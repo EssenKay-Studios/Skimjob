@@ -113,8 +113,8 @@ export const sampleEvents: { readonly [T in GameEventType]: EventOfType<T> } = {
     outcome: {
       result: "success",
       ranking: [
-        { player: ana, score: 9, stash: 9, timesShakenDown: 0, totalHandedIn: 30 },
-        { player: ben, score: 4, stash: 4, timesShakenDown: 1, totalHandedIn: 40 },
+        { player: ana, role: "rookie", score: 10.8, stash: 9, safe: 0, timesShakenDown: 0, totalHandedIn: 30 },
+        { player: ben, role: "fence", score: 4, stash: 4, safe: 3, timesShakenDown: 1, totalHandedIn: 40 },
       ],
       winners: [ana],
     },

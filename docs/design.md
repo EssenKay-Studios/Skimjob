@@ -47,9 +47,9 @@ Skimjob is a social deduction game for groups of friends, played in a browser or
 
 - **The heist succeeds** if, after the final meeting, the Haul is at or above the final target and Heat is below 100. Players are then ranked by stash, and the biggest stash wins. Some roles change how they score (see §8).
 - **The heist fails** if Heat reaches 100 at any point, or the final target is missed. Every crew member loses. Roles with a "wins on failure" condition, such as the Mole, win instead.
-- **Ties** go to whoever was shaken down fewer times, then to whoever handed in more total loot. The engine tracks that figure but only reveals it at the end.
-
-> **Open question:** when the heist fails, should we still show a "best of the losers" stash ranking for bragging rights? Leaning yes, clearly labelled as a loss.
+- **Ties** go to whoever was shaken down fewer times, then to whoever handed in more total loot. The engine tracks that figure but only reveals it at the end. *(Provisional: players still tied on all three share the win.)*
+- **Scores:** a Rookie's ×1.2 can give fractions; scores are kept to one decimal place. *(Provisional.)*
+- **A failed heist still shows the stash ranking** ("best of the losers"), clearly labelled as a loss. Nobody wins by it; only roles with a wins-on-failure condition win. *(Provisional, §19.1.)*
 
 ---
 
@@ -419,7 +419,7 @@ Chosen direction: **Option A, a cartoon cutaway of the building.** The bank is s
 
 ## 19. Open questions
 
-1. Should a failed heist still show a "best of the losers" ranking?
+1. Should a failed heist still show a "best of the losers" ranking? *(Provisionally yes, labelled as a loss; see §3.)*
 2. Should a shakedown ever reveal the Mole's role, or only their stash?
 3. Should rounds stay at 9, or should very long sessions get more rounds (for example 12 in a week-long game)?
 4. Are clean-threshold and compensation values the right size? This needs simulation.

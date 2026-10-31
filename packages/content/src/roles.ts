@@ -20,6 +20,22 @@ export interface RoleScoring {
   readonly perLootOverFinalTarget: number;
 }
 
+/** Why a heist failed: Heat reached 100, or the final target was missed. design §3 */
+export type FailureReason = "heat" | "target";
+
+/**
+ * A role that wins when the heist fails (Mole: any failure; Driver: Heat only,
+ * and only with the biggest stash). None of the starter roles has one. design §3, §8
+ */
+export interface WinsOnFailure {
+  readonly reasons: readonly FailureReason[];
+  /** Also needs the top spot in the stash ranking, ties included (Driver). */
+  readonly needsTopStash: boolean;
+}
+
+/** Scores are rounded to this many decimal places (Rookie ×1.2 gives fractions). docs/decisions.md */
+export const SCORE_DECIMALS = 1;
+
 export interface RoleDef {
   readonly id: RoleId;
   readonly name: string;
@@ -27,6 +43,8 @@ export interface RoleDef {
   /** false: every move must hand everything in (Insider). design §8 */
   readonly canPocket: boolean;
   readonly scoring: RoleScoring;
+  /** null: wins only as the biggest stash of a successful heist. design §3 */
+  readonly winsOnFailure: WinsOnFailure | null;
 }
 
 const PLAIN_SCORING: RoleScoring = { stashMultiplier: 1, perLootOverFinalTarget: 0 };
@@ -39,6 +57,7 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     power: { kind: "none" },
     canPocket: true,
     scoring: { stashMultiplier: 1.2, perLootOverFinalTarget: 0 },
+    winsOnFailure: null,
   },
   lookout: {
     id: "lookout",
@@ -46,6 +65,7 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     power: { kind: "lookout", extraRooms: 1 },
     canPocket: true,
     scoring: PLAIN_SCORING,
+    winsOnFailure: null,
   },
   insider: {
     id: "insider",
@@ -53,6 +73,7 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     power: { kind: "none" },
     canPocket: false,
     scoring: { stashMultiplier: 1, perLootOverFinalTarget: 1 },
+    winsOnFailure: null,
   },
   fence: {
     id: "fence",
@@ -60,5 +81,6 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     power: { kind: "fenceSafe", perAct: 5 },
     canPocket: true,
     scoring: PLAIN_SCORING,
+    winsOnFailure: null,
   },
 };

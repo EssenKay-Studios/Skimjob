@@ -4,7 +4,7 @@
 // must stay secret (a dealt role, a real split) cannot be constructed as public.
 // When you add an event type: add it to GameEvent, add a sample to
 // `samples.ts`, and make sure viewFor() tests cover it (CLAUDE.md).
-import type { JobId, RoleId, RoomId } from "@skimjob/content";
+import type { FailureReason, JobId, RoleId, RoomId } from "@skimjob/content";
 import type { MoleSetting, PlayerId, PlayerSeat, VoteVisibility } from "./config";
 import type { AbilityUse, Move, VoteChoice } from "./commands";
 import type { PrivateVisibility, PublicVisibility, RevealVisibility, SecretVisibility } from "./visibility";
@@ -290,12 +290,20 @@ export interface CheckpointChecked {
 
 // ---------------------------------------------------------------- end of game (§3, §13)
 
+/**
+ * One player's line in the final ranking, which the reveal shows (design §13).
+ * Ranked by score, then fewer shakedowns, then more handed in, then seat order.
+ */
 export interface RankEntry {
   readonly player: PlayerId;
-  /** Stash after role scoring (e.g. Rookie ×1.2, Insider surplus). design §8 */
+  /** Revealed at the end. design §13 */
+  readonly role: RoleId;
+  /** Stash after role scoring (e.g. Rookie ×1.2, Insider surplus), rounded to SCORE_DECIMALS. design §8 */
   readonly score: number;
   /** Final stash before role scoring, including any Fence safe. design §8 */
   readonly stash: number;
+  /** The part of `stash` hidden in the Fence safe (0 for other roles). design §8 */
+  readonly safe: number;
   /** Tie-break 1: fewer is better. design §3 */
   readonly timesShakenDown: number;
   /** Tie-break 2: more is better. Only revealed at the end. design §3 */
@@ -310,10 +318,13 @@ export type Outcome =
     }
   | {
       readonly result: "failed";
-      readonly reason: "heat" | "target";
-      /** Ranking of the losers, for bragging rights (design §19 open question 1). */
+      readonly reason: FailureReason;
+      /**
+       * "Best of the losers": the same ranking, shown as a loss. Nobody wins by
+       * it (design §19.1, provisional).
+       */
       readonly ranking: readonly RankEntry[];
-      /** Players whose role wins on failure (Mole, Driver). Empty in starter games. */
+      /** Players whose role wins on failure (`RoleDef.winsOnFailure`: Mole, Driver). Empty in starter games. */
       readonly winners: readonly PlayerId[];
     };
 

@@ -140,4 +140,8 @@ describe("starter roles — design §8, §8.1", () => {
     expect(ROLES.fence?.scoring).toEqual({ stashMultiplier: 1, perLootOverFinalTarget: 0 });
     expect(ROLES.rookie?.scoring.perLootOverFinalTarget).toBe(0);
   });
+
+  it("no starter role wins on failure (design §3: only roles like the Mole or Driver do)", () => {
+    for (const role of Object.values(ROLES)) expect(role.winsOnFailure).toBeNull();
+  });
 });
