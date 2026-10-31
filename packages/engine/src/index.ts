@@ -6,4 +6,5 @@ export * from "./types";
 export * from "./rng";
 export * from "./reduce";
 export * from "./setup";
+export * from "./job";
 export const ENGINE_VERSION = "0.1.0";

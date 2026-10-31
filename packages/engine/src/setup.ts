@@ -7,7 +7,7 @@
 import {
   DEFAULT_ROLE_POOL,
   FILLER_ROLE,
-  JOB_SETUPS,
+  JOBS,
   MAX_PLAYERS,
   MIN_PLAYERS,
   MOLE_ROLE,
@@ -22,6 +22,7 @@ import type { GameConfig, GameEvent, GameState, MoleSetting, RngState, VoteVisib
 import { PUBLIC, REVEAL, privateTo } from "./types";
 import { pick, seedRng, shuffle } from "./rng";
 import { replay } from "./reduce";
+import { jobById, roomsInPlay } from "./job";
 
 const MOLE_SETTINGS: readonly string[] = ["off", "maybe", "on"] satisfies readonly MoleSetting[];
 const VOTE_VISIBILITIES: readonly string[] = ["hiddenThenRevealed", "open", "secret"] satisfies readonly VoteVisibility[];
@@ -44,7 +45,7 @@ export function validateConfig(config: unknown): string[] {
   if (typeof voteVisibility !== "string" || !VOTE_VISIBILITIES.includes(voteVisibility)) {
     errors.push(`voteVisibility must be one of ${VOTE_VISIBILITIES.join(", ")}`);
   }
-  if (typeof job !== "string" || !Object.hasOwn(JOB_SETUPS, job)) errors.push(`unknown job ${String(job)}`);
+  if (typeof job !== "string" || !Object.hasOwn(JOBS, job)) errors.push(`unknown job ${String(job)}`);
 
   if (!Array.isArray(players)) {
     errors.push("players must be an array");
@@ -78,9 +79,7 @@ export function validateConfig(config: unknown): string[] {
 
 /** Rooms in play for a crew of `playerCount`. design §6.2 */
 export function roomsFor(job: JobId, playerCount: number): RoomId[] {
-  const setup = Object.hasOwn(JOB_SETUPS, job) ? JOB_SETUPS[job] : undefined;
-  if (!setup) throw new Error(`unknown job ${job}`);
-  return setup.roomTiers.filter((t) => t.minPlayers <= playerCount).flatMap((t) => t.rooms);
+  return roomsInPlay(jobById(job), playerCount);
 }
 
 /** The Mole counts that are possible (equally likely) for this crew. design §8.1 */

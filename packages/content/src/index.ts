@@ -3,8 +3,7 @@
 export const CONTENT_VERSION = "0.1.0";
 
 // Content identifiers. Plain strings so new rooms/roles/jobs are pure data;
-// the definitions themselves (yields, Heat, role powers) arrive with the
-// bank-job content task (STATUS.md task 3).
+// their definitions are in rooms.ts, roles.ts and jobs.ts.
 
 /** A room in a job, e.g. "vault", "office", "lobby", "security", "rooftop". design §6 */
 export type RoomId = string;
@@ -15,4 +14,7 @@ export type RoleId = string;
 /** A job (location), e.g. "bank". design §9 */
 export type JobId = string;
 
+export * from "./rooms";
+export * from "./roles";
+export * from "./jobs";
 export * from "./setup";

@@ -1,35 +1,10 @@
-// Content needed to set up a game: player-count limits, rooms in play by
-// player count, the roles that can be dealt, and how many Moles to deal.
-// Room yields/effects and role powers arrive with the bank-job content task
-// (STATUS.md task 3). design §6.2, §8.1, §16
-import type { JobId, RoleId, RoomId } from "./index";
+// Content needed to set up a game: player-count limits, the roles that can be
+// dealt, and how many Moles to deal. Rooms by player count live on the job
+// (jobs.ts). design §8.1, §16
+import type { RoleId } from "./index";
 
 export const MIN_PLAYERS = 2;
 export const MAX_PLAYERS = 12;
-
-/** Rooms added once the crew reaches `minPlayers`. Tiers are cumulative. design §6.2 */
-export interface RoomTier {
-  readonly minPlayers: number;
-  readonly rooms: readonly RoomId[];
-}
-
-export interface JobSetup {
-  readonly id: JobId;
-  /** Ordered by `minPlayers`; the first tier is the core rooms. */
-  readonly roomTiers: readonly RoomTier[];
-}
-
-/** First National Bank. design §6.1, §6.2 */
-export const BANK_SETUP: JobSetup = {
-  id: "bank",
-  roomTiers: [
-    { minPlayers: 2, rooms: ["vault", "office", "lobby", "security", "rooftop"] },
-    { minPlayers: 5, rooms: ["depositBoxes", "serverRoom"] },
-    { minPlayers: 9, rooms: ["tellerLine", "managersOffice"] },
-  ],
-};
-
-export const JOB_SETUPS: Readonly<Record<JobId, JobSetup>> = { bank: BANK_SETUP };
 
 /** The powerless role. Fills any seat the pool can't cover. design §8 */
 export const FILLER_ROLE: RoleId = "rookie";
