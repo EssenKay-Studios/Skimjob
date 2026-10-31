@@ -37,14 +37,15 @@ function deepFreeze<T>(value: T): T {
   return value;
 }
 
+/** A function command is called with the current state (e.g. `ROUND`). */
 function ok(state: GameState, command: unknown): GameState {
-  const r = handleCommand(state, command);
+  const r = handleCommand(state, typeof command === "function" ? command(state) : command);
   if (!r.ok) throw new Error(`rejected: ${r.reason}`);
   return r.state;
 }
 
 const submit = (player: string, move: unknown) => ({ type: "submitMove", player, move });
-const ROUND = { type: "advance", deadline: { kind: "round" } };
+const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
 const m = (room: string, pocket = 0, extra: Partial<Move> = {}): Move => ({ room, pocket, ...extra });
 
 /** Stand-in for task 6: open the next act's first round after the meeting. */
@@ -224,7 +225,7 @@ describe("QA rejected commands leave state unchanged", () => {
   const snapshot = JSON.stringify(base);
   const cases: [string, unknown][] = [
     ["null command", null],
-    ["array command", [ROUND]],
+    ["array command", [{ type: "advance", deadline: { kind: "round", round: 1 } }]],
     ["player not in the game", submit("p3", m("lobby"))],
     ["prototype key as player", submit("__proto__", m("lobby"))],
     ["inherited key as player", submit("hasOwnProperty", m("lobby"))],
@@ -266,7 +267,7 @@ describe("QA rejected commands leave state unchanged", () => {
   it("every command is refused after the game ends, and in awaitingMeeting moves/rounds are refused", () => {
     const waiting = play(game(2), [[null, null], [null, null], [null, null]]);
     expect(waiting.phase.kind).toBe("awaitingMeeting");
-    for (const c of [submit("p0", m("lobby")), ROUND]) expect(handleCommand(waiting, c).ok).toBe(false);
+    for (const c of [submit("p0", m("lobby")), ROUND(waiting)]) expect(handleCommand(waiting, c).ok).toBe(false);
   });
 });
 
@@ -280,7 +281,7 @@ describe("QA Heat raid — design §5.2 step 6, §7", () => {
     expect(s.phase).toMatchObject({ kind: "ended", outcome: { result: "failed", reason: "heat" } });
     expect(s.haul).toBe(52);
     expect(replay(s.config, s.log)).toEqual(s);
-    for (const c of [submit("p0", m("lobby")), ROUND]) expect(handleCommand(s, c).ok).toBe(false);
+    for (const c of [submit("p0", m("lobby")), ROUND(s)]) expect(handleCommand(s, c).ok).toBe(false);
   });
 
   it("a raid on an act's last round ends the game instead of waiting for the meeting", () => {

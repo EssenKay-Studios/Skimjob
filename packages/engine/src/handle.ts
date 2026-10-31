@@ -9,7 +9,7 @@
 // draw anything, `withRng` appends the reveal-only `rngAdvanced` after their
 // events automatically, so replay restores the RNG (docs/decisions.md).
 import type { GameEvent, GameState, PlayerState, RngState } from "./types";
-import { REVEAL, privateTo } from "./types";
+import { PUBLIC, REVEAL, privateTo } from "./types";
 import { pick, randomInt, shuffle } from "./rng";
 import { applyEvent } from "./reduce";
 import { checkMove, resolveRound } from "./round";
@@ -71,6 +71,21 @@ const submitMove: Handler = (state, command) => {
   return [{ type: "moveSubmitted", visibility: privateTo(player.id), player: player.id, round: state.phase.round, move }];
 };
 
+/**
+ * design §5.4: after a round resolves, each player may post one alibi for it,
+ * true or not. It stays open until the next round resolves (docs/decisions.md).
+ */
+const postAlibi: Handler = (state, command) => {
+  const player = playerFor(state, command);
+  if (typeof player === "string") return player;
+  const round = state.resolvedRound;
+  if (round === 0) return "no round has resolved yet";
+  if (state.alibisPosted.includes(player.id)) return `you already posted an alibi for round ${round}`;
+  const room = command.room;
+  if (typeof room !== "string" || !state.rooms.includes(room)) return `room ${String(room)} is not open in this game`;
+  return [{ type: "alibiPosted", visibility: PUBLIC, player: player.id, round, room }];
+};
+
 /** The scheduler says a deadline has passed. design §4.1, §5.2 */
 const advance: Handler = (state, command) => {
   const deadline = command.deadline;
@@ -78,6 +93,8 @@ const advance: Handler = (state, command) => {
   switch (deadline.kind) {
     case "round":
       if (state.phase.kind !== "planning") return "no round deadline is pending";
+      // Named round, so a retried or late deadline is refused instead of resolving the next round.
+      if (deadline.round !== state.phase.round) return `the round ${String(deadline.round)} deadline is not pending (round ${state.phase.round} is)`;
       return resolveRound(state, state.phase.round);
     case "openMeeting":
     case "closeMeeting":
@@ -87,7 +104,7 @@ const advance: Handler = (state, command) => {
   }
 };
 
-const HANDLERS: Readonly<Record<string, Handler>> = { submitMove, advance };
+const HANDLERS: Readonly<Record<string, Handler>> = { submitMove, postAlibi, advance };
 
 /** Apply one command. Never throws for bad input; a rejection leaves state as it was. */
 export function handleCommand(state: GameState, command: unknown): CommandResult {

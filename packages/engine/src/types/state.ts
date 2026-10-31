@@ -103,7 +103,9 @@ export interface GameState {
   readonly heat: number;
   /** Moves submitted so far for the current round (cleared when it resolves). */
   readonly moves: Readonly<Record<PlayerId, Move>>;
-  /** Players who already posted an alibi for the last resolved round (one each). design §5.4 */
+  /** The latest round resolved; 0 before any. Alibis are posted for this round. design §5.4 */
+  readonly resolvedRound: number;
+  /** Players who already posted an alibi for `resolvedRound` (one each). design §5.4 */
   readonly alibisPosted: readonly PlayerId[];
   readonly proposals: readonly MeetingProposal[];
   /** The regular meeting locked in for the current act, not yet open. design §11.1 */

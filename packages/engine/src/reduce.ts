@@ -26,6 +26,7 @@ export function initialState(config: GameConfig): GameState {
     rng: { words: [] },
     phase: { kind: "setup" },
     round: 0,
+    resolvedRound: 0,
     rooms: [],
     playerOrder: [],
     players: {},
@@ -106,12 +107,21 @@ function applyChange(state: GameState, event: GameEvent): GameState {
       return state;
     case "roundResolved": {
       // Haul and Heat are public totals; after an act's last round, the act's meeting comes next (task 6).
-      const next: GameState = { ...state, haul: event.haul, heat: event.heat, moves: {} };
+      // A new round of alibis opens (design §5.4).
+      const next: GameState = {
+        ...state,
+        haul: event.haul,
+        heat: event.heat,
+        moves: {},
+        resolvedRound: event.round,
+        alibisPosted: [],
+      };
       return isLastRoundOfAct(event.round) ? { ...next, phase: { kind: "awaitingMeeting", act: actOfRound(event.round) } } : next;
     }
     case "gameEnded":
       return { ...state, phase: { kind: "ended", outcome: event.outcome } };
     case "alibiPosted":
+      return { ...state, alibisPosted: [...state.alibisPosted, event.player] };
     case "meetingProposed":
     case "meetingProposalAccepted":
     case "meetingScheduled":

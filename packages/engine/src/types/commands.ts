@@ -44,6 +44,7 @@ export type VoteChoice =
 
 export type PlayerCommand =
   | { readonly type: "submitMove"; readonly player: PlayerId; readonly move: Move }
+  /** Claim (truthfully or not) which room you were in during the last resolved round. design §5.4 */
   | { readonly type: "postAlibi"; readonly player: PlayerId; readonly room: RoomId }
   /**
    * `slot` is an opaque label for the proposed time (e.g. an ISO timestamp).
@@ -64,8 +65,12 @@ export type PlayerCommand =
  * engine rejects a deadline that isn't currently pending. design §4.1, §11.1
  */
 export type Deadline =
-  /** The planning deadline for the current round: resolve it (default moves for anyone missing). design §5 */
-  | { readonly kind: "round" }
+  /**
+   * The planning deadline for `round`: resolve it (default moves for anyone
+   * missing). Rejected unless `round` is the one being planned, so a retried
+   * or late deadline can't resolve the next round early. design §5
+   */
+  | { readonly kind: "round"; readonly round: number }
   /** A scheduled regular meeting's slot, or an emergency's notice period, has arrived: open the vote window. design §11.1 */
   | { readonly kind: "openMeeting"; readonly meetingId: string }
   /** The open vote window has ended: tally, shakedown, then checkpoint / final check. design §11.2–§11.4 */

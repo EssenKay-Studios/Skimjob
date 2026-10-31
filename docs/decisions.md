@@ -4,6 +4,12 @@ Newest first. Each entry: what was decided, and why. Add an entry whenever a rul
 
 ---
 
+### 2026-11-01 — Alibis (M1 task 5)
+- **`postAlibi { player, room }` posts a public `alibiPosted { player, round, room }`** for the latest resolved round (`GameState.resolvedRound`). One per player per round; it can't be changed or withdrawn. Refused before round 1 resolves.
+- **Alibi window (provisional):** from a round's resolution until the next round resolves, in any phase (planning, awaiting the meeting, meeting). So round 2's planning is also the time to post round 1's alibi.
+- **An alibi must name a room in play (provisional).** It can be a lie, but not about a room that doesn't exist in this game (structured data, §5.4).
+- **The round deadline names its round:** `advance { deadline: { kind: "round", round } }` is refused unless `round` is the round being planned, so a retried or late deadline can't resolve the next round early (task 4 review). A retry is a harmless rejection.
+
 ### 2026-11-01 — Round loop (M1 task 4)
 - **`handleCommand(state, command)` is the one entry point** for commands. It returns `{ ok: true, state, events }` or `{ ok: false, reason }`. Commands arrive as untrusted JSON, so any bad input is a rejection that leaves state untouched, never a throw: wrong phase, unknown player, room not in play, a split that isn't a whole number from 0 to the room's loot (NaN, fractions, strings, Infinity), Security without a watched room, a watch from outside Security, an ability the role doesn't have. The stored move is normalised (unknown fields dropped).
 - **`rngAdvanced` is automatic.** Handlers draw only through the `Draw` they're given; `withRng` appends `rngAdvanced` after their events if anything was drawn, and discards the draws on a rejection. The round loop itself draws nothing.

@@ -95,8 +95,10 @@ describe("commands — design §17.2", () => {
     // @ts-expect-error meeting deadlines must say which meeting
     const noId: Command = { type: "advance", deadline: { kind: "openMeeting" } };
     // @ts-expect-error the round deadline carries no meeting id
-    const roundWithId: Command = { type: "advance", deadline: { kind: "round", meetingId: "m1" } };
-    expect([bare, noId, roundWithId]).toHaveLength(3);
+    const roundWithId: Command = { type: "advance", deadline: { kind: "round", round: 1, meetingId: "m1" } };
+    // @ts-expect-error the round deadline must name its round
+    const noRound: Command = { type: "advance", deadline: { kind: "round" } };
+    expect([bare, noId, roundWithId, noRound]).toHaveLength(4);
   });
 
   it("system commands are not player commands and carry no player", () => {
@@ -104,9 +106,9 @@ describe("commands — design §17.2", () => {
     expectTypeOf<Extract<SystemCommand, { player: unknown }>>().toBeNever();
 
     // @ts-expect-error a client can't send advance as a player command
-    const asPlayer: PlayerCommand = { type: "advance", deadline: { kind: "round" } };
+    const asPlayer: PlayerCommand = { type: "advance", deadline: { kind: "round", round: 1 } };
     // @ts-expect-error advance can't be attributed to a player
-    const attributed: Command = { type: "advance", player: "ana", deadline: { kind: "round" } };
+    const attributed: Command = { type: "advance", player: "ana", deadline: { kind: "round", round: 1 } };
     // @ts-expect-error a player can't pick the server's meeting slot
     const pick: PlayerCommand = { type: "scheduleMeeting", player: "ana", act: 1, slot: "x" };
     expect([asPlayer, attributed, pick]).toHaveLength(3);
