@@ -4,13 +4,12 @@
 // Pure: the round loop and the final meeting call `gameEnded` with the events
 // they have produced so far, which are folded first, so the ranking sees the
 // last round's splits and the final meeting's shakedown.
-import { ROLES, SCORE_DECIMALS, type FailureReason, type RoleDef, type RoleId } from "@skimjob/content";
+import { SCORE_DECIMALS, type FailureReason, type RoleDef, type RoleId } from "@skimjob/content";
 import type { GameEnded, GameEvent, GameState, Outcome, PlayerId, PlayerState, RankEntry } from "./types";
 import { PUBLIC } from "./types";
 import { applyEvent } from "./reduce";
-import { checkpointTarget, jobById } from "./job";
-
-type RoleTable = Readonly<Record<RoleId, RoleDef>>;
+import { checkpointTarget } from "./job";
+import { jobFor, rolesFor, type RoleTable } from "./overrides";
 
 const roleIn = (roles: RoleTable, role: RoleId): RoleDef | undefined => (Object.hasOwn(roles, role) ? roles[role] : undefined);
 
@@ -36,8 +35,8 @@ function compare(a: RankEntry, b: RankEntry): number {
 }
 
 /** Everyone, best first; a full tie keeps seat order. design §3, §8 */
-export function ranking(state: GameState, roles: RoleTable = ROLES): RankEntry[] {
-  const job = jobById(state.config.job);
+export function ranking(state: GameState, roles: RoleTable = rolesFor(state.config)): RankEntry[] {
+  const job = jobFor(state.config);
   const finalAct = job.checkpoints.perPlayer.length as 1 | 2 | 3;
   const surplus = Math.max(0, state.haul - checkpointTarget(job, finalAct, state.playerOrder.length));
   const entries = state.playerOrder.map((id): RankEntry => {
@@ -67,7 +66,7 @@ function top(ranked: readonly RankEntry[]): PlayerId[] {
  * `winsOnFailure` names the reason win (Driver also needs the top stash). The
  * ranking is kept on failure too, as a loss (design §19.1, provisional).
  */
-export function outcomeFor(state: GameState, failure: FailureReason | null, roles: RoleTable = ROLES): Outcome {
+export function outcomeFor(state: GameState, failure: FailureReason | null, roles: RoleTable = rolesFor(state.config)): Outcome {
   const ranked = ranking(state, roles);
   const leaders = top(ranked);
   if (failure === null) return { result: "success", ranking: ranked, winners: leaders };
@@ -81,7 +80,7 @@ export function outcomeFor(state: GameState, failure: FailureReason | null, role
 }
 
 /** The `gameEnded` event after `events` (this command's events so far) are folded into `state`. */
-export function gameEnded(state: GameState, events: readonly GameEvent[], failure: FailureReason | null, roles: RoleTable = ROLES): GameEnded {
+export function gameEnded(state: GameState, events: readonly GameEvent[], failure: FailureReason | null, roles: RoleTable = rolesFor(state.config)): GameEnded {
   const final = events.reduce(applyEvent, state);
   return { type: "gameEnded", visibility: PUBLIC, outcome: outcomeFor(final, failure, roles) };
 }

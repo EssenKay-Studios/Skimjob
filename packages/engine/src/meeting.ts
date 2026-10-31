@@ -20,7 +20,8 @@ import type {
   VoteChoice,
 } from "./types";
 import { PUBLIC, privateTo, secretTo } from "./types";
-import { checkpointTarget, clampHeat, jobById } from "./job";
+import { checkpointTarget, clampHeat } from "./job";
+import { jobFor } from "./overrides";
 import { actOfRound } from "./acts";
 import { gameEnded } from "./end";
 import { isObject, playerFor } from "./check";
@@ -196,7 +197,7 @@ export function meetingResult(crewSize: number, cast: number, skip: number, targ
 export function closeMeeting(state: GameState, meetingId: unknown): Result {
   const meeting = state.meeting;
   if (!meeting || meeting.id !== meetingId) return `meeting ${String(meetingId)} is not open`;
-  const job = jobById(state.config.job);
+  const job = jobFor(state.config);
   const crewSize = state.playerOrder.length;
   const { act } = meeting;
 

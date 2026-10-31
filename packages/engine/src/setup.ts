@@ -6,6 +6,7 @@
 // roundStarted for round 1 (public), and rngAdvanced (reveal) with the RNG state
 // after dealing.
 import {
+  CONTENT_VERSION,
   DEFAULT_ROLE_POOL,
   FILLER_ROLE,
   JOBS,
@@ -24,6 +25,7 @@ import { PUBLIC, REVEAL, privateTo } from "./types";
 import { pick, seedRng, shuffle } from "./rng";
 import { replay } from "./reduce";
 import { jobById, roomsInPlay } from "./job";
+import { validateOverrides } from "./overrides";
 
 const MOLE_SETTINGS: readonly string[] = ["off", "maybe", "on"] satisfies readonly MoleSetting[];
 const VOTE_VISIBILITIES: readonly string[] = ["hiddenThenRevealed", "open", "secret"] satisfies readonly VoteVisibility[];
@@ -50,7 +52,7 @@ const isStringArray = (v: unknown): v is string[] => Array.isArray(v) && v.every
 export function validateConfig(config: unknown): string[] {
   if (!isObject(config)) return ["config must be an object"];
   const errors: string[] = [];
-  const { seed, players, job, rolePool, mole, eventsEnabled, voteVisibility, starterMode } = config;
+  const { seed, players, job, rolePool, mole, eventsEnabled, voteVisibility, starterMode, contentOverrides } = config;
   if (typeof seed !== "string") errors.push("seed must be a string");
   if (typeof eventsEnabled !== "boolean") errors.push("eventsEnabled must be a boolean");
   if (typeof starterMode !== "boolean") errors.push("starterMode must be a boolean");
@@ -59,6 +61,8 @@ export function validateConfig(config: unknown): string[] {
     errors.push(`voteVisibility must be one of ${VOTE_VISIBILITIES.join(", ")}`);
   }
   if (typeof job !== "string" || !Object.hasOwn(JOBS, job)) errors.push(`unknown job ${String(job)}`);
+  // design §17.4: overrides name the job's rooms, so they're checked once the job is known.
+  else errors.push(...validateOverrides(contentOverrides, jobById(job)));
 
   if (!Array.isArray(players)) {
     errors.push("players must be an array");
@@ -145,6 +149,8 @@ export function setupEvents(config: GameConfig): GameEvent[] {
       eventsEnabled: config.eventsEnabled,
       voteVisibility: config.voteVisibility,
       starterMode: config.starterMode,
+      contentVersion: CONTENT_VERSION,
+      contentOverrides: config.contentOverrides ?? null,
     },
     { type: "rngSeeded", visibility: REVEAL, seed: config.seed },
     { type: "roomsSet", visibility: PUBLIC, rooms: roomsFor(config.job, config.players.length) },
