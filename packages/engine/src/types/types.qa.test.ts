@@ -25,6 +25,7 @@ type ExpectedVisibility = {
   rngSeeded: "reveal";
   roomsSet: "public";
   roleDealt: "private";
+  rngAdvanced: "reveal";
   roundStarted: "public";
   moveSubmitted: "private";
   defaultMoveAssigned: "private";

@@ -4,6 +4,14 @@ Newest first. Each entry: what was decided, and why. Add an entry whenever a rul
 
 ---
 
+### 2026-11-01 — Seeded RNG and setup (M1 task 2)
+- **RNG algorithm: sfc32, seeded by hashing the seed string with cyrb128**, then 12 outputs discarded. Small, fast, 128-bit state, passes PractRand, and simple enough to write in-repo (no engine dependency). `RngState.words` is the four sfc32 words as unsigned 32-bit integers. A golden-value test pins the output, because changing the algorithm changes every old log's draws.
+- **How RNG state is rebuilt on replay (deferred from PR #1):** `rngSeeded` sets the RNG from the seed, and any command that draws random numbers ends its events with a reveal-only **`rngAdvanced { words }`** carrying the RNG state after its draws. The fold just copies the words, so replay never re-draws and the fold never needs to know how many draws a rule makes. Being reveal-only, the state is in no player's view during the game (it would let them predict draws); after the game it is harmless, like the seed. Rejected: putting the state on the random-consuming events themselves (`roleDealt` is private and other draws may land on public events, so it would leak), and replaying from commands (breaks "state = fold over the log").
+- **Rooms are not random:** they come straight from the player-count tiers in content (§6.2).
+- **Role deal (provisional):** Moles first (by the Mole setting), then distinct roles drawn at random from the pool (each at most once), then Rookies for any seats left; the resulting deck is shuffled and dealt in seat order. So 4 players in starter mode get one of each starter role, and 12 get Lookout, Insider, Fence and nine Rookies. The Mole is never a pool role; it is controlled only by the Mole setting.
+- **Mole count (provisional):** 2–4 players: never. 5–8: off 0, maybe 0 or 1 (50%), on 1. 9–12: off 0, maybe 1 or 2 (50/50), on 2. Design §8.1 says "1 or 2 Moles" at 9–12 without saying how the host setting maps onto it; the host's "off" is respected at every size. Numbers live in `MOLE_RULES` in content.
+- **Host role pool:** empty means the content default (only the starter roles exist so far). Duplicates, unknown roles and the Mole are rejected. Starter mode ignores the pool.
+
 ### 2026-11-01 — Owner decisions for M2 (from Karthik)
 - Scope tonight: finish M1, then build M2 **running locally** (no deployment until hosting accounts exist).
 - Login: **invite link + nickname** for quick joins, plus **Google sign-in** for a persistent identity.

@@ -2,17 +2,17 @@
 // Clients and bots only ever receive a PlayerView. design §17.2
 //
 // State is a fold over `log`; every field other than `config` and `log` must be
-// derivable by replaying the log from the start. (How `rng` is rebuilt on
-// replay is decided in the seeded-RNG task; see STATUS.md notes.)
+// derivable by replaying the log from the start. `rng` is set from the seed by
+// `rngSeeded` and then by each reveal-only `rngAdvanced` (docs/decisions.md).
 import type { RoleId, RoomId } from "@skimjob/content";
 import type { GameConfig, PlayerId } from "./config";
 import type { Move, VoteChoice } from "./commands";
 import type { ActNumber, GameEvent, MeetingKind, Outcome } from "./events";
 
 /**
- * Seeded RNG state. The algorithm (and so the word count) is chosen in the
- * seeded-RNG task; it must be plain serialisable numbers so state can be
- * stored, replayed and compared.
+ * Seeded RNG state: the four unsigned 32-bit words of sfc32 (see `rng.ts`).
+ * Plain numbers so state can be stored, replayed and compared. Empty until
+ * `rngSeeded` is applied.
  */
 export interface RngState {
   readonly words: readonly number[];
