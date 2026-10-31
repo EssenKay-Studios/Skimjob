@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { MOLE_ROLE, STARTER_ROLES } from "@skimjob/content";
 import type { GameConfig, GameEvent, MoleSetting } from "./types";
 import { canSee } from "./types";
-import { createGame, dealRoles, roomsFor, setupEvents } from "./setup";
+import { createGame, dealRoles, roomsFor, setupEvents, validateConfig } from "./setup";
 import { applyEvent, initialState, replay } from "./reduce";
 import { seedRng } from "./rng";
 
@@ -156,6 +156,40 @@ describe("config validation — design §1, §15", () => {
     expect(() => setupEvents(config(6, { starterMode: true, eventsEnabled: true }))).toThrow(/events/);
     const created = setupEvents(config(6, { starterMode: true }))[0];
     expect(created).toMatchObject({ type: "gameCreated", starterMode: true, mole: "off", eventsEnabled: false });
+  });
+
+  // QA reproductions from PR #2: configs arrive as untrusted JSON (M2 server).
+  it("returns errors instead of throwing, and [] for a valid config", () => {
+    expect(validateConfig(config(6))).toEqual([]);
+    expect(validateConfig(null)).toEqual(["config must be an object"]);
+    expect(validateConfig({ ...config(1), job: "casino" })).toHaveLength(2);
+  });
+
+  it("rejects an unknown voteVisibility (it would land in the public gameCreated)", () => {
+    expect(validateConfig({ ...config(6), voteVisibility: "loud" })).toEqual([expect.stringMatching(/voteVisibility/)]);
+    expect(() => setupEvents({ ...config(6), voteVisibility: "loud" as never })).toThrow(/voteVisibility/);
+  });
+
+  it("rejects an unknown mole setting with a validation error, not a TypeError", () => {
+    expect(validateConfig({ ...config(6), mole: "sometimes" })).toEqual([expect.stringMatching(/mole/)]);
+    expect(() => setupEvents({ ...config(6), mole: "sometimes" as never })).toThrow(/invalid game config/);
+  });
+
+  it("looks jobs up by own key only (toString, __proto__ are unknown jobs)", () => {
+    for (const job of ["toString", "__proto__", "constructor"]) {
+      expect(validateConfig({ ...config(6), job })).toEqual([`unknown job ${job}`]);
+      expect(() => roomsFor(job, 6)).toThrow(/unknown job/);
+    }
+  });
+
+  it("rejects non-boolean starterMode / eventsEnabled / isBot and other wrong types", () => {
+    expect(validateConfig({ ...config(6), starterMode: "false" })).toEqual([expect.stringMatching(/starterMode/)]);
+    expect(validateConfig({ ...config(6), eventsEnabled: 0 })).toEqual([expect.stringMatching(/eventsEnabled/)]);
+    const players = config(3).players.map((p) => ({ ...p, isBot: "no" }));
+    expect(validateConfig({ ...config(3), players })).toEqual([expect.stringMatching(/isBot/)]);
+    expect(validateConfig({ ...config(3), seed: 42 })).toEqual(["seed must be a string"]);
+    expect(validateConfig({ ...config(3), rolePool: "fence" })).toEqual([expect.stringMatching(/rolePool/)]);
+    expect(validateConfig({ ...config(3), players: "abc" })).toEqual(["players must be an array"]);
   });
 
   it("starter mode ignores the role pool (GameConfig.rolePool)", () => {

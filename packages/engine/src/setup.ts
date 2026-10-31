@@ -18,38 +18,67 @@ import {
   type RoleId,
   type RoomId,
 } from "@skimjob/content";
-import type { GameConfig, GameEvent, GameState, MoleSetting, RngState } from "./types";
+import type { GameConfig, GameEvent, GameState, MoleSetting, RngState, VoteVisibility } from "./types";
 import { PUBLIC, REVEAL, privateTo } from "./types";
 import { pick, seedRng, shuffle } from "./rng";
 import { replay } from "./reduce";
 
-/** Throws if the config can't start a game. */
-export function validateConfig(config: GameConfig): void {
-  const n = config.players.length;
-  if (n < MIN_PLAYERS || n > MAX_PLAYERS) {
-    throw new Error(`a game needs ${MIN_PLAYERS}–${MAX_PLAYERS} players, got ${n}`);
+const MOLE_SETTINGS: readonly string[] = ["off", "maybe", "on"] satisfies readonly MoleSetting[];
+const VOTE_VISIBILITIES: readonly string[] = ["hiddenThenRevealed", "open", "secret"] satisfies readonly VoteVisibility[];
+
+const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null;
+const isStringArray = (v: unknown): v is string[] => Array.isArray(v) && v.every((x) => typeof x === "string");
+
+/**
+ * Everything wrong with a config, or `[]` if it can start a game. Configs reach
+ * the server as untrusted JSON, so this checks the shape too, not just the rules.
+ */
+export function validateConfig(config: unknown): string[] {
+  if (!isObject(config)) return ["config must be an object"];
+  const errors: string[] = [];
+  const { seed, players, job, rolePool, mole, eventsEnabled, voteVisibility, starterMode } = config;
+  if (typeof seed !== "string") errors.push("seed must be a string");
+  if (typeof eventsEnabled !== "boolean") errors.push("eventsEnabled must be a boolean");
+  if (typeof starterMode !== "boolean") errors.push("starterMode must be a boolean");
+  if (typeof mole !== "string" || !MOLE_SETTINGS.includes(mole)) errors.push(`mole must be one of ${MOLE_SETTINGS.join(", ")}`);
+  if (typeof voteVisibility !== "string" || !VOTE_VISIBILITIES.includes(voteVisibility)) {
+    errors.push(`voteVisibility must be one of ${VOTE_VISIBILITIES.join(", ")}`);
   }
-  const ids = new Set(config.players.map((p) => p.id));
-  if (ids.size !== n) throw new Error("player ids must be unique");
-  if (ids.has("")) throw new Error("player ids must not be empty");
-  if (!JOB_SETUPS[config.job]) throw new Error(`unknown job ${config.job}`);
+  if (typeof job !== "string" || !Object.hasOwn(JOB_SETUPS, job)) errors.push(`unknown job ${String(job)}`);
+
+  if (!Array.isArray(players)) {
+    errors.push("players must be an array");
+  } else {
+    if (players.length < MIN_PLAYERS || players.length > MAX_PLAYERS) {
+      errors.push(`a game needs ${MIN_PLAYERS}–${MAX_PLAYERS} players, got ${players.length}`);
+    }
+    const seatsOk = players.every(
+      (p) => isObject(p) && typeof p.id === "string" && p.id !== "" && typeof p.name === "string" && typeof p.isBot === "boolean",
+    );
+    if (!seatsOk) errors.push("each player needs a non-empty string id, a string name and a boolean isBot");
+    else if (new Set(players.map((p) => p.id)).size !== players.length) errors.push("player ids must be unique");
+  }
+
   // design §8.1: starter mode has no Mole and no events. Reject rather than
   // ignore, so gameCreated never claims a Mole or events the game won't have.
-  if (config.starterMode && config.mole !== "off") throw new Error("starter mode requires mole: off");
-  if (config.starterMode && config.eventsEnabled) throw new Error("starter mode requires eventsEnabled: false");
-  if (!config.starterMode) {
-    const pool = new Set(config.rolePool);
-    if (pool.size !== config.rolePool.length) throw new Error("role pool has duplicates");
-    for (const role of config.rolePool) {
-      if (role === MOLE_ROLE) throw new Error("the Mole is dealt by the mole setting, not the role pool");
-      if (!POOL_ROLES.includes(role)) throw new Error(`unknown role ${role}`);
+  if (starterMode === true && mole !== "off") errors.push("starter mode requires mole: off");
+  if (starterMode === true && eventsEnabled !== false) errors.push("starter mode requires eventsEnabled: false");
+
+  if (!isStringArray(rolePool)) {
+    errors.push("rolePool must be an array of role ids");
+  } else if (starterMode !== true) {
+    if (new Set(rolePool).size !== rolePool.length) errors.push("role pool has duplicates");
+    for (const role of rolePool) {
+      if (role === MOLE_ROLE) errors.push("the Mole is dealt by the mole setting, not the role pool");
+      else if (!POOL_ROLES.includes(role)) errors.push(`unknown role ${role}`);
     }
   }
+  return errors;
 }
 
 /** Rooms in play for a crew of `playerCount`. design §6.2 */
 export function roomsFor(job: JobId, playerCount: number): RoomId[] {
-  const setup = JOB_SETUPS[job];
+  const setup = Object.hasOwn(JOB_SETUPS, job) ? JOB_SETUPS[job] : undefined;
   if (!setup) throw new Error(`unknown job ${job}`);
   return setup.roomTiers.filter((t) => t.minPlayers <= playerCount).flatMap((t) => t.rooms);
 }
@@ -89,7 +118,8 @@ export function dealRoles(config: GameConfig, rng: RngState): { readonly value: 
 
 /** The setup events for a new game. Pure: same config, same events. */
 export function setupEvents(config: GameConfig): GameEvent[] {
-  validateConfig(config);
+  const errors = validateConfig(config);
+  if (errors.length > 0) throw new Error(`invalid game config: ${errors.join("; ")}`);
   const dealt = dealRoles(config, seedRng(config.seed));
   return [
     {
