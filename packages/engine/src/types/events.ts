@@ -5,7 +5,7 @@
 // When you add an event type: add it to GameEvent, add a sample to
 // `samples.ts`, and make sure viewFor() tests cover it (CLAUDE.md).
 import type { FailureReason, JobId, RoleId, RoomId } from "@skimjob/content";
-import type { MoleSetting, PlayerId, PlayerSeat, VoteVisibility } from "./config";
+import type { ContentOverrides, MoleSetting, PlayerId, PlayerSeat, VoteVisibility } from "./config";
 import type { AbilityUse, Move, VoteChoice } from "./commands";
 import type { PrivateVisibility, PublicVisibility, RevealVisibility, SecretVisibility } from "./visibility";
 
@@ -24,6 +24,10 @@ export interface GameCreated {
   readonly eventsEnabled: boolean;
   readonly voteVisibility: VoteVisibility;
   readonly starterMode: boolean;
+  /** `CONTENT_VERSION` the game was set up with, so an old log can be replayed against the right numbers. design §17.4 */
+  readonly contentVersion: string;
+  /** The config's content overrides (public: they are the rules everyone plays by), or null. design §17.4 */
+  readonly contentOverrides: ContentOverrides | null;
 }
 
 /** The RNG seed, kept out of every player's view until the reveal. */

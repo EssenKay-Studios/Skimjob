@@ -23,6 +23,8 @@ export const sampleEvents: { readonly [T in GameEventType]: EventOfType<T> } = {
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     starterMode: true,
+    contentVersion: "0.1.0",
+    contentOverrides: { heat: { perRound: 5 } },
   },
   rngSeeded: { type: "rngSeeded", visibility: REVEAL, seed: "sample-seed" },
   roomsSet: { type: "roomsSet", visibility: PUBLIC, rooms: ["vault", "office", "lobby", "security", "rooftop"] },

@@ -3,10 +3,11 @@
 //
 // Both are pure: they read state and return events (or a rejection reason).
 // `handleCommand` (handle.ts) folds the events.
-import { ROLES, type RoleDef, type RoleId, type RoomId } from "@skimjob/content";
+import type { RoleDef, RoleId, RoomId } from "@skimjob/content";
 import type { AbilityUse, GameEvent, GameState, Move, PlayerId, PlayerState } from "./types";
 import { PUBLIC, privateTo } from "./types";
-import { clampHeat, jobById, roomDef, roomLoot, roundHeatDelta } from "./job";
+import { clampHeat, roomDef, roomLoot, roundHeatDelta } from "./job";
+import { jobFor, rolesFor, type RoleTable } from "./overrides";
 import { isObject } from "./check";
 import { actOfRound, isLastRoundOfAct } from "./acts";
 import { gameEnded } from "./end";
@@ -16,8 +17,8 @@ export { actOfRound, isLastRoundOfAct };
 /** A role with no definition yet (the Mole, until its powers land) has no power and may pocket. */
 const NO_POWER: Pick<RoleDef, "power" | "canPocket"> = { power: { kind: "none" }, canPocket: true };
 
-function roleOf(role: RoleId): Pick<RoleDef, "power" | "canPocket"> {
-  return (Object.hasOwn(ROLES, role) ? ROLES[role] : undefined) ?? NO_POWER;
+function roleIn(roles: RoleTable, role: RoleId): Pick<RoleDef, "power" | "canPocket"> {
+  return (Object.hasOwn(roles, role) ? roles[role] : undefined) ?? NO_POWER;
 }
 
 const isCount = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v >= 0;
@@ -25,7 +26,7 @@ const isCount = (v: unknown): v is number => typeof v === "number" && Number.isI
 /** A role power used as part of a move, checked against the player's role. design §8 */
 function checkAbility(state: GameState, player: PlayerState, raw: unknown): AbilityUse | string {
   if (!isObject(raw) || typeof raw.kind !== "string") return "ability must be an object with a kind";
-  const { power } = roleOf(player.role);
+  const { power } = roleIn(rolesFor(state.config), player.role);
   if (power.kind !== raw.kind) return `your role has no ${raw.kind} ability`;
   switch (power.kind) {
     case "lookout": {
@@ -60,11 +61,11 @@ export function checkMove(state: GameState, player: PlayerState, raw: unknown): 
   if (!isObject(raw)) return "move must be an object";
   const { room, pocket, watch, ability } = raw;
   if (typeof room !== "string" || !state.rooms.includes(room)) return `room ${String(room)} is not open in this game`;
-  const def = roomDef(jobById(state.config.job), room);
+  const def = roomDef(jobFor(state.config), room);
   if (!isCount(pocket)) return "pocket must be a whole number, 0 or more";
   // The real yield can only drop below the room's loot (crowded Deposit boxes), so this is the upper bound.
   if (pocket > def.loot) return `you can pocket at most ${def.loot} in the ${def.name}`;
-  if (pocket > 0 && !roleOf(player.role).canPocket) return "your role can't pocket loot";
+  if (pocket > 0 && !roleIn(rolesFor(state.config), player.role).canPocket) return "your role can't pocket loot";
 
   let move: Move = { room, pocket };
   if (def.info === "watchRoom") {
@@ -90,7 +91,9 @@ export function checkMove(state: GameState, player: PlayerState, raw: unknown): 
  * act's meeting (design §11). Step 1, event cards, arrives with the events deck.
  */
 export function resolveRound(state: GameState, round: number): GameEvent[] {
-  const job = jobById(state.config.job);
+  const job = jobFor(state.config);
+  const roles = rolesFor(state.config);
+  const roleOf = (role: RoleId) => roleIn(roles, role);
   const order = state.playerOrder;
   const crewSize = order.length;
   const events: GameEvent[] = [];

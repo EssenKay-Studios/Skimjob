@@ -1,7 +1,7 @@
 // Small readers over a PlayerView: everything a bot knows comes from here.
 // Bots never see the game state, only viewFor() output. design §17.3
 import { ROLES, ROUNDS_PER_ACT, type JobDef, type RoleDef, type RoomDef, type RoomId } from "@skimjob/content";
-import { jobById, roomDef, type GameEvent, type LoggedEvent, type PlayerView } from "@skimjob/engine";
+import { jobById, overrideJob, overrideRoles, roomDef, type GameEvent, type LoggedEvent, type PlayerView } from "@skimjob/engine";
 
 type EventOf<T extends GameEvent["type"]> = Extract<GameEvent, { type: T }>;
 
@@ -12,18 +12,26 @@ export function ofType<T extends GameEvent["type"]>(list: readonly LoggedEvent[]
   return out;
 }
 
-/** The job, from the public `gameCreated` at the top of the ledger. */
+function createdOf(view: PlayerView): EventOf<"gameCreated"> {
+  const created = view.ledger[0]?.event;
+  if (created?.type === "gameCreated") return created;
+  const found = ofType(view.ledger, "gameCreated")[0];
+  if (!found) throw new Error("view has no gameCreated");
+  return found;
+}
+
+/** The job, from the public `gameCreated` at the top of the ledger, with the game's content overrides. design §17.4 */
 export function jobOf(view: PlayerView): JobDef {
-  const created = ofType(view.ledger, "gameCreated")[0];
-  if (!created) throw new Error("view has no gameCreated");
-  return jobById(created.job);
+  const created = createdOf(view);
+  return overrideJob(jobById(created.job), created.contentOverrides);
 }
 
 export const crewSize = (view: PlayerView): number => view.players.length + 1;
 
 /** A role with no definition yet (the Mole) plays with no power and may pocket, as in the engine. */
 export function roleOf(view: PlayerView): Pick<RoleDef, "power" | "canPocket"> {
-  const def = Object.hasOwn(ROLES, view.me.role) ? ROLES[view.me.role] : undefined;
+  const roles = overrideRoles(ROLES, createdOf(view).contentOverrides);
+  const def = Object.hasOwn(roles, view.me.role) ? roles[view.me.role] : undefined;
   return def ?? { power: { kind: "none" }, canPocket: true };
 }
 

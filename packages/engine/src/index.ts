@@ -7,6 +7,7 @@ export * from "./rng";
 export * from "./reduce";
 export * from "./setup";
 export * from "./job";
+export * from "./overrides";
 export * from "./acts";
 export * from "./round";
 export * from "./meeting";
