@@ -50,7 +50,12 @@ function copyData<T>(value: T): T {
   if (typeof value !== "object" || value === null) return value;
   if (Array.isArray(value)) return value.map(copyData) as T;
   const out: Record<string, unknown> = {};
-  for (const key of Object.keys(value)) out[key] = copyData((value as Record<string, unknown>)[key]);
+  for (const key of Object.keys(value)) {
+    const copy = copyData((value as Record<string, unknown>)[key]);
+    // Plain assignment to "__proto__" would set the prototype and drop the entry.
+    if (key === "__proto__") Object.defineProperty(out, key, { value: copy, enumerable: true, writable: true, configurable: true });
+    else out[key] = copy;
+  }
   return out as T;
 }
 
