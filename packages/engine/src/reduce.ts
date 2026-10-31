@@ -3,7 +3,7 @@
 // `applyEvent` is the only way state changes. Command handlers decide which
 // events happen (drawing from `state.rng` where needed); folding those events
 // rebuilds the same state, including the RNG, on replay.
-import type { GameConfig, GameEvent, GameState, PlayerId, PlayerState } from "./types";
+import type { GameConfig, GameEvent, GameState, MeetingState, Phase, PlayerId, PlayerState } from "./types";
 import { seedRng } from "./rng";
 import { actOfRound, isLastRoundOfAct } from "./round";
 
@@ -17,6 +17,23 @@ function updatePlayer(state: GameState, id: PlayerId, change: (p: PlayerState) =
 function mapPlayers(state: GameState, change: (p: PlayerState) => Partial<PlayerState>): GameState {
   const players = Object.fromEntries(Object.entries(state.players).map(([id, p]) => [id, { ...p, ...change(p) }]));
   return { ...state, players };
+}
+
+function openMeeting(state: GameState): MeetingState {
+  if (!state.meeting) throw new Error("no meeting is open");
+  return state.meeting;
+}
+
+/**
+ * Where the game goes when a meeting closes: back to planning the current
+ * round, or, if that round has resolved (the act's last), awaiting the act's
+ * meeting. The regular meeting's close then moves on with `roundStarted` or
+ * `gameEnded`. design §4.1
+ */
+function phaseAfterMeeting(state: GameState): Phase {
+  return state.resolvedRound === state.round
+    ? { kind: "awaitingMeeting", act: actOfRound(state.round) }
+    : { kind: "planning", round: state.round };
 }
 
 /** State before any event: only the host's config is known. */
@@ -106,7 +123,7 @@ function applyChange(state: GameState, event: GameEvent): GameState {
       // Information only; no state changes. (copsRaided is followed by gameEnded.)
       return state;
     case "roundResolved": {
-      // Haul and Heat are public totals; after an act's last round, the act's meeting comes next (task 6).
+      // Haul and Heat are public totals; after an act's last round, the act's meeting comes next (design §11).
       // A new round of alibis opens (design §5.4).
       const next: GameState = {
         ...state,
@@ -122,18 +139,52 @@ function applyChange(state: GameState, event: GameEvent): GameState {
       return { ...state, phase: { kind: "ended", outcome: event.outcome } };
     case "alibiPosted":
       return { ...state, alibisPosted: [...state.alibisPosted, event.player] };
-    case "meetingProposed":
+    // ------------------------------------------------ meetings and votes. design §11
+    case "meetingProposed": {
+      const { proposalId: id, by, act, slot } = event;
+      return { ...state, proposals: [...state.proposals, { id, by, act, slot, acceptedBy: [by] }] };
+    }
     case "meetingProposalAccepted":
+      return {
+        ...state,
+        proposals: state.proposals.map((p) => (p.id === event.proposalId ? { ...p, acceptedBy: [...p.acceptedBy, event.by] } : p)),
+      };
     case "meetingScheduled":
+      return { ...state, proposals: [], scheduledMeeting: { meetingId: event.meetingId, act: event.act, slot: event.slot } };
     case "emergencyMeetingCalled":
-    case "meetingOpened":
+      return updatePlayer({ ...state, pendingEmergency: { meetingId: event.meetingId, by: event.by } }, event.by, () => ({
+        emergencyMeetingUsed: true,
+      }));
+    case "meetingOpened": {
+      const emergency = event.kind === "emergency";
+      return {
+        ...state,
+        phase: { kind: "meeting", meetingId: event.meetingId },
+        meeting: { id: event.meetingId, kind: event.kind, act: event.act, calledBy: emergency ? (state.pendingEmergency?.by ?? null) : null, votes: {} },
+        scheduledMeeting: emergency ? state.scheduledMeeting : null,
+        pendingEmergency: emergency ? null : state.pendingEmergency,
+      };
+    }
     case "voteSealed":
-    case "voteCast":
+      return updatePlayer(state, event.player, () => ({ sealedVote: event.vote }));
+    case "voteCast": {
+      const meeting = openMeeting(state);
+      const next: GameState = { ...state, meeting: { ...meeting, votes: { ...meeting.votes, [event.player]: event.vote } } };
+      // A sealed vote is used up once it's cast. design §11.2
+      return event.sealed ? updatePlayer(next, event.player, () => ({ sealedVote: null })) : next;
+    }
     case "meetingClosed":
-    case "shakedownResolved":
+      openMeeting(state);
+      return { ...state, meeting: null, phase: phaseAfterMeeting(state) };
+    case "shakedownResolved": {
+      const next = { ...state, haul: state.haul + event.taken - event.compensation };
+      return updatePlayer(next, event.target, (p) => ({
+        stash: p.stash - event.taken + event.compensation,
+        timesShakenDown: p.timesShakenDown + 1,
+      }));
+    }
     case "checkpointChecked":
-      // Folded by later tasks (STATUS.md). Fail loudly rather than drop state.
-      throw new Error(`applyEvent: ${event.type} is not implemented yet`);
+      return { ...state, heat: state.heat + event.heatPenalty };
     default: {
       const unknown: never = event;
       throw new Error(`applyEvent: unknown event ${JSON.stringify(unknown)}`);

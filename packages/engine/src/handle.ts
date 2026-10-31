@@ -8,11 +8,22 @@
 // Randomness: handlers only draw through the `Draw` they are given. If they
 // draw anything, `withRng` appends the reveal-only `rngAdvanced` after their
 // events automatically, so replay restores the RNG (docs/decisions.md).
-import type { GameEvent, GameState, PlayerState, RngState } from "./types";
+import type { GameEvent, GameState, RngState } from "./types";
 import { PUBLIC, REVEAL, privateTo } from "./types";
 import { pick, randomInt, shuffle } from "./rng";
 import { applyEvent } from "./reduce";
 import { checkMove, resolveRound } from "./round";
+import { isObject, playerFor } from "./check";
+import {
+  acceptMeeting,
+  callEmergency,
+  castVote,
+  closeMeeting,
+  openMeeting,
+  proposeMeeting,
+  scheduleMeeting,
+  sealVote,
+} from "./meeting";
 
 export type CommandResult =
   | { readonly ok: true; readonly state: GameState; readonly events: readonly GameEvent[] }
@@ -51,14 +62,6 @@ export function withRng(rng: RngState, fn: (draw: Draw) => HandlerResult): Handl
   return [...out, { type: "rngAdvanced", visibility: REVEAL, words: state.words }];
 }
 
-const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
-
-function playerFor(state: GameState, command: Record<string, unknown>): PlayerState | string {
-  const id = command.player;
-  if (typeof id !== "string" || !Object.hasOwn(state.players, id)) return `unknown player ${String(id)}`;
-  return state.players[id] as PlayerState;
-}
-
 type Handler = (state: GameState, command: Record<string, unknown>, draw: Draw) => HandlerResult;
 
 /** design §5.1: a move can be changed until the round deadline; the last one counts. */
@@ -86,30 +89,44 @@ const postAlibi: Handler = (state, command) => {
   return [{ type: "alibiPosted", visibility: PUBLIC, player: player.id, round, room }];
 };
 
-/** The scheduler says a deadline has passed. design §4.1, §5.2 */
+/** The scheduler says a deadline has passed. design §4.1, §5.2, §11 */
 const advance: Handler = (state, command) => {
   const deadline = command.deadline;
   if (!isObject(deadline) || typeof deadline.kind !== "string") return "advance needs a deadline";
   switch (deadline.kind) {
     case "round":
+      // design §4.1: rounds are paused while a vote window is open.
+      if (state.phase.kind === "meeting") return "rounds are paused while a meeting is open";
       if (state.phase.kind !== "planning") return "no round deadline is pending";
       // Named round, so a retried or late deadline is refused instead of resolving the next round.
       if (deadline.round !== state.phase.round) return `the round ${String(deadline.round)} deadline is not pending (round ${state.phase.round} is)`;
       return resolveRound(state, state.phase.round);
     case "openMeeting":
+      return openMeeting(state, deadline.meetingId);
     case "closeMeeting":
-      return "meetings are not supported yet"; // STATUS.md task 6
+      return closeMeeting(state, deadline.meetingId);
     default:
       return `unknown deadline ${deadline.kind}`;
   }
 };
 
-const HANDLERS: Readonly<Record<string, Handler>> = { submitMove, postAlibi, advance };
+const HANDLERS: Readonly<Record<string, Handler>> = {
+  submitMove,
+  postAlibi,
+  proposeMeeting,
+  acceptMeeting,
+  callEmergency,
+  castVote,
+  sealVote,
+  advance,
+  scheduleMeeting,
+};
 
 /** Apply one command. Never throws for bad input; a rejection leaves state as it was. */
 export function handleCommand(state: GameState, command: unknown): CommandResult {
   if (!isObject(command) || typeof command.type !== "string") return { ok: false, reason: "command must be an object with a type" };
   if (state.phase.kind === "ended") return { ok: false, reason: "the game is over" };
+  if (state.phase.kind === "setup") return { ok: false, reason: "the game has not started" };
   const handler = Object.hasOwn(HANDLERS, command.type) ? HANDLERS[command.type] : undefined;
   if (!handler) return { ok: false, reason: `command ${command.type} is not supported` };
   const out = withRng(state.rng, (draw) => handler(state, command, draw));

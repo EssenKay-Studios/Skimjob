@@ -101,7 +101,7 @@ describe("rejected commands leave state untouched", () => {
     ["not an object", 7],
     ["no type", { player: "p0" }],
     ["unknown command", { type: "teleport" }],
-    ["not yet supported command", { type: "callEmergency", player: "p0" }],
+    ["unsupported command", { type: "useAbility", player: "p0" }],
     ["unknown player", submit("zed", { room: "lobby" })],
     ["missing move", { type: "submitMove", player: "p0" }],
     ["unknown room", submit("p0", { room: "kitchen" })],
@@ -324,7 +324,7 @@ describe("starter role powers in a move — design §8", () => {
     expect(reason(s, submit("p0", { room: "vault", ability: { kind: "fenceSafe", amount: 0 } }))).toMatch(/1 to 1/);
     s = run(s, submit("p0", { room: "vault", ability: { kind: "fenceSafe", amount: 1 } }), ROUND, ROUND);
     expect(s.players.p0).toMatchObject({ safe: 5, safeDepositedThisAct: 5 });
-    // Act 2 begins after the act-1 meeting (task 6); its roundStarted resets the allowance.
+    // Act 2 begins after the act-1 meeting (design §11); its roundStarted resets the allowance.
     const act2 = replay(s.config, [...s.log, { type: "roundStarted", visibility: { kind: "public" }, round: 4, act: 2 }]);
     expect(act2.players.p0).toMatchObject({ safe: 5, safeDepositedThisAct: 0 });
   });

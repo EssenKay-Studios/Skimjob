@@ -1,5 +1,5 @@
 // Job definitions: rooms by player count, Heat formula numbers and checkpoint
-// targets. design §6, §7, §9, §11.5
+// targets, shakedown numbers. design §6, §7, §9, §11.3, §11.5
 //
 // Heat and targets live on the job because jobs may change them (the Casino's
 // baseline Heat is +5, design §9). Engine helpers take a `JobDef` rather than
@@ -33,6 +33,14 @@ export interface CheckpointRules {
   readonly perPlayer: readonly [number, number, number];
 }
 
+/** design §11.3 */
+export interface ShakedownRules {
+  /** A shaken-down stash below this × the act number (3, 6, 9) is declared clean. */
+  readonly cleanBelowPerAct: number;
+  /** A clean target is paid this × the act number (5, 10, 15) out of the Haul. */
+  readonly compensationPerAct: number;
+}
+
 export interface JobDef {
   readonly id: JobId;
   readonly name: string;
@@ -44,6 +52,8 @@ export interface JobDef {
   readonly defaultRoom: RoomId;
   readonly heat: HeatRules;
   readonly checkpoints: CheckpointRules;
+  /** Kept on the job so simulator content overrides can tune it with the rest (design §17.4, §19 Q4). */
+  readonly shakedown: ShakedownRules;
 }
 
 /** First National Bank, the starter job. design §6.1, §6.2, §7, §11.5 */
@@ -86,6 +96,7 @@ export const BANK_JOB: JobDef = {
   defaultRoom: "lobby",
   heat: { max: 100, perRound: 4, missedCheckpoint: 15 },
   checkpoints: { perPlayer: [6, 14, 22] },
+  shakedown: { cleanBelowPerAct: 3, compensationPerAct: 5 },
 };
 
 export const JOBS: Readonly<Record<JobId, JobDef>> = { bank: BANK_JOB };

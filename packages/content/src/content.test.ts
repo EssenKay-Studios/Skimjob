@@ -102,6 +102,12 @@ describe("First National Bank checkpoint targets — design §11.5", () => {
   });
 });
 
+describe("First National Bank shakedowns — design §11.3", () => {
+  it("clean below 3 × the act number; a clean target is paid 5 × the act number", () => {
+    expect(BANK_JOB.shakedown).toEqual({ cleanBelowPerAct: 3, compensationPerAct: 5 });
+  });
+});
+
 describe("starter roles — design §8, §8.1", () => {
   it("every role that can be dealt has a definition with a matching id", () => {
     for (const id of new Set([...STARTER_ROLES, ...POOL_ROLES, ...DEFAULT_ROLE_POOL, FILLER_ROLE])) {
