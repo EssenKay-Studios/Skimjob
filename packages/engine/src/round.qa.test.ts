@@ -1,5 +1,6 @@
 // QA (PR #4): scripted full games, rejections, capacity, raids, determinism
 // and private information for the round loop. design §5, §6, §7, §8
+import { STARTER_ROLES } from "@skimjob/content";
 import { describe, expect, it } from "vitest";
 import type { GameConfig, GameEvent, GameState, Move } from "./types";
 import { PUBLIC, canSee } from "./types";
@@ -14,7 +15,7 @@ function config(players: number): GameConfig {
     seed: "qa-round",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: [],
+    rolePool: [...STARTER_ROLES], // no Muscle, so no shakedown window (task 12)
     mole: "off",
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",

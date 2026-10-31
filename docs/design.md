@@ -191,6 +191,13 @@ Every player is dealt **one secret role** at the start of the game. Roles are de
 
 *Fence safe timing (provisional):* the safe move is part of the Fence's move and happens after that round's split, so it can include loot pocketed that round; it can't move more than the stash holds.
 
+*Info and vote roles (provisional, task 12):*
+- **Hacker:** the loop is part of the Hacker's move and names any room in play. Only **Security** shows it as empty; the Lookout's extra room and room-mates still see who was there.
+- **Smooth talker:** the double vote counts toward the majority (§11.2), not toward quorum, which counts voters. The public tally counts one per ballot, so it never points at the Smooth talker; only a result the plain count can't explain shows that one was on the winning side. A sealed vote counts double too.
+- **Muscle:** when a vote passes a shakedown, a short **shakedown window** opens before it is applied (§11.3). The Muscle can cancel it then, including a shakedown of themselves. The cancel stays private until the window ends; the ledger then says the shakedown was cancelled, not who cancelled it. The window opens after every passed shakedown whenever the Muscle is in the game's role pool, dealt or not, so it never shows that a Muscle is in the crew.
+- **Blackmailer:** the guess is part of the Blackmailer's move. It resolves after that round's splits and Fence safe moves, takes at most what the target's stash holds and never touches the safe. The target is told privately how much was taken, but not by whom; a wrong guess, or a right one on an empty stash, tells the target nothing.
+- **Snitch:** the target is drawn at random from the other players at setup. "Holding more than the clean threshold" means the shakedown was **not clean** (stash at least 3 × the act number). The +10 goes into the Snitch's stash, each time it happens, and a cancelled shakedown pays nothing.
+
 ### 8.1 Dealing roles
 
 - The roles in play are drawn from the pool according to player count and the host's settings.
@@ -256,6 +263,8 @@ From round 2 onward, one event card is flipped at the start of each round and sh
 - **To pass**, a shakedown needs **more than half of the votes cast**, and at least half the crew has to take part (sealed votes count).
 - When the window closes, the ballots are cleared from the screen. The **result** stays in the ledger permanently.
 
+*Smooth talker (provisional):* "more than half of the votes cast" counts the Smooth talker's ballot twice; "at least half the crew has to take part" counts people. The tally shown counts one per ballot (see §8).
+
 *Ballots (provisional):* you can't vote to shake yourself down, and you can change your vote until the window closes. A sealed vote counts in the **next meeting that opens, regular or emergency**, and is then used up; sealing again replaces it, it can't be withdrawn, and a player who turns up can override it with a live vote.
 
 ### 11.3 Shakedown results
@@ -263,6 +272,7 @@ From round 2 onward, one event card is flipped at the start of each round and sh
 - The target's stash is revealed to everyone, and all of it except any Fence safe goes into the Haul.
 - **Clean threshold:** if the stash was below **3 × the act number** (3, 6 or 9), the target is declared clean. The crew pays them **5 × the act number** out of the Haul, so false accusations hurt everyone. *(Provisional: never more than the Haul holds.)* An emergency meeting uses the current act's numbers.
 - No player is ever eliminated.
+- *Muscle window (provisional):* when the role pool includes the Muscle, a passed shakedown is applied only after a short window in which the Muscle may cancel it (§8). The checkpoint (§11.4) comes after that window.
 
 ### 11.4 Order at a checkpoint
 

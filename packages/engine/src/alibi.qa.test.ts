@@ -1,4 +1,5 @@
 // QA (PR #5): alibis and the round-named deadline. design §5.4, §5
+import { STARTER_ROLES } from "@skimjob/content";
 import { describe, expect, it } from "vitest";
 import type { GameConfig, GameState } from "./types";
 import { PUBLIC, canSee } from "./types";
@@ -12,7 +13,7 @@ function config(players: number, seed = "qa-alibi"): GameConfig {
     seed,
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: [],
+    rolePool: [...STARTER_ROLES], // no Muscle, so no shakedown window (task 12)
     mole: "off",
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",

@@ -29,6 +29,7 @@ export const sampleEvents: { readonly [T in GameEventType]: EventOfType<T> } = {
   rngSeeded: { type: "rngSeeded", visibility: REVEAL, seed: "sample-seed" },
   roomsSet: { type: "roomsSet", visibility: PUBLIC, rooms: ["vault", "office", "lobby", "security", "rooftop"] },
   roleDealt: { type: "roleDealt", visibility: privateTo(ana), player: ana, role: "fence" },
+  snitchTargetAssigned: { type: "snitchTargetAssigned", visibility: privateTo(ana), player: ana, target: ben },
   rngAdvanced: { type: "rngAdvanced", visibility: REVEAL, words: [1, 2, 3, 4] },
   roundStarted: { type: "roundStarted", visibility: PUBLIC, round: 1, act: 1 },
   moveSubmitted: {
@@ -62,6 +63,7 @@ export const sampleEvents: { readonly [T in GameEventType]: EventOfType<T> } = {
     round: 1,
     ability: { kind: "fenceSafe", amount: 2 },
   },
+  blackmailed: { type: "blackmailed", visibility: privateTo(ben), player: ben, round: 2, stolen: 3 },
   roomSighting: { type: "roomSighting", visibility: privateTo(ana), player: ana, round: 1, room: "vault", others: [] },
   roomWatched: {
     type: "roomWatched",
@@ -98,6 +100,9 @@ export const sampleEvents: { readonly [T in GameEventType]: EventOfType<T> } = {
     ballots: { [ben]: { kind: "shakedown", target: ana }, [ana]: { kind: "skip" } },
     result: { kind: "noMajority" },
   },
+  shakedownPending: { type: "shakedownPending", visibility: PUBLIC, meetingId: "m1", kind: "regular", act: 1, target: ana },
+  shakedownCancelled: { type: "shakedownCancelled", visibility: PUBLIC, meetingId: "m1", target: ana },
+  snitchPaid: { type: "snitchPaid", visibility: privateTo(ben), player: ben, meetingId: "m1", target: ana, amount: 10 },
   shakedownResolved: {
     type: "shakedownResolved",
     visibility: PUBLIC,
@@ -131,6 +136,7 @@ export const sampleCommands: { readonly [T in CommandType]: Extract<Command, { t
   callEmergency: { type: "callEmergency", player: ben },
   castVote: { type: "castVote", player: ben, vote: { kind: "shakedown", target: ana } },
   sealVote: { type: "sealVote", player: ana, vote: { kind: "skip" } },
+  useAbility: { type: "useAbility", player: ben, ability: { kind: "cancelShakedown" } },
   advance: { type: "advance", deadline: { kind: "openMeeting", meetingId: "m2" } },
   scheduleMeeting: { type: "scheduleMeeting", act: 1, slot: "2026-11-01T21:00Z" },
 };

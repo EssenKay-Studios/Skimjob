@@ -1,4 +1,5 @@
 // Test helpers: scripted engine games for the bot tests. Not exported from the package.
+import { STARTER_ROLES } from "@skimjob/content";
 import { createGame, handleCommand, type GameConfig, type GameState, type PlayerId, type VoteVisibility } from "@skimjob/engine";
 
 const IDS = ["ana", "ben", "carl", "dee", "eve"];
@@ -8,7 +9,8 @@ export function seats(n: number): GameConfig["players"] {
 }
 
 export function config(n: number, seed: string, voteVisibility: VoteVisibility = "hiddenThenRevealed"): GameConfig {
-  return { seed, players: seats(n), job: "bank", rolePool: [], mole: "off", eventsEnabled: false, voteVisibility, starterMode: false };
+  // Starter pool: no Muscle, so scripted shakedowns need no window (task 12).
+  return { seed, players: seats(n), job: "bank", rolePool: [...STARTER_ROLES], mole: "off", eventsEnabled: false, voteVisibility, starterMode: false };
 }
 
 /** A game where `want` holds for the dealt roles (e.g. a pocketer who isn't the Insider), trying seeds in order. */

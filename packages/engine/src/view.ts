@@ -77,6 +77,7 @@ function buildView(state: GameState, playerId: PlayerId): PlayerView {
       role: me.role,
       stash: me.stash,
       safe: me.safe,
+      roleState: me.roleState,
       emergencyMeetingUsed: me.emergencyMeetingUsed,
       move: ownMove ?? null,
       sealedVote: me.sealedVote,

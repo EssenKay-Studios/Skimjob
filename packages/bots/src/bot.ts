@@ -4,7 +4,7 @@
 // Bots are deterministic: all their randomness comes from their own seeded RNG
 // (the engine's sfc32), never Math.random, so same seed + same views = same
 // commands. Their seed is their own, not the game's (which is secret).
-import { ROUNDS_PER_ACT, type RoomId } from "@skimjob/content";
+import { FILLER_ROLE, ROUNDS_PER_ACT, type RoomId } from "@skimjob/content";
 import {
   actOfRound,
   checkpointTarget,
@@ -87,6 +87,15 @@ export function decide(view: PlayerView, p: Personality, random: Random): Player
     if (view.me.vote === null) out.push({ type: "castVote", player, vote: chooseVote(view, p, random) });
     return out;
   }
+  if (phase.kind === "shakedownPending") {
+    // design §8: a Muscle with its cancel left keeps itself out of trouble (smarter use: task 16).
+    const { power } = roleOf(view);
+    const cancelled = ofType(view.caseFile, "abilityResolved").some((e) => e.ability.kind === "cancelShakedown" && e.ability.meetingId === phase.meetingId);
+    if (power.kind === "cancelShakedown" && phase.target === player && view.me.roleState.usedThisGame < power.perGame && !cancelled) {
+      out.push({ type: "useAbility", player, ability: { kind: "cancelShakedown" } });
+    }
+    return out;
+  }
   out.push(...scheduleMeeting(view));
   if (phase.kind === "planning") {
     if (wantsEmergency(view, p, random)) out.push({ type: "callEmergency", player });
@@ -124,6 +133,12 @@ export function chooseMove(view: PlayerView, p: Personality, random: Random): Mo
     const left = power.perAct - used;
     const hideable = view.me.stash + pocket;
     if (left >= 1 && hideable >= 1) ability = { kind: "fenceSafe", amount: Math.min(left, hideable) };
+  } else if (power.kind === "loopCameras" && view.me.roleState.usedThisAct < power.perAct && pocket > 0) {
+    // design §8: hide its own skim from the cameras (minimal; task 16).
+    ability = { kind: "loopCameras", room };
+  } else if (power.kind === "blackmail" && view.me.roleState.usedThisAct < power.perAct && view.players.length > 0) {
+    // design §8: Rookies are the commonest role, so guess one (minimal; task 16).
+    ability = { kind: "blackmail", target: pick(view.players, random).id, role: FILLER_ROLE };
   }
   return ability ? { ...move, ability } : move;
 }

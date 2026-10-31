@@ -18,14 +18,17 @@ export const MOLE_ROLE: RoleId = "mole";
 /** Starter mode: these roles only, no Mole, no events. design §8.1 */
 export const STARTER_ROLES: readonly RoleId[] = ["rookie", "lookout", "insider", "fence"];
 
+/** The info and vote roles (M1 task 12). design §8 */
+export const INFO_VOTE_ROLES: readonly RoleId[] = ["hacker", "smoothTalker", "muscle", "blackmailer", "snitch"];
+
 /**
- * Roles used when the host leaves the pool empty. Only the starter roles exist
- * so far; the remaining roles join this list as they are implemented.
+ * Roles used when the host leaves the pool empty: every implemented pool role.
+ * The Driver joins this list when it is implemented (task 13).
  */
-export const DEFAULT_ROLE_POOL: readonly RoleId[] = STARTER_ROLES;
+export const DEFAULT_ROLE_POOL: readonly RoleId[] = [...STARTER_ROLES, ...INFO_VOTE_ROLES];
 
 /** Every role id the engine accepts in a pool (the Mole is not a pool role). */
-export const POOL_ROLES: readonly RoleId[] = STARTER_ROLES;
+export const POOL_ROLES: readonly RoleId[] = DEFAULT_ROLE_POOL;
 
 /**
  * How many Moles to deal, by player count and the host's Mole setting.

@@ -1,4 +1,5 @@
 // Alibis (design §5.4) and the round-named deadline (task 4 review).
+import { STARTER_ROLES } from "@skimjob/content";
 import { describe, expect, it } from "vitest";
 import type { Command, GameConfig, GameEvent, GameState } from "./types";
 import { canSee } from "./types";
@@ -10,7 +11,7 @@ const cfg: GameConfig = {
   seed: "alibi-seed",
   players: ["p0", "p1", "p2"].map((id) => ({ id, name: id.toUpperCase(), isBot: true })),
   job: "bank",
-  rolePool: [],
+  rolePool: [...STARTER_ROLES], // no Muscle, so no shakedown window (task 12)
   mole: "off",
   eventsEnabled: false,
   voteVisibility: "hiddenThenRevealed",

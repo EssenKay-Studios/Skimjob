@@ -192,3 +192,28 @@ describe("role powers in bot games — design §8", () => {
     expect(used("lookout").length).toBeGreaterThan(0);
   });
 });
+
+describe("bots with the info and vote roles dealt — design §8, §17.3 (task 12)", () => {
+  const ROLE_POOL = ["hacker", "smoothTalker", "muscle", "blackmailer", "snitch"];
+
+  it("finish every game with no refused command, and use the Hacker, Blackmailer and Muscle powers", () => {
+    const used = new Set<string>();
+    const types = new Set<string>();
+    for (const mode of ["hiddenThenRevealed", "open", "secret"] as const) {
+      for (let i = 0; i < 20; i++) {
+        for (const n of [3, 5, 6]) {
+          const c = { ...config(n, `info-${mode}-${n}-${i}`, mode), rolePool: ROLE_POOL };
+          const r = runBotGame(c, createBots(c.players, mix(MIXED), `bots-${c.seed}`));
+          expect(r.state.phase.kind).toBe("ended");
+          expect(r.rejections).toEqual([]);
+          for (const e of r.state.log) {
+            types.add(e.type);
+            if (e.type === "abilityResolved") used.add(e.ability.kind);
+          }
+        }
+      }
+    }
+    for (const k of ["loopCameras", "blackmail", "cancelShakedown"]) expect(used, k).toContain(k);
+    for (const t of ["snitchTargetAssigned", "shakedownPending", "shakedownCancelled"]) expect(types, t).toContain(t);
+  });
+});

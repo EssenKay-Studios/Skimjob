@@ -21,7 +21,8 @@ import type {
 } from "./types";
 import { PUBLIC, privateTo, secretTo } from "./types";
 import { checkpointTarget, clampHeat } from "./job";
-import { jobFor } from "./overrides";
+import { jobFor, rolesFor } from "./overrides";
+import { rolePoolFor } from "./setup";
 import { actOfRound } from "./acts";
 import { gameEnded } from "./end";
 import { isObject, playerFor } from "./check";
@@ -37,8 +38,9 @@ export const emergencyMeetingId = (player: PlayerId): string => `emergency-${pla
 /** The act being played: the act of the latest round started. */
 const currentAct = (state: GameState): ActNumber => actOfRound(state.round);
 
-/** The current act's regular meeting slot is locked in (scheduled, or already open). */
-const slotLocked = (state: GameState): boolean => state.scheduledMeeting !== null || state.meeting?.kind === "regular";
+/** The current act's regular meeting slot is locked in (scheduled, already open, or its shakedown pending). */
+const slotLocked = (state: GameState): boolean =>
+  state.scheduledMeeting !== null || state.meeting?.kind === "regular" || state.pendingShakedown?.kind === "regular";
 
 const lockedReason = (state: GameState): string => `the act ${currentAct(state)} meeting is already scheduled`;
 
@@ -120,6 +122,7 @@ export function callEmergency(state: GameState, command: Raw): Result {
   if (typeof player === "string") return player;
   if (player.emergencyMeetingUsed) return "you have already called your emergency meeting";
   if (state.meeting) return "a meeting is already open";
+  if (state.pendingShakedown) return "a shakedown is pending";
   if (state.pendingEmergency) return "an emergency meeting has already been called";
   return [{ type: "emergencyMeetingCalled", visibility: PUBLIC, by: player.id, meetingId: emergencyMeetingId(player.id) }];
 }
@@ -147,6 +150,19 @@ export function castVote(state: GameState, command: Raw): Result {
   return [{ type: "voteCast", visibility: ballotVisibility(state, player.id), meetingId: meeting.id, player: player.id, vote, sealed: false }];
 }
 
+/** Every Snitch whose target this is gets their bonus, privately. design §8 */
+function snitchPayouts(state: GameState, meetingId: string, target: PlayerId): GameEvent[] {
+  const roles = rolesFor(state.config);
+  const out: GameEvent[] = [];
+  for (const id of state.playerOrder) {
+    const p = state.players[id] as PlayerState;
+    const power = (Object.hasOwn(roles, p.role) ? roles[p.role] : undefined)?.power;
+    if (power?.kind !== "snitch" || p.roleState.target !== target) continue;
+    out.push({ type: "snitchPaid", visibility: privateTo(id), player: id, meetingId, target, amount: power.bonus });
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------- deadlines (§4.1, §11)
 
 /**
@@ -156,6 +172,7 @@ export function castVote(state: GameState, command: Raw): Result {
  */
 export function openMeeting(state: GameState, meetingId: unknown): Result {
   if (state.meeting) return `meeting ${state.meeting.id} is already open`;
+  if (state.pendingShakedown) return `the shakedown of meeting ${state.pendingShakedown.meetingId} is pending`;
   // Checked first: an absent id must not match an absent pending meeting.
   if (typeof meetingId !== "string") return `meeting ${String(meetingId)} is not waiting to open`;
   const act = currentAct(state);
@@ -177,15 +194,40 @@ export function openMeeting(state: GameState, meetingId: unknown): Result {
 }
 
 /**
- * design §11.2: quorum is at least half the crew voting (sealed votes count);
- * a shakedown needs more than half of the votes cast. Every ballot weighs 1
- * until the Smooth talker lands.
+ * design §11.2: quorum is at least half the crew voting (sealed votes count),
+ * counting voters; a shakedown needs more than half of the votes cast,
+ * counting weight (the Smooth talker's ballot counts double, §8). `weight` is
+ * the total weight cast, and `skip` / `targets` are weights too. Without a
+ * Smooth talker, weight = voters.
  */
-export function meetingResult(crewSize: number, cast: number, skip: number, targets: ReadonlyMap<PlayerId, number>): MeetingResult {
-  if (cast * 2 < crewSize) return { kind: "noQuorum" };
-  for (const [target, votes] of targets) if (votes * 2 > cast) return { kind: "shakedown", target };
-  if (skip * 2 > cast) return { kind: "skipped" };
+export function meetingResult(
+  crewSize: number,
+  voters: number,
+  skip: number,
+  targets: ReadonlyMap<PlayerId, number>,
+  weight: number = voters,
+): MeetingResult {
+  if (voters * 2 < crewSize) return { kind: "noQuorum" };
+  for (const [target, votes] of targets) if (votes * 2 > weight) return { kind: "shakedown", target };
+  if (skip * 2 > weight) return { kind: "skipped" };
   return { kind: "noMajority" };
+}
+
+/** How much a player's ballot counts: the Smooth talker's `weight`, else 1. design §8 */
+function voteWeight(state: GameState, player: PlayerId): number {
+  const role = (state.players[player] as PlayerState).role;
+  const power = (Object.hasOwn(rolesFor(state.config), role) ? rolesFor(state.config)[role] : undefined)?.power;
+  return power?.kind === "voteWeight" ? power.weight : 1;
+}
+
+/**
+ * Whether a passed shakedown waits for a Muscle window. It depends only on the
+ * role pool, never on who was dealt, so the public phase can't tell anyone
+ * whether a Muscle is in the crew. design §8
+ */
+function shakedownWindow(state: GameState): boolean {
+  const roles = rolesFor(state.config);
+  return rolePoolFor(state.config).some((r) => Object.hasOwn(roles, r) && roles[r]?.power.kind === "cancelShakedown");
 }
 
 /**
@@ -197,42 +239,116 @@ export function meetingResult(crewSize: number, cast: number, skip: number, targ
 export function closeMeeting(state: GameState, meetingId: unknown): Result {
   const meeting = state.meeting;
   if (!meeting || meeting.id !== meetingId) return `meeting ${String(meetingId)} is not open`;
-  const job = jobFor(state.config);
   const crewSize = state.playerOrder.length;
-  const { act } = meeting;
 
   // Tally in seat order, so the event is the same however the votes arrived.
+  // The public tally counts ballots; the result counts weight (Smooth talker, design §8).
   const ballots: [PlayerId, VoteChoice][] = [];
   for (const id of state.playerOrder) if (Object.hasOwn(meeting.votes, id)) ballots.push([id, meeting.votes[id] as VoteChoice]);
   let skip = 0;
+  let skipWeight = 0;
+  let weight = 0;
   const counts = new Map<PlayerId, number>();
-  for (const [, vote] of ballots) {
-    if (vote.kind === "skip") skip++;
-    else counts.set(vote.target, (counts.get(vote.target) ?? 0) + 1);
+  const weights = new Map<PlayerId, number>();
+  for (const [voter, vote] of ballots) {
+    const w = voteWeight(state, voter);
+    weight += w;
+    if (vote.kind === "skip") {
+      skip++;
+      skipWeight += w;
+    } else {
+      counts.set(vote.target, (counts.get(vote.target) ?? 0) + 1);
+      weights.set(vote.target, (weights.get(vote.target) ?? 0) + w);
+    }
   }
-  const targets = new Map(state.playerOrder.filter((id) => counts.has(id)).map((id) => [id, counts.get(id) as number]));
-  const result = meetingResult(crewSize, ballots.length, skip, targets);
+  const inSeatOrder = (m: Map<PlayerId, number>) => new Map(state.playerOrder.filter((id) => m.has(id)).map((id) => [id, m.get(id) as number]));
+  const result = meetingResult(crewSize, ballots.length, skipWeight, inSeatOrder(weights), weight);
   const events: GameEvent[] = [
     {
       type: "meetingClosed",
       visibility: PUBLIC,
       meetingId: meeting.id,
-      tally: { skip, targets: Object.fromEntries(targets) },
+      tally: { skip, targets: Object.fromEntries(inSeatOrder(counts)) },
       // design §11.2: in "secret" mode only the tally is ever shown.
       ballots: state.config.voteVisibility === "secret" ? null : Object.fromEntries(ballots),
       result,
     },
   ];
+  const { kind, act } = meeting;
+  if (result.kind === "shakedown" && shakedownWindow(state)) {
+    // design §8: the Muscle may cancel it before it's applied (`useAbility`, then `advance { resolveShakedown }`).
+    events.push({ type: "shakedownPending", visibility: PUBLIC, meetingId: meeting.id, kind, act, target: result.target });
+    return events;
+  }
+  const shakedown = result.kind === "shakedown" ? { target: result.target, cancelled: false } : null;
+  return [...events, ...afterVote(state, events, { meetingId: meeting.id, kind, act }, shakedown)];
+}
+
+/** The shakedown window has ended: apply the shakedown (or announce the cancel), then go on. design §8, §11.3 */
+export function resolveShakedown(state: GameState, meetingId: unknown): Result {
+  const pending = state.pendingShakedown;
+  if (!pending || pending.meetingId !== meetingId) return `no shakedown is pending for meeting ${String(meetingId)}`;
+  return afterVote(state, [], pending, pending);
+}
+
+/**
+ * Muscle (design §8): once per game, cancel the pending shakedown. Private
+ * until the window ends, when `shakedownCancelled` says only that it was cancelled.
+ */
+export function useAbility(state: GameState, command: Raw): Result {
+  const player = playerFor(state, command);
+  if (typeof player === "string") return player;
+  const ability = command.ability;
+  if (!isObject(ability) || typeof ability.kind !== "string") return "ability must be an object with a kind";
+  const roles = rolesFor(state.config);
+  const power = (Object.hasOwn(roles, player.role) ? roles[player.role] : undefined)?.power;
+  if (ability.kind !== "cancelShakedown" || power?.kind !== "cancelShakedown") return `your role has no ${ability.kind} ability to use now`;
+  if (player.roleState.usedThisGame >= power.perGame) return "you have already cancelled a shakedown this game";
+  const pending = state.pendingShakedown;
+  if (!pending) return "no shakedown is pending";
+  if (pending.cancelled) return "this shakedown is already cancelled";
+  return [
+    {
+      type: "abilityResolved",
+      visibility: privateTo(player.id),
+      player: player.id,
+      round: state.round,
+      ability: { kind: "cancelShakedown", meetingId: pending.meetingId, target: pending.target },
+    },
+  ];
+}
+
+/**
+ * After the vote (and any shakedown window): the shakedown or its cancel,
+ * Snitch payouts, then for the act's regular meeting the checkpoint and what
+ * follows. design §11.3, §11.4. `prior` are this command's events so far
+ * (folded first when the game ends).
+ */
+function afterVote(
+  state: GameState,
+  prior: readonly GameEvent[],
+  meeting: { readonly meetingId: string; readonly kind: MeetingKind; readonly act: ActNumber },
+  shakedown: { readonly target: PlayerId; readonly cancelled: boolean } | null,
+): GameEvent[] {
+  const job = jobFor(state.config);
+  const crewSize = state.playerOrder.length;
+  const { act } = meeting;
+  const events: GameEvent[] = [];
 
   // design §11.3: the stash (never the Fence safe) goes into the Haul; a clean target is compensated.
   let haul = state.haul;
-  if (result.kind === "shakedown") {
-    const stash = (state.players[result.target] as PlayerState).stash;
+  if (shakedown?.cancelled) {
+    events.push({ type: "shakedownCancelled", visibility: PUBLIC, meetingId: meeting.meetingId, target: shakedown.target });
+  } else if (shakedown) {
+    const { target } = shakedown;
+    const stash = (state.players[target] as PlayerState).stash;
     const clean = stash < job.shakedown.cleanBelowPerAct * act;
     // Paid out of the Haul, so never more than it holds (provisional).
     const compensation = clean ? Math.min(job.shakedown.compensationPerAct * act, haul + stash) : 0;
     haul += stash - compensation;
-    events.push({ type: "shakedownResolved", visibility: PUBLIC, meetingId: meeting.id, target: result.target, stashRevealed: stash, taken: stash, clean, compensation });
+    events.push({ type: "shakedownResolved", visibility: PUBLIC, meetingId: meeting.meetingId, target, stashRevealed: stash, taken: stash, clean, compensation });
+    // Snitch (§8): paid when their target is shaken down holding at least the clean threshold (provisional).
+    if (!clean) events.push(...snitchPayouts(state, meeting.meetingId, target));
   }
   if (meeting.kind === "emergency") return events;
 
@@ -246,10 +362,10 @@ export function closeMeeting(state: GameState, meetingId: unknown): Result {
   // The ranking is worked out after the shakedown (design §3, §11.4), in end.ts.
   if (heat >= job.heat.max) {
     events.push({ type: "copsRaided", visibility: PUBLIC, round: state.round, heat });
-    events.push(gameEnded(state, events, "heat"));
+    events.push(gameEnded(state, [...prior, ...events], "heat"));
   } else if (final) {
     // design §3: the heist succeeds if the Haul meets the final target after the final meeting.
-    events.push(gameEnded(state, events, met ? null : "target"));
+    events.push(gameEnded(state, [...prior, ...events], met ? null : "target"));
   } else {
     events.push({ type: "roundStarted", visibility: PUBLIC, round: state.round + 1, act: actOfRound(state.round + 1) });
   }

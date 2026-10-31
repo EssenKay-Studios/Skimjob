@@ -29,11 +29,13 @@ Goal: run thousands of all-bot games at 2–12 players and use the results to tu
 
 - [x] **First balance pass** — content 0.2.0: checkpoints 7/15/24, Deposit boxes +10 Heat, Teller line 4, Insider 0.3 per surplus loot; bot fixes (Heat avoidance, vote thresholds). Success 82% → 65% overall (45/63/77/69/67/70/60% at 2/3/4/6/8/10/12p). Summary in `docs/balance/balance-1.md`, findings in decisions.md. Design §6.2, §7, §8, §11.5, §17.4.
 
+- [x] **Info & vote roles** — Hacker (loop Security's cameras, once per act), Smooth talker (double vote; plain public tally), Muscle (`useAbility` cancel in a public shakedown window, once per game), Blackmailer (role guess, steal 3, once per act), Snitch (secret target, +10 when it's shaken down not clean). Generic `roleState` per player, `useAbility`, `advance { resolveShakedown }`. All five join the default pool (content 0.3.0). Design §8, §11.2, §11.3.
+
 ### Next up (in order)
-- Remaining roles, events deck, Duel mode (see below); then a second balance pass with them in.
+- Win-condition roles, events deck, Duel mode (see below); then a second balance pass with them in.
 
 ### Later in M1
-12. [ ] **Info & vote roles** — Hacker, Smooth talker, Muscle, Blackmailer, Snitch (incl. generic role state + `useAbility`) — design §8.
+12. [x] **Info & vote roles** — done (see above).
 13. [ ] **Win-condition roles** — Driver, Mole (tip-off, Mole allies, winning rules: Mole wins only on failure and never on success; best non-Mole wins a success; Driver wins a success normally and a Heat failure if top stash) — design §3, §8, §8.1.
 14. [ ] **Events deck** — the ten events of design §10, one flipped per round from round 2, off in starter mode.
 15. [ ] **Duel mode** — exactly 2 humans, call-outs instead of votes — design §16.1.
@@ -59,10 +61,12 @@ Goal: run thousands of all-bot games at 2–12 players and use the results to tu
 - Roles with no `RoleDef` (the Mole, for now) play with no power and may pocket.
 - `samples.ts` has one sample per event and command type, and the compiler enforces it. `view.test.ts` loops over `sampleEvents`, so a new event type is covered automatically; if it can take more than one visibility, add the extra variants to `samples` there. New event types from later tasks (events deck, Mole) should also appear in the scripted games of `view.leak.test.ts`.
 - Visibility has four kinds: `public`, `private`, `reveal`, `secret`. `secret` never opens up, even after the game (Secret-mode ballots, §11.2). `voteCast`/`voteSealed` use `secretTo()` in Secret mode; `reveal.log` comes from `canSee(..., true)`, so other players' secret ballots are dropped.
-- `AbilityUse` covers only Lookout (`rooms`, 1 to `extraRooms`) and Fence. Extend it when the other roles land. Lockdown (closed rooms) arrives with the events deck; today "closed" means "not in play for this crew size".
+- **Role powers (task 12):** move powers are `AbilityUse` (Lookout, Fence, Hacker `loopCameras`, Blackmailer `blackmail`); powers used outside planning go through `useAbility` (`InstantAbility`, today only the Muscle's `cancelShakedown`; the Mole's tip-off could be either). Per-player uses live in `PlayerState.roleState` (`usedThisAct` reset each act, `usedThisGame`, `target`); add Mole allies there. `abilityResolved.ability` is a `ResolvedAbility`. Lockdown (closed rooms) arrives with the events deck; today "closed" means "not in play for this crew size".
+- **Shakedown window (task 12):** a passed shakedown becomes `shakedownPending` (phase and public event) whenever the role pool holds the Muscle; the server must send `advance { kind: "resolveShakedown", meetingId }` when its (short, server-set) window ends. Every new ending or shakedown path must go through `afterVote` in `meeting.ts`. Scripted tests that don't want the window use `rolePool: [...STARTER_ROLES]`.
+- **Default pool is now 9 roles** (content 0.3.0): the sim's default runs deal them, so balance-1 numbers no longer describe a default run (task 16 re-runs).
 - From the PR #1 review, deferred to the task named:
   - ~~Tasks 10/11: content overrides and `CONTENT_VERSION` in `gameCreated`~~ — done in task 10. New job/role numbers that should be tunable must be added to `ContentOverrides` and `validateOverrides`.
-  - **Remaining roles:** replace the Fence-specific `safe`/`safeDepositedThisAct` with a generic per-player role state (once-per-act/game uses, Snitch target, Mole allies). Some abilities happen outside planning (Muscle cancel after the vote passes, Double-cross accept, Duel call-out §16.1), so add a `useAbility` command (§17.2), and Muscle needs a window between `meetingClosed` and `shakedownResolved` (probably a new `Deadline` kind).
+  - ~~**Remaining roles:** generic per-player role state, `useAbility`, Muscle window~~ — done in task 12. Double-cross accept (events deck) and Duel call-out (§16.1) can use `useAbility` too.
   - **Events deck / Duel mode:** no event types yet (public `eventFlipped`, private Raid rumour / Inside tip results) and no Duel config flag.
 
 ## Questions for Karthik
@@ -81,3 +85,8 @@ Goal: run thousands of all-bot games at 2–12 players and use the results to tu
 - Balance (10–12 players): only ~0.4 shakedowns pass per game (votes scatter; a shakedown needs more than half the votes cast), and in a gentler crew one heavy pocketer wins ~50%. Keep the majority rule (humans will coordinate in chat), or let a plurality pass in big crews?
 - Balance (Heat): Heat busts are 51% of failures at 2p but 0% at 10–12p, because big crews average out. Numbers can't flatten this; OK to rely on the events deck for Heat swings?
 - Balance (Lookout): its extra room helps the crew, not its own score, so it wins 12 pp below fair share at 3p (−4 overall). Give it a small personal edge, or accept?
+- Hacker: should a camera loop also blind the Lookout's extra room, or only Security (current, provisional)?
+- Smooth talker: OK that the public tally counts one per ballot (so it never names the Smooth talker next to public ballots) while the result counts the double vote (current, provisional)?
+- Muscle: may the Muscle cancel their own shakedown (current, provisional)? And OK that the shakedown window opens after every passed shakedown whenever the Muscle is in the role pool (so it never shows one was dealt), adding a short wait to those games?
+- Snitch: "holding more than the clean threshold" read as "not clean" (stash ≥ 3 × act), paid every time it happens (current, provisional) — or strictly above, or once per game?
+- Blackmailer: should the victim be told they were blackmailed (current: privately, amount only, not by whom)?

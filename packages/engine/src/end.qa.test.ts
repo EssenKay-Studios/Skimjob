@@ -3,6 +3,7 @@
 // shakedown rescuing or sinking the heist, role scoring in the ranking,
 // tie-breaks at every level, 2/3/12 players, commands after the end, and
 // determinism / replay of a finished game. design §3, §8, §11.3, §13
+import { STARTER_ROLES } from "@skimjob/content";
 import { describe, expect, it } from "vitest";
 import type { GameConfig, GameEvent, GameState, Outcome, PlayerState } from "./types";
 import { setupEvents } from "./setup";
@@ -16,7 +17,7 @@ function config(players: number): GameConfig {
     seed: "qa-end",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: [],
+    rolePool: [...STARTER_ROLES], // no Muscle, so no shakedown window (task 12)
     mole: "off",
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",

@@ -1,9 +1,9 @@
 // The round loop: checking a submitted move, and resolving a round when its
-// deadline passes. design §5, §6, §7, §8 (starter role powers used in a move)
+// deadline passes. design §5, §6, §7, §8 (role powers used in a move)
 //
 // Both are pure: they read state and return events (or a rejection reason).
 // `handleCommand` (handle.ts) folds the events.
-import type { RoleDef, RoleId, RoomId } from "@skimjob/content";
+import { MOLE_ROLE, type RoleDef, type RoleId, type RoomId } from "@skimjob/content";
 import type { AbilityUse, GameEvent, GameState, Move, PlayerId, PlayerState } from "./types";
 import { PUBLIC, privateTo } from "./types";
 import { clampHeat, roomDef, roomLoot, roundHeatDelta } from "./job";
@@ -41,12 +41,29 @@ function checkAbility(state: GameState, player: PlayerState, raw: unknown): Abil
       return { kind: "lookout", rooms: [...rooms] };
     }
     case "fenceSafe": {
-      const left = power.perAct - player.safeDepositedThisAct;
+      const left = power.perAct - player.roleState.usedThisAct;
       if (!isCount(raw.amount) || raw.amount < 1 || raw.amount > left) {
         return `the safe takes a whole number from 1 to ${left} this act`;
       }
       return { kind: "fenceSafe", amount: raw.amount };
     }
+    case "loopCameras": {
+      if (player.roleState.usedThisAct >= power.perAct) return "you have already looped the cameras this act";
+      if (typeof raw.room !== "string" || !state.rooms.includes(raw.room)) return "loop the cameras of a room in play";
+      return { kind: "loopCameras", room: raw.room };
+    }
+    case "blackmail": {
+      if (player.roleState.usedThisAct >= power.perAct) return "you have already blackmailed someone this act";
+      const { target, role } = raw;
+      if (typeof target !== "string" || !Object.hasOwn(state.players, target)) return `unknown player ${String(target)}`;
+      if (target === player.id) return "you can't blackmail yourself";
+      if (typeof role !== "string" || !(Object.hasOwn(rolesFor(state.config), role) || role === MOLE_ROLE)) return `unknown role ${String(role)}`;
+      return { kind: "blackmail", target, role };
+    }
+    case "voteWeight":
+    case "cancelShakedown":
+    case "snitch":
+      return "your role's power isn't used in a move";
     case "none":
       return "your role has no ability";
   }
@@ -136,30 +153,56 @@ export function resolveRound(state: GameState, round: number): GameEvent[] {
     if (kept > 0) pocketed++;
     events.push({ type: "lootSplit", visibility: privateTo(id), player: id, round, room, loot, toHaul: loot - kept, toStash: kept });
   }
+  // Each stash as the round's splits, safe moves and blackmail change it.
+  const stash = new Map<PlayerId, number>(order.map((id) => [id, player(id).stash + (toStash.get(id) ?? 0)]));
+  const stashOf = (id: PlayerId): number => stash.get(id) as number;
   // Fence (§8): move loot from the stash, including this round's pocket, into the safe.
   for (const id of order) {
     const ability = moveOf(id).ability;
     if (ability?.kind !== "fenceSafe") continue;
     const p = player(id);
     const power = roleOf(p.role).power;
-    const left = power.kind === "fenceSafe" ? power.perAct - p.safeDepositedThisAct : 0;
-    const amount = Math.max(0, Math.min(ability.amount, left, p.stash + (toStash.get(id) ?? 0)));
+    const left = power.kind === "fenceSafe" ? power.perAct - p.roleState.usedThisAct : 0;
+    const amount = Math.max(0, Math.min(ability.amount, left, stashOf(id)));
+    stash.set(id, stashOf(id) - amount);
     events.push({ type: "abilityResolved", visibility: privateTo(id), player: id, round, ability: { kind: "fenceSafe", amount } });
+  }
+  // Blackmailer (§8): a right guess steals from the target's stash (never the safe), after the safe moves.
+  for (const id of order) {
+    const ability = moveOf(id).ability;
+    const power = roleOf(player(id).role).power;
+    if (ability?.kind !== "blackmail" || power.kind !== "blackmail") continue;
+    const correct = player(ability.target).role === ability.role;
+    const stolen = correct ? Math.min(power.steal, stashOf(ability.target)) : 0;
+    stash.set(ability.target, stashOf(ability.target) - stolen);
+    stash.set(id, stashOf(id) + stolen);
+    const resolved = { kind: "blackmail", target: ability.target, role: ability.role, correct, stolen } as const;
+    events.push({ type: "abilityResolved", visibility: privateTo(id), player: id, round, ability: resolved });
+    if (stolen > 0) events.push({ type: "blackmailed", visibility: privateTo(ability.target), player: ability.target, round, stolen });
   }
 
   // §5.2 step 4, §7: baseline + room pressure, rounded, then clamped once after every Heat source.
   const counts = Object.fromEntries(Object.entries(visitors).map(([room, ids]) => [room, ids.length]));
   const heat = clampHeat(job, state.heat + roundHeatDelta(job, crewSize, counts));
 
-  // §5.2 step 5: room-mates, then Security / Lookout / Server-room results.
+  // §5.2 step 5: room-mates, then Hacker loops, Security / Lookout / Server-room results.
   for (const id of order) {
     const room = moveOf(id).room;
     events.push({ type: "roomSighting", visibility: privateTo(id), player: id, round, room, others: others(room, id) });
   }
+  // Hacker (§8): a looped room shows as empty on Security this round (not to the Lookout or room-mates).
+  const looped = new Set<RoomId>();
+  for (const id of order) {
+    const ability = moveOf(id).ability;
+    if (ability?.kind !== "loopCameras" || roleOf(player(id).role).power.kind !== "loopCameras") continue;
+    looped.add(ability.room);
+    events.push({ type: "abilityResolved", visibility: privateTo(id), player: id, round, ability });
+  }
   for (const id of order) {
     const { room, watch, ability } = moveOf(id);
     if (roomDef(job, room).info === "watchRoom" && watch !== undefined) {
-      events.push({ type: "roomWatched", visibility: privateTo(id), player: id, round, source: "security", room: watch, seen: others(watch, id) });
+      const seen = looped.has(watch) ? [] : others(watch, id);
+      events.push({ type: "roomWatched", visibility: privateTo(id), player: id, round, source: "security", room: watch, seen });
     }
     if (ability?.kind === "lookout") {
       events.push({ type: "abilityResolved", visibility: privateTo(id), player: id, round, ability });
