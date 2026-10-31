@@ -107,9 +107,9 @@ describe("Deposit-box capacity — design §6.2", () => {
 
 describe("checkpoint targets per crew size — design §11.5", () => {
   it("2, 3 and 12 players", () => {
-    expect([1, 2, 3].map((a) => checkpointTarget(bank, a as 1 | 2 | 3, 2))).toEqual([12, 28, 44]);
-    expect([1, 2, 3].map((a) => checkpointTarget(bank, a as 1 | 2 | 3, 3))).toEqual([18, 42, 66]);
-    expect([1, 2, 3].map((a) => checkpointTarget(bank, a as 1 | 2 | 3, 12))).toEqual([72, 168, 264]);
+    expect([1, 2, 3].map((a) => checkpointTarget(bank, a as 1 | 2 | 3, 2))).toEqual([14, 30, 48]);
+    expect([1, 2, 3].map((a) => checkpointTarget(bank, a as 1 | 2 | 3, 3))).toEqual([21, 45, 72]);
+    expect([1, 2, 3].map((a) => checkpointTarget(bank, a as 1 | 2 | 3, 12))).toEqual([84, 180, 288]);
   });
 
   it("rejects act 0", () => {

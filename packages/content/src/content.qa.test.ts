@@ -1,5 +1,5 @@
 // QA (PR #3): bank room and starter-role data against the design tables.
-// design §6, §7, §8
+// design §6, §7, §8 (numbers from balance pass 1, docs/balance/balance-1.md)
 import { describe, expect, it } from "vitest";
 import { BANK_JOB, ROLES, STARTER_ROLES } from "./index";
 
@@ -12,9 +12,9 @@ describe("bank room data — design §6, §7", () => {
       lobby: [2, 0],
       security: [0, 0],
       rooftop: [0, -20],
-      depositBoxes: [5, 0],
+      depositBoxes: [5, 10],
       serverRoom: [0, 0],
-      tellerLine: [3, 0],
+      tellerLine: [4, 0],
       managersOffice: [5, 10],
     });
   });
