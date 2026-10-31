@@ -1,6 +1,6 @@
 # Skimjob — Game Design Document
 
-*Version 0.1 — 31 Oct 2026. All numbers are placeholders until the simulator has been run.*
+*Version 0.1 — 31 Oct 2026. All numbers are placeholders until the simulator has been run. Balance pass 1 (1 Nov 2026) changed the Deposit-box Heat, Teller-line loot, Insider scoring and checkpoint targets; see `docs/balance/balance-1.md`.*
 
 ---
 
@@ -144,8 +144,8 @@ More rooms keep the number of people per room, and so the number of witnesses, r
 | Players | Rooms added |
 |---|---|
 | 2–4 | Core only (5 rooms) |
-| 5–8 | **Deposit boxes**: 5 loot, holds 2 people (if more than 2 go, everyone there gets 3). **Server room**: 0 loot, learn *how many* players pocketed loot this round, but not who. |
-| 9–12 | Everything above, plus **Teller line**: 3 loot. **Manager's office**: 5 loot, adds half the vault pressure. |
+| 5–8 | **Deposit boxes**: 5 loot, holds 2 people (if more than 2 go, everyone there gets 3), adds half the vault pressure. **Server room**: 0 loot, learn *how many* players pocketed loot this round, but not who. |
+| 9–12 | Everything above, plus **Teller line**: 4 loot. **Manager's office**: 5 loot, adds half the vault pressure. |
 
 ---
 
@@ -157,6 +157,7 @@ Heat runs from 0 to 100. If it reaches 100, the cops raid and the heist fails.
 |---|---|
 | Each round (baseline) | +4 |
 | Vault pressure | +20 × (Vault visitors ÷ crew size) |
+| Deposit boxes | +10 × (visitors ÷ crew size) |
 | Manager's office | +10 × (visitors ÷ crew size) |
 | Rooftop | −20 × (Rooftop visitors ÷ crew size) |
 | Missed checkpoint | +15 |
@@ -180,7 +181,7 @@ Every player is dealt **one secret role** at the start of the game. Roles are de
 | **Lookout** | Each round, also sees who was in one extra room. | People lie around them more carefully, or try to frame them. |
 | **Hacker** | Once per act, can **loop the cameras** so one room shows as empty on Security that round. | Every empty camera result looks like their doing. |
 | **Fence** | Can move up to 5 loot per act into a hidden safe that shakedowns can't touch. | Assumed to be hoarding, so becomes the first shakedown target. |
-| **Insider** | Can't pocket loot. Scores 1 point for every loot the Haul ends above the final target. | Others pocket more, knowing the Insider will cover the Haul. |
+| **Insider** | Can't pocket loot. Scores 0.3 points for every loot the Haul ends above the final target. | Others pocket more, knowing the Insider will cover the Haul. |
 | **Smooth talker** | Their vote counts double. | Others coordinate their votes against them. |
 | **Muscle** | Once per game, can cancel a shakedown after the vote passes. | Everyone knows a vote against their friends may get blocked. |
 | **Blackmailer** | Once per act, secretly guesses one player's role. If right, steals 3 from that player's stash. | Gets shaken down quickly, and everyone hides their roles harder. |
@@ -271,9 +272,9 @@ From round 2 onward, one event card is flipped at the start of each round and sh
 
 | Checkpoint | Target |
 |---|---|
-| End of Act 1 | 6 × crew size |
-| End of Act 2 | 14 × crew size |
-| Final | 22 × crew size |
+| End of Act 1 | 7 × crew size |
+| End of Act 2 | 15 × crew size |
+| Final | 24 × crew size |
 
 A missed Act 1 or Act 2 checkpoint adds +15 Heat. Because targets are cumulative, the shortfall carries into the next act.
 

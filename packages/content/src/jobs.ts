@@ -72,7 +72,7 @@ export const BANK_JOB: JobDef = {
     lobby: { id: "lobby", name: "Lobby", loot: 2, heatPressure: 0, capacity: null, info: "none" },
     security: { id: "security", name: "Security", loot: 0, heatPressure: 0, capacity: null, info: "watchRoom" },
     rooftop: { id: "rooftop", name: "Rooftop", loot: 0, heatPressure: -20, capacity: null, info: "none" },
-    // 5–8 players. design §6.2
+    // 5–8 players. design §6.2; Deposit boxes add half the vault pressure (§7, balance pass 1).
     depositBoxes: {
       id: "depositBoxes",
       name: "Deposit boxes",
@@ -82,7 +82,7 @@ export const BANK_JOB: JobDef = {
       info: "none",
     },
     serverRoom: { id: "serverRoom", name: "Server room", loot: 0, heatPressure: 0, capacity: null, info: "pocketCount" },
-    // 9–12 players. design §6.2; Manager's office adds half the vault pressure (§7).
+    // 9–12 players. design §6.2 (Teller line 4 loot since balance pass 1); Manager's office adds half the vault pressure (§7).
     tellerLine: { id: "tellerLine", name: "Teller line", loot: 4, heatPressure: 0, capacity: null, info: "none" },
     managersOffice: {
       id: "managersOffice",
