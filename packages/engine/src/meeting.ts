@@ -21,7 +21,8 @@ import type {
 } from "./types";
 import { PUBLIC, privateTo, secretTo } from "./types";
 import { checkpointTarget, clampHeat, jobById } from "./job";
-import { actOfRound } from "./round";
+import { actOfRound } from "./acts";
+import { gameEnded } from "./end";
 import { isObject, playerFor } from "./check";
 
 type Result = GameEvent[] | string;
@@ -190,7 +191,7 @@ export function meetingResult(crewSize: number, cast: number, skip: number, targ
  * The window has ended. design §11.4: meeting → shakedown → checkpoint. After
  * an emergency meeting the game goes back to where it was. After the act's
  * regular meeting comes the checkpoint (+Heat if missed), then the next act —
- * or, after Act 3, the final check and the end of the game (ranking: task 7).
+ * or, after Act 3, the final check and the end of the game (end.ts).
  */
 export function closeMeeting(state: GameState, meetingId: unknown): Result {
   const meeting = state.meeting;
@@ -241,16 +242,13 @@ export function closeMeeting(state: GameState, meetingId: unknown): Result {
   const heat = met || final ? state.heat : clampHeat(job, state.heat + job.heat.missedCheckpoint);
   events.push({ type: "checkpointChecked", visibility: PUBLIC, act, target, haul, met, heatPenalty: heat - state.heat });
 
-  // Ranking, role scoring and winners are task 7 (design §3, §13); until then the outcome carries none.
+  // The ranking is worked out after the shakedown (design §3, §11.4), in end.ts.
   if (heat >= job.heat.max) {
     events.push({ type: "copsRaided", visibility: PUBLIC, round: state.round, heat });
-    events.push({ type: "gameEnded", visibility: PUBLIC, outcome: { result: "failed", reason: "heat", ranking: [], winners: [] } });
+    events.push(gameEnded(state, events, "heat"));
   } else if (final) {
     // design §3: the heist succeeds if the Haul meets the final target after the final meeting.
-    const outcome = met
-      ? ({ result: "success", ranking: [], winners: [] } as const)
-      : ({ result: "failed", reason: "target", ranking: [], winners: [] } as const);
-    events.push({ type: "gameEnded", visibility: PUBLIC, outcome });
+    events.push(gameEnded(state, events, met ? null : "target"));
   } else {
     events.push({ type: "roundStarted", visibility: PUBLIC, round: state.round + 1, act: actOfRound(state.round + 1) });
   }

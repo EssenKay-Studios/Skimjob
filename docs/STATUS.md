@@ -19,8 +19,9 @@ Goal: run thousands of all-bot games at 2–12 players and use the results to tu
 
 - [x] **Meetings & votes** — `proposeMeeting` / `acceptMeeting` (majority locks the slot), server `scheduleMeeting`, `callEmergency` (one per player per game), `advance { openMeeting / closeMeeting }`, `castVote` / `sealVote`, vote-visibility modes, quorum and majority, shakedown (Fence safe untouched), clean threshold and compensation (`JobDef.shakedown`), meeting → shakedown → checkpoint (+15 Heat if missed, clamped, raid at 100) → next act, and the final meeting before the final check (`gameEnded` success / failed `target`). Code in `meeting.ts`. Design §11, §4, §3.
 
+- [x] **End of game** — `gameEnded` now carries the ranking (`role`, `score`, `stash`, `safe`, shakedowns, handed in) and winners in all three endings (round raid, checkpoint-penalty raid, final check). Role scoring (Rookie ×1.2, Insider Haul surplus, Fence safe counted), tie-breaks, joint winners, "best of the losers" ranking on failure, and `RoleDef.winsOnFailure` for later roles. Code in `end.ts`. Design §3, §8, §13.
+
 ### Next up (in order)
-7. [ ] **End of game** — success/fail, ranking, tie-breaks, reveal view — design §3, §13.
 8. [ ] **`viewFor()`** + leak tests for every event type — design §17.2.
 9. [ ] **Bots** — Agent interface, suspicion model, Honest/Opportunist/Greedy/Cautious/Random — design §17.3.
 10. [ ] **Simulator CLI** — batches, seeds, player counts 2–12, bot mixes, CSV/JSON output, balance metrics report — design §17.4.
@@ -39,10 +40,10 @@ Goal: run thousands of all-bot games at 2–12 players and use the results to tu
 - New commands: add a handler to `HANDLERS` in `handle.ts`; return a reason string to reject. Unsupported commands are rejected today.
 - **M2 (server):** the server must set `command.player` from the authenticated session and never trust the client's value. Rejection reasons are role-specific ("your role can't pocket loot"), so a forged `player` could probe other players' roles. It must also send `advance { kind: "round", round }` with the round it scheduled.
 - **M2 (server) and meetings:** the act's meeting only opens from `awaitingMeeting` (after the act's last round), so if its slot passes mid-act the server sends `openMeeting` again once that round resolves. Only one meeting is open at a time: an `openMeeting` sent while another is open is refused and must be re-sent after it closes. The emergency notice period, window length and "act deadline" for `scheduleMeeting` are the server's. Meeting ids are `act-<n>` and `emergency-<player>`. Any new id or public field must come from public data only (never `log.length`).
-- **Task 7 (end of game):** `gameEnded` has an **empty `ranking`** and empty `winners` in three places: a Heat raid after a round (`round.ts`), a raid from a missed-checkpoint penalty, and the final check after the Act 3 meeting (both in `closeMeeting`, `meeting.ts`). Fill them there.
+- **End of game:** every ending calls `gameEnded(state, events, failure)` (`end.ts`) with the command's events so far. A new ending (events deck, Duel) must do the same.
+- **Mole / Driver:** give them a `RoleDef` with `winsOnFailure` (Mole `{ reasons: ["heat", "target"], needsTopStash: false }`, Driver `{ reasons: ["heat"], needsTopStash: true }`). The Mole "wins only if the heist fails", so it must also be kept out of the success winners — add that when the Mole's `RoleDef` lands (today a top-scoring Mole would win a successful heist).
 - **Task 8 (`viewFor`):** `GameState.meeting.votes` holds every ballot, including hidden and secret ones; only `me.vote` may come from it. `me.sealedVote` is the player's own. Ballots of others reach a view only through the ledger (Open mode, and `meetingClosed.ballots` outside Secret mode).
 - Moles can be dealt (by the Mole setting) but have no powers yet, and two Moles are not yet told about each other (§8.1) — add a private "your fellow Mole" event with the Mole role.
-- Task 7 applies `RoleDef.scoring` (Rookie ×1.2 gives non-integer scores; decide rounding there). Get the job with `jobById(config.job)`.
 - Roles with no `RoleDef` (the Mole, for now) play with no power and may pocket.
 - `samples.ts` has one sample per event and command type, and the compiler enforces it. The `viewFor()` leak tests in task 8 should loop over `sampleEvents`.
 - Visibility has four kinds: `public`, `private`, `reveal`, `secret`. `secret` never opens up, even after the game (Secret-mode ballots, §11.2). `voteCast`/`voteSealed` use `secretTo()` in Secret mode; task 8 builds `reveal.log` from `canSee(..., true)` so other players' secret ballots are dropped.
@@ -60,3 +61,4 @@ Goal: run thousands of all-bot games at 2–12 players and use the results to tu
 - Alibis: should the alibi for round N close when round N+1 starts (forcing it before planning) rather than when N+1 resolves (current, provisional)? And may an alibi name only rooms in play (current)?
 - Meetings: OK that the act's meeting opens only after its last round, that a sealed vote is used by the next meeting of either kind (no withdrawing), that you can't vote for yourself, and that clean-target compensation is capped at the Haul? (all provisional, decisions.md)
 - A Fence's clean check ignores the safe, so a Fence can hide loot and still be paid compensation as clean — keep this (current, provisional) or count the safe toward the clean check?
+- End of game: OK to keep scores to one decimal (Rookie 9 → 10.8), let fully tied leaders share the win, and show the stash ranking on a failed heist as a loss? (all provisional, decisions.md)

@@ -5,7 +5,7 @@
 // rebuilds the same state, including the RNG, on replay.
 import type { GameConfig, GameEvent, GameState, MeetingState, Phase, PlayerId, PlayerState } from "./types";
 import { seedRng } from "./rng";
-import { actOfRound, isLastRoundOfAct } from "./round";
+import { actOfRound, isLastRoundOfAct } from "./acts";
 
 /** Replace one player's state. Throws for players that weren't dealt in. */
 function updatePlayer(state: GameState, id: PlayerId, change: (p: PlayerState) => Partial<PlayerState>): GameState {

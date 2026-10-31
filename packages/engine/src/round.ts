@@ -3,21 +3,15 @@
 //
 // Both are pure: they read state and return events (or a rejection reason).
 // `handleCommand` (handle.ts) folds the events.
-import { ROLES, ROUNDS_PER_ACT, type RoleDef, type RoleId, type RoomId } from "@skimjob/content";
-import type { AbilityUse, ActNumber, GameEvent, GameState, Move, PlayerId, PlayerState } from "./types";
+import { ROLES, type RoleDef, type RoleId, type RoomId } from "@skimjob/content";
+import type { AbilityUse, GameEvent, GameState, Move, PlayerId, PlayerState } from "./types";
 import { PUBLIC, privateTo } from "./types";
 import { clampHeat, jobById, roomDef, roomLoot, roundHeatDelta } from "./job";
 import { isObject } from "./check";
+import { actOfRound, isLastRoundOfAct } from "./acts";
+import { gameEnded } from "./end";
 
-/** The act a round belongs to: rounds 1–3 are Act 1, and so on. design §4 */
-export function actOfRound(round: number): ActNumber {
-  return Math.ceil(round / ROUNDS_PER_ACT) as ActNumber;
-}
-
-/** True for rounds 3, 6 and 9: the act's meeting and checkpoint come next. design §4 */
-export function isLastRoundOfAct(round: number): boolean {
-  return round % ROUNDS_PER_ACT === 0;
-}
+export { actOfRound, isLastRoundOfAct };
 
 /** A role with no definition yet (the Mole, until its powers land) has no power and may pocket. */
 const NO_POWER: Pick<RoleDef, "power" | "canPocket"> = { power: { kind: "none" }, canPocket: true };
@@ -187,8 +181,7 @@ export function resolveRound(state: GameState, round: number): GameEvent[] {
   // §5.2 step 6: Heat at the max means the cops raid and the heist fails at once (§3, §7).
   if (heat >= job.heat.max) {
     events.push({ type: "copsRaided", visibility: PUBLIC, round, heat });
-    // Ranking and role scoring are task 7 (design §3, §13); until then the outcome carries none.
-    events.push({ type: "gameEnded", visibility: PUBLIC, outcome: { result: "failed", reason: "heat", ranking: [], winners: [] } });
+    events.push(gameEnded(state, events, "heat"));
   } else if (!isLastRoundOfAct(round)) {
     events.push({ type: "roundStarted", visibility: PUBLIC, round: round + 1, act: actOfRound(round + 1) });
   }

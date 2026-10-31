@@ -494,8 +494,8 @@ describe("the final meeting comes before the final check — design §3, §4, §
     const after = run(s, CLOSE);
     expect(since(s, after).map((e) => e.type)).toEqual(["meetingClosed", "checkpointChecked", "gameEnded"]);
     expect(LAST(after, "checkpointChecked")).toMatchObject({ act: 3, target: 44, haul: 54, met: true, heatPenalty: 0 });
-    // Ranking and winners are task 7.
-    expect(after.phase).toEqual({ kind: "ended", outcome: { result: "success", ranking: [], winners: [] } });
+    // Nobody pocketed; p0 handed in more (tie-break 2, end.test.ts).
+    expect(after.phase).toMatchObject({ kind: "ended", outcome: { result: "success", winners: ["p0"] } });
   });
 
   it("missing the final target fails the heist, with no Heat penalty", () => {

@@ -4,6 +4,17 @@ Newest first. Each entry: what was decided, and why. Add an entry whenever a rul
 
 ---
 
+### 2026-11-01 — End of game (M1 task 7)
+- **`gameEnded` carries the full ranking and the winners** in all three endings: a Heat raid after a round, a raid from the missed-checkpoint penalty, and the final check after the Act 3 meeting. `end.ts` folds the command's earlier events first (`gameEnded(state, events, failure)`), so the ranking sees the last round's splits and the final meeting's shakedown. `actOfRound`/`isLastRoundOfAct` moved to `acts.ts` so `end.ts` can use the fold without an import cycle (round.ts still re-exports them).
+- **Score (design §8):** (stash + Fence safe) × `stashMultiplier` + `perLootOverFinalTarget` × max(0, Haul − final target). Roles with no `RoleDef` (the Mole, for now) score their stash. The surplus uses the Haul at the end, whatever the ending.
+- **Score rounding (provisional):** to `SCORE_DECIMALS` (1) places, so a Rookie's 9 scores 10.8 (no float noise). Rounding to whole numbers would erase the Rookie's edge on small stashes and make more ties.
+- **Ranking order (design §3):** score, then fewer shakedowns, then more handed in, then seat order (stable). `RankEntry` also carries `role` and `safe` for the reveal (§13); the round-by-round reveal is the log itself, opened by `canSee` after the game (task 8 builds `PlayerView.reveal`).
+- **Joint winners (provisional):** on success, everyone tied with first place on score and both tie-breaks wins.
+- **"Best of the losers" (PM call, provisional, §19.1):** a failed heist keeps the same ranking, flagged as a loss by `result: "failed"`. Nobody is a winner unless their role wins on failure.
+- **Wins on failure is role content:** `RoleDef.winsOnFailure: { reasons, needsTopStash } | null`. A role wins a failed heist if its `reasons` include the failure reason (`"heat"` / `"target"`) and, when `needsTopStash`, it is among the top-ranked players (Driver). Every starter role has `null`. The scoring functions take the role table as a parameter (default `ROLES`), so tests plug in Mole/Driver defs today.
+
+---
+
 ### 2026-11-01 — Meetings and votes (M1 task 6)
 - **Meeting timing (PM decision, provisional):** a regular meeting opens only after the act's last round has resolved (rounds 1–3, the Act 1 meeting, checkpoint 1). Its slot can be proposed, accepted or server-picked at any time during the act; `advance { openMeeting }` for it is refused until the phase is `awaitingMeeting`, so the server re-sends it then. Emergency meetings can open mid-act; rounds pause (no moves, no round deadline) while any meeting is open, and closing one goes back to planning the same round with submitted moves kept (or back to awaiting the act's meeting). Only one meeting is open at a time; a second `openMeeting` is refused until the first closes.
 - **Ids are built from public data only, never RNG draws or the log length** (the log length would let players count hidden events; PR #6 review). Regular meeting `act-<n>`; emergency `emergency-<player>` (unique, since one per player per game); proposal `proposal-<n>`, numbering the game's `meetingProposed` events from 1. Meetings draw no randomness.
