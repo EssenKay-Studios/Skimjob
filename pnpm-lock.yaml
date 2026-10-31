@@ -35,6 +35,9 @@ importers:
 
   packages/bots:
     dependencies:
+      '@skimjob/content':
+        specifier: workspace:*
+        version: link:../content
       '@skimjob/engine':
         specifier: workspace:*
         version: link:../engine
