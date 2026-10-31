@@ -4,6 +4,14 @@ Newest first. Each entry: what was decided, and why. Add an entry whenever a rul
 
 ---
 
+### 2026-11-01 — viewFor (M1 task 8)
+- **`seq` numbers what the player can see, not the full log (replaces the task 1 choice).** With full-log indexes, the gaps between a player's own entries counted hidden events: the gap between your loot split and your room sighting told you whether the Fence used the safe, and its position among the round's events how many players before you sat in Security or used the Lookout power; gaps during a meeting counted hidden ballots. Same reason meeting ids never use the log length. Now `seq` is the index among the events the player can see during the game (public, plus private/secret to them). Ledger and case file share it, it has no gaps, and new events always get higher numbers, so one "last seen" cursor per player works all game (§13). `reveal.log` numbers its own stream the same way, so it has no gaps for others' secret ballots either.
+- **Ledger and case file are narrowed by type:** `LoggedEvent<PublicEvent>` and `LoggedEvent<CaseFileEvent>` (`WithVisibility<E, V>` in `types/view.ts`), so client code can't mistake a case-file entry for a public one. After the game they stay as they were; the reveal is the separate `reveal.log`.
+- **The view also carries `proposals`** (public, §11.1), so a client or bot can accept one without rebuilding them from the ledger. The open meeting's details (kind, act, who called it) stay in the ledger (`meetingOpened`, `emergencyMeetingCalled`).
+- **`viewFor` throws for a player who isn't seated.** Unlike commands it isn't fed untrusted input: the server asks for the authenticated player's own seat.
+- **"While you were away" input:** `eventsSince(view, seq)` returns the view's events after `seq`, oldest first. It works on a view, so it can't see more than the view. Turning it into a 2–4 line summary is M2.
+- **Leak tests:** after every command of scripted games at 2/5/9/12 players in all three vote modes, each player's view must be unchanged when everything hidden from them is changed, removed or added (other players' roles, stashes, safes, moves, ballots, seed, RNG, hidden events). That catches leaked values and leaked counts.
+
 ### 2026-11-01 — End of game (M1 task 7)
 - **`gameEnded` carries the full ranking and the winners** in all three endings: a Heat raid after a round, a raid from the missed-checkpoint penalty, and the final check after the Act 3 meeting. `end.ts` folds the command's earlier events first (`gameEnded(state, events, failure)`), so the ranking sees the last round's splits and the final meeting's shakedown. `actOfRound`/`isLastRoundOfAct` moved to `acts.ts` so `end.ts` can use the fold without an import cycle (round.ts still re-exports them).
 - **Score (design §8):** (stash + Fence safe) × `stashMultiplier` + `perLootOverFinalTarget` × max(0, Haul − final target). Roles with no `RoleDef` (the Mole, for now) score their stash. The surplus uses the Haul at the end, whatever the ending.
@@ -80,7 +88,7 @@ Newest first. Each entry: what was decided, and why. Add an entry whenever a rul
 - **`advance` names the deadline that passed:** `round`, `openMeeting { meetingId }` or `closeMeeting { meetingId }`. During planning the round deadline and an emergency notice period can both be pending, and the engine has no clock to tell them apart. The engine rejects a deadline that isn't pending.
 - **The server picks a regular meeting slot with a `scheduleMeeting { act, slot }` system command** when nobody locked one in by the act deadline (§11.1). It emits `meetingScheduled` with `proposalId: null`.
 - **Meeting time slots are opaque strings** that the engine stores and compares only for equality, never reads as a time.
-- **Views carry log positions:** `ledger` and `caseFile` entries are `{ seq, event }`, where `seq` is the index in the full log, for "since seq N" recaps (§13) and evidence cards (§12.1).
+- **Views carry log positions:** `ledger` and `caseFile` entries are `{ seq, event }`, where `seq` is the index in the full log, for "since seq N" recaps (§13) and evidence cards (§12.1). *(Superseded in task 8: `seq` now counts only what the player can see.)*
 - **`meetingClosed.tally` is `{ skip, targets }`**, so no player id can collide with "skip".
 - **A ranking's `stash` includes the Fence safe** (the safe protects loot from shakedowns; it is still the Fence's loot).
 

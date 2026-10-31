@@ -4,7 +4,23 @@ import type { RoleId, RoomId } from "@skimjob/content";
 import type { PlayerId, PlayerSeat, VoteVisibility } from "./config";
 import type { Move, VoteChoice } from "./commands";
 import type { ActNumber, GameEvent, Outcome } from "./events";
-import type { PendingEmergency, Phase, ScheduledMeeting } from "./state";
+import type { MeetingProposal, PendingEmergency, Phase, ScheduledMeeting } from "./state";
+import type { PrivateVisibility, PublicVisibility, SecretVisibility, Visibility } from "./visibility";
+
+/**
+ * `E` with its visibility narrowed to `V`, or never if `E` can't have it. Lets
+ * the ledger hold only public events and the case file only owned ones, by type.
+ */
+export type WithVisibility<E extends GameEvent, V extends Visibility> = E extends GameEvent
+  ? [Extract<E["visibility"], V>] extends [never]
+    ? never
+    : E & { readonly visibility: Extract<E["visibility"], V> }
+  : never;
+
+/** Events that can appear in the public ledger. design §13 */
+export type PublicEvent = WithVisibility<GameEvent, PublicVisibility>;
+/** Events that can appear in a case file: private to you, or your own secret-mode ballots. design §13, §11.2 */
+export type CaseFileEvent = WithVisibility<GameEvent, PrivateVisibility | SecretVisibility>;
 
 /**
  * Phase as a player sees it. Identical to Phase today; kept as its own name so
@@ -26,14 +42,19 @@ export interface SelfView {
 }
 
 /**
- * An event with its position in the full log. Views filter the log, so `seq`
- * keeps the global position for "since seq N" recaps and for evidence cards that
- * point at one case-file entry. design §12.1, §13
+ * An event with its position in what this player can see, for "since seq N"
+ * recaps and for evidence cards that point at one case-file entry. design §12.1, §13
+ *
+ * `seq` is *not* the index in the full log: gaps there would let a player count
+ * hidden events (e.g. a Fence using the safe, or who sat in Security). It is
+ * the index among the events this player can see during the game (public, plus
+ * private or secret to them), so ledger and case file share one numbering and
+ * new events always get higher numbers. The reveal log numbers its own,
+ * larger stream the same way. docs/decisions.md
  */
-export interface LoggedEvent {
-  /** Index of the event in `GameState.log`. */
+export interface LoggedEvent<E extends GameEvent = GameEvent> {
   readonly seq: number;
-  readonly event: GameEvent;
+  readonly event: E;
 }
 
 /** What everyone can see about another player. No stash, role or moves. */
@@ -57,15 +78,17 @@ export interface PlayerView {
   /** Both are public (design §11.1); null when nothing is pending. */
   readonly scheduledMeeting: ScheduledMeeting | null;
   readonly pendingEmergency: PendingEmergency | null;
+  /** Open proposals for the act's regular meeting (public, design §11.1). */
+  readonly proposals: readonly MeetingProposal[];
   /** Public events, oldest first. design §13 */
-  readonly ledger: readonly LoggedEvent[];
-  /** Events private to this player, oldest first. design §13 */
-  readonly caseFile: readonly LoggedEvent[];
+  readonly ledger: readonly LoggedEvent<PublicEvent>[];
+  /** Events private (or secret) to this player, oldest first. design §13 */
+  readonly caseFile: readonly LoggedEvent<CaseFileEvent>[];
   /**
    * Null until the game ends; then every event this player may see after the
    * game (every role, every real room and split, every ability) for the reveal
-   * timeline. Other players' secret-mode ballots are left out (design §11.2),
-   * so entries carry their `seq`. design §13
+   * timeline. Other players' secret-mode ballots are left out (design §11.2).
+   * `seq` numbers this stream (see `LoggedEvent`). design §13
    */
   readonly reveal: { readonly outcome: Outcome; readonly log: readonly LoggedEvent[] } | null;
 }
