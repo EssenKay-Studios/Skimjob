@@ -2,7 +2,8 @@
 // Clients and bots only ever receive a PlayerView. design §17.2
 //
 // State is a fold over `log`; every field other than `config` and `log` must be
-// derivable by replaying the log from the start.
+// derivable by replaying the log from the start. (How `rng` is rebuilt on
+// replay is decided in the seeded-RNG task; see STATUS.md notes.)
 import type { RoleId, RoomId } from "@skimjob/content";
 import type { GameConfig, PlayerId } from "./config";
 import type { Move, VoteChoice } from "./commands";
@@ -22,6 +23,8 @@ export interface RngState {
  * Setup → Planning → Resolving → (MeetingScheduled → MeetingOpen) → Checkpoint → … → FinalCheck → Reveal.
  * Resolving, Checkpoint and FinalCheck happen inside a single `advance()` and
  * leave only events behind, so they are not resting phases here.
+ * A scheduled-but-not-open meeting is not a phase either: it can coexist with
+ * planning, so it lives in `GameState.scheduledMeeting` / `pendingEmergency`.
  */
 export type Phase =
   | { readonly kind: "setup" }
@@ -63,6 +66,17 @@ export interface MeetingProposal {
   readonly acceptedBy: readonly PlayerId[];
 }
 
+export interface ScheduledMeeting {
+  readonly meetingId: string;
+  readonly act: ActNumber;
+  readonly slot: string;
+}
+
+export interface PendingEmergency {
+  readonly meetingId: string;
+  readonly by: PlayerId;
+}
+
 export interface MeetingState {
   readonly id: string;
   readonly kind: MeetingKind;
@@ -90,8 +104,11 @@ export interface GameState {
   /** Players who already posted an alibi for the last resolved round (one each). design §5.4 */
   readonly alibisPosted: readonly PlayerId[];
   readonly proposals: readonly MeetingProposal[];
-  /** The regular meeting slot locked in for the current act, if any. */
-  readonly scheduledMeeting: { readonly act: ActNumber; readonly slot: string } | null;
+  /** The regular meeting locked in for the current act, not yet open. design §11.1 */
+  readonly scheduledMeeting: ScheduledMeeting | null;
+  /** An emergency meeting that has been called and is in its notice period. design §11.1 */
+  readonly pendingEmergency: PendingEmergency | null;
+  /** The open vote window, if any; set exactly when `phase.kind === "meeting"`. */
   readonly meeting: MeetingState | null;
   readonly log: readonly GameEvent[];
 }

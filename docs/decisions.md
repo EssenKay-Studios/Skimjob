@@ -10,8 +10,13 @@ Newest first. Each entry: what was decided, and why. Add an entry whenever a rul
 - **A move's split is stored as `pocket`** (the amount kept), not the amount handed in. Real yields can change after submission (shared Deposit boxes, events), so `pocket` is capped at the actual yield, and "hand everything in" is simply `pocket: 0`. Design §5.1's rule is unchanged.
 - **`GameConfig` holds only settings that change the rules.** Session length, deadlines, meeting window length, quiet hours, pause/extend and bot replacement belong to the server, because the engine has no clock.
 - **The seed never appears in a public event.** `gameCreated` is public without the seed; the seed goes in a reveal-only `rngSeeded` event.
-- **Only resting phases are modelled:** `setup`, `planning`, `awaitingMeeting`, `meeting`, `ended`. Resolving, Checkpoint and FinalCheck from §17.2 happen inside one `advance()` and leave only events behind.
-- **Meeting time slots are opaque strings** that the engine stores but never reads as a time.
+- **Only resting phases are modelled:** `setup`, `planning`, `awaitingMeeting`, `meeting`, `ended`. Resolving, Checkpoint and FinalCheck from §17.2 happen inside one `advance()` and leave only events behind. A meeting that is scheduled or called but not yet open is **not** a phase, because it can coexist with planning: it lives in `GameState.scheduledMeeting` (regular) or `pendingEmergency` (in its notice period, §11.1). Both carry a `meetingId`.
+- **`advance` names the deadline that passed:** `round`, `openMeeting { meetingId }` or `closeMeeting { meetingId }`. During planning the round deadline and an emergency notice period can both be pending, and the engine has no clock to tell them apart. The engine rejects a deadline that isn't pending.
+- **The server picks a regular meeting slot with a `scheduleMeeting { act, slot }` system command** when nobody locked one in by the act deadline (§11.1). It emits `meetingScheduled` with `proposalId: null`.
+- **Meeting time slots are opaque strings** that the engine stores and compares only for equality, never reads as a time.
+- **Views carry log positions:** `ledger` and `caseFile` entries are `{ seq, event }`, where `seq` is the index in the full log, for "since seq N" recaps (§13) and evidence cards (§12.1).
+- **`meetingClosed.tally` is `{ skip, targets }`**, so no player id can collide with "skip".
+- **A ranking's `stash` includes the Fence safe** (the safe protects loot from shakedowns; it is still the Fence's loot).
 
 ### 2026-10-31 — Game name is Skimjob
 Replaces the working title "Heist Crew".

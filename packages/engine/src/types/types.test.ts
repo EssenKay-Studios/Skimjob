@@ -1,5 +1,5 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
-import type { GameEvent, PrivateVisibility, PublicVisibility, RevealVisibility, Visibility } from "./index";
+import type { Command, GameEvent, PrivateVisibility, PublicVisibility, RevealVisibility, Visibility } from "./index";
 import { PUBLIC, REVEAL, canSee, privateTo } from "./index";
 import { sampleCommands, sampleEvents } from "./samples";
 
@@ -52,5 +52,15 @@ describe("event visibility is fixed by type — design §17.2", () => {
     // @ts-expect-error a dealt role can never be public
     const leak: GameEvent = { type: "roleDealt", visibility: PUBLIC, player: "ana", role: "fence" };
     expect(leak).toBeDefined();
+  });
+});
+
+// The engine has no clock and several deadlines can be pending at once, so the
+// scheduler must say which one passed. design §4.1, §11.1
+describe("advance names its deadline — design §4.1, §11.1", () => {
+  it("a bare advance does not type-check", () => {
+    // @ts-expect-error advance must name the deadline that passed
+    const bare: Command = { type: "advance" };
+    expect(bare).toBeDefined();
   });
 });

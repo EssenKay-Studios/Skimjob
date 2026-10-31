@@ -35,3 +35,9 @@ Goal: run thousands of all-bot games at 2–12 players and use the results to tu
 - Types only so far: no reducer/command handler yet. Room/role *definitions* (yields, Heat, powers) are still to come in task 3; `packages/content` only has the `RoomId`/`RoleId`/`JobId` aliases.
 - `samples.ts` has one sample per event and command type, and the compiler enforces it. The `viewFor()` leak tests in task 8 should loop over `sampleEvents`.
 - `AbilityUse` covers only Lookout and Fence. Extend it when the other roles land.
+- From the PR #1 review, deferred to the task named:
+  - **Task 2 (RNG):** `rng` can't be rebuilt from events that don't record draws. Either random-consuming events carry the post-draw RNG state, or replay works from commands. Either way RNG state must never reach a public/private view (it would let players predict draws).
+  - **Task 6 (meetings):** say whether a sealed vote applies to an emergency meeting, and whether it can be withdrawn (`voteSealed` has no meeting/act scope yet). Decide whether a regular meeting slot can arrive mid-act (rounds pause, §4.1) or only after the act's last round.
+  - **Tasks 10/11 (sim/balance):** §17.4 "config overrides": add a content-overrides field to `GameConfig`, and a `CONTENT_VERSION` in `gameCreated` so old logs replay against the right numbers.
+  - **Remaining roles:** replace the Fence-specific `safe`/`safeDepositedThisAct` with a generic per-player role state (once-per-act/game uses, Snitch target, Mole allies). Some abilities happen outside planning (Muscle cancel after the vote passes, Double-cross accept, Duel call-out §16.1), so add a `useAbility` command (§17.2), and Muscle needs a window between `meetingClosed` and `shakedownResolved` (probably a new `Deadline` kind).
+  - **Events deck / Duel mode:** no event types yet (public `eventFlipped`, private Raid rumour / Inside tip results) and no Duel config flag.

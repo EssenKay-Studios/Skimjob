@@ -4,7 +4,7 @@ import type { RoleId, RoomId } from "@skimjob/content";
 import type { PlayerId, PlayerSeat, VoteVisibility } from "./config";
 import type { Move, VoteChoice } from "./commands";
 import type { ActNumber, GameEvent, Outcome } from "./events";
-import type { Phase } from "./state";
+import type { PendingEmergency, Phase, ScheduledMeeting } from "./state";
 
 /**
  * Phase as a player sees it. Identical to Phase today; kept as its own name so
@@ -25,6 +25,17 @@ export interface SelfView {
   readonly vote: VoteChoice | null;
 }
 
+/**
+ * An event with its position in the full log. Views filter the log, so `seq`
+ * keeps the global position for "since seq N" recaps and for evidence cards that
+ * point at one case-file entry. design §12.1, §13
+ */
+export interface LoggedEvent {
+  /** Index of the event in `GameState.log`. */
+  readonly seq: number;
+  readonly event: GameEvent;
+}
+
 /** What everyone can see about another player. No stash, role or moves. */
 export interface OtherPlayerView extends PlayerSeat {
   readonly emergencyMeetingUsed: boolean;
@@ -32,21 +43,27 @@ export interface OtherPlayerView extends PlayerSeat {
 
 export interface PlayerView {
   readonly me: SelfView;
+  /** Every *other* player, in seat order. You are in `me`. */
   readonly players: readonly OtherPlayerView[];
   readonly phase: PhaseView;
+  /** The latest round started (1–9); 0 during setup. Kept because not every phase carries it. */
   readonly round: number;
+  /** The act of `round`; 1 during setup. */
   readonly act: ActNumber;
   readonly rooms: readonly RoomId[];
   readonly haul: number;
   readonly heat: number;
   readonly voteVisibility: VoteVisibility;
+  /** Both are public (design §11.1); null when nothing is pending. */
+  readonly scheduledMeeting: ScheduledMeeting | null;
+  readonly pendingEmergency: PendingEmergency | null;
   /** Public events, oldest first. design §13 */
-  readonly ledger: readonly GameEvent[];
+  readonly ledger: readonly LoggedEvent[];
   /** Events private to this player, oldest first. design §13 */
-  readonly caseFile: readonly GameEvent[];
+  readonly caseFile: readonly LoggedEvent[];
   /**
    * Null until the game ends; then the complete log (every role, every real
-   * room and split, every ability) for the reveal timeline. design §13
+   * room and split, every ability) for the reveal timeline. Index = `seq`. design §13
    */
   readonly reveal: { readonly outcome: Outcome; readonly log: readonly GameEvent[] } | null;
 }

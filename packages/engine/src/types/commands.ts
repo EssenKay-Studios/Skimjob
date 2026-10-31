@@ -1,10 +1,11 @@
 // Commands in, events out. design §17.2
 //
-// Player commands are what a client (human or bot) sends. `advance` is sent by
-// the server scheduler or the simulator when a deadline passes; the engine
-// itself never decides that time is up.
+// Player commands are what a client (human or bot) sends. System commands are
+// sent by the server scheduler or the simulator: the engine has no clock, so it
+// never decides by itself that time is up or picks a meeting time.
 import type { RoomId } from "@skimjob/content";
 import type { PlayerId } from "./config";
+import type { ActNumber } from "./events";
 
 /** Role powers used as part of a move. Grows as roles are added. design §8 */
 export type AbilityUse =
@@ -39,7 +40,8 @@ export type PlayerCommand =
   | { readonly type: "postAlibi"; readonly player: PlayerId; readonly room: RoomId }
   /**
    * `slot` is an opaque label for the proposed time (e.g. an ISO timestamp).
-   * The engine stores and compares it but never interprets it as a time.
+   * The engine stores it and only ever compares slots for equality; it never
+   * reads one as a time.
    */
   | { readonly type: "proposeMeeting"; readonly player: PlayerId; readonly slot: string }
   | { readonly type: "acceptMeeting"; readonly player: PlayerId; readonly proposalId: string }
@@ -49,13 +51,26 @@ export type PlayerCommand =
   | { readonly type: "sealVote"; readonly player: PlayerId; readonly vote: VoteChoice };
 
 /**
- * Sent by the scheduler/simulator: the current deadline has passed.
- * Depending on phase this resolves a round, opens a scheduled meeting,
- * or closes a meeting window (then runs checkpoint / final check).
+ * Which deadline has passed. The engine has no clock, and several deadlines can
+ * be pending at once (e.g. the round deadline and an emergency meeting's notice
+ * period during planning), so the scheduler must say which one it means. The
+ * engine rejects a deadline that isn't currently pending. design §4.1, §11.1
  */
-export interface AdvanceCommand {
-  readonly type: "advance";
-}
+export type Deadline =
+  /** The planning deadline for the current round: resolve it (default moves for anyone missing). design §5 */
+  | { readonly kind: "round" }
+  /** A scheduled regular meeting's slot, or an emergency's notice period, has arrived: open the vote window. design §11.1 */
+  | { readonly kind: "openMeeting"; readonly meetingId: string }
+  /** The open vote window has ended: tally, shakedown, then checkpoint / final check. design §11.2–§11.4 */
+  | { readonly kind: "closeMeeting"; readonly meetingId: string };
 
-export type Command = PlayerCommand | AdvanceCommand;
+export type SystemCommand =
+  | { readonly type: "advance"; readonly deadline: Deadline }
+  /**
+   * Nobody locked in a regular meeting by the act deadline, so the server picks
+   * the slot. Emits `meetingScheduled` with `proposalId: null`. design §11.1
+   */
+  | { readonly type: "scheduleMeeting"; readonly act: ActNumber; readonly slot: string };
+
+export type Command = PlayerCommand | SystemCommand;
 export type CommandType = Command["type"];

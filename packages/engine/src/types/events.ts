@@ -176,10 +176,12 @@ export interface MeetingProposalAccepted {
   readonly by: PlayerId;
 }
 
-/** Locked in by majority, or chosen by the server if nobody did (`proposalId: null`). */
+/** Locked in by majority, or chosen by the server if nobody did (`proposalId: null`). design §11.1 */
 export interface MeetingScheduled {
   readonly type: "meetingScheduled";
   readonly visibility: PublicVisibility;
+  /** Named later by `advance { deadline: { kind: "openMeeting", meetingId } }`. */
+  readonly meetingId: string;
   readonly act: ActNumber;
   readonly slot: string;
   readonly proposalId: string | null;
@@ -233,8 +235,8 @@ export interface MeetingClosed {
   readonly type: "meetingClosed";
   readonly visibility: PublicVisibility;
   readonly meetingId: string;
-  /** Votes per target id, plus "skip". Weighted votes (Smooth talker) counted here. */
-  readonly tally: Readonly<Record<string, number>>;
+  /** Weighted votes (Smooth talker) are counted here. Skips are kept apart so no player id can collide with them. */
+  readonly tally: { readonly skip: number; readonly targets: Readonly<Record<PlayerId, number>> };
   readonly ballots: Readonly<Record<PlayerId, VoteChoice>> | null;
   readonly result: MeetingResult;
 }
@@ -272,6 +274,7 @@ export interface RankEntry {
   readonly player: PlayerId;
   /** Stash after role scoring (e.g. Rookie ×1.2, Insider surplus). design §8 */
   readonly score: number;
+  /** Final stash before role scoring, including any Fence safe. design §8 */
   readonly stash: number;
   /** Tie-break 1: fewer is better. design §3 */
   readonly timesShakenDown: number;
