@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 31 Oct 2026_
+_Last updated: 1 Nov 2026_
 
 ## Current milestone: M1 — Engine + simulator (bank job, starter roles, bots)
 
@@ -9,10 +9,10 @@ Goal: run thousands of all-bot games at 2–12 players and use the results to tu
 ### Done
 - [x] Game design v0.1 (`docs/design.md`)
 - [x] Monorepo skeleton (pnpm workspaces, TypeScript, vitest)
+- [x] **Core types** — `GameConfig`, `GameState`, `Command`, `GameEvent` (visibility fixed per event type), `PlayerView`, `canSee()`, plus one sample per event/command type in `packages/engine/src/types/`.
 
 ### Next up (in order)
-1. [ ] **Core types** — `GameConfig`, `GameState`, `Command`, `GameEvent` (with visibility), `PlayerView` in `packages/engine`.
-2. [ ] **Seeded RNG** + deterministic setup (deal roles, pick rooms by player count) — design §6.2, §8.1.
+2. [ ] **Seeded RNG** + deterministic setup (deal roles, pick rooms by player count) — design §6.2, §8.1. Pick the algorithm and fill `RngState.words`; setup emits `gameCreated`, `rngSeeded`, `roomsSet`, `roleDealt`.
 3. [ ] **Content: bank job** — core rooms, extra rooms by player count, Heat formula, checkpoint targets, starter roles (Rookie, Lookout, Insider, Fence) — design §6, §7, §8, §11.5.
 4. [ ] **Round loop** — `submitMove`, default moves, resolution order, Haul/Stash/Heat updates, room-mate sightings, Security result — design §5.
 5. [ ] **Alibis** — `postAlibi` command + ledger entry — design §5.4.
@@ -32,4 +32,6 @@ Goal: run thousands of all-bot games at 2–12 players and use the results to tu
 - **M4** — more content (museum, casino, roles, events).
 
 ## Notes / half-finished work
-- 31 Oct 2026: baseline checked on a fresh clone (`pnpm install`, `pnpm test`, `pnpm typecheck` all green). Nothing in progress; next session starts at task 1 (Core types).
+- Types only so far: no reducer/command handler yet. Room/role *definitions* (yields, Heat, powers) are still to come in task 3; `packages/content` only has the `RoomId`/`RoleId`/`JobId` aliases.
+- `samples.ts` has one sample per event and command type, and the compiler enforces it. The `viewFor()` leak tests in task 8 should loop over `sampleEvents`.
+- `AbilityUse` covers only Lookout and Fence. Extend it when the other roles land.

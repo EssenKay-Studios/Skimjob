@@ -4,6 +4,15 @@ Newest first. Each entry: what was decided, and why. Add an entry whenever a rul
 
 ---
 
+### 2026-11-01 — Core type choices
+- **Each event type fixes its own visibility in the type system.** For example, `roleDealt` can only be private and `rngSeeded` can only be reveal-only, so a secret can't be logged as public by mistake. `voteCast` is public or private depending on the vote-visibility setting.
+- **After the game ends, every event is visible to everyone** (`canSee`), which is what the reveal needs (§13).
+- **A move's split is stored as `pocket`** (the amount kept), not the amount handed in. Real yields can change after submission (shared Deposit boxes, events), so `pocket` is capped at the actual yield, and "hand everything in" is simply `pocket: 0`. Design §5.1's rule is unchanged.
+- **`GameConfig` holds only settings that change the rules.** Session length, deadlines, meeting window length, quiet hours, pause/extend and bot replacement belong to the server, because the engine has no clock.
+- **The seed never appears in a public event.** `gameCreated` is public without the seed; the seed goes in a reveal-only `rngSeeded` event.
+- **Only resting phases are modelled:** `setup`, `planning`, `awaitingMeeting`, `meeting`, `ended`. Resolving, Checkpoint and FinalCheck from §17.2 happen inside one `advance()` and leave only events behind.
+- **Meeting time slots are opaque strings** that the engine stores but never reads as a time.
+
 ### 2026-10-31 — Game name is Skimjob
 Replaces the working title "Heist Crew".
 
