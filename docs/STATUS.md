@@ -32,8 +32,12 @@ Goal: run thousands of all-bot games at 2–12 players and use the results to tu
 ### Next up (in order)
 - Remaining roles, events deck, Duel mode (see below); then a second balance pass with them in.
 
-### Later in M1 (after the above works)
-- Remaining roles (Hacker, Smooth talker, Muscle, Blackmailer, Snitch, Driver, Mole), events deck, Duel mode (2 humans).
+### Later in M1
+12. [ ] **Info & vote roles** — Hacker, Smooth talker, Muscle, Blackmailer, Snitch (incl. generic role state + `useAbility`) — design §8.
+13. [ ] **Win-condition roles** — Driver, Mole (tip-off, Mole allies, winning rules: Mole wins only on failure and never on success; best non-Mole wins a success; Driver wins a success normally and a Heat failure if top stash) — design §3, §8, §8.1.
+14. [ ] **Events deck** — the ten events of design §10, one flipped per round from round 2, off in starter mode.
+15. [ ] **Duel mode** — exactly 2 humans, call-outs instead of votes — design §16.1.
+16. [ ] **Balance pass 2** — re-run sims with all roles and events; bots learn the new roles minimally.
 
 ## Upcoming milestones
 - **M2** — playable web prototype (server, minimal UI, chat, ledger) for real playtests.
