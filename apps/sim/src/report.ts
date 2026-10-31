@@ -25,9 +25,9 @@ const ROWS: readonly Row[] = [
   { label: "Shakedown target had pocketed", target: "", cell: (m) => pct(m.shakedowns.hitPocketer) },
   { label: `Win rate, honest (pocket ≤${share(HONEST_MAX_SHARE)})`, target: "< moderate", cell: (m) => pct(m.pocketing.honest?.winRate ?? null) },
   { label: `Win rate, moderate (≤${share(MODERATE_MAX_SHARE)})`, target: "> honest", cell: (m) => pct(m.pocketing.moderate?.winRate ?? null) },
-  { label: `Win rate, heavy (>${share(MODERATE_MAX_SHARE)})`, target: "< moderate", cell: (m) => pct(m.pocketing.heavy?.winRate ?? null) },
-  { label: "Comeback: Act 1 leader wins", target: "< 50%", cell: (m) => pct(m.comeback.rate) },
-  { label: "Decided before Act 3", target: "< 15%", cell: (m) => pct(m.decidedEarly.rate) },
+  { label: `Win rate, heavy (>${share(MODERATE_MAX_SHARE)})`, target: "< 50%", cell: (m) => pct(m.pocketing.heavy?.winRate ?? null) },
+  { label: "Comeback: Act 1 leader wins (successes)", target: "< 50%", cell: (m) => pct(m.comeback.rate) },
+  { label: "Decided before Act 3 (successes)", target: "< 15%", cell: (m) => pct(m.decidedEarly.rate) },
 ];
 
 function table(header: readonly string[], rows: readonly (readonly string[])[]): string {
@@ -55,8 +55,9 @@ function groupTable(cols: readonly [string, Metrics][], pickGroup: (m: Metrics) 
 export function formatReport(summary: Summary, title: string): string {
   const cols = columns(summary);
   const hasMole = cols.some(([, m]) => m.roles.mole);
-  // design §17.4: Mole win rate when present (all games: the Mole wins by the heist failing).
-  const moleRow: Row = { label: "Mole win rate (games with a Mole)", target: "30–40%", cell: (m) => pct(m.roles.mole?.winRate ?? null) };
+  // design §17.4: Mole win rate when present. Not meaningful until the Mole's
+  // RoleDef (wins on failure) lands: today a Mole can only win by topping a successful heist.
+  const moleRow: Row = { label: "Mole win rate (n/a until Mole powers)", target: "30–40%", cell: (m) => `(${pct(m.roles.mole?.winRate ?? null)})` };
   const rows = hasMole ? [...ROWS, moleRow] : ROWS;
   const main = table(
     ["Balance metric (design §17.4)", "target", ...cols.map(([c]) => c)],

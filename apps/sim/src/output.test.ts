@@ -1,9 +1,9 @@
 // Per-game CSV/JSON output and the printed report. design §17.4 "Outputs"
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { GAME_COLUMNS, PLAYER_COLUMNS, csvCell, gameRows, playerRows, toCsv, writeOutputs } from "./output";
+import { GAME_COLUMNS, PLAYER_COLUMNS, csvCell, gameRows, playerRows, prepareOutDir, toCsv, writeOutputs } from "./output";
 import { summarize } from "./metrics";
 import { formatReport } from "./report";
 import { gameRec, seat } from "./testkit";
@@ -45,6 +45,30 @@ describe("writeOutputs", () => {
   });
 });
 
+describe("prepareOutDir — checked before any game runs (PR #10 QA)", () => {
+  it("creates a missing directory and accepts an existing one", () => {
+    const dir = mkdtempSync(join(tmpdir(), "sim-prep-"));
+    try {
+      expect(prepareOutDir(join(dir, "a", "b"))).toBeNull();
+      expect(prepareOutDir(join(dir, "a", "b"))).toBeNull();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+  it("refuses a file in place of the directory, or a directory in place of an output file", () => {
+    const dir = mkdtempSync(join(tmpdir(), "sim-prep-"));
+    try {
+      writeFileSync(join(dir, "file"), "x");
+      expect(prepareOutDir(join(dir, "file"))).toMatch(/not a directory/);
+      expect(prepareOutDir(join(dir, "file", "below"))).toMatch(/--out/);
+      mkdirSync(join(dir, "out", "games.csv"), { recursive: true });
+      expect(prepareOutDir(join(dir, "out"))).toMatch(/games\.csv exists and is not a file/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("formatReport", () => {
   it("shows every design §17.4 metric with its target, one column per player count", () => {
     const text = formatReport(summarize([...games, { ...games[0]!, players: 3 }]), "title");
@@ -53,6 +77,9 @@ describe("formatReport", () => {
     }
     expect(text).toMatch(/2p\s+3p\s+all/);
     expect(text).toContain("55–70%");
+    // design §17.4: heavy pocketing "should lose more often than it wins".
+    expect(text).toMatch(/Win rate, heavy[^\n]*< 50%/);
+    expect(text).toMatch(/Mole win rate \(n\/a until Mole powers\)/);
   });
   it("says when no Mole was dealt, and warns about refused commands", () => {
     const text = formatReport(summarize([gameRec({ playerRecords: [seat()], rejections: 2 })]), "t");

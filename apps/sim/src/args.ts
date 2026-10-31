@@ -160,6 +160,8 @@ export function parseSimArgs(argv: readonly string[], readFile?: (path: string) 
       return error(`--overrides: ${(e as Error).message}`);
     }
   }
+  if (values.out !== undefined && values.out.trim() === "") return error("--out needs a directory (use --no-files for none)");
+  if (values.out !== undefined && values.out.includes("\0")) return error("--out is not a valid path");
   const rolePool = values["role-pool"] === undefined ? [] : values["role-pool"].split(",").map((r) => r.trim()).filter((r) => r !== "");
 
   return {

@@ -54,8 +54,11 @@ export function ranking(state: GameState, roles: RoleTable = rolesFor(state.conf
   return entries.sort(compare); // stable: seat order breaks full ties
 }
 
-/** Players tied with the first place on every tie-break (joint winners, provisional). */
-function top(ranked: readonly RankEntry[]): PlayerId[] {
+/**
+ * Players tied with the first place on every tie-break (joint winners,
+ * provisional). Also the simulator's "leader" at a checkpoint. design §3
+ */
+export function leadersOf(ranked: readonly RankEntry[]): PlayerId[] {
   const first = ranked[0];
   return first ? ranked.filter((e) => compare(e, first) === 0).map((e) => e.player) : [];
 }
@@ -68,7 +71,7 @@ function top(ranked: readonly RankEntry[]): PlayerId[] {
  */
 export function outcomeFor(state: GameState, failure: FailureReason | null, roles: RoleTable = rolesFor(state.config)): Outcome {
   const ranked = ranking(state, roles);
-  const leaders = top(ranked);
+  const leaders = leadersOf(ranked);
   if (failure === null) return { result: "success", ranking: ranked, winners: leaders };
   const winners = ranked
     .filter((e) => {

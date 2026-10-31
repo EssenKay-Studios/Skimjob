@@ -1,8 +1,15 @@
 // Flattening a finished game for the metrics. design §17.4
 import { describe, expect, it } from "vitest";
 import { handleCommand, replay, setupEvents, type Command, type GameConfig, type GameEvent, type GameState } from "@skimjob/engine";
-import { recordGame, standing } from "./record";
+import { checkpointRankings, recordGame, standing } from "./record";
 import { runOne } from "./run";
+import { setupGame } from "./crew";
+import { PERSONALITIES, createBots, runBotGame } from "@skimjob/bots";
+
+function runBotGameFor(o: SimOptions, n: number, i: number) {
+  const { config, crew } = setupGame(o, n, i);
+  return runBotGame(config, createBots(config.players, (_s, k) => PERSONALITIES[crew[k] as keyof typeof PERSONALITIES], config.seed));
+}
 import { parseSimArgs, type SimOptions } from "./args";
 
 const options = (argv: string[] = []): SimOptions => {
@@ -45,12 +52,16 @@ function meeting(s: GameState, act: 1 | 2 | 3, votes: Command[] = []): GameState
   return run(s, ...votes, { type: "advance", deadline: { kind: "closeMeeting", meetingId: id } });
 }
 
-describe("standing — leaders and lead at a checkpoint", () => {
-  it("finds tied leaders and the lead over the next score", () => {
-    const totals = new Map([["a", 5], ["b", 5], ["c", 2]]);
-    expect(standing(totals, (_p, t) => t)).toEqual({ leaders: ["a", "b"], topScore: 5, lead: 3 });
-    expect(standing(new Map([["a", 1], ["b", 1]]), (_p, t) => t)).toEqual({ leaders: ["a", "b"], topScore: 1, lead: 0 });
-    expect(standing(new Map([["a", 3], ["b", 1]]), (_p, t) => t * 2)).toEqual({ leaders: ["a"], topScore: 6, lead: 4 });
+describe("standing — leaders and lead from the engine's ranking (design §3 tie-breaks)", () => {
+  const entry = (player: string, score: number, timesShakenDown = 0, totalHandedIn = 0) =>
+    ({ player, role: "rookie", score, stash: score, safe: 0, timesShakenDown, totalHandedIn });
+  it("leaders are tied on score and both tie-breaks; the lead is over the best of the rest", () => {
+    expect(standing([entry("a", 5, 0, 9), entry("b", 5, 0, 9), entry("c", 2)])).toEqual({ leaders: ["a", "b"], topScore: 5, lead: 3 });
+    expect(standing([entry("a", 6), entry("b", 2)])).toEqual({ leaders: ["a"], topScore: 6, lead: 4 });
+  });
+  it("a tie on score broken by fewer shakedowns or more handed in gives one leader, with lead 0", () => {
+    expect(standing([entry("a", 5, 0), entry("b", 5, 1)])).toEqual({ leaders: ["a"], topScore: 5, lead: 0 });
+    expect(standing([entry("a", 5, 0, 10), entry("b", 5, 0, 4)])).toEqual({ leaders: ["a"], topScore: 5, lead: 0 });
   });
 });
 
@@ -103,12 +114,34 @@ describe("recordGame — a scripted game", () => {
 });
 
 describe("recordGame — bot games agree with the engine's ranking", () => {
+  it("the ranking at the final checkpoint is the engine's final ranking", () => {
+    const o = options(["-p", "2-12"]);
+    for (const n of [3, 6, 12]) {
+      for (let i = 0; i < 3; i++) {
+        const { state } = runBotGameFor(o, n, i);
+        if (state.phase.kind !== "ended") throw new Error("not over");
+        const rankings = checkpointRankings(state.config, state.log);
+        if (state.phase.outcome.result === "success" || state.phase.outcome.reason === "target") {
+          expect(rankings[2]).toEqual(state.phase.outcome.ranking);
+        }
+      }
+    }
+  });
+
   it("stashes, winners and win credit match gameEnded", () => {
     const o = options(["-p", "2-12"]);
     for (const n of [2, 5, 9, 12]) {
       for (let i = 0; i < 3; i++) {
         const rec = runOne(o, n, i);
+        const { state } = runBotGameFor(o, n, i);
+        if (state.phase.kind !== "ended") throw new Error("not over");
         expect(rec.rejections).toBe(0);
+        const engine = new Map(state.phase.outcome.ranking.map((e) => [e.player, e]));
+        for (const p of rec.playerRecords) {
+          expect(p.stash).toBe(engine.get(p.id)?.stash);
+          expect(p.score).toBe(engine.get(p.id)?.score);
+          expect(p.timesShakenDown).toBe(engine.get(p.id)?.timesShakenDown);
+        }
         expect(rec.playerRecords).toHaveLength(n);
         const credit = rec.playerRecords.reduce((t, p) => t + p.winCredit, 0);
         expect(credit).toBeCloseTo(rec.winners.length > 0 ? 1 : 0);

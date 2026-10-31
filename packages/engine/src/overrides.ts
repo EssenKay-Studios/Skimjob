@@ -71,6 +71,14 @@ export function validateOverrides(raw: unknown, job: JobDef, roles: RoleTable = 
         else checkFields(capacity, `${path}.capacity`, { max: positiveCount, crowdedLoot: count }, errors);
       }
   }
+  // A crowded room pays less, never more: checkMove bounds a pocket by the room's loot. design §6.2
+  if (errors.length === 0 && isObject(raw.rooms)) {
+    for (const [room, def] of Object.entries(overrideJob(job, { rooms: raw.rooms } as ContentOverrides).rooms)) {
+      if (def.capacity && def.capacity.crowdedLoot > def.loot) {
+        errors.push(`contentOverrides.rooms.${room}: crowded loot (${def.capacity.crowdedLoot}) can't be more than loot (${def.loot})`);
+      }
+    }
+  }
   if (raw.heat !== undefined) {
     checkFields(raw.heat, "contentOverrides.heat", { max: positiveCount, perRound: finite, missedCheckpoint: count }, errors);
   }

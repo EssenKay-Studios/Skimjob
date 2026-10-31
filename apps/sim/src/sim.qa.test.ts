@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { PERSONALITIES, createBots, runBotGame } from "@skimjob/bots";
-import { checkpointTarget, jobFor, replay, rolesFor, scoreFor, type GameEvent, type GameState } from "@skimjob/engine";
+import { checkpointTarget, jobFor, leadersOf, ranking, replay, rolesFor, scoreFor, type GameEvent, type GameState } from "@skimjob/engine";
 import { parseSimArgs, type SimOptions } from "./args";
 import { setupGame } from "./crew";
 import { summarize } from "./metrics";
@@ -162,7 +162,9 @@ describe("design §17.4 metrics — hand-checked against the engine on a fixed s
         });
         const top = Math.max(...scores.map((x) => x.s));
         expect(recorded?.topScore).toBe(top);
-        expect(recorded?.leaders).toEqual(scores.filter((x) => x.s === top).map((x) => x.id));
+        // Leaders use the engine's tie-breaks (PR #10 review): a subset of the top scorers.
+        expect(recorded?.leaders).toEqual(leadersOf(ranking(mid)));
+        for (const id of recorded?.leaders ?? []) expect(scores.find((x) => x.id === id)?.s).toBe(top);
       }
     });
   });

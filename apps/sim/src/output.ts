@@ -1,5 +1,5 @@
 // Per-game output: CSV rows (one per game, one per seat) and JSON. design §17.4 "Outputs"
-import { mkdirSync, writeFileSync } from "node:fs";
+import { accessSync, constants, mkdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { GameRecord } from "./record";
 import type { Summary } from "./metrics";
@@ -43,10 +43,33 @@ export function playerRows(records: readonly GameRecord[]): Cell[][] {
   );
 }
 
+export const OUTPUT_FILES = ["games.csv", "players.csv", "games.json", "summary.json"] as const;
+
+/**
+ * Make sure `dir` can take the output before any game runs: create it if
+ * missing, and refuse a path that is a file, an output name that is a
+ * directory, or a directory we can't write. Returns the problem, or null.
+ */
+export function prepareOutDir(dir: string): string | null {
+  try {
+    const st = statSync(dir, { throwIfNoEntry: false });
+    if (st && !st.isDirectory()) return `--out ${dir} exists and is not a directory`;
+    mkdirSync(dir, { recursive: true });
+    accessSync(dir, constants.W_OK);
+    for (const name of OUTPUT_FILES) {
+      const f = statSync(join(dir, name), { throwIfNoEntry: false });
+      if (f && !f.isFile()) return `--out ${join(dir, name)} exists and is not a file`;
+    }
+    return null;
+  } catch (e) {
+    return `--out ${dir}: ${(e as NodeJS.ErrnoException).code ?? (e as Error).message}`;
+  }
+}
+
 /** Write games.csv, players.csv, games.json and summary.json into `dir`; returns the paths. */
 export function writeOutputs(dir: string, records: readonly GameRecord[], summary: Summary, options: unknown): string[] {
   mkdirSync(dir, { recursive: true });
-  const files: [string, string][] = [
+  const files: [(typeof OUTPUT_FILES)[number], string][] = [
     ["games.csv", toCsv(GAME_COLUMNS, gameRows(records))],
     ["players.csv", toCsv(PLAYER_COLUMNS, playerRows(records))],
     ["games.json", JSON.stringify(records) + "\n"],
