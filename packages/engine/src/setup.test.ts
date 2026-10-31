@@ -59,10 +59,10 @@ describe("dealing roles — design §8.1", () => {
     }
   });
 
-  it("starter mode: only Rookie, Lookout, Insider and Fence; no Mole even if the host set one", () => {
+  it("starter mode: only Rookie, Lookout, Insider and Fence; no Mole", () => {
     for (let n = 2; n <= 12; n++) {
       for (const seed of ["a", "b", "c"]) {
-        const roles = rolesOf(config(n, { seed, starterMode: true, mole: "on", rolePool: ["fence"] }));
+        const roles = rolesOf(config(n, { seed, starterMode: true, rolePool: ["fence"] }));
         for (const role of roles) expect(STARTER_ROLES).toContain(role);
       }
     }
@@ -148,6 +148,14 @@ describe("config validation — design §1, §15", () => {
     expect(() => setupEvents(config(3, { rolePool: ["wizard"] }))).toThrow(/role/);
     expect(() => setupEvents(config(3, { rolePool: ["fence", "fence"] }))).toThrow(/duplicates/);
     expect(() => setupEvents(config(6, { rolePool: ["mole"] }))).toThrow(/mole setting/);
+  });
+
+  it("starter mode rejects a Mole setting or events (design §8.1: no Mole, no events)", () => {
+    expect(() => setupEvents(config(6, { starterMode: true, mole: "on" }))).toThrow(/mole/);
+    expect(() => setupEvents(config(6, { starterMode: true, mole: "maybe" }))).toThrow(/mole/);
+    expect(() => setupEvents(config(6, { starterMode: true, eventsEnabled: true }))).toThrow(/events/);
+    const created = setupEvents(config(6, { starterMode: true }))[0];
+    expect(created).toMatchObject({ type: "gameCreated", starterMode: true, mole: "off", eventsEnabled: false });
   });
 
   it("starter mode ignores the role pool (GameConfig.rolePool)", () => {
