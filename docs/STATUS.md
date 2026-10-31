@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 31 Oct 2026_
+_Last updated: 1 Nov 2026_
 
 ## Current milestone: M1 — Engine + simulator (bank job, starter roles, bots)
 
@@ -9,10 +9,10 @@ Goal: run thousands of all-bot games at 2–12 players and use the results to tu
 ### Done
 - [x] Game design v0.1 (`docs/design.md`)
 - [x] Monorepo skeleton (pnpm workspaces, TypeScript, vitest)
+- [x] **Core types** — `GameConfig`, `GameState`, `Command`, `GameEvent` (visibility fixed per event type), `PlayerView`, `canSee()`, plus one sample per event/command type in `packages/engine/src/types/`.
 
 ### Next up (in order)
-1. [ ] **Core types** — `GameConfig`, `GameState`, `Command`, `GameEvent` (with visibility), `PlayerView` in `packages/engine`.
-2. [ ] **Seeded RNG** + deterministic setup (deal roles, pick rooms by player count) — design §6.2, §8.1.
+2. [ ] **Seeded RNG** + deterministic setup (deal roles, pick rooms by player count) — design §6.2, §8.1. Pick the algorithm and fill `RngState.words`; setup emits `gameCreated`, `rngSeeded`, `roomsSet`, `roleDealt`.
 3. [ ] **Content: bank job** — core rooms, extra rooms by player count, Heat formula, checkpoint targets, starter roles (Rookie, Lookout, Insider, Fence) — design §6, §7, §8, §11.5.
 4. [ ] **Round loop** — `submitMove`, default moves, resolution order, Haul/Stash/Heat updates, room-mate sightings, Security result — design §5.
 5. [ ] **Alibis** — `postAlibi` command + ledger entry — design §5.4.
@@ -32,4 +32,13 @@ Goal: run thousands of all-bot games at 2–12 players and use the results to tu
 - **M4** — more content (museum, casino, roles, events).
 
 ## Notes / half-finished work
-- 31 Oct 2026: baseline checked on a fresh clone (`pnpm install`, `pnpm test`, `pnpm typecheck` all green). Nothing in progress; next session starts at task 1 (Core types).
+- Types only so far: no reducer/command handler yet. Room/role *definitions* (yields, Heat, powers) are still to come in task 3; `packages/content` only has the `RoomId`/`RoleId`/`JobId` aliases.
+- `samples.ts` has one sample per event and command type, and the compiler enforces it. The `viewFor()` leak tests in task 8 should loop over `sampleEvents`.
+- Visibility has four kinds: `public`, `private`, `reveal`, `secret`. `secret` never opens up, even after the game (Secret-mode ballots, §11.2). Task 6 must tag `voteCast`/`voteSealed` with `secretTo()` in Secret mode; task 8 builds `reveal.log` from `canSee(..., true)` so other players' secret ballots are dropped.
+- `AbilityUse` covers only Lookout and Fence. Extend it when the other roles land.
+- From the PR #1 review, deferred to the task named:
+  - **Task 2 (RNG):** `rng` can't be rebuilt from events that don't record draws. Either random-consuming events carry the post-draw RNG state, or replay works from commands. Either way RNG state must never reach a public/private view (it would let players predict draws).
+  - **Task 6 (meetings):** say whether a sealed vote applies to an emergency meeting, and whether it can be withdrawn (`voteSealed` has no meeting/act scope yet). Decide whether a regular meeting slot can arrive mid-act (rounds pause, §4.1) or only after the act's last round.
+  - **Tasks 10/11 (sim/balance):** §17.4 "config overrides": add a content-overrides field to `GameConfig`, and a `CONTENT_VERSION` in `gameCreated` so old logs replay against the right numbers.
+  - **Remaining roles:** replace the Fence-specific `safe`/`safeDepositedThisAct` with a generic per-player role state (once-per-act/game uses, Snitch target, Mole allies). Some abilities happen outside planning (Muscle cancel after the vote passes, Double-cross accept, Duel call-out §16.1), so add a `useAbility` command (§17.2), and Muscle needs a window between `meetingClosed` and `shakedownResolved` (probably a new `Deadline` kind).
+  - **Events deck / Duel mode:** no event types yet (public `eventFlipped`, private Raid rumour / Inside tip results) and no Duel config flag.

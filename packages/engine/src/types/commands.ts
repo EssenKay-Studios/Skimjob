@@ -1,0 +1,76 @@
+// Commands in, events out. design §17.2
+//
+// Player commands are what a client (human or bot) sends. System commands are
+// sent by the server scheduler or the simulator: the engine has no clock, so it
+// never decides by itself that time is up or picks a meeting time.
+import type { RoomId } from "@skimjob/content";
+import type { PlayerId } from "./config";
+import type { ActNumber } from "./events";
+
+/** Role powers used as part of a move. Grows as roles are added. design §8 */
+export type AbilityUse =
+  /** Lookout: also see who was in one extra room this round. */
+  | { readonly kind: "lookout"; readonly room: RoomId }
+  /** Fence: move loot from stash into the hidden safe (cap per act is content). */
+  | { readonly kind: "fenceSafe"; readonly amount: number };
+
+/**
+ * One player's secret move for a round. design §5.1
+ *
+ * The split is expressed as how much to *pocket*; everything else goes to the
+ * Haul. The room's actual yield can change after submission (shared Deposit
+ * boxes, events), so pocket is clamped to the real yield at resolution, and
+ * "hand everything in" is simply `pocket: 0`. See docs/decisions.md.
+ */
+export interface Move {
+  readonly room: RoomId;
+  readonly pocket: number;
+  /** Required when `room` is a watcher room (Security): which room to watch. design §6.1 */
+  readonly watch?: RoomId;
+  readonly ability?: AbilityUse;
+}
+
+/** A vote in a crew meeting: shake someone down, or skip. design §11.2 */
+export type VoteChoice =
+  | { readonly kind: "shakedown"; readonly target: PlayerId }
+  | { readonly kind: "skip" };
+
+export type PlayerCommand =
+  | { readonly type: "submitMove"; readonly player: PlayerId; readonly move: Move }
+  | { readonly type: "postAlibi"; readonly player: PlayerId; readonly room: RoomId }
+  /**
+   * `slot` is an opaque label for the proposed time (e.g. an ISO timestamp).
+   * The engine stores it and only ever compares slots for equality; it never
+   * reads one as a time.
+   */
+  | { readonly type: "proposeMeeting"; readonly player: PlayerId; readonly slot: string }
+  | { readonly type: "acceptMeeting"; readonly player: PlayerId; readonly proposalId: string }
+  | { readonly type: "callEmergency"; readonly player: PlayerId }
+  | { readonly type: "castVote"; readonly player: PlayerId; readonly vote: VoteChoice }
+  /** Leave a vote in advance for the next meeting you might miss. design §11.2 */
+  | { readonly type: "sealVote"; readonly player: PlayerId; readonly vote: VoteChoice };
+
+/**
+ * Which deadline has passed. The engine has no clock, and several deadlines can
+ * be pending at once (e.g. the round deadline and an emergency meeting's notice
+ * period during planning), so the scheduler must say which one it means. The
+ * engine rejects a deadline that isn't currently pending. design §4.1, §11.1
+ */
+export type Deadline =
+  /** The planning deadline for the current round: resolve it (default moves for anyone missing). design §5 */
+  | { readonly kind: "round" }
+  /** A scheduled regular meeting's slot, or an emergency's notice period, has arrived: open the vote window. design §11.1 */
+  | { readonly kind: "openMeeting"; readonly meetingId: string }
+  /** The open vote window has ended: tally, shakedown, then checkpoint / final check. design §11.2–§11.4 */
+  | { readonly kind: "closeMeeting"; readonly meetingId: string };
+
+export type SystemCommand =
+  | { readonly type: "advance"; readonly deadline: Deadline }
+  /**
+   * Nobody locked in a regular meeting by the act deadline, so the server picks
+   * the slot. Emits `meetingScheduled` with `proposalId: null`. design §11.1
+   */
+  | { readonly type: "scheduleMeeting"; readonly act: ActNumber; readonly slot: string };
+
+export type Command = PlayerCommand | SystemCommand;
+export type CommandType = Command["type"];
