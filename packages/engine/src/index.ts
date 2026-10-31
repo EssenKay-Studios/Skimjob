@@ -7,4 +7,6 @@ export * from "./rng";
 export * from "./reduce";
 export * from "./setup";
 export * from "./job";
+export * from "./round";
+export * from "./handle";
 export const ENGINE_VERSION = "0.1.0";

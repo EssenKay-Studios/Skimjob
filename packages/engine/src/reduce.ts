@@ -3,8 +3,21 @@
 // `applyEvent` is the only way state changes. Command handlers decide which
 // events happen (drawing from `state.rng` where needed); folding those events
 // rebuilds the same state, including the RNG, on replay.
-import type { GameConfig, GameEvent, GameState, PlayerState } from "./types";
+import type { GameConfig, GameEvent, GameState, PlayerId, PlayerState } from "./types";
 import { seedRng } from "./rng";
+import { actOfRound, isLastRoundOfAct } from "./round";
+
+/** Replace one player's state. Throws for players that weren't dealt in. */
+function updatePlayer(state: GameState, id: PlayerId, change: (p: PlayerState) => Partial<PlayerState>): GameState {
+  const player = state.players[id];
+  if (!player) throw new Error(`unknown player ${id}`);
+  return { ...state, players: { ...state.players, [id]: { ...player, ...change(player) } } };
+}
+
+function mapPlayers(state: GameState, change: (p: PlayerState) => Partial<PlayerState>): GameState {
+  const players = Object.fromEntries(Object.entries(state.players).map(([id, p]) => [id, { ...p, ...change(p) }]));
+  return { ...state, players };
+}
 
 /** State before any event: only the host's config is known. */
 export function initialState(config: GameConfig): GameState {
@@ -12,6 +25,7 @@ export function initialState(config: GameConfig): GameState {
     config,
     rng: { words: [] },
     phase: { kind: "setup" },
+    round: 0,
     rooms: [],
     playerOrder: [],
     players: {},
@@ -56,16 +70,47 @@ function applyChange(state: GameState, event: GameEvent): GameState {
       };
       return { ...state, players: { ...state.players, [seat.id]: player } };
     }
-    case "roundStarted":
+    // ------------------------------------------------ round loop. design §5
+    case "roundStarted": {
+      const next: GameState = { ...state, phase: { kind: "planning", round: event.round }, round: event.round, moves: {} };
+      // The Fence's per-act safe allowance starts again with each act. design §8
+      return actOfRound(event.round) !== actOfRound(state.round) ? mapPlayers(next, () => ({ safeDepositedThisAct: 0 })) : next;
+    }
     case "moveSubmitted":
+      return updatePlayer({ ...state, moves: { ...state.moves, [event.player]: event.move } }, event.player, () => ({
+        consecutiveMissedMoves: 0,
+      }));
     case "defaultMoveAssigned":
+      return updatePlayer({ ...state, moves: { ...state.moves, [event.player]: event.move } }, event.player, (p) => ({
+        consecutiveMissedMoves: p.consecutiveMissedMoves + 1,
+      }));
     case "lootSplit":
-    case "abilityResolved":
+      return updatePlayer(state, event.player, (p) => ({
+        stash: p.stash + event.toStash,
+        totalHandedIn: p.totalHandedIn + event.toHaul,
+      }));
+    case "abilityResolved": {
+      const { ability } = event;
+      if (ability.kind !== "fenceSafe") return state;
+      return updatePlayer(state, event.player, (p) => ({
+        stash: p.stash - ability.amount,
+        safe: p.safe + ability.amount,
+        safeDepositedThisAct: p.safeDepositedThisAct + ability.amount,
+      }));
+    }
     case "roomSighting":
     case "roomWatched":
     case "pocketCount":
-    case "roundResolved":
     case "copsRaided":
+      // Information only; no state changes. (copsRaided is followed by gameEnded.)
+      return state;
+    case "roundResolved": {
+      // Haul and Heat are public totals; after an act's last round, the act's meeting comes next (task 6).
+      const next: GameState = { ...state, haul: event.haul, heat: event.heat, moves: {} };
+      return isLastRoundOfAct(event.round) ? { ...next, phase: { kind: "awaitingMeeting", act: actOfRound(event.round) } } : next;
+    }
+    case "gameEnded":
+      return { ...state, phase: { kind: "ended", outcome: event.outcome } };
     case "alibiPosted":
     case "meetingProposed":
     case "meetingProposalAccepted":
@@ -77,7 +122,6 @@ function applyChange(state: GameState, event: GameEvent): GameState {
     case "meetingClosed":
     case "shakedownResolved":
     case "checkpointChecked":
-    case "gameEnded":
       // Folded by later tasks (STATUS.md). Fail loudly rather than drop state.
       throw new Error(`applyEvent: ${event.type} is not implemented yet`);
     default: {

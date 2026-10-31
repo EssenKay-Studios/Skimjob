@@ -188,6 +188,8 @@ Every player is dealt **one secret role** at the start of the game. Roles are de
 | **Driver** | If the heist fails **because of Heat**, the Driver escapes and wins if they have the biggest stash. | People suspect them of trying to push Heat up. |
 | **Mole** *(optional)* | Wins only if the heist fails. Once per act, can **tip off** the cops (+10 Heat, hidden). | Revealed means hunted, and revealing it is rarely worth it. |
 
+*Fence safe timing (provisional):* the safe move is part of the Fence's move and happens after that round's split, so it can include loot pocketed that round; it can't move more than the stash holds.
+
 ### 8.1 Dealing roles
 
 - The roles in play are drawn from the pool according to player count and the host's settings.

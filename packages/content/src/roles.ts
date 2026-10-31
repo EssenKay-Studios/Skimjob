@@ -5,7 +5,10 @@ import type { RoleId } from "./index";
 /** A role's power. `kind` matches the engine's `AbilityUse` kind where the power is used in a move. design §8 */
 export type RolePower =
   | { readonly kind: "none" }
-  /** Lookout: each round, also sees who was in `extraRooms` extra room(s) of their choice. */
+  /**
+   * Lookout: each round, also sees who was in up to `extraRooms` extra room(s)
+   * of their choice, named in the move's `{ kind: "lookout", rooms }` ability.
+   */
   | { readonly kind: "lookout"; readonly extraRooms: number }
   /** Fence: may move up to `perAct` loot per act from stash into a hidden safe that shakedowns can't touch. */
   | { readonly kind: "fenceSafe"; readonly perAct: number };

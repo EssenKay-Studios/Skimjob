@@ -198,7 +198,7 @@ describe("config validation — design §1, §15", () => {
 });
 
 describe("setup events and visibility — design §17.2", () => {
-  it("emits gameCreated, rngSeeded, roomsSet, one roleDealt per seat, then rngAdvanced", () => {
+  it("emits gameCreated, rngSeeded, roomsSet, one roleDealt per seat, roundStarted, then rngAdvanced", () => {
     const events = setupEvents(config(3));
     expect(events.map((e) => e.type)).toEqual([
       "gameCreated",
@@ -207,6 +207,7 @@ describe("setup events and visibility — design §17.2", () => {
       "roleDealt",
       "roleDealt",
       "roleDealt",
+      "roundStarted",
       "rngAdvanced",
     ]);
   });
@@ -278,7 +279,9 @@ describe("determinism and replay — design §17.2", () => {
     expect(advanced.log).toHaveLength(2);
   });
 
-  it("after setup the game is still in the setup phase (round 1 starts in the round loop)", () => {
-    expect(createGame(config(3)).phase).toEqual({ kind: "setup" });
+  it("after setup, round 1 of act 1 is open for planning — design §4, §5.1", () => {
+    const state = createGame(config(3));
+    expect(state.phase).toEqual({ kind: "planning", round: 1 });
+    expect(state.round).toBe(1);
   });
 });

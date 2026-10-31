@@ -40,6 +40,8 @@ export interface JobDef {
   readonly roomTiers: readonly RoomTier[];
   /** Every room that appears in `roomTiers`. design §6 */
   readonly rooms: Readonly<Record<RoomId, RoomDef>>;
+  /** Where a player who misses the round deadline goes (handing everything in). Must be a core room. design §5.1 */
+  readonly defaultRoom: RoomId;
   readonly heat: HeatRules;
   readonly checkpoints: CheckpointRules;
 }
@@ -81,6 +83,7 @@ export const BANK_JOB: JobDef = {
       info: "none",
     },
   },
+  defaultRoom: "lobby",
   heat: { max: 100, perRound: 4, missedCheckpoint: 15 },
   checkpoints: { perPlayer: [6, 14, 22] },
 };
