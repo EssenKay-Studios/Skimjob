@@ -3,7 +3,8 @@
 //
 // Emits, in order: gameCreated (public, no seed), rngSeeded (reveal),
 // roomsSet (public), one roleDealt per seat in seat order (private), and
-// rngAdvanced (reveal) with the RNG state after dealing.
+// roundStarted for round 1 (public), and rngAdvanced (reveal) with the RNG state
+// after dealing.
 import {
   DEFAULT_ROLE_POOL,
   FILLER_ROLE,
@@ -141,11 +142,13 @@ export function setupEvents(config: GameConfig): GameEvent[] {
         role: dealt.value[i] as RoleId,
       }),
     ),
+    // Round 1 opens for planning as soon as the game is set up. design §4, §5.1
+    { type: "roundStarted", visibility: PUBLIC, round: 1, act: 1 },
     { type: "rngAdvanced", visibility: REVEAL, words: dealt.rng.words },
   ];
 }
 
-/** A new game after setup. Phase stays `setup` until the round loop (STATUS.md task 4) starts round 1. */
+/** A new game after setup, planning round 1. */
 export function createGame(config: GameConfig): GameState {
   return replay(config, setupEvents(config));
 }

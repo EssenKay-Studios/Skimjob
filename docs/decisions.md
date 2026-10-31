@@ -4,6 +4,19 @@ Newest first. Each entry: what was decided, and why. Add an entry whenever a rul
 
 ---
 
+### 2026-11-01 — Round loop (M1 task 4)
+- **`handleCommand(state, command)` is the one entry point** for commands. It returns `{ ok: true, state, events }` or `{ ok: false, reason }`. Commands arrive as untrusted JSON, so any bad input is a rejection that leaves state untouched, never a throw: wrong phase, unknown player, room not in play, a split that isn't a whole number from 0 to the room's loot (NaN, fractions, strings, Infinity), Security without a watched room, a watch from outside Security, an ability the role doesn't have. The stored move is normalised (unknown fields dropped).
+- **`rngAdvanced` is automatic.** Handlers draw only through the `Draw` they're given; `withRng` appends `rngAdvanced` after their events if anything was drawn, and discards the draws on a rejection. The round loop itself draws nothing.
+- **Setup opens round 1.** `setupEvents` now emits `roundStarted { round: 1 }` (before the final `rngAdvanced`), so `createGame` returns a game in planning. No separate "start" command.
+- **The default room is content** (`JobDef.defaultRoom`, `"lobby"` for the bank), since other jobs may not have a Lobby. **Rounds per act** is `ROUNDS_PER_ACT` (3) in content.
+- **Split bounds:** a move's `pocket` may be 0 to the room's listed loot when submitted, and is capped at the real yield when the round resolves (crowded Deposit boxes pay 3). The Insider's move is refused if `pocket > 0`, and resolution treats the Insider's pocket as 0 regardless.
+- **Lookout:** the ability is `{ kind: "lookout", rooms }`, 1 to `extraRooms` distinct rooms in play (content says 1). This replaces the single-room shape, so the content field means something. It's optional each round, and can name any room in play.
+- **Watch results leave out the watcher.** Security and Lookout results (`roomWatched.seen`), like room sightings, list the *other* players in the room.
+- **Fence safe (provisional):** the deposit happens after this round's split, from the stash including this round's pocket. The submitted amount must be 1 to what's left of the per-act cap (5); the amount actually moved is also capped by the stash, and `abilityResolved` reports the amount that moved. The allowance resets at the first round of each act.
+- **Heat:** baseline + room pressure is rounded, added, then clamped to 0–100 once (`roundResolved.heatDelta` is the change after clamping, so Rooftop at Heat 0 shows 0). Events and the missed-checkpoint penalty must join that single clamp when they land. Heat at 100 emits `copsRaided` then `gameEnded { failed, heat }`; the ranking is left empty until task 7.
+- **Acts:** after an act's last round the phase becomes `awaitingMeeting { act }` (also after round 9, for the final meeting); task 6 starts the next act. Server-room `pocketCount` counts players who kept anything this round.
+- **Player-keyed scratch data uses `Map`**, because player ids are host-chosen strings (a seat called `__proto__` works).
+
 ### 2026-11-01 — Bank job content (M1 task 3)
 - **Content shape:** `RoomDef` (`loot`, `heatPressure`, optional `capacity`, `info`: none / watchRoom / pocketCount), `RoleDef` (`power`, `canPocket`, `scoring`), and `JobDef` (room tiers, room defs, `heat`, `checkpoints`) in `packages/content`. The room tiers moved from `setup.ts` into `BANK_JOB` in `jobs.ts`, so there is one room list. Heat and checkpoint numbers live on the job, because jobs may change them (Casino baseline +5, §9).
 - **A room's Heat is one number, `heatPressure`, applied as pressure × (visitors ÷ crew size).** Vault 20, Manager's office 10, Rooftop −20, others 0 (§7). The engine sums pressure × visitors and divides by crew size once, so equal crew shares give exactly equal Heat at any size.

@@ -6,6 +6,9 @@ import type { RoleId } from "./index";
 export const MIN_PLAYERS = 2;
 export const MAX_PLAYERS = 12;
 
+/** A game is 3 acts of this many rounds (9 rounds in all). design §2, §4 */
+export const ROUNDS_PER_ACT = 3;
+
 /** The powerless role. Fills any seat the pool can't cover. design §8 */
 export const FILLER_ROLE: RoleId = "rookie";
 

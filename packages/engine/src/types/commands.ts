@@ -9,9 +9,16 @@ import type { ActNumber } from "./events";
 
 /** Role powers used as part of a move. Grows as roles are added. design §8 */
 export type AbilityUse =
-  /** Lookout: also see who was in one extra room this round. */
-  | { readonly kind: "lookout"; readonly room: RoomId }
-  /** Fence: move loot from stash into the hidden safe (cap per act is content). */
+  /**
+   * Lookout: also see who was in these rooms this round. 1 to the role's
+   * `extraRooms` (content) distinct rooms in play.
+   */
+  | { readonly kind: "lookout"; readonly rooms: readonly RoomId[] }
+  /**
+   * Fence: move loot from stash into the hidden safe after this round's split.
+   * Submitted: 1 to what is left of the per-act cap (content). Resolved
+   * (`abilityResolved`): what actually moved, capped by the stash.
+   */
   | { readonly kind: "fenceSafe"; readonly amount: number };
 
 /**

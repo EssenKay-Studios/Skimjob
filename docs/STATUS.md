@@ -13,8 +13,9 @@ Goal: run thousands of all-bot games at 2–12 players and use the results to tu
 - [x] **Seeded RNG** + deterministic setup — sfc32 in `packages/engine/src/rng.ts`; `setupEvents(config)` / `createGame(config)` emit `gameCreated`, `rngSeeded`, `roomsSet`, `roleDealt` ×N, `rngAdvanced`; `applyEvent`/`replay` fold the setup events. Dealing rules are in `packages/content/src/setup.ts` (room tiers moved to `jobs.ts` in task 3). Design §6.2, §8.1.
 - [x] **Content: bank job** — `BANK_JOB` (`packages/content/src/jobs.ts`): room defs (loot, Heat pressure, Deposit-box capacity, Security/Server-room info), room tiers, Heat numbers, checkpoint targets; starter role defs in `roles.ts`. Engine helpers in `packages/engine/src/job.ts`: `jobById`, `roomsInPlay`, `roomDef`, `roomLoot`, `roundHeatDelta`, `clampHeat`, `checkpointTarget`. Design §6, §7, §8, §11.5.
 
+- [x] **Round loop** — `handleCommand(state, command)` (`handle.ts`) returns `{ ok, state, events }` or `{ ok: false, reason }` and never throws for bad input. `submitMove` (changeable until the deadline, checked and normalised in `checkMove`), default moves, `advance { round }` → `resolveRound` (`round.ts`) in the §5.2 order: yields + Deposit-box capacity, splits, Fence safe, Heat (rounded, clamped once), sightings, Security / Lookout / Server room, public summary, raid at Heat 100. Insider can't pocket. `createGame` now opens round 1. Design §5, §6, §7, §8.
+
 ### Next up (in order)
-4. [ ] **Round loop** — `submitMove`, default moves, resolution order, Haul/Stash/Heat updates, room-mate sightings, Security result — design §5.
 5. [ ] **Alibis** — `postAlibi` command + ledger entry — design §5.4.
 6. [ ] **Meetings & votes** — scheduling, emergency meeting, sealed votes, quorum, shakedown, clean threshold & compensation, checkpoint order — design §11.
 7. [ ] **End of game** — success/fail, ranking, tie-breaks, reveal view — design §3, §13.
@@ -32,13 +33,17 @@ Goal: run thousands of all-bot games at 2–12 players and use the results to tu
 - **M4** — more content (museum, casino, roles, events).
 
 ## Notes / half-finished work
-- **RNG rule for every later task:** a command handler that draws from `state.rng` must append a reveal-only `rngAdvanced { words }` with the post-draw state after its other events (see decisions.md). `applyEvent` throws for event types not folded yet; each task adds its cases in `reduce.ts`.
-- After setup the phase is still `setup`; the round loop (task 4) should emit `roundStarted` for round 1.
+- **RNG rule for every later task:** command handlers draw only through the `Draw` that `handleCommand` passes them; `withRng` then appends the reveal-only `rngAdvanced { words }` automatically (see decisions.md). Never read `state.rng` in a handler. `applyEvent` throws for event types not folded yet; each task adds its cases in `reduce.ts`.
+- New commands: add a handler to `HANDLERS` in `handle.ts`; return a reason string to reject. Unsupported commands are rejected today.
+- **Task 5 (alibis):** `alibisPosted` is not reset yet; reset it when `roundResolved` is folded.
+- **Task 6 (meetings):** after round 3/6/9 the phase is `awaitingMeeting { act }` and nothing starts round 4/7. Task 6 implements `advance { openMeeting / closeMeeting }` (rejected for now) and emits `roundStarted` for the next act after the checkpoint. Its `roundStarted` resets the Fence's per-act allowance. Clamp Heat once after the missed-checkpoint penalty too.
+- **Task 7 (end of game):** a Heat raid emits `copsRaided` then `gameEnded { failed, heat }` with an **empty `ranking`** (`round.ts`). Fill the ranking there.
 - Moles can be dealt (by the Mole setting) but have no powers yet, and two Moles are not yet told about each other (§8.1) — add a private "your fellow Mole" event with the Mole role.
-- No command handlers yet; only the setup events are folded. Room and role definitions are data in `packages/content` (task 3); task 4 applies them: `roomLoot` for yields, `roundHeatDelta` then `clampHeat` for Heat (missed-checkpoint +15 is `job.heat.missedCheckpoint`), Insider `canPocket: false`, Lookout `extraRooms`, Fence `fenceSafe.perAct`. Task 7 applies `RoleDef.scoring` (Rookie ×1.2 gives non-integer scores; decide rounding there). Get the job with `jobById(config.job)`.
+- Task 7 applies `RoleDef.scoring` (Rookie ×1.2 gives non-integer scores; decide rounding there). Missed-checkpoint +15 is `job.heat.missedCheckpoint` (task 6). Get the job with `jobById(config.job)`.
+- Roles with no `RoleDef` (the Mole, for now) play with no power and may pocket.
 - `samples.ts` has one sample per event and command type, and the compiler enforces it. The `viewFor()` leak tests in task 8 should loop over `sampleEvents`.
 - Visibility has four kinds: `public`, `private`, `reveal`, `secret`. `secret` never opens up, even after the game (Secret-mode ballots, §11.2). Task 6 must tag `voteCast`/`voteSealed` with `secretTo()` in Secret mode; task 8 builds `reveal.log` from `canSee(..., true)` so other players' secret ballots are dropped.
-- `AbilityUse` covers only Lookout and Fence. Extend it when the other roles land.
+- `AbilityUse` covers only Lookout (`rooms`, 1 to `extraRooms`) and Fence. Extend it when the other roles land. Lockdown (closed rooms) arrives with the events deck; today "closed" means "not in play for this crew size".
 - From the PR #1 review, deferred to the task named:
   - **Task 6 (meetings):** say whether a sealed vote applies to an emergency meeting, and whether it can be withdrawn (`voteSealed` has no meeting/act scope yet). Decide whether a regular meeting slot can arrive mid-act (rounds pause, §4.1) or only after the act's last round.
   - **Tasks 10/11 (sim/balance):** §17.4 "config overrides": add a content-overrides field to `GameConfig` (validated: configs are untrusted JSON), and a `CONTENT_VERSION` in `gameCreated` so old logs replay against the right numbers. Task 3 prepared the seam: engine helpers take a `JobDef`, and only `jobById` and `validateConfig`'s job check read the `JOBS` table.
@@ -49,3 +54,4 @@ Goal: run thousands of all-bot games at 2–12 players and use the results to tu
 - Role deal: should each non-Rookie role be dealt at most once, with Rookies filling the rest (current, provisional), or can roles repeat in big crews?
 - Mole at 9–12 players: is "off" allowed, and does "maybe" mean 1-or-2 (current) or 0/1/2? "On" currently deals 2.
 - Heat: OK to round each round's change to a whole number (halves up) and floor Heat at 0? (provisional, decisions.md)
+- Fence: may the Fence put this round's pocket straight into the safe (current, provisional), or only loot already in the stash?

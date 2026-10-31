@@ -91,6 +91,8 @@ export interface GameState {
   readonly config: GameConfig;
   readonly rng: RngState;
   readonly phase: Phase;
+  /** The latest round started (1–9); 0 before round 1. Set by `roundStarted`. */
+  readonly round: number;
   /** Rooms in play for this player count. design §6.2 */
   readonly rooms: readonly RoomId[];
   /** Seat order, matching config.players. */
@@ -99,7 +101,7 @@ export interface GameState {
   readonly haul: number;
   /** 0–100. design §7 */
   readonly heat: number;
-  /** Moves submitted so far for the current round. */
+  /** Moves submitted so far for the current round (cleared when it resolves). */
   readonly moves: Readonly<Record<PlayerId, Move>>;
   /** Players who already posted an alibi for the last resolved round (one each). design §5.4 */
   readonly alibisPosted: readonly PlayerId[];
