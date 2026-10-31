@@ -88,9 +88,9 @@ describe("scheduling the act's meeting — design §11.1", () => {
     s = run(s, propose("p0", "tue-19:00"));
     const proposed = LAST(s, "meetingProposed");
     expect(proposed).toMatchObject({ visibility: { kind: "public" }, by: "p0", act: 1, slot: "tue-19:00" });
-    // Deterministic id, not drawn from the RNG: the event's position in the log.
+    // Deterministic id, not drawn from the RNG: the game's first proposal.
     const id = proposed!.proposalId;
-    expect(id).toBe(`proposal-${s.log.length - 1}`);
+    expect(id).toBe("proposal-1");
     expect(s.proposals).toEqual([{ id, by: "p0", act: 1, slot: "tue-19:00", acceptedBy: ["p0"] }]);
 
     s = run(s, accept("p1", id)); // 2 of 4: not a majority
@@ -102,6 +102,22 @@ describe("scheduling the act's meeting — design §11.1", () => {
     expect(s.scheduledMeeting).toEqual({ meetingId: "act-1", act: 1, slot: "tue-19:00" });
     expect(s.proposals).toEqual([]);
     expect(s.phase).toEqual({ kind: "planning", round: 1 }); // the slot can be locked mid-act
+  });
+
+  it("public ids and fields don't depend on hidden events (PR #6 review)", () => {
+    // Same public history, different private moves (more moveSubmitted events in one game).
+    const quiet = run(game(3), ROUND, propose("p0", "a"));
+    const busy = run(game(3), mv("p0", "vault", 6), mv("p0", "office", 1), mv("p1", "lobby"), ROUND, propose("p0", "a"));
+    expect(busy.log.length).not.toBe(quiet.log.length);
+    expect(LAST(busy, "meetingProposed")).toEqual(LAST(quiet, "meetingProposed"));
+    expect(LAST(busy, "meetingProposed")?.proposalId).toBe("proposal-1");
+    // Numbered across the whole game, so act 2's proposals don't reuse act 1's ids.
+    const act2 = run(toMeeting(quiet), CLOSE, propose("p1", "b"));
+    expect(LAST(act2, "meetingProposed")?.proposalId).toBe("proposal-2");
+    // Meeting ids are public names only.
+    const em = run(quiet, emergency("p2"));
+    expect(LAST(em, "emergencyMeetingCalled")?.meetingId).toBe("emergency-p2");
+    expect(run(quiet, (x: GameState) => accept("p1", x.proposals[0]!.id)).scheduledMeeting?.meetingId).toBe("act-1");
   });
 
   it("in a crew of 3, one accept beyond the proposer locks the slot", () => {

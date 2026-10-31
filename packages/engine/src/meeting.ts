@@ -83,8 +83,9 @@ export function proposeMeeting(state: GameState, command: Raw): Result {
   const slot = command.slot as string;
   const same = state.proposals.find((p) => p.slot === slot);
   if (same) return `that slot is already proposed (${same.id})`;
-  // The id is the event's position in the log: unique and deterministic.
-  const proposalId = `proposal-${state.log.length}`;
+  // Numbered from public data only (earlier proposals this game), never the log length,
+  // which would let players count hidden events. Unique and deterministic.
+  const proposalId = `proposal-${state.log.filter((e) => e.type === "meetingProposed").length + 1}`;
   return [{ type: "meetingProposed", visibility: PUBLIC, proposalId, by: player.id, act: currentAct(state), slot }];
 }
 
