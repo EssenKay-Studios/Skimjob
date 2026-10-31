@@ -137,10 +137,13 @@ function chooseRoom(view: PlayerView, p: Personality, random: Random): RoomId {
   if (cooler && danger > p.heatCaution && random() < Math.min(0.8, (danger - p.heatCaution) * 4)) return cooler;
   const watcher = roomsWhere(view, job, (d) => d.info === "watchRoom")[0];
   if (watcher && random() < p.watch) return watcher;
-  // Richer rooms are likelier, more so for the greedy; Heat-raising rooms less so as danger grows.
+  // Richer rooms are likelier, more so for the greedy. Heat-raising rooms get
+  // less likely once danger passes the bot's Heat caution (the same point and
+  // slope as the Rooftop above): a greedy player doesn't avoid the Vault at Heat 10.
+  const avoid = Math.max(0, danger - p.heatCaution) * 4;
   const options = roomsWhere(view, job, (d) => d.loot > 0).map((r) => {
     const d = roomDef(job, r);
-    const heatFactor = d.heatPressure > 0 ? Math.max(0.05, 1 - danger) : 1;
+    const heatFactor = d.heatPressure > 0 ? Math.max(0.05, 1 - avoid) : 1;
     return [r, d.loot ** (0.5 + p.greed) * heatFactor] as const;
   });
   return weighted(options, random) ?? job.defaultRoom;

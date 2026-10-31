@@ -68,9 +68,9 @@ describe("First National Bank rooms — design §6.1, §6.2", () => {
     expect(r.serverRoom?.info).toBe("pocketCount");
   });
 
-  it("9–12: Teller line 3 loot; Manager's office 5 loot", () => {
+  it("9–12: Teller line 4 loot; Manager's office 5 loot", () => {
     expect(BANK_JOB.roomTiers[2]).toEqual({ minPlayers: 9, rooms: ["tellerLine", "managersOffice"] });
-    expect(r.tellerLine?.loot).toBe(3);
+    expect(r.tellerLine?.loot).toBe(4);
     expect(r.managersOffice?.loot).toBe(5);
   });
 });
@@ -80,7 +80,7 @@ describe("First National Bank Heat numbers — design §7", () => {
     expect(BANK_JOB.heat).toEqual({ max: 100, perRound: 4, missedCheckpoint: 15 });
   });
 
-  it("Vault +20, Manager's office half of that, Rooftop −20 (per crew share); other rooms 0", () => {
+  it("Vault +20, Manager's office half of that, Deposit boxes +10, Rooftop −20 (per crew share); other rooms 0", () => {
     const pressure = Object.fromEntries(Object.values(BANK_JOB.rooms).map((d) => [d.id, d.heatPressure]));
     expect(pressure).toEqual({
       vault: 20,
@@ -88,7 +88,7 @@ describe("First National Bank Heat numbers — design §7", () => {
       lobby: 0,
       security: 0,
       rooftop: -20,
-      depositBoxes: 0,
+      depositBoxes: 10,
       serverRoom: 0,
       tellerLine: 0,
       managersOffice: 10,
@@ -97,8 +97,8 @@ describe("First National Bank Heat numbers — design §7", () => {
 });
 
 describe("First National Bank checkpoint targets — design §11.5", () => {
-  it("6, 14 and 22 × crew size at the end of Acts 1, 2 and 3", () => {
-    expect(BANK_JOB.checkpoints.perPlayer).toEqual([6, 14, 22]);
+  it("7, 15 and 24 × crew size at the end of Acts 1, 2 and 3", () => {
+    expect(BANK_JOB.checkpoints.perPlayer).toEqual([7, 15, 24]);
   });
 });
 
@@ -123,11 +123,11 @@ describe("starter roles — design §8, §8.1", () => {
     expect(ROLES.lookout).toMatchObject({ power: { kind: "lookout", extraRooms: 1 }, canPocket: true });
   });
 
-  it("Insider: can't pocket; 1 point per loot the Haul ends above the final target", () => {
+  it("Insider: can't pocket; 0.3 points per loot the Haul ends above the final target", () => {
     expect(ROLES.insider).toMatchObject({
       power: { kind: "none" },
       canPocket: false,
-      scoring: { stashMultiplier: 1, perLootOverFinalTarget: 1 },
+      scoring: { stashMultiplier: 1, perLootOverFinalTarget: 0.3 },
     });
   });
 

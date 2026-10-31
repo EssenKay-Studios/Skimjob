@@ -94,16 +94,16 @@ describe("round Heat — design §7", () => {
 });
 
 describe("checkpoint targets — design §11.5", () => {
-  it("6, 14 and 22 × crew size, cumulative", () => {
+  it("7, 15 and 24 × crew size, cumulative", () => {
     for (let n = 2; n <= 12; n++) {
-      expect([1, 2, 3].map((act) => checkpointTarget(bank, act as 1 | 2 | 3, n))).toEqual([6 * n, 14 * n, 22 * n]);
+      expect([1, 2, 3].map((act) => checkpointTarget(bank, act as 1 | 2 | 3, n))).toEqual([7 * n, 15 * n, 24 * n]);
     }
   });
 
-  it("a crew of 5 needs 30, 70 and 110", () => {
-    expect(checkpointTarget(bank, 1, 5)).toBe(30);
-    expect(checkpointTarget(bank, 2, 5)).toBe(70);
-    expect(checkpointTarget(bank, 3, 5)).toBe(110);
+  it("a crew of 5 needs 35, 75 and 120", () => {
+    expect(checkpointTarget(bank, 1, 5)).toBe(35);
+    expect(checkpointTarget(bank, 2, 5)).toBe(75);
+    expect(checkpointTarget(bank, 3, 5)).toBe(120);
   });
 
   it("rejects an act outside 1–3", () => {

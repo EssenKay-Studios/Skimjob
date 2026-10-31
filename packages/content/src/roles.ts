@@ -16,7 +16,7 @@ export type RolePower =
 export interface RoleScoring {
   /** Final stash is multiplied by this (Rookie ×1.2). design §8 */
   readonly stashMultiplier: number;
-  /** Points for every loot the Haul ends above the final target (Insider: 1). design §8 */
+  /** Points for every loot the Haul ends above the final target (Insider: 0.3, balance pass 1). design §8 */
   readonly perLootOverFinalTarget: number;
 }
 
@@ -72,7 +72,7 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     name: "Insider",
     power: { kind: "none" },
     canPocket: false,
-    scoring: { stashMultiplier: 1, perLootOverFinalTarget: 1 },
+    scoring: { stashMultiplier: 1, perLootOverFinalTarget: 0.3 },
     winsOnFailure: null,
   },
   fence: {

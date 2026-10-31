@@ -77,13 +77,13 @@ export const BANK_JOB: JobDef = {
       id: "depositBoxes",
       name: "Deposit boxes",
       loot: 5,
-      heatPressure: 0,
+      heatPressure: 10,
       capacity: { max: 2, crowdedLoot: 3 },
       info: "none",
     },
     serverRoom: { id: "serverRoom", name: "Server room", loot: 0, heatPressure: 0, capacity: null, info: "pocketCount" },
     // 9–12 players. design §6.2; Manager's office adds half the vault pressure (§7).
-    tellerLine: { id: "tellerLine", name: "Teller line", loot: 3, heatPressure: 0, capacity: null, info: "none" },
+    tellerLine: { id: "tellerLine", name: "Teller line", loot: 4, heatPressure: 0, capacity: null, info: "none" },
     managersOffice: {
       id: "managersOffice",
       name: "Manager's office",
@@ -95,7 +95,7 @@ export const BANK_JOB: JobDef = {
   },
   defaultRoom: "lobby",
   heat: { max: 100, perRound: 4, missedCheckpoint: 15 },
-  checkpoints: { perPlayer: [6, 14, 22] },
+  checkpoints: { perPlayer: [7, 15, 24] },
   shakedown: { cleanBelowPerAct: 3, compensationPerAct: 5 },
 };
 
