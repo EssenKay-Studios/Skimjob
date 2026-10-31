@@ -32,4 +32,4 @@ Goal: run thousands of all-bot games at 2–12 players and use the results to tu
 - **M4** — more content (museum, casino, roles, events).
 
 ## Notes / half-finished work
-_None yet._
+- 31 Oct 2026: baseline checked on a fresh clone (`pnpm install`, `pnpm test`, `pnpm typecheck` all green). Nothing in progress; next session starts at task 1 (Core types).
