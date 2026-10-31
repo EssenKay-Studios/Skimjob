@@ -8,6 +8,7 @@
 //  - after the game the reveal opens everything except others' secret-mode
 //    ballots, which never leak (design §11.2).
 // design §13, §17.2, §11.2
+import { isDeepStrictEqual } from "node:util";
 import { describe, expect, it } from "vitest";
 import type { GameConfig, GameEvent, GameState, LoggedEvent, PlayerId, PlayerState, PlayerView, VoteVisibility } from "./types";
 import { REVEAL, canSee, privateTo, secretTo } from "./types";
@@ -167,9 +168,9 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
   };
 }
 
-/** The same events in the same order, numbered 0, 1, 2, … */
+/** The same events (equal, since views are copies) in the same order, numbered 0, 1, 2, … */
 const sameEvents = (logged: readonly LoggedEvent[], events: readonly GameEvent[]): boolean =>
-  logged.length === events.length && logged.every((e, i) => e.event === events[i] && e.seq === i);
+  logged.length === events.length && logged.every((e, i) => isDeepStrictEqual(e.event, events[i]) && e.seq === i);
 
 function checkView(state: GameState, viewer: PlayerId, view: PlayerView): void {
   const gameOver = state.phase.kind === "ended";

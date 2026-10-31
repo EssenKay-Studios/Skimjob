@@ -1,5 +1,6 @@
 // viewFor(): one sample of every event type, every viewer, during and after the
 // game; the viewer's own fields; per-viewer numbering; eventsSince. design §13, §17.2
+import { isDeepStrictEqual } from "node:util";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import type { GameConfig, GameEvent, GameState, PlayerView, PrivateVisibility, PublicVisibility, SecretVisibility } from "./types";
 import { PUBLIC, REVEAL, privateTo, secretTo } from "./types";
@@ -26,7 +27,8 @@ const config = (voteVisibility: GameConfig["voteVisibility"] = "hiddenThenReveal
 const VIEWERS = ["ana", "ben", "carl"]; // carl owns no sample event
 const ended = (s: GameState): GameState => ({ ...s, phase: { kind: "ended", outcome: sampleEvents.gameEnded.outcome } });
 const withEvent = (s: GameState, event: GameEvent): GameState => ({ ...s, log: [...s.log, event] });
-const has = (list: readonly { event: GameEvent }[], event: GameEvent) => list.some((e) => e.event === event);
+// Views are copies (never the state's own objects), so events are compared by value.
+const has = (list: readonly { event: GameEvent }[], event: GameEvent) => list.some((e) => isDeepStrictEqual(e.event, event));
 
 function run(state: GameState, ...commands: unknown[]): GameState {
   return commands.reduce<GameState>((s, c) => {
@@ -176,5 +178,57 @@ describe("eventsSince — 'while you were away' input, design §13", () => {
     expect(since.map((e) => e.event.type)).toEqual(["moveSubmitted"]);
     expect(since[0]?.seq).toBe(last + 1);
     expect(eventsSince(viewFor(s, "ana"), -1).length).toBe(last + 2);
+  });
+});
+
+describe("views are copies — design §17.3 (bots only get viewFor), task 8 review", () => {
+  it("changing every part of a view changes neither the game nor later views", () => {
+    // A game with a Security watch, a resolved round, an alibi, a proposal, a sealed vote and a pending move.
+    let s = run(
+      createGame(config()),
+      { type: "submitMove", player: "ana", move: { room: "security", pocket: 0, watch: "vault" } },
+      { type: "advance", deadline: { kind: "round", round: 1 } },
+      { type: "postAlibi", player: "ana", room: "office" },
+      { type: "proposeMeeting", player: "ana", slot: "fri" },
+      { type: "sealVote", player: "ana", vote: { kind: "shakedown", target: "ben" } },
+      { type: "submitMove", player: "ana", move: { room: "office", pocket: 1 } },
+    );
+    const before = JSON.stringify(s);
+    const view = viewFor(s, "ana");
+    const fresh = JSON.stringify(view);
+
+    // Write through everything the view holds, nested objects included (casts get past `readonly`).
+    const scribble = (value: unknown): void => {
+      if (typeof value !== "object" || value === null) return;
+      if (Array.isArray(value)) {
+        value.forEach(scribble);
+        value.push("junk");
+        return;
+      }
+      const obj = value as Record<string, unknown>;
+      for (const key of Object.keys(obj)) {
+        scribble(obj[key]);
+        if (typeof obj[key] !== "object" || obj[key] === null) obj[key] = "junk";
+      }
+      obj.extra = "junk";
+    };
+    scribble(view);
+
+    expect(JSON.stringify(s)).toBe(before);
+    expect(JSON.stringify(viewFor(s, "ana"))).toBe(fresh);
+    // And the game still plays the same afterwards.
+    s = run(s, { type: "advance", deadline: { kind: "round", round: 2 } });
+    expect(s.players.ana?.stash).toBe(1);
+  });
+
+  it("two views of the same state share nothing", () => {
+    const s = createGame(config());
+    const a = viewFor(s, "ana");
+    const b = viewFor(s, "ana");
+    expect(a).toEqual(b);
+    expect(a.ledger[0]?.event).not.toBe(b.ledger[0]?.event);
+    expect(a.rooms).not.toBe(s.rooms);
+    expect(a.phase).not.toBe(s.phase);
+    expect(a.ledger[0]?.event).not.toBe(s.log[0]);
   });
 });

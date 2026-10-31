@@ -31,8 +31,30 @@ function visibleLog(log: readonly GameEvent[], viewer: PlayerId, gameOver: boole
   return out;
 }
 
-/** Throws for a player who isn't in the game: the server only asks for seated players. */
+/**
+ * Throws for a player who isn't in the game: the server only asks for seated players.
+ *
+ * The view is a deep copy: nothing in it is shared with the game state or its
+ * log, so a client or bot that changes its view can't change the game
+ * (task 8 review, docs/decisions.md).
+ */
 export function viewFor(state: GameState, playerId: PlayerId): PlayerView {
+  return copyData(buildView(state, playerId));
+}
+
+/**
+ * Deep copy of plain data (objects, arrays, primitives): all a view holds.
+ * Much faster than structuredClone on views, which bots ask for constantly.
+ */
+function copyData<T>(value: T): T {
+  if (typeof value !== "object" || value === null) return value;
+  if (Array.isArray(value)) return value.map(copyData) as T;
+  const out: Record<string, unknown> = {};
+  for (const key of Object.keys(value)) out[key] = copyData((value as Record<string, unknown>)[key]);
+  return out as T;
+}
+
+function buildView(state: GameState, playerId: PlayerId): PlayerView {
   const me = Object.hasOwn(state.players, playerId) ? state.players[playerId] : undefined;
   if (!me) throw new Error(`viewFor: unknown player ${playerId}`);
 
