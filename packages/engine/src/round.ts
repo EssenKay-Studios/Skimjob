@@ -7,6 +7,7 @@ import { ROLES, ROUNDS_PER_ACT, type RoleDef, type RoleId, type RoomId } from "@
 import type { AbilityUse, ActNumber, GameEvent, GameState, Move, PlayerId, PlayerState } from "./types";
 import { PUBLIC, privateTo } from "./types";
 import { clampHeat, jobById, roomDef, roomLoot, roundHeatDelta } from "./job";
+import { isObject } from "./check";
 
 /** The act a round belongs to: rounds 1–3 are Act 1, and so on. design §4 */
 export function actOfRound(round: number): ActNumber {
@@ -25,7 +26,6 @@ function roleOf(role: RoleId): Pick<RoleDef, "power" | "canPocket"> {
   return (Object.hasOwn(ROLES, role) ? ROLES[role] : undefined) ?? NO_POWER;
 }
 
-const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 const isCount = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v >= 0;
 
 /** A role power used as part of a move, checked against the player's role. design §8 */
@@ -93,7 +93,7 @@ export function checkMove(state: GameState, player: PlayerState, raw: unknown): 
  * Heat (rounded, then clamped once), information, the public summary, and
  * finally either the raid, the next round, or (after an act's last round)
  * nothing more: the fold of `roundResolved` leaves the game awaiting the
- * act's meeting (task 6). Step 1, event cards, arrives with the events deck.
+ * act's meeting (design §11). Step 1, event cards, arrives with the events deck.
  */
 export function resolveRound(state: GameState, round: number): GameEvent[] {
   const job = jobById(state.config.job);

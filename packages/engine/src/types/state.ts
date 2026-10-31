@@ -54,7 +54,10 @@ export interface PlayerState {
   readonly emergencyMeetingUsed: boolean;
   /** For the host's "replace with a bot" prompt after 2 missed rounds. design §15 */
   readonly consecutiveMissedMoves: number;
-  /** Vote left in advance for the next meeting. design §11.2 */
+  /**
+   * Vote left in advance. It is cast into the next meeting that opens, regular
+   * or emergency, and is then used up. Sealing again replaces it. design §11.2
+   */
   readonly sealedVote: VoteChoice | null;
 }
 
@@ -63,6 +66,7 @@ export interface MeetingProposal {
   readonly by: PlayerId;
   readonly act: ActNumber;
   readonly slot: string;
+  /** The proposer counts as accepting. Locked in once more than half the crew is here. design §11.1 */
   readonly acceptedBy: readonly PlayerId[];
 }
 
@@ -81,9 +85,14 @@ export interface MeetingState {
   readonly id: string;
   readonly kind: MeetingKind;
   readonly act: ActNumber;
+  /** Who called it (emergency meetings); null for the act's regular meeting. */
   readonly calledBy: PlayerId | null;
-  /** For emergency meetings: the round to resume planning afterwards. */
-  readonly resumeRound: number | null;
+  /**
+   * Ballots so far; a later ballot from the same player replaces the earlier one.
+   * Sealed votes are cast into it as the window opens. design §11.2
+   * (No resume point is stored: the game goes back to planning `round`, or to
+   * awaiting the act's meeting if `round` has already resolved.)
+   */
   readonly votes: Readonly<Record<PlayerId, VoteChoice>>;
 }
 
@@ -107,6 +116,7 @@ export interface GameState {
   readonly resolvedRound: number;
   /** Players who already posted an alibi for `resolvedRound` (one each). design §5.4 */
   readonly alibisPosted: readonly PlayerId[];
+  /** Open proposals for the current act's regular meeting; cleared once a slot is locked. design §11.1 */
   readonly proposals: readonly MeetingProposal[];
   /** The regular meeting locked in for the current act, not yet open. design §11.1 */
   readonly scheduledMeeting: ScheduledMeeting | null;
