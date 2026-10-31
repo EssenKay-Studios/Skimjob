@@ -1,6 +1,14 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
-import type { Command, GameEvent, PrivateVisibility, PublicVisibility, RevealVisibility, Visibility } from "./index";
-import { PUBLIC, REVEAL, canSee, privateTo } from "./index";
+import type {
+  Command,
+  GameEvent,
+  PrivateVisibility,
+  PublicVisibility,
+  RevealVisibility,
+  SecretVisibility,
+  Visibility,
+} from "./index";
+import { PUBLIC, REVEAL, canSee, privateTo, secretTo } from "./index";
 import { sampleCommands, sampleEvents } from "./samples";
 
 describe("visibility — design §17.2, §13", () => {
@@ -11,6 +19,11 @@ describe("visibility — design §17.2, §13", () => {
     ["reveal-only, during game", REVEAL, "ana", false, false],
     ["private to someone else, after the game", privateTo("ben"), "ana", true, true],
     ["reveal-only, after the game", REVEAL, "ana", true, true],
+    // design §11.2: in secret vote mode only the tally is ever shown
+    ["secret to self, during game", secretTo("ana"), "ana", false, true],
+    ["secret to someone else, during game", secretTo("ben"), "ana", false, false],
+    ["secret to self, after the game", secretTo("ana"), "ana", true, true],
+    ["secret to someone else, after the game", secretTo("ben"), "ana", true, false],
   ];
   it.each(cases)("%s", (_label, visibility, viewer, gameOver, expected) => {
     expect(canSee(visibility, viewer, gameOver)).toBe(expected);
@@ -21,7 +34,7 @@ describe("event samples", () => {
   it("there is one sample per event type, keyed by its own type", () => {
     for (const [key, event] of Object.entries(sampleEvents)) {
       expect(event.type).toBe(key);
-      expect(["public", "private", "reveal"]).toContain(event.visibility.kind);
+      expect(["public", "private", "reveal", "secret"]).toContain(event.visibility.kind);
     }
   });
 
@@ -46,7 +59,7 @@ describe("event visibility is fixed by type — design §17.2", () => {
     expectTypeOf<Extract<GameEvent, { type: "rngSeeded" }>["visibility"]>().toEqualTypeOf<RevealVisibility>();
     expectTypeOf<Extract<GameEvent, { type: "roundResolved" }>["visibility"]>().toEqualTypeOf<PublicVisibility>();
     expectTypeOf<Extract<GameEvent, { type: "voteCast" }>["visibility"]>().toEqualTypeOf<
-      PublicVisibility | PrivateVisibility
+      PublicVisibility | PrivateVisibility | SecretVisibility
     >();
 
     // @ts-expect-error a dealt role can never be public

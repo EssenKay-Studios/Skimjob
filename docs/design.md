@@ -244,7 +244,7 @@ From round 2 onward, one event card is flipped at the start of each round and sh
 - **Vote visibility** is a host setting:
   - *Hidden then revealed* (default): nobody can see votes while they're being cast, and everyone's votes go into the ledger afterwards.
   - *Open*: votes are visible as they're cast.
-  - *Secret*: only the tally is ever shown. An Informant role could see the votes in this mode (future role).
+  - *Secret*: only the tally is ever shown, even at the end-of-game reveal. An Informant role could see the votes in this mode (future role).
 - **Players who can't make it** can leave a sealed vote in advance. Otherwise they count as abstaining.
 - **To pass**, a shakedown needs **more than half of the votes cast**, and at least half the crew has to take part (sealed votes count).
 - When the window closes, the ballots are cleared from the screen. The **result** stays in the ledger permanently.
@@ -351,7 +351,7 @@ All the rules live in **one engine that has no knowledge of the UI or the clock*
 - **Deterministic:** every game has a random seed. The same seed and the same inputs always produce the same game, which makes replays, bug reports and simulations reproducible.
 - **Content as data:** rooms, roles, jobs, events, targets and Heat formulas are JSON config, not code. Balancing means editing numbers, not rewriting logic.
 - **Event-sourced:** the game is a log of events, and the current state is built by replaying that log. The ledger, case files, the "while you were away" summary and the end-of-game reveal are all views over that same log.
-- **Visibility-scoped events:** every event is tagged *public*, *private to player X*, or *reveal-only*. A projection function, `viewFor(state, playerId)`, returns only what that player is allowed to see. The server is authoritative, and clients never receive hidden information.
+- **Visibility-scoped events:** every event is tagged *public*, *private to player X* (opens up at the reveal), *secret to player X* (never opens up; Secret-mode ballots, §11.2), or *reveal-only*. A projection function, `viewFor(state, playerId)`, returns only what that player is allowed to see. The server is authoritative, and clients never receive hidden information.
 - **Phase state machine:** `Setup → Planning → Resolving → (MeetingScheduled → MeetingOpen) → Checkpoint → … → FinalCheck → Reveal`.
 - **Commands in, events out:** `submitMove`, `postAlibi`, `useAbility`, `proposeMeeting`, `acceptMeeting`, `callEmergency`, `castVote`, `sealVote`, plus `advance()`, which the scheduler (or the simulator) calls when a deadline passes.
 

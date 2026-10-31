@@ -13,7 +13,7 @@ import type {
   SystemCommand,
   Visibility,
 } from "./index";
-import { PUBLIC, REVEAL, canSee, privateTo } from "./index";
+import { PUBLIC, REVEAL, canSee, privateTo, secretTo } from "./index";
 import { sampleCommands, sampleEvents } from "./samples";
 
 type VisKind<T extends GameEventType> = EventOfType<T>["visibility"]["kind"];
@@ -41,8 +41,8 @@ type ExpectedVisibility = {
   meetingScheduled: "public";
   emergencyMeetingCalled: "public";
   meetingOpened: "public";
-  voteSealed: "private";
-  voteCast: "public" | "private";
+  voteSealed: "private" | "secret"; // secret in "secret" vote mode, design §11.2
+  voteCast: "public" | "private" | "secret";
   meetingClosed: "public";
   shakedownResolved: "public";
   checkpointChecked: "public";
@@ -154,15 +154,49 @@ describe("canSee — design §17.2, §13", () => {
     expect(canSee(bogus, "ana", false)).toBeFalsy();
   });
 
-  it("over every sample: during the game only public + own private; after, everything", () => {
+  it("over every sample: during the game only public + own private; after, everything but others' secrets", () => {
     const viewers = ["ana", "ben", "carl"]; // carl: a third seat that owns nothing
     for (const event of Object.values(sampleEvents) as GameEvent[]) {
       const v = event.visibility;
       for (const viewer of viewers) {
-        const expected = v.kind === "public" || (v.kind === "private" && v.player === viewer);
+        const owns = (v.kind === "private" || v.kind === "secret") && v.player === viewer;
+        const expected = v.kind === "public" || owns;
         expect(canSee(v, viewer, false), `${event.type} for ${viewer}`).toBe(expected);
-        expect(canSee(v, viewer, true), `${event.type} for ${viewer} after end`).toBe(true);
+        const expectedAfter = v.kind !== "secret" || owns;
+        expect(canSee(v, viewer, true), `${event.type} for ${viewer} after end`).toBe(expectedAfter);
       }
     }
+  });
+
+  // design §11.2: in Secret mode only the tally is ever shown, even at the reveal (QA bug 1, PR #1).
+  it("secret-mode ballots stay hidden from everyone but the voter, during and after the game", () => {
+    const cast: GameEvent = {
+      type: "voteCast",
+      visibility: secretTo("ben"),
+      meetingId: "m1",
+      player: "ben",
+      vote: { kind: "shakedown", target: "ana" },
+      sealed: false,
+    };
+    const sealed: GameEvent = { type: "voteSealed", visibility: secretTo("ben"), player: "ben", vote: { kind: "skip" } };
+    for (const event of [cast, sealed]) {
+      for (const gameOver of [false, true]) {
+        expect(canSee(event.visibility, "ben", gameOver), `${event.type} owner, gameOver=${gameOver}`).toBe(true);
+        for (const other of ["ana", "carl", "Ben", ""]) {
+          expect(canSee(event.visibility, other, gameOver), `${event.type} for ${other}, gameOver=${gameOver}`).toBe(false);
+        }
+      }
+    }
+  });
+
+  it("fails closed on an unknown visibility kind after the game too", () => {
+    const bogus = { kind: "everyone" } as unknown as Visibility;
+    expect(canSee(bogus, "ana", true)).toBe(false);
+  });
+
+  it("only ballots can be secret — design §11.2", () => {
+    // @ts-expect-error a dealt role is revealed at the end, it can't be secret
+    const role: GameEvent = { type: "roleDealt", visibility: secretTo("ana"), player: "ana", role: "fence" };
+    expect(role).toBeDefined();
   });
 });

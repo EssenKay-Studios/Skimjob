@@ -34,6 +34,7 @@ Goal: run thousands of all-bot games at 2–12 players and use the results to tu
 ## Notes / half-finished work
 - Types only so far: no reducer/command handler yet. Room/role *definitions* (yields, Heat, powers) are still to come in task 3; `packages/content` only has the `RoomId`/`RoleId`/`JobId` aliases.
 - `samples.ts` has one sample per event and command type, and the compiler enforces it. The `viewFor()` leak tests in task 8 should loop over `sampleEvents`.
+- Visibility has four kinds: `public`, `private`, `reveal`, `secret`. `secret` never opens up, even after the game (Secret-mode ballots, §11.2). Task 6 must tag `voteCast`/`voteSealed` with `secretTo()` in Secret mode; task 8 builds `reveal.log` from `canSee(..., true)` so other players' secret ballots are dropped.
 - `AbilityUse` covers only Lookout and Fence. Extend it when the other roles land.
 - From the PR #1 review, deferred to the task named:
   - **Task 2 (RNG):** `rng` can't be rebuilt from events that don't record draws. Either random-consuming events carry the post-draw RNG state, or replay works from commands. Either way RNG state must never reach a public/private view (it would let players predict draws).

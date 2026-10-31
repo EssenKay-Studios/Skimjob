@@ -7,7 +7,7 @@
 import type { JobId, RoleId, RoomId } from "@skimjob/content";
 import type { MoleSetting, PlayerId, PlayerSeat, VoteVisibility } from "./config";
 import type { AbilityUse, Move, VoteChoice } from "./commands";
-import type { PrivateVisibility, PublicVisibility, RevealVisibility } from "./visibility";
+import type { PrivateVisibility, PublicVisibility, RevealVisibility, SecretVisibility } from "./visibility";
 
 export type ActNumber = 1 | 2 | 3;
 export type MeetingKind = "regular" | "emergency";
@@ -202,18 +202,26 @@ export interface MeetingOpened {
   readonly act: ActNumber;
 }
 
-/** Only the voter knows what they sealed. design §11.2 */
+/**
+ * Only the voter knows what they sealed. Private in "open" and
+ * "hiddenThenRevealed" modes; secret in "secret" mode, so it stays hidden even
+ * at the reveal. design §11.2
+ */
 export interface VoteSealed {
   readonly type: "voteSealed";
-  readonly visibility: PrivateVisibility;
+  readonly visibility: PrivateVisibility | SecretVisibility;
   readonly player: PlayerId;
   readonly vote: VoteChoice;
 }
 
-/** Public as it's cast in "open" mode, otherwise private to the voter. design §11.2 */
+/**
+ * Public as it's cast in "open" mode, private to the voter in
+ * "hiddenThenRevealed" mode, and secret (never shown to anyone else, even at
+ * the reveal) in "secret" mode. design §11.2
+ */
 export interface VoteCast {
   readonly type: "voteCast";
-  readonly visibility: PublicVisibility | PrivateVisibility;
+  readonly visibility: PublicVisibility | PrivateVisibility | SecretVisibility;
   readonly meetingId: string;
   readonly player: PlayerId;
   readonly vote: VoteChoice;

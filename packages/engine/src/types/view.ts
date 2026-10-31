@@ -62,8 +62,10 @@ export interface PlayerView {
   /** Events private to this player, oldest first. design §13 */
   readonly caseFile: readonly LoggedEvent[];
   /**
-   * Null until the game ends; then the complete log (every role, every real
-   * room and split, every ability) for the reveal timeline. Index = `seq`. design §13
+   * Null until the game ends; then every event this player may see after the
+   * game (every role, every real room and split, every ability) for the reveal
+   * timeline. Other players' secret-mode ballots are left out (design §11.2),
+   * so entries carry their `seq`. design §13
    */
-  readonly reveal: { readonly outcome: Outcome; readonly log: readonly GameEvent[] } | null;
+  readonly reveal: { readonly outcome: Outcome; readonly log: readonly LoggedEvent[] } | null;
 }
