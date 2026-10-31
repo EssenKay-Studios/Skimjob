@@ -33,6 +33,10 @@ export function validateConfig(config: GameConfig): void {
   if (ids.size !== n) throw new Error("player ids must be unique");
   if (ids.has("")) throw new Error("player ids must not be empty");
   if (!JOB_SETUPS[config.job]) throw new Error(`unknown job ${config.job}`);
+  // design §8.1: starter mode has no Mole and no events. Reject rather than
+  // ignore, so gameCreated never claims a Mole or events the game won't have.
+  if (config.starterMode && config.mole !== "off") throw new Error("starter mode requires mole: off");
+  if (config.starterMode && config.eventsEnabled) throw new Error("starter mode requires eventsEnabled: false");
   if (!config.starterMode) {
     const pool = new Set(config.rolePool);
     if (pool.size !== config.rolePool.length) throw new Error("role pool has duplicates");
