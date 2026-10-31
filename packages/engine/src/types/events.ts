@@ -47,6 +47,18 @@ export interface RoleDealt {
   readonly role: RoleId;
 }
 
+/**
+ * The RNG state after the draws made while handling one command. Appended after
+ * the events those draws produced, whenever a command consumed randomness, so
+ * replaying the log restores `GameState.rng` without re-drawing. Reveal-only:
+ * the state would let a player predict future draws. docs/decisions.md
+ */
+export interface RngAdvanced {
+  readonly type: "rngAdvanced";
+  readonly visibility: RevealVisibility;
+  readonly words: readonly number[];
+}
+
 // ---------------------------------------------------------------- rounds (§5)
 
 export interface RoundStarted {
@@ -318,6 +330,7 @@ export type GameEvent =
   | RngSeeded
   | RoomsSet
   | RoleDealt
+  | RngAdvanced
   | RoundStarted
   | MoveSubmitted
   | DefaultMoveAssigned

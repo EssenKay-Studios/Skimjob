@@ -27,6 +27,7 @@ export const sampleEvents: { readonly [T in GameEventType]: EventOfType<T> } = {
   rngSeeded: { type: "rngSeeded", visibility: REVEAL, seed: "sample-seed" },
   roomsSet: { type: "roomsSet", visibility: PUBLIC, rooms: ["vault", "office", "lobby", "security", "rooftop"] },
   roleDealt: { type: "roleDealt", visibility: privateTo(ana), player: ana, role: "fence" },
+  rngAdvanced: { type: "rngAdvanced", visibility: REVEAL, words: [1, 2, 3, 4] },
   roundStarted: { type: "roundStarted", visibility: PUBLIC, round: 1, act: 1 },
   moveSubmitted: {
     type: "moveSubmitted",

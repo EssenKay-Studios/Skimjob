@@ -14,3 +14,5 @@ export type RoleId = string;
 
 /** A job (location), e.g. "bank". design §9 */
 export type JobId = string;
+
+export * from "./setup";
