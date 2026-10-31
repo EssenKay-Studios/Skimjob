@@ -7,6 +7,7 @@ import { setupEvents } from "./setup";
 import { applyEvent, replay } from "./reduce";
 import { actOfRound, isLastRoundOfAct } from "./round";
 import { handleCommand } from "./handle";
+import { V01_NUMBERS } from "./v01-numbers.testkit";
 
 function config(players: number): GameConfig {
   return {
@@ -18,6 +19,7 @@ function config(players: number): GameConfig {
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     starterMode: false,
+    contentOverrides: V01_NUMBERS, // scripted against content 0.1.0 numbers (balance pass 1)
   };
 }
 

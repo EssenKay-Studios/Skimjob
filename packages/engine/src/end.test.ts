@@ -6,6 +6,7 @@ import type { GameConfig, GameEvent, GameState, Outcome, PlayerState } from "./t
 import { setupEvents } from "./setup";
 import { replay } from "./reduce";
 import { handleCommand } from "./handle";
+import { V01_NUMBERS } from "./v01-numbers.testkit";
 import { outcomeFor, ranking } from "./end";
 
 function config(players: number): GameConfig {
@@ -18,6 +19,7 @@ function config(players: number): GameConfig {
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     starterMode: false,
+    contentOverrides: V01_NUMBERS, // scripted against content 0.1.0 numbers (balance pass 1)
   };
 }
 
