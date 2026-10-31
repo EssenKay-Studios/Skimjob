@@ -1,5 +1,6 @@
 // The round loop: moves, default moves, resolution, Heat, information, raids.
 // design §5, §6, §7, §8 (starter role powers used in a move)
+import { STARTER_ROLES } from "@skimjob/content";
 import { describe, expect, it } from "vitest";
 import type { Command, GameConfig, GameEvent, GameState } from "./types";
 import { setupEvents } from "./setup";
@@ -12,7 +13,7 @@ function config(players: number): GameConfig {
     seed: "round-seed",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: [],
+    rolePool: [...STARTER_ROLES], // no Muscle, so no shakedown window (task 12)
     mole: "off",
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
@@ -309,12 +310,12 @@ describe("starter role powers in a move — design §8", () => {
 
   it("the Fence moves stash (including this round's pocket) into the safe", () => {
     const s = run(game(2, ["fence"]), submit("p0", { room: "vault", pocket: 4, ability: { kind: "fenceSafe", amount: 3 } }), ROUND);
-    expect(s.players.p0).toMatchObject({ stash: 1, safe: 3, safeDepositedThisAct: 3 });
+    expect(s.players.p0).toMatchObject({ stash: 1, safe: 3, roleState: expect.objectContaining({ usedThisAct: 3 }) });
   });
 
   it("the safe move is capped by the stash", () => {
     const s = run(game(2, ["fence"]), submit("p0", { room: "vault", pocket: 2, ability: { kind: "fenceSafe", amount: 5 } }), ROUND);
-    expect(s.players.p0).toMatchObject({ stash: 0, safe: 2, safeDepositedThisAct: 2 });
+    expect(s.players.p0).toMatchObject({ stash: 0, safe: 2, roleState: expect.objectContaining({ usedThisAct: 2 }) });
     expect(s.log.find((e) => e.type === "abilityResolved")).toMatchObject({ ability: { kind: "fenceSafe", amount: 2 } });
   });
 
@@ -323,10 +324,10 @@ describe("starter role powers in a move — design §8", () => {
     expect(reason(s, submit("p0", { room: "vault", ability: { kind: "fenceSafe", amount: 2 } }))).toMatch(/1 to 1/);
     expect(reason(s, submit("p0", { room: "vault", ability: { kind: "fenceSafe", amount: 0 } }))).toMatch(/1 to 1/);
     s = run(s, submit("p0", { room: "vault", ability: { kind: "fenceSafe", amount: 1 } }), ROUND, ROUND);
-    expect(s.players.p0).toMatchObject({ safe: 5, safeDepositedThisAct: 5 });
+    expect(s.players.p0).toMatchObject({ safe: 5, roleState: expect.objectContaining({ usedThisAct: 5 }) });
     // Act 2 begins after the act-1 meeting (design §11); its roundStarted resets the allowance.
     const act2 = replay(s.config, [...s.log, { type: "roundStarted", visibility: { kind: "public" }, round: 4, act: 2 }]);
-    expect(act2.players.p0).toMatchObject({ safe: 5, safeDepositedThisAct: 0 });
+    expect(act2.players.p0).toMatchObject({ safe: 5, roleState: expect.objectContaining({ usedThisAct: 0 }) });
   });
 });
 

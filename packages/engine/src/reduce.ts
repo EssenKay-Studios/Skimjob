@@ -3,7 +3,8 @@
 // `applyEvent` is the only way state changes. Command handlers decide which
 // events happen (drawing from `state.rng` where needed); folding those events
 // rebuilds the same state, including the RNG, on replay.
-import type { GameConfig, GameEvent, GameState, MeetingState, Phase, PlayerId, PlayerState } from "./types";
+import type { GameConfig, GameEvent, GameState, MeetingState, Phase, PlayerId, PlayerState, RoleState } from "./types";
+import { NO_ROLE_STATE } from "./types";
 import { seedRng } from "./rng";
 import { actOfRound, isLastRoundOfAct } from "./acts";
 
@@ -18,6 +19,8 @@ function mapPlayers(state: GameState, change: (p: PlayerState) => Partial<Player
   const players = Object.fromEntries(Object.entries(state.players).map(([id, p]) => [id, { ...p, ...change(p) }]));
   return { ...state, players };
 }
+
+const withRoleState = (p: PlayerState, change: Partial<RoleState>): Partial<PlayerState> => ({ roleState: { ...p.roleState, ...change } });
 
 function openMeeting(state: GameState): MeetingState {
   if (!state.meeting) throw new Error("no meeting is open");
@@ -34,6 +37,11 @@ function phaseAfterMeeting(state: GameState): Phase {
   return state.resolvedRound === state.round
     ? { kind: "awaitingMeeting", act: actOfRound(state.round) }
     : { kind: "planning", round: state.round };
+}
+
+/** A shakedown window (if one was open) ends: back to where the meeting left the game. design §11.3 */
+function afterShakedown(state: GameState): GameState {
+  return state.pendingShakedown ? { ...state, pendingShakedown: null, phase: phaseAfterMeeting(state) } : state;
 }
 
 /** State before any event: only the host's config is known. */
@@ -55,6 +63,7 @@ export function initialState(config: GameConfig): GameState {
     scheduledMeeting: null,
     pendingEmergency: null,
     meeting: null,
+    pendingShakedown: null,
     log: [],
   };
 }
@@ -79,7 +88,7 @@ function applyChange(state: GameState, event: GameEvent): GameState {
         role: event.role,
         stash: 0,
         safe: 0,
-        safeDepositedThisAct: 0,
+        roleState: NO_ROLE_STATE,
         totalHandedIn: 0,
         timesShakenDown: 0,
         emergencyMeetingUsed: false,
@@ -88,11 +97,13 @@ function applyChange(state: GameState, event: GameEvent): GameState {
       };
       return { ...state, players: { ...state.players, [seat.id]: player } };
     }
+    case "snitchTargetAssigned":
+      return updatePlayer(state, event.player, (p) => withRoleState(p, { target: event.target }));
     // ------------------------------------------------ round loop. design §5
     case "roundStarted": {
       const next: GameState = { ...state, phase: { kind: "planning", round: event.round }, round: event.round, moves: {} };
-      // The Fence's per-act safe allowance starts again with each act. design §8
-      return actOfRound(event.round) !== actOfRound(state.round) ? mapPlayers(next, () => ({ safeDepositedThisAct: 0 })) : next;
+      // Per-act powers (Fence safe, Hacker, Blackmailer) start again with each act. design §8
+      return actOfRound(event.round) !== actOfRound(state.round) ? mapPlayers(next, (p) => withRoleState(p, { usedThisAct: 0 })) : next;
     }
     case "moveSubmitted":
       return updatePlayer({ ...state, moves: { ...state.moves, [event.player]: event.move } }, event.player, () => ({
@@ -109,13 +120,34 @@ function applyChange(state: GameState, event: GameEvent): GameState {
       }));
     case "abilityResolved": {
       const { ability } = event;
-      if (ability.kind !== "fenceSafe") return state;
-      return updatePlayer(state, event.player, (p) => ({
-        stash: p.stash - ability.amount,
-        safe: p.safe + ability.amount,
-        safeDepositedThisAct: p.safeDepositedThisAct + ability.amount,
-      }));
+      switch (ability.kind) {
+        case "fenceSafe":
+          return updatePlayer(state, event.player, (p) => ({
+            stash: p.stash - ability.amount,
+            safe: p.safe + ability.amount,
+            ...withRoleState(p, { usedThisAct: p.roleState.usedThisAct + ability.amount }),
+          }));
+        case "loopCameras":
+          return updatePlayer(state, event.player, (p) => withRoleState(p, { usedThisAct: p.roleState.usedThisAct + 1 }));
+        case "blackmail":
+          // The target's side is `blackmailed`. design §8
+          return updatePlayer(state, event.player, (p) => ({
+            stash: p.stash + ability.stolen,
+            ...withRoleState(p, { usedThisAct: p.roleState.usedThisAct + 1 }),
+          }));
+        case "cancelShakedown": {
+          const pending = state.pendingShakedown;
+          if (!pending) throw new Error("cancelShakedown: no shakedown is pending");
+          return updatePlayer({ ...state, pendingShakedown: { ...pending, cancelled: true } }, event.player, (p) =>
+            withRoleState(p, { usedThisGame: p.roleState.usedThisGame + 1 }),
+          );
+        }
+        case "lookout":
+          return state;
+      }
     }
+    case "blackmailed":
+      return updatePlayer(state, event.player, (p) => ({ stash: p.stash - event.stolen }));
     case "roomSighting":
     case "roomWatched":
     case "pocketCount":
@@ -176,8 +208,18 @@ function applyChange(state: GameState, event: GameEvent): GameState {
     case "meetingClosed":
       openMeeting(state);
       return { ...state, meeting: null, phase: phaseAfterMeeting(state) };
+    case "shakedownPending":
+      return {
+        ...state,
+        phase: { kind: "shakedownPending", meetingId: event.meetingId, target: event.target },
+        pendingShakedown: { meetingId: event.meetingId, kind: event.kind, act: event.act, target: event.target, cancelled: false },
+      };
+    case "shakedownCancelled":
+      return afterShakedown(state);
+    case "snitchPaid":
+      return updatePlayer(state, event.player, (p) => ({ stash: p.stash + event.amount }));
     case "shakedownResolved": {
-      const next = { ...state, haul: state.haul + event.taken - event.compensation };
+      const next = { ...afterShakedown(state), haul: state.haul + event.taken - event.compensation };
       return updatePlayer(next, event.target, (p) => ({
         stash: p.stash - event.taken + event.compensation,
         timesShakenDown: p.timesShakenDown + 1,

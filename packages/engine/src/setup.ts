@@ -25,7 +25,7 @@ import { PUBLIC, REVEAL, privateTo } from "./types";
 import { pick, seedRng, shuffle } from "./rng";
 import { replay } from "./reduce";
 import { jobById, roomsInPlay } from "./job";
-import { validateOverrides } from "./overrides";
+import { rolesFor, validateOverrides } from "./overrides";
 
 const MOLE_SETTINGS: readonly string[] = ["off", "maybe", "on"] satisfies readonly MoleSetting[];
 const VOTE_VISIBILITIES: readonly string[] = ["hiddenThenRevealed", "open", "secret"] satisfies readonly VoteVisibility[];
@@ -134,11 +134,29 @@ export function dealRoles(config: GameConfig, rng: RngState): { readonly value: 
   return shuffle(pool.rng, deck);
 }
 
+/**
+ * design §8: each Snitch is secretly given a target, drawn from the other
+ * players (in seat order, after the deal). No draws when no Snitch is dealt.
+ */
+function snitchTargets(config: GameConfig, roles: readonly RoleId[], rng: RngState): { readonly value: GameEvent[]; readonly rng: RngState } {
+  const table = rolesFor(config);
+  const events: GameEvent[] = [];
+  config.players.forEach((seat, i) => {
+    const role = roles[i] as RoleId;
+    if ((Object.hasOwn(table, role) ? table[role] : undefined)?.power.kind !== "snitch") return;
+    const target = pick(rng, config.players.filter((p) => p.id !== seat.id).map((p) => p.id));
+    rng = target.rng;
+    events.push({ type: "snitchTargetAssigned", visibility: privateTo(seat.id), player: seat.id, target: target.value });
+  });
+  return { value: events, rng };
+}
+
 /** The setup events for a new game. Pure: same config, same events. */
 export function setupEvents(config: GameConfig): GameEvent[] {
   const errors = validateConfig(config);
   if (errors.length > 0) throw new Error(`invalid game config: ${errors.join("; ")}`);
   const dealt = dealRoles(config, seedRng(config.seed));
+  const targets = snitchTargets(config, dealt.value, dealt.rng);
   return [
     {
       type: "gameCreated",
@@ -162,9 +180,10 @@ export function setupEvents(config: GameConfig): GameEvent[] {
         role: dealt.value[i] as RoleId,
       }),
     ),
+    ...targets.value,
     // Round 1 opens for planning as soon as the game is set up. design §4, §5.1
     { type: "roundStarted", visibility: PUBLIC, round: 1, act: 1 },
-    { type: "rngAdvanced", visibility: REVEAL, words: dealt.rng.words },
+    { type: "rngAdvanced", visibility: REVEAL, words: targets.rng.words },
   ];
 }
 

@@ -4,7 +4,7 @@ import type { RoleId, RoomId } from "@skimjob/content";
 import type { PlayerId, PlayerSeat, VoteVisibility } from "./config";
 import type { Move, VoteChoice } from "./commands";
 import type { ActNumber, GameEvent, Outcome } from "./events";
-import type { MeetingProposal, PendingEmergency, Phase, ScheduledMeeting } from "./state";
+import type { MeetingProposal, PendingEmergency, Phase, RoleState, ScheduledMeeting } from "./state";
 import type { PrivateVisibility, PublicVisibility, SecretVisibility, Visibility } from "./visibility";
 
 /**
@@ -33,6 +33,8 @@ export interface SelfView {
   readonly role: RoleId;
   readonly stash: number;
   readonly safe: number;
+  /** Your power's uses this act / game, and the Snitch's target. design §8 */
+  readonly roleState: RoleState;
   readonly emergencyMeetingUsed: boolean;
   /** Your current move for this round, if submitted. */
   readonly move: Move | null;

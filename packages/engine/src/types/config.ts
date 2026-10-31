@@ -55,12 +55,20 @@ export interface RoomOverride {
   readonly capacity?: { readonly max?: number; readonly crowdedLoot?: number };
 }
 
-/** New numbers for one role. `extraRooms` is the Lookout's, `perAct` the Fence's. design §8 */
+/**
+ * New numbers for one role. A role may only set its own power's numbers:
+ * `extraRooms` (Lookout), `perAct` (Fence, Hacker, Blackmailer), `weight`
+ * (Smooth talker), `perGame` (Muscle), `steal` (Blackmailer), `bonus` (Snitch). design §8
+ */
 export interface RoleOverride {
   readonly stashMultiplier?: number;
   readonly perLootOverFinalTarget?: number;
   readonly extraRooms?: number;
   readonly perAct?: number;
+  readonly weight?: number;
+  readonly perGame?: number;
+  readonly steal?: number;
+  readonly bonus?: number;
 }
 
 /** Every field is optional; whatever is left out keeps the content value. design §17.4 */

@@ -3,6 +3,7 @@
 // emergency-meeting timing; stale and wrong-id deadlines; shakedown edge cases;
 // the missed-checkpoint raid; ballot visibility per mode; determinism.
 // design §11, §4, §3
+import { STARTER_ROLES } from "@skimjob/content";
 import { describe, expect, it } from "vitest";
 import type { GameConfig, GameEvent, GameState, VoteVisibility } from "./types";
 import { canSee } from "./types";
@@ -16,7 +17,7 @@ function config(players: number, voteVisibility: VoteVisibility = "hiddenThenRev
     seed: "qa-meeting",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: [],
+    rolePool: [...STARTER_ROLES], // no Muscle, so no shakedown window (task 12)
     mole: "off",
     eventsEnabled: false,
     voteVisibility,

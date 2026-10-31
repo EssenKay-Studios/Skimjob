@@ -51,6 +51,14 @@ export interface RoleDealt {
   readonly role: RoleId;
 }
 
+/** The Snitch's secret target, drawn at setup from the other players. design §8 */
+export interface SnitchTargetAssigned {
+  readonly type: "snitchTargetAssigned";
+  readonly visibility: PrivateVisibility;
+  readonly player: PlayerId;
+  readonly target: PlayerId;
+}
+
 /**
  * The RNG state after the draws made while handling one command. Appended after
  * the events those draws produced, whenever a command consumed randomness, so
@@ -105,13 +113,37 @@ export interface LootSplit {
   readonly toStash: number;
 }
 
-/** An ability took effect. design §8 */
+/**
+ * What a used power did. Move powers as submitted (the Fence's `amount` is
+ * what actually moved), plus the Blackmailer's verdict and the Muscle's cancel.
+ * design §8
+ */
+export type ResolvedAbility =
+  | Exclude<AbilityUse, { readonly kind: "blackmail" }>
+  /** `stolen` is 0 for a wrong guess, and at most what the target's stash held for a right one. */
+  | { readonly kind: "blackmail"; readonly target: PlayerId; readonly role: RoleId; readonly correct: boolean; readonly stolen: number }
+  /** Muscle: the pending shakedown of `meetingId` will be cancelled when its window ends. design §11.3 */
+  | { readonly kind: "cancelShakedown"; readonly meetingId: string; readonly target: PlayerId };
+
+/** An ability took effect. Private to its user; `round` is the latest round started. design §8 */
 export interface AbilityResolved {
   readonly type: "abilityResolved";
   readonly visibility: PrivateVisibility;
   readonly player: PlayerId;
   readonly round: number;
-  readonly ability: AbilityUse;
+  readonly ability: ResolvedAbility;
+}
+
+/**
+ * Blackmail: someone guessed your role and took `stolen` from your stash.
+ * Only sent when something was taken; it doesn't say who. design §8
+ */
+export interface Blackmailed {
+  readonly type: "blackmailed";
+  readonly visibility: PrivateVisibility;
+  readonly player: PlayerId;
+  readonly round: number;
+  readonly stolen: number;
 }
 
 /** Who else was in your room. design §5.2 step 5 */
@@ -259,7 +291,11 @@ export interface MeetingClosed {
   readonly type: "meetingClosed";
   readonly visibility: PublicVisibility;
   readonly meetingId: string;
-  /** Weighted votes (Smooth talker) are counted here. Skips are kept apart so no player id can collide with them. */
+  /**
+   * One per ballot. The Smooth talker's extra weight decides `result` but is
+   * not shown here, so the tally never singles them out next to public
+   * ballots (provisional). Skips are kept apart so no player id can collide with them.
+   */
   readonly tally: { readonly skip: number; readonly targets: Readonly<Record<PlayerId, number>> };
   readonly ballots: Readonly<Record<PlayerId, VoteChoice>> | null;
   readonly result: MeetingResult;
@@ -278,6 +314,38 @@ export interface ShakedownResolved {
   readonly taken: number;
   readonly clean: boolean;
   readonly compensation: number;
+}
+
+/**
+ * The vote passed a shakedown on `target`; it is applied when the window ends
+ * (`advance { resolveShakedown }`), unless the Muscle cancels it. Only opened
+ * when the role pool holds the Muscle. design §8, §11.3
+ */
+export interface ShakedownPending {
+  readonly type: "shakedownPending";
+  readonly visibility: PublicVisibility;
+  readonly meetingId: string;
+  readonly kind: MeetingKind;
+  readonly act: ActNumber;
+  readonly target: PlayerId;
+}
+
+/** The Muscle blocked the shakedown. It doesn't say who did. design §8 */
+export interface ShakedownCancelled {
+  readonly type: "shakedownCancelled";
+  readonly visibility: PublicVisibility;
+  readonly meetingId: string;
+  readonly target: PlayerId;
+}
+
+/** The Snitch's target was shaken down and wasn't clean: `amount` goes into the Snitch's stash. design §8 */
+export interface SnitchPaid {
+  readonly type: "snitchPaid";
+  readonly visibility: PrivateVisibility;
+  readonly player: PlayerId;
+  readonly meetingId: string;
+  readonly target: PlayerId;
+  readonly amount: number;
 }
 
 /** design §11.4, §11.5 */
@@ -345,12 +413,14 @@ export type GameEvent =
   | RngSeeded
   | RoomsSet
   | RoleDealt
+  | SnitchTargetAssigned
   | RngAdvanced
   | RoundStarted
   | MoveSubmitted
   | DefaultMoveAssigned
   | LootSplit
   | AbilityResolved
+  | Blackmailed
   | RoomSighting
   | RoomWatched
   | PocketCount
@@ -365,7 +435,10 @@ export type GameEvent =
   | VoteSealed
   | VoteCast
   | MeetingClosed
+  | ShakedownPending
+  | ShakedownCancelled
   | ShakedownResolved
+  | SnitchPaid
   | CheckpointChecked
   | GameEnded;
 

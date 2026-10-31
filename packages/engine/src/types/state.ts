@@ -34,6 +34,13 @@ export type Phase =
   | { readonly kind: "awaitingMeeting"; readonly act: ActNumber }
   /** A vote window is open. Rounds are paused. design §4.1 */
   | { readonly kind: "meeting"; readonly meetingId: string }
+  /**
+   * The vote passed a shakedown on `target`; it is applied when this window's
+   * deadline passes, unless the Muscle cancels it. Opens after every passed
+   * shakedown when the role pool holds the Muscle, so it never tells anyone a
+   * Muscle was dealt. design §8, §11.3
+   */
+  | { readonly kind: "shakedownPending"; readonly meetingId: string; readonly target: PlayerId }
   /** Game over; everything is revealed. design §13 */
   | { readonly kind: "ended"; readonly outcome: Outcome };
 
@@ -47,8 +54,8 @@ export interface PlayerState {
   readonly stash: number;
   /** Fence's hidden safe: survives shakedowns. design §8 */
   readonly safe: number;
-  /** Loot moved into the safe this act (capped per act by content). */
-  readonly safeDepositedThisAct: number;
+  /** Uses of the role's power so far (all roles share the shape). design §8 */
+  readonly roleState: RoleState;
   readonly totalHandedIn: number;
   readonly timesShakenDown: number;
   readonly emergencyMeetingUsed: boolean;
@@ -59,6 +66,34 @@ export interface PlayerState {
    * or emergency, and is then used up. Sealing again replaces it. design §11.2
    */
   readonly sealedVote: VoteChoice | null;
+}
+
+/**
+ * Generic per-player role state: once-per-act and once-per-game uses and the
+ * Snitch's target. Private to the player. design §8
+ */
+export interface RoleState {
+  /**
+   * Uses this act, reset when an act starts: loot moved into the safe (Fence),
+   * camera loops (Hacker), role guesses (Blackmailer).
+   */
+  readonly usedThisAct: number;
+  /** Uses this game: cancelled shakedowns (Muscle). */
+  readonly usedThisGame: number;
+  /** The Snitch's secret target; null for every other role. */
+  readonly target: PlayerId | null;
+}
+
+export const NO_ROLE_STATE: RoleState = { usedThisAct: 0, usedThisGame: 0, target: null };
+
+/** A shakedown the vote passed, waiting for its window to end. Hidden: whether it was cancelled. design §11.3 */
+export interface PendingShakedown {
+  readonly meetingId: string;
+  readonly kind: MeetingKind;
+  readonly act: ActNumber;
+  readonly target: PlayerId;
+  /** The Muscle cancelled it. Never in a view: the cancel is only announced when the window ends. */
+  readonly cancelled: boolean;
 }
 
 export interface MeetingProposal {
@@ -124,5 +159,7 @@ export interface GameState {
   readonly pendingEmergency: PendingEmergency | null;
   /** The open vote window, if any; set exactly when `phase.kind === "meeting"`. */
   readonly meeting: MeetingState | null;
+  /** Set exactly when `phase.kind === "shakedownPending"`. */
+  readonly pendingShakedown: PendingShakedown | null;
   readonly log: readonly GameEvent[];
 }

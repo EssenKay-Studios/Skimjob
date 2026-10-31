@@ -5,7 +5,7 @@
 // rules code never meets a shape it doesn't know. Configs are untrusted JSON,
 // so `validateOverrides` checks every field (own keys only, known keys only,
 // finite numbers, whole numbers where the engine counts loot or Heat).
-import { ROLES, type JobDef, type JobId, type RoleDef, type RoleId, type RoomDef } from "@skimjob/content";
+import { ROLES, type JobDef, type JobId, type RoleDef, type RoleId, type RolePower, type RoomDef } from "@skimjob/content";
 import type { ContentOverrides, GameConfig, RoleOverride, RoomOverride } from "./types";
 import { isObject } from "./check";
 import { jobById } from "./job";
@@ -41,6 +41,18 @@ function checkFields(raw: unknown, path: string, fields: Readonly<Record<string,
 
 const ROOM_FIELDS = { loot: count, heatPressure: finite } as const;
 const ROLE_SCORING_FIELDS = { stashMultiplier: atLeast0, perLootOverFinalTarget: atLeast0 } as const;
+
+/** The numbers each power may have overridden: all of its own, never another role's. design §8 */
+const POWER_FIELDS: { readonly [K in RolePower["kind"]]: Readonly<Record<string, Rule>> } = {
+  none: {},
+  lookout: { extraRooms: positiveCount },
+  fenceSafe: { perAct: positiveCount },
+  loopCameras: { perAct: positiveCount },
+  voteWeight: { weight: positiveCount },
+  cancelShakedown: { perGame: positiveCount },
+  blackmail: { perAct: positiveCount, steal: count },
+  snitch: { bonus: count },
+};
 
 /**
  * Everything wrong with a content override for `job`, or `[]`. `null` and
@@ -106,10 +118,8 @@ export function validateOverrides(raw: unknown, job: JobDef, roles: RoleTable = 
           errors.push(`${path}: no such role`);
           continue;
         }
-        // Each role may tune only its own power's number. design §8
-        const power =
-          def.power.kind === "lookout" ? { extraRooms: positiveCount } : def.power.kind === "fenceSafe" ? { perAct: positiveCount } : {};
-        checkFields(o, path, { ...ROLE_SCORING_FIELDS, ...power }, errors);
+        // Each role may tune only its own power's numbers. design §8
+        checkFields(o, path, { ...ROLE_SCORING_FIELDS, ...POWER_FIELDS[def.power.kind] }, errors);
       }
   }
   return errors;
@@ -143,12 +153,9 @@ export function overrideRoles(roles: RoleTable, overrides: ContentOverrides | nu
   const out: Record<RoleId, RoleDef> = { ...roles };
   for (const [id, o] of Object.entries(overrides.roles) as [RoleId, RoleOverride][]) {
     const def = roles[id] as RoleDef;
-    const power =
-      def.power.kind === "lookout" && o.extraRooms !== undefined
-        ? { ...def.power, extraRooms: o.extraRooms }
-        : def.power.kind === "fenceSafe" && o.perAct !== undefined
-          ? { ...def.power, perAct: o.perAct }
-          : def.power;
+    // Validated: only this power's own fields are present.
+    const powerNumbers = Object.fromEntries(Object.entries(o).filter(([key]) => Object.hasOwn(POWER_FIELDS[def.power.kind], key)));
+    const power = { ...def.power, ...powerNumbers } as RolePower;
     const scoring = {
       ...def.scoring,
       ...(o.stashMultiplier !== undefined && { stashMultiplier: o.stashMultiplier }),

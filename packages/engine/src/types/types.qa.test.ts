@@ -25,12 +25,14 @@ type ExpectedVisibility = {
   rngSeeded: "reveal";
   roomsSet: "public";
   roleDealt: "private";
+  snitchTargetAssigned: "private"; // design §8: the Snitch's target is secret
   rngAdvanced: "reveal";
   roundStarted: "public";
   moveSubmitted: "private";
   defaultMoveAssigned: "private";
   lootSplit: "private";
   abilityResolved: "private";
+  blackmailed: "private"; // design §8: only the victim learns they were robbed, not by whom
   roomSighting: "private";
   roomWatched: "private";
   pocketCount: "private";
@@ -45,7 +47,10 @@ type ExpectedVisibility = {
   voteSealed: "private" | "secret"; // secret in "secret" vote mode, design §11.2
   voteCast: "public" | "private" | "secret";
   meetingClosed: "public";
+  shakedownPending: "public";
+  shakedownCancelled: "public"; // design §8: says it was cancelled, not who did it
   shakedownResolved: "public";
+  snitchPaid: "private";
   checkpointChecked: "public";
   gameEnded: "public";
 };

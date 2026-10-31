@@ -1,7 +1,7 @@
 // Content overrides on the game config: validation (untrusted JSON) and their
 // effect on the rules. design §17.4 "config overrides"
 import { describe, expect, it } from "vitest";
-import { BANK_JOB, CONTENT_VERSION, ROLES } from "@skimjob/content";
+import { BANK_JOB, CONTENT_VERSION, ROLES, STARTER_ROLES } from "@skimjob/content";
 import type { Command, ContentOverrides, GameConfig, GameEvent, GameState } from "./types";
 import { setupEvents, validateConfig } from "./setup";
 import { replay } from "./reduce";
@@ -15,7 +15,7 @@ function config(players: number, contentOverrides?: unknown): GameConfig {
     seed: "override-seed",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: [],
+    rolePool: [...STARTER_ROLES], // no Muscle, so no shakedown window (task 12)
     mole: "off",
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",

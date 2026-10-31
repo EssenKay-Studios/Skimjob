@@ -42,7 +42,7 @@ describe("checkOptions — the engine's validateConfig on the sim's settings", (
     expect(checkOptions(options([]))).toEqual([]);
   });
   it("reports bad role pools, jobs and overrides (untrusted JSON, design §17.4)", () => {
-    expect(checkOptions(options(["--role-pool", "hacker"]))).toEqual(["unknown role hacker"]);
+    expect(checkOptions(options(["--role-pool", "driver"]))).toEqual(["unknown role driver"]);
     expect(checkOptions(options(["--job", "casino"]))).toEqual(["unknown job casino"]);
     expect(checkOptions(options(["--overrides", '{"heat":{"perRound":"lots"}}']))).toEqual(["contentOverrides.heat.perRound must be a finite number"]);
     expect(checkOptions(options(["--starter", "--mole", "on"]))).toEqual(["starter mode requires mole: off"]);

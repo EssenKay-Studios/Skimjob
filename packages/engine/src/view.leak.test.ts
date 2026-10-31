@@ -32,10 +32,13 @@ function config(players: number, voteVisibility: VoteVisibility): GameConfig {
 const NO_LOOT = new Set(["security", "rooftop", "serverRoom"]);
 
 /**
- * A full game exercising every event type a starter game can produce: moves
- * (some changed, some missed), Security watches, the Server room, Lookout and
- * Fence powers, alibis, proposals, an emergency meeting, sealed and changed
- * ballots, shakedowns and checkpoints. Returns the state after every command.
+ * A full game exercising every event type the default pool can produce: moves
+ * (some changed, some missed), Security watches, the Server room, Lookout,
+ * Fence, Hacker and Blackmailer powers, the Snitch's target and payout, alibis,
+ * proposals, an emergency meeting, sealed and changed ballots (Smooth talker
+ * weight), shakedown windows (one cancelled by the Muscle), shakedowns and
+ * checkpoints. Returns the state after every command. (The script reads the
+ * full state to pick moves, as a scheduler would; views are what's checked.)
  */
 function playGame(players: number, voteVisibility: VoteVisibility): GameState[] {
   let s = createGame(config(players, voteVisibility));
@@ -55,13 +58,24 @@ function playGame(players: number, voteVisibility: VoteVisibility): GameState[] 
     player,
     vote: target === null || target === player ? { kind: "skip" } : { kind: "shakedown", target },
   });
-  const meeting = (target: PlayerId): void => {
+  const holder = (role: string): PlayerId | undefined => ids.find((id) => s.players[id]?.role === role);
+  const meeting = (target: PlayerId, act: number): void => {
     ids.forEach((id, i) => {
       if (id === target || i % 3 === 2) return; // a few stay away (sealed votes still count)
       step(vote(id, i % 2 === 0 ? target : null));
       if (i === 1) step(vote(id, target)); // changes their mind
     });
     step({ type: "advance", deadline: { kind: "closeMeeting", meetingId: s.meeting?.id } });
+    if (s.phase.kind !== "shakedownPending") return;
+    // design §8: in Act 2 the Muscle (if dealt) cancels the shakedown before its window ends.
+    const muscle = holder("muscle");
+    if (act === 2 && muscle) step({ type: "useAbility", player: muscle, ability: { kind: "cancelShakedown" } });
+    step({ type: "advance", deadline: { kind: "resolveShakedown", meetingId: s.phase.meetingId } });
+  };
+  // The Snitch's target pockets everything it can, and is the Act 3 meeting's target, so the Snitch gets paid.
+  const snitchTarget = (): PlayerId | null => {
+    const snitch = holder("snitch");
+    return snitch ? (s.players[snitch] as PlayerState).roleState.target : null;
   };
 
   for (let round = 1; round <= 9 && !over(); round++) {
@@ -71,17 +85,24 @@ function playGame(players: number, voteVisibility: VoteVisibility): GameState[] 
       step({ type: "sealVote", player: last, vote: { kind: "shakedown", target: "p0" } });
       step({ type: "callEmergency", player: "p1" });
       step({ type: "advance", deadline: { kind: "openMeeting", meetingId: "emergency-p1" } });
-      meeting("p0");
+      meeting("p0", act);
     }
     ids.forEach((id, i) => {
       if (round % 2 === 1 && i === ids.length - 1 && players > 2) return; // misses the deadline
       const role = (s.players[id] as PlayerState).role;
       const room = s.rooms[(i + round) % s.rooms.length] as string;
       const canKeep = role !== "insider" && !NO_LOOT.has(room);
-      const move: Record<string, unknown> = { room, pocket: canKeep && (i + round) % 3 === 0 ? 1 : 0 };
+      const greedy = id === snitchTarget();
+      const move: Record<string, unknown> = { room, pocket: canKeep && (greedy || (i + round) % 3 === 0) ? (greedy ? 2 : 1) : 0 };
       if (room === "security") move.watch = "vault";
       if (role === "lookout") move.ability = { kind: "lookout", rooms: [s.rooms[(i + round + 1) % s.rooms.length]] };
       if (role === "fence" && round % 2 === 0) move.ability = { kind: "fenceSafe", amount: 1 };
+      // design §8: the Hacker loops the Vault once per act; the Blackmailer guesses once per act (right in Acts 1 and 3).
+      if (role === "hacker" && round % 3 === 1) move.ability = { kind: "loopCameras", room: "vault" };
+      if (role === "blackmailer" && round % 3 === 2) {
+        const target = ids[(i + 1) % ids.length] as PlayerId;
+        move.ability = { kind: "blackmail", target, role: act === 2 ? "mole" : (s.players[target] as PlayerState).role };
+      }
       if (i === 0) step({ type: "submitMove", player: id, move: { room: "lobby", pocket: 0 } }); // later changed
       step({ type: "submitMove", player: id, move });
     });
@@ -98,7 +119,7 @@ function playGame(players: number, voteVisibility: VoteVisibility): GameState[] 
       }
       if (act === 2) step({ type: "sealVote", player: last, vote: { kind: "skip" } });
       step({ type: "advance", deadline: { kind: "openMeeting", meetingId: s.scheduledMeeting?.meetingId } });
-      meeting(ids[act % ids.length] as PlayerId);
+      meeting((act === 3 ? snitchTarget() : null) ?? (ids[act % ids.length] as PlayerId), act);
     }
   }
   return states;
@@ -125,6 +146,9 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
           { type: "rngAdvanced", visibility: REVEAL, words: [9, 9, 9, 9] },
           { type: "roleDealt", visibility: privateTo(other), player: other, role: "fence" },
           { type: "abilityResolved", visibility: privateTo(other), player: other, round: 1, ability: { kind: "fenceSafe", amount: 5 } },
+          { type: "snitchTargetAssigned", visibility: privateTo(other), player: other, target: viewer },
+          { type: "blackmailed", visibility: privateTo(other), player: other, round: 1, stolen: 3 },
+          { type: "snitchPaid", visibility: privateTo(other), player: other, meetingId: "act-1", target: viewer, amount: 10 },
         ] satisfies GameEvent[])),
   ];
   const log = state.log.filter((e) => canSee(e.visibility, viewer, gameOver)).flatMap((e) => [e, ...junk]);
@@ -139,7 +163,7 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
             role: p.role === "insider" ? "fence" : "insider",
             stash: p.stash + 101,
             safe: p.safe + 7,
-            safeDepositedThisAct: 4,
+            roleState: { usedThisAct: 4, usedThisGame: 1, target: viewer },
             totalHandedIn: p.totalHandedIn + 33,
             consecutiveMissedMoves: 5,
             sealedVote: { kind: "shakedown", target: viewer },
@@ -157,8 +181,11 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
   };
   const moves = keepOwn(state.moves, { room: "vault", pocket: 6 });
   const meeting = state.meeting && { ...state.meeting, votes: keepOwn(state.meeting.votes, { kind: "shakedown", target: viewer }) };
+  // Whether the Muscle has cancelled the pending shakedown is hidden until its window ends. design §8
+  const pendingShakedown = state.pendingShakedown && { ...state.pendingShakedown, cancelled: !state.pendingShakedown.cancelled };
   return {
     ...state,
+    pendingShakedown,
     config: { ...state.config, seed: "scrubbed" },
     rng: { words: [1, 2, 3, 4] },
     players,
@@ -205,6 +232,9 @@ function checkView(state: GameState, viewer: PlayerId, view: PlayerView): void {
 }
 
 describe("no leaks in real games — design §17.2, §13, §11.2", () => {
+  // Filled by the games below, then checked: the scripts reach every role power (task 12, design §8).
+  const seenTypes = new Set<string>();
+  const seenAbilities = new Set<string>();
   const cases = [2, 5, 9, 12].flatMap((n) => (["hiddenThenRevealed", "open", "secret"] as const).map((mode) => [n, mode] as const));
 
   it.each(cases)("%i players, %s votes", (players, mode) => {
@@ -218,6 +248,8 @@ describe("no leaks in real games — design §17.2, §13, §11.2", () => {
       expect(types, t).toContain(t);
     }
     if (players >= 5) expect(types).toContain("pocketCount");
+    for (const t of types) seenTypes.add(t);
+    for (const e of final.log) if (e.type === "abilityResolved") seenAbilities.add(e.ability.kind);
 
     for (const state of states) {
       for (const viewer of state.playerOrder) {
@@ -228,4 +260,9 @@ describe("no leaks in real games — design §17.2, §13, §11.2", () => {
       }
     }
   }, 30_000);
+
+  it("the games above reach every info and vote role's events (design §8)", () => {
+    for (const t of ["snitchTargetAssigned", "blackmailed", "shakedownPending", "shakedownCancelled", "snitchPaid"]) expect(seenTypes, t).toContain(t);
+    for (const k of ["lookout", "fenceSafe", "loopCameras", "blackmail", "cancelShakedown"]) expect(seenAbilities, k).toContain(k);
+  });
 });

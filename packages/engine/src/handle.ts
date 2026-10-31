@@ -21,8 +21,10 @@ import {
   closeMeeting,
   openMeeting,
   proposeMeeting,
+  resolveShakedown,
   scheduleMeeting,
   sealVote,
+  useAbility,
 } from "./meeting";
 
 export type CommandResult =
@@ -96,7 +98,7 @@ const advance: Handler = (state, command) => {
   switch (deadline.kind) {
     case "round":
       // design §4.1: rounds are paused while a vote window is open.
-      if (state.phase.kind === "meeting") return "rounds are paused while a meeting is open";
+      if (state.phase.kind === "meeting" || state.phase.kind === "shakedownPending") return "rounds are paused while a meeting is open";
       if (state.phase.kind !== "planning") return "no round deadline is pending";
       // Named round, so a retried or late deadline is refused instead of resolving the next round.
       if (deadline.round !== state.phase.round) return `the round ${String(deadline.round)} deadline is not pending (round ${state.phase.round} is)`;
@@ -105,6 +107,8 @@ const advance: Handler = (state, command) => {
       return openMeeting(state, deadline.meetingId);
     case "closeMeeting":
       return closeMeeting(state, deadline.meetingId);
+    case "resolveShakedown":
+      return resolveShakedown(state, deadline.meetingId);
     default:
       return `unknown deadline ${deadline.kind}`;
   }
@@ -118,6 +122,7 @@ const HANDLERS: Readonly<Record<string, Handler>> = {
   callEmergency,
   castVote,
   sealVote,
+  useAbility,
   advance,
   scheduleMeeting,
 };

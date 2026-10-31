@@ -1,4 +1,5 @@
 // Flattening a finished game for the metrics. design §17.4
+import { STARTER_ROLES } from "@skimjob/content";
 import { describe, expect, it } from "vitest";
 import { handleCommand, replay, setupEvents, type Command, type GameConfig, type GameEvent, type GameState } from "@skimjob/engine";
 import { checkpointRankings, recordGame, standing } from "./record";
@@ -23,7 +24,7 @@ function config(players: number): GameConfig {
     seed: "record-seed",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: [],
+    rolePool: [...STARTER_ROLES], // no Muscle, so no shakedown window (task 12)
     mole: "off",
     eventsEnabled: false,
     voteVisibility: "open",

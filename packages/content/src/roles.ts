@@ -1,5 +1,5 @@
 // Role definitions: powers, restrictions and scoring, as data. design §8
-// Only the starter roles exist so far; the rest arrive later in M1 (STATUS.md).
+// The Driver and Mole arrive later in M1 (STATUS.md).
 import type { RoleId } from "./index";
 
 /** A role's power. `kind` matches the engine's `AbilityUse` kind where the power is used in a move. design §8 */
@@ -11,7 +11,17 @@ export type RolePower =
    */
   | { readonly kind: "lookout"; readonly extraRooms: number }
   /** Fence: may move up to `perAct` loot per act from stash into a hidden safe that shakedowns can't touch. */
-  | { readonly kind: "fenceSafe"; readonly perAct: number };
+  | { readonly kind: "fenceSafe"; readonly perAct: number }
+  /** Hacker: `perAct` times per act, a move may loop the cameras so one room shows as empty on Security that round. */
+  | { readonly kind: "loopCameras"; readonly perAct: number }
+  /** Smooth talker: their ballot counts `weight` times toward a meeting's result (passive). design §11.2 */
+  | { readonly kind: "voteWeight"; readonly weight: number }
+  /** Muscle: `perGame` times per game, cancel a shakedown after the vote passes (`useAbility`). design §11.3 */
+  | { readonly kind: "cancelShakedown"; readonly perGame: number }
+  /** Blackmailer: `perAct` times per act, a move may guess one player's role; if right, steal `steal` from their stash. */
+  | { readonly kind: "blackmail"; readonly perAct: number; readonly steal: number }
+  /** Snitch: dealt a secret target; gets `bonus` each time that target is shaken down and isn't clean (passive). */
+  | { readonly kind: "snitch"; readonly bonus: number };
 
 export interface RoleScoring {
   /** Final stash is multiplied by this (Rookie ×1.2). design §8 */
@@ -49,7 +59,7 @@ export interface RoleDef {
 
 const PLAIN_SCORING: RoleScoring = { stashMultiplier: 1, perLootOverFinalTarget: 0 };
 
-/** The starter roles. design §8, §8.1 */
+/** Every role with a definition (the Mole and Driver arrive with task 13). design §8, §8.1 */
 export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
   rookie: {
     id: "rookie",
@@ -79,6 +89,46 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     id: "fence",
     name: "Fence",
     power: { kind: "fenceSafe", perAct: 5 },
+    canPocket: true,
+    scoring: PLAIN_SCORING,
+    winsOnFailure: null,
+  },
+  hacker: {
+    id: "hacker",
+    name: "Hacker",
+    power: { kind: "loopCameras", perAct: 1 },
+    canPocket: true,
+    scoring: PLAIN_SCORING,
+    winsOnFailure: null,
+  },
+  smoothTalker: {
+    id: "smoothTalker",
+    name: "Smooth talker",
+    power: { kind: "voteWeight", weight: 2 },
+    canPocket: true,
+    scoring: PLAIN_SCORING,
+    winsOnFailure: null,
+  },
+  muscle: {
+    id: "muscle",
+    name: "Muscle",
+    power: { kind: "cancelShakedown", perGame: 1 },
+    canPocket: true,
+    scoring: PLAIN_SCORING,
+    winsOnFailure: null,
+  },
+  blackmailer: {
+    id: "blackmailer",
+    name: "Blackmailer",
+    power: { kind: "blackmail", perAct: 1, steal: 3 },
+    canPocket: true,
+    scoring: PLAIN_SCORING,
+    winsOnFailure: null,
+  },
+  snitch: {
+    id: "snitch",
+    name: "Snitch",
+    power: { kind: "snitch", bonus: 10 },
     canPocket: true,
     scoring: PLAIN_SCORING,
     winsOnFailure: null,

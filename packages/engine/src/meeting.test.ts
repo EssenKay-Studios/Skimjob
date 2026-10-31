@@ -1,6 +1,7 @@
 // Crew meetings and votes: scheduling, emergency meetings, ballots and their
 // visibility, sealed votes, quorum and majority, shakedowns, the checkpoint
 // order and the move to the next act. design §11, §4, §3
+import { STARTER_ROLES } from "@skimjob/content";
 import { describe, expect, it } from "vitest";
 import type { GameConfig, GameEvent, GameState, VoteVisibility } from "./types";
 import { canSee } from "./types";
@@ -15,7 +16,7 @@ function config(players: number, voteVisibility: VoteVisibility = "hiddenThenRev
     seed: "meeting-seed",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: [],
+    rolePool: [...STARTER_ROLES], // no Muscle, so no shakedown window (task 12)
     mole: "off",
     eventsEnabled: false,
     voteVisibility,
@@ -205,14 +206,14 @@ describe("opening and closing the act's meeting — design §11.1, §4.1, §11.4
 
   it("after the act's meeting and checkpoint, the next act starts at round 4 (Fence allowance reset)", () => {
     let s = run(game(2, ["fence"]), mv("p0", "vault", 6, { ability: { kind: "fenceSafe", amount: 5 } }), ROUND, ROUND, ROUND);
-    expect(s.players.p0).toMatchObject({ safe: 5, safeDepositedThisAct: 5 });
+    expect(s.players.p0).toMatchObject({ safe: 5, roleState: expect.objectContaining({ usedThisAct: 5 }) });
     s = run(s, sched(1), open("act-1"));
     const before = s;
     s = run(s, close("act-1"));
     expect(since(before, s).map((e) => e.type)).toEqual(["meetingClosed", "checkpointChecked", "roundStarted"]);
     expect(LAST(s, "roundStarted")).toMatchObject({ round: 4, act: 2 });
     expect(s.phase).toEqual({ kind: "planning", round: 4 });
-    expect(s.players.p0).toMatchObject({ safe: 5, safeDepositedThisAct: 0 });
+    expect(s.players.p0).toMatchObject({ safe: 5, roleState: expect.objectContaining({ usedThisAct: 0 }) });
     // Act 2 has its own meeting, which can be proposed and scheduled anew.
     s = run(s, propose("p1", "act2-slot"), (x: GameState) => accept("p0", x.proposals[0]!.id));
     expect(s.scheduledMeeting).toEqual({ meetingId: "act-2", act: 2, slot: "act2-slot" });

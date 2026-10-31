@@ -50,7 +50,7 @@ export function createBots(
 /**
  * Run a game to the end. Each step, every agent (in seat order) sees its view
  * and sends its commands; then one deadline passes: an open meeting closes, a
- * called emergency opens, the round resolves, or the act's meeting opens (the
+ * pending shakedown's window ends, a called emergency opens, the round resolves, or the act's meeting opens (the
  * server picks a slot if nobody locked one in). Seats without an agent just
  * get default moves, like an absent player.
  */
@@ -81,6 +81,8 @@ export function runBotGame(config: GameConfig, agents: readonly Agent[], options
     const phase = state.phase;
     if (phase.kind === "meeting") {
       system({ type: "advance", deadline: { kind: "closeMeeting", meetingId: phase.meetingId } });
+    } else if (phase.kind === "shakedownPending") {
+      system({ type: "advance", deadline: { kind: "resolveShakedown", meetingId: phase.meetingId } });
     } else if (state.pendingEmergency && (phase.kind === "planning" || phase.kind === "awaitingMeeting")) {
       system({ type: "advance", deadline: { kind: "openMeeting", meetingId: state.pendingEmergency.meetingId } });
     } else if (phase.kind === "planning") {

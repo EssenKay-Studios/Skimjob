@@ -1,5 +1,6 @@
 // viewFor(): one sample of every event type, every viewer, during and after the
 // game; the viewer's own fields; per-viewer numbering; eventsSince. design §13, §17.2
+import { STARTER_ROLES } from "@skimjob/content";
 import { isDeepStrictEqual } from "node:util";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import type { GameConfig, GameEvent, GameState, PlayerView, PrivateVisibility, PublicVisibility, SecretVisibility } from "./types";
@@ -17,7 +18,7 @@ const config = (voteVisibility: GameConfig["voteVisibility"] = "hiddenThenReveal
     { id: "carl", name: "Carl", isBot: false },
   ],
   job: "bank",
-  rolePool: [],
+  rolePool: [...STARTER_ROLES], // no Muscle, so no shakedown window (task 12)
   mole: "off",
   eventsEnabled: false,
   voteVisibility,
@@ -94,6 +95,7 @@ describe("viewFor — the viewer's own data and public state — design §13", (
       role: s.players.ana?.role,
       stash: 0,
       safe: 0,
+      roleState: { usedThisAct: 0, usedThisGame: 0, target: null },
       emergencyMeetingUsed: false,
       move: { room: "office", pocket: 1 },
       sealedVote: null,

@@ -1,7 +1,7 @@
 // QA (PR #3): bank room and starter-role data against the design tables.
 // design §6, §7, §8 (numbers from balance pass 1, docs/balance/balance-1.md)
 import { describe, expect, it } from "vitest";
-import { BANK_JOB, ROLES, STARTER_ROLES } from "./index";
+import { BANK_JOB, INFO_VOTE_ROLES, POOL_ROLES, ROLES, STARTER_ROLES } from "./index";
 
 describe("bank room data — design §6, §7", () => {
   it("loot and Heat pressure for every room", () => {
@@ -31,9 +31,11 @@ describe("bank room data — design §6, §7", () => {
   });
 });
 
-describe("starter role data — design §8", () => {
-  it("the role table has exactly the starter roles", () => {
-    expect(Object.keys(ROLES).sort()).toEqual([...STARTER_ROLES].sort());
+describe("role data — design §8", () => {
+  it("the role table has exactly the pool roles (starter + info/vote roles, task 12); every id matches its key", () => {
+    expect(Object.keys(ROLES).sort()).toEqual([...STARTER_ROLES, ...INFO_VOTE_ROLES].sort());
+    expect([...POOL_ROLES].sort()).toEqual(Object.keys(ROLES).sort());
+    for (const [id, def] of Object.entries(ROLES)) expect(def.id).toBe(id);
   });
 
   it("only the Insider can't pocket", () => {

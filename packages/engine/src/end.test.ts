@@ -1,7 +1,7 @@
 // End of game: success and failure, the ranking with role scoring, tie-breaks,
 // winners, and roles that win on failure. design §3, §8, §13
 import { describe, expect, it } from "vitest";
-import { ROLES, type RoleDef } from "@skimjob/content";
+import { ROLES, STARTER_ROLES, type RoleDef } from "@skimjob/content";
 import type { GameConfig, GameEvent, GameState, Outcome, PlayerState } from "./types";
 import { setupEvents } from "./setup";
 import { replay } from "./reduce";
@@ -14,7 +14,7 @@ function config(players: number): GameConfig {
     seed: "end-seed",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: [],
+    rolePool: [...STARTER_ROLES], // no Muscle, so no shakedown window (task 12)
     mole: "off",
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
