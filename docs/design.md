@@ -242,6 +242,8 @@ From round 2 onward, one event card is flipped at the start of each round and sh
 - **Emergency meeting:** each player can call **one** emergency meeting per game, at any point. Others are notified and it opens after a short notice period that the host sets.
 - **Window length:** set by the host, from 5 to 30 minutes.
 
+*Meeting timing (provisional):* the act's slot can be proposed and locked in at any time during the act (the proposer counts as accepting; a majority is more than half the crew), but the meeting only **opens after the act's last round has resolved**: rounds 1–3, then the Act 1 meeting, then checkpoint 1. An emergency meeting can open mid-act; rounds pause while any meeting is open, and only one meeting is open at a time. Only one emergency meeting can be waiting to open at once.
+
 ### 11.2 Voting
 
 - During the window, each player either votes for one player to be shaken down or votes to skip.
@@ -253,10 +255,12 @@ From round 2 onward, one event card is flipped at the start of each round and sh
 - **To pass**, a shakedown needs **more than half of the votes cast**, and at least half the crew has to take part (sealed votes count).
 - When the window closes, the ballots are cleared from the screen. The **result** stays in the ledger permanently.
 
+*Ballots (provisional):* you can't vote to shake yourself down, and you can change your vote until the window closes. A sealed vote counts in the **next meeting that opens, regular or emergency**, and is then used up; sealing again replaces it, it can't be withdrawn, and a player who turns up can override it with a live vote.
+
 ### 11.3 Shakedown results
 
 - The target's stash is revealed to everyone, and all of it except any Fence safe goes into the Haul.
-- **Clean threshold:** if the stash was below **3 × the act number** (3, 6 or 9), the target is declared clean. The crew pays them **5 × the act number** out of the Haul, so false accusations hurt everyone.
+- **Clean threshold:** if the stash was below **3 × the act number** (3, 6 or 9), the target is declared clean. The crew pays them **5 × the act number** out of the Haul, so false accusations hurt everyone. *(Provisional: never more than the Haul holds.)* An emergency meeting uses the current act's numbers.
 - No player is ever eliminated.
 
 ### 11.4 Order at a checkpoint
