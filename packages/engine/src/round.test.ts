@@ -31,9 +31,10 @@ function game(players: number, roles: string[] = []): GameState {
   return replay(cfg, log);
 }
 
+/** Commands to run; a function is called with the current state (e.g. `ROUND`). */
 function run(state: GameState, ...commands: unknown[]): GameState {
   return commands.reduce<GameState>((s, c) => {
-    const r = handleCommand(s, c);
+    const r = handleCommand(s, typeof c === "function" ? c(s) : c);
     if (!r.ok) throw new Error(`rejected: ${r.reason}`);
     return r.state;
   }, state);
@@ -42,7 +43,8 @@ function run(state: GameState, ...commands: unknown[]): GameState {
 /** A submitMove command; `move` is loose on purpose so tests can send malformed moves. */
 const submit = (player: string, move: Record<string, unknown>): Command =>
   ({ type: "submitMove", player, move: { pocket: 0, ...move } }) as Command;
-const ROUND: Command = { type: "advance", deadline: { kind: "round" } };
+/** The deadline for the round being planned in `s`. */
+const ROUND = (s: GameState): Command => ({ type: "advance", deadline: { kind: "round", round: s.round } });
 
 /** The events the last command appended. */
 function lastEvents(before: GameState, after: GameState): GameEvent[] {
@@ -99,7 +101,7 @@ describe("rejected commands leave state untouched", () => {
     ["not an object", 7],
     ["no type", { player: "p0" }],
     ["unknown command", { type: "teleport" }],
-    ["not yet supported command", { type: "postAlibi", player: "p0", room: "lobby" }],
+    ["not yet supported command", { type: "callEmergency", player: "p0" }],
     ["unknown player", submit("zed", { room: "lobby" })],
     ["missing move", { type: "submitMove", player: "p0" }],
     ["unknown room", submit("p0", { room: "kitchen" })],
@@ -132,7 +134,7 @@ describe("rejected commands leave state untouched", () => {
     const after = run(game(2), ROUND, ROUND, ROUND);
     expect(after.phase).toEqual({ kind: "awaitingMeeting", act: 1 });
     expect(reason(after, submit("p0", { room: "lobby" }))).toMatch(/planned/);
-    expect(reason(after, ROUND)).toMatch(/no round deadline/);
+    expect(reason(after, ROUND(after))).toMatch(/no round deadline/);
   });
 });
 
