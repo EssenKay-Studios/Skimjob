@@ -134,8 +134,8 @@ describe("QA role dealing — design §8.1", () => {
 
 describe("QA config validation — design §8.1, §15", () => {
   it("accepts exactly 2 and exactly 12; rejects 0 and 13", () => {
-    expect(() => validateConfig(config(2))).not.toThrow();
-    expect(() => validateConfig(config(12, { mole: "on" }))).not.toThrow();
+    expect(validateConfig(config(2))).toEqual([]);
+    expect(validateConfig(config(12, { mole: "on" }))).toEqual([]);
     expect(() => setupEvents(config(0))).toThrow(/players/);
     expect(() => setupEvents(config(13))).toThrow(/players/);
   });
