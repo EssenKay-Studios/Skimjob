@@ -4,6 +4,12 @@ Newest first. Each entry: what was decided, and why. Add an entry whenever a rul
 
 ---
 
+### 2026-11-01 — Owner decisions for M2 (from Karthik)
+- Scope tonight: finish M1, then build M2 **running locally** (no deployment until hosting accounts exist).
+- Login: **invite link + nickname** for quick joins, plus **Google sign-in** for a persistent identity.
+- Backend: **Node server + Postgres**.
+- Art: agents draw the cartoon art as **SVG**, in a hand-drawn notebook style modelled on cityrt.com (style only — never their logo, name or artwork). Style guide: `docs/ui-style.md`.
+
 ### 2026-11-01 — Core type choices
 - **Each event type fixes its own visibility in the type system.** For example, `roleDealt` can only be private and `rngSeeded` can only be reveal-only, so a secret can't be logged as public by mistake. `voteCast` is public, private or secret depending on the vote-visibility setting; `voteSealed` is private or secret.
 - **After the game ends, private and reveal-only events become visible to everyone** (`canSee`), which is what the reveal needs (§13). **Secret events never do.** A fourth visibility kind, `secret` (`secretTo(player)`), is visible only to its player, during and after the game. It is used only for ballots (`voteCast`, `voteSealed`) in *Secret* vote mode, so "only the tally is ever shown" (§11.2) holds at the reveal too. A future Informant role would be granted these explicitly by `viewFor()`, not by `canSee()`. `PlayerView.reveal.log` is therefore a filtered list of `{ seq, event }`, not the raw log. Unknown visibility kinds fail closed, before and after the game. (QA finding on PR #1; PM decision.)

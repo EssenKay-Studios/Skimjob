@@ -47,7 +47,7 @@ pnpm sim -- --help   # run the simulator (once implemented)
 - **Deterministic.** All randomness goes through the seeded RNG in the game state. Same seed + same commands = same game. No `Math.random()`, no `Date.now()` inside the engine.
 - **No clock.** The engine knows rounds and phases, not wall time. The server/sim calls `advance()` when a deadline passes. Elastic session timing lives outside the engine.
 - **Event-sourced.** State = fold over the event log. Ledger, case files, "while you were away" recaps and the end-game reveal are all views over the log.
-- **Visibility-scoped.** Every event is tagged `public`, `private:<playerId>`, or `reveal`. `viewFor(state, playerId)` must never leak hidden information. Write a test whenever you add an event type.
+- **Visibility-scoped.** Every event is tagged `public`, `private:<playerId>`, `reveal`, or `secret:<playerId>` (secret-mode ballots: visible only to the voter, even after the game). `viewFor(state, playerId)` must never leak hidden information. Write a test whenever you add an event type.
 - **Content is data.** Numbers, rooms, roles, events live in `packages/content`. If you're hard-coding a number in the engine, it probably belongs in content.
 - **Bots are players.** Bots only receive `viewFor()` output and emit the same commands a human client would.
 - Every rule in `docs/design.md` that's implemented should have a test that names the design section (e.g. `// design §11.3`).
