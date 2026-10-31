@@ -365,13 +365,21 @@ describe("determinism and the event log — design §17.2", () => {
   });
 });
 
-describe("host-chosen player ids", () => {
-  it("a player called __proto__ plays like anyone else", () => {
-    const cfg: GameConfig = { ...config(2), players: [{ id: "__proto__", name: "Proto", isBot: false }, { id: "p1", name: "P1", isBot: true }] };
+describe("player ids", () => {
+  // Ids are record keys everywhere, so unsafe ones are refused at setup (PR #9 QA: a __proto__ seat lost entries in a copied view).
+  it("ids shaped like prototype keys, or outside [A-Za-z0-9_-]{1,32}, are refused at setup", () => {
+    for (const id of ["__proto__", "constructor", "prototype", "has space", "a.b", "x".repeat(33), "é"]) {
+      const cfg: GameConfig = { ...config(2), players: [{ id, name: "X", isBot: false }, { id: "p1", name: "P1", isBot: true }] };
+      expect(() => setupEvents(cfg), id).toThrow(/player ids must match/);
+    }
+  });
+
+  it("other ids that are also Object.prototype names play like anyone else", () => {
+    const cfg: GameConfig = { ...config(2), players: [{ id: "toString", name: "T", isBot: false }, { id: "hasOwnProperty", name: "H", isBot: true }] };
     const log = setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: "rookie" } : e));
-    const s = run(replay(cfg, log), submit("__proto__", { room: "office", pocket: 1 }), ROUND);
-    expect(Object.hasOwn(s.players, "__proto__")).toBe(true);
-    expect(s.players["__proto__"]).toMatchObject({ stash: 1, totalHandedIn: 3 });
+    const s = run(replay(cfg, log), submit("toString", { room: "office", pocket: 1 }), ROUND);
+    expect(Object.hasOwn(s.players, "toString")).toBe(true);
+    expect(s.players["toString"]).toMatchObject({ stash: 1, totalHandedIn: 3 });
     expect(s.haul).toBe(5);
     expect(replay(cfg, s.log)).toEqual(s);
   });

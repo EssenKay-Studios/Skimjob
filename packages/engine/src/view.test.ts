@@ -5,7 +5,7 @@ import { describe, expect, expectTypeOf, it } from "vitest";
 import type { GameConfig, GameEvent, GameState, PlayerView, PrivateVisibility, PublicVisibility, SecretVisibility } from "./types";
 import { PUBLIC, REVEAL, privateTo, secretTo } from "./types";
 import { sampleEvents } from "./types/samples";
-import { createGame } from "./setup";
+import { createGame, validateConfig } from "./setup";
 import { handleCommand } from "./handle";
 import { eventsSince, viewFor } from "./view";
 
@@ -230,5 +230,22 @@ describe("views are copies — design §17.3 (bots only get viewFor), task 8 rev
     expect(a.rooms).not.toBe(s.rooms);
     expect(a.phase).not.toBe(s.phase);
     expect(a.ledger[0]?.event).not.toBe(s.log[0]);
+  });
+});
+
+describe("view copies keep every key — PR #9 QA", () => {
+  it("an entry keyed __proto__ survives the copy instead of becoming the prototype", () => {
+    // Setup refuses such ids now; this guards the copy itself (QA's repro: a tally keyed by a __proto__ seat).
+    const targets = JSON.parse('{"__proto__": 2, "ben": 1}') as Record<string, number>;
+    const closed: GameEvent = { ...sampleEvents.meetingClosed, tally: { skip: 0, targets } };
+    const copied = viewFor(withEvent(createGame(config()), closed), "ana").ledger.at(-1)?.event;
+    expect(copied?.type === "meetingClosed" && Object.keys(copied.tally.targets)).toEqual(["__proto__", "ben"]);
+    expect(copied && Object.getPrototypeOf(copied.type === "meetingClosed" ? copied.tally.targets : null)).toBe(Object.prototype);
+  });
+
+  it("validateConfig refuses unsafe player ids", () => {
+    const players = ["__proto__", "constructor", "prototype"].map((id) => ({ id, name: id, isBot: false }));
+    expect(validateConfig({ ...config(), players })).toEqual([expect.stringMatching(/player ids must match/)]);
+    expect(validateConfig(config())).toEqual([]);
   });
 });

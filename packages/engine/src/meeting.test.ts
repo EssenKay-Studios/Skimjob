@@ -537,15 +537,15 @@ describe("determinism and the event log — design §17.2", () => {
     expect(ofType(s.log, "rngAdvanced")).toHaveLength(ofType(game(4).log, "rngAdvanced").length);
   });
 
-  it("a player called __proto__ can be voted for and shaken down", () => {
-    const cfg: GameConfig = { ...config(2), players: [{ id: "__proto__", name: "Proto", isBot: false }, { id: "p1", name: "P1", isBot: true }] };
+  it("a player called toString can be voted for and shaken down (__proto__ is refused at setup)", () => {
+    const cfg: GameConfig = { ...config(2), players: [{ id: "toString", name: "T", isBot: false }, { id: "p1", name: "P1", isBot: true }] };
     const log = setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: "rookie" } : e));
-    let s = run(replay(cfg, log), mv("__proto__", "vault", 6), ROUND, ROUND, ROUND, sched(1), open("act-1"), vote("p1", "__proto__"), seal("__proto__", "p1"));
+    let s = run(replay(cfg, log), mv("toString", "vault", 6), ROUND, ROUND, ROUND, sched(1), open("act-1"), vote("p1", "toString"), seal("toString", "p1"));
     s = run(s, CLOSE);
     const closed = LAST(s, "meetingClosed")!;
-    expect(Object.hasOwn(closed.tally.targets, "__proto__")).toBe(true);
+    expect(Object.hasOwn(closed.tally.targets, "toString")).toBe(true);
     expect(Object.hasOwn(closed.ballots ?? {}, "p1")).toBe(true);
-    expect(s.players["__proto__"]).toMatchObject({ stash: 0, timesShakenDown: 1, sealedVote: { kind: "shakedown", target: "p1" } });
+    expect(s.players["toString"]).toMatchObject({ stash: 0, timesShakenDown: 1, sealedVote: { kind: "shakedown", target: "p1" } });
     expect(replay(cfg, s.log)).toEqual(s);
   });
 });

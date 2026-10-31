@@ -379,8 +379,10 @@ describe("QA: viewFor edges — design §13, §11.2", () => {
     for (const id of ["p6", "", "P0", "__proto__", "constructor", "toString", "hasOwnProperty"]) expect(() => viewFor(game, id)).toThrow(/unknown player/);
   });
 
-  it("works for seats named like prototype keys", () => {
-    const s = createGame({ ...config(3, "open", "proto"), players: ["__proto__", "constructor", "toString"].map((id) => ({ id, name: id, isBot: false })) });
+  it("works for seats named like Object.prototype members (__proto__ / constructor / prototype are refused at setup)", () => {
+    const seats = (ids: string[]) => ({ ...config(3, "open", "proto"), players: ids.map((id) => ({ id, name: id, isBot: false })) });
+    expect(() => createGame(seats(["__proto__", "constructor", "toString"]))).toThrow(/player ids/);
+    const s = createGame(seats(["toString", "hasOwnProperty", "valueOf"]));
     for (const id of s.playerOrder) {
       const v = viewFor(s, id);
       expect([v.me.id, v.players.map((p) => p.id)]).toEqual([id, s.playerOrder.filter((p) => p !== id)]);
