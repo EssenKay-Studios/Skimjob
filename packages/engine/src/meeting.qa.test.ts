@@ -9,6 +9,7 @@ import { canSee } from "./types";
 import { setupEvents } from "./setup";
 import { replay } from "./reduce";
 import { handleCommand } from "./handle";
+import { V01_NUMBERS } from "./v01-numbers.testkit";
 
 function config(players: number, voteVisibility: VoteVisibility = "hiddenThenRevealed"): GameConfig {
   return {
@@ -20,6 +21,7 @@ function config(players: number, voteVisibility: VoteVisibility = "hiddenThenRev
     eventsEnabled: false,
     voteVisibility,
     starterMode: false,
+    contentOverrides: V01_NUMBERS, // scripted against content 0.1.0 numbers (balance pass 1)
   };
 }
 

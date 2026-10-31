@@ -28,6 +28,8 @@ function config(players: number): GameConfig {
     eventsEnabled: false,
     voteVisibility: "open",
     starterMode: false,
+    // scripted against content 0.1.0 checkpoint targets (balance pass 1)
+    contentOverrides: { checkpoints: { perPlayer: [6, 14, 22] } },
   };
 }
 
