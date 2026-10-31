@@ -112,6 +112,12 @@ describe("validateOverrides — configs are untrusted JSON (design §17.4)", () 
     expect(errs({ roles: { mole: { stashMultiplier: 2 } } })).toEqual(["contentOverrides.roles.mole: no such role"]);
   });
 
+  it("a crowded room can't pay more than its loot (checkMove bounds pockets by loot, design §6.2)", () => {
+    expect(errs({ rooms: { depositBoxes: { loot: 2 } } })).toEqual(["contentOverrides.rooms.depositBoxes: crowded loot (3) can't be more than loot (2)"]);
+    expect(errs({ rooms: { depositBoxes: { capacity: { crowdedLoot: 6 } } } })).toHaveLength(1);
+    expect(errs({ rooms: { depositBoxes: { loot: 2, capacity: { crowdedLoot: 2 } } } })).toEqual([]);
+  });
+
   it("validateConfig reports override errors, and setupEvents refuses them", () => {
     expect(validateConfig(config(4, { heat: { perRound: "4" } }))).toEqual(["contentOverrides.heat.perRound must be a finite number"]);
     expect(validateConfig(config(4, { heat: { perRound: 5 } }))).toEqual([]);
@@ -170,6 +176,24 @@ describe("overrides in play (design §17.4)", () => {
     s = run(s, { type: "advance", deadline: { kind: "openMeeting", meetingId: "act-1" } });
     s = run(s, { type: "advance", deadline: { kind: "closeMeeting", meetingId: "act-1" } });
     expect(s.log.find((e) => e.type === "checkpointChecked")).toMatchObject({ target: 2, met: true });
+  });
+
+  it("shakedown numbers change the clean threshold and compensation (design §11.3)", () => {
+    // Clean below 10 × act; a clean target is paid 2 × act.
+    const s0 = game(config(3, { shakedown: { cleanBelowPerAct: 10, compensationPerAct: 2 } }));
+    let s = s0;
+    for (let i = 0; i < 3; i++) {
+      s = after(s, () => submit("p0", { room: "vault", pocket: i === 0 ? 6 : 0 }), () => submit("p1", { room: "lobby" }), () => submit("p2", { room: "lobby" }), ROUND);
+    }
+    s = run(s, { type: "scheduleMeeting", act: 1, slot: "x" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: "act-1" } });
+    s = run(
+      s,
+      { type: "castVote", player: "p1", vote: { kind: "shakedown", target: "p0" } },
+      { type: "castVote", player: "p2", vote: { kind: "shakedown", target: "p0" } },
+      { type: "advance", deadline: { kind: "closeMeeting", meetingId: "act-1" } },
+    );
+    // A stash of 6 would be caught with the shipped numbers (clean below 3); here it's clean.
+    expect(s.log.find((e) => e.type === "shakedownResolved")).toMatchObject({ target: "p0", stashRevealed: 6, clean: true, compensation: 2 });
   });
 
   it("role numbers change powers and scoring (design §8)", () => {

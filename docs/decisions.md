@@ -11,10 +11,15 @@ Newest first. Each entry: what was decided, and why. Add an entry whenever a rul
 - **Metric definitions (provisional, design §17.4 leaves them open):**
   - *Heat-bust share* = Heat failures ÷ failures.
   - *Pocketing bands* by pocketed ÷ looted over the game: honest ≤ 10%, moderate ≤ 40%, heavy above. Insiders are left out (they can't pocket). Win rate is over all games, so a heist sunk by pocketing counts as a loss.
-  - *Shakedown accuracy* = shakedowns that weren't clean (the target held at least the clean threshold) ÷ shakedowns. Also reported: the target had pocketed anything before.
+  - *Shakedown accuracy* = shakedowns that weren't clean (the target held at least the clean threshold) ÷ shakedowns: the game's own verdict. Also reported: the target had pocketed anything since their last shakedown (clean-target compensation stays in the stash, so a repeat target can be "not clean" without pocketing).
   - *Role / personality win share*: joint winners share one win; role share is over seats in successful heists, against the fair share 1 ÷ crew size (mean over those seats). Mole win rate is over all games.
-  - *Comeback*: successful games whose Act 1 leader (after the Act 1 shakedown, scored as at the end; top score above 0) is among the winners. Target < 50%.
-  - *Decided early*: of games reaching Act 3, those won by the sole Act 2 leader with a lead of at least half the most one player could add in Act 3 (3 rounds × best room loot × best stash multiplier).
+  - *Standings at a checkpoint* come from the engine itself (PR #10 review): the log is folded with `applyEvent` and ranked with `ranking()` after each `checkpointChecked` (so after that act's shakedown, scored as at the end). Leaders are `leadersOf(ranking)`: tied on score *and* both tie-breaks, as joint winners are. The sim re-implements no rule.
+  - *Comeback*: successful games with a sole Act 1 leader (top score above 0), and how often that leader wins. Target < 50%. Games still fully tied after the tie-breaks are left out (PR #10 review: counting a win when any tied leader won inflated the rate).
+  - *Decided early*: of **successful** games, those won by the sole Act 2 leader with a lead of at least half the most one player could add in Act 3 (3 rounds × best room loot × best stash multiplier). Successful games only, like comeback and role shares, so it doesn't fall as task 11 lowers the success rate (PR #10 review). The max-gain proxy ignores Act 3 clean compensation and Insider surplus.
+  - *Heavy pocketing target* is the design's "< 50%" ("should lose more often than it wins"); honest vs moderate is the design's "moderate wins more often than honest".
+  - *Mole win rate* is shown as "n/a until Mole powers": until the Mole `RoleDef` (wins on failure) lands, a Mole can only win by topping a successful heist.
+- **Overrides keep crowded loot ≤ loot**: a Deposit-box override (or a loot override on its own) that makes the crowded yield higher than the listed loot is refused, since `checkMove` bounds a pocket by the listed loot (PR #10 review).
+- **`--out` is checked before any game runs**: empty is refused (it would write into the directory pnpm ran in; use `--no-files`), and a path that is a file, or an output name that is a directory, is a clean error (PR #10 QA).
 - **No view-copy optimisation needed:** 1,000 games at 6 players take about 13 s (about 11 ms a game with `viewFor` deep copies), so events are not frozen.
 
 ### 2026-11-01 — Bots (M1 task 9)

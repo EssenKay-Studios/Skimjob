@@ -6,7 +6,7 @@ import { USAGE, invocationDir, parseSimArgs, type SimOptions } from "./args";
 import { checkOptions, runBatch } from "./run";
 import { summarize } from "./metrics";
 import { formatReport } from "./report";
-import { writeOutputs } from "./output";
+import { prepareOutDir, writeOutputs } from "./output";
 
 function title(o: SimOptions, seconds: number): string {
   const counts = o.playerCounts.length === 1 ? `${o.playerCounts[0]} players` : `players ${o.playerCounts.join(",")}`;
@@ -36,15 +36,27 @@ function main(argv: readonly string[]): number {
     return 2;
   }
 
+  // Fail before the games run, not after (PR #10 QA).
+  const outDir = options.outDir === null ? null : resolve(invocationDir(), options.outDir);
+  const outProblem = outDir === null ? null : prepareOutDir(outDir);
+  if (outProblem !== null) {
+    process.stderr.write(`sim: ${outProblem}\n`);
+    return 2;
+  }
+
   const started = performance.now();
   const records = runBatch(options, (n, games) => process.stderr.write(`  ${games} games at ${n} players done\n`));
   const seconds = (performance.now() - started) / 1000;
   const summary = summarize(records);
 
-  if (options.outDir !== null) {
-    const dir = resolve(invocationDir(), options.outDir);
-    const files = writeOutputs(dir, records, summary, options);
-    process.stderr.write(`  wrote ${files.join(", ")}\n`);
+  if (outDir !== null) {
+    try {
+      const files = writeOutputs(outDir, records, summary, options);
+      process.stderr.write(`  wrote ${files.join(", ")}\n`);
+    } catch (e) {
+      process.stderr.write(`sim: couldn't write to ${outDir}: ${(e as Error).message}\n`);
+      return 1;
+    }
   }
   process.stdout.write(options.json ? JSON.stringify(summary, null, 2) + "\n" : "\n" + formatReport(summary, title(options, seconds)));
   return 0;

@@ -94,5 +94,8 @@ describe("parseSimArgs", () => {
     expect(error(["--votes", "loud"])).toMatch(/--votes/);
     expect(error(["--frob"])).toMatch(/frob/);
     expect(error(["stray"])).toMatch(/stray|positional/i);
+    // An empty --out would resolve to the directory pnpm was run from (PR #10 QA).
+    expect(error(["--out", ""])).toMatch(/--out/);
+    expect(error(["--out", "  "])).toMatch(/--out/);
   });
 });

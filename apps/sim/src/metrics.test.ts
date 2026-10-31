@@ -84,17 +84,17 @@ describe("shakedown accuracy — design §17.4 (50–70% catch a real cheater)",
 
 describe("comeback — design §17.4 (the Act 1 leader wins under 50%)", () => {
   const lead = (leaders: string[], topScore = 5) => ({ leaders, topScore, lead: 1 });
-  it("counts successful games with a real Act 1 leader, and whether a leader won", () => {
+  it("counts successful games with a sole Act 1 leader, and whether that leader won", () => {
     const m = comebackMetric([
       gameRec({ afterAct1: lead(["a"]), winners: ["a"] }),
-      gameRec({ afterAct1: lead(["a", "b"]), winners: ["b"] }),
+      gameRec({ afterAct1: lead(["a", "b"]), winners: ["b"] }), // still fully tied after tie-breaks: left out
       gameRec({ afterAct1: lead(["a"]), winners: ["c"] }),
-      gameRec({ afterAct1: lead(["c"]), winners: ["d"] }),
+      gameRec({ afterAct1: lead(["c"]), winners: ["d", "c"] }),
       gameRec({ afterAct1: lead(["a"], 0), winners: ["a"] }), // nobody had anything yet
       failed("target", { afterAct1: lead(["a"]) }), // no winner
       gameRec({ afterAct1: null, winners: ["a"] }),
     ]);
-    expect(m).toEqual({ games: 4, rate: 0.5 });
+    expect(m).toEqual({ games: 3, rate: 2 / 3 });
   });
 });
 
@@ -107,11 +107,12 @@ describe("decided early — design §17.4 (under 15% settled before Act 3)", () 
     expect(decidedEarly(gameRec({ afterAct2: act2(["a", "b"], 15), act3MaxGain: 20, winners: ["a"] }))).toBe(false);
     expect(decidedEarly(failed("target", { afterAct2: act2(["a"], 15), act3MaxGain: 20 }))).toBe(false);
   });
-  it("counts only games that reached Act 3", () => {
+  it("counts successful games only, so it doesn't move with the success rate", () => {
     const m = decidedEarlyMetric([
       gameRec({ afterAct2: act2(["a"], 15), winners: ["a"] }),
       gameRec(),
       failed("heat", { endedRound: 5, endedAct: 2 }),
+      failed("target", { afterAct2: act2(["a"], 15) }),
     ]);
     expect(m).toEqual({ games: 2, rate: 0.5 });
   });

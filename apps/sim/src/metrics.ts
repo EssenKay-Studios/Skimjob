@@ -11,10 +11,13 @@
 //   threshold ÷ shakedowns (also: the target had pocketed anything at all).
 // - role / personality win share: wins (joint winners share one) ÷ seats, in
 //   successful games, against the fair share 1 ÷ crew size (±5 pp target).
-// - comeback: in successful games with a leader after Act 1 (top stash above
-//   0), how often an Act 1 leader wins (target under 50%).
-// - decided early: games reaching Act 3 whose sole Act 2 leader won with a lead
-//   of at least half the most one player could add in Act 3 (target under 15%).
+// - comeback: in successful games with a sole leader after Act 1 (the
+//   engine's ranking with its tie-breaks; top score above 0), how often that
+//   leader wins (target under 50%). Games still fully tied are left out.
+// - decided early: successful games whose sole Act 2 leader won with a lead of
+//   at least half the most one player could add in Act 3 (target under 15%).
+//   Successful games only, like comeback and role shares, so the stash race
+//   is measured apart from the success rate.
 import type { GameRecord, PlayerRecord } from "./record";
 
 export const POCKET_BANDS = ["honest", "moderate", "heavy"] as const;
@@ -118,10 +121,12 @@ export interface RateOf {
   readonly rate: number | null;
 }
 
-/** How often an Act 1 leader goes on to win a successful heist. design §17.4 target < 50% */
+/** How often the sole Act 1 leader goes on to win a successful heist. design §17.4 target < 50% */
 export function comebackMetric(records: readonly GameRecord[]): RateOf {
-  const eligible = records.filter((g) => g.result === "success" && g.afterAct1 !== null && g.afterAct1.topScore > 0);
-  const leaderWon = eligible.filter((g) => g.afterAct1?.leaders.some((id) => g.winners.includes(id)));
+  const eligible = records.filter(
+    (g) => g.result === "success" && g.afterAct1 !== null && g.afterAct1.topScore > 0 && g.afterAct1.leaders.length === 1,
+  );
+  const leaderWon = eligible.filter((g) => g.winners.includes(g.afterAct1?.leaders[0] as string));
   return { games: eligible.length, rate: rate(leaderWon.length, eligible.length) };
 }
 
@@ -132,10 +137,10 @@ export function decidedEarly(g: GameRecord): boolean {
   return g.winners.includes(s.leaders[0] as string) && s.lead >= DECIDED_EARLY_LEAD_SHARE * g.act3MaxGain;
 }
 
-/** Share of games reaching Act 3 that were settled before it. design §17.4 target < 15% */
+/** Share of successful games that were settled before Act 3. design §17.4 target < 15% */
 export function decidedEarlyMetric(records: readonly GameRecord[]): RateOf {
-  const reached = records.filter((g) => g.endedAct === 3);
-  return { games: reached.length, rate: rate(reached.filter(decidedEarly).length, reached.length) };
+  const succeeded = records.filter((g) => g.result === "success");
+  return { games: succeeded.length, rate: rate(succeeded.filter(decidedEarly).length, succeeded.length) };
 }
 
 export interface Metrics {

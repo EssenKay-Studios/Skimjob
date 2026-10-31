@@ -4,7 +4,20 @@
 // Pure: a finished GameState (plus the bot crew) in, plain data out.
 import { ROUNDS_PER_ACT, SCORE_DECIMALS, type RoleId } from "@skimjob/content";
 import type { PersonalityId } from "@skimjob/bots";
-import { checkpointTarget, jobFor, rolesFor, type GameConfig, type GameEvent, type GameState, type PlayerId } from "@skimjob/engine";
+import {
+  applyEvent,
+  checkpointTarget,
+  initialState,
+  jobFor,
+  leadersOf,
+  ranking,
+  rolesFor,
+  type GameConfig,
+  type GameEvent,
+  type GameState,
+  type PlayerId,
+  type RankEntry,
+} from "@skimjob/engine";
 
 export interface PlayerRecord {
   readonly id: PlayerId;
@@ -32,11 +45,15 @@ export interface ShakedownRecord {
   readonly stashRevealed: number;
   /** Below the clean threshold: nothing worth taking. design §11.3 */
   readonly clean: boolean;
-  /** The target had pocketed something earlier in the game. */
+  /** The target had pocketed something since their last shakedown (or the start). */
   readonly targetHadPocketed: boolean;
 }
 
-/** Players tied for the top standing at a checkpoint, and by how much they lead the next player. */
+/**
+ * The engine's ranking at a checkpoint (after its shakedown), scored as at the
+ * end of the game. `leaders` are tied with first place on score and both
+ * tie-breaks (design §3), as for joint winners; usually one player.
+ */
 export interface Standing {
   readonly leaders: readonly PlayerId[];
   readonly topScore: number;
@@ -74,20 +91,27 @@ const roundScore = (n: number): number => {
   return Math.round(n * f) / f;
 };
 
-/**
- * Standings from per-player totals (stash + safe), scored as at the end of the
- * game (design §8: stash × multiplier + Insider surplus over the final target
- * at the current Haul).
- */
-export function standing(
-  totals: ReadonlyMap<PlayerId, number>,
-  scoreOf: (player: PlayerId, total: number) => number,
-): Standing {
-  const scores = [...totals].map(([id, total]) => ({ id, score: scoreOf(id, total) }));
-  const topScore = Math.max(...scores.map((s) => s.score));
-  const leaders = scores.filter((s) => s.score === topScore).map((s) => s.id);
-  const rest = scores.filter((s) => s.score !== topScore).map((s) => s.score);
+/** Leaders and lead from an engine ranking (best first). design §3 */
+export function standing(ranked: readonly RankEntry[]): Standing {
+  const leaders = leadersOf(ranked);
+  const topScore = ranked[0]?.score ?? 0;
+  const rest = ranked.filter((e) => !leaders.includes(e.player)).map((e) => e.score);
   return { leaders, topScore, lead: rest.length === 0 ? 0 : roundScore(topScore - Math.max(...rest)) };
+}
+
+/**
+ * The engine's ranking after each act's checkpoint (index 0 = Act 1), folding
+ * the log with the engine's own `applyEvent`, so no rule is re-implemented
+ * here. Acts the game didn't reach are missing.
+ */
+export function checkpointRankings(config: GameConfig, log: readonly GameEvent[]): (RankEntry[] | undefined)[] {
+  const out: (RankEntry[] | undefined)[] = [];
+  let state = initialState(config);
+  for (const event of log) {
+    state = applyEvent(state, event);
+    if (event.type === "checkpointChecked") out[event.act - 1] = ranking(state);
+  }
+  return out;
 }
 
 /** Flatten a finished game. `crew[i]` is the personality in seat i. */
@@ -102,18 +126,10 @@ export function recordGame(state: GameState, crew: readonly PersonalityId[], rej
   const finalTarget = checkpointTarget(job, 3, n);
   const roleOf = new Map<PlayerId, RoleId>(order.map((id) => [id, state.players[id]?.role ?? "?"]));
 
-  const scoreOf = (haul: number) => (player: PlayerId, total: number): number => {
-    const role = roleOf.get(player) as RoleId;
-    const def = Object.hasOwn(roles, role) ? roles[role] : undefined;
-    if (!def) return total;
-    return roundScore(total * def.scoring.stashMultiplier + def.scoring.perLootOverFinalTarget * Math.max(0, haul - finalTarget));
-  };
-
-  const totals = new Map<PlayerId, number>(order.map((id) => [id, 0]));
   const looted = new Map<PlayerId, number>(order.map((id) => [id, 0]));
   const pocketed = new Map<PlayerId, number>(order.map((id) => [id, 0]));
+  const sinceShakedown = new Map<PlayerId, number>(order.map((id) => [id, 0]));
   const shakedowns: ShakedownRecord[] = [];
-  const standings: (Standing | null)[] = [null, null];
   let meetingKind: { emergency: boolean; act: number } = { emergency: false, act: 1 };
   let meetings = 0;
   let checkpointsMissed = 0;
@@ -125,7 +141,7 @@ export function recordGame(state: GameState, crew: readonly PersonalityId[], rej
       case "lootSplit":
         add(looted, event.player, event.loot);
         add(pocketed, event.player, event.toStash);
-        add(totals, event.player, event.toStash);
+        add(sinceShakedown, event.player, event.toStash);
         break;
       case "roundResolved":
         endedRound = event.round;
@@ -141,19 +157,23 @@ export function recordGame(state: GameState, crew: readonly PersonalityId[], rej
           target: event.target,
           stashRevealed: event.stashRevealed,
           clean: event.clean,
-          targetHadPocketed: (pocketed.get(event.target) ?? 0) > 0,
+          targetHadPocketed: (sinceShakedown.get(event.target) ?? 0) > 0,
         });
-        add(totals, event.target, event.compensation - event.taken);
+        sinceShakedown.set(event.target, 0);
         break;
       case "checkpointChecked":
         if (!event.met) checkpointsMissed++;
-        if (event.act < 3) standings[event.act - 1] = standing(totals, scoreOf(event.haul));
         break;
       default:
         break;
     }
   }
 
+  const rankings = checkpointRankings(config, state.log);
+  const standingAfter = (act: 1 | 2): Standing | null => {
+    const r = rankings[act - 1];
+    return r ? standing(r) : null;
+  };
   const { outcome } = phase;
   const winners = outcome.winners;
   const ranked = new Map(outcome.ranking.map((e) => [e.player, e]));
@@ -174,8 +194,8 @@ export function recordGame(state: GameState, crew: readonly PersonalityId[], rej
     meetings,
     shakedowns,
     winners,
-    afterAct1: standings[0] ?? null,
-    afterAct2: standings[1] ?? null,
+    afterAct1: standingAfter(1),
+    afterAct2: standingAfter(2),
     act3MaxGain: roundScore(ROUNDS_PER_ACT * maxLoot * maxMultiplier),
     playerRecords: order.map((id, i): PlayerRecord => {
       const entry = ranked.get(id);
