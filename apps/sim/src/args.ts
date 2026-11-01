@@ -22,6 +22,8 @@ export interface SimOptions {
   readonly job: string;
   readonly rolePool: readonly string[];
   readonly starterMode: boolean;
+  /** The events deck (design §10). Off by default, and never with starter mode. */
+  readonly eventsEnabled: boolean;
   readonly mole: MoleSetting;
   readonly voteVisibility: VoteVisibility;
   /** Parsed but not yet checked: the engine's validateConfig checks it (untrusted JSON). */
@@ -52,6 +54,7 @@ Usage: pnpm sim -- [options]
       --job <id>          job (default bank)
       --role-pool <ids>   comma-separated roles to deal from (default: the content default)
       --starter           starter mode (Rookie/Lookout/Insider/Fence, no Mole, no events)
+      --events            flip an event card each round from round 2 (design §10; not with --starter)
       --mole <setting>    off | maybe | on (default off)
       --votes <mode>      hiddenThenRevealed | open | secret (default hiddenThenRevealed)
       --overrides <json>  content overrides as inline JSON or a path to a JSON file, e.g.
@@ -127,6 +130,7 @@ export function parseSimArgs(argv: readonly string[], readFile?: (path: string) 
         job: { type: "string" },
         "role-pool": { type: "string" },
         starter: { type: "boolean" },
+        events: { type: "boolean" },
         mole: { type: "string" },
         votes: { type: "string" },
         overrides: { type: "string" },
@@ -160,6 +164,7 @@ export function parseSimArgs(argv: readonly string[], readFile?: (path: string) 
       return error(`--overrides: ${(e as Error).message}`);
     }
   }
+  if (values.events && values.starter) return error("--events can't be used with --starter (starter mode has no events)");
   if (values.out !== undefined && values.out.trim() === "") return error("--out needs a directory (use --no-files for none)");
   if (values.out !== undefined && values.out.includes("\0")) return error("--out is not a valid path");
   const rolePool = values["role-pool"] === undefined ? [] : values["role-pool"].split(",").map((r) => r.trim()).filter((r) => r !== "");
@@ -174,6 +179,7 @@ export function parseSimArgs(argv: readonly string[], readFile?: (path: string) 
       job: values.job ?? "bank",
       rolePool,
       starterMode: values.starter ?? false,
+      eventsEnabled: values.events ?? false,
       mole: mole as MoleSetting,
       voteVisibility: votes as VoteVisibility,
       contentOverrides,

@@ -14,6 +14,7 @@ import { pick, randomInt, shuffle } from "./rng";
 import { applyEvent } from "./reduce";
 import { checkMove, resolveRound } from "./round";
 import { isObject, playerFor } from "./check";
+import { answerDoubleCross } from "./deck";
 import {
   acceptMeeting,
   callEmergency,
@@ -92,7 +93,7 @@ const postAlibi: Handler = (state, command) => {
 };
 
 /** The scheduler says a deadline has passed. design §4.1, §5.2, §11 */
-const advance: Handler = (state, command) => {
+const advance: Handler = (state, command, draw) => {
   const deadline = command.deadline;
   if (!isObject(deadline) || typeof deadline.kind !== "string") return "advance needs a deadline";
   switch (deadline.kind) {
@@ -102,13 +103,13 @@ const advance: Handler = (state, command) => {
       if (state.phase.kind !== "planning") return "no round deadline is pending";
       // Named round, so a retried or late deadline is refused instead of resolving the next round.
       if (deadline.round !== state.phase.round) return `the round ${String(deadline.round)} deadline is not pending (round ${state.phase.round} is)`;
-      return resolveRound(state, state.phase.round);
+      return resolveRound(state, state.phase.round, draw);
     case "openMeeting":
       return openMeeting(state, deadline.meetingId);
     case "closeMeeting":
-      return closeMeeting(state, deadline.meetingId);
+      return closeMeeting(state, deadline.meetingId, draw);
     case "resolveShakedown":
-      return resolveShakedown(state, deadline.meetingId);
+      return resolveShakedown(state, deadline.meetingId, draw);
     default:
       return `unknown deadline ${deadline.kind}`;
   }
@@ -123,6 +124,7 @@ const HANDLERS: Readonly<Record<string, Handler>> = {
   castVote,
   sealVote,
   useAbility,
+  answerDoubleCross,
   advance,
   scheduleMeeting,
 };

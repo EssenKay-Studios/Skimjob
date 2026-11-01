@@ -244,6 +244,15 @@ From round 2 onward, one event card is flipped at the start of each round and sh
 | **Inside tip** | One random player privately learns another player's role. |
 | **Double-cross** | Two random players are offered a role swap. It happens only if both secretly accept. |
 
+*Events deck (provisional, task 14):*
+- The deck holds one of each card; each flip draws from the cards not yet flipped, so no card repeats in a game (8 of the 10 are seen). Events are a host setting (§15), off in starter mode.
+- The card is flipped as the round starts, so players can plan around it; its effects apply when the round resolves (§5.2 step 1). Lockdown names its closed room on the flip (any room but the Lobby, where missed moves go). Double-cross offers go privately to the two players on the flip, and each can accept or decline until the round deadline; the swap happens at step 1, so the new roles play that round. Each role card keeps its uses so far; Moles are told if their fellow Mole changed.
+- **Shift change** also doubles the Vault's Heat pressure; **Payday** doubles the Lobby's loot (2 → 4).
+- **Power cut:** no room-mates, no Security and no Lookout results. The Server room still counts pockets.
+- **Audit:** every room in play is listed with what it came up short (0 included).
+- **Raid rumour:** compares stashes, not the Fence safe (which it never touches); ties are broken at random; with every stash empty nobody is hit. The lost loot is gone.
+- **Inside tip:** the tip is a player's current role.
+
 ---
 
 ## 11. Crew meetings and voting

@@ -4,7 +4,7 @@
 // State is a fold over `log`; every field other than `config` and `log` must be
 // derivable by replaying the log from the start. `rng` is set from the seed by
 // `rngSeeded` and then by each reveal-only `rngAdvanced` (docs/decisions.md).
-import type { RoleId, RoomId } from "@skimjob/content";
+import type { EventId, RoleId, RoomId } from "@skimjob/content";
 import type { GameConfig, PlayerId } from "./config";
 import type { Move, VoteChoice } from "./commands";
 import type { ActNumber, GameEvent, MeetingKind, Outcome } from "./events";
@@ -98,6 +98,22 @@ export interface PendingShakedown {
   readonly cancelled: boolean;
 }
 
+/** A Double-cross offer: the two players, and who has accepted so far. Hidden from everyone else. design §10 */
+export interface DoubleCrossOffer {
+  readonly players: readonly [PlayerId, PlayerId];
+  readonly accepted: readonly PlayerId[];
+}
+
+/** The event card flipped for `round`; cleared when the round resolves. design §10 */
+export interface ActiveCard {
+  readonly round: number;
+  readonly id: EventId;
+  /** The room Lockdown closes; null for other cards. Public. */
+  readonly room: RoomId | null;
+  /** Double-cross only. Never in a view: each of the two learns their own offer from the case file. */
+  readonly offer: DoubleCrossOffer | null;
+}
+
 export interface MeetingProposal {
   readonly id: string;
   readonly by: PlayerId;
@@ -147,6 +163,10 @@ export interface GameState {
   readonly haul: number;
   /** 0–100. design §7 */
   readonly heat: number;
+  /** This round's event card, if one was flipped (cleared when the round resolves). design §10 */
+  readonly card: ActiveCard | null;
+  /** Every card flipped so far this game, in order (public). The deck draws from the rest. design §10 */
+  readonly cardsFlipped: readonly EventId[];
   /** Moves submitted so far for the current round (cleared when it resolves). */
   readonly moves: Readonly<Record<PlayerId, Move>>;
   /** The latest round resolved; 0 before any. Alibis are posted for this round. design §5.4 */

@@ -98,6 +98,31 @@ describe("all-bot games — design §17.3", () => {
     expect(state.log.filter((e) => e.type === "defaultMoveAssigned" && e.player === "p3").length).toBeGreaterThan(0);
   });
 
+  it("with the events deck on (and Moles), bots finish at every size with no refused command — design §10", () => {
+    const seen = new Set<string>();
+    let swaps = 0;
+    let answers = 0;
+    let lockdowns = 0;
+    for (const n of sizes) {
+      for (const seed of ["ev-a", "ev-b", "ev-c"]) {
+        const c: GameConfig = { ...config(n, `${seed}-${n}`), eventsEnabled: true, mole: n >= 5 ? "on" : "off" };
+        const { state, rejections } = runBotGame(c, createBots(c.players, mix(MIXED), `bots-${seed}`));
+        expect(state.phase.kind, `${n} players`).toBe("ended");
+        expect(rejections, `${n} players`).toEqual([]);
+        for (const e of state.log) {
+          if (e.type === "eventFlipped") seen.add(e.card);
+          if (e.type === "eventFlipped" && e.card === "lockdown") lockdowns++;
+          if (e.type === "doubleCrossAnswered") answers++;
+          if (e.type === "doubleCrossResolved" && e.swap) swaps++;
+        }
+      }
+    }
+    expect(seen.size).toBe(10);
+    expect(lockdowns).toBeGreaterThan(0);
+    expect(answers).toBeGreaterThan(0);
+    expect(swaps).toBeGreaterThan(0);
+  });
+
   it("bots schedule the act meetings themselves — design §11.1", () => {
     const { state } = play(5, "schedule", ["honest"]);
     const scheduled = state.log.filter((e) => e.type === "meetingScheduled");

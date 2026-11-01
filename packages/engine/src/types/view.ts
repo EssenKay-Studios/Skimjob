@@ -76,6 +76,8 @@ export interface PlayerView {
   readonly rooms: readonly RoomId[];
   readonly haul: number;
   readonly heat: number;
+  /** This round's event card (public): its id and the room Lockdown closes. design §10 */
+  readonly card: { readonly round: number; readonly id: string; readonly room: RoomId | null } | null;
   readonly voteVisibility: VoteVisibility;
   /** Both are public (design §11.1); null when nothing is pending. */
   readonly scheduledMeeting: ScheduledMeeting | null;

@@ -57,6 +57,8 @@ export function initialState(config: GameConfig): GameState {
     players: {},
     haul: 0,
     heat: 0,
+    card: null,
+    cardsFlipped: [],
     moves: {},
     alibisPosted: [],
     proposals: [],
@@ -103,7 +105,7 @@ function applyChange(state: GameState, event: GameEvent): GameState {
       return updatePlayer(state, event.player, (p) => withRoleState(p, { allies: event.allies }));
     // ------------------------------------------------ round loop. design §5
     case "roundStarted": {
-      const next: GameState = { ...state, phase: { kind: "planning", round: event.round }, round: event.round, moves: {} };
+      const next: GameState = { ...state, phase: { kind: "planning", round: event.round }, round: event.round, moves: {}, card: null };
       // Per-act powers (Fence safe, Hacker, Blackmailer, Mole) start again with each act. design §8
       return actOfRound(event.round) !== actOfRound(state.round) ? mapPlayers(next, (p) => withRoleState(p, { usedThisAct: 0 })) : next;
     }
@@ -166,6 +168,7 @@ function applyChange(state: GameState, event: GameEvent): GameState {
         haul: event.haul,
         heat: event.heat,
         moves: {},
+        card: null,
         resolvedRound: event.round,
         alibisPosted: [],
       };
@@ -173,6 +176,34 @@ function applyChange(state: GameState, event: GameEvent): GameState {
     }
     case "gameEnded":
       return { ...state, phase: { kind: "ended", outcome: event.outcome } };
+    // ------------------------------------------------ events deck. design §10
+    case "eventFlipped":
+      return {
+        ...state,
+        card: { round: event.round, id: event.card, room: event.room, offer: null },
+        cardsFlipped: [...state.cardsFlipped, event.card],
+      };
+    case "doubleCrossOffered": {
+      const card = state.card;
+      if (!card) throw new Error("doubleCrossOffered: no card flipped");
+      // One event per player; the first sets the pair.
+      return card.offer ? state : { ...state, card: { ...card, offer: { players: [event.player, event.partner], accepted: [] } } };
+    }
+    case "doubleCrossAnswered": {
+      const offer = state.card?.offer;
+      if (!state.card || !offer) throw new Error("doubleCrossAnswered: no offer");
+      const rest = offer.accepted.filter((p) => p !== event.player);
+      return { ...state, card: { ...state.card, offer: { ...offer, accepted: event.accept ? [...rest, event.player] : rest } } };
+    }
+    case "doubleCrossResolved": {
+      const swap = event.swap;
+      return swap ? updatePlayer(state, event.player, () => ({ role: swap.role, roleState: swap.roleState })) : state;
+    }
+    case "raidRumourHit":
+      return updatePlayer(state, event.player, (p) => ({ stash: p.stash - event.lost }));
+    case "insideTip":
+    case "auditReport":
+      return state;
     case "alibiPosted":
       return { ...state, alibisPosted: [...state.alibisPosted, event.player] };
     // ------------------------------------------------ meetings and votes. design §11

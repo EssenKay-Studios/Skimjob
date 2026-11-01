@@ -4,7 +4,8 @@
 //
 // Every function is pure: it reads state and returns events, or the reason the
 // command is refused. `handleCommand` (handle.ts) folds the events. Nothing
-// here draws randomness: meeting and proposal ids are names and log positions.
+// here draws randomness except the next act's event card (deck.ts, design §10):
+// meeting and proposal ids are names and log positions.
 import { ROUNDS_PER_ACT } from "@skimjob/content";
 import type {
   ActNumber,
@@ -26,6 +27,8 @@ import { rolePoolFor } from "./setup";
 import { actOfRound } from "./acts";
 import { gameEnded } from "./end";
 import { isObject, playerFor } from "./check";
+import type { Draw } from "./handle";
+import { startRound } from "./deck";
 
 type Result = GameEvent[] | string;
 type Raw = Record<string, unknown>;
@@ -233,7 +236,7 @@ function shakedownWindow(state: GameState): boolean {
  * regular meeting comes the checkpoint (+Heat if missed), then the next act —
  * or, after Act 3, the final check and the end of the game (end.ts).
  */
-export function closeMeeting(state: GameState, meetingId: unknown): Result {
+export function closeMeeting(state: GameState, meetingId: unknown, draw: Draw): Result {
   const meeting = state.meeting;
   if (!meeting || meeting.id !== meetingId) return `meeting ${String(meetingId)} is not open`;
   const crewSize = state.playerOrder.length;
@@ -278,14 +281,14 @@ export function closeMeeting(state: GameState, meetingId: unknown): Result {
     return events;
   }
   const shakedown = result.kind === "shakedown" ? { target: result.target, cancelled: false } : null;
-  return [...events, ...afterVote(state, events, { meetingId: meeting.id, kind, act }, shakedown)];
+  return [...events, ...afterVote(state, events, { meetingId: meeting.id, kind, act }, shakedown, draw)];
 }
 
 /** The shakedown window has ended: apply the shakedown (or announce the cancel), then go on. design §8, §11.3 */
-export function resolveShakedown(state: GameState, meetingId: unknown): Result {
+export function resolveShakedown(state: GameState, meetingId: unknown, draw: Draw): Result {
   const pending = state.pendingShakedown;
   if (!pending || pending.meetingId !== meetingId) return `no shakedown is pending for meeting ${String(meetingId)}`;
-  return afterVote(state, [], pending, pending);
+  return afterVote(state, [], pending, pending, draw);
 }
 
 /**
@@ -325,6 +328,7 @@ function afterVote(
   prior: readonly GameEvent[],
   meeting: { readonly meetingId: string; readonly kind: MeetingKind; readonly act: ActNumber },
   shakedown: { readonly target: PlayerId; readonly cancelled: boolean } | null,
+  draw: Draw,
 ): GameEvent[] {
   const job = jobFor(state.config);
   const crewSize = state.playerOrder.length;
@@ -363,7 +367,7 @@ function afterVote(
     // design §3: the heist succeeds if the Haul meets the final target after the final meeting.
     events.push(gameEnded(state, [...prior, ...events], met ? null : "target"));
   } else {
-    events.push({ type: "roundStarted", visibility: PUBLIC, round: state.round + 1, act: actOfRound(state.round + 1) });
+    events.push(...startRound(state, state.round + 1, draw));
   }
   return events;
 }

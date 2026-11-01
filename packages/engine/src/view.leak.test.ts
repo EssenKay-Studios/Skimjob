@@ -1,4 +1,5 @@
-// Leak tests over real scripted games: 2, 5, 9 and 12 players, every vote mode.
+// Leak tests over real scripted games: 2, 5, 9 and 12 players, every vote mode,
+// with the events deck on (design §10).
 // After every command, for every player:
 //  - the ledger holds only public events, the case file only their own, and
 //    together they are exactly what canSee() allows during the game;
@@ -7,11 +8,12 @@
 //    leaves their view identical, so nothing hidden — not even a count — leaks;
 //  - after the game the reveal opens everything except others' secret-mode
 //    ballots, which never leak (design §11.2).
-// design §13, §17.2, §11.2
+// design §13, §17.2, §11.2, §10
 import { isDeepStrictEqual } from "node:util";
 import { describe, expect, it } from "vitest";
 import type { GameConfig, GameEvent, GameState, LoggedEvent, PlayerId, PlayerState, PlayerView, VoteVisibility } from "./types";
 import { REVEAL, canSee, privateTo, secretTo } from "./types";
+import { EVENT_DECK } from "@skimjob/content";
 import { createGame } from "./setup";
 import { handleCommand } from "./handle";
 import { viewFor } from "./view";
@@ -24,7 +26,7 @@ function config(players: number, voteVisibility: VoteVisibility): GameConfig {
     rolePool: [],
     // design §8.1: one Mole at 5–8 players, two (who know each other) at 9–12.
     mole: players >= 5 ? "on" : "off",
-    eventsEnabled: false,
+    eventsEnabled: true,
     voteVisibility,
     starterMode: false,
   };
@@ -38,7 +40,8 @@ const NO_LOOT = new Set(["security", "rooftop", "serverRoom"]);
  * Fence, Hacker, Blackmailer and Mole powers (tip-off, Mole allies), the Snitch's target and payout, alibis,
  * proposals, an emergency meeting, sealed and changed ballots (Smooth talker
  * weight), shakedown windows (one cancelled by the Muscle), shakedowns and
- * checkpoints. Returns the state after every command. (The script reads the
+ * checkpoints, and the event cards (Lockdown avoided; Double-cross offers
+ * accepted by both in even rounds, by one in odd rounds). Returns the state after every command. (The script reads the
  * full state to pick moves, as a scheduler would; views are what's checked.)
  */
 function playGame(players: number, voteVisibility: VoteVisibility): GameState[] {
@@ -91,7 +94,8 @@ function playGame(players: number, voteVisibility: VoteVisibility): GameState[] 
     ids.forEach((id, i) => {
       if (round % 2 === 1 && i === ids.length - 1 && players > 2) return; // misses the deadline
       const role = (s.players[id] as PlayerState).role;
-      const room = s.rooms[(i + round) % s.rooms.length] as string;
+      const drawn = s.rooms[(i + round) % s.rooms.length] as string;
+      const room = drawn === s.card?.room ? "lobby" : drawn; // design §10 Lockdown
       const canKeep = role !== "insider" && !NO_LOOT.has(room);
       const greedy = id === snitchTarget();
       const move: Record<string, unknown> = { room, pocket: canKeep && (greedy || (i + round) % 3 === 0) ? (greedy ? 2 : 1) : 0 };
@@ -108,6 +112,10 @@ function playGame(players: number, voteVisibility: VoteVisibility): GameState[] 
       }
       if (i === 0) step({ type: "submitMove", player: id, move: { room: "lobby", pocket: 0 } }); // later changed
       step({ type: "submitMove", player: id, move });
+    });
+    // design §10 Double-cross: both accept in even rounds (a swap), only the first in odd ones (none).
+    s.card?.offer?.players.forEach((id, k) => {
+      if (round % 2 === 0 || k === 0) step({ type: "answerDoubleCross", player: id, accept: true });
     });
     step({ type: "advance", deadline: { kind: "round", round } });
     ids.forEach((id, i) => {
@@ -154,6 +162,11 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
           { type: "abilityResolved", visibility: privateTo(other), player: other, round: 1, ability: { kind: "tipOff", heat: 10 } },
           { type: "blackmailed", visibility: privateTo(other), player: other, round: 1, stolen: 3 },
           { type: "snitchPaid", visibility: privateTo(other), player: other, meetingId: "act-1", target: viewer, amount: 10 },
+          { type: "doubleCrossOffered", visibility: privateTo(other), player: other, round: 2, partner: viewer },
+          { type: "doubleCrossAnswered", visibility: privateTo(other), player: other, round: 2, accept: true },
+          { type: "doubleCrossResolved", visibility: privateTo(other), player: other, round: 2, partner: viewer, swap: { role: "mole", roleState: { usedThisAct: 1, usedThisGame: 0, target: null, allies: [] } } },
+          { type: "raidRumourHit", visibility: privateTo(other), player: other, round: 2, lost: 3 },
+          { type: "insideTip", visibility: privateTo(other), player: other, round: 2, subject: viewer, role: "mole" },
         ] satisfies GameEvent[])),
   ];
   const log = state.log.filter((e) => canSee(e.visibility, viewer, gameOver)).flatMap((e) => [e, ...junk]);
@@ -188,8 +201,25 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
   const meeting = state.meeting && { ...state.meeting, votes: keepOwn(state.meeting.votes, { kind: "shakedown", target: viewer }) };
   // Whether the Muscle has cancelled the pending shakedown is hidden until its window ends. design §8
   const pendingShakedown = state.pendingShakedown && { ...state.pendingShakedown, cancelled: !state.pendingShakedown.cancelled };
+  // design §10: a Double-cross offer is hidden from everyone else, and the partner's answer from both.
+  const offer = state.card?.offer;
+  let card = state.card;
+  if (card && offer) {
+    const [a, b] = offer.players;
+    const toggled = (id: PlayerId): boolean => !offer.accepted.includes(id);
+    if (a === viewer || b === viewer) {
+      const partner = a === viewer ? b : a;
+      const accepted = [...offer.accepted.filter((id) => id === viewer), ...(toggled(partner) ? [partner] : [])];
+      card = { ...card, offer: { players: offer.players, accepted } };
+    } else {
+      const others = state.playerOrder.filter((id) => id !== viewer);
+      const pair: [PlayerId, PlayerId] = [others[others.length - 1] as PlayerId, others[0] as PlayerId];
+      card = { ...card, offer: { players: pair, accepted: toggled(a) ? pair : [] } };
+    }
+  }
   return {
     ...state,
+    card,
     pendingShakedown,
     config: { ...state.config, seed: "scrubbed" },
     rng: { words: [1, 2, 3, 4] },
@@ -240,6 +270,8 @@ describe("no leaks in real games — design §17.2, §13, §11.2", () => {
   // Filled by the games below, then checked: the scripts reach every role power (task 12, design §8).
   const seenTypes = new Set<string>();
   const seenAbilities = new Set<string>();
+  const seenCards = new Set<string>();
+  let swapped = false;
   const cases = [2, 5, 9, 12].flatMap((n) => (["hiddenThenRevealed", "open", "secret"] as const).map((mode) => [n, mode] as const));
 
   it.each(cases)("%i players, %s votes", (players, mode) => {
@@ -256,6 +288,8 @@ describe("no leaks in real games — design §17.2, §13, §11.2", () => {
     if (players >= 5) expect(types).toContain("pocketCount");
     for (const t of types) seenTypes.add(t);
     for (const e of final.log) if (e.type === "abilityResolved") seenAbilities.add(e.ability.kind);
+    for (const e of final.log) if (e.type === "eventFlipped") seenCards.add(e.card);
+    if (final.log.some((e) => e.type === "doubleCrossResolved" && e.swap !== null)) swapped = true;
 
     for (const state of states) {
       for (const viewer of state.playerOrder) {
@@ -267,8 +301,13 @@ describe("no leaks in real games — design §17.2, §13, §11.2", () => {
     }
   }, 30_000);
 
-  it("the games above reach every info, vote and Mole event (design §8, §8.1)", () => {
+  it("the games above reach every info, vote, Mole and event-card event (design §8, §8.1, §10)", () => {
     for (const t of ["snitchTargetAssigned", "blackmailed", "shakedownPending", "shakedownCancelled", "snitchPaid", "moleAllies"]) expect(seenTypes, t).toContain(t);
+    for (const t of ["eventFlipped", "doubleCrossOffered", "doubleCrossAnswered", "doubleCrossResolved", "raidRumourHit", "insideTip", "auditReport"]) {
+      expect(seenTypes, t).toContain(t);
+    }
+    for (const c of EVENT_DECK) expect(seenCards, c).toContain(c);
+    expect(swapped, "a Double-cross swap happened").toBe(true);
     for (const k of ["lookout", "fenceSafe", "loopCameras", "blackmail", "cancelShakedown", "tipOff"]) expect(seenAbilities, k).toContain(k);
   });
 });

@@ -97,6 +97,8 @@ function buildView(state: GameState, playerId: PlayerId): PlayerView {
     rooms: state.rooms,
     haul: state.haul,
     heat: state.heat,
+    // design §10: the card is public; a Double-cross offer is not (each of the two has it in their case file).
+    card: state.card && { round: state.card.round, id: state.card.id, room: state.card.room },
     voteVisibility: state.config.voteVisibility,
     scheduledMeeting: state.scheduledMeeting,
     pendingEmergency: state.pendingEmergency,

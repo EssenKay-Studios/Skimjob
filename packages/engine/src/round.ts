@@ -11,6 +11,9 @@ import { jobFor, powerOf, roleDefIn, rolesFor } from "./overrides";
 import { isObject } from "./check";
 import { actOfRound, isLastRoundOfAct } from "./acts";
 import { gameEnded } from "./end";
+import { applyEvent } from "./reduce";
+import type { Draw } from "./handle";
+import { cardEffects, cardHeat, closedRoom, isAudit, isBlackout, roundJob, startRound } from "./deck";
 
 export { actOfRound, isLastRoundOfAct };
 
@@ -78,7 +81,10 @@ export function checkMove(state: GameState, player: PlayerState, raw: unknown): 
   if (!isObject(raw)) return "move must be an object";
   const { room, pocket, watch, ability } = raw;
   if (typeof room !== "string" || !state.rooms.includes(room)) return `room ${String(room)} is not open in this game`;
-  const def = roomDef(jobFor(state.config), room);
+  // design §10 Lockdown: the card names a room closed for this round.
+  if (room === closedRoom(state)) return `the ${roomDef(jobFor(state.config), room).name} is closed this round (Lockdown)`;
+  // design §10: Shift change / Payday raise a room's loot this round.
+  const def = roomDef(roundJob(jobFor(state.config), state.card), room);
   if (!isCount(pocket)) return "pocket must be a whole number, 0 or more";
   // The real yield can only drop below the room's loot (crowded Deposit boxes), so this is the upper bound.
   if (pocket > def.loot) return `you can pocket at most ${def.loot} in the ${def.name}`;
@@ -105,12 +111,15 @@ export function checkMove(state: GameState, player: PlayerState, raw: unknown): 
  * Heat (rounded, then clamped once), information, the public summary, and
  * finally either the raid, the next round, or (after an act's last round)
  * nothing more: the fold of `roundResolved` leaves the game awaiting the
- * act's meeting (design §11). Step 1, event cards, arrives with the events deck.
+ * act's meeting (design §11). Step 1 is the round's event card (§10): its
+ * player effects (Raid rumour, Inside tip, Double-cross) come first and are
+ * folded before the rest is worked out, so a swapped role plays this round;
+ * the others change yields, Heat and information below.
  */
-export function resolveRound(state: GameState, round: number): GameEvent[] {
-  const job = jobFor(state.config);
+export function resolveRound(before: GameState, round: number, draw: Draw): GameEvent[] {
+  const job = roundJob(jobFor(before.config), before.card);
   const powerFor = (id: PlayerId) => powerOf(state.config, player(id).role);
-  const order = state.playerOrder;
+  const order = before.playerOrder;
   const crewSize = order.length;
   const events: GameEvent[] = [];
   const player = (id: PlayerId): PlayerState => {
@@ -123,7 +132,7 @@ export function resolveRound(state: GameState, round: number): GameEvent[] {
   // Maps, not objects, because player ids are host-chosen strings (e.g. "__proto__").
   const moves = new Map<PlayerId, Move>();
   for (const id of order) {
-    const submitted = Object.hasOwn(state.moves, id) ? state.moves[id] : undefined;
+    const submitted = Object.hasOwn(before.moves, id) ? before.moves[id] : undefined;
     if (submitted) {
       moves.set(id, submitted);
     } else {
@@ -133,6 +142,16 @@ export function resolveRound(state: GameState, round: number): GameEvent[] {
     }
   }
   const moveOf = (id: PlayerId): Move => moves.get(id) as Move;
+
+  // §5.2 step 1: the event card's player effects (design §10), folded so the rest of the round sees them.
+  const cardEvents = cardEffects(before, round, draw);
+  events.push(...cardEvents);
+  const state = cardEvents.reduce(applyEvent, before);
+  // A move's power only works if it still matches the player's role (a Double-cross may have swapped it).
+  const abilityOf = (id: PlayerId): AbilityUse | undefined => {
+    const ability = moveOf(id).ability;
+    return ability && ability.kind === powerFor(id).kind ? ability : undefined;
+  };
 
   // §5.2 step 2: who is where, and what each room pays (Deposit-box capacity, §6.2).
   const visitors: Record<RoomId, PlayerId[]> = {};
@@ -157,7 +176,7 @@ export function resolveRound(state: GameState, round: number): GameEvent[] {
   const stashOf = (id: PlayerId): number => stash.get(id) as number;
   // Fence (§8): move loot from the stash, including this round's pocket, into the safe.
   for (const id of order) {
-    const ability = moveOf(id).ability;
+    const ability = abilityOf(id);
     if (ability?.kind !== "fenceSafe") continue;
     const power = powerFor(id);
     const left = power.kind === "fenceSafe" ? power.perAct - player(id).roleState.usedThisAct : 0;
@@ -167,7 +186,7 @@ export function resolveRound(state: GameState, round: number): GameEvent[] {
   }
   // Blackmailer (§8): a right guess steals from the target's stash (never the safe), after the safe moves.
   for (const id of order) {
-    const ability = moveOf(id).ability;
+    const ability = abilityOf(id);
     const power = powerFor(id);
     if (ability?.kind !== "blackmail" || power.kind !== "blackmail") continue;
     const correct = player(ability.target).role === ability.role;
@@ -185,40 +204,50 @@ export function resolveRound(state: GameState, round: number): GameEvent[] {
   let tipOffs = 0;
   for (const id of order) {
     const power = powerFor(id);
-    if (moveOf(id).ability?.kind !== "tipOff" || power.kind !== "tipOff") continue;
+    if (abilityOf(id)?.kind !== "tipOff" || power.kind !== "tipOff") continue;
     tipOffs += power.heat;
     events.push({ type: "abilityResolved", visibility: privateTo(id), player: id, round, ability: { kind: "tipOff", heat: power.heat } });
   }
-  const heat = clampHeat(job, state.heat + roundHeatDelta(job, crewSize, counts) + tipOffs);
+  // design §10: Police patrol / Quiet night join the same single clamp.
+  const heat = clampHeat(job, state.heat + roundHeatDelta(job, crewSize, counts) + tipOffs + cardHeat(state));
 
   // §5.2 step 5: room-mates, then Hacker loops, Security / Lookout / Server-room results.
+  // design §10 Power cut: nobody sees anybody (sightings, Security and Lookout); the Server room still counts.
+  const blackout = isBlackout(state);
   for (const id of order) {
     const room = moveOf(id).room;
-    events.push({ type: "roomSighting", visibility: privateTo(id), player: id, round, room, others: others(room, id) });
+    if (!blackout) events.push({ type: "roomSighting", visibility: privateTo(id), player: id, round, room, others: others(room, id) });
   }
   // Hacker (§8): a looped room shows as empty on Security this round (not to the Lookout or room-mates).
   const looped = new Set<RoomId>();
   for (const id of order) {
-    const ability = moveOf(id).ability;
+    const ability = abilityOf(id);
     if (ability?.kind !== "loopCameras" || powerFor(id).kind !== "loopCameras") continue;
     looped.add(ability.room);
     events.push({ type: "abilityResolved", visibility: privateTo(id), player: id, round, ability });
   }
   for (const id of order) {
-    const { room, watch, ability } = moveOf(id);
-    if (roomDef(job, room).info === "watchRoom" && watch !== undefined) {
+    const { room, watch } = moveOf(id);
+    const ability = abilityOf(id);
+    if (!blackout && roomDef(job, room).info === "watchRoom" && watch !== undefined) {
       const seen = looped.has(watch) ? [] : others(watch, id);
       events.push({ type: "roomWatched", visibility: privateTo(id), player: id, round, source: "security", room: watch, seen });
     }
     if (ability?.kind === "lookout") {
       events.push({ type: "abilityResolved", visibility: privateTo(id), player: id, round, ability });
-      for (const r of ability.rooms) {
+      for (const r of blackout ? [] : ability.rooms) {
         events.push({ type: "roomWatched", visibility: privateTo(id), player: id, round, source: "lookout", room: r, seen: others(r, id) });
       }
     }
     if (roomDef(job, room).info === "pocketCount") {
       events.push({ type: "pocketCount", visibility: privateTo(id), player: id, round, pocketed });
     }
+  }
+  // design §10 Audit: what each room came up short (its visitors' pockets), every room in play listed.
+  if (isAudit(state)) {
+    const shortfalls: Record<RoomId, number> = {};
+    for (const r of state.rooms) shortfalls[r] = (visitors[r] ?? []).reduce((sum, id) => sum + (toStash.get(id) ?? 0), 0);
+    events.push({ type: "auditReport", visibility: PUBLIC, round, shortfalls });
   }
   events.push({
     type: "roundResolved",
@@ -233,9 +262,9 @@ export function resolveRound(state: GameState, round: number): GameEvent[] {
   // §5.2 step 6: Heat at the max means the cops raid and the heist fails at once (§3, §7).
   if (heat >= job.heat.max) {
     events.push({ type: "copsRaided", visibility: PUBLIC, round, heat });
-    events.push(gameEnded(state, events, "heat"));
+    events.push(gameEnded(before, events, "heat"));
   } else if (!isLastRoundOfAct(round)) {
-    events.push({ type: "roundStarted", visibility: PUBLIC, round: round + 1, act: actOfRound(round + 1) });
+    events.push(...startRound(state, round + 1, draw));
   }
   return events;
 }

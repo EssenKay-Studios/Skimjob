@@ -1,6 +1,6 @@
 // Game content as data: rooms, roles, jobs, events, scaling numbers.
 // See docs/design.md §6–§11.
-export const CONTENT_VERSION = "0.4.0";
+export const CONTENT_VERSION = "0.5.0";
 
 // Content identifiers. Plain strings so new rooms/roles/jobs are pure data;
 // their definitions are in rooms.ts, roles.ts and jobs.ts.
@@ -18,3 +18,4 @@ export * from "./rooms";
 export * from "./roles";
 export * from "./jobs";
 export * from "./setup";
+export * from "./events";

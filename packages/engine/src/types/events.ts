@@ -4,10 +4,11 @@
 // must stay secret (a dealt role, a real split) cannot be constructed as public.
 // When you add an event type: add it to GameEvent, add a sample to
 // `samples.ts`, and make sure viewFor() tests cover it (CLAUDE.md).
-import type { FailureReason, JobId, RoleId, RoomId } from "@skimjob/content";
+import type { EventId, FailureReason, JobId, RoleId, RoomId } from "@skimjob/content";
 import type { ContentOverrides, MoleSetting, PlayerId, PlayerSeat, VoteVisibility } from "./config";
 import type { AbilityUse, Move, VoteChoice } from "./commands";
 import type { PrivateVisibility, PublicVisibility, RevealVisibility, SecretVisibility } from "./visibility";
+import type { RoleState } from "./state";
 
 export type ActNumber = 1 | 2 | 3;
 export type MeetingKind = "regular" | "emergency";
@@ -206,6 +207,79 @@ export interface CopsRaided {
   readonly visibility: PublicVisibility;
   readonly round: number;
   readonly heat: number;
+}
+
+// ---------------------------------------------------------------- events deck (§10)
+
+/**
+ * The round's event card, flipped for everyone at the start of the round
+ * (from round 2, when events are on). `room` is the room Lockdown closes, else null. design §10
+ */
+export interface EventFlipped {
+  readonly type: "eventFlipped";
+  readonly visibility: PublicVisibility;
+  readonly round: number;
+  readonly card: EventId;
+  readonly room: RoomId | null;
+}
+
+/** Double-cross: you and `partner` are offered a role swap this round. Sent to each of the two. design §10 */
+export interface DoubleCrossOffered {
+  readonly type: "doubleCrossOffered";
+  readonly visibility: PrivateVisibility;
+  readonly player: PlayerId;
+  readonly round: number;
+  readonly partner: PlayerId;
+}
+
+/** Your (changeable until the round deadline) answer to a Double-cross offer. design §10 */
+export interface DoubleCrossAnswered {
+  readonly type: "doubleCrossAnswered";
+  readonly visibility: PrivateVisibility;
+  readonly player: PlayerId;
+  readonly round: number;
+  readonly accept: boolean;
+}
+
+/**
+ * Double-cross outcome at the round's resolution, to each of the two. `swap`
+ * is null unless both accepted; then it is your new role and its uses so far
+ * (they travel with the role card). design §10, §5.2 step 1
+ */
+export interface DoubleCrossResolved {
+  readonly type: "doubleCrossResolved";
+  readonly visibility: PrivateVisibility;
+  readonly player: PlayerId;
+  readonly round: number;
+  readonly partner: PlayerId;
+  readonly swap: { readonly role: RoleId; readonly roleState: RoleState } | null;
+}
+
+/** Raid rumour: you had the biggest stash and lost `lost` from it. Only you are told. design §10 */
+export interface RaidRumourHit {
+  readonly type: "raidRumourHit";
+  readonly visibility: PrivateVisibility;
+  readonly player: PlayerId;
+  readonly round: number;
+  readonly lost: number;
+}
+
+/** Inside tip: you learn `subject`'s role. design §10 */
+export interface InsideTip {
+  readonly type: "insideTip";
+  readonly visibility: PrivateVisibility;
+  readonly player: PlayerId;
+  readonly round: number;
+  readonly subject: PlayerId;
+  readonly role: RoleId;
+}
+
+/** Audit: the round's shortfall (loot pocketed) per room in play, 0 where none. design §10 */
+export interface AuditReport {
+  readonly type: "auditReport";
+  readonly visibility: PublicVisibility;
+  readonly round: number;
+  readonly shortfalls: Readonly<Record<RoomId, number>>;
 }
 
 // ---------------------------------------------------------------- alibis (§5.4)
@@ -440,6 +514,13 @@ export type GameEvent =
   | PocketCount
   | RoundResolved
   | CopsRaided
+  | EventFlipped
+  | DoubleCrossOffered
+  | DoubleCrossAnswered
+  | DoubleCrossResolved
+  | RaidRumourHit
+  | InsideTip
+  | AuditReport
   | AlibiPosted
   | MeetingProposed
   | MeetingProposalAccepted

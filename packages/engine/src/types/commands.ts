@@ -71,7 +71,9 @@ export type PlayerCommand =
   /** Leave a vote in advance for the next meeting you might miss. design §11.2 */
   | { readonly type: "sealVote"; readonly player: PlayerId; readonly vote: VoteChoice }
   /** A role power used outside a move (Muscle). design §17.2 */
-  | { readonly type: "useAbility"; readonly player: PlayerId; readonly ability: InstantAbility };
+  | { readonly type: "useAbility"; readonly player: PlayerId; readonly ability: InstantAbility }
+  /** Accept (or decline) this round's Double-cross offer; the last answer before the deadline counts. design §10 */
+  | { readonly type: "answerDoubleCross"; readonly player: PlayerId; readonly accept: boolean };
 
 /**
  * Which deadline has passed. The engine has no clock, and several deadlines can
