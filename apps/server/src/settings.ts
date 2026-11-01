@@ -65,11 +65,17 @@ export function parseSettings(input: unknown): { ok: true; settings: LobbySettin
 // eslint-disable-next-line no-control-regex
 const HIDDEN = /[\p{Cc}\u115f\u1160\u2800\u3164\uffa0]|(?!\u200d)\p{Cf}/u;
 
-/** "Bot ·", "bot-", "BOT:", "Bot" … (any separator after "bot") are reserved for bot seats. */
-export const looksLikeBot = (name: string) => /^bot(?:[^\p{L}\p{N}]|$)/u.test(name.normalize("NFKC").toLowerCase());
+/** NFKC, lower case, without default-ignorable characters (ZWJ, variation selectors, U+034F …). */
+const fold = (name: string) => name.normalize("NFKC").toLowerCase().replace(/\p{Default_Ignorable_Code_Point}/gu, "");
 
-/** Two nicknames are the same if they match ignoring case, width and whitespace. */
-export const nicknameKey = (name: string) => name.normalize("NFKC").toLowerCase().replace(/\s+/gu, "");
+/** "Bot ·", "bot-", "BOT:", "Bot" … (any separator after "bot") are reserved for bot seats. */
+export const looksLikeBot = (name: string) => /^bot(?:[^\p{L}\p{N}]|$)/u.test(fold(name).trim());
+
+/** Two nicknames are the same if they match ignoring case, width, whitespace and invisible characters. */
+export const nicknameKey = (name: string) => fold(name).replace(/\s+/gu, "");
+
+/** Something visible is left once invisible characters, combining marks and whitespace are gone. */
+const visible = (name: string) => fold(name).replace(/[\p{M}\s]/gu, "").length > 0;
 
 /**
  * A person's display name: free text, trimmed, inner whitespace collapsed,
@@ -78,7 +84,7 @@ export const nicknameKey = (name: string) => name.normalize("NFKC").toLowerCase(
 export function checkNickname(input: unknown): { ok: true; name: string } | { ok: false; error: string } {
   if (typeof input !== "string") return { ok: false, error: "nickname must be 1–24 characters" };
   const name = input.trim().replace(/\s+/gu, " ");
-  if (name.length === 0 || [...name].length > NICKNAME_MAX || HIDDEN.test(name)) return { ok: false, error: "nickname must be 1–24 visible characters" };
+  if (name.length === 0 || [...name].length > NICKNAME_MAX || HIDDEN.test(name) || !visible(name)) return { ok: false, error: "nickname must be 1–24 visible characters" };
   if (looksLikeBot(name)) return { ok: false, error: "nicknames starting with \"Bot\" are for bots" };
   return { ok: true, name };
 }

@@ -67,6 +67,11 @@ describe("guest sign-in (invite link + nickname)", () => {
     ["a\u2066b\u2069"], // bidi isolates
     ["\u3164"], // Hangul filler (blank letter)
     ["a\u00adb"], // soft hyphen (invisible)
+    ["\u200d"], // lone zero-width joiner
+    ["\ufe0f"], // lone variation selector 16
+    ["\u0301"], // bare combining mark
+    ["\u034f \u200d \ufe0f"], // only invisible characters and spaces
+    ["B\u200dot · Riya"], // a bot name with a ZWJ hidden in it
     ["Bot · Riya"],
     ["bot-riya"],
     ["BOT: Max"],
@@ -239,7 +244,7 @@ describe("invites", () => {
   it("nicknames are unique in a game, ignoring case, width and whitespace (409; no guest is made)", async () => {
     const { game } = await host();
     await join(game.inviteCode, "Ana Lee");
-    for (const dup of ["ana lee", "  ANA   LEE ", "AnaLee", "Ａｎａ Ｌｅｅ", "karthik"]) {
+    for (const dup of ["ana lee", "  ANA   LEE ", "AnaLee", "Ａｎａ Ｌｅｅ", "karthik", "Karthik\u200d", "Kar\ufe0fthik", "K\u034farthik"]) {
       const res = await join(game.inviteCode, dup);
       expect(res.status).toBe(409);
       expect(res.session).toBeNull();
