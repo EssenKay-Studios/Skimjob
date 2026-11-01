@@ -40,7 +40,7 @@ export interface GameConfig {
   readonly mole: MoleSetting;
   readonly eventsEnabled: boolean;
   readonly voteVisibility: VoteVisibility;
-  /** First game in a group: Rookie/Lookout/Inside Man/Fence only, no Mole, no events. design §8.1 */
+  /** First game in a group: Rookie/Inside Man/Lookout/Bagman/Cleaner only (role deck v2 §3), no Mole, no events. design §8.1 */
   readonly starterMode: boolean;
   /**
    * Duel mode: exactly 2 players, no meetings or votes; once per act each may
