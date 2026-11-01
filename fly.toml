@@ -1,0 +1,56 @@
+# Fly.io app for playtests: https://skimjob.fly.dev (docs/deploy.md).
+# Deployed by .github/workflows/deploy.yml after CI passes on main.
+app = "skimjob"
+primary_region = "bom" # Mumbai
+kill_signal = "SIGTERM"
+kill_timeout = "15s"
+# Headroom for PGlite's one-off initdb on a fresh volume (~600 MB once; ~175-250 MB after).
+swap_size_mb = 512
+
+[build]
+  dockerfile = "Dockerfile"
+
+# Non-secret settings. Secrets (DATABASE_URL later, OAuth) go in `fly secrets set`.
+[env]
+  NODE_ENV = "production"
+  HOST = "0.0.0.0"
+  PORT = "8080"
+  PUBLIC_ORIGIN = "https://skimjob.fly.dev"
+  WEB_DIR = "/app/web"
+  # Embedded Postgres (PGlite) on the volume. Set the DATABASE_URL secret to use real Postgres instead.
+  PGLITE_DIR = "/data/pglite"
+
+# One volume = one machine: PGlite lives here, so never scale past 1 machine on PGlite.
+[mounts]
+  source = "skimjob_data"
+  destination = "/data"
+  initial_size = "1gb"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # The scheduler (round and meeting deadlines) only ticks while the machine runs,
+  # so keep one always running. With min_machines_running = 0 Fly would stop it
+  # when idle and deadlines would fire late, on the next visit (the scheduler
+  # catches up on boot). auto_stop/auto_start stay on for any extra machine.
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["app"]
+
+  # Every open game socket is a connection; Fly's default hard limit is 25.
+  [http_service.concurrency]
+    type = "connections"
+    soft_limit = 200
+    hard_limit = 250
+
+  [[http_service.checks]]
+    grace_period = "30s"
+    interval = "30s"
+    method = "GET"
+    path = "/health"
+    timeout = "5s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

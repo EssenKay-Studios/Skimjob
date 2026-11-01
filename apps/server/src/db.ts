@@ -1,6 +1,7 @@
 // The server's whole view of the database: parameterised SQL, nothing more.
 // Two adapters: `pg` (real Postgres) and PGlite (Postgres in WASM, in-process;
 // tests and zero-setup dev). docs/m2-plan.md §1
+import { mkdir } from "node:fs/promises";
 import pg from "pg";
 import type { PGlite } from "@electric-sql/pglite";
 
@@ -71,12 +72,39 @@ export function pgliteDb(lite: PGlite): Db {
 }
 
 /**
- * Opens PGlite (a devDependency, loaded only when used): in memory without a
- * directory, else persisted there.
+ * postgresql.conf for an on-disk PGlite. PGlite writes this over the file
+ * initdb made, so it repeats initdb's settings and changes only these, for one
+ * 512 MB machine with a 1 GB volume (docs/deploy.md): shared_buffers 128MB →
+ * 16MB (steady memory ~350 → ~175 MB) and max/min_wal_size 1GB/80MB →
+ * 64MB/32MB (WAL can't fill the volume). Plenty for playtest-sized data.
+ */
+export const PGLITE_CONF = [
+  "max_connections = 100",
+  "shared_buffers = 16MB",
+  "dynamic_shared_memory_type = posix",
+  "max_wal_size = 64MB",
+  "min_wal_size = 32MB",
+  "log_file_mode = 0640",
+  "log_timezone = UTC",
+  "autovacuum_worker_slots = 16",
+  "datestyle = 'iso, mdy'",
+  "timezone = UTC",
+  "lc_messages = C",
+  "lc_monetary = C",
+  "lc_numeric = C",
+  "lc_time = C",
+  "default_text_search_config = 'pg_catalog.english'",
+  "",
+].join("\n");
+
+/**
+ * Opens PGlite (loaded only when used): in memory without a directory, else
+ * persisted there, making the directory if needed (a fresh Fly volume).
  */
 export async function openPglite(dataDir?: string): Promise<Db> {
   const { PGlite } = await import("@electric-sql/pglite");
-  const lite = dataDir ? new PGlite(dataDir) : new PGlite();
+  if (dataDir) await mkdir(dataDir, { recursive: true });
+  const lite = dataDir ? new PGlite(dataDir, { postgresqlconf: PGLITE_CONF }) : new PGlite();
   await lite.waitReady;
   return pgliteDb(lite);
 }

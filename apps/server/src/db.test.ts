@@ -1,7 +1,7 @@
 // Db adapters: PGlite in every run, real Postgres too when DATABASE_URL is set
 // (see testkit). docs/m2-plan.md §1
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { pgDb, type Db } from "./db";
+import { openPglite, pgDb, type Db } from "./db";
 import { freshDb, usingRealPostgres } from "./testkit";
 
 let db: Db;
@@ -61,5 +61,29 @@ describe.skipIf(!usingRealPostgres)("pgDb on real Postgres (PR #16 review)", () 
     await vi.waitFor(() => expect(lost.length).toBe(1));
     expect(await victim.query<{ one: number }>("select 1 as one")).toEqual([{ one: 1 }]);
     await victim.close();
+  });
+});
+
+describe("openPglite", () => {
+  it("makes a missing data directory (a fresh Fly volume, docs/deploy.md) and keeps data across reopen", { timeout: 60_000 }, async () => {
+    const { mkdtempSync, rmSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const root = mkdtempSync(join(tmpdir(), "skimjob-pglite-"));
+    const dir = join(root, "nested", "pglite");
+    try {
+      const first = await openPglite(dir);
+      await first.exec("create table kept (n int); insert into kept values (7)");
+      await first.close();
+      const again = await openPglite(dir);
+      expect(await again.query("select n from kept")).toEqual([{ n: 7 }]);
+      // PGLITE_CONF: small buffers and WAL for one small machine, initdb's other settings kept.
+      expect(await again.query("select current_setting('shared_buffers') sb, current_setting('max_wal_size') wal, current_setting('TimeZone') tz, current_setting('DateStyle') ds")).toEqual([
+        { sb: "16MB", wal: "64MB", tz: "UTC", ds: "ISO, MDY" },
+      ]);
+      await again.close();
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });
