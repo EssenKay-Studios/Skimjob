@@ -22,6 +22,17 @@ async function overflow(page: Page) {
 }
 
 async function smallTargets(page: Page) {
+  // Measure the resting layout: wait for the entrance animations (sheet-in, toast-in, pop-in) to
+  // finish. Mid-animation, a translated element's box can come out a hair under 44 px (43.99…),
+  // which made this check flaky in CI. Infinite ones (line boil, the premium button's bang) are left running.
+  await page.evaluate(() =>
+    Promise.all(
+      document
+        .getAnimations()
+        .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity)
+        .map((a) => a.finished.catch(() => undefined)),
+    ),
+  );
   return page.evaluate(() =>
     [...document.querySelectorAll<HTMLElement>("a[href], button, input, select, textarea, [role=button]")]
       .filter((el) => !el.closest("footer")) // the dev-only gallery link
