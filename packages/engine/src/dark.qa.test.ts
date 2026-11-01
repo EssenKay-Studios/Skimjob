@@ -11,6 +11,7 @@ import { handleCommand } from "./handle";
 import { viewFor } from "./view";
 import { outcomeFor } from "./end";
 import { checkpointTarget } from "./job";
+import { grantPerks } from "./perks.testkit";
 import { BANK_JOB } from "@skimjob/content";
 
 function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
@@ -73,13 +74,13 @@ function meeting(s: GameState, caller: PlayerId | null, ballots: Record<PlayerId
 describe("QA Blackmailer — the stolen vote at the next meeting (design §8, §11.2)", () => {
   const guess = (target: string, role: string, by = "p0") => mv(by, "lobby", 0, { ability: { kind: "blackmail", target, role } });
 
-  it("a Smooth Talker victim's 2 weight moves to the Blackmailer and turns the result", () => {
+  it("a Smooth Talker victim weighs 0 and the Blackmailer gets +1 (owner, 2 Nov), which turns the result", () => {
     // p0 Blackmailer, p1 Smooth Talker, p2 Mole. 7 players: p1 (2) + p3 alone for p4 = 3 of 6 weight: no majority.
     const base = game(7, ["blackmailer", "smoothTalker", "mole"]);
     const ballots = { p0: "p4", p1: "p5", p3: "p5", p5: null, p6: "p4" };
     // Plain: p5 has 3 (p1 ×2 + p3), p4 2, skip 1, of 6 → no majority.
     expect(lastResult(meeting(run(base, guess("p1", "rookie"), ROUND), "p3", ballots))?.result).toEqual({ kind: "noMajority" });
-    // Stolen: p1 weighs 0, p0 weighs 1 + 2 = 3 → p4 has 4 of 6. The public tally still counts ballots.
+    // Stolen: p1 weighs 0, p0 weighs 1 + 1 = 2 → p4 has 3 of 5. The public tally still counts ballots.
     const s = meeting(run(base, guess("p1", "smoothTalker"), ROUND), "p3", ballots);
     expect(lastResult(s)).toMatchObject({ tally: { skip: 1, targets: { p4: 2, p5: 2 } }, result: { kind: "shakedown", target: "p4" } });
   });
@@ -323,4 +324,47 @@ describe("QA view-diff leak test: every dark power used vs none (design §13, CL
   it("same seed + same commands → identical event log (determinism)", () => {
     expect(run(base, ...loud, ROUND).log).toEqual(run(base, ...loud, ROUND).log);
   });
+});
+
+describe("QA Blackmailer vs a +Vote victim, every vote mode (owner, 2 Nov: victim 0, Blackmailer +1)", () => {
+  // p0 Blackmailer, p1 Rookie victim holding a +Vote (weight 2 once spent), p2 Mole; the rest Rookies.
+  const guess = (role: string) => mv("p0", "lobby", 0, { ability: { kind: "blackmail", target: "p1", role } });
+  const use = (player: string, ability: object) => ({ type: "useAbility", player, ability });
+  function vote(mode: GameConfig["voteVisibility"], role: string, ballots: Record<PlayerId, PlayerId | null>): GameState {
+    let s = grantPerks(game(7, ["blackmailer", "rookie", "mole"], { voteVisibility: mode }), "p1", "extraVote");
+    s = run(s, guess(role), ROUND, { type: "callEmergency", player: "p3" }, (x: GameState) => ({ type: "advance", deadline: { kind: "openMeeting", meetingId: x.pendingEmergency?.meetingId } }));
+    s = run(s, use("p1", { kind: "extraVote" }));
+    for (const [player, target] of Object.entries(ballots)) s = run(s, { type: "castVote", player, vote: target === null ? { kind: "skip" } : { kind: "shakedown", target } });
+    s = run(s, (x: GameState) => ({ type: "advance", deadline: { kind: "closeMeeting", meetingId: x.meeting?.id } }));
+    return s.phase.kind === "shakedownPending" ? run(s, { type: "advance", deadline: { kind: "resolveShakedown", meetingId: s.phase.meetingId } }) : s;
+  }
+  // A: p4 ← p0, p6 ; p5 ← p1 (+Vote), p3 ; skip p5.
+  //   not stolen: p4 2, p5 3, skip 1 of 6 → no majority. stolen: p4 3 (p0 = 2), p5 1, skip 1 of 5 → shakedown p4.
+  //   (victim 0 without the Blackmailer's +1 would be p4 2 of 4 → no majority, so the +1 is there.)
+  const A = { p0: "p4", p6: "p4", p1: "p5", p3: "p5", p5: null };
+  // B: p4 ← p0, p2 ; p5 ← p1 (+Vote), p3 ; skip p5, p6.
+  //   stolen at +1: p4 3 of 6 → no majority. Had the victim's 2 (or its +Vote) moved over: p4 4 of 7 → shakedown.
+  const B = { p0: "p4", p2: "p4", p1: "p5", p3: "p5", p5: null, p6: null };
+
+  for (const mode of ["open", "hiddenThenRevealed", "secret"] as const) {
+    it(`${mode}: the victim's ballot (and +Vote) count 0, the Blackmailer's +1 exactly; the tally counts ballots`, () => {
+      expect(lastResult(vote(mode, "lookout", A))?.result).toEqual({ kind: "noMajority" });
+      const a = vote(mode, "rookie", A);
+      expect(lastResult(a)).toMatchObject({ tally: { skip: 1, targets: { p4: 2, p5: 2 } }, result: { kind: "shakedown", target: "p4" } });
+      const b = vote(mode, "rookie", B);
+      expect(lastResult(b)).toMatchObject({ tally: { skip: 2, targets: { p4: 2, p5: 2 } }, result: { kind: "noMajority" } });
+      if (mode !== "secret") return;
+      // design §11.2: secret ballots are visible only to the voter, even after the game; the victim's included.
+      expect(lastResult(a)?.ballots).toBeNull();
+      const ended = applyEvent(a, { type: "gameEnded", visibility: { kind: "public" }, outcome: outcomeFor(a, "heat") } as GameEvent);
+      for (const id of ["p0", "p2", "p3", "p4"]) {
+        const v = viewFor(ended, id);
+        const all = [...v.ledger, ...v.caseFile, ...(v.reveal?.log ?? [])].map((e) => e.event);
+        expect(all.filter((e) => e.type === "voteCast" && e.player === "p1"), id).toEqual([]);
+        expect(JSON.stringify(v), id).not.toMatch(/"p1":\{"kind":"shakedown"/);
+      }
+      const own = viewFor(ended, "p1");
+      expect([...own.caseFile, ...(own.reveal?.log ?? [])].some((e) => e.event.type === "voteCast" && e.event.player === "p1")).toBe(true);
+    });
+  }
 });
