@@ -1,7 +1,8 @@
 // /game/:id: the game screen, thin slice (docs/m2-plan.md M2-6). HUD, seats,
 // move panel, alibis, ledger and case file, and the game-over ranking, all
-// from the player's own view over the live channel. Meetings and votes (M2-7),
-// chat (M2-8b), the bank art (M2-9) and the full reveal (M2-11) come later.
+// from the player's own view over the live channel, and the chat (M2-8b,
+// GameChat.tsx). Meetings and votes (M2-7), the bank art (M2-9) and the full
+// reveal (M2-11) come later.
 import { useEffect, useMemo, useState } from "react";
 import type { CaseFileEvent, LoggedEvent, PlayerView, PublicEvent, RoomId } from "@skimjob/engine";
 import { Avatar } from "../components/Avatar";
@@ -31,13 +32,14 @@ import {
   timerFor,
   type Timer,
 } from "../game/hud";
-import { useGame, useNow, type ClientCommand, type Connection, type Reply } from "../game/useGame";
+import { useGame, useNow, type ClientCommand, type Connection, type GameChannel, type Reply } from "../game/useGame";
 import { api, ApiError, sentence, UNREACHABLE, type LobbyView } from "../api";
 import { navigate } from "../router";
+import { GameChat } from "./GameChat";
 import { TopBar } from "./TopBar";
 import "./game.css";
 
-type Access = { kind: "checking" } | { kind: "ok" } | { kind: "lobby" } | { kind: "error"; title: string; text: string };
+type Access = { kind: "checking" } | { kind: "ok"; dmNotices: boolean } | { kind: "lobby" } | { kind: "error"; title: string; text: string };
 
 /** Before opening the socket: is this a started game you sit in? (The upgrade's own 401/404 can't be read by a browser.) */
 function useAccess(id: string): Access {
@@ -45,7 +47,7 @@ function useAccess(id: string): Access {
   useEffect(() => {
     let live = true;
     api<LobbyView>("GET", `/games/${encodeURIComponent(id)}`).then(
-      (game) => live && setAccess(game.status === "lobby" ? { kind: "lobby" } : { kind: "ok" }),
+      (game) => live && setAccess(game.status === "lobby" ? { kind: "lobby" } : { kind: "ok", dmNotices: game.settings.dmNotices !== false }),
       (e: unknown) => {
         if (!live) return;
         if (e instanceof ApiError && e.status === 401) return setAccess({ kind: "error", title: "Sign in first", text: "Join the crew from your invite link, then come back to this game." });
@@ -99,7 +101,7 @@ export function Game({ id }: { id: string }) {
             <p>Opening the game.</p>
           </SketchFrame>
         ) : (
-          <Board view={view} timers={channel.timers} offset={channel.offset} send={send} />
+          <Board view={view} timers={channel.timers} offset={channel.offset} send={send} gameId={id} channel={channel} dmNotices={access.kind === "ok" && access.dmNotices} />
         )}
       </main>
     </div>
@@ -122,7 +124,7 @@ interface BoardProps {
   readonly send: (cmd: ClientCommand, done?: string) => Promise<Reply>;
 }
 
-function Board({ view, timers, offset, send }: BoardProps) {
+function Board({ view, timers, offset, send, gameId, channel, dmNotices }: BoardProps & { gameId: string; channel: GameChannel; dmNotices: boolean }) {
   const outcome = outcomeOf(view);
   return (
     <div className={outcome ? "game-grid is-over" : "game-grid"}>
@@ -131,9 +133,11 @@ function Board({ view, timers, offset, send }: BoardProps) {
       <div className="game-grid__action">
         {outcome ? <GameOver view={view} /> : <Actions view={view} timers={timers} offset={offset} send={send} />}
       </div>
-      <Records view={view} />
-      {/* M2-8b: the crew chat feed goes here (a column on wide screens, a bottom-sheet tab on phones). */}
-      <div className="game-grid__chat" data-slot="chat" hidden />
+      {/* From 1024 px the chat and the records share the right column; below that the chat is a sheet. */}
+      <div className="game-grid__side">
+        <GameChat gameId={gameId} view={view} channel={channel} dmNotices={dmNotices} />
+        <Records view={view} />
+      </div>
     </div>
   );
 }
