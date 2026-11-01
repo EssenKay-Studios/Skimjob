@@ -4,7 +4,7 @@
 // must stay secret (a dealt role, a real split) cannot be constructed as public.
 // When you add an event type: add it to GameEvent, add a sample to
 // `samples.ts`, and make sure viewFor() tests cover it (CLAUDE.md).
-import type { EventId, FailureReason, JobId, RoleId, RoomId } from "@skimjob/content";
+import type { EventId, FailureReason, JobId, PerkId, RoleId, RoomId } from "@skimjob/content";
 import type { ContentOverrides, MoleSetting, PlayerId, PlayerSeat, VoteVisibility } from "./config";
 import type { AbilityUse, Move, VoteChoice } from "./commands";
 import type { PrivateVisibility, PublicVisibility, RevealVisibility, SecretVisibility } from "./visibility";
@@ -172,13 +172,13 @@ export interface RoomSighting {
   readonly others: readonly PlayerId[];
 }
 
-/** Everyone seen in a watched room, via Security or the Lookout power. design §6.1, §8 */
+/** Everyone seen in a watched room, via Security, the Lookout power or a Tail perk. design §6.1, §8, §8.3 */
 export interface RoomWatched {
   readonly type: "roomWatched";
   readonly visibility: PrivateVisibility;
   readonly player: PlayerId;
   readonly round: number;
-  readonly source: "security" | "lookout";
+  readonly source: "security" | "lookout" | "tail";
   readonly room: RoomId;
   readonly seen: readonly PlayerId[];
 }
@@ -456,6 +456,60 @@ export interface CheckpointChecked {
   readonly heatPenalty: number;
 }
 
+// ---------------------------------------------------------------- perks (§8.3)
+
+/** You earned a perk token. Only you are told. design §8.3 */
+export interface PerkGranted {
+  readonly type: "perkGranted";
+  readonly visibility: PrivateVisibility;
+  readonly player: PlayerId;
+  readonly perk: PerkId;
+}
+
+/** What a spent perk did. `kind` is the perk spent. design §8.3 */
+export type ResolvedPerk =
+  /** `role` is `target`'s role when it was spent. */
+  | { readonly kind: "peek"; readonly target: PlayerId; readonly role: RoleId }
+  /** Spent by itself: the shakedown of you in `meetingId` was cancelled (the ledger says only that it was). */
+  | { readonly kind: "shield"; readonly meetingId: string }
+  | { readonly kind: "extraVote"; readonly meetingId: string }
+  /** You see `target`'s ballot in `meetingId` while it's open (in your view, not in an event). */
+  | { readonly kind: "ballot"; readonly meetingId: string; readonly target: PlayerId }
+  /** `room`'s visitors this round come as a `roomWatched` (source "tail") when it resolves. */
+  | { readonly kind: "tail"; readonly room: RoomId }
+  /** Your true alibi for `round` was stamped (`alibiVerified`). */
+  | { readonly kind: "alibi"; readonly round: number; readonly room: RoomId }
+  | { readonly kind: "recharge" }
+  /** The cards you may pick from for `round`'s flip; the first flips unless you pick (`rigPicked`). */
+  | { readonly kind: "rig"; readonly round: number; readonly cards: readonly EventId[] };
+
+/** You spent a perk token. Private to you; `round` is the latest round started. design §8.3 */
+export interface PerkUsed {
+  readonly type: "perkUsed";
+  readonly visibility: PrivateVisibility;
+  readonly player: PlayerId;
+  readonly round: number;
+  readonly perk: ResolvedPerk;
+}
+
+/** Your Rig's choice for `round`'s card (changeable until that round starts). design §8.3 */
+export interface RigPicked {
+  readonly type: "rigPicked";
+  readonly visibility: PrivateVisibility;
+  readonly player: PlayerId;
+  readonly round: number;
+  readonly card: EventId;
+}
+
+/** Alibi perk: the app stamps `player`'s alibi for `round` (their real room) as Verified. design §8.3, §5.4 */
+export interface AlibiVerified {
+  readonly type: "alibiVerified";
+  readonly visibility: PublicVisibility;
+  readonly player: PlayerId;
+  readonly round: number;
+  readonly room: RoomId;
+}
+
 // ---------------------------------------------------------------- Duel mode (§16.1)
 
 /**
@@ -512,6 +566,7 @@ export type Outcome =
   | {
       readonly result: "success";
       readonly ranking: readonly RankEntry[];
+      /** The best Crew score (joint on a full tie). Saboteurs and accomplices can't win a success. design §3 */
       readonly winners: readonly PlayerId[];
     }
   | {
@@ -522,7 +577,7 @@ export type Outcome =
        * it (design §19.1, provisional).
        */
       readonly ranking: readonly RankEntry[];
-      /** Players whose role wins on failure (`RoleDef.winsOnFailure`: Mole, Driver). Empty in starter games. */
+      /** The best score among saboteurs and accomplices; empty when none was dealt (e.g. starter games). design §3 */
       readonly winners: readonly PlayerId[];
     };
 
@@ -575,6 +630,10 @@ export type GameEvent =
   | ShakedownResolved
   | SnitchPaid
   | CheckpointChecked
+  | PerkGranted
+  | PerkUsed
+  | RigPicked
+  | AlibiVerified
   | CallOutMade
   | CallOutResolved
   | GameEnded;

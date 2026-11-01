@@ -185,7 +185,7 @@ describe("opening and closing the act's meeting — design §11.1, §4.1, §11.4
     expect(since(before, s)).toEqual([{ type: "meetingOpened", visibility: { kind: "public" }, meetingId: "act-1", kind: "regular", act: 1 }]);
     expect(s.phase).toEqual({ kind: "meeting", meetingId: "act-1" });
     expect(s.scheduledMeeting).toBeNull();
-    expect(s.meeting).toEqual({ id: "act-1", kind: "regular", act: 1, calledBy: null, votes: {} });
+    expect(s.meeting).toEqual({ id: "act-1", kind: "regular", act: 1, calledBy: null, votes: {}, extraVotes: [], ballotGrants: {} });
   });
 
   it("all three deadline kinds are refused when stale, retried or unknown", () => {

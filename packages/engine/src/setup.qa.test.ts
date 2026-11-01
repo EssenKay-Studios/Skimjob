@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { MOLE_ROLE, POOL_ROLES, STARTER_ROLES, type RoleId } from "@skimjob/content";
 import type { GameConfig, GameEvent, MoleSetting } from "./types";
 import { canSee } from "./types";
-import { createGame, moleOptions, roomsFor, setupEvents, validateConfig } from "./setup";
+import { createGame, darkSideOdds, roomsFor, setupEvents, validateConfig } from "./setup";
 import { replay } from "./reduce";
 import { nextUint32, seedRng } from "./rng";
 
@@ -99,7 +99,8 @@ describe("QA role dealing — design §8.1", () => {
         for (let s = 0; s < 15; s++) {
           const dealt = roles(config(n, { mole, seed: `inv-${n}-${mole}-${s}` }));
           expect(dealt).toHaveLength(n);
-          expect(moleOptions(n, mole, false)).toContain(count(dealt, MOLE_ROLE));
+          // Role deck v2 §3: the only saboteur so far is the Mole, at most once with unique roles.
+          expect(darkSideOdds(n, mole, false).map((o) => Math.min(1, o.saboteurs))).toContain(count(dealt, MOLE_ROLE));
           for (const r of dealt) expect([...POOL_ROLES, MOLE_ROLE]).toContain(r);
           for (const r of POOL_ROLES) if (r !== "rookie") expect(count(dealt, r)).toBeLessThanOrEqual(1);
         }
@@ -107,8 +108,8 @@ describe("QA role dealing — design §8.1", () => {
     }
   });
 
-  it("Mole 'on' at the tier boundaries: 4 → 0, 5 → 1, 8 → 1, 9 → 1 (owner answers, 1 Nov)", () => {
-    const expected: Record<number, number> = { 4: 0, 5: 1, 8: 1, 9: 1 };
+  it("Mole 'on' at the tier boundaries: 3 → 0, 4 → 1, 5 → 1, 8 → 1, 9 → 1 (role deck v2 §3)", () => {
+    const expected: Record<number, number> = { 3: 0, 4: 1, 5: 1, 8: 1, 9: 1 };
     for (const [n, moles] of Object.entries(expected)) expect(count(roles(config(Number(n), { mole: "on" })), MOLE_ROLE)).toBe(moles);
   });
 

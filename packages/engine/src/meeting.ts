@@ -6,7 +6,7 @@
 // command is refused. `handleCommand` (handle.ts) folds the events. Nothing
 // here draws randomness except the next act's event card (deck.ts, design §10):
 // meeting and proposal ids are names and log positions.
-import { BANK_JOB, ROUNDS_PER_ACT, type ShakedownRules } from "@skimjob/content";
+import { BANK_JOB, PERK_RULES, ROUNDS_PER_ACT, type RoleId, type ShakedownRules } from "@skimjob/content";
 import type {
   ActNumber,
   GameEvent,
@@ -22,8 +22,9 @@ import type {
 } from "./types";
 import { PUBLIC, privateTo, secretTo } from "./types";
 import { checkpointTarget, clampHeat } from "./job";
-import { jobFor, powerOf } from "./overrides";
-import { rolePoolFor } from "./setup";
+import { jobFor, powerOf, roleDefIn, rolesFor, type RoleTable } from "./overrides";
+import { dealableRoles } from "./setup";
+import { isPerkSpend, shieldFor, usePerk } from "./perks";
 import { actOfRound } from "./acts";
 import { gameEnded } from "./end";
 import { applyEvent } from "./reduce";
@@ -227,20 +228,27 @@ export function meetingResult(
   return { kind: "noMajority" };
 }
 
-/** How much a player's ballot counts: the Smooth talker's `weight`, else 1. design §8 */
+/** How much a player's ballot counts: the Smooth talker's `weight`, else 1, plus a +Vote spent in this meeting. design §8, §8.3 */
 function voteWeight(state: GameState, player: PlayerId): number {
   const power = powerOf(state.config, (state.players[player] as PlayerState).role);
-  return power.kind === "voteWeight" ? power.weight : 1;
+  const extra = state.meeting?.extraVotes.includes(player) ? PERK_RULES.extraVoteWeight : 0;
+  return (power.kind === "voteWeight" ? power.weight : 1) + extra;
 }
 
 /**
- * Whether a passed shakedown waits for a Muscle window. It depends only on the
- * role pool, never on who was dealt, so the public phase can't tell anyone
- * whether a Muscle is in the crew. design §8
+ * Whether a passed shakedown waits for a cancel window: whenever any role
+ * that could be dealt is a Muscle or can earn a Shield (role deck v2 §1). It
+ * depends only on what could be dealt, never on who was, so the public phase
+ * can't tell anyone whether a Muscle or a Shield is in the game. design §8, §8.3
  */
-function shakedownWindow(state: GameState): boolean {
-  return rolePoolFor(state.config).some((r) => powerOf(state.config, r).kind === "cancelShakedown");
+export function opensShakedownWindow(roles: RoleTable, dealable: readonly RoleId[]): boolean {
+  return dealable.some((r) => {
+    const def = roleDefIn(roles, r);
+    return def?.power.kind === "cancelShakedown" || def?.earns?.includes("shield") === true;
+  });
 }
+
+const shakedownWindow = (state: GameState): boolean => opensShakedownWindow(rolesFor(state.config), dealableRoles(state.config));
 
 /**
  * The window has ended. design §11.4: meeting → shakedown → checkpoint. After
@@ -305,13 +313,15 @@ export function resolveShakedown(state: GameState, meetingId: unknown, draw: Dra
 
 /**
  * Muscle (design §8): once per game, cancel the pending shakedown. Private
- * until the window ends, when `shakedownCancelled` says only that it was cancelled.
+ * until the window ends, when `shakedownCancelled` says only that it was
+ * cancelled. Perks are spent here too (perks.ts, design §8.3).
  */
-export function useAbility(state: GameState, command: Raw): Result {
+export function useAbility(state: GameState, command: Raw, draw: Draw): Result {
   const player = playerFor(state, command);
   if (typeof player === "string") return player;
   const ability = command.ability;
   if (!isObject(ability) || typeof ability.kind !== "string") return "ability must be an object with a kind";
+  if (isPerkSpend(ability.kind)) return usePerk(state, player, ability, draw);
   const power = powerOf(state.config, player.role);
   if (ability.kind !== "cancelShakedown" || power.kind !== "cancelShakedown") return `your role has no ${ability.kind} ability to use now`;
   if (player.roleState.usedThisGame >= power.perGame) return "you have already cancelled a shakedown this game";
@@ -349,8 +359,10 @@ function afterVote(
   // design §11.3: the stash (never the Fence safe) goes into the Haul; a clean target is compensated.
   // The clean check counts the Fence safe (owner answers, 1 Nov), so a Fence with a full safe isn't clean.
   const haul = state.haul;
-  if (shakedown?.cancelled) {
-    events.push({ type: "shakedownCancelled", visibility: PUBLIC, meetingId: meeting.meetingId, target: shakedown.target });
+  // design §8.3: a Shield cancels it by itself, announced just like the Muscle's cancel.
+  const shield = shakedown && !shakedown.cancelled ? shieldFor(state, shakedown.target, meeting.meetingId) : [];
+  if (shakedown && (shakedown.cancelled || shield.length > 0)) {
+    events.push(...shield, { type: "shakedownCancelled", visibility: PUBLIC, meetingId: meeting.meetingId, target: shakedown.target });
   } else if (shakedown) {
     const { target } = shakedown;
     const { stash, safe } = state.players[target] as PlayerState;

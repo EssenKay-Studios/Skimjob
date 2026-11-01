@@ -3,30 +3,33 @@
 //
 // Emits, in order: gameCreated (public, no seed), rngSeeded (reveal),
 // roomsSet (public), one roleDealt per seat in seat order (private), the
-// Moles' moleAllies when two are dealt and the Snitch's target (private),
+// saboteurs' moleAllies when two or more are dealt and the Snitch's target (private),
 // roundStarted for round 1 (public), and rngAdvanced (reveal) with the RNG state
 // after dealing.
 import {
   CONTENT_VERSION,
+  DARK_SIDE_LIMITS,
+  DARK_SIDE_MAYBE,
+  DARK_SIDE_RULES,
   DEFAULT_ROLE_POOL,
   FILLER_ROLE,
   JOBS,
   MAX_PLAYERS,
   MIN_PLAYERS,
-  MOLE_ROLE,
-  MOLE_RULES,
   POOL_ROLES,
   STARTER_ROLES,
+  type DarkSideMix,
+  type Faction,
   type JobId,
   type RoleId,
   type RoomId,
 } from "@skimjob/content";
 import type { GameConfig, GameEvent, GameState, MoleSetting, RngState, VoteVisibility } from "./types";
 import { PUBLIC, REVEAL, privateTo } from "./types";
-import { pick, seedRng, shuffle } from "./rng";
+import { pick, randomInt, seedRng, shuffle } from "./rng";
 import { replay } from "./reduce";
 import { jobById, roomsInPlay } from "./job";
-import { powerOf, roleDefIn, rolesFor, validateOverrides } from "./overrides";
+import { factionIn, powerOf, roleDefIn, rolesFor, validateOverrides, type RoleTable } from "./overrides";
 
 const MOLE_SETTINGS: readonly string[] = ["off", "maybe", "on"] satisfies readonly MoleSetting[];
 const VOTE_VISIBILITIES: readonly string[] = ["hiddenThenRevealed", "open", "secret"] satisfies readonly VoteVisibility[];
@@ -94,7 +97,7 @@ export function validateConfig(config: unknown): string[] {
   } else if (starterMode !== true) {
     if (new Set(rolePool).size !== rolePool.length) errors.push("role pool has duplicates");
     for (const role of rolePool) {
-      if (role === MOLE_ROLE) errors.push("the Mole is dealt by the mole setting, not the role pool");
+      if (factionIn(rolesFor({}), role) === "saboteur") errors.push(`the ${role} is a saboteur: dealt by the mole setting, not the role pool`);
       else if (!POOL_ROLES.includes(role)) errors.push(`unknown role ${role}`);
     }
   }
@@ -106,12 +109,72 @@ export function roomsFor(job: JobId, playerCount: number): RoomId[] {
   return roomsInPlay(jobById(job), playerCount);
 }
 
-/** The Mole counts that are possible (equally likely) for this crew. design §8.1 */
-export function moleOptions(playerCount: number, setting: MoleSetting, starterMode: boolean): readonly number[] {
-  if (starterMode) return [0];
-  const rule = MOLE_RULES.filter((r) => r.minPlayers <= playerCount).at(-1);
-  if (!rule) throw new Error(`no mole rule for ${playerCount} players`);
-  return rule[setting];
+/** A dark side: how many saboteurs and accomplices. design §8.1 */
+export interface DarkSide {
+  readonly saboteurs: number;
+  readonly accomplices: number;
+}
+
+/** One possible dark side and its chance (0–1). */
+export interface DarkSideChance extends DarkSide {
+  readonly chance: number;
+}
+
+/**
+ * The hard limits of role deck v2 §3, applied to a rolled dark side: no
+ * accomplices without a saboteur, at most saboteurs + 1 accomplices, and at
+ * most ⌊n ÷ 3⌋ dark seats (accomplices go first, then saboteurs).
+ */
+export function limitDarkSide(playerCount: number, mix: DarkSide): DarkSide {
+  const seats = Math.floor(playerCount / DARK_SIDE_LIMITS.seatDivisor);
+  const saboteurs = Math.min(mix.saboteurs, seats);
+  const accomplices = saboteurs === 0 ? 0 : Math.min(mix.accomplices, saboteurs + DARK_SIDE_LIMITS.accomplicesOverSaboteurs, seats - saboteurs);
+  return { saboteurs, accomplices };
+}
+
+/** The weighted dark-side mixes for a crew of `n` (setting "on"). */
+function darkSideRule(n: number): readonly DarkSideMix[] {
+  const rule = DARK_SIDE_RULES.filter((r) => r.minPlayers <= n).at(-1);
+  if (!rule) throw new Error(`no dark-side rule for ${n} players`);
+  return rule.options;
+}
+
+/** Setting "maybe" flips its coin for no dark side at this crew size. */
+const maybeCoin = (n: number, setting: MoleSetting): boolean => setting === "maybe" && n >= DARK_SIDE_MAYBE.minPlayers && n <= DARK_SIDE_MAYBE.maxPlayers;
+
+/**
+ * Every dark side the saboteur setting can roll for this crew, with its
+ * chance, after the hard limits (before the role pool caps it). design §8.1:
+ * off and starter mode are crew only; on uses the crew size's weights;
+ * maybe adds a 50% chance of no dark side at 4–8 players.
+ */
+export function darkSideOdds(playerCount: number, setting: MoleSetting, starterMode: boolean): readonly DarkSideChance[] {
+  const none: DarkSideChance = { saboteurs: 0, accomplices: 0, chance: 1 };
+  if (starterMode || setting === "off") return [none];
+  const options = darkSideRule(playerCount);
+  const total = options.reduce((sum, o) => sum + o.weight, 0);
+  const maybe = maybeCoin(playerCount, setting);
+  const scale = maybe ? 1 - DARK_SIDE_MAYBE.nonePercent / 100 : 1;
+  const odds = options.map((o) => ({ ...limitDarkSide(playerCount, o), chance: (o.weight / total) * scale }));
+  return maybe ? [{ ...none, chance: 1 - scale }, ...odds] : odds;
+}
+
+/** Roll the dark side (design §8.1): the "maybe" coin first where it applies, then the weighted mix. */
+function rollDarkSide(config: GameConfig, rng: RngState): { readonly value: DarkSide; readonly rng: RngState } {
+  const n = config.players.length;
+  if (config.starterMode || config.mole === "off") return { value: { saboteurs: 0, accomplices: 0 }, rng };
+  if (maybeCoin(n, config.mole)) {
+    const coin = randomInt(rng, 100);
+    rng = coin.rng;
+    if (coin.value < DARK_SIDE_MAYBE.nonePercent) return { value: { saboteurs: 0, accomplices: 0 }, rng };
+  }
+  const options = darkSideRule(n);
+  if (options.length === 1) return { value: limitDarkSide(n, options[0] as DarkSideMix), rng };
+  const total = options.reduce((sum, o) => sum + o.weight, 0);
+  const roll = randomInt(rng, total);
+  let left = roll.value;
+  const mix = options.find((o) => (left -= o.weight) < 0) as DarkSideMix;
+  return { value: limitDarkSide(n, mix), rng: roll.rng };
 }
 
 /** Whether this is a Duel game (2 players, call-outs instead of votes). design §16.1 */
@@ -120,53 +183,85 @@ export const isDuel = (config: GameConfig): boolean => config.duel === true;
 /** Powers that only work in meetings, so they are never dealt in Duel mode (no votes, design §16.1; provisional). */
 const MEETING_POWERS: readonly string[] = ["voteWeight", "cancelShakedown", "snitch"];
 
-/**
- * The pool roles may be dealt from. design §8.1: without roles whose
- * `minPlayers` the crew is below (the Insider needs 5); in Duel mode also
- * without the meeting-only roles (§16.1).
- */
-export function rolePoolFor(config: GameConfig): readonly RoleId[] {
-  const pool = config.starterMode ? STARTER_ROLES : config.rolePool.length > 0 ? config.rolePool : DEFAULT_ROLE_POOL;
-  const n = config.players.length;
-  const roles = rolesFor(config);
-  return pool.filter(
-    (r) => (roleDefIn(roles, r)?.minPlayers ?? 0) <= n && !(isDuel(config) && MEETING_POWERS.includes(powerOf(config, r).kind)),
-  );
+/** Dealable for this crew: not below the role's `minPlayers`, and in Duel mode not a meeting-only role. design §8.1, §16.1 */
+function dealable(config: GameConfig, roles: RoleTable, role: RoleId): boolean {
+  const def = roleDefIn(roles, role);
+  return (def?.minPlayers ?? 0) <= config.players.length && !(isDuel(config) && MEETING_POWERS.includes(def?.power.kind ?? "none"));
 }
 
 /**
- * One role per seat, in seat order. design §8.1
- * Moles first (by the mole setting), then the pool: with `uniqueRoles` (the
- * default) distinct roles drawn from it and Rookies for any seats left; without
- * it, each seat drawn from the whole pool (roles may repeat). The deck is
- * shuffled and dealt in seat order.
+ * The pool roles may be dealt from (crew and accomplices; saboteurs are
+ * never pool roles). design §8.1: without roles whose `minPlayers` the crew
+ * is below (the Insider needs 5); in Duel mode also without the meeting-only
+ * roles (§16.1); in starter mode the starter crew roles only. `roles` is the
+ * game's role table (tests may pass their own).
  */
-export function dealRoles(config: GameConfig, rng: RngState): { readonly value: RoleId[]; readonly rng: RngState } {
-  const n = config.players.length;
-  const moles = pick(rng, moleOptions(n, config.mole, config.starterMode));
-  const seats = n - moles.value;
-  const available = rolePoolFor(config);
-  let fromPool: RoleId[];
-  let next: RngState;
-  if (config.uniqueRoles === false && available.length > 0) {
-    fromPool = [];
-    next = moles.rng;
-    for (let i = 0; i < seats; i++) {
-      const drawn = pick(next, available);
-      fromPool.push(drawn.value);
-      next = drawn.rng;
-    }
-  } else {
-    const pool = shuffle(moles.rng, available);
-    fromPool = pool.value.slice(0, seats);
-    next = pool.rng;
+export function rolePoolFor(config: GameConfig, roles: RoleTable = rolesFor(config)): readonly RoleId[] {
+  const pool = config.starterMode ? STARTER_ROLES : config.rolePool.length > 0 ? config.rolePool : DEFAULT_ROLE_POOL;
+  return pool.filter((r) => dealable(config, roles, r) && (!config.starterMode || factionIn(roles, r) === "crew"));
+}
+
+/** The saboteur roles this crew may be dealt (by the saboteur setting, not the pool). design §8.1 */
+export function saboteursFor(config: GameConfig, roles: RoleTable = rolesFor(config)): readonly RoleId[] {
+  return Object.keys(roles).filter((r) => factionIn(roles, r) === "saboteur" && dealable(config, roles, r));
+}
+
+/** Every role this game could deal: the pool plus the saboteurs. Rules that must not reveal who was dealt read this. */
+export const dealableRoles = (config: GameConfig, roles: RoleTable = rolesFor(config)): readonly RoleId[] => [
+  ...rolePoolFor(config, roles),
+  ...saboteursFor(config, roles),
+];
+
+/** `count` roles from `pool`: distinct ones (as many as it has) with `unique`, else drawn with replacement. */
+function drawRoles(rng: RngState, pool: readonly RoleId[], count: number, unique: boolean): { readonly value: RoleId[]; readonly rng: RngState } {
+  if (count <= 0 || pool.length === 0) return { value: [], rng };
+  if (unique) {
+    const shuffled = shuffle(rng, pool);
+    return { value: shuffled.value.slice(0, count), rng: shuffled.rng };
   }
+  const value: RoleId[] = [];
+  for (let i = 0; i < count; i++) {
+    const drawn = pick(rng, pool);
+    value.push(drawn.value);
+    rng = drawn.rng;
+  }
+  return { value, rng };
+}
+
+/**
+ * One role per seat, in seat order. design §8.1 (role deck v2 §3)
+ * First the dark side is rolled (`rollDarkSide`, hard limits included);
+ * then saboteurs, accomplices and crew are drawn from their own pools: with
+ * `uniqueRoles` (the default) at most one of each role, so a faction's count
+ * is capped by its pool and Rookies fill the crew's seats; without it, pool
+ * roles (crew, accomplices) are drawn with replacement. Saboteurs are always
+ * distinct (one Mole at most, owner answers 1 Nov; provisional). A dark seat
+ * its pool can't fill goes to the crew, and accomplices are dropped if no
+ * saboteur could be dealt. The deck is shuffled and dealt in seat order.
+ */
+export function dealRoles(config: GameConfig, rng: RngState, roles: RoleTable = rolesFor(config)): { readonly value: RoleId[]; readonly rng: RngState } {
+  const n = config.players.length;
+  const unique = config.uniqueRoles !== false;
+  const pool = rolePoolFor(config, roles);
+  const of = (faction: Faction) => pool.filter((r) => factionIn(roles, r) === faction);
+  const rolled = rollDarkSide(config, rng);
+  const cap = (count: number, from: readonly RoleId[], distinct: boolean) => Math.min(count, from.length === 0 ? 0 : distinct ? from.length : count);
+  const saboteurPool = saboteursFor(config, roles);
+  const mix = limitDarkSide(n, {
+    saboteurs: cap(rolled.value.saboteurs, saboteurPool, true),
+    accomplices: cap(rolled.value.accomplices, of("accomplice"), unique),
+  });
+  const saboteurs = drawRoles(rolled.rng, saboteurPool, mix.saboteurs, true);
+  const accomplices = drawRoles(saboteurs.rng, of("accomplice"), mix.accomplices, unique);
+  const seats = n - saboteurs.value.length - accomplices.value.length;
+  const crew = drawRoles(accomplices.rng, of("crew"), unique ? seats : of("crew").length > 0 ? seats : 0, unique);
   const deck: RoleId[] = [
-    ...Array<RoleId>(moles.value).fill(MOLE_ROLE),
-    ...fromPool,
-    ...Array<RoleId>(seats - fromPool.length).fill(FILLER_ROLE),
+    ...saboteurs.value,
+    ...accomplices.value,
+    ...crew.value,
+    ...Array<RoleId>(seats - crew.value.length).fill(FILLER_ROLE),
   ];
-  return shuffle(next, deck);
+  return shuffle(crew.rng, deck);
 }
 
 /**
@@ -185,13 +280,12 @@ function snitchTargets(config: GameConfig, roles: readonly RoleId[], rng: RngSta
 }
 
 /**
- * design §8.1: when there are two Moles, they know each other. Each Mole gets
- * a private `moleAllies` naming the others; a lone Mole gets nothing. The
- * shipped Mole rules deal at most one (owner answers, 1 Nov); kept for
- * content that deals more.
+ * design §8.1: saboteurs know each other. Each saboteur gets a private
+ * `moleAllies` naming the others when two or more are dealt; a lone one gets nothing.
  */
 export function moleAllies(config: GameConfig, roles: readonly RoleId[]): GameEvent[] {
-  const moles = config.players.filter((_, i) => roles[i] === MOLE_ROLE).map((p) => p.id);
+  const table = rolesFor(config);
+  const moles = config.players.filter((_, i) => factionIn(table, roles[i] as RoleId) === "saboteur").map((p) => p.id);
   if (moles.length < 2) return [];
   return moles.map((id) => ({ type: "moleAllies", visibility: privateTo(id), player: id, allies: moles.filter((m) => m !== id) }));
 }

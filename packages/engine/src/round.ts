@@ -240,6 +240,11 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
         events.push({ type: "roomWatched", visibility: privateTo(id), player: id, round, source: "lookout", room: r, seen: others(r, id) });
       }
     }
+    // design §8.3 Tail: one more watched room, like the Lookout's (blinded by a Power cut, not by a camera loop).
+    const tailed = player(id).roleState.tail;
+    if (tailed !== null && !blackout) {
+      events.push({ type: "roomWatched", visibility: privateTo(id), player: id, round, source: "tail", room: tailed, seen: others(tailed, id) });
+    }
     if (roomDef(job, room).info === "pocketCount") {
       events.push({ type: "pocketCount", visibility: privateTo(id), player: id, round, pocketed });
     }

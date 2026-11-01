@@ -27,14 +27,17 @@ import { describe, expect, it } from "vitest";
 import { FILLER_ROLE, MOLE_ROLE, ROLES, STARTER_ROLES } from "@skimjob/content";
 import type { Command, GameConfig, GameEvent, GameState, MoleSetting, PlayerId, PlayerState, VoteVisibility } from "./types";
 import { REVEAL, canSee, secretTo } from "./types";
-import { createGame, moleOptions, rolePoolFor } from "./setup";
+import { createGame, darkSideOdds, rolePoolFor, saboteursFor } from "./setup";
+import { isDarkSide, rolesFor } from "./overrides";
 import { handleCommand } from "./handle";
 import { replay } from "./reduce";
 import { viewFor } from "./view";
 import { jobFor } from "./overrides";
 
 const RUNS = Number(process.env.FC_RUNS ?? 45);
-const SEED = Number(process.env.FC_SEED ?? 20261101);
+// Role deck v2 R1 changed the deal's draws, so 20261101's 45 games no longer happened to reach a
+// Muscle cancel (coverage below is statistical; seeds 1, 2, 3 and 20261102 all reach it).
+const SEED = Number(process.env.FC_SEED ?? 20261102);
 const TIMEOUT = 60_000 + RUNS * 1_000;
 const ALL_ROLES = Object.keys(ROLES);
 
@@ -316,11 +319,13 @@ function checkState(state: GameState, inflow: number): void {
   if (state.config.duel) check(state.meeting === null && state.scheduledMeeting === null && state.pendingEmergency === null, "Duel has no meetings (design §16.1)");
 }
 
-/** design §8.1: Moles by the setting, then distinct pool roles, then Rookies. */
+/** design §8.1 (role deck v2 §3): saboteurs by the setting (the Mole, at most once), then distinct pool roles, then Rookies. */
 function checkDeal(state: GameState): void {
   const roles = state.playerOrder.map((id) => (state.players[id] as PlayerState).role);
   const moles = roles.filter((r) => r === MOLE_ROLE).length;
-  check(moleOptions(roles.length, state.config.mole, state.config.starterMode).includes(moles), "Mole count allowed (design §8.1)", roles);
+  const allowed = darkSideOdds(roles.length, state.config.mole, state.config.starterMode).map((o) => Math.min(saboteursFor(state.config).length, o.saboteurs));
+  check(allowed.includes(moles), "Mole count allowed (design §8.1)", roles);
+  check(roles.filter((r) => isDarkSide(rolesFor(state.config), r)).length <= Math.floor(roles.length / 3), "at most ⌊n/3⌋ dark seats (design §8.1)", roles);
   const pool = rolePoolFor(state.config);
   const dealt = roles.filter((r) => r !== MOLE_ROLE && r !== FILLER_ROLE);
   if (state.config.uniqueRoles !== false) check(new Set(dealt).size === dealt.length, "uniqueRoles: each non-Rookie role dealt at most once (design §8.1)", roles);
@@ -350,7 +355,7 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
             role: p.role === "insider" ? "fence" : "insider",
             stash: p.stash + 101,
             safe: p.safe + 7,
-            roleState: { usedThisAct: 4, usedThisGame: 1, target: viewer, allies: [viewer] },
+            roleState: { usedThisAct: 4, usedThisGame: 1, target: viewer, allies: [viewer], perks: ["peek", "shield"], tail: "vault" },
             totalHandedIn: p.totalHandedIn + 33,
             consecutiveMissedMoves: 5,
             sealedVote: { kind: "shakedown", target: viewer },
@@ -418,6 +423,14 @@ function checkEnd(state: GameState): void {
     check((outcome.ranking[i - 1]?.score ?? 0) >= (outcome.ranking[i]?.score ?? 0), "ranking is by score", outcome.ranking);
   }
   check(outcome.winners.every((w) => state.playerOrder.includes(w)), "winners are players");
+  // design §3 (role deck v2 §0): the winning side's best score; Crew wins a success, the dark side a failure.
+  const roles = rolesFor(state.config);
+  const side = (role: string): boolean => isDarkSide(roles, role);
+  const wantDark = outcome.result === "failed";
+  const eligible = outcome.ranking.filter((r) => side(r.role) === wantDark);
+  check(outcome.winners.every((w) => eligible.some((r) => r.player === w)), "winners are on the winning side (design §3)", outcome);
+  check((eligible.length === 0) === (outcome.winners.length === 0), "the winning side always has a winner if dealt (design §3)", outcome);
+  if (eligible[0]) check(outcome.winners.includes(eligible[0].player), "the side's best score wins (design §3)", outcome);
 }
 
 // ---------------------------------------------------------------- the driver
