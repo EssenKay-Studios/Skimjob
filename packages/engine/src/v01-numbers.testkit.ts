@@ -10,3 +10,13 @@ export const V01_NUMBERS: ContentOverrides = {
   checkpoints: { perPlayer: [6, 14, 22] },
   roles: { insider: { perLootOverFinalTarget: 1 } },
 };
+
+/**
+ * The content 0.6.0 numbers that balance pass 2 changed (docs/balance/balance-2.md):
+ * Police patrol +10, Shift change Vault Heat ×2, Mole tip-off +10. Deck and
+ * Mole tests that script exact Heat pin them the same way.
+ */
+export const V06_NUMBERS: ContentOverrides = {
+  events: { policePatrol: { amount: 10 }, shiftChange: { heatMultiplier: 2 } },
+  roles: { mole: { heat: 10 } },
+};

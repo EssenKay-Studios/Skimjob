@@ -161,7 +161,7 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
   mole: {
     id: "mole",
     name: "Mole",
-    power: { kind: "tipOff", perAct: 1, heat: 10 },
+    power: { kind: "tipOff", perAct: 1, heat: 6 },
     canPocket: true,
     scoring: PLAIN_SCORING,
     // design §3, §8: wins only if the heist fails, for either reason, and never a success.

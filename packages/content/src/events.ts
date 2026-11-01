@@ -8,10 +8,10 @@ export type EventId = string;
 
 /** What a card does. The engine has one small effect function per kind. design §10 */
 export type EventEffect =
-  /** Police patrol (+10) / Quiet night (−10): added to the round's Heat before the clamp. design §7 */
+  /** Police patrol (+5, balance pass 2) / Quiet night (−10): added to the round's Heat before the clamp. design §7 */
   | { readonly kind: "heat"; readonly amount: number }
   /**
-   * Shift change (Vault: loot and Heat ×2) / Payday (Lobby: loot ×2, so 4):
+   * Shift change (Vault: loot ×2, Heat ×1.5 since balance pass 2) / Payday (Lobby: loot ×2, so 4):
    * the room's loot and Heat pressure are multiplied this round. Skipped if the
    * room isn't in play.
    */
@@ -37,9 +37,9 @@ export interface EventDef {
 
 /** The ten cards of design §10. */
 export const EVENTS: Readonly<Record<EventId, EventDef>> = {
-  policePatrol: { id: "policePatrol", name: "Police patrol", effect: { kind: "heat", amount: 10 } },
+  policePatrol: { id: "policePatrol", name: "Police patrol", effect: { kind: "heat", amount: 5 } },
   quietNight: { id: "quietNight", name: "Quiet night", effect: { kind: "heat", amount: -10 } },
-  shiftChange: { id: "shiftChange", name: "Shift change", effect: { kind: "roomSurge", room: "vault", lootMultiplier: 2, heatMultiplier: 2 } },
+  shiftChange: { id: "shiftChange", name: "Shift change", effect: { kind: "roomSurge", room: "vault", lootMultiplier: 2, heatMultiplier: 1.5 } },
   powerCut: { id: "powerCut", name: "Power cut", effect: { kind: "blackout" } },
   payday: { id: "payday", name: "Payday", effect: { kind: "roomSurge", room: "lobby", lootMultiplier: 2, heatMultiplier: 1 } },
   lockdown: { id: "lockdown", name: "Lockdown", effect: { kind: "lockdown" } },

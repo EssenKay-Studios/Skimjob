@@ -187,7 +187,7 @@ Every player is dealt **one secret role** at the start of the game. Roles are de
 | **Blackmailer** | Once per act, secretly guesses one player's role. If right, steals 3 from that player's stash. | Gets shaken down quickly, and everyone hides their roles harder. |
 | **Snitch** | Secretly assigned a target. Gets +10 if that target is shaken down while holding more than the clean threshold. | Their target has a reason to frame them. |
 | **Driver** | If the heist fails **because of Heat**, the Driver escapes and wins if they have the biggest stash. | People suspect them of trying to push Heat up. |
-| **Mole** *(optional)* | Wins only if the heist fails. Once per act, can **tip off** the cops (+10 Heat, hidden). | Revealed means hunted, and revealing it is rarely worth it. |
+| **Mole** *(optional)* | Wins only if the heist fails. Once per act, can **tip off** the cops (+6 Heat, hidden). | Revealed means hunted, and revealing it is rarely worth it. |
 
 *Fence safe timing (provisional):* the safe move is part of the Fence's move and happens after that round's split, so it can include loot pocketed that round; it can't move more than the stash holds.
 
@@ -200,7 +200,7 @@ Every player is dealt **one secret role** at the start of the game. Roles are de
 
 *Win-condition roles (provisional, task 13):*
 - **Driver:** wins a successful heist like anyone else. On a Heat failure it wins if it tops the whole crew's ranking (score, then the §3 tie-breaks), Moles included. A missed final target gives it nothing.
-- **Mole:** wins any failed heist (Heat or target), never a successful one. The tip-off is part of the Mole's move, at most once per act: +10 Heat is added to that round's Heat (after rounding, before the cap), so it only shows as part of the round's public Heat change. Only the Mole is told it happened. Two Moles are told privately at the start who the other is.
+- **Mole:** wins any failed heist (Heat or target), never a successful one. The tip-off is part of the Mole's move, at most once per act: +6 Heat (balance pass 2; was +10) is added to that round's Heat (after rounding, before the cap), so it only shows as part of the round's public Heat change. Only the Mole is told it happened. Two Moles are told privately at the start who the other is.
 
 ### 8.1 Dealing roles
 
@@ -233,9 +233,9 @@ From round 2 onward, one event card is flipped at the start of each round and sh
 
 | Event | Effect |
 |---|---|
-| **Police patrol** | Heat +10. |
+| **Police patrol** | Heat +5. |
 | **Quiet night** | Heat −10. |
-| **Shift change** | The Vault yields double this round, and so does its Heat. |
+| **Shift change** | The Vault yields double this round, and its Heat pressure is ×1.5. |
 | **Power cut** | No witnesses and no cameras this round. Nobody sees anybody. |
 | **Payday** | The Lobby yields 4 this round. |
 | **Lockdown** | One random room is closed this round. |
@@ -247,7 +247,7 @@ From round 2 onward, one event card is flipped at the start of each round and sh
 *Events deck (provisional, task 14):*
 - The deck holds one of each card; each flip draws from the cards not yet flipped, so no card repeats in a game (8 of the 10 are seen). Events are a host setting (§15), off in starter mode.
 - The card is flipped as the round starts, so players can plan around it; its effects apply when the round resolves (§5.2 step 1). Lockdown names its closed room on the flip (any room but the Lobby, where missed moves go). Double-cross offers go privately to the two players on the flip, and each can accept or decline until the round deadline; the swap happens at step 1, so the new roles play that round. Each role card keeps its uses so far; Moles are told if their fellow Mole changed.
-- **Shift change** also doubles the Vault's Heat pressure; **Payday** doubles the Lobby's loot (2 → 4).
+- **Shift change** also raises the Vault's Heat pressure ×1.5 (balance pass 2; was ×2, and Police patrol was +10); **Payday** doubles the Lobby's loot (2 → 4).
 - **Power cut:** no room-mates, no Security and no Lookout results. The Server room still counts pockets.
 - **Audit:** every room in play is listed with what it came up short (0 included).
 - **Raid rumour:** compares stashes, not the Fence safe (which it never touches); ties are broken at random; with every stash empty nobody is hit. The lost loot is gone.
