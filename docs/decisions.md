@@ -199,7 +199,7 @@ Replaces the working title "Heist Crew".
 Engine, content, bots, simulator, server and clients live in one pnpm monorepo so rule changes and their callers land together and types are shared.
 
 ### 2026-10-31 — Engine is a pure, deterministic, event-sourced TypeScript package
-Same package runs in browser, React Native and Node. Seeded RNG, no clock, content as data, visibility-scoped events, `viewFor()` projection. Enables replays, reveal, recaps, bots that can't cheat, and mass simulation.
+Same package runs on the Node server and in the simulator (and its types in the web client); native apps are Flutter thin clients (see 2026-11-01 entry). Seeded RNG, no clock, content as data, visibility-scoped events, `viewFor()` projection. Enables replays, reveal, recaps, bots that can't cheat, and mass simulation.
 
 ### 2026-10-31 — Bots use the same interface as humans
 Bots receive only `viewFor()` and emit normal commands. Needed for fair bot seats and meaningful simulation.

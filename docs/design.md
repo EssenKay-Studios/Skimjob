@@ -386,7 +386,7 @@ All the rules live in **one engine that has no knowledge of the UI or the clock*
 
 ### 17.2 Engine design
 
-- **Language:** TypeScript, so the same package runs in the browser, in React Native, and on a Node server.
+- **Language:** TypeScript. The engine runs on the Node server (authoritative) and in the simulator; the web client may import its types. Native apps (Flutter) only consume `viewFor` JSON from the server.
 - **Deterministic:** every game has a random seed. The same seed and the same inputs always produce the same game, which makes replays, bug reports and simulations reproducible.
 - **Content as data:** rooms, roles, jobs, events, targets and Heat formulas are JSON config, not code. Balancing means editing numbers, not rewriting logic.
 - **Event-sourced:** the game is a log of events, and the current state is built by replaying that log. The ledger, case files, the "while you were away" summary and the end-of-game reveal are all views over that same log.
@@ -438,7 +438,7 @@ These results are measured at every player count from 2 to 12, so the scaling ta
 - **Game server (Node):** runs the engine, stores the event logs, runs the scheduler for round deadlines and meeting windows, runs bots, and handles chat.
 - **Real-time updates:** WebSockets for chat, meeting windows and live updates.
 - **Push notifications:** FCM for Android, APNs for iOS, and web push for browsers.
-- **Clients:** a React web app and a React Native (Expo) mobile app, sharing the engine package and its types.
+- **Clients:** a responsive React web app (the launch product, installable as a PWA) and, later, a **Flutter** app for Android and iOS. Both are thin clients over the server's `viewFor` JSON; only the web app shares the engine's TypeScript types.
 
 ---
 

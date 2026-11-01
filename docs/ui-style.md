@@ -390,7 +390,7 @@ sketchbook paper. Below, `[frame]` means the sketch frame from §4.
 - Make one `<SketchFrame seed w h fill shadow boil>` component that renders the SVG layers from §4
   behind content with `isolation:isolate`, and cache the generated paths by (w, h, seed).
 - Fonts: self-host Pangolin + Inter (both OFL) as woff2.
-- The same frame and tokens map to React Native via `react-native-svg`.
+- The same frame and tokens map to Flutter via `CustomPainter` (wobbly border, hatched shadow) and a shared token file exported from `theme.css`.
 
 ---
 
