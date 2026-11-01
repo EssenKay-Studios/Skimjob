@@ -13,6 +13,10 @@
 //   view changed (like the pushes), so another player's hidden action never
 //   makes a bot roll its dice, and so never shows up as a public bot act.
 // - Commands for a game run one at a time (store.withGameLock), in arrival order.
+// - Chat (M2-8a, chat.ts): client `{ chat: { to?, text | evidence }, id? }`,
+//   replied to like a command; the message goes out as `{ chat }` (a DM only to
+//   its two players, others get `{ dmNotice }` if the host left notices on).
+//   On connect, after the first view: `{ chatHistory }`.
 import { createHash } from "node:crypto";
 import websocket from "@fastify/websocket";
 import type { FastifyInstance, FastifyRequest } from "fastify";
@@ -28,6 +32,8 @@ import {
   type SystemCommand,
 } from "@skimjob/engine";
 import { SESSION_COOKIE, type Sessions } from "./auth";
+import { createChat, parseChatRequest, type ChatHistory, type ChatMessage, type DmNotice } from "./chat";
+import type { Clock } from "./clock";
 import type { Db } from "./db";
 import { HttpError, playerIdOf } from "./lobby";
 import type { GameStore } from "./store";
@@ -64,6 +70,9 @@ const PLAYER_COMMANDS: { readonly [T in PlayerCommand["type"]]: true } = {
 
 export type ServerMessage =
   | { readonly view: ReturnType<typeof viewFor> }
+  | { readonly chat: ChatMessage }
+  | { readonly dmNotice: DmNotice }
+  | { readonly chatHistory: ChatHistory }
   | { readonly ok: true; readonly id?: string | number }
   | { readonly rejected: true; readonly reason: string; readonly id?: string | number };
 
@@ -85,6 +94,8 @@ export interface Live {
 }
 
 export interface LiveOptions {
+  /** Chat timestamps and rate limits. */
+  readonly clock: Clock;
   /**
    * Browser origins allowed to open a socket besides the server's own host
    * (e.g. the Vite dev server, whose proxy keeps the browser's Origin).
@@ -126,8 +137,7 @@ export function parseClientMessage(
   }
   if (typeof msg !== "object" || msg === null || Array.isArray(msg)) return { ok: false, reason: "expected { cmd }" };
   const { cmd, id: rawId } = msg as { cmd?: unknown; id?: unknown };
-  const id =
-    (typeof rawId === "string" && rawId.length <= 64) || (typeof rawId === "number" && Number.isFinite(rawId)) ? rawId : undefined;
+  const id = messageId(rawId);
   const withId = <T extends object>(r: T) => (id === undefined ? r : { ...r, id });
   if (typeof cmd !== "object" || cmd === null || Array.isArray(cmd)) return withId({ ok: false as const, reason: "expected { cmd }" });
   const type = (cmd as { type?: unknown }).type;
@@ -136,6 +146,24 @@ export function parseClientMessage(
   }
   // design §17.2 / STATUS "M2 (server)": the seat comes from the session, never the client.
   return withId({ ok: true as const, command: { ...cmd, player } as PlayerCommand });
+}
+
+/** The client's `id`, echoed in the reply: a string up to 64 characters or a finite number. */
+const messageId = (raw: unknown): string | number | undefined =>
+  (typeof raw === "string" && raw.length <= 64) || (typeof raw === "number" && Number.isFinite(raw)) ? raw : undefined;
+
+/** A `{ chat, id? }` message's parts, or null if the text isn't one (then it's a command). */
+export function chatPart(text: string): { chat: unknown; id?: string | number } | null {
+  let msg: unknown;
+  try {
+    msg = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (typeof msg !== "object" || msg === null || Array.isArray(msg) || !Object.hasOwn(msg, "chat")) return null;
+  const { chat, id: rawId } = msg as { chat: unknown; id?: unknown };
+  const id = messageId(rawId);
+  return id === undefined ? { chat } : { chat, id };
 }
 
 const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
@@ -160,8 +188,9 @@ export function originAllowed(origin: string | undefined, host: string | undefin
   }
 }
 
-export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Sessions, options: LiveOptions = {}): Live {
+export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Sessions, options: LiveOptions): Live {
   const allowedOrigins = options.allowedOrigins ?? [];
+  const chat = createChat(db, options.clock);
   const conns = new Map<string, Set<Conn>>();
   const bots = new Map<string, readonly { readonly player: PlayerId; readonly personality: PersonalityId }[]>();
   /** Per game, the view text each bot last acted on. */
@@ -255,6 +284,13 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
   const push = (gameId: string, state: GameState) => {
     for (const conn of conns.get(gameId) ?? []) sendView(conn, state);
   };
+  /** A crew message to everyone; a DM to its two players only, and its notice (if any) to the rest. design §12.1 */
+  const deliver = (gameId: string, message: ChatMessage, notice: DmNotice | null) => {
+    for (const conn of conns.get(gameId) ?? []) {
+      if (message.to === null || conn.player === message.from || conn.player === message.to) send(conn, { chat: message });
+      else if (notice) send(conn, { dmNotice: notice });
+    }
+  };
 
   /** After a change: bots, then every seat's fresh view. An ended game's bots are dropped. */
   const afterChange = async (gameId: string, state: GameState) => {
@@ -329,7 +365,9 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
         // The first view, in line with any change being made right now.
         void store.withGameLock(gameId, async () => {
           const state = await store.load(gameId);
-          if (state) sendView(conn, state);
+          if (!state) return;
+          sendView(conn, state);
+          send(conn, { chatHistory: await chat.history(gameId, conn.player) });
         });
         socket.on("message", (data, isBinary) => {
           if (conn.queued >= MAX_QUEUED_MESSAGES) {
@@ -337,8 +375,10 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
             return;
           }
           conn.queued++;
+          const chatMsg = isBinary ? null : chatPart(String(data));
           const parsed = isBinary ? { ok: false as const, reason: "messages must be text" } : parseClientMessage(String(data), conn.player);
-          const id = parsed.id === undefined ? {} : { id: parsed.id };
+          const msgId = chatMsg ? chatMsg.id : parsed.id;
+          const id = msgId === undefined ? {} : { id: msgId };
           let replied = false;
           const reply = (msg: ServerMessage) => {
             replied = true;
@@ -346,6 +386,17 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
           };
           void store
             .withGameLock(gameId, async () => {
+              if (chatMsg) {
+                const req = parseChatRequest(chatMsg.chat);
+                if (!req.ok) return reply({ rejected: true, reason: req.reason, ...id });
+                const state = await store.load(gameId);
+                if (!state) return reply({ rejected: true, reason: "game not found", ...id });
+                // The sender is the socket's seat, never the client's say. design §17.2
+                const r = await chat.post(gameId, state, conn.player, req.value);
+                if (!r.ok) return reply({ rejected: true, reason: r.reason, ...id });
+                reply({ ok: true, ...id });
+                return deliver(gameId, r.value.message, r.value.notice);
+              }
               if (!parsed.ok) return reply({ rejected: true, reason: parsed.reason, ...id });
               const state = await store.load(gameId);
               if (!state) return reply({ rejected: true, reason: "game not found", ...id });
