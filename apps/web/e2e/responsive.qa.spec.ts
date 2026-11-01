@@ -12,7 +12,7 @@ const VIEWPORTS = [
   { width: 1024, height: 768 },
   { width: 1280, height: 800 },
 ];
-const ROUTES = ["/", "/no-such-page", "/new", "/join/abcdefghjk", "/lobby/00000000-0000-0000-0000-000000000000"];
+const ROUTES = ["/", "/no-such-page", "/new", "/join/abcdefghjk", "/lobby/00000000-0000-0000-0000-000000000000", "/game/00000000-0000-0000-0000-000000000000"];
 
 // Viewport sizes are set per test below, so run each test once.
 test.beforeEach(({}, info) => test.skip(info.project.name !== "mobile", "viewports are set per test"));

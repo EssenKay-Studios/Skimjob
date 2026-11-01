@@ -48,7 +48,8 @@ test.describe("phones", () => {
         await page.goto("/dev/gallery");
         await expect(page.getByRole("heading", { name: "Component gallery" })).toBeVisible();
         expect(await smallTargets(page)).toEqual([]);
-        for (const route of ["/no-such-page", "/new", "/join/abcdefghjk"]) {
+        // The last is the game screen's "not your game" sheet (M2-6).
+        for (const route of ["/no-such-page", "/new", "/join/abcdefghjk", "/game/00000000-0000-0000-0000-000000000000"]) {
           await page.goto(route);
           expect(await smallTargets(page), route).toEqual([]);
         }

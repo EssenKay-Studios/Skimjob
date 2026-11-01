@@ -4,7 +4,7 @@ import { ToastProvider } from "./components/Toast";
 import { Button } from "./components/Button";
 import { SketchFrame } from "./components/SketchFrame";
 import { ArrowBack } from "./components/icons";
-import { GameStub } from "./screens/GameStub";
+import { Game } from "./screens/Game";
 import { Invite } from "./screens/Invite";
 import { Landing } from "./screens/Landing";
 import { Lobby } from "./screens/Lobby";
@@ -55,7 +55,7 @@ export function App() {
       ) : page === "lobby" ? (
         <Lobby key={param} id={param} />
       ) : page === "game" ? (
-        <GameStub key={param} id={param} />
+        <Game key={param} id={param} />
       ) : route === "/dev/gallery" && Gallery ? (
         <Suspense fallback={null}>
           <Gallery />

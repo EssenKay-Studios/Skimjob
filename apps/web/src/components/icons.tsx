@@ -55,3 +55,26 @@ export function Copy() {
     </svg>
   );
 }
+
+/** Private rows in the case file ("only you"). */
+export function Lock() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true">
+      <rect x="5.4" y="9.4" width="10" height="7.4" rx="1.6" fill="var(--clay-l)" transform="translate(.8 .8)" />
+      <rect x="4.6" y="8.8" width="10.8" height="8" rx="1.8" {...S} />
+      <path d="M7.2 8.6V6.4c0-1.7 1.2-3 2.8-3s2.8 1.3 2.8 3v2.2" {...S} />
+      <path d="M10 12.2v1.6" {...S} strokeWidth={2.2} />
+    </svg>
+  );
+}
+
+/** Countdowns. */
+export function Clock() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true">
+      <circle cx="10.8" cy="10.8" r="7" fill="var(--gold)" opacity=".55" />
+      <circle cx="10" cy="10" r="7.2" {...S} />
+      <path d="M10 5.8V10l2.8 1.8" {...S} />
+    </svg>
+  );
+}

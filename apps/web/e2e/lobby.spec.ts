@@ -56,8 +56,9 @@ test("host creates, copies the invite, guest joins, host adds bots, start lands 
   await host.getByRole("button", { name: "Start the job" }).click();
   await expect(host).toHaveURL(/\/game\//);
   await expect(guest).toHaveURL(/\/game\//, { timeout: 10_000 });
-  await expect(host.getByRole("heading", { name: "The job is on" })).toBeVisible();
-  await expect(guest.getByText("You're in as Lucky Lou")).toBeVisible();
+  // The game screen (M2-6): the HUD, and each player's own seat.
+  await expect(host.getByRole("region", { name: "Heist status" })).toBeVisible();
+  await expect(guest.getByRole("img", { name: "Lucky Lou (you)" })).toBeVisible();
 });
 
 test("the host hands over to another player, then leaves", async ({ browser }, info) => {
