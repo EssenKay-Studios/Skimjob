@@ -59,7 +59,7 @@ type ExpectedVisibility = {
   shakedownPending: "public";
   shakedownCancelled: "public"; // design §8: says it was cancelled, not who did it
   shakedownResolved: "public";
-  snitchPaid: "private";
+  snitchRewarded: "private";
   checkpointChecked: "public";
   perkGranted: "private"; // design §8.3: perks are your own
   perkUsed: "private";

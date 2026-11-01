@@ -13,7 +13,7 @@ export function config(n: number, seed: string, voteVisibility: VoteVisibility =
   return { seed, players: seats(n), job: "bank", rolePool: [...STARTER_ROLES], mole: "off", eventsEnabled: false, voteVisibility, starterMode: false };
 }
 
-/** A game where `want` holds for the dealt roles (e.g. a pocketer who isn't the Insider), trying seeds in order. */
+/** A game where `want` holds for the dealt roles (e.g. a pocketer who isn't the Inside Man), trying seeds in order. */
 export function game(n: number, want: (s: GameState) => boolean = () => true): GameState {
   for (let i = 0; ; i++) {
     const s = createGame(config(n, `script-${i}`));
@@ -24,7 +24,7 @@ export function game(n: number, want: (s: GameState) => boolean = () => true): G
 export const notInsider =
   (...ids: PlayerId[]) =>
   (s: GameState): boolean =>
-    ids.every((id) => s.players[id]?.role !== "insider");
+    ids.every((id) => s.players[id]?.role !== "insideMan");
 
 export function run(state: GameState, ...commands: unknown[]): GameState {
   return commands.reduce<GameState>((s, c) => {

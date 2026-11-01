@@ -53,7 +53,9 @@ const POWER_FIELDS: { readonly [K in RolePower["kind"]]: Readonly<Record<string,
   voteWeight: { weight: positiveCount },
   cancelShakedown: { perGame: positiveCount },
   blackmail: { perAct: positiveCount, steal: count },
-  snitch: { bonus: count },
+  snitch: { extraVotes: count },
+  audit: { perAct: positiveCount },
+  checkStash: { perAct: positiveCount },
   tipOff: { perAct: positiveCount, heat: count },
 };
 
@@ -144,8 +146,9 @@ export function validateOverrides(raw: unknown, job: JobDef, roles: RoleTable = 
           errors.push(`${path}: no such role`);
           continue;
         }
-        // Each role may tune only its own power's numbers. design §8
-        checkFields(o, path, { ...ROLE_SCORING_FIELDS, ...POWER_FIELDS[def.power.kind] }, errors);
+        // Each role may tune only its own power's numbers, and its reward's count if it has one. design §8, §8.3
+        const reward = def.rewards && def.rewards.length > 0 ? { rewardCount: count } : {};
+        checkFields(o, path, { ...ROLE_SCORING_FIELDS, ...POWER_FIELDS[def.power.kind], ...reward }, errors);
       }
   }
   if (raw.events !== undefined) {
@@ -221,7 +224,8 @@ export function overrideRoles(roles: RoleTable, overrides: ContentOverrides | nu
       ...(o.stashMultiplier !== undefined && { stashMultiplier: o.stashMultiplier }),
       ...(o.perLootOverFinalTarget !== undefined && { perLootOverFinalTarget: o.perLootOverFinalTarget }),
     };
-    out[id] = { ...def, power, scoring };
+    const rewards = o.rewardCount !== undefined && def.rewards ? def.rewards.map((r) => ({ ...r, count: o.rewardCount as number })) : def.rewards;
+    out[id] = { ...def, power, scoring, ...(rewards && { rewards }) };
   }
   return out;
 }

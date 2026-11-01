@@ -54,7 +54,13 @@ export type PerkSpend =
  * Muscle: cancel the shakedown that is pending (between the vote passing and
  * the shakedown being applied). Once per game (content). design §8, §11.3
  */
-export type InstantAbility = { readonly kind: "cancelShakedown" } | PerkSpend;
+export type InstantAbility =
+  | { readonly kind: "cancelShakedown" }
+  /** Auditor: the latest resolved round's shortfall for `room`. Once per act (content). design §8 (v2 §2) */
+  | { readonly kind: "audit"; readonly room: RoomId }
+  /** Detective: is `target`'s stash at or above the clean threshold? Once per act (content). design §8 (v2 §2) */
+  | { readonly kind: "checkStash"; readonly target: PlayerId }
+  | PerkSpend;
 
 /**
  * One player's secret move for a round. design §5.1

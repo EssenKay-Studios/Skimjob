@@ -66,13 +66,13 @@ function withPlayers(s: GameState, haul: number, change: Record<string, Partial<
 
 /**
  * 3 players, Heat +4 a round (Vault +20 and Rooftop −20 cancel). p0 Rookie in
- * the Vault, p1 Fence in the Office, p2 Insider on the Rooftop. Rounds 1–6:
+ * the Vault, p1 Fence in the Office, p2 Inside Man on the Rooftop. Rounds 1–6:
  * p0 and p1 pocket 1 (Haul +8). Rounds 7–9: both pocket 2 and the Fence safes 1
  * (Haul +6), p0 pockets `r9extra` more in round 9. Haul before the final
  * meeting: 66 − r9extra (final target 3 × 22 = 66).
  */
 function game3(r9extra: number, finalVotes: unknown[] = []): GameState {
-  let s = game(3, ["rookie", "fence", "insider"]);
+  let s = game(3, ["rookie", "fence", "insideMan"]);
   for (let round = 1; round <= 9; round++) {
     const act3 = round > 6;
     s = run(s, mv("p0", "vault", (act3 ? 2 : 1) + (round === 9 ? r9extra : 0)), mv("p1", "office", act3 ? 2 : 1, act3 ? SAFE1 : {}), mv("p2", "rooftop"), ROUND);
@@ -83,7 +83,7 @@ function game3(r9extra: number, finalVotes: unknown[] = []): GameState {
 }
 
 describe("3 players: the final target boundary — design §3, §8", () => {
-  it("Haul exactly at the final target succeeds; Insider surplus is 0; Rookie ×1.2 and Fence safe counted", () => {
+  it("Haul exactly at the final target succeeds; Inside Man surplus is 0; Rookie ×1.2 and Fence safe counted", () => {
     const s = game3(0);
     expect([s.haul, s.heat]).toEqual([66, 36]);
     const o = outcome(s);
@@ -91,7 +91,7 @@ describe("3 players: the final target boundary — design §3, §8", () => {
     expect(o.ranking).toEqual([
       { player: "p0", role: "rookie", score: 14.4, stash: 12, safe: 0, timesShakenDown: 0, totalHandedIn: 42 },
       { player: "p1", role: "fence", score: 12, stash: 12, safe: 3, timesShakenDown: 0, totalHandedIn: 24 },
-      { player: "p2", role: "insider", score: 0, stash: 0, safe: 0, timesShakenDown: 0, totalHandedIn: 0 },
+      { player: "p2", role: "insideMan", score: 0, stash: 0, safe: 0, timesShakenDown: 0, totalHandedIn: 0 },
     ]);
   });
 
@@ -111,12 +111,12 @@ describe("the final meeting's shakedown decides the heist — design §3, §11.3
     expect(o).toMatchObject({ result: "success", winners: ["p0"] });
     expect(o.ranking).toEqual([
       { player: "p0", role: "rookie", score: 15.6, stash: 13, safe: 0, timesShakenDown: 0, totalHandedIn: 41 },
-      { player: "p2", role: "insider", score: 8, stash: 0, safe: 0, timesShakenDown: 0, totalHandedIn: 0 }, // 74 − 66
+      { player: "p2", role: "insideMan", score: 8, stash: 0, safe: 0, timesShakenDown: 0, totalHandedIn: 0 }, // 74 − 66
       { player: "p1", role: "fence", score: 3, stash: 3, safe: 3, timesShakenDown: 1, totalHandedIn: 24 },
     ]);
   });
 
-  it("shaking down a clean Insider sinks a passing heist: compensation leaves the Haul below target", () => {
+  it("shaking down a clean Inside Man sinks a passing heist: compensation leaves the Haul below target", () => {
     const s = game3(0, [vote("p0", "p2"), vote("p1", "p2")]);
     expect(s.log.find((e) => e.type === "shakedownResolved")).toMatchObject({ target: "p2", clean: true, compensation: 15 });
     expect(s.log.find((e) => e.type === "checkpointChecked" && e.act === 3)).toMatchObject({ haul: 51, met: false, heatPenalty: 0 });
@@ -131,7 +131,7 @@ describe("12 players — design §3, §6.2, §8", () => {
   const ROOMS = ["vault", "vault", "rooftop", "office", "rooftop", "office", "office", "office", "depositBoxes", "depositBoxes", "tellerLine", "tellerLine"];
   const POCKET: Record<string, number> = { p0: 2, p1: 3, p3: 2 };
   function game12(): GameState {
-    let s = game(12, ["rookie", "lookout", "insider", "fence"]);
+    let s = game(12, ["rookie", "lookout", "insideMan", "fence"]);
     for (let round = 1; round <= 9; round++) {
       for (const [i, room] of ROOMS.entries()) {
         const id = `p${i}`;
@@ -143,7 +143,7 @@ describe("12 players — design §3, §6.2, §8", () => {
     return s;
   }
 
-  it("a full successful game: the Insider wins on surplus, zero scores ordered by handed in, then seat", () => {
+  it("a full successful game: the Inside Man wins on surplus, zero scores ordered by handed in, then seat", () => {
     const s = game12();
     expect([s.haul, s.heat]).toEqual([333, 36]); // final target 264
     const o = outcome(s);
@@ -176,9 +176,9 @@ describe("12 players — design §3, §6.2, §8", () => {
     expect(replay(a.config, JSON.parse(JSON.stringify(a.log)) as GameEvent[])).toEqual(a);
   });
 
-  /** All 12 in the Vault: Heat +24 a round → 24, 48, 72, 96, 100 (raid in round 5). p0 pockets 1; p1 is the Insider. */
+  /** All 12 in the Vault: Heat +24 a round → 24, 48, 72, 96, 100 (raid in round 5). p0 pockets 1; p1 is the Inside Man. */
   function raid12(): GameState {
-    let s = game(12, ["rookie", "insider"]);
+    let s = game(12, ["rookie", "insideMan"]);
     for (let round = 1; round <= 5; round++) {
       for (let i = 0; i < 12; i++) s = run(s, mv(`p${i}`, "vault", i === 0 ? 1 : 0));
       s = run(s, ROUND);
@@ -187,7 +187,7 @@ describe("12 players — design §3, §6.2, §8", () => {
     return s;
   }
 
-  it("a raid mid-round in Act 2: failed (heat), ranked with that round's splits, Insider surplus uses the Haul at the end", () => {
+  it("a raid mid-round in Act 2: failed (heat), ranked with that round's splits, Inside Man surplus uses the Haul at the end", () => {
     const s = raid12();
     expect([s.round, s.heat, s.haul]).toEqual([5, 100, 355]);
     expect(types(s, 2)).toEqual(["copsRaided", "gameEnded"]);
@@ -254,8 +254,8 @@ describe("2 players: a raid exactly at the checkpoint penalty — design §3, §
 });
 
 describe("tie-breaks at every level — design §3", () => {
-  it("cross-role score ties after scoring: Rookie 5 (×1.2 = 6) ties Lookout 6 and Insider 2 + 4 surplus", () => {
-    const s = withPlayers(game(3, ["rookie", "lookout", "insider"]), 70, {
+  it("cross-role score ties after scoring: Rookie 5 (×1.2 = 6) ties Lookout 6 and Inside Man 2 + 4 surplus", () => {
+    const s = withPlayers(game(3, ["rookie", "lookout", "insideMan"]), 70, {
       p0: { stash: 5, totalHandedIn: 1 },
       p1: { stash: 6, totalHandedIn: 3 },
       p2: { stash: 2, totalHandedIn: 2 }, // 2 + (70 − 66)

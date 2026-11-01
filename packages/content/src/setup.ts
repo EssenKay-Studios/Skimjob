@@ -16,7 +16,7 @@ export const FILLER_ROLE: RoleId = "rookie";
 export const MOLE_ROLE: RoleId = "mole";
 
 /** Starter mode: these crew roles only, no dark side, no events. design §8.1 */
-export const STARTER_ROLES: readonly RoleId[] = ["rookie", "lookout", "insider", "fence"];
+export const STARTER_ROLES: readonly RoleId[] = ["rookie", "lookout", "insideMan", "fence"];
 
 /** The info and vote roles (M1 task 12). design §8 */
 export const INFO_VOTE_ROLES: readonly RoleId[] = ["hacker", "smoothTalker", "muscle", "blackmailer", "snitch"];
@@ -24,8 +24,11 @@ export const INFO_VOTE_ROLES: readonly RoleId[] = ["hacker", "smoothTalker", "mu
 /** The win-condition pool role (M1 task 13); the Mole is dealt by the Mole setting instead. design §8 */
 export const WIN_CONDITION_ROLES: readonly RoleId[] = ["driver"];
 
+/** Crew roles new in role deck v2 (docs/roles-v2.md §2, step R2). design §8 */
+export const CREW_V2_ROLES: readonly RoleId[] = ["auditor", "detective"];
+
 /** Roles used when the host leaves the pool empty: every pool role. */
-export const DEFAULT_ROLE_POOL: readonly RoleId[] = [...STARTER_ROLES, ...INFO_VOTE_ROLES, ...WIN_CONDITION_ROLES];
+export const DEFAULT_ROLE_POOL: readonly RoleId[] = [...STARTER_ROLES, ...INFO_VOTE_ROLES, ...WIN_CONDITION_ROLES, ...CREW_V2_ROLES];
 
 /** Every role id the engine accepts in a pool (saboteurs, such as the Mole, are not pool roles). */
 export const POOL_ROLES: readonly RoleId[] = DEFAULT_ROLE_POOL;

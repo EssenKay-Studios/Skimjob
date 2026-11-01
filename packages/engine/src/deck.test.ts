@@ -20,7 +20,7 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
     seed: "deck-seed",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: ["rookie", "lookout", "fence", "insider"], // no Muscle, so no shakedown window
+    rolePool: ["rookie", "lookout", "fence", "insideMan"], // no Muscle, so no shakedown window
     mole: "off",
     eventsEnabled: true,
     voteVisibility: "open",
@@ -302,7 +302,7 @@ describe("card effects — design §10, §5.2", () => {
   });
 
   it("Inside tip: one player privately learns another player's real role", () => {
-    const s = resolve(withCard(atRound2(4, ["rookie", "lookout", "fence", "insider"]), "insideTip"));
+    const s = resolve(withCard(atRound2(4, ["rookie", "lookout", "fence", "insideMan"]), "insideTip"));
     const tips = lastResolution(s).filter((e): e is Extract<GameEvent, { type: "insideTip" }> => e.type === "insideTip");
     expect(tips).toHaveLength(1);
     const tip = tips[0] as Extract<GameEvent, { type: "insideTip" }>;
@@ -361,8 +361,8 @@ describe("Double-cross — design §10", () => {
     expect(handleThroughAlibis(resolve(base), answer("p0", true)).ok).toBe(false);
   });
 
-  it("the swapped role plays this round: a new Insider can't pocket, a stale move power is ignored", () => {
-    const base = run(offerFor(3, ["insider", "lookout", "rookie"], ["p0", "p1"]), answer("p0", true), answer("p1", true));
+  it("the swapped role plays this round: a new Inside Man can't pocket, a stale move power is ignored", () => {
+    const base = run(offerFor(3, ["insideMan", "lookout", "rookie"], ["p0", "p1"]), answer("p0", true), answer("p1", true));
     const s = resolve(base, {
       p0: { room: "office", pocket: 0 },
       p1: { room: "vault", pocket: 3, ability: { kind: "lookout", rooms: ["office"] } },
@@ -439,7 +439,7 @@ describe("event-card visibility (leak tests) — design §10, §13, §17.2", () 
       JSON.stringify(viewFor(s, "p0").caseFile) + JSON.stringify([viewFor(s, "p0").haul, viewFor(s, "p0").heat]);
     expect(strip(hit)).toBe(strip(miss));
 
-    const tipped = resolve(withCard(resolve(game(4, ["rookie", "lookout", "fence", "insider"])), "insideTip"));
+    const tipped = resolve(withCard(resolve(game(4, ["rookie", "lookout", "fence", "insideMan"])), "insideTip"));
     const tip = tipped.log.find((e) => e.type === "insideTip");
     for (const id of tipped.playerOrder) expect(sees(tipped, id, "insideTip")).toBe(tip?.type === "insideTip" && tip.player === id);
   });

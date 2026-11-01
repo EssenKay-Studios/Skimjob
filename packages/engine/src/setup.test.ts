@@ -59,7 +59,7 @@ describe("dealing roles — design §8.1", () => {
     }
   });
 
-  it("starter mode: only Rookie, Lookout, Insider and Fence; no Mole", () => {
+  it("starter mode: only Rookie, Lookout, Inside Man and Fence; no Mole", () => {
     for (let n = 2; n <= 12; n++) {
       for (const seed of ["a", "b", "c"]) {
         const roles = rolesOf(config(n, { seed, starterMode: true, rolePool: ["fence"] }));
@@ -68,28 +68,28 @@ describe("dealing roles — design §8.1", () => {
     }
   });
 
-  it("4 players, starter mode: one of each starter role but the Insider (from 5 players), a Rookie for it", () => {
+  it("4 players, starter mode: one of each starter role but the Inside Man (from 5 players), a Rookie for it", () => {
     expect(rolesOf(config(4, { starterMode: true })).sort()).toEqual(["fence", "lookout", "rookie", "rookie"]);
     expect(rolesOf(config(5, { starterMode: true })).sort()).toEqual([...STARTER_ROLES, "rookie"].sort());
   });
 
-  it("the Insider is dealt only from 5 players (design §8.1, owner answers 1 Nov)", () => {
+  it("the Inside Man is dealt only from 5 players (design §8.1, owner answers 1 Nov)", () => {
     for (const n of [2, 3, 4]) {
-      for (let s = 0; s < 30; s++) expect(rolesOf(config(n, { seed: `ins-${n}-${s}`, rolePool: ["insider", "fence"] }))).not.toContain("insider");
+      for (let s = 0; s < 30; s++) expect(rolesOf(config(n, { seed: `ins-${n}-${s}`, rolePool: ["insideMan", "fence"] }))).not.toContain("insideMan");
     }
-    expect(rolesOf(config(5, { rolePool: ["insider"] }))).toContain("insider");
+    expect(rolesOf(config(5, { rolePool: ["insideMan"] }))).toContain("insideMan");
   });
 
   it("pool roles are dealt at most once each; Rookie fills the remaining seats (provisional)", () => {
     const roles = rolesOf(config(12, { starterMode: true }));
-    for (const r of ["lookout", "insider", "fence"]) expect(roles.filter((x) => x === r)).toHaveLength(1);
+    for (const r of ["lookout", "insideMan", "fence"]) expect(roles.filter((x) => x === r)).toHaveLength(1);
     expect(roles.filter((x) => x === "rookie")).toHaveLength(9);
   });
 
   it("small crews get a random subset of the pool", () => {
     const seen = new Set<string>();
     for (let s = 0; s < 50; s++) for (const r of rolesOf(config(2, { seed: `s${s}`, starterMode: true }))) seen.add(r);
-    expect([...seen].sort()).toEqual(STARTER_ROLES.filter((r) => r !== "insider").sort());
+    expect([...seen].sort()).toEqual(STARTER_ROLES.filter((r) => r !== "insideMan").sort());
   });
 
   it("uniqueRoles false deals every seat from the pool with replacement, so roles may repeat; the Mole only by the Mole setting (design §8.1, §15)", () => {
@@ -291,7 +291,7 @@ describe("determinism and replay — design §17.2", () => {
 
   it("replaying the log rebuilds the same state, RNG included", () => {
     // No Snitch in the pool, so the deal is the setup's only draw.
-    const cfg = config(7, { mole: "maybe", rolePool: ["rookie", "lookout", "insider", "fence", "hacker"] });
+    const cfg = config(7, { mole: "maybe", rolePool: ["rookie", "lookout", "insideMan", "fence", "hacker"] });
     const state = createGame(cfg);
     const rebuilt = replay(cfg, JSON.parse(JSON.stringify(state.log)) as GameEvent[]);
     expect(rebuilt).toEqual(state);

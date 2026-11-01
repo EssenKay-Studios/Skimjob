@@ -135,12 +135,12 @@ describe("Shield — design §8.3, §11.3", () => {
   });
 
   it("the window opens whenever a Muscle or any role that can earn a Shield could be dealt (role deck v2 §1)", () => {
-    const shieldEarner = { ...ROLES.rookie, id: "detective", earns: ["shield"] } as (typeof ROLES)[string];
+    const shieldEarner = { ...ROLES.rookie, id: "detective", rewards: [{ on: "checkedShakenDirty", perk: "shield", count: 1 }] } as (typeof ROLES)[string];
     const roles = { ...ROLES, detective: shieldEarner };
     expect(opensShakedownWindow(roles, ["rookie", "lookout"])).toBe(false);
     expect(opensShakedownWindow(roles, ["rookie", "muscle"])).toBe(true);
     expect(opensShakedownWindow(roles, ["rookie", "detective"])).toBe(true);
-    const noShield = { ...roles, detective: { ...shieldEarner, earns: ["peek"] } } as typeof roles;
+    const noShield = { ...roles, detective: { ...shieldEarner, rewards: [{ on: "checkedShakenDirty", perk: "peek", count: 1 }] } } as typeof roles;
     expect(opensShakedownWindow(noShield, ["detective"])).toBe(false);
   });
 });

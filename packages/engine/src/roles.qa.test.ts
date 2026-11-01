@@ -258,7 +258,7 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
     const role = A.players[id]?.role;
     const room = pick(A.rooms);
     const loot = LOOT[room] ?? 0;
-    const m: Record<string, unknown> = { room, pocket: role !== "insider" && loot > 0 && rand() < 0.6 ? int(loot + 1) : 0 };
+    const m: Record<string, unknown> = { room, pocket: role !== "insideMan" && loot > 0 && rand() < 0.6 ? int(loot + 1) : 0 };
     if (room === "security") m.watch = pick(A.rooms);
     // Baseline power use, identical in both games (not for the kind that changes it).
     if (role === "hacker" && kind !== "hackerLoop" && round % 3 === 1 && rand() < 0.7) m.ability = { kind: "loopCameras", room: pick(A.rooms) };
@@ -299,7 +299,7 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
         planA.set(bm, [{ type: "submitMove", player: bm, move: { ...base, ability: { kind: "blackmail", target: t, role: wrong } } }]);
         planB.set(bm, [{ type: "submitMove", player: bm, move: { ...base, ability: { kind: "blackmail", target: t, role: real } } }]);
         // The target pockets something, so a right guess takes loot.
-        if (real !== "insider") {
+        if (real !== "insideMan") {
           const tm = [{ type: "submitMove", player: t, move: { room: "office", pocket: 3 } }];
           planA.set(t, tm);
           planB.set(t, tm);
@@ -525,8 +525,8 @@ describe("QA Blackmailer: stash edges, limits, wrong phase — design §8", () =
     expect(ofType(s.log, "blackmailed")).toEqual([{ type: "blackmailed", visibility: privateTo("p1"), player: "p1", round: 1, stolen: took }]);
   });
 
-  it("a right guess on an Insider (no stash) or a Fence with everything in the safe takes nothing and tells nobody", () => {
-    const ins = run(game(3, ["blackmailer", "insider"]), guess("p1", "insider"), ROUND);
+  it("a right guess on an Inside Man (no stash) or a Fence with everything in the safe takes nothing and tells nobody", () => {
+    const ins = run(game(3, ["blackmailer", "insideMan"]), guess("p1", "insideMan"), ROUND);
     expect(stolen(ins)).toMatchObject({ correct: true, stolen: 0 });
     const fence = run(game(3, ["blackmailer", "fence"]), guess("p1", "fence"), mv("p1", "office", 4, { ability: { kind: "fenceSafe", amount: 4 } }), ROUND);
     expect(stolen(fence)).toMatchObject({ correct: true, stolen: 0 });
@@ -558,8 +558,8 @@ describe("QA Blackmailer: stash edges, limits, wrong phase — design §8", () =
 });
 
 describe("QA Snitch: payout edges — design §8, §11.3", () => {
-  const bonus = 10;
-  const paid = (s: GameState) => ofType(s.log, "snitchPaid").map((e) => e.amount);
+  const bonus = 1; // role deck v2 §2: +1 ballot weight
+  const paid = (s: GameState) => ofType(s.log, "snitchRewarded").map((e) => e.votes);
 
   it.each([
     [6, true],
@@ -587,10 +587,10 @@ describe("QA Snitch: payout edges — design §8, §11.3", () => {
     s = run(s, RESOLVE, mv("p1", "vault", 6), ROUND);
     s = closeAll(run(emergency(s, "p1"), vote("p0", "p1"), vote("p2", "p1")));
     expect(paid(s)).toEqual([bonus, bonus]);
-    expect(s.players.p0?.stash).toBe(2 * bonus);
+    expect(s.players.p0?.roleState.bonusVotes).toBe(2 * bonus);
   });
 
-  it("a payout in the final meeting's window counts in the final ranking; a cancel there pays nothing", () => {
+  it("a reward in the final meeting's window is granted; a cancel there grants nothing", () => {
     const final = (cancelIt: boolean) => {
       let s = game(3, ["snitch", "rookie", "muscle"], {}, { p0: "p1" });
       for (let act = 1; act <= 3; act++) {
@@ -599,7 +599,7 @@ describe("QA Snitch: payout edges — design §8, §11.3", () => {
         if (act === 3) s = run(s, vote("p0", "p1"), vote("p2", "p1"), CLOSE, ...(cancelIt ? [cancel("p2")] : []), RESOLVE);
         else s = closeAll(s);
       }
-      return s.phase.kind === "ended" ? s.phase.outcome.ranking.find((e) => e.player === "p0")?.stash : "not ended";
+      return s.phase.kind === "ended" ? s.players.p0?.roleState.bonusVotes : "not ended";
     };
     expect([final(false), final(true)]).toEqual([bonus, 0]);
   });

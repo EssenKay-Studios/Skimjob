@@ -181,7 +181,7 @@ describe("QA: determinism — design §17.2", () => {
       const room = s.card?.room === "office" ? "lobby" : "office";
       for (const [id, pocket] of [["ana", r % 2], ["ben", (r + 1) % 2]] as const) {
         const role = s.players[id]?.role;
-        cmds.push(mv(id, { room, pocket: role === "insider" ? 0 : pocket }));
+        cmds.push(mv(id, { room, pocket: role === "insideMan" ? 0 : pocket }));
       }
       s = run(s, ...cmds);
       s.card?.offer?.players.forEach((id) => (s = run(s, { type: "answerDoubleCross", player: id, accept: true })));

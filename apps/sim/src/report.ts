@@ -82,7 +82,7 @@ export function formatReport(summary: Summary, title: string): string {
     "Personality win rate (all games; a failed heist is a loss)",
     people,
     "",
-    "Seats per pocketing band (Insiders left out: they can't pocket)",
+    "Seats per pocketing band (Inside Men left out: they can't pocket)",
     pockets,
   ].join("\n") + mole + rejections + "\n";
 }

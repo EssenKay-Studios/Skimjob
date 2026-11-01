@@ -5,7 +5,7 @@
 // Rebuilt from the ledger and case file each time it's needed, so a bot keeps
 // no hidden memory of its own: same view, same scores.
 import type { RoomId } from "@skimjob/content";
-import { roomDef, roomLoot, type PlayerId, type PlayerView, type RoundResolved } from "@skimjob/engine";
+import { roomDef, roomLoot, type AbilityResolved, type PlayerId, type PlayerView, type RoundResolved } from "@skimjob/engine";
 import { jobOf, ofType } from "./read";
 
 /** How much each kind of evidence moves a score. Shared by every personality; they differ in when they act on it. */
@@ -22,6 +22,10 @@ export interface SuspicionWeights {
   readonly afterClean: number;
   /** Score after a shakedown found loot: a known skimmer, but just emptied. design §11.3 */
   readonly afterDirty: number;
+  /** My Detective check said their stash is at or above the clean threshold (v2 §2). */
+  readonly checkedDirty: number;
+  /** Per loot my Audit found missing from a room, shared among the others who claimed it (v2 §2). */
+  readonly audited: number;
 }
 
 export const SUSPICION_WEIGHTS: SuspicionWeights = {
@@ -31,6 +35,8 @@ export const SUSPICION_WEIGHTS: SuspicionWeights = {
   noAlibi: 1.5,
   afterClean: -3,
   afterDirty: 1,
+  checkedDirty: 3,
+  audited: 1,
 };
 
 /** Suspicion of every other player, in seat order. Higher is more suspicious. */
@@ -113,9 +119,20 @@ export function suspicion(view: PlayerView, w: SuspicionWeights = SUSPICION_WEIG
     for (const [id, weight] of weights) add(id, (w.shortfall * unexplained * weight) / total);
   }
 
-  // In ledger order, so a shakedown resets what came before it. design §11.3
-  for (const { event } of view.ledger) {
+  /** v2 §2: what my own Auditor / Detective power found. */
+  function judgePower(ability: AbilityResolved["ability"]): void {
+    if (ability.kind === "checkStash" && ability.dirty) add(ability.target, w.checkedDirty);
+    if (ability.kind !== "audit" || ability.shortfall === 0) return;
+    const claimants = [...(alibis.get(ability.round) ?? [])].filter(([id, room]) => id !== me && room === ability.room).map(([id]) => id);
+    for (const id of claimants) add(id, (w.audited * ability.shortfall) / claimants.length);
+  }
+
+  // In log order (seq), so a shakedown resets what came before it. design §11.3
+  const powers = view.caseFile.filter((e) => e.event.type === "abilityResolved");
+  const events = powers.length === 0 ? view.ledger : [...view.ledger, ...powers].sort((a, b) => a.seq - b.seq);
+  for (const { event } of events) {
     if (event.type === "roundResolved") judgeRound(event);
+    else if (event.type === "abilityResolved") judgePower(event.ability);
     else if (event.type === "shakedownResolved" && event.target !== me) {
       score.set(event.target, event.clean ? w.afterClean : w.afterDirty);
     }

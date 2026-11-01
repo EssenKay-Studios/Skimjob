@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 1 Nov 2026 (role deck v2 R1)_
+_Last updated: 1 Nov 2026 (role deck v2 R2a)_
 
 ## Current milestone: M1 — Engine + simulator (bank job, starter roles, bots)
 
@@ -47,7 +47,9 @@ Goal: run thousands of all-bot games at 2–12 players and use the results to tu
 ## Role deck v2 (owner-approved spec: `docs/roles-v2.md`; Ballot also works in Secret mode)
 
 1. [x] **R1 Foundations** — content 0.9.0: `RoleDef.faction` (crew / accomplice / saboteur) replaces `winsOnFailure`/`winsOnSuccess`; win rule: success → best Crew score, failure → best saboteur/accomplice score, none dealt → nobody (`end.ts`). Mole = saboteur, everyone else crew for now (Driver without its failure win). Dealing by faction (`DARK_SIDE_RULES`, `limitDarkSide`, `darkSideOdds`, `dealRoles` in `setup.ts`): dark side rolled by crew size, hard limits, saboteur setting = the `mole` field, pools cap the roll, starter mode crew only. Perks (`perks.ts`, content `PERKS`): tokens in `roleState.perks`, private `perkGranted` / `perkUsed` / `rigPicked`, public `alibiVerified`; Peek, Shield (automatic), +Vote, Ballot (`me.seenBallots`, also in Secret mode), Tail, Alibi, Recharge, Rig. Shakedown window opens if a Muscle or a Shield earner (`RoleDef.earns`) could be dealt. Design §3, §8, §8.1, §8.3, §11.2, §11.3.
-2. [ ] **R2** Crew roles (v2 §2): Rookie…Mastermind, perk triggers.
+2. **R2** Crew roles (v2 §2), split in two:
+   - [x] **R2a** — content 0.10.0: Rookie (checkpoint → Tail), Inside Man (renamed from Insider; checkpoint → Peek), Lookout (saw a dirty one → Peek), Auditor (`useAbility audit`: latest round's shortfall for a room, once per act; → Ballot), Detective (`useAbility checkStash`, once per act; → Shield), Snitch (+1 ballot weight for the rest of the game, `snitchRewarded`). `RoleDef.rewards` (crew.ts emits the `perkGranted`s), `rewardCount` override, `needsMeetings`, Snitch/Detective from 4. Bots audit/check their top suspect. Design §8, §8.1, §8.3.
+   - [ ] **R2b** — Smooth Talker (extra emergency meeting), Muscle (Recharge, no compensation, named when dirty), Priest, Bagman, Cleaner, Fixer (Driver's crew half), Mastermind (events only); ≥5 for Smooth Talker/Muscle/Priest; starter set Rookie/Inside Man/Lookout/Bagman/Cleaner.
 3. [ ] **R3** Accomplices (Getaway Driver, Fence, Hacker, Blackmailer, Forger) and the Embezzler.
 4. [ ] **R4** Bot claims/bluffs and perk use; parallel sim suite.
 5. [ ] **R5** Parity balance (no two roles' normalised win rates more than 10% apart).
@@ -98,6 +100,7 @@ Plan and acceptance criteria: `docs/m2-plan.md`. Runs alongside M1 task 16 (bala
 - **Chat (M2-8a):** text is stored and sent exactly as typed (trimmed, CRLF → LF): the client must render it as text (React text nodes; never `dangerouslySetInnerHTML` or markdown-to-HTML). Message ids are random UUIDs (never the `n` order column, which counts others' DMs). The rate limit is in memory per server process. Bots don't chat yet (posting their alibi claim as a crew line is a later nicety). Chat works in ended games too (post-game talk).
 
 ## Notes / half-finished work
+- **Role deck v2 R2a (done):** rewards are `RoleDef.rewards` (crew.ts); R2b adds triggers there. The Driver is still the R1 placeholder (R2b: Fixer; R3: Getaway Driver). The Fence is still in the starter set (R3). Bots don't spend perks or read `seenBallots` (R4). Balance not re-run (R5).
 - **Role deck v2 R1 (done):** no role earns perks yet: R2/R3 add the triggers (emit `perkGranted`, list the perk in `RoleDef.earns` so rules like the shakedown window see it). Tests grant tokens with `grantPerks` (`perks.testkit.ts`). Accomplices are dealt only once a role has `faction: "accomplice"` (R3 moves Fence, Hacker, Blackmailer); dealing tests pass their own role table to `dealRoles`. A new saboteur (Embezzler) is dealt by the setting automatically (`saboteursFor`). Bots ignore perks and `seenBallots` (R4). Balance changed (4p now has a Mole with "on"; Driver lost its failure win): R5 re-runs the sim. `moleAllies` now goes to every saboteur when two or more are dealt.
 - **Ballot / Secret mode:** the only place another player's secret ballot reaches a view is `me.seenBallots`, during the meeting the Ballot was spent in. Keep it out of events, so the reveal stays clean. The leak test's scrub keeps the viewer's granted ballots.
 - **Test suite (test/integration-suite):** engine property tests (`invariants.prop.test.ts`, fast-check, seeded), server scenario stories (`scenarios.int.test.ts`), CI (`.github/workflows/ci.yml`: typecheck, tests, web e2e, `scripts/sim-smoke.sh`). See `docs/testing.md`; every bug fix adds a scenario or invariant. Open bug pinned with `it.fails`: `handleCommand` throws (instead of refusing) on a value with no string form such as JSON `{"toString":null}` in `room` / `proposalId` (the server catches it and refuses). M2-4 should replace the scenarios' stand-in `nextDeadline` with the real scheduler and fake clock.
@@ -134,6 +137,7 @@ Plan and acceptance criteria: `docs/m2-plan.md`. Runs alongside M1 task 16 (bala
 - **Duel mode (task 15, done):** the act's end in Duel is `endOfDuelAct` (`duel.ts`), called by `closeAlibis` (`round.ts`) when the act's last round's alibis close; any new end-of-act step must go there as well as in `afterVote` (both use `checkpoint()` in `meeting.ts`). M2: the server never sends `openMeeting`/`scheduleMeeting` in Duel games. Balance (task 16): the sim doesn't report call-outs yet (count, caught share, loot moved); bots call out only on a visible shortfall.
 
 ## Questions for Karthik
+- Role deck v2 R2a: OK that the Rookie keeps ×1.2, the Auditor audits the latest resolved round any time (instant), and "saw / audited / checked" rewards count any earlier time in the game? (provisional, decisions.md)
 - Scheduler presets: OK with the provisional numbers in decisions.md (M2-4: e.g. Quick 45 s rounds + 15 s alibis + 2 min meetings, 1 h 5 min + 30 s + 3 min, emergency notice 20 s … 2 h, Muscle window 15 s … 10 min), and that in 1-day+ games the server picks a meeting slot 1–2 h after the act's last round if nobody locked one?
 - Chat: OK that DMs to bots are refused (bots don't read), secret-mode ballots and sealed votes can't be shared as evidence cards (hidden-mode ballots only after the meeting closes), and limits of 500 characters, 8 stacked accents and 8 messages per 10 s? (provisional, decisions.md M2-8a)
 - Role deck v2 R1: OK that the Shield is spent by itself (not chosen), +Vote and Ballot are spent during an open meeting, Ballot is refused in Open mode, the Alibi stamps only a true alibi, and when two players rig the same round the oldest Rig's pick flips? (provisional, decisions.md)

@@ -62,7 +62,7 @@ describe("validateOverrides — configs are untrusted JSON (design §17.4)", () 
         heat: { max: 120, perRound: 3.5, missedCheckpoint: 10 },
         checkpoints: { perPlayer: [5, 12, 20] },
         shakedown: { cleanBelowPerAct: 2.5, compensationPerAct: 4 },
-        roles: { rookie: { stashMultiplier: 1.3 }, lookout: { extraRooms: 2 }, fence: { perAct: 6 }, insider: { perLootOverFinalTarget: 0.5 } },
+        roles: { rookie: { stashMultiplier: 1.3 }, lookout: { extraRooms: 2 }, fence: { perAct: 6 }, insideMan: { perLootOverFinalTarget: 0.5 } },
       }),
     ).toEqual([]);
   });

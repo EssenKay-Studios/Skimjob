@@ -19,7 +19,7 @@ import { cardEffects, cardHeat, closedRoom, isAudit, isBlackout, roundJob, start
 
 export { actOfRound, isLastRoundOfAct };
 
-/** Whether `role` may pocket loot (Insider can't, design §8). A role id with no definition may. */
+/** Whether `role` may pocket loot (Inside Man can't, design §8). A role id with no definition may. */
 const canPocket = (state: GameState, role: RoleId): boolean => roleDefIn(rolesFor(state.config), role)?.canPocket ?? true;
 
 const isCount = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v >= 0;
@@ -68,6 +68,8 @@ function checkAbility(state: GameState, player: PlayerState, raw: unknown): Abil
     case "voteWeight":
     case "cancelShakedown":
     case "snitch":
+    case "audit":
+    case "checkStash":
       return "your role's power isn't used in a move";
     case "none":
       return "your role has no ability";
@@ -159,7 +161,7 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
   for (const id of order) (visitors[moveOf(id).room] ??= []).push(id);
   const others = (room: RoomId, self: PlayerId): PlayerId[] => (visitors[room] ?? []).filter((p) => p !== self);
 
-  // §5.2 step 3: splits. Pocket is capped at the real yield; the Insider never pockets (§8).
+  // §5.2 step 3: splits. Pocket is capped at the real yield; the Inside Man never pockets (§8).
   let haulDelta = 0;
   let pocketed = 0;
   const toStash = new Map<PlayerId, number>();
