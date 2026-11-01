@@ -5,4 +5,6 @@ export * from "./personalities";
 export * from "./suspicion";
 export * from "./bot";
 export * from "./run";
-export { ofType } from "./read";
+export * from "./claims";
+export * from "./perks";
+export { claimantsOf, claimsOf, ofType } from "./read";

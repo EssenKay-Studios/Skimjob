@@ -19,8 +19,10 @@ import {
   type VoteChoice,
 } from "@skimjob/engine";
 import type { Personality } from "./personalities";
-import { crewSize, isDuel, jobOf, lastResolvedRound, ofType, roleOf, roomsWhere } from "./read";
-import { mostSuspicious, suspicion } from "./suspicion";
+import { claimsOf, crewSize, isDuel, jobOf, lastResolvedRound, ofType, roleOf, roomsWhere } from "./read";
+import { knownRoles, mostSuspicious, suspicion } from "./suspicion";
+import { claimCommands, meetingTime } from "./claims";
+import { alibiPerk, meetingPerks, planningPerks } from "./perks";
 import { heatDanger, jobThisRound } from "./heat";
 
 /**
@@ -109,12 +111,17 @@ export function decide(view: PlayerView, p: Personality, random: Random): Player
   const out: PlayerCommand[] = [];
   // design §5.4: alibis only while the round's alibi window is open.
   const room = view.alibiRound !== null ? chooseAlibi(view, p, random) : null;
-  if (room !== null) out.push({ type: "postAlibi", player, room });
+  if (room !== null) out.push({ type: "postAlibi", player, room }, ...alibiPerk(view, room));
   if (phase.kind === "meeting") {
-    if (view.me.vote === null) out.push({ type: "castVote", player, vote: chooseVote(view, p, random) });
+    // v2 §4: vote (with a +Vote on a shakedown), then maybe claim a role (the Priest only after its vote).
+    const vote = view.me.vote === null ? chooseVote(view, p, random) : null;
+    if (vote !== null) out.push({ type: "castVote", player, vote }, ...meetingPerks(view, vote));
+    out.push(...claimCommands(view, p, random, true));
     return out;
   }
   if (phase.kind === "shakedownPending") {
+    // v2 §4: a target can still claim (the Inside Man: "only to defend against a shakedown").
+    out.push(...claimCommands(view, p, random, true));
     // design §8, §11.3: a Muscle with its cancel left keeps itself out of trouble, and
     // stops a shakedown of someone it thinks is clean (the Haul would pay them compensation).
     const { power } = roleOf(view);
@@ -129,12 +136,16 @@ export function decide(view: PlayerView, p: Personality, random: Random): Player
   }
   const duel = isDuel(view);
   if (!duel) out.push(...scheduleMeeting(view));
+  // v2 §4: claims are made around meetings (the act's meeting is next, or an emergency is called).
+  if (!duel && meetingTime(view)) out.push(...claimCommands(view, p, random, false));
   out.push(...crewPowers(view));
   if (phase.kind === "planning") {
     if (duel) {
       if (wantsCallOut(view, p, random)) out.push({ type: "callOut", player });
     } else if (wantsEmergency(view, p, random)) out.push({ type: "callEmergency", player });
-    if (view.me.move === null) out.push({ type: "submitMove", player, move: chooseMove(view, p, random) });
+    const move = view.me.move ?? chooseMove(view, p, random);
+    if (view.me.move === null) out.push({ type: "submitMove", player, move });
+    out.push(...planningPerks(view, move.room));
     // design §10: answer a Double-cross offer once (minimal: a coin flip; a Mole keeps its card).
     const round = phase.round;
     const offered = ofType(view.caseFile, "doubleCrossOffered").some((e) => e.round === round);
@@ -220,13 +231,16 @@ export function chooseMove(view: PlayerView, p: Personality, random: Random): Mo
     if (claim !== undefined && view.rooms.includes(claim)) ability = { kind: "loopCameras", room: claim };
     else if (pocket > 0) ability = { kind: "loopCameras", room };
   } else if (power.kind === "blackmail" && view.me.roleState.usedThisAct < power.perAct && view.players.length > 0) {
-    // design §8, §10: a role it learned from an Inside tip is a sure guess (latest tip
-    // per player; it can be stale after a Double-cross); otherwise guess a Rookie,
-    // the commonest role, on a random player.
-    const tips = new Map(ofType(view.caseFile, "insideTip").filter((t) => t.subject !== view.me.id).map((t) => [t.subject, t.role]));
-    const known = [...tips].filter(([id]) => view.players.some((o) => o.id === id));
-    const [target, role] = known.length > 0 ? pick(known, random) : [pick(view.players, random).id, FILLER_ROLE];
-    ability = { kind: "blackmail", target, role };
+    // v2 §4: guess only with a role from a Peek or an Inside tip (sure, unless stale after
+    // a Double-cross) or, failing those, someone's claim of a unique role; otherwise skip.
+    const others = new Set(view.players.map((o) => o.id));
+    const known = [...knownRoles(view)].filter(([id]) => others.has(id));
+    const claimed = [...claimsOf(view)].filter(([id]) => others.has(id) && !knownRoles(view).has(id)).map(([id, roles]) => [id, roles.at(-1) as string] as const);
+    const guesses = known.length > 0 ? known : claimed.filter(([, role]) => role !== FILLER_ROLE);
+    if (guesses.length > 0) {
+      const [target, role] = pick(guesses, random);
+      ability = { kind: "blackmail", target, role };
+    }
   } else if (power.kind === "tipOff" && view.me.roleState.usedThisAct < power.perAct) {
     // design §8: the Mole sometimes tips off (at most once per act); otherwise it plays its personality.
     if (random() < MOLE_TIP_CHANCE) ability = { kind: "tipOff" };
@@ -338,13 +352,31 @@ export function wantsCallOut(view: PlayerView, p: Personality, random: Random): 
 
 // ---------------------------------------------------------------- meetings (§11)
 
-/** Help lock in the act's meeting: accept an open proposal, or propose one if there is none. design §11.1 */
+/**
+ * Bots propose the act's meeting only once this share of the act's rounds has
+ * resolved with no proposal, so people get to pick the time (PR #35 review;
+ * design §11.1). Bot setting.
+ */
+export const BOT_PROPOSE_AFTER = 2 / 3;
+
+/**
+ * Let people pick the meeting time (design §11.1): back an open proposal, a
+ * person's first (then the best backed), at once; propose one only late in
+ * the act (`BOT_PROPOSE_AFTER`) if nobody has. Bots never lock a slot by
+ * themselves early; if nobody locks one, the server picks it.
+ */
 function scheduleMeeting(view: PlayerView): PlayerCommand[] {
   const player = view.me.id;
   if (view.scheduledMeeting) return [];
-  const open = view.proposals.find((p) => !p.acceptedBy.includes(player));
+  const bots = new Set(view.players.filter((o) => o.isBot).map((o) => o.id));
+  const open = view.proposals
+    .filter((p) => !p.acceptedBy.includes(player))
+    .sort((a, b) => Number(bots.has(a.by) || a.by === player) - Number(bots.has(b.by) || b.by === player) || b.acceptedBy.length - a.acceptedBy.length)[0];
   if (open) return [{ type: "acceptMeeting", player, proposalId: open.id }];
-  if (view.proposals.length === 0) return [{ type: "proposeMeeting", player, slot: `act-${view.act}` }];
+  const resolvedThisAct = lastResolvedRound(view) - (view.act - 1) * ROUNDS_PER_ACT;
+  if (view.proposals.length === 0 && resolvedThisAct >= BOT_PROPOSE_AFTER * ROUNDS_PER_ACT) {
+    return [{ type: "proposeMeeting", player, slot: `act-${view.act}` }];
+  }
   return [];
 }
 
@@ -356,6 +388,24 @@ function wantsEmergency(view: PlayerView, p: Personality, random: Random): boole
   return top !== null && top.score >= p.emergencyAt;
 }
 
+/**
+ * The crew's shared hunch about each player at a meeting, in [−1, 1]: the same
+ * for every bot (seeded by the meeting and the player only), so it can carry a
+ * majority to a wrong target, as a crew talking itself into a theory does.
+ * Scaled by each bot's `hunch` (personalities.ts).
+ */
+export function crewHunch(view: PlayerView, player: PlayerId): number {
+  const meeting = view.phase.kind === "meeting" || view.phase.kind === "shakedownPending" ? view.phase.meetingId : `act-${view.act}`;
+  return botRandom(`hunch/${meeting}/${player}`)() * 2 - 1;
+}
+
+/** Suspicion as the bot reads it at a vote: the evidence, the crew's hunch (`hunch`), and its own misreading (`misread`). */
+export function misjudged(view: PlayerView, scores: ReadonlyMap<PlayerId, number>, p: Personality, random: Random): Map<PlayerId, number> {
+  const out = new Map<PlayerId, number>();
+  for (const [id, score] of scores) out.set(id, score + p.hunch * crewHunch(view, id) + p.misread * (random() * 2 - 1));
+  return out;
+}
+
 /** Shake down the most suspicious player once they pass the bot's threshold; otherwise skip. design §11.2 */
 export function chooseVote(view: PlayerView, p: Personality, random: Random): VoteChoice {
   // design §8.1: a Mole never votes to shake down its fellow Mole.
@@ -364,7 +414,7 @@ export function chooseVote(view: PlayerView, p: Personality, random: Random): Vo
     const target = pick([null, ...view.players.map((o) => o.id).filter((id) => !allies.includes(id))], random);
     return target === null ? { kind: "skip" } : { kind: "shakedown", target };
   }
-  const scores = suspicion(view);
+  const scores = misjudged(view, suspicion(view), p, random);
   // design §8: a Snitch is paid when its target is caught holding loot, so it moves on less evidence.
   const { power } = roleOf(view);
   const mark = power.kind === "snitch" ? view.me.roleState.target : null;

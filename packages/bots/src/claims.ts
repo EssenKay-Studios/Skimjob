@@ -1,0 +1,233 @@
+// Role claims and bluffs for bots (docs/roles-v2.md §4 "Claim"; design §8, §12.1).
+//
+// A claim is the public `claimRole` command (a `roleClaimed` on the ledger),
+// once per act. Bots don't read chat, so claims are structured engine data
+// and the same in the simulator and on the server.
+//
+// Default policy (v2 §4): a crew bot claims its true role when accused, with
+// chance 1 − its "lie"; a dark bot bluffs a crew role that is hard to
+// disprove and that nobody else has claimed. Each role's own line in the §4
+// table adjusts when it claims (`CLAIM_STYLE`) and what a dark role bluffs
+// (`BLUFFS`). These are bot settings, not game rules.
+import { ROLES, STARTER_ROLES, type RoleId } from "@skimjob/content";
+import { roomDef, roomLoot, type PlayerCommand, type PlayerId, type PlayerView } from "@skimjob/engine";
+import type { Personality } from "./personalities";
+import type { Random } from "./bot";
+import { claimantsOf, claimsOf, createdOf, crewSize, isDuel, jobOf, ofType, roleOf, uniqueRole } from "./read";
+import { suspicion } from "./suspicion";
+
+/**
+ * How a crew role claims (v2 §4 "Claim" column):
+ * - accused: the default, when accused, with chance 1 − lie;
+ * - free: also without being accused (a low-risk claim);
+ * - defend: only when a shakedown of it is in the air (it is always clean);
+ * - evidence: also when it holds evidence it is about to vote on (its sightings, audit, check);
+ * - rarely: when accused, at `RARELY` of the usual chance;
+ * - afterSave: also after its power saved someone (Muscle: a clean cancel; Fixer: a stopped raid);
+ * - afterVote: only once its own vote is in (Priest: never before a vote);
+ * - never: not even when accused (Snitch: the target would frame it).
+ */
+export type ClaimStyle = "accused" | "free" | "defend" | "evidence" | "rarely" | "afterSave" | "afterVote" | "never";
+
+export const CLAIM_STYLE: Readonly<Record<RoleId, ClaimStyle>> = {
+  rookie: "free",
+  insideMan: "defend",
+  lookout: "evidence",
+  auditor: "evidence",
+  detective: "evidence",
+  snitch: "never",
+  smoothTalker: "rarely",
+  muscle: "afterSave",
+  priest: "afterVote",
+  bagman: "free",
+  cleaner: "free",
+  fixer: "afterSave",
+  mastermind: "rarely",
+};
+
+/** Share of the usual claim chance for the "rarely" roles (bot setting). */
+export const RARELY = 0.25;
+
+/** Hard-to-disprove crew roles a dark bot bluffs by default (v2 §4). */
+export const SAFE_BLUFFS: readonly RoleId[] = ["rookie", "bagman", "cleaner"];
+
+/** v2 §4 "Claim": each dark role's preferred bluffs, best first; then `SAFE_BLUFFS`. */
+export const BLUFFS: Readonly<Record<RoleId, readonly RoleId[]>> = {
+  getawayDriver: ["cleaner"],
+  fence: ["rookie"],
+  hacker: ["auditor"],
+  blackmailer: ["detective"],
+  forger: ["lookout"],
+  mole: ["bagman", "rookie"],
+  embezzler: ["insideMan"],
+};
+
+/** Chance a dark bot bluffs once accused (bot setting; it has no truth to tell). */
+export const BLUFF_WHEN_ACCUSED = 0.8;
+
+/**
+ * A bot counts as accused once its public suspicion (what anyone could work
+ * out from the ledger, `publicSuspicion`) is at least this and the most of anyone's (bot setting).
+ */
+export const ACCUSED_AT = 1.5;
+
+/** Is a meeting about to happen or open: the time to claim. design §11.1 */
+export function meetingTime(view: PlayerView): boolean {
+  const k = view.phase.kind;
+  return k === "meeting" || k === "awaitingMeeting" || k === "shakedownPending" || view.pendingEmergency !== null;
+}
+
+/**
+ * Suspicion of every player, me included, from public data only: the ledger's
+ * alibis and round summaries (each round's shortfall against the claimed
+ * rooms, shared by how much each claimant could have taken), missing alibis,
+ * shakedown results and double role claims. What the crew can see of me.
+ */
+export function publicSuspicion(view: PlayerView): Map<PlayerId, number> {
+  const job = jobOf(view);
+  const ids = [view.me.id, ...view.players.map((o) => o.id)];
+  const score = new Map<PlayerId, number>(ids.map((id) => [id, 0]));
+  const add = (id: PlayerId, n: number) => score.has(id) && score.set(id, (score.get(id) ?? 0) + n);
+  const maxLoot = Math.max(...view.rooms.map((r) => roomDef(job, r).loot));
+  for (const { event: e } of view.ledger) {
+    if (e.type === "shakedownResolved") score.set(e.target, e.clean ? -3 : 1);
+    if (e.type !== "roundResolved" || e.round === view.alibiRound) continue;
+    const claims = new Map(ofType(view.ledger, "alibiPosted").filter((a) => a.round === e.round).map((a) => [a.player, a.room]));
+    const crowd = new Map<string, number>();
+    for (const room of claims.values()) crowd.set(room, (crowd.get(room) ?? 0) + 1);
+    let expected = 0;
+    for (const room of claims.values()) expected += roomLoot(roomDef(job, room), crowd.get(room) ?? 1);
+    const short = expected - e.haulDelta;
+    const weights = ids.map((id) => [id, claims.has(id) ? roomDef(job, claims.get(id) as string).loot + 1 : maxLoot + 1] as const);
+    const total = weights.reduce((s, [, w]) => s + w, 0);
+    for (const [id, w] of weights) {
+      if (!claims.has(id)) add(id, 1.5);
+      if (short > 0) add(id, (short * w) / total);
+    }
+  }
+  for (const [role, who] of doubleClaims(view)) if (role) for (const id of who) add(id, 2);
+  return score;
+}
+
+/** Unique roles claimed by more than one player, and who claimed them. */
+export function doubleClaims(view: PlayerView): Map<RoleId, PlayerId[]> {
+  const out = new Map<RoleId, PlayerId[]>();
+  for (const role of new Set(ofType(view.ledger, "roleClaimed").map((c) => c.role))) {
+    const who = claimantsOf(view, role);
+    if (uniqueRole(role) && who.length > 1) out.set(role, who);
+  }
+  return out;
+}
+
+/**
+ * Is the bot accused (v2 §4: "when accused at a meeting")? A shakedown of it is
+ * pending, a visible ballot in the open meeting names it, someone else claimed its
+ * role, or it is the crew's top public suspect.
+ */
+export function accused(view: PlayerView): "shakedown" | "suspected" | null {
+  const me = view.me.id;
+  const phase = view.phase;
+  if (phase.kind === "shakedownPending" && phase.target === me) return "shakedown";
+  if (phase.kind === "meeting") {
+    const ballots = ofType(view.ledger, "voteCast").filter((v) => v.meetingId === phase.meetingId && v.vote.kind === "shakedown" && v.vote.target === me);
+    if (ballots.length > 0) return "shakedown";
+  }
+  if (claimantsOf(view, view.me.role).some((id) => id !== me) && uniqueRole(view.me.role)) return "suspected";
+  const pub = publicSuspicion(view);
+  const mine = pub.get(me) ?? 0;
+  return mine >= ACCUSED_AT && [...pub.values()].every((s) => s <= mine) ? "suspected" : null;
+}
+
+/** Could `role` be in this game, as far as the public setup says (crew size, events, starter mode)? design §8.1 */
+export function couldBeDealt(view: PlayerView, role: RoleId): boolean {
+  const created = createdOf(view);
+  const def = Object.hasOwn(ROLES, role) ? ROLES[role] : undefined;
+  if (!def) return false;
+  if (created.starterMode) return STARTER_ROLES.includes(role);
+  if (def.minPlayers !== undefined && crewSize(view) < def.minPlayers) return false;
+  if (def.needsEvents && !created.eventsEnabled) return false;
+  return true;
+}
+
+/** The bluff a dark bot would claim now: its earlier claim, else its §4 bluff, else a safe one nobody else claimed. */
+export function bluffFor(view: PlayerView): RoleId | null {
+  const mine = claimsOf(view).get(view.me.id)?.at(-1);
+  if (mine !== undefined) return mine;
+  const taken = new Set(ofType(view.ledger, "roleClaimed").filter((c) => c.player !== view.me.id).map((c) => c.role));
+  const options = [...(BLUFFS[view.me.role] ?? []), ...SAFE_BLUFFS];
+  return options.find((r) => !taken.has(r) && couldBeDealt(view, r) && ROLES[r]?.faction === "crew") ?? null;
+}
+
+/** v2 §4 "evidence": the bot holds its own evidence against the player it is about to vote for. */
+function holdsEvidence(view: PlayerView): boolean {
+  const scores = suspicion(view);
+  const top = [...scores].sort((a, b) => b[1] - a[1])[0];
+  if (!top || top[1] <= 0) return false;
+  const [target] = top;
+  const { power } = roleOf(view);
+  const abilities = ofType(view.caseFile, "abilityResolved").map((e) => e.ability);
+  if (power.kind === "checkStash") return abilities.some((a) => a.kind === "checkStash" && a.dirty && a.target === target);
+  if (power.kind === "audit") return abilities.some((a) => a.kind === "audit" && a.shortfall > 0);
+  if (power.kind === "lookout") {
+    // A sighting that contradicts the target's alibi.
+    const alibis = ofType(view.ledger, "alibiPosted").filter((a) => a.player === target);
+    return ofType(view.caseFile, "roomWatched").some((w) => {
+      const said = alibis.find((a) => a.round === w.round)?.room;
+      return said !== undefined && (w.seen.includes(target) ? said !== w.room : said === w.room);
+    });
+  }
+  return false;
+}
+
+/** v2 §4 "afterSave": the Muscle's cancel saved a clean player (it got its Recharge), or the Fixer stopped a raid. */
+function saved(view: PlayerView): boolean {
+  const { power } = roleOf(view);
+  if (power.kind === "fixer") return ofType(view.ledger, "raidStopped").length > 0 && ofType(view.caseFile, "abilityResolved").some((e) => e.ability.kind === "fixer");
+  if (power.kind === "cancelShakedown") return ofType(view.caseFile, "perkGranted").some((e) => e.perk === "recharge");
+  return false;
+}
+
+/**
+ * The role to claim now, or null. Only around meetings (v2 §4: "when accused
+ * at a meeting"), once per act, never in Duel. Crew bots tell the truth; dark
+ * bots bluff (`bluffFor`).
+ */
+export function chooseClaim(view: PlayerView, p: Personality, random: Random, voted = view.me.vote !== null): RoleId | null {
+  if (isDuel(view) || !meetingTime(view)) return null;
+  if (ofType(view.ledger, "roleClaimed").some((c) => c.player === view.me.id && c.act === view.act)) return null;
+  const blame = accused(view);
+  const { faction } = roleOf(view);
+  if (faction !== "crew") {
+    if (blame === null || random() >= BLUFF_WHEN_ACCUSED) return null;
+    return bluffFor(view);
+  }
+  const role = view.me.role;
+  const truth = 1 - p.lie;
+  const chance = (() => {
+    switch (CLAIM_STYLE[role] ?? "accused") {
+      case "never":
+        return 0;
+      case "free":
+        return truth;
+      case "defend":
+        return blame === "shakedown" ? 1 : 0;
+      case "evidence":
+        return holdsEvidence(view) && view.phase.kind === "meeting" ? 1 : blame ? truth : 0;
+      case "rarely":
+        return blame ? truth * RARELY : 0;
+      case "afterSave":
+        return saved(view) ? 1 : blame ? truth : 0;
+      case "afterVote":
+        return view.phase.kind === "meeting" && voted && blame ? truth : 0;
+      case "accused":
+        return blame ? truth : 0;
+    }
+  })();
+  return chance > 0 && random() < chance ? role : null;
+}
+
+/** The claim command, if the bot claims now. */
+export function claimCommands(view: PlayerView, p: Personality, random: Random, voted = view.me.vote !== null): PlayerCommand[] {
+  const role = chooseClaim(view, p, random, voted);
+  return role === null ? [] : [{ type: "claimRole", player: view.me.id, role }];
+}
