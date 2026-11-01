@@ -79,14 +79,16 @@ export interface MoleAllies {
  * (the Hacker: one saboteur); "fence", your safe reached its reveal size (one saboteur);
  * "getaway", Heat reached the Getaway Driver's reveal level (it learns the
  * saboteurs, each saboteur learns it); "tipOff", a Mole's tip-off (one
- * accomplice it didn't know). design §8, §8.1
+ * accomplice it didn't know); "blackmail", a Blackmailer guessed a saboteur's
+ * role (each learns the other); "embezzle", an Embezzler's first take (one
+ * accomplice). At the deal the saboteurs are also told the Forger. design §8, §8.1
  */
 export interface AlliesLearned {
   readonly type: "alliesLearned";
   readonly visibility: PrivateVisibility;
   readonly player: PlayerId;
   readonly allies: readonly PlayerId[];
-  readonly via: "deal" | "fence" | "getaway" | "tipOff";
+  readonly via: "deal" | "fence" | "getaway" | "tipOff" | "blackmail" | "embezzle";
 }
 
 /**
@@ -149,9 +151,11 @@ export interface LootSplit {
  * design §8
  */
 export type ResolvedAbility =
-  | Exclude<AbilityUse, { readonly kind: "blackmail" | "tipOff" }>
-  /** `stolen` is 0 for a wrong guess, and at most what the target's stash held for a right one. */
-  | { readonly kind: "blackmail"; readonly target: PlayerId; readonly role: RoleId; readonly correct: boolean; readonly stolen: number }
+  | Exclude<AbilityUse, { readonly kind: "blackmail" | "tipOff" | "embezzle" }>
+  /** Blackmailer: right → `target`'s vote at the next meeting that opens is yours (v2 §2). */
+  | { readonly kind: "blackmail"; readonly target: PlayerId; readonly role: RoleId; readonly correct: boolean }
+  /** Embezzler: `amount` moved from the Haul to your stash (inside the round's Haul change; at most what the Haul held). design §8 (v2 §2) */
+  | { readonly kind: "embezzle"; readonly amount: number }
   /** Muscle: the pending shakedown of `meetingId` will be cancelled when its window ends. design §11.3 */
   | { readonly kind: "cancelShakedown"; readonly meetingId: string; readonly target: PlayerId }
   /** Mole: the tip-off added `heat` to this round's Heat. Nobody else is told; it's inside the round's total. design §8 */
@@ -180,15 +184,30 @@ export interface AbilityResolved {
 }
 
 /**
- * Blackmail: someone guessed your role and took `stolen` from your stash.
- * Only sent when something was taken; it doesn't say who. design §8
+ * Blackmail (v2 §2): someone guessed your role in `round`, so your vote is
+ * compromised: at the next meeting that opens your ballot weighs nothing (the
+ * Blackmailer's carries it). It doesn't say who. design §8, §11.2
  */
-export interface Blackmailed {
-  readonly type: "blackmailed";
+export interface VoteCompromised {
+  readonly type: "voteCompromised";
   readonly visibility: PrivateVisibility;
   readonly player: PlayerId;
   readonly round: number;
-  readonly stolen: number;
+}
+
+/**
+ * Forger (v2 §2): `forger` planted `target` in `room` in `round`; the watch
+ * feeds of `shownTo` (players, seat order) showed it as if real. Reveal-only:
+ * to watchers a forged sighting is a plain `roomWatched`. design §8, §13
+ */
+export interface SightingForged {
+  readonly type: "sightingForged";
+  readonly visibility: RevealVisibility;
+  readonly forger: PlayerId;
+  readonly round: number;
+  readonly target: PlayerId;
+  readonly room: RoomId;
+  readonly shownTo: readonly PlayerId[];
 }
 
 /** Who else was in your room. design §5.2 step 5 */
@@ -694,7 +713,8 @@ export type GameEvent =
   | DefaultMoveAssigned
   | LootSplit
   | AbilityResolved
-  | Blackmailed
+  | VoteCompromised
+  | SightingForged
   | RoomSighting
   | RoomWatched
   | PocketCount

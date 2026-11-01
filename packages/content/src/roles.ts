@@ -22,8 +22,26 @@ export type RolePower =
   | { readonly kind: "voteWeight"; readonly weight: number }
   /** Muscle: `perGame` times per game, cancel a shakedown after the vote passes (`useAbility`). design §11.3 */
   | { readonly kind: "cancelShakedown"; readonly perGame: number }
-  /** Blackmailer: `perAct` times per act, a move may guess one player's role; if right, steal `steal` from their stash. */
-  | { readonly kind: "blackmail"; readonly perAct: number; readonly steal: number }
+  /**
+   * Blackmailer: `perAct` times per act, a move may guess one player's role.
+   * Right → it steals their vote at the next meeting that opens (their ballot
+   * weighs 0 there, and its own weighs `STOLEN_VOTE_WEIGHT` more); the victim is told only
+   * that its vote is compromised. A saboteur guessed right and the Blackmailer
+   * learn each other. design §8, §11.2 (v2 §2)
+   */
+  | { readonly kind: "blackmail"; readonly perAct: number }
+  /**
+   * Forger: `perAct` times per act, a move may plant a fake sighting: `target`
+   * shows in `room` on every watch feed of that room this round (Security,
+   * Lookout, Tail), as if it were there. design §6.1, §8 (v2 §2)
+   */
+  | { readonly kind: "forge"; readonly perAct: number }
+  /**
+   * Embezzler: `perAct` times per act, a move may take `take` from the Haul into
+   * its stash after the round's splits, hidden in the round's Haul change. Its
+   * stash is never clean while it holds a take (since its last shakedown). design §8, §11.3 (v2 §2)
+   */
+  | { readonly kind: "embezzle"; readonly perAct: number; readonly take: number }
   /** Auditor: `perAct` times per act (`useAbility`), learn the latest resolved round's shortfall for one room. design §8 (v2 §2) */
   | { readonly kind: "audit"; readonly perAct: number }
   /** Detective: `perAct` times per act (`useAbility`), learn whether a player's stash is at or above the clean threshold. design §8 (v2 §2) */
@@ -110,7 +128,15 @@ export type PerkTrigger =
   /** This role's power stopped a raid (Fixer: Shield). */
   | "raidStopped"
   /** This role's camera loop hid a saboteur from a Security watcher that round (Hacker: Peek). */
-  | "loopHidSaboteur";
+  | "loopHidSaboteur"
+  /** A player this role forged into a watch feed, earlier this game, is shaken down clean (Forger: Shield). */
+  | "forgedShakenClean";
+
+/**
+ * What a stolen vote adds to the Blackmailer's ballot, whatever the victim's
+ * own weight (Smooth Talker, +Vote, Snitch reward): the victim's counts 0 (v2 §2; owner, 2 Nov).
+ */
+export const STOLEN_VOTE_WEIGHT = 1;
 
 /** The Cleaner is rewarded on every this-many-th round in its cooling room (v2 §2: every 2nd Rooftop round). */
 export const CLEANER_REWARD_EVERY = 2;
@@ -148,6 +174,8 @@ export interface RoleDef {
   readonly needsEvents?: boolean;
   /** Told this many saboteurs (at random) at the deal (Hacker: 1, role deck v2 §2). Absent: none. design §8.1 */
   readonly knowsSaboteurs?: number;
+  /** The saboteurs are told who holds this role at the deal (the Forger, role deck v2 §2). design §8.1 */
+  readonly knownToSaboteurs?: boolean;
 }
 
 const PLAIN_SCORING: RoleScoring = { stashMultiplier: 1, perLootOverFinalTarget: 0 };
@@ -211,6 +239,28 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     rewards: [{ on: "loopHidSaboteur", perk: "peek", count: 1 }],
     knowsSaboteurs: 1,
   },
+  blackmailer: {
+    id: "blackmailer",
+    name: "Blackmailer",
+    power: { kind: "blackmail", perAct: 1 },
+    canPocket: true,
+    scoring: PLAIN_SCORING,
+    faction: "accomplice",
+    minPlayers: 7,
+    needsMeetings: true,
+  },
+  forger: {
+    id: "forger",
+    name: "Forger",
+    power: { kind: "forge", perAct: 1 },
+    canPocket: true,
+    scoring: PLAIN_SCORING,
+    faction: "accomplice",
+    rewards: [{ on: "forgedShakenClean", perk: "shield", count: 1 }],
+    minPlayers: 7,
+    needsMeetings: true,
+    knownToSaboteurs: true,
+  },
   smoothTalker: {
     id: "smoothTalker",
     name: "Smooth Talker",
@@ -232,14 +282,6 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     rewards: [{ on: "cancelledClean", perk: "recharge", count: 1 }],
     minPlayers: 5,
     needsMeetings: true,
-  },
-  blackmailer: {
-    id: "blackmailer",
-    name: "Blackmailer",
-    power: { kind: "blackmail", perAct: 1, steal: 3 },
-    canPocket: true,
-    scoring: PLAIN_SCORING,
-    faction: "crew",
   },
   snitch: {
     id: "snitch",
@@ -327,6 +369,15 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     canPocket: true,
     scoring: PLAIN_SCORING,
     // design §3, §8: a saboteur; wins a failed heist with the best dark-side stash, never a success.
+    faction: "saboteur",
+  },
+  embezzler: {
+    id: "embezzler",
+    name: "Embezzler",
+    power: { kind: "embezzle", perAct: 1, take: 4 },
+    canPocket: true,
+    scoring: PLAIN_SCORING,
+    // v2 §2: a saboteur, dealt by the saboteur setting like the Mole.
     faction: "saboteur",
   },
 };

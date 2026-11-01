@@ -145,9 +145,11 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
   const int = (k: number): number => Math.floor(rand() * k);
   const pick = <T>(xs: readonly T[]): T => xs[int(xs.length)] as T;
   // v2 §2 (R3a): the Hacker is an accomplice, dealt only with a saboteur, so its games deal a Mole and no other accomplice.
+  // R3b: so is the Blackmailer (from 7 players).
   const hacking = kind === "hackerLoop";
-  const pool = hacking ? ["hacker", ...INFO_VOTE_ROLES] : n <= 5 ? [...INFO_VOTE_ROLES] : [];
-  const cfg = config(n, { seed: `rqa-${seed}`, voteVisibility: mode, rolePool: pool, ...(hacking && { mole: "on" as const }) });
+  const blackmailing = kind === "blackmail";
+  const pool = hacking ? ["hacker", ...INFO_VOTE_ROLES] : blackmailing ? ["blackmailer", ...INFO_VOTE_ROLES] : n <= 5 ? [...INFO_VOTE_ROLES] : [];
+  const cfg = config(n, { seed: `rqa-${seed}`, voteVisibility: mode, rolePool: pool, ...((hacking || blackmailing) && { mole: "on" as const }) });
   let A = createGame(cfg);
   const ids = A.playerOrder;
   const holder = (role: string): PlayerId | undefined => ids.find((id) => A.players[id]?.role === role);
@@ -190,8 +192,8 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
     if (!e) return false;
     if (e.type === "gameEnded") return true;
     if (e.type === "shakedownResolved" || e.type === "shakedownCancelled") return kind === "muscleCancel" || involved.has(e.target) || tainted.has(e.target);
-    // A ballot's weight (Smooth Talker; a Snitch's earned +1, v2 §2) shows only in a result the plain tally can't explain.
-    if (e.type === "meetingClosed") return kind === "smoothDealt" || kind === "snitchTarget";
+    // A ballot's weight (Smooth Talker; a Snitch's earned +1; a vote the Blackmailer stole, v2 §2) shows only in a result the plain tally can't explain.
+    if (e.type === "meetingClosed") return kind === "smoothDealt" || kind === "snitchTarget" || kind === "blackmail";
     return false;
   };
   const over = (): boolean => A.phase.kind === "ended" || B.phase.kind === "ended" || diverged !== null;
@@ -302,7 +304,7 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
         const base = lastMove(bm);
         planA.set(bm, [{ type: "submitMove", player: bm, move: { ...base, ability: { kind: "blackmail", target: t, role: wrong } } }]);
         planB.set(bm, [{ type: "submitMove", player: bm, move: { ...base, ability: { kind: "blackmail", target: t, role: real } } }]);
-        // The target pockets something, so a right guess takes loot.
+        // The target pockets something (v1 took loot; v2 §2 steals its vote at the next meeting instead).
         if (real !== "insideMan") {
           const tm = [{ type: "submitMove", player: t, move: { room: "office", pocket: 3 } }];
           planA.set(t, tm);
@@ -515,34 +517,8 @@ describe("QA Muscle: window, limits, wrong phase — design §8, §11.3", () => 
   });
 });
 
-describe("QA Blackmailer: stash edges, limits, wrong phase — design §8", () => {
+describe("QA Blackmailer: limits, wrong phase — design §8", () => {
   const guess = (target: string, role: string) => mv("p0", "lobby", 0, { ability: { kind: "blackmail", target, role } });
-  const stolen = (s: GameState) => ofType(s.log, "abilityResolved").find((e) => e.ability.kind === "blackmail")?.ability;
-
-  it.each([
-    [2, 2, 0],
-    [3, 3, 0],
-    [4, 3, 1],
-  ])("target stash %i: steals %i, leaves %i", (pocket, took, left) => {
-    const s = run(game(3, ["blackmailer"]), guess("p1", "rookie"), mv("p1", "office", pocket), ROUND);
-    expect(stolen(s)).toMatchObject({ correct: true, stolen: took });
-    expect([s.players.p0?.stash, s.players.p1?.stash]).toEqual([took, left]);
-    expect(ofType(s.log, "blackmailed")).toEqual([{ type: "blackmailed", visibility: privateTo("p1"), player: "p1", round: 1, stolen: took }]);
-  });
-
-  it("a right guess on an Inside Man (no stash) or a Fence with everything in the safe takes nothing and tells nobody", () => {
-    const ins = run(game(3, ["blackmailer", "insideMan"]), guess("p1", "insideMan"), ROUND);
-    expect(stolen(ins)).toMatchObject({ correct: true, stolen: 0 });
-    const fence = run(game(3, ["blackmailer", "fence"]), guess("p1", "fence"), mv("p1", "office", 4, { ability: { kind: "fenceSafe", amount: 4 } }), ROUND);
-    expect(stolen(fence)).toMatchObject({ correct: true, stolen: 0 });
-    expect(fence.players.p1).toMatchObject({ stash: 0, safe: 4 });
-    expect([...ofType(ins.log, "blackmailed"), ...ofType(fence.log, "blackmailed")]).toEqual([]);
-  });
-
-  it("a right guess on the Mole steals", () => {
-    const s = run(game(3, ["blackmailer", "mole"]), guess("p1", "mole"), mv("p1", "office", 4), ROUND);
-    expect(stolen(s)).toMatchObject({ correct: true, stolen: 3 });
-  });
 
   it("only a resolved guess uses the act's turn: a guess replaced before the deadline doesn't count; the turn comes back next act", () => {
     let s = run(game(3, ["blackmailer"]), guess("p1", "rookie"), mv("p0", "lobby"), ROUND);
@@ -556,8 +532,8 @@ describe("QA Blackmailer: stash edges, limits, wrong phase — design §8", () =
 
   it("the victim's event never names the Blackmailer", () => {
     const s = run(game(3, ["blackmailer"]), guess("p1", "rookie"), mv("p1", "office", 4), ROUND);
-    const e = ofType(viewFor(s, "p1").caseFile.map((x) => x.event), "blackmailed")[0];
-    expect(Object.keys(e ?? {}).sort()).toEqual(["player", "round", "stolen", "type", "visibility"]);
+    const e = ofType(viewFor(s, "p1").caseFile.map((x) => x.event), "voteCompromised")[0];
+    expect(Object.keys(e ?? {}).sort()).toEqual(["player", "round", "type", "visibility"]);
     expect(JSON.stringify(viewFor(s, "p2"))).not.toMatch(/blackmail/);
   });
 });

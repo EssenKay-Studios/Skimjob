@@ -6,7 +6,7 @@
 // command is refused. `handleCommand` (handle.ts) folds the events. Nothing
 // here draws randomness except the next act's event card (deck.ts, design §10):
 // meeting and proposal ids are names and log positions.
-import { BANK_JOB, MAX_SLOT_LENGTH, PERK_RULES, ROUNDS_PER_ACT, type RoleId, type ShakedownRules } from "@skimjob/content";
+import { BANK_JOB, MAX_SLOT_LENGTH, PERK_RULES, ROUNDS_PER_ACT, STOLEN_VOTE_WEIGHT, type RoleId, type ShakedownRules } from "@skimjob/content";
 import type {
   ActNumber,
   GameEvent,
@@ -25,8 +25,8 @@ import { checkpointTarget, clampHeat } from "./job";
 import { jobFor, powerOf, roleDefIn, rolesFor, type RoleTable } from "./overrides";
 import { dealableRoles } from "./setup";
 import { emergencySpent, isPerkSpend, perkCount, shieldFor, usePerk } from "./perks";
-import { getawayReveal } from "./accomplices";
-import { blessingEvents, checkpointRewards, dirtyShakedownRewards, muscleCancelEvents, stopRaid, useCrewPower } from "./crew";
+import { forgedBy, getawayReveal, holdsDirty, stolenVotes } from "./accomplices";
+import { blessingEvents, checkpointRewards, dirtyShakedownRewards, grantRewards, muscleCancelEvents, stopRaid, useCrewPower } from "./crew";
 import { actOfRound } from "./acts";
 import { gameEnded } from "./end";
 import { applyEvent } from "./reduce";
@@ -246,11 +246,26 @@ export function meetingResult(
  * How much a player's ballot counts: the Smooth talker's `weight`, else 1,
  * plus a +Vote spent in this meeting and the Snitch's reward. design §8, §8.3
  */
-function voteWeight(state: GameState, player: PlayerId): number {
+function baseWeight(state: GameState, player: PlayerId): number {
   const p = state.players[player] as PlayerState;
   const power = powerOf(state.config, p.role);
   const extra = state.meeting?.extraVotes.includes(player) ? PERK_RULES.extraVoteWeight : 0;
   return (power.kind === "voteWeight" ? power.weight : 1) + extra + p.roleState.bonusVotes;
+}
+
+/**
+ * The ballot weights at the open meeting: `baseWeight`, except that a
+ * Blackmailer's victim weighs 0 and the Blackmailer's own ballot weighs
+ * `STOLEN_VOTE_WEIGHT` (+1) more per stolen vote, whatever the victim's weight
+ * (v2 §2; owner, 2 Nov; nothing if it doesn't vote). design §8, §11.2
+ */
+function voteWeights(state: GameState): (player: PlayerId) => number {
+  const stolen = state.meeting ? stolenVotes(state, state.meeting.id) : new Map<PlayerId, PlayerId>();
+  return (player) => {
+    let w = stolen.has(player) ? 0 : baseWeight(state, player);
+    for (const by of stolen.values()) if (by === player) w += STOLEN_VOTE_WEIGHT;
+    return w;
+  };
 }
 
 /**
@@ -288,8 +303,9 @@ export function closeMeeting(state: GameState, meetingId: unknown, draw: Draw): 
   let weight = 0;
   const counts = new Map<PlayerId, number>();
   const weights = new Map<PlayerId, number>();
+  const voteWeight = voteWeights(state);
   for (const [voter, vote] of ballots) {
-    const w = voteWeight(state, voter);
+    const w = voteWeight(voter);
     weight += w;
     if (vote.kind === "skip") {
       skip++;
@@ -388,16 +404,21 @@ function afterVote(
     if (shakedown.cancelled) events.push(...muscleCancelEvents(state, meeting.meetingId, shakedown.target, act));
   } else if (shakedown) {
     const { target } = shakedown;
-    const { stash, safe } = state.players[target] as PlayerState;
-    const clean = stash + safe < job.shakedown.cleanBelowPerAct * act;
+    const { stash } = state.players[target] as PlayerState;
+    // v2 §2: an Embezzler holding a take is never clean; the whole stash, take and all, goes back.
+    const clean = !holdsDirty(state, target, job.shakedown.cleanBelowPerAct * act);
     // Paid out of the Haul, so never more than it holds (provisional).
     const compensation = clean ? Math.min(job.shakedown.compensationPerAct * act, haul + stash) : 0;
     events.push({ type: "shakedownResolved", visibility: PUBLIC, meetingId: meeting.meetingId, target, stashRevealed: stash, taken: stash, clean, compensation });
     // Snitch (§8): rewarded when its target is shaken down holding at least the clean threshold (provisional);
     // so are the crew roles whose perk this earns (v2 §2, design §8.3).
     if (!clean) events.push(...snitchRewards(state, meeting.meetingId, target), ...dirtyShakedownRewards(state, target, meeting.meetingId));
-    // Priest (v2 §2): a blessed target shaken down clean is compensated by the bank.
-    else events.push(...blessingEvents(state, meeting.meetingId, target, act, compensation));
+    // Priest (v2 §2): a blessed target shaken down clean is compensated by the bank; a Forger that planted them earns a Shield.
+    else
+      events.push(
+        ...blessingEvents(state, meeting.meetingId, target, act, compensation),
+        ...grantRewards(state, "forgedShakenClean", (p) => p.id !== target && forgedBy(state, p.id).includes(target)),
+      );
   }
   if (meeting.kind === "emergency") return events;
   return [...events, ...checkpoint(state, [...prior, ...events], act, draw)];

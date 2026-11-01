@@ -36,7 +36,8 @@ describe("bot Heat projection — design §7, §8, §10", () => {
   });
 
   it("a round's Heat above what the alibis and the card explain reads as a tip-off; the bot then expects more (design §8)", () => {
-    const s = moleGame(6, "on");
+    // Since R3b the one saboteur may be the Embezzler: take the first seed that deals a Mole.
+    const s = ["heat", "heat-1", "heat-2", "heat-3", "heat-4"].map((seed) => moleGame(6, "on", seed)).find((g) => g.playerOrder.some((id) => g.players[id]?.role === "mole")) as GameState;
     const tipped = viewFor(lobbyRound(s, true), crew(s));
     const quiet = viewFor(lobbyRound(s, false), crew(s));
     expect(suspectedTipOffRounds(tipped)).toEqual([1]);

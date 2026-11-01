@@ -109,7 +109,10 @@ const commandFields = (room: string, proposalId: string, other: string): readonl
   [{ type: "submitMove", move: { room, pocket: 0 } }, [id(["move"]), id(["move", "room"]), [["move", "pocket"], NOT_NUMBER], id(["move", "watch"]), id(["move", "ability"])]],
   [{ type: "submitMove", move: { room, pocket: 0, ability: { kind: "loopCameras", room } } }, [id(["move", "ability", "kind"]), id(["move", "ability", "room"])]],
   [{ type: "submitMove", move: { room, pocket: 0, ability: { kind: "blackmail", target: other, role: "fence" } } }, [id(["move", "ability", "target"]), id(["move", "ability", "role"])]],
-  [{ type: "submitMove", move: { room, pocket: 0, ability: { kind: "lookout", rooms: [room] } } }, [id(["move", "ability", "rooms"]), id(["move", "ability", "rooms", "0"])]],
+  // v2 §2 (R3b): the Forger's planted sighting.
+  [{ type: "submitMove", move: { room, pocket: 0, ability: { kind: "forge", target: other, room } } }, [id(["move", "ability", "target"]), id(["move", "ability", "room"])]],
+  // '["lobby"]' is a valid rooms list, accepted when the (randomly dealt) attacker is a Lookout, so it isn't tried there.
+  [{ type: "submitMove", move: { room, pocket: 0, ability: { kind: "lookout", rooms: [room] } } }, [[["move", "ability", "rooms"], ALL.filter((v) => v !== '["lobby"]')], id(["move", "ability", "rooms", "0"])]],
   [{ type: "submitMove", move: { room, pocket: 0, ability: { kind: "fenceSafe", amount: 1 } } }, [[["move", "ability", "amount"], NOT_NUMBER]]],
   [{ type: "postAlibi", room }, [id(["room"])]],
   [{ type: "proposeMeeting", slot: "s" }, [[["slot"], NON_STRING]]],

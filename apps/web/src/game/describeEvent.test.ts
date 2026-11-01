@@ -2,7 +2,7 @@
 import type { GameEvent, MeetingResult, ResolvedAbility, ResolvedPerk } from "@skimjob/engine";
 import { describe, expect, it } from "vitest";
 import { sampleEvents } from "../../../../packages/engine/src/types/samples";
-import { describeEvent } from "./describeEvent";
+import { EVIDENCE_CARD_NOTE, describeEvent } from "./describeEvent";
 
 const NAMES: Record<string, string> = { ana: "Ana", ben: "Ben" };
 const asAna = { me: "ana", name: (p: string) => NAMES[p] ?? p };
@@ -104,9 +104,11 @@ describe("describeEvent", () => {
     fenceSafe: [{ kind: "fenceSafe", amount: 2 }],
     loopCameras: [{ kind: "loopCameras", room: "vault" }],
     blackmail: [
-      { kind: "blackmail", target: "ben", role: "fence", correct: true, stolen: 3 },
-      { kind: "blackmail", target: "ben", role: "fence", correct: false, stolen: 0 },
+      { kind: "blackmail", target: "ben", role: "fence", correct: true },
+      { kind: "blackmail", target: "ben", role: "fence", correct: false },
     ],
+    forge: [{ kind: "forge", target: "ben", room: "vault" }],
+    embezzle: [{ kind: "embezzle", amount: 4 }],
     cancelShakedown: [{ kind: "cancelShakedown", meetingId: "m1", target: "ben" }],
     tipOff: [{ kind: "tipOff", heat: 6 }],
     audit: [{ kind: "audit", round: 2, room: "office", shortfall: 1 }],
@@ -130,6 +132,21 @@ describe("describeEvent", () => {
     expect(as(abilities.bless[0])).toBe("You blessed Ben for Act 2.");
     expect(as(abilities.bagman[0])).toBe("Round 1: you handed everything in, so the bank added +1 to the Haul.");
     expect(as(abilities.fixer[0])).toBe("Round 1: you stopped the raid and lost 3 from your stash.");
+    // v2 §2 (R3b): Blackmailer, Forger, Embezzler
+    expect(as(abilities.blackmail[0])).toBe("Round 1: you blackmailed Ben (the Fence): Ben's vote at the next meeting is yours.");
+    expect(as(abilities.forge[0])).toBe("Round 1: you forged a sighting of Ben in the Vault.");
+    expect(as(abilities.embezzle[0])).toBe("Round 1: you embezzled 4 from the Haul.");
+  });
+
+  // v2 §2 (R3b): the victim never learns who or which role; a forgery is only told apart in the reveal.
+  it("describes a compromised vote and a forged sighting without leaking", () => {
+    expect(describeEvent(sampleEvents.voteCompromised, { ...asAna, me: "ben" })).toBe("Someone has dirt on you (round 2): your vote is compromised at the next meeting.");
+    expect(describeEvent(sampleEvents.voteCompromised, { ...asAna, me: "ben" })).not.toMatch(/Ana|Blackmail|Fence/);
+    expect(describeEvent(sampleEvents.sightingForged, asCyd)).toBe("Forged: Ana planted Ben in the Vault on round 2's cameras, fooling Ana.");
+    expect(describeEvent({ ...sampleEvents.sightingForged, shownTo: [] }, asCyd)).toBe("Forged: Ana planted Ben in the Vault on round 2's cameras (nobody was watching).");
+    for (const via of ["blackmail", "embezzle"] as const) expect(describeEvent({ ...sampleEvents.alliesLearned, via }, asAna)).not.toMatch(/Mole|Embezzler|Blackmailer|saboteur|accomplice/i);
+    expect(EVIDENCE_CARD_NOTE).toMatch(/own case file/);
+    expect(EVIDENCE_CARD_NOTE).toMatch(/tampered/);
   });
 
   // design §8.3: every perk spent.
