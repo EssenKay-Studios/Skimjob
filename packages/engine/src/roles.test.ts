@@ -1,6 +1,7 @@
 // Info and vote roles: Hacker, Smooth talker, Muscle, Blackmailer, Snitch.
 // design §8 (and §11.2 / §11.3 where they change votes and shakedowns)
 import { describe, expect, it } from "vitest";
+import { handleThroughAlibis } from "./alibis.testkit";
 import { BANK_JOB, DEFAULT_ROLE_POOL, ROLES, STARTER_ROLES } from "@skimjob/content";
 import type { GameConfig, GameEvent, GameState, PlayerId, VoteVisibility } from "./types";
 import { privateTo } from "./types";
@@ -44,14 +45,14 @@ function game(players: number, roles: string[], extra: Partial<GameConfig> = {},
 type Cmd = unknown | ((s: GameState) => unknown);
 function run(state: GameState, ...commands: Cmd[]): GameState {
   return commands.reduce<GameState>((s, c) => {
-    const r = handleCommand(s, typeof c === "function" ? c(s) : c);
+    const r = handleThroughAlibis(s, typeof c === "function" ? c(s) : c);
     if (!r.ok) throw new Error(`rejected ${JSON.stringify(typeof c === "function" ? c(s) : c)}: ${r.reason}`);
     return r.state;
   }, state);
 }
 function reason(state: GameState, command: unknown): string {
   const before = JSON.stringify(state);
-  const r = handleCommand(state, command);
+  const r = handleThroughAlibis(state, command);
   if (r.ok) throw new Error("expected a rejection");
   expect(JSON.stringify(state)).toBe(before);
   return r.reason;

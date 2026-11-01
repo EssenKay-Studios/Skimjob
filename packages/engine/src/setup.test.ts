@@ -68,8 +68,16 @@ describe("dealing roles — design §8.1", () => {
     }
   });
 
-  it("4 players, starter mode: one of each starter role", () => {
-    expect(rolesOf(config(4, { starterMode: true })).sort()).toEqual([...STARTER_ROLES].sort());
+  it("4 players, starter mode: one of each starter role but the Insider (from 5 players), a Rookie for it", () => {
+    expect(rolesOf(config(4, { starterMode: true })).sort()).toEqual(["fence", "lookout", "rookie", "rookie"]);
+    expect(rolesOf(config(5, { starterMode: true })).sort()).toEqual([...STARTER_ROLES, "rookie"].sort());
+  });
+
+  it("the Insider is dealt only from 5 players (design §8.1, owner answers 1 Nov)", () => {
+    for (const n of [2, 3, 4]) {
+      for (let s = 0; s < 30; s++) expect(rolesOf(config(n, { seed: `ins-${n}-${s}`, rolePool: ["insider", "fence"] }))).not.toContain("insider");
+    }
+    expect(rolesOf(config(5, { rolePool: ["insider"] }))).toContain("insider");
   });
 
   it("pool roles are dealt at most once each; Rookie fills the remaining seats (provisional)", () => {
@@ -81,7 +89,25 @@ describe("dealing roles — design §8.1", () => {
   it("small crews get a random subset of the pool", () => {
     const seen = new Set<string>();
     for (let s = 0; s < 50; s++) for (const r of rolesOf(config(2, { seed: `s${s}`, starterMode: true }))) seen.add(r);
-    expect([...seen].sort()).toEqual([...STARTER_ROLES].sort());
+    expect([...seen].sort()).toEqual(STARTER_ROLES.filter((r) => r !== "insider").sort());
+  });
+
+  it("uniqueRoles false deals every seat from the pool with replacement, so roles may repeat; the Mole only by the Mole setting (design §8.1, §15)", () => {
+    let repeated = false;
+    for (let s = 0; s < 20; s++) {
+      const roles = rolesOf(config(12, { seed: `rep-${s}`, mole: "on", uniqueRoles: false }));
+      expect(roles.filter((r) => r === MOLE_ROLE)).toHaveLength(1);
+      if (new Set(roles.filter((r) => r !== "rookie")).size < roles.filter((r) => r !== "rookie").length) repeated = true;
+    }
+    expect(repeated).toBe(true);
+    // A pool of one: every non-Mole seat gets it.
+    expect(rolesOf(config(6, { rolePool: ["fence"], uniqueRoles: false })).sort()).toEqual(Array(6).fill("fence"));
+    // Default (absent or true): each pool role at most once.
+    for (const unique of [undefined, true]) {
+      const roles = rolesOf(config(12, { rolePool: ["fence"], ...(unique !== undefined && { uniqueRoles: unique }) }));
+      expect(roles.filter((r) => r === "fence")).toHaveLength(1);
+    }
+    expect(validateConfig(config(6, { uniqueRoles: "no" as unknown as boolean }))).toContain("uniqueRoles must be a boolean");
   });
 
   it("the host's role pool is respected", () => {
@@ -107,11 +133,11 @@ describe("dealing roles — design §8.1", () => {
     }
   });
 
-  it("Mole at 9–12: off → 0, on → 2, maybe → 1 or 2 (provisional)", () => {
+  it("Mole at 9–12: off → 0, on → 1, maybe → 0 or 1 (owner answers, 1 Nov)", () => {
     for (const n of [9, 12]) {
       expect(moleCounts(n, "off")).toEqual(new Set([0]));
-      expect(moleCounts(n, "on")).toEqual(new Set([2]));
-      expect(moleCounts(n, "maybe")).toEqual(new Set([1, 2]));
+      expect(moleCounts(n, "on")).toEqual(new Set([1]));
+      expect(moleCounts(n, "maybe")).toEqual(new Set([0, 1]));
     }
   });
 

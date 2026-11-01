@@ -4,6 +4,7 @@
 // tie-breaks at every level, 2/3/12 players, commands after the end, and
 // determinism / replay of a finished game. design §3, §8, §11.3, §13
 import { STARTER_ROLES } from "@skimjob/content";
+import { handleThroughAlibis } from "./alibis.testkit";
 import { describe, expect, it } from "vitest";
 import type { GameConfig, GameEvent, GameState, Outcome, PlayerState } from "./types";
 import { setupEvents } from "./setup";
@@ -37,7 +38,7 @@ function game(players: number, roles: string[] = []): GameState {
 type Cmd = unknown | ((s: GameState) => unknown);
 function run(state: GameState, ...commands: Cmd[]): GameState {
   return commands.reduce<GameState>((s, c) => {
-    const r = handleCommand(s, typeof c === "function" ? c(s) : c);
+    const r = handleThroughAlibis(s, typeof c === "function" ? c(s) : c);
     if (!r.ok) throw new Error(`rejected: ${r.reason}`);
     return r.state;
   }, state);
@@ -219,9 +220,9 @@ describe("12 players — design §3, §6.2, §8", () => {
       { type: "advance", deadline: { kind: "openMeeting", meetingId: "act-2" } },
       { type: "advance", deadline: { kind: "closeMeeting", meetingId: "act-2" } },
     ];
-    for (const c of commands) expect(handleCommand(s, c)).toEqual({ ok: false, reason: "the game is over" });
+    for (const c of commands) expect(handleThroughAlibis(s, c)).toEqual({ ok: false, reason: "the game is over" });
     // Also after a replay of the finished log.
-    expect(handleCommand(replay(s.config, s.log), mv("p0", "lobby"))).toEqual({ ok: false, reason: "the game is over" });
+    expect(handleThroughAlibis(replay(s.config, s.log), mv("p0", "lobby"))).toEqual({ ok: false, reason: "the game is over" });
     expect(JSON.stringify(s)).toBe(before);
   });
 });

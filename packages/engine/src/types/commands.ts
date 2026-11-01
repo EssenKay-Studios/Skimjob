@@ -94,6 +94,12 @@ export type Deadline =
    * or late deadline can't resolve the next round early. design §5
    */
   | { readonly kind: "round"; readonly round: number }
+  /**
+   * The alibi deadline for `round` (design §5.4): no more alibis for it; the
+   * next round's planning starts (or the act's meeting is awaited). Rejected
+   * unless `round` is the one whose alibis are open, so a retry is refused.
+   */
+  | { readonly kind: "alibis"; readonly round: number }
   /** A scheduled regular meeting's slot, or an emergency's notice period, has arrived: open the vote window. design §11.1 */
   | { readonly kind: "openMeeting"; readonly meetingId: string }
   /** The open vote window has ended: tally, shakedown, then checkpoint / final check. design §11.2–§11.4 */

@@ -1,6 +1,6 @@
 // Duel mode: two players, no meetings or votes. Once per act each player may
-// call out the other; the call is settled when the act's last round resolves,
-// just before the checkpoint. design §16.1
+// call out the other; the call is settled when the act's last round's alibis
+// close (design §5.4), just before the checkpoint. design §16.1
 //
 // Timing (provisional, docs/decisions.md): a call-out is made while any of the
 // act's rounds is being planned, stays private until the act ends, and covers

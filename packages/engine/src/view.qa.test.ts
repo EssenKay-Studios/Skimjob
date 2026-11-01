@@ -18,7 +18,7 @@ import { eventsSince, viewFor } from "./view";
 type Cmd = Record<string, unknown>;
 type Kind = "role" | "split" | "swap" | "fence" | "watch" | "miss" | "churn" | "voteChurn" | "ballotSwap" | "seal" | "control";
 const MODES: readonly VoteVisibility[] = ["hiddenThenRevealed", "open", "secret"];
-const LOOT: Record<string, number> = { vault: 6, office: 4, lobby: 2, depositBoxes: 5, tellerLine: 3, managersOffice: 5 };
+const LOOT: Record<string, number> = { vault: 6, office: 4, lobby: 2, depositBoxes: 5, tellerLine: 3, managersOffice: 4 };
 
 function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
@@ -323,6 +323,7 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
     planRound(round);
     step([{ type: "advance", deadline: { kind: "round", round } }]);
     for (const id of ids) if (!over() && rand() < 0.7) step([{ type: "postAlibi", player: id, room: pick(A.rooms) }]);
+    if (!over()) step([{ type: "advance", deadline: { kind: "alibis", round } }]); // design §5.4
     if (round % 3 === 0 && !over()) {
       if (rand() < 0.5) {
         step([{ type: "proposeMeeting", player: pick(ids), slot: `slot-${act}` }]);
@@ -443,6 +444,7 @@ describe("QA: viewFor edges — design §13, §11.2", () => {
       check();
       s = apply(s, { type: "advance", deadline: { kind: "round", round } }, "A");
       check();
+      if (s.phase.kind === "alibis") s = apply(s, { type: "advance", deadline: { kind: "alibis", round } }, "A");
       if (round % 3 === 0) {
         s = apply(s, { type: "scheduleMeeting", act: round / 3, slot: "x" }, "A");
         s = apply(s, { type: "advance", deadline: { kind: "openMeeting", meetingId: s.scheduledMeeting?.meetingId } }, "A");

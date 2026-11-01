@@ -295,6 +295,13 @@ export interface AlibiPosted {
   readonly room: RoomId;
 }
 
+/** The alibi deadline for `round` passed: no more alibis for it. design §5.4 */
+export interface AlibisClosed {
+  readonly type: "alibisClosed";
+  readonly visibility: PublicVisibility;
+  readonly round: number;
+}
+
 // ---------------------------------------------------------------- meetings (§11)
 
 export interface MeetingProposed {
@@ -554,6 +561,7 @@ export type GameEvent =
   | InsideTip
   | AuditReport
   | AlibiPosted
+  | AlibisClosed
   | MeetingProposed
   | MeetingProposalAccepted
   | MeetingScheduled

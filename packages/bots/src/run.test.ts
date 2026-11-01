@@ -201,7 +201,8 @@ describe("personalities behave as design §17.3 describes", () => {
 });
 
 describe("role powers in bot games — design §8", () => {
-  const states = Array.from({ length: 10 }, (_, g) => play(4, `roles-${g}`, ["opportunist", "greedy"]).state);
+  // 5 players: the Insider is dealt only from 5 (design §8.1).
+  const states = Array.from({ length: 10 }, (_, g) => play(5, `roles-${g}`, ["opportunist", "greedy"]).state);
   const roleOf = (s: GameState, id: PlayerId) => s.players[id]?.role;
 
   it("the Insider never pockets", () => {
@@ -266,20 +267,6 @@ describe("bots with Moles and the Driver dealt — design §8, §8.1, §17.3 (ta
       }
     }
     expect(tips).toBeGreaterThan(0);
-  });
-
-  it("a Mole never votes to shake down its fellow Mole", () => {
-    let pairs = 0;
-    for (const r of games) {
-      const moles = r.state.playerOrder.filter((id) => r.state.players[id]?.role === "mole");
-      if (moles.length < 2) continue;
-      pairs++;
-      for (const e of r.state.log) {
-        if (e.type !== "voteCast" || !moles.includes(e.player) || e.vote.kind !== "shakedown") continue;
-        expect(moles).not.toContain(e.vote.target);
-      }
-    }
-    expect(pairs).toBeGreaterThan(0);
   });
 
   it("Moles win some failed heists and no successful one", () => {

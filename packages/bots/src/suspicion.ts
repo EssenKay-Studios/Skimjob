@@ -6,7 +6,7 @@
 // no hidden memory of its own: same view, same scores.
 import type { RoomId } from "@skimjob/content";
 import { roomDef, roomLoot, type PlayerId, type PlayerView, type RoundResolved } from "@skimjob/engine";
-import { jobOf, lastResolvedRound, ofType } from "./read";
+import { jobOf, ofType } from "./read";
 
 /** How much each kind of evidence moves a score. Shared by every personality; they differ in when they act on it. */
 export interface SuspicionWeights {
@@ -43,7 +43,6 @@ export function suspicion(view: PlayerView, w: SuspicionWeights = SUSPICION_WEIG
     const s = score.get(id);
     if (s !== undefined) score.set(id, s + n);
   };
-  const last = lastResolvedRound(view);
   const alibis = new Map<number, Map<PlayerId, RoomId>>();
   for (const a of ofType(view.ledger, "alibiPosted")) {
     if (!alibis.has(a.round)) alibis.set(a.round, new Map());
@@ -74,7 +73,7 @@ export function suspicion(view: PlayerView, w: SuspicionWeights = SUSPICION_WEIG
       }
     }
     // The latest round's alibi window is still open: silence there isn't evidence yet.
-    const windowClosed = round < last;
+    const windowClosed = view.alibiRound !== round; // design §5.4
 
     // design §5.4: alibis against what I saw.
     for (const id of others) {

@@ -94,6 +94,7 @@ export const sampleEvents: { readonly [T in GameEventType]: EventOfType<T> } = {
   insideTip: { type: "insideTip", visibility: privateTo(ana), player: ana, round: 5, subject: ben, role: "fence" },
   auditReport: { type: "auditReport", visibility: PUBLIC, round: 6, shortfalls: { vault: 4, office: 0, lobby: 0, security: 0, rooftop: 0 } },
   alibiPosted: { type: "alibiPosted", visibility: PUBLIC, player: ana, round: 1, room: "lobby" },
+  alibisClosed: { type: "alibisClosed", visibility: PUBLIC, round: 1 },
   meetingProposed: { type: "meetingProposed", visibility: PUBLIC, proposalId: "p1", by: ana, act: 1, slot: "2026-11-01T19:00Z" },
   meetingProposalAccepted: { type: "meetingProposalAccepted", visibility: PUBLIC, proposalId: "p1", by: ben },
   meetingScheduled: { type: "meetingScheduled", visibility: PUBLIC, meetingId: "m1", act: 1, slot: "2026-11-01T19:00Z", proposalId: "p1" },

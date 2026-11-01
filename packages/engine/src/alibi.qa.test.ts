@@ -41,6 +41,8 @@ const run = (s: GameState, ...cs: Cmd[]) => cs.reduce<GameState>(ok, s);
 const alibi = (player: string, room: unknown, extra: object = {}) => ({ type: "postAlibi", player, room, ...extra });
 const deadline = (round: unknown) => ({ type: "advance", deadline: { kind: "round", round } });
 const ROUND = (s: GameState) => deadline(s.round);
+/** design §5.4: the alibi deadline of the round that just resolved. */
+const ALIBIS = (s: GameState) => ({ type: "advance", deadline: { kind: "alibis", round: s.resolvedRound } });
 
 /** Stand-in for task 6: open the next act's first round after the meeting. */
 function nextAct(s: GameState): GameState {
@@ -69,27 +71,28 @@ describe("QA alibis — design §5.4", () => {
     }
   });
 
-  it("window: round N's alibi can be posted during round N+1 planning, and closes when N+1 resolves", () => {
-    let s = run(createGame(config(3)), ROUND); // round 1 resolved, planning 2
-    s = run(s, { type: "submitMove", player: "p0", move: { room: "office", pocket: 0 } }, alibi("p0", "vault"));
+  it("window: round N's alibi is posted in its alibi window, before round N+1's planning, and closes at the alibi deadline", () => {
+    let s = run(createGame(config(3)), ROUND); // round 1 resolved, its alibis open
+    s = run(s, alibi("p0", "vault"));
     expect(s.log.at(-1)).toMatchObject({ type: "alibiPosted", round: 1 });
-    // p1 never posted for round 1; once round 2 resolves its alibi is for round 2.
-    s = run(s, ROUND);
-    expect(s.resolvedRound).toBe(2);
+    refused(s, { type: "submitMove", player: "p0", move: { room: "office", pocket: 0 } });
+    s = run(s, ALIBIS); // planning 2
+    expect(refused(s, alibi("p1", "lobby"))).toMatch(/round 1 are closed/);
+    s = run(s, { type: "submitMove", player: "p0", move: { room: "office", pocket: 0 } }, ROUND);
     const r = handleCommand(s, alibi("p1", "lobby"));
     expect(r.ok && r.events).toEqual([{ type: "alibiPosted", visibility: PUBLIC, player: "p1", round: 2, room: "lobby" }]);
-    // p0 posted for round 1 only, so may post for round 2.
     expect(handleCommand(s, alibi("p0", "office")).ok).toBe(true);
   });
 
-  it("window spans the act boundary: round 3's alibi in awaitingMeeting and in round 4's planning", () => {
-    let s = run(createGame(config(2)), ROUND, ROUND, ROUND);
+  it("at the act boundary: round 3's alibis come before the act's meeting is awaited", () => {
+    let s = run(createGame(config(2)), ROUND, ALIBIS, ROUND, ALIBIS, ROUND);
+    expect(s.phase).toEqual({ kind: "alibis", round: 3 });
+    s = run(s, alibi("p0", "rooftop"), ALIBIS);
     expect(s.phase.kind).toBe("awaitingMeeting");
-    s = ok(s, alibi("p0", "rooftop"));
+    expect(refused(s, alibi("p1", "lobby"))).toMatch(/round 3 are closed/);
     s = nextAct(s);
     expect(s.phase).toEqual({ kind: "planning", round: 4 });
-    expect(refused(s, alibi("p0", "lobby"))).toMatch(/round 3/);
-    expect(handleCommand(s, alibi("p1", "lobby"))).toMatchObject({ ok: true, events: [{ round: 3 }] });
+    refused(s, alibi("p1", "lobby"));
   });
 
   it("lies are allowed: an alibi naming a room nobody visited is accepted", () => {
@@ -117,6 +120,7 @@ describe("QA alibis — design §5.4", () => {
     // Raid: everyone in the Vault every round until Heat hits 100.
     let g = createGame(config(2));
     for (let i = 0; i < 12 && g.phase.kind !== "ended"; i++) {
+      if (g.phase.kind === "alibis") g = run(g, ALIBIS);
       if (g.phase.kind === "awaitingMeeting") g = nextAct(g);
       g = run(g, ...g.playerOrder.map((p) => ({ type: "submitMove", player: p, move: { room: "vault", pocket: 0 } })), ROUND);
     }
@@ -141,21 +145,22 @@ describe("QA alibis — design §5.4", () => {
 
 describe("QA round-named deadline — design §5", () => {
   it("duplicate, stale, future and malformed rounds are refused with no state change", () => {
-    let s = run(createGame(config(3)), ROUND);
-    s = run(s, ROUND); // planning 3
+    let s = run(createGame(config(3)), ROUND, ALIBIS);
+    s = run(s, ROUND, ALIBIS); // planning 3
     for (const round of [2, 1, 0, 4, 99, -3, "3", 3.5, NaN, Infinity, null, [3], { valueOf: () => 3 }]) refused(s, deadline(round));
     expect(ok(s, deadline(3)).resolvedRound).toBe(3);
   });
 
   it("the act's last-round deadline can't be repeated while the meeting is awaited", () => {
-    const s = run(createGame(config(2)), ROUND, ROUND, ROUND);
+    const s = run(createGame(config(2)), ROUND, ALIBIS, ROUND, ALIBIS, ROUND, ALIBIS);
+    expect(s.phase.kind).toBe("awaitingMeeting");
     for (const round of [3, 4]) refused(s, deadline(round));
   });
 
   it("determinism: same seed + same commands give an identical log, and replay matches", () => {
     const play = () => {
       let s = run(createGame(config(5, "det")), ROUND, alibi("p3", "depositBoxes"), alibi("p0", "vault"));
-      s = run(s, { type: "submitMove", player: "p1", move: { room: "office", pocket: 1 } }, ROUND, alibi("p1", "lobby"));
+      s = run(s, ALIBIS, { type: "submitMove", player: "p1", move: { room: "office", pocket: 1 } }, ROUND, alibi("p1", "lobby"));
       return s;
     };
     const a = play();

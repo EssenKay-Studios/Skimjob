@@ -2,9 +2,10 @@
 // and the Driver (wins a Heat failure with the biggest stash). design §3, §8, §8.1
 // The winning rules themselves are also in end.test.ts.
 import { describe, expect, it } from "vitest";
+import { handleThroughAlibis } from "./alibis.testkit";
 import { DEFAULT_ROLE_POOL, MOLE_ROLE, ROLES } from "@skimjob/content";
 import type { GameConfig, GameEvent, GameState, PlayerId } from "./types";
-import { createGame, setupEvents } from "./setup";
+import { createGame, moleAllies, setupEvents } from "./setup";
 import { replay } from "./reduce";
 import { handleCommand } from "./handle";
 import { viewFor } from "./view";
@@ -37,13 +38,13 @@ function game(players: number, roles: string[], extra: Partial<GameConfig> = {})
 type Cmd = unknown | ((s: GameState) => unknown);
 function run(state: GameState, ...commands: Cmd[]): GameState {
   return commands.reduce<GameState>((s, c) => {
-    const r = handleCommand(s, typeof c === "function" ? c(s) : c);
+    const r = handleThroughAlibis(s, typeof c === "function" ? c(s) : c);
     if (!r.ok) throw new Error(`rejected ${JSON.stringify(typeof c === "function" ? c(s) : c)}: ${r.reason}`);
     return r.state;
   }, state);
 }
 function reason(state: GameState, command: unknown): string {
-  const r = handleCommand(state, command);
+  const r = handleThroughAlibis(state, command);
   if (r.ok) throw new Error("expected a rejection");
   return r.reason;
 }
@@ -139,44 +140,59 @@ describe("Mole dealing and Mole allies — design §8.1", () => {
   });
 
   it("two Moles each get a private moleAllies naming the other; a lone Mole gets none", () => {
-    let pairs = 0;
     let singles = 0;
     for (const n of [5, 8, 9, 12]) {
       for (let seed = 0; seed < 10; seed++) {
         const cfg = config(n, { mole: "maybe", rolePool: [], seed: `allies-${n}-${seed}` });
         const events = setupEvents(cfg);
-        const dealt = moles(events);
-        const allies = events.filter((e) => e.type === "moleAllies");
-        if (dealt.length === 2) {
-          pairs++;
-          expect(allies).toEqual(
+        // design §8.1 (owner answers, 1 Nov): the shipped rules never deal two.
+        expect(moles(events).length).toBeLessThan(2);
+        expect(events.filter((e) => e.type === "moleAllies")).toEqual([]);
+        if (moles(events).length === 1) {
+          singles++;
+          // With content that deals two, both learn the other and nobody else learns anything.
+          const log = withTwoMoles(cfg);
+          const dealt = moles(log);
+          expect(log.filter((e) => e.type === "moleAllies")).toEqual(
             dealt.map((id) => ({ type: "moleAllies", visibility: { kind: "private", player: id }, player: id, allies: dealt.filter((m) => m !== id) })),
           );
-          const s = createGame(cfg);
+          const s = replay(cfg, log);
           for (const id of s.playerOrder) {
             const view = viewFor(s, id);
             const seen = view.caseFile.filter((l) => l.event.type === "moleAllies");
-            // Only the Moles learn anything; nobody else sees the event or an ally in their role state.
             expect(seen.length).toBe(dealt.includes(id) ? 1 : 0);
             expect(view.me.roleState.allies).toEqual(dealt.includes(id) ? dealt.filter((m) => m !== id) : []);
             expect(view.ledger.some((l) => (l.event as GameEvent).type === "moleAllies")).toBe(false);
           }
-        } else {
-          if (dealt.length === 1) singles++;
-          expect(allies).toEqual([]);
         }
       }
     }
-    expect(pairs).toBeGreaterThan(0);
     expect(singles).toBeGreaterThan(0);
   });
 
-  it("Mole 'on' deals 1 Mole at 5–8 and 2 at 9–12, as before (design §8.1)", () => {
+  it("Mole 'on' deals 1 Mole at 5–12, also at 9–12 (design §8.1, owner answers 1 Nov)", () => {
     expect(moles(setupEvents(config(5, { mole: "on" })))).toHaveLength(1);
-    expect(moles(setupEvents(config(9, { mole: "on" })))).toHaveLength(2);
+    expect(moles(setupEvents(config(9, { mole: "on" })))).toHaveLength(1);
+    expect(moles(setupEvents(config(12, { mole: "on" })))).toHaveLength(1);
     expect(moles(setupEvents(config(4, { mole: "on" })))).toHaveLength(0);
   });
 });
+
+/**
+ * The shipped Mole rules deal at most one Mole (design §8.1, owner answers 1 Nov).
+ * For content that deals two: `cfg`'s setup with a second seat (not a Snitch)
+ * turned Mole and the `moleAllies` setup would then emit.
+ */
+function withTwoMoles(cfg: GameConfig): GameEvent[] {
+  const events = setupEvents(cfg);
+  const dealt = events.filter((e): e is Extract<GameEvent, { type: "roleDealt" }> => e.type === "roleDealt");
+  const extra = dealt.find((e) => e.role !== MOLE_ROLE && e.role !== "snitch");
+  if (!extra || dealt.filter((e) => e.role === MOLE_ROLE).length !== 1) throw new Error("withTwoMoles needs exactly one Mole dealt");
+  const roles = dealt.map((e) => (e === extra ? MOLE_ROLE : e.role));
+  const swapped = events.map((e): GameEvent => (e === extra ? { ...extra, role: MOLE_ROLE } : e));
+  const at = swapped.indexOf(swapped.filter((e) => e.type === "roleDealt").at(-1) as GameEvent) + 1;
+  return [...swapped.slice(0, at), ...moleAllies(cfg, roles), ...swapped.slice(at)];
+}
 
 describe("shakedowns reveal the stash, not the role — design §8.2", () => {
   it("shaking down the Mole shows its stash and nothing about its role", () => {

@@ -26,7 +26,7 @@ import { PUBLIC, REVEAL, privateTo } from "./types";
 import { pick, seedRng, shuffle } from "./rng";
 import { replay } from "./reduce";
 import { jobById, roomsInPlay } from "./job";
-import { powerOf, validateOverrides } from "./overrides";
+import { powerOf, roleDefIn, rolesFor, validateOverrides } from "./overrides";
 
 const MOLE_SETTINGS: readonly string[] = ["off", "maybe", "on"] satisfies readonly MoleSetting[];
 const VOTE_VISIBILITIES: readonly string[] = ["hiddenThenRevealed", "open", "secret"] satisfies readonly VoteVisibility[];
@@ -53,7 +53,7 @@ const isStringArray = (v: unknown): v is string[] => Array.isArray(v) && v.every
 export function validateConfig(config: unknown): string[] {
   if (!isObject(config)) return ["config must be an object"];
   const errors: string[] = [];
-  const { seed, players, job, rolePool, mole, eventsEnabled, voteVisibility, starterMode, contentOverrides, duel } = config;
+  const { seed, players, job, rolePool, mole, eventsEnabled, voteVisibility, starterMode, contentOverrides, duel, uniqueRoles } = config;
   if (typeof seed !== "string") errors.push("seed must be a string");
   if (typeof eventsEnabled !== "boolean") errors.push("eventsEnabled must be a boolean");
   if (typeof starterMode !== "boolean") errors.push("starterMode must be a boolean");
@@ -87,6 +87,7 @@ export function validateConfig(config: unknown): string[] {
   // design §16.1: Duel mode is for exactly 2 players.
   if (duel !== undefined && typeof duel !== "boolean") errors.push("duel must be a boolean");
   if (duel === true && Array.isArray(players) && players.length !== 2) errors.push(`Duel mode needs exactly 2 players, got ${players.length}`);
+  if (uniqueRoles !== undefined && typeof uniqueRoles !== "boolean") errors.push("uniqueRoles must be a boolean");
 
   if (!isStringArray(rolePool)) {
     errors.push("rolePool must be an array of role ids");
@@ -119,29 +120,53 @@ export const isDuel = (config: GameConfig): boolean => config.duel === true;
 /** Powers that only work in meetings, so they are never dealt in Duel mode (no votes, design §16.1; provisional). */
 const MEETING_POWERS: readonly string[] = ["voteWeight", "cancelShakedown", "snitch"];
 
-/** The pool roles may be dealt from. design §8.1; in Duel mode without the meeting-only roles (§16.1). */
+/**
+ * The pool roles may be dealt from. design §8.1: without roles whose
+ * `minPlayers` the crew is below (the Insider needs 5); in Duel mode also
+ * without the meeting-only roles (§16.1).
+ */
 export function rolePoolFor(config: GameConfig): readonly RoleId[] {
   const pool = config.starterMode ? STARTER_ROLES : config.rolePool.length > 0 ? config.rolePool : DEFAULT_ROLE_POOL;
-  return isDuel(config) ? pool.filter((r) => !MEETING_POWERS.includes(powerOf(config, r).kind)) : pool;
+  const n = config.players.length;
+  const roles = rolesFor(config);
+  return pool.filter(
+    (r) => (roleDefIn(roles, r)?.minPlayers ?? 0) <= n && !(isDuel(config) && MEETING_POWERS.includes(powerOf(config, r).kind)),
+  );
 }
 
 /**
  * One role per seat, in seat order. design §8.1
- * Moles first (by the mole setting), then distinct roles drawn from the pool,
- * then Rookies for any seats left; the deck is shuffled and dealt in seat order.
- * (provisional, see docs/decisions.md)
+ * Moles first (by the mole setting), then the pool: with `uniqueRoles` (the
+ * default) distinct roles drawn from it and Rookies for any seats left; without
+ * it, each seat drawn from the whole pool (roles may repeat). The deck is
+ * shuffled and dealt in seat order.
  */
 export function dealRoles(config: GameConfig, rng: RngState): { readonly value: RoleId[]; readonly rng: RngState } {
   const n = config.players.length;
   const moles = pick(rng, moleOptions(n, config.mole, config.starterMode));
-  const pool = shuffle(moles.rng, rolePoolFor(config));
-  const fromPool = pool.value.slice(0, n - moles.value);
+  const seats = n - moles.value;
+  const available = rolePoolFor(config);
+  let fromPool: RoleId[];
+  let next: RngState;
+  if (config.uniqueRoles === false && available.length > 0) {
+    fromPool = [];
+    next = moles.rng;
+    for (let i = 0; i < seats; i++) {
+      const drawn = pick(next, available);
+      fromPool.push(drawn.value);
+      next = drawn.rng;
+    }
+  } else {
+    const pool = shuffle(moles.rng, available);
+    fromPool = pool.value.slice(0, seats);
+    next = pool.rng;
+  }
   const deck: RoleId[] = [
     ...Array<RoleId>(moles.value).fill(MOLE_ROLE),
     ...fromPool,
-    ...Array<RoleId>(n - moles.value - fromPool.length).fill(FILLER_ROLE),
+    ...Array<RoleId>(seats - fromPool.length).fill(FILLER_ROLE),
   ];
-  return shuffle(pool.rng, deck);
+  return shuffle(next, deck);
 }
 
 /**
@@ -161,9 +186,11 @@ function snitchTargets(config: GameConfig, roles: readonly RoleId[], rng: RngSta
 
 /**
  * design §8.1: when there are two Moles, they know each other. Each Mole gets
- * a private `moleAllies` naming the others; a lone Mole gets nothing.
+ * a private `moleAllies` naming the others; a lone Mole gets nothing. The
+ * shipped Mole rules deal at most one (owner answers, 1 Nov); kept for
+ * content that deals more.
  */
-function moleAllies(config: GameConfig, roles: readonly RoleId[]): GameEvent[] {
+export function moleAllies(config: GameConfig, roles: readonly RoleId[]): GameEvent[] {
   const moles = config.players.filter((_, i) => roles[i] === MOLE_ROLE).map((p) => p.id);
   if (moles.length < 2) return [];
   return moles.map((id) => ({ type: "moleAllies", visibility: privateTo(id), player: id, allies: moles.filter((m) => m !== id) }));

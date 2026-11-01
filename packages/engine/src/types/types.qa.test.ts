@@ -47,6 +47,7 @@ type ExpectedVisibility = {
   insideTip: "private"; // design §10: private to the recipient
   auditReport: "public"; // design §10: per-room shortfall on the ledger
   alibiPosted: "public";
+  alibisClosed: "public";
   meetingProposed: "public";
   meetingProposalAccepted: "public";
   meetingScheduled: "public";

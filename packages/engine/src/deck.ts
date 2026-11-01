@@ -3,7 +3,7 @@
 //
 // Cards are data in @skimjob/content; each kind of effect is one small
 // function here. All draws go through the command's `Draw`.
-import { EVENTS, EVENT_DECK, EVENTS_FROM_ROUND, MOLE_ROLE, type EventDef, type EventEffect, type JobDef, type RoomId } from "@skimjob/content";
+import { EVENTS, EVENT_DECK, EVENT_HEAT_FULL_CREW, EVENTS_FROM_ROUND, MOLE_ROLE, type EventDef, type EventEffect, type JobDef, type RoomId } from "@skimjob/content";
 import type { ActiveCard, GameConfig, GameEvent, GameState, PlayerId, PlayerState, RoleState } from "./types";
 import { PUBLIC, privateTo } from "./types";
 import type { Draw } from "./handle";
@@ -33,7 +33,7 @@ const effectIs = <K extends EventEffect["kind"]>(state: GameState, kind: K): Ext
 
 /**
  * `roundStarted`, then from round 2 (events on) the flipped card: drawn at
- * random from the cards not yet flipped, so none repeats. Lockdown names its
+ * random from the whole deck, so cards can repeat (owner answers, 1 Nov). Lockdown names its
  * closed room (any room in play but the default room) and Double-cross
  * privately offers two random players a swap, both as the card is flipped, so
  * players can plan around them. design §10
@@ -41,9 +41,7 @@ const effectIs = <K extends EventEffect["kind"]>(state: GameState, kind: K): Ext
 export function startRound(state: GameState, round: number, draw: Draw): GameEvent[] {
   const events: GameEvent[] = [{ type: "roundStarted", visibility: PUBLIC, round, act: actOfRound(round) }];
   if (!eventsOn(state.config) || round < EVENTS_FROM_ROUND) return events;
-  const left = EVENT_DECK.filter((id) => !state.cardsFlipped.includes(id));
-  if (left.length === 0) return events;
-  const card = draw.pick(left);
+  const card = draw.pick(EVENT_DECK);
   const effect = cardDef(card, eventsFor(state.config)).effect;
   let room: RoomId | null = null;
   if (effect.kind === "lockdown") {
@@ -60,20 +58,34 @@ export function startRound(state: GameState, round: number, draw: Draw): GameEve
   return events;
 }
 
-/** The job as this round's card changes it: Shift change and Payday multiply one room's loot and Heat pressure. design §10 */
-export function roundJob(job: JobDef, card: ActiveCard | null, events: EventTable = EVENTS): JobDef {
+/**
+ * design §10: event-card Heat is scaled by min(1, crew ÷ EVENT_HEAT_FULL_CREW),
+ * so it weighs on a crew of 2–4 about as much as on a crew of 5+ (owner answers, 1 Nov).
+ */
+export const eventHeatScale = (crewSize: number): number => Math.min(1, crewSize / EVENT_HEAT_FULL_CREW);
+
+/** A Heat card's amount for this crew, scaled and rounded (halves up). design §10 */
+export const scaledCardHeat = (amount: number, crewSize: number): number => Math.round(amount * eventHeatScale(crewSize));
+
+/**
+ * The job as this round's card changes it: Shift change and Payday multiply
+ * one room's loot and Heat pressure; the extra Heat pressure is scaled for
+ * small crews (`eventHeatScale`). design §10
+ */
+export function roundJob(job: JobDef, card: ActiveCard | null, events: EventTable, crewSize: number): JobDef {
   const effect = card ? cardDef(card.id, events).effect : null;
   if (effect?.kind !== "roomSurge" || !Object.hasOwn(job.rooms, effect.room)) return job;
   const def = job.rooms[effect.room] as JobDef["rooms"][string];
-  const surged = { ...def, loot: Math.round(def.loot * effect.lootMultiplier), heatPressure: def.heatPressure * effect.heatMultiplier };
+  const heatMultiplier = 1 + (effect.heatMultiplier - 1) * eventHeatScale(crewSize);
+  const surged = { ...def, loot: Math.round(def.loot * effect.lootMultiplier), heatPressure: def.heatPressure * heatMultiplier };
   return { ...job, rooms: { ...job.rooms, [effect.room]: surged } };
 }
 
 /** The room Lockdown closes this round, or null. design §10 */
 export const closedRoom = (state: GameState): RoomId | null => (effectIs(state, "lockdown") ? (state.card?.room ?? null) : null);
 
-/** Police patrol / Quiet night: Heat added to the round's change, before the clamp. design §10, §7 */
-export const cardHeat = (state: GameState): number => effectIs(state, "heat")?.amount ?? 0;
+/** Police patrol / Quiet night: Heat added to the round's change (scaled for small crews), before the clamp. design §10, §7 */
+export const cardHeat = (state: GameState): number => scaledCardHeat(effectIs(state, "heat")?.amount ?? 0, state.playerOrder.length);
 
 /** Power cut: nobody sees anybody (no sightings, Security or Lookout results). design §10 */
 export const isBlackout = (state: GameState): boolean => effectIs(state, "blackout") !== null;

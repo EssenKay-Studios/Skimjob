@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 import { viewFor, type GameState, type PlayerId } from "@skimjob/engine";
 import { SUSPICION_WEIGHTS as W, mostSuspicious, suspicion } from "./suspicion";
-import { game as scripted, notInsider, round, run, type Plan } from "./testkit";
+import { closeAlibis, game as scripted, notInsider, round, run, type Plan } from "./testkit";
 
 const game = (n: number, pocketers: PlayerId[] = []): GameState => scripted(n, notInsider(...pocketers));
 const scoresOf = (s: GameState, viewer: PlayerId) => suspicion(viewFor(s, viewer));
@@ -97,7 +97,7 @@ describe("suspicion — design §17.3", () => {
     expect(scoresOf(s, "ana").get("ben")).toBe(3 * W.lie);
     // Act 1 meeting: Ana and Carl shake Ben down (9 in stash: not clean), then Carl, who is clean.
     s = run(
-      s,
+      closeAlibis(s),
       { type: "scheduleMeeting", act: 1, slot: "x" },
       { type: "advance", deadline: { kind: "openMeeting", meetingId: "act-1" } },
       { type: "castVote", player: "ana", vote: { kind: "shakedown", target: "ben" } },

@@ -1,6 +1,7 @@
 // QA (PR #14): adversarial tests for the events deck — boundaries, card
 // interactions, deck exhaustion, determinism and Double-cross leaks. design §10
 import { describe, expect, it } from "vitest";
+import { handleThroughAlibis } from "./alibis.testkit";
 import { V06_NUMBERS } from "./v01-numbers.testkit";
 import type { RoomId } from "@skimjob/content";
 import type { GameConfig, GameEvent, GameState, PlayerId } from "./types";
@@ -38,7 +39,7 @@ function game(players: number, roles: string[] = [], extra: Partial<GameConfig> 
 
 function run(state: GameState, ...commands: unknown[]): GameState {
   return commands.reduce<GameState>((s, c) => {
-    const r = handleCommand(s, c);
+    const r = handleThroughAlibis(s, c);
     if (!r.ok) throw new Error(`rejected ${JSON.stringify(c)}: ${r.reason}`);
     return r.state;
   }, state);
@@ -46,7 +47,7 @@ function run(state: GameState, ...commands: unknown[]): GameState {
 
 const move = (player: PlayerId, room: RoomId, pocket = 0, rest: Record<string, unknown> = {}) => ({ type: "submitMove", player, move: { room, pocket, ...rest } });
 const answer = (player: PlayerId, accept: boolean) => ({ type: "answerDoubleCross", player, accept });
-const refused = (s: GameState, c: unknown) => !handleCommand(s, c).ok;
+const refused = (s: GameState, c: unknown) => !handleThroughAlibis(s, c).ok;
 
 /** Everyone not in `moves` goes to the Office (Lobby if the Office is closed); `skip` players submit nothing. */
 function resolve(state: GameState, moves: Record<PlayerId, Record<string, unknown>> = {}, skip: PlayerId[] = []): GameState {
@@ -108,8 +109,8 @@ const find = <T extends GameEvent["type"]>(events: readonly GameEvent[], type: T
 const roundResolved = (s: GameState) => find(lastResolution(s), "roundResolved")[0] as Extract<GameEvent, { type: "roundResolved" }>;
 
 describe("QA: Heat cards at the boundary — design §10, §7", () => {
-  // perRound 45: Heat 45 after round 1, 90 after a plain round 2.
-  const hot = (seed = "hot") => resolve(game(3, [], { seed, contentOverrides: { heat: { perRound: 45 } } }));
+  // perRound 45: Heat 45 after round 1, 90 after a plain round 2. 5 players, so card Heat is unscaled (design §10).
+  const hot = (seed = "hot") => resolve(game(5, [], { seed, contentOverrides: { heat: { perRound: 45 } } }));
 
   it("Police patrol taking Heat to exactly 100 raids the crew; without it the round ends at 90", () => {
     const s = resolve(withCard(hot(), "policePatrol"));
@@ -129,24 +130,24 @@ describe("QA: Heat cards at the boundary — design §10, §7", () => {
 });
 
 describe("QA: room surges — design §10", () => {
-  it("Shift change: two of three in the Vault → Heat round(4 + 2·40/3) = 31 (17 for one); 12 accepted, 13 refused; next round back to 6", () => {
+  // design §10: at 3 players the surge's extra Heat is scaled by 3/5, so the Vault's ×2 pressure is ×1.6 (32 per visitor).
+  it("Shift change: two of three in the Vault → Heat round(4 + 2·32/3) = 25 (15 for one); 12 accepted, 13 refused; next round back to 6", () => {
     const base = withCard(resolve(game(3)), "shiftChange");
     expect(refused(base, move("p0", "vault", 13))).toBe(true);
     const h0 = base.heat;
     const two = resolve(base, { p0: { room: "vault", pocket: 12 }, p1: { room: "vault", pocket: 0 } });
-    expect(two.heat - h0).toBe(31);
+    expect(two.heat - h0).toBe(25);
     expect(find(lastResolution(two), "lootSplit").filter((e) => e.room === "vault").map((e) => e.loot)).toEqual([12, 12]);
     const one = resolve(base, { p0: { room: "vault", pocket: 0 } });
-    expect(one.heat - h0).toBe(17);
-    // The card is gone next round: the Vault is back to 6 (unless round 3 also surges it, which it can't — no repeats).
-    expect(two.card?.id).not.toBe("shiftChange");
-    expect(refused(two, move("p0", "vault", 7))).toBe(true);
+    expect(one.heat - h0).toBe(15);
+    // The card is gone next round: with another card the Vault is back to 6.
+    expect(refused(withCard(two, "audit"), move("p0", "vault", 7))).toBe(true);
   });
 
   it("Shift change leaves the Deposit boxes and Manager's office alone (12 players)", () => {
     const base = withCard(resolve(game(12)), "shiftChange");
     const h0 = base.heat;
-    const s = resolve(base, { p0: { room: "depositBoxes", pocket: 5 }, p1: { room: "managersOffice", pocket: 5 } });
+    const s = resolve(base, { p0: { room: "depositBoxes", pocket: 5 }, p1: { room: "managersOffice", pocket: 4 } });
     // round(4 + (10 + 10)/12) = 6.
     expect(s.heat - h0).toBe(6);
     expect(refused(base, move("p0", "depositBoxes", 6))).toBe(true);
@@ -301,19 +302,21 @@ describe("QA: when the deck is on — design §10, §8.1", () => {
     expect(off.cardsFlipped).toEqual([]);
   });
 
-  it("over 9 rounds: exactly 8 different cards, one per round 2..9, right after each roundStarted (3 and 12 players)", () => {
+  it("over 9 rounds: one card per round 2..9 from the full deck (repeats allowed, owner answers 1 Nov), right after each roundStarted (3 and 12 players)", () => {
+    let repeats = 0;
     for (const n of [3, 12]) {
       for (let i = 0; i < 8; i++) {
         const end = playThrough(createGame(config(n, { seed: `exhaust-${n}-${i}` })));
         const flips = find(end.log, "eventFlipped");
         expect(flips.map((f) => f.round)).toEqual([2, 3, 4, 5, 6, 7, 8, 9]);
-        expect(new Set(flips.map((f) => f.card)).size).toBe(8);
+        if (new Set(flips.map((f) => f.card)).size < 8) repeats++;
         for (const f of flips) {
           const at = end.log.indexOf(f);
           expect(end.log[at - 1]).toMatchObject({ type: "roundStarted", round: f.round });
         }
       }
     }
+    expect(repeats).toBeGreaterThan(0);
   });
 });
 

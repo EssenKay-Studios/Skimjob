@@ -30,6 +30,13 @@ export type Phase =
   | { readonly kind: "setup" }
   /** Players are submitting moves for `round` (1–9). */
   | { readonly kind: "planning"; readonly round: number }
+  /**
+   * `round` has resolved; players post their alibis for it until the alibi
+   * deadline (`advance { kind: "alibis", round }`). Then the next round's
+   * planning starts, or after an act's last round its meeting is awaited
+   * (in Duel mode, the act's call-outs and checkpoint follow). design §5.4
+   */
+  | { readonly kind: "alibis"; readonly round: number }
   /** The act's last round has resolved; waiting for its regular meeting to open. */
   | { readonly kind: "awaitingMeeting"; readonly act: ActNumber }
   /** A vote window is open. Rounds are paused. design §4.1 */
@@ -165,12 +172,14 @@ export interface GameState {
   readonly heat: number;
   /** This round's event card, if one was flipped (cleared when the round resolves). design §10 */
   readonly card: ActiveCard | null;
-  /** Every card flipped so far this game, in order (public). The deck draws from the rest. design §10 */
+  /** Every card flipped so far this game, in order (public); every flip draws from the full deck. design §10 */
   readonly cardsFlipped: readonly EventId[];
   /** Moves submitted so far for the current round (cleared when it resolves). */
   readonly moves: Readonly<Record<PlayerId, Move>>;
   /** The latest round resolved; 0 before any. Alibis are posted for this round. design §5.4 */
   readonly resolvedRound: number;
+  /** Alibis for `resolvedRound` may still be posted (its alibi deadline hasn't passed). design §5.4 */
+  readonly alibisOpen: boolean;
   /** Players who already posted an alibi for `resolvedRound` (one each). design §5.4 */
   readonly alibisPosted: readonly PlayerId[];
   /** Open proposals for the current act's regular meeting; cleared once a slot is locked. design §11.1 */
