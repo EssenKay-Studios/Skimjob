@@ -55,20 +55,27 @@
   opacity: 1;
 }
 @media (hover: hover) {
-  .bank--pickable .bank-room:hover .bank-room__lift {
+  .bank--pickable .bank-room:not(.is-closed):hover .bank-room__lift {
     transform: translateY(-3px);
   }
-  .bank--pickable .bank-room:hover:not(.is-selected) .bank-room__focus {
+  .bank--pickable .bank-room:not(.is-closed):hover:not(.is-selected) .bank-room__focus {
     opacity: 0.8;
     stroke-dasharray: none;
     stroke: var(--clay);
   }
 }
-.bank--pickable .bank-room:active .bank-room__lift {
+.bank--pickable .bank-room:not(.is-closed):active .bank-room__lift {
   transform: translateY(1px);
 }
-.bank-room.is-closed {
+.bank--pickable .bank-room.is-closed {
   cursor: not-allowed;
+}
+.bank-closed__text {
+  font-family: var(--font-hand);
+  font-weight: 700;
+  font-size: 17px;
+  letter-spacing: 0.12em;
+  fill: var(--bad);
 }
 
 /* Line boil on the selected outline (ui-style §4): three variants, 0.18 s each. */
@@ -188,6 +195,11 @@
 .crook-avatar--away {
   filter: grayscale(0.85);
   opacity: 0.6;
+}
+.crook-tag__text {
+  font-family: var(--font-hand);
+  font-weight: 700;
+  fill: var(--ink);
 }
 .crook-fig__q {
   font-family: var(--font-hand);

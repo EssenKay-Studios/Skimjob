@@ -18,18 +18,25 @@
 //     }}
 //   />
 //
-// `look` is the player's seat number (0-based; 12 seats get 12 colours) or any
-// seed. Crooks are spread along the room's floor by `roomSlots()`; a crowded
-// room shrinks them and adds a back row. Only pass what the player's view
-// knows: their own room, who they saw there, and alibi claims as `ghost`.
+// `look` is the player's seat number (0-based; 12 seats get 12 colours and 12
+// hats) or any seed. Every crook wears a visible name tag (initials, unique
+// among the occupants); pass `tag` from `crewTags(allPlayerNames)` so the
+// tags match the avatars elsewhere on the screen. Tags are sized to stay
+// legible (≥ ~10 px) on a phone. Crooks are spread along the room's floor by
+// `roomSlots()`; a crowded room shrinks them and adds a back row (tags above
+// their heads). Only pass what the player's view knows: their own room, who
+// they saw there, and alibi claims as `ghost`.
+//
+// Rooms in `closed` (Lockdown) are taped off and can't be picked: no click
+// or key handling, `aria-disabled="true"`, no hover lift.
 //
 // For HTML overlays instead (badges, counters), use `bankLayout(rooms, mode)`
 // with `roomBoxPercent(layout, id)` inside a wrapper with the drawing's aspect.
 import { useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import type { Seed } from "../components/sketch";
-import { BANK_ROOM_NAMES, bankLayout, roomSlots, type BankLayout, type BankLayoutMode, type BankRoomId, type RoomBox } from "./bankLayout";
-import { CrookFigure } from "./Crook";
-import type { CrookLook, Expression } from "./crook";
+import { BANK_ROOM_NAMES, bankLayout, roomSlots, type BankLayout, type BankLayoutMode, type BankRoomId, type RoomBox, type Slot } from "./bankLayout";
+import { CrookFigure, nameTagWidth } from "./Crook";
+import { crewTags, type CrookLook, type Expression } from "./crook";
 import { RoomGlyph } from "./RoomIcon";
 import { ROOM_WALL, RoomInterior } from "./rooms";
 
@@ -44,8 +51,10 @@ export interface BankOccupant {
   readonly bot?: boolean;
   /** Carrying a loot sack. */
   readonly sack?: boolean;
-  /** Claimed (alibi), not seen: a dashed outline with a "?". */
+  /** Claimed (alibi), not seen: the claimant's dashed outline with a "?". */
   readonly ghost?: boolean;
+  /** Visible name tag; default: initials, unique among the drawing's occupants. */
+  readonly tag?: string;
 }
 
 export type TimeOfDay = "day" | "dusk" | "night";
@@ -69,6 +78,8 @@ export interface BankCutawayProps {
   readonly occupants?: Partial<Record<string, readonly BankOccupant[]>>;
   /** Room name tags (off for small decorative uses). */
   readonly labels?: boolean;
+  /** Crooks' initials tags. Default on; off only for decorative drawings with no players (landing doodle). */
+  readonly nameTags?: boolean;
   /** Lamp post and hedge at the sides (wide layout). */
   readonly scenery?: boolean;
   /** Crook size multiplier (bigger for small decorative drawings). */
@@ -128,6 +139,61 @@ function Pin({ x, y }: { x: number; y: number }) {
   );
 }
 
+/** Smallest on-screen size of a crook's name tag text, in CSS px. */
+export const MIN_TAG_PX = 10.5;
+
+/**
+ * Interaction props for a room: a button when pickable; a closed (Lockdown)
+ * room stays announced as a button but is disabled and never calls `pick`.
+ */
+export function roomButtonProps({
+  id,
+  label,
+  selected,
+  closed,
+  pick,
+}: {
+  id: BankRoomId;
+  label: string;
+  selected: boolean;
+  closed: boolean;
+  pick: ((room: BankRoomId) => void) | undefined;
+}) {
+  if (!pick) return { role: "group", "aria-label": label } as const;
+  if (closed) return { role: "button", tabIndex: 0, "aria-label": label, "aria-disabled": true, "aria-pressed": selected } as const;
+  return {
+    role: "button",
+    tabIndex: 0,
+    "aria-label": label,
+    "aria-pressed": selected,
+    onClick: () => pick(id),
+    onKeyDown: (e: KeyboardEvent<SVGGElement>) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        pick(id);
+      }
+    },
+  } as const;
+}
+
+/**
+ * Font size (room units) for the name tags in a room: at least MIN_TAG_PX on
+ * screen, but no wider than the gap to the next crook in the row.
+ */
+export function tagFont(slots: readonly Slot[], tags: readonly string[], pxPerUnit: number): number {
+  const want = Math.max(12, MIN_TAG_PX / pxPerUnit);
+  let fit = 22;
+  for (const row of [true, false]) {
+    const xs = slots.map((s, i) => ({ x: s.x, i })).filter(({ i }) => slots[i]!.back === row).sort((a, b) => a.x - b.x);
+    for (let k = 1; k < xs.length; k++) {
+      const gap = xs[k]!.x - xs[k - 1]!.x - 1.5;
+      const half = (nameTagWidth(tags[xs[k]!.i] ?? "?", 1) + nameTagWidth(tags[xs[k - 1]!.i] ?? "?", 1)) / 2;
+      fit = Math.min(fit, gap / half);
+    }
+  }
+  return Math.min(want, fit);
+}
+
 function Room({
   box,
   name,
@@ -139,8 +205,14 @@ function Room({
   occupants,
   pick,
   figureScale,
+  tags,
+  nameTags,
+  pxPerUnit,
 }: {
   figureScale: number;
+  nameTags: boolean;
+  tags: ReadonlyMap<string, string>;
+  pxPerUnit: number;
   box: RoomBox;
   name: string;
   uid: string;
@@ -166,21 +238,16 @@ function Room({
   ]
     .filter(Boolean)
     .join(", ");
-  const onKey = (e: KeyboardEvent<SVGGElement>) => {
-    if (pick && (e.key === "Enter" || e.key === " ")) {
-      e.preventDefault();
-      pick(id);
-    }
-  };
   const tagSize = 15;
+  const twoRows = slots.some((s) => s.back);
+  const tagOf = (o: BankOccupant) => o.tag ?? tags.get(o.id) ?? "?";
+  const font = tagFont(slots, occupants.map(tagOf), pxPerUnit);
   return (
     <g
       className={["bank-room", selected && "is-selected", closed && "is-closed"].filter(Boolean).join(" ")}
       data-room={id}
       transform={`translate(${x} ${y})`}
-      {...(pick
-        ? { role: "button", tabIndex: 0, "aria-label": label, "aria-pressed": selected, onClick: () => pick(id), onKeyDown: onKey }
-        : { role: "group", "aria-label": label })}
+      {...roomButtonProps({ id, label, selected, closed, pick })}
     >
       <title>{label}</title>
       <g className="bank-room__lift">
@@ -199,6 +266,13 @@ function Room({
               <rect x={-w} y={h / 2 - 9} width={w * 3} height="18" fill={`url(#${uid}-tape)`} stroke={INK} strokeWidth="1.6" transform={`rotate(-9 ${w / 2} ${h / 2})`} />
               <rect x={-w} y={h / 2 - 9} width={w * 3} height="18" fill={`url(#${uid}-tape)`} stroke={INK} strokeWidth="1.6" transform={`rotate(7 ${w / 2} ${h / 2 + 22})`} />
             </g>
+            <g transform={`translate(${w / 2} ${h / 2 + 10}) rotate(-4)`} className="bank-room__closed-sign">
+              <rect x="-38" y="-13" width="76" height="26" rx="4" fill="url(#sk-hatch)" opacity=".5" transform="translate(2.5 3)" />
+              <rect x="-38" y="-13" width="76" height="26" rx="4" fill="var(--paper-hi)" stroke={INK} strokeWidth="1.8" />
+              <text x="0" y="6" textAnchor="middle" className="bank-closed__text">
+                CLOSED
+              </text>
+            </g>
           </g>
         )}
         {order.map(({ s, o, i }) => (
@@ -214,6 +288,9 @@ function Room({
             scale={s.scale}
             flip={i % 2 === 1}
             label={`${o.name}${o.ghost ? " (claimed)" : ""}${o.bot ? " (bot)" : ""}`}
+            tag={nameTags ? tagOf(o) : undefined}
+            tagSize={font / s.scale}
+            tagAt={twoRows && s.back ? "head" : "body"}
           />
         ))}
         {labels && <RoomTag name={name} room={id} size={tagSize} on={selected} />}
@@ -400,6 +477,7 @@ export function BankCutaway({
   closed = [],
   occupants = {},
   labels = true,
+  nameTags = true,
   scenery = true,
   figureScale = 1,
   title = "First National Bank, cut away to show its rooms",
@@ -413,6 +491,11 @@ export function BankCutaway({
   const shut = new Set(closed);
   const pickable = !!onRoomSelect;
   const nameOf = (id: BankRoomId) => names?.[id] ?? BANK_ROOM_NAMES[id];
+  const people = new Map<string, string>();
+  for (const list of Object.values(occupants)) for (const o of list ?? []) if (!people.has(o.id)) people.set(o.id, o.name);
+  const auto = crewTags([...people.values()]);
+  const tags = new Map([...people.keys()].map((id, i) => [id, auto[i]!] as const));
+  const pxPerUnit = width ? width / lay.width : 1;
   return (
     <div ref={ref} className={["bank", `bank--${time}`, `bank--${mode}`, pickable && "bank--pickable", className].filter(Boolean).join(" ")}>
       <svg
@@ -480,6 +563,9 @@ export function BankCutaway({
             occupants={occupants[box.id] ?? []}
             pick={onRoomSelect}
             figureScale={figureScale}
+            tags={tags}
+            nameTags={nameTags}
+            pxPerUnit={pxPerUnit}
           />
         ))}
         {/* Parapets and cornice sit in front of the rooftop's props */}

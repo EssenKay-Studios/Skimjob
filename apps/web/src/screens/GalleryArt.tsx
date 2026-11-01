@@ -52,7 +52,7 @@ export function BankSection() {
     ...(rooms.includes("managersOffice") && { managersOffice: [crew(9), crew(10, { expression: "smug" }), crew(11, { bot: true })] }),
   };
   return (
-    <ArtSection id="bank" title="Bank cutaway" note="M2-9 · tap a room to select it · dashed crook = an alibi claim" wide>
+    <ArtSection id="bank" title="Bank cutaway" note="M2-9 · tap a room to select it · dashed crook = an alibi claim · Lockdown rooms can't be picked" wide>
       <div className="g-knobs">
         <Segmented
           seed="g-tier"
@@ -148,7 +148,7 @@ export function ArtSections() {
         </div>
       </ArtSection>
 
-      <ArtSection id="crooks" title="Crook avatars" note="12 seats, 12 colours · seeded hats · bot badge + antenna">
+      <ArtSection id="crooks" title="Crook avatars" note="12 seats: 12 colours and 12 hat shapes (tell apart without colour) · initials tag · bot badge + antenna">
         <div className="g-crew">
           {CREW_NAMES.map((n, i) => (
             <figure key={n} className="g-crew__seat">
@@ -174,14 +174,14 @@ export function ArtSections() {
         </div>
       </ArtSection>
 
-      <ArtSection id="figures" title="Crook figures" note="for the cutaway · sack · claimed (ghost)">
+      <ArtSection id="figures" title="Crook figures" note="for the cutaway · name tag · sack · claimed (ghost, in the claimant's colour)">
         <div className="g-row g-row--center g-figures">
           {EXPRESSIONS.map((e, i) => (
-            <CrookSvg key={e} name={`${CREW_NAMES[i]}`} look={i} expression={e} size={84} />
+            <CrookSvg key={e} name={`${CREW_NAMES[i]}`} look={i} expression={e} size={84} tag={CREW_NAMES[i]!.slice(0, 2)} />
           ))}
-          <CrookSvg name="Otto with the loot" look={4} expression="smug" sack size={84} />
-          <CrookSvg name="Sam (bot)" look={5} bot size={84} />
-          <CrookSvg name="Ines, claimed" look={6} ghost size={84} />
+          <CrookSvg name="Otto with the loot" look={4} expression="smug" sack size={84} tag="Ot" />
+          <CrookSvg name="Sam (bot)" look={5} bot size={84} tag="Sa" />
+          <CrookSvg name="Ines, claimed" look={6} ghost size={84} tag="In" />
         </div>
       </ArtSection>
 

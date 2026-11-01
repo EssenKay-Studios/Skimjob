@@ -6,6 +6,16 @@ const SHOTS = "/home/claude/pipeline/shots";
 test.beforeEach(({}, info) => test.skip(info.project.name !== "mobile", "viewports are set per test"));
 test.describe.configure({ timeout: 60_000 });
 
+/** Object.groupBy without needing the es2024 lib. */
+function groupBy<T>(xs: readonly T[], key: (x: T) => string | number): T[][] {
+  const m = new Map<string | number, T[]>();
+  for (const x of xs) {
+    const k = key(x);
+    m.set(k, [...(m.get(k) ?? []), x]);
+  }
+  return [...m.values()];
+}
+
 const overflowX = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
 
 /** Screen-space boxes of every crook figure (solid and ghost) with its room. */
@@ -61,11 +71,10 @@ for (const [label, query] of [
         expect(c.t, `${c.room} top`).toBeGreaterThanOrEqual(c.roomBox.t - 1);
       }
       // Overlap allowed only partially (front/back rows): no crook may be more than 60% hidden horizontally by a neighbour on the same row.
-      const byRoom = Object.groupBy(boxes, (c) => c.room);
-      for (const list of Object.values(byRoom)) {
-        const rows = Object.values(Object.groupBy(list!, (c) => Math.round(c.b / 4)));
+      for (const list of groupBy(boxes, (c) => c.room)) {
+        const rows = groupBy(list, (c) => Math.round(c.b / 4));
         for (const row of rows) {
-          const xs = row!.sort((a, b) => a.l - b.l);
+          const xs = row.sort((a, b) => a.l - b.l);
           for (let i = 1; i < xs.length; i++) expect((xs[i - 1]!.r - xs[i]!.l) / xs[i]!.w).toBeLessThan(0.6);
         }
       }
@@ -109,4 +118,36 @@ test("touch: tapping a room selects it", async ({ browser }) => {
   await expect(lobby).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByText("Selected: Lobby")).toBeVisible();
   await ctx.close();
+});
+
+test("a closed room (Lockdown) can't be picked by tap, click or keyboard", async ({ browser }) => {
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+  const page = await ctx.newPage();
+  await page.goto("/dev/gallery");
+  const sec = page.locator(".g-section--wide");
+  await sec.getByRole("button", { name: "Lockdown", exact: true }).tap();
+  const office = sec.locator(".bank-room[data-room=office]");
+  await expect(office).toHaveAttribute("aria-disabled", "true");
+  await expect(office.locator(".bank-closed__text")).toBeVisible();
+  await expect(office).toBeDisabled();
+  await office.tap({ force: true });
+  await office.click({ force: true });
+  await office.focus();
+  await page.keyboard.press("Enter");
+  await expect(office).toHaveAttribute("aria-pressed", "false");
+  await expect(page.getByText("Selected: Vault")).toBeVisible();
+  await ctx.close();
+});
+
+test("12 crooks in one room at 390 px: every crook has a visible name tag ≥ 10 px", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 900 });
+  await page.goto("/e2e/art-harness.qa.html?n=12");
+  await page.locator(".crook-fig").first().waitFor();
+  await page.evaluate(() => document.fonts.ready);
+  const tags = await page.$$eval(".bank-room .crook-tag__text", (els) => (els as SVGTextElement[]).map((e) => ({ text: e.textContent, px: parseFloat(getComputedStyle(e).fontSize) * Math.hypot(e.getScreenCTM()!.a, e.getScreenCTM()!.b) })));
+  expect(tags).toHaveLength(12);
+  expect(new Set(tags.map((t) => t.text)).size).toBe(12);
+  for (const t of tags) expect(t.px, t.text ?? "").toBeGreaterThanOrEqual(10);
+  // Avatars carry initials too.
+  await expect(page.locator("#avatars .crook-tag__text")).toHaveCount(12);
 });

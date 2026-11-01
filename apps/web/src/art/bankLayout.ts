@@ -210,13 +210,15 @@ const FIG_W = 50;
 export function roomSlots(w: number, h: number, count: number, size = 1): Slot[] {
   if (count <= 0) return [];
   const base = Math.min(0.86, (h * 0.5) / 72) * size;
-  const pad = 14;
-  const usable = Math.max(FIG_W * base, w - pad * 2);
+  const room = (pad: number) => Math.max(FIG_W * base, w - pad * 2);
+  let usable = room(14);
   const fit = (scale: number, gap: number) => Math.max(1, Math.floor((usable + gap) / (FIG_W * scale + gap)));
   let scale = base;
   let perRow = fit(scale, -12 * scale);
   if (perRow < count) {
+    // Crowded: smaller crooks, closer to the walls, so their name tags keep room.
     scale = base * 0.86;
+    usable = room(7);
     perRow = fit(scale, -14 * scale);
   }
   const rows = perRow >= count ? 1 : 2;
@@ -230,5 +232,6 @@ export function roomSlots(w: number, h: number, count: number, size = 1): Slot[]
     return Array.from({ length: n }, (_, i) => ({ x: Math.round((start + i * step) * 10) / 10, y, scale: Math.round(s * 1000) / 1000, back: isBack }));
   };
   const floorY = h - 5;
-  return [...place(back, scale * 0.9, floorY - 12, true, (FIG_W * scale) / 4), ...place(front, scale, floorY, false, 0)];
+  // The back row stands a little higher, so its faces show over the front row's hats.
+  return [...place(back, scale * 0.9, Math.round(floorY - 12 - 22 * scale), true, (FIG_W * scale) / 4), ...place(front, scale, floorY, false, 0)];
 }

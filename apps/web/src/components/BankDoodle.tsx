@@ -1,5 +1,5 @@
 // Landing illustration: the M2-9 bank cutaway at dusk with a few of the crew
-// at work (labels off, not interactive). Kept under this name so the landing
+// at work (room labels and name tags off: decoration, not players; not interactive). Kept under this name so the landing
 // and gallery keep importing it.
 import { BankCutaway, CORE_ROOMS, type BankOccupant } from "../art/BankCutaway";
 
@@ -21,6 +21,7 @@ export function BankDoodle({ className }: { className?: string }) {
       layout="wide"
       time="dusk"
       labels={false}
+      nameTags={false}
       figureScale={1.3}
       occupants={OCCUPANTS}
       title="First National Bank cut away like a dollhouse, masked crooks sneaking through its rooms"
