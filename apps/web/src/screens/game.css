@@ -1,0 +1,407 @@
+/* Game screen (M2-6): HUD, seats, move / alibi panels, records, game over.
+   ui-style §8 (in-game HUD), §10 (mobile), "Applying this to Skimjob". Tokens only. */
+
+.game-page {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.game-grid {
+  display: grid;
+  gap: 18px;
+  max-width: 1160px;
+  margin: 12px auto 32px;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "hud" "seats" "action" "records";
+}
+.game-grid.is-over {
+  grid-template-areas: "hud" "action" "seats" "records";
+}
+.game-grid > .hud {
+  grid-area: hud;
+}
+.game-grid > .crew {
+  grid-area: seats;
+}
+.game-grid__action {
+  grid-area: action;
+  display: grid;
+  gap: 18px;
+  align-content: start;
+  min-width: 0;
+}
+.game-grid > .records {
+  grid-area: records;
+}
+.game-grid__chat {
+  grid-area: chat;
+}
+
+@media (min-width: 960px) {
+  .game-grid,
+  .game-grid.is-over {
+    grid-template-columns: minmax(0, 1.35fr) minmax(300px, 1fr);
+    grid-template-areas:
+      "hud hud"
+      "seats records"
+      "action records";
+    grid-template-rows: auto auto 1fr;
+    align-items: start;
+  }
+}
+
+.game-msg {
+  max-width: 480px;
+  display: grid;
+  gap: 14px;
+  justify-items: start;
+  margin-top: 10vh;
+  padding: 30px 30px 28px;
+}
+
+/* ---------- HUD ---------- */
+.hud {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr) auto;
+  gap: 18px 26px;
+  align-items: center;
+  padding: 16px 22px 18px;
+}
+.hud__kicker {
+  margin-bottom: 6px;
+}
+.hud__title {
+  font-size: 26px;
+}
+.hud__timer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  color: var(--ink2);
+  font-weight: 600;
+}
+.hud__timer b {
+  font-size: 17px;
+  color: var(--ink);
+}
+.hud__clock {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  color: var(--ink);
+}
+.hud__clock svg {
+  width: 100%;
+  height: 100%;
+}
+.hud__alert {
+  margin-top: 6px;
+  color: var(--bad);
+  font-weight: 650;
+}
+.hud__stat {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+.hud__big {
+  font-size: 24px;
+  line-height: 1.05;
+  color: var(--ink);
+}
+.hud__big small {
+  font-size: 13px;
+  color: var(--mute);
+  font-weight: 600;
+}
+.hud__heat {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: end;
+  gap: 10px;
+}
+.hud__heat-text {
+  display: grid;
+  gap: 2px;
+}
+
+/* ---------- Crew (seats) ---------- */
+.crew {
+  padding: 14px 18px 16px;
+  display: grid;
+  gap: 10px;
+}
+.crew__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 14px;
+}
+.crew__title {
+  font-size: 18px;
+}
+.crew__role {
+  color: var(--clay-d);
+}
+.crew__list {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+}
+.crew-seat {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+.crew-seat__name {
+  display: grid;
+  font: 600 13px/1.2 var(--font-ui);
+  color: var(--ink);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.crew-seat.is-you .crew-seat__name {
+  color: var(--clay-d);
+}
+.crew-seat__mark {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--good);
+}
+
+/* ---------- Panels ---------- */
+.panel {
+  display: grid;
+  gap: 14px;
+  padding: 18px 20px 20px;
+  min-width: 0;
+}
+.panel__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 14px;
+}
+.panel__title {
+  font-size: 19px;
+}
+
+.move__rooms {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: 14px 12px;
+  padding-top: 6px;
+}
+.move__missed {
+  padding: 8px 12px;
+  border-radius: 8px 10px 7px 11px;
+  background: var(--clay-l);
+  color: var(--ink);
+  font-weight: 600;
+}
+.move__watch {
+  display: grid;
+  gap: 8px;
+}
+.move__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.move__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+}
+.move__status {
+  flex: 1 1 220px;
+}
+.alibi > .btn {
+  justify-self: start;
+}
+
+/* ---------- Records (ledger / case file) ---------- */
+.records {
+  display: grid;
+  gap: 8px;
+  padding: 16px 18px 18px 40px;
+  align-content: start;
+  min-width: 0;
+}
+.records__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.records__tabs .num {
+  font-size: 12px;
+  opacity: 0.75;
+}
+.records__note {
+  margin-top: 2px;
+}
+.records__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: min(64vh, 640px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.records__row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 8px 2px;
+  border-bottom: 1.3px dashed var(--ink-faint);
+  font-size: 13.5px;
+  line-height: 1.4;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.records__list.is-private .records__row:not(.meta) {
+  background: linear-gradient(transparent 12%, var(--clay-l) 12% 88%, transparent 88%);
+}
+.records__lock {
+  flex: none;
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  color: var(--ink);
+}
+.records__lock svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* ---------- Game over ---------- */
+.over {
+  position: relative;
+  padding-top: 26px;
+}
+.over__stamp {
+  justify-self: start;
+  padding: 4px 14px 6px;
+  border: 3px solid var(--clay-d);
+  border-radius: 8px 12px 9px 11px;
+  color: var(--clay-d);
+  font: 700 30px/1 var(--font-hand);
+  letter-spacing: 0.06em;
+  rotate: -7deg;
+  opacity: 0.88;
+  animation: stamp-in 0.5s var(--spring) both;
+}
+.over__stamp.is-busted {
+  border-color: var(--bad);
+  color: var(--bad);
+}
+@keyframes stamp-in {
+  from {
+    opacity: 0;
+    transform: scale(1.5);
+  }
+}
+.over__title {
+  font-size: 24px;
+}
+.ranking {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.ranking__row {
+  display: grid;
+  grid-template-columns: 22px auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-bottom: 1.3px dashed var(--ink-faint);
+}
+.ranking__row.is-winner {
+  background: var(--card-sand);
+  border-radius: 10px 12px 9px 11px;
+}
+.ranking__row.is-void .ranking__score b {
+  text-decoration: line-through;
+  text-decoration-color: var(--bad);
+}
+.ranking__row.is-you .ranking__who b {
+  color: var(--clay-d);
+}
+.ranking__pos {
+  font-size: 15px;
+  color: var(--mute);
+}
+.ranking__who,
+.ranking__score {
+  display: grid;
+  min-width: 0;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.ranking__score {
+  text-align: right;
+}
+.ranking__score b {
+  font-size: 17px;
+}
+.over > .btn {
+  justify-self: start;
+}
+
+/* ---------- Phones and small tablets ---------- */
+@media (max-width: 720px) {
+  .hud {
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding: 14px 16px 16px;
+    gap: 14px 18px;
+  }
+  .hud__phase {
+    grid-column: 1 / -1;
+  }
+  .hud__title {
+    font-size: 22px;
+  }
+}
+@media (max-width: 560px) {
+  .game-grid {
+    gap: 14px;
+    margin-top: 8px;
+  }
+  .move__rooms {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 10px;
+  }
+  .move__lock {
+    width: 100%;
+  }
+  .panel {
+    padding: 16px 14px 18px;
+  }
+  .records {
+    padding: 14px 12px 16px 32px;
+  }
+  .ranking__row {
+    grid-template-columns: 18px auto minmax(0, 1fr) auto;
+  }
+  .ranking__row .chip {
+    grid-column: 3 / -1;
+    justify-self: start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .over__stamp {
+    animation: none;
+  }
+}

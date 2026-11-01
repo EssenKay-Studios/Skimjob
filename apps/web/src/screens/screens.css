@@ -322,15 +322,6 @@ hr.dashed {
   color: var(--ink);
   overflow-wrap: anywhere;
 }
-.game-crew {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  list-style: none;
-  margin: 8px 0 0;
-  padding: 0;
-}
-
 /* ---------- Lobby ---------- */
 .offline-banner {
   position: sticky;

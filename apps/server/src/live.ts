@@ -7,7 +7,10 @@
 //   reason }` (with the same `id`), goes to that socket only: rejection reasons
 //   can be role-specific.
 // - After each change every connected seat gets `{ view }`, its fresh
-//   `viewFor()`, but only if that view changed. A hidden action (a move, a
+//   `viewFor()` and the game's deadlines (`timers`, for the countdown; all
+//   from public state), but only if those changed; `now` (the server's clock,
+//   so a client can correct its own) rides along and never counts as a change.
+//   A hidden action (a move, a
 //   sealed vote) therefore sends nothing to anyone else, not even a ping.
 // - Bot seats act through the same command path, but only when their own
 //   view changed (like the pushes), so another player's hidden action never
@@ -36,6 +39,7 @@ import { createChat, parseChatRequest, type ChatHistory, type ChatMessage, type 
 import type { Clock } from "./clock";
 import type { Db } from "./db";
 import { HttpError, playerIdOf } from "./lobby";
+import type { Timer } from "./scheduler";
 import type { GameStore } from "./store";
 
 /** Biggest client message accepted (a command is well under 1 KiB). */
@@ -69,7 +73,7 @@ const PLAYER_COMMANDS: { readonly [T in PlayerCommand["type"]]: true } = {
 };
 
 export type ServerMessage =
-  | { readonly view: ReturnType<typeof viewFor> }
+  | { readonly view: ReturnType<typeof viewFor>; readonly timers: readonly Timer[]; readonly now: number }
   | { readonly chat: ChatMessage }
   | { readonly dmNotice: DmNotice }
   | { readonly chatHistory: ChatHistory }
@@ -107,6 +111,8 @@ export interface LiveOptions {
    * (also on `settle`): the scheduler's `reconcile` (M2-4). Errors are logged.
    */
   readonly onChange?: (gameId: string, state: GameState) => Promise<void>;
+  /** The game's deadlines, sent with each view (the scheduler's `timers`). None if unset. */
+  readonly timers?: (gameId: string) => Promise<readonly Timer[]>;
 }
 
 interface Conn {
@@ -274,15 +280,22 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
   const send = (conn: Conn, msg: ServerMessage) => {
     if (conn.socket.readyState === conn.socket.OPEN) conn.socket.send(JSON.stringify(msg));
   };
-  /** Sends `conn` its view if it changed since the last one sent. */
-  const sendView = (conn: Conn, state: GameState) => {
-    const text = JSON.stringify({ view: viewFor(state, conn.player) });
+  /** The game's deadlines; a failed read only costs the countdown. */
+  const timersOf = async (gameId: string): Promise<readonly Timer[]> =>
+    options.timers ? options.timers(gameId).catch((err: unknown) => (app.log.error({ err, gameId }, "reading timers failed"), [])) : [];
+  /** Sends `conn` its view if it (or a timer) changed since the last one sent. */
+  const sendView = (conn: Conn, state: GameState, timers: readonly Timer[]) => {
+    const view = viewFor(state, conn.player);
+    const text = JSON.stringify({ view, timers });
     if (text === conn.last || conn.socket.readyState !== conn.socket.OPEN) return;
     conn.last = text;
-    conn.socket.send(text);
+    conn.socket.send(JSON.stringify({ view, timers, now: options.clock.now() }));
   };
-  const push = (gameId: string, state: GameState) => {
-    for (const conn of conns.get(gameId) ?? []) sendView(conn, state);
+  const push = async (gameId: string, state: GameState) => {
+    const set = conns.get(gameId);
+    if (!set || set.size === 0) return;
+    const timers = await timersOf(gameId);
+    for (const conn of set) sendView(conn, state, timers);
   };
   /** A crew message to everyone; a DM to its two players only, and its notice (if any) to the rest. design §12.1 */
   const deliver = (gameId: string, message: ChatMessage, notice: DmNotice | null) => {
@@ -300,7 +313,7 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
       botSeen.delete(gameId);
     }
     await options.onChange?.(gameId, settled).catch((err: unknown) => app.log.error({ err, gameId }, "after-change hook failed"));
-    push(gameId, settled);
+    await push(gameId, settled);
     return settled;
   };
 
@@ -366,7 +379,7 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
         void store.withGameLock(gameId, async () => {
           const state = await store.load(gameId);
           if (!state) return;
-          sendView(conn, state);
+          sendView(conn, state, await timersOf(gameId));
           send(conn, { chatHistory: await chat.history(gameId, conn.player) });
         });
         socket.on("message", (data, isBinary) => {

@@ -1,0 +1,192 @@
+// Pure helpers behind the game screen: what the HUD, seats, move and alibi
+// panels show, read only from the player's own view (and the public timers).
+// docs/m2-plan.md M2-6; design §5, §5.4, §6, §11.5, §13
+import { EVENTS, type JobDef, type RoomId } from "@skimjob/content";
+import {
+  checkpointTarget,
+  jobFor,
+  rolesFor,
+  type GameCreated,
+  type Outcome,
+  type PlayerId,
+  type PlayerView,
+} from "@skimjob/engine";
+
+/** A deadline as the live channel sends it (apps/server scheduler.ts `Timer`). */
+export interface Timer {
+  readonly key: string;
+  /** Epoch ms on the server's clock. */
+  readonly dueAt: number;
+  /** Set while a meeting pauses it. */
+  readonly pausedAt: number | null;
+}
+
+/** The public setup event (first in every ledger). */
+export const setupOf = (view: PlayerView): GameCreated | null => {
+  for (const { event } of view.ledger) if (event.type === "gameCreated") return event;
+  return null;
+};
+
+/** The job's numbers, with any content overrides the game was set up with. design §17.4 */
+export const jobOf = (view: PlayerView): JobDef => {
+  const setup = setupOf(view);
+  return jobFor({ job: setup?.job ?? "bank", contentOverrides: setup?.contentOverrides ?? null });
+};
+
+export const crewSize = (view: PlayerView) => view.players.length + 1;
+
+/** A seat at the table, in seat order (you included). */
+export interface SeatInfo {
+  readonly id: PlayerId;
+  readonly name: string;
+  readonly isBot: boolean;
+  readonly you: boolean;
+  /**
+   * Your own move is in for the round being planned. Other players' moves are
+   * hidden (the server never says who has moved, decisions.md M2-6), so this
+   * is only ever true for you.
+   */
+  readonly moved: boolean;
+}
+
+export function seatsOf(view: PlayerView): SeatInfo[] {
+  const order = setupOf(view)?.players ?? [...view.players, { id: view.me.id, name: "You", isBot: false }];
+  const planning = view.phase.kind === "planning";
+  return order.map((p) => ({
+    id: p.id,
+    name: p.name,
+    isBot: p.isBot,
+    you: p.id === view.me.id,
+    moved: p.id === view.me.id && planning && view.me.move !== null,
+  }));
+}
+
+/** Display names by player id. */
+export const namesOf = (view: PlayerView): ((p: PlayerId) => string) => {
+  const map = new Map(seatsOf(view).map((s) => [s.id, s.name]));
+  return (p) => map.get(p) ?? p;
+};
+
+export interface PhaseInfo {
+  /** e.g. "Planning" (the HUD's kicker already says the round). */
+  readonly title: string;
+  /** The deadline the countdown shows, and what it means ("locks in"). */
+  readonly timerKey: string | null;
+  readonly timerLabel: string;
+}
+
+export function phaseInfo(view: PlayerView): PhaseInfo {
+  const p = view.phase;
+  switch (p.kind) {
+    case "setup":
+      return { title: "Setting up the job", timerKey: null, timerLabel: "" };
+    case "planning":
+      return { title: "Planning: pick a room", timerKey: `round:${p.round}`, timerLabel: "locks in" };
+    case "alibis":
+      return { title: "Alibi window", timerKey: `alibis:${p.round}`, timerLabel: "alibis close in" };
+    case "awaitingMeeting":
+      return {
+        title: `Act ${p.act} is over: meeting next`,
+        timerKey: view.scheduledMeeting ? `openMeeting:${view.scheduledMeeting.meetingId}` : null,
+        timerLabel: "opens in",
+      };
+    case "meeting":
+      return { title: "Crew meeting", timerKey: `closeMeeting:${p.meetingId}`, timerLabel: "votes close in" };
+    case "shakedownPending":
+      return { title: "Shakedown pending", timerKey: `resolveShakedown:${p.meetingId}`, timerLabel: "lands in" };
+    case "ended":
+      return { title: p.outcome.result === "success" ? "Job done" : "Busted", timerKey: null, timerLabel: "" };
+    default: {
+      const never: never = p;
+      return never;
+    }
+  }
+}
+
+export const timerFor = (timers: readonly Timer[], key: string | null): Timer | null => (key ? (timers.find((t) => t.key === key) ?? null) : null);
+
+/** Time left on `timer` at server time `now`; a paused timer keeps what it had when it stopped. */
+export const remainingMs = (timer: Timer, now: number): number => Math.max(0, timer.dueAt - (timer.pausedAt ?? now));
+
+/** "0:42", "12:05", "4h 12m", "2d 3h". Rounded up, so it never shows 0:00 early. */
+export function formatCountdown(ms: number): string {
+  const s = Math.ceil(Math.max(0, ms) / 1000);
+  if (s < 3600) return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  const m = Math.ceil(s / 60);
+  if (m < 24 * 60) return `${Math.floor(m / 60)}h ${m % 60}m`;
+  const h = Math.ceil(m / 60);
+  return `${Math.floor(h / 24)}d ${h % 24}h`;
+}
+
+/** The checkpoint the Haul is racing: this act's cumulative target. design §11.5 */
+export function nextTarget(view: PlayerView): { readonly act: 1 | 2 | 3; readonly target: number; readonly final: boolean } {
+  return { act: view.act, target: checkpointTarget(jobOf(view), view.act, crewSize(view)), final: view.act === 3 };
+}
+
+export type HeatTrend = "up" | "down" | "none";
+
+/** One room in the move panel: its loot this round and how it moves the Heat. design §6, §7, §10 */
+export interface RoomOption {
+  readonly id: RoomId;
+  readonly name: string;
+  /** Listed loot this round (event surges included); a crowded room pays less. */
+  readonly loot: number;
+  readonly heat: HeatTrend;
+  /** Lockdown closed it this round. */
+  readonly closed: boolean;
+  /** Short notes: "×2 loot today", "crowded: 3 each above 2", "watch a room". */
+  readonly notes: readonly string[];
+  /** Security: the move must name a room to watch. design §6.1 */
+  readonly watcher: boolean;
+}
+
+export function roomOptions(view: PlayerView): RoomOption[] {
+  const job = jobOf(view);
+  const card = view.card && view.card.round === view.round ? view.card : null;
+  const effect = card ? EVENTS[card.id]?.effect : undefined;
+  return view.rooms.map((id) => {
+    const def = job.rooms[id];
+    const notes: string[] = [];
+    let loot = def?.loot ?? 0;
+    let pressure = def?.heatPressure ?? 0;
+    if (effect?.kind === "roomSurge" && effect.room === id) {
+      loot = Math.round(loot * effect.lootMultiplier);
+      pressure *= effect.heatMultiplier;
+      if (effect.lootMultiplier !== 1) notes.push(`×${effect.lootMultiplier} loot this round`);
+    }
+    if (def?.capacity) notes.push(`more than ${def.capacity.max} here: ${def.capacity.crowdedLoot} each`);
+    if (def?.info === "watchRoom") notes.push("watch one room");
+    if (def?.info === "pocketCount") notes.push("counts who pocketed");
+    const closed = effect?.kind === "lockdown" && card?.room === id;
+    return { id, name: def?.name ?? id, loot, heat: pressure > 0 ? "up" : pressure < 0 ? "down" : "none", closed, notes, watcher: def?.info === "watchRoom" };
+  });
+}
+
+/** Your role may pocket (the Inside Man hands everything in). design §8 */
+export function canPocket(view: PlayerView): boolean {
+  const setup = setupOf(view);
+  return rolesFor({ contentOverrides: setup?.contentOverrides ?? null })[view.me.role]?.canPocket ?? true;
+}
+
+/** The room a missed deadline sends you to. design §5.1 */
+export const defaultRoom = (view: PlayerView): RoomId => jobOf(view).defaultRoom;
+
+/** The latest round you missed, if it is the round that just resolved (shown on the move panel). design §5.1 */
+export function justMissed(view: PlayerView): { readonly round: number; readonly room: RoomId } | null {
+  const latest = view.caseFile.filter((x) => x.event.type === "defaultMoveAssigned").at(-1)?.event;
+  if (!latest || latest.type !== "defaultMoveAssigned") return null;
+  const lastResolved = view.phase.kind === "planning" ? view.phase.round - 1 : view.phase.kind === "alibis" ? view.phase.round : view.round;
+  return latest.round === lastResolved ? { round: latest.round, room: latest.move.room } : null;
+}
+
+/** The round whose alibi you may post, and the room you already claimed for it (if any). design §5.4 */
+export function alibiState(view: PlayerView): { readonly round: number; readonly posted: RoomId | null } | null {
+  if (view.alibiRound === null) return null;
+  const round = view.alibiRound;
+  let posted: RoomId | null = null;
+  for (const { event } of view.ledger) if (event.type === "alibiPosted" && event.player === view.me.id && event.round === round) posted = event.room;
+  return { round, posted };
+}
+
+/** The final outcome once the game has ended. design §3, §13 */
+export const outcomeOf = (view: PlayerView): Outcome | null => (view.phase.kind === "ended" ? view.phase.outcome : (view.reveal?.outcome ?? null));
