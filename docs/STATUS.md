@@ -63,6 +63,8 @@ Plan and acceptance criteria: `docs/m2-plan.md`. Runs alongside M1 task 16 (bala
 3. [ ] **M2-3** Live game channel and server bots.
 4. [ ] **M2-4** Scheduler and elastic timing.
 5. [ ] **M2-5** Web shell, style foundation, lobby screens.
+   - [x] **M2-5a** `apps/web` (Vite + React 19): dev proxy `/api` → server, `theme.css` tokens, self-hosted Pangolin + Inter, `<SketchFrame>` (seeded wobbly SVG ink, hatched shadow, grain, edge burn, tape, punch holes, line boil), buttons (primary / secondary / small / toggle / ghost / back / premium / danger-armed), blob avatars with initials, chips, text field, toasts, wordmark, landing screen (create / join with invite code / sign in, no API calls yet), `/dev/gallery`. `pnpm web`, `pnpm test:e2e` (Playwright smoke test). ui-style §1–§6, §9, §10.
+   - [ ] **M2-5b** Invite page (nickname), lobby (seats, bots, settings, start) and wiring the landing to M2-2's lobby API; then the M2-5 acceptance (two browsers, bots, start lands on the game route).
 6. [ ] **M2-6** Game screen thin slice (first playable build).
 7. [ ] **M2-7** Meetings and voting UI.
 8. [ ] **M2-8** Chat: crew, DMs, evidence cards.
@@ -81,6 +83,7 @@ Plan and acceptance criteria: `docs/m2-plan.md`. Runs alongside M1 task 16 (bala
 - `deadlines` is keyed `(game_id, key)` with the system command to send as `json`; M2-4 decides the key format (the schema comment suggests `round:3`, `openMeeting:act-1`).
 
 ## Notes / half-finished work
+- **Web (M2-5a, done):** frames are drawn by `<SketchFrame>` / `<FrameArt>` (`apps/web/src/components/`); give every frame a stable `seed` so it looks the same on every render. Fill/ink come from `--fr-fill` / `--fr-ink`. `<SketchDefs>` must stay mounted once (App). The landing buttons only toast for now: M2-5b wires them to the lobby API. The bank doodle on the landing is placeholder art for M2-9. Playwright projects run at 390×844 and 1280×800 on port 5179; `e2e/responsive*.spec.ts` set their own viewports (360–1280, with and without touch) and guard the web-first rules (no overflow, ≥44 px targets, gutters, contrast). Add every new screen to their route lists.
 - M2 server: a Muscle shakedown window must always run its full server-set length (ending early on cancel leaks via timing). PR #12 review.
 - M2 plan: see `docs/m2-plan.md` (14 tasks, M2-1 … M2-14).
 - **RNG rule for every later task:** command handlers draw only through the `Draw` that `handleCommand` passes them; `withRng` then appends the reveal-only `rngAdvanced { words }` automatically (see decisions.md). Never read `state.rng` in a handler. `applyEvent` throws for event types not folded yet; each task adds its cases in `reduce.ts`.
@@ -110,6 +113,7 @@ Plan and acceptance criteria: `docs/m2-plan.md`. Runs alongside M1 task 16 (bala
 - **Duel mode (task 15, done):** the act's end in Duel is `endOfDuelAct` (`duel.ts`), called by `resolveRound` after the act's last round; any new end-of-act step must go there as well as in `afterVote` (both use `checkpoint()` in `meeting.ts`). M2: the server never sends `openMeeting`/`scheduleMeeting` in Duel games. Balance (task 16): the sim doesn't report call-outs yet (count, caught share, loot moved); bots call out only on a visible shortfall.
 
 ## Questions for Karthik
+- Web: OK that the browser calls the server under `/api/...` (the dev proxy strips it), and with the landing copy and "skimjob" wordmark (coin over the i, mask mark)? See `/dev/gallery` and decisions.md (M2-5a).
 - Role deal: should each non-Rookie role be dealt at most once, with Rookies filling the rest (current, provisional), or can roles repeat in big crews?
 - Mole at 9–12 players: is "off" allowed, and does "maybe" mean 1-or-2 (current) or 0/1/2? "On" currently deals 2.
 - Heat: OK to round each round's change to a whole number (halves up) and floor Heat at 0? (provisional, decisions.md)

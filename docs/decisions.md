@@ -4,6 +4,26 @@ Newest first. Each entry: what was decided, and why. Add an entry whenever a rul
 
 ---
 
+### 2026-11-01 — Web shell and style foundation (M2-5a)
+- **Web dependencies:** runtime `react` + `react-dom` only; dev `vite`, `@vitejs/plugin-react` (JSX + fast refresh), `@types/react(-dom)` and `@playwright/test` pinned to **1.63.0** to match the preinstalled Chromium. No router, state, CSS or UI library (m2-plan §1).
+- **Fonts are committed woff2 files**, not an npm package: Pangolin 400 and Inter variable (latin + latin-ext subsets, from Fontsource 5.3.0) in `apps/web/src/fonts/` with their OFL licences, so `@font-face` can set `size-adjust: 96%` on Pangolin (ui-style §3).
+- **API prefix (provisional):** the client calls `/api/...`; Vite's dev proxy strips `/api` and forwards to the server (`SKIMJOB_SERVER`, default `http://localhost:3000`, WebSockets included), so server routes stay unprefixed. The production server will need the same prefix handling (or the routes move under `/api`) when the web build is served (M2-5b/M2-13).
+- **Sketch frame:** our own generator (`apps/web/src/components/sketch.ts`): a skewed rounded rectangle sampled every ~5px, displaced by loop-seamless sines (so the seam never shows), with the ink drawn as a filled ring (thicker at the corners) rather than a stroke; mulberry32 seeded from an FNV-1a hash of the seed; paths cached by (w, h, seed, options). Shared hatch, grain and gold/pass gradients live once in `<SketchDefs>`. The UI's RNG is separate from the engine's and never affects game state.
+- **Wordmark:** lower-case "skimjob" in Pangolin, the i's dot replaced by a gold coin, a clay domino-mask mark and a clay pencil swoosh. Deliberately single-colour lettering (CityRT's two-tone wordmark is on the do-not-copy list).
+- **Landing without an API:** "Plan a heist", "Join crew" and the sign-in buttons only validate input and show a toast; nothing is sent until M2-5b. The invite field accepts a code or a pasted link (`/join/<code>`, `/invite/<code>`, `/invites/<code>`), drops spaces and dashes, lower-cases, and accepts 4–16 letters/digits (M2-2's codes are 10 lower-case characters); the server has the final say.
+- **Premium card on the landing** holds "Sign in with Google" (persistent identity), since Skimjob has nothing to sell; the dark card stays the only strong contrast (ui-style §1).
+- **`/dev/gallery`** shows every component; the landing links to it only in dev builds, and the route is a lazy import behind `import.meta.env.DEV`, so it isn't in the production bundle.
+
+### 2026-11-01 — Web shell meets the web-first rules (PR #19 review/QA)
+- **Every interactive target is at least 44×44 px, for mouse and touch alike** (one size set, no `pointer: coarse` split): secondary/small/ghost/back buttons are 44 px tall with `min-width: 44px`, icon-only buttons 44×44, the top-bar home link is padded to 44. Primary stays 48, premium 46. Buttons don't flex-shrink (min-width would otherwise let flex squeeze the label out of the frame).
+- **Clay fills carry ink text, not cream:** cream on `#d97757` was 2.94:1 (2.57:1 on hover). Ink `#2a2320` on clay is 4.95:1, on hover 5.67:1; pressed uses the new `--clay-press #d47252` (4.65:1). Applies to primary, toggle-on and the active chip. Clay keeps its colour, so the brand look is unchanged.
+- **Other token changes:** `--mute` `#85796d` → `#74695e` (5.08:1 on paper, 4.59:1 on paper2); the focus ring uses `--clay-d` (4.49:1 on paper; clay was 2.96:1); the input placeholder uses `--mute`.
+- **No horizontal overflow, ever:** `body { overflow-x: clip }`, and the sheet entrance only slides and fades (no rotate, which widened a phone's layout viewport on tall sheets, and no scale, which briefly shrank controls under 44 px).
+- **Safe areas and gutters:** `<main>` and the top bar pad with `max(gutter, env(safe-area-inset-*))` (gutter 20 px, 12 px under 560 px); the top bar also respects the top inset and the body the bottom inset. Sheets centre inside that gutter up to 1120 px, so the frame and shadow never touch the edge on tablets.
+- **Landing chips wrap on phones** instead of the reference's horizontal scroller (ui-style §10): three chips fit on two lines and nothing is hidden.
+- **Hover effects sit inside `@media (hover: hover)`**, so a tapped button doesn't stay tilted on a phone; nothing relies on hover.
+- **The invite field shakes with the Web Animations API** (`TextField shake={n}`) instead of remounting, so focus and a phone's keyboard stay in the field after a bad code.
+
 ### 2026-11-01 — Web-first launch; responsive everywhere; mobile apps in Flutter (from Karthik)
 - The browser version is the launch product: it must work well on phones (Android/iOS browsers), tablets and laptops, so nobody has to install an app. Targets: 360–430 px phones, 768–1024 px tablets (both orientations), laptops; ≥44 px touch targets, no horizontal overflow, safe-area insets, no hover-only interactions.
 - Make the web app installable as a PWA (manifest + icons; "Add to Home Screen") — cheap, and closes most of the gap before store apps.
