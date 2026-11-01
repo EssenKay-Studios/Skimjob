@@ -40,15 +40,22 @@ function rookies(players: number): GameState {
   return replay(cfg, setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: "rookie" } : e)));
 }
 
+function apply(state: GameState, c: Command): GameState {
+  const r = handleCommand(state, c);
+  if (!r.ok) throw new Error(`rejected ${JSON.stringify(c)}: ${r.reason}`);
+  return r.state;
+}
+const move = (player: string, room: string, pocket = 0): Command => ({ type: "submitMove", player, move: { room, pocket } });
+/** The round's deadline, then (design §5.4) its alibi deadline. */
+const roundDeadline = (s: GameState): Command => ({ type: "advance", deadline: { kind: "round", round: s.round } });
+const alibiDeadline = (s: GameState): Command => ({ type: "advance", deadline: { kind: "alibis", round: s.resolvedRound } });
 function run(state: GameState, ...commands: Command[]): GameState {
   return commands.reduce<GameState>((s, c) => {
     const r = handleCommand(s, c);
     if (!r.ok) throw new Error(`rejected ${JSON.stringify(c)}: ${r.reason}`);
-    return r.state;
+    return r.state.phase.kind === "alibis" ? apply(r.state, alibiDeadline(r.state)) : r.state;
   }, state);
 }
-const move = (player: string, room: string, pocket = 0): Command => ({ type: "submitMove", player, move: { room, pocket } });
-const roundDeadline = (s: GameState): Command => ({ type: "advance", deadline: { kind: "round", round: s.round } });
 function meeting(s: GameState, act: 1 | 2 | 3, votes: Command[] = []): GameState {
   const id = `act-${act}`;
   s = run(s, { type: "scheduleMeeting", act, slot: `slot-${act}` }, { type: "advance", deadline: { kind: "openMeeting", meetingId: id } });

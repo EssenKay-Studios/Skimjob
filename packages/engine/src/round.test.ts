@@ -1,6 +1,7 @@
 // The round loop: moves, default moves, resolution, Heat, information, raids.
 // design §5, §6, §7, §8 (starter role powers used in a move)
 import { STARTER_ROLES } from "@skimjob/content";
+import { handleThroughAlibis } from "./alibis.testkit";
 import { describe, expect, it } from "vitest";
 import type { Command, GameConfig, GameEvent, GameState } from "./types";
 import { setupEvents } from "./setup";
@@ -35,7 +36,7 @@ function game(players: number, roles: string[] = []): GameState {
 /** Commands to run; a function is called with the current state (e.g. `ROUND`). */
 function run(state: GameState, ...commands: unknown[]): GameState {
   return commands.reduce<GameState>((s, c) => {
-    const r = handleCommand(s, typeof c === "function" ? c(s) : c);
+    const r = handleThroughAlibis(s, typeof c === "function" ? c(s) : c);
     if (!r.ok) throw new Error(`rejected: ${r.reason}`);
     return r.state;
   }, state);
@@ -53,7 +54,7 @@ function lastEvents(before: GameState, after: GameState): GameEvent[] {
 }
 
 function reason(state: GameState, command: unknown): string {
-  const r = handleCommand(state, command);
+  const r = handleThroughAlibis(state, command);
   if (r.ok) throw new Error("expected a rejection");
   return r.reason;
 }
@@ -124,7 +125,7 @@ describe("rejected commands leave state untouched", () => {
   ];
   for (const [name, command] of cases) {
     it(name, () => {
-      const r = handleCommand(s, command);
+      const r = handleThroughAlibis(s, command);
       expect(r.ok).toBe(false);
       if (!r.ok) expect(r.reason).toEqual(expect.any(String));
       expect(s.log).toHaveLength(game(3).log.length);
@@ -173,6 +174,8 @@ describe("resolution — design §5.2, §6", () => {
       "roomSighting",
       "roomWatched",
       "roundResolved",
+      // design §5.4: the round's alibi deadline (here passed at once by the test helper), then the next round.
+      "alibisClosed",
       "roundStarted",
     ]);
   });

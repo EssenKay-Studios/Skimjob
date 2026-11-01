@@ -8,7 +8,7 @@
 //   keep the due time they were given. So a restart changes nothing, and a
 //   fired deadline is gone once its change is stored.
 // - While a meeting (or the Muscle's window after it) is open, pausable
-//   deadlines (the round, an emergency's notice) stop: `paused_at` is set,
+//   deadlines (the round, the alibi window, an emergency's notice) stop: `paused_at` is set,
 //   and when the meeting is over their due time moves on by the pause.
 // - `tick` (every TICK_MS in main.ts) sends due deadlines, oldest first,
 //   through `live.system`, so bots act and views go out as for any change.
@@ -46,18 +46,18 @@ type Rule = (s: GameState, t: Timing, now: number) => readonly PlannedDeadline[]
 /**
  * One rule per deadline kind; the mapped type makes a new engine `Deadline`
  * kind fail typecheck until it has a rule here.
- *
- * TODO(PR #21): the alibi phase adds `Deadline` kind "alibis". Its entry:
- *   alibis: (s, t, now) => s.phase.kind === "alibis"
- *     ? [{ key: `alibis:${s.phase.round}`, command: advance({ kind: "alibis", round: s.phase.round }), dueAt: now + t.alibiMs, pausable: true }]
- *     : [],
- * plus `alibiMs` in each TIMINGS preset (and an alibi-phase round kept paused in `round` below).
+
  */
 export const DEADLINE_RULES: { readonly [K in Deadline["kind"] | "scheduleMeeting"]: Rule } = {
   // The round being planned; also while an emergency meeting interrupts it (paused). design §5, §4.1
   round: (s, t, now) => {
     const round = s.phase.kind === "planning" ? s.phase.round : meetingOpen(s) && s.round > s.resolvedRound ? s.round : 0;
     return round > 0 ? [{ key: `round:${round}`, command: advance({ kind: "round", round }), dueAt: now + t.roundMs, pausable: true }] : [];
+  },
+  // The alibi window after a round resolves; paused if an emergency interrupts it. design §5.4
+  alibis: (s, t, now) => {
+    const round = s.phase.kind === "alibis" ? s.phase.round : meetingOpen(s) && s.alibisOpen ? s.resolvedRound : 0;
+    return round > 0 ? [{ key: `alibis:${round}`, command: advance({ kind: "alibis", round }), dueAt: now + t.alibiMs, pausable: true }] : [];
   },
   // Nobody locked a slot by the act deadline (its last round resolving): the server picks one. design §11.1
   scheduleMeeting: (s, t, now) =>

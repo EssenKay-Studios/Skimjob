@@ -70,10 +70,10 @@ describe("First National Bank rooms — design §6.1, §6.2", () => {
     expect(r.serverRoom?.info).toBe("pocketCount");
   });
 
-  it("9–12: Teller line 4 loot; Manager's office 5 loot", () => {
+  it("9–12: Teller line 3 loot; Manager's office 4 loot (owner-answers pass, 1 Nov)", () => {
     expect(BANK_JOB.roomTiers[2]).toEqual({ minPlayers: 9, rooms: ["tellerLine", "managersOffice"] });
-    expect(r.tellerLine?.loot).toBe(4);
-    expect(r.managersOffice?.loot).toBe(5);
+    expect(r.tellerLine?.loot).toBe(3);
+    expect(r.managersOffice?.loot).toBe(4);
   });
 });
 
@@ -105,8 +105,8 @@ describe("First National Bank checkpoint targets — design §11.5", () => {
 });
 
 describe("First National Bank shakedowns — design §11.3", () => {
-  it("clean below 3 × the act number; a clean target is paid 5 × the act number", () => {
-    expect(BANK_JOB.shakedown).toEqual({ cleanBelowPerAct: 3, compensationPerAct: 5 });
+  it("clean below 3 × the act number; a clean target is paid 5 × the act number; from 9 players ⅓ of the votes is enough (§11.2)", () => {
+    expect(BANK_JOB.shakedown).toEqual({ cleanBelowPerAct: 3, compensationPerAct: 5, pluralityFromPlayers: 9, pluralityShare: 1 / 3 });
   });
 });
 

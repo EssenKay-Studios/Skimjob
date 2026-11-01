@@ -100,7 +100,8 @@ export function decide(view: PlayerView, p: Personality, random: Random): Player
   if (phase.kind === "ended" || phase.kind === "setup") return [];
   const player = view.me.id;
   const out: PlayerCommand[] = [];
-  const room = chooseAlibi(view, p, random);
+  // design §5.4: alibis only while the round's alibi window is open.
+  const room = view.alibiRound !== null ? chooseAlibi(view, p, random) : null;
   if (room !== null) out.push({ type: "postAlibi", player, room });
   if (phase.kind === "meeting") {
     if (view.me.vote === null) out.push({ type: "castVote", player, vote: chooseVote(view, p, random) });

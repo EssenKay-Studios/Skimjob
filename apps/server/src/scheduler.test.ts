@@ -85,7 +85,7 @@ async function step(gameId: string) {
 
 describe("presets (design §4.1)", () => {
   it("spread 9 rounds and 3 meetings over about the chosen length; Quick is about 15 minutes", () => {
-    const total = (k: keyof typeof TIMINGS) => (9 * TIMINGS[k].roundMs + 3 * TIMINGS[k].meetingMs) / 60_000;
+    const total = (k: keyof typeof TIMINGS) => (9 * (TIMINGS[k].roundMs + TIMINGS[k].alibiMs) + 3 * TIMINGS[k].meetingMs) / 60_000;
     expect(total("quick")).toBe(15);
     expect(total("1h")).toBeGreaterThan(50);
     expect(total("1h")).toBeLessThanOrEqual(60);
@@ -104,7 +104,7 @@ describe("presets (design §4.1)", () => {
 
 describe("all-bot games on a fake clock (M2-4 acceptance)", () => {
   for (const voteVisibility of ["hiddenThenRevealed", "open", "secret"] as VoteVisibility[]) {
-    it(`a Quick game finishes in ${voteVisibility} mode; deadlines move only by pauses, rounds take 60 s, the Muscle window runs in full`, { timeout: 60_000 }, async () => {
+    it(`a Quick game finishes in ${voteVisibility} mode; deadlines move only by pauses, rounds take 45 s and alibis 15 s, the Muscle window runs in full`, { timeout: 60_000 }, async () => {
       const { id } = await startGame(5, { sessionLength: "quick", voteVisibility });
       const started = clock.now();
       const seen = new Map<string, number>();
@@ -114,6 +114,7 @@ describe("all-bot games on a fake clock (M2-4 acceptance)", () => {
           if (!seen.has(d.key)) {
             seen.set(d.key, d.due);
             if (d.key.startsWith("round:") && !d.paused) expect(d.due - clock.now()).toBe(QUICK.roundMs); // design §4.1
+            if (d.key.startsWith("alibis:") && !d.paused) expect(d.due - clock.now()).toBe(QUICK.alibiMs); // design §5.4
             if (d.key.startsWith("closeMeeting:")) expect(d.due - clock.now()).toBe(QUICK.meetingMs);
             // STATUS: the Muscle's window always runs its full server-set length. design §11.3
             if (d.key.startsWith("resolveShakedown:")) expect(d.due - clock.now()).toBe(QUICK.shakedownWindowMs);
@@ -154,7 +155,12 @@ describe("restarts (M2-4 acceptance)", () => {
     expect(await app.scheduler.tick()).toBe(1);
     const s = await load(id);
     expect(count(s, "roundResolved")).toBe(1);
-    expect(s.phase).toEqual({ kind: "planning", round: 2 });
+    expect(s.phase).toEqual({ kind: "alibis", round: 1 });
+    expect(await deadlines(id)).toEqual([{ key: "alibis:1", due: clock.now() + QUICK.alibiMs, paused: false }]);
+    // design §5.4: the alibi deadline then starts round 2.
+    clock.advance(QUICK.alibiMs);
+    expect(await app.scheduler.tick()).toBe(1);
+    expect((await load(id)).phase).toEqual({ kind: "planning", round: 2 });
     expect(await deadlines(id)).toEqual([{ key: "round:2", due: clock.now() + QUICK.roundMs, paused: false }]);
   });
 
@@ -171,7 +177,7 @@ describe("restarts (M2-4 acceptance)", () => {
     ]);
     await app.close();
     await boot();
-    expect(await deadlines(id)).toEqual([{ key: "round:2", due: clock.now() + QUICK.roundMs, paused: false }]);
+    expect(await deadlines(id)).toEqual([{ key: "alibis:1", due: clock.now() + QUICK.alibiMs, paused: false }]);
     expect(await app.scheduler.tick()).toBe(0);
     expect(count(await load(id), "roundResolved")).toBe(1);
   });

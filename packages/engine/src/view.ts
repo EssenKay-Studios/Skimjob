@@ -94,6 +94,7 @@ function buildView(state: GameState, playerId: PlayerId): PlayerView {
     phase: state.phase,
     round: state.round,
     act: actOfRound(Math.max(1, state.round)),
+    alibiRound: state.alibisOpen ? state.resolvedRound : null,
     rooms: state.rooms,
     haul: state.haul,
     heat: state.heat,

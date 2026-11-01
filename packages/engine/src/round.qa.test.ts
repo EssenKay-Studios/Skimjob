@@ -1,6 +1,7 @@
 // QA (PR #4): scripted full games, rejections, capacity, raids, determinism
 // and private information for the round loop. design §5, §6, §7, §8
 import { STARTER_ROLES } from "@skimjob/content";
+import { handleThroughAlibis } from "./alibis.testkit";
 import { describe, expect, it } from "vitest";
 import type { GameConfig, GameEvent, GameState, Move } from "./types";
 import { PUBLIC, canSee } from "./types";
@@ -42,7 +43,7 @@ function deepFreeze<T>(value: T): T {
 
 /** A function command is called with the current state (e.g. `ROUND`). */
 function ok(state: GameState, command: unknown): GameState {
-  const r = handleCommand(state, typeof command === "function" ? command(state) : command);
+  const r = handleThroughAlibis(state, typeof command === "function" ? command(state) : command);
   if (!r.ok) throw new Error(`rejected: ${r.reason}`);
   return r.state;
 }
@@ -163,8 +164,8 @@ describe("QA scripted full games — design §5, §6, §7", () => {
   it("3 players (Insider, Lookout, Fence): 9 rounds, safe caps per act", () => {
     let s = play(game(3, ["insider", "lookout", "fence"]), THREE.slice(0, 1));
     // Round 2: 2 of the Fence's 5 already moved this act, so 5 is refused and 3 is fine.
-    expect(handleCommand(s, submit("p2", m("vault", 6, F(5)))).ok).toBe(false);
-    expect(handleCommand(s, submit("p0", m("vault", 1))).ok).toBe(false); // Insider can't pocket
+    expect(handleThroughAlibis(s, submit("p2", m("vault", 6, F(5)))).ok).toBe(false);
+    expect(handleThroughAlibis(s, submit("p0", m("vault", 1))).ok).toBe(false); // Insider can't pocket
     s = play(s, THREE.slice(1));
     expect(resolved(s).map((e) => e.type === "roundResolved" && e.haulDelta)).toEqual([9, 6, 0, 2, 4, 18, 6, 10, 4]);
     expect(resolved(s).map((e) => e.type === "roundResolved" && e.heat)).toEqual([11, 35, 26, 30, 34, 58, 55, 72, 83]);
@@ -216,7 +217,7 @@ describe("QA resubmitting a move — design §5.1", () => {
 
   it("a rejected resubmission keeps the earlier move", () => {
     let s = ok(game(3), submit("p0", m("office", 3)));
-    expect(handleCommand(s, submit("p0", m("office", 5))).ok).toBe(false);
+    expect(handleThroughAlibis(s, submit("p0", m("office", 5))).ok).toBe(false);
     s = ok(s, ROUND);
     expect(ofType(s, "lootSplit").find((e) => e.player === "p0")).toMatchObject({ room: "office", toStash: 3 });
   });
@@ -261,7 +262,7 @@ describe("QA rejected commands leave state unchanged", () => {
   ];
   for (const [name, command] of cases) {
     it(name, () => {
-      const r = handleCommand(base, command);
+      const r = handleThroughAlibis(base, command);
       expect(r.ok).toBe(false);
       expect(JSON.stringify(base)).toBe(snapshot);
     });
@@ -270,7 +271,7 @@ describe("QA rejected commands leave state unchanged", () => {
   it("every command is refused after the game ends, and in awaitingMeeting moves/rounds are refused", () => {
     const waiting = play(game(2), [[null, null], [null, null], [null, null]]);
     expect(waiting.phase.kind).toBe("awaitingMeeting");
-    for (const c of [submit("p0", m("lobby")), ROUND(waiting)]) expect(handleCommand(waiting, c).ok).toBe(false);
+    for (const c of [submit("p0", m("lobby")), ROUND(waiting)]) expect(handleThroughAlibis(waiting, c).ok).toBe(false);
   });
 });
 
@@ -284,7 +285,7 @@ describe("QA Heat raid — design §5.2 step 6, §7", () => {
     expect(s.phase).toMatchObject({ kind: "ended", outcome: { result: "failed", reason: "heat" } });
     expect(s.haul).toBe(52);
     expect(replay(s.config, s.log)).toEqual(s);
-    for (const c of [submit("p0", m("lobby")), ROUND(s)]) expect(handleCommand(s, c).ok).toBe(false);
+    for (const c of [submit("p0", m("lobby")), ROUND(s)]) expect(handleThroughAlibis(s, c).ok).toBe(false);
   });
 
   it("a raid on an act's last round ends the game instead of waiting for the meeting", () => {

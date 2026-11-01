@@ -12,7 +12,7 @@ import type { GameEvent, GameState, RngState } from "./types";
 import { PUBLIC, REVEAL, privateTo } from "./types";
 import { pick, randomInt, shuffle } from "./rng";
 import { applyEvent } from "./reduce";
-import { checkMove, resolveRound } from "./round";
+import { checkMove, closeAlibis, resolveRound } from "./round";
 import { isObject, playerFor } from "./check";
 import { answerDoubleCross } from "./deck";
 import { callOut } from "./duel";
@@ -81,13 +81,14 @@ const submitMove: Handler = (state, command) => {
 
 /**
  * design §5.4: after a round resolves, each player may post one alibi for it,
- * true or not. It stays open until the next round resolves (docs/decisions.md).
+ * true or not, until the round's alibi deadline (before the next round's planning).
  */
 const postAlibi: Handler = (state, command) => {
   const player = playerFor(state, command);
   if (typeof player === "string") return player;
   const round = state.resolvedRound;
   if (round === 0) return "no round has resolved yet";
+  if (!state.alibisOpen) return `alibis for round ${round} are closed`;
   if (state.alibisPosted.includes(player.id)) return `you already posted an alibi for round ${round}`;
   const room = command.room;
   if (typeof room !== "string" || !state.rooms.includes(room)) return `room ${String(room)} is not open in this game`;
@@ -106,6 +107,11 @@ const advance: Handler = (state, command, draw) => {
       // Named round, so a retried or late deadline is refused instead of resolving the next round.
       if (deadline.round !== state.phase.round) return `the round ${String(deadline.round)} deadline is not pending (round ${state.phase.round} is)`;
       return resolveRound(state, state.phase.round, draw);
+    case "alibis":
+      if (state.phase.kind === "meeting" || state.phase.kind === "shakedownPending") return "the alibi deadline is paused while a meeting is open";
+      if (state.phase.kind !== "alibis") return "no alibi deadline is pending";
+      if (deadline.round !== state.phase.round) return `the round ${String(deadline.round)} alibi deadline is not pending (round ${state.phase.round}'s is)`;
+      return closeAlibis(state, state.phase.round, draw);
     case "openMeeting":
       return openMeeting(state, deadline.meetingId);
     case "closeMeeting":

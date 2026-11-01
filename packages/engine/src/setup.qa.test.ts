@@ -107,18 +107,19 @@ describe("QA role dealing — design §8.1", () => {
     }
   });
 
-  it("Mole 'on' at the tier boundaries: 4 → 0, 5 → 1, 8 → 1, 9 → 2", () => {
-    const expected: Record<number, number> = { 4: 0, 5: 1, 8: 1, 9: 2 };
+  it("Mole 'on' at the tier boundaries: 4 → 0, 5 → 1, 8 → 1, 9 → 1 (owner answers, 1 Nov)", () => {
+    const expected: Record<number, number> = { 4: 0, 5: 1, 8: 1, 9: 1 };
     for (const [n, moles] of Object.entries(expected)) expect(count(roles(config(Number(n), { mole: "on" })), MOLE_ROLE)).toBe(moles);
   });
 
-  it("12 players, Mole on: 2 Moles, each other role once, Rookies fill the rest", () => {
+  it("12 players, Mole on: 1 Mole, each other role once, Rookies fill the rest", () => {
     const dealt = roles(config(12, { mole: "on" }));
-    expect(count(dealt, MOLE_ROLE)).toBe(2);
-    // Default pool (task 13): the 10 pool roles once each fill the other 10 seats.
-    for (const r of ["rookie", "lookout", "insider", "fence", "hacker", "smoothTalker", "muscle", "blackmailer", "snitch", "driver"]) expect(count(dealt, r)).toBe(1);
+    expect(count(dealt, MOLE_ROLE)).toBe(1);
+    // Default pool (task 13): the 10 pool roles once each, and one more Rookie.
+    for (const r of ["lookout", "insider", "fence", "hacker", "smoothTalker", "muscle", "blackmailer", "snitch", "driver"]) expect(count(dealt, r)).toBe(1);
+    expect(count(dealt, "rookie")).toBe(2);
     const narrow = roles(config(12, { mole: "on", rolePool: ["fence"] }));
-    expect([count(narrow, MOLE_ROLE), count(narrow, "fence"), count(narrow, "rookie")]).toEqual([2, 1, 9]);
+    expect([count(narrow, MOLE_ROLE), count(narrow, "fence"), count(narrow, "rookie")]).toEqual([1, 1, 10]);
   });
 
   it("starter mode at 2 and 12 never deals a Mole, even with the Mole in the (ignored) pool", () => {

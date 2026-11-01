@@ -85,12 +85,12 @@ describe("QA: sweep — every personality at 2, 3, 8, 12 players over many seeds
     }
   });
 
-  it("all-Mole-setting 'on' at 12 players (two Moles) still plays clean", () => {
+  it("all-Mole-setting 'on' at 12 players (one Mole, design §8.1) still plays clean", () => {
     for (let s = 0; s < 5; s++) {
       const c = config(12, `moles-${s}`, { mole: "on" });
       const r = runBotGame(c, createBots(c.players, rotate(s), `mo-${s}`));
       expectClean(r, `s=${s}`);
-      expect(Object.values(r.state.players).filter((p) => p.role === "mole").length).toBe(2);
+      expect(Object.values(r.state.players).filter((p) => p.role === "mole").length).toBe(1);
     }
   });
 });
@@ -197,6 +197,8 @@ function midGame(c: GameConfig): GameState {
   };
   for (const b of bots) for (const cmd of b.act(viewFor(state, b.player))) apply(cmd);
   apply({ type: "advance", deadline: { kind: "round", round: 1 } });
+  for (const b of bots) for (const cmd of b.act(viewFor(state, b.player))) apply(cmd);
+  apply({ type: "advance", deadline: { kind: "alibis", round: 1 } }); // design §5.4
   for (const b of bots) for (const cmd of b.act(viewFor(state, b.player))) apply(cmd);
   return state;
 }
@@ -313,6 +315,11 @@ describe("QA: commands are well-formed — design §8, §11.2", () => {
         const r = runBotGame(c, rec.wrapped);
         expectClean(r, `${id} n=${n}`);
         const insider = r.state.playerOrder.find((p) => r.state.players[p]?.role === "insider");
+        // design §8.1 (owner answers, 1 Nov): no Insider below 5 players.
+        if (n < 5) {
+          expect(insider).toBeUndefined();
+          continue;
+        }
         expect(insider).toBeDefined();
         const moves = rec.sent.filter((x) => x.command.player === insider && x.command.type === "submitMove");
         expect(moves.length).toBeGreaterThan(0);

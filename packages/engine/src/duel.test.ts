@@ -1,6 +1,7 @@
 // Duel mode: two players, call-outs instead of meetings and votes; checkpoints
 // and Heat as normal. design §16.1
 import { describe, expect, it } from "vitest";
+import { handleThroughAlibis } from "./alibis.testkit";
 import { DEFAULT_ROLE_POOL, type RoomId } from "@skimjob/content";
 import type { GameConfig, GameEvent, GameState, PlayerId } from "./types";
 import { PUBLIC, privateTo } from "./types";
@@ -42,14 +43,14 @@ function game(roles: [string, string] = ["rookie", "rookie"], extra: Partial<Gam
 
 function run(state: GameState, ...commands: unknown[]): GameState {
   return commands.reduce<GameState>((s, c) => {
-    const r = handleCommand(s, c);
+    const r = handleThroughAlibis(s, c);
     if (!r.ok) throw new Error(`rejected ${JSON.stringify(c)}: ${r.reason}`);
     return r.state;
   }, state);
 }
 
 const refusal = (state: GameState, command: unknown): string => {
-  const r = handleCommand(state, command);
+  const r = handleThroughAlibis(state, command);
   if (r.ok) throw new Error(`accepted ${JSON.stringify(command)}`);
   return r.reason;
 };
@@ -91,8 +92,10 @@ describe("Duel config — design §16.1", () => {
     expect(pool).not.toContain("smoothTalker");
     expect(pool).not.toContain("muscle");
     expect(pool).not.toContain("snitch");
-    expect(pool.length).toBe(DEFAULT_ROLE_POOL.length - 3);
-    expect(rolePoolFor(config({ duel: false }))).toEqual(DEFAULT_ROLE_POOL);
+    // design §8.1: nor the Insider, dealt only from 5 players (owner answers, 1 Nov).
+    expect(pool).not.toContain("insider");
+    expect(pool.length).toBe(DEFAULT_ROLE_POOL.length - 4);
+    expect(rolePoolFor(config({ duel: false }))).toEqual(DEFAULT_ROLE_POOL.filter((r) => r !== "insider"));
   });
 });
 
@@ -116,7 +119,7 @@ describe("Duel has no meetings or votes — design §16.1", () => {
     for (let r = 0; r < 3; r++) s = round(s);
     expect(s.phase).toEqual({ kind: "planning", round: 4 });
     const tail = s.log.slice(s.log.findIndex((e) => e.type === "roundResolved" && e.round === 3)).map((e) => e.type);
-    expect(tail).toEqual(["roundResolved", "checkpointChecked", "roundStarted"]);
+    expect(tail).toEqual(["roundResolved", "alibisClosed", "checkpointChecked", "roundStarted"]);
   });
 });
 
@@ -209,7 +212,7 @@ describe("checkpoints and Heat work as normal — design §16.1, §11.5, §7", (
     s = round(s, {}, {}, callOut("ana"));
     expect(s.phase.kind).toBe("ended");
     const types = s.log.map((e) => e.type);
-    expect(types.slice(types.lastIndexOf("roundResolved"))).toEqual(["roundResolved", "callOutResolved", "checkpointChecked", "gameEnded"]);
+    expect(types.slice(types.lastIndexOf("roundResolved"))).toEqual(["roundResolved", "alibisClosed", "callOutResolved", "checkpointChecked", "gameEnded"]);
     const ended = s.log.at(-1);
     if (ended?.type !== "gameEnded" || ended.outcome.result !== "success") throw new Error("expected a success");
     expect(ended.outcome.winners).toEqual(["ana"]);
