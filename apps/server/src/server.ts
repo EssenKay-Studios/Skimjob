@@ -55,7 +55,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     }
   });
 
-  const live = liveRoutes(app, db, store, s, { allowedOrigins: deps.allowedOrigins ?? [] });
+  const live = liveRoutes(app, db, store, s, { clock: deps.clock, allowedOrigins: deps.allowedOrigins ?? [] });
   app.decorate("live", live);
   authRoutes(app, db, s, deps.auth ?? [], (token) => live.closeSession(token));
   lobbyRoutes(app, db, store, s, (gameId) => live.settle(gameId));
