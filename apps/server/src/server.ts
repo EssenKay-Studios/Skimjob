@@ -5,8 +5,16 @@ import Fastify, { type FastifyInstance } from "fastify";
 import { authRoutes, sessions, type AuthProvider } from "./auth";
 import type { Clock } from "./clock";
 import type { Db } from "./db";
+import { liveRoutes, type Live } from "./live";
 import { HttpError, lobbyRoutes } from "./lobby";
 import { createGameStore, type GameStore } from "./store";
+
+declare module "fastify" {
+  interface FastifyInstance {
+    /** The live game channel: system commands (scheduler, M2-4) and bot runs. */
+    readonly live: Live;
+  }
+}
 
 export interface ServerDeps {
   readonly db: Db;
@@ -16,6 +24,8 @@ export interface ServerDeps {
   readonly auth?: readonly AuthProvider[];
   /** Defaults to a fresh store on `db`. */
   readonly store?: GameStore;
+  /** Browser origins, besides the server's own, that may open a game socket (the Vite dev server). */
+  readonly allowedOrigins?: readonly string[];
   /** Fastify's request logging; off by default (tests). */
   readonly logger?: boolean;
 }
@@ -45,7 +55,9 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     }
   });
 
-  authRoutes(app, db, s, deps.auth ?? []);
-  lobbyRoutes(app, db, store, s);
+  const live = liveRoutes(app, db, store, s, { allowedOrigins: deps.allowedOrigins ?? [] });
+  app.decorate("live", live);
+  authRoutes(app, db, s, deps.auth ?? [], (token) => live.closeSession(token));
+  lobbyRoutes(app, db, store, s, (gameId) => live.settle(gameId));
   return app;
 }

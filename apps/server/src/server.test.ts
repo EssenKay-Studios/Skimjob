@@ -1,7 +1,7 @@
 // App factory, /health and env config. docs/m2-plan.md M2-1
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { fakeClock } from "./clock";
-import { loadConfig, StartupError } from "./config";
+import { DEV_ORIGINS, loadConfig, StartupError } from "./config";
 import type { Db } from "./db";
 import { buildServer } from "./server";
 import { testDb } from "./testkit";
@@ -39,13 +39,14 @@ describe("buildServer", () => {
 
 describe("loadConfig", () => {
   it("has zero-setup defaults: loopback, port 3000, PGlite on disk, no dev login", () => {
-    expect(loadConfig({})).toEqual({ port: 3000, host: "127.0.0.1", databaseUrl: null, pgliteDir: ".pglite", devLogin: false });
+    expect(loadConfig({})).toEqual({ port: 3000, host: "127.0.0.1", databaseUrl: null, pgliteDir: ".pglite", devLogin: false, allowedOrigins: DEV_ORIGINS });
   });
 
   it("reads the environment", () => {
     expect(
       loadConfig({ PORT: "8080", HOST: "0.0.0.0", DATABASE_URL: "postgres://x@localhost/y", PGLITE_DIR: "memory", DEV_LOGIN: "1" }),
-    ).toEqual({ port: 8080, host: "0.0.0.0", databaseUrl: "postgres://x@localhost/y", pgliteDir: null, devLogin: true });
+    ).toEqual({ port: 8080, host: "0.0.0.0", databaseUrl: "postgres://x@localhost/y", pgliteDir: null, devLogin: true, allowedOrigins: DEV_ORIGINS });
+    expect(loadConfig({ ALLOWED_ORIGINS: " https://skimjob.example , http://lan:5173," }).allowedOrigins).toEqual(["https://skimjob.example", "http://lan:5173"]);
     expect(loadConfig({ DEV_LOGIN: "true" }).devLogin).toBe(false);
   });
 

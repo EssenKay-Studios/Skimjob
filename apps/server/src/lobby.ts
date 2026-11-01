@@ -118,7 +118,8 @@ const refuse = (status: number, message: string): never => {
 };
 const body = (req: FastifyRequest) => (req.body ?? {}) as Record<string, unknown>;
 
-export function lobbyRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Sessions): void {
+/** `onStart` runs once a game has started, outside its lock (the live channel lets the bots move). */
+export function lobbyRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Sessions, onStart: (gameId: string) => Promise<void> = async () => {}): void {
   const signedIn = async (req: FastifyRequest) => (await s.user(req)) ?? refuse(401, "not signed in");
 
   /** Runs `fn` on a game the user is seated in, under the game's lock. Not seated reads as not found. */
@@ -235,8 +236,8 @@ export function lobbyRoutes(app: FastifyInstance, db: Db, store: GameStore, s: S
     }),
   );
 
-  app.post<{ Params: { id: string } }>("/games/:id/start", (req) =>
-    asHost(req, async (game, seats, user) => {
+  app.post<{ Params: { id: string } }>("/games/:id/start", async (req) => {
+    const started = await asHost(req, async (game, seats, user) => {
       if (seats.length < MIN_PLAYERS) refuse(409, `a game needs at least ${MIN_PLAYERS} seats`);
       const config = gameConfig(game.settings, seats, randomBytes(16).toString("hex"));
       const errors = validateConfig(config);
@@ -247,8 +248,11 @@ export function lobbyRoutes(app: FastifyInstance, db: Db, store: GameStore, s: S
         }
       });
       return view((await gameById(db, game.id))!, await seatsOf(db, game.id), user);
-    }),
-  );
+    });
+    // The game has started either way; the bots also act at the next change or boot.
+    await onStart(started.id).catch((err: unknown) => req.log.error({ err, gameId: started.id }, "settling bots after start failed"));
+    return started;
+  });
 }
 
 /** The engine config for a lobby: seats in seat order, bank job, the content's default role pool. */
