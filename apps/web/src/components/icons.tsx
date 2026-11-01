@@ -78,3 +78,44 @@ export function Clock() {
     </svg>
   );
 }
+
+/** Chat (M2-8b): a speech bubble. */
+export function Bubble() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true">
+      <path d="M4.4 5.2h11.4v7.6H9.2l-3.6 3v-3H4.4z" fill="var(--clay-l)" transform="translate(.8 .8)" />
+      <path d="M3.6 4.4c4.2-.3 8.4-.3 12.6 0 .3 2.6.3 5.3 0 8-2.4.2-4.6.2-7 .2l-3.8 3.1.2-3.1H3.6c-.3-2.7-.3-5.5 0-8.2z" {...S} />
+    </svg>
+  );
+}
+
+/** Send a chat message: a paper plane. */
+export function Send() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true">
+      <path d="M3.4 9.6l13.2-5.8-4.4 13-2.6-5.2z" {...S} fill="currentColor" fillOpacity=".18" />
+      <path d="M9.6 11.6l7-7.8" {...S} />
+    </svg>
+  );
+}
+
+/** Close a sheet. */
+export function Close() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true">
+      <path d="M5.2 5c3.3 3.2 6.5 6.6 9.6 10.2M14.9 4.9c-3.4 3.2-6.6 6.6-9.8 10" {...S} strokeWidth={2.1} />
+    </svg>
+  );
+}
+
+/** Evidence cards: a clipped polaroid. */
+export function Evidence() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true">
+      <rect x="4.6" y="4.8" width="11" height="12" rx="1.4" fill="var(--manilla)" transform="translate(.8 .7)" />
+      <rect x="4.2" y="4.2" width="11.4" height="12.4" rx="1.6" {...S} />
+      <path d="M6.6 7.2h6.6v4.6H6.6zM6.8 14.2h4.6" {...S} strokeWidth={1.5} />
+      <path d="M8.4 2.6v3.4" {...S} strokeWidth={2.2} />
+    </svg>
+  );
+}

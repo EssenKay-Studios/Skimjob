@@ -29,11 +29,12 @@
   align-content: start;
   min-width: 0;
 }
-.game-grid > .records {
+.game-grid .records {
   grid-area: records;
 }
-.game-grid__chat {
-  grid-area: chat;
+/* The right column from 1024 px (chat above records); below that its children join the grid. */
+.game-grid__side {
+  display: contents;
 }
 
 @media (min-width: 960px) {
@@ -47,6 +48,85 @@
     grid-template-rows: auto auto 1fr;
     align-items: start;
   }
+}
+@media (min-width: 1024px) {
+  .game-grid,
+  .game-grid.is-over {
+    grid-template-areas:
+      "hud hud"
+      "seats side"
+      "action side";
+  }
+  .game-grid__side {
+    grid-area: side;
+    display: grid;
+    gap: 18px;
+    align-content: start;
+    min-width: 0;
+  }
+  .game-grid__side > .records {
+    grid-area: auto;
+  }
+}
+
+/* ---------- Chat dock (M2-8b): side panel from 1024 px, a sheet below ---------- */
+.chat-dock[hidden],
+.chat-dock.is-sheet[hidden] {
+  display: none;
+}
+.chat-dock.is-docked {
+  min-width: 0;
+}
+.chat-dock.is-docked .chat {
+  height: min(78vh, 600px);
+}
+.chat-dock.is-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom))
+    max(12px, env(safe-area-inset-left));
+}
+.chat-dock__scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--backdrop-shade);
+}
+.chat-dock.is-sheet .chat {
+  width: min(100%, 640px);
+  height: min(84dvh, 720px);
+  animation: sheet-up 0.32s var(--slide) both;
+}
+@keyframes sheet-up {
+  from {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+}
+html.chat-sheet-open body {
+  overflow: hidden;
+}
+.chat-fab {
+  position: fixed;
+  z-index: 30;
+  right: max(14px, env(safe-area-inset-right));
+  bottom: max(14px, env(safe-area-inset-bottom));
+}
+.chat-fab .btn__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+/* Room for the button under the last panel, and toasts above it. */
+.game-page:has(.chat-fab) {
+  padding-bottom: calc(80px + env(safe-area-inset-bottom));
+}
+:root:has(.chat-fab) .toasts {
+  bottom: calc(max(18px, env(safe-area-inset-bottom)) + 62px);
 }
 
 .game-msg {
@@ -400,8 +480,19 @@
   }
 }
 
+@media (max-width: 560px) {
+  /* Phones: the chat is full screen. */
+  .chat-dock.is-sheet {
+    padding: max(6px, env(safe-area-inset-top)) max(6px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left));
+  }
+  .chat-dock.is-sheet .chat {
+    height: 100%;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .over__stamp {
+  .over__stamp,
+  .chat-dock.is-sheet .chat {
     animation: none;
   }
 }

@@ -225,7 +225,10 @@ describe("QA: evidence cards (design §12.1, §11.2)", () => {
       expect(await a!.chat({ evidence })).toMatchObject({ rejected: true });
     }
     expect(a!.chats()).toEqual([]);
-    const entry = a!.view().caseFile[0]!;
+    // Role cards are refused (design §8, PR #38): share a move instead.
+    expect(await a!.sendRaw({ cmd: { type: "submitMove", move: { room: "office", pocket: 0 } } })).toMatchObject({ ok: true });
+    await vi.waitFor(() => expect(a!.view().caseFile.some((e) => e.event.type === "moveSubmitted")).toBe(true), quick);
+    const entry = a!.view().caseFile.find((e) => e.event.type === "moveSubmitted")!;
     expect(await a!.chat({ evidence: entry.seq, to: g1.humans[1]!.player })).toMatchObject({ ok: true });
     await vi.waitFor(() => expect(b!.chats()).toHaveLength(1), quick);
     const { type, visibility: _v, ...payload } = entry.event;

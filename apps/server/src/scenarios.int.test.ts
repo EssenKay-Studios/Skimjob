@@ -320,12 +320,13 @@ describe("scenarios: end-to-end stories over HTTP + WebSocket", () => {
     const [p0, p1, p2] = clients as [Client, Client, Client];
     expect(await p0.chat({ text: "let's be careful" })).toMatchObject({ ok: true });
     expect(await p0.chat({ to: p1.player, text: "side deal: vault, split 50/50" })).toMatchObject({ ok: true });
+    // Role cards are refused (design §8, PR #38).
     const role = p1.lastView().caseFile.find((e) => e.event.type === "roleDealt")!;
-    expect(await p1.chat({ to: p0.player, evidence: role.seq })).toMatchObject({ ok: true });
+    expect(await p1.chat({ to: p0.player, evidence: role.seq })).toMatchObject({ rejected: true });
     const refused = await play(game, clients, brainsFor(game));
     const final = await finish(game, clients, refused, before);
     expect(p2.raw.join()).not.toMatch(/side deal|"verified":true/);
-    expect(p2.messages.filter((m) => "dmNotice" in m)).toHaveLength(2);
+    expect(p2.messages.filter((m) => "dmNotice" in m)).toHaveLength(1); // the refused role card sent no notice
     expect(final.playerOrder).toEqual(Array.from({ length: 8 }, (_, i) => playerIdFor(i)));
     expect(typesIn(final)).toContain("meetingClosed");
     // The lobby shows the game as ended.
