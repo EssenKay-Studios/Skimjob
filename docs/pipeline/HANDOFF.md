@@ -26,11 +26,12 @@ The agents belonged to the old session. If that session is gone they are dead: r
 
 | PR | Branch | State | Next |
 |---|---|---|---|
-| #35 M2-7 meetings UI | `m2/meetings-ui` | QA PASS. Review CHANGES REQUESTED: e2e exceeded 20 min in CI, being sharded into 4 jobs | Builder finishes sharding → delta review → merge |
-| #36 R3b Blackmailer/Forger/Embezzler | `roles/r3b-dark` | QA PASS. Review CHANGES REQUESTED: Embezzler skim can make the public "Haul grew by" negative (a tell) | Builder fix → re-review + QA re-check → merge. Record owner decision: Blackmail victim's vote counts 0, Blackmailer gets +1 |
-| #37 R4b bot claims | `bots/claims` | Review and QA both flagged `crewHunch` (bot.ts ~397), seeded only by meeting id + seat id, so every game has the same seat bias | Builder adds per-game entropy plus a regression test → re-review/QA → merge |
-| (new) hostile-test flake | `fix/hostile-flake` | `live.hostile.qa.test.ts` Lookout+lobby case is flaky in CI and predates #37 | Builder finds the root cause and loops the test 30× → review → merge |
-| (new) M2-8b chat UI | `m2/chat-ui` | Being built: crew tab + DMs, plain-text rendering, bottom sheet on phones, 2-context e2e | Review + QA → merge |
+| #35 M2-7 meetings UI | `m2/meetings-ui` | **Merged** (e2e sharded into 6 jobs) | — |
+| #36 R3b Blackmailer/Forger/Embezzler | `roles/r3b-dark` | **Merged** (Embezzler take capped at the round's inflow; owner rule: victim's vote counts 0, Blackmailer +1) | — |
+| #37 R4b bot claims | `bots/claims` | **Merged** (`crewHunch` now mixes in a public per-game digest) | Follow-up: hidden `crewSeed` (STATUS) |
+| (dropped) hostile-test flake | `fix/hostile-flake` | Not needed: #36 fixed the root cause in `live.hostile.qa.test.ts` | — |
+| #38 M2-8b chat UI | `m2/chat-ui` | In progress: crew tab + DMs, plain-text rendering, bottom sheet on phones, 2-context e2e | Review + QA → merge |
+| #39 e2e touch-target check fix | `fix/got-it-target` | In progress: flaky 44 px target check, compare at layout precision | Review + QA → merge |
 
 If a branch exists but has no PR, or a PR has no fix commit after its review, spawn a fresh builder in FIX mode for it.
 
