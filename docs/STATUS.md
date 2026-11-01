@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 1 Nov 2026_
+_Last updated: 1 Nov 2026 (role deck v2 R1)_
 
 ## Current milestone: M1 — Engine + simulator (bank job, starter roles, bots)
 
@@ -43,6 +43,14 @@ Goal: run thousands of all-bot games at 2–12 players and use the results to tu
 - M1 done; M2 per `docs/m2-plan.md`.
 
 - [x] **Owner answers (1 Nov)** — content 0.8.0: alibi phase between rounds (`phase: alibis`, `advance { kind: "alibis", round }`, public `alibisClosed`, view `alibiRound`); ⅓-plurality shakedowns at 9–12; Insider from 5 players; Mole "on" = 1 at 9–12 ("maybe" = 0 or 1 from 5); event-card Heat × min(1, crew ÷ 5); the clean check counts the Fence safe; cards repeat; `GameConfig.uniqueRoles` (default true). Teller line 3, Manager's office 4. Design §5.4, §6.2, §8.1, §10, §11.2, §11.3, §15; decisions.md "Owner answers, 1 Nov".
+
+## Role deck v2 (owner-approved spec: `docs/roles-v2.md`; Ballot also works in Secret mode)
+
+1. [x] **R1 Foundations** — content 0.9.0: `RoleDef.faction` (crew / accomplice / saboteur) replaces `winsOnFailure`/`winsOnSuccess`; win rule: success → best Crew score, failure → best saboteur/accomplice score, none dealt → nobody (`end.ts`). Mole = saboteur, everyone else crew for now (Driver without its failure win). Dealing by faction (`DARK_SIDE_RULES`, `limitDarkSide`, `darkSideOdds`, `dealRoles` in `setup.ts`): dark side rolled by crew size, hard limits, saboteur setting = the `mole` field, pools cap the roll, starter mode crew only. Perks (`perks.ts`, content `PERKS`): tokens in `roleState.perks`, private `perkGranted` / `perkUsed` / `rigPicked`, public `alibiVerified`; Peek, Shield (automatic), +Vote, Ballot (`me.seenBallots`, also in Secret mode), Tail, Alibi, Recharge, Rig. Shakedown window opens if a Muscle or a Shield earner (`RoleDef.earns`) could be dealt. Design §3, §8, §8.1, §8.3, §11.2, §11.3.
+2. [ ] **R2** Crew roles (v2 §2): Rookie…Mastermind, perk triggers.
+3. [ ] **R3** Accomplices (Getaway Driver, Fence, Hacker, Blackmailer, Forger) and the Embezzler.
+4. [ ] **R4** Bot claims/bluffs and perk use; parallel sim suite.
+5. [ ] **R5** Parity balance (no two roles' normalised win rates more than 10% apart).
 
 ### Later in M1
 12. [x] **Info & vote roles** — done (see above).
@@ -87,6 +95,8 @@ Plan and acceptance criteria: `docs/m2-plan.md`. Runs alongside M1 task 16 (bala
 - `deadlines` is keyed `(game_id, key)` with the system command to send as `json`; M2-4 decides the key format (the schema comment suggests `round:3`, `openMeeting:act-1`).
 
 ## Notes / half-finished work
+- **Role deck v2 R1 (done):** no role earns perks yet: R2/R3 add the triggers (emit `perkGranted`, list the perk in `RoleDef.earns` so rules like the shakedown window see it). Tests grant tokens with `grantPerks` (`perks.testkit.ts`). Accomplices are dealt only once a role has `faction: "accomplice"` (R3 moves Fence, Hacker, Blackmailer); dealing tests pass their own role table to `dealRoles`. A new saboteur (Embezzler) is dealt by the setting automatically (`saboteursFor`). Bots ignore perks and `seenBallots` (R4). Balance changed (4p now has a Mole with "on"; Driver lost its failure win): R5 re-runs the sim. `moleAllies` now goes to every saboteur when two or more are dealt.
+- **Ballot / Secret mode:** the only place another player's secret ballot reaches a view is `me.seenBallots`, during the meeting the Ballot was spent in. Keep it out of events, so the reveal stays clean. The leak test's scrub keeps the viewer's granted ballots.
 - **Alibi phase (owner answers, 1 Nov):** every round that doesn't end the game resolves into `phase: { kind: "alibis", round }`; moves for the next round are refused until the server sends `advance { kind: "alibis", round }` (named, refused if repeated or stale; refused while a meeting is open, re-send after). After an act's last round it leads to `awaitingMeeting` (Duel: call-outs + checkpoint). M2-4 must schedule this deadline (short) after each round; M2-3's bots post alibis on `view.alibiRound !== null`. Scripted tests that aren't about alibis use `handleThroughAlibis` (`packages/engine/src/alibis.testkit.ts`).
 - **`uniqueRoles` (owner answers, 1 Nov):** a `GameConfig` field (absent = true). The lobby's `LobbySettings` (M2-2) doesn't offer it yet; add it with the other host settings (M2-5b/M2-13).
 - **Web (M2-5a, done):** frames are drawn by `<SketchFrame>` / `<FrameArt>` (`apps/web/src/components/`); give every frame a stable `seed` so it looks the same on every render. Fill/ink come from `--fr-fill` / `--fr-ink`. `<SketchDefs>` must stay mounted once (App). The landing buttons only toast for now: M2-5b wires them to the lobby API. The bank doodle on the landing is placeholder art for M2-9. Playwright projects run at 390×844 and 1280×800 on port 5179; `e2e/responsive*.spec.ts` set their own viewports (360–1280, with and without touch) and guard the web-first rules (no overflow, ≥44 px targets, gutters, contrast). Add every new screen to their route lists.
@@ -107,7 +117,7 @@ Plan and acceptance criteria: `docs/m2-plan.md`. Runs alongside M1 task 16 (bala
 - `samples.ts` has one sample per event and command type, and the compiler enforces it. `view.test.ts` loops over `sampleEvents`, so a new event type is covered automatically; if it can take more than one visibility, add the extra variants to `samples` there. New event types from later tasks (events deck) should also appear in the scripted games of `view.leak.test.ts`.
 - Visibility has four kinds: `public`, `private`, `reveal`, `secret`. `secret` never opens up, even after the game (Secret-mode ballots, §11.2). `voteCast`/`voteSealed` use `secretTo()` in Secret mode; `reveal.log` comes from `canSee(..., true)`, so other players' secret ballots are dropped.
 - **Role powers (task 12):** move powers are `AbilityUse` (Lookout, Fence, Hacker `loopCameras`, Blackmailer `blackmail`); powers used outside planning go through `useAbility` (`InstantAbility`, today only the Muscle's `cancelShakedown`). The Mole's tip-off is a move power (`tipOff`). Per-player uses live in `PlayerState.roleState` (`usedThisAct` reset each act, `usedThisGame`, `target`, `allies`). `abilityResolved.ability` is a `ResolvedAbility`. Lockdown (closed rooms) arrives with the events deck; today "closed" means "not in play for this crew size".
-- **Shakedown window (task 12):** a passed shakedown becomes `shakedownPending` (phase and public event) whenever the role pool holds the Muscle; the server must send `advance { kind: "resolveShakedown", meetingId }` when its (short, server-set) window ends. Every new ending or shakedown path must go through `afterVote` in `meeting.ts`. Scripted tests that don't want the window use `rolePool: [...STARTER_ROLES]`.
+- **Shakedown window (task 12):** a passed shakedown becomes `shakedownPending` (phase and public event) whenever the role pool holds the Muscle or a role that can earn a Shield (role deck v2 R1); the server must send `advance { kind: "resolveShakedown", meetingId }` when its (short, server-set) window ends. Every new ending or shakedown path must go through `afterVote` in `meeting.ts`. Scripted tests that don't want the window use `rolePool: [...STARTER_ROLES]`.
 - **Default pool is now 10 roles** (content 0.4.0, with the Driver): the sim's default runs deal them, so balance-1 numbers no longer describe a default run (task 16 re-runs).
 - From the PR #1 review, deferred to the task named:
   - ~~Tasks 10/11: content overrides and `CONTENT_VERSION` in `gameCreated`~~ — done in task 10. New job/role numbers that should be tunable must be added to `ContentOverrides` and `validateOverrides`.
@@ -119,6 +129,8 @@ Plan and acceptance criteria: `docs/m2-plan.md`. Runs alongside M1 task 16 (bala
 - **Duel mode (task 15, done):** the act's end in Duel is `endOfDuelAct` (`duel.ts`), called by `closeAlibis` (`round.ts`) when the act's last round's alibis close; any new end-of-act step must go there as well as in `afterVote` (both use `checkpoint()` in `meeting.ts`). M2: the server never sends `openMeeting`/`scheduleMeeting` in Duel games. Balance (task 16): the sim doesn't report call-outs yet (count, caught share, loot moved); bots call out only on a visible shortfall.
 
 ## Questions for Karthik
+- Role deck v2 R1: OK that the Shield is spent by itself (not chosen), +Vote and Ballot are spent during an open meeting, Ballot is refused in Open mode, the Alibi stamps only a true alibi, and a second Rig of the same round is refused? (provisional, decisions.md)
+- Role deck v2 R1: OK that saboteurs never repeat even with `uniqueRoles: false` (one Mole at most), and that rolled dark seats a pool can't fill (today: accomplices, a second saboteur) go to the crew?
 - M2 lobby: OK that one invite link per game works for anyone until the game starts (then 410), the host can't leave the lobby, and new bots default to the Opportunist personality? (provisional, decisions.md)
 - Web: OK that the browser calls the server under `/api/...` (the dev proxy strips it), and with the landing copy and "skimjob" wordmark (coin over the i, mask mark)? See `/dev/gallery` and decisions.md (M2-5a).
 - Heat: OK to round each round's change to a whole number (halves up) and floor Heat at 0? (provisional, decisions.md)

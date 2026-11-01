@@ -45,11 +45,13 @@ Skimjob is a social deduction game for groups of friends, played in a browser or
 
 ## 3. Winning and losing
 
-- **The heist succeeds** if, after the final meeting, the Haul is at or above the final target and Heat is below 100. Players are then ranked by stash, and the biggest stash wins. Some roles change how they score (see §8). A Mole never wins a successful heist, however big its stash: the biggest stash among the others wins.
-- **The heist fails** if Heat reaches 100 at any point, or the final target is missed. Every crew member loses. Roles with a "wins on failure" condition, such as the Mole, win instead.
+- **Two sides** *(role deck v2 §0, `docs/roles-v2.md`)*: every role belongs to a faction. **Crew** roles help the job; **saboteurs** (the Mole) wreck it; **accomplices** help the saboteurs. Saboteurs and accomplices together are the **dark side**. The winning side's **biggest stash wins** (after role scoring, §8, and the tie-breaks below).
+- **The heist succeeds** if, after the final meeting, the Haul is at or above the final target and Heat is below 100. The biggest **Crew** stash wins. Saboteurs and accomplices can't win a success, however big their stash.
+- **The heist fails** if Heat reaches 100 at any point, or the final target is missed. The crew loses, and the biggest stash among the **saboteurs and accomplices** wins. A failure with no dark side dealt is won by nobody (accomplices are never dealt without a saboteur). Loot taken by sabotage is just stash, so "steal, then sink the job" is the saboteurs' plan.
 - **Ties** go to whoever was shaken down fewer times, then to whoever handed in more total loot. The engine tracks that figure but only reveals it at the end. *(Provisional: players still tied on all three share the win.)*
 - **Scores:** a Rookie's ×1.2 can give fractions; scores are kept to one decimal place. *(Provisional.)*
-- **A failed heist still shows the stash ranking** ("best of the losers"), clearly labelled as a loss. Nobody wins by it; only roles with a wins-on-failure condition win. *(Provisional, §19.1.)*
+- **A failed heist still shows the whole stash ranking** ("best of the losers"), clearly labelled as a loss for the crew; only the dark side's best stash wins. *(Provisional, §19.1.)*
+- Roles are read as they are at the end of the game, so a Double-cross (§10) can change a player's side.
 
 ---
 
@@ -187,8 +189,10 @@ Every player is dealt **one secret role** at the start of the game. Roles are de
 | **Muscle** | Once per game, can cancel a shakedown after the vote passes. | Everyone knows a vote against their friends may get blocked. |
 | **Blackmailer** | Once per act, secretly guesses one player's role. If right, steals 3 from that player's stash. | Gets shaken down quickly, and everyone hides their roles harder. |
 | **Snitch** | Secretly assigned a target. Gets +10 if that target is shaken down while holding more than the clean threshold. | Their target has a reason to frame them. |
-| **Driver** | If the heist fails **because of Heat**, the Driver escapes and wins if they have the biggest stash. | People suspect them of trying to push Heat up. |
-| **Mole** *(optional)* | Wins only if the heist fails. Once per act, can **tip off** the cops (+6 Heat, hidden). | Revealed means hunted, and revealing it is rarely worth it. |
+| **Driver** | No power for now (crew). *(Role deck v2 R1, provisional: its old Heat-failure win is gone; R2/R3 split it into the Fixer, crew, and the Getaway Driver, accomplice.)* | People suspect them of trying to push Heat up. |
+| **Mole** *(saboteur, optional)* | Wins a failed heist with the dark side's best stash; never a successful one. Once per act, can **tip off** the cops (+6 Heat, hidden). | Revealed means hunted, and revealing it is rarely worth it. |
+
+*Factions (role deck v2, R1):* the Mole is the only **saboteur**; every other shipped role is **crew** until R2/R3 bring the v2 deck (Fence, Hacker and the new Blackmailer become accomplices there). `RoleDef.faction` replaces the old `winsOnFailure` / `winsOnSuccess` fields.
 
 *Fence safe timing (provisional):* the safe move is part of the Fence's move and happens after that round's split, so it can include loot pocketed that round; it can't move more than the stash holds.
 
@@ -199,21 +203,56 @@ Every player is dealt **one secret role** at the start of the game. Roles are de
 - **Blackmailer:** the guess is part of the Blackmailer's move. It resolves after that round's splits and Fence safe moves, takes at most what the target's stash holds and never touches the safe. The target is told privately how much was taken, but not by whom; a wrong guess, or a right one on an empty stash, tells the target nothing.
 - **Snitch:** the target is drawn at random from the other players at setup. "Holding more than the clean threshold" means the shakedown was **not clean** (stash plus any Fence safe at least 3 × the act number). The +10 goes into the Snitch's stash, each time it happens, and a cancelled shakedown pays nothing.
 
-*Win-condition roles (provisional, task 13):*
-- **Driver:** wins a successful heist like anyone else. On a Heat failure it wins if it tops the whole crew's ranking (score, then the §3 tie-breaks), Moles included. A missed final target gives it nothing.
-- **Mole:** wins any failed heist (Heat or target), never a successful one. The tip-off is part of the Mole's move, at most once per act: +6 Heat (balance pass 2; was +10) is added to that round's Heat (after rounding, before the cap), so it only shows as part of the round's public Heat change. Only the Mole is told it happened. If content ever deals two Moles, they are told privately at the start who the other is.
+*Win-condition roles (provisional, task 13; role deck v2 R1):*
+- **Driver:** crew, so it wins only a successful heist, like anyone else (it lost its Heat-failure win in R1).
+- **Mole:** a saboteur: wins a failed heist (Heat or target) if its score is the best of the dark side, never a successful one. The tip-off is part of the Mole's move, at most once per act: +6 Heat (balance pass 2; was +10) is added to that round's Heat (after rounding, before the cap), so it only shows as part of the round's public Heat change. Only the Mole is told it happened. Saboteurs know each other: when two or more are dealt, each is told privately at the start who the others are.
 
 ### 8.1 Dealing roles
 
-- The roles in play are drawn from the pool according to player count and the host's settings.
-- **Mole availability:** none at 2–4 players. From 5 players the host's Mole setting decides: *off* deals none, *on* deals **one** Mole (also at 9–12), *maybe* deals one half the time. *(Owner answers, 1 Nov: was 2 Moles at 9–12.)*
+*Role deck v2 §3 (`docs/roles-v2.md`).*
+
+- **First the dark side is rolled** (saboteurs and accomplices) from the weights below, then each faction's roles are drawn at random from its own eligible pool, at most one of each; the crew fills the remaining seats (Rookies when the crew pool runs out).
+- **Hard limits** at any crew size: at most ⌊n ÷ 3⌋ dark seats (accomplices are dropped first, then saboteurs); no accomplices without a saboteur; at most saboteurs + 1 accomplices.
+- **Host saboteur setting** (the old Mole setting, same field): *off* deals crew only; *on* uses the weights; *maybe* is like *on* but with a 50% chance of no dark side at 4–8 players (at 9–12 it is the same as *on*).
+
+| Players | Saboteurs / Accomplices (weight) | Fair success rate |
+|---|---|---|
+| 2–3 | 0 / 0 (crew only; 2p is Duel or bots) | n/a |
+| 4 | 1 / 0 | 75% |
+| 5–6 | 1 / 0 (50), 1 / 1 (50) | 67–83% |
+| 7–8 | 1 / 1 (60), 2 / 0 (20), 1 / 2 (20) | 71–75% |
+| 9–10 | 2 / 1 (60), 1 / 2 (20), 2 / 2 (20) | 60–70% |
+| 11–12 | 2 / 2 (60), 2 / 1 (20), 3 / 1 (20) | 67–75% |
+
+  The hard limits trim some mixes (at 5 players 1 / 1 becomes 1 / 0; at 7–8, 1 / 2 becomes 1 / 1). The fair success rate s = crew seats ÷ n makes a crew seat's and a dark seat's chances equal.
+- **Pools cap the roll (R1, provisional):** a faction can't deal more distinct roles than its pool holds. The Mole is the only saboteur and no accomplice ships yet, so today's deals have **at most one Mole** and **no accomplices**; an unfilled dark seat goes to the crew. Saboteurs are dealt by the setting, never from the host's role pool.
 - **Insider:** dealt only in crews of 5 or more (a crew of 2–4 can't spare a player who never pockets).
-- **Unique roles** (host setting, default on): each special role is dealt at most once and Rookies fill the remaining seats. Off: every seat is dealt from the pool with replacement, so roles may repeat. The Mole always follows the Mole setting, never the pool.
-- **Starter mode** (first game in a group): only Rookie, Lookout, Insider and Fence are used, with no Mole and no events.
+- **Unique roles** (host setting, default on): each special role is dealt at most once and Rookies fill the remaining crew seats. Off: crew and accomplice seats are drawn from their pools with replacement, so roles may repeat. Saboteurs are always distinct (one Mole at most, owner answers 1 Nov; provisional).
+- **Starter mode** (first game in a group): only the starter crew roles (Rookie, Lookout, Insider, Fence today), no dark side and no events.
 
 ### 8.2 Shakedowns and roles
 
 A shakedown reveals a player's **stash**, not their role. Roles only come out at the end, or when a player chooses to say what they are, truthfully or not.
+
+### 8.3 Perks
+
+*Role deck v2 §1 (`docs/roles-v2.md`); R1 builds the vocabulary, R2/R3 give roles the triggers that earn them.*
+
+A perk is a **private token**. Earning one is a private `perkGranted` (only you are told); your own tokens show in your view, nobody else's. Spending one is a private `perkUsed`, with `useAbility`; a refused spend keeps the token. The Shield is the exception: it is spent by itself.
+
+| Perk | Effect (R1, provisional details) |
+|---|---|
+| **Peek** | Learn one other player's role, as it is now. Any time. |
+| **Shield** | Spent by itself: your next passed shakedown is cancelled. The ledger says only "cancelled", as for the Muscle; a Muscle cancel first keeps the Shield. |
+| **+Vote** | +1 ballot weight in the open meeting (once per meeting); counts toward the majority, not the public tally or quorum, like the Smooth talker. |
+| **Ballot** | In an open meeting, see one other player's ballot live, as it changes, in your own view only (never in an event). **Works in Secret mode too** (owner decision on role deck v2: the one exception to secret ballots, §11.2). Refused in Open mode, where ballots are public. |
+| **Tail** | While planning, also see who is in one more room when the round resolves (like the Lookout; a Power cut blinds it, a camera loop doesn't). |
+| **Alibi** | Your posted alibi for the latest resolved round, if it is true, is stamped **Verified** in public (`alibiVerified`). A false alibi can't be stamped. One stamp per player per round. |
+| **Recharge** | Your power's uses this act come back, and one use this game (Muscle). Refused if nothing is used. |
+| **Rig** | Draw two different cards for the next round (events on); the first flips unless you pick the other, until that round starts. One Rig per round: a second is refused. |
+
+- **Shakedown window:** opens after every passed shakedown whenever a Muscle **or any role that can earn a Shield** could be dealt in this game, so the window never shows that either exists (§11.3).
+- **Double-cross** (§10): perks and a spent Tail stay with the player; they were earned, not dealt *(provisional)*.
 
 ---
 
@@ -275,7 +314,7 @@ From round 2 onward, one event card is flipped at the start of each round and sh
 - **Vote visibility** is a host setting:
   - *Hidden then revealed* (default): nobody can see votes while they're being cast, and everyone's votes go into the ledger afterwards.
   - *Open*: votes are visible as they're cast.
-  - *Secret*: only the tally is ever shown, even at the end-of-game reveal. An Informant role could see the votes in this mode (future role).
+  - *Secret*: only the tally is ever shown, even at the end-of-game reveal. The one exception is the **Ballot** perk (§8.3): its holder sees one chosen ballot, live, in their own view only (owner decision on role deck v2).
 - **Players who can't make it** can leave a sealed vote in advance. Otherwise they count as abstaining.
 - **To pass**, a shakedown needs **more than half of the votes cast**, and at least half the crew has to take part (sealed votes count).
 - **Big crews (9–12 players):** the player with the most votes is shaken down if they received **at least ⅓ of the votes cast** and **more votes than skip** (Smooth talker weight counts); a tie for the most votes, or skip leading or tied, means no shakedown. The quorum is the same. *(Owner answers, 1 Nov.)*
@@ -290,7 +329,7 @@ From round 2 onward, one event card is flipped at the start of each round and sh
 - The target's stash is revealed to everyone, and all of it except any Fence safe goes into the Haul.
 - **Clean threshold:** if the stash **plus any Fence safe** was below **3 × the act number** (3, 6 or 9), the target is declared clean, so a Fence with a full safe isn't clean and gets no compensation; the safe still can't be seized *(owner answers, 1 Nov)*. The crew pays them **5 × the act number** out of the Haul, so false accusations hurt everyone. *(Provisional: never more than the Haul holds.)* An emergency meeting uses the current act's numbers.
 - No player is ever eliminated.
-- *Muscle window (provisional):* when the role pool includes the Muscle, a passed shakedown is applied only after a short window in which the Muscle may cancel it (§8). The checkpoint (§11.4) comes after that window.
+- *Muscle window (provisional):* when the role pool includes the Muscle, or any role that can earn a Shield (§8.3), a passed shakedown is applied only after a short window in which the Muscle may cancel it (§8); a Shield cancels it when the window ends. The checkpoint (§11.4) comes after that window.
 
 ### 11.4 Order at a checkpoint
 
@@ -356,19 +395,19 @@ Notifications respect the host's quiet hours.
 
 ## 15. Host controls
 
-- Setup: session length, job, role pool, unique roles (on by default, §8.1), Mole setting, events on or off, vote visibility, meeting window length, quiet hours, starter mode. Defaults: events on, Mole "maybe", the full role pool.
+- Setup: session length, job, role pool, unique roles (on by default, §8.1), saboteur setting (the Mole setting, §8.1), events on or off, vote visibility, meeting window length, quiet hours, starter mode. Defaults: events on, Mole "maybe", the full role pool.
 - During the game: pause or resume, extend the current round, replace an inactive player with a bot (offered automatically after 2 missed rounds in a row), add bots to empty seats before the game starts.
 
 ---
 
 ## 16. Player-count scaling summary
 
-| Players | Rooms | Mole | Notes |
+| Players | Rooms | Dark side (§8.1) | Notes |
 |---|---|---|---|
 | 2 | 5 | No | Needs bots to vote properly. Without bots, use Duel mode (§16.1). |
-| 3–4 | 5 | No | Tight and personal. Every shortfall is easy to narrow down. |
-| 5–8 | 7 | Optional / maybe | The sweet spot. |
-| 9–12 | 9 | 1–2 | Chaotic. Lots of witnesses and lots of alliances. |
+| 3–4 | 5 | 3: no; 4: one saboteur | Tight and personal. Every shortfall is easy to narrow down. |
+| 5–8 | 7 | 1–2 saboteurs, 0–1 accomplices | The sweet spot. |
+| 9–12 | 9 | 1–3 saboteurs, 0–2 accomplices | Chaotic. Lots of witnesses and lots of alliances. |
 
 ### 16.1 Duel mode (exactly 2 humans, no bots)
 

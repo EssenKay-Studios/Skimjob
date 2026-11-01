@@ -8,7 +8,7 @@ import { handleThroughAlibis } from "./alibis.testkit";
 import { V06_NUMBERS } from "./v01-numbers.testkit";
 import { MOLE_ROLE } from "@skimjob/content";
 import type { GameConfig, GameEvent, GameState, MoleSetting, Outcome, PlayerId, PlayerState } from "./types";
-import { moleAllies, moleOptions, setupEvents, validateConfig } from "./setup";
+import { darkSideOdds, moleAllies, setupEvents, validateConfig } from "./setup";
 import { replay } from "./reduce";
 import { handleCommand } from "./handle";
 import { viewFor } from "./view";
@@ -134,26 +134,26 @@ describe("Heat raid mid-round — design §3, §7, §8", () => {
     return o;
   };
 
-  it("Driver tied with the Mole on every tie-break: both win", () => {
-    expect(sorted(raid(ROLES4, { p0: { stash: 10 }, p1: { stash: 10 } }).winners)).toEqual(["p0", "p1"]);
+  it("Driver tied with the Mole on every tie-break: only the Mole wins (the Driver is crew, role deck v2 R1)", () => {
+    expect(raid(ROLES4, { p0: { stash: 10 }, p1: { stash: 10 } }).winners).toEqual(["p0"]);
   });
 
   it("Driver level on stash but shaken down more than the Mole: only the Mole wins", () => {
     expect(raid(ROLES4, { p0: { stash: 10 }, p1: { stash: 10, timesShakenDown: 1 } }).winners).toEqual(["p0"]);
   });
 
-  it("Driver level with a Lookout on everything shares the top and wins", () => {
-    expect(sorted(raid(ROLES4, { p1: { stash: 10 }, p2: { stash: 10 } }).winners)).toEqual(["p0", "p1"]);
+  it("Driver level with a Lookout on top: the crew can't win a failure; the Mole does (design §3)", () => {
+    expect(raid(ROLES4, { p1: { stash: 10 }, p2: { stash: 10 } }).winners).toEqual(["p0"]);
   });
 
-  it("no Mole: the top Driver wins alone; a lower Driver leaves no winner", () => {
-    expect(raid(["driver", "lookout", "lookout"], { p0: { stash: 5 } }).winners).toEqual(["p0"]);
+  it("no saboteur dealt: nobody wins a Heat failure, a top-stash Driver included (design §3)", () => {
+    expect(raid(["driver", "lookout", "lookout"], { p0: { stash: 5 } }).winners).toEqual([]);
     expect(raid(["driver", "lookout", "lookout"], { p1: { stash: 5 } }).winners).toEqual([]);
   });
 });
 
 describe("Heat raid at a checkpoint — design §3, §11.4", () => {
-  it("a missed Act 1 checkpoint pushes Heat to 100: both Moles win, plus the top Driver", () => {
+  it("a missed Act 1 checkpoint pushes Heat to 100: the Mole with the bigger stash wins, not the top Driver (design §3)", () => {
     const roles = ["mole", "driver", "mole", ...Array(6).fill("lookout")];
     let s = game(9, roles);
     for (let r = 0; r < 3; r++) s = run({ ...s, heat: 0 }, ...allIn(s), ROUND);
@@ -161,7 +161,7 @@ describe("Heat raid at a checkpoint — design §3, §11.4", () => {
     expect(s.log.some((e) => e.type === "copsRaided")).toBe(true);
     const o = outcome(s);
     expect(o).toMatchObject({ result: "failed", reason: "heat" });
-    expect(sorted(o.winners)).toEqual(["p0", "p1", "p2"]);
+    expect(o.winners).toEqual(["p0"]);
   });
 });
 
@@ -231,19 +231,21 @@ describe("tip-off edges — design §8", () => {
 describe("Mole dealing — design §8.1", () => {
   const SETTINGS: MoleSetting[] = ["off", "maybe", "on"];
   const expected = (n: number, m: MoleSetting): number[] =>
-    // design §8.1 (owner answers, 1 Nov): one Mole at most; "maybe" is 0 or 1 from 5 players.
-    m === "off" || n <= 4 ? [0] : m === "maybe" ? [0, 1] : [1];
+    // design §8.1 (role deck v2 §3): a saboteur from 4 players; "maybe" is 0 or 1 at 4–8, like "on" at 9–12.
+    // The Mole is the only saboteur so far, so unique roles deal at most one.
+    m === "off" || n <= 3 ? [0] : m === "maybe" && n <= 8 ? [0, 1] : [1];
 
   it("Mole options per player count and setting, 2–12; starter mode never deals one", () => {
     for (let n = 2; n <= 12; n++) {
       for (const m of SETTINGS) {
-        expect([...moleOptions(n, m, false)].sort(), `${n}p ${m}`).toEqual(expected(n, m));
-        expect(moleOptions(n, m, true)).toEqual([0]);
+        const moles = [...new Set(darkSideOdds(n, m, false).map((o) => Math.min(1, o.saboteurs)))].sort();
+        expect(moles, `${n}p ${m}`).toEqual(expected(n, m));
+        expect(darkSideOdds(n, m, true)).toEqual([{ saboteurs: 0, accomplices: 0, chance: 1 }]);
       }
     }
   });
 
-  it("dealt Mole counts match, and 'maybe' reaches both counts at 6 and 10 players", () => {
+  it("dealt Mole counts match, and 'maybe' reaches both counts at 4, 6 and 8 players", () => {
     for (const n of [2, 4, 5, 6, 8, 9, 10, 12]) {
       for (const m of SETTINGS) {
         const seen = new Set<number>();
@@ -253,7 +255,7 @@ describe("Mole dealing — design §8.1", () => {
         }
         const want = expected(n, m);
         for (const c of seen) expect(want, `${n}p ${m}`).toContain(c);
-        if (m === "maybe" && (n === 6 || n === 10)) expect([...seen].sort()).toEqual(want);
+        if (m === "maybe" && (n === 4 || n === 6 || n === 8)) expect([...seen].sort()).toEqual(want);
       }
     }
   });

@@ -121,23 +121,23 @@ describe("dealing roles — design §8.1", () => {
     return counts;
   }
 
-  it("Mole: none at 2–4 players, whatever the setting", () => {
-    for (const n of [2, 3, 4]) for (const m of ["off", "maybe", "on"] as const) expect(moleCounts(n, m)).toEqual(new Set([0]));
+  it("Mole: none at 2–3 players, whatever the setting (role deck v2 §3)", () => {
+    for (const n of [2, 3]) for (const m of ["off", "maybe", "on"] as const) expect(moleCounts(n, m)).toEqual(new Set([0]));
   });
 
-  it("Mole at 5–8: off → 0, on → 1, maybe → 0 or 1", () => {
-    for (const n of [5, 8]) {
+  it("Mole at 4–8: off → 0, on → 1, maybe → 0 or 1 (role deck v2 §3)", () => {
+    for (const n of [4, 5, 8]) {
       expect(moleCounts(n, "off")).toEqual(new Set([0]));
       expect(moleCounts(n, "on")).toEqual(new Set([1]));
       expect(moleCounts(n, "maybe")).toEqual(new Set([0, 1]));
     }
   });
 
-  it("Mole at 9–12: off → 0, on → 1, maybe → 0 or 1 (owner answers, 1 Nov)", () => {
+  it("Mole at 9–12: off → 0, on and maybe → 1 (role deck v2 §3: 'maybe' only matters at 4–8; one Mole, owner answers 1 Nov)", () => {
     for (const n of [9, 12]) {
       expect(moleCounts(n, "off")).toEqual(new Set([0]));
       expect(moleCounts(n, "on")).toEqual(new Set([1]));
-      expect(moleCounts(n, "maybe")).toEqual(new Set([0, 1]));
+      expect(moleCounts(n, "maybe")).toEqual(new Set([1]));
     }
   });
 

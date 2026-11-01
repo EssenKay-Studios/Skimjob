@@ -61,6 +61,10 @@ type ExpectedVisibility = {
   shakedownResolved: "public";
   snitchPaid: "private";
   checkpointChecked: "public";
+  perkGranted: "private"; // design §8.3: perks are your own
+  perkUsed: "private";
+  rigPicked: "private";
+  alibiVerified: "public"; // design §8.3: the Verified stamp is for everyone
   callOutMade: "private"; // design §16.1: hidden until the act's end (provisional)
   callOutResolved: "public";
   gameEnded: "public";

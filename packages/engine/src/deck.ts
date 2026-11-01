@@ -3,11 +3,11 @@
 //
 // Cards are data in @skimjob/content; each kind of effect is one small
 // function here. All draws go through the command's `Draw`.
-import { EVENTS, EVENT_DECK, EVENT_HEAT_FULL_CREW, EVENTS_FROM_ROUND, MOLE_ROLE, type EventDef, type EventEffect, type JobDef, type RoomId } from "@skimjob/content";
+import { EVENTS, EVENT_DECK, EVENT_HEAT_FULL_CREW, EVENTS_FROM_ROUND, type EventDef, type EventEffect, type JobDef, type RoomId } from "@skimjob/content";
 import type { ActiveCard, GameConfig, GameEvent, GameState, PlayerId, PlayerState, RoleState } from "./types";
 import { PUBLIC, privateTo } from "./types";
 import type { Draw } from "./handle";
-import { eventsFor, jobFor, type EventTable } from "./overrides";
+import { eventsFor, factionIn, jobFor, rolesFor, type EventTable } from "./overrides";
 import { actOfRound } from "./acts";
 import { playerFor } from "./check";
 
@@ -36,12 +36,13 @@ const effectIs = <K extends EventEffect["kind"]>(state: GameState, kind: K): Ext
  * random from the whole deck, so cards can repeat (owner answers, 1 Nov). Lockdown names its
  * closed room (any room in play but the default room) and Double-cross
  * privately offers two random players a swap, both as the card is flipped, so
- * players can plan around them. design §10
+ * players can plan around them. A Rig for this round flips its holder's pick
+ * instead of a drawn card (design §8.3). design §10
  */
 export function startRound(state: GameState, round: number, draw: Draw): GameEvent[] {
   const events: GameEvent[] = [{ type: "roundStarted", visibility: PUBLIC, round, act: actOfRound(round) }];
   if (!eventsOn(state.config) || round < EVENTS_FROM_ROUND) return events;
-  const card = draw.pick(EVENT_DECK);
+  const card = state.rig?.round === round ? state.rig.pick : draw.pick(EVENT_DECK);
   const effect = cardDef(card, eventsFor(state.config)).effect;
   let room: RoomId | null = null;
   if (effect.kind === "lockdown") {
@@ -113,9 +114,11 @@ function insideTip(state: GameState, round: number, draw: Draw): GameEvent[] {
 
 /**
  * Double-cross: the swap happens only if both accepted. Each role card takes
- * its uses so far with it; a Snitch's target that would become its new holder
- * becomes the other swapper; Mole allies are recomputed and any other Mole
- * whose ally changed is told privately (`moleAllies`). (provisional)
+ * its uses so far with it; perk tokens and a spent Tail stay with the player
+ * (they were earned, not dealt; provisional, design §8.3); a Snitch's target
+ * that would become its new holder becomes the other swapper; saboteur allies
+ * are recomputed and any other saboteur whose ally changed is told privately
+ * (`moleAllies`). (provisional)
  */
 function doubleCross(state: GameState, round: number): GameEvent[] {
   const offer = state.card?.offer;
@@ -131,14 +134,18 @@ function doubleCross(state: GameState, round: number): GameEvent[] {
     ];
   }
   const roleAfter = (id: PlayerId) => (id === a ? pb.role : id === b ? pa.role : playerIn(state, id).role);
-  const moles = state.playerOrder.filter((id) => roleAfter(id) === MOLE_ROLE);
-  const alliesOf = (id: PlayerId): PlayerId[] => (roleAfter(id) === MOLE_ROLE ? moles.filter((m) => m !== id) : []);
+  const roles = rolesFor(state.config);
+  const saboteurAfter = (id: PlayerId): boolean => factionIn(roles, roleAfter(id)) === "saboteur";
+  const moles = state.playerOrder.filter(saboteurAfter);
+  const alliesOf = (id: PlayerId): PlayerId[] => (saboteurAfter(id) ? moles.filter((m) => m !== id) : []);
   // Same role on both sides: nothing changes hands, so each keeps its own uses.
   const same = pa.role === pb.role;
   const taken = (self: PlayerId, partner: PlayerId, from: PlayerState): RoleState => ({
     ...from.roleState,
     target: from.roleState.target === self ? partner : from.roleState.target,
     allies: alliesOf(self),
+    perks: playerIn(state, self).roleState.perks,
+    tail: playerIn(state, self).roleState.tail,
   });
   const events: GameEvent[] = [
     { type: "doubleCrossResolved", visibility: privateTo(a), player: a, round, partner: b, swap: { role: pb.role, roleState: taken(a, b, same ? pa : pb) } },

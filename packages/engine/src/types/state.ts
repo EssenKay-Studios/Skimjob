@@ -4,7 +4,7 @@
 // State is a fold over `log`; every field other than `config` and `log` must be
 // derivable by replaying the log from the start. `rng` is set from the seed by
 // `rngSeeded` and then by each reveal-only `rngAdvanced` (docs/decisions.md).
-import type { EventId, RoleId, RoomId } from "@skimjob/content";
+import type { EventId, PerkId, RoleId, RoomId } from "@skimjob/content";
 import type { GameConfig, PlayerId } from "./config";
 import type { Move, VoteChoice } from "./commands";
 import type { ActNumber, GameEvent, MeetingKind, Outcome } from "./events";
@@ -89,11 +89,23 @@ export interface RoleState {
   readonly usedThisGame: number;
   /** The Snitch's secret target; null for every other role. */
   readonly target: PlayerId | null;
-  /** A Mole's fellow Moles (design §8.1); empty for everyone else and for a lone Mole. */
+  /** A saboteur's fellow saboteurs (design §8.1); empty for everyone else and for a lone saboteur. */
   readonly allies: readonly PlayerId[];
+  /** Perk tokens held, in the order earned (one entry per token). design §8.3 */
+  readonly perks: readonly PerkId[];
+  /** The room a spent Tail watches when the round being planned resolves; null otherwise. design §8.3 */
+  readonly tail: RoomId | null;
 }
 
-export const NO_ROLE_STATE: RoleState = { usedThisAct: 0, usedThisGame: 0, target: null, allies: [] };
+export const NO_ROLE_STATE: RoleState = { usedThisAct: 0, usedThisGame: 0, target: null, allies: [], perks: [], tail: null };
+
+/** A spent Rig: `player` picks which of `cards` flips at the start of `round`. Hidden from everyone else. design §8.3 */
+export interface RiggedCard {
+  readonly player: PlayerId;
+  readonly round: number;
+  readonly cards: readonly EventId[];
+  readonly pick: EventId;
+}
 
 /** A shakedown the vote passed, waiting for its window to end. Hidden: whether it was cancelled. design §11.3 */
 export interface PendingShakedown {
@@ -154,6 +166,10 @@ export interface MeetingState {
    * awaiting the act's meeting if `round` has already resolved.)
    */
   readonly votes: Readonly<Record<PlayerId, VoteChoice>>;
+  /** Players who spent a +Vote in this meeting (hidden). design §8.3 */
+  readonly extraVotes: readonly PlayerId[];
+  /** Ballot perks spent in this meeting: viewer → the players whose ballots they see (hidden). design §8.3 */
+  readonly ballotGrants: Readonly<Record<PlayerId, readonly PlayerId[]>>;
 }
 
 export interface GameState {
@@ -182,6 +198,10 @@ export interface GameState {
   readonly alibisOpen: boolean;
   /** Players who already posted an alibi for `resolvedRound` (one each). design §5.4 */
   readonly alibisPosted: readonly PlayerId[];
+  /** Players whose alibi for `resolvedRound` is stamped Verified (public, Alibi perk). design §8.3 */
+  readonly alibisVerified: readonly PlayerId[];
+  /** The next card, if a Rig chose it (hidden). design §8.3 */
+  readonly rig: RiggedCard | null;
   /** Open proposals for the current act's regular meeting; cleared once a slot is locked. design §11.1 */
   readonly proposals: readonly MeetingProposal[];
   /** The regular meeting locked in for the current act, not yet open. design §11.1 */
