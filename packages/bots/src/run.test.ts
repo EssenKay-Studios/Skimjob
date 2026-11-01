@@ -249,11 +249,28 @@ describe("bots with the accomplices dealt — role deck v2 §2, §4 (R3a)", () =
   });
 });
 
+describe("bots with the Blackmailer, Forger and Embezzler dealt — role deck v2 §2, §4 (R3b)", () => {
+  // 9 players with a saboteur (Mole or Embezzler, or both) and accomplices from these two.
+  const games = Array.from({ length: 12 }, (_, g) => {
+    const c = { ...config(9, `dark3b-${g}`), mole: "on" as const, rolePool: ["blackmailer", "forger", "lookout", "rookie", "bagman", "auditor", "detective"] };
+    return runBotGame(c, createBots(c.players, mix(MIXED), `bots-${c.seed}`));
+  });
+  const log = games.flatMap((g) => g.state.log);
+
+  it("finish with no refused command; the Forger plants sightings and the Embezzler takes", () => {
+    for (const g of games) expect([g.state.phase.kind, g.rejections]).toEqual(["ended", []]);
+    const used = (kind: string) => log.filter((e) => e.type === "abilityResolved" && e.ability.kind === kind);
+    for (const k of ["forge", "embezzle"]) expect(used(k).length, k).toBeGreaterThan(0);
+    expect(log.some((e) => e.type === "sightingForged")).toBe(true);
+  });
+});
+
 describe("bots with the info and vote roles dealt — design §8, §17.3 (task 12)", () => {
   // The Hacker is an accomplice since R3a (tested below with the dark side).
-  const ROLE_POOL = ["smoothTalker", "muscle", "blackmailer", "snitch"];
+  // The Blackmailer is an accomplice since R3b (tested below with the dark side).
+  const ROLE_POOL = ["smoothTalker", "muscle", "snitch"];
 
-  it("finish every game with no refused command, and use the Blackmailer and Muscle powers", () => {
+  it("finish every game with no refused command, and use the Muscle power", () => {
     const used = new Set<string>();
     const types = new Set<string>();
     for (const mode of ["hiddenThenRevealed", "open", "secret"] as const) {
@@ -270,7 +287,7 @@ describe("bots with the info and vote roles dealt — design §8, §17.3 (task 1
         }
       }
     }
-    for (const k of ["blackmail", "cancelShakedown"]) expect(used, k).toContain(k);
+    for (const k of ["cancelShakedown"]) expect(used, k).toContain(k);
     for (const t of ["snitchTargetAssigned", "shakedownPending", "shakedownCancelled"]) expect(types, t).toContain(t);
    }, 30_000); // 180 games: over the 5 s default on a busy machine
 });

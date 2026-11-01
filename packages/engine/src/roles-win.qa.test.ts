@@ -232,7 +232,7 @@ describe("Mole dealing — design §8.1", () => {
   const SETTINGS: MoleSetting[] = ["off", "maybe", "on"];
   const expected = (n: number, m: MoleSetting): number[] =>
     // design §8.1 (role deck v2 §3): a saboteur from 4 players; "maybe" is 0 or 1 at 4–8, like "on" at 9–12.
-    // The Mole is the only saboteur so far, so unique roles deal at most one.
+    // Counted as saboteurs (min 1): since R3b the Mole or the Embezzler, each at most once.
     m === "off" || n <= 3 ? [0] : m === "maybe" && n <= 8 ? [0, 1] : [1];
 
   it("Mole options per player count and setting, 2–12; starter mode never deals one", () => {
@@ -251,7 +251,7 @@ describe("Mole dealing — design §8.1", () => {
         const seen = new Set<number>();
         for (let i = 0; i < 24; i++) {
           const ev = setupEvents(config(n, { mole: m, rolePool: [], seed: `deal-${n}-${m}-${i}` }));
-          seen.add(ev.filter((e) => e.type === "roleDealt" && e.role === MOLE_ROLE).length);
+          seen.add(Math.min(1, ev.filter((e) => e.type === "roleDealt" && (e.role === MOLE_ROLE || e.role === "embezzler")).length));
         }
         const want = expected(n, m);
         for (const c of seen) expect(want, `${n}p ${m}`).toContain(c);
@@ -272,10 +272,14 @@ describe("Mole dealing — design §8.1", () => {
  * turned Mole and the `moleAllies` setup would then emit.
  */
 function withTwoMoles(cfg: GameConfig): GameEvent[] {
-  const events = setupEvents(cfg);
+  // Since R3b the setting may deal an Embezzler beside the Mole: it is made a Mole here, and the setup's own moleAllies dropped.
+  const events = setupEvents(cfg)
+    .filter((e) => e.type !== "moleAllies")
+    .map((e): GameEvent => (e.type === "roleDealt" && e.role === "embezzler" ? { ...e, role: MOLE_ROLE } : e));
   const dealt = events.filter((e): e is Extract<GameEvent, { type: "roleDealt" }> => e.type === "roleDealt");
-  const extra = dealt.find((e) => e.role !== MOLE_ROLE && e.role !== "snitch");
-  if (!extra || dealt.filter((e) => e.role === MOLE_ROLE).length !== 1) throw new Error("withTwoMoles needs exactly one Mole dealt");
+  const already = dealt.filter((e) => e.role === MOLE_ROLE).length;
+  const extra = already === 2 ? undefined : dealt.find((e) => e.role !== MOLE_ROLE && e.role !== "snitch");
+  if ((!extra && already !== 2) || already < 1 || already > 2) throw new Error("withTwoMoles needs one or two saboteurs dealt");
   const roles = dealt.map((e) => (e === extra ? MOLE_ROLE : e.role));
   const swapped = events.map((e): GameEvent => (e === extra ? { ...extra, role: MOLE_ROLE } : e));
   const at = swapped.indexOf(swapped.filter((e) => e.type === "roleDealt").at(-1) as GameEvent) + 1;

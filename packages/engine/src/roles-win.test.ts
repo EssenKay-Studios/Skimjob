@@ -145,10 +145,11 @@ describe("Mole dealing and Mole allies — design §8.1", () => {
       for (let seed = 0; seed < 10; seed++) {
         const cfg = config(n, { mole: "maybe", rolePool: ["lookout", "auditor", "bagman", "cleaner"], seed: `allies-${n}-${seed}` });
         const events = setupEvents(cfg);
-        // design §8.1 (owner answers, 1 Nov): the shipped rules never deal two.
-        expect(moles(events).length).toBeLessThan(2);
-        expect(events.filter((e) => e.type === "moleAllies")).toEqual([]);
-        if (moles(events).length === 1) {
+        // Since R3b two saboteurs (the Mole and the Embezzler) may be dealt from 7: they know each other.
+        const sabs = events.flatMap((e) => (e.type === "roleDealt" && (e.role === MOLE_ROLE || e.role === "embezzler") ? [e.player] : []));
+        expect(sabs.length).toBeLessThanOrEqual(2);
+        expect(events.filter((e) => e.type === "moleAllies").map((e) => e.type === "moleAllies" && e.player)).toEqual(sabs.length === 2 ? sabs : []);
+        if (sabs.length === 1 && moles(events).length === 1) {
           singles++;
           // With content that deals two, both learn the other and nobody else learns anything.
           const log = withTwoMoles(cfg);
@@ -170,11 +171,13 @@ describe("Mole dealing and Mole allies — design §8.1", () => {
     expect(singles).toBeGreaterThan(0);
   });
 
-  it("Mole 'on' deals 1 Mole at 4–12 (design §8.1, role deck v2 §3: the only saboteur, at most once), none at 2–3", () => {
-    expect(moles(setupEvents(config(5, { mole: "on" })))).toHaveLength(1);
-    expect(moles(setupEvents(config(9, { mole: "on" })))).toHaveLength(1);
-    expect(moles(setupEvents(config(12, { mole: "on" })))).toHaveLength(1);
-    expect(moles(setupEvents(config(4, { mole: "on" })))).toHaveLength(1);
+  it("Mole 'on' deals at most 1 Mole at 4–12, none at 2–3 (design §8.1, role deck v2 §3; the Embezzler may take a saboteur seat since R3b)", () => {
+    const saboteurs = (events: readonly GameEvent[]) => events.filter((e) => e.type === "roleDealt" && (e.role === MOLE_ROLE || e.role === "embezzler")).length;
+    for (const n of [4, 5, 9, 12]) {
+      const events = setupEvents(config(n, { mole: "on" }));
+      expect(moles(events).length).toBeLessThanOrEqual(1);
+      expect(saboteurs(events)).toBeGreaterThanOrEqual(1);
+    }
     expect(moles(setupEvents(config(3, { mole: "on" })))).toHaveLength(0);
   });
 });
@@ -185,10 +188,14 @@ describe("Mole dealing and Mole allies — design §8.1", () => {
  * turned Mole and the `moleAllies` setup would then emit.
  */
 function withTwoMoles(cfg: GameConfig): GameEvent[] {
-  const events = setupEvents(cfg);
+  // Since R3b the setting may deal an Embezzler beside the Mole: it is made a Mole here, and the setup's own moleAllies dropped.
+  const events = setupEvents(cfg)
+    .filter((e) => e.type !== "moleAllies")
+    .map((e): GameEvent => (e.type === "roleDealt" && e.role === "embezzler" ? { ...e, role: MOLE_ROLE } : e));
   const dealt = events.filter((e): e is Extract<GameEvent, { type: "roleDealt" }> => e.type === "roleDealt");
-  const extra = dealt.find((e) => e.role !== MOLE_ROLE && e.role !== "snitch");
-  if (!extra || dealt.filter((e) => e.role === MOLE_ROLE).length !== 1) throw new Error("withTwoMoles needs exactly one Mole dealt");
+  const already = dealt.filter((e) => e.role === MOLE_ROLE).length;
+  const extra = already === 2 ? undefined : dealt.find((e) => e.role !== MOLE_ROLE && e.role !== "snitch");
+  if ((!extra && already !== 2) || already < 1 || already > 2) throw new Error("withTwoMoles needs one or two saboteurs dealt");
   const roles = dealt.map((e) => (e === extra ? MOLE_ROLE : e.role));
   const swapped = events.map((e): GameEvent => (e === extra ? { ...extra, role: MOLE_ROLE } : e));
   const at = swapped.indexOf(swapped.filter((e) => e.type === "roleDealt").at(-1) as GameEvent) + 1;

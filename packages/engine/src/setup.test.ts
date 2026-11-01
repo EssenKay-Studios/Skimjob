@@ -7,6 +7,8 @@ import { canSee } from "./types";
 import { createGame, dealRoles, roomsFor, setupEvents, validateConfig } from "./setup";
 import { applyEvent, initialState, replay } from "./reduce";
 import { seedRng } from "./rng";
+/** Role deck v2 R3b: the Embezzler is a saboteur too, dealt by the same setting. */
+const isSaboteur = (r: string): boolean => r === "mole" || r === "embezzler";
 
 function config(players: number, overrides: Partial<GameConfig> = {}): GameConfig {
   return {
@@ -96,7 +98,9 @@ describe("dealing roles — design §8.1", () => {
     let repeated = false;
     for (let s = 0; s < 20; s++) {
       const roles = rolesOf(config(12, { seed: `rep-${s}`, mole: "on", uniqueRoles: false }));
-      expect(roles.filter((r) => r === MOLE_ROLE)).toHaveLength(1);
+      // v2 §3 (R3b): one or two saboteurs at 12, each at most once.
+      expect([1, 2]).toContain(roles.filter(isSaboteur).length);
+      expect(roles.filter((r) => r === MOLE_ROLE).length).toBeLessThanOrEqual(1);
       if (new Set(roles.filter((r) => r !== "rookie")).size < roles.filter((r) => r !== "rookie").length) repeated = true;
     }
     expect(repeated).toBe(true);
@@ -117,7 +121,7 @@ describe("dealing roles — design §8.1", () => {
 
   function moleCounts(n: number, mole: MoleSetting): Set<number> {
     const counts = new Set<number>();
-    for (let s = 0; s < 60; s++) counts.add(rolesOf(config(n, { seed: `m${s}`, mole })).filter((r) => r === MOLE_ROLE).length);
+    for (let s = 0; s < 60; s++) counts.add(rolesOf(config(n, { seed: `m${s}`, mole })).filter(isSaboteur).length);
     return counts;
   }
 
@@ -125,26 +129,30 @@ describe("dealing roles — design §8.1", () => {
     for (const n of [2, 3]) for (const m of ["off", "maybe", "on"] as const) expect(moleCounts(n, m)).toEqual(new Set([0]));
   });
 
-  it("Mole at 4–8: off → 0, on → 1, maybe → 0 or 1 (role deck v2 §3)", () => {
-    for (const n of [4, 5, 8]) {
+  // Counted as saboteurs (Mole or Embezzler): since R3b the pool holds two, so the §3 mixes with two deal from 7.
+  it("saboteurs at 4–8: off → 0, on → 1 (two possible from 7), maybe → also 0 (role deck v2 §3)", () => {
+    for (const n of [4, 5]) {
       expect(moleCounts(n, "off")).toEqual(new Set([0]));
       expect(moleCounts(n, "on")).toEqual(new Set([1]));
       expect(moleCounts(n, "maybe")).toEqual(new Set([0, 1]));
     }
+    expect(moleCounts(8, "on")).toEqual(new Set([1, 2]));
+    expect(moleCounts(8, "maybe")).toEqual(new Set([0, 1, 2]));
   });
 
-  it("Mole at 9–12: off → 0, on and maybe → 1 (role deck v2 §3: 'maybe' only matters at 4–8; one Mole, owner answers 1 Nov)", () => {
-    for (const n of [9, 12]) {
+  it("saboteurs at 9–12: off → 0, on and maybe → 1 or 2, 2 at 12 (role deck v2 §3: 'maybe' only matters at 4–8; each saboteur role once)", () => {
+    // At 11–12 every mix has two or more saboteurs, so both roles are dealt.
+    for (const [n, counts] of [[9, [1, 2]], [12, [2]]] as const) {
       expect(moleCounts(n, "off")).toEqual(new Set([0]));
-      expect(moleCounts(n, "on")).toEqual(new Set([1]));
-      expect(moleCounts(n, "maybe")).toEqual(new Set([1]));
+      expect(moleCounts(n, "on")).toEqual(new Set(counts));
+      expect(moleCounts(n, "maybe")).toEqual(new Set(counts));
     }
   });
 
   it("'maybe a Mole' at 5–8 is about 50%", () => {
     let withMole = 0;
     for (let s = 0; s < 1000; s++) {
-      if (dealRoles(config(6, { seed: `half${s}`, mole: "maybe" }), seedRng(`half${s}`)).value.includes(MOLE_ROLE)) withMole++;
+      if (dealRoles(config(6, { seed: `half${s}`, mole: "maybe" }), seedRng(`half${s}`)).value.some(isSaboteur)) withMole++;
     }
     expect(withMole).toBeGreaterThan(430);
     expect(withMole).toBeLessThan(570);

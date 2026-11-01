@@ -148,9 +148,9 @@ describe("starter roles — design §8, §8.1", () => {
     expect(ROLES.rookie?.scoring.perLootOverFinalTarget).toBe(0);
   });
 
-  it("the Mole is a saboteur, the Getaway Driver, Fence and Hacker accomplices, the rest crew (design §3, role deck v2 R3a)", () => {
-    const faction = (id: string) => (id === "mole" ? "saboteur" : ACCOMPLICE_V2_ROLES.includes(id) ? "accomplice" : "crew");
-    expect([...ACCOMPLICE_V2_ROLES].sort()).toEqual(["fence", "getawayDriver", "hacker"]);
+  it("the Mole and Embezzler are saboteurs, the Getaway Driver, Fence, Hacker, Blackmailer and Forger accomplices, the rest crew (design §3, role deck v2 R3a, R3b)", () => {
+    const faction = (id: string) => (id === "mole" || id === "embezzler" ? "saboteur" : ACCOMPLICE_V2_ROLES.includes(id) ? "accomplice" : "crew");
+    expect([...ACCOMPLICE_V2_ROLES].sort()).toEqual(["blackmailer", "fence", "forger", "getawayDriver", "hacker"]);
     for (const role of Object.values(ROLES)) expect(role.faction, role.id).toBe(faction(role.id));
     for (const id of STARTER_ROLES) expect(ROLES[id]?.faction).toBe("crew");
   });
