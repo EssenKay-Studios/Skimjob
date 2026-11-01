@@ -21,7 +21,7 @@ import type { Clock } from "./clock";
 import type { Db } from "./db";
 import { SystemRefused } from "./live";
 import type { SessionLength } from "./settings";
-import { TIMINGS, type Timing } from "./timing";
+import { scaleTiming, TIMINGS, type Timing } from "./timing";
 
 export interface PlannedDeadline {
   /** Unique per game and never reused once fired, e.g. `round:3`, `openMeeting:act-1`. */
@@ -105,6 +105,18 @@ export interface Scheduler {
   tick(): Promise<number>;
   start(intervalMs: number): void;
   stop(): void;
+  /**
+   * The game's deadlines as clients may see them (the HUD countdown): every
+   * one comes from public state, so none says anything hidden. Oldest first.
+   */
+  timers(gameId: string): Promise<readonly Timer[]>;
+}
+
+/** A deadline for the client: due time in epoch ms; `pausedAt` is set while a meeting pauses it. */
+export interface Timer {
+  readonly key: string;
+  readonly dueAt: number;
+  readonly pausedAt: number | null;
 }
 
 /** Deadlines sent per tick at most (a few fall due together at an act's end). */
@@ -125,6 +137,8 @@ export function createScheduler(deps: {
   readonly system: (gameId: string, command: SystemCommand) => Promise<unknown>;
   /** Re-runs the game's after-change step (`live.settle`), so `reconcile` re-plans its deadlines. */
   readonly resync: (gameId: string) => Promise<unknown>;
+  /** TIME_SCALE (config.ts): multiplies every preset's wall times. Default 1. */
+  readonly timeScale?: number;
 }): Scheduler {
   const { db, clock, log } = deps;
   const timings = new Map<string, Timing>();
@@ -137,7 +151,7 @@ export function createScheduler(deps: {
     const known = timings.get(gameId);
     if (known) return known;
     const [row] = await db.query<{ length: SessionLength | null }>("select settings->>'sessionLength' as length from games where id = $1", [gameId]);
-    const timing = TIMINGS[row?.length ?? "1h"] ?? TIMINGS["1h"];
+    const timing = scaleTiming(TIMINGS[row?.length ?? "1h"] ?? TIMINGS["1h"], deps.timeScale ?? 1);
     timings.set(gameId, timing);
     return timing;
   };
@@ -216,6 +230,15 @@ export function createScheduler(deps: {
         ticking = false;
       }
       return sent;
+    },
+
+    async timers(gameId) {
+      const rows = await db.query<{ key: string; due: number; paused: number | null }>(
+        `select key, (extract(epoch from due_at) * 1000)::float8 as due, (extract(epoch from paused_at) * 1000)::float8 as paused
+         from deadlines where game_id = $1 order by due_at, key`,
+        [gameId],
+      );
+      return rows.map((r) => ({ key: r.key, dueAt: Math.round(Number(r.due)), pausedAt: r.paused === null ? null : Math.round(Number(r.paused)) }));
     },
 
     start(intervalMs) {

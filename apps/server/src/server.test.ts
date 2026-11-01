@@ -39,13 +39,13 @@ describe("buildServer", () => {
 
 describe("loadConfig", () => {
   it("has zero-setup defaults: loopback, port 3000, PGlite on disk, no dev login", () => {
-    expect(loadConfig({})).toEqual({ port: 3000, host: "127.0.0.1", databaseUrl: null, pgliteDir: ".pglite", devLogin: false, allowedOrigins: DEV_ORIGINS });
+    expect(loadConfig({})).toEqual({ port: 3000, host: "127.0.0.1", databaseUrl: null, pgliteDir: ".pglite", devLogin: false, allowedOrigins: DEV_ORIGINS, timeScale: 1 });
   });
 
   it("reads the environment", () => {
     expect(
       loadConfig({ PORT: "8080", HOST: "0.0.0.0", DATABASE_URL: "postgres://x@localhost/y", PGLITE_DIR: "memory", DEV_LOGIN: "1" }),
-    ).toEqual({ port: 8080, host: "0.0.0.0", databaseUrl: "postgres://x@localhost/y", pgliteDir: null, devLogin: true, allowedOrigins: DEV_ORIGINS });
+    ).toEqual({ port: 8080, host: "0.0.0.0", databaseUrl: "postgres://x@localhost/y", pgliteDir: null, devLogin: true, allowedOrigins: DEV_ORIGINS, timeScale: 1 });
     expect(loadConfig({ ALLOWED_ORIGINS: " https://skimjob.example , http://lan:5173," }).allowedOrigins).toEqual(["https://skimjob.example", "http://lan:5173"]);
     expect(loadConfig({ DEV_LOGIN: "true" }).devLogin).toBe(false);
   });

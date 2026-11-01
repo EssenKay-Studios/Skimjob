@@ -10,7 +10,8 @@ import { TICK_MS } from "./timing";
 try {
   const config = loadConfig();
   const { db, applied } = await openDatabase(config);
-  const app = buildServer({ db, clock: systemClock, logger: true, auth: config.devLogin ? [devAuthProvider()] : [], allowedOrigins: config.allowedOrigins, tickMs: TICK_MS });
+  const app = buildServer({ db, clock: systemClock, logger: true, auth: config.devLogin ? [devAuthProvider()] : [], allowedOrigins: config.allowedOrigins, tickMs: TICK_MS, timeScale: config.timeScale });
+  if (config.timeScale !== 1) app.log.warn({ timeScale: config.timeScale }, "TIME_SCALE is set: every deadline runs faster (dev and E2E only)");
   if (applied.length > 0) app.log.info({ applied }, "migrations applied");
   app.log.info(config.databaseUrl ? "database: Postgres (DATABASE_URL)" : `database: PGlite (${config.pgliteDir ?? "in memory"})`);
 

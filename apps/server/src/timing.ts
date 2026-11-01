@@ -44,5 +44,20 @@ export const TIMINGS: { readonly [K in SessionLength]: Timing } = {
   "1w": { roundMs: 17 * H, alibiMs: 1 * H, meetingMs: 20 * MIN, emergencyNoticeMs: 2 * H, shakedownWindowMs: 10 * MIN, autoMeetings: false, meetingLeadMs: 2 * H },
 };
 
+/** `t` with every wall time multiplied by `k` (TIME_SCALE, config.ts): fast dev and E2E games. */
+export function scaleTiming(t: Timing, k: number): Timing {
+  if (k === 1) return t;
+  const ms = (x: number) => Math.max(1, Math.round(x * k));
+  return {
+    ...t,
+    roundMs: ms(t.roundMs),
+    alibiMs: ms(t.alibiMs),
+    meetingMs: ms(t.meetingMs),
+    emergencyNoticeMs: ms(t.emergencyNoticeMs),
+    shakedownWindowMs: ms(t.shakedownWindowMs),
+    meetingLeadMs: t.meetingLeadMs === 0 ? 0 : ms(t.meetingLeadMs),
+  };
+}
+
 /** How often the scheduler looks for due deadlines (main.ts). */
 export const TICK_MS = 1000;

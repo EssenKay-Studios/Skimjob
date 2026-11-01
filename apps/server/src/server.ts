@@ -31,6 +31,8 @@ export interface ServerDeps {
   readonly allowedOrigins?: readonly string[];
   /** How often the scheduler sends due deadlines (TICK_MS in main.ts). Unset: never on its own; tests call `app.scheduler.tick()`. */
   readonly tickMs?: number;
+  /** TIME_SCALE (config.ts): multiplies every preset's wall times (fast E2E games). Default 1. */
+  readonly timeScale?: number;
   /** Fastify's request logging; off by default (tests). */
   readonly logger?: boolean;
 }
@@ -60,8 +62,13 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     }
   });
 
-  const scheduler = createScheduler({ db, clock: deps.clock, log: app.log, system: (gameId, command) => live.system(gameId, command), resync: (gameId) => live.settle(gameId) });
-  const live = liveRoutes(app, db, store, s, { clock: deps.clock, allowedOrigins: deps.allowedOrigins ?? [], onChange: scheduler.reconcile });
+  const scheduler = createScheduler({ db, clock: deps.clock, log: app.log, system: (gameId, command) => live.system(gameId, command), resync: (gameId) => live.settle(gameId), timeScale: deps.timeScale ?? 1 });
+  const live = liveRoutes(app, db, store, s, {
+    clock: deps.clock,
+    allowedOrigins: deps.allowedOrigins ?? [],
+    onChange: scheduler.reconcile,
+    timers: scheduler.timers,
+  });
   app.decorate("live", live);
   app.decorate("scheduler", scheduler);
   // After live's own onReady (bots settle and every running game's deadlines are reconciled), start ticking.
