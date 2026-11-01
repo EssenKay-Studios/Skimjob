@@ -11,7 +11,7 @@ import { defineConfig, devices } from "@playwright/test";
 //   games tagged @fast-clock (the slowest tests), run by the *-fast projects.
 // Ports come from the environment so two clones can run E2E side by side:
 // E2E_PORT (web, default 5179), E2E_SERVER_PORT (3179), E2E_FAST_PORT (5180), E2E_FAST_SERVER_PORT (3180).
-// CI shards the suite: `playwright test --shard=i/N` (.github/workflows/ci.yml).
+// CI shards the suite: `playwright test --shard=i/6` (.github/workflows/ci.yml).
 const num = (name: string, fallback: number) => Number(process.env[name] ?? fallback);
 const port = num("E2E_PORT", 5179);
 const serverPort = num("E2E_SERVER_PORT", 3179);
