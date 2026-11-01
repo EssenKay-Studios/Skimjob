@@ -1,13 +1,13 @@
 // Migration runner and the v1 schema. docs/m2-plan.md M2-1
 // Two databases only (each fresh PGlite costs seconds): one migrated with the
 // real files, one driven by throwaway migration directories.
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Db } from "./db";
-import { migrate } from "./migrate";
+import { migrate, MIGRATIONS_DIR } from "./migrate";
 import { freshDb, insertUser } from "./testkit";
 
 const dirs: URL[] = [];
@@ -23,7 +23,7 @@ const tables = async (db: Db) =>
   (await db.query<{ t: string }>("select table_name as t from information_schema.tables where table_schema = current_schema() order by 1")).map((r) => r.t);
 const versions = async (db: Db) => (await db.query<{ version: string }>("select version from schema_migrations order by 1")).map((r) => r.version);
 
-const ALL = ["001_init.sql", "002_identity.sql", "003_chat.sql"];
+const ALL = ["001_init.sql", "002_identity.sql", "003_chat.sql", "004_deadline_pause.sql", "005_bot_seen.sql"];
 let real: Db;
 let scratch: Db;
 beforeAll(async () => {
@@ -45,6 +45,26 @@ describe("migrate (the real migrations)", () => {
     expect(await migrate(real)).toEqual([]);
     expect(await versions(real)).toEqual(ALL);
     expect(await real.query("select display_name from users")).toEqual([{ display_name: "kept" }]);
+  });
+});
+
+describe("migrate (renumbered migrations)", () => {
+  it("a database that applied the scheduler's migrations as 003/004 (before chat took 003) migrates cleanly", { timeout: 60_000 }, async () => {
+    const old = await freshDb();
+    try {
+      const sql = (f: string) => readFile(new URL(f, MIGRATIONS_DIR), "utf8");
+      const before = await tempMigrations({
+        "001_init.sql": await sql("001_init.sql"),
+        "002_identity.sql": await sql("002_identity.sql"),
+        "003_deadline_pause.sql": await sql("004_deadline_pause.sql"),
+        "004_bot_seen.sql": await sql("005_bot_seen.sql"),
+      });
+      await migrate(old, before);
+      expect(await migrate(old)).toEqual(["003_chat.sql"]);
+      expect(await versions(old)).toEqual(ALL);
+    } finally {
+      await old.close();
+    }
   });
 });
 
