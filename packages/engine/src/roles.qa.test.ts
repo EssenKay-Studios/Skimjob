@@ -558,8 +558,8 @@ describe("QA Blackmailer: stash edges, limits, wrong phase — design §8", () =
 });
 
 describe("QA Snitch: payout edges — design §8, §11.3", () => {
-  const bonus = 10;
-  const paid = (s: GameState) => ofType(s.log, "snitchPaid").map((e) => e.amount);
+  const bonus = 1; // role deck v2 §2: +1 ballot weight
+  const paid = (s: GameState) => ofType(s.log, "snitchRewarded").map((e) => e.votes);
 
   it.each([
     [6, true],
@@ -587,10 +587,10 @@ describe("QA Snitch: payout edges — design §8, §11.3", () => {
     s = run(s, RESOLVE, mv("p1", "vault", 6), ROUND);
     s = closeAll(run(emergency(s, "p1"), vote("p0", "p1"), vote("p2", "p1")));
     expect(paid(s)).toEqual([bonus, bonus]);
-    expect(s.players.p0?.stash).toBe(2 * bonus);
+    expect(s.players.p0?.roleState.bonusVotes).toBe(2 * bonus);
   });
 
-  it("a payout in the final meeting's window counts in the final ranking; a cancel there pays nothing", () => {
+  it("a reward in the final meeting's window is granted; a cancel there grants nothing", () => {
     const final = (cancelIt: boolean) => {
       let s = game(3, ["snitch", "rookie", "muscle"], {}, { p0: "p1" });
       for (let act = 1; act <= 3; act++) {
@@ -599,7 +599,7 @@ describe("QA Snitch: payout edges — design §8, §11.3", () => {
         if (act === 3) s = run(s, vote("p0", "p1"), vote("p2", "p1"), CLOSE, ...(cancelIt ? [cancel("p2")] : []), RESOLVE);
         else s = closeAll(s);
       }
-      return s.phase.kind === "ended" ? s.phase.outcome.ranking.find((e) => e.player === "p0")?.stash : "not ended";
+      return s.phase.kind === "ended" ? s.players.p0?.roleState.bonusVotes : "not ended";
     };
     expect([final(false), final(true)]).toEqual([bonus, 0]);
   });

@@ -180,13 +180,14 @@ function rollDarkSide(config: GameConfig, rng: RngState): { readonly value: Dark
 /** Whether this is a Duel game (2 players, call-outs instead of votes). design §16.1 */
 export const isDuel = (config: GameConfig): boolean => config.duel === true;
 
-/** Powers that only work in meetings, so they are never dealt in Duel mode (no votes, design §16.1; provisional). */
-const MEETING_POWERS: readonly string[] = ["voteWeight", "cancelShakedown", "snitch"];
-
-/** Dealable for this crew: not below the role's `minPlayers`, and in Duel mode not a meeting-only role. design §8.1, §16.1 */
+/**
+ * Dealable for this crew: not below the role's `minPlayers`, and in Duel
+ * mode not a role that needs meetings (`needsMeetings`: no votes there).
+ * design §8.1, §16.1 (role deck v2 §3)
+ */
 function dealable(config: GameConfig, roles: RoleTable, role: RoleId): boolean {
   const def = roleDefIn(roles, role);
-  return (def?.minPlayers ?? 0) <= config.players.length && !(isDuel(config) && MEETING_POWERS.includes(def?.power.kind ?? "none"));
+  return (def?.minPlayers ?? 0) <= config.players.length && !(isDuel(config) && def?.needsMeetings === true);
 }
 
 /**

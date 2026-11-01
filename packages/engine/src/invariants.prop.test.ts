@@ -283,7 +283,6 @@ function lootFlow(events: readonly GameEvent[]): number {
   let n = 0;
   for (const e of events) {
     if (e.type === "lootSplit") n += e.toHaul + e.toStash;
-    else if (e.type === "snitchPaid") n += e.amount;
     else if (e.type === "raidRumourHit") n -= e.lost;
   }
   return n;
@@ -355,7 +354,7 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
             role: p.role === "insideMan" ? "fence" : "insideMan",
             stash: p.stash + 101,
             safe: p.safe + 7,
-            roleState: { usedThisAct: 4, usedThisGame: 1, target: viewer, allies: [viewer], perks: ["peek", "shield"], tail: "vault" },
+            roleState: { usedThisAct: 4, usedThisGame: 1, target: viewer, allies: [viewer], perks: ["peek", "shield"], tail: "vault", bonusVotes: 2 },
             totalHandedIn: p.totalHandedIn + 33,
             consecutiveMissedMoves: 5,
             sealedVote: { kind: "shakedown", target: viewer },

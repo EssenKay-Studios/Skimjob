@@ -32,6 +32,19 @@ describe("suspicion — design §17.3", () => {
     expect(mostSuspicious(scores)?.player).toBe("ben");
   });
 
+  it("my own Detective and Auditor results count (v2 §2)", () => {
+    // Everyone hands in, so only the powers' results move the scores.
+    const s = closeAlibis(round(game(3), { ana: { room: "office" }, ben: { room: "vault" }, carl: { room: "vault" } }));
+    const mine = (ability: object): GameState => ({
+      ...s,
+      log: [...s.log, { type: "abilityResolved", visibility: { kind: "private", player: "ana" }, player: "ana", round: 2, ability } as GameState["log"][number]],
+    });
+    expect(scoresOf(mine({ kind: "checkStash", target: "carl", threshold: 3, dirty: true }), "ana").get("carl")).toBe(W.checkedDirty);
+    // A Vault shortfall of 4 (made up), shared by ben and carl who both claimed it.
+    const audited = scoresOf(mine({ kind: "audit", round: 1, room: "vault", shortfall: 4 }), "ana");
+    expect([audited.get("ben"), audited.get("carl")]).toEqual([2 * W.audited, 2 * W.audited]);
+  });
+
   it("no shortfall, no blame", () => {
     const s = round(game(3), { ana: { room: "office" }, ben: { room: "vault" }, carl: { room: "lobby" } });
     expect([...scoresOf(s, "ana").values()]).toEqual([0, 0]);

@@ -139,7 +139,14 @@ export type ResolvedAbility =
   /** Muscle: the pending shakedown of `meetingId` will be cancelled when its window ends. design §11.3 */
   | { readonly kind: "cancelShakedown"; readonly meetingId: string; readonly target: PlayerId }
   /** Mole: the tip-off added `heat` to this round's Heat. Nobody else is told; it's inside the round's total. design §8 */
-  | { readonly kind: "tipOff"; readonly heat: number };
+  | { readonly kind: "tipOff"; readonly heat: number }
+  /** Auditor: `room` came up `shortfall` short in `round` (its visitors' pockets; 0 if none). design §8 (v2 §2) */
+  | { readonly kind: "audit"; readonly round: number; readonly room: RoomId; readonly shortfall: number }
+  /**
+   * Detective: whether `target`'s stash (with any Fence safe, as the clean
+   * check counts it) is at or above `threshold`, the current act's clean threshold. design §8 (v2 §2)
+   */
+  | { readonly kind: "checkStash"; readonly target: PlayerId; readonly threshold: number; readonly dirty: boolean };
 
 /** An ability took effect. Private to its user; `round` is the latest round started. design §8 */
 export interface AbilityResolved {
@@ -434,14 +441,17 @@ export interface ShakedownCancelled {
   readonly target: PlayerId;
 }
 
-/** The Snitch's target was shaken down and wasn't clean: `amount` goes into the Snitch's stash. design §8 */
-export interface SnitchPaid {
-  readonly type: "snitchPaid";
+/**
+ * The Snitch's target was shaken down and wasn't clean: the Snitch's ballot
+ * weighs `votes` more for the rest of the game. design §8 (v2 §2)
+ */
+export interface SnitchRewarded {
+  readonly type: "snitchRewarded";
   readonly visibility: PrivateVisibility;
   readonly player: PlayerId;
   readonly meetingId: string;
   readonly target: PlayerId;
-  readonly amount: number;
+  readonly votes: number;
 }
 
 /** design §11.4, §11.5 */
@@ -628,7 +638,7 @@ export type GameEvent =
   | ShakedownPending
   | ShakedownCancelled
   | ShakedownResolved
-  | SnitchPaid
+  | SnitchRewarded
   | CheckpointChecked
   | PerkGranted
   | PerkUsed

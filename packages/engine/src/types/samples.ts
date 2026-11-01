@@ -88,7 +88,7 @@ export const sampleEvents: { readonly [T in GameEventType]: EventOfType<T> } = {
     player: ana,
     round: 3,
     partner: ben,
-    swap: { role: "lookout", roleState: { usedThisAct: 0, usedThisGame: 0, target: null, allies: [], perks: ["peek"], tail: null } },
+    swap: { role: "lookout", roleState: { usedThisAct: 0, usedThisGame: 0, target: null, allies: [], perks: ["peek"], tail: null, bonusVotes: 0 } },
   },
   raidRumourHit: { type: "raidRumourHit", visibility: privateTo(ben), player: ben, round: 4, lost: 3 },
   insideTip: { type: "insideTip", visibility: privateTo(ana), player: ana, round: 5, subject: ben, role: "fence" },
@@ -123,7 +123,7 @@ export const sampleEvents: { readonly [T in GameEventType]: EventOfType<T> } = {
   },
   shakedownPending: { type: "shakedownPending", visibility: PUBLIC, meetingId: "m1", kind: "regular", act: 1, target: ana },
   shakedownCancelled: { type: "shakedownCancelled", visibility: PUBLIC, meetingId: "m1", target: ana },
-  snitchPaid: { type: "snitchPaid", visibility: privateTo(ben), player: ben, meetingId: "m1", target: ana, amount: 10 },
+  snitchRewarded: { type: "snitchRewarded", visibility: privateTo(ben), player: ben, meetingId: "m1", target: ana, votes: 1 },
   shakedownResolved: {
     type: "shakedownResolved",
     visibility: PUBLIC,

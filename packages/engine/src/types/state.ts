@@ -82,7 +82,8 @@ export interface PlayerState {
 export interface RoleState {
   /**
    * Uses this act, reset when an act starts: loot moved into the safe (Fence),
-   * camera loops (Hacker), role guesses (Blackmailer), tip-offs (Mole).
+   * camera loops (Hacker), role guesses (Blackmailer), tip-offs (Mole),
+   * audits (Auditor), stash checks (Detective).
    */
   readonly usedThisAct: number;
   /** Uses this game: cancelled shakedowns (Muscle). */
@@ -95,9 +96,11 @@ export interface RoleState {
   readonly perks: readonly PerkId[];
   /** The room a spent Tail watches when the round being planned resolves; null otherwise. design §8.3 */
   readonly tail: RoomId | null;
+  /** Extra ballot weight for the rest of the game (the Snitch's reward, `snitchRewarded`). design §8 (v2 §2) */
+  readonly bonusVotes: number;
 }
 
-export const NO_ROLE_STATE: RoleState = { usedThisAct: 0, usedThisGame: 0, target: null, allies: [], perks: [], tail: null };
+export const NO_ROLE_STATE: RoleState = { usedThisAct: 0, usedThisGame: 0, target: null, allies: [], perks: [], tail: null, bonusVotes: 0 };
 
 /** A spent Rig: `player` picks which of `cards` flips at the start of `round`. Hidden from everyone else. design §8.3 */
 export interface RiggedCard {

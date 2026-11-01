@@ -68,6 +68,8 @@ function checkAbility(state: GameState, player: PlayerState, raw: unknown): Abil
     case "voteWeight":
     case "cancelShakedown":
     case "snitch":
+    case "audit":
+    case "checkStash":
       return "your role's power isn't used in a move";
     case "none":
       return "your role has no ability";

@@ -191,6 +191,20 @@ describe("role habits — design §8", () => {
     expect(chooseMove(viewFor(s, "ana"), exact(PERSONALITIES.honest), seeded("b")).ability).toMatchObject({ kind: "blackmail", role: "rookie" });
   });
 
+  it("Auditor audits the room its top suspect claimed; Detective checks its top suspect in the act's last round (v2 §2, §4)", () => {
+    const lobby = { room: "lobby" };
+    // Round 1: ben pockets 4 in the Vault and claims the Office: the top suspect.
+    let s = closeAlibis(round(game(5, notInsider("ben")), { ana: lobby, ben: { room: "vault", pocket: 4, alibi: "office" }, carl: lobby, dee: lobby, eve: lobby }));
+    const uses = (st: GameState, role: string, used = 0) =>
+      decide(viewFor(withRole(st, "ana", role, { usedThisAct: used }), "ana"), exact(PERSONALITIES.honest), seeded("c")).filter((c) => c.type === "useAbility");
+    expect(uses(s, "auditor")).toEqual([{ type: "useAbility", player: "ana", ability: { kind: "audit", room: "office" } }]);
+    expect(uses(s, "auditor", 1)).toEqual([]);
+    expect(uses(s, "detective")).toEqual([]); // round 2 isn't the act's last
+    s = closeAlibis(round(s, { ana: lobby, ben: lobby, carl: lobby, dee: lobby, eve: lobby }));
+    expect(uses(s, "detective")).toEqual([{ type: "useAbility", player: "ana", ability: { kind: "checkStash", target: "ben" } }]);
+    expect(uses(s, "detective", 1)).toEqual([]);
+  });
+
   it("Snitch votes for its own target on less evidence than its usual top suspect needs (§8)", () => {
     // voteAt 0: every score of 0 passes; a tie goes to the first in seat order (ben) unless the Snitch's target wins.
     const p = exact(PERSONALITIES.honest, { voteAt: 0 });

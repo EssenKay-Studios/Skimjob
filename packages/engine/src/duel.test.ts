@@ -87,15 +87,13 @@ describe("Duel config — design §16.1", () => {
     expect(setupEvents(config({ duel: false }))[0]).toMatchObject({ duel: false });
   });
 
-  it("never deals the meeting-only roles (Smooth talker, Muscle, Snitch) — provisional", () => {
+  it("never deals the roles that need meetings (Smooth talker, Muscle, Snitch, Detective; role deck v2 §3)", () => {
     const pool = rolePoolFor(config());
-    expect(pool).not.toContain("smoothTalker");
-    expect(pool).not.toContain("muscle");
-    expect(pool).not.toContain("snitch");
-    // design §8.1: nor the Inside Man, dealt only from 5 players (owner answers, 1 Nov).
+    for (const r of ["smoothTalker", "muscle", "snitch", "detective"]) expect(pool).not.toContain(r);
+    // design §8.1: nor the Inside Man, dealt only from 5 players (owner answers, 1 Nov); Snitch and Detective need 4 (v2 §3).
     expect(pool).not.toContain("insideMan");
-    expect(pool.length).toBe(DEFAULT_ROLE_POOL.length - 4);
-    expect(rolePoolFor(config({ duel: false }))).toEqual(DEFAULT_ROLE_POOL.filter((r) => r !== "insideMan"));
+    expect(pool.length).toBe(DEFAULT_ROLE_POOL.length - 5);
+    expect(rolePoolFor(config({ duel: false }))).toEqual(DEFAULT_ROLE_POOL.filter((r) => !["insideMan", "snitch", "detective"].includes(r)));
   });
 });
 
@@ -119,7 +117,8 @@ describe("Duel has no meetings or votes — design §16.1", () => {
     for (let r = 0; r < 3; r++) s = round(s);
     expect(s.phase).toEqual({ kind: "planning", round: 4 });
     const tail = s.log.slice(s.log.findIndex((e) => e.type === "roundResolved" && e.round === 3)).map((e) => e.type);
-    expect(tail).toEqual(["roundResolved", "alibisClosed", "checkpointChecked", "roundStarted"]);
+    // design §8.3 (v2 §2): each Rookie earns a Tail for the checkpoint made.
+    expect(tail).toEqual(["roundResolved", "alibisClosed", "checkpointChecked", "perkGranted", "perkGranted", "roundStarted"]);
   });
 });
 

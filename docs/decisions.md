@@ -4,6 +4,15 @@ Newest first. Each entry: what was decided, and why. Add an entry whenever a rul
 
 ---
 
+### 2026-11-01 — Role deck v2, R2a: Rookie, Inside Man, Lookout, Auditor, Detective, Snitch
+R2 is split (> ~1,500 lines): R2a ships the first six crew roles of `docs/roles-v2.md` §2; R2b the other seven. Content 0.10.0. Design §8, §8.1, §8.3.
+- **Insider renamed Inside Man** (role id `insideMan`). Accountant/Lawyer/Planner never shipped, so the Detective is new; Priest, Mastermind and Fixer come in R2b.
+- **Rewards as data:** `RoleDef.rewards` (`{ on, perk, count }`, trigger ids in content) replaces R1's `earns`; the shakedown window reads it (a Shield reward opens it, so the Detective in the pool opens the window). One count per role, overridable as `rewardCount`.
+- **Provisional:** the Rookie keeps its ×1.2 score (the v2 table lists no score; R5 can drop it). Checkpoint rewards only for Acts 1–2 (the final check ends the game). "Someone it saw / audited / checked" counts any earlier time in the game by that player; one reward per dirty shakedown; never for your own shakedown. The Auditor audits the **latest resolved round** with `useAbility` (an instant power, so it can follow alibis; a Power cut doesn't stop it). The Detective checks any time with `useAbility`, against the current act's threshold, counting the Fence safe like the clean check.
+- **Snitch:** +1 ballot weight for the rest of the game per dirty target shakedown (`snitchRewarded`, replaces the +10 `snitchPaid`; `RoleState.bonusVotes`, which travels with the card in a Double-cross like other role uses). Counts toward the majority, not the tally or quorum.
+- **Dealing:** Snitch and Detective from 4 players; `RoleDef.needsMeetings` (Smooth talker, Muscle, Snitch, Detective) replaces the hard-coded Duel list. The Blackmailer's "not in Duel" and the starter-set change (Fence out, Bagman/Cleaner in) wait for R3/R2b. Auditor and Detective join the default pool (12 pool roles, so a 12-player game deals 11 of them plus the Mole, with no filler).
+- **Bots (minimal, v2 §4):** the Auditor audits the room its top suspect claimed; the Detective checks its top suspect in the act's last round; both results feed the suspicion model (`checkedDirty`, `audited`). Perk spending stays R4.
+
 ### 2026-11-01 — Role deck v2, R1: factions, perks, dealing by faction
 The owner approved role deck v2 (`docs/roles-v2.md`, the spec for R1–R5) with one change: the **Ballot perk works in Secret mode**. R1 builds the foundations; content 0.9.0. Design §3, §8, §8.1, §8.3, §11.2, §11.3.
 - **Factions replace `winsOnFailure` / `winsOnSuccess`:** `RoleDef.faction` is `crew`, `accomplice` or `saboteur`. Success → the best Crew score wins; failure (Heat or target) → the best saboteur-or-accomplice score wins; a failure with no dark side dealt → nobody. Ties as before (joint winners on a full tie). Roles are read at the end (a Double-cross can change sides).

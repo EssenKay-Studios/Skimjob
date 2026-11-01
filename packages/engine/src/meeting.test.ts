@@ -479,7 +479,9 @@ describe("order at a checkpoint — design §11.4, §11.5", () => {
   it("meeting → shakedown → checkpoint: a shakedown can rescue the checkpoint", () => {
     const s = act1Meeting();
     const rescued = run(s, vote("p1", "p0"), vote("p2", "p0"), CLOSE);
-    expect(since(s, rescued).map((e) => e.type)).toEqual(["voteCast", "voteCast", "meetingClosed", "shakedownResolved", "checkpointChecked", "roundStarted"]);
+    // design §8.3 (v2 §2): the Rookies' Tails for the checkpoint made come before the next round.
+    const tails = Array<string>(s.playerOrder.length).fill("perkGranted");
+    expect(since(s, rescued).map((e) => e.type)).toEqual(["voteCast", "voteCast", "meetingClosed", "shakedownResolved", "checkpointChecked", ...tails, "roundStarted"]);
     expect(LAST(rescued, "checkpointChecked")).toEqual({ type: "checkpointChecked", visibility: { kind: "public" }, act: 1, target: 18, haul: 22, met: true, heatPenalty: 0 });
     expect(rescued.heat).toBe(19);
   });

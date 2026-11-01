@@ -38,7 +38,7 @@ const NO_LOOT = new Set(["security", "rooftop", "serverRoom"]);
 /**
  * A full game exercising every event type the default pool can produce: moves
  * (some changed, some missed), Security watches, the Server room, Lookout,
- * Fence, Hacker, Blackmailer and Mole powers (tip-off, Mole allies), the Snitch's target and payout, alibis,
+ * Fence, Hacker, Blackmailer, Auditor, Detective and Mole powers (tip-off, Mole allies), the Snitch's target and reward, alibis,
  * proposals, an emergency meeting, sealed and changed ballots (Smooth talker
  * weight), shakedown windows (one cancelled by the Muscle), shakedowns and
  * checkpoints, and the event cards (Lockdown avoided; Double-cross offers
@@ -51,7 +51,7 @@ function playGame(players: number, voteVisibility: VoteVisibility): GameState[] 
   let s = createGame(config(players, voteVisibility));
   const ids = s.playerOrder;
   const last = ids[ids.length - 1] as PlayerId;
-  // design §8.3: no role earns perks yet (role deck v2 R2/R3), so the test hook grants them.
+  // design §8.3: crew roles earn perks in play (v2 §2); the test hook grants the rest so every perk is spent.
   s = grantPerks(s, "p0", "peek", "tail", "ballot", "extraVote");
   s = grantPerks(s, ids[1] as PlayerId, "shield"); // the Act 1 meeting's target
   s = grantPerks(s, last, "rig", "alibi");
@@ -109,6 +109,15 @@ function playGame(players: number, voteVisibility: VoteVisibility): GameState[] 
     // design §8.3: the Hacker gets its Act 1 loop back (if it made one).
     if (round === 2 && hacker && s.players[hacker]?.role === "hacker" && (s.players[hacker]?.roleState.usedThisAct ?? 0) > 0) {
       step({ type: "useAbility", player: hacker, ability: { kind: "recharge" } });
+    }
+    // v2 §2: the Auditor audits the Vault (latest round) and the Detective checks its neighbour, once per act.
+    const auditor = holder("auditor");
+    if (auditor && round % 3 === 2 && (s.players[auditor]?.roleState.usedThisAct ?? 1) === 0) {
+      step({ type: "useAbility", player: auditor, ability: { kind: "audit", room: "vault" } });
+    }
+    const detective = holder("detective");
+    if (detective && round % 3 === 1 && (s.players[detective]?.roleState.usedThisAct ?? 1) === 0) {
+      step({ type: "useAbility", player: detective, ability: { kind: "checkStash", target: ids[(ids.indexOf(detective) + 1) % ids.length] } });
     }
     if (round === 2) {
       // An emergency mid-act, with a sealed vote waiting for it. design §11.1, §11.2
@@ -227,10 +236,12 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
           { type: "moleAllies", visibility: privateTo(other), player: other, allies: [viewer] },
           { type: "abilityResolved", visibility: privateTo(other), player: other, round: 1, ability: { kind: "tipOff", heat: 10 } },
           { type: "blackmailed", visibility: privateTo(other), player: other, round: 1, stolen: 3 },
-          { type: "snitchPaid", visibility: privateTo(other), player: other, meetingId: "act-1", target: viewer, amount: 10 },
+          { type: "snitchRewarded", visibility: privateTo(other), player: other, meetingId: "act-1", target: viewer, votes: 1 },
+          { type: "abilityResolved", visibility: privateTo(other), player: other, round: 1, ability: { kind: "audit", round: 1, room: "vault", shortfall: 4 } },
+          { type: "abilityResolved", visibility: privateTo(other), player: other, round: 1, ability: { kind: "checkStash", target: viewer, threshold: 3, dirty: true } },
           { type: "doubleCrossOffered", visibility: privateTo(other), player: other, round: 2, partner: viewer },
           { type: "doubleCrossAnswered", visibility: privateTo(other), player: other, round: 2, accept: true },
-          { type: "doubleCrossResolved", visibility: privateTo(other), player: other, round: 2, partner: viewer, swap: { role: "mole", roleState: { usedThisAct: 1, usedThisGame: 0, target: null, allies: [], perks: ["shield"], tail: "vault" } } },
+          { type: "doubleCrossResolved", visibility: privateTo(other), player: other, round: 2, partner: viewer, swap: { role: "mole", roleState: { usedThisAct: 1, usedThisGame: 0, target: null, allies: [], perks: ["shield"], tail: "vault", bonusVotes: 0 } } },
           { type: "raidRumourHit", visibility: privateTo(other), player: other, round: 2, lost: 3 },
           { type: "insideTip", visibility: privateTo(other), player: other, round: 2, subject: viewer, role: "mole" },
           { type: "callOutMade", visibility: privateTo(other), player: other, act: 1 },
@@ -251,7 +262,7 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
             role: p.role === "insideMan" ? "fence" : "insideMan",
             stash: p.stash + 101,
             safe: p.safe + 7,
-            roleState: { usedThisAct: 4, usedThisGame: 1, target: viewer, allies: [viewer], perks: ["peek", "shield", "ballot"], tail: "vault" },
+            roleState: { usedThisAct: 4, usedThisGame: 1, target: viewer, allies: [viewer], perks: ["peek", "shield", "ballot"], tail: "vault", bonusVotes: 3 },
             totalHandedIn: p.totalHandedIn + 33,
             consecutiveMissedMoves: 5,
             sealedVote: { kind: "shakedown", target: viewer },
@@ -359,6 +370,7 @@ describe("no leaks in real games — design §17.2, §13, §11.2", () => {
   const seenTypes = new Set<string>();
   const seenAbilities = new Set<string>();
   const seenPerks = new Set<string>();
+  const earnedPerks = new Set<string>();
   const seenWatch = new Set<string>();
   const seenCards = new Set<string>();
   let swapped = false;
@@ -379,6 +391,8 @@ describe("no leaks in real games — design §17.2, §13, §11.2", () => {
     for (const t of types) seenTypes.add(t);
     for (const e of final.log) if (e.type === "abilityResolved") seenAbilities.add(e.ability.kind);
     for (const e of final.log) if (e.type === "perkUsed") seenPerks.add(e.perk.kind);
+    // v2 §2: perks earned in play (after the test hook's grants in the first state).
+    for (const e of final.log.slice((states[0] as GameState).log.length)) if (e.type === "perkGranted") earnedPerks.add(e.perk);
     for (const e of final.log) if (e.type === "roomWatched") seenWatch.add(e.source);
     for (const e of final.log) if (e.type === "eventFlipped") seenCards.add(e.card);
     if (final.log.some((e) => e.type === "doubleCrossResolved" && e.swap !== null)) swapped = true;
@@ -394,17 +408,19 @@ describe("no leaks in real games — design §17.2, §13, §11.2", () => {
   }, 30_000);
 
   it("the games above reach every info, vote, Mole and event-card event (design §8, §8.1, §10)", () => {
-    for (const t of ["snitchTargetAssigned", "blackmailed", "shakedownPending", "shakedownCancelled", "snitchPaid", "alibisClosed"]) expect(seenTypes, t).toContain(t);
+    for (const t of ["snitchTargetAssigned", "blackmailed", "shakedownPending", "shakedownCancelled", "snitchRewarded", "alibisClosed"]) expect(seenTypes, t).toContain(t);
     for (const t of ["eventFlipped", "doubleCrossOffered", "doubleCrossAnswered", "doubleCrossResolved", "raidRumourHit", "insideTip", "auditReport"]) {
       expect(seenTypes, t).toContain(t);
     }
     for (const c of EVENT_DECK) expect(seenCards, c).toContain(c);
     expect(swapped, "a Double-cross swap happened").toBe(true);
-    for (const k of ["lookout", "fenceSafe", "loopCameras", "blackmail", "cancelShakedown", "tipOff"]) expect(seenAbilities, k).toContain(k);
+    for (const k of ["lookout", "fenceSafe", "loopCameras", "blackmail", "cancelShakedown", "tipOff", "audit", "checkStash"]) expect(seenAbilities, k).toContain(k);
     // design §8.3: every perk event and every perk's effect.
     for (const t of ["perkGranted", "perkUsed", "rigPicked", "alibiVerified"]) expect(seenTypes, t).toContain(t);
     for (const k of ["peek", "shield", "extraVote", "ballot", "tail", "alibi", "recharge", "rig"]) expect(seenPerks, k).toContain(k);
     expect(seenWatch, "a Tail watch").toContain("tail");
+    // v2 §2: crew rewards are earned in these games: a checkpoint's Tail, the Detective's Shield, the Auditor's Ballot.
+    for (const k of ["tail", "shield", "ballot"]) expect(earnedPerks, k).toContain(k);
   });
 });
 

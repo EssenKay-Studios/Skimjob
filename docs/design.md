@@ -180,15 +180,17 @@ Every player is dealt **one secret role** at the start of the game. Roles are de
 
 | Role | Power | Weakness if revealed |
 |---|---|---|
-| **Rookie** | No power. Final stash counts ×1.2. | Seen as an easy target to pin blame on. |
-| **Lookout** | Each round, also sees who was in one extra room. | People lie around them more carefully, or try to frame them. |
+| **Rookie** | No power. Final stash counts ×1.2. *Reward:* each Act 1/2 checkpoint made → a Tail. | Seen as an easy target to pin blame on. |
+| **Lookout** | Each round, also sees who was in one extra room. *Reward:* someone it saw is shaken down dirty → a Peek. | People lie around them more carefully, or try to frame them. |
+| **Auditor** | Once per act, learns the latest resolved round's shortfall for one room (what its visitors pocketed). *Reward:* a visitor of that room, that round, is shaken down dirty → a Ballot. | Liars shake it down to discredit it. |
+| **Detective** *(4+ players, not in Duel)* | Once per act, learns whether one player's stash is at or above the clean threshold right now. *Reward:* a player it checked is shaken down dirty → a Shield. | Cheaters shake it down first (the Shield answers this). |
 | **Hacker** | Once per act, can **loop the cameras** so one room shows as empty on Security that round. | Every empty camera result looks like their doing. |
 | **Fence** | Can move up to 5 loot per act into a hidden safe that shakedowns can't touch. | Assumed to be hoarding, so becomes the first shakedown target. |
-| **Insider** | Can't pocket loot. Scores 0.3 points for every loot the Haul ends above the final target. | Others pocket more, knowing the Insider will cover the Haul. |
+| **Inside Man** *(5+ players)* | Can't pocket loot. Scores 0.3 points for every loot the Haul ends above the final target. *Reward:* each Act 1/2 checkpoint made → a Peek. | Others pocket more, knowing the Inside Man will cover the Haul. |
 | **Smooth talker** | Their vote counts double. | Others coordinate their votes against them. |
 | **Muscle** | Once per game, can cancel a shakedown after the vote passes. | Everyone knows a vote against their friends may get blocked. |
 | **Blackmailer** | Once per act, secretly guesses one player's role. If right, steals 3 from that player's stash. | Gets shaken down quickly, and everyone hides their roles harder. |
-| **Snitch** | Secretly assigned a target. Gets +10 if that target is shaken down while holding more than the clean threshold. | Their target has a reason to frame them. |
+| **Snitch** *(4+ players, not in Duel)* | Secretly assigned a target. Each time that target is shaken down while holding more than the clean threshold, its ballot weighs +1 for the rest of the game. | Their target has a reason to frame them. |
 | **Driver** | No power for now (crew). *(Role deck v2 R1, provisional: its old Heat-failure win is gone; R2/R3 split it into the Fixer, crew, and the Getaway Driver, accomplice.)* | People suspect them of trying to push Heat up. |
 | **Mole** *(saboteur, optional)* | Wins a failed heist with the dark side's best stash; never a successful one. Once per act, can **tip off** the cops (+6 Heat, hidden). | Revealed means hunted, and revealing it is rarely worth it. |
 
@@ -201,7 +203,12 @@ Every player is dealt **one secret role** at the start of the game. Roles are de
 - **Smooth talker:** the double vote counts toward the majority (§11.2), not toward quorum, which counts voters. The public tally counts one per ballot, so it never points at the Smooth talker; only a result the plain count can't explain shows that one was on the winning side. A sealed vote counts double too.
 - **Muscle:** when a vote passes a shakedown, a short **shakedown window** opens before it is applied (§11.3). The Muscle can cancel it then, including a shakedown of themselves. The cancel stays private until the window ends; the ledger then says the shakedown was cancelled, not who cancelled it. The window opens after every passed shakedown whenever the Muscle is in the game's role pool, dealt or not, so it never shows that a Muscle is in the crew.
 - **Blackmailer:** the guess is part of the Blackmailer's move. It resolves after that round's splits and Fence safe moves, takes at most what the target's stash holds and never touches the safe. The target is told privately how much was taken, but not by whom; a wrong guess, or a right one on an empty stash, tells the target nothing.
-- **Snitch:** the target is drawn at random from the other players at setup. "Holding more than the clean threshold" means the shakedown was **not clean** (stash plus any Fence safe at least 3 × the act number). The +10 goes into the Snitch's stash, each time it happens, and a cancelled shakedown pays nothing.
+- **Snitch:** the target is drawn at random from the other players at setup. "Holding more than the clean threshold" means the shakedown was **not clean** (stash plus any Fence safe at least 3 × the act number). Each time, its ballot weighs +1 more for the rest of the game (role deck v2; was +10 loot), counting toward the majority like the Smooth talker's, not the tally or quorum; a cancelled shakedown gives nothing.
+
+*Crew roles of role deck v2 (R2a, provisional details):*
+- **"Dirty"** means a shakedown that wasn't clean. Rewards come as private `perkGranted` events: after the checkpoint (Rookie, Inside Man; the final check grants nothing, the game is over) or right after the dirty shakedown (Lookout, Auditor, Detective). "Saw", "audited" and "checked" count anything earlier in the game by that player, and nobody is rewarded for their own shakedown. Each reward's count (1) is overridable (`rewardCount`).
+- **Auditor:** used with `useAbility` at any time after round 1 resolves; it audits the latest resolved round (so it can follow up an alibi). A Power cut doesn't stop it (it reads the books, not the cameras).
+- **Detective:** used with `useAbility` at any time; the threshold is the current act's (3 × act), and the Fence safe counts, as in the clean check.
 
 *Win-condition roles (provisional, task 13; role deck v2 R1):*
 - **Driver:** crew, so it wins only a successful heist, like anyone else (it lost its Heat-failure win in R1).
@@ -226,9 +233,10 @@ Every player is dealt **one secret role** at the start of the game. Roles are de
 
   The hard limits trim some mixes (at 5 players 1 / 1 becomes 1 / 0; at 7–8, 1 / 2 becomes 1 / 1). The fair success rate s = crew seats ÷ n makes a crew seat's and a dark seat's chances equal.
 - **Pools cap the roll (R1, provisional):** a faction can't deal more distinct roles than its pool holds. The Mole is the only saboteur and no accomplice ships yet, so today's deals have **at most one Mole** and **no accomplices**; an unfilled dark seat goes to the crew. Saboteurs are dealt by the setting, never from the host's role pool.
-- **Insider:** dealt only in crews of 5 or more (a crew of 2–4 can't spare a player who never pockets).
+- **Inside Man:** dealt only in crews of 5 or more (a crew of 2–4 can't spare a player who never pockets). **Snitch and Detective** from 4 players (role deck v2 §3).
+- **Not in Duel:** roles that need meetings (`RoleDef.needsMeetings`: Smooth talker, Muscle, Snitch, Detective today).
 - **Unique roles** (host setting, default on): each special role is dealt at most once and Rookies fill the remaining crew seats. Off: crew and accomplice seats are drawn from their pools with replacement, so roles may repeat. Saboteurs are always distinct (one Mole at most, owner answers 1 Nov; provisional).
-- **Starter mode** (first game in a group): only the starter crew roles (Rookie, Lookout, Insider, Fence today), no dark side and no events.
+- **Starter mode** (first game in a group): only the starter crew roles (Rookie, Lookout, Inside Man, Fence today; v2 swaps the Fence for the Bagman and Cleaner in R2b/R3), no dark side and no events.
 
 ### 8.2 Shakedowns and roles
 
@@ -236,7 +244,7 @@ A shakedown reveals a player's **stash**, not their role. Roles only come out at
 
 ### 8.3 Perks
 
-*Role deck v2 §1 (`docs/roles-v2.md`); R1 builds the vocabulary, R2/R3 give roles the triggers that earn them.*
+*Role deck v2 §1 (`docs/roles-v2.md`); R1 builds the vocabulary, R2/R3 give roles the triggers that earn them (`RoleDef.rewards`; R2a: Rookie, Inside Man, Lookout, Auditor, Detective, §8).*
 
 A perk is a **private token**. Earning one is a private `perkGranted` (only you are told); your own tokens show in your view, nobody else's. Spending one is a private `perkUsed`, with `useAbility`; a refused spend keeps the token. The Shield is the exception: it is spent by itself.
 

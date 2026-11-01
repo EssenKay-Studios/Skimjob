@@ -25,6 +25,7 @@ import { checkpointTarget, clampHeat } from "./job";
 import { jobFor, powerOf, roleDefIn, rolesFor, type RoleTable } from "./overrides";
 import { dealableRoles } from "./setup";
 import { isPerkSpend, shieldFor, usePerk } from "./perks";
+import { checkpointRewards, dirtyShakedownRewards, useCrewPower } from "./crew";
 import { actOfRound } from "./acts";
 import { gameEnded } from "./end";
 import { applyEvent } from "./reduce";
@@ -155,14 +156,14 @@ export function castVote(state: GameState, command: Raw): Result {
   return [{ type: "voteCast", visibility: ballotVisibility(state, player.id), meetingId: meeting.id, player: player.id, vote, sealed: false }];
 }
 
-/** Every Snitch whose target this is gets their bonus, privately. design §8 */
-function snitchPayouts(state: GameState, meetingId: string, target: PlayerId): GameEvent[] {
+/** Every Snitch whose target this is gets its extra vote weight for the rest of the game, privately. design §8 (v2 §2) */
+function snitchRewards(state: GameState, meetingId: string, target: PlayerId): GameEvent[] {
   const out: GameEvent[] = [];
   for (const id of state.playerOrder) {
     const p = state.players[id] as PlayerState;
     const power = powerOf(state.config, p.role);
     if (power.kind !== "snitch" || p.roleState.target !== target) continue;
-    out.push({ type: "snitchPaid", visibility: privateTo(id), player: id, meetingId, target, amount: power.bonus });
+    out.push({ type: "snitchRewarded", visibility: privateTo(id), player: id, meetingId, target, votes: power.extraVotes });
   }
   return out;
 }
@@ -228,11 +229,15 @@ export function meetingResult(
   return { kind: "noMajority" };
 }
 
-/** How much a player's ballot counts: the Smooth talker's `weight`, else 1, plus a +Vote spent in this meeting. design §8, §8.3 */
+/**
+ * How much a player's ballot counts: the Smooth talker's `weight`, else 1,
+ * plus a +Vote spent in this meeting and the Snitch's reward. design §8, §8.3
+ */
 function voteWeight(state: GameState, player: PlayerId): number {
-  const power = powerOf(state.config, (state.players[player] as PlayerState).role);
+  const p = state.players[player] as PlayerState;
+  const power = powerOf(state.config, p.role);
   const extra = state.meeting?.extraVotes.includes(player) ? PERK_RULES.extraVoteWeight : 0;
-  return (power.kind === "voteWeight" ? power.weight : 1) + extra;
+  return (power.kind === "voteWeight" ? power.weight : 1) + extra + p.roleState.bonusVotes;
 }
 
 /**
@@ -244,7 +249,7 @@ function voteWeight(state: GameState, player: PlayerId): number {
 export function opensShakedownWindow(roles: RoleTable, dealable: readonly RoleId[]): boolean {
   return dealable.some((r) => {
     const def = roleDefIn(roles, r);
-    return def?.power.kind === "cancelShakedown" || def?.earns?.includes("shield") === true;
+    return def?.power.kind === "cancelShakedown" || def?.rewards?.some((r) => r.perk === "shield") === true;
   });
 }
 
@@ -314,7 +319,8 @@ export function resolveShakedown(state: GameState, meetingId: unknown, draw: Dra
 /**
  * Muscle (design §8): once per game, cancel the pending shakedown. Private
  * until the window ends, when `shakedownCancelled` says only that it was
- * cancelled. Perks are spent here too (perks.ts, design §8.3).
+ * cancelled. Perks are spent here too (perks.ts, design §8.3), and the
+ * Auditor's and Detective's powers (crew.ts).
  */
 export function useAbility(state: GameState, command: Raw, draw: Draw): Result {
   const player = playerFor(state, command);
@@ -323,6 +329,8 @@ export function useAbility(state: GameState, command: Raw, draw: Draw): Result {
   if (!isObject(ability) || typeof ability.kind !== "string") return "ability must be an object with a kind";
   if (isPerkSpend(ability.kind)) return usePerk(state, player, ability, draw);
   const power = powerOf(state.config, player.role);
+  const crew = useCrewPower(state, player, power, ability);
+  if (crew !== null) return crew;
   if (ability.kind !== "cancelShakedown" || power.kind !== "cancelShakedown") return `your role has no ${ability.kind} ability to use now`;
   if (player.roleState.usedThisGame >= power.perGame) return "you have already cancelled a shakedown this game";
   const pending = state.pendingShakedown;
@@ -370,8 +378,9 @@ function afterVote(
     // Paid out of the Haul, so never more than it holds (provisional).
     const compensation = clean ? Math.min(job.shakedown.compensationPerAct * act, haul + stash) : 0;
     events.push({ type: "shakedownResolved", visibility: PUBLIC, meetingId: meeting.meetingId, target, stashRevealed: stash, taken: stash, clean, compensation });
-    // Snitch (§8): paid when their target is shaken down holding at least the clean threshold (provisional).
-    if (!clean) events.push(...snitchPayouts(state, meeting.meetingId, target));
+    // Snitch (§8): rewarded when its target is shaken down holding at least the clean threshold (provisional);
+    // so are the crew roles whose perk this earns (v2 §2, design §8.3).
+    if (!clean) events.push(...snitchRewards(state, meeting.meetingId, target), ...dirtyShakedownRewards(state, target));
   }
   if (meeting.kind === "emergency") return events;
   return [...events, ...checkpoint(state, [...prior, ...events], act, draw)];
@@ -393,6 +402,8 @@ export function checkpoint(state: GameState, prior: readonly GameEvent[], act: A
   const final = act === job.checkpoints.perPlayer.length;
   const heat = met || final ? now.heat : clampHeat(job, now.heat + job.heat.missedCheckpoint);
   events.push({ type: "checkpointChecked", visibility: PUBLIC, act, target, haul: now.haul, met, heatPenalty: heat - now.heat });
+  // design §8.3 (v2 §2): a checkpoint made before the last earns the Rookie's Tail and the Inside Man's Peek.
+  if (met && !final) events.push(...checkpointRewards(now));
 
   // The ranking is worked out after the shakedown (design §3, §11.4), in end.ts.
   if (heat >= job.heat.max) {

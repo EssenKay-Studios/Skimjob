@@ -74,7 +74,8 @@ export interface RoomOverride {
 /**
  * New numbers for one role. A role may only set its own power's numbers:
  * `extraRooms` (Lookout), `perAct` (Fence, Hacker, Blackmailer), `weight`
- * (Smooth talker), `perGame` (Muscle), `steal` (Blackmailer), `bonus` (Snitch). design §8
+ * (Smooth talker), `perGame` (Muscle), `steal` (Blackmailer), `extraVotes`
+ * (Snitch), and, for a role with a reward, `rewardCount` (perks per trigger). design §8, §8.3
  */
 export interface RoleOverride {
   readonly stashMultiplier?: number;
@@ -84,7 +85,9 @@ export interface RoleOverride {
   readonly weight?: number;
   readonly perGame?: number;
   readonly steal?: number;
-  readonly bonus?: number;
+  readonly extraVotes?: number;
+  /** Tokens each reward trigger grants (e.g. the Rookie's Tails per checkpoint). design §8.3 */
+  readonly rewardCount?: number;
   /** Mole tip-off Heat. design §8 */
   readonly heat?: number;
 }

@@ -113,12 +113,11 @@ describe("QA role dealing — design §8.1", () => {
     for (const [n, moles] of Object.entries(expected)) expect(count(roles(config(Number(n), { mole: "on" })), MOLE_ROLE)).toBe(moles);
   });
 
-  it("12 players, Mole on: 1 Mole, each other role once, Rookies fill the rest", () => {
+  it("12 players, Mole on: 1 Mole, each other role at most once, Rookies fill the rest", () => {
     const dealt = roles(config(12, { mole: "on" }));
     expect(count(dealt, MOLE_ROLE)).toBe(1);
-    // Default pool (task 13): the 10 pool roles once each, and one more Rookie.
-    for (const r of ["lookout", "insideMan", "fence", "hacker", "smoothTalker", "muscle", "blackmailer", "snitch", "driver"]) expect(count(dealt, r)).toBe(1);
-    expect(count(dealt, "rookie")).toBe(2);
+    // Default pool (12 roles since role deck v2 R2a): 11 of them once each, no filler needed.
+    expect(new Set(dealt).size).toBe(12);
     const narrow = roles(config(12, { mole: "on", rolePool: ["fence"] }));
     expect([count(narrow, MOLE_ROLE), count(narrow, "fence"), count(narrow, "rookie")]).toEqual([1, 1, 10]);
   });
