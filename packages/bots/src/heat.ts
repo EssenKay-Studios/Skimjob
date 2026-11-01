@@ -1,0 +1,92 @@
+// How much Heat a bot expects before the job ends: Heat now, this round's
+// event card, the baseline still to come and, when a Mole may be in play, the
+// tip-offs still to come. design §7, §8 (Mole), §10 (Heat cards, Shift change)
+//
+// Everything comes from the view: the public card, the public round summaries,
+// the alibis and the bot's own room. A tip-off leaves no trail to a player, so
+// the bots don't blame anyone for it; they lay low sooner instead (task 16).
+import { EVENTS, MOLE_ROLE, MOLE_RULES, ROLES, ROUNDS_PER_ACT, type JobDef, type RoomId } from "@skimjob/content";
+import { overrideRoles, roundHeatDelta, roundJob, type PlayerView } from "@skimjob/engine";
+import { createdOf, crewSize, jobOf, ofType, totalRounds } from "./read";
+
+/** The job as it plays this round: Shift change / Payday surge their room (design §10). */
+export function jobThisRound(view: PlayerView, job: JobDef = jobOf(view)): JobDef {
+  return view.card && view.card.round === view.round ? roundJob(job, { ...view.card, offer: null }) : job;
+}
+
+/** Heat the current round's card adds (Police patrol +10, Quiet night −10), else 0. design §10 */
+export function cardHeatNow(view: PlayerView): number {
+  const card = view.card;
+  if (!card || card.round !== view.round || !Object.hasOwn(EVENTS, card.id)) return 0;
+  const effect = EVENTS[card.id]?.effect;
+  return effect?.kind === "heat" ? effect.amount : 0;
+}
+
+/** Moles expected in this game from the public Mole setting and crew size (the mean of the setting's counts). design §8.1 */
+export function expectedMoles(view: PlayerView): number {
+  const n = crewSize(view);
+  const rule = MOLE_RULES.filter((r) => r.minPlayers <= n).at(-1);
+  const counts = rule ? rule[createdOf(view).mole] : [0];
+  return counts.reduce((a, b) => a + b, 0) / Math.max(1, counts.length);
+}
+
+/** The Mole's tip-off Heat in this game (content plus overrides), or 0 without a tip-off power. */
+export function tipOffHeat(view: PlayerView): number {
+  const power = overrideRoles(ROLES, createdOf(view).contentOverrides)[MOLE_ROLE]?.power;
+  return power?.kind === "tipOff" ? power.heat : 0;
+}
+
+/**
+ * Rounds whose public Heat change came out well above what the claimed rooms,
+ * the bot's own room and the card explain: likely a tip-off (design §8). Lies
+ * about rooms also move the sum, so only a gap of at least 60% of a tip-off
+ * counts. Rounds that hit the 0 floor are skipped (the gap can't show).
+ */
+export function suspectedTipOffRounds(view: PlayerView): number[] {
+  const tip = tipOffHeat(view);
+  if (tip <= 0 || expectedMoles(view) === 0) return [];
+  const job = jobOf(view);
+  const crew = crewSize(view);
+  const cards = new Map(ofType(view.ledger, "eventFlipped").map((e) => [e.round, e]));
+  const out: number[] = [];
+  for (const r of ofType(view.ledger, "roundResolved")) {
+    if (r.heat === 0) continue;
+    const mine = ofType(view.caseFile, "lootSplit").find((e) => e.round === r.round);
+    if (!mine) continue;
+    const counts: Record<RoomId, number> = { [mine.room]: 1 };
+    for (const a of ofType(view.ledger, "alibiPosted")) {
+      if (a.round === r.round && a.player !== view.me.id) counts[a.room] = (counts[a.room] ?? 0) + 1;
+    }
+    const card = cards.get(r.round);
+    const played = card ? roundJob(job, { round: card.round, id: card.card, room: card.room, offer: null }) : job;
+    const effect = card && Object.hasOwn(EVENTS, card.card) ? EVENTS[card.card]?.effect : undefined;
+    const expected = roundHeatDelta(played, crew, counts) + (effect?.kind === "heat" ? effect.amount : 0);
+    if (r.heatDelta - expected >= tip * 0.6) out.push(r.round);
+  }
+  return out;
+}
+
+/**
+ * Tip-off Heat the bot still expects, extrapolated from the tip-offs that have
+ * shown in the Heat so far (design §8: at most one per Mole per act): the
+ * observed rate per act for the acts still to come, plus this act's share not
+ * yet seen. Nothing seen, nothing expected: bots react to Heat swings rather
+ * than fearing a Mole that may not be there (assuming the worst made 10–12
+ * player crews lay low until they missed every target; task 16).
+ */
+export function tipOffsToCome(view: PlayerView): number {
+  const tip = tipOffHeat(view);
+  if (tip === 0 || expectedMoles(view) === 0) return 0;
+  const acts = totalRounds(jobOf(view)) / ROUNDS_PER_ACT;
+  const firstRound = (view.act - 1) * ROUNDS_PER_ACT + 1;
+  const seen = suspectedTipOffRounds(view);
+  const perAct = seen.length / view.act;
+  const seenThisAct = seen.filter((r) => r >= firstRound).length;
+  return tip * (perAct * (acts - view.act) + Math.max(0, perAct - seenThisAct));
+}
+
+/** (Heat now + this round's card + the baseline still to come + tip-offs to come) ÷ the raid level. design §7 */
+export function heatDanger(view: PlayerView, job: JobDef = jobOf(view)): number {
+  const roundsLeft = totalRounds(job) - view.round + 1;
+  return (view.heat + cardHeatNow(view) + job.heat.perRound * roundsLeft + tipOffsToCome(view)) / job.heat.max;
+}
