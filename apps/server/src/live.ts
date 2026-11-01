@@ -17,7 +17,7 @@ import { createHash } from "node:crypto";
 import websocket from "@fastify/websocket";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { WebSocket } from "ws";
-import { createBot, PERSONALITIES, type Agent, type PersonalityId, type Rejection } from "@skimjob/bots";
+import { createBot, PERSONALITIES, type PersonalityId, type Rejection } from "@skimjob/bots";
 import {
   handleCommand,
   viewFor,
@@ -70,7 +70,8 @@ export type ServerMessage =
 export interface Live {
   /**
    * Runs a system command (the scheduler's deadlines, M2-4), then the bots,
-   * then pushes views. Throws if the engine refuses it.
+   * then pushes views. Throws `SystemRefused` if the engine refuses it
+   * (any other error is a server failure: worth a retry).
    */
   system(gameId: string, command: SystemCommand): Promise<GameState>;
   /** Lets the bots act and pushes views (after the game starts, or a restart). */
@@ -137,8 +138,16 @@ export function parseClientMessage(
   return withId({ ok: true as const, command: { ...cmd, player } as PlayerCommand });
 }
 
-/** A bot's own seed: derived from the hidden game seed, so it can't be guessed but survives a restart. */
-const botSeed = (gameSeed: string, player: PlayerId) => createHash("sha256").update(`bot\0${gameSeed}\0${player}`).digest("hex");
+const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
+/**
+ * A bot decision's seed: from the hidden game seed (so it can't be guessed),
+ * the seat and the view it acts on, so the same view always gets the same
+ * decision, with or without a restart in between (no long-lived RNG stream).
+ */
+const botSeed = (gameSeed: string, player: PlayerId, viewHash: string) => sha256(`bot\0${gameSeed}\0${player}\0${viewHash}`);
+
+/** The engine refused a system command (a stale or duplicate deadline), as opposed to a server failure. */
+export class SystemRefused extends Error {}
 
 /** Same host as the request, or listed. No Origin header: not a browser, allowed. */
 export function originAllowed(origin: string | undefined, host: string | undefined, allowed: readonly string[]): boolean {
@@ -154,7 +163,7 @@ export function originAllowed(origin: string | undefined, host: string | undefin
 export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Sessions, options: LiveOptions = {}): Live {
   const allowedOrigins = options.allowedOrigins ?? [];
   const conns = new Map<string, Set<Conn>>();
-  const bots = new Map<string, readonly Agent[]>();
+  const bots = new Map<string, readonly { readonly player: PlayerId; readonly personality: PersonalityId }[]>();
   /** Per game, the view text each bot last acted on. */
   const botSeen = new Map<string, Map<PlayerId, string>>();
   const botRefusals: (Rejection & { gameId: string })[] = [];
@@ -177,18 +186,20 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
     return { ok: true as const, state: r.events.length > 0 ? await store.append(gameId, r.events) : state, changed: r.events.length > 0 };
   };
 
-  const botsFor = async (gameId: string, state: GameState): Promise<readonly Agent[]> => {
+  /** The game's bot seats; their last-acted view hashes (stored in `seats.bot_seen`) go into `botSeen`. */
+  const botsFor = async (gameId: string): Promise<readonly { readonly player: PlayerId; readonly personality: PersonalityId }[]> => {
     const known = bots.get(gameId);
     if (known) return known;
-    const rows = await db.query<{ player_id: string; bot_personality: PersonalityId }>(
-      "select player_id, bot_personality from seats where game_id = $1 and bot_personality is not null and player_id is not null order by seat_no",
+    const rows = await db.query<{ player_id: string; bot_personality: PersonalityId; bot_seen: string | null }>(
+      "select player_id, bot_personality, bot_seen from seats where game_id = $1 and bot_personality is not null and player_id is not null order by seat_no",
       [gameId],
     );
-    const agents = rows.map((r) =>
-      createBot({ player: r.player_id, personality: PERSONALITIES[r.bot_personality], seed: botSeed(state.config.seed, r.player_id) }),
-    );
-    bots.set(gameId, agents);
-    return agents;
+    const seen = new Map<PlayerId, string>();
+    for (const r of rows) if (r.bot_seen) seen.set(r.player_id, r.bot_seen);
+    botSeen.set(gameId, seen);
+    const seats = rows.map((r) => ({ player: r.player_id, personality: r.bot_personality }));
+    bots.set(gameId, seats);
+    return seats;
   };
 
   /**
@@ -199,17 +210,17 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
   const runBots = async (gameId: string, start: GameState): Promise<GameState> => {
     let state = start;
     if (state.phase.kind === "ended") return state;
-    const agents = await botsFor(gameId, state);
-    const seen = botSeen.get(gameId) ?? new Map<PlayerId, string>();
-    botSeen.set(gameId, seen);
+    const seats = await botsFor(gameId);
+    const seen = botSeen.get(gameId)!;
     for (let pass = 0; pass < MAX_BOT_PASSES; pass++) {
       let changed = false;
-      for (const agent of agents) {
+      for (const seat of seats) {
         if (state.phase.kind === "ended") break;
-        const view = viewFor(state, agent.player);
-        const text = JSON.stringify(view);
-        if (seen.get(agent.player) === text) continue;
-        seen.set(agent.player, text);
+        const view = viewFor(state, seat.player);
+        const hash = sha256(JSON.stringify(view));
+        if (seen.get(seat.player) === hash) continue;
+        seen.set(seat.player, hash);
+        const agent = createBot({ player: seat.player, personality: PERSONALITIES[seat.personality], seed: botSeed(state.config.seed, seat.player, hash) });
         for (const command of agent.act(view)) {
           if (state.phase.kind === "ended") break;
           const r = await apply(gameId, state, { ...command, player: agent.player });
@@ -222,6 +233,8 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
           state = r.state;
           changed ||= r.changed;
         }
+        // Kept across restarts (after its commands), so a rebuilt server doesn't act again on a view this bot already acted on.
+        await db.query("update seats set bot_seen = $3 where game_id = $1 and player_id = $2", [gameId, seat.player, hash]);
       }
       if (!changed) return state;
     }
@@ -262,7 +275,7 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
         const state = await store.load(gameId);
         if (!state) throw new Error(`game ${gameId} has not started`);
         const r = await apply(gameId, state, command);
-        if (!r.ok) throw new Error(`system command refused: ${JSON.stringify(command)}: ${r.reason}`);
+        if (!r.ok) throw new SystemRefused(`system command refused: ${JSON.stringify(command)}: ${r.reason}`);
         return afterChange(gameId, r.state);
       }),
     settle: (gameId) =>

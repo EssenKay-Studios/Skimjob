@@ -6,7 +6,7 @@ import { SESSION_COOKIE } from "./auth";
 import { fakeClock, type FakeClock } from "./clock";
 import type { Db } from "./db";
 import type { LobbyView } from "./lobby";
-import { planDeadlines } from "./scheduler";
+import { createScheduler, planDeadlines } from "./scheduler";
 import { buildServer } from "./server";
 import type { LobbySettings } from "./settings";
 import { createGameStore, type GameStore } from "./store";
@@ -180,6 +180,52 @@ describe("restarts (M2-4 acceptance)", () => {
     expect(await deadlines(id)).toEqual([{ key: "alibis:1", due: clock.now() + QUICK.alibiMs, paused: false }]);
     expect(await app.scheduler.tick()).toBe(0);
     expect(count(await load(id), "roundResolved")).toBe(1);
+  });
+});
+
+describe("failures (PR #22 review)", () => {
+  it("a server failure keeps the deadline and retries it with backoff; it fires once it works", { timeout: 60_000 }, async () => {
+    const { id } = await startGame(0, { sessionLength: "quick" }, 2);
+    let failures = 2;
+    const sched = createScheduler({
+      db,
+      clock,
+      log: app.log,
+      system: async (gameId, command) => {
+        if (failures-- > 0) throw new Error("database went away");
+        return app.live.system(gameId, command);
+      },
+      resync: (gameId) => app.live.settle(gameId),
+    });
+    clock.advance(QUICK.roundMs);
+    expect(await sched.tick()).toBe(0); // fails: kept, retry in 1 s
+    expect((await deadlines(id)).map((d) => d.key)).toEqual(["round:1"]);
+    expect(await sched.tick()).toBe(0); // backing off
+    clock.advance(1000);
+    expect(await sched.tick()).toBe(0); // fails again: retry in 2 s
+    clock.advance(1999);
+    expect(await sched.tick()).toBe(0);
+    clock.advance(1);
+    expect(await sched.tick()).toBe(1);
+    const s = await load(id);
+    expect(count(s, "roundResolved")).toBe(1);
+    expect(await deadlines(id)).toEqual([{ key: "alibis:1", due: clock.now() + QUICK.alibiMs, paused: false }]);
+  });
+
+  it("a refused (stale) deadline is dropped and the game's real next deadline is planned", { timeout: 60_000 }, async () => {
+    const { id } = await startGame(0, { sessionLength: "quick" }, 2);
+    clock.advance(QUICK.roundMs);
+    await app.scheduler.tick();
+    // As if reconcile failed after round 1 resolved: the fired row is left and nothing is planned.
+    await db.query("delete from deadlines where game_id = $1", [id]);
+    await db.query("insert into deadlines (game_id, key, due_at, command) values ($1, 'round:1', to_timestamp($2::float8 / 1000), $3::json)", [
+      id,
+      clock.now(),
+      JSON.stringify({ type: "advance", deadline: { kind: "round", round: 1 } }),
+    ]);
+    expect(await app.scheduler.tick()).toBe(0);
+    expect(count(await load(id), "roundResolved")).toBe(1);
+    expect(await deadlines(id)).toEqual([{ key: "alibis:1", due: clock.now() + QUICK.alibiMs, paused: false }]);
   });
 });
 

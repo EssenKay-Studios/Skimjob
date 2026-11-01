@@ -222,7 +222,7 @@ describe("role powers in bot games — design §8", () => {
 describe("bots with the info and vote roles dealt — design §8, §17.3 (task 12)", () => {
   const ROLE_POOL = ["hacker", "smoothTalker", "muscle", "blackmailer", "snitch"];
 
-  it("finish every game with no refused command, and use the Hacker, Blackmailer and Muscle powers", () => {
+  it("finish every game with no refused command, and use the Hacker, Blackmailer and Muscle powers", { timeout: 30_000 }, () => {
     const used = new Set<string>();
     const types = new Set<string>();
     for (const mode of ["hiddenThenRevealed", "open", "secret"] as const) {

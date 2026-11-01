@@ -13,11 +13,13 @@
 // - `tick` (every TICK_MS in main.ts) sends due deadlines, oldest first,
 //   through `live.system`, so bots act and views go out as for any change.
 // - The engine refuses a deadline that isn't pending (rounds are named), so
-//   even a stale row can't resolve anything twice.
+//   even a stale row can't resolve anything twice. A refused row is dropped
+//   and the game re-planned; any other failure keeps the row for a retry.
 import type { Deadline, GameState, SystemCommand } from "@skimjob/engine";
 import type { FastifyBaseLogger } from "fastify";
 import type { Clock } from "./clock";
 import type { Db } from "./db";
+import { SystemRefused } from "./live";
 import type { SessionLength } from "./settings";
 import { TIMINGS, type Timing } from "./timing";
 
@@ -46,7 +48,6 @@ type Rule = (s: GameState, t: Timing, now: number) => readonly PlannedDeadline[]
 /**
  * One rule per deadline kind; the mapped type makes a new engine `Deadline`
  * kind fail typecheck until it has a rule here.
-
  */
 export const DEADLINE_RULES: { readonly [K in Deadline["kind"] | "scheduleMeeting"]: Rule } = {
   // The round being planned; also while an emergency meeting interrupts it (paused). design §5, §4.1
@@ -108,6 +109,8 @@ export interface Scheduler {
 
 /** Deadlines sent per tick at most (a few fall due together at an act's end). */
 const MAX_PER_TICK = 100;
+/** Longest wait before retrying a deadline whose send failed (1 s, 2 s, 4 s … up to this). */
+export const MAX_BACKOFF_MS = 60_000;
 
 interface Row {
   key: string;
@@ -118,12 +121,17 @@ export function createScheduler(deps: {
   readonly db: Db;
   readonly clock: Clock;
   readonly log: FastifyBaseLogger;
+  /** Sends a system command (`live.system`); throws `SystemRefused` when the engine refuses it. */
   readonly system: (gameId: string, command: SystemCommand) => Promise<unknown>;
+  /** Re-runs the game's after-change step (`live.settle`), so `reconcile` re-plans its deadlines. */
+  readonly resync: (gameId: string) => Promise<unknown>;
 }): Scheduler {
   const { db, clock, log } = deps;
   const timings = new Map<string, Timing>();
   let timer: ReturnType<typeof setInterval> | null = null;
   let ticking = false;
+  /** Deadlines whose send failed (not refused): retried from `at`. Memory only; a restart retries at once. */
+  const retries = new Map<string, { failures: number; at: number }>();
 
   const timingOf = async (gameId: string): Promise<Timing> => {
     const known = timings.get(gameId);
@@ -172,20 +180,34 @@ export function createScheduler(deps: {
       let sent = 0;
       try {
         for (let i = 0; i < MAX_PER_TICK; i++) {
-          const [row] = await db.query<{ game_id: string; key: string; command: SystemCommand }>(
+          const now = clock.now();
+          const rows = await db.query<{ game_id: string; key: string; command: SystemCommand }>(
             `select game_id, key, command from deadlines
              where paused_at is null and due_at <= to_timestamp($1::float8 / 1000)
-             order by due_at, game_id, key limit 1`,
-            [clock.now()],
+             order by due_at, game_id, key limit $2`,
+            [now, MAX_PER_TICK],
           );
+          const row = rows.find((r) => (retries.get(`${r.game_id} ${r.key}`)?.at ?? 0) <= now);
           if (!row) break;
+          const id = `${row.game_id} ${row.key}`;
           try {
             await deps.system(row.game_id, row.command);
+            retries.delete(id);
             sent++;
           } catch (err) {
-            // Not pending any more (or the game is gone): drop it, or it would be retried forever.
-            log.error({ err, gameId: row.game_id, key: row.key }, "deadline refused; dropped");
-            await db.query("delete from deadlines where game_id = $1 and key = $2", [row.game_id, row.key]);
+            if (err instanceof SystemRefused) {
+              // Stale or duplicate (the game moved on, e.g. a reconcile after it failed): drop it and
+              // re-plan from the state, so the game's real next deadline exists.
+              retries.delete(id);
+              log.warn({ err, gameId: row.game_id, key: row.key }, "deadline refused; dropped");
+              await db.query("delete from deadlines where game_id = $1 and key = $2", [row.game_id, row.key]);
+              await deps.resync(row.game_id).catch((e: unknown) => log.error({ err: e, gameId: row.game_id }, "re-planning deadlines failed"));
+            } else {
+              // A server failure (database, bots): keep the row and try again later, backing off.
+              const failures = (retries.get(id)?.failures ?? 0) + 1;
+              retries.set(id, { failures, at: now + Math.min(MAX_BACKOFF_MS, 1000 * 2 ** (failures - 1)) });
+              log.error({ err, gameId: row.game_id, key: row.key, failures }, "deadline failed; will retry");
+            }
           }
         }
       } catch (err) {

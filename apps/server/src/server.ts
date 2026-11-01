@@ -60,7 +60,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     }
   });
 
-  const scheduler = createScheduler({ db, clock: deps.clock, log: app.log, system: (gameId, command) => live.system(gameId, command) });
+  const scheduler = createScheduler({ db, clock: deps.clock, log: app.log, system: (gameId, command) => live.system(gameId, command), resync: (gameId) => live.settle(gameId) });
   const live = liveRoutes(app, db, store, s, { allowedOrigins: deps.allowedOrigins ?? [], onChange: scheduler.reconcile });
   app.decorate("live", live);
   app.decorate("scheduler", scheduler);
