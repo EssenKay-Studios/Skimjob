@@ -3,7 +3,8 @@
 import { resolve } from "node:path";
 import { CONTENT_VERSION, ENGINE_VERSION } from "@skimjob/engine";
 import { USAGE, invocationDir, parseSimArgs, type SimOptions } from "./args";
-import { checkOptions, runBatch } from "./run";
+import { GAMES_PER_TASK, checkOptions, runBatchOn } from "./run";
+import { createPool } from "./pool";
 import { summarize } from "./metrics";
 import { formatReport } from "./report";
 import { prepareOutDir, writeOutputs } from "./output";
@@ -19,7 +20,7 @@ function title(o: SimOptions, seconds: number): string {
   ].join("\n");
 }
 
-function main(argv: readonly string[]): number {
+async function main(argv: readonly string[]): Promise<number> {
   const parsed = parseSimArgs(argv);
   if (parsed.kind === "help") {
     process.stdout.write(USAGE);
@@ -45,7 +46,15 @@ function main(argv: readonly string[]): number {
   }
 
   const started = performance.now();
-  const records = runBatch(options, (n, games) => process.stderr.write(`  ${games} games at ${n} players done\n`));
+  // No more workers than tasks: a small run shouldn't wait for idle threads to start.
+  const tasks = options.playerCounts.length * Math.ceil(options.games / GAMES_PER_TASK);
+  const pool = createPool(Math.min(parsed.workers, tasks));
+  let records;
+  try {
+    records = await runBatchOn(pool, options, (n, games) => process.stderr.write(`  ${games} games at ${n} players done\n`));
+  } finally {
+    await pool.close();
+  }
   const seconds = (performance.now() - started) / 1000;
   const summary = summarize(records);
 
@@ -62,4 +71,12 @@ function main(argv: readonly string[]): number {
   return 0;
 }
 
-process.exitCode = main(process.argv.slice(2));
+main(process.argv.slice(2)).then(
+  (code) => {
+    process.exitCode = code;
+  },
+  (e: Error) => {
+    process.stderr.write(`sim: ${e.stack ?? e.message}\n`);
+    process.exitCode = 1;
+  },
+);
