@@ -14,7 +14,6 @@ import { SketchFrame } from "../components/SketchFrame";
 import { SplitSlider } from "../components/SplitSlider";
 import { useToast } from "../components/Toast";
 import { Underline } from "../components/Underline";
-import { Wordmark } from "../components/Wordmark";
 import { cardName, describeEvent, roleName, roomName } from "../game/describeEvent";
 import {
   alibiState,
@@ -33,30 +32,27 @@ import {
   type Timer,
 } from "../game/hud";
 import { useGame, useNow, type ClientCommand, type Connection, type Reply } from "../game/useGame";
-import { linkClick, navigate } from "../router";
+import { api, ApiError, sentence, UNREACHABLE, type LobbyView } from "../api";
+import { navigate } from "../router";
+import { TopBar } from "./TopBar";
 import "./game.css";
 
 type Access = { kind: "checking" } | { kind: "ok" } | { kind: "lobby" } | { kind: "error"; title: string; text: string };
-
-const sentence = (msg: string) => {
-  const s = msg.charAt(0).toUpperCase() + msg.slice(1);
-  return /[.!?]$/.test(s) ? s : `${s}.`;
-};
 
 /** Before opening the socket: is this a started game you sit in? (The upgrade's own 401/404 can't be read by a browser.) */
 function useAccess(id: string): Access {
   const [access, setAccess] = useState<Access>({ kind: "checking" });
   useEffect(() => {
     let live = true;
-    fetch(`/api/games/${encodeURIComponent(id)}`, { credentials: "same-origin" })
-      .then(async (res) => {
-        const body = (await res.json().catch(() => ({}))) as { status?: string; error?: string };
+    api<LobbyView>("GET", `/games/${encodeURIComponent(id)}`).then(
+      (game) => live && setAccess(game.status === "lobby" ? { kind: "lobby" } : { kind: "ok" }),
+      (e: unknown) => {
         if (!live) return;
-        if (res.ok) return setAccess(body.status === "lobby" ? { kind: "lobby" } : { kind: "ok" });
-        if (res.status === 401) return setAccess({ kind: "error", title: "Sign in first", text: "Join the crew from your invite link, then come back to this game." });
-        setAccess({ kind: "error", title: "No job here", text: sentence(body.error ?? "This game doesn't exist, or you're not in it") });
-      })
-      .catch(() => live && setAccess({ kind: "error", title: "Can't reach the server", text: "Check your connection and reload." }));
+        if (e instanceof ApiError && e.status === 401) return setAccess({ kind: "error", title: "Sign in first", text: "Join the crew from your invite link, then come back to this game." });
+        if (e instanceof ApiError && e.status > 0 && e.status < 500) return setAccess({ kind: "error", title: "No job here", text: sentence(e.message) });
+        setAccess({ kind: "error", title: "Can't reach the hideout", text: e instanceof ApiError ? e.message : UNREACHABLE });
+      },
+    );
     return () => {
       live = false;
     };
@@ -113,12 +109,9 @@ export function Game({ id }: { id: string }) {
 function GameTop({ connection }: { connection: Connection | null }) {
   const label = connection === "reconnecting" ? "Reconnecting…" : connection === "connecting" ? "Connecting…" : connection === "signedOut" ? "Signed out" : null;
   return (
-    <header className="topbar game-top">
-      <a href="/" className="topbar__home" onClick={linkClick} aria-label="Skimjob home">
-        <Wordmark size={24} />
-      </a>
+    <TopBar>
       <span aria-live="polite">{label && <Chip colour={connection === "signedOut" ? "var(--bad)" : "var(--gold)"}>{label}</Chip>}</span>
-    </header>
+    </TopBar>
   );
 }
 
@@ -211,13 +204,13 @@ const cardLabel = (view: PlayerView) => `${cardName(view.card!.id)}${view.card!.
 function Seats({ view }: { view: PlayerView }) {
   const seats = seatsOf(view);
   return (
-    <SketchFrame as="section" seed="game-seats" radius={16} shadow={0.4} className="seats" aria-labelledby="seats-h">
-      <div className="seats__head">
-        <h2 id="seats-h" className="seats__title">
+    <SketchFrame as="section" seed="game-crew" radius={16} shadow={0.4} className="crew" aria-labelledby="crew-h">
+      <div className="crew__head">
+        <h2 id="crew-h" className="crew__title">
           The crew
         </h2>
         <span className="meta">
-          You're the <b className="seats__role">{roleName(view.me.role)}</b> · stash <b className="num">{view.me.stash}</b>
+          You're the <b className="crew__role">{roleName(view.me.role)}</b> · stash <b className="num">{view.me.stash}</b>
           {view.me.safe > 0 && (
             <>
               {" "}
@@ -226,13 +219,13 @@ function Seats({ view }: { view: PlayerView }) {
           )}
         </span>
       </div>
-      <ul className="seats__list">
+      <ul className="crew__list">
         {seats.map((s) => (
-          <li key={s.id} className={s.you ? "seat is-you" : "seat"}>
+          <li key={s.id} className={s.you ? "crew-seat is-you" : "crew-seat"}>
             <Avatar name={s.name.replace(/^Bot · /, "")} size={38} bot={s.isBot} status={s.moved ? "ready" : undefined} title={`${s.name}${s.you ? " (you)" : ""}${s.moved ? ", move locked in" : ""}`} />
-            <span className="seat__name">
+            <span className="crew-seat__name">
               {s.you ? "You" : s.name}
-              {s.moved && <span className="seat__mark">move in</span>}
+              {s.moved && <span className="crew-seat__mark">move in</span>}
             </span>
           </li>
         ))}

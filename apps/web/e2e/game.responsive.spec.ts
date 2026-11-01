@@ -59,7 +59,8 @@ for (const viewport of VIEWPORTS) {
       expect(await smallTargets(page)).toEqual([]);
 
       await page.locator('.room-tile[data-room="Vault"]').click();
-      await expect(page.locator("#split")).toBeVisible();
+      // The split slider, or the Inside Man's "hand everything in" note (roles are dealt at random).
+      await expect(page.locator("#split").or(page.getByText(/you hand everything in/))).toBeVisible();
       const o2 = await overflow(page);
       expect(o2.scroll).toBeLessThanOrEqual(o2.client);
       expect(await smallTargets(page)).toEqual([]);

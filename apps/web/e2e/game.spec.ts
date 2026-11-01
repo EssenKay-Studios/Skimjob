@@ -26,7 +26,7 @@ test("a host and a guest play a Quick game against bots to the end", async ({ pa
   await page.goto(`/game/${game.id}`);
   await guest.goto(`/game/${game.id}`);
   await expect(page.locator(".hud__kicker")).toContainText(/Round \d of 9/);
-  await expect(page.locator(".seat")).toHaveCount(4);
+  await expect(page.locator(".crew-seat")).toHaveCount(4);
 
   // Until the end: the host moves every round (Office, all in) and posts alibis; the guest never moves.
   const over = page.getByRole("list", { name: "Final ranking" });
@@ -100,8 +100,8 @@ test("the move panel: pick a room, split the loot, lock it in, change it; reconn
   await page.getByRole("button", { name: "Lock it in" }).click();
   await expect(page.getByRole("button", { name: "Locked in" })).toBeDisabled();
   await expect(page.getByText("Locked in: Vault, pocket 2.")).toBeVisible();
-  await expect(page.locator(".seat.is-you .avatar__dot")).toBeVisible(); // your own "move in" mark
-  await expect(page.locator(".seat:not(.is-you) .avatar__dot")).toHaveCount(0); // others' moves stay hidden
+  await expect(page.locator(".crew-seat.is-you .avatar__dot")).toBeVisible(); // your own "move in" mark
+  await expect(page.locator(".crew-seat:not(.is-you) .avatar__dot")).toHaveCount(0); // others' moves stay hidden
   await shot(page, "mid-round");
 
   // Security needs a room to watch before it can lock in. design §6.1
