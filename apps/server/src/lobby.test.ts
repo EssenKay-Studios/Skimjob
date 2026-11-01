@@ -27,7 +27,7 @@ afterAll(async () => {
 });
 
 type Who = string | null; // a session token
-const call = async (method: "GET" | "POST" | "DELETE", url: string, who: Who = null, payload?: Record<string, unknown>) => {
+const call = async (method: "GET" | "POST" | "DELETE" | "PATCH", url: string, who: Who = null, payload?: Record<string, unknown>) => {
   const cookies: Record<string, string> = who ? { [SESSION_COOKIE]: who } : {};
   const res = await app.inject(payload ? { method, url, payload, cookies } : { method, url, cookies });
   const set = res.cookies.find((c) => c.name === SESSION_COOKIE)?.value;
@@ -180,7 +180,7 @@ describe("create a game (design §15 setup)", () => {
   });
 
   it("takes the host's settings: session length, vote visibility, Mole, events, starter mode, DM notices", async () => {
-    const settings = { sessionLength: "quick", voteVisibility: "secret", mole: "off", eventsEnabled: false, starterMode: true, dmNotices: false };
+    const settings = { sessionLength: "quick", voteVisibility: "secret", mole: "off", eventsEnabled: false, starterMode: true, dmNotices: false, uniqueRoles: false };
     expect((await host(settings)).game.settings).toEqual(settings);
   });
 
@@ -277,13 +277,81 @@ describe("invites", () => {
 });
 
 describe("leave", () => {
-  it("a player may leave the lobby; the host may not", async () => {
+  it("a player may leave the lobby; the host may not until they hand over", async () => {
     const { who, game } = await host();
     const ana = (await join(game.inviteCode, "Ana")).session;
-    expect((await call("POST", `/games/${game.id}/leave`, who)).status).toBe(409);
+    const refused = await call("POST", `/games/${game.id}/leave`, who);
+    expect(refused.status).toBe(409);
+    expect(refused.body.error).toMatch(/hand the host role/);
     expect((await call("POST", `/games/${game.id}/leave`, ana)).status).toBe(200);
     expect((await call("GET", `/games/${game.id}`, who)).body.seats!.map((s) => s.nickname)).toEqual(["Karthik"]);
     expect((await call("GET", `/games/${game.id}`, ana)).status).toBe(404);
+  });
+});
+
+// Owner request (decisions.md M2-5b): before the start the host can hand the host role to another person, then leave.
+describe("host hand-over", () => {
+  it("moves the host role to another person, who can then run the lobby; the old host can leave", async () => {
+    const { who, game } = await host();
+    const ana = (await join(game.inviteCode, "Ana")).session!;
+    const handed = await call("POST", `/games/${game.id}/host`, who, { seat: 1 });
+    expect(handed.status).toBe(200);
+    expect(handed.body.youAreHost).toBe(false);
+    expect(handed.body.seats!.map((s) => [s.nickname, s.host])).toEqual([["Karthik", false], ["Ana", true]]);
+    expect((await call("GET", `/games/${game.id}`, ana)).body.youAreHost).toBe(true);
+    // The old host is now a player: no host actions, but may leave.
+    expect((await call("POST", `/games/${game.id}/bots`, who, {})).status).toBe(403);
+    expect((await call("POST", `/games/${game.id}/host`, who, { seat: 0 })).status).toBe(403);
+    expect((await call("POST", `/games/${game.id}/leave`, who)).status).toBe(200);
+    // The new host adds a bot and starts.
+    expect((await call("POST", `/games/${game.id}/bots`, ana, {})).status).toBe(201);
+    const started = await call("POST", `/games/${game.id}/start`, ana);
+    expect(started.status).toBe(200);
+    expect(started.body.seats!.map((s) => [s.nickname, s.playerId])).toEqual([["Ana", "p1"], ["Bot · Riya", "p2"]]);
+  });
+
+  it("refuses a bot, yourself, an empty seat, a non-host, and after the start", async () => {
+    const { who, game } = await host();
+    const ana = (await join(game.inviteCode, "Ana")).session!;
+    await call("POST", `/games/${game.id}/bots`, who, {});
+    expect((await call("POST", `/games/${game.id}/host`, who, { seat: 2 })).status).toBe(409); // bot
+    expect((await call("POST", `/games/${game.id}/host`, who, { seat: 0 })).status).toBe(409); // yourself
+    for (const seat of [7, "1", null, undefined]) expect((await call("POST", `/games/${game.id}/host`, who, { seat })).status).toBe(404);
+    expect((await call("POST", `/games/${game.id}/host`, ana, { seat: 1 })).status).toBe(403);
+    expect((await call("POST", `/games/${game.id}/start`, who)).status).toBe(200);
+    expect((await call("POST", `/games/${game.id}/host`, who, { seat: 1 })).status).toBe(409);
+  });
+});
+
+describe("host settings in the lobby", () => {
+  it("the host changes settings before the start; fields not sent are kept; others can't", async () => {
+    const { who, game } = await host({ sessionLength: "quick" });
+    const ana = (await join(game.inviteCode, "Ana")).session!;
+    const res = await call("PATCH", `/games/${game.id}/settings`, who, { settings: { uniqueRoles: false, mole: "on" } });
+    expect(res.status).toBe(200);
+    expect(res.body.settings).toEqual({ ...DEFAULT_SETTINGS, sessionLength: "quick", uniqueRoles: false, mole: "on" });
+    expect((await call("GET", `/games/${game.id}`, ana)).body.settings).toMatchObject({ uniqueRoles: false, mole: "on" });
+    expect((await call("PATCH", `/games/${game.id}/settings`, ana, { settings: { mole: "off" } })).status).toBe(403);
+  });
+
+  it.each([[{ mole: "yes" }], [{ seed: "x" }], [{ starterMode: true }], ["x"], [[]], [null]])("refuses %j", async (settings) => {
+    const { who, game } = await host();
+    expect((await call("PATCH", `/games/${game.id}/settings`, who, { settings })).status).toBe(400);
+    expect((await call("GET", `/games/${game.id}`, who)).body.settings).toEqual(DEFAULT_SETTINGS);
+  });
+
+  // design §8.1: uniqueRoles reaches the engine config (absent = true).
+  it("uniqueRoles goes into the game config", async () => {
+    const { gameConfig } = await import("./lobby");
+    const seats = [{ nickname: "A", bot_personality: null }, { nickname: "B", bot_personality: null }];
+    expect(gameConfig(DEFAULT_SETTINGS, seats, "s").uniqueRoles).toBe(true);
+    expect(gameConfig({ ...DEFAULT_SETTINGS, uniqueRoles: false }, seats, "s").uniqueRoles).toBe(false);
+  });
+
+  it("lists bot personalities and the seat limits", async () => {
+    const { game } = await host();
+    expect(game.personalities!.map((p) => p.id)).toContain("opportunist");
+    expect([game.minSeats, game.maxSeats]).toEqual([2, 12]);
   });
 });
 

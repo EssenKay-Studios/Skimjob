@@ -46,7 +46,7 @@ main {
 
 hr.dashed {
   border: 0;
-  border-top: 1.3px dashed #2a232040;
+  border-top: 1.3px dashed var(--rule);
   margin: 22px 0;
 }
 
@@ -289,6 +289,144 @@ hr.dashed {
   padding: 34px 32px 30px;
 }
 
+
+/* ---------- Form sheets: new game, invite, game stub ---------- */
+.form-sheet {
+  max-width: 560px;
+  display: grid;
+  gap: 10px;
+  justify-items: stretch;
+}
+.form-sheet hr.dashed {
+  margin: 12px 0;
+}
+.form-sheet__lede {
+  font-size: 15px;
+  line-height: 1.5;
+}
+.form-sheet__form {
+  display: grid;
+  gap: 14px;
+}
+.invite__head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.invite__head h1 {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.game-crew {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+/* ---------- Lobby ---------- */
+.lobby__loading {
+  text-align: center;
+  padding: 18vh 0;
+}
+.lobby__head {
+  display: grid;
+  gap: 4px;
+}
+.lobby__head .kicker {
+  margin-bottom: 4px;
+}
+.lobby__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+  gap: 28px 40px;
+  align-items: start;
+}
+.lobby__crew,
+.lobby__side,
+.settings {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.lobby__side {
+  gap: 26px;
+}
+.seats {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+}
+.seat {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 2px;
+  border-bottom: 1.3px dashed var(--rule);
+}
+.seat:last-child {
+  border-bottom: 0;
+}
+.seat__who {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+.seat__name {
+  font: 700 17px/1.2 var(--font-hand);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.seat__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.seat__tags .chip {
+  height: 24px;
+  font-size: 12px;
+}
+.addbot {
+  display: grid;
+  gap: 12px;
+  justify-items: start;
+  padding: 16px 16px 18px;
+}
+.invite-card {
+  display: grid;
+  gap: 12px;
+  justify-items: start;
+  padding: 18px 20px 20px;
+}
+.invite-card .field {
+  width: 100%;
+}
+.invite-card .field__input {
+  letter-spacing: 0;
+  font-size: 16px;
+  text-overflow: ellipsis;
+}
+.lobby__start {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 22px;
+}
+.lobby__start-btn {
+  min-width: 220px;
+}
+.lobby__start .meta {
+  flex: 1 1 240px;
+}
+.lobby__wait .hand {
+  font-size: 19px;
+  color: var(--clay-d);
+}
+
 /* ---------- Mobile (ui-style §10) ---------- */
 @media (max-width: 860px) {
   .landing__grid {
@@ -304,6 +442,9 @@ hr.dashed {
   }
   .g-grid {
     columns: 1;
+  }
+  .lobby__grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -337,6 +478,13 @@ hr.dashed {
   .pass-card {
     flex-direction: column;
     align-items: stretch;
+  }
+  .lobby__start-btn {
+    width: 100%;
+  }
+  .addbot > .btn,
+  .invite-card > .btn {
+    width: 100%;
   }
   .g-frames,
   .g-fields {

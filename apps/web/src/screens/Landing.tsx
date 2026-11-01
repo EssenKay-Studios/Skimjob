@@ -1,6 +1,5 @@
-// Landing (m2-plan M2-5): create a game, join with an invite code, sign in.
-// No API calls yet: the lobby and invite screens arrive with M2-5b (they need
-// M2-2's lobby API), so the actions only check input and say what's next.
+// Landing (m2-plan M2-5): create a game (/new), join with an invite code
+// (/join/:code), sign in (M2-12; a toast for now).
 import { useState, type FormEvent } from "react";
 import { Avatar } from "../components/Avatar";
 import { BankDoodle } from "../components/BankDoodle";
@@ -12,7 +11,7 @@ import { useToast } from "../components/Toast";
 import { Underline } from "../components/Underline";
 import { Wordmark } from "../components/Wordmark";
 import { parseInviteCode } from "../inviteCode";
-import { linkClick } from "../router";
+import { linkClick, navigate } from "../router";
 import { Play, Star, Door } from "../components/icons";
 
 const CREW = ["Mara Vox", "Dez", "Lucky Lou", "Priya K", "Otto"];
@@ -32,12 +31,7 @@ export function Landing() {
       return;
     }
     setCodeError(null);
-    toast(
-      <>
-        Code <b className="num">{parsed}</b> looks right. Joining a crew opens up soon.
-      </>,
-      "good",
-    );
+    navigate(`/join/${parsed}`);
   };
 
   return (
@@ -73,7 +67,7 @@ export function Landing() {
                   seed="create-game"
                   icon={<Play />}
                   className="landing__create"
-                  onClick={() => toast("Lobbies open soon: the server side is still being wired up.")}
+                  onClick={() => navigate("/new")}
                 >
                   Plan a heist
                 </Button>
