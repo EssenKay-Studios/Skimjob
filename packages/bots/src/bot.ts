@@ -19,7 +19,7 @@ import {
   type VoteChoice,
 } from "@skimjob/engine";
 import type { Personality } from "./personalities";
-import { claimsOf, crewSize, isDuel, jobOf, lastResolvedRound, ofType, roleOf, roomsWhere } from "./read";
+import { claimsOf, createdOf, crewSize, isDuel, jobOf, lastResolvedRound, ofType, roleOf, roomsWhere } from "./read";
 import { knownRoles, mostSuspicious, suspicion } from "./suspicion";
 import { claimCommands, meetingTime } from "./claims";
 import { alibiPerk, meetingPerks, planningPerks } from "./perks";
@@ -390,13 +390,29 @@ function wantsEmergency(view: PlayerView, p: Personality, random: Random): boole
 
 /**
  * The crew's shared hunch about each player at a meeting, in [−1, 1]: the same
- * for every bot (seeded by the meeting and the player only), so it can carry a
- * majority to a wrong target, as a crew talking itself into a theory does.
- * Scaled by each bot's `hunch` (personalities.ts).
+ * for every bot, so it can carry a majority to a wrong target, as a crew
+ * talking itself into a theory does. Scaled by each bot's `hunch` (personalities.ts).
+ *
+ * Seeded by the meeting, the player and `gameDigest` (public, game-specific),
+ * so every bot at the table shares it but it changes from game to game: seat
+ * and meeting ids are the same in every game, and alone they gave each seat a
+ * fixed bias (PR #37 review).
  */
 export function crewHunch(view: PlayerView, player: PlayerId): number {
   const meeting = view.phase.kind === "meeting" || view.phase.kind === "shakedownPending" ? view.phase.meetingId : `act-${view.act}`;
-  return botRandom(`hunch/${meeting}/${player}`)() * 2 - 1;
+  return botRandom(`hunch/${meeting}/${player}/${gameDigest(view)}`)() * 2 - 1;
+}
+
+/**
+ * Public data that differs between games and is the same in every player's
+ * view: the seats' names and the public round summaries so far. No round
+ * resolves during a meeting (or its shakedown window), so it holds steady for
+ * a whole meeting. Nobody can know it before the rounds are played.
+ */
+function gameDigest(view: PlayerView): string {
+  const names = createdOf(view).players.map((s) => `${s.id}=${s.name}`).join(",");
+  const rounds = ofType(view.ledger, "roundResolved").map((r) => `${r.round}:${r.haul}:${r.heat}`).join(",");
+  return `${names}|${rounds}`;
 }
 
 /** Suspicion as the bot reads it at a vote: the evidence, the crew's hunch (`hunch`), and its own misreading (`misread`). */
