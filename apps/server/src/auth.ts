@@ -125,7 +125,14 @@ export function sessions(db: Db, clock: Clock): Sessions {
 export const safeReturnTo = (v: unknown): string =>
   typeof v === "string" && v.length <= 512 && /^\/(?!\/)[A-Za-z0-9\-._~!$&'()*+,;=:@%/?#]*$/.test(v) ? v : "/";
 
-export function authRoutes(app: FastifyInstance, db: Db, s: Sessions, providers: readonly AuthProvider[]): void {
+/** `onSignOut` gets the token of a session that was just ended (the live channel closes its sockets). */
+export function authRoutes(
+  app: FastifyInstance,
+  db: Db,
+  s: Sessions,
+  providers: readonly AuthProvider[],
+  onSignOut: (token: string) => void = () => {},
+): void {
   const byName = new Map(providers.map((p) => [p.name, p]));
   const redirectUri = (req: FastifyRequest, name: string) => `${req.protocol}://${req.host}/auth/${name}/callback`;
 
@@ -146,7 +153,9 @@ export function authRoutes(app: FastifyInstance, db: Db, s: Sessions, providers:
   });
 
   app.post("/auth/logout", async (req, reply) => {
+    const token = req.cookies[SESSION_COOKIE];
     await s.end(req, reply);
+    if (token) onSignOut(token);
     return { ok: true };
   });
 

@@ -24,6 +24,8 @@ export interface ServerDeps {
   readonly auth?: readonly AuthProvider[];
   /** Defaults to a fresh store on `db`. */
   readonly store?: GameStore;
+  /** Browser origins, besides the server's own, that may open a game socket (the Vite dev server). */
+  readonly allowedOrigins?: readonly string[];
   /** Fastify's request logging; off by default (tests). */
   readonly logger?: boolean;
 }
@@ -53,9 +55,9 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     }
   });
 
-  authRoutes(app, db, s, deps.auth ?? []);
-  const live = liveRoutes(app, db, store, s);
+  const live = liveRoutes(app, db, store, s, { allowedOrigins: deps.allowedOrigins ?? [] });
   app.decorate("live", live);
+  authRoutes(app, db, s, deps.auth ?? [], (token) => live.closeSession(token));
   lobbyRoutes(app, db, store, s, (gameId) => live.settle(gameId));
   return app;
 }

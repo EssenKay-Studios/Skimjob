@@ -7,7 +7,7 @@ import type { WebSocket } from "ws";
 import { SESSION_COOKIE } from "./auth";
 import { fakeClock } from "./clock";
 import type { Db } from "./db";
-import { MAX_MESSAGE_BYTES, type ServerMessage } from "./live";
+import { MAX_MESSAGE_BYTES, MAX_QUEUED_MESSAGES, type ServerMessage } from "./live";
 import type { LobbyView } from "./lobby";
 import { buildServer } from "./server";
 import { createGameStore } from "./store";
@@ -193,13 +193,14 @@ describe("QA: hostile messages", () => {
 });
 
 describe("QA: flooding and many sockets", () => {
-  // No bots here: a bot re-rolls its noise on every change, so it can answer a hidden move with a public act (QA bug on PR #20).
-  it("300 commands sent at once all get replies, in order; a hidden-only flood sends the other seat nothing", async () => {
-    const { id, humans } = await startGame(2, 0);
+  // N is the most a socket may have waiting (more closes it: live.test.ts "flooding"). With bots seated
+  // too, since a bot now acts only on its own view changes (QA bug on PR #20, fixed).
+  it("a full queue of commands sent at once all get replies, in order; a hidden-only flood sends the other seat nothing", async () => {
+    const { id, humans } = await startGame(2, 2);
     const a = await Client.open(id, humans[0]!);
     const b = await Client.open(id, humans[1]!);
     const seen = await b.barrier();
-    const N = 300;
+    const N = MAX_QUEUED_MESSAGES;
     for (let i = 0; i < N; i++) {
       const cmd = i % 3 === 2 ? { type: "bogus" } : { type: "submitMove", player: humans[1]!.player, move: { room: "lobby", pocket: i % 2 } };
       a.ws.send(JSON.stringify({ id: i, cmd }));
@@ -209,7 +210,8 @@ describe("QA: flooding and many sockets", () => {
     expect(replies.map((r) => r.id)).toEqual([...Array(N).keys()]);
     replies.forEach((r, i) => expect("ok" in r).toBe(i % 3 !== 2));
     const state = await loadVia(id);
-    expect(state.moves[humans[0]!.player]).toEqual({ room: "lobby", pocket: (N - 2) % 2 }); // last accepted move wins
+    const lastAccepted = [...Array(N).keys()].filter((i) => i % 3 !== 2).at(-1)!;
+    expect(state.moves[humans[0]!.player]).toEqual({ room: "lobby", pocket: lastAccepted % 2 }); // last accepted move wins
     expect(state.moves[humans[1]!.player]).toBeUndefined();
     expect(await b.barrier()).toBe(seen + 1);
     expect(a.lastView()).toEqual(viewFor(state, humans[0]!.player));

@@ -9,7 +9,12 @@ export interface ServerConfig {
   readonly pgliteDir: string | null;
   /** DEV_LOGIN=1 enables the dev sign-in stub (M2-2). Never in a deployment. */
   readonly devLogin: boolean;
+  /** ALLOWED_ORIGINS (comma-separated): browser origins, besides the server's own host, that may open game sockets. */
+  readonly allowedOrigins: readonly string[];
 }
+
+/** The Vite dev server and the Playwright one (M2-5a), whose proxies keep the browser's Origin. */
+export const DEV_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:5179", "http://127.0.0.1:5179"];
 
 /** A startup failure whose message is the whole story: print it, exit 1. */
 export class StartupError extends Error {}
@@ -30,5 +35,8 @@ export function loadConfig(env: Env = process.env): ServerConfig {
     databaseUrl: env.DATABASE_URL || null,
     pgliteDir: pgliteDir === "memory" ? null : pgliteDir,
     devLogin: env.DEV_LOGIN === "1",
+    allowedOrigins: env.ALLOWED_ORIGINS?.trim()
+      ? env.ALLOWED_ORIGINS.split(",").map((o) => o.trim()).filter(Boolean)
+      : DEV_ORIGINS,
   };
 }

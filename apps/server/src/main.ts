@@ -9,7 +9,7 @@ import { buildServer } from "./server";
 try {
   const config = loadConfig();
   const { db, applied } = await openDatabase(config);
-  const app = buildServer({ db, clock: systemClock, logger: true, auth: config.devLogin ? [devAuthProvider()] : [] });
+  const app = buildServer({ db, clock: systemClock, logger: true, auth: config.devLogin ? [devAuthProvider()] : [], allowedOrigins: config.allowedOrigins });
   if (applied.length > 0) app.log.info({ applied }, "migrations applied");
   app.log.info(config.databaseUrl ? "database: Postgres (DATABASE_URL)" : `database: PGlite (${config.pgliteDir ?? "in memory"})`);
 

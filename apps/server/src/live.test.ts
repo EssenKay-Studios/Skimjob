@@ -1,5 +1,5 @@
 // Live game channel and server bots. docs/m2-plan.md M2-3; design §17.2, §17.3
-import { createBot, PERSONALITIES } from "@skimjob/bots";
+import { createBot, PERSONALITIES, type PersonalityId } from "@skimjob/bots";
 import { canSee, viewFor, type Command, type GameState, type PlayerCommand, type PlayerView } from "@skimjob/engine";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -7,7 +7,8 @@ import type { WebSocket } from "ws";
 import { SESSION_COOKIE } from "./auth";
 import { fakeClock } from "./clock";
 import type { Db } from "./db";
-import { parseClientMessage, type ServerMessage } from "./live";
+import { CLOSE_SIGNED_OUT, CLOSE_TOO_MANY, MAX_QUEUED_MESSAGES, originAllowed, parseClientMessage, type ServerMessage } from "./live";
+import { playerIdFor } from "./lobby";
 import type { LobbyView } from "./lobby";
 import { buildServer } from "./server";
 import type { LobbySettings } from "./settings";
@@ -41,12 +42,12 @@ interface Human {
   readonly player: string;
 }
 /** A started game with `people` signed-in seats (host first) and `bots` bot seats after them. */
-async function startGame(people: number, bots: number, settings: Partial<LobbySettings> = {}, start = true) {
+async function startGame(people: number, bots: number, settings: Partial<LobbySettings> = {}, start = true, personality: PersonalityId = "opportunist") {
   const host = (await call("/auth/guest", null, { nickname: "Host" })).session!;
   const game = (await call("/games", host, { settings })).body;
   const sessions = [host];
   for (let i = 1; i < people; i++) sessions.push((await call(`/invites/${game.inviteCode}/join`, null, { nickname: `Guest ${i}` })).session!);
-  for (let i = 0; i < bots; i++) await call(`/games/${game.id}/bots`, host, { personality: "opportunist" });
+  for (let i = 0; i < bots; i++) await call(`/games/${game.id}/bots`, host, { personality });
   if (!start) return { id: game.id, humans: sessions.map((who) => ({ who, player: "" })) };
   await call(`/games/${game.id}/start`, host);
   const humans: Human[] = [];
@@ -60,13 +61,17 @@ async function startGame(people: number, bots: number, settings: Partial<LobbySe
 /** A test socket that keeps every message it got, raw. */
 class Client {
   readonly raw: string[] = [];
+  closed: number | null = null;
   private n = 0;
   ws!: WebSocket;
   constructor(readonly player: string) {}
   static async open(gameId: string, h: Human) {
     const c = new Client(h.player);
     // Listen from the start: the first view can come right after the upgrade.
-    const onInit = (ws: WebSocket) => ws.on("message", (data) => c.raw.push(String(data)));
+    const onInit = (ws: WebSocket) => {
+      ws.on("message", (data) => c.raw.push(String(data)));
+      ws.on("close", (code) => (c.closed = code));
+    };
     c.ws = await app.injectWS(`/games/${gameId}/ws`, { headers: { cookie: `${SESSION_COOKIE}=${h.who}` } }, { onInit });
     await vi.waitFor(() => expect(c.views().length).toBe(1), quick);
     return c;
@@ -116,6 +121,29 @@ describe("connecting (GET /games/:id/ws)", () => {
     await expect(app.injectWS(`/games/not-a-game/ws`, { headers: { cookie: `${SESSION_COOKIE}=${stranger}` } })).rejects.toThrow(/404/);
     const lobby = await startGame(2, 0, {}, false);
     await expect(app.injectWS(`/games/${lobby.id}/ws`, { headers: { cookie: `${SESSION_COOKIE}=${lobby.humans[0]!.who}` } })).rejects.toThrow(/404/);
+  });
+
+  it("refuses a browser from another origin (403); its own host, a listed origin or no Origin is fine", async () => {
+    const { id, humans } = await startGame(2, 0);
+    const cookie = `${SESSION_COOKIE}=${humans[0]!.who}`;
+    await expect(app.injectWS(`/games/${id}/ws`, { headers: { cookie, host: "localhost:3000", origin: "https://evil.example" } })).rejects.toThrow(/403/);
+    const ws = await app.injectWS(`/games/${id}/ws`, { headers: { cookie, host: "localhost:3000", origin: "http://localhost:3000" } });
+    ws.close();
+    expect(originAllowed(undefined, "localhost:3000", [])).toBe(true);
+    expect(originAllowed("http://localhost:5173", "localhost:3000", ["http://localhost:5173"])).toBe(true);
+    expect(originAllowed("http://localhost:5173", "localhost:3000", [])).toBe(false);
+    expect(originAllowed("null", "localhost:3000", [])).toBe(false);
+  });
+
+  it("signing out closes that session's sockets (4401), not other people's", async () => {
+    const { id, humans } = await startGame(2, 0);
+    const a = await Client.open(id, humans[0]!);
+    const b = await Client.open(id, humans[1]!);
+    await app.inject({ method: "POST", url: "/auth/logout", cookies: { [SESSION_COOKIE]: humans[0]!.who } });
+    await vi.waitFor(() => expect(a.closed).toBe(CLOSE_SIGNED_OUT), quick);
+    expect(b.closed).toBeNull();
+    await expect(app.injectWS(`/games/${id}/ws`, { headers: { cookie: `${SESSION_COOKIE}=${humans[0]!.who}` } })).rejects.toThrow(/401/);
+    b.ws.close();
   });
 
   it("sends the seat its own view on connect, and nothing server-only", async () => {
@@ -186,6 +214,18 @@ describe("commands from a socket", () => {
   });
 });
 
+describe("flooding", () => {
+  it(`a socket with more than ${MAX_QUEUED_MESSAGES} messages waiting is closed (1008); others carry on`, async () => {
+    const { id, humans } = await startGame(2, 0);
+    const a = await Client.open(id, humans[0]!);
+    const b = await Client.open(id, humans[1]!);
+    for (let i = 0; i < MAX_QUEUED_MESSAGES * 3; i++) a.ws.send(JSON.stringify({ id: i, cmd: { type: "submitMove", move: { room: "lobby", pocket: i % 2 } } }));
+    await vi.waitFor(() => expect(a.closed).toBe(CLOSE_TOO_MANY), quick);
+    expect(await b.send({ type: "submitMove", move: { room: "lobby", pocket: 0 } })).toMatchObject({ ok: true });
+    b.ws.close();
+  });
+});
+
 describe("pushing views", () => {
   it("pushes a fresh view to every seat a public change touches, and nothing for a hidden one", async () => {
     const { id, humans } = await startGame(2, 0);
@@ -209,6 +249,49 @@ describe("pushing views", () => {
     await vi.waitFor(() => expect(tab2.views()).toHaveLength(2), quick);
     expect(tab2.messages.filter((m) => !("view" in m))).toHaveLength(0);
     for (const c of [a, b, tab2]) c.ws.close();
+  });
+
+  it("a bot acts only when its own view changed: a flood of hidden moves makes no bot act and pushes nothing (design §17.3)", async () => {
+    // A Random bot calls an emergency on 5% of the calls it gets (noise 1), so 100 extra calls
+    // would almost surely show. Pick a game where its emergency is still unused (it may call one at the start).
+    let game = await startGame(2, 1, {}, true, "random");
+    for (let tries = 0; (await load(game.id)).pendingEmergency !== null; tries++) {
+      expect(tries).toBeLessThan(10);
+      game = await startGame(2, 1, {}, true, "random");
+    }
+    const { id, humans } = game;
+    const a = await Client.open(id, humans[0]!);
+    const b = await Client.open(id, humans[1]!);
+    const seen = await b.barrier();
+    const before = (await load(id)).log.length;
+    // Pocket 0 (an Insider can't pocket) in two rooms that need no watch target.
+    const rooms = (await load(id)).rooms.filter((r) => r !== "security").slice(0, 2);
+    for (let i = 0; i < 100; i++) expect(await a.send({ type: "submitMove", move: { room: rooms[i % 2], pocket: 0 } })).toMatchObject({ ok: true });
+    const after = await load(id);
+    expect(after.log.slice(before).map((e) => e.type)).toEqual(Array(100).fill("moveSubmitted"));
+    expect(await b.barrier()).toBe(seen + 1);
+    a.ws.close();
+    b.ws.close();
+  });
+
+  it("bots of running games act when the server boots (a crash may have cut a settle short)", async () => {
+    const host = (await call("/auth/guest", null, { nickname: "Host" })).session!;
+    const game = (await call("/games", host, {})).body;
+    for (let i = 0; i < 2; i++) await call(`/games/${game.id}/bots`, host, {});
+    const seats = (await call(`/games/${game.id}/bots`, host, {})).body.seats;
+    const other = createGameStore(db); // start behind the live channel's back: no settle
+    const { gameConfig } = await import("./lobby");
+    const config = gameConfig({ ...(game.settings as LobbySettings) }, seats.map((x) => ({ nickname: x.nickname, bot_personality: x.bot })), "boot-seed");
+    await other.start(game.id, config, async (tx) => {
+      for (const [i, seat] of seats.entries()) await tx.query("update seats set player_id = $3 where game_id = $1 and seat_no = $2", [game.id, seat.seat, playerIdFor(i)]);
+    });
+    const bots = config.players.filter((p) => p.isBot).map((p) => p.id);
+    expect(Object.keys((await other.load(game.id))!.moves)).toEqual([]);
+    const booted = buildServer({ db, clock: fakeClock(Date.UTC(2026, 10, 1)), store: other });
+    await booted.ready();
+    const state = (await other.load(game.id))!;
+    for (const p of bots) expect(state.moves[p]).toBeDefined();
+    await booted.close();
   });
 
   it("bot seats act after the start, before anyone connects (design §17.3)", async () => {

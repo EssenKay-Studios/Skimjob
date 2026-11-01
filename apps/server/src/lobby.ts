@@ -249,7 +249,8 @@ export function lobbyRoutes(app: FastifyInstance, db: Db, store: GameStore, s: S
       });
       return view((await gameById(db, game.id))!, await seatsOf(db, game.id), user);
     });
-    await onStart(started.id);
+    // The game has started either way; the bots also act at the next change or boot.
+    await onStart(started.id).catch((err: unknown) => req.log.error({ err, gameId: started.id }, "settling bots after start failed"));
     return started;
   });
 }
