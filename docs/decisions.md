@@ -4,6 +4,14 @@ Newest first. Each entry: what was decided, and why. Add an entry whenever a rul
 
 ---
 
+### 2026-11-01 — Server skeleton and game store (M2-1)
+- **Server dependencies:** runtime `fastify` and `pg` only; dev `@electric-sql/pglite` (tests, and the fallback when `DATABASE_URL` is unset, loaded with a dynamic import) and `@types/pg`. No ORM, migration library, schema validator or `dotenv`, as `docs/m2-plan.md` §1 says. `@fastify/cookie` and `@fastify/websocket` join with M2-2 / M2-3, when they're used. The engine gains no dependency.
+- **`json`, not `jsonb`, for the replay inputs** (`games.config`, `game_events.event`, `deadlines.command`): checked on PGlite, `jsonb` re-sorts object keys (`{zeta, a}` comes back as `{a, zeta}`), so a reloaded log would differ from the written one in key order, and any rule that ever iterates a record's keys (tallies by player id) could replay differently. `json` keeps the text byte for byte; a test compares the stored text with `JSON.stringify` of each event. `games.settings` (host's lobby choices, never replayed) stays `jsonb`. Deviation from the plan's wording.
+- **Appends:** one `insert … select from json_array_elements($3::json) with ordinality` per batch inside a transaction that also updates `games.status`; the `(game_id, idx)` primary key makes a second writer at the same position fail the whole batch. The state is folded with `applyEvent` before writing, so an event the engine can't fold is never stored.
+- **Migrations:** the whole run is one transaction under a Postgres advisory lock, so a failing file leaves nothing applied and two starting servers (or parallel test files on one database) don't race. Versions are file names; two files with the same number are refused.
+- **Local Postgres:** `scripts/db.sh` runs a trust-auth cluster on 127.0.0.1:5433 in `.pgdata/` (as the `postgres` user when run as root); `docker-compose.yml` publishes Postgres 16 on 127.0.0.1:5433 for Karthik's machine. 5433 avoids clashing with an existing local Postgres.
+- **Defaults:** the server listens on 127.0.0.1:3000 (`HOST=0.0.0.0` for phones on the LAN); PGlite persists to `.pglite/` so a dev restart keeps games.
+
 ### 2026-11-01 — Duel mode (M1 task 15)
 - **Config:** `GameConfig.duel?: boolean` (absent = false); `validateConfig` refuses a non-boolean and `duel: true` without exactly 2 players. `gameCreated` carries `duel`, so bots and clients know. Bots aren't refused (`isBot` is informational and the simulator needs all-bot Duels).
 - **No meetings:** in Duel mode `handleCommand` refuses `proposeMeeting`, `acceptMeeting`, `scheduleMeeting`, `callEmergency`, `castVote` and `sealVote` ("Duel mode has no meetings or votes"). After an act's last round the game never rests in `awaitingMeeting`: the same `advance { round }` settles the act's call-outs, checks the checkpoint (shared `checkpoint()` in `meeting.ts`, also used after a meeting) and starts the next act or ends the game.
