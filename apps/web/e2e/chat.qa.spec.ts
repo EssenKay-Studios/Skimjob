@@ -8,7 +8,13 @@ import { expect as baseExpect, test, type Browser, type Page } from "@playwright
 import { startGame } from "./setupGame";
 
 const expect = baseExpect.configure({ timeout: 15_000 });
-const SHOTS = "/home/claude/pipeline/shots";
+// Screenshots only when QA_SHOTS names a folder (CI has no such folder).
+const SHOTS = process.env.QA_SHOTS;
+async function snap(p: Page, name: string, fullPage = true) {
+  if (!SHOTS) return;
+  mkdirSync(SHOTS, { recursive: true });
+  await p.screenshot({ path: `${SHOTS}/${name}`, fullPage });
+}
 
 async function player(browser: Browser, page: Page, width?: number) {
   const vp = page.viewportSize()!;
@@ -206,7 +212,6 @@ test("QA: with DM notices off, a third player gets no frame and no row for a DM"
 
 test("QA: hostile text arrives inert and wraps at 360 and 1280 px", async ({ page, browser }) => {
   test.setTimeout(120_000);
-  mkdirSync(SHOTS, { recursive: true });
   const narrow = await player(browser, page, 360);
   const wide = await player(browser, page, 1280);
   const game = await startGame(page.request, { bots: 1, guests: [narrow.request, wide.request], sessionLength: "1w" });
@@ -244,7 +249,7 @@ test("QA: hostile text arrives inert and wraps at 360 and 1280 px", async ({ pag
     });
     for (const d of widths) expect(d).toBeLessThanOrEqual(1);
     await noOverflow(p, `${w}px`);
-    await p.screenshot({ path: `${SHOTS}/qa-chat38-hostile-${w}.png`, fullPage: false });
+    await snap(p, `qa-chat38-hostile-${w}.png`, false);
   }
   for (const p of [narrow, wide]) await p.context().close();
 });
@@ -405,7 +410,6 @@ test("QA: someone without a seat (no spectators in M2) gets no chat and no messa
 
 test("QA: layout at 360 and 1280 px with five long-named humans, DM tabs, an evidence card and the pickers open", async ({ page, browser }) => {
   test.setTimeout(150_000);
-  mkdirSync(SHOTS, { recursive: true });
   const guests = await Promise.all([0, 1, 2, 3].map(() => player(browser, page)));
   await page.request.post("/api/auth/guest", { data: { nickname: "Host" } });
   const res = await page.request.post("/api/games", { data: { settings: { sessionLength: "1w" } } });
@@ -447,10 +451,10 @@ test("QA: layout at 360 and 1280 px with five long-named humans, DM tabs, an evi
         .map((r) => `${r.c} ${Math.round(r.width)}×${Math.round(r.height)}`),
     );
     expect(small, `${w}px small targets`).toEqual([]);
-    await view.screenshot({ path: `${SHOTS}/qa-chat38-layout-${w}.png` });
+    await snap(view, `qa-chat38-layout-${w}.png`);
     await tabs(view).getByRole("button", { name: /^WWWW/ }).click();
     await noOverflow(view, `${w}px DM thread`);
-    await view.screenshot({ path: `${SHOTS}/qa-chat38-dm-${w}.png` });
+    await snap(view, `qa-chat38-dm-${w}.png`);
     await view.close();
   }
   for (const g of guests) await g.context().close();
