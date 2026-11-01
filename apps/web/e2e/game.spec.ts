@@ -36,7 +36,8 @@ test("a host and a guest play a Quick game against bots to the end", async ({ pa
     const lock = page.getByRole("button", { name: "Lock it in" });
     if (await lock.isVisible().catch(() => false)) {
       await page.locator('.room-tile[data-room="Office"]').click({ timeout: 1000 }).catch(() => {});
-      if (await lock.isEnabled().catch(() => false)) {
+      // isEnabled waits for the element: the round can end (and the button go) in between.
+      if (await lock.isEnabled({ timeout: 500 }).catch(() => false)) {
         await lock.click({ timeout: 1000 }).then(() => moves++, () => {});
       }
     }
