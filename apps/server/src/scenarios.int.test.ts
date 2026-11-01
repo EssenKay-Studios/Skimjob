@@ -8,7 +8,7 @@
 // People are played by bot logic (or a script) over their own sockets.
 // design §17.2, §17.3, §13, §11, §16.1, §7
 import { createBot, PERSONALITIES, type Agent } from "@skimjob/bots";
-import { DEFAULT_ROLE_POOL, MOLE_ROLE } from "@skimjob/content";
+import { DEFAULT_ROLE_POOL, FILLER_ROLE, MOLE_ROLE } from "@skimjob/content";
 import { canSee, replay, viewFor, type GameConfig, type GameEvent, type GameState, type PlayerView, type SystemCommand } from "@skimjob/engine";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -151,10 +151,12 @@ function nextDeadline(state: GameState): SystemCommand[] {
   const phase = state.phase;
   if (phase.kind === "meeting") return [{ type: "advance", deadline: { kind: "closeMeeting", meetingId: phase.meetingId } }];
   if (phase.kind === "shakedownPending") return [{ type: "advance", deadline: { kind: "resolveShakedown", meetingId: phase.meetingId } }];
-  if (state.pendingEmergency && (phase.kind === "planning" || phase.kind === "awaitingMeeting")) {
+  if (state.pendingEmergency && (phase.kind === "planning" || phase.kind === "alibis" || phase.kind === "awaitingMeeting")) {
     return [{ type: "advance", deadline: { kind: "openMeeting", meetingId: state.pendingEmergency.meetingId } }];
   }
   if (phase.kind === "planning") return [{ type: "advance", deadline: { kind: "round", round: phase.round } }];
+  // design §5.4: the alibi deadline after each round.
+  if (phase.kind === "alibis") return [{ type: "advance", deadline: { kind: "alibis", round: phase.round } }];
   if (phase.kind === "awaitingMeeting") {
     const schedule: SystemCommand[] = state.scheduledMeeting ? [] : [{ type: "scheduleMeeting", act: phase.act, slot: `server-act-${phase.act}` }];
     return [...schedule, { type: "advance", deadline: { kind: "openMeeting", meetingId: state.scheduledMeeting?.meetingId ?? `act-${phase.act}` } }];
@@ -457,13 +459,14 @@ describe("scenarios: end-to-end stories over HTTP + WebSocket", () => {
     expect(typesIn(final).has("meetingOpened")).toBe(false);
   }, 60_000);
 
-  it("a 12-player game deals every role in the pool plus two Moles, and plays to the reveal (design §8.1)", async () => {
+  it("a 12-player game deals every role in the pool, one Mole and a Rookie to fill, and plays to the reveal (design §8.1)", async () => {
     const before = app.live.botRefusals.length;
     const game = await startGame(2, 10, { mole: "on", eventsEnabled: true, voteVisibility: "secret" });
     const clients = await Promise.all(game.humans.map((h) => Client.open(game.id, h)));
     const state = await load(game.id);
     const roles = state.playerOrder.map((p) => state.players[p]!.role).sort();
-    expect(roles).toEqual([...DEFAULT_ROLE_POOL, MOLE_ROLE, MOLE_ROLE].sort());
+    // Owner answers (1 Nov): one Mole at 9–12 with "on"; unique roles (the default), Rookies fill the rest.
+    expect(roles).toEqual([...DEFAULT_ROLE_POOL, MOLE_ROLE, FILLER_ROLE].sort());
     const refused = await play(game, clients, brainsFor(game));
     const final = await finish(game, clients, refused, before);
     expect(final.playerOrder).toHaveLength(12);

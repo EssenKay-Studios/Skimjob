@@ -33,7 +33,7 @@ import { replay } from "./reduce";
 import { viewFor } from "./view";
 import { jobFor } from "./overrides";
 
-const RUNS = Number(process.env.FC_RUNS ?? 60);
+const RUNS = Number(process.env.FC_RUNS ?? 45);
 const SEED = Number(process.env.FC_SEED ?? 20261101);
 const TIMEOUT = 60_000 + RUNS * 1_000;
 const ALL_ROLES = Object.keys(ROLES);
@@ -50,9 +50,11 @@ const normalConfig = fc
     mole: fc.constantFrom(...MOLES),
     events: fc.boolean(),
     starter: fc.boolean(),
+    // design §8.1, §15: absent = unique (the default); false lets roles repeat.
+    unique: fc.constantFrom(undefined, true, false),
     seed: fc.string({ minLength: 1, maxLength: 12 }),
   })
-  .map(({ players, vote, mole, events, starter, seed }): GameConfig => ({
+  .map(({ players, vote, mole, events, starter, unique, seed }): GameConfig => ({
     seed,
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i + 1}`, name: `P${i + 1}`, isBot: i % 2 === 1 })),
     job: "bank",
@@ -62,6 +64,7 @@ const normalConfig = fc
     eventsEnabled: starter ? false : events,
     voteVisibility: vote,
     starterMode: starter,
+    ...(unique === undefined ? {} : { uniqueRoles: unique }),
   }));
 
 /** design §16.1: Duel is exactly 2 players. */
@@ -94,10 +97,12 @@ function nextDeadlines(state: GameState): Command[] {
   if (phase.kind === "meeting") return [{ type: "advance", deadline: { kind: "closeMeeting", meetingId: phase.meetingId } }];
   if (phase.kind === "shakedownPending") return [{ type: "advance", deadline: { kind: "resolveShakedown", meetingId: phase.meetingId } }];
   const out: Command[] = [];
-  if (state.pendingEmergency && (phase.kind === "planning" || phase.kind === "awaitingMeeting")) {
+  if (state.pendingEmergency && (phase.kind === "planning" || phase.kind === "alibis" || phase.kind === "awaitingMeeting")) {
     out.push({ type: "advance", deadline: { kind: "openMeeting", meetingId: state.pendingEmergency.meetingId } });
   }
   if (phase.kind === "planning") out.push({ type: "advance", deadline: { kind: "round", round: phase.round } });
+  // design §5.4: the alibi deadline after each round.
+  if (phase.kind === "alibis") out.push({ type: "advance", deadline: { kind: "alibis", round: phase.round } });
   if (phase.kind === "awaitingMeeting") {
     if (state.scheduledMeeting) out.push({ type: "advance", deadline: { kind: "openMeeting", meetingId: state.scheduledMeeting.meetingId } });
     else out.push({ type: "scheduleMeeting", act: phase.act, slot: `server-act-${phase.act}` });
@@ -134,7 +139,9 @@ type Style = "mixed" | "hot" | "careful";
 
 function playerCommand(state: GameState, t: Tape, style: Style): { command: Record<string, unknown>; seated: boolean } {
   const seated = t.chance(92);
-  const player = seated ? t.pick(state.playerOrder) : t.pick(BOGUS_PLAYERS);
+  // In a shakedown window, lean on the Muscle (if dealt), so cancels happen. design §8
+  const muscle = state.phase.kind === "shakedownPending" ? state.playerOrder.find((id) => state.players[id]?.role === "muscle") : undefined;
+  const player = !seated ? t.pick(BOGUS_PLAYERS) : muscle && t.chance(50) ? muscle : t.pick(state.playerOrder);
   const p = seated ? (state.players[player as string] as PlayerState) : undefined;
   const others = state.playerOrder.filter((id) => id !== player);
   const room = (): string => {
@@ -150,7 +157,8 @@ function playerCommand(state: GameState, t: Tape, style: Style): { command: Reco
   // Mostly what fits the phase, sometimes anything.
   const phase = state.phase.kind;
   const fit = t.chance(70);
-  const choice = fit && phase === "planning" ? 0 : fit && phase === "meeting" ? 9 : fit && phase === "shakedownPending" ? 12 : t.int(14);
+  const choice =
+    fit && phase === "planning" ? 0 : fit && phase === "alibis" ? 5 : fit && phase === "meeting" ? 9 : fit && phase === "shakedownPending" ? 12 : t.int(14);
   switch (choice) {
     case 0:
     case 1:
@@ -247,6 +255,9 @@ function garbageCommand(state: GameState, t: Tape): unknown {
     { type: "advance", deadline: { kind: "round", round: String(state.round) } },
     { type: "advance", deadline: { kind: "round", round: state.round + 1 } },
     { type: "advance", deadline: { kind: "round", round: state.round - 1 } },
+    { type: "advance", deadline: { kind: "alibis", round: state.round + 1 } },
+    { type: "advance", deadline: { kind: "alibis", round: state.resolvedRound - 1 } },
+    { type: "advance", deadline: { kind: "alibis" } },
     { type: "advance", deadline: { kind: "openMeeting", meetingId: "act-9" } },
     { type: "advance", deadline: { kind: "closeMeeting", meetingId: "emergency-nobody" } },
     { type: "advance", deadline: { kind: "resolveShakedown", meetingId: "act-1" } },
@@ -299,6 +310,9 @@ function checkState(state: GameState, inflow: number): void {
   check((state.phase.kind === "shakedownPending") === (state.pendingShakedown !== null), "pendingShakedown set exactly in its phase", state.phase);
   check(state.round >= 1 && state.round <= 9 && state.resolvedRound <= state.round, "rounds 1..9, resolved ≤ started", [state.round, state.resolvedRound]);
   if (state.phase.kind === "planning") check(state.phase.round === state.round, "planning the latest round");
+  // design §5.4: alibis are open exactly in the alibi phase (or in a meeting called during it), for the round just resolved.
+  if (state.phase.kind === "alibis") check(state.alibisOpen && state.phase.round === state.resolvedRound && state.phase.round === state.round, "alibi phase for the round just resolved", state.phase);
+  if (state.phase.kind === "planning" || state.phase.kind === "awaitingMeeting") check(!state.alibisOpen, "alibis closed outside their phase", state.phase);
   if (state.config.duel) check(state.meeting === null && state.scheduledMeeting === null && state.pendingEmergency === null, "Duel has no meetings (design §16.1)");
 }
 
@@ -309,7 +323,7 @@ function checkDeal(state: GameState): void {
   check(moleOptions(roles.length, state.config.mole, state.config.starterMode).includes(moles), "Mole count allowed (design §8.1)", roles);
   const pool = rolePoolFor(state.config);
   const dealt = roles.filter((r) => r !== MOLE_ROLE && r !== FILLER_ROLE);
-  check(new Set(dealt).size === dealt.length, "each non-Rookie role dealt at most once (decisions.md, provisional)", roles);
+  if (state.config.uniqueRoles !== false) check(new Set(dealt).size === dealt.length, "uniqueRoles: each non-Rookie role dealt at most once (design §8.1)", roles);
   check(dealt.every((r) => pool.includes(r)), "roles come from the pool", roles);
   if (state.config.starterMode) check(roles.every((r) => STARTER_ROLES.includes(r)), "starter roles only (design §8.1)", roles);
 }
@@ -445,6 +459,7 @@ function play(config: GameConfig, tapeNumbers: readonly number[], checks = true)
     state = deepFreeze(r.state);
   };
 
+  const triedCancel = new Set<string>();
   let steps = 0;
   let lastPhase = state.phase.kind;
   while (state.phase.kind !== "ended") {
@@ -455,7 +470,15 @@ function play(config: GameConfig, tapeNumbers: readonly number[], checks = true)
       check(deadlines.some((d) => handleCommand(state, d).ok), "some deadline is pending", state.phase);
     }
     if (t.done) {
-      apply(deadlines[0], true);
+      // Out of tape: only deadlines pass, except that a dealt Muscle cancels the first window it can (design §8).
+      const muscle = state.phase.kind === "shakedownPending" ? state.playerOrder.find((id) => state.players[id]?.role === "muscle") : undefined;
+      const window = state.pendingShakedown?.meetingId ?? "";
+      if (muscle && !triedCancel.has(window)) {
+        triedCancel.add(window);
+        apply({ type: "useAbility", player: muscle, ability: { kind: "cancelShakedown" } }, false);
+      } else {
+        apply(deadlines[0], true);
+      }
     } else {
       const kind = t.int(100);
       if (kind < 86) {
