@@ -47,6 +47,8 @@ Goal: run thousands of all-bot games at 2–12 players and use the results to tu
 - **M4** — more content (museum, casino, roles, events).
 
 ## Notes / half-finished work
+- M2 server: a Muscle shakedown window must always run its full server-set length (ending early on cancel leaks via timing). PR #12 review.
+- M2 plan: see `docs/m2-plan.md` (14 tasks, M2-1 … M2-14).
 - **RNG rule for every later task:** command handlers draw only through the `Draw` that `handleCommand` passes them; `withRng` then appends the reveal-only `rngAdvanced { words }` automatically (see decisions.md). Never read `state.rng` in a handler. `applyEvent` throws for event types not folded yet; each task adds its cases in `reduce.ts`.
 - New commands: add a handler to `HANDLERS` in `handle.ts`; return a reason string to reject. Unsupported commands are rejected today.
 - **M2 (server):** the server must set `command.player` from the authenticated session and never trust the client's value. Rejection reasons are role-specific ("your role can't pocket loot"), so a forged `player` could probe other players' roles. It must also send `advance { kind: "round", round }` with the round it scheduled.
