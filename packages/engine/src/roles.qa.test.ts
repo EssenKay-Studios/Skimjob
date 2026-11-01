@@ -11,6 +11,7 @@
 // 2. Edge cases per role: limits, wrong phase / wrong role, vote maths at ties
 //    and quorum edges in every vote mode, threshold and stash edges.
 import { describe, expect, it } from "vitest";
+import { handleThroughAlibis } from "./alibis.testkit";
 import { INFO_VOTE_ROLES, STARTER_ROLES } from "@skimjob/content";
 import type { GameConfig, GameEvent, GameState, PlayerId, PlayerState, PlayerView, VoteVisibility } from "./types";
 import { privateTo } from "./types";
@@ -55,7 +56,7 @@ type Cmd = unknown | ((s: GameState) => unknown);
 function run(state: GameState, ...commands: Cmd[]): GameState {
   return commands.reduce<GameState>((s, c) => {
     const cmd = typeof c === "function" ? c(s) : c;
-    const r = handleCommand(s, cmd);
+    const r = handleThroughAlibis(s, cmd);
     if (!r.ok) throw new Error(`rejected ${JSON.stringify(cmd)}: ${r.reason}`);
     return r.state;
   }, state);
@@ -63,7 +64,7 @@ function run(state: GameState, ...commands: Cmd[]): GameState {
 /** The rejection reason; the state (and so every view) is untouched. */
 function reason(state: GameState, command: unknown): string {
   const before = JSON.stringify(state);
-  const r = handleCommand(state, command);
+  const r = handleThroughAlibis(state, command);
   if (r.ok) throw new Error(`expected a rejection of ${JSON.stringify(command)}`);
   expect(JSON.stringify(state)).toBe(before);
   return r.reason;
@@ -92,7 +93,7 @@ const NO_WINDOW = { rolePool: [...STARTER_ROLES, ...INFO_VOTE_ROLES.filter((r) =
 // ------------------------------------------------------------------ 1. counterfactual leak pairs
 
 type Kind = "muscleDealt" | "muscleCancel" | "smoothDealt" | "hackerLoop" | "blackmail" | "snitchTarget";
-const LOOT: Record<string, number> = { vault: 6, office: 4, lobby: 2, depositBoxes: 5, tellerLine: 4, managersOffice: 5 };
+const LOOT: Record<string, number> = { vault: 6, office: 4, lobby: 2, depositBoxes: 5, tellerLine: 3, managersOffice: 4 };
 
 function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
@@ -202,7 +203,7 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
       mv(y, room, 0, { ability: { kind: "blackmail", target: next, role: "muscle" } }),
       mv(y, room, 0, { ability: { kind: "cancelShakedown" } }),
     ].map((c) => {
-      const r = handleCommand(s, c);
+      const r = handleThroughAlibis(s, c);
       return r.ok ? "ok" : r.reason;
     });
   };
@@ -238,12 +239,12 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
     if (over()) return;
     for (const c of a) {
       commands.push(c);
-      const r = handleCommand(A, c);
+      const r = handleThroughAlibis(A, c);
       if (!r.ok) throw new Error(`A rejected ${JSON.stringify(c)}: ${r.reason}`);
       A = r.state;
     }
     for (const c of b) {
-      const r = handleCommand(B, c);
+      const r = handleThroughAlibis(B, c);
       if (!r.ok) throw new Error(`B rejected ${JSON.stringify(c)}: ${r.reason}`);
       B = r.state;
     }
@@ -571,11 +572,12 @@ describe("QA Snitch: payout edges — design §8, §11.3", () => {
     expect(paid(s)).toEqual(pays ? [bonus] : []);
   });
 
-  it("a Fence target's safe doesn't count: stash below the threshold is clean, so nothing is paid", () => {
+  it("a Fence target's safe counts toward the clean check (owner answers, 1 Nov): stash 2 + safe 4 isn't clean, so the Snitch is paid", () => {
     let s = run(game(3, ["snitch", "fence"], NO_WINDOW, { p0: "p1" }), mv("p1", "vault", 6, { ability: { kind: "fenceSafe", amount: 4 } }), ROUND);
     s = closeAll(run(emergency(s, "p2"), vote("p0", "p1"), vote("p2", "p1")));
-    expect(ofType(s.log, "shakedownResolved")[0]).toMatchObject({ stashRevealed: 2, clean: true });
-    expect(paid(s)).toEqual([]);
+    expect(ofType(s.log, "shakedownResolved")[0]).toMatchObject({ stashRevealed: 2, taken: 2, clean: false, compensation: 0 });
+    expect(s.players.p1).toMatchObject({ stash: 0, safe: 4 });
+    expect(paid(s)).toEqual([bonus]);
   });
 
   it("paid each time, and paid when the window ends (not when the vote closes)", () => {

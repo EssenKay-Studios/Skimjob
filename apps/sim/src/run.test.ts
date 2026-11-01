@@ -33,7 +33,8 @@ describe("runBatch", () => {
       expect(runBatch(o).every((r) => r.rejections === 0)).toBe(true);
     }
     const moles = runBatch(options(["-n", "2", "-p", "9", "--mole", "on"]));
-    expect(moles[0]?.playerRecords.filter((p) => p.role === "mole")).toHaveLength(2);
+    // design §8.1 (owner answers, 1 Nov): "on" deals one Mole at 9–12 too.
+    expect(moles[0]?.playerRecords.filter((p) => p.role === "mole")).toHaveLength(1);
   });
 });
 

@@ -36,11 +36,21 @@ export function run(state: GameState, ...commands: unknown[]): GameState {
 
 export type Plan = Record<PlayerId, { room: string; pocket?: number; watch?: string; alibi?: string | null }>;
 
-/** One round: everyone's move, the deadline, then the alibis (default the truth; null = none posted). */
+/** Pass the alibi deadline if the last round's alibi window is still open (design §5.4). */
+export function closeAlibis(state: GameState): GameState {
+  return state.phase.kind === "alibis" ? run(state, { type: "advance", deadline: { kind: "alibis", round: state.phase.round } }) : state;
+}
+
+/**
+ * One round: everyone's move, the deadline, then the alibis (default the truth;
+ * null = none posted). The round's alibi window is left open (design §5.4);
+ * the next `round` closes it first.
+ */
 export function round(state: GameState, plan: Plan): GameState {
-  const r = state.phase.kind === "planning" ? state.phase.round : 0;
+  const open = closeAlibis(state);
+  const r = open.phase.kind === "planning" ? open.phase.round : 0;
   let s = run(
-    state,
+    open,
     ...Object.entries(plan).map(([player, m]) => ({
       type: "submitMove",
       player,

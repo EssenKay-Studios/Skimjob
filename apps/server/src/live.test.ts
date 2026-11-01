@@ -308,7 +308,9 @@ describe("pushing views", () => {
     const { id, humans } = await startGame(1, 2);
     const c = await Client.open(id, humans[0]!);
     await expect(app.live.system(id, { type: "advance", deadline: { kind: "round", round: 2 } })).rejects.toThrow(/refused/);
-    const after = await app.live.system(id, { type: "advance", deadline: { kind: "round", round: 1 } });
+    const resolved = await app.live.system(id, { type: "advance", deadline: { kind: "round", round: 1 } });
+    expect(resolved.phase).toMatchObject({ kind: "alibis", round: 1 }); // design §5.4
+    const after = await app.live.system(id, { type: "advance", deadline: { kind: "alibis", round: 1 } });
     expect(after.phase).toMatchObject({ kind: "planning", round: 2 });
     for (const p of after.playerOrder.filter((x) => x !== humans[0]!.player)) expect(after.moves[p]).toBeDefined();
     await c.barrier();
@@ -322,10 +324,12 @@ function nextDeadline(state: GameState): Command[] {
   const phase = state.phase;
   if (phase.kind === "meeting") return [{ type: "advance", deadline: { kind: "closeMeeting", meetingId: phase.meetingId } }];
   if (phase.kind === "shakedownPending") return [{ type: "advance", deadline: { kind: "resolveShakedown", meetingId: phase.meetingId } }];
-  if (state.pendingEmergency && (phase.kind === "planning" || phase.kind === "awaitingMeeting")) {
+  if (state.pendingEmergency && (phase.kind === "planning" || phase.kind === "alibis" || phase.kind === "awaitingMeeting")) {
     return [{ type: "advance", deadline: { kind: "openMeeting", meetingId: state.pendingEmergency.meetingId } }];
   }
   if (phase.kind === "planning") return [{ type: "advance", deadline: { kind: "round", round: phase.round } }];
+  // design §5.4: the round's alibi window closes before the next round's planning.
+  if (phase.kind === "alibis") return [{ type: "advance", deadline: { kind: "alibis", round: phase.round } }];
   if (phase.kind === "awaitingMeeting") {
     const schedule: Command[] = state.scheduledMeeting ? [] : [{ type: "scheduleMeeting", act: phase.act, slot: `server-act-${phase.act}` }];
     return [...schedule, { type: "advance", deadline: { kind: "openMeeting", meetingId: state.scheduledMeeting?.meetingId ?? `act-${phase.act}` } }];

@@ -4,6 +4,7 @@
 // the missed-checkpoint raid; ballot visibility per mode; determinism.
 // design §11, §4, §3
 import { STARTER_ROLES } from "@skimjob/content";
+import { handleThroughAlibis } from "./alibis.testkit";
 import { describe, expect, it } from "vitest";
 import type { GameConfig, GameEvent, GameState, VoteVisibility } from "./types";
 import { canSee } from "./types";
@@ -37,14 +38,14 @@ function game(players: number, roles: string[] = [], mode?: VoteVisibility): Gam
 type Cmd = unknown | ((s: GameState) => unknown);
 function run(state: GameState, ...commands: Cmd[]): GameState {
   return commands.reduce<GameState>((s, c) => {
-    const r = handleCommand(s, typeof c === "function" ? c(s) : c);
+    const r = handleThroughAlibis(s, typeof c === "function" ? c(s) : c);
     if (!r.ok) throw new Error(`rejected: ${r.reason}`);
     return r.state;
   }, state);
 }
 function reason(state: GameState, command: unknown): string {
   const before = JSON.stringify(state);
-  const r = handleCommand(state, command);
+  const r = handleThroughAlibis(state, command);
   if (r.ok) throw new Error("expected a rejection");
   expect(JSON.stringify(state)).toBe(before);
   return r.reason;
@@ -185,13 +186,16 @@ describe("QA: quorum, ties and absent players at the boundaries — design §11.
     expect(LAST(run(s, vote("p1", "p0"), vote("p0", "p1"), CLOSE), "meetingClosed")?.result).toEqual({ kind: "noMajority" });
   });
 
-  it("12 players: 6 vs 6 between two targets and 6 shakedown vs 6 skip are both no majority; 7 of 12 passes", () => {
+  it("12 players: a 6 vs 6 tie between two targets is no shakedown; 6 shakedown vs 6 skip is none either (skip must be outvoted, design §11.2); 7 of 12 passes", () => {
     const s = toActMeeting(game(12));
     const crew = ids(12);
     const tie = run(s, ...crew.map((p, i) => vote(p, i < 6 ? "p11" : "p0")), CLOSE);
     expect(LAST(tie, "meetingClosed")).toMatchObject({ result: { kind: "noMajority" }, tally: { skip: 0, targets: { p0: 6, p11: 6 } } });
     const vsSkip = run(s, ...crew.map((p, i) => vote(p, i < 6 ? null : "p0")), CLOSE);
     expect(LAST(vsSkip, "meetingClosed")?.result).toEqual({ kind: "noMajority" });
+    // 4 / 4 / 4 between three targets: each has ⅓, but it's a tie.
+    const three = run(s, ...crew.map((p, i) => vote(p, i < 4 ? "p11" : i < 8 ? "p0" : "p1")), CLOSE);
+    expect(LAST(three, "meetingClosed")?.result).toEqual({ kind: "noMajority" });
     const seven = run(s, ...crew.map((p, i) => vote(p, i < 5 ? null : "p0")), CLOSE);
     expect(LAST(seven, "meetingClosed")?.result).toEqual({ kind: "shakedown", target: "p0" });
   });
@@ -217,9 +221,11 @@ describe("QA: emergency meetings — design §11.1", () => {
   });
 
   it("during the notice period: moves, round deadlines, alibis, proposals and sealing go on; a second call is refused", () => {
-    let s = run(game(4), emergency("p3"));
-    s = run(s, mv("p0", "vault", 1), ROUND, { type: "postAlibi", player: "p0", room: "lobby" }, propose("p1", "x"), seal("p2", "p3"));
-    expect(s.phase).toEqual({ kind: "planning", round: 2 });
+    let s = run(game(4), emergency("p3"), mv("p0", "vault", 1));
+    const resolved = handleCommand(s, ROUND(s)); // stays in round 1's alibi window (design §5.4)
+    if (!resolved.ok) throw new Error(resolved.reason);
+    s = run(resolved.state, { type: "postAlibi", player: "p0", room: "lobby" }, propose("p1", "x"), seal("p2", "p3"));
+    expect(s.phase).toEqual({ kind: "alibis", round: 1 });
     expect(reason(s, emergency("p0"))).toMatch(/already been called/);
     s = run(s, open("emergency-p3"));
     expect(s.meeting?.votes).toEqual({ p2: { kind: "shakedown", target: "p3" } });

@@ -6,6 +6,7 @@ import { canSee } from "./types";
 import { createGame } from "./setup";
 import { replay } from "./reduce";
 import { handleCommand } from "./handle";
+import { viewFor } from "./view";
 
 const cfg: GameConfig = {
   seed: "alibi-seed",
@@ -20,6 +21,7 @@ const cfg: GameConfig = {
 
 const alibi = (player: string, room: unknown): Command => ({ type: "postAlibi", player, room }) as Command;
 const roundDeadline = (round: unknown): Command => ({ type: "advance", deadline: { kind: "round", round } }) as Command;
+const alibiDeadline = (round: unknown): Command => ({ type: "advance", deadline: { kind: "alibis", round } }) as Command;
 
 function ok(state: GameState, command: Command): { state: GameState; events: readonly GameEvent[] } {
   const r = handleCommand(state, command);
@@ -55,16 +57,56 @@ describe("alibis — design §5.4", () => {
     let s = run(afterRound1, alibi("p0", "office"));
     expect(reason(s, alibi("p0", "lobby"))).toMatch(/already posted an alibi for round 1/);
     s = run(s, alibi("p1", "lobby")); // others still can
-    // Still round 1's alibi while round 2 is being planned; round 2's deadline opens round 2's.
-    s = run(s, roundDeadline(2));
+    s = run(s, alibiDeadline(1), roundDeadline(2));
     expect(s.alibisPosted).toEqual([]);
     expect(ok(s, alibi("p0", "lobby")).events[0]).toMatchObject({ round: 2 });
   });
 
-  it("alibis can be posted while the act's meeting is awaited (after round 3)", () => {
-    const s = run(afterRound1, roundDeadline(2), roundDeadline(3));
-    expect(s.phase.kind).toBe("awaitingMeeting");
+  it("a round's alibis close at its alibi deadline, before the next round's planning (owner answers, 1 Nov)", () => {
+    expect(afterRound1.phase).toEqual({ kind: "alibis", round: 1 });
+    // No moves for round 2 until the alibi deadline has passed.
+    expect(reason(afterRound1, { type: "submitMove", player: "p0", move: { room: "lobby", pocket: 0 } } as Command)).toMatch(/while a round is being planned/);
+    expect(reason(afterRound1, roundDeadline(2))).toMatch(/no round deadline is pending/);
+    const { state, events } = ok(afterRound1, alibiDeadline(1));
+    expect(events.map((e) => e.type)).toEqual(["alibisClosed", "roundStarted"]);
+    expect(events[0]).toEqual({ type: "alibisClosed", visibility: { kind: "public" }, round: 1 });
+    expect(state.phase).toEqual({ kind: "planning", round: 2 });
+    expect(reason(state, alibi("p2", "vault"))).toMatch(/alibis for round 1 are closed/);
+    expect(replay(cfg, state.log)).toEqual(state);
+  });
+
+  it("the alibi deadline names its round: a retried, stale or future one is refused", () => {
+    const s = run(afterRound1, alibiDeadline(1));
+    expect(reason(s, alibiDeadline(1))).toMatch(/no alibi deadline is pending/);
+    expect(reason(afterRound1, alibiDeadline(2))).toMatch(/round 2 alibi deadline is not pending/);
+    expect(handleCommand(afterRound1, alibiDeadline("1")).ok).toBe(false);
+  });
+
+  it("after an act's last round, alibis come before the act's meeting is awaited", () => {
+    let s = run(afterRound1, alibiDeadline(1), roundDeadline(2), alibiDeadline(2), roundDeadline(3));
+    expect(s.phase).toEqual({ kind: "alibis", round: 3 });
     expect(ok(s, alibi("p2", "rooftop")).events[0]).toMatchObject({ round: 3, room: "rooftop" });
+    s = run(s, alibiDeadline(3));
+    expect(s.phase).toEqual({ kind: "awaitingMeeting", act: 1 });
+    expect(reason(s, alibi("p2", "rooftop"))).toMatch(/closed/);
+  });
+
+  it("an emergency meeting can interrupt the alibi window; the deadline waits and alibis can still be posted", () => {
+    let s = run(afterRound1, { type: "callEmergency", player: "p0" } as Command, { type: "advance", deadline: { kind: "openMeeting", meetingId: "emergency-p0" } } as Command);
+    expect(s.phase.kind).toBe("meeting");
+    expect(reason(s, alibiDeadline(1))).toMatch(/paused while a meeting is open/);
+    s = run(s, alibi("p1", "office"), { type: "advance", deadline: { kind: "closeMeeting", meetingId: "emergency-p0" } } as Command);
+    expect(s.phase).toEqual({ kind: "alibis", round: 1 });
+    expect(run(s, alibiDeadline(1)).phase).toEqual({ kind: "planning", round: 2 });
+  });
+
+  it("a round that ends the game leaves no alibi window open (design §5.4, PR #21 QA)", () => {
+    let s = createGame({ ...cfg, contentOverrides: { heat: { perRound: 100 } } });
+    s = run(s, roundDeadline(1));
+    expect(s.phase.kind).toBe("ended");
+    expect(s.alibisOpen).toBe(false);
+    expect(viewFor(s, "p0").alibiRound).toBeNull();
+    expect(replay(s.config, s.log)).toEqual(s);
   });
 
   it("is refused before any round has resolved", () => {
@@ -91,11 +133,11 @@ describe("alibis — design §5.4", () => {
 
 describe("the round deadline names its round — design §5, task 4 review", () => {
   it("a retried or late deadline is refused instead of resolving the next round early", () => {
-    const s = run(createGame(cfg), roundDeadline(1));
+    const s = run(createGame(cfg), roundDeadline(1), alibiDeadline(1));
     expect(s.phase).toEqual({ kind: "planning", round: 2 });
     expect(reason(s, roundDeadline(1))).toMatch(/round 1 deadline is not pending \(round 2 is\)/);
     expect(handleCommand(s, roundDeadline(3)).ok).toBe(false);
-    expect(run(s, roundDeadline(2)).phase).toEqual({ kind: "planning", round: 3 });
+    expect(run(s, roundDeadline(2)).phase).toEqual({ kind: "alibis", round: 2 });
   });
 
   for (const [name, round] of [["missing", undefined], ["string", "1"], ["fractional", 1.5]] as const) {

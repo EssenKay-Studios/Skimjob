@@ -1,7 +1,8 @@
 // Crew meetings and votes: scheduling, emergency meetings, ballots and their
 // visibility, sealed votes, quorum and majority, shakedowns, the checkpoint
 // order and the move to the next act. design §11, §4, §3
-import { STARTER_ROLES } from "@skimjob/content";
+import { BANK_JOB, STARTER_ROLES } from "@skimjob/content";
+import { handleThroughAlibis } from "./alibis.testkit";
 import { describe, expect, it } from "vitest";
 import type { GameConfig, GameEvent, GameState, VoteVisibility } from "./types";
 import { canSee } from "./types";
@@ -39,14 +40,14 @@ function game(players: number, roles: string[] = [], mode?: VoteVisibility): Gam
 type Cmd = unknown | ((s: GameState) => unknown);
 function run(state: GameState, ...commands: Cmd[]): GameState {
   return commands.reduce<GameState>((s, c) => {
-    const r = handleCommand(s, typeof c === "function" ? c(s) : c);
+    const r = handleThroughAlibis(s, typeof c === "function" ? c(s) : c);
     if (!r.ok) throw new Error(`rejected: ${r.reason}`);
     return r.state;
   }, state);
 }
 function reason(state: GameState, command: unknown): string {
   const before = JSON.stringify(state);
-  const r = handleCommand(state, command);
+  const r = handleThroughAlibis(state, command);
   if (r.ok) throw new Error("expected a rejection");
   expect(JSON.stringify(state)).toBe(before);
   return r.reason;
@@ -172,7 +173,7 @@ describe("opening and closing the act's meeting — design §11.1, §4.1, §11.4
   it("the regular meeting opens only after the act's last round has resolved (provisional)", () => {
     let s = run(game(3), sched(1));
     for (const round of [1, 2]) {
-      expect(reason(s, open("act-1"))).toMatch(/opens after round 3 resolves/);
+      expect(reason(s, open("act-1"))).toMatch(/opens after round 3 and its alibi deadline/);
       s = run(s, ROUND);
       expect(s.round).toBe(round + 1);
     }
@@ -380,6 +381,22 @@ describe("quorum and majority — design §11.2", () => {
     expect(meetingResult(crew, cast, skip, targets)).toEqual(expected);
   });
 
+  // design §11.2 (owner answers, 1 Nov): from 9 players the top target needs only ⅓ of the votes cast, alone on top.
+  it.each([
+    ["9p: 3 of 9 is a third", 9, 9, 2, m([["a", 3], ["b", 2], ["c", 2]]), 9, { kind: "shakedown", target: "a" }],
+    ["9p: 2 of 9 is under a third", 9, 9, 3, m([["a", 2], ["b", 1], ["c", 1], ["d", 1], ["e", 1]]), 9, { kind: "noMajority" }],
+    ["12p: 4 of 12 with a 4–4 tie is no shakedown", 12, 12, 4, m([["a", 4], ["b", 4]]), 12, { kind: "noMajority" }],
+    ["12p: 4 of 12, the rest scattered", 12, 12, 3, m([["a", 4], ["b", 3], ["c", 2]]), 12, { kind: "shakedown", target: "a" }],
+    ["12p: a skip majority still skips", 12, 12, 7, m([["a", 4], ["b", 1]]), 12, { kind: "skipped" }],
+    ["12p: quorum unchanged", 12, 5, 0, m([["a", 5]]), 5, { kind: "noQuorum" }],
+    // Weight counts: 3 of 10 is under ⅓, but a Smooth talker's double ballot makes it 4 of 11.
+    ["10p: 3 of 10 is under a third", 10, 10, 3, m([["a", 3], ["b", 2], ["c", 2]]), 10, { kind: "noMajority" }],
+    ["10p: Smooth talker weight counts toward the third", 10, 10, 3, m([["a", 4], ["b", 2], ["c", 2]]), 11, { kind: "shakedown", target: "a" }],
+    ["8p: below 9 a plurality isn't enough", 8, 8, 2, m([["a", 3], ["b", 2], ["c", 1]]), 8, { kind: "noMajority" }],
+  ] as const)("plurality: %s", (_name, crew, cast, skip, targets, weight, expected) => {
+    expect(meetingResult(crew, cast, skip, targets, weight, BANK_JOB.shakedown)).toEqual(expected);
+  });
+
   it("no shakedown without a quorum, even if every vote names the same player", () => {
     const s = run(act1Meeting(), vote("p1", "p0"), CLOSE);
     expect(LAST(s, "meetingClosed")).toMatchObject({ result: { kind: "noQuorum" }, tally: { skip: 0, targets: { p0: 1 } } });
@@ -412,12 +429,20 @@ describe("shakedowns — design §11.3", () => {
     expect(after.haul).toBe(22);
   });
 
-  it("the Fence safe is untouched and not shown; a small stash outside it is clean", () => {
+  it("the Fence safe is untouched and not shown, but counts toward the clean check: a full safe isn't clean (owner answers, 1 Nov)", () => {
     const s = toMeeting(run(game(3, ["fence"]), mv("p0", "vault", 6, { ability: { kind: "fenceSafe", amount: 5 } })));
     expect(s.players.p0).toMatchObject({ stash: 1, safe: 5 });
     const after = run(s, vote("p1", "p0"), vote("p2", "p0"), CLOSE);
+    expect(LAST(after, "shakedownResolved")).toMatchObject({ stashRevealed: 1, taken: 1, clean: false, compensation: 0 });
+    expect(after.players.p0).toMatchObject({ stash: 0, safe: 5 });
+  });
+
+  it("a Fence whose stash and safe together are below the threshold is clean and compensated", () => {
+    const s = toMeeting(run(game(3, ["fence"]), mv("p0", "lobby", 2, { ability: { kind: "fenceSafe", amount: 1 } })));
+    expect(s.players.p0).toMatchObject({ stash: 1, safe: 1 });
+    const after = run(s, vote("p1", "p0"), vote("p2", "p0"), CLOSE);
     expect(LAST(after, "shakedownResolved")).toMatchObject({ stashRevealed: 1, taken: 1, clean: true, compensation: 5 });
-    expect(after.players.p0).toMatchObject({ stash: 5, safe: 5 });
+    expect(after.players.p0).toMatchObject({ stash: 5, safe: 1 });
   });
 
   it("clean below 3 × the act: the crew pays the target 5 × the act out of the Haul", () => {

@@ -191,6 +191,7 @@ describe("views are copies — design §17.3 (bots only get viewFor), task 8 rev
       { type: "submitMove", player: "ana", move: { room: "security", pocket: 0, watch: "vault" } },
       { type: "advance", deadline: { kind: "round", round: 1 } },
       { type: "postAlibi", player: "ana", room: "office" },
+      { type: "advance", deadline: { kind: "alibis", round: 1 } },
       { type: "proposeMeeting", player: "ana", slot: "fri" },
       { type: "sealVote", player: "ana", vote: { kind: "shakedown", target: "ben" } },
       { type: "submitMove", player: "ana", move: { room: "office", pocket: 1 } },

@@ -42,6 +42,8 @@ Goal: run thousands of all-bot games at 2–12 players and use the results to tu
 ### Next up (in order)
 - M1 done; M2 per `docs/m2-plan.md`.
 
+- [x] **Owner answers (1 Nov)** — content 0.8.0: alibi phase between rounds (`phase: alibis`, `advance { kind: "alibis", round }`, public `alibisClosed`, view `alibiRound`); ⅓-plurality shakedowns at 9–12; Insider from 5 players; Mole "on" = 1 at 9–12 ("maybe" = 0 or 1 from 5); event-card Heat × min(1, crew ÷ 5); the clean check counts the Fence safe; cards repeat; `GameConfig.uniqueRoles` (default true). Teller line 3, Manager's office 4. Design §5.4, §6.2, §8.1, §10, §11.2, §11.3, §15; decisions.md "Owner answers, 1 Nov".
+
 ### Later in M1
 12. [x] **Info & vote roles** — done (see above).
 13. [x] **Win-condition roles** — done (see above).
@@ -86,6 +88,8 @@ Plan and acceptance criteria: `docs/m2-plan.md`. Runs alongside M1 task 16 (bala
 
 ## Notes / half-finished work
 - **Test suite (test/integration-suite):** engine property tests (`invariants.prop.test.ts`, fast-check, seeded), server scenario stories (`scenarios.int.test.ts`), CI (`.github/workflows/ci.yml`: typecheck, tests, web e2e, `scripts/sim-smoke.sh`). See `docs/testing.md`; every bug fix adds a scenario or invariant. Open bug pinned with `it.fails`: `handleCommand` throws (instead of refusing) on a value with no string form such as JSON `{"toString":null}` in `room` / `proposalId` (the server catches it and refuses). M2-4 should replace the scenarios' stand-in `nextDeadline` with the real scheduler and fake clock.
+- **Alibi phase (owner answers, 1 Nov):** every round that doesn't end the game resolves into `phase: { kind: "alibis", round }`; moves for the next round are refused until the server sends `advance { kind: "alibis", round }` (named, refused if repeated or stale; refused while a meeting is open, re-send after). After an act's last round it leads to `awaitingMeeting` (Duel: call-outs + checkpoint). M2-4 must schedule this deadline (short) after each round; M2-3's bots post alibis on `view.alibiRound !== null`. Scripted tests that aren't about alibis use `handleThroughAlibis` (`packages/engine/src/alibis.testkit.ts`).
+- **`uniqueRoles` (owner answers, 1 Nov):** a `GameConfig` field (absent = true). The lobby's `LobbySettings` (M2-2) doesn't offer it yet; add it with the other host settings (M2-5b/M2-13).
 - **Web (M2-5a, done):** frames are drawn by `<SketchFrame>` / `<FrameArt>` (`apps/web/src/components/`); give every frame a stable `seed` so it looks the same on every render. Fill/ink come from `--fr-fill` / `--fr-ink`. `<SketchDefs>` must stay mounted once (App). The landing buttons only toast for now: M2-5b wires them to the lobby API. The bank doodle on the landing is placeholder art for M2-9. Playwright projects run at 390×844 and 1280×800 on port 5179; `e2e/responsive*.spec.ts` set their own viewports (360–1280, with and without touch) and guard the web-first rules (no overflow, ≥44 px targets, gutters, contrast). Add every new screen to their route lists.
 - M2 server: a Muscle shakedown window must always run its full server-set length (ending early on cancel leaks via timing). PR #12 review.
 - M2 plan: see `docs/m2-plan.md` (14 tasks, M2-1 … M2-14).
@@ -113,39 +117,27 @@ Plan and acceptance criteria: `docs/m2-plan.md`. Runs alongside M1 task 16 (bala
 
 - **Events deck (task 14, done):** a new card is a `EventDef` in `packages/content/src/events.ts`; a new effect *kind* needs one function in `deck.ts` (step-1 player effects go in `cardEffects`, round-number effects in `roundJob`/`cardHeat`). Any new place that starts a round must use `startRound(state, round, draw)` (it flips the card). Event numbers are in `ContentOverrides.events` (task 16). Balance (task 16): run the sim with `--events`; a quick 200-game run raised the Heat-bust share of failures at 4–6p from 8/12% to 47/30% (Police patrol, Shift change). Bots ignore Audit reports, Inside tips and offers beyond a coin flip.
 
-- **Duel mode (task 15, done):** the act's end in Duel is `endOfDuelAct` (`duel.ts`), called by `resolveRound` after the act's last round; any new end-of-act step must go there as well as in `afterVote` (both use `checkpoint()` in `meeting.ts`). M2: the server never sends `openMeeting`/`scheduleMeeting` in Duel games. Balance (task 16): the sim doesn't report call-outs yet (count, caught share, loot moved); bots call out only on a visible shortfall.
+- **Duel mode (task 15, done):** the act's end in Duel is `endOfDuelAct` (`duel.ts`), called by `closeAlibis` (`round.ts`) when the act's last round's alibis close; any new end-of-act step must go there as well as in `afterVote` (both use `checkpoint()` in `meeting.ts`). M2: the server never sends `openMeeting`/`scheduleMeeting` in Duel games. Balance (task 16): the sim doesn't report call-outs yet (count, caught share, loot moved); bots call out only on a visible shortfall.
 
 ## Questions for Karthik
 - M2 lobby: OK that one invite link per game works for anyone until the game starts (then 410), the host can't leave the lobby, and new bots default to the Opportunist personality? (provisional, decisions.md)
 - Web: OK that the browser calls the server under `/api/...` (the dev proxy strips it), and with the landing copy and "skimjob" wordmark (coin over the i, mask mark)? See `/dev/gallery` and decisions.md (M2-5a).
-- Role deal: should each non-Rookie role be dealt at most once, with Rookies filling the rest (current, provisional), or can roles repeat in big crews?
-- Mole at 9–12 players: is "off" allowed, and does "maybe" mean 1-or-2 (current) or 0/1/2? "On" currently deals 2.
 - Heat: OK to round each round's change to a whole number (halves up) and floor Heat at 0? (provisional, decisions.md)
 - Fence: may the Fence put this round's pocket straight into the safe (current, provisional), or only loot already in the stash?
-- Alibis: should the alibi for round N close when round N+1 starts (forcing it before planning) rather than when N+1 resolves (current, provisional)? And may an alibi name only rooms in play (current)?
+- Alibis: may an alibi name only rooms in play (current)?
 - Meetings: OK that the act's meeting opens only after its last round, that a sealed vote is used by the next meeting of either kind (no withdrawing), that you can't vote for yourself, and that clean-target compensation is capped at the Haul? (all provisional, decisions.md)
-- A Fence's clean check ignores the safe, so a Fence can hide loot and still be paid compensation as clean — keep this (current, provisional) or count the safe toward the clean check?
 - End of game: OK to keep scores to one decimal (Rookie 9 → 10.8), let fully tied leaders share the win, and show the stash ranking on a failed heist as a loss? (all provisional, decisions.md)
 - Opportunist bot: moves are simultaneous, so it can't know beforehand that it will be alone; OK that it pockets at a medium rate and only lies about it when nobody turned out to be in its room? (provisional, decisions.md)
 - Simulator metrics: OK with the provisional definitions (pocketing bands 10%/40% of loot, shakedown accuracy = not clean, comeback = sole Act 1 leader wins a successful heist, decided early = sole Act 2 leader wins a successful heist with a lead ≥ half the max Act 3 gain)? (decisions.md)
 - Balance (2 players): no shakedown can pass with 2 voters (no self-votes), so all-bot 2-player games succeed 45% with half the failures from Heat. OK to treat 2 players as bots-or-Duel only and not tune for it? (docs/balance/balance-1.md)
-- Balance (4 players): the Insider can't pocket and is always dealt at 4 players, which adds ~12 pp of success (77% at 4p vs 63% at 3p). Deal the Insider only from 5 players, or accept? (2–4 players share every number, so content can't separate them.)
-- Balance (10–12 players): only ~0.4 shakedowns pass per game (votes scatter; a shakedown needs more than half the votes cast), and in a gentler crew one heavy pocketer wins ~50%. Keep the majority rule (humans will coordinate in chat), or let a plurality pass in big crews?
-- Balance (Heat): Heat busts are 51% of failures at 2p but 0% at 10–12p, because big crews average out. Numbers can't flatten this; OK to rely on the events deck for Heat swings?
-- Balance (Lookout): its extra room helps the crew, not its own score, so it wins 12 pp below fair share at 3p (−4 overall). Give it a small personal edge, or accept?
 - Hacker: should a camera loop also blind the Lookout's extra room, or only Security (current, provisional)?
 - Smooth talker: OK that the public tally counts one per ballot (so it never names the Smooth talker next to public ballots) while the result counts the double vote (current, provisional)?
-- Muscle: may the Muscle cancel their own shakedown (current, provisional)? And OK that the shakedown window opens after every passed shakedown whenever the Muscle is in the role pool (so it never shows one was dealt), adding a short wait to those games?
-- Snitch: "holding more than the clean threshold" read as "not clean" (stash ≥ 3 × act), paid every time it happens (current, provisional) — or strictly above, or once per game?
-- Blackmailer: should the victim be told they were blackmailed (current: privately, amount only, not by whom)?
+- Muscle: OK that the shakedown window opens after every passed shakedown whenever the Muscle is in the role pool (so it never shows one was dealt), adding a short wait to those games?
+- Snitch: "holding more than the clean threshold" read as "not clean" (stash + safe ≥ 3 × act), paid every time it happens (current, provisional) — or strictly above, or once per game?
 - Mole tip-off: a move power at most once per act, added to that round's Heat inside the public total (current, provisional) — or usable at any time as its own hidden Heat bump?
 - Driver: on a Heat failure, does "the biggest stash" mean the top of the whole crew including Moles (current, provisional), or only among non-Moles?
-- Events deck: is "no card repeats in a game" right (current, provisional), or should every round draw from the full deck?
 - Double-cross: do the swapped roles take effect for the round being resolved (current) or from the next round? And may a Mole be offered a swap (current: yes; the other Mole is told its ally changed)?
 - Raid rumour: compare stashes without the Fence safe, break ties at random, and lose the 3 to the cops (current, provisional)? Power cut: should the Server room still count pockets (current)?
-- Duel call-outs: made any time during the act, kept private and settled at the act's end over the whole act (current, provisional) — or public when made, or settled at once over the rounds so far? And may a call take more than the stash holds (current: capped; the Fence safe is never touched), and a wrong call cost more than the caller's stash (current: capped)?
+- Duel call-outs: may a call take more than the stash holds (current: capped; the Fence safe is never touched), and a wrong call cost more than the caller's stash (current: capped)?
 - Duel roles: OK to leave the meeting-only roles (Smooth talker, Muscle, Snitch) out of the deal in Duel mode (current, provisional)?
-- Double-cross: §10 says both "secretly" accept. Should the answers stay hidden even at the end-of-game reveal (like Secret-mode ballots), or show at the reveal like other private events (current)?
-- Default config (balance pass 2): OK that a host's defaults are events on, Mole "maybe" and the full role pool (provisional, decisions.md)? Design §15 names the settings but not the defaults.
-- Mole (balance pass 2): with events off the Mole still wins 43–59% at 6–12p (30–41% with events on). Deal one Mole at 9–12 when "on" (today 2), let a shakedown that catches a Mole cancel its tip-offs, or accept? (docs/balance/balance-2.md)
-- Heat at 2–4 players (balance pass 2): Heat busts are 30–53% of failures with events on, because one Vault visitor is a third of a 3-player crew. Scale event Heat by crew size, or accept?
+- Heat at 3–4 players: with event Heat scaled, Heat busts are still 45% / 34% of failures (40% / 22% even with card Heat at 0): the rest is Vault pressure in small crews and the Shift change lure. Accept, or tune further? 4p succeeds 76% (target 55–70%).

@@ -120,6 +120,7 @@ The strongest cheating move is to loot the Vault, pocket the difference, and cla
 ### 5.4 Alibis
 
 - After a round resolves, each player can post one **Alibi** ("I was in the Office") to the ledger.
+- Alibis are posted **before the next round's planning**: a short alibi window follows every round. When its deadline passes (the server times it), the round's alibis close and the next round starts; after an act's last round, the act's meeting comes next. An emergency meeting may interrupt the window, which then resumes. *(Owner answers, 1 Nov.)*
 - Alibis are optional and can be lies. Posting none is suspicious in itself.
 - Alibis are structured data, so both bots and the auto-recap can reason about them.
 
@@ -145,7 +146,7 @@ More rooms keep the number of people per room, and so the number of witnesses, r
 |---|---|
 | 2–4 | Core only (5 rooms) |
 | 5–8 | **Deposit boxes**: 5 loot, holds 2 people (if more than 2 go, everyone there gets 3), adds half the vault pressure. **Server room**: 0 loot, learn *how many* players pocketed loot this round, but not who. |
-| 9–12 | Everything above, plus **Teller line**: 4 loot. **Manager's office**: 5 loot, adds half the vault pressure. |
+| 9–12 | Everything above, plus **Teller line**: 3 loot. **Manager's office**: 4 loot, adds half the vault pressure. *(1 Nov: were 4 and 5; see decisions.md.)* |
 
 ---
 
@@ -161,7 +162,7 @@ Heat runs from 0 to 100. If it reaches 100, the cops raid and the heist fails.
 | Manager's office | +10 × (visitors ÷ crew size) |
 | Rooftop | −20 × (Rooftop visitors ÷ crew size) |
 | Missed checkpoint | +15 |
-| Events / Mole tip-off | Varies |
+| Events / Mole tip-off | Varies (event Heat × min(1, crew ÷ 5) for crews of 2–4, §10) |
 
 Scaling by fractions of the crew means a crew of 12 and a crew of 3 feel the same pressure when the same *share* of players goes to the Vault.
 
@@ -196,16 +197,18 @@ Every player is dealt **one secret role** at the start of the game. Roles are de
 - **Smooth talker:** the double vote counts toward the majority (§11.2), not toward quorum, which counts voters. The public tally counts one per ballot, so it never points at the Smooth talker; only a result the plain count can't explain shows that one was on the winning side. A sealed vote counts double too.
 - **Muscle:** when a vote passes a shakedown, a short **shakedown window** opens before it is applied (§11.3). The Muscle can cancel it then, including a shakedown of themselves. The cancel stays private until the window ends; the ledger then says the shakedown was cancelled, not who cancelled it. The window opens after every passed shakedown whenever the Muscle is in the game's role pool, dealt or not, so it never shows that a Muscle is in the crew.
 - **Blackmailer:** the guess is part of the Blackmailer's move. It resolves after that round's splits and Fence safe moves, takes at most what the target's stash holds and never touches the safe. The target is told privately how much was taken, but not by whom; a wrong guess, or a right one on an empty stash, tells the target nothing.
-- **Snitch:** the target is drawn at random from the other players at setup. "Holding more than the clean threshold" means the shakedown was **not clean** (stash at least 3 × the act number). The +10 goes into the Snitch's stash, each time it happens, and a cancelled shakedown pays nothing.
+- **Snitch:** the target is drawn at random from the other players at setup. "Holding more than the clean threshold" means the shakedown was **not clean** (stash plus any Fence safe at least 3 × the act number). The +10 goes into the Snitch's stash, each time it happens, and a cancelled shakedown pays nothing.
 
 *Win-condition roles (provisional, task 13):*
 - **Driver:** wins a successful heist like anyone else. On a Heat failure it wins if it tops the whole crew's ranking (score, then the §3 tie-breaks), Moles included. A missed final target gives it nothing.
-- **Mole:** wins any failed heist (Heat or target), never a successful one. The tip-off is part of the Mole's move, at most once per act: +6 Heat (balance pass 2; was +10) is added to that round's Heat (after rounding, before the cap), so it only shows as part of the round's public Heat change. Only the Mole is told it happened. Two Moles are told privately at the start who the other is.
+- **Mole:** wins any failed heist (Heat or target), never a successful one. The tip-off is part of the Mole's move, at most once per act: +6 Heat (balance pass 2; was +10) is added to that round's Heat (after rounding, before the cap), so it only shows as part of the round's public Heat change. Only the Mole is told it happened. If content ever deals two Moles, they are told privately at the start who the other is.
 
 ### 8.1 Dealing roles
 
 - The roles in play are drawn from the pool according to player count and the host's settings.
-- **Mole availability:** none at 2–4 players; optional at 5–8, with a "maybe a Mole" setting where the chance is 50%; at 9–12, 1 or 2 Moles. When there are two, they know each other.
+- **Mole availability:** none at 2–4 players. From 5 players the host's Mole setting decides: *off* deals none, *on* deals **one** Mole (also at 9–12), *maybe* deals one half the time. *(Owner answers, 1 Nov: was 2 Moles at 9–12.)*
+- **Insider:** dealt only in crews of 5 or more (a crew of 2–4 can't spare a player who never pockets).
+- **Unique roles** (host setting, default on): each special role is dealt at most once and Rookies fill the remaining seats. Off: every seat is dealt from the pool with replacement, so roles may repeat. The Mole always follows the Mole setting, never the pool.
 - **Starter mode** (first game in a group): only Rookie, Lookout, Insider and Fence are used, with no Mole and no events.
 
 ### 8.2 Shakedowns and roles
@@ -245,7 +248,8 @@ From round 2 onward, one event card is flipped at the start of each round and sh
 | **Double-cross** | Two random players are offered a role swap. It happens only if both secretly accept. |
 
 *Events deck (provisional, task 14):*
-- The deck holds one of each card; each flip draws from the cards not yet flipped, so no card repeats in a game (8 of the 10 are seen). Events are a host setting (§15), off in starter mode.
+- The deck holds one of each card; every flip from round 2 draws from the **full deck**, so cards can repeat *(owner answers, 1 Nov)*. Events are a host setting (§15), off in starter mode.
+- **Event Heat for small crews:** a card's Heat (Police patrol, Quiet night) and the extra Heat of a surge (Shift change's ×1.5 beyond ×1) are scaled by **min(1, crew ÷ 5)**, rounded, so at 3 players Police patrol adds 3 and Quiet night removes 6. From 5 players cards play at full strength. *(Owner answers, 1 Nov.)*
 - The card is flipped as the round starts, so players can plan around it; its effects apply when the round resolves (§5.2 step 1). Lockdown names its closed room on the flip (any room but the Lobby, where missed moves go). Double-cross offers go privately to the two players on the flip, and each can accept or decline until the round deadline; the swap happens at step 1, so the new roles play that round. Each role card keeps its uses so far; Moles are told if their fellow Mole changed.
 - **Shift change** also raises the Vault's Heat pressure ×1.5 (balance pass 2; was ×2, and Police patrol was +10); **Payday** doubles the Lobby's loot (2 → 4).
 - **Power cut:** no room-mates, no Security and no Lookout results. The Server room still counts pockets.
@@ -274,6 +278,7 @@ From round 2 onward, one event card is flipped at the start of each round and sh
   - *Secret*: only the tally is ever shown, even at the end-of-game reveal. An Informant role could see the votes in this mode (future role).
 - **Players who can't make it** can leave a sealed vote in advance. Otherwise they count as abstaining.
 - **To pass**, a shakedown needs **more than half of the votes cast**, and at least half the crew has to take part (sealed votes count).
+- **Big crews (9–12 players):** the player with the most votes is shaken down if they received **at least ⅓ of the votes cast** and **more votes than skip** (Smooth talker weight counts); a tie for the most votes, or skip leading or tied, means no shakedown. The quorum is the same. *(Owner answers, 1 Nov.)*
 - When the window closes, the ballots are cleared from the screen. The **result** stays in the ledger permanently.
 
 *Smooth talker (provisional):* "more than half of the votes cast" counts the Smooth talker's ballot twice; "at least half the crew has to take part" counts people. The tally shown counts one per ballot (see §8).
@@ -283,7 +288,7 @@ From round 2 onward, one event card is flipped at the start of each round and sh
 ### 11.3 Shakedown results
 
 - The target's stash is revealed to everyone, and all of it except any Fence safe goes into the Haul.
-- **Clean threshold:** if the stash was below **3 × the act number** (3, 6 or 9), the target is declared clean. The crew pays them **5 × the act number** out of the Haul, so false accusations hurt everyone. *(Provisional: never more than the Haul holds.)* An emergency meeting uses the current act's numbers.
+- **Clean threshold:** if the stash **plus any Fence safe** was below **3 × the act number** (3, 6 or 9), the target is declared clean, so a Fence with a full safe isn't clean and gets no compensation; the safe still can't be seized *(owner answers, 1 Nov)*. The crew pays them **5 × the act number** out of the Haul, so false accusations hurt everyone. *(Provisional: never more than the Haul holds.)* An emergency meeting uses the current act's numbers.
 - No player is ever eliminated.
 - *Muscle window (provisional):* when the role pool includes the Muscle, a passed shakedown is applied only after a short window in which the Muscle may cancel it (§8). The checkpoint (§11.4) comes after that window.
 
@@ -351,7 +356,7 @@ Notifications respect the host's quiet hours.
 
 ## 15. Host controls
 
-- Setup: session length, job, role pool, Mole setting, events on or off, vote visibility, meeting window length, quiet hours, starter mode.
+- Setup: session length, job, role pool, unique roles (on by default, §8.1), Mole setting, events on or off, vote visibility, meeting window length, quiet hours, starter mode. Defaults: events on, Mole "maybe", the full role pool.
 - During the game: pause or resume, extend the current round, replace an inactive player with a bot (offered automatically after 2 missed rounds in a row), add bots to empty seats before the game starts.
 
 ---
@@ -371,7 +376,7 @@ There are no votes. Instead, once per act, each player can **call out** the othe
 
 *Duel mode (provisional, task 15):*
 - A host setting, valid only with exactly 2 players. No meetings, no emergency meetings and no votes; the meeting-only roles (Smooth talker, Muscle, Snitch) are never dealt. Events can be on.
-- **Timing:** a call-out can be made while any of the act's rounds is being planned, at most once per player per act, and can't be withdrawn. It stays private until the act's last round resolves; then every call-out of that act is settled (in seat order if both called), and the checkpoint is checked straight after, with no meeting (§11.4 order: call-outs → checkpoint). So a call-out covers the whole act, the last round included, however early it was made.
+- **Timing:** a call-out can be made while any of the act's rounds is being planned, at most once per player per act, and can't be withdrawn. It stays private until the act's last round resolves and its alibi window closes (§5.4); then every call-out of that act is settled (in seat order if both called), and the checkpoint is checked straight after, with no meeting (§11.4 order: call-outs → checkpoint). So a call-out covers the whole act, the last round included, however early it was made.
 - **Caught:** the caller takes everything the opponent pocketed that act (their real splits, whatever they claimed), out of the opponent's stash: never the Fence safe, and never more than the stash holds. The Haul is untouched.
 - **Wrong call:** the caller pays the opponent 5 × the act number (content: `duel.wrongCallOutPerAct`) from their own stash, never more than it holds.
 - The result is public: who called, whether the opponent had pocketed, and how much moved. A Heat raid in the act's last round ends the game before its call-outs are settled.

@@ -73,6 +73,8 @@ export interface PlayerView {
   readonly round: number;
   /** The act of `round`; 1 during setup. */
   readonly act: ActNumber;
+  /** The round whose alibis may still be posted (also while a meeting interrupts them), or null. design §5.4 */
+  readonly alibiRound: number | null;
   readonly rooms: readonly RoomId[];
   readonly haul: number;
   readonly heat: number;

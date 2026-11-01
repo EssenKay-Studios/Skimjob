@@ -50,7 +50,7 @@ export function createBots(
 /**
  * Run a game to the end. Each step, every agent (in seat order) sees its view
  * and sends its commands; then one deadline passes: an open meeting closes, a
- * pending shakedown's window ends, a called emergency opens, the round resolves, or the act's meeting opens (the
+ * pending shakedown's window ends, a called emergency opens, the round resolves, its alibis close, or the act's meeting opens (the
  * server picks a slot if nobody locked one in). Seats without an agent just
  * get default moves, like an absent player.
  */
@@ -83,10 +83,13 @@ export function runBotGame(config: GameConfig, agents: readonly Agent[], options
       system({ type: "advance", deadline: { kind: "closeMeeting", meetingId: phase.meetingId } });
     } else if (phase.kind === "shakedownPending") {
       system({ type: "advance", deadline: { kind: "resolveShakedown", meetingId: phase.meetingId } });
-    } else if (state.pendingEmergency && (phase.kind === "planning" || phase.kind === "awaitingMeeting")) {
+    } else if (state.pendingEmergency && (phase.kind === "planning" || phase.kind === "alibis" || phase.kind === "awaitingMeeting")) {
       system({ type: "advance", deadline: { kind: "openMeeting", meetingId: state.pendingEmergency.meetingId } });
     } else if (phase.kind === "planning") {
       system({ type: "advance", deadline: { kind: "round", round: phase.round } });
+    } else if (phase.kind === "alibis") {
+      // design §5.4: the bots have posted their alibis this step, so the alibi deadline passes.
+      system({ type: "advance", deadline: { kind: "alibis", round: phase.round } });
     } else if (phase.kind === "awaitingMeeting") {
       if (!state.scheduledMeeting) system({ type: "scheduleMeeting", act: phase.act, slot: `server-act-${phase.act}` });
       const meetingId = state.scheduledMeeting?.meetingId;

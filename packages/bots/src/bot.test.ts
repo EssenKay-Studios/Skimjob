@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { roomDef, viewFor, jobById, type GameEvent, type GameState, type Move, type PlayerCommand } from "@skimjob/engine";
 import { PERSONALITIES, type Personality } from "./personalities";
 import { botRandom, chooseAlibi, chooseMove, chooseVote, createBot, decide, type Random } from "./bot";
-import { game, notInsider, round, run } from "./testkit";
+import { closeAlibis, game, notInsider, round, run } from "./testkit";
 
 /** A personality with no noise, so a test can pin its behaviour. */
 const exact = (base: Personality, change: Partial<Personality> = {}): Personality => ({ ...base, noise: 0, ...change });
@@ -67,7 +67,7 @@ describe("moves — design §5.1, §6, §7, §8", () => {
   });
 
   it("the Insider never pockets — design §8", () => {
-    const s = game(4, (g) => g.players.ana?.role === "insider");
+    const s = game(5, (g) => g.players.ana?.role === "insider"); // design §8.1: Insiders from 5 players
     for (let i = 0; i < 30; i++) expect(chooseMove(viewFor(s, "ana"), PERSONALITIES.greedy, seeded(`i${i}`)).pocket).toBe(0);
   });
 
@@ -88,6 +88,7 @@ describe("moves — design §5.1, §6, §7, §8", () => {
     // Round 3, Haul 0, target 6 × 4 = 24: each needs to hand in 6 this round, so nothing is pocketed.
     let s = game(4, notInsider("ana"));
     for (let r = 1; r <= 2; r++) s = round(s, { ana: { room: "rooftop" }, ben: { room: "rooftop" }, carl: { room: "rooftop" }, dee: { room: "rooftop" } });
+    s = closeAlibis(s); // round 3 is being planned
     const greedyTeamPlayer = exact(PERSONALITIES.greedy, { pocketChance: 1, teamSpirit: 1, watch: 0, heatCaution: 2 });
     for (let i = 0; i < 20; i++) expect(chooseMove(viewFor(s, "ana"), greedyTeamPlayer, seeded(`p${i}`)).pocket).toBe(0);
   });
@@ -149,8 +150,14 @@ describe("votes — design §11.2, §17.3", () => {
     expect(decide(viewFor(s, "ana"), exact(PERSONALITIES.honest), rolls(0.5))).toEqual([]);
   });
 
+  it("a Mole never votes to shake down a fellow Mole (content that deals two, design §8.1)", () => {
+    const view = viewFor(liar(), "ana");
+    (view.me.roleState as unknown as { allies: string[] }).allies = ["ben"];
+    expect(chooseVote(view, exact(PERSONALITIES.honest), rolls(0.5))).toEqual({ kind: "skip" });
+  });
+
   it("calls its emergency meeting when suspicion is high enough — design §11.1", () => {
-    const cmds = decide(viewFor(liar(), "ana"), exact(PERSONALITIES.cautious, { emergencyAt: 8 }), rolls(0.5));
+    const cmds = decide(viewFor(closeAlibis(liar()), "ana"), exact(PERSONALITIES.cautious, { emergencyAt: 8 }), rolls(0.5));
     expect(cmds.map((c) => c.type)).toContain("callEmergency");
   });
 });

@@ -61,6 +61,8 @@ export interface RoleDef {
    * of the others wins instead. design §3, §8
    */
   readonly winsOnSuccess: boolean;
+  /** Dealt only in crews of at least this size (Insider: 5). Absent: any size. design §8.1 */
+  readonly minPlayers?: number;
 }
 
 const PLAIN_SCORING: RoleScoring = { stashMultiplier: 1, perLootOverFinalTarget: 0 };
@@ -93,6 +95,8 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     scoring: { stashMultiplier: 1, perLootOverFinalTarget: 0.3 },
     winsOnFailure: null,
     winsOnSuccess: true,
+    // Owner answers, 1 Nov: a crew of 2–4 can't spare a player who never pockets.
+    minPlayers: 5,
   },
   fence: {
     id: "fence",

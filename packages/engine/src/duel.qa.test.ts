@@ -1,5 +1,6 @@
 // QA (PR #15): adversarial Duel-mode tests. design §16.1
 import { describe, expect, it } from "vitest";
+import { handleThroughAlibis } from "./alibis.testkit";
 import { STARTER_ROLES, type RoomId } from "@skimjob/content";
 import type { GameConfig, GameEvent, GameState, PlayerId } from "./types";
 import { createGame, rolePoolFor, setupEvents, validateConfig } from "./setup";
@@ -37,7 +38,7 @@ function game(extra: Partial<GameConfig> = {}): GameState {
 
 function run(state: GameState, ...commands: unknown[]): GameState {
   return commands.reduce<GameState>((s, c) => {
-    const r = handleCommand(s, c);
+    const r = handleThroughAlibis(s, c);
     if (!r.ok) throw new Error(`rejected ${JSON.stringify(c)}: ${r.reason}`);
     return r.state;
   }, state);
@@ -74,14 +75,14 @@ describe("QA: no meetings in Duel; non-Duel unchanged — design §16.1, §11.1"
   it("meeting deadlines are refused in Duel", () => {
     const s = game();
     for (const kind of ["openMeeting", "closeMeeting", "resolveShakedown"]) {
-      expect(handleCommand(s, { type: "advance", deadline: { kind, meetingId: "m1" } }).ok, kind).toBe(false);
+      expect(handleThroughAlibis(s, { type: "advance", deadline: { kind, meetingId: "m1" } }).ok, kind).toBe(false);
     }
   });
 
   it("a 2-player non-Duel game still holds meetings and refuses call-outs", () => {
     const s = game({ duel: false });
-    expect(handleCommand(s, { type: "proposeMeeting", player: "ana", slot: "sat" }).ok).toBe(true);
-    expect(handleCommand(s, { type: "callEmergency", player: "ana" }).ok).toBe(true);
+    expect(handleThroughAlibis(s, { type: "proposeMeeting", player: "ana", slot: "sat" }).ok).toBe(true);
+    expect(handleThroughAlibis(s, { type: "callEmergency", player: "ana" }).ok).toBe(true);
     const after = round(round(round(s)));
     expect(types(after)).not.toContain("checkpointChecked"); // waits for the meeting
   });
@@ -90,7 +91,7 @@ describe("QA: no meetings in Duel; non-Duel unchanged — design §16.1, §11.1"
     let s = game();
     for (let r = 0; r < 9; r++) s = round(s);
     expect(s.phase.kind).toBe("ended");
-    expect(handleCommand(s, callOut("ana")).ok).toBe(false);
+    expect(handleThroughAlibis(s, callOut("ana")).ok).toBe(false);
   });
 });
 

@@ -113,7 +113,12 @@ export function validateOverrides(raw: unknown, job: JobDef, roles: RoleTable = 
     checkFields(raw.heat, "contentOverrides.heat", { max: positiveCount, perRound: finite, missedCheckpoint: count }, errors);
   }
   if (raw.shakedown !== undefined) {
-    checkFields(raw.shakedown, "contentOverrides.shakedown", { cleanBelowPerAct: atLeast0, compensationPerAct: count }, errors);
+    checkFields(
+      raw.shakedown,
+      "contentOverrides.shakedown",
+      { cleanBelowPerAct: atLeast0, compensationPerAct: count, pluralityFromPlayers: positiveCount, pluralityShare: atLeast0 },
+      errors,
+    );
   }
   if (raw.duel !== undefined) {
     checkFields(raw.duel, "contentOverrides.duel", { wrongCallOutPerAct: count }, errors);

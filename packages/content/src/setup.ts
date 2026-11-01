@@ -33,8 +33,8 @@ export const POOL_ROLES: readonly RoleId[] = DEFAULT_ROLE_POOL;
 /**
  * How many Moles to deal, by player count and the host's Mole setting.
  * Each entry lists equally likely counts; a single entry means no draw.
- * design §8.1: none at 2–4; optional at 5–8 ("maybe" = 50%); 1 or 2 at 9–12.
- * (provisional, see docs/decisions.md)
+ * design §8.1: none at 2–4; from 5 players "on" deals one Mole and "maybe"
+ * deals one half the time (owner answers, 1 Nov: one Mole at 9–12 too).
  */
 export interface MoleRule {
   readonly minPlayers: number;
@@ -47,5 +47,4 @@ export interface MoleRule {
 export const MOLE_RULES: readonly MoleRule[] = [
   { minPlayers: 2, off: [0], maybe: [0], on: [0] },
   { minPlayers: 5, off: [0], maybe: [0, 1], on: [1] },
-  { minPlayers: 9, off: [0], maybe: [1, 2], on: [2] },
 ];
