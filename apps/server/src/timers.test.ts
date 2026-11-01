@@ -11,6 +11,7 @@ import type { Db } from "./db";
 import type { ServerMessage } from "./live";
 import type { LobbyView } from "./lobby";
 import { buildServer } from "./server";
+import { serverDeps } from "./startup";
 import { testDb } from "./testkit";
 import { scaleTiming, TIMINGS } from "./timing";
 
@@ -116,6 +117,12 @@ describe("TIME_SCALE", () => {
 
   it.each(["0", "2", "-0.5", "abc", "1e-2", "0x1"])("refuses TIME_SCALE=%s", (v) => {
     expect(() => loadConfig({ TIME_SCALE: v })).toThrow(StartupError);
+  });
+
+  it.each(["0.1", "0.5", "abc", "0"])("is forced to 1 in production, ignoring TIME_SCALE=%s", (v) => {
+    const config = loadConfig({ NODE_ENV: "production", TIME_SCALE: v });
+    expect(config.timeScale).toBe(1);
+    expect(serverDeps(config).timeScale).toBe(1);
   });
 
   it("scales every wall time but keeps a zero lead at zero", () => {

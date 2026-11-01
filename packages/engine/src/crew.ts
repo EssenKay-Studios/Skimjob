@@ -10,7 +10,7 @@ import type { GameEvent, GameState, PlayerId, PlayerState } from "./types";
 import { privateTo } from "./types";
 import { jobFor, roleDefIn, rolesFor } from "./overrides";
 import { actOfRound } from "./acts";
-import { isObject } from "./check";
+import { isObject, show } from "./check";
 
 type Result = GameEvent[] | string;
 
@@ -36,7 +36,7 @@ function audit(state: GameState, player: PlayerState, perAct: number, raw: Recor
 function checkStash(state: GameState, player: PlayerState, perAct: number, raw: Record<string, unknown>): Result {
   if (player.roleState.usedThisAct >= perAct) return "you have already checked a stash this act";
   const target = raw.target;
-  if (typeof target !== "string" || !Object.hasOwn(state.players, target)) return `unknown player ${String(target)}`;
+  if (typeof target !== "string" || !Object.hasOwn(state.players, target)) return `unknown player ${show(target)}`;
   if (target === player.id) return "check another player's stash";
   const { stash, safe } = state.players[target] as PlayerState;
   const threshold = cleanThreshold(state);

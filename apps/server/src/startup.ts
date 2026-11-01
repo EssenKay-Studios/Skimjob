@@ -1,8 +1,10 @@
 // Opening the database at server start, with one-line errors instead of a
 // driver stack trace (bad DATABASE_URL, Postgres not running).
+import { devAuthProvider } from "./auth";
 import { StartupError, type ServerConfig } from "./config";
 import { openPglite, pgDb, type Db } from "./db";
 import { migrate } from "./migrate";
+import type { ServerDeps } from "./server";
 
 /** Where DATABASE_URL points, without user or password. */
 export function databaseLabel(url: string): string {
@@ -36,4 +38,17 @@ export async function openDatabase(config: ServerConfig): Promise<{ db: Db; appl
     await db.close().catch(() => {});
     throw new StartupError(`database migration failed: ${reason(err)}`);
   }
+}
+
+/** The parts of buildServer's deps that come from the environment (main.ts). */
+export function serverDeps(config: ServerConfig): Pick<ServerDeps, "auth" | "allowedOrigins" | "webDir" | "secureCookies" | "trustProxy" | "timeScale"> {
+  return {
+    // loadConfig already turns DEV_LOGIN off in production; this is the only place providers are chosen.
+    auth: config.devLogin && !config.production ? [devAuthProvider()] : [],
+    allowedOrigins: config.allowedOrigins,
+    webDir: config.webDir,
+    secureCookies: config.production,
+    trustProxy: config.production,
+    timeScale: config.timeScale,
+  };
 }

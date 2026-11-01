@@ -8,7 +8,7 @@ import type { AbilityUse, GameEvent, GameState, Move, PlayerId, PlayerState } fr
 import { PUBLIC, privateTo } from "./types";
 import { clampHeat, roomDef, roomLoot, roundHeatDelta } from "./job";
 import { eventsFor, jobFor, powerOf, roleDefIn, rolesFor } from "./overrides";
-import { isObject } from "./check";
+import { isObject, show } from "./check";
 import { actOfRound, isLastRoundOfAct } from "./acts";
 import { gameEnded } from "./end";
 import { applyEvent } from "./reduce";
@@ -56,9 +56,9 @@ function checkAbility(state: GameState, player: PlayerState, raw: unknown): Abil
     case "blackmail": {
       if (player.roleState.usedThisAct >= power.perAct) return "you have already blackmailed someone this act";
       const { target, role } = raw;
-      if (typeof target !== "string" || !Object.hasOwn(state.players, target)) return `unknown player ${String(target)}`;
+      if (typeof target !== "string" || !Object.hasOwn(state.players, target)) return `unknown player ${show(target)}`;
       if (target === player.id) return "you can't blackmail yourself";
-      if (typeof role !== "string" || !(Object.hasOwn(rolesFor(state.config), role) || role === MOLE_ROLE)) return `unknown role ${String(role)}`;
+      if (typeof role !== "string" || !(Object.hasOwn(rolesFor(state.config), role) || role === MOLE_ROLE)) return `unknown role ${show(role)}`;
       return { kind: "blackmail", target, role };
     }
     case "tipOff": {
@@ -84,7 +84,7 @@ function checkAbility(state: GameState, player: PlayerState, raw: unknown): Abil
 export function checkMove(state: GameState, player: PlayerState, raw: unknown): Move | string {
   if (!isObject(raw)) return "move must be an object";
   const { room, pocket, watch, ability } = raw;
-  if (typeof room !== "string" || !state.rooms.includes(room)) return `room ${String(room)} is not open in this game`;
+  if (typeof room !== "string" || !state.rooms.includes(room)) return `room ${show(room)} is not open in this game`;
   // design §10 Lockdown: the card names a room closed for this round.
   if (room === closedRoom(state)) return `the ${roomDef(jobFor(state.config), room).name} is closed this round (Lockdown)`;
   // design §10: Shift change / Payday raise a room's loot this round.

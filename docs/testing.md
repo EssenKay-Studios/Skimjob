@@ -15,8 +15,9 @@ All tests are seeded and deterministic. Nothing reads the wall clock (the server
 | Web e2e | `apps/web/e2e/*.spec.ts` | Screens in Chromium at phone and desktop sizes, responsive rules. Size checks wait for the entrance animations to finish first: a box measured mid-animation can come out at 43.99 px. | `pnpm test:e2e` |
 | Simulator smoke | `scripts/sim-smoke.sh` | 200 all-bot games each at 3/6/12 players (events on, Mole "maybe") end with no refused bot command. | `bash scripts/sim-smoke.sh [games]` |
 | Typecheck | every workspace | Strict TS. New event or command types must fail exhaustive switches. | `pnpm typecheck` |
+| Docker image | `Dockerfile` | The production image builds, boots on a fresh volume, serves `/health` and an SPA route, and runs as uid 1000 (CI only; no Docker daemon here). | `docker build -t skimjob .` (docs/deploy.md) |
 
-CI (`.github/workflows/ci.yml`) runs all of these on every push to `main` and every PR.
+CI (`.github/workflows/ci.yml`) runs all of these on every push to `main` and every PR. A green run on `main` deploys to Fly (`deploy.yml`, `docs/deploy.md`).
 
 ## Engine properties
 
@@ -76,6 +77,10 @@ Until M2-4 lands, `nextDeadline` (round, alibi, meeting and shakedown deadlines 
 
 Add a story when you fix a server bug, or when a feature changes how a game flows (scheduler, chat, host controls).
 
+## Hostile command values
+
+`commands.hostile.test.ts` takes, in states across every phase (and Duel), a command of every type that the engine accepts there, then replaces each field in turn (nested objects and lists such as `move`, `ability`, `vote`, `deadline` and `rooms` as well as their leaves) with hostile values: objects with no string form (`{"toString":null}`), prototype keys (`__proto__`, `constructor`, `toString`, …), values of the wrong type, over-long strings, `undefined`, or the field left out (except the optional `move.ability`). Each must be refused (not thrown) and leave the state unchanged, every field must have been tried against an accepted command, and every command type the engine handles (`COMMAND_TYPES`) must be in the list. Refusal reasons print command values with `show()` (`check.ts`), never `String()` or a raw template string, and cut strings over 40 characters short. Add the fields of any new command type to `baseCommands`.
+
 ## Known bugs pinned by tests
 
-- **Engine throws on values with no string form.** JSON can make such a value: `{"toString":null}`. If one is used as a `room`, `proposalId`, `player` or `meetingId`, `handleCommand` throws instead of refusing, because the rejection reasons pass it through `String()` or a template string. Clients can reach this through `room` and `proposalId`. The server catches the throw and refuses with "command could not be handled", but logs an error. The test is pinned with `it.fails` in `invariants.prop.test.ts` ("BUG: … HOSTILE"); remove `.fails` when the engine is fixed.
+None open. (Fixed: the engine threw on values with no string form such as `{"toString":null}`; see above.)
