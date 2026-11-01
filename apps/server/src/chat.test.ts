@@ -5,13 +5,14 @@ import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { WebSocket } from "ws";
 import { SESSION_COOKIE } from "./auth";
-import { checkChatText, evidenceCard, type ChatHistory, type ChatMessage, type DmNotice } from "./chat";
+import { checkChatText, createChat, evidenceCard, type ChatHistory, type ChatMessage, type DmNotice } from "./chat";
 import { fakeClock } from "./clock";
 import type { Db } from "./db";
 import type { ServerMessage } from "./live";
 import type { LobbyView } from "./lobby";
 import { buildServer } from "./server";
-import { CHAT_MAX_CHARS, CHAT_RATE, type LobbySettings } from "./settings";
+import { CHAT_MAX_CHARS, CHAT_MAX_MARKS, CHAT_RATE, type LobbySettings } from "./settings";
+import { createGameStore } from "./store";
 import { testDb } from "./testkit";
 
 const quick = { interval: 1, timeout: 5000 };
@@ -129,7 +130,28 @@ describe("crew chat (design §12.1)", () => {
     clock.advance(CHAT_RATE.windowMs);
     expect(await a.chat({ text: "later" })).toMatchObject({ ok: true });
     expect(checkChatText("tab\tand\nnewline")).toEqual({ ok: true, value: "tab\tand\nnewline" });
+    // Invisible-only text is empty (PR #24 QA); stacked marks are capped; real text with them is fine.
+    for (const blank of ["\u200b", "\u200e\u200f\u061c", "\u{e0041}\u{e0042}", "\u3164\u115f\u1160\uffa0", "\u2800", "\u034f\u2060", "\u200d\u0301"]) {
+      expect(checkChatText(blank)).toEqual({ ok: false, reason: "message is empty" });
+    }
+    expect(checkChatText(`a${"\u0301".repeat(CHAT_MAX_MARKS + 1)}`)).toMatchObject({ ok: false });
+    expect(checkChatText(`a${"\u0301\u200b".repeat(CHAT_MAX_MARKS + 1)}`)).toMatchObject({ ok: false });
+    for (const fine of ["Tiếng Việt", "नमस्ते", "👩‍👩‍👧 family", `a${"\u0301".repeat(CHAT_MAX_MARKS)}`]) expect(checkChatText(fine)).toMatchObject({ ok: true });
     closeAll(a);
+  });
+});
+
+describe("rate limiter memory", () => {
+  it("forgets senders whose window has passed", async () => {
+    const own = fakeClock(Date.UTC(2026, 10, 2));
+    const chat = createChat(db, own);
+    const { id, humans } = await startGame(2);
+    const state = (await createGameStore(db).load(id))!;
+    for (const h of humans) expect(await chat.post(id, state, h.player, { to: null, text: "hi" })).toMatchObject({ ok: true });
+    expect(chat.rateTracked()).toBe(2);
+    own.advance(CHAT_RATE.windowMs);
+    expect(await chat.post(id, state, humans[0]!.player, { to: null, text: "again" })).toMatchObject({ ok: true });
+    expect(chat.rateTracked()).toBe(1);
   });
 });
 
@@ -240,5 +262,17 @@ describe("evidence cards (design §12.1)", () => {
       caseFile: [{ seq: 7, event: { type: "voteCast", visibility: { kind: "secret", player: "p1" }, player: "p1", meetingId: "act-1", choice: "skip" } }],
     } as unknown as PlayerView;
     expect(evidenceCard(view, 7)).toEqual({ ok: false, reason: "secret ballots can't be shared" });
+  });
+
+  it("hidden mode: a ballot is shareable only once its meeting has closed; a sealed vote never (design §11.2, PR #24 review)", () => {
+    const vote = { kind: "skip" };
+    const cast = { seq: 9, event: { type: "voteCast", visibility: { kind: "private", player: "p1" }, meetingId: "act-1", player: "p1", vote, sealed: false } };
+    const sealed = { seq: 8, event: { type: "voteSealed", visibility: { kind: "private", player: "p1" }, player: "p1", vote } };
+    const closed = { seq: 10, event: { type: "meetingClosed", visibility: { kind: "public" }, meetingId: "act-1", tally: { skip: 1, targets: {} }, ballots: { p1: vote }, result: { kind: "skipped" } } };
+    const open = { caseFile: [sealed, cast], ledger: [] } as unknown as PlayerView;
+    const after = { caseFile: [sealed, cast], ledger: [closed] } as unknown as PlayerView;
+    expect(evidenceCard(open, 9)).toEqual({ ok: false, reason: "ballots can be shared once the meeting has closed" });
+    expect(evidenceCard(after, 9)).toEqual({ ok: true, value: { type: "voteCast", payload: { meetingId: "act-1", player: "p1", vote, sealed: false } } });
+    for (const v of [open, after]) expect(evidenceCard(v, 8)).toEqual({ ok: false, reason: "sealed votes can't be shared" });
   });
 });

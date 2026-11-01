@@ -235,14 +235,14 @@ describe("QA: evidence cards (design §12.1, §11.2)", () => {
     closeAll(a!, b!, other);
   });
 
-  it("a real secret-mode sealed ballot can't be shared; the same ballot in hidden mode can", async () => {
+  it("a real sealed ballot can't be shared, in secret mode or hidden mode (PR #24 review: not while its vote is open)", async () => {
     for (const voteVisibility of ["secret", "hiddenThenRevealed"] as const) {
       const { id, humans } = await startGame(3, 0, { voteVisibility });
       const a = await Client.open(id, humans[0]!);
       expect(await a.sendRaw({ cmd: { type: "sealVote", vote: { kind: "shakedown", target: humans[1]!.player } } })).toMatchObject({ ok: true });
       await vi.waitFor(() => expect(a.view().caseFile.some((e) => e.event.type === "voteSealed")).toBe(true), quick);
       const ballot = a.view().caseFile.find((e) => e.event.type === "voteSealed")!;
-      expect(await a.chat({ evidence: ballot.seq })).toMatchObject(voteVisibility === "secret" ? { rejected: true, reason: "secret ballots can't be shared" } : { ok: true });
+      expect(await a.chat({ evidence: ballot.seq })).toMatchObject({ rejected: true, reason: voteVisibility === "secret" ? "secret ballots can't be shared" : "sealed votes can't be shared" });
       closeAll(a);
     }
   });

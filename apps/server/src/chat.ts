@@ -15,7 +15,7 @@
 import { viewFor, type GameState, type PlayerId, type PlayerView } from "@skimjob/engine";
 import type { Clock } from "./clock";
 import type { Db } from "./db";
-import { CHAT_HISTORY_LIMIT, CHAT_MAX_CHARS, CHAT_RATE } from "./settings";
+import { CHAT_HISTORY_LIMIT, CHAT_MAX_CHARS, CHAT_MAX_MARKS, CHAT_RATE, hasVisibleText } from "./settings";
 
 /** A shared case-file entry: the event's type and fields, without seq or visibility. */
 export interface EvidenceCard {
@@ -59,11 +59,20 @@ type Result<T> = { ok: true; value: T } | { ok: false; reason: string };
 // eslint-disable-next-line no-control-regex
 const BAD_CHARS = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f‪-‮⁦-⁩]/u;
 
-/** Typed text: trimmed, CRLF → LF, 1–CHAT_MAX_CHARS characters, no control characters. */
+/** A run of more than CHAT_MAX_MARKS combining marks, ignoring invisible characters in between. */
+const MARK_RUN = new RegExp(`\\p{M}{${CHAT_MAX_MARKS + 1},}`, "u");
+const INVISIBLE = /[\p{Default_Ignorable_Code_Point}\p{Cf}]/gu;
+
+/**
+ * Typed text: trimmed, CRLF → LF, 1–CHAT_MAX_CHARS characters, something
+ * visible in it (the nickname rule: invisible-only text is empty), no control
+ * characters, no long stacks of combining marks.
+ */
 export function checkChatText(input: unknown): Result<string> {
   if (typeof input !== "string") return { ok: false, reason: "text must be a string" };
   const text = input.replace(/\r\n?/g, "\n").trim();
-  if (text.length === 0) return { ok: false, reason: "message is empty" };
+  if (!hasVisibleText(text)) return { ok: false, reason: "message is empty" };
+  if (MARK_RUN.test(text.replace(INVISIBLE, ""))) return { ok: false, reason: "too many accents on one character" };
   if ([...text].length > CHAT_MAX_CHARS) return { ok: false, reason: `messages are at most ${CHAT_MAX_CHARS} characters` };
   if (BAD_CHARS.test(text)) return { ok: false, reason: "message has control characters" };
   return { ok: true, value: text };
@@ -93,9 +102,18 @@ export function parseChatRequest(chat: unknown): Result<ChatRequest> {
 export function evidenceCard(view: PlayerView, seq: number): Result<EvidenceCard> {
   const entry = view.caseFile.find((e) => e.seq === seq);
   if (!entry) return { ok: false, reason: "that isn't an entry of your case file" };
+  const event = entry.event;
   // design §11.2: a secret ballot stays secret, so it can't be made provable either.
-  if (entry.event.visibility.kind === "secret") return { ok: false, reason: "secret ballots can't be shared" };
-  const { type, visibility: _visibility, ...payload } = entry.event;
+  if (event.visibility.kind === "secret") return { ok: false, reason: "secret ballots can't be shared" };
+  // design §11.2 hidden-then-revealed: no proving a ballot while its vote is
+  // open. A ballot cast in a meeting can be shared once that meeting closed;
+  // a sealed vote is a ballot for a meeting still to come, so never (its cast
+  // ballot can be, after the meeting).
+  if (event.type === "voteSealed") return { ok: false, reason: "sealed votes can't be shared" };
+  if (event.type === "voteCast" && !view.ledger.some((e) => e.event.type === "meetingClosed" && e.event.meetingId === event.meetingId)) {
+    return { ok: false, reason: "ballots can be shared once the meeting has closed" };
+  }
+  const { type, visibility: _visibility, ...payload } = event;
   return { ok: true, value: { type, payload } };
 }
 
@@ -128,11 +146,20 @@ export interface Chat {
   post(gameId: string, state: GameState, from: PlayerId, request: ChatRequest): Promise<Result<{ message: ChatMessage; notice: DmNotice | null }>>;
   /** What `player` gets on (re)connect: crew chat, their own DMs, and notices of others' DMs if on. */
   history(gameId: string, player: PlayerId): Promise<ChatHistory>;
+  /** Senders the rate limiter still remembers (tests: stale ones are dropped). */
+  rateTracked(): number;
 }
 
 export function createChat(db: Db, clock: Clock): Chat {
   /** Per game and player, the times of their recent accepted messages. Memory only. */
   const recent = new Map<string, number[]>();
+  let lastSweep = clock.now();
+  /** At most once a window, forgets senders with nothing left in it (ended games, people gone quiet). */
+  const sweep = (now: number) => {
+    if (now - lastSweep < CHAT_RATE.windowMs) return;
+    lastSweep = now;
+    for (const [key, times] of recent) if (times.every((t) => t <= now - CHAT_RATE.windowMs)) recent.delete(key);
+  };
 
   const dmNoticesOn = async (gameId: string) => {
     const [row] = await db.query<{ on: boolean | null }>("select (settings->>'dmNotices')::boolean as on from games where id = $1", [gameId]);
@@ -140,6 +167,7 @@ export function createChat(db: Db, clock: Clock): Chat {
   };
 
   return {
+    rateTracked: () => recent.size,
     async post(gameId, state, from, request) {
       if (request.to !== null) {
         const bad = checkRecipient(state, from, request.to);
@@ -154,6 +182,7 @@ export function createChat(db: Db, clock: Clock): Chat {
         card = c.value;
       }
       const now = clock.now();
+      sweep(now);
       const key = `${gameId}\0${from}`;
       const times = (recent.get(key) ?? []).filter((t) => t > now - CHAT_RATE.windowMs);
       if (times.length >= CHAT_RATE.messages) return { ok: false, reason: "slow down: too many messages" };

@@ -36,6 +36,8 @@ export const NICKNAME_MAX = 24;
 export const CHAT_MAX_CHARS = 500;
 export const CHAT_RATE = { messages: 8, windowMs: 10_000 } as const;
 export const CHAT_HISTORY_LIMIT = 200;
+/** Most combining marks in a row (stacked "zalgo" text); real scripts need far fewer. */
+export const CHAT_MAX_MARKS = 8;
 
 /** Themed names for bot seats, used in order; shown as "Bot · <name>". */
 export const BOT_NAMES = ["Riya", "Max", "Nico", "Juno", "Kofi", "Lena", "Omar", "Suki", "Tavi", "Wren", "Yara", "Zed"] as const;
@@ -79,8 +81,16 @@ export const looksLikeBot = (name: string) => /^bot(?:[^\p{L}\p{N}]|$)/u.test(fo
 /** Two nicknames are the same if they match ignoring case, width, whitespace and invisible characters. */
 export const nicknameKey = (name: string) => fold(name).replace(/\s+/gu, "");
 
-/** Something visible is left once invisible characters, combining marks and whitespace are gone. */
-const visible = (name: string) => fold(name).replace(/[\p{M}\s]/gu, "").length > 0;
+/** Letters that draw nothing: the Hangul fillers and the braille blank. */
+const BLANK_LETTERS = /[\u115f\u1160\u2800\u3164\uffa0]/gu;
+
+/**
+ * Something visible is left once default-ignorable and format characters
+ * (ZWJ, LRM/RLM/ALM, tag characters …), blank letters, combining marks and
+ * whitespace are gone. Nicknames and chat text.
+ */
+export const hasVisibleText = (text: string) => fold(text).replace(BLANK_LETTERS, "").replace(/[\p{Cf}\p{M}\s]/gu, "").length > 0;
+const visible = hasVisibleText;
 
 /**
  * A person's display name: free text, trimmed, inner whitespace collapsed,
