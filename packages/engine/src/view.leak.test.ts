@@ -14,7 +14,10 @@ import { describe, expect, it } from "vitest";
 import type { GameConfig, GameEvent, GameState, LoggedEvent, PlayerId, PlayerState, PlayerView, VoteChoice, VoteVisibility } from "./types";
 import { REVEAL, canSee, privateTo, secretTo } from "./types";
 import { EVENT_DECK } from "@skimjob/content";
-import { createGame } from "./setup";
+import { createGame, moleAllies, setupEvents } from "./setup";
+import { replay } from "./reduce";
+import { seedRng } from "./rng";
+import { dealtKnowledge } from "./accomplices";
 import { handleCommand } from "./handle";
 import { viewFor } from "./view";
 import { grantPerks } from "./perks.testkit";
@@ -36,6 +39,23 @@ function config(players: number, voteVisibility: VoteVisibility): GameConfig {
 const NO_LOOT = new Set(["security", "rooftop", "serverRoom"]);
 
 /**
+ * Role deck v2 §2 (R3a): every dark role at once (two Moles, the Getaway
+ * Driver, the Fence and the Hacker), more than a real deal allows (⌊n/3⌋), so
+ * the deal is forced: seat i gets DARK_ROLES[i], with the saboteurs' allies and
+ * the Hacker's tip as setup would give them. Low reveal levels, so the
+ * Fence's and Getaway Driver's reveals happen in the script.
+ */
+const DARK_ROLES = ["mole", "getawayDriver", "fence", "hacker", "lookout", "bagman", "mole", "muscle", "snitch"];
+const DARK_OVERRIDES = { roles: { fence: { revealSafe: 2 }, getawayDriver: { revealHeat: 30 } } };
+function darkGame(cfg: GameConfig): GameState {
+  const real = setupEvents(cfg).filter((e) => e.type !== "moleAllies" && e.type !== "alliesLearned");
+  const log = real.map((e, i): GameEvent => (e.type === "roleDealt" ? { ...e, role: DARK_ROLES[real.slice(0, i).filter((x) => x.type === "roleDealt").length] ?? "rookie" } : e));
+  const at = log.findIndex((e) => e.type === "roundStarted");
+  const told = [...moleAllies(cfg, DARK_ROLES), ...dealtKnowledge(cfg, DARK_ROLES, seedRng("dark")).value];
+  return replay(cfg, [...log.slice(0, at), ...told, ...log.slice(at)]);
+}
+
+/**
  * A full game exercising every event type the default pool can produce: moves
  * (some changed, some missed), Security watches, the Server room, Lookout,
  * Fence, Hacker, Blackmailer, Auditor, Detective and Mole powers (tip-off, Mole allies), the Snitch's target and reward, alibis,
@@ -47,8 +67,8 @@ const NO_LOOT = new Set(["security", "rooftop", "serverRoom"]);
  * the Act 1 shakedown). Returns the state after every command. (The script reads the
  * full state to pick moves, as a scheduler would; views are what's checked.)
  */
-function playGame(players: number, voteVisibility: VoteVisibility): GameState[] {
-  let s = createGame(config(players, voteVisibility));
+function playGame(players: number, voteVisibility: VoteVisibility, dark = false): GameState[] {
+  let s = dark ? darkGame({ ...config(players, voteVisibility), contentOverrides: DARK_OVERRIDES }) : createGame(config(players, voteVisibility));
   const ids = s.playerOrder;
   const last = ids[ids.length - 1] as PlayerId;
   // design §8.3: crew roles earn perks in play (v2 §2); the test hook grants the rest so every perk is spent.
@@ -138,15 +158,20 @@ function playGame(players: number, voteVisibility: VoteVisibility): GameState[] 
       const drawn = s.rooms[(i + round) % s.rooms.length] as string;
       const room = drawn === s.card?.room ? "lobby" : drawn; // design §10 Lockdown
       const canKeep = role !== "insideMan" && !NO_LOOT.has(room);
-      const greedy = id === snitchTarget();
+      const greedy = id === snitchTarget() || (dark && role === "fence");
       const move: Record<string, unknown> = { room, pocket: canKeep && (greedy || (i + round) % 3 === 0) ? (greedy ? 2 : 1) : 0 };
       if (room === "security") move.watch = "vault";
       if (role === "lookout") move.ability = { kind: "lookout", rooms: [s.rooms[(i + round + 1) % s.rooms.length]] };
-      if (role === "fence" && round % 2 === 0) move.ability = { kind: "fenceSafe", amount: 1 };
+      if (role === "fence" && (dark || round % 2 === 0) && (s.players[id]?.roleState.usedThisAct ?? 5) < 5) move.ability = { kind: "fenceSafe", amount: 1 };
       // design §8: the Hacker loops the Vault once per act; the Blackmailer guesses once per act (right in Acts 1 and 3).
       if (role === "hacker" && round % 3 === 1) move.ability = { kind: "loopCameras", room: "vault" };
       // design §8: each Mole tips off the cops once, in round 8 (late, so the script still reaches every meeting).
       if (role === "mole" && round === 8) move.ability = { kind: "tipOff" };
+      // v2 §2: in the all-dark game the Getaway Driver drives Heat up from the Rooftop.
+      if (dark && role === "getawayDriver" && s.card?.room !== "rooftop") {
+        Object.assign(move, { room: "rooftop", pocket: 0 });
+        delete move.watch;
+      }
       if (role === "blackmailer" && round % 3 === 2) {
         const target = ids[(i + 1) % ids.length] as PlayerId;
         move.ability = { kind: "blackmail", target, role: act === 2 ? "mole" : (s.players[target] as PlayerState).role };
@@ -240,6 +265,7 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
           { type: "abilityResolved", visibility: privateTo(other), player: other, round: 1, ability: { kind: "fenceSafe", amount: 5 } },
           { type: "snitchTargetAssigned", visibility: privateTo(other), player: other, target: viewer },
           { type: "moleAllies", visibility: privateTo(other), player: other, allies: [viewer] },
+          { type: "alliesLearned", visibility: privateTo(other), player: other, allies: [viewer], via: "getaway" },
           { type: "abilityResolved", visibility: privateTo(other), player: other, round: 1, ability: { kind: "tipOff", heat: 10 } },
           { type: "blackmailed", visibility: privateTo(other), player: other, round: 1, stolen: 3 },
           { type: "snitchRewarded", visibility: privateTo(other), player: other, meetingId: "act-1", target: viewer, votes: 1 },
@@ -413,6 +439,35 @@ describe("no leaks in real games — design §17.2, §13, §11.2", () => {
     }
   }, 30_000);
 
+  // v2 §2 (R3a): every dark role dealt; what each learns of its allies is checked by the same view-diff.
+  const seenVia = new Set<string>();
+  it.each(["hiddenThenRevealed", "open", "secret"] as const)("9 players, every dark role dealt, %s votes", (mode) => {
+    const states = playGame(9, mode, true);
+    const final = states[states.length - 1] as GameState;
+    expect(final.phase.kind).toBe("ended");
+    for (const e of final.log) if (e.type === "alliesLearned") seenVia.add(e.via);
+    for (const e of final.log) if (e.type === "abilityResolved") seenAbilities.add(e.ability.kind);
+    for (const e of final.log) if (e.type === "perkGranted") earnedPerks.add(e.perk);
+    for (const state of states) {
+      for (const viewer of state.playerOrder) {
+        const view = viewFor(state, viewer);
+        checkView(state, viewer, view);
+        expect(JSON.stringify(viewFor(scrub(state, viewer), viewer)), `scrubbed view for ${viewer}`).toBe(JSON.stringify(view));
+        // Allies known are exactly what this player was told (moleAllies, alliesLearned in its case file).
+        const told = new Set<string>();
+        for (const { event: e } of view.caseFile) {
+          if (e.type === "moleAllies") e.allies.forEach((a) => told.add(a));
+          if (e.type === "alliesLearned") e.allies.forEach((a) => told.add(a));
+        }
+        expect(new Set(view.me.roleState.allies)).toEqual(told);
+      }
+    }
+  }, 30_000);
+
+  it("the all-dark games reach every way the dark side learns its allies (v2 §2)", () => {
+    expect([...seenVia].sort()).toEqual(["deal", "fence", "getaway", "tipOff"]);
+  });
+
   it("the games above reach every info, vote, Mole and event-card event (design §8, §8.1, §10)", () => {
     for (const t of ["snitchTargetAssigned", "blackmailed", "shakedownPending", "shakedownCancelled", "snitchRewarded", "alibisClosed"]) expect(seenTypes, t).toContain(t);
     for (const t of ["eventFlipped", "doubleCrossOffered", "doubleCrossAnswered", "doubleCrossResolved", "raidRumourHit", "insideTip", "auditReport"]) {
@@ -425,9 +480,10 @@ describe("no leaks in real games — design §17.2, §13, §11.2", () => {
     for (const t of ["perkGranted", "perkUsed", "rigPicked", "alibiVerified"]) expect(seenTypes, t).toContain(t);
     for (const k of ["peek", "shield", "extraVote", "ballot", "tail", "alibi", "recharge", "rig"]) expect(seenPerks, k).toContain(k);
     expect(seenWatch, "a Tail watch").toContain("tail");
-    // v2 §2: crew rewards are earned in these games: checkpoints' Tail, Peek and Rig, the Cleaner's +Vote, the Bagman's
-    // Alibi, a clean Muscle cancel's Recharge, a Ballot. (The Detective's and Fixer's Shields: crew tests.)
-    for (const k of ["tail", "peek", "rig", "extraVote", "alibi", "recharge", "ballot"]) expect(earnedPerks, k).toContain(k);
+    // v2 §2: crew rewards are earned in these games: checkpoints' Tail, Peek and Rig, the Cleaner's +Vote, a clean
+    // Muscle cancel's Recharge, a Ballot. (The Detective's and Fixer's Shields and, since the R3a deal, the Bagman's
+    // Alibi: crew tests; the accomplices' rewards: accomplices.test.ts.)
+    for (const k of ["tail", "peek", "rig", "extraVote", "recharge", "ballot"]) expect(earnedPerks, k).toContain(k);
     for (const t of ["blessingPaid", "cardForeseen"]) expect(seenTypes, t).toContain(t);
     for (const k of ["bless", "bagman"]) expect(seenAbilities, k).toContain(k);
   });

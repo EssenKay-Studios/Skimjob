@@ -144,7 +144,10 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
   const rand = mulberry32(seed);
   const int = (k: number): number => Math.floor(rand() * k);
   const pick = <T>(xs: readonly T[]): T => xs[int(xs.length)] as T;
-  const cfg = config(n, { seed: `rqa-${seed}`, voteVisibility: mode, rolePool: n <= 5 ? [...INFO_VOTE_ROLES] : [] });
+  // v2 §2 (R3a): the Hacker is an accomplice, dealt only with a saboteur, so its games deal a Mole and no other accomplice.
+  const hacking = kind === "hackerLoop";
+  const pool = hacking ? ["hacker", ...INFO_VOTE_ROLES] : n <= 5 ? [...INFO_VOTE_ROLES] : [];
+  const cfg = config(n, { seed: `rqa-${seed}`, voteVisibility: mode, rolePool: pool, ...(hacking && { mole: "on" as const }) });
   let A = createGame(cfg);
   const ids = A.playerOrder;
   const holder = (role: string): PlayerId | undefined => ids.find((id) => A.players[id]?.role === role);

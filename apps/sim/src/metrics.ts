@@ -121,13 +121,17 @@ export interface RateOf {
   readonly rate: number | null;
 }
 
+/** A successful game with a sole Act 1 leader (top score above 0): counted by the comeback metric. */
+export const comebackEligible = (g: GameRecord): boolean =>
+  g.result === "success" && g.afterAct1 !== null && g.afterAct1.topScore > 0 && g.afterAct1.leaders.length === 1;
+
+/** An eligible game whose Act 1 leader won. */
+export const act1LeaderWon = (g: GameRecord): boolean => comebackEligible(g) && g.winners.includes(g.afterAct1?.leaders[0] as string);
+
 /** How often the sole Act 1 leader goes on to win a successful heist. design §17.4 target < 50% */
 export function comebackMetric(records: readonly GameRecord[]): RateOf {
-  const eligible = records.filter(
-    (g) => g.result === "success" && g.afterAct1 !== null && g.afterAct1.topScore > 0 && g.afterAct1.leaders.length === 1,
-  );
-  const leaderWon = eligible.filter((g) => g.winners.includes(g.afterAct1?.leaders[0] as string));
-  return { games: eligible.length, rate: rate(leaderWon.length, eligible.length) };
+  const eligible = records.filter(comebackEligible);
+  return { games: eligible.length, rate: rate(eligible.filter(act1LeaderWon).length, eligible.length) };
 }
 
 /** True if the game was effectively settled before Act 3 (see the definitions above). */

@@ -16,7 +16,8 @@ import type { Draw } from "./handle";
 import { isDuel } from "./setup";
 import { endOfDuelAct } from "./duel";
 import { cardEffects, cardHeat, closedRoom, isAudit, isBlackout, roundJob, startRound } from "./deck";
-import { roundRewards, stopRaid } from "./crew";
+import { grantRewards, roundRewards, stopRaid } from "./crew";
+import { darkRoundEvents, playersOf } from "./accomplices";
 
 export { actOfRound, isLastRoundOfAct };
 
@@ -76,6 +77,7 @@ function checkAbility(state: GameState, player: PlayerState, raw: unknown): Abil
     case "cleaner":
     case "fixer":
     case "foresee":
+    case "getaway":
       return "your role's power isn't used in a move";
     case "none":
       return "your role has no ability";
@@ -220,6 +222,9 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
   for (const id of order) {
     const power = powerFor(id);
     if (power.kind === "cleaner" && moveOf(id).room === power.room) counts[power.room] = (counts[power.room] ?? 0) + power.visitors - 1;
+    // Getaway Driver (v2 §2): its visit there adds the Heat a visitor would remove (× `reverse`), hidden in the total.
+    // It counts as negative visitors, so it follows the room's pressure (and its sign) if a card or override changes it.
+    if (power.kind === "getaway" && moveOf(id).room === power.room) counts[power.room] = (counts[power.room] ?? 0) - power.reverse - 1;
   }
   let tipOffs = 0;
   for (const id of order) {
@@ -239,18 +244,25 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
     if (!blackout) events.push({ type: "roomSighting", visibility: privateTo(id), player: id, round, room, others: others(room, id) });
   }
   // Hacker (§8): a looped room shows as empty on Security this round (not to the Lookout or room-mates).
-  const looped = new Set<RoomId>();
+  const looped = new Map<RoomId, PlayerId[]>();
   for (const id of order) {
     const ability = abilityOf(id);
     if (ability?.kind !== "loopCameras" || powerFor(id).kind !== "loopCameras") continue;
-    looped.add(ability.room);
+    looped.set(ability.room, [...(looped.get(ability.room) ?? []), id]);
     events.push({ type: "abilityResolved", visibility: privateTo(id), player: id, round, ability });
   }
+  // v2 §2: Hackers whose loop hid a saboteur from a crew Security watcher (their reward). Fooling the
+  // dark side, the Hacker itself included, earns nothing (PR #32 QA).
+  const saboteurs = playersOf(state, "saboteur");
+  const crew = playersOf(state, "crew");
+  const hid = new Set<PlayerId>();
   for (const id of order) {
     const { room, watch } = moveOf(id);
     const ability = abilityOf(id);
     if (!blackout && roomDef(job, room).info === "watchRoom" && watch !== undefined) {
-      const seen = looped.has(watch) ? [] : others(watch, id);
+      const loopers = looped.get(watch);
+      if (loopers && crew.includes(id) && others(watch, id).some((x) => saboteurs.includes(x))) for (const h of loopers) hid.add(h);
+      const seen = loopers ? [] : others(watch, id);
       events.push({ type: "roomWatched", visibility: privateTo(id), player: id, round, source: "security", room: watch, seen });
     }
     if (ability?.kind === "lookout") {
@@ -284,8 +296,9 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
     heat,
   });
 
-  // design §8.3 (v2 §2): the Bagman's and Cleaner's rewards for this round.
-  events.push(...roundRewards(state, events, round));
+  // design §8.3 (v2 §2): the Bagman's, Cleaner's and Hacker's rewards for this round, then what the dark side learns.
+  events.push(...roundRewards(state, events, round), ...grantRewards(state, "loopHidSaboteur", (p) => hid.has(p.id)));
+  events.push(...darkRoundEvents(events.reduce(applyEvent, before), round, draw));
 
   // §5.2 step 6: Heat at the max means the cops raid and the heist fails at once (§3, §7),
   // unless a Fixer stops it (v2 §2). Otherwise the round's alibis open (the fold of

@@ -10,8 +10,12 @@ export type RolePower =
    * of their choice, named in the move's `{ kind: "lookout", rooms }` ability.
    */
   | { readonly kind: "lookout"; readonly extraRooms: number }
-  /** Fence: may move up to `perAct` loot per act from stash into a hidden safe that shakedowns can't touch. */
-  | { readonly kind: "fenceSafe"; readonly perAct: number }
+  /**
+   * Fence: may move up to `perAct` loot per act from stash into a hidden safe
+   * that shakedowns can't touch. Once its safe holds `revealSafe` or more, it
+   * learns one saboteur (once per game). design §8 (v2 §2)
+   */
+  | { readonly kind: "fenceSafe"; readonly perAct: number; readonly revealSafe: number }
   /** Hacker: `perAct` times per act, a move may loop the cameras so one room shows as empty on Security that round. */
   | { readonly kind: "loopCameras"; readonly perAct: number }
   /** Smooth talker: their ballot counts `weight` times toward a meeting's result (passive). design §11.2 */
@@ -46,7 +50,17 @@ export type RolePower =
   | { readonly kind: "fixer"; readonly stopAt: number; readonly lossShare: number }
   /** Mastermind: privately sees the next event card when a round starts (events on only, passive). design §8, §10 (v2 §2) */
   | { readonly kind: "foresee" }
-  /** Mole: `perAct` times per act, a move may tip off the cops: +`heat` Heat that round, hidden in the round's total. design §7, §8 */
+  /**
+   * Getaway Driver: its visit to `room` adds `reverse` × the Heat a visitor
+   * there would remove (hidden in the round's Heat). Once Heat reaches
+   * `revealHeat`, it learns the saboteurs and they learn it (once per game). design §7, §8 (v2 §2)
+   */
+  | { readonly kind: "getaway"; readonly room: RoomId; readonly reverse: number; readonly revealHeat: number }
+  /**
+   * Mole: `perAct` times per act, a move may tip off the cops: +`heat` Heat
+   * that round, hidden in the round's total. Each tip-off also tells it one
+   * accomplice it didn't know yet (v2 §2). design §7, §8
+   */
   | { readonly kind: "tipOff"; readonly perAct: number; readonly heat: number };
 
 export interface RoleScoring {
@@ -94,7 +108,9 @@ export type PerkTrigger =
   /** Every `CLEANER_REWARD_EVERY`th round this role spends in its cooling room (Cleaner: +Vote). */
   | "coolingRounds"
   /** This role's power stopped a raid (Fixer: Shield). */
-  | "raidStopped";
+  | "raidStopped"
+  /** This role's camera loop hid a saboteur from a Security watcher that round (Hacker: Peek). */
+  | "loopHidSaboteur";
 
 /** The Cleaner is rewarded on every this-many-th round in its cooling room (v2 §2: every 2nd Rooftop round). */
 export const CLEANER_REWARD_EVERY = 2;
@@ -130,6 +146,8 @@ export interface RoleDef {
   readonly needsMeetings?: boolean;
   /** Needs the events deck, so dealt only with events on (Mastermind, role deck v2 §3). design §8.1, §10 */
   readonly needsEvents?: boolean;
+  /** Told this many saboteurs (at random) at the deal (Hacker: 1, role deck v2 §2). Absent: none. design §8.1 */
+  readonly knowsSaboteurs?: number;
 }
 
 const PLAIN_SCORING: RoleScoring = { stashMultiplier: 1, perLootOverFinalTarget: 0 };
@@ -165,13 +183,23 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     // Owner answers, 1 Nov: a crew of 2–4 can't spare a player who never pockets.
     minPlayers: 5,
   },
+  // Accomplices (role deck v2 §2): help the saboteurs; dealt only with one.
+  getawayDriver: {
+    id: "getawayDriver",
+    name: "Getaway Driver",
+    // The Driver's dark half; the Fixer is its crew half.
+    power: { kind: "getaway", room: "rooftop", reverse: 1, revealHeat: 75 },
+    canPocket: true,
+    scoring: PLAIN_SCORING,
+    faction: "accomplice",
+  },
   fence: {
     id: "fence",
     name: "Fence",
-    power: { kind: "fenceSafe", perAct: 5 },
+    power: { kind: "fenceSafe", perAct: 5, revealSafe: 10 },
     canPocket: true,
     scoring: PLAIN_SCORING,
-    faction: "crew",
+    faction: "accomplice",
   },
   hacker: {
     id: "hacker",
@@ -179,7 +207,9 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     power: { kind: "loopCameras", perAct: 1 },
     canPocket: true,
     scoring: PLAIN_SCORING,
-    faction: "crew",
+    faction: "accomplice",
+    rewards: [{ on: "loopHidSaboteur", perk: "peek", count: 1 }],
+    knowsSaboteurs: 1,
   },
   smoothTalker: {
     id: "smoothTalker",
@@ -273,7 +303,7 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
   fixer: {
     id: "fixer",
     name: "Fixer",
-    // The Driver's crew half (role deck v2 §2); the Getaway Driver (accomplice) comes in R3.
+    // The Driver's crew half (role deck v2 §2); the Getaway Driver is its accomplice half.
     power: { kind: "fixer", stopAt: 95, lossShare: 0.25 },
     canPocket: true,
     scoring: PLAIN_SCORING,

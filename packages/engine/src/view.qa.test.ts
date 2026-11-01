@@ -30,13 +30,14 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-const config = (n: number, voteVisibility: VoteVisibility, seed: string): GameConfig => ({
+// v2 §2 (R3a): the Fence is an accomplice, dealt only with a saboteur, so its games deal a Mole (6+ players).
+const config = (n: number, voteVisibility: VoteVisibility, seed: string, mole: GameConfig["mole"] = "off"): GameConfig => ({
   seed,
   players: Array.from({ length: n }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: i % 2 === 0 })),
   job: "bank",
   // No Muscle, so no shakedown window (task 12); no Bagman or Cleaner, whose powers show in the public Haul and Heat by design (v2 §2).
   rolePool: ["rookie", "lookout", "insideMan", "fence"],
-  mole: "off",
+  mole,
   eventsEnabled: false,
   voteVisibility,
   starterMode: false,
@@ -66,7 +67,7 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
   const rand = mulberry32(seed);
   const int = (k: number): number => Math.floor(rand() * k);
   const pick = <T>(xs: readonly T[]): T => xs[int(xs.length)] as T;
-  let A = createGame(config(n, mode, `qa-${seed}`));
+  let A = createGame(config(n, mode, `qa-${seed}`, kind === "fence" ? "on" : "off"));
   let B = A;
   const ids = A.playerOrder;
   const involved = new Set<PlayerId>();
@@ -359,7 +360,7 @@ describe("QA: changing one player's hidden choices never changes another player'
         if (r.diverged) firstPublic.add(r.diverged.type);
       }
     });
-    expect(applied, "the change was made in most games").toBeGreaterThanOrEqual((kind === "fence" ? 3 : 4) * SEEDS);
+    expect(applied, "the change was made in most games").toBeGreaterThanOrEqual((kind === "fence" ? 2 : 4) * SEEDS);
     expect(compared).toBeGreaterThan(200 * SEEDS);
     // design §11.2: in Secret mode ballots never surface, not even in the reveal.
     if (mode === "secret" && ["voteChurn", "ballotSwap", "seal"].includes(kind)) expect([...firstPublic]).toEqual([]);

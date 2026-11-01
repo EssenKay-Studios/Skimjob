@@ -25,6 +25,7 @@ import { checkpointTarget, clampHeat } from "./job";
 import { jobFor, powerOf, roleDefIn, rolesFor, type RoleTable } from "./overrides";
 import { dealableRoles } from "./setup";
 import { emergencySpent, isPerkSpend, perkCount, shieldFor, usePerk } from "./perks";
+import { getawayReveal } from "./accomplices";
 import { blessingEvents, checkpointRewards, dirtyShakedownRewards, muscleCancelEvents, stopRaid, useCrewPower } from "./crew";
 import { actOfRound } from "./acts";
 import { gameEnded } from "./end";
@@ -420,6 +421,8 @@ export function checkpoint(state: GameState, prior: readonly GameEvent[], act: A
   events.push({ type: "checkpointChecked", visibility: PUBLIC, act, target, haul: now.haul, met, heatPenalty: heat - now.heat });
   // design §8.3 (v2 §2): a checkpoint made before the last earns the Rookie's Tail, the Inside Man's Peek and the Mastermind's Rig.
   if (met && !final) events.push(...checkpointRewards(now));
+  // v2 §2: a penalty that takes Heat to the Getaway Driver's level reveals it and the saboteurs to each other.
+  if (heat > now.heat) events.push(...getawayReveal(events.reduce(applyEvent, now)));
   // v2 §2: a Fixer stops the penalty's raid.
   const saved = heat >= job.heat.max ? stopRaid(events.reduce(applyEvent, now), now.round) : [];
   events.push(...saved);

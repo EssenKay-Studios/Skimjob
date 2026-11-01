@@ -94,6 +94,10 @@ export interface RoleOverride {
   readonly bonus?: number;
   readonly visitors?: number;
   readonly stopAt?: number;
+  /** Fence: safe size that reveals a saboteur; Getaway Driver: Heat multiplier and reveal Heat (v2 §2). design §8 */
+  readonly revealSafe?: number;
+  readonly reverse?: number;
+  readonly revealHeat?: number;
 }
 
 /** Every field is optional; whatever is left out keeps the content value. design §17.4 */

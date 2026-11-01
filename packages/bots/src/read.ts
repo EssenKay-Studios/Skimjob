@@ -32,10 +32,10 @@ export const isDuel = (view: PlayerView): boolean => createdOf(view).duel === tr
 export const crewSize = (view: PlayerView): number => view.players.length + 1;
 
 /** The bot's role definition (content plus the game's overrides); an id with none plays with no power and may pocket, as in the engine. */
-export function roleOf(view: PlayerView): Pick<RoleDef, "power" | "canPocket"> {
+export function roleOf(view: PlayerView): Pick<RoleDef, "power" | "canPocket" | "faction"> {
   const roles = overrideRoles(ROLES, createdOf(view).contentOverrides);
   const def = Object.hasOwn(roles, view.me.role) ? roles[view.me.role] : undefined;
-  return def ?? { power: { kind: "none" }, canPocket: true };
+  return def ?? { power: { kind: "none" }, canPocket: true, faction: "crew" };
 }
 
 export const totalRounds = (job: JobDef): number => job.checkpoints.perPlayer.length * ROUNDS_PER_ACT;

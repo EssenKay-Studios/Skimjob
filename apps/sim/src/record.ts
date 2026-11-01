@@ -2,7 +2,7 @@
 // the event log (the full record of the game). design §17.4
 //
 // Pure: a finished GameState (plus the bot crew) in, plain data out.
-import { ROUNDS_PER_ACT, SCORE_DECIMALS, type RoleId } from "@skimjob/content";
+import { ROUNDS_PER_ACT, SCORE_DECIMALS, type Faction, type RoleId } from "@skimjob/content";
 import type { PersonalityId } from "@skimjob/bots";
 import {
   applyEvent,
@@ -23,6 +23,8 @@ export interface PlayerRecord {
   readonly id: PlayerId;
   readonly personality: PersonalityId;
   readonly role: RoleId;
+  /** The role's side (role deck v2 §0): crew, accomplice or saboteur. */
+  readonly faction: Faction;
   /** False for roles that can't pocket (Inside Man): left out of the pocketing metric. */
   readonly canPocket: boolean;
   readonly score: number;
@@ -205,6 +207,7 @@ export function recordGame(state: GameState, crew: readonly PersonalityId[], rej
         id,
         personality: crew[i] as PersonalityId,
         role,
+        faction: (Object.hasOwn(roles, role) ? roles[role]?.faction : undefined) ?? "crew",
         canPocket: (Object.hasOwn(roles, role) ? roles[role]?.canPocket : undefined) ?? true,
         score: entry?.score ?? 0,
         stash: entry?.stash ?? 0,

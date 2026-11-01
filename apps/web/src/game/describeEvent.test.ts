@@ -43,6 +43,19 @@ describe("describeEvent", () => {
     expect(describeEvent(sampleEvents.roleDealt, asCyd)).toBe("Ana was the Fence."); // the reveal
   });
 
+  // v2 §2 (R3a): what the dark side learns says who and how, never a role, and names nobody else.
+  it("describes alliesLearned for each way it is learned, without naming roles", () => {
+    const lines = (["deal", "fence", "getaway", "tipOff"] as const).map((via) => describeEvent({ ...sampleEvents.alliesLearned, via }, asAna));
+    expect(lines).toEqual([
+      "You were told at the deal that Ben is on the dark side.",
+      "Your full safe paid off: Ben is on the dark side.",
+      "The Heat ran high: you and Ben now know you're on the same side.",
+      "Your tip-off named a dark-side ally: Ben.",
+    ]);
+    for (const l of lines) expect(l).not.toMatch(/Mole|Hacker|Fence|Getaway|Driver|saboteur|accomplice|Cyd/i);
+    expect(describeEvent({ ...sampleEvents.alliesLearned, via: "getaway" }, asCyd)).toBe("The Heat ran high: Ana and Ben now know they're on the same side.");
+  });
+
   // design §5.1: a missed deadline shows the default move.
   it("says when the default move was made", () => {
     expect(describeEvent(sampleEvents.defaultMoveAssigned, { ...asAna, me: "ben" })).toBe(
