@@ -5,7 +5,7 @@
 // rules code never meets a shape it doesn't know. Configs are untrusted JSON,
 // so `validateOverrides` checks every field (own keys only, known keys only,
 // finite numbers, whole numbers where the engine counts loot or Heat).
-import { EVENTS, ROLES, type EventDef, type EventEffect, type JobDef, type JobId, type RoleDef, type RoleId, type RolePower, type RoomDef } from "@skimjob/content";
+import { EVENTS, ROLES, type EventDef, type EventEffect, type Faction, type JobDef, type JobId, type RoleDef, type RoleId, type RolePower, type RoomDef } from "@skimjob/content";
 import type { ContentOverrides, EventOverride, GameConfig, RoleOverride, RoomOverride } from "./types";
 import { isObject } from "./check";
 import { jobById } from "./job";
@@ -261,3 +261,11 @@ const NO_POWER: RolePower = { kind: "none" };
 export function powerOf(config: Pick<GameConfig, "contentOverrides">, role: RoleId): RolePower {
   return roleDefIn(rolesFor(config), role)?.power ?? NO_POWER;
 }
+
+/** The side `role` plays for; a role id with no definition is crew. design §3 */
+export function factionIn(roles: RoleTable, role: RoleId): Faction {
+  return roleDefIn(roles, role)?.faction ?? "crew";
+}
+
+/** Saboteurs and accomplices: the side that wins a failed heist. design §3 */
+export const isDarkSide = (roles: RoleTable, role: RoleId): boolean => factionIn(roles, role) !== "crew";

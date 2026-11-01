@@ -14,6 +14,7 @@ export * from "./meeting";
 export * from "./end";
 export * from "./deck";
 export * from "./duel";
+export * from "./perks";
 export * from "./handle";
 export * from "./view";
 export const ENGINE_VERSION = "0.1.0";

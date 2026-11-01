@@ -118,7 +118,7 @@ describe("Mole tip-off — design §7, §8", () => {
     expect(tipped.after.heat - plain.after.heat).toBe(15);
   });
 
-  it("a tip-off can bring the raid: Heat failure, the Mole wins, and the Driver with the top stash (design §3)", () => {
+  it("a tip-off can bring the raid: Heat failure, the Mole wins, not the top-stash Driver (design §3, role deck v2 §0)", () => {
     let s = game(3, ["mole", "driver", "rookie"]);
     s = { ...s, heat: 90 };
     s = run(s, mv("p0", "lobby", 0, TIP), mv("p1", "vault", 4), mv("p2", "lobby"), ROUND);
@@ -126,7 +126,7 @@ describe("Mole tip-off — design §7, §8", () => {
     expect(s.log.some((e) => e.type === "copsRaided")).toBe(true);
     expect(s.phase).toMatchObject({ kind: "ended", outcome: { result: "failed", reason: "heat" } });
     if (s.phase.kind !== "ended") throw new Error("not ended");
-    expect([...s.phase.outcome.winners].sort()).toEqual(["p0", "p1"]);
+    expect(s.phase.outcome.winners).toEqual(["p0"]);
   });
 });
 
@@ -170,11 +170,12 @@ describe("Mole dealing and Mole allies — design §8.1", () => {
     expect(singles).toBeGreaterThan(0);
   });
 
-  it("Mole 'on' deals 1 Mole at 5–12, also at 9–12 (design §8.1, owner answers 1 Nov)", () => {
+  it("Mole 'on' deals 1 Mole at 4–12 (design §8.1, role deck v2 §3: the only saboteur, at most once), none at 2–3", () => {
     expect(moles(setupEvents(config(5, { mole: "on" })))).toHaveLength(1);
     expect(moles(setupEvents(config(9, { mole: "on" })))).toHaveLength(1);
     expect(moles(setupEvents(config(12, { mole: "on" })))).toHaveLength(1);
-    expect(moles(setupEvents(config(4, { mole: "on" })))).toHaveLength(0);
+    expect(moles(setupEvents(config(4, { mole: "on" })))).toHaveLength(1);
+    expect(moles(setupEvents(config(3, { mole: "on" })))).toHaveLength(0);
   });
 });
 

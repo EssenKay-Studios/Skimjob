@@ -193,22 +193,25 @@ describe("a failed heist — design §3, §19.1", () => {
   });
 });
 
-describe("Mole and Driver winning rules (task 13) — design §3, §8", () => {
+describe("faction winning rules (role deck v2 §0) — design §3, §8", () => {
   // The real content defs (ROLES.mole, ROLES.driver). p0 Mole, p1 Driver, p2 Rookie (stash 5, score 6).
   const state = (driverStash: number, moleStash = 1): GameState =>
     withPlayers(game(3, ["mole", "driver", "rookie"]), 0, { p0: { stash: moleStash }, p1: { stash: driverStash }, p2: { stash: 5 } });
 
-  it("Heat failure: the Mole wins, and the Driver too with the biggest stash", () => {
-    expect(outcomeFor(state(9), "heat").winners).toEqual(["p1", "p0"]);
+  it("failure: the best dark-side stash wins, whatever the crew holds; the Driver is crew now (design §3, role deck v2 R1)", () => {
+    expect(outcomeFor(state(9), "heat").winners).toEqual(["p0"]);
     expect(outcomeFor(state(2), "heat").winners).toEqual(["p0"]);
-  });
-
-  it("Heat failure: the Driver's biggest stash is over the whole crew, Moles included", () => {
     expect(outcomeFor(state(9, 12), "heat").winners).toEqual(["p0"]);
   });
 
-  it("missed target: only the Mole wins, whatever the Driver holds", () => {
+  it("missed target: the Mole wins, whatever the Driver holds", () => {
     expect(outcomeFor(state(9), "target").winners).toEqual(["p0"]);
+  });
+
+  it("failure with two saboteurs: only the bigger stash wins (design §3: the winning side's best stash)", () => {
+    const s = withPlayers(game(4, ["mole", "mole", "rookie", "lookout"]), 0, { p0: { stash: 4 }, p1: { stash: 9 }, p2: { stash: 30 } });
+    expect(outcomeFor(s, "heat").winners).toEqual(["p1"]);
+    expect(outcomeFor(s, null).winners).toEqual(["p2"]);
   });
 
   it("success: the Driver wins normally with the biggest score", () => {

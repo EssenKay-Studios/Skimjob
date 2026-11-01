@@ -16,7 +16,11 @@ export interface PlayerSeat {
   readonly isBot: boolean;
 }
 
-/** design §8.1: none / always / 50% chance ("maybe a Mole"). Player-count limits are content rules. */
+/**
+ * The host's saboteur setting (the field keeps its old name, `mole`). design §8.1:
+ * off = crew only; on = the dark side rolled by crew size; maybe = like on,
+ * but with a 50% chance of no dark side at 4–8 players. Numbers are content rules.
+ */
 export type MoleSetting = "off" | "maybe" | "on";
 
 /** design §11.2 */
