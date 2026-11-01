@@ -80,6 +80,24 @@ test("the host hands over to another player, then leaves", async ({ browser }, i
   await expect(guest.locator(".seat")).toHaveCount(1, { timeout: 10_000 });
 });
 
+// PR #27 review: a signed-in player who hosts under another name keeps their session and their other games.
+test("hosting under a different name keeps the session", async ({ browser }, info) => {
+  test.skip(info.project.name !== "desktop", "one run is enough");
+  const page = await hostGame(browser, "Mara");
+  const first = page.url();
+  await page.goto("/new");
+  await expect(page.getByLabel("Your name in this game")).toHaveValue("Mara");
+  await page.getByLabel("Your name in this game").fill("Mara 2");
+  await page.getByRole("button", { name: "Open the lobby" }).click();
+  await expect(page).toHaveURL(/\/lobby\//);
+  await expect(page.locator(".seat__name")).toHaveText(["Mara 2"]);
+  expect(page.url()).not.toBe(first);
+  const me = await page.evaluate(() => fetch("/api/me").then((r) => r.json()));
+  expect(me.user.name).toBe("Mara");
+  await page.goto(first);
+  await expect(page.getByRole("heading", { name: "Assemble the crew" })).toBeVisible(); // still in the first game
+});
+
 test("a bad invite says so", async ({ page }) => {
   await page.goto("/join/zzzzzzzzzz");
   await expect(page.getByRole("heading", { name: "That invite doesn't open anything." })).toBeVisible();

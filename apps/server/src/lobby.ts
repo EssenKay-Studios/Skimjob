@@ -156,6 +156,11 @@ export function lobbyRoutes(app: FastifyInstance, db: Db, store: GameStore, s: S
     const user = await signedIn(req);
     const parsed = parseSettings(body(req).settings);
     if (!parsed.ok) return refuse(400, parsed.error);
+    // The host's seat name in this game (default: their account name). Never changes the session.
+    const rawName = body(req).nickname;
+    const checked = rawName === undefined ? null : checkNickname(rawName);
+    if (checked && !checked.ok) return refuse(400, checked.error);
+    const seatName = checked?.ok ? checked.name : user.name;
     let id: string | null = null;
     for (let tries = 0; id === null; tries++) {
       try {
@@ -164,7 +169,7 @@ export function lobbyRoutes(app: FastifyInstance, db: Db, store: GameStore, s: S
         if (tries >= 2) throw err; // an invite-code clash twice running isn't bad luck
       }
     }
-    await db.query("insert into seats (game_id, seat_no, user_id, nickname) values ($1, 0, $2, $3)", [id, user.id, user.name]);
+    await db.query("insert into seats (game_id, seat_no, user_id, nickname) values ($1, 0, $2, $3)", [id, user.id, seatName]);
     reply.code(201);
     return view((await gameById(db, id))!, await seatsOf(db, id), user);
   });

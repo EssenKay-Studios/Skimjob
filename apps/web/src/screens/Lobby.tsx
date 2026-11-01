@@ -10,12 +10,14 @@ import { Copy, Play, Plus } from "../components/icons";
 import { Segmented, type SegmentedOption } from "../components/Segmented";
 import { SketchFrame } from "../components/SketchFrame";
 import { TextField } from "../components/TextField";
-import { useToast } from "../components/Toast";
+import { ToastIcon, useToast } from "../components/Toast";
 import { Underline } from "../components/Underline";
 import { navigate } from "../router";
 import { TopBar } from "./TopBar";
 
 const POLL_MS = 2000;
+/** While the server can't be reached, polls back off (2 s, 4 s, 8 s … up to this). */
+const POLL_MAX_MS = 16000;
 
 const onOff: readonly SegmentedOption<boolean>[] = [
   { value: true, label: "On" },
@@ -91,23 +93,52 @@ export function Lobby({ id }: { id: string }) {
     setGame(view);
   }, []);
 
+  // One persistent banner while the server can't be reached (no toast per poll), cleared on recovery.
+  const [offline, setOffline] = useState(false);
   const failed = useCallback(
     (err: unknown) => {
-      if (err instanceof ApiError && (err.status === 404 || err.status === 401)) setMissing(true);
+      if (err instanceof ApiError && err.unreachable) setOffline(true);
+      else if (err instanceof ApiError && (err.status === 404 || err.status === 401)) setMissing(true);
       else toast(err instanceof ApiError ? sentence(err.message) : "Something went wrong.", "bad");
     },
     [toast],
   );
 
-  const refresh = useCallback(() => {
+  const refresh = useCallback(async (): Promise<boolean> => {
     const n = ++seq.current;
-    return api<LobbyView>("GET", `/games/${id}`).then((v) => apply(n, v), failed);
+    try {
+      apply(n, await api<LobbyView>("GET", `/games/${id}`));
+      setOffline(false);
+      return true;
+    } catch (err) {
+      failed(err);
+      return !(err instanceof ApiError && err.unreachable);
+    }
   }, [id, apply, failed]);
 
   useEffect(() => {
-    void refresh();
-    const t = setInterval(() => void refresh(), POLL_MS);
-    return () => clearInterval(t);
+    let stop = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let delay = POLL_MS;
+    const loop = async () => {
+      const ok = await refresh();
+      if (stop) return;
+      delay = ok ? POLL_MS : Math.min(delay * 2, POLL_MAX_MS);
+      timer = setTimeout(() => void loop(), delay);
+    };
+    void loop();
+    // Coming back online: check at once instead of waiting out the back-off.
+    const online = () => {
+      clearTimeout(timer);
+      delay = POLL_MS;
+      void loop();
+    };
+    window.addEventListener("online", online);
+    return () => {
+      stop = true;
+      clearTimeout(timer);
+      window.removeEventListener("online", online);
+    };
   }, [refresh]);
 
   useEffect(() => {
@@ -198,6 +229,14 @@ export function Lobby({ id }: { id: string }) {
         )}
       </TopBar>
       <main>
+        {offline && (
+          <SketchFrame seed="offline" radius={14} shadow={0.35} grain={false} fill="var(--clay-l)" className="offline-banner" role="status">
+            <ToastIcon tone="bad" />
+            <span>
+              <b>Can't reach the hideout.</b> Retrying… your seat is safe.
+            </span>
+          </SketchFrame>
+        )}
         <SketchFrame as="section" seed="lobby-sheet" radius={24} tape holes className="sheet lobby__sheet enter-sheet" aria-labelledby="lobby-title">
           <header className="lobby__head">
             <p className="kicker">Lobby · First National</p>

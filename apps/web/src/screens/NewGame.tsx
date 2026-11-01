@@ -22,7 +22,7 @@ export function NewGame() {
         setMe(u);
         if (u) setName((n) => n || u.name);
       },
-      () => setMe(null),
+      () => setMe(null), // can't tell yet; submit asks again
     );
   }, []);
 
@@ -36,9 +36,12 @@ export function NewGame() {
     }
     setBusy(true);
     try {
-      // A different name than the signed-in one hosts as a new guest.
-      if (!me || me.name !== nickname) await api("POST", "/auth/guest", { nickname });
-      const game = await api<LobbyView>("POST", "/games", {});
+      // Sign in as a guest only when there's no session. A signed-in player keeps it (and
+      // their other games); the name is just their seat name in this game (PR #27 review).
+      // Asked again here, so a failed check on load can never sign a player out.
+      const current = await fetchMe();
+      if (!current) await api("POST", "/auth/guest", { nickname });
+      const game = await api<LobbyView>("POST", "/games", { nickname });
       navigate(`/lobby/${game.id}`);
     } catch (err) {
       setError(err instanceof ApiError ? sentence(err.message) : "Something went wrong. Try again.");

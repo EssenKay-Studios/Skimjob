@@ -290,6 +290,21 @@ describe("leave", () => {
 });
 
 // Owner request (decisions.md M2-5b): before the start the host can hand the host role to another person, then leave.
+// PR #27 review: hosting under another name must not swap the session (a guest would lose their other games).
+describe("host nickname per game", () => {
+  it("POST /games { nickname } seats the host under that name and keeps the session", async () => {
+    const who = await guest("Karthik");
+    const first = await call("POST", "/games", who, {});
+    const res = await call("POST", "/games", who, { nickname: "  Kay  " });
+    expect(res.status).toBe(201);
+    expect(res.session).toBeNull(); // no new cookie
+    expect(res.body.seats!.map((s) => [s.nickname, s.you, s.host])).toEqual([["Kay", true, true]]);
+    expect((await call("GET", "/me", who)).body.user).toMatchObject({ name: "Karthik" });
+    expect((await call("GET", `/games/${first.body.id}`, who)).status).toBe(200); // the other game is still yours
+    for (const nickname of ["", "Bot · X", 7]) expect((await call("POST", "/games", who, { nickname })).status).toBe(400);
+  });
+});
+
 describe("host hand-over", () => {
   it("moves the host role to another person, who can then run the lobby; the old host can leave", async () => {
     const { who, game } = await host();

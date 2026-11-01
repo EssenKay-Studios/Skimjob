@@ -48,12 +48,19 @@ export interface Me {
   readonly guest: boolean;
 }
 
+/** What every "server unreachable" case says (offline, proxy 502/503/504, a non-JSON body). */
+export const UNREACHABLE = "Can't reach the hideout. Check your connection and try again.";
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
     message: string,
   ) {
     super(message);
+  }
+  /** The server couldn't be reached (no response, a gateway error, or not our JSON). */
+  get unreachable(): boolean {
+    return this.status === 0 || this.status === 502 || this.status === 503 || this.status === 504;
   }
 }
 
@@ -67,11 +74,16 @@ export async function api<T>(method: "GET" | "POST" | "PATCH" | "DELETE", path: 
   try {
     res = await fetch(`/api${path}`, init);
   } catch {
-    throw new ApiError(0, "Can't reach the server. Check your connection and try again.");
+    throw new ApiError(0, UNREACHABLE);
   }
-  const data = (await res.json().catch(() => ({}))) as { error?: string };
-  if (!res.ok) throw new ApiError(res.status, data.error ?? `Something went wrong (${res.status}).`);
-  return data as T;
+  const data = (await res.json().catch(() => null)) as { error?: string } | null;
+  if (res.ok && data) return data as T;
+  // Our server always answers JSON; anything else came from a proxy in front of it.
+  if (!data || typeof data.error !== "string") {
+    const status = res.ok || res.status < 500 ? 502 : res.status;
+    throw new ApiError(status === 500 ? 500 : status, status === 500 ? "Something went wrong on our side. Try again in a moment." : UNREACHABLE);
+  }
+  throw new ApiError(res.status, data.error);
 }
 
 /** The signed-in user, or null. */

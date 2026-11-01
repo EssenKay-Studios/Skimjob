@@ -286,11 +286,14 @@ test("offline and server errors show friendly messages", async ({ browser }) => 
   await host.goto(`/lobby/${g.id}`);
   await expect(host.getByRole("heading", { name: "Assemble the crew" })).toBeVisible();
   await hctx.setOffline(true);
-  await expect(host.getByText(/can't reach the server/i).first()).toBeVisible({ timeout: 5_000 });
+  await expect(host.getByText(/can't reach the hideout/i).first()).toBeVisible({ timeout: 5_000 });
   await host.waitForTimeout(4_500);
   await shot(host, "lobby-offline");
-  // QA PR #27 (reported, not asserted): each 2 s poll adds the same toast again (2–3 stacked copies).
+  // QA PR #27 (fixed): one persistent banner, never a toast per poll.
+  await expect(host.getByText(/can't reach the hideout/i)).toHaveCount(1);
+  await expect(host.locator(".toast")).toHaveCount(0);
   await hctx.setOffline(false);
+  await expect(host.getByText(/can't reach the hideout/i)).toHaveCount(0, { timeout: 5_000 });
   await expect(host.getByRole("heading", { name: "Assemble the crew" })).toBeVisible();
 });
 
@@ -309,6 +312,8 @@ test("server down (vite proxy 502, empty body) on invite and new game", async ({
   await shot(page, "new-server-down");
   await expect(page.locator(".field__error, [role=alert]").or(page.getByText(/went wrong|can't reach/i)).first()).toBeVisible();
   await expect(page).toHaveURL(/\/new$/);
-  // QA PR #27 (reported, not asserted): both show "Something went wrong (502)." rather than a server-down message.
-  expect(inviteText).toBeTruthy();
+  // QA PR #27 (fixed): a server-down message, not "Something went wrong (502)."
+  expect(inviteText).toMatch(/can't reach the hideout/i);
+  await expect(page.getByRole("alert")).toContainText(/can't reach the hideout/i);
+  await expect(page.getByText(/\(502\)/)).toHaveCount(0);
 });
