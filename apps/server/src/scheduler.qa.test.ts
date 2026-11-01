@@ -22,14 +22,30 @@ let app: FastifyInstance;
 let forcedSeed = "qa-sched-1";
 let duelForTwo = false;
 
+/** Queries matching one of these fail once each (a transient database error), then the pattern is spent. */
+let faults: RegExp[] = [];
+const faulty = <Q extends { query: Db["query"] }>(q: Q): Q => ({
+  ...q,
+  query: (async (sql: string, params?: readonly unknown[]) => {
+    const k = faults.findIndex((f) => f.test(sql));
+    if (k >= 0) {
+      faults.splice(k, 1);
+      throw new Error(`QA: injected database error on ${sql.slice(0, 40)}`);
+    }
+    return q.query(sql, params);
+  }) as Db["query"],
+});
+const faultyDb = (): Db => ({ ...faulty(db), transaction: (fn) => db.transaction((tx) => fn(faulty(tx))), close: () => db.close() });
+
 async function boot() {
-  const inner = createGameStore(db);
+  const sdb = faultyDb();
+  const inner = createGameStore(sdb);
   store = {
     ...inner,
     start: (gameId, config, inTx) =>
       inner.start(gameId, { ...config, seed: forcedSeed, ...(duelForTwo && config.players.length === 2 ? { duel: true, mole: "off" } : {}) }, inTx),
   };
-  app = buildServer({ db, clock, store });
+  app = buildServer({ db: sdb, clock, store });
   await app.ready();
 }
 /** A new fake clock at T0 and a server built on it. */
@@ -47,6 +63,7 @@ afterEach(async () => {
   await db.query("delete from deadlines");
   await db.query("update games set status = 'ended' where status = 'running'");
   duelForTwo = false;
+  faults = [];
 });
 afterAll(async () => {
   await app.close();
@@ -309,4 +326,71 @@ describe("emergency during an open alibi window (design §5.4)", () => {
     expect(await deadlines(id)).toEqual([{ key: "round:2", due: clock.now() + left, paused: false }]);
   });
 
+});
+
+describe("restart matrix after the fix (30c9f9e): bots, 10+ seeds, Duel included", () => {
+  const emergencyAt = async (s: GameState, _i: number, id: string, host: string) => {
+    if (s.phase.kind === "planning" && s.phase.round === 2 && !s.pendingEmergency && count(s, "emergencyMeetingCalled") === 0) {
+      expect(await send(id, host, { type: "callEmergency" })).toMatchObject({ ok: true });
+    }
+  };
+  for (let k = 0; k < 10; k++) {
+    const sessionLength = PRESETS[k % PRESETS.length]!;
+    const voteVisibility = (["hiddenThenRevealed", "open", "secret"] as VoteVisibility[])[k % 3]!;
+    it(`seed ${k}: ${sessionLength}, ${voteVisibility}, 6 seats and Duel — restart at every step = uninterrupted`, { timeout: 240_000 }, async () => {
+      forcedSeed = `qa-matrix-${k}`;
+      const opts = { act: emergencyAt };
+      const a = await play(5, { sessionLength, voteVisibility }, opts);
+      const b = await play(5, { sessionLength, voteVisibility }, { ...opts, restart: () => true });
+      expect(b.fired).toEqual(a.fired);
+      expect(b.log).toEqual(a.log);
+      duelForTwo = true;
+      forcedSeed = `qa-matrix-duel-${k}`;
+      const da = await play(1, { sessionLength, mole: "off" });
+      const db2 = await play(1, { sessionLength, mole: "off" }, { restart: () => true });
+      expect(db2.phases.has("checkpoint")).toBe(true);
+      expect(db2.fired).toEqual(da.fired);
+      expect(db2.log).toEqual(da.log);
+    });
+  }
+});
+
+describe("transient database errors on a deadline (30c9f9e retry/backoff)", () => {
+  /** Plays to the end, ticking every second when nothing is sent (backoff), arming `fault` once at step `at`. */
+  async function playWithFault(fault: RegExp | null, at: number) {
+    await fresh();
+    forcedSeed = "qa-fault";
+    const { id } = await startGame(5, { sessionLength: "quick" });
+    let idle = 0;
+    for (let i = 0; i < 2000; i++) {
+      if ((await load(id)).phase.kind === "ended") break;
+      if (i === at && fault) faults.push(fault);
+      const rows = (await deadlines(id)).filter((d) => !d.paused);
+      if (rows.length > 0 && rows[0]!.due > clock.now()) clock.advance(rows[0]!.due - clock.now());
+      if ((await app.scheduler.tick()) === 0) {
+        idle++;
+        expect(idle, "game stalled").toBeLessThan(200);
+        clock.advance(1000);
+      } else idle = 0;
+    }
+    const end = await load(id);
+    expect(end.phase.kind).toBe("ended");
+    expect(await deadlines(id)).toEqual([]);
+    expect(faults).toEqual([]); // the fault really fired
+    for (let r = 1; r <= end.resolvedRound; r++) expect(count(end, "roundResolved", (e) => e.round === r)).toBe(1);
+    return end.log;
+  }
+  it("a failed event write, deadline reconcile or bot bookkeeping is retried: the game finishes with the same log", { timeout: 240_000 }, async () => {
+    const clean = await playWithFault(null, 0);
+    for (const [fault, at] of [
+      [/insert into game_events/i, 3],
+      [/insert into deadlines/i, 5],
+      [/delete from deadlines/i, 7],
+      [/update seats set bot_seen/i, 9],
+      [/select game_id, key, command from deadlines/i, 4],
+    ] as const) {
+      const log = await playWithFault(fault, at);
+      expect(log, String(fault)).toEqual(clean);
+    }
+  });
 });
