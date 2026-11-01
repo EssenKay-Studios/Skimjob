@@ -1,0 +1,252 @@
+// /dev/gallery: every component and token on one page, for eyeballing the
+// style against docs/ui-style.md and for screenshots.
+import { useState, type ReactNode } from "react";
+import { Avatar } from "../components/Avatar";
+import { BankDoodle } from "../components/BankDoodle";
+import { Button, DangerButton } from "../components/Button";
+import { Chip } from "../components/Chip";
+import { ArrowBack, Copy, Play, Plus, Star } from "../components/icons";
+import { SketchFrame } from "../components/SketchFrame";
+import { TextField } from "../components/TextField";
+import { Toast, useToast } from "../components/Toast";
+import { Underline } from "../components/Underline";
+import { MaskMark, Wordmark } from "../components/Wordmark";
+import { CREW_COLOURS } from "../components/avatar";
+import { navigate } from "../router";
+
+const SWATCHES: readonly [string, string][] = [
+  ["--paper", "#faf9f5"],
+  ["--paper-hi", "#fffdf8"],
+  ["--paper2", "#f3ede0"],
+  ["--oat", "#e3dacc"],
+  ["--manilla", "#ebdbbc"],
+  ["--card-sand", "#f1dec4"],
+  ["--plinth", "#e8d4b6"],
+  ["--ink", "#2a2320"],
+  ["--ink2", "#4a403a"],
+  ["--mute", "#85796d"],
+  ["--clay", "#d97757"],
+  ["--clay-hover", "#e08565"],
+  ["--clay-d", "#b35a3c"],
+  ["--clay-l", "#f4d6c8"],
+  ["--kraft", "#d4a27f"],
+  ["--olive", "#788c5d"],
+  ["--good", "#4f7f34"],
+  ["--bad", "#b5443a"],
+  ["--sky", "#6a9bcc"],
+  ["--gold", "#e2b858"],
+];
+
+function Section({ id, title, note, children }: { id: string; title: string; note?: string; children: ReactNode }) {
+  return (
+    <SketchFrame as="section" seed={`g-${id}`} radius={16} shadow={0.5} className="g-section" aria-labelledby={`g-${id}`}>
+      <header className="g-section__head">
+        <h3 id={`g-${id}`}>
+          <Underline seed={id}>{title}</Underline>
+        </h3>
+        {note && <p className="meta">{note}</p>}
+      </header>
+      {children}
+    </SketchFrame>
+  );
+}
+
+export function Gallery() {
+  const toast = useToast();
+  const [speed, setSpeed] = useState(1);
+  const [armedCount, setArmedCount] = useState(0);
+  const [code, setCode] = useState("");
+  return (
+    <div className="gallery">
+      <header className="topbar">
+        <Button variant="back" seed="g-back" icon={<ArrowBack />} onClick={() => navigate("/")}>
+          Back <kbd>Esc</kbd>
+        </Button>
+        <Wordmark size={26} />
+      </header>
+
+      <SketchFrame as="section" seed="gallery-sheet" radius={24} tape holes className="sheet gallery__sheet enter-sheet">
+        <div className="gallery__title">
+          <h1>Component gallery</h1>
+          <p className="meta">Every M2-5 building block, drawn from docs/ui-style.md.</p>
+        </div>
+        <hr className="dashed" />
+
+        <div className="g-grid">
+          <Section id="buttons" title="Buttons" note="§5 · hover lifts and tilts, press squashes">
+            <div className="g-row">
+              <Button variant="primary" seed="g-p1" icon={<Play />}>
+                Lock it in
+              </Button>
+              <Button variant="primary" seed="g-p2" disabled>
+                Disabled
+              </Button>
+            </div>
+            <div className="g-row">
+              <Button variant="secondary" seed="g-s1">
+                Secondary
+              </Button>
+              <Button variant="secondary" seed="g-s2" icon={<Copy />}>
+                Copy invite link
+              </Button>
+              <Button variant="secondary" seed="g-s3" disabled>
+                Disabled
+              </Button>
+            </div>
+            <div className="g-row">
+              <Button variant="small" seed="g-sm1" icon={<Plus />} aria-label="Add a bot" />
+              <Button variant="small" seed="g-sm2">
+                Small
+              </Button>
+              {[1, 2, 3].map((n) => (
+                <Button key={n} variant="toggle" seed={`g-t${n}`} pressed={speed === n} onClick={() => setSpeed(n)}>
+                  {"▶".repeat(n)}
+                </Button>
+              ))}
+              <Button variant="ghost">Ghost</Button>
+            </div>
+            <div className="g-row">
+              <DangerButton seed="g-d" armedLabel="Really? Click again" onConfirm={() => setArmedCount((n) => n + 1)}>
+                Abandon the job
+              </DangerButton>
+              <span className="meta">confirmed {armedCount}×</span>
+            </div>
+            <div className="g-row">
+              <Button variant="back" seed="g-b2" icon={<ArrowBack />}>
+                Back <kbd>Esc</kbd>
+              </Button>
+              <Button variant="back" seed="g-b3" icon={<ArrowBack />} aria-label="Back" className="btn--icon" />
+            </div>
+          </Section>
+
+          <Section id="premium" title="Premium card" note="§2 dark exception · gold button wiggles now and then">
+            <SketchFrame seed="g-pass" radius={16} fill="url(#sk-pass)" ink="var(--pass-line)" shadow={0.55} grain={false} tilt={-0.5} className="pass-card">
+              <div className="pass-card__text">
+                <h2 className="pass-card__title">Keep your rap sheet</h2>
+                <p>Premium buttons only ever sit on this dark card.</p>
+              </div>
+              <Button variant="premium" seed="g-pr" icon={<Star />}>
+                Sign in with Google
+              </Button>
+            </SketchFrame>
+          </Section>
+
+          <Section id="avatars" title="Blob avatars" note="initials · crew colours · ready / away / turn / bot">
+            <div className="g-row g-row--center">
+              <Avatar name="Mara Vox" size={46} />
+              <Avatar name="Dez" size={40} status="ready" />
+              <Avatar name="Lucky Lou" size={40} status="turn" />
+              <Avatar name="Priya K" size={40} status="away" />
+              <Avatar name="Bot Opportunist" size={40} bot />
+              <Avatar name="otto" size={36} />
+              <Avatar name="émile" size={28} />
+            </div>
+            <div className="g-row g-row--center">
+              {CREW_COLOURS.map((c, i) => (
+                <Avatar key={c} name={["Ash", "Bo", "Cy", "Di", "Ed", "Fi", "Gus"][i]!} colour={c} size={36} />
+              ))}
+            </div>
+            <div className="g-row g-row--center">
+              <span className="avatar-stack">
+                {["Mara Vox", "Dez", "Lucky Lou", "Priya K", "Otto", "Sam"].map((n) => (
+                  <Avatar key={n} name={n} size={34} />
+                ))}
+              </span>
+              <span className="meta">avatar stack</span>
+            </div>
+          </Section>
+
+          <Section id="frames" title="Sketch frames" note="§4 · seeded wobble, hatched shadow, grain, tape, holes, boil">
+            <div className="g-frames">
+              <SketchFrame seed="f1" className="g-frame">
+                <b className="hand">seed f1</b>
+                <span className="meta">default card</span>
+              </SketchFrame>
+              <SketchFrame seed="f2" className="g-frame">
+                <b className="hand">seed f2</b>
+                <span className="meta">same size, new wobble</span>
+              </SketchFrame>
+              <SketchFrame seed="f3" fill="var(--manilla)" className="g-frame" tilt={-1}>
+                <b className="hand">manilla</b>
+                <span className="meta">case-file fill, tilted</span>
+              </SketchFrame>
+              <SketchFrame seed="f4" boil ink="var(--clay-d)" className="g-frame">
+                <b className="hand">boiling</b>
+                <span className="meta">hot / alert elements</span>
+              </SketchFrame>
+              <SketchFrame seed="f5" tape className="g-frame">
+                <b className="hand">taped</b>
+                <span className="meta">sheet furniture</span>
+              </SketchFrame>
+              <SketchFrame seed="f6" fill="var(--clay-l)" shadow={0} className="g-frame">
+                <b className="hand">no shadow</b>
+                <span className="meta">selected tint</span>
+              </SketchFrame>
+            </div>
+          </Section>
+
+          <Section id="type" title="Type" note="§3 · Pangolin headings, Inter body">
+            <div className="g-type">
+              <h1>Page title 32</h1>
+              <h2>Section heading 21</h2>
+              <h3>
+                <Underline seed="t">Panel heading 17</Underline>
+              </h3>
+              <p>Body copy in Inter 14.5/1.45. Pick a room, loot it, then decide how much reaches the Haul.</p>
+              <p className="meta">Caption · Inter 600 12 · muted</p>
+              <p>
+                <span className="num g-money">$ 48,200</span> <span className="meta">tabular numbers</span> <kbd>Esc</kbd> <kbd>Ctrl</kbd>{" "}
+                <kbd>1</kbd>
+              </p>
+              <div className="g-row g-row--center">
+                <Wordmark size={40} />
+                <MaskMark size={40} />
+              </div>
+            </div>
+          </Section>
+
+          <Section id="inputs" title="Chips, fields, toasts" note="§4 chips · §8 toasts">
+            <div className="g-row">
+              <Chip colour="var(--sky)">Sky</Chip>
+              <Chip colour="var(--olive)">Olive</Chip>
+              <Chip colour="var(--gold)">Gold</Chip>
+              <Chip on>Active</Chip>
+            </div>
+            <div className="g-fields">
+              <TextField seed="g-f1" label="Nickname" placeholder="Lucky Lou" hint="Shown to your crew." value={code} onChange={(e) => setCode(e.target.value)} />
+              <TextField seed="g-f2" label="Invite code" defaultValue="nope!" error="That doesn't look like an invite code." />
+            </div>
+            <div className="g-col">
+              <Toast text="Dez locked in a move." tone="good" seed="g-toast1" />
+              <Toast text="Heat is climbing: 72 / 100." tone="bad" seed="g-toast2" />
+              <Toast text="Meeting at 8 pm tonight." seed="g-toast3" />
+            </div>
+            <div className="g-row">
+              <Button variant="secondary" seed="g-pop" onClick={() => toast("A fresh toast pops in.", "good")}>
+                Pop a toast
+              </Button>
+            </div>
+          </Section>
+
+          <Section id="palette" title="Palette" note="§2 tokens">
+            <div className="g-swatches">
+              {SWATCHES.map(([name, hex]) => (
+                <div key={name} className="g-swatch">
+                  <span className="g-swatch__chip" style={{ background: `var(${name})` }} />
+                  <code>{name}</code>
+                  <span className="meta">{hex}</span>
+                </div>
+              ))}
+            </div>
+          </Section>
+
+          <Section id="art" title="Landing doodle" note="placeholder art until M2-9">
+            <SketchFrame seed="g-art" radius={18} fill="var(--card-sand)" shadow={0.5} className="hero-card">
+              <BankDoodle className="hero-card__img" />
+            </SketchFrame>
+          </Section>
+        </div>
+      </SketchFrame>
+    </div>
+  );
+}

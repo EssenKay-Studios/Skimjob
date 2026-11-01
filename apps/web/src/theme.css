@@ -1,0 +1,193 @@
+/* Skimjob tokens and base styles (docs/ui-style.md §2, §3, §9). */
+
+/* Fonts: self-hosted, SIL OFL (licences next to the files). */
+@font-face {
+  font-family: "Pangolin";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  size-adjust: 96%;
+  src: url("./fonts/pangolin-latin-400-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Pangolin";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  size-adjust: 96%;
+  src: url("./fonts/pangolin-latin-ext-400-normal.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+1D00-1DBF, U+1E00-1E9F,
+    U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("./fonts/inter-latin-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("./fonts/inter-latin-ext-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+1D00-1DBF, U+1E00-1E9F,
+    U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+:root {
+  /* Paper */
+  --paper: #faf9f5;
+  --paper-hi: #fffdf8;
+  --paper2: #f3ede0;
+  --oat: #e3dacc;
+  --manilla: #ebdbbc;
+  --card-sand: #f1dec4;
+  --plinth: #e8d4b6;
+  /* Ink */
+  --ink: #2a2320;
+  --ink2: #4a403a;
+  --mute: #85796d;
+  /* Accent */
+  --clay: #d97757;
+  --clay-hover: #e08565;
+  --clay-d: #b35a3c;
+  --clay-l: #f4d6c8;
+  --kraft: #d4a27f;
+  /* Signals */
+  --olive: #788c5d;
+  --good: #4f7f34;
+  --bad: #b5443a;
+  --sky: #6a9bcc;
+  --gold: #e2b858;
+  --cream: #fff7ee;
+  /* Premium ("crew pass") card */
+  --pass-1: #3b2c62;
+  --pass-2: #2b2449;
+  --pass-line: #171230;
+  --pass-gold: #f6bc45;
+  --pass-gold-d: #d99a1e;
+  --pass-text: #fff4de;
+  --pass-mute: #c8bedf;
+
+  /* Type */
+  --font-hand: "Pangolin", "Segoe Print", "Bradley Hand", "Comic Sans MS", cursive;
+  --font-ui: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+
+  /* Motion */
+  --spring: cubic-bezier(0.3, 1.55, 0.5, 1);
+  --slide: cubic-bezier(0.2, 0.85, 0.3, 1);
+
+  /* Hatched fill for meters and swatches: background: var(--hatch), var(--c) */
+  --hatch: repeating-linear-gradient(-55deg, #2a23204d 0 1px, transparent 1px 3px);
+
+  color-scheme: light;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  background: var(--paper2);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+  font: 400 14.5px/1.45 var(--font-ui);
+  color: var(--ink2);
+  background:
+    radial-gradient(120% 80% at 50% 0%, #faf6ee 0%, transparent 60%),
+    radial-gradient(#2a23200f 1px, transparent 1.3px) 0 0 / 22px 22px,
+    var(--paper2);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+.hand {
+  font-family: var(--font-hand);
+  font-weight: 700;
+  color: var(--ink);
+  margin: 0;
+}
+h1 {
+  font-size: 32px;
+  line-height: 1.2;
+}
+h2 {
+  font-size: 21px;
+  line-height: 1.2;
+}
+h3 {
+  font-size: 17px;
+  line-height: 1.2;
+}
+p {
+  margin: 0;
+}
+a {
+  color: var(--clay-d);
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1.5px;
+}
+
+.num {
+  font-family: var(--font-ui);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+.meta {
+  font: 600 12px/1.35 var(--font-ui);
+  color: var(--mute);
+}
+
+kbd {
+  display: inline-block;
+  min-width: 1.6em;
+  padding: 1px 5px;
+  font: 700 11px/1.4 var(--font-ui);
+  color: var(--ink2);
+  text-align: center;
+  background: var(--paper2);
+  border: 1.2px solid var(--ink2);
+  border-radius: 5px;
+}
+
+:focus-visible {
+  outline: 2.5px solid var(--clay);
+  outline-offset: 3px;
+  border-radius: 8px;
+}
+
+::selection {
+  background: var(--clay-l);
+  color: var(--ink);
+}
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+@media (max-height: 800px) {
+  h1 {
+    font-size: 27px;
+  }
+}
