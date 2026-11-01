@@ -27,7 +27,7 @@ packages/bots/     Agent interface + bot personalities
 apps/sim/          CLI simulator and balance reports
 apps/server/       (later) authoritative game server, scheduler, chat, push
 apps/web/          (later) React browser client
-apps/mobile/       (later) React Native / Expo app
+apps/mobile/       (later) Flutter app (Android/iOS) — talks to the server; no engine copy
 docs/              design.md, STATUS.md, decisions.md
 ```
 
