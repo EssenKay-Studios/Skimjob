@@ -60,6 +60,17 @@ export interface SnitchTargetAssigned {
 }
 
 /**
+ * design §8.1: when two Moles are dealt, each is told privately who the other
+ * is (`allies`: the other Moles). Not sent to a lone Mole.
+ */
+export interface MoleAllies {
+  readonly type: "moleAllies";
+  readonly visibility: PrivateVisibility;
+  readonly player: PlayerId;
+  readonly allies: readonly PlayerId[];
+}
+
+/**
  * The RNG state after the draws made while handling one command. Appended after
  * the events those draws produced, whenever a command consumed randomness, so
  * replaying the log restores `GameState.rng` without re-drawing. Reveal-only:
@@ -119,11 +130,13 @@ export interface LootSplit {
  * design §8
  */
 export type ResolvedAbility =
-  | Exclude<AbilityUse, { readonly kind: "blackmail" }>
+  | Exclude<AbilityUse, { readonly kind: "blackmail" | "tipOff" }>
   /** `stolen` is 0 for a wrong guess, and at most what the target's stash held for a right one. */
   | { readonly kind: "blackmail"; readonly target: PlayerId; readonly role: RoleId; readonly correct: boolean; readonly stolen: number }
   /** Muscle: the pending shakedown of `meetingId` will be cancelled when its window ends. design §11.3 */
-  | { readonly kind: "cancelShakedown"; readonly meetingId: string; readonly target: PlayerId };
+  | { readonly kind: "cancelShakedown"; readonly meetingId: string; readonly target: PlayerId }
+  /** Mole: the tip-off added `heat` to this round's Heat. Nobody else is told; it's inside the round's total. design §8 */
+  | { readonly kind: "tipOff"; readonly heat: number };
 
 /** An ability took effect. Private to its user; `round` is the latest round started. design §8 */
 export interface AbilityResolved {
@@ -414,6 +427,7 @@ export type GameEvent =
   | RoomsSet
   | RoleDealt
   | SnitchTargetAssigned
+  | MoleAllies
   | RngAdvanced
   | RoundStarted
   | MoveSubmitted

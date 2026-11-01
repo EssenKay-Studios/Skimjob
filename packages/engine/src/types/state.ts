@@ -75,16 +75,18 @@ export interface PlayerState {
 export interface RoleState {
   /**
    * Uses this act, reset when an act starts: loot moved into the safe (Fence),
-   * camera loops (Hacker), role guesses (Blackmailer).
+   * camera loops (Hacker), role guesses (Blackmailer), tip-offs (Mole).
    */
   readonly usedThisAct: number;
   /** Uses this game: cancelled shakedowns (Muscle). */
   readonly usedThisGame: number;
   /** The Snitch's secret target; null for every other role. */
   readonly target: PlayerId | null;
+  /** A Mole's fellow Moles (design §8.1); empty for everyone else and for a lone Mole. */
+  readonly allies: readonly PlayerId[];
 }
 
-export const NO_ROLE_STATE: RoleState = { usedThisAct: 0, usedThisGame: 0, target: null };
+export const NO_ROLE_STATE: RoleState = { usedThisAct: 0, usedThisGame: 0, target: null, allies: [] };
 
 /** A shakedown the vote passed, waiting for its window to end. Hidden: whether it was cancelled. design §11.3 */
 export interface PendingShakedown {

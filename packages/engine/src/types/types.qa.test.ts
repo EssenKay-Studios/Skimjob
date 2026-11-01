@@ -26,6 +26,7 @@ type ExpectedVisibility = {
   roomsSet: "public";
   roleDealt: "private";
   snitchTargetAssigned: "private"; // design §8: the Snitch's target is secret
+  moleAllies: "private"; // design §8.1: only the Moles know each other
   rngAdvanced: "reveal";
   roundStarted: "public";
   moveSubmitted: "private";

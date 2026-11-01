@@ -23,7 +23,9 @@ export type AbilityUse =
   /** Hacker: Security shows `room` as empty this round. Once per act (content). design §8 */
   | { readonly kind: "loopCameras"; readonly room: RoomId }
   /** Blackmailer: guess `target`'s role; if right, steal from their stash this round. Once per act (content). design §8 */
-  | { readonly kind: "blackmail"; readonly target: PlayerId; readonly role: RoleId };
+  | { readonly kind: "blackmail"; readonly target: PlayerId; readonly role: RoleId }
+  /** Mole: tip off the cops, adding the role's Heat (content) to this round's total. Once per act (content). design §7, §8 */
+  | { readonly kind: "tipOff" };
 
 /**
  * Role powers used outside a move, with `useAbility`. design §17.2

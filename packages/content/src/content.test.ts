@@ -142,6 +142,6 @@ describe("starter roles — design §8, §8.1", () => {
   });
 
   it("no starter role wins on failure (design §3: only roles like the Mole or Driver do)", () => {
-    for (const role of Object.values(ROLES)) expect(role.winsOnFailure).toBeNull();
+    for (const role of Object.values(ROLES)) if (role.id !== "mole" && role.id !== "driver") expect(role.winsOnFailure).toBeNull();
   });
 });

@@ -66,6 +66,13 @@ export function createBot({ player, personality, seed }: BotOptions): Agent & { 
   };
 }
 
+/**
+ * Chance a Mole bot tips off in a round when it still can this act (bot
+ * setting, not a game rule): about one act in two, so Moles push Heat a bit
+ * without dominating (sim, task 13). Smarter Moles: task 16.
+ */
+const MOLE_TIP_CHANCE = 0.15;
+
 const pick = <T>(items: readonly T[], random: Random): T => items[Math.floor(random() * items.length)] as T;
 
 function weighted<T>(items: readonly (readonly [T, number])[], random: Random): T | undefined {
@@ -139,6 +146,9 @@ export function chooseMove(view: PlayerView, p: Personality, random: Random): Mo
   } else if (power.kind === "blackmail" && view.me.roleState.usedThisAct < power.perAct && view.players.length > 0) {
     // design §8: Rookies are the commonest role, so guess one (minimal; task 16).
     ability = { kind: "blackmail", target: pick(view.players, random).id, role: FILLER_ROLE };
+  } else if (power.kind === "tipOff" && view.me.roleState.usedThisAct < power.perAct) {
+    // design §8: the Mole sometimes tips off (at most once per act); otherwise it plays its personality.
+    if (random() < MOLE_TIP_CHANCE) ability = { kind: "tipOff" };
   }
   return ability ? { ...move, ability } : move;
 }
@@ -227,10 +237,13 @@ function wantsEmergency(view: PlayerView, p: Personality, random: Random): boole
 
 /** Shake down the most suspicious player once they pass the bot's threshold; otherwise skip. design §11.2 */
 export function chooseVote(view: PlayerView, p: Personality, random: Random): VoteChoice {
+  // design §8.1: a Mole never votes to shake down its fellow Mole.
+  const allies = view.me.roleState.allies;
   if (random() < p.noise) {
-    const target = pick([null, ...view.players.map((o) => o.id)], random);
+    const target = pick([null, ...view.players.map((o) => o.id).filter((id) => !allies.includes(id))], random);
     return target === null ? { kind: "skip" } : { kind: "shakedown", target };
   }
   const top = mostSuspicious(suspicion(view));
+  if (top !== null && allies.includes(top.player)) return { kind: "skip" };
   return top !== null && top.score >= p.voteAt ? { kind: "shakedown", target: top.player } : { kind: "skip" };
 }

@@ -54,10 +54,9 @@ function groupTable(cols: readonly [string, Metrics][], pickGroup: (m: Metrics) 
 
 export function formatReport(summary: Summary, title: string): string {
   const cols = columns(summary);
-  const hasMole = cols.some(([, m]) => m.roles.mole);
-  // design §17.4: Mole win rate when present. Not meaningful until the Mole's
-  // RoleDef (wins on failure) lands: today a Mole can only win by topping a successful heist.
-  const moleRow: Row = { label: "Mole win rate (n/a until Mole powers)", target: "30–40%", cell: (m) => `(${pct(m.roles.mole?.winRate ?? null)})` };
+  const hasMole = cols.some(([, m]) => m.moleWins.games > 0);
+  // design §17.4: Mole win rate when present: games a Mole won ÷ games with a Mole (moleWinMetric).
+  const moleRow: Row = { label: "Mole win rate (games with a Mole)", target: "30–40%", cell: (m) => pct(m.moleWins.rate) };
   const rows = hasMole ? [...ROWS, moleRow] : ROWS;
   const main = table(
     ["Balance metric (design §17.4)", "target", ...cols.map(([c]) => c)],

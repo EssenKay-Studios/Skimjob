@@ -85,7 +85,7 @@ describe("QA: sweep — every personality at 2, 3, 8, 12 players over many seeds
     }
   });
 
-  it("all-Mole-setting 'on' at 12 players (two Moles with no RoleDef) still plays clean", () => {
+  it("all-Mole-setting 'on' at 12 players (two Moles) still plays clean", () => {
     for (let s = 0; s < 5; s++) {
       const c = config(12, `moles-${s}`, { mole: "on" });
       const r = runBotGame(c, createBots(c.players, rotate(s), `mo-${s}`));

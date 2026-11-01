@@ -99,10 +99,12 @@ function applyChange(state: GameState, event: GameEvent): GameState {
     }
     case "snitchTargetAssigned":
       return updatePlayer(state, event.player, (p) => withRoleState(p, { target: event.target }));
+    case "moleAllies":
+      return updatePlayer(state, event.player, (p) => withRoleState(p, { allies: event.allies }));
     // ------------------------------------------------ round loop. design §5
     case "roundStarted": {
       const next: GameState = { ...state, phase: { kind: "planning", round: event.round }, round: event.round, moves: {} };
-      // Per-act powers (Fence safe, Hacker, Blackmailer) start again with each act. design §8
+      // Per-act powers (Fence safe, Hacker, Blackmailer, Mole) start again with each act. design §8
       return actOfRound(event.round) !== actOfRound(state.round) ? mapPlayers(next, (p) => withRoleState(p, { usedThisAct: 0 })) : next;
     }
     case "moveSubmitted":
@@ -128,6 +130,8 @@ function applyChange(state: GameState, event: GameEvent): GameState {
             ...withRoleState(p, { usedThisAct: p.roleState.usedThisAct + ability.amount }),
           }));
         case "loopCameras":
+        case "tipOff":
+          // The tip-off's Heat is already in the round's `roundResolved` total. design §8
           return updatePlayer(state, event.player, (p) => withRoleState(p, { usedThisAct: p.roleState.usedThisAct + 1 }));
         case "blackmail":
           // The target's side is `blackmailed`. design §8

@@ -52,6 +52,7 @@ const POWER_FIELDS: { readonly [K in RolePower["kind"]]: Readonly<Record<string,
   cancelShakedown: { perGame: positiveCount },
   blackmail: { perAct: positiveCount, steal: count },
   snitch: { bonus: count },
+  tipOff: { perAct: positiveCount, heat: count },
 };
 
 /**
@@ -188,4 +189,16 @@ export function rolesFor(config: Pick<GameConfig, "contentOverrides">): RoleTabl
   const roles = overrideRoles(ROLES, config.contentOverrides);
   roleCache.set(config as GameConfig, roles);
   return roles;
+}
+
+/** `role`'s definition in `roles`, or undefined for an id with none (own keys only: ids are untrusted). */
+export function roleDefIn(roles: RoleTable, role: RoleId): RoleDef | undefined {
+  return Object.hasOwn(roles, role) ? roles[role] : undefined;
+}
+
+const NO_POWER: RolePower = { kind: "none" };
+
+/** `role`'s power in this game (content plus overrides); no power for an id with no definition. design §8 */
+export function powerOf(config: Pick<GameConfig, "contentOverrides">, role: RoleId): RolePower {
+  return roleDefIn(rolesFor(config), role)?.power ?? NO_POWER;
 }

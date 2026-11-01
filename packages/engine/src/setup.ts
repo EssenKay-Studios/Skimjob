@@ -2,7 +2,8 @@
 // deal one secret role per seat. design §6.2, §8.1, §15
 //
 // Emits, in order: gameCreated (public, no seed), rngSeeded (reveal),
-// roomsSet (public), one roleDealt per seat in seat order (private), and
+// roomsSet (public), one roleDealt per seat in seat order (private), the
+// Moles' moleAllies when two are dealt and the Snitch's target (private),
 // roundStarted for round 1 (public), and rngAdvanced (reveal) with the RNG state
 // after dealing.
 import {
@@ -25,7 +26,7 @@ import { PUBLIC, REVEAL, privateTo } from "./types";
 import { pick, seedRng, shuffle } from "./rng";
 import { replay } from "./reduce";
 import { jobById, roomsInPlay } from "./job";
-import { rolesFor, validateOverrides } from "./overrides";
+import { powerOf, validateOverrides } from "./overrides";
 
 const MOLE_SETTINGS: readonly string[] = ["off", "maybe", "on"] satisfies readonly MoleSetting[];
 const VOTE_VISIBILITIES: readonly string[] = ["hiddenThenRevealed", "open", "secret"] satisfies readonly VoteVisibility[];
@@ -139,16 +140,24 @@ export function dealRoles(config: GameConfig, rng: RngState): { readonly value: 
  * players (in seat order, after the deal). No draws when no Snitch is dealt.
  */
 function snitchTargets(config: GameConfig, roles: readonly RoleId[], rng: RngState): { readonly value: GameEvent[]; readonly rng: RngState } {
-  const table = rolesFor(config);
   const events: GameEvent[] = [];
   config.players.forEach((seat, i) => {
-    const role = roles[i] as RoleId;
-    if ((Object.hasOwn(table, role) ? table[role] : undefined)?.power.kind !== "snitch") return;
+    if (powerOf(config, roles[i] as RoleId).kind !== "snitch") return;
     const target = pick(rng, config.players.filter((p) => p.id !== seat.id).map((p) => p.id));
     rng = target.rng;
     events.push({ type: "snitchTargetAssigned", visibility: privateTo(seat.id), player: seat.id, target: target.value });
   });
   return { value: events, rng };
+}
+
+/**
+ * design §8.1: when there are two Moles, they know each other. Each Mole gets
+ * a private `moleAllies` naming the others; a lone Mole gets nothing.
+ */
+function moleAllies(config: GameConfig, roles: readonly RoleId[]): GameEvent[] {
+  const moles = config.players.filter((_, i) => roles[i] === MOLE_ROLE).map((p) => p.id);
+  if (moles.length < 2) return [];
+  return moles.map((id) => ({ type: "moleAllies", visibility: privateTo(id), player: id, allies: moles.filter((m) => m !== id) }));
 }
 
 /** The setup events for a new game. Pure: same config, same events. */
@@ -180,6 +189,7 @@ export function setupEvents(config: GameConfig): GameEvent[] {
         role: dealt.value[i] as RoleId,
       }),
     ),
+    ...moleAllies(config, dealt.value),
     ...targets.value,
     // Round 1 opens for planning as soon as the game is set up. design §4, §5.1
     { type: "roundStarted", visibility: PUBLIC, round: 1, act: 1 },

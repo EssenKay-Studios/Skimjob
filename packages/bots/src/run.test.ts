@@ -217,3 +217,54 @@ describe("bots with the info and vote roles dealt — design §8, §17.3 (task 1
     for (const t of ["snitchTargetAssigned", "shakedownPending", "shakedownCancelled"]) expect(types, t).toContain(t);
   });
 });
+
+describe("bots with Moles and the Driver dealt — design §8, §8.1, §17.3 (task 13)", () => {
+  const games = [5, 9, 12].flatMap((n) =>
+    Array.from({ length: 15 }, (_, i) => {
+      const c: GameConfig = { ...config(n, `moles-${n}-${i}`), mole: "on" };
+      return runBotGame(c, createBots(c.players, mix(MIXED), `bots-${c.seed}`));
+    }),
+  );
+
+  it("finish with no refused command; each Mole tips off at most once per act", () => {
+    let tips = 0;
+    for (const r of games) {
+      expect(r.state.phase.kind).toBe("ended");
+      expect(r.rejections).toEqual([]);
+      const resolved = r.state.log.filter((e) => e.type === "roundResolved").length;
+      for (const id of r.state.playerOrder) {
+        if (r.state.players[id]?.role !== "mole") continue;
+        const acts = r.state.log.flatMap((e) => (e.type === "abilityResolved" && e.player === id && e.ability.kind === "tipOff" ? [Math.ceil(e.round / 3)] : []));
+        tips += acts.length;
+        expect(new Set(acts).size).toBe(acts.length);
+        expect(acts.every((a) => a * 3 - 2 <= resolved)).toBe(true);
+      }
+    }
+    expect(tips).toBeGreaterThan(0);
+  });
+
+  it("a Mole never votes to shake down its fellow Mole", () => {
+    let pairs = 0;
+    for (const r of games) {
+      const moles = r.state.playerOrder.filter((id) => r.state.players[id]?.role === "mole");
+      if (moles.length < 2) continue;
+      pairs++;
+      for (const e of r.state.log) {
+        if (e.type !== "voteCast" || !moles.includes(e.player) || e.vote.kind !== "shakedown") continue;
+        expect(moles).not.toContain(e.vote.target);
+      }
+    }
+    expect(pairs).toBeGreaterThan(0);
+  });
+
+  it("Moles win some failed heists and no successful one", () => {
+    let moleWins = 0;
+    for (const r of games) {
+      const o = outcome(r.state);
+      const moleWinners = (o?.winners ?? []).filter((id) => r.state.players[id]?.role === "mole");
+      if (o?.result === "success") expect(moleWinners).toEqual([]);
+      moleWins += moleWinners.length;
+    }
+    expect(moleWins).toBeGreaterThan(0);
+  });
+});

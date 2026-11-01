@@ -33,7 +33,12 @@ export interface Personality {
 
 export type PersonalityId = "honest" | "opportunist" | "greedy" | "cautious" | "random";
 
-/** The design §17.3 bots, minus the Mole bot (no Mole powers yet). Placeholder numbers, to tune with the simulator. */
+/**
+ * The design §17.3 bots. A dealt Mole plays its personality with Mole habits on
+ * top (an occasional tip-off, at most once per act; never votes to shake down a
+ * fellow Mole; bot.ts).
+ * Placeholder numbers, to tune with the simulator.
+ */
 export const PERSONALITIES: Readonly<Record<PersonalityId, Personality>> = {
   // Hands in nearly everything, never lies, votes on the evidence.
   honest: {

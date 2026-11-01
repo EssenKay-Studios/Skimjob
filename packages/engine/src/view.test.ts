@@ -95,7 +95,7 @@ describe("viewFor — the viewer's own data and public state — design §13", (
       role: s.players.ana?.role,
       stash: 0,
       safe: 0,
-      roleState: { usedThisAct: 0, usedThisGame: 0, target: null },
+      roleState: { usedThisAct: 0, usedThisGame: 0, target: null, allies: [] },
       emergencyMeetingUsed: false,
       move: { room: "office", pocket: 1 },
       sealedVote: null,
