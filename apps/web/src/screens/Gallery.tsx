@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from "react";
 import { Avatar } from "../components/Avatar";
 import { BankDoodle } from "../components/BankDoodle";
+import { ArtSections, BankSection } from "./GalleryArt";
 import { Button, DangerButton } from "../components/Button";
 import { Chip } from "../components/Chip";
 import { ArrowBack, Copy, Play, Plus, Star } from "../components/icons";
@@ -17,6 +18,7 @@ import { Clock, Lock } from "../components/icons";
 import { HeatMeter, Meter } from "../components/Meter";
 import { RoomTile } from "../components/RoomTile";
 import { SplitSlider } from "../components/SplitSlider";
+import { Banner, ClockFace, DialogSheet, TallyBars } from "../components/MeetingKit";
 import { navigate } from "../router";
 
 const SWATCHES: readonly [string, string][] = [
@@ -40,6 +42,10 @@ const SWATCHES: readonly [string, string][] = [
   ["--bad", "#b5443a"],
   ["--sky", "#6a9bcc"],
   ["--gold", "#e2b858"],
+  ["--good-l", "#e2ebd2"],
+  ["--bad-l", "#f4d5cf"],
+  ["--tally-lead", "#f2b640"],
+  ["--tally-pass", "#2f6b2a"],
 ];
 
 function Section({ id, title, note, children }: { id: string; title: string; note?: string; children: ReactNode }) {
@@ -75,11 +81,15 @@ export function Gallery() {
         <SketchFrame as="section" seed="gallery-sheet" radius={24} tape holes className="sheet gallery__sheet enter-sheet">
           <div className="gallery__title">
             <h1>Component gallery</h1>
-            <p className="meta">Every M2-5 building block, drawn from docs/ui-style.md.</p>
+            <p className="meta">Every building block and illustration, drawn from docs/ui-style.md.</p>
           </div>
           <hr className="dashed" />
 
+          <BankSection />
+
           <div className="g-grid">
+            <ArtSections />
+
             <Section id="buttons" title="Buttons" note="§5 · hover lifts and tilts, press squashes">
               <div className="g-row">
                 <Button variant="primary" seed="g-p1" icon={<Play />}>
@@ -263,7 +273,7 @@ export function Gallery() {
               </div>
             </Section>
 
-            <Section id="art" title="Landing doodle" note="placeholder art until M2-9">
+            <Section id="art" title="Landing hero" note="M2-9 cutaway at dusk, labels off">
               <SketchFrame seed="g-art" radius={18} fill="var(--card-sand)" shadow={0.5} className="hero-card">
                 <BankDoodle className="hero-card__img" />
               </SketchFrame>
@@ -271,6 +281,10 @@ export function Gallery() {
 
             <Section id="game" title="Game kit" note="M2-6 · room tiles, split slider, Haul meter, Heat thermometer">
               <GameKitSamples />
+            </Section>
+
+            <Section id="meet" title="Meetings kit" note="M2-7 · clock face, tally bars, result banners, vote dialog sheet">
+              <MeetingKitSamples />
             </Section>
           </div>
         </SketchFrame>
@@ -310,6 +324,56 @@ function GameKitSamples() {
           <Lock />
         </span>
       </div>
+    </>
+  );
+}
+
+/** The meetings and voting building blocks (M2-7), live. */
+function MeetingKitSamples() {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <div className="g-row g-row--center">
+        {[42_000, 5 * 60_000 + 12_000, 29 * 60_000].map((ms) => (
+          <ClockFace key={ms} ms={ms} />
+        ))}
+        <span className="meta">0:42 / 5:12 / 29:00 left</span>
+      </div>
+      <TallyBars
+        label="Sample tally"
+        rows={[
+          { key: "a", label: "Dez", votes: 3, share: 1, passed: true },
+          { key: "b", label: "Mo", votes: 2, share: 2 / 3 },
+          { key: "skip", label: "Skip", votes: 1, share: 1 / 3 },
+        ]}
+      />
+      <TallyBars
+        label="Sample live tally"
+        rows={[
+          { key: "a", label: "Ana", votes: 2, share: 1, leading: true },
+          { key: "skip", label: "Skip", votes: 1, share: 0.5 },
+        ]}
+      />
+      <Banner tone="good" seed="g-b1" title="Caught! Dez was holding 11.">
+        11 went into the Haul.
+      </Banner>
+      <Banner tone="bad" seed="g-b2" title="Clean! Mo was holding 2.">
+        The crew paid 5 from the Haul in compensation.
+      </Banner>
+      <Banner seed="g-b3" title="The shakedown was called off.">
+        Nobody's stash was touched.
+      </Banner>
+      <Button variant="secondary" seed="g-dialog" onClick={() => setOpen(true)}>
+        Open the dialog sheet
+      </Button>
+      <DialogSheet open={open} onClose={() => setOpen(false)} seed="g-dialog-sheet" labelledBy="g-dialog-h">
+        <p className="kicker">Act 1 meeting</p>
+        <h2 id="g-dialog-h">Who's skimming?</h2>
+        <p>The vote window opens in this sheet. Esc, the backdrop or the button closes it.</p>
+        <Button variant="primary" seed="g-dialog-close" onClick={() => setOpen(false)}>
+          Close
+        </Button>
+      </DialogSheet>
     </>
   );
 }

@@ -368,6 +368,14 @@ describe("host settings in the lobby", () => {
     expect(game.personalities!.map((p) => p.id)).toContain("opportunist");
     expect([game.minSeats, game.maxSeats]).toEqual([2, 12]);
   });
+
+  // design §11.1, M2-7: the game screen offers slot proposals only when the group schedules meetings.
+  it("says whether meetings open by themselves (short presets) or at a slot the crew picks", async () => {
+    expect((await host({ sessionLength: "quick" })).game.autoMeetings).toBe(true);
+    expect((await host({ sessionLength: "3h" })).game.autoMeetings).toBe(true);
+    expect((await host({ sessionLength: "1d" })).game.autoMeetings).toBe(false);
+    expect((await host({ sessionLength: "1w" })).game.autoMeetings).toBe(false);
+  });
 });
 
 describe("bots fill seats", () => {

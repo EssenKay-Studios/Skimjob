@@ -11,6 +11,7 @@
     "test:pg": "bash scripts/db.sh start && DATABASE_URL=$(bash scripts/db.sh url) vitest run apps/server",
     "typecheck": "pnpm -r --if-present typecheck",
     "sim": "pnpm --filter @skimjob/sim start",
+    "sim:suite": "pnpm --filter @skimjob/sim suite",
     "dev": "pnpm --filter @skimjob/server dev",
     "web": "pnpm --filter @skimjob/web dev",
     "test:e2e": "pnpm --filter @skimjob/web test:e2e"

@@ -67,6 +67,14 @@
   --sky: #6a9bcc;
   --gold: #e2b858;
   --cream: #fff7ee;
+  /* Light washes for result banners (M2-7). */
+  --good-l: #e2ebd2;
+  --bad-l: #f4d5cf;
+  /* Vote tallies (ui-style "Vote window"): the leading option, and the one that passed. */
+  --tally-lead: #f2b640;
+  --tally-pass: #2f6b2a;
+  /* The vote dialog's backdrop. */
+  --scrim: #2a232066;
   /* Dashed rules between rows and under headers (ui-style §4). */
   --rule: #2a232040;
   /* Premium ("crew pass") card */
@@ -77,6 +85,84 @@
   --pass-gold-d: #d99a1e;
   --pass-text: #fff4de;
   --pass-mute: #c8bedf;
+
+  /* Illustration palette (M2-9 art: bank cutaway, room icons, crooks, spots).
+     World colours from ui-style §2 "World / building palette"; every art
+     component fills from these, never from raw hex. */
+  --art-ink: #3a2a22;
+  --art-shade: #3a2a2226;
+  --art-shade-2: #3a2a2240;
+  --art-hi: #fffdf880;
+  --art-brick: #a56347;
+  --art-brick-d: #87503a;
+  --art-stone: #efe6d6;
+  --art-stone-l: #f7f1e6;
+  --art-stone-d: #dccbae;
+  --art-stucco: #e5c697;
+  --art-stucco-d: #c9a774;
+  --art-roof: #d0623f;
+  --art-roof-d: #b4512f;
+  --art-slate: #5c6064;
+  --art-slate-d: #45484c;
+  --art-slate-l: #7f8489;
+  --art-steel: #a7afb2;
+  --art-steel-d: #7a8387;
+  --art-steel-l: #ccd2d3;
+  --art-wood: #9a6a48;
+  --art-wood-d: #774a33;
+  --art-wood-l: #bb8b62;
+  --art-window: #f4c76a;
+  --art-window-hi: #ffd98a;
+  --art-glass: #cfe1e6;
+  --art-screen: #9cc7b4;
+  --art-screen-d: #5f8f84;
+  --art-led: #8fd06f;
+  --art-gold-d: #c4932f;
+  --art-sack: #c9a26b;
+  --art-sack-d: #a5814f;
+  --art-velvet: #a33f3a;
+  --art-leaf: #6f8c4f;
+  --art-leaf-d: #4c6a3a;
+  --art-grass: #a2ad7a;
+  --art-earth: #cdb48f;
+  --art-earth-d: #b39873;
+  --art-asphalt: #4a4440;
+  --art-sidewalk: #c3b49c;
+  --art-sky-day: #d9e6e6;
+  --art-sky-dusk: #efc9a4;
+  --art-sky-night: #454a74;
+  --art-siren-r: #e0574a;
+  --art-siren-b: #5b86d6;
+  /* Room back walls */
+  --art-wall-roof: #d9e6e6;
+  --art-wall-security: #61707a;
+  --art-wall-office: #ecdfc6;
+  --art-wall-manager: #b98463;
+  --art-wall-server: #4d5869;
+  --art-wall-lobby: #f1e7d4;
+  --art-wall-teller: #e6d3ab;
+  --art-wall-vault: #969fa3;
+  --art-wall-boxes: #c2b293;
+  /* Crew colours for the masked-crook avatars: 12 distinct fills, one per seat. */
+  --crew-1: #d97757;
+  --crew-2: #3d5a80;
+  --crew-3: #788c5d;
+  --crew-4: #c46686;
+  --crew-5: #6b5aa6;
+  --crew-6: #6a9bcc;
+  --crew-7: #e2b858;
+  --crew-8: #9a5541;
+  --crew-9: #4f8a7e;
+  --crew-10: #8a8f96;
+  --crew-11: #b9a3dc;
+  --crew-12: #efe2c8;
+  /* Accessory colours (hats, bandanas) */
+  --acc-1: #5b524c;
+  --acc-2: #b5443a;
+  --acc-3: #e2b858;
+  --acc-4: #3d5a80;
+  --acc-5: #788c5d;
+  --acc-6: #faf9f5;
 
   /* Type */
   --font-hand: "Pangolin", "Segoe Print", "Bradley Hand", "Comic Sans MS", cursive;

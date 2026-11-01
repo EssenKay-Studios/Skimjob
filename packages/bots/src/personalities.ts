@@ -29,6 +29,19 @@ export interface Personality {
   readonly heatCaution: number;
   /** Chance that any one decision is made uniformly at random instead. 1 = the Random bot. */
   readonly noise: number;
+  /**
+   * How far off its own reading of the evidence can be at a vote: up to this
+   * many suspicion points either way, per player (people misjudge; v2 §5). design §17.3 "Suspicion"
+   */
+  readonly misread: number;
+  /**
+   * How far it goes along with the crew's shared hunch at a vote (`crewHunch`
+   * in bot.ts, the same for every bot at a meeting), in suspicion points
+   * either way. Shared misreadings are what carry a majority to a clean
+   * target: bot shakedowns were ~92% accurate without it, vs the 50–70%
+   * design §17.4 target (v2 §5). design §17.3 "Suspicion"
+   */
+  readonly hunch: number;
 }
 
 export type PersonalityId = "honest" | "opportunist" | "greedy" | "cautious" | "random";
@@ -53,6 +66,8 @@ export const PERSONALITIES: Readonly<Record<PersonalityId, Personality>> = {
     watch: 0.15,
     heatCaution: 0.85,
     noise: 0.02,
+    misread: 1,
+    hunch: 7,
   },
   // Pockets a fair share, and covers it with a false alibi when nobody saw it.
   opportunist: {
@@ -67,6 +82,8 @@ export const PERSONALITIES: Readonly<Record<PersonalityId, Personality>> = {
     watch: 0.1,
     heatCaution: 0.9,
     noise: 0.02,
+    misread: 1,
+    hunch: 7,
   },
   // Pockets often and big, lies often, rarely votes: stress-tests Heat and checkpoints.
   greedy: {
@@ -81,6 +98,8 @@ export const PERSONALITIES: Readonly<Record<PersonalityId, Personality>> = {
     watch: 0.05,
     heatCaution: 1,
     noise: 0.02,
+    misread: 1,
+    hunch: 7,
   },
   // Hands in nearly everything, lays low on the Rooftop and checks Security often; quick to suspect.
   cautious: {
@@ -95,6 +114,8 @@ export const PERSONALITIES: Readonly<Record<PersonalityId, Personality>> = {
     watch: 0.35,
     heatCaution: 0.55,
     noise: 0.02,
+    misread: 1,
+    hunch: 7,
   },
   // Every decision uniformly at random: the baseline for comparison.
   random: {
@@ -109,5 +130,7 @@ export const PERSONALITIES: Readonly<Record<PersonalityId, Personality>> = {
     watch: 0,
     heatCaution: 1,
     noise: 1,
+    misread: 0,
+    hunch: 0,
   },
 };

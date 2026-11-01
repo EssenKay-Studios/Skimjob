@@ -1,0 +1,65 @@
+/* /dev/gallery: layout for the M2-9 art samples. */
+.g-section--wide {
+  margin-bottom: 26px;
+}
+.g-knobs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 22px;
+}
+.g-bank {
+  min-width: 0;
+}
+.g-room-icons {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+  gap: 14px 10px;
+}
+.g-room-icon {
+  margin: 0;
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  text-align: center;
+}
+.g-room-icon__blob {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 50px;
+  border-radius: 52% 48% 55% 45% / 50% 58% 42% 50%;
+  opacity: 0.92;
+}
+.g-room-icon__blob .room-icon {
+  filter: drop-shadow(0 0 0 var(--paper));
+}
+.g-crew {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(58px, 1fr));
+  gap: 10px 6px;
+}
+.g-crew__seat {
+  margin: 0;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+}
+.g-figures {
+  gap: 4px 10px;
+}
+.g-spots {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.g-spots figure {
+  margin: 0;
+  display: grid;
+  gap: 4px;
+  text-align: center;
+}
+@media (max-width: 420px) {
+  .g-spots {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

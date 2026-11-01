@@ -54,6 +54,7 @@ type ExpectedVisibility = {
   auditReport: "public"; // design §10: per-room shortfall on the ledger
   alibiPosted: "public";
   alibisClosed: "public";
+  roleClaimed: "public"; // design §8, §12.1: a role claim is public talk
   meetingProposed: "public";
   meetingProposalAccepted: "public";
   meetingScheduled: "public";

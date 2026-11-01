@@ -61,3 +61,10 @@ export function scaleTiming(t: Timing, k: number): Timing {
 
 /** How often the scheduler looks for due deadlines (main.ts). */
 export const TICK_MS = 1000;
+
+/**
+ * The tick for a TIME_SCALE (dev and E2E only; always 1 in production): it
+ * shrinks with the deadlines, down to 100 ms, so a scaled-down alibi window
+ * isn't swallowed by a whole-second tick.
+ */
+export const tickFor = (timeScale: number): number => Math.max(100, Math.round(TICK_MS * Math.min(1, timeScale)));

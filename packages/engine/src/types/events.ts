@@ -366,6 +366,18 @@ export interface AlibiPosted {
   readonly room: RoomId;
 }
 
+/**
+ * A formal, possibly false, claim of your role (design §8, §12.1): public talk
+ * that changes no rule. Once per player per act (`act`, the act it was made in).
+ */
+export interface RoleClaimed {
+  readonly type: "roleClaimed";
+  readonly visibility: PublicVisibility;
+  readonly player: PlayerId;
+  readonly role: RoleId;
+  readonly act: ActNumber;
+}
+
 /** The alibi deadline for `round` passed: no more alibis for it. design §5.4 */
 export interface AlibisClosed {
   readonly type: "alibisClosed";
@@ -719,6 +731,7 @@ export type GameEvent =
   | AuditReport
   | AlibiPosted
   | AlibisClosed
+  | RoleClaimed
   | MeetingProposed
   | MeetingProposalAccepted
   | MeetingScheduled

@@ -176,7 +176,7 @@ Each round's room-and-baseline Heat change is rounded to a whole number (halves 
 
 ## 8. Roles
 
-Every player is dealt **one secret role** at the start of the game. Roles are designed so that **revealing your role is risky**: each one has a weakness once people know about it. Players can claim any role, truthfully or as a bluff.
+Every player is dealt **one secret role** at the start of the game. Roles are designed so that **revealing your role is risky**: each one has a weakness once people know about it. Players can claim any role, truthfully or as a bluff. A formal claim (the **Claim** button, §12.1) goes on the public ledger: once per player per act, any role the game knows (even one that can't be in this game, so a refusal never hints at the hidden role pool), never in Duel mode. Like an alibi it changes no rule; it is evidence the crew weighs.
 
 | Role | Power | Weakness if revealed |
 |---|---|---|
@@ -392,6 +392,7 @@ A missed Act 1 or Act 2 checkpoint adds +15 Heat. Because targets are cumulative
 - **Direct messages:** private side deals. Everyone can see *that* two players messaged, but not what they said (host setting, on by default).
 - **Evidence cards:** a player can share a **verified** item from their case file into a chat, such as a camera result. "Verified" means only **"from their own case file"**: the app really showed it to that player. That doesn't make the cameras right: a Hacker's loop or a Forger's fake sighting (R3b) can make a camera feed false, so every card says so: "Verified: from their own case file. Cameras can be tampered with." (`EVIDENCE_CARD_NOTE` in `apps/web/src/game/describeEvent.ts`). Claims typed in chat, or screenshots from WhatsApp, can't be verified.
 - **Alibi button:** posts a formal Alibi to the ledger (§5.4).
+- **Claim button:** posts a formal role claim to the ledger ("I'm the Lookout"), true or not (§8). Bots claim and bluff only this way, since they don't read chat.
 
 ### 12.2 Outside the app
 
@@ -491,7 +492,7 @@ Bots implement the same `Agent` interface a human client does: they receive thei
 | Mole | n/a | Often | Fakes it | Tries to make the heist fail without being noticed |
 | Random | Random | Random | Random | Baseline for comparison |
 
-Under the hood, each bot keeps a **suspicion score** for every other player, updated from shortfalls, alibis, witness sightings and evidence cards. It votes when one player's score passes its threshold. Bots communicate only through alibis and simple structured chat lines ("I was in the Office", "I suspect Riya").
+Under the hood, each bot keeps a **suspicion score** for every other player, updated from shortfalls, alibis, witness sightings, its own powers and perks (an Audit, a Detective check, a Peek), and role claims (a claim it knows is false, a role claimed twice, a changed claim). It votes when one player's score passes its threshold. At a vote it misjudges like people do: a small misreading of its own plus a hunch the whole crew shares at that meeting, which can carry a majority to a clean player (this keeps shakedown accuracy near the 50–70% target). Bots communicate only through alibis and role claims (§12.1): crew bots tell the truth when accused, dark bots bluff a hard-to-disprove crew role nobody has claimed (docs/roles-v2.md §4). They back meeting times people propose and only propose one themselves late in the act (§11.1).
 
 ### 17.4 Simulator
 

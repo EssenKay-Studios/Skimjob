@@ -72,9 +72,9 @@ async function contexts(browser: Browser, mobile: boolean) {
   return { hostCtx, guestCtx, host: await hostCtx.newPage(), guest: await guestCtx.newPage() };
 }
 
-test("12 seats, 24-char names: a Quick game to the end with moves changed, alibis, no leaks, no overflow", async ({ browser }, info) => {
+test("12 seats, 24-char names: a Quick game to the end with moves changed, alibis, no leaks, no overflow @fast-clock", async ({ browser }, info) => {
   test.setTimeout(420_000);
-  const mobile = info.project.name === "mobile";
+  const mobile = info.project.name.startsWith("mobile");
   const { hostCtx, guestCtx, host, guest } = await contexts(browser, mobile);
   const errors: string[] = [];
   for (const p of [host, guest]) p.on("pageerror", (e) => errors.push(e.message));

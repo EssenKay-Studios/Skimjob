@@ -1,0 +1,250 @@
+/* Meetings and voting (M2-7): planner, emergency, sealed vote, vote dialog,
+   shakedown window, results, role card. ui-style "Vote window". Tokens only. */
+
+.meetings__block {
+  display: grid;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1.3px dashed var(--ink-faint);
+}
+.meetings__block:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+.meetings__sub {
+  font-size: 15.5px;
+}
+.meetings__emergency,
+.meetings__open,
+.results__ok,
+.role-card__use {
+  justify-self: start;
+}
+
+.proposals {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.proposals__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  padding: 6px 0;
+  border-bottom: 1.3px dashed var(--ink-faint);
+}
+.proposals__what {
+  display: grid;
+  gap: 2px;
+  color: var(--ink);
+  min-width: 0;
+}
+.slot-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px 12px;
+}
+.slot-form .field {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.slot-form > .btn {
+  margin-top: 19px;
+}
+.slot-form .field__input {
+  letter-spacing: 0;
+  font-size: 15px;
+  min-width: 0;
+}
+
+.sealed__summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 12px;
+  min-height: 44px;
+  cursor: pointer;
+  list-style: none;
+}
+.sealed__summary::-webkit-details-marker {
+  display: none;
+}
+.sealed__summary::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--ink);
+  border-bottom: 2px solid var(--ink);
+  rotate: -45deg;
+  transition: rotate 0.25s var(--spring);
+}
+.sealed[open] > .sealed__summary::before {
+  rotate: 45deg;
+}
+.sealed[open] {
+  gap: 10px;
+}
+.sealed > .btn {
+  justify-self: start;
+}
+
+/* ---------- Vote picker ---------- */
+.vote-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.vote-pick {
+  max-width: 100%;
+  padding-left: 10px;
+}
+.vote-pick .btn__icon {
+  width: 26px;
+  height: 26px;
+}
+.vote-pick .btn__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.vote-pick--skip {
+  padding-left: 16px;
+}
+
+/* ---------- Vote dialog ---------- */
+.vote {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+.vote__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px 14px;
+}
+.vote__kicker {
+  margin-bottom: 6px;
+}
+.vote__title {
+  font-size: 24px;
+}
+.vote__clock {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.vote__clock b {
+  font-size: 15px;
+  color: var(--ink);
+}
+.vote__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+.vote__status {
+  flex: 1 1 200px;
+}
+.vote__live,
+.vote__seen {
+  display: grid;
+  gap: 8px;
+}
+.vote__back {
+  justify-self: center;
+}
+.ballots {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+  font-size: 13.5px;
+  color: var(--ink2);
+}
+.ballots li {
+  padding: 4px 0;
+  border-bottom: 1.3px dashed var(--ink-faint);
+  overflow-wrap: anywhere;
+}
+.ballots b {
+  color: var(--ink);
+}
+
+/* ---------- Results ---------- */
+.results {
+  padding-top: 24px;
+}
+.results__kicker {
+  margin-bottom: 0;
+}
+.results__title {
+  font-size: 22px;
+}
+
+/* ---------- Role card ---------- */
+.role-card {
+  gap: 10px;
+}
+.role-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 4px 14px;
+}
+.role-card__name {
+  font-size: 22px;
+  color: var(--clay-d);
+}
+.role-card__stash b {
+  font-size: 18px;
+  color: var(--ink);
+}
+.role-card__perks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.abilities {
+  display: grid;
+  gap: 12px;
+}
+.ability {
+  display: grid;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1.3px dashed var(--ink-faint);
+}
+.ability > .btn {
+  justify-self: start;
+}
+.ability p b {
+  color: var(--ink);
+}
+
+@media (max-width: 560px) {
+  .slot-form > .btn,
+  .meetings__emergency,
+  .meetings__open {
+    width: 100%;
+  }
+  .slot-form > .btn {
+    margin-top: 0;
+  }
+  .vote__foot > .btn {
+    width: 100%;
+  }
+}
