@@ -1,0 +1,235 @@
+/* M2-9 art: bank cutaway, room icons, crooks, spot illustrations.
+   Colours come from the --art-* / --crew-* / --acc-* tokens in theme.css. */
+
+/* ---------------------------------------------------------------- Bank cutaway */
+.bank {
+  --bank-sky-top: var(--art-sky-day);
+  --bank-sky-bottom: var(--paper-hi);
+  --bank-glass: var(--art-glass);
+  width: 100%;
+  min-width: 0;
+}
+.bank--dusk {
+  --bank-sky-top: color-mix(in srgb, var(--art-sky-night) 45%, var(--art-sky-dusk));
+  --bank-sky-bottom: var(--art-sky-dusk);
+  --bank-glass: var(--art-sky-dusk);
+}
+.bank--night {
+  --bank-sky-top: var(--art-sky-night);
+  --bank-sky-bottom: color-mix(in srgb, var(--art-sky-night) 70%, var(--art-sky-dusk));
+  --bank-glass: var(--art-sky-night);
+}
+.bank__svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.bank-tag__text {
+  font-family: var(--font-hand);
+  font-weight: 700;
+  fill: var(--ink);
+}
+.bank-sign {
+  font-family: var(--font-hand);
+  font-weight: 700;
+  letter-spacing: 0.32em;
+  fill: var(--art-ink);
+}
+.bank-room__lift {
+  transition: transform 0.16s var(--spring);
+}
+.bank--pickable .bank-room {
+  cursor: pointer;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.bank-room__focus {
+  fill: none;
+  stroke: var(--clay-d);
+  stroke-width: 3;
+  stroke-dasharray: 7 5;
+  opacity: 0;
+}
+.bank--pickable .bank-room:focus-visible .bank-room__focus {
+  opacity: 1;
+}
+@media (hover: hover) {
+  .bank--pickable .bank-room:hover .bank-room__lift {
+    transform: translateY(-3px);
+  }
+  .bank--pickable .bank-room:hover:not(.is-selected) .bank-room__focus {
+    opacity: 0.8;
+    stroke-dasharray: none;
+    stroke: var(--clay);
+  }
+}
+.bank--pickable .bank-room:active .bank-room__lift {
+  transform: translateY(1px);
+}
+.bank-room.is-closed {
+  cursor: not-allowed;
+}
+
+/* Line boil on the selected outline (ui-style §4): three variants, 0.18 s each. */
+.bank-boil > * {
+  opacity: 0;
+  animation: bank-boil 0.54s step-end infinite;
+}
+.bank-boil > :nth-child(1) {
+  opacity: 1;
+}
+.bank-boil > :nth-child(2) {
+  animation-delay: -0.18s;
+}
+.bank-boil > :nth-child(3) {
+  animation-delay: -0.36s;
+}
+@keyframes bank-boil {
+  0% {
+    opacity: 1;
+  }
+  33.3% {
+    opacity: 0;
+  }
+}
+
+.bank-pin {
+  animation: bank-bob 1.6s ease-in-out infinite;
+}
+.bank-pin__ring {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: bank-ring 1.6s ease-in-out infinite;
+}
+@keyframes bank-bob {
+  50% {
+    transform: translateY(-5px);
+  }
+}
+@keyframes bank-ring {
+  50% {
+    transform: scale(0.7);
+    opacity: 0.6;
+  }
+}
+
+.bank-fan {
+  transform-box: view-box;
+  animation: bank-spin 2.4s linear infinite;
+}
+@keyframes bank-spin {
+  to {
+    rotate: 360deg;
+  }
+}
+.bank-beacon {
+  animation: bank-blink 2s step-end infinite;
+}
+@keyframes bank-blink {
+  50% {
+    opacity: 0.25;
+  }
+}
+.bank-led {
+  animation: bank-blink 1.4s step-end infinite;
+}
+.bank-led--1 {
+  animation-delay: -0.3s;
+}
+.bank-led--2 {
+  animation-delay: -0.7s;
+  animation-duration: 2.1s;
+}
+.bank-led--3 {
+  animation: none;
+}
+.bank-led--4 {
+  animation-delay: -1.1s;
+  animation-duration: 0.9s;
+}
+.bank-flicker {
+  animation: bank-flicker 3.2s step-end infinite;
+}
+@keyframes bank-flicker {
+  0%,
+  86% {
+    opacity: 1;
+  }
+  88% {
+    opacity: 0.55;
+  }
+  92% {
+    opacity: 0.9;
+  }
+}
+.bank-laser {
+  animation: bank-blink 2.6s ease-in-out infinite;
+}
+.bank-siren {
+  animation: bank-siren 1s step-end infinite;
+}
+.bank-siren--b {
+  animation-delay: -0.5s;
+}
+@keyframes bank-siren {
+  50% {
+    opacity: 0.15;
+  }
+}
+
+/* ---------------------------------------------------------------- Crooks */
+.crook-avatar {
+  display: inline-block;
+  flex: none;
+  overflow: visible;
+  vertical-align: middle;
+}
+.crook-avatar--away {
+  filter: grayscale(0.85);
+  opacity: 0.6;
+}
+.crook-fig__q {
+  font-family: var(--font-hand);
+  font-weight: 700;
+  font-size: 26px;
+  fill: var(--art-ink);
+}
+
+/* ---------------------------------------------------------------- Room icons */
+.room-icon {
+  display: inline-block;
+  flex: none;
+  color: var(--ink);
+  vertical-align: middle;
+}
+
+/* ---------------------------------------------------------------- Spots */
+.spot {
+  display: block;
+  width: 100%;
+  max-width: 260px;
+  height: auto;
+  margin-inline: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bank-room__lift {
+    transition: none;
+  }
+  .bank-boil > *,
+  .bank-pin,
+  .bank-pin__ring,
+  .bank-fan,
+  .bank-beacon,
+  .bank-led,
+  .bank-flicker,
+  .bank-laser,
+  .bank-siren,
+  .spot-anim {
+    animation: none;
+  }
+  .bank-boil > :not(:first-child) {
+    opacity: 0;
+  }
+}
