@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from "react";
 import { Avatar } from "../components/Avatar";
 import { BankDoodle } from "../components/BankDoodle";
+import { ArtSections, BankSection } from "./GalleryArt";
 import { Button, DangerButton } from "../components/Button";
 import { Chip } from "../components/Chip";
 import { ArrowBack, Copy, Play, Plus, Star } from "../components/icons";
@@ -75,11 +76,15 @@ export function Gallery() {
         <SketchFrame as="section" seed="gallery-sheet" radius={24} tape holes className="sheet gallery__sheet enter-sheet">
           <div className="gallery__title">
             <h1>Component gallery</h1>
-            <p className="meta">Every M2-5 building block, drawn from docs/ui-style.md.</p>
+            <p className="meta">Every building block and illustration, drawn from docs/ui-style.md.</p>
           </div>
           <hr className="dashed" />
 
+          <BankSection />
+
           <div className="g-grid">
+            <ArtSections />
+
             <Section id="buttons" title="Buttons" note="§5 · hover lifts and tilts, press squashes">
               <div className="g-row">
                 <Button variant="primary" seed="g-p1" icon={<Play />}>
@@ -263,7 +268,7 @@ export function Gallery() {
               </div>
             </Section>
 
-            <Section id="art" title="Landing doodle" note="placeholder art until M2-9">
+            <Section id="art" title="Landing hero" note="M2-9 cutaway at dusk, labels off">
               <SketchFrame seed="g-art" radius={18} fill="var(--card-sand)" shadow={0.5} className="hero-card">
                 <BankDoodle className="hero-card__img" />
               </SketchFrame>
