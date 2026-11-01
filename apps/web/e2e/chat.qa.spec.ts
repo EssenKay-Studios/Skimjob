@@ -346,6 +346,43 @@ test("QA: unread badges per thread: a DM's badge and the crew's are separate, an
   for (const p of [g1, g2]) await p.context().close();
 });
 
+test("QA: two tabs of one player share read marks: a DM read in tab A stays read after tab B reads the crew (QA repro, PR #38)", async ({ page, browser }) => {
+  test.skip(!test.info().project.name.startsWith("mobile"), "the sheet decides what's on screen; the docked panel reads the crew at once");
+  test.setTimeout(90_000);
+  const [g1, g2] = [await player(browser, page), await player(browser, page)];
+  const game = await startGame(page.request, { bots: 1, guests: [g1.request, g2.request], sessionLength: "1w" });
+  const tabB = await page.context().newPage();
+  for (const p of [page, tabB, g1, g2]) await loaded(p, game.id);
+  for (const g of [g1, g2]) await openChat(g);
+  const fab = (p: Page) => p.locator(".chat-fab");
+
+  await dm(g2, /Host/);
+  await say(g2, "dm to host");
+  await expect(fab(page)).toHaveAccessibleName("Open chat, 1 unread");
+  await expect(fab(tabB)).toHaveAccessibleName("Open chat, 1 unread");
+  // Tab A reads the DM; tab B hears about it through storage.
+  await openChat(page);
+  await tabs(page).getByRole("button", { name: /^Guest 2/ }).click();
+  await expect(tabs(page).getByRole("button", { name: /^Guest 2/ })).not.toHaveAccessibleName(/unread/);
+  await closeChat(page);
+  await expect(fab(tabB)).toHaveAccessibleName("Open chat");
+  // A crew message; tab B reads the crew. Its write must not drop tab A's DM mark.
+  await say(g1, "crew msg");
+  await openChat(tabB);
+  await expect(feed(tabB)).toContainText("crew msg");
+  await expect(fab(page)).toHaveAccessibleName("Open chat");
+  await page.reload();
+  await expect(fab(page)).toHaveAccessibleName("Open chat");
+  await openChat(page);
+  await expect(tabs(page).getByRole("button", { name: /unread/ })).toHaveCount(0);
+  // A tab that was closed meanwhile also starts from the merged marks.
+  const tabC = await page.context().newPage();
+  await loaded(tabC, game.id);
+  await expect(fab(tabC)).toHaveAccessibleName("Open chat");
+  for (const p of [tabB, tabC]) await p.close();
+  for (const g of [g1, g2]) await g.context().close();
+});
+
 test("QA: chat survives phase changes (draft kept, event rows), and still works after the game ends, DMs still private", async ({ page, browser }) => {
   test.setTimeout(330_000);
   const errors: string[] = [];

@@ -3,8 +3,9 @@
 // counts across tabs, hidden DMs for a third player, hostile frames.
 // design §12.1, §11.2, docs/m2-plan.md M2-8
 import { describe, expect, it } from "vitest";
-import type { GameEvent, GameState } from "@skimjob/engine";
-import { checkChatText, createChat } from "../../../server/src/chat";
+import type { GameEvent, GameState, PlayerView } from "@skimjob/engine";
+import { checkChatText, createChat, evidenceCard } from "../../../server/src/chat";
+import { sampleEvents } from "../../../../packages/engine/src/types/samples";
 import { fakeClock } from "../../../server/src/clock";
 import type { Db } from "../../../server/src/db";
 import {
@@ -23,6 +24,7 @@ import {
   latestAt,
   markRead,
   rateWaitMs,
+  shareableEntries,
   threadMessages,
   totalUnread,
   unreadCount,
@@ -277,5 +279,24 @@ describe("QA: game events in the crew feed while phases change", () => {
     expect(rows.map((r) => r.kind)).toEqual(["message", "notice", "event", "notice"]);
     const after = feedFor(s, "crew", "p1", [{ key: "9", at: t(5), text: "Game over" }]);
     expect(after.map((r) => r.kind)).toEqual(["message", "notice", "event"]);
+  });
+});
+
+describe("QA: the evidence picker offers exactly what the server accepts (design §8, §11.2, §12.1, PR #38)", () => {
+  it("for every case-file sample, with one meeting closed and one open", () => {
+    const entries = Object.values(sampleEvents)
+      .filter((e) => e.visibility.kind === "private" || e.visibility.kind === "secret")
+      .map((event, i) => ({ seq: 100 + i, event }));
+    // A ballot of an open meeting too.
+    entries.push({ seq: 999, event: { ...sampleEvents.voteCast, meetingId: "still-open" } });
+    const view = { caseFile: entries, ledger: [{ seq: 1, event: { ...sampleEvents.meetingClosed, meetingId: "m1" } }] } as unknown as PlayerView;
+    const offered = new Set(shareableEntries(view).map((e) => e.seq));
+    const accepted = new Set(entries.filter((e) => evidenceCard(view, e.seq).ok).map((e) => e.seq));
+    expect([...offered].sort()).toEqual([...accepted].sort());
+    const typeOf = (seq: number) => entries.find((e) => e.seq === seq)!.event.type;
+    const offeredTypes = new Set([...offered].map(typeOf));
+    for (const t of ["roleDealt", "voteCompromised", "moleAllies", "alliesLearned", "insideTip", "voteSealed"]) expect(offeredTypes.has(t as never), t).toBe(false);
+    for (const t of ["roomSighting", "roomWatched", "lootSplit", "moveSubmitted"]) expect(offeredTypes.has(t as never), t).toBe(true);
+    expect(offered.has(999)).toBe(false);
   });
 });
