@@ -12,6 +12,8 @@ export interface DescribeContext {
   readonly name: (player: PlayerId) => string;
   /** A meeting slot for people (the engine's slots are opaque labels, often ISO times). Default: as is. */
   readonly slot?: (slot: string) => string;
+  /** The crew is big enough for the plurality rule (9–12, design §11.2): a failed vote isn't "no majority" there. */
+  readonly plurality?: boolean;
 }
 
 const ALL_ROOMS = Object.fromEntries(Object.values(JOBS).flatMap((j) => Object.values(j.rooms).map((r) => [r.id, r.name])));
@@ -138,7 +140,7 @@ function line(e: GameEvent, ctx: DescribeContext): string {
     case "voteCast":
       return `${verb(e.player, "voted", "voted")} ${choice(e.vote)}${e.sealed ? " (sealed earlier)" : ""}.`;
     case "meetingClosed":
-      return meetingResult(e.result, e.tally, who);
+      return meetingResult(e.result, e.tally, who, ctx.plurality ?? false);
     case "shakedownPending":
       return `The shakedown of ${who(e.target)} passed; it lands when the window closes.`;
     case "shakedownCancelled":
@@ -248,7 +250,12 @@ function perk(p: ResolvedPerk, player: PlayerId, { you, who, whose, verb }: Gram
   }
 }
 
-function meetingResult(r: MeetingResult, tally: { readonly skip: number; readonly targets: Readonly<Record<PlayerId, number>> }, who: (p: PlayerId) => string): string {
+function meetingResult(
+  r: MeetingResult,
+  tally: { readonly skip: number; readonly targets: Readonly<Record<PlayerId, number>> },
+  who: (p: PlayerId) => string,
+  plurality: boolean,
+): string {
   const votes = (n: number) => (n === 1 ? "1 vote" : `${n} votes`);
   switch (r.kind) {
     case "shakedown":
@@ -256,7 +263,7 @@ function meetingResult(r: MeetingResult, tally: { readonly skip: number; readonl
     case "skipped":
       return `The crew voted to skip (${votes(tally.skip)}).`;
     case "noMajority":
-      return "No majority: nobody is shaken down.";
+      return plurality ? "No clear winner: nobody is shaken down." : "No majority: nobody is shaken down.";
     case "noQuorum":
       return "Too few votes: nothing happens.";
     default: {

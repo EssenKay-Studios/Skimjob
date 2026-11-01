@@ -16,7 +16,9 @@ async function shot(page: Page, name: string) {
 }
 
 for (const mode of ["hiddenThenRevealed", "open", "secret"] as const) {
-  test(`an emergency meeting: call it, vote, change the vote, see the result (${mode})`, async ({ page }) => {
+  test(`an emergency meeting: call it, vote, change the vote, see the result (${mode})`, async ({ page }, info) => {
+    // Not about widths (game.responsive.spec.ts covers them): Hidden at both, the other modes on desktop only.
+    test.skip(mode !== "hiddenThenRevealed" && info.project.name !== "desktop", "one viewport is enough");
     test.setTimeout(90_000);
     const errors: string[] = [];
     page.on("pageerror", (e) => errors.push(e.message));
@@ -94,7 +96,8 @@ for (const mode of ["hiddenThenRevealed", "open", "secret"] as const) {
   });
 }
 
-test("propose a meeting time, a second player backs it, and leave a sealed vote (design §11.1, §11.2)", async ({ page, browser }) => {
+test("propose a meeting time, a second player backs it, and leave a sealed vote (design §11.1, §11.2)", async ({ page, browser }, info) => {
+  test.skip(info.project.name !== "desktop", "one viewport is enough");
   test.setTimeout(60_000);
   // One-week preset: the crew picks the slot. Two people and no bots (bots lock "the end of the act" at once).
   const guestCtx = await browser.newContext({ viewport: page.viewportSize()! });

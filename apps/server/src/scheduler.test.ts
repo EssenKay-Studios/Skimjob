@@ -11,7 +11,7 @@ import { buildServer } from "./server";
 import type { LobbySettings } from "./settings";
 import { createGameStore, type GameStore } from "./store";
 import { testDb } from "./testkit";
-import { TIMINGS } from "./timing";
+import { tickFor, TICK_MS, TIMINGS } from "./timing";
 
 const QUICK = TIMINGS.quick;
 
@@ -84,6 +84,13 @@ async function step(gameId: string) {
 }
 
 describe("presets (design §4.1)", () => {
+  it("the scheduler tick shrinks with TIME_SCALE (dev and E2E), never below 100 ms", () => {
+    expect(tickFor(1)).toBe(TICK_MS);
+    expect(tickFor(0.1)).toBe(100);
+    expect(tickFor(0.5)).toBe(500);
+    expect(tickFor(0.01)).toBe(100);
+  });
+
   it("spread 9 rounds and 3 meetings over about the chosen length; Quick is about 15 minutes", () => {
     const total = (k: keyof typeof TIMINGS) => (9 * (TIMINGS[k].roundMs + TIMINGS[k].alibiMs) + 3 * TIMINGS[k].meetingMs) / 60_000;
     expect(total("quick")).toBe(15);

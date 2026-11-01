@@ -15,10 +15,13 @@ import {
   type VoteChoice,
   type VoteVisibility,
 } from "@skimjob/engine";
-import { setupOf } from "./hud";
+import { crewSize, jobOf, setupOf } from "./hud";
 
 /** Duel games have no meetings or votes (design §16.1). */
 export const hasMeetings = (view: PlayerView): boolean => !setupOf(view)?.duel;
+
+/** Big crews (9–12) shake down on a plurality, so a failed vote is "no clear winner", not "no majority". design §11.2 */
+export const pluralityRule = (view: PlayerView): boolean => crewSize(view) >= jobOf(view).shakedown.pluralityFromPlayers;
 
 /** Every other player, in seat order: who you may vote for (never yourself, design §11.2). */
 export function voteTargets(view: PlayerView): { readonly id: PlayerId; readonly name: string; readonly isBot: boolean }[] {

@@ -4,7 +4,8 @@ import { startGame } from "./setupGame";
 
 // M2-6 acceptance (docs/m2-plan.md): a host and a guest play a Quick game
 // against bots to the end in the browser and see the ledger and the ranking.
-// The server runs with TIME_SCALE=0.1 (playwright.config.ts): 4.5 s rounds.
+// The server runs with TIME_SCALE=0.1 (playwright.config.ts): 4.5 s rounds and
+// 12 s meetings, enough for the host to vote (the fast clock's 6 s windows weren't).
 // SHOTS_DIR=… saves mid-round and game-over screenshots per viewport.
 const SHOTS = process.env.SHOTS_DIR;
 

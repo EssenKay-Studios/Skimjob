@@ -28,7 +28,7 @@ import {
   seatsOf,
   type Timer,
 } from "../game/hud";
-import { hasMeetings, slotText } from "../game/meeting";
+import { hasMeetings, pluralityRule, slotText } from "../game/meeting";
 import { DecidingPanel, MeetingNow, MeetingsPanel, ResultsBanner, RoleCard } from "./Meetings";
 import { useCountdown, useGame, type ClientCommand, type Connection, type Reply } from "../game/useGame";
 import { api, ApiError, sentence, UNREACHABLE, type LobbyView } from "../api";
@@ -385,7 +385,7 @@ type Tab = "ledger" | "case";
 function Records({ view }: { view: PlayerView }) {
   const [tab, setTab] = useState<Tab>("ledger");
   const name = namesOf(view);
-  const ctx = { me: view.me.id, name, slot: slotText };
+  const ctx = { me: view.me.id, name, slot: slotText, plurality: pluralityRule(view) };
   const rows: readonly LoggedEvent<PublicEvent | CaseFileEvent>[] = tab === "ledger" ? view.ledger : view.caseFile;
   return (
     <SketchFrame as="section" seed="game-records" radius={18} shadow={0.5} fill="var(--manilla)" holes className="records" aria-label="Ledger and case file">
@@ -429,7 +429,7 @@ function GameOver({ view }: { view: PlayerView }) {
       <h2 id="over-h" className="over__title">
         {won ? "The crew got away with it" : "The heist failed"}
       </h2>
-      {end && <p>{describeEvent(end.event, { me: view.me.id, name })}</p>}
+      {end && <p>{describeEvent(end.event, { me: view.me.id, name, plurality: pluralityRule(view) })}</p>}
       <ol className="ranking" aria-label="Final ranking">
         {outcome.ranking.map((r, i) => {
           const seat = seats.get(r.player);

@@ -26,6 +26,7 @@ import {
   openMeetingOf,
   perksHeld,
   plannerOf,
+  pluralityRule,
   sameVote,
   slotFromLocal,
   slotText,
@@ -368,14 +369,14 @@ export function DecidingPanel({ view, timers, offset }: Omit<Props, "send">) {
   );
 }
 
-const RESULT_TITLE = (o: MeetingOutcome, who: (p: PlayerId) => string, me: PlayerId): string => {
+const RESULT_TITLE = (o: MeetingOutcome, who: (p: PlayerId) => string, me: PlayerId, plurality: boolean): string => {
   switch (o.result.kind) {
     case "shakedown":
       return o.result.target === me ? "The crew voted to shake you down" : `The crew voted to shake down ${who(o.result.target)}`;
     case "skipped":
       return "The crew voted to skip";
     case "noMajority":
-      return "No majority: nobody is shaken down";
+      return plurality ? "No clear winner: nobody is shaken down" : "No majority: nobody is shaken down";
     case "noQuorum":
       return "Too few votes: nothing happens";
   }
@@ -394,7 +395,7 @@ export function ResultsBanner({ view }: { view: PlayerView }) {
     <SketchFrame as="section" seed={`results-${o.meetingId}`} radius={18} shadow={0.5} tape fill="var(--manilla)" className="panel results enter-sheet" aria-labelledby="results-h">
       <p className="kicker results__kicker">{o.kind === "emergency" ? "Emergency meeting" : `Act ${o.act} meeting`} · result</p>
       <h2 id="results-h" className="results__title">
-        {RESULT_TITLE(o, who, view.me.id)}
+        {RESULT_TITLE(o, who, view.me.id, pluralityRule(view))}
       </h2>
       <TallyBars rows={bars(o.tally, who, o.result)} label="Final tally" />
       {o.ballots ? <BallotList rows={o.ballots} who={who} label="How everyone voted" /> : <p className="meta">{MODE_NOTE.secret}</p>}

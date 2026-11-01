@@ -22,6 +22,7 @@ import {
   localInputValue,
   openMeetingOf,
   plannerOf,
+  pluralityRule,
   slotFromLocal,
   tallyRows,
 } from "./meeting";
@@ -141,6 +142,14 @@ describe("the vote window per vote mode (design §11.2)", () => {
     const s = voting("open", { rolePool: ["smoothTalker"], starterMode: false });
     expect(openMeetingOf(viewFor(s, "p1"))!.live).toEqual({ skip: 1, targets: { p2: 3 } });
     expect(abilityOffers(viewFor(s, "p1"))).toEqual([]);
+  });
+});
+
+describe("the plurality rule (design §11.2)", () => {
+  it("applies from 9 players", () => {
+    const crew = (n: number) => ({ ...config("open"), players: Array.from({ length: n }, (_, i) => ({ id: `p${i + 1}`, name: `P${i + 1}`, isBot: false })) });
+    expect(pluralityRule(viewFor(createGame(crew(8)), "p1"))).toBe(false);
+    expect(pluralityRule(viewFor(createGame(crew(9)), "p1"))).toBe(true);
   });
 });
 
