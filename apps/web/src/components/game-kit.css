@@ -289,3 +289,146 @@
   height: 22px;
   color: var(--ink);
 }
+
+/* ---------- Meetings kit (M2-7, ui-style "Vote window") ---------- */
+.clock-face {
+  flex: none;
+  display: block;
+}
+.clock-face__hand {
+  transition: transform 0.4s var(--spring);
+}
+
+.tally {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.tally__row {
+  display: grid;
+  grid-template-columns: minmax(0, 8.5em) minmax(0, 1fr) 2.2em;
+  align-items: center;
+  gap: 10px;
+  font: 600 13px/1.25 var(--font-ui);
+  color: var(--ink);
+}
+.tally__label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.tally__bar {
+  position: relative;
+  height: 14px;
+  border: 1.4px solid var(--ink);
+  border-radius: 4px 6px 3px 5px;
+  background: var(--paper-hi);
+}
+.tally__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--t-share);
+  border-radius: 3px 2px 2px 4px;
+  background: var(--hatch), var(--oat);
+  animation: tally-grow 0.7s var(--spring) both;
+}
+.tally__row.is-leading .tally__fill {
+  background: var(--hatch), var(--tally-lead);
+}
+.tally__row.is-passed .tally__fill {
+  background: var(--hatch), var(--tally-pass);
+}
+.tally__row.is-passed .tally__label {
+  color: var(--tally-pass);
+}
+.tally__votes {
+  text-align: right;
+  font-size: 15px;
+}
+@keyframes tally-grow {
+  from {
+    width: 0;
+  }
+}
+
+.banner {
+  display: grid;
+  gap: 4px;
+  padding: 10px 14px 12px;
+  min-width: 0;
+}
+.banner__title {
+  font: 700 17px/1.25 var(--font-hand);
+  color: var(--ink);
+}
+.banner--good .banner__title {
+  color: var(--good);
+}
+.banner--bad .banner__title {
+  color: var(--bad);
+}
+.banner__body {
+  font-size: 13.5px;
+  color: var(--ink2);
+  overflow-wrap: anywhere;
+}
+
+.dialog {
+  /* The whole viewport is the dialog box; the sheet is centred inside it, so a
+     click outside the sheet lands on the dialog (closes it) and nothing tilted
+     can widen the page. */
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: max(14px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom))
+    max(12px, env(safe-area-inset-left));
+  border: 0;
+  background: transparent;
+  overflow: hidden auto;
+  overscroll-behavior: contain;
+}
+.dialog[open] {
+  display: grid;
+  place-items: center;
+}
+.dialog::backdrop {
+  background: var(--scrim);
+}
+.dialog__sheet {
+  --fr-fill: var(--paper);
+  width: min(520px, 100%);
+  display: grid;
+  gap: 14px;
+  padding: 24px 22px 20px;
+  rotate: -0.5deg;
+  animation: dialog-in 0.5s var(--spring) both;
+}
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(-30px) rotate(-3deg);
+  }
+}
+@media (max-width: 420px) {
+  .dialog__sheet {
+    padding: 22px 14px 18px;
+    rotate: 0deg;
+  }
+  .tally__row {
+    grid-template-columns: minmax(0, 6.5em) minmax(0, 1fr) 2em;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .clock-face__hand {
+    transition: none;
+  }
+  .tally__fill,
+  .dialog__sheet {
+    animation: none;
+  }
+}

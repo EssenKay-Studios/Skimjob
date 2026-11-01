@@ -96,6 +96,7 @@ export const sampleEvents: { readonly [T in GameEventType]: EventOfType<T> } = {
   auditReport: { type: "auditReport", visibility: PUBLIC, round: 6, shortfalls: { vault: 4, office: 0, lobby: 0, security: 0, rooftop: 0 } },
   alibiPosted: { type: "alibiPosted", visibility: PUBLIC, player: ana, round: 1, room: "lobby" },
   alibisClosed: { type: "alibisClosed", visibility: PUBLIC, round: 1 },
+  roleClaimed: { type: "roleClaimed", visibility: PUBLIC, player: ana, role: "lookout", act: 1 },
   perkGranted: { type: "perkGranted", visibility: privateTo(ana), player: ana, perk: "peek" },
   perkUsed: { type: "perkUsed", visibility: privateTo(ana), player: ana, round: 2, perk: { kind: "peek", target: ben, role: "mole" } },
   rigPicked: { type: "rigPicked", visibility: privateTo(ben), player: ben, round: 3, card: "audit" },
@@ -159,6 +160,7 @@ export const sampleEvents: { readonly [T in GameEventType]: EventOfType<T> } = {
 export const sampleCommands: { readonly [T in CommandType]: Extract<Command, { type: T }> } = {
   submitMove: { type: "submitMove", player: ana, move: { room: "security", pocket: 0, watch: "vault" } },
   postAlibi: { type: "postAlibi", player: ana, room: "office" },
+  claimRole: { type: "claimRole", player: ben, role: "bagman" },
   proposeMeeting: { type: "proposeMeeting", player: ana, slot: "2026-11-01T19:00Z" },
   acceptMeeting: { type: "acceptMeeting", player: ben, proposalId: "p1" },
   callEmergency: { type: "callEmergency", player: ben },

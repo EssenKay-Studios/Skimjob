@@ -39,6 +39,9 @@ describe("describeEvent", () => {
     expect(describeEvent(sampleEvents.lootSplit, asCyd)).toBe("Round 1, Vault: Ana found 6 loot, 4 to the Haul and 2 pocketed.");
     expect(describeEvent(sampleEvents.alibiPosted, asAna)).toBe("You say you were in the Lobby in round 1.");
     expect(describeEvent(sampleEvents.alibiPosted, asCyd)).toBe("Ana says they were in the Lobby in round 1.");
+    // design §8, §12.1: a role claim, true or not.
+    expect(describeEvent(sampleEvents.roleClaimed, asAna)).toBe("You claim to be the Lookout.");
+    expect(describeEvent(sampleEvents.roleClaimed, asCyd)).toBe("Ana claims to be the Lookout.");
     expect(describeEvent(sampleEvents.roleDealt, asAna)).toBe("You were dealt the Fence.");
     expect(describeEvent(sampleEvents.roleDealt, asCyd)).toBe("Ana was the Fence."); // the reveal
   });
@@ -89,6 +92,10 @@ describe("describeEvent", () => {
     [results.noQuorum[0], "Too few votes: nothing happens."],
   ] as const)("describes the meeting result %j exactly", (result, text) => {
     expect(describeEvent({ ...sampleEvents.meetingClosed, result }, asAna)).toBe(text);
+  });
+  // design §11.2: 9–12 players shake down on a plurality, so a failed vote there has no clear winner rather than no majority.
+  it("says 'no clear winner' when the crew uses the plurality rule", () => {
+    expect(describeEvent({ ...sampleEvents.meetingClosed, result: { kind: "noMajority" } }, { ...asAna, plurality: true })).toBe("No clear winner: nobody is shaken down.");
   });
 
   // design §8: every ability's result.

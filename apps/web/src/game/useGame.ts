@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import type { PlayerCommand, PlayerView } from "@skimjob/engine";
 import { asChatMessage, asDmNotice, chatReducer, EMPTY_CHAT, type ChatAction, type ChatMessage, type ChatRequest, type ChatState, type DmNotice } from "./chat";
-import type { Timer } from "./hud";
+import { formatCountdown, remainingMs, timerFor, type Timer } from "./hud";
 
 /** A command as the client sends it: the server fills in `player` from the session. */
 export type ClientCommand = PlayerCommand extends infer C ? (C extends PlayerCommand ? Omit<C, "player"> : never) : never;
@@ -166,4 +166,13 @@ export function useNow(ms = 1000): number {
     return () => clearInterval(t);
   }, [ms]);
   return now;
+}
+
+/** The countdown for deadline `key`, on the server's clock (`offset` = server − local). */
+export function useCountdown(timers: readonly Timer[], key: string | null, offset: number): { text: string; ms: number; paused: boolean } | null {
+  const now = useNow(500) + offset;
+  const t = timerFor(timers, key);
+  if (!t) return null;
+  const ms = remainingMs(t, now);
+  return { text: formatCountdown(ms), ms, paused: t.pausedAt !== null };
 }

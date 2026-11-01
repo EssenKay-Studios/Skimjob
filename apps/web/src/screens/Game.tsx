@@ -20,26 +20,25 @@ import {
   alibiState,
   canPocket,
   defaultRoom,
-  formatCountdown,
   justMissed,
   namesOf,
   nextTarget,
   outcomeOf,
   phaseInfo,
-  remainingMs,
   roomOptions,
   seatsOf,
-  timerFor,
   type Timer,
 } from "../game/hud";
-import { useGame, useNow, type ClientCommand, type Connection, type GameChannel, type Reply } from "../game/useGame";
+import { hasMeetings, pluralityRule, slotText } from "../game/meeting";
+import { DecidingPanel, MeetingNow, MeetingsPanel, ResultsBanner, RoleCard } from "./Meetings";
+import { useCountdown, useGame, type ClientCommand, type Connection, type GameChannel, type Reply } from "../game/useGame";
 import { api, ApiError, sentence, UNREACHABLE, type LobbyView } from "../api";
 import { navigate } from "../router";
 import { GameChat } from "./GameChat";
 import { TopBar } from "./TopBar";
 import "./game.css";
 
-type Access = { kind: "checking" } | { kind: "ok"; dmNotices: boolean } | { kind: "lobby" } | { kind: "error"; title: string; text: string };
+type Access = { kind: "checking" } | { kind: "ok"; autoMeetings: boolean; dmNotices: boolean } | { kind: "lobby" } | { kind: "error"; title: string; text: string };
 
 /** Before opening the socket: is this a started game you sit in? (The upgrade's own 401/404 can't be read by a browser.) */
 function useAccess(id: string): Access {
@@ -47,7 +46,9 @@ function useAccess(id: string): Access {
   useEffect(() => {
     let live = true;
     api<LobbyView>("GET", `/games/${encodeURIComponent(id)}`).then(
-      (game) => live && setAccess(game.status === "lobby" ? { kind: "lobby" } : { kind: "ok", dmNotices: game.settings.dmNotices !== false }),
+      (game) =>
+        live &&
+        setAccess(game.status === "lobby" ? { kind: "lobby" } : { kind: "ok", autoMeetings: game.autoMeetings !== false, dmNotices: game.settings.dmNotices !== false }),
       (e: unknown) => {
         if (!live) return;
         if (e instanceof ApiError && e.status === 401) return setAccess({ kind: "error", title: "Sign in first", text: "Join the crew from your invite link, then come back to this game." });
@@ -101,7 +102,16 @@ export function Game({ id }: { id: string }) {
             <p>Opening the game.</p>
           </SketchFrame>
         ) : (
-          <Board view={view} timers={channel.timers} offset={channel.offset} send={send} gameId={id} channel={channel} dmNotices={access.kind === "ok" && access.dmNotices} />
+          <Board
+            view={view}
+            timers={channel.timers}
+            offset={channel.offset}
+            send={send}
+            autoMeetings={access.kind === "ok" ? access.autoMeetings : true}
+            gameId={id}
+            channel={channel}
+            dmNotices={access.kind === "ok" && access.dmNotices}
+          />
         )}
       </main>
     </div>
@@ -122,16 +132,18 @@ interface BoardProps {
   readonly timers: readonly Timer[];
   readonly offset: number;
   readonly send: (cmd: ClientCommand, done?: string) => Promise<Reply>;
+  /** Meetings open by themselves after each act (no slot proposals). design §11.1 */
+  readonly autoMeetings: boolean;
 }
 
-function Board({ view, timers, offset, send, gameId, channel, dmNotices }: BoardProps & { gameId: string; channel: GameChannel; dmNotices: boolean }) {
+function Board({ view, timers, offset, send, autoMeetings, gameId, channel, dmNotices }: BoardProps & { gameId: string; channel: GameChannel; dmNotices: boolean }) {
   const outcome = outcomeOf(view);
   return (
     <div className={outcome ? "game-grid is-over" : "game-grid"}>
       <Hud view={view} timers={timers} offset={offset} />
       <Seats view={view} />
       <div className="game-grid__action">
-        {outcome ? <GameOver view={view} /> : <Actions view={view} timers={timers} offset={offset} send={send} />}
+        {outcome ? <GameOver view={view} /> : <Actions view={view} timers={timers} offset={offset} send={send} autoMeetings={autoMeetings} />}
       </div>
       {/* From 1024 px the chat and the records share the right column; below that the chat is a sheet. */}
       <div className="game-grid__side">
@@ -140,13 +152,6 @@ function Board({ view, timers, offset, send, gameId, channel, dmNotices }: Board
       </div>
     </div>
   );
-}
-
-/** The countdown for `key`, on the server's clock. */
-function useCountdown(timers: readonly Timer[], key: string | null, offset: number): { text: string; paused: boolean } | null {
-  const now = useNow(500) + offset;
-  const t = timerFor(timers, key);
-  return t ? { text: formatCountdown(remainingMs(t, now)), paused: t.pausedAt !== null } : null;
 }
 
 function Hud({ view, timers, offset }: { view: PlayerView; timers: readonly Timer[]; offset: number }) {
@@ -213,15 +218,6 @@ function Seats({ view }: { view: PlayerView }) {
         <h2 id="crew-h" className="crew__title">
           The crew
         </h2>
-        <span className="meta">
-          You're the <b className="crew__role">{roleName(view.me.role)}</b> · stash <b className="num">{view.me.stash}</b>
-          {view.me.safe > 0 && (
-            <>
-              {" "}
-              · safe <b className="num">{view.me.safe}</b>
-            </>
-          )}
-        </span>
       </div>
       <ul className="crew__list">
         {seats.map((s) => (
@@ -238,35 +234,35 @@ function Seats({ view }: { view: PlayerView }) {
   );
 }
 
-function Actions({ view, timers, offset, send }: BoardProps) {
+function Actions({ view, timers, offset, send, autoMeetings }: BoardProps) {
   const alibi = alibiState(view);
   const p = view.phase;
+  const meetings = hasMeetings(view);
+  const voting = p.kind === "meeting" || p.kind === "shakedownPending";
   return (
     <>
+      {meetings && <ResultsBanner view={view} />}
+      {p.kind === "meeting" && <MeetingNow view={view} timers={timers} offset={offset} send={send} />}
+      {p.kind === "shakedownPending" && <DecidingPanel view={view} timers={timers} offset={offset} />}
       {alibi && <AlibiPanel view={view} round={alibi.round} posted={alibi.posted} send={send} />}
       {p.kind === "planning" ? (
-        <MovePanel key={p.round} view={view} round={p.round} timers={timers} offset={offset} send={send} />
-      ) : p.kind === "alibis" ? null : (
+        <MovePanel key={p.round} view={view} round={p.round} timers={timers} offset={offset} send={send} autoMeetings={autoMeetings} />
+      ) : p.kind === "alibis" || voting ? null : (
         <WaitPanel view={view} />
       )}
+      <RoleCard view={view} send={send} />
+      {meetings && !voting && <MeetingsPanel view={view} timers={timers} offset={offset} send={send} autoMeetings={autoMeetings} />}
     </>
   );
 }
 
 function WaitPanel({ view }: { view: PlayerView }) {
   const p = view.phase;
-  const text =
-    p.kind === "meeting"
-      ? "The crew is meeting. Voting from this screen arrives in the next build; the meeting closes by itself."
-      : p.kind === "shakedownPending"
-        ? "A shakedown passed. It lands when the window closes."
-        : p.kind === "awaitingMeeting"
-          ? `Act ${p.act} is over. The crew meeting opens next, then the checkpoint.`
-          : "Hang tight.";
+  const text = p.kind === "awaitingMeeting" ? `Act ${p.act} is over. The crew meeting opens next, then the checkpoint.` : "Hang tight.";
   return (
     <SketchFrame as="section" seed="game-wait" radius={16} shadow={0.4} className="panel" aria-live="polite">
       <h2 className="panel__title">
-        <Underline seed="wait">{p.kind === "meeting" ? "Meeting in progress" : "Between rounds"}</Underline>
+        <Underline seed="wait">Between rounds</Underline>
       </h2>
       <p>{text}</p>
     </SketchFrame>
@@ -404,7 +400,7 @@ type Tab = "ledger" | "case";
 function Records({ view }: { view: PlayerView }) {
   const [tab, setTab] = useState<Tab>("ledger");
   const name = namesOf(view);
-  const ctx = { me: view.me.id, name, slot: slotText };
+  const ctx = { me: view.me.id, name, slot: slotText, plurality: pluralityRule(view) };
   const rows: readonly LoggedEvent<PublicEvent | CaseFileEvent>[] = tab === "ledger" ? view.ledger : view.caseFile;
   return (
     <SketchFrame as="section" seed="game-records" radius={18} shadow={0.5} fill="var(--manilla)" holes className="records" aria-label="Ledger and case file">
@@ -434,14 +430,6 @@ function Records({ view }: { view: PlayerView }) {
   );
 }
 
-/** A meeting slot for people: ISO times as a local time, "act-2" as "the end of Act 2", other labels as they are. */
-function slotText(slot: string): string {
-  const act = /^act-(\d)$/.exec(slot);
-  if (act) return `the end of Act ${act[1]}`;
-  const t = /^\d{4}-\d{2}-\d{2}T/.test(slot) ? new Date(slot) : null;
-  return t && !Number.isNaN(t.getTime()) ? t.toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" }) : slot;
-}
-
 function GameOver({ view }: { view: PlayerView }) {
   const outcome = outcomeOf(view)!;
   const name = namesOf(view);
@@ -456,7 +444,7 @@ function GameOver({ view }: { view: PlayerView }) {
       <h2 id="over-h" className="over__title">
         {won ? "The crew got away with it" : "The heist failed"}
       </h2>
-      {end && <p>{describeEvent(end.event, { me: view.me.id, name })}</p>}
+      {end && <p>{describeEvent(end.event, { me: view.me.id, name, plurality: pluralityRule(view) })}</p>}
       <ol className="ranking" aria-label="Final ranking">
         {outcome.ranking.map((r, i) => {
           const seat = seats.get(r.player);

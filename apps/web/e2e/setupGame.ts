@@ -19,10 +19,17 @@ async function ok<T>(res: Awaited<ReturnType<APIRequestContext["post"]>>): Promi
  */
 export async function startGame(
   host: APIRequestContext,
-  { bots, guests = [], sessionLength = "quick", nickname = "Host" }: { bots: number; guests?: readonly APIRequestContext[]; sessionLength?: string; nickname?: string },
+  {
+    bots,
+    guests = [],
+    sessionLength = "quick",
+    nickname = "Host",
+    voteVisibility,
+  }: { bots: number; guests?: readonly APIRequestContext[]; sessionLength?: string; nickname?: string; voteVisibility?: "hiddenThenRevealed" | "open" | "secret" },
 ): Promise<StartedGame> {
   await ok(await host.post("/api/auth/guest", { data: { nickname } }));
-  const game = await ok<StartedGame>(await host.post("/api/games", { data: { settings: { sessionLength } } }));
+  const settings = { sessionLength, ...(voteVisibility && { voteVisibility }) };
+  const game = await ok<StartedGame>(await host.post("/api/games", { data: { settings } }));
   for (const [i, g] of guests.entries()) await ok(await g.post(`/api/invites/${game.inviteCode}/join`, { data: { nickname: `Guest ${i + 1}` } }));
   for (let i = 0; i < bots; i++) await ok(await host.post(`/api/games/${game.id}/bots`, { data: {} }));
   await ok(await host.post(`/api/games/${game.id}/start`, { data: {} }));

@@ -68,3 +68,49 @@ for (const viewport of VIEWPORTS) {
     });
   }
 }
+
+// M2-7: the meetings panel (1-week preset: the slot planner and the sealed
+// vote), the vote dialog and the results banner at every launch width.
+for (const viewport of VIEWPORTS) {
+  for (const touch of [false, true]) {
+    test(`meetings at ${viewport.width}x${viewport.height}${touch ? " touch" : ""}: planner, vote dialog, results`, async ({ browser }) => {
+      test.setTimeout(90_000);
+      const ctx = await browser.newContext({ viewport, hasTouch: touch, isMobile: touch });
+      const page = await ctx.newPage();
+      const check = async (where: string) => {
+        const o = await overflow(page);
+        expect(o.scroll, `${where}: overflow`).toBeLessThanOrEqual(o.client);
+        expect(o.viewport).toBe(viewport.width);
+        expect(await smallTargets(page), `${where}: small targets`).toEqual([]);
+      };
+
+      // Two people, no bots: bots lock "the end of the act" at once, which hides the planner.
+      const other = await browser.newContext();
+      const week = await startGame(page.request, { bots: 0, guests: [other.request], sessionLength: "1w" });
+      await page.goto(`/game/${week.id}`);
+      const panel = page.getByRole("region", { name: "Crew meetings" });
+      await expect(panel.getByLabel("Propose a time")).toBeVisible();
+      await panel.getByText("Can't make the meeting?").click();
+      await expect(panel.getByRole("group", { name: "Sealed vote" })).toBeVisible();
+      await check("planner");
+      await other.close();
+
+      // A fresh game in the 1-hour preset: call an emergency, vote in the dialog, see the results.
+      const hour = await startGame(page.request, { bots: 5, sessionLength: "1h", voteVisibility: "open" });
+      await page.goto(`/game/${hour.id}`);
+      await page.getByRole("button", { name: "Call an emergency meeting" }).click();
+      await page.getByRole("button", { name: "Sure? Tap again to call it" }).click();
+      const dialog = page.getByRole("dialog", { name: "Who's skimming?" });
+      await expect(dialog).toBeVisible({ timeout: 20_000 });
+      await dialog.getByRole("group", { name: "Your vote" }).getByRole("button", { name: "Skip" }).click();
+      await dialog.getByRole("button", { name: "Cast vote" }).click();
+      await expect(dialog.getByRole("button", { name: "Vote cast" })).toBeVisible();
+      await check("vote dialog");
+      await dialog.getByRole("button", { name: "Back to the board" }).click();
+      await check("meeting on");
+      await expect(page.getByRole("button", { name: "Got it" })).toBeVisible({ timeout: 40_000 });
+      await check("results");
+      await ctx.close();
+    });
+  }
+}

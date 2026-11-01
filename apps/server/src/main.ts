@@ -4,7 +4,7 @@ import { systemClock } from "./clock";
 import { loadConfig, StartupError } from "./config";
 import { openDatabase, serverDeps } from "./startup";
 import { buildServer } from "./server";
-import { TICK_MS } from "./timing";
+import { tickFor } from "./timing";
 import { checkWebDir } from "./web";
 
 try {
@@ -17,7 +17,7 @@ try {
     }
   }
   const { db, applied } = await openDatabase(config);
-  const app = buildServer({ db, clock: systemClock, logger: true, tickMs: TICK_MS, ...serverDeps(config) });
+  const app = buildServer({ db, clock: systemClock, logger: true, tickMs: tickFor(config.timeScale), ...serverDeps(config) });
   if (config.production && process.env.DEV_LOGIN === "1") app.log.warn("DEV_LOGIN=1 ignored: the dev sign-in stub is never on in production");
   const rawScale = process.env.TIME_SCALE?.trim();
   if (config.production && rawScale && rawScale !== "1") app.log.warn(`TIME_SCALE=${rawScale} ignored: deadlines always run at real speed in production`);
