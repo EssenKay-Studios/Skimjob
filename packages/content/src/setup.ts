@@ -6,6 +6,12 @@ import type { RoleId } from "./index";
 export const MIN_PLAYERS = 2;
 export const MAX_PLAYERS = 12;
 
+/**
+ * Longest meeting `slot` a command may name (an opaque label, e.g. an ISO
+ * time, ~24 characters). It is stored in the log and sent to every seat. design §11.1, §17.2
+ */
+export const MAX_SLOT_LENGTH = 64;
+
 /** A game is 3 acts of this many rounds (9 rounds in all). design §2, §4 */
 export const ROUNDS_PER_ACT = 3;
 

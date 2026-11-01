@@ -138,6 +138,9 @@ const HANDLERS: Readonly<Record<string, Handler>> = {
   scheduleMeeting,
 };
 
+/** Every command type the engine handles. */
+export const COMMAND_TYPES: readonly string[] = Object.keys(HANDLERS);
+
 /** design §16.1: Duel mode has no meetings or votes. */
 const MEETING_COMMANDS: readonly string[] = ["proposeMeeting", "acceptMeeting", "scheduleMeeting", "callEmergency", "castVote", "sealVote"];
 

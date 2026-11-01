@@ -136,6 +136,7 @@ Plan and acceptance criteria: `docs/m2-plan.md`. Runs alongside M1 task 16 (bala
 - **Duel mode (task 15, done):** the act's end in Duel is `endOfDuelAct` (`duel.ts`), called by `closeAlibis` (`round.ts`) when the act's last round's alibis close; any new end-of-act step must go there as well as in `afterVote` (both use `checkpoint()` in `meeting.ts`). M2: the server never sends `openMeeting`/`scheduleMeeting` in Duel games. Balance (task 16): the sim doesn't report call-outs yet (count, caught share, loot moved); bots call out only on a visible shortfall.
 
 ## Questions for Karthik
+- Commands: OK that a proposed meeting slot (free text) may be at most 64 characters? (provisional, decisions.md)
 - Role deck v2 R2a: OK that the Rookie keeps ×1.2, the Auditor audits the latest resolved round any time (instant), and "saw / audited / checked" rewards count any earlier time in the game? (provisional, decisions.md)
 - Scheduler presets: OK with the provisional numbers in decisions.md (M2-4: e.g. Quick 45 s rounds + 15 s alibis + 2 min meetings, 1 h 5 min + 30 s + 3 min, emergency notice 20 s … 2 h, Muscle window 15 s … 10 min), and that in 1-day+ games the server picks a meeting slot 1–2 h after the act's last round if nobody locked one?
 - Chat: OK that DMs to bots are refused (bots don't read), secret-mode ballots and sealed votes can't be shared as evidence cards (hidden-mode ballots only after the meeting closes), and limits of 500 characters, 8 stacked accents and 8 messages per 10 s? (provisional, decisions.md M2-8a)

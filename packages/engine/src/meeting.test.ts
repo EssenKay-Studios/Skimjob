@@ -1,7 +1,7 @@
 // Crew meetings and votes: scheduling, emergency meetings, ballots and their
 // visibility, sealed votes, quorum and majority, shakedowns, the checkpoint
 // order and the move to the next act. design §11, §4, §3
-import { BANK_JOB, STARTER_ROLES } from "@skimjob/content";
+import { BANK_JOB, MAX_SLOT_LENGTH, STARTER_ROLES } from "@skimjob/content";
 import { handleThroughAlibis } from "./alibis.testkit";
 import { describe, expect, it } from "vitest";
 import type { GameConfig, GameEvent, GameState, VoteVisibility } from "./types";
@@ -147,6 +147,14 @@ describe("scheduling the act's meeting — design §11.1", () => {
     for (const pid of ["nope", 3, undefined, null]) expect(reason(s, accept("p1", pid))).toMatch(/no open proposal/);
     for (const slot of ["", 3, null, undefined, {}]) expect(reason(s, propose("p1", slot))).toMatch(/slot/);
     expect(reason(s, propose("zed", "b"))).toMatch(/unknown player/);
+  });
+
+  it("caps a slot's length (free text, stored and sent to everyone) — design §11.1, §17.2", () => {
+    const s = game(4);
+    expect(handleCommand(s, propose("p0", "x".repeat(MAX_SLOT_LENGTH))).ok).toBe(true);
+    expect(reason(s, propose("p0", "x".repeat(MAX_SLOT_LENGTH + 1)))).toBe(`slot must be at most ${MAX_SLOT_LENGTH} characters`);
+    // An ISO time, as the server sends, fits.
+    expect(handleCommand(s, propose("p0", new Date(0).toISOString())).ok).toBe(true);
   });
 
   it("the server picks a slot when nobody locked one in (proposalId null)", () => {

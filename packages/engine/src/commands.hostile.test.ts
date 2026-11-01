@@ -1,7 +1,8 @@
-// Hostile command values: every field of every command type, sent with values
-// a JSON client can build to trip up lookups and reason strings — objects with
-// no string form ({"toString":null}), prototype keys ("__proto__",
-// "constructor", …), and values of the wrong type. Each must be refused, never
+// Hostile command values: every field of every command type (nested objects
+// and lists as well as their leaves), replaced by values a JSON client can
+// build to trip up lookups and reason strings — objects with no string form
+// ({"toString":null}), prototype keys ("__proto__", "constructor", …), values
+// of the wrong type, over-long strings, or left out. Each must be refused, never
 // thrown, and leave the state as it was. design §17.2 (commands arrive as
 // untrusted JSON; bad input is a rejection).
 //
@@ -9,14 +10,15 @@
 // the hostile value is what gets it refused; the coverage check at the end
 // makes sure every field was tried that way at least once.
 import { describe, expect, it } from "vitest";
-import type { PerkId } from "@skimjob/content";
+import { MAX_SLOT_LENGTH, type PerkId } from "@skimjob/content";
 import type { GameConfig, GameEvent, GameState, PlayerState } from "./types";
 import { setupEvents } from "./setup";
 import { replay } from "./reduce";
-import { handleCommand } from "./handle";
+import { COMMAND_TYPES, handleCommand } from "./handle";
 import { powerOf } from "./overrides";
 import { actOfRound } from "./acts";
 import { grantPerks } from "./perks.testkit";
+import { show } from "./check";
 
 // ---------------------------------------------------------------- states
 
@@ -164,17 +166,23 @@ function baseCommands(s: GameState): Record<string, unknown>[] {
 
 // ---------------------------------------------------------------- hostile values
 
-/** Fields whose strings are free text the engine only stores and compares (`slot`, design §11.1): any string is fine there. */
+/** Fields whose strings are free text the engine only stores and compares (`slot`, design §11.1): any short string is fine there. */
 const FREE_TEXT = new Set(["slot"]);
+/** Fields a command may leave out (a move without a power). */
+const OPTIONAL = new Set(["move.ability"]);
+/** Stands for "the field is left out". */
+const ABSENT = Symbol("absent");
 
-const OF_ANOTHER_TYPE: readonly unknown[] = [
-  JSON.parse('{"toString":null}'),
+const NO_STRING_FORM = JSON.parse('{"toString":null}') as unknown;
+/** Hostile values of every JSON type; each is tried wherever the field holds another type, and all of them in place of objects and lists. */
+const HOSTILE_VALUES: readonly unknown[] = [
+  NO_STRING_FORM,
   JSON.parse('{"toString":null,"valueOf":null}'),
   JSON.parse('{"__proto__":{"toString":null}}'),
   Object.create(null),
   {},
   [],
-  [JSON.parse('{"toString":null}')],
+  [NO_STRING_FORM],
   null,
   -1,
   1.5,
@@ -182,28 +190,43 @@ const OF_ANOTHER_TYPE: readonly unknown[] = [
   true,
   "__proto__",
 ];
-const PROTOTYPE_KEYS: readonly string[] = ["__proto__", "constructor", "prototype", "toString", "valueOf", "hasOwnProperty", "isPrototypeOf", ""];
-
-/** The hostile values to try in place of `value` at `field`. */
-function hostileFor(field: string, value: unknown): unknown[] {
-  const others = OF_ANOTHER_TYPE.filter((h) => typeof h !== typeof value);
-  return typeof value === "string" && !FREE_TEXT.has(field) ? [...others, ...PROTOTYPE_KEYS] : others;
-}
+const PROTOTYPE_KEYS: readonly string[] = ["__proto__", "constructor", "prototype", "toString", "valueOf", "hasOwnProperty", "isPrototypeOf", "", "x".repeat(12_000)];
 
 type Path = readonly (string | number)[];
 
-/** Every leaf of a command except its `type`. */
-function leaves(value: unknown, path: Path = []): Path[] {
-  if (Array.isArray(value)) return value.flatMap((v, i) => leaves(v, [...path, i]));
-  if (typeof value === "object" && value !== null) return Object.entries(value).flatMap(([k, v]) => (path.length === 0 && k === "type" ? [] : leaves(v, [...path, k])));
-  return [path];
+const isContainer = (v: unknown): boolean => typeof v === "object" && v !== null;
+
+/** The hostile values to try in place of `value` at `path`. */
+function hostileFor(path: Path, value: unknown): unknown[] {
+  const field = path.filter((k) => typeof k === "string").join(".");
+  // A list item can't be left out in JSON (no holes), so only object fields are.
+  const missing = OPTIONAL.has(field) ? [] : typeof path[path.length - 1] === "number" ? [undefined] : [ABSENT, undefined];
+  // Objects and lists are replaced by every hostile value, objects with no string form included.
+  if (isContainer(value)) return [...HOSTILE_VALUES, ...missing];
+  const others = HOSTILE_VALUES.filter((h) => typeof h !== typeof value);
+  if (typeof value !== "string") return [...others, ...missing];
+  // design §17.2: free text is capped (content), so an over-long slot is refused too.
+  const extra = FREE_TEXT.has(field) ? ["x".repeat(MAX_SLOT_LENGTH + 1)] : PROTOTYPE_KEYS;
+  return [...others, ...extra, ...missing];
+}
+
+/** Every field of a command, nested objects and lists as well as their leaves, except its `type`. */
+function fields(value: unknown, path: Path = []): Path[] {
+  const self = path.length > 0 ? [path] : [];
+  if (Array.isArray(value)) return [...self, ...value.flatMap((v, i) => fields(v, [...path, i]))];
+  if (isContainer(value)) {
+    return [...self, ...Object.entries(value as object).flatMap(([k, v]) => (path.length === 0 && k === "type" ? [] : fields(v, [...path, k])))];
+  }
+  return self;
 }
 
 function withValue(command: Record<string, unknown>, path: Path, value: unknown): unknown {
   const copy = structuredClone(command);
   let at: Record<string | number, unknown> = copy;
   for (const key of path.slice(0, -1)) at = at[key] as Record<string | number, unknown>;
-  at[path[path.length - 1] as string | number] = value;
+  const last = path[path.length - 1] as string | number;
+  if (value === ABSENT) delete at[last];
+  else at[last] = value;
   return copy;
 }
 
@@ -223,6 +246,7 @@ function deepFreeze<T>(value: T): T {
 }
 
 const describeValue = (v: unknown): string => {
+  if (v === ABSENT) return "(left out)";
   try {
     return JSON.stringify(v) ?? String(v);
   } catch {
@@ -233,6 +257,7 @@ const describeValue = (v: unknown): string => {
 describe("hostile command values are refused, never thrown — design §17.2", () => {
   it("every field of every command type, with every hostile value, against every phase", () => {
     const tried = new Set<string>();
+    const types = new Set<string>();
     const covered = new Set<string>();
     const failures: string[] = [];
     let attempts = 0;
@@ -240,11 +265,12 @@ describe("hostile command values are refused, never thrown — design §17.2", (
       const before = JSON.stringify(state);
       for (const base of baseCommands(state)) {
         const accepted = handleCommand(state, base).ok;
-        for (const path of leaves(base)) {
+        types.add(base.type as string);
+        for (const path of fields(base)) {
           const key = fieldKey(base, path);
           tried.add(key);
           if (accepted) covered.add(key);
-          for (const hostile of hostileFor(String(path[path.length - 1]), get(base, path))) {
+          for (const hostile of hostileFor(path, get(base, path))) {
             attempts++;
             const command = withValue(base, path, hostile);
             const where = `${key} = ${describeValue(hostile)} in phase ${state.phase.kind}`;
@@ -264,7 +290,23 @@ describe("hostile command values are refused, never thrown — design §17.2", (
     expect(failures).toEqual([]);
     // Every field was mutated starting from a command that was accepted at least once.
     expect([...tried].filter((k) => !covered.has(k)).sort()).toEqual([]);
+    // Every command type the engine handles is in baseCommands.
+    expect([...types].sort()).toEqual([...COMMAND_TYPES].sort());
     expect(tried.size).toBeGreaterThan(40);
     expect(attempts).toBeGreaterThan(10_000);
+  }, 60_000);
+
+  it("show() prints any command value without throwing, and cuts long strings short", () => {
+    expect([NO_STRING_FORM, Object.create(null), [NO_STRING_FORM], null, undefined, 3, true].map(show)).toEqual([
+      "(an object)",
+      "(an object)",
+      "(a list)",
+      "null",
+      "undefined",
+      "3",
+      "true",
+    ]);
+    expect(show("p1")).toBe("p1");
+    expect(show("x".repeat(12_000))).toBe(`${"x".repeat(40)}…`);
   });
 });

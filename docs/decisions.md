@@ -4,6 +4,9 @@ Newest first. Each entry: what was decided, and why. Add an entry whenever a rul
 
 ---
 
+### 2026-11-01 — Hostile command values; meeting slots capped at 64 characters
+Commands are untrusted JSON (design §17.2). Refusal reasons print command values with `show()` (never `String()`), which never throws and cuts strings over 40 characters short, so hostile input can't make `handleCommand` throw or flood logs. **Provisional:** a meeting `slot` (the only free-text command field) may be at most `MAX_SLOT_LENGTH` = 64 characters (content); it is stored in the log and broadcast to every seat, and the server's ISO times are about 24. Longer slots are refused.
+
 ### 2026-11-01 — Role deck v2, R2a: Rookie, Inside Man, Lookout, Auditor, Detective, Snitch
 R2 is split (> ~1,500 lines): R2a ships the first six crew roles of `docs/roles-v2.md` §2; R2b the other seven. Content 0.10.0. Design §8, §8.1, §8.3.
 - **Insider renamed Inside Man** (role id `insideMan`). Accountant/Lawyer/Planner never shipped, so the Detective is new; Priest, Mastermind and Fixer come in R2b.

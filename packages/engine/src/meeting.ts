@@ -6,7 +6,7 @@
 // command is refused. `handleCommand` (handle.ts) folds the events. Nothing
 // here draws randomness except the next act's event card (deck.ts, design §10):
 // meeting and proposal ids are names and log positions.
-import { BANK_JOB, PERK_RULES, ROUNDS_PER_ACT, type RoleId, type ShakedownRules } from "@skimjob/content";
+import { BANK_JOB, MAX_SLOT_LENGTH, PERK_RULES, ROUNDS_PER_ACT, type RoleId, type ShakedownRules } from "@skimjob/content";
 import type {
   ActNumber,
   GameEvent,
@@ -50,8 +50,10 @@ const slotLocked = (state: GameState): boolean =>
 
 const lockedReason = (state: GameState): string => `the act ${currentAct(state)} meeting is already scheduled`;
 
+/** A slot is free text the engine only stores and compares, so its length is capped (content). design §11.1, §17.2 */
 function checkSlot(slot: unknown): string | null {
-  return typeof slot === "string" && slot !== "" ? null : "slot must be a non-empty string";
+  if (typeof slot !== "string" || slot === "") return "slot must be a non-empty string";
+  return slot.length > MAX_SLOT_LENGTH ? `slot must be at most ${MAX_SLOT_LENGTH} characters` : null;
 }
 
 function scheduled(act: ActNumber, slot: string, proposalId: string | null): GameEvent {
