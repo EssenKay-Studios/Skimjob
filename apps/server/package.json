@@ -1,0 +1,23 @@
+{
+  "name": "@skimjob/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit -p .",
+    "dev": "tsx watch src/main.ts",
+    "start": "tsx src/main.ts"
+  },
+  "dependencies": {
+    "@skimjob/engine": "workspace:*",
+    "fastify": "^5.12.0",
+    "pg": "^8.23.0"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.14",
+    "@skimjob/bots": "workspace:*",
+    "@types/pg": "^8.23.0"
+  }
+}
