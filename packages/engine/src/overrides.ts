@@ -5,8 +5,8 @@
 // rules code never meets a shape it doesn't know. Configs are untrusted JSON,
 // so `validateOverrides` checks every field (own keys only, known keys only,
 // finite numbers, whole numbers where the engine counts loot or Heat).
-import { ROLES, type JobDef, type JobId, type RoleDef, type RoleId, type RolePower, type RoomDef } from "@skimjob/content";
-import type { ContentOverrides, GameConfig, RoleOverride, RoomOverride } from "./types";
+import { EVENTS, ROLES, type EventDef, type EventEffect, type JobDef, type JobId, type RoleDef, type RoleId, type RolePower, type RoomDef } from "@skimjob/content";
+import type { ContentOverrides, EventOverride, GameConfig, RoleOverride, RoomOverride } from "./types";
 import { isObject } from "./check";
 import { jobById } from "./job";
 
@@ -55,6 +55,20 @@ const POWER_FIELDS: { readonly [K in RolePower["kind"]]: Readonly<Record<string,
   tipOff: { perAct: positiveCount, heat: count },
 };
 
+/** The numbers each event effect may have overridden: its own only. design §10 */
+const EFFECT_FIELDS: { readonly [K in EventEffect["kind"]]: Readonly<Record<string, Rule>> } = {
+  heat: { amount: finite },
+  roomSurge: { lootMultiplier: atLeast0, heatMultiplier: atLeast0 },
+  blackout: {},
+  lockdown: {},
+  audit: {},
+  raidRumour: { loss: count },
+  insideTip: {},
+  doubleCross: {},
+};
+
+export type EventTable = Readonly<Record<string, EventDef>>;
+
 /**
  * Everything wrong with a content override for `job`, or `[]`. `null` and
  * `undefined` mean "no overrides". design §17.4
@@ -63,7 +77,7 @@ export function validateOverrides(raw: unknown, job: JobDef, roles: RoleTable = 
   if (raw === undefined || raw === null) return [];
   const errors: string[] = [];
   if (!isObject(raw)) return ["contentOverrides must be an object"];
-  const known = ["rooms", "heat", "checkpoints", "shakedown", "duel", "roles"];
+  const known = ["rooms", "heat", "checkpoints", "shakedown", "duel", "roles", "events"];
   for (const key of Object.keys(raw)) if (!known.includes(key)) errors.push(`contentOverrides.${key} is not an overridable section`);
 
   if (raw.rooms !== undefined) {
@@ -126,7 +140,40 @@ export function validateOverrides(raw: unknown, job: JobDef, roles: RoleTable = 
         checkFields(o, path, { ...ROLE_SCORING_FIELDS, ...POWER_FIELDS[def.power.kind] }, errors);
       }
   }
+  if (raw.events !== undefined) {
+    if (!isObject(raw.events)) errors.push("contentOverrides.events must be an object");
+    else
+      for (const [card, o] of Object.entries(raw.events)) {
+        const path = `contentOverrides.events.${card}`;
+        const def = Object.hasOwn(EVENTS, card) ? EVENTS[card] : undefined;
+        if (!def) errors.push(`${path}: no such event card`);
+        else checkFields(o, path, EFFECT_FIELDS[def.effect.kind], errors);
+      }
+  }
   return errors;
+}
+
+/** `events` with the override's numbers. Assumes `validateOverrides` passed. design §10 */
+export function overrideEvents(events: EventTable, overrides: ContentOverrides | null | undefined): EventTable {
+  if (!overrides?.events) return events;
+  const out: Record<string, EventDef> = { ...events };
+  for (const [id, o] of Object.entries(overrides.events) as [string, EventOverride][]) {
+    const def = events[id] as EventDef;
+    out[id] = { ...def, effect: { ...def.effect, ...o } as EventEffect };
+  }
+  return out;
+}
+
+const eventCache = new WeakMap<GameConfig, EventTable>();
+
+/** The event cards this game plays: the content cards with the config's overrides. design §10, §17.4 */
+export function eventsFor(config: Pick<GameConfig, "contentOverrides">): EventTable {
+  if (!config.contentOverrides?.events) return EVENTS;
+  const cached = eventCache.get(config as GameConfig);
+  if (cached) return cached;
+  const events = overrideEvents(EVENTS, config.contentOverrides);
+  eventCache.set(config as GameConfig, events);
+  return events;
 }
 
 /** `job` with the override's numbers. Assumes `validateOverrides` passed. */

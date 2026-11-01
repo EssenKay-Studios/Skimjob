@@ -7,7 +7,7 @@ import { EVENTS, EVENT_DECK, EVENTS_FROM_ROUND, MOLE_ROLE, type EventDef, type E
 import type { ActiveCard, GameConfig, GameEvent, GameState, PlayerId, PlayerState, RoleState } from "./types";
 import { PUBLIC, privateTo } from "./types";
 import type { Draw } from "./handle";
-import { jobFor } from "./overrides";
+import { eventsFor, jobFor, type EventTable } from "./overrides";
 import { actOfRound } from "./acts";
 import { playerFor } from "./check";
 
@@ -17,14 +17,14 @@ type Result = GameEvent[] | string;
 export const eventsOn = (config: GameConfig): boolean => config.eventsEnabled && !config.starterMode;
 
 /** The card's definition. Throws for ids the content doesn't have (the log only holds drawn ones). */
-export function cardDef(id: string): EventDef {
-  const def = Object.hasOwn(EVENTS, id) ? EVENTS[id] : undefined;
+export function cardDef(id: string, events: EventTable = EVENTS): EventDef {
+  const def = Object.hasOwn(events, id) ? events[id] : undefined;
   if (!def) throw new Error(`unknown event card ${id}`);
   return def;
 }
 
 /** This round's card effect, or null if no card was flipped. */
-export const cardEffect = (state: GameState): EventEffect | null => (state.card ? cardDef(state.card.id).effect : null);
+export const cardEffect = (state: GameState): EventEffect | null => (state.card ? cardDef(state.card.id, eventsFor(state.config)).effect : null);
 
 const effectIs = <K extends EventEffect["kind"]>(state: GameState, kind: K): Extract<EventEffect, { kind: K }> | null => {
   const effect = cardEffect(state);
@@ -44,7 +44,7 @@ export function startRound(state: GameState, round: number, draw: Draw): GameEve
   const left = EVENT_DECK.filter((id) => !state.cardsFlipped.includes(id));
   if (left.length === 0) return events;
   const card = draw.pick(left);
-  const effect = cardDef(card).effect;
+  const effect = cardDef(card, eventsFor(state.config)).effect;
   let room: RoomId | null = null;
   if (effect.kind === "lockdown") {
     const job = jobFor(state.config);
@@ -61,8 +61,8 @@ export function startRound(state: GameState, round: number, draw: Draw): GameEve
 }
 
 /** The job as this round's card changes it: Shift change and Payday multiply one room's loot and Heat pressure. design §10 */
-export function roundJob(job: JobDef, card: ActiveCard | null): JobDef {
-  const effect = card ? cardDef(card.id).effect : null;
+export function roundJob(job: JobDef, card: ActiveCard | null, events: EventTable = EVENTS): JobDef {
+  const effect = card ? cardDef(card.id, events).effect : null;
   if (effect?.kind !== "roomSurge" || !Object.hasOwn(job.rooms, effect.room)) return job;
   const def = job.rooms[effect.room] as JobDef["rooms"][string];
   const surged = { ...def, loot: Math.round(def.loot * effect.lootMultiplier), heatPressure: def.heatPressure * effect.heatMultiplier };
