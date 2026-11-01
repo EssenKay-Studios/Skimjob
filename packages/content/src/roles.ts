@@ -1,5 +1,6 @@
 // Role definitions: powers, restrictions and scoring, as data. design §8
 import type { RoleId } from "./index";
+import type { PerkId } from "./perks";
 
 /** A role's power. `kind` matches the engine's `AbilityUse` kind where the power is used in a move. design §8 */
 export type RolePower =
@@ -35,14 +36,14 @@ export interface RoleScoring {
 export type FailureReason = "heat" | "target";
 
 /**
- * A role that wins when the heist fails (Mole: any failure; Driver: Heat only,
- * and only with the biggest stash). None of the starter roles has one. design §3, §8
+ * The side a role plays for (role deck v2 §0, docs/roles-v2.md). design §3
+ * - crew: helps the job; wins a successful heist with the best crew stash.
+ * - saboteur: wrecks the job (Mole); dealt by the saboteur setting, never from the pool.
+ * - accomplice: helps the saboteurs; never dealt without one.
+ * Saboteurs and accomplices are "the dark side": a failed heist is won by
+ * the best stash among them, and by nobody if none was dealt.
  */
-export interface WinsOnFailure {
-  readonly reasons: readonly FailureReason[];
-  /** Also needs the top spot in the stash ranking, ties included (Driver). */
-  readonly needsTopStash: boolean;
-}
+export type Faction = "crew" | "accomplice" | "saboteur";
 
 /** Scores are rounded to this many decimal places (Rookie ×1.2 gives fractions). docs/decisions.md */
 export const SCORE_DECIMALS = 1;
@@ -54,20 +55,22 @@ export interface RoleDef {
   /** false: every move must hand everything in (Insider). design §8 */
   readonly canPocket: boolean;
   readonly scoring: RoleScoring;
-  /** null: wins only as the biggest stash of a successful heist. design §3 */
-  readonly winsOnFailure: WinsOnFailure | null;
+  /** Which side the role wins with. design §3 */
+  readonly faction: Faction;
   /**
-   * false: never wins a successful heist, whatever its stash (Mole); the best
-   * of the others wins instead. design §3, §8
+   * Perks this role's reward can grant (design §8.3). Absent: none. Read by
+   * rules that must not depend on who was dealt (e.g. the shakedown window
+   * opens whenever a Shield is possible from the pool). Role deck v2 R2/R3
+   * wire the triggers.
    */
-  readonly winsOnSuccess: boolean;
+  readonly earns?: readonly PerkId[];
   /** Dealt only in crews of at least this size (Insider: 5). Absent: any size. design §8.1 */
   readonly minPlayers?: number;
 }
 
 const PLAIN_SCORING: RoleScoring = { stashMultiplier: 1, perLootOverFinalTarget: 0 };
 
-/** Every role. The Mole is dealt by the Mole setting, never from the pool. design §8, §8.1 */
+/** Every role. Saboteurs (the Mole) are dealt by the saboteur setting, never from the pool. design §8, §8.1 */
 export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
   rookie: {
     id: "rookie",
@@ -75,8 +78,7 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     power: { kind: "none" },
     canPocket: true,
     scoring: { stashMultiplier: 1.2, perLootOverFinalTarget: 0 },
-    winsOnFailure: null,
-    winsOnSuccess: true,
+    faction: "crew",
   },
   lookout: {
     id: "lookout",
@@ -84,8 +86,7 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     power: { kind: "lookout", extraRooms: 1 },
     canPocket: true,
     scoring: PLAIN_SCORING,
-    winsOnFailure: null,
-    winsOnSuccess: true,
+    faction: "crew",
   },
   insider: {
     id: "insider",
@@ -93,8 +94,7 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     power: { kind: "none" },
     canPocket: false,
     scoring: { stashMultiplier: 1, perLootOverFinalTarget: 0.3 },
-    winsOnFailure: null,
-    winsOnSuccess: true,
+    faction: "crew",
     // Owner answers, 1 Nov: a crew of 2–4 can't spare a player who never pockets.
     minPlayers: 5,
   },
@@ -104,8 +104,7 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     power: { kind: "fenceSafe", perAct: 5 },
     canPocket: true,
     scoring: PLAIN_SCORING,
-    winsOnFailure: null,
-    winsOnSuccess: true,
+    faction: "crew",
   },
   hacker: {
     id: "hacker",
@@ -113,8 +112,7 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     power: { kind: "loopCameras", perAct: 1 },
     canPocket: true,
     scoring: PLAIN_SCORING,
-    winsOnFailure: null,
-    winsOnSuccess: true,
+    faction: "crew",
   },
   smoothTalker: {
     id: "smoothTalker",
@@ -122,8 +120,7 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     power: { kind: "voteWeight", weight: 2 },
     canPocket: true,
     scoring: PLAIN_SCORING,
-    winsOnFailure: null,
-    winsOnSuccess: true,
+    faction: "crew",
   },
   muscle: {
     id: "muscle",
@@ -131,8 +128,7 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     power: { kind: "cancelShakedown", perGame: 1 },
     canPocket: true,
     scoring: PLAIN_SCORING,
-    winsOnFailure: null,
-    winsOnSuccess: true,
+    faction: "crew",
   },
   blackmailer: {
     id: "blackmailer",
@@ -140,8 +136,7 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     power: { kind: "blackmail", perAct: 1, steal: 3 },
     canPocket: true,
     scoring: PLAIN_SCORING,
-    winsOnFailure: null,
-    winsOnSuccess: true,
+    faction: "crew",
   },
   snitch: {
     id: "snitch",
@@ -149,8 +144,7 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     power: { kind: "snitch", bonus: 10 },
     canPocket: true,
     scoring: PLAIN_SCORING,
-    winsOnFailure: null,
-    winsOnSuccess: true,
+    faction: "crew",
   },
   driver: {
     id: "driver",
@@ -158,9 +152,9 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     power: { kind: "none" },
     canPocket: true,
     scoring: PLAIN_SCORING,
-    // design §8: escapes a Heat failure and wins it with the biggest stash; wins a success like anyone.
-    winsOnFailure: { reasons: ["heat"], needsTopStash: true },
-    winsOnSuccess: true,
+    // Role deck v2 R1 (provisional): crew without its old Heat-failure win, until
+    // R2/R3 split it into the Fixer (crew) and the Getaway Driver (accomplice).
+    faction: "crew",
   },
   mole: {
     id: "mole",
@@ -168,8 +162,7 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     power: { kind: "tipOff", perAct: 1, heat: 6 },
     canPocket: true,
     scoring: PLAIN_SCORING,
-    // design §3, §8: wins only if the heist fails, for either reason, and never a success.
-    winsOnFailure: { reasons: ["heat", "target"], needsTopStash: false },
-    winsOnSuccess: false,
+    // design §3, §8: a saboteur; wins a failed heist with the best dark-side stash, never a success.
+    faction: "saboteur",
   },
 };

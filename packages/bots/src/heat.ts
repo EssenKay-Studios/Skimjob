@@ -5,8 +5,8 @@
 // Everything comes from the view: the public card, the public round summaries,
 // the alibis and the bot's own room. A tip-off leaves no trail to a player, so
 // the bots don't blame anyone for it; they lay low sooner instead (task 16).
-import { EVENTS, MOLE_ROLE, MOLE_RULES, ROLES, ROUNDS_PER_ACT, type JobDef, type RoomId } from "@skimjob/content";
-import { overrideEvents, overrideRoles, roundHeatDelta, roundJob, scaledCardHeat, type EventTable, type PlayerView } from "@skimjob/engine";
+import { EVENTS, MOLE_ROLE, ROLES, ROUNDS_PER_ACT, type JobDef, type RoomId } from "@skimjob/content";
+import { darkSideOdds, overrideEvents, overrideRoles, roundHeatDelta, roundJob, scaledCardHeat, type EventTable, type PlayerView } from "@skimjob/engine";
 import { createdOf, crewSize, jobOf, ofType, totalRounds } from "./read";
 
 /** The event cards with the game's public content overrides. design §10 */
@@ -26,12 +26,14 @@ export function cardHeatNow(view: PlayerView): number {
   return effect?.kind === "heat" ? scaledCardHeat(effect.amount, crewSize(view)) : 0;
 }
 
-/** Moles expected in this game from the public Mole setting and crew size (the mean of the setting's counts). design §8.1 */
+/**
+ * Moles expected in this game from the public saboteur setting and crew size:
+ * the chance a saboteur is dealt (design §8.1). Only one Mole is dealt with
+ * unique roles (the default), and the Mole is the only saboteur so far.
+ */
 export function expectedMoles(view: PlayerView): number {
-  const n = crewSize(view);
-  const rule = MOLE_RULES.filter((r) => r.minPlayers <= n).at(-1);
-  const counts = rule ? rule[createdOf(view).mole] : [0];
-  return counts.reduce((a, b) => a + b, 0) / Math.max(1, counts.length);
+  const created = createdOf(view);
+  return darkSideOdds(crewSize(view), created.mole, created.starterMode).reduce((sum, o) => sum + o.chance * Math.min(1, o.saboteurs), 0);
 }
 
 /** The Mole's tip-off Heat in this game (content plus overrides), or 0 without a tip-off power. */

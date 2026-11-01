@@ -142,7 +142,7 @@ describe("QA dealing — design §8.1", () => {
     expect(SEEDS.some((seed) => dealt(config(5, { seed })).includes("insider"))).toBe(true);
   });
 
-  it("exactly one Mole at 9–12 with 'on'; 0 or 1 with 'maybe'; never more with uniqueRoles false", () => {
+  it("exactly one Mole from 5 with 'on'; 'maybe' 0 or 1 at 5–8 and 1 at 9–12 (role deck v2 §3); never more with uniqueRoles false", () => {
     for (const n of [5, 8, 9, 10, 11, 12]) {
       const maybeCounts = new Set<number>();
       for (const seed of SEEDS.slice(0, 60)) {
@@ -154,7 +154,7 @@ describe("QA dealing — design §8.1", () => {
           maybeCounts.add(mb);
         }
       }
-      expect([...maybeCounts].sort()).toEqual([0, 1]);
+      expect([...maybeCounts].sort()).toEqual(n <= 8 ? [0, 1] : [1]);
     }
   });
 

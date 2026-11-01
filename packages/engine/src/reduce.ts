@@ -3,7 +3,8 @@
 // `applyEvent` is the only way state changes. Command handlers decide which
 // events happen (drawing from `state.rng` where needed); folding those events
 // rebuilds the same state, including the RNG, on replay.
-import type { GameConfig, GameEvent, GameState, MeetingState, Phase, PlayerId, PlayerState, RoleState } from "./types";
+import type { PerkId } from "@skimjob/content";
+import type { GameConfig, GameEvent, GameState, MeetingState, Phase, PlayerId, PlayerState, ResolvedPerk, RoleState } from "./types";
 import { NO_ROLE_STATE } from "./types";
 import { seedRng } from "./rng";
 import { actOfRound, isLastRoundOfAct } from "./acts";
@@ -21,6 +22,39 @@ function mapPlayers(state: GameState, change: (p: PlayerState) => Partial<Player
 }
 
 const withRoleState = (p: PlayerState, change: Partial<RoleState>): Partial<PlayerState> => ({ roleState: { ...p.roleState, ...change } });
+
+/** One `perk` token fewer (the first one held). */
+const spendToken = (p: PlayerState, perk: PerkId): Partial<PlayerState> => {
+  const i = p.roleState.perks.indexOf(perk);
+  if (i < 0) throw new Error(`perkUsed: ${p.id} holds no ${perk}`);
+  return withRoleState(p, { perks: [...p.roleState.perks.slice(0, i), ...p.roleState.perks.slice(i + 1)] });
+};
+
+/** A spent perk's lasting effect, after its token is gone. design §8.3 */
+function perkEffect(state: GameState, player: PlayerId, perk: ResolvedPerk): GameState {
+  switch (perk.kind) {
+    case "extraVote": {
+      const meeting = openMeeting(state);
+      return { ...state, meeting: { ...meeting, extraVotes: [...meeting.extraVotes, player] } };
+    }
+    case "ballot": {
+      const meeting = openMeeting(state);
+      const seen = Object.hasOwn(meeting.ballotGrants, player) ? (meeting.ballotGrants[player] as readonly PlayerId[]) : [];
+      return { ...state, meeting: { ...meeting, ballotGrants: { ...meeting.ballotGrants, [player]: [...seen, perk.target] } } };
+    }
+    case "tail":
+      return updatePlayer(state, player, (p) => withRoleState(p, { tail: perk.room }));
+    case "recharge":
+      return updatePlayer(state, player, (p) => withRoleState(p, { usedThisAct: 0, usedThisGame: Math.max(0, p.roleState.usedThisGame - 1) }));
+    case "rig":
+      return { ...state, rigs: [...state.rigs, { player, round: perk.round, cards: perk.cards, pick: perk.cards[0] as string }] };
+    case "peek":
+    case "shield":
+    case "alibi":
+      // Information, or a cancel announced by its own public event.
+      return state;
+  }
+}
 
 function openMeeting(state: GameState): MeetingState {
   if (!state.meeting) throw new Error("no meeting is open");
@@ -61,6 +95,8 @@ export function initialState(config: GameConfig): GameState {
     moves: {},
     alibisOpen: false,
     alibisPosted: [],
+    alibisVerified: [],
+    rigs: [],
     proposals: [],
     scheduledMeeting: null,
     pendingEmergency: null,
@@ -105,7 +141,9 @@ function applyChange(state: GameState, event: GameEvent): GameState {
       return updatePlayer(state, event.player, (p) => withRoleState(p, { allies: event.allies }));
     // ------------------------------------------------ round loop. design §5
     case "roundStarted": {
-      const next: GameState = { ...state, phase: { kind: "planning", round: event.round }, round: event.round, moves: {}, card: null };
+      // A Rig for this round has been used by its flip (deck.ts). design §8.3
+      const rigs = state.rigs.filter((r) => r.round > event.round);
+      const next: GameState = { ...state, phase: { kind: "planning", round: event.round }, round: event.round, moves: {}, card: null, rigs };
       // Per-act powers (Fence safe, Hacker, Blackmailer, Mole) start again with each act. design §8
       return actOfRound(event.round) !== actOfRound(state.round) ? mapPlayers(next, (p) => withRoleState(p, { usedThisAct: 0 })) : next;
     }
@@ -163,8 +201,9 @@ function applyChange(state: GameState, event: GameEvent): GameState {
     case "roundResolved":
       // Haul and Heat are public totals. The round's alibis open (design §5.4); the next
       // round, or after an act's last round its meeting (design §11), waits for their deadline.
+      // Tails watched this round (design §8.3); Verified stamps are for the round just ended.
       return {
-        ...state,
+        ...mapPlayers(state, (p) => (p.roleState.tail === null ? {} : withRoleState(p, { tail: null }))),
         phase: { kind: "alibis", round: event.round },
         haul: event.haul,
         heat: event.heat,
@@ -173,6 +212,7 @@ function applyChange(state: GameState, event: GameEvent): GameState {
         resolvedRound: event.round,
         alibisOpen: true,
         alibisPosted: [],
+        alibisVerified: [],
       };
     case "alibisClosed": {
       // Within an act `roundStarted` follows at once; after its last round the act's meeting is awaited.
@@ -235,7 +275,15 @@ function applyChange(state: GameState, event: GameEvent): GameState {
       return {
         ...state,
         phase: { kind: "meeting", meetingId: event.meetingId },
-        meeting: { id: event.meetingId, kind: event.kind, act: event.act, calledBy: emergency ? (state.pendingEmergency?.by ?? null) : null, votes: {} },
+        meeting: {
+          id: event.meetingId,
+          kind: event.kind,
+          act: event.act,
+          calledBy: emergency ? (state.pendingEmergency?.by ?? null) : null,
+          votes: {},
+          extraVotes: [],
+          ballotGrants: {},
+        },
         scheduledMeeting: emergency ? state.scheduledMeeting : null,
         pendingEmergency: emergency ? null : state.pendingEmergency,
       };
@@ -270,6 +318,17 @@ function applyChange(state: GameState, event: GameEvent): GameState {
     }
     case "checkpointChecked":
       return { ...state, heat: state.heat + event.heatPenalty };
+    // ------------------------------------------------ perks. design §8.3
+    case "perkGranted":
+      return updatePlayer(state, event.player, (p) => withRoleState(p, { perks: [...p.roleState.perks, event.perk] }));
+    case "perkUsed":
+      return perkEffect(updatePlayer(state, event.player, (p) => spendToken(p, event.perk.kind)), event.player, event.perk);
+    case "rigPicked": {
+      if (!state.rigs.some((r) => r.player === event.player && r.round === event.round)) throw new Error("rigPicked: no rigged card");
+      return { ...state, rigs: state.rigs.map((r) => (r.player === event.player && r.round === event.round ? { ...r, pick: event.card } : r)) };
+    }
+    case "alibiVerified":
+      return { ...state, alibisVerified: [...state.alibisVerified, event.player] };
     // ------------------------------------------------ Duel mode. design §16.1
     case "callOutMade":
       // Whether a player has called this act is read from the log (duel.ts); nothing else changes.

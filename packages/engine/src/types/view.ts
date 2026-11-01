@@ -41,6 +41,13 @@ export interface SelfView {
   readonly sealedVote: VoteChoice | null;
   /** Your ballot in the open meeting, if cast. */
   readonly vote: VoteChoice | null;
+  /**
+   * Ballot perk: the current ballot (null: none yet) of each player whose
+   * ballot you paid to see in the open meeting, also in Secret mode (the one
+   * exception to secret ballots, owner decision on role deck v2). Empty
+   * outside a meeting. design §8.3, §11.2
+   */
+  readonly seenBallots: Readonly<Record<PlayerId, VoteChoice | null>>;
 }
 
 /**

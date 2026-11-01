@@ -95,11 +95,12 @@ describe("viewFor — the viewer's own data and public state — design §13", (
       role: s.players.ana?.role,
       stash: 0,
       safe: 0,
-      roleState: { usedThisAct: 0, usedThisGame: 0, target: null, allies: [] },
+      roleState: { usedThisAct: 0, usedThisGame: 0, target: null, allies: [], perks: [], tail: null },
       emergencyMeetingUsed: false,
       move: { room: "office", pocket: 1 },
       sealedVote: null,
       vote: null,
+      seenBallots: {},
     });
     expect(ana.players).toEqual([
       { id: "ben", name: "Ben", isBot: true, emergencyMeetingUsed: false },

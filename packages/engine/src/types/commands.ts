@@ -3,7 +3,7 @@
 // Player commands are what a client (human or bot) sends. System commands are
 // sent by the server scheduler or the simulator: the engine has no clock, so it
 // never decides by itself that time is up or picks a meeting time.
-import type { RoleId, RoomId } from "@skimjob/content";
+import type { EventId, RoleId, RoomId } from "@skimjob/content";
 import type { PlayerId } from "./config";
 import type { ActNumber } from "./events";
 
@@ -28,11 +28,33 @@ export type AbilityUse =
   | { readonly kind: "tipOff" };
 
 /**
- * Role powers used outside a move, with `useAbility`. design §17.2
+ * Spending a perk token (design §8.3, docs/roles-v2.md §1), with `useAbility`.
+ * The Shield isn't here: it is spent by itself when a shakedown on you passes.
+ * - peek: learn `target`'s role now.
+ * - extraVote: your ballot in the open meeting weighs +1 (once per meeting).
+ * - ballot: see `target`'s ballot in the open meeting, as it changes (also in Secret mode).
+ * - tail: while planning, also see who is in `room` when this round resolves.
+ * - alibi: your alibi for the latest resolved round, if true, is stamped Verified (public).
+ * - recharge: your power's uses this act / one use this game come back.
+ * - rig: draw two cards for the next round; `rigPick` chooses one (the first if you don't).
+ */
+export type PerkSpend =
+  | { readonly kind: "peek"; readonly target: PlayerId }
+  | { readonly kind: "extraVote" }
+  | { readonly kind: "ballot"; readonly target: PlayerId }
+  | { readonly kind: "tail"; readonly room: RoomId }
+  | { readonly kind: "alibi" }
+  | { readonly kind: "recharge" }
+  | { readonly kind: "rig" }
+  /** Not a spend: choose which of your Rig's cards flips next; changeable until that round starts. */
+  | { readonly kind: "rigPick"; readonly card: EventId };
+
+/**
+ * Role powers and perks used outside a move, with `useAbility`. design §17.2
  * Muscle: cancel the shakedown that is pending (between the vote passing and
  * the shakedown being applied). Once per game (content). design §8, §11.3
  */
-export type InstantAbility = { readonly kind: "cancelShakedown" };
+export type InstantAbility = { readonly kind: "cancelShakedown" } | PerkSpend;
 
 /**
  * One player's secret move for a round. design §5.1
@@ -70,7 +92,7 @@ export type PlayerCommand =
   | { readonly type: "castVote"; readonly player: PlayerId; readonly vote: VoteChoice }
   /** Leave a vote in advance for the next meeting you might miss. design §11.2 */
   | { readonly type: "sealVote"; readonly player: PlayerId; readonly vote: VoteChoice }
-  /** A role power used outside a move (Muscle). design §17.2 */
+  /** A role power used outside a move (Muscle), or a perk spent. design §17.2, §8.3 */
   | { readonly type: "useAbility"; readonly player: PlayerId; readonly ability: InstantAbility }
   /** Accept (or decline) this round's Double-cross offer; the last answer before the deadline counts. design §10 */
   | { readonly type: "answerDoubleCross"; readonly player: PlayerId; readonly accept: boolean }

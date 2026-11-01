@@ -26,8 +26,10 @@ function lobbyRound(s: GameState, tip: boolean): GameState {
 const crew = (s: GameState) => s.playerOrder.find((id) => s.players[id]?.role !== "mole") as string;
 
 describe("bot Heat projection — design §7, §8, §10", () => {
-  it("expects Moles from the public Mole setting and crew size (design §8.1)", () => {
-    expect(expectedMoles(viewFor(moleGame(4, "on"), "ana"))).toBe(0);
+  it("expects Moles from the public saboteur setting and crew size (design §8.1, role deck v2 §3)", () => {
+    expect(expectedMoles(viewFor(moleGame(3, "on"), "ana"))).toBe(0);
+    expect(expectedMoles(viewFor(moleGame(4, "on"), "ana"))).toBe(1);
+    expect(expectedMoles(viewFor(moleGame(9, "maybe"), "ana"))).toBe(1);
     expect(expectedMoles(viewFor(moleGame(6, "off"), "ana"))).toBe(0);
     expect(expectedMoles(viewFor(moleGame(6, "maybe"), "ana"))).toBe(0.5);
     expect(expectedMoles(viewFor(moleGame(6, "on"), "ana"))).toBe(1);

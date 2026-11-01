@@ -9,7 +9,7 @@ import type { GameEnded, GameEvent, GameState, Outcome, PlayerId, PlayerState, R
 import { PUBLIC } from "./types";
 import { applyEvent } from "./reduce";
 import { checkpointTarget } from "./job";
-import { jobFor, roleDefIn, rolesFor, type RoleTable } from "./overrides";
+import { isDarkSide, jobFor, roleDefIn, rolesFor, type RoleTable } from "./overrides";
 
 const roundScore = (n: number): number => {
   const f = 10 ** SCORE_DECIMALS;
@@ -62,27 +62,20 @@ export function leadersOf(ranked: readonly RankEntry[]): PlayerId[] {
 }
 
 /**
- * design §3: on success the biggest stash wins (after role scoring and
- * tie-breaks), among roles that can win a success: a Mole never does
- * (`winsOnSuccess: false`), so the best of the rest wins. On failure every
- * crew member loses, and only roles whose `winsOnFailure` names the reason win
- * (the Driver also needs the top stash of the whole crew, Moles included). The
- * ranking is kept on failure too, as a loss (design §19.1, provisional).
+ * design §3 (role deck v2 §0): two sides, and the winning side's best score
+ * wins (after role scoring and tie-breaks). A success is won by the best
+ * Crew player; saboteurs and accomplices can't win it. A failure (Heat or
+ * target) is won by the best saboteur or accomplice, and by nobody when no
+ * one on that side was dealt. Roles are read as they are at the end (a
+ * Double-cross may have swapped them). The full ranking is kept on failure
+ * too, shown as a loss (design §19.1, provisional).
  */
 export function outcomeFor(state: GameState, failure: FailureReason | null, roles: RoleTable = rolesFor(state.config)): Outcome {
   const ranked = ranking(state, roles);
   if (failure === null) {
-    const eligible = ranked.filter((e) => roleDefIn(roles, e.role)?.winsOnSuccess !== false);
-    return { result: "success", ranking: ranked, winners: leadersOf(eligible) };
+    return { result: "success", ranking: ranked, winners: leadersOf(ranked.filter((e) => !isDarkSide(roles, e.role))) };
   }
-  const leaders = leadersOf(ranked);
-  const winners = ranked
-    .filter((e) => {
-      const wins = roleDefIn(roles, e.role)?.winsOnFailure;
-      return !!wins && wins.reasons.includes(failure) && (!wins.needsTopStash || leaders.includes(e.player));
-    })
-    .map((e) => e.player);
-  return { result: "failed", reason: failure, ranking: ranked, winners };
+  return { result: "failed", reason: failure, ranking: ranked, winners: leadersOf(ranked.filter((e) => isDarkSide(roles, e.role))) };
 }
 
 /** The `gameEnded` event after `events` (this command's events so far) are folded into `state`. */

@@ -121,7 +121,7 @@ describe("all-bot games — design §17.3", () => {
     expect(lockdowns).toBeGreaterThan(0);
     expect(answers).toBeGreaterThan(0);
     expect(swaps).toBeGreaterThan(0);
-  });
+   }, 30_000); // many full games: over the 5 s default on a busy machine
 
   it("bots schedule the act meetings themselves — design §11.1", () => {
     const { state } = play(5, "schedule", ["honest"]);
@@ -222,7 +222,7 @@ describe("role powers in bot games — design §8", () => {
 describe("bots with the info and vote roles dealt — design §8, §17.3 (task 12)", () => {
   const ROLE_POOL = ["hacker", "smoothTalker", "muscle", "blackmailer", "snitch"];
 
-  it("finish every game with no refused command, and use the Hacker, Blackmailer and Muscle powers", { timeout: 30_000 }, () => {
+  it("finish every game with no refused command, and use the Hacker, Blackmailer and Muscle powers", () => {
     const used = new Set<string>();
     const types = new Set<string>();
     for (const mode of ["hiddenThenRevealed", "open", "secret"] as const) {
@@ -241,7 +241,7 @@ describe("bots with the info and vote roles dealt — design §8, §17.3 (task 1
     }
     for (const k of ["loopCameras", "blackmail", "cancelShakedown"]) expect(used, k).toContain(k);
     for (const t of ["snitchTargetAssigned", "shakedownPending", "shakedownCancelled"]) expect(types, t).toContain(t);
-  });
+   }, 30_000); // 180 games: over the 5 s default on a busy machine
 });
 
 describe("bots with Moles and the Driver dealt — design §8, §8.1, §17.3 (task 13)", () => {

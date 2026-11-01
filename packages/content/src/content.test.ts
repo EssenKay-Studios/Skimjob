@@ -3,6 +3,10 @@
 import { describe, expect, it } from "vitest";
 import {
   BANK_JOB,
+  DARK_SIDE_RULES,
+  PERKS,
+  PERK_IDS,
+  PERK_RULES,
   DEFAULT_ROLE_POOL,
   EVENTS,
   EVENT_DECK,
@@ -143,8 +147,25 @@ describe("starter roles — design §8, §8.1", () => {
     expect(ROLES.rookie?.scoring.perLootOverFinalTarget).toBe(0);
   });
 
-  it("no starter role wins on failure (design §3: only roles like the Mole or Driver do)", () => {
-    for (const role of Object.values(ROLES)) if (role.id !== "mole" && role.id !== "driver") expect(role.winsOnFailure).toBeNull();
+  it("every role but the Mole is crew for now; the Mole is a saboteur (design §3, role deck v2 R1)", () => {
+    for (const role of Object.values(ROLES)) expect(role.faction, role.id).toBe(role.id === "mole" ? "saboteur" : "crew");
+    for (const id of STARTER_ROLES) expect(ROLES[id]?.faction).toBe("crew");
+  });
+
+  it("perks: eight kinds, the Shield spent by itself, the rest with useAbility (design §8.3)", () => {
+    expect([...PERK_IDS].sort()).toEqual(["alibi", "ballot", "extraVote", "peek", "recharge", "rig", "shield", "tail"]);
+    for (const id of PERK_IDS) expect(PERKS[id].spent, id).toBe(id === "shield" ? "auto" : "use");
+    expect(PERK_RULES).toEqual({ extraVoteWeight: 1, rigOptions: 2 });
+  });
+
+  it("dark-side weights (role deck v2 §3): crew only at 2–3, one saboteur at 4, then the weighted mixes", () => {
+    const at = (n: number) => DARK_SIDE_RULES.filter((r) => r.minPlayers <= n).at(-1)?.options.map((o) => [o.saboteurs, o.accomplices, o.weight]);
+    expect(at(3)).toEqual([[0, 0, 1]]);
+    expect(at(4)).toEqual([[1, 0, 1]]);
+    expect(at(6)).toEqual([[1, 0, 50], [1, 1, 50]]);
+    expect(at(8)).toEqual([[1, 1, 60], [2, 0, 20], [1, 2, 20]]);
+    expect(at(10)).toEqual([[2, 1, 60], [1, 2, 20], [2, 2, 20]]);
+    expect(at(12)).toEqual([[2, 2, 60], [2, 1, 20], [3, 1, 20]]);
   });
 });
 
