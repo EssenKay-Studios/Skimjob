@@ -188,17 +188,16 @@ describe("QA Embezzler — Haul cap, checkpoints, Mole (design §8, §11.5)", ()
   const roof = (s: GameState, skip: readonly string[] = ["p0"]) => s.playerOrder.filter((id) => !skip.includes(id)).map((id) => mv(id, "rooftop"));
   const rr = (s: GameState) => ofType(s.log, "roundResolved").at(-1);
 
-  it("takes at most the Haul from earlier rounds; the public Haul change shows only the drop", () => {
-    const two = run(withHaul(base, 2), take(), ...roof(base), ROUND);
-    expect(two.haul).toBe(0);
-    expect(two.players.p0?.stash).toBe(2);
-    expect(rr(two)?.haulDelta).toBe(-2);
-    const ten = run(withHaul(base, 10), take(), ...roof(base), ROUND);
-    expect([ten.haul, ten.players.p0?.stash, rr(ten)?.haulDelta]).toEqual([6, 4, -4]);
+  it("takes at most this round's inflow, never the Haul from earlier rounds, so the public Haul change is never negative (PR #36 review)", () => {
+    const none = run(withHaul(base, 10), take(), ...roof(base), ROUND);
+    expect([none.haul, none.players.p0?.stash, rr(none)?.haulDelta]).toEqual([10, 0, 0]);
+    // One player hands in the Lobby's 2: the take is 2 and the change shows 0.
+    const lobby = run(withHaul(base, 10), take(), mv("p3", "lobby"), ...roof(base, ["p0", "p3"]), ROUND);
+    expect([lobby.haul, lobby.players.p0?.stash, rr(lobby)?.haulDelta]).toEqual([10, 2, 0]);
   });
 
   it("ignores a hostile amount in the command (always the content's take)", () => {
-    const s = run(withHaul(base, 50), mv("p0", "rooftop", 0, { ability: { kind: "embezzle", amount: 999 } }), ...roof(base), ROUND);
+    const s = run(withHaul(base, 50), mv("p0", "rooftop", 0, { ability: { kind: "embezzle", amount: 999 } }), ...base.playerOrder.slice(1).map((id) => mv(id, "vault")), ROUND);
     expect(s.players.p0?.stash).toBe(4);
     expect(reason(base, { type: "useAbility", player: "p0", ability: { kind: "embezzle" } })).toBeTruthy();
   });
@@ -206,12 +205,13 @@ describe("QA Embezzler — Haul cap, checkpoints, Mole (design §8, §11.5)", ()
   it("a take in an act's last round can miss the checkpoint: +Heat penalty (design §11.5)", () => {
     const target = checkpointTarget(BANK_JOB, 1, 9);
     let s = run(base, ROUND, ROUND);
-    s = withHaul(s, target);
-    const made = meeting(run(s, ...roof(s, []), ROUND), null, {});
+    // p3 hands in the Lobby's 2, which make the target; the take (capped at the round's inflow, PR #36 review) misses it.
+    s = withHaul(s, target - 2);
+    const made = meeting(run(s, mv("p3", "lobby"), ...roof(s, ["p3"]), ROUND), null, {});
     expect(ofType(made.log, "checkpointChecked").at(-1)).toMatchObject({ act: 1, met: true, heatPenalty: 0 });
-    const missed = meeting(run(s, take(), ...roof(s), ROUND), null, {});
+    const missed = meeting(run(s, take(), mv("p3", "lobby"), ...roof(s, ["p0", "p3"]), ROUND), null, {});
     const cp = ofType(missed.log, "checkpointChecked").at(-1);
-    expect(cp).toMatchObject({ act: 1, haul: target - 4, met: false });
+    expect(cp).toMatchObject({ act: 1, haul: target - 2, met: false });
     expect(cp?.heatPenalty).toBeGreaterThan(0);
   });
 

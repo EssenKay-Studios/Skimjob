@@ -204,7 +204,12 @@ describe("Embezzler — v2 §2: a take from the Haul, hidden in the round's Haul
     expect(took.players.p0?.stash).toBe((plain.players.p0?.stash ?? 0) + 4);
     expect(ofType(since(base, took), "abilityResolved").find((e) => e.player === "p0")).toMatchObject({ visibility: privateTo("p0"), ability: { kind: "embezzle", amount: 4 } });
     expect(JSON.stringify(viewFor(took, "p3"))).not.toMatch(/embezzle/);
-    // The Haul can't go below 0: nobody handed anything in.
+    // design §8 (v2 §2, PR #36 review): capped at this round's inflow, so the public Haul change is never negative.
+    const stocked: GameState = { ...base, haul: 30 };
+    const thin = run(stocked, take("rooftop"), mv("p1", "lobby"), ...base.playerOrder.slice(2).map((id) => mv(id, "rooftop")), ROUND);
+    expect(ofType(thin.log, "abilityResolved").find((e) => e.player === "p0")?.ability).toEqual({ kind: "embezzle", amount: 2 });
+    expect(ofType(thin.log, "roundResolved")[0]).toMatchObject({ haulDelta: 0, haul: 30 });
+    // Nothing handed in: nothing taken.
     const empty = run(base, take("rooftop"), ...base.playerOrder.slice(1).map((id) => mv(id, "rooftop")), ROUND);
     expect(ofType(empty.log, "abilityResolved").find((e) => e.player === "p0")?.ability).toEqual({ kind: "embezzle", amount: 0 });
   });

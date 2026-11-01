@@ -212,11 +212,12 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
     stash.set(id, stashOf(id) - amount);
     events.push({ type: "abilityResolved", visibility: privateTo(id), player: id, round, ability: { kind: "fenceSafe", amount } });
   }
-  // Embezzler (v2 §2): after the splits, its take moves from the Haul (as it stands) to its stash, inside the Haul change.
+  // Embezzler (v2 §2): after the splits, its take moves from this round's inflow to its stash, inside the Haul change.
+  // Capped at the inflow (PR #36 review): the public Haul change never goes below 0, so a take never shows.
   for (const id of order) {
     const power = powerFor(id);
     if (abilityOf(id)?.kind !== "embezzle" || power.kind !== "embezzle") continue;
-    const amount = Math.max(0, Math.min(power.take, state.haul + haulDelta));
+    const amount = Math.max(0, Math.min(power.take, haulDelta));
     haulDelta -= amount;
     stash.set(id, stashOf(id) + amount);
     events.push({ type: "abilityResolved", visibility: privateTo(id), player: id, round, ability: { kind: "embezzle", amount } });
