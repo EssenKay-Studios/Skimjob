@@ -88,7 +88,7 @@ describe("QA: one token, one spend — design §8.3", () => {
 
 describe("QA: wrong phase — design §8.3", () => {
   it("Tail only while planning: refused in the alibis, a meeting and a shakedown window", () => {
-    const pool = { rolePool: ["rookie", "muscle"] };
+    const pool = { rolePool: ["rookie", "muscle", "fixer"] };
     const s = grantPerks(game(4, ["rookie", "muscle"], pool), "p0", "tail");
     const tail = use("p0", { kind: "tail", room: "vault" });
     expect(refused(run(s, ROUND), tail)).toMatch(/being planned/);
@@ -99,7 +99,7 @@ describe("QA: wrong phase — design §8.3", () => {
   });
 
   it("+Vote and Ballot are refused once the vote is tallied (shakedown window) and in the alibis", () => {
-    const pool = { rolePool: ["rookie", "muscle"] };
+    const pool = { rolePool: ["rookie", "muscle", "fixer"] };
     const s = grantPerks(game(4, ["rookie", "muscle"], pool), "p0", "extraVote", "ballot");
     const pending = run(s, ...emergency("p1"), vote("p1", "p2"), vote("p2", "p3"), vote("p3", "p2"), vote("p0", "p2"), CLOSE);
     for (const st of [pending, run(s, ROUND)]) {
@@ -160,9 +160,9 @@ describe("QA: Shield vs Muscle vs a plain shakedown — design §8.3, §11.3", (
     expect(other.players.p0?.stash).toBe(6);
   });
 
-  it("a bystander can't tell a Shield cancel from a Muscle cancel (same ledger, same case file)", () => {
-    const pool = { rolePool: ["rookie", "muscle"] };
-    const base = withStash(game(4, ["rookie", "muscle"], pool), "p0", 6);
+  it("a bystander can't tell a Shield cancel from a Muscle cancel of a clean target (same ledger, same case file; a dirty one names the Muscle, v2 §2)", () => {
+    const pool = { rolePool: ["rookie", "muscle", "fixer"] };
+    const base = withStash(game(4, ["rookie", "muscle"], pool), "p0", 1);
     const pending = (s: GameState) => run(s, ...emergency("p2"), vote("p1", "p0"), vote("p2", "p0"), vote("p3", "p0"), CLOSE);
     const byShield = run(pending(grantPerks(base, "p0", "shield")), RESOLVE);
     const byMuscle = run(pending(base), use("p1", { kind: "cancelShakedown" }), RESOLVE);

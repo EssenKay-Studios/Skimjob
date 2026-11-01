@@ -187,7 +187,8 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
     if (!e) return false;
     if (e.type === "gameEnded") return true;
     if (e.type === "shakedownResolved" || e.type === "shakedownCancelled") return kind === "muscleCancel" || involved.has(e.target) || tainted.has(e.target);
-    if (e.type === "meetingClosed") return kind === "smoothDealt";
+    // A ballot's weight (Smooth Talker; a Snitch's earned +1, v2 §2) shows only in a result the plain tally can't explain.
+    if (e.type === "meetingClosed") return kind === "smoothDealt" || kind === "snitchTarget";
     return false;
   };
   const over = (): boolean => A.phase.kind === "ended" || B.phase.kind === "ended" || diverged !== null;
@@ -348,7 +349,8 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
 }
 
 const KINDS: readonly Kind[] = ["muscleDealt", "muscleCancel", "smoothDealt", "hackerLoop", "blackmail", "snitchTarget"];
-const COUNTS = [3, 5, 9, 12];
+// From 5: the Muscle and Smooth Talker are dealt only in crews of 5 or more (role deck v2 §3).
+const COUNTS = [5, 7, 9, 12];
 /** Seeds per player count; raise locally (QA_SEEDS=10) for a wider sweep. */
 const SEEDS = Number(process.env.QA_SEEDS ?? 1);
 
@@ -379,7 +381,7 @@ describe("QA: one hidden role difference never changes another player's view or 
   }, 60_000);
 
   it("determinism: same seed + same commands → identical event log, and replay rebuilds the state", () => {
-    for (const n of [3, 12]) {
+    for (const n of [5, 12]) {
       const r = runPair("muscleCancel", n, "hiddenThenRevealed", 4242 + n);
       const again = r.commands.reduce<GameState>((s, c) => run(s, c), createGame(r.a.config));
       expect(again.log).toEqual(r.a.log);
@@ -505,7 +507,7 @@ describe("QA Muscle: window, limits, wrong phase — design §8, §11.3", () => 
     }
     expect(s.phase.kind).toBe("shakedownPending");
     const end = run(s, RESOLVE);
-    expect(since(s, end).map((e) => e.type)).toEqual(["shakedownCancelled", "checkpointChecked", "gameEnded"]);
+    expect(since(s, end).map((e) => e.type)).toEqual(["shakedownCancelled", "muscleNamed", "checkpointChecked", "gameEnded"]);
     expect(end.phase.kind === "ended" && end.phase.outcome.ranking.find((e) => e.player === "p1")?.stash).toBe(18);
   });
 });

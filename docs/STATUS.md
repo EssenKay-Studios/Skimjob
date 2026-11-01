@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 1 Nov 2026 (Fly.io deploy)_
+_Last updated: 1 Nov 2026 (role deck v2 R2b; Fly.io deploy)_
 
 ## Current milestone: M1 — Engine + simulator (bank job, starter roles, bots)
 
@@ -49,7 +49,7 @@ Goal: run thousands of all-bot games at 2–12 players and use the results to tu
 1. [x] **R1 Foundations** — content 0.9.0: `RoleDef.faction` (crew / accomplice / saboteur) replaces `winsOnFailure`/`winsOnSuccess`; win rule: success → best Crew score, failure → best saboteur/accomplice score, none dealt → nobody (`end.ts`). Mole = saboteur, everyone else crew for now (Driver without its failure win). Dealing by faction (`DARK_SIDE_RULES`, `limitDarkSide`, `darkSideOdds`, `dealRoles` in `setup.ts`): dark side rolled by crew size, hard limits, saboteur setting = the `mole` field, pools cap the roll, starter mode crew only. Perks (`perks.ts`, content `PERKS`): tokens in `roleState.perks`, private `perkGranted` / `perkUsed` / `rigPicked`, public `alibiVerified`; Peek, Shield (automatic), +Vote, Ballot (`me.seenBallots`, also in Secret mode), Tail, Alibi, Recharge, Rig. Shakedown window opens if a Muscle or a Shield earner (`RoleDef.earns`) could be dealt. Design §3, §8, §8.1, §8.3, §11.2, §11.3.
 2. **R2** Crew roles (v2 §2), split in two:
    - [x] **R2a** — content 0.10.0: Rookie (checkpoint → Tail), Inside Man (renamed from Insider; checkpoint → Peek), Lookout (saw a dirty one → Peek), Auditor (`useAbility audit`: latest round's shortfall for a room, once per act; → Ballot), Detective (`useAbility checkStash`, once per act; → Shield), Snitch (+1 ballot weight for the rest of the game, `snitchRewarded`). `RoleDef.rewards` (crew.ts emits the `perkGranted`s), `rewardCount` override, `needsMeetings`, Snitch/Detective from 4. Bots audit/check their top suspect. Design §8, §8.1, §8.3.
-   - [ ] **R2b** — Smooth Talker (extra emergency meeting), Muscle (Recharge, no compensation, named when dirty), Priest, Bagman, Cleaner, Fixer (Driver's crew half), Mastermind (events only); ≥5 for Smooth Talker/Muscle/Priest; starter set Rookie/Inside Man/Lookout/Bagman/Cleaner.
+   - [x] **R2b** — content 0.11.0: Smooth Talker (dirty win → Emergency perk, a second emergency meeting), Muscle (clean save → Recharge; dirty save → public `muscleNamed`), Priest (`useAbility bless`, once per act; clean shakedown → `blessingPaid` by the bank + Ballot; dirty → no blessing next act), Bagman (+1 Haul when all-in; all-in act → Alibi), Cleaner (Rooftop ×2 for Heat; every 2nd Rooftop round → +Vote), Fixer (replaces the Driver; raid stops at 95, ¼ stash, Shield; `raidStopped`), Mastermind (private `cardForeseen`, events only; checkpoint → Rig). ≥5 for Smooth Talker/Muscle/Priest; `needsEvents`; starter set Rookie/Inside Man/Lookout/Bagman/Cleaner. PR #26 notes: Auditor one audit per round, Detective not on a pending target. Bots: Priest blesses, Bagman all-in, Mastermind forecasts. Design §7, §8, §8.1, §8.3, §10.
 3. [ ] **R3** Accomplices (Getaway Driver, Fence, Hacker, Blackmailer, Forger) and the Embezzler.
 4. [ ] **R4** Bot claims/bluffs and perk use; parallel sim suite.
 5. [ ] **R5** Parity balance (no two roles' normalised win rates more than 10% apart).
@@ -170,3 +170,4 @@ Plan and acceptance criteria: `docs/m2-plan.md`. Runs alongside M1 task 16 (bala
 - Duel call-outs: may a call take more than the stash holds (current: capped; the Fence safe is never touched), and a wrong call cost more than the caller's stash (current: capped)?
 - Duel roles: OK to leave the meeting-only roles (Smooth talker, Muscle, Snitch) out of the deal in Duel mode (current, provisional)?
 - Heat at 3–4 players: with event Heat scaled, Heat busts are still 45% / 34% of failures (40% / 22% even with card Heat at 0): the rest is Vault pressure in small crews and the Shift change lure. Accept, or tune further? 4p succeeds 76% (target 55–70%).
+- R2b (provisional): Smooth Talker's extra emergency = a ninth perk "Emergency"; Priest's "Ballot on who voted for it" read as a Ballot perk; Fixer's "Shield for the rest of the game" read as one Shield token. OK?

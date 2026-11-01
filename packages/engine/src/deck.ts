@@ -3,11 +3,11 @@
 //
 // Cards are data in @skimjob/content; each kind of effect is one small
 // function here. All draws go through the command's `Draw`.
-import { EVENTS, EVENT_DECK, EVENT_HEAT_FULL_CREW, EVENTS_FROM_ROUND, type EventDef, type EventEffect, type JobDef, type RoomId } from "@skimjob/content";
+import { EVENTS, EVENT_DECK, EVENT_HEAT_FULL_CREW, EVENTS_FROM_ROUND, ROUNDS_PER_ACT, type EventDef, type EventEffect, type EventId, type JobDef, type RoomId } from "@skimjob/content";
 import type { ActiveCard, GameConfig, GameEvent, GameState, PlayerId, PlayerState, RoleState } from "./types";
 import { PUBLIC, privateTo } from "./types";
 import type { Draw } from "./handle";
-import { eventsFor, factionIn, jobFor, rolesFor, type EventTable } from "./overrides";
+import { eventsFor, factionIn, jobFor, powerOf, rolesFor, type EventTable } from "./overrides";
 import { actOfRound } from "./acts";
 import { playerFor } from "./check";
 
@@ -15,6 +15,35 @@ type Result = GameEvent[] | string;
 
 /** Events are off in starter mode (validateConfig also refuses starter + events) and when the host turns them off. design §8.1, §15 */
 export const eventsOn = (config: GameConfig): boolean => config.eventsEnabled && !config.starterMode;
+
+/** Whether a card flips at the start of `round`: events on, from `EVENTS_FROM_ROUND`, not past the last round. design §10 */
+export function cardRound(config: GameConfig, round: number): boolean {
+  const last = jobFor(config).checkpoints.perPlayer.length * ROUNDS_PER_ACT;
+  return eventsOn(config) && round >= EVENTS_FROM_ROUND && round <= last;
+}
+
+/** The card a Mastermind foresaw for `round` (it flips unless a Rig changes it), or undefined. design §8 (v2 §2) */
+export function foreseenCard(state: GameState, round: number): EventId | undefined {
+  for (let i = state.log.length - 1; i >= 0; i--) {
+    const e = state.log[i] as GameEvent;
+    if (e.type === "cardForeseen" && e.round === round) return e.card;
+  }
+  return undefined;
+}
+
+/**
+ * Mastermind (v2 §2): as round `round` starts, the next round's card is drawn
+ * now and each Mastermind is told it privately. Nothing is drawn when no
+ * Mastermind is dealt, so the public game is the same either way.
+ */
+export function foresee(config: GameConfig, roles: ReadonlyMap<PlayerId, string>, round: number, pickCard: () => EventId): GameEvent[] {
+  const next = round + 1;
+  if (!cardRound(config, next)) return [];
+  const minds = [...roles].filter(([, role]) => powerOf(config, role).kind === "foresee").map(([id]) => id);
+  if (minds.length === 0) return [];
+  const card = pickCard();
+  return minds.map((player): GameEvent => ({ type: "cardForeseen", visibility: privateTo(player), player, round: next, card }));
+}
 
 /** The card's definition. Throws for ids the content doesn't have (the log only holds drawn ones). */
 export function cardDef(id: string, events: EventTable = EVENTS): EventDef {
@@ -37,13 +66,16 @@ const effectIs = <K extends EventEffect["kind"]>(state: GameState, kind: K): Ext
  * closed room (any room in play but the default room) and Double-cross
  * privately offers two random players a swap, both as the card is flipped, so
  * players can plan around them. A Rig for this round flips its holder's pick
- * instead of a drawn card (the oldest, if several; design §8.3). design §10
+ * instead of a drawn card (the oldest, if several; design §8.3); else a card a
+ * Mastermind foresaw flips. Then any Mastermind foresees the next one. design §10
  */
 export function startRound(state: GameState, round: number, draw: Draw): GameEvent[] {
   const events: GameEvent[] = [{ type: "roundStarted", visibility: PUBLIC, round, act: actOfRound(round) }];
-  if (!eventsOn(state.config) || round < EVENTS_FROM_ROUND) return events;
+  const roles = new Map(state.playerOrder.map((id) => [id, playerIn(state, id).role]));
+  const ahead = (): GameEvent[] => foresee(state.config, roles, round, () => draw.pick(EVENT_DECK));
+  if (!eventsOn(state.config) || round < EVENTS_FROM_ROUND) return [...events, ...ahead()];
   // The oldest Rig of this round wins; later ones were spent without effect (they never learn more than the flip shows).
-  const card = state.rigs.find((r) => r.round === round)?.pick ?? draw.pick(EVENT_DECK);
+  const card = state.rigs.find((r) => r.round === round)?.pick ?? foreseenCard(state, round) ?? draw.pick(EVENT_DECK);
   const effect = cardDef(card, eventsFor(state.config)).effect;
   let room: RoomId | null = null;
   if (effect.kind === "lockdown") {
@@ -57,7 +89,7 @@ export function startRound(state: GameState, round: number, draw: Draw): GameEve
     events.push({ type: "doubleCrossOffered", visibility: privateTo(a), player: a, round, partner: b });
     events.push({ type: "doubleCrossOffered", visibility: privateTo(b), player: b, round, partner: a });
   }
-  return events;
+  return [...events, ...ahead()];
 }
 
 /**

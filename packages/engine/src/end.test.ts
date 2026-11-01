@@ -194,17 +194,17 @@ describe("a failed heist — design §3, §19.1", () => {
 });
 
 describe("faction winning rules (role deck v2 §0) — design §3, §8", () => {
-  // The real content defs (ROLES.mole, ROLES.driver). p0 Mole, p1 Driver, p2 Rookie (stash 5, score 6).
-  const state = (driverStash: number, moleStash = 1): GameState =>
-    withPlayers(game(3, ["mole", "driver", "rookie"]), 0, { p0: { stash: moleStash }, p1: { stash: driverStash }, p2: { stash: 5 } });
+  // The real content defs (ROLES.mole, ROLES.auditor). p0 Mole, p1 Auditor, p2 Rookie (stash 5, score 6).
+  const state = (auditorStash: number, moleStash = 1): GameState =>
+    withPlayers(game(3, ["mole", "auditor", "rookie"]), 0, { p0: { stash: moleStash }, p1: { stash: auditorStash }, p2: { stash: 5 } });
 
-  it("failure: the best dark-side stash wins, whatever the crew holds; the Driver is crew now (design §3, role deck v2 R1)", () => {
+  it("failure: the best dark-side stash wins, whatever the crew holds; the Auditor is crew now (design §3, role deck v2 R1)", () => {
     expect(outcomeFor(state(9), "heat").winners).toEqual(["p0"]);
     expect(outcomeFor(state(2), "heat").winners).toEqual(["p0"]);
     expect(outcomeFor(state(9, 12), "heat").winners).toEqual(["p0"]);
   });
 
-  it("missed target: the Mole wins, whatever the Driver holds", () => {
+  it("missed target: the Mole wins, whatever the Auditor holds", () => {
     expect(outcomeFor(state(9), "target").winners).toEqual(["p0"]);
   });
 
@@ -214,7 +214,7 @@ describe("faction winning rules (role deck v2 §0) — design §3, §8", () => {
     expect(outcomeFor(s, null).winners).toEqual(["p2"]);
   });
 
-  it("success: the Driver wins normally with the biggest score", () => {
+  it("success: the Auditor wins normally with the biggest score", () => {
     expect(outcomeFor(state(9), null)).toMatchObject({ result: "success", winners: ["p1"] });
     expect(outcomeFor(state(2), null)).toMatchObject({ result: "success", winners: ["p2"] });
   });

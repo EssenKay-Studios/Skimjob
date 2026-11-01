@@ -117,6 +117,7 @@ const commandFields = (room: string, proposalId: string, other: string): readonl
   [{ type: "castVote", vote: { kind: "shakedown", target: other } }, [id(["vote"]), id(["vote", "kind"]), id(["vote", "target"])]],
   [{ type: "sealVote", vote: { kind: "shakedown", target: other } }, [id(["vote"]), id(["vote", "kind"]), id(["vote", "target"])]],
   [{ type: "useAbility", ability: { kind: "checkStash", target: other } }, [id(["ability"]), id(["ability", "kind"]), id(["ability", "target"])]],
+  [{ type: "useAbility", ability: { kind: "bless", target: other } }, [id(["ability", "target"])]],
   [{ type: "useAbility", ability: { kind: "audit", room } }, [id(["ability", "room"])]],
   [{ type: "useAbility", ability: { kind: "tail", room } }, [id(["ability", "room"])]],
   [{ type: "useAbility", ability: { kind: "peek", target: other } }, [id(["ability", "target"])]],

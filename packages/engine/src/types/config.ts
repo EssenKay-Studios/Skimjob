@@ -40,7 +40,7 @@ export interface GameConfig {
   readonly mole: MoleSetting;
   readonly eventsEnabled: boolean;
   readonly voteVisibility: VoteVisibility;
-  /** First game in a group: Rookie/Lookout/Inside Man/Fence only, no Mole, no events. design §8.1 */
+  /** First game in a group: Rookie/Inside Man/Lookout/Bagman/Cleaner only (role deck v2 §3), no Mole, no events. design §8.1 */
   readonly starterMode: boolean;
   /**
    * Duel mode: exactly 2 players, no meetings or votes; once per act each may
@@ -90,6 +90,10 @@ export interface RoleOverride {
   readonly rewardCount?: number;
   /** Mole tip-off Heat. design §8 */
   readonly heat?: number;
+  /** Bagman's Haul bonus, Cleaner's Rooftop visitors, Fixer's raid stop (v2 §2). design §8 */
+  readonly bonus?: number;
+  readonly visitors?: number;
+  readonly stopAt?: number;
 }
 
 /** Every field is optional; whatever is left out keeps the content value. design §17.4 */

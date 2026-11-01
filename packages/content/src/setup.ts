@@ -21,20 +21,20 @@ export const FILLER_ROLE: RoleId = "rookie";
 /** The Mole (a saboteur) is dealt by the saboteur setting, never from the pool. design §8.1 */
 export const MOLE_ROLE: RoleId = "mole";
 
-/** Starter mode: these crew roles only, no dark side, no events. design §8.1 */
-export const STARTER_ROLES: readonly RoleId[] = ["rookie", "lookout", "insideMan", "fence"];
+/** Starter mode: these crew roles only, no dark side, no events (role deck v2 §3: the Fence left). design §8.1 */
+export const STARTER_ROLES: readonly RoleId[] = ["rookie", "insideMan", "lookout", "bagman", "cleaner"];
+
+/** Roles that become accomplices in role deck v2 R3; pool roles until then. design §8 */
+export const ACCOMPLICE_V2_ROLES: readonly RoleId[] = ["fence"];
 
 /** The info and vote roles (M1 task 12). design §8 */
 export const INFO_VOTE_ROLES: readonly RoleId[] = ["hacker", "smoothTalker", "muscle", "blackmailer", "snitch"];
 
-/** The win-condition pool role (M1 task 13); the Mole is dealt by the Mole setting instead. design §8 */
-export const WIN_CONDITION_ROLES: readonly RoleId[] = ["driver"];
-
-/** Crew roles new in role deck v2 (docs/roles-v2.md §2, step R2). design §8 */
-export const CREW_V2_ROLES: readonly RoleId[] = ["auditor", "detective"];
+/** Crew roles new in role deck v2 (docs/roles-v2.md §2, steps R2a/R2b; the Fixer is the Driver's crew half). design §8 */
+export const CREW_V2_ROLES: readonly RoleId[] = ["auditor", "detective", "priest", "fixer", "mastermind"];
 
 /** Roles used when the host leaves the pool empty: every pool role. */
-export const DEFAULT_ROLE_POOL: readonly RoleId[] = [...STARTER_ROLES, ...INFO_VOTE_ROLES, ...WIN_CONDITION_ROLES, ...CREW_V2_ROLES];
+export const DEFAULT_ROLE_POOL: readonly RoleId[] = [...STARTER_ROLES, ...ACCOMPLICE_V2_ROLES, ...INFO_VOTE_ROLES, ...CREW_V2_ROLES];
 
 /** Every role id the engine accepts in a pool (saboteurs, such as the Mole, are not pool roles). */
 export const POOL_ROLES: readonly RoleId[] = DEFAULT_ROLE_POOL;

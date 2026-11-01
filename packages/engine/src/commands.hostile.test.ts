@@ -25,7 +25,7 @@ import { show } from "./check";
 /** Every perk spent with `useAbility` (the Shield spends itself). design §8.3 */
 const ALL_PERKS: readonly PerkId[] = ["peek", "extraVote", "ballot", "tail", "alibi", "recharge", "rig"];
 
-const ROLES_BY_SEAT = ["lookout", "fence", "hacker", "blackmailer", "muscle", "auditor", "detective", "mole", "rookie"];
+const ROLES_BY_SEAT = ["lookout", "fence", "hacker", "blackmailer", "muscle", "auditor", "detective", "mole", "priest"];
 
 function config(extra: Partial<GameConfig> = {}): GameConfig {
   return {
@@ -130,6 +130,7 @@ function baseCommands(s: GameState): Record<string, unknown>[] {
     if (power.kind === "cancelShakedown") out.push({ type: "useAbility", player, ability: { kind: "cancelShakedown" } });
     if (power.kind === "audit") out.push({ type: "useAbility", player, ability: { kind: "audit", room } });
     if (power.kind === "checkStash") out.push({ type: "useAbility", player, ability: { kind: "checkStash", target: other(player) } });
+    if (power.kind === "bless") out.push({ type: "useAbility", player, ability: { kind: "bless", target: other(player) } });
     // Perks. design §8.3
     for (const ability of [
       { kind: "peek", target: other(player) },

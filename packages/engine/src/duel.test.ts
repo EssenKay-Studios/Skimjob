@@ -87,13 +87,15 @@ describe("Duel config — design §16.1", () => {
     expect(setupEvents(config({ duel: false }))[0]).toMatchObject({ duel: false });
   });
 
-  it("never deals the roles that need meetings (Smooth talker, Muscle, Snitch, Detective; role deck v2 §3)", () => {
+  it("never deals the roles that need meetings (Smooth Talker, Muscle, Snitch, Detective, Priest; role deck v2 §3)", () => {
     const pool = rolePoolFor(config());
-    for (const r of ["smoothTalker", "muscle", "snitch", "detective"]) expect(pool).not.toContain(r);
-    // design §8.1: nor the Inside Man, dealt only from 5 players (owner answers, 1 Nov); Snitch and Detective need 4 (v2 §3).
+    for (const r of ["smoothTalker", "muscle", "snitch", "detective", "priest"]) expect(pool).not.toContain(r);
+    // design §8.1: nor the Inside Man (5+), Snitch and Detective (4+), Smooth Talker, Muscle, Priest (5+),
+    // nor the Mastermind with events off (v2 §3).
+    const small = ["insideMan", "snitch", "detective", "smoothTalker", "muscle", "priest", "mastermind"];
     expect(pool).not.toContain("insideMan");
-    expect(pool.length).toBe(DEFAULT_ROLE_POOL.length - 5);
-    expect(rolePoolFor(config({ duel: false }))).toEqual(DEFAULT_ROLE_POOL.filter((r) => !["insideMan", "snitch", "detective"].includes(r)));
+    expect(pool.length).toBe(DEFAULT_ROLE_POOL.length - small.length);
+    expect(rolePoolFor(config({ duel: false }))).toEqual(DEFAULT_ROLE_POOL.filter((r) => !small.includes(r)));
   });
 });
 

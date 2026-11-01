@@ -119,6 +119,12 @@ function playGame(players: number, voteVisibility: VoteVisibility): GameState[] 
     if (detective && round % 3 === 1 && (s.players[detective]?.roleState.usedThisAct ?? 1) === 0) {
       step({ type: "useAbility", player: detective, ability: { kind: "checkStash", target: ids[(ids.indexOf(detective) + 1) % ids.length] } });
     }
+    // v2 §2: the Priest blesses the round-2 emergency's target (p0) in Act 1, and each later act's meeting target.
+    const priest = holder("priest");
+    const blessed = act === 1 ? "p0" : ((act === 3 ? snitchTarget() : null) ?? (ids[act % ids.length] as PlayerId));
+    if (priest && round % 3 === 1 && priest !== blessed && (s.players[priest]?.roleState.usedThisAct ?? 1) === 0) {
+      step({ type: "useAbility", player: priest, ability: { kind: "bless", target: blessed } });
+    }
     if (round === 2) {
       // An emergency mid-act, with a sealed vote waiting for it. design §11.1, §11.2
       step({ type: "sealVote", player: last, vote: { kind: "shakedown", target: "p0" } });
@@ -383,7 +389,7 @@ describe("no leaks in real games — design §17.2, §13, §11.2", () => {
     // The script covers every starter-game event type.
     const types = new Set(final.log.map((e) => e.type));
     for (const t of ["moveSubmitted", "defaultMoveAssigned", "roomWatched", "abilityResolved", "voteSealed", "voteCast", "shakedownResolved", "checkpointChecked", "meetingProposalAccepted"]) {
-      // At 2 players the default pool may deal two roles with no move power (e.g. Rookie and Driver).
+      // At 2 players the default pool may deal two roles with no move power (e.g. Rookie and Auditor).
       if ((t === "defaultMoveAssigned" || t === "abilityResolved") && players === 2) continue;
       expect(types, t).toContain(t);
     }
@@ -419,8 +425,11 @@ describe("no leaks in real games — design §17.2, §13, §11.2", () => {
     for (const t of ["perkGranted", "perkUsed", "rigPicked", "alibiVerified"]) expect(seenTypes, t).toContain(t);
     for (const k of ["peek", "shield", "extraVote", "ballot", "tail", "alibi", "recharge", "rig"]) expect(seenPerks, k).toContain(k);
     expect(seenWatch, "a Tail watch").toContain("tail");
-    // v2 §2: crew rewards are earned in these games: a checkpoint's Tail, the Detective's Shield, the Auditor's Ballot.
-    for (const k of ["tail", "shield", "ballot"]) expect(earnedPerks, k).toContain(k);
+    // v2 §2: crew rewards are earned in these games: checkpoints' Tail, Peek and Rig, the Cleaner's +Vote, the Bagman's
+    // Alibi, a clean Muscle cancel's Recharge, a Ballot. (The Detective's and Fixer's Shields: crew tests.)
+    for (const k of ["tail", "peek", "rig", "extraVote", "alibi", "recharge", "ballot"]) expect(earnedPerks, k).toContain(k);
+    for (const t of ["blessingPaid", "cardForeseen"]) expect(seenTypes, t).toContain(t);
+    for (const k of ["bless", "bagman"]) expect(seenAbilities, k).toContain(k);
   });
 });
 

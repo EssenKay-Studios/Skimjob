@@ -123,6 +123,10 @@ export const sampleEvents: { readonly [T in GameEventType]: EventOfType<T> } = {
   },
   shakedownPending: { type: "shakedownPending", visibility: PUBLIC, meetingId: "m1", kind: "regular", act: 1, target: ana },
   shakedownCancelled: { type: "shakedownCancelled", visibility: PUBLIC, meetingId: "m1", target: ana },
+  blessingPaid: { type: "blessingPaid", visibility: PUBLIC, meetingId: "m1", target: ana, amount: 5 },
+  muscleNamed: { type: "muscleNamed", visibility: PUBLIC, meetingId: "m1", player: ben, target: ana },
+  raidStopped: { type: "raidStopped", visibility: PUBLIC, round: 4, heat: 95 },
+  cardForeseen: { type: "cardForeseen", visibility: privateTo(ben), player: ben, round: 3, card: "policePatrol" },
   snitchRewarded: { type: "snitchRewarded", visibility: privateTo(ben), player: ben, meetingId: "m1", target: ana, votes: 1 },
   shakedownResolved: {
     type: "shakedownResolved",

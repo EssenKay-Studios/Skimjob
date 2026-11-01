@@ -122,7 +122,7 @@ describe("Shield — design §8.3, §11.3", () => {
   });
 
   it("with a shakedown window, it applies when the window ends; a Muscle cancel first keeps the Shield", () => {
-    const pool = ["rookie", "muscle"];
+    const pool = ["rookie", "muscle", "fixer"]; // the Fixer (a Shield earner) opens the window below 5 players, where no Muscle is dealt
     const s = grantPerks(withStash(game(4, ["rookie", "muscle"], { rolePool: pool }), "p0", 6), "p0", "shield");
     const pending = run(s, ...emergency("p2"), vote("p1", "p0"), vote("p2", "p0"), vote("p3", "p0"), CLOSE);
     expect(pending.phase.kind).toBe("shakedownPending");
@@ -267,7 +267,7 @@ describe("Recharge — design §8.3", () => {
   });
 
   it("gives a once-per-game use back (Muscle)", () => {
-    let s = grantPerks(game(4, ["muscle"], { rolePool: ["rookie", "muscle"] }), "p0", "recharge");
+    let s = grantPerks(game(4, ["muscle"], { rolePool: ["rookie", "muscle", "fixer"] }), "p0", "recharge");
     s = run(s, ...emergency("p1"), vote("p1", "p2"), vote("p2", "p3"), vote("p3", "p2"), CLOSE, use("p0", { kind: "cancelShakedown" }), RESOLVE);
     expect(s.players.p0?.roleState.usedThisGame).toBe(1);
     expect(run(s, use("p0", { kind: "recharge" })).players.p0?.roleState.usedThisGame).toBe(0);

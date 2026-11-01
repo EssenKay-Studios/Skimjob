@@ -117,7 +117,7 @@ describe("validateOverrides — configs are untrusted JSON (design §17.4)", () 
     expect(errs({ roles: { getaway: { stashMultiplier: 2 } } })).toEqual(["contentOverrides.roles.getaway: no such role"]);
     // design §8: the Mole's tip-off numbers are content, so they can be tuned; nobody else's.
     expect(errs({ roles: { mole: { heat: 15, perAct: 2 } } })).toEqual([]);
-    expect(errs({ roles: { driver: { heat: 15 } } })).toEqual(["contentOverrides.roles.driver.heat is not an overridable field"]);
+    expect(errs({ roles: { fixer: { heat: 15 } } })).toEqual(["contentOverrides.roles.fixer.heat is not an overridable field"]);
   });
 
   it("event cards: each card tunes only its own effect's numbers (design §10, balance pass 2)", () => {

@@ -143,16 +143,30 @@ export function decide(view: PlayerView, p: Personality, random: Random): Player
 // ---------------------------------------------------------------- crew powers (v2 §2)
 
 /**
- * The Auditor's and Detective's powers (role deck v2 §4 "Play", minimal; R4
- * adds claims and perk use). Once per act, while planning: the Auditor
- * audits the room its top suspect claimed for the latest round; the Detective
- * checks its top suspect in the act's last round, closest to the meeting.
+ * The Auditor's, Detective's and Priest's powers (role deck v2 §4 "Play",
+ * minimal; R4 adds claims and perk use). Once per act, while planning: the
+ * Auditor audits the room its top suspect claimed for the latest round; the
+ * Detective checks its top suspect in the act's last round, closest to the
+ * meeting; the Priest blesses its most-trusted player (lowest suspicion).
  */
 function crewPowers(view: PlayerView): PlayerCommand[] {
   const { power } = roleOf(view);
-  if (view.phase.kind !== "planning" || (power.kind !== "audit" && power.kind !== "checkStash")) return [];
+  if (view.phase.kind !== "planning" || (power.kind !== "audit" && power.kind !== "checkStash" && power.kind !== "bless")) return [];
   if (view.me.roleState.usedThisAct >= power.perAct) return [];
-  const top = mostSuspicious(suspicion(view));
+  const scores = suspicion(view);
+  if (power.kind === "bless") {
+    // v2 §2: no blessing in an act after a blessed player was caught dirty (its own blessings, public shakedowns).
+    const acts = new Map(ofType(view.ledger, "meetingOpened").map((e) => [e.meetingId, e.act]));
+    const dirty = ofType(view.ledger, "shakedownResolved").filter((x) => !x.clean && acts.get(x.meetingId) === view.act - 1);
+    const barred = ofType(view.caseFile, "abilityResolved").some((e) => {
+      const a = e.ability;
+      return a.kind === "bless" && a.act === view.act - 1 && dirty.some((x) => x.target === a.target);
+    });
+    if (barred) return [];
+    const trusted = [...view.players].map((o) => o.id).sort((a, b) => (scores.get(a) ?? 0) - (scores.get(b) ?? 0))[0];
+    return trusted === undefined ? [] : [{ type: "useAbility", player: view.me.id, ability: { kind: "bless", target: trusted } }];
+  }
+  const top = mostSuspicious(scores);
   if (top === null || top.score <= 0) return [];
   const player = view.me.id;
   if (power.kind === "checkStash") {
@@ -236,7 +250,8 @@ function chooseRoom(view: PlayerView, p: Personality, random: Random): RoomId {
 
 /** How much to keep. design §5.1; §11.5 (team-minded bots keep the Haul on pace for the checkpoint) */
 function choosePocket(view: PlayerView, p: Personality, random: Random, loot: number): number {
-  if (loot === 0 || !roleOf(view).canPocket) return 0;
+  // v2 §4: the Bagman leans honest and goes all-in (its bonus and Alibi need it).
+  if (loot === 0 || !roleOf(view).canPocket || roleOf(view).power.kind === "bagman") return 0;
   if (random() < p.noise) return Math.floor(random() * (loot + 1));
   if (random() >= p.pocketChance) return 0;
   let pocket = Math.min(loot, Math.max(1, Math.round(loot * p.greed * (0.5 + random()))));

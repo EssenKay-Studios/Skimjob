@@ -284,6 +284,10 @@ function lootFlow(events: readonly GameEvent[]): number {
   for (const e of events) {
     if (e.type === "lootSplit") n += e.toHaul + e.toStash;
     else if (e.type === "raidRumourHit") n -= e.lost;
+    // Role deck v2 R2b: the bank's Bagman bonus and Priest blessing pay in; the Fixer's save pays out.
+    else if (e.type === "abilityResolved" && e.ability.kind === "bagman") n += e.ability.bonus;
+    else if (e.type === "abilityResolved" && e.ability.kind === "fixer") n -= e.ability.lost;
+    else if (e.type === "blessingPaid") n += e.amount;
   }
   return n;
 }
