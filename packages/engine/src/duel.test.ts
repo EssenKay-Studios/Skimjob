@@ -92,7 +92,8 @@ describe("Duel config — design §16.1", () => {
     for (const r of ["smoothTalker", "muscle", "snitch", "detective", "priest"]) expect(pool).not.toContain(r);
     // design §8.1: nor the Inside Man (5+), Snitch and Detective (4+), Smooth Talker, Muscle, Priest (5+),
     // nor the Mastermind with events off (v2 §3).
-    const small = ["insideMan", "snitch", "detective", "smoothTalker", "muscle", "priest", "mastermind"];
+    // R3b: the Blackmailer and Forger (7+, need meetings) neither.
+    const small = ["insideMan", "snitch", "detective", "smoothTalker", "muscle", "priest", "mastermind", "blackmailer", "forger"];
     expect(pool).not.toContain("insideMan");
     expect(pool.length).toBe(DEFAULT_ROLE_POOL.length - small.length);
     expect(rolePoolFor(config({ duel: false }))).toEqual(DEFAULT_ROLE_POOL.filter((r) => !small.includes(r)));

@@ -21,14 +21,17 @@ export const FILLER_ROLE: RoleId = "rookie";
 /** The Mole (a saboteur) is dealt by the saboteur setting, never from the pool. design §8.1 */
 export const MOLE_ROLE: RoleId = "mole";
 
+/** Every saboteur (role deck v2 §2): the Mole and, since R3b, the Embezzler. Dealt by the saboteur setting, never pool roles. design §8.1 */
+export const SABOTEUR_ROLES: readonly RoleId[] = [MOLE_ROLE, "embezzler"];
+
 /** Starter mode: these crew roles only, no dark side, no events (role deck v2 §3: the Fence left). design §8.1 */
 export const STARTER_ROLES: readonly RoleId[] = ["rookie", "insideMan", "lookout", "bagman", "cleaner"];
 
-/** The accomplices (role deck v2 §2, R3a; the Blackmailer and Forger join in R3b). Dealt only with a saboteur. design §8, §8.1 */
-export const ACCOMPLICE_V2_ROLES: readonly RoleId[] = ["getawayDriver", "fence", "hacker"];
+/** The accomplices (role deck v2 §2, R3a and R3b). Dealt only with a saboteur. design §8, §8.1 */
+export const ACCOMPLICE_V2_ROLES: readonly RoleId[] = ["getawayDriver", "fence", "hacker", "blackmailer", "forger"];
 
-/** The info and vote roles still crew (M1 task 12; the Hacker is an accomplice since R3a). design §8 */
-export const INFO_VOTE_ROLES: readonly RoleId[] = ["smoothTalker", "muscle", "blackmailer", "snitch"];
+/** The info and vote roles still crew (M1 task 12; the Hacker and Blackmailer are accomplices since R3a/R3b). design §8 */
+export const INFO_VOTE_ROLES: readonly RoleId[] = ["smoothTalker", "muscle", "snitch"];
 
 /** Crew roles new in role deck v2 (docs/roles-v2.md §2, steps R2a/R2b; the Fixer is the Driver's crew half). design §8 */
 export const CREW_V2_ROLES: readonly RoleId[] = ["auditor", "detective", "priest", "fixer", "mastermind"];

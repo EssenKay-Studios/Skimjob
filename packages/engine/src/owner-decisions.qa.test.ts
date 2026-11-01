@@ -12,6 +12,8 @@ import { meetingResult } from "./meeting";
 import { eventHeatScale, roundJob, scaledCardHeat } from "./deck";
 import { viewFor } from "./view";
 import { V01_NUMBERS } from "./v01-numbers.testkit";
+/** Role deck v2 R3b: the Embezzler is a saboteur too, dealt by the same setting. */
+const isSaboteur = (r: string): boolean => r === "mole" || r === "embezzler";
 
 const seats = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true }));
 function config(n: number, extra: Partial<GameConfig> = {}): GameConfig {
@@ -147,11 +149,12 @@ describe("QA dealing — design §8.1", () => {
       const maybeCounts = new Set<number>();
       for (const seed of SEEDS.slice(0, 60)) {
         for (const uniqueRoles of [true, false]) {
-          const moles = (mole: "on" | "maybe") => dealt(config(n, { seed, mole, rolePool: [], uniqueRoles })).filter((r) => r === "mole").length;
-          expect(moles("on")).toBe(1);
+          const moles = (mole: "on" | "maybe") => dealt(config(n, { seed, mole, rolePool: [], uniqueRoles })).filter(isSaboteur).length;
+          // Since R3b a second saboteur (the Embezzler) can be dealt from 7; each saboteur role at most once.
+          expect([1, 2]).toContain(moles("on"));
           const mb = moles("maybe");
-          expect(mb).toBeLessThanOrEqual(1);
-          maybeCounts.add(mb);
+          expect(mb).toBeLessThanOrEqual(2);
+          maybeCounts.add(Math.min(1, mb));
         }
       }
       expect([...maybeCounts].sort()).toEqual(n <= 8 ? [0, 1] : [1]);
@@ -160,12 +163,12 @@ describe("QA dealing — design §8.1", () => {
 
   it("uniqueRoles false repeats roles; true never does; non-boolean rejected; deal is deterministic", () => {
     const repeats = (cfg: GameConfig) => {
-      const roles = dealt(cfg).filter((r) => r !== "rookie" && r !== "mole");
+      const roles = dealt(cfg).filter((r) => r !== "rookie" && !isSaboteur(r));
       return roles.length !== new Set(roles).size;
     };
     expect(SEEDS.slice(0, 40).some((seed) => repeats(config(12, { seed, rolePool: [], uniqueRoles: false })))).toBe(true);
     expect(SEEDS.slice(0, 40).some((seed) => repeats(config(12, { seed, rolePool: [] })))).toBe(false);
-    expect(dealt(config(6, { rolePool: ["lookout"], uniqueRoles: false, mole: "on" })).sort()).toEqual(["lookout", "lookout", "lookout", "lookout", "lookout", "mole"]);
+    expect(dealt(config(6, { rolePool: ["lookout"], uniqueRoles: false, mole: "on" })).map((r) => (isSaboteur(r) ? "saboteur" : r)).sort()).toEqual(["lookout", "lookout", "lookout", "lookout", "lookout", "saboteur"]);
     expect(validateConfig({ ...config(6), uniqueRoles: "no" })).toContain("uniqueRoles must be a boolean");
     const cfg = config(12, { seed: "det", rolePool: [], uniqueRoles: false, mole: "on" });
     expect(setupEvents(cfg)).toEqual(setupEvents(cfg));

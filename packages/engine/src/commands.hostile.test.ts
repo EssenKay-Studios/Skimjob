@@ -26,14 +26,15 @@ import { show } from "./check";
 const ALL_PERKS: readonly PerkId[] = ["peek", "extraVote", "ballot", "tail", "alibi", "recharge", "rig"];
 
 // v2 §2 (R3a): the Getaway Driver is passive (no command fields of its own) but plays every move.
-const ROLES_BY_SEAT = ["lookout", "fence", "hacker", "blackmailer", "muscle", "auditor", "detective", "mole", "priest", "getawayDriver"];
+// R3b: the Forger's and the Embezzler's move powers too.
+const ROLES_BY_SEAT = ["lookout", "fence", "hacker", "blackmailer", "muscle", "auditor", "detective", "mole", "priest", "getawayDriver", "forger", "embezzler"];
 
 function config(extra: Partial<GameConfig> = {}): GameConfig {
   return {
     seed: "hostile-seed",
     players: ROLES_BY_SEAT.map((_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: false })),
     job: "bank",
-    rolePool: ROLES_BY_SEAT.filter((r) => r !== "mole"),
+    rolePool: ROLES_BY_SEAT.filter((r) => r !== "mole" && r !== "embezzler"),
     mole: "off",
     eventsEnabled: true,
     // Secret mode, so the Ballot perk can be spent (it's refused in Open mode).
@@ -125,7 +126,11 @@ function baseCommands(s: GameState): Record<string, unknown>[] {
               ? { kind: "blackmail", target: other(player), role: "fence" }
               : power.kind === "tipOff"
                 ? { kind: "tipOff" }
-                : null;
+                : power.kind === "forge"
+                  ? { kind: "forge", target: other(player), room }
+                  : power.kind === "embezzle"
+                    ? { kind: "embezzle" }
+                    : null;
     if (ability) out.push({ type: "submitMove", player, move: { room, pocket: 0, ability } });
     // Powers used outside a move. design §8
     if (power.kind === "cancelShakedown") out.push({ type: "useAbility", player, ability: { kind: "cancelShakedown" } });

@@ -7,6 +7,8 @@ import { canSee } from "./types";
 import { createGame, darkSideOdds, roomsFor, setupEvents, validateConfig } from "./setup";
 import { replay } from "./reduce";
 import { nextUint32, seedRng } from "./rng";
+/** Role deck v2 R3b: the Embezzler is a saboteur too, dealt by the same setting. */
+const isSaboteur = (r: string): boolean => r === "mole" || r === "embezzler";
 
 const SETTINGS: readonly MoleSetting[] = ["off", "maybe", "on"];
 
@@ -99,9 +101,9 @@ describe("QA role dealing — design §8.1", () => {
         for (let s = 0; s < 15; s++) {
           const dealt = roles(config(n, { mole, seed: `inv-${n}-${mole}-${s}` }));
           expect(dealt).toHaveLength(n);
-          // Role deck v2 §3: the only saboteur so far is the Mole, at most once with unique roles.
-          expect(darkSideOdds(n, mole, false).map((o) => Math.min(1, o.saboteurs))).toContain(count(dealt, MOLE_ROLE));
-          for (const r of dealt) expect([...POOL_ROLES, MOLE_ROLE]).toContain(r);
+          // Role deck v2 §3: two saboteur roles (Mole, Embezzler since R3b), each at most once.
+          expect(darkSideOdds(n, mole, false).map((o) => Math.min(2, o.saboteurs))).toContain(dealt.filter(isSaboteur).length);
+          for (const r of dealt) expect([...POOL_ROLES, MOLE_ROLE, "embezzler"]).toContain(r);
           for (const r of POOL_ROLES) if (r !== "rookie") expect(count(dealt, r)).toBeLessThanOrEqual(1);
         }
       }
@@ -109,17 +111,19 @@ describe("QA role dealing — design §8.1", () => {
   });
 
   it("Mole 'on' at the tier boundaries: 3 → 0, 4 → 1, 5 → 1, 8 → 1, 9 → 1 (role deck v2 §3)", () => {
-    const expected: Record<number, number> = { 3: 0, 4: 1, 5: 1, 8: 1, 9: 1 };
-    for (const [n, moles] of Object.entries(expected)) expect(count(roles(config(Number(n), { mole: "on" })), MOLE_ROLE)).toBe(moles);
+    // Since R3b two saboteurs can be dealt from 7 (the §3 table's 2-saboteur mixes).
+    const expected: Record<number, readonly number[]> = { 3: [0], 4: [1], 5: [1], 8: [1, 2], 9: [1, 2] };
+    for (const [n, moles] of Object.entries(expected)) expect(moles).toContain(roles(config(Number(n), { mole: "on" })).filter(isSaboteur).length);
   });
 
   it("12 players, Mole on: 1 Mole, each other role at most once, Rookies fill the rest", () => {
     const dealt = roles(config(12, { mole: "on" }));
-    expect(count(dealt, MOLE_ROLE)).toBe(1);
+    expect([1, 2]).toContain(dealt.filter(isSaboteur).length);
+    expect(count(dealt, MOLE_ROLE)).toBeLessThanOrEqual(1);
     // Default pool (12 roles since role deck v2 R2a): 11 of them once each, no filler needed.
     expect(new Set(dealt).size).toBe(12);
     const narrow = roles(config(12, { mole: "on", rolePool: ["fence"] }));
-    expect([count(narrow, MOLE_ROLE), count(narrow, "fence"), count(narrow, "rookie")]).toEqual([1, 1, 10]);
+    expect([count(narrow, "fence"), count(narrow, "rookie") + narrow.filter(isSaboteur).length]).toEqual([1, 11]);
   });
 
   it("starter mode at 2 and 12 never deals a Mole, even with the Mole in the (ignored) pool", () => {

@@ -150,8 +150,9 @@ describe("dealing by faction — design §8.1 (role deck v2 §3)", () => {
     }
   });
 
-  it("saboteurs are never pool roles: the shipped Mole is the only saboteur, dealt by the setting", () => {
-    expect(saboteursFor(config(6))).toEqual([MOLE_ROLE]);
+  it("saboteurs are never pool roles: the shipped Mole and Embezzler (R3b) are dealt by the setting", () => {
+    expect(saboteursFor(config(6))).toEqual([MOLE_ROLE, "embezzler"]);
+    expect(rolePoolFor(config(6))).not.toContain("embezzler");
     expect(rolePoolFor(config(6))).not.toContain(MOLE_ROLE);
     expect(validateConfig(config(6, { rolePool: ["rookie", MOLE_ROLE] })).join()).toMatch(/saboteur/);
   });

@@ -286,7 +286,8 @@ describe("QA: commands are well-formed — design §8, §11.2", () => {
     const has = (test: (e: (typeof log)[number]) => boolean) => expect(log.some(test)).toBe(true);
     has((e) => e.type === "emergencyMeetingCalled");
     has((e) => e.type === "shakedownResolved");
-    has((e) => e.type === "abilityResolved" && e.ability.kind === "fenceSafe");
+    // Since R3b five accomplices share the dark seats, so any accomplice's move power counts here.
+    has((e) => e.type === "abilityResolved" && ["fenceSafe", "loopCameras", "forge", "blackmail"].includes(e.ability.kind));
     has((e) => e.type === "abilityResolved" && e.ability.kind === "lookout");
   });
 

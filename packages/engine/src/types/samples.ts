@@ -66,7 +66,8 @@ export const sampleEvents: { readonly [T in GameEventType]: EventOfType<T> } = {
     round: 1,
     ability: { kind: "fenceSafe", amount: 2 },
   },
-  blackmailed: { type: "blackmailed", visibility: privateTo(ben), player: ben, round: 2, stolen: 3 },
+  voteCompromised: { type: "voteCompromised", visibility: privateTo(ben), player: ben, round: 2 },
+  sightingForged: { type: "sightingForged", visibility: REVEAL, forger: ana, round: 2, target: ben, room: "vault", shownTo: [ana] },
   roomSighting: { type: "roomSighting", visibility: privateTo(ana), player: ana, round: 1, room: "vault", others: [] },
   roomWatched: {
     type: "roomWatched",

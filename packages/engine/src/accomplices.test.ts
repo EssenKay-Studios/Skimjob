@@ -183,7 +183,7 @@ describe("Hacker — v2 §2, design §8", () => {
       const hacker = s.playerOrder.find((id) => s.players[id]?.role === "hacker");
       if (!hacker) continue;
       seen++;
-      const saboteurs = s.playerOrder.filter((id) => s.players[id]?.role === "mole");
+      const saboteurs = s.playerOrder.filter((id) => s.players[id]?.role === "mole" || s.players[id]?.role === "embezzler");
       const told = log.filter((e) => e.type === "alliesLearned");
       expect(told).toHaveLength(1);
       expect(told[0]).toMatchObject({ player: hacker, via: "deal", visibility: privateTo(hacker) });

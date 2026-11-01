@@ -73,7 +73,7 @@ describe("QA win rule with accomplices — design §3 (v2 §0)", () => {
 });
 
 describe("QA dealing and dealt knowledge at 6–12 players — design §8.1 (v2 §3)", () => {
-  it("never more than ⌊n/3⌋ dark, accomplices only with a saboteur; at the deal only the Hacker knows one saboteur and the saboteurs know only each other", () => {
+  it("never more than ⌊n/3⌋ dark, accomplices only with a saboteur; at the deal only the Hacker knows one saboteur and the saboteurs know only each other and the Forger", () => {
     let hackers = 0;
     for (let n = 6; n <= 12; n++) {
       for (let i = 0; i < 12; i++) {
@@ -87,7 +87,9 @@ describe("QA dealing and dealt knowledge at 6–12 players — design §8.1 (v2 
         for (const id of s.playerOrder) {
           const allies = (s.players[id] as PlayerState).roleState.allies;
           const r = roleOf(id);
-          if (faction(r) === "saboteur") expect(new Set(allies)).toEqual(new Set(sabs.filter((x) => x !== id)));
+          // R3b: the saboteurs are also told the Forger at the deal.
+          const forgers = s.playerOrder.filter((x) => roleOf(x) === "forger");
+          if (faction(r) === "saboteur") expect(new Set(allies)).toEqual(new Set([...sabs.filter((x) => x !== id), ...forgers]));
           else if (r === "hacker" && sabs.length > 0) {
             hackers++;
             expect(allies).toHaveLength(1);
