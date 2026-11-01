@@ -11,7 +11,7 @@ import { validateConfig, type GameConfig } from "@skimjob/engine";
 import { createGuestUser, type Sessions, type User } from "./auth";
 import type { Db, Queryable } from "./db";
 import type { GameStatus, GameStore } from "./store";
-import { BOT_NAMES, parseNickname, parseSettings, type LobbySettings } from "./settings";
+import { BOT_NAMES, checkNickname, looksLikeBot, nicknameKey, parseSettings, type LobbySettings } from "./settings";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CODE_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"; // no 0/o, 1/l/i
@@ -75,8 +75,13 @@ const gameById = async (db: Queryable, id: string) =>
   UUID.test(id)
     ? (await db.query<GameRow>("select id, status, host_user_id, invite_code, settings from games where id = $1", [id]))[0]
     : undefined;
-const gameByCode = async (db: Queryable, code: string) =>
-  (await db.query<GameRow>("select id, status, host_user_id, invite_code, settings from games where invite_code = $1", [code.toLowerCase()]))[0];
+const CODE = new RegExp(`^[${CODE_ALPHABET}]{${CODE_LENGTH}}$`);
+/** Anything that can't be an invite code (wrong length, NUL, …) is simply unknown. */
+const gameByCode = async (db: Queryable, raw: string) => {
+  const code = raw.toLowerCase();
+  if (!CODE.test(code)) return undefined;
+  return (await db.query<GameRow>("select id, status, host_user_id, invite_code, settings from games where invite_code = $1", [code]))[0];
+};
 const seatsOf = (db: Queryable, id: string) =>
   db.query<SeatRow>("select seat_no, player_id, user_id, nickname, bot_personality from seats where game_id = $1 order by seat_no", [id]);
 const nextSeat = (seats: readonly SeatRow[]) => (seats.length ? Math.max(...seats.map((s) => s.seat_no)) + 1 : 0);
@@ -167,7 +172,9 @@ export function lobbyRoutes(app: FastifyInstance, db: Db, store: GameStore, s: S
   app.post<{ Params: { code: string } }>("/invites/:code/join", async (req, reply) => {
     const found = (await gameByCode(db, req.params.code)) ?? refuse(404, "unknown invite code");
     const rawName = body(req).nickname;
-    const nickname = rawName === undefined ? undefined : (parseNickname(rawName) ?? refuse(400, "nickname must be 1–24 characters"));
+    const checked = rawName === undefined ? undefined : checkNickname(rawName);
+    if (checked && !checked.ok) refuse(400, checked.error);
+    const nickname = checked?.ok ? checked.name : undefined;
     const current = await s.user(req);
     if (!current && !nickname) refuse(400, "pick a nickname to join");
     return store.withGameLock(found.id, async () => {
@@ -176,12 +183,15 @@ export function lobbyRoutes(app: FastifyInstance, db: Db, store: GameStore, s: S
       if (current && seats.some((x) => x.user_id === current.id)) return view(game, seats, current); // already in
       if (game.status !== "lobby") refuse(410, "this game has already started");
       if (seats.length >= MAX_PLAYERS) refuse(409, `the game is full (${MAX_PLAYERS} seats)`);
-      const user = current ?? (await createGuestUser(db, nickname!));
+      const name = nickname ?? current!.name;
+      if (looksLikeBot(name)) refuse(400, "nicknames starting with \"Bot\" are for bots");
+      if (seats.some((x) => nicknameKey(x.nickname) === nicknameKey(name))) refuse(409, "that nickname is taken in this game; pick another");
+      const user = current ?? (await createGuestUser(db, name));
       await db.query("insert into seats (game_id, seat_no, user_id, nickname) values ($1, $2, $3, $4)", [
         game.id,
         nextSeat(seats),
         user.id,
-        nickname ?? user.name,
+        name,
       ]);
       if (!current) await s.start(reply, user);
       return view(game, await seatsOf(db, game.id), user);
@@ -204,8 +214,8 @@ export function lobbyRoutes(app: FastifyInstance, db: Db, store: GameStore, s: S
         refuse(400, `personality must be one of ${Object.keys(PERSONALITIES).join(", ")}`);
       }
       if (seats.length >= MAX_PLAYERS) refuse(409, `the game is full (${MAX_PLAYERS} seats)`);
-      const taken = new Set(seats.map((x) => x.nickname));
-      const name = BOT_NAMES.map((n) => `Bot · ${n}`).find((n) => !taken.has(n)) ?? `Bot · ${nextSeat(seats)}`;
+      const taken = new Set(seats.map((x) => nicknameKey(x.nickname)));
+      const name = [...BOT_NAMES, String(nextSeat(seats))].map((n) => `Bot · ${n}`).find((n) => !taken.has(nicknameKey(n)))!;
       await db.query("insert into seats (game_id, seat_no, nickname, bot_personality) values ($1, $2, $3, $4)", [
         game.id,
         nextSeat(seats),

@@ -60,11 +60,30 @@ export function parseSettings(input: unknown): { ok: true; settings: LobbySettin
   return { ok: true, settings: s as unknown as LobbySettings };
 }
 
-/** A display name: free text, trimmed, 1–24 characters, no control characters. Never an id. */
+// Control characters, and invisible / bidi-control ones (format characters
+// except the zero-width joiner inside emoji, plus blank "letters").
+// eslint-disable-next-line no-control-regex
+const HIDDEN = /[\p{Cc}\u115f\u1160\u2800\u3164\uffa0]|(?!\u200d)\p{Cf}/u;
+
+/** "Bot ·", "bot-", "BOT:", "Bot" … (any separator after "bot") are reserved for bot seats. */
+export const looksLikeBot = (name: string) => /^bot(?:[^\p{L}\p{N}]|$)/u.test(name.normalize("NFKC").toLowerCase());
+
+/** Two nicknames are the same if they match ignoring case, width and whitespace. */
+export const nicknameKey = (name: string) => name.normalize("NFKC").toLowerCase().replace(/\s+/gu, "");
+
+/**
+ * A person's display name: free text, trimmed, inner whitespace collapsed,
+ * 1–24 characters, nothing invisible, not bot-like. Never an id.
+ */
+export function checkNickname(input: unknown): { ok: true; name: string } | { ok: false; error: string } {
+  if (typeof input !== "string") return { ok: false, error: "nickname must be 1–24 characters" };
+  const name = input.trim().replace(/\s+/gu, " ");
+  if (name.length === 0 || [...name].length > NICKNAME_MAX || HIDDEN.test(name)) return { ok: false, error: "nickname must be 1–24 visible characters" };
+  if (looksLikeBot(name)) return { ok: false, error: "nicknames starting with \"Bot\" are for bots" };
+  return { ok: true, name };
+}
+
 export function parseNickname(input: unknown): string | null {
-  if (typeof input !== "string") return null;
-  const name = input.trim().replace(/\s+/g, " ");
-  // eslint-disable-next-line no-control-regex
-  if (name.length === 0 || [...name].length > NICKNAME_MAX || /[\u0000-\u001f\u007f-\u009f]/.test(name)) return null;
-  return name;
+  const r = checkNickname(input);
+  return r.ok ? r.name : null;
 }

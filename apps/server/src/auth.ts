@@ -9,7 +9,7 @@ import { createHash, randomBytes } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { Clock } from "./clock";
 import type { Db, Queryable } from "./db";
-import { parseNickname, SESSION_TTL_MS } from "./settings";
+import { checkNickname, parseNickname, SESSION_TTL_MS } from "./settings";
 
 export const SESSION_COOKIE = "sj_session";
 const SIGNIN_COOKIE = "sj_signin";
@@ -117,8 +117,13 @@ export function sessions(db: Db, clock: Clock): Sessions {
   };
 }
 
-/** Only same-site paths, so a sign-in link can't bounce the browser elsewhere. */
-const safeReturnTo = (v: unknown) => (typeof v === "string" && /^\/(?![/\\])/.test(v) ? v : "/");
+/**
+ * Only same-site paths, so a sign-in link can't bounce the browser elsewhere
+ * (or break the Location header): one leading "/", then only URL path/query
+ * characters — no "//", backslash, whitespace or control characters. Else "/".
+ */
+export const safeReturnTo = (v: unknown): string =>
+  typeof v === "string" && v.length <= 512 && /^\/(?!\/)[A-Za-z0-9\-._~!$&'()*+,;=:@%/?#]*$/.test(v) ? v : "/";
 
 export function authRoutes(app: FastifyInstance, db: Db, s: Sessions, providers: readonly AuthProvider[]): void {
   const byName = new Map(providers.map((p) => [p.name, p]));
@@ -133,9 +138,9 @@ export function authRoutes(app: FastifyInstance, db: Db, s: Sessions, providers:
 
   // Guest sign-in to host a game (joining by invite signs a guest in by itself).
   app.post("/auth/guest", async (req, reply) => {
-    const name = parseNickname((req.body as { nickname?: unknown } | null)?.nickname);
-    if (!name) return reply.code(400).send({ error: "nickname must be 1–24 characters" });
-    const user = await createGuestUser(db, name);
+    const nick = checkNickname((req.body as { nickname?: unknown } | null)?.nickname);
+    if (!nick.ok) return reply.code(400).send({ error: nick.error });
+    const user = await createGuestUser(db, nick.name);
     await s.start(reply, user);
     return { user };
   });
@@ -177,8 +182,9 @@ export function authRoutes(app: FastifyInstance, db: Db, s: Sessions, providers:
       }
       const who = await provider.identify({ code, verifier: String(pending.verifier), redirectUri: redirectUri(req, provider.name) });
       if (!who) return reply.code(401).send({ error: "sign-in refused" });
+      const returnTo = safeReturnTo(pending.returnTo); // checked before anything is written
       await s.start(reply, await userForIdentity(db, provider.name, who));
-      return reply.redirect(safeReturnTo(pending.returnTo));
+      return reply.redirect(returnTo);
     },
   );
 }

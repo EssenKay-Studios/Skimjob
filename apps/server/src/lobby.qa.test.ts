@@ -142,13 +142,14 @@ describe("QA: nicknames are free text", () => {
     expect([...mine.nickname].length).toBeLessThanOrEqual(24);
   });
 
-  it("a nickname is display text, never an id: two people may share one, and ids stay p1..pN", async () => {
+  it("a nickname is display text, never an id: an id-like nickname is fine, ids stay p1..pN (PR #18 review: no duplicates)", async () => {
     const { who, game } = await host();
-    await join(game.inviteCode, "Host");
+    expect((await join(game.inviteCode, " host ")).status).toBe(409); // same as "Host", ignoring case and whitespace
+    await join(game.inviteCode, "p3");
     await join(game.inviteCode, "p1");
     const started = await call("POST", `/games/${game.id}/start`, who);
     expect(started.status).toBe(200);
-    expect(started.body.seats!.map((s) => [s.nickname, s.playerId])).toEqual([["Host", "p1"], ["Host", "p2"], ["p1", "p3"]]);
+    expect(started.body.seats!.map((s) => [s.nickname, s.playerId])).toEqual([["Host", "p1"], ["p3", "p2"], ["p1", "p3"]]);
   });
 });
 

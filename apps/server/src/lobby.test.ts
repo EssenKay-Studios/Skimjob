@@ -55,8 +55,32 @@ describe("guest sign-in (invite link + nickname)", () => {
     expect((await call("GET", "/me", cookie.value)).body.user).toMatchObject({ name: "Zoë the 🦝", guest: true });
   });
 
-  it.each([[""], ["   "], ["x".repeat(25)], ["bad\u0000name"], [42], [null]])("refuses nickname %j", async (nickname) => {
+  it.each([
+    [""],
+    ["   "],
+    ["x".repeat(25)],
+    ["bad\u0000name"],
+    [42],
+    [null],
+    ["\u200b"], // zero-width space only
+    ["a\u202eb"], // bidi override
+    ["a\u2066b\u2069"], // bidi isolates
+    ["\u3164"], // Hangul filler (blank letter)
+    ["a\u00adb"], // soft hyphen (invisible)
+    ["Bot · Riya"],
+    ["bot-riya"],
+    ["BOT: Max"],
+    ["Bot•Max"],
+    ["ＢＯＴ · Max"], // fullwidth
+    ["Bot"],
+  ])("refuses nickname %j", async (nickname) => {
     expect((await call("POST", "/auth/guest", null, { nickname })).status).toBe(400);
+  });
+
+  it("allows names that merely start with the letters b-o-t, and emoji joined with ZWJ", async () => {
+    for (const nickname of ["Botswana Bob", "Bottle", "👨\u200d👩\u200d👧"]) {
+      expect((await call("POST", "/auth/guest", null, { nickname })).status).toBe(200);
+    }
   });
 
   it("401s /me without a session, with a bogus one, after logout and after expiry", async () => {
@@ -113,8 +137,26 @@ describe("dev sign-in stub (stands in for Google until M2-12)", () => {
     expect(none.cookies.some((c) => c.name === SESSION_COOKIE)).toBe(false);
   });
 
-  it.each(["https://evil.example/", "//evil.example/", "/\\evil.example", "javascript:alert(1)"])("never redirects off-site (returnTo %s)", async (returnTo) => {
-    expect((await signIn("Nico", returnTo)).cb.headers.location).toBe("/");
+  it.each([
+    "https://evil.example/",
+    "//evil.example/",
+    "/\\evil.example",
+    "javascript:alert(1)",
+    "/\t/evil.example",
+    "/\n/evil.example",
+    "/x\r\nSet-Cookie: a=b",
+    "/ /evil.example",
+    "/x\u0000",
+    "/é",
+    "/" + "a".repeat(600),
+  ])("never redirects off-site or breaks the redirect (returnTo %j): falls back to /", async (returnTo) => {
+    const { cb } = await signIn("Nico", returnTo);
+    expect(cb.statusCode).toBe(302);
+    expect(cb.headers.location).toBe("/");
+  });
+
+  it.each(["/", "/games/abc?tab=chat#top", "/invite/abc-def_~.%20"])("keeps a same-site path (returnTo %j)", async (returnTo) => {
+    expect((await signIn("Nico", returnTo)).cb.headers.location).toBe(returnTo);
   });
 });
 
@@ -192,6 +234,24 @@ describe("invites", () => {
     expect(joins.filter((r) => r.status === 200)).toHaveLength(11);
     expect(joins.filter((r) => r.status === 409)).toHaveLength(3);
     expect(joins.find((r) => r.status === 409)!.body.error).toMatch(/full/);
+  });
+
+  it("nicknames are unique in a game, ignoring case, width and whitespace (409; no guest is made)", async () => {
+    const { game } = await host();
+    await join(game.inviteCode, "Ana Lee");
+    for (const dup of ["ana lee", "  ANA   LEE ", "AnaLee", "Ａｎａ Ｌｅｅ", "karthik"]) {
+      const res = await join(game.inviteCode, dup);
+      expect(res.status).toBe(409);
+      expect(res.session).toBeNull();
+    }
+    const kim = await guest("karthik"); // a signed-in user whose name clashes, joining without a nickname
+    expect((await call("POST", `/invites/${game.inviteCode}/join`, kim, {})).status).toBe(409);
+    expect((await join(game.inviteCode, "Kim", kim)).status).toBe(200);
+  });
+
+  it.each(["%00", "abc%00defgh", "%E2%80%AE", "abcdefghij%0A", "o0o0o0o0o0", "abcdefghijk"])("a malformed invite code (%s) is a clean 404", async (code) => {
+    expect((await call("GET", `/invites/${code}`)).status).toBe(404);
+    expect((await join(code, "Sam")).status).toBe(404);
   });
 
   it("a code is used once its game has started: 410 for newcomers, the game for those seated", async () => {
