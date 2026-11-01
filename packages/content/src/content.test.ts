@@ -129,8 +129,8 @@ describe("starter roles — design §8, §8.1", () => {
     expect(ROLES.lookout).toMatchObject({ power: { kind: "lookout", extraRooms: 1 }, canPocket: true });
   });
 
-  it("Insider: can't pocket; 0.3 points per loot the Haul ends above the final target", () => {
-    expect(ROLES.insider).toMatchObject({
+  it("Inside Man: can't pocket; 0.3 points per loot the Haul ends above the final target", () => {
+    expect(ROLES.insideMan).toMatchObject({
       power: { kind: "none" },
       canPocket: false,
       scoring: { stashMultiplier: 1, perLootOverFinalTarget: 0.3 },
@@ -141,7 +141,7 @@ describe("starter roles — design §8, §8.1", () => {
     expect(ROLES.fence).toMatchObject({ power: { kind: "fenceSafe", perAct: 5 }, canPocket: true });
   });
 
-  it("only the Rookie and Insider score differently from plain stash", () => {
+  it("only the Rookie and Inside Man score differently from plain stash", () => {
     expect(ROLES.lookout?.scoring).toEqual({ stashMultiplier: 1, perLootOverFinalTarget: 0 });
     expect(ROLES.fence?.scoring).toEqual({ stashMultiplier: 1, perLootOverFinalTarget: 0 });
     expect(ROLES.rookie?.scoring.perLootOverFinalTarget).toBe(0);

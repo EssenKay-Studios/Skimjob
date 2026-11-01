@@ -117,7 +117,7 @@ describe("QA role dealing — design §8.1", () => {
     const dealt = roles(config(12, { mole: "on" }));
     expect(count(dealt, MOLE_ROLE)).toBe(1);
     // Default pool (task 13): the 10 pool roles once each, and one more Rookie.
-    for (const r of ["lookout", "insider", "fence", "hacker", "smoothTalker", "muscle", "blackmailer", "snitch", "driver"]) expect(count(dealt, r)).toBe(1);
+    for (const r of ["lookout", "insideMan", "fence", "hacker", "smoothTalker", "muscle", "blackmailer", "snitch", "driver"]) expect(count(dealt, r)).toBe(1);
     expect(count(dealt, "rookie")).toBe(2);
     const narrow = roles(config(12, { mole: "on", rolePool: ["fence"] }));
     expect([count(narrow, MOLE_ROLE), count(narrow, "fence"), count(narrow, "rookie")]).toEqual([1, 1, 10]);

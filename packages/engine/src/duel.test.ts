@@ -92,10 +92,10 @@ describe("Duel config — design §16.1", () => {
     expect(pool).not.toContain("smoothTalker");
     expect(pool).not.toContain("muscle");
     expect(pool).not.toContain("snitch");
-    // design §8.1: nor the Insider, dealt only from 5 players (owner answers, 1 Nov).
-    expect(pool).not.toContain("insider");
+    // design §8.1: nor the Inside Man, dealt only from 5 players (owner answers, 1 Nov).
+    expect(pool).not.toContain("insideMan");
     expect(pool.length).toBe(DEFAULT_ROLE_POOL.length - 4);
-    expect(rolePoolFor(config({ duel: false }))).toEqual(DEFAULT_ROLE_POOL.filter((r) => r !== "insider"));
+    expect(rolePoolFor(config({ duel: false }))).toEqual(DEFAULT_ROLE_POOL.filter((r) => r !== "insideMan"));
   });
 });
 

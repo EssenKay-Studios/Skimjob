@@ -23,7 +23,7 @@ export interface PlayerRecord {
   readonly id: PlayerId;
   readonly personality: PersonalityId;
   readonly role: RoleId;
-  /** False for roles that can't pocket (Insider): left out of the pocketing metric. */
+  /** False for roles that can't pocket (Inside Man): left out of the pocketing metric. */
   readonly canPocket: boolean;
   readonly score: number;
   /** Final stash, Fence safe included. */

@@ -192,7 +192,7 @@ function dealable(config: GameConfig, roles: RoleTable, role: RoleId): boolean {
 /**
  * The pool roles may be dealt from (crew and accomplices; saboteurs are
  * never pool roles). design §8.1: without roles whose `minPlayers` the crew
- * is below (the Insider needs 5); in Duel mode also without the meeting-only
+ * is below (the Inside Man needs 5); in Duel mode also without the meeting-only
  * roles (§16.1); in starter mode the starter crew roles only. `roles` is the
  * game's role table (tests may pass their own).
  */

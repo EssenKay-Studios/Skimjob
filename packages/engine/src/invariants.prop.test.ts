@@ -352,7 +352,7 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
         ? p
         : {
             ...p,
-            role: p.role === "insider" ? "fence" : "insider",
+            role: p.role === "insideMan" ? "fence" : "insideMan",
             stash: p.stash + 101,
             safe: p.safe + 7,
             roleState: { usedThisAct: 4, usedThisGame: 1, target: viewer, allies: [viewer], perks: ["peek", "shield"], tail: "vault" },

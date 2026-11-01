@@ -122,7 +122,7 @@ function playGame(players: number, voteVisibility: VoteVisibility): GameState[] 
       const role = (s.players[id] as PlayerState).role;
       const drawn = s.rooms[(i + round) % s.rooms.length] as string;
       const room = drawn === s.card?.room ? "lobby" : drawn; // design §10 Lockdown
-      const canKeep = role !== "insider" && !NO_LOOT.has(room);
+      const canKeep = role !== "insideMan" && !NO_LOOT.has(room);
       const greedy = id === snitchTarget();
       const move: Record<string, unknown> = { room, pocket: canKeep && (greedy || (i + round) % 3 === 0) ? (greedy ? 2 : 1) : 0 };
       if (room === "security") move.watch = "vault";
@@ -191,7 +191,7 @@ function playDuel(seed: string): GameState[] {
     s.playerOrder.forEach((id, i) => {
       const role = (s.players[id] as PlayerState).role;
       const room = s.card?.room === "office" ? "lobby" : "office"; // design §10 Lockdown
-      const pocket = role !== "insider" && (round + i) % 4 === 0 ? 1 : 0;
+      const pocket = role !== "insideMan" && (round + i) % 4 === 0 ? 1 : 0;
       step({ type: "submitMove", player: id, move: { room, pocket } });
     });
     s.card?.offer?.players.forEach((id) => step({ type: "answerDoubleCross", player: id, accept: true }));
@@ -248,7 +248,7 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
         ? p
         : {
             ...p,
-            role: p.role === "insider" ? "fence" : "insider",
+            role: p.role === "insideMan" ? "fence" : "insideMan",
             stash: p.stash + 101,
             safe: p.safe + 7,
             roleState: { usedThisAct: 4, usedThisGame: 1, target: viewer, allies: [viewer], perks: ["peek", "shield", "ballot"], tail: "vault" },

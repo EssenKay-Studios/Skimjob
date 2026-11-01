@@ -258,7 +258,7 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
     const role = A.players[id]?.role;
     const room = pick(A.rooms);
     const loot = LOOT[room] ?? 0;
-    const m: Record<string, unknown> = { room, pocket: role !== "insider" && loot > 0 && rand() < 0.6 ? int(loot + 1) : 0 };
+    const m: Record<string, unknown> = { room, pocket: role !== "insideMan" && loot > 0 && rand() < 0.6 ? int(loot + 1) : 0 };
     if (room === "security") m.watch = pick(A.rooms);
     // Baseline power use, identical in both games (not for the kind that changes it).
     if (role === "hacker" && kind !== "hackerLoop" && round % 3 === 1 && rand() < 0.7) m.ability = { kind: "loopCameras", room: pick(A.rooms) };
@@ -299,7 +299,7 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
         planA.set(bm, [{ type: "submitMove", player: bm, move: { ...base, ability: { kind: "blackmail", target: t, role: wrong } } }]);
         planB.set(bm, [{ type: "submitMove", player: bm, move: { ...base, ability: { kind: "blackmail", target: t, role: real } } }]);
         // The target pockets something, so a right guess takes loot.
-        if (real !== "insider") {
+        if (real !== "insideMan") {
           const tm = [{ type: "submitMove", player: t, move: { room: "office", pocket: 3 } }];
           planA.set(t, tm);
           planB.set(t, tm);
@@ -525,8 +525,8 @@ describe("QA Blackmailer: stash edges, limits, wrong phase — design §8", () =
     expect(ofType(s.log, "blackmailed")).toEqual([{ type: "blackmailed", visibility: privateTo("p1"), player: "p1", round: 1, stolen: took }]);
   });
 
-  it("a right guess on an Insider (no stash) or a Fence with everything in the safe takes nothing and tells nobody", () => {
-    const ins = run(game(3, ["blackmailer", "insider"]), guess("p1", "insider"), ROUND);
+  it("a right guess on an Inside Man (no stash) or a Fence with everything in the safe takes nothing and tells nobody", () => {
+    const ins = run(game(3, ["blackmailer", "insideMan"]), guess("p1", "insideMan"), ROUND);
     expect(stolen(ins)).toMatchObject({ correct: true, stolen: 0 });
     const fence = run(game(3, ["blackmailer", "fence"]), guess("p1", "fence"), mv("p1", "office", 4, { ability: { kind: "fenceSafe", amount: 4 } }), ROUND);
     expect(stolen(fence)).toMatchObject({ correct: true, stolen: 0 });

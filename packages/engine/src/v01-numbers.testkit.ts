@@ -8,7 +8,7 @@ import type { ContentOverrides } from "./types";
 export const V01_NUMBERS: ContentOverrides = {
   rooms: { depositBoxes: { heatPressure: 0 }, tellerLine: { loot: 3 }, managersOffice: { loot: 5 } },
   checkpoints: { perPlayer: [6, 14, 22] },
-  roles: { insider: { perLootOverFinalTarget: 1 } },
+  roles: { insideMan: { perLootOverFinalTarget: 1 } },
 };
 
 /**

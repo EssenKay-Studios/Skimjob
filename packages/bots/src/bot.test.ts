@@ -66,8 +66,8 @@ describe("moves — design §5.1, §6, §7, §8", () => {
     }
   });
 
-  it("the Insider never pockets — design §8", () => {
-    const s = game(5, (g) => g.players.ana?.role === "insider"); // design §8.1: Insiders from 5 players
+  it("the Inside Man never pockets — design §8", () => {
+    const s = game(5, (g) => g.players.ana?.role === "insideMan"); // design §8.1: Inside Men from 5 players
     for (let i = 0; i < 30; i++) expect(chooseMove(viewFor(s, "ana"), PERSONALITIES.greedy, seeded(`i${i}`)).pocket).toBe(0);
   });
 

@@ -201,12 +201,12 @@ describe("personalities behave as design §17.3 describes", () => {
 });
 
 describe("role powers in bot games — design §8", () => {
-  // 5 players: the Insider is dealt only from 5 (design §8.1).
+  // 5 players: the Inside Man is dealt only from 5 (design §8.1).
   const states = Array.from({ length: 10 }, (_, g) => play(5, `roles-${g}`, ["opportunist", "greedy"]).state);
   const roleOf = (s: GameState, id: PlayerId) => s.players[id]?.role;
 
-  it("the Insider never pockets", () => {
-    const splits = states.flatMap((s) => s.log.filter((e) => e.type === "lootSplit" && roleOf(s, e.player) === "insider"));
+  it("the Inside Man never pockets", () => {
+    const splits = states.flatMap((s) => s.log.filter((e) => e.type === "lootSplit" && roleOf(s, e.player) === "insideMan"));
     expect(splits.length).toBeGreaterThan(0);
     expect(splits.every((e) => e.type === "lootSplit" && e.toStash === 0)).toBe(true);
   });

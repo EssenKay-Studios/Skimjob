@@ -16,7 +16,7 @@ export const FILLER_ROLE: RoleId = "rookie";
 export const MOLE_ROLE: RoleId = "mole";
 
 /** Starter mode: these crew roles only, no dark side, no events. design §8.1 */
-export const STARTER_ROLES: readonly RoleId[] = ["rookie", "lookout", "insider", "fence"];
+export const STARTER_ROLES: readonly RoleId[] = ["rookie", "lookout", "insideMan", "fence"];
 
 /** The info and vote roles (M1 task 12). design §8 */
 export const INFO_VOTE_ROLES: readonly RoleId[] = ["hacker", "smoothTalker", "muscle", "blackmailer", "snitch"];

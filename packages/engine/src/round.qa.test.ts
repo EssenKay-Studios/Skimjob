@@ -107,7 +107,7 @@ const TWO: (Move | null)[][] = [
   [m("office", 1), m("vault")], //                                 haul +9,  +14 → 86
 ];
 
-/** 3 players: Insider, Lookout, Fence. Heat Δ = round(4 + 20·(V − R)/3). */
+/** 3 players: Inside Man, Lookout, Fence. Heat Δ = round(4 + 20·(V − R)/3). */
 const L = (room: string) => ({ ability: { kind: "lookout" as const, rooms: [room] } });
 const F = (amount: number) => ({ ability: { kind: "fenceSafe" as const, amount } });
 const THREE: (Move | null)[][] = [
@@ -161,11 +161,11 @@ describe("QA scripted full games — design §5, §6, §7", () => {
     checkLedger(s);
   });
 
-  it("3 players (Insider, Lookout, Fence): 9 rounds, safe caps per act", () => {
-    let s = play(game(3, ["insider", "lookout", "fence"]), THREE.slice(0, 1));
+  it("3 players (Inside Man, Lookout, Fence): 9 rounds, safe caps per act", () => {
+    let s = play(game(3, ["insideMan", "lookout", "fence"]), THREE.slice(0, 1));
     // Round 2: 2 of the Fence's 5 already moved this act, so 5 is refused and 3 is fine.
     expect(handleThroughAlibis(s, submit("p2", m("vault", 6, F(5)))).ok).toBe(false);
-    expect(handleThroughAlibis(s, submit("p0", m("vault", 1))).ok).toBe(false); // Insider can't pocket
+    expect(handleThroughAlibis(s, submit("p0", m("vault", 1))).ok).toBe(false); // Inside Man can't pocket
     s = play(s, THREE.slice(1));
     expect(resolved(s).map((e) => e.type === "roundResolved" && e.haulDelta)).toEqual([9, 6, 0, 2, 4, 18, 6, 10, 4]);
     expect(resolved(s).map((e) => e.type === "roundResolved" && e.heat)).toEqual([11, 35, 26, 30, 34, 58, 55, 72, 83]);
@@ -225,7 +225,7 @@ describe("QA resubmitting a move — design §5.1", () => {
 
 describe("QA rejected commands leave state unchanged", () => {
   // Mid-round, with a move already in, on a frozen state: any mutation would throw.
-  const base = deepFreeze(ok(game(3, ["insider", "lookout", "fence"]), submit("p1", m("office", 2))));
+  const base = deepFreeze(ok(game(3, ["insideMan", "lookout", "fence"]), submit("p1", m("office", 2))));
   const snapshot = JSON.stringify(base);
   const cases: [string, unknown][] = [
     ["null command", null],
@@ -245,8 +245,8 @@ describe("QA rejected commands leave state unchanged", () => {
     ["NaN pocket", submit("p1", m("lobby", Number.NaN))],
     ["negative fractional pocket", submit("p1", m("lobby", -0.5))],
     ["Security watching an unknown room", submit("p1", m("security", 0, { watch: "kitchen" }))],
-    ["Insider pockets 1", submit("p0", m("vault", 1))],
-    ["Insider uses the Lookout's power", submit("p0", m("vault", 0, L("office")))],
+    ["Inside Man pockets 1", submit("p0", m("vault", 1))],
+    ["Inside Man uses the Lookout's power", submit("p0", m("vault", 0, L("office")))],
     ["Lookout watches no rooms", submit("p1", m("lobby", 0, { ability: { kind: "lookout", rooms: [] } }))],
     ["Lookout watches 2 rooms", submit("p1", m("lobby", 0, { ability: { kind: "lookout", rooms: ["vault", "office"] } }))],
     ["Lookout watches a closed room", submit("p1", m("lobby", 0, L("depositBoxes")))],
@@ -310,7 +310,7 @@ describe("QA Heat raid — design §5.2 step 6, §7", () => {
 describe("QA determinism — design §17.2", () => {
   for (const [n, script, roles] of [
     [2, TWO, []],
-    [3, THREE, ["insider", "lookout", "fence"]],
+    [3, THREE, ["insideMan", "lookout", "fence"]],
     [12, TWELVE, []],
   ] as const) {
     it(`${n} players: same seed + same commands → identical log; replay (also via JSON) rebuilds the state`, () => {
@@ -327,7 +327,7 @@ describe("QA private information — design §5.2 step 5, §17.2", () => {
   const PRIVATE = new Set(["moveSubmitted", "defaultMoveAssigned", "lootSplit", "abilityResolved", "roomSighting", "roomWatched", "pocketCount", "roleDealt"]);
   const games = [
     play(game(2), TWO),
-    play(game(3, ["insider", "lookout", "fence"]), THREE),
+    play(game(3, ["insideMan", "lookout", "fence"]), THREE),
     play(game(12), TWELVE),
   ];
   for (const s of games) {

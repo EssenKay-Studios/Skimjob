@@ -1,6 +1,6 @@
 // QA (PR #9): adversarial checks on the bots and the all-bot runner. design §17.3
 // (bots play by the same rules and see only their own view), §17.2 (determinism),
-// §5.1 (absent players get default moves), §8 (Insider can't pocket), §11.2 (votes).
+// §5.1 (absent players get default moves), §8 (Inside Man can't pocket), §11.2 (votes).
 import { describe, expect, it } from "vitest";
 import {
   createGame,
@@ -294,11 +294,11 @@ describe("QA: commands are well-formed — design §8, §11.2", () => {
     for (const { sent } of games) for (const { view, command } of sent) expect(command.player).toBe(view.me.id);
   });
 
-  it("Insider bots never try to pocket, whatever the personality (Random included)", () => {
+  it("Inside Man bots never try to pocket, whatever the personality (Random included)", () => {
     let insiderMoves = 0;
     for (const { sent } of games) {
       for (const { view, command } of sent) {
-        if (command.type !== "submitMove" || view.me.role !== "insider") continue;
+        if (command.type !== "submitMove" || view.me.role !== "insideMan") continue;
         insiderMoves++;
         expect(command.move.pocket).toBe(0);
       }
@@ -306,16 +306,16 @@ describe("QA: commands are well-formed — design §8, §11.2", () => {
     expect(insiderMoves).toBeGreaterThan(20);
   });
 
-  it("Insider bots never pocket: forced Insider seat for every personality at every size", () => {
+  it("Inside Man bots never pocket: forced Inside Man seat for every personality at every size", () => {
     for (const id of IDS) {
       for (const n of SIZES) {
-        // rolePool ["insider"] guarantees exactly one Insider; find it from the full state (scheduler side).
-        const c = config(n, `ins-${id}-${n}`, { rolePool: ["insider"] });
+        // rolePool ["insideMan"] guarantees exactly one Inside Man; find it from the full state (scheduler side).
+        const c = config(n, `ins-${id}-${n}`, { rolePool: ["insideMan"] });
         const rec = recording(createBots(c.players, only(id), `ins-${id}`));
         const r = runBotGame(c, rec.wrapped);
         expectClean(r, `${id} n=${n}`);
-        const insider = r.state.playerOrder.find((p) => r.state.players[p]?.role === "insider");
-        // design §8.1 (owner answers, 1 Nov): no Insider below 5 players.
+        const insider = r.state.playerOrder.find((p) => r.state.players[p]?.role === "insideMan");
+        // design §8.1 (owner answers, 1 Nov): no Inside Man below 5 players.
         if (n < 5) {
           expect(insider).toBeUndefined();
           continue;

@@ -284,8 +284,8 @@ describe("rounds and acts — design §4", () => {
 });
 
 describe("starter role powers in a move — design §8", () => {
-  it("the Insider can't pocket loot", () => {
-    const s = game(2, ["insider"]);
+  it("the Inside Man can't pocket loot", () => {
+    const s = game(2, ["insideMan"]);
     expect(reason(s, submit("p0", { room: "vault", pocket: 1 }))).toMatch(/can't pocket/);
     expect(run(s, submit("p0", { room: "vault", pocket: 0 }), ROUND).players.p0?.totalHandedIn).toBe(6);
   });
@@ -337,7 +337,7 @@ describe("starter role powers in a move — design §8", () => {
 describe("determinism and the event log — design §17.2", () => {
   it("replaying the log rebuilds the same state", () => {
     const s = run(
-      game(6, ["fence", "lookout", "insider"]),
+      game(6, ["fence", "lookout", "insideMan"]),
       submit("p0", { room: "depositBoxes", pocket: 3, ability: { kind: "fenceSafe", amount: 2 } }),
       submit("p1", { room: "security", watch: "depositBoxes", ability: { kind: "lookout", rooms: ["vault"] } }),
       submit("p3", { room: "vault", pocket: 6 }),

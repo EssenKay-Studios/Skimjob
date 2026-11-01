@@ -544,7 +544,7 @@ describe("the final meeting comes before the final check — design §3, §4, §
 
 describe("determinism and the event log — design §17.2", () => {
   const script = (): GameState => {
-    let s = run(game(4, ["fence", "lookout", "insider"]), mv("p3", "vault", 6), seal("p2", "p3"), propose("p1", "x"));
+    let s = run(game(4, ["fence", "lookout", "insideMan"]), mv("p3", "vault", 6), seal("p2", "p3"), propose("p1", "x"));
     s = run(s, (x: GameState) => accept("p0", x.proposals[0]!.id), (x: GameState) => accept("p3", x.proposals[0]!.id), ROUND);
     s = run(s, emergency("p0"), open("emergency-p0"), vote("p0", "p3"), vote("p1", "p3"), CLOSE, ROUND, ROUND, OPEN_ACT, vote("p0", null), CLOSE);
     return s;

@@ -203,7 +203,7 @@ describe("QA: flooding and many sockets", () => {
     const b = await Client.open(id, humans[1]!);
     const seen = await b.barrier();
     const N = MAX_QUEUED_MESSAGES;
-    // Pocket 0 (an Insider can't pocket); alternate two rooms that need no watch target, so "last wins" shows.
+    // Pocket 0 (an Inside Man can't pocket); alternate two rooms that need no watch target, so "last wins" shows.
     const rooms = (await loadVia(id)).rooms.filter((r) => r !== "security").slice(0, 2);
     for (let i = 0; i < N; i++) {
       const cmd = i % 3 === 2 ? { type: "bogus" } : { type: "submitMove", player: humans[1]!.player, move: { room: rooms[i % 2], pocket: 0 } };

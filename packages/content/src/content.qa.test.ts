@@ -38,14 +38,14 @@ describe("role data — design §8", () => {
     for (const [id, def] of Object.entries(ROLES)) expect(def.id).toBe(id);
   });
 
-  it("only the Insider can't pocket", () => {
-    expect(Object.values(ROLES).filter((r) => !r.canPocket).map((r) => r.id)).toEqual(["insider"]);
+  it("only the Inside Man can't pocket", () => {
+    expect(Object.values(ROLES).filter((r) => !r.canPocket).map((r) => r.id)).toEqual(["insideMan"]);
   });
 
-  it("only the Rookie gets a stash multiplier; only the Insider scores on the Haul", () => {
+  it("only the Rookie gets a stash multiplier; only the Inside Man scores on the Haul", () => {
     const mult = Object.values(ROLES).filter((r) => r.scoring.stashMultiplier !== 1).map((r) => r.id);
     const haul = Object.values(ROLES).filter((r) => r.scoring.perLootOverFinalTarget !== 0).map((r) => r.id);
     expect(mult).toEqual(["rookie"]);
-    expect(haul).toEqual(["insider"]);
+    expect(haul).toEqual(["insideMan"]);
   });
 });

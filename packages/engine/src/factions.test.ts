@@ -28,7 +28,7 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
 const as = (role: RoleId, faction: RoleDef["faction"]): RoleDef => ({ ...(ROLES[role] as RoleDef), faction });
 /** R3-like: Fence and Hacker play as accomplices; a second saboteur exists. */
 const TABLE: RoleTable = { ...ROLES, fence: as("fence", "accomplice"), hacker: as("hacker", "accomplice"), embezzler: { ...as("mole", "saboteur"), id: "embezzler", name: "Embezzler" } };
-const POOL = ["rookie", "lookout", "insider", "fence", "hacker", "smoothTalker", "muscle", "snitch"];
+const POOL = ["rookie", "lookout", "insideMan", "fence", "hacker", "smoothTalker", "muscle", "snitch"];
 
 const sides = (n: number, extra: Partial<GameConfig>, seed: string, table: RoleTable = TABLE) => {
   const dealt = dealRoles(config(n, { rolePool: POOL, seed, ...extra }), seedRng(seed), table).value;

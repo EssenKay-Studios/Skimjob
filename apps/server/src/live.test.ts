@@ -264,7 +264,7 @@ describe("pushing views", () => {
     const b = await Client.open(id, humans[1]!);
     const seen = await b.barrier();
     const before = (await load(id)).log.length;
-    // Pocket 0 (an Insider can't pocket) in two rooms that need no watch target.
+    // Pocket 0 (an Inside Man can't pocket) in two rooms that need no watch target.
     const rooms = (await load(id)).rooms.filter((r) => r !== "security").slice(0, 2);
     for (let i = 0; i < 100; i++) expect(await a.send({ type: "submitMove", move: { room: rooms[i % 2], pocket: 0 } })).toMatchObject({ ok: true });
     const after = await load(id);

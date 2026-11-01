@@ -445,7 +445,7 @@ describe("scenarios: end-to-end stories over HTTP + WebSocket", () => {
     expect(await a.send({ type: "callOut" })).toMatchObject({ rejected: true });
     const skimmer: Brain = (view) =>
       view.phase.kind === "planning" && !view.me.move
-        ? [{ type: "submitMove", move: { room: view.card?.room === "office" ? "vault" : "office", pocket: view.me.role === "insider" ? 0 : 2 } }]
+        ? [{ type: "submitMove", move: { room: view.card?.room === "office" ? "vault" : "office", pocket: view.me.role === "insideMan" ? 0 : 2 } }]
         : [];
     const caller: Brain = (view) => {
       const out: unknown[] = steadyBrain("lobby")(view).slice();

@@ -9,7 +9,7 @@ import { formatReport } from "./report";
 import { gameRec, seat } from "./testkit";
 
 const games = [
-  gameRec({ seed: "a,b", players: 2, playerRecords: [seat({ id: "p1" }), seat({ id: "p2", role: "insider", canPocket: false })], winners: ["p1"] }),
+  gameRec({ seed: "a,b", players: 2, playerRecords: [seat({ id: "p1" }), seat({ id: "p2", role: "insideMan", canPocket: false })], winners: ["p1"] }),
   gameRec({ seed: "c", players: 2, result: "failed", reason: "heat", playerRecords: [seat({ id: "p1", role: "mole" }), seat({ id: "p2" })] }),
 ];
 

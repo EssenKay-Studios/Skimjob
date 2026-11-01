@@ -1,4 +1,4 @@
-// QA (PR #21, owner answers 1 Nov): big-crew plurality edges (§11.2), Insider
+// QA (PR #21, owner answers 1 Nov): big-crew plurality edges (§11.2), Inside Man
 // from 5 and one Mole (§8.1), uniqueRoles (§8.1, §15), scaled event Heat (§10),
 // Fence safe in the clean check (§11.3), the alibi phase (§5.4) with meetings,
 // shakedown windows, Duel mode and the last round, and repeating cards (§10).
@@ -129,17 +129,17 @@ describe("QA plurality at 8 vs 9 players — design §11.2", () => {
 describe("QA dealing — design §8.1", () => {
   const SEEDS = Array.from({ length: 150 }, (_, i) => `deal-${i}`);
 
-  it("the Insider is never dealt at 2–4 players (any setting); it is dealt at 5", () => {
+  it("the Inside Man is never dealt at 2–4 players (any setting); it is dealt at 5", () => {
     for (const n of [2, 3, 4]) {
       for (const seed of SEEDS) {
-        for (const extra of [{}, { uniqueRoles: false }, { rolePool: ["insider"] }, { rolePool: ["insider"], uniqueRoles: false }, { starterMode: true }] as Partial<GameConfig>[]) {
-          expect(dealt(config(n, { seed, mole: "on", eventsEnabled: extra.starterMode ? false : true, ...extra, ...(extra.starterMode ? { mole: "off" } : {}) }))).not.toContain("insider");
+        for (const extra of [{}, { uniqueRoles: false }, { rolePool: ["insideMan"] }, { rolePool: ["insideMan"], uniqueRoles: false }, { starterMode: true }] as Partial<GameConfig>[]) {
+          expect(dealt(config(n, { seed, mole: "on", eventsEnabled: extra.starterMode ? false : true, ...extra, ...(extra.starterMode ? { mole: "off" } : {}) }))).not.toContain("insideMan");
         }
       }
     }
-    // An Insider-only pool at 4p deals all Rookies, also with uniqueRoles false.
-    expect(dealt(config(4, { rolePool: ["insider"], uniqueRoles: false }))).toEqual(["rookie", "rookie", "rookie", "rookie"]);
-    expect(SEEDS.some((seed) => dealt(config(5, { seed })).includes("insider"))).toBe(true);
+    // An Inside Man-only pool at 4p deals all Rookies, also with uniqueRoles false.
+    expect(dealt(config(4, { rolePool: ["insideMan"], uniqueRoles: false }))).toEqual(["rookie", "rookie", "rookie", "rookie"]);
+    expect(SEEDS.some((seed) => dealt(config(5, { seed })).includes("insideMan"))).toBe(true);
   });
 
   it("exactly one Mole from 5 with 'on'; 'maybe' 0 or 1 at 5–8 and 1 at 9–12 (role deck v2 §3); never more with uniqueRoles false", () => {

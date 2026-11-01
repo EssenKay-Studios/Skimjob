@@ -28,7 +28,7 @@ export type RolePower =
 export interface RoleScoring {
   /** Final stash is multiplied by this (Rookie ×1.2). design §8 */
   readonly stashMultiplier: number;
-  /** Points for every loot the Haul ends above the final target (Insider: 0.3, balance pass 1). design §8 */
+  /** Points for every loot the Haul ends above the final target (Inside Man: 0.3, balance pass 1). design §8 */
   readonly perLootOverFinalTarget: number;
 }
 
@@ -52,7 +52,7 @@ export interface RoleDef {
   readonly id: RoleId;
   readonly name: string;
   readonly power: RolePower;
-  /** false: every move must hand everything in (Insider). design §8 */
+  /** false: every move must hand everything in (Inside Man). design §8 */
   readonly canPocket: boolean;
   readonly scoring: RoleScoring;
   /** Which side the role wins with. design §3 */
@@ -64,7 +64,7 @@ export interface RoleDef {
    * wire the triggers.
    */
   readonly earns?: readonly PerkId[];
-  /** Dealt only in crews of at least this size (Insider: 5). Absent: any size. design §8.1 */
+  /** Dealt only in crews of at least this size (Inside Man: 5). Absent: any size. design §8.1 */
   readonly minPlayers?: number;
 }
 
@@ -88,9 +88,9 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     scoring: PLAIN_SCORING,
     faction: "crew",
   },
-  insider: {
-    id: "insider",
-    name: "Insider",
+  insideMan: {
+    id: "insideMan",
+    name: "Inside Man",
     power: { kind: "none" },
     canPocket: false,
     scoring: { stashMultiplier: 1, perLootOverFinalTarget: 0.3 },
