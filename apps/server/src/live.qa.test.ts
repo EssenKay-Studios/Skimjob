@@ -201,8 +201,10 @@ describe("QA: flooding and many sockets", () => {
     const b = await Client.open(id, humans[1]!);
     const seen = await b.barrier();
     const N = MAX_QUEUED_MESSAGES;
+    // Pocket 0 (an Insider can't pocket); alternate two rooms that need no watch target, so "last wins" shows.
+    const rooms = (await loadVia(id)).rooms.filter((r) => r !== "security").slice(0, 2);
     for (let i = 0; i < N; i++) {
-      const cmd = i % 3 === 2 ? { type: "bogus" } : { type: "submitMove", player: humans[1]!.player, move: { room: "lobby", pocket: i % 2 } };
+      const cmd = i % 3 === 2 ? { type: "bogus" } : { type: "submitMove", player: humans[1]!.player, move: { room: rooms[i % 2], pocket: 0 } };
       a.ws.send(JSON.stringify({ id: i, cmd }));
     }
     await vi.waitFor(() => expect(a.messages.filter((m) => "id" in m)).toHaveLength(N), { interval: 5, timeout: 20_000 });
@@ -211,7 +213,7 @@ describe("QA: flooding and many sockets", () => {
     replies.forEach((r, i) => expect("ok" in r).toBe(i % 3 !== 2));
     const state = await loadVia(id);
     const lastAccepted = [...Array(N).keys()].filter((i) => i % 3 !== 2).at(-1)!;
-    expect(state.moves[humans[0]!.player]).toEqual({ room: "lobby", pocket: lastAccepted % 2 }); // last accepted move wins
+    expect(state.moves[humans[0]!.player]).toEqual({ room: rooms[lastAccepted % 2], pocket: 0 }); // last accepted move wins
     expect(state.moves[humans[1]!.player]).toBeUndefined();
     expect(await b.barrier()).toBe(seen + 1);
     expect(a.lastView()).toEqual(viewFor(state, humans[0]!.player));
