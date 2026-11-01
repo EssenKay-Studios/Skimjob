@@ -52,6 +52,14 @@ pnpm sim -- --help   # run the simulator (once implemented)
 - **Bots are players.** Bots only receive `viewFor()` output and emit the same commands a human client would.
 - Every rule in `docs/design.md` that's implemented should have a test that names the design section (e.g. `// design §11.3`).
 
+## UI rules (non-negotiable for every page, panel and component)
+
+- **One look everywhere:** the hand-drawn cartoon notebook style in `docs/ui-style.md` (cream paper, wobbly ink outlines, hatched shadows, tape, Pangolin headings + Inter body, clay-orange accent, springy motion). No screen may fall back to plain/default UI.
+- **Build from the shared kit only:** `apps/web` theme tokens (`theme.css`) and shared components (`SketchFrame`, buttons, avatars, …). No raw colours, fonts, shadows or radii outside `theme.css`; add a token or component instead.
+- **New component → add it to `/dev/gallery`** so the whole kit stays visible in one place.
+- **Responsive web is the launch product:** check every UI change at 360, 390, 768, 1024 and 1280 px — no horizontal overflow, touch targets ≥ 44 px, safe-area insets, no hover-only interactions. Reviewers screenshot and look.
+- **Style only from CityRT** — never copy its logo, name or artwork.
+
 ## Code conventions
 
 - TypeScript, strict mode, ESM. Node 22.
