@@ -73,7 +73,9 @@ class Client {
       ws.on("close", (code) => (c.closed = code));
     };
     c.ws = await app.injectWS(`/games/${gameId}/ws`, { headers: { cookie: `${SESSION_COOKIE}=${h.who}` } }, { onInit });
-    await vi.waitFor(() => expect(c.views().length).toBe(1), quick);
+    // The first view, then the chat history (M2-8a).
+    await vi.waitFor(() => expect(c.messages.some((m) => "chatHistory" in m)).toBe(true), quick);
+    expect(c.views()).toHaveLength(1);
     return c;
   }
   get messages(): ServerMessage[] {
@@ -247,7 +249,7 @@ describe("pushing views", () => {
     expect(b.views()).toHaveLength(2);
     expect(b.lastView().proposals).toHaveLength(1);
     await vi.waitFor(() => expect(tab2.views()).toHaveLength(2), quick);
-    expect(tab2.messages.filter((m) => !("view" in m))).toHaveLength(0);
+    expect(tab2.messages.filter((m) => !("view" in m) && !("chatHistory" in m))).toHaveLength(0);
     for (const c of [a, b, tab2]) c.ws.close();
   });
 
@@ -387,7 +389,7 @@ describe("acceptance: a full game over sockets (docs/m2-plan.md M2-3)", () => {
             for (const { event } of [...v.ledger, ...v.caseFile]) expect(canSee(event.visibility, c.player, false)).toBe(true);
             for (const { event } of v.reveal?.log ?? []) expect(canSee(event.visibility, c.player, true)).toBe(true);
             if (v.reveal === null) expect(text).not.toContain(seed); // the seed is reveal-only (rngSeeded)
-          } else {
+          } else if (!("chatHistory" in msg)) {
             expect(Object.keys(msg).sort()).toEqual("ok" in msg ? ["id", "ok"] : ["id", "reason", "rejected"]);
           }
         }
