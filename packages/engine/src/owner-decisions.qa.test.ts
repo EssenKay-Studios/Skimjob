@@ -62,13 +62,15 @@ describe("QA plurality at 8 vs 9 players — design §11.2", () => {
   it.each([
     // [name, crew, voters, skipWeight, targets, totalWeight, expected]
     ["8p: 4 of 8 is not more than half", 8, 8, 0, m([["a", 4], ["b", 3], ["c", 1]]), 8, "noMajority"],
-    ["9p: 3 of 9 exactly a third, alone on top", 9, 9, 3, m([["a", 3], ["b", 2], ["c", 1]]), 9, "shakedown"],
+    ["9p: 3 of 9 exactly a third, alone on top, ahead of skip", 9, 9, 2, m([["a", 3], ["b", 2], ["c", 2]]), 9, "shakedown"],
     ["9p: 3–3 tie at a third", 9, 9, 3, m([["a", 3], ["b", 3]]), 9, "noMajority"],
     ["9p: one absent, 3 of 8", 9, 8, 2, m([["a", 3], ["b", 2], ["c", 1]]), 8, "shakedown"],
     ["9p: bare quorum of 5, 2 of 5", 9, 5, 1, m([["a", 2], ["b", 1], ["c", 1]]), 5, "shakedown"],
     ["9p: quorum missed by one (4 of 9)", 9, 4, 0, m([["a", 4]]), 4, "noQuorum"],
-    ["9p: skip outvotes the leader but isn't a majority", 9, 9, 4, m([["a", 3], ["b", 2]]), 9, "shakedown"],
-    ["12p: current behaviour — skip leads 6 vs A 4 without a majority, A (⅓) is still shaken down", 12, 12, 6, m([["a", 4], ["b", 2]]), 12, "shakedown"],
+    // Owner decision (PR #21): if skip leads, no shakedown.
+    ["9p: skip outvotes the leader but isn't a majority", 9, 9, 4, m([["a", 3], ["b", 2]]), 9, "noMajority"],
+    ["12p: skip leads 6 vs A 4 without a majority: no shakedown", 12, 12, 6, m([["a", 4], ["b", 2]]), 12, "noMajority"],
+    ["12p: skip ties the leader 4 vs A 4: no shakedown", 12, 12, 4, m([["a", 4], ["b", 3], ["c", 1]]), 12, "noMajority"],
     ["12p: 7 skip of 12", 12, 12, 7, m([["a", 5]]), 12, "skipped"],
     ["9p Smooth talker: 3 plain votes of weight 10 is under a third", 9, 9, 3, m([["a", 3], ["b", 2], ["c", 2]]), 10, "noMajority"],
     ["9p Smooth talker: ST + 2 = 4 of 10", 9, 9, 3, m([["a", 4], ["b", 2], ["c", 1]]), 10, "shakedown"],

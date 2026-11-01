@@ -278,7 +278,7 @@ From round 2 onward, one event card is flipped at the start of each round and sh
   - *Secret*: only the tally is ever shown, even at the end-of-game reveal. An Informant role could see the votes in this mode (future role).
 - **Players who can't make it** can leave a sealed vote in advance. Otherwise they count as abstaining.
 - **To pass**, a shakedown needs **more than half of the votes cast**, and at least half the crew has to take part (sealed votes count).
-- **Big crews (9–12 players):** unless more than half the votes skip, the player with the most votes is shaken down if they received **at least ⅓ of the votes cast** (Smooth talker weight counts); a tie for the most votes means no shakedown. The quorum is the same. *(Owner answers, 1 Nov; "a skip majority still skips" is provisional.)*
+- **Big crews (9–12 players):** the player with the most votes is shaken down if they received **at least ⅓ of the votes cast** and **more votes than skip** (Smooth talker weight counts); a tie for the most votes, or skip leading or tied, means no shakedown. The quorum is the same. *(Owner answers, 1 Nov.)*
 - When the window closes, the ballots are cleared from the screen. The **result** stays in the ledger permanently.
 
 *Smooth talker (provisional):* "more than half of the votes cast" counts the Smooth talker's ballot twice; "at least half the crew has to take part" counts people. The tally shown counts one per ballot (see §8).
@@ -376,7 +376,7 @@ There are no votes. Instead, once per act, each player can **call out** the othe
 
 *Duel mode (provisional, task 15):*
 - A host setting, valid only with exactly 2 players. No meetings, no emergency meetings and no votes; the meeting-only roles (Smooth talker, Muscle, Snitch) are never dealt. Events can be on.
-- **Timing:** a call-out can be made while any of the act's rounds is being planned, at most once per player per act, and can't be withdrawn. It stays private until the act's last round resolves; then every call-out of that act is settled (in seat order if both called), and the checkpoint is checked straight after, with no meeting (§11.4 order: call-outs → checkpoint). So a call-out covers the whole act, the last round included, however early it was made.
+- **Timing:** a call-out can be made while any of the act's rounds is being planned, at most once per player per act, and can't be withdrawn. It stays private until the act's last round resolves and its alibi window closes (§5.4); then every call-out of that act is settled (in seat order if both called), and the checkpoint is checked straight after, with no meeting (§11.4 order: call-outs → checkpoint). So a call-out covers the whole act, the last round included, however early it was made.
 - **Caught:** the caller takes everything the opponent pocketed that act (their real splits, whatever they claimed), out of the opponent's stash: never the Fence safe, and never more than the stash holds. The Haul is untouched.
 - **Wrong call:** the caller pays the opponent 5 × the act number (content: `duel.wrongCallOutPerAct`) from their own stash, never more than it holds.
 - The result is public: who called, whether the opponent had pocketed, and how much moved. A Heat raid in the act's last round ends the game before its call-outs are settled.

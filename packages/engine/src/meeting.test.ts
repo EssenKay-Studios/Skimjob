@@ -173,7 +173,7 @@ describe("opening and closing the act's meeting — design §11.1, §4.1, §11.4
   it("the regular meeting opens only after the act's last round has resolved (provisional)", () => {
     let s = run(game(3), sched(1));
     for (const round of [1, 2]) {
-      expect(reason(s, open("act-1"))).toMatch(/opens after round 3 resolves/);
+      expect(reason(s, open("act-1"))).toMatch(/opens after round 3 and its alibi deadline/);
       s = run(s, ROUND);
       expect(s.round).toBe(round + 1);
     }

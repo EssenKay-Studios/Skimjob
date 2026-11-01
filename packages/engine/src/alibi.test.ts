@@ -6,6 +6,7 @@ import { canSee } from "./types";
 import { createGame } from "./setup";
 import { replay } from "./reduce";
 import { handleCommand } from "./handle";
+import { viewFor } from "./view";
 
 const cfg: GameConfig = {
   seed: "alibi-seed",
@@ -97,6 +98,15 @@ describe("alibis — design §5.4", () => {
     s = run(s, alibi("p1", "office"), { type: "advance", deadline: { kind: "closeMeeting", meetingId: "emergency-p0" } } as Command);
     expect(s.phase).toEqual({ kind: "alibis", round: 1 });
     expect(run(s, alibiDeadline(1)).phase).toEqual({ kind: "planning", round: 2 });
+  });
+
+  it("a round that ends the game leaves no alibi window open (design §5.4, PR #21 QA)", () => {
+    let s = createGame({ ...cfg, contentOverrides: { heat: { perRound: 100 } } });
+    s = run(s, roundDeadline(1));
+    expect(s.phase.kind).toBe("ended");
+    expect(s.alibisOpen).toBe(false);
+    expect(viewFor(s, "p0").alibiRound).toBeNull();
+    expect(replay(s.config, s.log)).toEqual(s);
   });
 
   it("is refused before any round has resolved", () => {

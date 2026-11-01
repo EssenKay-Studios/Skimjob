@@ -181,7 +181,7 @@ export function openMeeting(state: GameState, meetingId: unknown): Result {
   const act = currentAct(state);
   let kind: MeetingKind;
   if (state.scheduledMeeting?.meetingId === meetingId) {
-    if (state.phase.kind !== "awaitingMeeting") return `the act ${act} meeting opens after round ${act * ROUNDS_PER_ACT} resolves`;
+    if (state.phase.kind !== "awaitingMeeting") return `the act ${act} meeting opens after round ${act * ROUNDS_PER_ACT} and its alibi deadline`;
     kind = "regular";
   } else if (state.pendingEmergency?.meetingId === meetingId) {
     kind = "emergency";
@@ -203,9 +203,9 @@ export function openMeeting(state: GameState, meetingId: unknown): Result {
  * the total weight cast, and `skip` / `targets` are weights too. Without a
  * Smooth talker, weight = voters.
  *
- * From `rules.pluralityFromPlayers` (9) a plurality is enough: unless more than
- * half skip, the player with the most votes, alone on top, is shaken down with
- * at least `rules.pluralityShare` (⅓) of the votes cast (owner answers, 1 Nov).
+ * From `rules.pluralityFromPlayers` (9) a plurality is enough: the player with
+ * the most votes, alone on top and with more votes than skip, is shaken down
+ * with at least `rules.pluralityShare` (⅓) of the votes cast (owner answers, 1 Nov).
  */
 export function meetingResult(
   crewSize: number,
@@ -222,7 +222,7 @@ export function meetingResult(
     const top = Math.max(0, ...targets.values());
     const leaders = [...targets].filter(([, votes]) => votes === top);
     // A small epsilon so ⅓ of 9 or 12 isn't lost to floating point.
-    if (top > 0 && leaders.length === 1 && top >= rules.pluralityShare * weight - 1e-9) return { kind: "shakedown", target: (leaders[0] as [PlayerId, number])[0] };
+    if (top > 0 && top > skip && leaders.length === 1 && top >= rules.pluralityShare * weight - 1e-9) return { kind: "shakedown", target: (leaders[0] as [PlayerId, number])[0] };
   }
   return { kind: "noMajority" };
 }

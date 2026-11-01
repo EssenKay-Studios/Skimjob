@@ -186,13 +186,13 @@ describe("QA: quorum, ties and absent players at the boundaries — design §11.
     expect(LAST(run(s, vote("p1", "p0"), vote("p0", "p1"), CLOSE), "meetingClosed")?.result).toEqual({ kind: "noMajority" });
   });
 
-  it("12 players: a 6 vs 6 tie between two targets is no shakedown; 6 shakedown vs 6 skip passes by plurality (design §11.2, 9+); 7 of 12 passes", () => {
+  it("12 players: a 6 vs 6 tie between two targets is no shakedown; 6 shakedown vs 6 skip is none either (skip must be outvoted, design §11.2); 7 of 12 passes", () => {
     const s = toActMeeting(game(12));
     const crew = ids(12);
     const tie = run(s, ...crew.map((p, i) => vote(p, i < 6 ? "p11" : "p0")), CLOSE);
     expect(LAST(tie, "meetingClosed")).toMatchObject({ result: { kind: "noMajority" }, tally: { skip: 0, targets: { p0: 6, p11: 6 } } });
     const vsSkip = run(s, ...crew.map((p, i) => vote(p, i < 6 ? null : "p0")), CLOSE);
-    expect(LAST(vsSkip, "meetingClosed")?.result).toEqual({ kind: "shakedown", target: "p0" });
+    expect(LAST(vsSkip, "meetingClosed")?.result).toEqual({ kind: "noMajority" });
     // 4 / 4 / 4 between three targets: each has ⅓, but it's a tie.
     const three = run(s, ...crew.map((p, i) => vote(p, i < 4 ? "p11" : i < 8 ? "p0" : "p1")), CLOSE);
     expect(LAST(three, "meetingClosed")?.result).toEqual({ kind: "noMajority" });

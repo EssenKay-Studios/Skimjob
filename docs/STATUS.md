@@ -138,5 +138,4 @@ Plan and acceptance criteria: `docs/m2-plan.md`. Runs alongside M1 task 16 (bala
 - Raid rumour: compare stashes without the Fence safe, break ties at random, and lose the 3 to the cops (current, provisional)? Power cut: should the Server room still count pockets (current)?
 - Duel call-outs: may a call take more than the stash holds (current: capped; the Fence safe is never touched), and a wrong call cost more than the caller's stash (current: capped)?
 - Duel roles: OK to leave the meeting-only roles (Smooth talker, Muscle, Snitch) out of the deal in Duel mode (current, provisional)?
-- Big-crew votes (9–12): when more than half the votes skip, the meeting skips even if the top target has ⅓ (provisional, decisions.md "Owner answers, 1 Nov") — right?
 - Heat at 3–4 players: with event Heat scaled, Heat busts are still 45% / 34% of failures (40% / 22% even with card Heat at 0): the rest is Vault pressure in small crews and the Shift change lure. Accept, or tune further? 4p succeeds 76% (target 55–70%).

@@ -182,7 +182,8 @@ function applyChange(state: GameState, event: GameEvent): GameState {
         : closed;
     }
     case "gameEnded":
-      return { ...state, phase: { kind: "ended", outcome: event.outcome } };
+      // A round that ends the game has no alibi window (design §5.4, PR #21 QA).
+      return { ...state, phase: { kind: "ended", outcome: event.outcome }, alibisOpen: false };
     // ------------------------------------------------ events deck. design §10
     case "eventFlipped":
       return {

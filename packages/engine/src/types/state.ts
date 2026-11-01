@@ -172,7 +172,7 @@ export interface GameState {
   readonly heat: number;
   /** This round's event card, if one was flipped (cleared when the round resolves). design §10 */
   readonly card: ActiveCard | null;
-  /** Every card flipped so far this game, in order (public). The deck draws from the rest. design §10 */
+  /** Every card flipped so far this game, in order (public); every flip draws from the full deck. design §10 */
   readonly cardsFlipped: readonly EventId[];
   /** Moves submitted so far for the current round (cleared when it resolves). */
   readonly moves: Readonly<Record<PlayerId, Move>>;
