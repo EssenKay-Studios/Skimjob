@@ -183,6 +183,8 @@ export function ChatPanel(props: ChatPanelProps) {
   const pageVisible = usePageVisible();
   const composer = useRef<HTMLTextAreaElement>(null);
   const sent = useRef<number[]>([]);
+  /** Unsent drafts per thread, so switching tabs never loses one. */
+  const [drafts, setDrafts] = useState<Readonly<Partial<Record<ThreadId, string>>>>({});
   const headId = useId();
 
   // ---- scrolling: follow the latest unless you've scrolled up to read ----
@@ -310,7 +312,10 @@ export function ChatPanel(props: ChatPanelProps) {
         online={connection === "open"}
         evidence={evidence}
         picking={picker === "evidence"}
-        onPick={(on) => setPicker(on ? "evidence" : "none")}
+        // Closing after a share leaves the DM picker alone if it was opened meanwhile.
+        onPick={(on) => setPicker((p) => (on ? "evidence" : p === "evidence" ? "none" : p))}
+        draft={drafts[thread] ?? ""}
+        onDraft={(text) => setDrafts((d) => ({ ...d, [thread]: text }))}
       />
     </SketchFrame>
   );
@@ -340,12 +345,13 @@ interface ComposerProps {
   readonly evidence: readonly ShareableEntry[];
   readonly picking: boolean;
   readonly onPick: (on: boolean) => void;
+  readonly draft: string;
+  readonly onDraft: (text: string) => void;
 }
 
-function Composer({ inputRef, sent, to, toName, send, online, evidence, picking, onPick }: ComposerProps) {
+function Composer({ inputRef, sent, to, toName, send, online, evidence, picking, onPick, draft: text, onDraft: setText }: ComposerProps) {
   const id = useId();
   const sentTimes = sent.current;
-  const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [, tick] = useReducer((n: number) => n + 1, 0);
@@ -425,7 +431,7 @@ function Composer({ inputRef, sent, to, toName, send, online, evidence, picking,
             className="chat__input"
             rows={1}
             value={text}
-            placeholder={to ? `Message ${toName}…` : "Message the crew…"}
+            placeholder={to ? "Private message…" : "Message the crew…"}
             aria-describedby={`${id}-st`}
             aria-invalid={status.over}
             onChange={(e) => {

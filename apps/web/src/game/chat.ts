@@ -2,7 +2,7 @@
 // mirrored here because the web app doesn't import the server), the feed
 // state, threads, unread counts, composer limits and evidence-card text. Pure;
 // the components and useGame() read through these. design §12.1, docs/m2-plan.md M2-8
-import type { CaseFileEvent, GameEvent, LoggedEvent, PlayerId, PlayerView } from "@skimjob/engine";
+import { revealsRole, type CaseFileEvent, type GameEvent, type LoggedEvent, type PlayerId, type PlayerView } from "@skimjob/engine";
 import { describeEvent, type DescribeContext } from "./describeEvent";
 
 /** The server's limits (apps/server settings.ts; chat.test.ts checks they match). */
@@ -10,6 +10,8 @@ export const CHAT_MAX_CHARS = 500;
 export const CHAT_RATE = { messages: 8, windowMs: 10_000 } as const;
 /** The counter shows from here on. */
 export const CHAT_WARN_AT = 400;
+/** Longest run of combining marks on one character (server CHAT_MAX_MARKS). */
+export const CHAT_MAX_MARKS = 8;
 
 // ---------- Wire types (apps/server chat.ts) ----------
 
@@ -139,6 +141,15 @@ export function totalUnread(state: ChatState, me: PlayerId, read: ReadState): nu
 /** The time of `thread`'s latest message, or null. */
 export const latestAt = (state: ChatState, thread: ThreadId, me: PlayerId): string | null => threadMessages(state, thread, me).at(-1)?.at ?? null;
 
+/** Two sets of read marks (another tab's, stored ones) merged: the later mark per thread wins, so nothing goes back to unread. */
+export function mergeRead(a: ReadState, b: ReadState): ReadState {
+  const out: Partial<Record<ThreadId, string>> = { ...a };
+  for (const [t, at] of Object.entries(b) as [ThreadId, string | undefined][]) {
+    if (typeof at === "string" && at > (out[t] ?? "")) out[t] = at;
+  }
+  return out;
+}
+
 /** Marks `thread` read up to `at` (never backwards). */
 export const markRead = (read: ReadState, thread: ThreadId, at: string): ReadState => ((read[thread] ?? "") >= at ? read : { ...read, [thread]: at });
 
@@ -216,20 +227,32 @@ export interface ComposerStatus {
   readonly note: string | null;
 }
 
-// Invisible-only text counts as empty (the server's rule).
-const VISIBLE = /[^\p{Cf}\p{M}\p{Z}\s]/u;
+// The server's text rules (apps/server chat.ts checkChatText, settings.ts
+// hasVisibleText), so Send stays off for text it would refuse anyway.
+/** Letters that draw nothing: the Hangul fillers and the braille blank. */
+const BLANK_LETTERS = /[\u115f\u1160\u2800\u3164\uffa0]/gu;
+const hasVisibleText = (text: string) =>
+  text.normalize("NFKC").replace(/\p{Default_Ignorable_Code_Point}/gu, "").replace(BLANK_LETTERS, "").replace(/[\p{Cf}\p{M}\s]/gu, "").length > 0;
+// eslint-disable-next-line no-control-regex
+const BAD_CHARS = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/u;
+const MARK_RUN = new RegExp(`\\p{M}{${CHAT_MAX_MARKS + 1},}`, "u");
+const INVISIBLE = /[\p{Default_Ignorable_Code_Point}\p{Cf}]/gu;
 
 export function composerStatus(text: string, sent: readonly number[], now: number): ComposerStatus {
   const length = chatLength(text);
-  const empty = !VISIBLE.test(text);
+  const normalised = text.replace(/\r\n?/g, "\n").trim();
+  const empty = !hasVisibleText(normalised);
   const over = length > CHAT_MAX_CHARS;
+  const bad = !empty && BAD_CHARS.test(normalised) ? "Control or text-direction characters can't be sent." : !empty && MARK_RUN.test(normalised.replace(INVISIBLE, "")) ? "Too many accents on one character." : null;
   const waitMs = rateWaitMs(sent, now);
   const note = over
     ? `Too long by ${length - CHAT_MAX_CHARS}: messages are at most ${CHAT_MAX_CHARS} characters.`
-    : waitMs > 0
+    : bad
+      ? bad
+      : waitMs > 0
       ? `Slow down: ${CHAT_RATE.messages} messages per ${CHAT_RATE.windowMs / 1000} s. Send again in ${Math.ceil(waitMs / 1000)} s.`
       : null;
-  return { length, empty, over, warn: length >= CHAT_WARN_AT, waitMs, canSend: !empty && !over && waitMs === 0, note };
+  return { length, empty, over, warn: length >= CHAT_WARN_AT, waitMs, canSend: !empty && !over && !bad && waitMs === 0, note };
 }
 
 // ---------- Evidence cards ----------
@@ -253,12 +276,14 @@ export function cardText(card: EvidenceCard, from: PlayerId, ctx: DescribeContex
 /**
  * Your case-file entries you could share, newest first. Mirrors the server's
  * refusals (apps/server chat.ts evidenceCard) so the picker doesn't offer
- * them: secret ballots, sealed votes, and ballots of a meeting still open. design §11.2
+ * them: role cards (anything stating a role or faction, design §8), secret
+ * ballots, sealed votes, and ballots of a meeting still open. design §11.2
  */
 export function shareableEntries(view: Pick<PlayerView, "caseFile" | "ledger">): LoggedEvent<CaseFileEvent>[] {
   const closed = new Set(view.ledger.flatMap((e) => (e.event.type === "meetingClosed" ? [e.event.meetingId] : [])));
   return view.caseFile
     .filter(({ event }) => {
+      if (revealsRole(event)) return false;
       if (event.visibility.kind === "secret") return false;
       if (event.type === "voteSealed") return false;
       if (event.type === "voteCast") return closed.has(event.meetingId);

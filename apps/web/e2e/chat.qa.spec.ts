@@ -224,10 +224,10 @@ test("QA: hostile text arrives inert and wraps at 360 and 1280 px", async ({ pag
     `https://example.com/${"a".repeat(470)}`,
   ];
   for (const b of bodies) await say(page, b);
-  // A bidi override is refused by the server, shown inline, and the draft is kept.
+  // A bidi override: the server refuses it, so Send stays off and the composer says why; the draft is kept (QA nit, PR #38).
   await composer(page).fill("hi \u202eevil");
-  await sendBtn(page).click();
-  await expect(page.locator(".chat__status")).toContainText(/control characters/i);
+  await expect(sendBtn(page)).toBeDisabled();
+  await expect(page.locator(".chat__status")).toContainText(/text-direction characters/i);
   await expect(composer(page)).toHaveValue("hi \u202eevil");
   await composer(page).fill("");
 

@@ -7,7 +7,7 @@ import type { PlayerView } from "@skimjob/engine";
 import { Button } from "../components/Button";
 import { ChatBadge, ChatPanel, type ChatPerson } from "../components/Chat";
 import { Bubble } from "../components/icons";
-import { feedWorthy, markRead, shareableEntries, totalUnread, type FeedEvent, type ReadState, type ThreadId } from "../game/chat";
+import { feedWorthy, markRead, mergeRead, shareableEntries, totalUnread, type FeedEvent, type ReadState, type ThreadId } from "../game/chat";
 import { describeEvent } from "../game/describeEvent";
 import { namesOf, seatsOf } from "../game/hud";
 import type { GameChannel } from "../game/useGame";
@@ -27,33 +27,51 @@ function useMedia(query: string): boolean {
   return on;
 }
 
-const readKey = (gameId: string) => `skimjob:chat-read:${gameId}`;
+/** Per game and seat, so a shared device doesn't mix two players' marks. */
+const readKey = (gameId: string, player: string) => `skimjob:chat-read:${gameId}:${player}`;
 
-/** Per-thread read marks, kept across reloads (best effort: private mode may refuse storage). */
-function useChatRead(gameId: string): [ReadState, (thread: ThreadId, at: string) => void] {
-  const [read, setRead] = useState<ReadState>(() => {
-    try {
-      const raw = localStorage.getItem(readKey(gameId));
-      const parsed: unknown = raw ? JSON.parse(raw) : {};
-      return typeof parsed === "object" && parsed !== null ? (parsed as ReadState) : {};
-    } catch {
-      return {};
-    }
-  });
+function loadRead(key: string): ReadState {
+  try {
+    const raw = localStorage.getItem(key);
+    const parsed: unknown = raw ? JSON.parse(raw) : {};
+    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? (parsed as ReadState) : {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Per-thread read marks, kept across reloads and shared by every tab of the
+ * same player: each write merges with what's stored (latest mark per thread
+ * wins) and other tabs' writes are merged in as they happen, so a thread read
+ * in one tab never turns unread again in another (QA, PR #38).
+ */
+export function useChatRead(gameId: string, player: string): [ReadState, (thread: ThreadId, at: string) => void] {
+  const key = readKey(gameId, player);
+  const [read, setRead] = useState<ReadState>(() => loadRead(key));
+  useEffect(() => {
+    setRead((r) => mergeRead(r, loadRead(key)));
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === key) setRead((r) => mergeRead(r, loadRead(key)));
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [key]);
   const onRead = useCallback(
     (thread: ThreadId, at: string) =>
       setRead((r) => {
         const next = markRead(r, thread, at);
-        if (next !== r) {
-          try {
-            localStorage.setItem(readKey(gameId), JSON.stringify(next));
-          } catch {
-            // Storage full or refused: the marks last until the page closes.
-          }
+        if (next === r) return r;
+        // Merge with the stored marks (another tab may have written since) before writing back.
+        const merged = mergeRead(loadRead(key), next);
+        try {
+          localStorage.setItem(key, JSON.stringify(merged));
+        } catch {
+          // Storage full or refused: the marks last until the page closes.
         }
-        return next;
+        return merged;
       }),
-    [gameId],
+    [key],
   );
   return [read, onRead];
 }
@@ -83,7 +101,7 @@ export function GameChat({ gameId, view, channel, dmNotices }: { gameId: string;
   const docked = useMedia(CHAT_DOCK_QUERY);
   const [open, setOpen] = useState(false);
   const [focusKey, setFocusKey] = useState(0);
-  const [read, onRead] = useChatRead(gameId);
+  const [read, onRead] = useChatRead(gameId, view.me.id);
   const events = useLiveEvents(view, channel.offset);
   const me = view.me.id;
   const people = useMemo<ChatPerson[]>(() => seatsOf(view).map((s) => ({ id: s.id, name: s.name, isBot: s.isBot })), [view]);
@@ -105,9 +123,13 @@ export function GameChat({ gameId, view, channel, dmNotices }: { gameId: string;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
     document.addEventListener("keydown", onKey);
     document.documentElement.classList.add("chat-sheet-open");
+    // A modal sheet: the game behind it can't be tabbed into or read out.
+    const behind = [...document.querySelectorAll<HTMLElement>(".topbar, .game-grid > :not(.game-grid__side), .game-grid__side > :not(.chat-dock)")];
+    for (const el of behind) el.inert = true;
     return () => {
       document.removeEventListener("keydown", onKey);
       document.documentElement.classList.remove("chat-sheet-open");
+      for (const el of behind) el.inert = false;
     };
   }, [sheet, open, close]);
 

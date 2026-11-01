@@ -3,6 +3,7 @@
 import { describe, expect, it } from "vitest";
 import type { CaseFileEvent, GameEvent, LoggedEvent, PublicEvent } from "@skimjob/engine";
 import { sampleEvents } from "../../../../packages/engine/src/types/samples";
+import { checkChatText } from "../../../server/src/chat";
 import * as server from "../../../server/src/settings";
 import {
   asChatMessage,
@@ -17,6 +18,7 @@ import {
   feedFor,
   feedWorthy,
   markRead,
+  mergeRead,
   noticeText,
   rateWaitMs,
   shareableEntries,
@@ -109,6 +111,21 @@ describe("threads and unread (design §12.1: crew chat plus private DMs)", () =>
   });
 });
 
+describe("read marks across tabs (QA, PR #38)", () => {
+  it("merge to the latest mark per thread, so a thread read in one tab stays read in the other", () => {
+    const tabA = markRead({}, "dm:p3", t(5));
+    const tabB = markRead({ "dm:p3": t(1) }, "crew", t(6));
+    const merged = mergeRead(tabB, tabA);
+    expect(merged).toEqual({ "dm:p3": t(5), crew: t(6) });
+    expect(mergeRead(tabA, tabB)).toEqual(merged);
+    // Never backwards, and junk in storage is ignored.
+    expect(mergeRead(merged, { crew: t(2), "dm:p3": 7 } as never)).toEqual(merged);
+    const s = fold({ type: "history", history: { messages: [msg("d", "p3", "p1", 5)], dmNotices: [] } });
+    expect(unreadCount(s, "dm:p3", "p1", tabB)).toBe(1);
+    expect(unreadCount(s, "dm:p3", "p1", mergeRead(tabB, tabA))).toBe(0);
+  });
+});
+
 describe("feedFor", () => {
   it("shows DM notices in the crew feed only, folding a run for the same two players (design §12.1)", () => {
     const s = fold({
@@ -151,6 +168,23 @@ describe("composer limits (server: 500 characters, 8 messages per 10 s)", () => 
     expect(over.note).toMatch(/Too long by 12/);
   });
 
+  it.each([
+    ["bidi override", "hi \u202e there"],
+    ["bidi isolate", "a\u2066b"],
+    ["C0 control", "bell\u0007"],
+    ["C1 control", "x\u0085y"],
+    ["Hangul filler only", "\u3164\u3164"],
+    ["halfwidth filler only", "\uffa0"],
+    ["braille blank only", "\u2800\u2800"],
+    ["nine stacked accents", `e${"\u0301".repeat(9)}`],
+    ["eight stacked accents", `e${"\u0301".repeat(8)}`],
+    ["tab and newline", "a\tb\nc"],
+  ])("Send is on exactly when the server would accept it: %s (QA nit, PR #38)", (_label, text) => {
+    const st = composerStatus(text, [], 0);
+    expect(st.canSend).toBe(checkChatText(text).ok);
+    if (!st.canSend && !st.empty) expect(st.note).toBeTruthy();
+  });
+
   it("waits out the rate limit from your 8th message in 10 s", () => {
     const sent = [0, 1000, 2000, 3000, 4000, 5000, 6000];
     expect(rateWaitMs(sent, 6500)).toBe(0);
@@ -189,6 +223,9 @@ describe("evidence cards (design §12.1)", () => {
       ledger: [] as LoggedEvent<PublicEvent>[],
     };
     expect(shareableEntries(view).map((e) => e.event.type)).toEqual(["roomSighting"]);
+    // Role cards never show (design §8, PM decision on PR #38): the deal, a Peek, an Inside tip, allies.
+    const roles = { caseFile: caseFile([sampleEvents.roleDealt, sampleEvents.perkUsed, sampleEvents.insideTip, sampleEvents.alliesLearned, sampleEvents.lootSplit]), ledger: [] };
+    expect(shareableEntries(roles).map((e) => e.event.type)).toEqual(["lootSplit"]);
     const closed = { ...view, ledger: [{ seq: 9, event: { ...sampleEvents.meetingClosed, meetingId: cast.meetingId } as PublicEvent }] };
     expect(shareableEntries(closed).map((e) => e.seq)).toEqual([3, 1]); // newest first
   });

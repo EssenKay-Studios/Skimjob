@@ -46,6 +46,11 @@ test("crew chat reaches everyone; a DM reaches only its two players", async ({ p
     await expect(p.getByRole("heading", { name: "Round 1 · Pick your room", level: 2 })).toBeVisible();
   }
 
+  // A move gives the host a shareable case-file entry (role cards can't be shared).
+  await page.locator('.room-tile[data-room="Office"]').click();
+  await page.getByRole("button", { name: "Lock it in" }).click();
+  await expect(page.getByRole("button", { name: "Locked in" })).toBeVisible();
+
   // Unread before opening: the phone button counts it.
   await openChat(page);
   await say(page, "Hi crew <b>not bold</b> **not bold either**");
@@ -90,9 +95,13 @@ test("crew chat reaches everyone; a DM reaches only its two players", async ({ p
   // Evidence card: the host shares a case-file entry to the crew.
   await page.getByRole("group", { name: "Conversations" }).getByRole("button", { name: /^Crew/ }).click();
   await page.getByRole("button", { name: "Share evidence" }).click();
-  await page.getByRole("group", { name: "Share a case-file entry" }).getByRole("button").first().click();
+  const entries = page.getByRole("group", { name: "Share a case-file entry" }).getByRole("button");
+  // Never the role deal (design §8: roles are claimed, true or as a bluff).
+  await expect(entries.filter({ hasText: /dealt/ })).toHaveCount(0);
+  await entries.filter({ hasText: /Office/ }).first().click();
   const card = guest2.getByRole("group", { name: "Evidence card, verified" });
   await expect(card).toBeVisible();
+  await expect(card).toContainText("Office");
   await expect(card).toContainText("Cameras can be tampered with.");
 
   // After a reload (history on reconnect): the same, and still no DM for Guest 2.
@@ -109,6 +118,41 @@ test("crew chat reaches everyone; a DM reaches only its two players", async ({ p
   expect(errors).toEqual([]);
   await guest1.context().close();
   await guest2.context().close();
+});
+
+test("two tabs of one player share read marks: a DM read in one stays read (QA, PR #38)", async ({ page, browser }) => {
+  test.setTimeout(90_000);
+  const guest = await player(browser, page);
+  const game = await startGame(page.request, { bots: 1, guests: [guest.request], sessionLength: "1w" });
+  const tabB = await page.context().newPage();
+  for (const p of [page, tabB, guest]) await p.goto(`/game/${game.id}`);
+  await openChat(guest);
+  await guest.getByRole("button", { name: "DM", exact: true }).click();
+  await guest.getByRole("group", { name: "Message a player privately" }).getByRole("button", { name: /Host/ }).click();
+  await say(guest, "psst, read me once");
+
+  // Tab A reads the DM.
+  await openChat(page);
+  const dmTab = (p: Page) => p.getByRole("group", { name: "Conversations" }).getByRole("button", { name: /^Guest 1 \(direct message\)/ });
+  await expect(dmTab(page)).toHaveAccessibleName(/1 unread/);
+  await dmTab(page).click();
+  await expect(feed(page)).toContainText("psst, read me once");
+  await expect(dmTab(page)).not.toHaveAccessibleName(/unread/);
+
+  // Tab B then reads new crew chat (and writes its own marks).
+  await guest.getByRole("group", { name: "Conversations" }).getByRole("button", { name: /^Crew/ }).click();
+  await say(guest, "crew news");
+  await openChat(tabB);
+  await expect(feed(tabB)).toContainText("crew news");
+  await expect(dmTab(tabB)).not.toHaveAccessibleName(/unread/); // merged in from tab A
+  await tabB.waitForTimeout(300);
+
+  // Tab A after a reload: the DM is still read.
+  await page.reload();
+  await openChat(page);
+  await expect(dmTab(page)).toBeVisible();
+  await expect(dmTab(page)).not.toHaveAccessibleName(/unread/);
+  await guest.context().close();
 });
 
 test("the composer explains the length and rate limits", async ({ page, browser }) => {
