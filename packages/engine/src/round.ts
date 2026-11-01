@@ -223,6 +223,7 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
     const power = powerFor(id);
     if (power.kind === "cleaner" && moveOf(id).room === power.room) counts[power.room] = (counts[power.room] ?? 0) + power.visitors - 1;
     // Getaway Driver (v2 §2): its visit there adds the Heat a visitor would remove (× `reverse`), hidden in the total.
+    // It counts as negative visitors, so it follows the room's pressure (and its sign) if a card or override changes it.
     if (power.kind === "getaway" && moveOf(id).room === power.room) counts[power.room] = (counts[power.room] ?? 0) - power.reverse - 1;
   }
   let tipOffs = 0;
@@ -250,15 +251,17 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
     looped.set(ability.room, [...(looped.get(ability.room) ?? []), id]);
     events.push({ type: "abilityResolved", visibility: privateTo(id), player: id, round, ability });
   }
-  // v2 §2: Hackers whose loop hid a saboteur from a Security watcher (their reward).
+  // v2 §2: Hackers whose loop hid a saboteur from a crew Security watcher (their reward). Fooling the
+  // dark side, the Hacker itself included, earns nothing (PR #32 QA).
   const saboteurs = playersOf(state, "saboteur");
+  const crew = playersOf(state, "crew");
   const hid = new Set<PlayerId>();
   for (const id of order) {
     const { room, watch } = moveOf(id);
     const ability = abilityOf(id);
     if (!blackout && roomDef(job, room).info === "watchRoom" && watch !== undefined) {
       const loopers = looped.get(watch);
-      if (loopers && others(watch, id).some((x) => saboteurs.includes(x))) for (const h of loopers) hid.add(h);
+      if (loopers && crew.includes(id) && others(watch, id).some((x) => saboteurs.includes(x))) for (const h of loopers) hid.add(h);
       const seen = loopers ? [] : others(watch, id);
       events.push({ type: "roomWatched", visibility: privateTo(id), player: id, round, source: "security", room: watch, seen });
     }

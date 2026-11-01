@@ -56,8 +56,17 @@ function line(e: GameEvent, ctx: DescribeContext): string {
       return you(e.player) ? `You were dealt the ${roleName(e.role)}.` : `${ctx.name(e.player)} was the ${roleName(e.role)}.`;
     case "snitchTargetAssigned":
       return `${whose(e.player)} Snitch target is ${who(e.target)}.`;
+    case "alliesLearned": {
+      // v2 §2: only what the event says (who, and how); never a role name. The learner sees it, or anyone in the reveal.
+      const are = e.allies.length > 1 ? "are" : "is";
+      if (e.via === "deal") return `${verb(e.player, "were", "was")} told at the deal that ${names(e.allies)} ${are} on the dark side.`;
+      if (e.via === "fence") return `${whose(e.player)} full safe paid off: ${names(e.allies)} ${are} on the dark side.`;
+      if (e.via === "tipOff") return `${whose(e.player)} tip-off named a dark-side ally: ${names(e.allies)}.`;
+      return `The Heat ran high: ${who(e.player)} and ${names(e.allies)} now know ${you(e.player) ? "you're" : "they're"} on the same side.`;
+    }
     case "moleAllies":
-      return `${whose(e.player)} fellow Mole${e.allies.length > 1 ? "s" : ""}: ${names(e.allies)}.`;
+      // After a Double-cross the list can hold learned accomplices too (v2 §2), so "allies", not "fellow Moles".
+      return `${whose(e.player)} dark-side all${e.allies.length > 1 ? "ies" : "y"}: ${names(e.allies)}.`;
     case "rngAdvanced":
       return "The dice rolled.";
     case "roundStarted":

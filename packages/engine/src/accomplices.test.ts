@@ -243,3 +243,52 @@ describe("Double-cross keeps what a player learned — design §10 (provisional)
     expect(s.players.p0?.roleState.allies).toEqual(["p1"]);
   });
 });
+
+describe("PR #32 QA: who a loop must fool, and the Driver's reveal around a Double-cross — v2 §2, design §8, §10", () => {
+  const loop = { kind: "loopCameras", room: "vault" };
+  const watchVault = (player: string, extra: object = {}) => ({ type: "submitMove", player, move: { room: "security", pocket: 0, watch: "vault", ...extra } });
+
+  it("no Peek for fooling its own Security watch (QA bug 1), nor a saboteur's", () => {
+    const self = run(game(4, ["hacker", "mole"]), watchVault("p0", { ability: loop }), mv("p1", "vault", 2), ROUND);
+    expect(self.log.find((e) => e.type === "roomWatched" && e.player === "p0")).toMatchObject({ seen: [] });
+    expect(granted(self, "p0")).toEqual([]);
+    const mole = run(game(6, ["hacker", "mole", "mole"]), mv("p0", "lobby", 0, { ability: loop }), mv("p1", "vault", 2), watchVault("p2"), ROUND);
+    expect(granted(mole, "p0")).toEqual([]);
+    // A crew watcher next to it still counts.
+    const both = run(game(4, ["hacker", "mole"]), watchVault("p0", { ability: loop }), mv("p1", "vault", 2), watchVault("p2"), ROUND);
+    expect(granted(both, "p0")).toEqual(["peek"]);
+  });
+
+  const swap = (s: GameState, a: string, b: string): GameState =>
+    run({ ...s, card: { round: s.round, id: "doubleCross", room: null, offer: { players: [a, b], accepted: [a, b] } } }, ROUND);
+
+  it("the reveal tells the saboteurs as they are at that moment: a Mole swapped in before it learns the Driver, one swapped in after doesn't", () => {
+    // Before: p1's Mole card goes to p2, then Heat runs high.
+    let s = swap(game(6, ["getawayDriver", "mole", "rookie"]), "p1", "p2");
+    s = run(withHeat(s, 74), mv("p0", "rooftop"), ROUND);
+    expect(learned(s).map((e) => [e.player, e.allies])).toEqual([["p0", ["p2"]], ["p2", ["p0"]]]);
+    // After: the reveal happened, then the Mole card moves on; nobody is re-told.
+    const after = swap(s, "p2", "p3");
+    expect(after.players.p3?.role).toBe("mole");
+    expect(learned(after)).toHaveLength(2);
+    expect(after.players.p3?.roleState.allies).toEqual([]);
+    expect(after.players.p2?.roleState.allies).toEqual(["p0"]); // what p2 learned stays with p2
+    expect(after.players.p0?.roleState.allies).toEqual(["p2"]);
+  });
+
+  it("dark players swapping with crew: the old holder keeps what it learned, the new holder gets none of it, nobody else is told", () => {
+    let s = game(9, ["mole", "fence", "hacker", "rookie", "lookout"]);
+    s = { ...s, players: { ...s.players, p2: { ...(s.players.p2 as PlayerState), roleState: { ...(s.players.p2 as PlayerState).roleState, allies: ["p0"] } } } };
+    s = run(s, mv("p0", "lobby", 0, { ability: { kind: "tipOff" } }), ROUND);
+    const tipped = [...(s.players.p0?.roleState.allies ?? [])];
+    expect(tipped).toHaveLength(1);
+    const before = s.log.length;
+    s = swap(s, "p0", "p3");
+    s = swap(s, "p2", "p4");
+    expect([s.players.p3?.role, s.players.p4?.role]).toEqual(["mole", "hacker"]);
+    expect(s.players.p0?.roleState.allies).toEqual(tipped);
+    expect(s.players.p3?.roleState.allies).toEqual([]);
+    expect(s.players.p4?.roleState.allies).toEqual([]);
+    expect(s.log.slice(before).filter((e) => e.type === "moleAllies" || e.type === "alliesLearned")).toEqual([]);
+  });
+});
