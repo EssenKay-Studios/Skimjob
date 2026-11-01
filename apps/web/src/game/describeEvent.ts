@@ -123,6 +123,8 @@ function line(e: GameEvent, ctx: DescribeContext): string {
       return `${verb(e.player, "say", "says")} ${you(e.player) ? "you were" : "they were"} in the ${roomName(e.room)} in round ${e.round}.`;
     case "alibisClosed":
       return `Alibis for round ${e.round} are closed.`;
+    case "roleClaimed":
+      return `${verb(e.player, "claim", "claims")} to be the ${roleName(e.role)}.`;
     case "meetingProposed":
       return `${verb(e.by, "proposed", "proposed")} the Act ${e.act} meeting for ${slot(e.slot)}.`;
     case "meetingProposalAccepted":

@@ -62,6 +62,7 @@ export const CLOSE_TOO_MANY = 1008;
 const PLAYER_COMMANDS: { readonly [T in PlayerCommand["type"]]: true } = {
   submitMove: true,
   postAlibi: true,
+  claimRole: true,
   proposeMeeting: true,
   acceptMeeting: true,
   callEmergency: true,

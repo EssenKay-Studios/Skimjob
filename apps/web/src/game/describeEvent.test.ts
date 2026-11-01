@@ -39,6 +39,9 @@ describe("describeEvent", () => {
     expect(describeEvent(sampleEvents.lootSplit, asCyd)).toBe("Round 1, Vault: Ana found 6 loot, 4 to the Haul and 2 pocketed.");
     expect(describeEvent(sampleEvents.alibiPosted, asAna)).toBe("You say you were in the Lobby in round 1.");
     expect(describeEvent(sampleEvents.alibiPosted, asCyd)).toBe("Ana says they were in the Lobby in round 1.");
+    // design §8, §12.1: a role claim, true or not.
+    expect(describeEvent(sampleEvents.roleClaimed, asAna)).toBe("You claim to be the Lookout.");
+    expect(describeEvent(sampleEvents.roleClaimed, asCyd)).toBe("Ana claims to be the Lookout.");
     expect(describeEvent(sampleEvents.roleDealt, asAna)).toBe("You were dealt the Fence.");
     expect(describeEvent(sampleEvents.roleDealt, asCyd)).toBe("Ana was the Fence."); // the reveal
   });

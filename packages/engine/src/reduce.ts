@@ -277,6 +277,9 @@ function applyChange(state: GameState, event: GameEvent): GameState {
       return state;
     case "alibiPosted":
       return { ...state, alibisPosted: [...state.alibisPosted, event.player] };
+    // design §8, §12.1: talk only; the handler reads earlier claims from the log.
+    case "roleClaimed":
+      return state;
     // ------------------------------------------------ meetings and votes. design §11
     case "meetingProposed": {
       const { proposalId: id, by, act, slot } = event;

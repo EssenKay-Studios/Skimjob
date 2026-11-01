@@ -16,6 +16,7 @@ import { checkMove, closeAlibis, resolveRound } from "./round";
 import { isObject, playerFor, show } from "./check";
 import { answerDoubleCross } from "./deck";
 import { callOut } from "./duel";
+import { claimRole } from "./claims";
 import { isDuel } from "./setup";
 import {
   acceptMeeting,
@@ -126,6 +127,7 @@ const advance: Handler = (state, command, draw) => {
 const HANDLERS: Readonly<Record<string, Handler>> = {
   submitMove,
   postAlibi,
+  claimRole,
   proposeMeeting,
   acceptMeeting,
   callEmergency,
@@ -141,8 +143,8 @@ const HANDLERS: Readonly<Record<string, Handler>> = {
 /** Every command type the engine handles. */
 export const COMMAND_TYPES: readonly string[] = Object.keys(HANDLERS);
 
-/** design §16.1: Duel mode has no meetings or votes. */
-const MEETING_COMMANDS: readonly string[] = ["proposeMeeting", "acceptMeeting", "scheduleMeeting", "callEmergency", "castVote", "sealVote"];
+/** design §16.1: Duel mode has no meetings or votes (nor role claims, which are meeting talk). */
+const MEETING_COMMANDS: readonly string[] = ["claimRole", "proposeMeeting", "acceptMeeting", "scheduleMeeting", "callEmergency", "castVote", "sealVote"];
 
 /** Apply one command. Never throws for bad input; a rejection leaves state as it was. */
 export function handleCommand(state: GameState, command: unknown): CommandResult {

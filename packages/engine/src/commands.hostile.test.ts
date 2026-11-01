@@ -146,6 +146,7 @@ function baseCommands(s: GameState): Record<string, unknown>[] {
       out.push({ type: "useAbility", player, ability });
     }
     out.push({ type: "postAlibi", player, room });
+    out.push({ type: "claimRole", player, role: "lookout" }); // design §8, §12.1
     out.push({ type: "proposeMeeting", player, slot: `slot-${s.log.length}` });
     for (const proposal of s.proposals) out.push({ type: "acceptMeeting", player, proposalId: proposal.id });
     out.push({ type: "callEmergency", player });

@@ -90,6 +90,11 @@ export type PlayerCommand =
   /** Claim (truthfully or not) which room you were in during the last resolved round. design §5.4 */
   | { readonly type: "postAlibi"; readonly player: PlayerId; readonly room: RoomId }
   /**
+   * Claim (truthfully or not) to be `role`: public, changes no rule. Once per
+   * act; any role the content knows. design §8, §12.1
+   */
+  | { readonly type: "claimRole"; readonly player: PlayerId; readonly role: RoleId }
+  /**
    * `slot` is an opaque label for the proposed time (e.g. an ISO timestamp).
    * The engine stores it and only ever compares slots for equality; it never
    * reads one as a time.
