@@ -109,6 +109,17 @@ describe("Blackmailer — v2 §2: a right guess steals the victim's vote at the 
     expect(lastResult(after)?.result).toEqual({ kind: "shakedown", target: "p4" });
   });
 
+  it("the Blackmailer gains exactly +1, whatever the victim's weight: a Smooth Talker victim (×2) counts 0 (v2 §2, design §8; owner, 2 Nov)", () => {
+    const talker = game(7, ["blackmailer", "smoothTalker"]);
+    const guess = (role: string) => mv("p0", "lobby", 0, { ability: { kind: "blackmail", target: "p1", role } });
+    // p0 and p1 (×2) for p4; p2, p3, p5 skip. Unstolen: 3 vs 3, no majority. Stolen: p4 weighs 0 + 1 + 1 = 2
+    // against 3 skips (2 × 3 > 5): skipped. Had the Blackmailer taken p1's full weight (2), it would be 3 vs 3 again.
+    const votes = { p0: "p4", p1: "p4", p2: null, p3: null, p5: null };
+    expect(lastResult(emergency(run(talker, guess("rookie"), ROUND), "p3", votes))?.result).toEqual({ kind: "noMajority" });
+    const stolen = emergency(run(talker, guess("smoothTalker"), ROUND), "p3", votes);
+    expect(lastResult(stolen)).toMatchObject({ tally: { skip: 3, targets: { p4: 2 } }, result: { kind: "skipped" } });
+  });
+
   it("the victim's vote is lost even if the Blackmailer doesn't vote", () => {
     const s = emergency(run(base, guess("p1", "lookout"), ROUND), "p3", { p1: "p4", p3: "p4", p5: "p4", p6: null, p2: null });
     expect(lastResult(s)?.result).toEqual({ kind: "noMajority" });

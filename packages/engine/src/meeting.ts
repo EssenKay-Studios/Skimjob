@@ -6,7 +6,7 @@
 // command is refused. `handleCommand` (handle.ts) folds the events. Nothing
 // here draws randomness except the next act's event card (deck.ts, design §10):
 // meeting and proposal ids are names and log positions.
-import { BANK_JOB, MAX_SLOT_LENGTH, PERK_RULES, ROUNDS_PER_ACT, type RoleId, type ShakedownRules } from "@skimjob/content";
+import { BANK_JOB, MAX_SLOT_LENGTH, PERK_RULES, ROUNDS_PER_ACT, STOLEN_VOTE_WEIGHT, type RoleId, type ShakedownRules } from "@skimjob/content";
 import type {
   ActNumber,
   GameEvent,
@@ -255,14 +255,15 @@ function baseWeight(state: GameState, player: PlayerId): number {
 
 /**
  * The ballot weights at the open meeting: `baseWeight`, except that a
- * Blackmailer's victim weighs 0 and the Blackmailer adds the victim's weight
- * to its own ballot (v2 §2; nothing if it doesn't vote). design §8, §11.2
+ * Blackmailer's victim weighs 0 and the Blackmailer's own ballot weighs
+ * `STOLEN_VOTE_WEIGHT` (+1) more per stolen vote, whatever the victim's weight
+ * (v2 §2; owner, 2 Nov; nothing if it doesn't vote). design §8, §11.2
  */
 function voteWeights(state: GameState): (player: PlayerId) => number {
   const stolen = state.meeting ? stolenVotes(state, state.meeting.id) : new Map<PlayerId, PlayerId>();
   return (player) => {
     let w = stolen.has(player) ? 0 : baseWeight(state, player);
-    for (const [victim, by] of stolen) if (by === player) w += baseWeight(state, victim);
+    for (const by of stolen.values()) if (by === player) w += STOLEN_VOTE_WEIGHT;
     return w;
   };
 }

@@ -25,7 +25,7 @@ export type RolePower =
   /**
    * Blackmailer: `perAct` times per act, a move may guess one player's role.
    * Right → it steals their vote at the next meeting that opens (their ballot
-   * weighs 0 there, and its own weighs theirs more); the victim is told only
+   * weighs 0 there, and its own weighs `STOLEN_VOTE_WEIGHT` more); the victim is told only
    * that its vote is compromised. A saboteur guessed right and the Blackmailer
    * learn each other. design §8, §11.2 (v2 §2)
    */
@@ -131,6 +131,12 @@ export type PerkTrigger =
   | "loopHidSaboteur"
   /** A player this role forged into a watch feed, earlier this game, is shaken down clean (Forger: Shield). */
   | "forgedShakenClean";
+
+/**
+ * What a stolen vote adds to the Blackmailer's ballot, whatever the victim's
+ * own weight (Smooth Talker, +Vote, Snitch reward): the victim's counts 0 (v2 §2; owner, 2 Nov).
+ */
+export const STOLEN_VOTE_WEIGHT = 1;
 
 /** The Cleaner is rewarded on every this-many-th round in its cooling room (v2 §2: every 2nd Rooftop round). */
 export const CLEANER_REWARD_EVERY = 2;
