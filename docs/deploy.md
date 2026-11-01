@@ -20,7 +20,11 @@ the same server uses real Postgres instead (below).
    - `flyctl deploy --remote-only --ha=false` (Fly's builders build the `Dockerfile`; `--ha=false` keeps it to
      one machine, because PGlite lives on one volume);
    - smoke-tests `https://skimjob.fly.dev/health` and `/join/smoke`.
-4. Or run it by hand: GitHub → Actions → **Deploy** → Run workflow (any branch; it skips the CI gate).
+4. Or run it by hand: GitHub → Actions → **Deploy** → Run workflow. Only on `main`, and only if CI passed for
+   that commit (the job checks through the Actions API and stops otherwise).
+
+`FLY_API_TOKEN` is given only to the flyctl steps, never job-wide, and the third-party actions
+(`actions/checkout`, `superfly/flyctl-actions/setup-flyctl`) are pinned to full commit SHAs; bump them by hand.
 
 Deploys run one at a time (`concurrency: deploy-fly`). Each deploy stops the old machine and starts the new one
 on the same volume, so there are ~10–30 s of downtime. Open sockets drop (clients have to reconnect);
@@ -62,7 +66,6 @@ Or with Docker: `docker build -t skimjob . && docker run --rm -p 8080:8080 -v sk
 - **Quickest:** `flyctl releases -a skimjob --image` lists releases with their image; redeploy an older one with
   `flyctl deploy -a skimjob --image registry.fly.io/skimjob:deployment-<id> --ha=false`.
 - **Through git:** revert the bad commit on `main` (`git revert <sha>`, push). CI runs and the deploy follows.
-- **A branch or old commit by hand:** Actions → Deploy → Run workflow and pick the ref.
 - Database migrations only add (see `apps/server/migrations/`); an older image runs fine on a newer schema as
   long as that stays true. If a migration ever has to change or drop something, note the rollback in its PR.
 - **Data:** Fly snapshots volumes daily (kept 5 days). `flyctl volumes snapshots list <volume-id>` and
