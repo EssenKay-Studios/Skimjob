@@ -86,6 +86,10 @@ function line(e: GameEvent, ctx: DescribeContext): string {
       return `Round ${e.round}: Haul ${signed(e.haulDelta)} (now ${e.haul}), Heat ${signed(e.heatDelta)} (now ${e.heat}).`;
     case "copsRaided":
       return `The cops raided in round ${e.round} at Heat ${e.heat}. The job is blown.`;
+    case "raidStopped":
+      return `The cops were about to raid in round ${e.round}, but the raid was stopped: Heat is back to ${e.heat}.`;
+    case "cardForeseen":
+      return `${verb(e.player, "foresaw", "foresaw")} round ${e.round}'s card: ${cardName(e.card)}.`;
     case "eventFlipped":
       return `Round ${e.round} event: ${cardName(e.card)}${e.room ? ` (the ${roomName(e.room)} is closed)` : ""}.`;
     case "doubleCrossOffered":
@@ -132,6 +136,10 @@ function line(e: GameEvent, ctx: DescribeContext): string {
       return `The shakedown of ${who(e.target)} was called off.`;
     case "shakedownResolved":
       return `${who(e.target)} ${you(e.target) ? "were" : "was"} shaken down: a stash of ${e.stashRevealed}, ${e.taken} into the Haul.${e.clean ? ` Clean! The crew paid ${e.compensation} in compensation.` : ""}`;
+    case "blessingPaid":
+      return `${who(e.target)} ${you(e.target) ? "were" : "was"} blessed: the bank paid the compensation, so ${e.amount} went back into the Haul.`;
+    case "muscleNamed":
+      return `${verb(e.player, "were", "was")} named as the ${roleName("muscle")}: ${you(e.player) ? "you" : "they"} called off the shakedown of ${who(e.target)}, who wasn't clean.`;
     case "snitchRewarded":
       return `Snitching paid: ${who(e.target)} wasn't clean, so ${whose(e.player)} ballot weighs +${e.votes} from now on.`;
     case "checkpointChecked":
@@ -171,7 +179,7 @@ type Grammar = {
   readonly verb: (p: PlayerId, second: string, third: string) => string;
 };
 
-function ability(a: ResolvedAbility, player: PlayerId, round: number, { who, verb }: Grammar): string {
+function ability(a: ResolvedAbility, player: PlayerId, round: number, { who, whose, verb }: Grammar): string {
   switch (a.kind) {
     case "lookout":
       return `Round ${round}: ${verb(player, "kept", "kept")} lookout on the ${list(a.rooms.map(roomName))}.`;
@@ -191,6 +199,12 @@ function ability(a: ResolvedAbility, player: PlayerId, round: number, { who, ver
       return `Audit: the ${roomName(a.room)} came up ${a.shortfall} short in round ${a.round}.`;
     case "checkStash":
       return `Stash check: ${who(a.target)} ${a.dirty ? `holds ${a.threshold} or more (not clean)` : `holds less than ${a.threshold} (clean)`}.`;
+    case "bless":
+      return `${verb(player, "blessed", "blessed")} ${who(a.target)} for Act ${a.act}.`;
+    case "bagman":
+      return `Round ${round}: ${verb(player, "handed", "handed")} everything in, so the bank added +${a.bonus} to the Haul.`;
+    case "fixer":
+      return `Round ${round}: ${verb(player, "stopped", "stopped")} the raid and lost ${a.lost} from ${whose(player)} stash.`;
     default: {
       const never: never = a;
       return String((never as { kind: string }).kind);
@@ -216,6 +230,8 @@ function perk(p: ResolvedPerk, player: PlayerId, { you, who, whose, verb }: Gram
       return `${verb(player, "recharged", "recharged")} ${whose(player)} role's power.`;
     case "rig":
       return `${verb(player, "rigged", "rigged")} round ${p.round}'s card: ${list(p.cards.map(cardName))} to pick from.`;
+    case "emergency":
+      return `${verb(player, "spent", "spent")} an ${perkName("emergency")} perk to call an extra emergency meeting.`;
     default: {
       const never: never = p;
       return String((never as { kind: string }).kind);
