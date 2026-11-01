@@ -4,14 +4,6 @@ Newest first. Each entry: what was decided, and why. Add an entry whenever a rul
 
 ---
 
-### 2026-11-01 — Art: bank cutaway, room icons, crooks, spots (M2-9)
-Our own drawings in the notebook look (warm ink, flat fills, one cel-shade tone, seeded wobble filter), as React SVG in `apps/web/src/art/`, coloured only from new `--art-*`, `--crew-1…12` and `--acc-*` tokens in `theme.css`. Design §18; ui-style "Applying this to Skimjob".
-- **Side view, not 3/4 isometric** (provisional): design §18 says "seen from the side like a dollhouse"; ui-style suggests 3/4. Side view keeps every room a plain rectangle, so hit areas, crook placement and a phone layout stay simple. Floors: Rooftop; upper floor Security, Office, (9+) Manager's office, (5+) Server room; ground Teller line (9+), Lobby; basement Vault, (5+) Deposit boxes. Rooms not in play are left out and the rest widen.
-- **Two layouts** (provisional): `wide` (960-unit drawing, up to four rooms a storey) and `stacked` (400 units, two rooms a storey, scrolls) chosen by the drawing's own width (below 600 px → stacked).
-- **Crooks** (provisional): masked gumdrop blobs; seat number → one of 12 crew colours (12 seats never repeat), a hat (beanie, pompom, cap, bandana, none) and a body shape. Four expressions: neutral, smug, nervous, caught. Bots get an antenna and a robot badge. An alibi claim is a dashed "?" ghost, never a solid crook, so the board can't show a position the view doesn't know.
-- **Time of day and Heat** are props (`time`, `heat`): the game screen maps rounds to day/dusk/night; the sky reddens from Heat 40 and sirens glow from 80. Lockdown-closed rooms get hazard tape.
-- The landing's placeholder doodle is replaced by the cutaway at dusk. Not wired into the game screen yet (M2-6 is in review).
-
 ### 2026-11-01 — Role deck v2, R2b: Smooth Talker, Muscle, Priest, Bagman, Cleaner, Fixer, Mastermind
 The other seven crew roles of `docs/roles-v2.md` §2; content 0.11.0. Design §7, §8, §8.1, §8.3, §10.
 - **Renames:** the Driver is gone; its crew half is the **Fixer** (`fixer`). Lawyer and Planner never shipped, so the **Priest** and **Mastermind** are new. Smooth Talker and Muscle keep their powers and gain their v2 rewards. One tunable number each in content: weight ×2, cancels 1/game, blessings 1/act, Bagman bonus +1, Cleaner visitors ×2, Fixer `stopAt` 95, Mastermind's Rig count (`rewardCount`) 1.
