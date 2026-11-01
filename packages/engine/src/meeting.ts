@@ -26,6 +26,7 @@ import { jobFor, powerOf } from "./overrides";
 import { rolePoolFor } from "./setup";
 import { actOfRound } from "./acts";
 import { gameEnded } from "./end";
+import { applyEvent } from "./reduce";
 import { isObject, playerFor } from "./check";
 import type { Draw } from "./handle";
 import { startRound } from "./deck";
@@ -320,8 +321,8 @@ export function useAbility(state: GameState, command: Raw): Result {
 /**
  * After the vote (and any shakedown window): the shakedown or its cancel,
  * Snitch payouts, then for the act's regular meeting the checkpoint and what
- * follows. design §11.3, §11.4. `prior` are this command's events so far
- * (folded first when the game ends).
+ * follows (`checkpoint`). design §11.3, §11.4. `prior` are this command's
+ * events so far.
  */
 function afterVote(
   state: GameState,
@@ -331,12 +332,11 @@ function afterVote(
   draw: Draw,
 ): GameEvent[] {
   const job = jobFor(state.config);
-  const crewSize = state.playerOrder.length;
   const { act } = meeting;
   const events: GameEvent[] = [];
 
   // design §11.3: the stash (never the Fence safe) goes into the Haul; a clean target is compensated.
-  let haul = state.haul;
+  const haul = state.haul;
   if (shakedown?.cancelled) {
     events.push({ type: "shakedownCancelled", visibility: PUBLIC, meetingId: meeting.meetingId, target: shakedown.target });
   } else if (shakedown) {
@@ -345,29 +345,40 @@ function afterVote(
     const clean = stash < job.shakedown.cleanBelowPerAct * act;
     // Paid out of the Haul, so never more than it holds (provisional).
     const compensation = clean ? Math.min(job.shakedown.compensationPerAct * act, haul + stash) : 0;
-    haul += stash - compensation;
     events.push({ type: "shakedownResolved", visibility: PUBLIC, meetingId: meeting.meetingId, target, stashRevealed: stash, taken: stash, clean, compensation });
     // Snitch (§8): paid when their target is shaken down holding at least the clean threshold (provisional).
     if (!clean) events.push(...snitchPayouts(state, meeting.meetingId, target));
   }
   if (meeting.kind === "emergency") return events;
+  return [...events, ...checkpoint(state, [...prior, ...events], act, draw)];
+}
 
-  // design §11.4, §11.5: the checkpoint, after the shakedown. Missing Act 1 or 2 adds Heat (clamped once).
-  const target = checkpointTarget(job, act, crewSize);
-  const met = haul >= target;
+/**
+ * design §11.4, §11.5: the act's checkpoint, after its meeting (or, in Duel
+ * mode, its call-outs, §16.1), then the next act or the end of the game.
+ * `prior` (this command's events so far) is folded into `state` first, so the
+ * Haul and Heat are as they stand now.
+ */
+export function checkpoint(state: GameState, prior: readonly GameEvent[], act: ActNumber, draw: Draw): GameEvent[] {
+  const now = prior.reduce(applyEvent, state);
+  const job = jobFor(state.config);
+  const events: GameEvent[] = [];
+  // Missing Act 1 or 2 adds Heat (clamped once).
+  const target = checkpointTarget(job, act, now.playerOrder.length);
+  const met = now.haul >= target;
   const final = act === job.checkpoints.perPlayer.length;
-  const heat = met || final ? state.heat : clampHeat(job, state.heat + job.heat.missedCheckpoint);
-  events.push({ type: "checkpointChecked", visibility: PUBLIC, act, target, haul, met, heatPenalty: heat - state.heat });
+  const heat = met || final ? now.heat : clampHeat(job, now.heat + job.heat.missedCheckpoint);
+  events.push({ type: "checkpointChecked", visibility: PUBLIC, act, target, haul: now.haul, met, heatPenalty: heat - now.heat });
 
   // The ranking is worked out after the shakedown (design §3, §11.4), in end.ts.
   if (heat >= job.heat.max) {
-    events.push({ type: "copsRaided", visibility: PUBLIC, round: state.round, heat });
+    events.push({ type: "copsRaided", visibility: PUBLIC, round: now.round, heat });
     events.push(gameEnded(state, [...prior, ...events], "heat"));
   } else if (final) {
     // design §3: the heist succeeds if the Haul meets the final target after the final meeting.
     events.push(gameEnded(state, [...prior, ...events], met ? null : "target"));
   } else {
-    events.push(...startRound(state, state.round + 1, draw));
+    events.push(...startRound(now, now.round + 1, draw));
   }
   return events;
 }

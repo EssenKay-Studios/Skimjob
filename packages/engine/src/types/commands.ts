@@ -73,7 +73,13 @@ export type PlayerCommand =
   /** A role power used outside a move (Muscle). design §17.2 */
   | { readonly type: "useAbility"; readonly player: PlayerId; readonly ability: InstantAbility }
   /** Accept (or decline) this round's Double-cross offer; the last answer before the deadline counts. design §10 */
-  | { readonly type: "answerDoubleCross"; readonly player: PlayerId; readonly accept: boolean };
+  | { readonly type: "answerDoubleCross"; readonly player: PlayerId; readonly accept: boolean }
+  /**
+   * Duel mode: call out the opponent for this act, at most once per act, while
+   * one of its rounds is being planned. Settled when the act's last round
+   * resolves; can't be withdrawn. design §16.1
+   */
+  | { readonly type: "callOut"; readonly player: PlayerId };
 
 /**
  * Which deadline has passed. The engine has no clock, and several deadlines can

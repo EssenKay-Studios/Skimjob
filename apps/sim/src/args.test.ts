@@ -57,6 +57,7 @@ describe("parseSimArgs", () => {
       rolePool: [],
       starterMode: false,
       eventsEnabled: false,
+      duel: false,
       mole: "off",
       voteVisibility: "hiddenThenRevealed",
       contentOverrides: null,
@@ -83,6 +84,9 @@ describe("parseSimArgs", () => {
     // design §10: the events deck; starter mode has none (§8.1).
     expect(run(["--events"]).eventsEnabled).toBe(true);
     expect(error(["--events", "--starter"])).toMatch(/starter/);
+    // design §16.1: Duel mode is 2 players only.
+    expect(run(["--duel", "-p", "2"]).duel).toBe(true);
+    expect(error(["--duel", "-p", "2-3"])).toMatch(/2 players/);
   });
 
   it("reads overrides inline or from a file, and reports bad JSON", () => {

@@ -39,6 +39,11 @@ export interface GameConfig {
   /** First game in a group: Rookie/Lookout/Insider/Fence only, no Mole, no events. design §8.1 */
   readonly starterMode: boolean;
   /**
+   * Duel mode: exactly 2 players, no meetings or votes; once per act each may
+   * call out the other instead. Absent means false. design §16.1
+   */
+  readonly duel?: boolean;
+  /**
    * Simulator / playtest tuning: replaces some of the job's and roles' numbers
    * for this game only. Absent or null plays the content as shipped. Numbers
    * only; it can't add or remove rooms or roles. Checked by `validateConfig`
@@ -79,5 +84,6 @@ export interface ContentOverrides {
   readonly heat?: { readonly max?: number; readonly perRound?: number; readonly missedCheckpoint?: number };
   readonly checkpoints?: { readonly perPlayer?: readonly [number, number, number] };
   readonly shakedown?: { readonly cleanBelowPerAct?: number; readonly compensationPerAct?: number };
+  readonly duel?: { readonly wrongCallOutPerAct?: number };
   readonly roles?: Readonly<Record<RoleId, RoleOverride>>;
 }

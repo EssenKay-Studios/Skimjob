@@ -35,14 +35,16 @@ Goal: run thousands of all-bot games at 2–12 players and use the results to tu
 
 - [x] **Events deck** — the ten §10 cards as content (`EVENTS`, content 0.5.0), one public `eventFlipped` per round from round 2 (seeded draw, no repeats), off in starter mode / with `eventsEnabled: false`. Effects in `packages/engine/src/deck.ts`: Heat cards and room surges in the round's numbers, Power cut (no sightings / Security / Lookout), Lockdown (closed room refused), public per-room Audit, private Raid rumour and Inside tip, Double-cross (private offers, `answerDoubleCross`, swap at §5.2 step 1 only if both accept). Bots avoid the closed room and answer offers. Sim `--events`. Design §10, §5.2.
 
+- [x] **Duel mode** — `GameConfig.duel` (exactly 2 players; in `gameCreated`), no meetings or votes, `callOut` once per player per act (private until the act's last round resolves, then public `callOutResolved` before the checkpoint): a caught opponent hands over everything they pocketed that act, a wrong call pays 5 × act (`JobDef.duel`, content 0.6.0, overridable). Meeting-only roles aren't dealt. Bots call out on a visible shortfall; sim `--duel`. Design §16.1.
+
 ### Next up (in order)
-- Duel mode (see below); then a second balance pass with roles and events in.
+- Balance pass 2 with roles and events in (task 16).
 
 ### Later in M1
 12. [x] **Info & vote roles** — done (see above).
 13. [x] **Win-condition roles** — done (see above).
 14. [x] **Events deck** — done (see above).
-15. [ ] **Duel mode** — exactly 2 humans, call-outs instead of votes — design §16.1.
+15. [x] **Duel mode** — done (see above).
 16. [ ] **Balance pass 2** — re-run sims with all roles and events; bots learn the new roles minimally.
 
 ## Upcoming milestones
@@ -73,9 +75,11 @@ Goal: run thousands of all-bot games at 2–12 players and use the results to tu
 - From the PR #1 review, deferred to the task named:
   - ~~Tasks 10/11: content overrides and `CONTENT_VERSION` in `gameCreated`~~ — done in task 10. New job/role numbers that should be tunable must be added to `ContentOverrides` and `validateOverrides`.
   - ~~**Remaining roles:** generic per-player role state, `useAbility`, Muscle window~~ — done in task 12. Double-cross accept (events deck) and Duel call-out (§16.1) can use `useAbility` too.
-  - ~~**Events deck:** event types~~ — done in task 14. **Duel mode:** no Duel config flag yet.
+  - ~~**Events deck:** event types~~ — done in task 14. ~~**Duel mode:** no Duel config flag yet~~ — done in task 15.
 
 - **Events deck (task 14, done):** a new card is a `EventDef` in `packages/content/src/events.ts`; a new effect *kind* needs one function in `deck.ts` (step-1 player effects go in `cardEffects`, round-number effects in `roundJob`/`cardHeat`). Any new place that starts a round must use `startRound(state, round, draw)` (it flips the card). Event numbers aren't in `ContentOverrides` yet. Balance (task 16): run the sim with `--events`; a quick 200-game run raised the Heat-bust share of failures at 4–6p from 8/12% to 47/30% (Police patrol, Shift change). Bots ignore Audit reports, Inside tips and offers beyond a coin flip.
+
+- **Duel mode (task 15, done):** the act's end in Duel is `endOfDuelAct` (`duel.ts`), called by `resolveRound` after the act's last round; any new end-of-act step must go there as well as in `afterVote` (both use `checkpoint()` in `meeting.ts`). M2: the server never sends `openMeeting`/`scheduleMeeting` in Duel games. Balance (task 16): the sim doesn't report call-outs yet (count, caught share, loot moved); bots call out only on a visible shortfall.
 
 ## Questions for Karthik
 - Role deal: should each non-Rookie role be dealt at most once, with Rookies filling the rest (current, provisional), or can roles repeat in big crews?
@@ -103,3 +107,6 @@ Goal: run thousands of all-bot games at 2–12 players and use the results to tu
 - Events deck: is "no card repeats in a game" right (current, provisional), or should every round draw from the full deck?
 - Double-cross: do the swapped roles take effect for the round being resolved (current) or from the next round? And may a Mole be offered a swap (current: yes; the other Mole is told its ally changed)?
 - Raid rumour: compare stashes without the Fence safe, break ties at random, and lose the 3 to the cops (current, provisional)? Power cut: should the Server room still count pockets (current)?
+- Duel call-outs: made any time during the act, kept private and settled at the act's end over the whole act (current, provisional) — or public when made, or settled at once over the rounds so far? And may a call take more than the stash holds (current: capped; the Fence safe is never touched), and a wrong call cost more than the caller's stash (current: capped)?
+- Duel roles: OK to leave the meeting-only roles (Smooth talker, Muscle, Snitch) out of the deal in Duel mode (current, provisional)?
+- Double-cross: §10 says both "secretly" accept. Should the answers stay hidden even at the end-of-game reveal (like Secret-mode ballots), or show at the reveal like other private events (current)?

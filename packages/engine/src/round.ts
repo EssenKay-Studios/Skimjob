@@ -13,6 +13,8 @@ import { actOfRound, isLastRoundOfAct } from "./acts";
 import { gameEnded } from "./end";
 import { applyEvent } from "./reduce";
 import type { Draw } from "./handle";
+import { isDuel } from "./setup";
+import { endOfDuelAct } from "./duel";
 import { cardEffects, cardHeat, closedRoom, isAudit, isBlackout, roundJob, startRound } from "./deck";
 
 export { actOfRound, isLastRoundOfAct };
@@ -111,7 +113,8 @@ export function checkMove(state: GameState, player: PlayerState, raw: unknown): 
  * Heat (rounded, then clamped once), information, the public summary, and
  * finally either the raid, the next round, or (after an act's last round)
  * nothing more: the fold of `roundResolved` leaves the game awaiting the
- * act's meeting (design §11). Step 1 is the round's event card (§10): its
+ * act's meeting (design §11). In Duel mode the act's call-outs and checkpoint
+ * follow at once instead (design §16.1). Step 1 is the round's event card (§10): its
  * player effects (Raid rumour, Inside tip, Double-cross) come first and are
  * folded before the rest is worked out, so a swapped role plays this round;
  * the others change yields, Heat and information below.
@@ -265,6 +268,9 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
     events.push(gameEnded(before, events, "heat"));
   } else if (!isLastRoundOfAct(round)) {
     events.push(...startRound(state, round + 1, draw));
+  } else if (isDuel(state.config)) {
+    // design §16.1: no meeting; the act's call-outs are settled, then the checkpoint as normal.
+    events.push(...endOfDuelAct(before, events, actOfRound(round), draw));
   }
   return events;
 }

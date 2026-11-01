@@ -26,6 +26,9 @@ export function jobOf(view: PlayerView): JobDef {
   return overrideJob(jobById(created.job), created.contentOverrides);
 }
 
+/** Duel mode (design §16.1): call-outs instead of meetings and votes. */
+export const isDuel = (view: PlayerView): boolean => createdOf(view).duel === true;
+
 export const crewSize = (view: PlayerView): number => view.players.length + 1;
 
 /** The bot's role definition (content plus the game's overrides); an id with none plays with no power and may pocket, as in the engine. */

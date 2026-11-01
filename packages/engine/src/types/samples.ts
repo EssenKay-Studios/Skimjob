@@ -23,6 +23,7 @@ export const sampleEvents: { readonly [T in GameEventType]: EventOfType<T> } = {
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     starterMode: true,
+    duel: false,
     contentVersion: "0.1.0",
     contentOverrides: { heat: { perRound: 5 } },
   },
@@ -129,6 +130,8 @@ export const sampleEvents: { readonly [T in GameEventType]: EventOfType<T> } = {
     compensation: 5,
   },
   checkpointChecked: { type: "checkpointChecked", visibility: PUBLIC, act: 1, target: 12, haul: 10, met: false, heatPenalty: 15 },
+  callOutMade: { type: "callOutMade", visibility: privateTo(ana), player: ana, act: 1 },
+  callOutResolved: { type: "callOutResolved", visibility: PUBLIC, act: 1, caller: ana, target: ben, caught: true, amount: 4 },
   gameEnded: {
     type: "gameEnded",
     visibility: PUBLIC,
@@ -153,6 +156,7 @@ export const sampleCommands: { readonly [T in CommandType]: Extract<Command, { t
   sealVote: { type: "sealVote", player: ana, vote: { kind: "skip" } },
   useAbility: { type: "useAbility", player: ben, ability: { kind: "cancelShakedown" } },
   answerDoubleCross: { type: "answerDoubleCross", player: ana, accept: true },
+  callOut: { type: "callOut", player: ben },
   advance: { type: "advance", deadline: { kind: "openMeeting", meetingId: "m2" } },
   scheduleMeeting: { type: "scheduleMeeting", act: 1, slot: "2026-11-01T21:00Z" },
 };
