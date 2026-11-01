@@ -67,6 +67,14 @@
   --sky: #6a9bcc;
   --gold: #e2b858;
   --cream: #fff7ee;
+  /* Light washes for result banners (M2-7). */
+  --good-l: #e2ebd2;
+  --bad-l: #f4d5cf;
+  /* Vote tallies (ui-style "Vote window"): the leading option, and the one that passed. */
+  --tally-lead: #f2b640;
+  --tally-pass: #2f6b2a;
+  /* The vote dialog's backdrop. */
+  --scrim: #2a232066;
   /* Dashed rules between rows and under headers (ui-style §4). */
   --rule: #2a232040;
   /* Premium ("crew pass") card */

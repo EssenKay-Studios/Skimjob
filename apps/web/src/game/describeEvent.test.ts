@@ -90,6 +90,10 @@ describe("describeEvent", () => {
   ] as const)("describes the meeting result %j exactly", (result, text) => {
     expect(describeEvent({ ...sampleEvents.meetingClosed, result }, asAna)).toBe(text);
   });
+  // design §11.2: 9–12 players shake down on a plurality, so a failed vote there has no clear winner rather than no majority.
+  it("says 'no clear winner' when the crew uses the plurality rule", () => {
+    expect(describeEvent({ ...sampleEvents.meetingClosed, result: { kind: "noMajority" } }, { ...asAna, plurality: true })).toBe("No clear winner: nobody is shaken down.");
+  });
 
   // design §8: every ability's result.
   const abilities: SamplesOf<ResolvedAbility> = {
