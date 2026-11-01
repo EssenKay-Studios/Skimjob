@@ -1,7 +1,7 @@
 // /join/:code: the invite page. Shows whose crew it is, asks for a nickname,
 // joins (POST /invites/:code/join signs a guest in), then opens the lobby.
 import { useEffect, useState, type FormEvent } from "react";
-import { api, ApiError, fetchMe, sentence, type InvitePreview, type LobbyView } from "../api";
+import { api, ApiError, sentence, type InvitePreview, type LobbyView } from "../api";
 import { Avatar } from "../components/Avatar";
 import { Button } from "../components/Button";
 import { ArrowBack, Play } from "../components/icons";
@@ -36,7 +36,6 @@ export function Invite({ code }: { code: string }) {
         );
       },
     );
-    fetchMe().then((u) => live && u && setName((n) => n || u.name), () => {});
     return () => {
       live = false;
     };
@@ -82,10 +81,16 @@ export function Invite({ code }: { code: string }) {
               <p className="kicker">You're invited</p>
               <div className="invite__head">
                 {load.invite.host && <Avatar name={load.invite.host} size={46} />}
-                <h1 id="invite-title">
-                  Join <Underline seed="inv-host">{load.invite.host ?? "the"}</Underline>
-                  {load.invite.host ? "'s crew" : " crew"}
-                </h1>
+                <div className="invite__who">
+                  <h1 id="invite-title">
+                    Join <Underline seed="inv-crew">the crew</Underline>
+                  </h1>
+                  {load.invite.host && (
+                    <p className="meta">
+                      <b className="invite__host">{load.invite.host}</b> is hosting
+                    </p>
+                  )}
+                </div>
               </div>
               <p className="form-sheet__lede">
                 One bank, one crew, and everyone's skimming. <span className="num">{load.invite.seats}</span> of{" "}

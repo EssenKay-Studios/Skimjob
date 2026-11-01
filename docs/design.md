@@ -397,6 +397,7 @@ Notifications respect the host's quiet hours.
 
 - Setup: session length, job, role pool, unique roles (on by default, §8.1), saboteur setting (the Mole setting, §8.1), events on or off, vote visibility, meeting window length, quiet hours, starter mode. Defaults: events on, Mole "maybe", the full role pool.
 - During the game: pause or resume, extend the current round, replace an inactive player with a bot (offered automatically after 2 missed rounds in a row), add bots to empty seats before the game starts.
+- Before the start, the host can hand the host role to another person in the lobby (never a bot) and then leave; the host can't leave without handing over first. *(Owner request, M2-5b.)*
 
 ---
 

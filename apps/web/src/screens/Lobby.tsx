@@ -271,6 +271,7 @@ export function Lobby({ id }: { id: string }) {
                   <Underline seed="rules">House rules</Underline>
                 </h2>
                 {!game.youAreHost && <p className="meta">Only the host can change these.</p>}
+                <div className="settings__list">
                 {SETTINGS.map((def) => (
                   <Segmented<string | boolean>
                     key={def.key}
@@ -282,8 +283,10 @@ export function Lobby({ id }: { id: string }) {
                     readOnly={!game.youAreHost}
                     disabled={busy}
                     onChange={(v) => changeSetting(def.key, v)}
+                    wide={def.options.length > 2}
                   />
                 ))}
+                </div>
               </section>
             </aside>
           </div>

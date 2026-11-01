@@ -18,13 +18,15 @@ export interface SegmentedProps<T> {
   readonly readOnly?: boolean;
   readonly disabled?: boolean;
   readonly seed: string;
+  /** Takes a whole row in a `.settings__list` grid (more than two options). */
+  readonly wide?: boolean;
 }
 
-export function Segmented<T extends string | boolean>({ label, hint, options, value, onChange, readOnly, disabled, seed }: SegmentedProps<T>) {
+export function Segmented<T extends string | boolean>({ label, hint, options, value, onChange, readOnly, disabled, seed, wide }: SegmentedProps<T>) {
   const id = useId();
   const chosen = options.find((o) => o.value === value);
   return (
-    <div className="seg" role="group" aria-labelledby={`${id}-l`}>
+    <div className={wide ? "seg seg--wide" : "seg"} role="group" aria-labelledby={`${id}-l`}>
       <div className="seg__head">
         <span id={`${id}-l`} className="seg__label">
           {label}
