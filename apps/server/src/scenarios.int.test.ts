@@ -16,6 +16,7 @@ import type { WebSocket } from "ws";
 import { SESSION_COOKIE } from "./auth";
 import { fakeClock } from "./clock";
 import type { Db } from "./db";
+import type { ChatMessage, DmNotice } from "./chat";
 import type { ServerMessage } from "./live";
 import { gameConfig, playerIdFor, type LobbyView } from "./lobby";
 import { buildServer } from "./server";
@@ -124,8 +125,15 @@ class Client {
     return this.views().at(-1)!;
   }
   async send(cmd: unknown): Promise<ServerMessage> {
+    return this.sendRaw({ cmd });
+  }
+  /** A chat message (M2-8a): `{ to?, text }` or `{ to?, evidence }`. */
+  async chat(chat: unknown): Promise<ServerMessage> {
+    return this.sendRaw({ chat });
+  }
+  async sendRaw(msg: Record<string, unknown>): Promise<ServerMessage> {
     const id = `${this.tag}-${++this.n}`;
-    this.ws.send(JSON.stringify({ cmd, id }));
+    this.ws.send(JSON.stringify({ ...msg, id }));
     let reply: ServerMessage | undefined;
     await vi.waitFor(() => {
       reply = this.messages.find((m) => "id" in m && m.id === id);
@@ -213,6 +221,17 @@ async function play(game: Game, clients: readonly (Client | null)[], brains: rea
  */
 async function assertCleanSocket(c: Client, final: GameState) {
   if (c.closed === null) await c.barrier();
+  // Chat (M2-8a, design §12.1): crew messages and this seat's own DMs only;
+  // others' DMs at most as a bare notice { from, to, at }.
+  const chatFor = (m: ChatMessage) => {
+    expect(m.to === null || m.from === c.player || m.to === c.player).toBe(true);
+    expect(Object.keys(m).sort().join()).toBe(m.verified ? "at,card,from,id,to,verified" : "at,from,id,text,to,verified");
+    if (m.verified) expect(JSON.stringify(m.card)).not.toMatch(/"seq"|"visibility"/);
+  };
+  const noticeFor = (n: DmNotice) => {
+    expect(Object.keys(n).sort().join()).toBe("at,from,to");
+    expect(n.from !== c.player && n.to !== c.player).toBe(true);
+  };
   const real = new Set(final.log.map((e) => JSON.stringify(e)));
   const seed = JSON.stringify(final.config.seed);
   const isReal = (e: GameEvent) => real.has(JSON.stringify(e));
@@ -228,6 +247,13 @@ async function assertCleanSocket(c: Client, final: GameState) {
       // The seed and RNG state are reveal-only (rngSeeded / rngAdvanced). design §17.2
       if (v.reveal === null) expect(text).not.toMatch(new RegExp(`${seed.replace(/[^a-z0-9]/gi, ".")}|"words"|"seed"|"rngSeeded"`));
       else expect(v.reveal.log.every(({ event }) => canSee(event.visibility, c.player, true) && isReal(event))).toBe(true);
+    } else if ("chatHistory" in msg) {
+      msg.chatHistory.messages.forEach(chatFor);
+      msg.chatHistory.dmNotices.forEach(noticeFor);
+    } else if ("chat" in msg) {
+      chatFor(msg.chat);
+    } else if ("dmNotice" in msg) {
+      noticeFor(msg.dmNotice);
     } else {
       expect(Object.keys(msg).sort()).toEqual("ok" in msg ? ["id", "ok"] : ["id", "reason", "rejected"]);
       expect(String((msg as { id?: unknown }).id).startsWith(`${c.tag}-`)).toBe(true);
@@ -290,8 +316,16 @@ describe("scenarios: end-to-end stories over HTTP + WebSocket", () => {
     const before = app.live.botRefusals.length;
     const game = await startGame(3, 5, { voteVisibility: "hiddenThenRevealed", mole: "on", eventsEnabled: true });
     const clients = await Promise.all(game.humans.map((h) => Client.open(game.id, h)));
+    // Some talk on the way (M2-8a): crew chat, a DM between seats 1 and 2, an evidence card.
+    const [p0, p1, p2] = clients as [Client, Client, Client];
+    expect(await p0.chat({ text: "let's be careful" })).toMatchObject({ ok: true });
+    expect(await p0.chat({ to: p1.player, text: "side deal: vault, split 50/50" })).toMatchObject({ ok: true });
+    const role = p1.lastView().caseFile.find((e) => e.event.type === "roleDealt")!;
+    expect(await p1.chat({ to: p0.player, evidence: role.seq })).toMatchObject({ ok: true });
     const refused = await play(game, clients, brainsFor(game));
     const final = await finish(game, clients, refused, before);
+    expect(p2.raw.join()).not.toMatch(/side deal|"verified":true/);
+    expect(p2.messages.filter((m) => "dmNotice" in m)).toHaveLength(2);
     expect(final.playerOrder).toEqual(Array.from({ length: 8 }, (_, i) => playerIdFor(i)));
     expect(typesIn(final)).toContain("meetingClosed");
     // The lobby shows the game as ended.

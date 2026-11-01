@@ -13,11 +13,15 @@
 //   view changed (like the pushes), so another player's hidden action never
 //   makes a bot roll its dice, and so never shows up as a public bot act.
 // - Commands for a game run one at a time (store.withGameLock), in arrival order.
+// - Chat (M2-8a, chat.ts): client `{ chat: { to?, text | evidence }, id? }`,
+//   replied to like a command; the message goes out as `{ chat }` (a DM only to
+//   its two players, others get `{ dmNotice }` if the host left notices on).
+//   On connect, after the first view: `{ chatHistory }`.
 import { createHash } from "node:crypto";
 import websocket from "@fastify/websocket";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { WebSocket } from "ws";
-import { createBot, PERSONALITIES, type Agent, type PersonalityId, type Rejection } from "@skimjob/bots";
+import { createBot, PERSONALITIES, type PersonalityId, type Rejection } from "@skimjob/bots";
 import {
   handleCommand,
   viewFor,
@@ -28,6 +32,8 @@ import {
   type SystemCommand,
 } from "@skimjob/engine";
 import { SESSION_COOKIE, type Sessions } from "./auth";
+import { createChat, parseChatRequest, type ChatHistory, type ChatMessage, type DmNotice } from "./chat";
+import type { Clock } from "./clock";
 import type { Db } from "./db";
 import { HttpError, playerIdOf } from "./lobby";
 import type { GameStore } from "./store";
@@ -64,13 +70,17 @@ const PLAYER_COMMANDS: { readonly [T in PlayerCommand["type"]]: true } = {
 
 export type ServerMessage =
   | { readonly view: ReturnType<typeof viewFor> }
+  | { readonly chat: ChatMessage }
+  | { readonly dmNotice: DmNotice }
+  | { readonly chatHistory: ChatHistory }
   | { readonly ok: true; readonly id?: string | number }
   | { readonly rejected: true; readonly reason: string; readonly id?: string | number };
 
 export interface Live {
   /**
    * Runs a system command (the scheduler's deadlines, M2-4), then the bots,
-   * then pushes views. Throws if the engine refuses it.
+   * then pushes views. Throws `SystemRefused` if the engine refuses it
+   * (any other error is a server failure: worth a retry).
    */
   system(gameId: string, command: SystemCommand): Promise<GameState>;
   /** Lets the bots act and pushes views (after the game starts, or a restart). */
@@ -84,12 +94,19 @@ export interface Live {
 }
 
 export interface LiveOptions {
+  /** Chat timestamps and rate limits. */
+  readonly clock: Clock;
   /**
    * Browser origins allowed to open a socket besides the server's own host
    * (e.g. the Vite dev server, whose proxy keeps the browser's Origin).
    * Requests without an Origin (not a browser) are allowed: the cookie is the check.
    */
   readonly allowedOrigins?: readonly string[];
+  /**
+   * Runs inside the game's lock after every change once the bots have settled
+   * (also on `settle`): the scheduler's `reconcile` (M2-4). Errors are logged.
+   */
+  readonly onChange?: (gameId: string, state: GameState) => Promise<void>;
 }
 
 interface Conn {
@@ -120,8 +137,7 @@ export function parseClientMessage(
   }
   if (typeof msg !== "object" || msg === null || Array.isArray(msg)) return { ok: false, reason: "expected { cmd }" };
   const { cmd, id: rawId } = msg as { cmd?: unknown; id?: unknown };
-  const id =
-    (typeof rawId === "string" && rawId.length <= 64) || (typeof rawId === "number" && Number.isFinite(rawId)) ? rawId : undefined;
+  const id = messageId(rawId);
   const withId = <T extends object>(r: T) => (id === undefined ? r : { ...r, id });
   if (typeof cmd !== "object" || cmd === null || Array.isArray(cmd)) return withId({ ok: false as const, reason: "expected { cmd }" });
   const type = (cmd as { type?: unknown }).type;
@@ -132,8 +148,34 @@ export function parseClientMessage(
   return withId({ ok: true as const, command: { ...cmd, player } as PlayerCommand });
 }
 
-/** A bot's own seed: derived from the hidden game seed, so it can't be guessed but survives a restart. */
-const botSeed = (gameSeed: string, player: PlayerId) => createHash("sha256").update(`bot\0${gameSeed}\0${player}`).digest("hex");
+/** The client's `id`, echoed in the reply: a string up to 64 characters or a finite number. */
+const messageId = (raw: unknown): string | number | undefined =>
+  (typeof raw === "string" && raw.length <= 64) || (typeof raw === "number" && Number.isFinite(raw)) ? raw : undefined;
+
+/** A `{ chat, id? }` message's parts, or null if the text isn't one (then it's a command). */
+export function chatPart(text: string): { chat: unknown; id?: string | number } | null {
+  let msg: unknown;
+  try {
+    msg = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (typeof msg !== "object" || msg === null || Array.isArray(msg) || !Object.hasOwn(msg, "chat")) return null;
+  const { chat, id: rawId } = msg as { chat: unknown; id?: unknown };
+  const id = messageId(rawId);
+  return id === undefined ? { chat } : { chat, id };
+}
+
+const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
+/**
+ * A bot decision's seed: from the hidden game seed (so it can't be guessed),
+ * the seat and the view it acts on, so the same view always gets the same
+ * decision, with or without a restart in between (no long-lived RNG stream).
+ */
+const botSeed = (gameSeed: string, player: PlayerId, viewHash: string) => sha256(`bot\0${gameSeed}\0${player}\0${viewHash}`);
+
+/** The engine refused a system command (a stale or duplicate deadline), as opposed to a server failure. */
+export class SystemRefused extends Error {}
 
 /** Same host as the request, or listed. No Origin header: not a browser, allowed. */
 export function originAllowed(origin: string | undefined, host: string | undefined, allowed: readonly string[]): boolean {
@@ -146,10 +188,11 @@ export function originAllowed(origin: string | undefined, host: string | undefin
   }
 }
 
-export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Sessions, options: LiveOptions = {}): Live {
+export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Sessions, options: LiveOptions): Live {
   const allowedOrigins = options.allowedOrigins ?? [];
+  const chat = createChat(db, options.clock);
   const conns = new Map<string, Set<Conn>>();
-  const bots = new Map<string, readonly Agent[]>();
+  const bots = new Map<string, readonly { readonly player: PlayerId; readonly personality: PersonalityId }[]>();
   /** Per game, the view text each bot last acted on. */
   const botSeen = new Map<string, Map<PlayerId, string>>();
   const botRefusals: (Rejection & { gameId: string })[] = [];
@@ -172,18 +215,20 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
     return { ok: true as const, state: r.events.length > 0 ? await store.append(gameId, r.events) : state, changed: r.events.length > 0 };
   };
 
-  const botsFor = async (gameId: string, state: GameState): Promise<readonly Agent[]> => {
+  /** The game's bot seats; their last-acted view hashes (stored in `seats.bot_seen`) go into `botSeen`. */
+  const botsFor = async (gameId: string): Promise<readonly { readonly player: PlayerId; readonly personality: PersonalityId }[]> => {
     const known = bots.get(gameId);
     if (known) return known;
-    const rows = await db.query<{ player_id: string; bot_personality: PersonalityId }>(
-      "select player_id, bot_personality from seats where game_id = $1 and bot_personality is not null and player_id is not null order by seat_no",
+    const rows = await db.query<{ player_id: string; bot_personality: PersonalityId; bot_seen: string | null }>(
+      "select player_id, bot_personality, bot_seen from seats where game_id = $1 and bot_personality is not null and player_id is not null order by seat_no",
       [gameId],
     );
-    const agents = rows.map((r) =>
-      createBot({ player: r.player_id, personality: PERSONALITIES[r.bot_personality], seed: botSeed(state.config.seed, r.player_id) }),
-    );
-    bots.set(gameId, agents);
-    return agents;
+    const seen = new Map<PlayerId, string>();
+    for (const r of rows) if (r.bot_seen) seen.set(r.player_id, r.bot_seen);
+    botSeen.set(gameId, seen);
+    const seats = rows.map((r) => ({ player: r.player_id, personality: r.bot_personality }));
+    bots.set(gameId, seats);
+    return seats;
   };
 
   /**
@@ -194,17 +239,17 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
   const runBots = async (gameId: string, start: GameState): Promise<GameState> => {
     let state = start;
     if (state.phase.kind === "ended") return state;
-    const agents = await botsFor(gameId, state);
-    const seen = botSeen.get(gameId) ?? new Map<PlayerId, string>();
-    botSeen.set(gameId, seen);
+    const seats = await botsFor(gameId);
+    const seen = botSeen.get(gameId)!;
     for (let pass = 0; pass < MAX_BOT_PASSES; pass++) {
       let changed = false;
-      for (const agent of agents) {
+      for (const seat of seats) {
         if (state.phase.kind === "ended") break;
-        const view = viewFor(state, agent.player);
-        const text = JSON.stringify(view);
-        if (seen.get(agent.player) === text) continue;
-        seen.set(agent.player, text);
+        const view = viewFor(state, seat.player);
+        const hash = sha256(JSON.stringify(view));
+        if (seen.get(seat.player) === hash) continue;
+        seen.set(seat.player, hash);
+        const agent = createBot({ player: seat.player, personality: PERSONALITIES[seat.personality], seed: botSeed(state.config.seed, seat.player, hash) });
         for (const command of agent.act(view)) {
           if (state.phase.kind === "ended") break;
           const r = await apply(gameId, state, { ...command, player: agent.player });
@@ -217,6 +262,8 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
           state = r.state;
           changed ||= r.changed;
         }
+        // Kept across restarts (after its commands), so a rebuilt server doesn't act again on a view this bot already acted on.
+        await db.query("update seats set bot_seen = $3 where game_id = $1 and player_id = $2", [gameId, seat.player, hash]);
       }
       if (!changed) return state;
     }
@@ -237,6 +284,13 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
   const push = (gameId: string, state: GameState) => {
     for (const conn of conns.get(gameId) ?? []) sendView(conn, state);
   };
+  /** A crew message to everyone; a DM to its two players only, and its notice (if any) to the rest. design §12.1 */
+  const deliver = (gameId: string, message: ChatMessage, notice: DmNotice | null) => {
+    for (const conn of conns.get(gameId) ?? []) {
+      if (message.to === null || conn.player === message.from || conn.player === message.to) send(conn, { chat: message });
+      else if (notice) send(conn, { dmNotice: notice });
+    }
+  };
 
   /** After a change: bots, then every seat's fresh view. An ended game's bots are dropped. */
   const afterChange = async (gameId: string, state: GameState) => {
@@ -245,6 +299,7 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
       bots.delete(gameId);
       botSeen.delete(gameId);
     }
+    await options.onChange?.(gameId, settled).catch((err: unknown) => app.log.error({ err, gameId }, "after-change hook failed"));
     push(gameId, settled);
     return settled;
   };
@@ -256,7 +311,7 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
         const state = await store.load(gameId);
         if (!state) throw new Error(`game ${gameId} has not started`);
         const r = await apply(gameId, state, command);
-        if (!r.ok) throw new Error(`system command refused: ${JSON.stringify(command)}: ${r.reason}`);
+        if (!r.ok) throw new SystemRefused(`system command refused: ${JSON.stringify(command)}: ${r.reason}`);
         return afterChange(gameId, r.state);
       }),
     settle: (gameId) =>
@@ -310,7 +365,9 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
         // The first view, in line with any change being made right now.
         void store.withGameLock(gameId, async () => {
           const state = await store.load(gameId);
-          if (state) sendView(conn, state);
+          if (!state) return;
+          sendView(conn, state);
+          send(conn, { chatHistory: await chat.history(gameId, conn.player) });
         });
         socket.on("message", (data, isBinary) => {
           if (conn.queued >= MAX_QUEUED_MESSAGES) {
@@ -318,8 +375,10 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
             return;
           }
           conn.queued++;
+          const chatMsg = isBinary ? null : chatPart(String(data));
           const parsed = isBinary ? { ok: false as const, reason: "messages must be text" } : parseClientMessage(String(data), conn.player);
-          const id = parsed.id === undefined ? {} : { id: parsed.id };
+          const msgId = chatMsg ? chatMsg.id : parsed.id;
+          const id = msgId === undefined ? {} : { id: msgId };
           let replied = false;
           const reply = (msg: ServerMessage) => {
             replied = true;
@@ -327,6 +386,17 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
           };
           void store
             .withGameLock(gameId, async () => {
+              if (chatMsg) {
+                const req = parseChatRequest(chatMsg.chat);
+                if (!req.ok) return reply({ rejected: true, reason: req.reason, ...id });
+                const state = await store.load(gameId);
+                if (!state) return reply({ rejected: true, reason: "game not found", ...id });
+                // The sender is the socket's seat, never the client's say. design §17.2
+                const r = await chat.post(gameId, state, conn.player, req.value);
+                if (!r.ok) return reply({ rejected: true, reason: r.reason, ...id });
+                reply({ ok: true, ...id });
+                return deliver(gameId, r.value.message, r.value.notice);
+              }
               if (!parsed.ok) return reply({ rejected: true, reason: parsed.reason, ...id });
               const state = await store.load(gameId);
               if (!state) return reply({ rejected: true, reason: "game not found", ...id });

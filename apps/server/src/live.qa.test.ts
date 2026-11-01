@@ -68,7 +68,9 @@ class Client {
       ws.on("close", (code) => (c.closed = code));
     };
     c.ws = await app.injectWS(`/games/${gameId}/ws`, { headers: { cookie: `${SESSION_COOKIE}=${h.who}` } }, { onInit });
-    await vi.waitFor(() => expect(c.views().length).toBe(1), quick);
+    // The first view, then the chat history (M2-8a).
+    await vi.waitFor(() => expect(c.messages.some((m) => "chatHistory" in m)).toBe(true), quick);
+    expect(c.views()).toHaveLength(1);
     return c;
   }
   get messages(): ServerMessage[] {
@@ -231,7 +233,7 @@ describe("QA: flooding and many sockets", () => {
     // A private change made from tab 1 reaches tab 2 (same seat), with no reply on tab 2.
     expect(await t1.send({ type: "submitMove", move: { room: "lobby", pocket: 0 } })).toMatchObject({ ok: true });
     await vi.waitFor(() => expect(t2.views().length).toBeGreaterThanOrEqual(2), quick);
-    expect(t2.messages.filter((m) => !("view" in m))).toHaveLength(0);
+    expect(t2.messages.filter((m) => !("view" in m) && !("chatHistory" in m))).toHaveLength(0);
     // A deadline: both tabs move on together.
     await app.live.system(id, { type: "advance", deadline: { kind: "round", round: 1 } });
     await app.live.system(id, { type: "advance", deadline: { kind: "alibis", round: 1 } }); // design §5.4
