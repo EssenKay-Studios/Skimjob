@@ -1,8 +1,8 @@
 // Db adapters: PGlite in every run, real Postgres too when DATABASE_URL is set
 // (see testkit). docs/m2-plan.md §1
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { Db } from "./db";
-import { freshDb } from "./testkit";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { pgDb, type Db } from "./db";
+import { freshDb, usingRealPostgres } from "./testkit";
 
 let db: Db;
 beforeAll(async () => {
@@ -47,5 +47,19 @@ describe("Db", () => {
     expect(await db.query("select * from u")).toEqual([]);
     // and the connection is usable afterwards
     expect(await db.query<{ one: number }>("select 1 as one")).toEqual([{ one: 1 }]);
+  });
+});
+
+describe.skipIf(!usingRealPostgres)("pgDb on real Postgres (PR #16 review)", () => {
+  it("survives an idle connection being killed: reports it, then carries on", { timeout: 20_000 }, async () => {
+    const lost: Error[] = [];
+    const victim = pgDb(process.env.DATABASE_URL!, (err) => lost.push(err));
+    const [me] = await victim.query<{ pid: number }>("select pg_backend_pid() as pid");
+    const killer = pgDb(process.env.DATABASE_URL!);
+    await killer.query("select pg_terminate_backend($1)", [me!.pid]);
+    await killer.close();
+    await vi.waitFor(() => expect(lost.length).toBe(1));
+    expect(await victim.query<{ one: number }>("select 1 as one")).toEqual([{ one: 1 }]);
+    await victim.close();
   });
 });

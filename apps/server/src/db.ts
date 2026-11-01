@@ -18,9 +18,18 @@ export interface Db extends Queryable {
   close(): Promise<void>;
 }
 
-/** Real Postgres through a `pg` pool. */
-export function pgDb(connection: string | pg.PoolConfig): Db {
+/**
+ * Real Postgres through a `pg` pool. `onIdleError` hears about idle pooled
+ * connections that fail (Postgres restarted, network dropped): `pg` emits
+ * those on the pool, and an unheard `error` event would kill the process.
+ * The pool replaces the connection by itself.
+ */
+export function pgDb(
+  connection: string | pg.PoolConfig,
+  onIdleError: (err: Error) => void = (err) => console.error(`postgres: idle connection lost: ${err.message}`),
+): Db {
   const pool = new pg.Pool(typeof connection === "string" ? { connectionString: connection } : connection);
+  pool.on("error", onIdleError);
   const on = (c: pg.Pool | pg.PoolClient): Queryable => ({
     query: async <R>(sql: string, params: readonly unknown[] = []) => (await c.query(sql, [...params])).rows as R[],
     // Without params `pg` uses the simple query protocol, which allows several statements.
@@ -30,16 +39,17 @@ export function pgDb(connection: string | pg.PoolConfig): Db {
     ...on(pool),
     async transaction(fn) {
       const client = await pool.connect();
+      let broken: Error | undefined;
       try {
         await client.query("begin");
         const result = await fn(on(client));
         await client.query("commit");
         return result;
       } catch (err) {
-        await client.query("rollback").catch(() => {});
+        await client.query("rollback").catch((e: Error) => (broken = e));
         throw err;
       } finally {
-        client.release();
+        client.release(broken); // a client that can't roll back is discarded, not reused
       }
     },
     close: () => pool.end(),

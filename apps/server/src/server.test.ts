@@ -1,7 +1,7 @@
 // App factory, /health and env config. docs/m2-plan.md M2-1
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { fakeClock } from "./clock";
-import { loadConfig } from "./config";
+import { loadConfig, StartupError } from "./config";
 import type { Db } from "./db";
 import { buildServer } from "./server";
 import { testDb } from "./testkit";
@@ -49,8 +49,17 @@ describe("loadConfig", () => {
     expect(loadConfig({ DEV_LOGIN: "true" }).devLogin).toBe(false);
   });
 
-  it.each(["abc", "-1", "70000", "1.5"])("refuses PORT=%s", (port) => {
-    expect(() => loadConfig({ PORT: port })).toThrow(/PORT/);
+  it.each(["abc", "-1", "70000", "1.5", "0", "0x50", "1e3"])("refuses PORT=%s", (port) => {
+    expect(() => loadConfig({ PORT: port })).toThrow(StartupError);
+    expect(() => loadConfig({ PORT: port })).toThrow(/PORT must be a whole number from 1 to 65535/);
+  });
+
+  it.each(["", " ", undefined])("treats a blank or unset PORT (%j) as the default 3000, like HOST", (port) => {
+    expect(loadConfig(port === undefined ? {} : { PORT: port }).port).toBe(3000);
+  });
+
+  it("treats a blank PGLITE_DIR as the default directory", () => {
+    expect(loadConfig({ PGLITE_DIR: "" }).pgliteDir).toBe(".pglite");
   });
 });
 

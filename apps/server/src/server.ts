@@ -3,13 +3,11 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import type { Clock } from "./clock";
 import type { Db } from "./db";
-import { createGameStore, type GameStore } from "./store";
 
 export interface ServerDeps {
   readonly db: Db;
+  /** Not read yet: the scheduler (M2-4) and sessions (M2-2) use it. */
   readonly clock: Clock;
-  /** Defaults to a store over `db`. */
-  readonly store?: GameStore;
   /** Fastify's request logging; off by default (tests). */
   readonly logger?: boolean;
 }
