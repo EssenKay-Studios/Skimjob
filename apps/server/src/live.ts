@@ -90,6 +90,11 @@ export interface LiveOptions {
    * Requests without an Origin (not a browser) are allowed: the cookie is the check.
    */
   readonly allowedOrigins?: readonly string[];
+  /**
+   * Runs inside the game's lock after every change once the bots have settled
+   * (also on `settle`): the scheduler's `reconcile` (M2-4). Errors are logged.
+   */
+  readonly onChange?: (gameId: string, state: GameState) => Promise<void>;
 }
 
 interface Conn {
@@ -245,6 +250,7 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
       bots.delete(gameId);
       botSeen.delete(gameId);
     }
+    await options.onChange?.(gameId, settled).catch((err: unknown) => app.log.error({ err, gameId }, "after-change hook failed"));
     push(gameId, settled);
     return settled;
   };

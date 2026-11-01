@@ -23,7 +23,7 @@ const tables = async (db: Db) =>
   (await db.query<{ t: string }>("select table_name as t from information_schema.tables where table_schema = current_schema() order by 1")).map((r) => r.t);
 const versions = async (db: Db) => (await db.query<{ version: string }>("select version from schema_migrations order by 1")).map((r) => r.version);
 
-const ALL = ["001_init.sql", "002_identity.sql"];
+const ALL = ["001_init.sql", "002_identity.sql", "003_deadline_pause.sql"];
 let real: Db;
 let scratch: Db;
 beforeAll(async () => {

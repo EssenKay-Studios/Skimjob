@@ -5,11 +5,12 @@ import { systemClock } from "./clock";
 import { loadConfig, StartupError } from "./config";
 import { openDatabase } from "./startup";
 import { buildServer } from "./server";
+import { TICK_MS } from "./timing";
 
 try {
   const config = loadConfig();
   const { db, applied } = await openDatabase(config);
-  const app = buildServer({ db, clock: systemClock, logger: true, auth: config.devLogin ? [devAuthProvider()] : [], allowedOrigins: config.allowedOrigins });
+  const app = buildServer({ db, clock: systemClock, logger: true, auth: config.devLogin ? [devAuthProvider()] : [], allowedOrigins: config.allowedOrigins, tickMs: TICK_MS });
   if (applied.length > 0) app.log.info({ applied }, "migrations applied");
   app.log.info(config.databaseUrl ? "database: Postgres (DATABASE_URL)" : `database: PGlite (${config.pgliteDir ?? "in memory"})`);
 
