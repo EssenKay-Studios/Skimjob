@@ -5,8 +5,16 @@ import Fastify, { type FastifyInstance } from "fastify";
 import { authRoutes, sessions, type AuthProvider } from "./auth";
 import type { Clock } from "./clock";
 import type { Db } from "./db";
+import { liveRoutes, type Live } from "./live";
 import { HttpError, lobbyRoutes } from "./lobby";
 import { createGameStore, type GameStore } from "./store";
+
+declare module "fastify" {
+  interface FastifyInstance {
+    /** The live game channel: system commands (scheduler, M2-4) and bot runs. */
+    readonly live: Live;
+  }
+}
 
 export interface ServerDeps {
   readonly db: Db;
@@ -46,6 +54,8 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   });
 
   authRoutes(app, db, s, deps.auth ?? []);
-  lobbyRoutes(app, db, store, s);
+  const live = liveRoutes(app, db, store, s);
+  app.decorate("live", live);
+  lobbyRoutes(app, db, store, s, (gameId) => live.settle(gameId));
   return app;
 }
