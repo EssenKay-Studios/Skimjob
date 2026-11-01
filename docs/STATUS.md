@@ -54,6 +54,32 @@ Goal: run thousands of all-bot games at 2–12 players and use the results to tu
 - **M3** — mobile apps, push notifications, cartoon art direction.
 - **M4** — more content (museum, casino, roles, events).
 
+## Milestone 2 — playable web prototype (local only)
+
+Plan and acceptance criteria: `docs/m2-plan.md`. Runs alongside M1 task 16 (balance pass 2, another branch).
+
+1. [x] **M2-1 Server skeleton and game store** — `apps/server`: `buildServer({ db, clock })` (Fastify, `/health`), `loadConfig(env)`, `Db` (`query`/`exec`/`transaction`) with `pg` and PGlite adapters, migration runner (`migrations/NNN_*.sql`, `schema_migrations`, one transaction, advisory lock), schema v1 (`users`, `sessions`, `games`, `seats`, `game_events`, `deadlines`), `GameStore` (`create` lobby game, `start` with config + setup events, `append` all-or-none, `load` = `replay`, in-memory cache, `withGameLock`), `Clock` / `fakeClock`. `scripts/db.sh start|stop|status|url`, `docker-compose.yml`, `pnpm dev`, `pnpm test:pg`. Design §17.2, §17.5.
+2. [ ] **M2-2** Identity, invites and lobby API.
+3. [ ] **M2-3** Live game channel and server bots.
+4. [ ] **M2-4** Scheduler and elastic timing.
+5. [ ] **M2-5** Web shell, style foundation, lobby screens.
+6. [ ] **M2-6** Game screen thin slice (first playable build).
+7. [ ] **M2-7** Meetings and voting UI.
+8. [ ] **M2-8** Chat: crew, DMs, evidence cards.
+9. [ ] **M2-9** Art: bank cutaway, room icons, avatars.
+10. [ ] **M2-10** Ledger, case file and "While you were away".
+11. [ ] **M2-11** End-of-game reveal.
+12. [ ] **M2-12** Google sign-in (needs Karthik's client id).
+13. [ ] **M2-13** Host controls and resilience.
+14. [ ] **M2-14** Playtest pass.
+
+### M2 notes
+- **Database:** no `DATABASE_URL` means PGlite in `.pglite/` (`PGLITE_DIR=memory` for in-memory). Tests use a fresh in-memory PGlite per file; with `DATABASE_URL` set (`pnpm test:pg` starts `scripts/db.sh`) they use real Postgres, one throwaway schema per test database. A fresh PGlite takes a few seconds here, so share one per test file.
+- **Store contract (M2-2…M2-4):** run each command as `store.withGameLock(id, async () => { const s = await store.load(id); const r = handleCommand(s, cmd); if (r.ok) await store.append(id, r.events); })`. `append` folds with `applyEvent`, writes at `idx = log.length` (the `(game_id, idx)` key refuses a second writer) and drops the cache entry if the write fails. `games.status` follows the state (`running` → `ended`).
+- **Never send** `games.config` (has the seed) or `game_events.idx` (counts hidden events) to a client.
+- `buildServer` has no `auth` yet: M2-2 adds the `AuthProvider` dependency (and `@fastify/cookie`); M2-3 adds `@fastify/websocket` and moves `@skimjob/bots` from dev to runtime dependencies.
+- `deadlines` is keyed `(game_id, key)` with the system command to send as `json`; M2-4 decides the key format (the schema comment suggests `round:3`, `openMeeting:act-1`).
+
 ## Notes / half-finished work
 - M2 server: a Muscle shakedown window must always run its full server-set length (ending early on cancel leaks via timing). PR #12 review.
 - M2 plan: see `docs/m2-plan.md` (14 tasks, M2-1 … M2-14).
