@@ -4,6 +4,11 @@ Newest first. Each entry: what was decided, and why. Add an entry whenever a rul
 
 ---
 
+### 2026-11-01 — Web-first launch; responsive everywhere; mobile apps in Flutter (from Karthik)
+- The browser version is the launch product: it must work well on phones (Android/iOS browsers), tablets and laptops, so nobody has to install an app. Targets: 360–430 px phones, 768–1024 px tablets (both orientations), laptops; ≥44 px touch targets, no horizontal overflow, safe-area insets, no hover-only interactions.
+- Make the web app installable as a PWA (manifest + icons; "Add to Home Screen") — cheap, and closes most of the gap before store apps.
+- Native apps come later and will be built in **Flutter** (replaces the earlier React Native/Expo plan). The server stays authoritative and sends `viewFor` JSON, so a Dart client needs no copy of the engine.
+
 ### 2026-11-01 — Server skeleton and game store (M2-1)
 - **Server dependencies:** runtime `fastify` and `pg` only; dev `@electric-sql/pglite` (tests, and the fallback when `DATABASE_URL` is unset, loaded with a dynamic import) and `@types/pg`. No ORM, migration library, schema validator or `dotenv`, as `docs/m2-plan.md` §1 says. `@fastify/cookie` and `@fastify/websocket` join with M2-2 / M2-3, when they're used. The engine gains no dependency.
 - **`json`, not `jsonb`, for the replay inputs** (`games.config`, `game_events.event`, `deadlines.command`): checked on PGlite, `jsonb` re-sorts object keys (`{zeta, a}` comes back as `{a, zeta}`), so a reloaded log would differ from the written one in key order, and any rule that ever iterates a record's keys (tallies by player id) could replay differently. `json` keeps the text byte for byte; a test compares the stored text with `JSON.stringify` of each event. `games.settings` (host's lobby choices, never replayed) stays `jsonb`. Deviation from the plan's wording.
