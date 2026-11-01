@@ -1,0 +1,17 @@
+# Local Postgres for `pnpm dev` (alternative to scripts/db.sh):
+#   docker compose up -d
+#   DATABASE_URL=postgres://skimjob:skimjob@127.0.0.1:5433/skimjob pnpm dev
+# Without DATABASE_URL the server uses PGlite instead (nothing to install).
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: skimjob
+      POSTGRES_PASSWORD: skimjob
+      POSTGRES_DB: skimjob
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - skimjob-pg:/var/lib/postgresql/data
+volumes:
+  skimjob-pg:

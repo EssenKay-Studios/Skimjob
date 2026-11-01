@@ -1,0 +1,65 @@
+// App factory, /health and env config. docs/m2-plan.md M2-1
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { fakeClock } from "./clock";
+import { loadConfig } from "./config";
+import type { Db } from "./db";
+import { buildServer } from "./server";
+import { testDb } from "./testkit";
+
+let db: Db;
+beforeAll(async () => {
+  db = await testDb();
+}, 30_000);
+afterAll(() => db.close());
+
+describe("buildServer", () => {
+  it("answers /health when the database does", async () => {
+    const app = buildServer({ db, clock: fakeClock() });
+    const res = await app.inject({ method: "GET", url: "/health" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ ok: true });
+    await app.close();
+  });
+
+  it("answers 503 when the database doesn't", async () => {
+    const broken: Db = { ...db, query: async () => Promise.reject(new Error("down")) };
+    const app = buildServer({ db: broken, clock: fakeClock() });
+    const res = await app.inject({ method: "GET", url: "/health" });
+    expect(res.statusCode).toBe(503);
+    expect(res.json()).toEqual({ ok: false });
+    await app.close();
+  });
+
+  it("404s unknown routes", async () => {
+    const app = buildServer({ db, clock: fakeClock() });
+    expect((await app.inject({ method: "GET", url: "/nope" })).statusCode).toBe(404);
+    await app.close();
+  });
+});
+
+describe("loadConfig", () => {
+  it("has zero-setup defaults: loopback, port 3000, PGlite on disk, no dev login", () => {
+    expect(loadConfig({})).toEqual({ port: 3000, host: "127.0.0.1", databaseUrl: null, pgliteDir: ".pglite", devLogin: false });
+  });
+
+  it("reads the environment", () => {
+    expect(
+      loadConfig({ PORT: "8080", HOST: "0.0.0.0", DATABASE_URL: "postgres://x@localhost/y", PGLITE_DIR: "memory", DEV_LOGIN: "1" }),
+    ).toEqual({ port: 8080, host: "0.0.0.0", databaseUrl: "postgres://x@localhost/y", pgliteDir: null, devLogin: true });
+    expect(loadConfig({ DEV_LOGIN: "true" }).devLogin).toBe(false);
+  });
+
+  it.each(["abc", "-1", "70000", "1.5"])("refuses PORT=%s", (port) => {
+    expect(() => loadConfig({ PORT: port })).toThrow(/PORT/);
+  });
+});
+
+describe("fakeClock", () => {
+  it("moves only when told to, and only forward", () => {
+    const clock = fakeClock(1000);
+    expect(clock.now()).toBe(1000);
+    clock.advance(500);
+    expect(clock.now()).toBe(1500);
+    expect(() => clock.advance(-1)).toThrow();
+  });
+});
