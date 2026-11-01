@@ -3,13 +3,13 @@
 // triggers) and players spend them. design §8.3
 
 /** One perk token kind. */
-export type PerkId = "peek" | "shield" | "extraVote" | "ballot" | "tail" | "alibi" | "recharge" | "rig";
+export type PerkId = "peek" | "shield" | "extraVote" | "ballot" | "tail" | "alibi" | "recharge" | "rig" | "emergency";
 
 export interface PerkDef {
   readonly id: PerkId;
   readonly name: string;
   readonly effect: string;
-  /** "use": spent with `useAbility`; "auto": spent by the engine when it applies (Shield). */
+  /** "use": spent with `useAbility`; "auto": spent by the engine when it applies (Shield; Emergency, by calling one). */
   readonly spent: "use" | "auto";
 }
 
@@ -22,6 +22,8 @@ export const PERKS: Readonly<Record<PerkId, PerkDef>> = {
   alibi: { id: "alibi", name: "Alibi", effect: "Your alibi for the last round is stamped Verified.", spent: "use" },
   recharge: { id: "recharge", name: "Recharge", effect: "Your once-per-act or once-per-game power comes back.", spent: "use" },
   rig: { id: "rig", name: "Rig", effect: "Pick the next event card from two.", spent: "use" },
+  // Smooth Talker's reward (role deck v2 §2: "an extra emergency meeting"); spent by calling it.
+  emergency: { id: "emergency", name: "Emergency", effect: "Call one more emergency meeting this game.", spent: "auto" },
 };
 
 export const PERK_IDS: readonly PerkId[] = Object.keys(PERKS) as PerkId[];

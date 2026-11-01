@@ -54,7 +54,7 @@ beforeAll(async () => {
 afterAll(() => db.close());
 
 describe("QA: round-trips at 2 / 6 / 12 players — design §17.2", () => {
-  const allRoles = ["rookie", "lookout", "insideMan", "fence", "hacker", "smoothTalker", "muscle", "blackmailer", "snitch", "driver"];
+  const allRoles = ["rookie", "lookout", "insideMan", "fence", "hacker", "smoothTalker", "muscle", "blackmailer", "snitch", "auditor", "detective", "bagman", "cleaner", "priest", "fixer", "mastermind"];
   it.each([
     ["2 players (not Duel)", config(2, "qa-2", { mole: "off" })],
     ["6 players, full role pool, Open votes", config(6, "qa-6", { rolePool: allRoles, voteVisibility: "open" })],

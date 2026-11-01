@@ -59,7 +59,7 @@ describe("dealing roles — design §8.1", () => {
     }
   });
 
-  it("starter mode: only Rookie, Lookout, Inside Man and Fence; no Mole", () => {
+  it("starter mode: only Rookie, Inside Man, Lookout, Bagman and Cleaner (role deck v2 §3); no Mole", () => {
     for (let n = 2; n <= 12; n++) {
       for (const seed of ["a", "b", "c"]) {
         const roles = rolesOf(config(n, { seed, starterMode: true, rolePool: ["fence"] }));
@@ -68,9 +68,9 @@ describe("dealing roles — design §8.1", () => {
     }
   });
 
-  it("4 players, starter mode: one of each starter role but the Inside Man (from 5 players), a Rookie for it", () => {
-    expect(rolesOf(config(4, { starterMode: true })).sort()).toEqual(["fence", "lookout", "rookie", "rookie"]);
-    expect(rolesOf(config(5, { starterMode: true })).sort()).toEqual([...STARTER_ROLES, "rookie"].sort());
+  it("4 players, starter mode: one of each starter role but the Inside Man (from 5 players)", () => {
+    expect(rolesOf(config(4, { starterMode: true })).sort()).toEqual(["bagman", "cleaner", "lookout", "rookie"]);
+    expect(rolesOf(config(5, { starterMode: true })).sort()).toEqual([...STARTER_ROLES].sort());
   });
 
   it("the Inside Man is dealt only from 5 players (design §8.1, owner answers 1 Nov)", () => {
@@ -82,8 +82,8 @@ describe("dealing roles — design §8.1", () => {
 
   it("pool roles are dealt at most once each; Rookie fills the remaining seats (provisional)", () => {
     const roles = rolesOf(config(12, { starterMode: true }));
-    for (const r of ["lookout", "insideMan", "fence"]) expect(roles.filter((x) => x === r)).toHaveLength(1);
-    expect(roles.filter((x) => x === "rookie")).toHaveLength(9);
+    for (const r of ["lookout", "insideMan", "bagman", "cleaner"]) expect(roles.filter((x) => x === r)).toHaveLength(1);
+    expect(roles.filter((x) => x === "rookie")).toHaveLength(8);
   });
 
   it("small crews get a random subset of the pool", () => {
@@ -152,7 +152,7 @@ describe("dealing roles — design §8.1", () => {
 
   it("the deal is shuffled across seats", () => {
     const fenceSeats = new Set<number>();
-    for (let s = 0; s < 40; s++) fenceSeats.add(rolesOf(config(4, { seed: `seat${s}`, starterMode: true })).indexOf("fence"));
+    for (let s = 0; s < 40; s++) fenceSeats.add(rolesOf(config(4, { seed: `seat${s}`, starterMode: true })).indexOf("bagman"));
     expect(fenceSeats).toEqual(new Set([0, 1, 2, 3]));
   });
 });

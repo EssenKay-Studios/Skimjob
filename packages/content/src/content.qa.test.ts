@@ -1,7 +1,7 @@
 // QA (PR #3): bank room and starter-role data against the design tables.
 // design §6, §7, §8 (numbers from balance pass 1, docs/balance/balance-1.md)
 import { describe, expect, it } from "vitest";
-import { BANK_JOB, CREW_V2_ROLES, INFO_VOTE_ROLES, MOLE_ROLE, POOL_ROLES, ROLES, STARTER_ROLES, WIN_CONDITION_ROLES } from "./index";
+import { ACCOMPLICE_V2_ROLES, BANK_JOB, CREW_V2_ROLES, INFO_VOTE_ROLES, MOLE_ROLE, POOL_ROLES, ROLES, STARTER_ROLES } from "./index";
 
 describe("bank room data — design §6, §7", () => {
   it("loot and Heat pressure for every room", () => {
@@ -33,7 +33,7 @@ describe("bank room data — design §6, §7", () => {
 
 describe("role data — design §8", () => {
   it("the role table has exactly the pool roles plus the Mole (tasks 12, 13); every id matches its key", () => {
-    expect(Object.keys(ROLES).sort()).toEqual([...STARTER_ROLES, ...INFO_VOTE_ROLES, ...WIN_CONDITION_ROLES, ...CREW_V2_ROLES, MOLE_ROLE].sort());
+    expect(Object.keys(ROLES).sort()).toEqual([...STARTER_ROLES, ...ACCOMPLICE_V2_ROLES, ...INFO_VOTE_ROLES, ...CREW_V2_ROLES, MOLE_ROLE].sort());
     expect([...POOL_ROLES].sort()).toEqual(Object.keys(ROLES).filter((r) => r !== MOLE_ROLE).sort());
     for (const [id, def] of Object.entries(ROLES)) expect(def.id).toBe(id);
   });

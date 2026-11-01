@@ -57,6 +57,11 @@ const POWER_FIELDS: { readonly [K in RolePower["kind"]]: Readonly<Record<string,
   audit: { perAct: positiveCount },
   checkStash: { perAct: positiveCount },
   tipOff: { perAct: positiveCount, heat: count },
+  bless: { perAct: positiveCount },
+  bagman: { bonus: count },
+  cleaner: { visitors: positiveCount },
+  fixer: { stopAt: count },
+  foresee: {},
 };
 
 /** The numbers each event effect may have overridden: its own only. design §10 */

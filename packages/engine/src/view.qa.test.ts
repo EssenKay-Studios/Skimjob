@@ -8,7 +8,6 @@
 // (a shakedown of an involved player, the ballots at close or as cast, the end).
 // Swapping two players' roles is checked the same way.
 // The first public difference must be one of those; anything else is a leak.
-import { STARTER_ROLES } from "@skimjob/content";
 import { describe, expect, it } from "vitest";
 import type { GameConfig, GameEvent, GameState, PlayerId, PlayerState, PlayerView, VoteVisibility } from "./types";
 import { createGame } from "./setup";
@@ -35,7 +34,8 @@ const config = (n: number, voteVisibility: VoteVisibility, seed: string): GameCo
   seed,
   players: Array.from({ length: n }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: i % 2 === 0 })),
   job: "bank",
-  rolePool: [...STARTER_ROLES], // no Muscle, so no shakedown window (task 12)
+  // No Muscle, so no shakedown window (task 12); no Bagman or Cleaner, whose powers show in the public Haul and Heat by design (v2 §2).
+  rolePool: ["rookie", "lookout", "insideMan", "fence"],
   mole: "off",
   eventsEnabled: false,
   voteVisibility,

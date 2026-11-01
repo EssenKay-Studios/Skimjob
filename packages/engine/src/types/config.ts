@@ -90,6 +90,10 @@ export interface RoleOverride {
   readonly rewardCount?: number;
   /** Mole tip-off Heat. design §8 */
   readonly heat?: number;
+  /** Bagman's Haul bonus, Cleaner's Rooftop visitors, Fixer's raid stop (v2 §2). design §8 */
+  readonly bonus?: number;
+  readonly visitors?: number;
+  readonly stopAt?: number;
 }
 
 /** Every field is optional; whatever is left out keeps the content value. design §17.4 */

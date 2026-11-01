@@ -134,7 +134,7 @@ describe("Mole win rate — design §17.4, §3", () => {
   it("games with a Mole that a Mole won, per game (two winning Moles count once)", () => {
     const mole = (id: string) => seat({ id, role: "mole" });
     const records = [
-      gameRec({ result: "failed", reason: "heat", playerRecords: [mole("m0"), mole("m1"), seat({ id: "d", role: "driver" })], winners: ["m0", "m1", "d"] }),
+      gameRec({ result: "failed", reason: "heat", playerRecords: [mole("m0"), mole("m1"), seat({ id: "d", role: "fixer" })], winners: ["m0", "m1", "d"] }),
       gameRec({ result: "failed", reason: "target", playerRecords: [mole("m0")], winners: ["m0"] }),
       gameRec({ playerRecords: [mole("m0"), seat({ id: "x" })], winners: ["x"] }),
       gameRec({ playerRecords: [seat({ id: "x" })], winners: ["x"] }), // no Mole: left out

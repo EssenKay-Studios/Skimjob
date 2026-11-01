@@ -1,5 +1,5 @@
 // Role definitions: powers, restrictions and scoring, as data. design §8
-import type { RoleId } from "./index";
+import type { RoleId, RoomId } from "./index";
 import type { PerkId } from "./perks";
 
 /** A role's power. `kind` matches the engine's `AbilityUse` kind where the power is used in a move. design §8 */
@@ -29,6 +29,23 @@ export type RolePower =
    * isn't clean, its ballot weighs `extraVotes` more for the rest of the game (passive). design §8 (v2 §2)
    */
   | { readonly kind: "snitch"; readonly extraVotes: number }
+  /**
+   * Priest: `perAct` times per act (`useAbility`), bless another player for the
+   * act. Blessed and shaken down clean in that act → the bank pays the
+   * compensation, not the Haul. design §8 (v2 §2)
+   */
+  | { readonly kind: "bless"; readonly perAct: number }
+  /** Bagman: each round it pockets nothing, the bank adds `bonus` to the Haul (hidden in the round's Haul change, passive). design §8 (v2 §2) */
+  | { readonly kind: "bagman"; readonly bonus: number }
+  /** Cleaner: its visit to `room` counts as `visitors` visitors for that room's Heat pressure (passive). design §7, §8 (v2 §2) */
+  | { readonly kind: "cleaner"; readonly room: RoomId; readonly visitors: number }
+  /**
+   * Fixer: once per game, automatically, a raid stops with Heat at `stopAt`;
+   * the Fixer loses `lossShare` of its stash (rounded, halves up). design §7, §8 (v2 §2)
+   */
+  | { readonly kind: "fixer"; readonly stopAt: number; readonly lossShare: number }
+  /** Mastermind: privately sees the next event card when a round starts (events on only, passive). design §8, §10 (v2 §2) */
+  | { readonly kind: "foresee" }
   /** Mole: `perAct` times per act, a move may tip off the cops: +`heat` Heat that round, hidden in the round's total. design §7, §8 */
   | { readonly kind: "tipOff"; readonly perAct: number; readonly heat: number };
 
@@ -65,7 +82,22 @@ export type PerkTrigger =
   /** A visitor of a room this role audited, in the audited round, is shaken down dirty (Auditor: Ballot). */
   | "auditedShakenDirty"
   /** A player this role checked, earlier this game, is shaken down dirty (Detective: Shield). */
-  | "checkedShakenDirty";
+  | "checkedShakenDirty"
+  /** This role voted to shake down a player who was then shaken down dirty (Smooth Talker: an extra emergency meeting). */
+  | "wonDirtyShakedown"
+  /** This role's cancel saved a player who was clean (Muscle: Recharge). Never for its own shakedown. */
+  | "cancelledClean"
+  /** A player this role blessed this act is shaken down clean (Priest: Ballot). */
+  | "blessedShakenClean"
+  /** This role pocketed nothing in every round of an act (Bagman: Alibi), granted as the act's last round resolves. */
+  | "actAllIn"
+  /** Every `CLEANER_REWARD_EVERY`th round this role spends in its cooling room (Cleaner: +Vote). */
+  | "coolingRounds"
+  /** This role's power stopped a raid (Fixer: Shield). */
+  | "raidStopped";
+
+/** The Cleaner is rewarded on every this-many-th round in its cooling room (v2 §2: every 2nd Rooftop round). */
+export const CLEANER_REWARD_EVERY = 2;
 
 /** A role's reward: `count` tokens of `perk` each time `on` happens. design §8.3 */
 export interface PerkReward {
@@ -96,6 +128,8 @@ export interface RoleDef {
   readonly minPlayers?: number;
   /** Needs meetings, so never dealt in Duel mode (role deck v2 §3). design §16.1 */
   readonly needsMeetings?: boolean;
+  /** Needs the events deck, so dealt only with events on (Mastermind, role deck v2 §3). design §8.1, §10 */
+  readonly needsEvents?: boolean;
 }
 
 const PLAIN_SCORING: RoleScoring = { stashMultiplier: 1, perLootOverFinalTarget: 0 };
@@ -149,11 +183,13 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
   },
   smoothTalker: {
     id: "smoothTalker",
-    name: "Smooth talker",
+    name: "Smooth Talker",
     power: { kind: "voteWeight", weight: 2 },
     canPocket: true,
     scoring: PLAIN_SCORING,
     faction: "crew",
+    rewards: [{ on: "wonDirtyShakedown", perk: "emergency", count: 1 }],
+    minPlayers: 5,
     needsMeetings: true,
   },
   muscle: {
@@ -163,6 +199,8 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     canPocket: true,
     scoring: PLAIN_SCORING,
     faction: "crew",
+    rewards: [{ on: "cancelledClean", perk: "recharge", count: 1 }],
+    minPlayers: 5,
     needsMeetings: true,
   },
   blackmailer: {
@@ -203,15 +241,54 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     minPlayers: 4,
     needsMeetings: true,
   },
-  driver: {
-    id: "driver",
-    name: "Driver",
-    power: { kind: "none" },
+  priest: {
+    id: "priest",
+    name: "Priest",
+    power: { kind: "bless", perAct: 1 },
     canPocket: true,
     scoring: PLAIN_SCORING,
-    // Role deck v2 R1 (provisional): crew without its old Heat-failure win, until
-    // R2/R3 split it into the Fixer (crew) and the Getaway Driver (accomplice).
     faction: "crew",
+    rewards: [{ on: "blessedShakenClean", perk: "ballot", count: 1 }],
+    minPlayers: 5,
+    needsMeetings: true,
+  },
+  bagman: {
+    id: "bagman",
+    name: "Bagman",
+    power: { kind: "bagman", bonus: 1 },
+    canPocket: true,
+    scoring: PLAIN_SCORING,
+    faction: "crew",
+    rewards: [{ on: "actAllIn", perk: "alibi", count: 1 }],
+  },
+  cleaner: {
+    id: "cleaner",
+    name: "Cleaner",
+    power: { kind: "cleaner", room: "rooftop", visitors: 2 },
+    canPocket: true,
+    scoring: PLAIN_SCORING,
+    faction: "crew",
+    rewards: [{ on: "coolingRounds", perk: "extraVote", count: 1 }],
+  },
+  fixer: {
+    id: "fixer",
+    name: "Fixer",
+    // The Driver's crew half (role deck v2 §2); the Getaway Driver (accomplice) comes in R3.
+    power: { kind: "fixer", stopAt: 95, lossShare: 0.25 },
+    canPocket: true,
+    scoring: PLAIN_SCORING,
+    faction: "crew",
+    rewards: [{ on: "raidStopped", perk: "shield", count: 1 }],
+  },
+  mastermind: {
+    id: "mastermind",
+    name: "Mastermind",
+    power: { kind: "foresee" },
+    canPocket: true,
+    scoring: PLAIN_SCORING,
+    faction: "crew",
+    rewards: [{ on: "checkpointMade", perk: "rig", count: 1 }],
+    needsEvents: true,
   },
   mole: {
     id: "mole",
