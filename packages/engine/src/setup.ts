@@ -28,6 +28,7 @@ import type { GameConfig, GameEvent, GameState, MoleSetting, RngState, VoteVisib
 import { PUBLIC, REVEAL, privateTo } from "./types";
 import { pick, randomInt, seedRng, shuffle } from "./rng";
 import { replay } from "./reduce";
+import { show } from "./check";
 import { jobById, roomsInPlay } from "./job";
 import { factionIn, powerOf, roleDefIn, rolesFor, validateOverrides, type RoleTable } from "./overrides";
 
@@ -64,7 +65,7 @@ export function validateConfig(config: unknown): string[] {
   if (typeof voteVisibility !== "string" || !VOTE_VISIBILITIES.includes(voteVisibility)) {
     errors.push(`voteVisibility must be one of ${VOTE_VISIBILITIES.join(", ")}`);
   }
-  if (typeof job !== "string" || !Object.hasOwn(JOBS, job)) errors.push(`unknown job ${String(job)}`);
+  if (typeof job !== "string" || !Object.hasOwn(JOBS, job)) errors.push(`unknown job ${show(job)}`);
   // design §17.4: overrides name the job's rooms, so they're checked once the job is known.
   else errors.push(...validateOverrides(contentOverrides, jobById(job)));
 

@@ -4,6 +4,9 @@ Newest first. Each entry: what was decided, and why. Add an entry whenever a rul
 
 ---
 
+### 2026-11-01 — Hostile command values; meeting slots capped at 64 characters
+Commands are untrusted JSON (design §17.2). Refusal reasons print command values with `show()` (never `String()`), which never throws and cuts strings over 40 characters short, so hostile input can't make `handleCommand` throw or flood logs. **Provisional:** a meeting `slot` (the only free-text command field) may be at most `MAX_SLOT_LENGTH` = 64 characters (content); it is stored in the log and broadcast to every seat, and the server's ISO times are about 24. Longer slots are refused.
+
 ### 2026-11-01 — Lobby screens and host hand-over (M2-5b)
 - **Host hand-over (owner request):** before the start, `POST /games/:id/host { seat }` moves the host role to another *person* seated in the lobby (a bot, yourself, an empty seat or a non-number seat is refused; host only; 409 after the start). The old host is then an ordinary player and may leave. This **replaces the M2-2 "host can't leave the lobby" decision**: the host still can't leave directly (409 "hand the host role to another player before you leave"), so a lobby always has a host. Mid-game hand-over is M2-13.
 - **Settings change in the lobby:** `PATCH /games/:id/settings { settings }` (host, lobby only) merges the sent fields into the current ones and runs the same `parseSettings` checks. The client keeps starter mode valid in one change (turning it on sets saboteur off and events off; turning either back on turns starter mode off), since the server refuses the mix.
