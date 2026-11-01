@@ -32,7 +32,15 @@ test("a host and a guest play a Quick game against bots to the end", async ({ pa
   const over = page.getByRole("list", { name: "Final ranking" });
   let alibis = 0;
   let moves = 0;
+  let votes = 0;
   while (!(await over.isVisible())) {
+    // Each act's meeting (M2-7): the vote dialog opens by itself; the host skips.
+    const dialog = page.getByRole("dialog", { name: "Who's skimming?" });
+    if (await dialog.isVisible().catch(() => false)) {
+      await dialog.getByRole("group", { name: "Your vote" }).getByRole("button", { name: "Skip" }).click({ timeout: 1000 }).catch(() => {});
+      await dialog.getByRole("button", { name: "Cast vote" }).click({ timeout: 1000 }).then(() => votes++, () => {});
+      await dialog.getByRole("button", { name: "Back to the board" }).click({ timeout: 1000 }).catch(() => {});
+    }
     const lock = page.getByRole("button", { name: "Lock it in" });
     if (await lock.isVisible().catch(() => false)) {
       await page.locator('.room-tile[data-room="Office"]').click({ timeout: 1000 }).catch(() => {});
@@ -50,6 +58,7 @@ test("a host and a guest play a Quick game against bots to the end", async ({ pa
   }
   expect(moves).toBeGreaterThan(0);
   expect(alibis).toBeGreaterThan(0);
+  expect(votes).toBeGreaterThan(0);
 
   // Game over: stamp, ranking of all four, winners marked; the ledger has the rounds.
   await expect(page.locator(".over__stamp")).toHaveText(/JOB DONE|BUSTED/);
@@ -60,6 +69,11 @@ test("a host and a guest play a Quick game against bots to the end", async ({ pa
   await expect(ledger).toContainText(/Job done!|Busted:/);
   await page.getByRole("button", { name: /Case file/ }).click();
   await expect(page.getByRole("list", { name: "Case file" })).toContainText(/Round \d, Office: you found 4 loot/);
+  // The act's meetings: the host's ballot (private in the default Hidden mode), and the results in the ledger.
+  await expect(page.getByRole("list", { name: "Case file" })).toContainText("You voted to skip.");
+  await page.getByRole("button", { name: /Ledger/ }).click();
+  await expect(ledger).toContainText("The Act 1 meeting is open: time to vote.");
+  await expect(ledger).toContainText(/Act 1 checkpoint: Haul \d+, target \d+/);
   await page.getByRole("button", { name: /Ledger/ }).click();
   await shot(page, "over");
 

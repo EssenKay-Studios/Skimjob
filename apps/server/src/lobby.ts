@@ -11,6 +11,7 @@ import { validateConfig, type GameConfig } from "@skimjob/engine";
 import { createGuestUser, type Sessions, type User } from "./auth";
 import type { Db, Queryable } from "./db";
 import type { GameStatus, GameStore } from "./store";
+import { TIMINGS } from "./timing";
 import { BOT_NAMES, checkNickname, DEFAULT_SETTINGS, looksLikeBot, nicknameKey, parseSettings, type LobbySettings } from "./settings";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -44,6 +45,11 @@ export interface LobbyView {
   readonly inviteCode: string;
   readonly settings: LobbySettings;
   readonly youAreHost: boolean;
+  /**
+   * Meetings open as soon as the act's last round resolves (the Quick, 1 h and
+   * 3 h presets), so the game screen offers no slot proposals. design §11.1, M2-7
+   */
+  readonly autoMeetings: boolean;
   /** Seats needed to start, and the most a game can have (bots included). */
   readonly minSeats: number;
   readonly maxSeats: number;
@@ -101,6 +107,7 @@ function view(game: GameRow, seats: readonly SeatRow[], user: User): LobbyView {
     // Games made before a setting existed get its default (e.g. uniqueRoles).
     settings: { ...DEFAULT_SETTINGS, ...game.settings },
     youAreHost: game.host_user_id === user.id,
+    autoMeetings: (TIMINGS[game.settings.sessionLength] ?? TIMINGS[DEFAULT_SETTINGS.sessionLength]).autoMeetings,
     minSeats: MIN_PLAYERS,
     maxSeats: MAX_PLAYERS,
     personalities: PERSONALITY_LIST,
