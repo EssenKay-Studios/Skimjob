@@ -99,7 +99,7 @@ export function Landing() {
                 <h2 className="join__title">Got an invite?</h2>
                 <div className="join__row">
                   <TextField
-                    key={shake}
+                    shake={shake}
                     seed="invite-code"
                     label="Invite code or link"
                     hideLabel

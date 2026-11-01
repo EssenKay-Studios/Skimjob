@@ -1,5 +1,5 @@
 // A paper text input inside a sketch frame.
-import { useId, type InputHTMLAttributes, type ReactNode } from "react";
+import { useEffect, useId, type InputHTMLAttributes, type ReactNode } from "react";
 import { FrameArt, useElementSize } from "./SketchFrame";
 
 export interface TextFieldProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "size"> {
@@ -9,11 +9,22 @@ export interface TextFieldProps extends Omit<InputHTMLAttributes<HTMLInputElemen
   readonly seed?: string;
   /** Hide the label visually (still read by screen readers). */
   readonly hideLabel?: boolean;
+  /** Bump to shake the box (ui-style §9). The input is never remounted, so
+   * focus and a phone's keyboard stay put. */
+  readonly shake?: number;
 }
 
-export function TextField({ label, hint, error, seed = "field", hideLabel, className, ...rest }: TextFieldProps) {
+const SHAKE: Keyframe[] = [{ translate: "0" }, { translate: "-4px" }, { translate: "3px" }, { translate: "-2px" }, { translate: "0" }];
+
+export function TextField({ label, hint, error, seed = "field", hideLabel, shake = 0, className, ...rest }: TextFieldProps) {
   const id = useId();
   const [ref, size] = useElementSize<HTMLDivElement>();
+  useEffect(() => {
+    const box = ref.current;
+    if (!shake || !box || typeof box.animate !== "function") return;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    box.animate(SHAKE, { duration: 350, easing: "ease" });
+  }, [shake, ref]);
   const note = error ?? hint;
   return (
     <div className={["field", error && "is-error", className].filter(Boolean).join(" ")}>

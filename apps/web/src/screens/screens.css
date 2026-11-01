@@ -1,5 +1,12 @@
 /* Screen layouts: landing, gallery, 404 (ui-style §1, §4, §10). */
 
+/* Page gutter: never less than the safe-area inset (notch, rounded corners). */
+:root {
+  --gutter: 20px;
+  --gutter-l: max(var(--gutter), env(safe-area-inset-left));
+  --gutter-r: max(var(--gutter), env(safe-area-inset-right));
+}
+
 .topbar {
   display: flex;
   align-items: center;
@@ -7,11 +14,21 @@
   gap: 16px;
   max-width: 1160px;
   margin: 0 auto;
-  padding: 18px 24px 8px;
+  padding: max(14px, env(safe-area-inset-top)) var(--gutter-r) 4px var(--gutter-l);
 }
 .topbar__home {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 4px 6px;
+  margin-left: -6px;
   text-decoration: none;
   border-radius: 10px;
+}
+
+main {
+  padding: 0 var(--gutter-r) 0 var(--gutter-l);
 }
 .topbar__nav {
   display: flex;
@@ -21,6 +38,8 @@
 .sheet {
   --fr-fill: var(--paper);
   max-width: 1120px;
+  /* Side gutters come from <main>, so the ink frame and hatched shadow never
+     touch the screen edge. */
   margin: 18px auto 32px;
   padding: 34px 40px 36px 52px;
 }
@@ -130,6 +149,7 @@ hr.dashed {
 }
 .hero-card__caption {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
   gap: 10px;
@@ -252,13 +272,14 @@ hr.dashed {
   margin-bottom: 4px;
 }
 .btn--icon {
-  width: 38px;
+  width: 44px;
   padding: 0;
 }
 
 /* ---------- 404 ---------- */
 .notfound {
-  padding: 12vh 16px;
+  padding-top: 12vh;
+  padding-bottom: 12vh;
 }
 .notfound__sheet {
   max-width: 460px;
@@ -277,7 +298,9 @@ hr.dashed {
     gap: 26px;
   }
   .landing__art {
-    max-width: 520px;
+    justify-self: center;
+    width: 100%;
+    max-width: 560px;
   }
   .g-grid {
     columns: 1;
@@ -285,11 +308,11 @@ hr.dashed {
 }
 
 @media (max-width: 560px) {
-  .topbar {
-    padding: 14px 14px 4px;
+  :root {
+    --gutter: 12px;
   }
   .sheet {
-    margin: 22px 12px 24px;
+    margin: 14px auto 24px;
     padding: 26px 16px 24px 34px;
   }
   .landing__title {
@@ -303,13 +326,6 @@ hr.dashed {
   }
   .landing__create {
     width: 100%;
-  }
-  .landing__chips {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    margin-right: -16px;
-    padding: 2px 16px 4px 1px;
-    scrollbar-width: none;
   }
   .join__row {
     flex-direction: column;

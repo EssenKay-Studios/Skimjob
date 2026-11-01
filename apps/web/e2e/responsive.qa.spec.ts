@@ -48,9 +48,8 @@ for (const { width, height } of VIEWPORTS) {
         });
       }
 
-      // Known failures (QA PR #19): topbar "Sign in" 40px tall, home link 34px,
-      // 404 "Back to the start" 40px. Remove fixme once buttons are ≥44px.
-      test.fixme(`touch targets are at least 44px on /`, async ({ page }) => {
+      // QA PR #19: topbar "Sign in" was 40px tall, home link 34px (fixed).
+      test(`touch targets are at least 44px on /`, async ({ page }) => {
         await page.goto("/");
         expect(await smallTargets(page)).toEqual([]);
       });
@@ -58,12 +57,12 @@ for (const { width, height } of VIEWPORTS) {
   }
 }
 
-// Known failure (QA PR #19): `.enter-sheet`'s rotate(-1.2deg) on a tall sheet
-// widens a phone's layout viewport for good (gallery at 390 touch: 413px).
-// Any tall sheet (lobby with 12 seats) will hit it. Remove fixme once fixed.
+// QA PR #19: `.enter-sheet`'s rotate(-1.2deg) on a tall sheet widened a
+// phone's layout viewport for good (gallery at 390 touch: 413px). Fixed: no
+// rotate in the entrance, and the body clips horizontal overflow.
 test.describe("tall sheet", () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
-  test.fixme("no horizontal overflow on /dev/gallery", async ({ page }) => {
+  test("no horizontal overflow on /dev/gallery", async ({ page }) => {
     await page.goto("/dev/gallery");
     await page.waitForTimeout(800);
     expect((await overflow(page)).viewport).toBe(390);
@@ -153,10 +152,9 @@ test.describe("landing behaviour", () => {
     expect(api).toEqual([]);
   });
 
-  // Known failure (QA PR #19): the error shake remounts the field
-  // (`key={shake}` in Landing.tsx), so focus drops to <body> and a phone's
-  // keyboard closes. Remove fixme once focus stays in the field.
-  test.fixme("Enter on a bad code keeps focus in the invite field", async ({ page }) => {
+  // QA PR #19: the error shake used to remount the field (`key={shake}`), so
+  // focus dropped to <body> and a phone's keyboard closed. Fixed.
+  test("Enter on a bad code keeps focus in the invite field", async ({ page }) => {
     await page.goto("/");
     const field = page.getByPlaceholder("Invite code or link");
     await field.fill("abc");

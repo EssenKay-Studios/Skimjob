@@ -1,12 +1,15 @@
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { SketchDefs } from "./components/SketchFrame";
 import { ToastProvider } from "./components/Toast";
 import { Button } from "./components/Button";
 import { SketchFrame } from "./components/SketchFrame";
 import { ArrowBack } from "./components/icons";
-import { Gallery } from "./screens/Gallery";
 import { Landing } from "./screens/Landing";
 import { navigate, usePath } from "./router";
+
+// The gallery is a dev tool: only dev builds load it, so it stays out of the
+// production bundle.
+const Gallery = import.meta.env.DEV ? lazy(() => import("./screens/Gallery").then((m) => ({ default: m.Gallery }))) : null;
 
 function NotFound() {
   return (
@@ -36,7 +39,15 @@ export function App() {
   return (
     <ToastProvider>
       <SketchDefs />
-      {route === "/" ? <Landing /> : route === "/dev/gallery" ? <Gallery /> : <NotFound />}
+      {route === "/" ? (
+        <Landing />
+      ) : route === "/dev/gallery" && Gallery ? (
+        <Suspense fallback={null}>
+          <Gallery />
+        </Suspense>
+      ) : (
+        <NotFound />
+      )}
     </ToastProvider>
   );
 }

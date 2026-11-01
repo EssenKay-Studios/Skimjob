@@ -52,11 +52,12 @@
   /* Ink */
   --ink: #2a2320;
   --ink2: #4a403a;
-  --mute: #85796d;
+  --mute: #74695e;
   /* Accent */
   --clay: #d97757;
   --clay-hover: #e08565;
   --clay-d: #b35a3c;
+  --clay-press: #d47252;
   --clay-l: #f4d6c8;
   --kraft: #d4a27f;
   /* Signals */
@@ -111,6 +112,10 @@ body {
     radial-gradient(#2a23200f 1px, transparent 1.3px) 0 0 / 22px 22px,
     var(--paper2);
   -webkit-font-smoothing: antialiased;
+  /* Nothing may widen the page (tilted frames, shadows, entrances): a phone
+     grows its layout viewport to fit overflow and doesn't shrink back. */
+  overflow-x: clip;
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 h1,
@@ -167,7 +172,7 @@ kbd {
 }
 
 :focus-visible {
-  outline: 2.5px solid var(--clay);
+  outline: 2.5px solid var(--clay-d);
   outline-offset: 3px;
   border-radius: 8px;
 }
