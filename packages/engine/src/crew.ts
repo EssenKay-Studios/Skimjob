@@ -14,6 +14,7 @@ import { PUBLIC, privateTo } from "./types";
 import { jobFor, powerOf, roleDefIn, rolesFor } from "./overrides";
 import { actOfRound, isLastRoundOfAct } from "./acts";
 import { isObject, show } from "./check";
+import { holdsDirty } from "./accomplices";
 
 type Result = GameEvent[] | string;
 
@@ -47,7 +48,6 @@ function checkStash(state: GameState, player: PlayerState, perAct: number, raw: 
   if (target === player.id) return "check another player's stash";
   // PR #26 review: a check during the window would be a sure Shield (the shakedown is public, so this refusal tells nothing).
   if (state.pendingShakedown?.target === target) return "that player's shakedown is already pending";
-  const { stash, safe } = state.players[target] as PlayerState;
   const threshold = cleanThreshold(state);
   return [
     {
@@ -55,7 +55,7 @@ function checkStash(state: GameState, player: PlayerState, perAct: number, raw: 
       visibility: privateTo(player.id),
       player: player.id,
       round: state.round,
-      ability: { kind: "checkStash", target, threshold, dirty: stash + safe >= threshold },
+      ability: { kind: "checkStash", target, threshold, dirty: holdsDirty(state, target, threshold) },
     },
   ];
 }
@@ -155,10 +155,7 @@ export function dirtyShakedownRewards(state: GameState, target: PlayerId, meetin
 }
 
 /** Whether `target` holds at least `act`'s clean threshold (stash plus any Fence safe), as the clean check counts it. design §11.3 */
-const dirtyAt = (state: GameState, target: PlayerId, act: number): boolean => {
-  const { stash, safe } = state.players[target] as PlayerState;
-  return stash + safe >= jobFor(state.config).shakedown.cleanBelowPerAct * act;
-};
+const dirtyAt = (state: GameState, target: PlayerId, act: number): boolean => holdsDirty(state, target, jobFor(state.config).shakedown.cleanBelowPerAct * act);
 
 /**
  * Muscle (v2 §2), as its cancel of `target`'s shakedown takes effect: a

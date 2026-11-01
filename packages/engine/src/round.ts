@@ -5,7 +5,7 @@
 // `handleCommand` (handle.ts) folds the events.
 import { MOLE_ROLE, type RoleId, type RoomId } from "@skimjob/content";
 import type { AbilityUse, GameEvent, GameState, Move, PlayerId, PlayerState } from "./types";
-import { PUBLIC, privateTo } from "./types";
+import { PUBLIC, REVEAL, privateTo } from "./types";
 import { clampHeat, roomDef, roomLoot, roundHeatDelta } from "./job";
 import { eventsFor, jobFor, powerOf, roleDefIn, rolesFor } from "./overrides";
 import { isObject, show } from "./check";
@@ -17,7 +17,7 @@ import { isDuel } from "./setup";
 import { endOfDuelAct } from "./duel";
 import { cardEffects, cardHeat, closedRoom, isAudit, isBlackout, roundJob, startRound } from "./deck";
 import { grantRewards, roundRewards, stopRaid } from "./crew";
-import { darkRoundEvents, playersOf } from "./accomplices";
+import { blackmailAllies, darkRoundEvents, playersOf } from "./accomplices";
 
 export { actOfRound, isLastRoundOfAct };
 
@@ -62,6 +62,17 @@ function checkAbility(state: GameState, player: PlayerState, raw: unknown): Abil
       if (target === player.id) return "you can't blackmail yourself";
       if (typeof role !== "string" || !(Object.hasOwn(rolesFor(state.config), role) || role === MOLE_ROLE)) return `unknown role ${show(role)}`;
       return { kind: "blackmail", target, role };
+    }
+    case "forge": {
+      if (player.roleState.usedThisAct >= power.perAct) return "you have already forged a sighting this act";
+      const { target, room } = raw;
+      if (typeof target !== "string" || !Object.hasOwn(state.players, target)) return `unknown player ${show(target)}`;
+      if (typeof room !== "string" || !state.rooms.includes(room)) return "forge a sighting in a room in play";
+      return { kind: "forge", target, room };
+    }
+    case "embezzle": {
+      if (player.roleState.usedThisAct >= power.perAct) return "you have already embezzled this act";
+      return { kind: "embezzle" };
     }
     case "tipOff": {
       if (player.roleState.usedThisAct >= power.perAct) return "you have already tipped off the cops this act";
@@ -188,7 +199,7 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
       events.push({ type: "abilityResolved", visibility: privateTo(id), player: id, round, ability: { kind: "bagman", bonus: power.bonus } });
     }
   }
-  // Each stash as the round's splits, safe moves and blackmail change it.
+  // Each stash as the round's splits, safe moves and takes change it.
   const stash = new Map<PlayerId, number>(order.map((id) => [id, player(id).stash + (toStash.get(id) ?? 0)]));
   const stashOf = (id: PlayerId): number => stash.get(id) as number;
   // Fence (§8): move loot from the stash, including this round's pocket, into the safe.
@@ -201,18 +212,25 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
     stash.set(id, stashOf(id) - amount);
     events.push({ type: "abilityResolved", visibility: privateTo(id), player: id, round, ability: { kind: "fenceSafe", amount } });
   }
-  // Blackmailer (§8): a right guess steals from the target's stash (never the safe), after the safe moves.
+  // Embezzler (v2 §2): after the splits, its take moves from the Haul (as it stands) to its stash, inside the Haul change.
+  for (const id of order) {
+    const power = powerFor(id);
+    if (abilityOf(id)?.kind !== "embezzle" || power.kind !== "embezzle") continue;
+    const amount = Math.max(0, Math.min(power.take, state.haul + haulDelta));
+    haulDelta -= amount;
+    stash.set(id, stashOf(id) + amount);
+    events.push({ type: "abilityResolved", visibility: privateTo(id), player: id, round, ability: { kind: "embezzle", amount } });
+  }
+  // Blackmailer (v2 §2): a right guess steals the target's vote at the next meeting (meeting.ts); the
+  // victim is told its vote is compromised. A saboteur guessed right and the Blackmailer learn each other.
   for (const id of order) {
     const ability = abilityOf(id);
-    const power = powerFor(id);
-    if (ability?.kind !== "blackmail" || power.kind !== "blackmail") continue;
+    if (ability?.kind !== "blackmail") continue;
     const correct = player(ability.target).role === ability.role;
-    const stolen = correct ? Math.min(power.steal, stashOf(ability.target)) : 0;
-    stash.set(ability.target, stashOf(ability.target) - stolen);
-    stash.set(id, stashOf(id) + stolen);
-    const resolved = { kind: "blackmail", target: ability.target, role: ability.role, correct, stolen } as const;
-    events.push({ type: "abilityResolved", visibility: privateTo(id), player: id, round, ability: resolved });
-    if (stolen > 0) events.push({ type: "blackmailed", visibility: privateTo(ability.target), player: ability.target, round, stolen });
+    events.push({ type: "abilityResolved", visibility: privateTo(id), player: id, round, ability: { ...ability, correct } });
+    if (!correct) continue;
+    events.push({ type: "voteCompromised", visibility: privateTo(ability.target), player: ability.target, round });
+    events.push(...blackmailAllies(state, id, ability.target));
   }
 
   // §5.2 step 4, §7: baseline + room pressure, rounded, plus any Mole tip-off (§8, hidden in
@@ -256,29 +274,52 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
   const saboteurs = playersOf(state, "saboteur");
   const crew = playersOf(state, "crew");
   const hid = new Set<PlayerId>();
+  // Forger (v2 §2): planted players show on every watch feed of the room this round (not to room-mates),
+  // in seat order like real ones, unless really there or watching it themselves.
+  const forged = new Map<RoomId, Set<PlayerId>>();
+  const forgers: { readonly forger: PlayerId; readonly target: PlayerId; readonly room: RoomId }[] = [];
+  for (const id of order) {
+    const ability = abilityOf(id);
+    if (ability?.kind !== "forge") continue;
+    events.push({ type: "abilityResolved", visibility: privateTo(id), player: id, round, ability });
+    forgers.push({ forger: id, target: ability.target, room: ability.room });
+    if (!(visitors[ability.room] ?? []).includes(ability.target)) forged.set(ability.room, (forged.get(ability.room) ?? new Set()).add(ability.target));
+  }
+  const fooled = new Map<string, PlayerId[]>();
+  const feed = (watcher: PlayerId, r: RoomId): PlayerId[] => {
+    const fakes = [...(forged.get(r) ?? [])].filter((x) => x !== watcher);
+    for (const x of fakes) fooled.set(`${x}\u0000${r}`, [...(fooled.get(`${x}\u0000${r}`) ?? []), watcher]);
+    const seen = new Set([...others(r, watcher), ...fakes]);
+    return order.filter((x) => seen.has(x));
+  };
   for (const id of order) {
     const { room, watch } = moveOf(id);
     const ability = abilityOf(id);
     if (!blackout && roomDef(job, room).info === "watchRoom" && watch !== undefined) {
       const loopers = looped.get(watch);
       if (loopers && crew.includes(id) && others(watch, id).some((x) => saboteurs.includes(x))) for (const h of loopers) hid.add(h);
-      const seen = loopers ? [] : others(watch, id);
+      const seen = loopers ? [] : feed(id, watch);
       events.push({ type: "roomWatched", visibility: privateTo(id), player: id, round, source: "security", room: watch, seen });
     }
     if (ability?.kind === "lookout") {
       events.push({ type: "abilityResolved", visibility: privateTo(id), player: id, round, ability });
       for (const r of blackout ? [] : ability.rooms) {
-        events.push({ type: "roomWatched", visibility: privateTo(id), player: id, round, source: "lookout", room: r, seen: others(r, id) });
+        events.push({ type: "roomWatched", visibility: privateTo(id), player: id, round, source: "lookout", room: r, seen: feed(id, r) });
       }
     }
     // design §8.3 Tail: one more watched room, like the Lookout's (blinded by a Power cut, not by a camera loop).
     const tailed = player(id).roleState.tail;
     if (tailed !== null && !blackout) {
-      events.push({ type: "roomWatched", visibility: privateTo(id), player: id, round, source: "tail", room: tailed, seen: others(tailed, id) });
+      events.push({ type: "roomWatched", visibility: privateTo(id), player: id, round, source: "tail", room: tailed, seen: feed(id, tailed) });
     }
     if (roomDef(job, room).info === "pocketCount") {
       events.push({ type: "pocketCount", visibility: privateTo(id), player: id, round, pocketed });
     }
+  }
+  // v2 §2: which feeds a forged sighting fooled, for the end-of-game reveal only.
+  for (const f of forgers) {
+    const shownTo = fooled.get(`${f.target}\u0000${f.room}`) ?? [];
+    events.push({ type: "sightingForged", visibility: REVEAL, forger: f.forger, round, target: f.target, room: f.room, shownTo: order.filter((x) => shownTo.includes(x)) });
   }
   // design §10 Audit: what each room came up short (its visitors' pockets), every room in play listed.
   if (isAudit(state)) {

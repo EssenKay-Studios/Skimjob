@@ -34,7 +34,8 @@ type ExpectedVisibility = {
   defaultMoveAssigned: "private";
   lootSplit: "private";
   abilityResolved: "private";
-  blackmailed: "private"; // design §8: only the victim learns they were robbed, not by whom
+  voteCompromised: "private"; // v2 §2: only the victim learns its vote is compromised, not by whom
+  sightingForged: "reveal"; // v2 §2: a forged sighting is told apart only in the end-of-game reveal
   roomSighting: "private";
   roomWatched: "private";
   pocketCount: "private";

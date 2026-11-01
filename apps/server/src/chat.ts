@@ -10,6 +10,9 @@
 //   the server re-reads it from their `viewFor`, copies `type` + payload (the
 //   event without `type`, `visibility` or `seq`) and marks it verified. Typed
 //   text is never verified. Secret-mode ballots can't be shared (decisions.md).
+//   "Verified" means only "from their own case file": a camera feed can be
+//   false (Hacker loop, Forger's planted sighting), so the client shows the
+//   card with the web's `EVIDENCE_CARD_NOTE` (design §12.1, v2 §2).
 // - Text is plain text: stored and sent as typed. Clients must render it as
 //   text, never as HTML.
 import { viewFor, type GameState, type PlayerId, type PlayerView } from "@skimjob/engine";

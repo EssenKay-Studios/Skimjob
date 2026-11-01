@@ -22,8 +22,12 @@ export type AbilityUse =
   | { readonly kind: "fenceSafe"; readonly amount: number }
   /** Hacker: Security shows `room` as empty this round. Once per act (content). design §8 */
   | { readonly kind: "loopCameras"; readonly room: RoomId }
-  /** Blackmailer: guess `target`'s role; if right, steal from their stash this round. Once per act (content). design §8 */
+  /** Blackmailer: guess `target`'s role; if right, steal their vote at the next meeting. Once per act (content). design §8 (v2 §2) */
   | { readonly kind: "blackmail"; readonly target: PlayerId; readonly role: RoleId }
+  /** Forger: `target` shows in `room` on this round's watch feeds of that room. Once per act (content). design §8 (v2 §2) */
+  | { readonly kind: "forge"; readonly target: PlayerId; readonly room: RoomId }
+  /** Embezzler: take the role's `take` (content) from the Haul after this round's splits. Once per act (content). design §8 (v2 §2) */
+  | { readonly kind: "embezzle" }
   /** Mole: tip off the cops, adding the role's Heat (content) to this round's total. Once per act (content). design §7, §8 */
   | { readonly kind: "tipOff" };
 

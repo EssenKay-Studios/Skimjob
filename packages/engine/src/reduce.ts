@@ -150,7 +150,7 @@ function applyChange(state: GameState, event: GameEvent): GameState {
       // A Rig for this round has been used by its flip (deck.ts). design §8.3
       const rigs = state.rigs.filter((r) => r.round > event.round);
       const next: GameState = { ...state, phase: { kind: "planning", round: event.round }, round: event.round, moves: {}, card: null, rigs };
-      // Per-act powers (Fence safe, Hacker, Blackmailer, Mole) start again with each act. design §8
+      // Per-act powers (Fence safe, Hacker, Blackmailer, Forger, Mole, Embezzler) start again with each act. design §8
       return actOfRound(event.round) !== actOfRound(state.round) ? mapPlayers(next, (p) => withRoleState(p, { usedThisAct: 0 })) : next;
     }
     case "moveSubmitted":
@@ -180,12 +180,14 @@ function applyChange(state: GameState, event: GameEvent): GameState {
         case "audit":
         case "checkStash":
         case "bless":
+        case "blackmail":
+        case "forge":
           // The tip-off's Heat is already in the round's `roundResolved` total. design §8
           return updatePlayer(state, event.player, (p) => withRoleState(p, { usedThisAct: p.roleState.usedThisAct + 1 }));
-        case "blackmail":
-          // The target's side is `blackmailed`. design §8
+        case "embezzle":
+          // v2 §2: the take left the Haul inside the round's `roundResolved` Haul change.
           return updatePlayer(state, event.player, (p) => ({
-            stash: p.stash + ability.stolen,
+            stash: p.stash + ability.amount,
             ...withRoleState(p, { usedThisAct: p.roleState.usedThisAct + 1 }),
           }));
         case "cancelShakedown": {
@@ -205,8 +207,10 @@ function applyChange(state: GameState, event: GameEvent): GameState {
           return state;
       }
     }
-    case "blackmailed":
-      return updatePlayer(state, event.player, (p) => ({ stash: p.stash - event.stolen }));
+    case "voteCompromised":
+    case "sightingForged":
+      // v2 §2: the stolen vote is read from the log when the meeting closes (meeting.ts).
+      return state;
     case "roomSighting":
     case "roomWatched":
     case "pocketCount":

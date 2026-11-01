@@ -4,7 +4,7 @@
 // Bots are deterministic: all their randomness comes from their own seeded RNG
 // (the engine's sfc32), never Math.random, so same seed + same views = same
 // commands. Their seed is their own, not the game's (which is secret).
-import { FILLER_ROLE, ROUNDS_PER_ACT, type RoomId } from "@skimjob/content";
+import { ROUNDS_PER_ACT, type RoomId } from "@skimjob/content";
 import {
   checkpointTarget,
   nextUint32,
@@ -220,13 +220,29 @@ export function chooseMove(view: PlayerView, p: Personality, random: Random): Mo
     if (claim !== undefined && view.rooms.includes(claim)) ability = { kind: "loopCameras", room: claim };
     else if (pocket > 0) ability = { kind: "loopCameras", room };
   } else if (power.kind === "blackmail" && view.me.roleState.usedThisAct < power.perAct && view.players.length > 0) {
-    // design §8, §10: a role it learned from an Inside tip is a sure guess (latest tip
-    // per player; it can be stale after a Double-cross); otherwise guess a Rookie,
-    // the commonest role, on a random player.
-    const tips = new Map(ofType(view.caseFile, "insideTip").filter((t) => t.subject !== view.me.id).map((t) => [t.subject, t.role]));
-    const known = [...tips].filter(([id]) => view.players.some((o) => o.id === id));
-    const [target, role] = known.length > 0 ? pick(known, random) : [pick(view.players, random).id, FILLER_ROLE];
-    ability = { kind: "blackmail", target, role };
+    // v2 §4: guess only with a role it learned (an Inside tip or a Peek; the latest per
+    // player, which can be stale after a Double-cross); otherwise skip. Claims come in R4.
+    const learned: [string, string][] = [
+      ...ofType(view.caseFile, "insideTip").map((t): [string, string] => [t.subject, t.role]),
+      ...ofType(view.caseFile, "perkUsed").flatMap((e): [string, string][] => (e.perk.kind === "peek" ? [[e.perk.target, e.perk.role]] : [])),
+    ];
+    const known = [...new Map(learned)].filter(([id]) => view.players.some((o) => o.id === id));
+    if (known.length > 0) {
+      const [target, role] = pick(known, random);
+      ability = { kind: "blackmail", target, role };
+    }
+  } else if (power.kind === "forge" && view.me.roleState.usedThisAct < power.perAct) {
+    // v2 §4: plant its most-trusted rival (lowest suspicion, not a known ally) in the room
+    // likely to come up short: where it skims itself, else the richest room, in the act's last round.
+    const scores = suspicion(view);
+    const rival = view.players.map((o) => o.id).filter((id) => !view.me.roleState.allies.includes(id)).sort((a, b) => (scores.get(a) ?? 0) - (scores.get(b) ?? 0))[0];
+    const richest = [...byLoot(lootRooms)].sort((a, b) => b[1] - a[1])[0]?.[0];
+    const short = pocket > 0 ? room : view.round % ROUNDS_PER_ACT === 0 ? richest : undefined;
+    if (rival !== undefined && short !== undefined) ability = { kind: "forge", target: rival, room: short };
+  } else if (power.kind === "embezzle" && view.me.roleState.usedThisAct < power.perAct) {
+    // v2 §4: take when it is in the richest room (a crowd there to blame), or in the act's last round.
+    const richest = [...byLoot(lootRooms)].sort((a, b) => b[1] - a[1])[0]?.[0];
+    if (room === richest || view.round % ROUNDS_PER_ACT === 0) ability = { kind: "embezzle" };
   } else if (power.kind === "tipOff" && view.me.roleState.usedThisAct < power.perAct) {
     // design §8: the Mole sometimes tips off (at most once per act); otherwise it plays its personality.
     if (random() < MOLE_TIP_CHANCE) ability = { kind: "tipOff" };

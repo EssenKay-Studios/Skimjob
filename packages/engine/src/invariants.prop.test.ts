@@ -184,6 +184,10 @@ function playerCommand(state: GameState, t: Tape, style: Style): { command: Reco
               return { kind: "blackmail", target: t.pick(others.length ? others : state.playerOrder), role: t.pick(ALL_ROLES) };
             case "tipOff":
               return { kind: "tipOff" };
+            case "forge":
+              return { kind: "forge", target: t.pick(state.playerOrder), room: room() };
+            case "embezzle":
+              return { kind: "embezzle" };
             default:
               return t.chance(20) ? { kind: t.pick(["lookout", "fenceSafe", "tipOff", "loopCameras"]) } : undefined;
           }
@@ -325,12 +329,13 @@ function checkState(state: GameState, inflow: number): void {
 /** design §8.1 (role deck v2 §3): saboteurs by the setting (the Mole, at most once), then distinct pool roles, then Rookies. */
 function checkDeal(state: GameState): void {
   const roles = state.playerOrder.map((id) => (state.players[id] as PlayerState).role);
-  const moles = roles.filter((r) => r === MOLE_ROLE).length;
+  // R3b: the Embezzler is a saboteur too, dealt by the same setting.
+  const moles = roles.filter((r) => r === MOLE_ROLE || r === "embezzler").length;
   const allowed = darkSideOdds(roles.length, state.config.mole, state.config.starterMode).map((o) => Math.min(saboteursFor(state.config).length, o.saboteurs));
   check(allowed.includes(moles), "Mole count allowed (design §8.1)", roles);
   check(roles.filter((r) => isDarkSide(rolesFor(state.config), r)).length <= Math.floor(roles.length / 3), "at most ⌊n/3⌋ dark seats (design §8.1)", roles);
   const pool = rolePoolFor(state.config);
-  const dealt = roles.filter((r) => r !== MOLE_ROLE && r !== FILLER_ROLE);
+  const dealt = roles.filter((r) => r !== MOLE_ROLE && r !== "embezzler" && r !== FILLER_ROLE);
   if (state.config.uniqueRoles !== false) check(new Set(dealt).size === dealt.length, "uniqueRoles: each non-Rookie role dealt at most once (design §8.1)", roles);
   check(dealt.every((r) => pool.includes(r)), "roles come from the pool", roles);
   if (state.config.starterMode) check(roles.every((r) => STARTER_ROLES.includes(r)), "starter roles only (design §8.1)", roles);

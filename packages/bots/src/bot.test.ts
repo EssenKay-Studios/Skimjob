@@ -183,12 +183,31 @@ describe("role habits — design §8", () => {
     expect(cancels(pending(withRole(s, "ana", "rookie"), "ana"), "ana")).toBe(false);
   });
 
-  it("Blackmailer uses a role it learned from an Inside tip; otherwise guesses a Rookie (§8, §10)", () => {
+  it("Blackmailer uses a role it learned from an Inside tip or a Peek; otherwise skips (v2 §4)", () => {
     const s = withRole(game(5), "ana", "blackmailer");
     const tip: GameEvent = { type: "insideTip", visibility: { kind: "private", player: "ana" }, player: "ana", round: 1, subject: "ben", role: "fence" };
+    const peek: GameEvent = { type: "perkUsed", visibility: { kind: "private", player: "ana" }, player: "ana", round: 1, perk: { kind: "peek", target: "ben", role: "mole" } };
     const tipped: GameState = { ...s, log: [...s.log, tip] };
     expect(chooseMove(viewFor(tipped, "ana"), exact(PERSONALITIES.honest), seeded("b")).ability).toEqual({ kind: "blackmail", target: "ben", role: "fence" });
-    expect(chooseMove(viewFor(s, "ana"), exact(PERSONALITIES.honest), seeded("b")).ability).toMatchObject({ kind: "blackmail", role: "rookie" });
+    expect(chooseMove(viewFor({ ...s, log: [...s.log, peek] }, "ana"), exact(PERSONALITIES.honest), seeded("b")).ability).toEqual({ kind: "blackmail", target: "ben", role: "mole" });
+    expect(chooseMove(viewFor(s, "ana"), exact(PERSONALITIES.honest), seeded("b")).ability).toBeUndefined();
+  });
+
+  it("Forger plants its most-trusted rival where it skims, or in the richest room in the act's last round; Embezzler takes in the richest room or the act's last round (v2 §4)", () => {
+    const forger = withRole(game(5), "ana", "forger");
+    for (let i = 0; i < 20; i++) {
+      const m = chooseMove(viewFor(forger, "ana"), exact(PERSONALITIES.greedy), seeded(`f${i}`));
+      if (m.ability) expect(m.ability).toMatchObject({ kind: "forge", room: m.room });
+      else expect(m.pocket).toBe(0);
+    }
+    const last: GameState = { ...forger, round: 3, phase: { kind: "planning", round: 3 } };
+    expect(chooseMove(viewFor(last, "ana"), exact(PERSONALITIES.honest), seeded("f")).ability).toMatchObject({ kind: "forge", room: "vault" });
+    const emb = withRole(game(5), "ana", "embezzler");
+    for (let i = 0; i < 20; i++) {
+      const m = chooseMove(viewFor(emb, "ana"), exact(PERSONALITIES.greedy), seeded(`e${i}`));
+      expect(m.ability !== undefined).toBe(m.room === "vault");
+    }
+    expect(chooseMove(viewFor({ ...emb, round: 3, phase: { kind: "planning", round: 3 } }, "ana"), exact(PERSONALITIES.honest), seeded("e")).ability).toEqual({ kind: "embezzle" });
   });
 
   it("Auditor audits the room its top suspect claimed; Detective checks its top suspect in the act's last round (v2 §2, §4)", () => {

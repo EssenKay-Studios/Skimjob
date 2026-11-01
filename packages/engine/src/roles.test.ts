@@ -87,14 +87,14 @@ describe("content — design §8", () => {
     expect(power("hacker", "loopCameras").perAct).toBe(1);
     expect(power("smoothTalker", "voteWeight").weight).toBe(2);
     expect(power("muscle", "cancelShakedown").perGame).toBe(1);
-    expect(power("blackmailer", "blackmail")).toMatchObject({ perAct: 1, steal: 3 });
+    expect(power("blackmailer", "blackmail")).toEqual({ kind: "blackmail", perAct: 1 }); // v2 §2: steals a vote, not loot
     expect(power("snitch", "snitch").extraVotes).toBe(1); // role deck v2 §2: +Vote for the rest of the game
     for (const r of ["hacker", "smoothTalker", "muscle", "blackmailer", "snitch"]) expect(DEFAULT_ROLE_POOL).toContain(r);
-    expect(validateConfig(config(5, { rolePool: ["hacker", "smoothTalker", "muscle", "blackmailer", "snitch"] }))).toEqual([]);
+    expect(validateConfig(config(7, { rolePool: ["hacker", "smoothTalker", "muscle", "blackmailer", "snitch"] }))).toEqual([]);
   });
 
   it("content overrides can tune each power's own numbers, never another role's (design §17.4)", () => {
-    const roles = { hacker: { perAct: 2 }, smoothTalker: { weight: 3 }, muscle: { perGame: 2 }, blackmailer: { perAct: 2, steal: 5 }, snitch: { extraVotes: 2 } };
+    const roles = { hacker: { perAct: 2 }, smoothTalker: { weight: 3 }, muscle: { perGame: 2 }, blackmailer: { perAct: 2 }, snitch: { extraVotes: 2 } };
     expect(validateConfig(config(5, { contentOverrides: { roles } }))).toEqual([]);
     expect(validateConfig(config(5, { contentOverrides: { roles: { hacker: { steal: 5 } } } }))).toEqual([expect.stringMatching(/hacker\.steal/)]);
     expect(validateConfig(config(5, { contentOverrides: { roles: { muscle: { perGame: 0 } } } }))).toEqual([expect.stringMatching(/perGame/)]);
@@ -143,39 +143,19 @@ describe("Hacker: loop the cameras — design §8", () => {
   });
 });
 
-describe("Blackmailer: guess a role, steal if right — design §8", () => {
+describe("Blackmailer: guess a role (v2 §2: the vote steal is in dark.test.ts) — design §8", () => {
   // p0 Blackmailer, p1 Fence, p2 Rookie.
   const base = game(3, ["blackmailer", "fence", "rookie"]);
   const guess = (target: string, role: string) => mv("p0", "lobby", 0, { ability: { kind: "blackmail", target, role } });
-  const steal = power("blackmailer", "blackmail").steal;
 
-  it("a right guess steals from the target's stash (after this round's split and safe move, never the safe); only the target is told, not by whom", () => {
-    // p1 pockets 6 and hides 2 in the safe: stash 4, safe 2. p0 guesses "fence" right.
-    const after = run(base, guess("p1", "fence"), mv("p1", "vault", 6, { ability: { kind: "fenceSafe", amount: 2 } }), ROUND);
-    const events = since(base, after);
-    expect(ofType(events, "abilityResolved").find((e) => e.player === "p0")).toMatchObject({
-      visibility: { kind: "private", player: "p0" },
-      ability: { kind: "blackmail", target: "p1", role: "fence", correct: true, stolen: steal },
-    });
-    expect(ofType(events, "blackmailed")).toEqual([{ type: "blackmailed", visibility: privateTo("p1"), player: "p1", round: 1, stolen: steal }]);
-    expect(after.players.p0).toMatchObject({ stash: steal, roleState: { usedThisAct: 1 } });
-    expect(after.players.p1).toMatchObject({ stash: 4 - steal, safe: 2 });
-  });
-
-  it("the steal is capped at what the stash holds", () => {
-    const after = run(base, guess("p2", "rookie"), mv("p2", "office", 1), ROUND);
-    expect(ofType(since(base, after), "abilityResolved")[0]?.ability).toMatchObject({ correct: true, stolen: 1 });
-    expect([after.players.p0?.stash, after.players.p2?.stash]).toEqual([1, 0]);
-  });
-
-  it("a wrong guess steals nothing and the target hears nothing; a right guess on an empty stash isn't announced either", () => {
-    const wrong = run(base, guess("p1", "rookie"), mv("p1", "vault", 6), ROUND);
-    expect(ofType(since(base, wrong), "abilityResolved")[0]?.ability).toMatchObject({ correct: false, stolen: 0 });
-    expect(ofType(since(base, wrong), "blackmailed")).toEqual([]);
-    expect(wrong.players.p1?.stash).toBe(6);
-    const empty = run(base, guess("p2", "rookie"), ROUND);
-    expect(ofType(since(base, empty), "abilityResolved")[0]?.ability).toMatchObject({ correct: true, stolen: 0 });
-    expect(ofType(since(base, empty), "blackmailed")).toEqual([]);
+  it("a right or wrong guess takes nothing from any stash (v2 §2); only a right one tells the target", () => {
+    const right = run(base, guess("p1", "fence"), mv("p1", "vault", 6), ROUND);
+    expect(ofType(since(base, right), "abilityResolved").find((e) => e.player === "p0")?.ability).toEqual({ kind: "blackmail", target: "p1", role: "fence", correct: true });
+    expect(ofType(since(base, right), "voteCompromised")).toEqual([{ type: "voteCompromised", visibility: privateTo("p1"), player: "p1", round: 1 }]);
+    expect([right.players.p0?.stash, right.players.p1?.stash]).toEqual([0, 6]);
+    const wrong = run(base, guess("p1", "rookie"), ROUND);
+    expect(ofType(since(base, wrong), "abilityResolved")[0]?.ability).toMatchObject({ correct: false });
+    expect(ofType(since(base, wrong), "voteCompromised")).toEqual([]);
   });
 
   it("once per act; not yourself; a known role; only the Blackmailer", () => {

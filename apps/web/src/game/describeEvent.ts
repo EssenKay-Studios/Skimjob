@@ -30,6 +30,13 @@ const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 /** "to shake down Dez" / "to shake you down". */
 const shakeDown = (target: PlayerId, who: (p: PlayerId) => string) => (who(target) === "you" ? "to shake you down" : `to shake down ${who(target)}`);
 
+/**
+ * The note every evidence card carries (design §12.1, v2 §2): "verified" only
+ * means the app really showed it in that player's own case file; a Hacker's
+ * loop or a Forger's fake sighting can make a camera feed false.
+ */
+export const EVIDENCE_CARD_NOTE = "Verified: from their own case file. Cameras can be tampered with.";
+
 export function describeEvent(event: GameEvent, ctx: DescribeContext): string {
   return cap(line(event, ctx));
 }
@@ -62,6 +69,8 @@ function line(e: GameEvent, ctx: DescribeContext): string {
       if (e.via === "deal") return `${verb(e.player, "were", "was")} told at the deal that ${names(e.allies)} ${are} on the dark side.`;
       if (e.via === "fence") return `${whose(e.player)} full safe paid off: ${names(e.allies)} ${are} on the dark side.`;
       if (e.via === "tipOff") return `${whose(e.player)} tip-off named a dark-side ally: ${names(e.allies)}.`;
+      if (e.via === "embezzle") return `${whose(e.player)} first take named a dark-side ally: ${names(e.allies)}.`;
+      if (e.via === "blackmail") return `A blackmail guess hit the dark side: ${who(e.player)} and ${names(e.allies)} now know ${you(e.player) ? "you're" : "they're"} on the same side.`;
       return `The Heat ran high: ${who(e.player)} and ${names(e.allies)} now know ${you(e.player) ? "you're" : "they're"} on the same side.`;
     }
     case "moleAllies":
@@ -79,8 +88,12 @@ function line(e: GameEvent, ctx: DescribeContext): string {
       return `Round ${e.round}, ${roomName(e.room)}: ${verb(e.player, "found", "found")} ${e.loot} loot, ${e.toHaul} to the Haul and ${e.toStash} pocketed.`;
     case "abilityResolved":
       return ability(e.ability, e.player, e.round, { you, who, whose, verb });
-    case "blackmailed":
-      return `Someone blackmailed ${who(e.player)} in round ${e.round} and took ${e.stolen} from the stash.`;
+    case "voteCompromised":
+      // v2 §2: never says who, or which role was guessed.
+      return `Someone has dirt on ${who(e.player)} (round ${e.round}): ${whose(e.player)} vote is compromised at the next meeting.`;
+    case "sightingForged":
+      // Reveal-only (v2 §2): the one place a forged sighting is told apart from a real one.
+      return `Forged: ${verb(e.forger, "planted", "planted")} ${who(e.target)} in the ${roomName(e.room)} on round ${e.round}'s cameras${e.shownTo.length === 0 ? " (nobody was watching)" : `, fooling ${names(e.shownTo)}`}.`;
     case "roomSighting":
       return e.others.length === 0
         ? `Round ${e.round}: ${verb(e.player, "were", "was")} alone in the ${roomName(e.room)}.`
@@ -188,7 +201,7 @@ type Grammar = {
   readonly verb: (p: PlayerId, second: string, third: string) => string;
 };
 
-function ability(a: ResolvedAbility, player: PlayerId, round: number, { who, whose, verb }: Grammar): string {
+function ability(a: ResolvedAbility, player: PlayerId, round: number, { you, who, whose, verb }: Grammar): string {
   switch (a.kind) {
     case "lookout":
       return `Round ${round}: ${verb(player, "kept", "kept")} lookout on the ${list(a.rooms.map(roomName))}.`;
@@ -198,8 +211,12 @@ function ability(a: ResolvedAbility, player: PlayerId, round: number, { who, who
       return `Round ${round}: ${verb(player, "looped", "looped")} the cameras on the ${roomName(a.room)}.`;
     case "blackmail":
       return a.correct
-        ? `Round ${round}: ${verb(player, "blackmailed", "blackmailed")} ${who(a.target)} (the ${roleName(a.role)}) and took ${a.stolen}.`
+        ? `Round ${round}: ${verb(player, "blackmailed", "blackmailed")} ${who(a.target)} (the ${roleName(a.role)}): ${whose(a.target)} vote at the next meeting is ${you(player) ? "yours" : "theirs"}.`
         : `Round ${round}: ${verb(player, "guessed", "guessed")} ${who(a.target)} was the ${roleName(a.role)}, wrongly.`;
+    case "forge":
+      return `Round ${round}: ${verb(player, "forged", "forged")} a sighting of ${who(a.target)} in the ${roomName(a.room)}.`;
+    case "embezzle":
+      return `Round ${round}: ${verb(player, "embezzled", "embezzled")} ${a.amount} from the Haul.`;
     case "cancelShakedown":
       return `${verb(player, "leaned", "leaned")} on the crew: the shakedown of ${who(a.target)} is off.`;
     case "tipOff":
