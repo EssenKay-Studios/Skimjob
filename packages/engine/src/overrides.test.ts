@@ -1,12 +1,12 @@
 // Content overrides on the game config: validation (untrusted JSON) and their
 // effect on the rules. design §17.4 "config overrides"
 import { describe, expect, it } from "vitest";
-import { BANK_JOB, CONTENT_VERSION, ROLES, STARTER_ROLES } from "@skimjob/content";
+import { BANK_JOB, CONTENT_VERSION, EVENTS, ROLES, STARTER_ROLES } from "@skimjob/content";
 import type { Command, ContentOverrides, GameConfig, GameEvent, GameState } from "./types";
 import { setupEvents, validateConfig } from "./setup";
 import { replay } from "./reduce";
 import { handleCommand } from "./handle";
-import { jobFor, overrideJob, overrideRoles, rolesFor, validateOverrides } from "./overrides";
+import { eventsFor, jobFor, overrideEvents, overrideJob, overrideRoles, rolesFor, validateOverrides } from "./overrides";
 import { ranking } from "./end";
 import { viewFor } from "./view";
 
@@ -69,7 +69,7 @@ describe("validateOverrides — configs are untrusted JSON (design §17.4)", () 
   it("rejects non-objects and unknown sections", () => {
     expect(errs(5)).toEqual(["contentOverrides must be an object"]);
     expect(errs([])).toEqual(["contentOverrides must be an object"]);
-    expect(errs({ events: {} })).toEqual(["contentOverrides.events is not an overridable section"]);
+    expect(errs({ deck: {} })).toEqual(["contentOverrides.deck is not an overridable section"]);
     expect(errs({ rooms: [] })).toEqual(["contentOverrides.rooms must be an object"]);
     expect(errs({ heat: "hot" })).toEqual(["contentOverrides.heat must be an object"]);
   });
@@ -113,6 +113,19 @@ describe("validateOverrides — configs are untrusted JSON (design §17.4)", () 
     // design §8: the Mole's tip-off numbers are content, so they can be tuned; nobody else's.
     expect(errs({ roles: { mole: { heat: 15, perAct: 2 } } })).toEqual([]);
     expect(errs({ roles: { driver: { heat: 15 } } })).toEqual(["contentOverrides.roles.driver.heat is not an overridable field"]);
+  });
+
+  it("event cards: each card tunes only its own effect's numbers (design §10, balance pass 2)", () => {
+    expect(errs({ events: { policePatrol: { amount: 10 }, shiftChange: { lootMultiplier: 2, heatMultiplier: 2 }, raidRumour: { loss: 5 } } })).toEqual([]);
+    expect(errs({ events: { policePatrol: { loss: 3 } } })).toEqual(["contentOverrides.events.policePatrol.loss is not an overridable field"]);
+    expect(errs({ events: { audit: { amount: 1 } } })).toHaveLength(1);
+    expect(errs({ events: { raidRumour: { loss: 2.5 } } })).toHaveLength(1);
+    expect(errs({ events: { meteor: { amount: 1 } } })).toEqual(["contentOverrides.events.meteor: no such event card"]);
+    expect(errs({ events: [] })).toHaveLength(1);
+    const tuned = overrideEvents(EVENTS, { events: { shiftChange: { heatMultiplier: 3 } } });
+    expect(tuned.shiftChange?.effect).toEqual({ kind: "roomSurge", room: "vault", lootMultiplier: 2, heatMultiplier: 3 });
+    expect(tuned.policePatrol).toBe(EVENTS.policePatrol);
+    expect(eventsFor({ contentOverrides: null })).toBe(EVENTS);
   });
 
   it("a crowded room can't pay more than its loot (checkMove bounds pockets by loot, design §6.2)", () => {

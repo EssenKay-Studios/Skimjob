@@ -156,7 +156,9 @@ describe("events deck content — design §10", () => {
       expect(def?.id).toBe(id);
       if (def?.effect.kind === "roomSurge") expect(Object.keys(BANK_JOB.rooms)).toContain(def.effect.room);
     }
-    expect(EVENTS.policePatrol?.effect).toEqual({ kind: "heat", amount: 10 });
+    // balance pass 2: Police patrol 10 → 5, Shift change Vault Heat ×2 → ×1.5
+    expect(EVENTS.policePatrol?.effect).toEqual({ kind: "heat", amount: 5 });
+    expect(EVENTS.shiftChange?.effect).toEqual({ kind: "roomSurge", room: "vault", lootMultiplier: 2, heatMultiplier: 1.5 });
     expect(EVENTS.quietNight?.effect).toEqual({ kind: "heat", amount: -10 });
     expect(EVENTS.raidRumour?.effect).toEqual({ kind: "raidRumour", loss: 3 });
   });
