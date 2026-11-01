@@ -83,7 +83,7 @@ export function Lobby({ id }: { id: string }) {
   const [game, setGame] = useState<LobbyView | null>(null);
   const [missing, setMissing] = useState(false);
   const [personality, setPersonality] = useState("opportunist");
-  const [busy, setBusy] = useState(false);
+  const [busyAct, setBusy] = useState(false);
   // Responses are applied in request order, so a slow poll never undoes a newer change.
   const seq = useRef(0);
   const applied = useRef(0);
@@ -116,22 +116,32 @@ export function Lobby({ id }: { id: string }) {
     }
   }, [id, apply, failed]);
 
+  // One poll loop at a time (QA PR #27: an "online" event mid-poll used to start a second loop).
   useEffect(() => {
     let stop = false;
+    let running = false;
+    let again = false; // "online" arrived mid-poll: poll again at once when it ends
     let timer: ReturnType<typeof setTimeout> | undefined;
     let delay = POLL_MS;
     const loop = async () => {
+      if (running || stop) return;
+      running = true;
+      clearTimeout(timer);
       const ok = await refresh();
+      running = false;
       if (stop) return;
       delay = ok ? POLL_MS : Math.min(delay * 2, POLL_MAX_MS);
-      timer = setTimeout(() => void loop(), delay);
+      if (again) {
+        again = false;
+        void loop();
+      } else timer = setTimeout(() => void loop(), delay);
     };
     void loop();
     // Coming back online: check at once instead of waiting out the back-off.
     const online = () => {
-      clearTimeout(timer);
       delay = POLL_MS;
-      void loop();
+      if (running) again = true;
+      else void loop();
     };
     window.addEventListener("online", online);
     return () => {
@@ -155,12 +165,23 @@ export function Lobby({ id }: { id: string }) {
       return true;
     } catch (err) {
       failed(err);
+      // An optimistic change that didn't reach the server must not look saved (PR #27 review).
+      if (optimistic && err instanceof ApiError && err.unreachable) toast("That change wasn't saved: can't reach the hideout.", "bad");
       void refresh();
       return false;
     } finally {
       setBusy(false);
     }
   };
+
+  const banner = offline && (
+          <SketchFrame seed="offline" radius={14} shadow={0.35} grain={false} fill="var(--clay-l)" className="offline-banner" role="status">
+            <ToastIcon tone="bad" />
+            <span>
+              <b>Can't reach the hideout.</b> Retrying… your seat is safe.
+            </span>
+          </SketchFrame>
+  );
 
   if (missing) {
     return (
@@ -183,12 +204,15 @@ export function Lobby({ id }: { id: string }) {
       <div className="page">
         <TopBar />
         <main>
-          <p className="meta lobby__loading">Opening the lobby…</p>
+          {banner}
+          <p className="meta lobby__loading">{offline ? "Waiting for the hideout to answer…" : "Opening the lobby…"}</p>
         </main>
       </div>
     );
   }
 
+  // While the server can't be reached, nothing can be changed (it would only revert).
+  const busy = busyAct || offline;
   const host = game.seats.find((s) => s.host);
   const full = game.seats.length >= game.maxSeats;
   const canStart = game.seats.length >= game.minSeats;
@@ -229,14 +253,7 @@ export function Lobby({ id }: { id: string }) {
         )}
       </TopBar>
       <main>
-        {offline && (
-          <SketchFrame seed="offline" radius={14} shadow={0.35} grain={false} fill="var(--clay-l)" className="offline-banner" role="status">
-            <ToastIcon tone="bad" />
-            <span>
-              <b>Can't reach the hideout.</b> Retrying… your seat is safe.
-            </span>
-          </SketchFrame>
-        )}
+        {banner}
         <SketchFrame as="section" seed="lobby-sheet" radius={24} tape holes className="sheet lobby__sheet enter-sheet" aria-labelledby="lobby-title">
           <header className="lobby__head">
             <p className="kicker">Lobby · First National</p>

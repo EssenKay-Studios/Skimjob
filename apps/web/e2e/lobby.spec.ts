@@ -163,3 +163,77 @@ test.describe("lobby and invite at every width", () => {
     });
   }
 });
+
+// PR #27 QA/review: one poll loop, a clear state when the server is down on load, no edits while offline.
+test.describe("lobby while the server is unreachable", () => {
+  test.beforeEach(({}, info) => test.skip(info.project.name !== "desktop", "one run is enough"));
+
+  async function lobbyPage(browser: Browser) {
+    const ctx = await browser.newContext();
+    const page = await ctx.newPage();
+    await page.goto("/");
+    const id = await page.evaluate(async () => {
+      const post = (url: string, body: unknown) => fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }).then((r) => r.json());
+      await post("/api/auth/guest", { nickname: "Mara" });
+      return (await post("/api/games", {})).id as string;
+    });
+    return { ctx, page, id };
+  }
+
+  test("an 'online' event mid-poll never starts a second poll loop", async ({ browser }) => {
+    const { page, id } = await lobbyPage(browser);
+    let polls = 0;
+    await page.route(`**/api/games/${id}`, async (r) => {
+      polls++;
+      await new Promise((res) => setTimeout(res, 300)); // keep each poll in flight a while
+      await r.continue();
+    });
+    await page.goto(`/lobby/${id}`);
+    await expect(page.getByRole("heading", { name: "Assemble the crew" })).toBeVisible();
+    for (let i = 0; i < 5; i++) {
+      await page.evaluate(() => window.dispatchEvent(new Event("online")));
+      await page.waitForTimeout(120);
+    }
+    polls = 0;
+    await page.waitForTimeout(6_900);
+    // One loop: a poll every ~2.3 s (2 s wait + 0.3 s in flight) → about 3 in 6.9 s; two loops would be ~6.
+    expect(polls).toBeLessThanOrEqual(4);
+  });
+
+  test("opening the lobby with the server down shows the offline state, then the lobby", async ({ browser }) => {
+    const { page, id } = await lobbyPage(browser);
+    await page.route("**/api/**", (r) => r.fulfill({ status: 502, body: "" }));
+    await page.goto(`/lobby/${id}`);
+    await expect(page.getByText(/can't reach the hideout/i)).toBeVisible();
+    await expect(page.getByText("Waiting for the hideout to answer")).toBeVisible();
+    if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/lobby-down-1280.png` });
+    await page.unroute("**/api/**");
+    await page.evaluate(() => window.dispatchEvent(new Event("online")));
+    await expect(page.getByRole("heading", { name: "Assemble the crew" })).toBeVisible();
+    await expect(page.getByText(/can't reach the hideout/i)).toHaveCount(0);
+  });
+
+  test("settings can't be changed while offline, so nothing looks saved and reverts", async ({ browser }) => {
+    const { ctx, page, id } = await lobbyPage(browser);
+    await page.goto(`/lobby/${id}`);
+    const off = page.getByRole("group", { name: "Unique roles" }).getByRole("button", { name: "Off" });
+    await expect(off).toBeEnabled();
+    await ctx.setOffline(true);
+    await expect(page.getByText(/can't reach the hideout/i)).toBeVisible({ timeout: 5_000 });
+    await expect(off).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Add bot" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Start the job" })).toBeDisabled();
+    await ctx.setOffline(false);
+    await expect(off).toBeEnabled({ timeout: 10_000 });
+  });
+
+  test("a change that fails to reach the server says it wasn't saved", async ({ browser }) => {
+    const { page, id } = await lobbyPage(browser);
+    await page.goto(`/lobby/${id}`);
+    const group = page.getByRole("group", { name: "Unique roles" });
+    await page.route(`**/api/games/${id}/settings`, (r) => r.fulfill({ status: 502, body: "" }));
+    await group.getByRole("button", { name: "Off" }).click();
+    await expect(page.getByText("That change wasn't saved")).toBeVisible();
+    await expect(group.getByRole("button", { name: "On" })).toHaveAttribute("aria-pressed", "true");
+  });
+});

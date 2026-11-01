@@ -49,6 +49,7 @@ export interface Me {
 }
 
 /** What every "server unreachable" case says (offline, proxy 502/503/504, a non-JSON body). */
+const REQUEST_TIMEOUT_MS = 8000;
 export const UNREACHABLE = "Can't reach the hideout. Check your connection and try again.";
 
 export class ApiError extends Error {
@@ -65,7 +66,8 @@ export class ApiError extends Error {
 }
 
 export async function api<T>(method: "GET" | "POST" | "PATCH" | "DELETE", path: string, body?: unknown): Promise<T> {
-  const init: RequestInit = { method, credentials: "same-origin" };
+  // A request that hangs (server down behind a proxy) counts as unreachable after a while.
+  const init: RequestInit = { method, credentials: "same-origin", signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) };
   if (body !== undefined) {
     init.headers = { "content-type": "application/json" };
     init.body = JSON.stringify(body);
@@ -76,7 +78,7 @@ export async function api<T>(method: "GET" | "POST" | "PATCH" | "DELETE", path: 
   } catch {
     throw new ApiError(0, UNREACHABLE);
   }
-  const data = (await res.json().catch(() => null)) as { error?: string } | null;
+  const data = (await res.json().catch(() => null)) // a timed-out body read is unreachable too as { error?: string } | null;
   if (res.ok && data) return data as T;
   // Our server always answers JSON; anything else came from a proxy in front of it.
   if (!data || typeof data.error !== "string") {
