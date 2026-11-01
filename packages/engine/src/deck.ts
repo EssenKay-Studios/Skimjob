@@ -151,7 +151,7 @@ function insideTip(state: GameState, round: number, draw: Draw): GameEvent[] {
  * (they were earned, not dealt; provisional, design §8.3); a Snitch's target
  * that would become its new holder becomes the other swapper; saboteur allies
  * are recomputed and any other saboteur whose ally changed is told privately
- * (`moleAllies`). (provisional)
+ * (`moleAllies`); allies learned in play (`alliesLearned`) stay with the player. (provisional)
  */
 function doubleCross(state: GameState, round: number): GameEvent[] {
   const offer = state.card?.offer;
@@ -170,7 +170,12 @@ function doubleCross(state: GameState, round: number): GameEvent[] {
   const roles = rolesFor(state.config);
   const saboteurAfter = (id: PlayerId): boolean => factionIn(roles, roleAfter(id)) === "saboteur";
   const moles = state.playerOrder.filter(saboteurAfter);
-  const alliesOf = (id: PlayerId): PlayerId[] => (saboteurAfter(id) ? moles.filter((m) => m !== id) : []);
+  // Allies a player learned in play (v2 §2, `alliesLearned`) stay with the player, like perks; saboteur mates are recomputed.
+  const learned = (id: PlayerId): PlayerId[] => state.log.flatMap((e) => (e.type === "alliesLearned" && e.player === id ? e.allies : []));
+  const alliesOf = (id: PlayerId): PlayerId[] => {
+    const mates = saboteurAfter(id) ? moles.filter((m) => m !== id) : [];
+    return [...mates, ...new Set(learned(id).filter((x) => x !== id && !mates.includes(x)))];
+  };
   // Same role on both sides: nothing changes hands, so each keeps its own uses.
   const same = pa.role === pb.role;
   const taken = (self: PlayerId, partner: PlayerId, from: PlayerState): RoleState => ({
@@ -188,7 +193,7 @@ function doubleCross(state: GameState, round: number): GameEvent[] {
     if (m === a || m === b) continue;
     const allies = alliesOf(m);
     const before = playerIn(state, m).roleState.allies;
-    if (allies.length !== before.length || allies.some((x, i) => x !== before[i])) {
+    if (allies.length !== before.length || allies.some((x) => !before.includes(x))) {
       events.push({ type: "moleAllies", visibility: privateTo(m), player: m, allies });
     }
   }

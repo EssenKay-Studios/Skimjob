@@ -3,7 +3,8 @@
 //
 // Emits, in order: gameCreated (public, no seed), rngSeeded (reveal),
 // roomsSet (public), one roleDealt per seat in seat order (private), the
-// saboteurs' moleAllies when two or more are dealt and the Snitch's target (private),
+// saboteurs' moleAllies when two or more are dealt, what accomplices are told
+// at the deal (alliesLearned, v2 §2) and the Snitch's target (private),
 // roundStarted for round 1 (public), and rngAdvanced (reveal) with the RNG state
 // after dealing.
 import {
@@ -33,6 +34,7 @@ import { eventsOn, foresee } from "./deck";
 import { show } from "./check";
 import { jobById, roomsInPlay } from "./job";
 import { factionIn, powerOf, roleDefIn, rolesFor, validateOverrides, type RoleTable } from "./overrides";
+import { dealtKnowledge } from "./accomplices";
 
 const MOLE_SETTINGS: readonly string[] = ["off", "maybe", "on"] satisfies readonly MoleSetting[];
 const VOTE_VISIBILITIES: readonly string[] = ["hiddenThenRevealed", "open", "secret"] satisfies readonly VoteVisibility[];
@@ -305,8 +307,10 @@ export function setupEvents(config: GameConfig): GameEvent[] {
   if (errors.length > 0) throw new Error(`invalid game config: ${errors.join("; ")}`);
   const dealt = dealRoles(config, seedRng(config.seed));
   const targets = snitchTargets(config, dealt.value, dealt.rng);
+  // v2 §2: the Hacker is told one saboteur.
+  const known = dealtKnowledge(config, dealt.value, targets.rng);
   // design §8 (v2 §2): a Mastermind foresees round 2's card as round 1 opens.
-  let rng = targets.rng;
+  let rng = known.rng;
   const seats = new Map(config.players.map((p, i) => [p.id, dealt.value[i] as RoleId]));
   const foreseen = foresee(config, seats, 1, () => {
     const card = pick(rng, EVENT_DECK);
@@ -338,6 +342,7 @@ export function setupEvents(config: GameConfig): GameEvent[] {
       }),
     ),
     ...moleAllies(config, dealt.value),
+    ...known.value,
     ...targets.value,
     // Round 1 opens for planning as soon as the game is set up. design §4, §5.1
     { type: "roundStarted", visibility: PUBLIC, round: 1, act: 1 },

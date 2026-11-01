@@ -165,7 +165,7 @@ describe("QA dealing — design §8.1", () => {
     };
     expect(SEEDS.slice(0, 40).some((seed) => repeats(config(12, { seed, rolePool: [], uniqueRoles: false })))).toBe(true);
     expect(SEEDS.slice(0, 40).some((seed) => repeats(config(12, { seed, rolePool: [] })))).toBe(false);
-    expect(dealt(config(6, { rolePool: ["hacker"], uniqueRoles: false, mole: "on" })).sort()).toEqual(["hacker", "hacker", "hacker", "hacker", "hacker", "mole"]);
+    expect(dealt(config(6, { rolePool: ["lookout"], uniqueRoles: false, mole: "on" })).sort()).toEqual(["lookout", "lookout", "lookout", "lookout", "lookout", "mole"]);
     expect(validateConfig({ ...config(6), uniqueRoles: "no" })).toContain("uniqueRoles must be a boolean");
     const cfg = config(12, { seed: "det", rolePool: [], uniqueRoles: false, mole: "on" });
     expect(setupEvents(cfg)).toEqual(setupEvents(cfg));

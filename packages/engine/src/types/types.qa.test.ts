@@ -27,6 +27,7 @@ type ExpectedVisibility = {
   roleDealt: "private";
   snitchTargetAssigned: "private"; // design §8: the Snitch's target is secret
   moleAllies: "private"; // design §8.1: only the Moles know each other
+  alliesLearned: "private"; // v2 §2: what one dark-side player learns of its allies
   rngAdvanced: "reveal";
   roundStarted: "public";
   moveSubmitted: "private";

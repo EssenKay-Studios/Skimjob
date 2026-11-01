@@ -48,7 +48,7 @@ const ROLE_SCORING_FIELDS = { stashMultiplier: atLeast0, perLootOverFinalTarget:
 const POWER_FIELDS: { readonly [K in RolePower["kind"]]: Readonly<Record<string, Rule>> } = {
   none: {},
   lookout: { extraRooms: positiveCount },
-  fenceSafe: { perAct: positiveCount },
+  fenceSafe: { perAct: positiveCount, revealSafe: count },
   loopCameras: { perAct: positiveCount },
   voteWeight: { weight: positiveCount },
   cancelShakedown: { perGame: positiveCount },
@@ -62,6 +62,7 @@ const POWER_FIELDS: { readonly [K in RolePower["kind"]]: Readonly<Record<string,
   cleaner: { visitors: positiveCount },
   fixer: { stopAt: count },
   foresee: {},
+  getaway: { reverse: count, revealHeat: count },
 };
 
 /** The numbers each event effect may have overridden: its own only. design §10 */

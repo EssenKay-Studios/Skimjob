@@ -211,18 +211,49 @@ describe("role powers in bot games — design §8", () => {
     expect(splits.every((e) => e.type === "lootSplit" && e.toStash === 0)).toBe(true);
   });
 
-  it("the Fence hides loot in the safe, and the Lookout watches an extra room", () => {
-    const used = (kind: string) =>
-      states.flatMap((s) => s.log).filter((e) => e.type === "abilityResolved" && e.ability.kind === kind && (kind !== "fenceSafe" || (e.ability.kind === "fenceSafe" && e.ability.amount > 0)));
-    expect(used("fenceSafe").length).toBeGreaterThan(0);
-    expect(used("lookout").length).toBeGreaterThan(0);
+  it("the Lookout watches an extra room", () => {
+    const used = states.flatMap((s) => s.log).filter((e) => e.type === "abilityResolved" && e.ability.kind === "lookout");
+    expect(used.length).toBeGreaterThan(0);
+  });
+});
+
+describe("bots with the accomplices dealt — role deck v2 §2, §4 (R3a)", () => {
+  // 9 players with a Mole: one or two accomplices from these three, every game.
+  const games = Array.from({ length: 12 }, (_, g) => {
+    const c = { ...config(9, `dark-${g}`), mole: "on" as const, rolePool: ["getawayDriver", "fence", "hacker", "lookout", "rookie", "bagman", "auditor"] };
+    return runBotGame(c, createBots(c.players, mix(MIXED), `bots-${c.seed}`));
+  });
+  const log = games.flatMap((g) => g.state.log);
+
+  it("finish with no refused command; the Fence fills its safe, the Hacker loops, the Mole tips off", () => {
+    for (const g of games) expect([g.state.phase.kind, g.rejections]).toEqual(["ended", []]);
+    const used = (kind: string) => log.filter((e) => e.type === "abilityResolved" && e.ability.kind === kind);
+    for (const k of ["fenceSafe", "loopCameras", "tipOff"]) expect(used(k).length, k).toBeGreaterThan(0);
+    expect(log.some((e) => e.type === "alliesLearned")).toBe(true);
+  });
+
+  it("the Getaway Driver goes to the Rooftop, and no dark-side bot votes to shake down an ally it knows", () => {
+    let rooftop = 0;
+    for (const g of games) {
+      const s = g.state;
+      const driver = s.playerOrder.find((id) => s.players[id]?.role === "getawayDriver");
+      rooftop += s.log.filter((e) => e.type === "lootSplit" && e.player === driver && e.room === "rooftop").length;
+      const allies = new Map<string, string[]>();
+      for (const e of s.log) {
+        if (e.type === "moleAllies") allies.set(e.player, [...e.allies]);
+        if (e.type === "alliesLearned") allies.set(e.player, [...(allies.get(e.player) ?? []), ...e.allies]);
+        if (e.type === "voteCast" && e.vote.kind === "shakedown") expect(allies.get(e.player) ?? []).not.toContain(e.vote.target);
+      }
+    }
+    expect(rooftop).toBeGreaterThan(0);
   });
 });
 
 describe("bots with the info and vote roles dealt — design §8, §17.3 (task 12)", () => {
-  const ROLE_POOL = ["hacker", "smoothTalker", "muscle", "blackmailer", "snitch"];
+  // The Hacker is an accomplice since R3a (tested below with the dark side).
+  const ROLE_POOL = ["smoothTalker", "muscle", "blackmailer", "snitch"];
 
-  it("finish every game with no refused command, and use the Hacker, Blackmailer and Muscle powers", () => {
+  it("finish every game with no refused command, and use the Blackmailer and Muscle powers", () => {
     const used = new Set<string>();
     const types = new Set<string>();
     for (const mode of ["hiddenThenRevealed", "open", "secret"] as const) {
@@ -239,7 +270,7 @@ describe("bots with the info and vote roles dealt — design §8, §17.3 (task 1
         }
       }
     }
-    for (const k of ["loopCameras", "blackmail", "cancelShakedown"]) expect(used, k).toContain(k);
+    for (const k of ["blackmail", "cancelShakedown"]) expect(used, k).toContain(k);
     for (const t of ["snitchTargetAssigned", "shakedownPending", "shakedownCancelled"]) expect(types, t).toContain(t);
    }, 30_000); // 180 games: over the 5 s default on a busy machine
 });

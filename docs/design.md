@@ -184,8 +184,6 @@ Every player is dealt **one secret role** at the start of the game. Roles are de
 | **Lookout** | Each round, also sees who was in one extra room. *Reward:* someone it saw is shaken down dirty → a Peek. | People lie around them more carefully, or try to frame them. |
 | **Auditor** | Once per act, learns the latest resolved round's shortfall for one room (what its visitors pocketed). *Reward:* a visitor of that room, that round, is shaken down dirty → a Ballot. | Liars shake it down to discredit it. |
 | **Detective** *(4+ players, not in Duel)* | Once per act, learns whether one player's stash is at or above the clean threshold right now. *Reward:* a player it checked is shaken down dirty → a Shield. | Cheaters shake it down first (the Shield answers this). |
-| **Hacker** | Once per act, can **loop the cameras** so one room shows as empty on Security that round. | Every empty camera result looks like their doing. |
-| **Fence** | Can move up to 5 loot per act into a hidden safe that shakedowns can't touch. | Assumed to be hoarding, so becomes the first shakedown target. |
 | **Inside Man** *(5+ players)* | Can't pocket loot. Scores 0.3 points for every loot the Haul ends above the final target. *Reward:* each Act 1/2 checkpoint made → a Peek. | Others pocket more, knowing the Inside Man will cover the Haul. |
 | **Smooth Talker** *(5+ players, not in Duel)* | Their vote counts double (majority only). *Reward:* on the winning side of a dirty shakedown → one more emergency meeting (an Emergency perk). | Others coordinate their votes against them. |
 | **Muscle** *(5+ players, not in Duel)* | Once per game, can cancel a shakedown after the vote passes. *Reward:* the target was clean → a Recharge (no compensation is paid); the target was dirty → the ledger names the Muscle. | Everyone knows a vote against their friends may get blocked. |
@@ -196,9 +194,18 @@ Every player is dealt **one secret role** at the start of the game. Roles are de
 | **Mastermind** *(events on only)* | Privately sees each next event card as a round starts (round 2's at setup). *Reward:* each Act 1/2 checkpoint made → a Rig. | Blamed for every bad card. |
 | **Blackmailer** | Once per act, secretly guesses one player's role. If right, steals 3 from that player's stash. | Gets shaken down quickly, and everyone hides their roles harder. |
 | **Snitch** *(4+ players, not in Duel)* | Secretly assigned a target. Each time that target is shaken down while holding more than the clean threshold, its ballot weighs +1 for the rest of the game. | Their target has a reason to frame them. |
-| **Mole** *(saboteur, optional)* | Wins a failed heist with the dark side's best stash; never a successful one. Once per act, can **tip off** the cops (+6 Heat, hidden). | Revealed means hunted, and revealing it is rarely worth it. |
+| **Getaway Driver** *(accomplice)* | Its Rooftop visit **adds** the Heat a visitor would remove (hidden in the round's Heat). *Reward:* Heat at 75 or more → it learns the saboteurs and they learn it. Knows nobody at the start. | Rooftop claims that don't cool Heat give it away. |
+| **Fence** *(accomplice)* | Can move up to 5 loot per act into a hidden safe that shakedowns can't touch. *Reward:* safe at 10 or more → learns one saboteur. Knows nobody at the start. | Assumed to be hoarding, so becomes the first shakedown target. |
+| **Hacker** *(accomplice)* | Once per act, can **loop the cameras** so one room shows as empty on Security that round. Knows one saboteur from the start. *Reward:* its loop hid a saboteur from a Security watcher → a Peek. | Every empty camera result looks like their doing. |
+| **Mole** *(saboteur, optional)* | Wins a failed heist with the dark side's best stash; never a successful one. Once per act, can **tip off** the cops (+6 Heat, hidden). *Reward:* each tip-off → learns one accomplice it didn't know. | Revealed means hunted, and revealing it is rarely worth it. |
 
-*Factions (role deck v2, R1):* the Mole is the only **saboteur**; every other shipped role is **crew** until R3 brings the accomplices (Fence, Hacker and the new Blackmailer become accomplices there; the Getaway Driver is new). `RoleDef.faction` replaces the old `winsOnFailure` / `winsOnSuccess` fields. The Driver was split in R2b: its crew half is the Fixer.
+*Factions (role deck v2, R1, R3a):* the Mole is the only **saboteur** (the Embezzler comes in R3b). The **accomplices** are the Getaway Driver, Fence and Hacker (R3a); the Blackmailer and Forger join them in R3b, so the Blackmailer is still crew with its old power. Everyone else is **crew**. `RoleDef.faction` replaces the old `winsOnFailure` / `winsOnSuccess` fields. The Driver was split: its crew half is the Fixer (R2b), its dark half the Getaway Driver (R3a), and the old Driver's failure win is gone.
+
+*Accomplices and what the dark side learns (R3a, provisional details):*
+- **Allies:** everything the dark side learns about itself is a private `alliesLearned { allies, via }`, added to `roleState.allies` (bots never vote to shake down a known ally). `via`: `deal` (the Hacker's saboteur), `fence`, `getaway`, `tipOff`. Picks are drawn at random from the ones the player doesn't know yet; only the player named is told, except the Getaway Driver's reveal, which goes both ways. In a Double-cross what a player learned stays with the player (like perks); saboteur mates are recomputed.
+- **Getaway Driver:** passive: on the Rooftop it counts as −1 visitors for Heat (× `reverse`, 1). The reveal is checked after every round and after a missed checkpoint's penalty, once per Driver; nothing if no saboteur is dealt.
+- **Fence:** the reveal is checked as the round resolves (after the safe move), once per game. A **Recharge never refills the safe allowance** (it is refused for the Fence).
+- **Hacker:** the reward needs a Security watcher (not a Lookout or Tail, which a loop doesn't fool) watching the looped room while a saboteur other than the watcher was in it; one Peek per loop, however many watchers.
 
 *Fence safe timing (provisional):* the safe move is part of the Fence's move and happens after that round's split, so it can include loot pocketed that round; it can't move more than the stash holds.
 
@@ -243,8 +250,8 @@ Every player is dealt **one secret role** at the start of the game. Roles are de
 | 9–10 | 2 / 1 (60), 1 / 2 (20), 2 / 2 (20) | 60–70% |
 | 11–12 | 2 / 2 (60), 2 / 1 (20), 3 / 1 (20) | 67–75% |
 
-  The hard limits trim some mixes (at 5 players 1 / 1 becomes 1 / 0; at 7–8, 1 / 2 becomes 1 / 1). The fair success rate s = crew seats ÷ n makes a crew seat's and a dark seat's chances equal.
-- **Pools cap the roll (R1, provisional):** a faction can't deal more distinct roles than its pool holds. The Mole is the only saboteur and no accomplice ships yet, so today's deals have **at most one Mole** and **no accomplices**; an unfilled dark seat goes to the crew. Saboteurs are dealt by the setting, never from the host's role pool.
+  The ⌊n ÷ 3⌋ cap trims the table: at **5** players 1 / 1 becomes 1 / 0 (no accomplice ever); at **7–8**, 1 / 2 becomes 1 / 1; at **9–10**, 2 / 2 becomes 2 / 1; at **11**, 2 / 2 becomes 2 / 1 and 3 / 1 becomes 3 / 0. Only 4, 6 and 12 play the table as written (R5 retunes the weights). The fair success rate s = crew seats ÷ n makes a crew seat's and a dark seat's chances equal.
+- **Pools cap the roll (R1, provisional):** a faction can't deal more distinct roles than its pool holds. The Mole is the only saboteur, so today's deals have **at most one Mole**, and so at most saboteurs + 1 = 2 accomplices (R3a: Getaway Driver, Fence, Hacker); an unfilled dark seat goes to the crew. Saboteurs are dealt by the setting, never from the host's role pool.
 - **Inside Man:** dealt only in crews of 5 or more (a crew of 2–4 can't spare a player who never pockets). **Snitch and Detective** from 4 players (role deck v2 §3).
 - **Smooth Talker, Muscle and Priest** from 5 players; the **Mastermind** only with events on (`RoleDef.needsEvents`).
 - **Not in Duel:** roles that need meetings (`RoleDef.needsMeetings`: Smooth Talker, Muscle, Priest, Snitch, Detective today).
@@ -375,7 +382,7 @@ A missed Act 1 or Act 2 checkpoint adds +15 Heat. Because targets are cumulative
 
 - **Crew chat:** everyone.
 - **Direct messages:** private side deals. Everyone can see *that* two players messaged, but not what they said (host setting, on by default).
-- **Evidence cards:** a player can share a **verified** item from their case file into a chat, such as a camera result. The app marks it as genuine. Claims typed in chat, or screenshots from WhatsApp, can't be verified.
+- **Evidence cards:** a player can share a **verified** item from their case file into a chat, such as a camera result. The app marks it as genuine: the app really showed it to that player. That doesn't make the cameras right: a Hacker's loop (and, from R3b, a Forger's fake sighting) can make a camera feed false, so the card says so ("cameras can be tampered with"). Claims typed in chat, or screenshots from WhatsApp, can't be verified.
 - **Alibi button:** posts a formal Alibi to the ledger (§5.4).
 
 ### 12.2 Outside the app

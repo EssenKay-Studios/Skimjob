@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 1 Nov 2026 (role deck v2 R2b; Fly.io deploy)_
+_Last updated: 1 Nov 2026 (role deck v2 R3a)_
 
 ## Current milestone: M1 — Engine + simulator (bank job, starter roles, bots)
 
@@ -50,7 +50,9 @@ Goal: run thousands of all-bot games at 2–12 players and use the results to tu
 2. **R2** Crew roles (v2 §2), split in two:
    - [x] **R2a** — content 0.10.0: Rookie (checkpoint → Tail), Inside Man (renamed from Insider; checkpoint → Peek), Lookout (saw a dirty one → Peek), Auditor (`useAbility audit`: latest round's shortfall for a room, once per act; → Ballot), Detective (`useAbility checkStash`, once per act; → Shield), Snitch (+1 ballot weight for the rest of the game, `snitchRewarded`). `RoleDef.rewards` (crew.ts emits the `perkGranted`s), `rewardCount` override, `needsMeetings`, Snitch/Detective from 4. Bots audit/check their top suspect. Design §8, §8.1, §8.3.
    - [x] **R2b** — content 0.11.0: Smooth Talker (dirty win → Emergency perk, a second emergency meeting), Muscle (clean save → Recharge; dirty save → public `muscleNamed`), Priest (`useAbility bless`, once per act; clean shakedown → `blessingPaid` by the bank + Ballot; dirty → no blessing next act), Bagman (+1 Haul when all-in; all-in act → Alibi), Cleaner (Rooftop ×2 for Heat; every 2nd Rooftop round → +Vote), Fixer (replaces the Driver; raid stops at 95, ¼ stash, Shield; `raidStopped`), Mastermind (private `cardForeseen`, events only; checkpoint → Rig). ≥5 for Smooth Talker/Muscle/Priest; `needsEvents`; starter set Rookie/Inside Man/Lookout/Bagman/Cleaner. PR #26 notes: Auditor one audit per round, Detective not on a pending target. Bots: Priest blesses, Bagman all-in, Mastermind forecasts. Design §7, §8, §8.1, §8.3, §10.
-3. [ ] **R3** Accomplices (Getaway Driver, Fence, Hacker, Blackmailer, Forger) and the Embezzler.
+3. **R3** Accomplices and the Embezzler, split in two:
+   - [x] **R3a** — content 0.12.0: Getaway Driver (new; Rooftop visit adds Heat, Heat ≥ 75 → it and the saboteurs learn each other), Fence (accomplice; safe ≥ 10 → learns a saboteur), Hacker (accomplice; knows a saboteur from the deal; loop hid a saboteur from Security → Peek), Mole (each tip-off → learns an accomplice). Private `alliesLearned` (`accomplices.ts`). R1 follow-ups: Recharge refused for the Fence; the ⌊n/3⌋ cuts of the §3 table tested and logged. Allies learned survive a Double-cross. Leak/view-diff with every dark role dealt (`view.leak.test.ts`). Bots: Driver Rooftop at mid Heat, Hacker loops its saboteur's room. Design §7, §8, §8.1, §12.1.
+   - [ ] **R3b** — Blackmailer (accomplice, v2 power: steal a vote; ≥7, not in Duel), Forger (fake sightings; ≥7; the evidence card's "cameras can be tampered with"), Embezzler (saboteur; Haul take, a shakedown returns it; first take → learns an accomplice). New command handlers follow PR #28 (own-key + type checks, `show()`), join `commands.hostile.test.ts`, get leak tests and the all-dark view-diff.
 4. [ ] **R4** Bot claims/bluffs and perk use; parallel sim suite.
 5. [ ] **R5** Parity balance (no two roles' normalised win rates more than 10% apart).
 
@@ -101,6 +103,7 @@ Plan and acceptance criteria: `docs/m2-plan.md`. Runs alongside M1 task 16 (bala
 - **Chat (M2-8a):** text is stored and sent exactly as typed (trimmed, CRLF → LF): the client must render it as text (React text nodes; never `dangerouslySetInnerHTML` or markdown-to-HTML). Message ids are random UUIDs (never the `n` order column, which counts others' DMs). The rate limit is in memory per server process. Bots don't chat yet (posting their alibi claim as a crew line is a later nicety). Chat works in ended games too (post-game talk).
 
 ## Notes / half-finished work
+- **Role deck v2 R3a (done):** R3b next (see the list above). The Blackmailer is still crew with the v1 steal-3 power and still dealt in Duel (R3b adds `needsMeetings`, `minPlayers: 7`). For R5: the ⌊n/3⌋ cap means no accomplice at 5p and trims 7–11p (decisions.md R3a); bots don't spend perks (the Hacker's Peek) or claim (R4). The evidence-card UI (M2-8b) must say cameras can be tampered with.
 - **Fly deploy:** the first deploy runs when this lands on main (deploy.yml only triggers from the default branch). Live today: landing, invite, lobby and the `/game/:id` placeholder (M2-6 makes it playable). Not yet: Google sign-in secrets (M2-12), managed Postgres (`docs/deploy.md` has the steps), PWA manifest. The server must stay one process (per-game lock, scheduler) even after a move to Postgres.
 - **Role deck v2 R2a (done):** rewards are `RoleDef.rewards` (crew.ts); R2b adds triggers there. The Driver is still the R1 placeholder (R2b: Fixer; R3: Getaway Driver). The Fence is still in the starter set (R3). Bots don't spend perks or read `seenBallots` (R4). Balance not re-run (R5).
 - **Role deck v2 R1 (done):** no role earns perks yet: R2/R3 add the triggers (emit `perkGranted`, list the perk in `RoleDef.earns` so rules like the shakedown window see it). Tests grant tokens with `grantPerks` (`perks.testkit.ts`). Accomplices are dealt only once a role has `faction: "accomplice"` (R3 moves Fence, Hacker, Blackmailer); dealing tests pass their own role table to `dealRoles`. A new saboteur (Embezzler) is dealt by the setting automatically (`saboteursFor`). Bots ignore perks and `seenBallots` (R4). Balance changed (4p now has a Mole with "on"; Driver lost its failure win): R5 re-runs the sim. `moleAllies` now goes to every saboteur when two or more are dealt.
@@ -169,3 +172,4 @@ Plan and acceptance criteria: `docs/m2-plan.md`. Runs alongside M1 task 16 (bala
 - Duel roles: OK to leave the meeting-only roles (Smooth talker, Muscle, Snitch) out of the deal in Duel mode (current, provisional)?
 - Heat at 3–4 players: with event Heat scaled, Heat busts are still 45% / 34% of failures (40% / 22% even with card Heat at 0): the rest is Vault pressure in small crews and the Shift change lure. Accept, or tune further? 4p succeeds 76% (target 55–70%).
 - R2b (provisional): Smooth Talker's extra emergency = a ninth perk "Emergency"; Priest's "Ballot on who voted for it" read as a Ballot perk; Fixer's "Shield for the rest of the game" read as one Shield token. OK?
+- R3a: the ⌊n/3⌋ cap means a 5-player game never deals an accomplice (the §3 table's 1/1 at 5–6 only happens at 6). Keep that, or allow 2 dark seats at 5?

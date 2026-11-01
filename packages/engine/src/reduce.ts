@@ -140,6 +140,11 @@ function applyChange(state: GameState, event: GameEvent): GameState {
       return updatePlayer(state, event.player, (p) => withRoleState(p, { target: event.target }));
     case "moleAllies":
       return updatePlayer(state, event.player, (p) => withRoleState(p, { allies: event.allies }));
+    case "alliesLearned":
+      // Role deck v2 §2: added to the allies already known.
+      return updatePlayer(state, event.player, (p) =>
+        withRoleState(p, { allies: [...p.roleState.allies, ...event.allies.filter((a) => !p.roleState.allies.includes(a))] }),
+      );
     // ------------------------------------------------ round loop. design §5
     case "roundStarted": {
       // A Rig for this round has been used by its flip (deck.ts). design §8.3

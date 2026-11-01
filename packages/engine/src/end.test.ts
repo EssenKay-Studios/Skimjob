@@ -77,7 +77,7 @@ describe("a successful heist — design §3, §8", () => {
     return s;
   }
 
-  it("the heist succeeds after the final meeting and the biggest score wins", () => {
+  it("the heist succeeds after the final meeting and the biggest crew score wins (the Fence is an accomplice, v2 §2)", () => {
     const s = fullGame();
     expect([s.haul, s.heat]).toEqual([45, 36]);
     expect(outcome(s)).toEqual({
@@ -88,7 +88,7 @@ describe("a successful heist — design §3, §8", () => {
         // design §8: the Inside Man scores 1 per loot above the final target (45 − 44).
         { player: "p1", role: "insideMan", score: 1, stash: 0, safe: 0, timesShakenDown: 0, totalHandedIn: 0 },
       ],
-      winners: ["p0"],
+      winners: ["p1"],
     });
   });
 
@@ -232,7 +232,7 @@ describe("faction winning rules (role deck v2 §0) — design §3, §8", () => {
   });
 
   it("with the starter roles nobody wins a failed heist", () => {
-    const s = withPlayers(game(4, ["rookie", "lookout", "insideMan", "fence"]), 0, { p0: { stash: 3 }, p3: { stash: 8, safe: 2 } });
+    const s = withPlayers(game(4, ["rookie", "lookout", "insideMan", "bagman"]), 0, { p0: { stash: 3 }, p3: { stash: 8 } });
     expect(outcomeFor(s, "heat").winners).toEqual([]);
     expect(outcomeFor(s, "target").winners).toEqual([]);
   });
