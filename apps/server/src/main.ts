@@ -1,17 +1,26 @@
 // `pnpm dev` / `pnpm --filter @skimjob/server start`: open the database,
 // migrate, listen. A bad setting ends with one line on stderr, not a stack.
-import { devAuthProvider } from "./auth";
 import { systemClock } from "./clock";
 import { loadConfig, StartupError } from "./config";
-import { openDatabase } from "./startup";
+import { openDatabase, serverDeps } from "./startup";
 import { buildServer } from "./server";
 import { TICK_MS } from "./timing";
+import { checkWebDir } from "./web";
 
 try {
   const config = loadConfig();
+  if (config.webDir) {
+    try {
+      checkWebDir(config.webDir);
+    } catch (err) {
+      throw new StartupError((err as Error).message);
+    }
+  }
   const { db, applied } = await openDatabase(config);
-  const app = buildServer({ db, clock: systemClock, logger: true, auth: config.devLogin ? [devAuthProvider()] : [], allowedOrigins: config.allowedOrigins, tickMs: TICK_MS });
+  const app = buildServer({ db, clock: systemClock, logger: true, tickMs: TICK_MS, ...serverDeps(config) });
+  if (config.production && process.env.DEV_LOGIN === "1") app.log.warn("DEV_LOGIN=1 ignored: the dev sign-in stub is never on in production");
   if (applied.length > 0) app.log.info({ applied }, "migrations applied");
+  if (config.webDir) app.log.info(`web app: ${config.webDir}`);
   app.log.info(config.databaseUrl ? "database: Postgres (DATABASE_URL)" : `database: PGlite (${config.pgliteDir ?? "in memory"})`);
 
   const stop = async () => {

@@ -55,7 +55,7 @@ Usage: pnpm sim -- [options]
   -s, --seed <seed>       base seed; same options + seed = same results (default "sim")
       --job <id>          job (default bank)
       --role-pool <ids>   comma-separated roles to deal from (default: the content default)
-      --starter           starter mode (Rookie/Lookout/Inside Man/Fence, no Mole, no events)
+      --starter           starter mode (Rookie/Inside Man/Lookout/Bagman/Cleaner, no Mole, no events)
       --events            flip an event card each round from round 2 (design §10; not with --starter)
       --duel              Duel mode: call-outs instead of meetings (design §16.1; needs -p 2)
       --mole <setting>    off | maybe | on (default off)

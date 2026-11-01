@@ -15,8 +15,9 @@ All tests are seeded and deterministic. Nothing reads the wall clock (the server
 | Web e2e | `apps/web/e2e/*.spec.ts` | Screens in Chromium at phone and desktop sizes, responsive rules. Size checks wait for the entrance animations to finish first: a box measured mid-animation can come out at 43.99 px. | `pnpm test:e2e` |
 | Simulator smoke | `scripts/sim-smoke.sh` | 200 all-bot games each at 3/6/12 players (events on, Mole "maybe") end with no refused bot command. | `bash scripts/sim-smoke.sh [games]` |
 | Typecheck | every workspace | Strict TS. New event or command types must fail exhaustive switches. | `pnpm typecheck` |
+| Docker image | `Dockerfile` | The production image builds, boots on a fresh volume, serves `/health` and an SPA route, and runs as uid 1000 (CI only; no Docker daemon here). | `docker build -t skimjob .` (docs/deploy.md) |
 
-CI (`.github/workflows/ci.yml`) runs all of these on every push to `main` and every PR.
+CI (`.github/workflows/ci.yml`) runs all of these on every push to `main` and every PR. A green run on `main` deploys to Fly (`deploy.yml`, `docs/deploy.md`).
 
 ## Engine properties
 

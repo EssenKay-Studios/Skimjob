@@ -6,7 +6,8 @@ test("landing renders", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   page.on("console", (m) => {
-    if (m.type() === "error") errors.push(m.text());
+    // The unknown code's 404 is expected (the invite page says so).
+    if (m.type() === "error" && !m.text().includes("404")) errors.push(m.text());
   });
   await page.goto("/");
 
@@ -23,7 +24,8 @@ test("landing renders", async ({ page }) => {
 
   await page.getByPlaceholder("Invite code or link").fill("K7QX-M2PA");
   await page.getByRole("button", { name: "Join crew" }).click();
-  await expect(page.getByRole("status").filter({ hasText: "k7qxm2pa" })).toBeVisible();
+  await expect(page).toHaveURL(/\/join\/k7qxm2pa$/); // M2-5b: the invite page
+  await expect(page.getByRole("heading", { name: "That invite doesn't open anything." })).toBeVisible();
 
   expect(errors).toEqual([]);
 });

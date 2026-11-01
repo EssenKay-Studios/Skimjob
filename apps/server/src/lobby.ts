@@ -11,7 +11,7 @@ import { validateConfig, type GameConfig } from "@skimjob/engine";
 import { createGuestUser, type Sessions, type User } from "./auth";
 import type { Db, Queryable } from "./db";
 import type { GameStatus, GameStore } from "./store";
-import { BOT_NAMES, checkNickname, looksLikeBot, nicknameKey, parseSettings, type LobbySettings } from "./settings";
+import { BOT_NAMES, checkNickname, DEFAULT_SETTINGS, looksLikeBot, nicknameKey, parseSettings, type LobbySettings } from "./settings";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CODE_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"; // no 0/o, 1/l/i
@@ -44,6 +44,11 @@ export interface LobbyView {
   readonly inviteCode: string;
   readonly settings: LobbySettings;
   readonly youAreHost: boolean;
+  /** Seats needed to start, and the most a game can have (bots included). */
+  readonly minSeats: number;
+  readonly maxSeats: number;
+  /** Bot personalities the host can pick from (`POST /games/:id/bots`). */
+  readonly personalities: readonly { readonly id: PersonalityId; readonly name: string }[];
   readonly seats: readonly {
     readonly seat: number;
     readonly nickname: string;
@@ -86,13 +91,19 @@ const seatsOf = (db: Queryable, id: string) =>
   db.query<SeatRow>("select seat_no, player_id, user_id, nickname, bot_personality from seats where game_id = $1 order by seat_no", [id]);
 const nextSeat = (seats: readonly SeatRow[]) => (seats.length ? Math.max(...seats.map((s) => s.seat_no)) + 1 : 0);
 
+const PERSONALITY_LIST = (Object.keys(PERSONALITIES) as PersonalityId[]).map((id) => ({ id, name: PERSONALITIES[id].name }));
+
 function view(game: GameRow, seats: readonly SeatRow[], user: User): LobbyView {
   return {
     id: game.id,
     status: game.status,
     inviteCode: game.invite_code,
-    settings: game.settings,
+    // Games made before a setting existed get its default (e.g. uniqueRoles).
+    settings: { ...DEFAULT_SETTINGS, ...game.settings },
     youAreHost: game.host_user_id === user.id,
+    minSeats: MIN_PLAYERS,
+    maxSeats: MAX_PLAYERS,
+    personalities: PERSONALITY_LIST,
     seats: seats.map((s) => ({
       seat: s.seat_no,
       nickname: s.nickname,
@@ -145,6 +156,11 @@ export function lobbyRoutes(app: FastifyInstance, db: Db, store: GameStore, s: S
     const user = await signedIn(req);
     const parsed = parseSettings(body(req).settings);
     if (!parsed.ok) return refuse(400, parsed.error);
+    // The host's seat name in this game (default: their account name). Never changes the session.
+    const rawName = body(req).nickname;
+    const checked = rawName === undefined ? null : checkNickname(rawName);
+    if (checked && !checked.ok) return refuse(400, checked.error);
+    const seatName = checked?.ok ? checked.name : user.name;
     let id: string | null = null;
     for (let tries = 0; id === null; tries++) {
       try {
@@ -153,7 +169,7 @@ export function lobbyRoutes(app: FastifyInstance, db: Db, store: GameStore, s: S
         if (tries >= 2) throw err; // an invite-code clash twice running isn't bad luck
       }
     }
-    await db.query("insert into seats (game_id, seat_no, user_id, nickname) values ($1, 0, $2, $3)", [id, user.id, user.name]);
+    await db.query("insert into seats (game_id, seat_no, user_id, nickname) values ($1, 0, $2, $3)", [id, user.id, seatName]);
     reply.code(201);
     return view((await gameById(db, id))!, await seatsOf(db, id), user);
   });
@@ -202,9 +218,34 @@ export function lobbyRoutes(app: FastifyInstance, db: Db, store: GameStore, s: S
   app.post<{ Params: { id: string } }>("/games/:id/leave", (req) =>
     inGame(req, async (game, _seats, user) => {
       if (game.status !== "lobby") refuse(409, "the game has already started");
-      if (game.host_user_id === user.id) refuse(409, "the host can't leave the lobby");
+      if (game.host_user_id === user.id) refuse(409, "hand the host role to another player before you leave");
       await db.query("delete from seats where game_id = $1 and user_id = $2", [game.id, user.id]);
       return { ok: true };
+    }),
+  );
+
+  // The host changes settings in the lobby: the body's fields replace the current ones.
+  app.patch<{ Params: { id: string } }>("/games/:id/settings", (req) =>
+    asHost(req, async (game, seats, user) => {
+      const patch = body(req).settings;
+      if (typeof patch !== "object" || patch === null || Array.isArray(patch)) return refuse(400, "settings must be an object");
+      for (const k of Object.keys(patch)) if (!Object.hasOwn(DEFAULT_SETTINGS, k)) refuse(400, `unknown setting ${JSON.stringify(k)}`);
+      const parsed = parseSettings({ ...DEFAULT_SETTINGS, ...game.settings, ...patch });
+      if (!parsed.ok) return refuse(400, parsed.error);
+      await db.query("update games set settings = $2::jsonb where id = $1", [game.id, JSON.stringify(parsed.settings)]);
+      return view({ ...game, settings: parsed.settings }, seats, user);
+    }),
+  );
+
+  // Host hand-over (before the start): the host role moves to another person in the lobby, never a bot.
+  app.post<{ Params: { id: string } }>("/games/:id/host", (req) =>
+    asHost(req, async (game, seats, user) => {
+      const seatNo = body(req).seat;
+      const to = seats.find((x) => x.seat_no === seatNo) ?? refuse(404, "no player in that seat");
+      if (to.user_id === null) refuse(409, "a bot can't be the host");
+      if (to.user_id === user.id) refuse(409, "you're already the host");
+      await db.query("update games set host_user_id = $2 where id = $1", [game.id, to.user_id]);
+      return view({ ...game, host_user_id: to.user_id! }, seats, user);
     }),
   );
 
@@ -266,5 +307,6 @@ export function gameConfig(settings: LobbySettings, seats: readonly Pick<SeatRow
     eventsEnabled: settings.eventsEnabled,
     voteVisibility: settings.voteVisibility,
     starterMode: settings.starterMode,
+    uniqueRoles: settings.uniqueRoles !== false,
   };
 }

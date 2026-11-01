@@ -4,7 +4,11 @@ import { ToastProvider } from "./components/Toast";
 import { Button } from "./components/Button";
 import { SketchFrame } from "./components/SketchFrame";
 import { ArrowBack } from "./components/icons";
+import { GameStub } from "./screens/GameStub";
+import { Invite } from "./screens/Invite";
 import { Landing } from "./screens/Landing";
+import { Lobby } from "./screens/Lobby";
+import { NewGame } from "./screens/NewGame";
 import { navigate, usePath } from "./router";
 
 // The gallery is a dev tool: only dev builds load it, so it stays out of the
@@ -30,17 +34,28 @@ export function App() {
   useEffect(() => {
     // Esc goes back to the start from any sheet (ui-style §5 "Back [Esc]").
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && location.pathname !== "/") navigate("/");
+      // Not from a lobby or a game: those are places, not sheets over the start.
+      if (e.key === "Escape" && location.pathname !== "/" && !/^\/(lobby|game)\//.test(location.pathname)) navigate("/");
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
   const route = path.replace(/\/+$/, "") || "/";
+  const [, page, arg] = route.match(/^\/(join|lobby|game)\/([^/]+)$/) ?? [];
+  const param = arg ? decodeURIComponent(arg) : "";
   return (
     <ToastProvider>
       <SketchDefs />
       {route === "/" ? (
         <Landing />
+      ) : route === "/new" ? (
+        <NewGame />
+      ) : page === "join" ? (
+        <Invite key={param} code={param} />
+      ) : page === "lobby" ? (
+        <Lobby key={param} id={param} />
+      ) : page === "game" ? (
+        <GameStub key={param} id={param} />
       ) : route === "/dev/gallery" && Gallery ? (
         <Suspense fallback={null}>
           <Gallery />

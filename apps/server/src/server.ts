@@ -9,6 +9,7 @@ import { liveRoutes, type Live } from "./live";
 import { HttpError, lobbyRoutes } from "./lobby";
 import { createScheduler, type Scheduler } from "./scheduler";
 import { createGameStore, type GameStore } from "./store";
+import { stripApiPrefix, webRoutes } from "./web";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -33,14 +34,23 @@ export interface ServerDeps {
   readonly tickMs?: number;
   /** Fastify's request logging; off by default (tests). */
   readonly logger?: boolean;
+  /** The built web app to serve with SPA fallback (WEB_DIR, docs/deploy.md); unset serves none. */
+  readonly webDir?: string | null;
+  /** Mark every cookie `Secure` (production: the site is HTTPS only). */
+  readonly secureCookies?: boolean;
+  /** Believe X-Forwarded-* from the TLS-terminating proxy in front (production on Fly). */
+  readonly trustProxy?: boolean;
 }
 
 export function buildServer(deps: ServerDeps): FastifyInstance {
   const { db } = deps;
-  const app = Fastify({ logger: deps.logger ?? false });
+  // `/api/...` and the bare route are the same route (web.ts).
+  const app = Fastify({ logger: deps.logger ?? false, trustProxy: deps.trustProxy ?? false, rewriteUrl: (req) => stripApiPrefix(req.url ?? "/") });
   const store = deps.store ?? createGameStore(db);
   const s = sessions(db, deps.clock);
-  void app.register(cookie);
+  // `parseOptions` are also @fastify/cookie's defaults for setCookie/clearCookie.
+  void app.register(cookie, deps.secureCookies ? { parseOptions: { secure: true } } : {});
+  if (deps.webDir) webRoutes(app, deps.webDir);
 
   // Every refusal is `{ error }`. Our own (HttpError) and Fastify's (bad JSON,
   // wrong content type) say what was wrong; anything else is a bug, logged.

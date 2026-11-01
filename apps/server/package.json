@@ -8,10 +8,14 @@
   "scripts": {
     "typecheck": "tsc --noEmit -p .",
     "dev": "tsx watch src/main.ts",
-    "start": "tsx src/main.ts"
+    "start": "tsx src/main.ts",
+    "build": "node build.mjs",
+    "start:prod": "node dist/main.js"
   },
   "dependencies": {
+    "@electric-sql/pglite": "^0.5.14",
     "@fastify/cookie": "^11.1.5",
+    "@fastify/static": "^9.3.0",
     "@fastify/websocket": "^11.3.6",
     "@skimjob/bots": "workspace:*",
     "@skimjob/content": "workspace:*",
@@ -20,8 +24,8 @@
     "pg": "^8.23.0"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "^0.5.14",
     "@types/pg": "^8.23.0",
-    "@types/ws": "^8.18.2"
+    "@types/ws": "^8.18.2",
+    "esbuild": "^0.28.2"
   }
 }
