@@ -199,7 +199,8 @@ describe("config validation — design §1, §15", () => {
 
 describe("setup events and visibility — design §17.2", () => {
   it("emits gameCreated, rngSeeded, roomsSet, one roleDealt per seat, roundStarted, then rngAdvanced", () => {
-    const events = setupEvents(config(3));
+    // No Snitch in this pool, so no snitchTargetAssigned (and no Moles at 3 players).
+    const events = setupEvents(config(3, { rolePool: ["rookie", "lookout", "fence"] }));
     expect(events.map((e) => e.type)).toEqual([
       "gameCreated",
       "rngSeeded",
@@ -263,7 +264,8 @@ describe("determinism and replay — design §17.2", () => {
   });
 
   it("replaying the log rebuilds the same state, RNG included", () => {
-    const cfg = config(7, { mole: "maybe" });
+    // No Snitch in the pool, so the deal is the setup's only draw.
+    const cfg = config(7, { mole: "maybe", rolePool: ["rookie", "lookout", "insider", "fence", "hacker"] });
     const state = createGame(cfg);
     const rebuilt = replay(cfg, JSON.parse(JSON.stringify(state.log)) as GameEvent[]);
     expect(rebuilt).toEqual(state);

@@ -109,7 +109,10 @@ describe("validateOverrides — configs are untrusted JSON (design §17.4)", () 
     expect(errs({ rooms: { depositBoxes: { capacity: { max: 0 } } } })).toHaveLength(1);
     expect(errs({ roles: { fence: { extraRooms: 2 } } })).toEqual(["contentOverrides.roles.fence.extraRooms is not an overridable field"]);
     expect(errs({ roles: { lookout: { perAct: 2 } } })).toHaveLength(1);
-    expect(errs({ roles: { mole: { stashMultiplier: 2 } } })).toEqual(["contentOverrides.roles.mole: no such role"]);
+    expect(errs({ roles: { getaway: { stashMultiplier: 2 } } })).toEqual(["contentOverrides.roles.getaway: no such role"]);
+    // design §8: the Mole's tip-off numbers are content, so they can be tuned; nobody else's.
+    expect(errs({ roles: { mole: { heat: 15, perAct: 2 } } })).toEqual([]);
+    expect(errs({ roles: { driver: { heat: 15 } } })).toEqual(["contentOverrides.roles.driver.heat is not an overridable field"]);
   });
 
   it("a crowded room can't pay more than its loot (checkMove bounds pockets by loot, design §6.2)", () => {

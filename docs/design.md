@@ -45,7 +45,7 @@ Skimjob is a social deduction game for groups of friends, played in a browser or
 
 ## 3. Winning and losing
 
-- **The heist succeeds** if, after the final meeting, the Haul is at or above the final target and Heat is below 100. Players are then ranked by stash, and the biggest stash wins. Some roles change how they score (see §8).
+- **The heist succeeds** if, after the final meeting, the Haul is at or above the final target and Heat is below 100. Players are then ranked by stash, and the biggest stash wins. Some roles change how they score (see §8). A Mole never wins a successful heist, however big its stash: the biggest stash among the others wins.
 - **The heist fails** if Heat reaches 100 at any point, or the final target is missed. Every crew member loses. Roles with a "wins on failure" condition, such as the Mole, win instead.
 - **Ties** go to whoever was shaken down fewer times, then to whoever handed in more total loot. The engine tracks that figure but only reveals it at the end. *(Provisional: players still tied on all three share the win.)*
 - **Scores:** a Rookie's ×1.2 can give fractions; scores are kept to one decimal place. *(Provisional.)*
@@ -197,6 +197,10 @@ Every player is dealt **one secret role** at the start of the game. Roles are de
 - **Muscle:** when a vote passes a shakedown, a short **shakedown window** opens before it is applied (§11.3). The Muscle can cancel it then, including a shakedown of themselves. The cancel stays private until the window ends; the ledger then says the shakedown was cancelled, not who cancelled it. The window opens after every passed shakedown whenever the Muscle is in the game's role pool, dealt or not, so it never shows that a Muscle is in the crew.
 - **Blackmailer:** the guess is part of the Blackmailer's move. It resolves after that round's splits and Fence safe moves, takes at most what the target's stash holds and never touches the safe. The target is told privately how much was taken, but not by whom; a wrong guess, or a right one on an empty stash, tells the target nothing.
 - **Snitch:** the target is drawn at random from the other players at setup. "Holding more than the clean threshold" means the shakedown was **not clean** (stash at least 3 × the act number). The +10 goes into the Snitch's stash, each time it happens, and a cancelled shakedown pays nothing.
+
+*Win-condition roles (provisional, task 13):*
+- **Driver:** wins a successful heist like anyone else. On a Heat failure it wins if it tops the whole crew's ranking (score, then the §3 tie-breaks), Moles included. A missed final target gives it nothing.
+- **Mole:** wins any failed heist (Heat or target), never a successful one. The tip-off is part of the Mole's move, at most once per act: +10 Heat is added to that round's Heat (after rounding, before the cap), so it only shows as part of the round's public Heat change. Only the Mole is told it happened. Two Moles are told privately at the start who the other is.
 
 ### 8.1 Dealing roles
 

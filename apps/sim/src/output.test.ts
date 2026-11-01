@@ -79,7 +79,7 @@ describe("formatReport", () => {
     expect(text).toContain("55–70%");
     // design §17.4: heavy pocketing "should lose more often than it wins".
     expect(text).toMatch(/Win rate, heavy[^\n]*< 50%/);
-    expect(text).toMatch(/Mole win rate \(n\/a until Mole powers\)/);
+    expect(text).toMatch(/Mole win rate \(games with a Mole\)/);
   });
   it("says when no Mole was dealt, and warns about refused commands", () => {
     const text = formatReport(summarize([gameRec({ playerRecords: [seat()], rejections: 2 })]), "t");

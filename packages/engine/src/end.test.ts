@@ -1,7 +1,7 @@
 // End of game: success and failure, the ranking with role scoring, tie-breaks,
 // winners, and roles that win on failure. design §3, §8, §13
 import { describe, expect, it } from "vitest";
-import { ROLES, STARTER_ROLES, type RoleDef } from "@skimjob/content";
+import { STARTER_ROLES } from "@skimjob/content";
 import type { GameConfig, GameEvent, GameState, Outcome, PlayerState } from "./types";
 import { setupEvents } from "./setup";
 import { replay } from "./reduce";
@@ -192,28 +192,39 @@ describe("a failed heist — design §3, §19.1", () => {
   });
 });
 
-describe("roles that win on failure are content data — design §3, §8", () => {
-  // Test-only role defs standing in for the Mole and Driver, which land later in M1.
-  const plain = ROLES.lookout as RoleDef;
-  const roles: Readonly<Record<string, RoleDef>> = {
-    ...ROLES,
-    mole: { ...plain, id: "mole", name: "Mole", power: { kind: "none" }, winsOnFailure: { reasons: ["heat", "target"], needsTopStash: false } },
-    driver: { ...plain, id: "driver", name: "Driver", power: { kind: "none" }, winsOnFailure: { reasons: ["heat"], needsTopStash: true } },
-  };
-  const state = (driverStash: number): GameState =>
-    withPlayers(game(3, ["mole", "driver", "rookie"]), 0, { p0: { stash: 1 }, p1: { stash: driverStash }, p2: { stash: 5 } });
+describe("Mole and Driver winning rules (task 13) — design §3, §8", () => {
+  // The real content defs (ROLES.mole, ROLES.driver). p0 Mole, p1 Driver, p2 Rookie (stash 5, score 6).
+  const state = (driverStash: number, moleStash = 1): GameState =>
+    withPlayers(game(3, ["mole", "driver", "rookie"]), 0, { p0: { stash: moleStash }, p1: { stash: driverStash }, p2: { stash: 5 } });
 
   it("Heat failure: the Mole wins, and the Driver too with the biggest stash", () => {
-    expect(outcomeFor(state(9), "heat", roles).winners).toEqual(["p1", "p0"]);
-    expect(outcomeFor(state(2), "heat", roles).winners).toEqual(["p0"]);
+    expect(outcomeFor(state(9), "heat").winners).toEqual(["p1", "p0"]);
+    expect(outcomeFor(state(2), "heat").winners).toEqual(["p0"]);
   });
 
-  it("missed target: only the Mole wins", () => {
-    expect(outcomeFor(state(9), "target", roles).winners).toEqual(["p0"]);
+  it("Heat failure: the Driver's biggest stash is over the whole crew, Moles included", () => {
+    expect(outcomeFor(state(9, 12), "heat").winners).toEqual(["p0"]);
   });
 
-  it("success: a wins-on-failure role gains nothing; the biggest score wins", () => {
-    expect(outcomeFor(state(2), null, roles)).toMatchObject({ result: "success", winners: ["p2"] });
+  it("missed target: only the Mole wins, whatever the Driver holds", () => {
+    expect(outcomeFor(state(9), "target").winners).toEqual(["p0"]);
+  });
+
+  it("success: the Driver wins normally with the biggest score", () => {
+    expect(outcomeFor(state(9), null)).toMatchObject({ result: "success", winners: ["p1"] });
+    expect(outcomeFor(state(2), null)).toMatchObject({ result: "success", winners: ["p2"] });
+  });
+
+  it("success: the Mole never wins, even with the biggest stash; the best non-Mole does", () => {
+    const o = outcomeFor(state(2, 20), null);
+    expect(o.ranking[0]).toMatchObject({ player: "p0", role: "mole", stash: 20 });
+    expect(o).toMatchObject({ result: "success", winners: ["p2"] });
+  });
+
+  it("success: two Moles on top leave the win to the best non-Mole, ties included", () => {
+    const s = withPlayers(game(4, ["mole", "mole", "rookie", "lookout"]), 0, { p0: { stash: 30 }, p1: { stash: 30 }, p2: { stash: 5 }, p3: { stash: 6 } });
+    expect(outcomeFor(s, null).winners).toEqual(["p2", "p3"]); // Rookie 5 × 1.2 = 6 ties the Lookout's 6
+    expect(outcomeFor(s, "target").winners).toEqual(["p0", "p1"]);
   });
 
   it("with the starter roles nobody wins a failed heist", () => {

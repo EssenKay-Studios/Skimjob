@@ -69,6 +69,8 @@ export interface RoleOverride {
   readonly perGame?: number;
   readonly steal?: number;
   readonly bonus?: number;
+  /** Mole tip-off Heat. design §8 */
+  readonly heat?: number;
 }
 
 /** Every field is optional; whatever is left out keeps the content value. design §17.4 */

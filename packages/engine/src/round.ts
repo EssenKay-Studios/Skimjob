@@ -3,30 +3,26 @@
 //
 // Both are pure: they read state and return events (or a rejection reason).
 // `handleCommand` (handle.ts) folds the events.
-import { MOLE_ROLE, type RoleDef, type RoleId, type RoomId } from "@skimjob/content";
+import { MOLE_ROLE, type RoleId, type RoomId } from "@skimjob/content";
 import type { AbilityUse, GameEvent, GameState, Move, PlayerId, PlayerState } from "./types";
 import { PUBLIC, privateTo } from "./types";
 import { clampHeat, roomDef, roomLoot, roundHeatDelta } from "./job";
-import { jobFor, rolesFor, type RoleTable } from "./overrides";
+import { jobFor, powerOf, roleDefIn, rolesFor } from "./overrides";
 import { isObject } from "./check";
 import { actOfRound, isLastRoundOfAct } from "./acts";
 import { gameEnded } from "./end";
 
 export { actOfRound, isLastRoundOfAct };
 
-/** A role with no definition yet (the Mole, until its powers land) has no power and may pocket. */
-const NO_POWER: Pick<RoleDef, "power" | "canPocket"> = { power: { kind: "none" }, canPocket: true };
-
-function roleIn(roles: RoleTable, role: RoleId): Pick<RoleDef, "power" | "canPocket"> {
-  return (Object.hasOwn(roles, role) ? roles[role] : undefined) ?? NO_POWER;
-}
+/** Whether `role` may pocket loot (Insider can't, design §8). A role id with no definition may. */
+const canPocket = (state: GameState, role: RoleId): boolean => roleDefIn(rolesFor(state.config), role)?.canPocket ?? true;
 
 const isCount = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v >= 0;
 
 /** A role power used as part of a move, checked against the player's role. design §8 */
 function checkAbility(state: GameState, player: PlayerState, raw: unknown): AbilityUse | string {
   if (!isObject(raw) || typeof raw.kind !== "string") return "ability must be an object with a kind";
-  const { power } = roleIn(rolesFor(state.config), player.role);
+  const power = powerOf(state.config, player.role);
   if (power.kind !== raw.kind) return `your role has no ${raw.kind} ability`;
   switch (power.kind) {
     case "lookout": {
@@ -60,6 +56,10 @@ function checkAbility(state: GameState, player: PlayerState, raw: unknown): Abil
       if (typeof role !== "string" || !(Object.hasOwn(rolesFor(state.config), role) || role === MOLE_ROLE)) return `unknown role ${String(role)}`;
       return { kind: "blackmail", target, role };
     }
+    case "tipOff": {
+      if (player.roleState.usedThisAct >= power.perAct) return "you have already tipped off the cops this act";
+      return { kind: "tipOff" };
+    }
     case "voteWeight":
     case "cancelShakedown":
     case "snitch":
@@ -82,7 +82,7 @@ export function checkMove(state: GameState, player: PlayerState, raw: unknown): 
   if (!isCount(pocket)) return "pocket must be a whole number, 0 or more";
   // The real yield can only drop below the room's loot (crowded Deposit boxes), so this is the upper bound.
   if (pocket > def.loot) return `you can pocket at most ${def.loot} in the ${def.name}`;
-  if (pocket > 0 && !roleIn(rolesFor(state.config), player.role).canPocket) return "your role can't pocket loot";
+  if (pocket > 0 && !canPocket(state, player.role)) return "your role can't pocket loot";
 
   let move: Move = { room, pocket };
   if (def.info === "watchRoom") {
@@ -109,8 +109,7 @@ export function checkMove(state: GameState, player: PlayerState, raw: unknown): 
  */
 export function resolveRound(state: GameState, round: number): GameEvent[] {
   const job = jobFor(state.config);
-  const roles = rolesFor(state.config);
-  const roleOf = (role: RoleId) => roleIn(roles, role);
+  const powerFor = (id: PlayerId) => powerOf(state.config, player(id).role);
   const order = state.playerOrder;
   const crewSize = order.length;
   const events: GameEvent[] = [];
@@ -147,7 +146,7 @@ export function resolveRound(state: GameState, round: number): GameEvent[] {
   for (const id of order) {
     const { room, pocket } = moveOf(id);
     const loot = roomLoot(roomDef(job, room), visitors[room]?.length ?? 0);
-    const kept = roleOf(player(id).role).canPocket ? Math.min(pocket, loot) : 0;
+    const kept = canPocket(state, player(id).role) ? Math.min(pocket, loot) : 0;
     toStash.set(id, kept);
     haulDelta += loot - kept;
     if (kept > 0) pocketed++;
@@ -160,9 +159,8 @@ export function resolveRound(state: GameState, round: number): GameEvent[] {
   for (const id of order) {
     const ability = moveOf(id).ability;
     if (ability?.kind !== "fenceSafe") continue;
-    const p = player(id);
-    const power = roleOf(p.role).power;
-    const left = power.kind === "fenceSafe" ? power.perAct - p.roleState.usedThisAct : 0;
+    const power = powerFor(id);
+    const left = power.kind === "fenceSafe" ? power.perAct - player(id).roleState.usedThisAct : 0;
     const amount = Math.max(0, Math.min(ability.amount, left, stashOf(id)));
     stash.set(id, stashOf(id) - amount);
     events.push({ type: "abilityResolved", visibility: privateTo(id), player: id, round, ability: { kind: "fenceSafe", amount } });
@@ -170,7 +168,7 @@ export function resolveRound(state: GameState, round: number): GameEvent[] {
   // Blackmailer (§8): a right guess steals from the target's stash (never the safe), after the safe moves.
   for (const id of order) {
     const ability = moveOf(id).ability;
-    const power = roleOf(player(id).role).power;
+    const power = powerFor(id);
     if (ability?.kind !== "blackmail" || power.kind !== "blackmail") continue;
     const correct = player(ability.target).role === ability.role;
     const stolen = correct ? Math.min(power.steal, stashOf(ability.target)) : 0;
@@ -181,9 +179,17 @@ export function resolveRound(state: GameState, round: number): GameEvent[] {
     if (stolen > 0) events.push({ type: "blackmailed", visibility: privateTo(ability.target), player: ability.target, round, stolen });
   }
 
-  // §5.2 step 4, §7: baseline + room pressure, rounded, then clamped once after every Heat source.
+  // §5.2 step 4, §7: baseline + room pressure, rounded, plus any Mole tip-off (§8, hidden in
+  // the round's total), then clamped once after every Heat source.
   const counts = Object.fromEntries(Object.entries(visitors).map(([room, ids]) => [room, ids.length]));
-  const heat = clampHeat(job, state.heat + roundHeatDelta(job, crewSize, counts));
+  let tipOffs = 0;
+  for (const id of order) {
+    const power = powerFor(id);
+    if (moveOf(id).ability?.kind !== "tipOff" || power.kind !== "tipOff") continue;
+    tipOffs += power.heat;
+    events.push({ type: "abilityResolved", visibility: privateTo(id), player: id, round, ability: { kind: "tipOff", heat: power.heat } });
+  }
+  const heat = clampHeat(job, state.heat + roundHeatDelta(job, crewSize, counts) + tipOffs);
 
   // §5.2 step 5: room-mates, then Hacker loops, Security / Lookout / Server-room results.
   for (const id of order) {
@@ -194,7 +200,7 @@ export function resolveRound(state: GameState, round: number): GameEvent[] {
   const looped = new Set<RoomId>();
   for (const id of order) {
     const ability = moveOf(id).ability;
-    if (ability?.kind !== "loopCameras" || roleOf(player(id).role).power.kind !== "loopCameras") continue;
+    if (ability?.kind !== "loopCameras" || powerFor(id).kind !== "loopCameras") continue;
     looped.add(ability.room);
     events.push({ type: "abilityResolved", visibility: privateTo(id), player: id, round, ability });
   }

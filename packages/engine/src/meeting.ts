@@ -21,7 +21,7 @@ import type {
 } from "./types";
 import { PUBLIC, privateTo, secretTo } from "./types";
 import { checkpointTarget, clampHeat } from "./job";
-import { jobFor, rolesFor } from "./overrides";
+import { jobFor, powerOf } from "./overrides";
 import { rolePoolFor } from "./setup";
 import { actOfRound } from "./acts";
 import { gameEnded } from "./end";
@@ -152,12 +152,11 @@ export function castVote(state: GameState, command: Raw): Result {
 
 /** Every Snitch whose target this is gets their bonus, privately. design §8 */
 function snitchPayouts(state: GameState, meetingId: string, target: PlayerId): GameEvent[] {
-  const roles = rolesFor(state.config);
   const out: GameEvent[] = [];
   for (const id of state.playerOrder) {
     const p = state.players[id] as PlayerState;
-    const power = (Object.hasOwn(roles, p.role) ? roles[p.role] : undefined)?.power;
-    if (power?.kind !== "snitch" || p.roleState.target !== target) continue;
+    const power = powerOf(state.config, p.role);
+    if (power.kind !== "snitch" || p.roleState.target !== target) continue;
     out.push({ type: "snitchPaid", visibility: privateTo(id), player: id, meetingId, target, amount: power.bonus });
   }
   return out;
@@ -215,9 +214,8 @@ export function meetingResult(
 
 /** How much a player's ballot counts: the Smooth talker's `weight`, else 1. design §8 */
 function voteWeight(state: GameState, player: PlayerId): number {
-  const role = (state.players[player] as PlayerState).role;
-  const power = (Object.hasOwn(rolesFor(state.config), role) ? rolesFor(state.config)[role] : undefined)?.power;
-  return power?.kind === "voteWeight" ? power.weight : 1;
+  const power = powerOf(state.config, (state.players[player] as PlayerState).role);
+  return power.kind === "voteWeight" ? power.weight : 1;
 }
 
 /**
@@ -226,8 +224,7 @@ function voteWeight(state: GameState, player: PlayerId): number {
  * whether a Muscle is in the crew. design §8
  */
 function shakedownWindow(state: GameState): boolean {
-  const roles = rolesFor(state.config);
-  return rolePoolFor(state.config).some((r) => Object.hasOwn(roles, r) && roles[r]?.power.kind === "cancelShakedown");
+  return rolePoolFor(state.config).some((r) => powerOf(state.config, r).kind === "cancelShakedown");
 }
 
 /**
@@ -300,9 +297,8 @@ export function useAbility(state: GameState, command: Raw): Result {
   if (typeof player === "string") return player;
   const ability = command.ability;
   if (!isObject(ability) || typeof ability.kind !== "string") return "ability must be an object with a kind";
-  const roles = rolesFor(state.config);
-  const power = (Object.hasOwn(roles, player.role) ? roles[player.role] : undefined)?.power;
-  if (ability.kind !== "cancelShakedown" || power?.kind !== "cancelShakedown") return `your role has no ${ability.kind} ability to use now`;
+  const power = powerOf(state.config, player.role);
+  if (ability.kind !== "cancelShakedown" || power.kind !== "cancelShakedown") return `your role has no ${ability.kind} ability to use now`;
   if (player.roleState.usedThisGame >= power.perGame) return "you have already cancelled a shakedown this game";
   const pending = state.pendingShakedown;
   if (!pending) return "no shakedown is pending";

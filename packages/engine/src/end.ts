@@ -4,14 +4,12 @@
 // Pure: the round loop and the final meeting call `gameEnded` with the events
 // they have produced so far, which are folded first, so the ranking sees the
 // last round's splits and the final meeting's shakedown.
-import { SCORE_DECIMALS, type FailureReason, type RoleDef, type RoleId } from "@skimjob/content";
+import { SCORE_DECIMALS, type FailureReason, type RoleDef } from "@skimjob/content";
 import type { GameEnded, GameEvent, GameState, Outcome, PlayerId, PlayerState, RankEntry } from "./types";
 import { PUBLIC } from "./types";
 import { applyEvent } from "./reduce";
 import { checkpointTarget } from "./job";
-import { jobFor, rolesFor, type RoleTable } from "./overrides";
-
-const roleIn = (roles: RoleTable, role: RoleId): RoleDef | undefined => (Object.hasOwn(roles, role) ? roles[role] : undefined);
+import { jobFor, roleDefIn, rolesFor, type RoleTable } from "./overrides";
 
 const roundScore = (n: number): number => {
   const f = 10 ** SCORE_DECIMALS;
@@ -20,8 +18,8 @@ const roundScore = (n: number): number => {
 
 /**
  * design §8: stash (Fence safe included) × the role's multiplier, plus its
- * points for every loot the Haul ends above the final target. Roles with no
- * definition yet (the Mole) score their stash.
+ * points for every loot the Haul ends above the final target. A role id with
+ * no definition scores its stash.
  */
 export function scoreFor(player: PlayerState, def: RoleDef | undefined, surplus: number): number {
   const stash = player.stash + player.safe;
@@ -44,7 +42,7 @@ export function ranking(state: GameState, roles: RoleTable = rolesFor(state.conf
     return {
       player: id,
       role: p.role,
-      score: scoreFor(p, roleIn(roles, p.role), surplus),
+      score: scoreFor(p, roleDefIn(roles, p.role), surplus),
       stash: p.stash + p.safe,
       safe: p.safe,
       timesShakenDown: p.timesShakenDown,
@@ -65,17 +63,22 @@ export function leadersOf(ranked: readonly RankEntry[]): PlayerId[] {
 
 /**
  * design §3: on success the biggest stash wins (after role scoring and
- * tie-breaks). On failure every crew member loses, and only roles whose
- * `winsOnFailure` names the reason win (Driver also needs the top stash). The
+ * tie-breaks), among roles that can win a success: a Mole never does
+ * (`winsOnSuccess: false`), so the best of the rest wins. On failure every
+ * crew member loses, and only roles whose `winsOnFailure` names the reason win
+ * (the Driver also needs the top stash of the whole crew, Moles included). The
  * ranking is kept on failure too, as a loss (design §19.1, provisional).
  */
 export function outcomeFor(state: GameState, failure: FailureReason | null, roles: RoleTable = rolesFor(state.config)): Outcome {
   const ranked = ranking(state, roles);
+  if (failure === null) {
+    const eligible = ranked.filter((e) => roleDefIn(roles, e.role)?.winsOnSuccess !== false);
+    return { result: "success", ranking: ranked, winners: leadersOf(eligible) };
+  }
   const leaders = leadersOf(ranked);
-  if (failure === null) return { result: "success", ranking: ranked, winners: leaders };
   const winners = ranked
     .filter((e) => {
-      const wins = roleIn(roles, e.role)?.winsOnFailure;
+      const wins = roleDefIn(roles, e.role)?.winsOnFailure;
       return !!wins && wins.reasons.includes(failure) && (!wins.needsTopStash || leaders.includes(e.player));
     })
     .map((e) => e.player);

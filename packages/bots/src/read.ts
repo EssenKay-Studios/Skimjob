@@ -28,7 +28,7 @@ export function jobOf(view: PlayerView): JobDef {
 
 export const crewSize = (view: PlayerView): number => view.players.length + 1;
 
-/** A role with no definition yet (the Mole) plays with no power and may pocket, as in the engine. */
+/** The bot's role definition (content plus the game's overrides); an id with none plays with no power and may pocket, as in the engine. */
 export function roleOf(view: PlayerView): Pick<RoleDef, "power" | "canPocket"> {
   const roles = overrideRoles(ROLES, createdOf(view).contentOverrides);
   const def = Object.hasOwn(roles, view.me.role) ? roles[view.me.role] : undefined;

@@ -22,7 +22,8 @@ function config(players: number, voteVisibility: VoteVisibility): GameConfig {
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: i % 2 === 1 })),
     job: "bank",
     rolePool: [],
-    mole: "off",
+    // design §8.1: one Mole at 5–8 players, two (who know each other) at 9–12.
+    mole: players >= 5 ? "on" : "off",
     eventsEnabled: false,
     voteVisibility,
     starterMode: false,
@@ -34,7 +35,7 @@ const NO_LOOT = new Set(["security", "rooftop", "serverRoom"]);
 /**
  * A full game exercising every event type the default pool can produce: moves
  * (some changed, some missed), Security watches, the Server room, Lookout,
- * Fence, Hacker and Blackmailer powers, the Snitch's target and payout, alibis,
+ * Fence, Hacker, Blackmailer and Mole powers (tip-off, Mole allies), the Snitch's target and payout, alibis,
  * proposals, an emergency meeting, sealed and changed ballots (Smooth talker
  * weight), shakedown windows (one cancelled by the Muscle), shakedowns and
  * checkpoints. Returns the state after every command. (The script reads the
@@ -99,6 +100,8 @@ function playGame(players: number, voteVisibility: VoteVisibility): GameState[] 
       if (role === "fence" && round % 2 === 0) move.ability = { kind: "fenceSafe", amount: 1 };
       // design §8: the Hacker loops the Vault once per act; the Blackmailer guesses once per act (right in Acts 1 and 3).
       if (role === "hacker" && round % 3 === 1) move.ability = { kind: "loopCameras", room: "vault" };
+      // design §8: each Mole tips off the cops once, in round 8 (late, so the script still reaches every meeting).
+      if (role === "mole" && round === 8) move.ability = { kind: "tipOff" };
       if (role === "blackmailer" && round % 3 === 2) {
         const target = ids[(i + 1) % ids.length] as PlayerId;
         move.ability = { kind: "blackmail", target, role: act === 2 ? "mole" : (s.players[target] as PlayerState).role };
@@ -147,6 +150,8 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
           { type: "roleDealt", visibility: privateTo(other), player: other, role: "fence" },
           { type: "abilityResolved", visibility: privateTo(other), player: other, round: 1, ability: { kind: "fenceSafe", amount: 5 } },
           { type: "snitchTargetAssigned", visibility: privateTo(other), player: other, target: viewer },
+          { type: "moleAllies", visibility: privateTo(other), player: other, allies: [viewer] },
+          { type: "abilityResolved", visibility: privateTo(other), player: other, round: 1, ability: { kind: "tipOff", heat: 10 } },
           { type: "blackmailed", visibility: privateTo(other), player: other, round: 1, stolen: 3 },
           { type: "snitchPaid", visibility: privateTo(other), player: other, meetingId: "act-1", target: viewer, amount: 10 },
         ] satisfies GameEvent[])),
@@ -163,7 +168,7 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
             role: p.role === "insider" ? "fence" : "insider",
             stash: p.stash + 101,
             safe: p.safe + 7,
-            roleState: { usedThisAct: 4, usedThisGame: 1, target: viewer },
+            roleState: { usedThisAct: 4, usedThisGame: 1, target: viewer, allies: [viewer] },
             totalHandedIn: p.totalHandedIn + 33,
             consecutiveMissedMoves: 5,
             sealedVote: { kind: "shakedown", target: viewer },
@@ -244,7 +249,8 @@ describe("no leaks in real games — design §17.2, §13, §11.2", () => {
     // The script covers every starter-game event type.
     const types = new Set(final.log.map((e) => e.type));
     for (const t of ["moveSubmitted", "defaultMoveAssigned", "roomWatched", "abilityResolved", "voteSealed", "voteCast", "shakedownResolved", "checkpointChecked", "meetingProposalAccepted"]) {
-      if (t === "defaultMoveAssigned" && players === 2) continue;
+      // At 2 players the default pool may deal two roles with no move power (e.g. Rookie and Driver).
+      if ((t === "defaultMoveAssigned" || t === "abilityResolved") && players === 2) continue;
       expect(types, t).toContain(t);
     }
     if (players >= 5) expect(types).toContain("pocketCount");
@@ -261,8 +267,8 @@ describe("no leaks in real games — design §17.2, §13, §11.2", () => {
     }
   }, 30_000);
 
-  it("the games above reach every info and vote role's events (design §8)", () => {
-    for (const t of ["snitchTargetAssigned", "blackmailed", "shakedownPending", "shakedownCancelled", "snitchPaid"]) expect(seenTypes, t).toContain(t);
-    for (const k of ["lookout", "fenceSafe", "loopCameras", "blackmail", "cancelShakedown"]) expect(seenAbilities, k).toContain(k);
+  it("the games above reach every info, vote and Mole event (design §8, §8.1)", () => {
+    for (const t of ["snitchTargetAssigned", "blackmailed", "shakedownPending", "shakedownCancelled", "snitchPaid", "moleAllies"]) expect(seenTypes, t).toContain(t);
+    for (const k of ["lookout", "fenceSafe", "loopCameras", "blackmail", "cancelShakedown", "tipOff"]) expect(seenAbilities, k).toContain(k);
   });
 });

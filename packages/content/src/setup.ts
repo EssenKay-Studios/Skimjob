@@ -21,11 +21,11 @@ export const STARTER_ROLES: readonly RoleId[] = ["rookie", "lookout", "insider",
 /** The info and vote roles (M1 task 12). design §8 */
 export const INFO_VOTE_ROLES: readonly RoleId[] = ["hacker", "smoothTalker", "muscle", "blackmailer", "snitch"];
 
-/**
- * Roles used when the host leaves the pool empty: every implemented pool role.
- * The Driver joins this list when it is implemented (task 13).
- */
-export const DEFAULT_ROLE_POOL: readonly RoleId[] = [...STARTER_ROLES, ...INFO_VOTE_ROLES];
+/** The win-condition pool role (M1 task 13); the Mole is dealt by the Mole setting instead. design §8 */
+export const WIN_CONDITION_ROLES: readonly RoleId[] = ["driver"];
+
+/** Roles used when the host leaves the pool empty: every pool role. */
+export const DEFAULT_ROLE_POOL: readonly RoleId[] = [...STARTER_ROLES, ...INFO_VOTE_ROLES, ...WIN_CONDITION_ROLES];
 
 /** Every role id the engine accepts in a pool (the Mole is not a pool role). */
 export const POOL_ROLES: readonly RoleId[] = DEFAULT_ROLE_POOL;

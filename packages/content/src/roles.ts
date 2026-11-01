@@ -1,5 +1,4 @@
 // Role definitions: powers, restrictions and scoring, as data. design §8
-// The Driver and Mole arrive later in M1 (STATUS.md).
 import type { RoleId } from "./index";
 
 /** A role's power. `kind` matches the engine's `AbilityUse` kind where the power is used in a move. design §8 */
@@ -21,7 +20,9 @@ export type RolePower =
   /** Blackmailer: `perAct` times per act, a move may guess one player's role; if right, steal `steal` from their stash. */
   | { readonly kind: "blackmail"; readonly perAct: number; readonly steal: number }
   /** Snitch: dealt a secret target; gets `bonus` each time that target is shaken down and isn't clean (passive). */
-  | { readonly kind: "snitch"; readonly bonus: number };
+  | { readonly kind: "snitch"; readonly bonus: number }
+  /** Mole: `perAct` times per act, a move may tip off the cops: +`heat` Heat that round, hidden in the round's total. design §7, §8 */
+  | { readonly kind: "tipOff"; readonly perAct: number; readonly heat: number };
 
 export interface RoleScoring {
   /** Final stash is multiplied by this (Rookie ×1.2). design §8 */
@@ -55,11 +56,16 @@ export interface RoleDef {
   readonly scoring: RoleScoring;
   /** null: wins only as the biggest stash of a successful heist. design §3 */
   readonly winsOnFailure: WinsOnFailure | null;
+  /**
+   * false: never wins a successful heist, whatever its stash (Mole); the best
+   * of the others wins instead. design §3, §8
+   */
+  readonly winsOnSuccess: boolean;
 }
 
 const PLAIN_SCORING: RoleScoring = { stashMultiplier: 1, perLootOverFinalTarget: 0 };
 
-/** Every role with a definition (the Mole and Driver arrive with task 13). design §8, §8.1 */
+/** Every role. The Mole is dealt by the Mole setting, never from the pool. design §8, §8.1 */
 export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
   rookie: {
     id: "rookie",
@@ -68,6 +74,7 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     canPocket: true,
     scoring: { stashMultiplier: 1.2, perLootOverFinalTarget: 0 },
     winsOnFailure: null,
+    winsOnSuccess: true,
   },
   lookout: {
     id: "lookout",
@@ -76,6 +83,7 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     canPocket: true,
     scoring: PLAIN_SCORING,
     winsOnFailure: null,
+    winsOnSuccess: true,
   },
   insider: {
     id: "insider",
@@ -84,6 +92,7 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     canPocket: false,
     scoring: { stashMultiplier: 1, perLootOverFinalTarget: 0.3 },
     winsOnFailure: null,
+    winsOnSuccess: true,
   },
   fence: {
     id: "fence",
@@ -92,6 +101,7 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     canPocket: true,
     scoring: PLAIN_SCORING,
     winsOnFailure: null,
+    winsOnSuccess: true,
   },
   hacker: {
     id: "hacker",
@@ -100,6 +110,7 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     canPocket: true,
     scoring: PLAIN_SCORING,
     winsOnFailure: null,
+    winsOnSuccess: true,
   },
   smoothTalker: {
     id: "smoothTalker",
@@ -108,6 +119,7 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     canPocket: true,
     scoring: PLAIN_SCORING,
     winsOnFailure: null,
+    winsOnSuccess: true,
   },
   muscle: {
     id: "muscle",
@@ -116,6 +128,7 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     canPocket: true,
     scoring: PLAIN_SCORING,
     winsOnFailure: null,
+    winsOnSuccess: true,
   },
   blackmailer: {
     id: "blackmailer",
@@ -124,6 +137,7 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     canPocket: true,
     scoring: PLAIN_SCORING,
     winsOnFailure: null,
+    winsOnSuccess: true,
   },
   snitch: {
     id: "snitch",
@@ -132,5 +146,26 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     canPocket: true,
     scoring: PLAIN_SCORING,
     winsOnFailure: null,
+    winsOnSuccess: true,
+  },
+  driver: {
+    id: "driver",
+    name: "Driver",
+    power: { kind: "none" },
+    canPocket: true,
+    scoring: PLAIN_SCORING,
+    // design §8: escapes a Heat failure and wins it with the biggest stash; wins a success like anyone.
+    winsOnFailure: { reasons: ["heat"], needsTopStash: true },
+    winsOnSuccess: true,
+  },
+  mole: {
+    id: "mole",
+    name: "Mole",
+    power: { kind: "tipOff", perAct: 1, heat: 10 },
+    canPocket: true,
+    scoring: PLAIN_SCORING,
+    // design §3, §8: wins only if the heist fails, for either reason, and never a success.
+    winsOnFailure: { reasons: ["heat", "target"], needsTopStash: false },
+    winsOnSuccess: false,
   },
 };
