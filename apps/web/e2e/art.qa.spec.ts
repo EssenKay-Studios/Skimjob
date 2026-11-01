@@ -1,8 +1,10 @@
+import { existsSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 
 // QA (PR #33, M2-9 art): cutaway, crooks, gallery and landing across viewports.
 const VIEWPORTS = [360, 390, 768, 1024, 1280].map((width) => ({ width, height: width < 700 ? 800 : 900 }));
-const SHOTS = "/home/claude/pipeline/shots";
+// QA's local screenshot folder when it exists; on CI, Playwright's test-results.
+const SHOTS = process.env.QA_SHOTS ?? (existsSync("/home/claude/pipeline/shots") ? "/home/claude/pipeline/shots" : "test-results/qa-art-shots");
 test.beforeEach(({}, info) => test.skip(info.project.name !== "mobile", "viewports are set per test"));
 test.describe.configure({ timeout: 60_000 });
 
