@@ -200,8 +200,11 @@ export interface GameState {
   readonly alibisPosted: readonly PlayerId[];
   /** Players whose alibi for `resolvedRound` is stamped Verified (public, Alibi perk). design §8.3 */
   readonly alibisVerified: readonly PlayerId[];
-  /** The next card, if a Rig chose it (hidden). design §8.3 */
-  readonly rig: RiggedCard | null;
+  /**
+   * Rigs spent for coming rounds, oldest first, at most one per player per
+   * round (hidden). The oldest for a round flips its pick. design §8.3
+   */
+  readonly rigs: readonly RiggedCard[];
   /** Open proposals for the current act's regular meeting; cleared once a slot is locked. design §11.1 */
   readonly proposals: readonly MeetingProposal[];
   /** The regular meeting locked in for the current act, not yet open. design §11.1 */

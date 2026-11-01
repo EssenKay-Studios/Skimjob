@@ -206,7 +206,7 @@ describe("QA: +Vote, Recharge, Rig at the meeting — design §8.3", () => {
     const next = run(s, use("p0", { kind: "rigPick", card: pick }), CLOSE);
     expect(next.round).toBe(4);
     expect(next.card?.id).toBe(pick);
-    expect(next.rig).toBeNull();
+    expect(next.rigs).toEqual([]);
   });
 });
 
@@ -223,7 +223,7 @@ describe("QA: perks never leak to other views — design §8.3, §17.2", () => {
     s = check(s, use("p0", { kind: "peek", target: "p1" }));
     s = check(s, use("p0", { kind: "tail", room: "vault" }));
     s = check(s, use("p0", { kind: "rig" }));
-    const rig = s.rig;
+    const rig = s.rigs[0];
     if (!rig) throw new Error("no rig");
     s = check(s, use("p0", { kind: "rigPick", card: rig.cards[1] }));
     s = run(s, mv("p0", "lobby", 0, { ability: { kind: "loopCameras", room: "vault" } }), ROUND, ALIBIS);

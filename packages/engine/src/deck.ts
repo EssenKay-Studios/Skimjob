@@ -37,12 +37,13 @@ const effectIs = <K extends EventEffect["kind"]>(state: GameState, kind: K): Ext
  * closed room (any room in play but the default room) and Double-cross
  * privately offers two random players a swap, both as the card is flipped, so
  * players can plan around them. A Rig for this round flips its holder's pick
- * instead of a drawn card (design §8.3). design §10
+ * instead of a drawn card (the oldest, if several; design §8.3). design §10
  */
 export function startRound(state: GameState, round: number, draw: Draw): GameEvent[] {
   const events: GameEvent[] = [{ type: "roundStarted", visibility: PUBLIC, round, act: actOfRound(round) }];
   if (!eventsOn(state.config) || round < EVENTS_FROM_ROUND) return events;
-  const card = state.rig?.round === round ? state.rig.pick : draw.pick(EVENT_DECK);
+  // The oldest Rig of this round wins; later ones were spent without effect (they never learn more than the flip shows).
+  const card = state.rigs.find((r) => r.round === round)?.pick ?? draw.pick(EVENT_DECK);
   const effect = cardDef(card, eventsFor(state.config)).effect;
   let room: RoomId | null = null;
   if (effect.kind === "lockdown") {

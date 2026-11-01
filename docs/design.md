@@ -249,7 +249,7 @@ A perk is a **private token**. Earning one is a private `perkGranted` (only you 
 | **Tail** | While planning, also see who is in one more room when the round resolves (like the Lookout; a Power cut blinds it, a camera loop doesn't). |
 | **Alibi** | Your posted alibi for the latest resolved round, if it is true, is stamped **Verified** in public (`alibiVerified`). A false alibi can't be stamped. One stamp per player per round. |
 | **Recharge** | Your power's uses this act come back, and one use this game (Muscle). Refused if nothing is used. |
-| **Rig** | Draw two different cards for the next round (events on); the first flips unless you pick the other, until that round starts. One Rig per round: a second is refused. |
+| **Rig** | Draw two different cards for the next round (events on); the first flips unless you pick the other, until that round starts. Another player's Rig of the same round never refuses yours (a refusal would hint at who holds what); if several players rig a round, the oldest Rig's pick flips. |
 
 - **Shakedown window:** opens after every passed shakedown whenever a Muscle **or any role that can earn a Shield** could be dealt in this game, so the window never shows that either exists (§11.3).
 - **Double-cross** (§10): perks and a spent Tail stay with the player; they were earned, not dealt *(provisional)*.

@@ -47,7 +47,7 @@ function perkEffect(state: GameState, player: PlayerId, perk: ResolvedPerk): Gam
     case "recharge":
       return updatePlayer(state, player, (p) => withRoleState(p, { usedThisAct: 0, usedThisGame: Math.max(0, p.roleState.usedThisGame - 1) }));
     case "rig":
-      return { ...state, rig: { player, round: perk.round, cards: perk.cards, pick: perk.cards[0] as string } };
+      return { ...state, rigs: [...state.rigs, { player, round: perk.round, cards: perk.cards, pick: perk.cards[0] as string }] };
     case "peek":
     case "shield":
     case "alibi":
@@ -96,7 +96,7 @@ export function initialState(config: GameConfig): GameState {
     alibisOpen: false,
     alibisPosted: [],
     alibisVerified: [],
-    rig: null,
+    rigs: [],
     proposals: [],
     scheduledMeeting: null,
     pendingEmergency: null,
@@ -142,8 +142,8 @@ function applyChange(state: GameState, event: GameEvent): GameState {
     // ------------------------------------------------ round loop. design §5
     case "roundStarted": {
       // A Rig for this round has been used by its flip (deck.ts). design §8.3
-      const rig = state.rig && state.rig.round > event.round ? state.rig : null;
-      const next: GameState = { ...state, phase: { kind: "planning", round: event.round }, round: event.round, moves: {}, card: null, rig };
+      const rigs = state.rigs.filter((r) => r.round > event.round);
+      const next: GameState = { ...state, phase: { kind: "planning", round: event.round }, round: event.round, moves: {}, card: null, rigs };
       // Per-act powers (Fence safe, Hacker, Blackmailer, Mole) start again with each act. design §8
       return actOfRound(event.round) !== actOfRound(state.round) ? mapPlayers(next, (p) => withRoleState(p, { usedThisAct: 0 })) : next;
     }
@@ -324,8 +324,8 @@ function applyChange(state: GameState, event: GameEvent): GameState {
     case "perkUsed":
       return perkEffect(updatePlayer(state, event.player, (p) => spendToken(p, event.perk.kind)), event.player, event.perk);
     case "rigPicked": {
-      if (!state.rig) throw new Error("rigPicked: no rigged card");
-      return { ...state, rig: { ...state.rig, pick: event.card } };
+      if (!state.rigs.some((r) => r.player === event.player && r.round === event.round)) throw new Error("rigPicked: no rigged card");
+      return { ...state, rigs: state.rigs.map((r) => (r.player === event.player && r.round === event.round ? { ...r, pick: event.card } : r)) };
     }
     case "alibiVerified":
       return { ...state, alibisVerified: [...state.alibisVerified, event.player] };

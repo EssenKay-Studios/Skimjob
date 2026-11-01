@@ -108,22 +108,23 @@ function nextCardRound(state: GameState): number | null {
 
 /**
  * Rig: draw `PERK_RULES.rigOptions` different cards for the next round; the
- * first flips unless you pick another (`rigPick`). One Rig per round: a
- * second is refused (it tells its holder someone else rigged it; only
- * possible with repeated roles).
+ * first flips unless you pick another (`rigPick`). Someone else's Rig of the
+ * same round never refuses yours (a refusal would tell you who holds what,
+ * e.g. after a Double-cross; PR #25 review): if several players rig a round,
+ * the oldest Rig's pick flips. One Rig of a round per player.
  */
 function rig(state: GameState, player: PlayerState, draw: Draw): Result {
   const round = nextCardRound(state);
   if (round === null) return "there is no next event card to rig";
-  if (state.rig?.round === round) return "the next event card is already rigged";
+  if (state.rigs.some((r) => r.player === player.id && r.round === round)) return "you already rigged the next event card";
   const cards = draw.shuffle(EVENT_DECK).slice(0, PERK_RULES.rigOptions);
   return [spent(state, player, { kind: "rig", round, cards })];
 }
 
 /** Choose which of your Rig's cards flips next; changeable until that round starts. */
 function rigPick(state: GameState, player: PlayerState, raw: Raw): Result {
-  const rigged = state.rig;
-  if (!rigged || rigged.player !== player.id) return "you have no rigged card to pick";
+  const rigged = state.rigs.find((r) => r.player === player.id && r.round === nextCardRound(state));
+  if (!rigged) return "you have no rigged card to pick";
   if (typeof raw.card !== "string" || !rigged.cards.includes(raw.card)) return `pick one of ${rigged.cards.join(", ")}`;
   return [{ type: "rigPicked", visibility: privateTo(player.id), player: player.id, round: rigged.round, card: raw.card }];
 }

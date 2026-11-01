@@ -104,7 +104,7 @@ function playGame(players: number, voteVisibility: VoteVisibility): GameState[] 
       step({ type: "useAbility", player: "p0", ability: { kind: "peek", target: ids[1] } });
       step({ type: "useAbility", player: "p0", ability: { kind: "tail", room: s.rooms[0] } });
       step({ type: "useAbility", player: last, ability: { kind: "rig" } });
-      step({ type: "useAbility", player: last, ability: { kind: "rigPick", card: s.rig?.cards[1] } });
+      step({ type: "useAbility", player: last, ability: { kind: "rigPick", card: s.rigs.find((r) => r.player === last)?.cards[1] } });
     }
     // design §8.3: the Hacker gets its Act 1 loop back (if it made one).
     if (round === 2 && hacker && s.players[hacker]?.role === "hacker" && (s.players[hacker]?.roleState.usedThisAct ?? 0) > 0) {
@@ -285,7 +285,7 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
     ballotGrants: { ...Object.fromEntries(state.playerOrder.map((id) => [id, [viewer]])), [viewer]: seen },
   };
   // A Rig is its holder's secret. design §8.3
-  const rig = state.rig?.player === viewer ? state.rig : { player: other, round: 9, cards: ["audit", "lockdown"], pick: "lockdown" };
+  const rigs = [...state.rigs.filter((r) => r.player === viewer), { player: other, round: 9, cards: ["audit", "lockdown"], pick: "lockdown" }];
   // Whether the Muscle has cancelled the pending shakedown is hidden until its window ends. design §8
   const pendingShakedown = state.pendingShakedown && { ...state.pendingShakedown, cancelled: !state.pendingShakedown.cancelled };
   // design §10: a Double-cross offer is hidden from everyone else, and the partner's answer from both.
@@ -308,7 +308,7 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
     ...state,
     card,
     pendingShakedown,
-    rig,
+    rigs,
     config: { ...state.config, seed: "scrubbed" },
     rng: { words: [1, 2, 3, 4] },
     players,

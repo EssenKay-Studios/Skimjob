@@ -275,6 +275,18 @@ describe("Recharge — design §8.3", () => {
 });
 
 describe("Rig — design §8.3, §10", () => {
+  it("someone else's Rig of the same round never refuses yours (no refusal tells you who holds what; PR #25 review): the oldest pick flips", () => {
+    const s = grantPerks(rigged(), "p1", "rig");
+    const first = spentRig(s);
+    const both = run(s, use("p1", { kind: "rig" }));
+    const second = since(s, both).find((e) => e.type === "perkUsed");
+    expect(second).toMatchObject({ player: "p1", perk: { kind: "rig", round: 2 } });
+    if (second?.type !== "perkUsed" || second.perk.kind !== "rig") throw new Error("no second Rig");
+    const p1Pick = second.perk.cards.find((c) => c !== first.cards[0]) as string;
+    const picked = run(both, use("p1", { kind: "rigPick", card: p1Pick }), use("p0", { kind: "rigPick", card: first.cards[1] }));
+    expect(run(picked, ROUND, ALIBIS).card?.id).toBe(first.cards[1]);
+  });
+
   const rigged = (): GameState => run(grantPerks(game(4, [], { eventsEnabled: true }), "p0", "rig", "rig"), use("p0", { kind: "rig" }));
   const toRound2 = (s: GameState): GameState => run(s, ROUND, ALIBIS);
   const spentRig = (s: GameState) => {
@@ -296,18 +308,18 @@ describe("Rig — design §8.3, §10", () => {
     expect(since(s, picked)).toEqual([{ type: "rigPicked", visibility: privateTo("p0"), player: "p0", round: 2, card: rig.cards[1] }]);
     const next = toRound2(picked);
     expect(next.card?.id).toBe(rig.cards[1]);
-    expect(next.rig).toBeNull();
+    expect(next.rigs).toEqual([]);
   });
 
-  it("refused: a card not drawn, someone else's pick, a second Rig of the same round, events off", () => {
+  it("refused: a card not drawn, someone else's pick, your own second Rig of a round, events off", () => {
     const s = grantPerks(rigged(), "p1", "rig");
     const other = EVENT_DECK.find((c) => !spentRig(s).cards.includes(c));
     expect(reason(s, use("p0", { kind: "rigPick", card: other }))).toMatch(/pick one of/);
     expect(reason(s, use("p1", { kind: "rigPick", card: spentRig(s).cards[0] }))).toMatch(/no rigged card/);
-    expect(reason(s, use("p1", { kind: "rig" }))).toMatch(/already rigged/);
+    expect(reason(s, use("p0", { kind: "rig" }))).toMatch(/you already rigged/);
     expect(reason(grantPerks(game(4), "p0", "rig"), use("p0", { kind: "rig" }))).toMatch(/no next event card/);
     // After round 2 starts, the next card (round 3) can be rigged again.
-    const round2 = toRound2(s);
+    const round2 = toRound2(run(grantPerks(s, "p1", "rig"), use("p1", { kind: "rig" })));
     expect(since(round2, run(round2, use("p1", { kind: "rig" }))).find((e) => e.type === "perkUsed")).toMatchObject({ perk: { kind: "rig", round: 3 } });
   });
 });

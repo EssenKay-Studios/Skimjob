@@ -50,5 +50,5 @@ describe("QA: win rule in every ending, all-bot games — design §3", () => {
     // The sample covers success and both failures, with and without a dark side.
     expect([...endings.keys()]).toEqual(expect.arrayContaining(["success/dark", "success/crew-only"]));
     expect([...endings.keys()].some((k) => k.startsWith("heat/") || k.startsWith("target/"))).toBe(true);
-  });
+   }, 30_000); // many full bot games: over the 5 s default on a busy machine
 });
