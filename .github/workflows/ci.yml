@@ -1,4 +1,5 @@
-# CI: typecheck, unit + property + integration tests, web e2e, simulator smoke.
+# CI: typecheck, unit + property + integration tests, web e2e, simulator smoke, Docker image.
+# A green run on main triggers the Fly deploy (deploy.yml, docs/deploy.md).
 # Layers and how to run each locally: docs/testing.md
 name: CI
 
@@ -64,3 +65,23 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: bash scripts/sim-smoke.sh 200
+
+  docker:
+    name: Docker image builds and serves
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build --progress=plain -t skimjob:ci .
+      # The production image boots (PGlite on a fresh volume, as on Fly) and serves the app, an SPA route and /health.
+      - name: Run the image
+        run: |
+          docker run -d --name skimjob -p 8080:8080 -v skimjob-ci-data:/data -e PUBLIC_ORIGIN=http://localhost:8080 skimjob:ci
+          for i in $(seq 1 30); do curl -fsS http://localhost:8080/health && break; sleep 2; done
+          curl -fsS http://localhost:8080/health
+          page=$(curl -fsS http://localhost:8080/join/abc)
+          echo "$page" | grep -q '<div id="root">'
+          # The server runs as the unprivileged `node` user (uid 1000), not root.
+          test "$(docker exec skimjob awk '/^Uid:/ {print $2}' /proc/1/status)" = 1000
+      - if: always()
+        run: docker logs skimjob || true
