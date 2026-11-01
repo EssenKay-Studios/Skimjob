@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@fastify/cookie": "^11.1.5",
+    "@fastify/websocket": "^11.3.6",
     "@skimjob/bots": "workspace:*",
     "@skimjob/content": "workspace:*",
     "@skimjob/engine": "workspace:*",
@@ -20,6 +21,7 @@
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.14",
-    "@types/pg": "^8.23.0"
+    "@types/pg": "^8.23.0",
+    "@types/ws": "^8.18.2"
   }
 }
