@@ -17,7 +17,7 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
     seed: "deck-qa",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: ["rookie", "lookout", "fence", "insider"],
+    rolePool: ["rookie", "lookout", "fence", "insideMan"],
     mole: "off",
     eventsEnabled: true,
     voteVisibility: "open",
@@ -196,9 +196,9 @@ describe("QA: Lockdown vs moves — design §10", () => {
 
 describe("QA: Audit numbers — design §10", () => {
   it("crowded Deposit boxes: shortfalls are what was actually kept; they sum to the pockets, and pockets + Haul = loot", () => {
-    const base = withCard(resolve(game(6, ["insider"])), "audit");
+    const base = withCard(resolve(game(6, ["insideMan"])), "audit");
     const s = resolve(base, {
-      p0: { room: "vault", pocket: 0 }, // Insider: hands in all 6
+      p0: { room: "vault", pocket: 0 }, // Inside Man: hands in all 6
       p1: { room: "depositBoxes", pocket: 5 },
       p2: { room: "depositBoxes", pocket: 5 },
       p3: { room: "depositBoxes", pocket: 1 },

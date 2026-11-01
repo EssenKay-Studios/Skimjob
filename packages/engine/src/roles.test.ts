@@ -88,13 +88,13 @@ describe("content — design §8", () => {
     expect(power("smoothTalker", "voteWeight").weight).toBe(2);
     expect(power("muscle", "cancelShakedown").perGame).toBe(1);
     expect(power("blackmailer", "blackmail")).toMatchObject({ perAct: 1, steal: 3 });
-    expect(power("snitch", "snitch").bonus).toBe(10);
+    expect(power("snitch", "snitch").extraVotes).toBe(1); // role deck v2 §2: +Vote for the rest of the game
     for (const r of ["hacker", "smoothTalker", "muscle", "blackmailer", "snitch"]) expect(DEFAULT_ROLE_POOL).toContain(r);
     expect(validateConfig(config(5, { rolePool: ["hacker", "smoothTalker", "muscle", "blackmailer", "snitch"] }))).toEqual([]);
   });
 
   it("content overrides can tune each power's own numbers, never another role's (design §17.4)", () => {
-    const roles = { hacker: { perAct: 2 }, smoothTalker: { weight: 3 }, muscle: { perGame: 2 }, blackmailer: { perAct: 2, steal: 5 }, snitch: { bonus: 4 } };
+    const roles = { hacker: { perAct: 2 }, smoothTalker: { weight: 3 }, muscle: { perGame: 2 }, blackmailer: { perAct: 2, steal: 5 }, snitch: { extraVotes: 2 } };
     expect(validateConfig(config(5, { contentOverrides: { roles } }))).toEqual([]);
     expect(validateConfig(config(5, { contentOverrides: { roles: { hacker: { steal: 5 } } } }))).toEqual([expect.stringMatching(/hacker\.steal/)]);
     expect(validateConfig(config(5, { contentOverrides: { roles: { muscle: { perGame: 0 } } } }))).toEqual([expect.stringMatching(/perGame/)]);
@@ -303,7 +303,8 @@ describe("Muscle: cancel a shakedown after the vote passes — design §8, §11.
     expect(s.phase.kind).toBe("shakedownPending");
     expect(reason(s, { type: "proposeMeeting", player: "p0", slot: "y" })).toMatch(/already scheduled/);
     const after = run(s, RESOLVE);
-    expect(since(s, after).map((e) => e.type)).toEqual(["shakedownResolved", "checkpointChecked", "roundStarted"]);
+    // design §8.3 (v2 §2): the two Rookies' Tails for the checkpoint made.
+    expect(since(s, after).map((e) => e.type)).toEqual(["shakedownResolved", "checkpointChecked", "perkGranted", "perkGranted", "roundStarted"]);
     expect(after.round).toBe(4);
   });
 });
@@ -331,41 +332,35 @@ describe("Snitch: a secret target — design §8", () => {
     const s = run(game(3, ["snitch"], extra, { p0: "p1" }), mv("p1", "vault", pocket), ROUND);
     return run(emergency(s, "p2"), vote("p0", "p1"), vote("p2", "p1"), CLOSE);
   };
-  const bonus = power("snitch", "snitch").bonus;
+  const votes = power("snitch", "snitch").extraVotes;
 
-  it("paid privately when the target is shaken down holding at least the clean threshold (provisional: not clean)", () => {
+  it("rewarded privately when the target is shaken down holding at least the clean threshold (provisional: not clean; v2 §2)", () => {
     const s = shaken(cleanBelowPerAct * 1);
-    const paid = ofType(s.log, "snitchPaid");
-    expect(paid).toEqual([{ type: "snitchPaid", visibility: privateTo("p0"), player: "p0", meetingId: "emergency-p2", target: "p1", amount: bonus }]);
-    expect(s.players.p0?.stash).toBe(bonus);
+    const paid = ofType(s.log, "snitchRewarded");
+    expect(paid).toEqual([{ type: "snitchRewarded", visibility: privateTo("p0"), player: "p0", meetingId: "emergency-p2", target: "p1", votes }]);
+    expect(s.players.p0?.stash).toBe(0);
+    expect(s.players.p0?.roleState.bonusVotes).toBe(votes);
   });
 
   it("not paid when the target is clean", () => {
     const s = shaken(cleanBelowPerAct - 1);
     expect(ofType(s.log, "shakedownResolved")[0]?.clean).toBe(true);
-    expect(ofType(s.log, "snitchPaid")).toEqual([]);
+    expect(ofType(s.log, "snitchRewarded")).toEqual([]);
   });
 
   it("not paid when someone else is shaken down, or when the Muscle cancels the shakedown", () => {
     let s = run(game(3, ["snitch"], { rolePool: [...STARTER_ROLES] }, { p0: "p2" }), mv("p1", "vault", 6), ROUND);
     s = run(emergency(s, "p2"), vote("p0", "p1"), vote("p2", "p1"), CLOSE);
-    expect(ofType(s.log, "snitchPaid")).toEqual([]);
+    expect(ofType(s.log, "snitchRewarded")).toEqual([]);
     let m = run(game(3, ["snitch", "rookie", "muscle"], {}, { p0: "p1" }), mv("p1", "vault", 6), ROUND);
     m = run(emergency(m, "p2"), vote("p0", "p1"), vote("p2", "p1"), CLOSE, cancel("p2"), RESOLVE);
-    expect(ofType(m.log, "snitchPaid")).toEqual([]);
+    expect(ofType(m.log, "snitchRewarded")).toEqual([]);
   });
 
-  it("the payout counts in the final ranking (design §3)", () => {
-    // The Act 3 meeting shakes down the target; the bonus is in the Snitch's score.
-    let s = game(3, ["snitch"], { rolePool: [...STARTER_ROLES] }, { p0: "p1" });
-    for (let act = 1; act <= 3; act++) {
-      for (let r = 0; r < 3; r++) s = run(s, mv("p1", "vault", act === 3 ? 6 : 0), ROUND); // 18 by the Act 3 meeting: not clean
-      s = run(s, { type: "scheduleMeeting", act, slot: "x" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: `act-${act}` } });
-      if (act === 3) s = run(s, vote("p0", "p1"), vote("p2", "p1"));
-      s = run(s, CLOSE);
-    }
-    expect(s.phase.kind).toBe("ended");
-    const ranking = s.phase.kind === "ended" ? s.phase.outcome.ranking : [];
-    expect(ranking.find((e) => e.player === "p0")).toMatchObject({ stash: bonus, score: bonus });
+  it("the reward weighs in every later meeting: the Snitch's ballot alone is a majority of 3 (v2 §2)", () => {
+    // After the reward p0 weighs 2 of 3: its lone vote shakes down p2 against p1's skip.
+    let s = run(shaken(cleanBelowPerAct), mv("p2", "vault", 6), ROUND);
+    s = run(emergency(s, "p1"), vote("p0", "p2"), { type: "castVote", player: "p1", vote: { kind: "skip" } }, CLOSE);
+    expect(ofType(s.log, "meetingClosed").at(-1)?.result).toEqual({ kind: "shakedown", target: "p2" });
   });
 });

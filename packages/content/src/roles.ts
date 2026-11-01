@@ -20,15 +20,22 @@ export type RolePower =
   | { readonly kind: "cancelShakedown"; readonly perGame: number }
   /** Blackmailer: `perAct` times per act, a move may guess one player's role; if right, steal `steal` from their stash. */
   | { readonly kind: "blackmail"; readonly perAct: number; readonly steal: number }
-  /** Snitch: dealt a secret target; gets `bonus` each time that target is shaken down and isn't clean (passive). */
-  | { readonly kind: "snitch"; readonly bonus: number }
+  /** Auditor: `perAct` times per act (`useAbility`), learn the latest resolved round's shortfall for one room. design §8 (v2 §2) */
+  | { readonly kind: "audit"; readonly perAct: number }
+  /** Detective: `perAct` times per act (`useAbility`), learn whether a player's stash is at or above the clean threshold. design §8 (v2 §2) */
+  | { readonly kind: "checkStash"; readonly perAct: number }
+  /**
+   * Snitch: dealt a secret target; each time that target is shaken down and
+   * isn't clean, its ballot weighs `extraVotes` more for the rest of the game (passive). design §8 (v2 §2)
+   */
+  | { readonly kind: "snitch"; readonly extraVotes: number }
   /** Mole: `perAct` times per act, a move may tip off the cops: +`heat` Heat that round, hidden in the round's total. design §7, §8 */
   | { readonly kind: "tipOff"; readonly perAct: number; readonly heat: number };
 
 export interface RoleScoring {
   /** Final stash is multiplied by this (Rookie ×1.2). design §8 */
   readonly stashMultiplier: number;
-  /** Points for every loot the Haul ends above the final target (Insider: 0.3, balance pass 1). design §8 */
+  /** Points for every loot the Haul ends above the final target (Inside Man: 0.3, balance pass 1). design §8 */
   readonly perLootOverFinalTarget: number;
 }
 
@@ -45,6 +52,28 @@ export type FailureReason = "heat" | "target";
  */
 export type Faction = "crew" | "accomplice" | "saboteur";
 
+/**
+ * What earns a role its perk (role deck v2 §2, docs/roles-v2.md). "Dirty"
+ * means a shakedown that found the target holding at least the clean
+ * threshold (`shakedownResolved` with `clean: false`). design §8.3
+ */
+export type PerkTrigger =
+  /** Each Act 1 or 2 checkpoint made (Rookie: Tail; Inside Man: Peek). The final check ends the game, so it grants nothing. */
+  | "checkpointMade"
+  /** A player this role's Lookout power saw, earlier this game, is shaken down dirty (Lookout: Peek). */
+  | "watchedShakenDirty"
+  /** A visitor of a room this role audited, in the audited round, is shaken down dirty (Auditor: Ballot). */
+  | "auditedShakenDirty"
+  /** A player this role checked, earlier this game, is shaken down dirty (Detective: Shield). */
+  | "checkedShakenDirty";
+
+/** A role's reward: `count` tokens of `perk` each time `on` happens. design §8.3 */
+export interface PerkReward {
+  readonly on: PerkTrigger;
+  readonly perk: PerkId;
+  readonly count: number;
+}
+
 /** Scores are rounded to this many decimal places (Rookie ×1.2 gives fractions). docs/decisions.md */
 export const SCORE_DECIMALS = 1;
 
@@ -52,20 +81,21 @@ export interface RoleDef {
   readonly id: RoleId;
   readonly name: string;
   readonly power: RolePower;
-  /** false: every move must hand everything in (Insider). design §8 */
+  /** false: every move must hand everything in (Inside Man). design §8 */
   readonly canPocket: boolean;
   readonly scoring: RoleScoring;
   /** Which side the role wins with. design §3 */
   readonly faction: Faction;
   /**
-   * Perks this role's reward can grant (design §8.3). Absent: none. Read by
-   * rules that must not depend on who was dealt (e.g. the shakedown window
-   * opens whenever a Shield is possible from the pool). Role deck v2 R2/R3
-   * wire the triggers.
+   * The perks this role earns, and how (design §8.3). Absent: none. Also read
+   * by rules that must not depend on who was dealt (e.g. the shakedown window
+   * opens whenever a Shield is possible from the pool).
    */
-  readonly earns?: readonly PerkId[];
-  /** Dealt only in crews of at least this size (Insider: 5). Absent: any size. design §8.1 */
+  readonly rewards?: readonly PerkReward[];
+  /** Dealt only in crews of at least this size (Inside Man: 5). Absent: any size. design §8.1 */
   readonly minPlayers?: number;
+  /** Needs meetings, so never dealt in Duel mode (role deck v2 §3). design §16.1 */
+  readonly needsMeetings?: boolean;
 }
 
 const PLAIN_SCORING: RoleScoring = { stashMultiplier: 1, perLootOverFinalTarget: 0 };
@@ -79,6 +109,7 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     canPocket: true,
     scoring: { stashMultiplier: 1.2, perLootOverFinalTarget: 0 },
     faction: "crew",
+    rewards: [{ on: "checkpointMade", perk: "tail", count: 1 }],
   },
   lookout: {
     id: "lookout",
@@ -87,14 +118,16 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     canPocket: true,
     scoring: PLAIN_SCORING,
     faction: "crew",
+    rewards: [{ on: "watchedShakenDirty", perk: "peek", count: 1 }],
   },
-  insider: {
-    id: "insider",
-    name: "Insider",
+  insideMan: {
+    id: "insideMan",
+    name: "Inside Man",
     power: { kind: "none" },
     canPocket: false,
     scoring: { stashMultiplier: 1, perLootOverFinalTarget: 0.3 },
     faction: "crew",
+    rewards: [{ on: "checkpointMade", perk: "peek", count: 1 }],
     // Owner answers, 1 Nov: a crew of 2–4 can't spare a player who never pockets.
     minPlayers: 5,
   },
@@ -121,6 +154,7 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     canPocket: true,
     scoring: PLAIN_SCORING,
     faction: "crew",
+    needsMeetings: true,
   },
   muscle: {
     id: "muscle",
@@ -129,6 +163,7 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     canPocket: true,
     scoring: PLAIN_SCORING,
     faction: "crew",
+    needsMeetings: true,
   },
   blackmailer: {
     id: "blackmailer",
@@ -141,10 +176,32 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
   snitch: {
     id: "snitch",
     name: "Snitch",
-    power: { kind: "snitch", bonus: 10 },
+    power: { kind: "snitch", extraVotes: 1 },
     canPocket: true,
     scoring: PLAIN_SCORING,
     faction: "crew",
+    minPlayers: 4,
+    needsMeetings: true,
+  },
+  auditor: {
+    id: "auditor",
+    name: "Auditor",
+    power: { kind: "audit", perAct: 1 },
+    canPocket: true,
+    scoring: PLAIN_SCORING,
+    faction: "crew",
+    rewards: [{ on: "auditedShakenDirty", perk: "ballot", count: 1 }],
+  },
+  detective: {
+    id: "detective",
+    name: "Detective",
+    power: { kind: "checkStash", perAct: 1 },
+    canPocket: true,
+    scoring: PLAIN_SCORING,
+    faction: "crew",
+    rewards: [{ on: "checkedShakenDirty", perk: "shield", count: 1 }],
+    minPlayers: 4,
+    needsMeetings: true,
   },
   driver: {
     id: "driver",

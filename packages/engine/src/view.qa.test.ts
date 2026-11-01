@@ -103,7 +103,7 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
       log: A.log.map((e) => (e.type === "roleDealt" && (e.player === x || e.player === z) ? { ...e, role: e.player === x ? pz.role : px.role } : e)),
     };
   }
-  const noPocket = [...restricted].some((id) => A.players[id]?.role === "insider");
+  const noPocket = [...restricted].some((id) => A.players[id]?.role === "insideMan");
 
   const compare = (): void => {
     const end = over();
@@ -144,7 +144,7 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
     const role = A.players[id]?.role;
     const room = pick(A.rooms);
     const loot = LOOT[room] ?? 0;
-    const keep = role !== "insider" && !(noPocket && restricted.has(id));
+    const keep = role !== "insideMan" && !(noPocket && restricted.has(id));
     const move: Cmd = { room, pocket: keep && loot > 0 && rand() < 0.5 ? int(loot + 1) : 0 };
     if (room === "security") move.watch = pick(A.rooms);
     if (restricted.has(id)) return move;
@@ -159,7 +159,7 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
     return t === id || rand() < 0.15 ? { kind: "skip" } : { kind: "shakedown", target: t };
   };
   const roleHolder = (role: string): PlayerId | undefined => ids.find((id) => A.players[id]?.role === role);
-  const canPocket = (id: PlayerId): boolean => A.players[id]?.role !== "insider";
+  const canPocket = (id: PlayerId): boolean => A.players[id]?.role !== "insideMan";
   const due = (round: number): boolean => !applied && round >= start;
 
   function planRound(round: number): void {

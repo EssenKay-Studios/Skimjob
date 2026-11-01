@@ -180,9 +180,9 @@ describe("design §17.4 metrics — hand-checked against the engine on a fixed s
     expect(s.shakedowns.count).toBe(sd.length);
     expect(s.shakedowns.accuracy).toBe(sd.filter((e) => e.type === "shakedownResolved" && !e.clean).length / sd.length);
     // Role win share in successful games: each joint winner gets 1 ÷ winners.
-    const insiderSeats = records.filter((r) => r.result === "success").flatMap((r) => r.playerRecords.filter((p) => p.role === "insider").map((p) => ({ r, p })));
+    const insiderSeats = records.filter((r) => r.result === "success").flatMap((r) => r.playerRecords.filter((p) => p.role === "insideMan").map((p) => ({ r, p })));
     const credit = insiderSeats.reduce((t, { r, p }) => t + (r.winners.includes(p.id) ? 1 / r.winners.length : 0), 0);
-    expect(s.roles.insider?.successWinShare).toBeCloseTo(credit / insiderSeats.length, 12);
+    expect(s.roles.insideMan?.successWinShare).toBeCloseTo(credit / insiderSeats.length, 12);
     // Per-count summaries partition the games.
     expect(Object.values(summarize(records).byPlayers).reduce((t, m) => t + m.games, 0)).toBe(16);
   });

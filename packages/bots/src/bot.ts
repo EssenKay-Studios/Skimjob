@@ -122,6 +122,7 @@ export function decide(view: PlayerView, p: Personality, random: Random): Player
   }
   const duel = isDuel(view);
   if (!duel) out.push(...scheduleMeeting(view));
+  out.push(...crewPowers(view));
   if (phase.kind === "planning") {
     if (duel) {
       if (wantsCallOut(view, p, random)) out.push({ type: "callOut", player });
@@ -137,6 +138,29 @@ export function decide(view: PlayerView, p: Personality, random: Random): Player
     }
   }
   return out;
+}
+
+// ---------------------------------------------------------------- crew powers (v2 §2)
+
+/**
+ * The Auditor's and Detective's powers (role deck v2 §4 "Play", minimal; R4
+ * adds claims and perk use). Once per act, while planning: the Auditor
+ * audits the room its top suspect claimed for the latest round; the Detective
+ * checks its top suspect in the act's last round, closest to the meeting.
+ */
+function crewPowers(view: PlayerView): PlayerCommand[] {
+  const { power } = roleOf(view);
+  if (view.phase.kind !== "planning" || (power.kind !== "audit" && power.kind !== "checkStash")) return [];
+  if (view.me.roleState.usedThisAct >= power.perAct) return [];
+  const top = mostSuspicious(suspicion(view));
+  if (top === null || top.score <= 0) return [];
+  const player = view.me.id;
+  if (power.kind === "checkStash") {
+    return view.round % ROUNDS_PER_ACT === 0 ? [{ type: "useAbility", player, ability: { kind: "checkStash", target: top.player } }] : [];
+  }
+  const round = lastResolvedRound(view);
+  const claim = ofType(view.ledger, "alibiPosted").find((a) => a.player === top.player && a.round === round);
+  return claim ? [{ type: "useAbility", player, ability: { kind: "audit", room: claim.room } }] : [];
 }
 
 // ---------------------------------------------------------------- moves (§5.1)

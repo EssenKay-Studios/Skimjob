@@ -43,7 +43,7 @@ describe("pocketing bands — design §17.4 (moderate beats honest, heavy loses)
 });
 
 describe("group win rates — design §17.4 (each role within ±5 pp of 1 ÷ crew)", () => {
-  const players = [seat({ id: "a", role: "rookie" }), seat({ id: "b", role: "fence" }), seat({ id: "c", role: "rookie" }), seat({ id: "d", role: "insider" })];
+  const players = [seat({ id: "a", role: "rookie" }), seat({ id: "b", role: "fence" }), seat({ id: "c", role: "rookie" }), seat({ id: "d", role: "insideMan" })];
   const games = [
     gameRec({ players: 4, playerRecords: players, winners: ["a"] }),
     gameRec({ players: 4, playerRecords: players, winners: ["b", "c"] }),
@@ -56,7 +56,7 @@ describe("group win rates — design §17.4 (each role within ±5 pp of 1 ÷ cre
     expect(byRole.rookie).toEqual({ seats: 6, winRate: 1.5 / 6, successSeats: 4, successWinShare: 1.5 / 4, fairShare: 0.25, deltaPp: 12.5 });
     expect(byRole.fence?.successWinShare).toBe(0.25);
     expect(byRole.fence?.deltaPp).toBe(0);
-    expect(byRole.insider).toMatchObject({ seats: 3, winRate: 0, successWinShare: 0, deltaPp: -25 });
+    expect(byRole.insideMan).toMatchObject({ seats: 3, winRate: 0, successWinShare: 0, deltaPp: -25 });
   });
 
   it("all seats' win shares in successful games add up to one win per game", () => {
@@ -64,8 +64,8 @@ describe("group win rates — design §17.4 (each role within ±5 pp of 1 ÷ cre
     expect(total).toBeCloseTo(2);
   });
 
-  it("a key of null leaves the seat out (Insiders in the pocketing bands)", () => {
-    const out = groupWins(games, (p) => (p.role === "insider" ? null : p.role));
+  it("a key of null leaves the seat out (Inside Men in the pocketing bands)", () => {
+    const out = groupWins(games, (p) => (p.role === "insideMan" ? null : p.role));
     expect(Object.keys(out)).toEqual(["fence", "rookie"]);
   });
 

@@ -65,10 +65,10 @@ function withPlayers(s: GameState, haul: number, change: Record<string, Partial<
 describe("a successful heist — design §3, §8", () => {
   /**
    * 2 players. p0 (Fence) in the Vault pockets 1 a round and puts 1 a round in
-   * the safe in Act 3; p1 (Insider) on the Rooftop. Haul +5 a round → 45 ≥ 44.
+   * the safe in Act 3; p1 (Inside Man) on the Rooftop. Haul +5 a round → 45 ≥ 44.
    */
   function fullGame(): GameState {
-    let s = game(2, ["fence", "insider"]);
+    let s = game(2, ["fence", "insideMan"]);
     for (let round = 1; round <= 9; round++) {
       const safe = round > 6 ? { ability: { kind: "fenceSafe", amount: 1 } } : {};
       s = run(s, mv("p0", "vault", 1, safe), mv("p1", "rooftop"), ROUND);
@@ -85,8 +85,8 @@ describe("a successful heist — design §3, §8", () => {
       ranking: [
         // design §8: the stash includes the Fence safe.
         { player: "p0", role: "fence", score: 9, stash: 9, safe: 3, timesShakenDown: 0, totalHandedIn: 45 },
-        // design §8: the Insider scores 1 per loot above the final target (45 − 44).
-        { player: "p1", role: "insider", score: 1, stash: 0, safe: 0, timesShakenDown: 0, totalHandedIn: 0 },
+        // design §8: the Inside Man scores 1 per loot above the final target (45 − 44).
+        { player: "p1", role: "insideMan", score: 1, stash: 0, safe: 0, timesShakenDown: 0, totalHandedIn: 0 },
       ],
       winners: ["p0"],
     });
@@ -118,10 +118,10 @@ describe("role scoring — design §8", () => {
     ]);
   });
 
-  it("Insider: surplus over the final target is added to the stash; none below it", () => {
-    const above = withPlayers(game(2, ["insider", "rookie"]), 50, { p0: { stash: 5 } });
+  it("Inside Man: surplus over the final target is added to the stash; none below it", () => {
+    const above = withPlayers(game(2, ["insideMan", "rookie"]), 50, { p0: { stash: 5 } });
     expect(ranking(above).find((e) => e.player === "p0")?.score).toBe(11); // 5 + (50 − 44)
-    const below = withPlayers(game(2, ["insider", "rookie"]), 40, { p0: { stash: 5 } });
+    const below = withPlayers(game(2, ["insideMan", "rookie"]), 40, { p0: { stash: 5 } });
     expect(ranking(below).find((e) => e.player === "p0")?.score).toBe(5);
   });
 
@@ -232,7 +232,7 @@ describe("faction winning rules (role deck v2 §0) — design §3, §8", () => {
   });
 
   it("with the starter roles nobody wins a failed heist", () => {
-    const s = withPlayers(game(4, ["rookie", "lookout", "insider", "fence"]), 0, { p0: { stash: 3 }, p3: { stash: 8, safe: 2 } });
+    const s = withPlayers(game(4, ["rookie", "lookout", "insideMan", "fence"]), 0, { p0: { stash: 3 }, p3: { stash: 8, safe: 2 } });
     expect(outcomeFor(s, "heat").winners).toEqual([]);
     expect(outcomeFor(s, "target").winners).toEqual([]);
   });

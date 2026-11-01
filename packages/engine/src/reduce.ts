@@ -171,6 +171,8 @@ function applyChange(state: GameState, event: GameEvent): GameState {
           }));
         case "loopCameras":
         case "tipOff":
+        case "audit":
+        case "checkStash":
           // The tip-off's Heat is already in the round's `roundResolved` total. design §8
           return updatePlayer(state, event.player, (p) => withRoleState(p, { usedThisAct: p.roleState.usedThisAct + 1 }));
         case "blackmail":
@@ -307,8 +309,8 @@ function applyChange(state: GameState, event: GameEvent): GameState {
       };
     case "shakedownCancelled":
       return afterShakedown(state);
-    case "snitchPaid":
-      return updatePlayer(state, event.player, (p) => ({ stash: p.stash + event.amount }));
+    case "snitchRewarded":
+      return updatePlayer(state, event.player, (p) => withRoleState(p, { bonusVotes: p.roleState.bonusVotes + event.votes }));
     case "shakedownResolved": {
       const next = { ...afterShakedown(state), haul: state.haul + event.taken - event.compensation };
       return updatePlayer(next, event.target, (p) => ({
