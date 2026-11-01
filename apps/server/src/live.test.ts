@@ -274,7 +274,7 @@ describe("pushing views", () => {
     expect(await b.barrier()).toBe(seen + 1);
     a.ws.close();
     b.ws.close();
-  });
+  }, 15_000); // heavy: slow under a full parallel run (QA, PR #31)
 
   it("bots of running games act when the server boots (a crash may have cut a settle short)", async () => {
     const host = (await call("/auth/guest", null, { nickname: "Host" })).session!;

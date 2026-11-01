@@ -75,6 +75,12 @@ importers:
 
   apps/web:
     dependencies:
+      '@skimjob/content':
+        specifier: workspace:*
+        version: link:../../packages/content
+      '@skimjob/engine':
+        specifier: workspace:*
+        version: link:../../packages/engine
       react:
         specifier: ^19.2.0
         version: 19.3.1

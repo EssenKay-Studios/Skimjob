@@ -18,7 +18,8 @@ export default defineConfig({
   webServer: [
     {
       command: "pnpm --filter @skimjob/server start",
-      env: { PORT: String(serverPort), PGLITE_DIR: "memory" },
+      // TIME_SCALE: Quick games run ten times faster, so the game E2E plays 9 rounds in under two minutes.
+      env: { PORT: String(serverPort), PGLITE_DIR: "memory", TIME_SCALE: "0.1" },
       url: `http://127.0.0.1:${serverPort}/health`,
       reuseExistingServer: false,
       timeout: 60_000,

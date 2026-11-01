@@ -1,0 +1,141 @@
+// The live game channel (apps/server live.ts) as one React hook: the latest
+// view, the deadlines, the server's clock offset, and `send` for commands.
+// Reconnects with backoff when the socket drops (wifi blips, a server
+// restart, a phone waking up). docs/m2-plan.md M2-6
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { PlayerCommand, PlayerView } from "@skimjob/engine";
+import type { Timer } from "./hud";
+
+/** A command as the client sends it: the server fills in `player` from the session. */
+export type ClientCommand = PlayerCommand extends infer C ? (C extends PlayerCommand ? Omit<C, "player"> : never) : never;
+
+export type Reply = { readonly ok: true } | { readonly ok: false; readonly reason: string };
+
+export type Connection = "connecting" | "open" | "reconnecting" | "signedOut";
+
+export interface GameChannel {
+  readonly view: PlayerView | null;
+  readonly timers: readonly Timer[];
+  /** server time − local time, ms: add it to Date.now() to read the server's clock. */
+  readonly offset: number;
+  readonly connection: Connection;
+  readonly send: (cmd: ClientCommand) => Promise<Reply>;
+}
+
+/** Waits before reconnect attempt n (0-based): 0.5 s, 1 s, 2 s, 4 s, then every 8 s. */
+export const backoffMs = (attempt: number) => Math.min(8000, 500 * 2 ** attempt);
+/** The server closes with this when the session signs out (live.ts CLOSE_SIGNED_OUT): don't retry. */
+const CLOSE_SIGNED_OUT = 4401;
+
+type Incoming =
+  | { view: PlayerView; timers?: Timer[]; now?: number }
+  | { ok: true; id?: string | number }
+  | { rejected: true; reason: string; id?: string | number }
+  | Record<string, unknown>;
+
+export function socketUrl(gameId: string, loc: Pick<Location, "protocol" | "host"> = location): string {
+  return `${loc.protocol === "https:" ? "wss" : "ws"}://${loc.host}/api/games/${encodeURIComponent(gameId)}/ws`;
+}
+
+export function useGame(gameId: string, enabled = true): GameChannel {
+  const [view, setView] = useState<PlayerView | null>(null);
+  const [timers, setTimers] = useState<readonly Timer[]>([]);
+  const [offset, setOffset] = useState(0);
+  const [connection, setConnection] = useState<Connection>("connecting");
+  const socket = useRef<WebSocket | null>(null);
+  const pending = useRef(new Map<string, (r: Reply) => void>());
+  const nextId = useRef(1);
+
+  useEffect(() => {
+    if (!enabled) return;
+    let stopped = false;
+    let attempt = 0;
+    let retry: ReturnType<typeof setTimeout> | null = null;
+    const failPending = () => {
+      for (const resolve of pending.current.values()) resolve({ ok: false, reason: "the connection dropped; try again" });
+      pending.current.clear();
+    };
+    const connect = () => {
+      if (stopped) return;
+      retry = null;
+      const ws = new WebSocket(socketUrl(gameId));
+      socket.current = ws;
+      ws.onopen = () => {
+        attempt = 0;
+        setConnection("open");
+      };
+      ws.onmessage = (e) => {
+        let msg: Incoming;
+        try {
+          msg = JSON.parse(String(e.data)) as Incoming;
+        } catch {
+          return;
+        }
+        if ("view" in msg && msg.view) {
+          const m = msg as { view: PlayerView; timers?: Timer[]; now?: number };
+          setView(m.view);
+          setTimers(m.timers ?? []);
+          if (typeof m.now === "number") setOffset(m.now - Date.now());
+          return;
+        }
+        // Chat messages (`chat`, `dmNotice`, `chatHistory`) are for M2-8b's feed.
+        const id = "id" in msg ? String(msg.id) : null;
+        const resolve = id ? pending.current.get(id) : undefined;
+        if (!id || !resolve) return;
+        pending.current.delete(id);
+        if ("ok" in msg && msg.ok === true) resolve({ ok: true });
+        else if ("rejected" in msg) resolve({ ok: false, reason: String(msg.reason) });
+      };
+      ws.onclose = (e) => {
+        if (socket.current === ws) socket.current = null;
+        failPending();
+        if (stopped) return;
+        if (e.code === CLOSE_SIGNED_OUT) return setConnection("signedOut");
+        setConnection("reconnecting");
+        retry = setTimeout(connect, backoffMs(attempt++));
+      };
+    };
+    // Back online or back in front: try now rather than wait out the backoff.
+    const now = () => {
+      if (retry && !stopped) {
+        clearTimeout(retry);
+        connect();
+      }
+    };
+    const onVisible = () => document.visibilityState === "visible" && now();
+    window.addEventListener("online", now);
+    document.addEventListener("visibilitychange", onVisible);
+    connect();
+    return () => {
+      stopped = true;
+      if (retry) clearTimeout(retry);
+      window.removeEventListener("online", now);
+      document.removeEventListener("visibilitychange", onVisible);
+      socket.current?.close();
+      socket.current = null;
+      failPending();
+    };
+  }, [gameId, enabled]);
+
+  const send = useCallback((cmd: ClientCommand): Promise<Reply> => {
+    const ws = socket.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return Promise.resolve({ ok: false, reason: "not connected; reconnecting" });
+    const id = `c${nextId.current++}`;
+    return new Promise<Reply>((resolve) => {
+      pending.current.set(id, resolve);
+      ws.send(JSON.stringify({ cmd, id }));
+    });
+  }, []);
+
+  return { view, timers, offset, connection, send };
+}
+
+/** The current time, re-rendering every `ms`. */
+export function useNow(ms = 1000): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), ms);
+    return () => clearInterval(t);
+  }, [ms]);
+  return now;
+}
