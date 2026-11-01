@@ -38,13 +38,13 @@ describe("QA: /health", () => {
 
 describe("QA: bad env config", () => {
   it.each([
-    ["0", 0],
+    ["1", 1],
     ["65535", 65535],
   ])("accepts the boundary PORT=%s", (port, want) => {
     expect(loadConfig({ PORT: port }).port).toBe(want);
   });
 
-  it.each(["65536", "-0.5", "NaN", "Infinity", "8080abc"])("refuses PORT=%s with a message naming PORT", (port) => {
+  it.each(["0", "65536", "-0.5", "NaN", "Infinity", "8080abc", "0x50", "1e3", "+80", "80 80"])("refuses PORT=%s with a message naming PORT", (port) => {
     expect(() => loadConfig({ PORT: port })).toThrow(/PORT/);
   });
 

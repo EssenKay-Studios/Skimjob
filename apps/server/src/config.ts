@@ -11,12 +11,18 @@ export interface ServerConfig {
   readonly devLogin: boolean;
 }
 
+/** A startup failure whose message is the whole story: print it, exit 1. */
+export class StartupError extends Error {}
+
 type Env = Readonly<Record<string, string | undefined>>;
 
 export function loadConfig(env: Env = process.env): ServerConfig {
-  const port = Number(env.PORT ?? 3000);
-  if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error(`PORT must be a port number, got ${env.PORT}`);
-  const pgliteDir = env.PGLITE_DIR ?? ".pglite";
+  // Unset or blank means the default, like HOST. Otherwise digits only, so
+  // "0x50" or "1e3" isn't read as a number by accident.
+  const rawPort = env.PORT?.trim() || "3000";
+  const port = /^\d{1,5}$/.test(rawPort) ? Number(rawPort) : NaN;
+  if (!(port >= 1 && port <= 65535)) throw new StartupError(`PORT must be a whole number from 1 to 65535, got ${JSON.stringify(env.PORT)}`);
+  const pgliteDir = env.PGLITE_DIR?.trim() || ".pglite";
   return {
     port,
     // Loopback by default; HOST=0.0.0.0 lets phones on the LAN join.
