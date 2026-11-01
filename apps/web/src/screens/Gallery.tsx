@@ -1,6 +1,9 @@
 // /dev/gallery: every component and token on one page, for eyeballing the
 // style against docs/ui-style.md and for screenshots.
-import { useState, type ReactNode } from "react";
+import { useCallback, useReducer, useState, type ReactNode } from "react";
+import { ChatBadge, ChatPanel, EvidenceCardView } from "../components/Chat";
+import { Bubble } from "../components/icons";
+import { chatReducer, EMPTY_CHAT, markRead, type ChatMessage, type ChatRequest, type ReadState, type ThreadId } from "../game/chat";
 import { Avatar } from "../components/Avatar";
 import { BankDoodle } from "../components/BankDoodle";
 import { ArtSections, BankSection } from "./GalleryArt";
@@ -283,6 +286,10 @@ export function Gallery() {
               <GameKitSamples />
             </Section>
 
+            <Section id="chat" title="Chat" note="M2-8b · crew + DMs, DM notices, evidence cards, limits">
+              <ChatSamples />
+            </Section>
+
             <Section id="meet" title="Meetings kit" note="M2-7 · clock face, tally bars, result banners, vote dialog sheet">
               <MeetingKitSamples />
             </Section>
@@ -375,5 +382,62 @@ function MeetingKitSamples() {
         </Button>
       </DialogSheet>
     </>
+  );
+}
+
+const G_PEOPLE = [
+  { id: "me", name: "You", isBot: false },
+  { id: "dez", name: "Dez", isBot: false },
+  { id: "lou", name: "Lucky Lou", isBot: false },
+  { id: "bot", name: "Bot · Rex", isBot: true },
+];
+const gAt = (min: number) => new Date(Date.UTC(2026, 10, 2, 18, min)).toISOString();
+const G_SIGHTING = { type: "roomSighting", payload: { player: "dez", round: 2, room: "vault", others: ["lou"] } };
+const G_HISTORY: ChatMessage[] = [
+  { id: "g1", from: "dez", to: null, at: gAt(1), verified: false, text: "Who went to the Vault in round 2? The Haul came up short." },
+  { id: "g2", from: "lou", to: null, at: gAt(2), verified: false, text: "Not me. <b>Promise</b> **really**. Supercalifragilisticexpialidociousvaultdoorsquad" },
+  { id: "g3", from: "dez", to: null, at: gAt(3), verified: true, card: G_SIGHTING },
+  { id: "g4", from: "lou", to: "me", at: gAt(4), verified: false, text: "Back me up at the meeting?" },
+];
+
+/** The chat panel (M2-8b) with sample talk; sending works locally. */
+function ChatSamples() {
+  const [chat, dispatch] = useReducer(chatReducer, EMPTY_CHAT, (s) =>
+    chatReducer(s, { type: "history", history: { messages: G_HISTORY, dmNotices: [{ from: "dez", to: "lou", at: gAt(5) }] } }),
+  );
+  const [read, setRead] = useState<ReadState>({});
+  const onRead = useCallback((t: ThreadId, at: string) => setRead((r) => markRead(r, t, at)), []);
+  const send = async (req: ChatRequest) => {
+    const base = { id: `local-${Date.now()}`, from: "me", to: req.to, at: new Date().toISOString() };
+    dispatch({ type: "message", message: "text" in req ? { ...base, verified: false, text: req.text } : { ...base, verified: true, card: G_SIGHTING } });
+    return { ok: true } as const;
+  };
+  return (
+    <div className="g-chat">
+      <ChatPanel
+        me="me"
+        people={G_PEOPLE}
+        chat={chat}
+        read={read}
+        onRead={onRead}
+        send={send}
+        connection="open"
+        evidence={[{ seq: 1, text: "Round 2, Vault: Dez saw Lucky Lou there too." }]}
+        events={[{ key: "g-ev", at: gAt(6), text: "Round 2: Haul +9, Heat +12." }]}
+        visible
+        className="g-chat__panel"
+      />
+      <div className="g-col">
+        <EvidenceCardView card={G_SIGHTING} from="dez" ctx={{ me: "me", name: (p) => G_PEOPLE.find((x) => x.id === p)?.name ?? p }} seed="g-ev-card" />
+        <div className="g-row">
+          <Button variant="primary" seed="g-chat-fab" icon={<Bubble />} aria-label="Open chat, 3 unread">
+            <span className="g-fab-label">
+              Chat <ChatBadge count={3} />
+            </span>
+          </Button>
+          <span className="meta">The phone / tablet open-chat button</span>
+        </div>
+      </div>
+    </div>
   );
 }

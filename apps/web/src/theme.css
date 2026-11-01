@@ -177,6 +177,8 @@
   /* Game kit (M2-6): a drawn drop shadow, and faint ink for dashed rows. */
   --shade: #2a23204d;
   --ink-faint: #2a232038;
+  /* Behind full-screen sheets (ui-style §4 "Backdrop shade"): the game stays visible, washed out. */
+  --backdrop-shade: radial-gradient(#f3ede06b 0%, #f3ede09e 70%, #d6c4aabf 100%);
 
   color-scheme: light;
 }

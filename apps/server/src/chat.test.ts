@@ -103,6 +103,17 @@ class Client {
 
 const closeAll = (...cs: Client[]) => cs.forEach((c) => c.ws.close());
 
+/** Submits a move (Office, all in) and returns its private `moveSubmitted` case-file entry: a shareable card. */
+async function movedEntry(c: Client) {
+  expect(await c.sendRaw({ cmd: { type: "submitMove", move: { room: "office", pocket: 0 } } })).toMatchObject({ ok: true });
+  let entry: PlayerView["caseFile"][number] | undefined;
+  await vi.waitFor(() => {
+    entry = c.view().caseFile.find((e) => e.event.type === "moveSubmitted");
+    expect(entry).toBeDefined();
+  }, quick);
+  return entry!;
+}
+
 describe("crew chat (design §12.1)", () => {
   it("reaches every seat; the sender comes from the session; text stays plain text", async () => {
     const { id, humans } = await startGame(3);
@@ -228,11 +239,11 @@ describe("evidence cards (design §12.1)", () => {
   it("shares your own case-file entry, verified, re-read by the server, without seq", async () => {
     const { id, humans } = await startGame(3);
     const [a, b] = await Promise.all(humans.slice(0, 2).map((h) => Client.open(id, h)));
-    const own = a!.view().caseFile.find((e) => e.event.type === "roleDealt")!;
+    const own = await movedEntry(a!);
     expect(await a!.chat({ evidence: own.seq })).toMatchObject({ ok: true });
     await vi.waitFor(() => expect(b!.chats()).toHaveLength(1), quick);
     const card = b!.chats()[0]!;
-    expect(card).toMatchObject({ from: humans[0]!.player, verified: true, card: { type: "roleDealt", payload: { player: humans[0]!.player, role: a!.view().me.role } } });
+    expect(card).toMatchObject({ from: humans[0]!.player, verified: true, card: { type: "moveSubmitted", payload: { player: humans[0]!.player, move: { room: "office", pocket: 0 } } } });
     expect(JSON.stringify(card)).not.toMatch(/"seq"|"visibility"/);
     // Typed claims are never verified.
     await a!.chat({ text: "I'm the Lookout, honest" });
@@ -241,17 +252,36 @@ describe("evidence cards (design §12.1)", () => {
     closeAll(a!, b!);
   });
 
+  it("refuses role cards: your deal, or any entry stating a role or faction (design §8, PM decision on PR #38)", async () => {
+    const { id, humans } = await startGame(2);
+    const [a, b] = await Promise.all(humans.map((h) => Client.open(id, h)));
+    const deal = a!.view().caseFile.find((e) => e.event.type === "roleDealt")!;
+    const reason = "role cards can't be shared: role claims stay unverified";
+    expect(await a!.chat({ evidence: deal.seq })).toMatchObject({ rejected: true, reason });
+    expect(await a!.chat({ to: humans[1]!.player, evidence: deal.seq })).toMatchObject({ rejected: true, reason });
+    await b!.barrier();
+    expect(b!.chats()).toEqual([]);
+    const pv = (event: Record<string, unknown>) => ({ caseFile: [{ seq: 3, event: { visibility: { kind: "private", player: "p1" }, player: "p1", ...event } }], ledger: [] }) as unknown as PlayerView;
+    expect(evidenceCard(pv({ type: "insideTip", round: 2, subject: "p2", role: "mole" }), 3)).toEqual({ ok: false, reason });
+    expect(evidenceCard(pv({ type: "perkUsed", round: 2, perk: { kind: "peek", target: "p2", role: "fence" } }), 3)).toEqual({ ok: false, reason });
+    expect(evidenceCard(pv({ type: "alliesLearned", allies: ["p2"], via: "deal" }), 3)).toEqual({ ok: false, reason });
+    // Ability results stay shareable.
+    expect(evidenceCard(pv({ type: "roomSighting", round: 1, room: "vault", others: ["p2"] }), 3)).toMatchObject({ ok: true });
+    closeAll(a!, b!);
+  });
+
   it("refuses a forged entry, a ledger entry, or anything but your own case-file seq", async () => {
     const { id, humans } = await startGame(2);
     const [a, b] = await Promise.all(humans.map((h) => Client.open(id, h)));
     const ledgerSeq = a!.view().ledger[0]!.seq;
-    const theirs = b!.view().caseFile.find((e) => e.event.type === "roleDealt")!;
+    const theirs = await movedEntry(b!);
+    const mine = await movedEntry(a!);
     expect(await a!.chat({ evidence: ledgerSeq })).toMatchObject({ rejected: true, reason: "that isn't an entry of your case file" });
     expect(await a!.chat({ evidence: 9999 })).toMatchObject({ rejected: true });
     expect(await a!.chat({ evidence: theirs })).toMatchObject({ rejected: true }); // a whole (forged) entry
     expect(await a!.chat({ evidence: theirs.event })).toMatchObject({ rejected: true });
     // A seq names an entry of the sender's own case file: never someone else's.
-    expect(await a!.chat({ evidence: theirs.seq })).toMatchObject({ ok: true });
+    expect(await a!.chat({ evidence: mine.seq })).toMatchObject({ ok: true });
     await vi.waitFor(() => expect(b!.chats()).toHaveLength(1), quick);
     expect(b!.chats()[0]).toMatchObject({ card: { payload: { player: humans[0]!.player } } });
     closeAll(a!, b!);

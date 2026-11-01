@@ -38,9 +38,16 @@ async function layoutProblems(page: Page): Promise<string[]> {
       const out: string[] = [];
       const d = document.documentElement;
       if (d.scrollWidth > d.clientWidth) out.push(`overflow ${d.scrollWidth} > ${d.clientWidth}`);
+      // Layout boxes are whole 1/64 px, but under a transformed ancestor (a
+      // sheet's slide-in) Chromium maps the rect in float32: a 44 px button
+      // reads 43.999996. Compare at layout precision; print two decimals so a
+      // real 43.9 is not shown as 44.
+      const px = (v: number) => Math.round(v * 64) / 64;
       for (const el of document.querySelectorAll<HTMLElement>("a[href], button, input, select, textarea, [role=button]")) {
         const r = el.getBoundingClientRect();
-        if (r.width > 0 && (r.width < 44 || r.height < 44)) out.push(`target "${(el.getAttribute("aria-label") ?? el.textContent ?? "").trim()}" ${Math.round(r.width)}x${Math.round(r.height)}`);
+        const w = px(r.width);
+        const h = px(r.height);
+        if (w > 0 && (w < 44 || h < 44)) out.push(`target "${(el.getAttribute("aria-label") ?? el.textContent ?? "").trim()}" ${w.toFixed(2)}x${h.toFixed(2)}`);
       }
       // Text spilling out of a seat (the long names).
       for (const el of document.querySelectorAll<HTMLElement>(".crew-seat__name, .ranking__who")) if (el.scrollWidth > el.clientWidth + 1) out.push(`clipped "${el.textContent}"`);

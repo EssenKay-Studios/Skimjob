@@ -222,6 +222,29 @@ hr.dashed {
   justify-items: start;
   gap: 10px;
 }
+/* Chat samples (M2-8b) */
+.g-chat {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+@media (min-width: 900px) {
+  .g-chat {
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  }
+}
+.g-chat__panel {
+  height: 560px;
+}
+.g-chat .g-col {
+  justify-items: stretch;
+}
+.g-fab-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
 .g-frames {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
