@@ -556,3 +556,28 @@
   width: calc(100% + 0.06em);
   overflow: visible;
 }
+
+/* ---------- Segmented choice (toggle row) ---------- */
+.seg {
+  display: grid;
+  gap: 7px;
+}
+.seg__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+}
+.seg__label {
+  font: 700 15px/1.2 var(--font-hand);
+  color: var(--ink);
+}
+.seg__opts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.seg__opts .btn {
+  padding: 0 13px;
+  font-size: 13.5px;
+}

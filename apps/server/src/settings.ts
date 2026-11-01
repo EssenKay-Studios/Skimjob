@@ -17,6 +17,8 @@ export interface LobbySettings {
   readonly starterMode: boolean;
   /** Others see that a DM happened (design §12.1). Server-only; M2-8. */
   readonly dmNotices: boolean;
+  /** Each pool role at most once (design §8.1, `GameConfig.uniqueRoles`). */
+  readonly uniqueRoles: boolean;
 }
 
 export const DEFAULT_SETTINGS: LobbySettings = {
@@ -26,6 +28,7 @@ export const DEFAULT_SETTINGS: LobbySettings = {
   eventsEnabled: true,
   starterMode: false,
   dmNotices: true,
+  uniqueRoles: true,
 };
 
 /** Session cookie lifetime. */
@@ -58,7 +61,7 @@ export function parseSettings(input: unknown): { ok: true; settings: LobbySettin
   if (!(SESSION_LENGTHS as readonly unknown[]).includes(s.sessionLength)) return { ok: false, error: `sessionLength must be one of ${SESSION_LENGTHS.join(", ")}` };
   if (!(VOTE_VISIBILITIES as readonly unknown[]).includes(s.voteVisibility)) return { ok: false, error: `voteVisibility must be one of ${VOTE_VISIBILITIES.join(", ")}` };
   if (!(MOLE_SETTINGS as readonly unknown[]).includes(s.mole)) return { ok: false, error: `mole must be one of ${MOLE_SETTINGS.join(", ")}` };
-  for (const k of ["eventsEnabled", "starterMode", "dmNotices"] as const) {
+  for (const k of ["eventsEnabled", "starterMode", "dmNotices", "uniqueRoles"] as const) {
     if (typeof s[k] !== "boolean") return { ok: false, error: `${k} must be true or false` };
   }
   if (s.starterMode === true && (s.mole !== "off" || s.eventsEnabled !== false)) {

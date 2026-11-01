@@ -6,6 +6,7 @@ import { BankDoodle } from "../components/BankDoodle";
 import { Button, DangerButton } from "../components/Button";
 import { Chip } from "../components/Chip";
 import { ArrowBack, Copy, Play, Plus, Star } from "../components/icons";
+import { Segmented } from "../components/Segmented";
 import { SketchFrame } from "../components/SketchFrame";
 import { TextField } from "../components/TextField";
 import { Toast, useToast } from "../components/Toast";
@@ -56,6 +57,7 @@ export function Gallery() {
   const [speed, setSpeed] = useState(1);
   const [armedCount, setArmedCount] = useState(0);
   const [code, setCode] = useState("");
+  const [mole, setMole] = useState<"off" | "maybe" | "on">("maybe");
   return (
     <div className="gallery">
       <header className="topbar">
@@ -118,6 +120,22 @@ export function Gallery() {
                 </Button>
                 <Button variant="back" seed="g-b3" icon={<ArrowBack />} aria-label="Back" className="btn--icon" />
               </div>
+            </Section>
+
+            <Section id="segmented" title="Segmented choice" note="host settings, bot picker · read-only shows the chosen chip">
+              <Segmented
+                seed="g-seg"
+                label="Saboteur (the dark side)"
+                hint="Maybe: you won't know"
+                options={[
+                  { value: "off", label: "Off" },
+                  { value: "maybe", label: "Maybe" },
+                  { value: "on", label: "On" },
+                ]}
+                value={mole}
+                onChange={setMole}
+              />
+              <Segmented seed="g-seg-ro" label="Read-only (guests)" options={[{ value: mole, label: mole }]} value={mole} readOnly />
             </Section>
 
             <Section id="premium" title="Premium card" note="§2 dark exception · gold button wiggles now and then">

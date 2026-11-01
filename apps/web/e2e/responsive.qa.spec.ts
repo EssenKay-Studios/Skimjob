@@ -12,7 +12,7 @@ const VIEWPORTS = [
   { width: 1024, height: 768 },
   { width: 1280, height: 800 },
 ];
-const ROUTES = ["/", "/no-such-page"];
+const ROUTES = ["/", "/no-such-page", "/new", "/join/abcdefghjk", "/lobby/00000000-0000-0000-0000-000000000000"];
 
 // Viewport sizes are set per test below, so run each test once.
 test.beforeEach(({}, info) => test.skip(info.project.name !== "mobile", "viewports are set per test"));
@@ -122,9 +122,7 @@ test.describe("landing behaviour", () => {
     test("turns off the sheet entrance and toast animations", async ({ page }) => {
       await page.goto("/");
       expect(await page.locator(".enter-sheet").first().evaluate((e) => getComputedStyle(e).animationName)).toBe("none");
-      await page.getByRole("button", { name: "Join crew" }).click();
-      await page.getByPlaceholder("Invite code or link").fill("abcd1234");
-      await page.getByRole("button", { name: "Join crew" }).click();
+      await page.getByRole("button", { name: "Sign in", exact: true }).click();
       expect(await page.locator(".toast").first().evaluate((e) => getComputedStyle(e).animationName)).toBe("none");
     });
   });
@@ -134,22 +132,23 @@ test.describe("landing behaviour", () => {
     page.on("request", (r) => {
       if (new URL(r.url()).pathname.startsWith("/api")) api.push(r.url());
     });
+    for (const [input, code] of [
+      ["  K7QX-M2PA  ", "k7qxm2pa"],
+      ["k7 qx m2 pa", "k7qxm2pa"],
+      ["https://skimjob.app/join/AbCd1234?x=1", "abcd1234"],
+    ] as const) {
+      await page.goto("/");
+      await page.getByPlaceholder("Invite code or link").fill(input);
+      await page.getByRole("button", { name: "Join crew" }).click();
+      await expect(page).toHaveURL(new RegExp(`/join/${code}$`)); // M2-5b: the invite page
+    }
+    api.length = 0;
     await page.goto("/");
     const field = page.getByPlaceholder("Invite code or link");
     const join = page.getByRole("button", { name: "Join crew" });
     // 16px or more, so iOS Safari doesn't zoom on focus.
     expect(parseFloat(await field.evaluate((e) => getComputedStyle(e).fontSize))).toBeGreaterThanOrEqual(16);
 
-    for (const [input, code] of [
-      ["  K7QX-M2PA  ", "k7qxm2pa"],
-      ["k7 qx m2 pa", "k7qxm2pa"],
-      ["https://skimjob.app/join/AbCd1234?x=1", "abcd1234"],
-    ] as const) {
-      await field.fill(input);
-      await join.click();
-      await expect(page.getByRole("status").filter({ hasText: code }).last()).toBeVisible();
-      await expect(field).toHaveAttribute("aria-invalid", "false");
-    }
     for (const junk of ["abc", "a".repeat(17), "ab_cd1234", "https://x/invite/", "ÄBCD1234", "<script>"]) {
       await field.fill(junk);
       await join.click();
