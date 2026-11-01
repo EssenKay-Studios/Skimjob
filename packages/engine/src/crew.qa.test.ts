@@ -1,0 +1,339 @@
+// QA for role deck v2 R2a (docs/roles-v2.md §2, §3): power limits, generic
+// refusals, exact perk triggers at the threshold, Snitch target edges, Inside
+// Man and Rookie scoring under the faction win rule, eligibility at 2–12 and
+// Duel, a view-diff leak check with all six dealt, determinism.
+// design §3, §8, §8.1, §8.3, §11.3, §13, §16.1
+import { describe, expect, it } from "vitest";
+import { handleThroughAlibis } from "./alibis.testkit";
+import { BANK_JOB } from "@skimjob/content";
+import type { GameConfig, GameEvent, GameState, PlayerState } from "./types";
+import { rolePoolFor, setupEvents } from "./setup";
+import { replay } from "./reduce";
+import { outcomeFor } from "./end";
+import { viewFor } from "./view";
+
+const SIX = ["rookie", "insideMan", "lookout", "auditor", "detective", "snitch"];
+const { cleanBelowPerAct } = BANK_JOB.shakedown;
+
+function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
+  return {
+    seed: "crew-qa",
+    players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
+    job: "bank",
+    rolePool: ["rookie", "lookout", "insideMan", "fence"],
+    mole: "off",
+    eventsEnabled: false,
+    voteVisibility: "hiddenThenRevealed",
+    starterMode: false,
+    ...extra,
+  };
+}
+
+/** Seat i gets roles[i] (Rookie if missing); a dealt Snitch gets `snitchTarget` if given. */
+function game(players: number, roles: string[], extra: Partial<GameConfig> = {}, snitchTarget?: string): GameState {
+  const cfg = config(players, extra);
+  let seat = 0;
+  const log: GameEvent[] = [];
+  const setup = setupEvents(cfg);
+  for (const e of setup) {
+    if (e.type === "roleDealt") {
+      const role = roles[seat++] ?? "rookie";
+      log.push({ ...e, role });
+      if (role === "snitch" && snitchTarget && !setup.some((x) => x.type === "snitchTargetAssigned" && x.player === e.player)) {
+        log.push({ type: "snitchTargetAssigned", visibility: e.visibility, player: e.player, target: snitchTarget } as GameEvent);
+      }
+    } else if (e.type === "snitchTargetAssigned" && snitchTarget) log.push({ ...e, target: snitchTarget });
+    else log.push(e);
+  }
+  return replay(cfg, log);
+}
+
+type Cmd = unknown | ((s: GameState) => unknown);
+function run(state: GameState, ...commands: Cmd[]): GameState {
+  return commands.reduce<GameState>((s, c) => {
+    const command = typeof c === "function" ? c(s) : c;
+    const r = handleThroughAlibis(s, command);
+    if (!r.ok) throw new Error(`rejected ${JSON.stringify(command)}: ${r.reason}`);
+    return r.state;
+  }, state);
+}
+function reason(state: GameState, command: unknown): string {
+  const r = handleThroughAlibis(state, command);
+  if (r.ok) throw new Error("expected a rejection");
+  return r.reason;
+}
+const ofType = <T extends GameEvent["type"]>(events: readonly GameEvent[], type: T) =>
+  events.filter((e): e is Extract<GameEvent, { type: T }> => e.type === type);
+const granted = (s: GameState, player: string) => ofType(s.log, "perkGranted").filter((e) => e.player === player).map((e) => e.perk);
+const lastAbility = (s: GameState) => ofType(s.log, "abilityResolved").at(-1)?.ability;
+
+const mv = (player: string, room: string, pocket = 0, extra: object = {}) => ({ type: "submitMove", player, move: { room, pocket, ...extra } });
+const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
+const vote = (player: string, target: string) => ({ type: "castVote", player, vote: { kind: "shakedown", target } });
+const skipVote = (player: string) => ({ type: "castVote", player, vote: { kind: "skip" } });
+const CLOSE = (s: GameState) => ({ type: "advance", deadline: { kind: "closeMeeting", meetingId: s.meeting?.id } });
+const use = (player: string, ability: object) => ({ type: "useAbility", player, ability });
+const emergency = (s: GameState, caller: string) =>
+  run(s, { type: "callEmergency", player: caller }, { type: "advance", deadline: { kind: "openMeeting", meetingId: `emergency-${caller}` } });
+const shakeDown = (s: GameState, caller: string, target: string): GameState => {
+  s = emergency(s, caller);
+  for (const id of s.playerOrder) if (id !== target) s = run(s, vote(id, target));
+  return run(s, CLOSE);
+};
+/** Play to the end of the current act with `moves` each round; the regular meeting runs `inMeeting` then closes. */
+const finishAct = (s: GameState, moves: Cmd[], inMeeting: (s: GameState) => GameState = (x) => x): GameState => {
+  const act = Math.ceil(s.round / 3);
+  while (s.phase.kind === "planning" && Math.ceil(s.round / 3) === act) {
+    const before = s.round;
+    s = run(s, ...moves, ROUND);
+    if (s.round === before) break;
+  }
+  s = run(s, { type: "scheduleMeeting", act, slot: "x" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: `act-${act}` } });
+  return run(inMeeting(s), CLOSE);
+};
+const STEADY = [mv("p0", "office"), mv("p1", "office"), mv("p2", "lobby")];
+
+describe("QA: refusals are generic and power limits hold — v2 §2, design §8", () => {
+  it("every role without the power gets the same reason; the game being over refuses even the holder", () => {
+    const s = run(game(6, SIX), ROUND);
+    for (const kind of [{ kind: "audit", room: "vault" }, { kind: "checkStash", target: "p0" }]) {
+      const holder = kind.kind === "audit" ? "p3" : "p4";
+      const reasons = new Set(s.playerOrder.filter((p) => p !== holder).map((p) => reason(s, use(p, kind))));
+      expect([...reasons]).toEqual([`your role has no ${kind.kind} ability to use now`]);
+    }
+    let end = game(3, ["auditor", "detective"]);
+    for (let act = 1; act <= 3; act++) end = finishAct(end, STEADY);
+    expect(end.phase.kind).toBe("ended");
+    expect(reason(end, use("p0", { kind: "audit", room: "office" }))).toBe("the game is over");
+    expect(reason(end, use("p1", { kind: "checkStash", target: "p0" }))).toBe("the game is over");
+  });
+
+  it("once per act, counted across meeting and planning; a refused use doesn't spend it; resets each act", () => {
+    let s = run(game(3, ["auditor", "detective"]), mv("p2", "vault", 3), ROUND);
+    expect(reason(s, use("p1", { kind: "checkStash", target: "p1" }))).toMatch(/another player/);
+    expect(reason(s, use("p0", { kind: "audit", room: "moon" }))).toMatch(/room in play/);
+    s = emergency(s, "p2");
+    // Usable during a meeting ("any time"), and the refused tries above spent nothing.
+    s = run(s, use("p0", { kind: "audit", room: "vault" }), use("p1", { kind: "checkStash", target: "p2" }), CLOSE);
+    expect(s.players.p0?.roleState.usedThisAct).toBe(1);
+    expect(reason(s, use("p0", { kind: "audit", room: "office" }))).toMatch(/already audited/);
+    expect(reason(s, use("p1", { kind: "checkStash", target: "p0" }))).toMatch(/already checked/);
+    s = finishAct(s, STEADY);
+    expect(s.round).toBe(4);
+    s = run(s, use("p0", { kind: "audit", room: "office" }), use("p1", { kind: "checkStash", target: "p0" }));
+    // The Auditor reads the latest resolved round (3), not the round being planned.
+    expect(ofType(s.log, "abilityResolved").at(-2)?.ability).toMatchObject({ kind: "audit", round: 3, room: "office", shortfall: 0 });
+    expect(lastAbility(s)).toMatchObject({ kind: "checkStash", threshold: 2 * cleanBelowPerAct });
+  });
+});
+
+describe("QA: dirty vs clean at exactly the threshold — design §11.3, v2 §2", () => {
+  /** Round 1: p1 pockets `pocket` in the Vault; the Detective p0 checks p1, the Lookout p2 watched the Vault. */
+  const caught = (pocket: number) => {
+    let s = run(
+      game(4, ["detective", "rookie", "lookout", "auditor"]),
+      mv("p1", "vault", pocket),
+      mv("p2", "lobby", 0, { ability: { kind: "lookout", rooms: ["vault"] } }),
+      ROUND,
+      use("p0", { kind: "checkStash", target: "p1" }),
+      use("p3", { kind: "audit", room: "vault" }),
+    );
+    s = shakeDown(s, "p3", "p1");
+    return s;
+  };
+
+  it("at the threshold: the Detective reads dirty, the shakedown is dirty, and all three readers are rewarded", () => {
+    const s = caught(cleanBelowPerAct);
+    const check = ofType(s.log, "abilityResolved").find((e) => e.ability.kind === "checkStash")?.ability;
+    expect(check).toMatchObject({ dirty: true, threshold: cleanBelowPerAct });
+    expect(ofType(s.log, "shakedownResolved")[0]?.clean).toBe(false);
+    expect(granted(s, "p0")).toEqual(["shield"]);
+    expect(granted(s, "p2")).toEqual(["peek"]);
+    expect(granted(s, "p3")).toEqual(["ballot"]);
+  });
+
+  it("one below: the Detective reads clean, the shakedown is clean, and nobody is rewarded", () => {
+    const s = caught(cleanBelowPerAct - 1);
+    expect(ofType(s.log, "abilityResolved").find((e) => e.ability.kind === "checkStash")?.ability).toMatchObject({ dirty: false });
+    expect(ofType(s.log, "shakedownResolved")[0]?.clean).toBe(true);
+    expect(ofType(s.log, "perkGranted")).toEqual([]);
+  });
+
+  it("act 2 doubles the bar: dirty in Act 1, then caught clean in Act 2 → no Shield", () => {
+    let s = run(game(3, ["detective"]), mv("p1", "vault", cleanBelowPerAct), mv("p0", "office"), mv("p2", "office"), ROUND);
+    s = run(s, use("p0", { kind: "checkStash", target: "p1" }));
+    expect(lastAbility(s)).toMatchObject({ dirty: true });
+    s = finishAct(s, [mv("p0", "office"), mv("p1", "office"), mv("p2", "office")]);
+    expect(s.players.p1?.stash).toBeLessThan(2 * cleanBelowPerAct);
+    s = shakeDown(s, "p2", "p1");
+    expect(ofType(s.log, "shakedownResolved")[0]?.clean).toBe(true);
+    expect(granted(s, "p0")).toEqual([]);
+  });
+});
+
+describe("QA: Lookout sightings and reward counts — v2 §2, design §8.3", () => {
+  it("a sighting in Act 1 pays in Act 2; one Peek per dirty shakedown however often it saw them; Security sightings don't count", () => {
+    let s = game(3, ["lookout"]);
+    const watchVault = mv("p0", "lobby", 0, { ability: { kind: "lookout", rooms: ["vault"] } });
+    s = run(s, watchVault, mv("p1", "vault", 2), mv("p2", "office"), ROUND, watchVault, mv("p1", "vault", 2), mv("p2", "office"), ROUND);
+    s = finishAct(s, [mv("p0", "lobby"), mv("p1", "office", 4), mv("p2", "office")]);
+    expect(s.round).toBe(4);
+    expect(s.players.p1!.stash).toBeGreaterThanOrEqual(2 * cleanBelowPerAct);
+    s = shakeDown(s, "p2", "p1");
+    expect(ofType(s.log, "shakedownResolved")[0]?.clean).toBe(false);
+    expect(granted(s, "p0")).toEqual(["peek"]);
+
+    // Security (the room, not the power) saw p1: no Peek.
+    let t = run(game(3, ["lookout"]), mv("p0", "security", 0, { watch: "vault" }), mv("p1", "vault", cleanBelowPerAct), mv("p2", "office"), ROUND);
+    expect(ofType(t.log, "roomWatched").map((e) => e.source)).toEqual(["security"]);
+    t = shakeDown(t, "p2", "p1");
+    expect(granted(t, "p0")).toEqual([]);
+  });
+
+  it("nobody is rewarded for their own dirty shakedown (Lookout, Auditor, Detective)", () => {
+    let s = run(game(4, ["lookout", "auditor", "detective"]), mv("p0", "vault", cleanBelowPerAct, { ability: { kind: "lookout", rooms: ["vault"] } }), mv("p1", "vault"), mv("p2", "vault"), ROUND);
+    s = run(s, use("p1", { kind: "audit", room: "vault" }), use("p2", { kind: "checkStash", target: "p1" }));
+    // p1 (Auditor) audited its own room and is checked by the Detective; p0 (Lookout) saw p1 and p2.
+    s = run(s, mv("p1", "office", cleanBelowPerAct), ROUND);
+    s = shakeDown(s, "p3", "p1");
+    expect(ofType(s.log, "shakedownResolved")[0]?.clean).toBe(false);
+    expect(granted(s, "p1")).toEqual([]); // not for its own shakedown
+    expect(granted(s, "p0")).toEqual(["peek"]);
+    expect(granted(s, "p2")).toEqual(["shield"]);
+  });
+});
+
+describe("QA: Snitch target edges — v2 §2, design §8, §11.2", () => {
+  it("rewarded at exactly the threshold, not one below, nor when the target's Shield cancels it; weight counts toward the majority", () => {
+    const atPocket = (pocket: number, shield = false) => {
+      let s = game(4, ["snitch"], {}, "p1");
+      if (shield) s = { ...s, players: { ...s.players, p1: { ...(s.players.p1 as PlayerState), roleState: { ...(s.players.p1 as PlayerState).roleState, perks: ["shield"] } } } };
+      s = run(s, mv("p1", "vault", pocket), ROUND);
+      return shakeDown(s, "p2", "p1");
+    };
+    expect(atPocket(cleanBelowPerAct).players.p0?.roleState.bonusVotes).toBe(1);
+    expect(atPocket(cleanBelowPerAct - 1).players.p0?.roleState.bonusVotes).toBe(0);
+    const shielded = atPocket(cleanBelowPerAct, true);
+    expect(ofType(shielded.log, "shakedownCancelled")).toHaveLength(1);
+    expect(ofType(shielded.log, "snitchRewarded")).toEqual([]);
+
+    // With +1 weight, the Snitch and one ally (3 of 5 weight) carry a 4-player vote that 2 of 4 can't.
+    const decide = (s: GameState) => {
+      s = emergency(run(s, ROUND), "p1");
+      s = run(s, vote("p0", "p3"), vote("p2", "p3"), skipVote("p1"), skipVote("p3"), CLOSE);
+      return ofType(s.log, "meetingClosed").at(-1);
+    };
+    expect(decide(atPocket(cleanBelowPerAct))).toMatchObject({ result: { kind: "shakedown", target: "p3" } });
+    expect(decide(atPocket(cleanBelowPerAct - 1))).toMatchObject({ result: { kind: "noMajority" } });
+  });
+
+  it("the target is always another player, at every crew size the Snitch can be dealt", () => {
+    for (let n = 4; n <= 12; n++) {
+      for (let i = 0; i < 15; i++) {
+        const events = setupEvents(config(n, { seed: `snitch-${n}-${i}`, rolePool: ["snitch", "rookie"] }));
+        for (const e of ofType(events, "snitchTargetAssigned")) {
+          expect(e.target).not.toBe(e.player);
+          expect(events.some((x) => x.type === "roleDealt" && x.player === e.player && x.role === "snitch")).toBe(true);
+        }
+      }
+    }
+  });
+});
+
+describe("QA: Inside Man and Rookie under the faction win rule — design §3, §8", () => {
+  it("Inside Man: never pockets, a Peek per Act 1/2 checkpoint (spendable), and 0.3 per loot over the final target", () => {
+    let s = game(3, ["rookie", "insideMan"]);
+    expect(reason(s, mv("p1", "office", 4))).toMatch(/can't pocket/);
+    const moves = STEADY;
+    s = finishAct(s, moves);
+    s = run(s, use("p1", { kind: "peek", target: "p0" }));
+    expect(ofType(s.log, "perkUsed").at(-1)).toMatchObject({ player: "p1", perk: { kind: "peek", target: "p0", role: "rookie" } });
+    s = finishAct(finishAct(s, moves), moves);
+    expect(s.phase.kind).toBe("ended");
+    expect(granted(s, "p1")).toEqual(["peek", "peek"]);
+    expect(granted(s, "p0")).toEqual(["tail", "tail"]);
+    const end = ofType(s.log, "gameEnded")[0]!.outcome;
+    expect(end.result).toBe("success");
+    const target = BANK_JOB.checkpoints.perPlayer.at(-1)! * 3;
+    const im = end.ranking.find((r) => r.player === "p1")!;
+    expect(im.score).toBeCloseTo(Math.round(0.3 * Math.max(0, s.haul - target) * 10) / 10, 5);
+  });
+
+  it("Rookie ×1.2 can win a success over a bigger raw stash, and never wins a failure", () => {
+    const base = game(4, ["rookie", "lookout", "mole", "auditor"]);
+    const withStashes = (st: Record<string, number>): GameState => ({
+      ...base,
+      players: Object.fromEntries(Object.entries(base.players).map(([id, p]) => [id, { ...p, stash: st[id] ?? 0 }])),
+    });
+    const s = withStashes({ p0: 10, p1: 11, p2: 30, p3: 0 });
+    const won = outcomeFor(s, null);
+    expect(won.ranking.find((r) => r.player === "p0")?.score).toBe(12);
+    expect(won.winners).toEqual(["p0"]); // the Mole's 30 can't win a success
+    expect(outcomeFor(s, "heat").winners).toEqual(["p2"]);
+    expect(outcomeFor(withStashes({ p0: 10, p1: 12 }), null).winners).toEqual(["p0", "p1"]); // 12.0 vs 12: a full tie, joint winners
+    const crewOnly = game(4, ["rookie", "lookout"]);
+    expect(outcomeFor(crewOnly, "target").winners).toEqual([]);
+  });
+});
+
+describe("QA: eligibility at 2–12 players and Duel — v2 §3, design §8.1, §16.1", () => {
+  it("rolePoolFor and real deals respect minPlayers and needsMeetings", () => {
+    for (let n = 2; n <= 12; n++) {
+      const pool = rolePoolFor(config(n, { rolePool: SIX }));
+      expect(pool.includes("insideMan"), `insideMan @${n}`).toBe(n >= 5);
+      expect(pool.includes("snitch"), `snitch @${n}`).toBe(n >= 4);
+      expect(pool.includes("detective"), `detective @${n}`).toBe(n >= 4);
+      for (const r of ["rookie", "lookout", "auditor"]) expect(pool).toContain(r);
+      for (let i = 0; i < 10; i++) {
+        const dealt = ofType(setupEvents(config(n, { seed: `elig-${n}-${i}`, rolePool: SIX })), "roleDealt").map((e) => e.role);
+        for (const r of dealt) expect(r === "rookie" || pool.includes(r), `${r} dealt @${n}`).toBe(true);
+        const specials = dealt.filter((r) => r !== "rookie");
+        expect(new Set(specials).size).toBe(specials.length);
+      }
+    }
+    const duel = rolePoolFor(config(2, { duel: true, rolePool: SIX }));
+    expect([...duel].sort()).toEqual(["auditor", "lookout", "rookie"]);
+  });
+});
+
+describe("QA: view-diff with all six dealt, and determinism — design §13, §17.2", () => {
+  // Variant A: every reader points at p0, who is caught dirty; B: they point elsewhere. Same public play.
+  const play = (a: boolean): GameState => {
+    let s = game(6, SIX, { rolePool: SIX }, a ? "p0" : "p1");
+    s = run(
+      s,
+      mv("p0", "vault", 6),
+      mv("p2", "lobby", 0, { ability: { kind: "lookout", rooms: [a ? "vault" : "rooftop"] } }),
+      ROUND,
+      use("p3", { kind: "audit", room: a ? "vault" : "office" }),
+      use("p4", { kind: "checkStash", target: a ? "p0" : "p1" }),
+    );
+    s = emergency(s, "p1");
+    for (const id of s.playerOrder) if (id !== "p0") s = run(s, vote(id, "p0"));
+    s = run(s, CLOSE);
+    if (s.pendingShakedown) s = run(s, { type: "advance", deadline: { kind: "resolveShakedown", meetingId: s.pendingShakedown.meetingId } });
+    return run(s, ROUND);
+  };
+
+  it("the uninvolved players' views and rejections are identical whether or not four rewards fired", () => {
+    const [a, b] = [play(true), play(false)];
+    expect(ofType(a.log, "shakedownResolved")[0]?.clean).toBe(false);
+    expect(ofType(a.log, "perkGranted").map((e) => e.perk).sort()).toEqual(["ballot", "peek", "shield"]);
+    expect(ofType(a.log, "snitchRewarded")).toHaveLength(1);
+    expect(ofType(b.log, "perkGranted")).toEqual([]);
+    for (const viewer of ["p0", "p1"]) {
+      expect(viewFor(a, viewer)).toEqual(viewFor(b, viewer));
+      expect(reason(a, use(viewer, { kind: "audit", room: "vault" }))).toBe(reason(b, use(viewer, { kind: "audit", room: "vault" })));
+    }
+    for (const viewer of a.playerOrder) {
+      const json = JSON.stringify(viewFor(a, viewer));
+      for (const other of a.playerOrder) if (other !== viewer) expect(json).not.toContain(`"private:${other}"`);
+    }
+  });
+
+  it("same seed + same commands → identical log, and replay rebuilds the state", () => {
+    const [a, b] = [play(true), play(true)];
+    expect(a.log).toEqual(b.log);
+    expect(replay(a.config, a.log)).toEqual(a);
+  });
+});
