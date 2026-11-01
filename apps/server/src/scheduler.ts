@@ -21,7 +21,7 @@ import type { Clock } from "./clock";
 import type { Db } from "./db";
 import { SystemRefused } from "./live";
 import type { SessionLength } from "./settings";
-import { TIMINGS, type Timing } from "./timing";
+import { scaleTiming, TIMINGS, type Timing } from "./timing";
 
 export interface PlannedDeadline {
   /** Unique per game and never reused once fired, e.g. `round:3`, `openMeeting:act-1`. */
@@ -105,6 +105,18 @@ export interface Scheduler {
   tick(): Promise<number>;
   start(intervalMs: number): void;
   stop(): void;
+  /**
+   * The game's deadlines as clients may see them (the HUD countdown): every
+   * one comes from public state, so none says anything hidden. Oldest first.
+   */
+  timers(gameId: string): Promise<readonly Timer[]>;
+}
+
+/** A deadline for the client: due time in epoch ms; `pausedAt` is set while a meeting pauses it. */
+export interface Timer {
+  readonly key: string;
+  readonly dueAt: number;
+  readonly pausedAt: number | null;
 }
 
 /** Deadlines sent per tick at most (a few fall due together at an act's end). */
@@ -115,7 +127,11 @@ export const MAX_BACKOFF_MS = 60_000;
 interface Row {
   key: string;
   paused: boolean;
+  due: number;
+  paused_ms: number | null;
 }
+
+const sortTimers = (ts: Timer[]) => ts.sort((a, b) => a.dueAt - b.dueAt || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
 
 export function createScheduler(deps: {
   readonly db: Db;
@@ -125,6 +141,8 @@ export function createScheduler(deps: {
   readonly system: (gameId: string, command: SystemCommand) => Promise<unknown>;
   /** Re-runs the game's after-change step (`live.settle`), so `reconcile` re-plans its deadlines. */
   readonly resync: (gameId: string) => Promise<unknown>;
+  /** TIME_SCALE (config.ts): multiplies every preset's wall times. Default 1. */
+  readonly timeScale?: number;
 }): Scheduler {
   const { db, clock, log } = deps;
   const timings = new Map<string, Timing>();
@@ -132,12 +150,14 @@ export function createScheduler(deps: {
   let ticking = false;
   /** Deadlines whose send failed (not refused): retried from `at`. Memory only; a restart retries at once. */
   const retries = new Map<string, { failures: number; at: number }>();
+  /** Each game's deadlines as of its last reconcile (memory only; read from the table after a restart). */
+  const known = new Map<string, readonly Timer[]>();
 
   const timingOf = async (gameId: string): Promise<Timing> => {
     const known = timings.get(gameId);
     if (known) return known;
     const [row] = await db.query<{ length: SessionLength | null }>("select settings->>'sessionLength' as length from games where id = $1", [gameId]);
-    const timing = TIMINGS[row?.length ?? "1h"] ?? TIMINGS["1h"];
+    const timing = scaleTiming(TIMINGS[row?.length ?? "1h"] ?? TIMINGS["1h"], deps.timeScale ?? 1);
     timings.set(gameId, timing);
     return timing;
   };
@@ -148,30 +168,48 @@ export function createScheduler(deps: {
       const planned = new Map(planDeadlines(state, await timingOf(gameId), now).map((d) => [d.key, d]));
       if (state.phase.kind === "ended") timings.delete(gameId);
       const paused = meetingOpen(state);
-      await db.transaction(async (tx) => {
-        const rows = await tx.query<Row>("select key, paused_at is not null as paused from deadlines where game_id = $1", [gameId]);
+      const timers = await db.transaction(async (tx) => {
+        const rows = await tx.query<Row>(
+          `select key, paused_at is not null as paused, (extract(epoch from due_at) * 1000)::float8 as due,
+             (extract(epoch from paused_at) * 1000)::float8 as paused_ms
+           from deadlines where game_id = $1`,
+          [gameId],
+        );
         const have = new Set(rows.map((r) => r.key));
+        // What the rows will be, for `timers` (so a view push needs no query of its own).
+        const after: Timer[] = [];
         for (const row of rows) {
           const want = planned.get(row.key);
+          const dueAt = Math.round(Number(row.due));
+          const pausedAt = row.paused_ms === null ? null : Math.round(Number(row.paused_ms));
           if (!want) {
             await tx.query("delete from deadlines where game_id = $1 and key = $2", [gameId, row.key]);
           } else if (want.pausable && paused && !row.paused) {
             await tx.query("update deadlines set paused_at = to_timestamp($3::float8 / 1000) where game_id = $1 and key = $2", [gameId, row.key, now]);
+            after.push({ key: row.key, dueAt, pausedAt: now });
           } else if (!paused && row.paused) {
             await tx.query(
               "update deadlines set due_at = due_at + (to_timestamp($3::float8 / 1000) - paused_at), paused_at = null where game_id = $1 and key = $2",
               [gameId, row.key, now],
             );
+            after.push({ key: row.key, dueAt: dueAt + (now - (pausedAt ?? now)), pausedAt: null });
+          } else {
+            after.push({ key: row.key, dueAt, pausedAt });
           }
         }
         for (const d of planned.values()) {
           if (have.has(d.key)) continue;
+          const pausedAt = d.pausable && paused ? now : null;
           await tx.query(
             "insert into deadlines (game_id, key, due_at, command, paused_at) values ($1, $2, to_timestamp($3::float8 / 1000), $4::json, $5)",
-            [gameId, d.key, d.dueAt, JSON.stringify(d.command), d.pausable && paused ? new Date(now).toISOString() : null],
+            [gameId, d.key, d.dueAt, JSON.stringify(d.command), pausedAt === null ? null : new Date(now).toISOString()],
           );
+          after.push({ key: d.key, dueAt: d.dueAt, pausedAt });
         }
+        return after;
       });
+      if (state.phase.kind === "ended") known.delete(gameId);
+      else known.set(gameId, sortTimers(timers));
     },
 
     async tick() {
@@ -201,6 +239,7 @@ export function createScheduler(deps: {
               retries.delete(id);
               log.warn({ err, gameId: row.game_id, key: row.key }, "deadline refused; dropped");
               await db.query("delete from deadlines where game_id = $1 and key = $2", [row.game_id, row.key]);
+              known.delete(row.game_id);
               await deps.resync(row.game_id).catch((e: unknown) => log.error({ err: e, gameId: row.game_id }, "re-planning deadlines failed"));
             } else {
               // A server failure (database, bots): keep the row and try again later, backing off.
@@ -216,6 +255,17 @@ export function createScheduler(deps: {
         ticking = false;
       }
       return sent;
+    },
+
+    async timers(gameId) {
+      const cached = known.get(gameId);
+      if (cached) return cached;
+      const rows = await db.query<{ key: string; due: number; paused: number | null }>(
+        `select key, (extract(epoch from due_at) * 1000)::float8 as due, (extract(epoch from paused_at) * 1000)::float8 as paused
+         from deadlines where game_id = $1 order by due_at, key`,
+        [gameId],
+      );
+      return sortTimers(rows.map((r) => ({ key: r.key, dueAt: Math.round(Number(r.due)), pausedAt: r.paused === null ? null : Math.round(Number(r.paused)) })));
     },
 
     start(intervalMs) {

@@ -267,7 +267,7 @@ test("leave and rejoin; back button and refresh on every route", async ({ browse
   await hctx.request.post(`/api/games/${g.id}/start`);
   await expect(guest).toHaveURL(/\/game\//, { timeout: 10_000 });
   await guest.reload();
-  await expect(guest.getByText("You're in as Lou")).toBeVisible();
+  await expect(guest.getByRole("img", { name: "Lou (you)" })).toBeVisible(); // the game screen's own seat (M2-6)
   await guest.goBack(); // back to the started lobby: bounces to the game again
   await expect(guest).toHaveURL(/\/game\//, { timeout: 10_000 });
 

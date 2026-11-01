@@ -166,6 +166,9 @@
 
   /* Hatched fill for meters and swatches: background: var(--hatch), var(--c) */
   --hatch: repeating-linear-gradient(-55deg, #2a23204d 0 1px, transparent 1px 3px);
+  /* Game kit (M2-6): a drawn drop shadow, and faint ink for dashed rows. */
+  --shade: #2a23204d;
+  --ink-faint: #2a232038;
 
   color-scheme: light;
 }

@@ -14,6 +14,10 @@ import { Toast, useToast } from "../components/Toast";
 import { Underline } from "../components/Underline";
 import { MaskMark, Wordmark } from "../components/Wordmark";
 import { CREW_COLOURS } from "../components/avatar";
+import { Clock, Lock } from "../components/icons";
+import { HeatMeter, Meter } from "../components/Meter";
+import { RoomTile } from "../components/RoomTile";
+import { SplitSlider } from "../components/SplitSlider";
 import { navigate } from "../router";
 
 const SWATCHES: readonly [string, string][] = [
@@ -269,9 +273,48 @@ export function Gallery() {
                 <BankDoodle className="hero-card__img" />
               </SketchFrame>
             </Section>
+
+            <Section id="game" title="Game kit" note="M2-6 · room tiles, split slider, Haul meter, Heat thermometer">
+              <GameKitSamples />
+            </Section>
           </div>
         </SketchFrame>
       </main>
     </div>
+  );
+}
+
+/** The game screen's building blocks (M2-6), live. */
+function GameKitSamples() {
+  const [room, setRoom] = useState("vault");
+  const [pocket, setPocket] = useState(2);
+  return (
+    <>
+      <div className="g-tiles">
+        <RoomTile seed="g-rt1" name="Vault" loot={6} heat="up" selected={room === "vault"} onSelect={() => setRoom("vault")} />
+        <RoomTile seed="g-rt2" name="Deposit boxes" loot={5} heat="up" notes={["more than 2 here: 3 each"]} selected={room === "boxes"} onSelect={() => setRoom("boxes")} />
+        <RoomTile seed="g-rt3" name="Rooftop" loot={0} heat="down" selected={room === "roof"} onSelect={() => setRoom("roof")} />
+        <RoomTile seed="g-rt4" name="Office" loot={4} heat="none" disabled disabledNote="Closed by Lockdown" />
+      </div>
+      <SplitSlider id="g-split" loot={6} pocket={pocket} onChange={setPocket} />
+      <div className="g-row g-row--center">
+        <span className="g-meter">
+          <Meter value={18} max={32} notch={28} label="Haul (sample)" />
+        </span>
+        <span className="meta">Haul 18 · target 28</span>
+      </div>
+      <div className="g-row g-row--center">
+        {[12, 48, 76, 94].map((h) => (
+          <HeatMeter key={h} heat={h} size="sm" />
+        ))}
+        <span className="meta">Heat 12 / 48 / 76 / 94</span>
+        <span className="g-icon">
+          <Clock />
+        </span>
+        <span className="g-icon">
+          <Lock />
+        </span>
+      </div>
+    </>
   );
 }

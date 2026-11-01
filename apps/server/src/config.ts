@@ -12,6 +12,12 @@ export interface ServerConfig {
   /** ALLOWED_ORIGINS (comma-separated): browser origins, besides the server's own host, that may open game sockets. */
   readonly allowedOrigins: readonly string[];
   /**
+   * TIME_SCALE (0 < x ≤ 1, default 1): every preset's wall times are multiplied
+   * by it, so a Quick game runs in a minute or two for E2E tests and solo dev
+   * play. Always 1 in production, whatever TIME_SCALE says.
+   */
+  readonly timeScale: number;
+  /**
    * NODE_ENV=production (the Fly deployment, docs/deploy.md): secure cookies,
    * trust the TLS proxy's X-Forwarded-* headers, listen on 0.0.0.0 by
    * default, no dev origins, and the dev sign-in stub stays off even with DEV_LOGIN=1.
@@ -39,6 +45,10 @@ export function loadConfig(env: Env = process.env): ServerConfig {
   if (!(port >= 1 && port <= 65535)) throw new StartupError(`PORT must be a whole number from 1 to 65535, got ${JSON.stringify(env.PORT)}`);
   const pgliteDir = env.PGLITE_DIR?.trim() || ".pglite";
   const production = env.NODE_ENV === "production";
+  // A stray TIME_SCALE must never speed up a real playtest: production ignores it (main.ts warns).
+  const rawScale = production ? "1" : env.TIME_SCALE?.trim() || "1";
+  const timeScale = /^\d*\.?\d+$/.test(rawScale) ? Number(rawScale) : NaN;
+  if (!(timeScale > 0 && timeScale <= 1)) throw new StartupError(`TIME_SCALE must be a number above 0 and at most 1, got ${JSON.stringify(env.TIME_SCALE)}`);
   const publicOrigin = env.PUBLIC_ORIGIN?.trim() ? parseOrigin(env.PUBLIC_ORIGIN.trim()) : null;
   const listed = env.ALLOWED_ORIGINS?.trim()
     ? env.ALLOWED_ORIGINS.split(",").map((o) => o.trim()).filter(Boolean)
@@ -55,6 +65,7 @@ export function loadConfig(env: Env = process.env): ServerConfig {
     production,
     publicOrigin,
     webDir: env.WEB_DIR?.trim() || null,
+    timeScale,
   };
 }
 

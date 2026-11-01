@@ -19,6 +19,9 @@ try {
   const { db, applied } = await openDatabase(config);
   const app = buildServer({ db, clock: systemClock, logger: true, tickMs: TICK_MS, ...serverDeps(config) });
   if (config.production && process.env.DEV_LOGIN === "1") app.log.warn("DEV_LOGIN=1 ignored: the dev sign-in stub is never on in production");
+  const rawScale = process.env.TIME_SCALE?.trim();
+  if (config.production && rawScale && rawScale !== "1") app.log.warn(`TIME_SCALE=${rawScale} ignored: deadlines always run at real speed in production`);
+  if (config.timeScale !== 1) app.log.warn({ timeScale: config.timeScale }, "TIME_SCALE is set: every deadline runs faster (dev and E2E only)");
   if (applied.length > 0) app.log.info({ applied }, "migrations applied");
   if (config.webDir) app.log.info(`web app: ${config.webDir}`);
   app.log.info(config.databaseUrl ? "database: Postgres (DATABASE_URL)" : `database: PGlite (${config.pgliteDir ?? "in memory"})`);
