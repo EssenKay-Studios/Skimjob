@@ -67,6 +67,8 @@
   --sky: #6a9bcc;
   --gold: #e2b858;
   --cream: #fff7ee;
+  /* Dashed rules between rows and under headers (ui-style §4). */
+  --rule: #2a232040;
   /* Premium ("crew pass") card */
   --pass-1: #3b2c62;
   --pass-2: #2b2449;

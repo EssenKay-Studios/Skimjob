@@ -44,12 +44,14 @@ test.describe("phones", () => {
         }
       });
 
-      test("gallery and 404 targets are at least 44px", async ({ page }) => {
+      test("gallery, 404, new-game and invite targets are at least 44px", async ({ page }) => {
         await page.goto("/dev/gallery");
         await expect(page.getByRole("heading", { name: "Component gallery" })).toBeVisible();
         expect(await smallTargets(page)).toEqual([]);
-        await page.goto("/no-such-page");
-        expect(await smallTargets(page)).toEqual([]);
+        for (const route of ["/no-such-page", "/new", "/join/abcdefghjk"]) {
+          await page.goto(route);
+          expect(await smallTargets(page), route).toEqual([]);
+        }
       });
     });
   }
