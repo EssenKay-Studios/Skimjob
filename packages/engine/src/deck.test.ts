@@ -1,6 +1,7 @@
 // The events deck: one public card per round from round 2, its effects at
 // §5.2 step 1 and through the round, and the Double-cross answer. design §10, §5.2
 import { describe, expect, it } from "vitest";
+import { V06_NUMBERS } from "./v01-numbers.testkit";
 import { EVENTS, EVENT_DECK, EVENTS_FROM_ROUND, type RoomId } from "@skimjob/content";
 import type { GameConfig, GameEvent, GameState, PlayerId } from "./types";
 import { PUBLIC, privateTo } from "./types";
@@ -29,7 +30,8 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
 
 /** A new game with chosen roles (seat i gets roles[i], Rookie if missing), plus any extra setup events. */
 function game(players: number, roles: string[] = [], extra: Partial<GameConfig> = {}, more: GameEvent[] = []): GameState {
-  const cfg = config(players, extra);
+  // Pin the 0.6.0 card numbers (balance pass 2 changed them); an extra override still wins.
+  const cfg = config(players, { ...extra, contentOverrides: { ...V06_NUMBERS, ...extra.contentOverrides } });
   const log = setupEvents(cfg)
     .filter((e) => e.type !== "snitchTargetAssigned" && e.type !== "moleAllies")
     .map((e, i, all): GameEvent => {

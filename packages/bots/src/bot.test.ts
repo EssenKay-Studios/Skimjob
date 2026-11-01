@@ -1,7 +1,7 @@
 // Bot decisions from a view: moves, alibis, meeting scheduling, votes, role
 // powers, and determinism. design §17.3 (and §5.1, §5.4, §8, §11.1, §11.2)
 import { describe, expect, it } from "vitest";
-import { roomDef, viewFor, jobById, type GameState, type Move, type PlayerCommand } from "@skimjob/engine";
+import { roomDef, viewFor, jobById, type GameEvent, type GameState, type Move, type PlayerCommand } from "@skimjob/engine";
 import { PERSONALITIES, type Personality } from "./personalities";
 import { botRandom, chooseAlibi, chooseMove, chooseVote, createBot, decide, type Random } from "./bot";
 import { game, notInsider, round, run } from "./testkit";
@@ -152,5 +152,43 @@ describe("votes — design §11.2, §17.3", () => {
   it("calls its emergency meeting when suspicion is high enough — design §11.1", () => {
     const cmds = decide(viewFor(liar(), "ana"), exact(PERSONALITIES.cautious, { emergencyAt: 8 }), rolls(0.5));
     expect(cmds.map((c) => c.type)).toContain("callEmergency");
+  });
+});
+
+// ---------------------------------------------------------------- role habits (balance pass 2, task 16)
+
+describe("role habits — design §8", () => {
+  /** A 5-player game where `player` holds `role` (roles are swapped in by hand; the engine isn't asked). */
+  const withRole = (s: GameState, player: string, role: string, roleState: Partial<GameState["players"][string]["roleState"]> = {}): GameState => {
+    const me = s.players[player] as GameState["players"][string];
+    return { ...s, players: { ...s.players, [player]: { ...me, role, roleState: { ...me.roleState, ...roleState } } } };
+  };
+  const pending = (s: GameState, target: string): GameState => ({ ...s, phase: { kind: "shakedownPending", meetingId: "act-1", target } });
+  const cancels = (s: GameState, player: string) =>
+    decide(viewFor(s, player), exact(PERSONALITIES.honest), seeded("m")).some((c) => c.type === "useAbility" && c.ability.kind === "cancelShakedown");
+
+  it("Muscle cancels a shakedown of itself or of someone it thinks clean, while its cancel lasts (§8, §11.3)", () => {
+    const s = withRole(game(5), "ana", "muscle");
+    expect(cancels(pending(s, "ana"), "ana")).toBe(true);
+    // No evidence against ben: suspicion 0, so he looks clean.
+    expect(cancels(pending(s, "ben"), "ana")).toBe(true);
+    expect(cancels(pending(withRole(s, "ana", "muscle", { usedThisGame: 1 }), "ana"), "ana")).toBe(false);
+    expect(cancels(pending(withRole(s, "ana", "rookie"), "ana"), "ana")).toBe(false);
+  });
+
+  it("Blackmailer uses a role it learned from an Inside tip; otherwise guesses a Rookie (§8, §10)", () => {
+    const s = withRole(game(5), "ana", "blackmailer");
+    const tip: GameEvent = { type: "insideTip", visibility: { kind: "private", player: "ana" }, player: "ana", round: 1, subject: "ben", role: "fence" };
+    const tipped: GameState = { ...s, log: [...s.log, tip] };
+    expect(chooseMove(viewFor(tipped, "ana"), exact(PERSONALITIES.honest), seeded("b")).ability).toEqual({ kind: "blackmail", target: "ben", role: "fence" });
+    expect(chooseMove(viewFor(s, "ana"), exact(PERSONALITIES.honest), seeded("b")).ability).toMatchObject({ kind: "blackmail", role: "rookie" });
+  });
+
+  it("Snitch votes for its own target on less evidence than its usual top suspect needs (§8)", () => {
+    // voteAt 0: every score of 0 passes; a tie goes to the first in seat order (ben) unless the Snitch's target wins.
+    const p = exact(PERSONALITIES.honest, { voteAt: 0 });
+    const s = game(5);
+    expect(chooseVote(viewFor(withRole(s, "ana", "snitch", { target: "carl" }), "ana"), p, seeded("s"))).toEqual({ kind: "shakedown", target: "carl" });
+    expect(chooseVote(viewFor(withRole(s, "ana", "rookie"), "ana"), p, seeded("s"))).toEqual({ kind: "shakedown", target: "ben" });
   });
 });

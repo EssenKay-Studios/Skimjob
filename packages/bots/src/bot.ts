@@ -19,8 +19,9 @@ import {
   type VoteChoice,
 } from "@skimjob/engine";
 import type { Personality } from "./personalities";
-import { crewSize, isDuel, jobOf, lastResolvedRound, ofType, roleOf, roomsWhere, totalRounds } from "./read";
+import { crewSize, isDuel, jobOf, lastResolvedRound, ofType, roleOf, roomsWhere } from "./read";
 import { mostSuspicious, suspicion } from "./suspicion";
+import { heatDanger, jobThisRound } from "./heat";
 
 /**
  * Anything that plays a seat: a bot, or (later) a human client. It sees only
@@ -72,6 +73,15 @@ export function createBot({ player, personality, seed }: BotOptions): Agent & { 
  */
 const MOLE_TIP_CHANCE = 0.15;
 
+/**
+ * A Muscle bot rescues a shakedown target whose suspicion (to it) is below this
+ * (bot setting; no dice, since the bot may be asked again during the window). design §8
+ */
+const MUSCLE_CLEAN_BELOW = 1;
+
+/** A Snitch bot votes for its own target at this share of its usual vote threshold (bot setting). design §8 */
+const SNITCH_EAGERNESS = 0.5;
+
 /** Chance a bot accepts a Double-cross offer (bot setting, not a game rule; minimal until task 16). design §10 */
 const DOUBLE_CROSS_ACCEPT = 0.5;
 
@@ -97,11 +107,15 @@ export function decide(view: PlayerView, p: Personality, random: Random): Player
     return out;
   }
   if (phase.kind === "shakedownPending") {
-    // design §8: a Muscle with its cancel left keeps itself out of trouble (smarter use: task 16).
+    // design §8, §11.3: a Muscle with its cancel left keeps itself out of trouble, and
+    // stops a shakedown of someone it thinks is clean (the Haul would pay them compensation).
     const { power } = roleOf(view);
     const cancelled = ofType(view.caseFile, "abilityResolved").some((e) => e.ability.kind === "cancelShakedown" && e.ability.meetingId === phase.meetingId);
-    if (power.kind === "cancelShakedown" && phase.target === player && view.me.roleState.usedThisGame < power.perGame && !cancelled) {
-      out.push({ type: "useAbility", player, ability: { kind: "cancelShakedown" } });
+    if (power.kind === "cancelShakedown" && view.me.roleState.usedThisGame < power.perGame && !cancelled) {
+      const looksClean = phase.target !== player && (suspicion(view).get(phase.target) ?? 0) < MUSCLE_CLEAN_BELOW;
+      if (phase.target === player || looksClean) {
+        out.push({ type: "useAbility", player, ability: { kind: "cancelShakedown" } });
+      }
     }
     return out;
   }
@@ -128,7 +142,7 @@ export function decide(view: PlayerView, p: Personality, random: Random): Player
 
 /** Room, split and role power for this round. design §5.1, §6, §7, §8 */
 export function chooseMove(view: PlayerView, p: Personality, random: Random): Move {
-  const job = jobOf(view);
+  const job = jobThisRound(view);
   const lootRooms = roomsWhere(view, job, (d) => d.loot > 0);
   const byLoot = (rooms: readonly RoomId[]) => rooms.map((r) => [r, roomDef(job, r).loot] as const);
   const chosen = random() < p.noise ? pick(view.rooms, random) : chooseRoom(view, p, random);
@@ -156,8 +170,13 @@ export function chooseMove(view: PlayerView, p: Personality, random: Random): Mo
     // design §8: hide its own skim from the cameras (minimal; task 16).
     ability = { kind: "loopCameras", room };
   } else if (power.kind === "blackmail" && view.me.roleState.usedThisAct < power.perAct && view.players.length > 0) {
-    // design §8: Rookies are the commonest role, so guess one (minimal; task 16).
-    ability = { kind: "blackmail", target: pick(view.players, random).id, role: FILLER_ROLE };
+    // design §8, §10: a role it learned from an Inside tip is a sure guess (latest tip
+    // per player; it can be stale after a Double-cross); otherwise guess a Rookie,
+    // the commonest role, on a random player.
+    const tips = new Map(ofType(view.caseFile, "insideTip").filter((t) => t.subject !== view.me.id).map((t) => [t.subject, t.role]));
+    const known = [...tips].filter(([id]) => view.players.some((o) => o.id === id));
+    const [target, role] = known.length > 0 ? pick(known, random) : [pick(view.players, random).id, FILLER_ROLE];
+    ability = { kind: "blackmail", target, role };
   } else if (power.kind === "tipOff" && view.me.roleState.usedThisAct < power.perAct) {
     // design §8: the Mole sometimes tips off (at most once per act); otherwise it plays its personality.
     if (random() < MOLE_TIP_CHANCE) ability = { kind: "tipOff" };
@@ -166,10 +185,14 @@ export function chooseMove(view: PlayerView, p: Personality, random: Random): Mo
 }
 
 function chooseRoom(view: PlayerView, p: Personality, random: Random): RoomId {
-  const job = jobOf(view);
-  // design §7: Heat now plus the baseline still to come, against the raid level.
-  const roundsLeft = totalRounds(job) - view.round + 1;
-  const danger = (view.heat + job.heat.perRound * roundsLeft) / job.heat.max;
+  const base = jobOf(view);
+  // design §10: this round's card can surge a room's loot and Heat (Shift change, Payday).
+  const job = jobThisRound(view, base);
+  // design §7: Heat now plus this round's card, the baseline still to come and,
+  // when a Mole may be in play, the tip-offs still to come (heat.ts), against the raid level.
+  const danger = heatDanger(view, base);
+  // The most any room pushes Heat on a normal round: a surged room is avoided harder.
+  const usual = Math.max(1, ...roomsWhere(view, base, (d) => d.heatPressure > 0).map((r) => roomDef(base, r).heatPressure));
   const cooler = roomsWhere(view, job, (d) => d.heatPressure < 0)[0];
   if (cooler && danger > p.heatCaution && random() < Math.min(0.8, (danger - p.heatCaution) * 4)) return cooler;
   const watcher = roomsWhere(view, job, (d) => d.info === "watchRoom")[0];
@@ -180,7 +203,7 @@ function chooseRoom(view: PlayerView, p: Personality, random: Random): RoomId {
   const avoid = Math.max(0, danger - p.heatCaution) * 4;
   const options = roomsWhere(view, job, (d) => d.loot > 0).map((r) => {
     const d = roomDef(job, r);
-    const heatFactor = d.heatPressure > 0 ? Math.max(0.05, 1 - avoid) : 1;
+    const heatFactor = d.heatPressure > 0 ? Math.max(0.05, 1 - avoid * Math.max(1, d.heatPressure / usual)) : 1;
     return [r, d.loot ** (0.5 + p.greed) * heatFactor] as const;
   });
   return weighted(options, random) ?? job.defaultRoom;
@@ -282,7 +305,14 @@ export function chooseVote(view: PlayerView, p: Personality, random: Random): Vo
     const target = pick([null, ...view.players.map((o) => o.id).filter((id) => !allies.includes(id))], random);
     return target === null ? { kind: "skip" } : { kind: "shakedown", target };
   }
-  const top = mostSuspicious(suspicion(view));
+  const scores = suspicion(view);
+  // design §8: a Snitch is paid when its target is caught holding loot, so it moves on less evidence.
+  const { power } = roleOf(view);
+  const mark = power.kind === "snitch" ? view.me.roleState.target : null;
+  if (mark !== null && mark !== undefined && !allies.includes(mark) && (scores.get(mark) ?? 0) >= p.voteAt * SNITCH_EAGERNESS) {
+    return { kind: "shakedown", target: mark };
+  }
+  const top = mostSuspicious(scores);
   if (top !== null && allies.includes(top.player)) return { kind: "skip" };
   return top !== null && top.score >= p.voteAt ? { kind: "shakedown", target: top.player } : { kind: "skip" };
 }

@@ -4,6 +4,7 @@
 // Mole dealing per player count, a counterfactual Mole-deal leak check and
 // determinism. design §3, §8, §8.1
 import { describe, expect, it } from "vitest";
+import { V06_NUMBERS } from "./v01-numbers.testkit";
 import { MOLE_ROLE } from "@skimjob/content";
 import type { GameConfig, GameEvent, GameState, MoleSetting, Outcome, PlayerId, PlayerState } from "./types";
 import { moleOptions, setupEvents, validateConfig } from "./setup";
@@ -199,7 +200,8 @@ describe("tip-off edges — design §8", () => {
   });
 
   it("two Moles tipping off in one round add both, and only each Mole hears of its own", () => {
-    const s0 = game(4, ["mole", "mole", "lookout", "lookout"]);
+    // Pins the 0.6.0 tip-off (+10; balance pass 2 made it +6).
+    const s0 = game(4, ["mole", "mole", "lookout", "lookout"], { contentOverrides: V06_NUMBERS });
     const plain = run(s0, ...allIn(s0), ROUND);
     const tipped = run(s0, mv("p0", "lobby", 0, TIP), mv("p1", "lobby", 0, TIP), mv("p2", "lobby"), mv("p3", "lobby"), ROUND);
     expect(tipped.heat - plain.heat).toBe(20);

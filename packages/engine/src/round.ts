@@ -7,7 +7,7 @@ import { MOLE_ROLE, type RoleId, type RoomId } from "@skimjob/content";
 import type { AbilityUse, GameEvent, GameState, Move, PlayerId, PlayerState } from "./types";
 import { PUBLIC, privateTo } from "./types";
 import { clampHeat, roomDef, roomLoot, roundHeatDelta } from "./job";
-import { jobFor, powerOf, roleDefIn, rolesFor } from "./overrides";
+import { eventsFor, jobFor, powerOf, roleDefIn, rolesFor } from "./overrides";
 import { isObject } from "./check";
 import { actOfRound, isLastRoundOfAct } from "./acts";
 import { gameEnded } from "./end";
@@ -86,7 +86,7 @@ export function checkMove(state: GameState, player: PlayerState, raw: unknown): 
   // design §10 Lockdown: the card names a room closed for this round.
   if (room === closedRoom(state)) return `the ${roomDef(jobFor(state.config), room).name} is closed this round (Lockdown)`;
   // design §10: Shift change / Payday raise a room's loot this round.
-  const def = roomDef(roundJob(jobFor(state.config), state.card), room);
+  const def = roomDef(roundJob(jobFor(state.config), state.card, eventsFor(state.config)), room);
   if (!isCount(pocket)) return "pocket must be a whole number, 0 or more";
   // The real yield can only drop below the room's loot (crowded Deposit boxes), so this is the upper bound.
   if (pocket > def.loot) return `you can pocket at most ${def.loot} in the ${def.name}`;
@@ -120,7 +120,7 @@ export function checkMove(state: GameState, player: PlayerState, raw: unknown): 
  * the others change yields, Heat and information below.
  */
 export function resolveRound(before: GameState, round: number, draw: Draw): GameEvent[] {
-  const job = roundJob(jobFor(before.config), before.card);
+  const job = roundJob(jobFor(before.config), before.card, eventsFor(before.config));
   const powerFor = (id: PlayerId) => powerOf(state.config, player(id).role);
   const order = before.playerOrder;
   const crewSize = order.length;

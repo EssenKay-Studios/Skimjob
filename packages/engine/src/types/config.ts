@@ -4,7 +4,7 @@
 // time — session length, round deadlines, meeting window length, quiet hours,
 // pause/extend — belongs to the server's scheduler, because the engine has no
 // clock (CLAUDE.md "Engine rules"; design §4.1).
-import type { JobId, RoleId, RoomId } from "@skimjob/content";
+import type { EventId, JobId, RoleId, RoomId } from "@skimjob/content";
 
 /** Stable id for a seat. Unique within a game. */
 export type PlayerId = string;
@@ -86,4 +86,18 @@ export interface ContentOverrides {
   readonly shakedown?: { readonly cleanBelowPerAct?: number; readonly compensationPerAct?: number };
   readonly duel?: { readonly wrongCallOutPerAct?: number };
   readonly roles?: Readonly<Record<RoleId, RoleOverride>>;
+  /** Event card numbers (balance pass 2). design §10 */
+  readonly events?: Readonly<Record<EventId, EventOverride>>;
+}
+
+/**
+ * New numbers for one event card. A card may only set its own effect's
+ * numbers: `amount` (Police patrol / Quiet night), `lootMultiplier` and
+ * `heatMultiplier` (Shift change / Payday), `loss` (Raid rumour). design §10
+ */
+export interface EventOverride {
+  readonly amount?: number;
+  readonly lootMultiplier?: number;
+  readonly heatMultiplier?: number;
+  readonly loss?: number;
 }

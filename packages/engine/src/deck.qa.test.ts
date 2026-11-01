@@ -1,6 +1,7 @@
 // QA (PR #14): adversarial tests for the events deck — boundaries, card
 // interactions, deck exhaustion, determinism and Double-cross leaks. design §10
 import { describe, expect, it } from "vitest";
+import { V06_NUMBERS } from "./v01-numbers.testkit";
 import type { RoomId } from "@skimjob/content";
 import type { GameConfig, GameEvent, GameState, PlayerId } from "./types";
 import { PUBLIC, privateTo } from "./types";
@@ -26,7 +27,8 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
 
 /** A new game, seat i dealt roles[i] (Rookie if missing). */
 function game(players: number, roles: string[] = [], extra: Partial<GameConfig> = {}): GameState {
-  const cfg = config(players, extra);
+  // Pin the 0.6.0 card numbers (balance pass 2 changed them); an extra override still wins.
+  const cfg = config(players, { ...extra, contentOverrides: { ...V06_NUMBERS, ...extra.contentOverrides } });
   let seat = 0;
   const log = setupEvents(cfg)
     .filter((e) => e.type !== "snitchTargetAssigned" && e.type !== "moleAllies")

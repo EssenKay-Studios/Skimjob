@@ -47,10 +47,11 @@ The look is **a stylised 3D toy world, with UI drawn as a hand-made sketchbook o
 | `--plinth` | `#e8d4b6` | the oval "display plinth" under a building (sampled) |
 | `--ink` | `#2a2320` | outlines, headings, primary text (warm near-black, never #000) |
 | `--ink2` | `#4a403a` | body text |
-| `--mute` | `#85796d` | captions, subtitles, meta |
+| `--mute` | `#74695e` | captions, subtitles, meta (reference `#85796d` was 4.0:1; darkened for AA) |
 | `--clay` | `#d97757` | **primary accent**: primary buttons, active chip/tab, underlines |
 | `--clay-hover` | `#e08565` | primary hover |
-| `--clay-d` | `#b35a3c` | accent text, pressed, links |
+| `--clay-d` | `#b35a3c` | accent text, links, focus ring |
+| `--clay-press` | `#d47252` | primary pressed (keeps ink text ≥4.5:1) |
 | `--clay-l` | `#f4d6c8` | selected item tint, active nav pill (`#f4ece8` sampled) |
 | `--kraft` | `#d4a27f` | masking tape (at 60% alpha) |
 | `--olive` | `#788c5d` | "free" badge, nature |
@@ -78,8 +79,8 @@ The look is **a stylised 3D toy world, with UI drawn as a hand-made sketchbook o
   (brick), `#c46686` (rose), `#b7684f` (rust), `#6a9bcc` (sky), `#788c5d` (olive), `#6b5aa6`
   (violet), `#3d5a80` (navy).
 
-**Rules.** Text is always `--ink`/`--ink2` on paper. Large fills (clay, bad, good) use cream text
-`#fff7ee`. Coloured fills inside meters and swatches get a **diagonal hatch overlay**:
+**Rules.** Text is always `--ink`/`--ink2` on paper. **Clay fills use `--ink` text** (4.95:1; cream on
+clay is only 2.94:1). Darker fills (bad, good) use cream text `#fff7ee`. Every text pair must reach WCAG AA 4.5:1. Coloured fills inside meters and swatches get a **diagonal hatch overlay**:
 `repeating-linear-gradient(-55deg, #2a23204d 0 1px, transparent 1px 3px), var(--c)`.
 
 ## 3. Typography
@@ -147,27 +148,30 @@ radius. The object sits on a soft lighter oval "plinth" (`--plinth`). The title 
 category (Inter 600 `--mute`) go **below** the thumbnail, outside the frame.
 
 **Chips/filters.** Height about 30px, radius about 10px, 1.3px ink border, paper fill. A 12px
-colour dot sits before the label. The active chip is filled clay with cream text and no dot.
+colour dot sits before the label. The active chip is filled clay with ink text and no dot.
 
 ## 5. Buttons
 
 | Variant | Fill | Text | Size | Notes |
 |---|---|---|---|---|
-| **Primary** | `--clay` `#d97757` | `#fff7ee`, Pangolin 700 17–18px | h 46–48px, pad `0 26px 3px` | sketch frame + hatched shadow; leading ▶ or icon; full-width on mobile |
-| **Secondary** | `--paper` | `--ink`, Inter 600 14.5px | h 40px, pad `0 16px` | sketch frame, shadow .4 |
-| **Small / icon** | `--paper` | Inter 600 13px | 32×32 min | shadow .35 |
-| **Toggle on** | `--clay` | `#fff7ee` | — | used for speed / active tool |
-| **Ghost** | transparent | ink | — | no shadow |
+| **Primary** | `--clay` `#d97757` | `--ink`, Pangolin 700 17–18px | h 46–48px, pad `0 26px 3px` | sketch frame + hatched shadow; leading ▶ or icon; full-width on mobile |
+| **Secondary** | `--paper` | `--ink`, Inter 600 14.5px | h 44px, pad `0 16px` | sketch frame, shadow .4 |
+| **Small / icon** | `--paper` | Inter 600 13px | 44×44 min | shadow .35 |
+| **Toggle on** | `--clay` | `--ink` | — | used for speed / active tool |
+| **Ghost** | transparent | ink | h 44px | no shadow |
 | **Danger** | paper, red text → **armed** = `--bad` fill, `#fff4ec` text + shake (.35s) | | | arm on first click, confirm on second |
 | **Premium** | gold gradient `#f6bc45`→`#e9a92c`, 2px `#171230` border | `#2a2320` Inter 700 | h 46px | only on dark premium card; star icon; periodic "bang" wiggle |
-| **Back** | paper with **clay outline** | "‹ Back [Esc]" | h 38px | top-left of every sheet |
+| **Back** | paper with **clay outline** | "‹ Back [Esc]" | h 44px | top-left of every sheet |
+
+**Skimjob rule: every interactive target (buttons, links, inputs) is at least 44×44 px**, for mouse
+and touch alike (decisions 2026-11-01). The reference's 32–40 px sizes are not used.
 
 States (all buttons):
 
-- hover: `translateY(-1.5px) rotate(-1deg)` and the fill lightens (`#fffdf8`, or `#e08565` for
+- hover (only inside `@media (hover: hover)`, so taps don't leave a button tilted): `translateY(-1.5px) rotate(-1deg)` and the fill lightens (`#fffdf8`, or `#e08565` for
   primary).
 - active: `translateY(1px) scale(.97)`.
-- focus-visible: `2.5px solid --clay` outline, offset 3px, radius 8px.
+- focus-visible: `2.5px solid --clay-d` outline, offset 3px, radius 8px.
 - disabled: opacity .45 plus `grayscale(.6)`.
 - Transitions: `transform .16s var(--spring)` with `--spring: cubic-bezier(.3,1.55,.5,1)`.
 
@@ -276,12 +280,17 @@ States (all buttons):
 
 ## 10. Mobile behaviour (390×844)
 
+- **Skimjob rules (web-first, decisions 2026-11-01):** phones 360–430 px, tablets 768–1024 px in
+  both orientations, laptops. No horizontal overflow (`body { overflow-x: clip }`; entrances never
+  rotate or scale a sheet). Page gutters are `max(gutter, env(safe-area-inset-*))`: 20 px, 12 px
+  under 560 px. Targets ≥44 px. Nothing works only on hover.
 - Sheets go nearly full-bleed with 12px page padding. Tape and spiral holes stay; the rounded ink
   frame still wraps the whole screen.
 - The home page becomes a single column: logo row (with a language pill and a "☰ Menu" button in a
   clay outline) → a hero render in a rounded ink frame → a Pangolin ~24px headline → a
   full-width primary button → the premium card.
-- Filter chips become a **horizontal scroll row** with no wrapping.
+- Filter chips become a **horizontal scroll row** with no wrapping. *Skimjob wraps them instead*,
+  so nothing is hidden off-screen.
 - Grids drop to **2 columns** (catalog) or 1 column (styles, how-to steps).
 - The Back button shrinks to an icon-only 48×48 clay-outlined square.
 - *Their weakness to avoid:* long page titles wrap awkwardly beside the subtitle ("How to / Play").
@@ -390,7 +399,7 @@ sketchbook paper. Below, `[frame]` means the sketch frame from §4.
 - Make one `<SketchFrame seed w h fill shadow boil>` component that renders the SVG layers from §4
   behind content with `isolation:isolate`, and cache the generated paths by (w, h, seed).
 - Fonts: self-host Pangolin + Inter (both OFL) as woff2.
-- The same frame and tokens map to React Native via `react-native-svg`.
+- The same frame and tokens map to Flutter via `CustomPainter` (wobbly border, hatched shadow) and a shared token file exported from `theme.css`.
 
 ---
 

@@ -37,15 +37,17 @@ Goal: run thousands of all-bot games at 2–12 players and use the results to tu
 
 - [x] **Duel mode** — `GameConfig.duel` (exactly 2 players; in `gameCreated`), no meetings or votes, `callOut` once per player per act (private until the act's last round resolves, then public `callOutResolved` before the checkpoint): a caught opponent hands over everything they pocketed that act, a wrong call pays 5 × act (`JobDef.duel`, content 0.6.0, overridable). Meeting-only roles aren't dealt. Bots call out on a visible shortfall; sim `--duel`. Design §16.1.
 
+- [x] **Second balance pass** — content 0.7.0: Police patrol +5, Shift change Vault Heat ×1.5, Mole tip-off +6; event numbers overridable (`contentOverrides.events`); bots read event cards and tip-offs in the Heat (`packages/bots/src/heat.ts`), Muscle/Snitch/Blackmailer habits. Default config (events, Mole maybe): success 56% → 66%, Heat share of failures 40% → 26%, Mole win 50% → 34%. Summary in `docs/balance/balance-2.md`. Design §7, §8, §10, §17.4.
+
 ### Next up (in order)
-- Balance pass 2 with roles and events in (task 16).
+- M1 done; M2 per `docs/m2-plan.md`.
 
 ### Later in M1
 12. [x] **Info & vote roles** — done (see above).
 13. [x] **Win-condition roles** — done (see above).
 14. [x] **Events deck** — done (see above).
 15. [x] **Duel mode** — done (see above).
-16. [ ] **Balance pass 2** — re-run sims with all roles and events; bots learn the new roles minimally.
+16. [x] **Balance pass 2** — done (see above).
 
 ## Upcoming milestones
 - **M2** — playable web prototype (server, minimal UI, chat, ledger) for real playtests.
@@ -61,6 +63,8 @@ Plan and acceptance criteria: `docs/m2-plan.md`. Runs alongside M1 task 16 (bala
 3. [ ] **M2-3** Live game channel and server bots.
 4. [ ] **M2-4** Scheduler and elastic timing.
 5. [ ] **M2-5** Web shell, style foundation, lobby screens.
+   - [x] **M2-5a** `apps/web` (Vite + React 19): dev proxy `/api` → server, `theme.css` tokens, self-hosted Pangolin + Inter, `<SketchFrame>` (seeded wobbly SVG ink, hatched shadow, grain, edge burn, tape, punch holes, line boil), buttons (primary / secondary / small / toggle / ghost / back / premium / danger-armed), blob avatars with initials, chips, text field, toasts, wordmark, landing screen (create / join with invite code / sign in, no API calls yet), `/dev/gallery`. `pnpm web`, `pnpm test:e2e` (Playwright smoke test). ui-style §1–§6, §9, §10.
+   - [ ] **M2-5b** Invite page (nickname), lobby (seats, bots, settings, start) and wiring the landing to M2-2's lobby API; then the M2-5 acceptance (two browsers, bots, start lands on the game route).
 6. [ ] **M2-6** Game screen thin slice (first playable build).
 7. [ ] **M2-7** Meetings and voting UI.
 8. [ ] **M2-8** Chat: crew, DMs, evidence cards.
@@ -80,6 +84,7 @@ Plan and acceptance criteria: `docs/m2-plan.md`. Runs alongside M1 task 16 (bala
 - `deadlines` is keyed `(game_id, key)` with the system command to send as `json`; M2-4 decides the key format (the schema comment suggests `round:3`, `openMeeting:act-1`).
 
 ## Notes / half-finished work
+- **Web (M2-5a, done):** frames are drawn by `<SketchFrame>` / `<FrameArt>` (`apps/web/src/components/`); give every frame a stable `seed` so it looks the same on every render. Fill/ink come from `--fr-fill` / `--fr-ink`. `<SketchDefs>` must stay mounted once (App). The landing buttons only toast for now: M2-5b wires them to the lobby API. The bank doodle on the landing is placeholder art for M2-9. Playwright projects run at 390×844 and 1280×800 on port 5179; `e2e/responsive*.spec.ts` set their own viewports (360–1280, with and without touch) and guard the web-first rules (no overflow, ≥44 px targets, gutters, contrast). Add every new screen to their route lists.
 - M2 server: a Muscle shakedown window must always run its full server-set length (ending early on cancel leaks via timing). PR #12 review.
 - M2 plan: see `docs/m2-plan.md` (14 tasks, M2-1 … M2-14).
 - **RNG rule for every later task:** command handlers draw only through the `Draw` that `handleCommand` passes them; `withRng` then appends the reveal-only `rngAdvanced { words }` automatically (see decisions.md). Never read `state.rng` in a handler. `applyEvent` throws for event types not folded yet; each task adds its cases in `reduce.ts`.
@@ -88,7 +93,7 @@ Plan and acceptance criteria: `docs/m2-plan.md`. Runs alongside M1 task 16 (bala
 - **M2 (server) and meetings:** the act's meeting only opens from `awaitingMeeting` (after the act's last round), so if its slot passes mid-act the server sends `openMeeting` again once that round resolves. Only one meeting is open at a time: an `openMeeting` sent while another is open is refused and must be re-sent after it closes. The emergency notice period, window length and "act deadline" for `scheduleMeeting` are the server's. Meeting ids are `act-<n>` and `emergency-<player>`. Any new id or public field must come from public data only (never `log.length`).
 - **End of game:** every ending calls `gameEnded(state, events, failure)` (`end.ts`) with the command's events so far. A new ending (events deck, Duel) must do the same.
 - **Mole / Driver (task 13, done):** both have `RoleDef`s. Success winners skip roles with `winsOnSuccess: false` (the Mole), so a top-stash Mole never wins a success; the Driver, which has a `winsOnFailure`, still wins a success normally. Any new role that must not win a success sets `winsOnSuccess: false`; don't key it off `winsOnFailure`.
-- **Balance (task 16):** with the Mole "on", a quick 200-game run gives success 57/39/28% at 6/9/12p (vs 72/75/61% with the Mole off) and a Mole win rate of 43/61/73% (target 30–40%). Two Moles at 9–12 are strong; bots don't yet hunt Moles.
+- **Balance (task 16, done):** see `docs/balance/balance-2.md`. Still open: Mole without events 43–59% at 6–12p, 2–4p Heat busts, events on + Mole off at 6–12p succeeds 78–84%, the sim doesn't report call-outs. New bot Heat logic is in `packages/bots/src/heat.ts`.
 - **Balance (task 11, done):** `pnpm sim -- -n 1000 -p 2,3,4,6,8,10,12` takes about 2 minutes. Scripted rule tests pin the 0.1.0 numbers with `V01_NUMBERS` (`packages/engine/src/v01-numbers.testkit.ts`); new scripted tests can do the same. Open after pass 1: 2p (no shakedowns pass) at 45%, 4p at 77%, few shakedowns pass at 10–12p, Heat busts fade with crew size, bot shakedown accuracy ~84%. A gentler mix (honest 2, opportunist 3, greedy 1, cautious 2) succeeds 79%. Rerun after the events deck and new roles land.
 - **Bots → simulator (task 10, done):** build on `runBotGame` / `createBots` in `packages/bots` (zero refused commands is a test requirement). A quick look at 50 games per size, mixed crews (Honest, Opportunist, Cautious, Greedy): success about 90–100% at 4–12 players (target 55–70%), Heat raids almost never (bots lay low well before 100), 70–95% of shakedowns catch loot; all-Greedy crews mostly miss the final target; 2-player games never pass a shakedown (one vote each can't make a majority, §16). These are the bots' numbers, not tuned yet: task 11. Bots don't seal votes or chat.
 - **Player ids** must match `/^[A-Za-z0-9_-]{1,32}$/` and not be `__proto__`/`constructor`/`prototype` (`validateConfig`). The M2 server generates them; display names stay free text.
@@ -104,12 +109,13 @@ Plan and acceptance criteria: `docs/m2-plan.md`. Runs alongside M1 task 16 (bala
   - ~~**Remaining roles:** generic per-player role state, `useAbility`, Muscle window~~ — done in task 12. Double-cross accept (events deck) and Duel call-out (§16.1) can use `useAbility` too.
   - ~~**Events deck:** event types~~ — done in task 14. ~~**Duel mode:** no Duel config flag yet~~ — done in task 15.
 
-- **Events deck (task 14, done):** a new card is a `EventDef` in `packages/content/src/events.ts`; a new effect *kind* needs one function in `deck.ts` (step-1 player effects go in `cardEffects`, round-number effects in `roundJob`/`cardHeat`). Any new place that starts a round must use `startRound(state, round, draw)` (it flips the card). Event numbers aren't in `ContentOverrides` yet. Balance (task 16): run the sim with `--events`; a quick 200-game run raised the Heat-bust share of failures at 4–6p from 8/12% to 47/30% (Police patrol, Shift change). Bots ignore Audit reports, Inside tips and offers beyond a coin flip.
+- **Events deck (task 14, done):** a new card is a `EventDef` in `packages/content/src/events.ts`; a new effect *kind* needs one function in `deck.ts` (step-1 player effects go in `cardEffects`, round-number effects in `roundJob`/`cardHeat`). Any new place that starts a round must use `startRound(state, round, draw)` (it flips the card). Event numbers are in `ContentOverrides.events` (task 16). Balance (task 16): run the sim with `--events`; a quick 200-game run raised the Heat-bust share of failures at 4–6p from 8/12% to 47/30% (Police patrol, Shift change). Bots ignore Audit reports, Inside tips and offers beyond a coin flip.
 
 - **Duel mode (task 15, done):** the act's end in Duel is `endOfDuelAct` (`duel.ts`), called by `resolveRound` after the act's last round; any new end-of-act step must go there as well as in `afterVote` (both use `checkpoint()` in `meeting.ts`). M2: the server never sends `openMeeting`/`scheduleMeeting` in Duel games. Balance (task 16): the sim doesn't report call-outs yet (count, caught share, loot moved); bots call out only on a visible shortfall.
 
 ## Questions for Karthik
 - M2 lobby: OK that one invite link per game works for anyone until the game starts (then 410), the host can't leave the lobby, and new bots default to the Opportunist personality? (provisional, decisions.md)
+- Web: OK that the browser calls the server under `/api/...` (the dev proxy strips it), and with the landing copy and "skimjob" wordmark (coin over the i, mask mark)? See `/dev/gallery` and decisions.md (M2-5a).
 - Role deal: should each non-Rookie role be dealt at most once, with Rookies filling the rest (current, provisional), or can roles repeat in big crews?
 - Mole at 9–12 players: is "off" allowed, and does "maybe" mean 1-or-2 (current) or 0/1/2? "On" currently deals 2.
 - Heat: OK to round each round's change to a whole number (halves up) and floor Heat at 0? (provisional, decisions.md)
@@ -138,3 +144,6 @@ Plan and acceptance criteria: `docs/m2-plan.md`. Runs alongside M1 task 16 (bala
 - Duel call-outs: made any time during the act, kept private and settled at the act's end over the whole act (current, provisional) — or public when made, or settled at once over the rounds so far? And may a call take more than the stash holds (current: capped; the Fence safe is never touched), and a wrong call cost more than the caller's stash (current: capped)?
 - Duel roles: OK to leave the meeting-only roles (Smooth talker, Muscle, Snitch) out of the deal in Duel mode (current, provisional)?
 - Double-cross: §10 says both "secretly" accept. Should the answers stay hidden even at the end-of-game reveal (like Secret-mode ballots), or show at the reveal like other private events (current)?
+- Default config (balance pass 2): OK that a host's defaults are events on, Mole "maybe" and the full role pool (provisional, decisions.md)? Design §15 names the settings but not the defaults.
+- Mole (balance pass 2): with events off the Mole still wins 43–59% at 6–12p (30–41% with events on). Deal one Mole at 9–12 when "on" (today 2), let a shakedown that catches a Mole cancel its tip-offs, or accept? (docs/balance/balance-2.md)
+- Heat at 2–4 players (balance pass 2): Heat busts are 30–53% of failures with events on, because one Vault visitor is a third of a 3-player crew. Scale event Heat by crew size, or accept?

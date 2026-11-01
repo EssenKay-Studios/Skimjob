@@ -12,7 +12,7 @@ export function ofType<T extends GameEvent["type"]>(list: readonly LoggedEvent[]
   return out;
 }
 
-function createdOf(view: PlayerView): EventOf<"gameCreated"> {
+export function createdOf(view: PlayerView): EventOf<"gameCreated"> {
   const created = view.ledger[0]?.event;
   if (created?.type === "gameCreated") return created;
   const found = ofType(view.ledger, "gameCreated")[0];
