@@ -1,0 +1,94 @@
+# Deploy to Fly.io (https://skimjob.fly.dev) after CI passes on main, or by hand
+# (Actions → Deploy → Run workflow). How it works, rollback, costs: docs/deploy.md
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+# One deploy at a time, in order; a newer push waits rather than cancelling a half-done deploy.
+concurrency:
+  group: deploy-fly
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy to Fly.io
+    # Only a green CI run for a push to main (not a PR run on a branch called main), or a manual run.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      # Repo variables (Settings → Secrets and variables → Actions → Variables) override these.
+      FLY_APP: ${{ vars.FLY_APP || 'skimjob' }}
+      FLY_ORG: ${{ vars.FLY_ORG || 'personal' }}
+      FLY_REGION: bom
+      FLY_VOLUME: skimjob_data
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Exactly the commit CI tested (main may have moved on since).
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Check the token
+        run: |
+          if [ -z "$FLY_API_TOKEN" ]; then
+            echo "::error title=FLY_API_TOKEN::The FLY_API_TOKEN repo secret is missing or empty."
+            exit 1
+          fi
+
+      - name: Create the app if missing
+        run: |
+          has_app() { flyctl apps list --json | jq -e --arg a "$FLY_APP" 'any(.[]?; (.Name // .name) == $a)' >/dev/null; }
+          if has_app; then
+            echo "App $FLY_APP exists."
+          elif out=$(flyctl apps create "$FLY_APP" --org "$FLY_ORG" 2>&1); then
+            echo "Created app $FLY_APP in org $FLY_ORG."
+          elif echo "$out" | grep -qi "already" && has_app; then
+            echo "App $FLY_APP exists (created by a concurrent run)."
+          else
+            echo "$out"
+            echo "::error title=Fly app::Could not create the Fly app '$FLY_APP' in org '$FLY_ORG'. If the name is taken by someone else, set the FLY_APP repo variable to a free name (docs/deploy.md)."
+            exit 1
+          fi
+
+      - name: Create the data volume if missing
+        run: |
+          if flyctl volumes list --app "$FLY_APP" --json | jq -e --arg v "$FLY_VOLUME" 'any(.[]?; (.name // .Name) == $v)' >/dev/null; then
+            echo "Volume $FLY_VOLUME exists."
+          else
+            flyctl volumes create "$FLY_VOLUME" --app "$FLY_APP" --region "$FLY_REGION" --size 1 --yes
+          fi
+
+      - name: Deploy
+        # Non-secret env comes from fly.toml [env]; PUBLIC_ORIGIN follows the app name.
+        # --ha=false: one machine only, because PGlite lives on its one volume.
+        run: >-
+          flyctl deploy --remote-only
+          --app "$FLY_APP"
+          --ha=false
+          --env PUBLIC_ORIGIN=https://$FLY_APP.fly.dev
+          --wait-timeout 10m
+
+      - name: Smoke test
+        run: |
+          url="https://$FLY_APP.fly.dev"
+          for i in $(seq 1 20); do
+            if curl -fsS "$url/health" && curl -fsS -o /dev/null "$url/join/smoke"; then
+              echo; echo "Live: $url"; exit 0
+            fi
+            sleep 6
+          done
+          echo "::error title=Smoke test::$url/health did not answer after the deploy."
+          exit 1
