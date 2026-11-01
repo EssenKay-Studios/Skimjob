@@ -6,7 +6,6 @@
 // commands. Their seed is their own, not the game's (which is secret).
 import { FILLER_ROLE, ROUNDS_PER_ACT, type RoomId } from "@skimjob/content";
 import {
-  actOfRound,
   checkpointTarget,
   nextUint32,
   roomDef,
@@ -73,6 +72,9 @@ export function createBot({ player, personality, seed }: BotOptions): Agent & { 
  */
 const MOLE_TIP_CHANCE = 0.15;
 
+/** Chance a bot accepts a Double-cross offer (bot setting, not a game rule; minimal until task 16). design §10 */
+const DOUBLE_CROSS_ACCEPT = 0.5;
+
 const pick = <T>(items: readonly T[], random: Random): T => items[Math.floor(random() * items.length)] as T;
 
 function weighted<T>(items: readonly (readonly [T, number])[], random: Random): T | undefined {
@@ -107,6 +109,14 @@ export function decide(view: PlayerView, p: Personality, random: Random): Player
   if (phase.kind === "planning") {
     if (wantsEmergency(view, p, random)) out.push({ type: "callEmergency", player });
     if (view.me.move === null) out.push({ type: "submitMove", player, move: chooseMove(view, p, random) });
+    // design §10: answer a Double-cross offer once (minimal: a coin flip; a Mole keeps its card).
+    const round = phase.round;
+    const offered = ofType(view.caseFile, "doubleCrossOffered").some((e) => e.round === round);
+    const answered = ofType(view.caseFile, "doubleCrossAnswered").some((e) => e.round === round);
+    if (offered && !answered) {
+      const accept = roleOf(view).power.kind !== "tipOff" && random() < DOUBLE_CROSS_ACCEPT;
+      out.push({ type: "answerDoubleCross", player, accept });
+    }
   }
   return out;
 }
@@ -118,7 +128,9 @@ export function chooseMove(view: PlayerView, p: Personality, random: Random): Mo
   const job = jobOf(view);
   const lootRooms = roomsWhere(view, job, (d) => d.loot > 0);
   const byLoot = (rooms: readonly RoomId[]) => rooms.map((r) => [r, roomDef(job, r).loot] as const);
-  const room = random() < p.noise ? pick(view.rooms, random) : chooseRoom(view, p, random);
+  const chosen = random() < p.noise ? pick(view.rooms, random) : chooseRoom(view, p, random);
+  // design §10 Lockdown: the closed room is refused, so go to the default room (never closed) instead.
+  const room = view.card?.room === chosen ? job.defaultRoom : chosen;
   const def = roomDef(job, room);
   const pocket = choosePocket(view, p, random, def.loot);
   let move: Move = { room, pocket };
@@ -133,11 +145,8 @@ export function chooseMove(view: PlayerView, p: Personality, random: Random): Mo
     if (target !== undefined) ability = { kind: "lookout", rooms: [target] };
   } else if (power.kind === "fenceSafe") {
     // design §8: hide what the act's allowance and the stash allow.
-    const used = ofType(view.caseFile, "abilityResolved").reduce(
-      (sum, e) => sum + (e.ability.kind === "fenceSafe" && actOfRound(e.round) === view.act ? e.ability.amount : 0),
-      0,
-    );
-    const left = power.perAct - used;
+    // The role's uses this act (they travel with the card in a Double-cross, design §10).
+    const left = power.perAct - view.me.roleState.usedThisAct;
     const hideable = view.me.stash + pocket;
     if (left >= 1 && hideable >= 1) ability = { kind: "fenceSafe", amount: Math.min(left, hideable) };
   } else if (power.kind === "loopCameras" && view.me.roleState.usedThisAct < power.perAct && pocket > 0) {

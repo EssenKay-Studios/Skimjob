@@ -4,6 +4,8 @@ import { describe, expect, it } from "vitest";
 import {
   BANK_JOB,
   DEFAULT_ROLE_POOL,
+  EVENTS,
+  EVENT_DECK,
   FILLER_ROLE,
   JOBS,
   MIN_PLAYERS,
@@ -143,5 +145,19 @@ describe("starter roles — design §8, §8.1", () => {
 
   it("no starter role wins on failure (design §3: only roles like the Mole or Driver do)", () => {
     for (const role of Object.values(ROLES)) if (role.id !== "mole" && role.id !== "driver") expect(role.winsOnFailure).toBeNull();
+  });
+});
+
+describe("events deck content — design §10", () => {
+  it("has ten cards with matching ids, and room cards name rooms of the bank", () => {
+    expect(EVENT_DECK).toHaveLength(10);
+    for (const id of EVENT_DECK) {
+      const def = EVENTS[id];
+      expect(def?.id).toBe(id);
+      if (def?.effect.kind === "roomSurge") expect(Object.keys(BANK_JOB.rooms)).toContain(def.effect.room);
+    }
+    expect(EVENTS.policePatrol?.effect).toEqual({ kind: "heat", amount: 10 });
+    expect(EVENTS.quietNight?.effect).toEqual({ kind: "heat", amount: -10 });
+    expect(EVENTS.raidRumour?.effect).toEqual({ kind: "raidRumour", loss: 3 });
   });
 });

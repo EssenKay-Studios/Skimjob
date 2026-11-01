@@ -39,6 +39,13 @@ type ExpectedVisibility = {
   pocketCount: "private";
   roundResolved: "public";
   copsRaided: "public";
+  eventFlipped: "public"; // design §10: the card is shown to everyone
+  doubleCrossOffered: "private"; // design §10: only the two players know
+  doubleCrossAnswered: "private"; // design §10: acceptance is secret
+  doubleCrossResolved: "private";
+  raidRumourHit: "private"; // design §10: only the affected player is told
+  insideTip: "private"; // design §10: private to the recipient
+  auditReport: "public"; // design §10: per-room shortfall on the ledger
   alibiPosted: "public";
   meetingProposed: "public";
   meetingProposalAccepted: "public";

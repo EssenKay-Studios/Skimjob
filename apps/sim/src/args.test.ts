@@ -56,6 +56,7 @@ describe("parseSimArgs", () => {
       job: "bank",
       rolePool: [],
       starterMode: false,
+      eventsEnabled: false,
       mole: "off",
       voteVisibility: "hiddenThenRevealed",
       contentOverrides: null,
@@ -79,6 +80,9 @@ describe("parseSimArgs", () => {
       starterMode: true, mole: "maybe", voteVisibility: "secret", outDir: "here", json: true,
     });
     expect(run(["--no-files"]).outDir).toBeNull();
+    // design §10: the events deck; starter mode has none (§8.1).
+    expect(run(["--events"]).eventsEnabled).toBe(true);
+    expect(error(["--events", "--starter"])).toMatch(/starter/);
   });
 
   it("reads overrides inline or from a file, and reports bad JSON", () => {

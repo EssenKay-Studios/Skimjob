@@ -33,13 +33,15 @@ Goal: run thousands of all-bot games at 2–12 players and use the results to tu
 
 - [x] **Win-condition roles** — Driver (wins a success normally; a Heat failure with the top stash) and Mole (`tipOff` move power, +10 Heat once per act, hidden in the round's Heat; wins only failed heists, never a success, where the best non-Mole wins via `RoleDef.winsOnSuccess`; two Moles get a private `moleAllies`). Driver joins the default pool (content 0.4.0). `powerOf(config, role)` replaces the repeated role lookups. Bots: Moles tip off now and then and never vote for a fellow Mole; the sim's Mole win rate is per game. Design §3, §8, §8.1, §8.2.
 
+- [x] **Events deck** — the ten §10 cards as content (`EVENTS`, content 0.5.0), one public `eventFlipped` per round from round 2 (seeded draw, no repeats), off in starter mode / with `eventsEnabled: false`. Effects in `packages/engine/src/deck.ts`: Heat cards and room surges in the round's numbers, Power cut (no sightings / Security / Lookout), Lockdown (closed room refused), public per-room Audit, private Raid rumour and Inside tip, Double-cross (private offers, `answerDoubleCross`, swap at §5.2 step 1 only if both accept). Bots avoid the closed room and answer offers. Sim `--events`. Design §10, §5.2.
+
 ### Next up (in order)
-- Events deck, Duel mode (see below); then a second balance pass with them in.
+- Duel mode (see below); then a second balance pass with roles and events in.
 
 ### Later in M1
 12. [x] **Info & vote roles** — done (see above).
 13. [x] **Win-condition roles** — done (see above).
-14. [ ] **Events deck** — the ten events of design §10, one flipped per round from round 2, off in starter mode.
+14. [x] **Events deck** — done (see above).
 15. [ ] **Duel mode** — exactly 2 humans, call-outs instead of votes — design §16.1.
 16. [ ] **Balance pass 2** — re-run sims with all roles and events; bots learn the new roles minimally.
 
@@ -71,7 +73,9 @@ Goal: run thousands of all-bot games at 2–12 players and use the results to tu
 - From the PR #1 review, deferred to the task named:
   - ~~Tasks 10/11: content overrides and `CONTENT_VERSION` in `gameCreated`~~ — done in task 10. New job/role numbers that should be tunable must be added to `ContentOverrides` and `validateOverrides`.
   - ~~**Remaining roles:** generic per-player role state, `useAbility`, Muscle window~~ — done in task 12. Double-cross accept (events deck) and Duel call-out (§16.1) can use `useAbility` too.
-  - **Events deck / Duel mode:** no event types yet (public `eventFlipped`, private Raid rumour / Inside tip results) and no Duel config flag.
+  - ~~**Events deck:** event types~~ — done in task 14. **Duel mode:** no Duel config flag yet.
+
+- **Events deck (task 14, done):** a new card is a `EventDef` in `packages/content/src/events.ts`; a new effect *kind* needs one function in `deck.ts` (step-1 player effects go in `cardEffects`, round-number effects in `roundJob`/`cardHeat`). Any new place that starts a round must use `startRound(state, round, draw)` (it flips the card). Event numbers aren't in `ContentOverrides` yet. Balance (task 16): run the sim with `--events`; a quick 200-game run raised the Heat-bust share of failures at 4–6p from 8/12% to 47/30% (Police patrol, Shift change). Bots ignore Audit reports, Inside tips and offers beyond a coin flip.
 
 ## Questions for Karthik
 - Role deal: should each non-Rookie role be dealt at most once, with Rookies filling the rest (current, provisional), or can roles repeat in big crews?
@@ -96,3 +100,6 @@ Goal: run thousands of all-bot games at 2–12 players and use the results to tu
 - Blackmailer: should the victim be told they were blackmailed (current: privately, amount only, not by whom)?
 - Mole tip-off: a move power at most once per act, added to that round's Heat inside the public total (current, provisional) — or usable at any time as its own hidden Heat bump?
 - Driver: on a Heat failure, does "the biggest stash" mean the top of the whole crew including Moles (current, provisional), or only among non-Moles?
+- Events deck: is "no card repeats in a game" right (current, provisional), or should every round draw from the full deck?
+- Double-cross: do the swapped roles take effect for the round being resolved (current) or from the next round? And may a Mole be offered a swap (current: yes; the other Mole is told its ally changed)?
+- Raid rumour: compare stashes without the Fence safe, break ties at random, and lose the 3 to the cops (current, provisional)? Power cut: should the Server room still count pockets (current)?
