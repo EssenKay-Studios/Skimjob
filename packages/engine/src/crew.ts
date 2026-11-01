@@ -13,7 +13,7 @@ import type { ActNumber, GameEvent, GameState, PlayerId, PlayerState } from "./t
 import { PUBLIC, privateTo } from "./types";
 import { jobFor, powerOf, roleDefIn, rolesFor } from "./overrides";
 import { actOfRound, isLastRoundOfAct } from "./acts";
-import { isObject } from "./check";
+import { isObject, show } from "./check";
 
 type Result = GameEvent[] | string;
 
@@ -43,7 +43,7 @@ function audit(state: GameState, player: PlayerState, perAct: number, raw: Recor
 function checkStash(state: GameState, player: PlayerState, perAct: number, raw: Record<string, unknown>): Result {
   if (player.roleState.usedThisAct >= perAct) return "you have already checked a stash this act";
   const target = raw.target;
-  if (typeof target !== "string" || !Object.hasOwn(state.players, target)) return `unknown player ${String(target)}`;
+  if (typeof target !== "string" || !Object.hasOwn(state.players, target)) return `unknown player ${show(target)}`;
   if (target === player.id) return "check another player's stash";
   // PR #26 review: a check during the window would be a sure Shield (the shakedown is public, so this refusal tells nothing).
   if (state.pendingShakedown?.target === target) return "that player's shakedown is already pending";
@@ -94,7 +94,7 @@ function blessedWentDirty(state: GameState, priest: PlayerId, act: number): bool
 function bless(state: GameState, player: PlayerState, perAct: number, raw: Record<string, unknown>): Result {
   if (player.roleState.usedThisAct >= perAct) return "you have already blessed someone this act";
   const target = raw.target;
-  if (typeof target !== "string" || !Object.hasOwn(state.players, target)) return `unknown player ${String(target)}`;
+  if (typeof target !== "string" || !Object.hasOwn(state.players, target)) return `unknown player ${show(target)}`;
   if (target === player.id) return "bless another player";
   if (state.pendingShakedown?.target === target) return "that player's shakedown is already pending";
   const act = actOfRound(Math.max(1, state.round));

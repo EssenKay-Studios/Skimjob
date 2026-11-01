@@ -9,7 +9,7 @@ import { EVENT_DECK, PERKS, PERK_RULES, type PerkId } from "@skimjob/content";
 import type { GameEvent, GameState, PlayerId, PlayerState, ResolvedPerk } from "./types";
 import { PUBLIC, privateTo } from "./types";
 import type { Draw } from "./handle";
-import { isObject } from "./check";
+import { isObject, show } from "./check";
 import { cardRound, foreseenCard } from "./deck";
 
 type Result = GameEvent[] | string;
@@ -28,7 +28,7 @@ const spent = (state: GameState, player: PlayerState, perk: ResolvedPerk): GameE
 
 /** Why `target` isn't another player in the game, or null if it is. */
 function notOther(state: GameState, player: PlayerState, target: unknown): string | null {
-  if (typeof target !== "string" || !Object.hasOwn(state.players, target)) return `unknown player ${String(target)}`;
+  if (typeof target !== "string" || !Object.hasOwn(state.players, target)) return `unknown player ${show(target)}`;
   return target === player.id ? "pick another player" : null;
 }
 
@@ -61,7 +61,7 @@ function ballot(state: GameState, player: PlayerState, raw: Raw): Result {
   const bad = notOther(state, player, raw.target);
   if (bad) return bad;
   const target = raw.target as PlayerId;
-  if (meeting.ballotGrants[player.id]?.includes(target)) return "you already see that player's ballot";
+  if (Object.hasOwn(meeting.ballotGrants, player.id) && meeting.ballotGrants[player.id]?.includes(target)) return "you already see that player's ballot";
   return [spent(state, player, { kind: "ballot", meetingId: meeting.id, target })];
 }
 

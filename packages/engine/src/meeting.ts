@@ -6,7 +6,7 @@
 // command is refused. `handleCommand` (handle.ts) folds the events. Nothing
 // here draws randomness except the next act's event card (deck.ts, design §10):
 // meeting and proposal ids are names and log positions.
-import { BANK_JOB, PERK_RULES, ROUNDS_PER_ACT, type RoleId, type ShakedownRules } from "@skimjob/content";
+import { BANK_JOB, MAX_SLOT_LENGTH, PERK_RULES, ROUNDS_PER_ACT, type RoleId, type ShakedownRules } from "@skimjob/content";
 import type {
   ActNumber,
   GameEvent,
@@ -29,7 +29,7 @@ import { blessingEvents, checkpointRewards, dirtyShakedownRewards, muscleCancelE
 import { actOfRound } from "./acts";
 import { gameEnded } from "./end";
 import { applyEvent } from "./reduce";
-import { isObject, playerFor } from "./check";
+import { isObject, playerFor, show } from "./check";
 import type { Draw } from "./handle";
 import { startRound } from "./deck";
 
@@ -53,8 +53,10 @@ const slotLocked = (state: GameState): boolean =>
 
 const lockedReason = (state: GameState): string => `the act ${currentAct(state)} meeting is already scheduled`;
 
+/** A slot is free text the engine only stores and compares, so its length is capped (content). design §11.1, §17.2 */
 function checkSlot(slot: unknown): string | null {
-  return typeof slot === "string" && slot !== "" ? null : "slot must be a non-empty string";
+  if (typeof slot !== "string" || slot === "") return "slot must be a non-empty string";
+  return slot.length > MAX_SLOT_LENGTH ? `slot must be at most ${MAX_SLOT_LENGTH} characters` : null;
 }
 
 function scheduled(act: ActNumber, slot: string, proposalId: string | null): GameEvent {
@@ -79,7 +81,7 @@ function checkVote(state: GameState, voter: PlayerState, raw: unknown): VoteChoi
   if (raw.kind === "skip") return { kind: "skip" };
   if (raw.kind !== "shakedown") return "vote must be a shakedown or a skip";
   const target = raw.target;
-  if (typeof target !== "string" || !Object.hasOwn(state.players, target)) return `unknown player ${String(target)}`;
+  if (typeof target !== "string" || !Object.hasOwn(state.players, target)) return `unknown player ${show(target)}`;
   if (target === voter.id) return "you can't vote to shake yourself down";
   return { kind: "shakedown", target };
 }
@@ -108,7 +110,7 @@ export function acceptMeeting(state: GameState, command: Raw): Result {
   if (typeof player === "string") return player;
   if (slotLocked(state)) return lockedReason(state);
   const proposal = state.proposals.find((p) => p.id === command.proposalId);
-  if (!proposal) return `no open proposal ${String(command.proposalId)}`;
+  if (!proposal) return `no open proposal ${show(command.proposalId)}`;
   if (proposal.acceptedBy.includes(player.id)) return "you already accepted this proposal";
   const events: GameEvent[] = [{ type: "meetingProposalAccepted", visibility: PUBLIC, proposalId: proposal.id, by: player.id }];
   if ((proposal.acceptedBy.length + 1) * 2 > state.playerOrder.length) events.push(scheduled(proposal.act, proposal.slot, proposal.id));
@@ -118,7 +120,7 @@ export function acceptMeeting(state: GameState, command: Raw): Result {
 /** System: nobody locked a slot in by the act deadline, so the server picks one. */
 export function scheduleMeeting(state: GameState, command: Raw): Result {
   const act = currentAct(state);
-  if (command.act !== act) return `act ${String(command.act)} is not being played (act ${act} is)`;
+  if (command.act !== act) return `act ${show(command.act)} is not being played (act ${act} is)`;
   if (slotLocked(state)) return lockedReason(state);
   const bad = checkSlot(command.slot);
   if (bad) return bad;
@@ -189,7 +191,7 @@ export function openMeeting(state: GameState, meetingId: unknown): Result {
   if (state.meeting) return `meeting ${state.meeting.id} is already open`;
   if (state.pendingShakedown) return `the shakedown of meeting ${state.pendingShakedown.meetingId} is pending`;
   // Checked first: an absent id must not match an absent pending meeting.
-  if (typeof meetingId !== "string") return `meeting ${String(meetingId)} is not waiting to open`;
+  if (typeof meetingId !== "string") return `meeting ${show(meetingId)} is not waiting to open`;
   const act = currentAct(state);
   let kind: MeetingKind;
   if (state.scheduledMeeting?.meetingId === meetingId) {
@@ -198,7 +200,7 @@ export function openMeeting(state: GameState, meetingId: unknown): Result {
   } else if (state.pendingEmergency?.meetingId === meetingId) {
     kind = "emergency";
   } else {
-    return `meeting ${String(meetingId)} is not waiting to open`;
+    return `meeting ${show(meetingId)} is not waiting to open`;
   }
   const events: GameEvent[] = [{ type: "meetingOpened", visibility: PUBLIC, meetingId, kind, act }];
   for (const player of state.playerOrder) {
@@ -273,7 +275,7 @@ const shakedownWindow = (state: GameState): boolean => opensShakedownWindow(role
  */
 export function closeMeeting(state: GameState, meetingId: unknown, draw: Draw): Result {
   const meeting = state.meeting;
-  if (!meeting || meeting.id !== meetingId) return `meeting ${String(meetingId)} is not open`;
+  if (!meeting || meeting.id !== meetingId) return `meeting ${show(meetingId)} is not open`;
   const crewSize = state.playerOrder.length;
 
   // Tally in seat order, so the event is the same however the votes arrived.
@@ -322,7 +324,7 @@ export function closeMeeting(state: GameState, meetingId: unknown, draw: Draw): 
 /** The shakedown window has ended: apply the shakedown (or announce the cancel), then go on. design §8, §11.3 */
 export function resolveShakedown(state: GameState, meetingId: unknown, draw: Draw): Result {
   const pending = state.pendingShakedown;
-  if (!pending || pending.meetingId !== meetingId) return `no shakedown is pending for meeting ${String(meetingId)}`;
+  if (!pending || pending.meetingId !== meetingId) return `no shakedown is pending for meeting ${show(meetingId)}`;
   return afterVote(state, [], pending, pending, draw);
 }
 

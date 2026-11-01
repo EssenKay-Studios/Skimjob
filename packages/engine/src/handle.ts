@@ -13,7 +13,7 @@ import { PUBLIC, REVEAL, privateTo } from "./types";
 import { pick, randomInt, shuffle } from "./rng";
 import { applyEvent } from "./reduce";
 import { checkMove, closeAlibis, resolveRound } from "./round";
-import { isObject, playerFor } from "./check";
+import { isObject, playerFor, show } from "./check";
 import { answerDoubleCross } from "./deck";
 import { callOut } from "./duel";
 import { isDuel } from "./setup";
@@ -91,7 +91,7 @@ const postAlibi: Handler = (state, command) => {
   if (!state.alibisOpen) return `alibis for round ${round} are closed`;
   if (state.alibisPosted.includes(player.id)) return `you already posted an alibi for round ${round}`;
   const room = command.room;
-  if (typeof room !== "string" || !state.rooms.includes(room)) return `room ${String(room)} is not open in this game`;
+  if (typeof room !== "string" || !state.rooms.includes(room)) return `room ${show(room)} is not open in this game`;
   return [{ type: "alibiPosted", visibility: PUBLIC, player: player.id, round, room }];
 };
 
@@ -105,12 +105,12 @@ const advance: Handler = (state, command, draw) => {
       if (state.phase.kind === "meeting" || state.phase.kind === "shakedownPending") return "rounds are paused while a meeting is open";
       if (state.phase.kind !== "planning") return "no round deadline is pending";
       // Named round, so a retried or late deadline is refused instead of resolving the next round.
-      if (deadline.round !== state.phase.round) return `the round ${String(deadline.round)} deadline is not pending (round ${state.phase.round} is)`;
+      if (deadline.round !== state.phase.round) return `the round ${show(deadline.round)} deadline is not pending (round ${state.phase.round} is)`;
       return resolveRound(state, state.phase.round, draw);
     case "alibis":
       if (state.phase.kind === "meeting" || state.phase.kind === "shakedownPending") return "the alibi deadline is paused while a meeting is open";
       if (state.phase.kind !== "alibis") return "no alibi deadline is pending";
-      if (deadline.round !== state.phase.round) return `the round ${String(deadline.round)} alibi deadline is not pending (round ${state.phase.round}'s is)`;
+      if (deadline.round !== state.phase.round) return `the round ${show(deadline.round)} alibi deadline is not pending (round ${state.phase.round}'s is)`;
       return closeAlibis(state, state.phase.round, draw);
     case "openMeeting":
       return openMeeting(state, deadline.meetingId);
@@ -137,6 +137,9 @@ const HANDLERS: Readonly<Record<string, Handler>> = {
   advance,
   scheduleMeeting,
 };
+
+/** Every command type the engine handles. */
+export const COMMAND_TYPES: readonly string[] = Object.keys(HANDLERS);
 
 /** design §16.1: Duel mode has no meetings or votes. */
 const MEETING_COMMANDS: readonly string[] = ["proposeMeeting", "acceptMeeting", "scheduleMeeting", "callEmergency", "castVote", "sealVote"];

@@ -533,12 +533,10 @@ function rerun(config: GameConfig, commands: readonly unknown[]): GameState {
 }
 
 /**
- * BUG (engine): objects that can't be turned into a string, which JSON.parse
- * makes from `{"toString":null}`, make handleCommand throw instead of refusing
- * (rejection reasons interpolate the raw value with String()/template strings).
- * `room` and `proposalId` reach the engine from a client; the server catches the
- * throw (live.ts `run`) and refuses with "command could not be handled", logging an error.
- * TODO(test/integration-suite PR, "Bugs found"): remove `.fails` once fixed.
+ * Objects that can't be turned into a string, which JSON.parse makes from
+ * `{"toString":null}`, used to make handleCommand throw (refusal reasons
+ * interpolated the raw value). Refused now; commands.hostile.test.ts covers
+ * every field of every command.
  */
 const HOSTILE = JSON.parse('{"toString":null}') as unknown;
 const hostileCommands = (player: PlayerId): unknown[] => [
@@ -618,7 +616,7 @@ describe("engine invariants under fuzzing — design §17.2", () => {
     );
   }, TIMEOUT);
 
-  it.fails("BUG: a value with no string form ({\"toString\":null}) is refused, not thrown — see HOSTILE", () => {
+  it("a value with no string form ({\"toString\":null}) is refused, not thrown — see HOSTILE", () => {
     const state = createGame({ ...duelFree, seed: "hostile" });
     for (const c of hostileCommands("p1")) expect(handleCommand(state, c).ok).toBe(false);
   });
