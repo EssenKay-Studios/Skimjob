@@ -11,6 +11,16 @@ export interface ServerConfig {
   readonly devLogin: boolean;
   /** ALLOWED_ORIGINS (comma-separated): browser origins, besides the server's own host, that may open game sockets. */
   readonly allowedOrigins: readonly string[];
+  /**
+   * NODE_ENV=production (the Fly deployment, docs/deploy.md): secure cookies,
+   * trust the TLS proxy's X-Forwarded-* headers, listen on 0.0.0.0 by
+   * default, no dev origins, and the dev sign-in stub stays off even with DEV_LOGIN=1.
+   */
+  readonly production: boolean;
+  /** PUBLIC_ORIGIN: the origin people open (https://skimjob.fly.dev); always allowed to open game sockets. */
+  readonly publicOrigin: string | null;
+  /** WEB_DIR: the built web app (apps/web/dist) to serve, with SPA fallback; null serves none (dev uses Vite). */
+  readonly webDir: string | null;
 }
 
 /** The Vite dev server and the Playwright one (M2-5a), whose proxies keep the browser's Origin. */
@@ -28,15 +38,36 @@ export function loadConfig(env: Env = process.env): ServerConfig {
   const port = /^\d{1,5}$/.test(rawPort) ? Number(rawPort) : NaN;
   if (!(port >= 1 && port <= 65535)) throw new StartupError(`PORT must be a whole number from 1 to 65535, got ${JSON.stringify(env.PORT)}`);
   const pgliteDir = env.PGLITE_DIR?.trim() || ".pglite";
+  const production = env.NODE_ENV === "production";
+  const publicOrigin = env.PUBLIC_ORIGIN?.trim() ? parseOrigin(env.PUBLIC_ORIGIN.trim()) : null;
+  const listed = env.ALLOWED_ORIGINS?.trim()
+    ? env.ALLOWED_ORIGINS.split(",").map((o) => o.trim()).filter(Boolean)
+    : production ? [] : DEV_ORIGINS;
   return {
     port,
-    // Loopback by default; HOST=0.0.0.0 lets phones on the LAN join.
-    host: env.HOST || "127.0.0.1",
+    // Loopback by default in dev; HOST=0.0.0.0 lets phones on the LAN join.
+    // In production the platform's proxy must reach it, so 0.0.0.0.
+    host: env.HOST || (production ? "0.0.0.0" : "127.0.0.1"),
     databaseUrl: env.DATABASE_URL || null,
     pgliteDir: pgliteDir === "memory" ? null : pgliteDir,
-    devLogin: env.DEV_LOGIN === "1",
-    allowedOrigins: env.ALLOWED_ORIGINS?.trim()
-      ? env.ALLOWED_ORIGINS.split(",").map((o) => o.trim()).filter(Boolean)
-      : DEV_ORIGINS,
+    devLogin: env.DEV_LOGIN === "1" && !production,
+    allowedOrigins: publicOrigin && !listed.includes(publicOrigin) ? [...listed, publicOrigin] : listed,
+    production,
+    publicOrigin,
+    webDir: env.WEB_DIR?.trim() || null,
   };
+}
+
+/** `https://skimjob.fly.dev` (no path, no trailing slash), or a StartupError. */
+function parseOrigin(raw: string): string {
+  let url: URL | null = null;
+  try {
+    url = new URL(raw);
+  } catch {
+    // reported below
+  }
+  if (!url || (url.protocol !== "https:" && url.protocol !== "http:") || url.origin !== raw.replace(/\/$/, "")) {
+    throw new StartupError(`PUBLIC_ORIGIN must be an origin like https://skimjob.fly.dev, got ${JSON.stringify(raw)}`);
+  }
+  return url.origin;
 }
