@@ -1,7 +1,7 @@
 // Small readers over a PlayerView: everything a bot knows comes from here.
 // Bots never see the game state, only viewFor() output. design §17.3
-import { ROLES, ROUNDS_PER_ACT, type JobDef, type RoleDef, type RoomDef, type RoomId } from "@skimjob/content";
-import { jobById, overrideJob, overrideRoles, roomDef, type GameEvent, type LoggedEvent, type PlayerView } from "@skimjob/engine";
+import { FILLER_ROLE, ROLES, ROUNDS_PER_ACT, type JobDef, type RoleDef, type RoleId, type RoomDef, type RoomId } from "@skimjob/content";
+import { jobById, overrideJob, overrideRoles, roomDef, type GameEvent, type LoggedEvent, type PlayerId, type PlayerView } from "@skimjob/engine";
 
 type EventOf<T extends GameEvent["type"]> = Extract<GameEvent, { type: T }>;
 
@@ -47,3 +47,26 @@ export function lastResolvedRound(view: PlayerView): number {
 
 export const roomsWhere = (view: PlayerView, job: JobDef, test: (def: RoomDef) => boolean): RoomId[] =>
   view.rooms.filter((r) => test(roomDef(job, r)));
+
+// ---------------------------------------------------------------- role claims (design §8, §12.1; v2 §4)
+
+/** Every player's claims, oldest first (me included). */
+export function claimsOf(view: PlayerView): Map<PlayerId, RoleId[]> {
+  const out = new Map<PlayerId, RoleId[]>();
+  for (const c of ofType(view.ledger, "roleClaimed")) out.set(c.player, [...(out.get(c.player) ?? []), c.role]);
+  return out;
+}
+
+/** Who has claimed `role` (any act), in claim order. */
+export function claimantsOf(view: PlayerView, role: RoleId): PlayerId[] {
+  const out: PlayerId[] = [];
+  for (const c of ofType(view.ledger, "roleClaimed")) if (c.role === role && !out.includes(c.player)) out.push(c.player);
+  return out;
+}
+
+/**
+ * Roles dealt at most once, so two claimants means at least one liar. The
+ * filler role (Rookie) fills the empty seats and can repeat (design §8.1);
+ * so can every role in a game dealt with repeats, which the view can't tell.
+ */
+export const uniqueRole = (role: RoleId): boolean => role !== FILLER_ROLE;

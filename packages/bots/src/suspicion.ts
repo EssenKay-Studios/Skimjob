@@ -4,9 +4,9 @@
 //
 // Rebuilt from the ledger and case file each time it's needed, so a bot keeps
 // no hidden memory of its own: same view, same scores.
-import type { RoomId } from "@skimjob/content";
+import { ROLES, type RoleId, type RoomId } from "@skimjob/content";
 import { roomDef, roomLoot, type AbilityResolved, type PlayerId, type PlayerView, type RoundResolved } from "@skimjob/engine";
-import { jobOf, ofType } from "./read";
+import { claimantsOf, claimsOf, jobOf, ofType, uniqueRole } from "./read";
 
 /** How much each kind of evidence moves a score. Shared by every personality; they differ in when they act on it. */
 export interface SuspicionWeights {
@@ -26,6 +26,18 @@ export interface SuspicionWeights {
   readonly checkedDirty: number;
   /** Per loot my Audit found missing from a room, shared among the others who claimed it (v2 §2). */
   readonly audited: number;
+  /**
+   * A role claim I know is false (v2 §4): it names my own role, contradicts my
+   * Peek or Inside tip, or claims a role that can't pocket after loot was found
+   * on them. Half as much for changing one's claimed role.
+   */
+  readonly falseClaim: number;
+  /** A unique role claimed by two players: one of them lies (v2 §4), so both. */
+  readonly doubleClaim: number;
+  /** A claim I can't check, standing alone: a little trust. */
+  readonly claimed: number;
+  /** My Peek or Inside tip says they are a saboteur or an accomplice. */
+  readonly knownDark: number;
 }
 
 export const SUSPICION_WEIGHTS: SuspicionWeights = {
@@ -37,6 +49,10 @@ export const SUSPICION_WEIGHTS: SuspicionWeights = {
   afterDirty: 1,
   checkedDirty: 3,
   audited: 1,
+  falseClaim: 6,
+  doubleClaim: 2,
+  claimed: -0.5,
+  knownDark: 8,
 };
 
 /** Suspicion of every other player, in seat order. Higher is more suspicious. */
@@ -137,7 +153,39 @@ export function suspicion(view: PlayerView, w: SuspicionWeights = SUSPICION_WEIG
       score.set(event.target, event.clean ? w.afterClean : w.afterDirty);
     }
   }
+  judgeClaims(view, add, w);
   return score;
+}
+
+/** What I know of other players' roles: my latest Peek or Inside tip on each (it can be stale after a Double-cross). */
+export function knownRoles(view: PlayerView): Map<PlayerId, RoleId> {
+  const known = new Map<PlayerId, RoleId>();
+  for (const { event: e } of view.caseFile) {
+    if (e.type === "insideTip") known.set(e.subject, e.role);
+    if (e.type === "perkUsed" && e.perk.kind === "peek") known.set(e.perk.target, e.perk.role);
+  }
+  return known;
+}
+
+/** v2 §4: role claims against what I know, double claims, and roles I've learned. */
+function judgeClaims(view: PlayerView, add: (id: PlayerId, n: number) => void, w: SuspicionWeights): void {
+  const me = view.me.id;
+  const known = knownRoles(view);
+  for (const [id, role] of known) if (id !== me && ROLES[role] && ROLES[role].faction !== "crew") add(id, w.knownDark);
+  const caughtDirty = new Set(ofType(view.ledger, "shakedownResolved").filter((x) => !x.clean).map((x) => x.target));
+  for (const e of ofType(view.caseFile, "abilityResolved")) if (e.ability.kind === "checkStash" && e.ability.dirty) caughtDirty.add(e.ability.target);
+  for (const [id, roles] of claimsOf(view)) {
+    if (id === me) continue;
+    const role = roles.at(-1) as RoleId;
+    if (new Set(roles).size > 1) add(id, w.falseClaim / 2);
+    const knownRole = known.get(id);
+    const def = Object.hasOwn(ROLES, role) ? ROLES[role] : undefined;
+    if (knownRole !== undefined) add(id, knownRole === role ? w.claimed : w.falseClaim);
+    else if (uniqueRole(role) && role === view.me.role) add(id, w.falseClaim);
+    else if (def?.canPocket === false && caughtDirty.has(id)) add(id, w.falseClaim);
+    else if (uniqueRole(role) && claimantsOf(view, role).length > 1) add(id, w.doubleClaim);
+    else add(id, w.claimed);
+  }
 }
 
 /** The most suspicious other player and their score (first in seat order on a tie), or null with nobody else. */

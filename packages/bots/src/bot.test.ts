@@ -3,11 +3,12 @@
 import { describe, expect, it } from "vitest";
 import { roomDef, viewFor, jobById, type GameEvent, type GameState, type Move, type PlayerCommand } from "@skimjob/engine";
 import { PERSONALITIES, type Personality } from "./personalities";
-import { botRandom, chooseAlibi, chooseMove, chooseVote, createBot, decide, type Random } from "./bot";
+import { botRandom, chooseAlibi, chooseMove, chooseVote, createBot, crewHunch, decide, misjudged, type Random } from "./bot";
+import { suspicion } from "./suspicion";
 import { closeAlibis, game, notInsider, round, run } from "./testkit";
 
-/** A personality with no noise, so a test can pin its behaviour. */
-const exact = (base: Personality, change: Partial<Personality> = {}): Personality => ({ ...base, noise: 0, ...change });
+/** A personality with no noise or misreading at votes, so a test can pin its behaviour. */
+const exact = (base: Personality, change: Partial<Personality> = {}): Personality => ({ ...base, noise: 0, misread: 0, hunch: 0, ...change });
 /** Random numbers from a list (then 0.5 forever). */
 const rolls = (...values: number[]): Random => () => values.shift() ?? 0.5;
 const seeded = botRandom;
@@ -33,11 +34,33 @@ describe("Agent — design §17.3", () => {
     expect(() => bot.act(viewFor(game(3), "ben"))).toThrow();
   });
 
-  it("in round 1 planning: proposes the act's meeting and submits a valid move; no alibi yet — design §5.1, §11.1", () => {
+  it("in round 1 planning: submits a valid move and leaves the meeting time to people; no alibi yet — design §5.1, §11.1", () => {
     const s = game(4);
     const cmds = decide(viewFor(s, "ana"), PERSONALITIES.honest, seeded("a"));
-    expect(cmds.map((c) => c.type)).toEqual(["proposeMeeting", "submitMove"]);
+    expect(cmds.map((c) => c.type)).toEqual(["submitMove"]);
     expect(run(s, ...cmds).moves.ana).toBeDefined();
+  });
+
+  it("proposes the act's meeting only once two thirds of the act have passed with no proposal (PR #35 review) — design §11.1", () => {
+    const lobby = { room: "lobby" };
+    const all = (s: GameState) => Object.fromEntries(s.playerOrder.map((id) => [id, lobby]));
+    let s = game(4);
+    const proposes = (st: GameState) => decide(viewFor(st, "ana"), exact(PERSONALITIES.honest), seeded("a")).some((c) => c.type === "proposeMeeting");
+    expect(proposes(s)).toBe(false);
+    s = closeAlibis(round(s, all(s))); // round 2: a third of the act gone
+    expect(proposes(s)).toBe(false);
+    s = closeAlibis(round(s, all(s))); // round 3: two thirds gone
+    expect(proposes(s)).toBe(true);
+  });
+
+  it("backs a person's proposal before a bot's — design §11.1", () => {
+    const people = (st: GameState): GameState => ({ ...st, config: { ...st.config, players: st.config.players.map((x) => (x.id === "dee" ? { ...x, isBot: false } : x)) } });
+    let s = run(people(game(5)), { type: "proposeMeeting", player: "ben", slot: "act-1" }, { type: "proposeMeeting", player: "dee", slot: "2026-11-02T19:00Z" });
+    const view = viewFor(s, "ana");
+    (view.players as unknown as { id: string; isBot: boolean }[]).forEach((o) => (o.isBot = o.id !== "dee"));
+    expect(decide(view, PERSONALITIES.honest, seeded("a"))[0]).toEqual({ type: "acceptMeeting", player: "ana", proposalId: "proposal-2" });
+    s = run(s, { type: "acceptMeeting", player: "ana", proposalId: "proposal-2" });
+    expect(s.proposals.find((p) => p.id === "proposal-2")?.acceptedBy).toEqual(["dee", "ana"]);
   });
 
   it("accepts an open proposal instead of proposing another, and does nothing once the slot is locked — design §11.1", () => {
@@ -145,9 +168,24 @@ describe("votes — design §11.2, §17.3", () => {
   it("votes in an open meeting, once", () => {
     let s = run(liar(), { type: "callEmergency", player: "carl" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: "emergency-carl" } });
     const cmds = decide(viewFor(s, "ana"), exact(PERSONALITIES.honest), rolls(0.5));
-    expect(cmds).toEqual([{ type: "castVote", player: "ana", vote: { kind: "shakedown", target: "ben" } }]);
+    expect(cmds[0]).toEqual({ type: "castVote", player: "ana", vote: { kind: "shakedown", target: "ben" } });
     s = run(s, ...cmds);
-    expect(decide(viewFor(s, "ana"), exact(PERSONALITIES.honest), rolls(0.5))).toEqual([]);
+    expect(decide(viewFor(s, "ana"), exact(PERSONALITIES.honest), rolls(0.5)).filter((c) => c.type === "castVote")).toEqual([]);
+  });
+
+  it("misjudges at votes: a crew-wide hunch (the same for every bot at a meeting) plus its own misreading (v2 §5)", () => {
+    const s = run(liar(), { type: "callEmergency", player: "carl" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: "emergency-carl" } });
+    const [a, c] = [viewFor(s, "ana"), viewFor(s, "carl")];
+    expect(crewHunch(a, "ben")).toBe(crewHunch(c, "ben"));
+    expect(Math.abs(crewHunch(a, "ben"))).toBeLessThanOrEqual(1);
+    // Another meeting, another hunch.
+    expect(crewHunch({ ...a, phase: { kind: "meeting", meetingId: "act-1" } }, "ben")).not.toBe(crewHunch(a, "ben"));
+    const evidence = suspicion(a);
+    const p = exact(PERSONALITIES.honest, { hunch: 7, misread: 1 });
+    const read = misjudged(a, evidence, p, rolls(0.5)); // own misreading 0 at a roll of 0.5
+    for (const [id, score] of evidence) expect(read.get(id)).toBeCloseTo(score + 7 * crewHunch(a, id));
+    // With no hunch or misreading, a bot reads the evidence as it is.
+    expect(misjudged(a, evidence, exact(PERSONALITIES.honest), rolls(0.9))).toEqual(evidence);
   });
 
   it("a Mole never votes to shake down a fellow Mole (content that deals two, design §8.1)", () => {
@@ -183,12 +221,15 @@ describe("role habits — design §8", () => {
     expect(cancels(pending(withRole(s, "ana", "rookie"), "ana"), "ana")).toBe(false);
   });
 
-  it("Blackmailer uses a role it learned from an Inside tip; otherwise guesses a Rookie (§8, §10)", () => {
+  it("Blackmailer guesses only with a role from an Inside tip, a Peek or a claim; otherwise skips (§8, §10; v2 §4)", () => {
     const s = withRole(game(5), "ana", "blackmailer");
     const tip: GameEvent = { type: "insideTip", visibility: { kind: "private", player: "ana" }, player: "ana", round: 1, subject: "ben", role: "fence" };
     const tipped: GameState = { ...s, log: [...s.log, tip] };
     expect(chooseMove(viewFor(tipped, "ana"), exact(PERSONALITIES.honest), seeded("b")).ability).toEqual({ kind: "blackmail", target: "ben", role: "fence" });
-    expect(chooseMove(viewFor(s, "ana"), exact(PERSONALITIES.honest), seeded("b")).ability).toMatchObject({ kind: "blackmail", role: "rookie" });
+    expect(chooseMove(viewFor(s, "ana"), exact(PERSONALITIES.honest), seeded("b")).ability).toBeUndefined();
+    const claimed = run(s, { type: "claimRole", player: "carl", role: "lookout" }, { type: "claimRole", player: "dee", role: "rookie" });
+    // A Rookie claim is no guess worth making (many Rookies); a unique role is.
+    expect(chooseMove(viewFor(claimed, "ana"), exact(PERSONALITIES.honest), seeded("b")).ability).toEqual({ kind: "blackmail", target: "carl", role: "lookout" });
   });
 
   it("Auditor audits the room its top suspect claimed; Detective checks its top suspect in the act's last round (v2 §2, §4)", () => {
