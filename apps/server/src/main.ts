@@ -1,5 +1,6 @@
 // `pnpm dev` / `pnpm --filter @skimjob/server start`: open the database,
 // migrate, listen. A bad setting ends with one line on stderr, not a stack.
+import { devAuthProvider } from "./auth";
 import { systemClock } from "./clock";
 import { loadConfig, StartupError } from "./config";
 import { openDatabase } from "./startup";
@@ -8,7 +9,7 @@ import { buildServer } from "./server";
 try {
   const config = loadConfig();
   const { db, applied } = await openDatabase(config);
-  const app = buildServer({ db, clock: systemClock, logger: true });
+  const app = buildServer({ db, clock: systemClock, logger: true, auth: config.devLogin ? [devAuthProvider()] : [] });
   if (applied.length > 0) app.log.info({ applied }, "migrations applied");
   app.log.info(config.databaseUrl ? "database: Postgres (DATABASE_URL)" : `database: PGlite (${config.pgliteDir ?? "in memory"})`);
 

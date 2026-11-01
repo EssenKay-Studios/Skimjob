@@ -1,0 +1,266 @@
+// Lobby API: create a game, invite by code, seats (people and bots), start.
+// design §15 (setup), §16; docs/m2-plan.md M2-2
+//
+// Who you are always comes from the session cookie, never the request body.
+// Lobby changes for one game run one at a time (store.withGameLock).
+import { randomBytes } from "node:crypto";
+import type { FastifyInstance, FastifyRequest } from "fastify";
+import { PERSONALITIES, type PersonalityId } from "@skimjob/bots";
+import { MAX_PLAYERS, MIN_PLAYERS } from "@skimjob/content";
+import { validateConfig, type GameConfig } from "@skimjob/engine";
+import { createGuestUser, type Sessions, type User } from "./auth";
+import type { Db, Queryable } from "./db";
+import type { GameStatus, GameStore } from "./store";
+import { BOT_NAMES, checkNickname, looksLikeBot, nicknameKey, parseSettings, type LobbySettings } from "./settings";
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const CODE_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"; // no 0/o, 1/l/i
+const CODE_LENGTH = 10;
+export const DEFAULT_BOT: PersonalityId = "opportunist";
+
+/** An invite code: 10 characters from an unambiguous alphabet (~49 bits). */
+export function inviteCode(): string {
+  const bytes = randomBytes(CODE_LENGTH);
+  return [...bytes].map((b) => CODE_ALPHABET[b % CODE_ALPHABET.length]).join("");
+}
+
+/** Seat i (in seat order) plays as `p<i+1>`: always a safe engine id (STATUS "Player ids"). */
+export const playerIdFor = (index: number) => `p${index + 1}`;
+
+/**
+ * The engine player a signed-in user plays as in a started game, or null.
+ * The only source of `command.player` (M2-3): never take it from the client.
+ */
+export async function playerIdOf(db: Queryable, gameId: string, userId: string): Promise<string | null> {
+  if (!UUID.test(gameId)) return null;
+  const [row] = await db.query<{ player_id: string | null }>("select player_id from seats where game_id = $1 and user_id = $2", [gameId, userId]);
+  return row?.player_id ?? null;
+}
+
+/** What a seated player sees of the lobby. No user ids, no config (it has the seed). */
+export interface LobbyView {
+  readonly id: string;
+  readonly status: GameStatus;
+  readonly inviteCode: string;
+  readonly settings: LobbySettings;
+  readonly youAreHost: boolean;
+  readonly seats: readonly {
+    readonly seat: number;
+    readonly nickname: string;
+    /** The bot's personality; null for a person. */
+    readonly bot: PersonalityId | null;
+    readonly host: boolean;
+    readonly you: boolean;
+    /** Engine player id, once the game has started. */
+    readonly playerId: string | null;
+  }[];
+}
+
+interface GameRow {
+  id: string;
+  status: GameStatus;
+  host_user_id: string;
+  invite_code: string;
+  settings: LobbySettings;
+}
+interface SeatRow {
+  seat_no: number;
+  player_id: string | null;
+  user_id: string | null;
+  nickname: string;
+  bot_personality: PersonalityId | null;
+}
+
+const gameById = async (db: Queryable, id: string) =>
+  UUID.test(id)
+    ? (await db.query<GameRow>("select id, status, host_user_id, invite_code, settings from games where id = $1", [id]))[0]
+    : undefined;
+const CODE = new RegExp(`^[${CODE_ALPHABET}]{${CODE_LENGTH}}$`);
+/** Anything that can't be an invite code (wrong length, NUL, …) is simply unknown. */
+const gameByCode = async (db: Queryable, raw: string) => {
+  const code = raw.toLowerCase();
+  if (!CODE.test(code)) return undefined;
+  return (await db.query<GameRow>("select id, status, host_user_id, invite_code, settings from games where invite_code = $1", [code]))[0];
+};
+const seatsOf = (db: Queryable, id: string) =>
+  db.query<SeatRow>("select seat_no, player_id, user_id, nickname, bot_personality from seats where game_id = $1 order by seat_no", [id]);
+const nextSeat = (seats: readonly SeatRow[]) => (seats.length ? Math.max(...seats.map((s) => s.seat_no)) + 1 : 0);
+
+function view(game: GameRow, seats: readonly SeatRow[], user: User): LobbyView {
+  return {
+    id: game.id,
+    status: game.status,
+    inviteCode: game.invite_code,
+    settings: game.settings,
+    youAreHost: game.host_user_id === user.id,
+    seats: seats.map((s) => ({
+      seat: s.seat_no,
+      nickname: s.nickname,
+      bot: s.bot_personality,
+      host: s.user_id === game.host_user_id,
+      you: s.user_id === user.id,
+      playerId: s.player_id,
+    })),
+  };
+}
+
+/** A refusal: the error handler (server.ts) sends `{ error: message }` with `status`. */
+export class HttpError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+const refuse = (status: number, message: string): never => {
+  throw new HttpError(status, message);
+};
+const body = (req: FastifyRequest) => (req.body ?? {}) as Record<string, unknown>;
+
+export function lobbyRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Sessions): void {
+  const signedIn = async (req: FastifyRequest) => (await s.user(req)) ?? refuse(401, "not signed in");
+
+  /** Runs `fn` on a game the user is seated in, under the game's lock. Not seated reads as not found. */
+  const inGame = async <T>(req: FastifyRequest<{ Params: { id: string } }>, fn: (game: GameRow, seats: SeatRow[], user: User) => Promise<T>) => {
+    const user = await signedIn(req);
+    return store.withGameLock(req.params.id, async () => {
+      const game = await gameById(db, req.params.id);
+      const seats = game ? await seatsOf(db, game.id) : [];
+      if (!game || !seats.some((x) => x.user_id === user.id)) return refuse(404, "game not found");
+      return fn(game, seats, user);
+    });
+  };
+
+  /** Like inGame, for host-only lobby actions. */
+  const asHost = <T>(req: FastifyRequest<{ Params: { id: string } }>, fn: (game: GameRow, seats: SeatRow[], user: User) => Promise<T>) =>
+    inGame(req, async (game, seats, user) => {
+      if (game.host_user_id !== user.id) refuse(403, "only the host can do that");
+      if (game.status !== "lobby") refuse(409, "the game has already started");
+      return fn(game, seats, user);
+    });
+
+  app.post("/games", async (req, reply) => {
+    const user = await signedIn(req);
+    const parsed = parseSettings(body(req).settings);
+    if (!parsed.ok) return refuse(400, parsed.error);
+    let id: string | null = null;
+    for (let tries = 0; id === null; tries++) {
+      try {
+        id = await store.create({ hostUserId: user.id, inviteCode: inviteCode(), settings: { ...parsed.settings } });
+      } catch (err) {
+        if (tries >= 2) throw err; // an invite-code clash twice running isn't bad luck
+      }
+    }
+    await db.query("insert into seats (game_id, seat_no, user_id, nickname) values ($1, 0, $2, $3)", [id, user.id, user.name]);
+    reply.code(201);
+    return view((await gameById(db, id))!, await seatsOf(db, id), user);
+  });
+
+  app.get<{ Params: { id: string } }>("/games/:id", (req) => inGame(req, async (game, seats, user) => view(game, seats, user)));
+
+  // Invite page preview: no sign-in needed, says only whose game it is and how full.
+  app.get<{ Params: { code: string } }>("/invites/:code", async (req) => {
+    const game = (await gameByCode(db, req.params.code)) ?? refuse(404, "unknown invite code");
+    if (game.status !== "lobby") refuse(410, "this game has already started");
+    const seats = await seatsOf(db, game.id);
+    const host = seats.find((x) => x.user_id === game.host_user_id);
+    return { host: host?.nickname ?? null, seats: seats.length, maxSeats: MAX_PLAYERS };
+  });
+
+  // Join by invite. Without a session this is the guest sign-in: the nickname makes a guest user.
+  app.post<{ Params: { code: string } }>("/invites/:code/join", async (req, reply) => {
+    const found = (await gameByCode(db, req.params.code)) ?? refuse(404, "unknown invite code");
+    const rawName = body(req).nickname;
+    const checked = rawName === undefined ? undefined : checkNickname(rawName);
+    if (checked && !checked.ok) refuse(400, checked.error);
+    const nickname = checked?.ok ? checked.name : undefined;
+    const current = await s.user(req);
+    if (!current && !nickname) refuse(400, "pick a nickname to join");
+    return store.withGameLock(found.id, async () => {
+      const game = (await gameById(db, found.id))!;
+      const seats = await seatsOf(db, game.id);
+      if (current && seats.some((x) => x.user_id === current.id)) return view(game, seats, current); // already in
+      if (game.status !== "lobby") refuse(410, "this game has already started");
+      if (seats.length >= MAX_PLAYERS) refuse(409, `the game is full (${MAX_PLAYERS} seats)`);
+      const name = nickname ?? current!.name;
+      if (looksLikeBot(name)) refuse(400, "nicknames starting with \"Bot\" are for bots");
+      if (seats.some((x) => nicknameKey(x.nickname) === nicknameKey(name))) refuse(409, "that nickname is taken in this game; pick another");
+      const user = current ?? (await createGuestUser(db, name));
+      await db.query("insert into seats (game_id, seat_no, user_id, nickname) values ($1, $2, $3, $4)", [
+        game.id,
+        nextSeat(seats),
+        user.id,
+        name,
+      ]);
+      if (!current) await s.start(reply, user);
+      return view(game, await seatsOf(db, game.id), user);
+    });
+  });
+
+  app.post<{ Params: { id: string } }>("/games/:id/leave", (req) =>
+    inGame(req, async (game, _seats, user) => {
+      if (game.status !== "lobby") refuse(409, "the game has already started");
+      if (game.host_user_id === user.id) refuse(409, "the host can't leave the lobby");
+      await db.query("delete from seats where game_id = $1 and user_id = $2", [game.id, user.id]);
+      return { ok: true };
+    }),
+  );
+
+  app.post<{ Params: { id: string } }>("/games/:id/bots", (req, reply) =>
+    asHost(req, async (game, seats, user) => {
+      const personality = body(req).personality ?? DEFAULT_BOT;
+      if (typeof personality !== "string" || !Object.hasOwn(PERSONALITIES, personality)) {
+        refuse(400, `personality must be one of ${Object.keys(PERSONALITIES).join(", ")}`);
+      }
+      if (seats.length >= MAX_PLAYERS) refuse(409, `the game is full (${MAX_PLAYERS} seats)`);
+      const taken = new Set(seats.map((x) => nicknameKey(x.nickname)));
+      const name = [...BOT_NAMES, String(nextSeat(seats))].map((n) => `Bot · ${n}`).find((n) => !taken.has(nicknameKey(n)))!;
+      await db.query("insert into seats (game_id, seat_no, nickname, bot_personality) values ($1, $2, $3, $4)", [
+        game.id,
+        nextSeat(seats),
+        name,
+        personality,
+      ]);
+      reply.code(201);
+      return view(game, await seatsOf(db, game.id), user);
+    }),
+  );
+
+  app.delete<{ Params: { id: string; seat: string } }>("/games/:id/bots/:seat", (req) =>
+    asHost(req, async (game, seats, user) => {
+      const seat = seats.find((x) => String(x.seat_no) === req.params.seat && x.bot_personality !== null) ?? refuse(404, "no bot in that seat");
+      await db.query("delete from seats where game_id = $1 and seat_no = $2", [game.id, seat.seat_no]);
+      return view(game, await seatsOf(db, game.id), user);
+    }),
+  );
+
+  app.post<{ Params: { id: string } }>("/games/:id/start", (req) =>
+    asHost(req, async (game, seats, user) => {
+      if (seats.length < MIN_PLAYERS) refuse(409, `a game needs at least ${MIN_PLAYERS} seats`);
+      const config = gameConfig(game.settings, seats, randomBytes(16).toString("hex"));
+      const errors = validateConfig(config);
+      if (errors.length > 0) throw new Error(`lobby made a bad config: ${errors.join("; ")}`);
+      await store.start(game.id, config, async (tx) => {
+        for (const [i, seat] of seats.entries()) {
+          await tx.query("update seats set player_id = $3 where game_id = $1 and seat_no = $2", [game.id, seat.seat_no, playerIdFor(i)]);
+        }
+      });
+      return view((await gameById(db, game.id))!, await seatsOf(db, game.id), user);
+    }),
+  );
+}
+
+/** The engine config for a lobby: seats in seat order, bank job, the content's default role pool. */
+export function gameConfig(settings: LobbySettings, seats: readonly Pick<SeatRow, "nickname" | "bot_personality">[], seed: string): GameConfig {
+  return {
+    seed,
+    players: seats.map((x, i) => ({ id: playerIdFor(i), name: x.nickname, isBot: x.bot_personality !== null })),
+    job: "bank",
+    rolePool: [],
+    mole: settings.mole,
+    eventsEnabled: settings.eventsEnabled,
+    voteVisibility: settings.voteVisibility,
+    starterMode: settings.starterMode,
+  };
+}

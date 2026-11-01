@@ -23,6 +23,7 @@ const tables = async (db: Db) =>
   (await db.query<{ t: string }>("select table_name as t from information_schema.tables where table_schema = current_schema() order by 1")).map((r) => r.t);
 const versions = async (db: Db) => (await db.query<{ version: string }>("select version from schema_migrations order by 1")).map((r) => r.version);
 
+const ALL = ["001_init.sql", "002_identity.sql"];
 let real: Db;
 let scratch: Db;
 beforeAll(async () => {
@@ -33,8 +34,8 @@ afterAll(async () => {
 });
 
 describe("migrate (the real migrations)", () => {
-  it("creates every M2-1 table", async () => {
-    expect(await migrate(real)).toEqual(["001_init.sql"]);
+  it("creates every table", async () => {
+    expect(await migrate(real)).toEqual(ALL);
     expect(await tables(real)).toEqual(["deadlines", "game_events", "games", "schema_migrations", "seats", "sessions", "users"]);
   });
 
@@ -42,7 +43,7 @@ describe("migrate (the real migrations)", () => {
     await insertUser(real, "kept");
     expect(await migrate(real)).toEqual([]);
     expect(await migrate(real)).toEqual([]);
-    expect(await versions(real)).toEqual(["001_init.sql"]);
+    expect(await versions(real)).toEqual(ALL);
     expect(await real.query("select display_name from users")).toEqual([{ display_name: "kept" }]);
   });
 });
