@@ -9,10 +9,11 @@
 // - An evidence card names one entry of the sender's own case file by `seq`;
 //   the server re-reads it from their `viewFor`, copies `type` + payload (the
 //   event without `type`, `visibility` or `seq`) and marks it verified. Typed
-//   text is never verified. Secret-mode ballots can't be shared (decisions.md).
+//   text is never verified. Secret-mode ballots can't be shared (decisions.md),
+//   nor can anything that states a role or faction (engine `revealsRole`).
 // - Text is plain text: stored and sent as typed. Clients must render it as
 //   text, never as HTML.
-import { viewFor, type GameState, type PlayerId, type PlayerView } from "@skimjob/engine";
+import { revealsRole, viewFor, type GameState, type PlayerId, type PlayerView } from "@skimjob/engine";
 import type { Clock } from "./clock";
 import type { Db } from "./db";
 import { CHAT_HISTORY_LIMIT, CHAT_MAX_CHARS, CHAT_MAX_MARKS, CHAT_RATE, hasVisibleText } from "./settings";
@@ -103,6 +104,9 @@ export function evidenceCard(view: PlayerView, seq: number): Result<EvidenceCard
   const entry = view.caseFile.find((e) => e.seq === seq);
   if (!entry) return { ok: false, reason: "that isn't an entry of your case file" };
   const event = entry.event;
+  // design §8: roles are claimed "truthfully or as a bluff"; a verified role
+  // card (your deal, a Peek, an Inside tip, allies) would end bluffing.
+  if (revealsRole(event)) return { ok: false, reason: "role cards can't be shared: role claims stay unverified" };
   // design §11.2: a secret ballot stays secret, so it can't be made provable either.
   if (event.visibility.kind === "secret") return { ok: false, reason: "secret ballots can't be shared" };
   // design §11.2 hidden-then-revealed: no proving a ballot while its vote is
