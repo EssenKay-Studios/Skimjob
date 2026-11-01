@@ -4,6 +4,30 @@ Newest first. Each entry: what was decided, and why. Add an entry whenever a rul
 
 ---
 
+### 2026-11-01 — Owner answers, 1 Nov
+Karthik answered the open questions in STATUS.md. Content 0.8.0.
+- **Alibis before planning (§5.4):** every round that doesn't end the game resolves into an alibi window (`phase: { kind: "alibis", round }`); moves for the next round are refused until `advance { kind: "alibis", round }` closes it (public `alibisClosed`; named, so a repeat or stale one is refused; paused while a meeting is open). After an act's last round the act's meeting is awaited next (Duel: call-outs and checkpoint). An emergency meeting can interrupt the window, which resumes after. `PlayerView.alibiRound` says whose alibis are open. The server times it (M2-4); the bot runner passes it once bots have posted.
+- **Shakedowns at 9–12 (§11.2):** unless more than half the votes skip, the player with the most votes (weight, Smooth talker included) is shaken down with at least ⅓ of the votes cast; a tie means none. Quorum unchanged; below 9 a strict majority. Numbers in `JobDef.shakedown` (`pluralityFromPlayers: 9`, `pluralityShare: 1/3`, overridable). *Provisional:* a skip majority still skips.
+- **Insider only from 5 players (§8.1):** `RoleDef.minPlayers` (Insider 5); `rolePoolFor` drops roles the crew is too small for, also in starter mode.
+- **One Mole at 9–12 (§8.1):** "on" deals 1 from 5 players; "maybe" deals 0 or 1 (50%) from 5 players, so the rule is the same at 5–12. The two-Mole code (allies, Double-cross) stays for content that deals more.
+- **Event Heat for small crews (§10):** Heat cards and the extra Heat of a surge are scaled by min(1, crew ÷ 5) (`EVENT_HEAT_FULL_CREW`), rounded: at 3p Police patrol +3, Quiet night −6, Shift change Vault ×1.3. Bots use the same numbers.
+- **Clean check counts the Fence safe (§11.3):** stash + safe below 3 × act is clean; the safe still can't be seized, and only the stash is revealed (so "not clean" on a small stash hints at a safe).
+- **Cards repeat (§10):** every flip from round 2 draws from all ten cards.
+- **`uniqueRoles` host setting (§8.1, §15):** `GameConfig.uniqueRoles`, absent = true (each pool role at most once, Rookies fill). False: every non-Mole seat is drawn from the pool with replacement; the Mole only by the Mole setting.
+- **Confirmed as is (resolved):** Lookout unchanged; the Muscle may cancel its own shakedown; the Blackmailer's victim is told the amount only; Double-cross answers show at the reveal; host defaults are events on, Mole "maybe", the full role pool; Duel call-outs stay secret until the act's end. Also resolved: role deal (now the `uniqueRoles` setting), Mole at 9–12, alibi timing, Fence clean check, Insider at 4p, plurality in big crews, small-crew Heat, card repeats.
+- **Balance tweak:** with ⅓ pluralities, 9/12p succeeded 84/87% and the Mole won 16/16%, so the 9–12 rooms pay less: **Teller line 4 → 3, Manager's office 5 → 4** (`V01_NUMBERS` pins the old Manager's office for scripted tests).
+
+Sims, 500 games per count, default host config (events on, Mole maybe, full pool, mixed bots), seed `sim`:
+
+| Metric | 3p | 4p | 6p | 9p | 12p |
+|---|---|---|---|---|---|
+| Success, before → after | 64 → 65% | 81 → 76% | 70 → 69% | 68 → 70% | 63 → 67% |
+| Heat-bust share of failures | 48 → 45% | 27 → 34% | 18 → 21% | 8 → 3% | 3 → 2% |
+| Shakedowns per game | 0.92 → 1.04 | 0.97 → 1.19 | 0.91 → 0.96 | 0.38 → 1.88 | 0.40 → 1.86 |
+| Mole win (games with one) | — | — | 34 → 35% | 32 → 32% | 37 → 37% |
+
+Small-crew Heat busts barely moved: with card Heat set to 0 they are still 40% / 22% of failures at 3/4p (31% / 19% with events off), so most of it is Vault pressure in small crews and the Shift change loot lure, not card Heat. 4p at 76% stays a little high (2–4 players share every number). Both are questions in STATUS.md.
+
 ### 2026-11-01 — Identity, invites and lobby API (M2-2)
 - **Sessions:** a 32-byte random token (base64url) in the `sj_session` cookie (httpOnly, SameSite=Lax, path `/`, 30 days); the DB stores only its SHA-256, and expiry is checked against the injected `Clock`. Not `Secure` yet (local http only). SameSite=Lax keeps the cookie off cross-site posts.
 - **Guests (owner decision, guests may host — provisional default):** `POST /auth/guest { nickname }` makes a guest user and session; `POST /invites/:code/join { nickname }` does the same when there's no session, so an invite link + nickname is the whole sign-in. A signed-in user joining keeps their session (nickname optional). The guest user is only made once the join is sure to succeed.

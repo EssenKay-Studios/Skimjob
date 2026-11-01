@@ -50,11 +50,17 @@ export const EVENTS: Readonly<Record<EventId, EventDef>> = {
 };
 
 /**
- * The deck: one of each card. Each flip draws at random from the cards not yet
- * flipped this game, so no card repeats (8 of the 10 are seen in 9 rounds).
- * (provisional, docs/decisions.md)
+ * The deck: one of each card. Every flip draws from the whole deck, so a card
+ * can repeat (owner answers, 1 Nov). design §10
  */
 export const EVENT_DECK: readonly EventId[] = Object.keys(EVENTS);
 
 /** The first round that flips a card. design §10 */
 export const EVENTS_FROM_ROUND = 2;
+
+/**
+ * Event-card Heat (Heat cards, and the extra Heat of a surge) is scaled by
+ * min(1, crew size ÷ this) for small crews, so one Vault visitor in a crew of
+ * 3 doesn't turn a card into a bust. design §10
+ */
+export const EVENT_HEAT_FULL_CREW = 5;

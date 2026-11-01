@@ -4,10 +4,11 @@
 // Mole dealing per player count, a counterfactual Mole-deal leak check and
 // determinism. design §3, §8, §8.1
 import { describe, expect, it } from "vitest";
+import { handleThroughAlibis } from "./alibis.testkit";
 import { V06_NUMBERS } from "./v01-numbers.testkit";
 import { MOLE_ROLE } from "@skimjob/content";
 import type { GameConfig, GameEvent, GameState, MoleSetting, Outcome, PlayerId, PlayerState } from "./types";
-import { moleOptions, setupEvents, validateConfig } from "./setup";
+import { moleAllies, moleOptions, setupEvents, validateConfig } from "./setup";
 import { replay } from "./reduce";
 import { handleCommand } from "./handle";
 import { viewFor } from "./view";
@@ -37,7 +38,7 @@ type Cmd = unknown | ((s: GameState) => unknown);
 function run(state: GameState, ...commands: Cmd[]): GameState {
   return commands.reduce<GameState>((s, c) => {
     const cmd = typeof c === "function" ? c(s) : c;
-    const r = handleCommand(s, cmd);
+    const r = handleThroughAlibis(s, cmd);
     if (!r.ok) throw new Error(`rejected ${JSON.stringify(cmd)}: ${r.reason}`);
     return r.state;
   }, state);
@@ -170,7 +171,7 @@ describe("tip-off edges — design §8", () => {
   it("a refused tip-off writes nothing (no event anyone could see), for a Mole and a non-Mole alike", () => {
     const used = run(mole3(), mv("p0", "lobby", 0, TIP), ROUND);
     for (const [s, p] of [[used, "p0"], [mole3(), "p1"], [mole3(), "p2"]] as const) {
-      const r = handleCommand(s, mv(p, "lobby", 0, TIP));
+      const r = handleThroughAlibis(s, mv(p, "lobby", 0, TIP));
       expect(r.ok).toBe(false);
       expect(r).not.toHaveProperty("events");
       expect(r).not.toHaveProperty("state");
@@ -212,7 +213,7 @@ describe("tip-off edges — design §8", () => {
   it("a perAct override of 2 allows two tip-offs an act, refuses a third", () => {
     let s = game(3, ["mole"], { contentOverrides: { roles: { mole: { perAct: 2 } } } });
     s = run(s, mv("p0", "lobby", 0, TIP), ROUND, mv("p0", "lobby", 0, TIP), ROUND);
-    expect(handleCommand(s, mv("p0", "lobby", 0, TIP))).toMatchObject({ ok: false });
+    expect(handleThroughAlibis(s, mv("p0", "lobby", 0, TIP))).toMatchObject({ ok: false });
   });
 
   it("tip-off override fields are refused on other roles, and perAct 0 is refused", () => {
@@ -230,7 +231,8 @@ describe("tip-off edges — design §8", () => {
 describe("Mole dealing — design §8.1", () => {
   const SETTINGS: MoleSetting[] = ["off", "maybe", "on"];
   const expected = (n: number, m: MoleSetting): number[] =>
-    m === "off" || n <= 4 ? [0] : n <= 8 ? (m === "maybe" ? [0, 1] : [1]) : m === "maybe" ? [1, 2] : [2];
+    // design §8.1 (owner answers, 1 Nov): one Mole at most; "maybe" is 0 or 1 from 5 players.
+    m === "off" || n <= 4 ? [0] : m === "maybe" ? [0, 1] : [1];
 
   it("Mole options per player count and setting, 2–12; starter mode never deals one", () => {
     for (let n = 2; n <= 12; n++) {
@@ -262,10 +264,26 @@ describe("Mole dealing — design §8.1", () => {
   });
 });
 
+/**
+ * The shipped Mole rules deal at most one Mole (design §8.1, owner answers 1 Nov).
+ * For content that deals two: `cfg`'s setup with a second seat (not a Snitch)
+ * turned Mole and the `moleAllies` setup would then emit.
+ */
+function withTwoMoles(cfg: GameConfig): GameEvent[] {
+  const events = setupEvents(cfg);
+  const dealt = events.filter((e): e is Extract<GameEvent, { type: "roleDealt" }> => e.type === "roleDealt");
+  const extra = dealt.find((e) => e.role !== MOLE_ROLE && e.role !== "snitch");
+  if (!extra || dealt.filter((e) => e.role === MOLE_ROLE).length !== 1) throw new Error("withTwoMoles needs exactly one Mole dealt");
+  const roles = dealt.map((e) => (e === extra ? MOLE_ROLE : e.role));
+  const swapped = events.map((e): GameEvent => (e === extra ? { ...extra, role: MOLE_ROLE } : e));
+  const at = swapped.indexOf(swapped.filter((e) => e.type === "roleDealt").at(-1) as GameEvent) + 1;
+  return [...swapped.slice(0, at), ...moleAllies(cfg, roles), ...swapped.slice(at)];
+}
+
 describe("counterfactual: who the Moles are never shows in another player's view — design §8.1, §17.2", () => {
   it("12 players: a non-Mole's views match those of the same game with the two Moles swapped for Lookouts", () => {
     const cfg = config(12, { mole: "on" });
-    const real = setupEvents(cfg);
+    const real = withTwoMoles(cfg);
     const moles = real.flatMap((e) => (e.type === "roleDealt" && e.role === MOLE_ROLE ? [e.player] : []));
     expect(moles).toHaveLength(2);
     expect(real.filter((e) => e.type === "moleAllies")).toHaveLength(2);
@@ -299,7 +317,7 @@ describe("determinism with Moles — design §17.2", () => {
     const a = play();
     const b = play();
     expect(b.log).toEqual(a.log);
-    expect(a.log.filter((e) => e.type === "abilityResolved" && e.ability.kind === "tipOff")).toHaveLength(2);
+    expect(a.log.filter((e) => e.type === "abilityResolved" && e.ability.kind === "tipOff")).toHaveLength(1);
     expect(replay(a.config, a.log)).toEqual(a);
   });
 });

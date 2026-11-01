@@ -6,7 +6,7 @@
 // the alibis and the bot's own room. A tip-off leaves no trail to a player, so
 // the bots don't blame anyone for it; they lay low sooner instead (task 16).
 import { EVENTS, MOLE_ROLE, MOLE_RULES, ROLES, ROUNDS_PER_ACT, type JobDef, type RoomId } from "@skimjob/content";
-import { overrideEvents, overrideRoles, roundHeatDelta, roundJob, type EventTable, type PlayerView } from "@skimjob/engine";
+import { overrideEvents, overrideRoles, roundHeatDelta, roundJob, scaledCardHeat, type EventTable, type PlayerView } from "@skimjob/engine";
 import { createdOf, crewSize, jobOf, ofType, totalRounds } from "./read";
 
 /** The event cards with the game's public content overrides. design §10 */
@@ -14,16 +14,16 @@ const cardsOf = (view: PlayerView): EventTable => overrideEvents(EVENTS, created
 
 /** The job as it plays this round: Shift change / Payday surge their room (design §10). */
 export function jobThisRound(view: PlayerView, job: JobDef = jobOf(view)): JobDef {
-  return view.card && view.card.round === view.round ? roundJob(job, { ...view.card, offer: null }, cardsOf(view)) : job;
+  return view.card && view.card.round === view.round ? roundJob(job, { ...view.card, offer: null }, cardsOf(view), crewSize(view)) : job;
 }
 
-/** Heat the current round's card adds (Police patrol +10, Quiet night −10), else 0. design §10 */
+/** Heat the current round's card adds (Police patrol +5, Quiet night −10, scaled for small crews), else 0. design §10 */
 export function cardHeatNow(view: PlayerView): number {
   const card = view.card;
   const cards = cardsOf(view);
   if (!card || card.round !== view.round || !Object.hasOwn(cards, card.id)) return 0;
   const effect = cards[card.id]?.effect;
-  return effect?.kind === "heat" ? effect.amount : 0;
+  return effect?.kind === "heat" ? scaledCardHeat(effect.amount, crewSize(view)) : 0;
 }
 
 /** Moles expected in this game from the public Mole setting and crew size (the mean of the setting's counts). design §8.1 */
@@ -63,9 +63,9 @@ export function suspectedTipOffRounds(view: PlayerView): number[] {
       if (a.round === r.round && a.player !== view.me.id) counts[a.room] = (counts[a.room] ?? 0) + 1;
     }
     const card = flipped.get(r.round);
-    const played = card ? roundJob(job, { round: card.round, id: card.card, room: card.room, offer: null }, cards) : job;
+    const played = card ? roundJob(job, { round: card.round, id: card.card, room: card.room, offer: null }, cards, crew) : job;
     const effect = card && Object.hasOwn(cards, card.card) ? cards[card.card]?.effect : undefined;
-    const expected = roundHeatDelta(played, crew, counts) + (effect?.kind === "heat" ? effect.amount : 0);
+    const expected = roundHeatDelta(played, crew, counts) + (effect?.kind === "heat" ? scaledCardHeat(effect.amount, crew) : 0);
     if (r.heatDelta - expected >= tip * 0.6) out.push(r.round);
   }
   return out;

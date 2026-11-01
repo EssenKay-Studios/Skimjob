@@ -121,6 +121,8 @@ function playGame(players: number, voteVisibility: VoteVisibility): GameState[] 
     ids.forEach((id, i) => {
       if (i % 4 !== 3) step({ type: "postAlibi", player: id, room: s.rooms[i % s.rooms.length] });
     });
+    // design §5.4: the alibi deadline closes the round's alibis before the next round's planning.
+    if (!over()) step({ type: "advance", deadline: { kind: "alibis", round } });
     if (round % 3 === 0 && !over()) {
       if (act === 1) {
         step({ type: "proposeMeeting", player: "p0", slot: "sat-8pm" });
@@ -163,6 +165,7 @@ function playDuel(seed: string): GameState[] {
     s.card?.offer?.players.forEach((id) => step({ type: "answerDoubleCross", player: id, accept: true }));
     step({ type: "advance", deadline: { kind: "round", round } });
     step({ type: "postAlibi", player: "p0", room: "office" });
+    step({ type: "advance", deadline: { kind: "alibis", round } }); // design §5.4
   }
   return states;
 }
@@ -334,7 +337,7 @@ describe("no leaks in real games — design §17.2, §13, §11.2", () => {
   }, 30_000);
 
   it("the games above reach every info, vote, Mole and event-card event (design §8, §8.1, §10)", () => {
-    for (const t of ["snitchTargetAssigned", "blackmailed", "shakedownPending", "shakedownCancelled", "snitchPaid", "moleAllies"]) expect(seenTypes, t).toContain(t);
+    for (const t of ["snitchTargetAssigned", "blackmailed", "shakedownPending", "shakedownCancelled", "snitchPaid", "alibisClosed"]) expect(seenTypes, t).toContain(t);
     for (const t of ["eventFlipped", "doubleCrossOffered", "doubleCrossAnswered", "doubleCrossResolved", "raidRumourHit", "insideTip", "auditReport"]) {
       expect(seenTypes, t).toContain(t);
     }

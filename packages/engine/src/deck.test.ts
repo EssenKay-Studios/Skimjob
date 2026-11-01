@@ -1,6 +1,7 @@
 // The events deck: one public card per round from round 2, its effects at
 // §5.2 step 1 and through the round, and the Double-cross answer. design §10, §5.2
 import { describe, expect, it } from "vitest";
+import { handleThroughAlibis } from "./alibis.testkit";
 import { V06_NUMBERS } from "./v01-numbers.testkit";
 import { EVENTS, EVENT_DECK, EVENTS_FROM_ROUND, type RoomId } from "@skimjob/content";
 import type { GameConfig, GameEvent, GameState, PlayerId } from "./types";
@@ -9,7 +10,7 @@ import { createGame, setupEvents, validateConfig } from "./setup";
 import { replay } from "./reduce";
 import { handleCommand } from "./handle";
 import { viewFor } from "./view";
-import { closedRoom } from "./deck";
+import { closedRoom, eventHeatScale, scaledCardHeat } from "./deck";
 import { jobById } from "./job";
 
 const BANK = jobById("bank");
@@ -46,7 +47,7 @@ function game(players: number, roles: string[] = [], extra: Partial<GameConfig> 
 
 function run(state: GameState, ...commands: unknown[]): GameState {
   return commands.reduce<GameState>((s, c) => {
-    const r = handleCommand(s, c);
+    const r = handleThroughAlibis(s, c);
     if (!r.ok) throw new Error(`rejected ${JSON.stringify(c)}: ${r.reason}`);
     return r.state;
   }, state);
@@ -144,14 +145,15 @@ describe("the deck — design §10", () => {
     ]);
   });
 
-  it("flips one public card at the start of every round from round 2, never repeating", () => {
+  it("flips one public card at the start of every round from round 2, drawn from the full deck (owner answers, 1 Nov)", () => {
     for (const n of [2, 4, 7]) {
       const end = playThrough(createGame(config(n, { seed: `flip-${n}` })));
       const flipped = flips(end);
       expect(flipped.map((e) => e.round)).toEqual([2, 3, 4, 5, 6, 7, 8, 9]);
       expect(EVENTS_FROM_ROUND).toBe(2);
       expect(flipped.every((e) => e.visibility.kind === "public" && EVENT_DECK.includes(e.card))).toBe(true);
-      expect(new Set(flipped.map((e) => e.card)).size).toBe(8);
+      // Repeats allowed: each flip draws from all ten cards (the game's seeds give a repeat here).
+      expect(new Set(flipped.map((e) => e.card)).size).toBeLessThan(8);
       // Flipped straight after its round starts, so players can plan around it.
       for (const e of flipped) {
         const at = end.log.indexOf(e);
@@ -188,7 +190,7 @@ describe("card effects — design §10, §5.2", () => {
   const atRound2 = (n: number, roles: string[] = [], extra: Partial<GameConfig> = {}) => resolve(game(n, roles, extra));
 
   it("Police patrol adds 10 Heat and Quiet night removes 10 (clamped at 0), in the round's one Heat change", () => {
-    const base = atRound2(3);
+    const base = atRound2(5);
     const heat0 = base.heat;
     const patrol = resolve(withCard(base, "policePatrol"));
     expect(patrol.heat - heat0).toBe(BANK.heat.perRound + 10);
@@ -197,17 +199,29 @@ describe("card effects — design §10, §5.2", () => {
     expect(lastResolution(quiet).find((e) => e.type === "roundResolved")).toMatchObject({ heatDelta: quiet.heat - heat0 });
   });
 
-  it("Shift change: the Vault yields double and its Heat pressure doubles; a pocket up to the doubled loot is accepted", () => {
+  it("event-card Heat is scaled by min(1, crew ÷ 5) for small crews, rounded (owner answers, 1 Nov)", () => {
+    // design §10: Police patrol +10 (0.6.0 numbers) gives 4 / 6 / 8 / 10 at 2 / 3 / 4 / 5+ players.
+    for (const [n, patrol] of [[2, 4], [3, 6], [4, 8], [5, 10], [9, 10]] as const) {
+      const base = atRound2(n);
+      expect(resolve(withCard(base, "policePatrol")).heat - base.heat).toBe(BANK.heat.perRound + patrol);
+    }
+    expect(eventHeatScale(3)).toBeCloseTo(0.6);
+    expect(scaledCardHeat(-10, 3)).toBe(-6);
+    expect(scaledCardHeat(5, 3)).toBe(3);
+    expect(scaledCardHeat(5, 12)).toBe(5);
+  });
+
+  it("Shift change: the Vault yields double and its Heat pressure doubles (×1.8 at 4 players, design §10 scaling); a pocket up to the doubled loot is accepted", () => {
     const base = withCard(atRound2(4, ["rookie"]), "shiftChange");
     const heat0 = base.heat;
     const s = resolve(base, { p0: { room: "vault", pocket: 12 } });
     const split = lastResolution(s).find((e) => e.type === "lootSplit" && e.player === "p0");
     expect(split).toMatchObject({ loot: 12, toStash: 12, toHaul: 0 });
-    // One of 4 in the Vault: 4 + 2 × 20 × 1/4 = 14.
-    expect(s.heat - heat0).toBe(BANK.heat.perRound + Math.round((2 * 20) / 4));
+    // One of 4 in the Vault: the surge's extra ×1 is scaled by 4/5, so 4 + 1.8 × 20 × 1/4 = 13.
+    expect(s.heat - heat0).toBe(BANK.heat.perRound + Math.round((1.8 * 20) / 4));
     // Without the card the same pocket is refused.
     const plain = withCard(atRound2(4, ["rookie"]), "audit");
-    expect(handleCommand(plain, move("p0", "vault", 12)).ok).toBe(false);
+    expect(handleThroughAlibis(plain, move("p0", "vault", 12)).ok).toBe(false);
   });
 
   it("Payday: the Lobby yields 4", () => {
@@ -231,9 +245,9 @@ describe("card effects — design §10, §5.2", () => {
   it("Lockdown: the named room is refused for the round; it is never the default room and always in play", () => {
     const base = atRound2(4);
     const s = withCard(base, "lockdown", "vault");
-    const r = handleCommand(s, move("p0", "vault"));
+    const r = handleThroughAlibis(s, move("p0", "vault"));
     expect(r.ok).toBe(false);
-    expect(handleCommand(s, move("p0", "office")).ok).toBe(true);
+    expect(handleThroughAlibis(s, move("p0", "office")).ok).toBe(true);
     // Drawn rooms over many seeds.
     for (let i = 0; i < 40; i++) {
       const g = untilCard(createGame(config(6, { seed: `lock-${i}` })), "lockdown");
@@ -337,14 +351,14 @@ describe("Double-cross — design §10", () => {
 
   it("only the offered players may answer, only while the round is planned, with a boolean", () => {
     const base = offerFor(3, [], ["p0", "p1"]);
-    expect(handleCommand(base, answer("p2", true)).ok).toBe(false);
-    expect(handleCommand(base, { type: "answerDoubleCross", player: "p0", accept: "yes" }).ok).toBe(false);
-    const answered = handleCommand(base, answer("p0", true));
+    expect(handleThroughAlibis(base, answer("p2", true)).ok).toBe(false);
+    expect(handleThroughAlibis(base, { type: "answerDoubleCross", player: "p0", accept: "yes" }).ok).toBe(false);
+    const answered = handleThroughAlibis(base, answer("p0", true));
     expect(answered.ok && answered.events[0]).toMatchObject({ type: "doubleCrossAnswered", visibility: privateTo("p0"), accept: true });
     // No offer in a round without the card.
-    expect(handleCommand(withCard(resolve(game(3)), "audit"), answer("p0", true)).ok).toBe(false);
+    expect(handleThroughAlibis(withCard(resolve(game(3)), "audit"), answer("p0", true)).ok).toBe(false);
     // Not after the round has resolved.
-    expect(handleCommand(resolve(base), answer("p0", true)).ok).toBe(false);
+    expect(handleThroughAlibis(resolve(base), answer("p0", true)).ok).toBe(false);
   });
 
   it("the swapped role plays this round: a new Insider can't pocket, a stale move power is ignored", () => {

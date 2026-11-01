@@ -39,6 +39,13 @@ export interface ShakedownRules {
   readonly cleanBelowPerAct: number;
   /** A clean target is paid this × the act number (5, 10, 15) out of the Haul. */
   readonly compensationPerAct: number;
+  /**
+   * From this crew size a plurality is enough: the player with the most votes
+   * (by weight, no tie) is shaken down if they got at least `pluralityShare`
+   * of the votes cast. Smaller crews need more than half. design §11.2
+   */
+  readonly pluralityFromPlayers: number;
+  readonly pluralityShare: number;
 }
 
 /** design §16.1 Duel mode (2 players, call-outs instead of votes). */
@@ -90,12 +97,13 @@ export const BANK_JOB: JobDef = {
       info: "none",
     },
     serverRoom: { id: "serverRoom", name: "Server room", loot: 0, heatPressure: 0, capacity: null, info: "pocketCount" },
-    // 9–12 players. design §6.2 (Teller line 4 loot since balance pass 1); Manager's office adds half the vault pressure (§7).
-    tellerLine: { id: "tellerLine", name: "Teller line", loot: 4, heatPressure: 0, capacity: null, info: "none" },
+    // 9–12 players. design §6.2 (Teller line 3, Manager's office 4 since the owner-answers pass, 1 Nov: the
+    // ⅓-plurality shakedowns made big crews succeed ~85%); Manager's office adds half the vault pressure (§7).
+    tellerLine: { id: "tellerLine", name: "Teller line", loot: 3, heatPressure: 0, capacity: null, info: "none" },
     managersOffice: {
       id: "managersOffice",
       name: "Manager's office",
-      loot: 5,
+      loot: 4,
       heatPressure: 10,
       capacity: null,
       info: "none",
@@ -104,7 +112,7 @@ export const BANK_JOB: JobDef = {
   defaultRoom: "lobby",
   heat: { max: 100, perRound: 4, missedCheckpoint: 15 },
   checkpoints: { perPlayer: [7, 15, 24] },
-  shakedown: { cleanBelowPerAct: 3, compensationPerAct: 5 },
+  shakedown: { cleanBelowPerAct: 3, compensationPerAct: 5, pluralityFromPlayers: 9, pluralityShare: 1 / 3 },
   duel: { wrongCallOutPerAct: 5 },
 };
 

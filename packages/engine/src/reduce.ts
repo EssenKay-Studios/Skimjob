@@ -29,14 +29,13 @@ function openMeeting(state: GameState): MeetingState {
 
 /**
  * Where the game goes when a meeting closes: back to planning the current
- * round, or, if that round has resolved (the act's last), awaiting the act's
- * meeting. The regular meeting's close then moves on with `roundStarted` or
- * `gameEnded`. design §4.1
+ * round; if that round has resolved, back to its alibis while they're open,
+ * else (the act's last round) awaiting the act's meeting. The regular
+ * meeting's close then moves on with `roundStarted` or `gameEnded`. design §4.1, §5.4
  */
 function phaseAfterMeeting(state: GameState): Phase {
-  return state.resolvedRound === state.round
-    ? { kind: "awaitingMeeting", act: actOfRound(state.round) }
-    : { kind: "planning", round: state.round };
+  if (state.resolvedRound !== state.round) return { kind: "planning", round: state.round };
+  return state.alibisOpen ? { kind: "alibis", round: state.round } : { kind: "awaitingMeeting", act: actOfRound(state.round) };
 }
 
 /** A shakedown window (if one was open) ends: back to where the meeting left the game. design §11.3 */
@@ -60,6 +59,7 @@ export function initialState(config: GameConfig): GameState {
     card: null,
     cardsFlipped: [],
     moves: {},
+    alibisOpen: false,
     alibisPosted: [],
     proposals: [],
     scheduledMeeting: null,
@@ -160,19 +160,26 @@ function applyChange(state: GameState, event: GameEvent): GameState {
     case "copsRaided":
       // Information only; no state changes. (copsRaided is followed by gameEnded.)
       return state;
-    case "roundResolved": {
-      // Haul and Heat are public totals; after an act's last round, the act's meeting comes next (design §11).
-      // A new round of alibis opens (design §5.4).
-      const next: GameState = {
+    case "roundResolved":
+      // Haul and Heat are public totals. The round's alibis open (design §5.4); the next
+      // round, or after an act's last round its meeting (design §11), waits for their deadline.
+      return {
         ...state,
+        phase: { kind: "alibis", round: event.round },
         haul: event.haul,
         heat: event.heat,
         moves: {},
         card: null,
         resolvedRound: event.round,
+        alibisOpen: true,
         alibisPosted: [],
       };
-      return isLastRoundOfAct(event.round) ? { ...next, phase: { kind: "awaitingMeeting", act: actOfRound(event.round) } } : next;
+    case "alibisClosed": {
+      // Within an act `roundStarted` follows at once; after its last round the act's meeting is awaited.
+      const closed: GameState = { ...state, alibisOpen: false };
+      return isLastRoundOfAct(event.round)
+        ? { ...closed, phase: { kind: "awaitingMeeting", act: actOfRound(event.round) } }
+        : closed;
     }
     case "gameEnded":
       return { ...state, phase: { kind: "ended", outcome: event.outcome } };

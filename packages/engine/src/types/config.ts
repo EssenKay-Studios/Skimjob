@@ -44,6 +44,13 @@ export interface GameConfig {
    */
   readonly duel?: boolean;
   /**
+   * Each pool role is dealt at most once, Rookies filling the rest (true, the
+   * default when absent); false deals every seat from the pool with
+   * replacement, so roles may repeat. The Mole always follows the Mole
+   * setting. design §8.1, §15
+   */
+  readonly uniqueRoles?: boolean;
+  /**
    * Simulator / playtest tuning: replaces some of the job's and roles' numbers
    * for this game only. Absent or null plays the content as shipped. Numbers
    * only; it can't add or remove rooms or roles. Checked by `validateConfig`
@@ -83,7 +90,12 @@ export interface ContentOverrides {
   readonly rooms?: Readonly<Record<RoomId, RoomOverride>>;
   readonly heat?: { readonly max?: number; readonly perRound?: number; readonly missedCheckpoint?: number };
   readonly checkpoints?: { readonly perPlayer?: readonly [number, number, number] };
-  readonly shakedown?: { readonly cleanBelowPerAct?: number; readonly compensationPerAct?: number };
+  readonly shakedown?: {
+    readonly cleanBelowPerAct?: number;
+    readonly compensationPerAct?: number;
+    readonly pluralityFromPlayers?: number;
+    readonly pluralityShare?: number;
+  };
   readonly duel?: { readonly wrongCallOutPerAct?: number };
   readonly roles?: Readonly<Record<RoleId, RoleOverride>>;
   /** Event card numbers (balance pass 2). design §10 */

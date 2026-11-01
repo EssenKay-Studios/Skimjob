@@ -1,6 +1,7 @@
 // End of game: success and failure, the ranking with role scoring, tie-breaks,
 // winners, and roles that win on failure. design §3, §8, §13
 import { describe, expect, it } from "vitest";
+import { handleThroughAlibis } from "./alibis.testkit";
 import { STARTER_ROLES } from "@skimjob/content";
 import type { GameConfig, GameEvent, GameState, Outcome, PlayerState } from "./types";
 import { setupEvents } from "./setup";
@@ -37,7 +38,7 @@ function game(players: number, roles: string[] = []): GameState {
 type Cmd = unknown | ((s: GameState) => unknown);
 function run(state: GameState, ...commands: Cmd[]): GameState {
   return commands.reduce<GameState>((s, c) => {
-    const r = handleCommand(s, typeof c === "function" ? c(s) : c);
+    const r = handleThroughAlibis(s, typeof c === "function" ? c(s) : c);
     if (!r.ok) throw new Error(`rejected: ${r.reason}`);
     return r.state;
   }, state);

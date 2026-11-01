@@ -86,7 +86,7 @@ export function checkMove(state: GameState, player: PlayerState, raw: unknown): 
   // design §10 Lockdown: the card names a room closed for this round.
   if (room === closedRoom(state)) return `the ${roomDef(jobFor(state.config), room).name} is closed this round (Lockdown)`;
   // design §10: Shift change / Payday raise a room's loot this round.
-  const def = roomDef(roundJob(jobFor(state.config), state.card, eventsFor(state.config)), room);
+  const def = roomDef(roundJob(jobFor(state.config), state.card, eventsFor(state.config), state.playerOrder.length), room);
   if (!isCount(pocket)) return "pocket must be a whole number, 0 or more";
   // The real yield can only drop below the room's loot (crowded Deposit boxes), so this is the upper bound.
   if (pocket > def.loot) return `you can pocket at most ${def.loot} in the ${def.name}`;
@@ -111,16 +111,14 @@ export function checkMove(state: GameState, player: PlayerState, raw: unknown): 
  * Every event for resolving the current round, in the order of design §5.2:
  * default moves (§5.1), yields and capacity, splits (then the Fence safe),
  * Heat (rounded, then clamped once), information, the public summary, and
- * finally either the raid, the next round, or (after an act's last round)
- * nothing more: the fold of `roundResolved` leaves the game awaiting the
- * act's meeting (design §11). In Duel mode the act's call-outs and checkpoint
- * follow at once instead (design §16.1). Step 1 is the round's event card (§10): its
+ * finally the raid, or nothing more: the fold of `roundResolved` opens the
+ * round's alibis (design §5.4) and `closeAlibis` goes on. Step 1 is the round's event card (§10): its
  * player effects (Raid rumour, Inside tip, Double-cross) come first and are
  * folded before the rest is worked out, so a swapped role plays this round;
  * the others change yields, Heat and information below.
  */
 export function resolveRound(before: GameState, round: number, draw: Draw): GameEvent[] {
-  const job = roundJob(jobFor(before.config), before.card, eventsFor(before.config));
+  const job = roundJob(jobFor(before.config), before.card, eventsFor(before.config), before.playerOrder.length);
   const powerFor = (id: PlayerId) => powerOf(state.config, player(id).role);
   const order = before.playerOrder;
   const crewSize = order.length;
@@ -263,14 +261,23 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
   });
 
   // §5.2 step 6: Heat at the max means the cops raid and the heist fails at once (§3, §7).
+  // Otherwise the round's alibis open (the fold of `roundResolved`); `closeAlibis` moves on.
   if (heat >= job.heat.max) {
     events.push({ type: "copsRaided", visibility: PUBLIC, round, heat });
     events.push(gameEnded(before, events, "heat"));
-  } else if (!isLastRoundOfAct(round)) {
-    events.push(...startRound(state, round + 1, draw));
-  } else if (isDuel(state.config)) {
-    // design §16.1: no meeting; the act's call-outs are settled, then the checkpoint as normal.
-    events.push(...endOfDuelAct(before, events, actOfRound(round), draw));
   }
+  return events;
+}
+
+/**
+ * design §5.4: the alibi deadline for `round` has passed. The next round
+ * starts (flipping its card); after an act's last round the game awaits the
+ * act's meeting (the fold of `alibisClosed`), or in Duel mode the act's
+ * call-outs and checkpoint follow at once (design §16.1).
+ */
+export function closeAlibis(state: GameState, round: number, draw: Draw): GameEvent[] {
+  const events: GameEvent[] = [{ type: "alibisClosed", visibility: PUBLIC, round }];
+  if (!isLastRoundOfAct(round)) return [...events, ...startRound(state, round + 1, draw)];
+  if (isDuel(state.config)) return [...events, ...endOfDuelAct(state, events, actOfRound(round), draw)];
   return events;
 }

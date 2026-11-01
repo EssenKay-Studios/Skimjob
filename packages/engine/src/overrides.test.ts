@@ -1,6 +1,7 @@
 // Content overrides on the game config: validation (untrusted JSON) and their
 // effect on the rules. design §17.4 "config overrides"
 import { describe, expect, it } from "vitest";
+import { handleThroughAlibis } from "./alibis.testkit";
 import { BANK_JOB, CONTENT_VERSION, EVENTS, ROLES, STARTER_ROLES } from "@skimjob/content";
 import type { Command, ContentOverrides, GameConfig, GameEvent, GameState } from "./types";
 import { setupEvents, validateConfig } from "./setup";
@@ -36,7 +37,7 @@ function game(cfg: GameConfig, roles: string[] = []): GameState {
 
 function run(state: GameState, ...commands: Command[]): GameState {
   return commands.reduce<GameState>((s, c) => {
-    const r = handleCommand(s, c);
+    const r = handleThroughAlibis(s, c);
     if (!r.ok) throw new Error(`rejected: ${r.reason}`);
     return r.state;
   }, state);
@@ -88,6 +89,10 @@ describe("validateOverrides — configs are untrusted JSON (design §17.4)", () 
     expect(errs({ heat: { perRound: Number.POSITIVE_INFINITY } })).toHaveLength(1);
     expect(errs({ heat: { max: 0 } })).toHaveLength(1);
     expect(errs({ shakedown: { compensationPerAct: 1.5 } })).toHaveLength(1);
+    // design §11.2: the big-crew plurality numbers are tunable too.
+    expect(errs({ shakedown: { pluralityFromPlayers: 10, pluralityShare: 0.4 } })).toEqual([]);
+    expect(errs({ shakedown: { pluralityFromPlayers: 0 } })).toHaveLength(1);
+    expect(errs({ shakedown: { pluralityShare: -0.1 } })).toHaveLength(1);
     expect(errs({ roles: { rookie: { stashMultiplier: -0.1 } } })).toHaveLength(1);
   });
 
@@ -186,7 +191,7 @@ describe("overrides in play (design §17.4)", () => {
     expect(s1.haul).toBe(9);
     expect(s1.heat).toBe(10);
     // A pocket above the overridden loot is refused, like the shipped one.
-    expect(handleCommand(s1, submit("p0", { room: "vault", pocket: 10 })).ok).toBe(false);
+    expect(handleThroughAlibis(s1, submit("p0", { room: "vault", pocket: 10 })).ok).toBe(false);
   });
 
   it("checkpoint targets and the missed-checkpoint penalty change (design §11.5)", () => {

@@ -6,7 +6,7 @@
 // command is refused. `handleCommand` (handle.ts) folds the events. Nothing
 // here draws randomness except the next act's event card (deck.ts, design §10):
 // meeting and proposal ids are names and log positions.
-import { ROUNDS_PER_ACT } from "@skimjob/content";
+import { BANK_JOB, ROUNDS_PER_ACT, type ShakedownRules } from "@skimjob/content";
 import type {
   ActNumber,
   GameEvent,
@@ -202,6 +202,10 @@ export function openMeeting(state: GameState, meetingId: unknown): Result {
  * counting weight (the Smooth talker's ballot counts double, §8). `weight` is
  * the total weight cast, and `skip` / `targets` are weights too. Without a
  * Smooth talker, weight = voters.
+ *
+ * From `rules.pluralityFromPlayers` (9) a plurality is enough: unless more than
+ * half skip, the player with the most votes, alone on top, is shaken down with
+ * at least `rules.pluralityShare` (⅓) of the votes cast (owner answers, 1 Nov).
  */
 export function meetingResult(
   crewSize: number,
@@ -209,10 +213,17 @@ export function meetingResult(
   skip: number,
   targets: ReadonlyMap<PlayerId, number>,
   weight: number = voters,
+  rules: Pick<ShakedownRules, "pluralityFromPlayers" | "pluralityShare"> = BANK_JOB.shakedown,
 ): MeetingResult {
   if (voters * 2 < crewSize) return { kind: "noQuorum" };
   for (const [target, votes] of targets) if (votes * 2 > weight) return { kind: "shakedown", target };
   if (skip * 2 > weight) return { kind: "skipped" };
+  if (crewSize >= rules.pluralityFromPlayers) {
+    const top = Math.max(0, ...targets.values());
+    const leaders = [...targets].filter(([, votes]) => votes === top);
+    // A small epsilon so ⅓ of 9 or 12 isn't lost to floating point.
+    if (top > 0 && leaders.length === 1 && top >= rules.pluralityShare * weight - 1e-9) return { kind: "shakedown", target: (leaders[0] as [PlayerId, number])[0] };
+  }
   return { kind: "noMajority" };
 }
 
@@ -263,7 +274,7 @@ export function closeMeeting(state: GameState, meetingId: unknown, draw: Draw): 
     }
   }
   const inSeatOrder = (m: Map<PlayerId, number>) => new Map(state.playerOrder.filter((id) => m.has(id)).map((id) => [id, m.get(id) as number]));
-  const result = meetingResult(crewSize, ballots.length, skipWeight, inSeatOrder(weights), weight);
+  const result = meetingResult(crewSize, ballots.length, skipWeight, inSeatOrder(weights), weight, jobFor(state.config).shakedown);
   const events: GameEvent[] = [
     {
       type: "meetingClosed",
@@ -336,13 +347,14 @@ function afterVote(
   const events: GameEvent[] = [];
 
   // design §11.3: the stash (never the Fence safe) goes into the Haul; a clean target is compensated.
+  // The clean check counts the Fence safe (owner answers, 1 Nov), so a Fence with a full safe isn't clean.
   const haul = state.haul;
   if (shakedown?.cancelled) {
     events.push({ type: "shakedownCancelled", visibility: PUBLIC, meetingId: meeting.meetingId, target: shakedown.target });
   } else if (shakedown) {
     const { target } = shakedown;
-    const stash = (state.players[target] as PlayerState).stash;
-    const clean = stash < job.shakedown.cleanBelowPerAct * act;
+    const { stash, safe } = state.players[target] as PlayerState;
+    const clean = stash + safe < job.shakedown.cleanBelowPerAct * act;
     // Paid out of the Haul, so never more than it holds (provisional).
     const compensation = clean ? Math.min(job.shakedown.compensationPerAct * act, haul + stash) : 0;
     events.push({ type: "shakedownResolved", visibility: PUBLIC, meetingId: meeting.meetingId, target, stashRevealed: stash, taken: stash, clean, compensation });
