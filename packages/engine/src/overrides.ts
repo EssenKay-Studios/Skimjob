@@ -63,7 +63,7 @@ export function validateOverrides(raw: unknown, job: JobDef, roles: RoleTable = 
   if (raw === undefined || raw === null) return [];
   const errors: string[] = [];
   if (!isObject(raw)) return ["contentOverrides must be an object"];
-  const known = ["rooms", "heat", "checkpoints", "shakedown", "roles"];
+  const known = ["rooms", "heat", "checkpoints", "shakedown", "duel", "roles"];
   for (const key of Object.keys(raw)) if (!known.includes(key)) errors.push(`contentOverrides.${key} is not an overridable section`);
 
   if (raw.rooms !== undefined) {
@@ -97,6 +97,9 @@ export function validateOverrides(raw: unknown, job: JobDef, roles: RoleTable = 
   }
   if (raw.shakedown !== undefined) {
     checkFields(raw.shakedown, "contentOverrides.shakedown", { cleanBelowPerAct: atLeast0, compensationPerAct: count }, errors);
+  }
+  if (raw.duel !== undefined) {
+    checkFields(raw.duel, "contentOverrides.duel", { wrongCallOutPerAct: count }, errors);
   }
   if (raw.checkpoints !== undefined) {
     const path = "contentOverrides.checkpoints";
@@ -145,6 +148,7 @@ export function overrideJob(job: JobDef, overrides: ContentOverrides | null | un
     heat: { ...job.heat, ...overrides.heat },
     checkpoints: overrides.checkpoints?.perPlayer ? { perPlayer: overrides.checkpoints.perPlayer } : job.checkpoints,
     shakedown: { ...job.shakedown, ...overrides.shakedown },
+    duel: { ...job.duel, ...overrides.duel },
   };
 }
 

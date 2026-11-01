@@ -47,6 +47,7 @@ export function setupGame(options: SimOptions, players: number, index: number): 
     rolePool: options.rolePool,
     mole: options.mole,
     eventsEnabled: options.eventsEnabled,
+    duel: options.duel,
     voteVisibility: options.voteVisibility,
     starterMode: options.starterMode,
     // Checked by the engine's validateConfig before any game runs.

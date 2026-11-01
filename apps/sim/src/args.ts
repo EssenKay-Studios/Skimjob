@@ -24,6 +24,8 @@ export interface SimOptions {
   readonly starterMode: boolean;
   /** The events deck (design §10). Off by default, and never with starter mode. */
   readonly eventsEnabled: boolean;
+  /** Duel mode (design §16.1): 2 players only, call-outs instead of meetings. */
+  readonly duel: boolean;
   readonly mole: MoleSetting;
   readonly voteVisibility: VoteVisibility;
   /** Parsed but not yet checked: the engine's validateConfig checks it (untrusted JSON). */
@@ -55,6 +57,7 @@ Usage: pnpm sim -- [options]
       --role-pool <ids>   comma-separated roles to deal from (default: the content default)
       --starter           starter mode (Rookie/Lookout/Insider/Fence, no Mole, no events)
       --events            flip an event card each round from round 2 (design §10; not with --starter)
+      --duel              Duel mode: call-outs instead of meetings (design §16.1; needs -p 2)
       --mole <setting>    off | maybe | on (default off)
       --votes <mode>      hiddenThenRevealed | open | secret (default hiddenThenRevealed)
       --overrides <json>  content overrides as inline JSON or a path to a JSON file, e.g.
@@ -131,6 +134,7 @@ export function parseSimArgs(argv: readonly string[], readFile?: (path: string) 
         "role-pool": { type: "string" },
         starter: { type: "boolean" },
         events: { type: "boolean" },
+        duel: { type: "boolean" },
         mole: { type: "string" },
         votes: { type: "string" },
         overrides: { type: "string" },
@@ -165,6 +169,7 @@ export function parseSimArgs(argv: readonly string[], readFile?: (path: string) 
     }
   }
   if (values.events && values.starter) return error("--events can't be used with --starter (starter mode has no events)");
+  if (values.duel && playerCounts.some((n) => n !== 2)) return error("--duel needs exactly 2 players (-p 2)");
   if (values.out !== undefined && values.out.trim() === "") return error("--out needs a directory (use --no-files for none)");
   if (values.out !== undefined && values.out.includes("\0")) return error("--out is not a valid path");
   const rolePool = values["role-pool"] === undefined ? [] : values["role-pool"].split(",").map((r) => r.trim()).filter((r) => r !== "");
@@ -180,6 +185,7 @@ export function parseSimArgs(argv: readonly string[], readFile?: (path: string) 
       rolePool,
       starterMode: values.starter ?? false,
       eventsEnabled: values.events ?? false,
+      duel: values.duel ?? false,
       mole: mole as MoleSetting,
       voteVisibility: votes as VoteVisibility,
       contentOverrides,

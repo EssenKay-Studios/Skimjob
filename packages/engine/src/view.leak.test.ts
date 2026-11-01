@@ -136,6 +136,37 @@ function playGame(players: number, voteVisibility: VoteVisibility): GameState[] 
   return states;
 }
 
+/**
+ * design §16.1: a Duel game with events on. Both players skim in some rounds;
+ * each act one or both call the other out (made in different rounds, so a
+ * call is pending across a round), caught and wrong calls both happen.
+ */
+function playDuel(seed: string): GameState[] {
+  let s = createGame({ ...config(2, "hiddenThenRevealed"), seed, duel: true });
+  const states = [s];
+  const step = (command: unknown): void => {
+    if (s.phase.kind === "ended") return;
+    const r = handleCommand(s, command);
+    if (!r.ok) throw new Error(`rejected ${JSON.stringify(command)}: ${r.reason}`);
+    s = r.state;
+    states.push(s);
+  };
+  for (let round = 1; round <= 9 && s.phase.kind !== "ended"; round++) {
+    if (round % 3 === 2) step({ type: "callOut", player: "p0" });
+    if (round === 3 || round === 9) step({ type: "callOut", player: "p1" });
+    s.playerOrder.forEach((id, i) => {
+      const role = (s.players[id] as PlayerState).role;
+      const room = s.card?.room === "office" ? "lobby" : "office"; // design §10 Lockdown
+      const pocket = role !== "insider" && (round + i) % 4 === 0 ? 1 : 0;
+      step({ type: "submitMove", player: id, move: { room, pocket } });
+    });
+    s.card?.offer?.players.forEach((id) => step({ type: "answerDoubleCross", player: id, accept: true }));
+    step({ type: "advance", deadline: { kind: "round", round } });
+    step({ type: "postAlibi", player: "p0", room: "office" });
+  }
+  return states;
+}
+
 const owned = (e: GameEvent, viewer: PlayerId): boolean =>
   (e.visibility.kind === "private" || e.visibility.kind === "secret") && e.visibility.player === viewer;
 
@@ -167,6 +198,7 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
           { type: "doubleCrossResolved", visibility: privateTo(other), player: other, round: 2, partner: viewer, swap: { role: "mole", roleState: { usedThisAct: 1, usedThisGame: 0, target: null, allies: [] } } },
           { type: "raidRumourHit", visibility: privateTo(other), player: other, round: 2, lost: 3 },
           { type: "insideTip", visibility: privateTo(other), player: other, round: 2, subject: viewer, role: "mole" },
+          { type: "callOutMade", visibility: privateTo(other), player: other, act: 1 },
         ] satisfies GameEvent[])),
   ];
   const log = state.log.filter((e) => canSee(e.visibility, viewer, gameOver)).flatMap((e) => [e, ...junk]);
@@ -309,5 +341,29 @@ describe("no leaks in real games — design §17.2, §13, §11.2", () => {
     for (const c of EVENT_DECK) expect(seenCards, c).toContain(c);
     expect(swapped, "a Double-cross swap happened").toBe(true);
     for (const k of ["lookout", "fenceSafe", "loopCameras", "blackmail", "cancelShakedown", "tipOff"]) expect(seenAbilities, k).toContain(k);
+  });
+});
+
+describe("no leaks in Duel games — design §16.1, §17.2, §13", () => {
+  const verdicts = new Set<boolean>();
+  it.each(["duel-a", "duel-b", "duel-c"])("seed %s", (seed) => {
+    const states = playDuel(seed);
+    const final = states[states.length - 1] as GameState;
+    expect(final.phase.kind).toBe("ended");
+    const resolved = final.log.filter((e) => e.type === "callOutResolved");
+    expect(final.log.some((e) => e.type === "callOutMade")).toBe(true);
+    expect(resolved.length).toBeGreaterThan(0);
+    for (const e of resolved) if (e.type === "callOutResolved") verdicts.add(e.caught);
+    for (const state of states) {
+      for (const viewer of state.playerOrder) {
+        const view = viewFor(state, viewer);
+        checkView(state, viewer, view);
+        expect(JSON.stringify(viewFor(scrub(state, viewer), viewer)), `scrubbed view for ${viewer}`).toBe(JSON.stringify(view));
+      }
+    }
+  });
+
+  it("the games above reach both a caught and a wrong call-out", () => {
+    expect([...verdicts].sort()).toEqual([false, true]);
   });
 });

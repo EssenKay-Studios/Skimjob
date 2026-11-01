@@ -19,7 +19,7 @@ import {
   type VoteChoice,
 } from "@skimjob/engine";
 import type { Personality } from "./personalities";
-import { crewSize, jobOf, lastResolvedRound, ofType, roleOf, roomsWhere, totalRounds } from "./read";
+import { crewSize, isDuel, jobOf, lastResolvedRound, ofType, roleOf, roomsWhere, totalRounds } from "./read";
 import { mostSuspicious, suspicion } from "./suspicion";
 
 /**
@@ -105,9 +105,12 @@ export function decide(view: PlayerView, p: Personality, random: Random): Player
     }
     return out;
   }
-  out.push(...scheduleMeeting(view));
+  const duel = isDuel(view);
+  if (!duel) out.push(...scheduleMeeting(view));
   if (phase.kind === "planning") {
-    if (wantsEmergency(view, p, random)) out.push({ type: "callEmergency", player });
+    if (duel) {
+      if (wantsCallOut(view, p, random)) out.push({ type: "callOut", player });
+    } else if (wantsEmergency(view, p, random)) out.push({ type: "callEmergency", player });
     if (view.me.move === null) out.push({ type: "submitMove", player, move: chooseMove(view, p, random) });
     // design §10: answer a Double-cross offer once (minimal: a coin flip; a Mole keeps its card).
     const round = phase.round;
@@ -222,6 +225,33 @@ export function chooseAlibi(view: PlayerView, p: Personality, random: Random): R
     .filter((r) => r !== split.room && roomDef(job, r).loot <= split.toHaul)
     .sort((a, b) => roomDef(job, b).loot - roomDef(job, a).loot);
   return covers[0] ?? split.room;
+}
+
+// ---------------------------------------------------------------- Duel call-outs (§16.1)
+
+/**
+ * Duel (minimal; task 16 refines): in the act's last round, call out the
+ * opponent if a round this act handed in less than the room they claimed or
+ * were seen in pays (Haul change minus my own hand-in, so exact at 2
+ * players); otherwise only by noise. Once per act.
+ */
+export function wantsCallOut(view: PlayerView, p: Personality, random: Random): boolean {
+  if (view.round % ROUNDS_PER_ACT !== 0) return false;
+  if (ofType(view.caseFile, "callOutMade").some((e) => e.act === view.act)) return false;
+  const opponent = view.players[0]?.id;
+  if (opponent === undefined) return false;
+  const job = jobOf(view);
+  const firstRound = (view.act - 1) * ROUNDS_PER_ACT + 1;
+  const short = ofType(view.ledger, "roundResolved").some((r) => {
+    if (r.round < firstRound) return false;
+    const mine = ofType(view.caseFile, "lootSplit").find((e) => e.round === r.round);
+    if (!mine) return false;
+    const seenWithMe = ofType(view.caseFile, "roomSighting").some((e) => e.round === r.round && e.others.includes(opponent));
+    const claimed = ofType(view.ledger, "alibiPosted").find((a) => a.player === opponent && a.round === r.round)?.room;
+    const room = seenWithMe ? mine.room : claimed;
+    return room !== undefined && r.haulDelta - mine.toHaul < roomDef(job, room).loot;
+  });
+  return short || random() < p.noise;
 }
 
 // ---------------------------------------------------------------- meetings (§11)

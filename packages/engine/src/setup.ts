@@ -53,7 +53,7 @@ const isStringArray = (v: unknown): v is string[] => Array.isArray(v) && v.every
 export function validateConfig(config: unknown): string[] {
   if (!isObject(config)) return ["config must be an object"];
   const errors: string[] = [];
-  const { seed, players, job, rolePool, mole, eventsEnabled, voteVisibility, starterMode, contentOverrides } = config;
+  const { seed, players, job, rolePool, mole, eventsEnabled, voteVisibility, starterMode, contentOverrides, duel } = config;
   if (typeof seed !== "string") errors.push("seed must be a string");
   if (typeof eventsEnabled !== "boolean") errors.push("eventsEnabled must be a boolean");
   if (typeof starterMode !== "boolean") errors.push("starterMode must be a boolean");
@@ -84,6 +84,9 @@ export function validateConfig(config: unknown): string[] {
   // ignore, so gameCreated never claims a Mole or events the game won't have.
   if (starterMode === true && mole !== "off") errors.push("starter mode requires mole: off");
   if (starterMode === true && eventsEnabled !== false) errors.push("starter mode requires eventsEnabled: false");
+  // design §16.1: Duel mode is for exactly 2 players.
+  if (duel !== undefined && typeof duel !== "boolean") errors.push("duel must be a boolean");
+  if (duel === true && Array.isArray(players) && players.length !== 2) errors.push(`Duel mode needs exactly 2 players, got ${players.length}`);
 
   if (!isStringArray(rolePool)) {
     errors.push("rolePool must be an array of role ids");
@@ -110,10 +113,16 @@ export function moleOptions(playerCount: number, setting: MoleSetting, starterMo
   return rule[setting];
 }
 
-/** The pool roles may be dealt from. design §8.1 */
+/** Whether this is a Duel game (2 players, call-outs instead of votes). design §16.1 */
+export const isDuel = (config: GameConfig): boolean => config.duel === true;
+
+/** Powers that only work in meetings, so they are never dealt in Duel mode (no votes, design §16.1; provisional). */
+const MEETING_POWERS: readonly string[] = ["voteWeight", "cancelShakedown", "snitch"];
+
+/** The pool roles may be dealt from. design §8.1; in Duel mode without the meeting-only roles (§16.1). */
 export function rolePoolFor(config: GameConfig): readonly RoleId[] {
-  if (config.starterMode) return STARTER_ROLES;
-  return config.rolePool.length > 0 ? config.rolePool : DEFAULT_ROLE_POOL;
+  const pool = config.starterMode ? STARTER_ROLES : config.rolePool.length > 0 ? config.rolePool : DEFAULT_ROLE_POOL;
+  return isDuel(config) ? pool.filter((r) => !MEETING_POWERS.includes(powerOf(config, r).kind)) : pool;
 }
 
 /**
@@ -176,6 +185,7 @@ export function setupEvents(config: GameConfig): GameEvent[] {
       eventsEnabled: config.eventsEnabled,
       voteVisibility: config.voteVisibility,
       starterMode: config.starterMode,
+      duel: isDuel(config),
       contentVersion: CONTENT_VERSION,
       contentOverrides: config.contentOverrides ?? null,
     },

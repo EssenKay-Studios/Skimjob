@@ -262,6 +262,15 @@ function applyChange(state: GameState, event: GameEvent): GameState {
     }
     case "checkpointChecked":
       return { ...state, heat: state.heat + event.heatPenalty };
+    // ------------------------------------------------ Duel mode. design §16.1
+    case "callOutMade":
+      // Whether a player has called this act is read from the log (duel.ts); nothing else changes.
+      return state;
+    case "callOutResolved": {
+      const [from, to] = event.caught ? [event.target, event.caller] : [event.caller, event.target];
+      const paid = updatePlayer(state, from, (p) => ({ stash: p.stash - event.amount }));
+      return updatePlayer(paid, to, (p) => ({ stash: p.stash + event.amount }));
+    }
     default: {
       const unknown: never = event;
       throw new Error(`applyEvent: unknown event ${JSON.stringify(unknown)}`);

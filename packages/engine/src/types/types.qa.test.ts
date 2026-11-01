@@ -60,6 +60,8 @@ type ExpectedVisibility = {
   shakedownResolved: "public";
   snitchPaid: "private";
   checkpointChecked: "public";
+  callOutMade: "private"; // design §16.1: hidden until the act's end (provisional)
+  callOutResolved: "public";
   gameEnded: "public";
 };
 
