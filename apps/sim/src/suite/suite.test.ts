@@ -8,7 +8,8 @@ import { gameSeed, setupGame } from "../crew";
 import { parseSuiteArgs } from "./args";
 import { buildMatrix, cellSimOptions, distinctMoleSettings, shardCells, type SuiteOptions } from "./matrix";
 import { mergeShards } from "./merge";
-import { buildReport, compareReports, formatSuiteReport, parityOf, REPORT_FORMAT, SHARD_KIND, stringifyJson } from "./report";
+import { buildReport, compareReports, formatSuiteReport, parityOf, REPORT_FORMAT, SHARD_KIND, stringifyJson, verdictText } from "./report";
+import { checkReport } from "./validate";
 import { cellStatus, type CellResult } from "./run";
 import { addTallies, emptyTally, tallyGames } from "./tally";
 import { PARITY_MIN_SEATS } from "./targets";
@@ -179,6 +180,35 @@ describe("report, merge and compare", () => {
     expect(bad.checks.fail).toBe(r.checks.fail + 1);
   });
 
+  it("counts only interval-confirmed PASS/FAIL; a FAIL within noise of the bound is inconclusive (PR #34 review)", () => {
+    // 680/1000 is inside 55–70% but its interval crosses 70%; 720/1000 is outside but also crosses it.
+    const r = buildReport(o, versions, [fakeCell(o, keys[0] as string, 680), fakeCell(o, keys[1] as string, 720)]);
+    expect(r.cells.map((c) => verdictText(c.rates.success?.check ?? null))).toEqual(["inconcl.", "inconcl."]);
+    const sure = buildReport(o, versions, cells);
+    expect(sure.checks.fail).toBeGreaterThan(0);
+    // Neither success check is a confirmed FAIL here, so --strict (checks.fail > 0) can only come from other checks.
+    expect(r.checks.fail).toBe(sure.checks.fail - 1);
+    expect(r.checks.inconclusive).toBe(sure.checks.inconclusive + 2);
+  });
+
+  it("labels a fixed -n run as fixed, without cap marks (PR #34 QA)", () => {
+    const fixed = { ...o, minGames: 1000, maxGames: 1000, batch: 200 };
+    const text = formatSuiteReport(buildReport(fixed, versions, cells.map((c) => ({ ...c, converged: false }))));
+    expect(text).toContain("Fixed: 1000 games per cell");
+    expect(text).not.toMatch(/1000\+/);
+    expect(formatSuiteReport(buildReport(o, versions, cells.map((c) => ({ ...c, converged: false }))))).toMatch(/1000\+/);
+  });
+
+  it("checks a baseline's shape before use (PR #34 QA)", () => {
+    const good = JSON.parse(stringifyJson(buildReport(o, versions, cells)));
+    expect(typeof checkReport(good)).toBe("object");
+    expect(checkReport({ kind: "skimjob-sim-suite", format: 1 })).toMatch(/versions/);
+    expect(checkReport({ ...good, cells: null })).toBe("cells isn't a list");
+    expect(checkReport({ ...good, parity: [{}] })).toMatch(/parity group 1/);
+    expect(checkReport({ ...good, cells: [{ key: "x", rates: { success: { rate: "high" } } }] })).toMatch(/rate success/);
+    expect(checkReport("nope")).toMatch(/isn't a suite report/);
+  });
+
   it("merge puts shards back together exactly, and refuses a bad set", () => {
     const matrix = buildMatrix(o);
     const shard = (index: number, count: number) => ({
@@ -196,6 +226,19 @@ describe("report, merge and compare", () => {
     expect(mergeShards([shard(1, 2), shard(1, 2)])).toBe("shard 1/2 given twice");
     expect(mergeShards([shard(1, 2), { ...shard(2, 2), options: { ...o, seed: "other" } }])).toBe("shards come from runs with different settings");
     expect(mergeShards([{ kind: "nope" }])).toMatch(/isn't a suite shard/);
+    // Malformed files with the right kind and format (PR #34 QA): a message, never a crash.
+    const { shard: _drop, ...noShard } = shard(1, 2);
+    expect(mergeShards([noShard, shard(2, 2)])).toMatch(/^file 1 shard isn't/);
+    expect(mergeShards([{ ...shard(1, 2), cells: null }, shard(2, 2)])).toBe("file 1 cells isn't a list");
+    expect(mergeShards([{ ...shard(1, 2), options: { seed: 1 } }, shard(2, 2)])).toMatch(/^file 1 options.seed/);
+    const badTally = shard(1, 2);
+    expect(mergeShards([{ ...badTally, cells: badTally.cells.map((c) => ({ ...c, tally: { games: -1 } })) }, shard(2, 2)])).toMatch(/tally.games isn't a count/);
+  });
+
+  it("compare notes different sampling settings (PR #34 review)", () => {
+    const base = buildReport({ ...o, ciHalfWidth: 0.05, maxGames: 400 }, versions, cells);
+    expect(compareReports(base, buildReport(o, versions, cells))).toMatch(/sampling differs/);
+    expect(compareReports(base, base)).not.toMatch(/sampling differs/);
   });
 
   it("compare shows what moved, marks real moves and flipped checks", () => {
@@ -223,7 +266,7 @@ describe("suite arguments", () => {
     expect(r.options).toMatchObject({ minGames: 30, maxGames: 30, batch: 30, events: [false] });
     expect(r.settings).toMatchObject({ shard: { index: 2, count: 3 }, out: "sim-output/suite-shard-2-of-3.json" });
     expect(parseSuiteArgs(["merge", "a.json", "b.json", "--strict"])).toMatchObject({ kind: "merge", files: ["a.json", "b.json"], settings: { strict: true } });
-    for (const bad of [["--shard", "3/2"], ["--shard", "1/2", "--strict"], ["--mole", "sometimes"], ["--ci", "0"], ["-n", "5", "--max-games", "9"], ["--min-games", "500", "--max-games", "100"], ["merge"], ["merge", "a", "-p", "4"], ["-w", "0"]]) {
+    for (const bad of [["--shard", "3/2"], ["--shard", "1/2", "--strict"], ["--mole", "sometimes"], ["--ci", "0"], ["-n", "5", "--max-games", "9"], ["--min-games", "500", "--max-games", "100"], ["merge"], ["merge", "a", "-p", "4"], ["-w", "0"], ["-n", "3", "--batch", "5"], ["--min-games", "100", "--batch", "200"]]) {
       expect(parseSuiteArgs(bad).kind, bad.join(" ")).toBe("error");
     }
   });

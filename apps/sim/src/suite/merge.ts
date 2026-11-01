@@ -2,7 +2,8 @@
 // (tallies), so merging is putting the cells back in matrix order: the report
 // built from them is byte-identical to an unsharded run's.
 import { buildMatrix, shardCells, type SuiteOptions } from "./matrix";
-import { REPORT_FORMAT, SHARD_KIND, type ShardFile, type Versions } from "./report";
+import type { ShardFile, Versions } from "./report";
+import { checkShard, tallyProblem } from "./validate";
 import type { CellResult } from "./run";
 
 export interface Merged {
@@ -11,16 +12,14 @@ export interface Merged {
   readonly cells: readonly CellResult[];
 }
 
-const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
-
 /** Check that `shards` are the n shards of one suite run, each once; then the cells in matrix order. Or the problem. */
 export function mergeShards(shards: readonly unknown[]): Merged | string {
   if (shards.length === 0) return "no shard files";
   const files: ShardFile[] = [];
   for (const [i, s] of shards.entries()) {
-    if (!isObject(s) || s.kind !== SHARD_KIND) return `file ${i + 1} isn't a suite shard (kind "${SHARD_KIND}")`;
-    if (s.format !== REPORT_FORMAT) return `file ${i + 1} has format ${String(s.format)}, expected ${REPORT_FORMAT}`;
-    files.push(s as unknown as ShardFile);
+    const checked = checkShard(s);
+    if (typeof checked === "string") return `file ${i + 1} ${checked}`;
+    files.push(checked);
   }
   const first = files[0] as ShardFile;
   const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
@@ -42,7 +41,14 @@ export function mergeShards(shards: readonly unknown[]): Merged | string {
     const want = shardCells(matrix, f.shard.index, count).map((c) => c.key);
     const got = f.cells.map((c) => c.key);
     if (!same(want, got)) return `shard ${f.shard.index}/${count} doesn't hold the cells it should (${got.join(", ")})`;
-    for (const c of f.cells) byKey.set(c.key, c);
+  }
+  // Every file holds the right cells; now their contents.
+  for (const f of files) {
+    for (const c of f.cells) {
+      const problem = tallyProblem(c.tally);
+      if (problem) return `shard ${f.shard.index}/${count} cell ${c.key}: ${problem}`;
+      byKey.set(c.key, c);
+    }
   }
   return { options: first.options, versions: first.versions, cells: matrix.map((c) => byKey.get(c.key) as CellResult) };
 }

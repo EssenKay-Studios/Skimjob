@@ -57,7 +57,8 @@ Running:
                           sim-output/suite-shard-<i>-of-<n>.json for a shard)
       --no-files          don't write JSON
       --compare <file>    print what moved since a baseline report (e.g. docs/balance/baseline.json)
-      --strict            exit 1 if any check FAILs
+      --strict            exit 1 if any check FAILs (confirmed by its 95% interval)
+                          exit codes: 1 strict FAIL, 2 bad input (checked before running), 3 broke
       --json              print the report as JSON instead of text
   -h, --help              show this help
 `;
@@ -172,6 +173,7 @@ export function parseSuiteArgs(argv: readonly string[], readFile?: (path: string
   // A cell's games are whole batches, so the default batch is no bigger than the minimum (-n 30 plays exactly 30).
   const batch = wholeNumber(values.batch, Math.min(DEFAULTS.batch, minGames));
   if (!Number.isInteger(batch) || batch < 1) return error("--batch must be a whole number, 1 or more");
+  if (batch > minGames) return error(`--batch ${batch} is more than ${fixed === null ? "--min-games" : "-n"} ${minGames}: a cell plays whole batches`);
 
   const options: SuiteOptions = {
     seed: values.seed ?? DEFAULTS.seed,

@@ -1,6 +1,6 @@
 // `pnpm sim:suite`: the simulation suite CLI. See `pnpm sim:suite -- --help`
 // and docs/testing.md "Running the suite". design §17.4, docs/roles-v2.md §5
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { accessSync, constants, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { CONTENT_VERSION, ENGINE_VERSION } from "@skimjob/engine";
 import { invocationDir } from "../args";
@@ -9,7 +9,8 @@ import { checkOptions } from "../run";
 import { SUITE_USAGE, parseSuiteArgs, type RunSettings } from "./args";
 import { buildMatrix, cellSimOptions, shardCells } from "./matrix";
 import { mergeShards } from "./merge";
-import { buildReport, compareReports, formatSuiteReport, REPORT_KIND, reportJson, shardJson, SHARD_KIND, REPORT_FORMAT, type SuiteReport } from "./report";
+import { buildReport, compareReports, formatSuiteReport, reportJson, shardJson, SHARD_KIND, REPORT_FORMAT, type SuiteReport } from "./report";
+import { checkReport } from "./validate";
 import { runCells } from "./run";
 
 const versions = { engine: ENGINE_VERSION, content: CONTENT_VERSION };
@@ -24,24 +25,50 @@ function write(path: string, text: string): void {
   say(`  wrote ${path}`);
 }
 
-function readJson(path: string): unknown {
-  return JSON.parse(readFileSync(at(path), "utf8")) as unknown;
+/** Exit codes: 0 ok; 1 = --strict and a confirmed FAIL; 2 = bad input (arguments, files); 3 = the run itself broke. */
+class InputError extends Error {}
+
+function readJson(path: string, what: string): unknown {
+  let text: string;
+  try {
+    text = readFileSync(at(path), "utf8");
+  } catch (e) {
+    throw new InputError(`${what} ${path}: ${(e as NodeJS.ErrnoException).code ?? (e as Error).message}`);
+  }
+  try {
+    return JSON.parse(text) as unknown;
+  } catch (e) {
+    throw new InputError(`${what} ${path} isn't valid JSON (${(e as Error).message})`);
+  }
+}
+
+/** The --compare baseline, read and checked before any game runs. */
+function loadBaseline(path: string): SuiteReport {
+  const r = checkReport(readJson(path, "--compare"));
+  if (typeof r === "string") throw new InputError(`--compare ${path} ${r}`);
+  return r;
+}
+
+/** Make sure the output file can be written before the games run (as pnpm sim does). */
+function checkOut(path: string): void {
+  const st = statSync(path, { throwIfNoEntry: false });
+  if (st && !st.isFile()) throw new InputError(`--out ${path} exists and is not a file`);
+  try {
+    mkdirSync(dirname(path), { recursive: true });
+    accessSync(dirname(path), constants.W_OK);
+    if (st) accessSync(path, constants.W_OK);
+  } catch (e) {
+    throw new InputError(`--out ${path}: ${(e as NodeJS.ErrnoException).code ?? (e as Error).message}`);
+  }
 }
 
 /** Print (and write) a finished report, compare it, and pick the exit code. */
-function finish(report: SuiteReport, s: RunSettings): number {
+function finish(report: SuiteReport, s: RunSettings, base: SuiteReport | null): number {
   if (s.out !== null) write(at(s.out), reportJson(report));
   process.stdout.write(s.json ? reportJson(report) : "\n" + formatSuiteReport(report));
-  if (s.compare !== null) {
-    const base = readJson(s.compare) as SuiteReport;
-    if (base?.kind !== REPORT_KIND || base.format !== REPORT_FORMAT) {
-      say(`sim:suite: ${s.compare} isn't a suite report`);
-      return 2;
-    }
-    (s.json ? process.stderr : process.stdout).write("\n" + compareReports(base, report));
-  }
+  if (base !== null) (s.json ? process.stderr : process.stdout).write("\n" + compareReports(base, report));
   if (s.strict && report.checks.fail > 0) {
-    say(`sim:suite: ${report.checks.fail} check(s) FAILED (--strict)`);
+    say(`sim:suite: ${report.checks.fail} check(s) FAILED, confirmed by their 95% intervals (--strict)`);
     return 1;
   }
   return 0;
@@ -58,15 +85,19 @@ async function main(argv: readonly string[]): Promise<number> {
     return 2;
   }
 
+  const { settings } = parsed;
+  const base = settings.compare === null ? null : loadBaseline(settings.compare);
+  if (settings.out !== null) checkOut(at(settings.out));
+
   if (parsed.kind === "merge") {
-    let shards: unknown[];
+    const shards = parsed.files.map((f) => readJson(f, "shard"));
+    let merged;
     try {
-      shards = parsed.files.map(readJson);
+      merged = mergeShards(shards);
     } catch (e) {
-      say(`sim:suite merge: ${(e as Error).message}`);
-      return 2;
+      // mergeShards checks shapes first; this only catches what those checks missed.
+      throw new InputError(`merge: the shard files don't fit together (${(e as Error).message})`);
     }
-    const merged = mergeShards(shards);
     if (typeof merged === "string") {
       say(`sim:suite merge: ${merged}`);
       return 2;
@@ -74,10 +105,10 @@ async function main(argv: readonly string[]): Promise<number> {
     if (merged.versions.engine !== versions.engine || merged.versions.content !== versions.content) {
       say(`  note: shards ran engine ${merged.versions.engine}, content ${merged.versions.content} (this checkout: ${versions.engine}, ${versions.content})`);
     }
-    return finish(buildReport(merged.options, merged.versions, merged.cells), parsed.settings);
+    return finish(buildReport(merged.options, merged.versions, merged.cells), settings, base);
   }
 
-  const { options, settings } = parsed;
+  const { options } = parsed;
   const matrix = buildMatrix(options);
   const cells = settings.shard ? shardCells(matrix, settings.shard.index, settings.shard.count) : matrix;
   const errors = new Set<string>();
@@ -95,7 +126,8 @@ async function main(argv: readonly string[]): Promise<number> {
   try {
     results = await runCells(options, cells, pool, (r, done, total) => {
       const secs = ((performance.now() - started) / 1000).toFixed(0);
-      say(`  [${done}/${total}] ${r.key}: ${r.tally.games} games${r.converged ? "" : " (hit --max-games)"}  ${secs}s`);
+      const capped = r.converged || options.minGames === options.maxGames ? "" : " (reached the --max-games cap)";
+      say(`  [${done}/${total}] ${r.key}: ${r.tally.games} games${capped}  ${secs}s`);
     });
   } finally {
     await pool.close();
@@ -106,7 +138,7 @@ async function main(argv: readonly string[]): Promise<number> {
     if (settings.out !== null) write(at(settings.out), shardJson({ kind: SHARD_KIND, format: REPORT_FORMAT, versions, options, shard: settings.shard, cells: results }));
     return 0;
   }
-  return finish(buildReport(options, versions, results), settings);
+  return finish(buildReport(options, versions, results), settings, base);
 }
 
 main(process.argv.slice(2)).then(
@@ -114,7 +146,12 @@ main(process.argv.slice(2)).then(
     process.exitCode = code;
   },
   (e: Error) => {
+    if (e instanceof InputError) {
+      process.stderr.write(`sim:suite: ${e.message}\n`);
+      process.exitCode = 2;
+      return;
+    }
     process.stderr.write(`sim:suite: ${e.stack ?? e.message}\n`);
-    process.exitCode = 1;
+    process.exitCode = 3;
   },
 );

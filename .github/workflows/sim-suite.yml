@@ -22,7 +22,7 @@ on:
         description: "Other sim:suite options without spaces inside values, e.g. -p 4-8 --mole on"
         default: ""
       strict:
-        description: "Fail the run if any check FAILs"
+        description: "Fail the run if any check FAILs (confirmed by its 95% interval)"
         type: boolean
         default: false
 

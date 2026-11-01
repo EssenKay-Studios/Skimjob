@@ -66,11 +66,20 @@ export interface ParityGroup {
   readonly check: CheckResult;
 }
 
+/**
+ * Only interval-confirmed results count as PASS or FAIL: the whole 95%
+ * interval inside the target (PASS) or outside it (FAIL). Anything else is
+ * inconclusive, whatever side its point estimate is on (for parity the point
+ * spread is biased upward by noise, so only its interval range is used).
+ * `--strict` fails on `fail` only.
+ */
 export interface CheckCounts {
+  /** Confirmed passes. */
   readonly pass: number;
+  /** Confirmed failures, plus one if bots sent refused commands. */
   readonly fail: number;
-  /** Of those, how many the 95% interval doesn't back up yet. */
-  readonly unsure: number;
+  /** The interval crosses the target: more games needed to tell. */
+  readonly inconclusive: number;
 }
 
 export interface SuiteReport {
@@ -162,9 +171,9 @@ export function buildReport(options: SuiteOptions, versions: Versions, cells: re
     games: cells.reduce((s, c) => s + c.tally.games, 0),
     rejections,
     checks: {
-      pass: decided.filter((c) => c.verdict === "pass").length,
-      fail: decided.filter((c) => c.verdict === "fail").length + (rejections > 0 ? 1 : 0),
-      unsure: decided.filter((c) => !c.sure).length,
+      pass: decided.filter((c) => c.verdict === "pass" && c.sure).length,
+      fail: decided.filter((c) => c.verdict === "fail" && c.sure).length + (rejections > 0 ? 1 : 0),
+      inconclusive: decided.filter((c) => !c.sure).length,
     },
     cells: cellReports,
     parity,
@@ -193,11 +202,15 @@ export const shardJson = (s: ShardFile): string => stringifyJson(s) + "\n";
 
 // ---- text ----
 
+/** min = max: a fixed number of games per cell (`-n`), not adaptive. */
+export const fixedGames = (o: SuiteOptions): boolean => o.minGames === o.maxGames;
+
 const pp = (v: number | null): string => (v === null ? "—" : (v * 100).toFixed(1));
 
-function verdictText(c: CheckResult | null): string {
+/** PASS / FAIL only when the interval confirms it; otherwise "inconcl.". */
+export function verdictText(c: CheckResult | null): string {
   if (!c || c.verdict === "n/a") return "";
-  return `${c.verdict.toUpperCase()}${c.sure ? "" : "?"}`;
+  return c.sure ? c.verdict.toUpperCase() : "inconcl.";
 }
 
 /** "66.1±1.9 PASS": the rate and half-width in percentage points, and the check. */
@@ -220,7 +233,7 @@ export function formatSuiteReport(r: SuiteReport): string {
   const rateCols = RATES.filter((d) => r.cells.some((c) => c.rates[d.id] !== undefined));
   const cells = table(
     ["cell", "games", ...rateCols.map((d) => (d.band ? `${d.label} ${bandText(d.band)}` : d.label))],
-    r.cells.map((c) => [c.key, `${c.games}${c.converged ? "" : "+"}`, ...rateCols.map((d) => rateCell(c.rates[d.id]))]),
+    r.cells.map((c) => [c.key, `${c.games}${c.converged || fixedGames(o) ? "" : "+"}`, ...rateCols.map((d) => rateCell(c.rates[d.id]))]),
   );
   const parity = table(
     ["parity group (events pooled)", "games", `spread ≤${PARITY_MAX_SPREAD.toFixed(2)}`, "95% range", "", "highest", "lowest"],
@@ -242,17 +255,21 @@ export function formatSuiteReport(r: SuiteReport): string {
   const mix = o.mix.map((m) => `${m.personality}:${m.weight}`).join(",");
   const lines = [
     `Skimjob sim suite (engine ${r.versions.engine}, content ${r.versions.content}): ${r.games} games, seed "${o.seed}", bots ${mix}`,
-    `Adaptive: ${o.minGames}–${o.maxGames} games per cell in batches of ${o.batch}, until every checked 95% interval is within ±${(o.ciHalfWidth * 100).toFixed(1)} pp` +
+    (fixedGames(o)
+      ? `Fixed: ${o.maxGames} games per cell${o.maxGames % o.batch === 0 ? "" : ` (rounded up to whole batches of ${o.batch})`}`
+      : `Adaptive: ${o.minGames}–${o.maxGames} games per cell in batches of ${o.batch}, until every checked 95% interval is within ±${(o.ciHalfWidth * 100).toFixed(1)} pp`) +
       (o.contentOverrides ? `; overrides ${JSON.stringify(o.contentOverrides)}` : ""),
     "",
-    "Rates in % ± 95% half-width (Wilson), pp. PASS/FAIL on the estimate; '?' = the interval crosses the target (more games could flip it).",
-    "games+ = stopped at the game cap before every interval was narrow enough.",
+    "Rates in % ± 95% half-width (Wilson), pp. PASS / FAIL only when the whole interval is inside / outside the target;",
+    "inconcl. = the interval crosses it (more games needed). Intervals are nominal (not adjusted for adaptive stopping or for many checks).",
+    ...(fixedGames(o) ? [] : ["games+ = stopped at the --max-games cap (rounded up to whole batches) before every interval was narrow enough."]),
     cells,
     "",
     "Role parity (docs/roles-v2.md §5): each role's win credit ÷ fair share 1/n, all games; spread = max − min across roles.",
+    "The point spread is biased upward by noise, so the verdict uses the 95% range: FAIL only if even the closest the intervals allow is over the limit.",
     parity,
     "",
-    `Checks: ${r.checks.pass} PASS, ${r.checks.fail} FAIL (${r.checks.unsure} not yet backed by their interval).`,
+    `Checks: ${r.checks.pass} PASS, ${r.checks.fail} FAIL, ${r.checks.inconclusive} inconclusive (PASS/FAIL confirmed by the 95% interval; --strict fails on FAIL).`,
   ];
   if (r.rejections > 0) lines.push(`FAIL: bots sent ${r.rejections} refused commands (should be 0).`);
   return lines.join("\n") + "\n";
@@ -270,6 +287,11 @@ export function compareReports(base: SuiteReport, cur: SuiteReport): string {
   const notes: string[] = [];
   if (base.versions.engine !== cur.versions.engine || base.versions.content !== cur.versions.content) {
     notes.push(`versions: engine ${base.versions.engine} → ${cur.versions.engine}, content ${base.versions.content} → ${cur.versions.content}`);
+  }
+  const sampling = (o: SuiteOptions) => ({ ciHalfWidth: o.ciHalfWidth, minGames: o.minGames, maxGames: o.maxGames, batch: o.batch });
+  if (JSON.stringify(sampling(base.options)) !== JSON.stringify(sampling(cur.options))) {
+    const show = (o: SuiteOptions) => `±${(o.ciHalfWidth * 100).toFixed(1)} pp, ${o.minGames}–${o.maxGames} games`;
+    notes.push(`sampling differs (baseline ${show(base.options)}, now ${show(cur.options)}): the wider run's intervals decide what counts as a real move`);
   }
   if (base.options.seed !== cur.options.seed) notes.push(`seeds differ ("${base.options.seed}" vs "${cur.options.seed}"): games aren't paired, so small moves are noise`);
   const baseCells = new Map(base.cells.map((c) => [c.key, c]));
@@ -290,19 +312,20 @@ export function compareReports(base: SuiteReport, cur: SuiteReport): string {
         if (!x || !y || x.rate === null || y.rate === null) return "";
         const delta = (x.rate - y.rate) * 100;
         const noise = Math.hypot(x.halfWidth ?? 0, y.halfWidth ?? 0) * 100;
-        const xv = verdictText(x.check).replace("?", "");
-        const yv = verdictText(y.check).replace("?", "");
+        const xv = verdictText(x.check);
+        const yv = verdictText(y.check);
         if (xv !== yv) flips.push(`${c.key} ${d.label}: ${yv} → ${xv} (${pp(y.rate)}% → ${pp(x.rate)}%)`);
         return `${delta >= 0 ? "+" : ""}${delta.toFixed(1)}${Math.abs(delta) > noise ? "*" : " "}`;
       }),
     ]);
   }
-  for (const k of baseCells.keys()) if (!cur.cells.some((c) => c.key === k)) notes.push(`${k}: only in the baseline`);
+  const onlyBase = [...baseCells.keys()].filter((k) => !cur.cells.some((c) => c.key === k));
+  if (onlyBase.length > 0) notes.push(`${onlyBase.length} baseline cell${onlyBase.length > 1 ? "s" : ""} not in this run${onlyBase.length <= 5 ? ` (${onlyBase.join(", ")})` : ""}`);
   const baseParity = new Map(base.parity.map((p) => [p.key, p]));
   const parityRows = cur.parity.flatMap((p) => {
     const b = baseParity.get(p.key);
     if (!b || b.spread === null || p.spread === null) return [];
-    if (b.check.verdict !== p.check.verdict) flips.push(`${p.key} parity: ${b.check.verdict.toUpperCase()} → ${p.check.verdict.toUpperCase()} (${b.spread.toFixed(2)} → ${p.spread.toFixed(2)})`);
+    if (verdictText(b.check) !== verdictText(p.check)) flips.push(`${p.key} parity: ${verdictText(b.check)} → ${verdictText(p.check)} (${b.spread.toFixed(2)} → ${p.spread.toFixed(2)})`);
     return [[p.key, b.spread.toFixed(2), p.spread.toFixed(2), `${p.spread - b.spread >= 0 ? "+" : ""}${(p.spread - b.spread).toFixed(2)}`]];
   });
   return [

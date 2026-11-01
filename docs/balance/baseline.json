@@ -20,9 +20,9 @@
  "games": 20000,
  "rejections": 0,
  "checks": {
-  "pass": 122,
-  "fail": 131,
-  "unsure": 102
+  "pass": 71,
+  "fail": 80,
+  "inconclusive": 102
  },
  "cells": [
   {"key":"2p/mole-off/events-on","players":2,"mole":"off","events":true,"games":400,"converged":false,"rejections":0,"rates":{"success":{"num":194,"den":400,"rate":0.485,"lo":0.4364,"hi":0.5339,"halfWidth":0.0487,"band":{"lo":0.55,"hi":0.7},"check":{"verdict":"fail","sure":true}},"heatShare":{"num":94,"den":206,"rate":0.4563,"lo":0.3897,"hi":0.5245,"halfWidth":0.0674,"band":{"lo":0.1,"hi":0.2},"check":{"verdict":"fail","sure":true}},"comeback":{"num":122,"den":135,"rate":0.9037,"lo":0.8422,"hi":0.9429,"halfWidth":0.0503,"band":{"lo":0,"hi":0.5},"check":{"verdict":"fail","sure":true}},"decidedEarly":{"num":35,"den":194,"rate":0.1804,"lo":0.1327,"hi":0.2406,"halfWidth":0.0539,"band":{"lo":0,"hi":0.15},"check":{"verdict":"fail","sure":false}},"shakedownAccuracy":{"num":0,"den":0,"rate":null,"lo":null,"hi":null,"halfWidth":null,"band":null,"check":null}}},
