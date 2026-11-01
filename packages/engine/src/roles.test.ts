@@ -255,14 +255,17 @@ describe("Muscle: cancel a shakedown after the vote passes — design §8, §11.
     expect(after.phase).toEqual({ kind: "planning", round: 2 });
   });
 
-  it("the Muscle's cancel is private until the window ends; then the ledger says it was cancelled, not by whom", () => {
+  it("the Muscle's cancel is private until the window ends; then the ledger says it was cancelled, and names the Muscle as the target was dirty (v2 §2)", () => {
     const s = setup(["muscle"]);
     const cancelled = run(s, cancel("p0"));
     expect(cancelled.log.at(-1)).toMatchObject({ type: "abilityResolved", visibility: { kind: "private", player: "p0" }, ability: { kind: "cancelShakedown", meetingId: "emergency-p2", target: "p1" } });
     // Nobody else's view changes when the Muscle acts.
     for (const id of ["p1", "p2"]) expect(JSON.stringify(viewFor(cancelled, id))).toBe(JSON.stringify(viewFor(s, id)));
     const after = run(cancelled, RESOLVE);
-    expect(since(cancelled, after)).toEqual([{ type: "shakedownCancelled", visibility: { kind: "public" }, meetingId: "emergency-p2", target: "p1" }]);
+    expect(since(cancelled, after)).toEqual([
+      { type: "shakedownCancelled", visibility: { kind: "public" }, meetingId: "emergency-p2", target: "p1" },
+      { type: "muscleNamed", visibility: { kind: "public" }, meetingId: "emergency-p2", player: "p0", target: "p1" },
+    ]);
     expect(after.players.p1).toMatchObject({ stash: 6, timesShakenDown: 0 });
     expect(after.players.p0?.roleState.usedThisGame).toBe(1);
     expect(after.phase).toEqual({ kind: "planning", round: 2 });

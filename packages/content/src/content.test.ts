@@ -152,9 +152,9 @@ describe("starter roles — design §8, §8.1", () => {
     for (const id of STARTER_ROLES) expect(ROLES[id]?.faction).toBe("crew");
   });
 
-  it("perks: eight kinds, the Shield spent by itself, the rest with useAbility (design §8.3)", () => {
-    expect([...PERK_IDS].sort()).toEqual(["alibi", "ballot", "extraVote", "peek", "recharge", "rig", "shield", "tail"]);
-    for (const id of PERK_IDS) expect(PERKS[id].spent, id).toBe(id === "shield" ? "auto" : "use");
+  it("perks: eight kinds plus the Smooth Talker's Emergency; Shield and Emergency spent by themselves, the rest with useAbility (design §8.3)", () => {
+    expect([...PERK_IDS].sort()).toEqual(["alibi", "ballot", "emergency", "extraVote", "peek", "recharge", "rig", "shield", "tail"]);
+    for (const id of PERK_IDS) expect(PERKS[id].spent, id).toBe(id === "shield" || id === "emergency" ? "auto" : "use");
     expect(PERK_RULES).toEqual({ extraVoteWeight: 1, rigOptions: 2 });
   });
 

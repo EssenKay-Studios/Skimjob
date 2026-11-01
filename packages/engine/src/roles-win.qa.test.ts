@@ -1,4 +1,4 @@
-// QA (PR #13): Driver and Mole through every real ending (success, missed final
+// QA (PR #13): Auditor and Mole through every real ending (success, missed final
 // target, raid mid-round, raid at a checkpoint), ties between Moles and others,
 // tip-off edges (refusals write nothing, re-submits, per-act limits, overrides),
 // Mole dealing per player count, a counterfactual Mole-deal leak check and
@@ -18,7 +18,7 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
     seed: "qa-win",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: ["rookie", "lookout", "fence", "driver"], // no Muscle window, no Snitch
+    rolePool: ["rookie", "lookout", "fence", "auditor"], // no Muscle window, no Snitch
     mole: "off",
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
@@ -72,8 +72,8 @@ const outcome = (s: GameState): Outcome => {
 };
 const sorted = (ids: readonly PlayerId[]) => [...ids].sort();
 
-// p0 Mole, p1 Driver, p2 Lookout, p3 Lookout.
-const ROLES4 = ["mole", "driver", "lookout", "lookout"];
+// p0 Mole, p1 Auditor, p2 Lookout, p3 Lookout.
+const ROLES4 = ["mole", "auditor", "lookout", "lookout"];
 
 describe("success at the final meeting — design §3", () => {
   const ending = (patch: Record<PlayerId, Patch>, roles = ROLES4) => {
@@ -98,28 +98,28 @@ describe("success at the final meeting — design §3", () => {
     expect(sorted(o.winners)).toEqual(["p2", "p3"]);
   });
 
-  it("the Driver wins a success with the top score; a lower Driver doesn't", () => {
+  it("the Auditor wins a success with the top score; a lower Auditor doesn't", () => {
     expect(ending({ p0: { stash: 5 }, p1: { stash: 30 }, p2: { stash: 20 } }).winners).toEqual(["p1"]);
     expect(ending({ p1: { stash: 10 }, p2: { stash: 20 } }).winners).toEqual(["p2"]);
   });
 
   it("two Moles at 9 players never win a success", () => {
-    const roles = ["mole", "mole", "driver"];
+    const roles = ["mole", "mole", "auditor"];
     const o = ending({ p0: { stash: 40 }, p1: { stash: 40 }, p2: { stash: 3 }, p5: { stash: 7 } }, [...roles, ...Array(6).fill("lookout")]);
     expect(o.winners).toEqual(["p5"]);
   });
 });
 
 describe("missed final target — design §3, §8", () => {
-  it("only the Mole(s) win; a top-stash Driver gets nothing", () => {
-    const s = toFinalMeeting(game(5, ["mole", "driver", "mole", "lookout", "lookout"]));
+  it("only the Mole(s) win; a top-stash Auditor gets nothing", () => {
+    const s = toFinalMeeting(game(5, ["mole", "auditor", "mole", "lookout", "lookout"]));
     const o = outcome(run(withPlayers({ ...s, haul: 0 }, { p1: { stash: 99 } }), CLOSE));
     expect(o).toMatchObject({ result: "failed", reason: "target" });
     expect(sorted(o.winners)).toEqual(["p0", "p2"]);
   });
 
-  it("with no Mole dealt, nobody wins a missed target, Driver included", () => {
-    const s = toFinalMeeting(game(3, ["driver", "lookout", "lookout"]));
+  it("with no Mole dealt, nobody wins a missed target, Auditor included", () => {
+    const s = toFinalMeeting(game(3, ["auditor", "lookout", "lookout"]));
     expect(outcome(run(withPlayers({ ...s, haul: 0 }, { p0: { stash: 99 } }), CLOSE)).winners).toEqual([]);
   });
 });
@@ -134,27 +134,27 @@ describe("Heat raid mid-round — design §3, §7, §8", () => {
     return o;
   };
 
-  it("Driver tied with the Mole on every tie-break: only the Mole wins (the Driver is crew, role deck v2 R1)", () => {
+  it("Auditor tied with the Mole on every tie-break: only the Mole wins (the Auditor is crew, role deck v2 R1)", () => {
     expect(raid(ROLES4, { p0: { stash: 10 }, p1: { stash: 10 } }).winners).toEqual(["p0"]);
   });
 
-  it("Driver level on stash but shaken down more than the Mole: only the Mole wins", () => {
+  it("Auditor level on stash but shaken down more than the Mole: only the Mole wins", () => {
     expect(raid(ROLES4, { p0: { stash: 10 }, p1: { stash: 10, timesShakenDown: 1 } }).winners).toEqual(["p0"]);
   });
 
-  it("Driver level with a Lookout on top: the crew can't win a failure; the Mole does (design §3)", () => {
+  it("Auditor level with a Lookout on top: the crew can't win a failure; the Mole does (design §3)", () => {
     expect(raid(ROLES4, { p1: { stash: 10 }, p2: { stash: 10 } }).winners).toEqual(["p0"]);
   });
 
-  it("no saboteur dealt: nobody wins a Heat failure, a top-stash Driver included (design §3)", () => {
-    expect(raid(["driver", "lookout", "lookout"], { p0: { stash: 5 } }).winners).toEqual([]);
-    expect(raid(["driver", "lookout", "lookout"], { p1: { stash: 5 } }).winners).toEqual([]);
+  it("no saboteur dealt: nobody wins a Heat failure, a top-stash Auditor included (design §3)", () => {
+    expect(raid(["auditor", "lookout", "lookout"], { p0: { stash: 5 } }).winners).toEqual([]);
+    expect(raid(["auditor", "lookout", "lookout"], { p1: { stash: 5 } }).winners).toEqual([]);
   });
 });
 
 describe("Heat raid at a checkpoint — design §3, §11.4", () => {
-  it("a missed Act 1 checkpoint pushes Heat to 100: the Mole with the bigger stash wins, not the top Driver (design §3)", () => {
-    const roles = ["mole", "driver", "mole", ...Array(6).fill("lookout")];
+  it("a missed Act 1 checkpoint pushes Heat to 100: the Mole with the bigger stash wins, not the top Auditor (design §3)", () => {
+    const roles = ["mole", "auditor", "mole", ...Array(6).fill("lookout")];
     let s = game(9, roles);
     for (let r = 0; r < 3; r++) s = run({ ...s, heat: 0 }, ...allIn(s), ROUND);
     s = run(withPlayers({ ...s, haul: 0, heat: 85 }, { p1: { stash: 12 }, p0: { stash: 11 } }), SCHED, OPEN, CLOSE);
@@ -166,7 +166,7 @@ describe("Heat raid at a checkpoint — design §3, §11.4", () => {
 });
 
 describe("tip-off edges — design §8", () => {
-  const mole3 = () => game(3, ["mole", "driver", "lookout"]);
+  const mole3 = () => game(3, ["mole", "auditor", "lookout"]);
 
   it("a refused tip-off writes nothing (no event anyone could see), for a Mole and a non-Mole alike", () => {
     const used = run(mole3(), mv("p0", "lobby", 0, TIP), ROUND);

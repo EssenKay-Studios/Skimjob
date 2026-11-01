@@ -16,6 +16,7 @@ import type { Draw } from "./handle";
 import { isDuel } from "./setup";
 import { endOfDuelAct } from "./duel";
 import { cardEffects, cardHeat, closedRoom, isAudit, isBlackout, roundJob, startRound } from "./deck";
+import { roundRewards, stopRaid } from "./crew";
 
 export { actOfRound, isLastRoundOfAct };
 
@@ -70,6 +71,11 @@ function checkAbility(state: GameState, player: PlayerState, raw: unknown): Abil
     case "snitch":
     case "audit":
     case "checkStash":
+    case "bless":
+    case "bagman":
+    case "cleaner":
+    case "fixer":
+    case "foresee":
       return "your role's power isn't used in a move";
     case "none":
       return "your role has no ability";
@@ -173,6 +179,12 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
     haulDelta += loot - kept;
     if (kept > 0) pocketed++;
     events.push({ type: "lootSplit", visibility: privateTo(id), player: id, round, room, loot, toHaul: loot - kept, toStash: kept });
+    // Bagman (v2 §2): handed in everything (and something) → the bank adds its bonus, hidden in the round's Haul change.
+    const power = powerFor(id);
+    if (power.kind === "bagman" && kept === 0 && loot > 0 && power.bonus > 0) {
+      haulDelta += power.bonus;
+      events.push({ type: "abilityResolved", visibility: privateTo(id), player: id, round, ability: { kind: "bagman", bonus: power.bonus } });
+    }
   }
   // Each stash as the round's splits, safe moves and blackmail change it.
   const stash = new Map<PlayerId, number>(order.map((id) => [id, player(id).stash + (toStash.get(id) ?? 0)]));
@@ -204,6 +216,11 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
   // §5.2 step 4, §7: baseline + room pressure, rounded, plus any Mole tip-off (§8, hidden in
   // the round's total), then clamped once after every Heat source.
   const counts = Object.fromEntries(Object.entries(visitors).map(([room, ids]) => [room, ids.length]));
+  // Cleaner (v2 §2): its visit to its cooling room counts as `visitors` visitors for that room's Heat pressure.
+  for (const id of order) {
+    const power = powerFor(id);
+    if (power.kind === "cleaner" && moveOf(id).room === power.room) counts[power.room] = (counts[power.room] ?? 0) + power.visitors - 1;
+  }
   let tipOffs = 0;
   for (const id of order) {
     const power = powerFor(id);
@@ -267,9 +284,15 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
     heat,
   });
 
-  // §5.2 step 6: Heat at the max means the cops raid and the heist fails at once (§3, §7).
-  // Otherwise the round's alibis open (the fold of `roundResolved`); `closeAlibis` moves on.
+  // design §8.3 (v2 §2): the Bagman's and Cleaner's rewards for this round.
+  events.push(...roundRewards(state, events, round));
+
+  // §5.2 step 6: Heat at the max means the cops raid and the heist fails at once (§3, §7),
+  // unless a Fixer stops it (v2 §2). Otherwise the round's alibis open (the fold of
+  // `roundResolved`); `closeAlibis` moves on.
   if (heat >= job.heat.max) {
+    const saved = stopRaid(events.reduce(applyEvent, before), round);
+    if (saved.length > 0) return [...events, ...saved];
     events.push({ type: "copsRaided", visibility: PUBLIC, round, heat });
     events.push(gameEnded(before, events, "heat"));
   }

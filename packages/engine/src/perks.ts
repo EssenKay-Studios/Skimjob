@@ -5,13 +5,12 @@
 // come in role deck v2 R2/R3) and live in `roleState.perks`. Every spend is a
 // private `perkUsed` (folded in reduce.ts), plus `alibiVerified` (public) for
 // the Alibi and `rigPicked` for the Rig's choice. Refusals keep the token.
-import { EVENT_DECK, EVENTS_FROM_ROUND, PERKS, PERK_RULES, ROUNDS_PER_ACT, type PerkId } from "@skimjob/content";
+import { EVENT_DECK, PERKS, PERK_RULES, type PerkId } from "@skimjob/content";
 import type { GameEvent, GameState, PlayerId, PlayerState, ResolvedPerk } from "./types";
 import { PUBLIC, privateTo } from "./types";
 import type { Draw } from "./handle";
 import { isObject, show } from "./check";
-import { jobFor } from "./overrides";
-import { eventsOn } from "./deck";
+import { cardRound, foreseenCard } from "./deck";
 
 type Result = GameEvent[] | string;
 type Raw = Record<string, unknown>;
@@ -102,8 +101,7 @@ function recharge(state: GameState, player: PlayerState): Result {
 /** The round whose card flips next, if it has one (events on, round 2 onwards, not past the last round). */
 function nextCardRound(state: GameState): number | null {
   const next = state.round + 1;
-  const last = jobFor(state.config).checkpoints.perPlayer.length * ROUNDS_PER_ACT;
-  return eventsOn(state.config) && next >= EVENTS_FROM_ROUND && next <= last ? next : null;
+  return cardRound(state.config, next) ? next : null;
 }
 
 /**
@@ -111,13 +109,18 @@ function nextCardRound(state: GameState): number | null {
  * first flips unless you pick another (`rigPick`). Someone else's Rig of the
  * same round never refuses yours (a refusal would tell you who holds what,
  * e.g. after a Double-cross; PR #25 review): if several players rig a round,
- * the oldest Rig's pick flips. One Rig of a round per player.
+ * the oldest Rig's pick flips. One Rig of a round per player. If a
+ * Mastermind already foresaw the card (v2 §2), it is the first option, so
+ * the Mastermind's view stays true unless someone picks the other.
  */
 function rig(state: GameState, player: PlayerState, draw: Draw): Result {
   const round = nextCardRound(state);
   if (round === null) return "there is no next event card to rig";
   if (state.rigs.some((r) => r.player === player.id && r.round === round)) return "you already rigged the next event card";
-  const cards = draw.shuffle(EVENT_DECK).slice(0, PERK_RULES.rigOptions);
+  const known = foreseenCard(state, round);
+  const cards = known
+    ? [known, ...draw.shuffle(EVENT_DECK.filter((c) => c !== known)).slice(0, PERK_RULES.rigOptions - 1)]
+    : draw.shuffle(EVENT_DECK).slice(0, PERK_RULES.rigOptions);
   return [spent(state, player, { kind: "rig", round, cards })];
 }
 
@@ -131,7 +134,10 @@ function rigPick(state: GameState, player: PlayerState, raw: Raw): Result {
 
 type Spend = (state: GameState, player: PlayerState, raw: Raw, draw: Draw) => Result;
 
-const SPENDS: { readonly [K in Exclude<PerkId, "shield">]: Spend } = {
+/** Perks the engine spends by itself (design §8.3): the Shield, and the Emergency when you call one more meeting. */
+type AutoPerk = "shield" | "emergency";
+
+const SPENDS: { readonly [K in Exclude<PerkId, AutoPerk>]: Spend } = {
   peek,
   extraVote: (state, player) => extraVote(state, player),
   ballot,
@@ -142,18 +148,22 @@ const SPENDS: { readonly [K in Exclude<PerkId, "shield">]: Spend } = {
 };
 
 /** Whether `kind` names a perk spend (or the Rig's pick) for `useAbility`. */
-export const isPerkSpend = (kind: string): boolean => kind === "rigPick" || kind === "shield" || Object.hasOwn(SPENDS, kind);
+export const isPerkSpend = (kind: string): boolean => kind === "rigPick" || kind === "shield" || kind === "emergency" || Object.hasOwn(SPENDS, kind);
 
 /** `useAbility` with a perk: needs a token of that kind (except the Rig's pick). design §8.3 */
 export function usePerk(state: GameState, player: PlayerState, raw: unknown, draw: Draw): Result {
   if (!isObject(raw) || typeof raw.kind !== "string") return "ability must be an object with a kind";
   if (raw.kind === "rigPick") return rigPick(state, player, raw);
   if (raw.kind === "shield") return "a Shield is spent by itself when a shakedown of you passes";
-  const spend = Object.hasOwn(SPENDS, raw.kind) ? SPENDS[raw.kind as Exclude<PerkId, "shield">] : undefined;
+  if (raw.kind === "emergency") return "an Emergency is spent by calling an emergency meeting";
+  const spend = Object.hasOwn(SPENDS, raw.kind) ? SPENDS[raw.kind as Exclude<PerkId, AutoPerk>] : undefined;
   if (!spend) return `unknown perk ${raw.kind}`;
   if (perkCount(player, raw.kind as PerkId) === 0) return `you have no ${PERKS[raw.kind as PerkId].name} perk`;
   return spend(state, player, raw, draw);
 }
+
+/** Emergency (Smooth Talker's reward): spent as `player` calls `meetingId` beyond their one per game. */
+export const emergencySpent = (state: GameState, player: PlayerState, meetingId: string): GameEvent => spent(state, player, { kind: "emergency", meetingId });
 
 /** Shield: whether a passed shakedown of `target` is cancelled by their Shield (spent by itself). */
 export function shieldFor(state: GameState, target: PlayerId, meetingId: string): GameEvent[] {

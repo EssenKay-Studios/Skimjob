@@ -146,7 +146,13 @@ export type ResolvedAbility =
    * Detective: whether `target`'s stash (with any Fence safe, as the clean
    * check counts it) is at or above `threshold`, the current act's clean threshold. design §8 (v2 §2)
    */
-  | { readonly kind: "checkStash"; readonly target: PlayerId; readonly threshold: number; readonly dirty: boolean };
+  | { readonly kind: "checkStash"; readonly target: PlayerId; readonly threshold: number; readonly dirty: boolean }
+  /** Priest: `target` is blessed for `act` (a clean shakedown of them that act is paid by the bank). design §8 (v2 §2) */
+  | { readonly kind: "bless"; readonly target: PlayerId; readonly act: ActNumber }
+  /** Bagman: it pocketed nothing this round, so the bank added `bonus` to the Haul (inside the round's Haul change). design §8 (v2 §2) */
+  | { readonly kind: "bagman"; readonly bonus: number }
+  /** Fixer: its once-per-game save stopped a raid; it lost `lost` from its stash. design §8 (v2 §2) */
+  | { readonly kind: "fixer"; readonly lost: number };
 
 /** An ability took effect. Private to its user; `round` is the latest round started. design §8 */
 export interface AbilityResolved {
@@ -218,7 +224,30 @@ export interface CopsRaided {
   readonly heat: number;
 }
 
+/**
+ * Heat reached the max, but a Fixer's once-per-game save stopped the raid:
+ * Heat is now `heat`. It doesn't say who. design §7, §8 (v2 §2)
+ */
+export interface RaidStopped {
+  readonly type: "raidStopped";
+  readonly visibility: PublicVisibility;
+  readonly round: number;
+  readonly heat: number;
+}
+
 // ---------------------------------------------------------------- events deck (§10)
+
+/**
+ * Mastermind: the card that flips at the start of `round`, unless a Rig
+ * changes it. Only the Mastermind is told. design §8, §10 (v2 §2)
+ */
+export interface CardForeseen {
+  readonly type: "cardForeseen";
+  readonly visibility: PrivateVisibility;
+  readonly player: PlayerId;
+  readonly round: number;
+  readonly card: EventId;
+}
 
 /**
  * The round's event card, flipped for everyone at the start of the round
@@ -442,6 +471,28 @@ export interface ShakedownCancelled {
 }
 
 /**
+ * The shakedown of `target` was clean and they were blessed this act: the
+ * bank pays their compensation, so `amount` goes back into the Haul. It
+ * doesn't say who blessed them. design §8 (v2 §2: Priest)
+ */
+export interface BlessingPaid {
+  readonly type: "blessingPaid";
+  readonly visibility: PublicVisibility;
+  readonly meetingId: string;
+  readonly target: PlayerId;
+  readonly amount: number;
+}
+
+/** The Muscle cancelled the shakedown of a player who wasn't clean, so the ledger names it. design §8 (v2 §2) */
+export interface MuscleNamed {
+  readonly type: "muscleNamed";
+  readonly visibility: PublicVisibility;
+  readonly meetingId: string;
+  readonly player: PlayerId;
+  readonly target: PlayerId;
+}
+
+/**
  * The Snitch's target was shaken down and wasn't clean: the Snitch's ballot
  * weighs `votes` more for the rest of the game. design §8 (v2 §2)
  */
@@ -491,7 +542,9 @@ export type ResolvedPerk =
   | { readonly kind: "alibi"; readonly round: number; readonly room: RoomId }
   | { readonly kind: "recharge" }
   /** The cards you may pick from for `round`'s flip; the first flips unless you pick (`rigPicked`). */
-  | { readonly kind: "rig"; readonly round: number; readonly cards: readonly EventId[] };
+  | { readonly kind: "rig"; readonly round: number; readonly cards: readonly EventId[] }
+  /** Spent by calling `meetingId`, an emergency meeting beyond your one per game (Smooth Talker's reward). */
+  | { readonly kind: "emergency"; readonly meetingId: string };
 
 /** You spent a perk token. Private to you; `round` is the latest round started. design §8.3 */
 export interface PerkUsed {
@@ -618,6 +671,8 @@ export type GameEvent =
   | PocketCount
   | RoundResolved
   | CopsRaided
+  | RaidStopped
+  | CardForeseen
   | EventFlipped
   | DoubleCrossOffered
   | DoubleCrossAnswered
@@ -639,6 +694,8 @@ export type GameEvent =
   | ShakedownCancelled
   | ShakedownResolved
   | SnitchRewarded
+  | BlessingPaid
+  | MuscleNamed
   | CheckpointChecked
   | PerkGranted
   | PerkUsed

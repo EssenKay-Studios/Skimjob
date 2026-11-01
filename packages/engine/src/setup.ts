@@ -17,6 +17,7 @@ import {
   MAX_PLAYERS,
   MIN_PLAYERS,
   POOL_ROLES,
+  EVENT_DECK,
   STARTER_ROLES,
   type DarkSideMix,
   type Faction,
@@ -28,6 +29,7 @@ import type { GameConfig, GameEvent, GameState, MoleSetting, RngState, VoteVisib
 import { PUBLIC, REVEAL, privateTo } from "./types";
 import { pick, randomInt, seedRng, shuffle } from "./rng";
 import { replay } from "./reduce";
+import { eventsOn, foresee } from "./deck";
 import { show } from "./check";
 import { jobById, roomsInPlay } from "./job";
 import { factionIn, powerOf, roleDefIn, rolesFor, validateOverrides, type RoleTable } from "./overrides";
@@ -182,13 +184,18 @@ function rollDarkSide(config: GameConfig, rng: RngState): { readonly value: Dark
 export const isDuel = (config: GameConfig): boolean => config.duel === true;
 
 /**
- * Dealable for this crew: not below the role's `minPlayers`, and in Duel
- * mode not a role that needs meetings (`needsMeetings`: no votes there).
+ * Dealable for this crew: not below the role's `minPlayers`, in Duel mode
+ * not a role that needs meetings (`needsMeetings`: no votes there), and with
+ * events off not a role that needs the deck (`needsEvents`: the Mastermind).
  * design §8.1, §16.1 (role deck v2 §3)
  */
 function dealable(config: GameConfig, roles: RoleTable, role: RoleId): boolean {
   const def = roleDefIn(roles, role);
-  return (def?.minPlayers ?? 0) <= config.players.length && !(isDuel(config) && def?.needsMeetings === true);
+  return (
+    (def?.minPlayers ?? 0) <= config.players.length &&
+    !(isDuel(config) && def?.needsMeetings === true) &&
+    !(def?.needsEvents === true && !eventsOn(config))
+  );
 }
 
 /**
@@ -298,6 +305,14 @@ export function setupEvents(config: GameConfig): GameEvent[] {
   if (errors.length > 0) throw new Error(`invalid game config: ${errors.join("; ")}`);
   const dealt = dealRoles(config, seedRng(config.seed));
   const targets = snitchTargets(config, dealt.value, dealt.rng);
+  // design §8 (v2 §2): a Mastermind foresees round 2's card as round 1 opens.
+  let rng = targets.rng;
+  const seats = new Map(config.players.map((p, i) => [p.id, dealt.value[i] as RoleId]));
+  const foreseen = foresee(config, seats, 1, () => {
+    const card = pick(rng, EVENT_DECK);
+    rng = card.rng;
+    return card.value;
+  });
   return [
     {
       type: "gameCreated",
@@ -326,7 +341,8 @@ export function setupEvents(config: GameConfig): GameEvent[] {
     ...targets.value,
     // Round 1 opens for planning as soon as the game is set up. design §4, §5.1
     { type: "roundStarted", visibility: PUBLIC, round: 1, act: 1 },
-    { type: "rngAdvanced", visibility: REVEAL, words: targets.rng.words },
+    ...foreseen,
+    { type: "rngAdvanced", visibility: REVEAL, words: rng.words },
   ];
 }
 

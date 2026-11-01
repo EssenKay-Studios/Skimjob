@@ -24,8 +24,8 @@ import { PUBLIC, privateTo, secretTo } from "./types";
 import { checkpointTarget, clampHeat } from "./job";
 import { jobFor, powerOf, roleDefIn, rolesFor, type RoleTable } from "./overrides";
 import { dealableRoles } from "./setup";
-import { isPerkSpend, shieldFor, usePerk } from "./perks";
-import { checkpointRewards, dirtyShakedownRewards, useCrewPower } from "./crew";
+import { emergencySpent, isPerkSpend, perkCount, shieldFor, usePerk } from "./perks";
+import { blessingEvents, checkpointRewards, dirtyShakedownRewards, muscleCancelEvents, stopRaid, useCrewPower } from "./crew";
 import { actOfRound } from "./acts";
 import { gameEnded } from "./end";
 import { applyEvent } from "./reduce";
@@ -38,8 +38,11 @@ type Raw = Record<string, unknown>;
 
 /** The act's regular meeting. Ids are names, never RNG draws (STATUS.md). */
 export const regularMeetingId = (act: ActNumber): string => `act-${act}`;
-/** Unique because each player calls at most one emergency meeting per game. design §11.1 */
-export const emergencyMeetingId = (player: PlayerId): string => `emergency-${player}`;
+/**
+ * The `n`th emergency meeting `player` calls (a Smooth Talker may earn more
+ * than one, v2 §2). Unique: the prefix tells them apart for any player id. design §11.1
+ */
+export const emergencyMeetingId = (player: PlayerId, n = 1): string => (n === 1 ? `emergency-${player}` : `emergency${n}-${player}`);
 
 /** The act being played: the act of the latest round started. */
 const currentAct = (state: GameState): ActNumber => actOfRound(state.round);
@@ -124,15 +127,22 @@ export function scheduleMeeting(state: GameState, command: Raw): Result {
   return [scheduled(act, command.slot as string, null)];
 }
 
-/** One per player per game, at any point outside a meeting. The notice period is the server's. */
+/**
+ * One per player per game, at any point outside a meeting, plus one per
+ * Emergency perk held (the Smooth Talker's reward, v2 §2). The notice period is the server's.
+ */
 export function callEmergency(state: GameState, command: Raw): Result {
   const player = playerFor(state, command);
   if (typeof player === "string") return player;
-  if (player.emergencyMeetingUsed) return "you have already called your emergency meeting";
+  const extra = player.emergencyMeetingUsed;
+  if (extra && perkCount(player, "emergency") === 0) return "you have already called your emergency meeting";
   if (state.meeting) return "a meeting is already open";
   if (state.pendingShakedown) return "a shakedown is pending";
   if (state.pendingEmergency) return "an emergency meeting has already been called";
-  return [{ type: "emergencyMeetingCalled", visibility: PUBLIC, by: player.id, meetingId: emergencyMeetingId(player.id) }];
+  const n = state.log.filter((e) => e.type === "emergencyMeetingCalled" && e.by === player.id).length + 1;
+  const meetingId = emergencyMeetingId(player.id, n);
+  const called: GameEvent = { type: "emergencyMeetingCalled", visibility: PUBLIC, by: player.id, meetingId };
+  return extra ? [emergencySpent(state, player, meetingId), called] : [called];
 }
 
 // ---------------------------------------------------------------- voting (§11.2)
@@ -373,6 +383,8 @@ function afterVote(
   const shield = shakedown && !shakedown.cancelled ? shieldFor(state, shakedown.target, meeting.meetingId) : [];
   if (shakedown && (shakedown.cancelled || shield.length > 0)) {
     events.push(...shield, { type: "shakedownCancelled", visibility: PUBLIC, meetingId: meeting.meetingId, target: shakedown.target });
+    // v2 §2: the Muscle is named if the target wasn't clean, else earns a Recharge.
+    if (shakedown.cancelled) events.push(...muscleCancelEvents(state, meeting.meetingId, shakedown.target, act));
   } else if (shakedown) {
     const { target } = shakedown;
     const { stash, safe } = state.players[target] as PlayerState;
@@ -382,7 +394,9 @@ function afterVote(
     events.push({ type: "shakedownResolved", visibility: PUBLIC, meetingId: meeting.meetingId, target, stashRevealed: stash, taken: stash, clean, compensation });
     // Snitch (§8): rewarded when its target is shaken down holding at least the clean threshold (provisional);
     // so are the crew roles whose perk this earns (v2 §2, design §8.3).
-    if (!clean) events.push(...snitchRewards(state, meeting.meetingId, target), ...dirtyShakedownRewards(state, target));
+    if (!clean) events.push(...snitchRewards(state, meeting.meetingId, target), ...dirtyShakedownRewards(state, target, meeting.meetingId));
+    // Priest (v2 §2): a blessed target shaken down clean is compensated by the bank.
+    else events.push(...blessingEvents(state, meeting.meetingId, target, act, compensation));
   }
   if (meeting.kind === "emergency") return events;
   return [...events, ...checkpoint(state, [...prior, ...events], act, draw)];
@@ -404,11 +418,14 @@ export function checkpoint(state: GameState, prior: readonly GameEvent[], act: A
   const final = act === job.checkpoints.perPlayer.length;
   const heat = met || final ? now.heat : clampHeat(job, now.heat + job.heat.missedCheckpoint);
   events.push({ type: "checkpointChecked", visibility: PUBLIC, act, target, haul: now.haul, met, heatPenalty: heat - now.heat });
-  // design §8.3 (v2 §2): a checkpoint made before the last earns the Rookie's Tail and the Inside Man's Peek.
+  // design §8.3 (v2 §2): a checkpoint made before the last earns the Rookie's Tail, the Inside Man's Peek and the Mastermind's Rig.
   if (met && !final) events.push(...checkpointRewards(now));
+  // v2 §2: a Fixer stops the penalty's raid.
+  const saved = heat >= job.heat.max ? stopRaid(events.reduce(applyEvent, now), now.round) : [];
+  events.push(...saved);
 
   // The ranking is worked out after the shakedown (design §3, §11.4), in end.ts.
-  if (heat >= job.heat.max) {
+  if (heat >= job.heat.max && saved.length === 0) {
     events.push({ type: "copsRaided", visibility: PUBLIC, round: now.round, heat });
     events.push(gameEnded(state, [...prior, ...events], "heat"));
   } else if (final) {

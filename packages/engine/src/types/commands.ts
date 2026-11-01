@@ -60,6 +60,8 @@ export type InstantAbility =
   | { readonly kind: "audit"; readonly room: RoomId }
   /** Detective: is `target`'s stash at or above the clean threshold? Once per act (content). design §8 (v2 §2) */
   | { readonly kind: "checkStash"; readonly target: PlayerId }
+  /** Priest: bless another player for this act. Once per act (content). design §8 (v2 §2) */
+  | { readonly kind: "bless"; readonly target: PlayerId }
   | PerkSpend;
 
 /**

@@ -51,7 +51,8 @@ function perkEffect(state: GameState, player: PlayerId, perk: ResolvedPerk): Gam
     case "peek":
     case "shield":
     case "alibi":
-      // Information, or a cancel announced by its own public event.
+    case "emergency":
+      // Information, or a cancel (or call) announced by its own public event.
       return state;
   }
 }
@@ -173,6 +174,7 @@ function applyChange(state: GameState, event: GameEvent): GameState {
         case "tipOff":
         case "audit":
         case "checkStash":
+        case "bless":
           // The tip-off's Heat is already in the round's `roundResolved` total. design §8
           return updatePlayer(state, event.player, (p) => withRoleState(p, { usedThisAct: p.roleState.usedThisAct + 1 }));
         case "blackmail":
@@ -188,7 +190,13 @@ function applyChange(state: GameState, event: GameEvent): GameState {
             withRoleState(p, { usedThisGame: p.roleState.usedThisGame + 1 }),
           );
         }
+        case "fixer":
+          return updatePlayer(state, event.player, (p) => ({
+            stash: p.stash - ability.lost,
+            ...withRoleState(p, { usedThisGame: p.roleState.usedThisGame + 1 }),
+          }));
         case "lookout":
+        case "bagman":
           return state;
       }
     }
@@ -198,8 +206,16 @@ function applyChange(state: GameState, event: GameEvent): GameState {
     case "roomWatched":
     case "pocketCount":
     case "copsRaided":
+    case "cardForeseen":
+    case "muscleNamed":
       // Information only; no state changes. (copsRaided is followed by gameEnded.)
       return state;
+    case "raidStopped":
+      // design §8 (v2 §2): a Fixer stopped the raid; Heat is set back.
+      return { ...state, heat: event.heat };
+    case "blessingPaid":
+      // design §8 (v2 §2): the bank pays the blessed player's compensation, so it goes back into the Haul.
+      return { ...state, haul: state.haul + event.amount };
     case "roundResolved":
       // Haul and Heat are public totals. The round's alibis open (design §5.4); the next
       // round, or after an act's last round its meeting (design §11), waits for their deadline.

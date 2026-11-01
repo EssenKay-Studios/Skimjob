@@ -1,5 +1,5 @@
 // Win-condition roles: the Mole (tip-off, Mole allies, wins only on failure)
-// and the Driver (wins a Heat failure with the biggest stash). design §3, §8, §8.1
+// and the Auditor (wins a Heat failure with the biggest stash). design §3, §8, §8.1
 // The winning rules themselves are also in end.test.ts.
 import { describe, expect, it } from "vitest";
 import { handleThroughAlibis } from "./alibis.testkit";
@@ -15,7 +15,7 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
     seed: "win-seed",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: ["rookie", "lookout", "fence", "driver"], // no Muscle (no shakedown window), no Snitch
+    rolePool: ["rookie", "lookout", "fence", "auditor"], // no Muscle (no shakedown window), no Snitch
     mole: "off",
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
@@ -62,7 +62,7 @@ const TIP_HEAT = (ROLES.mole?.power as { heat: number }).heat;
 describe("Mole tip-off — design §7, §8", () => {
   /** One round of 3 players in the Lobby; p0 is the Mole and tips off if `tip`. */
   const oneRound = (tip: boolean, extra: Partial<GameConfig> = {}) => {
-    const s = game(3, ["mole", "driver", "rookie"], extra);
+    const s = game(3, ["mole", "auditor", "rookie"], extra);
     const after = run(s, mv("p0", "lobby", 0, tip ? TIP : {}), mv("p1", "lobby"), mv("p2", "lobby"), ROUND);
     return { before: s, after, events: since(s, after) };
   };
@@ -107,7 +107,7 @@ describe("Mole tip-off — design §7, §8", () => {
   });
 
   it("only the Mole can tip off", () => {
-    const s = game(3, ["mole", "driver", "rookie"]);
+    const s = game(3, ["mole", "auditor", "rookie"]);
     expect(reason(s, mv("p1", "lobby", 0, TIP))).toBe("your role has no tipOff ability");
     expect(reason(s, mv("p2", "lobby", 0, TIP))).toBe("your role has no tipOff ability");
   });
@@ -118,8 +118,8 @@ describe("Mole tip-off — design §7, §8", () => {
     expect(tipped.after.heat - plain.after.heat).toBe(15);
   });
 
-  it("a tip-off can bring the raid: Heat failure, the Mole wins, not the top-stash Driver (design §3, role deck v2 §0)", () => {
-    let s = game(3, ["mole", "driver", "rookie"]);
+  it("a tip-off can bring the raid: Heat failure, the Mole wins, not the top-stash Auditor (design §3, role deck v2 §0)", () => {
+    let s = game(3, ["mole", "auditor", "rookie"]);
     s = { ...s, heat: 90 };
     s = run(s, mv("p0", "lobby", 0, TIP), mv("p1", "vault", 4), mv("p2", "lobby"), ROUND);
     expect(s.heat).toBe(100);
@@ -134,8 +134,8 @@ describe("Mole dealing and Mole allies — design §8.1", () => {
   const moles = (events: readonly GameEvent[]): PlayerId[] =>
     events.flatMap((e) => (e.type === "roleDealt" && e.role === MOLE_ROLE ? [e.player] : []));
 
-  it("the Driver is in the default pool; the Mole stays out of it (dealt by the Mole setting)", () => {
-    expect(DEFAULT_ROLE_POOL).toContain("driver");
+  it("the Auditor is in the default pool; the Mole stays out of it (dealt by the Mole setting)", () => {
+    expect(DEFAULT_ROLE_POOL).toContain("auditor");
     expect(DEFAULT_ROLE_POOL).not.toContain(MOLE_ROLE);
   });
 
@@ -197,7 +197,7 @@ function withTwoMoles(cfg: GameConfig): GameEvent[] {
 
 describe("shakedowns reveal the stash, not the role — design §8.2", () => {
   it("shaking down the Mole shows its stash and nothing about its role", () => {
-    let s = game(3, ["mole", "driver", "rookie"]);
+    let s = game(3, ["mole", "auditor", "rookie"]);
     s = run(s, mv("p0", "vault", 3), mv("p1", "lobby"), mv("p2", "lobby"), ROUND, ROUND, ROUND);
     s = run(s, { type: "scheduleMeeting", act: 1, slot: "x" }, OPEN, vote("p1", "p0"), vote("p2", "p0"), CLOSE);
     const shakedown = s.log.find((e) => e.type === "shakedownResolved");
@@ -205,7 +205,7 @@ describe("shakedowns reveal the stash, not the role — design §8.2", () => {
     expect(Object.keys(shakedown ?? {}).sort()).toEqual(["clean", "compensation", "meetingId", "stashRevealed", "taken", "target", "type", "visibility"]);
     // No public event after setup names a role; the roles only come out at the reveal.
     const publicAfterSetup = s.log.filter((e) => e.visibility.kind === "public" && e.type !== "gameCreated");
-    expect(JSON.stringify(publicAfterSetup)).not.toMatch(/"mole"|"driver"/);
+    expect(JSON.stringify(publicAfterSetup)).not.toMatch(/"mole"|"auditor"/);
     expect(viewFor(s, "p1").players.find((p) => p.id === "p0")).not.toHaveProperty("role");
   });
 });
