@@ -120,6 +120,11 @@ describe("validateOverrides — configs are untrusted JSON (design §17.4)", () 
     expect(errs({ events: { policePatrol: { loss: 3 } } })).toEqual(["contentOverrides.events.policePatrol.loss is not an overridable field"]);
     expect(errs({ events: { audit: { amount: 1 } } })).toHaveLength(1);
     expect(errs({ events: { raidRumour: { loss: 2.5 } } })).toHaveLength(1);
+    // design §7: Heat is whole numbers, so a Heat card's amount is a signed whole number.
+    expect(errs({ events: { quietNight: { amount: -15 } } })).toEqual([]);
+    expect(errs({ events: { policePatrol: { amount: 2.5 } } })).toEqual(["contentOverrides.events.policePatrol.amount must be a whole number"]);
+    expect(errs({ events: { policePatrol: { amount: "5" } } })).toHaveLength(1);
+    expect(errs({ events: { policePatrol: { amount: Infinity } } })).toHaveLength(1);
     expect(errs({ events: { meteor: { amount: 1 } } })).toEqual(["contentOverrides.events.meteor: no such event card"]);
     expect(errs({ events: [] })).toHaveLength(1);
     const tuned = overrideEvents(EVENTS, { events: { shiftChange: { heatMultiplier: 3 } } });

@@ -15,12 +15,14 @@ export type RoleTable = Readonly<Record<RoleId, RoleDef>>;
 type Rule = (v: unknown) => boolean;
 const finite: Rule = (v) => typeof v === "number" && Number.isFinite(v);
 const atLeast0: Rule = (v) => finite(v) && (v as number) >= 0;
+const integer: Rule = (v) => typeof v === "number" && Number.isInteger(v);
 const count: Rule = (v) => typeof v === "number" && Number.isInteger(v) && v >= 0;
 const positiveCount: Rule = (v) => count(v) && (v as number) >= 1;
 
 const RULE_TEXT = new Map<Rule, string>([
   [finite, "a finite number"],
   [atLeast0, "a number, 0 or more"],
+  [integer, "a whole number"],
   [count, "a whole number, 0 or more"],
   [positiveCount, "a whole number, 1 or more"],
 ]);
@@ -57,7 +59,8 @@ const POWER_FIELDS: { readonly [K in RolePower["kind"]]: Readonly<Record<string,
 
 /** The numbers each event effect may have overridden: its own only. design §10 */
 const EFFECT_FIELDS: { readonly [K in EventEffect["kind"]]: Readonly<Record<string, Rule>> } = {
-  heat: { amount: finite },
+  // Heat is whole numbers (design §7), so a Heat card's amount is a signed whole number.
+  heat: { amount: integer },
   roomSurge: { lootMultiplier: atLeast0, heatMultiplier: atLeast0 },
   blackout: {},
   lockdown: {},
