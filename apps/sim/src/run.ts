@@ -2,6 +2,7 @@
 import { PERSONALITIES, createBots, runBotGame } from "@skimjob/bots";
 import { validateConfig } from "@skimjob/engine";
 import type { SimOptions } from "./args";
+import type { Pool } from "./pool";
 import { setupGame } from "./crew";
 import { recordGame, type GameRecord } from "./record";
 
@@ -31,4 +32,24 @@ export function runBatch(options: SimOptions, progress?: (players: number, games
     progress?.(n, options.games);
   }
   return records;
+}
+
+/** Games per worker task in `runBatchOn`. */
+export const GAMES_PER_TASK = 25;
+
+/**
+ * `runBatch` over a worker pool: the same records in the same order, for any
+ * pool size (each game depends only on the options, player count and index).
+ */
+export async function runBatchOn(pool: Pool, options: SimOptions, progress?: (players: number, games: number) => void): Promise<GameRecord[]> {
+  const perCount = options.playerCounts.map(async (players) => {
+    const tasks: Promise<GameRecord[]>[] = [];
+    for (let from = 0; from < options.games; from += GAMES_PER_TASK) {
+      tasks.push(pool.run({ kind: "games", options, players, from, to: Math.min(options.games, from + GAMES_PER_TASK) }));
+    }
+    const records = (await Promise.all(tasks)).flat();
+    progress?.(players, options.games);
+    return records;
+  });
+  return (await Promise.all(perCount)).flat();
 }

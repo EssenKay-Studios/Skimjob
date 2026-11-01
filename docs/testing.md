@@ -13,11 +13,34 @@ All tests are seeded and deterministic. Nothing reads the wall clock (the server
 | Engine properties | `packages/engine/src/invariants.prop.test.ts` | Invariants under random configs and command streams (below). | `pnpm test` or `npx vitest run packages/engine/src/invariants.prop.test.ts` |
 | Server scenarios | `apps/server/src/scenarios.int.test.ts` | Named end-to-end stories over the real HTTP + WebSocket API on PGlite. | `pnpm test` (`pnpm test:pg` for real Postgres) |
 | Web e2e | `apps/web/e2e/*.spec.ts` | Screens in Chromium at phone and desktop sizes, responsive rules. Size checks wait for the entrance animations to finish first: a box measured mid-animation can come out at 43.99 px. | `pnpm test:e2e` |
+| Simulation suite | `apps/sim/src/suite/` | The §17.4 targets and role parity over the whole settings matrix, with confidence intervals (below). Manual: long. | `pnpm sim:suite`, or the "Sim suite" workflow |
 | Simulator smoke | `scripts/sim-smoke.sh` | 200 all-bot games each at 3/6/12 players (events on, Mole "maybe") end with no refused bot command. | `bash scripts/sim-smoke.sh [games]` |
 | Typecheck | every workspace | Strict TS. New event or command types must fail exhaustive switches. | `pnpm typecheck` |
 | Docker image | `Dockerfile` | The production image builds, boots on a fresh volume, serves `/health` and an SPA route, and runs as uid 1000 (CI only; no Docker daemon here). | `docker build -t skimjob .` (docs/deploy.md) |
 
-CI (`.github/workflows/ci.yml`) runs all of these on every push to `main` and every PR. A green run on `main` deploys to Fly (`deploy.yml`, `docs/deploy.md`).
+CI (`.github/workflows/ci.yml`) runs all of these except the simulation suite on every push to `main` and every PR. A green run on `main` deploys to Fly (`deploy.yml`, `docs/deploy.md`).
+
+## Running the suite
+
+Run the suite after any change to rules, numbers or bots. It shows what the change did to balance.
+
+```
+pnpm sim:suite                                   # whole matrix, ±2 pp, all CPU cores (hours on a laptop)
+pnpm sim:suite -- -p 6 --mole maybe --events on  # one cell
+pnpm sim:suite -- --ci 5 --max-games 1000        # quicker and rougher
+pnpm sim:suite -- --overrides '{"heat":{"perRound":5}}' --compare docs/balance/baseline.json
+pnpm sim:suite -- --help
+```
+
+- **Matrix:** player counts 2–12 × saboteur setting (off / maybe / on, skipping a setting that deals exactly like another at that size) × events on/off. `uniqueRoles` and the bot mix stay at their defaults. That makes 50 cells today.
+- **Adaptive:** each cell plays batches of 200 games, starting with at least 400. It stops once every checked rate's 95% interval (Wilson) is within `--ci` (±2 pp), or at `--max-games` (6000). `-n N` plays a fixed N per cell instead.
+- **Checks:** each cell is checked for heist success 55–70%, saboteur win rate 30–40% (where one can be dealt), Heat share of failures 10–20%, comeback ≤ 50% and decided early ≤ 15% (design §17.4). Role parity is checked per player count and saboteur setting (docs/roles-v2.md §5): win share ÷ fair share 1/n, with max − min ≤ 0.10. Each check prints PASS or FAIL. A `?` means the 95% interval crosses the target, so more games could flip it. A `+` after a cell's game count means it hit `--max-games` first. Refused bot commands are a FAIL. `--strict` exits 1 on any FAIL.
+- **Output:** the report goes to `sim-output/suite.json` (`--out`, or `--no-files`), and the same text is printed. `--json` prints the JSON instead.
+- **Compare:** `--compare <report.json>` prints each rate's change in pp. A `*` marks a move bigger than both intervals together. It also lists checks that changed verdict and parity spreads. Content overrides don't change the seeds, so a rule change replays the same deals and bot dice, and the deltas are the change, not noise. `docs/balance/baseline.json` is a committed moderate run (±5 pp, 200–400 games per cell). Refresh it when a balance pass lands.
+- **Deterministic:** every game's seed is `<seed>/<cell>/<n>p/<index>`. The report is byte-identical for any `--workers` or `--shard` split (`suite/determinism.test.ts` checks this with real worker threads). `pnpm sim -- --workers N` also gives the same records for any N.
+- **Shards:** `--shard i/n` runs only some cells (split by estimated cost) and writes `sim-output/suite-shard-i-of-n.json`. `pnpm sim:suite -- merge <shards...>` combines them into exactly the report one run would give, and takes `--compare` and `--strict`.
+- **On GitHub:** Actions → "Sim suite" → Run workflow (`.github/workflows/sim-suite.yml`, manual only). It runs N shards on separate runners and merges them. It compares with the baseline, puts the text in the run summary and uploads `suite-report` (JSON + text) as an artifact. Inputs: shards, ±pp, max games, overrides JSON, extra options, strict.
+- **Cost:** a game takes about 8 ms per player on one core. The default full run is roughly 100–300k games, so use the workflow (10 shards finish in well under an hour) or a narrower matrix locally. Most of a game's time is `viewFor`'s deep copy of the view for every bot (decisions.md, R4a).
 
 ## Engine properties
 

@@ -1,0 +1,124 @@
+# The full simulation suite (docs/testing.md "Running the suite"): the design §17.4
+# matrix at 2–12 players, sharded across runners, merged into one report and
+# compared with docs/balance/baseline.json. Long, so manual only.
+name: Sim suite
+
+on:
+  workflow_dispatch:
+    inputs:
+      shards:
+        description: "Runners to split the matrix over (1-50)"
+        default: "10"
+      ci:
+        description: "Target 95% half-width per rate, percentage points"
+        default: "2"
+      max_games:
+        description: "Most games per cell"
+        default: "6000"
+      overrides:
+        description: "Content overrides JSON to try a rule change, e.g. {\"heat\":{\"perRound\":5}}"
+        default: ""
+      extra:
+        description: "Other sim:suite options without spaces inside values, e.g. -p 4-8 --mole on"
+        default: ""
+      strict:
+        description: "Fail the run if any check FAILs"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    name: Plan shards
+    runs-on: ubuntu-latest
+    outputs:
+      list: ${{ steps.plan.outputs.list }}
+    steps:
+      - id: plan
+        env:
+          SHARDS: ${{ inputs.shards }}
+        run: |
+          case "$SHARDS" in (''|*[!0-9]*) echo "shards must be a whole number"; exit 1;; esac
+          if [ "$SHARDS" -lt 1 ] || [ "$SHARDS" -gt 50 ]; then echo "shards must be 1-50"; exit 1; fi
+          echo "list=$(node -e 'console.log(JSON.stringify(Array.from({ length: +process.argv[1] }, (_, i) => i + 1)))' "$SHARDS")" >> "$GITHUB_OUTPUT"
+
+  shard:
+    name: Shard ${{ matrix.shard }}/${{ inputs.shards }}
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.plan.outputs.list) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Run the shard (workers = CPU count)
+        env:
+          SHARD: ${{ matrix.shard }}/${{ inputs.shards }}
+          N: ${{ matrix.shard }}
+          CI_PP: ${{ inputs.ci }}
+          MAX_GAMES: ${{ inputs.max_games }}
+          OVERRIDES: ${{ inputs.overrides }}
+          EXTRA: ${{ inputs.extra }}
+        run: |
+          args=(--shard "$SHARD" --ci "$CI_PP" --max-games "$MAX_GAMES" --out "sim-output/shard-$N.json")
+          if [ -n "$OVERRIDES" ]; then args+=(--overrides "$OVERRIDES"); fi
+          # $EXTRA is split into words on purpose (several options); never eval'd.
+          read -r -a extra <<< "$EXTRA"
+          pnpm -s sim:suite -- "${args[@]}" "${extra[@]}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: suite-shard-${{ matrix.shard }}
+          path: sim-output/shard-${{ matrix.shard }}.json
+          if-no-files-found: error
+
+  merge:
+    name: Merge and report
+    needs: shard
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: suite-shard-*
+          path: sim-output/shards
+          merge-multiple: true
+      - name: Merge shards, compare with the baseline
+        id: merge
+        env:
+          STRICT: ${{ inputs.strict && '--strict' || '' }}
+        run: |
+          set +e
+          pnpm -s sim:suite -- merge sim-output/shards/*.json --out sim-output/suite.json --compare docs/balance/baseline.json $STRICT > sim-output/suite.txt
+          code=$?
+          set -e
+          cat sim-output/suite.txt
+          { echo '```'; cat sim-output/suite.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: suite-report
+          path: |
+            sim-output/suite.json
+            sim-output/suite.txt
+      - name: Checks (with strict)
+        if: steps.merge.outputs.code != '0'
+        run: |
+          echo "sim:suite merge exited ${{ steps.merge.outputs.code }}"
+          exit 1
