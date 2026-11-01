@@ -25,7 +25,8 @@ import { show } from "./check";
 /** Every perk spent with `useAbility` (the Shield spends itself). design §8.3 */
 const ALL_PERKS: readonly PerkId[] = ["peek", "extraVote", "ballot", "tail", "alibi", "recharge", "rig"];
 
-const ROLES_BY_SEAT = ["lookout", "fence", "hacker", "blackmailer", "muscle", "auditor", "detective", "mole", "priest"];
+// v2 §2 (R3a): the Getaway Driver is passive (no command fields of its own) but plays every move.
+const ROLES_BY_SEAT = ["lookout", "fence", "hacker", "blackmailer", "muscle", "auditor", "detective", "mole", "priest", "getawayDriver"];
 
 function config(extra: Partial<GameConfig> = {}): GameConfig {
   return {

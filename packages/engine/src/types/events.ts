@@ -74,6 +74,22 @@ export interface MoleAllies {
 }
 
 /**
+ * Role deck v2 §2: you learn who some of your dark-side allies are (`allies`,
+ * added to the ones you knew). `via` says how: "deal", told at the deal
+ * (the Hacker: one saboteur); "fence", your safe reached its reveal size (one saboteur);
+ * "getaway", Heat reached the Getaway Driver's reveal level (it learns the
+ * saboteurs, each saboteur learns it); "tipOff", a Mole's tip-off (one
+ * accomplice it didn't know). design §8, §8.1
+ */
+export interface AlliesLearned {
+  readonly type: "alliesLearned";
+  readonly visibility: PrivateVisibility;
+  readonly player: PlayerId;
+  readonly allies: readonly PlayerId[];
+  readonly via: "deal" | "fence" | "getaway" | "tipOff";
+}
+
+/**
  * The RNG state after the draws made while handling one command. Appended after
  * the events those draws produced, whenever a command consumed randomness, so
  * replaying the log restores `GameState.rng` without re-drawing. Reveal-only:
@@ -659,6 +675,7 @@ export type GameEvent =
   | RoleDealt
   | SnitchTargetAssigned
   | MoleAllies
+  | AlliesLearned
   | RngAdvanced
   | RoundStarted
   | MoveSubmitted

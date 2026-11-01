@@ -107,7 +107,7 @@ describe("Rookie and Inside Man: a checkpoint made earns a perk — v2 §2, desi
   it("the count per trigger is the role's one tunable number (content override `rewardCount`, design §17.4)", () => {
     const overrides = { roles: { rookie: { rewardCount: 2 } } };
     expect(validateConfig(config(3, { contentOverrides: overrides }))).toEqual([]);
-    expect(validateConfig(config(3, { contentOverrides: { roles: { hacker: { rewardCount: 2 } } } }))).toEqual([expect.stringMatching(/hacker\.rewardCount/)]);
+    expect(validateConfig(config(3, { contentOverrides: { roles: { fence: { rewardCount: 2 } } } }))).toEqual([expect.stringMatching(/fence\.rewardCount/)]);
     const s = finishAct(game(3, ["rookie"], { contentOverrides: overrides }), ...STEADY);
     expect(granted(s, "p0")).toEqual(["tail", "tail"]);
     expect(rolesFor({ contentOverrides: overrides }).rookie?.rewards?.[0]?.count).toBe(2);

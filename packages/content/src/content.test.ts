@@ -2,6 +2,7 @@
 // design §6, §7, §8, §11.5
 import { describe, expect, it } from "vitest";
 import {
+  ACCOMPLICE_V2_ROLES,
   BANK_JOB,
   DARK_SIDE_RULES,
   PERKS,
@@ -147,8 +148,10 @@ describe("starter roles — design §8, §8.1", () => {
     expect(ROLES.rookie?.scoring.perLootOverFinalTarget).toBe(0);
   });
 
-  it("every role but the Mole is crew for now; the Mole is a saboteur (design §3, role deck v2 R1)", () => {
-    for (const role of Object.values(ROLES)) expect(role.faction, role.id).toBe(role.id === "mole" ? "saboteur" : "crew");
+  it("the Mole is a saboteur, the Getaway Driver, Fence and Hacker accomplices, the rest crew (design §3, role deck v2 R3a)", () => {
+    const faction = (id: string) => (id === "mole" ? "saboteur" : ACCOMPLICE_V2_ROLES.includes(id) ? "accomplice" : "crew");
+    expect([...ACCOMPLICE_V2_ROLES].sort()).toEqual(["fence", "getawayDriver", "hacker"]);
+    for (const role of Object.values(ROLES)) expect(role.faction, role.id).toBe(faction(role.id));
     for (const id of STARTER_ROLES) expect(ROLES[id]?.faction).toBe("crew");
   });
 

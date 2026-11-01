@@ -95,9 +95,9 @@ describe("3 players: the final target boundary — design §3, §8", () => {
     ]);
   });
 
-  it("one loot short of the final target fails (reason target), ranking kept, nobody wins", () => {
+  it("one loot short of the final target fails (reason target), ranking kept, the Fence (an accomplice, v2 §2) wins", () => {
     const o = outcome(game3(1));
-    expect(o).toMatchObject({ result: "failed", reason: "target", winners: [] });
+    expect(o).toMatchObject({ result: "failed", reason: "target", winners: ["p1"] });
     expect(rows(o)).toEqual([["p0", 15.6], ["p1", 12], ["p2", 0]]);
   });
 });
@@ -121,7 +121,7 @@ describe("the final meeting's shakedown decides the heist — design §3, §11.3
     expect(s.log.find((e) => e.type === "shakedownResolved")).toMatchObject({ target: "p2", clean: true, compensation: 15 });
     expect(s.log.find((e) => e.type === "checkpointChecked" && e.act === 3)).toMatchObject({ haul: 51, met: false, heatPenalty: 0 });
     const o = outcome(s);
-    expect(o).toMatchObject({ result: "failed", reason: "target", winners: [] });
+    expect(o).toMatchObject({ result: "failed", reason: "target", winners: ["p1"] }); // the Fence: the only dark-side seat (v2 §2)
     expect(rows(o)).toEqual([["p2", 15], ["p0", 14.4], ["p1", 12]]);
   });
 });
@@ -235,11 +235,11 @@ describe("2 players: a raid exactly at the checkpoint penalty — design §3, §
     return run(s, sched(1), OPEN, CLOSE);
   }
 
-  it("Heat 73 + 12 + 15 = 100: raid at the checkpoint, ranked with the safe", () => {
+  it("Heat 73 + 12 + 15 = 100: raid at the checkpoint, ranked with the safe; the Fence (an accomplice, v2 §2) wins", () => {
     const s = act1(73);
     expect(types(s, 3)).toEqual(["checkpointChecked", "copsRaided", "gameEnded"]);
     const o = outcome(s);
-    expect(o).toMatchObject({ result: "failed", reason: "heat", winners: [] });
+    expect(o).toMatchObject({ result: "failed", reason: "heat", winners: ["p0"] });
     expect(o.ranking).toEqual([
       { player: "p0", role: "fence", score: 1, stash: 1, safe: 1, timesShakenDown: 0, totalHandedIn: 5 },
       { player: "p1", role: "rookie", score: 0, stash: 0, safe: 0, timesShakenDown: 0, totalHandedIn: 6 },

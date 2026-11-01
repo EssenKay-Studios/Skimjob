@@ -24,11 +24,11 @@ export const MOLE_ROLE: RoleId = "mole";
 /** Starter mode: these crew roles only, no dark side, no events (role deck v2 §3: the Fence left). design §8.1 */
 export const STARTER_ROLES: readonly RoleId[] = ["rookie", "insideMan", "lookout", "bagman", "cleaner"];
 
-/** Roles that become accomplices in role deck v2 R3; pool roles until then. design §8 */
-export const ACCOMPLICE_V2_ROLES: readonly RoleId[] = ["fence"];
+/** The accomplices (role deck v2 §2, R3a; the Blackmailer and Forger join in R3b). Dealt only with a saboteur. design §8, §8.1 */
+export const ACCOMPLICE_V2_ROLES: readonly RoleId[] = ["getawayDriver", "fence", "hacker"];
 
-/** The info and vote roles (M1 task 12). design §8 */
-export const INFO_VOTE_ROLES: readonly RoleId[] = ["hacker", "smoothTalker", "muscle", "blackmailer", "snitch"];
+/** The info and vote roles still crew (M1 task 12; the Hacker is an accomplice since R3a). design §8 */
+export const INFO_VOTE_ROLES: readonly RoleId[] = ["smoothTalker", "muscle", "blackmailer", "snitch"];
 
 /** Crew roles new in role deck v2 (docs/roles-v2.md §2, steps R2a/R2b; the Fixer is the Driver's crew half). design §8 */
 export const CREW_V2_ROLES: readonly RoleId[] = ["auditor", "detective", "priest", "fixer", "mastermind"];

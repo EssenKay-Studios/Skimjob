@@ -101,18 +101,18 @@ describe("dealing roles — design §8.1", () => {
     }
     expect(repeated).toBe(true);
     // A pool of one: every non-Mole seat gets it.
-    expect(rolesOf(config(6, { rolePool: ["fence"], uniqueRoles: false })).sort()).toEqual(Array(6).fill("fence"));
+    expect(rolesOf(config(6, { rolePool: ["lookout"], uniqueRoles: false })).sort()).toEqual(Array(6).fill("lookout"));
     // Default (absent or true): each pool role at most once.
     for (const unique of [undefined, true]) {
-      const roles = rolesOf(config(12, { rolePool: ["fence"], ...(unique !== undefined && { uniqueRoles: unique }) }));
-      expect(roles.filter((r) => r === "fence")).toHaveLength(1);
+      const roles = rolesOf(config(12, { rolePool: ["lookout"], ...(unique !== undefined && { uniqueRoles: unique }) }));
+      expect(roles.filter((r) => r === "lookout")).toHaveLength(1);
     }
     expect(validateConfig(config(6, { uniqueRoles: "no" as unknown as boolean }))).toContain("uniqueRoles must be a boolean");
   });
 
   it("the host's role pool is respected", () => {
-    const roles = rolesOf(config(3, { rolePool: ["fence", "lookout"] }));
-    expect(roles.sort()).toEqual(["fence", "lookout", "rookie"]);
+    const roles = rolesOf(config(3, { rolePool: ["bagman", "lookout"] }));
+    expect(roles.sort()).toEqual(["bagman", "lookout", "rookie"]);
   });
 
   function moleCounts(n: number, mole: MoleSetting): Set<number> {

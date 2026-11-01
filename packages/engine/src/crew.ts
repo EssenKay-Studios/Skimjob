@@ -112,7 +112,7 @@ export function useCrewPower(state: GameState, player: PlayerState, power: RoleP
 }
 
 /** `count` × `perk` for each player whose role has a reward on `trigger` and for whom `earned` holds. */
-function rewards(state: GameState, trigger: PerkTrigger, earned: (player: PlayerState) => boolean): GameEvent[] {
+export function grantRewards(state: GameState, trigger: PerkTrigger, earned: (player: PlayerState) => boolean): GameEvent[] {
   const roles = rolesFor(state.config);
   const out: GameEvent[] = [];
   for (const id of state.playerOrder) {
@@ -126,7 +126,7 @@ function rewards(state: GameState, trigger: PerkTrigger, earned: (player: Player
 }
 
 /** design §8.3 (v2 §2): an Act 1 or 2 checkpoint was made. Rookie → Tail, Inside Man → Peek, Mastermind → Rig. */
-export const checkpointRewards = (state: GameState): GameEvent[] => rewards(state, "checkpointMade", () => true);
+export const checkpointRewards = (state: GameState): GameEvent[] => grantRewards(state, "checkpointMade", () => true);
 
 /**
  * design §8.3 (v2 §2): `target` was just shaken down dirty. Lookout → Peek if
@@ -145,12 +145,12 @@ export function dirtyShakedownRewards(state: GameState, target: PlayerId, meetin
     return split?.type === "lootSplit" ? split.room : undefined;
   };
   return [
-    ...rewards(state, "watchedShakenDirty", (p) => mine(p).some((e) => e.type === "roomWatched" && e.source === "lookout" && e.seen.includes(target))),
-    ...rewards(state, "auditedShakenDirty", (p) =>
+    ...grantRewards(state, "watchedShakenDirty", (p) => mine(p).some((e) => e.type === "roomWatched" && e.source === "lookout" && e.seen.includes(target))),
+    ...grantRewards(state, "auditedShakenDirty", (p) =>
       mine(p).some((e) => e.type === "abilityResolved" && e.ability.kind === "audit" && roomOf(e.ability.round) === e.ability.room),
     ),
-    ...rewards(state, "checkedShakenDirty", (p) => mine(p).some((e) => e.type === "abilityResolved" && e.ability.kind === "checkStash" && e.ability.target === target)),
-    ...rewards(state, "wonDirtyShakedown", (p) => p.id !== target && ballots.get(p.id) === target),
+    ...grantRewards(state, "checkedShakenDirty", (p) => mine(p).some((e) => e.type === "abilityResolved" && e.ability.kind === "checkStash" && e.ability.target === target)),
+    ...grantRewards(state, "wonDirtyShakedown", (p) => p.id !== target && ballots.get(p.id) === target),
   ];
 }
 
@@ -171,7 +171,7 @@ export function muscleCancelEvents(state: GameState, meetingId: string, target: 
   if (cancel?.type !== "abilityResolved") return [];
   const muscle = cancel.player;
   if (dirtyAt(state, target, act)) return [{ type: "muscleNamed", visibility: PUBLIC, meetingId, player: muscle, target }];
-  return rewards(state, "cancelledClean", (p) => p.id === muscle && muscle !== target);
+  return grantRewards(state, "cancelledClean", (p) => p.id === muscle && muscle !== target);
 }
 
 /**
@@ -183,7 +183,7 @@ export function blessingEvents(state: GameState, meetingId: string, target: Play
   const priests = blessersOf(state, target, act);
   if (priests.length === 0) return [];
   const paid: GameEvent[] = compensation > 0 ? [{ type: "blessingPaid", visibility: PUBLIC, meetingId, target, amount: compensation }] : [];
-  return [...paid, ...rewards(state, "blessedShakenClean", (p) => priests.includes(p.id))];
+  return [...paid, ...grantRewards(state, "blessedShakenClean", (p) => priests.includes(p.id))];
 }
 
 /**
@@ -205,7 +205,7 @@ export function roundRewards(now: GameState, fresh: readonly GameEvent[], round:
     const visits = splits(p).filter((e) => e.type === "lootSplit" && e.room === power.room);
     return visits.at(-1)?.type === "lootSplit" && (visits.at(-1) as { round: number }).round === round && visits.length % CLEANER_REWARD_EVERY === 0;
   };
-  return [...rewards(now, "actAllIn", allIn), ...rewards(now, "coolingRounds", cooled)];
+  return [...grantRewards(now, "actAllIn", allIn), ...grantRewards(now, "coolingRounds", cooled)];
 }
 
 /**
@@ -223,7 +223,7 @@ export function stopRaid(now: GameState, round: number): GameEvent[] {
     return [
       { type: "abilityResolved", visibility: privateTo(id), player: id, round, ability: { kind: "fixer", lost } },
       { type: "raidStopped", visibility: PUBLIC, round, heat: Math.min(power.stopAt, jobFor(now.config).heat.max - 1) },
-      ...rewards(now, "raidStopped", (p) => p.id === id),
+      ...grantRewards(now, "raidStopped", (p) => p.id === id),
     ];
   }
   return [];

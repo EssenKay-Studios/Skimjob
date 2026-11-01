@@ -143,7 +143,7 @@ describe("Mole dealing and Mole allies — design §8.1", () => {
     let singles = 0;
     for (const n of [5, 8, 9, 12]) {
       for (let seed = 0; seed < 10; seed++) {
-        const cfg = config(n, { mole: "maybe", rolePool: [], seed: `allies-${n}-${seed}` });
+        const cfg = config(n, { mole: "maybe", rolePool: ["lookout", "auditor", "bagman", "cleaner"], seed: `allies-${n}-${seed}` });
         const events = setupEvents(cfg);
         // design §8.1 (owner answers, 1 Nov): the shipped rules never deal two.
         expect(moles(events).length).toBeLessThan(2);

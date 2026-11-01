@@ -85,6 +85,13 @@ const SNITCH_EAGERNESS = 0.5;
 /** Chance a bot accepts a Double-cross offer (bot setting, not a game rule; minimal until task 16). design §10 */
 const DOUBLE_CROSS_ACCEPT = 0.5;
 
+/**
+ * Getaway Driver bots (v2 §4 "Play", bot settings): with Heat danger from
+ * `mid` up to `high` they go to the Rooftop (where their visit heats) with
+ * chance `rooftop`; from `high` they loot and pocket without minding the checkpoint.
+ */
+const GETAWAY = { mid: 0.4, high: 0.75, rooftop: 0.6 } as const;
+
 const pick = <T>(items: readonly T[], random: Random): T => items[Math.floor(random() * items.length)] as T;
 
 function weighted<T>(items: readonly (readonly [T, number])[], random: Random): T | undefined {
@@ -133,7 +140,8 @@ export function decide(view: PlayerView, p: Personality, random: Random): Player
     const offered = ofType(view.caseFile, "doubleCrossOffered").some((e) => e.round === round);
     const answered = ofType(view.caseFile, "doubleCrossAnswered").some((e) => e.round === round);
     if (offered && !answered) {
-      const accept = roleOf(view).power.kind !== "tipOff" && random() < DOUBLE_CROSS_ACCEPT;
+      // The dark side (saboteurs, accomplices) keeps its card.
+      const accept = roleOf(view).faction === "crew" && random() < DOUBLE_CROSS_ACCEPT;
       out.push({ type: "answerDoubleCross", player, accept });
     }
   }
@@ -205,9 +213,12 @@ export function chooseMove(view: PlayerView, p: Personality, random: Random): Mo
     const left = power.perAct - view.me.roleState.usedThisAct;
     const hideable = view.me.stash + pocket;
     if (left >= 1 && hideable >= 1) ability = { kind: "fenceSafe", amount: Math.min(left, hideable) };
-  } else if (power.kind === "loopCameras" && view.me.roleState.usedThisAct < power.perAct && pocket > 0) {
-    // design §8: hide its own skim from the cameras (minimal; task 16).
-    ability = { kind: "loopCameras", room };
+  } else if (power.kind === "loopCameras" && view.me.roleState.usedThisAct < power.perAct) {
+    // v2 §4: loop the room its known saboteur claimed last (it may go back there); otherwise hide its own skim.
+    const ally = view.me.roleState.allies[0];
+    const claim = ofType(view.ledger, "alibiPosted").filter((a) => a.player === ally).at(-1)?.room;
+    if (claim !== undefined && view.rooms.includes(claim)) ability = { kind: "loopCameras", room: claim };
+    else if (pocket > 0) ability = { kind: "loopCameras", room };
   } else if (power.kind === "blackmail" && view.me.roleState.usedThisAct < power.perAct && view.players.length > 0) {
     // design §8, §10: a role it learned from an Inside tip is a sure guess (latest tip
     // per player; it can be stale after a Double-cross); otherwise guess a Rookie,
@@ -233,6 +244,12 @@ function chooseRoom(view: PlayerView, p: Personality, random: Random): RoomId {
   // The most any room pushes Heat on a normal round: a surged room is avoided harder.
   const usual = Math.max(1, ...roomsWhere(view, base, (d) => d.heatPressure > 0).map((r) => roomDef(base, r).heatPressure));
   const cooler = roomsWhere(view, job, (d) => d.heatPressure < 0)[0];
+  // v2 §4: a Getaway Driver heats the Rooftop when Heat is mid, and loots once it's high.
+  const { power } = roleOf(view);
+  if (power.kind === "getaway") {
+    if (danger >= GETAWAY.high) return weighted(roomsWhere(view, job, (d) => d.loot > 0).map((r) => [r, roomDef(job, r).loot] as const), random) ?? job.defaultRoom;
+    if (danger >= GETAWAY.mid && view.rooms.includes(power.room) && random() < GETAWAY.rooftop) return power.room;
+  }
   if (cooler && danger > p.heatCaution && random() < Math.min(0.8, (danger - p.heatCaution) * 4)) return cooler;
   const watcher = roomsWhere(view, job, (d) => d.info === "watchRoom")[0];
   if (watcher && random() < p.watch) return watcher;
@@ -255,7 +272,9 @@ function choosePocket(view: PlayerView, p: Personality, random: Random, loot: nu
   if (random() < p.noise) return Math.floor(random() * (loot + 1));
   if (random() >= p.pocketChance) return 0;
   let pocket = Math.min(loot, Math.max(1, Math.round(loot * p.greed * (0.5 + random()))));
-  if (random() < p.teamSpirit) {
+  // v2 §4: a Getaway Driver pockets freely once Heat is high (the job is sinking anyway).
+  const reckless = roleOf(view).power.kind === "getaway" && heatDanger(view, jobOf(view)) >= GETAWAY.high;
+  if (!reckless && random() < p.teamSpirit) {
     const job = jobOf(view);
     const crew = crewSize(view);
     const roundsLeftInAct = view.act * ROUNDS_PER_ACT - view.round + 1;
