@@ -76,6 +76,8 @@ describe("QA plurality at 8 vs 9 players — design §11.2", () => {
     ["9p Smooth talker: ST + 2 = 4 of 10", 9, 9, 3, m([["a", 4], ["b", 2], ["c", 1]]), 10, "shakedown"],
     ["9p Smooth talker: 4–4 weight tie (ST+2 vs 4 plain)", 9, 9, 0, m([["a", 4], ["b", 4], ["c", 2]]), 10, "noMajority"],
     ["9p Smooth talker skipping makes a skip majority", 9, 9, 6, m([["a", 4]]), 10, "skipped"],
+    ["9p Smooth talker skipping ties the leader by weight (skip 4 vs A 4 of 10)", 9, 9, 4, m([["a", 4], ["b", 2]]), 10, "noMajority"],
+    ["9p Smooth talker skipping, leader one ahead (A 4 vs skip 3 of 10)", 9, 9, 3, m([["a", 4], ["b", 2], ["c", 1]]), 10, "shakedown"],
     ["9p: every voter skips 4, rest scattered singletons", 9, 9, 4, m([["a", 1], ["b", 1], ["c", 1], ["d", 1], ["e", 1]]), 9, "noMajority"],
   ] as const)("%s", (_n, crew, voters, skip, targets, weight, expected) => {
     expect(meetingResult(crew, voters, skip, targets, weight, BANK_JOB.shakedown).kind).toBe(expected);
@@ -306,6 +308,25 @@ describe("QA alibi phase — design §5.4", () => {
     expect(r.events.some((e) => e.type === "checkpointChecked")).toBe(true);
     expect(["planning", "ended"]).toContain(r.state.phase.kind);
     expect(r.state.alibisOpen).toBe(false);
+  });
+});
+
+describe("QA game end closes the alibi window — design §5.4 (PR #21 QA repro)", () => {
+  it("2p, both in the Vault every round until the game ends: no alibi window in state or view", () => {
+    let s = game(config(2));
+    for (let i = 0; i < 12 && s.phase.kind !== "ended"; i++) {
+      if (s.phase.kind === "alibis") s = run(s, ALIBIS);
+      if (s.phase.kind === "awaitingMeeting") {
+        const act = s.phase.act;
+        s = run(s, { type: "scheduleMeeting", act, slot: "x" }, open(`act-${act}`), close(`act-${act}`));
+        if (s.phase.kind === "ended") break;
+      }
+      s = run(s, mv("p0", "vault"), mv("p1", "vault"), ROUND);
+    }
+    expect(s.phase.kind).toBe("ended");
+    expect(s.alibisOpen).toBe(false);
+    for (const p of ["p0", "p1"]) expect(viewFor(s, p).alibiRound).toBeNull();
+    expect(replay(s.config, s.log)).toEqual(s);
   });
 });
 
