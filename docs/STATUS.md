@@ -57,7 +57,7 @@ Goal: run thousands of all-bot games at 2–12 players and use the results to tu
 Plan and acceptance criteria: `docs/m2-plan.md`. Runs alongside M1 task 16 (balance pass 2, another branch).
 
 1. [x] **M2-1 Server skeleton and game store** — `apps/server`: `buildServer({ db, clock })` (Fastify, `/health`), `loadConfig(env)`, `Db` (`query`/`exec`/`transaction`) with `pg` and PGlite adapters, migration runner (`migrations/NNN_*.sql`, `schema_migrations`, one transaction, advisory lock), schema v1 (`users`, `sessions`, `games`, `seats`, `game_events`, `deadlines`), `GameStore` (`create` lobby game, `start` with config + setup events, `append` all-or-none, `load` = `replay`, in-memory cache, `withGameLock`), `Clock` / `fakeClock`. `scripts/db.sh start|stop|status|url`, `docker-compose.yml`, `pnpm dev`, `pnpm test:pg`. Design §17.2, §17.5.
-2. [ ] **M2-2** Identity, invites and lobby API.
+2. [x] **M2-2 Identity, invites and lobby API** — sessions (random token in an httpOnly SameSite=Lax cookie, SHA-256 in the DB, 30 days, injected clock), guest sign-in (`POST /auth/guest`, or joining by invite with a nickname), `AuthProvider` (redirect + `state` + PKCE verifier) with the `dev` stub (`DEV_LOGIN=1`: `/auth/dev/start?hint=Name`), `/me`, logout. Lobby: `POST /games` (host settings), `GET /games/:id`, `GET /invites/:code`, `POST /invites/:code/join`, `POST /games/:id/leave`, `POST/DELETE /games/:id/bots`, `POST /games/:id/start` (ids `p1…pN`, `randomBytes` seed, `validateConfig`, `store.start`). `playerIdOf(db, game, user)` is the only source of `command.player`. Design §15, §16.
 3. [ ] **M2-3** Live game channel and server bots.
 4. [ ] **M2-4** Scheduler and elastic timing.
 5. [ ] **M2-5** Web shell, style foundation, lobby screens.
@@ -75,7 +75,8 @@ Plan and acceptance criteria: `docs/m2-plan.md`. Runs alongside M1 task 16 (bala
 - **Database:** no `DATABASE_URL` means PGlite in `.pglite/` (`PGLITE_DIR=memory` for in-memory). Tests use a fresh in-memory PGlite per file; with `DATABASE_URL` set (`pnpm test:pg` starts `scripts/db.sh`) they use real Postgres, one throwaway schema per test database. A fresh PGlite takes a few seconds here, so share one per test file.
 - **Store contract (M2-2…M2-4):** run each command as `store.withGameLock(id, async () => { const s = await store.load(id); const r = handleCommand(s, cmd); if (r.ok) await store.append(id, r.events); })`. `append` folds with `applyEvent`, writes at `idx = log.length` (the `(game_id, idx)` key refuses a second writer) and drops the cache entry if the write fails. `games.status` follows the state (`running` → `ended`).
 - **Never send** `games.config` (has the seed) or `game_events.idx` (counts hidden events) to a client.
-- `buildServer` has no `auth` yet: M2-2 adds the `AuthProvider` dependency (and `@fastify/cookie`); M2-3 adds `@fastify/websocket` and moves `@skimjob/bots` from dev to runtime dependencies.
+- `buildServer({ db, clock, auth, store })`: `auth` is the redirect providers (`[devAuthProvider()]` with `DEV_LOGIN=1`; M2-12 adds Google with the same interface, keyed `users.external_id = "google:<sub>"`). Pass one shared `store` so the socket (M2-3) and the lobby use the same lock and cache. M2-3 adds `@fastify/websocket` (`@skimjob/bots` is already a runtime dependency).
+- **Lobby (M2-2):** refusals are `{ error }` (`HttpError`); a game you're not seated in is 404. Host settings live in `games.settings` (`LobbySettings`, `settings.ts`); `sessionLength` is a preset id (`quick`, `1h` … `1w`) that M2-4 gives timings; `dmNotices` is for M2-8. Settings can't be changed after create yet. Bot seats: `bot_personality` set, name `Bot · <name>`, `isBot: true` in the config; M2-3 runs `createBot` for them by personality.
 - `deadlines` is keyed `(game_id, key)` with the system command to send as `json`; M2-4 decides the key format (the schema comment suggests `round:3`, `openMeeting:act-1`).
 
 ## Notes / half-finished work
@@ -108,6 +109,7 @@ Plan and acceptance criteria: `docs/m2-plan.md`. Runs alongside M1 task 16 (bala
 - **Duel mode (task 15, done):** the act's end in Duel is `endOfDuelAct` (`duel.ts`), called by `resolveRound` after the act's last round; any new end-of-act step must go there as well as in `afterVote` (both use `checkpoint()` in `meeting.ts`). M2: the server never sends `openMeeting`/`scheduleMeeting` in Duel games. Balance (task 16): the sim doesn't report call-outs yet (count, caught share, loot moved); bots call out only on a visible shortfall.
 
 ## Questions for Karthik
+- M2 lobby: OK that one invite link per game works for anyone until the game starts (then 410), the host can't leave the lobby, and new bots default to the Opportunist personality? (provisional, decisions.md)
 - Role deal: should each non-Rookie role be dealt at most once, with Rookies filling the rest (current, provisional), or can roles repeat in big crews?
 - Mole at 9–12 players: is "off" allowed, and does "maybe" mean 1-or-2 (current) or 0/1/2? "On" currently deals 2.
 - Heat: OK to round each round's change to a whole number (halves up) and floor Heat at 0? (provisional, decisions.md)

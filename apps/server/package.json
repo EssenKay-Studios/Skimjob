@@ -11,13 +11,15 @@
     "start": "tsx src/main.ts"
   },
   "dependencies": {
+    "@fastify/cookie": "^11.1.5",
+    "@skimjob/bots": "workspace:*",
+    "@skimjob/content": "workspace:*",
     "@skimjob/engine": "workspace:*",
     "fastify": "^5.12.0",
     "pg": "^8.23.0"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.14",
-    "@skimjob/bots": "workspace:*",
     "@types/pg": "^8.23.0"
   }
 }

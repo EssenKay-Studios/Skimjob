@@ -20,10 +20,11 @@ export interface GameStore {
   create(game: NewGame): Promise<string>;
   /**
    * Starts a lobby game: stores the config (with its seed) and the setup
-   * events of `createGame(config)`, in one transaction. Throws if the game
-   * isn't in the lobby or the config is invalid.
+   * events of `createGame(config)`, in one transaction (with `inTx`, if
+   * given, e.g. writing the seats' player ids). Throws if the game isn't in
+   * the lobby or the config is invalid.
    */
-  start(gameId: string, config: GameConfig): Promise<GameState>;
+  start(gameId: string, config: GameConfig, inTx?: (tx: Queryable) => Promise<void>): Promise<GameState>;
   /**
    * Folds `events` onto the game and stores them, all or none, in one
    * transaction (the status follows the new state). Throws if the game hasn't
@@ -61,7 +62,7 @@ export function createGameStore(db: Db): GameStore {
       return row.id;
     },
 
-    async start(gameId, config) {
+    async start(gameId, config, inTx) {
       const state = createGame(config);
       await db.transaction(async (tx) => {
         const started = await tx.query(
@@ -70,6 +71,7 @@ export function createGameStore(db: Db): GameStore {
         );
         if (started.length === 0) throw new Error(`game ${gameId} is not in the lobby`);
         await insertEvents(tx, gameId, 0, state.log);
+        await inTx?.(tx);
       });
       cache.set(gameId, state);
       return state;
