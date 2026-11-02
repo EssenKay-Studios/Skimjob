@@ -1,4 +1,4 @@
-# Orchestrator handoff (snapshot 2026-11-02 04:30 IST)
+# Orchestrator handoff (snapshot 2026-11-02, after the owner answers)
 
 Read this together with `docs/STATUS.md`, which holds the canonical task list. This file covers how the work is run and what was in flight at the snapshot.
 
@@ -22,7 +22,10 @@ Read this together with `docs/STATUS.md`, which holds the canonical task list. T
 - Send the owner a short progress update about every 15 minutes.
 
 ## In flight at snapshot
-Nothing. No agents are running, and every PR through #39 is merged (#35, #36, #37, #38 chat UI, #39 e2e target check; the separate flake PR was dropped because #36 fixed the root cause). Docs PR #40 folds the PR notes into `docs/decisions.md` and `docs/STATUS.md`.
+- **R5 parity balance** on `balance/r5-parity`.
+- **Lock-in / presence** on `m2/lock-in-presence`: public lock-in marks, presence (online dot + last seen), rounds end early once everyone has locked in, meeting slot locks on a human majority (bots don't count).
+- **Docs PR** `docs/owner-answers-2nov`: folds the owner answers of 2 Nov and the PR #41 notes into `docs/decisions.md` and `docs/STATUS.md`.
+- Merged through #41 (bank board + Claim role; the M2-9 art is wired into the game screen).
 
 ## Remaining plan
 1. R5 parity balance with `pnpm sim:suite`:
@@ -30,25 +33,28 @@ Nothing. No agents are running, and every PR through #39 is merged (#35, #36, #3
    - success 55–70% (8p is 51%)
    - saboteur win 30–40%
    - Inside Man at 2–3 players
+   - Heat at 3–4 players (PM call: left to the R5 sim data, not asked of the owner)
    - revisit the 5-player Accomplice cut
-2. Wire the M2-9 art into the game screen.
-3. M2-10: ledger, case file, "While you were away", suspicion board.
-4. M2-11: end-of-game reveal.
-5. M2-13: host controls (pause, extend, replace with bot).
-6. M2-12: Google sign-in, stub-ready (needs a client id from the owner).
-7. M2-14: playtest pass.
-8. **M2-15: offline demo build.** Run the in-browser engine and bots with the same UI, and publish it as a claude.ai artifact the owner can verify. This is the deliverable the owner asked for.
+2. Lock-in / presence / early end / human-majority meeting lock (in flight).
+3. R6a rules: role list setting (Exact default / Possible / Hidden), deck presets + per-role toggles, deal style Balanced / Truly random, Fence safe revealed on shakedown, tip-off any time as its own public Heat event, shakedown window only when a Muscle or Shield earner is dealt under Exact (PM call), bots aware of the public role list, sim re-run.
+4. R6b web: lobby deck picker, Roles rulebook sheet + tap-to-explain, visual cues for every power, last round's board shown faded while planning.
+5. M2-10: ledger, case file, "While you were away", suspicion board.
+6. M2-11: end-of-game reveal.
+7. M2-13: host controls (pause, extend, replace with bot).
+8. M2-12: Google sign-in, stub-ready (needs a client id from the owner).
+9. M2-14: playtest pass.
+10. **M2-15: offline demo build.** Run the in-browser engine and bots with the same UI, and publish it as a claude.ai artifact the owner can verify. This is the deliverable the owner asked for.
 
 Follow-ups from reviews (see STATUS "Open follow-ups"):
 - Bots: a hidden `crewSeed` from the harness for the shared hunch (#37 review).
-- Bot scheduling: bots only back proposals, never propose first; fix before M2-14 (#35 review).
+- Bot scheduling: bots only back proposals, never propose first, and (owner, 2 Nov) their backing doesn't count toward the lock; in the lock-in/presence PR (#35 review).
 - SHA-pin the GitHub Actions in `ci.yml`, `deploy.yml` and `sim-suite.yml` (now `@v4` tags).
 
 ## Owner direction and constraints
 - 1 Nov: "finish the entire development, testing, integration testing, everything, and just give it to me as an artifact to verify." Deployment is decided later (AWS Lightsail or Fly).
   - Fly: the account is flagged high-risk. The owner must unlock it at fly.io/high-risk-unlock, then re-run `deploy.yml`. `FLY_API_TOKEN` is already a repo secret.
   - Lightsail would need the secrets `LIGHTSAIL_SSH_KEY`, `LIGHTSAIL_HOST` and `LIGHTSAIL_USER`, a subdomain A record, and answers on Docker, the proxy and RAM.
-- Ask the owner only for real decisions, as MCQs with a recommended option. Otherwise keep going.
+- Ask the owner only for real decisions, as MCQs with a recommended option. Otherwise keep going. Technical defaults go to the owner in batches of 4 (2 Nov).
 - UI: the cityrt-style cartoon notebook on every screen (`docs/ui-style.md`, CLAUDE.md UI rules). Style only: never their logo, name or art.
 - Earlier preview artifact (landing page + gallery): https://claude.ai/artifact/Bss1QfARNq9WM8qwdC4CAY
 
