@@ -1,13 +1,16 @@
 // QA (PR #44): public lock-in marks and presence on the crew list, seen from
 // another person's screen. Owner decisions, 2 Nov. design §5.1, §13
+import { existsSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 import { startGame } from "./setupGame";
 
 const WIDTHS = [360, 390, 768, 1024, 1280];
 const seat = (page: Page, name: string) => page.locator(".crew-seat:not(.is-you)").filter({ hasText: name });
 
-test("a person's lock-in shows on others' seats, a change shows nothing; presence online → seen; no overflow at 360–1280", async ({ page, browser }) => {
+test("a person's lock-in shows on others' seats, a change shows nothing; presence online → seen; no overflow at 360–1280", async ({ page, browser }, info) => {
   test.setTimeout(90_000);
+  // Pipeline evidence folder locally; the test output folder on CI.
+  const shots = existsSync("/home/claude/pipeline/shots") ? "/home/claude/pipeline/shots" : info.outputPath();
   const errors: string[] = [];
   const hostCtx = await browser.newContext();
   const host = await hostCtx.newPage();
@@ -39,9 +42,10 @@ test("a person's lock-in shows on others' seats, a change shows nothing; presenc
   const crewBefore = await page.locator(".crew-seat").evaluateAll((els) => els.map((e) => e.outerHTML).join("\n"));
 
   // A change: the guest's crew list is unchanged.
-  await host.locator("#split").fill("4");
+  // A room change (any role: an Inside Man has no split slider; 5 seats can deal one).
+  await host.locator('.room-tile[data-room="Office"]').click();
   await host.getByRole("button", { name: "Update move" }).click();
-  await expect(host.getByText("Locked in: Vault, pocket 2.")).toBeVisible();
+  await expect(host.getByText(/Locked in: Office/)).toBeVisible();
   await page.waitForTimeout(1000);
   const crewAfter = await page.locator(".crew-seat").evaluateAll((els) => els.map((e) => e.outerHTML).join("\n"));
   expect(crewAfter).toBe(crewBefore);
@@ -66,7 +70,7 @@ test("a person's lock-in shows on others' seats, a change shows nothing; presenc
     expect(o.scroll, `horizontal overflow at ${w}px: ${o.wide.join(", ")}`).toBeLessThanOrEqual(o.client);
     // Seat rows' targets stay readable: the mark and the presence line never overlap the name.
     await tab.locator(".crew-seat").first().scrollIntoViewIfNeeded();
-    await tab.screenshot({ path: `/home/claude/pipeline/shots/qa-44-crew-${w}.png`, fullPage: true });
+    await tab.screenshot({ path: `${shots}/qa-44-crew-${w}.png`, fullPage: true });
     await tab.close();
   }
 
