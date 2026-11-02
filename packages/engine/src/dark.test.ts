@@ -75,7 +75,8 @@ describe("R3b content and eligibility — v2 §2, §3", () => {
       expect(rolePoolFor(config(2, { duel: true }))).not.toContain(r);
     }
     expect(ROLES.forger).toMatchObject({ knownToSaboteurs: true, rewards: [{ on: "forgedShakenClean", perk: "shield", count: 1 }] });
-    expect(ROLES.embezzler).toMatchObject({ faction: "saboteur", power: { kind: "embezzle", perAct: 1, take: 4 } });
+    // R5 (balance-3.md): take 4 → 1.
+    expect(ROLES.embezzler).toMatchObject({ faction: "saboteur", power: { kind: "embezzle", perAct: 1, take: 1 } });
     expect(DEFAULT_ROLE_POOL).not.toContain("embezzler");
     expect(saboteursFor(config(4))).toContain("embezzler");
     // A dealable Forger (a Shield earner) keeps the shakedown window rule independent of who was dealt (design §8.3).
@@ -205,18 +206,20 @@ describe("Embezzler — v2 §2: a take from the Haul, hidden in the round's Haul
   // p0 Embezzler, p1 Fence (an accomplice), p2 Detective, the rest Rookies.
   const base = game(7, ["embezzler", "fence", "detective"]);
   const take = (at = "lobby") => mv("p0", at, 0, { ability: { kind: "embezzle" } });
+  const TAKE = (ROLES.embezzler?.power as { take: number }).take;
   const vaultAll = (s: GameState) => s.playerOrder.filter((id) => id !== "p0").map((id) => mv(id, "vault"));
 
-  it("moves 4 from the Haul (after the splits) to its stash; only the Embezzler is told, the rest is in the Haul change", () => {
+  it("moves its take (content: 1 since R5) from the Haul (after the splits) to its stash; only the Embezzler is told, the rest is in the Haul change", () => {
     const plain = run(base, ...vaultAll(base), ROUND);
     const took = run(base, take(), ...vaultAll(base), ROUND);
     const rr = (s: GameState) => ofType(s.log, "roundResolved")[0];
-    expect((rr(plain)?.haulDelta ?? 0) - (rr(took)?.haulDelta ?? 0)).toBe(4);
-    expect(took.players.p0?.stash).toBe((plain.players.p0?.stash ?? 0) + 4);
-    expect(ofType(since(base, took), "abilityResolved").find((e) => e.player === "p0")).toMatchObject({ visibility: privateTo("p0"), ability: { kind: "embezzle", amount: 4 } });
+    expect((rr(plain)?.haulDelta ?? 0) - (rr(took)?.haulDelta ?? 0)).toBe(TAKE);
+    expect(took.players.p0?.stash).toBe((plain.players.p0?.stash ?? 0) + TAKE);
+    expect(ofType(since(base, took), "abilityResolved").find((e) => e.player === "p0")).toMatchObject({ visibility: privateTo("p0"), ability: { kind: "embezzle", amount: TAKE } });
     expect(JSON.stringify(viewFor(took, "p3"))).not.toMatch(/embezzle/);
-    // design §8 (v2 §2, PR #36 review): capped at this round's inflow, so the public Haul change is never negative.
-    const stocked: GameState = { ...base, haul: 30 };
+    // design §8 (v2 §2, PR #36 review): capped at this round's inflow, so the public Haul change is never negative
+    // (with the 0.13.0 take of 4, more than the round's inflow of 2).
+    const stocked: GameState = { ...game(7, ["embezzler", "fence", "detective"], { contentOverrides: { roles: { embezzler: { take: 4 } } } }), haul: 30 };
     const thin = run(stocked, take("rooftop"), mv("p1", "lobby"), ...base.playerOrder.slice(2).map((id) => mv(id, "rooftop")), ROUND);
     expect(ofType(thin.log, "abilityResolved").find((e) => e.player === "p0")?.ability).toEqual({ kind: "embezzle", amount: 2 });
     expect(ofType(thin.log, "roundResolved")[0]).toMatchObject({ haulDelta: 0, haul: 30 });
@@ -243,9 +246,9 @@ describe("Embezzler — v2 §2: a take from the Haul, hidden in the round's Haul
 
   it("a shakedown always finds it dirty while it holds a take, and returns the whole stash to the Haul; the Detective agrees", () => {
     const s = run(base, take(), ROUND);
-    expect(s.players.p0?.stash).toBe(4);
+    expect(s.players.p0?.stash).toBe(TAKE);
     const check = run(s, { type: "useAbility", player: "p2", ability: { kind: "checkStash", target: "p0" } });
-    // Threshold 3 in Act 1: 4 is dirty anyway, so check the rule with the stash forced below it.
+    // Threshold 3 in Act 1: the take alone is below it, yet it reads dirty; and so with the stash forced to 1.
     expect(ofType(since(s, check), "abilityResolved")[0]?.ability).toMatchObject({ dirty: true });
     const low: GameState = { ...s, players: { ...s.players, p0: { ...(s.players.p0 as NonNullable<typeof s.players.p0>), stash: 1 } } };
     const lowCheck = run(low, { type: "useAbility", player: "p2", ability: { kind: "checkStash", target: "p0" } });

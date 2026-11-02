@@ -67,8 +67,8 @@ describe("Mole tip-off — design §7, §8", () => {
     return { before: s, after, events: since(s, after) };
   };
 
-  it("adds the content Heat (+6 since balance pass 2) to the round's Heat, inside the public total", () => {
-    expect(TIP_HEAT).toBe(6);
+  it("adds the content Heat (+4 since R5, balance-3.md; +6 from balance pass 2) to the round's Heat, inside the public total", () => {
+    expect(TIP_HEAT).toBe(4);
     const plain = oneRound(false);
     const tipped = oneRound(true);
     expect(roundResolved(tipped.events).heatDelta - roundResolved(plain.events).heatDelta).toBe(TIP_HEAT);

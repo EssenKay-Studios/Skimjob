@@ -29,8 +29,8 @@ function config(players: number): GameConfig {
     eventsEnabled: false,
     voteVisibility: "open",
     starterMode: false,
-    // scripted against content 0.1.0 checkpoint targets (balance pass 1)
-    contentOverrides: { checkpoints: { perPlayer: [6, 14, 22] } },
+    // scripted against content 0.1.0 checkpoint targets (balance pass 1) and the Rookie's ×1.2 (0.1.0–0.13.0; R5 made it ×1.05)
+    contentOverrides: { checkpoints: { perPlayer: [6, 14, 22] }, roles: { rookie: { stashMultiplier: 1.2 } } },
   };
 }
 

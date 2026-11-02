@@ -91,12 +91,12 @@ describe("room tiers at the boundaries — design §6.2, §16", () => {
 });
 
 describe("Deposit-box capacity — design §6.2", () => {
-  it("full 5 at exactly 2 visitors, 3 each from the 3rd visitor on", () => {
+  it("full 5 at exactly 2 visitors, 4 each from the 3rd visitor on (R5; was 3)", () => {
     const boxes = roomDef(bank, "depositBoxes");
-    expect(boxes.capacity).toEqual({ max: 2, crowdedLoot: 3 });
+    expect(boxes.capacity).toEqual({ max: 2, crowdedLoot: 4 });
     expect(roomLoot(boxes, 2)).toBe(5);
-    expect(roomLoot(boxes, 3)).toBe(3);
-    expect(roomLoot(boxes, 8)).toBe(3);
+    expect(roomLoot(boxes, 3)).toBe(4);
+    expect(roomLoot(boxes, 8)).toBe(4);
   });
 
   it("no other bank room has a capacity", () => {
@@ -107,9 +107,9 @@ describe("Deposit-box capacity — design §6.2", () => {
 
 describe("checkpoint targets per crew size — design §11.5", () => {
   it("2, 3 and 12 players", () => {
-    expect([1, 2, 3].map((a) => checkpointTarget(bank, a as 1 | 2 | 3, 2))).toEqual([14, 30, 48]);
-    expect([1, 2, 3].map((a) => checkpointTarget(bank, a as 1 | 2 | 3, 3))).toEqual([21, 45, 72]);
-    expect([1, 2, 3].map((a) => checkpointTarget(bank, a as 1 | 2 | 3, 12))).toEqual([84, 180, 288]);
+    expect([1, 2, 3].map((a) => checkpointTarget(bank, a as 1 | 2 | 3, 2))).toEqual([14, 30, 46]);
+    expect([1, 2, 3].map((a) => checkpointTarget(bank, a as 1 | 2 | 3, 3))).toEqual([21, 45, 69]);
+    expect([1, 2, 3].map((a) => checkpointTarget(bank, a as 1 | 2 | 3, 12))).toEqual([84, 180, 276]);
   });
 
   it("rejects act 0", () => {

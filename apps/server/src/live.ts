@@ -180,6 +180,8 @@ const sha256 = (text: string) => createHash("sha256").update(text).digest("hex")
  * decision, with or without a restart in between (no long-lived RNG stream).
  */
 const botSeed = (gameSeed: string, player: PlayerId, viewHash: string) => sha256(`bot\0${gameSeed}\0${player}\0${viewHash}`);
+/** The bots' shared hunch seed (BotOptions.crewSeed): one per game, from the secret game seed, so it can't be worked out from public data. */
+const crewSeed = (gameSeed: string) => sha256(`crew\0${gameSeed}`);
 
 /** The engine refused a system command (a stale or duplicate deadline), as opposed to a server failure. */
 export class SystemRefused extends Error {}
@@ -256,7 +258,7 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
         const hash = sha256(JSON.stringify(view));
         if (seen.get(seat.player) === hash) continue;
         seen.set(seat.player, hash);
-        const agent = createBot({ player: seat.player, personality: PERSONALITIES[seat.personality], seed: botSeed(state.config.seed, seat.player, hash) });
+        const agent = createBot({ player: seat.player, personality: PERSONALITIES[seat.personality], seed: botSeed(state.config.seed, seat.player, hash), crewSeed: crewSeed(state.config.seed) });
         for (const command of agent.act(view)) {
           if (state.phase.kind === "ended") break;
           const r = await apply(gameId, state, { ...command, player: agent.player });

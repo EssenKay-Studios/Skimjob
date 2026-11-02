@@ -3,7 +3,7 @@
 // design §3, §7, §8, §8.1, §10 (v2 §2, §3)
 import { describe, expect, it } from "vitest";
 import { handleThroughAlibis } from "./alibis.testkit";
-import { BANK_JOB, ROLES } from "@skimjob/content";
+import { BANK_JOB, ROLES, maxDarkSeats } from "@skimjob/content";
 import type { GameConfig, GameEvent, GameState, PlayerState } from "./types";
 import { privateTo } from "./types";
 import { createGame, setupEvents } from "./setup";
@@ -11,6 +11,7 @@ import { replay } from "./reduce";
 import { roundHeatDelta } from "./job";
 import { viewFor } from "./view";
 import { outcomeFor } from "./end";
+import { V013_NUMBERS } from "./v01-numbers.testkit";
 
 function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
   return {
@@ -73,7 +74,7 @@ describe("QA win rule with accomplices — design §3 (v2 §0)", () => {
 });
 
 describe("QA dealing and dealt knowledge at 6–12 players — design §8.1 (v2 §3)", () => {
-  it("never more than ⌊n/3⌋ dark, accomplices only with a saboteur; at the deal only the Hacker knows one saboteur and the saboteurs know only each other and the Forger", () => {
+  it("never more than n ÷ 3 (rounded, R5) dark, accomplices only with a saboteur; at the deal only the Hacker knows one saboteur and the saboteurs know only each other and the Forger", () => {
     let hackers = 0;
     for (let n = 6; n <= 12; n++) {
       for (let i = 0; i < 12; i++) {
@@ -81,7 +82,7 @@ describe("QA dealing and dealt knowledge at 6–12 players — design §8.1 (v2 
         const s = createGame(cfg);
         const roleOf = (id: string) => (s.players[id] as PlayerState).role;
         const fs = s.playerOrder.map((id) => faction(roleOf(id)));
-        expect(fs.filter((f) => f !== "crew").length, `${n}/${i}`).toBeLessThanOrEqual(Math.floor(n / 3));
+        expect(fs.filter((f) => f !== "crew").length, `${n}/${i}`).toBeLessThanOrEqual(maxDarkSeats(n));
         if (fs.includes("accomplice")) expect(fs).toContain("saboteur");
         const sabs = s.playerOrder.filter((id) => faction(roleOf(id)) === "saboteur");
         for (const id of s.playerOrder) {
@@ -119,9 +120,12 @@ describe("QA Getaway Driver — v2 §2, design §7", () => {
   });
 
   it("with a Cleaner also on the Rooftop, the Driver still adds Heat (counts stack)", () => {
-    const heat = (roles: string[]) => run(withHeat(game(4, roles), 30), mv("p0", "rooftop"), mv("p1", "rooftop"), mv("p2", "lobby"), mv("p3", "lobby"), ROUND).heat;
+    // Pinned to reverse ×1 (content 0.13.0); R5 ships ×0 (balance-3.md), where it counts as no visitor.
+    const heat = (roles: string[], extra: Partial<GameConfig> = { contentOverrides: V013_NUMBERS }) =>
+      run(withHeat(game(4, roles, extra), 30), mv("p0", "rooftop"), mv("p1", "rooftop"), mv("p2", "lobby"), mv("p3", "lobby"), ROUND).heat;
     expect(heat(["getawayDriver", "cleaner"])).toBe(30 + roundHeatDelta(BANK_JOB, 4, { rooftop: -1 + 2, lobby: 2 }));
     expect(heat(["getawayDriver", "cleaner"])).toBeGreaterThan(heat(["rookie", "cleaner"]));
+    expect(heat(["getawayDriver", "cleaner"], {})).toBe(30 + roundHeatDelta(BANK_JOB, 4, { rooftop: 2, lobby: 2 }));
   });
 });
 
