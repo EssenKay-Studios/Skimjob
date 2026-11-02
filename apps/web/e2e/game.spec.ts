@@ -111,13 +111,18 @@ test("the move panel: pick a room, split the loot, lock it in, change it; reconn
   await expect(page.getByText("Miss the deadline and you go to the Lobby, handing everything in.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Lock it in" })).toBeDisabled();
 
-  // The Vault, pocketing 2 (the slider's value is the Haul share).
+  // The Vault, pocketing 2 (the slider's value is the Haul share). A role that can't pocket
+  // (an Inside Man, which R5's dealing can give the host) has no slider: it hands everything in.
   await page.locator('.room-tile[data-room="Vault"]').click();
-  await page.locator("#split").fill("4");
-  await expect(page.locator(".split__pocket")).toContainText("2");
+  await expect(page.getByRole("button", { name: "Lock it in" })).toBeEnabled();
+  const pockets = (await page.locator("#split").count()) > 0;
+  if (pockets) {
+    await page.locator("#split").fill("4");
+    await expect(page.locator(".split__pocket")).toContainText("2");
+  }
   await page.getByRole("button", { name: "Lock it in" }).click();
   await expect(page.getByRole("button", { name: "Locked in" })).toBeDisabled();
-  await expect(page.getByText("Locked in: Vault, pocket 2.")).toBeVisible();
+  await expect(page.getByText(pockets ? "Locked in: Vault, pocket 2." : "Locked in: Vault, all to the Haul.")).toBeVisible();
   await expect(page.locator(".crew-seat.is-you .crook-avatar--ready")).toBeVisible(); // your own "locked in" mark (everyone's is public)
   // Lock-ins are public (owner decision, 2 Nov): the bots have locked in, the idle guest hasn't; never a room or split.
   await expect(page.locator(".crew-seat:not(.is-you) .crook-avatar--ready")).toHaveCount(3);
