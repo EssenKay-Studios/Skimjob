@@ -317,6 +317,22 @@ describe("pushing views", () => {
     b.ws.close();
   }, 15_000); // heavy: slow under a full parallel run (QA, PR #31)
 
+  it("a person's public lock-in makes no bot act (bots don't use lock-in marks; owner decision 2 Nov)", async () => {
+    // Random bots call an emergency on 5% of the views they act on, so acting on every lock-in would show.
+    for (let g = 0; g < 5; g++) {
+      const { id, humans } = await startGame(1, 3, {}, true, "random");
+      const a = await Client.open(id, humans[0]!);
+      const before = await load(id);
+      const seen = await db.query<{ bot_seen: string }>("select bot_seen from seats where game_id = $1 and bot_seen is not null order by seat_no", [id]);
+      const room = before.rooms.find((r) => r !== "security")!;
+      expect(await a.send({ type: "submitMove", move: { room, pocket: 0 } })).toMatchObject({ ok: true });
+      const after = await load(id);
+      expect(after.log.slice(before.log.length).map((e) => e.type)).toEqual(["moveLocked", "moveSubmitted"]);
+      expect(await db.query("select bot_seen from seats where game_id = $1 and bot_seen is not null order by seat_no", [id])).toEqual(seen);
+      a.ws.close();
+    }
+  }, 30_000);
+
   it("bots of running games act when the server boots (a crash may have cut a settle short)", async () => {
     const host = (await call("/auth/guest", null, { nickname: "Host" })).session!;
     const game = (await call("/games", host, {})).body;

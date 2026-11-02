@@ -16,6 +16,7 @@
 // - Bot seats act through the same command path, but only when their own
 //   view changed (like the pushes), so another player's hidden action never
 //   makes a bot roll its dice, and so never shows up as a public bot act.
+//   Lock-in marks don't count as a change (`botTrigger`).
 // - Commands for a game run one at a time (store.withGameLock), in arrival order.
 // - Chat (M2-8a, chat.ts): client `{ chat: { to?, text | evidence }, id? }`,
 //   replied to like a command; the message goes out as `{ chat }` (a DM only to
@@ -38,6 +39,7 @@ import {
   type GameState,
   type PlayerCommand,
   type PlayerId,
+  type PlayerView,
   type SystemCommand,
 } from "@skimjob/engine";
 import { SESSION_COOKIE, type Sessions } from "./auth";
@@ -195,6 +197,18 @@ const sha256 = (text: string) => createHash("sha256").update(text).digest("hex")
  */
 const botSeed = (gameSeed: string, player: PlayerId, viewHash: string) => sha256(`bot\0${gameSeed}\0${player}\0${viewHash}`);
 
+/**
+ * The part of a bot's view whose change makes it act: all of it but the
+ * lock-in marks (`moveLocked`, `lockedIn`; owner decision 2 Nov). Bots don't
+ * use them, so another player locking in never gives every bot a fresh roll of
+ * the dice (a random emergency, say) that it didn't get before lock-ins were public.
+ */
+export const botTrigger = (view: PlayerView): unknown => ({
+  ...view,
+  lockedIn: [],
+  ledger: view.ledger.filter((e) => e.event.type !== "moveLocked"),
+});
+
 /** The engine refused a system command (a stale or duplicate deadline), as opposed to a server failure. */
 export class SystemRefused extends Error {}
 
@@ -271,7 +285,7 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
       for (const seat of seats) {
         if (state.phase.kind === "ended") break;
         const view = viewFor(state, seat.player);
-        const hash = sha256(JSON.stringify(view));
+        const hash = sha256(JSON.stringify(botTrigger(view)));
         if (seen.get(seat.player) === hash) continue;
         seen.set(seat.player, hash);
         const agent = createBot({ player: seat.player, personality: PERSONALITIES[seat.personality], seed: botSeed(state.config.seed, seat.player, hash) });
