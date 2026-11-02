@@ -111,3 +111,6 @@ export function parseNickname(input: unknown): string | null {
   const r = checkNickname(input);
   return r.ok ? r.name : null;
 }
+
+/** Suspicion board (design §12.3, M2-10): characters per note. */
+export const BOARD_NOTE_MAX_CHARS = 280;

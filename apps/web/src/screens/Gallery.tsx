@@ -7,6 +7,7 @@ import { chatReducer, EMPTY_CHAT, markRead, type ChatMessage, type ChatRequest, 
 import { Avatar } from "../components/Avatar";
 import { BankDoodle } from "../components/BankDoodle";
 import { ArtSections, BankSection } from "./GalleryArt";
+import { NotesSections } from "./GalleryNotes";
 import { Button, DangerButton } from "../components/Button";
 import { Chip } from "../components/Chip";
 import { ArrowBack, Copy, Play, Plus, Star } from "../components/icons";
@@ -290,6 +291,8 @@ export function Gallery() {
             <Section id="chat" title="Chat" note="M2-8b · crew + DMs, DM notices, evidence cards, limits">
               <ChatSamples />
             </Section>
+
+            <NotesSections />
 
             <Section id="meet" title="Meetings kit" note="M2-7 · clock face, tally bars, result banners, vote dialog sheet">
               <MeetingKitSamples />

@@ -2,19 +2,24 @@
 // move panel, alibis, ledger and case file, and the game-over ranking, all
 // from the player's own view over the live channel, and the chat (M2-8b,
 // GameChat.tsx), meetings and votes (M2-7, Meetings.tsx) and the bank board
-// (M2-9 art, figures from the view only: game/board.ts). The full reveal
-// (M2-11) comes later.
+// (M2-9 art, figures from the view only: game/board.ts), and (M2-10) the
+// ledger / case file sheet, the "While you were away" recap and the private
+// suspicion board (game/notes.ts). The full reveal (M2-11) comes later.
 import { useEffect, useMemo, useState } from "react";
-import type { CaseFileEvent, LoggedEvent, PlayerView, PublicEvent, RoomId } from "@skimjob/engine";
+import type { PlayerView, RoomId } from "@skimjob/engine";
 import { Button } from "../components/Button";
 import { Chip } from "../components/Chip";
-import { Clock, Lock, Play } from "../components/icons";
+import { Clock, Play } from "../components/icons";
 import { HeatMeter, Meter } from "../components/Meter";
 import { BankCutaway } from "../art/BankCutaway";
 import { BANK_ROOMS, type BankRoomId } from "../art/bankLayout";
 import { CrookAvatar } from "../art/Crook";
+import { AwayRecap } from "../components/AwayRecap";
+import { CaseFile } from "../components/CaseFile";
+import { SuspicionBoard, SuspicionMark } from "../components/SuspicionBoard";
+import { useSeatNotes, type Board as SuspicionMarks, type BoardChannel } from "../game/notes";
 import { RoomIcon } from "../art/RoomIcon";
-import { BustedSpot, EmptyFileSpot, JobDoneSpot, WaitingSpot } from "../art/Spots";
+import { BustedSpot, JobDoneSpot, WaitingSpot } from "../art/Spots";
 import { RoomTile } from "../components/RoomTile";
 import { SketchFrame } from "../components/SketchFrame";
 import { SplitSlider } from "../components/SplitSlider";
@@ -160,21 +165,38 @@ function Board({ view, timers, offset, send, autoMeetings, gameId, channel, dmNo
     room: (picked && picked.round === planning ? picked.room : null) ?? view.me.move?.room ?? null,
     setRoom: (room) => planning !== null && setPicked({ round: planning, room }),
   };
+  const plurality = pluralityRule(view);
+  const ctx = useMemo(() => ({ me: view.me.id, name: namesOf(view), slot: slotText, plurality }), [view, plurality]);
+  // M2-10: the recap on return and the private suspicion board, both kept per seat on the server.
+  const notes = useSeatNotes(gameId, view, ctx);
   return (
-    <div className={outcome ? "game-grid is-over" : "game-grid"}>
-      <Hud view={view} timers={timers} offset={offset} />
-      <BankBoard view={view} pick={planning !== null ? pick : null} />
-      <Seats view={view} presence={channel.presence} offset={offset} />
-      <div className="game-grid__action">
-        {outcome ? <GameOver view={view} /> : <Actions view={view} timers={timers} offset={offset} send={send} autoMeetings={autoMeetings} pick={pick} />}
+    <>
+      <AwayRecap lines={notes.away.lines} onDismiss={notes.away.dismiss} />
+      <div className={outcome ? "game-grid is-over" : "game-grid"}>
+        <Hud view={view} timers={timers} offset={offset} />
+        <BankBoard view={view} pick={planning !== null ? pick : null} />
+        <Seats view={view} presence={channel.presence} offset={offset} marks={notes.board.board} />
+        <div className="game-grid__action">
+          {outcome ? <GameOver view={view} /> : <Actions view={view} timers={timers} offset={offset} send={send} autoMeetings={autoMeetings} pick={pick} />}
+          {!outcome && <CrewBoard view={view} board={notes.board} />}
+        </div>
+        {/* From 1024 px the chat and the records share the right column; below that the chat is a sheet. */}
+        <div className="game-grid__side">
+          <GameChat gameId={gameId} view={view} channel={channel} dmNotices={dmNotices} />
+          <CaseFile view={view} ctx={ctx} />
+        </div>
       </div>
-      {/* From 1024 px the chat and the records share the right column; below that the chat is a sheet. */}
-      <div className="game-grid__side">
-        <GameChat gameId={gameId} view={view} channel={channel} dmNotices={dmNotices} />
-        <Records view={view} />
-      </div>
-    </div>
+    </>
   );
+}
+
+/** design §12.3: your private tags on everyone else. */
+function CrewBoard({ view, board }: { view: PlayerView; board: BoardChannel }) {
+  const looks = seatLooks(view);
+  const people = seatsOf(view)
+    .filter((s) => !s.you)
+    .map((s) => ({ id: s.id, name: s.name, isBot: s.isBot, look: looks.get(s.id)?.look ?? 0, tag: looks.get(s.id)?.tag }));
+  return <SuspicionBoard people={people} board={board.board} error={board.error} onSave={board.save} />;
 }
 
 function Hud({ view, timers, offset }: { view: PlayerView; timers: readonly Timer[]; offset: number }) {
@@ -279,7 +301,7 @@ function BankBoard({ view, pick }: { view: PlayerView; pick: Pick | null }) {
  * The crew: who has locked in this round (public, owner decision 2 Nov) and
  * each person's presence, online now or last seen; bots show as bots. design §5.1
  */
-function Seats({ view, presence, offset }: { view: PlayerView; presence: Presence | null; offset: number }) {
+function Seats({ view, presence, offset, marks }: { view: PlayerView; presence: Presence | null; offset: number; marks: SuspicionMarks | null }) {
   const seats = seatsOf(view);
   const looks = seatLooks(view);
   const now = useNow(30_000) + offset;
@@ -308,6 +330,7 @@ function Seats({ view, presence, offset }: { view: PlayerView; presence: Presenc
                 {s.you ? "You" : s.name}
                 {s.lockedIn && <span className="crew-seat__mark">locked in</span>}
                 {here.text && !s.you && <span className={`crew-seat__here crew-seat__here--${here.kind}`}>{here.text}</span>}
+                {!s.you && <SuspicionMark tag={marks?.[s.id]?.tag} />}
               </span>
             </li>
           );
@@ -482,42 +505,6 @@ function AlibiPanel({ view, round, posted, send }: { view: PlayerView; round: nu
         )}
         <ClaimRole view={view} send={send} where="alibi" />
       </div>
-    </SketchFrame>
-  );
-}
-
-type Tab = "ledger" | "case";
-
-function Records({ view }: { view: PlayerView }) {
-  const [tab, setTab] = useState<Tab>("ledger");
-  const name = namesOf(view);
-  const ctx = { me: view.me.id, name, slot: slotText, plurality: pluralityRule(view) };
-  const rows: readonly LoggedEvent<PublicEvent | CaseFileEvent>[] = tab === "ledger" ? view.ledger : view.caseFile;
-  return (
-    <SketchFrame as="section" seed="game-records" radius={18} shadow={0.5} fill="var(--manilla)" holes className="records" aria-label="Ledger and case file">
-      <div className="records__tabs" role="group" aria-label="Show">
-        <Button variant="toggle" seed="tab-ledger" pressed={tab === "ledger"} onClick={() => setTab("ledger")}>
-          Ledger <span className="num">{view.ledger.length}</span>
-        </Button>
-        <Button variant="toggle" seed="tab-case" pressed={tab === "case"} onClick={() => setTab("case")}>
-          Case file <span className="num">{view.caseFile.length}</span>
-        </Button>
-      </div>
-      <p className="meta records__note">{tab === "ledger" ? "What everyone sees." : "Only you see these."}</p>
-      <ol className={tab === "case" ? "records__list is-private" : "records__list"} aria-label={tab === "ledger" ? "Ledger" : "Case file"}>
-        {[...rows].reverse().map(({ seq, event }) => (
-          <li key={seq} className="records__row">
-            {tab === "case" && (
-              <span className="records__lock" aria-label="Only you">
-                <Lock />
-              </span>
-            )}
-            <span>{describeEvent(event, ctx)}</span>
-          </li>
-        ))}
-        {rows.length === 0 && <li className="records__row meta">Nothing yet.</li>}
-      </ol>
-      {rows.length === 0 && tab === "case" && <EmptyFileSpot className="records__spot" />}
     </SketchFrame>
   );
 }

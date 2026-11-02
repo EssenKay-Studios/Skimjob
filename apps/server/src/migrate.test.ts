@@ -23,7 +23,7 @@ const tables = async (db: Db) =>
   (await db.query<{ t: string }>("select table_name as t from information_schema.tables where table_schema = current_schema() order by 1")).map((r) => r.t);
 const versions = async (db: Db) => (await db.query<{ version: string }>("select version from schema_migrations order by 1")).map((r) => r.version);
 
-const ALL = ["001_init.sql", "002_identity.sql", "003_chat.sql", "004_deadline_pause.sql", "005_bot_seen.sql", "006_seat_last_seen.sql"];
+const ALL = ["001_init.sql", "002_identity.sql", "003_chat.sql", "004_deadline_pause.sql", "005_bot_seen.sql", "006_seat_last_seen.sql", "007_suspicion_board.sql"];
 let real: Db;
 let scratch: Db;
 beforeAll(async () => {
@@ -36,7 +36,7 @@ afterAll(async () => {
 describe("migrate (the real migrations)", () => {
   it("creates every table", async () => {
     expect(await migrate(real)).toEqual(ALL);
-    expect(await tables(real)).toEqual(["chat_messages", "deadlines", "game_events", "games", "schema_migrations", "seats", "sessions", "users"]);
+    expect(await tables(real)).toEqual(["chat_messages", "deadlines", "game_events", "games", "schema_migrations", "seats", "sessions", "suspicion_marks", "users"]);
   });
 
   it("is idempotent: a second run applies nothing and changes nothing", async () => {
@@ -60,7 +60,7 @@ describe("migrate (renumbered migrations)", () => {
         "004_bot_seen.sql": await sql("005_bot_seen.sql"),
       });
       await migrate(old, before);
-      expect(await migrate(old)).toEqual(["003_chat.sql", "006_seat_last_seen.sql"]);
+      expect(await migrate(old)).toEqual(["003_chat.sql", "006_seat_last_seen.sql", "007_suspicion_board.sql"]);
       expect(await versions(old)).toEqual(ALL);
     } finally {
       await old.close();
