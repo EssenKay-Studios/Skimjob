@@ -86,7 +86,7 @@ test("a host and a guest play a Quick game against bots to the end", async ({ pa
   await guestCtx.close();
 });
 
-test("the move panel: pick a room, split the loot, lock it in, change it; reconnects after a dropped socket", async ({ page }) => {
+test("the move panel: pick a room, split the loot, lock it in, change it; reconnects after a dropped socket", async ({ page, browser }) => {
   test.setTimeout(60_000);
   // Keep a handle on the page's sockets so the test can drop the game's (not Vite's, which would reload the page).
   await page.addInitScript(() => {
@@ -102,21 +102,32 @@ test("the move panel: pick a room, split the loot, lock it in, change it; reconn
   });
   const gameSockets = () => page.evaluate(() => (window as unknown as { __sockets: WebSocket[] }).__sockets.filter((ws) => ws.url.includes("/api/games/")).length);
   // The 1-hour preset (30 s rounds at TIME_SCALE 0.1): time to look around in round 1.
-  const game = await startGame(page.request, { bots: 3, sessionLength: "1h" });
+  // An absent guest who never moves keeps round 1 open: once the whole crew has locked in, a round ends
+  // a few seconds later (owner decision, 2 Nov).
+  const idle = await browser.newContext();
+  const game = await startGame(page.request, { bots: 3, guests: [idle.request], sessionLength: "1h" });
   await page.goto(`/game/${game.id}`);
   await expect(page.getByRole("heading", { name: "Round 1 · Pick your room", level: 2 })).toBeVisible();
   await expect(page.getByText("Miss the deadline and you go to the Lobby, handing everything in.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Lock it in" })).toBeDisabled();
 
-  // The Vault, pocketing 2 (the slider's value is the Haul share).
+  // The Vault, pocketing 2 (the slider's value is the Haul share). A role that can't pocket
+  // (an Inside Man, which R5's dealing can give the host) has no slider: it hands everything in.
   await page.locator('.room-tile[data-room="Vault"]').click();
-  await page.locator("#split").fill("4");
-  await expect(page.locator(".split__pocket")).toContainText("2");
+  await expect(page.getByRole("button", { name: "Lock it in" })).toBeEnabled();
+  const pockets = (await page.locator("#split").count()) > 0;
+  if (pockets) {
+    await page.locator("#split").fill("4");
+    await expect(page.locator(".split__pocket")).toContainText("2");
+  }
   await page.getByRole("button", { name: "Lock it in" }).click();
   await expect(page.getByRole("button", { name: "Locked in" })).toBeDisabled();
-  await expect(page.getByText("Locked in: Vault, pocket 2.")).toBeVisible();
-  await expect(page.locator(".crew-seat.is-you .crook-avatar--ready")).toBeVisible(); // your own "move in" mark
-  await expect(page.locator(".crew-seat:not(.is-you) .crook-avatar--ready")).toHaveCount(0); // others' moves stay hidden
+  await expect(page.getByText(pockets ? "Locked in: Vault, pocket 2." : "Locked in: Vault, all to the Haul.")).toBeVisible();
+  await expect(page.locator(".crew-seat.is-you .crook-avatar--ready")).toBeVisible(); // your own "locked in" mark (everyone's is public)
+  // Lock-ins are public (owner decision, 2 Nov): the bots have locked in, the idle guest hasn't; never a room or split.
+  await expect(page.locator(".crew-seat:not(.is-you) .crook-avatar--ready")).toHaveCount(3);
+  await expect(page.locator(".crew-seat:not(.is-you)").filter({ hasText: "Guest 1" })).toContainText("not here yet");
+  await expect(page.locator(".crew-seat:not(.is-you)").filter({ hasText: "Bot" }).first()).toContainText("bot");
   await shot(page, "mid-round");
 
   // Security needs a room to watch before it can lock in. design §6.1
@@ -133,14 +144,17 @@ test("the move panel: pick a room, split the loot, lock it in, change it; reconn
   await expect(page.getByText("Reconnecting…")).toBeHidden({ timeout: 10_000 });
   expect(await gameSockets()).toBe(2);
   await expect(page.getByText("Locked in: Security, all to the Haul.")).toBeVisible();
+  await idle.close();
 });
 
-test("the bank board: tap a room to pick it, see who you saw and the alibi claims; claim a role (M2-9, R4b)", async ({ page }) => {
+test("the bank board: tap a room to pick it, see who you saw and the alibi claims; claim a role (M2-9, R4b)", async ({ page, browser }) => {
   test.setTimeout(150_000);
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   // The 1-hour preset: 30 s rounds and 3 s alibi windows at TIME_SCALE 0.1.
-  const game = await startGame(page.request, { bots: 4, sessionLength: "1h" });
+  // An absent guest keeps the round to its full length (it would end soon after everyone locks in: owner decision, 2 Nov).
+  const idle = await browser.newContext();
+  const game = await startGame(page.request, { bots: 4, guests: [idle.request], sessionLength: "1h" });
   await page.goto(`/game/${game.id}`);
   await expect(page.getByRole("heading", { name: "Round 1 · Pick your room", level: 2 })).toBeVisible();
   const board = page.getByRole("region", { name: "The bank" });
@@ -175,6 +189,7 @@ test("the bank board: tap a room to pick it, see who you saw and the alibi claim
   await expect(alibi.getByText("You claimed to be the Lookout this act.")).toBeVisible();
   await expect(page.getByRole("list", { name: "Ledger" })).toContainText("You claim to be the Lookout.");
   expect(errors).toEqual([]);
+  await idle.close();
 });
 
 test("shows the default move after a missed round (design §5.1)", async ({ page }) => {

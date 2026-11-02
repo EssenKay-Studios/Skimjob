@@ -311,8 +311,13 @@ export interface CrookAvatarProps extends CrookProps {
   readonly name: string;
   /** Diameter in px. */
   readonly size?: number;
-  /** ready: move in (clay dot); away: grey wash. */
+  /** ready: locked in a move this round (clay stamp with a tick, public); away: grey wash. design §5.1 */
   readonly status?: "ready" | "away" | undefined;
+  /**
+   * A person's presence (owner decision, 2 Nov): online, a filled green dot
+   * top-left; offline, a hollow one. Not for bots (their badge says bot).
+   */
+  readonly presence?: "online" | "offline" | undefined;
   /** Visible name tag; default: the name's initials (`nameTag`). Pass `crewTags()` output for crew-unique tags. */
   readonly tag?: string | undefined;
   readonly className?: string;
@@ -326,10 +331,14 @@ function AvatarTag({ text, size }: { text: string; size: number }) {
 }
 
 /** A round crook portrait: a slightly-off circle in a tint of the crew colour. */
-export function CrookAvatar({ name, look, expression = "neutral", bot = false, size = 44, status, tag, className }: CrookAvatarProps) {
+export function CrookAvatar({ name, look, expression = "neutral", bot = false, size = 44, status, presence, tag, className }: CrookAvatarProps) {
   const id = useId().replace(/:/g, "");
   const l = lookOf(look);
-  const label = crookLabel(name, expression, bot) + (status === "ready" ? ", move in" : status === "away" ? ", away" : "");
+  const here = bot ? undefined : presence;
+  const label =
+    crookLabel(name, expression, bot) +
+    (status === "ready" ? ", locked in" : status === "away" ? ", away" : "") +
+    (here === "online" ? ", online" : here === "offline" ? ", offline" : "");
   const ring = "M32 2.4C49 2.2 61.8 14.6 61.6 32.4C61.4 49.4 48.6 61.8 31.6 61.6C14.6 61.4 2.2 48.8 2.4 31.8C2.6 14.8 15.2 2.6 32 2.4Z";
   return (
     <svg
@@ -357,7 +366,24 @@ export function CrookAvatar({ name, look, expression = "neutral", bot = false, s
           <BotBadge />
         </g>
       )}
-      {status === "ready" && <circle cx="54" cy="10" r="6" fill="var(--clay)" stroke={INK} strokeWidth="1.8" />}
+      {status === "ready" && (
+        <g className="crook-avatar__locked">
+          <circle cx="54" cy="10" r="7" fill="var(--clay)" stroke={INK} strokeWidth="1.8" />
+          <path d="M50.6 10.2L53.1 12.8L57.6 7.4" fill="none" stroke="var(--paper-hi)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </g>
+      )}
+      {here && (
+        <circle
+          className={`crook-avatar__here crook-avatar__here--${here}`}
+          cx="9"
+          cy="9"
+          r="5"
+          fill={here === "online" ? "var(--good)" : "var(--paper-hi)"}
+          stroke={INK}
+          strokeWidth="1.6"
+          strokeDasharray={here === "offline" ? "2.4 1.8" : undefined}
+        />
+      )}
       <AvatarTag text={tag ?? nameTag(name)} size={size} />
     </svg>
   );

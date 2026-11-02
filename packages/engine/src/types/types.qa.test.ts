@@ -30,6 +30,7 @@ type ExpectedVisibility = {
   alliesLearned: "private"; // v2 §2: what one dark-side player learns of its allies
   rngAdvanced: "reveal";
   roundStarted: "public";
+  moveLocked: "public";
   moveSubmitted: "private";
   defaultMoveAssigned: "private";
   lootSplit: "private";

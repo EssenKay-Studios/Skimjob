@@ -91,6 +91,12 @@ export interface PlayerView {
   /** Both are public (design §11.1); null when nothing is pending. */
   readonly scheduledMeeting: ScheduledMeeting | null;
   readonly pendingEmergency: PendingEmergency | null;
+  /**
+   * Players who have locked in a move for the round being planned (also while
+   * a meeting interrupts it), in seat order, you included; empty otherwise.
+   * Public: the same as this round's `moveLocked` events (owner decision, 2 Nov). design §5.1
+   */
+  readonly lockedIn: readonly PlayerId[];
   /** Open proposals for the act's regular meeting (public, design §11.1). */
   readonly proposals: readonly MeetingProposal[];
   /** Public events, oldest first. design §13 */

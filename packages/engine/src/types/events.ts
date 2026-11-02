@@ -121,6 +121,18 @@ export interface MoveSubmitted {
   readonly move: Move;
 }
 
+/**
+ * Public: a player has locked in a move this round (their first `submitMove`
+ * of the round; a later change emits nothing new). Never the room or split.
+ * Owner decision (2 Nov): lock-ins are public. design §5.1
+ */
+export interface MoveLocked {
+  readonly type: "moveLocked";
+  readonly visibility: PublicVisibility;
+  readonly player: PlayerId;
+  readonly round: number;
+}
+
 /** Missed the deadline: Lobby, hand everything in. design §5.1 */
 export interface DefaultMoveAssigned {
   readonly type: "defaultMoveAssigned";
@@ -709,6 +721,7 @@ export type GameEvent =
   | AlliesLearned
   | RngAdvanced
   | RoundStarted
+  | MoveLocked
   | MoveSubmitted
   | DefaultMoveAssigned
   | LootSplit

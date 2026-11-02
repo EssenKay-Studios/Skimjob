@@ -70,14 +70,19 @@ export function withRng(rng: RngState, fn: (draw: Draw) => HandlerResult): Handl
 
 type Handler = (state: GameState, command: Record<string, unknown>, draw: Draw) => HandlerResult;
 
-/** design §5.1: a move can be changed until the round deadline; the last one counts. */
+/**
+ * design §5.1: a move can be changed until the round deadline; the last one counts.
+ * The first one of the round also emits the public `moveLocked` (owner decision, 2 Nov).
+ */
 const submitMove: Handler = (state, command) => {
   if (state.phase.kind !== "planning") return "moves can only be submitted while a round is being planned";
   const player = playerFor(state, command);
   if (typeof player === "string") return player;
   const move = checkMove(state, player, command.move);
   if (typeof move === "string") return move;
-  return [{ type: "moveSubmitted", visibility: privateTo(player.id), player: player.id, round: state.phase.round, move }];
+  const round = state.phase.round;
+  const submitted: GameEvent = { type: "moveSubmitted", visibility: privateTo(player.id), player: player.id, round, move };
+  return Object.hasOwn(state.moves, player.id) ? [submitted] : [{ type: "moveLocked", visibility: PUBLIC, player: player.id, round }, submitted];
 };
 
 /**

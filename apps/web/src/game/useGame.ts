@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import type { PlayerCommand, PlayerView } from "@skimjob/engine";
 import { asChatMessage, asDmNotice, chatReducer, EMPTY_CHAT, type ChatAction, type ChatMessage, type ChatRequest, type ChatState, type DmNotice } from "./chat";
-import { formatCountdown, remainingMs, timerFor, type Timer } from "./hud";
+import { formatCountdown, remainingMs, timerFor, type Presence, type SeatPresence, type Timer } from "./hud";
 
 /** A command as the client sends it: the server fills in `player` from the session. */
 export type ClientCommand = PlayerCommand extends infer C ? (C extends PlayerCommand ? Omit<C, "player"> : never) : never;
@@ -25,6 +25,21 @@ export interface GameChannel {
   readonly chat: ChatState;
   /** Posts a chat message or evidence card; replied to like a command. */
   readonly sendChat: (req: ChatRequest) => Promise<Reply>;
+  /** Each person's seat: online now or last seen (owner decision, 2 Nov). Null until the server sends it. */
+  readonly presence: Presence | null;
+}
+
+/** A `{ presence }` frame's map, checked entry by entry (bad entries dropped); null if it isn't one. */
+export function presenceOf(msg: Record<string, unknown>): Presence | null {
+  if (!("presence" in msg) || typeof msg.presence !== "object" || msg.presence === null || Array.isArray(msg.presence)) return null;
+  const out: Record<string, SeatPresence> = {};
+  for (const [id, raw] of Object.entries(msg.presence as Record<string, unknown>)) {
+    if (typeof raw !== "object" || raw === null) continue;
+    const { online, lastSeen } = raw as { online?: unknown; lastSeen?: unknown };
+    if (typeof online !== "boolean" || !(lastSeen === null || (typeof lastSeen === "number" && Number.isFinite(lastSeen)))) continue;
+    out[id] = { online, lastSeen };
+  }
+  return out;
 }
 
 /** Waits before reconnect attempt n (0-based): 0.5 s, 1 s, 2 s, 4 s, then every 8 s. */
@@ -64,6 +79,7 @@ export function useGame(gameId: string, enabled = true): GameChannel {
   const [view, setView] = useState<PlayerView | null>(null);
   const [timers, setTimers] = useState<readonly Timer[]>([]);
   const [offset, setOffset] = useState(0);
+  const [presence, setPresence] = useState<Presence | null>(null);
   const [connection, setConnection] = useState<Connection>("connecting");
   const [chat, dispatchChat] = useReducer(chatReducer, EMPTY_CHAT);
   const socket = useRef<WebSocket | null>(null);
@@ -102,6 +118,8 @@ export function useGame(gameId: string, enabled = true): GameChannel {
           if (typeof m.now === "number") setOffset(m.now - Date.now());
           return;
         }
+        const seats = presenceOf(msg as Record<string, unknown>);
+        if (seats) return setPresence(seats);
         const chatAction = chatActionOf(msg as Record<string, unknown>);
         if (chatAction) return dispatchChat(chatAction);
         const id = "id" in msg ? String(msg.id) : null;
@@ -155,7 +173,7 @@ export function useGame(gameId: string, enabled = true): GameChannel {
   const send = useCallback((cmd: ClientCommand) => request({ cmd }), [request]);
   const sendChat = useCallback((chat: ChatRequest) => request({ chat }), [request]);
 
-  return { view, timers, offset, connection, send, chat, sendChat };
+  return { view, timers, offset, connection, send, chat, sendChat, presence };
 }
 
 /** The current time, re-rendering every `ms`. */

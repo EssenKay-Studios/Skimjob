@@ -1,7 +1,9 @@
 // Game screen helpers, from real engine views. docs/m2-plan.md M2-6
 import { createGame, handleCommand, viewFor, type GameConfig, type GameState, type PlayerCommand, type SystemCommand } from "@skimjob/engine";
 import { describe, expect, it } from "vitest";
+import { presenceOf } from "./useGame";
 import {
+  agoText,
   alibiState,
   canPocket,
   formatCountdown,
@@ -10,6 +12,7 @@ import {
   nextTarget,
   outcomeOf,
   phaseInfo,
+  presenceInfo,
   remainingMs,
   roomOptions,
   seatsOf,
@@ -76,18 +79,49 @@ describe("HUD", () => {
 });
 
 describe("seats", () => {
-  it("lists everyone in seat order and marks only your own move as submitted", () => {
+  it("lists everyone in seat order and marks who has locked in, for everyone (owner decision, 2 Nov; design §5.1)", () => {
     let s = createGame(config(3));
-    expect(seatsOf(viewFor(s, "p2")).map((x) => [x.id, x.you, x.moved])).toEqual([
+    expect(seatsOf(viewFor(s, "p2")).map((x) => [x.id, x.you, x.lockedIn])).toEqual([
       ["p1", false, false],
       ["p2", true, false],
       ["p3", false, false],
     ]);
     s = run(s, { type: "submitMove", player: "p1", move: { room: "office", pocket: 0 } });
-    // p1's move is hidden from p2 (design §5.1); p1 sees its own mark.
-    expect(seatsOf(viewFor(s, "p2")).some((x) => x.moved)).toBe(false);
-    expect(seatsOf(viewFor(s, "p1")).find((x) => x.you)!.moved).toBe(true);
+    // p1's lock-in is public; its room and split are not.
+    for (const viewer of ["p1", "p2", "p3"]) expect(seatsOf(viewFor(s, viewer)).map((x) => x.lockedIn)).toEqual([true, false, false]);
+    expect(viewFor(s, "p2").me.move).toBeNull();
     expect(namesOf(viewFor(s, "p1"))("p2")).toBe("Bot · 1");
+  });
+
+  it("presence: online, last seen, not here yet; bots are bots, never online (owner decision, 2 Nov)", () => {
+    const now = 10 * 3600_000;
+    const seat = (id: string, isBot = false, you = false) => ({ id, isBot, you });
+    const presence = { p1: { online: true, lastSeen: 0 }, p2: { online: false, lastSeen: now - 5 * 60_000 }, p3: { online: false, lastSeen: null } };
+    expect(presenceInfo(seat("p1"), presence, now)).toEqual({ kind: "online", text: "online" });
+    expect(presenceInfo(seat("p2"), presence, now)).toEqual({ kind: "seen", text: "seen 5 min ago" });
+    expect(presenceInfo(seat("p3"), presence, now)).toEqual({ kind: "never", text: "not here yet" });
+    expect(presenceInfo(seat("p4", true), { ...presence, p4: { online: true, lastSeen: 1 } }, now)).toEqual({ kind: "bot", text: "bot" });
+    expect(presenceInfo(seat("p9"), null, now).kind).toBe("unknown");
+    expect(presenceInfo(seat("p3", false, true), presence, now).kind).toBe("online");
+    expect([agoText(30_000), agoText(3 * 3600_000), agoText(49 * 3600_000), agoText(24 * 3600_000)]).toEqual(["just now", "3 h ago", "2 days ago", "1 day ago"]);
+  });
+
+  it("reads a { presence } frame, dropping bad entries", () => {
+    expect(presenceOf({ presence: { p1: { online: true, lastSeen: 5 }, p2: { online: "yes", lastSeen: null }, p3: { online: false, lastSeen: null } } })).toEqual({
+      p1: { online: true, lastSeen: 5 },
+      p3: { online: false, lastSeen: null },
+    });
+    expect(presenceOf({ view: {} })).toBeNull();
+    expect(presenceOf({ presence: [] })).toBeNull();
+  });
+
+  it("a round's countdown is the earlier of its deadline and the early end once everyone has locked in (design §4.1)", () => {
+    const round = { key: "round:2", dueAt: 50_000, pausedAt: null };
+    const early = { key: "roundEarly:2", dueAt: 20_000, pausedAt: null };
+    expect(timerFor([round], "round:2")).toBe(round);
+    expect(timerFor([round, early], "round:2")).toBe(early);
+    expect(timerFor([{ ...early, dueAt: 60_000 }, round], "round:2")).toBe(round);
+    expect(timerFor([early, { key: "alibis:2", dueAt: 1, pausedAt: null }], "alibis:2")?.key).toBe("alibis:2");
   });
 });
 

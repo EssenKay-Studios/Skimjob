@@ -15,7 +15,7 @@
 // - The engine refuses a deadline that isn't pending (rounds are named), so
 //   even a stale row can't resolve anything twice. A refused row is dropped
 //   and the game re-planned; any other failure keeps the row for a retry.
-import type { Deadline, GameState, SystemCommand } from "@skimjob/engine";
+import { lockedIn, type Deadline, type GameState, type SystemCommand } from "@skimjob/engine";
 import type { FastifyBaseLogger } from "fastify";
 import type { Clock } from "./clock";
 import type { Db } from "./db";
@@ -38,6 +38,9 @@ export const meetingOpen = (s: GameState) => s.phase.kind === "meeting" || s.pha
 
 const advance = (deadline: Deadline): SystemCommand => ({ type: "advance", deadline });
 
+/** Every seat has locked in a move for the round being planned (public: `moveLocked`, design §5.1). */
+export const allLockedIn = (s: GameState): boolean => s.playerOrder.length > 0 && lockedIn(s).length === s.playerOrder.length;
+
 /** Strict ISO 8601 with a zone (Date.parse alone reads "act-1" as a date in 2001). */
 const ISO_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})$/;
 /** A slot's time in ms, or NaN if it isn't an ISO time (the engine's slots are opaque labels). */
@@ -51,9 +54,16 @@ type Rule = (s: GameState, t: Timing, now: number) => readonly PlannedDeadline[]
  */
 export const DEADLINE_RULES: { readonly [K in Deadline["kind"] | "scheduleMeeting"]: Rule } = {
   // The round being planned; also while an emergency meeting interrupts it (paused). design §5, §4.1
+  // Once every seat has locked in, `roundEarly:<n>` resolves it `lockInGraceMs` later (owner decision,
+  // 2 Nov): set once, so a change during the grace doesn't restart it; whichever row falls due first
+  // resolves the round, and the other one is dropped with it. design §4.1, §5.1
   round: (s, t, now) => {
     const round = s.phase.kind === "planning" ? s.phase.round : meetingOpen(s) && s.round > s.resolvedRound ? s.round : 0;
-    return round > 0 ? [{ key: `round:${round}`, command: advance({ kind: "round", round }), dueAt: now + t.roundMs, pausable: true }] : [];
+    if (round === 0) return [];
+    const command = advance({ kind: "round", round });
+    const out: PlannedDeadline[] = [{ key: `round:${round}`, command, dueAt: now + t.roundMs, pausable: true }];
+    if (allLockedIn(s)) out.push({ key: `roundEarly:${round}`, command, dueAt: now + t.lockInGraceMs, pausable: true });
+    return out;
   },
   // The alibi window after a round resolves; paused if an emergency interrupts it. design §5.4
   alibis: (s, t, now) => {
@@ -61,9 +71,18 @@ export const DEADLINE_RULES: { readonly [K in Deadline["kind"] | "scheduleMeetin
     return round > 0 ? [{ key: `alibis:${round}`, command: advance({ kind: "alibis", round }), dueAt: now + t.alibiMs, pausable: true }] : [];
   },
   // Nobody locked a slot by the act deadline (its last round resolving): the server picks one. design §11.1
+  // Auto-scheduled presets open it at once whatever the slot, so they name it `act-<n>` (the end of the
+  // act; no wall time in the log, so a retried deadline can't change the game); others pick a time.
   scheduleMeeting: (s, t, now) =>
     s.phase.kind === "awaitingMeeting" && !s.scheduledMeeting
-      ? [{ key: `scheduleMeeting:act-${s.phase.act}`, command: { type: "scheduleMeeting", act: s.phase.act, slot: new Date(now + t.meetingLeadMs).toISOString() }, dueAt: now, pausable: false }]
+      ? [
+          {
+            key: `scheduleMeeting:act-${s.phase.act}`,
+            command: { type: "scheduleMeeting", act: s.phase.act, slot: t.autoMeetings ? `act-${s.phase.act}` : new Date(now + t.meetingLeadMs).toISOString() },
+            dueAt: now,
+            pausable: false,
+          },
+        ]
       : [],
   // An emergency after its notice; the act's meeting at its slot, once its last round has resolved and
   // no other meeting is open (so it is sent again after one closes). design §11.1

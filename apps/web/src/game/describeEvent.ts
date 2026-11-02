@@ -82,6 +82,8 @@ function line(e: GameEvent, ctx: DescribeContext): string {
       return "The dice rolled.";
     case "roundStarted":
       return `Round ${e.round} begins (Act ${e.act}).`;
+    case "moveLocked":
+      return `${verb(e.player, "locked", "locked")} in a move for round ${e.round}.`;
     case "moveSubmitted":
       return `${verb(e.player, "picked", "picked")} the ${roomName(e.move.room)} for round ${e.round}${e.move.pocket > 0 ? `, pocketing up to ${e.move.pocket}` : ", handing everything in"}${e.move.watch ? `, watching the ${roomName(e.move.watch)}` : ""}.`;
     case "defaultMoveAssigned":

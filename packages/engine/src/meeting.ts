@@ -89,7 +89,18 @@ function checkVote(state: GameState, voter: PlayerState, raw: unknown): VoteChoi
 
 // ---------------------------------------------------------------- scheduling (§11.1)
 
-/** Any player proposes a slot for the current act's meeting; the proposer counts as accepting. */
+/**
+ * design §11.1 (owner decision, 2 Nov): a slot locks once more than half of
+ * the crew's people (human seats) back it; bots' backing doesn't count. With
+ * no people at all (simulator, all-bot tests) more than half the crew does.
+ */
+export function slotLocks(state: GameState, backers: readonly PlayerId[]): boolean {
+  const humans = new Set(state.config.players.filter((seat) => !seat.isBot).map((seat) => seat.id));
+  if (humans.size === 0) return backers.length * 2 > state.playerOrder.length;
+  return backers.filter((id) => humans.has(id)).length * 2 > humans.size;
+}
+
+/** Any player proposes a slot for the current act's meeting; the proposer counts as accepting (and may lock it alone). */
 export function proposeMeeting(state: GameState, command: Raw): Result {
   const player = playerFor(state, command);
   if (typeof player === "string") return player;
@@ -102,10 +113,13 @@ export function proposeMeeting(state: GameState, command: Raw): Result {
   // Numbered from public data only (earlier proposals this game), never the log length,
   // which would let players count hidden events. Unique and deterministic.
   const proposalId = `proposal-${state.log.filter((e) => e.type === "meetingProposed").length + 1}`;
-  return [{ type: "meetingProposed", visibility: PUBLIC, proposalId, by: player.id, act: currentAct(state), slot }];
+  const act = currentAct(state);
+  const events: GameEvent[] = [{ type: "meetingProposed", visibility: PUBLIC, proposalId, by: player.id, act, slot }];
+  if (slotLocks(state, [player.id])) events.push(scheduled(act, slot, proposalId));
+  return events;
 }
 
-/** Locked in once more than half the crew has accepted. */
+/** Locked in once a majority of the people (or, with none, of the crew) has accepted (`slotLocks`). */
 export function acceptMeeting(state: GameState, command: Raw): Result {
   const player = playerFor(state, command);
   if (typeof player === "string") return player;
@@ -114,7 +128,7 @@ export function acceptMeeting(state: GameState, command: Raw): Result {
   if (!proposal) return `no open proposal ${show(command.proposalId)}`;
   if (proposal.acceptedBy.includes(player.id)) return "you already accepted this proposal";
   const events: GameEvent[] = [{ type: "meetingProposalAccepted", visibility: PUBLIC, proposalId: proposal.id, by: player.id }];
-  if ((proposal.acceptedBy.length + 1) * 2 > state.playerOrder.length) events.push(scheduled(proposal.act, proposal.slot, proposal.id));
+  if (slotLocks(state, [...proposal.acceptedBy, player.id])) events.push(scheduled(proposal.act, proposal.slot, proposal.id));
   return events;
 }
 

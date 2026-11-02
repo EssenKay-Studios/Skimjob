@@ -113,12 +113,23 @@ function buildView(state: GameState, playerId: PlayerId): PlayerView {
     voteVisibility: state.config.voteVisibility,
     scheduledMeeting: state.scheduledMeeting,
     pendingEmergency: state.pendingEmergency,
+    lockedIn: lockedIn(state),
     proposals: state.proposals,
     ledger,
     caseFile,
     // design §13: everything opens up at the end, except others' secret-mode ballots (§11.2).
     reveal: state.phase.kind === "ended" ? { outcome: state.phase.outcome, log: visibleLog(state.log, playerId, true) } : null,
   };
+}
+
+/**
+ * Who has locked in a move this round (design §5.1, public by owner decision):
+ * the seats with a submitted move while the round is unresolved. Default moves
+ * are only assigned as the round resolves, so they never show here.
+ */
+export function lockedIn(state: GameState): PlayerId[] {
+  const unresolved = state.phase.kind === "planning" || ((state.phase.kind === "meeting" || state.phase.kind === "shakedownPending") && state.round > state.resolvedRound);
+  return unresolved ? state.playerOrder.filter((id) => Object.hasOwn(state.moves, id)) : [];
 }
 
 /**

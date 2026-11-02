@@ -10,16 +10,27 @@
 //   `viewFor()` and the game's deadlines (`timers`, for the countdown; all
 //   from public state), but only if those changed; `now` (the server's clock,
 //   so a client can correct its own) rides along and never counts as a change.
-//   A hidden action (a move, a
-//   sealed vote) therefore sends nothing to anyone else, not even a ping.
+//   A hidden action (a change to a move already locked in, a sealed vote)
+//   therefore sends nothing to anyone else, not even a ping; a round's first
+//   move is public (`moveLocked`, owner decision 2 Nov).
 // - Bot seats act through the same command path, but only when their own
 //   view changed (like the pushes), so another player's hidden action never
 //   makes a bot roll its dice, and so never shows up as a public bot act.
+//   Lock-in marks don't count as a change (`botTrigger`).
 // - Commands for a game run one at a time (store.withGameLock), in arrival order.
 // - Chat (M2-8a, chat.ts): client `{ chat: { to?, text | evidence }, id? }`,
 //   replied to like a command; the message goes out as `{ chat }` (a DM only to
 //   its two players, others get `{ dmNotice }` if the host left notices on).
 //   On connect, after the first view: `{ chatHistory }`.
+// - Per socket the order is always: first view, `{ chatHistory }`, `{ presence }`.
+//   Chat, DM notices and presence updates wait until a socket has had all three
+//   (`Conn.ready`); nothing is lost, as chat is posted under the game lock the
+//   first view is sent under, and presence is sent whole.
+// - Presence (owner decision, 2 Nov): `{ presence }`, each human seat's
+//   `online` (a socket open now) and `lastSeen` (epoch ms, kept in
+//   `seats.last_seen_at`), sent on connect and to everyone when a seat comes
+//   online or goes offline. Server-only: never in the engine log. Bot seats
+//   aren't listed (clients show them as bots).
 import { createHash } from "node:crypto";
 import websocket from "@fastify/websocket";
 import type { FastifyInstance, FastifyRequest } from "fastify";
@@ -32,6 +43,7 @@ import {
   type GameState,
   type PlayerCommand,
   type PlayerId,
+  type PlayerView,
   type SystemCommand,
 } from "@skimjob/engine";
 import { SESSION_COOKIE, type Sessions } from "./auth";
@@ -73,7 +85,15 @@ const PLAYER_COMMANDS: { readonly [T in PlayerCommand["type"]]: true } = {
   callOut: true,
 };
 
+/** One human seat's presence. `lastSeen`: when it last had the game open (null: never). */
+export interface SeatPresence {
+  readonly online: boolean;
+  readonly lastSeen: number | null;
+}
+export type Presence = Readonly<Record<PlayerId, SeatPresence>>;
+
 export type ServerMessage =
+  | { readonly presence: Presence }
   | { readonly view: ReturnType<typeof viewFor>; readonly timers: readonly Timer[]; readonly now: number }
   | { readonly chat: ChatMessage }
   | { readonly dmNotice: DmNotice }
@@ -125,6 +145,10 @@ interface Conn {
   last: string | null;
   /** Messages waiting for the game's lock. */
   queued: number;
+  /** It has had its first view, chat history and presence; only then does it get chat and presence updates. */
+  ready: boolean;
+  /** The presence text last sent, so an unchanged one isn't sent again. */
+  presence: string | null;
 }
 
 /**
@@ -183,6 +207,18 @@ const botSeed = (gameSeed: string, player: PlayerId, viewHash: string) => sha256
 /** The bots' shared hunch seed (BotOptions.crewSeed): one per game, from the secret game seed, so it can't be worked out from public data. */
 const crewSeed = (gameSeed: string) => sha256(`crew\0${gameSeed}`);
 
+/**
+ * The part of a bot's view whose change makes it act: all of it but the
+ * lock-in marks (`moveLocked`, `lockedIn`; owner decision 2 Nov). Bots don't
+ * use them, so another player locking in never gives every bot a fresh roll of
+ * the dice (a random emergency, say) that it didn't get before lock-ins were public.
+ */
+export const botTrigger = (view: PlayerView): unknown => ({
+  ...view,
+  lockedIn: [],
+  ledger: view.ledger.filter((e) => e.event.type !== "moveLocked"),
+});
+
 /** The engine refused a system command (a stale or duplicate deadline), as opposed to a server failure. */
 export class SystemRefused extends Error {}
 
@@ -206,6 +242,8 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
   const botSeen = new Map<string, Map<PlayerId, string>>();
   const botRefusals: (Rejection & { gameId: string })[] = [];
   const seatOf = new WeakMap<FastifyRequest, PlayerId>();
+  /** Per game, each human seat's last-seen time (epoch ms or null), read from `seats` once. */
+  const lastSeen = new Map<string, Map<PlayerId, number | null>>();
 
   /** The engine never throws for bad input; if it ever does, that's a refusal (and a bug to log). */
   const run = (state: GameState, command: Command) => {
@@ -255,7 +293,7 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
       for (const seat of seats) {
         if (state.phase.kind === "ended") break;
         const view = viewFor(state, seat.player);
-        const hash = sha256(JSON.stringify(view));
+        const hash = sha256(JSON.stringify(botTrigger(view)));
         if (seen.get(seat.player) === hash) continue;
         seen.set(seat.player, hash);
         const agent = createBot({ player: seat.player, personality: PERSONALITIES[seat.personality], seed: botSeed(state.config.seed, seat.player, hash), crewSeed: crewSeed(state.config.seed) });
@@ -303,10 +341,53 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
   /** A crew message to everyone; a DM to its two players only, and its notice (if any) to the rest. design §12.1 */
   const deliver = (gameId: string, message: ChatMessage, notice: DmNotice | null) => {
     for (const conn of conns.get(gameId) ?? []) {
+      if (!conn.ready) continue; // its chat history (read later, under the same lock) has it
       if (message.to === null || conn.player === message.from || conn.player === message.to) send(conn, { chat: message });
       else if (notice) send(conn, { dmNotice: notice });
     }
   };
+
+  const humanSeats = async (gameId: string): Promise<Map<PlayerId, number | null>> => {
+    const known = lastSeen.get(gameId);
+    if (known) return known;
+    const rows = await db.query<{ player_id: string; seen: number | null }>(
+      `select player_id, (extract(epoch from last_seen_at) * 1000)::float8 as seen
+       from seats where game_id = $1 and user_id is not null and player_id is not null order by seat_no`,
+      [gameId],
+    );
+    const seats = new Map(rows.map((r) => [r.player_id, r.seen === null ? null : Math.round(Number(r.seen))] as const));
+    lastSeen.set(gameId, seats);
+    return seats;
+  };
+  /** Every human seat's presence: online while any of its sockets is open. */
+  const presenceOf = async (gameId: string): Promise<Presence> => {
+    const seats = await humanSeats(gameId);
+    const online = new Set([...(conns.get(gameId) ?? [])].filter((c) => c.socket.readyState === c.socket.OPEN).map((c) => c.player));
+    const out: Record<PlayerId, SeatPresence> = {};
+    for (const [player, seen] of seats) out[player] = { online: online.has(player), lastSeen: seen };
+    return out;
+  };
+  /** The seat was seen now (a socket opened, or its last one closed): stored for restarts. */
+  const seen = async (gameId: string, player: PlayerId) => {
+    const now = options.clock.now();
+    const seats = await humanSeats(gameId);
+    if (!seats.has(player)) return;
+    seats.set(player, now);
+    await db.query("update seats set last_seen_at = to_timestamp($3::float8 / 1000) where game_id = $1 and player_id = $2", [gameId, player, now]);
+  };
+  /** Sends `conn` the presence, if it differs from the one it last got. */
+  const sendPresence = (conn: Conn, presence: Presence) => {
+    const text = JSON.stringify(presence);
+    if (text === conn.presence || conn.socket.readyState !== conn.socket.OPEN) return;
+    conn.presence = text;
+    conn.socket.send(JSON.stringify({ presence }));
+  };
+  /** Sends every ready socket in the game the presence, if it changed for it. */
+  const pushPresence = async (gameId: string) => {
+    const presence = await presenceOf(gameId);
+    for (const conn of conns.get(gameId) ?? []) if (conn.ready) sendPresence(conn, presence);
+  };
+  const presenceFailed = (gameId: string) => (err: unknown) => app.log.error({ err, gameId }, "presence update failed");
 
   /** After a change: bots, then every seat's fresh view. An ended game's bots are dropped. */
   const afterChange = async (gameId: string, state: GameState) => {
@@ -371,12 +452,21 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
       },
       (socket, req) => {
         const gameId = req.params.id;
-        const conn: Conn = { player: seatOf.get(req)!, socket, token: req.cookies[SESSION_COOKIE] ?? "", last: null, queued: 0 };
+        const conn: Conn = { player: seatOf.get(req)!, socket, token: req.cookies[SESSION_COOKIE] ?? "", last: null, queued: 0, ready: false, presence: null };
         const set = conns.get(gameId) ?? new Set<Conn>();
         conns.set(gameId, set.add(conn));
         socket.on("close", () => {
           set.delete(conn);
           if (set.size === 0 && conns.get(gameId) === set) conns.delete(gameId);
+          // Last seen as its last socket closes; the others hear it went offline.
+          const still = [...set].some((c) => c.player === conn.player);
+          if (!still) {
+            void seen(gameId, conn.player)
+              .then(() => (conns.has(gameId) ? pushPresence(gameId) : undefined))
+              .catch(presenceFailed(gameId))
+              // No socket left: drop the cache (after `seen`, which would otherwise fill it again).
+              .finally(() => conns.has(gameId) || lastSeen.delete(gameId));
+          }
         });
         // The first view, in line with any change being made right now.
         void store.withGameLock(gameId, async () => {
@@ -384,6 +474,13 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
           if (!state) return;
           sendView(conn, state, await timersOf(gameId));
           send(conn, { chatHistory: await chat.history(gameId, conn.player) });
+          // Presence: this socket gets it now (always, even if a broadcast raced it); everyone else if it changed (the seat came online).
+          await seen(gameId, conn.player).catch(presenceFailed(gameId));
+          const presence = await presenceOf(gameId).catch((err: unknown) => (presenceFailed(gameId)(err), {}));
+          conn.presence = JSON.stringify(presence);
+          send(conn, { presence });
+          conn.ready = true;
+          await pushPresence(gameId).catch(presenceFailed(gameId));
         });
         socket.on("message", (data, isBinary) => {
           if (conn.queued >= MAX_QUEUED_MESSAGES) {

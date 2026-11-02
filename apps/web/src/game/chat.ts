@@ -303,5 +303,5 @@ export const chatTime = (iso: string): string => {
  * compact rows). Setup and per-player chatter (alibis, proposals) stay in the
  * ledger only, so the feed doesn't drown the talk.
  */
-const QUIET_EVENTS: ReadonlySet<string> = new Set(["gameCreated", "roomsSet", "roundStarted", "alibiPosted", "alibisClosed", "meetingProposed", "meetingProposalAccepted"]);
+const QUIET_EVENTS: ReadonlySet<string> = new Set(["gameCreated", "roomsSet", "roundStarted", "alibiPosted", "alibisClosed", "meetingProposed", "meetingProposalAccepted", "moveLocked"]);
 export const feedWorthy = (event: GameEvent): boolean => event.visibility.kind === "public" && !QUIET_EVENTS.has(event.type);

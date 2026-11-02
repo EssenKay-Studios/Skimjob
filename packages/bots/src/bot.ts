@@ -382,17 +382,11 @@ export function wantsCallOut(view: PlayerView, p: Personality, random: Random): 
 // ---------------------------------------------------------------- meetings (§11)
 
 /**
- * Bots propose the act's meeting only once this share of the act's rounds has
- * resolved with no proposal, so people get to pick the time (PR #35 review;
- * design §11.1). Bot setting.
- */
-export const BOT_PROPOSE_AFTER = 2 / 3;
-
-/**
  * Let people pick the meeting time (design §11.1): back an open proposal, a
- * person's first (then the best backed), at once; propose one only late in
- * the act (`BOT_PROPOSE_AFTER`) if nobody has. Bots never lock a slot by
- * themselves early; if nobody locks one, the server picks it.
+ * person's first (then the best backed), at once. Bots never propose a slot
+ * (STATUS "Bot scheduling", #35 review), and their backing doesn't count
+ * toward the lock while the crew has people (owner decision, 2 Nov); if
+ * nobody locks one, the server picks it.
  */
 function scheduleMeeting(view: PlayerView): PlayerCommand[] {
   const player = view.me.id;
@@ -401,12 +395,7 @@ function scheduleMeeting(view: PlayerView): PlayerCommand[] {
   const open = view.proposals
     .filter((p) => !p.acceptedBy.includes(player))
     .sort((a, b) => Number(bots.has(a.by) || a.by === player) - Number(bots.has(b.by) || b.by === player) || b.acceptedBy.length - a.acceptedBy.length)[0];
-  if (open) return [{ type: "acceptMeeting", player, proposalId: open.id }];
-  const resolvedThisAct = lastResolvedRound(view) - (view.act - 1) * ROUNDS_PER_ACT;
-  if (view.proposals.length === 0 && resolvedThisAct >= BOT_PROPOSE_AFTER * ROUNDS_PER_ACT) {
-    return [{ type: "proposeMeeting", player, slot: `act-${view.act}` }];
-  }
-  return [];
+  return open ? [{ type: "acceptMeeting", player, proposalId: open.id }] : [];
 }
 
 function wantsEmergency(view: PlayerView, p: Personality, random: Random): boolean {

@@ -31,13 +31,15 @@ import {
   nextTarget,
   outcomeOf,
   phaseInfo,
+  presenceInfo,
   roomOptions,
   seatsOf,
+  type Presence,
   type Timer,
 } from "../game/hud";
 import { hasMeetings, pluralityRule, slotText } from "../game/meeting";
 import { ClaimRole, DecidingPanel, MeetingNow, MeetingsPanel, ResultsBanner, RoleCard } from "./Meetings";
-import { useCountdown, useGame, type ClientCommand, type Connection, type GameChannel, type Reply } from "../game/useGame";
+import { useCountdown, useGame, useNow, type ClientCommand, type Connection, type GameChannel, type Reply } from "../game/useGame";
 import { api, ApiError, sentence, UNREACHABLE, type LobbyView } from "../api";
 import { navigate } from "../router";
 import { GameChat } from "./GameChat";
@@ -162,7 +164,7 @@ function Board({ view, timers, offset, send, autoMeetings, gameId, channel, dmNo
     <div className={outcome ? "game-grid is-over" : "game-grid"}>
       <Hud view={view} timers={timers} offset={offset} />
       <BankBoard view={view} pick={planning !== null ? pick : null} />
-      <Seats view={view} />
+      <Seats view={view} presence={channel.presence} offset={offset} />
       <div className="game-grid__action">
         {outcome ? <GameOver view={view} /> : <Actions view={view} timers={timers} offset={offset} send={send} autoMeetings={autoMeetings} pick={pick} />}
       </div>
@@ -273,9 +275,14 @@ function BankBoard({ view, pick }: { view: PlayerView; pick: Pick | null }) {
   );
 }
 
-function Seats({ view }: { view: PlayerView }) {
+/**
+ * The crew: who has locked in this round (public, owner decision 2 Nov) and
+ * each person's presence, online now or last seen; bots show as bots. design §5.1
+ */
+function Seats({ view, presence, offset }: { view: PlayerView; presence: Presence | null; offset: number }) {
   const seats = seatsOf(view);
   const looks = seatLooks(view);
+  const now = useNow(30_000) + offset;
   return (
     <SketchFrame as="section" seed="game-crew" radius={16} shadow={0.4} className="crew" aria-labelledby="crew-h">
       <div className="crew__head">
@@ -284,22 +291,27 @@ function Seats({ view }: { view: PlayerView }) {
         </h2>
       </div>
       <ul className="crew__list">
-        {seats.map((s) => (
-          <li key={s.id} className={s.you ? "crew-seat is-you" : "crew-seat"}>
-            <CrookAvatar
-              name={`${s.name}${s.you ? " (you)" : ""}`}
-              look={looks.get(s.id)?.look ?? 0}
-              tag={looks.get(s.id)?.tag}
-              size={44}
-              bot={s.isBot}
-              status={s.moved ? "ready" : undefined}
-            />
-            <span className="crew-seat__name">
-              {s.you ? "You" : s.name}
-              {s.moved && <span className="crew-seat__mark">move in</span>}
-            </span>
-          </li>
-        ))}
+        {seats.map((s) => {
+          const here = presenceInfo(s, presence, now);
+          return (
+            <li key={s.id} className={s.you ? "crew-seat is-you" : "crew-seat"}>
+              <CrookAvatar
+                name={`${s.name}${s.you ? " (you)" : ""}`}
+                look={looks.get(s.id)?.look ?? 0}
+                tag={looks.get(s.id)?.tag}
+                size={44}
+                bot={s.isBot}
+                status={s.lockedIn ? "ready" : undefined}
+                presence={here.kind === "online" ? "online" : here.kind === "seen" || here.kind === "never" ? "offline" : undefined}
+              />
+              <span className="crew-seat__name">
+                {s.you ? "You" : s.name}
+                {s.lockedIn && <span className="crew-seat__mark">locked in</span>}
+                {here.text && !s.you && <span className={`crew-seat__here crew-seat__here--${here.kind}`}>{here.text}</span>}
+              </span>
+            </li>
+          );
+        })}
       </ul>
     </SketchFrame>
   );

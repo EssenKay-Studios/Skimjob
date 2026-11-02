@@ -247,6 +247,13 @@ async function assertCleanSocket(c: Client, final: GameState) {
       // The seed and RNG state are reveal-only (rngSeeded / rngAdvanced). design §17.2
       if (v.reveal === null) expect(text).not.toMatch(new RegExp(`${seed.replace(/[^a-z0-9]/gi, ".")}|"words"|"seed"|"rngSeeded"`));
       else expect(v.reveal.log.every(({ event }) => canSee(event.visibility, c.player, true) && isReal(event))).toBe(true);
+    } else if ("presence" in msg) {
+      // Owner decision (2 Nov): human seats' online / last seen only; server-only, never in the log.
+      const humans = new Set(final.config.players.filter((p) => !p.isBot).map((p) => p.id));
+      for (const [player, p] of Object.entries(msg.presence)) {
+        expect(humans.has(player)).toBe(true);
+        expect(Object.keys(p).sort().join()).toBe("lastSeen,online");
+      }
     } else if ("chatHistory" in msg) {
       msg.chatHistory.messages.forEach(chatFor);
       msg.chatHistory.dmNotices.forEach(noticeFor);
@@ -349,6 +356,7 @@ describe("scenarios: end-to-end stories over HTTP + WebSocket", () => {
     // While they're away, the others vote (open votes: public changes they'll miss).
     clients[0] = null;
     for (const c of clients) if (c) expect(await c.send({ type: "castVote", vote: { kind: "skip" } })).toMatchObject({ ok: true });
+    await clients[1]!.barrier(); // the bots' answers to the last vote land after its reply
     const mid = await load(game.id);
     expect(mid.meeting?.id).toBe(meetingId);
     const back = await Client.open(game.id, game.humans[0]!);

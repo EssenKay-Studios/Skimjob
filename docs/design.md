@@ -84,6 +84,7 @@ The engine doesn't know about real time. A scheduler on the server spreads the h
 
 - In sessions shorter than 3 hours, meetings are always auto-scheduled.
 - Rounds are **paused** while a vote window is open, so nothing resolves in the middle of a vote.
+- **Rounds end early once the whole crew has locked in** (owner decision, 2 Nov): the round resolves a short grace period after the last lock-in, or at its deadline if that comes first, so the last player can still change their move. Changing a move during the grace doesn't restart it. *Grace (provisional, `timing.ts`, scaled by TIME_SCALE):* Quick 5 s, 1 hour 10 s, 3 hours 30 s, 1 day 2 min, 3 days and 1 week 5 min. Alibi windows, meeting windows, emergency notices and the Muscle's window always run their full length.
 - The host can set "quiet hours", such as midnight to 7am, during which rounds don't resolve and no notifications are sent.
 
 ---
@@ -98,6 +99,10 @@ Every player submits a **move**:
 3. **Ability** (optional): a role power, if their role has one.
 
 Moves can be changed until the round deadline. If a player misses the deadline, they get a **default move**: Lobby, hand everything in.
+
+**Lock-ins are public** (owner decision, 2 Nov): everyone sees which players have locked in a move this round (a mark on their seat, and a `moveLocked` line in the ledger), never the room, split or ability. Only the first move of a round counts as locking in; changing it afterwards shows nothing new. Bots lock in like anyone. A default move never shows as locked in.
+
+**Presence is public** (owner decision, 2 Nov): each person's seat shows whether they are online now or when they were last seen. It comes from the server (who has the game open), never from the game log. Bots show as bots, never as online.
 
 ### 5.2 Resolution order
 
@@ -339,11 +344,11 @@ From round 2 onward, one event card is flipped at the start of each round and sh
 
 ### 11.1 Scheduling
 
-- **Regular meeting:** each act has one meeting, which must take place before that act's checkpoint. Any player can propose a time, and it's locked in once a majority accepts. If nobody schedules one by the act deadline, the server picks a time.
+- **Regular meeting:** each act has one meeting, which must take place before that act's checkpoint. Any player can propose a time, and it's locked in once a majority of the **people** (human players) accepts; bots' backing doesn't count toward the lock (owner decision, 2 Nov). With no people at all (simulator, all-bot tests), a majority of the crew locks it. Bots never propose a time, they only back existing proposals. If nobody schedules one by the act deadline, the server picks a time.
 - **Emergency meeting:** each player can call **one** emergency meeting per game, at any point. Others are notified and it opens after a short notice period that the host sets.
 - **Window length:** set by the host, from 5 to 30 minutes.
 
-*Meeting timing (provisional):* the act's slot can be proposed and locked in at any time during the act (the proposer counts as accepting; a majority is more than half the crew), but the meeting only **opens after the act's last round has resolved**: rounds 1–3, then the Act 1 meeting, then checkpoint 1. An emergency meeting can open mid-act; rounds pause while any meeting is open, and only one meeting is open at a time. Only one emergency meeting can be waiting to open at once.
+*Meeting timing (provisional):* the act's slot can be proposed and locked in at any time during the act (the proposer counts as accepting, so one person in a crew of bots locks a slot by proposing it; a majority is more than half the crew's people), but the meeting only **opens after the act's last round has resolved**: rounds 1–3, then the Act 1 meeting, then checkpoint 1. An emergency meeting can open mid-act; rounds pause while any meeting is open, and only one meeting is open at a time. Only one emergency meeting can be waiting to open at once.
 
 ### 11.2 Voting
 
@@ -408,10 +413,12 @@ Each player has a private board where they can tag every other player as *truste
 
 | View | Contents | Visible to |
 |---|---|---|
-| **Public ledger** | Round summaries (Haul change, Heat), events, alibis, meeting times, vote results, shakedown results, checkpoints | Everyone |
+| **Public ledger** | Round summaries (Haul change, Heat), who has locked in a move each round (never the move), events, alibis, meeting times, vote results, shakedown results, checkpoints | Everyone |
 | **Case file** | Who you saw in your room, Security/Lookout/Server results, your own moves and splits, private event results | You only |
 | **While you were away** | A 2–4 line summary of what changed since your last visit, shown at the top of the screen | You only |
 | **End-of-game reveal** | Every role; every player's real room and split for each round; every stash over time; every ability used | Everyone, after the game ends |
+
+Seats also show each person's **presence** (online now, or last seen), from the server and never in the ledger (owner decision, 2 Nov).
 
 The end-of-game reveal works like a timeline you can scrub through, round by round, so the group can relive the big moments ("you were in the Vault in round 4?!").
 

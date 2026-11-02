@@ -11,7 +11,7 @@
 // design §13, §17.2, §11.2, §10
 import { isDeepStrictEqual } from "node:util";
 import { describe, expect, it } from "vitest";
-import type { GameConfig, GameEvent, GameState, LoggedEvent, PlayerId, PlayerState, PlayerView, VoteChoice, VoteVisibility } from "./types";
+import type { GameConfig, GameEvent, GameState, LoggedEvent, Move, PlayerId, PlayerState, PlayerView, VoteChoice, VoteVisibility } from "./types";
 import { REVEAL, canSee, privateTo, secretTo } from "./types";
 import { EVENT_DECK } from "@skimjob/content";
 import { createGame, moleAllies, setupEvents } from "./setup";
@@ -204,8 +204,9 @@ function playGame(players: number, voteVisibility: VoteVisibility, dark = false)
     if (!over()) step({ type: "advance", deadline: { kind: "alibis", round } });
     if (round % 3 === 0 && !over()) {
       if (act === 1) {
-        step({ type: "proposeMeeting", player: "p0", slot: "sat-8pm" });
-        for (const id of ids.slice(1)) if (!s.scheduledMeeting) step({ type: "acceptMeeting", player: id, proposalId: "proposal-1" });
+        // A bot (p1) proposes, so the people's backing locks it (design §11.1, owner decision 2 Nov: bots don't count).
+        step({ type: "proposeMeeting", player: "p1", slot: "sat-8pm" });
+        for (const id of ids.filter((x) => x !== "p1")) if (!s.scheduledMeeting) step({ type: "acceptMeeting", player: id, proposalId: "proposal-1" });
       } else {
         step({ type: "scheduleMeeting", act, slot: `act-${act}-slot` });
       }
@@ -321,7 +322,12 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
     }
     return out;
   };
-  const moves = keepOwn(state.moves, { room: "vault", pocket: 6 });
+  // Who has locked in is public (owner decision, 2 Nov: `moveLocked`, design §5.1); what they picked is not.
+  const moves: Record<PlayerId, Move> = {};
+  for (const id of state.playerOrder) {
+    if (!Object.hasOwn(state.moves, id)) continue;
+    moves[id] = id === viewer ? (state.moves[id] as Move) : { room: "vault", pocket: 6 };
+  }
   // design §8.3: others' +Votes and Ballot perks are hidden; the ballots the viewer paid to see stay as they are.
   const seen = state.meeting?.ballotGrants[viewer] ?? [];
   const votesSeen = (votes: Readonly<Record<PlayerId, VoteChoice>>): Record<PlayerId, VoteChoice> => {

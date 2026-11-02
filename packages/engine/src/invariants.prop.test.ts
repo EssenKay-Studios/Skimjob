@@ -25,7 +25,7 @@ import { isDeepStrictEqual } from "node:util";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { FILLER_ROLE, MOLE_ROLE, ROLES, STARTER_ROLES, maxDarkSeats } from "@skimjob/content";
-import type { Command, GameConfig, GameEvent, GameState, MoleSetting, PlayerId, PlayerState, VoteVisibility } from "./types";
+import type { Command, GameConfig, GameEvent, GameState, MoleSetting, Move, PlayerId, PlayerState, VoteVisibility } from "./types";
 import { REVEAL, canSee, secretTo } from "./types";
 import { createGame, darkSideOdds, rolePoolFor, saboteursFor } from "./setup";
 import { isDarkSide, rolesFor } from "./overrides";
@@ -377,6 +377,11 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
     }
     return out;
   };
+  // Who has locked in a move is public (owner decision, 2 Nov; design §5.1), what they picked is not.
+  const fakeMoves: Record<PlayerId, Move> = {};
+  for (const id of state.playerOrder) {
+    if (Object.hasOwn(state.moves, id)) fakeMoves[id] = id === viewer ? (state.moves[id] as Move) : { room: "vault", pocket: 6 };
+  }
   const offer = state.card?.offer;
   const card =
     state.card && offer && !offer.players.includes(viewer)
@@ -387,7 +392,7 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
     config: { ...state.config, seed: "scrubbed" },
     rng: { words: [1, 2, 3, 4] },
     players,
-    moves: fakeFor(state.moves, { room: "vault", pocket: 6 }),
+    moves: fakeMoves,
     meeting: state.meeting && { ...state.meeting, votes: fakeFor(state.meeting.votes, { kind: "shakedown", target: viewer }) },
     pendingShakedown: state.pendingShakedown && { ...state.pendingShakedown, cancelled: !state.pendingShakedown.cancelled },
     card,

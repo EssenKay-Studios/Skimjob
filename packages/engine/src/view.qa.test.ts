@@ -85,6 +85,8 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
     if (e.type === "shakedownResolved") return ["split", "swap", "fence"].includes(kind) && involved.has(e.target);
     if (e.type === "voteCast") return mode === "open" && involved.has(e.player);
     if (e.type === "meetingClosed") return mode === "hiddenThenRevealed" && kind === "ballotSwap";
+    // Owner decision (2 Nov), design §5.1: whether someone locked in is public, so a missed move shows.
+    if (e.type === "moveLocked") return kind === "miss" && involved.has(e.player);
     return false;
   };
   const over = (): boolean => A.phase.kind === "ended";
@@ -203,6 +205,9 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
           const mz = last(z);
           const { ability: ax } = mx;
           const { ability: az } = mz;
+          // Both lock in in A too (a missed move would show publicly: owner decision, 2 Nov).
+          plan.set(x, [submit(x, mx)]);
+          plan.set(z, [submit(z, mz)]);
           planB.set(x, [submit(x, { ...mz, ability: ax })]);
           planB.set(z, [submit(z, { ...mx, ability: az })]);
           // Rules let anyone in, watching, or looking out at either room see the swap.

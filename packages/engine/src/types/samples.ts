@@ -35,6 +35,7 @@ export const sampleEvents: { readonly [T in GameEventType]: EventOfType<T> } = {
   alliesLearned: { type: "alliesLearned", visibility: privateTo(ana), player: ana, allies: [ben], via: "fence" },
   rngAdvanced: { type: "rngAdvanced", visibility: REVEAL, words: [1, 2, 3, 4] },
   roundStarted: { type: "roundStarted", visibility: PUBLIC, round: 1, act: 1 },
+  moveLocked: { type: "moveLocked", visibility: PUBLIC, player: ana, round: 1 },
   moveSubmitted: {
     type: "moveSubmitted",
     visibility: privateTo(ana),

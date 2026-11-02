@@ -68,8 +68,8 @@ class Client {
       ws.on("close", (code) => (c.closed = code));
     };
     c.ws = await app.injectWS(`/games/${gameId}/ws`, { headers: { cookie: `${SESSION_COOKIE}=${h.who}` } }, { onInit });
-    // The first view, then the chat history (M2-8a).
-    await vi.waitFor(() => expect(c.messages.some((m) => "chatHistory" in m)).toBe(true), quick);
+    // The first view, then the chat history (M2-8a), then presence (owner decision, 2 Nov).
+    await vi.waitFor(() => expect(c.messages.some((m) => "presence" in m)).toBe(true), quick);
     expect(c.views()).toHaveLength(1);
     return c;
   }
@@ -203,16 +203,18 @@ describe("QA: flooding and many sockets", () => {
     const { id, humans } = await startGame(2, 2);
     const a = await Client.open(id, humans[0]!);
     const b = await Client.open(id, humans[1]!);
-    const seen = await b.barrier();
     const N = MAX_QUEUED_MESSAGES;
     // Pocket 0 (an Inside Man can't pocket); alternate two rooms that need no watch target, so "last wins" shows.
     const rooms = (await loadVia(id)).rooms.filter((r) => r !== "security").slice(0, 2);
+    // a's first lock-in is public (moveLocked, owner decision 2 Nov); only the changes after it are hidden.
+    expect(await a.send({ type: "submitMove", move: { room: rooms[1], pocket: 0 } })).toMatchObject({ ok: true });
+    const seen = await b.barrier();
     for (let i = 0; i < N; i++) {
       const cmd = i % 3 === 2 ? { type: "bogus" } : { type: "submitMove", player: humans[1]!.player, move: { room: rooms[i % 2], pocket: 0 } };
       a.ws.send(JSON.stringify({ id: i, cmd }));
     }
-    await vi.waitFor(() => expect(a.messages.filter((m) => "id" in m)).toHaveLength(N), { interval: 5, timeout: 20_000 });
-    const replies = a.messages.filter((m) => "id" in m) as { id: number }[];
+    await vi.waitFor(() => expect(a.messages.filter((m) => "id" in m && typeof m.id === "number")).toHaveLength(N), { interval: 5, timeout: 20_000 });
+    const replies = a.messages.filter((m) => "id" in m && typeof m.id === "number") as { id: number }[];
     expect(replies.map((r) => r.id)).toEqual([...Array(N).keys()]);
     replies.forEach((r, i) => expect("ok" in r).toBe(i % 3 !== 2));
     const state = await loadVia(id);
@@ -233,7 +235,7 @@ describe("QA: flooding and many sockets", () => {
     // A private change made from tab 1 reaches tab 2 (same seat), with no reply on tab 2.
     expect(await t1.send({ type: "submitMove", move: { room: "lobby", pocket: 0 } })).toMatchObject({ ok: true });
     await vi.waitFor(() => expect(t2.views().length).toBeGreaterThanOrEqual(2), quick);
-    expect(t2.messages.filter((m) => !("view" in m) && !("chatHistory" in m))).toHaveLength(0);
+    expect(t2.messages.filter((m) => !("view" in m) && !("chatHistory" in m) && !("presence" in m))).toHaveLength(0);
     // A deadline: both tabs move on together.
     await app.live.system(id, { type: "advance", deadline: { kind: "round", round: 1 } });
     await app.live.system(id, { type: "advance", deadline: { kind: "alibis", round: 1 } }); // design §5.4

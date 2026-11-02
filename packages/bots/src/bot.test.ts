@@ -41,20 +41,20 @@ describe("Agent — design §17.3", () => {
     expect(run(s, ...cmds).moves.ana).toBeDefined();
   });
 
-  it("proposes the act's meeting only once two thirds of the act have passed with no proposal (PR #35 review) — design §11.1", () => {
+  it("never proposes a meeting slot, even late in the act; only backs existing ones (STATUS bot scheduling, #35 review) — design §11.1", () => {
     const lobby = { room: "lobby" };
     const all = (s: GameState) => Object.fromEntries(s.playerOrder.map((id) => [id, lobby]));
     let s = game(4);
     const proposes = (st: GameState) => decide(viewFor(st, "ana"), exact(PERSONALITIES.honest), seeded("a")).some((c) => c.type === "proposeMeeting");
     expect(proposes(s)).toBe(false);
-    s = closeAlibis(round(s, all(s))); // round 2: a third of the act gone
+    s = closeAlibis(round(s, all(s)));
     expect(proposes(s)).toBe(false);
-    s = closeAlibis(round(s, all(s))); // round 3: two thirds gone
-    expect(proposes(s)).toBe(true);
+    s = closeAlibis(round(s, all(s))); // round 3: the act's last round
+    expect(proposes(s)).toBe(false);
   });
 
   it("backs a person's proposal before a bot's — design §11.1", () => {
-    const people = (st: GameState): GameState => ({ ...st, config: { ...st.config, players: st.config.players.map((x) => (x.id === "dee" ? { ...x, isBot: false } : x)) } });
+    const people = (st: GameState): GameState => ({ ...st, config: { ...st.config, players: st.config.players.map((x) => (x.id === "dee" || x.id === "carl" ? { ...x, isBot: false } : x)) } });
     let s = run(people(game(5)), { type: "proposeMeeting", player: "ben", slot: "act-1" }, { type: "proposeMeeting", player: "dee", slot: "2026-11-02T19:00Z" });
     const view = viewFor(s, "ana");
     (view.players as unknown as { id: string; isBot: boolean }[]).forEach((o) => (o.isBot = o.id !== "dee"));
