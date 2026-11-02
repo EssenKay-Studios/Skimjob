@@ -337,6 +337,9 @@ describe("QA private information — design §5.2 step 5, §17.2", () => {
           const owner = (e as { player: string }).player;
           expect(e.visibility, e.type).toEqual({ kind: "private", player: owner });
           for (const viewer of s.playerOrder) expect(canSee(e.visibility, viewer, false)).toBe(viewer === owner);
+        } else if (e.type === "moveLocked") {
+          // Owner decision (2 Nov), design §5.1: who locked in is public, never the room or split.
+          expect(Object.keys(e).sort(), e.type).toEqual(["player", "round", "type", "visibility"]);
         } else if (e.visibility.kind === "public") {
           // Public events carry no per-player data.
           expect(JSON.stringify(e), e.type).not.toMatch(/"(player|pocket|toStash|stash|seen|others|move)"/);

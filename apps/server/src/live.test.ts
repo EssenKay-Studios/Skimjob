@@ -21,10 +21,11 @@ const quick = { interval: 1, timeout: 5000 };
 let db: Db;
 let app: FastifyInstance;
 let store: GameStore;
+const clock = fakeClock(Date.UTC(2026, 10, 1));
 beforeAll(async () => {
   db = await testDb();
   store = createGameStore(db);
-  app = buildServer({ db, clock: fakeClock(Date.UTC(2026, 10, 1)), store });
+  app = buildServer({ db, clock, store });
   await app.ready();
 }, 30_000);
 afterAll(async () => {
@@ -73,8 +74,8 @@ class Client {
       ws.on("close", (code) => (c.closed = code));
     };
     c.ws = await app.injectWS(`/games/${gameId}/ws`, { headers: { cookie: `${SESSION_COOKIE}=${h.who}` } }, { onInit });
-    // The first view, then the chat history (M2-8a).
-    await vi.waitFor(() => expect(c.messages.some((m) => "chatHistory" in m)).toBe(true), quick);
+    // The first view, then the chat history (M2-8a), then presence (owner decision, 2 Nov).
+    await vi.waitFor(() => expect(c.messages.some((m) => "presence" in m)).toBe(true), quick);
     expect(c.views()).toHaveLength(1);
     return c;
   }
@@ -202,17 +203,55 @@ describe("commands from a socket", () => {
     const { id, humans } = await startGame(2, 1);
     const a = await Client.open(id, humans[0]!);
     const b = await Client.open(id, humans[1]!);
+    // a's first move is public (moveLocked, owner decision 2 Nov); the changes after it are hidden.
+    expect(await a.send({ type: "submitMove", move: { room: "lobby", pocket: 0 } })).toMatchObject({ ok: true });
     const seen = await b.barrier();
     a.ws.send(JSON.stringify({ id: 1, cmd: { type: "submitMove", move: { room: "nowhere", pocket: 0 } } }));
     a.ws.send(JSON.stringify({ id: 2, cmd: { type: "submitMove", move: { room: "lobby", pocket: 0 } } }));
-    await vi.waitFor(() => expect(a.messages.filter((m) => "id" in m)).toHaveLength(2), quick);
-    const replies = a.messages.filter((m) => "id" in m);
+    await vi.waitFor(() => expect(a.messages.filter((m) => "id" in m && typeof m.id === "number")).toHaveLength(2), quick);
+    const replies = a.messages.filter((m) => "id" in m && typeof m.id === "number");
     expect(replies[0]).toMatchObject({ id: 1, rejected: true, reason: expect.any(String) });
     expect(replies[1]).toEqual({ id: 2, ok: true });
     // b got nothing but its own barrier reply: not the refusal, and no push (a move is private).
     expect(await b.barrier()).toBe(seen + 1);
     a.ws.close();
     b.ws.close();
+  });
+});
+
+describe("presence (owner decision, 2 Nov)", () => {
+  const presences = (c: Client) => c.messages.flatMap((m) => ("presence" in m ? [m.presence] : []));
+  it("each person's seat shows online now or last seen, pushed as seats come and go; bots aren't listed; never in the log", async () => {
+    const { id, humans } = await startGame(2, 1);
+    const [ha, hb] = humans as [Human, Human];
+    const logBefore = (await load(id)).log.length;
+    const t0 = clock.now();
+    const a = await Client.open(id, ha);
+    expect(presences(a).at(-1)).toEqual({ [ha.player]: { online: true, lastSeen: t0 }, [hb.player]: { online: false, lastSeen: null } });
+    clock.advance(5000);
+    const b = await Client.open(id, hb);
+    await vi.waitFor(() => expect(presences(a).at(-1)?.[hb.player]).toEqual({ online: true, lastSeen: t0 + 5000 }), quick);
+    expect(presences(b).at(-1)).toEqual({ [ha.player]: { online: true, lastSeen: t0 }, [hb.player]: { online: true, lastSeen: t0 + 5000 } });
+    // A second tab for a changes nothing for b's seat; closing one of two tabs keeps a online.
+    // (terminate: an injected socket's close handshake never reaches the server.)
+    const a2 = await Client.open(id, ha);
+    a2.ws.terminate();
+    clock.advance(60_000);
+    b.ws.terminate();
+    await vi.waitFor(() => expect(presences(a).at(-1)?.[hb.player]).toEqual({ online: false, lastSeen: t0 + 65_000 }), quick);
+    expect(presences(a).at(-1)?.[ha.player]?.online).toBe(true);
+    // Kept for restarts; only human seats; nothing in the engine log.
+    const rows = await db.query<{ player_id: string; seen: number | null }>(
+      "select player_id, (extract(epoch from last_seen_at) * 1000)::float8 as seen from seats where game_id = $1 order by seat_no",
+      [id],
+    );
+    expect(rows.map((r) => [r.player_id, r.seen === null ? null : Math.round(Number(r.seen))])).toEqual([
+      [ha.player, expect.any(Number)],
+      [hb.player, t0 + 65_000],
+      [expect.any(String), null],
+    ]);
+    expect((await load(id)).log.length).toBe(logBefore);
+    a.ws.close();
   });
 });
 
@@ -249,7 +288,7 @@ describe("pushing views", () => {
     expect(b.views()).toHaveLength(2);
     expect(b.lastView().proposals).toHaveLength(1);
     await vi.waitFor(() => expect(tab2.views()).toHaveLength(2), quick);
-    expect(tab2.messages.filter((m) => !("view" in m) && !("chatHistory" in m))).toHaveLength(0);
+    expect(tab2.messages.filter((m) => !("view" in m) && !("chatHistory" in m) && !("presence" in m))).toHaveLength(0);
     for (const c of [a, b, tab2]) c.ws.close();
   });
 
@@ -264,10 +303,12 @@ describe("pushing views", () => {
     const { id, humans } = game;
     const a = await Client.open(id, humans[0]!);
     const b = await Client.open(id, humans[1]!);
-    const seen = await b.barrier();
-    const before = (await load(id)).log.length;
     // Pocket 0 (an Inside Man can't pocket) in two rooms that need no watch target.
     const rooms = (await load(id)).rooms.filter((r) => r !== "security").slice(0, 2);
+    // The first lock-in is public (moveLocked, owner decision 2 Nov); every change after it is hidden.
+    expect(await a.send({ type: "submitMove", move: { room: rooms[1], pocket: 0 } })).toMatchObject({ ok: true });
+    const seen = await b.barrier();
+    const before = (await load(id)).log.length;
     for (let i = 0; i < 100; i++) expect(await a.send({ type: "submitMove", move: { room: rooms[i % 2], pocket: 0 } })).toMatchObject({ ok: true });
     const after = await load(id);
     expect(after.log.slice(before).map((e) => e.type)).toEqual(Array(100).fill("moveSubmitted"));
@@ -389,6 +430,9 @@ describe("acceptance: a full game over sockets (docs/m2-plan.md M2-3)", () => {
             for (const { event } of [...v.ledger, ...v.caseFile]) expect(canSee(event.visibility, c.player, false)).toBe(true);
             for (const { event } of v.reveal?.log ?? []) expect(canSee(event.visibility, c.player, true)).toBe(true);
             if (v.reveal === null) expect(text).not.toContain(seed); // the seed is reveal-only (rngSeeded)
+          } else if ("presence" in msg) {
+            // Human seats only, never in the engine log (owner decision, 2 Nov).
+            for (const p of Object.values(msg.presence)) expect(Object.keys(p).sort()).toEqual(["lastSeen", "online"]);
           } else if (!("chatHistory" in msg)) {
             expect(Object.keys(msg).sort()).toEqual("ok" in msg ? ["id", "ok"] : ["id", "reason", "rejected"]);
           }

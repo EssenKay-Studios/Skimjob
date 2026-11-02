@@ -47,6 +47,7 @@ export interface ProposalRow {
   readonly id: string;
   readonly slot: string;
   readonly by: PlayerId;
+  /** Backers that count toward the lock: people only (bots' backing doesn't count). design §11.1 */
   readonly backers: number;
   /** You proposed or backed it. */
   readonly backed: boolean;
@@ -57,7 +58,7 @@ export interface Planner {
   /** The act's meeting is locked in (and not yet open). */
   readonly locked: { readonly meetingId: string; readonly slot: string } | null;
   readonly proposals: readonly ProposalRow[];
-  /** Backers that lock a slot in: more than half the crew. */
+  /** Backers that lock a slot in: more than half the crew's people (owner decision, 2 Nov; the crew if none). */
   readonly needed: number;
   /** Proposing and backing are allowed now (not locked, no meeting on). */
   readonly open: boolean;
@@ -67,14 +68,18 @@ const meetingOn = (view: PlayerView) => view.phase.kind === "meeting" || view.ph
 
 /** The act's meeting: proposals, backers and the locked slot. design §11.1 */
 export function plannerOf(view: PlayerView): Planner {
-  const crew = view.players.length + 1;
+  // design §11.1 (owner decision, 2 Nov): a majority of the people locks it; bots' backing doesn't count.
+  const bots = new Set(view.players.filter((o) => o.isBot).map((o) => o.id));
+  const people = view.players.length + 1 - bots.size;
+  const counted = (ids: readonly PlayerId[]) => (people > 0 ? ids.filter((id) => !bots.has(id)).length : ids.length);
+  const crew = people > 0 ? people : view.players.length + 1;
   const locked = view.scheduledMeeting ? { meetingId: view.scheduledMeeting.meetingId, slot: view.scheduledMeeting.slot } : null;
   return {
     act: view.act,
     locked,
     proposals: view.proposals
       .filter((p) => p.act === view.act)
-      .map((p) => ({ id: p.id, slot: p.slot, by: p.by, backers: p.acceptedBy.length, backed: p.acceptedBy.includes(view.me.id) })),
+      .map((p) => ({ id: p.id, slot: p.slot, by: p.by, backers: counted(p.acceptedBy), backed: p.acceptedBy.includes(view.me.id) })),
     needed: Math.floor(crew / 2) + 1,
     open: !locked && !meetingOn(view) && view.phase.kind !== "ended",
   };

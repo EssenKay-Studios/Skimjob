@@ -256,7 +256,17 @@ html.chat-sheet-open body {
 .crew-seat__mark {
   font-size: 11.5px;
   font-weight: 600;
+  color: var(--clay-d);
+}
+/* Presence (owner decision, 2 Nov): online now or last seen; bots say bot. */
+.crew-seat__here {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--mute);
+}
+.crew-seat__here--online {
   color: var(--good);
+  font-weight: 600;
 }
 
 /* ---------- Panels ---------- */

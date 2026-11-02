@@ -64,7 +64,11 @@ describe("timers on the live channel", () => {
     expect(first.now).toBe(T0);
     expect(first.timers).toEqual([{ key: "round:1", dueAt: T0 + TIMINGS.quick.roundMs, pausedAt: null }]);
 
-    // A's move is hidden: B gets nothing new, not even a fresh `now`. design §5.1
+    // A's lock-in is public (owner decision, 2 Nov); a change after it is hidden: B gets nothing new,
+    // not even a fresh `now`. design §5.1
+    await a.send({ type: "submitMove", move: { room: "lobby", pocket: 0 } });
+    await b.send({});
+    expect(b.view().lockedIn).toEqual([a.view().me.id]);
     clock.advance(1000);
     const before = b.raw.length;
     await a.send({ type: "submitMove", move: { room: "office", pocket: 0 } });

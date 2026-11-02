@@ -178,9 +178,10 @@ describe("eventsSince — 'while you were away' input, design §13", () => {
       { type: "submitMove", player: "ben", move: { room: "vault", pocket: 0 } },
     );
     const since = eventsSince(viewFor(s, "ana"), last);
-    expect(since.map((e) => e.event.type)).toEqual(["moveSubmitted"]);
+    // Ana's own lock-in, her move, then Ben's public lock-in (owner decision, 2 Nov; design §5.1).
+    expect(since.map((e) => e.event.type)).toEqual(["moveLocked", "moveSubmitted", "moveLocked"]);
     expect(since[0]?.seq).toBe(last + 1);
-    expect(eventsSince(viewFor(s, "ana"), -1).length).toBe(last + 2);
+    expect(eventsSince(viewFor(s, "ana"), -1).length).toBe(last + 4);
   });
 });
 

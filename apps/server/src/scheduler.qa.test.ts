@@ -11,7 +11,7 @@ import { buildServer } from "./server";
 import type { LobbySettings, SessionLength } from "./settings";
 import { createGameStore, type GameStore } from "./store";
 import { testDb } from "./testkit";
-import { TIMINGS } from "./timing";
+import { scaleTiming, TIMINGS } from "./timing";
 
 const T0 = Date.UTC(2026, 10, 2, 9);
 let db: Db;
@@ -278,7 +278,7 @@ describe("clock jumps (laptop sleep)", () => {
 });
 
 describe("humans before a deadline (design §5)", () => {
-  it("a move sent before the deadline is used; the round still runs its full length; after it, moves are refused", { timeout: 60_000 }, async () => {
+  it("a move sent before the deadline is used; with others still to lock in the round runs its full length; after it, moves are refused", { timeout: 60_000 }, async () => {
     await fresh();
     const { id, host } = await startGame(0, { sessionLength: "quick" }, 2);
     const [round1] = await deadlines(id);
@@ -298,6 +298,52 @@ describe("humans before a deadline (design §5)", () => {
     expect((await send(id, host, { type: "submitMove", move: { room, pocket: 0 } })).rejected).toBe(true);
   });
 });
+const byDue = async (id: string) => (await deadlines(id)).sort((a, b) => a.due - b.due);
+
+describe("early round end once the whole crew has locked in (owner decision, 2 Nov; design §4.1, §5.1)", () => {
+  it("the round resolves lockInGraceMs after the last lock-in; a change during the grace doesn't restart it; alibis stay timed", { timeout: 60_000 }, async () => {
+    await fresh();
+    const { id, host } = await startGame(2, { sessionLength: "quick" });
+    const t = TIMINGS.quick;
+    let s = await load(id);
+    const hostId = s.playerOrder[0]!;
+    // The bots locked in at the start; the host hasn't, so only the full-length round is planned.
+    expect(s.playerOrder.slice(1).every((p) => Object.hasOwn(s.moves, p))).toBe(true);
+    const [round1] = await deadlines(id);
+    expect((await deadlines(id)).map((d) => d.key)).toEqual(["round:1"]);
+    clock.advance(10_000);
+    const room = viewFor(s, hostId).rooms.find((r) => r !== "security")!;
+    expect(await send(id, host, { type: "submitMove", move: { room, pocket: 0 } })).toMatchObject({ ok: true });
+    const early = { key: "roundEarly:1", due: clock.now() + t.lockInGraceMs, paused: false };
+    expect(await byDue(id)).toEqual([early, round1]);
+    // A change during the grace: still the same due time.
+    clock.advance(t.lockInGraceMs - 1000);
+    expect(await send(id, host, { type: "submitMove", move: { room: "lobby", pocket: 0 } })).toMatchObject({ ok: true });
+    expect(await byDue(id)).toEqual([early, round1]);
+    expect(await app.scheduler.tick()).toBe(0);
+    clock.advance(1000);
+    expect(await app.scheduler.tick()).toBe(1);
+    s = await load(id);
+    expect(s.phase).toEqual({ kind: "alibis", round: 1 });
+    // The change made in the grace counts: the host's last move, and no new lock-in for it.
+    const mine = s.log.filter((e) => e.type === "moveSubmitted" && e.player === hostId);
+    expect(mine.at(-1)).toMatchObject({ move: { room: "lobby", pocket: 0 } });
+    expect(count(s, "moveLocked", (e) => e.player === hostId)).toBe(1);
+    expect(count(s, "roundResolved")).toBe(1);
+    expect(count(s, "defaultMoveAssigned")).toBe(0);
+    // Both round rows are gone with the round; the alibi window runs its full length.
+    expect(await deadlines(id)).toEqual([{ key: "alibis:1", due: clock.now() + t.alibiMs, paused: false }]);
+  });
+
+  it("the grace scales with TIME_SCALE and never outlasts the round", () => {
+    for (const [k, t] of Object.entries(TIMINGS)) {
+      expect(t.lockInGraceMs, k).toBeGreaterThan(0);
+      expect(t.lockInGraceMs, k).toBeLessThan(t.roundMs / 4);
+    }
+    expect(scaleTiming(TIMINGS.quick, 0.1).lockInGraceMs).toBe(TIMINGS.quick.lockInGraceMs / 10);
+  });
+});
+
 const QUICK_MS = TIMINGS.quick.roundMs;
 
 describe("emergency during an open alibi window (design §5.4)", () => {

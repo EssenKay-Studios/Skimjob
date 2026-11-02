@@ -123,11 +123,12 @@ describe("all-bot games — design §17.3", () => {
     expect(swaps).toBeGreaterThan(0);
    }, 30_000); // many full games: over the 5 s default on a busy machine
 
-  it("bots schedule the act meetings themselves — design §11.1", () => {
+  it("bots never propose a slot, so the server picks every act's meeting — design §11.1 (STATUS bot scheduling)", () => {
     const { state } = play(5, "schedule", ["honest"]);
     const scheduled = state.log.filter((e) => e.type === "meetingScheduled");
     expect(scheduled.length).toBe(3);
-    expect(scheduled.every((e) => e.type === "meetingScheduled" && e.proposalId !== null)).toBe(true);
+    expect(state.log.some((e) => e.type === "meetingProposed")).toBe(false);
+    expect(scheduled.every((e) => e.type === "meetingScheduled" && e.proposalId === null)).toBe(true);
   });
 });
 

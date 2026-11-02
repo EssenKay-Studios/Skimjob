@@ -186,7 +186,7 @@ function SlotPlanner({ view, send, offset, who }: { view: PlayerView; send: Send
           min={min}
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          hint={`Locked in once ${planner.needed} of the crew back it.`}
+          hint={`Locked in once ${planner.needed} of the crew's people back it (bots' backing doesn't count).`}
         />
         <Button variant="secondary" seed="propose" disabled={!slot || busy || !planner.open} onClick={propose}>
           Propose

@@ -153,6 +153,9 @@ function applyChange(state: GameState, event: GameEvent): GameState {
       // Per-act powers (Fence safe, Hacker, Blackmailer, Forger, Mole, Embezzler) start again with each act. design §8
       return actOfRound(event.round) !== actOfRound(state.round) ? mapPlayers(next, (p) => withRoleState(p, { usedThisAct: 0 })) : next;
     }
+    case "moveLocked":
+      // Public mark only: the move itself is folded by the `moveSubmitted` that follows. design §5.1
+      return state;
     case "moveSubmitted":
       return updatePlayer({ ...state, moves: { ...state.moves, [event.player]: event.move } }, event.player, () => ({
         consecutiveMissedMoves: 0,

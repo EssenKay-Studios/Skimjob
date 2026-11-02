@@ -1,6 +1,6 @@
 // QA (PR #37): bot role claims, bluffs and meeting-proposal timing in whole games.
 // design §8, §11.1, §12.1, §16.1, §17.2, §17.3; docs/roles-v2.md §4
-import { ROLES, ROUNDS_PER_ACT } from "@skimjob/content";
+import { ROLES } from "@skimjob/content";
 import { replay, viewFor, type GameConfig, type GameEvent, type PlayerCommand, type PlayerView, type VoteVisibility } from "@skimjob/engine";
 import { describe, expect, it } from "vitest";
 import type { Agent } from "./bot";
@@ -114,21 +114,15 @@ describe("meeting proposals with a human seat — QA PR #37, design §11.1", () 
   };
   const bots = (c: GameConfig) => createBots(c.players.slice(1), (_, i) => PERSONALITIES[MIX[i % MIX.length] as PersonalityId], c.seed);
 
-  it("bots never propose before two thirds of the act have resolved", () => {
+  it("bots never propose a slot: with no person proposing, the server picks every act's (STATUS bot scheduling)", () => {
     for (const [n, k] of [[3, 0], [6, 1], [12, 2]] as const) {
       const c = humanSeat(n, `qa37-h-${n}`, MODES[k] as VoteVisibility);
       const r = play(c, [person("q0", false), ...bots(c)]);
       expect(r.rejections).toEqual([]);
-      let resolved = 0;
-      let proposals = 0;
-      for (const e of r.state.log) {
-        if (e.type === "roundResolved") resolved = e.round;
-        if (e.type === "meetingProposed") {
-          proposals++;
-          expect(resolved - (e.act - 1) * ROUNDS_PER_ACT, `${n}p: ${e.by} proposed act ${e.act} after round ${resolved}`).toBeGreaterThanOrEqual((2 / 3) * ROUNDS_PER_ACT);
-        }
-      }
-      expect(proposals).toBeGreaterThan(0);
+      expect(r.state.log.filter((e) => e.type === "meetingProposed"), `${n}p`).toEqual([]);
+      const scheduled = r.state.log.filter((e): e is Extract<GameEvent, { type: "meetingScheduled" }> => e.type === "meetingScheduled");
+      expect(scheduled.length).toBeGreaterThan(0);
+      expect(scheduled.every((e) => e.proposalId === null)).toBe(true);
     }
   });
 

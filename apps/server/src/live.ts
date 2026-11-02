@@ -10,8 +10,9 @@
 //   `viewFor()` and the game's deadlines (`timers`, for the countdown; all
 //   from public state), but only if those changed; `now` (the server's clock,
 //   so a client can correct its own) rides along and never counts as a change.
-//   A hidden action (a move, a
-//   sealed vote) therefore sends nothing to anyone else, not even a ping.
+//   A hidden action (a change to a move already locked in, a sealed vote)
+//   therefore sends nothing to anyone else, not even a ping; a round's first
+//   move is public (`moveLocked`, owner decision 2 Nov).
 // - Bot seats act through the same command path, but only when their own
 //   view changed (like the pushes), so another player's hidden action never
 //   makes a bot roll its dice, and so never shows up as a public bot act.
@@ -20,6 +21,11 @@
 //   replied to like a command; the message goes out as `{ chat }` (a DM only to
 //   its two players, others get `{ dmNotice }` if the host left notices on).
 //   On connect, after the first view: `{ chatHistory }`.
+// - Presence (owner decision, 2 Nov): `{ presence }`, each human seat's
+//   `online` (a socket open now) and `lastSeen` (epoch ms, kept in
+//   `seats.last_seen_at`), sent on connect and to everyone when a seat comes
+//   online or goes offline. Server-only: never in the engine log. Bot seats
+//   aren't listed (clients show them as bots).
 import { createHash } from "node:crypto";
 import websocket from "@fastify/websocket";
 import type { FastifyInstance, FastifyRequest } from "fastify";
@@ -73,7 +79,15 @@ const PLAYER_COMMANDS: { readonly [T in PlayerCommand["type"]]: true } = {
   callOut: true,
 };
 
+/** One human seat's presence. `lastSeen`: when it last had the game open (null: never). */
+export interface SeatPresence {
+  readonly online: boolean;
+  readonly lastSeen: number | null;
+}
+export type Presence = Readonly<Record<PlayerId, SeatPresence>>;
+
 export type ServerMessage =
+  | { readonly presence: Presence }
   | { readonly view: ReturnType<typeof viewFor>; readonly timers: readonly Timer[]; readonly now: number }
   | { readonly chat: ChatMessage }
   | { readonly dmNotice: DmNotice }
@@ -204,6 +218,10 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
   const botSeen = new Map<string, Map<PlayerId, string>>();
   const botRefusals: (Rejection & { gameId: string })[] = [];
   const seatOf = new WeakMap<FastifyRequest, PlayerId>();
+  /** Per game, each human seat's last-seen time (epoch ms or null), read from `seats` once. */
+  const lastSeen = new Map<string, Map<PlayerId, number | null>>();
+  /** Per game, the presence text last sent to everyone, so an unchanged one isn't sent again. */
+  const presenceSent = new Map<string, string>();
 
   /** The engine never throws for bad input; if it ever does, that's a refusal (and a bug to log). */
   const run = (state: GameState, command: Command) => {
@@ -306,6 +324,44 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
     }
   };
 
+  const humanSeats = async (gameId: string): Promise<Map<PlayerId, number | null>> => {
+    const known = lastSeen.get(gameId);
+    if (known) return known;
+    const rows = await db.query<{ player_id: string; seen: number | null }>(
+      `select player_id, (extract(epoch from last_seen_at) * 1000)::float8 as seen
+       from seats where game_id = $1 and user_id is not null and player_id is not null order by seat_no`,
+      [gameId],
+    );
+    const seats = new Map(rows.map((r) => [r.player_id, r.seen === null ? null : Math.round(Number(r.seen))] as const));
+    lastSeen.set(gameId, seats);
+    return seats;
+  };
+  /** Every human seat's presence: online while any of its sockets is open. */
+  const presenceOf = async (gameId: string): Promise<Presence> => {
+    const seats = await humanSeats(gameId);
+    const online = new Set([...(conns.get(gameId) ?? [])].filter((c) => c.socket.readyState === c.socket.OPEN).map((c) => c.player));
+    const out: Record<PlayerId, SeatPresence> = {};
+    for (const [player, seen] of seats) out[player] = { online: online.has(player), lastSeen: seen };
+    return out;
+  };
+  /** The seat was seen now (a socket opened, or its last one closed): stored for restarts. */
+  const seen = async (gameId: string, player: PlayerId) => {
+    const now = options.clock.now();
+    const seats = await humanSeats(gameId);
+    if (!seats.has(player)) return;
+    seats.set(player, now);
+    await db.query("update seats set last_seen_at = to_timestamp($3::float8 / 1000) where game_id = $1 and player_id = $2", [gameId, player, now]);
+  };
+  /** Sends everyone in the game (but `except`, already sent it) its presence, if it changed since the last send. */
+  const pushPresence = async (gameId: string, except?: Conn) => {
+    const presence = await presenceOf(gameId);
+    const text = JSON.stringify(presence);
+    if (presenceSent.get(gameId) === text) return;
+    presenceSent.set(gameId, text);
+    for (const conn of conns.get(gameId) ?? []) if (conn !== except) send(conn, { presence });
+  };
+  const presenceFailed = (gameId: string) => (err: unknown) => app.log.error({ err, gameId }, "presence update failed");
+
   /** After a change: bots, then every seat's fresh view. An ended game's bots are dropped. */
   const afterChange = async (gameId: string, state: GameState) => {
     const settled = await runBots(gameId, state);
@@ -375,6 +431,13 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
         socket.on("close", () => {
           set.delete(conn);
           if (set.size === 0 && conns.get(gameId) === set) conns.delete(gameId);
+          // Last seen as its last socket closes; the others hear it went offline.
+          const still = [...set].some((c) => c.player === conn.player);
+          if (!still) void seen(gameId, conn.player).then(() => pushPresence(gameId)).catch(presenceFailed(gameId));
+          if (set.size === 0) {
+            presenceSent.delete(gameId);
+            lastSeen.delete(gameId);
+          }
         });
         // The first view, in line with any change being made right now.
         void store.withGameLock(gameId, async () => {
@@ -382,6 +445,10 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
           if (!state) return;
           sendView(conn, state, await timersOf(gameId));
           send(conn, { chatHistory: await chat.history(gameId, conn.player) });
+          // Presence: this socket gets it now; everyone else if it changed (the seat came online).
+          await seen(gameId, conn.player).catch(presenceFailed(gameId));
+          send(conn, { presence: await presenceOf(gameId) });
+          await pushPresence(gameId, conn);
         });
         socket.on("message", (data, isBinary) => {
           if (conn.queued >= MAX_QUEUED_MESSAGES) {

@@ -172,6 +172,14 @@ export function ArtSections() {
           <CrookAvatar name="Bot Opportunist" look="Bot Opportunist" size={44} bot expression="smug" />
           <span className="meta">28 · 36 ready · 44 away · seeded bot</span>
         </div>
+        <div className="g-row g-row--center">
+          <CrookAvatar name="Mara" look={0} size={44} status="ready" presence="online" />
+          <CrookAvatar name="Lou" look={2} size={44} presence="online" />
+          <CrookAvatar name="Priya" look={3} size={44} status="ready" presence="offline" />
+          <CrookAvatar name="Otto" look={4} size={44} presence="offline" />
+          <CrookAvatar name="Bot Sam" look={5} size={44} bot status="ready" presence="online" />
+          <span className="meta">seats: locked in (clay tick) · online (green dot) · offline, last seen (dashed dot) · a bot never shows online</span>
+        </div>
       </ArtSection>
 
       <ArtSection id="figures" title="Crook figures" note="for the cutaway · name tag · sack · claimed (ghost, in the claimant's colour) · seen on camera">

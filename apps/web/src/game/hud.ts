@@ -42,22 +42,58 @@ export interface SeatInfo {
   readonly isBot: boolean;
   readonly you: boolean;
   /**
-   * Your own move is in for the round being planned. Other players' moves are
-   * hidden (the server never says who has moved, decisions.md M2-6), so this
-   * is only ever true for you.
+   * Locked in a move for the round being planned (also while a meeting
+   * interrupts it). Public for everyone (owner decision, 2 Nov: `moveLocked`);
+   * what they picked never is. design §5.1
    */
-  readonly moved: boolean;
+  readonly lockedIn: boolean;
+}
+
+/** A human seat's presence as the live channel sends it (apps/server live.ts `SeatPresence`). */
+export interface SeatPresence {
+  readonly online: boolean;
+  /** Epoch ms on the server's clock; null: never had the game open. */
+  readonly lastSeen: number | null;
+}
+export type Presence = Readonly<Record<PlayerId, SeatPresence>>;
+
+/** What a seat's presence line says (owner decision, 2 Nov). Bots are bots, never "online". */
+export interface PresenceInfo {
+  readonly kind: "bot" | "online" | "seen" | "never" | "unknown";
+  readonly text: string;
+}
+
+/** "just now", "5 min ago", "3 h ago", "2 days ago". */
+export function agoText(ms: number): string {
+  const min = Math.floor(Math.max(0, ms) / 60_000);
+  if (min < 1) return "just now";
+  if (min < 60) return `${min} min ago`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `${h} h ago`;
+  const d = Math.floor(h / 24);
+  return `${d} day${d === 1 ? "" : "s"} ago`;
+}
+
+/** `seat`'s presence at server time `now`; `presence` null until the server has sent it. */
+export function presenceInfo(seat: Pick<SeatInfo, "id" | "isBot" | "you">, presence: Presence | null, now: number): PresenceInfo {
+  if (seat.isBot) return { kind: "bot", text: "bot" };
+  if (seat.you) return { kind: "online", text: "online" };
+  const p = presence && Object.hasOwn(presence, seat.id) ? presence[seat.id] : undefined;
+  if (!p) return { kind: "unknown", text: "" };
+  if (p.online) return { kind: "online", text: "online" };
+  if (p.lastSeen === null) return { kind: "never", text: "not here yet" };
+  return { kind: "seen", text: `seen ${agoText(now - p.lastSeen)}` };
 }
 
 export function seatsOf(view: PlayerView): SeatInfo[] {
   const order = setupOf(view)?.players ?? [...view.players, { id: view.me.id, name: "You", isBot: false }];
-  const planning = view.phase.kind === "planning";
+  const locked = new Set(view.lockedIn);
   return order.map((p) => ({
     id: p.id,
     name: p.name,
     isBot: p.isBot,
     you: p.id === view.me.id,
-    moved: p.id === view.me.id && planning && view.me.move !== null,
+    lockedIn: locked.has(p.id),
   }));
 }
 
@@ -103,7 +139,19 @@ export function phaseInfo(view: PlayerView): PhaseInfo {
   }
 }
 
-export const timerFor = (timers: readonly Timer[], key: string | null): Timer | null => (key ? (timers.find((t) => t.key === key) ?? null) : null);
+/**
+ * The deadline `key` names. A round (`round:<n>`) ends at the earlier of its own
+ * deadline and `roundEarly:<n>`, set once the whole crew has locked in (owner
+ * decision, 2 Nov; design §4.1).
+ */
+export function timerFor(timers: readonly Timer[], key: string | null): Timer | null {
+  if (!key) return null;
+  const own = timers.find((t) => t.key === key) ?? null;
+  if (!key.startsWith("round:")) return own;
+  const early = timers.find((t) => t.key === `roundEarly:${key.slice("round:".length)}`) ?? null;
+  if (!own || !early) return own ?? early;
+  return early.dueAt <= own.dueAt ? early : own;
+}
 
 /** Time left on `timer` at server time `now`; a paused timer keeps what it had when it stopped. */
 export const remainingMs = (timer: Timer, now: number): number => Math.max(0, timer.dueAt - (timer.pausedAt ?? now));
