@@ -46,13 +46,13 @@ export function BankSection() {
   const occupants: Partial<Record<string, BankOccupant[]>> = {
     vault: [crew(0, { expression: "smug", sack: true }), crew(3, { expression: "nervous" })],
     lobby: [crew(1), crew(5, { bot: true }), crew(2, { ghost: true })],
-    rooftop: [crew(4, { expression: "neutral" })],
+    rooftop: [crew(4, { expression: "neutral" }), crew(2, { camera: true })],
     ...(rooms.includes("serverRoom") && { serverRoom: [crew(6, { bot: true, expression: "smug" })] }),
     ...(rooms.includes("tellerLine") && { tellerLine: [crew(7), crew(8, { expression: "caught" })] }),
     ...(rooms.includes("managersOffice") && { managersOffice: [crew(9), crew(10, { expression: "smug" }), crew(11, { bot: true })] }),
   };
   return (
-    <ArtSection id="bank" title="Bank cutaway" note="M2-9 · tap a room to select it · dashed crook = an alibi claim · Lockdown rooms can't be picked" wide>
+    <ArtSection id="bank" title="Bank cutaway" note="M2-9 · tap a room to select it · dashed crook = an alibi claim · blue, faded crook with a camera = seen on camera · Lockdown rooms can't be picked" wide>
       <div className="g-knobs">
         <Segmented
           seed="g-tier"
@@ -174,7 +174,7 @@ export function ArtSections() {
         </div>
       </ArtSection>
 
-      <ArtSection id="figures" title="Crook figures" note="for the cutaway · name tag · sack · claimed (ghost, in the claimant's colour)">
+      <ArtSection id="figures" title="Crook figures" note="for the cutaway · name tag · sack · claimed (ghost, in the claimant's colour) · seen on camera">
         <div className="g-row g-row--center g-figures">
           {EXPRESSIONS.map((e, i) => (
             <CrookSvg key={e} name={`${CREW_NAMES[i]}`} look={i} expression={e} size={84} tag={CREW_NAMES[i]!.slice(0, 2)} />
@@ -182,6 +182,7 @@ export function ArtSections() {
           <CrookSvg name="Otto with the loot" look={4} expression="smug" sack size={84} tag="Ot" />
           <CrookSvg name="Sam (bot)" look={5} bot size={84} tag="Sa" />
           <CrookSvg name="Ines, claimed" look={6} ghost size={84} tag="In" />
+          <CrookSvg name="Kofi, on camera" look={7} camera size={84} tag="Ko" />
         </div>
       </ArtSection>
 

@@ -25,7 +25,8 @@ function run(state: GameState, ...commands: (PlayerCommand | SystemCommand)[]): 
   }
   return state;
 }
-const move = (player: string, room: string): PlayerCommand => ({ type: "submitMove", player, move: { room, pocket: 0 } }) as PlayerCommand;
+const move = (player: string, room: string, watch?: string): PlayerCommand =>
+  ({ type: "submitMove", player, move: { room, pocket: 0, ...(watch ? { watch } : {}) } }) as PlayerCommand;
 const alibi = (player: string, room: string): PlayerCommand => ({ type: "postAlibi", player, room }) as PlayerCommand;
 const round = (r: number): SystemCommand => ({ type: "advance", deadline: { kind: "round", round: r } });
 
@@ -36,7 +37,7 @@ function afterRound1(): GameState {
 
 const figures = (scene: ReturnType<typeof boardScene>) =>
   Object.entries(scene.occupants)
-    .flatMap(([room, list]) => list.map((o) => `${o.id}@${room}${o.ghost ? "?" : ""}`))
+    .flatMap(([room, list]) => list.map((o) => `${o.id}@${room}${o.ghost ? "?" : o.camera ? "~cam" : ""}`))
     .sort();
 
 describe("board scene (M2-9 wiring)", () => {
@@ -68,7 +69,50 @@ describe("board scene (M2-9 wiring)", () => {
     expect(figures(boardScene(v))).toEqual(["p1@vault", "p2@vault", "p3@vault?", "p4@office?"]);
   });
 
+  it("draws the room you watched as seen on camera, never twice (design §6.1 Security)", () => {
+    // p1 is Security watching the lobby; p2 stands with p1; p3 is in the lobby; p4 in the office.
+    const s = run(createGame(config()), move("p1", "security", "lobby"), move("p2", "security", "office"), move("p3", "lobby"), move("p4", "office"), round(1));
+    const v = viewFor(s, "p1");
+    expect(v.caseFile.some((x) => x.event.type === "roomWatched")).toBe(true);
+    expect(figures(boardScene(v))).toEqual(["p1@security", "p2@security", "p3@lobby~cam"]);
+    // A claim that matches the camera adds nothing; a lie about the camera's room shows up as a ghost elsewhere.
+    const claims = run(s, alibi("p3", "lobby"), alibi("p4", "lobby"));
+    expect(figures(boardScene(viewFor(claims, "p1")))).toEqual(["p1@security", "p2@security", "p3@lobby~cam", "p4@lobby?"]);
+    // p3 watched nobody: no camera figures in their view.
+    expect(figures(boardScene(viewFor(s, "p3")))).toEqual(["p3@lobby"]);
+  });
+
   it("figures come only from the case file and the alibis: strip them and only you are left (M2-9 acceptance)", () => {
+    const s = run(
+      createGame(config()),
+      move("p1", "vault"),
+      move("p2", "vault"),
+      move("p3", "lobby"),
+      move("p4", "security", "vault"),
+      round(1),
+      alibi("p3", "vault"),
+      alibi("p1", "office"),
+    );
+    for (const viewer of ["p1", "p4"]) {
+      const v = viewFor(s, viewer);
+      const stripped: PlayerView = {
+        ...v,
+        caseFile: v.caseFile.filter((x) => x.event.type !== "roomSighting" && x.event.type !== "roomWatched"),
+        ledger: v.ledger.filter((x) => x.event.type !== "alibiPosted"),
+      };
+      expect(figures(boardScene(stripped)), viewer).toEqual([viewer === "p1" ? "p1@vault" : "p4@security"]);
+      // Every non-ghost figure other than you is backed by a roomSighting or roomWatched in your case file.
+      const seenIds = new Set(
+        v.caseFile.flatMap((x) => (x.event.type === "roomSighting" ? x.event.others : x.event.type === "roomWatched" ? x.event.seen : [])),
+      );
+      for (const list of Object.values(boardScene(v).occupants))
+        for (const o of list ?? []) if (!o.ghost && o.id !== viewer) expect(seenIds.has(o.id), `${viewer} sees ${o.id}`).toBe(true);
+      expect(boardScene(JSON.parse(JSON.stringify(v)) as PlayerView)).toEqual(boardScene(v));
+    }
+    expect(figures(boardScene(viewFor(s, "p4")))).toEqual(["p1@office?", "p1@vault~cam", "p2@vault~cam", "p3@vault?", "p4@security"]);
+  });
+
+  it("acceptance, single viewer with sightings only (M2-9)", () => {
     const s = run(afterRound1(), alibi("p3", "vault"), alibi("p4", "office"));
     const v = viewFor(s, "p1");
     const stripped: PlayerView = {
@@ -77,7 +121,6 @@ describe("board scene (M2-9 wiring)", () => {
       ledger: v.ledger.filter((x) => x.event.type !== "alibiPosted"),
     };
     expect(figures(boardScene(stripped))).toEqual(["p1@vault"]);
-    // Every non-ghost figure other than you is backed by a roomSighting in your case file.
     const seenIds = new Set(v.caseFile.flatMap((x) => (x.event.type === "roomSighting" ? x.event.others : [])));
     for (const list of Object.values(boardScene(v).occupants))
       for (const o of list ?? []) if (!o.ghost && o.id !== "p1") expect(seenIds.has(o.id), o.id).toBe(true);

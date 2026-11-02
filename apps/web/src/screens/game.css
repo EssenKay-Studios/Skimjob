@@ -314,15 +314,6 @@ html.chat-sheet-open body {
   align-items: center;
   gap: 10px 12px;
 }
-.alibi__claimed {
-  flex: 1 1 200px;
-}
-.claim {
-  flex: 1 1 100%;
-  display: grid;
-  gap: 10px;
-  justify-items: start;
-}
 
 /* ---------- Bank board (M2-9 art) ---------- */
 .board {

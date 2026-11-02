@@ -76,6 +76,13 @@ for (const viewport of VIEWPORTS) {
       const o3 = await overflow(page);
       expect(o3.scroll).toBeLessThanOrEqual(o3.client);
       expect(await smallTargets(page)).toEqual([]);
+
+      // R4b: the role card's Claim role list open.
+      await page.locator(".role-card").getByRole("button", { name: "Claim role" }).click();
+      await expect(page.locator(".role-card").getByRole("group", { name: "Role to claim" })).toBeVisible();
+      const o4 = await overflow(page);
+      expect(o4.scroll).toBeLessThanOrEqual(o4.client);
+      expect(await smallTargets(page)).toEqual([]);
       await ctx.close();
     });
   }

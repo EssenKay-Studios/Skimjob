@@ -4,7 +4,7 @@
 // GameChat.tsx), meetings and votes (M2-7, Meetings.tsx) and the bank board
 // (M2-9 art, figures from the view only: game/board.ts). The full reveal
 // (M2-11) comes later.
-import { useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { CaseFileEvent, LoggedEvent, PlayerView, PublicEvent, RoomId } from "@skimjob/engine";
 import { Button } from "../components/Button";
 import { Chip } from "../components/Chip";
@@ -35,8 +35,8 @@ import {
   seatsOf,
   type Timer,
 } from "../game/hud";
-import { claimState, hasMeetings, pluralityRule, slotText } from "../game/meeting";
-import { DecidingPanel, MeetingNow, MeetingsPanel, ResultsBanner, RoleCard } from "./Meetings";
+import { hasMeetings, pluralityRule, slotText } from "../game/meeting";
+import { ClaimRole, DecidingPanel, MeetingNow, MeetingsPanel, ResultsBanner, RoleCard } from "./Meetings";
 import { useCountdown, useGame, type ClientCommand, type Connection, type GameChannel, type Reply } from "../game/useGame";
 import { api, ApiError, sentence, UNREACHABLE, type LobbyView } from "../api";
 import { navigate } from "../router";
@@ -321,7 +321,8 @@ function Actions({ view, timers, offset, send, autoMeetings, pick }: BoardProps 
       ) : p.kind === "alibis" || voting ? null : (
         <WaitPanel view={view} />
       )}
-      <RoleCard view={view} send={send} />
+      {/* During the alibi window the claim sits next to the alibi button instead of on the card. */}
+      <RoleCard view={view} send={send} claim={!alibi} />
       {meetings && !voting && <MeetingsPanel view={view} timers={timers} offset={offset} send={send} autoMeetings={autoMeetings} />}
     </>
   );
@@ -467,56 +468,9 @@ function AlibiPanel({ view, round, posted, send }: { view: PlayerView; round: nu
             Post alibi
           </Button>
         )}
-        <ClaimRole view={view} send={send} />
+        <ClaimRole view={view} send={send} where="alibi" />
       </div>
     </SketchFrame>
-  );
-}
-
-/** A formal, public, possibly false role claim, once per act (R4b; design §8, §12.1). Not in Duel. */
-function ClaimRole({ view, send }: { view: PlayerView; send: BoardProps["send"] }) {
-  const claim = claimState(view);
-  const [open, setOpen] = useState(false);
-  const [role, setRole] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const panel = useId();
-  if (!claim) return null;
-  if (claim.claimed)
-    return (
-      <p className="meta alibi__claimed">
-        You claimed to be the <b>{roleName(claim.claimed)}</b> this act.
-      </p>
-    );
-  const go = async () => {
-    if (!role) return;
-    setBusy(true);
-    const r = await send({ type: "claimRole", role }, "Role claimed.");
-    setBusy(false);
-    if (r.ok) setOpen(false);
-  };
-  return (
-    <>
-      <Button variant="secondary" seed="claim-role" aria-expanded={open} aria-controls={panel} onClick={() => setOpen(!open)}>
-        {open ? "Never mind" : "Claim role"}
-      </Button>
-      {open && (
-        <div id={panel} className="claim">
-          <p>
-            Tell the crew which role you have. Everyone sees it, it doesn't have to be true, and you get one claim in Act {claim.act}.
-          </p>
-          <div className="move__chips" role="group" aria-label="Role to claim">
-            {claim.options.map((o) => (
-              <Button key={o.id} variant="toggle" seed={`claim-${o.id}`} pressed={role === o.id} onClick={() => setRole(o.id)}>
-                {o.name}
-              </Button>
-            ))}
-          </div>
-          <Button variant="primary" seed="claim-go" disabled={!role || busy} onClick={go}>
-            {role ? `Claim the ${roleName(role)}` : "Pick a role"}
-          </Button>
-        </div>
-      )}
-    </>
   );
 }
 

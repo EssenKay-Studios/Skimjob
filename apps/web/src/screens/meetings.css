@@ -14,10 +14,21 @@
 .meetings__sub {
   font-size: 15.5px;
 }
+/* Role claim (R4b): next to the alibi button, and on the role card. design §8, §12.1 */
+.claim__done {
+  flex: 1 1 200px;
+}
+.claim {
+  flex: 1 1 100%;
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+}
 .meetings__emergency,
 .meetings__open,
 .results__ok,
-.role-card__use {
+.role-card__use,
+.role-card .claim__toggle {
   justify-self: start;
 }
 

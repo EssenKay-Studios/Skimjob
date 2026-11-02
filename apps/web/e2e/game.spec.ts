@@ -159,18 +159,20 @@ test("the bank board: tap a room to pick it, see who you saw and the alibi claim
   await page.getByRole("button", { name: "Lock it in" }).click();
   await expect(page.getByText("Locked in: Office")).toBeVisible();
 
-  // Each alibi window (3 s): claim the Lookout once. The board shows the resolved round meanwhile.
-  const ledger = page.getByRole("list", { name: "Ledger" });
-  const done = async () => ((await ledger.textContent()) ?? "").includes("You claim to be the Lookout.");
-  for (let tries = 0; tries < 3 && !(await done()); tries++) {
-    await expect(page.getByRole("heading", { name: /Round \d alibi/ })).toBeVisible({ timeout: 45_000 });
-    await expect(board.getByText(/as you saw it/)).toBeVisible();
-    await page.getByRole("button", { name: "Claim role" }).click({ timeout: 1000 }).catch(() => {});
-    await page.getByRole("group", { name: "Role to claim" }).getByRole("button", { name: "Lookout" }).click({ timeout: 1000 }).catch(() => {});
-    await page.getByRole("button", { name: "Claim the Lookout" }).click({ timeout: 1000 }).catch(() => {});
-    await page.getByText("You claimed to be the Lookout this act.").waitFor({ timeout: 1500 }).catch(() => {});
-    await expect(page.getByRole("heading", { name: /Round \d alibi/ })).toBeHidden({ timeout: 10_000 });
-  }
+  // Claim a role from the role card, any time (owner, 2 Nov): once per act.
+  const card = page.locator(".role-card");
+  await card.getByRole("button", { name: "Claim role" }).click();
+  await card.getByRole("group", { name: "Role to claim" }).getByRole("button", { name: "Lookout" }).click();
+  await card.getByRole("button", { name: "Claim the Lookout" }).click();
+  await expect(card.getByText("You claimed to be the Lookout this act.")).toBeVisible();
+  await expect(card.getByRole("button", { name: "Claim role" })).toHaveCount(0);
+
+  // The alibi window (3 s): the board shows the resolved round, with you in the Office; the claim moves next to the alibi button.
+  const alibi = page.locator(".alibi");
+  await expect(alibi).toBeVisible({ timeout: 45_000 });
+  await expect(board.getByText(/as you saw it/)).toBeVisible();
+  await expect(board.locator(".bank-room.is-selected[data-room=office]")).toBeVisible();
+  await expect(alibi.getByText("You claimed to be the Lookout this act.")).toBeVisible();
   await expect(page.getByRole("list", { name: "Ledger" })).toContainText("You claim to be the Lookout.");
   expect(errors).toEqual([]);
 });

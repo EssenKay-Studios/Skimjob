@@ -4,8 +4,10 @@
 // While a round is being planned the board shows your pick for that round
 // (you, standing in the room you picked). After a round resolves (alibi
 // window, meetings, game over) it shows that round as you know it: you in your
-// room, the players your case file says you saw there, and every public alibi
-// claim for the round as a dashed ghost. Nothing else: never another player's
+// room, the players your case file says you saw there, the players you watched
+// on camera (Security, the Lookout, a Tail perk: `roomWatched`, drawn as
+// "seen on camera"; a forged sighting looks the same, by design), and every
+// public alibi claim for the round as a dashed ghost. Nothing else: never another player's
 // move or room unless the view itself says so.
 import { EVENTS, type RoomId } from "@skimjob/content";
 import { actOfRound, type PlayerId, type PlayerView } from "@skimjob/engine";
@@ -81,9 +83,16 @@ function closedIn(view: PlayerView, round: number): RoomId[] {
 export function boardScene(view: PlayerView, pick: RoomId | null = null): BoardScene {
   const looks = seatLooks(view);
   const occupants: Record<string, BankOccupant[]> = {};
-  const put = (room: RoomId, id: PlayerId, ghost = false) => {
+  const put = (room: RoomId, id: PlayerId, kind: "here" | "camera" | "ghost" = "here") => {
     const s = looks.get(id);
-    const o: BankOccupant = { id, name: s?.name ?? id, look: s?.look ?? id, bot: s?.bot ?? false, ...(s ? { tag: s.tag } : {}), ...(ghost ? { ghost: true } : {}) };
+    const o: BankOccupant = {
+      id,
+      name: s?.name ?? id,
+      look: s?.look ?? id,
+      bot: s?.bot ?? false,
+      ...(s ? { tag: s.tag } : {}),
+      ...(kind === "ghost" ? { ghost: true } : kind === "camera" ? { camera: true } : {}),
+    };
     (occupants[room] ??= []).push(o);
   };
 
@@ -107,12 +116,23 @@ export function boardScene(view: PlayerView, pick: RoomId | null = null): BoardS
       put(e.room, other);
     }
   }
+  // design §6.1, §8, §8.3: rooms you watched. Everyone placed in person stays
+  // where you stood with them; anyone else is drawn once, on camera.
+  seen.add(view.me.id);
+  for (const { event: e } of view.caseFile) {
+    if (e.type !== "roomWatched" || e.player !== view.me.id || e.round !== round) continue;
+    for (const other of e.seen) {
+      if (seen.has(other)) continue;
+      seen.add(other);
+      put(e.room, other, "camera");
+    }
+  }
   // design §5.4: claims are public talk, drawn as ghosts. A claim that only
   // repeats what you already see (you, or someone you saw, in that very room) adds nothing.
   for (const { event: e } of view.ledger) {
     if (e.type !== "alibiPosted" || e.round !== round) continue;
     const there = occupants[e.room]?.some((o) => o.id === e.player && !o.ghost);
-    if (!there) put(e.room, e.player, true);
+    if (!there) put(e.room, e.player, "ghost");
   }
   return { round, mode: "seen", selected: mine, occupants, closed: closedIn(view, round), time: timeOfRound(round) };
 }

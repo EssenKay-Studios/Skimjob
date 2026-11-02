@@ -17,6 +17,7 @@ import { roleName } from "../game/describeEvent";
 import { namesOf, type Timer } from "../game/hud";
 import {
   abilityOffers,
+  claimState,
   decidingOf,
   emergencyOf,
   latestOutcome,
@@ -435,7 +436,7 @@ export function ResultsBanner({ view }: { view: PlayerView }) {
 
 // ---------------------------------------------------------------- your role card and its abilities
 
-export function RoleCard({ view, send }: { view: PlayerView; send: Send }) {
+export function RoleCard({ view, send, claim = true }: { view: PlayerView; send: Send; claim?: boolean }) {
   const offers = abilityOffers(view);
   const perks = perksHeld(view);
   const [open, setOpen] = useState(false);
@@ -472,6 +473,7 @@ export function RoleCard({ view, send }: { view: PlayerView; send: Send }) {
           ))}
         </ul>
       )}
+      {claim && <ClaimRole view={view} send={send} where="card" />}
       {offers.length > 0 && (
         <Button variant="small" seed="use-ability" aria-expanded={show} aria-controls={panel} onClick={() => setOpen(!open)} className="role-card__use">
           {show ? "Hide abilities" : "Use ability"}
@@ -552,4 +554,51 @@ function AbilityRow({ view, offer, send, done }: { view: PlayerView; offer: Abil
         </div>
       );
   }
+}
+
+/** A formal, public, possibly false role claim, once per act (R4b; design §8, §12.1). Not in Duel. */
+export function ClaimRole({ view, send, where }: { view: PlayerView; send: Send; where: "alibi" | "card" }) {
+  const claim = claimState(view);
+  const [open, setOpen] = useState(false);
+  const [role, setRole] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const panel = useId();
+  if (!claim) return null;
+  if (claim.claimed)
+    return (
+      <p className="meta claim__done">
+        You claimed to be the <b>{roleName(claim.claimed)}</b> this act.
+      </p>
+    );
+  const go = async () => {
+    if (!role) return;
+    setBusy(true);
+    const r = await send({ type: "claimRole", role }, "Role claimed.");
+    setBusy(false);
+    if (r.ok) setOpen(false);
+  };
+  return (
+    <>
+      <Button variant={where === "card" ? "small" : "secondary"} seed={`claim-role-${where}`} className="claim__toggle" aria-expanded={open} aria-controls={panel} onClick={() => setOpen(!open)}>
+        {open ? "Never mind" : "Claim role"}
+      </Button>
+      {open && (
+        <div id={panel} className="claim">
+          <p>
+            Tell the crew which role you have. Everyone sees it, it doesn't have to be true, and you get one claim in Act {claim.act}.
+          </p>
+          <div className="move__chips" role="group" aria-label="Role to claim">
+            {claim.options.map((o) => (
+              <Button key={o.id} variant="toggle" seed={`claim-${where}-${o.id}`} pressed={role === o.id} onClick={() => setRole(o.id)}>
+                {o.name}
+              </Button>
+            ))}
+          </div>
+          <Button variant="primary" seed={`claim-go-${where}`} disabled={!role || busy} onClick={go}>
+            {role ? `Claim the ${roleName(role)}` : "Pick a role"}
+          </Button>
+        </div>
+      )}
+    </>
+  );
 }
