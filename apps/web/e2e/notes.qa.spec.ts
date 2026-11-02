@@ -95,7 +95,7 @@ for (const viewport of [
         .filter((r) => r.width > 0 && (r.width < 44 || r.height < 44)).length,
     );
     expect(small).toBe(0);
-    await page.screenshot({ path: `/home/claude/pipeline/shots/qa-m210-12seats-${viewport.width}.png`, fullPage: true });
+    if (process.env.SHOTS_DIR) await page.screenshot({ path: `${process.env.SHOTS_DIR}/qa-m210-12seats-${viewport.width}.png`, fullPage: true });
     await ctx.close();
   });
 }
