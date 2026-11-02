@@ -7,6 +7,7 @@ import type { Clock } from "./clock";
 import type { Db } from "./db";
 import { liveRoutes, type Live } from "./live";
 import { HttpError, lobbyRoutes } from "./lobby";
+import { notesRoutes } from "./notes";
 import { createScheduler, type Scheduler } from "./scheduler";
 import { createGameStore, type GameStore } from "./store";
 import { stripApiPrefix, webRoutes } from "./web";
@@ -86,5 +87,6 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   app.addHook("onClose", async () => scheduler.stop());
   authRoutes(app, db, s, deps.auth ?? [], (token) => live.closeSession(token));
   lobbyRoutes(app, db, store, s, (gameId) => live.settle(gameId));
+  notesRoutes(app, db, store, s, deps.clock);
   return app;
 }

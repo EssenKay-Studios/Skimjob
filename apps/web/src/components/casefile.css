@@ -1,0 +1,347 @@
+/* Ledger / case file sheet, "While you were away" recap, suspicion board (M2-10).
+   ui-style "Ledger / case file", §8 feed chirps, §9 motion. Tokens only. */
+
+/* ---------- The sheet ---------- */
+.records {
+  position: relative;
+  display: grid;
+  gap: 10px;
+  padding: 26px 18px 18px 40px;
+  align-content: start;
+  min-width: 0;
+}
+/* The manila folder's tab. */
+.records__folder-tab {
+  position: absolute;
+  top: -13px;
+  left: 44px;
+  padding: 3px 16px 5px;
+  border: 1.8px solid var(--ink);
+  border-bottom: 0;
+  border-radius: var(--radius-tab);
+  background: var(--manilla);
+  font: 400 14px/1.2 var(--font-hand);
+  color: var(--ink2);
+  rotate: -1deg;
+}
+.records__tabs,
+.records__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.records__tabs .num {
+  font-size: 12px;
+  opacity: 0.75;
+}
+.records__chips .btn {
+  padding: 0 12px;
+  font-size: 13px;
+}
+.records__filters {
+  display: grid;
+  gap: 8px;
+  padding: 8px 0 4px;
+  border-top: 1.3px dashed var(--ink-faint);
+}
+.records__note {
+  margin-top: 2px;
+}
+.records__scroll {
+  display: grid;
+  gap: 14px;
+  max-height: min(64vh, 640px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 6px 4px 4px 2px;
+  min-width: 0;
+}
+.records__round {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+/* A paper-clipped polaroid round card, alternating ±1.5°. */
+.records__card {
+  position: relative;
+  justify-self: start;
+  margin: 2px 0 4px 8px;
+  padding: 5px 14px 6px 22px;
+  border: 1.6px solid var(--ink);
+  border-radius: var(--radius-card);
+  background: var(--paper-hi);
+  box-shadow: var(--shadow-card);
+  font: 400 15px/1.2 var(--font-hand);
+  color: var(--ink);
+  rotate: -1.5deg;
+}
+.records__card.is-right {
+  rotate: 1.5deg;
+}
+.records__clip {
+  position: absolute;
+  left: 6px;
+  top: -9px;
+  width: 9px;
+  height: 22px;
+  border: 2px solid var(--art-steel-d);
+  border-radius: var(--radius-clip);
+  background: transparent;
+}
+.records__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.records__row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 8px 2px;
+  border-bottom: 1.3px dashed var(--ink-faint);
+  font-size: 13.5px;
+  line-height: 1.4;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.records__row.is-private {
+  background: linear-gradient(transparent 12%, var(--clay-l) 12% 88%, transparent 88%);
+}
+.records__lock {
+  flex: none;
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  color: var(--ink);
+}
+.records__lock svg {
+  width: 100%;
+  height: 100%;
+}
+@media (max-width: 560px) {
+  .records {
+    padding: 24px 12px 16px 32px;
+  }
+  .records__folder-tab {
+    left: 34px;
+  }
+}
+
+/* ---------- While you were away ---------- */
+.away {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px 16px;
+  max-width: 1160px;
+  margin: 14px auto 0;
+  padding: 16px 18px 16px 16px;
+  animation: away-drop 0.45s var(--spring) both;
+}
+.away__narrator {
+  flex: none;
+}
+.away__body {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.away__title {
+  font: 400 21px/1.15 var(--font-hand);
+  color: var(--clay-d);
+}
+.away__lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+/* Feed chirps (ui-style §8): slide in from 14px below with a -1.5° tilt. */
+.away__line {
+  justify-self: start;
+  max-width: 100%;
+  padding: 6px 12px 7px;
+  border: 1.3px solid var(--ink);
+  border-radius: var(--radius-bubble);
+  background: var(--paper);
+  font: 500 13.5px/1.4 var(--font-ui);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+  animation: away-chirp 0.32s var(--spring) both;
+}
+.away__line:last-child {
+  background: var(--clay-l);
+}
+.away__ok {
+  align-self: center;
+}
+@keyframes away-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-18px) scale(0.96) rotate(-2deg);
+  }
+}
+@keyframes away-chirp {
+  from {
+    opacity: 0;
+    transform: translateY(14px) rotate(-1.5deg);
+  }
+}
+@media (max-width: 560px) {
+  .away {
+    grid-template-columns: auto minmax(0, 1fr);
+    margin-top: 10px;
+    padding: 14px 12px;
+  }
+  .away__ok {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+}
+
+/* The narrator blinks and bobs. */
+.raccoon__bob {
+  animation: raccoon-bob 3.2s ease-in-out infinite;
+  transform-origin: 32px 56px;
+}
+.raccoon__eyes {
+  animation: raccoon-blink 5s steps(1) infinite;
+  transform-origin: 32px 32px;
+}
+@keyframes raccoon-bob {
+  50% {
+    transform: translateY(-2px) rotate(-2deg);
+  }
+}
+@keyframes raccoon-blink {
+  96% {
+    transform: scaleY(0.1);
+  }
+}
+
+/* ---------- Suspicion board ---------- */
+.sus__private {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.sus__lock {
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+}
+.sus__lock svg {
+  width: 100%;
+  height: 100%;
+}
+.sus__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+}
+.sus-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  padding: 10px 2px 12px;
+  border-bottom: 1.3px dashed var(--ink-faint);
+  min-width: 0;
+}
+.sus-row:last-child {
+  border-bottom: 0;
+}
+.sus-row__who {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.sus-row__name {
+  font: 400 16px/1.2 var(--font-hand);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.sus-row__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.sus-tag {
+  padding: 0 12px;
+  font-size: 13px;
+}
+.btn.sus-tag--trusted.is-on {
+  --fr-fill: var(--good-l);
+}
+.btn.sus-tag--unsure.is-on {
+  --fr-fill: var(--gold);
+}
+.btn.sus-tag--suspicious.is-on {
+  --fr-fill: var(--bad-l);
+}
+@media (hover: hover) {
+  .btn.sus-tag--trusted.is-on:hover:not(:disabled) {
+    --fr-fill: var(--good-l);
+  }
+  .btn.sus-tag--unsure.is-on:hover:not(:disabled) {
+    --fr-fill: var(--gold);
+  }
+  .btn.sus-tag--suspicious.is-on:hover:not(:disabled) {
+    --fr-fill: var(--bad-l);
+  }
+}
+.sus-row__note {
+  padding: 4px 10px 5px;
+  border-left: 3px solid var(--kraft);
+  background: var(--paper2);
+  font: 400 13.5px/1.4 var(--font-ui);
+  color: var(--ink2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.sus-row__edit {
+  display: grid;
+  gap: 8px;
+}
+.sus-row__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.sus__error {
+  color: var(--bad);
+  font: 600 13px/1.35 var(--font-ui);
+}
+/* A tag on a crew seat (read-only). */
+.sus-mark {
+  justify-self: start;
+  padding: 1px 7px 2px;
+  border: 1.2px solid var(--ink);
+  border-radius: var(--radius-chip);
+  font: 600 11px/1.3 var(--font-ui);
+  color: var(--ink);
+}
+.sus-mark--trusted {
+  background: var(--good-l);
+}
+.sus-mark--unsure {
+  background: var(--gold);
+}
+.sus-mark--suspicious {
+  background: var(--bad-l);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .away,
+  .away__line,
+  .raccoon__bob,
+  .raccoon__eyes {
+    animation: none;
+  }
+}

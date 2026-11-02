@@ -111,3 +111,9 @@ export function parseNickname(input: unknown): string | null {
   const r = checkNickname(input);
   return r.ok ? r.name : null;
 }
+
+/** Suspicion board (design §12.3, M2-10): characters per note. */
+export const BOARD_NOTE_MAX_CHARS = 280;
+/** Suspicion board writes per window per seat, and "last seen" marks (a page sends at most one a second or so). */
+export const BOARD_RATE = { writes: 20, windowMs: 10_000 } as const;
+export const SEEN_RATE = { writes: 60, windowMs: 10_000 } as const;
