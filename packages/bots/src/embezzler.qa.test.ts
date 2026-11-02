@@ -17,6 +17,8 @@ function config(n: number, seed: string): GameConfig {
     eventsEnabled: true,
     voteVisibility: "hiddenThenRevealed",
     starterMode: false,
+    // The 0.13.0 take of 4 (R5 ships 1, balance-3.md): a take that can outrun a round's inflow tests the cap.
+    contentOverrides: { roles: { embezzler: { take: 4 } } },
   };
 }
 

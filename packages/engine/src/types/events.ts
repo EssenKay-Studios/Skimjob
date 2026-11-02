@@ -672,7 +672,7 @@ export interface RankEntry {
   readonly player: PlayerId;
   /** Revealed at the end. design §13 */
   readonly role: RoleId;
-  /** Stash after role scoring (e.g. Rookie ×1.2, Inside Man surplus), rounded to SCORE_DECIMALS. design §8 */
+  /** Stash after role scoring (e.g. Rookie ×1.05, Inside Man surplus), rounded to SCORE_DECIMALS. design §8 */
   readonly score: number;
   /** Final stash before role scoring, including any Fence safe. design §8 */
   readonly stash: number;

@@ -208,8 +208,8 @@ describe("QA: Audit numbers — design §10", () => {
     const audit = find(events, "auditReport")[0];
     const splits = find(events, "lootSplit");
     expect(Object.keys(audit?.shortfalls ?? {}).sort()).toEqual([...s.rooms].sort());
-    // Three in the Deposit boxes (max 2) yield 3 each: kept 3 + 3 + 1.
-    expect(audit?.shortfalls).toMatchObject({ vault: 0, depositBoxes: 7, office: 0, serverRoom: 0 });
+    // Three in the Deposit boxes (max 2) yield 4 each (R5; was 3): kept 4 + 4 + 1.
+    expect(audit?.shortfalls).toMatchObject({ vault: 0, depositBoxes: 9, office: 0, serverRoom: 0 });
     const kept = splits.reduce((n, e) => n + e.toStash, 0);
     expect(Object.values(audit?.shortfalls ?? {}).reduce((a, b) => a + b, 0)).toBe(kept);
     expect(kept + roundResolved(s).haulDelta).toBe(splits.reduce((n, e) => n + e.loot, 0));

@@ -5,7 +5,7 @@
 // No accomplice role ships until R3, so the accomplice rules are checked with
 // a role table that makes the Fence and Hacker accomplices (dealRoles takes a table).
 import { describe, expect, it } from "vitest";
-import { MOLE_ROLE, ROLES, type RoleDef, type RoleId } from "@skimjob/content";
+import { MOLE_ROLE, ROLES, maxDarkSeats, type RoleDef, type RoleId } from "@skimjob/content";
 import type { GameConfig, MoleSetting } from "./types";
 import { darkSideOdds, dealRoles, limitDarkSide, rolePoolFor, saboteursFor, validateConfig } from "./setup";
 import { seedRng } from "./rng";
@@ -37,16 +37,21 @@ const sides = (n: number, extra: Partial<GameConfig>, seed: string, table: RoleT
 };
 
 describe("dark-side hard limits — design §8.1 (role deck v2 §3)", () => {
-  it("at most ⌊n/3⌋ dark seats (accomplices go first), no accomplices without a saboteur, accomplices ≤ saboteurs + 1", () => {
-    expect(limitDarkSide(5, { saboteurs: 1, accomplices: 1 })).toEqual({ saboteurs: 1, accomplices: 0 });
+  it("at most n ÷ 3 dark seats, rounded (R5; was ⌊n/3⌋) (accomplices go first), no accomplices without a saboteur, accomplices ≤ saboteurs + 1", () => {
+    expect(limitDarkSide(5, { saboteurs: 1, accomplices: 1 })).toEqual({ saboteurs: 1, accomplices: 1 });
+    expect(limitDarkSide(5, { saboteurs: 1, accomplices: 2 })).toEqual({ saboteurs: 1, accomplices: 1 });
     expect(limitDarkSide(6, { saboteurs: 1, accomplices: 1 })).toEqual({ saboteurs: 1, accomplices: 1 });
     expect(limitDarkSide(7, { saboteurs: 1, accomplices: 2 })).toEqual({ saboteurs: 1, accomplices: 1 });
+    expect(limitDarkSide(8, { saboteurs: 1, accomplices: 2 })).toEqual({ saboteurs: 1, accomplices: 2 });
     expect(limitDarkSide(9, { saboteurs: 2, accomplices: 2 })).toEqual({ saboteurs: 2, accomplices: 1 });
-    expect(limitDarkSide(11, { saboteurs: 3, accomplices: 1 })).toEqual({ saboteurs: 3, accomplices: 0 });
+    expect(limitDarkSide(11, { saboteurs: 3, accomplices: 1 })).toEqual({ saboteurs: 3, accomplices: 1 });
+    expect(limitDarkSide(11, { saboteurs: 3, accomplices: 2 })).toEqual({ saboteurs: 3, accomplices: 1 });
     expect(limitDarkSide(12, { saboteurs: 1, accomplices: 3 })).toEqual({ saboteurs: 1, accomplices: 2 });
     expect(limitDarkSide(12, { saboteurs: 0, accomplices: 2 })).toEqual({ saboteurs: 0, accomplices: 0 });
+    expect(limitDarkSide(4, { saboteurs: 2, accomplices: 0 })).toEqual({ saboteurs: 1, accomplices: 0 });
+    // 2–3 players round up to 1 seat too, but their table row rolls no dark side (§3).
     expect(limitDarkSide(3, { saboteurs: 1, accomplices: 0 })).toEqual({ saboteurs: 1, accomplices: 0 });
-    expect(limitDarkSide(2, { saboteurs: 1, accomplices: 0 })).toEqual({ saboteurs: 0, accomplices: 0 });
+    for (const m of ["maybe", "on"] as const) for (const n of [2, 3]) expect(darkSideOdds(n, m, false).every((o) => o.saboteurs === 0)).toBe(true);
   });
 });
 
@@ -68,8 +73,8 @@ describe("dark-side odds by crew size and saboteur setting — design §8.1", ()
       { saboteurs: 1, accomplices: 0, chance: 0.5 },
       { saboteurs: 1, accomplices: 1, chance: 0.5 },
     ]);
-    // 5p: ⌊5/3⌋ = 1 seat, so the 1/1 mix becomes 1/0.
-    expect(darkSideOdds(5, "on", false).every((o) => o.saboteurs === 1 && o.accomplices === 0)).toBe(true);
+    // 5p: n ÷ 3 rounded = 2 seats since R5, so the 1/1 mix is dealt as written (it was cut to 1/0).
+    expect(darkSideOdds(5, "on", false)).toEqual(darkSideOdds(6, "on", false));
     expect(darkSideOdds(10, "on", false)).toEqual([
       { saboteurs: 2, accomplices: 1, chance: 0.6 },
       { saboteurs: 1, accomplices: 2, chance: 0.2 },
@@ -97,7 +102,7 @@ describe("dealing by faction — design §8.1 (role deck v2 §3)", () => {
         for (let i = 0; i < 25; i++) {
           const d = sides(n, { mole }, `inv-${n}-${mole}-${i}`);
           expect(d.dealt).toHaveLength(n);
-          expect(d.saboteurs + d.accomplices).toBeLessThanOrEqual(Math.floor(n / 3));
+          expect(d.saboteurs + d.accomplices).toBeLessThanOrEqual(maxDarkSeats(n));
           if (d.saboteurs === 0) expect(d.accomplices).toBe(0);
           expect(d.accomplices).toBeLessThanOrEqual(d.saboteurs + 1);
           if (mole === "off" || n <= 3) expect(d.saboteurs).toBe(0);
@@ -108,9 +113,10 @@ describe("dealing by faction — design §8.1 (role deck v2 §3)", () => {
     }
   });
 
-  it("reaches the mixes the weights allow (7–8: 1/1, 2/0; 11–12: 2/2, 2/1, 3/0 is capped by two saboteur roles)", () => {
+  it("reaches the mixes the weights allow (7: 1/1, 2/0; 8: also 1/2; 11–12: 2/2, 2/1, 3/0 is capped by two saboteur roles)", () => {
     const seen = (n: number) => new Set(Array.from({ length: 150 }, (_, i) => sides(n, {}, `mix-${n}-${i}`)).map((d) => `${d.saboteurs}/${d.accomplices}`));
-    expect([...seen(8)].sort()).toEqual(["1/1", "2/0"]); // 1/2 is capped to 1/1 by ⌊8/3⌋ = 2
+    expect([...seen(7)].sort()).toEqual(["1/1", "2/0"]); // 1/2 is capped to 1/1 by 7 ÷ 3 rounded = 2
+    expect([...seen(8)].sort()).toEqual(["1/1", "1/2", "2/0"]); // R5: 8 ÷ 3 rounded = 3 seats
     expect([...seen(12)].sort()).toEqual(["2/1", "2/2"]); // 3/1: only two saboteur roles exist here
   });
 

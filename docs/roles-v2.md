@@ -39,7 +39,7 @@ Size: **S** means content plus a small hook. **M** means a new ability or event,
 | Role | Power | Reward (trigger → perk) | Weakness if revealed | Size |
 |---|---|---|---|---|
 | Rookie | None | Each checkpoint made → Tail [1] | The easy one to pin blame on | S |
-| Inside Man | Can't pocket; scores 0.3 per loot over the final target [0.3] | Each checkpoint made → Peek | Others pocket more, knowing it covers | S |
+| Inside Man | Can't pocket; scores 0.15 per loot over the final target [0.15; R5, was 0.3] | Each checkpoint made → Peek | Others pocket more, knowing it covers | S |
 | Lookout | Sees 1 extra room each round [1] | Someone it saw is shaken down dirty → Peek | Framed; liars route around it | S |
 | Auditor | Once per act: that round's shortfall for one room [1/act] | A visitor of that room is shaken down dirty → Ballot | Liars shake it down to discredit it | M |
 | Detective | Once per act: is X's stash at or above the clean threshold? [1/act] | X is shaken down dirty → Shield | Cheaters shake it down first (the Shield answers this) | M |
@@ -56,7 +56,7 @@ Size: **S** means content plus a small hook. **M** means a new ability or event,
 
 | Role | Power | Reward (trigger → perk) | Knows | Weakness if revealed | Size |
 |---|---|---|---|---|---|
-| Getaway Driver | Its Rooftop visit *adds* the Heat it would remove (hidden) [×1] | Heat ≥ 75 → learns the saboteurs, and they learn it | Nobody | Rooftop claims that don't cool Heat give it away | S |
+| Getaway Driver | Its Rooftop visit cools nothing (hidden) [×0; R5, was ×1: it *added* the Heat it would remove] | Heat ≥ 75 → learns the saboteurs, and they learn it | Nobody | Rooftop claims that don't cool Heat give it away | S |
 | Fence | Up to 5 per act into a safe that shakedowns can't touch (unchanged) [5] | Safe ≥ 10 → learns one saboteur | Nobody | Assumed to be hoarding; first shakedown target | S |
 | Hacker | Once per act: loops one room so Security shows it empty (unchanged) [1/act] | Its loop hid a saboteur from a watcher → Peek | One saboteur, from the start | Every empty camera feed is blamed on it | S |
 | Blackmailer | Once per act: guess a player's role. Right → steal their vote at the next meeting; the victim is told "your vote is compromised" [1/act] | Guessed a saboteur → they become mutual allies | Nobody | Players hide roles; victims out it | M |
@@ -66,8 +66,8 @@ Size: **S** means content plus a small hook. **M** means a new ability or event,
 
 | Role | Sabotage | Reward | Weakness if revealed | Size |
 |---|---|---|---|---|
-| Mole | Once per act: tip-off, +6 Heat hidden in the round's change [6] | Each tip-off → learns one unknown accomplice | Hunted | — |
-| Embezzler | Once per act: moves 4 from the Haul to its stash after splits, hidden in the Haul change [4] | The take itself, plus its first take → learns one accomplice | Its stash is always dirty, and a shakedown returns the take | S |
+| Mole | Once per act: tip-off, +4 Heat hidden in the round's change [4; R5, was 6] | Each tip-off → learns one unknown accomplice | Hunted | — |
+| Embezzler | Once per act: moves 1 from the Haul to its stash after splits, hidden in the Haul change [1; R5, was 4] | The take itself, plus its first take → learns one accomplice | Its stash is always dirty, and a shakedown returns the take | S |
 
 **Changes from v1:** Gambler, Specialist, Miser, Smuggler and Safecracker are cut. Fence and Hacker go back to their original powers as Accomplices; they already hurt the crew. Insider is renamed Inside Man and Accountant becomes Detective. Driver is split into the Fixer (crew) and the Getaway Driver (accomplice). Lawyer becomes the Priest. Planner becomes the Mastermind.
 
@@ -75,7 +75,7 @@ Size: **S** means content plus a small hook. **M** means a new ability or event,
 
 - First, roll the dark side (saboteurs and accomplices) using the weights below. Then draw the roles at random from each faction's eligible pool, at most one of each. Crew fills the remaining seats.
 - **Hard limits** (any count):
-  - At most ⌊n/3⌋ dark seats.
+  - At most n/3 dark seats, rounded to the nearest (R5; was ⌊n/3⌋, which never dealt an accomplice at 5).
   - No accomplices without a saboteur.
   - Accomplices ≤ saboteurs + 1.
 - **Host setting:** *off* means crew only. *maybe* means a 50% chance of no dark side at 4–8 players. *on* means the weights below.
@@ -117,13 +117,13 @@ Size: **S** means content plus a small hook. **M** means a new ability or event,
 | Smooth Talker | Votes normally | Rarely; a claim invites a vote bloc against it |
 | Muscle | Cancels when it rates the target clean | After a cancel that saved a clean player |
 | Priest | Blesses its most-trusted player | Never before a vote; after one to vouch |
-| Bagman | Leans honest, all-in | Freely |
+| Bagman | Leans honest: all-in through Act 1, then its personality (R5) | Freely |
 | Cleaner | Rooftop when its Heat reader says danger | Freely |
 | Fixer | Passive; a little more careful | After the save |
 | Mastermind | Feeds the next card into its Heat forecast; Rigs Heat-calming cards | Rarely (gets blamed for cards) |
-| Getaway Driver | Rooftop when Heat is mid; pockets when it is high | Bluffs Cleaner |
+| Getaway Driver | Rooftop when Heat is mid; pockets when it is very high (R5: 0.9 of the raid level, was 0.75) | Bluffs Cleaner |
 | Fence | Deposits the act's cap; avoids being the top suspect | Bluffs Rookie |
-| Hacker | Loops the room its known saboteur picked | Bluffs Auditor |
+| Hacker | Loops its own room when it skims (R5), else the room its known saboteur picked | Bluffs Auditor |
 | Blackmailer | Guesses only with a role from a Peek, a tip or a claim; otherwise skips | Bluffs Detective |
 | Forger | Plants its most-trusted rival in the short room | Bluffs Lookout, backing the forged sighting |
 | Mole | As today (tip-off about one act in two) | Bluffs Bagman or Rookie |
@@ -138,4 +138,4 @@ Size: **S** means content plus a small hook. **M** means a new ability or event,
 - **Fixer vs Mole:** a saved raid cuts the Mole's chances. Tune the tip-off and the Fixer threshold together.
 - **Embezzler plus a missed checkpoint is +15 Heat.** Watch whether Embezzler games bust too often at 4–6p.
 - **Harder for bots:** Blackmailer, Forger, Priest and Mastermind's Rig. Bots' shakedowns are already 84% accurate, which inflates every "dirty catch" perk. Expect crew info roles to look strong until bot accuracy drops to 50–70%.
-- **Inside Man is already +20–25 pp at 2–3p,** before its Peek. Those counts have no dark side, so tune it there.
+- **Inside Man is already +20–25 pp at 2–3p,** before its Peek. Those counts have no dark side, so tune it there. *(R5: moot since the owner's 1 Nov answer: the Inside Man is dealt only from 5 players, so it is never in a 2–3 player game.)*

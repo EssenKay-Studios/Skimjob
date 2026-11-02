@@ -1,10 +1,10 @@
 // Role deck v2 accomplices, step R3a (docs/roles-v2.md §2, §3): Getaway
 // Driver, Fence, Hacker, the Mole's tip-off reward, what each learns about
-// its allies (private `alliesLearned`), dealing by faction with the ⌊n/3⌋ cap,
+// its allies (private `alliesLearned`), dealing by faction with the n ÷ 3 (rounded) cap,
 // and the R1 follow-up (a Recharge never refills the Fence's safe). design §7, §8, §8.1, §8.3
 import { describe, expect, it } from "vitest";
 import { handleThroughAlibis } from "./alibis.testkit";
-import { ACCOMPLICE_V2_ROLES, BANK_JOB, ROLES } from "@skimjob/content";
+import { ACCOMPLICE_V2_ROLES, BANK_JOB, ROLES, maxDarkSeats } from "@skimjob/content";
 import type { GameConfig, GameEvent, GameState, PlayerState } from "./types";
 import { privateTo } from "./types";
 import { createGame, darkSideOdds, setupEvents } from "./setup";
@@ -12,6 +12,7 @@ import { replay } from "./reduce";
 import { roundHeatDelta } from "./job";
 import { viewFor } from "./view";
 import { grantPerks } from "./perks.testkit";
+import { V013_NUMBERS } from "./v01-numbers.testkit";
 
 function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
   return {
@@ -64,7 +65,8 @@ const withSafe = (s: GameState, id: string, safe: number, stash = 0): GameState 
 describe("accomplices: content and dealing — v2 §2, §3, design §8.1", () => {
   it("the Getaway Driver, Fence and Hacker are accomplices, each with one main number", () => {
     for (const id of ACCOMPLICE_V2_ROLES) expect(ROLES[id]?.faction, id).toBe("accomplice");
-    expect(ROLES.getawayDriver?.power).toEqual({ kind: "getaway", room: "rooftop", reverse: 1, revealHeat: 75 });
+    // R5 (balance-3.md): reverse ×1 → ×0, its Rooftop visit cools nothing.
+    expect(ROLES.getawayDriver?.power).toEqual({ kind: "getaway", room: "rooftop", reverse: 0, revealHeat: 75 });
     expect(ROLES.fence?.power).toEqual({ kind: "fenceSafe", perAct: 5, revealSafe: 10 });
     expect(ROLES.hacker).toMatchObject({ power: { kind: "loopCameras", perAct: 1 }, knowsSaboteurs: 1, rewards: [{ on: "loopHidSaboteur", perk: "peek", count: 1 }] });
   });
@@ -76,14 +78,16 @@ describe("accomplices: content and dealing — v2 §2, §3, design §8.1", () =>
     }
   });
 
-  it("the ⌊n/3⌋ dark-seat cap trims the §3 weight table at 5, 7–8 and 9–11 players (logged for R5)", () => {
+  it("the dark-seat cap (n ÷ 3 rounded, R5) trims the §3 weight table only at 7 and 9–10 players", () => {
     const mixes = (n: number) => darkSideOdds(n, "on", false).map((o) => `${o.saboteurs}/${o.accomplices}`);
+    expect([4, 5, 6, 7, 8, 9, 10, 11, 12].map(maxDarkSeats)).toEqual([1, 2, 2, 2, 3, 3, 3, 4, 4]);
     expect(mixes(4)).toEqual(["1/0"]);
-    expect(mixes(5)).toEqual(["1/0", "1/0"]); // 1/1 → 1/0
+    expect(mixes(5)).toEqual(["1/0", "1/1"]); // R5: a 5-player game can deal an accomplice
     expect(mixes(6)).toEqual(["1/0", "1/1"]);
-    for (const n of [7, 8]) expect(mixes(n)).toEqual(["1/1", "2/0", "1/1"]); // 1/2 → 1/1
+    expect(mixes(7)).toEqual(["1/1", "2/0", "1/1"]); // 1/2 → 1/1
+    expect(mixes(8)).toEqual(["1/1", "2/0", "1/2"]);
     for (const n of [9, 10]) expect(mixes(n)).toEqual(["2/1", "1/2", "2/1"]); // 2/2 → 2/1
-    expect(mixes(11)).toEqual(["2/1", "2/1", "3/0"]); // 2/2 → 2/1, 3/1 → 3/0
+    expect(mixes(11)).toEqual(["2/2", "2/1", "3/1"]);
     expect(mixes(12)).toEqual(["2/2", "2/1", "3/1"]);
   });
 
@@ -93,7 +97,7 @@ describe("accomplices: content and dealing — v2 §2, §3, design §8.1", () =>
         const s = createGame(config(n, { seed: `cap-${n}-${i}`, mole: "on", rolePool: [] }));
         const factions = Object.values(s.players).map((p) => ROLES[p.role]?.faction);
         const dark = factions.filter((f) => f !== "crew").length;
-        expect(dark).toBeLessThanOrEqual(Math.floor(n / 3));
+        expect(dark).toBeLessThanOrEqual(maxDarkSeats(n));
         if (factions.includes("accomplice")) expect(factions).toContain("saboteur");
       }
     }
@@ -101,10 +105,16 @@ describe("accomplices: content and dealing — v2 §2, §3, design §8.1", () =>
 });
 
 describe("Getaway Driver — v2 §2, design §7", () => {
-  it("its Rooftop visit adds the Heat a visitor would remove, hidden in the round's total", () => {
-    const heatOf = (role: string) => run(withHeat(game(3, [role]), 30), mv("p0", "rooftop"), mv("p1", "lobby"), mv("p2", "lobby"), ROUND).heat;
+  it("its Rooftop visit adds reverse × the Heat a visitor would remove, hidden in the round's total", () => {
+    const heatOf = (role: string, extra: Partial<GameConfig> = {}) =>
+      run(withHeat(game(3, [role], extra), 30), mv("p0", "rooftop"), mv("p1", "lobby"), mv("p2", "lobby"), ROUND).heat;
     expect(heatOf("rookie")).toBe(30 + roundHeatDelta(BANK_JOB, 3, { rooftop: 1, lobby: 2 }));
-    expect(heatOf("getawayDriver")).toBe(30 + roundHeatDelta(BANK_JOB, 3, { rooftop: -1, lobby: 2 }));
+    // reverse ×1 (content 0.13.0): it adds what a visitor would remove.
+    const x1 = { contentOverrides: V013_NUMBERS };
+    expect(heatOf("getawayDriver", x1)).toBe(30 + roundHeatDelta(BANK_JOB, 3, { rooftop: -1, lobby: 2 }));
+    expect(heatOf("getawayDriver", x1)).toBeGreaterThan(heatOf("rookie"));
+    // reverse ×0 (R5): it cools nothing, as if it had stayed away.
+    expect(heatOf("getawayDriver")).toBe(30 + roundHeatDelta(BANK_JOB, 3, { lobby: 2 }));
     expect(heatOf("getawayDriver")).toBeGreaterThan(heatOf("rookie"));
     // Elsewhere it plays like anyone.
     const lobby = run(withHeat(game(3, ["getawayDriver"]), 30), mv("p0", "lobby"), ROUND);
@@ -112,7 +122,7 @@ describe("Getaway Driver — v2 §2, design §7", () => {
   });
 
   it("Heat at 75 or more: it learns the saboteurs and they learn it, privately and once", () => {
-    let s = withHeat(game(6, ["getawayDriver", "mole", "rookie", "mole"]), 70);
+    let s = withHeat(game(6, ["getawayDriver", "mole", "rookie", "mole"]), 72);
     s = run(s, mv("p0", "rooftop"), ROUND);
     expect(s.heat).toBeGreaterThanOrEqual(75);
     expect(learned(s).map((e) => [e.player, e.allies, e.via])).toEqual([

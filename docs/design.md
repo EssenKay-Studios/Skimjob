@@ -49,7 +49,7 @@ Skimjob is a social deduction game for groups of friends, played in a browser or
 - **The heist succeeds** if, after the final meeting, the Haul is at or above the final target and Heat is below 100. The biggest **Crew** stash wins. Saboteurs and accomplices can't win a success, however big their stash.
 - **The heist fails** if Heat reaches 100 at any point, or the final target is missed. The crew loses, and the biggest stash among the **saboteurs and accomplices** wins. A failure with no dark side dealt is won by nobody (accomplices are never dealt without a saboteur). Loot taken by sabotage is just stash, so "steal, then sink the job" is the saboteurs' plan.
 - **Ties** go to whoever was shaken down fewer times, then to whoever handed in more total loot. The engine tracks that figure but only reveals it at the end. *(Provisional: players still tied on all three share the win.)*
-- **Scores:** a Rookie's ×1.2 can give fractions; scores are kept to one decimal place. *(Provisional.)*
+- **Scores:** a Rookie's ×1.05 can give fractions; scores are kept to one decimal place. *(Provisional.)*
 - **A failed heist still shows the whole stash ranking** ("best of the losers"), clearly labelled as a loss for the crew; only the dark side's best stash wins. *(Provisional, §19.1.)*
 - Roles are read as they are at the end of the game, so a Double-cross (§10) can change a player's side.
 
@@ -152,8 +152,8 @@ More rooms keep the number of people per room, and so the number of witnesses, r
 | Players | Rooms added |
 |---|---|
 | 2–4 | Core only (5 rooms) |
-| 5–8 | **Deposit boxes**: 5 loot, holds 2 people (if more than 2 go, everyone there gets 3), adds half the vault pressure. **Server room**: 0 loot, learn *how many* players pocketed loot this round, but not who. |
-| 9–12 | Everything above, plus **Teller line**: 3 loot. **Manager's office**: 4 loot, adds half the vault pressure. *(1 Nov: were 4 and 5; see decisions.md.)* |
+| 5–8 | **Deposit boxes**: 5 loot, holds 2 people (if more than 2 go, everyone there gets 4; R5, was 3), adds half the vault pressure. **Server room**: 0 loot, learn *how many* players pocketed loot this round, but not who. |
+| 9–12 | Everything above, plus **Teller line**: 4 loot. **Manager's office**: 4 loot, adds half the vault pressure. *(1 Nov: were 4 and 5; R5 put the Teller line back to 4 — see decisions.md and balance-3.md.)* |
 
 ---
 
@@ -185,11 +185,11 @@ Every player is dealt **one secret role** at the start of the game. Roles are de
 
 | Role | Power | Weakness if revealed |
 |---|---|---|
-| **Rookie** | No power. Final stash counts ×1.2. *Reward:* each Act 1/2 checkpoint made → a Tail. | Seen as an easy target to pin blame on. |
+| **Rookie** | No power. Final stash counts ×1.05 (R5; was ×1.2). *Reward:* each Act 1/2 checkpoint made → a Tail. | Seen as an easy target to pin blame on. |
 | **Lookout** | Each round, also sees who was in one extra room. *Reward:* someone it saw is shaken down dirty → a Peek. | People lie around them more carefully, or try to frame them. |
 | **Auditor** | Once per act, learns the latest resolved round's shortfall for one room (what its visitors pocketed). *Reward:* a visitor of that room, that round, is shaken down dirty → a Ballot. | Liars shake it down to discredit it. |
 | **Detective** *(4+ players, not in Duel)* | Once per act, learns whether one player's stash is at or above the clean threshold right now. *Reward:* a player it checked is shaken down dirty → a Shield. | Cheaters shake it down first (the Shield answers this). |
-| **Inside Man** *(5+ players)* | Can't pocket loot. Scores 0.3 points for every loot the Haul ends above the final target. *Reward:* each Act 1/2 checkpoint made → a Peek. | Others pocket more, knowing the Inside Man will cover the Haul. |
+| **Inside Man** *(5+ players)* | Can't pocket loot. Scores 0.15 points (R5; was 0.3) for every loot the Haul ends above the final target. *Reward:* each Act 1/2 checkpoint made → a Peek. | Others pocket more, knowing the Inside Man will cover the Haul. |
 | **Smooth Talker** *(5+ players, not in Duel)* | Their vote counts double (majority only). *Reward:* on the winning side of a dirty shakedown → one more emergency meeting (an Emergency perk). | Others coordinate their votes against them. |
 | **Muscle** *(5+ players, not in Duel)* | Once per game, can cancel a shakedown after the vote passes. *Reward:* the target was clean → a Recharge (no compensation is paid); the target was dirty → the ledger names the Muscle. | Everyone knows a vote against their friends may get blocked. |
 | **Priest** *(5+ players, not in Duel)* | Once per act, blesses another player for that act: blessed and shaken down clean → the bank pays the compensation, not the Haul. *Reward:* a Ballot when that happens. Blessed but caught dirty → no blessing next act. | Its flock becomes a free target. |
@@ -198,19 +198,19 @@ Every player is dealt **one secret role** at the start of the game. Roles are de
 | **Fixer** | Once per game, automatically: a raid stops with Heat at 95, and the Fixer loses ¼ of its stash (rounded, halves up). *Reward:* a Shield. | The crew gets reckless with Heat. |
 | **Mastermind** *(events on only)* | Privately sees each next event card as a round starts (round 2's at setup). *Reward:* each Act 1/2 checkpoint made → a Rig. | Blamed for every bad card. |
 | **Snitch** *(4+ players, not in Duel)* | Secretly assigned a target. Each time that target is shaken down while holding more than the clean threshold, its ballot weighs +1 for the rest of the game. | Their target has a reason to frame them. |
-| **Getaway Driver** *(accomplice)* | Its Rooftop visit **adds** the Heat a visitor would remove (hidden in the round's Heat). *Reward:* Heat at 75 or more → it learns the saboteurs and they learn it. Knows nobody at the start. | Rooftop claims that don't cool Heat give it away. |
+| **Getaway Driver** *(accomplice)* | Its Rooftop visit **cools nothing**: it counts as `reverse` × −1 visitors, and R5 set `reverse` to 0 (it used to *add* the Heat a visitor would remove), so the Heat a claimed Rooftop visit should have removed is missing (hidden in the round's Heat). *Reward:* Heat at 75 or more → it learns the saboteurs and they learn it. Knows nobody at the start. | Rooftop claims that don't cool Heat give it away. |
 | **Fence** *(accomplice)* | Can move up to 5 loot per act into a hidden safe that shakedowns can't touch. *Reward:* safe at 10 or more → learns one saboteur. Knows nobody at the start. | Assumed to be hoarding, so becomes the first shakedown target. |
 | **Hacker** *(accomplice)* | Once per act, can **loop the cameras** so one room shows as empty on Security that round. Knows one saboteur from the start. *Reward:* its loop hid a saboteur from a crew player watching on Security → a Peek. | Every empty camera result looks like their doing. |
 | **Blackmailer** *(accomplice, 7+ players, not in Duel)* | Once per act, secretly guesses one player's role. If right, it **steals that player's vote** at the next meeting; the victim is told only "your vote is compromised". *Reward:* guessed a saboteur → they become mutual allies. Knows nobody at the start. | Players hide their roles; victims out it. |
 | **Forger** *(accomplice, 7+ players, not in Duel)* | Once per act, plants a **fake sighting**: player X shows in room R on that round's watch feeds of R. *Reward:* a player it forged is shaken down clean → a Shield. Knows nobody, but the saboteurs are told who the Forger is at the deal. | Proof of the dark side: hunted at once. |
-| **Embezzler** *(saboteur, optional)* | Once per act, moves up to 4 of the round's handed-in loot from the Haul to its stash after the splits, hidden in the round's Haul change. *Reward:* the take itself; its first take → learns one accomplice. | Its stash is always dirty, and a shakedown returns the take. |
-| **Mole** *(saboteur, optional)* | Wins a failed heist with the dark side's best stash; never a successful one. Once per act, can **tip off** the cops (+6 Heat, hidden). *Reward:* each tip-off → learns one accomplice it didn't know. | Revealed means hunted, and revealing it is rarely worth it. |
+| **Embezzler** *(saboteur, optional)* | Once per act, moves up to 1 (R5; was 4) of the round's handed-in loot from the Haul to its stash after the splits, hidden in the round's Haul change. *Reward:* the take itself; its first take → learns one accomplice. | Its stash is always dirty, and a shakedown returns the take. |
+| **Mole** *(saboteur, optional)* | Wins a failed heist with the dark side's best stash; never a successful one. Once per act, can **tip off** the cops (+4 Heat, hidden; R5, was +6). *Reward:* each tip-off → learns one accomplice it didn't know. | Revealed means hunted, and revealing it is rarely worth it. |
 
 *Factions (role deck v2, R1, R3a, R3b):* the Mole and the Embezzler are the **saboteurs**. The **accomplices** are the Getaway Driver, Fence and Hacker (R3a) and the Blackmailer and Forger (R3b). Everyone else is **crew**. `RoleDef.faction` replaces the old `winsOnFailure` / `winsOnSuccess` fields. The Driver was split: its crew half is the Fixer (R2b), its dark half the Getaway Driver (R3a), and the old Driver's failure win is gone.
 
 *Accomplices and what the dark side learns (R3a, provisional details):*
 - **Allies:** everything the dark side learns about itself is a private `alliesLearned { allies, via }`, added to `roleState.allies` (bots never vote to shake down a known ally). `via`: `deal` (the Hacker's saboteur; R3b: each saboteur is told the Forger), `fence`, `getaway`, `tipOff`, `blackmail`, `embezzle` (R3b). Picks are drawn at random from the ones the player doesn't know yet; only the player named is told, except the Getaway Driver's reveal, which goes both ways. In a Double-cross what a player learned stays with the player (like perks); saboteur mates are recomputed.
-- **Getaway Driver:** passive: on the Rooftop it counts as −1 visitors for Heat (× `reverse`, 1). The reveal is checked after every round and after a missed checkpoint's penalty, once per Driver player, with the saboteurs as they are then; nothing if no saboteur is dealt. After a Double-cross nobody is re-told: a new Mole doesn't learn a Driver revealed earlier, and a player who takes the Driver card reveals again when Heat is high.
+- **Getaway Driver:** passive: on the Rooftop it counts as −1 visitors for Heat (× `reverse`, 0 since R5, so it counts as no visitor). The reveal is checked after every round and after a missed checkpoint's penalty, once per Driver player, with the saboteurs as they are then; nothing if no saboteur is dealt. After a Double-cross nobody is re-told: a new Mole doesn't learn a Driver revealed earlier, and a player who takes the Driver card reveals again when Heat is high.
 - **Fence:** the reveal is checked as the round resolves (after the safe move), once per game. A **Recharge never refills the safe allowance** (it is refused for the Fence).
 - **Hacker:** the reward needs a **crew** Security watcher (not a Lookout or Tail, which a loop doesn't fool) watching the looped room while a saboteur was in it; fooling the dark side (a saboteur, or the Hacker watching its own loop) earns nothing. One Peek per loop, however many watchers.
 
@@ -243,14 +243,14 @@ Every player is dealt **one secret role** at the start of the game. Roles are de
 - **Mastermind:** the foreseen card is drawn early from the game's RNG (only when a Mastermind is dealt) and flips unless a Rig picks another; a Rig of a foreseen round offers the foreseen card first. Nothing is foreseen past round 9.
 
 *Win-condition roles (provisional, task 13; role deck v2 R1):*
-- **Mole:** a saboteur: wins a failed heist (Heat or target) if its score is the best of the dark side, never a successful one. The tip-off is part of the Mole's move, at most once per act: +6 Heat (balance pass 2; was +10) is added to that round's Heat (after rounding, before the cap), so it only shows as part of the round's public Heat change. Only the Mole is told it happened. Saboteurs know each other: when two or more are dealt, each is told privately at the start who the others are.
+- **Mole:** a saboteur: wins a failed heist (Heat or target) if its score is the best of the dark side, never a successful one. The tip-off is part of the Mole's move, at most once per act: +4 Heat (R5; +6 from balance pass 2, +10 before) is added to that round's Heat (after rounding, before the cap), so it only shows as part of the round's public Heat change. Only the Mole is told it happened. Saboteurs know each other: when two or more are dealt, each is told privately at the start who the others are.
 
 ### 8.1 Dealing roles
 
 *Role deck v2 §3 (`docs/roles-v2.md`).*
 
 - **First the dark side is rolled** (saboteurs and accomplices) from the weights below, then each faction's roles are drawn at random from its own eligible pool, at most one of each; the crew fills the remaining seats (Rookies when the crew pool runs out).
-- **Hard limits** at any crew size: at most ⌊n ÷ 3⌋ dark seats (accomplices are dropped first, then saboteurs); no accomplices without a saboteur; at most saboteurs + 1 accomplices.
+- **Hard limits** at any crew size: at most n ÷ 3 dark seats, rounded to the nearest (⌊(n + 1) ÷ 3⌋: 1 at 4, 2 at 5–7, 3 at 8–10, 4 at 11–12; R5, was ⌊n ÷ 3⌋) (accomplices are dropped first, then saboteurs); no accomplices without a saboteur; at most saboteurs + 1 accomplices.
 - **Host saboteur setting** (the old Mole setting, same field): *off* deals crew only; *on* uses the weights; *maybe* is like *on* but with a 50% chance of no dark side at 4–8 players (at 9–12 it is the same as *on*).
 
 | Players | Saboteurs / Accomplices (weight) | Fair success rate |
@@ -262,7 +262,7 @@ Every player is dealt **one secret role** at the start of the game. Roles are de
 | 9–10 | 2 / 1 (60), 1 / 2 (20), 2 / 2 (20) | 60–70% |
 | 11–12 | 2 / 2 (60), 2 / 1 (20), 3 / 1 (20) | 67–75% |
 
-  The ⌊n ÷ 3⌋ cap trims the table: at **5** players 1 / 1 becomes 1 / 0 (no accomplice ever); at **7–8**, 1 / 2 becomes 1 / 1; at **9–10**, 2 / 2 becomes 2 / 1; at **11**, 2 / 2 becomes 2 / 1 and 3 / 1 becomes 3 / 0. Only 4, 6 and 12 play the table as written (R5 retunes the weights). The fair success rate s = crew seats ÷ n makes a crew seat's and a dark seat's chances equal.
+  The cap trims the table only at **7**, where 1 / 2 becomes 1 / 1, and at **9–10**, where 2 / 2 becomes 2 / 1. *(R5: with ⌊n ÷ 3⌋ a 5-player game never dealt an accomplice, and 8 and 11 were trimmed too; see balance-3.md.)* The fair success rate s = crew seats ÷ n makes a crew seat's and a dark seat's chances equal.
 - **Pools cap the roll (R1, provisional):** a faction can't deal more distinct roles than its pool holds. There are two saboteur roles (Mole, Embezzler since R3b), so the table's two-saboteur mixes deal both and a 3 / 1 roll at 11–12 deals two; an unfilled dark seat goes to the crew. Saboteurs are dealt by the setting, never from the host's role pool.
 - **Inside Man:** dealt only in crews of 5 or more (a crew of 2–4 can't spare a player who never pockets). **Snitch and Detective** from 4 players (role deck v2 §3).
 - **Smooth Talker, Muscle and Priest** from 5 players; the **Mastermind** only with events on (`RoleDef.needsEvents`).
@@ -383,7 +383,7 @@ From round 2 onward, one event card is flipped at the start of each round and sh
 |---|---|
 | End of Act 1 | 7 × crew size |
 | End of Act 2 | 15 × crew size |
-| Final | 24 × crew size |
+| Final | 23 × crew size *(R5; was 24)* |
 
 A missed Act 1 or Act 2 checkpoint adds +15 Heat. Because targets are cumulative, the shortfall carries into the next act.
 

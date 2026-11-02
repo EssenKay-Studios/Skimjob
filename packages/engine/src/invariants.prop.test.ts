@@ -24,7 +24,7 @@
 import { isDeepStrictEqual } from "node:util";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { FILLER_ROLE, MOLE_ROLE, ROLES, STARTER_ROLES } from "@skimjob/content";
+import { FILLER_ROLE, MOLE_ROLE, ROLES, STARTER_ROLES, maxDarkSeats } from "@skimjob/content";
 import type { Command, GameConfig, GameEvent, GameState, MoleSetting, Move, PlayerId, PlayerState, VoteVisibility } from "./types";
 import { REVEAL, canSee, secretTo } from "./types";
 import { createGame, darkSideOdds, rolePoolFor, saboteursFor } from "./setup";
@@ -333,7 +333,7 @@ function checkDeal(state: GameState): void {
   const moles = roles.filter((r) => r === MOLE_ROLE || r === "embezzler").length;
   const allowed = darkSideOdds(roles.length, state.config.mole, state.config.starterMode).map((o) => Math.min(saboteursFor(state.config).length, o.saboteurs));
   check(allowed.includes(moles), "Mole count allowed (design §8.1)", roles);
-  check(roles.filter((r) => isDarkSide(rolesFor(state.config), r)).length <= Math.floor(roles.length / 3), "at most ⌊n/3⌋ dark seats (design §8.1)", roles);
+  check(roles.filter((r) => isDarkSide(rolesFor(state.config), r)).length <= maxDarkSeats(roles.length), "at most n ÷ 3 (rounded) dark seats (design §8.1)", roles);
   const pool = rolePoolFor(state.config);
   const dealt = roles.filter((r) => r !== MOLE_ROLE && r !== "embezzler" && r !== FILLER_ROLE);
   if (state.config.uniqueRoles !== false) check(new Set(dealt).size === dealt.length, "uniqueRoles: each non-Rookie role dealt at most once (design §8.1)", roles);

@@ -139,7 +139,7 @@ describe("validateOverrides — configs are untrusted JSON (design §17.4)", () 
   });
 
   it("a crowded room can't pay more than its loot (checkMove bounds pockets by loot, design §6.2)", () => {
-    expect(errs({ rooms: { depositBoxes: { loot: 2 } } })).toEqual(["contentOverrides.rooms.depositBoxes: crowded loot (3) can't be more than loot (2)"]);
+    expect(errs({ rooms: { depositBoxes: { loot: 2 } } })).toEqual(["contentOverrides.rooms.depositBoxes: crowded loot (4) can't be more than loot (2)"]);
     expect(errs({ rooms: { depositBoxes: { capacity: { crowdedLoot: 6 } } } })).toHaveLength(1);
     expect(errs({ rooms: { depositBoxes: { loot: 2, capacity: { crowdedLoot: 2 } } } })).toEqual([]);
   });

@@ -38,13 +38,17 @@ export interface BotGameOptions {
   readonly maxSteps?: number;
 }
 
-/** One bot per seat, each with its own seed derived from `seed` and its seat id. */
+/**
+ * One bot per seat, each with its own seed derived from `seed` and its seat id,
+ * and one shared `crewSeed` for the crew's hunch (from `seed`, which the
+ * players never see: the sim and tests pass the game's seed).
+ */
 export function createBots(
   seats: readonly PlayerSeat[],
   personalityFor: (seat: PlayerSeat, index: number) => Personality,
   seed: string,
 ): Agent[] {
-  return seats.map((seat, i) => createBot({ player: seat.id, personality: personalityFor(seat, i), seed: `${seed}/${seat.id}` }));
+  return seats.map((seat, i) => createBot({ player: seat.id, personality: personalityFor(seat, i), seed: `${seed}/${seat.id}`, crewSeed: `${seed}/crew` }));
 }
 
 /**

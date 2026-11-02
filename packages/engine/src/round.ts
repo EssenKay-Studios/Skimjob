@@ -241,7 +241,7 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
   for (const id of order) {
     const power = powerFor(id);
     if (power.kind === "cleaner" && moveOf(id).room === power.room) counts[power.room] = (counts[power.room] ?? 0) + power.visitors - 1;
-    // Getaway Driver (v2 §2): its visit there adds the Heat a visitor would remove (× `reverse`), hidden in the total.
+    // Getaway Driver (v2 §2): its visit there adds `reverse` × the Heat a visitor would remove (0 since R5: it cools nothing), hidden in the total.
     // It counts as negative visitors, so it follows the room's pressure (and its sign) if a card or override changes it.
     if (power.kind === "getaway" && moveOf(id).room === power.room) counts[power.room] = (counts[power.room] ?? 0) - power.reverse - 1;
   }
