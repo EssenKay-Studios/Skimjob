@@ -78,6 +78,9 @@ async function send(id: string, who: string, cmd: Record<string, unknown>) {
   ws.on("message", (d) => replies.push(String(d)));
   ws.send(JSON.stringify({ cmd, id: "q" }));
   await vi.waitFor(() => expect(replies.some((r) => r.includes('"id":"q"'))).toBe(true), { interval: 1, timeout: 10_000 });
+  // The reply goes out before the change's deadlines are stored; a no-op queues behind them on the game lock.
+  ws.send(JSON.stringify({ id: "barrier" }));
+  await vi.waitFor(() => expect(replies.some((r) => r.includes('"id":"barrier"'))).toBe(true), { interval: 1, timeout: 10_000 });
   ws.terminate();
   return JSON.parse(replies.find((r) => r.includes('"id":"q"'))!) as { ok?: true; rejected?: true; reason?: string };
 }

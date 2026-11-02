@@ -246,6 +246,9 @@ describe("pausing (design §4.1, §11.1)", () => {
     ws.on("message", (d) => replies.push(String(d)));
     ws.send(JSON.stringify({ cmd: { type: "callEmergency" }, id: "e" }));
     await vi.waitFor(() => expect(replies.some((r) => r.includes('"id":"e"'))).toBe(true), { interval: 1, timeout: 5000 });
+    // The reply goes out before the change's deadlines are stored; a no-op queues behind them on the game lock.
+    ws.send(JSON.stringify({ id: "b" }));
+    await vi.waitFor(() => expect(replies.some((r) => r.includes('"id":"b"'))).toBe(true), { interval: 1, timeout: 5000 });
     ws.close();
     const meetingId = (await load(id)).pendingEmergency!.meetingId;
     expect(await deadlines(id)).toEqual([{ key: `openMeeting:${meetingId}`, due: clock.now() + QUICK.emergencyNoticeMs, paused: false }, round1]);
@@ -275,12 +278,18 @@ describe("early round end under a pause (review of #44; owner decision, 2 Nov; d
     const replies: string[] = [];
     ws.on("message", (d) => replies.push(String(d)));
     let n = 0;
-    const send = async (cmd: Record<string, unknown>) => {
+    const roundTrip = async (msg: Record<string, unknown>) => {
       const msgId = `c${++n}`;
-      ws.send(JSON.stringify({ cmd, id: msgId }));
+      ws.send(JSON.stringify({ ...msg, id: msgId }));
       let reply: string | undefined;
       await vi.waitFor(() => expect((reply = replies.find((r) => r.includes(`"id":"${msgId}"`)))).toBeDefined(), { interval: 1, timeout: 5000 });
       return JSON.parse(reply!) as Record<string, unknown>;
+    };
+    // The reply goes out before the change's deadlines are stored; a no-op queues behind them on the game lock.
+    const send = async (cmd: Record<string, unknown>) => {
+      const reply = await roundTrip({ cmd });
+      await roundTrip({});
+      return reply;
     };
     if (!(await load(id)).pendingEmergency) expect(await send({ type: "callEmergency" })).toMatchObject({ ok: true });
     const meetingId = (await load(id)).pendingEmergency!.meetingId;

@@ -356,6 +356,7 @@ describe("scenarios: end-to-end stories over HTTP + WebSocket", () => {
     // While they're away, the others vote (open votes: public changes they'll miss).
     clients[0] = null;
     for (const c of clients) if (c) expect(await c.send({ type: "castVote", vote: { kind: "skip" } })).toMatchObject({ ok: true });
+    await clients[1]!.barrier(); // the bots' answers to the last vote land after its reply
     const mid = await load(game.id);
     expect(mid.meeting?.id).toBe(meetingId);
     const back = await Client.open(game.id, game.humans[0]!);

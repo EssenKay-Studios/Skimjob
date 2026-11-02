@@ -92,6 +92,7 @@ describe("timers on the live channel", () => {
     const a = await open(app, id, host);
     await open(app, id, guest);
     await a.send({ type: "callEmergency" });
+    await a.send({}); // a barrier through the game's lock: the reply goes out before the view
     const notice = a.views().at(-1)!.timers;
     const meetingId = a.view().pendingEmergency!.meetingId;
     expect(notice.map((t) => t.key).sort()).toEqual([`openMeeting:${meetingId}`, "round:1"]);
