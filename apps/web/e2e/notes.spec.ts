@@ -77,6 +77,57 @@ test("the recap shows what changed while you were away, once, and the board stay
   await guestCtx.close();
 });
 
+test("a hidden tab coming back to the front shows the recap, and the missed events stay unseen until then (QA, PR #46)", async ({ browser }, info) => {
+  test.skip(info.project.name !== "desktop", "one viewport is enough for the flow");
+  test.setTimeout(90_000);
+  const hostCtx = await browser.newContext();
+  const guestCtx = await browser.newContext();
+  const host = await hostCtx.newPage();
+  const guest = await guestCtx.newPage();
+  // A tab the test can hide and show: visibilityState plus the visibilitychange event.
+  await host.addInitScript(() => {
+    let hidden = false;
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => (hidden ? "hidden" : "visible") });
+    Object.defineProperty(document, "hidden", { configurable: true, get: () => hidden });
+    (window as unknown as { setHidden: (h: boolean) => void }).setHidden = (h) => {
+      hidden = h;
+      document.dispatchEvent(new Event("visibilitychange"));
+    };
+  });
+  const game = await startGame(host.request, { bots: 3, guests: [guest.request], sessionLength: "1w" });
+  const saved = seenSaved(host);
+  await host.goto(`/game/${game.id}`);
+  await expect(host.getByRole("heading", { name: "Round 1 · Pick your room", level: 2 })).toBeVisible();
+  await saved;
+  const lastSeen = async () => ((await (await host.request.get(`/api/games/${game.id}/notes`)).json()) as { lastSeen: number }).lastSeen;
+  const before = await lastSeen();
+
+  await host.evaluate(() => (window as unknown as { setHidden: (h: boolean) => void }).setHidden(true));
+  const hiddenAt = Date.now();
+  await guest.goto(`/game/${game.id}`);
+  await guest.getByRole("button", { name: "Call an emergency meeting" }).click();
+  await guest.getByRole("button", { name: "Sure? Tap again to call it" }).click();
+  // It reaches the hidden tab's view, but nobody is looking: the mark stays put.
+  await expect(host.getByRole("list", { name: "Ledger" })).toContainText("Guest 1 called an emergency meeting.");
+  await host.waitForTimeout(2500);
+  expect(await lastSeen()).toBe(before);
+  // Away long enough to count (AWAY_MIN_HIDDEN_MS, 10 s): a quick tab switch gets no recap.
+  await host.waitForTimeout(Math.max(0, hiddenAt + 10_500 - Date.now()));
+
+  await host.evaluate(() => (window as unknown as { setHidden: (h: boolean) => void }).setHidden(false));
+  const recap = host.getByRole("region", { name: "While you were away" });
+  await expect(recap).toBeVisible();
+  await expect(recap).toContainText("Guest 1 called an emergency meeting.");
+  await host.waitForTimeout(2500);
+  expect(await lastSeen()).toBe(before);
+  const dismissed = seenSaved(host);
+  await recap.getByRole("button", { name: "Caught up" }).click();
+  await dismissed;
+  expect(await lastSeen()).toBeGreaterThan(before);
+  await hostCtx.close();
+  await guestCtx.close();
+});
+
 async function settle(page: Page) {
   await page.evaluate(() =>
     Promise.all(

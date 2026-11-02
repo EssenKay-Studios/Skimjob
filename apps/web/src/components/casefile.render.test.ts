@@ -106,6 +106,11 @@ describe("the recap and the board", () => {
     expect(html(createElement(SuspicionMark, { tag: null }))).toBe("");
   });
 
+  it("take radii and shadows from theme.css tokens (review, PR #46)", () => {
+    const css = readFileSync(new URL("./casefile.css", import.meta.url), "utf8");
+    for (const m of css.matchAll(/(border-radius|box-shadow):\s*([^;]+);/g)) expect(m[2], m[0]).toMatch(/^(var\(--[\w-]+\)|0|none)$/);
+  });
+
   it("use theme tokens only and never inject HTML (UI rules)", () => {
     for (const f of ["./CaseFile.tsx", "./AwayRecap.tsx", "./SuspicionBoard.tsx", "./casefile.css", "../art/Raccoon.tsx", "../game/away.ts", "../game/records.ts", "../game/notes.ts", "../screens/GalleryNotes.tsx"]) {
       const src = readFileSync(new URL(f, import.meta.url), "utf8");

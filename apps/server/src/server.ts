@@ -87,6 +87,6 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   app.addHook("onClose", async () => scheduler.stop());
   authRoutes(app, db, s, deps.auth ?? [], (token) => live.closeSession(token));
   lobbyRoutes(app, db, store, s, (gameId) => live.settle(gameId));
-  notesRoutes(app, db, store, s);
+  notesRoutes(app, db, store, s, deps.clock);
   return app;
 }

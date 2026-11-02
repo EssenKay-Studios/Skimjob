@@ -21,7 +21,8 @@ import type { Sessions } from "./auth";
 import { checkChatText } from "./chat";
 import type { Db } from "./db";
 import { HttpError, playerIdOf } from "./lobby";
-import { BOARD_NOTE_MAX_CHARS } from "./settings";
+import type { Clock } from "./clock";
+import { BOARD_NOTE_MAX_CHARS, BOARD_RATE, SEEN_RATE } from "./settings";
 import type { GameStore } from "./store";
 
 export const SUSPICION_TAGS = ["trusted", "unsure", "suspicious"] as const;
@@ -72,7 +73,32 @@ export const topSeq = (state: GameState, player: PlayerId): number => {
   return view.ledger.length + view.caseFile.length - 1;
 };
 
-export function notesRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Sessions): void {
+/**
+ * A per-key sliding-window limit (memory only): `allow(key)` is false once `limit.writes`
+ * were allowed for that key within `limit.windowMs`. Keys with nothing in the window are swept.
+ */
+export function rateLimiter(clock: Clock, limit: { readonly writes: number; readonly windowMs: number }) {
+  const recent = new Map<string, number[]>();
+  let lastSweep = clock.now();
+  return {
+    allow(key: string): boolean {
+      const now = clock.now();
+      if (now - lastSweep >= limit.windowMs) {
+        lastSweep = now;
+        for (const [k, times] of recent) if (times.every((t) => t <= now - limit.windowMs)) recent.delete(k);
+      }
+      const times = (recent.get(key) ?? []).filter((t) => t > now - limit.windowMs);
+      if (times.length >= limit.writes) return false;
+      recent.set(key, [...times, now]);
+      return true;
+    },
+    tracked: () => recent.size,
+  };
+}
+
+export function notesRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Sessions, clock: Clock): void {
+  const boardRate = rateLimiter(clock, BOARD_RATE);
+  const seenRate = rateLimiter(clock, SEEN_RATE);
   /** The caller's seat in a started game, and its state; 401 / 404 otherwise. */
   const seat = async (req: FastifyRequest<{ Params: { id: string } }>): Promise<{ gameId: string; player: PlayerId; state: GameState }> => {
     const user = await s.user(req);
@@ -103,6 +129,7 @@ export function notesRoutes(app: FastifyInstance, db: Db, store: GameStore, s: S
 
   app.patch<{ Params: { id: string } }>("/games/:id/notes/seen", async (req) => {
     const { gameId, player, state } = await seat(req);
+    if (!seenRate.allow(`${gameId}\0${player}`)) throw new HttpError(429, "slow down: too many updates");
     const seq = (req.body as { seq?: unknown } | null)?.seq;
     if (!Number.isSafeInteger(seq) || (seq as number) < -1) throw new HttpError(400, "seq must be a whole number");
     // Never past what this seat can see, and never backwards (two tabs may race).
@@ -116,6 +143,7 @@ export function notesRoutes(app: FastifyInstance, db: Db, store: GameStore, s: S
 
   app.patch<{ Params: { id: string } }>("/games/:id/notes/board", async (req) => {
     const { gameId, player, state } = await seat(req);
+    if (!boardRate.allow(`${gameId}\0${player}`)) throw new HttpError(429, "slow down: too many changes to your board");
     const edit = parseBoardEdit(req.body, state, player);
     if (!edit.ok) throw new HttpError(400, edit.reason);
     const { subject, mark } = edit.value;

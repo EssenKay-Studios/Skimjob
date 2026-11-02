@@ -17,7 +17,8 @@ import { CrookAvatar } from "../art/Crook";
 import { AwayRecap } from "../components/AwayRecap";
 import { CaseFile } from "../components/CaseFile";
 import { SuspicionBoard, SuspicionMark } from "../components/SuspicionBoard";
-import { useSeatNotes, type Board as SuspicionMarks, type BoardChannel } from "../game/notes";
+import { useAwayRecap, useSuspicionBoard, type Board as SuspicionMarks, type BoardChannel } from "../game/notes";
+import type { DescribeContext } from "../game/describeEvent";
 import { RoomIcon } from "../art/RoomIcon";
 import { BustedSpot, JobDoneSpot, WaitingSpot } from "../art/Spots";
 import { RoomTile } from "../components/RoomTile";
@@ -167,18 +168,18 @@ function Board({ view, timers, offset, send, autoMeetings, gameId, channel, dmNo
   };
   const plurality = pluralityRule(view);
   const ctx = useMemo(() => ({ me: view.me.id, name: namesOf(view), slot: slotText, plurality }), [view, plurality]);
-  // M2-10: the recap on return and the private suspicion board, both kept per seat on the server.
-  const notes = useSeatNotes(gameId, view, ctx);
+  // M2-10: the private suspicion board, kept per seat on the server (the recap lives in `Away`).
+  const board = useSuspicionBoard(gameId);
   return (
     <>
-      <AwayRecap lines={notes.away.lines} onDismiss={notes.away.dismiss} />
+      <Away gameId={gameId} view={view} ctx={ctx} />
       <div className={outcome ? "game-grid is-over" : "game-grid"}>
         <Hud view={view} timers={timers} offset={offset} />
         <BankBoard view={view} pick={planning !== null ? pick : null} />
-        <Seats view={view} presence={channel.presence} offset={offset} marks={notes.board.board} />
+        <Seats view={view} presence={channel.presence} offset={offset} marks={board.board} />
         <div className="game-grid__action">
           {outcome ? <GameOver view={view} /> : <Actions view={view} timers={timers} offset={offset} send={send} autoMeetings={autoMeetings} pick={pick} />}
-          {!outcome && <CrewBoard view={view} board={notes.board} />}
+          {!outcome && <CrewBoard view={view} board={board} />}
         </div>
         {/* From 1024 px the chat and the records share the right column; below that the chat is a sheet. */}
         <div className="game-grid__side">
@@ -188,6 +189,12 @@ function Board({ view, timers, offset, send, autoMeetings, gameId, channel, dmNo
       </div>
     </>
   );
+}
+
+/** design §13: the recap on return. Its own component, so following the view never re-renders the whole screen. */
+function Away({ gameId, view, ctx }: { gameId: string; view: PlayerView; ctx: DescribeContext }) {
+  const away = useAwayRecap(gameId, view, ctx);
+  return <AwayRecap lines={away.lines} onDismiss={away.dismiss} />;
 }
 
 /** design §12.3: your private tags on everyone else. */

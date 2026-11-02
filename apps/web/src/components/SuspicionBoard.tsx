@@ -1,7 +1,7 @@
 // The suspicion board (design §12.3, M2-10): your own private tags on every
 // other player (trusted / unsure / suspicious) with an optional note. Saved on
 // the server for your seat only; nobody else ever sees it.
-import { useState } from "react";
+import { memo, useState } from "react";
 import type { PlayerId } from "@skimjob/engine";
 import { CrookAvatar } from "../art/Crook";
 import { NOTE_MAX_CHARS, SUSPICION_TAGS, TAG_LABELS, type Board, type BoardMark, type SuspicionTag } from "../game/notes";
@@ -37,7 +37,16 @@ export function SuspicionMark({ tag }: { tag: SuspicionTag | null | undefined })
   return <span className={`sus-mark sus-mark--${tag}`}>{TAG_LABELS[tag]}</span>;
 }
 
-export function SuspicionBoard({ people, board, error, onSave, seed = "sus" }: SuspicionBoardProps) {
+const samePeople = (a: readonly BoardPerson[], b: readonly BoardPerson[]) =>
+  a.length === b.length && a.every((p, i) => p.id === b[i]!.id && p.name === b[i]!.name && p.look === b[i]!.look && p.tag === b[i]!.tag && p.isBot === b[i]!.isBot);
+
+/** Re-renders only when the board or the people change, not with every view. */
+export const SuspicionBoard = memo(
+  SuspicionBoardPanel,
+  (a, b) => a.board === b.board && a.error === b.error && a.onSave === b.onSave && a.seed === b.seed && samePeople(a.people, b.people),
+);
+
+function SuspicionBoardPanel({ people, board, error, onSave, seed = "sus" }: SuspicionBoardProps) {
   return (
     <SketchFrame as="section" seed={`${seed}-board`} radius={16} shadow={0.45} className="panel sus" aria-labelledby={`${seed}-h`}>
       <div className="panel__head">
@@ -117,9 +126,9 @@ function SuspicionRow({ person, mark, onSave, seed }: { person: BoardPerson; mar
             hideLabel
             seed={`${seed}-note`}
             value={draft}
-            maxLength={NOTE_MAX_CHARS}
             placeholder="Said Vault, but the cameras had them in the Office…"
-            onChange={(e) => setDraft(e.target.value)}
+            // Capped in code points, as the server counts (maxLength would count UTF-16 units: 140 emoji).
+            onChange={(e) => setDraft([...e.target.value].slice(0, NOTE_MAX_CHARS).join(""))}
             onKeyDown={(e) => {
               if (e.key === "Enter") void saveNote();
               if (e.key === "Escape") setEditing(false);

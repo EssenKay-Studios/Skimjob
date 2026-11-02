@@ -3,7 +3,7 @@
 // a lock, grouped under paper-clipped round cards, filterable by source, act
 // and round. Every line comes from describeEvent; nothing here knows roles.
 // design §13
-import { useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import type { PlayerView } from "@skimjob/engine";
 import { EmptyFileSpot } from "../art/Spots";
 import { describeEvent, type DescribeContext } from "../game/describeEvent";
@@ -30,7 +30,21 @@ export interface CaseFileProps {
   readonly seed?: string;
 }
 
-export function CaseFile({ view, ctx, initial = START, seed = "records" }: CaseFileProps) {
+/**
+ * Re-renders only when an entry is added (or the context changes): views
+ * arrive many times a round, and the sheet is the biggest part of the screen.
+ */
+export const CaseFile = memo(
+  CaseFileSheet,
+  (a, b) =>
+    a.view.ledger.length === b.view.ledger.length &&
+    a.view.caseFile.length === b.view.caseFile.length &&
+    a.ctx.me === b.ctx.me &&
+    a.ctx.plurality === b.ctx.plurality &&
+    a.seed === b.seed,
+);
+
+function CaseFileSheet({ view, ctx, initial = START, seed = "records" }: CaseFileProps) {
   const [filter, setFilter] = useState<RecordFilter>(initial);
   const rows = useMemo(() => recordRows(view), [view]);
   const choices = useMemo(() => filterChoices(rows, filter.act), [rows, filter.act]);
