@@ -22,6 +22,10 @@
 //   replied to like a command; the message goes out as `{ chat }` (a DM only to
 //   its two players, others get `{ dmNotice }` if the host left notices on).
 //   On connect, after the first view: `{ chatHistory }`.
+// - Per socket the order is always: first view, `{ chatHistory }`, `{ presence }`.
+//   Chat, DM notices and presence updates wait until a socket has had all three
+//   (`Conn.ready`); nothing is lost, as chat is posted under the game lock the
+//   first view is sent under, and presence is sent whole.
 // - Presence (owner decision, 2 Nov): `{ presence }`, each human seat's
 //   `online` (a socket open now) and `lastSeen` (epoch ms, kept in
 //   `seats.last_seen_at`), sent on connect and to everyone when a seat comes
@@ -141,6 +145,10 @@ interface Conn {
   last: string | null;
   /** Messages waiting for the game's lock. */
   queued: number;
+  /** It has had its first view, chat history and presence; only then does it get chat and presence updates. */
+  ready: boolean;
+  /** The presence text last sent, so an unchanged one isn't sent again. */
+  presence: string | null;
 }
 
 /**
@@ -236,8 +244,6 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
   const seatOf = new WeakMap<FastifyRequest, PlayerId>();
   /** Per game, each human seat's last-seen time (epoch ms or null), read from `seats` once. */
   const lastSeen = new Map<string, Map<PlayerId, number | null>>();
-  /** Per game, the presence text last sent to everyone, so an unchanged one isn't sent again. */
-  const presenceSent = new Map<string, string>();
 
   /** The engine never throws for bad input; if it ever does, that's a refusal (and a bug to log). */
   const run = (state: GameState, command: Command) => {
@@ -335,6 +341,7 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
   /** A crew message to everyone; a DM to its two players only, and its notice (if any) to the rest. design §12.1 */
   const deliver = (gameId: string, message: ChatMessage, notice: DmNotice | null) => {
     for (const conn of conns.get(gameId) ?? []) {
+      if (!conn.ready) continue; // its chat history (read later, under the same lock) has it
       if (message.to === null || conn.player === message.from || conn.player === message.to) send(conn, { chat: message });
       else if (notice) send(conn, { dmNotice: notice });
     }
@@ -368,13 +375,17 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
     seats.set(player, now);
     await db.query("update seats set last_seen_at = to_timestamp($3::float8 / 1000) where game_id = $1 and player_id = $2", [gameId, player, now]);
   };
-  /** Sends everyone in the game (but `except`, already sent it) its presence, if it changed since the last send. */
-  const pushPresence = async (gameId: string, except?: Conn) => {
-    const presence = await presenceOf(gameId);
+  /** Sends `conn` the presence, if it differs from the one it last got. */
+  const sendPresence = (conn: Conn, presence: Presence) => {
     const text = JSON.stringify(presence);
-    if (presenceSent.get(gameId) === text) return;
-    presenceSent.set(gameId, text);
-    for (const conn of conns.get(gameId) ?? []) if (conn !== except) send(conn, { presence });
+    if (text === conn.presence || conn.socket.readyState !== conn.socket.OPEN) return;
+    conn.presence = text;
+    conn.socket.send(JSON.stringify({ presence }));
+  };
+  /** Sends every ready socket in the game the presence, if it changed for it. */
+  const pushPresence = async (gameId: string) => {
+    const presence = await presenceOf(gameId);
+    for (const conn of conns.get(gameId) ?? []) if (conn.ready) sendPresence(conn, presence);
   };
   const presenceFailed = (gameId: string) => (err: unknown) => app.log.error({ err, gameId }, "presence update failed");
 
@@ -441,7 +452,7 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
       },
       (socket, req) => {
         const gameId = req.params.id;
-        const conn: Conn = { player: seatOf.get(req)!, socket, token: req.cookies[SESSION_COOKIE] ?? "", last: null, queued: 0 };
+        const conn: Conn = { player: seatOf.get(req)!, socket, token: req.cookies[SESSION_COOKIE] ?? "", last: null, queued: 0, ready: false, presence: null };
         const set = conns.get(gameId) ?? new Set<Conn>();
         conns.set(gameId, set.add(conn));
         socket.on("close", () => {
@@ -449,10 +460,12 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
           if (set.size === 0 && conns.get(gameId) === set) conns.delete(gameId);
           // Last seen as its last socket closes; the others hear it went offline.
           const still = [...set].some((c) => c.player === conn.player);
-          if (!still) void seen(gameId, conn.player).then(() => pushPresence(gameId)).catch(presenceFailed(gameId));
-          if (set.size === 0) {
-            presenceSent.delete(gameId);
-            lastSeen.delete(gameId);
+          if (!still) {
+            void seen(gameId, conn.player)
+              .then(() => (conns.has(gameId) ? pushPresence(gameId) : undefined))
+              .catch(presenceFailed(gameId))
+              // No socket left: drop the cache (after `seen`, which would otherwise fill it again).
+              .finally(() => conns.has(gameId) || lastSeen.delete(gameId));
           }
         });
         // The first view, in line with any change being made right now.
@@ -461,10 +474,13 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
           if (!state) return;
           sendView(conn, state, await timersOf(gameId));
           send(conn, { chatHistory: await chat.history(gameId, conn.player) });
-          // Presence: this socket gets it now; everyone else if it changed (the seat came online).
+          // Presence: this socket gets it now (always, even if a broadcast raced it); everyone else if it changed (the seat came online).
           await seen(gameId, conn.player).catch(presenceFailed(gameId));
-          send(conn, { presence: await presenceOf(gameId) });
-          await pushPresence(gameId, conn);
+          const presence = await presenceOf(gameId).catch((err: unknown) => (presenceFailed(gameId)(err), {}));
+          conn.presence = JSON.stringify(presence);
+          send(conn, { presence });
+          conn.ready = true;
+          await pushPresence(gameId).catch(presenceFailed(gameId));
         });
         socket.on("message", (data, isBinary) => {
           if (conn.queued >= MAX_QUEUED_MESSAGES) {

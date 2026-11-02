@@ -59,6 +59,10 @@ async function startGame(people: number, bots: number, settings: Partial<LobbySe
   return { id: game.id, humans };
 }
 
+/** The kinds of a socket's first three messages. */
+const firstKinds = (messages: readonly ServerMessage[]) =>
+  messages.slice(0, 3).map((m) => ["view", "chatHistory", "presence", "chat", "dmNotice"].find((k) => k in m) ?? JSON.stringify(m));
+
 /** A test socket that keeps every message it got, raw. */
 class Client {
   readonly raw: string[] = [];
@@ -74,9 +78,10 @@ class Client {
       ws.on("close", (code) => (c.closed = code));
     };
     c.ws = await app.injectWS(`/games/${gameId}/ws`, { headers: { cookie: `${SESSION_COOKIE}=${h.who}` } }, { onInit });
-    // The first view, then the chat history (M2-8a), then presence (owner decision, 2 Nov).
+    // The first view, then the chat history (M2-8a), then presence (owner decision, 2 Nov), and nothing before.
     await vi.waitFor(() => expect(c.messages.some((m) => "presence" in m)).toBe(true), quick);
     expect(c.views()).toHaveLength(1);
+    expect(firstKinds(c.messages)).toEqual(["view", "chatHistory", "presence"]);
     return c;
   }
   get messages(): ServerMessage[] {
@@ -251,6 +256,37 @@ describe("presence (owner decision, 2 Nov)", () => {
       [expect.any(String), null],
     ]);
     expect((await load(id)).log.length).toBe(logBefore);
+    a.ws.close();
+  });
+});
+
+describe("connect order (review of #44)", () => {
+  it("a socket gets its first view, then chat history, then presence, even while others chat and come and go", async () => {
+    const { id, humans } = await startGame(3, 0);
+    const [ha, hb, hc] = humans as [Human, Human, Human];
+    const a = await Client.open(id, ha);
+    for (let i = 0; i < 8; i++) {
+      clock.advance(10_000); // past the chat rate limit
+      // Open b raw (no waiting) while a chats and c's tab opens and drops: chat and presence fly meanwhile.
+      const b = new Client(hb.player);
+      const onInit = (ws: WebSocket) => ws.on("message", (data) => b.raw.push(String(data)));
+      const opening = app.injectWS(`/games/${id}/ws`, { headers: { cookie: `${SESSION_COOKIE}=${hb.who}` } }, { onInit });
+      const chats = [a.sendRaw({ chat: { text: `hi ${i}` } }), a.sendRaw({ chat: { text: `again ${i}` } })];
+      const c = await Client.open(id, hc);
+      c.ws.terminate();
+      b.ws = await opening;
+      for (const reply of await Promise.all(chats)) expect(reply).toMatchObject({ ok: true });
+      await vi.waitFor(() => expect(b.messages.some((m) => "presence" in m)).toBe(true), quick);
+      expect(firstKinds(b.messages)).toEqual(["view", "chatHistory", "presence"]);
+      // Every chat line reached b once: in its history or live after it, never both.
+      await b.barrier();
+      const history = b.messages.flatMap((m) => ("chatHistory" in m ? m.chatHistory.messages.map((x) => x.id) : []));
+      const live = b.messages.flatMap((m) => ("chat" in m ? [m.chat.id] : []));
+      const all = [...history, ...live];
+      expect(new Set(all).size).toBe(all.length);
+      expect(all).toHaveLength(2 * (i + 1));
+      b.ws.terminate();
+    }
     a.ws.close();
   });
 });
