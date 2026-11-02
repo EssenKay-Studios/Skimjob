@@ -33,7 +33,7 @@ Read this together with `docs/STATUS.md`, which holds the canonical task list. T
    - success 55–70% (8p is 51%)
    - saboteur win 30–40%
    - Inside Man at 2–3 players
-   - Heat at 3–4 players (owner deferred to data, 2 Nov)
+   - Heat at 3–4 players (PM call: left to the R5 sim data, not asked of the owner)
    - revisit the 5-player Accomplice cut
 2. Lock-in / presence / early end / human-majority meeting lock (in flight).
 3. R6a rules: role list setting (Exact default / Possible / Hidden), deck presets + per-role toggles, deal style Balanced / Truly random, Fence safe revealed on shakedown, tip-off any time as its own public Heat event, shakedown window only when a Muscle or Shield earner is dealt under Exact (PM call), bots aware of the public role list, sim re-run.
