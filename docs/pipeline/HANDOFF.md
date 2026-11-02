@@ -1,4 +1,4 @@
-# Orchestrator handoff (snapshot 2026-11-02, after the owner answers)
+# Orchestrator handoff (snapshot 2026-11-02 evening, paused by the owner)
 
 Read this together with `docs/STATUS.md`, which holds the canonical task list. This file covers how the work is run and what was in flight at the snapshot.
 
@@ -16,39 +16,35 @@ Read this together with `docs/STATUS.md`, which holds the canonical task list. T
   - `gh pr` and GraphQL are blocked, so use `gh api` REST.
   - Actions logs and secrets endpoints are blocked.
   - `git reset --hard`, rebase and force-push are denied, so use `checkout -B` and `git merge origin/main`.
-  - Local tests are slow under load, so trust the CI check-runs.
+  - Local tests are slow under load; CI check-runs are the merge gate, but run the full e2e locally before pushing (see process lessons).
 - Builders do NOT edit `docs/decisions.md` or `STATUS.md`. They put `## Decisions` and `## STATUS updates` sections in the PR body, and the PM folds those into the docs later. This avoids constant conflicts.
 - Never add Co-Authored-By or Claude-Session lines; `merge.sh` aborts if it finds them.
 - Send the owner a short progress update about every 15 minutes.
 
-## In flight at snapshot
-- **R5 parity balance** on `balance/r5-parity`.
-- **Lock-in / presence** on `m2/lock-in-presence`: public lock-in marks, presence (online dot + last seen), rounds end early once everyone has locked in, meeting slot locks on a human majority (bots don't count).
-- **Docs PR** `docs/owner-answers-2nov`: folds the owner answers of 2 Nov and the PR #41 notes into `docs/decisions.md` and `docs/STATUS.md`.
-- Merged through #41 (bank board + Claim role; the M2-9 art is wired into the game screen).
+## State at snapshot
+- **PAUSED:** the owner asked to pause all work at 16:23 IST on 2 Nov, after M2-10. Nothing is in flight; don't start a task until he resumes.
+- **Open PR:** #45 (draft, `docs/roles-v3`): the roles v3 spec (`docs/roles-v3.md`), waiting for owner approval. Nothing of it is built.
+- **Merged through #46** on 2 Nov: #41 (bank board + Claim role), #42 (owner answers docs), #43 (R5 parity balance, provisional), #44 (lock-in marks, presence, early round end, human-majority meeting lock), #46 (M2-10 ledger, case file, "While you were away", suspicion board), plus this docs fold.
+- **The repo is public** (owner, 2 Nov: Actions minutes had run out). Never commit secrets; they stay in repo secrets.
+- Player rulebook: claude.ai doc "Skimjob — How to play" (https://claude.ai/artifact/3dEyv4wdmiJ3a9DhrtsBtN). Open there: Exact vs Possible as the default role list.
 
 ## Remaining plan
-1. R5 parity balance with `pnpm sim:suite`:
-   - no two roles' normalized win rates more than 10% apart (today: spread 0.96 / 1.86 / 2.46 at 4/6/8p)
-   - success 55–70% (8p is 51%)
-   - saboteur win 30–40%
-   - Inside Man at 2–3 players
-   - Heat at 3–4 players (PM call: left to the R5 sim data, not asked of the owner)
-   - revisit the 5-player Accomplice cut
-2. Lock-in / presence / early end / human-majority meeting lock (in flight).
-3. R6a rules: role list setting (Exact default / Possible / Hidden), deck presets + per-role toggles, deal style Balanced / Truly random, Fence safe revealed on shakedown, tip-off any time as its own public Heat event, shakedown window only when a Muscle or Shield earner is dealt under Exact (PM call), bots aware of the public role list, sim re-run.
-4. R6b web: lobby deck picker, Roles rulebook sheet + tap-to-explain, visual cues for every power, last round's board shown faded while planning.
-5. M2-10: ledger, case file, "While you were away", suspicion board.
-6. M2-11: end-of-game reveal.
-7. M2-13: host controls (pause, extend, replace with bot).
-8. M2-12: Google sign-in, stub-ready (needs a client id from the owner).
-9. M2-14: playtest pass.
-10. **M2-15: offline demo build.** Run the in-browser engine and bots with the same UI, and publish it as a claude.ai artifact the owner can verify. This is the deliverable the owner asked for.
+1. **Roles v3 approval** (PR #45). Direction is in decisions.md "Owner answers, 2 Nov (afternoon)".
+2. **R6a rules:** roles v3 plus the 2 Nov answers (role list setting, deck presets + toggles, deal modes Balanced / Truly random, Fence safe revealed, tip-off any time, shakedown window under Exact), the bots for all of it, and one background balance pass run locally with a tuning script (parity ≤ 0.10, success 55–70%).
+3. **R6b roles UI:** lobby deck picker, Roles rulebook + tap-to-explain, visual cues for every power, last round shown faded while planning.
+4. M2-11: end-of-game reveal.
+5. M2-13: host controls (pause, extend, replace with bot).
+6. M2-12: Google sign-in, stub-ready (needs a client id from the owner).
+7. M2-14: playtest pass.
+8. **M2-15: offline demo build.** Run the in-browser engine and bots with the same UI, and publish it as a claude.ai artifact the owner can verify. This is the deliverable the owner asked for.
 
-Follow-ups from reviews (see STATUS "Open follow-ups"):
-- Bots: a hidden `crewSeed` from the harness for the shared hunch (#37 review).
-- Bot scheduling: bots only back proposals, never propose first, and (owner, 2 Nov) their backing doesn't count toward the lock; in the lock-in/presence PR (#35 review).
-- SHA-pin the GitHub Actions in `ci.yml`, `deploy.yml` and `sim-suite.yml` (now `@v4` tags).
+Follow-ups from reviews: see STATUS "Open follow-ups" (board rate-limiter test, CaseFile memo names, double notes fetch, Quick-game e2e flake, R5 and #44 review notes, SHA-pinning the Actions).
+
+## Process lessons (2 Nov)
+- **QA pushes once:** a QA agent pushes its tests in a single push at the end, not commit by commit (each push restarts CI and the review).
+- **Agents run the full e2e locally before pushing** (all specs, both projects); CI-only e2e failures cost a fix round each.
+- **The PM can't self-QA a docs PR:** spawn a QA agent to check it before merging.
+- GitHub squash merges are fine.
 
 ## Owner direction and constraints
 - 1 Nov: "finish the entire development, testing, integration testing, everything, and just give it to me as an artifact to verify." Deployment is decided later (AWS Lightsail or Fly).
