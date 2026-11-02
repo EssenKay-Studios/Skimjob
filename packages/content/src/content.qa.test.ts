@@ -14,7 +14,7 @@ describe("bank room data — design §6, §7", () => {
       rooftop: [0, -20],
       depositBoxes: [5, 10],
       serverRoom: [0, 0],
-      tellerLine: [3, 0],
+      tellerLine: [4, 0],
       managersOffice: [4, 10],
     });
   });

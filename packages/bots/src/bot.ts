@@ -19,7 +19,7 @@ import {
   type VoteChoice,
 } from "@skimjob/engine";
 import type { Personality } from "./personalities";
-import { claimsOf, createdOf, crewSize, isDuel, jobOf, lastResolvedRound, ofType, roleOf, roomsWhere } from "./read";
+import { claimsOf, createdOf, crewSize, isDuel, jobOf, lastResolvedRound, ofType, roleOf, roomsWhere, totalRounds } from "./read";
 import { knownRoles, mostSuspicious, suspicion } from "./suspicion";
 import { claimCommands, meetingTime } from "./claims";
 import { alibiPerk, meetingPerks, planningPerks } from "./perks";
@@ -98,9 +98,14 @@ const DOUBLE_CROSS_ACCEPT = 0.5;
 /**
  * Getaway Driver bots (v2 §4 "Play", bot settings): with Heat danger from
  * `mid` up to `high` they go to the Rooftop (where their visit heats) with
- * chance `rooftop`; from `high` they loot and pocket without minding the checkpoint.
+ * chance `rooftop`; from `high` they loot and pocket without minding the
+ * checkpoint (`high` 0.75 → 0.9 in R5: its reckless skims made it the dark
+ * side's top stash; docs/balance/balance-3.md).
  */
-const GETAWAY = { mid: 0.4, high: 0.75, rooftop: 0.6 } as const;
+const GETAWAY = { mid: 0.4, high: 0.9, rooftop: 0.4 } as const;
+
+/** A Bagman bot goes all-in in every round of this many acts, then plays its personality (bot setting, R5). */
+export const BAGMAN_ALL_IN_ACTS = 1;
 
 const pick = <T>(items: readonly T[], random: Random): T => items[Math.floor(random() * items.length)] as T;
 
@@ -233,11 +238,12 @@ export function chooseMove(view: PlayerView, p: Personality, random: Random): Mo
     const hideable = view.me.stash + pocket;
     if (left >= 1 && hideable >= 1) ability = { kind: "fenceSafe", amount: Math.min(left, hideable) };
   } else if (power.kind === "loopCameras" && view.me.roleState.usedThisAct < power.perAct) {
-    // v2 §4: loop the room its known saboteur claimed last (it may go back there); otherwise hide its own skim.
+    // v2 §4: hide its own skim first (R5: looping for its saboteur alone left it the dark
+    // side's smallest stash; balance-3.md), else loop the room its known saboteur claimed last.
     const ally = view.me.roleState.allies[0];
     const claim = ofType(view.ledger, "alibiPosted").filter((a) => a.player === ally).at(-1)?.room;
-    if (claim !== undefined && view.rooms.includes(claim)) ability = { kind: "loopCameras", room: claim };
-    else if (pocket > 0) ability = { kind: "loopCameras", room };
+    if (pocket > 0) ability = { kind: "loopCameras", room };
+    else if (claim !== undefined && view.rooms.includes(claim)) ability = { kind: "loopCameras", room: claim };
   } else if (power.kind === "blackmail" && view.me.roleState.usedThisAct < power.perAct && view.players.length > 0) {
     // v2 §4: guess only with a role from a Peek or an Inside tip (sure, unless stale after
     // a Double-cross) or, failing those, someone's claim of a unique role; otherwise skip.
@@ -301,8 +307,11 @@ function chooseRoom(view: PlayerView, p: Personality, random: Random): RoomId {
 
 /** How much to keep. design §5.1; §11.5 (team-minded bots keep the Haul on pace for the checkpoint) */
 function choosePocket(view: PlayerView, p: Personality, random: Random, loot: number): number {
-  // v2 §4: the Bagman leans honest and goes all-in (its bonus and Alibi need it).
-  if (loot === 0 || !roleOf(view).canPocket || roleOf(view).power.kind === "bagman") return 0;
+  // v2 §4: the Bagman leans honest: all-in through Act 1 (its bonus, and the Alibi it
+  // needs), then it plays its personality, covered by that Alibi (R5: all-in every
+  // round, it almost never had the top stash; docs/balance/balance-3.md).
+  const bagmanAllIn = roleOf(view).power.kind === "bagman" && view.act <= BAGMAN_ALL_IN_ACTS;
+  if (loot === 0 || !roleOf(view).canPocket || bagmanAllIn) return 0;
   if (random() < p.noise) return Math.floor(random() * (loot + 1));
   if (random() >= p.pocketChance) return 0;
   let pocket = Math.min(loot, Math.max(1, Math.round(loot * p.greed * (0.5 + random()))));

@@ -98,6 +98,8 @@ export interface RoleOverride {
   readonly revealSafe?: number;
   readonly reverse?: number;
   readonly revealHeat?: number;
+  /** Embezzler: loot taken from the Haul per use (v2 §2). design §8 */
+  readonly take?: number;
 }
 
 /** Every field is optional; whatever is left out keeps the content value. design §17.4 */

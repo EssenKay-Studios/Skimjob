@@ -88,18 +88,20 @@ export const BANK_JOB: JobDef = {
     security: { id: "security", name: "Security", loot: 0, heatPressure: 0, capacity: null, info: "watchRoom" },
     rooftop: { id: "rooftop", name: "Rooftop", loot: 0, heatPressure: -20, capacity: null, info: "none" },
     // 5–8 players. design §6.2; Deposit boxes add half the vault pressure (§7, balance pass 1).
+    // Crowded loot 3 → 4 in R5 (balance-3.md): with accomplices dealt, 5–8p crews succeeded well under the fair rate.
     depositBoxes: {
       id: "depositBoxes",
       name: "Deposit boxes",
       loot: 5,
       heatPressure: 10,
-      capacity: { max: 2, crowdedLoot: 3 },
+      capacity: { max: 2, crowdedLoot: 4 },
       info: "none",
     },
     serverRoom: { id: "serverRoom", name: "Server room", loot: 0, heatPressure: 0, capacity: null, info: "pocketCount" },
     // 9–12 players. design §6.2 (Teller line 3, Manager's office 4 since the owner-answers pass, 1 Nov: the
     // ⅓-plurality shakedowns made big crews succeed ~85%); Manager's office adds half the vault pressure (§7).
-    tellerLine: { id: "tellerLine", name: "Teller line", loot: 3, heatPressure: 0, capacity: null, info: "none" },
+    // Teller line back to 4 in R5 (balance-3.md): two saboteurs and up to two accomplices sank 9–12p crews to 17–31%.
+    tellerLine: { id: "tellerLine", name: "Teller line", loot: 4, heatPressure: 0, capacity: null, info: "none" },
     managersOffice: {
       id: "managersOffice",
       name: "Manager's office",
@@ -111,7 +113,8 @@ export const BANK_JOB: JobDef = {
   },
   defaultRoom: "lobby",
   heat: { max: 100, perRound: 4, missedCheckpoint: 15 },
-  checkpoints: { perPlayer: [7, 15, 24] },
+  // Final 24 → 23 per player in R5 (balance-3.md): toward the fair success rate (crew seats ÷ n).
+  checkpoints: { perPlayer: [7, 15, 23] },
   shakedown: { cleanBelowPerAct: 3, compensationPerAct: 5, pluralityFromPlayers: 9, pluralityShare: 1 / 3 },
   duel: { wrongCallOutPerAct: 5 },
 };

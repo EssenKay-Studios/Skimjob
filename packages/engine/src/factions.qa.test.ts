@@ -3,7 +3,7 @@
 // (accomplices, three saboteurs); and the win rule's ties across factions.
 // design §3, §8.1 (docs/roles-v2.md §0, §3)
 import { describe, expect, it } from "vitest";
-import { ROLES, type RoleDef, type RoleId } from "@skimjob/content";
+import { ROLES, maxDarkSeats, type RoleDef, type RoleId } from "@skimjob/content";
 import type { GameConfig, GameState, MoleSetting, PlayerState } from "./types";
 import { createGame, darkSideOdds, dealRoles } from "./setup";
 import { seedRng } from "./rng";
@@ -40,7 +40,7 @@ function check(dealt: readonly RoleId[], n: number, table: RoleTable, mole: Mole
   const count = (f: RoleDef["faction"]) => dealt.filter((r) => factionIn(table, r) === f).length;
   const [sab, acc] = [count("saboteur"), count("accomplice")];
   expect(dealt).toHaveLength(n);
-  expect(sab + acc).toBeLessThanOrEqual(Math.floor(n / 3));
+  expect(sab + acc).toBeLessThanOrEqual(maxDarkSeats(n));
   if (sab === 0) expect(acc).toBe(0);
   expect(acc).toBeLessThanOrEqual(sab + 1);
   if (mole === "off" || starter || n <= 3) expect(sab + acc).toBe(0);
@@ -75,7 +75,7 @@ describe("QA: dealing, the full matrix — design §8.1", () => {
     }
   });
 
-  it("R3-like table: limits hold everywhere, with and without uniqueRoles; 12p reaches 3/1, 11p never does", () => {
+  it("R3-like table: limits hold everywhere, with and without uniqueRoles; 11–12p reach 3/1 (R5 cap), 10p never does", () => {
     const seen = new Map<number, Set<string>>();
     for (let n = 2; n <= 12; n++) {
       seen.set(n, new Set());
@@ -90,9 +90,9 @@ describe("QA: dealing, the full matrix — design §8.1", () => {
       }
     }
     expect(seen.get(12)).toContain("3/1");
-    expect(seen.get(11)).not.toContain("3/1");
-    expect(seen.get(11)).toContain("3/0");
-    expect([...(seen.get(5) ?? [])].sort()).toEqual(["0/0", "1/0"]); // 1/1 is capped by ⌊5/3⌋ = 1
+    expect(seen.get(11)).toContain("3/1"); // R5: 11 ÷ 3 rounded = 4 seats (⌊11/3⌋ = 3 cut it to 3/0)
+    expect(seen.get(10)).not.toContain("3/1");
+    expect([...(seen.get(5) ?? [])].sort()).toEqual(["0/0", "1/0", "1/1"]); // R5: 5 ÷ 3 rounded = 2 seats
   });
 
   it("the odds sum to 1 at every size and setting, and stay inside the limits", () => {
@@ -102,7 +102,7 @@ describe("QA: dealing, the full matrix — design §8.1", () => {
           const odds = darkSideOdds(n, mole, starter);
           expect(odds.reduce((t, o) => t + o.chance, 0)).toBeCloseTo(1, 9);
           for (const o of odds) {
-            expect(o.saboteurs + o.accomplices).toBeLessThanOrEqual(Math.floor(n / 3));
+            expect(o.saboteurs + o.accomplices).toBeLessThanOrEqual(maxDarkSeats(n));
             expect(o.accomplices).toBeLessThanOrEqual(o.saboteurs === 0 ? 0 : o.saboteurs + 1);
           }
         }

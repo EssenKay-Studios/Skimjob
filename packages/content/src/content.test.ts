@@ -67,17 +67,17 @@ describe("First National Bank rooms — design §6.1, §6.2", () => {
     for (const id of ["vault", "office", "lobby", "rooftop"]) expect(r[id]?.info).toBe("none");
   });
 
-  it("5–8: Deposit boxes 5 loot, holds 2, everyone gets 3 if more go; Server room counts pocketers", () => {
+  it("5–8: Deposit boxes 5 loot, holds 2, everyone gets 4 if more go (R5; was 3); Server room counts pocketers", () => {
     expect(BANK_JOB.roomTiers[1]).toEqual({ minPlayers: 5, rooms: ["depositBoxes", "serverRoom"] });
     expect(r.depositBoxes?.loot).toBe(5);
-    expect(r.depositBoxes?.capacity).toEqual({ max: 2, crowdedLoot: 3 });
+    expect(r.depositBoxes?.capacity).toEqual({ max: 2, crowdedLoot: 4 }); // R5 (balance-3.md): 3 → 4
     expect(r.serverRoom?.loot).toBe(0);
     expect(r.serverRoom?.info).toBe("pocketCount");
   });
 
-  it("9–12: Teller line 3 loot; Manager's office 4 loot (owner-answers pass, 1 Nov)", () => {
+  it("9–12: Teller line 4 loot (R5, balance-3.md); Manager's office 4 loot (owner-answers pass, 1 Nov)", () => {
     expect(BANK_JOB.roomTiers[2]).toEqual({ minPlayers: 9, rooms: ["tellerLine", "managersOffice"] });
-    expect(r.tellerLine?.loot).toBe(3);
+    expect(r.tellerLine?.loot).toBe(4);
     expect(r.managersOffice?.loot).toBe(4);
   });
 });
@@ -105,7 +105,7 @@ describe("First National Bank Heat numbers — design §7", () => {
 
 describe("First National Bank checkpoint targets — design §11.5", () => {
   it("7, 15 and 24 × crew size at the end of Acts 1, 2 and 3", () => {
-    expect(BANK_JOB.checkpoints.perPlayer).toEqual([7, 15, 24]);
+    expect(BANK_JOB.checkpoints.perPlayer).toEqual([7, 15, 23]); // R5 (balance-3.md): final 24 → 23
   });
 });
 
@@ -122,19 +122,19 @@ describe("starter roles — design §8, §8.1", () => {
     }
   });
 
-  it("Rookie: no power, final stash ×1.2", () => {
-    expect(ROLES.rookie).toMatchObject({ power: { kind: "none" }, canPocket: true, scoring: { stashMultiplier: 1.2 } });
+  it("Rookie: no power, final stash ×1.05 (R5, balance-3.md; was ×1.2)", () => {
+    expect(ROLES.rookie).toMatchObject({ power: { kind: "none" }, canPocket: true, scoring: { stashMultiplier: 1.05 } });
   });
 
   it("Lookout: sees who was in one extra room each round", () => {
     expect(ROLES.lookout).toMatchObject({ power: { kind: "lookout", extraRooms: 1 }, canPocket: true });
   });
 
-  it("Inside Man: can't pocket; 0.3 points per loot the Haul ends above the final target", () => {
+  it("Inside Man: can't pocket; 0.2 points per loot the Haul ends above the final target (R5, balance-3.md; was 0.3)", () => {
     expect(ROLES.insideMan).toMatchObject({
       power: { kind: "none" },
       canPocket: false,
-      scoring: { stashMultiplier: 1, perLootOverFinalTarget: 0.3 },
+      scoring: { stashMultiplier: 1, perLootOverFinalTarget: 0.2 },
     });
   });
 

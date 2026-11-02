@@ -99,7 +99,7 @@ describe("move panel", () => {
     expect(by.vault).toMatchObject({ loot: 6, heat: "up", watcher: false, closed: false });
     expect(by.rooftop).toMatchObject({ loot: 0, heat: "down" });
     expect(by.security).toMatchObject({ watcher: true, notes: ["watch one room"] });
-    expect(by.depositBoxes!.notes).toEqual(["more than 2 here: 3 each"]);
+    expect(by.depositBoxes!.notes).toEqual(["more than 2 here: 4 each"]);
   });
 
   it("shows a missed deadline's default move (design §5.1)", () => {

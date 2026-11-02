@@ -184,7 +184,8 @@ describe("QA Forger — fake sightings (design §8, §13)", () => {
 
 describe("QA Embezzler — Haul cap, checkpoints, Mole (design §8, §11.5)", () => {
   // p0 Embezzler, p1 Mole, p2 Hacker (accomplice), the rest Rookies. 9 players, everyone on the Rooftop (0 loot).
-  const base = game(9, ["embezzler", "mole", "hacker"]);
+  // Pinned to the 0.13.0 take of 4 (R5 ships 1, balance-3.md), so the inflow cap shows.
+  const base = game(9, ["embezzler", "mole", "hacker"], { contentOverrides: { roles: { embezzler: { take: 4 } } } });
   const take = (at = "rooftop") => mv("p0", at, 0, { ability: { kind: "embezzle" } });
   const roof = (s: GameState, skip: readonly string[] = ["p0"]) => s.playerOrder.filter((id) => !skip.includes(id)).map((id) => mv(id, "rooftop"));
   const rr = (s: GameState) => ofType(s.log, "roundResolved").at(-1);

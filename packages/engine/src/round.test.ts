@@ -180,7 +180,7 @@ describe("resolution — design §5.2, §6", () => {
     ]);
   });
 
-  it("Deposit boxes pay 5 to up to 2 people, and 3 to everyone there when more go; pocket is capped at the real yield (§6.2)", () => {
+  it("Deposit boxes pay 5 to up to 2 people, and 4 to everyone there when more go (R5; was 3); pocket is capped at the real yield (§6.2)", () => {
     const two = run(game(5), submit("p0", { room: "depositBoxes", pocket: 5 }), submit("p1", { room: "depositBoxes" }), ROUND);
     expect(two.players.p0?.stash).toBe(5);
     expect(two.players.p1?.totalHandedIn).toBe(5);
@@ -191,8 +191,8 @@ describe("resolution — design §5.2, §6", () => {
       submit("p2", { room: "depositBoxes" }),
       ROUND,
     );
-    expect(three.players.p0).toMatchObject({ stash: 3, totalHandedIn: 0 });
-    expect(three.players.p1).toMatchObject({ stash: 0, totalHandedIn: 3 });
+    expect(three.players.p0).toMatchObject({ stash: 4, totalHandedIn: 0 });
+    expect(three.players.p1).toMatchObject({ stash: 0, totalHandedIn: 4 });
   });
 
   it("each player learns who else was in their room (§5.2 step 5)", () => {

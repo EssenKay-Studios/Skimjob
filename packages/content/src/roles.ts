@@ -187,7 +187,8 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     name: "Rookie",
     power: { kind: "none" },
     canPocket: true,
-    scoring: { stashMultiplier: 1.2, perLootOverFinalTarget: 0 },
+    // ×1.2 → ×1.05 in R5 (balance-3.md): the Rookie topped the crew's parity at most counts.
+    scoring: { stashMultiplier: 1.05, perLootOverFinalTarget: 0 },
     faction: "crew",
     rewards: [{ on: "checkpointMade", perk: "tail", count: 1 }],
   },
@@ -205,7 +206,8 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     name: "Inside Man",
     power: { kind: "none" },
     canPocket: false,
-    scoring: { stashMultiplier: 1, perLootOverFinalTarget: 0.3 },
+    // 0.3 → 0.2 per loot in R5 (balance-3.md): with the lower final target, overshoot came easier.
+    scoring: { stashMultiplier: 1, perLootOverFinalTarget: 0.2 },
     faction: "crew",
     rewards: [{ on: "checkpointMade", perk: "peek", count: 1 }],
     // Owner answers, 1 Nov: a crew of 2–4 can't spare a player who never pockets.
@@ -216,7 +218,9 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     id: "getawayDriver",
     name: "Getaway Driver",
     // The Driver's dark half; the Fixer is its crew half.
-    power: { kind: "getaway", room: "rooftop", reverse: 1, revealHeat: 75 },
+    // reverse ×1 → ×0 in R5 (balance-3.md): its Rooftop visit cools nothing (it only looks like it
+    // does) instead of adding Heat; adding Heat made it the dark side's top seat at 5–10p.
+    power: { kind: "getaway", room: "rooftop", reverse: 0, revealHeat: 75 },
     canPocket: true,
     scoring: PLAIN_SCORING,
     faction: "accomplice",
@@ -365,7 +369,8 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
   mole: {
     id: "mole",
     name: "Mole",
-    power: { kind: "tipOff", perAct: 1, heat: 6 },
+    // +6 → +4 Heat in R5 (balance-3.md).
+    power: { kind: "tipOff", perAct: 1, heat: 4 },
     canPocket: true,
     scoring: PLAIN_SCORING,
     // design §3, §8: a saboteur; wins a failed heist with the best dark-side stash, never a success.
@@ -374,7 +379,9 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
   embezzler: {
     id: "embezzler",
     name: "Embezzler",
-    power: { kind: "embezzle", perAct: 1, take: 4 },
+    // Take 4 → 1 in R5 (balance-3.md): the take made it the dark side's best stash in almost every
+    // failure (parity 1.8–5.7× fair share).
+    power: { kind: "embezzle", perAct: 1, take: 1 },
     canPocket: true,
     scoring: PLAIN_SCORING,
     // v2 §2: a saboteur, dealt by the saboteur setting like the Mole.

@@ -100,11 +100,16 @@ export const DARK_SIDE_RULES: readonly DarkSideRule[] = [
 ];
 
 /**
- * Hard limits on any dark side (role deck v2 §3): at most ⌊n ÷ seatDivisor⌋
- * dark seats, no accomplices without a saboteur, and at most
+ * Hard limits on any dark side (role deck v2 §3): at most
+ * ⌊(n + seatRounding) ÷ seatDivisor⌋ dark seats (n ÷ 3 rounded to the
+ * nearest: 1 at 4, 2 at 5–7, 3 at 8–10, 4 at 11–12; R5 lifted the 5-player
+ * cut, which was ⌊n ÷ 3⌋), no accomplices without a saboteur, and at most
  * saboteurs + `accomplicesOverSaboteurs` accomplices.
  */
-export const DARK_SIDE_LIMITS = { seatDivisor: 3, accomplicesOverSaboteurs: 1 } as const;
+export const DARK_SIDE_LIMITS = { seatDivisor: 3, seatRounding: 1, accomplicesOverSaboteurs: 1 } as const;
+
+/** The most dark seats a crew of `n` may have (`DARK_SIDE_LIMITS`). design §8.1 */
+export const maxDarkSeats = (n: number): number => Math.floor((n + DARK_SIDE_LIMITS.seatRounding) / DARK_SIDE_LIMITS.seatDivisor);
 
 /** Saboteur setting "maybe": a `nonePercent`% chance of no dark side at all at minPlayers–maxPlayers; elsewhere like "on". */
 export const DARK_SIDE_MAYBE = { minPlayers: 4, maxPlayers: 8, nonePercent: 50 } as const;

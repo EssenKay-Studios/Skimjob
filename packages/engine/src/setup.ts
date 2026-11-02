@@ -10,6 +10,7 @@
 import {
   CONTENT_VERSION,
   DARK_SIDE_LIMITS,
+  maxDarkSeats,
   DARK_SIDE_MAYBE,
   DARK_SIDE_RULES,
   DEFAULT_ROLE_POOL,
@@ -128,10 +129,10 @@ export interface DarkSideChance extends DarkSide {
 /**
  * The hard limits of role deck v2 §3, applied to a rolled dark side: no
  * accomplices without a saboteur, at most saboteurs + 1 accomplices, and at
- * most ⌊n ÷ 3⌋ dark seats (accomplices go first, then saboteurs).
+ * most n ÷ 3 dark seats, rounded (`maxDarkSeats`; accomplices go first, then saboteurs).
  */
 export function limitDarkSide(playerCount: number, mix: DarkSide): DarkSide {
-  const seats = Math.floor(playerCount / DARK_SIDE_LIMITS.seatDivisor);
+  const seats = maxDarkSeats(playerCount);
   const saboteurs = Math.min(mix.saboteurs, seats);
   const accomplices = saboteurs === 0 ? 0 : Math.min(mix.accomplices, saboteurs + DARK_SIDE_LIMITS.accomplicesOverSaboteurs, seats - saboteurs);
   return { saboteurs, accomplices };

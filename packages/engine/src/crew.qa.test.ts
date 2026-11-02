@@ -5,7 +5,7 @@
 // design §3, §8, §8.1, §8.3, §11.3, §13, §16.1
 import { describe, expect, it } from "vitest";
 import { handleThroughAlibis } from "./alibis.testkit";
-import { BANK_JOB } from "@skimjob/content";
+import { BANK_JOB, ROLES } from "@skimjob/content";
 import type { GameConfig, GameEvent, GameState, PlayerState } from "./types";
 import { rolePoolFor, setupEvents } from "./setup";
 import { replay } from "./reduce";
@@ -241,7 +241,7 @@ describe("QA: Snitch target edges — v2 §2, design §8, §11.2", () => {
 });
 
 describe("QA: Inside Man and Rookie under the faction win rule — design §3, §8", () => {
-  it("Inside Man: never pockets, a Peek per Act 1/2 checkpoint (spendable), and 0.3 per loot over the final target", () => {
+  it("Inside Man: never pockets, a Peek per Act 1/2 checkpoint (spendable), and 0.2 per loot over the final target (R5)", () => {
     let s = game(3, ["rookie", "insideMan"]);
     expect(reason(s, mv("p1", "office", 4))).toMatch(/can't pocket/);
     const moves = STEADY;
@@ -256,21 +256,23 @@ describe("QA: Inside Man and Rookie under the faction win rule — design §3, �
     expect(end.result).toBe("success");
     const target = BANK_JOB.checkpoints.perPlayer.at(-1)! * 3;
     const im = end.ranking.find((r) => r.player === "p1")!;
-    expect(im.score).toBeCloseTo(Math.round(0.3 * Math.max(0, s.haul - target) * 10) / 10, 5);
+    // 0.2 per loot since R5 (balance-3.md; 0.3 before).
+    expect(ROLES.insideMan?.scoring.perLootOverFinalTarget).toBe(0.2);
+    expect(im.score).toBeCloseTo(Math.round(0.2 * Math.max(0, s.haul - target) * 10) / 10, 5);
   });
 
-  it("Rookie ×1.2 can win a success over a bigger raw stash, and never wins a failure", () => {
+  it("Rookie ×1.05 (R5; ×1.2 before) can win a success over a bigger raw stash, and never wins a failure", () => {
     const base = game(4, ["rookie", "lookout", "mole", "auditor"]);
     const withStashes = (st: Record<string, number>): GameState => ({
       ...base,
       players: Object.fromEntries(Object.entries(base.players).map(([id, p]) => [id, { ...p, stash: st[id] ?? 0 }])),
     });
-    const s = withStashes({ p0: 10, p1: 11, p2: 30, p3: 0 });
+    const s = withStashes({ p0: 40, p1: 41, p2: 60, p3: 0 });
     const won = outcomeFor(s, null);
-    expect(won.ranking.find((r) => r.player === "p0")?.score).toBe(12);
-    expect(won.winners).toEqual(["p0"]); // the Mole's 30 can't win a success
+    expect(won.ranking.find((r) => r.player === "p0")?.score).toBe(42);
+    expect(won.winners).toEqual(["p0"]); // the Mole's 60 can't win a success
     expect(outcomeFor(s, "heat").winners).toEqual(["p2"]);
-    expect(outcomeFor(withStashes({ p0: 10, p1: 12 }), null).winners).toEqual(["p0", "p1"]); // 12.0 vs 12: a full tie, joint winners
+    expect(outcomeFor(withStashes({ p0: 20, p1: 21 }), null).winners).toEqual(["p0", "p1"]); // 21.0 vs 21: a full tie, joint winners
     const crewOnly = game(4, ["rookie", "lookout"]);
     expect(outcomeFor(crewOnly, "target").winners).toEqual([]);
   });

@@ -30,9 +30,9 @@ describe("room yields — design §6.1, §6.2", () => {
     for (const v of [1, 2, 5, 12]) expect(roomLoot(roomDef(bank, "vault"), v)).toBe(6);
   });
 
-  it("Deposit boxes: 5 each for up to 2 people, 3 each if more than 2 go", () => {
+  it("Deposit boxes: 5 each for up to 2 people, 4 each if more than 2 go (R5; was 3)", () => {
     const boxes = roomDef(bank, "depositBoxes");
-    expect([1, 2, 3, 4].map((v) => roomLoot(boxes, v))).toEqual([5, 5, 3, 3]);
+    expect([1, 2, 3, 4].map((v) => roomLoot(boxes, v))).toEqual([5, 5, 4, 4]);
   });
 });
 
@@ -94,16 +94,16 @@ describe("round Heat — design §7", () => {
 });
 
 describe("checkpoint targets — design §11.5", () => {
-  it("7, 15 and 24 × crew size, cumulative", () => {
+  it("7, 15 and 23 × crew size, cumulative (R5: final 24 → 23)", () => {
     for (let n = 2; n <= 12; n++) {
-      expect([1, 2, 3].map((act) => checkpointTarget(bank, act as 1 | 2 | 3, n))).toEqual([7 * n, 15 * n, 24 * n]);
+      expect([1, 2, 3].map((act) => checkpointTarget(bank, act as 1 | 2 | 3, n))).toEqual([7 * n, 15 * n, 23 * n]);
     }
   });
 
-  it("a crew of 5 needs 35, 75 and 120", () => {
+  it("a crew of 5 needs 35, 75 and 115", () => {
     expect(checkpointTarget(bank, 1, 5)).toBe(35);
     expect(checkpointTarget(bank, 2, 5)).toBe(75);
-    expect(checkpointTarget(bank, 3, 5)).toBe(120);
+    expect(checkpointTarget(bank, 3, 5)).toBe(115);
   });
 
   it("rejects an act outside 1–3", () => {
