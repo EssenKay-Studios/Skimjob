@@ -1,4 +1,4 @@
-# Orchestrator handoff (snapshot 2026-11-02 00:30 IST)
+# Orchestrator handoff (snapshot 2026-11-02 04:30 IST)
 
 Read this together with `docs/STATUS.md`, which holds the canonical task list. This file covers how the work is run and what was in flight at the snapshot.
 
@@ -22,22 +22,12 @@ Read this together with `docs/STATUS.md`, which holds the canonical task list. T
 - Send the owner a short progress update about every 15 minutes.
 
 ## In flight at snapshot
-The agents belonged to the old session. If that session is gone they are dead: resume from what is on GitHub. Anything they never pushed is lost.
+Nothing. No agents are running, and every PR through #39 is merged (#35, #36, #37, #38 chat UI, #39 e2e target check; the separate flake PR was dropped because #36 fixed the root cause). Docs PR #40 folds the PR notes into `docs/decisions.md` and `docs/STATUS.md`.
 
-| PR | Branch | State | Next |
-|---|---|---|---|
-| #35 M2-7 meetings UI | `m2/meetings-ui` | QA PASS. Review CHANGES REQUESTED: e2e exceeded 20 min in CI, being sharded into 4 jobs | Builder finishes sharding → delta review → merge |
-| #36 R3b Blackmailer/Forger/Embezzler | `roles/r3b-dark` | QA PASS. Review CHANGES REQUESTED: Embezzler skim can make the public "Haul grew by" negative (a tell) | Builder fix → re-review + QA re-check → merge. Record owner decision: Blackmail victim's vote counts 0, Blackmailer gets +1 |
-| #37 R4b bot claims | `bots/claims` | Review and QA both flagged `crewHunch` (bot.ts ~397), seeded only by meeting id + seat id, so every game has the same seat bias | Builder adds per-game entropy plus a regression test → re-review/QA → merge |
-| (new) hostile-test flake | `fix/hostile-flake` | `live.hostile.qa.test.ts` Lookout+lobby case is flaky in CI and predates #37 | Builder finds the root cause and loops the test 30× → review → merge |
-| (new) M2-8b chat UI | `m2/chat-ui` | Being built: crew tab + DMs, plain-text rendering, bottom sheet on phones, 2-context e2e | Review + QA → merge |
-
-If a branch exists but has no PR, or a PR has no fix commit after its review, spawn a fresh builder in FIX mode for it.
-
-## Remaining plan after those
+## Remaining plan
 1. R5 parity balance with `pnpm sim:suite`:
-   - no two roles' normalized win rates more than 10% apart
-   - success 55–70%
+   - no two roles' normalized win rates more than 10% apart (today: spread 0.96 / 1.86 / 2.46 at 4/6/8p)
+   - success 55–70% (8p is 51%)
    - saboteur win 30–40%
    - Inside Man at 2–3 players
    - revisit the 5-player Accomplice cut
@@ -48,7 +38,11 @@ If a branch exists but has no PR, or a PR has no fix commit after its review, sp
 6. M2-12: Google sign-in, stub-ready (needs a client id from the owner).
 7. M2-14: playtest pass.
 8. **M2-15: offline demo build.** Run the in-browser engine and bots with the same UI, and publish it as a claude.ai artifact the owner can verify. This is the deliverable the owner asked for.
-9. Fold the Decisions and STATUS sections from merged PR bodies into `docs/decisions.md` and `docs/STATUS.md`.
+
+Follow-ups from reviews (see STATUS "Open follow-ups"):
+- Bots: a hidden `crewSeed` from the harness for the shared hunch (#37 review).
+- Bot scheduling: bots only back proposals, never propose first; fix before M2-14 (#35 review).
+- SHA-pin the GitHub Actions in `ci.yml`, `deploy.yml` and `sim-suite.yml` (now `@v4` tags).
 
 ## Owner direction and constraints
 - 1 Nov: "finish the entire development, testing, integration testing, everything, and just give it to me as an artifact to verify." Deployment is decided later (AWS Lightsail or Fly).
