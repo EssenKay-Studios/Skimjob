@@ -130,11 +130,11 @@ describe("starter roles — design §8, §8.1", () => {
     expect(ROLES.lookout).toMatchObject({ power: { kind: "lookout", extraRooms: 1 }, canPocket: true });
   });
 
-  it("Inside Man: can't pocket; 0.2 points per loot the Haul ends above the final target (R5, balance-3.md; was 0.3)", () => {
+  it("Inside Man: can't pocket; 0.15 points per loot the Haul ends above the final target (R5, balance-3.md; was 0.3)", () => {
     expect(ROLES.insideMan).toMatchObject({
       power: { kind: "none" },
       canPocket: false,
-      scoring: { stashMultiplier: 1, perLootOverFinalTarget: 0.2 },
+      scoring: { stashMultiplier: 1, perLootOverFinalTarget: 0.15 },
     });
   });
 

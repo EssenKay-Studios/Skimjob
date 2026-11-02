@@ -241,7 +241,7 @@ describe("QA: Snitch target edges — v2 §2, design §8, §11.2", () => {
 });
 
 describe("QA: Inside Man and Rookie under the faction win rule — design §3, §8", () => {
-  it("Inside Man: never pockets, a Peek per Act 1/2 checkpoint (spendable), and 0.2 per loot over the final target (R5)", () => {
+  it("Inside Man: never pockets, a Peek per Act 1/2 checkpoint (spendable), and 0.15 per loot over the final target (R5)", () => {
     let s = game(3, ["rookie", "insideMan"]);
     expect(reason(s, mv("p1", "office", 4))).toMatch(/can't pocket/);
     const moves = STEADY;
@@ -256,9 +256,9 @@ describe("QA: Inside Man and Rookie under the faction win rule — design §3, �
     expect(end.result).toBe("success");
     const target = BANK_JOB.checkpoints.perPlayer.at(-1)! * 3;
     const im = end.ranking.find((r) => r.player === "p1")!;
-    // 0.2 per loot since R5 (balance-3.md; 0.3 before).
-    expect(ROLES.insideMan?.scoring.perLootOverFinalTarget).toBe(0.2);
-    expect(im.score).toBeCloseTo(Math.round(0.2 * Math.max(0, s.haul - target) * 10) / 10, 5);
+    // 0.15 per loot since R5 (balance-3.md; 0.3 before).
+    expect(ROLES.insideMan?.scoring.perLootOverFinalTarget).toBe(0.15);
+    expect(im.score).toBeCloseTo(Math.round(0.15 * Math.max(0, s.haul - target) * 10) / 10, 5);
   });
 
   it("Rookie ×1.05 (R5; ×1.2 before) can win a success over a bigger raw stash, and never wins a failure", () => {

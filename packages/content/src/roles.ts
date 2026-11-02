@@ -82,7 +82,7 @@ export type RolePower =
   | { readonly kind: "tipOff"; readonly perAct: number; readonly heat: number };
 
 export interface RoleScoring {
-  /** Final stash is multiplied by this (Rookie ×1.2). design §8 */
+  /** Final stash is multiplied by this (Rookie ×1.05). design §8 */
   readonly stashMultiplier: number;
   /** Points for every loot the Haul ends above the final target (Inside Man: 0.3, balance pass 1). design §8 */
   readonly perLootOverFinalTarget: number;
@@ -148,7 +148,7 @@ export interface PerkReward {
   readonly count: number;
 }
 
-/** Scores are rounded to this many decimal places (Rookie ×1.2 gives fractions). docs/decisions.md */
+/** Scores are rounded to this many decimal places (Rookie ×1.05 gives fractions). docs/decisions.md */
 export const SCORE_DECIMALS = 1;
 
 export interface RoleDef {
@@ -206,8 +206,9 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     name: "Inside Man",
     power: { kind: "none" },
     canPocket: false,
-    // 0.3 → 0.2 per loot in R5 (balance-3.md): with the lower final target, overshoot came easier.
-    scoring: { stashMultiplier: 1, perLootOverFinalTarget: 0.2 },
+    // 0.3 → 0.15 per loot in R5 (balance-3.md): with the lower final target, overshoot came easier
+    // and it topped the parity table at 5–12 players.
+    scoring: { stashMultiplier: 1, perLootOverFinalTarget: 0.15 },
     faction: "crew",
     rewards: [{ on: "checkpointMade", perk: "peek", count: 1 }],
     // Owner answers, 1 Nov: a crew of 2–4 can't spare a player who never pockets.
