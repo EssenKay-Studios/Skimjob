@@ -203,6 +203,26 @@
   opacity: 0.55;
   filter: grayscale(0.7);
 }
+.room-tile__head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+/* The room icon on a soft colour blob (ui-style §6). */
+.room-tile__icon {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 30px;
+  height: 28px;
+  border-radius: 52% 48% 55% 45% / 50% 58% 42% 50%;
+  background: color-mix(in srgb, var(--kraft) 55%, transparent);
+  color: var(--ink);
+}
+.room-tile.is-selected .room-tile__icon {
+  background: color-mix(in srgb, var(--clay) 45%, transparent);
+}
 .room-tile__name {
   font: 700 15.5px/1.15 var(--font-hand);
   color: var(--ink);

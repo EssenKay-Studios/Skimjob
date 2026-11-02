@@ -1,6 +1,7 @@
 // A room in the move picker (ui-style "Round-move panel"): an item tile with
 // the room's name, a loot swatch and a Heat hint. Selected: clay outline that
 // boils, plus a pin.
+import type { ReactNode } from "react";
 import { FrameArt, useElementSize } from "./SketchFrame";
 
 export type HeatHint = "up" | "down" | "none";
@@ -16,18 +17,27 @@ export interface RoomTileProps {
   readonly disabledNote?: string;
   readonly onSelect?: () => void;
   readonly seed: string;
+  /** A room icon before the name (e.g. `<RoomIcon>`), decorative. */
+  readonly icon?: ReactNode;
 }
 
 const HEAT_TEXT: Record<HeatHint, string> = { up: "Heat ↑", down: "Heat ↓", none: "No Heat" };
 
-export function RoomTile({ name, loot, heat, notes = [], selected, disabled, disabledNote, onSelect, seed }: RoomTileProps) {
+export function RoomTile({ name, loot, heat, notes = [], selected, disabled, disabledNote, onSelect, seed, icon }: RoomTileProps) {
   const [ref, size] = useElementSize<HTMLButtonElement>();
   const cls = ["room-tile", selected && "is-selected", disabled && "is-closed"].filter(Boolean).join(" ");
   return (
     <button ref={ref} type="button" className={cls} aria-pressed={!!selected} disabled={disabled} onClick={onSelect} data-room={name}>
       {size && <FrameArt w={size.w} h={size.h} seed={seed} radius={12} stroke={1.6} wobble={0.9} shadow={selected ? 0.5 : 0.3} grain={false} boil={!!selected} />}
       {selected && <span className="room-tile__pin" aria-hidden="true" />}
-      <span className="room-tile__name">{name}</span>
+      <span className="room-tile__head">
+        {icon && (
+          <span className="room-tile__icon" aria-hidden="true">
+            {icon}
+          </span>
+        )}
+        <span className="room-tile__name">{name}</span>
+      </span>
       <span className="room-tile__loot">
         {loot > 0 && (
           <span className="room-tile__bar" aria-hidden="true">

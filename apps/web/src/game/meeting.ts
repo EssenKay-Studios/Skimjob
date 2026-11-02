@@ -342,3 +342,27 @@ export function perksHeld(view: PlayerView): { readonly id: PerkId; readonly nam
   for (const p of view.me.roleState.perks) counts.set(p, (counts.get(p) ?? 0) + 1);
   return [...counts].map(([id, count]) => ({ id, name: PERKS[id]?.name ?? id, count }));
 }
+
+// ---------------------------------------------------------------- role claims (§8, §12.1)
+
+/** A role you may claim to be: every role the game's content knows, so the list never hints at the hidden pool. */
+export interface ClaimOption {
+  readonly id: string;
+  readonly name: string;
+}
+
+/**
+ * Your role claim for the current act: null in Duel (no claims, design §16.1),
+ * else the roles on offer and the one you already claimed this act (once per act).
+ */
+export function claimState(view: PlayerView): { readonly act: 1 | 2 | 3; readonly claimed: string | null; readonly options: readonly ClaimOption[] } | null {
+  if (!hasMeetings(view) || view.phase.kind === "ended" || view.phase.kind === "setup") return null;
+  const act = view.act;
+  let claimed: string | null = null;
+  for (const { event } of view.ledger) if (event.type === "roleClaimed" && event.player === view.me.id && event.act === act) claimed = event.role;
+  const roles = rolesFor({ contentOverrides: setupOf(view)?.contentOverrides ?? null });
+  const options = Object.entries(roles)
+    .map(([id, def]) => ({ id, name: def.name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  return { act, claimed, options };
+}

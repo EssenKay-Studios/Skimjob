@@ -1,20 +1,26 @@
 // /game/:id: the game screen, thin slice (docs/m2-plan.md M2-6). HUD, seats,
 // move panel, alibis, ledger and case file, and the game-over ranking, all
 // from the player's own view over the live channel, and the chat (M2-8b,
-// GameChat.tsx). Meetings and votes (M2-7), the bank art (M2-9) and the full
-// reveal (M2-11) come later.
-import { useEffect, useMemo, useState } from "react";
+// GameChat.tsx), meetings and votes (M2-7, Meetings.tsx) and the bank board
+// (M2-9 art, figures from the view only: game/board.ts). The full reveal
+// (M2-11) comes later.
+import { useEffect, useId, useMemo, useState } from "react";
 import type { CaseFileEvent, LoggedEvent, PlayerView, PublicEvent, RoomId } from "@skimjob/engine";
-import { Avatar } from "../components/Avatar";
 import { Button } from "../components/Button";
 import { Chip } from "../components/Chip";
 import { Clock, Lock, Play } from "../components/icons";
 import { HeatMeter, Meter } from "../components/Meter";
+import { BankCutaway } from "../art/BankCutaway";
+import { BANK_ROOMS, type BankRoomId } from "../art/bankLayout";
+import { CrookAvatar } from "../art/Crook";
+import { RoomIcon } from "../art/RoomIcon";
+import { BustedSpot, EmptyFileSpot, JobDoneSpot, WaitingSpot } from "../art/Spots";
 import { RoomTile } from "../components/RoomTile";
 import { SketchFrame } from "../components/SketchFrame";
 import { SplitSlider } from "../components/SplitSlider";
 import { useToast } from "../components/Toast";
 import { Underline } from "../components/Underline";
+import { boardScene, seatLooks } from "../game/board";
 import { cardName, describeEvent, roleName, roomName } from "../game/describeEvent";
 import {
   alibiState,
@@ -29,7 +35,7 @@ import {
   seatsOf,
   type Timer,
 } from "../game/hud";
-import { hasMeetings, pluralityRule, slotText } from "../game/meeting";
+import { claimState, hasMeetings, pluralityRule, slotText } from "../game/meeting";
 import { DecidingPanel, MeetingNow, MeetingsPanel, ResultsBanner, RoleCard } from "./Meetings";
 import { useCountdown, useGame, type ClientCommand, type Connection, type GameChannel, type Reply } from "../game/useGame";
 import { api, ApiError, sentence, UNREACHABLE, type LobbyView } from "../api";
@@ -136,14 +142,29 @@ interface BoardProps {
   readonly autoMeetings: boolean;
 }
 
+/** The room picked (on the board or in the move panel) for the round being planned, not yet locked in. */
+interface Pick {
+  readonly room: RoomId | null;
+  readonly setRoom: (room: RoomId) => void;
+}
+
+const isBankRoom = (r: string): r is BankRoomId => (BANK_ROOMS as readonly string[]).includes(r);
+
 function Board({ view, timers, offset, send, autoMeetings, gameId, channel, dmNotices }: BoardProps & { gameId: string; channel: GameChannel; dmNotices: boolean }) {
   const outcome = outcomeOf(view);
+  const planning = view.phase.kind === "planning" ? view.phase.round : null;
+  const [picked, setPicked] = useState<{ round: number; room: RoomId } | null>(null);
+  const pick: Pick = {
+    room: (picked && picked.round === planning ? picked.room : null) ?? view.me.move?.room ?? null,
+    setRoom: (room) => planning !== null && setPicked({ round: planning, room }),
+  };
   return (
     <div className={outcome ? "game-grid is-over" : "game-grid"}>
       <Hud view={view} timers={timers} offset={offset} />
+      <BankBoard view={view} pick={planning !== null ? pick : null} />
       <Seats view={view} />
       <div className="game-grid__action">
-        {outcome ? <GameOver view={view} /> : <Actions view={view} timers={timers} offset={offset} send={send} autoMeetings={autoMeetings} />}
+        {outcome ? <GameOver view={view} /> : <Actions view={view} timers={timers} offset={offset} send={send} autoMeetings={autoMeetings} pick={pick} />}
       </div>
       {/* From 1024 px the chat and the records share the right column; below that the chat is a sheet. */}
       <div className="game-grid__side">
@@ -210,8 +231,51 @@ function Hud({ view, timers, offset }: { view: PlayerView; timers: readonly Time
 
 const cardLabel = (view: PlayerView) => `${cardName(view.card!.id)}${view.card!.room ? ` (${roomName(view.card!.room)} closed)` : ""}`;
 
+/**
+ * The main board: the bank cut away (M2-9 art). While planning, tap a room to
+ * pick it (drives the move panel); afterwards it shows the round as your view
+ * knows it: you, who you saw in your room, and alibi claims as dashed ghosts.
+ */
+function BankBoard({ view, pick }: { view: PlayerView; pick: Pick | null }) {
+  const scene = boardScene(view, pick?.room ?? null);
+  const names = useMemo(() => Object.fromEntries(roomOptions(view).map((o) => [o.id, o.name])), [view]);
+  const caption =
+    scene.round === 0
+      ? "The job hasn't started."
+      : scene.mode === "pick"
+        ? scene.selected
+          ? `Round ${scene.round}: you're heading for the ${names[scene.selected] ?? roomName(scene.selected)}. Tap another room to change.`
+          : `Round ${scene.round}: tap a room to pick it.`
+        : `Round ${scene.round} as you saw it. Dashed figures are alibi claims, true or not.`;
+  return (
+    <SketchFrame as="section" seed="game-bank" radius={18} shadow={0.5} className="board" aria-labelledby="board-h">
+      <div className="board__head">
+        <h2 id="board-h" className="panel__title">
+          <Underline seed="board">The bank</Underline>
+        </h2>
+        <p className="meta board__caption" aria-live="polite">
+          {caption}
+        </p>
+      </div>
+      <BankCutaway
+        className="board__bank"
+        rooms={view.rooms}
+        names={names}
+        time={scene.time}
+        heat={view.heat}
+        selected={scene.selected}
+        closed={scene.closed}
+        occupants={scene.occupants}
+        title={scene.mode === "pick" ? "The bank: pick a room" : `The bank in round ${scene.round}`}
+        {...(pick ? { onRoomSelect: (r: BankRoomId) => pick.setRoom(r) } : {})}
+      />
+    </SketchFrame>
+  );
+}
+
 function Seats({ view }: { view: PlayerView }) {
   const seats = seatsOf(view);
+  const looks = seatLooks(view);
   return (
     <SketchFrame as="section" seed="game-crew" radius={16} shadow={0.4} className="crew" aria-labelledby="crew-h">
       <div className="crew__head">
@@ -222,7 +286,14 @@ function Seats({ view }: { view: PlayerView }) {
       <ul className="crew__list">
         {seats.map((s) => (
           <li key={s.id} className={s.you ? "crew-seat is-you" : "crew-seat"}>
-            <Avatar name={s.name.replace(/^Bot · /, "")} size={38} bot={s.isBot} status={s.moved ? "ready" : undefined} title={`${s.name}${s.you ? " (you)" : ""}${s.moved ? ", move locked in" : ""}`} />
+            <CrookAvatar
+              name={`${s.name}${s.you ? " (you)" : ""}`}
+              look={looks.get(s.id)?.look ?? 0}
+              tag={looks.get(s.id)?.tag}
+              size={44}
+              bot={s.isBot}
+              status={s.moved ? "ready" : undefined}
+            />
             <span className="crew-seat__name">
               {s.you ? "You" : s.name}
               {s.moved && <span className="crew-seat__mark">move in</span>}
@@ -234,7 +305,7 @@ function Seats({ view }: { view: PlayerView }) {
   );
 }
 
-function Actions({ view, timers, offset, send, autoMeetings }: BoardProps) {
+function Actions({ view, timers, offset, send, autoMeetings, pick }: BoardProps & { pick: Pick }) {
   const alibi = alibiState(view);
   const p = view.phase;
   const meetings = hasMeetings(view);
@@ -246,7 +317,7 @@ function Actions({ view, timers, offset, send, autoMeetings }: BoardProps) {
       {p.kind === "shakedownPending" && <DecidingPanel view={view} timers={timers} offset={offset} />}
       {alibi && <AlibiPanel view={view} round={alibi.round} posted={alibi.posted} send={send} />}
       {p.kind === "planning" ? (
-        <MovePanel key={p.round} view={view} round={p.round} timers={timers} offset={offset} send={send} autoMeetings={autoMeetings} />
+        <MovePanel key={p.round} view={view} round={p.round} timers={timers} offset={offset} send={send} autoMeetings={autoMeetings} pick={pick} />
       ) : p.kind === "alibis" || voting ? null : (
         <WaitPanel view={view} />
       )}
@@ -260,19 +331,20 @@ function WaitPanel({ view }: { view: PlayerView }) {
   const p = view.phase;
   const text = p.kind === "awaitingMeeting" ? `Act ${p.act} is over. The crew meeting opens next, then the checkpoint.` : "Hang tight.";
   return (
-    <SketchFrame as="section" seed="game-wait" radius={16} shadow={0.4} className="panel" aria-live="polite">
+    <SketchFrame as="section" seed="game-wait" radius={16} shadow={0.4} className="panel wait" aria-live="polite">
       <h2 className="panel__title">
         <Underline seed="wait">Between rounds</Underline>
       </h2>
       <p>{text}</p>
+      <WaitingSpot className="panel__spot" />
     </SketchFrame>
   );
 }
 
-function MovePanel({ view, round, timers, offset, send }: BoardProps & { round: number }) {
+function MovePanel({ view, round, timers, offset, send, pick }: BoardProps & { round: number; pick: Pick }) {
   const options = useMemo(() => roomOptions(view), [view]);
   const mine = view.me.move;
-  const [room, setRoom] = useState<RoomId | null>(mine?.room ?? null);
+  const { room, setRoom } = pick;
   const [pocket, setPocket] = useState(mine?.pocket ?? 0);
   const [watch, setWatch] = useState<RoomId | null>(mine?.watch ?? null);
   const [busy, setBusy] = useState(false);
@@ -311,6 +383,7 @@ function MovePanel({ view, round, timers, offset, send }: BoardProps & { round: 
             key={o.id}
             seed={`room-${o.id}`}
             name={o.name}
+            {...(isBankRoom(o.id) ? { icon: <RoomIcon room={o.id} size={22} /> } : {})}
             loot={o.loot}
             heat={o.heat}
             notes={o.notes}
@@ -386,12 +459,64 @@ function AlibiPanel({ view, round, posted, send }: { view: PlayerView; round: nu
               </Button>
             ))}
           </div>
+        </>
+      )}
+      <div className="alibi__actions">
+        {!posted && (
           <Button variant="secondary" seed="alibi-post" disabled={!room || busy} onClick={post}>
             Post alibi
           </Button>
-        </>
-      )}
+        )}
+        <ClaimRole view={view} send={send} />
+      </div>
     </SketchFrame>
+  );
+}
+
+/** A formal, public, possibly false role claim, once per act (R4b; design §8, §12.1). Not in Duel. */
+function ClaimRole({ view, send }: { view: PlayerView; send: BoardProps["send"] }) {
+  const claim = claimState(view);
+  const [open, setOpen] = useState(false);
+  const [role, setRole] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const panel = useId();
+  if (!claim) return null;
+  if (claim.claimed)
+    return (
+      <p className="meta alibi__claimed">
+        You claimed to be the <b>{roleName(claim.claimed)}</b> this act.
+      </p>
+    );
+  const go = async () => {
+    if (!role) return;
+    setBusy(true);
+    const r = await send({ type: "claimRole", role }, "Role claimed.");
+    setBusy(false);
+    if (r.ok) setOpen(false);
+  };
+  return (
+    <>
+      <Button variant="secondary" seed="claim-role" aria-expanded={open} aria-controls={panel} onClick={() => setOpen(!open)}>
+        {open ? "Never mind" : "Claim role"}
+      </Button>
+      {open && (
+        <div id={panel} className="claim">
+          <p>
+            Tell the crew which role you have. Everyone sees it, it doesn't have to be true, and you get one claim in Act {claim.act}.
+          </p>
+          <div className="move__chips" role="group" aria-label="Role to claim">
+            {claim.options.map((o) => (
+              <Button key={o.id} variant="toggle" seed={`claim-${o.id}`} pressed={role === o.id} onClick={() => setRole(o.id)}>
+                {o.name}
+              </Button>
+            ))}
+          </div>
+          <Button variant="primary" seed="claim-go" disabled={!role || busy} onClick={go}>
+            {role ? `Claim the ${roleName(role)}` : "Pick a role"}
+          </Button>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -426,6 +551,7 @@ function Records({ view }: { view: PlayerView }) {
         ))}
         {rows.length === 0 && <li className="records__row meta">Nothing yet.</li>}
       </ol>
+      {rows.length === 0 && tab === "case" && <EmptyFileSpot className="records__spot" />}
     </SketchFrame>
   );
 }
@@ -434,6 +560,7 @@ function GameOver({ view }: { view: PlayerView }) {
   const outcome = outcomeOf(view)!;
   const name = namesOf(view);
   const seats = new Map(seatsOf(view).map((s) => [s.id, s]));
+  const looks = seatLooks(view);
   const won = outcome.result === "success";
   const end = view.ledger.find((x) => x.event.type === "gameEnded");
   return (
@@ -441,6 +568,7 @@ function GameOver({ view }: { view: PlayerView }) {
       <p className={won ? "over__stamp" : "over__stamp is-busted"} aria-hidden="true">
         {won ? "JOB DONE" : "BUSTED"}
       </p>
+      {won ? <JobDoneSpot className="over__spot" look={seatLooks(view).get(outcome.winners[0] ?? view.me.id)?.look ?? 0} /> : <BustedSpot className="over__spot" look={seatLooks(view).get(view.me.id)?.look ?? 1} />}
       <h2 id="over-h" className="over__title">
         {won ? "The crew got away with it" : "The heist failed"}
       </h2>
@@ -452,7 +580,7 @@ function GameOver({ view }: { view: PlayerView }) {
           return (
             <li key={r.player} className={["ranking__row", winner && "is-winner", !won && "is-void", seat?.you && "is-you"].filter(Boolean).join(" ")}>
               <span className="ranking__pos num">{i + 1}</span>
-              <Avatar name={name(r.player).replace(/^Bot · /, "")} size={36} bot={seat?.isBot} title={name(r.player)} />
+              <CrookAvatar name={name(r.player).replace(/^Bot · /, "")} look={looks.get(r.player)?.look ?? 0} tag={looks.get(r.player)?.tag} size={44} bot={seat?.isBot ?? false} expression={winner ? "smug" : won ? "neutral" : "caught"} />
               <span className="ranking__who">
                 <b>{seat?.you ? "You" : name(r.player)}</b>
                 <span className="meta">{roleName(r.role)}</span>

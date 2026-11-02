@@ -115,8 +115,8 @@ test("the move panel: pick a room, split the loot, lock it in, change it; reconn
   await page.getByRole("button", { name: "Lock it in" }).click();
   await expect(page.getByRole("button", { name: "Locked in" })).toBeDisabled();
   await expect(page.getByText("Locked in: Vault, pocket 2.")).toBeVisible();
-  await expect(page.locator(".crew-seat.is-you .avatar__dot")).toBeVisible(); // your own "move in" mark
-  await expect(page.locator(".crew-seat:not(.is-you) .avatar__dot")).toHaveCount(0); // others' moves stay hidden
+  await expect(page.locator(".crew-seat.is-you .crook-avatar--ready")).toBeVisible(); // your own "move in" mark
+  await expect(page.locator(".crew-seat:not(.is-you) .crook-avatar--ready")).toHaveCount(0); // others' moves stay hidden
   await shot(page, "mid-round");
 
   // Security needs a room to watch before it can lock in. design §6.1
@@ -133,6 +133,46 @@ test("the move panel: pick a room, split the loot, lock it in, change it; reconn
   await expect(page.getByText("Reconnecting…")).toBeHidden({ timeout: 10_000 });
   expect(await gameSockets()).toBe(2);
   await expect(page.getByText("Locked in: Security, all to the Haul.")).toBeVisible();
+});
+
+test("the bank board: tap a room to pick it, see who you saw and the alibi claims; claim a role (M2-9, R4b)", async ({ page }) => {
+  test.setTimeout(150_000);
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  // The 1-hour preset: 30 s rounds and 3 s alibi windows at TIME_SCALE 0.1.
+  const game = await startGame(page.request, { bots: 4, sessionLength: "1h" });
+  await page.goto(`/game/${game.id}`);
+  await expect(page.getByRole("heading", { name: "Round 1 · Pick your room", level: 2 })).toBeVisible();
+  const board = page.getByRole("region", { name: "The bank" });
+  await expect(board.getByText("Round 1: tap a room to pick it.")).toBeVisible();
+
+  // The board drives the move panel, and the panel drives the board.
+  await board.locator(".bank-room[data-room=vault]").click();
+  await expect(page.locator('.room-tile[data-room="Vault"]')).toHaveAttribute("aria-pressed", "true");
+  await expect(board.locator(".bank-room[data-room=vault]")).toHaveAttribute("aria-pressed", "true");
+  await expect(board.getByText(/heading for the Vault/)).toBeVisible();
+  await page.locator('.room-tile[data-room="Office"]').click();
+  await expect(board.locator(".bank-room[data-room=office]")).toHaveAttribute("aria-pressed", "true");
+  await expect(board.locator(".bank-room[data-room=vault]")).toHaveAttribute("aria-pressed", "false");
+  // Only you stand in the bank while planning: nobody else's pick is drawn.
+  await expect(board.locator(".bank-room .crook-fig")).toHaveCount(1);
+  await page.getByRole("button", { name: "Lock it in" }).click();
+  await expect(page.getByText("Locked in: Office")).toBeVisible();
+
+  // Each alibi window (3 s): claim the Lookout once. The board shows the resolved round meanwhile.
+  const ledger = page.getByRole("list", { name: "Ledger" });
+  const done = async () => ((await ledger.textContent()) ?? "").includes("You claim to be the Lookout.");
+  for (let tries = 0; tries < 3 && !(await done()); tries++) {
+    await expect(page.getByRole("heading", { name: /Round \d alibi/ })).toBeVisible({ timeout: 45_000 });
+    await expect(board.getByText(/as you saw it/)).toBeVisible();
+    await page.getByRole("button", { name: "Claim role" }).click({ timeout: 1000 }).catch(() => {});
+    await page.getByRole("group", { name: "Role to claim" }).getByRole("button", { name: "Lookout" }).click({ timeout: 1000 }).catch(() => {});
+    await page.getByRole("button", { name: "Claim the Lookout" }).click({ timeout: 1000 }).catch(() => {});
+    await page.getByText("You claimed to be the Lookout this act.").waitFor({ timeout: 1500 }).catch(() => {});
+    await expect(page.getByRole("heading", { name: /Round \d alibi/ })).toBeHidden({ timeout: 10_000 });
+  }
+  await expect(page.getByRole("list", { name: "Ledger" })).toContainText("You claim to be the Lookout.");
+  expect(errors).toEqual([]);
 });
 
 test("shows the default move after a missed round (design §5.1)", async ({ page }) => {
