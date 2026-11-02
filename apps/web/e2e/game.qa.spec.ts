@@ -62,7 +62,7 @@ async function leaks(guest: Page): Promise<string[]> {
     .evaluate(() => {
       const out: string[] = [];
       for (const seat of document.querySelectorAll(".crew-seat:not(.is-you)")) {
-        if (seat.querySelector(".crew-seat__mark, .avatar__dot")) out.push(`submitted mark on ${seat.textContent}`);
+        if (seat.querySelector(".crew-seat__mark, .avatar__dot, .crook-avatar--ready")) out.push(`submitted mark on ${seat.textContent}`);
         if (/inside man|security chief|role|stash|pocket|\d+ loot/i.test(seat.textContent ?? "")) out.push(`seat text: ${seat.textContent}`);
         const title = seat.querySelector("[title]")?.getAttribute("title") ?? "";
         if (/locked in/i.test(title)) out.push(`seat title: ${title}`);

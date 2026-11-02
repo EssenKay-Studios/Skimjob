@@ -380,6 +380,13 @@ export interface CrookFigureProps extends CrookProps {
    * *claims* (alibi) but nobody saw them in. design §5.4, m2-plan M2-9.
    */
   readonly ghost?: boolean;
+  /**
+   * Seen on camera (Security, the Lookout, a Tail perk), not in person: the
+   * crook drawn faded behind a blue CCTV wash with scanlines and a camera
+   * badge. Solid figures are people you stood with; ghosts are claims.
+   * design §6.1, §8, §8.3
+   */
+  readonly camera?: boolean;
   /** Accessible name; becomes an SVG <title>. */
   readonly label?: string;
   /** Visible name tag (initials), so the crook is identifiable on touch and without colour. */
@@ -402,6 +409,7 @@ export function CrookFigure({
   sack = false,
   armsUp,
   ghost = false,
+  camera = false,
   label,
   tag,
   tagSize = 16,
@@ -435,8 +443,9 @@ export function CrookFigure({
     );
   }
   return (
-    <g transform={t} className="crook-fig">
+    <g transform={t} className={camera ? "crook-fig crook-fig--camera" : "crook-fig"}>
       {label && <title>{label}</title>}
+      <g opacity={camera ? 0.62 : undefined}>
       <ellipse cx="32" cy="69.5" rx="21" ry="3.6" fill="var(--art-shade-2)" />
       <ellipse cx="23" cy="66.4" rx="6.6" ry="3.8" fill="var(--ink)" {...line} strokeWidth={1.6} />
       <ellipse cx="41" cy="66.4" rx="6.6" ry="3.8" fill="var(--ink)" {...line} strokeWidth={1.6} />
@@ -464,13 +473,46 @@ export function CrookFigure({
           <path d={sack ? "M53 44c4-3 4-8 2-14" : "M53.5 44c3 3 4 7 3 10"} fill="none" stroke={crewVar(l.colour)} strokeWidth="3" strokeLinecap="round" />
         </>
       )}
+      </g>
+      {camera && (
+        <g pointerEvents="none">
+          <clipPath id={`${id}-cam`}>
+            <path d={body.d} />
+          </clipPath>
+          <g clipPath={`url(#${id}-cam)`}>
+            <rect x="0" y="0" width="64" height="72" fill="var(--sky)" opacity=".38" />
+            {[8, 16, 24, 32, 40, 48, 56, 64].map((y) => (
+              <path key={y} d={`M0 ${y}H64`} stroke="var(--art-ink)" strokeWidth="1.1" opacity=".3" />
+            ))}
+          </g>
+          <path d={body.d} fill="none" stroke="var(--sky)" strokeWidth="2.4" />
+        </g>
+      )}
       {bot && (
         <g transform={tag && tagAt === "body" ? "translate(47 36) scale(.9)" : "translate(40 50) scale(.95)"}>
           <BotBadge />
         </g>
       )}
+      {camera && (
+        <g transform={flip ? "translate(64 0) scale(-1 1) translate(-2 4)" : "translate(-2 4)"}>
+          <CameraBadge />
+        </g>
+      )}
       {tagEl}
     </g>
+  );
+}
+
+/** "Seen on camera": a little CCTV camera on a sky disc, in its own 18-unit box. */
+function CameraBadge() {
+  return (
+    <>
+      <circle cx="9" cy="9" r="8.6" fill="var(--sky)" stroke={INK} strokeWidth="1.6" />
+      <path d="M3.6 6.4h7.6l1.6 2.2v2.6H3.6z" fill="var(--paper-hi)" stroke={INK} strokeWidth="1.3" strokeLinejoin="round" />
+      <path d="M12.8 9.2l2.4-1.4v3.4l-2.4-1" fill="var(--paper-hi)" stroke={INK} strokeWidth="1.2" strokeLinejoin="round" />
+      <circle cx="5.6" cy="8.8" r=".9" fill="var(--bad)" />
+      <path d="M6 11.2v2.6" stroke={INK} strokeWidth="1.3" strokeLinecap="round" />
+    </>
   );
 }
 

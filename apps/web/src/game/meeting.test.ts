@@ -16,6 +16,7 @@ import {
 import { describe, expect, it } from "vitest";
 import {
   abilityOffers,
+  claimState,
   decidingOf,
   emergencyOf,
   latestOutcome,
@@ -245,5 +246,20 @@ describe("the shakedown window and results (design §11.3, §11.4)", () => {
     expect(o.result).toEqual({ kind: "skipped" });
     expect(o.checkpoint).toMatchObject({ act: 1, target: 35 });
     expect(o.fresh).toBe(true);
+  });
+});
+
+describe("role claims (R4b, design §8, §12.1)", () => {
+  it("offers every content role, once per act, and none in Duel (design §16.1)", () => {
+    let s = createGame(config("open"));
+    const before = claimState(viewFor(s, "p1"))!;
+    expect(before.act).toBe(1);
+    expect(before.claimed).toBeNull();
+    expect(before.options.map((o) => o.id)).toEqual(expect.arrayContaining(["lookout", "rookie", "mole"]));
+    s = run(s, { type: "claimRole", player: "p1", role: "lookout" });
+    expect(claimState(viewFor(s, "p1"))!.claimed).toBe("lookout");
+    expect(claimState(viewFor(s, "p2"))!.claimed).toBeNull();
+    const duel = createGame(config("open", { players: config("open").players.slice(0, 2), duel: true }));
+    expect(claimState(viewFor(duel, "p1"))).toBeNull();
   });
 });

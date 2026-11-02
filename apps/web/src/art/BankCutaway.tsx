@@ -25,7 +25,7 @@
 // legible (≥ ~10 px) on a phone. Crooks are spread along the room's floor by
 // `roomSlots()`; a crowded room shrinks them and adds a back row (tags above
 // their heads). Only pass what the player's view knows: their own room, who
-// they saw there, and alibi claims as `ghost`.
+// they saw there, who they watched on camera as `camera`, and alibi claims as `ghost`.
 //
 // Rooms in `closed` (Lockdown) are taped off and can't be picked: no click
 // or key handling, `aria-disabled="true"`, no hover lift.
@@ -53,6 +53,8 @@ export interface BankOccupant {
   readonly sack?: boolean;
   /** Claimed (alibi), not seen: the claimant's dashed outline with a "?". */
   readonly ghost?: boolean;
+  /** Seen on camera (Security, the Lookout, a Tail perk), not in person: faded, CCTV wash, camera badge. */
+  readonly camera?: boolean;
   /** Visible name tag; default: initials, unique among the drawing's occupants. */
   readonly tag?: string;
 }
@@ -227,13 +229,15 @@ function Room({
   const wall = ROOM_WALL[id];
   const slots = roomSlots(w, h, occupants.length, figureScale);
   const order = slots.map((s, i) => ({ s, o: occupants[i]!, i })).sort((a, b) => Number(b.s.back) - Number(a.s.back));
-  const who = occupants.filter((o) => !o.ghost).map((o) => o.name);
+  const who = occupants.filter((o) => !o.ghost && !o.camera).map((o) => o.name);
+  const filmed = occupants.filter((o) => !o.ghost && o.camera).map((o) => o.name);
   const claims = occupants.filter((o) => o.ghost).map((o) => o.name);
   const label = [
     name,
     selected ? "selected" : "",
     closed ? "closed" : "",
     who.length ? `here: ${who.join(", ")}` : "",
+    filmed.length ? `on camera: ${filmed.join(", ")}` : "",
     claims.length ? `claimed: ${claims.join(", ")}` : "",
   ]
     .filter(Boolean)
@@ -283,11 +287,12 @@ function Room({
             bot={!!o.bot}
             sack={!!o.sack}
             ghost={!!o.ghost}
+            camera={!!o.camera && !o.ghost}
             x={s.x}
             y={s.y}
             scale={s.scale}
             flip={i % 2 === 1}
-            label={`${o.name}${o.ghost ? " (claimed)" : ""}${o.bot ? " (bot)" : ""}`}
+            label={`${o.name}${o.ghost ? " (claimed)" : o.camera ? " (on camera)" : ""}${o.bot ? " (bot)" : ""}`}
             tag={nameTags ? tagOf(o) : undefined}
             tagSize={font / s.scale}
             tagAt={twoRows && s.back ? "head" : "body"}

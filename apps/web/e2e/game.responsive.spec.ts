@@ -4,7 +4,8 @@ import { startGame } from "./setupGame";
 // The live game screen (M2-6) at every launch viewport (decisions.md
 // 2026-11-01 "Web-first launch; responsive everywhere"): no horizontal
 // overflow and every target at least 44 px, with the move panel open and a
-// room picked (slider and the Security watch picker showing).
+// room picked (slider and the Security watch picker showing), and the bank
+// board (M2-9) picking a room.
 
 const VIEWPORTS = [
   { width: 360, height: 740 },
@@ -63,6 +64,24 @@ for (const viewport of VIEWPORTS) {
       await expect(page.locator("#split").or(page.getByText(/you hand everything in/))).toBeVisible();
       const o2 = await overflow(page);
       expect(o2.scroll).toBeLessThanOrEqual(o2.client);
+      expect(await smallTargets(page)).toEqual([]);
+
+      // M2-9: the bank board is the main board; tapping a room picks it in the move panel.
+      const board = page.getByRole("region", { name: "The bank" });
+      const bank = await board.locator(".bank__svg").boundingBox();
+      expect(bank!.x).toBeGreaterThanOrEqual(0);
+      expect(bank!.x + bank!.width).toBeLessThanOrEqual(viewport.width);
+      await board.locator(".bank-room[data-room=office]").click();
+      await expect(page.locator('.room-tile[data-room="Office"]')).toHaveAttribute("aria-pressed", "true");
+      const o3 = await overflow(page);
+      expect(o3.scroll).toBeLessThanOrEqual(o3.client);
+      expect(await smallTargets(page)).toEqual([]);
+
+      // R4b: the role card's Claim role list open.
+      await page.locator(".role-card").getByRole("button", { name: "Claim role" }).click();
+      await expect(page.locator(".role-card").getByRole("group", { name: "Role to claim" })).toBeVisible();
+      const o4 = await overflow(page);
+      expect(o4.scroll).toBeLessThanOrEqual(o4.client);
       expect(await smallTargets(page)).toEqual([]);
       await ctx.close();
     });
