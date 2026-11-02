@@ -55,4 +55,15 @@ describe("crew hunch — design §17.3 (v2 §5)", () => {
     }
     for (let i = 1; i <= 6; i++) expect(targets.get(`p${i}`) ?? 0, `p${i} in ${JSON.stringify([...targets])}`).toBeGreaterThan(0);
   });
+
+  it("with the harness's hidden crewSeed it can't be computed from public data: the same view gives a different hunch per seed (STATUS follow-up, PR #37 review)", () => {
+    const g = meetingViews("g-a");
+    const seeds = ["s1", "s2", "s3", "s4", "s5"].map((seed) => crewHunch(g.p2, "p3", seed));
+    expect(new Set(seeds).size).toBe(seeds.length);
+    // Still shared by the table and steady for the meeting, for one crewSeed.
+    expect(crewHunch(g.p5, "p3", "s1")).toBe(seeds[0]);
+    expect(crewHunch(g.later, "p3", "s1")).toBe(seeds[0]);
+    // And not the public-data fallback.
+    expect(seeds).not.toContain(crewHunch(g.p2, "p3"));
+  });
 });

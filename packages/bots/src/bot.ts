@@ -44,6 +44,14 @@ export interface BotOptions {
   readonly personality: Personality;
   /** The bot's own seed. Never the game's seed: that is hidden from every player. */
   readonly seed: string;
+  /**
+   * The crew's shared hunch seed (`crewHunch`): the same for every bot in a
+   * game, different between games, and hidden from the players (the harness
+   * derives it from the game's secret seed), so nobody can work the hunch out
+   * from public data (PR #37 review). Absent: the hunch falls back to public
+   * game data (`gameDigest`).
+   */
+  readonly crewSeed?: string;
 }
 
 /** A bot's own random numbers: the engine's seeded sfc32, kept apart from the game's RNG. */
@@ -56,14 +64,14 @@ export function botRandom(seed: string): Random {
   };
 }
 
-export function createBot({ player, personality, seed }: BotOptions): Agent & { readonly personality: Personality } {
+export function createBot({ player, personality, seed, crewSeed }: BotOptions): Agent & { readonly personality: Personality } {
   const random = botRandom(seed);
   return {
     player,
     personality,
     act: (view) => {
       if (view.me.id !== player) throw new Error(`bot ${player} was given ${view.me.id}'s view`);
-      return decide(view, personality, random);
+      return decide(view, personality, random, crewSeed);
     },
   };
 }
@@ -104,7 +112,7 @@ function weighted<T>(items: readonly (readonly [T, number])[], random: Random): 
 }
 
 /** Everything the bot wants to do given this view. */
-export function decide(view: PlayerView, p: Personality, random: Random): PlayerCommand[] {
+export function decide(view: PlayerView, p: Personality, random: Random, crewSeed?: string): PlayerCommand[] {
   const phase = view.phase;
   if (phase.kind === "ended" || phase.kind === "setup") return [];
   const player = view.me.id;
@@ -114,7 +122,7 @@ export function decide(view: PlayerView, p: Personality, random: Random): Player
   if (room !== null) out.push({ type: "postAlibi", player, room }, ...alibiPerk(view, room));
   if (phase.kind === "meeting") {
     // v2 §4: vote (with a +Vote on a shakedown), then maybe claim a role (the Priest only after its vote).
-    const vote = view.me.vote === null ? chooseVote(view, p, random) : null;
+    const vote = view.me.vote === null ? chooseVote(view, p, random, crewSeed) : null;
     if (vote !== null) out.push({ type: "castVote", player, vote }, ...meetingPerks(view, vote));
     out.push(...claimCommands(view, p, random, true));
     return out;
@@ -405,14 +413,16 @@ function wantsEmergency(view: PlayerView, p: Personality, random: Random): boole
  * for every bot, so it can carry a majority to a wrong target, as a crew
  * talking itself into a theory does. Scaled by each bot's `hunch` (personalities.ts).
  *
- * Seeded by the meeting, the player and `gameDigest` (public, game-specific),
- * so every bot at the table shares it but it changes from game to game: seat
- * and meeting ids are the same in every game, and alone they gave each seat a
- * fixed bias (PR #37 review).
+ * Seeded by the meeting, the player and the harness's hidden `crewSeed`
+ * (BotOptions), so every bot at the table shares it but it changes from game
+ * to game: seat and meeting ids are the same in every game, and alone they
+ * gave each seat a fixed bias (PR #37 review). Without a `crewSeed` it falls
+ * back to `gameDigest` (public, game-specific), which anyone could compute.
  */
-export function crewHunch(view: PlayerView, player: PlayerId): number {
+export function crewHunch(view: PlayerView, player: PlayerId, crewSeed?: string): number {
   const meeting = view.phase.kind === "meeting" || view.phase.kind === "shakedownPending" ? view.phase.meetingId : `act-${view.act}`;
-  return botRandom(`hunch/${meeting}/${player}/${gameDigest(view)}`)() * 2 - 1;
+  const salt = crewSeed !== undefined ? `crew:${crewSeed}` : gameDigest(view);
+  return botRandom(`hunch/${meeting}/${player}/${salt}`)() * 2 - 1;
 }
 
 /**
@@ -428,21 +438,21 @@ function gameDigest(view: PlayerView): string {
 }
 
 /** Suspicion as the bot reads it at a vote: the evidence, the crew's hunch (`hunch`), and its own misreading (`misread`). */
-export function misjudged(view: PlayerView, scores: ReadonlyMap<PlayerId, number>, p: Personality, random: Random): Map<PlayerId, number> {
+export function misjudged(view: PlayerView, scores: ReadonlyMap<PlayerId, number>, p: Personality, random: Random, crewSeed?: string): Map<PlayerId, number> {
   const out = new Map<PlayerId, number>();
-  for (const [id, score] of scores) out.set(id, score + p.hunch * crewHunch(view, id) + p.misread * (random() * 2 - 1));
+  for (const [id, score] of scores) out.set(id, score + p.hunch * crewHunch(view, id, crewSeed) + p.misread * (random() * 2 - 1));
   return out;
 }
 
 /** Shake down the most suspicious player once they pass the bot's threshold; otherwise skip. design §11.2 */
-export function chooseVote(view: PlayerView, p: Personality, random: Random): VoteChoice {
+export function chooseVote(view: PlayerView, p: Personality, random: Random, crewSeed?: string): VoteChoice {
   // design §8.1: a Mole never votes to shake down its fellow Mole.
   const allies = view.me.roleState.allies;
   if (random() < p.noise) {
     const target = pick([null, ...view.players.map((o) => o.id).filter((id) => !allies.includes(id))], random);
     return target === null ? { kind: "skip" } : { kind: "shakedown", target };
   }
-  const scores = misjudged(view, suspicion(view), p, random);
+  const scores = misjudged(view, suspicion(view), p, random, crewSeed);
   // design §8: a Snitch is paid when its target is caught holding loot, so it moves on less evidence.
   const { power } = roleOf(view);
   const mark = power.kind === "snitch" ? view.me.roleState.target : null;
