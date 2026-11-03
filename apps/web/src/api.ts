@@ -3,12 +3,19 @@
 
 export type SessionLength = "quick" | "1h" | "3h" | "1d" | "3d" | "1w";
 export type VoteVisibility = "hiddenThenRevealed" | "open" | "secret";
-export type MoleSetting = "off" | "maybe" | "on";
+/** extension.md "Host settings" (R6b adds their controls). */
+export type DeckId = "starter" | "standard" | "everything";
+export type DealStyle = "balanced" | "random";
+export type RoleListSetting = "exact" | "possible" | "hidden";
 
 export interface LobbySettings {
   readonly sessionLength: SessionLength;
   readonly voteVisibility: VoteVisibility;
-  readonly mole: MoleSetting;
+  readonly deck: DeckId;
+  /** Per-role toggles; empty = the deck preset's roles. */
+  readonly roles: readonly string[];
+  readonly deal: DealStyle;
+  readonly roleList: RoleListSetting;
   readonly eventsEnabled: boolean;
   readonly starterMode: boolean;
   readonly dmNotices: boolean;

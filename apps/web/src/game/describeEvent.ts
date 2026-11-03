@@ -12,7 +12,7 @@ export interface DescribeContext {
   readonly name: (player: PlayerId) => string;
   /** A meeting slot for people (the engine's slots are opaque labels, often ISO times). Default: as is. */
   readonly slot?: (slot: string) => string;
-  /** The crew is big enough for the plurality rule (9–12, design §11.2): a failed vote isn't "no majority" there. */
+  /** Unused since one vote rule covers every crew size (extension.md "Fixed numbers"); R6b drops it. */
   readonly plurality?: boolean;
 }
 
@@ -65,19 +65,10 @@ function line(e: GameEvent, ctx: DescribeContext): string {
       return you(e.player) ? `You were dealt the ${roleName(e.role)}.` : `${ctx.name(e.player)} was the ${roleName(e.role)}.`;
     case "snitchTargetAssigned":
       return `${whose(e.player)} Snitch target is ${who(e.target)}.`;
-    case "alliesLearned": {
-      // v2 §2: only what the event says (who, and how); never a role name. The learner sees it, or anyone in the reveal.
-      const are = e.allies.length > 1 ? "are" : "is";
-      if (e.via === "deal") return `${verb(e.player, "were", "was")} told at the deal that ${names(e.allies)} ${are} on the dark side.`;
-      if (e.via === "fence") return `${whose(e.player)} full safe paid off: ${names(e.allies)} ${are} on the dark side.`;
-      if (e.via === "tipOff") return `${whose(e.player)} tip-off named a dark-side ally: ${names(e.allies)}.`;
-      if (e.via === "embezzle") return `${whose(e.player)} first take named a dark-side ally: ${names(e.allies)}.`;
-      if (e.via === "blackmail") return `A blackmail guess hit the dark side: ${who(e.player)} and ${names(e.allies)} now know ${you(e.player) ? "you're" : "they're"} on the same side.`;
-      return `The Heat ran high: ${who(e.player)} and ${names(e.allies)} now know ${you(e.player) ? "you're" : "they're"} on the same side.`;
-    }
-    case "moleAllies":
-      // After a Double-cross the list can hold learned accomplices too (v2 §2), so "allies", not "fellow Moles".
-      return `${whose(e.player)} dark-side all${e.allies.length > 1 ? "ies" : "y"}: ${names(e.allies)}.`;
+    case "roleListShown":
+      return `${e.list === "exact" ? "Roles in play" : "Roles that could be in play"}: ${list(e.roles.map(roleName))}.`;
+    case "shopDealt":
+      return `The shop has ${list(e.perks.map(perkName))} on sale.`;
     case "rngAdvanced":
       return "The dice rolled.";
     case "roundStarted":
@@ -168,12 +159,19 @@ function line(e: GameEvent, ctx: DescribeContext): string {
       return `${who(e.target)} ${you(e.target) ? "were" : "was"} blessed: the bank paid the compensation, so ${e.amount} went back into the Haul.`;
     case "muscleNamed":
       return `${verb(e.player, "were", "was")} named as the ${roleName("muscle")}: ${you(e.player) ? "you" : "they"} called off the shakedown of ${who(e.target)}, who wasn't clean.`;
-    case "snitchRewarded":
-      return `Snitching paid: ${who(e.target)} wasn't clean, so ${whose(e.player)} ballot weighs +${e.votes} from now on.`;
     case "checkpointChecked":
       return `${e.act === 3 ? "Final target" : `Act ${e.act} checkpoint`}: Haul ${e.haul}, target ${e.target}, ${e.met ? "made it" : `missed${e.heatPenalty > 0 ? ` (Heat +${e.heatPenalty})` : ""}`}.`;
-    case "perkGranted":
-      return `${verb(e.player, "earned", "earned")} a ${perkName(e.perk)} perk: ${PERKS[e.perk]?.effect ?? ""}`.trim();
+    case "tokenEarned":
+      return `${verb(e.player, "earned", "earned")} a token.`;
+    case "perkBought":
+      return `${verb(e.player, "bought", "bought")} a ${perkName(e.perk)} perk for ${e.cost} token${e.cost === 1 ? "" : "s"}: ${PERKS[e.perk]?.effect ?? ""}`.trim();
+    case "policeActivity":
+      // extension.md "Police activity": a patrol and a tip-off read the same.
+      return `Police activity: Heat +${e.heatAdded}.`;
+    case "policeScheduled":
+      return `A police moment came${e.patrol ? " with a patrol" : ""}.`;
+    case "tipOffLanded":
+      return `${whose(e.player)} tip-off landed in round ${e.round}.`;
     case "perkUsed":
       return perk(e.perk, e.player, { you, who, whose, verb });
     case "rigPicked":
@@ -226,7 +224,7 @@ function ability(a: ResolvedAbility, player: PlayerId, round: number, { you, who
     case "cancelShakedown":
       return `${verb(player, "leaned", "leaned")} on the crew: the shakedown of ${who(a.target)} is off.`;
     case "tipOff":
-      return `Round ${round}: ${verb(player, "tipped", "tipped")} off the cops (Heat +${a.heat}).`;
+      return `Round ${round}: ${verb(player, "tipped", "tipped")} off the cops.`;
     case "audit":
       return `Audit: the ${roomName(a.room)} came up ${a.shortfall} short in round ${a.round}.`;
     case "checkStash":

@@ -46,17 +46,12 @@ describe("describeEvent", () => {
     expect(describeEvent(sampleEvents.roleDealt, asCyd)).toBe("Ana was the Fence."); // the reveal
   });
 
-  // v2 §2 (R3a): what the dark side learns says who and how, never a role, and names nobody else.
-  it("describes alliesLearned for each way it is learned, without naming roles", () => {
-    const lines = (["deal", "fence", "getaway", "tipOff"] as const).map((via) => describeEvent({ ...sampleEvents.alliesLearned, via }, asAna));
-    expect(lines).toEqual([
-      "You were told at the deal that Ben is on the dark side.",
-      "Your full safe paid off: Ben is on the dark side.",
-      "The Heat ran high: you and Ben now know you're on the same side.",
-      "Your tip-off named a dark-side ally: Ben.",
-    ]);
-    for (const l of lines) expect(l).not.toMatch(/Mole|Hacker|Fence|Getaway|Driver|saboteur|accomplice|Cyd/i);
-    expect(describeEvent({ ...sampleEvents.alliesLearned, via: "getaway" }, asCyd)).toBe("The Heat ran high: Ana and Ben now know they're on the same side.");
+  // extension.md "Police activity", "Tokens and the shop": a patrol and a tip-off read the same; tokens never say why.
+  it("describes police activity, tokens and the shop", () => {
+    expect(describeEvent(sampleEvents.policeActivity, asCyd)).toBe("Police activity: Heat +4.");
+    expect(describeEvent(sampleEvents.tokenEarned, asAna)).toBe("You earned a token.");
+    expect(describeEvent(sampleEvents.perkBought, asAna)).toBe("You bought a Peek perk for 2 tokens: Learn one player's role.");
+    expect(describeEvent(sampleEvents.shopDealt, asCyd)).toBe("The shop has Peek, Alibi and +Vote on sale.");
   });
 
   // design §5.1: a missed deadline shows the default move.
@@ -110,7 +105,7 @@ describe("describeEvent", () => {
     forge: [{ kind: "forge", target: "ben", room: "vault" }],
     embezzle: [{ kind: "embezzle", amount: 4 }],
     cancelShakedown: [{ kind: "cancelShakedown", meetingId: "m1", target: "ben" }],
-    tipOff: [{ kind: "tipOff", heat: 6 }],
+    tipOff: [{ kind: "tipOff" }],
     audit: [{ kind: "audit", round: 2, room: "office", shortfall: 1 }],
     checkStash: [
       { kind: "checkStash", target: "ben", threshold: 3, dirty: true },
@@ -144,7 +139,6 @@ describe("describeEvent", () => {
     expect(describeEvent(sampleEvents.voteCompromised, { ...asAna, me: "ben" })).not.toMatch(/Ana|Blackmail|Fence/);
     expect(describeEvent(sampleEvents.sightingForged, asCyd)).toBe("Forged: Ana planted Ben in the Vault on round 2's cameras, fooling Ana.");
     expect(describeEvent({ ...sampleEvents.sightingForged, shownTo: [] }, asCyd)).toBe("Forged: Ana planted Ben in the Vault on round 2's cameras (nobody was watching).");
-    for (const via of ["blackmail", "embezzle"] as const) expect(describeEvent({ ...sampleEvents.alliesLearned, via }, asAna)).not.toMatch(/Mole|Embezzler|Blackmailer|saboteur|accomplice/i);
     expect(EVIDENCE_CARD_NOTE).toMatch(/own case file/);
     expect(EVIDENCE_CARD_NOTE).toMatch(/tampered/);
   });
@@ -167,7 +161,6 @@ describe("describeEvent", () => {
   });
   it("names perks and cards", () => {
     expect(describeEvent(sampleEvents.perkUsed, asAna)).toBe("Peek: Ben is the Mole.");
-    expect(describeEvent(sampleEvents.perkGranted, asAna)).toBe("You earned a Peek perk: Learn one player's role.");
     expect(describeEvent({ ...sampleEvents.perkUsed, perk: perks.rig[0] }, asAna)).toBe("You rigged round 3's card: Audit and Payday to pick from.");
     // design §8.3: the Smooth Talker's Emergency
     expect(describeEvent({ ...sampleEvents.perkUsed, perk: perks.emergency[0] }, asAna)).toBe("You spent an Emergency perk to call an extra emergency meeting.");
@@ -178,7 +171,7 @@ describe("describeEvent", () => {
     expect(describeEvent(sampleEvents.raidStopped, asCyd)).toBe("The cops were about to raid in round 4, but the raid was stopped: Heat is back to 95.");
     expect(describeEvent(sampleEvents.blessingPaid, asCyd)).toBe("Ana was blessed: the bank paid the compensation, so 5 went back into the Haul.");
     expect(describeEvent(sampleEvents.muscleNamed, asCyd)).toBe("Ben was named as the Muscle: they called off the shakedown of Ana, who wasn't clean.");
-    expect(describeEvent(sampleEvents.cardForeseen, { ...asAna, me: "ben" })).toBe("You foresaw round 3's card: Police patrol.");
+    expect(describeEvent(sampleEvents.cardForeseen, { ...asAna, me: "ben" })).toBe("You foresaw round 3's card: Quiet night.");
   });
 
   // design §16.1: Duel call-outs both ways.

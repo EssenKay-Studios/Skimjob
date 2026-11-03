@@ -111,7 +111,7 @@ describe("the vote window per vote mode (design §11.2)", () => {
 
   it("Ballot perk: its holder sees the one ballot they unlocked, also in Secret mode (design §8.3)", () => {
     let s = createGame(config("secret"));
-    s = applyEvent(s, { type: "perkGranted", visibility: privateTo("p1"), player: "p1", perk: "ballot" });
+    s = applyEvent(s, { type: "perkBought", visibility: privateTo("p1"), player: "p1", perk: "ballot", cost: 0 });
     s = run(s, { type: "callEmergency", player: "p2" }, open("emergency-p2"), shake("p3", "p2"), skip("p4"));
     expect(abilityOffers(viewFor(s, "p1"))).toContainEqual({ kind: "ballot", targets: ["p2", "p3", "p4", "p5"] });
     s = run(s, { type: "useAbility", player: "p1", ability: { kind: "ballot", target: "p3" } });
@@ -126,7 +126,7 @@ describe("the vote window per vote mode (design §11.2)", () => {
 
   it("Ballot is never offered in Open mode, where ballots are public anyway", () => {
     let s = createGame(config("open"));
-    s = applyEvent(s, { type: "perkGranted", visibility: privateTo("p1"), player: "p1", perk: "ballot" });
+    s = applyEvent(s, { type: "perkBought", visibility: privateTo("p1"), player: "p1", perk: "ballot", cost: 0 });
     s = run(s, { type: "callEmergency", player: "p2" }, open("emergency-p2"));
     expect(abilityOffers(viewFor(s, "p1"))).toEqual([]);
   });
@@ -146,11 +146,11 @@ describe("the vote window per vote mode (design §11.2)", () => {
   });
 });
 
-describe("the plurality rule (design §11.2)", () => {
-  it("applies from 9 players", () => {
+describe("no plurality rule (extension.md: one vote rule for every crew size)", () => {
+  it("never applies, even at 9 players", () => {
     const crew = (n: number) => ({ ...config("open"), players: Array.from({ length: n }, (_, i) => ({ id: `p${i + 1}`, name: `P${i + 1}`, isBot: false })) });
     expect(pluralityRule(viewFor(createGame(crew(8)), "p1"))).toBe(false);
-    expect(pluralityRule(viewFor(createGame(crew(9)), "p1"))).toBe(true);
+    expect(pluralityRule(viewFor(createGame(crew(9)), "p1"))).toBe(false);
   });
 });
 
@@ -202,7 +202,7 @@ describe("scheduling and emergencies (design §11.1)", () => {
     expect(emergencyOf(viewFor(s, "p2")).canCall).toBe(false);
     s = run(s, close("emergency-p1"));
     expect(emergencyOf(viewFor(s, "p1"))).toMatchObject({ canCall: false, note: "You've called your emergency meeting for this game." });
-    s = applyEvent(s, { type: "perkGranted", visibility: privateTo("p1"), player: "p1", perk: "emergency" });
+    s = applyEvent(s, { type: "perkBought", visibility: privateTo("p1"), player: "p1", perk: "emergency", cost: 0 });
     expect(emergencyOf(viewFor(s, "p1"))).toMatchObject({ canCall: true, note: expect.stringContaining("Emergency perk") });
   });
 });
