@@ -1,4 +1,4 @@
-# Orchestrator handoff (snapshot 2026-11-02 evening, paused by the owner)
+# Orchestrator handoff (snapshot 2026-11-03 morning, resumed on the owner's Mac)
 
 Read this together with `docs/STATUS.md`, which holds the canonical task list. This file covers how the work is run and what was in flight at the snapshot.
 
@@ -22,21 +22,22 @@ Read this together with `docs/STATUS.md`, which holds the canonical task list. T
 - Send the owner a short progress update about every 15 minutes.
 
 ## State at snapshot
-- **PAUSED:** the owner asked to pause all work at 16:23 IST on 2 Nov, after M2-10. Nothing is in flight; don't start a task until he resumes.
-- **Open PR:** #45 (draft, `docs/roles-v3`): the roles v3 spec (`docs/roles-v3.md`), waiting for owner approval. Nothing of it is built.
-- **Merged through #46** on 2 Nov: #41 (bank board + Claim role), #42 (owner answers docs), #43 (R5 parity balance, provisional), #44 (lock-in marks, presence, early round end, human-majority meeting lock), #46 (M2-10 ledger, case file, "While you were away", suspicion board), plus this docs fold.
+- **RESUMED 3 Nov:** the pipeline runs again, now on the owner's Mac (setup in the ops PR `ops/mac-pipeline`).
+- **Roles v3 approved as amended by the Extension** (owner, 3 Nov morning; decisions.md "Owner answers, 3 Nov (morning)"). The docs PR `docs/extension-approved` folds it into `docs/roles-v3.md`, `docs/design.md` v0.2 and `docs/extension.md`, and closes draft #45. Nothing of it is built yet. Out of scope: `docs/rebuild.md`, Books mode, the recruited Mole.
+- **Merged through #46** on 2 Nov: #41 (bank board + Claim role), #42 (owner answers docs), #43 (R5 parity balance, provisional), #44 (lock-in marks, presence, early round end, human-majority meeting lock), #46 (M2-10 ledger, case file, "While you were away", suspicion board), plus the 2 Nov docs fold.
 - **The repo is public** (owner, 2 Nov: Actions minutes had run out). Never commit secrets; they stay in repo secrets.
-- Player rulebook: claude.ai doc "Skimjob — How to play" (https://claude.ai/artifact/3dEyv4wdmiJ3a9DhrtsBtN). Open there: Exact vs Possible as the default role list.
+- **Deploy workflow is manual-only** until a host is chosen (owner, 3 Nov; done in the ops PR).
+- Player rulebook: claude.ai doc "Skimjob — How to play" (https://claude.ai/artifact/3dEyv4wdmiJ3a9DhrtsBtN); the role-list default there is now settled as Exact roles dealt.
 
 ## Remaining plan
-1. **Roles v3 approval** (PR #45). Direction is in decisions.md "Owner answers, 2 Nov (afternoon)".
-2. **R6a rules:** roles v3 plus the 2 Nov answers (role list setting, deck presets + toggles, deal modes Balanced / Truly random, Fence safe revealed, tip-off any time, shakedown window under Exact), the bots for all of it, and one background balance pass run locally with a tuning script (parity ≤ 0.10, success 55–70%).
-3. **R6b roles UI:** lobby deck picker, Roles rulebook + tap-to-explain, visual cues for every power, last round shown faded while planning.
-4. M2-11: end-of-game reveal.
+1. **R6a + Extension rules** (engine, content, bots): roles v3, tokens and the 3-perk shop, "once between meetings", fixed shakedown numbers (clean 6, pay 8), one vote rule, whole-number scoring, "police activity" and "camera offline" cover, Heat breakdown, Standard deck, Quick uses Starter, the 3 Nov owner rulings. Spec: `docs/roles-v3.md` + `docs/design.md` v0.2 (the Extension wins on conflict).
+2. **One balance pass** for all of it on the sharded "Sim suite" GitHub workflow: per-role parity ≤ 0.10, success 55–70%; the Extension's numbers (clean 6, pay 8, shop costs) are starting values to tune.
+3. **R6b + Extension UI:** role cards and Roles rulebook, "between meetings" wording, gap box, Haul target bar, Heat breakdown, shop sheet, lobby deck picker, visual cues for every power, last round shown faded while planning.
+4. M2-11: end-of-game reveal (include tokens and purchases).
 5. M2-13: host controls (pause, extend, replace with bot).
 6. M2-12: Google sign-in, stub-ready (needs a client id from the owner).
 7. M2-14: playtest pass.
-8. **M2-15: offline demo build.** Run the in-browser engine and bots with the same UI, and publish it as a claude.ai artifact the owner can verify. This is the deliverable the owner asked for.
+8. **M2-15: offline demo build.** Run the in-browser engine and bots with the same UI, and publish it as a **GitHub Pages** site the owner can verify (owner, 3 Nov). This is the deliverable the owner asked for.
 
 Follow-ups from reviews: see STATUS "Open follow-ups" (board rate-limiter test, CaseFile memo names, double notes fetch, Quick-game e2e flake, R5 and #44 review notes, SHA-pinning the Actions).
 

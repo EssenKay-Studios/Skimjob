@@ -1,10 +1,10 @@
 # Skimjob Extension: simplified rulebook
 
-*2 Nov 2026 · Karthik. Proposal, not yet approved for build. Companion proposal: [`rebuild.md`](rebuild.md).*
+*2 Nov 2026 · Karthik. **Approved 3 Nov 2026**: it amends roles v3 ([`roles-v3.md`](roles-v3.md)), and wins on any conflict. Built in R6a (rules, content, bots) and R6b (UI), with one balance pass between them; its numbers are starting values for that pass. The companion proposal [`rebuild.md`](rebuild.md) is **not approved, out of scope**.*
 
 ## Summary
 
-The Extension is the current game (roles v3, PR #45) made lighter to learn, without changing how it is built. The Rebuild is the jobs redesign in [`rebuild.md`](rebuild.md).
+The Extension is the current game (roles v3, PR #45) made lighter to learn, without changing how it is built. The Rebuild is the jobs redesign in [`rebuild.md`](rebuild.md) (not approved, out of scope).
 
 **What changes for players:**
 
@@ -227,6 +227,20 @@ Police patrol drops from +5 to +4 to match the tip-off. Unlike the other cards, 
 
 Quick games switch to the Starter deck automatically. 45-second rounds leave no time for powers and tokens.
 
+## Owner rulings (3 Nov)
+
+The owner's answers of 3 Nov fill gaps the tables above leave open. All final.
+
+1. **Getaway Driver, Fence, Mole and Embezzler** earn **1 token** for their trigger, not a free Peek.
+2. **Emergency meetings don't recharge** "once between meetings" powers. Only the regular meetings after rounds 3, 6 and 9 do.
+3. The **Detective's "dirty" line and the shakedown's clean line** stay one shared number (6), tuned together.
+4. The **Mole** earns a token for every tip-off (at most 3 per game).
+5. The **Blackmailer** earns a token when a vote it stole decides a shakedown.
+6. A **Muscle** that saves an innocent gets a token **and** its power back.
+7. **Duel mode:** "between meetings" limits reset after rounds 3 and 6.
+
+Also decided: the role list shown to players defaults to **Exact roles dealt**. The folded rules are in [`roles-v3.md`](roles-v3.md) and [`design.md`](design.md).
+
 ## Code change estimate
 
 The Extension changes about **1,500 lines of source and 1,500 lines of tests**, about 7% of the roughly 20,700 lines of source on `main` today. Most of it rides on work already queued. These are estimates from reading the repo, not a line-by-line plan.
@@ -253,9 +267,11 @@ The Extension changes about **1,500 lines of source and 1,500 lines of tests**, 
 - **Unaffected:** the end-of-game reveal (it should also list tokens and purchases), host controls, Google sign-in, the playtest pass and the offline demo.
 - **Untouched:** the engine core, server, lobby, chat, art and CI.
 
-**Not part of the Extension** (adds one experiment each, if wanted later): Books mode, where the Haul is hidden and a public Banker reports it (about 600–900 more lines), and a Mole recruited mid-game instead of dealt (about 200–300).
+**Not part of the Extension, not approved, out of scope** (adds one experiment each, if wanted later): Books mode, where the Haul is hidden and a public Banker reports it (about 600–900 more lines), and a Mole recruited mid-game instead of dealt (about 200–300).
 
 ## Extension vs Rebuild
+
+*Kept for the record. The owner chose the Extension on 3 Nov; the Rebuild and Books mode are not approved and out of scope.*
 
 The Extension is the cheaper and safer path; the Rebuild is the more original game. They aren't mutually exclusive: Books mode is the first step from the Extension toward the Rebuild.
 

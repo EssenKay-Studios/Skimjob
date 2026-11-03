@@ -144,7 +144,7 @@ async lock, single process). Never send `seq` outside its owner's view (evidence
 
 ### M2-11 End-of-game reveal (M)
 - Stamp (JOB DONE / BUSTED), ranking podium (roles, stash, safe, score, winners; VOID wash on failure).
-- Timeline scrub round by round from `reveal.log`: real rooms and splits, stash over time, abilities.
+- Timeline scrub round by round from `reveal.log`: real rooms and splits, stash over time, abilities, tokens earned and perks bought (roles v3 + Extension).
 - Refs: §3, §13, ui-style "End-of-game reveal". **Accept:** all three endings render; Secret-mode ballots
   stay hidden; the timeline matches the log for a seeded game.
 
@@ -168,6 +168,13 @@ async lock, single process). Never send `seq` outside its owner's view (evidence
   game id, round and client version (never the seed before the end).
 - Update STATUS.md (M2 done, findings, M3 next), decisions.md for every choice made in M2.
 - **Accept:** a 1-hour game with 2 humans + 4 bots completes without a server error; all tests, typecheck, E2E green.
+
+### M2-15 Offline demo (M, GitHub Pages)
+- A static build of the web client with the engine and bots running in the browser (an in-browser adapter in
+  place of the server channel), the same UI, no server or sign-in.
+- Published as a **GitHub Pages** site for Karthik to verify (owner, 3 Nov; replaces the claude.ai artifact).
+- Refs: STATUS M2-15, decisions.md "Owner answers, 3 Nov (morning)". **Accept:** a Quick game with bots plays
+  through to the reveal on the Pages URL with no network calls beyond static assets.
 
 Order rationale: 1–4 give a working server playable by bots; 5–6 make it playable by people (thin slice);
 7–8 add the social layer; 9–11 are look and payoff; 12 waits on Karthik; 13–14 harden for a real playtest.
