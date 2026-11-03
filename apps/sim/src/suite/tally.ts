@@ -1,7 +1,7 @@
 // A cell's running counts: everything the suite's rates need, folded one game
 // at a time, so a cell of thousands of games is a few numbers instead of its
 // records. Plain JSON data: shard files carry tallies and `merge` adds them.
-// design §17.4, docs/roles-v2.md §5, extension.md Build notes "Sim"
+// design §17.4, extension.md Build notes "Sim"
 import type { GameRecord } from "../record";
 import { act1LeaderWon, comebackEligible, decidedEarly } from "../metrics";
 

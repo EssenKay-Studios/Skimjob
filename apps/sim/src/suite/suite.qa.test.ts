@@ -1,5 +1,5 @@
 // QA (PR #34): adversarial checks on the parallel sim suite. design §17.2
-// (deterministic), §17.4 (rates and targets), docs/roles-v2.md §5 (parity).
+// (deterministic), §17.4 (rates and targets), extension.md Build notes "Sim" (parity).
 import { describe, expect, it } from "vitest";
 import { createPool } from "../pool";
 import { wilson } from "../stats";
@@ -87,7 +87,7 @@ describe("QA: hand-checked numbers", () => {
     expect(iv.halfWidth).toBeCloseTo(0.13, 4);
   });
 
-  it("parity: credit ÷ fair share, spread and its range — docs/roles-v2.md §5", () => {
+  it("parity: credit ÷ fair share, spread and its range — extension.md Build notes \"Sim\"", () => {
     // 4-player seats: fair = seats/4. a wins 50 of 200 (ratio 1.0), b wins 20 of 100 (ratio 0.8).
     const p = parityOf({ a: { seats: 200, credit: 50, fair: 50, successCredit: 0, earned: 0, spent: 0 }, b: { seats: 100, credit: 20, fair: 25, successCredit: 0, earned: 0, spent: 0 }, c: { seats: 99, credit: 99, fair: 24.75, successCredit: 0, earned: 0, spent: 0 } });
     expect(p.fewSeats).toEqual(["c"]);

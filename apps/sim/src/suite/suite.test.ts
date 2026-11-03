@@ -1,6 +1,6 @@
 // The simulation suite: intervals, the matrix, tallies, adaptive stopping,
 // parity, merge and compare. design §17.2 (deterministic), §17.4 (metrics and
-// targets), docs/roles-v2.md §5 (role parity).
+// targets), extension.md Build notes "Sim" (role parity).
 import { describe, expect, it } from "vitest";
 import { checkBand, wilson } from "../stats";
 import { gameRec, seat } from "../testkit";
@@ -148,7 +148,7 @@ describe("adaptive stopping", () => {
   });
 });
 
-describe("role parity — docs/roles-v2.md §5", () => {
+describe("role parity — extension.md Build notes \"Sim\"", () => {
   const n = 5;
   const seats = (s: number, winShare: number) => ({ seats: s, credit: s * winShare, fair: s / n, successCredit: 0, earned: 0, spent: 0 });
 
