@@ -10,6 +10,7 @@ import { BANK_JOB, DECKS, PERKS, POLICE_ACTIVITY, ROLES, SHOP_COLUMNS, type Perk
 import {
   checkpointTarget,
   createGame,
+  roundHeatDelta,
   handleCommand,
   privateTo,
   replay,
@@ -602,6 +603,83 @@ describe("the Heat breakdown is exact (extension.md \"Heat\", \"What the app wor
     expect(h.total, h.text).toBe(-3);
     expect(h.lines.map((l) => l.kind)).toEqual(["base", "event", "clamp"]);
     expect(h.lines.find((l) => l.kind === "event")).toMatchObject({ label: "Quiet night", value: -10 });
+  });
+
+  /**
+   * Plays real rounds (meetings included) until Heat sits in [lo, hi], each round
+   * picking the room mix whose Heat lands closest under `hi`. No Heat is set by hand,
+   * so the log the breakdown reads is the real one.
+   */
+  function climb(s: GameState, lo: number, hi: number): GameState {
+    for (let guard = 0; guard < 40 && !(s.phase.kind === "planning" && s.heat >= lo && s.heat <= hi); guard++) {
+      if (s.phase.kind !== "planning") {
+        s = playOut1(s);
+        continue;
+      }
+      const n = s.playerOrder.length;
+      const hot = s.rooms.filter((r) => r === "vault" || r === "depositBoxes");
+      let best: string[] = s.playerOrder.map(() => "office");
+      let bestHeat = -1;
+      for (let v = 0; v <= n; v++)
+        for (let d = 0; d <= Math.min(1, n - v); d++)
+          for (let r = 0; r <= n - v - d; r++) {
+            const rooms = s.playerOrder.map((_, i) => (i < v ? "vault" : i < v + d && hot.includes("depositBoxes") ? "depositBoxes" : i < v + d + r ? "rooftop" : "office"));
+            const counts: Record<string, number> = {};
+            for (const room of rooms) counts[room] = (counts[room] ?? 0) + 1;
+            const heat = s.heat + roundHeatDelta(BANK_JOB, n, counts);
+            // Leave room for a missed target's penalty before a meeting.
+            const cap = s.round % 3 === 0 ? hi - BANK_JOB.heat.missedCheckpoint : hi;
+            if (heat <= cap && heat > bestHeat) [best, bestHeat] = [rooms, heat];
+          }
+      s = run(s, ...s.playerOrder.map((p, i) => mv(p, best[i]!)), ROUND);
+    }
+    expect(s.phase.kind).toBe("planning");
+    expect(s.heat).toBeGreaterThanOrEqual(lo);
+    expect(s.heat).toBeLessThanOrEqual(hi);
+    return s;
+  }
+
+  it("police activity right below the top (no Heat set by hand): +4 police, a clamp line, and the lines sum to the real change", () => {
+    const MOLE = config(5, { rolePool: ["rookie", "lookout", "mole"], roleList: "possible", seed: "police-top" });
+    let s = climb(game(MOLE, { roles: ["mole"], patrol: true }), BANK_JOB.heat.max - POLICE_ACTIVITY.heat + 1, BANK_JOB.heat.max - 1);
+    const before = s.heat;
+    const round = s.round;
+    const lines = (st: GameState) => heatRound(viewFor(st, "p1"), round)?.lines ?? [];
+    const prior = lines(s).reduce((a, l) => a + l.value, 0);
+    s = run(s, MOMENT);
+    expect(s.log.filter((e) => e.type === "policeActivity")).toHaveLength(1);
+    expect(s.log.some((e) => e.type === "copsRaided")).toBe(true);
+    const after = lines(s);
+    expect(after.filter((l) => l.kind === "police")).toEqual([{ label: "police activity", value: POLICE_ACTIVITY.heat, kind: "police" }]);
+    expect(after.filter((l) => l.kind === "clamp")).toEqual([{ label: "Heat is at the top", value: BANK_JOB.heat.max - before - POLICE_ACTIVITY.heat, kind: "clamp" }]);
+    expect(after.reduce((a, l) => a + l.value, 0) - prior).toBe(BANK_JOB.heat.max - before);
+  });
+
+  it("police activity below the top has no clamp line", () => {
+    const MOLE = config(5, { rolePool: ["rookie", "lookout", "mole"], roleList: "possible", seed: "police-mid" });
+    let s = climb(game(MOLE, { roles: ["mole"], patrol: true }), 40, 60);
+    const before = s.heat;
+    s = run(s, MOMENT);
+    const h = heatRound(viewFor(s, "p1"), s.round)!;
+    expect(h.lines.some((l) => l.kind === "clamp"), h.text).toBe(false);
+    expect(s.heat - before).toBe(POLICE_ACTIVITY.heat);
+  });
+
+  it("a Fixer stopping a raid after a round: a 'raid stopped' line (no name) and the lines sum to the real change", () => {
+    let s = climb(game(config(5, { rolePool: ["rookie", "fixer"], seed: "fixer-top" }), { roles: ["fixer"] }), 85, 90);
+    const before = s.heat;
+    const round = s.round;
+    s = run(s, ...ids(5).map((p) => mv(p, "vault")), ROUND);
+    expect(s.log.some((e) => e.type === "raidStopped")).toBe(true);
+    expect(s.log.some((e) => e.type === "copsRaided")).toBe(false);
+    for (const p of ids(5)) {
+      const h = heatRound(viewFor(s, p), round)!;
+      expect(h.total, `${p}: ${h.text}`).toBe(s.heat - before);
+      const stopped = h.lines.filter((l) => l.kind === "stopped");
+      expect(stopped, h.text).toEqual([{ label: "raid stopped", value: expect.any(Number), kind: "stopped" }]);
+      expect(stopped[0]!.value).toBeLessThan(0);
+      expect(h.text).not.toMatch(/fixer|P0/i);
+    }
   });
 
   it("a missed target near the top adds only what fits, and its line says so", () => {
