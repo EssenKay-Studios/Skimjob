@@ -7,16 +7,15 @@ A social deduction heist game for groups of friends (web + Android/iOS). A crew 
 ## Start of every session
 
 1. Read `docs/STATUS.md` — current milestone, what's done, what's next.
-2. Read the relevant sections of `docs/design.md` (the full game design; canonical rules source).
+2. Read the relevant sections of `docs/design.md` (the full game design; canonical rules source) and, for roles, tokens and the shop, `docs/extension.md` (the R6 spec; it wins on conflict).
 3. Skim `docs/decisions.md` before changing anything that looks like a deliberate choice.
 4. Work on **one** task from STATUS.md (or the GitHub issue you were given). Keep sessions scoped.
 
 ## End of every session
 
-1. Run tests and typecheck (commands below). Do not leave `main` red.
-2. Update `docs/STATUS.md`: tick what's done, add what's next, note anything half-finished.
-3. If a rule or design choice changed, update `docs/design.md` **and** add an entry to `docs/decisions.md`.
-4. Commit and push.
+1. Run typecheck and the tests relevant to your change (commands below); CI runs the full suite and must be green.
+2. Don't edit `docs/STATUS.md` or `docs/decisions.md` in a feature PR: put `## Decisions` and `## STATUS updates` sections in the PR body; the PM folds them in (in its own docs PR). If a rule changed, update `docs/design.md` in the PR.
+3. Commit to your branch, push it and open a PR (`docs/pipeline/common.md`).
 
 ## Repo layout (pnpm monorepo)
 
@@ -25,10 +24,10 @@ packages/engine/   rules, state machine, event log, viewFor() — pure & determi
 packages/content/  rooms, roles, jobs, events, scaling numbers (data, not logic)
 packages/bots/     Agent interface + bot personalities
 apps/sim/          CLI simulator and balance reports
-apps/server/       (later) authoritative game server, scheduler, chat, push
-apps/web/          (later) React browser client
+apps/server/       authoritative game server, scheduler, chat, push
+apps/web/          React browser client
 apps/mobile/       (later) Flutter app (Android/iOS) — talks to the server; no engine copy
-docs/              design.md, STATUS.md, decisions.md
+docs/              design.md, extension.md (R6 rules), STATUS.md, decisions.md, deploy.md, pipeline/
 ```
 
 Dependency direction: `content` ← `engine` ← `bots` ← `sim`/`server`. The engine must never import from bots, sim, or any app.
@@ -71,4 +70,4 @@ pnpm sim -- --help   # run the simulator (once implemented)
 
 - Author every commit as `karthik24iyer <karthik24iyer@gmail.com>`.
 - Never add Claude as author or co-author — no `Co-Authored-By` or `Claude-Session` lines in commit messages.
-- Small, focused commits with clear messages. Push to a branch and open a PR for larger changes; trivial doc updates can go to `main`.
+- Small, focused commits with clear messages. **Everything goes through a PR, docs included; never push to `main`.** Only the PM merges, with `docs/pipeline/merge.sh <PR>` once the gate passes (`docs/pipeline/HANDOFF.md`).

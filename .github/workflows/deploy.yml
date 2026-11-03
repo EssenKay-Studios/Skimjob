@@ -1,6 +1,6 @@
-# Deploy to Fly.io (https://skimjob.fly.dev). Manual only until the owner picks a host (Fly or
-# Lightsail): Actions → Deploy → Run workflow, main only, and only a commit whose CI passed.
-# How it works, rollback, costs: docs/deploy.md
+# UNUSED: Skimjob is deployed on AWS Lightsail (owner's choice, 3 Nov), not Fly; see docs/deploy.md.
+# Kept for reference: a manual-only Fly.io deploy (Actions → Deploy → Run workflow), main only,
+# and only a commit whose CI passed.
 name: Deploy
 
 on:
