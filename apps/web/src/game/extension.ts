@@ -324,7 +324,7 @@ export interface ShopItem {
 }
 
 export interface ShopState {
-  /** This game has a shop (not in Starter/Quick). */
+  /** This game has a shop (not in Quick games). */
   readonly open: boolean;
   readonly tokens: number;
   readonly items: readonly ShopItem[];
@@ -418,10 +418,16 @@ export function perkUses(view: PlayerView): PerkUse[] {
 
 // ---------------------------------------------------------------- end of game
 
-/** How the game ended, in one line, and why each winner won. extension.md "Winning and losing" */
-export function endingText(outcome: { readonly result: "success" } | { readonly result: "failed"; readonly reason: FailureReason }): { title: string; badge: string; loss: boolean } {
+type Ending = ({ readonly result: "success" } | { readonly result: "failed"; readonly reason: FailureReason }) & { readonly winners: readonly string[] };
+
+/**
+ * How the game ended, in one line, and why each winner won. A failed heist's
+ * ranking is a loss only when nobody qualified through winsOn. extension.md "Winning and losing"
+ */
+export function endingText(outcome: Ending): { title: string; badge: string; loss: boolean } {
   if (outcome.result === "success") return { title: "Final target met with Heat below 100", badge: "Biggest stash", loss: false };
+  const loss = outcome.winners.length === 0;
   return outcome.reason === "heat"
-    ? { title: "The cops raided: Heat hit 100", badge: "Wins on a raid", loss: true }
-    : { title: "The final target was missed", badge: "Wins on a missed target", loss: true };
+    ? { title: "The cops raided: Heat hit 100", badge: "Wins on a raid", loss }
+    : { title: "The final target was missed", badge: "Wins on a missed target", loss };
 }

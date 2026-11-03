@@ -327,7 +327,7 @@ export function Lobby({ id }: { id: string }) {
                       <Segmented<string | boolean>
                         seed={`set-${def.key}`}
                         label={def.label}
-                        hint={locked ? "Off with the Starter deck" : "hint" in def ? def.hint : undefined}
+                        hint={locked ? (game.settings.sessionLength === "quick" ? "Off in Quick games" : "Off with the Starter deck") : "hint" in def ? def.hint : undefined}
                         options={def.options}
                         value={locked ? false : game.settings[def.key]}
                         readOnly={!game.youAreHost || locked}

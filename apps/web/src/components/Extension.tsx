@@ -216,7 +216,7 @@ export function RulebookSheet({ open, onClose, view }: { open: boolean; onClose:
           <ul className="rulebook__list">
             <li>Your role earns tokens; tokens buy perks. Each game's shop has one perk from each column.</li>
             <li>Tokens and what you buy stay private until you use a perk. Use at most one per round.</li>
-            <li>Unspent tokens are worth nothing at the end. Quick and Starter games have no shop.</li>
+            <li>Unspent tokens are worth nothing at the end. Quick games have no tokens and no shop.</li>
           </ul>
           {shop.length > 0 ? (
             <ul className="rulebook__perks" aria-label="This game's shop">
@@ -345,7 +345,7 @@ export function GapBox({ view }: { view: PlayerView }) {
 
 // ---------------------------------------------------------------- tokens and the shop
 
-/** Your tokens and the shop button, on the role card. Nothing in games without a shop (Starter, Quick). */
+/** Your tokens and the shop button, on the role card. Nothing in games without a shop (Quick). */
 export function Tokens({ view, send }: { view: PlayerView; send: Send }) {
   const shop = shopState(view);
   const [open, setOpen] = useState(false);
@@ -514,11 +514,14 @@ function PerkUseRow({ view, use, send }: { view: PlayerView; use: PerkUse; send:
 // ---------------------------------------------------------------- end of game
 
 /** How the game ended, and on a failure that the ranking is a loss. extension.md "Winning and losing" */
-export function EndingNote({ outcome }: { outcome: Parameters<typeof endingText>[0] }) {
+export function EndingNote({ outcome, name }: { outcome: Parameters<typeof endingText>[0]; name: (id: string) => string }) {
   const e = endingText(outcome);
+  const who = outcome.winners.map(name);
+  const winners = who.length > 1 ? `${who.slice(0, -1).join(", ")} and ${who[who.length - 1]}` : (who[0] ?? "");
+  const verb = who.length > 1 || who[0] === "You" ? e.badge.replace(/^Wins/, "win") : e.badge.replace(/^Wins/, "wins");
   return (
     <p className={e.loss ? "ending is-loss" : "ending"}>
-      <b>{e.title}.</b> {e.loss ? "The ranking is marked as a loss." : "The biggest stash wins."}
+      <b>{e.title}.</b> {outcome.result === "success" ? "The biggest stash wins." : e.loss ? "The ranking is marked as a loss." : `${winners} ${verb}.`}
     </p>
   );
 }

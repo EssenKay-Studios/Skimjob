@@ -8,7 +8,7 @@
   align-items: center;
   padding: 2px 9px;
   border: 1.3px solid var(--ink);
-  border-radius: 9px 11px 8px 10px;
+  border-radius: var(--radius-chip);
   font: 700 12px/1.3 var(--font-ui);
   color: var(--ink);
   background: var(--paper);
@@ -102,7 +102,7 @@
   max-width: 28em;
   padding: 6px 10px;
   border: 1.3px solid var(--ink);
-  border-radius: 10px 12px 9px 11px;
+  border-radius: var(--radius-bubble);
   background: var(--paper-hi);
   box-shadow: var(--shadow-card);
   font: 500 13px/1.4 var(--font-ui);
@@ -228,7 +228,7 @@
 .heat-parts__line {
   padding: 1px 8px;
   border: 1.2px solid var(--ink-faint);
-  border-radius: 8px 10px 7px 9px;
+  border-radius: var(--radius-chip);
   background: var(--paper);
   font: 600 13px/1.5 var(--font-ui);
   color: var(--ink2);
@@ -243,7 +243,7 @@
 }
 .heat-parts__more summary {
   cursor: pointer;
-  min-height: 28px;
+  min-height: 44px;
   display: inline-flex;
   align-items: center;
 }
@@ -259,7 +259,7 @@
   gap: 2px;
   padding: 10px 14px;
   border: 1.5px dashed var(--ink);
-  border-radius: 12px 14px 11px 13px;
+  border-radius: var(--radius-bubble);
   background: var(--paper-hi);
 }
 .gap-box__text {
@@ -296,7 +296,7 @@
   width: 18px;
   height: 18px;
   border: 1.4px solid var(--ink);
-  border-radius: 50% 46% 52% 48%;
+  border-radius: var(--radius-blob);
   background: var(--hatch), var(--gold);
   flex: none;
 }
@@ -342,7 +342,7 @@
   min-width: 30px;
   height: 30px;
   border: 1.4px solid var(--ink);
-  border-radius: 50% 46% 52% 48%;
+  border-radius: var(--radius-blob);
   background: var(--hatch), var(--gold);
   color: var(--ink);
 }

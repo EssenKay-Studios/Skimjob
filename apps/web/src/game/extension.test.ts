@@ -13,7 +13,11 @@ import {
   type PlayerCommand,
   type SystemCommand,
 } from "@skimjob/engine";
+import { readFileSync } from "node:fs";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { EndingNote } from "../components/Extension";
 import { describeEvent } from "./describeEvent";
 import { endingText, gapInfo, heatRound, heatRounds, howYouWin, perkUses, roleInfo, roleListInfo, shopState, targetBar, usedPerkThisRound } from "./extension";
 import { abilityOffers } from "./meeting";
@@ -108,8 +112,9 @@ describe("the target bar, Heat breakdown and gap box (extension.md: What the app
 describe("tokens and the perk shop (extension.md)", () => {
   const withShop = (shop: GameState["shop"]) => ({ ...createGame(config()), shop });
 
-  it("has no shop in Starter games", () => {
+  it("has no shop in Quick games (starter mode), but the Starter deck keeps it", () => {
     expect(shopState(viewFor(createGame(config({ starterMode: true })), "p1")).open).toBe(false);
+    expect(shopState(viewFor(createGame(config({ deck: "starter", rolePool: [...DECKS.starter] })), "p1")).open).toBe(true);
   });
 
   it("prices perks from the view, buys with tokens and keeps them private", () => {
@@ -166,10 +171,20 @@ describe("no tells (extension.md Situations)", () => {
 });
 
 describe("endings (extension.md Winning and losing)", () => {
-  it("says how it ended and marks a failure as a loss", () => {
-    expect(endingText({ result: "success" })).toEqual({ title: "Final target met with Heat below 100", badge: "Biggest stash", loss: false });
-    expect(endingText({ result: "failed", reason: "heat" })).toMatchObject({ badge: "Wins on a raid", loss: true });
-    expect(endingText({ result: "failed", reason: "target" })).toMatchObject({ badge: "Wins on a missed target", loss: true });
+  it("says how it ended and marks a failure with no qualified winner as a loss", () => {
+    expect(endingText({ result: "success", winners: ["p1"] })).toEqual({ title: "Final target met with Heat below 100", badge: "Biggest stash", loss: false });
+    expect(endingText({ result: "failed", reason: "heat", winners: [] })).toMatchObject({ badge: "Wins on a raid", loss: true });
+    expect(endingText({ result: "failed", reason: "target", winners: [] })).toMatchObject({ badge: "Wins on a missed target", loss: true });
+  });
+
+  it("doesn't call a failure with a ★ winner a loss", () => {
+    expect(endingText({ result: "failed", reason: "heat", winners: ["p2"] })).toMatchObject({ title: "The cops raided: Heat hit 100", badge: "Wins on a raid", loss: false });
+    expect(endingText({ result: "failed", reason: "target", winners: ["p3"] }).loss).toBe(false);
+    const note = (winners: string[]) => renderToStaticMarkup(createElement(EndingNote, { outcome: { result: "failed", reason: "heat", winners }, name: (id: string) => (id === "p1" ? "You" : id === "p2" ? "Ben" : "Cy") }));
+    expect(note(["p2"])).toContain("Ben wins on a raid.");
+    expect(note(["p2"])).not.toContain("loss");
+    expect(note(["p1", "p3"])).toContain("You and Cy win on a raid.");
+    expect(note([])).toContain("The ranking is marked as a loss.");
   });
 });
 
@@ -192,8 +207,9 @@ describe("lobby deck settings (extension.md Host settings)", () => {
     expect(deckRoles({ ...base, sessionLength: "quick" })).toEqual(DECKS.starter);
   });
 
-  it("makes Starter the no-events, no-shop deck and leaves it cleanly", () => {
-    expect(deckPatch(base, "starter")).toEqual({ deck: "starter", roles: [], starterMode: true, eventsEnabled: false });
+  it("makes Starter only the no-events deck (never starter mode) and clears a stored starter mode", () => {
+    expect(deckPatch(base, "starter")).toEqual({ deck: "starter", roles: [], eventsEnabled: false });
+    expect(deckPatch(base, "everything")).toEqual({ deck: "everything", roles: [] });
     expect(deckPatch({ ...base, deck: "starter", starterMode: true }, "everything")).toEqual({ deck: "everything", roles: [], starterMode: false });
   });
 
@@ -202,5 +218,12 @@ describe("lobby deck settings (extension.md Host settings)", () => {
     expect(off.roles).toEqual(DECKS.standard.filter((r) => r !== "fence"));
     expect(rolePatch({ ...base, roles: off.roles! }, "fence")).toEqual({ roles: [] });
     expect(rolePatch({ ...base, roles: ["rookie"] }, "rookie")).toBeNull();
+  });
+});
+
+describe("extension.css uses theme tokens (CLAUDE.md UI rules)", () => {
+  it("has no raw radii or shadows", () => {
+    const css = readFileSync(new URL("../components/extension.css", import.meta.url), "utf8");
+    for (const m of css.matchAll(/(border-radius|box-shadow):\s*([^;]+);/g)) expect(m[2], m[0]).toMatch(/^(var\(--[\w-]+\)|0|none)$/);
   });
 });

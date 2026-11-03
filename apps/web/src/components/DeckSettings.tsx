@@ -24,7 +24,7 @@ const LIST_OPTIONS: readonly SegmentedOption<LobbySettings["roleList"]>[] = [
   { value: "hidden", label: "Hidden" },
 ];
 const DECK_HINT: Record<DeckId, string> = {
-  starter: "First game: simple roles, no events, no shop",
+  starter: "First game: simple roles, no event cards",
   standard: "The default; Rookies fill spare seats",
   everything: "All the roles",
 };
@@ -37,7 +37,7 @@ const LIST_HINT: Record<LobbySettings["roleList"], string> = {
 
 export const QUICK_NOTE = "Quick games play the Starter deck with no event cards, tokens or shop.";
 
-/** The deck players will get: Starter for Quick or starter mode, else the stored deck. */
+/** The deck players will get: Starter for Quick (or a game stored in starter mode), else the stored deck. */
 export const effectiveDeck = (s: LobbySettings): DeckId => (s.sessionLength === "quick" || s.starterMode ? "starter" : s.deck);
 
 /** The roles switched on: the toggles, or the deck's preset when there are none. */
@@ -45,10 +45,12 @@ export const deckRoles = (s: LobbySettings): readonly RoleId[] => (s.roles.lengt
 
 const sameSet = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((x) => b.includes(x));
 
-/** A deck choice as a settings patch: Starter is the starter mode (no events, no shop); the toggles reset. */
+/**
+ * A deck choice as a settings patch; the toggles reset. Starter only turns the
+ * event cards off: tokens, the shop and the toggles stay (only Quick drops them).
+ */
 export function deckPatch(s: LobbySettings, deck: DeckId): Partial<LobbySettings> {
-  if (deck === "starter") return { deck, roles: [], starterMode: true, eventsEnabled: false };
-  return { deck, roles: [], ...(s.starterMode ? { starterMode: false } : {}) };
+  return { deck, roles: [], ...(deck === "starter" ? { eventsEnabled: false } : {}), ...(s.starterMode ? { starterMode: false } : {}) };
 }
 
 /** One role toggled, as a settings patch; back to [] when it matches the preset. Never empties the deck. */
@@ -62,7 +64,7 @@ export function rolePatch(s: LobbySettings, role: RoleId): Partial<LobbySettings
 export function DeckSettings({ settings, readOnly, disabled, onChange }: { settings: LobbySettings; readOnly: boolean; disabled: boolean; onChange: (patch: Partial<LobbySettings>) => void }) {
   const quick = settings.sessionLength === "quick";
   const deck = effectiveDeck(settings);
-  const locked = quick || deck === "starter";
+  const locked = quick || settings.starterMode;
   const on = deckRoles(settings);
   const custom = settings.roles.length > 0;
   const [open, setOpen] = useState(false);

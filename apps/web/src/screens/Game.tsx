@@ -536,14 +536,14 @@ export function GameOver({ view }: { view: PlayerView }) {
       <h2 id="over-h" className="over__title">
         {won ? "The crew got away with it" : "The heist failed"}
       </h2>
-      <EndingNote outcome={outcome} />
+      <EndingNote outcome={outcome} name={(id) => (id === view.me.id ? "You" : name(id))} />
       {end && <p>{describeEvent(end.event, { me: view.me.id, name })}</p>}
-      <ol className="ranking" aria-label={won ? "Final ranking" : "Final ranking, marked as a loss"}>
+      <ol className="ranking" aria-label={ending.loss ? "Final ranking, marked as a loss" : "Final ranking"}>
         {outcome.ranking.map((r, i) => {
           const seat = seats.get(r.player);
           const winner = outcome.winners.includes(r.player);
           return (
-            <li key={r.player} className={["ranking__row", winner && "is-winner", !won && "is-void", seat?.you && "is-you"].filter(Boolean).join(" ")}>
+            <li key={r.player} className={["ranking__row", winner && "is-winner", !won && !winner && "is-void", seat?.you && "is-you"].filter(Boolean).join(" ")}>
               <span className="ranking__pos num">{i + 1}</span>
               <CrookAvatar name={name(r.player).replace(/^Bot · /, "")} look={looks.get(r.player)?.look ?? 0} tag={looks.get(r.player)?.tag} size={44} bot={seat?.isBot ?? false} expression={winner ? "smug" : won ? "neutral" : "caught"} />
               <span className="ranking__who">
@@ -559,7 +559,7 @@ export function GameOver({ view }: { view: PlayerView }) {
                 </span>
               </span>
               {winner && <Chip on>Winner</Chip>}
-              {!winner && !won && <span className="meta ranking__loss">Loss</span>}
+              {!winner && ending.loss && <span className="meta ranking__loss">Loss</span>}
             </li>
           );
         })}

@@ -172,7 +172,7 @@ function ShopSection() {
           <Tokens view={view} send={send} />
           <PerkUses view={view} send={send} />
         </SketchFrame>
-        <p className="meta">Starter and Quick games have no shop: nothing shows.</p>
+        <p className="meta">Quick games have no tokens or shop: nothing shows. (The Starter deck keeps them.)</p>
         <SketchFrame seed="g-tokens-starter" radius={14} fill="var(--card-sand)" className="panel">
           <Tokens view={starter} send={send} />
           <p className="meta">(no tokens line)</p>
@@ -269,7 +269,7 @@ function DeckSection() {
 
 function EndSection() {
   const base = useMemo(() => viewFor(playedGame(), "p1"), []);
-  const ranking = base.players.map((p, i) => ({ player: p.id, role: (["fence", "rookie", "lookout", "mole"] as const)[i]!, score: 30 - i * 6, stash: 30 - i * 6, safe: i === 0 ? 5 : 0, timesShakenDown: 0, totalHandedIn: 10 }));
+  const ranking = base.players.map((p, i) => ({ player: p.id, role: (["fence", "rookie", "lookout", "mole"] as const)[i]!, score: 30 - i * 6 + (i === 0 ? 5 : 0), stash: 30 - i * 6, safe: i === 0 ? 5 : 0, timesShakenDown: 0, totalHandedIn: 10 }));
   const ended = (outcome: Extract<PlayerView["phase"], { kind: "ended" }>["outcome"]): PlayerView => ({ ...base, phase: { kind: "ended", outcome } });
   return (
     <>

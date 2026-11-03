@@ -115,9 +115,10 @@ test("lobby: deck, per-role picks, deal and role list persist; Quick locks Start
   await page.getByRole("button", { name: "Pick roles one by one" }).click();
   await expect(page.locator(".deck-roles__chips").getByRole("button", { name: firstName, exact: true })).toHaveAttribute("aria-pressed", "false");
 
-  // Starter: no per-role picks, events off.
+  // Starter only turns event cards off: the per-role picks stay (tokens and the shop too).
   await group("Deck").getByRole("button", { name: "Starter" }).click();
-  await expect(page.getByRole("button", { name: "Pick roles one by one" })).toHaveCount(0);
+  await expect(group("Deck").getByRole("button", { name: "Starter" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator(".deck-roles__chips").getByRole("button").first()).toBeVisible(); // the open picker stays
   await expect(page.getByText("Off with the Starter deck")).toBeVisible();
 
   // Quick: Starter, read-only, with the note.
@@ -126,4 +127,6 @@ test("lobby: deck, per-role picks, deal and role list persist; Quick locks Start
   await expect(page.getByText("Quick games play the Starter deck")).toBeVisible();
   await expect(group("Deck").getByRole("button")).toHaveCount(0);
   await expect(group("Deck")).toContainText("Starter");
+  await expect(page.getByRole("button", { name: "Pick roles one by one" })).toHaveCount(0);
+  await expect(page.getByText("Off in Quick games")).toBeVisible();
 });
