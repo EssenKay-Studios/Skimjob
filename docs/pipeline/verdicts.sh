@@ -6,9 +6,10 @@
 # gh/API error: the gate fails closed), 2 on bad input.
 # Read-only. Works from any directory (REPO overrides the repo).
 #
-# Mergeable iff: the latest review mentioning VERDICT is exactly
+# Only reviews/comments by GATE_AUTHORS count (see below).
+# Mergeable iff: the latest verdict-like review/comment is exactly
 # `VERDICT: APPROVE` + `Head: <sha S_r>` (a malformed latest one is a no, never a
-# fall-back to an older one); the latest comment mentioning `QA:` is exactly
+# fall-back to an older one); the latest QA-like one is exactly
 # `QA: PASS` + `Head: <current head>`; every commit (old and new paths) in
 # S_r..head touches only *.qa.test.ts / *.qa.spec.ts (else a delta re-review is needed); every
 # check-run on the head completed as success/skipped/neutral; PR open, not draft,
@@ -44,16 +45,33 @@ echo "head:   $head"
 [ "$draft" = false ] || no "PR is a draft"
 [ "$mstate" = CLEAN ] || no "merge state $mstate (want CLEAN)"
 
-# One line per review / comment that looks like a verdict (mentions "verdict", or
-# "qa:", anywhere, any case, e.g. `**Verdict: approve**`, `> qa: fail`): its first two raw lines. The newest
-# one is used and must be in the exact format; there is no fall-back to older ones.
-first2='(.body | gsub("\r"; "") | split("\n")) as $l | [$l[0], ($l[1] // "")] | @tsv'
-rvs=$(gh api --paginate "$A/pulls/$N/reviews" \
-  --jq ".[] | select((.body // \"\") | test(\"verdict\"; \"i\")) | $first2") || fatal "cannot read reviews"
-qas=$(gh api --paginate "$A/issues/$N/comments" \
-  --jq ".[] | select((.body // \"\") | test(\"\\\\bqa\\\\s*:\"; \"i\")) | $first2") || fatal "cannot read PR comments"
-IFS=$'\t' read -r rv1 rv2 <<<"$(tail -1 <<<"$rvs")"
-IFS=$'\t' read -r qa1 qa2 <<<"$(tail -1 <<<"$qas")"
+# Verdicts count only from the pipeline's accounts (the repo is public, so anyone
+# can comment): GATE_AUTHORS, comma-separated logins, default karthik24iyer.
+# Everyone else is ignored entirely, and so are PENDING (unsubmitted) reviews.
+GATE_AUTHORS=${GATE_AUTHORS:-karthik24iyer}
+[[ $GATE_AUTHORS =~ ^[A-Za-z0-9-]+(,[A-Za-z0-9-]+)*$ ]] || fatal "bad GATE_AUTHORS '$GATE_AUTHORS'"
+allow="[\"${GATE_AUTHORS//,/\",\"}\"]"
+# Reviews and PR comments are both scanned for both kinds (an agent may post on
+# the wrong channel). Each body is one kind at most, any case, leading markdown
+# (* # > _ blanks) ignored: its first line starts with "verdict" or "qa"; else a
+# review mentioning "verdict" anywhere, or a comment with "qa:" / "qa —" anywhere.
+# Output per match: "<time>\t<kind>\t<line 1>\t<line 2>". The newest of each kind
+# is used and must be in the exact format; there is no fall-back to older ones.
+scan='.[] | select((.state // "") != "PENDING")
+  | select(.user.login as $u | '"$allow"' | any(. == $u))
+  | (.body // "") as $b | ($b | gsub("\r"; "") | split("\n")) as $l
+  | (if ($b | test("^[\\s\\x{feff}*#>_]*verdict"; "i")) then "verdict"
+     elif ($b | test("^[\\s\\x{feff}*#>_]*qa\\b"; "i")) then "qa"
+     elif $ch == "review" and ($b | test("verdict"; "i")) then "verdict"
+     elif $ch == "comment" and ($b | test("\\bqa\\s*[:\u2014\u2013]"; "i")) then "qa"
+     else empty end) as $k
+  | [(.submitted_at // .created_at // ""), $k, $l[0], ($l[1] // "")] | @tsv'
+found=$(gh api --paginate "$A/pulls/$N/reviews" --jq "\"review\" as \$ch | $scan") || fatal "cannot read reviews"
+c=$(gh api --paginate "$A/issues/$N/comments" --jq "\"comment\" as \$ch | $scan") || fatal "cannot read PR comments"
+found=$(printf '%s\n%s\n' "$found" "$c" | grep . | sort -s -t $'\t' -k1,1)
+newest() { awk -F'\t' -v k="$1" '$2 == k { l = $3 "\t" $4 } END { print l }' <<<"$found"; }
+IFS=$'\t' read -r rv1 rv2 <<<"$(newest verdict)"
+IFS=$'\t' read -r qa1 qa2 <<<"$(newest qa)"
 sha_of() { [[ $1 =~ ^Head:\ ([0-9a-f]{40})[[:space:]]*$ ]] && echo "${BASH_REMATCH[1]}"; }
 rsha=$(sha_of "$rv2"); qsha=$(sha_of "$qa2")
 echo "review: ${rv1:-none}  @ ${rsha:-<no Head: line>}"
@@ -125,6 +143,12 @@ while IFS=$'\t' read -r name st concl; do
   if [ "$st" != completed ]; then pending+=("$name")
   else case "$concl" in success|skipped|neutral) ;; *) failing+=("$name ($concl)") ;; esac; fi
 done <<<"$runs"
+# Commit statuses too (latest per context); none is fine.
+sts=$(gh api "$A/commits/$head/status" --jq '.statuses[] | [.context, .state] | @tsv') || fatal "cannot read commit statuses on head"
+while IFS=$'\t' read -r name st; do
+  [ -z "$name" ] && continue
+  case "$st" in success) ;; pending) pending+=("$name (status)") ;; *) failing+=("$name (status $st)") ;; esac
+done <<<"$sts"
 if [ $total -eq 0 ]; then echo "ci:     no check-runs on head"; no "no CI check-runs on head"
 elif [ ${#failing[@]} -eq 0 ] && [ ${#pending[@]} -eq 0 ]; then echo "ci:     green ($total check-runs)"
 else

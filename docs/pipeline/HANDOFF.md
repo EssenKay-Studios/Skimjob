@@ -10,10 +10,11 @@ Read this together with `docs/STATUS.md`, which holds the canonical task list. T
   - `qa.md` adds `*.qa.test.ts` (and e2e `*.qa.spec.ts`) tests, pushes once, and comments; first line `QA: PASS` or `QA: FAIL`, second line `Head: <40-char head after its push>`.
 - Every agent reads `common.md` first. Agent reports are at most 80 words; the details go on the PR.
 - **Merge gate (SHA-bound):** `docs/pipeline/verdicts.sh <PR>` prints the head, both verdicts and the sha each names, commits since the review, CI on the head and authorship, then `MERGEABLE: yes|no (<reasons>)`. Mergeable iff:
-  - the newest review mentioning `VERDICT` is exactly `VERDICT: APPROVE` + `Head: S_r`, and the newest comment mentioning `QA:` is exactly `QA: PASS` + `Head: <current head>` (malformed newest = no; never falls back to an older verdict);
+  - only reviews/comments by `GATE_AUTHORS` (default `karthik24iyer`; the repo is public) count, PENDING reviews never;
+  - the newest verdict-like review/comment is exactly `VERDICT: APPROVE` + `Head: S_r`, and the newest QA-like one is exactly `QA: PASS` + `Head: <current head>` (malformed newest = no; never falls back to an older verdict);
   - every commit in S_r..head only touches QA test files (`*.qa.test.ts`, `*.qa.spec.ts`; old and new paths of renames); otherwise get a delta re-review;
   - any gh/API error on any page fails closed (`MERGEABLE: no`);
-  - every check-run on the head completed as success/skipped/neutral (docs-only PRs too);
+  - every check-run on the head completed as success/skipped/neutral, and every commit status is success (docs-only PRs too);
   - the PR is open, not a draft, merge state CLEAN;
   - every commit is authored by `karthik24iyer <karthik24iyer@gmail.com>` and no message has a co-authored-by / claude-session / generated-by line.
 - Merge with `docs/pipeline/merge.sh <PR>`: it runs the gate, then `gh pr merge --squash --match-head-commit <head> --delete-branch`, and prints `merged #N -> main <sha> | next: <first unticked STATUS task>`.

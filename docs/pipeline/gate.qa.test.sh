@@ -20,7 +20,7 @@ case $sub in
   "pr view") f=pr.json; [ "$json" = commits ] && key=pr-commits ;;
   api*) case $path in
       */reviews) f=reviews.json ;; */comments) f=comments.json ;;
-      */compare/*) f=compare.json ;; */check-runs*) f=checks.json ;;
+      */compare/*) f=compare.json ;; */check-runs*) f=checks.json ;; */status) f=status.json ;;
       */commits/*) f=commit-${path##*/}.json ;; *) exit 0 ;; esac ;;
   *) echo "fake gh: unexpected: $sub" >&2; exit 1 ;;
 esac
@@ -39,6 +39,8 @@ reset() {
   rm -rf "$FIX"; mkdir -p "$FIX"
   draft=false; mstate=CLEAN; state=OPEN; authors=$OK_AUTHOR; body=""
   review="VERDICT: APPROVE\nHead: $H"; qa="QA: PASS\nHead: $H"; review_new=""; qa_new=""
+  review_new_by=karthik24iyer; qa_new_by=karthik24iyer; review_new_state=COMMENTED
+  qa_as_review=""; review_as_comment=""; statuses=""
   checks='{"name":"Typecheck","status":"completed","conclusion":"success"}'
   compare_status=ahead; since_files='["apps/web/src/x.qa.test.ts"]'; prev=""
 }
@@ -48,8 +50,18 @@ write() {
  "commits":[{"oid":"$C","authors":$authors,"messageHeadline":"feat: x","messageBody":"$body"}]}
 J
   # *_new: a newer review / comment after the first one.
-  jq -n --arg a "$review" --arg b "$review_new" '[$a, $b | select(. != "") | {body: gsub("\\\\n"; "\n")}]' >"$FIX/reviews.json"
-  jq -n --arg a "$qa" --arg b "$qa_new" '[$a, $b | select(. != "") | {body: gsub("\\\\n"; "\n")}]' >"$FIX/comments.json"
+  # Times: review, then QA, then the *_new ones, then the cross-channel ones (newest).
+  jq -n --arg a "$review" --arg b "$review_new" --arg by "$review_new_by" --arg st "$review_new_state" --arg x "$qa_as_review" '[
+      {body: $a, user: {login: "karthik24iyer"}, state: "COMMENTED", submitted_at: "2026-01-01T00:00:01Z"},
+      {body: $b, user: {login: $by}, state: $st, submitted_at: "2026-01-01T00:00:03Z"},
+      {body: $x, user: {login: "karthik24iyer"}, state: "COMMENTED", submitted_at: "2026-01-01T00:00:05Z"}
+    ] | map(select(.body != "") | .body |= gsub("\\\\n"; "\n"))' >"$FIX/reviews.json"
+  jq -n --arg a "$qa" --arg b "$qa_new" --arg by "$qa_new_by" --arg x "$review_as_comment" '[
+      {body: $a, user: {login: "karthik24iyer"}, created_at: "2026-01-01T00:00:02Z"},
+      {body: $b, user: {login: $by}, created_at: "2026-01-01T00:00:04Z"},
+      {body: $x, user: {login: "karthik24iyer"}, created_at: "2026-01-01T00:00:06Z"}
+    ] | map(select(.body != "") | .body |= gsub("\\\\n"; "\n"))' >"$FIX/comments.json"
+  echo "{\"statuses\":[$statuses]}" >"$FIX/status.json"
   echo "{\"check_runs\":[$checks]}" >"$FIX/checks.json"
   echo "{\"status\":\"$compare_status\",\"total_commits\":1,\"commits\":[{\"sha\":\"$C\"}]}" >"$FIX/compare.json"
   jq -n --argjson f "$since_files" --arg p "$prev" \
@@ -111,6 +123,23 @@ reset; qa_new="qa: fail\nHead: $H"; expect no "newer lower-case QA verdict is ma
 reset; qa_new="**Qa: Pass**\nHead: $H"; expect no "newer bold mixed-case QA verdict is malformed"
 reset; qa_new="> QA : FAIL\nHead: $H"; expect no "newer quoted QA verdict is malformed"
 reset; qa_new="QA:PASS\nHead: $H"; expect no "newer QA verdict without a space is malformed"
+# Only GATE_AUTHORS count (public repo); PENDING reviews don't count.
+reset; review="VERDICT: CHANGES REQUESTED\nHead: $H"; review_new="VERDICT: APPROVE\nHead: $H"; review_new_by=mallory; expect no "foreign APPROVE newer than a real CHANGES REQUESTED"
+reset; qa="QA: FAIL\nHead: $H"; qa_new="QA: PASS\nHead: $H"; qa_new_by=mallory; expect no "foreign PASS newer than a real QA FAIL"
+reset; review_new="VERDICT: CHANGES REQUESTED\nHead: $H"; review_new_by=mallory; expect yes "foreign CHANGES REQUESTED doesn't block"
+reset; qa_new="QA: FAIL\nHead: $H"; qa_new_by=mallory; expect yes "foreign QA FAIL doesn't block"
+reset; review_new="VERDICT: CHANGES REQUESTED\nHead: $H"; review_new_by=pm-bot; export GATE_AUTHORS=karthik24iyer,pm-bot; expect no "GATE_AUTHORS adds an account"; unset GATE_AUTHORS
+reset; review="VERDICT: CHANGES REQUESTED\nHead: $H"; review_new="VERDICT: APPROVE\nHead: $H"; review_new_state=PENDING; expect no "pending APPROVE doesn't count"
+# Verdicts on the wrong channel still count; malformed QA without a colon too.
+reset; review_as_comment="VERDICT: CHANGES REQUESTED\nHead: $H"; expect no "CHANGES REQUESTED posted as a comment"
+reset; qa_as_review="QA: FAIL\nHead: $H"; expect no "QA FAIL posted as a review"
+reset; qa_new="QA FAIL\nHead: $H"; expect no "newer QA verdict without a colon is malformed"
+reset; qa_new="QA: PASS\nHead: $H\n\nThe reviewer's verdict stands."; expect yes "QA comment mentioning verdict is still a QA verdict"
+# Commit statuses (besides check-runs).
+reset; statuses='{"context":"ext/ci","state":"failure"}'; expect no "failing commit status"
+reset; statuses='{"context":"ext/ci","state":"pending"}'; expect no "pending commit status"
+reset; statuses='{"context":"ext/ci","state":"success"}'; expect yes "green commit status"
+reset; touch "$FIX/fail-status.json"; expect no "commit status read fails"
 # gh errors on any page fail closed (the fake prints the data, then fails).
 reset; touch "$FIX/fail-reviews.json"; expect no "reviews read fails"
 reset; touch "$FIX/fail-comments.json"; expect no "comments read fails"
