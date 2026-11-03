@@ -5,8 +5,8 @@ Read this with `docs/STATUS.md` (the canonical task list and the owner's open qu
 **Standing rule: keep status and orchestration docs clean.** Update in place, delete stale or contradictory content, no history narratives (history lives in git, the PRs and `docs/archive/decisions-history.md`).
 
 ## Current state (3 Nov 2026)
-- **Development is halted** (owner): every code PR is merged (M2-1 to M2-13 and R6, through #64; #64 made `crewSeed` required in the bots); start nothing new until the owner says so.
-- **In flight:** #65 `chore/cleanup` (owner-approved docs and pipeline cleanup). Nothing else.
+- **Development is halted** (owner): every code PR is merged (M2-1 to M2-13 and R6, through #65); start nothing new until the owner says so.
+- **In flight:** nothing.
 - **Paused by the owner:** M2-14 playtest pass, M2-15 offline demo (GitHub Pages).
 - **Out of scope:** `docs/rebuild.md` (jobs redesign proposal), Books mode, the recruited Mole.
 - **Specs:** `docs/design.md` plus `docs/extension.md` (roles, tokens, shop; wins on conflict). Current decisions: `docs/decisions.md`.

@@ -32,8 +32,9 @@ never `pm2 … all`; never touch Arcway's files, process or database.
      "select g.id, g.updated_at, count(s.*) from games g join seats s on s.game_id = g.id
       where g.status = 'running' group by g.id order by g.updated_at desc"
    ```
-   A paused, bots-only smoke-test game stays in the list; ignore it (the app can't end it). There is no broadcast to players; tell the hosts of those games directly (and, from builds with #54, they can
-   pause first).
+   There is no broadcast to players; tell the hosts of those games directly (and, from builds with #54, they can
+   pause first). A host can't end a game early; to clear an abandoned one, take a `pg_dump` first, then
+   `delete from games where id = '<id>'` (seats, events, deadlines, chat and notes go with it).
 1. **Build on the Mac** from a fresh clone of `main`, in a scratch folder (not `/tmp`), Node 22, pnpm 10.28:
    ```sh
    export PATH=/opt/homebrew/opt/node@22/bin:$PATH CI=1 PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1

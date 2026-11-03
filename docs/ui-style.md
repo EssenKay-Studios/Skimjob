@@ -103,7 +103,7 @@ Scale (desktop):
 ## 4. Cards and panels: the "sketch frame"
 
 Each panel is an SVG frame drawn behind the content (do not use CSS `border`). Write our own
-generator (`packages/ui/sketchFrame.ts`) with these layers, bottom to top:
+generator (`apps/web/src/components/sketch.ts`, used by `SketchFrame.tsx`) with these layers, bottom to top:
 
 1. **Hatched shadow.** The same outline offset by **(+3.5px, +4.5px)** and filled with a hatch
    pattern: 4.2px tile, rotated 38°, line `#2A2320` 1.15px at 62% opacity. Overall opacity is 0.62
