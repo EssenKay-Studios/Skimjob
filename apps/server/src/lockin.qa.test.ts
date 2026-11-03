@@ -232,23 +232,25 @@ describe("restart mid-grace: no double, no skip", () => {
 
 describe("an emergency meeting / Muscle window opening during the grace pauses and resumes it (design §4.1, §11)", () => {
   it("both round rows pause while the meeting (and any shakedown window) is open, then keep their time left", { timeout: 120_000 }, async () => {
+    const t1h = TIMINGS["1h"];
     let sawShakedown = false;
     for (let k = 0; k < 6; k++) {
       forcedSeed = `qa-lockin-emerg-${k}`;
       await fresh();
-      const { id, humans } = await startGame(4, 2);
+      // Not Quick: Quick forces the Starter deck, which has no Muscle and no shop (extension.md "Host settings").
+      const { id, humans } = await startGame(4, 2, { sessionLength: "1h" });
       const host = humans[0]!;
       for (const h of humans.slice(1)) expect(await send(id, h.who, moveFor(await load(id), h.player))).toMatchObject({ ok: true });
       let s = await load(id);
       if (!s.pendingEmergency) expect(await send(id, host.who, { type: "callEmergency" })).toMatchObject({ ok: true });
       s = await load(id);
       const open = await rowOf(id, `openMeeting:${s.pendingEmergency!.meetingId}`);
-      // Lock in 3 s before the meeting opens: the grace (5 s) runs past it.
+      // Lock in 3 s before the meeting opens: the grace (10 s) runs past it.
       clock.advance(open!.due - clock.now() - 3000);
       expect(await send(id, host.who, moveFor(s, host.player))).toMatchObject({ ok: true });
       const early = (await rowOf(id, "roundEarly:1"))!;
       const round = (await rowOf(id, "round:1"))!;
-      expect(early.due - open!.due).toBe(t.lockInGraceMs - 3000);
+      expect(early.due - open!.due).toBe(t1h.lockInGraceMs - 3000);
       clock.advance(3000);
       expect(await app.scheduler.tick()).toBe(1);
       expect((await load(id)).phase.kind).toBe("meeting");
@@ -276,10 +278,11 @@ describe("an emergency meeting / Muscle window opening during the grace pauses a
       // A change after the resume still doesn't restart it; it fires 2 s after the meeting.
       expect(await send(id, host.who, moveFor(s, host.player, 1))).toMatchObject({ ok: true });
       expect((await rowOf(id, "roundEarly:1"))!.due).toBe(early.due + paused);
-      clock.advance(t.lockInGraceMs - 3000 - 1);
+      clock.advance(t1h.lockInGraceMs - 3000 - 1);
       expect(await app.scheduler.tick()).toBe(0);
       clock.advance(1);
-      expect(await app.scheduler.tick()).toBe(1);
+      // >= 1: an earlier seed's game (same clock) may have a row due at this instant too.
+      expect(await app.scheduler.tick()).toBeGreaterThanOrEqual(1);
       const end = await load(id);
       expect(count(end, "roundResolved", (e) => e.round === 1)).toBe(1);
       expect(count(end, "defaultMoveAssigned")).toBe(0);

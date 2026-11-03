@@ -8,7 +8,7 @@
 // People are played by bot logic (or a script) over their own sockets.
 // design §17.2, §17.3, §13, §11, §16.1, §7
 import { createBot, PERSONALITIES, type Agent } from "@skimjob/bots";
-import { DEFAULT_ROLE_POOL, MOLE_ROLE } from "@skimjob/content";
+import { POOL_ROLES, MOLE_ROLE, DECKS, ROLES } from "@skimjob/content";
 import { canSee, replay, viewFor, type GameConfig, type GameEvent, type GameState, type PlayerView, type SystemCommand } from "@skimjob/engine";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -23,6 +23,9 @@ import { buildServer } from "./server";
 import type { LobbySettings } from "./settings";
 import { createGameStore, type GameStore } from "./store";
 import { testDb } from "./testkit";
+
+/** The Standard deck with every Wildcard and Lone wolf toggled off: no Mole, so no police moments (was saboteur "off"). */
+const TEAM_ROLES = DECKS.standard.filter((r) => ROLES[r]?.tag === "teamPlayer");
 
 const quick = { interval: 1, timeout: 5000 };
 const clock = fakeClock(Date.UTC(2026, 10, 1));
@@ -321,7 +324,7 @@ const typesIn = (s: GameState) => new Set(s.log.map((e) => e.type));
 describe("scenarios: end-to-end stories over HTTP + WebSocket", () => {
   it("host creates a game, guests join by invite, bots fill the seats, and a full game plays to the reveal", async () => {
     const before = app.live.botRefusals.length;
-    const game = await startGame(3, 5, { voteVisibility: "hiddenThenRevealed", mole: "on", eventsEnabled: true });
+    const game = await startGame(3, 5, { voteVisibility: "hiddenThenRevealed", eventsEnabled: true });
     const clients = await Promise.all(game.humans.map((h) => Client.open(game.id, h)));
     // Some talk on the way (M2-8a): crew chat, a DM between seats 1 and 2, an evidence card.
     const [p0, p1, p2] = clients as [Client, Client, Client];
@@ -400,7 +403,7 @@ describe("scenarios: end-to-end stories over HTTP + WebSocket", () => {
 
   it("idle people get the default move every round, and still get the reveal", async () => {
     const before = app.live.botRefusals.length;
-    const game = await startGame(2, 4, { mole: "off" });
+    const game = await startGame(2, 4, { roles: TEAM_ROLES });
     const clients = await Promise.all(game.humans.map((h) => Client.open(game.id, h)));
     const refused = await play(game, clients, clients.map(() => null));
     const final = await finish(game, clients, refused, before);
@@ -437,7 +440,7 @@ describe("scenarios: end-to-end stories over HTTP + WebSocket", () => {
   }, 60_000);
 
   it("an emergency meeting during its notice period: planning goes on, a second call is refused, the round waits for the vote", async () => {
-    const game = await startGame(4, 0, { mole: "off", eventsEnabled: false });
+    const game = await startGame(4, 0, { roles: TEAM_ROLES, eventsEnabled: false });
     const clients = await Promise.all(game.humans.map((h) => Client.open(game.id, h)));
     const [a, b, c, d] = clients as [Client, Client, Client, Client];
     // design §11.1: one emergency per player; the notice period is the server's.
@@ -468,7 +471,7 @@ describe("scenarios: end-to-end stories over HTTP + WebSocket", () => {
 
   it("a Duel game: no meetings over the socket, call-outs settle at the act's end, and the reveal ranks both (design §16.1)", async () => {
     // The lobby has no Duel setting yet, so this one game starts through the store with duel: true.
-    const { id, sessions } = await openLobby(2, 0, { mole: "off" });
+    const { id, sessions } = await openLobby(2, 0, { roles: TEAM_ROLES });
     const seats = (await lobby(id, sessions[0]!)).seats;
     const config: GameConfig = {
       ...gameConfig({ ...(await lobby(id, sessions[0]!)).settings }, seats.map((x) => ({ nickname: x.nickname, bot_personality: x.bot })), "duel-scenario"),
@@ -502,24 +505,22 @@ describe("scenarios: end-to-end stories over HTTP + WebSocket", () => {
     expect(typesIn(final).has("meetingOpened")).toBe(false);
   }, 60_000);
 
-  it("a 12-player game deals at most one of each saboteur and different pool roles, and plays to the reveal (design §8.1)", async () => {
+  it("a 12-player Everything game deals different roles, and plays to the reveal (extension.md \"Decks and dealing\")", async () => {
     const before = app.live.botRefusals.length;
-    const game = await startGame(2, 10, { mole: "on", eventsEnabled: true, voteVisibility: "secret" });
+    const game = await startGame(2, 10, { deck: "everything", eventsEnabled: true, voteVisibility: "secret" });
     const clients = await Promise.all(game.humans.map((h) => Client.open(game.id, h)));
     const state = await load(game.id);
     const roles = state.playerOrder.map((p) => state.players[p]!.role).sort();
-    // Role deck v2 §3: at 12 every mix has two saboteurs or more, so the Mole and the Embezzler (R3b) are both dealt;
-    // unique roles (the default): the pool covers the rest.
-    expect(roles.filter((r) => r === MOLE_ROLE || r === "embezzler").sort()).toEqual(["embezzler", MOLE_ROLE]);
+    // Unique roles (the default) from the 20-role Everything deck: twelve different roles.
     expect(new Set(roles).size).toBe(12);
-    for (const r of roles) expect([...DEFAULT_ROLE_POOL, MOLE_ROLE, "embezzler"]).toContain(r);
+    for (const r of roles) expect(POOL_ROLES).toContain(r);
     const refused = await play(game, clients, brainsFor(game));
     const final = await finish(game, clients, refused, before);
     expect(final.playerOrder).toHaveLength(12);
   }, 90_000);
 
   it("the heist fails by Heat: everyone hits the Vault until the cops raid at 100 (design §7)", async () => {
-    const game = await startGame(3, 0, { mole: "off", eventsEnabled: false });
+    const game = await startGame(3, 0, { roles: TEAM_ROLES, eventsEnabled: false });
     const clients = await Promise.all(game.humans.map((h) => Client.open(game.id, h)));
     const refused = await play(game, clients, clients.map(() => steadyBrain("vault")));
     const final = await finish(game, clients, refused, app.live.botRefusals.length);
@@ -529,7 +530,7 @@ describe("scenarios: end-to-end stories over HTTP + WebSocket", () => {
   }, 60_000);
 
   it("the heist fails by target: a crew on the Rooftop misses every checkpoint and the final target (design §11.5)", async () => {
-    const game = await startGame(3, 0, { mole: "off", eventsEnabled: false });
+    const game = await startGame(3, 0, { roles: TEAM_ROLES, eventsEnabled: false });
     const clients = await Promise.all(game.humans.map((h) => Client.open(game.id, h)));
     const refused = await play(game, clients, clients.map(() => steadyBrain("rooftop")));
     const final = await finish(game, clients, refused, app.live.botRefusals.length);
@@ -542,7 +543,7 @@ describe("scenarios: end-to-end stories over HTTP + WebSocket", () => {
   }, 60_000);
 
   it("hostile input over a socket is refused and the game carries on (bad shapes, forged ids, system commands)", async () => {
-    const game = await startGame(2, 1, { mole: "off" });
+    const game = await startGame(2, 1, { roles: TEAM_ROLES });
     const [a] = await Promise.all(game.humans.map((h) => Client.open(game.id, h)));
     const before = await load(game.id);
     const hostile: unknown[] = [
