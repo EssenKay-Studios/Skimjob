@@ -7,14 +7,14 @@ Read this with `docs/STATUS.md` (the canonical task list and the owner's open qu
 ## Current state (3 Nov 2026)
 - **Development is halted** (owner): every code PR is merged (M2-1 to M2-13 and R6, through #65); start nothing new until the owner says so.
 - **In flight:** nothing.
-- **Paused by the owner:** M2-14 playtest pass, M2-15 offline demo (GitHub Pages).
+- **Parked by the owner (3 Nov):** M2-14 playtest pass (the owner playtests on the live site himself) and M2-15 offline demo (not needed while the live site exists).
 - **Out of scope:** `docs/rebuild.md` (jobs redesign proposal), Books mode, the recruited Mole.
 - **Specs:** `docs/design.md` plus `docs/extension.md` (roles, tokens, shop; wins on conflict). Current decisions: `docs/decisions.md`.
 - **Live:** https://skimjob.duckdns.org on the owner's AWS Lightsail box, running 1a4e083 with Google sign-in on (release `20261103-172121-1a4e083`; the 38002fd release is kept, but is not a safe rollback target: see `docs/deploy.md` step 8). Runbook: `docs/deploy.md`. Connection details are in the owner's local `ssh-relay` skill, never in the repo.
 
 ## How to resume
 1. Ask the owner to confirm the provisional decisions in STATUS "Questions for the owner".
-2. M2-14 playtest pass, then M2-15 offline demo: the in-browser engine and bots with the same UI, published as a GitHub Pages site the owner can verify.
+2. Ask what to build next: M2-14 and M2-15 are parked; the candidates are in STATUS (open follow-ups, M3, M4).
 
 ## How the pipeline works
 - **Where it runs:** three setups, all covered in `common.md` "Where you run": (a) the owner's Mac directly (main clone `/Users/karthikeyaniyer/Documents/Misc/Skimjob`, one worktree per agent under `…/Misc/skimjob-wt/<name>`); (b) a cloud session whose agents run commands on the Mac through the local terminal tool (≈60 s per call: background long runs with nohup and poll logs; never `/tmp`); (c) a cloud session working entirely in its Linux container (clone under `/home/claude`, Node 22 preinstalled, GraphQL blocked so REST only, slow 2-core box: run only affected specs and rely on CI). Tell each agent which setup it is in.
@@ -58,7 +58,7 @@ Read this with `docs/STATUS.md` (the canonical task list and the owner's open qu
 - Never add Co-Authored-By or Claude-Session lines; the gate refuses them.
 
 ## Owner direction and constraints
-- Goal: finish development and testing and hand over an artifact to verify (the M2-15 offline demo), with the live Lightsail site for playtests.
+- Goal: a solid game on the live Lightsail site, which the owner playtests himself.
 - Ask the owner only for real decisions, as MCQs with a recommended option; batch technical defaults (about 4 at a time). Otherwise keep going.
 - UI: the cityrt-style cartoon notebook on every screen (`docs/ui-style.md`, CLAUDE.md UI rules). Style only: never their logo, name or art.
 - **The repo is public.** Never commit secrets, SSH key names, connection details (host, IP, user) or any off-box backup destination or its credentials. On-box paths, service and file names, and the backup script and schedule may be named (`docs/deploy.md` does).

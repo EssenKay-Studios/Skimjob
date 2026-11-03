@@ -152,14 +152,14 @@ async lock, single process). Never send `seq` outside its owner's view (evidence
   (they gate notifications).
 - Refs: §15, §4.1. **Accept:** tests for pause across a deadline, extend, and replace/return; E2E survives a reload.
 
-### M2-14 Playtest pass (M)
+### M2-14 Playtest pass (M) — parked (owner, 3 Nov)
 - `docs/playtest.md`: how to run locally (`pnpm dev`, LAN URL for phones), presets, known limits.
 - Play Quick and 1-hour games with 3 contexts + bots; fix what breaks; a "report a problem" link that copies
   game id, round and client version (never the seed before the end).
 - Update STATUS.md (M2 done, findings, M3 next), decisions.md for every choice made in M2.
 - **Accept:** a 1-hour game with 2 humans + 4 bots completes without a server error; all tests, typecheck, E2E green.
 
-### M2-15 Offline demo (M, GitHub Pages)
+### M2-15 Offline demo (M, GitHub Pages) — parked (owner, 3 Nov)
 - A static build of the web client with the engine and bots running in the browser (an in-browser adapter in
   place of the server channel), the same UI, no server or sign-in.
 - Published as a **GitHub Pages** site for Karthik to verify (owner, 3 Nov; replaces the claude.ai artifact).

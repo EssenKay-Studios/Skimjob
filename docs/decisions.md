@@ -82,7 +82,8 @@ The rules are `docs/design.md` and `docs/extension.md`. The choices behind them:
 - **Hosting: AWS Lightsail,** https://skimjob.duckdns.org, on the owner's box beside Arcway, which no Skimjob step may touch. systemd service, releases with a `current` symlink, nginx, Postgres, weekly `pg_dump`. Built on the Mac and uploaded by hand; nothing deploys from CI. Runbook: `docs/deploy.md`. *Confirmed.*
 - **The repo is public** (free CI minutes), so nothing secret or connection detail is ever committed. *Confirmed.*
 - **CI:** typecheck and tests, 6 e2e shards (with a fast-clock server), sim smoke; docs-only PRs (every path `*.md`) skip e2e and sim smoke. *Confirmed.*
-- **The M2-15 offline demo is a GitHub Pages site** (engine and bots in the browser, same UI). *Confirmed;* paused by the owner.
+- **The M2-15 offline demo is a GitHub Pages site** (engine and bots in the browser, same UI). *Confirmed;* parked by the owner (3 Nov): not needed while the live site exists.
+- **M2-14 playtest pass is parked** (owner, 3 Nov): the owner playtests on the live site himself. *Confirmed.*
 - **Out of scope:** `docs/rebuild.md` (a proposal), Books mode, the recruited Mole. *Confirmed.*
 
 ## Pipeline and git

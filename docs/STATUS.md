@@ -6,7 +6,7 @@ _Last updated: 3 Nov 2026. **Development is halted** (owner): every code PR is m
 - **Specs:** `docs/design.md` is the game design; `docs/extension.md` is the rules spec for roles, tokens and the shop and wins on any conflict. Current decisions: `docs/decisions.md`. Out of scope: `docs/rebuild.md` (jobs redesign proposal), Books mode, the recruited Mole.
 - **Content** 0.17.0 (R6 balance pass, provisional gates; `docs/balance/r6-balance.md`).
 - **Live:** https://skimjob.duckdns.org on the owner's AWS Lightsail box (`docs/deploy.md`). It runs 1a4e083 (all of M2-1 to M2-13 and R6), with Google sign-in on.
-- **Next step:** on hold, owner to resume (M2-14, then M2-15; see `docs/pipeline/HANDOFF.md` "How to resume").
+- **Next step:** on hold. M2-14 and M2-15 are parked (owner, 3 Nov): the owner runs the playtests himself on the live site, and the offline demo isn't needed for now.
 
 ## Current milestone: M2 — playable web prototype
 
@@ -25,8 +25,8 @@ Plan and acceptance criteria: `docs/m2-plan.md`. This is the canonical task list
 11. [x] **M2-11** End-of-game reveal (incl. tokens and purchases) (#55): roles and win rules, ending and why, scores, a scrubbable round timeline (tokens, perks, tip-offs vs patrols, loops vs power cuts, forged sightings, stolen votes), beside #52's final ranking.
 12. [x] **M2-12** Google sign-in, stub-ready, and "My games" (#53). Routes `/api/auth/google/{start,callback}`.
 13. [x] **M2-13** Host controls and resilience (#54): pause/resume, extend, replace with bot + hand back, lobby kick.
-14. [ ] **M2-14** Playtest pass — **paused by the owner**.
-15. [ ] **M2-15** Offline demo (in-browser engine and bots, same UI) as a GitHub Pages site — **paused by the owner**.
+14. [ ] **M2-14** Playtest pass — **parked** (owner, 3 Nov): the owner playtests on the live site himself.
+15. [ ] **M2-15** Offline demo (in-browser engine and bots, same UI) as a GitHub Pages site — **parked** (owner, 3 Nov): not needed while the live site exists.
 
 - [x] **R6 — the Extension** (`docs/extension.md`), built inside M2: R6a rules in engine, content, bots and sim (#50); balance pass, content 0.17.0 (#51); R6b Extension UI: deck picker, rulebook, role cards, shop, Heat breakdown, gap box (#52).
 - [x] **Ops:** Lightsail deployment (systemd, nginx, Postgres, weekly `pg_dump`); Mac pipeline and SHA-bound merge gate (#48).
@@ -73,4 +73,4 @@ Every provisional call still to confirm, once each; each is marked *provisional*
 6. **Server and timing, Google sign-in** (#53): the account's seat is kept on a same-game clash; redirect URI from env; display-name fallback (`name` → `given_name` → "Crook"); scopes `openid profile`; `prompt=select_account`.
 7. **Web and UI** (#52, #55, #62): Extension UI readings and end-of-game reveal readings (Starter deck ≠ starter mode, Heat breakdown parts, reveal attribution of tip-offs, loops and stolen votes); the reveal-overflow regression coverage (pipeline and git).
 8. **Older provisional readings** (1–2 Nov, M1 to M2-10; partly accepted 2 Nov): accept the rest in bulk, or name any to revisit.
-9. **Resume:** when to restart development (M2-14, M2-15).
+9. **Resume:** what to build next (M2-14 and M2-15 are parked).
