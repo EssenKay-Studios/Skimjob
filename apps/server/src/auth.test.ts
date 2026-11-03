@@ -129,7 +129,8 @@ const callback = (url: string, signin: string | null, session?: string) => {
   const cookies: Record<string, string> = {};
   if (signin) cookies.sj_signin = signin;
   if (session) cookies[SESSION_COOKIE] = session;
-  return app.inject({ method: "GET", url: `/auth/${u.pathname.split("/").at(-2)}/callback${u.search}`, cookies });
+  // The path as registered (Google's is under /api, which the server serves like the bare route).
+  return app.inject({ method: "GET", url: `${u.pathname}${u.search}`, cookies });
 };
 
 /** The two providers, as the browser sees them: start → (provider page) → callback URL. */
@@ -351,21 +352,28 @@ describe("Google sign-in config (docs/deploy.md)", () => {
     expect(serverDeps(loadConfig({ DEV_LOGIN: "1" })).auth?.map((p) => p.name)).toEqual(["dev"]);
   });
 
-  it("is on with id + secret; the callback is GOOGLE_REDIRECT_URL or PUBLIC_ORIGIN's", () => {
+  it("is on with id + secret; the callback is GOOGLE_REDIRECT_URL, else PUBLIC_ORIGIN's (dev: Vite's) /api/auth/google/callback", () => {
     const local = loadConfig({ ...keys, GOOGLE_REDIRECT_URL: REDIRECT, DEV_LOGIN: "1" });
     expect(local.google).toEqual({ clientId: CLIENT_ID, clientSecret: CLIENT_SECRET, redirectUri: REDIRECT });
     expect(serverDeps(local).auth?.map((p) => p.name)).toEqual(["google", "dev"]);
     const prod = loadConfig({ ...keys, NODE_ENV: "production", PUBLIC_ORIGIN: "https://skimjob.fly.dev" });
-    expect(prod.google?.redirectUri).toBe("https://skimjob.fly.dev/auth/google/callback");
+    expect(prod.google?.redirectUri).toBe("https://skimjob.fly.dev/api/auth/google/callback");
     expect(serverDeps(prod).auth?.map((p) => p.name)).toEqual(["google"]);
+    // The owner's OAuth client (Lightsail, docs/deploy.md): these exact URIs are registered.
+    expect(loadConfig({ ...keys, NODE_ENV: "production", PUBLIC_ORIGIN: "https://skimjob.duckdns.org" }).google?.redirectUri).toBe(
+      "https://skimjob.duckdns.org/api/auth/google/callback",
+    );
+    expect(loadConfig(keys).google?.redirectUri).toBe("http://localhost:5173/api/auth/google/callback");
   });
 
   it.each([
     [{ GOOGLE_CLIENT_ID: CLIENT_ID }, /both/],
     [{ GOOGLE_CLIENT_SECRET: CLIENT_SECRET }, /both/],
-    [keys, /GOOGLE_REDIRECT_URL/],
+    [{ ...keys, NODE_ENV: "production" }, /GOOGLE_REDIRECT_URL/],
     [{ ...keys, GOOGLE_REDIRECT_URL: "https://skimjob.fly.dev/elsewhere" }, /ending in/],
-    [{ ...keys, GOOGLE_REDIRECT_URL: "ftp://x/auth/google/callback" }, /ending in/],
+    [{ ...keys, GOOGLE_REDIRECT_URL: "ftp://x/api/auth/google/callback" }, /ending in/],
+    // Not under /api: Vite's dev proxy wouldn't reach it.
+    [{ ...keys, GOOGLE_REDIRECT_URL: "http://localhost:5173/auth/google/callback" }, /ending in \/api\/auth\/google\/callback/],
     [{ ...keys, GOOGLE_REDIRECT_URL: "not a url" }, /ending in/],
   ])("refuses to start with %j", (env, message) => {
     expect(() => loadConfig(env)).toThrow(StartupError);

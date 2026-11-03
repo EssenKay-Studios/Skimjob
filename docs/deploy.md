@@ -64,27 +64,63 @@ Google's published keys (issuer, audience = the client id, expiry, nonce). Users
    External, scopes `openid` and `profile`. While it's in "Testing", add the playtesters' Google accounts as
    test users (or publish it).
 2. APIs & Services → **Credentials** → Create credentials → **OAuth client ID** → type **Web application**.
+   The sign-in routes live under `/api` (`/api/auth/google/start` and `/api/auth/google/callback`), so
+   Vite's `/api` proxy reaches them in dev, and production serves them on the same path.
    **Authorized redirect URIs** (add each one you use; Google wants an exact match):
-   - deployed: `https://skimjob.fly.dev/auth/google/callback` (or `https://<FLY_APP>.fly.dev/...`);
+   - Lightsail: `https://skimjob.duckdns.org/api/auth/google/callback`;
+   - Fly: `https://skimjob.fly.dev/api/auth/google/callback`;
    - local `pnpm dev` (Vite on 5173 in front of the server): `http://localhost:5173/api/auth/google/callback`;
-   - local production build (`node apps/server/dist/main.js` on 8080): `http://localhost:8080/auth/google/callback`.
-   No "Authorized JavaScript origins" are needed (the browser never talks to Google's API itself).
+   - local production build (`node apps/server/dist/main.js` on 8080): `http://localhost:8080/api/auth/google/callback`.
+   **Authorized JavaScript origins** aren't used by this flow (the browser never calls Google's API), but
+   listing the sites does no harm: `http://localhost:5173`, `https://skimjob.duckdns.org`.
 3. Copy the client id and secret. **Never commit them.**
-   - Deployed: `flyctl secrets set -a skimjob GOOGLE_CLIENT_ID='…apps.googleusercontent.com' GOOGLE_CLIENT_SECRET='…'`
-     (restarts the machine). The callback is `PUBLIC_ORIGIN` + `/auth/google/callback`, so nothing else to set.
-   - Local: export them in your shell (not in a file in the repo) with the callback, then `pnpm dev`:
-     `GOOGLE_CLIENT_ID=… GOOGLE_CLIENT_SECRET=… GOOGLE_REDIRECT_URL=http://localhost:5173/api/auth/google/callback pnpm dev`.
+   - Lightsail: see "Google sign-in on Lightsail" below.
+   - Fly: `flyctl secrets set -a skimjob GOOGLE_CLIENT_ID='…apps.googleusercontent.com' GOOGLE_CLIENT_SECRET='…'`
+     (restarts the machine). The callback is `PUBLIC_ORIGIN` + `/api/auth/google/callback`, so nothing else to set.
+   - Local: export them in your shell (not in a file in the repo), then `pnpm dev`:
+     `GOOGLE_CLIENT_ID=… GOOGLE_CLIENT_SECRET=… pnpm dev`. Outside production with no `PUBLIC_ORIGIN` the
+     callback defaults to `http://localhost:5173/api/auth/google/callback`.
      LAN IPs don't work: Google only allows `http://` for `localhost`.
 4. Check: the server logs `Google sign-in: on (callback …)` at boot, `GET /api/auth/providers` lists
    `google`, and the landing page shows "Sign in with Google".
 
-`GOOGLE_REDIRECT_URL` overrides the callback (it must end in `/auth/google/callback`; under `/api/` is fine).
+`GOOGLE_REDIRECT_URL` overrides the callback (it must end in `/api/auth/google/callback`). The server still
+answers the bare `/auth/google/...` paths (every route works with and without `/api`), but Google only ever
+sees the `/api` one.
 A guest who signs in with a Google account that's new here keeps their user, nickname and seats. Signing in
 to an account that already exists switches to that account and brings the guest's seats and host roles along.
 If the guest and the account sit in the same game, the account keeps its own seat (and takes the host role);
 the guest's seat is dropped from a lobby, and in a started game it stays as a quiet player nobody signs in as.
 Signed in, the landing page lists "My games" (`GET /api/me/games`).
-To turn Google off again: `flyctl secrets unset -a skimjob GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET`.
+To turn Google off again: remove both variables (Fly: `flyctl secrets unset -a skimjob GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET`).
+
+### Google sign-in on Lightsail (https://skimjob.duckdns.org)
+
+The owner's OAuth client has these registered:
+
+| | Local (`pnpm dev`) | Lightsail |
+|---|---|---|
+| Authorized JavaScript origin | `http://localhost:5173` | `https://skimjob.duckdns.org` |
+| Authorized redirect URI | `http://localhost:5173/api/auth/google/callback` | `https://skimjob.duckdns.org/api/auth/google/callback` |
+
+**Owner action:** the client currently lists `http://localhost:5173/auth/google/callback` (no `/api`). Add
+`http://localhost:5173/api/auth/google/callback` to its Authorized redirect URIs. Without it, local sign-in stops
+at Google with `redirect_uri_mismatch`. The old URI can be removed: Vite only proxies `/api`.
+
+On the server, the settings go in `/etc/skimjob/env` (root-owned, `chmod 600`, read by the service). It is
+**never committed**, and nothing in the repo holds the secret:
+
+```sh
+NODE_ENV=production
+PUBLIC_ORIGIN=https://skimjob.duckdns.org
+GOOGLE_CLIENT_ID=…apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=…
+```
+
+With `PUBLIC_ORIGIN` set, the callback is `https://skimjob.duckdns.org/api/auth/google/callback`, so there's
+no need for `GOOGLE_REDIRECT_URL`. Restart the service after editing the file. Then check that the boot log says
+`Google sign-in: on (callback https://skimjob.duckdns.org/api/auth/google/callback)`. The HTTPS proxy in front
+must pass `/api/*` through to the server unchanged (the server strips `/api` itself).
 
 ## Run the production build locally
 

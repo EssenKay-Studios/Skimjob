@@ -30,13 +30,17 @@ export interface ServerConfig {
   /**
    * "Sign in with Google" (M2-12): on when GOOGLE_CLIENT_ID and
    * GOOGLE_CLIENT_SECRET are set. The redirect URI is GOOGLE_REDIRECT_URL, or
-   * PUBLIC_ORIGIN + /auth/google/callback. docs/deploy.md "Google sign-in".
+   * PUBLIC_ORIGIN (outside production: the Vite dev origin) + GOOGLE_CALLBACK_PATH.
+   * docs/deploy.md "Google sign-in".
    */
   readonly google: { readonly clientId: string; readonly clientSecret: string; readonly redirectUri: string } | null;
 }
 
 /** The Vite dev server and the Playwright one (M2-5a), whose proxies keep the browser's Origin. */
 export const DEV_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:5179", "http://127.0.0.1:5179"];
+
+/** Where Google sends the browser back: under /api, so Vite's dev proxy reaches it too (web.ts strips the prefix). */
+export const GOOGLE_CALLBACK_PATH = "/api/auth/google/callback";
 
 /** A startup failure whose message is the whole story: print it, exit 1. */
 export class StartupError extends Error {}
@@ -72,16 +76,17 @@ export function loadConfig(env: Env = process.env): ServerConfig {
     publicOrigin,
     webDir: env.WEB_DIR?.trim() || null,
     timeScale,
-    google: googleConfig(env, publicOrigin),
+    google: googleConfig(env, publicOrigin ?? (production ? null : DEV_ORIGINS[0]!)),
   };
 }
 
-function googleConfig(env: Env, publicOrigin: string | null): ServerConfig["google"] {
+/** `origin`: PUBLIC_ORIGIN, or outside production the Vite dev origin; null means there's no default callback. */
+function googleConfig(env: Env, origin: string | null): ServerConfig["google"] {
   const clientId = env.GOOGLE_CLIENT_ID?.trim() ?? "";
   const clientSecret = env.GOOGLE_CLIENT_SECRET?.trim() ?? "";
   if (!clientId && !clientSecret) return null;
   if (!clientId || !clientSecret) throw new StartupError("Google sign-in needs both GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET (or neither)");
-  const raw = env.GOOGLE_REDIRECT_URL?.trim() || (publicOrigin ? `${publicOrigin}/auth/google/callback` : "");
+  const raw = env.GOOGLE_REDIRECT_URL?.trim() || (origin ? `${origin}${GOOGLE_CALLBACK_PATH}` : "");
   if (!raw) throw new StartupError("Google sign-in needs GOOGLE_REDIRECT_URL (or PUBLIC_ORIGIN) for its callback URL");
   let url: URL | null = null;
   try {
@@ -89,8 +94,8 @@ function googleConfig(env: Env, publicOrigin: string | null): ServerConfig["goog
   } catch {
     // reported below
   }
-  if (!url || (url.protocol !== "https:" && url.protocol !== "http:") || !/\/auth\/google\/callback$/.test(url.pathname) || url.search || url.hash) {
-    throw new StartupError(`GOOGLE_REDIRECT_URL must be a URL ending in /auth/google/callback, got ${JSON.stringify(raw)}`);
+  if (!url || (url.protocol !== "https:" && url.protocol !== "http:") || !url.pathname.endsWith(GOOGLE_CALLBACK_PATH) || url.search || url.hash) {
+    throw new StartupError(`GOOGLE_REDIRECT_URL must be a URL ending in ${GOOGLE_CALLBACK_PATH}, got ${JSON.stringify(raw)}`);
   }
   return { clientId, clientSecret, redirectUri: url.href };
 }

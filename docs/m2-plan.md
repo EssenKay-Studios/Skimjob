@@ -180,8 +180,8 @@ Order rationale: 1–4 give a working server playable by bots; 5–6 make it pla
 7–8 add the social layer; 9–11 are look and payoff; 12 waits on Karthik; 13–14 harden for a real playtest.
 
 ## 3. Questions for Karthik
-1. **Google OAuth client id/secret** (Web application, redirect `http://localhost:5173/auth/google/callback`
-   and your LAN IP if phones join). *Default:* dev-login stub until provided; M2-12 runs last.
+1. **Google OAuth client id/secret** (Web application, redirect `http://localhost:5173/api/auth/google/callback`
+   and the deployed `…/api/auth/google/callback`; docs/deploy.md "Google sign-in"). *Default:* dev-login stub until provided; M2-12 runs last.
 2. **Local Postgres on your machine:** Docker or a native install? *Default:* `docker-compose.yml` for you;
    PGlite fallback when `DATABASE_URL` is unset, so `pnpm dev` works with nothing installed.
 3. **Playtest presets:** OK to add a "Quick (15 min)" preset (about 1.5 min rounds, 2 min meetings) next to the
