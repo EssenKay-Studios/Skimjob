@@ -39,11 +39,10 @@ Plan and acceptance criteria: `docs/m2-plan.md`. This is the canonical task list
 ## Open follow-ups (from reviews and QA)
 - **R6 balance** (`docs/balance/r6-balance.md`): Heat share of failures 34–54% at 4–6p (design target 10–20%, not gated); Starter succeeds 86–96% and Duel 44% (report-only); the Cleaner sits lowest of the Team roles; revisit team parity 0.10 (gated at 0.20) after the M2-14 playtests.
 - **Quiet hours** must freeze police moments and deadlines (M3; host pause already does, #54).
-- **Flaky tests:** see `docs/pipeline/HANDOFF.md` "Known flaky tests"; stabilise them. The 12-seat game QA test's reveal overflow was real and is fixed (#62, merged); its alibi-window timing fix is in flight (#63). Watch #62's new reveal long-names spec at 1024/1280 in CI (it timed out once locally).
+- **Flaky tests:** see `docs/pipeline/HANDOFF.md` "Known flaky tests"; stabilise them. The 12-seat game QA test's real bugs are fixed: reveal overflow (#62) and alibi-window timing (#63). Watch #62's new reveal long-names spec at 1024/1280 in CI (it timed out once locally).
 - **Board PATCH rate limiter has no test** (#46): `apps/server/src/notes.ts` `rateLimiter`; add one with the fake clock.
 - **`CaseFile` memo misses name changes** (#46): a mid-game rename (a bot takes over) shows old names until a new entry arrives.
 - **Notes endpoint fetched twice** (#46): `useAwayRecap` and `useSuspicionBoard` each call `GET /games/:id/notes`.
-- **Make `crewSeed` required** in the bots (#43), so nothing falls back to the public `gameDigest`.
 - **#44 notes:** absent people in the people-majority denominator; the faint offline dot.
 - **CI actions pinned to `@v4` tags, not SHAs** (#35): `ci.yml`, `sim-suite.yml`.
 - Smaller: the hunch can outweigh a certain Peek; `live.hostile.qa.test.ts` has no `claimRole` row; server bots re-roll claim chances on every `decide()`; a slow test in `packages/bots/src/run.test.ts` needs an explicit timeout; the `viewFor` deep-copy speedup (35–40% of sim time) is left for the owner (#34).

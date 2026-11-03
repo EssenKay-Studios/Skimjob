@@ -5,8 +5,8 @@ Read this with `docs/STATUS.md` (the canonical task list and the owner's open qu
 **Standing rule: keep status and orchestration docs clean.** Update in place, delete stale or contradictory content, no history narratives (history lives in git, the PRs and `docs/archive/decisions-history.md`).
 
 ## Current state (3 Nov 2026)
-- **Development is halted** (owner): every code PR is merged (M2-1 to M2-13 and R6, through #62); start nothing new until the owner says so.
-- **In flight:** #63 `test/12-seat-alibi-timing` (alibi-window timing in the 12-seat QA test) and `fix/crewseed-required` (make `crewSeed` required in the bots). Nothing else.
+- **Development is halted** (owner): every code PR is merged (M2-1 to M2-13 and R6, through #64; #64 made `crewSeed` required in the bots); start nothing new until the owner says so.
+- **In flight:** #65 `chore/cleanup` (owner-approved docs and pipeline cleanup). Nothing else.
 - **Paused by the owner:** M2-14 playtest pass, M2-15 offline demo (GitHub Pages).
 - **Out of scope:** `docs/rebuild.md` (jobs redesign proposal), Books mode, the recruited Mole.
 - **Specs:** `docs/design.md` plus `docs/extension.md` (roles, tokens, shop; wins on conflict). Current decisions: `docs/decisions.md`.
@@ -40,7 +40,6 @@ Read this with `docs/STATUS.md` (the canonical task list and the owner's open qu
 - **Never `gh pr checks --watch`:** it gets backgrounded and stalls agents. Poll the check-runs in short calls instead (common.md). On the Mac directly, run long commands in the foreground; through the terminal tool, background them with nohup and poll.
 - **Testing policy:** run only the specs and unit tests the PR touches, `pnpm typecheck` before pushing (QA too), push once, and let CI's unit suite and 6 e2e shards run the rest. Never skip or disable a test.
 - **Known flaky tests** (rerun once; if it fails again, treat it as real). E2E files are in `apps/web/e2e/`; `[project]` is the Playwright project:
-  - `game.qa.spec.ts` "12 seats, 24-char names: a Quick game to the end with moves changed, alibis, no leaks, no overflow" [mobile-fast]: overflow fixed in #62; alibi timing fix in flight (#63);
   - `responsive.qa.spec.ts` "landing behaviour › reduced motion › turns off the sheet entrance and toast animations" [mobile];
   - `responsive.qa.spec.ts` "<width>x<height> touch › touch targets are at least 44px on /" [mobile];
   - `responsive.qa.spec.ts` "landing behaviour › invite field: links, spaces and dashes are tidied; junk is refused without a request" (project not recorded);
