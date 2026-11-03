@@ -8,7 +8,7 @@ A social deduction heist game for groups of friends, played over an hour or a wh
 - Current status and next tasks: [`docs/STATUS.md`](docs/STATUS.md)
 - Decision log: [`docs/decisions.md`](docs/decisions.md)
 - Working on the code (humans and AI): [`CLAUDE.md`](CLAUDE.md)
-- Playtest server: https://skimjob.fly.dev, deployed from `main` — [`docs/deploy.md`](docs/deploy.md)
+- Playtest server: not live yet; deploys are manual-only until a host is chosen — [`docs/deploy.md`](docs/deploy.md)
 
 ```
 pnpm install

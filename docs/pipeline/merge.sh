@@ -1,14 +1,27 @@
 #!/bin/bash
-# usage: merge.sh PR_NUMBER BRANCH  -> rebase-merge, verify main green, print one line
-set -e
-N=$1; B=$2; R=repos/EssenKay-Studios/Skimjob; cd ${CLONE:-/home/claude/skimjob}
-git fetch -q origin +refs/heads/$B:refs/remotes/origin/$B +refs/heads/main:refs/remotes/origin/main
-if git log --format=%B origin/main..origin/$B | grep -qiE "co-authored-by|claude-session"; then echo "ABORT: attribution lines on branch"; exit 1; fi
-gh api -X PUT $R/pulls/$N/merge -f merge_method=${3:-rebase} --jq '.merged' >/dev/null
-git fetch -q origin +refs/heads/main:refs/remotes/origin/main
-git checkout -q -B main origin/main
-if [ -z "$FAST" ]; then pnpm install --silent >/dev/null 2>&1
-T=$(pnpm test 2>&1 | grep -E "^\s+Tests" | tr -s ' ')
-pnpm typecheck >/dev/null 2>&1 && TC=ok || TC=FAIL
-else T=" (local tests skipped; CI on main checked separately)"; TC=skipped; fi
-echo "merged #$N -> main $(git rev-parse --short HEAD) |$T | typecheck $TC | next: $(grep -m1 -E '^[0-9]+\. \[ \]' docs/STATUS.md | cut -c1-80)"
+# usage: merge.sh PR
+# Runs the verdicts.sh gate; if MERGEABLE: yes, squash-merges exactly the gated
+# head (--match-head-commit) and deletes the branch, then prints one line:
+#   merged #N -> main <sha> | next: <first unticked STATUS task>
+# Aborts with the gate's reasons otherwise. Docs-only PRs need green CI too.
+set -o pipefail
+N=$1
+[[ $N =~ ^[0-9]+$ ]] || { echo "usage: merge.sh PR_NUMBER" >&2; exit 2; }
+REPO=${REPO:-EssenKay-Studios/Skimjob}
+export REPO
+out=$(bash "$(dirname "$0")/verdicts.sh" "$N"); rc=$?
+last=$(tail -1 <<<"$out")
+if [ $rc -ne 0 ] || [ "$last" != "MERGEABLE: yes" ]; then
+  echo "$out"
+  echo "ABORT: #$N not merged ${last#MERGEABLE: no }"
+  exit 1
+fi
+head=$(awk '$1 == "head:" {print $2}' <<<"$out")
+[[ $head =~ ^[0-9a-f]{40}$ ]] || { echo "ABORT: could not read the gated head sha" >&2; exit 1; }
+# Run outside any clone so gh only deletes the remote branch, not a local
+# branch that may be checked out in an agent's worktree.
+(cd / && gh pr merge "$N" -R "$REPO" --squash --match-head-commit "$head" --delete-branch) || { echo "ABORT: gh pr merge failed for #$N" >&2; exit 1; }
+sha=$(gh pr view "$N" -R "$REPO" --json mergeCommit --jq '.mergeCommit.oid')
+next=$(gh api -H "Accept: application/vnd.github.raw" "repos/$REPO/contents/docs/STATUS.md?ref=main" \
+  | grep -m1 -E '^[0-9]+\. \[ \]' | cut -c1-80)
+echo "merged #$N -> main ${sha:0:7} | next: ${next:-<none unticked>}"

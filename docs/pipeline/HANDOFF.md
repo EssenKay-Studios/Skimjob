@@ -3,23 +3,32 @@
 Read this together with `docs/STATUS.md`, which holds the canonical task list. This file covers how the work is run and what was in flight at the snapshot.
 
 ## How the pipeline works
-- The orchestrator (PM) never writes code itself. It spawns Opus subagents, one per task. Each pipeline brief lives in this folder:
-  - `builder.md` writes code and opens a PR.
-  - `reviewer.md` posts a review whose last line is `VERDICT: APPROVE` or `VERDICT: CHANGES REQUESTED`.
-  - `qa.md` adds `*.qa.test.ts` tests and posts a `QA: PASS` or `QA: FAIL` comment.
+- The pipeline runs on the owner's Mac. Main clone: `/Users/karthikeyaniyer/Documents/Misc/Skimjob`; every agent works in its own git worktree under `/Users/karthikeyaniyer/Documents/Misc/skimjob-wt/<name>` (`git worktree add`, removed with `git worktree remove` when done). Setup and rules: `common.md`.
+- The orchestrator (PM) never writes code itself. It spawns Opus subagents, one per task, up to about 3–5 at once. Each pipeline brief lives in this folder:
+  - `builder.md` writes code and opens a PR (`gh pr create`).
+  - `reviewer.md` posts `gh pr review N --comment`; first line `VERDICT: APPROVE` or `VERDICT: CHANGES REQUESTED`, second line `Head: <40-char sha reviewed>`.
+  - `qa.md` adds `*.qa.test.ts` (and e2e `*.qa.spec.ts`) tests, pushes once, and comments; first line `QA: PASS` or `QA: FAIL`, second line `Head: <40-char head after its push>`.
 - Every agent reads `common.md` first. Agent reports are at most 80 words; the details go on the PR.
-- Merge rule: merge only when the **latest head** has a reviewer APPROVE **and** QA PASS. After any code-touching fix, get a delta re-review first. Use:
-  `FAST=1 CLONE=<clone> docs/pipeline/merge.sh <PR> <branch> squash`
-- Check a PR's status with `docs/pipeline/verdicts.sh <PR>`.
-- Give each concurrent agent its own clone (`/home/claude/skimjob-<name>`), a shallow clone with git identity `karthik24iyer <karthik24iyer@gmail.com>`. Fetch with explicit refspecs.
-- Environment gotchas:
-  - `gh pr` and GraphQL are blocked, so use `gh api` REST.
-  - Actions logs and secrets endpoints are blocked.
-  - `git reset --hard`, rebase and force-push are denied, so use `checkout -B` and `git merge origin/main`.
-  - Local tests are slow under load; CI check-runs are the merge gate, but run the full e2e locally before pushing (see process lessons).
+- **Merge gate (SHA-bound):** `docs/pipeline/verdicts.sh <PR>` prints the head, both verdicts and the sha each names, commits since the review, CI on the head and authorship, then `MERGEABLE: yes|no (<reasons>)`. Mergeable iff:
+  - only reviews/comments by `GATE_AUTHORS` (default `karthik24iyer`; the repo is public) count, PENDING reviews never;
+  - the newest verdict-like review/comment is exactly `VERDICT: APPROVE` + `Head: S_r`, and the newest QA-like one is exactly `QA: PASS` + `Head: <current head>` (malformed newest = no; never falls back to an older verdict);
+  - every commit in S_r..head only touches QA test files (`*.qa.test.ts`, `*.qa.spec.ts`; old and new paths of renames); otherwise get a delta re-review;
+  - any gh/API error on any page fails closed (`MERGEABLE: no`);
+  - every check-run on the head completed as success/skipped/neutral, and every commit status is success (docs-only PRs too);
+  - the PR is open, not a draft, merge state CLEAN;
+  - every commit is authored by `karthik24iyer <karthik24iyer@gmail.com>` and no message has a co-authored-by / claude-session / generated-by line.
+- Merge with `docs/pipeline/merge.sh <PR>`: it runs the gate, then `gh pr merge --squash --match-head-commit <head> --delete-branch`, and prints `merged #N -> main <sha> | next: <first unticked STATUS task>`.
 - Builders do NOT edit `docs/decisions.md` or `STATUS.md`. They put `## Decisions` and `## STATUS updates` sections in the PR body, and the PM folds those into the docs later. This avoids constant conflicts.
-- Never add Co-Authored-By or Claude-Session lines; `merge.sh` aborts if it finds them.
 - Send the owner a short progress update about every 15 minutes.
+
+## Environment gotchas
+- Node 22 only: `export PATH=/opt/homebrew/opt/node@22/bin:$PATH` before node/pnpm (the system node is newer). `.nvmrc` pins 22 for fnm/nvm.
+- macOS is case-insensitive: never add two paths, or two modules (`Crook.tsx` + `crook.ts`), that differ only in case. CI checks it.
+- Playwright: `cd apps/web && npx playwright install chromium` once (normal Mac cache). Concurrent agents must use their own `E2E_*` ports; a killed run can leave vite/server processes holding them (`lsof -iTCP:<port> -sTCP:LISTEN`, kill by PID).
+- `pnpm test:pg` needs Homebrew postgres; optional, CI covers PGlite.
+- `gh pr`, GraphQL, rebase, `reset --hard` and force-push to an agent's own feature branch all work. Never force-push `main`.
+- Several agents share the machine: local runs are slower under load. Run affected e2e specs while iterating and the full e2e once before the final push; CI check-runs are still the merge gate.
+- Never add Co-Authored-By or Claude-Session lines; the gate refuses them.
 
 ## State at snapshot
 - **PAUSED:** the owner asked to pause all work at 16:23 IST on 2 Nov, after M2-10. Nothing is in flight; don't start a task until he resumes.
@@ -40,10 +49,12 @@ Read this together with `docs/STATUS.md`, which holds the canonical task list. T
 
 Follow-ups from reviews: see STATUS "Open follow-ups" (board rate-limiter test, CaseFile memo names, double notes fetch, Quick-game e2e flake, R5 and #44 review notes, SHA-pinning the Actions).
 
-## Process lessons (2 Nov)
-- **QA pushes once:** a QA agent pushes its tests in a single push at the end, not commit by commit (each push restarts CI and the review).
-- **Agents run the full e2e locally before pushing** (all specs, both projects); CI-only e2e failures cost a fix round each.
+## Process lessons
+- **QA pushes once:** a QA agent pushes its tests in a single push at the end, not commit by commit (each push restarts CI). Its comment names the head after that push.
+- **Verdicts name a sha.** A verdict without `Head: <sha>` can't gate a merge; after any non-QA-test commit, get a delta re-review naming the new head.
+- **Agents run e2e locally before pushing:** affected specs while iterating, the full e2e (all specs, all projects) once before the final push; CI-only e2e failures cost a fix round each.
 - **The PM can't self-QA a docs PR:** spawn a QA agent to check it before merging.
+- **One worktree per agent**, never the main clone's working tree; don't `git stash` or switch branches in a worktree while its e2e run is serving from it.
 - GitHub squash merges are fine.
 
 ## Owner direction and constraints

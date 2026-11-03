@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CREW_SIZE, crewLooks, crewTags, crookLabel, crookLook, HATS, nameTag } from "./crook";
+import { CREW_SIZE, crewLooks, crewTags, crookLabel, crookLook, HATS, nameTag } from "./crookLooks";
 
 describe("crook looks (M2-9 avatars)", () => {
   it("gives 12 seats 12 different colours", () => {

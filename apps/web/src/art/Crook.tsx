@@ -8,7 +8,7 @@
 // - <CrookSvg>: a standalone figure (gallery, spots).
 import { useId } from "react";
 import type { Seed } from "../components/sketch";
-import { accVar, crookLabel, crookLook, crewVar, isLightBody, nameTag, type CrookLook, type Expression, type Hat } from "./crook";
+import { accVar, crookLabel, crookLook, crewVar, isLightBody, nameTag, type CrookLook, type Expression, type Hat } from "./crookLooks";
 
 const INK = "var(--art-ink)";
 const MASK = "var(--ink)";

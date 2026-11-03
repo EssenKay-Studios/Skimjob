@@ -36,7 +36,7 @@ import { useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from "re
 import type { Seed } from "../components/sketch";
 import { BANK_ROOM_NAMES, bankLayout, roomSlots, type BankLayout, type BankLayoutMode, type BankRoomId, type RoomBox, type Slot } from "./bankLayout";
 import { CrookFigure, nameTagWidth } from "./Crook";
-import { crewTags, type CrookLook, type Expression } from "./crook";
+import { crewTags, type CrookLook, type Expression } from "./crookLooks";
 import { RoomGlyph } from "./RoomIcon";
 import { ROOM_WALL, RoomInterior } from "./rooms";
 

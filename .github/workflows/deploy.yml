@@ -1,34 +1,25 @@
-# Deploy to Fly.io (https://skimjob.fly.dev) after CI passes on main, or by hand
-# (Actions → Deploy → Run workflow, main only, and only a commit whose CI passed).
+# Deploy to Fly.io (https://skimjob.fly.dev). Manual only until the owner picks a host (Fly or
+# Lightsail): Actions → Deploy → Run workflow, main only, and only a commit whose CI passed.
 # How it works, rollback, costs: docs/deploy.md
 name: Deploy
 
 on:
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
-    branches: [main]
   workflow_dispatch:
 
-# One deploy at a time, in order; a newer push waits rather than cancelling a half-done deploy.
+# One deploy at a time, in order; a newer run waits rather than cancelling a half-done deploy.
 concurrency:
   group: deploy-fly
   cancel-in-progress: false
 
 permissions:
   contents: read
-  actions: read # the manual run checks the commit's CI result
+  actions: read # the run checks the commit's CI result
 
 jobs:
   deploy:
     name: Deploy to Fly.io
-    # A green CI run for a push to main (not a PR run on a branch called main), or a manual run on main.
-    if: >-
-      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'workflow_run' &&
-       github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.event == 'push' &&
-       github.event.workflow_run.head_branch == 'main')
+    # Manual runs on main only.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     # FLY_API_TOKEN is not job-wide: only the flyctl steps get it.
@@ -38,10 +29,9 @@ jobs:
       FLY_ORG: ${{ vars.FLY_ORG || 'personal' }}
       FLY_REGION: bom
       FLY_VOLUME: skimjob_data
-      DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+      DEPLOY_SHA: ${{ github.sha }}
     steps:
-      - name: Require green CI for this commit (manual runs)
-        if: github.event_name == 'workflow_dispatch'
+      - name: Require green CI for this commit
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -55,7 +45,7 @@ jobs:
       # Third-party actions pinned to full commit SHAs.
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          # Exactly the commit CI tested (main may have moved on since).
+          # Exactly the commit whose CI was checked above.
           ref: ${{ env.DEPLOY_SHA }}
 
       - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1 # 1.6

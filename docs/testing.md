@@ -18,7 +18,7 @@ All tests are seeded and deterministic. Nothing reads the wall clock (the server
 | Typecheck | every workspace | Strict TS. New event or command types must fail exhaustive switches. | `pnpm typecheck` |
 | Docker image | `Dockerfile` | The production image builds, boots on a fresh volume, serves `/health` and an SPA route, and runs as uid 1000 (CI only; no Docker daemon here). | `docker build -t skimjob .` (docs/deploy.md) |
 
-CI (`.github/workflows/ci.yml`) runs all of these except the simulation suite on every push to `main` and every PR. A green run on `main` deploys to Fly (`deploy.yml`, `docs/deploy.md`).
+CI (`.github/workflows/ci.yml`) runs all of these except the simulation suite on every push to `main` and every PR. Deploys are manual-only for now (`deploy.yml`, `docs/deploy.md`).
 
 ## Running the suite
 
