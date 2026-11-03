@@ -261,7 +261,7 @@ The Rebuild keeps the engine's architecture but replaces most of its rules. I es
 | Server (lobby, identity, live socket, chat, scheduler) | ~2,300 | Keep mostly | The scheduler loses act windows and gains the Driver's scheduling and petitions |
 | Web: chat, lobby, art, PWA, design system | ~4,500 | Keep | Art fits; the bank cutaway still works |
 | Web: game and meeting screens | ~4,300 | Rewrite much of it | New: 10 job ledger forms, the shop, motions, purchase log; Haul and Heat leave the main screen |
-| CI, Docker, Playwright setup | — | Keep | Most e2e scenarios need rewriting |
+| CI, Playwright setup | — | Keep | Most e2e scenarios need rewriting |
 
 **What gets thrown away beyond code:** three balance passes and the R5 role-parity work, and the 20-role deck design. **New risks with no equivalent in the current game:** bots that lie believably, a ledger UI that works on a phone, and a crew blinded when a job holder goes quiet in an async game.
 

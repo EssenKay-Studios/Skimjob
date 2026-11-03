@@ -25,7 +25,7 @@ export const DEFAULTS = { seed: "suite", players: "2-12", setups: "balanced,rand
 
 export const SUITE_USAGE = `Skimjob simulation suite: a fixed matrix of all-bot game settings, each played until its
 rates are known to within a target, checked against the design §17.4 targets and role
-parity (docs/roles-v2.md §5). Results are the same for any --workers or --shard split.
+parity (extension.md Build notes "Sim"). Results are the same for any --workers or --shard split.
 
 Usage: pnpm sim:suite -- [options]
        pnpm sim:suite -- merge <shard.json>... [--out f] [--compare f] [--strict] [--json]

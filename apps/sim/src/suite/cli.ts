@@ -1,5 +1,5 @@
 // `pnpm sim:suite`: the simulation suite CLI. See `pnpm sim:suite -- --help`
-// and docs/testing.md "Running the suite". design §17.4, docs/roles-v2.md §5
+// and docs/testing.md "Running the suite". design §17.4, extension.md Build notes "Sim"
 import { accessSync, constants, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { CONTENT_VERSION, ENGINE_VERSION } from "@skimjob/engine";

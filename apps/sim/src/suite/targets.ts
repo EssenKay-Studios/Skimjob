@@ -1,5 +1,5 @@
 // The suite's rates and their targets. design §17.4 "Balance metrics and rough
-// targets"; role parity from docs/roles-v2.md §5 (owner requirement); the
+// targets"; role parity from extension.md Build notes "Sim" (owner requirement); the
 // gates and reports of extension.md Build notes "Sim".
 // Targets are report settings, not game rules, so they live here and not in
 // packages/content.
@@ -74,7 +74,7 @@ export const RATES: readonly RateDef[] = [
 ];
 
 /**
- * Role parity (docs/roles-v2.md §5): each role's win credit ÷ its fair share
+ * Role parity (extension.md Build notes "Sim"): each role's win credit ÷ its fair share
  * (Σ 1 ÷ crew size over its seats), over all games, failures included. The
  * spread max − min across the roles dealt must be at most this, in Balanced
  * games at 4–12 players. extension.md Build notes "Sim"

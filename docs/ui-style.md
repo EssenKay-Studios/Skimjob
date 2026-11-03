@@ -410,8 +410,7 @@ sketchbook paper. Below, `[frame]` means the sketch frame from §4.
 - The **Rubik's-cube-style logo** and the **mascot creature** design. Draw our own mascot.
 - Any of their **renders and artwork**: the title backgrounds (Eiffel evening, lighthouse dusk,
   night street, etc.), the style-preview images, the building-catalog models and the icons. Do not
-  use the screenshots in `shots/` or the files in `dl/` as product assets. They are for internal
-  reference only.
+  use screenshots or downloads of their site as product assets.
 - Their **source code**, including the sketch-frame generator in `sketch-*.js`. Write our own
   from the description above.
 - Product copy and names: "Anti-Bot Pass", "verified human", "chirps", or their page texts.

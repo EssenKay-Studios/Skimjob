@@ -1,7 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
 
-// Chromium comes preinstalled (PLAYWRIGHT_BROWSERS_PATH); @playwright/test is
-// pinned to the same version so no browser download is needed.
+// Chromium: run `npx playwright install chromium` once (it goes to the normal
+// Playwright cache, e.g. ~/Library/Caches/ms-playwright on the Mac); CI installs
+// it in its e2e job. @playwright/test is pinned, so the browser matches it.
 //
 // Two game servers, each with its own Vite dev server in front (in-memory
 // PGlite, never a dev server's ports):

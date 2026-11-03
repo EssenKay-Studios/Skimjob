@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Local Postgres for `pnpm dev` and the real-Postgres test run, without Docker:
+# Local Postgres for `pnpm dev` and the real-Postgres test run (`pnpm test:pg`):
 # a throwaway cluster in .pgdata/ (gitignored). Trust auth on localhost only.
 #   scripts/db.sh start | stop | status | url
 # Env: PGPORT (default 5433), PG_BIN (default: newest /usr/lib/postgresql/*/bin
@@ -17,7 +17,7 @@ if [[ -z "${PG_BIN:-}" ]]; then
   PG_BIN="$(ls -d /usr/lib/postgresql/*/bin 2>/dev/null | sort -V | tail -1 || true)"
   [[ -n "$PG_BIN" ]] || PG_BIN="$(dirname "$(command -v pg_ctl || echo /nonexistent/pg_ctl)")"
 fi
-[[ -x "$PG_BIN/pg_ctl" ]] || { echo "pg_ctl not found; set PG_BIN or use docker compose up -d" >&2; exit 1; }
+[[ -x "$PG_BIN/pg_ctl" ]] || { echo "pg_ctl not found; install Postgres (e.g. with Homebrew) or set PG_BIN" >&2; exit 1; }
 
 # Postgres refuses to run as root: run its tools as the postgres user instead.
 as_pg() {

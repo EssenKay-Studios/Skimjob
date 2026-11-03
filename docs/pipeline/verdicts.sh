@@ -4,7 +4,8 @@
 # commits since the review, CI on the head, authorship, and a last line
 # `MERGEABLE: yes|no (<reasons>)`. Exit 0 if mergeable, 1 if not (including any
 # gh/API error: the gate fails closed), 2 on bad input.
-# Read-only. Works from any directory (REPO overrides the repo).
+# Read-only. GitHub REST API only (`gh api`; no GraphQL, no `gh pr`), so it runs on
+# the Mac and in cloud sessions alike. Works from any directory (REPO overrides the repo).
 #
 # Only reviews/comments by GATE_AUTHORS count (see below).
 # Mergeable iff: the latest verdict-like review/comment is exactly
@@ -13,7 +14,7 @@
 # `QA: PASS` + `Head: <current head>`; every commit (old and new paths) in
 # S_r..head touches only *.qa.test.ts / *.qa.spec.ts (else a delta re-review is needed); every
 # check-run on the head completed as success/skipped/neutral; PR open, not draft,
-# merge state CLEAN; every commit authored by karthik24iyer <karthik24iyer@gmail.com>
+# mergeable_state clean; every commit authored by karthik24iyer <karthik24iyer@gmail.com>
 # and no commit message has a co-authored-by / claude-session / generated-by line.
 set -o pipefail
 N=$1
@@ -27,23 +28,27 @@ no() { reasons+=("$1"); }
 # join SEP ITEMS...
 join() { local sep=$1 out=$2; shift 2; for x in "$@"; do out+="$sep$x"; done; echo "$out"; }
 
-# Any gh failure (on any page) is a no: never fall back to partial or older data.
+# Any gh api failure (on any page) is a no: never fall back to partial or older data.
 fatal() { echo "MERGEABLE: no ($1)"; exit 1; }
 
-pr=$(gh pr view "$N" -R "$REPO" --json headRefOid,isDraft,mergeStateStatus,state \
-  --jq '[.headRefOid, .isDraft, .mergeStateStatus, .state] | @tsv') || fatal "cannot read PR #$N"
-IFS=$'\t' read -r head draft mstate state <<<"$pr"
+# REST only (gh api), so this runs anywhere gh is logged in, GraphQL or not.
+prq='[.head.sha, (.draft | tostring), (.mergeable_state // "unknown"), .state, (.merged | tostring), (.mergeable | tostring)] | @tsv'
+pr=$(gh api "$A/pulls/$N" --jq "$prq") || fatal "cannot read PR #$N"
+IFS=$'\t' read -r head draft mstate state merged mable <<<"$pr"
 [[ $head =~ ^[0-9a-f]{40}$ ]] || fatal "cannot read the head sha of PR #$N"
-# GitHub computes the merge state lazily; ask again once if it is still UNKNOWN.
-if [ "$mstate" = UNKNOWN ]; then
+# GitHub computes mergeability lazily (mergeable null, state unknown); ask again once.
+if [ "$mable" = null ] && [ "$state" = open ]; then
   sleep 3
-  mstate=$(gh pr view "$N" -R "$REPO" --json mergeStateStatus --jq .mergeStateStatus) || fatal "cannot read the merge state"
+  pr=$(gh api "$A/pulls/$N" --jq "$prq") || fatal "cannot read the merge state"
+  IFS=$'\t' read -r head2 draft mstate state merged mable <<<"$pr"
+  [ "$head2" = "$head" ] || fatal "head moved while reading PR #$N"
 fi
-echo "PR #$N  state $state  draft $draft  merge-state $mstate"
+if [ "$merged" = true ]; then shown=closed/merged; else shown=$state; fi
+echo "PR #$N  state $shown  draft $draft  merge-state $mstate"
 echo "head:   $head"
-[ "$state" = OPEN ] || no "PR is $state"
+[ "$state" = open ] || no "PR is $shown"
 [ "$draft" = false ] || no "PR is a draft"
-[ "$mstate" = CLEAN ] || no "merge state $mstate (want CLEAN)"
+[ "$mstate" = clean ] || no "merge state $mstate (want clean)"
 
 # Verdicts count only from the pipeline's accounts (the repo is public, so anyone
 # can comment): GATE_AUTHORS, comma-separated logins, default karthik24iyer.
@@ -158,9 +163,9 @@ else
 fi
 
 # Authorship and attribution lines, every commit on the branch.
-commits=$(gh pr view "$N" -R "$REPO" --json commits --jq '.commits[] |
-  [.oid[0:7], ([.authors[] | "\(.name) <\(.email)>"] | join(", ")),
-   ((.messageHeadline + "\n" + .messageBody) | test("(?im)^\\s*(co-authored-by|claude-session|generated-by)")) ] | @tsv') || fatal "cannot read the PR's commits"
+commits=$(gh api --paginate "$A/pulls/$N/commits?per_page=100" --jq '.[] |
+  [.sha[0:7], "\(.commit.author.name) <\(.commit.author.email)>",
+   (.commit.message | test("(?im)^\\s*(co-authored-by|claude-session|generated-by)") | tostring)] | @tsv') || fatal "cannot read the PR's commits"
 [ -n "$commits" ] || fatal "no commits read for PR #$N"
 badauth=(); badmsg=()
 while IFS=$'\t' read -r c who attr; do

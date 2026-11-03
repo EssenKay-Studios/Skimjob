@@ -3,9 +3,9 @@
 _Last updated: 3 Nov 2026. **Development is halted** (owner): every code PR is merged; nothing new starts until the owner says so._
 
 ## Where things stand
-- **Specs:** `docs/design.md` is the game design; `docs/extension.md` is the single R6 rules spec and wins on any conflict. Roles v3 is retired (folded into the Extension); `docs/roles-v2.md` is the historical R1–R5 spec only. Out of scope: `docs/rebuild.md` (jobs redesign), Books mode, the recruited Mole.
+- **Specs:** `docs/design.md` is the game design; `docs/extension.md` is the rules spec for roles, tokens and the shop and wins on any conflict. Current decisions: `docs/decisions.md`. Out of scope: `docs/rebuild.md` (jobs redesign proposal), Books mode, the recruited Mole.
 - **Content** 0.17.0 (R6 balance pass, provisional gates; `docs/balance/r6-balance.md`).
-- **Live:** https://skimjob.duckdns.org on the owner's AWS Lightsail box (`docs/deploy.md`). It runs 1a4e083 (all of M2-1 to M2-13 and R6), with Google sign-in on. A paused bot smoke-test game stays in its database (harmless; the app can't end it). Fly is unused.
+- **Live:** https://skimjob.duckdns.org on the owner's AWS Lightsail box (`docs/deploy.md`). It runs 1a4e083 (all of M2-1 to M2-13 and R6), with Google sign-in on. A paused bot smoke-test game stays in its database (harmless; the app can't end it).
 - **Next step:** on hold, owner to resume (M2-14, then M2-15; see `docs/pipeline/HANDOFF.md` "How to resume").
 
 ## Current milestone: M2 — playable web prototype
@@ -32,18 +32,17 @@ Plan and acceptance criteria: `docs/m2-plan.md`. This is the canonical task list
 - [x] **Ops:** Lightsail deployment (systemd, nginx, Postgres, weekly `pg_dump`); Mac pipeline and SHA-bound merge gate (#48).
 
 ## Done before M2 (record)
-- **M1** — engine, simulator and bots (tasks 1–16): rules, `viewFor`, events deck, Duel, sim CLI, balance passes 1–2 (`docs/balance/balance-1.md`, `balance-2.md`).
-- **Role deck v2, R1–R5** (`docs/roles-v2.md`; #34, #36, #37, #43 and earlier): factions, perks, crew and dark roles, bot claims, the sim suite, R5 parity balance. Superseded by R6.
-- Details of each are in `docs/decisions.md` and the PRs.
+- **M1** — engine, simulator and bots (tasks 1–16): rules, `viewFor`, events deck, Duel, sim CLI, the first balance passes.
+- **Role deck R1–R5** (#34, #36, #37, #43 and earlier): roles, perks, bot claims, the sim suite; replaced by R6.
+- History: `docs/archive/decisions-history.md` and the PRs.
 
 ## Open follow-ups (from reviews and QA)
 - **R6 balance** (`docs/balance/r6-balance.md`): Heat share of failures 34–54% at 4–6p (design target 10–20%, not gated); Starter succeeds 86–96% and Duel 44% (report-only); the Cleaner sits lowest of the Team roles; revisit team parity 0.10 (gated at 0.20) after the M2-14 playtests.
 - **Quiet hours** must freeze police moments and deadlines (M3; host pause already does, #54).
-- **Flaky tests:** see `docs/pipeline/HANDOFF.md` "Known flaky tests"; stabilise them.
+- **Flaky tests:** see `docs/pipeline/HANDOFF.md` "Known flaky tests"; stabilise them. The 12-seat game QA test's real bugs are fixed: reveal overflow (#62) and alibi-window timing (#63). Watch #62's new reveal long-names spec at 1024/1280 in CI (it timed out once locally).
 - **Board PATCH rate limiter has no test** (#46): `apps/server/src/notes.ts` `rateLimiter`; add one with the fake clock.
 - **`CaseFile` memo misses name changes** (#46): a mid-game rename (a bot takes over) shows old names until a new entry arrives.
 - **Notes endpoint fetched twice** (#46): `useAwayRecap` and `useSuspicionBoard` each call `GET /games/:id/notes`.
-- **Make `crewSeed` required** in the bots (#43), so nothing falls back to the public `gameDigest`.
 - **#44 notes:** absent people in the people-majority denominator; the faint offline dot.
 - **CI actions pinned to `@v4` tags, not SHAs** (#35): `ci.yml`, `sim-suite.yml`.
 - Smaller: the hunch can outweigh a certain Peek; `live.hostile.qa.test.ts` has no `claimRole` row; server bots re-roll claim chances on every `decide()`; a slow test in `packages/bots/src/run.test.ts` needs an explicit timeout; the `viewFor` deep-copy speedup (35–40% of sim time) is left for the owner (#34).
@@ -65,13 +64,13 @@ Plan and acceptance criteria: `docs/m2-plan.md`. This is the canonical task list
 - **M4** — more content (museum, casino, roles, events).
 
 ## Questions for the owner
-Every provisional call still to confirm, once each; the details are in the named `docs/decisions.md` entry (3 Nov unless dated).
-1. **"R6a provisional decisions"** (#50): Balanced 5–6p deal; token triggers; automatic perks (Shield, Emergency) exempt from one-per-round; police moments on game time; view readings; legacy `mole` setting migration; bot and sim tunables.
-2. **"R6a confirm items"**: the Blackmailer keeps its token if the shakedown is cancelled; the Mole tips off at most 3 times a game, even with Recharge.
-3. **"PM provisional calls on the R6 parity gate"** (#51): the split parity gate; ★ band 0.9–1.8×; ★ lean point 0.8; Balanced 4p 1/1; Team parity ≤ 0.20 until M2-14; Muscle bot threshold 2.
-4. **"Owner answers, 3 Nov (morning)"**, "Provisional (PM, 3 Nov fix round)" and "Gap-fills": background police only when a Mole could be dealt; a tip-off lands at the next free hidden police moment; a wrong Duel call-out pays [8]; the between-meetings end, Recharge, 1 h default session, Quick = Starter with no shop, Duel shop and dealing, the Fixer stopping any raid, Forger 7+.
-5. **"Host controls (M2-13)"** (#54): players can act while paused; Extend amounts per preset, no cap; replace with bot after 2 missed rounds (never the host, Opportunist), handed back by host or player; lobby kick of any non-host seat.
-6. **"Google sign-in (M2-12)"** (#53): the account's seat is kept on a same-game clash; redirect URI from env (`PUBLIC_ORIGIN` + `/api/auth/google/callback`); display-name fallback (`name` → `given_name` → "Crook"); `prompt=select_account`.
-7. **"Extension UI (R6b)"** (#52) and **"End-of-game reveal (M2-11)"** (#55): builder readings (Starter deck ≠ starter mode, Heat breakdown parts, reveal attribution of tip-offs, loops and stolen votes).
-8. **Older `(provisional)` markers** (1–2 Nov entries, M1 to M2-10, R1–R5; partly accepted in "Owner answers, 2 Nov"): accept the rest in bulk, or name any to revisit.
+Every provisional call still to confirm, once each; each is marked *provisional* in the named `docs/decisions.md` section (details of the older ones: `docs/archive/decisions-history.md`).
+1. **Rules and roles, R6a readings** (#50): Balanced 5–6p deal; token triggers; automatic perks (Shield, Emergency) exempt from one-per-round; police moments on game time (refused during meetings, next due from the previous, Heat × min(1, crew ÷ 5), one per round in the sim); view readings; the legacy `mole` setting migrated; Exact list in content order; Hidden list falls back to the preset for bots; Mole and Embezzler in Duel; bot and sim tunables.
+2. **Rules and roles, R6 confirm items:** the Blackmailer keeps its token if the shakedown is cancelled; the Mole tips off at most 3 times a game, even with Recharge.
+3. **Balance gates** (#51): the split parity gate; ★ band 0.9–1.8×; ★ lean point 0.8 with content 0.17.0's numbers; Balanced 4p 1/1 and 8p 2/1; Team parity ≤ 0.20 until M2-14; Muscle bot threshold 2; Heat share and Starter/Duel success report-only.
+4. **Rules and roles, police and gap-fills:** background police only when a Mole could be dealt; a tip-off lands at the next free police moment; a wrong Duel call-out pays 8; when a between-meetings stretch ends and how Recharge works; 1 h default session; Quick = Starter with no shop; Duel shop and events-off dealing; the Fixer stopping any raid; Forger 7+.
+5. **Server and timing, host controls** (#54): players can act while paused; Extend amounts per preset, no cap; replace with bot after 2 missed rounds (never the host, Opportunist), handed back by host or player; lobby kick of any non-host seat.
+6. **Server and timing, Google sign-in** (#53): the account's seat is kept on a same-game clash; redirect URI from env; display-name fallback (`name` → `given_name` → "Crook"); scopes `openid profile`; `prompt=select_account`.
+7. **Web and UI** (#52, #55, #62): Extension UI readings and end-of-game reveal readings (Starter deck ≠ starter mode, Heat breakdown parts, reveal attribution of tip-offs, loops and stolen votes); the reveal-overflow regression coverage (pipeline and git).
+8. **Older provisional readings** (1–2 Nov, M1 to M2-10; partly accepted 2 Nov): accept the rest in bulk, or name any to revisit.
 9. **Resume:** when to restart development (M2-14, M2-15).

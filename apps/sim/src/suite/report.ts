@@ -2,7 +2,7 @@
 // PASS/FAIL against the targets, role parity per player count and setup, a
 // per-role summary (★ wins by ending, tokens), and the text and JSON forms of
 // it. Pure: cell results in, report out, so a single run and merged shards
-// give the same bytes. design §17.4, docs/roles-v2.md §5, extension.md Build notes "Sim"
+// give the same bytes. design §17.4, extension.md Build notes "Sim"
 import { ROLES } from "@skimjob/content";
 import { checkBand, wilson, type Band, type CheckResult, type Verdict } from "../stats";
 import type { Setup, SuiteOptions } from "./matrix";
@@ -162,7 +162,7 @@ function cellReport(c: CellResult): CellReport {
   return { key: c.key, players: c.players, setup: c.setup, events: c.events, games: c.tally.games, converged: c.converged, rejections: c.tally.rejections, rates };
 }
 
-/** Role parity for a pool of games at one crew size. docs/roles-v2.md §5 */
+/** Role parity for a pool of games at one crew size. extension.md Build notes "Sim" */
 export function parityOf(roles: Readonly<Record<string, SeatTally>>, max: number = PARITY_MAX_SPREAD): Pick<ParityGroup, "roles" | "fewSeats" | "spread" | "spreadLo" | "spreadHi" | "check"> {
   const counted: ParityRole[] = [];
   const fewSeats: string[] = [];
@@ -388,7 +388,7 @@ export function formatSuiteReport(r: SuiteReport): string {
     ...(fixedGames(o) ? [] : ["games+ = stopped at the --max-games cap (rounded up to whole batches) before every interval was narrow enough."]),
     cells,
     "",
-    "Role parity (docs/roles-v2.md §5): each role's win credit ÷ fair share 1/n, all games; spread = max − min across roles.",
+    "Role parity (extension.md Build notes \"Sim\"): each role's win credit ÷ fair share 1/n, all games; spread = max − min across roles.",
     "Split gate (PM 3 Nov, provisional): the spread over the team roles (win only a success) must be ≤ the limit",
     `(${TEAM_PARITY_MAX_SPREAD.toFixed(2)} until the M2-14 playtests; the target is ${PARITY_MAX_SPREAD.toFixed(2)}, as the all-role column), and each ★ role's`,
     `ratio ÷ the team roles' pooled ratio must sit in ${STAR_BAND.lo}–${STAR_BAND.hi}. The all-role spread is reported, not counted.`,
