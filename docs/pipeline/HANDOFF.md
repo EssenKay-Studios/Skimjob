@@ -13,8 +13,8 @@ Read this with `docs/STATUS.md` (the canonical task list and the owner's open qu
 - **Live:** https://skimjob.duckdns.org on the owner's AWS Lightsail box, running 1a4e083 with Google sign-in on (release `20261103-172121-1a4e083`; the 38002fd release is kept, but is not a safe rollback target: see `docs/deploy.md` step 8). Runbook: `docs/deploy.md`. Connection details are in the owner's local `ssh-relay` skill, never in the repo.
 
 ## How to resume
-1. Ask the owner to confirm the provisional decisions in STATUS "Questions for the owner".
-2. Ask what to build next: M2-14 and M2-15 are parked; the candidates are in STATUS (open follow-ups, M3, M4).
+1. Next milestone: **R7 Simplified**, run exactly as `docs/simplified.md` "How to run it" says (roles and models, kickoff prompt, steps S0–S5 with owner checkpoints).
+2. Separately, the owner may confirm the provisional decisions in STATUS "Questions for the owner". M2-14 and M2-15 are parked.
 
 ## How the pipeline works
 - **Where it runs:** three setups, all covered in `common.md` "Where you run": (a) the owner's Mac directly (main clone `/Users/karthikeyaniyer/Documents/Misc/Skimjob`, one worktree per agent under `…/Misc/skimjob-wt/<name>`); (b) a cloud session whose agents run commands on the Mac through the local terminal tool (≈60 s per call: background long runs with nohup and poll logs; never `/tmp`); (c) a cloud session working entirely in its Linux container (clone under `/home/claude`, Node 22 preinstalled, GraphQL blocked so REST only, slow 2-core box: run only affected specs and rely on CI). Tell each agent which setup it is in.
