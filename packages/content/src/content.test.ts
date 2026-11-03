@@ -137,7 +137,7 @@ describe("starter roles — design §8, §8.1", () => {
   });
 
   it("Fence: up to 5 loot per stretch into a safe; token at 10", () => {
-    expect(ROLES.fence).toMatchObject({ power: { kind: "fenceSafe", perAct: 1, tokenSafe: 10 }, canPocket: true });
+    expect(ROLES.fence).toMatchObject({ power: { kind: "fenceSafe", perAct: 1, tokenSafe: 3 }, canPocket: true });
   });
 
   it("tags and winsOn (extension.md Build notes \"Win rule\", \"Tags\")", () => {

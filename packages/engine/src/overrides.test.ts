@@ -140,7 +140,7 @@ describe("validateOverrides — configs are untrusted JSON (design §17.4)", () 
     expect(errs({ events: { meteor: { amount: 1 } } })).toEqual(["contentOverrides.events.meteor: no such event card"]);
     expect(errs({ events: [] })).toHaveLength(1);
     const tuned = overrideEvents(EVENTS, { events: { shiftChange: { heatMultiplier: 3 } } });
-    expect(tuned.shiftChange?.effect).toEqual({ kind: "roomSurge", room: "vault", lootMultiplier: 2, heatMultiplier: 3 });
+    expect(tuned.shiftChange?.effect).toEqual({ kind: "roomSurge", room: "vault", lootMultiplier: 1.5, heatMultiplier: 3 });
     expect(tuned.quietNight).toBe(EVENTS.quietNight);
     expect(eventsFor({ contentOverrides: null })).toBe(EVENTS);
   });

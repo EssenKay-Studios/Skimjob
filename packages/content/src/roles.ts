@@ -224,7 +224,7 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
   fence: {
     id: "fence",
     name: "Fence",
-    power: { kind: "fenceSafe", perAct: 1, tokenSafe: 10 },
+    power: { kind: "fenceSafe", perAct: 1, tokenSafe: 3 },
     canPocket: true,
     scoring: PLAIN_SCORING,
     tag: "wildcard",

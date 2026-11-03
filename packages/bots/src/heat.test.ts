@@ -40,11 +40,11 @@ describe("bot Heat projection — design §7, §10; extension.md \"Police activi
     const s = heatGame(4);
     const scale = 4 / 5;
     const withCard = (id: string): GameState => ({ ...s, card: { round: 1, id, room: null, offer: null } });
-    expect(cardHeatNow(viewFor(withCard("quietNight"), "ana"))).toBe(-8);
+    expect(cardHeatNow(viewFor(withCard("quietNight"), "ana"))).toBe(-4); // Quiet night −5 × 4/5
     expect(cardHeatNow(viewFor(withCard("audit"), "ana"))).toBe(0);
-    expect(heatDanger(viewFor(withCard("quietNight"), "ana"))).toBeCloseTo(heatDanger(viewFor(s, "ana")) - 8 / 100);
+    expect(heatDanger(viewFor(withCard("quietNight"), "ana"))).toBeCloseTo(heatDanger(viewFor(s, "ana")) - 4 / 100);
     const vault = jobThisRound(viewFor(withCard("shiftChange"), "ana")).rooms.vault;
-    expect(vault?.loot).toBe(12);
+    expect(vault?.loot).toBe(9); // 6 × 1.5
     expect(vault?.heatPressure).toBeCloseTo(20 * (1 + ((EVENTS.shiftChange?.effect as { heatMultiplier: number }).heatMultiplier - 1) * scale));
   });
 });

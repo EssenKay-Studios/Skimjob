@@ -153,18 +153,19 @@ describe("QA dealing — design §8.1", () => {
 describe("QA event Heat scaling — design §10", () => {
   const quiet = (EVENTS.quietNight!.effect as { amount: number }).amount;
   it.each([
-    [2, 2, -4, 1.2],
-    [3, 3, -6, 1.3],
-    [4, 4, -8, 1.4],
-    [5, 5, -10, 1.5],
-    [12, 5, -10, 1.5],
+    // Content 0.16.0 (r6-balance.md): Quiet night −5, Shift change Vault Heat ×2, loot ×1.5.
+    [2, 2, -2, 1.4],
+    [3, 3, -3, 1.6],
+    [4, 4, -4, 1.8],
+    [5, 5, -5, 2],
+    [12, 5, -5, 2],
   ])("%ip (patrol scale %i, now police activity — not scaled): Quiet night %i, Shift change Vault Heat ×%f", (n, _p, q, mult) => {
     expect(scaledCardHeat(quiet, n)).toBe(q);
     expect(eventHeatScale(n)).toBeLessThanOrEqual(1);
     const base = BANK_JOB.rooms.vault!;
     const vault = roundJob(BANK_JOB, { round: 2, id: "shiftChange", room: null } as never, EVENTS, n).rooms.vault!;
     expect(vault.heatPressure).toBeCloseTo(base.heatPressure * mult, 9);
-    expect(vault.loot).toBe(base.loot * 2); // loot isn't scaled
+    expect(vault.loot).toBe(base.loot * 1.5); // loot isn't scaled
     // Payday's ×1 Heat stays ×1.
     expect(roundJob(BANK_JOB, { round: 2, id: "payday", room: null } as never, EVENTS, n).rooms.lobby!.heatPressure).toBe(BANK_JOB.rooms.lobby!.heatPressure);
   });

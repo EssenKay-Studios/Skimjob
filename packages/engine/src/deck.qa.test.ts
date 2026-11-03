@@ -137,7 +137,7 @@ describe("QA: room surges — design §10", () => {
   it("Shift change leaves the Deposit boxes and Manager's office alone (12 players)", () => {
     const base = withCard(resolve(game(12)), "shiftChange");
     const h0 = base.heat;
-    const s = resolve(base, { p0: { room: "depositBoxes", pocket: 5 }, p1: { room: "managersOffice", pocket: 4 } });
+    const s = resolve(base, { p0: { room: "depositBoxes", pocket: 5 }, p1: { room: "managersOffice", pocket: 3 } });
     // round(4 + (10 + 10)/12) = 6.
     expect(s.heat - h0).toBe(6);
     expect(refused(base, move("p0", "depositBoxes", 6))).toBe(true);
