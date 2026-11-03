@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import type { PlayerCommand, PlayerView } from "@skimjob/engine";
 import { asChatMessage, asDmNotice, chatReducer, EMPTY_CHAT, type ChatAction, type ChatMessage, type ChatRequest, type ChatState, type DmNotice } from "./chat";
+import { controlOf, NO_CONTROL, type Control } from "./host";
 import { formatCountdown, remainingMs, timerFor, type Presence, type SeatPresence, type Timer } from "./hud";
 
 /** A command as the client sends it: the server fills in `player` from the session. */
@@ -27,6 +28,8 @@ export interface GameChannel {
   readonly sendChat: (req: ChatRequest) => Promise<Reply>;
   /** Each person's seat: online now or last seen (owner decision, 2 Nov). Null until the server sends it. */
   readonly presence: Presence | null;
+  /** The host's pause, stand-in bots and idle seats (M2-13), sent with each view. */
+  readonly control: Control;
 }
 
 /** A `{ presence }` frame's map, checked entry by entry (bad entries dropped); null if it isn't one. */
@@ -80,6 +83,7 @@ export function useGame(gameId: string, enabled = true): GameChannel {
   const [timers, setTimers] = useState<readonly Timer[]>([]);
   const [offset, setOffset] = useState(0);
   const [presence, setPresence] = useState<Presence | null>(null);
+  const [control, setControl] = useState<Control>(NO_CONTROL);
   const [connection, setConnection] = useState<Connection>("connecting");
   const [chat, dispatchChat] = useReducer(chatReducer, EMPTY_CHAT);
   const socket = useRef<WebSocket | null>(null);
@@ -115,6 +119,7 @@ export function useGame(gameId: string, enabled = true): GameChannel {
           const m = msg as { view: PlayerView; timers?: Timer[]; now?: number };
           setView(m.view);
           setTimers(m.timers ?? []);
+          setControl(controlOf(msg as Record<string, unknown>) ?? NO_CONTROL);
           if (typeof m.now === "number") setOffset(m.now - Date.now());
           return;
         }
@@ -173,7 +178,7 @@ export function useGame(gameId: string, enabled = true): GameChannel {
   const send = useCallback((cmd: ClientCommand) => request({ cmd }), [request]);
   const sendChat = useCallback((chat: ChatRequest) => request({ chat }), [request]);
 
-  return { view, timers, offset, connection, send, chat, sendChat, presence };
+  return { view, timers, offset, connection, send, chat, sendChat, presence, control };
 }
 
 /** The current time, re-rendering every `ms`. */

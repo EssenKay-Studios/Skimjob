@@ -1,6 +1,7 @@
 // /lobby/:id: seats (people and clearly marked bots), the invite link, host
-// settings, bots, hand-over and start. Polls GET /games/:id every 2 s; when the
-// game starts every seated browser moves to /game/:id. design §15, §16
+// settings, bots, hand-over, removing a seat (M2-13) and start. Polls GET
+// /games/:id every 2 s; when the game starts every seated browser moves to
+// /game/:id. design §15, §16
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError, inviteLink, sentence, type LobbySettings, type LobbyView, type Seat } from "../api";
 import { Avatar } from "../components/Avatar";
@@ -417,6 +418,11 @@ function SeatRow({
           }
         >
           Make host
+        </DangerButton>
+      )}
+      {game.youAreHost && !s.bot && !s.you && (
+        <DangerButton seed={`kick-${s.seat}`} disabled={busy} armedLabel="Remove?" aria-label={`Remove ${s.nickname}`} onConfirm={() => void act("DELETE", `/games/${game.id}/seats/${s.seat}`)}>
+          Remove
         </DangerButton>
       )}
     </li>

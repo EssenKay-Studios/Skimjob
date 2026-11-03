@@ -6,6 +6,7 @@ import { authRoutes, sessions, type AuthProvider } from "./auth";
 import type { Clock } from "./clock";
 import type { Db } from "./db";
 import { liveRoutes, type Live } from "./live";
+import { hostRoutes } from "./host";
 import { HttpError, lobbyRoutes } from "./lobby";
 import { notesRoutes } from "./notes";
 import { createScheduler, type Scheduler } from "./scheduler";
@@ -73,7 +74,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     }
   });
 
-  const scheduler = createScheduler({ db, clock: deps.clock, log: app.log, system: (gameId, command) => live.system(gameId, command), resync: (gameId) => live.settle(gameId), timeScale: deps.timeScale ?? 1 });
+  const scheduler = createScheduler({ db, clock: deps.clock, log: app.log, system: (gameId, command, key) => live.deadline(gameId, key, command), resync: (gameId) => live.settle(gameId), timeScale: deps.timeScale ?? 1 });
   const live = liveRoutes(app, db, store, s, {
     clock: deps.clock,
     allowedOrigins: deps.allowedOrigins ?? [],
@@ -88,5 +89,6 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   authRoutes(app, db, s, deps.auth ?? [], (token) => live.closeSession(token));
   lobbyRoutes(app, db, store, s, (gameId) => live.settle(gameId));
   notesRoutes(app, db, store, s, deps.clock);
+  hostRoutes(app, db, s, live, scheduler, deps.clock);
   return app;
 }

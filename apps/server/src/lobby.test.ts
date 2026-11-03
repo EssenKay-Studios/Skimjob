@@ -177,7 +177,7 @@ describe("create a game (design §15 setup)", () => {
     expect(game.settings).toEqual(DEFAULT_SETTINGS);
     expect(game.inviteCode).toMatch(/^[a-z2-9]{10}$/);
     expect(game.youAreHost).toBe(true);
-    expect(game.seats).toEqual([{ seat: 0, nickname: "Karthik", bot: null, host: true, you: true, playerId: null }]);
+    expect(game.seats).toEqual([{ seat: 0, nickname: "Karthik", bot: null, host: true, you: true, playerId: null, standIn: null }]);
   });
 
   it("takes the host's settings: session length, vote visibility, deck, toggles, deal, role list, events, starter mode, DM notices", async () => {

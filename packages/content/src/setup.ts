@@ -86,3 +86,6 @@ export const BALANCED_MIX: Readonly<Record<number, BalancedMix>> = {
 
 /** Truly random deals: at most this many of each of these roles. extension.md "Truly random" */
 export const RANDOM_DEAL_SINGLETONS: readonly RoleId[] = ["mole", "embezzler"];
+
+/** The host is offered "replace with a bot" for a player who missed this many rounds in a row. design §15 */
+export const REPLACE_AFTER_MISSED_ROUNDS = 2;

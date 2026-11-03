@@ -31,11 +31,20 @@
 //   `seats.last_seen_at`), sent on connect and to everyone when a seat comes
 //   online or goes offline. Server-only: never in the engine log. Bot seats
 //   aren't listed (clients show them as bots).
+// - Host controls (M2-13, host.ts): each view message carries `control`, the
+//   same for every seat and all from public or server-only data: whether the
+//   host has paused the game, which human seats a bot is playing for now, and
+//   which seats missed `REPLACE_AFTER_MISSED_ROUNDS` rounds in a row (public:
+//   those rounds had no lock-in mark). Nothing in it says anything about a
+//   police moment. A seat a bot is playing for can chat but not send commands.
+// - A socket is closed (4401) once its session expires, at the latest on its
+//   next message (M2-13: it used to outlive the session).
 import { createHash } from "node:crypto";
 import websocket from "@fastify/websocket";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { WebSocket } from "ws";
 import { createBot, PERSONALITIES, type PersonalityId, type Rejection } from "@skimjob/bots";
+import { REPLACE_AFTER_MISSED_ROUNDS } from "@skimjob/content";
 import {
   handleCommand,
   viewFor,
@@ -51,7 +60,7 @@ import { createChat, parseChatRequest, type ChatHistory, type ChatMessage, type 
 import type { Clock } from "./clock";
 import type { Db } from "./db";
 import { HttpError, playerIdOf } from "./lobby";
-import type { Timer } from "./scheduler";
+import { DEADLINE_SKIPPED, type Timer } from "./scheduler";
 import type { GameStore } from "./store";
 
 /** Biggest client message accepted (a command is well under 1 KiB). */
@@ -69,6 +78,8 @@ export const MAX_QUEUED_MESSAGES = 64;
 /** Close codes: the session was signed out; the socket sent too much. */
 export const CLOSE_SIGNED_OUT = 4401;
 export const CLOSE_TOO_MANY = 1008;
+/** The longest wait a Node timer holds (about 24.8 days). */
+const MAX_TIMER_MS = 2 ** 31 - 1;
 
 /** Commands a client may send. Typed so a new player command fails typecheck until listed. */
 const PLAYER_COMMANDS: { readonly [T in PlayerCommand["type"]]: true } = {
@@ -93,9 +104,22 @@ export interface SeatPresence {
 }
 export type Presence = Readonly<Record<PlayerId, SeatPresence>>;
 
+/**
+ * The host controls' public state (M2-13), sent with every view: the same for
+ * every seat. design §15
+ */
+export interface Control {
+  /** When the host paused the game (epoch ms); null while it runs. */
+  readonly pausedAt: number | null;
+  /** Human seats a bot is playing for now (replace with a bot), in seat order. */
+  readonly standIns: readonly PlayerId[];
+  /** Seats that missed `REPLACE_AFTER_MISSED_ROUNDS` rounds in a row: the host is offered a bot for them. */
+  readonly idle: readonly PlayerId[];
+}
+
 export type ServerMessage =
   | { readonly presence: Presence }
-  | { readonly view: ReturnType<typeof viewFor>; readonly timers: readonly Timer[]; readonly now: number }
+  | { readonly view: ReturnType<typeof viewFor>; readonly timers: readonly Timer[]; readonly control: Control; readonly now: number }
   | { readonly chat: ChatMessage }
   | { readonly dmNotice: DmNotice }
   | { readonly chatHistory: ChatHistory }
@@ -109,12 +133,26 @@ export interface Live {
    * (any other error is a server failure: worth a retry).
    */
   system(gameId: string, command: SystemCommand): Promise<GameState>;
+  /**
+   * The scheduler's `system`: deadline `key`'s command, but first checks under the
+   * game's lock that the row is still there, due and unpaused, and the host hasn't
+   * paused the game; if not, applies nothing and answers `DEADLINE_SKIPPED` (a pause
+   * acknowledged to the host is never followed by a deadline firing, M2-13).
+   */
+  deadline(gameId: string, key: string, command: SystemCommand): Promise<GameState | typeof DEADLINE_SKIPPED>;
   /** Lets the bots act and pushes views (after the game starts, or a restart). */
   settle(gameId: string): Promise<void>;
   /** Lets the bots of every running game act (on boot: a crash may have cut a settle short). */
   settleRunning(): Promise<void>;
   /** Closes every socket opened with this session token (sign-out). */
   closeSession(token: string): void;
+  /**
+   * A host control (M2-13): runs `fn` in the game's lock on its current state
+   * (it changes server-only rows: `games.paused_at`, `seats.stand_in`,
+   * deadlines), then re-reads the bot seats and control, lets the bots act and
+   * re-plans and pushes, as after any change. Throws HttpError 404 if the game hasn't started.
+   */
+  hostAction<T>(gameId: string, fn: (state: GameState) => Promise<T>): Promise<T>;
   /** The latest bot commands the engine refused. A correct bot makes none. */
   readonly botRefusals: readonly (Rejection & { readonly gameId: string })[];
 }
@@ -148,6 +186,8 @@ interface Conn {
   queued: number;
   /** It has had its first view, chat history and presence; only then does it get chat and presence updates. */
   ready: boolean;
+  /** When its session expires (epoch ms, on the server's clock); the socket is closed then. */
+  readonly expiresAt: number;
   /** The presence text last sent, so an unchanged one isn't sent again. */
   presence: string | null;
 }
@@ -242,7 +282,9 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
   /** Per game, the view text each bot last acted on. */
   const botSeen = new Map<string, Map<PlayerId, string>>();
   const botRefusals: (Rejection & { gameId: string })[] = [];
-  const seatOf = new WeakMap<FastifyRequest, PlayerId>();
+  const seatOf = new WeakMap<FastifyRequest, { player: PlayerId; expiresAt: number }>();
+  /** Per game, the host's pause and the seats bots are standing in for (server-only rows), read once. */
+  const controls = new Map<string, { pausedAt: number | null; standIns: readonly PlayerId[] }>();
   /** Per game, each human seat's last-seen time (epoch ms or null), read from `seats` once. */
   const lastSeen = new Map<string, Map<PlayerId, number | null>>();
 
@@ -267,8 +309,10 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
   const botsFor = async (gameId: string): Promise<readonly { readonly player: PlayerId; readonly personality: PersonalityId }[]> => {
     const known = bots.get(gameId);
     if (known) return known;
+    // A bot seat, or a human seat a bot is standing in for (M2-13).
     const rows = await db.query<{ player_id: string; bot_personality: PersonalityId; bot_seen: string | null }>(
-      "select player_id, bot_personality, bot_seen from seats where game_id = $1 and bot_personality is not null and player_id is not null order by seat_no",
+      `select player_id, coalesce(bot_personality, stand_in) as bot_personality, bot_seen from seats
+       where game_id = $1 and (bot_personality is not null or stand_in is not null) and player_id is not null order by seat_no`,
       [gameId],
     );
     const seen = new Map<PlayerId, string>();
@@ -325,19 +369,38 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
   /** The game's deadlines; a failed read only costs the countdown. */
   const timersOf = async (gameId: string): Promise<readonly Timer[]> =>
     options.timers ? options.timers(gameId).catch((err: unknown) => (app.log.error({ err, gameId }, "reading timers failed"), [])) : [];
-  /** Sends `conn` its view if it (or a timer) changed since the last one sent. */
-  const sendView = (conn: Conn, state: GameState, timers: readonly Timer[]) => {
+  const controlRows = async (gameId: string) => {
+    const known = controls.get(gameId);
+    if (known) return known;
+    const [game] = await db.query<{ paused: number | null }>("select (extract(epoch from paused_at) * 1000)::float8 as paused from games where id = $1", [gameId]);
+    const seats = await db.query<{ player_id: string }>(
+      "select player_id from seats where game_id = $1 and stand_in is not null and player_id is not null order by seat_no",
+      [gameId],
+    );
+    const out = { pausedAt: game?.paused == null ? null : Math.round(Number(game.paused)), standIns: seats.map((r) => r.player_id) };
+    controls.set(gameId, out);
+    return out;
+  };
+  /** The game's `control` for the views (M2-13). Idle seats come from public lock-in marks; an ended game has none. */
+  const controlOf = async (gameId: string, state: GameState): Promise<Control> => {
+    const rows = await controlRows(gameId);
+    const idle = state.phase.kind === "ended" ? [] : state.playerOrder.filter((p) => (state.players[p]?.consecutiveMissedMoves ?? 0) >= REPLACE_AFTER_MISSED_ROUNDS);
+    return { ...rows, idle };
+  };
+  /** Sends `conn` its view if it (or a timer, or the control) changed since the last one sent. */
+  const sendView = (conn: Conn, state: GameState, timers: readonly Timer[], control: Control) => {
     const view = viewFor(state, conn.player);
-    const text = JSON.stringify({ view, timers });
+    const text = JSON.stringify({ view, timers, control });
     if (text === conn.last || conn.socket.readyState !== conn.socket.OPEN) return;
     conn.last = text;
-    conn.socket.send(JSON.stringify({ view, timers, now: options.clock.now() }));
+    conn.socket.send(JSON.stringify({ view, timers, control, now: options.clock.now() }));
   };
   const push = async (gameId: string, state: GameState) => {
     const set = conns.get(gameId);
     if (!set || set.size === 0) return;
     const timers = await timersOf(gameId);
-    for (const conn of set) sendView(conn, state, timers);
+    const control = await controlOf(gameId, state);
+    for (const conn of set) sendView(conn, state, timers, control);
   };
   /** A crew message to everyone; a DM to its two players only, and its notice (if any) to the rest. design §12.1 */
   const deliver = (gameId: string, message: ChatMessage, notice: DmNotice | null) => {
@@ -399,18 +462,42 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
     }
     await options.onChange?.(gameId, settled).catch((err: unknown) => app.log.error({ err, gameId }, "after-change hook failed"));
     await push(gameId, settled);
+    if (settled.phase.kind === "ended") controls.delete(gameId);
     return settled;
+  };
+
+  /** Applies a system command; the caller holds the game's lock. */
+  const runSystem = async (gameId: string, command: SystemCommand) => {
+    const state = await store.load(gameId);
+    if (!state) throw new Error(`game ${gameId} has not started`);
+    const r = await apply(gameId, state, command);
+    if (!r.ok) throw new SystemRefused(`system command refused: ${JSON.stringify(command)}: ${r.reason}`);
+    return afterChange(gameId, r.state);
   };
 
   const live: Live = {
     botRefusals,
-    system: (gameId, command) =>
+    system: (gameId, command) => store.withGameLock(gameId, () => runSystem(gameId, command)),
+    deadline: (gameId, key, command) =>
+      store.withGameLock(gameId, async () => {
+        const due = await db.query(
+          `select 1 from deadlines d join games g on g.id = d.game_id
+           where d.game_id = $1 and d.key = $2 and d.paused_at is null and g.paused_at is null
+             and d.due_at <= to_timestamp($3::float8 / 1000)`,
+          [gameId, key, options.clock.now()],
+        );
+        return due.length === 0 ? DEADLINE_SKIPPED : runSystem(gameId, command);
+      }),
+    hostAction: (gameId, fn) =>
       store.withGameLock(gameId, async () => {
         const state = await store.load(gameId);
-        if (!state) throw new Error(`game ${gameId} has not started`);
-        const r = await apply(gameId, state, command);
-        if (!r.ok) throw new SystemRefused(`system command refused: ${JSON.stringify(command)}: ${r.reason}`);
-        return afterChange(gameId, r.state);
+        if (!state) throw new HttpError(404, "game not found or not started");
+        const out = await fn(state);
+        controls.delete(gameId);
+        bots.delete(gameId);
+        botSeen.delete(gameId);
+        await afterChange(gameId, state);
+        return out;
       }),
     settle: (gameId) =>
       store.withGameLock(gameId, async () => {
@@ -444,19 +531,34 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
         // Refused before the upgrade, as plain HTTP: 401 signed out, 404 not seated in a started game.
         preValidation: async (req) => {
           if (!originAllowed(req.headers.origin, req.headers.host, allowedOrigins)) throw new HttpError(403, "origin not allowed");
-          const user = await s.user(req);
-          if (!user) throw new HttpError(401, "not signed in");
-          const player = await playerIdOf(db, req.params.id, user.id);
+          const session = await s.session(req);
+          if (!session) throw new HttpError(401, "not signed in");
+          const player = await playerIdOf(db, req.params.id, session.user.id);
           if (!player || !(await store.load(req.params.id))) throw new HttpError(404, "game not found or not started");
-          seatOf.set(req, player);
+          seatOf.set(req, { player, expiresAt: session.expiresAt });
         },
       },
       (socket, req) => {
         const gameId = req.params.id;
-        const conn: Conn = { player: seatOf.get(req)!, socket, token: req.cookies[SESSION_COOKIE] ?? "", last: null, queued: 0, ready: false, presence: null };
+        const seat = seatOf.get(req)!;
+        const conn: Conn = { player: seat.player, socket, token: req.cookies[SESSION_COOKIE] ?? "", last: null, queued: 0, ready: false, presence: null, expiresAt: seat.expiresAt };
+        /** Closes the socket if its session has expired; true if it did. */
+        const expired = () => {
+          if (options.clock.now() < conn.expiresAt) return false;
+          socket.close(CLOSE_SIGNED_OUT, "session expired");
+          return true;
+        };
+        // Also on its own when the session runs out (re-armed if the wait was longer than a timer can hold).
+        let expiry: ReturnType<typeof setTimeout> | null = null;
+        const arm = () => {
+          expiry = setTimeout(() => expired() || arm(), Math.min(MAX_TIMER_MS, Math.max(1000, conn.expiresAt - options.clock.now())));
+          expiry.unref?.();
+        };
+        arm();
         const set = conns.get(gameId) ?? new Set<Conn>();
         conns.set(gameId, set.add(conn));
         socket.on("close", () => {
+          if (expiry) clearTimeout(expiry);
           set.delete(conn);
           if (set.size === 0 && conns.get(gameId) === set) conns.delete(gameId);
           // Last seen as its last socket closes; the others hear it went offline.
@@ -473,7 +575,7 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
         void store.withGameLock(gameId, async () => {
           const state = await store.load(gameId);
           if (!state) return;
-          sendView(conn, state, await timersOf(gameId));
+          sendView(conn, state, await timersOf(gameId), await controlOf(gameId, state));
           send(conn, { chatHistory: await chat.history(gameId, conn.player) });
           // Presence: this socket gets it now (always, even if a broadcast raced it); everyone else if it changed (the seat came online).
           await seen(gameId, conn.player).catch(presenceFailed(gameId));
@@ -484,6 +586,7 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
           await pushPresence(gameId).catch(presenceFailed(gameId));
         });
         socket.on("message", (data, isBinary) => {
+          if (expired()) return;
           if (conn.queued >= MAX_QUEUED_MESSAGES) {
             socket.close(CLOSE_TOO_MANY, "too many messages; wait for replies");
             return;
@@ -514,6 +617,9 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
               if (!parsed.ok) return reply({ rejected: true, reason: parsed.reason, ...id });
               const state = await store.load(gameId);
               if (!state) return reply({ rejected: true, reason: "game not found", ...id });
+              if ((await controlRows(gameId)).standIns.includes(conn.player)) {
+                return reply({ rejected: true, reason: "a bot is playing your seat; take it back first", ...id });
+              }
               const r = await apply(gameId, state, parsed.command);
               if (!r.ok) return reply({ rejected: true, reason: r.reason, ...id });
               reply({ ok: true, ...id });

@@ -9,6 +9,7 @@ import { BankDoodle } from "../components/BankDoodle";
 import { ArtSections, BankSection } from "./GalleryArt";
 import { NotesSections } from "./GalleryNotes";
 import { ExtensionSections } from "./GalleryExtension";
+import { HostSection } from "./GalleryHost";
 import { Button, DangerButton } from "../components/Button";
 import { Chip } from "../components/Chip";
 import { ArrowBack, Copy, Play, Plus, Star } from "../components/icons";
@@ -300,6 +301,8 @@ export function Gallery() {
             </Section>
 
             <ExtensionSections />
+
+            <HostSection />
           </div>
         </SketchFrame>
       </main>

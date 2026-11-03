@@ -32,6 +32,11 @@ export interface Timing {
    */
   readonly autoMeetings: boolean;
   readonly meetingLeadMs: number;
+  /**
+   * How much the host's "extend" adds to the current round's planning, alibi
+   * window or meeting, each time (M2-13, design §15). Provisional numbers.
+   */
+  readonly extendMs: number;
 }
 
 const S = 1000;
@@ -43,12 +48,12 @@ const H = 60 * MIN;
  * 15 s alibis) plus three 2-minute meetings is 15 minutes.
  */
 export const TIMINGS: { readonly [K in SessionLength]: Timing } = {
-  quick: { roundMs: 45 * S, lockInGraceMs: 5 * S, alibiMs: 15 * S, meetingMs: 2 * MIN, emergencyNoticeMs: 20 * S, shakedownWindowMs: 15 * S, autoMeetings: true, meetingLeadMs: 0 },
-  "1h": { roundMs: 5 * MIN, lockInGraceMs: 10 * S, alibiMs: 30 * S, meetingMs: 3 * MIN, emergencyNoticeMs: 1 * MIN, shakedownWindowMs: 30 * S, autoMeetings: true, meetingLeadMs: 0 },
-  "3h": { roundMs: 17 * MIN, lockInGraceMs: 30 * S, alibiMs: 1 * MIN, meetingMs: 5 * MIN, emergencyNoticeMs: 5 * MIN, shakedownWindowMs: 1 * MIN, autoMeetings: true, meetingLeadMs: 0 },
-  "1d": { roundMs: 2.25 * H, lockInGraceMs: 2 * MIN, alibiMs: 15 * MIN, meetingMs: 10 * MIN, emergencyNoticeMs: 30 * MIN, shakedownWindowMs: 5 * MIN, autoMeetings: false, meetingLeadMs: 1 * H },
-  "3d": { roundMs: 7.5 * H, lockInGraceMs: 5 * MIN, alibiMs: 20 * MIN, meetingMs: 20 * MIN, emergencyNoticeMs: 1 * H, shakedownWindowMs: 10 * MIN, autoMeetings: false, meetingLeadMs: 2 * H },
-  "1w": { roundMs: 17 * H, lockInGraceMs: 5 * MIN, alibiMs: 1 * H, meetingMs: 20 * MIN, emergencyNoticeMs: 2 * H, shakedownWindowMs: 10 * MIN, autoMeetings: false, meetingLeadMs: 2 * H },
+  quick: { roundMs: 45 * S, lockInGraceMs: 5 * S, alibiMs: 15 * S, meetingMs: 2 * MIN, emergencyNoticeMs: 20 * S, shakedownWindowMs: 15 * S, autoMeetings: true, meetingLeadMs: 0, extendMs: 20 * S },
+  "1h": { roundMs: 5 * MIN, lockInGraceMs: 10 * S, alibiMs: 30 * S, meetingMs: 3 * MIN, emergencyNoticeMs: 1 * MIN, shakedownWindowMs: 30 * S, autoMeetings: true, meetingLeadMs: 0, extendMs: 2 * MIN },
+  "3h": { roundMs: 17 * MIN, lockInGraceMs: 30 * S, alibiMs: 1 * MIN, meetingMs: 5 * MIN, emergencyNoticeMs: 5 * MIN, shakedownWindowMs: 1 * MIN, autoMeetings: true, meetingLeadMs: 0, extendMs: 5 * MIN },
+  "1d": { roundMs: 2.25 * H, lockInGraceMs: 2 * MIN, alibiMs: 15 * MIN, meetingMs: 10 * MIN, emergencyNoticeMs: 30 * MIN, shakedownWindowMs: 5 * MIN, autoMeetings: false, meetingLeadMs: 1 * H, extendMs: 30 * MIN },
+  "3d": { roundMs: 7.5 * H, lockInGraceMs: 5 * MIN, alibiMs: 20 * MIN, meetingMs: 20 * MIN, emergencyNoticeMs: 1 * H, shakedownWindowMs: 10 * MIN, autoMeetings: false, meetingLeadMs: 2 * H, extendMs: 1 * H },
+  "1w": { roundMs: 17 * H, lockInGraceMs: 5 * MIN, alibiMs: 1 * H, meetingMs: 20 * MIN, emergencyNoticeMs: 2 * H, shakedownWindowMs: 10 * MIN, autoMeetings: false, meetingLeadMs: 2 * H, extendMs: 2 * H },
 };
 
 /** `t` with every wall time multiplied by `k` (TIME_SCALE, config.ts): fast dev and E2E games. */
@@ -64,6 +69,7 @@ export function scaleTiming(t: Timing, k: number): Timing {
     emergencyNoticeMs: ms(t.emergencyNoticeMs),
     shakedownWindowMs: ms(t.shakedownWindowMs),
     meetingLeadMs: t.meetingLeadMs === 0 ? 0 : ms(t.meetingLeadMs),
+    extendMs: ms(t.extendMs),
   };
 }
 

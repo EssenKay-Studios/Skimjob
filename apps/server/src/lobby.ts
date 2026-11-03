@@ -64,6 +64,8 @@ export interface LobbyView {
     readonly you: boolean;
     /** Engine player id, once the game has started. */
     readonly playerId: string | null;
+    /** The bot playing this person's seat for now (host controls, M2-13); null if none. */
+    readonly standIn: PersonalityId | null;
   }[];
 }
 
@@ -80,6 +82,7 @@ interface SeatRow {
   user_id: string | null;
   nickname: string;
   bot_personality: PersonalityId | null;
+  stand_in: PersonalityId | null;
 }
 
 const gameById = async (db: Queryable, id: string) =>
@@ -94,7 +97,7 @@ const gameByCode = async (db: Queryable, raw: string) => {
   return (await db.query<GameRow>("select id, status, host_user_id, invite_code, settings from games where invite_code = $1", [code]))[0];
 };
 const seatsOf = (db: Queryable, id: string) =>
-  db.query<SeatRow>("select seat_no, player_id, user_id, nickname, bot_personality from seats where game_id = $1 order by seat_no", [id]);
+  db.query<SeatRow>("select seat_no, player_id, user_id, nickname, bot_personality, stand_in from seats where game_id = $1 order by seat_no", [id]);
 const nextSeat = (seats: readonly SeatRow[]) => (seats.length ? Math.max(...seats.map((s) => s.seat_no)) + 1 : 0);
 
 const PERSONALITY_LIST = (Object.keys(PERSONALITIES) as PersonalityId[]).map((id) => ({ id, name: PERSONALITIES[id].name }));
@@ -118,6 +121,7 @@ function view(game: GameRow, seats: readonly SeatRow[], user: User): LobbyView {
       host: s.user_id === game.host_user_id,
       you: s.user_id === user.id,
       playerId: s.player_id,
+      standIn: s.stand_in,
     })),
   };
 }
@@ -279,6 +283,16 @@ export function lobbyRoutes(app: FastifyInstance, db: Db, store: GameStore, s: S
   app.delete<{ Params: { id: string; seat: string } }>("/games/:id/bots/:seat", (req) =>
     asHost(req, async (game, seats, user) => {
       const seat = seats.find((x) => String(x.seat_no) === req.params.seat && x.bot_personality !== null) ?? refuse(404, "no bot in that seat");
+      await db.query("delete from seats where game_id = $1 and seat_no = $2", [game.id, seat.seat_no]);
+      return view(game, await seatsOf(db, game.id), user);
+    }),
+  );
+
+  // Kick (before the start, M2-13): the host removes anyone else's seat, a person or a bot. design §15
+  app.delete<{ Params: { id: string; seat: string } }>("/games/:id/seats/:seat", (req) =>
+    asHost(req, async (game, seats, user) => {
+      const seat = seats.find((x) => String(x.seat_no) === req.params.seat) ?? refuse(404, "no player in that seat");
+      if (seat.user_id === game.host_user_id) refuse(409, "the host can't remove their own seat");
       await db.query("delete from seats where game_id = $1 and seat_no = $2", [game.id, seat.seat_no]);
       return view(game, await seatsOf(db, game.id), user);
     }),
