@@ -1,10 +1,10 @@
 # Status
 
-_Last updated: 3 Nov 2026, morning (owner answers of 3 Nov: go-ahead for `docs/extension.md`, rulings 1–10, police activity option A). Work **resumed 3 Nov**; the pipeline now runs on the owner's Mac. R6a is next._
+_Last updated: 3 Nov 2026, afternoon (R6a done (#50); the R6 balance pass is done with its PR: success passes, parity is blocked on an owner decision). Work **resumed 3 Nov**; the pipeline now runs on the owner's Mac. R6b is next._
 
 ## Current milestone: M2 + R6 — the Extension rules (`docs/extension.md`), then the rest of M2
 
-M1 (engine, simulator, bots) is done; its record follows. R6a (the Extension's rules in engine, content and bots) is next.
+M1 (engine, simulator, bots) is done; its record follows. R6a (the Extension's rules in engine, content and bots) is done (#50), and so is its balance pass (content 0.16.0, `docs/balance/r6-balance.md`). R6b is next.
 
 ### M1 — Engine + simulator (bank job, starter roles, bots)
 
@@ -45,8 +45,8 @@ Goal: run thousands of all-bot games at 2–12 players and use the results to tu
 
 ### Next up (in order)
 - M1 done; M2 per `docs/m2-plan.md`. Paused 2 Nov 16:23 IST; **resumed 3 Nov** on the owner's Mac, go-ahead given 3 Nov (decisions.md "Owner answers, 3 Nov (morning)"). On 3 Nov the owner merged the roles v3 spec into `docs/extension.md`, the single rules spec for R6 (draft PR #45 closed). Done on 2 Nov: [x] R5 parity balance, provisional (#43); [x] M2-9 art wired into the game screen and the Claim role button (#41); [x] lock-in marks, presence, early round end, human-majority meeting lock (#44); [x] M2-10 (#46). Next, as in `docs/pipeline/HANDOFF.md`:
-  1. **R6a rules** (engine, content, bots): everything in `docs/extension.md`, as its "Build notes" section lists (one crew, win rule with `winsOn`, no automatic reveals, temperament tags, Balanced / Truly random, tokens and the 3-perk shop, fixed shakedown numbers, one vote rule, whole-number scoring, "police activity" and "camera offline" cover, Heat breakdown, Standard deck, Quick uses Starter).
-  2. **Balance pass** for all of R6a on the sharded "Sim suite" workflow: per-role parity ≤ 0.10, success 55–70%; the Extension's numbers are starting values.
+  1. [x] **R6a rules** (#50, content 0.15.0): roles v3 and the Extension rules are in the engine, content, bots and sim; the suite then had 27 PASS / 22 FAIL / 32 inconclusive (success low at 2p and 12p). Scope: everything in `docs/extension.md`, as its "Build notes" section lists (one crew, win rule with `winsOn`, no automatic reveals, temperament tags, Balanced / Truly random, tokens and the 3-perk shop, fixed shakedown numbers, one vote rule, whole-number scoring, "police activity" and "camera offline" cover, Heat breakdown, Standard deck, Quick uses Starter).
+  2. [x] **Balance pass** for all of R6a on the sharded "Sim suite" workflow (content 0.16.0, `docs/balance/r6-balance.md`, baseline refreshed at ±2 pp): **success 55–70% passes in all 18 gated cells** (57.7–68.2%). **Per-role parity ≤ 0.10 fails everywhere** (spread 0.63–1.01, was 0.46–1.59): the ★ roles also win failed heists, which numbers can't offset; even with no failure wins at all the spread stays 0.2–0.5. Owner decision needed (see Questions). Tuned: Teller line 5, Manager's office 3, Shift change loot ×1.5 / Heat ×2, Quiet night −5, police chance 30%, Fence safe 1 an act (token at 3), Balanced 4p 1 / 1 (one over the n ÷ 3 cap) and 8p 2 / 1.
   3. **R6b roles UI** (web): lobby deck picker (presets, toggles, deal mode, role-list setting); Roles rulebook sheet + tap any role name to explain; a visual cue for every power and ability; last round's board shown faded while planning; "between meetings" wording, the gap box, the Haul target bar, the Heat breakdown, the shop.
   4. **M2-11** end-of-game reveal (include tokens and purchases).
   5. **M2-13** host controls (pause, extend, replace with bot; shift `roundEarly:<n>` with the round).
@@ -119,6 +119,9 @@ Plan and acceptance criteria: `docs/m2-plan.md`. Runs alongside M1 task 16 (bala
 
 ## Notes / half-finished work
 - **Open follow-ups from reviews/QA (not fixed yet):**
+  - **Host pause and quiet hours must freeze police moments** (#50 review): police moments run on game time and freeze only for meetings today. Do it with M2-13 (host controls).
+  - **Drain in-progress games before deploying R6a** (#50 review): a game logged with removed event types (`perkGranted`, `alliesLearned`, `policePatrol`) won't replay on the new engine.
+  - **R6 balance follow-ups** (`docs/balance/r6-balance.md`): Heat share of failures is 31–63% at 4–8p, 23% at 9p events on and 8% at 12p events off (design target 10–20%, not a task gate); Starter succeeds 86–93% and Duel 44% (report-only); the Hacker and Cleaner sit lowest (0.5–0.6).
   - **Board PATCH rate limiter has no test** (#46 review): `apps/server/src/notes.ts` `rateLimiter`; add one with the fake clock (N allowed, N+1 → 429, window slides, sweep drops idle keys).
   - **`CaseFile` memo misses name changes** (#46 review): its comparator ignores `ctx.name` / `ctx.slot`, so a mid-game rename (a bot takes over) shows old names until a new entry arrives.
   - **Notes endpoint fetched twice** (#46 review): `useAwayRecap` and `useSuspicionBoard` each call `GET /games/:id/notes`; one shared fetch would do.
@@ -175,6 +178,8 @@ Plan and acceptance criteria: `docs/m2-plan.md`. Runs alongside M1 task 16 (bala
 
 ## Questions for Karthik
 Answered: everything up to 3 Nov morning (decisions.md "Owner answers, 3 Nov (morning)": R6 go-ahead, role list default Exact); the art direction is approved for now. Still open:
+- **Parity gate (R6 balance, `docs/balance/r6-balance.md`):** ≤ 0.10 can't be met by numbers while ★ roles also win failures. Options: (a) gate team roles against each other and ★ roles against their own band, or count success wins only; (b) a rule that trims ★ failure wins (e.g. half credit); (c) fewer ★ roles in Balanced mixes or a bot-rule change. Also confirm Balanced 4p dealing 1 Lone wolf + 1 Wildcard (one over the n ÷ 3 cap).
+- **R6a confirm items** (#50 review): automatic perks (Shield, Emergency) exempt from one-per-round; the Blackmailer's token stands if the shakedown is then cancelled; the Mole's token cap reading (max 3 per game).
 - Deploy target (the deploy workflow is manual-only until a host is chosen, owner 3 Nov): Fly (unlock the account at fly.io/high-risk-unlock, then re-run `deploy.yml`) or AWS Lightsail (needs the secrets `LIGHTSAIL_SSH_KEY`, `LIGHTSAIL_HOST`, `LIGHTSAIL_USER`, a subdomain A record, and answers on Docker, the proxy and RAM)?
 - Fly deploy: OK to keep the machine always on (`min_machines_running = 1`, roughly $4–5/month in Mumbai) so deadlines fire on time, rather than stopping it when idle? (docs/deploy.md)
 - Google sign-in (M2-12): please send the Google OAuth client id; until then M2-12 is built stub-ready.

@@ -4,6 +4,25 @@ Newest first. Each entry: what was decided, and why. Add an entry whenever a rul
 
 ---
 
+### 2026-11-03 — R6a provisional decisions
+PM/builder readings made while building R6a (#50); the owner may change any of them.
+- **Deal and setup:** Balanced 5–6p is 1 Lone wolf / 1 Wildcard. The Exact role list is in content order. A Hidden role list falls back to the deck preset for bots. Mole and Embezzler can be dealt in Duel. Starter has no shop or tokens.
+- **Token triggers:** Hacker: the looped room had a Security watcher, and another visitor there pocketed. The Blackmailer's token is emitted at the vote. The Embezzler's first take is the first non-zero take. The Fixer's save also stops a police raid. Tokens and perks stay with the player on a Double-cross.
+- **Perks:** automatic perks (Shield, Emergency) are exempt from one-per-round.
+- **Police:** moments are refused while a meeting is open; the server freezes them on game time (a meeting open or waiting to open). The server has no host pause or quiet hours yet (they must freeze moments too: M2-13). The next moment is due from when the previous one fired. Police Heat is scaled by min(1, crew ÷ 5). The sim runs one moment per round.
+- **Views:** Hacker loop = that room's Security feed offline; Power cut = all feeds offline. Gap box = alibi room loot − Haul delta. In the Heat breakdown, base absorbs rounding; a missed target sits under the stretch's last round.
+- **Settings:** the legacy `mole` lobby input is migrated rather than refused ("off" → Team players only; other values → plain deck).
+- **Bots:** forecast Heat = clamp((danger − 0.75) × 2); target = clamp((final − projected) ÷ final × 4 + 0.5). TOP_FACTOR 2, LEAN_AT 0.4. The Mole tips off when Heat + card + 2 × perRound ≥ 70%. Buy order: shield, peek, extraVote, alibi, tail, recharge, rig, emergency; the last round spends the remainder. ★ roles refuse the Double-cross. Bots skip a second audit of the same round after Recharge.
+- **Sim:** the setup axis is balanced / random / possible / hidden (default the first three), on the Standard deck. Only Balanced 4–12 gates; other cells and the Mole win-rate row are report-only. sim-smoke uses the Everything deck.
+- **Tests:** server lockin.qa uses the 1 h session (Quick has no Muscle); the scenario test uses the Everything deck at 12p.
+- **Web:** `pluralityRule` is stubbed to false (R6b removes the callers). No new controls for deck / deal / role list yet (R6b).
+- **Deploy:** in-progress games logged with removed event types (`perkGranted`, `alliesLearned`, `policePatrol`) won't replay; drain them before deploying.
+
+---
+
+### 2026-11-03 — R6 balance pass: success passes, parity blocked
+Content 0.16.0 (`docs/balance/r6-balance.md`). Teller line 4 → 5, Manager's office 4 → 3, Shift change Vault loot ×2 → ×1.5 and Heat ×1.5 → ×2, Quiet night −10 → −5, police patrol chance 25% → 30%, Fence safe 5 → 1 per stretch with its token at 3 (was 10, unreachable at 1), Balanced 4p 1/0 → 1/1 and 8p 1/1 → 2/1. Kept: clean line 6 (= Detective line), pay 8, Duel wrong call 8, shop costs. Why: success was 70–81% with events on and 52–56% at 9–12p with events off; now 57.7–68.2% in every gated cell. Parity (≤ 0.10) is not met (0.63–1.01): a ★ role wins on success like anyone and also on failure, so its ratio is about s + (1 − s)·φ against s for team roles; with no failure wins at all the spread is still 0.2–0.5. Needs an owner decision on the gate or the rule (STATUS "Questions").
+
 ### 2026-11-03 — Owner answers, 3 Nov (morning)
 **Go-ahead given:** `docs/extension.md` is approved for build and wins on any conflict. `docs/design.md` stays secondary until R6a lands; its sections are brought in line then (its §17.4 now carries the owner gates). Out of scope: `docs/rebuild.md`, Books mode, the recruited Mole.
 

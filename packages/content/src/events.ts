@@ -8,10 +8,10 @@ export type EventId = string;
 
 /** What a card does. The engine has one small effect function per kind. design §10 */
 export type EventEffect =
-  /** Quiet night (−10): added to the round's Heat before the clamp. design §7 */
+  /** Quiet night (−5 since the R6 balance pass): added to the round's Heat before the clamp. design §7 */
   | { readonly kind: "heat"; readonly amount: number }
   /**
-   * Shift change (Vault: loot ×2, Heat ×1.5 since balance pass 2) / Payday (Lobby: loot ×2, so 4):
+   * Shift change (Vault: loot ×1.5, Heat ×2 since the R6 balance pass) / Payday (Lobby: loot ×2, so 4):
    * the room's loot and Heat pressure are multiplied this round. Skipped if the
    * room isn't in play.
    */

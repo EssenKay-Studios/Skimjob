@@ -67,8 +67,8 @@ Richer rooms raise Heat. If Heat ever reaches 100, the cops raid and the heist f
 | Rooftop | 0 | Lowers Heat | All |
 | Deposit boxes | 5 | Raises Heat; more than 2 visitors get 4 each | 5+ |
 | Server room | 0 | Learn how many pocketed this round, not who | 5+ |
-| Teller line | 4 | — | 9+ |
-| Manager's office | 4 | Raises Heat (half the Vault's) | 9+ |
+| Teller line | 5 | — | 9+ |
+| Manager's office | 3 | Raises Heat (half the Vault's) | 9+ |
 
 **Heat per round**
 
@@ -110,7 +110,7 @@ At each meeting the crew may vote to shake down one player, and then the Haul is
 | Meeting 2 | 15 × players | +15 Heat; the shortfall carries forward |
 | Final meeting | 23 × players | The heist fails |
 
-The clean line (6) and payout (8) replace 3 × and 5 × the act number. They are starting values for the balance pass.
+The clean line (6) and payout (8) replace 3 × and 5 × the act number. The R6 balance pass kept both (docs/balance/r6-balance.md).
 
 ## Winning and losing
 
@@ -161,7 +161,7 @@ All 20 roles stay, with the same powers as today. What changes: every reward is 
 | Role | Power | Earns a token when | Also wins |
 | --- | --- | --- | --- |
 | Getaway Driver ★ | Its Rooftop visit doesn't really cool Heat | Heat reaches 75 | A raid, with the biggest stash |
-| Fence ★ | Hides up to 5 loot between meetings in a safe that shakedowns show but can't take | The safe reaches 10 | Any failure, with the biggest stash (safe counts) |
+| Fence ★ | Hides up to 1 loot between meetings in a safe that shakedowns show but can't take | The safe reaches 3 | Any failure, with the biggest stash (safe counts) |
 | Hacker | Once between meetings: loops one room's cameras, which then read "camera offline" | A loop hid someone who pocketed | — |
 | Blackmailer | Once between meetings: guess a player's role; if right, it steals their vote at the next meeting | A vote it stole decides a shakedown (ruling 5) | — |
 | Forger | Once between meetings: plants a fake sighting on that round's camera and Lookout feeds | Someone it framed is shaken down clean | — |
@@ -198,8 +198,8 @@ From round 2, one event card is flipped every round for everyone to see. Cards c
 
 | Card | Effect this round | Looks the same as |
 | --- | --- | --- |
-| Quiet night | Heat −10 | — |
-| Shift change | The Vault pays double, with 1.5× its Heat | — |
+| Quiet night | Heat −5 | — |
+| Shift change | The Vault pays 1.5×, with double its Heat | — |
 | Payday | The Lobby pays 4 | — |
 | Power cut | Every camera reads "camera offline"; nobody sees anybody | The Hacker's loop, for one room |
 | Lockdown | One room is closed | — |
@@ -208,7 +208,7 @@ From round 2, one event card is flipped every round for everyone to see. Cards c
 | Inside tip | One random player secretly learns another's role | — |
 | Double-cross | Two players are offered a role swap; it happens only if both accept | — |
 
-**Police activity** (owner, 3 Nov, option A): the Police patrol is no longer a card. Instead, whenever a Mole could be in the game (provisional), about **1 round in 4** [tunable] brings a hidden "police activity: +4 Heat" at a random moment of game time, during or between rounds. It lands at the same hidden moments as the Mole's queued tip-off and is announced exactly like it, so the two look the same (see Build notes, "Police activity"). (Was the +5 Police patrol card.)
+**Police activity** (owner, 3 Nov, option A): the Police patrol is no longer a card. Instead, whenever a Mole could be in the game (provisional), about **3 rounds in 10** [tuned: 30%] brings a hidden "police activity: +4 Heat" at a random moment of game time, during or between rounds. It lands at the same hidden moments as the Mole's queued tip-off and is announced exactly like it, so the two look the same (see Build notes, "Police activity"). (Was the +5 Police patrol card.)
 
 ## Host settings
 
@@ -269,7 +269,7 @@ For the builders. This section carries over everything from `roles-v3.md` (owner
 1. The four reveal rewards that became Peeks (Getaway Driver, Fence, Mole, Embezzler), and every other role reward, are now **one token** each.
 2. "Once per act" reads "once between meetings" everywhere players see it. The engine keeps acts internally.
 3. Rookie ×1.05 and Inside Man +0.15 become no multiplier and +1 per 5 loot over the final target. Scores are whole numbers.
-4. The Mole's tip-off is still any time, once between meetings, +4 Heat. But it is announced only as "police activity", the same as the background patrol that replaces the Police patrol card: a hidden background chance [1 in 4] per round of +4 at a random moment, run only when a Mole could be in the game (owner, 3 Nov, option A; see "Police activity" below). The tip-off is queued to the same hidden moments.
+4. The Mole's tip-off is still any time, once between meetings, +4 Heat. But it is announced only as "police activity", the same as the background patrol that replaces the Police patrol card: a hidden background chance [30%, tuned] per round of +4 at a random moment, run only when a Mole could be in the game (owner, 3 Nov, option A; see "Police activity" below). The tip-off is queued to the same hidden moments.
 5. The plurality rule for crews of 9–12 is dropped; one vote rule for every size.
 
 **Win rule** (`end.ts`)
@@ -293,7 +293,7 @@ For the builders. This section carries over everything from `roles-v3.md` (owner
 **Tags, decks and dealing**
 
 - Temperament tag replaces faction and changes no rule: Team player (13 roles), Wildcard (Getaway Driver, Fence, Hacker, Blackmailer, Forger), Lone wolf (Mole, Embezzler).
-- **Balanced** (default): a fixed mix per player count, decided by the balance pass (start from roles-v2 §3's most-weighted row under the round(n ÷ 3) cap). The host can't change it. Seats the deck can't fill go to Team players, Rookies last.
+- **Balanced** (default): a fixed mix per player count, decided by the balance pass (start from roles-v2 §3's most-weighted row under the round(n ÷ 3) cap; the R6 balance pass dealt 4 players 1 / 1, one over the cap, and 8 players 2 / 1). The host can't change it. Seats the deck can't fill go to Team players, Rookies last.
 - **Truly random:** each seat drawn uniformly from the eligible deck, at most one Mole and one Embezzler.
 - Dropped: the saboteur Off / Maybe / On setting, "no wildcards without a lone wolf", and "at most lone wolves + 1 wildcards". A stored saboteur field is ignored on read: a saved *Off* becomes Balanced with every Wildcard and Lone wolf toggled off; *Maybe* and *On* become plain Balanced.
 - Presets: Starter (unchanged), Standard (the 11 roles above), Everything; plus per-role toggles. Quick games force Starter. The sim matrix drops its saboteur axis.
@@ -319,7 +319,7 @@ For the builders. This section carries over everything from `roles-v3.md` (owner
 
   A moment that would fall inside a meeting lands right after the meeting closes, after its target check.
 - **Police moments:** the engine draws a hidden schedule of moments from the seeded RNG. The first moment is at game time g₀. Each next gap is drawn uniformly from [0.5, 1.5] × the preset's round length (planning plus alibi window). This is about one moment per round, and moments are not tied to phase boundaries, so early round ends don't move them.
-  - At each moment, the background fires with chance [1 in 4] (`policeActivity.chance`).
+  - At each moment, the background fires with chance [30%, tuned] (`POLICE_ACTIVITY.chancePercent`).
   - The draws are secret state, reveal-only in the log.
   - The server fires each moment with `advance { kind: "policeMoment" }`. The sim, which has no clock, takes one moment per round, at the round's resolution.
 - **Mole tip-off, queued:** the Mole may **use** its tip-off any time, once between meetings, as the 2 Nov answer says; the use counts at once. The tip-off **lands** at the next free police moment (provisional), the same way as a patrol, so timing can't tell them apart.
@@ -352,7 +352,8 @@ For the builders. This section carries over everything from `roles-v3.md` (owner
 - Run it on the sharded "Sim suite" GitHub workflow, not babysat in a chat.
 - Flag in the balance brief: police moments run on game time, so live games with many early round ends get fewer than one moment per round, while the sim takes exactly one. Live Heat can drift below the sim's; watch it in the M2-14 playtest.
 - Flag in the balance brief: background police activity adds about +1 Heat per round (about +9 a game) where a Mole could be, against the old card's ~+4.
-- Tunables include police activity's chance [1 in 4], the Duel wrong-call pay [8], alongside the clean line [6], pay [8] and shop costs.
+- Tunables include police activity's chance [30%], the Duel wrong-call pay [8], alongside the clean line [6], pay [8] and shop costs.
+- **R6 balance pass (content 0.16.0, docs/balance/r6-balance.md):** success passes 55–70% in all 18 gated cells. Parity fails everywhere (spread 0.63–1.01): the ★ roles also win failures, which numbers can't offset (owner decision pending). Tuned: Teller line 5, Manager's office 3, Shift change loot ×1.5 / Heat ×2, Quiet night −5, police chance 30%, Fence safe 1 an act (token at 3), Balanced 4p 1 / 1 and 8p 2 / 1. Kept: clean line 6, pay 8, Duel 8, shop costs.
 
 ## Code change estimate
 
