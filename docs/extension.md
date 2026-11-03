@@ -1,10 +1,10 @@
 # Skimjob Extension: simplified rulebook
 
-*2 Nov 2026 · Karthik. Proposal, not yet approved for build. Companion proposal: [`rebuild.md`](rebuild.md).*
+*2–3 Nov 2026 · Karthik. The single rules spec for the R6 build. It replaces `roles-v3.md` (draft PR #45, closed), keeping its decisions and amending five of them (see "Build notes"). Build starts when the owner says go. Companion proposal: [`rebuild.md`](rebuild.md).*
 
 ## Summary
 
-The Extension is the current game (roles v3, PR #45) made lighter to learn, without changing how it is built. The Rebuild is the jobs redesign in [`rebuild.md`](rebuild.md).
+The Extension is the current game made lighter to learn, without changing how it is built. It includes everything from the roles v3 spec (one crew, failure wins for four roles, no automatic reveals, temperament tags, the two deal modes). The Rebuild is the jobs redesign in [`rebuild.md`](rebuild.md).
 
 **What changes for players:**
 
@@ -20,7 +20,7 @@ The Extension is the current game (roles v3, PR #45) made lighter to learn, with
 
 **What stays:** 9 rounds, rooms, Heat, alibis, all 20 roles and their powers, role claims, chat, evidence cards, no elimination, one winner.
 
-**Cost:** roughly 1,300–1,600 lines of source changed or added, about 7% of the codebase, plus about 1,000–1,500 lines of tests. Most of it fits inside the roles v3 work that is already planned (R6a, R6b) and the balance pass that has to run anyway. For comparison, the Rebuild would change about half the code.
+**Cost:** roughly 1,300–1,600 lines of source changed or added, about 7% of the codebase, plus about 1,000–1,500 lines of tests. Most of it fits inside the R6 work that was already planned (R6a rules, R6b UI) and the balance pass that has to run anyway. For comparison, the Rebuild would change about half the code.
 
 ## The game in one minute
 
@@ -130,7 +130,7 @@ Every role card carries one "How you win" line, so nobody has to look this table
 
 ## Roles
 
-All 20 roles stay, with the same powers as roles v3. What changes: every reward is now **one token** (spent in the shop), every "once per act" reads **once between meetings**, and the scoring decimals are gone. The tag only describes how selfish a power is; it is not a team. ★ marks the four roles that can also win when the heist fails.
+All 20 roles stay, with the same powers as today. What changes: every reward is now **one token** (spent in the shop), every "once per act" reads **once between meetings**, and the scoring decimals are gone. The tag only describes how selfish a power is; it is not a team. ★ marks the four roles that can also win when the heist fails.
 
 **Decks**
 
@@ -227,6 +227,61 @@ Police patrol drops from +5 to +4 to match the tip-off. Unlike the other cards, 
 
 Quick games switch to the Starter deck automatically. 45-second rounds leave no time for powers and tokens.
 
+## Build notes (engine, bots, sim)
+
+For the builders. This section carries over everything from `roles-v3.md` (owner-approved 2 Nov) that this spec keeps. Numbers in [brackets] are tunables for the balance pass.
+
+**What the Extension amends in roles v3** (where they differ, this doc wins):
+
+1. The four reveal rewards that became Peeks (Getaway Driver, Fence, Mole, Embezzler), and every other role reward, are now **one token** each.
+2. "Once per act" reads "once between meetings" everywhere players see it. The engine keeps acts internally.
+3. Rookie ×1.05 and Inside Man +0.15 become no multiplier and +1 per 5 loot over the final target. Scores are whole numbers.
+4. The Mole's tip-off is still any time, once between meetings, +4 Heat. But it is announced only as "police activity", the same as the Police patrol card (now +4, at a random moment).
+5. The plurality rule for crews of 9–12 is dropped; one vote rule for every size.
+
+**Win rule** (`end.ts`)
+
+- Rank every player by score (stash + Fence safe + Inside Man bonus), then apply the tie-breaks (fewer shakedowns, then more handed in). The **top group** is everyone still level at the top.
+- Success: the top group wins, whatever their roles.
+- Failure: nobody wins, except top-group members whose role wins that ending. `RoleDef.faction` and `isDarkSide` go; a `winsOn: ("heat" | "target")[]` field replaces them: Getaway Driver `[heat]`, Mole `[heat, target]`, Embezzler `[target]`, Fence `[heat, target]`.
+- A failure-winner outside the top group doesn't win. Tie-breaks come first. Roles are read at the end, so a Double-cross can hand over a failure win. The full ranking is always shown, labelled as a loss unless someone qualified.
+
+**Reveals**
+
+- Removed: every automatic ally reveal (Hacker knows a saboteur; Getaway Driver at Heat 75; Fence at safe 10; Mole per tip-off; Embezzler's first take; Forger known to saboteurs; saboteurs knowing each other; the Blackmailer/saboteur special case). The `alliesLearned` event and `roleState.allies` go.
+- Kept: every power a player *chooses* to use to learn a role: Peek, Inside tip, Detective, the Blackmailer's guess, claims and evidence cards.
+
+**Tokens and the shop**
+
+- Each `RoleDef.rewards` trigger grants one token (a private event) instead of a named perk.
+- At setup the shop is dealt from content with the seeded RNG: one perk per column (Learn / Protect / Sway). A `buyPerk` command spends tokens; the existing perk effects are reused unchanged. Shield stays automatic once bought.
+- The shakedown pause opens when a Muscle is dealt or Shield is in the shop (with the Exact role list; otherwise when either could be).
+
+**Tags, decks and dealing**
+
+- Temperament tag replaces faction and changes no rule: Team player (13 roles), Wildcard (Getaway Driver, Fence, Hacker, Blackmailer, Forger), Lone wolf (Mole, Embezzler).
+- **Balanced** (default): a fixed mix per player count, decided by the balance pass (start from roles-v2 §3's most-weighted row under the round(n ÷ 3) cap). The host can't change it. Seats the deck can't fill go to Team players, Rookies last.
+- **Truly random:** each seat drawn uniformly from the eligible deck, at most one Mole and one Embezzler.
+- Dropped: the saboteur Off / Maybe / On setting, "no wildcards without a lone wolf", and "at most lone wolves + 1 wildcards". A stored saboteur field is ignored on read: a saved *Off* becomes Balanced with every Wildcard and Lone wolf toggled off; *Maybe* and *On* become plain Balanced.
+- Presets: Starter (unchanged), Standard (the 11 roles above), Everything; plus per-role toggles. Quick games force Starter. The sim matrix drops its saboteur axis.
+
+**Kept from the 2 Nov owner answers:** Exact role list shown by default (Possible / Hidden as options); Fence safe shown on a shakedown but not seized; plain explainers: a "How you win" line and tag on every card, an Endings table in the rulebook, an end screen that says how it ended and badges the winner's reason, and tapping any role name shows its tag and win line.
+
+**Bots**
+
+- Every bot keeps a public ending forecast (chance of success, raid, missed target) from Haul pace, Heat and the role list, and an estimate of its own stash rank.
+- Most roles win only on success: they keep the job alive and skim when the forecast is safe.
+- The four ★ roles lean toward their failure once its forecast passes a lean point [0.4] *and* they rate themselves top; otherwise they play for success. The Mole tips off when Heat after the round would pass about [70].
+- Votes are on suspicion only; no ally logic. ★ holders and evidence-leaving roles (Hacker, Forger) bluff a low-risk role (Rookie, Bagman, Cleaner) when accused; the rest claim truthfully with chance 1 − lie. Public tells: rising Heat points at the Driver or Mole; "camera offline" at the Hacker or a Power cut; a big shown safe at the Fence.
+- Bots buy perks by simple priorities and spend tokens before the game ends.
+
+**Sim**
+
+- Gates: per-role parity ≤ 0.10 (win credit ÷ 1/n, all 20 roles, Balanced, 4–12 players) and success 55–70%.
+- Reports: the ending split (success / raid / miss), no-winner rate, shared-win rate, wins by success vs failure for each ★ role, token earning and spending per role, and Truly random and the role-list settings (no gate).
+- Watch: the Mole and Fence can win either way and may sit high; Hacker, Blackmailer, Forger and Inside Man may sit low. Tune stash-earning numbers first.
+- Run it on the sharded "Sim suite" GitHub workflow, not babysat in a chat.
+
 ## Code change estimate
 
 The Extension changes about **1,500 lines of source and 1,500 lines of tests**, about 7% of the roughly 20,700 lines of source on `main` today. Most of it rides on work already queued. These are estimates from reading the repo, not a line-by-line plan.
@@ -247,9 +302,9 @@ The Extension changes about **1,500 lines of source and 1,500 lines of tests**, 
 
 **How it fits the work that's still pending**
 
-- **R6a (building roles v3):** the Extension's rule changes can go into the same build, since both touch rewards, dealing and the win rule. That avoids changing the same files twice.
-- **R6b (roles UI):** role cards already get a "How you win" line and a rulebook sheet there. The Extension's wording and the shop sheet join it.
-- **Balance:** the pass already planned after roles v3 covers the Extension too. That is computer time, not code.
+- **R6a (rules):** builds this whole spec in one pass: the roles v3 parts and the Extension's changes touch the same files (rewards, dealing, the win rule), so nothing is changed twice.
+- **R6b (roles UI):** role cards get a "How you win" line and a rulebook sheet there. The Extension's wording and the shop sheet join it.
+- **Balance:** one pass after R6a covers everything. That is computer time, not code.
 - **Unaffected:** the end-of-game reveal (it should also list tokens and purchases), host controls, Google sign-in, the playtest pass and the offline demo.
 - **Untouched:** the engine core, server, lobby, chat, art and CI.
 
@@ -270,4 +325,4 @@ The Extension is the cheaper and safer path; the Rebuild is the more original ga
 | One player goes quiet | Only their power is lost | The crew loses a record |
 | Originality | Close to other hidden-role games | No obvious competitor |
 
-Build the Extension into the roles v3 work, finish the demo, and playtest. If the group wants more to do between rounds, try Books mode as the next step.
+Build the Extension as R6, finish the demo, and playtest. If the group wants more to do between rounds, try Books mode as the next step.

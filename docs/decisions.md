@@ -4,6 +4,11 @@ Newest first. Each entry: what was decided, and why. Add an entry whenever a rul
 
 ---
 
+### 2026-11-03 — One rules spec: the Extension replaces roles v3
+The owner merged the roles v3 spec into `docs/extension.md`, which is now the single rules spec for R6. Draft PR #45 (`docs/roles-v3.md`) is closed, not merged. The Extension keeps every roles v3 decision except five, listed in its "Build notes": rewards become one token each (a 3-perk shop replaces fixed rewards), "once per act" reads "once between meetings", whole-number scoring, the Mole's tip-off is announced only as "police activity" (like the Police patrol card, now +4), and one vote rule for every crew size. Wherever this log says "roles v3" or "PR #45", read `docs/extension.md`. `docs/rebuild.md` (the jobs redesign) is a separate proposal and is not to be built. Why: one doc instead of a spec plus an amendment, and the Extension's changes touch the same files as roles v3, so R6a builds them in one pass.
+
+---
+
 ### 2026-11-02 — Owner answers, 2 Nov (afternoon): roles v3 direction
 Owner-approved **direction**, not built. The spec is draft PR #45 (`docs/roles-v3.md` on `docs/roles-v3`); R6a builds it only after the owner signs off that PR. Earlier lines the same day conflicted: the later one wins. The owner withdrew "accomplices win only on failure" (09:57) and rejected task-based escape clauses (10:50, "too complex, forced").
 - **Concept:** no teams or secret groups. Everyone is one crew, in a glorified prisoner's dilemma. Roles differ in temperament, from most team impact to truly selfish.
