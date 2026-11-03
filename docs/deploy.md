@@ -3,7 +3,7 @@
 **Live:** https://skimjob.duckdns.org, on the owner's existing AWS Lightsail box. The box also runs another
 production app, **Arcway**, which no Skimjob step may touch. Deploys are manual: build on the Mac, upload, switch
 a symlink, restart. Nothing deploys on merge. Host, SSH user and key are in the owner's local `ssh-relay` skill,
-never in this (public) repo. The deployed build and whether a redeploy is pending are in `docs/STATUS.md`.
+never in this (public) repo. The deployed build is in `docs/STATUS.md`.
 
 **Fly is unused.** Lightsail was chosen (3 Nov; `docs/decisions.md`). `Dockerfile`, `fly.toml` and
 `.github/workflows/deploy.yml` are kept (CI still builds and boots the Docker image) but nothing deploys to Fly.
@@ -29,7 +29,7 @@ never `pm2 … all`; never touch Arcway's files, process or database.
 0. **Check for games in progress** on the box, and warn their players. A restart drops sockets for a few seconds
    (clients reconnect; the scheduler catches up on deadlines that passed). A game whose log holds event types removed
    since the deployed build won't replay, so finish those first (`git log -p <deployed sha>..main --
-   packages/engine/src/types/events.ts`; none were removed between 38002fd and 16a4a20).
+   packages/engine/src/types/events.ts`).
    ```sh
    sudo runuser -u postgres -- psql -d skimjob -Atc \
      "select g.id, g.updated_at, count(s.*) from games g join seats s on s.game_id = g.id
@@ -118,8 +118,7 @@ Google's published keys (issuer, audience = the client id, expiry, nonce). Users
 
 **Status:** the owner's OAuth client exists with both redirect URIs registered
 (`http://localhost:5173/api/auth/google/callback` and `https://skimjob.duckdns.org/api/auth/google/callback`).
-Google is **not yet on** on Lightsail: that needs the two variables in `/etc/skimjob/env` and a redeploy of a build
-that includes #53.
+Google is **on** in production: both variables are set in `/etc/skimjob/env`.
 
 1. Google Cloud console → APIs & Services → **OAuth consent screen**: app name "Skimjob", user type External,
    scopes `openid` and `profile`. While it's in "Testing", add the playtesters' Google accounts as test users (or
