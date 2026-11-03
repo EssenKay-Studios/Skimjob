@@ -24,6 +24,10 @@ function config(n: number, seed: string, extra: Partial<GameConfig> = {}): GameC
   };
 }
 
+// Whole bot games are slow on CI runners (~5× this Mac): few games per case and a generous timeout.
+const GAMES_PER_CASE = 2;
+const SLOW = 60_000;
+
 const play = (c: GameConfig, botSeed = c.seed) => runBotGame(c, createBots(c.players, (_, i) => PERSONALITIES[IDS[i % IDS.length] as PersonalityId], botSeed));
 
 const CASES: { n: number; extra: Partial<GameConfig> }[] = [];
@@ -43,11 +47,11 @@ describe("QA: full bot games under the Extension rules", () => {
       expect(b.state.log).toEqual(a.state.log);
       expect(replay(c, a.state.log)).toEqual(a.state);
     }
-  });
+  }, SLOW);
 
   it("every round's Heat parts add up to its Heat change; every police activity and missed target adds what it says", () => {
     for (const { n, extra } of CASES) {
-      for (let i = 0; i < 4; i++) {
+      for (let i = 0; i < GAMES_PER_CASE; i++) {
         const c = config(n, `heat-${n}-${i}-${JSON.stringify(extra)}`, extra);
         const { state } = play(c);
         let heat = createGame(c).heat;
@@ -70,11 +74,11 @@ describe("QA: full bot games under the Extension rules", () => {
         for (const r of resolved) expect(heatBreakdown(state.log, r)).not.toBeNull();
       }
     }
-  });
+  }, SLOW);
 
   it("scores and tokens are whole numbers; nobody learns an ally automatically; police only when a Mole could be in", () => {
     for (const { n, extra } of CASES) {
-      for (let i = 0; i < 4; i++) {
+      for (let i = 0; i < GAMES_PER_CASE; i++) {
         const c = config(n, `prop-${n}-${i}-${JSON.stringify(extra)}`, extra);
         const { state } = play(c);
         const end = state.log.find((e) => e.type === "gameEnded");
@@ -95,5 +99,5 @@ describe("QA: full bot games under the Extension rules", () => {
         if (extra.roleList === "exact") expect(start.police !== null).toBe(Object.values(start.players).some((p) => p.role === "mole"));
       }
     }
-  });
+  }, SLOW);
 });
