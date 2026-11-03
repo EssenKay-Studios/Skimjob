@@ -96,6 +96,15 @@ describe("the target bar, Heat breakdown and gap box (extension.md: What the app
     expect(heatRounds(viewFor(s, "p1")).map((x) => x.round)).toEqual([1]);
   });
 
+  it("shows what the 0 floor took back, so the lines add up to the real change (extension.md: Heat never drops below 0)", () => {
+    const move = (player: string): PlayerCommand => ({ type: "submitMove", player, move: { room: "rooftop", pocket: 0 } });
+    const s = run(createGame(config()), move("p1"), move("p2"), move("p3"), move("p4"), round(1));
+    expect(s.heat).toBe(0);
+    const h = heatRound(viewFor(s, "p1"), 1)!;
+    expect(h.lines.find((l) => l.kind === "clamp")).toMatchObject({ label: "Heat can't go below 0" });
+    expect(h.total).toBe(0);
+  });
+
   it("adds up the alibis against the Haul's growth", () => {
     let s = run(createGame(config()), round(1));
     const v0 = viewFor(s, "p1");

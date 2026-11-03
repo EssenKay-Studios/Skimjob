@@ -95,6 +95,8 @@ export interface HeatBreakdown {
   readonly base: number;
   readonly rooms: Readonly<Record<RoomId, number>>;
   readonly events: number;
+  /** What the 0–max limit took back from the round's change (e.g. laying low at Heat 0), else 0. */
+  readonly clamp: number;
   /** Each police activity under this round (+4 each, scaled in small crews), in order. */
   readonly police: readonly number[];
   /** The missed-target penalty if the round closed a stretch whose target was missed, else 0. */

@@ -55,17 +55,28 @@ export function roundHeatDelta(
 }
 
 /**
- * Each room's part of `roundHeatDelta` (rounded, halves up), for rooms that
- * changed Heat, in `rooms` order. The public Heat breakdown. extension.md "What the app works out for you"
+ * Each room's whole-number part of `roundHeatDelta` beyond the baseline, for
+ * rooms that changed Heat, in `rooms` order: the public Heat breakdown.
+ * The rooms add up exactly to `roundHeatDelta − baseline`, so the baseline
+ * line always shows its true value ("+4 every round", extension.md "Heat").
+ * The rounding goes where it happens, to the rooms whose exact shares were
+ * cut most (largest remainder). extension.md "What the app works out for you"
  */
 export function roomHeatParts(job: JobDef, crewSize: number, visitors: Readonly<Record<RoomId, number>>, rooms: readonly RoomId[]): Record<RoomId, number> {
-  const out: Record<RoomId, number> = {};
-  for (const room of rooms) {
-    const count = visitors[room] ?? 0;
-    if (count === 0) continue;
-    const part = Math.round((roomDef(job, room).heatPressure * count) / crewSize) + 0;
-    if (part !== 0) out[room] = part;
+  const exact = rooms
+    .filter((room) => (visitors[room] ?? 0) !== 0 && roomDef(job, room).heatPressure !== 0)
+    .map((room) => ({ room, share: (roomDef(job, room).heatPressure * (visitors[room] ?? 0)) / crewSize }));
+  const parts = new Map(exact.map((x) => [x.room, Math.floor(x.share)]));
+  let left = roundHeatDelta(job, crewSize, visitors) - Math.round(job.heat.perRound) - [...parts.values()].reduce((a, b) => a + b, 0);
+  // Remainders, biggest first (ties in `rooms` order); each room takes at most one.
+  const byRemainder = [...exact].sort((a, b) => b.share - Math.floor(b.share) - (a.share - Math.floor(a.share)));
+  for (const { room } of byRemainder) {
+    if (left <= 0) break;
+    parts.set(room, parts.get(room)! + 1);
+    left--;
   }
+  const out: Record<RoomId, number> = {};
+  for (const { room } of exact) if (parts.get(room) !== 0) out[room] = parts.get(room)! + 0;
   return out;
 }
 

@@ -166,12 +166,12 @@ export function heatBreakdown(log: readonly GameEvent[], round: number): HeatBre
   const police: number[] = [];
   let missedTarget = 0;
   for (const e of log) {
-    if (e.type === "roundResolved" && e.round === round) parts = { round, ...e.heatParts, police: [], missedTarget: 0 };
+    if (e.type === "roundResolved" && e.round === round) parts = { round, ...e.heatParts, clamp: e.heatParts.clamp ?? 0, police: [], missedTarget: 0 };
     else if (e.type === "policeActivity" && e.round === round) police.push(e.heatAdded);
     else if (e.type === "checkpointChecked" && e.act * ROUNDS_PER_ACT === round) missedTarget = e.heatPenalty;
   }
   if (!parts && police.length === 0) return null;
-  return { ...(parts ?? { round, base: 0, rooms: {}, events: 0 }), police, missedTarget };
+  return { ...(parts ?? { round, base: 0, rooms: {}, events: 0, clamp: 0 }), police, missedTarget };
 }
 
 /**

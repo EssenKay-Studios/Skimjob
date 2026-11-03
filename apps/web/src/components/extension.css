@@ -237,6 +237,10 @@
   color: var(--ink);
 }
 .heat-parts__line.is-police,
+.heat-parts__line.is-clamp {
+  border-style: dashed;
+  color: var(--mute);
+}
 .heat-parts__line.is-missed {
   border-color: var(--bad);
   background: var(--bad-l);
