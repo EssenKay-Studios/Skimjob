@@ -82,6 +82,9 @@ export function checkReport(v: unknown): SuiteReport | string {
   if (!Array.isArray(v.parity)) return "parity isn't a list";
   for (const [i, p] of v.parity.entries()) {
     if (!isObj(p) || !isStr(p.key) || !(p.spread === null || isNum(p.spread)) || !checkProblem(p.check) || p.check === null) return `parity group ${i + 1} isn't { key, spread, check }`;
+    // team / stars arrived with the split gate; an older baseline has neither.
+    if (p.team !== undefined && (!isObj(p.team) || !(p.team.spread === null || isNum(p.team.spread)) || !checkProblem(p.team.check) || p.team.check === null)) return `parity group ${p.key} team isn't { spread, check }`;
+    if (p.stars !== undefined && (!Array.isArray(p.stars) || !p.stars.every((x) => isObj(x) && isStr(x.role) && isNum(x.relative) && checkProblem(x.check)))) return `parity group ${p.key} stars isn't a list of { role, relative, check }`;
   }
   return v as unknown as SuiteReport;
 }
