@@ -4,8 +4,8 @@
 // GameChat.tsx), meetings and votes (M2-7, Meetings.tsx) and the bank board
 // (M2-9 art, figures from the view only: game/board.ts), and (M2-10) the
 // ledger / case file sheet, the "While you were away" recap and the private
-// suspicion board (game/notes.ts), and the host strip (M2-13, GameHost.tsx).
-// The full reveal (M2-11) comes later.
+// suspicion board (game/notes.ts), the host strip (M2-13, GameHost.tsx) and
+// (M2-11) the end-of-game reveal (components/Reveal.tsx, from `view.reveal.summary`).
 import { useEffect, useMemo, useState } from "react";
 import { ROUNDS_PER_ACT } from "@skimjob/content";
 import type { PlayerView, RoomId } from "@skimjob/engine";
@@ -19,6 +19,7 @@ import { MeetingName, meetingAfter } from "../game/wording";
 import { BankCutaway } from "../art/BankCutaway";
 import { BANK_ROOMS, type BankRoomId } from "../art/bankLayout";
 import { CrookAvatar } from "../art/Crook";
+import { Reveal } from "../components/Reveal";
 import { AwayRecap } from "../components/AwayRecap";
 import { CaseFile } from "../components/CaseFile";
 import { SuspicionBoard, SuspicionMark } from "../components/SuspicionBoard";
@@ -188,6 +189,7 @@ function Board({ view, timers, offset, send, autoMeetings, gameId, channel, dmNo
         <div className="game-grid__action">
           {outcome ? <GameOver view={view} /> : <Actions view={view} timers={timers} offset={offset} send={send} autoMeetings={autoMeetings} pick={pick} />}
           {!outcome && <CrewBoard view={view} board={board} />}
+          {view.reveal && <Reveal summary={view.reveal.summary} ctx={ctx} looks={seatLooks(view)} />}
         </div>
         {/* From 1024 px the chat and the records share the right column; below that the chat is a sheet. */}
         <div className="game-grid__side">
