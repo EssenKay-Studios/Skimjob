@@ -33,16 +33,16 @@ function meetingViews(seed: string) {
   expect(start).toBeGreaterThan(0);
   expect(end).toBeGreaterThan(start + 1);
   const opened = replay(c, log.slice(0, start + 1));
-  return { p2: viewFor(opened, "p2"), p5: viewFor(opened, "p5"), later: viewFor(replay(c, log.slice(0, end)), "p2") };
+  return { crew: `${seed}/crew`, p2: viewFor(opened, "p2"), p5: viewFor(opened, "p5"), later: viewFor(replay(c, log.slice(0, end)), "p2") };
 }
 
 describe("crew hunch — design §17.3 (v2 §5)", () => {
   it("is shared by every bot and holds for the whole meeting, but differs between games for the same seat and meeting", () => {
     const games = ["g-a", "g-b", "g-c", "g-d"].map(meetingViews);
-    expect(new Set(games.map((g) => crewHunch(g.p2, "p3"))).size).toBeGreaterThan(1);
+    expect(new Set(games.map((g) => crewHunch(g.p2, "p3", g.crew))).size).toBeGreaterThan(1);
     for (const g of games) {
-      expect(crewHunch(g.p2, "p3")).toBe(crewHunch(g.p5, "p3"));
-      expect(crewHunch(g.later, "p3")).toBe(crewHunch(g.p2, "p3"));
+      expect(crewHunch(g.p2, "p3", g.crew)).toBe(crewHunch(g.p5, "p3", g.crew));
+      expect(crewHunch(g.later, "p3", g.crew)).toBe(crewHunch(g.p2, "p3", g.crew));
     }
   });
 
@@ -63,7 +63,7 @@ describe("crew hunch — design §17.3 (v2 §5)", () => {
     // Still shared by the table and steady for the meeting, for one crewSeed.
     expect(crewHunch(g.p5, "p3", "s1")).toBe(seeds[0]);
     expect(crewHunch(g.later, "p3", "s1")).toBe(seeds[0]);
-    // And not the public-data fallback.
-    expect(seeds).not.toContain(crewHunch(g.p2, "p3"));
+    // And it comes from the crewSeed, not the view: another game's view gives the same hunch for the same crewSeed.
+    expect(crewHunch(meetingViews("g-b").p2, "p3", "s1")).toBe(seeds[0]);
   });
 });

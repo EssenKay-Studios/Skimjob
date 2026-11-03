@@ -39,7 +39,7 @@ describe("QA #51: ★ lean point 0.8 — extension.md Build notes \"Bots\" [0.8]
 describe("QA #51: Muscle rescues below suspicion 2 — design §8, §11.3", { timeout: 10_000 }, () => {
   const pending = (s: GameState): GameState => ({ ...s, phase: { kind: "shakedownPending", meetingId: "act-1", target: "ben" } });
   const muscle = (s: GameState) => withRole(s, "ana", "muscle");
-  const cancels = (s: GameState, seed = "m") => decide(viewFor(s, "ana"), exact, botRandom(seed)).some((c) => c.type === "useAbility" && c.ability.kind === "cancelShakedown");
+  const cancels = (s: GameState, seed = "m") => decide(viewFor(s, "ana"), exact, botRandom(seed), "test-crew").some((c) => c.type === "useAbility" && c.ability.kind === "cancelShakedown");
   const shakenDirty: GameEvent = { type: "shakedownResolved", visibility: PUBLIC, meetingId: "emergency-x", target: "ben", stashRevealed: 7, safeRevealed: 0, taken: 7, clean: false, compensation: 0 };
   const claim = (player: string): GameEvent => ({ type: "roleClaimed", visibility: PUBLIC, player, role: "lookout", act: 1 });
 
@@ -59,7 +59,7 @@ describe("QA #51: Muscle rescues below suspicion 2 — design §8, §11.3", { ti
     const s = pending(muscle(addLog(game(5), shakenDirty)));
     for (const seed of ["a", "b", "c"]) expect(cancels(s, seed)).toBe(true);
     const v = viewFor(s, "ana");
-    expect(decide(v, exact, botRandom("x"))).toEqual(decide(v, exact, botRandom("x")));
+    expect(decide(v, exact, botRandom("x"), "test-crew")).toEqual(decide(v, exact, botRandom("x"), "test-crew"));
   });
 });
 
@@ -72,8 +72,8 @@ describe("QA #51: votes are on suspicion only — extension.md Build notes \"Bot
     expect(leaning(viewFor(star, "ana"))).toBe("heat");
     for (const role of ["rookie", "cleaner", "mole", "embezzler", "fence"]) {
       for (const seed of ["v1", "v2", "v3"]) {
-        expect(chooseVote(viewFor(withRole(base, "ana", role, { stash: 10 }), "ana"), PERSONALITIES.honest, botRandom(seed))).toEqual(
-          chooseVote(viewFor(star, "ana"), PERSONALITIES.honest, botRandom(seed)),
+        expect(chooseVote(viewFor(withRole(base, "ana", role, { stash: 10 }), "ana"), PERSONALITIES.honest, botRandom(seed), "test-crew")).toEqual(
+          chooseVote(viewFor(star, "ana"), PERSONALITIES.honest, botRandom(seed), "test-crew"),
         );
       }
     }

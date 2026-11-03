@@ -440,7 +440,7 @@ describe("acceptance: a full game over sockets (docs/m2-plan.md M2-3)", () => {
       const { id, humans } = await startGame(3, 4, { voteVisibility, eventsEnabled: true });
       const clients = await Promise.all(humans.map((h) => Client.open(id, h)));
       // People are played by bot logic in the test, over their sockets, always forging another seat's id.
-      const agents = humans.map((h, i) => createBot({ player: h.player, personality: PERSONALITIES[(["greedy", "honest", "cautious"] as const)[i]!], seed: `human/${i}` }));
+      const agents = humans.map((h, i) => createBot({ player: h.player, personality: PERSONALITIES[(["greedy", "honest", "cautious"] as const)[i]!], seed: `human/${i}`, crewSeed: "test-crew" }));
       const refused: { player: string; command: PlayerCommand; reply: ServerMessage }[] = [];
 
       let steps = 0;

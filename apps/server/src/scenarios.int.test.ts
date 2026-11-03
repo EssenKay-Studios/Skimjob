@@ -182,7 +182,7 @@ const passDeadline = async (id: string) => {
 type Brain = (view: PlayerView) => readonly unknown[];
 const botBrain = (agent: Agent): Brain => (view) => agent.act(view).map(({ player: _, ...rest }) => rest);
 const brainsFor = (game: Game): Brain[] =>
-  game.humans.map((h, i) => botBrain(createBot({ player: h.player, personality: PERSONALITIES[(["greedy", "honest", "cautious"] as const)[i % 3]!], seed: `person/${i}` })));
+  game.humans.map((h, i) => botBrain(createBot({ player: h.player, personality: PERSONALITIES[(["greedy", "honest", "cautious"] as const)[i % 3]!], seed: `person/${i}`, crewSeed: "test-crew" })));
 
 interface Refusal {
   readonly player: string;

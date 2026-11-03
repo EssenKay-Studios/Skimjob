@@ -33,7 +33,7 @@ describe("ending forecast and leaning — extension.md Build notes \"Bots\"", ()
 });
 
 describe("the Mole's tip-off — extension.md \"Police activity\", Build notes \"Bots\"", () => {
-  const tips = (s: GameState) => decide(viewFor(s, "ana"), exact, () => 0.5).filter((c) => c.type === "useAbility" && c.ability.kind === "tipOff");
+  const tips = (s: GameState) => decide(viewFor(s, "ana"), exact, () => 0.5, "test-crew").filter((c) => c.type === "useAbility" && c.ability.kind === "tipOff");
   it(`tips off when Heat within about two rounds would pass ${MOLE_TIP_AT * 100}% of the raid level, once between meetings`, () => {
     const s = game(5);
     expect(tips(as({ ...s, heat: 20 }, "mole"))).toEqual([]);
