@@ -4,9 +4,9 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { MAX_PLAYERS, MIN_PLAYERS } from "@skimjob/content";
+import { MAX_PLAYERS, MIN_PLAYERS, type DeckId } from "@skimjob/content";
 import { PERSONALITIES, type PersonalityId } from "@skimjob/bots";
-import type { MoleSetting, VoteVisibility } from "@skimjob/engine";
+import type { DealStyle, RoleListSetting, VoteVisibility } from "@skimjob/engine";
 import { defaultWorkers } from "./pool";
 
 export interface MixEntry {
@@ -27,7 +27,10 @@ export interface SimOptions {
   readonly eventsEnabled: boolean;
   /** Duel mode (design §16.1): 2 players only, call-outs instead of meetings. */
   readonly duel: boolean;
-  readonly mole: MoleSetting;
+  /** Deck preset, deal style and role list (extension.md "Decks and dealing", "Role list"). */
+  readonly deck: DeckId;
+  readonly deal: DealStyle;
+  readonly roleList: RoleListSetting;
   readonly voteVisibility: VoteVisibility;
   /** Parsed but not yet checked: the engine's validateConfig checks it (untrusted JSON). */
   readonly contentOverrides: unknown;
@@ -59,7 +62,9 @@ Usage: pnpm sim -- [options]
       --starter           starter mode (Rookie/Inside Man/Lookout/Bagman/Cleaner, no Mole, no events)
       --events            flip an event card each round from round 2 (design §10; not with --starter)
       --duel              Duel mode: call-outs instead of meetings (design §16.1; needs -p 2)
-      --mole <setting>    off | maybe | on (default off)
+      --deck <preset>     starter | standard | everything (default standard; --role-pool overrides)
+      --deal <style>      balanced | random (default balanced)
+      --role-list <mode>  exact | possible | hidden (default exact)
       --votes <mode>      hiddenThenRevealed | open | secret (default hiddenThenRevealed)
       --overrides <json>  content overrides as inline JSON or a path to a JSON file, e.g.
                           '{"heat":{"perRound":5},"rooms":{"vault":{"loot":7}}}'
@@ -118,7 +123,9 @@ export function parseOverrides(value: string, readFile: (path: string) => string
   return JSON.parse(text) as unknown;
 }
 
-const MOLE: readonly string[] = ["off", "maybe", "on"];
+const DECKS: readonly string[] = ["starter", "standard", "everything"];
+const DEALS: readonly string[] = ["balanced", "random"];
+const ROLE_LISTS: readonly string[] = ["exact", "possible", "hidden"];
 const VOTES: readonly string[] = ["hiddenThenRevealed", "open", "secret"];
 
 /** Parse argv (without node and the script). A leading "--" from `pnpm sim -- …` is ignored. */
@@ -141,7 +148,9 @@ export function parseSimArgs(argv: readonly string[], readFile?: (path: string) 
         starter: { type: "boolean" },
         events: { type: "boolean" },
         duel: { type: "boolean" },
-        mole: { type: "string" },
+        deck: { type: "string" },
+        deal: { type: "string" },
+        "role-list": { type: "string" },
         votes: { type: "string" },
         overrides: { type: "string" },
         out: { type: "string" },
@@ -163,8 +172,12 @@ export function parseSimArgs(argv: readonly string[], readFile?: (path: string) 
   if (typeof playerCounts === "string") return error(playerCounts);
   const mix = values.bots === undefined ? DEFAULT_MIX : parseMix(values.bots);
   if (typeof mix === "string") return error(mix);
-  const mole = values.mole ?? "off";
-  if (!MOLE.includes(mole)) return error(`--mole must be one of ${MOLE.join(", ")}`);
+  const deck = values.deck ?? "standard";
+  if (!DECKS.includes(deck)) return error(`--deck must be one of ${DECKS.join(", ")}`);
+  const deal = values.deal ?? "balanced";
+  if (!DEALS.includes(deal)) return error(`--deal must be one of ${DEALS.join(", ")}`);
+  const roleList = values["role-list"] ?? "exact";
+  if (!ROLE_LISTS.includes(roleList)) return error(`--role-list must be one of ${ROLE_LISTS.join(", ")}`);
   const votes = values.votes ?? "hiddenThenRevealed";
   if (!VOTES.includes(votes)) return error(`--votes must be one of ${VOTES.join(", ")}`);
   let contentOverrides: unknown = null;
@@ -196,7 +209,9 @@ export function parseSimArgs(argv: readonly string[], readFile?: (path: string) 
       starterMode: values.starter ?? false,
       eventsEnabled: values.events ?? false,
       duel: values.duel ?? false,
-      mole: mole as MoleSetting,
+      deck: deck as DeckId,
+      deal: deal as DealStyle,
+      roleList: roleList as RoleListSetting,
       voteVisibility: votes as VoteVisibility,
       contentOverrides,
       outDir: values.files === false ? null : (values.out ?? "sim-output"),

@@ -21,7 +21,6 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
     rolePool: ["rookie", "lookout", "fence", "insideMan"], // no Muscle, so no shakedown window
-    mole: "off",
     eventsEnabled: true,
     voteVisibility: "open",
     starterMode: false,
@@ -34,7 +33,7 @@ function game(players: number, roles: string[] = [], extra: Partial<GameConfig> 
   // Pin the 0.6.0 card numbers (balance pass 2 changed them); an extra override still wins.
   const cfg = config(players, { ...extra, contentOverrides: { ...V06_NUMBERS, ...extra.contentOverrides } });
   const log = setupEvents(cfg)
-    .filter((e) => e.type !== "snitchTargetAssigned" && e.type !== "moleAllies")
+    .filter((e) => e.type !== "snitchTargetAssigned")
     .map((e, i, all): GameEvent => {
       if (e.type !== "roleDealt") return e;
       const seat = all.slice(0, i).filter((x) => x.type === "roleDealt").length;
@@ -130,9 +129,8 @@ function untilCard(state: GameState, card: string): GameState {
 const flips = (s: GameState) => s.log.filter((e): e is Extract<GameEvent, { type: "eventFlipped" }> => e.type === "eventFlipped");
 
 describe("the deck — design §10", () => {
-  it("has the ten cards of §10, as data", () => {
+  it("has the cards of §10 as data, without Police patrol (extension.md \"Police activity\")", () => {
     expect(EVENT_DECK.map((id) => EVENTS[id]?.name)).toEqual([
-      "Police patrol",
       "Quiet night",
       "Shift change",
       "Power cut",
@@ -189,21 +187,19 @@ describe("the deck — design §10", () => {
 describe("card effects — design §10, §5.2", () => {
   const atRound2 = (n: number, roles: string[] = [], extra: Partial<GameConfig> = {}) => resolve(game(n, roles, extra));
 
-  it("Police patrol adds 10 Heat and Quiet night removes 10 (clamped at 0), in the round's one Heat change", () => {
+  it("Quiet night removes 10 (clamped at 0), in the round's one Heat change", () => {
     const base = atRound2(5);
     const heat0 = base.heat;
-    const patrol = resolve(withCard(base, "policePatrol"));
-    expect(patrol.heat - heat0).toBe(BANK.heat.perRound + 10);
     const quiet = resolve(withCard(base, "quietNight"));
     expect(quiet.heat).toBe(Math.max(0, heat0 + BANK.heat.perRound - 10));
     expect(lastResolution(quiet).find((e) => e.type === "roundResolved")).toMatchObject({ heatDelta: quiet.heat - heat0 });
   });
 
   it("event-card Heat is scaled by min(1, crew ÷ 5) for small crews, rounded (owner answers, 1 Nov)", () => {
-    // design §10: Police patrol +10 (0.6.0 numbers) gives 4 / 6 / 8 / 10 at 2 / 3 / 4 / 5+ players.
-    for (const [n, patrol] of [[2, 4], [3, 6], [4, 8], [5, 10], [9, 10]] as const) {
-      const base = atRound2(n);
-      expect(resolve(withCard(base, "policePatrol")).heat - base.heat).toBe(BANK.heat.perRound + patrol);
+    // design §10: Quiet night −10 gives −4 / −6 / −8 / −10 at 2 / 3 / 4 / 5+ players.
+    for (const [n, quiet] of [[2, 4], [3, 6], [4, 8], [5, 10], [9, 10]] as const) {
+      const base = atRound2(n, [], { contentOverrides: { heat: { perRound: 30 } } });
+      expect(resolve(withCard(base, "quietNight")).heat - base.heat).toBe(30 - quiet);
     }
     expect(eventHeatScale(3)).toBeCloseTo(0.6);
     expect(scaledCardHeat(-10, 3)).toBe(-6);
@@ -229,7 +225,7 @@ describe("card effects — design §10, §5.2", () => {
     expect(lastResolution(s).find((e) => e.type === "lootSplit" && e.player === "p1")).toMatchObject({ room: "lobby", loot: 4, toHaul: 4 });
   });
 
-  it("Power cut: no sightings, no Security or Lookout results; loot, splits and the Lookout's use still happen", () => {
+  it("Power cut: no sightings, Security reads \"camera offline\", no Lookout results; loot, splits and the Lookout's use still happen", () => {
     const base = withCard(atRound2(3, ["lookout", "rookie", "rookie"]), "powerCut");
     const s = resolve(base, {
       p0: { room: "office", pocket: 0, ability: { kind: "lookout", rooms: ["vault"] } },
@@ -237,7 +233,9 @@ describe("card effects — design §10, §5.2", () => {
       p2: { room: "vault", pocket: 1 },
     });
     const events = lastResolution(s);
-    expect(events.filter((e) => e.type === "roomSighting" || e.type === "roomWatched")).toEqual([]);
+    expect(events.filter((e) => e.type === "roomSighting")).toEqual([]);
+    // extension.md "Camera offline": the feed reads offline, the same as a Hacker loop.
+    expect(events.filter((e) => e.type === "roomWatched").every((e) => e.type === "roomWatched" && e.offline && e.seen.length === 0)).toBe(true);
     expect(events.filter((e) => e.type === "lootSplit")).toHaveLength(3);
     expect(events.some((e) => e.type === "abilityResolved" && e.player === "p0")).toBe(true);
   });
@@ -383,21 +381,6 @@ describe("Double-cross — design §10", () => {
     expect(s.players.p0?.roleState.target).toBeNull();
   });
 
-  it("a Mole swapped out hands its ally to the new Mole, and the other Mole is told privately (design §8.1)", () => {
-    const allies: GameEvent[] = [
-      { type: "moleAllies", visibility: privateTo("p0"), player: "p0", allies: ["p1"] },
-      { type: "moleAllies", visibility: privateTo("p1"), player: "p1", allies: ["p0"] },
-    ];
-    const roles = ["mole", "mole", "lookout", ...Array(6).fill("rookie")];
-    const base = run(offerFor(9, roles, ["p0", "p2"], { mole: "on", rolePool: ["lookout", "rookie"] }, allies), answer("p0", true), answer("p2", true));
-    const s = resolve(base);
-    expect([s.players.p0?.role, s.players.p2?.role]).toEqual(["lookout", "mole"]);
-    expect(s.players.p2?.roleState.allies).toEqual(["p1"]);
-    expect(s.players.p0?.roleState.allies).toEqual([]);
-    expect(s.players.p1?.roleState.allies).toEqual(["p2"]);
-    const told = lastResolution(s).filter((e) => e.type === "moleAllies");
-    expect(told).toEqual([{ type: "moleAllies", visibility: privateTo("p1"), player: "p1", allies: ["p2"] }]);
-  });
 });
 
 describe("event-card visibility (leak tests) — design §10, §13, §17.2", () => {
@@ -448,7 +431,7 @@ describe("event-card visibility (leak tests) — design §10, §13, §17.2", () 
     const s = resolve(withCard(resolve(game(3)), "powerCut"), { p0: { room: "security", pocket: 0, watch: "office" } });
     for (const id of s.playerOrder) {
       const round2 = viewFor(s, id).caseFile.filter((e) => "round" in e.event && e.event.round === 2).map((e) => e.event.type);
-      expect(round2.sort()).toEqual(["lootSplit", "moveSubmitted"]);
+      expect(round2.sort()).toEqual(id === "p0" ? ["lootSplit", "moveSubmitted", "roomWatched"] : ["lootSplit", "moveSubmitted"]);
     }
   });
 

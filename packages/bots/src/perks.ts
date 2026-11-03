@@ -8,6 +8,7 @@
 // - Recharge: once its power is used up (Muscle).
 // - Rig: while planning, then pick the most Heat-calming of the two cards (Mastermind).
 // - Ballot is kept: bots don't read others' ballots (they don't talk). The Shield spends itself.
+// - Buying (extension.md "Tokens and the perk shop"): `buyPerks`, by a fixed priority.
 import { EVENTS, ROUNDS_PER_ACT, type EventId, type PerkId, type RoomId } from "@skimjob/content";
 import { overrideEvents, roomDef, type PlayerCommand, type PlayerView, type VoteChoice } from "@skimjob/engine";
 import { createdOf, lastResolvedRound, ofType, roleOf, roomsWhere, totalRounds } from "./read";
@@ -16,6 +17,73 @@ import { publicSuspicion } from "./claims";
 import { jobThisRound } from "./heat";
 
 const has = (view: PlayerView, perk: PerkId): boolean => view.me.roleState.perks.includes(perk);
+export const hasPerk = has;
+
+/** Perks spent by themselves (Shield, Emergency) and the Rig's pick don't count as the round's one use. */
+const isChosenUse = (c: PlayerCommand): boolean => c.type === "useAbility" && c.ability.kind !== "rigPick";
+
+/**
+ * A filter for the perk spends of one `decide` call: at most one chosen perk
+ * use per round, counting one already made this round (the case file's
+ * `perkUsed`). extension.md "Tokens and the perk shop"
+ */
+export function perkSpender(view: PlayerView): (commands: readonly PlayerCommand[]) => PlayerCommand[] {
+  let used = ofType(view.caseFile, "perkUsed").some((e) => e.round === view.round && e.perk.kind !== "shield" && e.perk.kind !== "emergency");
+  return (commands) => {
+    const out: PlayerCommand[] = [];
+    for (const c of commands) {
+      if (!isChosenUse(c)) out.push(c);
+      else if (!used) {
+        used = true;
+        out.push(c);
+      }
+    }
+    return out;
+  };
+}
+
+/** Shop perks in the order a bot buys them, and when each is worth having (bot settings). */
+const BUY_ORDER: readonly PerkId[] = ["shield", "peek", "extraVote", "alibi", "tail", "recharge", "rig", "emergency", "ballot"];
+
+function worthBuying(view: PlayerView, perk: PerkId): boolean {
+  switch (perk) {
+    case "recharge": {
+      const { power } = roleOf(view);
+      return ("perAct" in power || "perGame" in power) && power.kind !== "fenceSafe";
+    }
+    case "rig":
+      return createdOf(view).eventsEnabled;
+    case "ballot":
+      return false; // bots don't read others' ballots
+    default:
+      return true;
+  }
+}
+
+/**
+ * Buy shop perks by a fixed priority while planning: one of each useful perk
+ * it doesn't hold, as tokens allow. In the last round it spends what is left
+ * (unspent tokens are worth nothing). extension.md Build notes "Bots"
+ */
+export function buyPerks(view: PlayerView): PlayerCommand[] {
+  if (view.phase.kind !== "planning" || view.shop.length === 0) return [];
+  let tokens = view.me.roleState.tokens;
+  const last = view.round >= totalRounds(jobThisRound(view));
+  const out: PlayerCommand[] = [];
+  const buy = (perk: PerkId, cost: number) => {
+    out.push({ type: "buyPerk", player: view.me.id, perk });
+    tokens -= cost;
+  };
+  for (const perk of BUY_ORDER) {
+    const offer = view.shop.find((o) => o.perk === perk);
+    if (offer && tokens >= offer.cost && !has(view, perk) && worthBuying(view, perk)) buy(perk, offer.cost);
+  }
+  if (last) {
+    const cheapest = [...view.shop].sort((a, b) => a.cost - b.cost)[0];
+    while (cheapest && cheapest.cost > 0 && tokens >= cheapest.cost) buy(cheapest.perk, cheapest.cost);
+  }
+  return out;
+}
 
 /** Public suspicion of me at or above this makes a true alibi worth stamping (bot setting). */
 const STAMP_ALIBI_AT = 0.5;

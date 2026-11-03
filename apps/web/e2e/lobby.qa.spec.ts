@@ -167,7 +167,7 @@ test("non-host: controls hidden and the API refuses host actions; hand-over to a
   const r = gctx.request;
   expect((await r.post(`/api/games/${g.id}/start`)).status()).toBe(403);
   expect((await r.post(`/api/games/${g.id}/host`, { data: { seat: 1 } })).status()).toBe(403);
-  expect((await r.patch(`/api/games/${g.id}/settings`, { data: { settings: { mole: "on" } } })).status()).toBe(403);
+  expect((await r.patch(`/api/games/${g.id}/settings`, { data: { settings: { deck: "everything" } } })).status()).toBe(403);
   expect((await r.post(`/api/games/${g.id}/bots`, { data: {} })).status()).toBe(403);
   expect((await r.delete(`/api/games/${g.id}/bots/${botSeat}`)).status()).toBe(403);
 

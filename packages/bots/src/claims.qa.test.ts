@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import type { Agent } from "./bot";
 import { PERSONALITIES, type PersonalityId } from "./personalities";
 import { createBots, runBotGame } from "./run";
-import { publicSuspicion } from "./claims";
+import { bluffs, publicSuspicion, SAFE_BLUFFS } from "./claims";
 import { suspicion } from "./suspicion";
 import { game, run } from "./testkit";
 
@@ -70,22 +70,22 @@ describe("bot claims in whole games — QA PR #37", () => {
     }
   });
 
-  it("dark bots bluff only crew roles nobody else had claimed (or repeat their own story) — v2 §4", () => {
-    let bluffs = 0;
+  it("★ and evidence-leaving bots bluff only low-risk roles nobody else had claimed (or repeat their own story); the rest tell the truth — extension.md Build notes \"Bots\"", () => {
+    let bluffed = 0;
     for (const { c, r } of results) {
       for (const { i, claim, real } of claimsWithTruth(c, r.state.log)) {
-        if (ROLES[real]?.faction === "crew") {
+        if (!bluffs(real)) {
           expect(claim.role, `crew bot ${claim.player} tells the truth`).toBe(real);
           continue;
         }
-        bluffs++;
-        expect(ROLES[claim.role]?.faction).toBe("crew");
+        bluffed++;
+        expect(SAFE_BLUFFS).toContain(claim.role);
         const before = r.state.log.slice(0, i).filter((e): e is Claim => e.type === "roleClaimed");
         if (before.some((b) => b.player === claim.player && b.role === claim.role)) continue; // sticking to its story
         expect(before.filter((b) => b.role === claim.role).map((b) => b.player), `${c.seed}: ${claim.player} bluffs ${claim.role}`).toEqual([]);
       }
     }
-    expect(bluffs).toBeGreaterThan(0);
+    expect(bluffed).toBeGreaterThan(0);
   });
 
   it("same seed → same claims (and same log) — design §17.2", () => {

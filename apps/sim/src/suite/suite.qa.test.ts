@@ -16,7 +16,7 @@ const opts = (argv: string[]): SuiteOptions => {
   return r.options;
 };
 // Adaptive (not fixed -n), so the stop point itself must be worker-independent.
-const options = opts(["-p", "3,5", "--mole", "off,on", "--events", "off", "--min-games", "4", "--max-games", "12", "--batch", "4", "--ci", "30", "-s", "qa"]);
+const options = opts(["-p", "3,5", "--setups", "balanced,random", "--events", "off", "--min-games", "4", "--max-games", "12", "--batch", "4", "--ci", "30", "-s", "qa"]);
 
 async function run(workers: number, cells = buildMatrix(options)) {
   const pool = createPool(workers);
@@ -47,7 +47,7 @@ describe("QA: suite determinism, 1/2/3 workers and 1/1, 3-way shards — design 
 
 describe("QA: tiny CI target hits the cap and says so — design §17.4", () => {
   it("every cell stops at max-games (rounded up to whole batches), converged false, marked +", { timeout: 60_000 }, async () => {
-    const o = opts(["-p", "4", "--mole", "off", "--events", "off", "--ci", "0.001", "--min-games", "3", "--max-games", "7", "--batch", "3"]);
+    const o = opts(["-p", "4", "--setups", "balanced", "--events", "off", "--ci", "0.001", "--min-games", "3", "--max-games", "7", "--batch", "3"]);
     const pool = createPool(1);
     const results = await runCells(o, buildMatrix(o), pool);
     await pool.close();
@@ -56,13 +56,13 @@ describe("QA: tiny CI target hits the cap and says so — design §17.4", () => 
     expect(results[0]?.tally.games).toBe(9);
     const report = buildReport(o, versions, results);
     expect(report.cells[0]?.converged).toBe(false);
-    expect(formatSuiteReport(report)).toMatch(/4p\/mole-off\/events-off\s+9\+/);
+    expect(formatSuiteReport(report)).toMatch(/4p\/balanced\/events-off\s+9\+/);
   });
 });
 
 describe("QA: a failing task rejects the run instead of hanging", () => {
   it("worker pool rejects a throwing task and closes", { timeout: 60_000 }, async () => {
-    const o = opts(["-p", "4", "--mole", "off", "--events", "off", "-n", "2"]);
+    const o = opts(["-p", "4", "--setups", "balanced", "--events", "off", "-n", "2"]);
     const cell = buildMatrix(o)[0];
     if (!cell) throw new Error("no cell");
     const pool = createPool(2);
@@ -72,7 +72,7 @@ describe("QA: a failing task rejects the run instead of hanging", () => {
   });
 
   it("runCells rejects when a cell's games throw (bad content override)", { timeout: 60_000 }, async () => {
-    const o = { ...opts(["-p", "3,4", "--mole", "off", "--events", "off", "-n", "2"]), contentOverrides: { nope: 1 } };
+    const o = { ...opts(["-p", "3,4", "--setups", "balanced", "--events", "off", "-n", "2"]), contentOverrides: { nope: 1 } };
     const pool = createPool(2);
     await expect(runCells(o, buildMatrix(o), pool)).rejects.toThrow(/overridable/);
     await pool.close();
@@ -89,7 +89,7 @@ describe("QA: hand-checked numbers", () => {
 
   it("parity: credit ÷ fair share, spread and its range — docs/roles-v2.md §5", () => {
     // 4-player seats: fair = seats/4. a wins 50 of 200 (ratio 1.0), b wins 20 of 100 (ratio 0.8).
-    const p = parityOf({ a: { seats: 200, credit: 50, fair: 50 }, b: { seats: 100, credit: 20, fair: 25 }, c: { seats: 99, credit: 99, fair: 24.75 } });
+    const p = parityOf({ a: { seats: 200, credit: 50, fair: 50, successCredit: 0, earned: 0, spent: 0 }, b: { seats: 100, credit: 20, fair: 25, successCredit: 0, earned: 0, spent: 0 }, c: { seats: 99, credit: 99, fair: 24.75, successCredit: 0, earned: 0, spent: 0 } });
     expect(p.fewSeats).toEqual(["c"]);
     expect(p.roles).toEqual([
       { role: "a", seats: 200, ratio: 1, lo: 0.78, hi: 1.257 },
@@ -100,7 +100,7 @@ describe("QA: hand-checked numbers", () => {
 });
 
 describe("QA: merge refuses forged shard sets", () => {
-  const o = opts(["-p", "3,5", "--mole", "off", "--events", "off", "-n", "2"]);
+  const o = opts(["-p", "3,5", "--setups", "balanced", "--events", "off", "-n", "2"]);
   const matrix = buildMatrix(o);
   const shard = (index: number, count: number, cells = shardCells(matrix, index, count)) => ({
     kind: SHARD_KIND,

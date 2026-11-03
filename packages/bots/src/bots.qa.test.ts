@@ -29,7 +29,6 @@ function config(n: number, seed: string, extra: Partial<GameConfig> = {}): GameC
     players: Array.from({ length: n }, (_, i) => ({ id: `q${i}`, name: `Q${i}`, isBot: true })),
     job: "bank",
     rolePool: [],
-    mole: "off",
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     starterMode: false,
@@ -173,12 +172,14 @@ describe("QA: bots never read the state, only their view — design §17.3", () 
   });
 
   it("hidden facts don't change a bot's commands: same view from two games with different secret seeds", () => {
-    // Find two seeds whose public setup and q0's role agree; q0's view (and so its commands) must then agree.
-    const base = createGame(config(4, "hid-0"));
+    // Find two seeds whose public setup (shop included) and q0's role agree; q0's view (and so its commands) must then agree.
+    // A Hidden role list, so the deal itself isn't public. extension.md "Role list"
+    const hidden = (seed: string) => createGame(config(4, seed, { roleList: "hidden" }));
+    const base = hidden("hid-0");
     const key = (s: GameState) => JSON.stringify(viewFor(s, "q0"));
     let other: GameState | null = null;
-    for (let i = 1; i < 200 && !other; i++) {
-      const s = createGame(config(4, `hid-${i}`));
+    for (let i = 1; i < 2000 && !other; i++) {
+      const s = hidden(`hid-${i}`);
       if (key(s) === key(base) && JSON.stringify(s.players) !== JSON.stringify(base.players)) other = s;
     }
     expect(other).not.toBeNull();
@@ -274,7 +275,7 @@ describe("QA: commands are well-formed — design §8, §11.2", () => {
   // One batch of recorded games shared by the checks below.
   const games = SIZES.flatMap((n) =>
     Array.from({ length: 5 }, (_, s) => {
-      const c = config(n, `cmd-${n}-${s}`, { voteVisibility: cyc(VOTE_MODES, s), mole: s % 2 ? "on" : "off" });
+      const c = config(n, `cmd-${n}-${s}`, { voteVisibility: cyc(VOTE_MODES, s), deck: s % 2 ? "everything" : "standard" });
       const rec = recording(createBots(c.players, rotate(s), `cmd-${s}`));
       const r = runBotGame(c, rec.wrapped);
       return { n, r, sent: rec.sent };

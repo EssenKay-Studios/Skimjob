@@ -188,12 +188,6 @@ describe("votes — design §11.2, §17.3", () => {
     expect(misjudged(a, evidence, exact(PERSONALITIES.honest), rolls(0.9))).toEqual(evidence);
   });
 
-  it("a Mole never votes to shake down a fellow Mole (content that deals two, design §8.1)", () => {
-    const view = viewFor(liar(), "ana");
-    (view.me.roleState as unknown as { allies: string[] }).allies = ["ben"];
-    expect(chooseVote(view, exact(PERSONALITIES.honest), rolls(0.5))).toEqual({ kind: "skip" });
-  });
-
   it("calls its emergency meeting when suspicion is high enough — design §11.1", () => {
     const cmds = decide(viewFor(closeAlibis(liar()), "ana"), exact(PERSONALITIES.cautious, { emergencyAt: 8 }), rolls(0.5));
     expect(cmds.map((c) => c.type)).toContain("callEmergency");
@@ -254,7 +248,10 @@ describe("role habits — design §8", () => {
   it("Auditor audits the room its top suspect claimed; Detective checks its top suspect in the act's last round (v2 §2, §4)", () => {
     const lobby = { room: "lobby" };
     // Round 1: ben pockets 4 in the Vault and claims the Office: the top suspect.
-    let s = closeAlibis(round(game(5, notInsider("ben")), { ana: lobby, ben: { room: "vault", pocket: 4, alibi: "office" }, carl: lobby, dee: lobby, eve: lobby }));
+    // No Bagman (swapped for a Rookie): his hidden bonus would cover most of ben's shortfall.
+    const dealt = game(5, notInsider("ben"));
+    const bagman = Object.values(dealt.players).find((p) => p.role === "bagman")?.id;
+    let s = closeAlibis(round(bagman ? withRole(dealt, bagman, "rookie") : dealt, { ana: lobby, ben: { room: "vault", pocket: 4, alibi: "office" }, carl: lobby, dee: lobby, eve: lobby }));
     const uses = (st: GameState, role: string, used = 0) =>
       decide(viewFor(withRole(st, "ana", role, { usedThisAct: used }), "ana"), exact(PERSONALITIES.honest), seeded("c")).filter((c) => c.type === "useAbility");
     expect(uses(s, "auditor")).toEqual([{ type: "useAbility", player: "ana", ability: { kind: "audit", room: "office" } }]);

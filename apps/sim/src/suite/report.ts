@@ -1,11 +1,11 @@
 // The suite report: every cell's rates with Wilson 95% intervals and
-// PASS/FAIL against the targets, role parity per player count and saboteur
-// setting, and the text and JSON forms of it. Pure: cell results in, report
-// out, so a single run and merged shards give the same bytes.
-// design §17.4, docs/roles-v2.md §5
-import type { MoleSetting } from "@skimjob/engine";
+// PASS/FAIL against the targets, role parity per player count and setup, a
+// per-role summary (★ wins by ending, tokens), and the text and JSON forms of
+// it. Pure: cell results in, report out, so a single run and merged shards
+// give the same bytes. design §17.4, docs/roles-v2.md §5, extension.md Build notes "Sim"
+import { ROLES } from "@skimjob/content";
 import { checkBand, wilson, type Band, type CheckResult, type Verdict } from "../stats";
-import type { SuiteOptions } from "./matrix";
+import type { Setup, SuiteOptions } from "./matrix";
 import type { CellResult } from "./run";
 import { PARITY_MAX_SPREAD, PARITY_MIN_SEATS, RATES } from "./targets";
 import { addTallies, emptyTally, type SeatTally } from "./tally";
@@ -33,7 +33,7 @@ export interface RateResult {
 export interface CellReport {
   readonly key: string;
   readonly players: number;
-  readonly mole: MoleSetting;
+  readonly setup: Setup;
   readonly events: boolean;
   readonly games: number;
   readonly converged: boolean;
@@ -51,10 +51,10 @@ export interface ParityRole {
 }
 
 export interface ParityGroup {
-  /** e.g. "9p/mole-on": events on and off pooled. */
+  /** e.g. "9p/balanced": events on and off pooled. */
   readonly key: string;
   readonly players: number;
-  readonly mole: MoleSetting;
+  readonly setup: Setup;
   readonly games: number;
   readonly roles: readonly ParityRole[];
   /** Roles dealt too rarely here to count (fewer than PARITY_MIN_SEATS seats). */
@@ -82,6 +82,24 @@ export interface CheckCounts {
   readonly inconclusive: number;
 }
 
+/**
+ * One role over the whole run (every cell pooled): how its wins split by
+ * ending (★ roles also win failures) and its shop tokens per seat.
+ * extension.md Build notes "Sim"
+ */
+export interface RoleSummary {
+  readonly role: string;
+  /** A ★ role (wins on some failures). */
+  readonly star: boolean;
+  readonly seats: number;
+  /** Win credit ÷ fair share, every cell pooled (setups and crew sizes mixed: a rough guide; parity is per group). */
+  readonly ratio: number;
+  /** Share of its win credit from successful heists. */
+  readonly fromSuccess: number | null;
+  readonly earnedPerSeat: number;
+  readonly spentPerSeat: number;
+}
+
 export interface SuiteReport {
   readonly kind: typeof REPORT_KIND;
   readonly format: typeof REPORT_FORMAT;
@@ -92,6 +110,7 @@ export interface SuiteReport {
   readonly checks: CheckCounts;
   readonly cells: readonly CellReport[];
   readonly parity: readonly ParityGroup[];
+  readonly roles: readonly RoleSummary[];
 }
 
 export interface ShardFile {
@@ -115,8 +134,8 @@ function rateResult(num: number, den: number, band: Band | null): RateResult {
 
 function cellReport(c: CellResult): CellReport {
   const rates: Record<string, RateResult> = {};
-  for (const r of RATES) if (r.applies(c)) rates[r.id] = rateResult(r.num(c.tally), r.den(c.tally), r.band);
-  return { key: c.key, players: c.players, mole: c.mole, events: c.events, games: c.tally.games, converged: c.converged, rejections: c.tally.rejections, rates };
+  for (const r of RATES) if (r.applies(c)) rates[r.id] = rateResult(r.num(c.tally), r.den(c.tally), r.checked(c) ? r.band : null);
+  return { key: c.key, players: c.players, setup: c.setup, events: c.events, games: c.tally.games, converged: c.converged, rejections: c.tally.rejections, rates };
 }
 
 /** Role parity for a pool of games at one crew size. docs/roles-v2.md §5 */
@@ -143,18 +162,41 @@ export function parityOf(roles: Readonly<Record<string, SeatTally>>): Pick<Parit
   return { roles: counted, fewSeats, spread, spreadLo, spreadHi, check: { verdict, sure } };
 }
 
-/** Parity groups: one per player count and saboteur setting, events on and off pooled, in matrix order. */
+/**
+ * Parity groups: one per player count and setup, events on and off pooled, in
+ * matrix order. Only gated groups (Balanced, 4–12 players) get a verdict; the
+ * rest are reported. extension.md Build notes "Sim"
+ */
 function parityGroups(cells: readonly CellResult[]): ParityGroup[] {
   const groups = new Map<string, CellResult[]>();
   for (const c of cells) {
-    const key = `${c.players}p/mole-${c.mole}`;
+    const key = `${c.players}p/${c.setup}`;
     groups.set(key, [...(groups.get(key) ?? []), c]);
   }
   return [...groups].map(([key, cs]) => {
     const tally = cs.reduce((t, c) => addTallies(t, c.tally), emptyTally());
     const first = cs[0] as CellResult;
-    return { key, players: first.players, mole: first.mole, games: tally.games, ...parityOf(tally.roles) };
+    const parity = parityOf(tally.roles);
+    const check: CheckResult = first.gated ? parity.check : { verdict: "n/a", sure: false };
+    return { key, players: first.players, setup: first.setup, games: tally.games, ...parity, check };
   });
+}
+
+/** Every role over the whole run, in content order. extension.md Build notes "Sim" */
+function roleSummaries(cells: readonly CellResult[]): RoleSummary[] {
+  const roles = cells.reduce((t, c) => addTallies(t, c.tally), emptyTally()).roles;
+  const order = Object.keys(ROLES);
+  return Object.entries(roles)
+    .sort(([a], [b]) => order.indexOf(a) - order.indexOf(b))
+    .map(([role, s]) => ({
+      role,
+      star: (Object.hasOwn(ROLES, role) ? ROLES[role]?.winsOn.length ?? 0 : 0) > 0,
+      seats: s.seats,
+      ratio: s.fair > 0 ? r3(s.credit / s.fair) : 0,
+      fromSuccess: s.credit > 0 ? r3(s.successCredit / s.credit) : null,
+      earnedPerSeat: s.seats > 0 ? r3(s.earned / s.seats) : 0,
+      spentPerSeat: s.seats > 0 ? r3(s.spent / s.seats) : 0,
+    }));
 }
 
 export function buildReport(options: SuiteOptions, versions: Versions, cells: readonly CellResult[]): SuiteReport {
@@ -177,6 +219,7 @@ export function buildReport(options: SuiteOptions, versions: Versions, cells: re
     },
     cells: cellReports,
     parity,
+    roles: roleSummaries(cells),
   };
 }
 
@@ -235,6 +278,18 @@ export function formatSuiteReport(r: SuiteReport): string {
     ["cell", "games", ...rateCols.map((d) => (d.band ? `${d.label} ${bandText(d.band)}` : d.label))],
     r.cells.map((c) => [c.key, `${c.games}${c.converged || fixedGames(o) ? "" : "+"}`, ...rateCols.map((d) => rateCell(c.rates[d.id]))]),
   );
+  const roles = table(
+    ["role", "seats", "win ÷ fair", "wins on success", "on failure", "tokens earned/seat", "spent/seat"],
+    r.roles.map((x) => [
+      `${x.role}${x.star ? " ★" : ""}`,
+      String(x.seats),
+      x.ratio.toFixed(2),
+      x.fromSuccess === null ? "—" : `${(x.fromSuccess * 100).toFixed(0)}%`,
+      x.fromSuccess === null ? "—" : `${((1 - x.fromSuccess) * 100).toFixed(0)}%`,
+      x.earnedPerSeat.toFixed(2),
+      x.spentPerSeat.toFixed(2),
+    ]),
+  );
   const parity = table(
     ["parity group (events pooled)", "games", `spread ≤${PARITY_MAX_SPREAD.toFixed(2)}`, "95% range", "", "highest", "lowest"],
     r.parity.map((p) => {
@@ -267,7 +322,11 @@ export function formatSuiteReport(r: SuiteReport): string {
     "",
     "Role parity (docs/roles-v2.md §5): each role's win credit ÷ fair share 1/n, all games; spread = max − min across roles.",
     "The point spread is biased upward by noise, so the verdict uses the 95% range: FAIL only if even the closest the intervals allow is over the limit.",
+    "Gated: Balanced at 4–12 players (extension.md Build notes \"Sim\"); Truly random and the role-list setups are reported only.",
     parity,
+    "",
+    "Roles, every cell pooled: win credit ÷ fair share, where the wins came from (★ roles also win failures), shop tokens per seat.",
+    roles,
     "",
     `Checks: ${r.checks.pass} PASS, ${r.checks.fail} FAIL, ${r.checks.inconclusive} inconclusive (PASS/FAIL confirmed by the 95% interval; --strict fails on FAIL).`,
   ];

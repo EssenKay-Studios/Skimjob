@@ -1,18 +1,29 @@
 // Host lobby settings and the server's own limits (not game rules, so not in
 // @skimjob/content). design §15 setup, docs/m2-plan.md M2-2
-import type { MoleSetting, VoteVisibility } from "@skimjob/engine";
+import { DECKS, POOL_ROLES, ROLES, type DeckId, type RoleId } from "@skimjob/content";
+import type { DealStyle, RoleListSetting, VoteVisibility } from "@skimjob/engine";
 
 /** Session-length presets (design §4.1, plus "quick" for playtests). M2-4 gives them their timings. */
 export const SESSION_LENGTHS = ["quick", "1h", "3h", "1d", "3d", "1w"] as const;
 export type SessionLength = (typeof SESSION_LENGTHS)[number];
 
 const VOTE_VISIBILITIES: readonly VoteVisibility[] = ["hiddenThenRevealed", "open", "secret"];
-const MOLE_SETTINGS: readonly MoleSetting[] = ["off", "maybe", "on"];
+const DECK_IDS: readonly DeckId[] = ["starter", "standard", "everything"];
+const DEAL_STYLES: readonly DealStyle[] = ["balanced", "random"];
+const ROLE_LISTS: readonly RoleListSetting[] = ["exact", "possible", "hidden"];
+/** The dropped saboteur setting: still read from stored games and old clients, never kept. extension.md Build notes "Tags, decks and dealing" */
+const LEGACY_MOLE = "mole";
 
 export interface LobbySettings {
   readonly sessionLength: SessionLength;
   readonly voteVisibility: VoteVisibility;
-  readonly mole: MoleSetting;
+  /** Deck preset (extension.md "Decks"); Quick games play Starter whatever this says. */
+  readonly deck: DeckId;
+  /** Per-role toggles: the roles in the deck; empty = the preset's. */
+  readonly roles: readonly RoleId[];
+  /** Balanced or Truly random deal; Exact, Possible or Hidden role list. extension.md "Host settings" */
+  readonly deal: DealStyle;
+  readonly roleList: RoleListSetting;
   readonly eventsEnabled: boolean;
   readonly starterMode: boolean;
   /** Others see that a DM happened (design §12.1). Server-only; M2-8. */
@@ -24,7 +35,10 @@ export interface LobbySettings {
 export const DEFAULT_SETTINGS: LobbySettings = {
   sessionLength: "1h",
   voteVisibility: "hiddenThenRevealed",
-  mole: "maybe",
+  deck: "standard",
+  roles: [],
+  deal: "balanced",
+  roleList: "exact",
   eventsEnabled: true,
   starterMode: false,
   dmNotices: true,
@@ -47,27 +61,60 @@ export const BOT_NAMES = ["Riya", "Max", "Nico", "Juno", "Kofi", "Lena", "Omar",
 
 const own = (o: object, k: string) => Object.hasOwn(o, k);
 
+/** A setting key the server reads: the current ones, plus the dropped saboteur setting (migrated). */
+export const isSettingKey = (k: string) => own(DEFAULT_SETTINGS, k) || k === LEGACY_MOLE;
+
+/**
+ * The dropped saboteur setting, read from a stored game or an old client: a
+ * saved "off" becomes the deck with every Wildcard and Lone wolf toggled off;
+ * "maybe" and "on" become the plain deck. extension.md Build notes "Tags, decks and dealing"
+ */
+function migrateMole(raw: Record<string, unknown>): Record<string, unknown> {
+  if (!own(raw, LEGACY_MOLE)) return raw;
+  const { [LEGACY_MOLE]: mole, ...rest } = raw;
+  if (mole !== "off") return rest;
+  const deck = typeof rest.deck === "string" && (DECK_IDS as readonly string[]).includes(rest.deck) ? (rest.deck as DeckId) : DEFAULT_SETTINGS.deck;
+  const from = Array.isArray(rest.roles) && rest.roles.length > 0 ? (rest.roles as RoleId[]) : DECKS[deck];
+  return { ...rest, roles: from.filter((r) => Object.hasOwn(ROLES, r) && ROLES[r]?.tag === "teamPlayer") };
+}
+
 /**
  * Host settings from untrusted JSON: missing fields take the defaults, unknown
- * fields are refused. Starter mode needs the Mole off and events off (the
- * engine refuses the mix, decisions.md "Starter mode requires…").
+ * fields are refused, a stored saboteur setting is migrated. Starter mode
+ * needs events off (the engine refuses the mix, decisions.md "Starter mode requires…").
  */
 export function parseSettings(input: unknown): { ok: true; settings: LobbySettings } | { ok: false; error: string } {
   if (input === undefined || input === null) return { ok: true, settings: DEFAULT_SETTINGS };
   if (typeof input !== "object" || Array.isArray(input)) return { ok: false, error: "settings must be an object" };
-  const raw = input as Record<string, unknown>;
-  for (const k of Object.keys(raw)) if (!own(DEFAULT_SETTINGS, k)) return { ok: false, error: `unknown setting ${JSON.stringify(k)}` };
+  for (const k of Object.keys(input)) if (!isSettingKey(k)) return { ok: false, error: `unknown setting ${JSON.stringify(k)}` };
+  const raw = migrateMole(input as Record<string, unknown>);
   const s = { ...DEFAULT_SETTINGS, ...raw } as Record<keyof LobbySettings, unknown>;
   if (!(SESSION_LENGTHS as readonly unknown[]).includes(s.sessionLength)) return { ok: false, error: `sessionLength must be one of ${SESSION_LENGTHS.join(", ")}` };
   if (!(VOTE_VISIBILITIES as readonly unknown[]).includes(s.voteVisibility)) return { ok: false, error: `voteVisibility must be one of ${VOTE_VISIBILITIES.join(", ")}` };
-  if (!(MOLE_SETTINGS as readonly unknown[]).includes(s.mole)) return { ok: false, error: `mole must be one of ${MOLE_SETTINGS.join(", ")}` };
+  if (!(DECK_IDS as readonly unknown[]).includes(s.deck)) return { ok: false, error: `deck must be one of ${DECK_IDS.join(", ")}` };
+  if (!(DEAL_STYLES as readonly unknown[]).includes(s.deal)) return { ok: false, error: `deal must be one of ${DEAL_STYLES.join(", ")}` };
+  if (!(ROLE_LISTS as readonly unknown[]).includes(s.roleList)) return { ok: false, error: `roleList must be one of ${ROLE_LISTS.join(", ")}` };
+  const roles = s.roles;
+  if (!Array.isArray(roles) || !roles.every((r) => (POOL_ROLES as readonly unknown[]).includes(r)) || new Set(roles).size !== roles.length) {
+    return { ok: false, error: "roles must be a list of distinct role ids" };
+  }
   for (const k of ["eventsEnabled", "starterMode", "dmNotices", "uniqueRoles"] as const) {
     if (typeof s[k] !== "boolean") return { ok: false, error: `${k} must be true or false` };
   }
-  if (s.starterMode === true && (s.mole !== "off" || s.eventsEnabled !== false)) {
-    return { ok: false, error: "starter mode needs mole \"off\" and eventsEnabled false" };
-  }
+  if (s.starterMode === true && s.eventsEnabled !== false) return { ok: false, error: "starter mode needs eventsEnabled false" };
   return { ok: true, settings: s as unknown as LobbySettings };
+}
+
+/**
+ * A game's stored settings as the server uses them: missing fields take the
+ * defaults (games made before a setting existed) and a saboteur setting is
+ * migrated. A row that no longer parses keeps its own fields over the defaults.
+ */
+export function storedSettings(stored: unknown): LobbySettings {
+  const raw = typeof stored === "object" && stored !== null && !Array.isArray(stored) ? (stored as Record<string, unknown>) : {};
+  const known = Object.fromEntries(Object.entries(raw).filter(([k]) => isSettingKey(k)));
+  const parsed = parseSettings({ ...DEFAULT_SETTINGS, ...known });
+  return parsed.ok ? parsed.settings : ({ ...DEFAULT_SETTINGS, ...migrateMole(known) } as LobbySettings);
 }
 
 // Control characters, and invisible / bidi-control ones (format characters

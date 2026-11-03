@@ -47,26 +47,16 @@ const SETTINGS = [
       { value: "secret", label: "Secret" },
     ],
   },
-  {
-    key: "mole",
-    label: "Saboteur (the dark side)",
-    hint: "Maybe: you won't know if one was dealt",
-    options: [
-      { value: "off", label: "Off" },
-      { value: "maybe", label: "Maybe" },
-      { value: "on", label: "On" },
-    ],
-  },
   { key: "uniqueRoles", label: "Unique roles", hint: "Each role at most once", options: onOff },
   { key: "eventsEnabled", label: "Bank events", options: onOff },
-  { key: "starterMode", label: "Starter mode", hint: "Simple roles; no saboteur, no events", options: onOff },
+  { key: "starterMode", label: "Starter mode", hint: "Simple roles; no shop, no events", options: onOff },
   { key: "dmNotices", label: "DM notices", hint: "Everyone sees that a DM was sent", options: onOff },
 ] as const satisfies readonly { key: keyof LobbySettings; label: string; hint?: string; options: readonly SegmentedOption<string | boolean>[] }[];
 
 /** One change, plus what starter mode needs to stay valid (the server refuses the mix). */
 function settingsPatch(current: LobbySettings, key: keyof LobbySettings, value: string | boolean): Partial<LobbySettings> {
-  if (key === "starterMode" && value === true) return { starterMode: true, mole: "off", eventsEnabled: false };
-  if (current.starterMode && ((key === "mole" && value !== "off") || (key === "eventsEnabled" && value === true))) return { [key]: value, starterMode: false };
+  if (key === "starterMode" && value === true) return { starterMode: true, eventsEnabled: false };
+  if (current.starterMode && key === "eventsEnabled" && value === true) return { [key]: value, starterMode: false };
   return { [key]: value };
 }
 

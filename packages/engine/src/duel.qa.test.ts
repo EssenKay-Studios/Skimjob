@@ -31,7 +31,7 @@ function config(extra: Partial<GameConfig> = {}): GameConfig {
 function game(extra: Partial<GameConfig> = {}): GameState {
   const cfg = config(extra);
   const log = setupEvents(cfg)
-    .filter((e) => e.type !== "snitchTargetAssigned" && e.type !== "moleAllies")
+    .filter((e) => e.type !== "snitchTargetAssigned")
     .map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: "rookie" } : e));
   return replay(cfg, log);
 }

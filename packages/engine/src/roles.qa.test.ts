@@ -12,7 +12,7 @@
 //    and quorum edges in every vote mode, threshold and stash edges.
 import { describe, expect, it } from "vitest";
 import { handleThroughAlibis } from "./alibis.testkit";
-import { INFO_VOTE_ROLES, STARTER_ROLES } from "@skimjob/content";
+import { STARTER_ROLES } from "@skimjob/content";
 import type { GameConfig, GameEvent, GameState, PlayerId, PlayerState, PlayerView, VoteVisibility } from "./types";
 import { privateTo } from "./types";
 import { createGame, setupEvents } from "./setup";
@@ -29,7 +29,6 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
     rolePool: [],
-    mole: "off",
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     starterMode: false,
@@ -88,6 +87,7 @@ const closeAll = (s: GameState): GameState => {
   const closed = run(s, CLOSE);
   return closed.phase.kind === "shakedownPending" ? run(closed, RESOLVE) : closed;
 };
+const INFO_VOTE_ROLES = ["hacker", "smoothTalker", "muscle", "blackmailer", "snitch"] as const;
 const NO_WINDOW = { rolePool: [...STARTER_ROLES, ...INFO_VOTE_ROLES.filter((r) => r !== "muscle")] };
 
 // ------------------------------------------------------------------ 1. counterfactual leak pairs
@@ -144,12 +144,12 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
   const rand = mulberry32(seed);
   const int = (k: number): number => Math.floor(rand() * k);
   const pick = <T>(xs: readonly T[]): T => xs[int(xs.length)] as T;
-  // v2 §2 (R3a): the Hacker is an accomplice, dealt only with a saboteur, so its games deal a Mole and no other accomplice.
-  // R3b: so is the Blackmailer (from 7 players).
   const hacking = kind === "hackerLoop";
   const blackmailing = kind === "blackmail";
-  const pool = hacking ? ["hacker", ...INFO_VOTE_ROLES] : blackmailing ? ["blackmailer", ...INFO_VOTE_ROLES] : n <= 5 ? [...INFO_VOTE_ROLES] : [];
-  const cfg = config(n, { seed: `rqa-${seed}`, voteVisibility: mode, rolePool: pool, ...((hacking || blackmailing) && { mole: "on" as const }) });
+  const pool = hacking || blackmailing || n <= 5 ? [...INFO_VOTE_ROLES] : [];
+  // extension.md "Host settings": the counterfactual holds where the role list doesn't name the dealt
+  // roles ("Possible"); with "Exact" the dealt roles are public by design.
+  const cfg = config(n, { seed: `rqa-${seed}`, voteVisibility: mode, rolePool: pool, deck: "everything", roleList: "possible" });
   let A = createGame(cfg);
   const ids = A.playerOrder;
   const holder = (role: string): PlayerId | undefined => ids.find((id) => A.players[id]?.role === role);
@@ -288,6 +288,8 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
         const room = pick(A.rooms);
         applied = true;
         involved.add(h);
+        // Both games submit a move (a move is public as "locked in"); only B loops.
+        planA.set(h, [{ type: "submitMove", player: h, move: lastMove(h) }]);
         planB.set(h, [{ type: "submitMove", player: h, move: { ...lastMove(h), ability: { kind: "loopCameras", room } } }]);
         // Security watching that room sees a difference by the rules.
         for (const y of ids) if (lastMove(y).room === "security" && lastMove(y).watch === room) tainted.add(y);
@@ -447,8 +449,10 @@ describe("QA Muscle: window, limits, wrong phase — design §8, §11.3", () => 
 
   it("other players' views are identical through the window whether a Muscle is dealt or not", () => {
     for (const other of ["rookie", "hacker"]) {
-      let a = run(game(4, ["muscle"]), mv("p1", "vault", 6), ROUND);
-      let b = run(game(4, [other]), mv("p1", "vault", 6), ROUND);
+      // extension.md "Host settings": with the "Possible" list the window opens either way.
+      const extra: Partial<GameConfig> = { roleList: "possible", rolePool: [...STARTER_ROLES, "muscle", "hacker"] };
+      let a = run(game(5, ["muscle"], extra), mv("p1", "vault", 6), ROUND);
+      let b = run(game(5, [other], extra), mv("p1", "vault", 6), ROUND);
       for (const c of [{ type: "callEmergency", player: "p2" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: "emergency-p2" } }, vote("p0", "p1"), vote("p2", "p1"), vote("p3", "p1"), CLOSE, RESOLVE]) {
         a = run(a, c);
         b = run(b, c);
@@ -539,13 +543,14 @@ describe("QA Blackmailer: limits, wrong phase — design §8", () => {
 });
 
 describe("QA Snitch: payout edges — design §8, §11.3", () => {
-  const bonus = 1; // role deck v2 §2: +1 ballot weight
-  const paid = (s: GameState) => ofType(s.log, "snitchRewarded").map((e) => e.votes);
+  // extension.md "Tokens": the Snitch earns one private token, no extra vote.
+  const bonus = "targetShakenDirty";
+  const paid = (s: GameState) => ofType(s.log, "tokenEarned").filter((e) => e.player === "p0").map((e) => e.trigger);
 
   it.each([
     [6, true],
     [5, false],
-  ])("act 2 emergency: target stash %i → paid %s (threshold 3 × act)", (stash, pays) => {
+  ])("act 2 emergency: target stash %i → paid %s (one line of 6)", (stash, pays) => {
     let s = run(game(3, ["snitch"], NO_WINDOW, { p0: "p1" }), ROUND, ROUND, ROUND);
     s = run(closeAll(actMeeting(s, 1)), mv("p1", "vault", stash), ROUND);
     s = closeAll(run(emergency(s, "p2"), vote("p0", "p1"), vote("p2", "p1")));
@@ -562,13 +567,13 @@ describe("QA Snitch: payout edges — design §8, §11.3", () => {
   });
 
   it("paid each time, and paid when the window ends (not when the vote closes)", () => {
-    let s = run(game(3, ["snitch"], {}, { p0: "p1" }), mv("p1", "vault", 6), ROUND);
+    let s = run(game(3, ["snitch", "rookie", "muscle"], {}, { p0: "p1" }), mv("p1", "vault", 6), ROUND);
     s = run(emergency(s, "p2"), vote("p0", "p1"), vote("p2", "p1"), CLOSE);
     expect(paid(s)).toEqual([]);
     s = run(s, RESOLVE, mv("p1", "vault", 6), ROUND);
     s = closeAll(run(emergency(s, "p1"), vote("p0", "p1"), vote("p2", "p1")));
     expect(paid(s)).toEqual([bonus, bonus]);
-    expect(s.players.p0?.roleState.bonusVotes).toBe(2 * bonus);
+    expect(s.players.p0?.roleState.tokens).toBe(2);
   });
 
   it("a reward in the final meeting's window is granted; a cancel there grants nothing", () => {
@@ -580,9 +585,9 @@ describe("QA Snitch: payout edges — design §8, §11.3", () => {
         if (act === 3) s = run(s, vote("p0", "p1"), vote("p2", "p1"), CLOSE, ...(cancelIt ? [cancel("p2")] : []), RESOLVE);
         else s = closeAll(s);
       }
-      return s.phase.kind === "ended" ? s.players.p0?.roleState.bonusVotes : "not ended";
+      return s.phase.kind === "ended" ? paid(s).length : "not ended";
     };
-    expect([final(false), final(true)]).toEqual([bonus, 0]);
+    expect([final(false), final(true)]).toEqual([1, 0]);
   });
 
   it("not paid when the Snitch is the one shaken down; at 2 players the target is the other player", () => {

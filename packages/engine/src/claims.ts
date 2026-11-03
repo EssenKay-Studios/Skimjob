@@ -19,7 +19,7 @@ export function claimRole(state: GameState, command: Record<string, unknown>): G
   if (typeof role !== "string" || !Object.hasOwn(rolesFor(state.config), role)) return `unknown role ${show(role)}`;
   const act = actOfRound(state.round);
   if (state.log.some((e) => e.type === "roleClaimed" && e.player === player.id && e.act === act)) {
-    return `you already claimed a role in act ${act}`;
+    return "you already claimed a role since the last meeting";
   }
   return [{ type: "roleClaimed", visibility: PUBLIC, player: player.id, role, act }];
 }

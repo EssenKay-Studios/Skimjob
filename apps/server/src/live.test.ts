@@ -437,7 +437,7 @@ describe("acceptance: a full game over sockets (docs/m2-plan.md M2-3)", () => {
     "%s votes: each socket only ever gets what canSee allows it; nobody's commands are refused",
     async (voteVisibility) => {
       const refusalsBefore = app.live.botRefusals.length;
-      const { id, humans } = await startGame(3, 4, { voteVisibility, mole: "on", eventsEnabled: true });
+      const { id, humans } = await startGame(3, 4, { voteVisibility, eventsEnabled: true });
       const clients = await Promise.all(humans.map((h) => Client.open(id, h)));
       // People are played by bot logic in the test, over their sockets, always forging another seat's id.
       const agents = humans.map((h, i) => createBot({ player: h.player, personality: PERSONALITIES[(["greedy", "honest", "cautious"] as const)[i]!], seed: `human/${i}` }));

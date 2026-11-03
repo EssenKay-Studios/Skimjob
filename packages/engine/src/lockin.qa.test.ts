@@ -1,6 +1,6 @@
 // QA (PR #44): public lock-in marks and the people-majority meeting lock.
 // Owner decisions, 2 Nov. design §5.1, §11.1, §13
-import { DEFAULT_ROLE_POOL } from "@skimjob/content";
+import { POOL_ROLES } from "@skimjob/content";
 import { describe, expect, it } from "vitest";
 import type { GameConfig, GameEvent, GameState } from "./types";
 import { createGame } from "./setup";
@@ -13,7 +13,7 @@ function config(humans: readonly boolean[], seed = "lockin-qa"): GameConfig {
     seed,
     players: humans.map((human, i) => ({ id: `p${i}`, name: `P${i}`, isBot: !human })),
     job: "bank",
-    rolePool: [...DEFAULT_ROLE_POOL],
+    rolePool: [...POOL_ROLES],
     mole: "off",
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",

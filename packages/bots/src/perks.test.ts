@@ -9,7 +9,7 @@ import { closeAlibis, config, game, notInsider, round, run } from "./testkit";
 
 const exact = (base: Personality): Personality => ({ ...base, noise: 0, misread: 0, hunch: 0 });
 const grant = (s: GameState, player: string, ...perks: PerkId[]): GameState =>
-  perks.reduce((st, perk) => applyEvent(st, { type: "perkGranted", visibility: { kind: "private", player }, player, perk }), s);
+  perks.reduce((st, perk) => applyEvent(st, { type: "perkBought", visibility: { kind: "private", player }, player, perk, cost: 0 }), s);
 const spends = (cmds: PlayerCommand[]) => cmds.flatMap((c) => (c.type === "useAbility" ? [c.ability] : []));
 const lobby = { room: "lobby" };
 /** Round 1: ben pockets in the Vault and claims the Lobby: ana's top suspect. */
@@ -70,7 +70,7 @@ describe("bot perks — v2 §1, §4", () => {
   it("Rig: the Mastermind rigs, then picks the most Heat-calming card", () => {
     const view = viewFor(game(5), "ana");
     expect(cardHeatScore(view, "quietNight")).toBeLessThan(cardHeatScore(view, "audit"));
-    expect(cardHeatScore(view, "policePatrol")).toBeGreaterThan(cardHeatScore(view, "audit"));
+    expect(cardHeatScore(view, "shiftChange")).toBeGreaterThan(cardHeatScore(view, "audit"));
     for (let i = 0; i < 20; i++) {
       const base = createGame({ ...config(5, `rig-${i}`), eventsEnabled: true });
       let s = grant({ ...base, players: { ...base.players, ana: { ...(base.players.ana as GameState["players"][string]), role: "mastermind" } } }, "ana", "rig");

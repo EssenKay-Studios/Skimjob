@@ -1,7 +1,7 @@
 // Shape checks for the JSON files the suite reads back (shard files for
 // `merge`, a baseline for `--compare`): a bad file gets a clear message, never
 // a crash halfway through. They come from disk, so they're untrusted.
-import type { SuiteOptions } from "./matrix";
+import { isSetup, type SuiteOptions } from "./matrix";
 import { REPORT_FORMAT, REPORT_KIND, SHARD_KIND, type ShardFile, type SuiteReport } from "./report";
 import type { Tally } from "./tally";
 
@@ -12,14 +12,15 @@ const isInt = (v: unknown): v is number => Number.isInteger(v);
 const isStr = (v: unknown): v is string => typeof v === "string";
 
 const TALLY_COUNTS = [
-  "games", "successes", "failures", "heatFailures", "saboteurGames", "saboteurWins", "darkSideWins",
+  "games", "successes", "failures", "heatFailures", "targetFailures", "noWinner", "sharedWin",
   "comebackGames", "act1LeaderWins", "decidedEarly", "shakedowns", "shakedownsCaught", "rejections",
 ] as const satisfies readonly (keyof Tally)[];
 
 function seatsProblem(v: unknown, what: string): string | null {
   if (!isObj(v)) return `${what} isn't an object`;
   for (const [k, s] of Object.entries(v)) {
-    if (!isObj(s) || !isInt(s.seats) || !isNum(s.credit) || !isNum(s.fair)) return `${what}.${k} isn't { seats, credit, fair }`;
+    const ok = isObj(s) && isInt(s.seats) && isNum(s.credit) && isNum(s.fair) && isNum(s.successCredit) && isNum(s.earned) && isNum(s.spent);
+    if (!ok) return `${what}.${k} isn't { seats, credit, fair, successCredit, earned, spent }`;
   }
   return null;
 }
@@ -35,7 +36,7 @@ export function optionsProblem(v: unknown): string | null {
   const o = v as Partial<Record<keyof SuiteOptions, unknown>>;
   if (!isStr(o.seed)) return "options.seed isn't a string";
   if (!Array.isArray(o.playerCounts) || !o.playerCounts.every(isInt)) return "options.playerCounts isn't a list of player counts";
-  if (!Array.isArray(o.moles) || !o.moles.every((m) => m === "off" || m === "maybe" || m === "on")) return "options.moles isn't a list of saboteur settings";
+  if (!Array.isArray(o.setups) || !o.setups.every(isSetup)) return "options.setups isn't a list of setups";
   if (!Array.isArray(o.events) || !o.events.every((e) => typeof e === "boolean")) return "options.events isn't a list of booleans";
   if (!Array.isArray(o.mix) || !o.mix.every((m) => isObj(m) && isStr(m.personality) && isNum(m.weight))) return "options.mix isn't a bot mix";
   for (const k of ["ciHalfWidth", "minGames", "maxGames", "batch"] as const) if (!isNum(o[k]) || (o[k] as number) <= 0) return `options.${k} isn't a positive number`;
@@ -56,7 +57,7 @@ export function checkShard(v: unknown): ShardFile | string {
   if (!Array.isArray(v.cells)) return "cells isn't a list";
   for (const [i, c] of v.cells.entries()) {
     if (!isObj(c) || !isStr(c.key)) return `cell ${i + 1} has no key`;
-    if (!isInt(c.players) || !isStr(c.mole) || typeof c.events !== "boolean" || typeof c.saboteurs !== "boolean") return `cell ${c.key} lacks its settings`;
+    if (!isInt(c.players) || !isSetup(c.setup) || typeof c.events !== "boolean" || typeof c.gated !== "boolean") return `cell ${c.key} lacks its settings`;
     if (!isInt(c.batches) || typeof c.converged !== "boolean") return `cell ${c.key} lacks batches/converged`;
   }
   return v as unknown as ShardFile;

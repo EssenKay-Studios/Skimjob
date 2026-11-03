@@ -1,6 +1,7 @@
-// Perks: tokens, spending with useAbility, and each perk's effect.
-// design §8.3 (role deck v2 §1, docs/roles-v2.md). Tokens come from the
-// test-only `grantPerks` hook until R2/R3 wire the role triggers.
+// Perks: holding, spending with useAbility (one per round), and each perk's
+// effect. design §8.3; extension.md "Tokens and the perk shop". Perks come
+// from the test-only `grantPerks` hook (a free `perkBought`); buying is in
+// extension.test.ts.
 import { describe, expect, it } from "vitest";
 import { EVENT_DECK, PERK_RULES, ROLES, type PerkId } from "@skimjob/content";
 import type { GameConfig, GameEvent, GameState, PlayerState } from "./types";
@@ -17,8 +18,7 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
     seed: "perk-seed",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: ["rookie", "lookout", "fence", "hacker"], // no Muscle: no shakedown window
-    mole: "off",
+    rolePool: ["rookie", "lookout", "fence", "hacker"], // no Muscle: a window only if the shop holds a Shield
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     starterMode: false,
@@ -60,17 +60,19 @@ const emergency = (by: string) => [{ type: "callEmergency", player: by }, { type
 const CLOSE = (s: GameState) => ({ type: "advance", deadline: { kind: "closeMeeting", meetingId: s.meeting?.id } });
 const RESOLVE = (s: GameState) => ({ type: "advance", deadline: { kind: "resolveShakedown", meetingId: s.pendingShakedown?.meetingId } });
 const vote = (player: string, target: string | null) => ({ type: "castVote", player, vote: target ? { kind: "shakedown", target } : { kind: "skip" } });
+/** Resolve a waiting shakedown nobody cancels. */
+const settle = (s: GameState): GameState => (s.phase.kind === "shakedownPending" ? run(s, RESOLVE) : s);
 const perks = (s: GameState, id: string): readonly PerkId[] => (s.players[id] as PlayerState).roleState.perks;
 const withStash = (s: GameState, id: string, stash: number): GameState => ({ ...s, players: { ...s.players, [id]: { ...(s.players[id] as PlayerState), stash } } });
 
 describe("perk tokens — design §8.3", () => {
-  it("perkGranted is private; your view shows your own perks only, and nobody else's view changes", () => {
+  it("a perk held is private; your view shows your own perks only, and nobody else's view changes", () => {
     const s = game(4);
     const granted = grantPerks(s, "p0", "peek", "shield", "peek");
     expect(since(s, granted)).toEqual([
-      { type: "perkGranted", visibility: privateTo("p0"), player: "p0", perk: "peek" },
-      { type: "perkGranted", visibility: privateTo("p0"), player: "p0", perk: "shield" },
-      { type: "perkGranted", visibility: privateTo("p0"), player: "p0", perk: "peek" },
+      { type: "perkBought", visibility: privateTo("p0"), player: "p0", perk: "peek", cost: 0 },
+      { type: "perkBought", visibility: privateTo("p0"), player: "p0", perk: "shield", cost: 0 },
+      { type: "perkBought", visibility: privateTo("p0"), player: "p0", perk: "peek", cost: 0 },
     ]);
     expect(viewFor(granted, "p0").me.roleState.perks).toEqual(["peek", "shield", "peek"]);
     for (const other of ["p1", "p2", "p3"]) expect(JSON.stringify(viewFor(granted, other))).toBe(JSON.stringify(viewFor(s, other)));
@@ -90,8 +92,8 @@ describe("perk tokens — design §8.3", () => {
   });
 
   it("the log replays to the same state (event-sourced, design §17.2)", () => {
-    let s = grantPerks(game(4, [], { eventsEnabled: true }), "p0", "peek", "tail", "rig");
-    s = run(s, use("p0", { kind: "peek", target: "p2" }), use("p0", { kind: "tail", room: "vault" }), use("p0", { kind: "rig" }));
+    let s = grantPerks(grantPerks(grantPerks(game(4, [], { eventsEnabled: true }), "p0", "peek"), "p1", "tail"), "p2", "rig");
+    s = run(s, use("p0", { kind: "peek", target: "p2" }), use("p1", { kind: "tail", room: "vault" }), use("p2", { kind: "rig" }));
     expect(replay(s.config, s.log)).toEqual(s);
   });
 });
@@ -105,7 +107,7 @@ describe("Peek — design §8.3", () => {
 });
 
 describe("Shield — design §8.3, §11.3", () => {
-  const shakedownOfP0 = (s: GameState): GameState => run(s, ...emergency("p1"), vote("p1", "p0"), vote("p2", "p0"), vote("p3", "p0"), CLOSE);
+  const shakedownOfP0 = (s: GameState): GameState => settle(run(s, ...emergency("p1"), vote("p1", "p0"), vote("p2", "p0"), vote("p3", "p0"), CLOSE));
 
   it("cancels the next passed shakedown of its holder by itself: private perkUsed, public cancel, stash kept", () => {
     const s = grantPerks(withStash(game(4), "p0", 6), "p0", "shield");
@@ -117,13 +119,13 @@ describe("Shield — design §8.3, §11.3", () => {
     expect(after.players.p0).toMatchObject({ stash: 6, timesShakenDown: 0 });
     expect(perks(after, "p0")).toEqual([]);
     // Spent: the next one goes through.
-    const again = run(after, ...emergency("p2"), vote("p1", "p0"), vote("p2", "p0"), vote("p3", "p0"), CLOSE);
+    const again = settle(run(after, ...emergency("p2"), vote("p1", "p0"), vote("p2", "p0"), vote("p3", "p0"), CLOSE));
     expect(since(after, again).some((e) => e.type === "shakedownResolved")).toBe(true);
   });
 
   it("with a shakedown window, it applies when the window ends; a Muscle cancel first keeps the Shield", () => {
-    const pool = ["rookie", "muscle", "fixer"]; // the Fixer (a Shield earner) opens the window below 5 players, where no Muscle is dealt
-    const s = grantPerks(withStash(game(4, ["rookie", "muscle"], { rolePool: pool }), "p0", 6), "p0", "shield");
+    const pool = ["rookie", "muscle"]; // a Muscle could be dealt at 5: the window opens
+    const s = grantPerks(withStash(game(5, ["rookie", "muscle"], { rolePool: pool }), "p0", 6), "p0", "shield");
     const pending = run(s, ...emergency("p2"), vote("p1", "p0"), vote("p2", "p0"), vote("p3", "p0"), CLOSE);
     expect(pending.phase.kind).toBe("shakedownPending");
     expect(perks(pending, "p0")).toEqual(["shield"]); // nothing shown before the window ends
@@ -134,14 +136,10 @@ describe("Shield — design §8.3, §11.3", () => {
     expect(since(pending, muscled).filter((e) => e.type === "perkUsed")).toEqual([]);
   });
 
-  it("the window opens whenever a Muscle or any role that can earn a Shield could be dealt (role deck v2 §1)", () => {
-    const shieldEarner = { ...ROLES.rookie, id: "detective", rewards: [{ on: "checkedShakenDirty", perk: "shield", count: 1 }] } as (typeof ROLES)[string];
-    const roles = { ...ROLES, detective: shieldEarner };
-    expect(opensShakedownWindow(roles, ["rookie", "lookout"])).toBe(false);
-    expect(opensShakedownWindow(roles, ["rookie", "muscle"])).toBe(true);
-    expect(opensShakedownWindow(roles, ["rookie", "detective"])).toBe(true);
-    const noShield = { ...roles, detective: { ...shieldEarner, rewards: [{ on: "checkedShakenDirty", perk: "peek", count: 1 }] } } as typeof roles;
-    expect(opensShakedownWindow(noShield, ["detective"])).toBe(false);
+  it("the window opens when the shop holds a Shield or a Muscle could be dealt (extension.md \"Shakedowns\")", () => {
+    expect(opensShakedownWindow(ROLES, ["rookie", "lookout"], ["peek", "alibi", "extraVote"])).toBe(false);
+    expect(opensShakedownWindow(ROLES, ["rookie", "lookout"], ["peek", "shield", "extraVote"])).toBe(true);
+    expect(opensShakedownWindow(ROLES, ["rookie", "muscle"], [])).toBe(true);
   });
 });
 
@@ -176,10 +174,10 @@ describe("Ballot — design §8.3, §11.2", () => {
     expect(spent).toEqual([{ type: "perkUsed", visibility: privateTo("p0"), player: "p0", round: 1, perk: { kind: "ballot", meetingId: "emergency-p0", target: "p1" } }]);
     expect(viewFor(seen, "p0").me.seenBallots).toEqual({ p1: { kind: "shakedown", target: "p2" } });
     for (const other of ["p1", "p2", "p3"]) expect(viewFor(seen, other).me.seenBallots).toEqual({});
-    // Live: a changed ballot shows; a second Ballot on someone who hasn't voted shows null.
-    const changed = run(seen, vote("p1", null), use("p0", { kind: "ballot", target: "p3" }));
-    expect(viewFor(changed, "p0").me.seenBallots).toEqual({ p1: { kind: "skip" }, p3: null });
-    expect(reason(changed, use("p0", { kind: "ballot", target: "p1" }))).toMatch(/no Ballot perk|already/);
+    // Live: a changed ballot shows; a second Ballot waits for another round (one perk per round).
+    const changed = run(seen, vote("p1", null));
+    expect(viewFor(changed, "p0").me.seenBallots).toEqual({ p1: { kind: "skip" } });
+    expect(reason(changed, use("p0", { kind: "ballot", target: "p3" }))).toMatch(/already used a perk this round/);
     // Gone once the meeting closes.
     expect(viewFor(run(changed, CLOSE), "p0").me.seenBallots).toEqual({});
   });
@@ -206,20 +204,22 @@ describe("Tail — design §8.3", () => {
   it("while planning, also see who is in one more room when the round resolves; then it's gone", () => {
     const s = grantPerks(game(4), "p0", "tail", "tail");
     const tailed = run(s, use("p0", { kind: "tail", room: "vault" }));
-    expect(reason(tailed, use("p0", { kind: "tail", room: "office" }))).toMatch(/already tailing/);
+    expect(reason(tailed, use("p0", { kind: "tail", room: "office" }))).toMatch(/already/);
     expect(reason(s, use("p0", { kind: "tail", room: "attic" }))).toMatch(/room in play/);
     const resolved = run(tailed, mv("p0", "lobby"), mv("p1", "vault"), mv("p2", "vault"), mv("p3", "office"), ROUND);
-    expect(since(tailed, resolved)).toContainEqual({ type: "roomWatched", visibility: privateTo("p0"), player: "p0", round: 1, source: "tail", room: "vault", seen: ["p1", "p2"] });
+    expect(since(tailed, resolved)).toContainEqual({ type: "roomWatched", visibility: privateTo("p0"), player: "p0", round: 1, source: "tail", room: "vault", seen: ["p1", "p2"], offline: false });
     expect(resolved.players.p0?.roleState.tail).toBeNull();
     // Not outside planning (the round's alibis are open now).
-    expect(reason(resolved, use("p0", { kind: "tail", room: "vault" }))).toMatch(/being planned/);
+    expect(reason(grantPerks(resolved, "p1", "tail"), use("p1", { kind: "tail", room: "vault" }))).toMatch(/being planned/);
   });
 
-  it("a Power cut blinds it, as it does the Lookout (design §10)", () => {
+  it("a Power cut blinds it, as it does the Lookout: \"camera offline\" (design §10, extension.md \"Camera offline\")", () => {
     const s = grantPerks(game(4), "p0", "tail");
     const dark: GameState = { ...s, card: { round: 1, id: "powerCut", room: null, offer: null } };
     const resolved = run(dark, use("p0", { kind: "tail", room: "vault" }), mv("p1", "vault"), ROUND);
-    expect(since(dark, resolved).some((e) => e.type === "roomWatched")).toBe(false);
+    expect(since(dark, resolved).filter((e) => e.type === "roomWatched")).toEqual([
+      { type: "roomWatched", visibility: privateTo("p0"), player: "p0", round: 1, source: "tail", room: "vault", seen: [], offline: true },
+    ]);
   });
 });
 
@@ -235,7 +235,7 @@ describe("Alibi — design §8.3, §5.4", () => {
       { type: "alibiVerified", visibility: PUBLIC, player: "p0", round: 1, room: "office" },
     ]);
     expect(viewFor(after, "p2").ledger.at(-1)?.event).toEqual({ type: "alibiVerified", visibility: PUBLIC, player: "p0", round: 1, room: "office" });
-    expect(reason(after, use("p0", { kind: "alibi" }))).toMatch(/already verified/);
+    expect(reason(after, use("p0", { kind: "alibi" }))).toMatch(/already/);
   });
 
   it("refused (token kept) for a false alibi or none; refused before any round has resolved", () => {
@@ -267,8 +267,9 @@ describe("Recharge — design §8.3", () => {
   });
 
   it("gives a once-per-game use back (Muscle)", () => {
-    let s = grantPerks(game(4, ["muscle"], { rolePool: ["rookie", "muscle", "fixer"] }), "p0", "recharge");
-    s = run(s, ...emergency("p1"), vote("p1", "p2"), vote("p2", "p3"), vote("p3", "p2"), CLOSE, use("p0", { kind: "cancelShakedown" }), RESOLVE);
+    // p2 is dirty, so the cancel stays spent (a clean save gives it back, extension.md "Roles").
+    let s = grantPerks(withStash(game(5, ["muscle"], { rolePool: ["rookie", "muscle"] }), "p2", 6), "p0", "recharge");
+    s = run(s, ...emergency("p1"), vote("p1", "p2"), vote("p3", "p2"), vote("p4", "p2"), CLOSE, use("p0", { kind: "cancelShakedown" }), RESOLVE);
     expect(s.players.p0?.roleState.usedThisGame).toBe(1);
     expect(run(s, use("p0", { kind: "recharge" })).players.p0?.roleState.usedThisGame).toBe(0);
   });
@@ -316,7 +317,7 @@ describe("Rig — design §8.3, §10", () => {
     const other = EVENT_DECK.find((c) => !spentRig(s).cards.includes(c));
     expect(reason(s, use("p0", { kind: "rigPick", card: other }))).toMatch(/pick one of/);
     expect(reason(s, use("p1", { kind: "rigPick", card: spentRig(s).cards[0] }))).toMatch(/no rigged card/);
-    expect(reason(s, use("p0", { kind: "rig" }))).toMatch(/you already rigged/);
+    expect(reason(s, use("p0", { kind: "rig" }))).toMatch(/already/);
     expect(reason(grantPerks(game(4), "p0", "rig"), use("p0", { kind: "rig" }))).toMatch(/no next event card/);
     // After round 2 starts, the next card (round 3) can be rigged again.
     const round2 = toRound2(run(grantPerks(s, "p1", "rig"), use("p1", { kind: "rig" })));

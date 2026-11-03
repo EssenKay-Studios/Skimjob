@@ -7,7 +7,7 @@ import { EVENTS, EVENT_DECK, EVENT_HEAT_FULL_CREW, EVENTS_FROM_ROUND, ROUNDS_PER
 import type { ActiveCard, GameConfig, GameEvent, GameState, PlayerId, PlayerState, RoleState } from "./types";
 import { PUBLIC, privateTo } from "./types";
 import type { Draw } from "./handle";
-import { eventsFor, factionIn, jobFor, powerOf, rolesFor, type EventTable } from "./overrides";
+import { eventsFor, jobFor, powerOf, type EventTable } from "./overrides";
 import { actOfRound } from "./acts";
 import { playerFor } from "./check";
 
@@ -118,7 +118,7 @@ export function roundJob(job: JobDef, card: ActiveCard | null, events: EventTabl
 /** The room Lockdown closes this round, or null. design §10 */
 export const closedRoom = (state: GameState): RoomId | null => (effectIs(state, "lockdown") ? (state.card?.room ?? null) : null);
 
-/** Police patrol / Quiet night: Heat added to the round's change (scaled for small crews), before the clamp. design §10, §7 */
+/** Quiet night (a Heat card): Heat added to the round's change (scaled for small crews), before the clamp. design §10, §7 */
 export const cardHeat = (state: GameState): number => scaledCardHeat(effectIs(state, "heat")?.amount ?? 0, state.playerOrder.length);
 
 /** Power cut: nobody sees anybody (no sightings, Security or Lookout results). design §10 */
@@ -147,11 +147,10 @@ function insideTip(state: GameState, round: number, draw: Draw): GameEvent[] {
 
 /**
  * Double-cross: the swap happens only if both accepted. Each role card takes
- * its uses so far with it; perk tokens and a spent Tail stay with the player
+ * its uses so far with it; tokens, perks and a spent Tail stay with the player
  * (they were earned, not dealt; provisional, design §8.3); a Snitch's target
- * that would become its new holder becomes the other swapper; saboteur allies
- * are recomputed and any other saboteur whose ally changed is told privately
- * (`moleAllies`); allies learned in play (`alliesLearned`) stay with the player. (provisional)
+ * that would become its new holder becomes the other swapper. Nobody else is
+ * told (extension.md: no automatic reveals).
  */
 function doubleCross(state: GameState, round: number): GameEvent[] {
   const offer = state.card?.offer;
@@ -166,38 +165,19 @@ function doubleCross(state: GameState, round: number): GameEvent[] {
       { type: "doubleCrossResolved", visibility: privateTo(b), player: b, round, partner: a, swap: null },
     ];
   }
-  const roleAfter = (id: PlayerId) => (id === a ? pb.role : id === b ? pa.role : playerIn(state, id).role);
-  const roles = rolesFor(state.config);
-  const saboteurAfter = (id: PlayerId): boolean => factionIn(roles, roleAfter(id)) === "saboteur";
-  const moles = state.playerOrder.filter(saboteurAfter);
-  // Allies a player learned in play (v2 §2, `alliesLearned`) stay with the player, like perks; saboteur mates are recomputed.
-  const learned = (id: PlayerId): PlayerId[] => state.log.flatMap((e) => (e.type === "alliesLearned" && e.player === id ? e.allies : []));
-  const alliesOf = (id: PlayerId): PlayerId[] => {
-    const mates = saboteurAfter(id) ? moles.filter((m) => m !== id) : [];
-    return [...mates, ...new Set(learned(id).filter((x) => x !== id && !mates.includes(x)))];
-  };
   // Same role on both sides: nothing changes hands, so each keeps its own uses.
   const same = pa.role === pb.role;
   const taken = (self: PlayerId, partner: PlayerId, from: PlayerState): RoleState => ({
     ...from.roleState,
     target: from.roleState.target === self ? partner : from.roleState.target,
-    allies: alliesOf(self),
+    tokens: playerIn(state, self).roleState.tokens,
     perks: playerIn(state, self).roleState.perks,
     tail: playerIn(state, self).roleState.tail,
   });
-  const events: GameEvent[] = [
+  return [
     { type: "doubleCrossResolved", visibility: privateTo(a), player: a, round, partner: b, swap: { role: pb.role, roleState: taken(a, b, same ? pa : pb) } },
     { type: "doubleCrossResolved", visibility: privateTo(b), player: b, round, partner: a, swap: { role: pa.role, roleState: taken(b, a, same ? pb : pa) } },
   ];
-  for (const m of moles) {
-    if (m === a || m === b) continue;
-    const allies = alliesOf(m);
-    const before = playerIn(state, m).roleState.allies;
-    if (allies.length !== before.length || allies.some((x) => !before.includes(x))) {
-      events.push({ type: "moleAllies", visibility: privateTo(m), player: m, allies });
-    }
-  }
-  return events;
 }
 
 /** §5.2 step 1: the card's effects that change players before the round's yields. Other kinds act later in the round. design §10 */

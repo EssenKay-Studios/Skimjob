@@ -19,11 +19,12 @@ import {
   type VoteChoice,
 } from "@skimjob/engine";
 import type { Personality } from "./personalities";
-import { claimsOf, createdOf, crewSize, isDuel, jobOf, lastResolvedRound, ofType, roleOf, roomsWhere, totalRounds } from "./read";
+import { claimsOf, createdOf, crewSize, isDuel, isStar, jobOf, lastResolvedRound, ofType, roleOf, roomsWhere, totalRounds } from "./read";
 import { knownRoles, mostSuspicious, suspicion } from "./suspicion";
 import { claimCommands, meetingTime } from "./claims";
-import { alibiPerk, meetingPerks, planningPerks } from "./perks";
-import { heatDanger, jobThisRound } from "./heat";
+import { alibiPerk, buyPerks, hasPerk, meetingPerks, perkSpender, planningPerks } from "./perks";
+import { cardHeatNow, heatDanger, jobThisRound } from "./heat";
+import { leaning } from "./forecast";
 
 /**
  * Anything that plays a seat: a bot, or (later) a human client. It sees only
@@ -77,11 +78,11 @@ export function createBot({ player, personality, seed, crewSeed }: BotOptions): 
 }
 
 /**
- * Chance a Mole bot tips off in a round when it still can this act (bot
- * setting, not a game rule): about one act in two, so Moles push Heat a bit
- * without dominating (sim, task 13). Smarter Moles: task 16.
+ * A Mole bot tips off when Heat two rounds on (this round, then about one
+ * round's wait for the next police moment) would reach this share of the raid
+ * level [70 of 100], or when it leans toward a raid. extension.md Build notes "Bots"
  */
-const MOLE_TIP_CHANCE = 0.15;
+export const MOLE_TIP_AT = 0.7;
 
 /**
  * A Muscle bot rescues a shakedown target whose suspicion (to it) is below this
@@ -94,15 +95,6 @@ const SNITCH_EAGERNESS = 0.5;
 
 /** Chance a bot accepts a Double-cross offer (bot setting, not a game rule; minimal until task 16). design §10 */
 const DOUBLE_CROSS_ACCEPT = 0.5;
-
-/**
- * Getaway Driver bots (v2 §4 "Play", bot settings): with Heat danger from
- * `mid` up to `high` they go to the Rooftop (where their visit heats) with
- * chance `rooftop`; from `high` they loot and pocket without minding the
- * checkpoint (`high` 0.75 → 0.9 in R5: its reckless skims made it the dark
- * side's top stash; docs/balance/balance-3.md).
- */
-const GETAWAY = { mid: 0.4, high: 0.9, rooftop: 0.4 } as const;
 
 /** A Bagman bot goes all-in in every round of this many acts, then plays its personality (bot setting, R5). */
 export const BAGMAN_ALL_IN_ACTS = 1;
@@ -122,13 +114,15 @@ export function decide(view: PlayerView, p: Personality, random: Random, crewSee
   if (phase.kind === "ended" || phase.kind === "setup") return [];
   const player = view.me.id;
   const out: PlayerCommand[] = [];
+  // extension.md "Tokens and the perk shop": one perk use per round.
+  const spend = perkSpender(view);
   // design §5.4: alibis only while the round's alibi window is open.
   const room = view.alibiRound !== null ? chooseAlibi(view, p, random) : null;
-  if (room !== null) out.push({ type: "postAlibi", player, room }, ...alibiPerk(view, room));
+  if (room !== null) out.push({ type: "postAlibi", player, room }, ...spend(alibiPerk(view, room)));
   if (phase.kind === "meeting") {
     // v2 §4: vote (with a +Vote on a shakedown), then maybe claim a role (the Priest only after its vote).
     const vote = view.me.vote === null ? chooseVote(view, p, random, crewSeed) : null;
-    if (vote !== null) out.push({ type: "castVote", player, vote }, ...meetingPerks(view, vote));
+    if (vote !== null) out.push({ type: "castVote", player, vote }, ...spend(meetingPerks(view, vote)));
     out.push(...claimCommands(view, p, random, true));
     return out;
   }
@@ -151,21 +145,21 @@ export function decide(view: PlayerView, p: Personality, random: Random, crewSee
   if (!duel) out.push(...scheduleMeeting(view));
   // v2 §4: claims are made around meetings (the act's meeting is next, or an emergency is called).
   if (!duel && meetingTime(view)) out.push(...claimCommands(view, p, random, false));
-  out.push(...crewPowers(view));
+  out.push(...crewPowers(view), ...moleTipOff(view), ...buyPerks(view));
   if (phase.kind === "planning") {
     if (duel) {
       if (wantsCallOut(view, p, random)) out.push({ type: "callOut", player });
     } else if (wantsEmergency(view, p, random)) out.push({ type: "callEmergency", player });
     const move = view.me.move ?? chooseMove(view, p, random);
     if (view.me.move === null) out.push({ type: "submitMove", player, move });
-    out.push(...planningPerks(view, move.room));
+    out.push(...spend(planningPerks(view, move.room)));
     // design §10: answer a Double-cross offer once (minimal: a coin flip; a Mole keeps its card).
     const round = phase.round;
     const offered = ofType(view.caseFile, "doubleCrossOffered").some((e) => e.round === round);
     const answered = ofType(view.caseFile, "doubleCrossAnswered").some((e) => e.round === round);
     if (offered && !answered) {
-      // The dark side (saboteurs, accomplices) keeps its card.
-      const accept = roleOf(view).faction === "crew" && random() < DOUBLE_CROSS_ACCEPT;
+      // A ★ role keeps its card (it can win when the job fails).
+      const accept = !isStar(view.me.role) && random() < DOUBLE_CROSS_ACCEPT;
       out.push({ type: "answerDoubleCross", player, accept });
     }
   }
@@ -205,8 +199,25 @@ function crewPowers(view: PlayerView): PlayerCommand[] {
     return view.round % ROUNDS_PER_ACT === 0 ? [{ type: "useAbility", player, ability: { kind: "checkStash", target: top.player } }] : [];
   }
   const round = lastResolvedRound(view);
+  // A Recharge perk can free the power again before a new round resolves; the engine allows one audit per round.
+  if (ofType(view.caseFile, "abilityResolved").some((e) => e.ability.kind === "audit" && e.ability.round === round)) return [];
   const claim = ofType(view.ledger, "alibiPosted").find((a) => a.player === top.player && a.round === round);
   return claim ? [{ type: "useAbility", player, ability: { kind: "audit", room: claim.room } }] : [];
+}
+
+/**
+ * The Mole's tip-off: any time outside meetings, once between meetings. It
+ * lands at the next police moment, so the bot tips off when Heat after this
+ * round and about one more would pass `MOLE_TIP_AT` of the raid level, or when
+ * it leans toward a raid. extension.md "Police activity", Build notes "Bots"
+ */
+function moleTipOff(view: PlayerView): PlayerCommand[] {
+  const { power } = roleOf(view);
+  if (power.kind !== "tipOff" || view.me.roleState.usedThisAct >= power.perAct || view.me.tipOffs >= power.perGame) return [];
+  const job = jobOf(view);
+  const soon = view.heat + cardHeatNow(view) + 2 * job.heat.perRound;
+  if (soon < MOLE_TIP_AT * job.heat.max && leaning(view) !== "heat") return [];
+  return [{ type: "useAbility", player: view.me.id, ability: { kind: "tipOff" } }];
 }
 
 // ---------------------------------------------------------------- moves (§5.1)
@@ -238,12 +249,8 @@ export function chooseMove(view: PlayerView, p: Personality, random: Random): Mo
     const hideable = view.me.stash + pocket;
     if (left >= 1 && hideable >= 1) ability = { kind: "fenceSafe", amount: Math.min(left, hideable) };
   } else if (power.kind === "loopCameras" && view.me.roleState.usedThisAct < power.perAct) {
-    // v2 §4: hide its own skim first (R5: looping for its saboteur alone left it the dark
-    // side's smallest stash; balance-3.md), else loop the room its known saboteur claimed last.
-    const ally = view.me.roleState.allies[0];
-    const claim = ofType(view.ledger, "alibiPosted").filter((a) => a.player === ally).at(-1)?.room;
+    // v2 §4: hide its own skim (no allies to cover since the Extension).
     if (pocket > 0) ability = { kind: "loopCameras", room };
-    else if (claim !== undefined && view.rooms.includes(claim)) ability = { kind: "loopCameras", room: claim };
   } else if (power.kind === "blackmail" && view.me.roleState.usedThisAct < power.perAct && view.players.length > 0) {
     // v2 §4: guess only with a role from a Peek or an Inside tip (sure, unless stale after
     // a Double-cross) or, failing those, someone's claim of a unique role; otherwise skip.
@@ -256,10 +263,10 @@ export function chooseMove(view: PlayerView, p: Personality, random: Random): Mo
       ability = { kind: "blackmail", target, role };
     }
   } else if (power.kind === "forge" && view.me.roleState.usedThisAct < power.perAct) {
-    // v2 §4: plant its most-trusted rival (lowest suspicion, not a known ally) in the room
+    // v2 §4: plant its most-trusted rival (lowest suspicion) in the room
     // likely to come up short: where it skims itself, else the richest room, in the act's last round.
     const scores = suspicion(view);
-    const rival = view.players.map((o) => o.id).filter((id) => !view.me.roleState.allies.includes(id)).sort((a, b) => (scores.get(a) ?? 0) - (scores.get(b) ?? 0))[0];
+    const rival = view.players.map((o) => o.id).sort((a, b) => (scores.get(a) ?? 0) - (scores.get(b) ?? 0))[0];
     const richest = [...byLoot(lootRooms)].sort((a, b) => b[1] - a[1])[0]?.[0];
     const short = pocket > 0 ? room : view.round % ROUNDS_PER_ACT === 0 ? richest : undefined;
     if (rival !== undefined && short !== undefined) ability = { kind: "forge", target: rival, room: short };
@@ -267,9 +274,6 @@ export function chooseMove(view: PlayerView, p: Personality, random: Random): Mo
     // v2 §4: take when it is in the richest room (a crowd there to blame), or in the act's last round.
     const richest = [...byLoot(lootRooms)].sort((a, b) => b[1] - a[1])[0]?.[0];
     if (room === richest || view.round % ROUNDS_PER_ACT === 0) ability = { kind: "embezzle" };
-  } else if (power.kind === "tipOff" && view.me.roleState.usedThisAct < power.perAct) {
-    // design §8: the Mole sometimes tips off (at most once per act); otherwise it plays its personality.
-    if (random() < MOLE_TIP_CHANCE) ability = { kind: "tipOff" };
   }
   return ability ? { ...move, ability } : move;
 }
@@ -279,17 +283,21 @@ function chooseRoom(view: PlayerView, p: Personality, random: Random): RoomId {
   // design §10: this round's card can surge a room's loot and Heat (Shift change, Payday).
   const job = jobThisRound(view, base);
   // design §7: Heat now plus this round's card, the baseline still to come and,
-  // when a Mole may be in play, the tip-offs still to come (heat.ts), against the raid level.
+  // when a Mole could be in play, the police activity still to come (heat.ts), against the raid level.
   const danger = heatDanger(view, base);
   // The most any room pushes Heat on a normal round: a surged room is avoided harder.
   const usual = Math.max(1, ...roomsWhere(view, base, (d) => d.heatPressure > 0).map((r) => roomDef(base, r).heatPressure));
   const cooler = roomsWhere(view, job, (d) => d.heatPressure < 0)[0];
-  // v2 §4: a Getaway Driver heats the Rooftop when Heat is mid, and loots once it's high.
+  // extension.md Build notes "Bots": a ★ role leaning toward a raid heats the job
+  // (the Driver on its Rooftop), toward a missed target it skims the richest room.
+  const lean = leaning(view);
   const { power } = roleOf(view);
-  if (power.kind === "getaway") {
-    if (danger >= GETAWAY.high) return weighted(roomsWhere(view, job, (d) => d.loot > 0).map((r) => [r, roomDef(job, r).loot] as const), random) ?? job.defaultRoom;
-    if (danger >= GETAWAY.mid && view.rooms.includes(power.room) && random() < GETAWAY.rooftop) return power.room;
+  if (lean === "heat") {
+    if (power.kind === "getaway" && view.rooms.includes(power.room)) return power.room;
+    const hottest = roomsWhere(view, job, (d) => d.heatPressure > 0).sort((a, b) => roomDef(job, b).heatPressure - roomDef(job, a).heatPressure)[0];
+    if (hottest !== undefined) return hottest;
   }
+  if (lean === "target") return roomsWhere(view, job, (d) => d.loot > 0).sort((a, b) => roomDef(job, b).loot - roomDef(job, a).loot)[0] ?? job.defaultRoom;
   if (cooler && danger > p.heatCaution && random() < Math.min(0.8, (danger - p.heatCaution) * 4)) return cooler;
   const watcher = roomsWhere(view, job, (d) => d.info === "watchRoom")[0];
   if (watcher && random() < p.watch) return watcher;
@@ -315,9 +323,9 @@ function choosePocket(view: PlayerView, p: Personality, random: Random, loot: nu
   if (random() < p.noise) return Math.floor(random() * (loot + 1));
   if (random() >= p.pocketChance) return 0;
   let pocket = Math.min(loot, Math.max(1, Math.round(loot * p.greed * (0.5 + random()))));
-  // v2 §4: a Getaway Driver pockets freely once Heat is high (the job is sinking anyway).
-  const reckless = roleOf(view).power.kind === "getaway" && heatDanger(view, jobOf(view)) >= GETAWAY.high;
-  if (!reckless && random() < p.teamSpirit) {
+  // extension.md Build notes "Bots": a ★ role leaning toward its failure skims all it can.
+  if (leaning(view) !== null) return loot;
+  if (random() < p.teamSpirit) {
     const job = jobOf(view);
     const crew = crewSize(view);
     const roundsLeftInAct = view.act * ROUNDS_PER_ACT - view.round + 1;
@@ -399,7 +407,7 @@ function scheduleMeeting(view: PlayerView): PlayerCommand[] {
 }
 
 function wantsEmergency(view: PlayerView, p: Personality, random: Random): boolean {
-  if (view.me.emergencyMeetingUsed || view.pendingEmergency) return false;
+  if ((view.me.emergencyMeetingUsed && !hasPerk(view, "emergency")) || view.pendingEmergency) return false;
   if (random() < p.noise * 0.05) return true;
   if (p.emergencyAt === null) return false;
   const top = mostSuspicious(suspicion(view));
@@ -442,22 +450,19 @@ export function misjudged(view: PlayerView, scores: ReadonlyMap<PlayerId, number
   return out;
 }
 
-/** Shake down the most suspicious player once they pass the bot's threshold; otherwise skip. design §11.2 */
+/** Shake down the most suspicious player once they pass the bot's threshold; otherwise skip. Suspicion only, no ally logic (extension.md Build notes "Bots"). design §11.2 */
 export function chooseVote(view: PlayerView, p: Personality, random: Random, crewSeed?: string): VoteChoice {
-  // design §8.1: a Mole never votes to shake down its fellow Mole.
-  const allies = view.me.roleState.allies;
   if (random() < p.noise) {
-    const target = pick([null, ...view.players.map((o) => o.id).filter((id) => !allies.includes(id))], random);
+    const target = pick([null, ...view.players.map((o) => o.id)], random);
     return target === null ? { kind: "skip" } : { kind: "shakedown", target };
   }
   const scores = misjudged(view, suspicion(view), p, random, crewSeed);
   // design §8: a Snitch is paid when its target is caught holding loot, so it moves on less evidence.
   const { power } = roleOf(view);
   const mark = power.kind === "snitch" ? view.me.roleState.target : null;
-  if (mark !== null && mark !== undefined && !allies.includes(mark) && (scores.get(mark) ?? 0) >= p.voteAt * SNITCH_EAGERNESS) {
+  if (mark !== null && mark !== undefined && (scores.get(mark) ?? 0) >= p.voteAt * SNITCH_EAGERNESS) {
     return { kind: "shakedown", target: mark };
   }
   const top = mostSuspicious(scores);
-  if (top !== null && allies.includes(top.player)) return { kind: "skip" };
   return top !== null && top.score >= p.voteAt ? { kind: "shakedown", target: top.player } : { kind: "skip" };
 }

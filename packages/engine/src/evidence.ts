@@ -8,9 +8,10 @@ import type { GameEvent, GameEventType } from "./types";
 /**
  * Entries that are role cards by type, even where the payload names no role:
  * a Snitch target says you're the Snitch; a compromised vote says a
- * Blackmailer guessed your (dark-side) role.
+ * Blackmailer guessed your role; a token's trigger (and a landed tip-off)
+ * names the role that earned it.
  */
-const ROLE_CARD_TYPES: ReadonlySet<GameEventType> = new Set<GameEventType>(["roleDealt", "moleAllies", "alliesLearned", "snitchTargetAssigned", "snitchRewarded", "voteCompromised"]);
+const ROLE_CARD_TYPES: ReadonlySet<GameEventType> = new Set<GameEventType>(["roleDealt", "snitchTargetAssigned", "voteCompromised", "tokenEarned", "tipOffLanded"]);
 
 /** Payload keys that state a role or a faction (anyone's): a Peek, an Inside tip, a Double-cross swap, a Blackmail guess, allies. */
 const ROLE_KEYS: ReadonlySet<string> = new Set(["role", "roles", "faction", "allies"]);

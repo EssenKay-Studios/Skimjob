@@ -23,7 +23,7 @@ const { botRandom, chooseVote, crewHunch } = await import("./bot");
 const { PERSONALITIES } = await import("./personalities");
 const { createBots, runBotGame } = await import("./run");
 
-/** All Rookies, Mole off, events off: nothing in any view depends on the seed. */
+/** All Rookies, Mole off, events off: nothing in any view but the public shop depends on the seed. */
 const config = (seed: string, n = 6): GameConfig => ({
   seed,
   players: Array.from({ length: n }, (_, i) => ({ id: `p${i + 1}`, name: `Bot ${i + 1}`, isBot: true })),
@@ -72,7 +72,8 @@ describe("QA PR #43: crewSeed — the hunch is not computable from public data",
 
   it("the games are indistinguishable to every player: identical views (public and private) despite different secret seeds", () => {
     for (const p of games[0]!.state.playerOrder) {
-      const all = views(p).map((v) => JSON.stringify(v));
+      // The perk shop is dealt from the game seed, in the open (extension.md "Tokens and the perk shop"): not the crew seed.
+      const all = views(p).map((v) => JSON.stringify(v, (k, x: unknown) => (k === "shop" || (x as { type?: string } | null)?.type === "shopDealt" ? undefined : x)));
       expect(new Set(all).size, p).toBe(1);
       // And the secret seed is nowhere in a view.
       for (const [i, text] of all.entries()) expect(text).not.toContain(SEEDS[i]);

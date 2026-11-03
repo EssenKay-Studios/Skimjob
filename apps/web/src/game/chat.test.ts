@@ -223,8 +223,8 @@ describe("evidence cards (design §12.1)", () => {
       ledger: [] as LoggedEvent<PublicEvent>[],
     };
     expect(shareableEntries(view).map((e) => e.event.type)).toEqual(["roomSighting"]);
-    // Role cards never show (design §8, PM decision on PR #38): the deal, a Peek, an Inside tip, allies.
-    const roles = { caseFile: caseFile([sampleEvents.roleDealt, sampleEvents.perkUsed, sampleEvents.insideTip, sampleEvents.alliesLearned, sampleEvents.lootSplit]), ledger: [] };
+    // Role cards never show (design §8, PM decision on PR #38): the deal, a Peek, an Inside tip, a tip-off landing.
+    const roles = { caseFile: caseFile([sampleEvents.roleDealt, sampleEvents.perkUsed, sampleEvents.insideTip, sampleEvents.tipOffLanded, sampleEvents.lootSplit]), ledger: [] };
     expect(shareableEntries(roles).map((e) => e.event.type)).toEqual(["lootSplit"]);
     const closed = { ...view, ledger: [{ seq: 9, event: { ...sampleEvents.meetingClosed, meetingId: cast.meetingId } as PublicEvent }] };
     expect(shareableEntries(closed).map((e) => e.seq)).toEqual([3, 1]); // newest first

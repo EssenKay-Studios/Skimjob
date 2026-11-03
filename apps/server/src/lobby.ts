@@ -12,7 +12,7 @@ import { createGuestUser, type Sessions, type User } from "./auth";
 import type { Db, Queryable } from "./db";
 import type { GameStatus, GameStore } from "./store";
 import { TIMINGS } from "./timing";
-import { BOT_NAMES, checkNickname, DEFAULT_SETTINGS, looksLikeBot, nicknameKey, parseSettings, type LobbySettings } from "./settings";
+import { BOT_NAMES, checkNickname, DEFAULT_SETTINGS, isSettingKey, looksLikeBot, nicknameKey, parseSettings, storedSettings, type LobbySettings } from "./settings";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CODE_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"; // no 0/o, 1/l/i
@@ -104,8 +104,8 @@ function view(game: GameRow, seats: readonly SeatRow[], user: User): LobbyView {
     id: game.id,
     status: game.status,
     inviteCode: game.invite_code,
-    // Games made before a setting existed get its default (e.g. uniqueRoles).
-    settings: { ...DEFAULT_SETTINGS, ...game.settings },
+    // Games made before a setting existed get its default (e.g. uniqueRoles); a saboteur setting is migrated.
+    settings: storedSettings(game.settings),
     youAreHost: game.host_user_id === user.id,
     autoMeetings: (TIMINGS[game.settings.sessionLength] ?? TIMINGS[DEFAULT_SETTINGS.sessionLength]).autoMeetings,
     minSeats: MIN_PLAYERS,
@@ -236,8 +236,8 @@ export function lobbyRoutes(app: FastifyInstance, db: Db, store: GameStore, s: S
     asHost(req, async (game, seats, user) => {
       const patch = body(req).settings;
       if (typeof patch !== "object" || patch === null || Array.isArray(patch)) return refuse(400, "settings must be an object");
-      for (const k of Object.keys(patch)) if (!Object.hasOwn(DEFAULT_SETTINGS, k)) refuse(400, `unknown setting ${JSON.stringify(k)}`);
-      const parsed = parseSettings({ ...DEFAULT_SETTINGS, ...game.settings, ...patch });
+      for (const k of Object.keys(patch)) if (!isSettingKey(k)) refuse(400, `unknown setting ${JSON.stringify(k)}`);
+      const parsed = parseSettings({ ...storedSettings(game.settings), ...patch });
       if (!parsed.ok) return refuse(400, parsed.error);
       await db.query("update games set settings = $2::jsonb where id = $1", [game.id, JSON.stringify(parsed.settings)]);
       return view({ ...game, settings: parsed.settings }, seats, user);
@@ -287,7 +287,7 @@ export function lobbyRoutes(app: FastifyInstance, db: Db, store: GameStore, s: S
   app.post<{ Params: { id: string } }>("/games/:id/start", async (req) => {
     const started = await asHost(req, async (game, seats, user) => {
       if (seats.length < MIN_PLAYERS) refuse(409, `a game needs at least ${MIN_PLAYERS} seats`);
-      const config = gameConfig(game.settings, seats, randomBytes(16).toString("hex"));
+      const config = gameConfig(storedSettings(game.settings), seats, randomBytes(16).toString("hex"));
       const errors = validateConfig(config);
       if (errors.length > 0) throw new Error(`lobby made a bad config: ${errors.join("; ")}`);
       await store.start(game.id, config, async (tx) => {
@@ -303,17 +303,25 @@ export function lobbyRoutes(app: FastifyInstance, db: Db, store: GameStore, s: S
   });
 }
 
-/** The engine config for a lobby: seats in seat order, bank job, the content's default role pool. */
+/**
+ * The engine config for a lobby: seats in seat order, bank job, the host's
+ * deck, toggles, deal and role list. Quick forces Starter with events off
+ * (no shop, no tokens); the host's other choices stay stored for when the
+ * length changes. extension.md "Host settings"
+ */
 export function gameConfig(settings: LobbySettings, seats: readonly Pick<SeatRow, "nickname" | "bot_personality">[], seed: string): GameConfig {
+  const quick = settings.sessionLength === "quick";
   return {
     seed,
     players: seats.map((x, i) => ({ id: playerIdFor(i), name: x.nickname, isBot: x.bot_personality !== null })),
     job: "bank",
-    rolePool: [],
-    mole: settings.mole,
-    eventsEnabled: settings.eventsEnabled,
+    rolePool: quick ? [] : [...settings.roles],
+    deck: settings.deck,
+    deal: settings.deal,
+    roleList: settings.roleList,
+    eventsEnabled: quick ? false : settings.eventsEnabled,
     voteVisibility: settings.voteVisibility,
-    starterMode: settings.starterMode,
+    starterMode: quick || settings.starterMode,
     uniqueRoles: settings.uniqueRoles !== false,
   };
 }

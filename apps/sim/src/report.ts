@@ -56,7 +56,8 @@ export function formatReport(summary: Summary, title: string): string {
   const cols = columns(summary);
   const hasMole = cols.some(([, m]) => m.moleWins.games > 0);
   // design §17.4: Mole win rate when present: games a Mole won ÷ games with a Mole (moleWinMetric).
-  const moleRow: Row = { label: "Mole win rate (games with a Mole)", target: "30–40%", cell: (m) => pct(m.moleWins.rate) };
+  // Reported only: under one crew the Mole is held to role parity (extension.md Build notes "Sim").
+  const moleRow: Row = { label: "Mole win rate (games with a Mole)", target: "report", cell: (m) => pct(m.moleWins.rate) };
   const rows = hasMole ? [...ROWS, moleRow] : ROWS;
   const main = table(
     ["Balance metric (design §17.4)", "target", ...cols.map(([c]) => c)],
@@ -69,7 +70,7 @@ export function formatReport(summary: Summary, title: string): string {
     (m) => Object.fromEntries(POCKET_BANDS.flatMap((b) => (m.pocketing[b] ? [[b, m.pocketing[b]]] : []))),
     (g) => String(g.seats),
   );
-  const mole = hasMole ? "" : "\nMole win rate (target 30–40%): — (no Moles dealt)";
+  const mole = hasMole ? "" : "\nMole win rate: — (no Moles dealt)";
   const rejections = summary.overall.rejections > 0 ? `\nWARNING: bots sent ${summary.overall.rejections} refused commands (should be 0).` : "";
   return [
     title,

@@ -18,11 +18,11 @@ function config(players: number, voteVisibility: VoteVisibility = "hiddenThenRev
     seed: "qa-meeting",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: [...STARTER_ROLES], // no Muscle, so no shakedown window (task 12)
-    mole: "off",
+    // Starter mode: no Muscle and no shop (so no Shield), so no shakedown window (extension.md "Shakedowns").
+    rolePool: [...STARTER_ROLES],
     eventsEnabled: false,
     voteVisibility,
-    starterMode: false,
+    starterMode: true,
     contentOverrides: V01_NUMBERS, // scripted against content 0.1.0 numbers (balance pass 1)
   };
 }
@@ -103,7 +103,7 @@ function fullGame(n: number, mode: VoteVisibility): GameState {
   let s = game(n, [], mode);
   // Act 1
   s = lockByVote(s, "act1-slot");
-  s = run(s, mv("p0", "vault", 4), ROUND); // round 1: p0 pockets 4
+  s = run(s, mv("p0", "vault", 6), ROUND); // round 1: p0 pockets 6 (the clean line, extension.md "Shakedowns")
   s = run(s, emergency("p1"), mv("p2", "lobby"), ROUND); // notice period spans round 2's deadline
   expect(s.phase).toEqual({ kind: "planning", round: 3 });
   s = run(s, open("emergency-p1"), ...crew.map((p) => vote(p, null)), CLOSE);
@@ -114,7 +114,7 @@ function fullGame(n: number, mode: VoteVisibility): GameState {
   s = run(s, open("act-1"));
   expect(s.meeting?.votes).toEqual({ p2: { kind: "shakedown", target: "p0" } });
   s = run(s, ...crew.slice(1).filter((p) => p !== "p2").map((p) => vote(p, "p0")), CLOSE);
-  expect(LAST(s, "shakedownResolved")).toMatchObject({ meetingId: "act-1", target: "p0", stashRevealed: 4, clean: false });
+  expect(LAST(s, "shakedownResolved")).toMatchObject({ meetingId: "act-1", target: "p0", stashRevealed: 6, clean: false });
   expect(s.phase).toEqual({ kind: "planning", round: 4 });
   // Act 2
   s = run(s, ROUND, ROUND, ROUND, sched(2, "server-pick"), emergency("p0"), open("emergency-p0"));
@@ -282,26 +282,27 @@ describe("QA: stale, duplicate and wrong-id deadlines — design §4.1", () => {
   });
 });
 
-describe("QA: shakedowns — design §11.3", () => {
-  it("Fence: only the stash outside the safe is revealed and taken; the safe is untouched", () => {
+describe("QA: shakedowns — design §11.3, extension.md \"Shakedowns (fixed numbers)\"", () => {
+  it("Fence: the safe is shown but not taken; only the stash outside it goes to the Haul", () => {
     let s = run(game(3, ["fence"]), mv("p0", "vault", 6, { ability: { kind: "fenceSafe", amount: 2 } }), ROUND);
     s = run(s, mv("p0", "vault", 6), ROUND); // stash 10, safe 2
     expect(s.players.p0).toMatchObject({ stash: 10, safe: 2 });
     s = toActMeeting(s);
     const haul = s.haul;
     s = run(s, vote("p1", "p0"), vote("p2", "p0"), CLOSE);
-    expect(LAST(s, "shakedownResolved")).toMatchObject({ stashRevealed: 10, taken: 10, clean: false, compensation: 0 });
-    expect(JSON.stringify(LAST(s, "shakedownResolved"))).not.toMatch(/safe/);
+    expect(LAST(s, "shakedownResolved")).toMatchObject({ stashRevealed: 10, safeRevealed: 2, taken: 10, clean: false, compensation: 0 });
     expect(s.players.p0).toMatchObject({ stash: 0, safe: 2 });
     expect(s.haul).toBe(haul + 10);
   });
 
   it.each([
+    [1, 6, false],
+    [1, 5, true],
     [2, 6, false],
     [2, 5, true],
-    [3, 9, false],
-    [3, 8, true],
-  ])("Act %i: a stash of %i is clean=%s (threshold 3 × act); clean pays 5 × act", (act, stash, clean) => {
+    [3, 6, false],
+    [3, 5, true],
+  ])("Act %i: a stash of %i is clean=%s (one line, 6, in every act); clean pays 8", (act, stash, clean) => {
     let s = game(3);
     for (let a = 1; a < act; a++) s = run(toActMeeting(s), CLOSE);
     // Give p0 exactly `stash`, pocketing up to 3 of the Vault's loot in each round of the act.
@@ -313,7 +314,7 @@ describe("QA: shakedowns — design §11.3", () => {
     }
     expect(s.players.p0?.stash).toBe(stash);
     s = run(s, sched(act), open(`act-${act}`), vote("p1", "p0"), vote("p2", "p0"), CLOSE);
-    expect(LAST(s, "shakedownResolved")).toMatchObject({ stashRevealed: stash, clean, compensation: clean ? 5 * act : 0 });
+    expect(LAST(s, "shakedownResolved")).toMatchObject({ stashRevealed: stash, clean, compensation: clean ? 8 : 0 });
   });
 
   it("compensation larger than a non-empty Haul empties the Haul and never goes negative (provisional)", () => {
@@ -322,7 +323,7 @@ describe("QA: shakedowns — design §11.3", () => {
     expect(s.players.p1?.stash).toBe(1);
     const haul = s.haul;
     expect(haul).toBeGreaterThan(0);
-    expect(haul + 1).toBeLessThan(5);
+    expect(haul + 1).toBeLessThan(8);
     s = run(s, mv("p0", "rooftop"), mv("p1", "rooftop"), ROUND, mv("p0", "rooftop"), mv("p1", "rooftop"), ROUND);
     expect(s.haul).toBe(haul);
     s = run(s, sched(1), open("act-1"), vote("p0", "p1"), CLOSE);

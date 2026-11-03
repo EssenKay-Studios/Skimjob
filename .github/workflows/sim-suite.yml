@@ -19,7 +19,7 @@ on:
         description: "Content overrides JSON to try a rule change, e.g. {\"heat\":{\"perRound\":5}}"
         default: ""
       extra:
-        description: "Other sim:suite options without spaces inside values, e.g. -p 4-8 --mole on"
+        description: "Other sim:suite options without spaces inside values, e.g. -p 4-8 --setups balanced,hidden"
         default: ""
       strict:
         description: "Fail the run if any check FAILs (confirmed by its 95% interval)"

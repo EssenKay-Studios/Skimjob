@@ -61,8 +61,11 @@ describe("validateOverrides — configs are untrusted JSON (design §17.4)", () 
         rooms: { vault: { loot: 7, heatPressure: 25.5 }, depositBoxes: { capacity: { max: 3, crowdedLoot: 2 } } },
         heat: { max: 120, perRound: 3.5, missedCheckpoint: 10 },
         checkpoints: { perPlayer: [5, 12, 20] },
-        shakedown: { cleanBelowPerAct: 2.5, compensationPerAct: 4 },
-        roles: { rookie: { stashMultiplier: 1.3 }, lookout: { extraRooms: 2 }, fence: { perAct: 6 }, insideMan: { perLootOverFinalTarget: 0.5 } },
+        shakedown: { cleanBelow: 5, payout: 4 },
+        duel: { wrongCallOut: 6 },
+        police: { chancePercent: 50, heat: 6 },
+        perks: { peek: { cost: 3 } },
+        roles: { rookie: { rewardCount: 2 }, lookout: { extraRooms: 2 }, fence: { perAct: 6 }, insideMan: { lootPerPointOverFinalTarget: 4 } },
       }),
     ).toEqual([]);
   });
@@ -88,12 +91,13 @@ describe("validateOverrides — configs are untrusted JSON (design §17.4)", () 
     expect(errs({ rooms: { vault: { heatPressure: Number.NaN } } })).toHaveLength(1);
     expect(errs({ heat: { perRound: Number.POSITIVE_INFINITY } })).toHaveLength(1);
     expect(errs({ heat: { max: 0 } })).toHaveLength(1);
-    expect(errs({ shakedown: { compensationPerAct: 1.5 } })).toHaveLength(1);
-    // design §11.2: the big-crew plurality numbers are tunable too.
-    expect(errs({ shakedown: { pluralityFromPlayers: 10, pluralityShare: 0.4 } })).toEqual([]);
-    expect(errs({ shakedown: { pluralityFromPlayers: 0 } })).toHaveLength(1);
-    expect(errs({ shakedown: { pluralityShare: -0.1 } })).toHaveLength(1);
-    expect(errs({ roles: { rookie: { stashMultiplier: -0.1 } } })).toHaveLength(1);
+    expect(errs({ shakedown: { payout: 1.5 } })).toHaveLength(1);
+    // extension.md "One vote rule": no plurality numbers any more.
+    expect(errs({ shakedown: { pluralityFromPlayers: 10 } })).toHaveLength(1);
+    expect(errs({ police: { chancePercent: 101 } })).toHaveLength(1);
+    expect(errs({ perks: { peek: { cost: -1 } } })).toHaveLength(1);
+    expect(errs({ perks: { jetpack: { cost: 1 } } })).toEqual(["contentOverrides.perks.jetpack: no such perk"]);
+    expect(errs({ roles: { insideMan: { lootPerPointOverFinalTarget: -1 } } })).toHaveLength(1);
   });
 
   it("rejects unknown fields, so a typo isn't silently ignored", () => {
@@ -114,27 +118,30 @@ describe("validateOverrides — configs are untrusted JSON (design §17.4)", () 
     expect(errs({ rooms: { depositBoxes: { capacity: { max: 0 } } } })).toHaveLength(1);
     expect(errs({ roles: { fence: { extraRooms: 2 } } })).toEqual(["contentOverrides.roles.fence.extraRooms is not an overridable field"]);
     expect(errs({ roles: { lookout: { perAct: 2 } } })).toHaveLength(1);
-    expect(errs({ roles: { getaway: { stashMultiplier: 2 } } })).toEqual(["contentOverrides.roles.getaway: no such role"]);
-    // design §8: the Mole's tip-off numbers are content, so they can be tuned; nobody else's.
-    expect(errs({ roles: { mole: { heat: 15, perAct: 2 } } })).toEqual([]);
+    expect(errs({ roles: { getaway: { rewardCount: 2 } } })).toEqual(["contentOverrides.roles.getaway: no such role"]);
+    // extension.md "Police activity": the tip-off's Heat is the police number, not the Mole's.
+    expect(errs({ roles: { mole: { perAct: 2 } } })).toEqual([]);
+    expect(errs({ roles: { mole: { heat: 15 } } })).toEqual(["contentOverrides.roles.mole.heat is not an overridable field"]);
     expect(errs({ roles: { fixer: { heat: 15 } } })).toEqual(["contentOverrides.roles.fixer.heat is not an overridable field"]);
   });
 
   it("event cards: each card tunes only its own effect's numbers (design §10, balance pass 2)", () => {
-    expect(errs({ events: { policePatrol: { amount: 10 }, shiftChange: { lootMultiplier: 2, heatMultiplier: 2 }, raidRumour: { loss: 5 } } })).toEqual([]);
-    expect(errs({ events: { policePatrol: { loss: 3 } } })).toEqual(["contentOverrides.events.policePatrol.loss is not an overridable field"]);
+    expect(errs({ events: { quietNight: { amount: -10 }, shiftChange: { lootMultiplier: 2, heatMultiplier: 2 }, raidRumour: { loss: 5 } } })).toEqual([]);
+    expect(errs({ events: { quietNight: { loss: 3 } } })).toEqual(["contentOverrides.events.quietNight.loss is not an overridable field"]);
+    // extension.md "Police activity": Police patrol has left the deck.
+    expect(errs({ events: { policePatrol: { amount: 10 } } })).toEqual(["contentOverrides.events.policePatrol: no such event card"]);
     expect(errs({ events: { audit: { amount: 1 } } })).toHaveLength(1);
     expect(errs({ events: { raidRumour: { loss: 2.5 } } })).toHaveLength(1);
     // design §7: Heat is whole numbers, so a Heat card's amount is a signed whole number.
     expect(errs({ events: { quietNight: { amount: -15 } } })).toEqual([]);
-    expect(errs({ events: { policePatrol: { amount: 2.5 } } })).toEqual(["contentOverrides.events.policePatrol.amount must be a whole number"]);
-    expect(errs({ events: { policePatrol: { amount: "5" } } })).toHaveLength(1);
-    expect(errs({ events: { policePatrol: { amount: Infinity } } })).toHaveLength(1);
+    expect(errs({ events: { quietNight: { amount: 2.5 } } })).toEqual(["contentOverrides.events.quietNight.amount must be a whole number"]);
+    expect(errs({ events: { quietNight: { amount: "5" } } })).toHaveLength(1);
+    expect(errs({ events: { quietNight: { amount: Infinity } } })).toHaveLength(1);
     expect(errs({ events: { meteor: { amount: 1 } } })).toEqual(["contentOverrides.events.meteor: no such event card"]);
     expect(errs({ events: [] })).toHaveLength(1);
     const tuned = overrideEvents(EVENTS, { events: { shiftChange: { heatMultiplier: 3 } } });
     expect(tuned.shiftChange?.effect).toEqual({ kind: "roomSurge", room: "vault", lootMultiplier: 2, heatMultiplier: 3 });
-    expect(tuned.policePatrol).toBe(EVENTS.policePatrol);
+    expect(tuned.quietNight).toBe(EVENTS.quietNight);
     expect(eventsFor({ contentOverrides: null })).toBe(EVENTS);
   });
 
@@ -160,9 +167,9 @@ describe("merging overrides (design §17.4)", () => {
     expect(job.rooms.depositBoxes?.capacity).toEqual({ max: 2, crowdedLoot: 1 });
     expect(job.heat).toEqual({ ...BANK_JOB.heat, perRound: 2 });
     expect(job.checkpoints).toBe(BANK_JOB.checkpoints);
-    const roles = overrideRoles(ROLES, { roles: { lookout: { extraRooms: 2, stashMultiplier: 1.1 } } });
+    const roles = overrideRoles(ROLES, { roles: { lookout: { extraRooms: 2, lootPerPointOverFinalTarget: 3 } } });
     expect(roles.lookout?.power).toEqual({ kind: "lookout", extraRooms: 2 });
-    expect(roles.lookout?.scoring).toEqual({ stashMultiplier: 1.1, perLootOverFinalTarget: 0 });
+    expect(roles.lookout?.scoring).toEqual({ lootPerPointOverFinalTarget: 3 });
     expect(roles.rookie).toBe(ROLES.rookie);
     expect(JSON.stringify([BANK_JOB, ROLES])).toBe(before);
   });
@@ -204,9 +211,9 @@ describe("overrides in play (design §17.4)", () => {
     expect(s.log.find((e) => e.type === "checkpointChecked")).toMatchObject({ target: 2, met: true });
   });
 
-  it("shakedown numbers change the clean threshold and compensation (design §11.3)", () => {
-    // Clean below 10 × act; a clean target is paid 2 × act.
-    const s0 = game(config(3, { shakedown: { cleanBelowPerAct: 10, compensationPerAct: 2 } }));
+  it("shakedown numbers change the clean line and payout (extension.md \"Shakedowns\")", () => {
+    // Clean below 10; a clean target is paid 2.
+    const s0 = game(config(3, { shakedown: { cleanBelow: 10, payout: 2 } }));
     let s = s0;
     for (let i = 0; i < 3; i++) {
       s = after(s, () => submit("p0", { room: "vault", pocket: i === 0 ? 6 : 0 }), () => submit("p1", { room: "lobby" }), () => submit("p2", { room: "lobby" }), ROUND);
@@ -218,17 +225,15 @@ describe("overrides in play (design §17.4)", () => {
       { type: "castVote", player: "p2", vote: { kind: "shakedown", target: "p0" } },
       { type: "advance", deadline: { kind: "closeMeeting", meetingId: "act-1" } },
     );
-    // A stash of 6 would be caught with the shipped numbers (clean below 3); here it's clean.
+    // A stash of 6 would be caught with the shipped numbers (clean below 6); here it's clean.
     expect(s.log.find((e) => e.type === "shakedownResolved")).toMatchObject({ target: "p0", stashRevealed: 6, clean: true, compensation: 2 });
   });
 
-  it("role numbers change powers and scoring (design §8)", () => {
-    const cfg = config(5, { roles: { lookout: { extraRooms: 2 }, rookie: { stashMultiplier: 2 } } });
+  it("role numbers change powers (design §8)", () => {
+    const cfg = config(5, { roles: { lookout: { extraRooms: 2 } } });
     const s0 = game(cfg, ["lookout", "rookie"]);
     // The Lookout may now watch two rooms.
     const s1 = run(s0, submit("p0", { room: "lobby", ability: { kind: "lookout", rooms: ["vault", "office"] } }));
     expect(s1.moves.p0?.ability).toEqual({ kind: "lookout", rooms: ["vault", "office"] });
-    const s2 = after(s1, () => submit("p1", { room: "office", pocket: 3 }), ROUND);
-    expect(ranking(s2).find((e) => e.player === "p1")?.score).toBe(6);
   });
 });

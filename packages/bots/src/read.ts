@@ -1,6 +1,6 @@
 // Small readers over a PlayerView: everything a bot knows comes from here.
 // Bots never see the game state, only viewFor() output. design §17.3
-import { FILLER_ROLE, ROLES, ROUNDS_PER_ACT, type JobDef, type RoleDef, type RoleId, type RoomDef, type RoomId } from "@skimjob/content";
+import { DECKS, FILLER_ROLE, ROLES, ROUNDS_PER_ACT, type JobDef, type RoleDef, type RoleId, type RoomDef, type RoomId } from "@skimjob/content";
 import { jobById, overrideJob, overrideRoles, roomDef, type GameEvent, type LoggedEvent, type PlayerId, type PlayerView } from "@skimjob/engine";
 
 type EventOf<T extends GameEvent["type"]> = Extract<GameEvent, { type: T }>;
@@ -32,10 +32,31 @@ export const isDuel = (view: PlayerView): boolean => createdOf(view).duel === tr
 export const crewSize = (view: PlayerView): number => view.players.length + 1;
 
 /** The bot's role definition (content plus the game's overrides); an id with none plays with no power and may pocket, as in the engine. */
-export function roleOf(view: PlayerView): Pick<RoleDef, "power" | "canPocket" | "faction"> {
+export function roleOf(view: PlayerView): Pick<RoleDef, "power" | "canPocket" | "winsOn" | "tag"> {
   const roles = overrideRoles(ROLES, createdOf(view).contentOverrides);
   const def = Object.hasOwn(roles, view.me.role) ? roles[view.me.role] : undefined;
-  return def ?? { power: { kind: "none" }, canPocket: true, faction: "crew" };
+  return def ?? { power: { kind: "none" }, canPocket: true, winsOn: [], tag: "teamPlayer" };
+}
+
+/** A ★ role: one that can also win when the job fails (`winsOn`). extension.md "How you win" */
+export const isStar = (role: RoleId): boolean => (Object.hasOwn(ROLES, role) ? (ROLES[role]?.winsOn.length ?? 0) > 0 : false);
+
+/**
+ * Could `role` be in this game, as far as the public setup says: the shown
+ * role list (Exact or Possible), else the deck, crew size, events and Duel.
+ * extension.md "Host settings"
+ */
+export function couldBeDealt(view: PlayerView, role: RoleId): boolean {
+  if (view.roleList) return view.roleList.roles.includes(role);
+  const created = createdOf(view);
+  const def = Object.hasOwn(ROLES, role) ? ROLES[role] : undefined;
+  if (!def) return false;
+  if (role === FILLER_ROLE) return true;
+  if (!DECKS[created.deck].includes(role)) return false;
+  if (def.minPlayers !== undefined && crewSize(view) < def.minPlayers) return false;
+  if (def.needsEvents && !created.eventsEnabled) return false;
+  if (def.needsMeetings && created.duel) return false;
+  return true;
 }
 
 export const totalRounds = (job: JobDef): number => job.checkpoints.perPlayer.length * ROUNDS_PER_ACT;

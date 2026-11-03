@@ -4,16 +4,16 @@
 // once per act. Bots don't read chat, so claims are structured engine data
 // and the same in the simulator and on the server.
 //
-// Default policy (v2 §4): a crew bot claims its true role when accused, with
-// chance 1 − its "lie"; a dark bot bluffs a crew role that is hard to
-// disprove and that nobody else has claimed. Each role's own line in the §4
-// table adjusts when it claims (`CLAIM_STYLE`) and what a dark role bluffs
-// (`BLUFFS`). These are bot settings, not game rules.
-import { ROLES, STARTER_ROLES, type RoleId } from "@skimjob/content";
+// Default policy (extension.md Build notes "Bots"): ★ holders and the roles
+// that leave evidence (Hacker, Forger) bluff a low-risk role (Rookie, Bagman,
+// Cleaner) nobody else has claimed when accused; the rest claim truthfully
+// with chance 1 − their "lie". Each role's own line in the v2 §4 table adjusts
+// when it claims (`CLAIM_STYLE`). These are bot settings, not game rules.
+import type { RoleId } from "@skimjob/content";
 import { roomDef, roomLoot, type PlayerCommand, type PlayerId, type PlayerView } from "@skimjob/engine";
 import type { Personality } from "./personalities";
 import type { Random } from "./bot";
-import { claimantsOf, claimsOf, createdOf, crewSize, isDuel, jobOf, ofType, roleOf, uniqueRole } from "./read";
+import { claimantsOf, claimsOf, couldBeDealt, isDuel, isStar, jobOf, ofType, roleOf, uniqueRole } from "./read";
 import { suspicion } from "./suspicion";
 
 /**
@@ -48,21 +48,16 @@ export const CLAIM_STYLE: Readonly<Record<RoleId, ClaimStyle>> = {
 /** Share of the usual claim chance for the "rarely" roles (bot setting). */
 export const RARELY = 0.25;
 
-/** Hard-to-disprove crew roles a dark bot bluffs by default (v2 §4). */
+/** The low-risk roles a bluffing bot claims, in order. extension.md Build notes "Bots" */
 export const SAFE_BLUFFS: readonly RoleId[] = ["rookie", "bagman", "cleaner"];
 
-/** v2 §4 "Claim": each dark role's preferred bluffs, best first; then `SAFE_BLUFFS`. */
-export const BLUFFS: Readonly<Record<RoleId, readonly RoleId[]>> = {
-  getawayDriver: ["cleaner"],
-  fence: ["rookie"],
-  hacker: ["auditor"],
-  blackmailer: ["detective"],
-  forger: ["lookout"],
-  mole: ["bagman", "rookie"],
-  embezzler: ["insideMan"],
-};
+/** Roles whose power leaves evidence, so they bluff too. extension.md Build notes "Bots" */
+export const EVIDENCE_ROLES: readonly RoleId[] = ["hacker", "forger"];
 
-/** Chance a dark bot bluffs once accused (bot setting; it has no truth to tell). */
+/** Whether this role bluffs when accused: a ★ role or one that leaves evidence. */
+export const bluffs = (role: RoleId): boolean => isStar(role) || EVIDENCE_ROLES.includes(role);
+
+/** Chance a bluffing bot bluffs once accused (bot setting). */
 export const BLUFF_WHEN_ACCUSED = 0.8;
 
 /**
@@ -138,24 +133,12 @@ export function accused(view: PlayerView): "shakedown" | "suspected" | null {
   return mine >= ACCUSED_AT && [...pub.values()].every((s) => s <= mine) ? "suspected" : null;
 }
 
-/** Could `role` be in this game, as far as the public setup says (crew size, events, starter mode)? design §8.1 */
-export function couldBeDealt(view: PlayerView, role: RoleId): boolean {
-  const created = createdOf(view);
-  const def = Object.hasOwn(ROLES, role) ? ROLES[role] : undefined;
-  if (!def) return false;
-  if (created.starterMode) return STARTER_ROLES.includes(role);
-  if (def.minPlayers !== undefined && crewSize(view) < def.minPlayers) return false;
-  if (def.needsEvents && !created.eventsEnabled) return false;
-  return true;
-}
-
-/** The bluff a dark bot would claim now: its earlier claim, else its §4 bluff, else a safe one nobody else claimed. */
+/** The bluff a bluffing bot would claim now: its earlier claim, else a low-risk role that could be dealt and nobody else claimed. */
 export function bluffFor(view: PlayerView): RoleId | null {
   const mine = claimsOf(view).get(view.me.id)?.at(-1);
   if (mine !== undefined) return mine;
   const taken = new Set(ofType(view.ledger, "roleClaimed").filter((c) => c.player !== view.me.id).map((c) => c.role));
-  const options = [...(BLUFFS[view.me.role] ?? []), ...SAFE_BLUFFS];
-  return options.find((r) => !taken.has(r) && couldBeDealt(view, r) && ROLES[r]?.faction === "crew") ?? null;
+  return SAFE_BLUFFS.find((r) => r !== view.me.role && !taken.has(r) && couldBeDealt(view, r)) ?? null;
 }
 
 /** v2 §4 "evidence": the bot holds its own evidence against the player it is about to vote for. */
@@ -183,21 +166,20 @@ function holdsEvidence(view: PlayerView): boolean {
 function saved(view: PlayerView): boolean {
   const { power } = roleOf(view);
   if (power.kind === "fixer") return ofType(view.ledger, "raidStopped").length > 0 && ofType(view.caseFile, "abilityResolved").some((e) => e.ability.kind === "fixer");
-  if (power.kind === "cancelShakedown") return ofType(view.caseFile, "perkGranted").some((e) => e.perk === "recharge");
+  if (power.kind === "cancelShakedown") return ofType(view.caseFile, "tokenEarned").some((e) => e.trigger === "cancelledClean");
   return false;
 }
 
 /**
  * The role to claim now, or null. Only around meetings (v2 §4: "when accused
- * at a meeting"), once per act, never in Duel. Crew bots tell the truth; dark
- * bots bluff (`bluffFor`).
+ * at a meeting"), once per act, never in Duel. Most bots tell the truth;
+ * ★ and evidence-leaving roles bluff (`bluffFor`).
  */
 export function chooseClaim(view: PlayerView, p: Personality, random: Random, voted = view.me.vote !== null): RoleId | null {
   if (isDuel(view) || !meetingTime(view)) return null;
   if (ofType(view.ledger, "roleClaimed").some((c) => c.player === view.me.id && c.act === view.act)) return null;
   const blame = accused(view);
-  const { faction } = roleOf(view);
-  if (faction !== "crew") {
+  if (bluffs(view.me.role)) {
     if (blame === null || random() >= BLUFF_WHEN_ACCUSED) return null;
     return bluffFor(view);
   }

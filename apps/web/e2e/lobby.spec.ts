@@ -46,12 +46,12 @@ test("host creates, copies the invite, guest joins, host adds bots, start lands 
   await host.getByRole("button", { name: "Remove Bot · Max" }).click();
   await expect(host.locator(".seat--bot")).toHaveCount(1);
 
-  // Host settings, incl. Unique roles and the saboteur setting; the guest sees them read-only.
+  // Host settings, incl. Unique roles and the vote setting; the guest sees them read-only.
   await host.getByRole("group", { name: "Unique roles" }).getByRole("button", { name: "Off" }).click();
-  await host.getByRole("group", { name: /Saboteur/ }).getByRole("button", { name: "On" }).click();
+  await host.getByRole("group", { name: "Votes" }).getByRole("button", { name: "Open" }).click();
   await expect(host.getByRole("group", { name: "Unique roles" }).getByRole("button", { name: "Off" })).toHaveAttribute("aria-pressed", "true");
-  await expect(guest.getByRole("group", { name: /Saboteur/ })).toContainText("On");
-  await expect(guest.getByRole("group", { name: /Saboteur/ }).getByRole("button")).toHaveCount(0);
+  await expect(guest.getByRole("group", { name: "Votes" })).toContainText("Open");
+  await expect(guest.getByRole("group", { name: "Votes" }).getByRole("button")).toHaveCount(0);
 
   await host.getByRole("button", { name: "Start the job" }).click();
   await expect(host).toHaveURL(/\/game\//);

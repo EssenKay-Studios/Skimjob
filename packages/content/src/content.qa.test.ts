@@ -1,7 +1,7 @@
 // QA (PR #3): bank room and starter-role data against the design tables.
 // design §6, §7, §8 (numbers from balance pass 1, docs/balance/balance-1.md)
 import { describe, expect, it } from "vitest";
-import { ACCOMPLICE_V2_ROLES, BANK_JOB, CREW_V2_ROLES, INFO_VOTE_ROLES, MOLE_ROLE, POOL_ROLES, ROLES, SABOTEUR_ROLES, STARTER_ROLES } from "./index";
+import { BANK_JOB, MOLE_ROLE, POOL_ROLES, ROLES } from "./index";
 
 describe("bank room data — design §6, §7", () => {
   it("loot and Heat pressure for every room", () => {
@@ -32,10 +32,9 @@ describe("bank room data — design §6, §7", () => {
 });
 
 describe("role data — design §8", () => {
-  it("the role table has exactly the pool roles plus the saboteurs (tasks 12, 13; the Embezzler since R3b); every id matches its key", () => {
-    expect(Object.keys(ROLES).sort()).toEqual([...STARTER_ROLES, ...ACCOMPLICE_V2_ROLES, ...INFO_VOTE_ROLES, ...CREW_V2_ROLES, ...SABOTEUR_ROLES].sort());
-    expect([...POOL_ROLES].sort()).toEqual(Object.keys(ROLES).filter((r) => !SABOTEUR_ROLES.includes(r)).sort());
-    expect(SABOTEUR_ROLES).toContain(MOLE_ROLE);
+  it("every role can be toggled into a deck (extension.md \"Decks\"); every id matches its key", () => {
+    expect([...POOL_ROLES].sort()).toEqual(Object.keys(ROLES).sort());
+    expect(POOL_ROLES).toContain(MOLE_ROLE);
     for (const [id, def] of Object.entries(ROLES)) expect(def.id).toBe(id);
   });
 
@@ -43,10 +42,7 @@ describe("role data — design §8", () => {
     expect(Object.values(ROLES).filter((r) => !r.canPocket).map((r) => r.id)).toEqual(["insideMan"]);
   });
 
-  it("only the Rookie gets a stash multiplier; only the Inside Man scores on the Haul", () => {
-    const mult = Object.values(ROLES).filter((r) => r.scoring.stashMultiplier !== 1).map((r) => r.id);
-    const haul = Object.values(ROLES).filter((r) => r.scoring.perLootOverFinalTarget !== 0).map((r) => r.id);
-    expect(mult).toEqual(["rookie"]);
-    expect(haul).toEqual(["insideMan"]);
+  it("only the Inside Man scores on the Haul", () => {
+    expect(Object.values(ROLES).filter((r) => r.scoring.lootPerPointOverFinalTarget !== 0).map((r) => r.id)).toEqual(["insideMan"]);
   });
 });

@@ -60,15 +60,16 @@ describe("bot claims — docs/roles-v2.md §4", () => {
     expect(chooseClaim(viewFor(meeting, "ana"), exact(PERSONALITIES.honest), rolls(0), false)).toBeNull();
   });
 
-  it("a dark bot bluffs its §4 crew role when accused, never one someone else claimed, else a safe one", () => {
+  // extension.md Build notes "Bots": ★ and evidence-leaving roles bluff a low-risk role on the role list nobody else claimed.
+  it("a ★ bot bluffs a safe role when accused, never one someone else claimed", () => {
+    // The Starter pool's Exact role list: rookie, insideMan, lookout, bagman, cleaner.
     const mole = pending(withRole(game(5), "ana", "mole"));
-    expect(chooseClaim(viewFor(mole, "ana"), exact(PERSONALITIES.greedy), rolls(0))).toBe("bagman");
-    const taken = run(mole, { type: "claimRole", player: "ben", role: "bagman" });
-    expect(bluffFor(viewFor(taken, "ana"))).toBe("rookie");
-    const hacker = pending(withRole(game(5), "ana", "hacker"));
-    expect(bluffFor(viewFor(hacker, "ana"))).toBe("auditor");
-    expect(bluffFor(viewFor(pending(withRole(game(5), "ana", "getawayDriver")), "ana"))).toBe("cleaner");
-    expect(bluffFor(viewFor(pending(withRole(game(5), "ana", "fence")), "ana"))).toBe("rookie");
+    expect(chooseClaim(viewFor(mole, "ana"), exact(PERSONALITIES.greedy), rolls(0))).toBe("rookie");
+    const taken = run(mole, { type: "claimRole", player: "ben", role: "rookie" });
+    expect(bluffFor(viewFor(taken, "ana"))).toBe("bagman");
+    const both = run(taken, { type: "claimRole", player: "carl", role: "bagman" });
+    expect(bluffFor(viewFor(both, "ana"))).toBe("cleaner");
+    expect(bluffFor(viewFor(pending(withRole(game(5), "ana", "hacker")), "ana"))).toBe("rookie");
     // Not accused: it keeps quiet.
     expect(chooseClaim(viewFor(awaiting(withRole(game(5), "ana", "mole")), "ana"), exact(PERSONALITIES.greedy), rolls(0))).toBeNull();
     // It sticks to its story in later acts.

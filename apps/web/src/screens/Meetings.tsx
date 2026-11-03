@@ -522,7 +522,7 @@ function AbilityRow({ view, offer, send, done }: { view: PlayerView; offer: Abil
       return (
         <div className="ability">
           <p>
-            <b>Bless a player for this act.</b> If they're shaken down and turn out clean, the bank pays their compensation.
+            <b>Bless a player until the next meeting.</b> If they're shaken down and turn out clean, the bank pays their compensation.
           </p>
           {targets(offer.targets, "Player to bless")}
           <Button variant="secondary" seed="ab-bless" disabled={!target} onClick={() => target && void use({ type: "useAbility", ability: { kind: "bless", target } }, "Blessed.")}>
@@ -556,7 +556,7 @@ function AbilityRow({ view, offer, send, done }: { view: PlayerView; offer: Abil
   }
 }
 
-/** A formal, public, possibly false role claim, once per act (R4b; design §8, §12.1). Not in Duel. */
+/** A formal, public, possibly false role claim, once between meetings (R4b; design §8, §12.1). Not in Duel. */
 export function ClaimRole({ view, send, where }: { view: PlayerView; send: Send; where: "alibi" | "card" }) {
   const claim = claimState(view);
   const [open, setOpen] = useState(false);
@@ -567,7 +567,7 @@ export function ClaimRole({ view, send, where }: { view: PlayerView; send: Send;
   if (claim.claimed)
     return (
       <p className="meta claim__done">
-        You claimed to be the <b>{roleName(claim.claimed)}</b> this act.
+        You claimed to be the <b>{roleName(claim.claimed)}</b> since the last meeting.
       </p>
     );
   const go = async () => {
@@ -585,7 +585,7 @@ export function ClaimRole({ view, send, where }: { view: PlayerView; send: Send;
       {open && (
         <div id={panel} className="claim">
           <p>
-            Tell the crew which role you have. Everyone sees it, it doesn't have to be true, and you get one claim in Act {claim.act}.
+            Tell the crew which role you have. Everyone sees it, it doesn't have to be true, and you get one claim between meetings.
           </p>
           <div className="move__chips" role="group" aria-label="Role to claim">
             {claim.options.map((o) => (

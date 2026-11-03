@@ -83,6 +83,7 @@ const PLAYER_COMMANDS: { readonly [T in PlayerCommand["type"]]: true } = {
   useAbility: true,
   answerDoubleCross: true,
   callOut: true,
+  buyPerk: true,
 };
 
 /** One human seat's presence. `lastSeen`: when it last had the game open (null: never). */

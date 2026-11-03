@@ -1,7 +1,8 @@
-// Content needed to set up a game: player-count limits, the roles that can be
-// dealt, and the dark side (saboteurs and accomplices) to deal. Rooms by player count live on the job
-// (jobs.ts). design §8.1, §16
+// Content needed to set up a game: player-count limits, the decks and the
+// Balanced deal's mix by crew size. Rooms by player count live on the job
+// (jobs.ts). design §8.1, §16, extension.md "Decks", "Tags, decks and dealing"
 import type { RoleId } from "./index";
+import { ROLES } from "./roles";
 
 export const MIN_PLAYERS = 2;
 export const MAX_PLAYERS = 12;
@@ -15,101 +16,73 @@ export const MAX_SLOT_LENGTH = 64;
 /** A game is 3 acts of this many rounds (9 rounds in all). design §2, §4 */
 export const ROUNDS_PER_ACT = 3;
 
-/** The powerless role. Fills any seat the pool can't cover. design §8 */
+/** The powerless role. Fills any seat the deck can't cover. design §8 */
 export const FILLER_ROLE: RoleId = "rookie";
 
-/** The Mole (a saboteur) is dealt by the saboteur setting, never from the pool. design §8.1 */
+/** The Mole: background police activity runs only when one could be in the game. extension.md "Police activity" */
 export const MOLE_ROLE: RoleId = "mole";
 
-/** Every saboteur (role deck v2 §2): the Mole and, since R3b, the Embezzler. Dealt by the saboteur setting, never pool roles. design §8.1 */
-export const SABOTEUR_ROLES: readonly RoleId[] = [MOLE_ROLE, "embezzler"];
+/** A deck preset. extension.md "Decks" */
+export type DeckId = "starter" | "standard" | "everything";
 
-/** Starter mode: these crew roles only, no dark side, no events (role deck v2 §3: the Fence left). design §8.1 */
+/** Starter (first game, no events): unchanged from role deck v2 §3. */
 export const STARTER_ROLES: readonly RoleId[] = ["rookie", "insideMan", "lookout", "bagman", "cleaner"];
 
-/** The accomplices (role deck v2 §2, R3a and R3b). Dealt only with a saboteur. design §8, §8.1 */
-export const ACCOMPLICE_V2_ROLES: readonly RoleId[] = ["getawayDriver", "fence", "hacker", "blackmailer", "forger"];
-
-/** The info and vote roles still crew (M1 task 12; the Hacker and Blackmailer are accomplices since R3a/R3b). design §8 */
-export const INFO_VOTE_ROLES: readonly RoleId[] = ["smoothTalker", "muscle", "snitch"];
-
-/** Crew roles new in role deck v2 (docs/roles-v2.md §2, steps R2a/R2b; the Fixer is the Driver's crew half). design §8 */
-export const CREW_V2_ROLES: readonly RoleId[] = ["auditor", "detective", "priest", "fixer", "mastermind"];
-
-/** Roles used when the host leaves the pool empty: every pool role. */
-export const DEFAULT_ROLE_POOL: readonly RoleId[] = [...STARTER_ROLES, ...ACCOMPLICE_V2_ROLES, ...INFO_VOTE_ROLES, ...CREW_V2_ROLES];
-
-/** Every role id the engine accepts in a pool (saboteurs, such as the Mole, are not pool roles). */
-export const POOL_ROLES: readonly RoleId[] = DEFAULT_ROLE_POOL;
-
-/**
- * One possible dark side for a crew: how many saboteurs and accomplices, and
- * its weight among the options for that crew size. Role deck v2 §3 (docs/roles-v2.md).
- */
-export interface DarkSideMix {
-  readonly saboteurs: number;
-  readonly accomplices: number;
-  readonly weight: number;
-}
-
-export interface DarkSideRule {
-  readonly minPlayers: number;
-  readonly options: readonly DarkSideMix[];
-}
-
-/**
- * The dark side rolled with the saboteur setting "on", by crew size. Ordered
- * by `minPlayers`; the last rule at or below the player count applies.
- * design §8.1 (role deck v2 §3): crew only at 2–3, one saboteur at 4, then
- * weighted mixes. The hard limits (`DARK_SIDE_LIMITS`) still apply after the roll.
- */
-export const DARK_SIDE_RULES: readonly DarkSideRule[] = [
-  { minPlayers: 2, options: [{ saboteurs: 0, accomplices: 0, weight: 1 }] },
-  { minPlayers: 4, options: [{ saboteurs: 1, accomplices: 0, weight: 1 }] },
-  {
-    minPlayers: 5,
-    options: [
-      { saboteurs: 1, accomplices: 0, weight: 50 },
-      { saboteurs: 1, accomplices: 1, weight: 50 },
-    ],
-  },
-  {
-    minPlayers: 7,
-    options: [
-      { saboteurs: 1, accomplices: 1, weight: 60 },
-      { saboteurs: 2, accomplices: 0, weight: 20 },
-      { saboteurs: 1, accomplices: 2, weight: 20 },
-    ],
-  },
-  {
-    minPlayers: 9,
-    options: [
-      { saboteurs: 2, accomplices: 1, weight: 60 },
-      { saboteurs: 1, accomplices: 2, weight: 20 },
-      { saboteurs: 2, accomplices: 2, weight: 20 },
-    ],
-  },
-  {
-    minPlayers: 11,
-    options: [
-      { saboteurs: 2, accomplices: 2, weight: 60 },
-      { saboteurs: 2, accomplices: 1, weight: 20 },
-      { saboteurs: 3, accomplices: 1, weight: 20 },
-    ],
-  },
+/** Standard, the default: 11 roles; Rookies fill any spare seats. */
+export const STANDARD_ROLES: readonly RoleId[] = [
+  "lookout",
+  "auditor",
+  "detective",
+  "smoothTalker",
+  "muscle",
+  "cleaner",
+  "hacker",
+  "fence",
+  "getawayDriver",
+  "mole",
+  "embezzler",
 ];
 
+/** Everything: all 20 roles. */
+export const EVERYTHING_ROLES: readonly RoleId[] = Object.keys(ROLES);
+
+export const DECKS: Readonly<Record<DeckId, readonly RoleId[]>> = {
+  starter: STARTER_ROLES,
+  standard: STANDARD_ROLES,
+  everything: EVERYTHING_ROLES,
+};
+
+export const DEFAULT_DECK: DeckId = "standard";
+
+/** Every role id the host may toggle on (any role, on top of any preset outside Quick). */
+export const POOL_ROLES: readonly RoleId[] = EVERYTHING_ROLES;
+
+/** How many Lone wolf and Wildcard seats the Balanced deal fills; the rest are Team players. */
+export interface BalancedMix {
+  readonly loneWolves: number;
+  readonly wildcards: number;
+}
+
 /**
- * Hard limits on any dark side (role deck v2 §3): at most
- * ⌊(n + seatRounding) ÷ seatDivisor⌋ dark seats (n ÷ 3 rounded to the
- * nearest: 1 at 4, 2 at 5–7, 3 at 8–10, 4 at 11–12; R5 lifted the 5-player
- * cut, which was ⌊n ÷ 3⌋), no accomplices without a saboteur, and at most
- * saboteurs + `accomplicesOverSaboteurs` accomplices.
+ * The Balanced deal's fixed mix by crew size (index = players). Start values
+ * from roles-v2 §3's most-weighted row under the round(n ÷ 3) cap (saboteurs →
+ * Lone wolves, accomplices → Wildcards; at 5–6 the 50/50 tie takes the row
+ * with a Wildcard, provisional). The balance pass tunes it; the host can't
+ * change it. extension.md Build notes "Tags, decks and dealing"
  */
-export const DARK_SIDE_LIMITS = { seatDivisor: 3, seatRounding: 1, accomplicesOverSaboteurs: 1 } as const;
+export const BALANCED_MIX: Readonly<Record<number, BalancedMix>> = {
+  2: { loneWolves: 0, wildcards: 0 },
+  3: { loneWolves: 0, wildcards: 0 },
+  4: { loneWolves: 1, wildcards: 0 },
+  5: { loneWolves: 1, wildcards: 1 },
+  6: { loneWolves: 1, wildcards: 1 },
+  7: { loneWolves: 1, wildcards: 1 },
+  8: { loneWolves: 1, wildcards: 1 },
+  9: { loneWolves: 2, wildcards: 1 },
+  10: { loneWolves: 2, wildcards: 1 },
+  11: { loneWolves: 2, wildcards: 2 },
+  12: { loneWolves: 2, wildcards: 2 },
+};
 
-/** The most dark seats a crew of `n` may have (`DARK_SIDE_LIMITS`). design §8.1 */
-export const maxDarkSeats = (n: number): number => Math.floor((n + DARK_SIDE_LIMITS.seatRounding) / DARK_SIDE_LIMITS.seatDivisor);
-
-/** Saboteur setting "maybe": a `nonePercent`% chance of no dark side at all at minPlayers–maxPlayers; elsewhere like "on". */
-export const DARK_SIDE_MAYBE = { minPlayers: 4, maxPlayers: 8, nonePercent: 50 } as const;
+/** Truly random deals: at most this many of each of these roles. extension.md "Truly random" */
+export const RANDOM_DEAL_SINGLETONS: readonly RoleId[] = ["mole", "embezzler"];

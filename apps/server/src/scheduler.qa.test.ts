@@ -1,4 +1,5 @@
 // QA (PR #22, M2-4): scheduler attacks on a fake clock. design §4.1, §5.4, §11.1, §11.3, §16.1
+import { DECKS, ROLES } from "@skimjob/content";
 import { viewFor, type GameState, type VoteVisibility } from "@skimjob/engine";
 import type { FastifyInstance } from "fastify";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -12,6 +13,9 @@ import type { LobbySettings, SessionLength } from "./settings";
 import { createGameStore, type GameStore } from "./store";
 import { testDb } from "./testkit";
 import { scaleTiming, TIMINGS } from "./timing";
+
+/** The Standard deck with every Wildcard and Lone wolf toggled off: no Mole, so no police moments (was saboteur "off"). */
+const TEAM_ROLES = DECKS.standard.filter((r) => ROLES[r]?.tag === "teamPlayer");
 
 const T0 = Date.UTC(2026, 10, 2, 9);
 let db: Db;
@@ -43,7 +47,7 @@ async function boot() {
   store = {
     ...inner,
     start: (gameId, config, inTx) =>
-      inner.start(gameId, { ...config, seed: forcedSeed, ...(duelForTwo && config.players.length === 2 ? { duel: true, mole: "off" } : {}) }, inTx),
+      inner.start(gameId, { ...config, seed: forcedSeed, ...(duelForTwo && config.players.length === 2 ? { duel: true, roles: TEAM_ROLES } : {}) }, inTx),
   };
   app = buildServer({ db: sdb, clock, store });
   await app.ready();
@@ -187,7 +191,7 @@ describe("every preset finishes all-bot games (design §4.1)", () => {
       }
       duelForTwo = true;
       forcedSeed = `qa-${sessionLength}-duel`;
-      const duel = await play(1, { sessionLength, mole: "off" });
+      const duel = await play(1, { sessionLength, roles: TEAM_ROLES });
       expect(duel.phases.has("checkpoint")).toBe(true);
       expect(duel.log.some((e) => e.type === "meetingOpened")).toBe(false);
     });
@@ -231,7 +235,7 @@ describe("kill/restart at every step = an uninterrupted run (same seed)", () => 
       for (const p of (await play(5, { sessionLength: "quick" }, { act: emergencyAt, restart: () => true })).phases) phases.add(p);
     }
     duelForTwo = true;
-    for (const p of (await play(1, { sessionLength: "1w", mole: "off" }, { restart: () => true })).phases) phases.add(p);
+    for (const p of (await play(1, { sessionLength: "1w", roles: TEAM_ROLES }, { restart: () => true })).phases) phases.add(p);
     for (const p of ["planning", "alibis", "notice", "meeting", "checkpoint"]) expect(phases.has(p), p).toBe(true);
     console.log("QA restart phases covered:", [...phases].join(","));
   });
@@ -395,8 +399,8 @@ describe("restart matrix after the fix (30c9f9e): bots, 10+ seeds, Duel included
       expect(b.log).toEqual(a.log);
       duelForTwo = true;
       forcedSeed = `qa-matrix-duel-${k}`;
-      const da = await play(1, { sessionLength, mole: "off" });
-      const db2 = await play(1, { sessionLength, mole: "off" }, { restart: () => true });
+      const da = await play(1, { sessionLength, roles: TEAM_ROLES });
+      const db2 = await play(1, { sessionLength, roles: TEAM_ROLES }, { restart: () => true });
       expect(db2.phases.has("checkpoint")).toBe(true);
       expect(db2.fired).toEqual(da.fired);
       expect(db2.log).toEqual(da.log);

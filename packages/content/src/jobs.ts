@@ -33,25 +33,21 @@ export interface CheckpointRules {
   readonly perPlayer: readonly [number, number, number];
 }
 
-/** design §11.3 */
+/** design §11.3 (extension.md "Shakedowns (fixed numbers)") */
 export interface ShakedownRules {
-  /** A shaken-down stash below this × the act number (3, 6, 9) is declared clean. */
-  readonly cleanBelowPerAct: number;
-  /** A clean target is paid this × the act number (5, 10, 15) out of the Haul. */
-  readonly compensationPerAct: number;
   /**
-   * From this crew size a plurality is enough: the player with the most votes
-   * (by weight, no tie) is shaken down if they got at least `pluralityShare`
-   * of the votes cast. Smaller crews need more than half. design §11.2
+   * A shaken-down stash (plus any Fence safe) below this is declared clean. One
+   * number shared with the Detective's "dirty" line (owner ruling 3, 3 Nov).
    */
-  readonly pluralityFromPlayers: number;
-  readonly pluralityShare: number;
+  readonly cleanBelow: number;
+  /** A clean target is paid this out of the Haul (or by the bank, if blessed). */
+  readonly payout: number;
 }
 
 /** design §16.1 Duel mode (2 players, call-outs instead of votes). */
 export interface DuelRules {
-  /** A call-out on an opponent who pocketed nothing that act costs the caller this × the act number (5, 10, 15), paid to the opponent. */
-  readonly wrongCallOutPerAct: number;
+  /** A call-out on an opponent who pocketed nothing since the last check costs the caller this (capped at its stash), paid to the opponent. extension.md gap-fills */
+  readonly wrongCallOut: number;
 }
 
 export interface JobDef {
@@ -115,8 +111,10 @@ export const BANK_JOB: JobDef = {
   heat: { max: 100, perRound: 4, missedCheckpoint: 15 },
   // Final 24 → 23 per player in R5 (balance-3.md): toward the fair success rate (crew seats ÷ n).
   checkpoints: { perPlayer: [7, 15, 23] },
-  shakedown: { cleanBelowPerAct: 3, compensationPerAct: 5, pluralityFromPlayers: 9, pluralityShare: 1 / 3 },
-  duel: { wrongCallOutPerAct: 5 },
+  // extension.md: fixed clean line 6 and payout 8 (were 3 × and 5 × the act); starting values for the balance pass.
+  shakedown: { cleanBelow: 6, payout: 8 },
+  // extension.md gap-fills: the Duel wrong call pays the clean payout number (was 5 × act).
+  duel: { wrongCallOut: 8 },
 };
 
 export const JOBS: Readonly<Record<JobId, JobDef>> = { bank: BANK_JOB };

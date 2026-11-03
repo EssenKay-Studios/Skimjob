@@ -5,7 +5,10 @@
 // players' roles, stashes, moves and ballots never reach it except through
 // events the viewer may see.
 import type {
+  ActiveCard,
   CaseFileEvent,
+  GapBox,
+  HeatBreakdown,
   GameEvent,
   GameState,
   LoggedEvent,
@@ -16,6 +19,10 @@ import type {
 } from "./types";
 import { canSee } from "./types";
 import { actOfRound } from "./acts";
+import { ROUNDS_PER_ACT } from "@skimjob/content";
+import { roomDef, roomLoot } from "./job";
+import { eventsFor, jobFor, perkCost } from "./overrides";
+import { roundJob } from "./deck";
 
 const isPublic = (event: GameEvent): event is PublicEvent => event.visibility.kind === "public";
 const isCaseFile = (event: GameEvent): event is CaseFileEvent => event.visibility.kind !== "public";
@@ -88,6 +95,7 @@ function buildView(state: GameState, playerId: PlayerId): PlayerView {
       safe: me.safe,
       roleState: me.roleState,
       emergencyMeetingUsed: me.emergencyMeetingUsed,
+      tipOffs: state.police?.tipOffs[me.id] ?? 0,
       move: ownMove ?? null,
       sealedVote: me.sealedVote,
       vote: ownVote ?? null,
@@ -115,11 +123,55 @@ function buildView(state: GameState, playerId: PlayerId): PlayerView {
     pendingEmergency: state.pendingEmergency,
     lockedIn: lockedIn(state),
     proposals: state.proposals,
+    shop: state.shop.map((perk) => ({ perk, cost: perkCost(state.config, perk) })),
+    roleList: roleListOf(state.log),
+    gap: gapBox(state),
     ledger,
     caseFile,
     // design §13: everything opens up at the end, except others' secret-mode ballots (§11.2).
     reveal: state.phase.kind === "ended" ? { outcome: state.phase.outcome, log: visibleLog(state.log, playerId, true) } : null,
   };
+}
+
+function roleListOf(log: readonly GameEvent[]): PlayerView["roleList"] {
+  const shown = log.find((e) => e.type === "roleListShown");
+  return shown?.type === "roleListShown" ? { list: shown.list, roles: shown.roles } : null;
+}
+
+/** The gap box for the latest resolved round, from public events only. extension.md "What the app works out for you" */
+export function gapBox(state: GameState): GapBox | null {
+  const round = state.resolvedRound;
+  if (round === 0) return null;
+  let haulGrowth = 0;
+  let card: ActiveCard | null = null;
+  const alibis: string[] = [];
+  for (const e of state.log) {
+    if (e.type === "roundResolved" && e.round === round) haulGrowth = e.haulDelta;
+    else if (e.type === "eventFlipped" && e.round === round) card = { round, id: e.card, room: e.room, offer: null };
+    else if (e.type === "alibiPosted" && e.round === round) alibis.push(e.room);
+  }
+  const job = roundJob(jobFor(state.config), card, eventsFor(state.config), state.playerOrder.length);
+  const claimed = alibis.reduce((sum, room) => sum + roomLoot(roomDef(job, room), alibis.filter((r) => r === room).length), 0);
+  return { round, posted: alibis.length, alibis: claimed, haulGrowth, unaccounted: claimed - haulGrowth };
+}
+
+/**
+ * The Heat breakdown of `round` from public events (a ledger is enough):
+ * the round summary's parts, police activity under it, and a missed target's
+ * penalty at the stretch's last round. Null if the round has nothing yet.
+ * extension.md "What the app works out for you", "Police activity"
+ */
+export function heatBreakdown(log: readonly GameEvent[], round: number): HeatBreakdown | null {
+  let parts: HeatBreakdown | null = null;
+  const police: number[] = [];
+  let missedTarget = 0;
+  for (const e of log) {
+    if (e.type === "roundResolved" && e.round === round) parts = { round, ...e.heatParts, police: [], missedTarget: 0 };
+    else if (e.type === "policeActivity" && e.round === round) police.push(e.heatAdded);
+    else if (e.type === "checkpointChecked" && e.act * ROUNDS_PER_ACT === round) missedTarget = e.heatPenalty;
+  }
+  if (!parts && police.length === 0) return null;
+  return { ...(parts ?? { round, base: 0, rooms: {}, events: 0 }), police, missedTarget };
 }
 
 /**

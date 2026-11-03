@@ -10,6 +10,9 @@
 // - While a meeting (or the Muscle's window after it) is open, pausable
 //   deadlines (the round, the alibi window, an emergency's notice) stop: `paused_at` is set,
 //   and when the meeting is over their due time moves on by the pause.
+// - Hidden police moments (`police:<n>`, extension.md "Police activity") run
+//   on game time: they also stop while the act's meeting waits to open, and
+//   they never appear in `timers`, so clients can't see or time them.
 // - `tick` (every TICK_MS in main.ts) sends due deadlines, oldest first,
 //   through `live.system`, so bots act and views go out as for any change.
 // - The engine refuses a deadline that isn't pending (rounds are named), so
@@ -31,10 +34,22 @@ export interface PlannedDeadline {
   readonly dueAt: number;
   /** Stops while a meeting is open (design §4.1: rounds are paused during a vote). */
   readonly pausable: boolean;
+  /**
+   * Runs on game time (police moments): stops too while the act's meeting
+   * waits to open, and is hidden from clients. extension.md "Police activity"
+   */
+  readonly gameTime?: true;
 }
 
 /** A vote window, or the Muscle's window after one, is open. design §4.1 */
 export const meetingOpen = (s: GameState) => s.phase.kind === "meeting" || s.phase.kind === "shakedownPending";
+
+/** Game time is frozen: a meeting is open or the act's meeting waits to open. extension.md "Police activity" */
+export const gameTimeFrozen = (s: GameState) => meetingOpen(s) || s.phase.kind === "awaitingMeeting";
+
+/** Police moments' deadline keys. They are never sent to clients. extension.md "Police activity" (no leak) */
+export const POLICE_KEY_PREFIX = "police:";
+export const isHiddenDeadline = (key: string) => key.startsWith(POLICE_KEY_PREFIX);
 
 const advance = (deadline: Deadline): SystemCommand => ({ type: "advance", deadline });
 
@@ -109,6 +124,14 @@ export const DEADLINE_RULES: { readonly [K in Deadline["kind"] | "scheduleMeetin
     s.phase.kind === "shakedownPending"
       ? [{ key: `resolveShakedown:${s.phase.meetingId}`, command: advance({ kind: "resolveShakedown", meetingId: s.phase.meetingId }), dueAt: now + t.shakedownWindowMs, pausable: false }]
       : [],
+  // The next hidden police moment, `gapPermille` thousandths of a round length (planning plus alibi
+  // window) after the last one, in game time. Set once when the moment is drawn. extension.md "Police activity"
+  policeMoment: (s, t, now) => {
+    if (!s.police) return [];
+    const { moment, gapPermille } = s.police;
+    const dueAt = now + Math.round((gapPermille * (t.roundMs + t.alibiMs)) / 1000);
+    return [{ key: `${POLICE_KEY_PREFIX}${moment}`, command: advance({ kind: "policeMoment", moment }), dueAt, pausable: true, gameTime: true }];
+  },
 };
 
 /** Every deadline the state calls for. An ended game has none. */
@@ -187,6 +210,8 @@ export function createScheduler(deps: {
       const planned = new Map(planDeadlines(state, await timingOf(gameId), now).map((d) => [d.key, d]));
       if (state.phase.kind === "ended") timings.delete(gameId);
       const paused = meetingOpen(state);
+      const frozen = gameTimeFrozen(state);
+      const pausedFor = (d: PlannedDeadline | undefined) => (d?.gameTime ? frozen : paused);
       const timers = await db.transaction(async (tx) => {
         const rows = await tx.query<Row>(
           `select key, paused_at is not null as paused, (extract(epoch from due_at) * 1000)::float8 as due,
@@ -203,10 +228,10 @@ export function createScheduler(deps: {
           const pausedAt = row.paused_ms === null ? null : Math.round(Number(row.paused_ms));
           if (!want) {
             await tx.query("delete from deadlines where game_id = $1 and key = $2", [gameId, row.key]);
-          } else if (want.pausable && paused && !row.paused) {
+          } else if (want.pausable && pausedFor(want) && !row.paused) {
             await tx.query("update deadlines set paused_at = to_timestamp($3::float8 / 1000) where game_id = $1 and key = $2", [gameId, row.key, now]);
             after.push({ key: row.key, dueAt, pausedAt: now });
-          } else if (!paused && row.paused) {
+          } else if (!pausedFor(want) && row.paused) {
             await tx.query(
               "update deadlines set due_at = due_at + (to_timestamp($3::float8 / 1000) - paused_at), paused_at = null where game_id = $1 and key = $2",
               [gameId, row.key, now],
@@ -218,7 +243,7 @@ export function createScheduler(deps: {
         }
         for (const d of planned.values()) {
           if (have.has(d.key)) continue;
-          const pausedAt = d.pausable && paused ? now : null;
+          const pausedAt = d.pausable && pausedFor(d) ? now : null;
           await tx.query(
             "insert into deadlines (game_id, key, due_at, command, paused_at) values ($1, $2, to_timestamp($3::float8 / 1000), $4::json, $5)",
             [gameId, d.key, d.dueAt, JSON.stringify(d.command), pausedAt === null ? null : new Date(now).toISOString()],
@@ -228,7 +253,7 @@ export function createScheduler(deps: {
         return after;
       });
       if (state.phase.kind === "ended") known.delete(gameId);
-      else known.set(gameId, sortTimers(timers));
+      else known.set(gameId, sortTimers(timers.filter((x) => !isHiddenDeadline(x.key))));
     },
 
     async tick() {
@@ -284,7 +309,7 @@ export function createScheduler(deps: {
          from deadlines where game_id = $1 order by due_at, key`,
         [gameId],
       );
-      return sortTimers(rows.map((r) => ({ key: r.key, dueAt: Math.round(Number(r.due)), pausedAt: r.paused === null ? null : Math.round(Number(r.paused)) })));
+      return sortTimers(rows.filter((r) => !isHiddenDeadline(r.key)).map((r) => ({ key: r.key, dueAt: Math.round(Number(r.due)), pausedAt: r.paused === null ? null : Math.round(Number(r.paused)) })));
     },
 
     start(intervalMs) {

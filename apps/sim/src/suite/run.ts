@@ -28,7 +28,7 @@ export interface CellResult extends Cell {
  */
 export function cellStatus(o: SuiteOptions, cell: Cell, t: Tally): { done: boolean; converged: boolean } {
   if (t.games < o.minGames) return { done: false, converged: false };
-  const converged = RATES.filter((r) => r.band !== null && r.applies(cell)).every((r) => {
+  const converged = RATES.filter((r) => r.band !== null && r.checked(cell) && r.applies(cell)).every((r) => {
     const hw = wilson(r.num(t), r.den(t)).halfWidth;
     return hw === null || hw <= o.ciHalfWidth;
   });

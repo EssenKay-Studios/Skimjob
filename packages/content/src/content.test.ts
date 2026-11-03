@@ -2,13 +2,14 @@
 // design §6, §7, §8, §11.5
 import { describe, expect, it } from "vitest";
 import {
-  ACCOMPLICE_V2_ROLES,
+  BALANCED_MIX,
   BANK_JOB,
-  DARK_SIDE_RULES,
+  DECKS,
+  POLICE_ACTIVITY,
+  SHOP_COLUMNS,
   PERKS,
   PERK_IDS,
   PERK_RULES,
-  DEFAULT_ROLE_POOL,
   EVENTS,
   EVENT_DECK,
   FILLER_ROLE,
@@ -109,79 +110,88 @@ describe("First National Bank checkpoint targets — design §11.5", () => {
   });
 });
 
-describe("First National Bank shakedowns — design §11.3", () => {
-  it("clean below 3 × the act number; a clean target is paid 5 × the act number; from 9 players ⅓ of the votes is enough (§11.2)", () => {
-    expect(BANK_JOB.shakedown).toEqual({ cleanBelowPerAct: 3, compensationPerAct: 5, pluralityFromPlayers: 9, pluralityShare: 1 / 3 });
+describe("First National Bank shakedowns — extension.md \"Shakedowns (fixed numbers)\"", () => {
+  it("clean below 6, payout 8; the Duel wrong call pays 8; no plurality rule", () => {
+    expect(BANK_JOB.shakedown).toEqual({ cleanBelow: 6, payout: 8 });
+    expect(BANK_JOB.duel).toEqual({ wrongCallOut: 8 });
   });
 });
 
 describe("starter roles — design §8, §8.1", () => {
   it("every role that can be dealt has a definition with a matching id", () => {
-    for (const id of new Set([...STARTER_ROLES, ...POOL_ROLES, ...DEFAULT_ROLE_POOL, FILLER_ROLE])) {
+    for (const id of new Set([...STARTER_ROLES, ...POOL_ROLES, FILLER_ROLE])) {
       expect(ROLES[id]?.id).toBe(id);
     }
   });
 
-  it("Rookie: no power, final stash ×1.05 (R5, balance-3.md; was ×1.2)", () => {
-    expect(ROLES.rookie).toMatchObject({ power: { kind: "none" }, canPocket: true, scoring: { stashMultiplier: 1.05 } });
+  it("Rookie: no power, plain stash (extension.md: no multiplier)", () => {
+    expect(ROLES.rookie).toMatchObject({ power: { kind: "none" }, canPocket: true, scoring: { lootPerPointOverFinalTarget: 0 } });
   });
 
   it("Lookout: sees who was in one extra room each round", () => {
     expect(ROLES.lookout).toMatchObject({ power: { kind: "lookout", extraRooms: 1 }, canPocket: true });
   });
 
-  it("Inside Man: can't pocket; 0.15 points per loot the Haul ends above the final target (R5, balance-3.md; was 0.3)", () => {
-    expect(ROLES.insideMan).toMatchObject({
-      power: { kind: "none" },
-      canPocket: false,
-      scoring: { stashMultiplier: 1, perLootOverFinalTarget: 0.15 },
-    });
+  it("Inside Man: can't pocket; +1 per 5 loot the Haul ends above the final target (extension.md \"Winning and losing\")", () => {
+    expect(ROLES.insideMan).toMatchObject({ power: { kind: "none" }, canPocket: false, scoring: { lootPerPointOverFinalTarget: 5 } });
   });
 
-  it("Fence: up to 5 loot per act into a hidden safe", () => {
-    expect(ROLES.fence).toMatchObject({ power: { kind: "fenceSafe", perAct: 5 }, canPocket: true });
+  it("Fence: up to 5 loot per stretch into a safe; token at 10", () => {
+    expect(ROLES.fence).toMatchObject({ power: { kind: "fenceSafe", perAct: 5, tokenSafe: 10 }, canPocket: true });
   });
 
-  it("only the Rookie and Inside Man score differently from plain stash", () => {
-    expect(ROLES.lookout?.scoring).toEqual({ stashMultiplier: 1, perLootOverFinalTarget: 0 });
-    expect(ROLES.fence?.scoring).toEqual({ stashMultiplier: 1, perLootOverFinalTarget: 0 });
-    expect(ROLES.rookie?.scoring.perLootOverFinalTarget).toBe(0);
+  it("tags and winsOn (extension.md Build notes \"Win rule\", \"Tags\")", () => {
+    const tagged = (tag: string) => Object.values(ROLES).filter((r) => r.tag === tag).map((r) => r.id).sort();
+    expect(tagged("wildcard")).toEqual(["blackmailer", "fence", "forger", "getawayDriver", "hacker"]);
+    expect(tagged("loneWolf")).toEqual(["embezzler", "mole"]);
+    expect(tagged("teamPlayer")).toHaveLength(13);
+    const winners = Object.fromEntries(Object.values(ROLES).filter((r) => r.winsOn.length > 0).map((r) => [r.id, r.winsOn]));
+    expect(winners).toEqual({ getawayDriver: ["heat"], fence: ["heat", "target"], mole: ["heat", "target"], embezzler: ["target"] });
+    for (const id of STARTER_ROLES) expect(ROLES[id]?.tag).toBe("teamPlayer");
   });
 
-  it("the Mole and Embezzler are saboteurs, the Getaway Driver, Fence, Hacker, Blackmailer and Forger accomplices, the rest crew (design §3, role deck v2 R3a, R3b)", () => {
-    const faction = (id: string) => (id === "mole" || id === "embezzler" ? "saboteur" : ACCOMPLICE_V2_ROLES.includes(id) ? "accomplice" : "crew");
-    expect([...ACCOMPLICE_V2_ROLES].sort()).toEqual(["blackmailer", "fence", "forger", "getawayDriver", "hacker"]);
-    for (const role of Object.values(ROLES)) expect(role.faction, role.id).toBe(faction(role.id));
-    for (const id of STARTER_ROLES) expect(ROLES[id]?.faction).toBe("crew");
+  it("every role earns exactly one token per trigger (extension.md \"Roles\")", () => {
+    for (const role of Object.values(ROLES)) {
+      if (role.id === "rookie" || role.rewards) expect(role.rewards?.map((r) => r.count), role.id).toEqual([1]);
+    }
+    expect(Object.values(ROLES).filter((r) => !r.rewards).map((r) => r.id)).toEqual([]);
   });
 
-  it("perks: eight kinds plus the Smooth Talker's Emergency; Shield and Emergency spent by themselves, the rest with useAbility (design §8.3)", () => {
+  it("perks: nine kinds in three shop columns; Peek and Shield cost 2, the rest 1 (extension.md \"Tokens and the perk shop\")", () => {
     expect([...PERK_IDS].sort()).toEqual(["alibi", "ballot", "emergency", "extraVote", "peek", "recharge", "rig", "shield", "tail"]);
     for (const id of PERK_IDS) expect(PERKS[id].spent, id).toBe(id === "shield" || id === "emergency" ? "auto" : "use");
+    for (const id of PERK_IDS) expect(PERKS[id].cost, id).toBe(id === "peek" || id === "shield" ? 2 : 1);
+    for (const [column, ids] of Object.entries(SHOP_COLUMNS)) for (const id of ids) expect(PERKS[id].column).toBe(column);
     expect(PERK_RULES).toEqual({ extraVoteWeight: 1, rigOptions: 2 });
   });
 
-  it("dark-side weights (role deck v2 §3): crew only at 2–3, one saboteur at 4, then the weighted mixes", () => {
-    const at = (n: number) => DARK_SIDE_RULES.filter((r) => r.minPlayers <= n).at(-1)?.options.map((o) => [o.saboteurs, o.accomplices, o.weight]);
-    expect(at(3)).toEqual([[0, 0, 1]]);
-    expect(at(4)).toEqual([[1, 0, 1]]);
-    expect(at(6)).toEqual([[1, 0, 50], [1, 1, 50]]);
-    expect(at(8)).toEqual([[1, 1, 60], [2, 0, 20], [1, 2, 20]]);
-    expect(at(10)).toEqual([[2, 1, 60], [1, 2, 20], [2, 2, 20]]);
-    expect(at(12)).toEqual([[2, 2, 60], [2, 1, 20], [3, 1, 20]]);
+  it("decks: Starter 5, Standard 11, Everything 20 (extension.md \"Decks\")", () => {
+    expect(DECKS.starter).toHaveLength(5);
+    expect(DECKS.standard).toHaveLength(11);
+    expect([...DECKS.everything].sort()).toEqual(Object.keys(ROLES).sort());
+  });
+
+  it("Balanced mix: roles-v2 §3's most-weighted row under the round(n ÷ 3) cap", () => {
+    for (let n = 2; n <= 12; n++) {
+      const mix = BALANCED_MIX[n];
+      expect(mix, `${n}`).toBeDefined();
+      expect((mix?.loneWolves ?? 0) + (mix?.wildcards ?? 0)).toBeLessThanOrEqual(Math.round(n / 3));
+    }
+    expect(BALANCED_MIX[4]).toEqual({ loneWolves: 1, wildcards: 0 });
+    expect(BALANCED_MIX[12]).toEqual({ loneWolves: 2, wildcards: 2 });
   });
 });
 
 describe("events deck content — design §10", () => {
-  it("has ten cards with matching ids, and room cards name rooms of the bank", () => {
-    expect(EVENT_DECK).toHaveLength(10);
+  it("has nine cards with matching ids (Police patrol left, extension.md \"Police activity\"), and room cards name rooms of the bank", () => {
+    expect(EVENT_DECK).toHaveLength(9);
+    expect(EVENT_DECK).not.toContain("policePatrol");
+    expect(POLICE_ACTIVITY).toMatchObject({ chancePercent: 25, heat: 4 });
     for (const id of EVENT_DECK) {
       const def = EVENTS[id];
       expect(def?.id).toBe(id);
       if (def?.effect.kind === "roomSurge") expect(Object.keys(BANK_JOB.rooms)).toContain(def.effect.room);
     }
-    // balance pass 2: Police patrol 10 → 5, Shift change Vault Heat ×2 → ×1.5
-    expect(EVENTS.policePatrol?.effect).toEqual({ kind: "heat", amount: 5 });
     expect(EVENTS.shiftChange?.effect).toEqual({ kind: "roomSurge", room: "vault", lootMultiplier: 2, heatMultiplier: 1.5 });
     expect(EVENTS.quietNight?.effect).toEqual({ kind: "heat", amount: -10 });
     expect(EVENTS.raidRumour?.effect).toEqual({ kind: "raidRumour", loss: 3 });

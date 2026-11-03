@@ -20,8 +20,8 @@ import { crewSize, jobOf, setupOf } from "./hud";
 /** Duel games have no meetings or votes (design §16.1). */
 export const hasMeetings = (view: PlayerView): boolean => !setupOf(view)?.duel;
 
-/** Big crews (9–12) shake down on a plurality, so a failed vote is "no clear winner", not "no majority". design §11.2 */
-export const pluralityRule = (view: PlayerView): boolean => crewSize(view) >= jobOf(view).shakedown.pluralityFromPlayers;
+/** One vote rule for every crew size: no plurality rule any more. extension.md (R6b removes the callers) */
+export const pluralityRule = (_view: PlayerView): boolean => false;
 
 /** Every other player, in seat order: who you may vote for (never yourself, design §11.2). */
 export function voteTargets(view: PlayerView): { readonly id: PlayerId; readonly name: string; readonly isBot: boolean }[] {

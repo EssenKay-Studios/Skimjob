@@ -1,67 +1,48 @@
-// The bots' Heat projection: event cards and tip-offs seen in the public Heat.
-// design §7, §8 (Mole tip-off), §10 (Heat cards); balance pass 2 (task 16)
+// The bots' Heat projection: event cards and the police activity still to
+// come where a Mole could be in the game. design §7, §10; extension.md "Police activity"
 import { describe, expect, it } from "vitest";
-import { EVENTS, ROLES, STARTER_ROLES } from "@skimjob/content";
-import { createGame, viewFor, type GameConfig, type GameState, type MoleSetting } from "@skimjob/engine";
-import { cardHeatNow, expectedMoles, heatDanger, jobThisRound, suspectedTipOffRounds, tipOffsToCome } from "./heat";
-import { run, seats } from "./testkit";
+import { EVENTS, POLICE_ACTIVITY, STARTER_ROLES } from "@skimjob/content";
+import { createGame, viewFor, type GameConfig, type GameState, type PlayerView } from "@skimjob/engine";
+import { cardHeatNow, heatDanger, jobThisRound, policeHeat, policeInPlay, policeToCome } from "./heat";
+import { seats } from "./testkit";
 
-const TIP = (ROLES.mole?.power as { heat: number }).heat;
-
-function moleGame(n: number, mole: MoleSetting, seed = "heat"): GameState {
-  const config: GameConfig = { seed, players: seats(n), job: "bank", rolePool: [...STARTER_ROLES], mole, eventsEnabled: false, voteVisibility: "hiddenThenRevealed", starterMode: false };
+function heatGame(n: number, extra: Partial<GameConfig> = {}, seed = "heat"): GameState {
+  const config: GameConfig = { seed, players: seats(n), job: "bank", rolePool: [...STARTER_ROLES], eventsEnabled: false, voteVisibility: "hiddenThenRevealed", starterMode: false, ...extra };
   return createGame(config);
 }
 
-/** Round 1 with everyone in the Lobby and truthful alibis; the Mole tips off if `tip`. */
-function lobbyRound(s: GameState, tip: boolean): GameState {
-  const moves = s.playerOrder.map((player) => {
-    const ability = tip && s.players[player]?.role === "mole" ? { ability: { kind: "tipOff" } } : {};
-    return { type: "submitMove", player, move: { room: "lobby", pocket: 0, ...ability } };
-  });
-  const after = run(s, ...moves, { type: "advance", deadline: { kind: "round", round: 1 } });
-  return run(after, ...s.playerOrder.map((player) => ({ type: "postAlibi", player, room: "lobby" })));
-}
+const withActivity = (view: PlayerView, round: number): PlayerView => ({
+  ...view,
+  ledger: [...view.ledger, { seq: view.ledger.length, event: { type: "policeActivity", visibility: { kind: "public" }, round, heatAdded: 4, heat: view.heat + 4 } } as PlayerView["ledger"][number]],
+});
 
-const crew = (s: GameState) => s.playerOrder.find((id) => s.players[id]?.role !== "mole") as string;
-
-describe("bot Heat projection — design §7, §8, §10", () => {
-  it("expects Moles from the public saboteur setting and crew size (design §8.1, role deck v2 §3)", () => {
-    expect(expectedMoles(viewFor(moleGame(3, "on"), "ana"))).toBe(0);
-    expect(expectedMoles(viewFor(moleGame(4, "on"), "ana"))).toBe(1);
-    expect(expectedMoles(viewFor(moleGame(9, "maybe"), "ana"))).toBe(1);
-    expect(expectedMoles(viewFor(moleGame(6, "off"), "ana"))).toBe(0);
-    expect(expectedMoles(viewFor(moleGame(6, "maybe"), "ana"))).toBe(0.5);
-    expect(expectedMoles(viewFor(moleGame(6, "on"), "ana"))).toBe(1);
+describe("bot Heat projection — design §7, §10; extension.md \"Police activity\"", () => {
+  it("expects police activity only when a Mole could be in the game (role list, else the deck)", () => {
+    expect(policeInPlay(viewFor(heatGame(6), "ana"))).toBe(false);
+    expect(policeInPlay(viewFor(heatGame(6, { rolePool: ["rookie", "mole"], roleList: "possible" }), "ana"))).toBe(true);
+    // Hidden: the deck preset (Standard has the Mole; Starter doesn't).
+    expect(policeInPlay(viewFor(heatGame(6, { rolePool: [], roleList: "hidden" }), "ana"))).toBe(true);
+    expect(policeInPlay(viewFor(heatGame(6, { rolePool: [], roleList: "hidden", starterMode: true }), "ana"))).toBe(false);
+    expect(policeToCome(viewFor(heatGame(6), "ana"))).toBe(0);
   });
 
-  it("a round's Heat above what the alibis and the card explain reads as a tip-off; the bot then expects more (design §8)", () => {
-    // Since R3b the one saboteur may be the Embezzler: take the first seed that deals a Mole.
-    const s = ["heat", "heat-1", "heat-2", "heat-3", "heat-4"].map((seed) => moleGame(6, "on", seed)).find((g) => g.playerOrder.some((id) => g.players[id]?.role === "mole")) as GameState;
-    const tipped = viewFor(lobbyRound(s, true), crew(s));
-    const quiet = viewFor(lobbyRound(s, false), crew(s));
-    expect(suspectedTipOffRounds(tipped)).toEqual([1]);
-    expect(suspectedTipOffRounds(quiet)).toEqual([]);
-    // One tip-off seen in act 1: one per act expected for acts 2 and 3; none if none was seen.
-    expect(tipOffsToCome(tipped)).toBe(TIP * 2);
-    expect(tipOffsToCome(quiet)).toBe(0);
-    expect(heatDanger(tipped)).toBeGreaterThan(heatDanger(quiet));
-  });
-
-  it("with no Mole possible there is nothing to detect", () => {
-    const s = moleGame(4, "on");
-    expect(suspectedTipOffRounds(viewFor(lobbyRound(s, false), "ana"))).toEqual([]);
+  it("expects the background chance per round left, or the rate seen so far if higher", () => {
+    const s = heatGame(6, { rolePool: ["rookie", "mole"], roleList: "possible" });
+    const view = viewFor(s, "ana");
+    expect(policeHeat(view)).toBe(POLICE_ACTIVITY.heat);
+    expect(policeToCome(view)).toBeCloseTo((POLICE_ACTIVITY.chancePercent / 100) * 9 * 4);
+    // Two activities before any round resolved read as at least one per round.
+    expect(policeToCome(withActivity(withActivity(view, 1), 1))).toBeCloseTo(2 * 9 * 4);
+    expect(heatDanger(withActivity(withActivity(view, 1), 1))).toBeGreaterThan(heatDanger(view));
   });
 
   it("this round's Heat card counts toward danger, and Shift change surges the Vault (design §10, scaled ×4/5 at 4 players)", () => {
-    const s = moleGame(4, "off");
+    const s = heatGame(4);
     const scale = 4 / 5;
     const withCard = (id: string): GameState => ({ ...s, card: { round: 1, id, room: null, offer: null } });
-    const patrol = Math.round((EVENTS.policePatrol?.effect as { amount: number }).amount * scale);
-    expect(cardHeatNow(viewFor(withCard("policePatrol"), "ana"))).toBe(patrol);
     expect(cardHeatNow(viewFor(withCard("quietNight"), "ana"))).toBe(-8);
     expect(cardHeatNow(viewFor(withCard("audit"), "ana"))).toBe(0);
-    expect(heatDanger(viewFor(withCard("policePatrol"), "ana"))).toBeCloseTo(heatDanger(viewFor(s, "ana")) + patrol / 100);
+    expect(heatDanger(viewFor(withCard("quietNight"), "ana"))).toBeCloseTo(heatDanger(viewFor(s, "ana")) - 8 / 100);
     const vault = jobThisRound(viewFor(withCard("shiftChange"), "ana")).rooms.vault;
     expect(vault?.loot).toBe(12);
     expect(vault?.heatPressure).toBeCloseTo(20 * (1 + ((EVENTS.shiftChange?.effect as { heatMultiplier: number }).heatMultiplier - 1) * scale));

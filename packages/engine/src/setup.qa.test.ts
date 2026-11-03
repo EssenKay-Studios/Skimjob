@@ -1,16 +1,16 @@
 // QA (PR #2): adversarial tests for seeded RNG, setup and replay.
 // design §6.2, §8.1, §16, §17.2
 import { describe, expect, it } from "vitest";
-import { MOLE_ROLE, POOL_ROLES, STARTER_ROLES, type RoleId } from "@skimjob/content";
-import type { GameConfig, GameEvent, MoleSetting } from "./types";
+import { BALANCED_MIX, MOLE_ROLE, ROLES, STANDARD_ROLES, STARTER_ROLES, type RoleId } from "@skimjob/content";
+import type { DealStyle, GameConfig, GameEvent } from "./types";
 import { canSee } from "./types";
-import { createGame, darkSideOdds, roomsFor, setupEvents, validateConfig } from "./setup";
+import { createGame, roomsFor, setupEvents, validateConfig } from "./setup";
 import { replay } from "./reduce";
 import { nextUint32, seedRng } from "./rng";
-/** Role deck v2 R3b: the Embezzler is a saboteur too, dealt by the same setting. */
-const isSaboteur = (r: string): boolean => r === "mole" || r === "embezzler";
 
-const SETTINGS: readonly MoleSetting[] = ["off", "maybe", "on"];
+/** extension.md "Host settings": the two deal styles. */
+const SETTINGS: readonly DealStyle[] = ["balanced", "random"];
+const tagCount = (list: readonly string[], tag: string): number => list.filter((r) => ROLES[r]?.tag === tag).length;
 
 function config(players: number, overrides: Partial<GameConfig> = {}): GameConfig {
   return {
@@ -18,7 +18,6 @@ function config(players: number, overrides: Partial<GameConfig> = {}): GameConfi
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: i > 0 })),
     job: "bank",
     rolePool: [],
-    mole: "off",
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     starterMode: false,
@@ -41,8 +40,8 @@ describe("QA determinism — design §17.2", () => {
   it("same config gives identical events and state at 2, 3, 8, 12 players; config and content untouched", () => {
     const starterBefore = [...STARTER_ROLES];
     for (const n of [2, 3, 8, 12]) {
-      for (const mole of SETTINGS) {
-        const cfg = deepFreeze(config(n, { mole }));
+      for (const deal of SETTINGS) {
+        const cfg = deepFreeze(config(n, { deal }));
         const events = setupEvents(cfg);
         expect(setupEvents(JSON.parse(JSON.stringify(cfg)) as GameConfig)).toEqual(events);
         expect(createGame(cfg)).toEqual(createGame(cfg));
@@ -53,7 +52,7 @@ describe("QA determinism — design §17.2", () => {
 
   it("different seeds (even one character apart) give different RNG states", () => {
     const finals = new Set<string>();
-    for (let s = 0; s < 200; s++) finals.add(JSON.stringify(createGame(config(12, { seed: `seed-${s}`, mole: "maybe" })).rng));
+    for (let s = 0; s < 200; s++) finals.add(JSON.stringify(createGame(config(12, { seed: `seed-${s}`, deal: "random" })).rng));
     expect(finals.size).toBe(200);
     expect(setupEvents(config(12, { seed: "ab" })).at(-1)).not.toEqual(setupEvents(config(12, { seed: "ba" })).at(-1));
   });
@@ -62,7 +61,7 @@ describe("QA determinism — design §17.2", () => {
 describe("QA replay rebuilds identical state, RNG included — design §17.2", () => {
   it("replaying a JSON round-tripped log equals the live state at 2, 5, 9, 12 players", () => {
     for (const n of [2, 5, 9, 12]) {
-      const cfg = config(n, { mole: "maybe", seed: `replay-${n}` });
+      const cfg = config(n, { deal: "random", seed: `replay-${n}` });
       const live = createGame(cfg);
       const rebuilt = replay(cfg, JSON.parse(JSON.stringify(live.log)) as GameEvent[]);
       expect(rebuilt).toEqual(live);
@@ -72,7 +71,7 @@ describe("QA replay rebuilds identical state, RNG included — design §17.2", (
   });
 
   it("the RNG after setup has moved on from the seed, and a prefix replay stops at the seed", () => {
-    const cfg = config(6, { mole: "maybe" });
+    const cfg = config(6, { deal: "random" });
     const live = createGame(cfg);
     expect(live.rng).not.toEqual(seedRng(cfg.seed));
     const seededAt = live.log.findIndex((e) => e.type === "rngSeeded");
@@ -95,35 +94,28 @@ describe("QA rooms by player count — design §6.2, §16", () => {
 });
 
 describe("QA role dealing — design §8.1", () => {
-  it("invariants for every size 2–12, every Mole setting, many seeds", () => {
+  it("invariants for every size 2–12, both deal styles, many seeds (extension.md \"Decks\", \"Host settings\")", () => {
     for (let n = 2; n <= 12; n++) {
-      for (const mole of SETTINGS) {
+      for (const deal of SETTINGS) {
         for (let s = 0; s < 15; s++) {
-          const dealt = roles(config(n, { mole, seed: `inv-${n}-${mole}-${s}` }));
+          const dealt = roles(config(n, { deal, seed: `inv-${n}-${deal}-${s}` }));
           expect(dealt).toHaveLength(n);
-          // Role deck v2 §3: two saboteur roles (Mole, Embezzler since R3b), each at most once.
-          expect(darkSideOdds(n, mole, false).map((o) => Math.min(2, o.saboteurs))).toContain(dealt.filter(isSaboteur).length);
-          for (const r of dealt) expect([...POOL_ROLES, MOLE_ROLE, "embezzler"]).toContain(r);
-          for (const r of POOL_ROLES) if (r !== "rookie") expect(count(dealt, r)).toBeLessThanOrEqual(1);
+          for (const r of dealt) expect([...STANDARD_ROLES, "rookie"]).toContain(r);
+          for (const r of STANDARD_ROLES) expect(count(dealt, r)).toBeLessThanOrEqual(1);
+          if (deal === "balanced") expect(tagCount(dealt, "loneWolf")).toBe(BALANCED_MIX[n]!.loneWolves);
         }
       }
     }
   });
 
-  it("Mole 'on' at the tier boundaries: 3 → 0, 4 → 1, 5 → 1, 8 → 1, 9 → 1 (role deck v2 §3)", () => {
-    // Since R3b two saboteurs can be dealt from 7 (the §3 table's 2-saboteur mixes).
-    const expected: Record<number, readonly number[]> = { 3: [0], 4: [1], 5: [1], 8: [1, 2], 9: [1, 2] };
-    for (const [n, moles] of Object.entries(expected)) expect(moles).toContain(roles(config(Number(n), { mole: "on" })).filter(isSaboteur).length);
-  });
-
-  it("12 players, Mole on: 1 Mole, each other role at most once, Rookies fill the rest", () => {
-    const dealt = roles(config(12, { mole: "on" }));
-    expect([1, 2]).toContain(dealt.filter(isSaboteur).length);
-    expect(count(dealt, MOLE_ROLE)).toBeLessThanOrEqual(1);
-    // Default pool (12 roles since role deck v2 R2a): 11 of them once each, no filler needed.
-    expect(new Set(dealt).size).toBe(12);
-    const narrow = roles(config(12, { mole: "on", rolePool: ["fence"] }));
-    expect([count(narrow, "fence"), count(narrow, "rookie") + narrow.filter(isSaboteur).length]).toEqual([1, 11]);
+  it("12 players, Standard, Balanced: 2 Lone wolves, 2 of the 3 Wildcards, the 6 Team players, then 2 Rookies; a narrow deck fills with Rookies", () => {
+    const dealt = roles(config(12));
+    expect(count(dealt, MOLE_ROLE)).toBe(1);
+    expect(new Set(dealt).size).toBe(11);
+    expect(count(dealt, "rookie")).toBe(2);
+    expect(tagCount(dealt, "wildcard")).toBe(2);
+    const narrow = roles(config(12, { rolePool: ["fence"] }));
+    expect([count(narrow, "fence"), count(narrow, "rookie")]).toEqual([1, 11]);
   });
 
   it("starter mode at 2 and 12 never deals a Mole, even with the Mole in the (ignored) pool", () => {
@@ -140,7 +132,7 @@ describe("QA role dealing — design §8.1", () => {
 describe("QA config validation — design §8.1, §15", () => {
   it("accepts exactly 2 and exactly 12; rejects 0 and 13", () => {
     expect(validateConfig(config(2))).toEqual([]);
-    expect(validateConfig(config(12, { mole: "on" }))).toEqual([]);
+    expect(validateConfig(config(12, { mole: "on", deck: "everything", deal: "random", roleList: "hidden" }))).toEqual([]);
     expect(() => setupEvents(config(0))).toThrow(/players/);
     expect(() => setupEvents(config(13))).toThrow(/players/);
   });
@@ -151,15 +143,15 @@ describe("QA config validation — design §8.1, §15", () => {
     expect(() => setupEvents({ ...cfg, players })).toThrow(/unique/);
   });
 
-  it("starter mode rejects a Mole setting even at 2 players, where no Mole could be dealt", () => {
-    expect(() => setupEvents(config(2, { starterMode: true, mole: "maybe" }))).toThrow(/mole/);
+  it("a stored saboteur setting is still read but never refused (extension.md Build notes: migrated on read)", () => {
+    for (const mole of ["off", "maybe", "on"] as const) expect(() => setupEvents(config(2, { starterMode: true, mole }))).not.toThrow();
   });
 });
 
 describe("QA RNG state is never in a player's view — design §17.2", () => {
   it("no event visible to any seat during the game carries a seed or RNG words", () => {
     for (const n of [2, 12]) {
-      const cfg = config(n, { mole: "maybe" });
+      const cfg = config(n, { deal: "random" });
       const log = createGame(cfg).log;
       for (const viewer of cfg.players.map((p) => p.id)) {
         for (const e of log.filter((ev) => canSee(ev.visibility, viewer, false))) {

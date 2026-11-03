@@ -57,7 +57,7 @@ describe("role claims — design §8, §12.1", () => {
 
   it("once per player per act; the next act opens a new claim", () => {
     let s = ok(start, claim("p0", "rookie")).state;
-    expect(reason(s, claim("p0", "bagman"))).toMatch(/already claimed a role in act 1/);
+    expect(reason(s, claim("p0", "bagman"))).toMatch(/already claimed a role since the last meeting/);
     expect(reason(s, claim("p0", "rookie"))).toMatch(/already claimed/);
     s = ok(s, claim("p1", "rookie")).state; // a double claim is allowed: the crew judges it
     // Play out act 1 to its meeting, then into act 2.
@@ -67,7 +67,7 @@ describe("role claims — design §8, §12.1", () => {
       s = r.state;
     }
     expect(s.phase.kind).toBe("awaitingMeeting");
-    expect(reason(s, claim("p0", "bagman"))).toMatch(/act 1/); // the act's meeting is still act 1
+    expect(reason(s, claim("p0", "bagman"))).toMatch(/already claimed/); // the stretch runs until its meeting closes
     s = ok(s, { type: "scheduleMeeting", act: 1, slot: "now" }).state;
     s = ok(s, { type: "advance", deadline: { kind: "openMeeting", meetingId: "act-1" } }).state;
     expect(ok(s, claim("p2", "cleaner")).events[0]).toMatchObject({ act: 1 }); // during the vote window too

@@ -54,6 +54,21 @@ export function roundHeatDelta(
   return Math.round(job.heat.perRound + pressure / crewSize);
 }
 
+/**
+ * Each room's part of `roundHeatDelta` (rounded, halves up), for rooms that
+ * changed Heat, in `rooms` order. The public Heat breakdown. extension.md "What the app works out for you"
+ */
+export function roomHeatParts(job: JobDef, crewSize: number, visitors: Readonly<Record<RoomId, number>>, rooms: readonly RoomId[]): Record<RoomId, number> {
+  const out: Record<RoomId, number> = {};
+  for (const room of rooms) {
+    const count = visitors[room] ?? 0;
+    if (count === 0) continue;
+    const part = Math.round((roomDef(job, room).heatPressure * count) / crewSize) + 0;
+    if (part !== 0) out[room] = part;
+  }
+  return out;
+}
+
 /** Heat stays within 0–max: laying low can't bank Heat below zero. design §7 */
 export function clampHeat(job: JobDef, heat: number): number {
   return Math.min(job.heat.max, Math.max(0, heat));

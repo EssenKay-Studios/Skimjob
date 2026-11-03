@@ -149,7 +149,7 @@ export function decidedEarlyMetric(records: readonly GameRecord[]): RateOf {
 
 /**
  * design §17.4 "Mole win rate (when present)": of games with a Mole dealt, the
- * share a Mole won (a Mole wins only failed heists, design §3). Per game, not
+ * share a Mole won (by score on a success, or on a heat or target failure; extension.md "Who wins"). Per game, not
  * per seat, so two Moles (or a Mole and the Driver) winning together count once.
  */
 export function moleWinMetric(records: readonly GameRecord[]): RateOf {

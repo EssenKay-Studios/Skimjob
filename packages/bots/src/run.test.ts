@@ -13,7 +13,6 @@ function config(n: number, seed: string, voteVisibility: VoteVisibility = "hidde
     players: Array.from({ length: n }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
     rolePool: [],
-    mole: "off",
     eventsEnabled: false,
     voteVisibility,
     starterMode: false,
@@ -41,7 +40,7 @@ describe("all-bot games — design §17.3", () => {
       const { state, rejections, steps } = play(n, `size-${n}`, ids);
       expect(state.phase.kind, `${n} players`).toBe("ended");
       expect(rejections, `${n} players`).toEqual([]);
-      expect(steps).toBeLessThan(40);
+      expect(steps).toBeLessThan(60); // a round is ~3 steps, police moment included
     }
   });
 
@@ -117,7 +116,7 @@ describe("all-bot games — design §17.3", () => {
         }
       }
     }
-    expect(seen.size).toBe(10);
+    expect(seen.size).toBe(9); // extension.md "Police activity": the Police patrol left the deck
     expect(lockdowns).toBeGreaterThan(0);
     expect(answers).toBeGreaterThan(0);
     expect(swaps).toBeGreaterThan(0);
@@ -202,8 +201,11 @@ describe("personalities behave as design §17.3 describes", () => {
 });
 
 describe("role powers in bot games — design §8", () => {
-  // 5 players: the Inside Man is dealt only from 5 (design §8.1).
-  const states = Array.from({ length: 10 }, (_, g) => play(5, `roles-${g}`, ["opportunist", "greedy"]).state);
+  // 5 players: the Inside Man is dealt only from 5 (design §8.1); he is not in the Standard deck, so pick him.
+  const states = Array.from({ length: 10 }, (_, g) => {
+    const c = { ...config(5, `roles-${g}`), rolePool: ["insideMan", "lookout", "rookie", "bagman", "auditor"] };
+    return runBotGame(c, createBots(c.players, mix(["opportunist", "greedy"]), `bots-${c.seed}`)).state;
+  });
   const roleOf = (s: GameState, id: PlayerId) => s.players[id]?.role;
 
   it("the Inside Man never pockets", () => {
@@ -218,42 +220,31 @@ describe("role powers in bot games — design §8", () => {
   });
 });
 
-describe("bots with the accomplices dealt — role deck v2 §2, §4 (R3a)", () => {
-  // 9 players with a Mole: one or two accomplices from these three, every game.
+describe("bots with the Wildcards and the Mole dealt — extension.md Build notes \"Bots\"", () => {
   const games = Array.from({ length: 12 }, (_, g) => {
-    const c = { ...config(9, `dark-${g}`), mole: "on" as const, rolePool: ["getawayDriver", "fence", "hacker", "lookout", "rookie", "bagman", "auditor"] };
+    const c = { ...config(9, `dark-${g}`), rolePool: ["getawayDriver", "fence", "hacker", "mole", "lookout", "rookie", "bagman", "auditor"] };
     return runBotGame(c, createBots(c.players, mix(MIXED), `bots-${c.seed}`));
   });
   const log = games.flatMap((g) => g.state.log);
 
-  it("finish with no refused command; the Fence fills its safe, the Hacker loops, the Mole tips off", () => {
+  it("finish with no refused command; the Fence fills its safe, the Hacker loops, the Mole's tip-offs land as police activity", () => {
     for (const g of games) expect([g.state.phase.kind, g.rejections]).toEqual(["ended", []]);
     const used = (kind: string) => log.filter((e) => e.type === "abilityResolved" && e.ability.kind === kind);
     for (const k of ["fenceSafe", "loopCameras", "tipOff"]) expect(used(k).length, k).toBeGreaterThan(0);
-    expect(log.some((e) => e.type === "alliesLearned")).toBe(true);
+    expect(log.filter((e) => e.type === "tipOffLanded").length).toBeGreaterThan(0);
+    expect(log.filter((e) => e.type === "policeActivity").length).toBeGreaterThan(log.filter((e) => e.type === "tipOffLanded").length);
   });
 
-  it("the Getaway Driver goes to the Rooftop, and no dark-side bot votes to shake down an ally it knows", () => {
-    let rooftop = 0;
-    for (const g of games) {
-      const s = g.state;
-      const driver = s.playerOrder.find((id) => s.players[id]?.role === "getawayDriver");
-      rooftop += s.log.filter((e) => e.type === "lootSplit" && e.player === driver && e.room === "rooftop").length;
-      const allies = new Map<string, string[]>();
-      for (const e of s.log) {
-        if (e.type === "moleAllies") allies.set(e.player, [...e.allies]);
-        if (e.type === "alliesLearned") allies.set(e.player, [...(allies.get(e.player) ?? []), ...e.allies]);
-        if (e.type === "voteCast" && e.vote.kind === "shakedown") expect(allies.get(e.player) ?? []).not.toContain(e.vote.target);
-      }
-    }
-    expect(rooftop).toBeGreaterThan(0);
+  it("bots earn tokens and buy perks from the shop", () => {
+    expect(log.filter((e) => e.type === "tokenEarned").length).toBeGreaterThan(0);
+    expect(log.filter((e) => e.type === "perkBought").length).toBeGreaterThan(0);
   });
 });
 
 describe("bots with the Blackmailer, Forger and Embezzler dealt — role deck v2 §2, §4 (R3b)", () => {
   // 9 players with a saboteur (Mole or Embezzler, or both) and accomplices from these two.
   const games = Array.from({ length: 12 }, (_, g) => {
-    const c = { ...config(9, `dark3b-${g}`), mole: "on" as const, rolePool: ["blackmailer", "forger", "lookout", "rookie", "bagman", "auditor", "detective"] };
+    const c = { ...config(9, `dark3b-${g}`), rolePool: ["blackmailer", "forger", "embezzler", "mole", "lookout", "rookie", "bagman", "auditor", "detective"] };
     return runBotGame(c, createBots(c.players, mix(MIXED), `bots-${c.seed}`));
   });
   const log = games.flatMap((g) => g.state.log);
@@ -301,30 +292,37 @@ describe("bots with Moles and the Driver dealt — design §8, §8.1, §17.3 (ta
     }),
   );
 
-  it("finish with no refused command; each Mole tips off at most once per act", () => {
+  // extension.md "Once between meetings": only regular meetings (after rounds 3/6/9) reset the window.
+  it("finish with no refused command; each Mole tips off at most once between regular meetings", () => {
     let tips = 0;
     for (const r of games) {
       expect(r.state.phase.kind).toBe("ended");
       expect(r.rejections).toEqual([]);
-      const resolved = r.state.log.filter((e) => e.type === "roundResolved").length;
       for (const id of r.state.playerOrder) {
         if (r.state.players[id]?.role !== "mole") continue;
-        const acts = r.state.log.flatMap((e) => (e.type === "abilityResolved" && e.player === id && e.ability.kind === "tipOff" ? [Math.ceil(e.round / 3)] : []));
-        tips += acts.length;
-        expect(new Set(acts).size).toBe(acts.length);
-        expect(acts.every((a) => a * 3 - 2 <= resolved)).toBe(true);
+        // Per window: tip-offs ≤ 1 + Recharge perks used (extension.md gap-fills: Recharge gives back a used-up use).
+        const allowed = new Map<number, number>();
+        const used = new Map<number, number>();
+        let window = 0;
+        for (const e of r.state.log) {
+          if (e.type === "meetingOpened" && e.meetingId.startsWith("act-")) window++;
+          if (e.type === "perkUsed" && e.player === id && e.perk.kind === "recharge") allowed.set(window, (allowed.get(window) ?? 1) + 1);
+          if (e.type === "abilityResolved" && e.player === id && e.ability.kind === "tipOff") {
+            used.set(window, (used.get(window) ?? 0) + 1);
+            tips++;
+          }
+        }
+        for (const [w, k] of used) expect(k).toBeLessThanOrEqual(allowed.get(w) ?? 1);
       }
     }
     expect(tips).toBeGreaterThan(0);
   });
 
-  it("Moles win some failed heists and no successful one", () => {
+  it("Moles win some games (one crew: from the top group, either ending) — extension.md \"One crew, and how you win\"", () => {
     let moleWins = 0;
     for (const r of games) {
       const o = outcome(r.state);
-      const moleWinners = (o?.winners ?? []).filter((id) => r.state.players[id]?.role === "mole");
-      if (o?.result === "success") expect(moleWinners).toEqual([]);
-      moleWins += moleWinners.length;
+      moleWins += (o?.winners ?? []).filter((id) => r.state.players[id]?.role === "mole").length;
     }
     expect(moleWins).toBeGreaterThan(0);
   });

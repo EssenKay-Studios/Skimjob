@@ -1,9 +1,8 @@
 // Command-line options for the simulation suite (`pnpm sim:suite`). Node built-ins only.
 import { parseArgs } from "node:util";
-import type { MoleSetting } from "@skimjob/engine";
 import { DEFAULT_MIX, parseMix, parseOverrides, parsePlayerCounts } from "../args";
 import { defaultWorkers } from "../pool";
-import type { SuiteOptions } from "./matrix";
+import type { Setup, SuiteOptions } from "./matrix";
 
 export interface RunSettings {
   readonly workers: number;
@@ -22,7 +21,7 @@ export type ParsedSuiteArgs =
   | { readonly kind: "run"; readonly options: SuiteOptions; readonly settings: RunSettings }
   | { readonly kind: "merge"; readonly files: readonly string[]; readonly settings: RunSettings };
 
-export const DEFAULTS = { seed: "suite", players: "2-12", moles: "off,maybe,on", events: "on,off", ci: 2, minGames: 400, maxGames: 6000, batch: 200 } as const;
+export const DEFAULTS = { seed: "suite", players: "2-12", setups: "balanced,random,possible", events: "on,off", ci: 2, minGames: 400, maxGames: 6000, batch: 200 } as const;
 
 export const SUITE_USAGE = `Skimjob simulation suite: a fixed matrix of all-bot game settings, each played until its
 rates are known to within a target, checked against the design §17.4 targets and role
@@ -33,8 +32,9 @@ Usage: pnpm sim:suite -- [options]
 
 Matrix (one cell per combination):
   -p, --players <spec>    player counts, e.g. 2-12 or 4,6,8 (default ${DEFAULTS.players})
-      --mole <list>       saboteur settings (default ${DEFAULTS.moles}); a setting that deals
-                          exactly like an earlier one at that size is skipped
+      --setups <list>     dealing setups (default ${DEFAULTS.setups}): balanced (Exact role
+                          list; the gates), random (Truly random), possible / hidden (Balanced
+                          with that role list); the Standard deck throughout
       --events <list>     on, off or both (default ${DEFAULTS.events})
   -b, --bots <mix>        bot mix as in pnpm sim (default honest,opportunist,greedy,cautious)
       --overrides <json>  content overrides, inline JSON or a file (as in pnpm sim); seeds don't
@@ -97,7 +97,7 @@ export function parseSuiteArgs(argv: readonly string[], readFile?: (path: string
       allowNegative: true,
       options: {
         players: { type: "string", short: "p" },
-        mole: { type: "string" },
+        setups: { type: "string" },
         events: { type: "string" },
         bots: { type: "string", short: "b" },
         overrides: { type: "string" },
@@ -138,7 +138,7 @@ export function parseSuiteArgs(argv: readonly string[], readFile?: (path: string
   });
 
   if (merging) {
-    const matrixFlags = ["players", "mole", "events", "bots", "overrides", "seed", "ci", "min-games", "max-games", "games", "batch", "shard"] as const;
+    const matrixFlags = ["players", "setups", "events", "bots", "overrides", "seed", "ci", "min-games", "max-games", "games", "batch", "shard"] as const;
     const given = matrixFlags.filter((f) => values[f] !== undefined);
     if (given.length > 0) return error(`merge takes its settings from the shard files, not --${given.join(", --")}`);
     if (positionals.length === 0) return error("merge needs the shard files to combine");
@@ -148,8 +148,8 @@ export function parseSuiteArgs(argv: readonly string[], readFile?: (path: string
   if (shard && (values.compare !== undefined || values.strict)) return error("--compare and --strict need the whole matrix: give them to merge");
   const playerCounts = parsePlayerCounts(values.players ?? DEFAULTS.players);
   if (typeof playerCounts === "string") return error(playerCounts);
-  const moles = list<MoleSetting>(values.mole ?? DEFAULTS.moles, ["off", "maybe", "on"], "mole");
-  if (typeof moles === "string") return error(moles);
+  const setups = list<Setup>(values.setups ?? DEFAULTS.setups, ["balanced", "random", "possible", "hidden"], "setups");
+  if (typeof setups === "string") return error(setups);
   const eventList = list(values.events ?? DEFAULTS.events, ["on", "off"], "events");
   if (typeof eventList === "string") return error(eventList);
   const mix = values.bots === undefined ? DEFAULT_MIX : parseMix(values.bots);
@@ -178,7 +178,7 @@ export function parseSuiteArgs(argv: readonly string[], readFile?: (path: string
   const options: SuiteOptions = {
     seed: values.seed ?? DEFAULTS.seed,
     playerCounts,
-    moles,
+    setups,
     events: eventList.map((e) => e === "on"),
     mix,
     contentOverrides,
