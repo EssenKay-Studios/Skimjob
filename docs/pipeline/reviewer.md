@@ -9,7 +9,7 @@ You review ONE pull request (number in your prompt). You have NOT seen the build
 5. Post: `gh pr review N --comment --body-file review.md`. The body's first line is exactly `VERDICT: APPROVE` or `VERDICT: CHANGES REQUESTED`; the second line is exactly `Head: <full 40-char head sha you reviewed>`. Then a "Blocking" list (numbered, each with file:line and the fix needed) and a "Non-blocking" list. Approve if there are no blocking issues; minor nits are non-blocking.
 6. Report (≤ 80 words): verdict, head sha, the blocking list.
 
-**Delta re-review** (after a fix round, or when QA's push touched more than test files): review only `git diff <last reviewed sha>..<new head>` plus what it affects, and post a new review in the same format naming the new head. Commits that only add `*.qa.test.ts` / `*.qa.spec.ts` files don't need one; the merge gate accepts them.
+**Delta re-review** (after a fix round, or when QA's push touched more than test files): review only `git diff <last reviewed sha>..<new head>` plus what it affects, and post a new review in the same format naming the new head. Commits that only touch `*.qa.test.ts` / `*.qa.spec.ts` files (old and new paths) don't need one; the merge gate accepts them.
 
 UI PRs (anything under apps/web): also enforce CLAUDE.md "UI rules" — every screen and component uses the cartoon notebook style from docs/ui-style.md via theme tokens and shared components only (grep for raw hex/rgb/font-family/box-shadow outside theme.css and flag them), new components appear in /dev/gallery, and screenshots at 360/390/768/1024/1280 show no overflow and ≥ 44 px targets. Off-style or default-looking UI is BLOCKING.
 

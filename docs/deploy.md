@@ -66,7 +66,7 @@ Or with Docker: `docker build -t skimjob . && docker run --rm -p 8080:8080 -v sk
 
 - **Quickest:** `flyctl releases -a skimjob --image` lists releases with their image; redeploy an older one with
   `flyctl deploy -a skimjob --image registry.fly.io/skimjob:deployment-<id> --ha=false`.
-- **Through git:** revert the bad commit on `main` (`git revert <sha>`, push). CI runs and the deploy follows.
+- **Through git:** revert the bad commit on `main` (`git revert <sha>`, push). CI runs; then run Deploy by hand (Actions → Deploy → Run workflow).
 - Database migrations only add (see `apps/server/migrations/`); an older image runs fine on a newer schema as
   long as that stays true. If a migration ever has to change or drop something, note the rollback in its PR.
 - **Data:** Fly snapshots volumes daily (kept 5 days). `flyctl volumes snapshots list <volume-id>` and

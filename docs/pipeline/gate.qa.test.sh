@@ -10,14 +10,14 @@ FIX=$WORK/fix
 cat >"$WORK/bin/gh" <<'EOF'
 #!/bin/bash
 FIX=${GATE_FIX:?}
-q=.; path=; sub="$1 $2"
+q=.; path=; json=; sub="$1 $2"
 while [ $# -gt 0 ]; do
-  case $1 in --jq) q=$2; shift ;; -R|--json|-H|--match-head-commit) shift ;;
+  case $1 in --jq) q=$2; shift ;; --json) json=$2; shift ;; -R|-H|--match-head-commit) shift ;;
     repos/*) path=$1 ;; esac; shift
 done
 case $sub in
   "pr merge") echo merged >"$FIX/MERGED"; exit 0 ;;
-  "pr view") f=pr.json ;;
+  "pr view") f=pr.json; [ "$json" = commits ] && key=pr-commits ;;
   api*) case $path in
       */reviews) f=reviews.json ;; */comments) f=comments.json ;;
       */compare/*) f=compare.json ;; */check-runs*) f=checks.json ;;
@@ -25,6 +25,8 @@ case $sub in
   *) echo "fake gh: unexpected: $sub" >&2; exit 1 ;;
 esac
 [ -f "$FIX/$f" ] || { echo "fake gh: no $f" >&2; exit 1; }
+# fail-<file|pr-commits>: print the data (an earlier page), then fail (a later page).
+if [ -f "$FIX/fail-${key:-$f}" ]; then jq -r "$q" "$FIX/$f"; echo "fake gh: HTTP 502" >&2; exit 1; fi
 jq -r "$q" "$FIX/$f"
 EOF
 chmod +x "$WORK/bin/gh"
@@ -36,7 +38,7 @@ OK_AUTHOR='[{"name":"karthik24iyer","email":"karthik24iyer@gmail.com"}]'
 reset() {
   rm -rf "$FIX"; mkdir -p "$FIX"
   draft=false; mstate=CLEAN; state=OPEN; authors=$OK_AUTHOR; body=""
-  review="VERDICT: APPROVE\nHead: $H"; qa="QA: PASS\nHead: $H"
+  review="VERDICT: APPROVE\nHead: $H"; qa="QA: PASS\nHead: $H"; review_new=""; qa_new=""
   checks='{"name":"Typecheck","status":"completed","conclusion":"success"}'
   compare_status=ahead; since_files='["apps/web/src/x.qa.test.ts"]'; prev=""
 }
@@ -45,10 +47,11 @@ write() {
 {"headRefOid":"$H","isDraft":$draft,"mergeStateStatus":"$mstate","state":"$state",
  "commits":[{"oid":"$C","authors":$authors,"messageHeadline":"feat: x","messageBody":"$body"}]}
 J
-  echo "[$( [ -n "$review" ] && echo "{\"body\":\"$review\"}" )]" >"$FIX/reviews.json"
-  echo "[$( [ -n "$qa" ] && echo "{\"body\":\"$qa\"}" )]" >"$FIX/comments.json"
+  # *_new: a newer review / comment after the first one.
+  jq -n --arg a "$review" --arg b "$review_new" '[$a, $b | select(. != "") | {body: gsub("\\\\n"; "\n")}]' >"$FIX/reviews.json"
+  jq -n --arg a "$qa" --arg b "$qa_new" '[$a, $b | select(. != "") | {body: gsub("\\\\n"; "\n")}]' >"$FIX/comments.json"
   echo "{\"check_runs\":[$checks]}" >"$FIX/checks.json"
-  echo "{\"status\":\"$compare_status\",\"commits\":[{\"sha\":\"$C\"}]}" >"$FIX/compare.json"
+  echo "{\"status\":\"$compare_status\",\"total_commits\":1,\"commits\":[{\"sha\":\"$C\"}]}" >"$FIX/compare.json"
   jq -n --argjson f "$since_files" --arg p "$prev" \
     '{files: [$f[] | {filename: .} + (if $p == "" then {} else {previous_filename: $p, status: "renamed"} end)]}' \
     >"$FIX/commit-$C.json"
@@ -90,5 +93,25 @@ reset; body='Claude-Session: abc'; expect no "Claude-Session line in message"
 reset; draft=true; expect no "draft PR"
 reset; state=CLOSED; expect no "closed PR"
 reset; mstate=BLOCKED; expect no "merge state BLOCKED"
+# Renames and removals: the old path counts too.
+reset; review="VERDICT: APPROVE\nHead: $R"; since_files='["src/rules.qa.test.ts"]'; prev=src/rules.ts; expect no "source renamed to a QA name since review"
+reset; review="VERDICT: APPROVE\nHead: $R"; since_files='["src/old.qa.test.ts"]'; prev=src/older.qa.test.ts; expect yes "QA test renamed to another QA test since review"
+reset; review="VERDICT: APPROVE\nHead: $R"; since_files='["src/removed.ts"]'; expect no "non-QA file removed since review"
+# The newest verdict-looking review / comment is used; malformed = no, never an older APPROVE / PASS.
+reset; review_new="**VERDICT: CHANGES REQUESTED**\nHead: $H"; expect no "newer bold verdict is malformed"
+reset; review_new="## VERDICT: APPROVE\nHead: $H"; expect no "newer heading verdict is malformed"
+reset; review_new="\nVERDICT: APPROVE\nHead: $H"; expect no "newer verdict after a blank line is malformed"
+reset; review_new="VERDICT: CHANGES REQUESTED\nHead: $H"; expect no "newer CHANGES REQUESTED wins"
+reset; review_new="Looks fine, no comments"; expect yes "newer non-verdict review is ignored"
+reset; qa_new="**QA: FAIL**\nHead: $H"; expect no "newer bold QA verdict is malformed"
+reset; qa_new="QA:PASS\nHead: $H"; expect no "newer QA verdict without a space is malformed"
+# gh errors on any page fail closed (the fake prints the data, then fails).
+reset; touch "$FIX/fail-reviews.json"; expect no "reviews read fails"
+reset; touch "$FIX/fail-comments.json"; expect no "comments read fails"
+reset; touch "$FIX/fail-checks.json"; expect no "check-runs read fails"
+reset; touch "$FIX/fail-pr-commits"; expect no "PR commits read fails"
+reset; review="VERDICT: APPROVE\nHead: $R"; touch "$FIX/fail-compare.json"; expect no "compare fails"
+reset; review="VERDICT: APPROVE\nHead: $R"; touch "$FIX/fail-commit-$C.json"; expect no "commit files read fails"
+reset; touch "$FIX/fail-pr.json"; expect no "PR read fails"
 
 [ $fails -eq 0 ] && echo "all gate tests passed" || { echo "$fails gate test(s) failed"; exit 1; }
