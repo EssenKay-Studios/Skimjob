@@ -44,14 +44,14 @@ echo "head:   $head"
 [ "$draft" = false ] || no "PR is a draft"
 [ "$mstate" = CLEAN ] || no "merge state $mstate (want CLEAN)"
 
-# One line per review / comment that looks like a verdict (mentions VERDICT, or
-# QA:, anywhere, e.g. `**VERDICT: APPROVE**`): its first two raw lines. The newest
+# One line per review / comment that looks like a verdict (mentions "verdict", or
+# "qa:", anywhere, any case, e.g. `**Verdict: approve**`, `> qa: fail`): its first two raw lines. The newest
 # one is used and must be in the exact format; there is no fall-back to older ones.
 first2='(.body | gsub("\r"; "") | split("\n")) as $l | [$l[0], ($l[1] // "")] | @tsv'
 rvs=$(gh api --paginate "$A/pulls/$N/reviews" \
-  --jq ".[] | select((.body // \"\") | test(\"VERDICT\")) | $first2") || fatal "cannot read reviews"
+  --jq ".[] | select((.body // \"\") | test(\"verdict\"; \"i\")) | $first2") || fatal "cannot read reviews"
 qas=$(gh api --paginate "$A/issues/$N/comments" \
-  --jq ".[] | select((.body // \"\") | test(\"\\\\bQA:\")) | $first2") || fatal "cannot read PR comments"
+  --jq ".[] | select((.body // \"\") | test(\"\\\\bqa\\\\s*:\"; \"i\")) | $first2") || fatal "cannot read PR comments"
 IFS=$'\t' read -r rv1 rv2 <<<"$(tail -1 <<<"$rvs")"
 IFS=$'\t' read -r qa1 qa2 <<<"$(tail -1 <<<"$qas")"
 sha_of() { [[ $1 =~ ^Head:\ ([0-9a-f]{40})[[:space:]]*$ ]] && echo "${BASH_REMATCH[1]}"; }

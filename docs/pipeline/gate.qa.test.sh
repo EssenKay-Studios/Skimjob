@@ -104,6 +104,12 @@ reset; review_new="\nVERDICT: APPROVE\nHead: $H"; expect no "newer verdict after
 reset; review_new="VERDICT: CHANGES REQUESTED\nHead: $H"; expect no "newer CHANGES REQUESTED wins"
 reset; review_new="Looks fine, no comments"; expect yes "newer non-verdict review is ignored"
 reset; qa_new="**QA: FAIL**\nHead: $H"; expect no "newer bold QA verdict is malformed"
+reset; review_new="Verdict: changes requested\nHead: $H"; expect no "newer lower-case verdict is malformed"
+reset; review_new="**verdict: approve**\nHead: $H"; expect no "newer bold lower-case verdict is malformed"
+reset; review_new="> VERDICT: changes requested\nHead: $H"; expect no "newer quoted verdict is malformed"
+reset; qa_new="qa: fail\nHead: $H"; expect no "newer lower-case QA verdict is malformed"
+reset; qa_new="**Qa: Pass**\nHead: $H"; expect no "newer bold mixed-case QA verdict is malformed"
+reset; qa_new="> QA : FAIL\nHead: $H"; expect no "newer quoted QA verdict is malformed"
 reset; qa_new="QA:PASS\nHead: $H"; expect no "newer QA verdict without a space is malformed"
 # gh errors on any page fail closed (the fake prints the data, then fails).
 reset; touch "$FIX/fail-reviews.json"; expect no "reviews read fails"
