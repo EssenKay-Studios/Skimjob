@@ -13,6 +13,7 @@ import { applyEvent, replay } from "./reduce";
 import { heatBreakdown, viewFor } from "./view";
 import { outcomeFor, ranking } from "./end";
 import { meetingResult } from "./meeting";
+import { V015_NUMBERS } from "./v01-numbers.testkit";
 
 function config(n: number, extra: Partial<GameConfig> = {}): GameConfig {
   return {
@@ -248,7 +249,7 @@ describe("tokens: every trigger (extension.md \"Roles\", owner rulings 1, 4, 5, 
   });
 
   it("Fence: one token when the safe reaches 10, never again (ruling 1)", () => {
-    let s = game(config(5), { roles: ["fence"] });
+    let s = game(config(5, { contentOverrides: V015_NUMBERS }), { roles: ["fence"] }); // scripted at 5 an act, token at 10
     s = run(s, mv("p0", "vault", 6, { ability: { kind: "fenceSafe", amount: 5 } }));
     s = closeAct(toActMeeting(s));
     expect(s.players.p0?.safe).toBe(5);
@@ -710,7 +711,7 @@ describe("QA re-check (PR #50 fixes): locked in", () => {
       if (!r.ok) reasons.push(r.reason);
     }
     {
-      const s = run(game(config(5), { roles: ["fence"] }), mv("p0", "vault", 6, { ability: { kind: "fenceSafe", amount: 5 } }), ROUND);
+      const s = run(game(config(5), { roles: ["fence"] }), mv("p0", "vault", 6, { ability: { kind: "fenceSafe", amount: 1 } }), ROUND);
       const r = handleCommand(s, mv("p0", "vault", 6, { ability: { kind: "fenceSafe", amount: 1 } }));
       if (!r.ok) reasons.push(r.reason);
     }

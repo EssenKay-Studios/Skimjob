@@ -76,10 +76,10 @@ describe("First National Bank rooms — design §6.1, §6.2", () => {
     expect(r.serverRoom?.info).toBe("pocketCount");
   });
 
-  it("9–12: Teller line 4 loot (R5, balance-3.md); Manager's office 4 loot (owner-answers pass, 1 Nov)", () => {
+  it("9–12: Teller line 6 loot (R6 split-gate pass, r6-balance.md); Manager's office 3 loot (R6 balance pass)", () => {
     expect(BANK_JOB.roomTiers[2]).toEqual({ minPlayers: 9, rooms: ["tellerLine", "managersOffice"] });
-    expect(r.tellerLine?.loot).toBe(4);
-    expect(r.managersOffice?.loot).toBe(4);
+    expect(r.tellerLine?.loot).toBe(6);
+    expect(r.managersOffice?.loot).toBe(3);
   });
 });
 
@@ -88,7 +88,7 @@ describe("First National Bank Heat numbers — design §7", () => {
     expect(BANK_JOB.heat).toEqual({ max: 100, perRound: 4, missedCheckpoint: 15 });
   });
 
-  it("Vault +20, Manager's office half of that, Deposit boxes +10, Rooftop −20 (per crew share); other rooms 0", () => {
+  it("Vault +20, Manager's office and Teller line half of that (R6 split-gate pass), Deposit boxes +10, Rooftop −20 (per crew share); other rooms 0", () => {
     const pressure = Object.fromEntries(Object.values(BANK_JOB.rooms).map((d) => [d.id, d.heatPressure]));
     expect(pressure).toEqual({
       vault: 20,
@@ -98,7 +98,7 @@ describe("First National Bank Heat numbers — design §7", () => {
       rooftop: -20,
       depositBoxes: 10,
       serverRoom: 0,
-      tellerLine: 0,
+      tellerLine: 10,
       managersOffice: 10,
     });
   });
@@ -137,7 +137,7 @@ describe("starter roles — design §8, §8.1", () => {
   });
 
   it("Fence: up to 5 loot per stretch into a safe; token at 10", () => {
-    expect(ROLES.fence).toMatchObject({ power: { kind: "fenceSafe", perAct: 5, tokenSafe: 10 }, canPocket: true });
+    expect(ROLES.fence).toMatchObject({ power: { kind: "fenceSafe", perAct: 1, tokenSafe: 3 }, canPocket: true });
   });
 
   it("tags and winsOn (extension.md Build notes \"Win rule\", \"Tags\")", () => {
@@ -171,13 +171,14 @@ describe("starter roles — design §8, §8.1", () => {
     expect([...DECKS.everything].sort()).toEqual(Object.keys(ROLES).sort());
   });
 
-  it("Balanced mix: roles-v2 §3's most-weighted row under the round(n ÷ 3) cap", () => {
+  // extension.md Build notes "Tags, decks and dealing": the balance pass decides the mix; r6-balance.md lifted 4p one over the cap.
+  it("Balanced mix: under the round(n ÷ 3) cap except the tuned 4p row", () => {
     for (let n = 2; n <= 12; n++) {
       const mix = BALANCED_MIX[n];
       expect(mix, `${n}`).toBeDefined();
-      expect((mix?.loneWolves ?? 0) + (mix?.wildcards ?? 0)).toBeLessThanOrEqual(Math.round(n / 3));
+      expect((mix?.loneWolves ?? 0) + (mix?.wildcards ?? 0)).toBeLessThanOrEqual(Math.round(n / 3) + (n === 4 ? 1 : 0));
     }
-    expect(BALANCED_MIX[4]).toEqual({ loneWolves: 1, wildcards: 0 });
+    expect(BALANCED_MIX[4]).toEqual({ loneWolves: 1, wildcards: 1 });
     expect(BALANCED_MIX[12]).toEqual({ loneWolves: 2, wildcards: 2 });
   });
 });
@@ -186,14 +187,14 @@ describe("events deck content — design §10", () => {
   it("has nine cards with matching ids (Police patrol left, extension.md \"Police activity\"), and room cards name rooms of the bank", () => {
     expect(EVENT_DECK).toHaveLength(9);
     expect(EVENT_DECK).not.toContain("policePatrol");
-    expect(POLICE_ACTIVITY).toMatchObject({ chancePercent: 25, heat: 4 });
+    expect(POLICE_ACTIVITY).toMatchObject({ chancePercent: 30, heat: 4 });
     for (const id of EVENT_DECK) {
       const def = EVENTS[id];
       expect(def?.id).toBe(id);
       if (def?.effect.kind === "roomSurge") expect(Object.keys(BANK_JOB.rooms)).toContain(def.effect.room);
     }
-    expect(EVENTS.shiftChange?.effect).toEqual({ kind: "roomSurge", room: "vault", lootMultiplier: 2, heatMultiplier: 1.5 });
-    expect(EVENTS.quietNight?.effect).toEqual({ kind: "heat", amount: -10 });
+    expect(EVENTS.shiftChange?.effect).toEqual({ kind: "roomSurge", room: "vault", lootMultiplier: 1.5, heatMultiplier: 2 });
+    expect(EVENTS.quietNight?.effect).toEqual({ kind: "heat", amount: -5 });
     expect(EVENTS.raidRumour?.effect).toEqual({ kind: "raidRumour", loss: 3 });
   });
 });

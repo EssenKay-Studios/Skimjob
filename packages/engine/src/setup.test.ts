@@ -147,7 +147,7 @@ describe("dealing roles — design §8.1", () => {
         expect(countTag(roles, "wildcard"), `${n}p`).toBe(mix.wildcards);
       }
     }
-    expect(BALANCED_MIX[8]).toEqual({ loneWolves: 1, wildcards: 1 });
+    expect(BALANCED_MIX[8]).toEqual({ loneWolves: 2, wildcards: 1 });
   });
 
   it("Balanced: a tag the deck can't fill goes to Team players", () => {

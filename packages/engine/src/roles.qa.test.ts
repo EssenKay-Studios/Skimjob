@@ -88,12 +88,14 @@ const closeAll = (s: GameState): GameState => {
   return closed.phase.kind === "shakedownPending" ? run(closed, RESOLVE) : closed;
 };
 const INFO_VOTE_ROLES = ["hacker", "smoothTalker", "muscle", "blackmailer", "snitch"] as const;
+// The R6a start value (5 an act), so a hand-worked safe of 4 fits one act; content tunes it (docs/balance/r6-balance.md).
+const FENCE_5: Partial<GameConfig> = { contentOverrides: { roles: { fence: { perAct: 5 } } } };
 const NO_WINDOW = { rolePool: [...STARTER_ROLES, ...INFO_VOTE_ROLES.filter((r) => r !== "muscle")] };
 
 // ------------------------------------------------------------------ 1. counterfactual leak pairs
 
 type Kind = "muscleDealt" | "muscleCancel" | "smoothDealt" | "hackerLoop" | "blackmail" | "snitchTarget";
-const LOOT: Record<string, number> = { vault: 6, office: 4, lobby: 2, depositBoxes: 5, tellerLine: 3, managersOffice: 4 };
+const LOOT: Record<string, number> = { vault: 6, office: 4, lobby: 2, depositBoxes: 5, tellerLine: 3, managersOffice: 3 };
 
 function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
@@ -559,7 +561,7 @@ describe("QA Snitch: payout edges — design §8, §11.3", () => {
   });
 
   it("a Fence target's safe counts toward the clean check (owner answers, 1 Nov): stash 2 + safe 4 isn't clean, so the Snitch is paid", () => {
-    let s = run(game(3, ["snitch", "fence"], NO_WINDOW, { p0: "p1" }), mv("p1", "vault", 6, { ability: { kind: "fenceSafe", amount: 4 } }), ROUND);
+    let s = run(game(3, ["snitch", "fence"], { ...NO_WINDOW, ...FENCE_5 }, { p0: "p1" }), mv("p1", "vault", 6, { ability: { kind: "fenceSafe", amount: 4 } }), ROUND);
     s = closeAll(run(emergency(s, "p2"), vote("p0", "p1"), vote("p2", "p1")));
     expect(ofType(s.log, "shakedownResolved")[0]).toMatchObject({ stashRevealed: 2, taken: 2, clean: false, compensation: 0 });
     expect(s.players.p1).toMatchObject({ stash: 0, safe: 4 });

@@ -8,7 +8,7 @@ import { gameSeed, setupGame } from "../crew";
 import { parseSuiteArgs } from "./args";
 import { buildMatrix, cellSimOptions, shardCells, type SuiteOptions } from "./matrix";
 import { mergeShards } from "./merge";
-import { buildReport, compareReports, formatSuiteReport, parityOf, REPORT_FORMAT, SHARD_KIND, stringifyJson, verdictText } from "./report";
+import { buildReport, compareReports, formatSuiteReport, parityOf, REPORT_FORMAT, SHARD_KIND, splitParityOf, stringifyJson, verdictText } from "./report";
 import { checkReport } from "./validate";
 import { cellStatus, type CellResult } from "./run";
 import { addTallies, emptyTally, tallyGames } from "./tally";
@@ -164,6 +164,28 @@ describe("role parity — docs/roles-v2.md §5", () => {
     expect(parityOf({ a: seats(40000, 0.2), b: seats(40000, 0.25) }).check).toEqual({ verdict: "fail", sure: true });
     expect(parityOf({ a: seats(PARITY_MIN_SEATS, 0.2), b: seats(PARITY_MIN_SEATS, 0.225) }).check).toEqual({ verdict: "fail", sure: false });
     expect(parityOf({ a: seats(400, 0.2) }).check.verdict).toBe("n/a");
+  });
+  it("split gate (PM 3 Nov): the spread over team roles only, ★ roles in STAR_BAND of the team roles' pooled ratio — docs/balance/r6-balance.md", () => {
+    // auditor and cleaner win only a success; mole, fence and embezzler are ★ (winsOn).
+    const split = splitParityOf({
+      auditor: seats(40000, 0.12),
+      cleaner: seats(40000, 0.13),
+      mole: seats(40000, 0.2),
+      fence: seats(40000, 0.3),
+      embezzler: seats(40000, 0.1),
+    });
+    expect(split.team.spread).toBe(0.05);
+    expect(split.team.check).toEqual({ verdict: "pass", sure: true });
+    expect(split.team.average?.ratio).toBe(0.625);
+    const star = Object.fromEntries(split.stars.map((x) => [x.role, x]));
+    expect(star.mole).toMatchObject({ relative: 1.6, check: { verdict: "pass", sure: true } });
+    expect(star.fence).toMatchObject({ relative: 2.4, check: { verdict: "fail", sure: true } });
+    expect(star.embezzler).toMatchObject({ relative: 0.8, check: { verdict: "fail", sure: true } });
+  });
+  it("the team-role spread is gated at TEAM_PARITY_MAX_SPREAD (0.20, PM provisional), not the 0.10 target — docs/balance/r6-balance.md", () => {
+    const team = { auditor: seats(40000, 0.12), cleaner: seats(40000, 0.15) };
+    expect(splitParityOf(team).team).toMatchObject({ spread: 0.15, check: { verdict: "pass", sure: true } });
+    expect(parityOf(team).check).toEqual({ verdict: "fail", sure: true });
   });
 });
 

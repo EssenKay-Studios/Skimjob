@@ -15,8 +15,8 @@ export interface Forecast {
   readonly target: number;
 }
 
-/** A ★ role leans toward its failure once that ending's forecast passes this [0.4]. extension.md Build notes "Bots" */
-export const LEAN_AT = 0.4;
+/** A ★ role leans toward its failure once that ending's forecast passes this [0.8] (R6 balance pass: was 0.4, r6-balance.md). extension.md Build notes "Bots" */
+export const LEAN_AT = 0.8;
 
 /** It rates itself top when its score is at least this many times the average other player's estimated stash (bot setting). */
 export const TOP_FACTOR = 2;

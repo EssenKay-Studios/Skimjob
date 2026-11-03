@@ -596,13 +596,14 @@ describe("the Heat breakdown is exact (extension.md \"Heat\", \"What the app wor
     s = run(s, ...ids(5).map((p) => mv(p, "office")), ROUND, ALIBIS);
     s = replay(s.config, s.log.map((e) => (e.type === "eventFlipped" && e.round === 2 ? { ...e, card: "quietNight", room: null } : e)));
     expect(s.log.some((e) => e.type === "eventFlipped" && e.round === 2 && e.card === "quietNight")).toBe(true);
-    s = at(s, 3);
+    // Heat 0, so the tuned Quiet night (−5, content 0.17.0, r6-balance.md) still clamps: 0 + 4 − 5 → 0.
+    s = at(s, 0);
     s = run(s, ...ids(5).map((p) => mv(p, "office")), ROUND);
     const h = heatRound(viewFor(s, "p0"), 2)!;
     expect(s.heat).toBe(0);
-    expect(h.total, h.text).toBe(-3);
+    expect(h.total, h.text).toBe(0);
     expect(h.lines.map((l) => l.kind)).toEqual(["base", "event", "clamp"]);
-    expect(h.lines.find((l) => l.kind === "event")).toMatchObject({ label: "Quiet night", value: -10 });
+    expect(h.lines.find((l) => l.kind === "event")).toMatchObject({ label: "Quiet night", value: -5 });
   });
 
   /**

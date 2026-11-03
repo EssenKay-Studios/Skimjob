@@ -87,8 +87,10 @@ export const MOLE_TIP_AT = 0.7;
 /**
  * A Muscle bot rescues a shakedown target whose suspicion (to it) is below this
  * (bot setting; no dice, since the bot may be asked again during the window). design §8
+ * 2 since the R6 balance pass (was 1): it spends its cancel on others more often, so it is
+ * less often the one player a shakedown can't touch (team parity, docs/balance/r6-balance.md).
  */
-const MUSCLE_CLEAN_BELOW = 1;
+const MUSCLE_CLEAN_BELOW = 2;
 
 /** A Snitch bot votes for its own target at this share of its usual vote threshold (bot setting). design §8 */
 const SNITCH_EAGERNESS = 0.5;

@@ -8,6 +8,7 @@ import { setupEvents } from "./setup";
 import { replay } from "./reduce";
 import { handleCommand, withRng } from "./handle";
 import { seedRng } from "./rng";
+import { V015_NUMBERS } from "./v01-numbers.testkit";
 
 function config(players: number): GameConfig {
   return {
@@ -19,6 +20,7 @@ function config(players: number): GameConfig {
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     starterMode: false,
+    contentOverrides: V015_NUMBERS, // the Fence's safe scripted at 5 an act (content 0.15.0)
   };
 }
 

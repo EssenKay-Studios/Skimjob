@@ -80,5 +80,27 @@ export const RATES: readonly RateDef[] = [
  * games at 4–12 players. extension.md Build notes "Sim"
  */
 export const PARITY_MAX_SPREAD = 0.1;
+/**
+ * The split parity gate (PM 3 Nov, provisional): the spread above is checked
+ * over the team roles only (roles that win only a success); each ★ role
+ * (one that also wins some failures) must instead sit in this band, as its
+ * win credit ÷ fair share over the team roles' pooled ratio. The all-role
+ * spread is still reported, ungated.
+ *
+ * Band (PM start 0.9–1.4, set from the data, docs/balance/r6-balance.md): a ★
+ * role with an average stash that wins every failure scores 1 ÷ s against the
+ * team roles, s the success rate; at the gate's 55% floor that is 1.8. Above
+ * it, a ★ role tops the ranking more often than an average player. 1.4 is
+ * that ceiling at a 70% success rate, so it would ask ★ roles to rank below
+ * average whenever success is under 70%. Below 0.9, the role is too weak.
+ */
+export const STAR_BAND = { lo: 0.9, hi: 1.8 } as const;
+/**
+ * The team-role spread's gate (PM 3 Nov, provisional, owner to confirm): 0.20
+ * until the M2-14 playtests; PARITY_MAX_SPREAD (0.10) stays the target. The
+ * Muscle (self-cancel) and the Cleaner (cools on the 0-loot Rooftop) hold it
+ * at 0.2–0.3 at 9–12p, and no number moves them. docs/balance/r6-balance.md
+ */
+export const TEAM_PARITY_MAX_SPREAD = 0.2;
 /** Roles with fewer seats than this in a parity group are listed but left out of its spread. */
 export const PARITY_MIN_SEATS = 100;

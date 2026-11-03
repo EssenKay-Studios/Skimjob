@@ -14,6 +14,7 @@ import { replay } from "./reduce";
 import { opensShakedownWindow } from "./meeting";
 import { rolesFor } from "./overrides";
 import { viewFor } from "./view";
+import { V015_NUMBERS } from "./v01-numbers.testkit";
 
 function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
   return {
@@ -187,7 +188,7 @@ describe("Auditor: once per act, a room's shortfall in the latest round — v2 �
 
 describe("Detective: once per act, is a stash at or above the clean threshold? — v2 §2, design §8", () => {
   it("private yes/no against this act's threshold, counting the Fence safe like the clean check", () => {
-    let s = run(game(3, ["detective", "fence"]), mv("p1", "vault", 6, { ability: { kind: "fenceSafe", amount: 4 } }), mv("p2", "vault", cleanBelowPerAct - 1), ROUND);
+    let s = run(game(3, ["detective", "fence"], { contentOverrides: V015_NUMBERS }), mv("p1", "vault", 6, { ability: { kind: "fenceSafe", amount: 4 } }), mv("p2", "vault", cleanBelowPerAct - 1), ROUND);
     s = run(s, use("p0", { kind: "checkStash", target: "p1" }));
     expect(s.log.at(-1)).toEqual({
       type: "abilityResolved",

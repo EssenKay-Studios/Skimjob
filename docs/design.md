@@ -159,7 +159,7 @@ More rooms keep the number of people per room, and so the number of witnesses, r
 |---|---|
 | 2–4 | Core only (5 rooms) |
 | 5–8 | **Deposit boxes**: 5 loot, holds 2 people (if more than 2 go, everyone there gets 4; R5, was 3), adds half the vault pressure. **Server room**: 0 loot, learn *how many* players pocketed loot this round, but not who. |
-| 9–12 | Everything above, plus **Teller line**: 4 loot. **Manager's office**: 4 loot, adds half the vault pressure. *(1 Nov: were 4 and 5; R5 put the Teller line back to 4 — see decisions.md and balance-3.md.)* |
+| 9–12 | Everything above, plus **Teller line**: 6 loot, adds half the vault pressure. **Manager's office**: 3 loot, adds half the vault pressure. *(1 Nov: were 4 and 5; R5 put the Teller line back to 4; the R6 balance pass made them 5 and 3, and its split-gate pass made the Teller line 6 loot with +10 Heat — see r6-balance.md.)* |
 
 ---
 
@@ -173,6 +173,7 @@ Heat runs from 0 to 100. If it reaches 100, the cops raid and the heist fails.
 | Vault pressure | +20 × (Vault visitors ÷ crew size) |
 | Deposit boxes | +10 × (visitors ÷ crew size) |
 | Manager's office | +10 × (visitors ÷ crew size) |
+| Teller line | +10 × (visitors ÷ crew size) (R6 split-gate pass) |
 | Rooftop | −20 × (Rooftop visitors ÷ crew size) |
 | Missed checkpoint | +15 |
 | Events | Varies (event Heat × min(1, crew ÷ 5) for crews of 2–4, §10) |
@@ -206,7 +207,7 @@ Every player is dealt **one secret role** at the start of the game. Roles are de
 | | Cleaner | Every 2nd Rooftop round |
 | | Fixer | Its save stops a raid (any raid, police activity included) |
 | Wildcard | Getaway Driver ★ | Heat first reaches 75 (once per game) |
-| | Fence ★ | The safe reaches 10 |
+| | Fence ★ | The safe reaches 3 |
 | | Hacker | Its loop hid a visitor who pocketed from a Security watcher of that room |
 | | Blackmailer | A vote it stole decides a shakedown (it wouldn't have passed without it) |
 | | Forger | Someone it framed is shaken down clean |
@@ -227,7 +228,7 @@ Every player is dealt **one secret role** at the start of the game. Roles are de
 *(extension.md "Roles" Decks, "Host settings", Build notes "Tags, decks and dealing"; R6a.)*
 
 - **Decks:** Starter (Rookie, Inside Man, Lookout, Bagman, Cleaner; no events, no shop, no tokens), **Standard** (the default, 11 roles: Lookout, Auditor, Detective, Smooth Talker, Muscle, Cleaner, Hacker, Fence, Getaway Driver, Mole, Embezzler; Rookies fill spare seats) and Everything (all 20). The host can switch roles on or off one by one (the `roles` setting, which replaces the preset when not empty). **Quick games force Starter** with events off.
-- **Balanced** (default): a fixed mix per crew size from content (`BALANCED_MIX`: Lone wolves / Wildcards, starting from roles-v2 §3's most-weighted row under the round(n ÷ 3) cap; *R6a provisional: 5–6 players deal 1 / 1*). The rest are Team players; seats the deck can't fill go to Team players, Rookies last. The host can't change the mix.
+- **Balanced** (default): a fixed mix per crew size from content (`BALANCED_MIX`: Lone wolves / Wildcards, starting from roles-v2 §3's most-weighted row under the round(n ÷ 3) cap; *R6a provisional: 5–6 players deal 1 / 1; the R6 balance pass deals 4 players 1 / 1, one over the cap, and 8 players 2 / 1*). The rest are Team players; seats the deck can't fill go to Team players, Rookies last. The host can't change the mix.
 - **Truly random:** each seat drawn uniformly from the eligible deck, at most one Mole and one Embezzler.
 - **Role list shown** (host setting): **Exact** roles dealt (default, `roleListShown`, in content order), the roles that **could** be in the game (Possible: only what the deal can give, so Balanced at 2–3 players lists only Team players), or nothing (Hidden).
 - **Dropped:** the saboteur Off / Maybe / On setting and its caps. A stored saboteur field is migrated on read: *Off* becomes the deck with every Wildcard and Lone wolf toggled off; *Maybe* and *On* become the plain deck.
@@ -279,8 +280,8 @@ From round 2 onward, one event card is flipped at the start of each round and sh
 
 | Event | Effect |
 |---|---|
-| **Quiet night** | Heat −10. |
-| **Shift change** | The Vault yields double this round, and its Heat pressure is ×1.5. |
+| **Quiet night** | Heat −5. |
+| **Shift change** | The Vault yields ×1.5 this round, and its Heat pressure is ×2. |
 | **Power cut** | No witnesses and no cameras this round. Nobody sees anybody. |
 | **Payday** | The Lobby yields 4 this round. |
 | **Lockdown** | One random room is closed this round. |
@@ -289,15 +290,15 @@ From round 2 onward, one event card is flipped at the start of each round and sh
 | **Inside tip** | One random player privately learns another player's role. |
 | **Double-cross** | Two random players are offered a role swap. It happens only if both secretly accept. |
 
-**Police activity** (extension.md "Situations", Build notes "Police activity"; owner, 3 Nov, option A): the Police patrol is no longer a card. When a Mole could be in the game (dealt, with the Exact list; otherwise one the deal could give: never Balanced at 2–3 players), the engine draws a hidden schedule of **police moments** from the seeded RNG (reveal-only `policeScheduled`): each gap is uniform in [0.5, 1.5] × the preset's round length (planning plus alibi window), in game time (§4.1), and each moment brings a background patrol with chance 1 in 4 (content `POLICE_ACTIVITY`). At most one activity per moment: a queued Mole tip-off takes the next free moment and replaces a patrol drawn for it. Either way the crew sees one public `policeActivity` (+4 × min(1, crew ÷ 5), no source) with an immediate raid check; the Mastermind doesn't foresee it. The server fires moments with `advance { policeMoment }` and never exposes a timer for them; the simulator takes one moment per round. *(R6a provisional: moments are refused while a meeting is open; the server freezes them then.)*
+**Police activity** (extension.md "Situations", Build notes "Police activity"; owner, 3 Nov, option A): the Police patrol is no longer a card. When a Mole could be in the game (dealt, with the Exact list; otherwise one the deal could give: never Balanced at 2–3 players), the engine draws a hidden schedule of **police moments** from the seeded RNG (reveal-only `policeScheduled`): each gap is uniform in [0.5, 1.5] × the preset's round length (planning plus alibi window), in game time (§4.1), and each moment brings a background patrol with chance 30% (content `POLICE_ACTIVITY`; R6 balance, was 1 in 4). At most one activity per moment: a queued Mole tip-off takes the next free moment and replaces a patrol drawn for it. Either way the crew sees one public `policeActivity` (+4 × min(1, crew ÷ 5), no source) with an immediate raid check; the Mastermind doesn't foresee it. The server fires moments with `advance { policeMoment }` and never exposes a timer for them; the simulator takes one moment per round. *(R6a provisional: moments are refused while a meeting is open; the server freezes them then.)*
 
 A **Power cut** blinds every feed, which reads "camera offline", the same as a Hacker's loop reads for one room.
 
 *Events deck (provisional, task 14):*
 - The deck holds one of each card; every flip from round 2 draws from the **full deck**, so cards can repeat *(owner answers, 1 Nov)*. Events are a host setting (§15), off in starter mode.
-- **Event Heat for small crews:** a card's Heat (Quiet night; police activity likewise) and the extra Heat of a surge (Shift change's ×1.5 beyond ×1) are scaled by **min(1, crew ÷ 5)**, rounded, so at 3 players Quiet night removes 6. From 5 players cards play at full strength. *(Owner answers, 1 Nov.)*
+- **Event Heat for small crews:** a card's Heat (Quiet night; police activity likewise) and the extra Heat of a surge (Shift change's ×2 beyond ×1) are scaled by **min(1, crew ÷ 5)**, rounded, so at 3 players Quiet night removes 3. From 5 players cards play at full strength. *(Owner answers, 1 Nov.)*
 - The card is flipped as the round starts, so players can plan around it; its effects apply when the round resolves (§5.2 step 1). Lockdown names its closed room on the flip (any room but the Lobby, where missed moves go). Double-cross offers go privately to the two players on the flip, and each can accept or decline until the round deadline; the swap happens at step 1, so the new roles play that round. Each role card keeps its uses so far; Moles are told if their fellow Mole changed.
-- **Shift change** also raises the Vault's Heat pressure ×1.5 (balance pass 2; was ×2); **Payday** doubles the Lobby's loot (2 → 4).
+- **Shift change** also raises the Vault's Heat pressure ×2 and pays its loot ×1.5 (R6 balance pass; were ×1.5 and ×2); **Payday** doubles the Lobby's loot (2 → 4).
 - **Power cut:** no room-mates, no Security and no Lookout results. The Server room still counts pockets.
 - **Audit:** every room in play is listed with what it came up short (0 included).
 - **Raid rumour:** compares stashes, not the Fence safe (which it never touches); ties are broken at random; with every stash empty nobody is hit. The lost loot is gone.
@@ -482,7 +483,7 @@ A command-line tool that runs batches of all-bot games:
 | Heat-bust rate | 10–20% of failures come from Heat |
 | Pocketing vs. honest | Moderate pocketing should win more often than pure honesty. Heavy pocketing should lose more often than it wins. |
 | Shakedown accuracy | 50–70% of shakedowns catch a real cheater |
-| Per-role parity (owner gate) | ≤ 0.10: win credit ÷ (1 ÷ crew size), all 20 roles, Balanced deal, 4–12 players (extension.md Build notes, "Sim") |
+| Per-role parity (owner gate; split gate PM provisional 3 Nov, owner to confirm) | Win credit ÷ (1 ÷ crew size), Balanced deal, 4–12 players (extension.md Build notes, "Sim"). Team roles: spread (max − min) ≤ 0.20 until the M2-14 playtests, target 0.10. ★ roles: each at 0.9–1.8× the Team-role average. The all-role spread is report-only. (docs/balance/r6-balance.md) |
 | Comeback rate | The leader after Act 1 wins less than 50% of the time |
 | Decided early | Less than 15% of games are effectively settled before Act 3 |
 

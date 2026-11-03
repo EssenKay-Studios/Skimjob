@@ -17,7 +17,7 @@ import { eventsSince, viewFor } from "./view";
 type Cmd = Record<string, unknown>;
 type Kind = "role" | "split" | "swap" | "fence" | "watch" | "miss" | "churn" | "voteChurn" | "ballotSwap" | "seal" | "control";
 const MODES: readonly VoteVisibility[] = ["hiddenThenRevealed", "open", "secret"];
-const LOOT: Record<string, number> = { vault: 6, office: 4, lobby: 2, depositBoxes: 5, tellerLine: 3, managersOffice: 4 };
+const LOOT: Record<string, number> = { vault: 6, office: 4, lobby: 2, depositBoxes: 5, tellerLine: 3, managersOffice: 3 };
 
 function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
@@ -153,7 +153,7 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
     if (restricted.has(id)) return move;
     if (role === "lookout" && rand() < 0.8) move.ability = { kind: "lookout", rooms: [pick(A.rooms)] };
     // The safe only in an act's first round, so a changed amount in B is never refused later.
-    if (role === "fence" && round % 3 === 1 && rand() < 0.7) move.ability = { kind: "fenceSafe", amount: 1 + int(5) };
+    if (role === "fence" && round % 3 === 1 && rand() < 0.7) move.ability = { kind: "fenceSafe", amount: 1 + int(1) };
     return move;
   };
   const submit = (player: PlayerId, move: Cmd): Cmd => ({ type: "submitMove", player, move });
@@ -225,7 +225,7 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
           involved.add(f);
           const m = { ...last(f), room: "office", pocket: 4, watch: undefined };
           plan.set(f, [submit(f, { ...m, ability: undefined })]);
-          planB.set(f, [submit(f, { ...m, ability: { kind: "fenceSafe", amount: 1 + int(4) } })]);
+          planB.set(f, [submit(f, { ...m, ability: { kind: "fenceSafe", amount: 1 + int(1) } })]);
         }
       } else if (kind === "watch") {
         const x = pick(ids);

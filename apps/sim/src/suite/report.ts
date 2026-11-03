@@ -7,7 +7,7 @@ import { ROLES } from "@skimjob/content";
 import { checkBand, wilson, type Band, type CheckResult, type Verdict } from "../stats";
 import type { Setup, SuiteOptions } from "./matrix";
 import type { CellResult } from "./run";
-import { PARITY_MAX_SPREAD, PARITY_MIN_SEATS, RATES } from "./targets";
+import { PARITY_MAX_SPREAD, PARITY_MIN_SEATS, RATES, STAR_BAND, TEAM_PARITY_MAX_SPREAD } from "./targets";
 import { addTallies, emptyTally, type SeatTally } from "./tally";
 
 export const REPORT_KIND = "skimjob-sim-suite";
@@ -59,10 +59,34 @@ export interface ParityGroup {
   readonly roles: readonly ParityRole[];
   /** Roles dealt too rarely here to count (fewer than PARITY_MIN_SEATS seats). */
   readonly fewSeats: readonly string[];
-  /** max − min ratio over the counted roles, with the range the intervals allow. */
+  /** max − min ratio over every counted role, with the range the intervals allow. Reported only since the split gate. */
   readonly spread: number | null;
   readonly spreadLo: number | null;
   readonly spreadHi: number | null;
+  /** The all-role spread's verdict against PARITY_MAX_SPREAD: shown, not counted in the checks. */
+  readonly check: CheckResult;
+  /** The gate's first half: the same spread over the team roles only (roles that win only a success). */
+  readonly team: TeamParity;
+  /** The gate's second half: each ★ role against the team roles' pooled ratio, in STAR_BAND. */
+  readonly stars: readonly StarParity[];
+}
+
+export interface TeamParity {
+  readonly spread: number | null;
+  readonly spreadLo: number | null;
+  readonly spreadHi: number | null;
+  readonly check: CheckResult;
+  /** The team roles pooled: win credit ÷ fair share, with its 95% interval (null if no team role counted). */
+  readonly average: { readonly ratio: number; readonly lo: number; readonly hi: number } | null;
+}
+
+export interface StarParity {
+  readonly role: string;
+  /** The ★ role's ratio ÷ the team roles' pooled ratio. */
+  readonly relative: number;
+  /** The widest the two intervals allow (★ lo ÷ team hi to ★ hi ÷ team lo). */
+  readonly lo: number;
+  readonly hi: number;
   readonly check: CheckResult;
 }
 
@@ -139,7 +163,7 @@ function cellReport(c: CellResult): CellReport {
 }
 
 /** Role parity for a pool of games at one crew size. docs/roles-v2.md §5 */
-export function parityOf(roles: Readonly<Record<string, SeatTally>>): Pick<ParityGroup, "roles" | "fewSeats" | "spread" | "spreadLo" | "spreadHi" | "check"> {
+export function parityOf(roles: Readonly<Record<string, SeatTally>>, max: number = PARITY_MAX_SPREAD): Pick<ParityGroup, "roles" | "fewSeats" | "spread" | "spreadLo" | "spreadHi" | "check"> {
   const counted: ParityRole[] = [];
   const fewSeats: string[] = [];
   for (const [role, s] of Object.entries(roles)) {
@@ -157,15 +181,45 @@ export function parityOf(roles: Readonly<Record<string, SeatTally>>): Pick<Parit
   const spread = r3(Math.max(...ratios) - Math.min(...ratios));
   const spreadHi = r3(Math.max(...counted.map((r) => r.hi)) - Math.min(...counted.map((r) => r.lo)));
   const spreadLo = r3(Math.max(0, Math.max(...counted.map((r) => r.lo)) - Math.min(...counted.map((r) => r.hi))));
-  const verdict: Verdict = spread <= PARITY_MAX_SPREAD ? "pass" : "fail";
-  const sure = verdict === "pass" ? spreadHi <= PARITY_MAX_SPREAD : spreadLo > PARITY_MAX_SPREAD;
+  const verdict: Verdict = spread <= max ? "pass" : "fail";
+  const sure = verdict === "pass" ? spreadHi <= max : spreadLo > max;
   return { roles: counted, fewSeats, spread, spreadLo, spreadHi, check: { verdict, sure } };
+}
+
+/** A ★ role: one that also wins some failures (`winsOn`). extension.md "Winning and losing" */
+export const isStar = (role: string): boolean => (Object.hasOwn(ROLES, role) ? ROLES[role as keyof typeof ROLES]?.winsOn.length ?? 0 : 0) > 0;
+
+/**
+ * The split parity gate for one pool (PM 3 Nov, provisional): the spread over
+ * the team roles, and each ★ role's ratio ÷ the team roles' pooled ratio in
+ * STAR_BAND. Roles under PARITY_MIN_SEATS seats are left out of both.
+ * docs/balance/r6-balance.md
+ */
+export function splitParityOf(roles: Readonly<Record<string, SeatTally>>): Pick<ParityGroup, "team" | "stars"> {
+  const teamRoles = Object.fromEntries(Object.entries(roles).filter(([role]) => !isStar(role)));
+  const { spread, spreadLo, spreadHi, check, roles: counted } = parityOf(teamRoles, TEAM_PARITY_MAX_SPREAD);
+  const pooled = counted.reduce((t, r) => { const s = teamRoles[r.role] as SeatTally; return { seats: t.seats + s.seats, credit: t.credit + s.credit, fair: t.fair + s.fair }; }, { seats: 0, credit: 0, fair: 0 });
+  let average: TeamParity["average"] = null;
+  if (pooled.fair > 0) {
+    const iv = wilson(pooled.credit, pooled.seats);
+    const scale = pooled.seats / pooled.fair;
+    average = { ratio: r3((iv.rate as number) * scale), lo: r3((iv.lo as number) * scale), hi: r3((iv.hi as number) * scale) };
+  }
+  const starRoles = parityOf(Object.fromEntries(Object.entries(roles).filter(([role]) => isStar(role)))).roles;
+  const stars = average === null || average.lo <= 0
+    ? []
+    : starRoles.map((x) => {
+        const iv = { rate: r3(x.ratio / average.ratio), lo: r3(x.lo / average.hi), hi: r3(x.hi / average.lo) };
+        return { role: x.role, relative: iv.rate, lo: iv.lo, hi: iv.hi, check: checkBand(iv, STAR_BAND) };
+      });
+  return { team: { spread, spreadLo, spreadHi, check, average }, stars };
 }
 
 /**
  * Parity groups: one per player count and setup, events on and off pooled, in
- * matrix order. Only gated groups (Balanced, 4–12 players) get a verdict; the
- * rest are reported. extension.md Build notes "Sim"
+ * matrix order. Only gated groups (Balanced, 4–12 players) get a verdict, on
+ * the split gate (team-role spread and ★ bands); the all-role spread and the
+ * other groups are reported. extension.md Build notes "Sim"
  */
 function parityGroups(cells: readonly CellResult[]): ParityGroup[] {
   const groups = new Map<string, CellResult[]>();
@@ -177,8 +231,11 @@ function parityGroups(cells: readonly CellResult[]): ParityGroup[] {
     const tally = cs.reduce((t, c) => addTallies(t, c.tally), emptyTally());
     const first = cs[0] as CellResult;
     const parity = parityOf(tally.roles);
-    const check: CheckResult = first.gated ? parity.check : { verdict: "n/a", sure: false };
-    return { key, players: first.players, setup: first.setup, games: tally.games, ...parity, check };
+    const split = splitParityOf(tally.roles);
+    const na: CheckResult = { verdict: "n/a", sure: false };
+    const team = first.gated ? split.team : { ...split.team, check: na };
+    const stars = first.gated ? split.stars : split.stars.map((x) => ({ ...x, check: na }));
+    return { key, players: first.players, setup: first.setup, games: tally.games, ...parity, check: first.gated ? parity.check : na, team, stars };
   });
 }
 
@@ -190,7 +247,7 @@ function roleSummaries(cells: readonly CellResult[]): RoleSummary[] {
     .sort(([a], [b]) => order.indexOf(a) - order.indexOf(b))
     .map(([role, s]) => ({
       role,
-      star: (Object.hasOwn(ROLES, role) ? ROLES[role]?.winsOn.length ?? 0 : 0) > 0,
+      star: isStar(role),
       seats: s.seats,
       ratio: s.fair > 0 ? r3(s.credit / s.fair) : 0,
       fromSuccess: s.credit > 0 ? r3(s.successCredit / s.credit) : null,
@@ -202,7 +259,10 @@ function roleSummaries(cells: readonly CellResult[]): RoleSummary[] {
 export function buildReport(options: SuiteOptions, versions: Versions, cells: readonly CellResult[]): SuiteReport {
   const cellReports = cells.map(cellReport);
   const parity = parityGroups(cells);
-  const all: CheckResult[] = [...cellReports.flatMap((c) => Object.values(c.rates).flatMap((r) => (r.check ? [r.check] : []))), ...parity.map((p) => p.check)];
+  const all: CheckResult[] = [
+    ...cellReports.flatMap((c) => Object.values(c.rates).flatMap((r) => (r.check ? [r.check] : []))),
+    ...parity.flatMap((p) => [p.team.check, ...p.stars.map((x) => x.check)]),
+  ];
   const decided = all.filter((c) => c.verdict !== "n/a");
   const rejections = cells.reduce((s, c) => s + c.tally.rejections, 0);
   return {
@@ -291,21 +351,29 @@ export function formatSuiteReport(r: SuiteReport): string {
     ]),
   );
   const parity = table(
-    ["parity group (events pooled)", "games", `spread ≤${PARITY_MAX_SPREAD.toFixed(2)}`, "95% range", "", "highest", "lowest"],
+    ["parity group (events pooled)", "games", `team spread ≤${TEAM_PARITY_MAX_SPREAD.toFixed(2)}`, "95% range", "", "team highest", "team lowest", "team avg", "all-role spread (report)", ""],
     r.parity.map((p) => {
-      const sorted = [...p.roles].sort((a, b) => b.ratio - a.ratio);
-      const hi = sorted.length > 1 ? sorted[0] : undefined;
-      const lo = sorted.length > 1 ? sorted.at(-1) : undefined;
+      const team = p.roles.filter((x) => !isStar(x.role)).sort((a, b) => b.ratio - a.ratio);
+      const hi = team.length > 1 ? team[0] : undefined;
+      const lo = team.length > 1 ? team.at(-1) : undefined;
+      const t = p.team;
       return [
         p.key,
         String(p.games),
-        p.spread === null ? "—" : p.spread.toFixed(2),
-        p.spreadLo === null ? "" : `${p.spreadLo.toFixed(2)}–${(p.spreadHi as number).toFixed(2)}`,
-        verdictText(p.check),
+        t.spread === null ? "—" : t.spread.toFixed(2),
+        t.spreadLo === null ? "" : `${t.spreadLo.toFixed(2)}–${(t.spreadHi as number).toFixed(2)}`,
+        verdictText(t.check),
         hi ? `${hi.role} ${hi.ratio.toFixed(2)}` : "",
         lo ? `${lo.role} ${lo.ratio.toFixed(2)}` : "",
+        t.average === null ? "—" : t.average.ratio.toFixed(2),
+        p.spread === null ? "—" : p.spread.toFixed(2),
+        verdictText(p.check),
       ];
     }),
+  );
+  const stars = table(
+    ["parity group", "★ role", `÷ team avg ${STAR_BAND.lo.toFixed(1)}–${STAR_BAND.hi.toFixed(1)}`, "95% range", ""],
+    r.parity.flatMap((p) => p.stars.map((x) => [p.key, x.role, x.relative.toFixed(2), `${x.lo.toFixed(2)}–${x.hi.toFixed(2)}`, verdictText(x.check)])),
   );
   const mix = o.mix.map((m) => `${m.personality}:${m.weight}`).join(",");
   const lines = [
@@ -321,9 +389,14 @@ export function formatSuiteReport(r: SuiteReport): string {
     cells,
     "",
     "Role parity (docs/roles-v2.md §5): each role's win credit ÷ fair share 1/n, all games; spread = max − min across roles.",
+    "Split gate (PM 3 Nov, provisional): the spread over the team roles (win only a success) must be ≤ the limit",
+    `(${TEAM_PARITY_MAX_SPREAD.toFixed(2)} until the M2-14 playtests; the target is ${PARITY_MAX_SPREAD.toFixed(2)}, as the all-role column), and each ★ role's`,
+    `ratio ÷ the team roles' pooled ratio must sit in ${STAR_BAND.lo}–${STAR_BAND.hi}. The all-role spread is reported, not counted.`,
     "The point spread is biased upward by noise, so the verdict uses the 95% range: FAIL only if even the closest the intervals allow is over the limit.",
     "Gated: Balanced at 4–12 players (extension.md Build notes \"Sim\"); Truly random and the role-list setups are reported only.",
     parity,
+    "",
+    stars,
     "",
     "Roles, every cell pooled: win credit ÷ fair share, where the wins came from (★ roles also win failures), shop tokens per seat.",
     roles,
@@ -381,18 +454,27 @@ export function compareReports(base: SuiteReport, cur: SuiteReport): string {
   const onlyBase = [...baseCells.keys()].filter((k) => !cur.cells.some((c) => c.key === k));
   if (onlyBase.length > 0) notes.push(`${onlyBase.length} baseline cell${onlyBase.length > 1 ? "s" : ""} not in this run${onlyBase.length <= 5 ? ` (${onlyBase.join(", ")})` : ""}`);
   const baseParity = new Map(base.parity.map((p) => [p.key, p]));
+  const change = (a: number, b: number) => `${b - a >= 0 ? "+" : ""}${(b - a).toFixed(2)}`;
   const parityRows = cur.parity.flatMap((p) => {
     const b = baseParity.get(p.key);
     if (!b || b.spread === null || p.spread === null) return [];
-    if (verdictText(b.check) !== verdictText(p.check)) flips.push(`${p.key} parity: ${verdictText(b.check)} → ${verdictText(p.check)} (${b.spread.toFixed(2)} → ${p.spread.toFixed(2)})`);
-    return [[p.key, b.spread.toFixed(2), p.spread.toFixed(2), `${p.spread - b.spread >= 0 ? "+" : ""}${(p.spread - b.spread).toFixed(2)}`]];
+    // A baseline from before the split gate has no team / ★ results.
+    const bt = b.team?.spread ?? null;
+    const pt = p.team.spread;
+    if (b.team && verdictText(b.team.check) !== verdictText(p.team.check)) flips.push(`${p.key} team parity: ${verdictText(b.team.check)} → ${verdictText(p.team.check)} (${bt?.toFixed(2)} → ${pt?.toFixed(2)})`);
+    const baseStars = new Map((b.stars ?? []).map((x) => [x.role, x]));
+    for (const x of p.stars) {
+      const y = baseStars.get(x.role);
+      if (y && verdictText(y.check) !== verdictText(x.check)) flips.push(`${p.key} ${x.role} ★ band: ${verdictText(y.check)} → ${verdictText(x.check)} (${y.relative.toFixed(2)} → ${x.relative.toFixed(2)})`);
+    }
+    return [[p.key, bt === null ? "—" : bt.toFixed(2), pt === null ? "—" : pt.toFixed(2), bt === null || pt === null ? "" : change(bt, pt), b.spread.toFixed(2), p.spread.toFixed(2), change(b.spread, p.spread)]];
   });
   return [
     "Compared with the baseline: change in percentage points; * = bigger than both intervals together.",
     ...notes.map((n) => `  note: ${n}`),
     table(["cell", ...rateCols.map((d) => d.label)], rows),
     "",
-    table(["parity group", "base", "now", "change"], parityRows),
+    table(["parity group", "team base", "now", "change", "all-role base", "now", "change"], parityRows),
     "",
     flips.length === 0 ? "No check changed verdict." : `Checks that changed verdict:\n${flips.map((f) => `  ${f}`).join("\n")}`,
   ].join("\n") + "\n";

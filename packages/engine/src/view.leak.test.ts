@@ -182,7 +182,7 @@ function playGame(players: number, voteVisibility: VoteVisibility, dark = false)
       const move: Record<string, unknown> = { room, pocket: canKeep && (greedy || (i + round) % 3 === 0) ? (greedy ? 2 : 1) : 0 };
       if (room === "security") move.watch = "vault";
       if (role === "lookout") move.ability = { kind: "lookout", rooms: [s.rooms[(i + round + 1) % s.rooms.length]] };
-      if (role === "fence" && (dark || round % 2 === 0) && (s.players[id]?.roleState.usedThisAct ?? 5) < 5) move.ability = { kind: "fenceSafe", amount: 1 };
+      if (role === "fence" && (dark || round % 2 === 0) && (s.players[id]?.roleState.usedThisAct ?? 1) < 1) move.ability = { kind: "fenceSafe", amount: 1 };
       // design §8: the Hacker loops the Vault once per act; the Blackmailer guesses once per act.
       if (role === "hacker" && round % 3 === 1) move.ability = { kind: "loopCameras", room: "vault" };
       // extension.md "Police activity": each Mole tips off the cops once, in round 8 (late, so the script still reaches every meeting).
