@@ -144,7 +144,7 @@ async lock, single process). Never send `seq` outside its owner's view (evidence
 
 ### M2-11 End-of-game reveal (M)
 - Stamp (JOB DONE / BUSTED), ranking podium (roles, stash, safe, score, winners; VOID wash on failure).
-- Timeline scrub round by round from `reveal.log`: real rooms and splits, stash over time, abilities, tokens earned and perks bought (roles v3 + Extension).
+- Timeline scrub round by round from `reveal.log`: real rooms and splits, stash over time, abilities, tokens earned and perks bought (`docs/extension.md`).
 - Refs: §3, §13, ui-style "End-of-game reveal". **Accept:** all three endings render; Secret-mode ballots
   stay hidden; the timeline matches the log for a seeded game.
 
@@ -178,6 +178,7 @@ async lock, single process). Never send `seq` outside its owner's view (evidence
 
 Order rationale: 1–4 give a working server playable by bots; 5–6 make it playable by people (thin slice);
 7–8 add the social layer; 9–11 are look and payoff; 12 waits on Karthik; 13–14 harden for a real playtest.
+*Current order (3 Nov):* R6a, the balance pass and R6b (`docs/extension.md`) come before M2-11, then M2-13, M2-12, M2-14 and M2-15; see `docs/STATUS.md`.
 
 ## 3. Questions for Karthik
 1. **Google OAuth client id/secret** (Web application, redirect `http://localhost:5173/auth/google/callback`

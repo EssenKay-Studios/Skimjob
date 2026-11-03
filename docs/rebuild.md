@@ -6,7 +6,7 @@
 
 The Rebuild turns Skimjob from a game of secret role powers into a game of **public jobs**. Each player keeps one of the crew's records by hand, may lie in it, and the crew polices the liars by vote.
 
-*Names used here:* **the current game** is Skimjob as it stands, including the roles v3 update (PR #45). **The Rebuild** is this proposal, which would replace roles v3.
+*Names used here:* **the current game** is Skimjob as it stands, including the changes in [`extension.md`](extension.md). **The Rebuild** is this proposal, which would replace them.
 
 - **What changes from the current game:** no acts or checkpoints; no secret roles or factions; Haul and Heat are no longer shown by the app; a fixed bank that runs out; a duty-point perk shop; one possible Rat recruited by the cops mid-game.
 - **What stays:** the core round (pick a room, split the loot), alibis, shakedowns, meetings, chat, no elimination, one winner.

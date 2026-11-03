@@ -1,6 +1,8 @@
 # Skimjob — Game Design Document
 
-*Version 0.2 — 3 Nov 2026: the canonical rules are now **roles v3 as amended by the Extension** (approved 3 Nov; [`roles-v3.md`](roles-v3.md), [`extension.md`](extension.md); the Extension wins on any conflict). This is the spec for R6a (rules, content, bots) and R6b (UI), **not yet built**: `main` still plays the R5 rules (content 0.14.0). Numbers in [brackets] and those called starting values are tuned by the balance pass. The Rebuild ([`rebuild.md`](rebuild.md)), Books mode and a recruited Mole are not approved and out of scope. Version 0.1 was 31 Oct 2026; balance passes 1–3 are in `docs/balance/`.*
+**For R6 rules, [`docs/extension.md`](extension.md) is the spec and wins on any conflict; this file is brought in line as R6a lands.**
+
+*Version 0.2 — 3 Nov 2026: the rules below follow **the Extension** ([`extension.md`](extension.md), approved for build 3 Nov, the single R6 spec that carries roles v3; it wins on any conflict). This is the spec for R6a (rules, content, bots) and R6b (UI), **not yet built**: `main` still plays the R5 rules (content 0.14.0). Numbers in [brackets] and those called starting values are tuned by the balance pass. The Rebuild ([`rebuild.md`](rebuild.md)), Books mode and a recruited Mole are not approved and out of scope. Version 0.1 was 31 Oct 2026; balance passes 1–3 are in `docs/balance/`.*
 
 ---
 
@@ -46,7 +48,7 @@ Skimjob is a social deduction game for groups of friends, played in a browser or
 
 ## 3. Winning and losing
 
-*Roles v3 §1 as amended by the Extension (approved 3 Nov 2026; R6a builds it). There are no sides: everyone is one crew, and at most one player wins (or a shared tie), never a team.*
+*The Extension's win rule (extension.md "Winning and losing" and Build notes; approved 3 Nov 2026; R6a builds it). There are no sides: everyone is one crew, and at most one player wins (or a shared tie), never a team.*
 
 - **Score** = stash, plus the Fence safe, plus the Inside Man's bonus (+1 per [5] loot the Haul ends above the final target, rounded down). **Whole numbers only**: no multipliers and no decimals (the Rookie's ×1.05 and one-decimal rounding are gone).
 - **Ranking:** every player by score, then the tie-breaks: fewer times shaken down, then more total loot handed in (tracked by the engine, revealed only at the end). The **top group** is everyone still level after both; they share the win.
@@ -62,7 +64,7 @@ Skimjob is a social deduction game for groups of friends, played in a browser or
 - A failure-winner outside the top group doesn't win, even if it beats every other failure-winner; if no top-group member qualifies, nobody wins.
 - **A failed heist still shows the whole ranking**, labelled as a loss unless someone qualified.
 - Roles are read as they are at the end of the game, so a Double-cross (§10) can hand over a failure win.
-- Every role card carries one "How you win" line (roles-v3.md §1), so nobody has to look this table up.
+- Every role card carries one "How you win" line (extension.md), so nobody has to look this table up.
 
 ---
 
@@ -200,7 +202,7 @@ Each round's room-and-baseline Heat change is rounded to a whole number (halves 
 
 ## 8. Roles
 
-*Roles v3 as amended by the Extension (approved 3 Nov 2026; `docs/roles-v3.md`, `docs/extension.md`). The spec for R6a/R6b, not yet built: `main` still plays the R5 roles (factions, per-role perk rewards, ally reveals). Numbers in [brackets] are starting values, tuned by the balance pass.*
+*The Extension (approved for build 3 Nov 2026; `docs/extension.md`, which carries roles v3). The spec for R6a/R6b, not yet built: `main` still plays the R5 roles (factions, per-role perk rewards, ally reveals). Numbers in [brackets] are starting values, tuned by the balance pass.*
 
 Every player is dealt **one secret role** at the start of the game. Roles are designed so that **revealing your role is risky**: each one has a weakness once people know about it. Players can claim any role, truthfully or as a bluff. A formal claim (the **Claim** button, §12.1) goes on the public ledger: once per player **between meetings**, any role the game knows (even one that can't be in this game, so a refusal never hints at the hidden role pool), never in Duel mode. Like an alibi it changes no rule; it is evidence the crew weighs.
 
@@ -243,9 +245,9 @@ Every player is dealt **one secret role** at the start of the game. Roles are de
 | **Mole** ★ | Once between meetings, **any time**: tips off the cops for +[4] Heat, a public event announced only as **"police activity"**, the same announcement as the background patrol (§10). At most 3 per game. | Each tip-off (owner, 3 Nov). | Any failure, with the biggest stash. | Revealed means hunted. |
 | **Embezzler** ★ | Once between meetings: moves up to [1] of the round's handed-in loot from the Haul to its stash after the splits, hidden in the round's Haul change. While it holds a take, a shakedown always catches it. | Its first take. | A missed target, with the biggest stash. | Its stash is always dirty while holding a take. |
 
-**Minimum crew sizes:** Snitch and Detective 4+; Inside Man, Smooth Talker, Muscle and Priest 5+; Blackmailer and Forger 7+. **Not in Duel:** roles that need meetings (Smooth Talker, Muscle, Priest, Snitch, Detective, Blackmailer, Forger).
+**Minimum crew sizes:** Snitch and Detective 4+; Inside Man, Smooth Talker, Muscle and Priest 5+; Blackmailer and Forger 7+ (Forger 7+ is provisional: kept from roles v2; the Extension's list names only the Blackmailer). **Not in Duel:** roles that need meetings (Smooth Talker, Muscle, Priest, Snitch, Detective, Blackmailer, Forger).
 
-*Role details (R1–R5 builds, kept where roles v3 doesn't change them; provisional unless noted):*
+*Role details (R1–R5 builds, kept where the Extension doesn't change them; provisional unless noted):*
 - **Tokens:** earning one is a private event (only you are told); your own token count shows in your view, nobody else's. Tokens are granted right after the triggering shakedown (Lookout, Auditor, Detective, Snitch, Smooth Talker, Forger), at the meeting's target check (Rookie, Inside Man, Mastermind; the final check grants nothing, the game is over), or as the triggering round resolves. "Saw", "audited", "checked" and "framed" count anything earlier in the game by that player, and nobody earns from their own shakedown. Tokens stay with the player in a Double-cross (they were earned, not dealt); role uses travel with the card.
 - **Auditor:** used any time after round 1 resolves; it audits the latest resolved round (so it can follow up an alibi), not the same round twice. A Power cut doesn't stop it (it reads the books, not the cameras).
 - **Detective:** used any time; can't check a player whose shakedown is pending. The Fence safe counts, as in the clean check.
@@ -265,7 +267,7 @@ Every player is dealt **one secret role** at the start of the game. Roles are de
 
 ### 8.1 Dealing roles
 
-*Roles v3 §6 as amended by the Extension.*
+*The Extension's decks and dealing (extension.md "Roles", "Host settings" and Build notes).*
 
 - **Decks** (host setting, §15), plus **per-role toggles** on top of any preset:
   - **Starter** (first game, no events): Rookie, Inside Man, Lookout, Bagman, Cleaner. Never deals a Wildcard or Lone wolf.
@@ -286,7 +288,7 @@ Every player is dealt **one secret role** at the start of the game. Roles are de
 
 A shakedown reveals a player's **stash** (and a Fence's safe), not their role. Roles only come out at the end, or when a player chooses to say what they are, truthfully or not.
 
-**No automatic reveals** (roles v3 §2): nobody learns anyone's role from the deal or as a reward (the Hacker's known saboteur, the Getaway Driver ↔ saboteur reveal, the Fence's, Mole's and Embezzler's reveals, the Forger known to saboteurs, saboteurs knowing each other, and the Blackmailer's ally bond are all gone; `alliesLearned` and `roleState.allies` go). Roles are learned only by choice: the Peek perk, the Inside tip card, the Detective, the Blackmailer's guess, claims and evidence cards.
+**No automatic reveals** (extension.md Build notes, "Reveals"): nobody learns anyone's role from the deal or as a reward (the Hacker's known saboteur, the Getaway Driver ↔ saboteur reveal, the Fence's, Mole's and Embezzler's reveals, the Forger known to saboteurs, saboteurs knowing each other, and the Blackmailer's ally bond are all gone; `alliesLearned` and `roleState.allies` go). Roles are learned only by choice: the Peek perk, the Inside tip card, the Detective, the Blackmailer's guess, claims and evidence cards.
 
 ### 8.3 Tokens and the perk shop
 
@@ -477,7 +479,7 @@ Notifications respect the host's quiet hours.
 
 ## 15. Host controls
 
-*Roles v3 + Extension (approved 3 Nov; R6a/R6b build the new settings). The saboteur ("Mole") setting is removed.*
+*The Extension (approved for build 3 Nov; R6a/R6b build the new settings). The saboteur ("Mole") setting is removed.*
 
 | Setting | Options (default first) |
 |---|---|
@@ -553,7 +555,7 @@ Bots implement the same `Agent` interface a human client does: they receive thei
 | Mole | n/a | Often | Fakes it | Tries to make the heist fail without being noticed |
 | Random | Random | Random | Random | Baseline for comparison |
 
-Under the hood, each bot keeps a **suspicion score** for every other player, updated from shortfalls, alibis, witness sightings, its own powers and perks (an Audit, a Detective check, a Peek), and role claims (a claim it knows is false, a role claimed twice, a changed claim). It votes when one player's score passes its threshold. At a vote it misjudges like people do: a small misreading of its own plus a hunch the whole crew shares at that meeting, which can carry a majority to a clean player (this keeps shakedown accuracy near the 50–70% target). Bots communicate only through alibis and role claims (§12.1): under roles v3 (R6a) holders of a failure-winner card or an evidence-leaving power (Hacker, Forger) bluff a low-risk role and the rest claim truthfully when accused (roles-v3.md §8; today's R4b bots still use the crew/dark tables of docs/roles-v2.md §4). They back meeting times people propose and only propose one themselves late in the stretch before the meeting (§11.1). ("Act" and "stretch" here and in §17.4 are engine and sim terms; players never see them.)
+Under the hood, each bot keeps a **suspicion score** for every other player, updated from shortfalls, alibis, witness sightings, its own powers and perks (an Audit, a Detective check, a Peek), and role claims (a claim it knows is false, a role claimed twice, a changed claim). It votes when one player's score passes its threshold. At a vote it misjudges like people do: a small misreading of its own plus a hunch the whole crew shares at that meeting, which can carry a majority to a clean player (this keeps shakedown accuracy near the 50–70% target). Bots communicate only through alibis and role claims (§12.1): under roles v3 (R6a) holders of a failure-winner card or an evidence-leaving power (Hacker, Forger) bluff a low-risk role and the rest claim truthfully when accused (extension.md Build notes, "Bots"; today's R4b bots still use the crew/dark tables of docs/roles-v2.md §4). They back meeting times people propose and only propose one themselves late in the stretch before the meeting (§11.1). ("Act" and "stretch" here and in §17.4 are engine and sim terms; players never see them.)
 
 ### 17.4 Simulator
 
@@ -570,7 +572,7 @@ A command-line tool that runs batches of all-bot games:
 | Heat-bust rate | 10–20% of failures come from Heat |
 | Pocketing vs. honest | Moderate pocketing should win more often than pure honesty. Heavy pocketing should lose more often than it wins. |
 | Shakedown accuracy | 50–70% of shakedowns catch a real cheater |
-| Per-role parity (owner gate) | ≤ 0.10: each role's win credit ÷ (1 ÷ crew size), all 20 roles, Balanced deal, counts 4–12 (roles-v3.md §9) |
+| Per-role parity (owner gate) | ≤ 0.10: each role's win credit ÷ (1 ÷ crew size), all 20 roles, Balanced deal, counts 4–12 (extension.md Build notes, "Sim") |
 | Mole, Fence (watched, no gate) | Reported by ending (success vs failure wins); tuned via the tip-off, safe cap and lean points |
 | Comeback rate | The leader after meeting 1 (round 3) wins less than 50% of the time |
 | Decided early | Less than 15% of games are effectively settled before round 7 |
