@@ -75,3 +75,5 @@ Every provisional call still to confirm, once each; the details are in the named
 7. **"Extension UI (R6b)"** (#52) and **"End-of-game reveal (M2-11)"** (#55): builder readings (Starter deck ≠ starter mode, Heat breakdown parts, reveal attribution of tip-offs, loops and stolen votes).
 8. **Older `(provisional)` markers** (1–2 Nov entries, M1 to M2-10, R1–R5; partly accepted in "Owner answers, 2 Nov"): accept the rest in bulk, or name any to revisit.
 9. **Resume:** when to restart development (M2-14, M2-15).
+
+<!-- QA probe for PR #60 docs-only lane; never merged -->
