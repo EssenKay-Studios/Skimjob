@@ -147,7 +147,7 @@ describe("QA: recap after a meeting, a shakedown, the end and a reconnect (desig
     const lines = recap(eventsSince(view, topSeq(viewFor(states[i]!, "p1"))), view, ctxOf(view, "p1"));
     expect(lines.length).toBeGreaterThanOrEqual(2);
     expect(lines.length).toBeLessThanOrEqual(RECAP_MAX_LINES);
-    expect(lines.join("\n")).toMatch(/checkpoint|voted/);
+    expect(lines.join("\n")).toMatch(/target|voted/);
     expect(lines.at(-1)).toMatch(/^Now: round \d+/);
   });
 

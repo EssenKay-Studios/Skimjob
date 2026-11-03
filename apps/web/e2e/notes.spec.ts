@@ -165,9 +165,9 @@ for (const viewport of VIEWPORTS) {
 
     const sheet = page.getByRole("region", { name: "Ledger and case file" });
     await sheet.getByRole("button", { name: /^Both/ }).click();
-    await sheet.getByRole("group", { name: "Act" }).getByRole("button", { name: "Act 1" }).click();
+    await sheet.getByRole("group", { name: "Rounds" }).getByRole("button", { name: "Rounds 1–3" }).click();
     await sheet.getByRole("group", { name: "Round" }).getByRole("button", { name: "Round 1" }).click();
-    await expect(sheet.getByRole("list", { name: "Ledger and case file" })).toContainText("Round 1 · Act 1");
+    await expect(sheet.getByRole("list", { name: "Ledger and case file" })).toContainText("Round 1");
 
     const board = page.getByRole("region", { name: "Your suspicion board" });
     const first = board.getByRole("group").first();

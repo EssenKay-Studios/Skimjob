@@ -64,7 +64,7 @@ describe("ledger and case file rows (design §13)", () => {
     for (const g of groups) expect(g.rows.map((r) => r.seq)).toEqual([...g.rows].map((r) => r.seq).sort((a, b) => b - a));
     expect(filterChoices(rows, null)).toEqual({ acts: [1, 2], rounds: [1, 2, 3, 4] });
     expect(filterChoices(rows, 1).rounds).toEqual([1, 2, 3]);
-    expect(roundLabel(groups[0]!)).toBe("Round 4 · Act 2");
+    expect(roundLabel(groups[0]!)).toBe("Round 4");
     expect(roundLabel(groups.at(-1)!)).toBe("Before the job");
   });
 });

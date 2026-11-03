@@ -6,11 +6,15 @@
 // ledger / case file sheet, the "While you were away" recap and the private
 // suspicion board (game/notes.ts). The full reveal (M2-11) comes later.
 import { useEffect, useMemo, useState } from "react";
+import { ROUNDS_PER_ACT } from "@skimjob/content";
 import type { PlayerView, RoomId } from "@skimjob/engine";
 import { Button } from "../components/Button";
 import { Chip } from "../components/Chip";
 import { Clock, Play } from "../components/icons";
-import { HeatMeter, Meter } from "../components/Meter";
+import { HeatMeter } from "../components/Meter";
+import { EndingNote, GapBox, HeatBreakdown, TargetBar } from "../components/Extension";
+import { endingText } from "../game/extension";
+import { MeetingName, meetingAfter } from "../game/wording";
 import { BankCutaway } from "../art/BankCutaway";
 import { BANK_ROOMS, type BankRoomId } from "../art/bankLayout";
 import { CrookAvatar } from "../art/Crook";
@@ -32,9 +36,9 @@ import {
   alibiState,
   canPocket,
   defaultRoom,
+  jobOf,
   justMissed,
   namesOf,
-  nextTarget,
   outcomeOf,
   phaseInfo,
   presenceInfo,
@@ -43,7 +47,7 @@ import {
   type Presence,
   type Timer,
 } from "../game/hud";
-import { hasMeetings, pluralityRule, slotText } from "../game/meeting";
+import { hasMeetings, slotText } from "../game/meeting";
 import { ClaimRole, DecidingPanel, MeetingNow, MeetingsPanel, ResultsBanner, RoleCard } from "./Meetings";
 import { useCountdown, useGame, useNow, type ClientCommand, type Connection, type GameChannel, type Reply } from "../game/useGame";
 import { api, ApiError, sentence, UNREACHABLE, type LobbyView } from "../api";
@@ -166,8 +170,7 @@ function Board({ view, timers, offset, send, autoMeetings, gameId, channel, dmNo
     room: (picked && picked.round === planning ? picked.room : null) ?? view.me.move?.room ?? null,
     setRoom: (room) => planning !== null && setPicked({ round: planning, room }),
   };
-  const plurality = pluralityRule(view);
-  const ctx = useMemo(() => ({ me: view.me.id, name: namesOf(view), slot: slotText, plurality }), [view, plurality]);
+  const ctx = useMemo(() => ({ me: view.me.id, name: namesOf(view), slot: slotText }), [view]);
   // M2-10: the private suspicion board, kept per seat on the server (the recap lives in `Away`).
   const board = useSuspicionBoard(gameId);
   return (
@@ -211,13 +214,12 @@ function Hud({ view, timers, offset }: { view: PlayerView; timers: readonly Time
   const countdown = useCountdown(timers, phase.timerKey, offset);
   const emergency = view.pendingEmergency;
   const emergencyIn = useCountdown(timers, emergency ? `openMeeting:${emergency.meetingId}` : null, offset);
-  const target = nextTarget(view);
-  const max = 100;
+  const max = jobOf(view).heat.max;
   return (
     <SketchFrame as="section" seed="game-hud" radius={18} shadow={0.5} className="hud" aria-label="Heist status">
       <div className="hud__phase">
         <p className="kicker hud__kicker">
-          {view.round > 0 ? `Round ${view.round} of 9 · Act ${view.act}` : "Setting up"}
+          {view.round > 0 ? `Round ${view.round} of ${3 * ROUNDS_PER_ACT} · ${MeetingName(view.act)} after round ${meetingAfter(view.act)}` : "Setting up"}
         </p>
         <h1 className="hud__title">{phase.title}</h1>
         {countdown && (
@@ -238,12 +240,7 @@ function Hud({ view, timers, offset }: { view: PlayerView; timers: readonly Time
         )}
       </div>
       <div className="hud__stat hud__haul">
-        <span className="meta">Haul</span>
-        <span className="num hud__big">{view.haul}</span>
-        <Meter value={view.haul} max={Math.max(target.target, view.haul) * 1.15} notch={target.target} tone="var(--olive)" label="Haul" />
-        <span className="meta">
-          {target.final ? "final target" : `Act ${target.act} target`} <b className="num">{target.target}</b>
-        </span>
+        <TargetBar view={view} />
       </div>
       <div className="hud__stat hud__heat">
         <HeatMeter heat={view.heat} max={max} />
@@ -256,6 +253,11 @@ function Hud({ view, timers, offset }: { view: PlayerView; timers: readonly Time
           {view.card && view.card.round === view.round && <span className="meta">Card: {cardLabel(view)}</span>}
         </span>
       </div>
+      {view.round > 0 && (
+        <div className="hud__extra">
+          <HeatBreakdown view={view} />
+        </div>
+      )}
     </SketchFrame>
   );
 }
@@ -358,6 +360,7 @@ function Actions({ view, timers, offset, send, autoMeetings, pick }: BoardProps 
       {p.kind === "meeting" && <MeetingNow view={view} timers={timers} offset={offset} send={send} />}
       {p.kind === "shakedownPending" && <DecidingPanel view={view} timers={timers} offset={offset} />}
       {alibi && <AlibiPanel view={view} round={alibi.round} posted={alibi.posted} send={send} />}
+      <GapBox view={view} />
       {p.kind === "planning" ? (
         <MovePanel key={p.round} view={view} round={p.round} timers={timers} offset={offset} send={send} autoMeetings={autoMeetings} pick={pick} />
       ) : p.kind === "alibis" || voting ? null : (
@@ -372,7 +375,7 @@ function Actions({ view, timers, offset, send, autoMeetings, pick }: BoardProps 
 
 function WaitPanel({ view }: { view: PlayerView }) {
   const p = view.phase;
-  const text = p.kind === "awaitingMeeting" ? `Act ${p.act} is over. The crew meeting opens next, then the checkpoint.` : "Hang tight.";
+  const text = p.kind === "awaitingMeeting" ? `Round ${meetingAfter(p.act)} is done. ${MeetingName(p.act)} opens next, then the Haul is checked against its target.` : "Hang tight.";
   return (
     <SketchFrame as="section" seed="game-wait" radius={16} shadow={0.4} className="panel wait" aria-live="polite">
       <h2 className="panel__title">
@@ -516,12 +519,13 @@ function AlibiPanel({ view, round, posted, send }: { view: PlayerView; round: nu
   );
 }
 
-function GameOver({ view }: { view: PlayerView }) {
+export function GameOver({ view }: { view: PlayerView }) {
   const outcome = outcomeOf(view)!;
   const name = namesOf(view);
   const seats = new Map(seatsOf(view).map((s) => [s.id, s]));
   const looks = seatLooks(view);
   const won = outcome.result === "success";
+  const ending = endingText(outcome);
   const end = view.ledger.find((x) => x.event.type === "gameEnded");
   return (
     <SketchFrame as="section" seed="game-over" radius={20} shadow={0.55} tape className={won ? "panel over" : "panel over is-busted"} aria-labelledby="over-h">
@@ -532,8 +536,9 @@ function GameOver({ view }: { view: PlayerView }) {
       <h2 id="over-h" className="over__title">
         {won ? "The crew got away with it" : "The heist failed"}
       </h2>
-      {end && <p>{describeEvent(end.event, { me: view.me.id, name, plurality: pluralityRule(view) })}</p>}
-      <ol className="ranking" aria-label="Final ranking">
+      <EndingNote outcome={outcome} />
+      {end && <p>{describeEvent(end.event, { me: view.me.id, name })}</p>}
+      <ol className="ranking" aria-label={won ? "Final ranking" : "Final ranking, marked as a loss"}>
         {outcome.ranking.map((r, i) => {
           const seat = seats.get(r.player);
           const winner = outcome.winners.includes(r.player);
@@ -544,6 +549,7 @@ function GameOver({ view }: { view: PlayerView }) {
               <span className="ranking__who">
                 <b>{seat?.you ? "You" : name(r.player)}</b>
                 <span className="meta">{roleName(r.role)}</span>
+                {winner && <span className="meta ranking__badge">{ending.badge}</span>}
               </span>
               <span className="ranking__score">
                 <b className="num">{r.score}</b>
@@ -553,6 +559,7 @@ function GameOver({ view }: { view: PlayerView }) {
                 </span>
               </span>
               {winner && <Chip on>Winner</Chip>}
+              {!winner && !won && <span className="meta ranking__loss">Loss</span>}
             </li>
           );
         })}

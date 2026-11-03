@@ -65,7 +65,7 @@ describe("describeEvent", () => {
     expect(describeEvent(sampleEvents.roundResolved, asAna)).toBe("Round 1: Haul +6 (now 6), Heat +14 (now 14).");
     expect(describeEvent({ ...sampleEvents.roundResolved, heatDelta: -6, heat: 8 }, asAna)).toBe("Round 1: Haul +6 (now 6), Heat −6 (now 8).");
     expect(describeEvent(sampleEvents.eventFlipped, asAna)).toBe("Round 2 event: Lockdown (the Vault is closed).");
-    expect(describeEvent(sampleEvents.checkpointChecked, asAna)).toBe("Act 1 checkpoint: Haul 10, target 12, missed (Heat +15).");
+    expect(describeEvent(sampleEvents.checkpointChecked, asAna)).toBe("Meeting 1 target: Haul 10, target 12, missed (Heat +15).");
     expect(describeEvent({ ...sampleEvents.checkpointChecked, act: 3, met: true, heatPenalty: 0 }, asAna)).toBe("Final target: Haul 10, target 12, made it.");
     expect(describeEvent(sampleEvents.auditReport, asAna)).toBe("Audit of round 6: Vault 4 short.");
   });
@@ -87,10 +87,6 @@ describe("describeEvent", () => {
     [results.noQuorum[0], "Too few votes: nothing happens."],
   ] as const)("describes the meeting result %j exactly", (result, text) => {
     expect(describeEvent({ ...sampleEvents.meetingClosed, result }, asAna)).toBe(text);
-  });
-  // design §11.2: 9–12 players shake down on a plurality, so a failed vote there has no clear winner rather than no majority.
-  it("says 'no clear winner' when the crew uses the plurality rule", () => {
-    expect(describeEvent({ ...sampleEvents.meetingClosed, result: { kind: "noMajority" } }, { ...asAna, plurality: true })).toBe("No clear winner: nobody is shaken down.");
   });
 
   // design §8: every ability's result.
@@ -124,7 +120,7 @@ describe("describeEvent", () => {
     expect(as(abilities.lookout[0])).toBe("Round 1: you kept lookout on the Vault and Office.");
     expect(as(abilities.checkStash[0])).toBe("Stash check: Ben holds 3 or more (not clean).");
     // design §8 (v2 §2): Priest, Bagman, Fixer
-    expect(as(abilities.bless[0])).toBe("You blessed Ben for Act 2.");
+    expect(as(abilities.bless[0])).toBe("You blessed Ben until the next meeting.");
     expect(as(abilities.bagman[0])).toBe("Round 1: you handed everything in, so the bank added +1 to the Haul.");
     expect(as(abilities.fixer[0])).toBe("Round 1: you stopped the raid and lost 3 from your stash.");
     // v2 §2 (R3b): Blackmailer, Forger, Embezzler
@@ -176,8 +172,8 @@ describe("describeEvent", () => {
 
   // design §16.1: Duel call-outs both ways.
   it("describes call-outs", () => {
-    expect(describeEvent(sampleEvents.callOutResolved, asCyd)).toBe("Call-out, Act 1: Ana caught Ben skimming; 4 moves to Ana.");
-    expect(describeEvent({ ...sampleEvents.callOutResolved, caught: false }, asAna)).toBe("Call-out, Act 1: you got it wrong and pay Ben 4.");
+    expect(describeEvent(sampleEvents.callOutResolved, asCyd)).toBe("Call-out, rounds 1–3: Ana caught Ben skimming; 4 moves to Ana.");
+    expect(describeEvent({ ...sampleEvents.callOutResolved, caught: false }, asAna)).toBe("Call-out, rounds 1–3: you got it wrong and pay Ben 4.");
   });
 
   // design §3: every ending.
@@ -194,6 +190,6 @@ describe("describeEvent", () => {
   });
 
   it("formats meeting slots through the context", () => {
-    expect(describeEvent(sampleEvents.meetingScheduled, { ...asAna, slot: () => "7 pm" })).toBe("The Act 1 meeting is set for 7 pm.");
+    expect(describeEvent(sampleEvents.meetingScheduled, { ...asAna, slot: () => "7 pm" })).toBe("Meeting 1 is set for 7 pm.");
   });
 });

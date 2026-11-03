@@ -73,8 +73,8 @@ test("a host and a guest play a Quick game against bots to the end", async ({ pa
   // The act's meetings: the host's ballot (private in the default Hidden mode), and the results in the ledger.
   await expect(page.getByRole("list", { name: "Case file" })).toContainText("You voted to skip.");
   await page.getByRole("button", { name: /Ledger/ }).click();
-  await expect(ledger).toContainText("The Act 1 meeting is open: time to vote.");
-  await expect(ledger).toContainText(/Act 1 checkpoint: Haul \d+, target \d+/);
+  await expect(ledger).toContainText("Meeting 1 is open: time to vote.");
+  await expect(ledger).toContainText(/Meeting 1 target: Haul \d+, target \d+/);
   await page.getByRole("button", { name: /Ledger/ }).click();
   await shot(page, "over");
 
@@ -178,7 +178,7 @@ test("the bank board: tap a room to pick it, see who you saw and the alibi claim
   await card.getByRole("button", { name: "Claim role" }).click();
   await card.getByRole("group", { name: "Role to claim" }).getByRole("button", { name: "Lookout" }).click();
   await card.getByRole("button", { name: "Claim the Lookout" }).click();
-  await expect(card.getByText("You claimed to be the Lookout since the last meeting.")).toBeVisible();
+  await expect(card.getByText("You claimed to be the Lookout. One claim between meetings")).toBeVisible();
   await expect(card.getByRole("button", { name: "Claim role" })).toHaveCount(0);
 
   // The alibi window (3 s): the board shows the resolved round, with you in the Office; the claim moves next to the alibi button.
@@ -186,7 +186,7 @@ test("the bank board: tap a room to pick it, see who you saw and the alibi claim
   await expect(alibi).toBeVisible({ timeout: 45_000 });
   await expect(board.getByText(/as you saw it/)).toBeVisible();
   await expect(board.locator(".bank-room.is-selected[data-room=office]")).toBeVisible();
-  await expect(alibi.getByText("You claimed to be the Lookout since the last meeting.")).toBeVisible();
+  await expect(alibi.getByText("You claimed to be the Lookout. One claim between meetings")).toBeVisible();
   await expect(page.getByRole("list", { name: "Ledger" })).toContainText("You claim to be the Lookout.");
   expect(errors).toEqual([]);
   await idle.close();

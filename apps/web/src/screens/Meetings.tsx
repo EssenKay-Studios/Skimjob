@@ -12,6 +12,7 @@ import { Chip } from "../components/Chip";
 import { Banner, ClockFace, DialogSheet, TallyBars, type TallyBar } from "../components/MeetingKit";
 import { SketchFrame } from "../components/SketchFrame";
 import { TextField } from "../components/TextField";
+import { MyRoleFacts, RoleList, RulebookButton, Tokens } from "../components/Extension";
 import { Underline } from "../components/Underline";
 import { roleName } from "../game/describeEvent";
 import { namesOf, type Timer } from "../game/hud";
@@ -27,7 +28,6 @@ import {
   openMeetingOf,
   perksHeld,
   plannerOf,
-  pluralityRule,
   sameVote,
   slotFromLocal,
   slotText,
@@ -37,6 +37,7 @@ import {
   type MeetingOutcome,
   type Tally,
 } from "../game/meeting";
+import { MeetingName, targetName } from "../game/wording";
 import { useCountdown, type ClientCommand, type Reply } from "../game/useGame";
 import "./meetings.css";
 
@@ -106,7 +107,7 @@ export function MeetingsPanel({ view, timers, offset, send, autoMeetings }: Prop
       </div>
 
       <div className="meetings__block">
-        <h3 className="meetings__sub">Act {planner.act} meeting</h3>
+        <h3 className="meetings__sub">{MeetingName(planner.act)}</h3>
         {planner.locked ? (
           <p>
             Set for <b>{slotText(planner.locked.slot)}</b>
@@ -234,7 +235,7 @@ export function MeetingNow({ view, timers, offset, send }: Props) {
       <SketchFrame as="section" seed="game-meeting-now" radius={16} shadow={0.45} fill="var(--card-sand)" className="panel" aria-labelledby="meeting-now-h">
         <div className="panel__head">
           <h2 id="meeting-now-h" className="panel__title">
-            <Underline seed="meeting-now">{m.kind === "emergency" ? "Emergency meeting" : `Act ${m.act} meeting`}</Underline>
+            <Underline seed="meeting-now">{m.kind === "emergency" ? "Emergency meeting" : MeetingName(m.act)}</Underline>
           </h2>
           {left && <span className="meta">votes close in {left.text}</span>}
         </div>
@@ -276,7 +277,7 @@ function VoteSheet({ view, timers, offset, send, onDone }: Props & { onDone: () 
       <div className="vote__head">
         <div>
           <p className="kicker vote__kicker">
-            {m.kind === "emergency" ? `Emergency meeting${m.calledBy ? ` · called by ${who(m.calledBy)}` : ""}` : `Act ${m.act} meeting`}
+            {m.kind === "emergency" ? `Emergency meeting${m.calledBy ? ` · called by ${who(m.calledBy)}` : ""}` : MeetingName(m.act)}
           </p>
           <h2 id="vote-h" className="vote__title">
             Who's skimming?
@@ -370,14 +371,14 @@ export function DecidingPanel({ view, timers, offset }: Omit<Props, "send">) {
   );
 }
 
-const RESULT_TITLE = (o: MeetingOutcome, who: (p: PlayerId) => string, me: PlayerId, plurality: boolean): string => {
+const RESULT_TITLE = (o: MeetingOutcome, who: (p: PlayerId) => string, me: PlayerId): string => {
   switch (o.result.kind) {
     case "shakedown":
       return o.result.target === me ? "The crew voted to shake you down" : `The crew voted to shake down ${who(o.result.target)}`;
     case "skipped":
       return "The crew voted to skip";
     case "noMajority":
-      return plurality ? "No clear winner: nobody is shaken down" : "No majority: nobody is shaken down";
+      return "No majority: nobody is shaken down";
     case "noQuorum":
       return "Too few votes: nothing happens";
   }
@@ -394,9 +395,9 @@ export function ResultsBanner({ view }: { view: PlayerView }) {
   const are = s?.target === view.me.id ? "were" : "was";
   return (
     <SketchFrame as="section" seed={`results-${o.meetingId}`} radius={18} shadow={0.5} tape fill="var(--manilla)" className="panel results enter-sheet" aria-labelledby="results-h">
-      <p className="kicker results__kicker">{o.kind === "emergency" ? "Emergency meeting" : `Act ${o.act} meeting`} · result</p>
+      <p className="kicker results__kicker">{o.kind === "emergency" ? "Emergency meeting" : MeetingName(o.act)} · result</p>
       <h2 id="results-h" className="results__title">
-        {RESULT_TITLE(o, who, view.me.id, pluralityRule(view))}
+        {RESULT_TITLE(o, who, view.me.id)}
       </h2>
       <TallyBars rows={bars(o.tally, who, o.result)} label="Final tally" />
       {o.ballots ? <BallotList rows={o.ballots} who={who} label="How everyone voted" /> : <p className="meta">{MODE_NOTE.secret}</p>}
@@ -421,7 +422,7 @@ export function ResultsBanner({ view }: { view: PlayerView }) {
         <Banner
           tone={o.checkpoint.met ? "good" : "bad"}
           seed="res-checkpoint"
-          title={`${o.checkpoint.act === 3 ? "Final target" : `Act ${o.checkpoint.act} checkpoint`} ${o.checkpoint.met ? "made" : "missed"}`}
+          title={`${targetName(o.checkpoint.act)} ${o.checkpoint.met ? "made" : "missed"}`}
         >
           Haul <b className="num">{o.checkpoint.haul}</b> against a target of <b className="num">{o.checkpoint.target}</b>
           {o.checkpoint.heatPenalty > 0 ? `: Heat +${o.checkpoint.heatPenalty}.` : "."}
@@ -461,6 +462,8 @@ export function RoleCard({ view, send, claim = true }: { view: PlayerView; send:
           )}
         </span>
       </div>
+      <MyRoleFacts view={view} />
+      <Tokens view={view} send={send} />
       {perks.length > 0 && (
         <ul className="role-card__perks" aria-label="Your perks">
           {perks.map((p) => (
@@ -486,6 +489,10 @@ export function RoleCard({ view, send, claim = true }: { view: PlayerView; send:
           ))}
         </div>
       )}
+      <div className="role-card__foot">
+        <RoleList view={view} />
+        <RulebookButton view={view} />
+      </div>
     </SketchFrame>
   );
 }
@@ -567,7 +574,7 @@ export function ClaimRole({ view, send, where }: { view: PlayerView; send: Send;
   if (claim.claimed)
     return (
       <p className="meta claim__done">
-        You claimed to be the <b>{roleName(claim.claimed)}</b> since the last meeting.
+        You claimed to be the <b>{roleName(claim.claimed)}</b>. One claim between meetings: your next one comes after the next meeting.
       </p>
     );
   const go = async () => {
