@@ -1,12 +1,14 @@
 // Landing (m2-plan M2-5): create a game (/new), join with an invite code
 // (/join/:code), sign in with Google (M2-12; shown only when the server has a
 // Google client id, else the top bar's "Sign in" just explains nicknames).
+// Signed in with Google, the pass card's place shows "My games".
 import { useEffect, useState, type FormEvent } from "react";
-import { fetchMe, fetchProviders, googleSignInUrl, type Me } from "../api";
+import { fetchMe, fetchMyGames, fetchProviders, googleSignInUrl, type Me, type MyGame } from "../api";
 import { Avatar } from "../components/Avatar";
 import { BankDoodle } from "../components/BankDoodle";
 import { Button } from "../components/Button";
 import { Chip } from "../components/Chip";
+import { MyGames } from "../components/MyGames";
 import { SketchFrame } from "../components/SketchFrame";
 import { TextField } from "../components/TextField";
 import { useToast } from "../components/Toast";
@@ -25,6 +27,7 @@ export function Landing() {
   const [shake, setShake] = useState(0);
   const [google, setGoogle] = useState(false);
   const [me, setMe] = useState<Me | null>(null);
+  const [games, setGames] = useState<MyGame[] | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -33,7 +36,11 @@ export function Landing() {
       if (!live || !p.includes("google")) return;
       setGoogle(true);
       fetchMe().then(
-        (u) => live && setMe(u),
+        (u) => {
+          if (!live) return;
+          setMe(u);
+          if (u && !u.guest) fetchMyGames().then((g) => live && setGames(g), () => {});
+        },
         () => {}, // offline: the landing page works signed out
       );
     });
@@ -161,17 +168,22 @@ export function Landing() {
             </div>
 
             {google && !account && (
-            <div className="landing__pass">
-              <SketchFrame seed="pass-card" radius={16} fill="url(#sk-pass)" ink="var(--pass-line)" shadow={0.55} grain={false} tilt={0.6} className="pass-card">
-                <div className="pass-card__text">
-                  <h2 className="pass-card__title">Keep your rap sheet</h2>
-                  <p>Sign in to keep your name and record between jobs. To play, a nickname is enough.</p>
-                </div>
-                <Button variant="premium" seed="pass-btn" icon={<Star />} onClick={signIn}>
-                  Sign in with Google
-                </Button>
-              </SketchFrame>
-            </div>
+              <div className="landing__pass">
+                <SketchFrame seed="pass-card" radius={16} fill="url(#sk-pass)" ink="var(--pass-line)" shadow={0.55} grain={false} tilt={0.6} className="pass-card">
+                  <div className="pass-card__text">
+                    <h2 className="pass-card__title">Keep your rap sheet</h2>
+                    <p>Sign in to keep your name and record between jobs. To play, a nickname is enough.</p>
+                  </div>
+                  <Button variant="premium" seed="pass-btn" icon={<Star />} onClick={signIn}>
+                    Sign in with Google
+                  </Button>
+                </SketchFrame>
+              </div>
+            )}
+            {account && games && (
+              <div className="landing__pass">
+                <MyGames games={games} />
+              </div>
             )}
           </div>
         </SketchFrame>

@@ -37,6 +37,8 @@ const SKEW_S = 60;
 const JWKS_DEFAULT_TTL_MS = 60 * 60 * 1000;
 const JWKS_MIN_REFETCH_MS = 60 * 1000;
 const FALLBACK_NAME = "Crook";
+/** A Google call that hangs ends as the callback's 502. */
+const FETCH_TIMEOUT_MS = 10_000;
 
 /** The PKCE S256 challenge for a verifier (RFC 7636 §4.2). */
 export const pkceChallenge = (verifier: string) => createHash("sha256").update(verifier).digest("base64url");
@@ -51,7 +53,7 @@ export function googleAuthProvider(opts: GoogleAuthOptions): AuthProvider {
 
   async function loadKeys(): Promise<void> {
     keysFetched = now();
-    const res = await http(ep.jwks);
+    const res = await http(ep.jwks, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
     if (!res.ok) throw new Error(`Google JWKS answered ${res.status}`);
     const body = (await res.json()) as { keys?: unknown };
     const next = new Map<string, KeyObject>();
@@ -119,6 +121,7 @@ export function googleAuthProvider(opts: GoogleAuthOptions): AuthProvider {
     async identify({ code, verifier, nonce, redirectUri }): Promise<Identity | null> {
       const res = await http(ep.token, {
         method: "POST",
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
         headers: { "content-type": "application/x-www-form-urlencoded", accept: "application/json" },
         body: new URLSearchParams({
           grant_type: "authorization_code",

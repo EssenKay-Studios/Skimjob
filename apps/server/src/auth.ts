@@ -78,10 +78,11 @@ export async function createGuestUser(db: Queryable, name: string): Promise<User
 
 /**
  * The user for an external account, made on first sign-in. A guest signing in
- * to an account that's new here becomes that account (same user, so their
- * seats and nickname stay); an account that already exists wins over the guest.
+ * keeps their seats (m2-plan M2-12): to an account that's new here, the guest
+ * user becomes that account; to one that already exists, the guest's seats and
+ * host roles move to it (adoptGuest).
  */
-async function userForIdentity(db: Queryable, provider: string, who: Identity, guest: User | null): Promise<User> {
+async function userForIdentity(db: Db, provider: string, who: Identity, guest: User | null): Promise<User> {
   const externalId = `${provider}:${who.subject}`;
   if (guest?.guest) {
     try {
@@ -103,7 +104,31 @@ async function userForIdentity(db: Queryable, provider: string, who: Identity, g
     [who.displayName, externalId],
   );
   if (!row) throw new Error("user not created");
+  if (guest?.guest && guest.id !== row.id) await adoptGuest(db, guest.id, row.id);
   return { id: row.id, name: row.display_name, guest: false };
+}
+
+/**
+ * Moves what a guest holds to the account they just signed in to, in one
+ * transaction: every host role, and every seat in a game the account isn't in.
+ * Where both sit in the same game the account keeps its own seat; the guest's
+ * is removed if the game is still a lobby, and otherwise stays with the guest
+ * user (the engine player must keep existing; it just goes quiet). Only ever
+ * runs for the guest of the signed-in browser's own session, after the
+ * provider proved the account, so nobody can pull seats out of another account.
+ */
+export async function adoptGuest(db: Db, guestId: string, accountId: string): Promise<void> {
+  await db.transaction(async (tx) => {
+    const [g] = await tx.query("select id from users where id = $1 and external_id is null for update", [guestId]);
+    if (!g) return; // not a guest (any more)
+    await tx.query("update games set host_user_id = $2 where host_user_id = $1", [guestId, accountId]);
+    await tx.query(
+      `update seats s set user_id = $2 where s.user_id = $1
+       and not exists (select 1 from seats o where o.game_id = s.game_id and o.user_id = $2)`,
+      [guestId, accountId],
+    );
+    await tx.query("delete from seats s using games g where s.game_id = g.id and g.status = 'lobby' and s.user_id = $1", [guestId]);
+  });
 }
 
 export interface Sessions {

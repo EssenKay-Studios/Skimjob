@@ -79,8 +79,11 @@ Google's published keys (issuer, audience = the client id, expiry, nonce). Users
    `google`, and the landing page shows "Sign in with Google".
 
 `GOOGLE_REDIRECT_URL` overrides the callback (it must end in `/auth/google/callback`; under `/api/` is fine).
-A guest who signs in with a Google account that's new here keeps their user, nickname and seats; signing in
-to an account that already exists switches to that account (the guest's seats stay with the guest).
+A guest who signs in with a Google account that's new here keeps their user, nickname and seats. Signing in
+to an account that already exists switches to that account and brings the guest's seats and host roles along.
+If the guest and the account sit in the same game, the account keeps its own seat (and takes the host role);
+the guest's seat is dropped from a lobby, and in a started game it stays as a quiet player nobody signs in as.
+Signed in, the landing page lists "My games" (`GET /api/me/games`).
 To turn Google off again: `flyctl secrets unset -a skimjob GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET`.
 
 ## Run the production build locally

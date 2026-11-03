@@ -301,6 +301,27 @@ describe("invites", () => {
   });
 });
 
+// m2-plan M2-12: "My games" lists every game you hold a seat in.
+describe("my games", () => {
+  it("lists the games you're seated in: live ones first, newest first, with your name and role", async () => {
+    const { who, game: lobby } = await host({ sessionLength: "1h" });
+    const { who: other, game: theirs } = await host();
+    await join(theirs.inviteCode, "Kay", who);
+    const ana = (await join(lobby.inviteCode, "Ana")).session;
+    await call("POST", `/games/${lobby.id}/start`, who);
+    const listed = await call("GET", "/me/games", who);
+    expect(listed.status).toBe(200);
+    expect(listed.body.games).toEqual([
+      { id: lobby.id, status: "running", nickname: "Karthik", youAreHost: true, host: "Karthik", seats: 2, sessionLength: "1h" },
+      { id: theirs.id, status: "lobby", nickname: "Kay", youAreHost: false, host: "Karthik", seats: 2, sessionLength: DEFAULT_SETTINGS.sessionLength },
+    ]);
+    expect((await call("GET", "/me/games", ana)).body.games).toEqual([expect.objectContaining({ id: lobby.id, youAreHost: false, nickname: "Ana" })]);
+    expect((await call("GET", "/me/games", other)).body.games).toEqual([expect.objectContaining({ id: theirs.id, youAreHost: true })]);
+    expect((await call("GET", "/me/games", await guest("Nobody"))).body).toEqual({ games: [] });
+    expect((await call("GET", "/me/games")).status).toBe(401);
+  });
+});
+
 describe("leave", () => {
   it("a player may leave the lobby; the host may not until they hand over", async () => {
     const { who, game } = await host();

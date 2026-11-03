@@ -26,7 +26,8 @@ export interface ServerConfig {
   /** PUBLIC_ORIGIN: the origin people open (https://skimjob.fly.dev); always allowed to open game sockets. */
   readonly publicOrigin: string | null;
   /** WEB_DIR: the built web app (apps/web/dist) to serve, with SPA fallback; null serves none (dev uses Vite). */
-  readonly webDir: string | null;  /**
+  readonly webDir: string | null;
+  /**
    * "Sign in with Google" (M2-12): on when GOOGLE_CLIENT_ID and
    * GOOGLE_CLIENT_SECRET are set. The redirect URI is GOOGLE_REDIRECT_URL, or
    * PUBLIC_ORIGIN + /auth/google/callback. docs/deploy.md "Google sign-in".

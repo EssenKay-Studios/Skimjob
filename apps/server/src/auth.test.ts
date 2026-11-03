@@ -105,6 +105,17 @@ const me = async (session: string | null) => {
   return res.statusCode === 200 ? (res.json().user as { id: string; name: string; guest: boolean }) : null;
 };
 const guest = async (nickname: string) => sessionOf(await app.inject({ method: "POST", url: "/auth/guest", payload: { nickname } }))!;
+const api = async (method: "GET" | "POST", url: string, session: string, payload?: object) =>
+  app.inject({ method, url, cookies: { [SESSION_COOKIE]: session }, ...(payload ? { payload } : {}) });
+/** A new lobby hosted by `session`: its id and invite code. */
+const hostGame = async (session: string) => {
+  const res = await api("POST", "/games", session, {});
+  expect(res.statusCode).toBe(201);
+  return res.json() as { id: string; inviteCode: string };
+};
+const joinGame = async (code: string, session: string, nickname: string) => expect((await api("POST", `/invites/${code}/join`, session, { nickname })).statusCode).toBeLessThan(300);
+const seatsIn = (gameId: string) => db.query<{ user_id: string; nickname: string }>("select user_id, nickname from seats where game_id = $1 order by seat_no", [gameId]);
+const hostOf = async (gameId: string) => (await db.query<{ host_user_id: string }>("select host_user_id from games where id = $1", [gameId]))[0]!.host_user_id;
 
 /** /auth/<p>/start: the provider URL and the sign-in cookie. */
 async function start(provider: string, q = "", session?: string) {
@@ -176,6 +187,52 @@ describe.each(Object.entries(flows))("redirect sign-in: %s (m2-plan M2-12, share
     const g = await guest("Drifter");
     const { cb } = await signIn("Owner", "/", g);
     expect((await me(sessionOf(cb)))!.id).toBe(owner!.id);
+  });
+
+  it("a guest who signs in to an existing account brings their seats and host roles along", async () => {
+    const ownerSession = sessionOf((await signIn(`Keeper-${name}`)).cb)!;
+    const owner = (await me(ownerSession))!;
+    const g = await guest("Stray");
+    const gid = (await me(g))!.id;
+    const other = await guest("Bystander");
+    const otherId = (await me(other))!.id;
+    // hosted: the guest hosts a lobby the account isn't in; joined: someone else's lobby the guest sits in.
+    const hosted = await hostGame(g);
+    await joinGame(hosted.inviteCode, other, "Bystander");
+    const joined = await hostGame(other);
+    await joinGame(joined.inviteCode, g, "Stray");
+    // clashLobby / clashRunning: both the guest and the account are seated.
+    const clashLobby = await hostGame(g);
+    await joinGame(clashLobby.inviteCode, ownerSession, "Keeper");
+    const clashRunning = await hostGame(other);
+    await joinGame(clashRunning.inviteCode, g, "Stray");
+    await joinGame(clashRunning.inviteCode, ownerSession, "Keeper");
+    await db.query("update games set status = 'running', config = '{}'::json where id = $1", [clashRunning.id]);
+
+    const { cb } = await signIn(`Keeper-${name}`, "/", g);
+    const session = sessionOf(cb)!;
+    expect((await me(session))!.id).toBe(owner.id);
+
+    expect(await hostOf(hosted.id)).toBe(owner.id);
+    expect(await seatsIn(hosted.id)).toEqual([{ user_id: owner.id, nickname: "Stray" }, { user_id: otherId, nickname: "Bystander" }]);
+    expect(await hostOf(joined.id)).toBe(otherId);
+    expect(await seatsIn(joined.id)).toEqual([{ user_id: otherId, nickname: "Bystander" }, { user_id: owner.id, nickname: "Stray" }]);
+    // Same game twice: the account keeps its own seat (and takes the host role); the lobby drops the guest's.
+    expect(await hostOf(clashLobby.id)).toBe(owner.id);
+    expect(await seatsIn(clashLobby.id)).toEqual([{ user_id: owner.id, nickname: "Keeper" }]);
+    // A started game can't lose a player, so the guest's seat stays (with nobody signed in as it).
+    expect(await seatsIn(clashRunning.id)).toEqual([
+      { user_id: otherId, nickname: "Bystander" },
+      { user_id: gid, nickname: "Stray" },
+      { user_id: owner.id, nickname: "Keeper" },
+    ]);
+    // The account can open every game it now holds.
+    for (const id of [hosted.id, joined.id, clashLobby.id]) expect((await api("GET", `/games/${id}`, session)).statusCode).toBe(200);
+    // Nothing of the bystander's moved, and a later guest can't pull the account's seats away.
+    expect((await me(other))!.id).toBe(otherId);
+    const thief = await guest("Thief");
+    await signIn(`Thief-${name}`, "/", thief);
+    expect(await hostOf(hosted.id)).toBe(owner.id);
   });
 
   it("cancelling on the provider's page goes back signed out", async () => {

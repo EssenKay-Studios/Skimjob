@@ -114,6 +114,20 @@ export const fetchProviders = () =>
     () => [] as string[],
   );
 
+/** One row of "My games" (GET /me/games, M2-12). */
+export interface MyGame {
+  id: string;
+  status: "lobby" | "running" | "ended";
+  /** Your seat name in that game. */
+  nickname: string;
+  youAreHost: boolean;
+  /** The host's seat name. */
+  host: string | null;
+  seats: number;
+  sessionLength: SessionLength;
+}
+export const fetchMyGames = () => api<{ games: MyGame[] }>("GET", "/me/games").then((r) => r.games);
+
 /** A full-page visit (not fetch): the server redirects to Google and back to `returnTo`. M2-12 */
 export const googleSignInUrl = (returnTo: string) => `/api/auth/google/start?${new URLSearchParams({ returnTo })}`;
 

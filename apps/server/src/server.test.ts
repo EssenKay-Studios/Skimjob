@@ -39,13 +39,19 @@ describe("buildServer", () => {
 
 describe("loadConfig", () => {
   it("has zero-setup defaults: loopback, port 3000, PGlite on disk, no dev login", () => {
-    expect(loadConfig({})).toEqual({ port: 3000, host: "127.0.0.1", databaseUrl: null, pgliteDir: ".pglite", devLogin: false, allowedOrigins: DEV_ORIGINS, production: false, publicOrigin: null, webDir: null, timeScale: 1 });
+    expect(loadConfig({})).toEqual({ port: 3000, host: "127.0.0.1", databaseUrl: null, pgliteDir: ".pglite", devLogin: false, allowedOrigins: DEV_ORIGINS, production: false, publicOrigin: null, webDir: null, timeScale: 1, google: null });
   });
 
   it("reads the environment", () => {
     expect(
       loadConfig({ PORT: "8080", HOST: "0.0.0.0", DATABASE_URL: "postgres://x@localhost/y", PGLITE_DIR: "memory", DEV_LOGIN: "1" }),
-    ).toEqual({ port: 8080, host: "0.0.0.0", databaseUrl: "postgres://x@localhost/y", pgliteDir: null, devLogin: true, allowedOrigins: DEV_ORIGINS, production: false, publicOrigin: null, webDir: null, timeScale: 1 });
+    ).toEqual({ port: 8080, host: "0.0.0.0", databaseUrl: "postgres://x@localhost/y", pgliteDir: null, devLogin: true, allowedOrigins: DEV_ORIGINS, production: false, publicOrigin: null, webDir: null, timeScale: 1, google: null });
+    // M2-12: Google sign-in from GOOGLE_* (more cases in auth.test.ts).
+    expect(loadConfig({ GOOGLE_CLIENT_ID: "id", GOOGLE_CLIENT_SECRET: "secret", GOOGLE_REDIRECT_URL: "http://localhost:5173/api/auth/google/callback" }).google).toEqual({
+      clientId: "id",
+      clientSecret: "secret",
+      redirectUri: "http://localhost:5173/api/auth/google/callback",
+    });
     expect(loadConfig({ ALLOWED_ORIGINS: " https://skimjob.example , http://lan:5173," }).allowedOrigins).toEqual(["https://skimjob.example", "http://lan:5173"]);
     expect(loadConfig({ DEV_LOGIN: "true" }).devLogin).toBe(false);
   });
