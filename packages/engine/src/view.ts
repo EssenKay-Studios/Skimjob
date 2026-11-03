@@ -165,13 +165,31 @@ export function heatBreakdown(log: readonly GameEvent[], round: number): HeatBre
   let parts: HeatBreakdown | null = null;
   const police: number[] = [];
   let missedTarget = 0;
+  let policeClamp = 0;
+  let stopped = 0;
+  // Heat before each event, so police activity at the top shows what the limit took back.
+  let heat = 0;
   for (const e of log) {
-    if (e.type === "roundResolved" && e.round === round) parts = { round, ...e.heatParts, clamp: e.heatParts.clamp ?? 0, police: [], missedTarget: 0 };
-    else if (e.type === "policeActivity" && e.round === round) police.push(e.heatAdded);
-    else if (e.type === "checkpointChecked" && e.act * ROUNDS_PER_ACT === round) missedTarget = e.heatPenalty;
+    if (e.type === "roundResolved") {
+      if (e.round === round) parts = { round, ...e.heatParts, clamp: e.heatParts.clamp ?? 0, police: [], missedTarget: 0, stopped: 0 };
+      heat = e.heat;
+    } else if (e.type === "policeActivity") {
+      if (e.round === round) {
+        police.push(e.heatAdded);
+        policeClamp += e.heat - (heat + e.heatAdded);
+      }
+      heat = e.heat;
+    } else if (e.type === "raidStopped") {
+      if (e.round === round) stopped += e.heat - heat;
+      heat = e.heat;
+    } else if (e.type === "checkpointChecked") {
+      if (e.act * ROUNDS_PER_ACT === round) missedTarget = e.heatPenalty;
+      heat += e.heatPenalty;
+    }
   }
-  if (!parts && police.length === 0) return null;
-  return { ...(parts ?? { round, base: 0, rooms: {}, events: 0, clamp: 0 }), police, missedTarget };
+  if (!parts && police.length === 0 && stopped === 0) return null;
+  const p = parts ?? { round, base: 0, rooms: {}, events: 0, clamp: 0 };
+  return { ...p, clamp: p.clamp + policeClamp, police, missedTarget, stopped };
 }
 
 /**

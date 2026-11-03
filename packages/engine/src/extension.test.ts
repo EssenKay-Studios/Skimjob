@@ -331,7 +331,7 @@ describe("the Heat breakdown and the gap box — extension.md \"What the app wor
     const total = (parts?.base ?? 0) + Object.values(parts?.rooms ?? {}).reduce((a, b) => a + b, 0) + (parts?.events ?? 0);
     expect(total).toBe(summary?.heatDelta);
     expect(parts?.rooms.vault).toBeGreaterThan(0);
-    expect(heatBreakdown(s.log, 1)).toEqual({ round: 1, ...parts, clamp: 0, police: [4], missedTarget: 0 });
+    expect(heatBreakdown(s.log, 1)).toEqual({ round: 1, ...parts, clamp: 0, police: [4], missedTarget: 0, stopped: 0 });
     // The view's ledger is enough to work it out (public events only).
     const ledger = viewFor(s, "p3").ledger.map((e) => e.event);
     expect(heatBreakdown(ledger, 1)).toEqual(heatBreakdown(s.log, 1));
@@ -358,6 +358,21 @@ describe("the Heat breakdown and the gap box — extension.md \"What the app wor
     expect(summary.heatParts.clamp).toBeGreaterThan(0);
     expect(partsSum(summary.heatParts)).toBe(0);
     expect(heatBreakdown(s.log, 1)?.clamp).toBe(summary.heatParts.clamp);
+  });
+
+  it("police activity at the top shows the full +4 and what the limit took back, so the parts add up to the real change (extension.md \"Police activity\")", () => {
+    const s = run(game(config(4), { roles: [] }), ROUND);
+    const top = BANK_JOB.heat.max;
+    const log: GameEvent[] = [
+      ...s.log,
+      { type: "policeActivity", visibility: PUBLIC, round: 1, heatAdded: top - 1 - s.heat, heat: top - 1 },
+      { type: "policeActivity", visibility: PUBLIC, round: 2, heatAdded: POLICE_ACTIVITY.heat, heat: top },
+    ];
+    const b = heatBreakdown(log, 2)!;
+    expect(b.police).toEqual([POLICE_ACTIVITY.heat]);
+    expect(b.clamp).toBe(1 - POLICE_ACTIVITY.heat);
+    expect(partsSum(b) + b.police.reduce((x, y) => x + y, 0)).toBe(1);
+    expect(heatBreakdown(log, 1)!.clamp).toBe(heatBreakdown(s.log, 1)!.clamp);
   });
 
   it("a missed target's penalty shows under the stretch's last round", () => {

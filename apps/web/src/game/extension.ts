@@ -235,7 +235,7 @@ export function targetBar(view: PlayerView): TargetBar {
 export interface HeatLine {
   readonly label: string;
   readonly value: number;
-  readonly kind: "base" | "room" | "event" | "clamp" | "police" | "missed";
+  readonly kind: "base" | "room" | "event" | "police" | "missed" | "stopped" | "clamp";
 }
 
 export interface HeatRound {
@@ -262,10 +262,11 @@ export function heatRound(view: Pick<PlayerView, "ledger">, round: number): Heat
   if (b.base !== 0) lines.push({ label: "every round", value: b.base, kind: "base" });
   for (const [room, v] of Object.entries(b.rooms)) if (v !== 0) lines.push({ label: roomName(room), value: v, kind: "room" });
   if (b.events !== 0) lines.push({ label: card?.type === "eventFlipped" ? cardName(card.card) : "event card", value: b.events, kind: "event" });
-  // extension.md "Heat": it never drops below 0 (or past the top), so the lines add up to the real change.
-  if (b.clamp !== 0) lines.push({ label: b.clamp > 0 ? "Heat can't go below 0" : "Heat is at the top", value: b.clamp, kind: "clamp" });
   for (const v of b.police) lines.push({ label: "police activity", value: v, kind: "police" });
   if (b.missedTarget !== 0) lines.push({ label: "missed target", value: b.missedTarget, kind: "missed" });
+  if (b.stopped !== 0) lines.push({ label: "raid stopped", value: b.stopped, kind: "stopped" });
+  // extension.md "Heat": it never drops below 0 (or past the top), so the lines add up to the real change.
+  if (b.clamp !== 0) lines.push({ label: b.clamp > 0 ? "Heat can't go below 0" : "Heat is at the top", value: b.clamp, kind: "clamp" });
   const total = lines.reduce((s, l) => s + l.value, 0);
   return { round, lines, total, text: lines.length === 0 ? "no change" : lines.map((l) => `${signed(l.value)} ${l.label}`).join(", ") };
 }

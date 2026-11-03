@@ -105,6 +105,19 @@ describe("the target bar, Heat breakdown and gap box (extension.md: What the app
     expect(h.total).toBe(0);
   });
 
+  it("police activity at Heat 99 still reads +4, with a line for what the top took back (extension.md \"Police activity\")", () => {
+    let s = run(createGame(config()), round(1));
+    const top = BANK_JOB.heat.max;
+    s = applyEvent(s, { type: "policeActivity", visibility: PUBLIC, round: 1, heatAdded: top - 1 - s.heat, heat: top - 1 });
+    s = applyEvent(s, { type: "policeActivity", visibility: PUBLIC, round: 2, heatAdded: POLICE_ACTIVITY.heat, heat: top });
+    const h = heatRound(viewFor(s, "p1"), 2)!;
+    expect(h.lines).toEqual([
+      { label: "police activity", value: POLICE_ACTIVITY.heat, kind: "police" },
+      { label: "Heat is at the top", value: 1 - POLICE_ACTIVITY.heat, kind: "clamp" },
+    ]);
+    expect(h.total).toBe(1);
+  });
+
   it("adds up the alibis against the Haul's growth", () => {
     let s = run(createGame(config()), round(1));
     const v0 = viewFor(s, "p1");
