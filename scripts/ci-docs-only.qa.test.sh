@@ -20,7 +20,7 @@ check "docs/x.md"                       true  "$(classify "docs/x.md$nl")"
 check "docs/pipeline/x.md"              true  "$(classify "docs/pipeline/x.md$nl")"
 check "docs/pipeline/verdicts.sh"       false "$(classify "docs/pipeline/verdicts.sh$nl")"
 check "docs/pipeline/merge.sh"          false "$(classify "docs/pipeline/merge.sh$nl")"
-check "docs/balance/baseline.json"      true  "$(classify "docs/balance/baseline.json$nl")"
+check "docs/balance/baseline.json"      false "$(classify "docs/balance/baseline.json$nl")"
 check "apps/web/src/x.ts"               false "$(classify "apps/web/src/x.ts$nl")"
 check ".github/workflows/ci.yml"        false "$(classify ".github/workflows/ci.yml$nl")"
 check "package.json + docs/a.md"        false "$(classify "package.json${nl}docs/a.md$nl")"
@@ -31,10 +31,9 @@ check "docs/my notes.md"                true  "$(classify "docs/my notes.md$nl")
 check "my file.ts"                      false "$(classify "my file.ts$nl")"
 check "empty list"                      false "$(classify "")"
 check "blank lines only"                false "$(classify "$nl$nl")"
-# The workflow feeds `<<<"$files"`, which always ends the last path with a newline.
-# (Raw stdin without one drops the last path: see the PR #60 QA comment.)
-f=$'docs/a.md\nx.ts'
-check "last path, as the workflow feeds it" false "$(bash "$DIR/scripts/ci-docs-only.sh" <<<"$f")"
+check "no trailing newline"             false "$(classify "docs/a.md${nl}x.ts")"
+check "no trailing newline, all md"     true  "$(classify "docs/a.md${nl}b.md")"
+check "docs/notes.txt"                  false "$(classify "docs/notes.txt$nl")"
 check "docs (no slash)"                 false "$(classify "docs$nl")"
 check "x.md.ts"                         false "$(classify "x.md.ts$nl")"
 check "x.MD (case)"                     false "$(classify "x.MD$nl")"
