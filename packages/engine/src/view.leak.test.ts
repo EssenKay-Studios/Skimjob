@@ -294,6 +294,8 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
           { type: "abilityResolved", visibility: privateTo(other), player: other, round: 1, ability: { kind: "tipOff" } },
           { type: "tipOffLanded", visibility: privateTo(other), player: other, round: 1 },
           { type: "policeScheduled", visibility: REVEAL, moment: 3, gapPermille: 700, patrol: true },
+          { type: "policeCause", visibility: REVEAL, round: 1, cause: "tipOff", mole: other },
+          { type: "votesStolen", visibility: REVEAL, meetingId: "act-1", steals: [{ victim: viewer, blackmailer: other, decided: true }] },
           { type: "tokenEarned", visibility: privateTo(other), player: other, trigger: "tipOffLanded" },
           { type: "perkBought", visibility: privateTo(other), player: other, perk: "shield", cost: 2 },
           { type: "voteCompromised", visibility: privateTo(other), player: other, round: 1 },
@@ -504,7 +506,7 @@ describe("no leaks in real games — design §17.2, §13, §11.2", () => {
 
   it("the all-wildcard games reach every lone-wolf and wildcard token, police activity and the queued tip-off (extension.md \"Roles\", \"Police activity\")", () => {
     for (const t of ["heatReached", "safeReached", "firstTake", "tipOffLanded"]) expect(earned, t).toContain(t);
-    for (const t of ["voteCompromised", "sightingForged", "policeScheduled", "policeActivity", "tipOffLanded"]) expect(darkTypes, t).toContain(t);
+    for (const t of ["voteCompromised", "sightingForged", "policeScheduled", "policeActivity", "policeCause", "tipOffLanded", "votesStolen"]) expect(darkTypes, t).toContain(t);
     for (const k of ["forge", "embezzle", "blackmail"]) expect(seenAbilities, k).toContain(k);
   });
 

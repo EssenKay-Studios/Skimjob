@@ -55,6 +55,8 @@ describe("reveal summary in whole bot games — design §13", () => {
         const police = items.filter((i) => i.kind === "police");
         expect(police.length).toBe(count(log, (e) => e.type === "policeActivity"));
         expect(police.filter((i) => i.cause === "tipOff").length).toBe(count(log, (e) => e.type === "tipOffLanded"));
+        const steals = log.flatMap((e) => (e.type === "votesStolen" ? e.steals : []));
+        expect(items.filter((i) => i.kind === "voteStolen").map((i) => i.kind === "voteStolen" && i.decided)).toEqual(steals.map((st) => st.decided));
         const offline = items.filter((i) => i.kind === "cameraOffline");
         expect(offline.length).toBe(count(log, (e) => e.type === "roomWatched" && e.offline));
         for (const o of offline) if (o.cause === "hackerLoop") expect(o.hackers.length).toBeGreaterThan(0);

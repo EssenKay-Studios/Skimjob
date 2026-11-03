@@ -10,7 +10,7 @@
 // small crews), then a raid check that a Fixer can stop. Only the Mole is told
 // its tip-off landed (`tipOffLanded`), and earns its token then.
 import type { GameEvent, GameState } from "./types";
-import { PUBLIC, privateTo } from "./types";
+import { PUBLIC, REVEAL, privateTo } from "./types";
 import type { Draw } from "./handle";
 import { show } from "./check";
 import { clampHeat } from "./job";
@@ -34,6 +34,7 @@ export function policeMoment(state: GameState, moment: unknown, draw: Draw): Gam
     const heatAdded = scaledCardHeat(policeFor(state.config).heat, state.playerOrder.length);
     const heat = clampHeat(job, state.heat + heatAdded);
     events.push({ type: "policeActivity", visibility: PUBLIC, round: state.round, heatAdded, heat });
+    events.push({ type: "policeCause", visibility: REVEAL, round: state.round, cause: tipper === undefined ? "patrol" : "tipOff", mole: tipper ?? null });
     if (tipper !== undefined) {
       events.push({ type: "tipOffLanded", visibility: privateTo(tipper), player: tipper, round: state.round });
       events.push(...grantRewards(state, "tipOffLanded", (p) => p.id === tipper));

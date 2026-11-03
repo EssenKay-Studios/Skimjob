@@ -7,7 +7,7 @@ import { BANK_JOB, PERKS, POLICE_ACTIVITY, ROLES, SHOP_COLUMNS, SHOP_RULES, type
 import { handleThroughAlibis } from "./alibis.testkit";
 import { handleCommand } from "./handle";
 import type { GameConfig, GameEvent, GameState, PlayerId } from "./types";
-import { PUBLIC, privateTo } from "./types";
+import { PUBLIC, REVEAL, privateTo } from "./types";
 import { createGame, dealableRoles, setupEvents } from "./setup";
 import { replay } from "./reduce";
 import { gapBox, heatBreakdown, viewFor } from "./view";
@@ -186,6 +186,8 @@ describe("police activity — extension.md \"Police activity\" (owner, 3 Nov), B
     const after = run(s, MOMENT);
     const events = since(s, after);
     expect(events[0]).toEqual({ type: "policeActivity", visibility: PUBLIC, round: 1, heatAdded: POLICE_ACTIVITY.heat, heat: s.heat + 4 });
+    // design §13: which it was is recorded reveal-only, right after.
+    expect(events[1]).toEqual({ type: "policeCause", visibility: REVEAL, round: 1, cause: "patrol", mole: null });
     expect(ofType(events, "policeScheduled")).toMatchObject([{ moment: 2 }]);
     expect(after.heat).toBe(s.heat + 4);
     expect(after.police?.moment).toBe(2);
@@ -207,6 +209,7 @@ describe("police activity — extension.md \"Police activity\" (owner, 3 Nov), B
       const landed = run(tipped, MOMENT);
       const events = since(tipped, landed);
       expect(ofType(events, "policeActivity")).toHaveLength(1);
+      expect(ofType(events, "policeCause")).toEqual([{ type: "policeCause", visibility: REVEAL, round: 1, cause: "tipOff", mole: "p0" }]);
       expect(ofType(events, "tipOffLanded")).toEqual([{ type: "tipOffLanded", visibility: privateTo("p0"), player: "p0", round: 1 }]);
       expect(ofType(events, "tokenEarned")).toEqual([{ type: "tokenEarned", visibility: privateTo("p0"), player: "p0", trigger: "tipOffLanded" }]);
       expect(landed.police?.queue).toEqual([]);
@@ -301,6 +304,25 @@ describe("the Blackmailer's token — extension.md owner ruling 5 (reviewer note
     const ballots = [vote("p0", "p2"), vote("p3", "p2"), vote("p4", "p2"), vote("p1", null), vote("p5", null), vote("p6", null), close];
     expect(blackmailTokens(run(wrong, ...ballots))).toBe(0);
     expect(blackmailTokens(run(right, ...ballots))).toBe(1);
+  });
+
+  it("records the steals at the close in a reveal-only votesStolen, with whether they decided it (design §13)", () => {
+    const right = run(game(config(7), { roles: ["blackmailer"] }), blackmail("rookie"), ROUND, ...meeting);
+    const decided = run(right, vote("p0", "p2"), vote("p3", "p2"), vote("p4", "p2"), vote("p1", null), vote("p5", null), vote("p6", null), close);
+    const steal = { type: "votesStolen", visibility: REVEAL, meetingId: "emergency-p6" };
+    expect(ofType(decided.log, "votesStolen")).toEqual([{ ...steal, steals: [{ victim: "p1", blackmailer: "p0", decided: true }] }]);
+    const failed = run(right, vote("p0", "p2"), vote("p3", "p2"), vote("p4", null), vote("p5", null), vote("p6", null), close);
+    expect(ofType(failed.log, "votesStolen")).toEqual([{ ...steal, steals: [{ victim: "p1", blackmailer: "p0", decided: false }] }]);
+    const wrong = run(game(config(7), { roles: ["blackmailer"] }), blackmail("lookout"), ROUND, ...meeting, vote("p0", "p2"), close);
+    expect(ofType(wrong.log, "votesStolen")).toEqual([]);
+    // A Double-cross that moves the Blackmailer role away before the meeting: no token, but the reveal still knows.
+    const at = right.log.findIndex((e) => e.type === "meetingOpened");
+    const swap = { role: "rookie", roleState: { usedThisAct: 0, usedThisGame: 0, target: null, tokens: 0, perks: [], tail: null } } as const;
+    const crossed = replay(right.config, [...right.log.slice(0, at), { type: "doubleCrossResolved", visibility: privateTo("p0"), player: "p0", round: 1, partner: "p3", swap }, ...right.log.slice(at)]);
+    const after = run(crossed, vote("p0", "p2"), vote("p3", "p2"), vote("p4", "p2"), vote("p1", null), vote("p5", null), vote("p6", null), close);
+    expect(blackmailTokens(after)).toBe(0);
+    expect(ofType(after.log, "votesStolen")[0]?.steals).toEqual([{ victim: "p1", blackmailer: "p0", decided: true }]);
+    for (const id of after.playerOrder) expect(JSON.stringify(viewFor(after, id))).not.toContain("votesStolen");
   });
 });
 

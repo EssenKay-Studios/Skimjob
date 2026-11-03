@@ -40,8 +40,6 @@ interface Draft {
   stashes: Record<PlayerId, number>;
 }
 
-type Steal = { -readonly [K in keyof Extract<RevealItem, { kind: "voteStolen" }>]: Extract<RevealItem, { kind: "voteStolen" }>[K] };
-
 /**
  * The reveal summary of a finished game from `log` (a reveal log, in order)
  * and its `outcome`. `roles` and `events` are the game's tables
@@ -65,10 +63,6 @@ export function revealSummary(log: readonly GameEvent[], outcome: Outcome, table
   let blackout = false;
   /** This round's Hackers by looped room. */
   let loops = new Map<RoomId, PlayerId[]>();
-  /** Right Blackmailer guesses waiting for the next meeting: victim → Blackmailer. */
-  let pendingSteals: [PlayerId, PlayerId][] = [];
-  /** The steals at the open (or last) meeting, to mark `decided` when the token comes. */
-  let steals: Steal[] = [];
   const doubleCrossSeen = new Set<string>();
   const loot = new Map<number, Map<PlayerId, Omit<RevealMove, "missed" | "alibi">>>();
   const missed = new Set<string>();
@@ -117,7 +111,6 @@ export function revealSummary(log: readonly GameEvent[], outcome: Outcome, table
         if (a.kind === "embezzle") add(e.player, a.amount);
         if (a.kind === "fixer") add(e.player, -a.lost);
         if (a.kind === "loopCameras") loops.set(a.room, [...(loops.get(a.room) ?? []), e.player]);
-        if (a.kind === "blackmail" && a.correct) pendingSteals.push([a.target, e.player]);
         items.push({ kind: "event", event: e });
         break;
       }
@@ -135,22 +128,18 @@ export function revealSummary(log: readonly GameEvent[], outcome: Outcome, table
         }
         break;
       case "policeActivity": {
+        // extension.md "Police activity": the reveal-only `policeCause` right after says which it was.
         const next = log[i + 1];
-        const mole = next?.type === "tipOffLanded" ? next.player : null;
-        items.push({ kind: "police", heatAdded: e.heatAdded, heat: e.heat, cause: mole === null ? "patrol" : "tipOff", mole });
+        const cause = next?.type === "policeCause" ? next : null;
+        items.push({ kind: "police", heatAdded: e.heatAdded, heat: e.heat, cause: cause?.cause ?? "patrol", mole: cause?.mole ?? null });
         break;
       }
-      case "meetingOpened": {
-        steals = pendingSteals.map(([victim, blackmailer]): Steal => ({ kind: "voteStolen", blackmailer, victim, meetingId: e.meetingId, decided: false }));
-        pendingSteals = [];
-        items.push(...steals);
+      case "votesStolen":
+        for (const st of e.steals) items.push({ kind: "voteStolen", blackmailer: st.blackmailer, victim: st.victim, meetingId: e.meetingId, decided: st.decided });
         break;
-      }
       case "tokenEarned": {
         push(tokens, e.player, e.trigger);
         items.push({ kind: "token", player: e.player, trigger: e.trigger });
-        // extension.md ruling 5: this token, right after the meeting closed, says the steals decided its shakedown.
-        if (e.trigger === "stolenVoteDecided") for (const s of steals) if (s.blackmailer === e.player) s.decided = true;
         break;
       }
       case "perkBought":

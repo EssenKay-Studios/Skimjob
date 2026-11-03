@@ -173,6 +173,10 @@ function line(e: GameEvent, ctx: DescribeContext): string {
       return `A police moment came${e.patrol ? " with a patrol" : ""}.`;
     case "tipOffLanded":
       return `${whose(e.player)} tip-off landed in round ${e.round}.`;
+    case "policeCause":
+      return `That police activity was ${e.mole === null ? "a patrol" : `${whose(e.mole)} tip-off`}.`;
+    case "votesStolen":
+      return e.steals.map((st) => `${verb(st.blackmailer, "stole", "stole")} ${whose(st.victim)} vote${st.decided ? ", and it decided the shakedown" : ""}.`).join(" ");
     case "perkUsed":
       return perk(e.perk, e.player, { you, who, whose, verb });
     case "rigPicked":

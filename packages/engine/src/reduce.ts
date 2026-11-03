@@ -154,6 +154,9 @@ function applyChange(state: GameState, event: GameEvent): GameState {
       return { ...state, police: { moment: event.moment, gapPermille: event.gapPermille, patrol: event.patrol, queue: state.police?.queue ?? [], tipOffs: state.police?.tipOffs ?? {} } };
     case "policeActivity":
       return { ...state, heat: event.heat };
+    case "policeCause":
+    case "votesStolen":
+      return state;
     case "tipOffLanded": {
       const police = state.police;
       if (!police || police.queue[0] !== event.player) throw new Error(`tipOffLanded: ${event.player}'s tip-off isn't next in the queue`);

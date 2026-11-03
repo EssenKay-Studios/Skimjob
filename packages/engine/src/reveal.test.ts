@@ -44,7 +44,9 @@ describe("reveal summary — design §13", () => {
       started(1),
       { type: "abilityResolved", visibility: privateTo("p0"), player: "p0", round: 1, ability: { kind: "tipOff" } },
       { type: "policeActivity", visibility: PUBLIC, round: 1, heatAdded: 8, heat: 30 },
+      { type: "policeCause", visibility: REVEAL, round: 1, cause: "patrol", mole: null },
       { type: "policeActivity", visibility: PUBLIC, round: 1, heatAdded: 8, heat: 38 },
+      { type: "policeCause", visibility: REVEAL, round: 1, cause: "tipOff", mole: "p0" },
       { type: "tipOffLanded", visibility: privateTo("p0"), player: "p0", round: 1 },
     ];
     const s = revealSummary(log, success([rank("p0", "mole", 0)]), TABLES);
@@ -76,23 +78,29 @@ describe("reveal summary — design §13", () => {
     expect(s.rounds[1]?.card).toEqual({ id: "powerCut", room: null });
   });
 
-  it("marks a Blackmailer's stolen vote at the next meeting, and whether it decided the shakedown (ruling 5)", () => {
+  it("marks a Blackmailer's stolen votes from votesStolen, decided or not, with or without its token (ruling 5)", () => {
+    const closed = (id: string): GameEvent => ({ type: "meetingClosed", visibility: PUBLIC, meetingId: id, tally: { skip: 0, targets: { p1: 2 } }, ballots: null, result: { kind: "shakedown", target: "p1" } });
     const log: GameEvent[] = [
       dealt("p0", "blackmailer"),
       dealt("p1", "rookie"),
       started(1),
       { type: "abilityResolved", visibility: privateTo("p0"), player: "p0", round: 1, ability: { kind: "blackmail", target: "p1", role: "rookie", correct: true } },
-      { type: "abilityResolved", visibility: privateTo("p0"), player: "p0", round: 1, ability: { kind: "blackmail", target: "p0", role: "rookie", correct: false } },
       { type: "voteCompromised", visibility: privateTo("p1"), player: "p1", round: 1 },
       { type: "meetingOpened", visibility: PUBLIC, meetingId: "m1", kind: "regular", act: 1 },
-      { type: "meetingClosed", visibility: PUBLIC, meetingId: "m1", tally: { skip: 0, targets: { p1: 2 } }, ballots: null, result: { kind: "shakedown", target: "p1" } },
+      closed("m1"),
+      { type: "votesStolen", visibility: REVEAL, meetingId: "m1", steals: [{ victim: "p1", blackmailer: "p0", decided: true }] },
       { type: "tokenEarned", visibility: privateTo("p0"), player: "p0", trigger: "stolenVoteDecided" },
-      { type: "meetingOpened", visibility: PUBLIC, meetingId: "m2", kind: "regular", act: 1 },
+      started(2),
+      // A Double-cross moved the role away: the steal still decided it, but nobody earns the token.
+      { type: "doubleCrossResolved", visibility: privateTo("p0"), player: "p0", round: 2, partner: "p1", swap: { role: "rookie", roleState: { usedThisAct: 0, usedThisGame: 0, target: null, tokens: 1, perks: [], tail: null } } },
+      { type: "meetingOpened", visibility: PUBLIC, meetingId: "m2", kind: "regular", act: 2 },
+      closed("m2"),
+      { type: "votesStolen", visibility: REVEAL, meetingId: "m2", steals: [{ victim: "p1", blackmailer: "p0", decided: true }] },
     ];
-    const s = revealSummary(log, success([rank("p0", "blackmailer", 0), rank("p1", "rookie", 0)]), TABLES);
-    const items = s.rounds[0]?.items ?? [];
-    expect(items.filter((i) => i.kind === "voteStolen")).toEqual([{ kind: "voteStolen", blackmailer: "p0", victim: "p1", meetingId: "m1", decided: true }]);
-    expect(items).toContainEqual({ kind: "token", player: "p0", trigger: "stolenVoteDecided" });
+    const s = revealSummary(log, success([rank("p0", "rookie", 0), rank("p1", "rookie", 0)]), TABLES);
+    const stolen = (r: number) => (s.rounds[r]?.items ?? []).filter((i) => i.kind === "voteStolen");
+    expect(stolen(0)).toEqual([{ kind: "voteStolen", blackmailer: "p0", victim: "p1", meetingId: "m1", decided: true }]);
+    expect(stolen(1)).toEqual([{ kind: "voteStolen", blackmailer: "p0", victim: "p1", meetingId: "m2", decided: true }]);
     expect(s.seats[0]?.tokens).toEqual(["stolenVoteDecided"]);
   });
 
