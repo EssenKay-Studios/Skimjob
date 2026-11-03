@@ -104,6 +104,7 @@ test("12 seats, 24-char names: a Quick game to the end with moves changed, alibi
   let changed = 0;
   let alibis = 0;
   let round = 0;
+  const post = host.getByRole("button", { name: "Post alibi" });
   while (!(await over.isVisible())) {
     const heading = await host.locator("#move-h").textContent({ timeout: 200 }).catch(() => null);
     const lock = host.getByRole("button", { name: /Lock it in|Update move/ });
@@ -131,15 +132,18 @@ test("12 seats, 24-char names: a Quick game to the end with moves changed, alibi
         }
       }
     }
-    const post = host.getByRole("button", { name: "Post alibi" });
+    // At the fast clock an alibi window is under a second: act first, check the
+    // layout after. Until one alibi is in, tap straight away; the open panel is
+    // checked on a later window, once the count no longer depends on it.
     if (await post.isVisible().catch(() => false)) {
-      await once("alibi-open", host);
+      if (alibis > 0) await once("alibi-open", host);
       await tap(host, host.getByRole("group", { name: "Alibi room" }).getByRole("button", { name: "Vault" })).catch(() => {});
       await tap(host, post).then(() => alibis++, () => {});
       await once("alibi-posted", host);
     }
     if (await host.locator(".panel[aria-live=polite]").isVisible().catch(() => false)) await once("waiting", host);
-    await host.waitForTimeout(120);
+    // Wake as soon as an alibi window opens rather than on a fixed 120 ms tick.
+    await post.waitFor({ state: "visible", timeout: 120 }).catch(() => {});
   }
   await expect(over.locator(".ranking__row")).toHaveCount(12);
   await expect(host.locator(".over__stamp")).toHaveText(/JOB DONE|BUSTED/);
