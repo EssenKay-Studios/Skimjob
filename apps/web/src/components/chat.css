@@ -92,7 +92,9 @@
   padding: 18px 4px;
   text-align: center;
 }
-.chat__jump {
+/* Two classes: .btn (components.css, loaded later) sets position: relative,
+   which left the pill in the flex row and pushed it past the right edge. */
+.btn.chat__jump {
   position: absolute;
   left: 50%;
   bottom: 10px;

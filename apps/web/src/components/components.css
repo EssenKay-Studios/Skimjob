@@ -139,8 +139,17 @@
     --fr-fill: var(--paper-hi);
   }
 }
+/* The press squishes the frame and label, never the button's own box: a
+   pressed (or touch-stuck :active) target stays 44x44 (ui-style §5). */
 .btn:active:not(:disabled) {
-  transform: translateY(1px) scale(0.97);
+  transform: translateY(1px);
+  transition-duration: 0.06s;
+}
+.btn > * {
+  transition: transform 0.16s var(--spring);
+}
+.btn:active:not(:disabled) > * {
+  transform: scale(0.97);
   transition-duration: 0.06s;
 }
 .btn:disabled {
@@ -509,7 +518,8 @@
   .sk-boil > g + g {
     display: none;
   }
-  .btn {
+  .btn,
+  .btn > * {
     transition: none;
   }
 }
