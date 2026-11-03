@@ -31,7 +31,7 @@ describe("bot perks — v2 §1, §4", () => {
     expect(spends(planningPerks(viewFor(s, "ana"), "vault"))[0]).toMatchObject({ kind: "tail" });
     expect(spends(planningPerks(viewFor(s, "ana"), "vault"))[0]).not.toEqual({ kind: "tail", room: "vault" });
     // decide() spends it along with the move, and the engine accepts both.
-    const cmds = decide(viewFor(s, "ana"), exact(PERSONALITIES.honest), botRandom("t"));
+    const cmds = decide(viewFor(s, "ana"), exact(PERSONALITIES.honest), botRandom("t"), "test-crew");
     expect(spends(cmds).map((a) => a.kind)).toContain("tail");
     run(s, ...cmds);
   });
@@ -41,7 +41,7 @@ describe("bot perks — v2 §1, §4", () => {
     const view = viewFor(s, "ana");
     expect(spends(meetingPerks(view, { kind: "shakedown", target: "ben" }))).toEqual([{ kind: "extraVote" }]);
     expect(meetingPerks(view, { kind: "skip" })).toEqual([]);
-    run(s, ...decide(view, exact(PERSONALITIES.honest), botRandom("v")));
+    run(s, ...decide(view, exact(PERSONALITIES.honest), botRandom("v"), "test-crew"));
   });
 
   it("Recharge: once its power is used up (Muscle), never before", () => {

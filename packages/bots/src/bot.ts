@@ -19,7 +19,7 @@ import {
   type VoteChoice,
 } from "@skimjob/engine";
 import type { Personality } from "./personalities";
-import { claimsOf, createdOf, crewSize, isDuel, isStar, jobOf, lastResolvedRound, ofType, roleOf, roomsWhere, totalRounds } from "./read";
+import { claimsOf, crewSize, isDuel, isStar, jobOf, lastResolvedRound, ofType, roleOf, roomsWhere, totalRounds } from "./read";
 import { knownRoles, mostSuspicious, suspicion } from "./suspicion";
 import { claimCommands, meetingTime } from "./claims";
 import { alibiPerk, buyPerks, hasPerk, meetingPerks, perkSpender, planningPerks } from "./perks";
@@ -49,10 +49,9 @@ export interface BotOptions {
    * The crew's shared hunch seed (`crewHunch`): the same for every bot in a
    * game, different between games, and hidden from the players (the harness
    * derives it from the game's secret seed), so nobody can work the hunch out
-   * from public data (PR #37 review). Absent: the hunch falls back to public
-   * game data (`gameDigest`).
+   * from public data (PR #37 review). Required: there is no public-data fallback.
    */
-  readonly crewSeed?: string;
+  readonly crewSeed: string;
 }
 
 /** A bot's own random numbers: the engine's seeded sfc32, kept apart from the game's RNG. */
@@ -111,7 +110,7 @@ function weighted<T>(items: readonly (readonly [T, number])[], random: Random): 
 }
 
 /** Everything the bot wants to do given this view. */
-export function decide(view: PlayerView, p: Personality, random: Random, crewSeed?: string): PlayerCommand[] {
+export function decide(view: PlayerView, p: Personality, random: Random, crewSeed: string): PlayerCommand[] {
   const phase = view.phase;
   if (phase.kind === "ended" || phase.kind === "setup") return [];
   const player = view.me.id;
@@ -424,36 +423,23 @@ function wantsEmergency(view: PlayerView, p: Personality, random: Random): boole
  * Seeded by the meeting, the player and the harness's hidden `crewSeed`
  * (BotOptions), so every bot at the table shares it but it changes from game
  * to game: seat and meeting ids are the same in every game, and alone they
- * gave each seat a fixed bias (PR #37 review). Without a `crewSeed` it falls
- * back to `gameDigest` (public, game-specific), which anyone could compute.
+ * gave each seat a fixed bias (PR #37 review). Nothing in it comes from
+ * public view data beyond the meeting id, so nobody can compute it.
  */
-export function crewHunch(view: PlayerView, player: PlayerId, crewSeed?: string): number {
+export function crewHunch(view: PlayerView, player: PlayerId, crewSeed: string): number {
   const meeting = view.phase.kind === "meeting" || view.phase.kind === "shakedownPending" ? view.phase.meetingId : `act-${view.act}`;
-  const salt = crewSeed !== undefined ? `crew:${crewSeed}` : gameDigest(view);
-  return botRandom(`hunch/${meeting}/${player}/${salt}`)() * 2 - 1;
-}
-
-/**
- * Public data that differs between games and is the same in every player's
- * view: the seats' names and the public round summaries so far. No round
- * resolves during a meeting (or its shakedown window), so it holds steady for
- * a whole meeting. Nobody can know it before the rounds are played.
- */
-function gameDigest(view: PlayerView): string {
-  const names = createdOf(view).players.map((s) => `${s.id}=${s.name}`).join(",");
-  const rounds = ofType(view.ledger, "roundResolved").map((r) => `${r.round}:${r.haul}:${r.heat}`).join(",");
-  return `${names}|${rounds}`;
+  return botRandom(`hunch/${meeting}/${player}/crew:${crewSeed}`)() * 2 - 1;
 }
 
 /** Suspicion as the bot reads it at a vote: the evidence, the crew's hunch (`hunch`), and its own misreading (`misread`). */
-export function misjudged(view: PlayerView, scores: ReadonlyMap<PlayerId, number>, p: Personality, random: Random, crewSeed?: string): Map<PlayerId, number> {
+export function misjudged(view: PlayerView, scores: ReadonlyMap<PlayerId, number>, p: Personality, random: Random, crewSeed: string): Map<PlayerId, number> {
   const out = new Map<PlayerId, number>();
   for (const [id, score] of scores) out.set(id, score + p.hunch * crewHunch(view, id, crewSeed) + p.misread * (random() * 2 - 1));
   return out;
 }
 
 /** Shake down the most suspicious player once they pass the bot's threshold; otherwise skip. Suspicion only, no ally logic (extension.md Build notes "Bots"). design §11.2 */
-export function chooseVote(view: PlayerView, p: Personality, random: Random, crewSeed?: string): VoteChoice {
+export function chooseVote(view: PlayerView, p: Personality, random: Random, crewSeed: string): VoteChoice {
   if (random() < p.noise) {
     const target = pick([null, ...view.players.map((o) => o.id)], random);
     return target === null ? { kind: "skip" } : { kind: "shakedown", target };

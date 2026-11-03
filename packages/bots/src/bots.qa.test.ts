@@ -108,8 +108,8 @@ describe("QA: determinism — design §17.2", () => {
   it("a bot's commands depend only on (its seed, the views it has seen): two bots with one seed agree", () => {
     const c = config(5, "twin");
     const s = createGame(c);
-    const a = createBot({ player: "q1", personality: PERSONALITIES.random, seed: "twin" });
-    const b = createBot({ player: "q1", personality: PERSONALITIES.random, seed: "twin" });
+    const a = createBot({ player: "q1", personality: PERSONALITIES.random, seed: "twin", crewSeed: "test-crew" });
+    const b = createBot({ player: "q1", personality: PERSONALITIES.random, seed: "twin", crewSeed: "test-crew" });
     for (let i = 0; i < 20; i++) expect(a.act(viewFor(s, "q1"))).toEqual(b.act(viewFor(s, "q1")));
   });
 });
@@ -183,7 +183,7 @@ describe("QA: bots never read the state, only their view — design §17.3", () 
       if (key(s) === key(base) && JSON.stringify(s.players) !== JSON.stringify(base.players)) other = s;
     }
     expect(other).not.toBeNull();
-    const bot = () => createBot({ player: "q0", personality: PERSONALITIES.random, seed: "hid" });
+    const bot = () => createBot({ player: "q0", personality: PERSONALITIES.random, seed: "hid", crewSeed: "test-crew" });
     expect(bot().act(viewFor(other as GameState, "q0"))).toEqual(bot().act(viewFor(base, "q0")));
   });
 });
@@ -362,7 +362,7 @@ describe("QA: commands are well-formed — design §8, §11.2", () => {
   it("an ended game gets no commands from any bot", () => {
     for (const { r } of games.slice(0, 4)) {
       for (const id of r.state.playerOrder) {
-        for (const p of IDS) expect(createBot({ player: id, personality: PERSONALITIES[p], seed: "end" }).act(viewFor(r.state, id))).toEqual([]);
+        for (const p of IDS) expect(createBot({ player: id, personality: PERSONALITIES[p], seed: "end", crewSeed: "test-crew" }).act(viewFor(r.state, id))).toEqual([]);
       }
     }
   });

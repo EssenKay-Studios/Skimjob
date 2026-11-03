@@ -80,9 +80,13 @@ describe("QA PR #43: crewSeed — the hunch is not computable from public data",
     }
   });
 
-  it("the public-data fallback (no crewSeed) is the same in all of them: the old hunch was guessable", () => {
-    const fallback = views("p2").map((v) => crewHunch(v, "p1"));
-    expect(new Set(fallback).size).toBe(1);
+  it("the hunch depends on the crewSeed, not on view data: identical views give the same hunch for one crewSeed and different hunches for different ones", () => {
+    for (const p of ["p1", "p2", "p3"]) {
+      const same = views("p2").map((v) => crewHunch(v, p, "fixed/crew"));
+      expect(new Set(same).size, p).toBe(1);
+      const differ = views("p2").map((v, i) => crewHunch(v, p, `${SEEDS[i]}/crew`));
+      expect(new Set(differ).size, p).toBe(differ.length);
+    }
   });
 
   it("with the crewSeed createBots derives from each hidden seed, the same views give different hunches", () => {
@@ -99,19 +103,19 @@ describe("QA PR #43: crewSeed — the hunch is not computable from public data",
     });
     expect(crewSeeds).toEqual(SEEDS.map((s) => `${s}/crew`));
     for (const p of ["p1", "p2", "p3", "p4"]) {
-      const hunches = views("p2").map((v, i) => crewHunch(v, p, crewSeeds[i]));
+      const hunches = views("p2").map((v, i) => crewHunch(v, p, crewSeeds[i]!));
       expect(new Set(hunches).size, p).toBe(hunches.length);
       // Still shared: every bot at a table reads the same hunch for p.
-      for (const [i, g] of games.entries()) expect(crewHunch(viewFor(g.state, "p5"), p, crewSeeds[i])).toBe(hunches[i]);
+      for (const [i, g] of games.entries()) expect(crewHunch(viewFor(g.state, "p5"), p, crewSeeds[i]!)).toBe(hunches[i]);
     }
   });
 
-  it("it changes votes: same view, same bot random, different crewSeed → some vote differs; no crewSeed → identical votes", () => {
+  it("it changes votes: same view, same bot random, different crewSeed → some vote differs; same crewSeed → identical votes", () => {
     const view = viewFor(games[0]!.state, "p3");
     const p = PERSONALITIES.honest;
     const votes = SEEDS.map((s) => JSON.stringify(chooseVote(view, p, botRandom("same"), `${s}/crew`)));
     expect(new Set(votes).size).toBeGreaterThan(1);
-    const plain = games.map((g) => JSON.stringify(chooseVote(viewFor(g.state, "p3"), p, botRandom("same"))));
+    const plain = games.map((g) => JSON.stringify(chooseVote(viewFor(g.state, "p3"), p, botRandom("same"), "fixed/crew")));
     expect(new Set(plain).size).toBe(1);
   });
 

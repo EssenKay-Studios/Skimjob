@@ -35,7 +35,7 @@ multiset, deal styles, Fence safe shown in shakedowns, tip-off as its own public
 - **Hacker:** loops its own room when it skims, else its saboteur's. Looping only for its saboteur left it the dark side's smallest stash.
 - **Getaway Driver:** pockets recklessly from 0.9 of the raid level (was 0.75); goes to the Rooftop at mid Heat with chance 0.4 (was 0.6).
 - **Crew hunch:** seeded by a hidden `crewSeed` the harness passes (sim: from the game seed; server: `sha256(crew, game seed)`), not public
-  data (STATUS follow-up from the #37 review). The public digest stays as a fallback when no `crewSeed` is given.
+  data (STATUS follow-up from the #37 review). `crewSeed` is required; there is no public-data fallback.
 
 ## Results (mole on)
 

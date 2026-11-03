@@ -34,10 +34,10 @@ describe("bot claims — docs/roles-v2.md §4", () => {
 
   it("claims only around meetings, once per act, and the engine accepts the claim", () => {
     const s = pending(withRole(game(5), "ana", "rookie"));
-    const cmds = claims(decide(viewFor(s, "ana"), exact(PERSONALITIES.honest), rolls(0)));
+    const cmds = claims(decide(viewFor(s, "ana"), exact(PERSONALITIES.honest), rolls(0), "test-crew"));
     expect(cmds).toEqual([{ type: "claimRole", player: "ana", role: "rookie" }]);
     const after = run(s, ...cmds);
-    expect(claims(decide(viewFor(after, "ana"), exact(PERSONALITIES.honest), rolls(0)))).toEqual([]);
+    expect(claims(decide(viewFor(after, "ana"), exact(PERSONALITIES.honest), rolls(0), "test-crew"))).toEqual([]);
     // Planning, no meeting coming: never.
     expect(chooseClaim(viewFor(withRole(game(5), "ana", "rookie"), "ana"), exact(PERSONALITIES.honest), rolls(0))).toBeNull();
   });
