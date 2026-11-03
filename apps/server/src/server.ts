@@ -6,6 +6,7 @@ import { authRoutes, sessions, type AuthProvider } from "./auth";
 import type { Clock } from "./clock";
 import type { Db } from "./db";
 import { liveRoutes, type Live } from "./live";
+import { hostRoutes } from "./host";
 import { HttpError, lobbyRoutes } from "./lobby";
 import { notesRoutes } from "./notes";
 import { createScheduler, type Scheduler } from "./scheduler";
@@ -88,5 +89,6 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   authRoutes(app, db, s, deps.auth ?? [], (token) => live.closeSession(token));
   lobbyRoutes(app, db, store, s, (gameId) => live.settle(gameId));
   notesRoutes(app, db, store, s, deps.clock);
+  hostRoutes(app, db, s, live, scheduler, deps.clock);
   return app;
 }

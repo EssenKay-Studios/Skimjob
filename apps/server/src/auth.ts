@@ -85,10 +85,23 @@ export interface Sessions {
   start(reply: FastifyReply, user: User): Promise<void>;
   /** The signed-in user, or null. */
   user(req: FastifyRequest): Promise<User | null>;
+  /** The signed-in user and when the session expires (epoch ms), or null. */
+  session(req: FastifyRequest): Promise<{ readonly user: User; readonly expiresAt: number } | null>;
   end(req: FastifyRequest, reply: FastifyReply): Promise<void>;
 }
 
 export function sessions(db: Db, clock: Clock): Sessions {
+  const session: Sessions["session"] = async (req) => {
+    const t = req.cookies[SESSION_COOKIE];
+    if (!t) return null;
+    const [row] = await db.query<{ id: string; display_name: string; external_id: string | null; expires: number }>(
+      `select u.id, u.display_name, u.external_id, (extract(epoch from s.expires_at) * 1000)::float8 as expires
+       from sessions s join users u on u.id = s.user_id
+       where s.token_hash = $1 and s.expires_at > $2`,
+      [sha256(t), new Date(clock.now())],
+    );
+    return row ? { user: { id: row.id, name: row.display_name, guest: row.external_id === null }, expiresAt: Math.round(Number(row.expires)) } : null;
+  };
   return {
     async start(reply, user) {
       const t = token();
@@ -100,15 +113,9 @@ export function sessions(db: Db, clock: Clock): Sessions {
       reply.setCookie(SESSION_COOKIE, t, { path: "/", httpOnly: true, sameSite: "lax", maxAge: SESSION_TTL_MS / 1000 });
     },
     async user(req) {
-      const t = req.cookies[SESSION_COOKIE];
-      if (!t) return null;
-      const [row] = await db.query<{ id: string; display_name: string; external_id: string | null }>(
-        `select u.id, u.display_name, u.external_id from sessions s join users u on u.id = s.user_id
-         where s.token_hash = $1 and s.expires_at > $2`,
-        [sha256(t), new Date(clock.now())],
-      );
-      return row ? { id: row.id, name: row.display_name, guest: row.external_id === null } : null;
+      return (await session(req))?.user ?? null;
     },
+    session,
     async end(req, reply) {
       const t = req.cookies[SESSION_COOKIE];
       if (t) await db.query("delete from sessions where token_hash = $1", [sha256(t)]);

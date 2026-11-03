@@ -416,8 +416,9 @@ hr.dashed {
 }
 .seat {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 8px 12px;
   padding: 10px 2px;
   border-bottom: 1.3px dashed var(--rule);
 }
@@ -425,7 +426,7 @@ hr.dashed {
   border-bottom: 0;
 }
 .seat__who {
-  flex: 1;
+  flex: 1 1 120px;
   min-width: 0;
   display: grid;
   gap: 4px;

@@ -13,8 +13,16 @@
 // - Hidden police moments (`police:<n>`, extension.md "Police activity") run
 //   on game time: they also stop while the act's meeting waits to open, and
 //   they never appear in `timers`, so clients can't see or time them.
+// - A host pause (M2-13, `games.paused_at`) stops every row, police moments
+//   and `roundEarly` included; on resume each moves on by its own pause. A row
+//   a meeting had already paused keeps its earlier `paused_at`, so it still
+//   moves on by the whole stop. The host's extend moves the current phase's
+//   rows on (`extendKeys`), never a police moment: game time runs on through
+//   the extra planning time, as through any round.
 // - `tick` (every TICK_MS in main.ts) sends due deadlines, oldest first,
 //   through `live.system`, so bots act and views go out as for any change.
+//   Games run side by side: a game whose send is slow (or still running from
+//   the last tick) never holds up another's deadlines.
 // - The engine refuses a deadline that isn't pending (rounds are named), so
 //   even a stale row can't resolve anything twice. A refused row is dropped
 //   and the game re-planned; any other failure keeps the row for a retry.
@@ -52,6 +60,24 @@ export const POLICE_KEY_PREFIX = "police:";
 export const isHiddenDeadline = (key: string) => key.startsWith(POLICE_KEY_PREFIX);
 
 const advance = (deadline: Deadline): SystemCommand => ({ type: "advance", deadline });
+
+/**
+ * The deadlines the host's extend moves on (M2-13, design §15): the round being
+ * planned (with its early end, set once everyone locked in), the alibi window
+ * or the open vote window. None in other phases. Never a police moment.
+ */
+export function extendKeys(s: GameState): readonly string[] {
+  switch (s.phase.kind) {
+    case "planning":
+      return [`round:${s.phase.round}`, `roundEarly:${s.phase.round}`];
+    case "alibis":
+      return [`alibis:${s.phase.round}`];
+    case "meeting":
+      return [`closeMeeting:${s.phase.meetingId}`];
+    default:
+      return [];
+  }
+}
 
 /** Every seat has locked in a move for the round being planned (public: `moveLocked`, design §5.1). */
 export const allLockedIn = (s: GameState): boolean => s.playerOrder.length > 0 && lockedIn(s).length === s.playerOrder.length;
@@ -145,6 +171,14 @@ export interface Scheduler {
   reconcile(gameId: string, state: GameState): Promise<void>;
   /** Sends every due deadline (oldest first). Returns how many were sent. */
   tick(): Promise<number>;
+  /**
+   * Moves the current phase's deadlines (`extendKeys`) on by the preset's
+   * `extendMs`. Call inside the game's lock, then `reconcile`. Returns the ms
+   * added, or null if nothing in this phase can be extended.
+   */
+  extend(gameId: string, state: GameState): Promise<number | null>;
+  /** Forgets the game's cached timing and timers (its session length or rows changed outside `reconcile`). */
+  forget(gameId: string): void;
   start(intervalMs: number): void;
   stop(): void;
   /**
@@ -161,7 +195,7 @@ export interface Timer {
   readonly pausedAt: number | null;
 }
 
-/** Deadlines sent per tick at most (a few fall due together at an act's end). */
+/** Deadlines sent per game per tick at most (a few fall due together at an act's end). */
 const MAX_PER_TICK = 100;
 /** Longest wait before retrying a deadline whose send failed (1 s, 2 s, 4 s … up to this). */
 export const MAX_BACKOFF_MS = 60_000;
@@ -189,7 +223,8 @@ export function createScheduler(deps: {
   const { db, clock, log } = deps;
   const timings = new Map<string, Timing>();
   let timer: ReturnType<typeof setInterval> | null = null;
-  let ticking = false;
+  /** Games whose deadlines are being sent now: a later tick skips them, not the others. */
+  const busy = new Set<string>();
   /** Deadlines whose send failed (not refused): retried from `at`. Memory only; a restart retries at once. */
   const retries = new Map<string, { failures: number; at: number }>();
   /** Each game's deadlines as of its last reconcile (memory only; read from the table after a restart). */
@@ -204,6 +239,52 @@ export function createScheduler(deps: {
     return timing;
   };
 
+  /** Sends the game's due deadlines one by one (oldest first), re-reading after each: one may drop another. */
+  const tickGame = async (gameId: string): Promise<number> => {
+    if (busy.has(gameId)) return 0;
+    busy.add(gameId);
+    let sent = 0;
+    try {
+      for (let i = 0; i < MAX_PER_TICK; i++) {
+        const now = clock.now();
+        const rows = await db.query<{ game_id: string; key: string; command: SystemCommand }>(
+          `select game_id, key, command from deadlines
+           where game_id = $1 and paused_at is null and due_at <= to_timestamp($2::float8 / 1000)
+           order by due_at, key limit $3`,
+          [gameId, now, MAX_PER_TICK],
+        );
+        const row = rows.find((r) => (retries.get(`${gameId} ${r.key}`)?.at ?? 0) <= now);
+        if (!row) break;
+        const id = `${gameId} ${row.key}`;
+        try {
+          await deps.system(gameId, row.command);
+          retries.delete(id);
+          sent++;
+        } catch (err) {
+          if (err instanceof SystemRefused) {
+            // Stale or duplicate (the game moved on, e.g. a reconcile after it failed): drop it and
+            // re-plan from the state, so the game's real next deadline exists.
+            retries.delete(id);
+            log.warn({ err, gameId, key: row.key }, "deadline refused; dropped");
+            await db.query("delete from deadlines where game_id = $1 and key = $2", [gameId, row.key]);
+            known.delete(gameId);
+            await deps.resync(gameId).catch((e: unknown) => log.error({ err: e, gameId }, "re-planning deadlines failed"));
+          } else {
+            // A server failure (database, bots): keep the row and try again later, backing off.
+            const failures = (retries.get(id)?.failures ?? 0) + 1;
+            retries.set(id, { failures, at: now + Math.min(MAX_BACKOFF_MS, 1000 * 2 ** (failures - 1)) });
+            log.error({ err, gameId, key: row.key, failures }, "deadline failed; will retry");
+          }
+        }
+      }
+    } catch (err) {
+      log.error({ err, gameId }, "scheduler tick failed");
+    } finally {
+      busy.delete(gameId);
+    }
+    return sent;
+  };
+
   const scheduler: Scheduler = {
     async reconcile(gameId, state) {
       const now = clock.now();
@@ -211,8 +292,11 @@ export function createScheduler(deps: {
       if (state.phase.kind === "ended") timings.delete(gameId);
       const paused = meetingOpen(state);
       const frozen = gameTimeFrozen(state);
-      const pausedFor = (d: PlannedDeadline | undefined) => (d?.gameTime ? frozen : paused);
       const timers = await db.transaction(async (tx) => {
+        // The host's pause stops every row, whatever its kind. M2-13
+        const [game] = await tx.query<{ paused: boolean }>("select paused_at is not null as paused from games where id = $1", [gameId]);
+        const hostPaused = game?.paused === true;
+        const pausedFor = (d: PlannedDeadline | undefined) => hostPaused || (d !== undefined && d.pausable && (d.gameTime ? frozen : paused));
         const rows = await tx.query<Row>(
           `select key, paused_at is not null as paused, (extract(epoch from due_at) * 1000)::float8 as due,
              (extract(epoch from paused_at) * 1000)::float8 as paused_ms
@@ -228,7 +312,7 @@ export function createScheduler(deps: {
           const pausedAt = row.paused_ms === null ? null : Math.round(Number(row.paused_ms));
           if (!want) {
             await tx.query("delete from deadlines where game_id = $1 and key = $2", [gameId, row.key]);
-          } else if (want.pausable && pausedFor(want) && !row.paused) {
+          } else if (pausedFor(want) && !row.paused) {
             await tx.query("update deadlines set paused_at = to_timestamp($3::float8 / 1000) where game_id = $1 and key = $2", [gameId, row.key, now]);
             after.push({ key: row.key, dueAt, pausedAt: now });
           } else if (!pausedFor(want) && row.paused) {
@@ -243,7 +327,7 @@ export function createScheduler(deps: {
         }
         for (const d of planned.values()) {
           if (have.has(d.key)) continue;
-          const pausedAt = d.pausable && pausedFor(d) ? now : null;
+          const pausedAt = pausedFor(d) ? now : null;
           await tx.query(
             "insert into deadlines (game_id, key, due_at, command, paused_at) values ($1, $2, to_timestamp($3::float8 / 1000), $4::json, $5)",
             [gameId, d.key, d.dueAt, JSON.stringify(d.command), pausedAt === null ? null : new Date(now).toISOString()],
@@ -257,48 +341,37 @@ export function createScheduler(deps: {
     },
 
     async tick() {
-      if (ticking) return 0;
-      ticking = true;
-      let sent = 0;
+      let games: string[];
       try {
-        for (let i = 0; i < MAX_PER_TICK; i++) {
-          const now = clock.now();
-          const rows = await db.query<{ game_id: string; key: string; command: SystemCommand }>(
-            `select game_id, key, command from deadlines
-             where paused_at is null and due_at <= to_timestamp($1::float8 / 1000)
-             order by due_at, game_id, key limit $2`,
-            [now, MAX_PER_TICK],
-          );
-          const row = rows.find((r) => (retries.get(`${r.game_id} ${r.key}`)?.at ?? 0) <= now);
-          if (!row) break;
-          const id = `${row.game_id} ${row.key}`;
-          try {
-            await deps.system(row.game_id, row.command);
-            retries.delete(id);
-            sent++;
-          } catch (err) {
-            if (err instanceof SystemRefused) {
-              // Stale or duplicate (the game moved on, e.g. a reconcile after it failed): drop it and
-              // re-plan from the state, so the game's real next deadline exists.
-              retries.delete(id);
-              log.warn({ err, gameId: row.game_id, key: row.key }, "deadline refused; dropped");
-              await db.query("delete from deadlines where game_id = $1 and key = $2", [row.game_id, row.key]);
-              known.delete(row.game_id);
-              await deps.resync(row.game_id).catch((e: unknown) => log.error({ err: e, gameId: row.game_id }, "re-planning deadlines failed"));
-            } else {
-              // A server failure (database, bots): keep the row and try again later, backing off.
-              const failures = (retries.get(id)?.failures ?? 0) + 1;
-              retries.set(id, { failures, at: now + Math.min(MAX_BACKOFF_MS, 1000 * 2 ** (failures - 1)) });
-              log.error({ err, gameId: row.game_id, key: row.key, failures }, "deadline failed; will retry");
-            }
-          }
-        }
+        const due = await db.query<{ game_id: string }>(
+          "select distinct game_id from deadlines where paused_at is null and due_at <= to_timestamp($1::float8 / 1000)",
+          [clock.now()],
+        );
+        games = due.map((r) => r.game_id).filter((g) => !busy.has(g));
       } catch (err) {
         log.error({ err }, "scheduler tick failed");
-      } finally {
-        ticking = false;
+        return 0;
       }
-      return sent;
+      const sent = await Promise.all(games.map((g) => tickGame(g)));
+      return sent.reduce((a, b) => a + b, 0);
+    },
+
+    async extend(gameId, state) {
+      const keys = extendKeys(state);
+      if (keys.length === 0) return null;
+      const ms = (await timingOf(gameId)).extendMs;
+      const rows = await db.query<{ key: string }>(
+        "update deadlines set due_at = due_at + ($3::float8 / 1000) * interval '1 second' where game_id = $1 and key = any($2::text[]) returning key",
+        [gameId, keys, ms],
+      );
+      if (rows.length === 0) return null;
+      known.delete(gameId);
+      return ms;
+    },
+
+    forget(gameId) {
+      timings.delete(gameId);
+      known.delete(gameId);
     },
 
     async timers(gameId) {

@@ -4,7 +4,8 @@
 // GameChat.tsx), meetings and votes (M2-7, Meetings.tsx) and the bank board
 // (M2-9 art, figures from the view only: game/board.ts), and (M2-10) the
 // ledger / case file sheet, the "While you were away" recap and the private
-// suspicion board (game/notes.ts). The full reveal (M2-11) comes later.
+// suspicion board (game/notes.ts), and the host strip (M2-13, GameHost.tsx).
+// The full reveal (M2-11) comes later.
 import { useEffect, useMemo, useState } from "react";
 import { ROUNDS_PER_ACT } from "@skimjob/content";
 import type { PlayerView, RoomId } from "@skimjob/engine";
@@ -53,10 +54,11 @@ import { useCountdown, useGame, useNow, type ClientCommand, type Connection, typ
 import { api, ApiError, sentence, UNREACHABLE, type LobbyView } from "../api";
 import { navigate } from "../router";
 import { GameChat } from "./GameChat";
+import { GameHost } from "./GameHost";
 import { TopBar } from "./TopBar";
 import "./game.css";
 
-type Access = { kind: "checking" } | { kind: "ok"; autoMeetings: boolean; dmNotices: boolean } | { kind: "lobby" } | { kind: "error"; title: string; text: string };
+type Access = { kind: "checking" } | { kind: "ok"; autoMeetings: boolean; dmNotices: boolean; game: LobbyView } | { kind: "lobby" } | { kind: "error"; title: string; text: string };
 
 /** Before opening the socket: is this a started game you sit in? (The upgrade's own 401/404 can't be read by a browser.) */
 function useAccess(id: string): Access {
@@ -66,7 +68,7 @@ function useAccess(id: string): Access {
     api<LobbyView>("GET", `/games/${encodeURIComponent(id)}`).then(
       (game) =>
         live &&
-        setAccess(game.status === "lobby" ? { kind: "lobby" } : { kind: "ok", autoMeetings: game.autoMeetings !== false, dmNotices: game.settings.dmNotices !== false }),
+        setAccess(game.status === "lobby" ? { kind: "lobby" } : { kind: "ok", autoMeetings: game.autoMeetings !== false, dmNotices: game.settings.dmNotices !== false, game }),
       (e: unknown) => {
         if (!live) return;
         if (e instanceof ApiError && e.status === 401) return setAccess({ kind: "error", title: "Sign in first", text: "Join the crew from your invite link, then come back to this game." });
@@ -120,6 +122,8 @@ export function Game({ id }: { id: string }) {
             <p>Opening the game.</p>
           </SketchFrame>
         ) : (
+          <>
+          {access.kind === "ok" && <GameHost gameId={id} game={access.game} view={view} control={channel.control} />}
           <Board
             view={view}
             timers={channel.timers}
@@ -130,6 +134,7 @@ export function Game({ id }: { id: string }) {
             channel={channel}
             dmNotices={access.kind === "ok" && access.dmNotices}
           />
+          </>
         )}
       </main>
     </div>

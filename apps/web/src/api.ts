@@ -29,6 +29,8 @@ export interface Seat {
   readonly host: boolean;
   readonly you: boolean;
   readonly playerId: string | null;
+  /** The bot playing this person's seat for now (host controls, M2-13); null if none. */
+  readonly standIn?: string | null;
 }
 
 export interface LobbyView {
