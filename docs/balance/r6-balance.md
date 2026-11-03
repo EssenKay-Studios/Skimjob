@@ -171,7 +171,7 @@ crew) — Starter is left as it is (learning mode, report-only).
 
 PM call: one focused attempt, numbers only (no new rules), at most two Sim suite iterations, on the Muscle and the Cleaner;
 if the team-role spread is still over 0.10, gate it at **≤ 0.20** provisionally (`TEAM_PARITY_MAX_SPREAD`; 0.10 stays the
-target, and the all-role column still reports against 0.10), to revisit after the M2-14 playtests.
+target, and the all-role column still reports against 0.10), to revisit after the owner's playtests.
 
 What content offers: the Muscle has one number (`perGame`, already 1, the minimum) and no per-crew-size values; its reward
 count can't go to 0 without dropping the power-back (owner ruling 6). The Cleaner has `visitors` (tried earlier) and its

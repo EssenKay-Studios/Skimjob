@@ -47,7 +47,7 @@ The rules are `docs/design.md` and `docs/extension.md`. The choices behind them:
 ## Balance gates
 
 - **Heist success 55–70%** in the gated cells (Balanced, 4–12 players). *Confirmed.*
-- **Role parity: the target is spread ≤ 0.10.** *Confirmed.* PM calls on the R6 parity gate, provisional, owner to confirm (`docs/balance/r6-balance.md`): (1) the gate is split: Team roles only, the all-role spread report-only; (2) each ★ role within 0.9–1.8× the Team-role average; (3) ★ lean point 0.8 with content 0.17.0's numbers (Teller line 6 loot and +10 Heat × share); (4) Balanced 4p 1 Lone wolf / 1 Wildcard (one over the n ÷ 3 cap) and 8p 2 / 1, Starter left as is; (5) Team-role parity gated at ≤ 0.20 until the M2-14 playtests, with the Muscle bot's rescue threshold at suspicion 2.
+- **Role parity: the target is spread ≤ 0.10.** *Confirmed.* PM calls on the R6 parity gate, provisional, owner to confirm (`docs/balance/r6-balance.md`): (1) the gate is split: Team roles only, the all-role spread report-only; (2) each ★ role within 0.9–1.8× the Team-role average; (3) ★ lean point 0.8 with content 0.17.0's numbers (Teller line 6 loot and +10 Heat × share); (4) Balanced 4p 1 Lone wolf / 1 Wildcard (one over the n ÷ 3 cap) and 8p 2 / 1, Starter left as is; (5) Team-role parity gated at ≤ 0.20 until the owner's playtests, with the Muscle bot's rescue threshold at suspicion 2.
 - **A check passes or fails only when its whole 95% interval is in or out of the target;** otherwise it is inconclusive. Parity fails only if even the closest the intervals allow is over the line. *Confirmed* (the R4a suite checks, accepted 2 Nov).
 - **Content 0.17.0 is what ships,** and `docs/balance/baseline.json` is the comparison baseline; re-run the suite after any rule, number or bot change. 0.17.0's numbers are a provisional PM call (parity-gate call 3 above), owner to confirm.
 - Heat share of failures (target 10–20%), Starter and Duel success are report-only for now. *Provisional.*
@@ -82,7 +82,8 @@ The rules are `docs/design.md` and `docs/extension.md`. The choices behind them:
 - **Hosting: AWS Lightsail,** https://skimjob.duckdns.org, on the owner's box beside Arcway, which no Skimjob step may touch. systemd service, releases with a `current` symlink, nginx, Postgres, weekly `pg_dump`. Built on the Mac and uploaded by hand; nothing deploys from CI. Runbook: `docs/deploy.md`. *Confirmed.*
 - **The repo is public** (free CI minutes), so nothing secret or connection detail is ever committed. *Confirmed.*
 - **CI:** typecheck and tests, 6 e2e shards (with a fast-clock server), sim smoke; docs-only PRs (every path `*.md`) skip e2e and sim smoke. *Confirmed.*
-- **The M2-15 offline demo is a GitHub Pages site** (engine and bots in the browser, same UI). *Confirmed;* paused by the owner.
+- **The M2-15 offline demo is a GitHub Pages site** (engine and bots in the browser, same UI). *Confirmed;* parked by the owner (3 Nov): not needed while the live site exists.
+- **M2-14 playtest pass is parked** (owner, 3 Nov): the owner playtests on the live site himself. *Confirmed.*
 - **Out of scope:** `docs/rebuild.md` (a proposal), Books mode, the recruited Mole. *Confirmed.*
 
 ## Pipeline and git

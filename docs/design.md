@@ -481,7 +481,7 @@ A command-line tool that runs batches of all-bot games:
 | Heat-bust rate | 10–20% of failures come from Heat |
 | Pocketing vs. honest | Moderate pocketing should win more often than pure honesty. Heavy pocketing should lose more often than it wins. |
 | Shakedown accuracy | 50–70% of shakedowns catch a real cheater |
-| Per-role parity (owner gate; split gate PM provisional 3 Nov, owner to confirm) | Win credit ÷ (1 ÷ crew size), Balanced deal, 4–12 players (extension.md Build notes, "Sim"). Team roles: spread (max − min) ≤ 0.20 until the M2-14 playtests, target 0.10. ★ roles: each at 0.9–1.8× the Team-role average. The all-role spread is report-only. (docs/balance/r6-balance.md) |
+| Per-role parity (owner gate; split gate PM provisional 3 Nov, owner to confirm) | Win credit ÷ (1 ÷ crew size), Balanced deal, 4–12 players (extension.md Build notes, "Sim"). Team roles: spread (max − min) ≤ 0.20 until the owner's playtests, target 0.10. ★ roles: each at 0.9–1.8× the Team-role average. The all-role spread is report-only. (docs/balance/r6-balance.md) |
 | Comeback rate | The leader after Act 1 wins less than 50% of the time |
 | Decided early | Less than 15% of games are effectively settled before Act 3 |
 

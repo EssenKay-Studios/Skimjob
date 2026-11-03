@@ -2,7 +2,7 @@
 
 > **Live status is in `docs/STATUS.md`** (task ticks, what is paused). This plan is the original scope and acceptance criteria. Since written: the game is deployed on AWS Lightsail (`docs/deploy.md`), and the questions in §3 are answered (`docs/decisions.md`).
 
-> **Owner update (1 Nov):** the web app is the launch product — fully responsive on phones, tablets and laptops, installable as a PWA. Every UI task (M2-5 … M2-11, M2-14) must be checked at 360, 390, 768, 1024 and 1280 px. Native apps (M3) will use Flutter. See decisions.md.
+> **Owner update (1 Nov):** the web app is the launch product — fully responsive on phones, tablets and laptops, installable as a PWA. Every UI task (M2-5 … M2-11) must be checked at 360, 390, 768, 1024 and 1280 px. Native apps (M3) will use Flutter. See decisions.md.
 
 _Planner, 1 Nov 2026. Inputs: CLAUDE.md, STATUS.md, design.md §4.1/§11–§15/§17.5/§18, decisions.md, ui-style.md, engine + bots APIs._
 
@@ -152,14 +152,14 @@ async lock, single process). Never send `seq` outside its owner's view (evidence
   (they gate notifications).
 - Refs: §15, §4.1. **Accept:** tests for pause across a deadline, extend, and replace/return; E2E survives a reload.
 
-### M2-14 Playtest pass (M)
+### M2-14 Playtest pass (M) — parked (owner, 3 Nov)
 - `docs/playtest.md`: how to run locally (`pnpm dev`, LAN URL for phones), presets, known limits.
 - Play Quick and 1-hour games with 3 contexts + bots; fix what breaks; a "report a problem" link that copies
   game id, round and client version (never the seed before the end).
 - Update STATUS.md (M2 done, findings, M3 next), decisions.md for every choice made in M2.
 - **Accept:** a 1-hour game with 2 humans + 4 bots completes without a server error; all tests, typecheck, E2E green.
 
-### M2-15 Offline demo (M, GitHub Pages)
+### M2-15 Offline demo (M, GitHub Pages) — parked (owner, 3 Nov)
 - A static build of the web client with the engine and bots running in the browser (an in-browser adapter in
   place of the server channel), the same UI, no server or sign-in.
 - Published as a **GitHub Pages** site for Karthik to verify (owner, 3 Nov; replaces the claude.ai artifact).
