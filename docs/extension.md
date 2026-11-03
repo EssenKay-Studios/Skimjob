@@ -346,11 +346,11 @@ For the builders. Numbers in [brackets] are tunables for the balance pass.
 
 **Sim**
 
-- Gates: per-role parity ≤ 0.10 (win credit ÷ 1/n, Balanced, 4–12 players) and success 55–70%. **Split gate (PM provisional, 3 Nov; owner to confirm):** the spread is taken over Team roles only, gated at ≤ 0.20 until the M2-14 playtests (0.10 stays the target); each ★ role's win rate must sit at 0.9–1.8× the Team-role average (a ★ role with an average stash wins about 1 ÷ success rate as often; docs/balance/r6-balance.md). The all-role spread is report-only.
+- Gates: per-role parity ≤ 0.10 (win credit ÷ 1/n, Balanced, 4–12 players) and success 55–70%. **Split gate (PM provisional, 3 Nov; owner to confirm):** the spread is taken over Team roles only, gated at ≤ 0.20 until the owner's playtests (0.10 stays the target); each ★ role's win rate must sit at 0.9–1.8× the Team-role average (a ★ role with an average stash wins about 1 ÷ success rate as often; docs/balance/r6-balance.md). The all-role spread is report-only.
 - Reports: the ending split (success / raid / miss), no-winner rate, shared-win rate, wins by success vs failure for each ★ role, token earning and spending per role, and Truly random and the role-list settings (no gate).
 - Watch: the Mole and Fence can win either way and may sit high; Hacker, Blackmailer, Forger and Inside Man may sit low. Tune stash-earning numbers first.
 - Run it on the sharded "Sim suite" GitHub workflow, not babysat in a chat.
-- Flag in the balance brief: police moments run on game time, so live games with many early round ends get fewer than one moment per round, while the sim takes exactly one. Live Heat can drift below the sim's; watch it in the M2-14 playtest.
+- Flag in the balance brief: police moments run on game time, so live games with many early round ends get fewer than one moment per round, while the sim takes exactly one. Live Heat can drift below the sim's; watch it in the owner's playtests.
 - Flag in the balance brief: background police activity adds about +1 Heat per round (about +9 a game) where a Mole could be, against the old card's ~+4.
 - Tunables include police activity's chance [30%], the Duel wrong-call pay [8], alongside the clean line [6], pay [8] and shop costs.
 - **R6 balance pass (content 0.16.0, docs/balance/r6-balance.md):** success passes 55–70% in all 18 gated cells. Parity fails everywhere (spread 0.63–1.01): the ★ roles also win failures, which numbers can't offset (owner decision pending). Tuned: Teller line 5, Manager's office 3, Shift change loot ×1.5 / Heat ×2, Quiet night −5, police chance 30%, Fence safe 1 an act (token at 3), Balanced 4p 1 / 1 and 8p 2 / 1. Kept: clean line 6, pay 8, Duel 8, shop costs.

@@ -37,7 +37,7 @@ Plan and acceptance criteria: `docs/m2-plan.md`. This is the canonical task list
 - History: `docs/archive/decisions-history.md` and the PRs.
 
 ## Open follow-ups (from reviews and QA)
-- **R6 balance** (`docs/balance/r6-balance.md`): Heat share of failures 34–54% at 4–6p (design target 10–20%, not gated); Starter succeeds 86–96% and Duel 44% (report-only); the Cleaner sits lowest of the Team roles; revisit team parity 0.10 (gated at 0.20) after the M2-14 playtests.
+- **R6 balance** (`docs/balance/r6-balance.md`): Heat share of failures 34–54% at 4–6p (design target 10–20%, not gated); Starter succeeds 86–96% and Duel 44% (report-only); the Cleaner sits lowest of the Team roles; revisit team parity 0.10 (gated at 0.20) after the owner's playtests.
 - **Quiet hours** must freeze police moments and deadlines (M3; host pause already does, #54).
 - **Flaky tests:** see `docs/pipeline/HANDOFF.md` "Known flaky tests"; stabilise them. The 12-seat game QA test's real bugs are fixed: reveal overflow (#62) and alibi-window timing (#63).
 - **Board PATCH rate limiter has no test** (#46): `apps/server/src/notes.ts` `rateLimiter`; add one with the fake clock.
@@ -47,7 +47,7 @@ Plan and acceptance criteria: `docs/m2-plan.md`. This is the canonical task list
 - **CI actions pinned to `@v4` tags, not SHAs** (#35): `ci.yml`, `sim-suite.yml`.
 - Smaller: the hunch can outweigh a certain Peek; `live.hostile.qa.test.ts` has no `claimRole` row; server bots re-roll claim chances on every `decide()`; a slow test in `packages/bots/src/run.test.ts` needs an explicit timeout; the `viewFor` deep-copy speedup (35–40% of sim time) is left for the owner (#34).
 - **Reveal:** the "stolen vote decided" flag needs tokens on, so it always reads false in Quick (starter mode) (#55).
-- **Before M2-14:** check bot pace (bots react to every change they can see; an instant public reaction to something private is a mild tell); server-picked meeting slots must avoid quiet hours once they exist.
+- **Before playtests:** check bot pace (bots react to every change they can see; an instant public reaction to something private is a mild tell); server-picked meeting slots must avoid quiet hours once they exist.
 
 ## Engineering notes (standing rules)
 - **Engine:** handlers draw randomness only through the `Draw` that `handleCommand` passes them (`withRng` appends `rngAdvanced`); never read `state.rng`. New commands go in `HANDLERS` (`handle.ts`) and return a reason string to refuse; `applyEvent` throws on unfolded event types, so add cases in `reduce.ts`. Every ending goes through `gameEnded` (`end.ts`); every shakedown path through `afterVote` (`meeting.ts`); any new place that starts a round uses `startRound`. Read powers with `powerOf(config, role)`.
@@ -67,7 +67,7 @@ Plan and acceptance criteria: `docs/m2-plan.md`. This is the canonical task list
 Every provisional call still to confirm, once each; each is marked *provisional* in the named `docs/decisions.md` section (details of the older ones: `docs/archive/decisions-history.md`).
 1. **Rules and roles, R6a readings** (#50): Balanced 5–6p deal; token triggers; automatic perks (Shield, Emergency) exempt from one-per-round; police moments on game time (refused during meetings, next due from the previous, Heat × min(1, crew ÷ 5), one per round in the sim); view readings; the legacy `mole` setting migrated; Exact list in content order; Hidden list falls back to the preset for bots; Mole and Embezzler in Duel; bot and sim tunables.
 2. **Rules and roles, R6 confirm items:** the Blackmailer keeps its token if the shakedown is cancelled; the Mole tips off at most 3 times a game, even with Recharge.
-3. **Balance gates** (#51): the split parity gate; ★ band 0.9–1.8×; ★ lean point 0.8 with content 0.17.0's numbers; Balanced 4p 1/1 and 8p 2/1; Team parity ≤ 0.20 until M2-14; Muscle bot threshold 2; Heat share and Starter/Duel success report-only.
+3. **Balance gates** (#51): the split parity gate; ★ band 0.9–1.8×; ★ lean point 0.8 with content 0.17.0's numbers; Balanced 4p 1/1 and 8p 2/1; Team parity ≤ 0.20 until the owner's playtests; Muscle bot threshold 2; Heat share and Starter/Duel success report-only.
 4. **Rules and roles, police and gap-fills:** background police only when a Mole could be dealt; a tip-off lands at the next free police moment; a wrong Duel call-out pays 8; when a between-meetings stretch ends and how Recharge works; 1 h default session; Quick = Starter with no shop; Duel shop and events-off dealing; the Fixer stopping any raid; Forger 7+.
 5. **Server and timing, host controls** (#54): players can act while paused; Extend amounts per preset, no cap; replace with bot after 2 missed rounds (never the host, Opportunist), handed back by host or player; lobby kick of any non-host seat.
 6. **Server and timing, Google sign-in** (#53): the account's seat is kept on a same-game clash; redirect URI from env; display-name fallback (`name` → `given_name` → "Crook"); scopes `openid profile`; `prompt=select_account`.

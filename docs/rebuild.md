@@ -292,7 +292,7 @@ No data exists for this exact choice. The outside evidence leans toward the Rebu
 
 Test the Rebuild cheaply before committing to the rewrite, and keep the current game moving so nothing is lost either way. The lighter version of the current game is described in [`extension.md`](extension.md).
 
-1. **Finish the current demo (M2-15) as planned.** It is nearly done, and it is the baseline to compare against.
+1. **Use the current game on the live site as the baseline** (the M2-15 offline demo was parked on 3 Nov). It is the version to compare against.
 2. **Run the Rebuild as a paper prototype.** Play one 2–3 day game with 6–8 friends over WhatsApp. You act as the game: hold the true numbers in a private Google Sheet, DM each job holder their feed, and run votes as polls. That needs no code.
 3. **Play one game of the current version with the same group** in the existing web prototype.
 4. **Measure both the same way:**
