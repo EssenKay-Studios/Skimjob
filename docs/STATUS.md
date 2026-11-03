@@ -1,8 +1,12 @@
 # Status
 
-_Last updated: 2 Nov 2026, evening (PRs #43, #44, #46 and the owner's afternoon answers folded in; earlier: owner answers of 2 Nov, PR notes #28–#41). Work is **paused** by the owner (16:23 IST, after M2-10)._
+_Last updated: 3 Nov 2026, morning (owner answers of 3 Nov: go-ahead for `docs/extension.md`, rulings 1–10, police activity option A). Work **resumed 3 Nov**; the pipeline now runs on the owner's Mac. R6a is next._
 
-## Current milestone: M1 — Engine + simulator (bank job, starter roles, bots)
+## Current milestone: M2 + R6 — the Extension rules (`docs/extension.md`), then the rest of M2
+
+M1 (engine, simulator, bots) is done; its record follows. R6a (the Extension's rules in engine, content and bots) is next.
+
+### M1 — Engine + simulator (bank job, starter roles, bots)
 
 Goal: run thousands of all-bot games at 2–12 players and use the results to tune the placeholder numbers in `docs/design.md`.
 
@@ -40,15 +44,15 @@ Goal: run thousands of all-bot games at 2–12 players and use the results to tu
 - [x] **Second balance pass** — content 0.7.0: Police patrol +5, Shift change Vault Heat ×1.5, Mole tip-off +6; event numbers overridable (`contentOverrides.events`); bots read event cards and tip-offs in the Heat (`packages/bots/src/heat.ts`), Muscle/Snitch/Blackmailer habits. Default config (events, Mole maybe): success 56% → 66%, Heat share of failures 40% → 26%, Mole win 50% → 34%. Summary in `docs/balance/balance-2.md`. Design §7, §8, §10, §17.4.
 
 ### Next up (in order)
-- M1 done; M2 per `docs/m2-plan.md`. **Paused by the owner** (2 Nov, 16:23 IST). Nothing in flight and no open PRs. On 3 Nov the owner merged the roles v3 spec into `docs/extension.md`, the single rules spec for R6 (draft PR #45 closed). Done on 2 Nov: [x] R5 parity balance, provisional (#43); [x] M2-9 art wired into the game screen and the Claim role button (#41); [x] lock-in marks, presence, early round end, human-majority meeting lock (#44); [x] M2-10 (#46). Next, as in `docs/pipeline/HANDOFF.md`:
-  1. **Go-ahead:** the owner says when to start building `docs/extension.md`.
-  2. **R6a rules** (engine, content, bots): everything in `docs/extension.md`, as its "Build notes" section lists (one crew, win rule with `winsOn`, no automatic reveals, temperament tags, Balanced / Truly random, tokens and the 3-perk shop, fixed shakedown numbers, one vote rule, whole-number scoring, "police activity" and "camera offline" cover, Heat breakdown, Standard deck, Quick uses Starter); then **one balance pass on the sharded Sim suite workflow** (parity ≤ 0.10, success 55–70%).
+- M1 done; M2 per `docs/m2-plan.md`. Paused 2 Nov 16:23 IST; **resumed 3 Nov** on the owner's Mac, go-ahead given 3 Nov (decisions.md "Owner answers, 3 Nov (morning)"). On 3 Nov the owner merged the roles v3 spec into `docs/extension.md`, the single rules spec for R6 (draft PR #45 closed). Done on 2 Nov: [x] R5 parity balance, provisional (#43); [x] M2-9 art wired into the game screen and the Claim role button (#41); [x] lock-in marks, presence, early round end, human-majority meeting lock (#44); [x] M2-10 (#46). Next, as in `docs/pipeline/HANDOFF.md`:
+  1. **R6a rules** (engine, content, bots): everything in `docs/extension.md`, as its "Build notes" section lists (one crew, win rule with `winsOn`, no automatic reveals, temperament tags, Balanced / Truly random, tokens and the 3-perk shop, fixed shakedown numbers, one vote rule, whole-number scoring, "police activity" and "camera offline" cover, Heat breakdown, Standard deck, Quick uses Starter).
+  2. **Balance pass** for all of R6a on the sharded "Sim suite" workflow: per-role parity ≤ 0.10, success 55–70%; the Extension's numbers are starting values.
   3. **R6b roles UI** (web): lobby deck picker (presets, toggles, deal mode, role-list setting); Roles rulebook sheet + tap any role name to explain; a visual cue for every power and ability; last round's board shown faded while planning; "between meetings" wording, the gap box, the Haul target bar, the Heat breakdown, the shop.
-  4. **M2-11** end-of-game reveal.
+  4. **M2-11** end-of-game reveal (include tokens and purchases).
   5. **M2-13** host controls (pause, extend, replace with bot; shift `roundEarly:<n>` with the round).
   6. **M2-12** Google sign-in, stub-ready (needs a client id from Karthik).
   7. **M2-14** playtest pass.
-  8. **M2-15** offline demo build (in-browser engine + bots, same UI), published as a claude.ai artifact for Karthik to verify.
+  8. **M2-15** offline demo build (in-browser engine + bots, same UI), published as a GitHub Pages site.
 
 - [x] **Owner answers (1 Nov)** — content 0.8.0: alibi phase between rounds (`phase: alibis`, `advance { kind: "alibis", round }`, public `alibisClosed`, view `alibiRound`); ⅓-plurality shakedowns at 9–12; Insider from 5 players; Mole "on" = 1 at 9–12 ("maybe" = 0 or 1 from 5); event-card Heat × min(1, crew ÷ 5); the clean check counts the Fence safe; cards repeat; `GameConfig.uniqueRoles` (default true). Teller line 3, Manager's office 4. Design §5.4, §6.2, §8.1, §10, §11.2, §11.3, §15; decisions.md "Owner answers, 1 Nov".
 
@@ -101,7 +105,7 @@ Plan and acceptance criteria: `docs/m2-plan.md`. Runs alongside M1 task 16 (bala
 12. [ ] **M2-12** Google sign-in (needs Karthik's client id).
 13. [ ] **M2-13** Host controls and resilience.
 14. [ ] **M2-14** Playtest pass.
-15. [ ] **M2-15** Offline demo build: the in-browser engine and bots with the same UI, published as a claude.ai artifact for Karthik to verify.
+15. [ ] **M2-15** Offline demo build: the in-browser engine and bots with the same UI, published as a GitHub Pages site.
 
 ### M2 notes
 - **Database:** no `DATABASE_URL` means PGlite in `.pglite/` (`PGLITE_DIR=memory` for in-memory). Tests use a fresh in-memory PGlite per file; with `DATABASE_URL` set (`pnpm test:pg` starts `scripts/db.sh`) they use real Postgres, one throwaway schema per test database. A fresh PGlite takes a few seconds here, so share one per test file.
@@ -170,9 +174,7 @@ Plan and acceptance criteria: `docs/m2-plan.md`. Runs alongside M1 task 16 (bala
 - **Duel mode (task 15, done):** the act's end in Duel is `endOfDuelAct` (`duel.ts`), called by `closeAlibis` (`round.ts`) when the act's last round's alibis close; any new end-of-act step must go there as well as in `afterVote` (both use `checkpoint()` in `meeting.ts`). M2: the server never sends `openMeeting`/`scheduleMeeting` in Duel games. Balance (task 16): the sim doesn't report call-outs yet (count, caught share, loot moved); bots call out only on a visible shortfall.
 
 ## Questions for Karthik
-Answered: everything up to 2 Nov afternoon (decisions.md "Owner answers, 2 Nov" and "Owner answers, 2 Nov (afternoon)"); the art direction is approved for now. Still open:
-- **R6 go-ahead:** say when to start building `docs/extension.md` (it replaces the roles v3 spec).
-- **Role list default:** Exact roles dealt or Possible roles as the default host setting? (Open in the rulebook doc "Skimjob — How to play", https://claude.ai/artifact/3dEyv4wdmiJ3a9DhrtsBtN.)
-- Deploy target: Fly (unlock the account at fly.io/high-risk-unlock, then re-run `deploy.yml`) or AWS Lightsail (needs the secrets `LIGHTSAIL_SSH_KEY`, `LIGHTSAIL_HOST`, `LIGHTSAIL_USER`, a subdomain A record, and answers on Docker, the proxy and RAM)?
+Answered: everything up to 3 Nov morning (decisions.md "Owner answers, 3 Nov (morning)": R6 go-ahead, role list default Exact); the art direction is approved for now. Still open:
+- Deploy target (the deploy workflow is manual-only until a host is chosen, owner 3 Nov): Fly (unlock the account at fly.io/high-risk-unlock, then re-run `deploy.yml`) or AWS Lightsail (needs the secrets `LIGHTSAIL_SSH_KEY`, `LIGHTSAIL_HOST`, `LIGHTSAIL_USER`, a subdomain A record, and answers on Docker, the proxy and RAM)?
 - Fly deploy: OK to keep the machine always on (`min_machines_running = 1`, roughly $4–5/month in Mumbai) so deadlines fire on time, rather than stopping it when idle? (docs/deploy.md)
 - Google sign-in (M2-12): please send the Google OAuth client id; until then M2-12 is built stub-ready.

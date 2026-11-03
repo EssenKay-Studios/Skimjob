@@ -4,6 +4,34 @@ Newest first. Each entry: what was decided, and why. Add an entry whenever a rul
 
 ---
 
+### 2026-11-03 — Owner answers, 3 Nov (morning)
+**Go-ahead given:** `docs/extension.md` is approved for build and wins on any conflict. `docs/design.md` stays secondary until R6a lands; its sections are brought in line then (its §17.4 now carries the owner gates). Out of scope: `docs/rebuild.md`, Books mode, the recruited Mole.
+
+Answers, all final (recorded in extension.md "Owner rulings (3 Nov)"):
+1. Getaway Driver / Fence / Mole / Embezzler reward: 1 token (not a free Peek).
+2. Emergency meetings don't recharge "once between meetings" powers; only the regular meetings after rounds 3, 6, 9 do.
+3. The Detective's "dirty" line and the shakedown's clean line stay one shared number (6), tuned together.
+4. The Mole earns a token for every tip-off (max 3 per game).
+5. The Blackmailer earns a token when a vote it stole decides a shakedown.
+6. A Muscle that saves an innocent gets a token and its power back.
+7. Duel: "between meetings" limits reset after rounds 3 and 6.
+8. The role list shown to players defaults to Exact roles dealt (closes Exact vs Possible).
+9. M2-15 offline demo is a GitHub Pages site (replaces the claude.ai artifact).
+10. The deploy workflow is manual-only until a host is chosen (done in the ops PR).
+
+**Police patrol, option A (confirmed):** the patrol leaves the event deck (9 cards). A hidden background chance, about 1 round in 4 (tunable), of "police activity +4" at a random moment, between rounds included, announced exactly like the Mole's tip-off. Timing is in extension.md Build notes, "Police activity": hidden moments in game time (frozen by pauses, meetings and quiet hours). The Mole's tip-off is queued to the next moment. Moments never reach clients as timers.
+
+**Provisional (PM, 3 Nov fix round):**
+- **Background police activity runs only when a Mole could be in the game** (dealt, or possible under the role-list setting), whatever the events setting. Otherwise it is off (Starter, Quick and the Duel default). It exists only as the Mole's cover; its ~+1 Heat per round is a balance-pass tunable.
+- **The Mole's tip-off is used any time but lands at the next free hidden police moment.** At most one police activity per moment; a tip-off replaces a patrol drawn for that moment. This changes the 2 Nov "applied at once" reading; the owner should confirm.
+- **A wrong Duel call-out: the caller pays the rival [8]** from its own stash (never more than it holds), the clean payout number (was 5 × act), tuned with it.
+
+**Gap-fills (PM readings from review, the owner may change them):** when a "between meetings" stretch ends and how Recharge works; session default 1 h; Quick forces Starter with no shop; Duel's shop and events-off dealing; the Fixer stops any raid, including mid-round; Forger 7+ (kept from roles v2).
+
+**Build order:** R6a (rules, content, bots) → one balance pass on the Sim suite workflow (parity ≤ 0.10, success 55–70%; the Extension's numbers are starting values) → R6b UI → M2-11 reveal (with tokens and purchases) → M2-13 → M2-12 → M2-14 → M2-15. Work resumed 3 Nov; the pipeline now runs on the owner's Mac.
+
+---
+
 ### 2026-11-03 — One rules spec: the Extension replaces roles v3
 The owner merged the roles v3 spec into `docs/extension.md`, which is now the single rules spec for R6. Draft PR #45 (`docs/roles-v3.md`) is closed, not merged. The Extension keeps every roles v3 decision except five, listed in its "Build notes": rewards become one token each (a 3-perk shop replaces fixed rewards), "once per act" reads "once between meetings", whole-number scoring, the Mole's tip-off is announced only as "police activity" (like the Police patrol card, now +4), and one vote rule for every crew size. Wherever this log says "roles v3" or "PR #45", read `docs/extension.md`. `docs/rebuild.md` (the jobs redesign) is a separate proposal and is not to be built. Why: one doc instead of a spec plus an amendment, and the Extension's changes touch the same files as roles v3, so R6a builds them in one pass.
 
@@ -17,7 +45,7 @@ Owner-approved **direction**, not built. The spec is draft PR #45 (`docs/roles-v
 - **Factions** become a descriptive temperament tag: Team player / Wildcard / Lone wolf.
 - **Dealing (11:00):** two deal modes only. **Balanced** is a fixed, researched mix per player count, decided by the sim. **Truly random** allows any mix, even more lone wolves than team players. The saboteur Off / Maybe / On setting goes, and there is no Few / Some / Many knob.
 - **Balance goal (confirmed):** every role has about the same chance to win (parity spread ≤ 0.10), and heists succeed 55–70%. The 30–40% saboteur-win target is dropped. The "raise the target when saboteurs are off" question has to be re-asked in v3 terms.
-- **Still open:** Exact or Possible as the default role list (see the rulebook doc "Skimjob — How to play", https://claude.ai/artifact/3dEyv4wdmiJ3a9DhrtsBtN).
+- **Still open:** Exact or Possible as the default role list (see the rulebook doc "Skimjob — How to play", https://claude.ai/artifact/3dEyv4wdmiJ3a9DhrtsBtN). *(Answered 3 Nov: Exact; see "Owner answers, 3 Nov (morning)".)*
 - Art direction **approved for now** (09:24): side view, stacked phone layout, gumdrop crooks (M2-9 provisional calls confirmed).
 
 ### 2026-11-02 — Repo public; CI minutes

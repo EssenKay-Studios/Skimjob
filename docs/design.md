@@ -1,5 +1,7 @@
 # Skimjob — Game Design Document
 
+**For R6 rules, [`docs/extension.md`](extension.md) is the spec and wins on any conflict; sections here are brought in line as R6a lands.**
+
 *Version 0.1 — 31 Oct 2026. All numbers are placeholders until the simulator has been run. Balance pass 1 (1 Nov 2026) changed the Deposit-box Heat, Teller-line loot, Insider scoring and checkpoint targets; see `docs/balance/balance-1.md`.*
 
 ---
@@ -512,12 +514,11 @@ A command-line tool that runs batches of all-bot games:
 
 | Metric | Target |
 |---|---|
-| Heist success rate (normal mixes) | 55–70% |
+| Heist success rate (owner gate) | 55–70% |
 | Heat-bust rate | 10–20% of failures come from Heat |
 | Pocketing vs. honest | Moderate pocketing should win more often than pure honesty. Heavy pocketing should lose more often than it wins. |
 | Shakedown accuracy | 50–70% of shakedowns catch a real cheater |
-| Role win rates | Each role within ±5 percentage points of its fair share (1 ÷ crew size) |
-| Mole win rate (when present) | 30–40% |
+| Per-role parity (owner gate) | ≤ 0.10: win credit ÷ (1 ÷ crew size), all 20 roles, Balanced deal, 4–12 players (extension.md Build notes, "Sim") |
 | Comeback rate | The leader after Act 1 wins less than 50% of the time |
 | Decided early | Less than 15% of games are effectively settled before Act 3 |
 
