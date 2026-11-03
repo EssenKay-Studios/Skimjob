@@ -42,7 +42,7 @@ export interface ServerDeps {
   readonly webDir?: string | null;
   /** Mark every cookie `Secure` (production: the site is HTTPS only). */
   readonly secureCookies?: boolean;
-  /** Believe X-Forwarded-* from the TLS-terminating proxy in front (production on Fly). */
+  /** Believe X-Forwarded-* from the TLS-terminating proxy in front (nginx in production). */
   readonly trustProxy?: boolean;
 }
 

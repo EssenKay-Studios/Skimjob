@@ -65,7 +65,7 @@ describe.skipIf(!usingRealPostgres)("pgDb on real Postgres (PR #16 review)", () 
 });
 
 describe("openPglite", () => {
-  it("makes a missing data directory (a fresh Fly volume, docs/deploy.md) and keeps data across reopen", { timeout: 60_000 }, async () => {
+  it("makes a missing data directory (a fresh data directory) and keeps data across reopen", { timeout: 60_000 }, async () => {
     const { mkdtempSync, rmSync } = await import("node:fs");
     const { tmpdir } = await import("node:os");
     const { join } = await import("node:path");

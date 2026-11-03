@@ -99,7 +99,7 @@ export const PGLITE_CONF = [
 
 /**
  * Opens PGlite (loaded only when used): in memory without a directory, else
- * persisted there, making the directory if needed (a fresh Fly volume).
+ * persisted there, making the directory if needed (a fresh data directory).
  */
 export async function openPglite(dataDir?: string): Promise<Db> {
   const { PGlite } = await import("@electric-sql/pglite");

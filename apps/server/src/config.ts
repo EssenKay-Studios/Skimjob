@@ -18,12 +18,12 @@ export interface ServerConfig {
    */
   readonly timeScale: number;
   /**
-   * NODE_ENV=production (the Fly deployment, docs/deploy.md): secure cookies,
+   * NODE_ENV=production (the Lightsail deployment, docs/deploy.md): secure cookies,
    * trust the TLS proxy's X-Forwarded-* headers, listen on 0.0.0.0 by
    * default, no dev origins, and the dev sign-in stub stays off even with DEV_LOGIN=1.
    */
   readonly production: boolean;
-  /** PUBLIC_ORIGIN: the origin people open (https://skimjob.fly.dev); always allowed to open game sockets. */
+  /** PUBLIC_ORIGIN: the origin people open (https://skimjob.duckdns.org); always allowed to open game sockets. */
   readonly publicOrigin: string | null;
   /** WEB_DIR: the built web app (apps/web/dist) to serve, with SPA fallback; null serves none (dev uses Vite). */
   readonly webDir: string | null;
@@ -100,7 +100,7 @@ function googleConfig(env: Env, origin: string | null): ServerConfig["google"] {
   return { clientId, clientSecret, redirectUri: url.href };
 }
 
-/** `https://skimjob.fly.dev` (no path, no trailing slash), or a StartupError. */
+/** `https://skimjob.duckdns.org` (no path, no trailing slash), or a StartupError. */
 function parseOrigin(raw: string): string {
   let url: URL | null = null;
   try {
@@ -109,7 +109,7 @@ function parseOrigin(raw: string): string {
     // reported below
   }
   if (!url || (url.protocol !== "https:" && url.protocol !== "http:") || url.origin !== raw.replace(/\/$/, "")) {
-    throw new StartupError(`PUBLIC_ORIGIN must be an origin like https://skimjob.fly.dev, got ${JSON.stringify(raw)}`);
+    throw new StartupError(`PUBLIC_ORIGIN must be an origin like https://skimjob.duckdns.org, got ${JSON.stringify(raw)}`);
   }
   return url.origin;
 }
