@@ -67,17 +67,17 @@ export interface BalancedMix {
  * The Balanced deal's fixed mix by crew size (index = players). Start values
  * from roles-v2 §3's most-weighted row under the round(n ÷ 3) cap (saboteurs →
  * Lone wolves, accomplices → Wildcards; at 5–6 the 50/50 tie takes the row
- * with a Wildcard, provisional). The balance pass tunes it; the host can't
- * change it. extension.md Build notes "Tags, decks and dealing"
+ * with a Wildcard, provisional). Tuned by the R6 balance pass (r6-balance.md:
+ * 4p and 8p gained a seat over the cap); the host can't change it. extension.md Build notes "Tags, decks and dealing"
  */
 export const BALANCED_MIX: Readonly<Record<number, BalancedMix>> = {
   2: { loneWolves: 0, wildcards: 0 },
   3: { loneWolves: 0, wildcards: 0 },
-  4: { loneWolves: 1, wildcards: 0 },
+  4: { loneWolves: 1, wildcards: 1 },
   5: { loneWolves: 1, wildcards: 1 },
   6: { loneWolves: 1, wildcards: 1 },
   7: { loneWolves: 1, wildcards: 1 },
-  8: { loneWolves: 1, wildcards: 1 },
+  8: { loneWolves: 2, wildcards: 1 },
   9: { loneWolves: 2, wildcards: 1 },
   10: { loneWolves: 2, wildcards: 1 },
   11: { loneWolves: 2, wildcards: 2 },

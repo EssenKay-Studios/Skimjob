@@ -37,8 +37,8 @@ export interface EventDef {
 
 /** The nine cards of design §10. extension.md "Police activity": the Police patrol left the deck. */
 export const EVENTS: Readonly<Record<EventId, EventDef>> = {
-  quietNight: { id: "quietNight", name: "Quiet night", effect: { kind: "heat", amount: -10 } },
-  shiftChange: { id: "shiftChange", name: "Shift change", effect: { kind: "roomSurge", room: "vault", lootMultiplier: 2, heatMultiplier: 1.5 } },
+  quietNight: { id: "quietNight", name: "Quiet night", effect: { kind: "heat", amount: -5 } },
+  shiftChange: { id: "shiftChange", name: "Shift change", effect: { kind: "roomSurge", room: "vault", lootMultiplier: 1.5, heatMultiplier: 2 } },
   powerCut: { id: "powerCut", name: "Power cut", effect: { kind: "blackout" } },
   payday: { id: "payday", name: "Payday", effect: { kind: "roomSurge", room: "lobby", lootMultiplier: 2, heatMultiplier: 1 } },
   lockdown: { id: "lockdown", name: "Lockdown", effect: { kind: "lockdown" } },
@@ -71,10 +71,10 @@ export const EVENT_HEAT_FULL_CREW = 5;
  * [gapMin, gapMax] × the preset's round length (in thousandths, so the draw
  * stays whole), and at each moment a background patrol fires with chance
  * `chancePercent`%. A patrol and a Mole's tip-off add the same `heat`, scaled
- * by min(1, crew ÷ EVENT_HEAT_FULL_CREW). Tunables for the balance pass.
+ * by min(1, crew ÷ EVENT_HEAT_FULL_CREW). Tuned in the R6 balance pass (r6-balance.md).
  */
 export const POLICE_ACTIVITY = {
-  chancePercent: 25,
+  chancePercent: 30,
   heat: 4,
   gapMinPermille: 500,
   gapMaxPermille: 1500,
