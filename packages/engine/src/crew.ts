@@ -27,7 +27,7 @@ export const cleanThreshold = (state: GameState): number => jobFor(state.config)
  * one room in play: what its visitors pocketed (0 if none, or if nobody was there).
  */
 function audit(state: GameState, player: PlayerState, perAct: number, raw: Record<string, unknown>): Result {
-  if (player.roleState.usedThisAct >= perAct) return "you have already audited a room this act";
+  if (player.roleState.usedThisAct >= perAct) return "you have already audited a room since the last meeting";
   const round = state.resolvedRound;
   if (round === 0) return "no round has resolved yet";
   // PR #26 review: the act's last round is still the latest one as the next act starts; one audit of it is enough.
@@ -43,7 +43,7 @@ function audit(state: GameState, player: PlayerState, perAct: number, raw: Recor
 
 /** Detective (v2 §2): once per act, whether another player's stash is at or above the clean threshold right now. */
 function checkStash(state: GameState, player: PlayerState, perAct: number, raw: Record<string, unknown>): Result {
-  if (player.roleState.usedThisAct >= perAct) return "you have already checked a stash this act";
+  if (player.roleState.usedThisAct >= perAct) return "you have already checked a stash since the last meeting";
   const target = raw.target;
   if (typeof target !== "string" || !Object.hasOwn(state.players, target)) return `unknown player ${show(target)}`;
   if (target === player.id) return "check another player's stash";
@@ -93,13 +93,13 @@ function blessedWentDirty(state: GameState, priest: PlayerId, act: number): bool
  * act after a blessed player was shaken down dirty in the act before.
  */
 function bless(state: GameState, player: PlayerState, perAct: number, raw: Record<string, unknown>): Result {
-  if (player.roleState.usedThisAct >= perAct) return "you have already blessed someone this act";
+  if (player.roleState.usedThisAct >= perAct) return "you have already blessed someone since the last meeting";
   const target = raw.target;
   if (typeof target !== "string" || !Object.hasOwn(state.players, target)) return `unknown player ${show(target)}`;
   if (target === player.id) return "bless another player";
   if (state.pendingShakedown?.target === target) return "that player's shakedown is already pending";
   const act = actOfRound(Math.max(1, state.round));
-  if (blessedWentDirty(state, player.id, act - 1)) return "your last blessing was caught dirty: no blessing this act";
+  if (blessedWentDirty(state, player.id, act - 1)) return "your last blessing was caught dirty: no blessing until the next meeting";
   return [{ type: "abilityResolved", visibility: privateTo(player.id), player: player.id, round: state.round, ability: { kind: "bless", target, act } }];
 }
 
@@ -108,8 +108,10 @@ function bless(state: GameState, player: PlayerState, perAct: number, raw: Recor
  * once and joins the police queue (folded); it lands at the next free hidden
  * police moment (police.ts). extension.md "Police activity"
  */
-function tipOff(state: GameState, player: PlayerState, perAct: number): Result {
+function tipOff(state: GameState, player: PlayerState, perAct: number, perGame: number): Result {
   if (!state.police) return "there is no police activity in this game";
+  // extension.md owner ruling 4: at most 3 a game, even with Recharge.
+  if ((state.police.tipOffs[player.id] ?? 0) >= perGame) return `you have already tipped off the cops ${perGame} times this game`;
   if (player.roleState.usedThisAct >= perAct) return "you have already tipped off the cops since the last meeting";
   return [{ type: "abilityResolved", visibility: privateTo(player.id), player: player.id, round: state.round, ability: { kind: "tipOff" } }];
 }
@@ -117,7 +119,7 @@ function tipOff(state: GameState, player: PlayerState, perAct: number): Result {
 /** `useAbility` with the Auditor's, Detective's, Priest's or Mole's power, or null if `power` is none of them. */
 export function useCrewPower(state: GameState, player: PlayerState, power: RolePower, raw: unknown): Result | null {
   if (!isObject(raw) || raw.kind !== power.kind) return null;
-  if (power.kind === "tipOff") return tipOff(state, player, power.perAct);
+  if (power.kind === "tipOff") return tipOff(state, player, power.perAct, power.perGame);
   if (power.kind === "audit") return audit(state, player, power.perAct, raw);
   if (power.kind === "checkStash") return checkStash(state, player, power.perAct, raw);
   if (power.kind === "bless") return bless(state, player, power.perAct, raw);

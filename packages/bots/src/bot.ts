@@ -213,7 +213,7 @@ function crewPowers(view: PlayerView): PlayerCommand[] {
  */
 function moleTipOff(view: PlayerView): PlayerCommand[] {
   const { power } = roleOf(view);
-  if (power.kind !== "tipOff" || view.me.roleState.usedThisAct >= power.perAct) return [];
+  if (power.kind !== "tipOff" || view.me.roleState.usedThisAct >= power.perAct || view.me.tipOffs >= power.perGame) return [];
   const job = jobOf(view);
   const soon = view.heat + cardHeatNow(view) + 2 * job.heat.perRound;
   if (soon < MOLE_TIP_AT * job.heat.max && leaning(view) !== "heat") return [];

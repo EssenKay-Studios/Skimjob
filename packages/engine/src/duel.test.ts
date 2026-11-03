@@ -133,9 +133,9 @@ describe("call-outs — design §16.1", () => {
     let s = run(game(), callOut("ana"));
     expect(s.log.at(-1)).toEqual({ type: "callOutMade", visibility: privateTo("ana"), player: "ana", act: 1 });
     expect(viewFor(s, "ben").caseFile.some((e) => e.event.type === "callOutMade")).toBe(false);
-    expect(refusal(s, callOut("ana"))).toBe("you have already called out your opponent in act 1");
+    expect(refusal(s, callOut("ana"))).toBe("you have already called out your opponent since the last meeting");
     s = round(s);
-    expect(refusal(s, callOut("ana"))).toBe("you have already called out your opponent in act 1");
+    expect(refusal(s, callOut("ana"))).toBe("you have already called out your opponent since the last meeting");
     s = run(s, callOut("ben")); // Ben's own call this act
     s = round(round(s));
     expect(s.round).toBe(4);

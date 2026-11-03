@@ -3,7 +3,7 @@
 // offline", the Heat breakdown, the gap box and the role list.
 // docs/extension.md (THE spec for R6a)
 import { describe, expect, it } from "vitest";
-import { PERKS, POLICE_ACTIVITY, SHOP_COLUMNS, SHOP_RULES, type PerkId } from "@skimjob/content";
+import { PERKS, POLICE_ACTIVITY, ROLES, SHOP_COLUMNS, SHOP_RULES, type PerkId } from "@skimjob/content";
 import { handleThroughAlibis } from "./alibis.testkit";
 import { handleCommand } from "./handle";
 import type { GameConfig, GameEvent, GameState, PlayerId } from "./types";
@@ -242,6 +242,65 @@ describe("police activity — extension.md \"Police activity\" (owner, 3 Nov), B
     expect(play().log).toEqual(play().log);
     const s = play();
     expect(replay(s.config, s.log)).toEqual(s);
+  });
+});
+
+describe("the Mole's tip-off cap — extension.md owner ruling 4 (\"at most 3 per game\")", () => {
+  it("a fourth tip-off is refused even with Recharge, so no fourth token; the Mole's view counts them", () => {
+    const cfg = config(5, { rolePool: ["rookie", "lookout", "mole"], roleList: "possible" });
+    let s = game(cfg, { roles: ["mole"], patrol: false, shop: ["peek", "recharge", "extraVote"], tokens: { p0: 3 } });
+    s = run(s, tipOff("p0"), MOMENT, buy("p0", "recharge"), { type: "useAbility", player: "p0", ability: { kind: "recharge" } }, tipOff("p0"), MOMENT, ROUND);
+    s = run(s, buy("p0", "recharge"), { type: "useAbility", player: "p0", ability: { kind: "recharge" } }, tipOff("p0"), MOMENT, ROUND);
+    expect(viewFor(s, "p0").me.tipOffs).toBe(3);
+    expect(viewFor(s, "p1").me.tipOffs).toBe(0);
+    s = run(s, buy("p0", "recharge"), { type: "useAbility", player: "p0", ability: { kind: "recharge" } });
+    expect(reason(s, tipOff("p0"))).toMatch(/already tipped off the cops 3 times this game/);
+    expect(ofType(s.log, "tipOffLanded")).toHaveLength(3);
+    expect(ofType(s.log, "tokenEarned").filter((e) => e.trigger === "tipOffLanded")).toHaveLength(3);
+  });
+});
+
+describe("what the deal can give — extension.md \"Host settings\", Build notes \"Police activity\" (QA on R6a)", () => {
+  it("Balanced at 2–3 players deals no Lone wolf or Wildcard: no police, and the Possible list names only Team players", () => {
+    for (const n of [2, 3]) {
+      for (const roleList of ["possible", "hidden"] as const) {
+        const cfg = config(n, { deck: "everything", roleList, eventsEnabled: true });
+        expect(dealableRoles(cfg)).not.toContain("mole");
+        const s = createGame(cfg);
+        expect(s.police, `${n}p ${roleList}`).toBeNull();
+        if (roleList === "possible") {
+          const listed = viewFor(s, "p0").roleList?.roles ?? [];
+          expect(listed.length).toBeGreaterThan(0);
+          for (const r of listed) expect(ROLES[r]?.tag, r).toBe("teamPlayer");
+        }
+      }
+    }
+  });
+
+  it("Truly random at 3 and Balanced at 4 can deal the Mole, so the police run", () => {
+    expect(createGame(config(3, { deck: "everything", roleList: "possible", deal: "random" })).police).not.toBeNull();
+    expect(createGame(config(4, { deck: "everything", roleList: "possible" })).police).not.toBeNull();
+  });
+});
+
+describe("the Blackmailer's token — extension.md owner ruling 5 (reviewer note 11)", () => {
+  const vote = (player: string, target: string | null) => ({ type: "castVote", player, vote: target === null ? { kind: "skip" } : { kind: "shakedown", target } });
+  const blackmail = (role: string) => mv("p0", "lobby", 0, { ability: { kind: "blackmail", target: "p1", role } });
+  const meeting = [{ type: "callEmergency", player: "p6" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: "emergency-p6" } }];
+  const close = { type: "advance", deadline: { kind: "closeMeeting", meetingId: "emergency-p6" } };
+  const blackmailTokens = (s: GameState) => ofType(s.log, "tokenEarned").filter((e) => e.trigger === "stolenVoteDecided").length;
+
+  it("only when the stolen votes changed the outcome: none when no shakedown passes, none for a wrong guess", () => {
+    // 7 players; p0 Blackmailer, p1 Rookie. p0's 2 weight (its own and p1's) plus p3 on p2 is 3 of 7: no majority.
+    const right = run(game(config(7), { roles: ["blackmailer"] }), blackmail("rookie"), ROUND, ...meeting);
+    const failed = run(right, vote("p0", "p2"), vote("p3", "p2"), vote("p4", null), vote("p5", null), vote("p6", null), close);
+    expect(ofType(failed.log, "meetingClosed")[0]?.result.kind).not.toBe("shakedown");
+    expect(blackmailTokens(failed)).toBe(0);
+    // A wrong guess steals nothing: the same ballots that a right guess would decide earn nothing.
+    const wrong = run(game(config(7), { roles: ["blackmailer"] }), blackmail("lookout"), ROUND, ...meeting);
+    const ballots = [vote("p0", "p2"), vote("p3", "p2"), vote("p4", "p2"), vote("p1", null), vote("p5", null), vote("p6", null), close];
+    expect(blackmailTokens(run(wrong, ...ballots))).toBe(0);
+    expect(blackmailTokens(run(right, ...ballots))).toBe(1);
   });
 });
 

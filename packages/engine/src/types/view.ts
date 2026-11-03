@@ -36,6 +36,8 @@ export interface SelfView {
   /** Your power's uses this act / game, and the Snitch's target. design §8 */
   readonly roleState: RoleState;
   readonly emergencyMeetingUsed: boolean;
+  /** Your own tip-offs this game (Mole; at most 3, extension.md owner ruling 4). 0 for everyone else. */
+  readonly tipOffs: number;
   /** Your current move for this round, if submitted. */
   readonly move: Move | null;
   readonly sealedVote: VoteChoice | null;

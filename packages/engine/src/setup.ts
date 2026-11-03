@@ -166,15 +166,52 @@ export function rolePoolFor(config: GameConfig, roles: RoleTable = rolesFor(conf
 }
 
 /**
- * Every role this game could deal: the eligible deck, plus Rookies when they
- * fill a seat (which depends only on the deck's sizes, never on the draws).
- * The "possible" role list and rules that must not reveal who was dealt read
- * this. extension.md "Host settings"
+ * How many roles `drawRoles` draws: it stops early only when the pool runs
+ * out, which happens with `unique`, or when only singletons are left. Never
+ * depends on the draws themselves.
+ */
+function drawnCount(pool: readonly RoleId[], count: number, unique: boolean): number {
+  if (!unique && pool.some((r) => !RANDOM_DEAL_SINGLETONS.includes(r))) return count;
+  return Math.min(count, pool.length);
+}
+
+/** The Balanced deal's three draws: each tag's pool and how many seats it gets. */
+function balancedDraws(config: GameConfig, roles: RoleTable) {
+  const n = config.players.length;
+  const unique = config.uniqueRoles !== false;
+  const pool = rolePoolFor(config, roles);
+  const mix = BALANCED_MIX[n] ?? { loneWolves: 0, wildcards: 0 };
+  const of = (tag: Temperament) => pool.filter((r) => tagIn(roles, r) === tag && r !== FILLER_ROLE);
+  const lone = { pool: of("loneWolf"), count: mix.loneWolves };
+  const wild = { pool: of("wildcard"), count: mix.wildcards };
+  const team = { pool: of("teamPlayer"), count: n - drawnCount(lone.pool, lone.count, unique) - drawnCount(wild.pool, wild.count, unique) };
+  return { n, unique, lone, wild, team };
+}
+
+/**
+ * Every role this game could actually deal (QA on R6a): with Balanced, only
+ * the tags the crew size's mix gives a seat (so no Mole at 2–3 players);
+ * with Truly random, the eligible deck; plus Rookies when they fill a seat.
+ * None of it depends on the draws. The "possible" role list, whether police
+ * activity runs, and rules that must not reveal who was dealt read this.
+ * extension.md "Host settings", Build notes "Police activity"
  */
 export function dealableRoles(config: GameConfig, roles: RoleTable = rolesFor(config)): readonly RoleId[] {
-  const pool = rolePoolFor(config, roles);
-  if (pool.includes(FILLER_ROLE)) return pool;
-  return dealRoles(config, seedRng(""), roles).filled ? [...pool, FILLER_ROLE] : pool;
+  if (dealStyleOf(config) === "random") {
+    const pool = rolePoolFor(config, roles);
+    const n = config.players.length;
+    const drawn = drawnCount(pool, n, config.uniqueRoles !== false);
+    return drawn < n && !pool.includes(FILLER_ROLE) ? [...pool, FILLER_ROLE] : pool;
+  }
+  const { n, unique, lone, wild, team } = balancedDraws(config, roles);
+  const out: RoleId[] = [];
+  let seated = 0;
+  for (const d of [lone, wild, team]) {
+    const k = drawnCount(d.pool, d.count, unique);
+    if (k > 0) out.push(...d.pool);
+    seated += k;
+  }
+  return seated < n ? [...out, FILLER_ROLE] : out;
 }
 
 /**
@@ -218,11 +255,10 @@ export function dealRoles(
     const drawn = drawRoles(rng, pool, n, unique);
     return { value: fill(drawn.value), rng: drawn.rng, filled: drawn.value.length < n };
   }
-  const mix = BALANCED_MIX[n] ?? { loneWolves: 0, wildcards: 0 };
-  const of = (tag: Temperament) => pool.filter((r) => tagIn(roles, r) === tag && r !== FILLER_ROLE);
-  const lone = drawRoles(rng, of("loneWolf"), mix.loneWolves, unique);
-  const wild = drawRoles(lone.rng, of("wildcard"), mix.wildcards, unique);
-  const team = drawRoles(wild.rng, of("teamPlayer"), n - lone.value.length - wild.value.length, unique);
+  const draws = balancedDraws(config, roles);
+  const lone = drawRoles(rng, draws.lone.pool, draws.lone.count, unique);
+  const wild = drawRoles(lone.rng, draws.wild.pool, draws.wild.count, unique);
+  const team = drawRoles(wild.rng, draws.team.pool, draws.team.count, unique);
   const dealt = [...lone.value, ...wild.value, ...team.value];
   const shuffled = shuffle(team.rng, fill(dealt));
   return { value: shuffled.value, rng: shuffled.rng, filled: dealt.length < n };
@@ -231,11 +267,12 @@ export function dealRoles(
 /**
  * Whether background police activity runs (extension.md "Police activity",
  * provisional): only when a Mole could be in the game. With the Exact role
- * list that means one was dealt; otherwise that it is in the eligible deck.
+ * list that means one was dealt; otherwise that the deal could give one
+ * (`dealableRoles`: so never with Balanced at 2–3 players).
  */
 export function policeRuns(config: GameConfig, dealt: readonly RoleId[], roles: RoleTable = rolesFor(config)): boolean {
   const isMole = (r: RoleId) => powerOf(config, r).kind === "tipOff" || r === MOLE_ROLE;
-  return roleListOf(config) === "exact" ? dealt.some(isMole) : rolePoolFor(config, roles).some(isMole);
+  return roleListOf(config) === "exact" ? dealt.some(isMole) : dealableRoles(config, roles).some(isMole);
 }
 
 /**

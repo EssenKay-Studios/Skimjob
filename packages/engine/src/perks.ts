@@ -95,7 +95,7 @@ function alibi(state: GameState, player: PlayerState): Result {
   ];
 }
 
-/** Recharge: your power's uses this act, and one use this game, come back. Never the Fence's safe allowance (v2 §2, R1 follow-up). */
+/** Recharge: a use of your power since the last meeting, or a once-per-game use, comes back. Never the Fence's safe allowance (v2 §2, R1 follow-up). */
 function recharge(state: GameState, player: PlayerState): Result {
   if (powerOf(state.config, player.role).kind === "fenceSafe") return "a Recharge doesn't refill the Fence's safe";
   const { usedThisAct, usedThisGame } = player.roleState;

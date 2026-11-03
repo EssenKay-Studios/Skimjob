@@ -418,7 +418,7 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
     pendingShakedown: state.pendingShakedown && { ...state.pendingShakedown, cancelled: !state.pendingShakedown.cancelled },
     card,
     // extension.md "Police activity": the schedule and the queued tip-offs are hidden from everyone.
-    police: state.police && { moment: state.police.moment + 3, gapPermille: 1, patrol: !state.police.patrol, queue: [other] },
+    police: state.police && { moment: state.police.moment + 3, gapPermille: 1, patrol: !state.police.patrol, queue: [other], tipOffs: { [other]: 7, [viewer]: state.police.tipOffs[viewer] ?? 0 } },
     log,
   };
 }

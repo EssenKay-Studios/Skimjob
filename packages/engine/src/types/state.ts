@@ -108,13 +108,15 @@ export const NO_ROLE_STATE: RoleState = { usedThisAct: 0, usedThisGame: 0, targe
  * view. `moment` is the next police moment's number, `gapPermille` how long
  * after the previous one it falls (thousandths of a round length, game time),
  * `patrol` whether a background patrol fires there; `queue` the Moles whose
- * tip-offs wait for a moment, oldest first.
+ * tip-offs wait for a moment, oldest first; `tipOffs` each player's tip-offs
+ * this game (queued or landed; Recharge never gives one back).
  */
 export interface PoliceState {
   readonly moment: number;
   readonly gapPermille: number;
   readonly patrol: boolean;
   readonly queue: readonly PlayerId[];
+  readonly tipOffs: Readonly<Record<PlayerId, number>>;
 }
 
 /** A spent Rig: `player` picks which of `cards` flips at the start of `round`. Hidden from everyone else. design §8.3 */

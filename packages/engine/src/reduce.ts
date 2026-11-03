@@ -151,7 +151,7 @@ function applyChange(state: GameState, event: GameEvent): GameState {
     case "shopDealt":
       return { ...state, shop: event.perks };
     case "policeScheduled":
-      return { ...state, police: { moment: event.moment, gapPermille: event.gapPermille, patrol: event.patrol, queue: state.police?.queue ?? [] } };
+      return { ...state, police: { moment: event.moment, gapPermille: event.gapPermille, patrol: event.patrol, queue: state.police?.queue ?? [], tipOffs: state.police?.tipOffs ?? {} } };
     case "policeActivity":
       return { ...state, heat: event.heat };
     case "tipOffLanded": {
@@ -197,7 +197,7 @@ function applyChange(state: GameState, event: GameEvent): GameState {
         case "tipOff": {
           // extension.md "Police activity": the use counts at once; it lands at the next free police moment.
           const used = updatePlayer(state, event.player, (p) => withRoleState(p, { usedThisAct: p.roleState.usedThisAct + 1 }));
-          return used.police ? { ...used, police: { ...used.police, queue: [...used.police.queue, event.player] } } : used;
+          return used.police ? { ...used, police: { ...used.police, queue: [...used.police.queue, event.player], tipOffs: { ...used.police.tipOffs, [event.player]: (used.police.tipOffs[event.player] ?? 0) + 1 } } } : used;
         }
         case "loopCameras":
         case "audit":

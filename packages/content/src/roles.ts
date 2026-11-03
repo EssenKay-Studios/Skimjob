@@ -78,7 +78,7 @@ export type RolePower =
    * activity" (`POLICE_ACTIVITY.heat`), the same as a background patrol.
    * extension.md "Police activity"
    */
-  | { readonly kind: "tipOff"; readonly perAct: number };
+  | { readonly kind: "tipOff"; readonly perAct: number; readonly perGame: number };
 
 export interface RoleScoring {
   /**
@@ -342,7 +342,8 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
   mole: {
     id: "mole",
     name: "Mole",
-    power: { kind: "tipOff", perAct: 1 },
+    // extension.md owner ruling 4: at most 3 tip-offs (so tokens) a game, Recharge included.
+    power: { kind: "tipOff", perAct: 1, perGame: 3 },
     canPocket: true,
     scoring: PLAIN_SCORING,
     tag: "loneWolf",

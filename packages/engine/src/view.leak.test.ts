@@ -383,7 +383,7 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
     }
   }
   // extension.md "Police activity": the schedule and the tip-off queue are nobody's to see.
-  const police = { moment: (state.police?.moment ?? 0) + 5, gapPermille: 1234, patrol: !state.police?.patrol, queue: [other, other] };
+  const police = { moment: (state.police?.moment ?? 0) + 5, gapPermille: 1234, patrol: !state.police?.patrol, queue: [other, other], tipOffs: { [other]: 7, [viewer]: state.police?.tipOffs[viewer] ?? 0 } };
   return {
     ...state,
     card,

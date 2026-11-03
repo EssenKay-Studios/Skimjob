@@ -34,7 +34,7 @@ export function callOut(state: GameState, command: Record<string, unknown>): Res
   if (typeof player === "string") return player;
   if (state.phase.kind !== "planning") return "you can only call out while a round is being planned";
   const act = actOfRound(state.phase.round);
-  if (callersIn(state, act).includes(player.id)) return `you have already called out your opponent in act ${act}`;
+  if (callersIn(state, act).includes(player.id)) return "you have already called out your opponent since the last meeting";
   return [{ type: "callOutMade", visibility: privateTo(player.id), player: player.id, act }];
 }
 

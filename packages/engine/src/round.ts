@@ -45,17 +45,17 @@ function checkAbility(state: GameState, player: PlayerState, raw: unknown): Abil
     case "fenceSafe": {
       const left = power.perAct - player.roleState.usedThisAct;
       if (!isCount(raw.amount) || raw.amount < 1 || raw.amount > left) {
-        return `the safe takes a whole number from 1 to ${left} this act`;
+        return `the safe takes a whole number from 1 to ${left} between these meetings`;
       }
       return { kind: "fenceSafe", amount: raw.amount };
     }
     case "loopCameras": {
-      if (player.roleState.usedThisAct >= power.perAct) return "you have already looped the cameras this act";
+      if (player.roleState.usedThisAct >= power.perAct) return "you have already looped the cameras since the last meeting";
       if (typeof raw.room !== "string" || !state.rooms.includes(raw.room)) return "loop the cameras of a room in play";
       return { kind: "loopCameras", room: raw.room };
     }
     case "blackmail": {
-      if (player.roleState.usedThisAct >= power.perAct) return "you have already blackmailed someone this act";
+      if (player.roleState.usedThisAct >= power.perAct) return "you have already blackmailed someone since the last meeting";
       const { target, role } = raw;
       if (typeof target !== "string" || !Object.hasOwn(state.players, target)) return `unknown player ${show(target)}`;
       if (target === player.id) return "you can't blackmail yourself";
@@ -63,14 +63,14 @@ function checkAbility(state: GameState, player: PlayerState, raw: unknown): Abil
       return { kind: "blackmail", target, role };
     }
     case "forge": {
-      if (player.roleState.usedThisAct >= power.perAct) return "you have already forged a sighting this act";
+      if (player.roleState.usedThisAct >= power.perAct) return "you have already forged a sighting since the last meeting";
       const { target, room } = raw;
       if (typeof target !== "string" || !Object.hasOwn(state.players, target)) return `unknown player ${show(target)}`;
       if (typeof room !== "string" || !state.rooms.includes(room)) return "forge a sighting in a room in play";
       return { kind: "forge", target, room };
     }
     case "embezzle": {
-      if (player.roleState.usedThisAct >= power.perAct) return "you have already embezzled this act";
+      if (player.roleState.usedThisAct >= power.perAct) return "you have already embezzled since the last meeting";
       return { kind: "embezzle" };
     }
     case "tipOff":

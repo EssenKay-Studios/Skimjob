@@ -97,6 +97,7 @@ describe("viewFor — the viewer's own data and public state — design §13", (
       safe: 0,
       roleState: { usedThisAct: 0, usedThisGame: 0, target: null, perks: [], tail: null, tokens: 0 },
       emergencyMeetingUsed: false,
+      tipOffs: 0,
       move: { room: "office", pocket: 1 },
       sealedVote: null,
       vote: null,

@@ -210,7 +210,7 @@ Every player is dealt **one secret role** at the start of the game. Roles are de
 | | Hacker | Its loop hid a visitor who pocketed from a Security watcher of that room |
 | | Blackmailer | A vote it stole decides a shakedown (it wouldn't have passed without it) |
 | | Forger | Someone it framed is shaken down clean |
-| Lone wolf | Mole ★ | Each tip-off, when it lands (§10) |
+| Lone wolf | Mole ★ | Each tip-off, when it lands (§10); at most 3 tip-offs a game, Recharge included |
 | | Embezzler ★ | Its first (non-zero) take |
 
 *What changed from role deck v2 (R6a; the sections below were the v2 detail):*
@@ -229,7 +229,7 @@ Every player is dealt **one secret role** at the start of the game. Roles are de
 - **Decks:** Starter (Rookie, Inside Man, Lookout, Bagman, Cleaner; no events, no shop, no tokens), **Standard** (the default, 11 roles: Lookout, Auditor, Detective, Smooth Talker, Muscle, Cleaner, Hacker, Fence, Getaway Driver, Mole, Embezzler; Rookies fill spare seats) and Everything (all 20). The host can switch roles on or off one by one (the `roles` setting, which replaces the preset when not empty). **Quick games force Starter** with events off.
 - **Balanced** (default): a fixed mix per crew size from content (`BALANCED_MIX`: Lone wolves / Wildcards, starting from roles-v2 §3's most-weighted row under the round(n ÷ 3) cap; *R6a provisional: 5–6 players deal 1 / 1*). The rest are Team players; seats the deck can't fill go to Team players, Rookies last. The host can't change the mix.
 - **Truly random:** each seat drawn uniformly from the eligible deck, at most one Mole and one Embezzler.
-- **Role list shown** (host setting): **Exact** roles dealt (default, `roleListShown`, in content order), the roles that **could** be in the game (Possible), or nothing (Hidden).
+- **Role list shown** (host setting): **Exact** roles dealt (default, `roleListShown`, in content order), the roles that **could** be in the game (Possible: only what the deal can give, so Balanced at 2–3 players lists only Team players), or nothing (Hidden).
 - **Dropped:** the saboteur Off / Maybe / On setting and its caps. A stored saboteur field is migrated on read: *Off* becomes the deck with every Wildcard and Lone wolf toggled off; *Maybe* and *On* become the plain deck.
 - **Eligibility** is unchanged: Snitch and Detective 4+; Inside Man, Smooth Talker, Muscle and Priest 5+; Blackmailer and Forger 7+; the Mastermind only with events on; meeting roles never in Duel. **Unique roles** (default on): each role at most once. Mole and Embezzler are always at most one each.
 
@@ -289,7 +289,7 @@ From round 2 onward, one event card is flipped at the start of each round and sh
 | **Inside tip** | One random player privately learns another player's role. |
 | **Double-cross** | Two random players are offered a role swap. It happens only if both secretly accept. |
 
-**Police activity** (extension.md "Situations", Build notes "Police activity"; owner, 3 Nov, option A): the Police patrol is no longer a card. When a Mole could be in the game (dealt, with the Exact list; in the eligible deck otherwise), the engine draws a hidden schedule of **police moments** from the seeded RNG (reveal-only `policeScheduled`): each gap is uniform in [0.5, 1.5] × the preset's round length (planning plus alibi window), in game time (§4.1), and each moment brings a background patrol with chance 1 in 4 (content `POLICE_ACTIVITY`). At most one activity per moment: a queued Mole tip-off takes the next free moment and replaces a patrol drawn for it. Either way the crew sees one public `policeActivity` (+4 × min(1, crew ÷ 5), no source) with an immediate raid check; the Mastermind doesn't foresee it. The server fires moments with `advance { policeMoment }` and never exposes a timer for them; the simulator takes one moment per round. *(R6a provisional: moments are refused while a meeting is open; the server freezes them then.)*
+**Police activity** (extension.md "Situations", Build notes "Police activity"; owner, 3 Nov, option A): the Police patrol is no longer a card. When a Mole could be in the game (dealt, with the Exact list; otherwise one the deal could give: never Balanced at 2–3 players), the engine draws a hidden schedule of **police moments** from the seeded RNG (reveal-only `policeScheduled`): each gap is uniform in [0.5, 1.5] × the preset's round length (planning plus alibi window), in game time (§4.1), and each moment brings a background patrol with chance 1 in 4 (content `POLICE_ACTIVITY`). At most one activity per moment: a queued Mole tip-off takes the next free moment and replaces a patrol drawn for it. Either way the crew sees one public `policeActivity` (+4 × min(1, crew ÷ 5), no source) with an immediate raid check; the Mastermind doesn't foresee it. The server fires moments with `advance { policeMoment }` and never exposes a timer for them; the simulator takes one moment per round. *(R6a provisional: moments are refused while a meeting is open; the server freezes them then.)*
 
 A **Power cut** blinds every feed, which reads "camera offline", the same as a Hacker's loop reads for one room.
 
