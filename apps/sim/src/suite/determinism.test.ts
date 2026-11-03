@@ -16,7 +16,7 @@ const versions = { engine: "e", content: "c" };
 const options: SuiteOptions = {
   seed: "determinism",
   playerCounts: [2, 4],
-  moles: ["on"],
+  setups: ["balanced"],
   events: [true],
   mix: [
     { personality: "honest", weight: 1 },

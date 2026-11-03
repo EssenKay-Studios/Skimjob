@@ -18,7 +18,7 @@ const file = (name: string, text: string): string => {
   return p;
 };
 // A one-game cell: if a check didn't run first, the run would print progress before failing.
-const tiny = ["-p", "2", "--mole", "off", "--events", "off", "-n", "1", "-w", "1"];
+const tiny = ["-p", "2", "--setups", "balanced", "--events", "off", "-n", "1", "-w", "1"];
 
 function run(args: string[]) {
   const r = spawnSync(process.execPath, ["--import", tsx, cli, ...args], { encoding: "utf8", env: { ...process.env, INIT_CWD: dir } });

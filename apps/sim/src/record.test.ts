@@ -25,12 +25,11 @@ function config(players: number): GameConfig {
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
     rolePool: [...STARTER_ROLES], // no Muscle, so no shakedown window (task 12)
-    mole: "off",
     eventsEnabled: false,
     voteVisibility: "open",
     starterMode: false,
-    // scripted against content 0.1.0 checkpoint targets (balance pass 1) and the Rookie's ×1.2 (0.1.0–0.13.0; R5 made it ×1.05)
-    contentOverrides: { checkpoints: { perPlayer: [6, 14, 22] }, roles: { rookie: { stashMultiplier: 1.2 } } },
+    // scripted against content 0.1.0 checkpoint targets (balance pass 1); whole-number scores, no Rookie multiplier (extension.md "Scoring")
+    contentOverrides: { checkpoints: { perPlayer: [6, 14, 22] } },
   };
 }
 
@@ -105,16 +104,16 @@ describe("recordGame — a scripted game", () => {
   });
 
   it("records the standings after Act 1, after its shakedown (design §11.4)", () => {
-    // p0 lost 18; p1 has 3 × 1.2 (Rookie).
-    expect(rec.afterAct1).toEqual({ leaders: ["p1"], topScore: 3.6, lead: 3.6 });
-    expect(rec.afterAct2).toEqual({ leaders: ["p1"], topScore: 3.6, lead: 3.6 });
-    expect(rec.act3MaxGain).toBe(21.6); // 3 rounds × Vault 6 × Rookie 1.2
+    // p0 lost 18; p1 has 3 (whole numbers, no Rookie multiplier: extension.md "Scoring").
+    expect(rec.afterAct1).toEqual({ leaders: ["p1"], topScore: 3, lead: 3 });
+    expect(rec.afterAct2).toEqual({ leaders: ["p1"], topScore: 3, lead: 3 });
+    expect(rec.act3MaxGain).toBe(18); // 3 rounds × Vault 6
   });
 
   it("records each seat's looting and pocketing", () => {
     const [p0, p1, p2] = rec.playerRecords;
     expect(p0).toMatchObject({ id: "p0", personality: "greedy", role: "rookie", looted: 18 + 12, pocketed: 18, stash: 0, timesShakenDown: 1 });
-    expect(p1).toMatchObject({ personality: "opportunist", looted: 18, pocketed: 3, stash: 3, score: 3.6, winner: false, winCredit: 0 });
+    expect(p1).toMatchObject({ personality: "opportunist", looted: 18, pocketed: 3, stash: 3, score: 3, winner: false, winCredit: 0 });
     expect(p2).toMatchObject({ personality: "honest", looted: 18, pocketed: 0, canPocket: true });
   });
 

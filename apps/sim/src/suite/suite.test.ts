@@ -6,7 +6,7 @@ import { checkBand, wilson } from "../stats";
 import { gameRec, seat } from "../testkit";
 import { gameSeed, setupGame } from "../crew";
 import { parseSuiteArgs } from "./args";
-import { buildMatrix, cellSimOptions, distinctMoleSettings, shardCells, type SuiteOptions } from "./matrix";
+import { buildMatrix, cellSimOptions, shardCells, type SuiteOptions } from "./matrix";
 import { mergeShards } from "./merge";
 import { buildReport, compareReports, formatSuiteReport, parityOf, REPORT_FORMAT, SHARD_KIND, stringifyJson, verdictText } from "./report";
 import { checkReport } from "./validate";
@@ -48,37 +48,38 @@ describe("Wilson 95% intervals", () => {
   });
 });
 
-describe("the matrix — design §17.4 (2–12 players), §8.1 (saboteur setting), §10 (events)", () => {
-  it("has every player count, the saboteur settings that deal differently there, events on and off", () => {
+describe("the matrix — design §17.4 (2–12 players), extension.md Build notes \"Sim\" (setups, gates), §10 (events)", () => {
+  it("has every player count × setup × events on and off; only Balanced at 4–12 is gated", () => {
     const cells = buildMatrix(opts());
-    const settings = (n: number) => [...new Set(cells.filter((c) => c.players === n).map((c) => c.mole))];
-    expect(settings(2)).toEqual(["off"]); // crew only at 2–3: "maybe" and "on" deal like "off"
-    expect(settings(3)).toEqual(["off"]);
-    for (const n of [4, 5, 6, 7, 8]) expect(settings(n)).toEqual(["off", "maybe", "on"]);
-    for (const n of [9, 10, 11, 12]) expect(settings(n)).toEqual(["off", "on"]); // "maybe" is "on" from 9
-    expect(cells).toHaveLength(2 * (2 + 5 * 3 + 4 * 2));
-    expect(cells.filter((c) => c.players === 6).map((c) => c.events)).toEqual([true, false, true, false, true, false]);
-    expect(cells.find((c) => c.key === "4p/mole-on/events-on")?.saboteurs).toBe(true);
-    expect(cells.find((c) => c.key === "4p/mole-off/events-on")?.saboteurs).toBe(false);
-    expect(distinctMoleSettings(10, ["maybe", "on"])).toEqual(["on"]);
-    expect(distinctMoleSettings(10, ["maybe"])).toEqual(["maybe"]);
+    expect(cells).toHaveLength(11 * 3 * 2);
+    expect(cells.filter((c) => c.players === 6).map((c) => `${c.setup}/${c.events}`)).toEqual([
+      "balanced/true", "balanced/false", "random/true", "random/false", "possible/true", "possible/false",
+    ]);
+    expect(cells.filter((c) => c.gated).map((c) => c.key)).toEqual(
+      cells.filter((c) => c.setup === "balanced" && c.players >= 4).map((c) => c.key),
+    );
+    expect(cells.find((c) => c.key === "3p/balanced/events-on")?.gated).toBe(false);
+    expect(cells.find((c) => c.key === "4p/balanced/events-on")?.gated).toBe(true);
+    expect(cells.find((c) => c.key === "4p/random/events-on")?.gated).toBe(false);
   });
 
-  it("every cell's games are valid configs with uniqueRoles left at its default", () => {
-    for (const c of buildMatrix(opts())) {
+  it("every cell's games are valid Standard-deck configs with its deal and role list", () => {
+    for (const c of buildMatrix(opts({ setups: ["balanced", "random", "possible", "hidden"] }))) {
       const { config } = setupGame(cellSimOptions(opts(), c), c.players, 0);
       expect(config.uniqueRoles).toBeUndefined();
-      expect(config.mole).toBe(c.mole);
+      expect(config.deck).toBe("standard");
+      expect(config.deal).toBe(c.setup === "random" ? "random" : "balanced");
+      expect(config.roleList).toBe(c.setup === "possible" || c.setup === "hidden" ? c.setup : "exact");
       expect(config.eventsEnabled).toBe(c.events);
     }
   });
 
   it("a game's seed comes from the suite seed, the cell and the game index only", () => {
     const o = opts({ seed: "S", batch: 7 });
-    const cell = buildMatrix(o).find((c) => c.key === "6p/mole-maybe/events-off");
+    const cell = buildMatrix(o).find((c) => c.key === "6p/random/events-off");
     if (!cell) throw new Error("cell missing");
     const so = cellSimOptions(o, cell);
-    expect(gameSeed(so.seed, cell.players, 12)).toBe("S/6p/mole-maybe/events-off/6p/12");
+    expect(gameSeed(so.seed, cell.players, 12)).toBe("S/6p/random/events-off/6p/12");
     // Batch size, sampling targets and overrides don't change the seeds (overrides: paired games for --compare).
     expect(cellSimOptions({ ...o, batch: 50, ciHalfWidth: 0.05, contentOverrides: { heat: { perRound: 1 } } }, cell).seed).toBe(so.seed);
   });
@@ -98,18 +99,18 @@ describe("the matrix — design §17.4 (2–12 players), §8.1 (saboteur setting
 });
 
 describe("tallies", () => {
-  const mole = (over = {}) => seat({ id: "m", role: "mole", faction: "saboteur", ...over });
+  const mole = (over = {}) => seat({ id: "m", role: "mole", tag: "loneWolf", star: true, ...over });
   const games = [
-    gameRec({ players: 4, winners: ["a"], playerRecords: [seat({ id: "a" }), seat({ id: "b", role: "lookout" }), mole()] }),
-    gameRec({ players: 4, result: "failed", reason: "heat", winners: ["m"], playerRecords: [seat({ id: "a" }), mole()] }),
+    gameRec({ players: 4, winners: ["a", "m"], playerRecords: [seat({ id: "a", winCredit: 0.5, tokensEarned: 2, tokensSpent: 1 }), seat({ id: "b", role: "lookout" }), mole({ winCredit: 0.5, tokensEarned: 1 })] }),
+    gameRec({ players: 4, result: "failed", reason: "heat", winners: ["m"], playerRecords: [seat({ id: "a" }), mole({ winCredit: 1, tokensEarned: 2, tokensSpent: 2 })] }),
     gameRec({ players: 4, result: "failed", reason: "target", winners: [], playerRecords: [seat({ id: "a" }), seat({ id: "b", role: "lookout" })] }),
   ];
 
-  it("count what the rates need — design §17.4", () => {
+  it("count what the rates need: endings, no-winner and shared wins, credit by ending, tokens — extension.md Build notes \"Sim\"", () => {
     const t = tallyGames(games);
-    expect(t).toMatchObject({ games: 3, successes: 1, failures: 2, heatFailures: 1, saboteurGames: 2, saboteurWins: 1, darkSideWins: 1 });
-    expect(t.roles.rookie).toEqual({ seats: 3, credit: 1, fair: 0.75 });
-    expect(t.roles.mole).toEqual({ seats: 2, credit: 1, fair: 0.5 });
+    expect(t).toMatchObject({ games: 3, successes: 1, failures: 2, heatFailures: 1, targetFailures: 1, noWinner: 1, sharedWin: 1 });
+    expect(t.roles.rookie).toEqual({ seats: 3, credit: 0.5, fair: 0.75, successCredit: 0.5, earned: 2, spent: 1 });
+    expect(t.roles.mole).toEqual({ seats: 2, credit: 1.5, fair: 0.5, successCredit: 0.5, earned: 3, spent: 2 });
     expect(Object.keys(t.roles)).toEqual(["lookout", "mole", "rookie"]);
   });
 
@@ -120,28 +121,36 @@ describe("tallies", () => {
 });
 
 describe("adaptive stopping", () => {
-  const cell = buildMatrix(opts()).find((c) => c.key === "6p/mole-on/events-on");
+  const cell = buildMatrix(opts()).find((c) => c.key === "6p/balanced/events-on");
   if (!cell) throw new Error("cell missing");
   const t = (over: Partial<ReturnType<typeof emptyTally>>) => ({ ...emptyTally(), ...over });
 
   it("never stops before minGames; stops at maxGames even if not narrow enough", () => {
     const o = opts({ minGames: 400, maxGames: 1000, ciHalfWidth: 0.02 });
     expect(cellStatus(o, cell, t({ games: 200, successes: 200 }))).toEqual({ done: false, converged: false });
-    expect(cellStatus(o, cell, t({ games: 1000, successes: 600, saboteurGames: 1000, saboteurWins: 350 }))).toEqual({ done: true, converged: false });
+    expect(cellStatus(o, cell, t({ games: 1000, successes: 600 }))).toEqual({ done: true, converged: false });
   });
 
   it("stops once every checked rate is within the target half-width", () => {
     const o = opts({ minGames: 400, maxGames: 100000, ciHalfWidth: 0.02 });
-    const narrow = { games: 10000, successes: 6500, failures: 3500, heatFailures: 600, saboteurGames: 10000, saboteurWins: 3500, comebackGames: 6000, act1LeaderWins: 2900 };
+    const narrow = { games: 10000, successes: 6500, failures: 3500, heatFailures: 600, comebackGames: 6000, act1LeaderWins: 2900, shakedowns: 10000, shakedownsCaught: 5000 };
     expect(cellStatus(o, cell, t({ ...narrow, decidedEarly: 800 }))).toEqual({ done: true, converged: true });
     // Heat share over only 350 failures is ±4 pp: keep going.
     expect(cellStatus(o, cell, t({ ...narrow, decidedEarly: 800, failures: 350, heatFailures: 60 })).done).toBe(false);
+  });
+
+  it("an ungated cell (Truly random, or under 4 players) has no bands, so it stops at minGames", () => {
+    const o = opts({ minGames: 400, maxGames: 100000, ciHalfWidth: 0.02 });
+    const random = buildMatrix(o).find((c) => c.key === "6p/random/events-on");
+    if (!random) throw new Error("cell missing");
+    expect(cellStatus(o, random, t({ games: 400, successes: 100 }))).toEqual({ done: true, converged: true });
+    expect(cellStatus(o, cell, t({ games: 400, successes: 100 })).done).toBe(false);
   });
 });
 
 describe("role parity — docs/roles-v2.md §5", () => {
   const n = 5;
-  const seats = (s: number, winShare: number) => ({ seats: s, credit: s * winShare, fair: s / n });
+  const seats = (s: number, winShare: number) => ({ seats: s, credit: s * winShare, fair: s / n, successCredit: 0, earned: 0, spent: 0 });
 
   it("is each role's win credit ÷ fair share; spread max − min must be ≤ 0.10", () => {
     const p = parityOf({ a: seats(40000, 0.2), b: seats(40000, 0.21), c: seats(10, 0.9) });
@@ -166,7 +175,7 @@ function fakeCell(o: SuiteOptions, key: string, successes: number, games = 1000)
 }
 
 describe("report, merge and compare", () => {
-  const o = opts({ playerCounts: [4, 6], moles: ["maybe"], events: [true] });
+  const o = opts({ playerCounts: [4, 6], setups: ["balanced"], events: [true] });
   const keys = buildMatrix(o).map((c) => c.key);
   const cells = [fakeCell(o, keys[0] as string, 620), fakeCell(o, keys[1] as string, 800)];
 
@@ -174,7 +183,7 @@ describe("report, merge and compare", () => {
     const r = buildReport(o, versions, cells);
     expect(r.cells[0]?.rates.success?.check).toEqual({ verdict: "pass", sure: true });
     expect(r.cells[1]?.rates.success?.check).toEqual({ verdict: "fail", sure: true });
-    expect(formatSuiteReport(r)).toContain("4p/mole-maybe/events-on");
+    expect(formatSuiteReport(r)).toContain("4p/balanced/events-on");
     // Refused bot commands are a failure of their own.
     const bad = buildReport(o, versions, [cells[0] as CellResult, { ...(cells[1] as CellResult), tally: { ...(cells[1] as CellResult).tally, rejections: 2 } }]);
     expect(bad.checks.fail).toBe(r.checks.fail + 1);
@@ -246,7 +255,7 @@ describe("report, merge and compare", () => {
     const cur = buildReport(o, versions, [fakeCell(o, keys[0] as string, 500), cells[1] as CellResult]);
     const text = compareReports(base, cur);
     expect(text).toContain("-12.0*");
-    expect(text).toContain("4p/mole-maybe/events-on success: PASS → FAIL");
+    expect(text).toContain("4p/balanced/events-on success: PASS → FAIL");
     expect(compareReports(base, base)).toContain("No check changed verdict.");
   });
 });
@@ -255,7 +264,7 @@ describe("suite arguments", () => {
   it("defaults: the whole matrix, ±2 pp, 400–6000 games in batches of 200", () => {
     const r = parseSuiteArgs([]);
     if (r.kind !== "run") throw new Error("should parse");
-    expect(r.options).toMatchObject({ seed: "suite", moles: ["off", "maybe", "on"], events: [true, false], ciHalfWidth: 0.02, minGames: 400, maxGames: 6000, batch: 200 });
+    expect(r.options).toMatchObject({ seed: "suite", setups: ["balanced", "random", "possible"], events: [true, false], ciHalfWidth: 0.02, minGames: 400, maxGames: 6000, batch: 200 });
     expect(r.options.playerCounts).toEqual([2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
     expect(r.settings).toMatchObject({ shard: null, out: "sim-output/suite.json", strict: false });
   });
@@ -266,7 +275,7 @@ describe("suite arguments", () => {
     expect(r.options).toMatchObject({ minGames: 30, maxGames: 30, batch: 30, events: [false] });
     expect(r.settings).toMatchObject({ shard: { index: 2, count: 3 }, out: "sim-output/suite-shard-2-of-3.json" });
     expect(parseSuiteArgs(["merge", "a.json", "b.json", "--strict"])).toMatchObject({ kind: "merge", files: ["a.json", "b.json"], settings: { strict: true } });
-    for (const bad of [["--shard", "3/2"], ["--shard", "1/2", "--strict"], ["--mole", "sometimes"], ["--ci", "0"], ["-n", "5", "--max-games", "9"], ["--min-games", "500", "--max-games", "100"], ["merge"], ["merge", "a", "-p", "4"], ["-w", "0"], ["-n", "3", "--batch", "5"], ["--min-games", "100", "--batch", "200"]]) {
+    for (const bad of [["--shard", "3/2"], ["--shard", "1/2", "--strict"], ["--setups", "sometimes"], ["--ci", "0"], ["-n", "5", "--max-games", "9"], ["--min-games", "500", "--max-games", "100"], ["merge"], ["merge", "a", "-p", "4"], ["-w", "0"], ["-n", "3", "--batch", "5"], ["--min-games", "100", "--batch", "200"]]) {
       expect(parseSuiteArgs(bad).kind, bad.join(" ")).toBe("error");
     }
   });

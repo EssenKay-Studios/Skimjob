@@ -23,7 +23,7 @@ describe("design §17.4 inputs — bad arguments are clean errors, never throws"
   const bad: string[][] = [
     ["-n", "0"], ["-n", "1.5"], ["-n", "1e400"], ["-n", "-3"], ["-n"], ["-p", "1"], ["-p", "13"], ["-p", "12-2"], ["-p", "6,"],
     ["-b", "__proto__"], ["-b", "constructor:2"], ["-b", "honest:0"], ["-b", "honest:Infinity"], ["-b", "honest,honest"], ["-b", ""],
-    ["--mole", "__proto__"], ["--votes", "toString"], ["--bogus"], ["positional"], ["--overrides", '{"heat":'],
+    ["--deck", "__proto__"], ["--role-list", "toString"], ["--votes", "toString"], ["--bogus"], ["positional"], ["--overrides", '{"heat":'],
     ["--overrides", "/nonexistent/qa.json"], ["--overrides", ""],
   ];
   it.each(bad.map((a) => [a.join(" "), a]))("%s → error", (_label, argv) => {
@@ -180,9 +180,9 @@ describe("design §17.4 metrics — hand-checked against the engine on a fixed s
     expect(s.shakedowns.count).toBe(sd.length);
     expect(s.shakedowns.accuracy).toBe(sd.filter((e) => e.type === "shakedownResolved" && !e.clean).length / sd.length);
     // Role win share in successful games: each joint winner gets 1 ÷ winners.
-    const insiderSeats = records.filter((r) => r.result === "success").flatMap((r) => r.playerRecords.filter((p) => p.role === "insideMan").map((p) => ({ r, p })));
-    const credit = insiderSeats.reduce((t, { r, p }) => t + (r.winners.includes(p.id) ? 1 / r.winners.length : 0), 0);
-    expect(s.roles.insideMan?.successWinShare).toBeCloseTo(credit / insiderSeats.length, 12);
+    const lookoutSeats = records.filter((r) => r.result === "success").flatMap((r) => r.playerRecords.filter((p) => p.role === "lookout").map((p) => ({ r, p })));
+    const credit = lookoutSeats.reduce((t, { r, p }) => t + (r.winners.includes(p.id) ? 1 / r.winners.length : 0), 0);
+    expect(s.roles.lookout?.successWinShare).toBeCloseTo(credit / lookoutSeats.length, 12);
     // Per-count summaries partition the games.
     expect(Object.values(summarize(records).byPlayers).reduce((t, m) => t + m.games, 0)).toBe(16);
   });

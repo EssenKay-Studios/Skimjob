@@ -199,6 +199,8 @@ function crewPowers(view: PlayerView): PlayerCommand[] {
     return view.round % ROUNDS_PER_ACT === 0 ? [{ type: "useAbility", player, ability: { kind: "checkStash", target: top.player } }] : [];
   }
   const round = lastResolvedRound(view);
+  // A Recharge perk can free the power again before a new round resolves; the engine allows one audit per round.
+  if (ofType(view.caseFile, "abilityResolved").some((e) => e.ability.kind === "audit" && e.ability.round === round)) return [];
   const claim = ofType(view.ledger, "alibiPosted").find((a) => a.player === top.player && a.round === round);
   return claim ? [{ type: "useAbility", player, ability: { kind: "audit", room: claim.room } }] : [];
 }

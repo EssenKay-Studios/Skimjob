@@ -1,7 +1,7 @@
 // A cell's running counts: everything the suite's rates need, folded one game
 // at a time, so a cell of thousands of games is a few numbers instead of its
 // records. Plain JSON data: shard files carry tallies and `merge` adds them.
-// design §17.4, docs/roles-v2.md §5
+// design §17.4, docs/roles-v2.md §5, extension.md Build notes "Sim"
 import type { GameRecord } from "../record";
 import { act1LeaderWon, comebackEligible, decidedEarly } from "../metrics";
 
@@ -11,6 +11,11 @@ export interface SeatTally {
   readonly credit: number;
   /** Σ 1 ÷ crew size over the seats: the credit if every seat won equally often. */
   readonly fair: number;
+  /** Of the credit, what came from successful heists (the rest is from failures: ★ roles). */
+  readonly successCredit: number;
+  /** Shop tokens earned and spent over the seats. extension.md "Tokens and the perk shop" */
+  readonly earned: number;
+  readonly spent: number;
 }
 
 export interface Tally {
@@ -18,11 +23,11 @@ export interface Tally {
   readonly successes: number;
   readonly failures: number;
   readonly heatFailures: number;
-  /** Games with a saboteur dealt, and those a saboteur won. */
-  readonly saboteurGames: number;
-  readonly saboteurWins: number;
-  /** Games with a saboteur dealt that the heist failed (the dark side's win). */
-  readonly darkSideWins: number;
+  /** Failed on a missed final target. */
+  readonly targetFailures: number;
+  /** Games nobody won (a failure no top-group role wins on), and games two or more shared. extension.md "One crew, and how you win" */
+  readonly noWinner: number;
+  readonly sharedWin: number;
   /** Successful games with a sole Act 1 leader, and those that leader won. */
   readonly comebackGames: number;
   readonly act1LeaderWins: number;
@@ -42,9 +47,9 @@ export const emptyTally = (): Tally => ({
   successes: 0,
   failures: 0,
   heatFailures: 0,
-  saboteurGames: 0,
-  saboteurWins: 0,
-  darkSideWins: 0,
+  targetFailures: 0,
+  noWinner: 0,
+  sharedWin: 0,
   comebackGames: 0,
   act1LeaderWins: 0,
   decidedEarly: 0,
@@ -57,7 +62,9 @@ export const emptyTally = (): Tally => ({
 
 const addSeat = (to: Record<string, SeatTally>, key: string, s: SeatTally): void => {
   const a = Object.hasOwn(to, key) ? to[key] : undefined;
-  to[key] = a ? { seats: a.seats + s.seats, credit: a.credit + s.credit, fair: a.fair + s.fair } : { ...s };
+  to[key] = a
+    ? { seats: a.seats + s.seats, credit: a.credit + s.credit, fair: a.fair + s.fair, successCredit: a.successCredit + s.successCredit, earned: a.earned + s.earned, spent: a.spent + s.spent }
+    : { ...s };
 };
 
 /** Keys sorted, so a tally prints the same whatever order its games came in. */
@@ -73,11 +80,9 @@ export function tallyGames(records: readonly GameRecord[], start: Tally = emptyT
     if (success) t.successes++;
     else t.failures++;
     if (!success && g.reason === "heat") t.heatFailures++;
-    if (g.playerRecords.some((p) => p.faction === "saboteur")) {
-      t.saboteurGames++;
-      if (g.playerRecords.some((p) => p.faction === "saboteur" && p.winner)) t.saboteurWins++;
-      if (!success) t.darkSideWins++;
-    }
+    if (!success && g.reason === "target") t.targetFailures++;
+    if (g.winners.length === 0) t.noWinner++;
+    if (g.winners.length > 1) t.sharedWin++;
     if (comebackEligible(g)) t.comebackGames++;
     if (act1LeaderWon(g)) t.act1LeaderWins++;
     if (decidedEarly(g)) t.decidedEarly++;
@@ -85,7 +90,7 @@ export function tallyGames(records: readonly GameRecord[], start: Tally = emptyT
     t.shakedownsCaught += g.shakedowns.filter((s) => !s.clean).length;
     t.rejections += g.rejections;
     for (const p of g.playerRecords) {
-      const seat = { seats: 1, credit: p.winCredit, fair: 1 / g.players };
+      const seat = { seats: 1, credit: p.winCredit, fair: 1 / g.players, successCredit: success ? p.winCredit : 0, earned: p.tokensEarned, spent: p.tokensSpent };
       addSeat(t.roles, p.role, seat);
       addSeat(t.personalities, p.personality, seat);
     }
@@ -104,9 +109,9 @@ export function addTallies(a: Tally, b: Tally): Tally {
     successes: a.successes + b.successes,
     failures: a.failures + b.failures,
     heatFailures: a.heatFailures + b.heatFailures,
-    saboteurGames: a.saboteurGames + b.saboteurGames,
-    saboteurWins: a.saboteurWins + b.saboteurWins,
-    darkSideWins: a.darkSideWins + b.darkSideWins,
+    targetFailures: a.targetFailures + b.targetFailures,
+    noWinner: a.noWinner + b.noWinner,
+    sharedWin: a.sharedWin + b.sharedWin,
     comebackGames: a.comebackGames + b.comebackGames,
     act1LeaderWins: a.act1LeaderWins + b.act1LeaderWins,
     decidedEarly: a.decidedEarly + b.decidedEarly,

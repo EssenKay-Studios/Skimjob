@@ -58,7 +58,9 @@ describe("parseSimArgs", () => {
       starterMode: false,
       eventsEnabled: false,
       duel: false,
-      mole: "off",
+      deck: "standard",
+      deal: "balanced",
+      roleList: "exact",
       voteVisibility: "hiddenThenRevealed",
       contentOverrides: null,
       outDir: "sim-output",
@@ -74,11 +76,11 @@ describe("parseSimArgs", () => {
   it("reads every option", () => {
     const o = run([
       "-n", "7", "-p", "3-4", "-b", "random", "-s", "x", "--job", "bank", "--role-pool", "lookout, fence",
-      "--starter", "--mole", "maybe", "--votes", "secret", "--out", "here", "--json",
+      "--starter", "--deck", "everything", "--deal", "random", "--role-list", "hidden", "--votes", "secret", "--out", "here", "--json",
     ]);
     expect(o).toMatchObject({
       games: 7, playerCounts: [3, 4], mix: [{ personality: "random", weight: 1 }], seed: "x", rolePool: ["lookout", "fence"],
-      starterMode: true, mole: "maybe", voteVisibility: "secret", outDir: "here", json: true,
+      starterMode: true, deck: "everything", deal: "random", roleList: "hidden", voteVisibility: "secret", outDir: "here", json: true,
     });
     expect(run(["--no-files"]).outDir).toBeNull();
     // design §10: the events deck; starter mode has none (§8.1).
@@ -98,7 +100,9 @@ describe("parseSimArgs", () => {
   it("refuses bad values and unknown options", () => {
     expect(error(["-n", "0"])).toMatch(/--games/);
     expect(error(["-n", "2.5"])).toMatch(/--games/);
-    expect(error(["--mole", "sometimes"])).toMatch(/--mole/);
+    expect(error(["--deck", "sometimes"])).toMatch(/--deck/);
+    expect(error(["--deal", "fair"])).toMatch(/--deal/);
+    expect(error(["--role-list", "some"])).toMatch(/--role-list/);
     expect(error(["--votes", "loud"])).toMatch(/--votes/);
     expect(error(["--frob"])).toMatch(/frob/);
     expect(error(["stray"])).toMatch(/stray|positional/i);

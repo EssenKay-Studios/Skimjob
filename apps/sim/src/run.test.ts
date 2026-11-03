@@ -26,15 +26,15 @@ describe("runBatch", () => {
     expect(runBatch(options(["-n", "4", "-p", "5", "-s", "other"]))).not.toEqual(runBatch(o));
   });
 
-  it("plays every setting: starter mode, Moles, vote modes, Random bots", () => {
-    for (const argv of [["--starter"], ["--mole", "on", "-p", "9"], ["--votes", "secret"], ["--votes", "open"], ["-b", "random"], ["--role-pool", "lookout,fence"]]) {
+  it("plays every setting: starter mode, decks, deals, role lists, vote modes, Random bots", () => {
+    for (const argv of [["--starter"], ["--deck", "everything", "-p", "9"], ["--deal", "random", "-p", "7"], ["--role-list", "hidden"], ["--role-list", "possible"], ["--votes", "secret"], ["--votes", "open"], ["-b", "random"], ["--role-pool", "lookout,fence"]]) {
       const o = options(["-n", "2", ...argv]);
       expect(checkOptions(o)).toEqual([]);
       expect(runBatch(o).every((r) => r.rejections === 0)).toBe(true);
     }
-    const moles = runBatch(options(["-n", "2", "-p", "9", "--mole", "on"]));
-    // design §8.1 (owner answers, 1 Nov): "on" deals one Mole at 9–12 too.
-    expect(moles[0]?.playerRecords.filter((p) => p.role === "mole")).toHaveLength(1);
+    // extension.md "Decks and dealing": Starter mode plays the Starter deck whatever --deck says.
+    const starter = runBatch(options(["-n", "2", "-p", "5", "--starter", "--deck", "everything"]));
+    expect(starter[0]?.playerRecords.every((p) => !p.star)).toBe(true);
   });
 });
 
@@ -46,7 +46,6 @@ describe("checkOptions — the engine's validateConfig on the sim's settings", (
     expect(checkOptions(options(["--role-pool", "getaway"]))).toEqual(["unknown role getaway"]);
     expect(checkOptions(options(["--job", "casino"]))).toEqual(["unknown job casino"]);
     expect(checkOptions(options(["--overrides", '{"heat":{"perRound":"lots"}}']))).toEqual(["contentOverrides.heat.perRound must be a finite number"]);
-    expect(checkOptions(options(["--starter", "--mole", "on"]))).toEqual(["starter mode requires mole: off"]);
   });
 });
 

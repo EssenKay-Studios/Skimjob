@@ -14,7 +14,7 @@ All tests are seeded and deterministic. Nothing reads the wall clock (the server
 | Server scenarios | `apps/server/src/scenarios.int.test.ts` | Named end-to-end stories over the real HTTP + WebSocket API on PGlite. | `pnpm test` (`pnpm test:pg` for real Postgres) |
 | Web e2e | `apps/web/e2e/*.spec.ts` | Screens in Chromium at phone and desktop sizes, responsive rules. Size checks wait for the entrance animations to finish first: a box measured mid-animation can come out at 43.99 px. | `pnpm test:e2e` (CI: 6 shards, `--shard=i/6`; ports and clock via `E2E_*` env, see `playwright.config.ts`) |
 | Simulation suite | `apps/sim/src/suite/` | The §17.4 targets and role parity over the whole settings matrix, with confidence intervals (below). Manual: long. | `pnpm sim:suite`, or the "Sim suite" workflow |
-| Simulator smoke | `scripts/sim-smoke.sh` | 200 all-bot games each at 3/6/12 players (events on, Mole "maybe") end with no refused bot command. | `bash scripts/sim-smoke.sh [games]` |
+| Simulator smoke | `scripts/sim-smoke.sh` | 200 all-bot games each at 3/6/12 players (events on, Everything deck) end with no refused bot command. | `bash scripts/sim-smoke.sh [games]` |
 | Typecheck | every workspace | Strict TS. New event or command types must fail exhaustive switches. | `pnpm typecheck` |
 | Docker image | `Dockerfile` | The production image builds, boots on a fresh volume, serves `/health` and an SPA route, and runs as uid 1000 (CI only; no Docker daemon here). | `docker build -t skimjob .` (docs/deploy.md) |
 
@@ -26,21 +26,22 @@ Run the suite after any change to rules, numbers or bots. It shows what the chan
 
 ```
 pnpm sim:suite                                   # whole matrix, ±2 pp, all CPU cores (hours on a laptop)
-pnpm sim:suite -- -p 6 --mole maybe --events on  # one cell
+pnpm sim:suite -- -p 6 --setups balanced --events on  # one cell
 pnpm sim:suite -- --ci 5 --max-games 1000        # quicker and rougher
 pnpm sim:suite -- --overrides '{"heat":{"perRound":5}}' --compare docs/balance/baseline.json
 pnpm sim:suite -- --help
 ```
 
-- **Matrix:** player counts 2–12 × saboteur setting (off / maybe / on, skipping a setting that deals exactly like another at that size) × events on/off. `uniqueRoles` and the bot mix stay at their defaults. That makes 50 cells today.
+- **Matrix:** player counts 2–12 × setup × events on/off, on the Standard deck (extension.md Build notes "Sim"). Setups (`--setups`): `balanced` (Balanced deal, Exact role list), `random` (Truly random), `possible` and `hidden` (Balanced with that role list); the default is `balanced,random,possible`. `uniqueRoles` and the bot mix stay at their defaults. That makes 66 cells by default.
 - **Adaptive:** each cell plays batches of 200 games (`--batch`, at most `--min-games`), starting with at least 400. It stops once every checked rate's 95% interval (Wilson) is within `--ci` (±2 pp), or at `--max-games` (6000). `-n N` plays a fixed N per cell instead.
-- **Checks:** each cell is checked for heist success 55–70%, saboteur win rate 30–40% (where one can be dealt), Heat share of failures 10–20%, comeback ≤ 50% and decided early ≤ 15% (design §17.4). Role parity is checked per player count and saboteur setting (docs/roles-v2.md §5): win share ÷ fair share 1/n, with max − min ≤ 0.10. Parity stands in for §17.4's "each role within ±5 pp of fair share".
+- **Checks (gates):** only the gated cells, Balanced at 4–12 players, are checked: heist success 55–70%, Heat share of failures 10–20%, comeback ≤ 50%, decided early ≤ 15% and shakedown accuracy (design §17.4), and role parity per player count (docs/roles-v2.md §5, extension.md Build notes "Sim"): win share ÷ fair share 1/n, with max − min ≤ 0.10. Parity stands in for §17.4's "each role within ±5 pp of fair share". Other cells (2–3 players, Truly random, the role-list setups) are reported only and stop at `--min-games`.
+- **Reports:** the ending split (success / raid on Heat / missed target), the no-winner and shared-win rates per cell, and a per-role table over all cells: win ÷ fair, the share of wins from success vs failure (★ roles win some failures) and shop tokens earned and spent per seat.
   - A check is **PASS** or **FAIL** only when its whole 95% interval is inside or outside the target. Otherwise it is **inconclusive** (`inconcl.`, more games needed); the point estimate is still printed.
   - Parity's point spread is biased upward by noise: the max − min of many noisy ratios is wide even for a balanced deck. So parity FAILs only when even the closest the per-role intervals allow (`max lo − min hi`) is over 0.10, and PASSes only when the widest (`max hi − min lo`) is within it.
   - A `+` after a cell's game count means it hit `--max-games` (rounded up to whole batches) first. A fixed `-n` run says "Fixed" and has no `+`.
   - Refused bot commands are a FAIL.
 - **Exit codes:** 0 ok. 1 = `--strict` and at least one confirmed FAIL. 2 = bad input: arguments, a missing or malformed `--compare` baseline or shard file, an unwritable `--out`. These are all checked before any game runs. 3 = the run itself broke.
-- **Caveats:** the intervals are nominal. They are not adjusted for adaptive stopping, which stops on interval width rather than on the estimate, so the effect is small. Nor are they adjusted for running 250+ checks, so expect a few confirmed FAILs by chance when a true rate sits right on a bound. Until accomplices exist (R3), "saboteur wins" and "dark side wins" are equal (only a saboteur can win a failed heist).
+- **Caveats:** the intervals are nominal. They are not adjusted for adaptive stopping, which stops on interval width rather than on the estimate, so the effect is small. Nor are they adjusted for running 250+ checks, so expect a few confirmed FAILs by chance when a true rate sits right on a bound.
 - **Output:** the report goes to `sim-output/suite.json` (`--out`, or `--no-files`), and the same text is printed. `--json` prints the JSON instead.
 - **Compare:** `--compare <report.json>` prints each rate's change in pp. A `*` marks a move bigger than both intervals together. It also lists checks that changed verdict and parity spreads, and notes when the two runs used different seeds or sampling settings. Content overrides don't change the seeds, so a rule change replays the same deals and bot dice, and the deltas are the change, not noise. `docs/balance/baseline.json` is a committed moderate run (±5 pp, 200–400 games per cell). Refresh it when a balance pass lands.
 - **Deterministic:** every game's seed is `<seed>/<cell>/<n>p/<index>`. The report is byte-identical for any `--workers` or `--shard` split (`suite/determinism.test.ts` checks this with real worker threads). `pnpm sim -- --workers N` also gives the same records for any N.

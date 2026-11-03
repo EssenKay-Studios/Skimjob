@@ -1,14 +1,32 @@
 // The suite's fixed matrix of game settings, one cell per combination, and the
 // options every cell's games are built from. design §17.4 ("measured at every
-// player count from 2 to 12"), §8.1 (saboteur setting), §10 (events).
-import { darkSideOdds, type MoleSetting } from "@skimjob/engine";
+// player count from 2 to 12"), §10 (events); extension.md "Decks and dealing",
+// "Role list" and Build notes "Sim" (the saboteur axis is gone).
+import type { DealStyle, RoleListSetting } from "@skimjob/engine";
 import type { MixEntry, SimOptions } from "../args";
+
+/**
+ * A dealing setup: Balanced with the Exact role list (the default, and the one
+ * the gates apply to), Truly random, or Balanced with the Possible or Hidden
+ * role list. The Standard deck throughout. extension.md Build notes "Sim"
+ */
+export type Setup = "balanced" | "random" | "possible" | "hidden";
+export const SETUPS: Readonly<Record<Setup, { readonly deal: DealStyle; readonly roleList: RoleListSetting }>> = {
+  balanced: { deal: "balanced", roleList: "exact" },
+  random: { deal: "random", roleList: "exact" },
+  possible: { deal: "balanced", roleList: "possible" },
+  hidden: { deal: "balanced", roleList: "hidden" },
+};
+export const isSetup = (v: unknown): v is Setup => typeof v === "string" && Object.hasOwn(SETUPS, v);
+
+/** The gates (success band, role parity) cover Balanced games at 4–12 players. extension.md Build notes "Sim" */
+export const GATED_FROM_PLAYERS = 4;
 
 /** What a whole suite run is: the same SuiteOptions give the same report, whatever the workers or shards. */
 export interface SuiteOptions {
   readonly seed: string;
   readonly playerCounts: readonly number[];
-  readonly moles: readonly MoleSetting[];
+  readonly setups: readonly Setup[];
   readonly events: readonly boolean[];
   readonly mix: readonly MixEntry[];
   /** Untrusted JSON, checked by the engine's validateConfig (as in `pnpm sim`). */
@@ -23,48 +41,24 @@ export interface SuiteOptions {
 }
 
 export interface Cell {
-  /** e.g. "6p/mole-maybe/events-on": also part of each game's seed. */
+  /** e.g. "6p/balanced/events-on": also part of each game's seed. */
   readonly key: string;
   readonly players: number;
-  readonly mole: MoleSetting;
+  readonly setup: Setup;
   readonly events: boolean;
-  /** Whether this setting can deal a saboteur at this crew size (so the saboteur win rate applies). */
-  readonly saboteurs: boolean;
+  /** Whether the gates apply: Balanced, 4–12 players. Other cells are reported only. */
+  readonly gated: boolean;
 }
 
-export const cellKey = (players: number, mole: MoleSetting, events: boolean): string => `${players}p/mole-${mole}/events-${events ? "on" : "off"}`;
+export const cellKey = (players: number, setup: Setup, events: boolean): string => `${players}p/${setup}/events-${events ? "on" : "off"}`;
 
-const sameOdds = (a: ReturnType<typeof darkSideOdds>, b: ReturnType<typeof darkSideOdds>): boolean => JSON.stringify(a) === JSON.stringify(b);
-
-/** When two settings deal alike, the one kept: "off", then "on", then "maybe". */
-const PRIORITY: readonly MoleSetting[] = ["off", "on", "maybe"];
-
-/**
- * The saboteur settings worth a cell at `n` players, in the order given: a
- * setting is left out when it deals exactly like another one asked for (by
- * the engine's own `darkSideOdds`), e.g. "maybe" and "on" at 2–3 players are
- * crew-only like "off", and "maybe" is "on" at 9–12. So the matrix follows
- * the dealing rules if they change.
- */
-export function distinctMoleSettings(n: number, settings: readonly MoleSetting[]): MoleSetting[] {
-  const kept: MoleSetting[] = [];
-  const seen: ReturnType<typeof darkSideOdds>[] = [];
-  for (const m of PRIORITY.filter((p) => settings.includes(p))) {
-    const odds = darkSideOdds(n, m, false);
-    if (seen.some((s) => sameOdds(s, odds))) continue;
-    seen.push(odds);
-    kept.push(m);
-  }
-  return settings.filter((m) => kept.includes(m));
-}
-
-/** Every cell, in report order: player count, then saboteur setting, then events. */
-export function buildMatrix(o: Pick<SuiteOptions, "playerCounts" | "moles" | "events">): Cell[] {
+/** Every cell, in report order: player count, then setup, then events. */
+export function buildMatrix(o: Pick<SuiteOptions, "playerCounts" | "setups" | "events">): Cell[] {
   const cells: Cell[] = [];
   for (const n of o.playerCounts) {
-    for (const mole of distinctMoleSettings(n, o.moles)) {
-      const saboteurs = darkSideOdds(n, mole, false).some((d) => d.saboteurs > 0 && d.chance > 0);
-      for (const events of o.events) cells.push({ key: cellKey(n, mole, events), players: n, mole, events, saboteurs });
+    for (const setup of o.setups) {
+      const gated = setup === "balanced" && n >= GATED_FROM_PLAYERS;
+      for (const events of o.events) cells.push({ key: cellKey(n, setup, events), players: n, setup, events, gated });
     }
   }
   return cells;
@@ -89,7 +83,9 @@ export function cellSimOptions(o: SuiteOptions, cell: Cell): SimOptions {
     starterMode: false,
     eventsEnabled: cell.events,
     duel: false,
-    mole: cell.mole,
+    deck: "standard",
+    deal: SETUPS[cell.setup].deal,
+    roleList: SETUPS[cell.setup].roleList,
     voteVisibility: "hiddenThenRevealed",
     contentOverrides: o.contentOverrides,
     outDir: null,

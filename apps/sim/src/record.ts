@@ -2,7 +2,7 @@
 // the event log (the full record of the game). design §17.4
 //
 // Pure: a finished GameState (plus the bot crew) in, plain data out.
-import { ROUNDS_PER_ACT, SCORE_DECIMALS, type Faction, type RoleId } from "@skimjob/content";
+import { ROUNDS_PER_ACT, type RoleId, type Temperament } from "@skimjob/content";
 import type { PersonalityId } from "@skimjob/bots";
 import {
   applyEvent,
@@ -23,8 +23,10 @@ export interface PlayerRecord {
   readonly id: PlayerId;
   readonly personality: PersonalityId;
   readonly role: RoleId;
-  /** The role's side (role deck v2 §0): crew, accomplice or saboteur. */
-  readonly faction: Faction;
+  /** The role's temperament tag. extension.md "Temperament tags" */
+  readonly tag: Temperament;
+  /** A ★ role: it also wins some failures (`winsOn` non-empty). extension.md "One crew, and how you win" */
+  readonly star: boolean;
   /** False for roles that can't pocket (Inside Man): left out of the pocketing metric. */
   readonly canPocket: boolean;
   readonly score: number;
@@ -38,6 +40,9 @@ export interface PlayerRecord {
   readonly winner: boolean;
   /** 1 ÷ number of winners if a winner (joint winners share one win), else 0. */
   readonly winCredit: number;
+  /** Shop tokens earned and spent. extension.md "Tokens and the perk shop" */
+  readonly tokensEarned: number;
+  readonly tokensSpent: number;
 }
 
 export interface ShakedownRecord {
@@ -81,24 +86,19 @@ export interface GameRecord {
   /** Standings after the Act 1 and Act 2 checkpoints (null if the game ended first). */
   readonly afterAct1: Standing | null;
   readonly afterAct2: Standing | null;
-  /** Most score one player could add in Act 3: rounds × the best room's loot × the best stash multiplier. */
+  /** Most score one player could add in Act 3: rounds × the best room's loot (whole-number scores, no multiplier). */
   readonly act3MaxGain: number;
   readonly playerRecords: readonly PlayerRecord[];
   /** Bot commands the engine refused (should be 0). */
   readonly rejections: number;
 }
 
-const roundScore = (n: number): number => {
-  const f = 10 ** SCORE_DECIMALS;
-  return Math.round(n * f) / f;
-};
-
 /** Leaders and lead from an engine ranking (best first). design §3 */
 export function standing(ranked: readonly RankEntry[]): Standing {
   const leaders = leadersOf(ranked);
   const topScore = ranked[0]?.score ?? 0;
   const rest = ranked.filter((e) => !leaders.includes(e.player)).map((e) => e.score);
-  return { leaders, topScore, lead: rest.length === 0 ? 0 : roundScore(topScore - Math.max(...rest)) };
+  return { leaders, topScore, lead: rest.length === 0 ? 0 : topScore - Math.max(...rest) };
 }
 
 /**
@@ -131,6 +131,8 @@ export function recordGame(state: GameState, crew: readonly PersonalityId[], rej
   const looted = new Map<PlayerId, number>(order.map((id) => [id, 0]));
   const pocketed = new Map<PlayerId, number>(order.map((id) => [id, 0]));
   const sinceShakedown = new Map<PlayerId, number>(order.map((id) => [id, 0]));
+  const earned = new Map<PlayerId, number>();
+  const spent = new Map<PlayerId, number>();
   const shakedowns: ShakedownRecord[] = [];
   let meetingKind: { emergency: boolean; act: number } = { emergency: false, act: 1 };
   let meetings = 0;
@@ -166,6 +168,12 @@ export function recordGame(state: GameState, crew: readonly PersonalityId[], rej
       case "checkpointChecked":
         if (!event.met) checkpointsMissed++;
         break;
+      case "tokenEarned":
+        add(earned, event.player, 1);
+        break;
+      case "perkBought":
+        add(spent, event.player, event.cost);
+        break;
       default:
         break;
     }
@@ -180,7 +188,6 @@ export function recordGame(state: GameState, crew: readonly PersonalityId[], rej
   const winners = outcome.winners;
   const ranked = new Map(outcome.ranking.map((e) => [e.player, e]));
   const maxLoot = Math.max(...state.rooms.map((r) => job.rooms[r]?.loot ?? 0));
-  const maxMultiplier = Math.max(1, ...order.map((id) => roles[roleOf.get(id) as RoleId]?.scoring.stashMultiplier ?? 1));
 
   return {
     seed: config.seed,
@@ -198,17 +205,19 @@ export function recordGame(state: GameState, crew: readonly PersonalityId[], rej
     winners,
     afterAct1: standingAfter(1),
     afterAct2: standingAfter(2),
-    act3MaxGain: roundScore(ROUNDS_PER_ACT * maxLoot * maxMultiplier),
+    act3MaxGain: ROUNDS_PER_ACT * maxLoot,
     playerRecords: order.map((id, i): PlayerRecord => {
       const entry = ranked.get(id);
       const role = roleOf.get(id) as RoleId;
       const winner = winners.includes(id);
+      const def = Object.hasOwn(roles, role) ? roles[role] : undefined;
       return {
         id,
         personality: crew[i] as PersonalityId,
         role,
-        faction: (Object.hasOwn(roles, role) ? roles[role]?.faction : undefined) ?? "crew",
-        canPocket: (Object.hasOwn(roles, role) ? roles[role]?.canPocket : undefined) ?? true,
+        tag: def?.tag ?? "teamPlayer",
+        star: (def?.winsOn.length ?? 0) > 0,
+        canPocket: def?.canPocket ?? true,
         score: entry?.score ?? 0,
         stash: entry?.stash ?? 0,
         looted: looted.get(id) ?? 0,
@@ -216,6 +225,8 @@ export function recordGame(state: GameState, crew: readonly PersonalityId[], rej
         timesShakenDown: entry?.timesShakenDown ?? 0,
         winner,
         winCredit: winner ? 1 / winners.length : 0,
+        tokensEarned: earned.get(id) ?? 0,
+        tokensSpent: spent.get(id) ?? 0,
       };
     }),
     rejections,
