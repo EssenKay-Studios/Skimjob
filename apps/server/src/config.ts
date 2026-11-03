@@ -26,7 +26,12 @@ export interface ServerConfig {
   /** PUBLIC_ORIGIN: the origin people open (https://skimjob.fly.dev); always allowed to open game sockets. */
   readonly publicOrigin: string | null;
   /** WEB_DIR: the built web app (apps/web/dist) to serve, with SPA fallback; null serves none (dev uses Vite). */
-  readonly webDir: string | null;
+  readonly webDir: string | null;  /**
+   * "Sign in with Google" (M2-12): on when GOOGLE_CLIENT_ID and
+   * GOOGLE_CLIENT_SECRET are set. The redirect URI is GOOGLE_REDIRECT_URL, or
+   * PUBLIC_ORIGIN + /auth/google/callback. docs/deploy.md "Google sign-in".
+   */
+  readonly google: { readonly clientId: string; readonly clientSecret: string; readonly redirectUri: string } | null;
 }
 
 /** The Vite dev server and the Playwright one (M2-5a), whose proxies keep the browser's Origin. */
@@ -66,7 +71,27 @@ export function loadConfig(env: Env = process.env): ServerConfig {
     publicOrigin,
     webDir: env.WEB_DIR?.trim() || null,
     timeScale,
+    google: googleConfig(env, publicOrigin),
   };
+}
+
+function googleConfig(env: Env, publicOrigin: string | null): ServerConfig["google"] {
+  const clientId = env.GOOGLE_CLIENT_ID?.trim() ?? "";
+  const clientSecret = env.GOOGLE_CLIENT_SECRET?.trim() ?? "";
+  if (!clientId && !clientSecret) return null;
+  if (!clientId || !clientSecret) throw new StartupError("Google sign-in needs both GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET (or neither)");
+  const raw = env.GOOGLE_REDIRECT_URL?.trim() || (publicOrigin ? `${publicOrigin}/auth/google/callback` : "");
+  if (!raw) throw new StartupError("Google sign-in needs GOOGLE_REDIRECT_URL (or PUBLIC_ORIGIN) for its callback URL");
+  let url: URL | null = null;
+  try {
+    url = new URL(raw);
+  } catch {
+    // reported below
+  }
+  if (!url || (url.protocol !== "https:" && url.protocol !== "http:") || !/\/auth\/google\/callback$/.test(url.pathname) || url.search || url.hash) {
+    throw new StartupError(`GOOGLE_REDIRECT_URL must be a URL ending in /auth/google/callback, got ${JSON.stringify(raw)}`);
+  }
+  return { clientId, clientSecret, redirectUri: url.href };
 }
 
 /** `https://skimjob.fly.dev` (no path, no trailing slash), or a StartupError. */

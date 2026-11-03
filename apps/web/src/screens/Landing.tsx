@@ -1,6 +1,8 @@
 // Landing (m2-plan M2-5): create a game (/new), join with an invite code
-// (/join/:code), sign in (M2-12; a toast for now).
-import { useState, type FormEvent } from "react";
+// (/join/:code), sign in with Google (M2-12; shown only when the server has a
+// Google client id, else the top bar's "Sign in" just explains nicknames).
+import { useEffect, useState, type FormEvent } from "react";
+import { fetchMe, fetchProviders, googleSignInUrl, type Me } from "../api";
 import { Avatar } from "../components/Avatar";
 import { BankDoodle } from "../components/BankDoodle";
 import { Button } from "../components/Button";
@@ -21,6 +23,27 @@ export function Landing() {
   const [code, setCode] = useState("");
   const [codeError, setCodeError] = useState<string | null>(null);
   const [shake, setShake] = useState(0);
+  const [google, setGoogle] = useState(false);
+  const [me, setMe] = useState<Me | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    // Who's signed in only matters (and is only asked) when Google sign-in is on.
+    fetchProviders().then((p) => {
+      if (!live || !p.includes("google")) return;
+      setGoogle(true);
+      fetchMe().then(
+        (u) => live && setMe(u),
+        () => {}, // offline: the landing page works signed out
+      );
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  const account = me && !me.guest ? me : null;
+  const signIn = () => location.assign(googleSignInUrl("/"));
 
   const join = (e: FormEvent) => {
     e.preventDefault();
@@ -41,9 +64,20 @@ export function Landing() {
           <Wordmark size={30} />
         </a>
         <nav className="topbar__nav">
-          <Button variant="secondary" seed="nav-signin" icon={<Door />} onClick={() => toast("Sign-in is on its way. For now, you'll just pick a nickname.")}>
-            Sign in
-          </Button>
+          {account ? (
+            <span aria-label={`Signed in as ${account.name}`}>
+              <Chip colour="var(--olive)">{account.name}</Chip>
+            </span>
+          ) : (
+            <Button
+              variant="secondary"
+              seed="nav-signin"
+              icon={<Door />}
+              onClick={google ? signIn : () => toast("Sign-in is on its way. For now, you'll just pick a nickname.")}
+            >
+              Sign in
+            </Button>
+          )}
         </nav>
       </header>
 
@@ -126,17 +160,19 @@ export function Landing() {
               </SketchFrame>
             </div>
 
+            {google && !account && (
             <div className="landing__pass">
               <SketchFrame seed="pass-card" radius={16} fill="url(#sk-pass)" ink="var(--pass-line)" shadow={0.55} grain={false} tilt={0.6} className="pass-card">
                 <div className="pass-card__text">
                   <h2 className="pass-card__title">Keep your rap sheet</h2>
                   <p>Sign in to keep your name and record between jobs. To play, a nickname is enough.</p>
                 </div>
-                <Button variant="premium" seed="pass-btn" icon={<Star />} onClick={() => toast("Google sign-in is coming soon.")}>
+                <Button variant="premium" seed="pass-btn" icon={<Star />} onClick={signIn}>
                   Sign in with Google
                 </Button>
               </SketchFrame>
             </div>
+            )}
           </div>
         </SketchFrame>
       </main>

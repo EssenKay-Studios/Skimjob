@@ -7,8 +7,11 @@ test("landing renders", async ({ page }) => {
   page.on("pageerror", (e) => errors.push(e.message));
   page.on("console", (m) => {
     // The unknown code's 404 is expected (the invite page says so).
-    if (m.type() === "error" && !m.text().includes("404")) errors.push(m.text());
+    // So is /api/me's 401 (signed out; asked because Google sign-in is on).
+    if (m.type() === "error" && !m.text().includes("404") && !m.text().includes("401")) errors.push(m.text());
   });
+  // A server with a Google client id (M2-12; signin.spec.ts covers one without).
+  await page.route("**/api/auth/providers", (r) => r.fulfill({ json: { providers: ["google"] } }));
   await page.goto("/");
 
   await expect(page.getByRole("img", { name: "Skimjob" }).first()).toBeVisible();

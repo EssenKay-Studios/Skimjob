@@ -41,7 +41,7 @@ Repo variables (Settings → Secrets and variables → Actions → **Variables**
 |---|---|
 | Image | `Dockerfile`: build stage (`node:22-bookworm-slim`, pnpm 10.28) runs `pnpm fetch`, `pnpm install --offline --frozen-lockfile`, `vite build` (web), `esbuild` (server → one `dist/main.js`, workspace packages inlined), `pnpm deploy --prod` (prod `node_modules` only). Runtime stage is `node:22-alpine` with just those. |
 | User | The entrypoint (`apps/server/docker-entrypoint.sh`) starts as root only to create `/data/pglite` and `chown` it to `node` (a fresh Fly volume is root-owned), then `su-exec`s the server as `node` (uid 1000). |
-| Config | `fly.toml` `[env]`: `NODE_ENV=production`, `HOST=0.0.0.0`, `PORT=8080`, `PUBLIC_ORIGIN=https://skimjob.fly.dev`, `WEB_DIR=/app/web`, `PGLITE_DIR=/data/pglite`. Secrets (none yet) go in `fly secrets set`. |
+| Config | `fly.toml` `[env]`: `NODE_ENV=production`, `HOST=0.0.0.0`, `PORT=8080`, `PUBLIC_ORIGIN=https://skimjob.fly.dev`, `WEB_DIR=/app/web`, `PGLITE_DIR=/data/pglite`. Secrets go in `fly secrets set` (only the optional Google sign-in pair so far, below). |
 | One origin | The server serves `WEB_DIR` (hashed `/assets/*` cached a year, everything else revalidated), the API both bare and under `/api/...` (the client's prefix, `stripApiPrefix`), and the game sockets (`/api/games/:id/ws`). Any other `GET` without a file extension gets `index.html` (client routes like `/join/:code`, `/lobby/:id`, `/game/:id`). Unknown `/api/...` and missing files are a JSON 404. |
 | Production mode | `NODE_ENV=production`: cookies are `Secure`, the server trusts Fly's `X-Forwarded-*`, the socket Origin check allows the server's own host and `PUBLIC_ORIGIN` only (no Vite dev origins), and the dev sign-in stub is off even if `DEV_LOGIN=1` is set. |
 | Health | Fly checks `GET /health` every 30 s (it runs `select 1`). |
@@ -50,6 +50,38 @@ Repo variables (Settings → Secrets and variables → Actions → **Variables**
 
 URLs: https://skimjob.fly.dev (game), https://skimjob.fly.dev/health, dashboard https://fly.io/apps/skimjob,
 logs `flyctl logs -a skimjob`.
+
+## Google sign-in
+
+Optional. Without it the landing page hides "Sign in with Google" and everyone plays with a nickname (guests);
+`DEV_LOGIN=1` still gives the dev stub outside production. The server turns Google on when **both**
+`GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are set (one without the other refuses to start). The flow is
+OpenID Connect, authorization code + PKCE (S256), with `state` and `nonce`; the ID token is checked against
+Google's published keys (issuer, audience = the client id, expiry, nonce). Users are keyed by Google's `sub`
+(`users.external_id = "google:<sub>"`); only the `openid profile` scopes are asked for (no email).
+
+1. Google Cloud console → APIs & Services → **OAuth consent screen**: app name "Skimjob", user type
+   External, scopes `openid` and `profile`. While it's in "Testing", add the playtesters' Google accounts as
+   test users (or publish it).
+2. APIs & Services → **Credentials** → Create credentials → **OAuth client ID** → type **Web application**.
+   **Authorized redirect URIs** (add each one you use; Google wants an exact match):
+   - deployed: `https://skimjob.fly.dev/auth/google/callback` (or `https://<FLY_APP>.fly.dev/...`);
+   - local `pnpm dev` (Vite on 5173 in front of the server): `http://localhost:5173/api/auth/google/callback`;
+   - local production build (`node apps/server/dist/main.js` on 8080): `http://localhost:8080/auth/google/callback`.
+   No "Authorized JavaScript origins" are needed (the browser never talks to Google's API itself).
+3. Copy the client id and secret. **Never commit them.**
+   - Deployed: `flyctl secrets set -a skimjob GOOGLE_CLIENT_ID='…apps.googleusercontent.com' GOOGLE_CLIENT_SECRET='…'`
+     (restarts the machine). The callback is `PUBLIC_ORIGIN` + `/auth/google/callback`, so nothing else to set.
+   - Local: export them in your shell (not in a file in the repo) with the callback, then `pnpm dev`:
+     `GOOGLE_CLIENT_ID=… GOOGLE_CLIENT_SECRET=… GOOGLE_REDIRECT_URL=http://localhost:5173/api/auth/google/callback pnpm dev`.
+     LAN IPs don't work: Google only allows `http://` for `localhost`.
+4. Check: the server logs `Google sign-in: on (callback …)` at boot, `GET /api/auth/providers` lists
+   `google`, and the landing page shows "Sign in with Google".
+
+`GOOGLE_REDIRECT_URL` overrides the callback (it must end in `/auth/google/callback`; under `/api/` is fine).
+A guest who signs in with a Google account that's new here keeps their user, nickname and seats; signing in
+to an account that already exists switches to that account (the guest's seats stay with the guest).
+To turn Google off again: `flyctl secrets unset -a skimjob GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET`.
 
 ## Run the production build locally
 

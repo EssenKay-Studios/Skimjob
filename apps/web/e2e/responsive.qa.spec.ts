@@ -100,6 +100,8 @@ test.describe("landing behaviour", () => {
   });
 
   test("keyboard focus is visible on every landing button and link", async ({ page }) => {
+    // With Google sign-in on (M2-12), so its button is there to tab to.
+    await page.route("**/api/auth/providers", (r) => r.fulfill({ json: { providers: ["google"] } }));
     await page.goto("/");
     const seen = new Set<string>();
     for (let i = 0; i < 12; i++) {
@@ -142,8 +144,10 @@ test.describe("landing behaviour", () => {
       await page.getByRole("button", { name: "Join crew" }).click();
       await expect(page).toHaveURL(new RegExp(`/join/${code}$`)); // M2-5b: the invite page
     }
-    api.length = 0;
+    const loaded = page.waitForResponse((r) => r.url().endsWith("/api/auth/providers"));
     await page.goto("/");
+    await loaded;
+    api.length = 0; // the page's own sign-in check on load (M2-12) isn't the field's
     const field = page.getByPlaceholder("Invite code or link");
     const join = page.getByRole("button", { name: "Join crew" });
     // 16px or more, so iOS Safari doesn't zoom on focus.

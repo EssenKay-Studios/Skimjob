@@ -24,6 +24,7 @@ try {
   if (config.timeScale !== 1) app.log.warn({ timeScale: config.timeScale }, "TIME_SCALE is set: every deadline runs faster (dev and E2E only)");
   if (applied.length > 0) app.log.info({ applied }, "migrations applied");
   if (config.webDir) app.log.info(`web app: ${config.webDir}`);
+  app.log.info(config.google ? `Google sign-in: on (callback ${config.google.redirectUri})` : "Google sign-in: off (no GOOGLE_CLIENT_ID)");
   app.log.info(config.databaseUrl ? "database: Postgres (DATABASE_URL)" : `database: PGlite (${config.pgliteDir ?? "in memory"})`);
 
   const stop = async () => {

@@ -107,6 +107,16 @@ export const fetchMe = () =>
     },
   );
 
+/** The redirect sign-in providers the server has on ("google" with a client id, "dev" with DEV_LOGIN=1). */
+export const fetchProviders = () =>
+  api<{ providers: string[] }>("GET", "/auth/providers").then(
+    (r) => r.providers,
+    () => [] as string[],
+  );
+
+/** A full-page visit (not fetch): the server redirects to Google and back to `returnTo`. M2-12 */
+export const googleSignInUrl = (returnTo: string) => `/api/auth/google/start?${new URLSearchParams({ returnTo })}`;
+
 /** Server messages are lower-case fragments ("that nickname is taken…"): make them a sentence. */
 export const sentence = (msg: string) => {
   const s = msg.charAt(0).toUpperCase() + msg.slice(1);
