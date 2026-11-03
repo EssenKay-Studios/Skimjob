@@ -2,9 +2,9 @@
 // Determinism (same seed + same crewSeed => same commands and log), the hunch
 // follows the crewSeed, and the public data gameDigest used to read (seat
 // names, round haul/heat) no longer moves it. design §17.3 (bots are players); PR #37 review
-import { viewFor, type Agent, type GameConfig, type PlayerCommand, type PlayerView } from "@skimjob/engine";
+import { viewFor, type GameConfig, type PlayerCommand, type PlayerView } from "@skimjob/engine";
 import { describe, expect, it } from "vitest";
-import { createBot, crewHunch } from "./bot";
+import { createBot, crewHunch, type Agent } from "./bot";
 import { PERSONALITIES } from "./personalities";
 import { runBotGame } from "./run";
 
