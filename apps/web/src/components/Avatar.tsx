@@ -1,7 +1,7 @@
 // Blob avatar: a slightly non-round ink circle in a crew colour with the
 // player's initials in Pangolin (ui-style §6, "Player avatars").
 import type { CSSProperties } from "react";
-import { crewColour, initialsOf } from "./avatar";
+import { crewColour, initialsOf } from "./avatarLooks";
 
 export type AvatarStatus = "ready" | "away" | "turn";
 

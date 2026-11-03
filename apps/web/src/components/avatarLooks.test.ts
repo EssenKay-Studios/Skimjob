@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CREW_COLOURS, crewColour, initialsOf } from "./avatar";
+import { CREW_COLOURS, crewColour, initialsOf } from "./avatarLooks";
 
 // ui-style "Player avatars": initials in Pangolin on a crew colour from §2.
 describe("initialsOf", () => {

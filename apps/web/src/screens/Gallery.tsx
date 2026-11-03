@@ -17,7 +17,7 @@ import { TextField } from "../components/TextField";
 import { Toast, useToast } from "../components/Toast";
 import { Underline } from "../components/Underline";
 import { MaskMark, Wordmark } from "../components/Wordmark";
-import { CREW_COLOURS } from "../components/avatar";
+import { CREW_COLOURS } from "../components/avatarLooks";
 import { Clock, Lock } from "../components/icons";
 import { HeatMeter, Meter } from "../components/Meter";
 import { RoomTile } from "../components/RoomTile";

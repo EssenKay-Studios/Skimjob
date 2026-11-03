@@ -1,5 +1,5 @@
 # CI: typecheck, unit + property + integration tests, web e2e, simulator smoke, Docker image.
-# A green run on main triggers the Fly deploy (deploy.yml, docs/deploy.md).
+# Deploys are manual-only for now (deploy.yml, docs/deploy.md).
 # Layers and how to run each locally: docs/testing.md
 name: CI
 
@@ -19,6 +19,18 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      # macOS and Windows checkouts are case-insensitive: two paths that differ only
+      # in case (or modules like Crook.tsx + crook.ts, which `./Crook` can't tell apart)
+      # break the build there.
+      - name: No paths that differ only in case
+        run: |
+          dupes=$(git ls-files | sort -f | uniq -di
+            git ls-files | grep -E '\.(ts|tsx|js|jsx|mjs|cjs)$' | sed -E 's/\.[a-z]+$//' | sort -f | uniq -di)
+          if [ -n "$dupes" ]; then
+            echo "::error::Paths or module names that differ only in case (they collide on macOS/Windows). Rename one of each:"
+            echo "$dupes"
+            exit 1
+          fi
       - uses: pnpm/action-setup@v4 # version from package.json "packageManager"
       - uses: actions/setup-node@v4
         with:

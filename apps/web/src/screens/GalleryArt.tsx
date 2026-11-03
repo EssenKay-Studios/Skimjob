@@ -6,7 +6,7 @@ import { Underline } from "../components/Underline";
 import { BankCutaway, CORE_ROOMS, type BankOccupant, type TimeOfDay } from "../art/BankCutaway";
 import { BANK_ROOMS, BANK_ROOM_NAMES, type BankRoomId } from "../art/bankLayout";
 import { CrookAvatar, CrookSvg } from "../art/Crook";
-import { EXPRESSIONS } from "../art/crook";
+import { EXPRESSIONS } from "../art/crookLooks";
 import { RoomIcon } from "../art/RoomIcon";
 import { BustedSpot, EmptyFileSpot, JobDoneSpot, WaitingSpot } from "../art/Spots";
 import "./gallery-art.css";

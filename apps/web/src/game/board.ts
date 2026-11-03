@@ -12,7 +12,7 @@
 import { EVENTS, type RoomId } from "@skimjob/content";
 import { actOfRound, type PlayerId, type PlayerView } from "@skimjob/engine";
 import type { BankOccupant, TimeOfDay } from "../art/BankCutaway";
-import { crewTags } from "../art/crook";
+import { crewTags } from "../art/crookLooks";
 import { seatsOf } from "./hud";
 
 export interface BoardScene {
