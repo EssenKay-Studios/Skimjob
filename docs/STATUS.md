@@ -66,12 +66,12 @@ Plan and acceptance criteria: `docs/m2-plan.md`. This is the canonical task list
 
 ## Questions for the owner
 Every provisional call still to confirm, once each; each is marked *provisional* in the named `docs/decisions.md` section (details of the older ones: `docs/archive/decisions-history.md`).
-1. **Rules and roles** (R6, #50): Balanced 4–6p 1 Lone wolf / 1 Wildcard; Quick = Starter with no shop; automatic perks (Shield, Emergency) exempt from one-per-round; the legacy `mole` setting migrated; R6a token triggers, view readings and bot tunables.
+1. **Rules and roles, R6a readings** (#50): Balanced 5–6p deal; token triggers; automatic perks (Shield, Emergency) exempt from one-per-round; police moments on game time (refused during meetings, next due from the previous, Heat × min(1, crew ÷ 5), one per round in the sim); view readings; the legacy `mole` setting migrated; Exact list in content order; Hidden list falls back to the preset for bots; Mole and Embezzler in Duel; bot and sim tunables.
 2. **Rules and roles, R6 confirm items:** the Blackmailer keeps its token if the shakedown is cancelled; the Mole tips off at most 3 times a game, even with Recharge.
-3. **Balance gates** (#51): the split parity gate; ★ band 0.9–1.8×; ★ lean point 0.8; Team parity ≤ 0.20 until M2-14; Muscle bot threshold 2; Heat share and Starter/Duel success report-only.
-4. **Rules and roles, police and gap-fills:** background police only when a Mole could be dealt; a tip-off lands at the next free police moment; a wrong Duel call-out pays 8; 1 h default session; Duel shop and dealing; the Fixer stopping any raid; Forger 7+.
+3. **Balance gates** (#51): the split parity gate; ★ band 0.9–1.8×; ★ lean point 0.8 with content 0.17.0's numbers; Balanced 4p 1/1 and 8p 2/1; Team parity ≤ 0.20 until M2-14; Muscle bot threshold 2; Heat share and Starter/Duel success report-only.
+4. **Rules and roles, police and gap-fills:** background police only when a Mole could be dealt; a tip-off lands at the next free police moment; a wrong Duel call-out pays 8; when a between-meetings stretch ends and how Recharge works; 1 h default session; Quick = Starter with no shop; Duel shop and events-off dealing; the Fixer stopping any raid; Forger 7+.
 5. **Server and timing, host controls** (#54): players can act while paused; Extend amounts per preset, no cap; replace with bot after 2 missed rounds (never the host, Opportunist), handed back by host or player; lobby kick of any non-host seat.
-6. **Server and timing, Google sign-in** (#53): the account's seat is kept on a same-game clash; redirect URI from env; display-name fallback (`name` → `given_name` → "Crook"); `prompt=select_account`.
-7. **Web and UI** (#52, #55, #62): builder readings (Starter deck ≠ starter mode, Heat breakdown parts, reveal attribution of tip-offs, loops and stolen votes); the reveal-overflow regression coverage.
+6. **Server and timing, Google sign-in** (#53): the account's seat is kept on a same-game clash; redirect URI from env; display-name fallback (`name` → `given_name` → "Crook"); scopes `openid profile`; `prompt=select_account`.
+7. **Web and UI** (#52, #55, #62): Extension UI readings and end-of-game reveal readings (Starter deck ≠ starter mode, Heat breakdown parts, reveal attribution of tip-offs, loops and stolen votes); the reveal-overflow regression coverage (pipeline and git).
 8. **Older provisional readings** (1–2 Nov, M1 to M2-10; partly accepted 2 Nov): accept the rest in bulk, or name any to revisit.
 9. **Resume:** when to restart development (M2-14, M2-15).
