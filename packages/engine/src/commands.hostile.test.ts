@@ -11,9 +11,9 @@
 // makes sure every field was tried that way at least once.
 import { describe, expect, it } from "vitest";
 import { MAX_SLOT_LENGTH, type PerkId } from "@skimjob/content";
-import type { GameConfig, GameEvent, GameState, PlayerState } from "./types";
+import { privateTo, type GameConfig, type GameEvent, type GameState, type PlayerState } from "./types";
 import { setupEvents } from "./setup";
-import { replay } from "./reduce";
+import { applyEvent, replay } from "./reduce";
 import { COMMAND_TYPES, handleCommand } from "./handle";
 import { powerOf } from "./overrides";
 import { actOfRound } from "./acts";
@@ -34,8 +34,9 @@ function config(extra: Partial<GameConfig> = {}): GameConfig {
     seed: "hostile-seed",
     players: ROLES_BY_SEAT.map((_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: false })),
     job: "bank",
-    rolePool: ROLES_BY_SEAT.filter((r) => r !== "mole" && r !== "embezzler"),
-    mole: "off",
+    rolePool: ROLES_BY_SEAT,
+    // A Mole could be in the game, so the hidden police moments run. extension.md "Police activity"
+    roleList: "possible",
     eventsEnabled: true,
     // Secret mode, so the Ballot perk can be spent (it's refused in Open mode).
     voteVisibility: "secret",
@@ -71,7 +72,11 @@ function scenarioStates(): GameState[] {
   const out: GameState[] = [];
   const keep = (s: GameState): GameState => (out.push(s), s);
   let s = game(config(), ROLES_BY_SEAT);
-  for (const id of s.playerOrder) s = grantPerks(s, id, ...ALL_PERKS, ...ALL_PERKS);
+  for (const id of s.playerOrder) {
+    s = grantPerks(s, id, ...ALL_PERKS, ...ALL_PERKS);
+    // Tokens to buy from the shop. extension.md "Tokens and the perk shop"
+    for (let i = 0; i < 4; i++) s = applyEvent(s, { type: "tokenEarned", visibility: privateTo(id), player: id, trigger: "checkpointMade" });
+  }
   keep(s); // planning round 1
   s = keep(run(s, { type: "useAbility", player: "p8", ability: { kind: "rig" } })); // the Rig's pick is open
   s = keep(run(s, ...s.playerOrder.map((id) => mv(id, "lobby"))));
@@ -124,9 +129,7 @@ function baseCommands(s: GameState): Record<string, unknown>[] {
             ? { kind: "loopCameras", room }
             : power.kind === "blackmail"
               ? { kind: "blackmail", target: other(player), role: "fence" }
-              : power.kind === "tipOff"
-                ? { kind: "tipOff" }
-                : power.kind === "forge"
+              : power.kind === "forge"
                   ? { kind: "forge", target: other(player), room }
                   : power.kind === "embezzle"
                     ? { kind: "embezzle" }
@@ -136,8 +139,10 @@ function baseCommands(s: GameState): Record<string, unknown>[] {
     if (power.kind === "cancelShakedown") out.push({ type: "useAbility", player, ability: { kind: "cancelShakedown" } });
     if (power.kind === "audit") out.push({ type: "useAbility", player, ability: { kind: "audit", room } });
     if (power.kind === "checkStash") out.push({ type: "useAbility", player, ability: { kind: "checkStash", target: other(player) } });
+    if (power.kind === "tipOff") out.push({ type: "useAbility", player, ability: { kind: "tipOff" } }); // extension.md "Police activity"
     if (power.kind === "bless") out.push({ type: "useAbility", player, ability: { kind: "bless", target: other(player) } });
-    // Perks. design §8.3
+    // Perks. extension.md "Tokens and the perk shop"
+    for (const perk of s.shop) out.push({ type: "buyPerk", player, perk });
     for (const ability of [
       { kind: "peek", target: other(player) },
       { kind: "extraVote" },
@@ -165,6 +170,7 @@ function baseCommands(s: GameState): Record<string, unknown>[] {
   const meetingIds = [s.scheduledMeeting?.meetingId, s.pendingEmergency?.meetingId, s.meeting?.id, s.pendingShakedown?.meetingId];
   out.push({ type: "advance", deadline: { kind: "round", round: s.round } });
   out.push({ type: "advance", deadline: { kind: "alibis", round: s.resolvedRound } });
+  if (s.police) out.push({ type: "advance", deadline: { kind: "policeMoment", moment: s.police.moment } });
   for (const kind of ["openMeeting", "closeMeeting", "resolveShakedown"]) {
     for (const meetingId of meetingIds) if (meetingId) out.push({ type: "advance", deadline: { kind, meetingId } });
   }

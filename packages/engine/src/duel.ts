@@ -51,7 +51,7 @@ function pocketedIn(state: GameState, player: PlayerId, act: ActNumber): number 
  * as normal, with no meeting). A caught opponent hands over everything they
  * pocketed this act, capped by their stash (the Fence safe is never touched,
  * as in a shakedown); a wrong call costs the caller the job's
- * `wrongCallOutPerAct` × act, capped by the caller's stash (provisional).
+ * `wrongCallOut` (extension.md gap-fills, provisional), capped by the caller's stash.
  * `prior` are this command's events so far.
  */
 export function endOfDuelAct(state: GameState, prior: readonly GameEvent[], act: ActNumber, draw: Draw): GameEvent[] {
@@ -63,7 +63,7 @@ export function endOfDuelAct(state: GameState, prior: readonly GameEvent[], act:
     const pocketed = pocketedIn(now, target, act);
     const caught = pocketed > 0;
     const payer = (now.players[caught ? target : caller] as PlayerState).stash;
-    const amount = Math.min(caught ? pocketed : job.duel.wrongCallOutPerAct * act, payer);
+    const amount = Math.min(caught ? pocketed : job.duel.wrongCallOut, payer);
     const event: GameEvent = { type: "callOutResolved", visibility: PUBLIC, act, caller, target, caught, amount };
     events.push(event);
     now = applyEvent(now, event);

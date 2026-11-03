@@ -18,8 +18,7 @@ function config(players: number): GameConfig {
     seed: "qa-end",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: [...STARTER_ROLES], // no Muscle, so no shakedown window (task 12)
-    mole: "off",
+    rolePool: [...STARTER_ROLES], // no Muscle; the shop's Shield may still open the window (run passes it)
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     starterMode: false,
@@ -40,7 +39,11 @@ function run(state: GameState, ...commands: Cmd[]): GameState {
   return commands.reduce<GameState>((s, c) => {
     const r = handleThroughAlibis(s, typeof c === "function" ? c(s) : c);
     if (!r.ok) throw new Error(`rejected: ${r.reason}`);
-    return r.state;
+    // extension.md "Shakedowns": nobody holds a Shield here, so the window just passes.
+    if (r.state.phase.kind !== "shakedownPending") return r.state;
+    const passed = handleCommand(r.state, { type: "advance", deadline: { kind: "resolveShakedown", meetingId: r.state.phase.meetingId } });
+    if (!passed.ok) throw new Error(`rejected: ${passed.reason}`);
+    return passed.state;
   }, state);
 }
 
@@ -83,34 +86,34 @@ function game3(r9extra: number, finalVotes: unknown[] = []): GameState {
 }
 
 describe("3 players: the final target boundary — design §3, §8", () => {
-  it("Haul exactly at the final target succeeds; Inside Man surplus is 0; Rookie ×1.2 and Fence safe counted", () => {
+  it("Haul exactly at the final target succeeds; Inside Man surplus is 0; Fence safe counted; whole-number scores", () => {
     const s = game3(0);
     expect([s.haul, s.heat]).toEqual([66, 36]);
     const o = outcome(s);
     expect(o).toMatchObject({ result: "success", winners: ["p0"] });
     expect(o.ranking).toEqual([
-      { player: "p0", role: "rookie", score: 14.4, stash: 12, safe: 0, timesShakenDown: 0, totalHandedIn: 42 },
+      { player: "p0", role: "rookie", score: 12, stash: 12, safe: 0, timesShakenDown: 0, totalHandedIn: 42 },
       { player: "p1", role: "fence", score: 12, stash: 12, safe: 3, timesShakenDown: 0, totalHandedIn: 24 },
       { player: "p2", role: "insideMan", score: 0, stash: 0, safe: 0, timesShakenDown: 0, totalHandedIn: 0 },
     ]);
   });
 
-  it("one loot short of the final target fails (reason target), ranking kept, the Fence (an accomplice, v2 §2) wins", () => {
+  it("one loot short of the final target fails (reason target), ranking kept; the Fence outside the top group doesn't win (extension.md \"How you win\")", () => {
     const o = outcome(game3(1));
-    expect(o).toMatchObject({ result: "failed", reason: "target", winners: ["p1"] });
-    expect(rows(o)).toEqual([["p0", 15.6], ["p1", 12], ["p2", 0]]);
+    expect(o).toMatchObject({ result: "failed", reason: "target", winners: [] });
+    expect(rows(o)).toEqual([["p0", 13], ["p1", 12], ["p2", 0]]);
   });
 });
 
 describe("the final meeting's shakedown decides the heist — design §3, §11.3, §11.4", () => {
-  it("shaking down the Fence rescues a failing heist; the safe stays and counts; exactly-at-threshold stash is not clean", () => {
-    // Haul 65 before the meeting. Fence stash 9 outside the safe = 3 × act 3 → not clean, all 9 taken → 74.
+  it("shaking down the Fence rescues a failing heist; the safe stays and counts; a stash over the clean line is dirty", () => {
+    // Haul 65 before the meeting. Fence stash 9 outside the safe ≥ the clean line 6 → dirty, all 9 taken → 74.
     const s = game3(1, [vote("p0", "p1"), vote("p2", "p1"), vote("p1", "p0")]);
     expect(s.log.find((e) => e.type === "shakedownResolved")).toMatchObject({ target: "p1", taken: 9, clean: false, compensation: 0 });
     const o = outcome(s);
     expect(o).toMatchObject({ result: "success", winners: ["p0"] });
     expect(o.ranking).toEqual([
-      { player: "p0", role: "rookie", score: 15.6, stash: 13, safe: 0, timesShakenDown: 0, totalHandedIn: 41 },
+      { player: "p0", role: "rookie", score: 13, stash: 13, safe: 0, timesShakenDown: 0, totalHandedIn: 41 },
       { player: "p2", role: "insideMan", score: 8, stash: 0, safe: 0, timesShakenDown: 0, totalHandedIn: 0 }, // 74 − 66
       { player: "p1", role: "fence", score: 3, stash: 3, safe: 3, timesShakenDown: 1, totalHandedIn: 24 },
     ]);
@@ -118,11 +121,13 @@ describe("the final meeting's shakedown decides the heist — design §3, §11.3
 
   it("shaking down a clean Inside Man sinks a passing heist: compensation leaves the Haul below target", () => {
     const s = game3(0, [vote("p0", "p2"), vote("p1", "p2")]);
-    expect(s.log.find((e) => e.type === "shakedownResolved")).toMatchObject({ target: "p2", clean: true, compensation: 15 });
-    expect(s.log.find((e) => e.type === "checkpointChecked" && e.act === 3)).toMatchObject({ haul: 51, met: false, heatPenalty: 0 });
+    // extension.md "Shakedowns": a clean target is paid a fixed 8.
+    expect(s.log.find((e) => e.type === "shakedownResolved")).toMatchObject({ target: "p2", clean: true, compensation: 8 });
+    expect(s.log.find((e) => e.type === "checkpointChecked" && e.act === 3)).toMatchObject({ haul: 58, met: false, heatPenalty: 0 });
     const o = outcome(s);
-    expect(o).toMatchObject({ result: "failed", reason: "target", winners: ["p1"] }); // the Fence: the only dark-side seat (v2 §2)
-    expect(rows(o)).toEqual([["p2", 15], ["p0", 14.4], ["p1", 12]]);
+    // The Rookie tops the ranking on handed in, so nobody wins the failure.
+    expect(o).toMatchObject({ result: "failed", reason: "target", winners: [] });
+    expect(rows(o)).toEqual([["p0", 12], ["p1", 12], ["p2", 8]]);
   });
 });
 
@@ -151,7 +156,7 @@ describe("12 players — design §3, §6.2, §8", () => {
     expect(o.ranking.map((e) => [e.player, e.score, e.totalHandedIn])).toEqual([
       ["p2", 69, 0],
       ["p1", 27, 27],
-      ["p0", 21.6, 36],
+      ["p0", 18, 36],
       ["p3", 18, 18],
       ["p8", 0, 45],
       ["p9", 0, 45],
@@ -195,7 +200,7 @@ describe("12 players — design §3, §6.2, §8", () => {
     expect(o).toMatchObject({ result: "failed", reason: "heat", winners: [] });
     expect(o.ranking.slice(0, 3).map((e) => [e.player, e.score, e.totalHandedIn])).toEqual([
       ["p1", 91, 30], // 355 − 264
-      ["p0", 6, 25],
+      ["p0", 5, 25],
       ["p2", 0, 30],
     ]);
     // Full tie among p2–p11 keeps seat order.
@@ -254,9 +259,9 @@ describe("2 players: a raid exactly at the checkpoint penalty — design §3, §
 });
 
 describe("tie-breaks at every level — design §3", () => {
-  it("cross-role score ties after scoring: Rookie 5 (×1.2 = 6) ties Lookout 6 and Inside Man 2 + 4 surplus", () => {
+  it("cross-role score ties after scoring: Rookie 6 ties Lookout 6 and Inside Man 2 + 4 surplus", () => {
     const s = withPlayers(game(3, ["rookie", "lookout", "insideMan"]), 70, {
-      p0: { stash: 5, totalHandedIn: 1 },
+      p0: { stash: 6, totalHandedIn: 1 },
       p1: { stash: 6, totalHandedIn: 3 },
       p2: { stash: 2, totalHandedIn: 2 }, // 2 + (70 − 66)
     });
@@ -290,12 +295,5 @@ describe("tie-breaks at every level — design §3", () => {
     expect(outcomeFor(s, null).winners).toEqual(["p0", "p1"]);
     expect(outcomeFor(s, "heat").winners).toEqual([]);
     expect(outcomeFor(s, "target").winners).toEqual([]);
-  });
-
-  it("Rookie scores are exact to one decimal with no float noise", () => {
-    for (const stash of [1, 3, 7, 13, 29, 101]) {
-      const score = ranking(withPlayers(game(2), 0, { p0: { stash } }))[0]?.score;
-      expect(String(score)).toBe((stash * 1.2).toFixed(1).replace(/\.0$/, ""));
-    }
   });
 });

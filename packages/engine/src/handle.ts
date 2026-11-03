@@ -18,6 +18,8 @@ import { answerDoubleCross } from "./deck";
 import { callOut } from "./duel";
 import { claimRole } from "./claims";
 import { isDuel } from "./setup";
+import { buyPerk } from "./perks";
+import { policeMoment } from "./police";
 import {
   acceptMeeting,
   callEmergency,
@@ -124,6 +126,8 @@ const advance: Handler = (state, command, draw) => {
       return closeMeeting(state, deadline.meetingId, draw);
     case "resolveShakedown":
       return resolveShakedown(state, deadline.meetingId, draw);
+    case "policeMoment":
+      return policeMoment(state, deadline.moment, draw);
     default:
       return `unknown deadline ${deadline.kind}`;
   }
@@ -141,6 +145,7 @@ const HANDLERS: Readonly<Record<string, Handler>> = {
   useAbility,
   answerDoubleCross,
   callOut,
+  buyPerk: (state, command) => buyPerk(state, command),
   advance,
   scheduleMeeting,
 };

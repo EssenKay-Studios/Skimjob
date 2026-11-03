@@ -26,8 +26,8 @@ type ExpectedVisibility = {
   roomsSet: "public";
   roleDealt: "private";
   snitchTargetAssigned: "private"; // design §8: the Snitch's target is secret
-  moleAllies: "private"; // design §8.1: only the Moles know each other
-  alliesLearned: "private"; // v2 §2: what one dark-side player learns of its allies
+  roleListShown: "public"; // extension.md "Host settings": the Exact / Possible list
+  shopDealt: "public"; // extension.md "Tokens and the perk shop": the three perks on offer
   rngAdvanced: "reveal";
   roundStarted: "public";
   moveLocked: "public";
@@ -43,6 +43,9 @@ type ExpectedVisibility = {
   roundResolved: "public";
   copsRaided: "public";
   raidStopped: "public";
+  policeActivity: "public"; // extension.md "Police activity": "police activity +4", the same either way
+  policeScheduled: "reveal"; // extension.md "Police activity": the hidden moments, never shown in play
+  tipOffLanded: "private"; // extension.md "Police activity": only the Mole learns the tip-off landed
   cardForeseen: "private";
   blessingPaid: "public";
   muscleNamed: "public";
@@ -67,9 +70,9 @@ type ExpectedVisibility = {
   shakedownPending: "public";
   shakedownCancelled: "public"; // design §8: says it was cancelled, not who did it
   shakedownResolved: "public";
-  snitchRewarded: "private";
   checkpointChecked: "public";
-  perkGranted: "private"; // design §8.3: perks are your own
+  tokenEarned: "private"; // extension.md "Tokens": tokens are private
+  perkBought: "private"; // extension.md "Tokens and the perk shop": private until used
   perkUsed: "private";
   rigPicked: "private";
   alibiVerified: "public"; // design §8.3: the Verified stamp is for everyone

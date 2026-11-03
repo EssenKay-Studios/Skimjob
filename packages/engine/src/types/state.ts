@@ -76,31 +76,46 @@ export interface PlayerState {
 }
 
 /**
- * Generic per-player role state: once-per-act and once-per-game uses and the
- * Snitch's target. Private to the player. design §8
+ * Generic per-player role state: once-between-meetings and once-per-game uses,
+ * the Snitch's target, tokens and perks. Private to the player. design §8
  */
 export interface RoleState {
   /**
-   * Uses this act, reset when an act starts: loot moved into the safe (Fence),
+   * Uses this stretch (extension.md "between meetings"; acts internally):
+   * reset as the next stretch's first round starts, which is right after a
+   * regular meeting (or a Duel act end) closes with its target check;
+   * emergency meetings never reset it. Loot moved into the safe (Fence),
    * camera loops (Hacker), role guesses (Blackmailer), tip-offs (Mole),
-   * audits (Auditor), stash checks (Detective).
+   * audits (Auditor), stash checks (Detective), blessings (Priest).
    */
   readonly usedThisAct: number;
   /** Uses this game: cancelled shakedowns (Muscle). */
   readonly usedThisGame: number;
   /** The Snitch's secret target; null for every other role. */
   readonly target: PlayerId | null;
-  /** A saboteur's fellow saboteurs (design §8.1); empty for everyone else and for a lone saboteur. */
-  readonly allies: readonly PlayerId[];
-  /** Perk tokens held, in the order earned (one entry per token). design §8.3 */
+  /** Unspent tokens (extension.md "Tokens and the perk shop"); they stay with the player on a Double-cross. */
+  readonly tokens: number;
+  /** Perks bought and not yet used, in the order bought. design §8.3 */
   readonly perks: readonly PerkId[];
   /** The room a spent Tail watches when the round being planned resolves; null otherwise. design §8.3 */
   readonly tail: RoomId | null;
-  /** Extra ballot weight for the rest of the game (the Snitch's reward, `snitchRewarded`). design §8 (v2 §2) */
-  readonly bonusVotes: number;
 }
 
-export const NO_ROLE_STATE: RoleState = { usedThisAct: 0, usedThisGame: 0, target: null, allies: [], perks: [], tail: null, bonusVotes: 0 };
+export const NO_ROLE_STATE: RoleState = { usedThisAct: 0, usedThisGame: 0, target: null, tokens: 0, perks: [], tail: null };
+
+/**
+ * The hidden police schedule (extension.md "Police activity"). Never in a
+ * view. `moment` is the next police moment's number, `gapPermille` how long
+ * after the previous one it falls (thousandths of a round length, game time),
+ * `patrol` whether a background patrol fires there; `queue` the Moles whose
+ * tip-offs wait for a moment, oldest first.
+ */
+export interface PoliceState {
+  readonly moment: number;
+  readonly gapPermille: number;
+  readonly patrol: boolean;
+  readonly queue: readonly PlayerId[];
+}
 
 /** A spent Rig: `player` picks which of `cards` flips at the start of `round`. Hidden from everyone else. design §8.3 */
 export interface RiggedCard {
@@ -218,5 +233,9 @@ export interface GameState {
   readonly meeting: MeetingState | null;
   /** Set exactly when `phase.kind === "shakedownPending"`. */
   readonly pendingShakedown: PendingShakedown | null;
+  /** The shop's perks (public), dealt at setup. extension.md "Tokens and the perk shop" */
+  readonly shop: readonly PerkId[];
+  /** Hidden police schedule; null when no Mole could be in the game (or the game is over). */
+  readonly police: PoliceState | null;
   readonly log: readonly GameEvent[];
 }

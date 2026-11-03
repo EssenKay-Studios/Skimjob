@@ -8,35 +8,33 @@ import type { ContentOverrides } from "./types";
 export const V01_NUMBERS: ContentOverrides = {
   rooms: { depositBoxes: { heatPressure: 0, capacity: { max: 2, crowdedLoot: 3 } }, tellerLine: { loot: 3 }, managersOffice: { loot: 5 } },
   checkpoints: { perPlayer: [6, 14, 22] },
-  // The Rookie's ×1.2 held from 0.1.0 to 0.13.0 (R5 made it ×1.05).
-  roles: { insideMan: { perLootOverFinalTarget: 1 }, rookie: { stashMultiplier: 1.2 } },
+  // The Inside Man's bonus is whole points since 0.15.0 (extension.md "Scoring"): 1 per loot pins the old +1 per loot.
+  roles: { insideMan: { lootPerPointOverFinalTarget: 1 } },
 };
 
 /**
  * The content 0.6.0 numbers that balance pass 2 changed (docs/balance/balance-2.md):
- * Police patrol +10, Shift change Vault Heat ×2, Mole tip-off +10. Deck and
- * Mole tests that script exact Heat pin them the same way.
+ * Shift change Vault Heat ×2 (and police activity +10, the old patrol and
+ * tip-off number). Deck tests that script exact Heat pin them the same way.
  */
 export const V06_NUMBERS: ContentOverrides = {
-  events: { policePatrol: { amount: 10 }, shiftChange: { heatMultiplier: 2 } },
-  roles: { mole: { heat: 10 } },
+  events: { shiftChange: { heatMultiplier: 2 } },
+  police: { heat: 10 },
 };
 
 /**
  * The content 0.13.0 numbers that the R5 parity pass changed (docs/balance/balance-3.md):
  * Deposit boxes 3 each when crowded, Teller line 3, final target 24 per player,
- * Rookie ×1.2, Inside Man 0.3 per loot over the target, Getaway Driver's Rooftop
- * visit adding the Heat it would remove (×1), Mole tip-off +6, Embezzler take 4.
+ * Getaway Driver's Rooftop visit adding the Heat it would remove (×1),
+ * Embezzler take 4. (The Rookie's multiplier and fractional Inside Man bonus
+ * are gone since 0.15.0.)
  * Rule tests that script exact numbers pin them the same way.
  */
 export const V013_NUMBERS: ContentOverrides = {
   rooms: { depositBoxes: { capacity: { max: 2, crowdedLoot: 3 } }, tellerLine: { loot: 3 } },
   checkpoints: { perPlayer: [7, 15, 24] },
   roles: {
-    rookie: { stashMultiplier: 1.2 },
-    insideMan: { perLootOverFinalTarget: 0.3 },
     getawayDriver: { reverse: 1 },
-    mole: { heat: 6 },
     embezzler: { take: 4 },
   },
 };

@@ -19,16 +19,18 @@
 //  - replay(config, log) rebuilds the state; same seed + commands = same log. [§17.2]
 //  - viewFor never leaks: the ledger/case file are exactly what canSee allows,
 //    and changing anything hidden from a player leaves their view identical. [§13, §17.2, §11.2]
-//  - the deal follows §8.1 (one of each non-Rookie role, Mole count allowed).
-//  - the end-of-game ranking matches the final stashes. [§3, §13]
+//  - the deal follows the deck and the Balanced mix (extension.md "Decks", "Host settings").
+//  - the end-of-game ranking matches the final stashes; the winners are the
+//    top group of everyone (success) or of those whose role wins on the
+//    failure's cause. [extension.md "How you win"]
 import { isDeepStrictEqual } from "node:util";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { FILLER_ROLE, MOLE_ROLE, ROLES, STARTER_ROLES, maxDarkSeats } from "@skimjob/content";
-import type { Command, GameConfig, GameEvent, GameState, MoleSetting, Move, PlayerId, PlayerState, VoteVisibility } from "./types";
+import { BALANCED_MIX, FILLER_ROLE, RANDOM_DEAL_SINGLETONS, ROLES, STARTER_ROLES, type DeckId } from "@skimjob/content";
+import type { Command, DealStyle, GameConfig, GameEvent, GameState, Move, PlayerId, PlayerState, RoleListSetting, VoteVisibility } from "./types";
 import { REVEAL, canSee, secretTo } from "./types";
-import { createGame, darkSideOdds, rolePoolFor, saboteursFor } from "./setup";
-import { isDarkSide, rolesFor } from "./overrides";
+import { createGame, dealStyleOf, rolePoolFor } from "./setup";
+import { rolesFor, tagIn, winsOn } from "./overrides";
 import { handleCommand } from "./handle";
 import { replay } from "./reduce";
 import { viewFor } from "./view";
@@ -44,26 +46,32 @@ const ALL_ROLES = Object.keys(ROLES);
 // ---------------------------------------------------------------- configs
 
 const VOTES: readonly VoteVisibility[] = ["hiddenThenRevealed", "open", "secret"];
-const MOLES: readonly MoleSetting[] = ["off", "maybe", "on"];
+const DECK_IDS: readonly DeckId[] = ["starter", "standard", "everything"];
+const DEALS: readonly DealStyle[] = ["balanced", "random"];
+const ROLE_LISTS: readonly RoleListSetting[] = ["exact", "possible", "hidden"];
 
 const normalConfig = fc
   .record({
     players: fc.integer({ min: 2, max: 12 }),
     vote: fc.constantFrom(...VOTES),
-    mole: fc.constantFrom(...MOLES),
+    deck: fc.constantFrom(...DECK_IDS),
+    deal: fc.constantFrom(...DEALS),
+    roleList: fc.constantFrom(...ROLE_LISTS),
     events: fc.boolean(),
     starter: fc.boolean(),
     // design §8.1, §15: absent = unique (the default); false lets roles repeat.
     unique: fc.constantFrom(undefined, true, false),
     seed: fc.string({ minLength: 1, maxLength: 12 }),
   })
-  .map(({ players, vote, mole, events, starter, unique, seed }): GameConfig => ({
+  .map(({ players, vote, deck, deal, roleList, events, starter, unique, seed }): GameConfig => ({
     seed,
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i + 1}`, name: `P${i + 1}`, isBot: i % 2 === 1 })),
     job: "bank",
     rolePool: [],
-    // Starter mode needs the Mole and events off (validateConfig).
-    mole: starter ? "off" : mole,
+    deck,
+    deal,
+    roleList,
+    // Starter mode needs events off (validateConfig).
     eventsEnabled: starter ? false : events,
     voteVisibility: vote,
     starterMode: starter,
@@ -72,8 +80,8 @@ const normalConfig = fc
 
 /** design §16.1: Duel is exactly 2 players. */
 const duelConfig = fc
-  .record({ events: fc.boolean(), mole: fc.constantFrom(...MOLES), seed: fc.string({ minLength: 1, maxLength: 12 }) })
-  .map(({ events, mole, seed }): GameConfig => ({
+  .record({ events: fc.boolean(), deck: fc.constantFrom(...DECK_IDS), seed: fc.string({ minLength: 1, maxLength: 12 }) })
+  .map(({ events, deck, seed }): GameConfig => ({
     seed,
     players: [
       { id: "p1", name: "P1", isBot: false },
@@ -81,7 +89,7 @@ const duelConfig = fc
     ],
     job: "bank",
     rolePool: [],
-    mole,
+    deck,
     eventsEnabled: events,
     voteVisibility: "hiddenThenRevealed",
     starterMode: false,
@@ -109,6 +117,10 @@ function nextDeadlines(state: GameState): Command[] {
   if (phase.kind === "awaitingMeeting") {
     if (state.scheduledMeeting) out.push({ type: "advance", deadline: { kind: "openMeeting", meetingId: state.scheduledMeeting.meetingId } });
     else out.push({ type: "scheduleMeeting", act: phase.act, slot: `server-act-${phase.act}` });
+  }
+  // extension.md "Police activity": the next hidden moment, whenever no meeting is open.
+  if (state.police && (phase.kind === "planning" || phase.kind === "alibis" || phase.kind === "awaitingMeeting")) {
+    out.push({ type: "advance", deadline: { kind: "policeMoment", moment: state.police.moment } });
   }
   return out;
 }
@@ -161,7 +173,7 @@ function playerCommand(state: GameState, t: Tape, style: Style): { command: Reco
   const phase = state.phase.kind;
   const fit = t.chance(70);
   const choice =
-    fit && phase === "planning" ? 0 : fit && phase === "alibis" ? 5 : fit && phase === "meeting" ? 9 : fit && phase === "shakedownPending" ? 12 : t.int(14);
+    fit && phase === "planning" ? 0 : fit && phase === "alibis" ? 5 : fit && phase === "meeting" ? 9 : fit && phase === "shakedownPending" ? 12 : t.int(15);
   switch (choice) {
     case 0:
     case 1:
@@ -182,8 +194,6 @@ function playerCommand(state: GameState, t: Tape, style: Style): { command: Reco
               return { kind: "loopCameras", room: room() };
             case "blackmail":
               return { kind: "blackmail", target: t.pick(others.length ? others : state.playerOrder), role: t.pick(ALL_ROLES) };
-            case "tipOff":
-              return { kind: "tipOff" };
             case "forge":
               return { kind: "forge", target: t.pick(state.playerOrder), room: room() };
             case "embezzle":
@@ -213,6 +223,12 @@ function playerCommand(state: GameState, t: Tape, style: Style): { command: Reco
       return { command: { ...base, type: "sealVote", vote: vote() }, seated };
     case 12:
       return { command: { ...base, type: "useAbility", ability: { kind: "cancelShakedown" } }, seated };
+    case 13: {
+      // extension.md "Tokens and the perk shop", "Police activity": shop buys and the Mole's tip-off.
+      if (t.chance(50)) return { command: { ...base, type: "useAbility", ability: { kind: "tipOff" } }, seated };
+      const perk = state.shop.length && t.chance(90) ? t.pick(state.shop) : "peek";
+      return { command: { ...base, type: "buyPerk", perk }, seated };
+    }
     default:
       return t.chance(50)
         ? { command: { ...base, type: "answerDoubleCross", accept: t.chance(60) }, seated }
@@ -326,19 +342,24 @@ function checkState(state: GameState, inflow: number): void {
   if (state.config.duel) check(state.meeting === null && state.scheduledMeeting === null && state.pendingEmergency === null, "Duel has no meetings (design §16.1)");
 }
 
-/** design §8.1 (role deck v2 §3): saboteurs by the setting (the Mole, at most once), then distinct pool roles, then Rookies. */
+/** extension.md "Decks", "Host settings": deck roles (Rookies fill), unique by default, one Mole/Embezzler at most, the Balanced mix. */
 function checkDeal(state: GameState): void {
   const roles = state.playerOrder.map((id) => (state.players[id] as PlayerState).role);
-  // R3b: the Embezzler is a saboteur too, dealt by the same setting.
-  const moles = roles.filter((r) => r === MOLE_ROLE || r === "embezzler").length;
-  const allowed = darkSideOdds(roles.length, state.config.mole, state.config.starterMode).map((o) => Math.min(saboteursFor(state.config).length, o.saboteurs));
-  check(allowed.includes(moles), "Mole count allowed (design §8.1)", roles);
-  check(roles.filter((r) => isDarkSide(rolesFor(state.config), r)).length <= maxDarkSeats(roles.length), "at most n ÷ 3 (rounded) dark seats (design §8.1)", roles);
+  const table = rolesFor(state.config);
   const pool = rolePoolFor(state.config);
-  const dealt = roles.filter((r) => r !== MOLE_ROLE && r !== "embezzler" && r !== FILLER_ROLE);
+  const dealt = roles.filter((r) => r !== FILLER_ROLE);
+  for (const r of RANDOM_DEAL_SINGLETONS) check(roles.filter((x) => x === r).length <= 1, `at most one ${r}`, roles);
   if (state.config.uniqueRoles !== false) check(new Set(dealt).size === dealt.length, "uniqueRoles: each non-Rookie role dealt at most once (design §8.1)", roles);
-  check(dealt.every((r) => pool.includes(r)), "roles come from the pool", roles);
+  check(dealt.every((r) => pool.includes(r)), "roles come from the deck", roles);
   if (state.config.starterMode) check(roles.every((r) => STARTER_ROLES.includes(r)), "starter roles only (design §8.1)", roles);
+  if (dealStyleOf(state.config) === "balanced") {
+    const mix = BALANCED_MIX[roles.length] ?? { loneWolves: 0, wildcards: 0 };
+    for (const [tag, want] of [["loneWolf", mix.loneWolves], ["wildcard", mix.wildcards]] as const) {
+      const inDeck = pool.filter((r) => tagIn(table, r) === tag).length;
+      const cap = state.config.uniqueRoles === false ? want : Math.min(want, inDeck);
+      check(roles.filter((r) => tagIn(table, r) === tag).length === (inDeck === 0 ? 0 : cap), `Balanced: ${tag} seats by the mix`, roles);
+    }
+  }
 }
 
 /**
@@ -363,7 +384,7 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
             role: p.role === "insideMan" ? "fence" : "insideMan",
             stash: p.stash + 101,
             safe: p.safe + 7,
-            roleState: { usedThisAct: 4, usedThisGame: 1, target: viewer, allies: [viewer], perks: ["peek", "shield"], tail: "vault", bonusVotes: 2 },
+            roleState: { usedThisAct: 4, usedThisGame: 1, target: viewer, tokens: p.roleState.tokens + 3, perks: ["peek", "shield"], tail: "vault" },
             totalHandedIn: p.totalHandedIn + 33,
             consecutiveMissedMoves: 5,
             sealedVote: { kind: "shakedown", target: viewer },
@@ -396,6 +417,8 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
     meeting: state.meeting && { ...state.meeting, votes: fakeFor(state.meeting.votes, { kind: "shakedown", target: viewer }) },
     pendingShakedown: state.pendingShakedown && { ...state.pendingShakedown, cancelled: !state.pendingShakedown.cancelled },
     card,
+    // extension.md "Police activity": the schedule and the queued tip-offs are hidden from everyone.
+    police: state.police && { moment: state.police.moment + 3, gapPermille: 1, patrol: !state.police.patrol, queue: [other] },
     log,
   };
 }
@@ -436,14 +459,13 @@ function checkEnd(state: GameState): void {
     check((outcome.ranking[i - 1]?.score ?? 0) >= (outcome.ranking[i]?.score ?? 0), "ranking is by score", outcome.ranking);
   }
   check(outcome.winners.every((w) => state.playerOrder.includes(w)), "winners are players");
-  // design §3 (role deck v2 §0): the winning side's best score; Crew wins a success, the dark side a failure.
+  // extension.md "How you win": the top group (level with first on score and tie-breaks) wins a success;
+  // a failure only its members whose role wins on that cause.
   const roles = rolesFor(state.config);
-  const side = (role: string): boolean => isDarkSide(roles, role);
-  const wantDark = outcome.result === "failed";
-  const eligible = outcome.ranking.filter((r) => side(r.role) === wantDark);
-  check(outcome.winners.every((w) => eligible.some((r) => r.player === w)), "winners are on the winning side (design §3)", outcome);
-  check((eligible.length === 0) === (outcome.winners.length === 0), "the winning side always has a winner if dealt (design §3)", outcome);
-  if (eligible[0]) check(outcome.winners.includes(eligible[0].player), "the side's best score wins (design §3)", outcome);
+  const first = outcome.ranking[0];
+  const level = (r: (typeof outcome.ranking)[number]) => first !== undefined && r.score === first.score && r.timesShakenDown === first.timesShakenDown && r.totalHandedIn === first.totalHandedIn;
+  const eligible = outcome.ranking.filter((r) => level(r) && (outcome.result === "success" || winsOn(roles, r.role, outcome.reason)));
+  check(isDeepStrictEqual([...outcome.winners].sort(), eligible.map((r) => r.player).sort()), "winners = the eligible top group", outcome);
 }
 
 // ---------------------------------------------------------------- the driver
@@ -565,7 +587,6 @@ const duelFree: GameConfig = {
   ],
   job: "bank",
   rolePool: [],
-  mole: "off",
   eventsEnabled: false,
   voteVisibility: "open",
   starterMode: false,

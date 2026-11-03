@@ -1,7 +1,8 @@
 // QA (PR #25, role deck v2 R1): perks — double spends, wrong phases, Shield vs
 // Muscle vs a plain shakedown, +Vote stacking, Recharge on the Mole, a Rig spent
 // at the act's meeting, view diffs while perks are held and spent, determinism.
-// design §8.3 (docs/roles-v2.md §1), §11.2, §11.3
+// design §8.3 (docs/roles-v2.md §1), §11.2, §11.3; extension.md "Tokens and the
+// perk shop" (one perk use per round)
 import { describe, expect, it } from "vitest";
 import type { PerkId } from "@skimjob/content";
 import type { GameConfig, GameEvent, GameState, PlayerState } from "./types";
@@ -16,8 +17,7 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
     seed: "perk-qa",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: ["rookie", "lookout", "fence", "hacker"], // no Muscle: no shakedown window
-    mole: "off",
+    rolePool: ["rookie", "lookout", "fence", "hacker"], // no Muscle: a window only if the shop holds a Shield
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     starterMode: false,
@@ -186,12 +186,12 @@ describe("QA: +Vote, Recharge, Rig at the meeting — design §8.3", () => {
     expect(closed(run(s, use("p0", { kind: "extraVote" }), ...votes.slice(0, 3), CLOSE))).toMatchObject({ result: { kind: "shakedown", target: "p5" } });
   });
 
-  it("Recharge gives the Mole a second tip-off in the same act", () => {
-    const TIP = { ability: { kind: "tipOff" } };
-    let s = grantPerks(game(4, ["mole"]), "p0", "recharge");
-    s = run(s, mv("p0", "lobby", 0, TIP), ROUND, ALIBIS);
-    expect(refused(s, mv("p0", "lobby", 0, TIP))).toBeTruthy();
-    s = run(s, use("p0", { kind: "recharge" }), mv("p0", "lobby", 0, TIP), ROUND);
+  it("Recharge gives the Mole a second tip-off between the same meetings (extension.md \"Police activity\")", () => {
+    const TIP = use("p0", { kind: "tipOff" });
+    let s = grantPerks(game(4, ["mole"], { rolePool: ["rookie", "mole"], roleList: "possible" }), "p0", "recharge");
+    s = run(s, TIP, ROUND, ALIBIS);
+    expect(refused(s, TIP)).toMatch(/already tipped off/);
+    s = run(s, use("p0", { kind: "recharge" }), TIP);
     expect(s.log.filter((e) => e.type === "abilityResolved" && e.ability.kind === "tipOff")).toHaveLength(2);
   });
 
@@ -220,16 +220,25 @@ describe("QA: perks never leak to other views — design §8.3, §17.2", () => {
       expect(views(after)).toEqual(views(before));
       return after;
     };
+    // One perk use per round (extension.md "Tokens and the perk shop"), so the spends spread over rounds.
+    const next = (st: GameState) => run({ ...st, heat: 0, haul: 10_000 }, ROUND, ALIBIS);
     s = check(s, use("p0", { kind: "peek", target: "p1" }));
+    s = next(s);
     s = check(s, use("p0", { kind: "tail", room: "vault" }));
+    s = next(s);
     s = check(s, use("p0", { kind: "rig" }));
     const rig = s.rigs[0];
     if (!rig) throw new Error("no rig");
     s = check(s, use("p0", { kind: "rigPick", card: rig.cards[1] }));
-    s = run(s, mv("p0", "lobby", 0, { ability: { kind: "loopCameras", room: "vault" } }), ROUND, ALIBIS);
+    s = next(s);
+    s = run(s, SCHED, OPEN, CLOSE);
+    s = run({ ...s, heat: 0 }, mv("p0", "lobby", 0, { ability: { kind: "loopCameras", room: "vault" } }), ROUND);
     s = check(s, use("p0", { kind: "recharge" }));
-    s = run(s, ...emergency("p1"), vote("p1", "p2"));
+    s = run(s, ALIBIS);
+    s = run(s, ...emergency("p2"));
     s = check(s, use("p0", { kind: "extraVote" }));
+    s = run({ ...s, heat: 0 }, CLOSE, ROUND, ALIBIS);
+    s = run(s, ...emergency("p1"), vote("p1", "p2"));
     s = check(s, use("p0", { kind: "ballot", target: "p1" }));
     expect(viewFor(s, "p0").me.seenBallots).toEqual({ p1: { kind: "shakedown", target: "p2" } });
     // p1's own view doesn't learn it is watched; no other view sees perks.
@@ -243,8 +252,9 @@ describe("QA: perks never leak to other views — design §8.3, §17.2", () => {
 describe("QA: determinism with perks — design §17.2", () => {
   it("same seed + same commands give the same log; the log replays to the same state", () => {
     const script = (): GameState => {
-      let s = grantPerks(game(5, ["lookout"], { eventsEnabled: true }), "p0", "rig", "tail", "peek", "ballot", "shield");
-      s = run(s, use("p0", { kind: "rig" }), use("p0", { kind: "tail", room: "vault" }), use("p0", { kind: "peek", target: "p3" }));
+      let s = grantPerks(game(5, ["lookout"], { eventsEnabled: true }), "p0", "rig", "ballot", "shield");
+      s = grantPerks(grantPerks(s, "p2", "tail"), "p3", "peek");
+      s = run(s, use("p0", { kind: "rig" }), use("p2", { kind: "tail", room: "vault" }), use("p3", { kind: "peek", target: "p4" }));
       s = run(s, mv("p0", "lobby"), mv("p1", "vault", 2), mv("p2", "vault"), ROUND, ALIBIS);
       s = run(s, ...emergency("p1"), use("p0", { kind: "ballot", target: "p1" }), vote("p1", "p0"), vote("p2", "p0"), vote("p3", "p0"), vote("p4", "p0"), CLOSE);
       return s;

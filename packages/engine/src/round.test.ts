@@ -157,6 +157,7 @@ describe("resolution — design §5.2, §6", () => {
       haul: 8,
       heatDelta: 11, // 4 + 20 × 1/3 = 10.67 → 11 (design §7)
       heat: 11,
+      heatParts: { base: 4, rooms: { vault: 7 }, events: 0 }, // extension.md "What the app works out for you"
     });
   });
 
@@ -211,7 +212,7 @@ describe("resolution — design §5.2, §6", () => {
     const before = run(game(4), submit("p0", { room: "security", watch: "vault" }), submit("p1", { room: "vault" }), submit("p2", { room: "vault" }));
     const watched = lastEvents(before, run(before, ROUND)).filter((e) => e.type === "roomWatched");
     expect(watched).toEqual([
-      { type: "roomWatched", visibility: { kind: "private", player: "p0" }, player: "p0", round: 1, source: "security", room: "vault", seen: ["p1", "p2"] },
+      { type: "roomWatched", visibility: { kind: "private", player: "p0" }, player: "p0", round: 1, source: "security", room: "vault", seen: ["p1", "p2"], offline: false },
     ]);
   });
 

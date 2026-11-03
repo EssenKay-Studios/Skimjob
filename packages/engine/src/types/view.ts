@@ -1,6 +1,6 @@
 // What one player is allowed to know: the output of viewFor(state, playerId).
 // Clients and bots receive only this. design §13, §17.2, §17.3
-import type { RoleId, RoomId } from "@skimjob/content";
+import type { PerkId, RoleId, RoomId } from "@skimjob/content";
 import type { PlayerId, PlayerSeat, VoteVisibility } from "./config";
 import type { Move, VoteChoice } from "./commands";
 import type { ActNumber, GameEvent, Outcome } from "./events";
@@ -71,6 +71,34 @@ export interface OtherPlayerView extends PlayerSeat {
   readonly emergencyMeetingUsed: boolean;
 }
 
+/**
+ * The gap box (data only; the app draws it): what the round's public alibis
+ * say the Haul should have grown by, against what it really grew.
+ * `alibis` counts each alibi's room loot (event effects and crowding by
+ * alibis included), as if everything were handed in. extension.md "What the app works out for you"
+ */
+export interface GapBox {
+  readonly round: number;
+  /** How many alibis are posted for the round so far. */
+  readonly posted: number;
+  readonly alibis: number;
+  readonly haulGrowth: number;
+  /** `alibis` − `haulGrowth`: what the alibis claim that didn't reach the Haul. */
+  readonly unaccounted: number;
+}
+
+/** One round's Heat change by part, for the Heat breakdown. extension.md "What the app works out for you", "Police activity" */
+export interface HeatBreakdown {
+  readonly round: number;
+  readonly base: number;
+  readonly rooms: Readonly<Record<RoomId, number>>;
+  readonly events: number;
+  /** Each police activity under this round (+4 each, scaled in small crews), in order. */
+  readonly police: readonly number[];
+  /** The missed-target penalty if the round closed a stretch whose target was missed, else 0. */
+  readonly missedTarget: number;
+}
+
 export interface PlayerView {
   readonly me: SelfView;
   /** Every *other* player, in seat order. You are in `me`. */
@@ -99,6 +127,12 @@ export interface PlayerView {
   readonly lockedIn: readonly PlayerId[];
   /** Open proposals for the act's regular meeting (public, design §11.1). */
   readonly proposals: readonly MeetingProposal[];
+  /** This game's perk shop (public; empty in starter mode), with each perk's cost in tokens. extension.md "Tokens and the perk shop" */
+  readonly shop: readonly { readonly perk: PerkId; readonly cost: number }[];
+  /** The roles shown at setup (public): exactly those dealt, or every role that could be; null when Hidden. extension.md "Settings" */
+  readonly roleList: { readonly list: "exact" | "possible"; readonly roles: readonly RoleId[] } | null;
+  /** The gap box for the latest resolved round; null before round 1 resolves. extension.md "What the app works out for you" */
+  readonly gap: GapBox | null;
   /** Public events, oldest first. design §13 */
   readonly ledger: readonly LoggedEvent<PublicEvent>[];
   /** Events private (or secret) to this player, oldest first. design §13 */

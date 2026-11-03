@@ -3,7 +3,7 @@
 // Player commands are what a client (human or bot) sends. System commands are
 // sent by the server scheduler or the simulator: the engine has no clock, so it
 // never decides by itself that time is up or picks a meeting time.
-import type { EventId, RoleId, RoomId } from "@skimjob/content";
+import type { EventId, PerkId, RoleId, RoomId } from "@skimjob/content";
 import type { PlayerId } from "./config";
 import type { ActNumber } from "./events";
 
@@ -26,10 +26,8 @@ export type AbilityUse =
   | { readonly kind: "blackmail"; readonly target: PlayerId; readonly role: RoleId }
   /** Forger: `target` shows in `room` on this round's watch feeds of that room. Once per act (content). design §8 (v2 §2) */
   | { readonly kind: "forge"; readonly target: PlayerId; readonly room: RoomId }
-  /** Embezzler: take the role's `take` (content) from the Haul after this round's splits. Once per act (content). design §8 (v2 §2) */
-  | { readonly kind: "embezzle" }
-  /** Mole: tip off the cops, adding the role's Heat (content) to this round's total. Once per act (content). design §7, §8 */
-  | { readonly kind: "tipOff" };
+  /** Embezzler: take the role's `take` (content) from the Haul after this round's splits. Once per stretch (content). design §8 (v2 §2) */
+  | { readonly kind: "embezzle" };
 
 /**
  * Spending a perk token (design §8.3, docs/roles-v2.md §1), with `useAbility`.
@@ -39,7 +37,7 @@ export type AbilityUse =
  * - ballot: see `target`'s ballot in the open meeting, as it changes (also in Secret mode).
  * - tail: while planning, also see who is in `room` when this round resolves.
  * - alibi: your alibi for the latest resolved round, if true, is stamped Verified (public).
- * - recharge: your power's uses this act / one use this game come back.
+ * - recharge: one used-up use of your power (this stretch's, or a once-per-game one) comes back.
  * - rig: draw two cards for the next round; `rigPick` chooses one (the first if you don't).
  */
 export type PerkSpend =
@@ -64,8 +62,13 @@ export type InstantAbility =
   | { readonly kind: "audit"; readonly room: RoomId }
   /** Detective: is `target`'s stash at or above the clean threshold? Once per act (content). design §8 (v2 §2) */
   | { readonly kind: "checkStash"; readonly target: PlayerId }
-  /** Priest: bless another player for this act. Once per act (content). design §8 (v2 §2) */
+  /** Priest: bless another player until the next regular meeting closes. Once per stretch (content). design §8 (v2 §2) */
   | { readonly kind: "bless"; readonly target: PlayerId }
+  /**
+   * Mole: tip off the cops, any time, once per stretch. Queued: it lands at the
+   * next free hidden police moment as "police activity". extension.md "Police activity"
+   */
+  | { readonly kind: "tipOff" }
   | PerkSpend;
 
 /**
@@ -113,6 +116,8 @@ export type PlayerCommand =
   | { readonly type: "useAbility"; readonly player: PlayerId; readonly ability: InstantAbility }
   /** Accept (or decline) this round's Double-cross offer; the last answer before the deadline counts. design §10 */
   | { readonly type: "answerDoubleCross"; readonly player: PlayerId; readonly accept: boolean }
+  /** Buy one of the shop's perks with tokens; any time. extension.md "Tokens and the perk shop" */
+  | { readonly type: "buyPerk"; readonly player: PlayerId; readonly perk: PerkId }
   /**
    * Duel mode: call out the opponent for this act, at most once per act, while
    * one of its rounds is being planned. Settled when the act's last round
@@ -148,7 +153,13 @@ export type Deadline =
    * apply the shakedown, unless the Muscle cancelled it, then go on as after
    * the meeting (checkpoint, next act or final check). design §8, §11.3, §11.4
    */
-  | { readonly kind: "resolveShakedown"; readonly meetingId: string };
+  | { readonly kind: "resolveShakedown"; readonly meetingId: string }
+  /**
+   * Hidden police moment `moment` has come (game time; the server never shows
+   * it to clients; the simulator sends one per round as it resolves). Rejected
+   * unless it is the next scheduled moment. extension.md "Police activity"
+   */
+  | { readonly kind: "policeMoment"; readonly moment: number };
 
 export type SystemCommand =
   | { readonly type: "advance"; readonly deadline: Deadline }

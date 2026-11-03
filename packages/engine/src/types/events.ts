@@ -4,8 +4,8 @@
 // must stay secret (a dealt role, a real split) cannot be constructed as public.
 // When you add an event type: add it to GameEvent, add a sample to
 // `samples.ts`, and make sure viewFor() tests cover it (CLAUDE.md).
-import type { EventId, FailureReason, JobId, PerkId, RoleId, RoomId } from "@skimjob/content";
-import type { ContentOverrides, MoleSetting, PlayerId, PlayerSeat, VoteVisibility } from "./config";
+import type { DeckId, EventId, FailureReason, JobId, PerkId, RoleId, RoomId, TokenTrigger } from "@skimjob/content";
+import type { ContentOverrides, DealStyle, PlayerId, PlayerSeat, RoleListSetting, VoteVisibility } from "./config";
 import type { AbilityUse, Move, VoteChoice } from "./commands";
 import type { PrivateVisibility, PublicVisibility, RevealVisibility, SecretVisibility } from "./visibility";
 import type { RoleState } from "./state";
@@ -21,7 +21,10 @@ export interface GameCreated {
   readonly visibility: PublicVisibility;
   readonly players: readonly PlayerSeat[];
   readonly job: JobId;
-  readonly mole: MoleSetting;
+  /** The deck preset (after the stored saboteur-setting migration and starter mode). extension.md "Decks" */
+  readonly deck: DeckId;
+  readonly deal: DealStyle;
+  readonly roleList: RoleListSetting;
   readonly eventsEnabled: boolean;
   readonly voteVisibility: VoteVisibility;
   readonly starterMode: boolean;
@@ -63,32 +66,23 @@ export interface SnitchTargetAssigned {
 }
 
 /**
- * design §8.1: when two Moles are dealt, each is told privately who the other
- * is (`allies`: the other Moles). Not sent to a lone Mole.
+ * The role list shown to players (extension.md "Host settings"): with "exact",
+ * every role dealt (one entry per seat); with "possible", every role this game
+ * could deal. Sorted in content order, so it never tells seats apart. Not
+ * emitted when the list is hidden.
  */
-export interface MoleAllies {
-  readonly type: "moleAllies";
-  readonly visibility: PrivateVisibility;
-  readonly player: PlayerId;
-  readonly allies: readonly PlayerId[];
+export interface RoleListShown {
+  readonly type: "roleListShown";
+  readonly visibility: PublicVisibility;
+  readonly list: "exact" | "possible";
+  readonly roles: readonly RoleId[];
 }
 
-/**
- * Role deck v2 §2: you learn who some of your dark-side allies are (`allies`,
- * added to the ones you knew). `via` says how: "deal", told at the deal
- * (the Hacker: one saboteur); "fence", your safe reached its reveal size (one saboteur);
- * "getaway", Heat reached the Getaway Driver's reveal level (it learns the
- * saboteurs, each saboteur learns it); "tipOff", a Mole's tip-off (one
- * accomplice it didn't know); "blackmail", a Blackmailer guessed a saboteur's
- * role (each learns the other); "embezzle", an Embezzler's first take (one
- * accomplice). At the deal the saboteurs are also told the Forger. design §8, §8.1
- */
-export interface AlliesLearned {
-  readonly type: "alliesLearned";
-  readonly visibility: PrivateVisibility;
-  readonly player: PlayerId;
-  readonly allies: readonly PlayerId[];
-  readonly via: "deal" | "fence" | "getaway" | "tipOff" | "blackmail" | "embezzle";
+/** The shop's three perks, one per column, dealt at setup (none in starter mode). extension.md "Tokens and the perk shop" */
+export interface ShopDealt {
+  readonly type: "shopDealt";
+  readonly visibility: PublicVisibility;
+  readonly perks: readonly PerkId[];
 }
 
 /**
@@ -163,15 +157,15 @@ export interface LootSplit {
  * design §8
  */
 export type ResolvedAbility =
-  | Exclude<AbilityUse, { readonly kind: "blackmail" | "tipOff" | "embezzle" }>
+  | Exclude<AbilityUse, { readonly kind: "blackmail" | "embezzle" }>
   /** Blackmailer: right → `target`'s vote at the next meeting that opens is yours (v2 §2). */
   | { readonly kind: "blackmail"; readonly target: PlayerId; readonly role: RoleId; readonly correct: boolean }
   /** Embezzler: `amount` moved from the Haul to your stash (inside the round's Haul change; at most what the Haul held). design §8 (v2 §2) */
   | { readonly kind: "embezzle"; readonly amount: number }
   /** Muscle: the pending shakedown of `meetingId` will be cancelled when its window ends. design §11.3 */
   | { readonly kind: "cancelShakedown"; readonly meetingId: string; readonly target: PlayerId }
-  /** Mole: the tip-off added `heat` to this round's Heat. Nobody else is told; it's inside the round's total. design §8 */
-  | { readonly kind: "tipOff"; readonly heat: number }
+  /** Mole: a tip-off is queued; it lands at the next free hidden police moment (`tipOffLanded`). extension.md "Police activity" */
+  | { readonly kind: "tipOff" }
   /** Auditor: `room` came up `shortfall` short in `round` (its visitors' pockets; 0 if none). design §8 (v2 §2) */
   | { readonly kind: "audit"; readonly round: number; readonly room: RoomId; readonly shortfall: number }
   /**
@@ -241,6 +235,11 @@ export interface RoomWatched {
   readonly source: "security" | "lookout" | "tail";
   readonly room: RoomId;
   readonly seen: readonly PlayerId[];
+  /**
+   * "Camera offline": a Hacker's loop or a Power cut blinded this feed (`seen`
+   * is empty). Both read exactly the same. extension.md "Situations"
+   */
+  readonly offline: boolean;
 }
 
 /** Server room: how many pocketed, not who. design §6.2 */
@@ -261,6 +260,50 @@ export interface RoundResolved {
   readonly haul: number;
   readonly heatDelta: number;
   readonly heat: number;
+  /**
+   * The round's Heat change by part (before the clamp at 0): the baseline,
+   * each room that changed Heat (rounded; the Cleaner's and Getaway Driver's
+   * visits included), and the event card. The baseline takes up any rounding,
+   * so the parts add up to the unclamped change. Police activity and a missed
+   * target come as their own events under the round (`heatBreakdown`).
+   * extension.md "What the app works out for you" (the Heat breakdown)
+   */
+  readonly heatParts: { readonly base: number; readonly rooms: Readonly<Record<RoomId, number>>; readonly events: number };
+}
+
+/**
+ * Police activity (extension.md "Police activity"): a background patrol or a
+ * Mole's queued tip-off landed at a hidden police moment. Both read exactly
+ * the same; it never says which. `round` is the round in progress (the latest
+ * whose planning has opened). A raid check follows at once.
+ */
+export interface PoliceActivity {
+  readonly type: "policeActivity";
+  readonly visibility: PublicVisibility;
+  readonly round: number;
+  readonly heatAdded: number;
+  readonly heat: number;
+}
+
+/**
+ * The hidden police schedule: police moment `moment` falls `gapPermille`
+ * thousandths of a round length after the previous one (game time), and a
+ * background patrol fires there if `patrol`. Reveal-only. extension.md "Police activity"
+ */
+export interface PoliceScheduled {
+  readonly type: "policeScheduled";
+  readonly visibility: RevealVisibility;
+  readonly moment: number;
+  readonly gapPermille: number;
+  readonly patrol: boolean;
+}
+
+/** Your queued tip-off landed as this police activity (only the Mole is told). extension.md "Police activity" */
+export interface TipOffLanded {
+  readonly type: "tipOffLanded";
+  readonly visibility: PrivateVisibility;
+  readonly player: PlayerId;
+  readonly round: number;
 }
 
 /** Heat reached 100. The heist fails immediately. design §5.2 step 6, §7 */
@@ -502,6 +545,8 @@ export interface ShakedownResolved {
   readonly meetingId: string;
   readonly target: PlayerId;
   readonly stashRevealed: number;
+  /** A Fence's safe is shown too, but not taken. extension.md "Shakedowns (fixed numbers)" */
+  readonly safeRevealed: number;
   readonly taken: number;
   readonly clean: boolean;
   readonly compensation: number;
@@ -551,19 +596,6 @@ export interface MuscleNamed {
   readonly target: PlayerId;
 }
 
-/**
- * The Snitch's target was shaken down and wasn't clean: the Snitch's ballot
- * weighs `votes` more for the rest of the game. design §8 (v2 §2)
- */
-export interface SnitchRewarded {
-  readonly type: "snitchRewarded";
-  readonly visibility: PrivateVisibility;
-  readonly player: PlayerId;
-  readonly meetingId: string;
-  readonly target: PlayerId;
-  readonly votes: number;
-}
-
 /** design §11.4, §11.5 */
 export interface CheckpointChecked {
   readonly type: "checkpointChecked";
@@ -578,12 +610,21 @@ export interface CheckpointChecked {
 
 // ---------------------------------------------------------------- perks (§8.3)
 
-/** You earned a perk token. Only you are told. design §8.3 */
-export interface PerkGranted {
-  readonly type: "perkGranted";
+/** Your role earned you one token, for `trigger`. Only you are told. extension.md "Tokens and the perk shop" */
+export interface TokenEarned {
+  readonly type: "tokenEarned";
+  readonly visibility: PrivateVisibility;
+  readonly player: PlayerId;
+  readonly trigger: TokenTrigger;
+}
+
+/** You bought `perk` from the shop for `cost` tokens. Private until used. extension.md "Tokens and the perk shop" */
+export interface PerkBought {
+  readonly type: "perkBought";
   readonly visibility: PrivateVisibility;
   readonly player: PlayerId;
   readonly perk: PerkId;
+  readonly cost: number;
 }
 
 /** What a spent perk did. `kind` is the perk spent. design §8.3 */
@@ -672,7 +713,7 @@ export interface RankEntry {
   readonly player: PlayerId;
   /** Revealed at the end. design §13 */
   readonly role: RoleId;
-  /** Stash after role scoring (e.g. Rookie ×1.05, Inside Man surplus), rounded to SCORE_DECIMALS. design §8 */
+  /** Stash (safe included) plus the Inside Man's bonus; a whole number. extension.md "Winning and losing" */
   readonly score: number;
   /** Final stash before role scoring, including any Fence safe. design §8 */
   readonly stash: number;
@@ -684,22 +725,23 @@ export interface RankEntry {
   readonly totalHandedIn: number;
 }
 
+/**
+ * extension.md "Winning and losing": one crew. The top group is everyone level
+ * with the first place after the tie-breaks. A success is won by the top
+ * group; a failure by the top-group members whose role (as it is at the end)
+ * wins that ending (`RoleDef.winsOn`), and by nobody otherwise. The full
+ * ranking is always kept, shown as a loss unless someone qualified.
+ */
 export type Outcome =
   | {
       readonly result: "success";
       readonly ranking: readonly RankEntry[];
-      /** The best Crew score (joint on a full tie). Saboteurs and accomplices can't win a success. design §3 */
       readonly winners: readonly PlayerId[];
     }
   | {
       readonly result: "failed";
       readonly reason: FailureReason;
-      /**
-       * "Best of the losers": the same ranking, shown as a loss. Nobody wins by
-       * it (design §19.1, provisional).
-       */
       readonly ranking: readonly RankEntry[];
-      /** The best score among saboteurs and accomplices; empty when none was dealt (e.g. starter games). design §3 */
       readonly winners: readonly PlayerId[];
     };
 
@@ -717,8 +759,8 @@ export type GameEvent =
   | RoomsSet
   | RoleDealt
   | SnitchTargetAssigned
-  | MoleAllies
-  | AlliesLearned
+  | RoleListShown
+  | ShopDealt
   | RngAdvanced
   | RoundStarted
   | MoveLocked
@@ -732,6 +774,9 @@ export type GameEvent =
   | RoomWatched
   | PocketCount
   | RoundResolved
+  | PoliceActivity
+  | PoliceScheduled
+  | TipOffLanded
   | CopsRaided
   | RaidStopped
   | CardForeseen
@@ -756,11 +801,11 @@ export type GameEvent =
   | ShakedownPending
   | ShakedownCancelled
   | ShakedownResolved
-  | SnitchRewarded
   | BlessingPaid
   | MuscleNamed
   | CheckpointChecked
-  | PerkGranted
+  | TokenEarned
+  | PerkBought
   | PerkUsed
   | RigPicked
   | AlibiVerified

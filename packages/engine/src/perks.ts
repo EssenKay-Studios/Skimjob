@@ -1,17 +1,20 @@
-// Perks: spending perk tokens with `useAbility`, one small function per perk,
-// and the Shield, which is spent by itself. design §8.3 (docs/roles-v2.md §1)
+// Perks: buying them from the game's shop with tokens, spending them with
+// `useAbility` (one small function per perk), and the Shield, which is spent
+// by itself. design §8.3; extension.md "Tokens and the perk shop"
 //
-// Tokens are granted by the private `perkGranted` (the roles that earn them
-// come in role deck v2 R2/R3) and live in `roleState.perks`. Every spend is a
-// private `perkUsed` (folded in reduce.ts), plus `alibiVerified` (public) for
-// the Alibi and `rigPicked` for the Rig's choice. Refusals keep the token.
+// Roles earn tokens (the private `tokenEarned`, crew.ts). `buyPerk` spends
+// tokens on one of the three perks dealt at setup (private `perkBought`); the
+// bought perk lives in `roleState.perks`. Every use is a private `perkUsed`
+// (folded in reduce.ts), plus `alibiVerified` (public) for the Alibi and
+// `rigPicked` for the Rig's choice. At most one perk use per round; refusals
+// keep the perk. Unspent tokens are worth nothing at the end.
 import { EVENT_DECK, PERKS, PERK_RULES, type PerkId } from "@skimjob/content";
 import type { GameEvent, GameState, PlayerId, PlayerState, ResolvedPerk } from "./types";
 import { PUBLIC, privateTo } from "./types";
 import type { Draw } from "./handle";
-import { isObject, show } from "./check";
 import { cardRound, foreseenCard } from "./deck";
-import { powerOf } from "./overrides";
+import { perkCost, powerOf } from "./overrides";
+import { isObject, playerFor, show } from "./check";
 
 type Result = GameEvent[] | string;
 type Raw = Record<string, unknown>;
@@ -152,7 +155,26 @@ const SPENDS: { readonly [K in Exclude<PerkId, AutoPerk>]: Spend } = {
 /** Whether `kind` names a perk spend (or the Rig's pick) for `useAbility`. */
 export const isPerkSpend = (kind: string): boolean => kind === "rigPick" || kind === "shield" || kind === "emergency" || Object.hasOwn(SPENDS, kind);
 
-/** `useAbility` with a perk: needs a token of that kind (except the Rig's pick). design §8.3 */
+/**
+ * `buyPerk`: spend tokens on one of this game's shop perks, any time
+ * (several of a kind allowed). Private until the perk is used.
+ * extension.md "Tokens and the perk shop"
+ */
+export function buyPerk(state: GameState, command: Raw): Result {
+  const player = playerFor(state, command);
+  if (typeof player === "string") return player;
+  const perk = command.perk;
+  if (typeof perk !== "string" || !state.shop.includes(perk as PerkId)) return `perk ${show(perk)} is not in this game's shop`;
+  const cost = perkCost(state.config, perk as PerkId);
+  if (player.roleState.tokens < cost) return `${PERKS[perk as PerkId].name} costs ${cost} tokens; you have ${player.roleState.tokens}`;
+  return [{ type: "perkBought", visibility: privateTo(player.id), player: player.id, perk: perk as PerkId, cost }];
+}
+
+/** Whether `player` already used a perk by choice this round (the Shield and Emergency, spent by themselves, don't count). extension.md "Tokens and the perk shop" */
+const usedPerkThisRound = (state: GameState, player: PlayerId): boolean =>
+  state.log.some((e) => e.type === "perkUsed" && e.player === player && e.round === state.round && e.perk.kind !== "shield" && e.perk.kind !== "emergency");
+
+/** `useAbility` with a perk: needs one of that kind (except the Rig's pick), and at most one use per round. design §8.3 */
 export function usePerk(state: GameState, player: PlayerState, raw: unknown, draw: Draw): Result {
   if (!isObject(raw) || typeof raw.kind !== "string") return "ability must be an object with a kind";
   if (raw.kind === "rigPick") return rigPick(state, player, raw);
@@ -161,6 +183,7 @@ export function usePerk(state: GameState, player: PlayerState, raw: unknown, dra
   const spend = Object.hasOwn(SPENDS, raw.kind) ? SPENDS[raw.kind as Exclude<PerkId, AutoPerk>] : undefined;
   if (!spend) return `unknown perk ${raw.kind}`;
   if (perkCount(player, raw.kind as PerkId) === 0) return `you have no ${PERKS[raw.kind as PerkId].name} perk`;
+  if (usedPerkThisRound(state, player.id)) return "you have already used a perk this round";
   return spend(state, player, raw, draw);
 }
 

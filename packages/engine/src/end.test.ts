@@ -9,6 +9,8 @@ import { replay } from "./reduce";
 import { handleCommand } from "./handle";
 import { V01_NUMBERS } from "./v01-numbers.testkit";
 import { outcomeFor, ranking } from "./end";
+import { checkpointTarget } from "./job";
+import { jobFor } from "./overrides";
 
 function config(players: number): GameConfig {
   return {
@@ -16,7 +18,6 @@ function config(players: number): GameConfig {
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
     rolePool: [...STARTER_ROLES], // no Muscle, so no shakedown window (task 12)
-    mole: "off",
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     starterMode: false,
@@ -38,7 +39,9 @@ function game(players: number, roles: string[] = []): GameState {
 type Cmd = unknown | ((s: GameState) => unknown);
 function run(state: GameState, ...commands: Cmd[]): GameState {
   return commands.reduce<GameState>((s, c) => {
-    const r = handleThroughAlibis(s, typeof c === "function" ? c(s) : c);
+    const command = typeof c === "function" ? c(s) : c;
+    if (command === null) return s;
+    const r = handleThroughAlibis(s, command);
     if (!r.ok) throw new Error(`rejected: ${r.reason}`);
     return r.state;
   }, state);
@@ -49,6 +52,8 @@ const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", r
 const sched = (act: number) => ({ type: "scheduleMeeting", act, slot: "slot" });
 const OPEN = (s: GameState) => ({ type: "advance", deadline: { kind: "openMeeting", meetingId: s.scheduledMeeting?.meetingId } });
 const CLOSE = (s: GameState) => ({ type: "advance", deadline: { kind: "closeMeeting", meetingId: s.meeting?.id } });
+/** The shakedown window (open whenever the shop holds a Shield) passes. extension.md "Shakedowns" */
+const RESOLVE = (s: GameState) => (s.phase.kind === "shakedownPending" ? { type: "advance", deadline: { kind: "resolveShakedown", meetingId: s.phase.meetingId } } : null);
 const vote = (player: string, target: string) => ({ type: "castVote", player, vote: { kind: "shakedown", target } });
 
 const outcome = (s: GameState): Outcome => {
@@ -77,7 +82,7 @@ describe("a successful heist — design §3, §8", () => {
     return s;
   }
 
-  it("the heist succeeds after the final meeting and the biggest crew score wins (the Fence is an accomplice, v2 §2)", () => {
+  it("the heist succeeds after the final meeting and the top score wins, whatever the role (extension.md \"How you win\")", () => {
     const s = fullGame();
     expect([s.haul, s.heat]).toEqual([45, 36]);
     expect(outcome(s)).toEqual({
@@ -88,7 +93,7 @@ describe("a successful heist — design §3, §8", () => {
         // design §8: the Inside Man scores 1 per loot above the final target (45 − 44).
         { player: "p1", role: "insideMan", score: 1, stash: 0, safe: 0, timesShakenDown: 0, totalHandedIn: 0 },
       ],
-      winners: ["p1"],
+      winners: ["p0"],
     });
   });
 
@@ -102,30 +107,33 @@ describe("a successful heist — design §3, §8", () => {
 });
 
 describe("role scoring — design §8", () => {
-  it("Rookie: final stash ×1.2, rounded to one decimal (provisional)", () => {
-    const s = withPlayers(game(2), 0, { p0: { stash: 9 }, p1: { stash: 7 } });
+  // extension.md "Winning and losing": whole-number scores, no Rookie multiplier.
+  it("Rookie: scores its stash (no multiplier); scores are whole numbers", () => {
+    const s = withPlayers(game(2, ["rookie", "lookout"]), 0, { p0: { stash: 9 }, p1: { stash: 10 } });
     expect(ranking(s).map((e) => [e.player, e.score])).toEqual([
-      ["p0", 10.8],
-      ["p1", 8.4],
-    ]);
-  });
-
-  it("Rookie ×1.2 can beat a bigger plain stash", () => {
-    const s = withPlayers(game(2, ["lookout", "rookie"]), 0, { p0: { stash: 11 }, p1: { stash: 10 } });
-    expect(ranking(s).map((e) => [e.player, e.score])).toEqual([
-      ["p1", 12],
-      ["p0", 11],
+      ["p1", 10],
+      ["p0", 9],
     ]);
   });
 
   it("Inside Man: surplus over the final target is added to the stash; none below it", () => {
     const above = withPlayers(game(2, ["insideMan", "rookie"]), 50, { p0: { stash: 5 } });
-    expect(ranking(above).find((e) => e.player === "p0")?.score).toBe(11); // 5 + (50 − 44)
+    expect(ranking(above).find((e) => e.player === "p0")?.score).toBe(11); // 5 + (50 − 44), V01 numbers: 1 point per loot
     const below = withPlayers(game(2, ["insideMan", "rookie"]), 40, { p0: { stash: 5 } });
     expect(ranking(below).find((e) => e.player === "p0")?.score).toBe(5);
   });
 
-  it("a role with no definition yet (the Mole) scores its stash", () => {
+  // extension.md "Winning and losing": +1 per 5 loot over the final target, rounded down.
+  it("Inside Man (shipped numbers): +1 point per 5 loot over the final target", () => {
+    const cfg = { ...config(2), contentOverrides: null };
+    const log = setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" && e.player === "p0" ? { ...e, role: "insideMan" } : e));
+    const target = checkpointTarget(jobFor(cfg), 3, 2);
+    const at = (haul: number) => ranking(withPlayers(replay(cfg, log), haul, { p0: { stash: 5 } })).find((e) => e.player === "p0")?.score;
+    expect(target).toBeGreaterThan(0);
+    expect([at(target + 4), at(target + 5), at(target + 14), at(target - 3)]).toEqual([5, 6, 7, 5]);
+  });
+
+  it("the Mole scores its stash", () => {
     const s = withPlayers(game(2, ["mole", "rookie"]), 0, { p0: { stash: 4 } });
     expect(ranking(s)[0]).toMatchObject({ player: "p0", role: "mole", score: 4 });
   });
@@ -163,20 +171,20 @@ describe("a failed heist — design §3, §19.1", () => {
     expect(o).toMatchObject({ result: "failed", reason: "heat", winners: [] });
     // "Best of the losers" ranking, shown as a loss (provisional).
     expect(o.ranking.map((e) => [e.player, e.score, e.stash, e.totalHandedIn])).toEqual([
-      ["p0", 3.6, 3, 3],
-      ["p1", 1.2, 1, 1],
+      ["p0", 3, 3, 3],
+      ["p1", 1, 1, 1],
     ]);
   });
 
   it("a raid from the missed-checkpoint penalty is ranked after the meeting's shakedown", () => {
     let s = { ...game(2), heat: 80 };
     for (let i = 0; i < 3; i++) s = run(s, mv("p0", "lobby", 2), ROUND); // Haul 6 of 12, Heat 92
-    s = run(s, sched(1), OPEN, vote("p0", "p1"), CLOSE); // p1 is clean: paid 5, Haul 1, checkpoint missed
+    s = run(s, sched(1), OPEN, vote("p0", "p1"), CLOSE, RESOLVE); // p1 is clean: paid 6 (all the Haul), checkpoint missed
     expect(s.log.slice(-3).map((e) => e.type)).toEqual(["checkpointChecked", "copsRaided", "gameEnded"]);
     const o = outcome(s);
     expect(o).toMatchObject({ result: "failed", reason: "heat", winners: [] });
     expect(o.ranking.map((e) => [e.player, e.score, e.timesShakenDown])).toEqual([
-      ["p0", 7.2, 0],
+      ["p0", 6, 0],
       ["p1", 6, 1],
     ]);
   });
@@ -189,51 +197,51 @@ describe("a failed heist — design §3, §19.1", () => {
     }
     const o = outcome(s);
     expect(o).toMatchObject({ result: "failed", reason: "target", winners: [] });
-    expect(o.ranking[0]).toMatchObject({ player: "p0", stash: 18, score: 21.6 });
+    expect(o.ranking[0]).toMatchObject({ player: "p0", stash: 18, score: 18 });
   });
 });
 
-describe("faction winning rules (role deck v2 §0) — design §3, §8", () => {
-  // The real content defs (ROLES.mole, ROLES.auditor). p0 Mole, p1 Auditor, p2 Rookie (stash 5, score 6).
+describe("one crew: the top group wins (extension.md \"How you win\", Build notes \"Win rule\")", () => {
+  // p0 Mole, p1 Auditor, p2 Rookie (stash 5).
   const state = (auditorStash: number, moleStash = 1): GameState =>
     withPlayers(game(3, ["mole", "auditor", "rookie"]), 0, { p0: { stash: moleStash }, p1: { stash: auditorStash }, p2: { stash: 5 } });
 
-  it("failure: the best dark-side stash wins, whatever the crew holds; the Auditor is crew now (design §3, role deck v2 R1)", () => {
-    expect(outcomeFor(state(9), "heat").winners).toEqual(["p0"]);
-    expect(outcomeFor(state(2), "heat").winners).toEqual(["p0"]);
-    expect(outcomeFor(state(9, 12), "heat").winners).toEqual(["p0"]);
-  });
-
-  it("missed target: the Mole wins, whatever the Auditor holds", () => {
-    expect(outcomeFor(state(9), "target").winners).toEqual(["p0"]);
-  });
-
-  it("failure with two saboteurs: only the bigger stash wins (design §3: the winning side's best stash)", () => {
-    const s = withPlayers(game(4, ["mole", "mole", "rookie", "lookout"]), 0, { p0: { stash: 4 }, p1: { stash: 9 }, p2: { stash: 30 } });
-    expect(outcomeFor(s, "heat").winners).toEqual(["p1"]);
-    expect(outcomeFor(s, null).winners).toEqual(["p2"]);
-  });
-
-  it("success: the Auditor wins normally with the biggest score", () => {
+  it("success: the top group wins whatever their roles, the Mole included", () => {
     expect(outcomeFor(state(9), null)).toMatchObject({ result: "success", winners: ["p1"] });
     expect(outcomeFor(state(2), null)).toMatchObject({ result: "success", winners: ["p2"] });
+    expect(outcomeFor(state(2, 20), null)).toMatchObject({ result: "success", winners: ["p0"] });
   });
 
-  it("success: the Mole never wins, even with the biggest stash; the best non-Mole does", () => {
-    const o = outcomeFor(state(2, 20), null);
-    expect(o.ranking[0]).toMatchObject({ player: "p0", role: "mole", stash: 20 });
-    expect(o).toMatchObject({ result: "success", winners: ["p2"] });
+  it("failure: only a top-group member whose role wins that ending; a failure-winner outside the top group doesn't win", () => {
+    expect(outcomeFor(state(2, 12), "heat").winners).toEqual(["p0"]);
+    expect(outcomeFor(state(2, 12), "target").winners).toEqual(["p0"]);
+    expect(outcomeFor(state(9), "heat").winners).toEqual([]);
+    expect(outcomeFor(state(9), "target").winners).toEqual([]);
   });
 
-  it("success: two Moles on top leave the win to the best non-Mole, ties included", () => {
-    const s = withPlayers(game(4, ["mole", "mole", "rookie", "lookout"]), 0, { p0: { stash: 30 }, p1: { stash: 30 }, p2: { stash: 5 }, p3: { stash: 6 } });
-    expect(outcomeFor(s, null).winners).toEqual(["p2", "p3"]); // Rookie 5 × 1.2 = 6 ties the Lookout's 6
-    expect(outcomeFor(s, "target").winners).toEqual(["p0", "p1"]);
+  it("the full ranking is kept on a loss", () => {
+    const o = outcomeFor(state(9), "heat");
+    expect(o.ranking.map((e) => e.player)).toEqual(["p1", "p2", "p0"]);
   });
 
-  it("with the starter roles nobody wins a failed heist", () => {
-    const s = withPlayers(game(4, ["rookie", "lookout", "insideMan", "bagman"]), 0, { p0: { stash: 3 }, p3: { stash: 8 } });
+  it("winsOn: Getaway Driver [heat], Embezzler [target], Fence and Mole both", () => {
+    const top = (role: string, reason: "heat" | "target") =>
+      outcomeFor(withPlayers(game(2, [role, "rookie"]), 0, { p0: { stash: 9 }, p1: { stash: 1 } }), reason).winners;
+    expect([top("getawayDriver", "heat"), top("getawayDriver", "target")]).toEqual([["p0"], []]);
+    expect([top("embezzler", "heat"), top("embezzler", "target")]).toEqual([[], ["p0"]]);
+    expect([top("fence", "heat"), top("fence", "target")]).toEqual([["p0"], ["p0"]]);
+    expect([top("mole", "heat"), top("mole", "target")]).toEqual([["p0"], ["p0"]]);
+    expect([top("lookout", "heat"), top("lookout", "target")]).toEqual([[], []]);
+  });
+
+  it("a tied top group: on success all win; on failure only those whose role wins it", () => {
+    const s = withPlayers(game(4, ["mole", "lookout", "rookie", "fence"]), 0, { p0: { stash: 6 }, p1: { stash: 6 }, p2: { stash: 5 }, p3: { stash: 6 } });
+    expect(outcomeFor(s, null).winners).toEqual(["p0", "p1", "p3"]);
+    expect(outcomeFor(s, "heat").winners).toEqual(["p0", "p3"]);
+  });
+
+  it("tie-breaks come first: a failure-winner behind on shakedowns is out of the top group", () => {
+    const s = withPlayers(game(2, ["mole", "lookout"]), 0, { p0: { stash: 6, timesShakenDown: 1 }, p1: { stash: 6 } });
     expect(outcomeFor(s, "heat").winners).toEqual([]);
-    expect(outcomeFor(s, "target").winners).toEqual([]);
   });
 });

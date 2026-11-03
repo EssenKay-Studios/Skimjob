@@ -2,7 +2,7 @@
 // and Heat as normal. design §16.1
 import { describe, expect, it } from "vitest";
 import { handleThroughAlibis } from "./alibis.testkit";
-import { DEFAULT_ROLE_POOL, type RoomId } from "@skimjob/content";
+import { POOL_ROLES, type RoomId } from "@skimjob/content";
 import type { GameConfig, GameEvent, GameState, PlayerId } from "./types";
 import { PUBLIC, privateTo } from "./types";
 import { rolePoolFor, setupEvents, validateConfig } from "./setup";
@@ -20,7 +20,6 @@ function config(extra: Partial<GameConfig> = {}): GameConfig {
     ],
     job: "bank",
     rolePool: [],
-    mole: "off",
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     starterMode: false,
@@ -36,7 +35,7 @@ function game(roles: [string, string] = ["rookie", "rookie"], extra: Partial<Gam
   const cfg = config(extra);
   let seat = 0;
   const log = setupEvents(cfg)
-    .filter((e) => e.type !== "snitchTargetAssigned" && e.type !== "moleAllies")
+    .filter((e) => e.type !== "snitchTargetAssigned")
     .map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: roles[seat++] as string } : e));
   return replay(cfg, log);
 }
@@ -88,15 +87,15 @@ describe("Duel config — design §16.1", () => {
   });
 
   it("never deals the roles that need meetings (Smooth Talker, Muscle, Snitch, Detective, Priest; role deck v2 §3)", () => {
-    const pool = rolePoolFor(config());
+    const pool = rolePoolFor(config({ deck: "everything" }));
     for (const r of ["smoothTalker", "muscle", "snitch", "detective", "priest"]) expect(pool).not.toContain(r);
     // design §8.1: nor the Inside Man (5+), Snitch and Detective (4+), Smooth Talker, Muscle, Priest (5+),
     // nor the Mastermind with events off (v2 §3).
     // R3b: the Blackmailer and Forger (7+, need meetings) neither.
     const small = ["insideMan", "snitch", "detective", "smoothTalker", "muscle", "priest", "mastermind", "blackmailer", "forger"];
     expect(pool).not.toContain("insideMan");
-    expect(pool.length).toBe(DEFAULT_ROLE_POOL.length - small.length);
-    expect(rolePoolFor(config({ duel: false }))).toEqual(DEFAULT_ROLE_POOL.filter((r) => !small.includes(r)));
+    expect(pool.length).toBe(POOL_ROLES.length - small.length);
+    expect(rolePoolFor(config({ duel: false, deck: "everything" }))).toEqual(POOL_ROLES.filter((r) => !small.includes(r)));
   });
 });
 
@@ -120,8 +119,8 @@ describe("Duel has no meetings or votes — design §16.1", () => {
     for (let r = 0; r < 3; r++) s = round(s);
     expect(s.phase).toEqual({ kind: "planning", round: 4 });
     const tail = s.log.slice(s.log.findIndex((e) => e.type === "roundResolved" && e.round === 3)).map((e) => e.type);
-    // design §8.3 (v2 §2): each Rookie earns a Tail for the checkpoint made.
-    expect(tail).toEqual(["roundResolved", "alibisClosed", "checkpointChecked", "perkGranted", "perkGranted", "roundStarted"]);
+    // extension.md "Tokens": each Rookie earns a token for the target made.
+    expect(tail).toEqual(["roundResolved", "alibisClosed", "checkpointChecked", "tokenEarned", "tokenEarned", "roundStarted"]);
   });
 });
 
@@ -159,16 +158,16 @@ describe("call-outs — design §16.1", () => {
   it("only this act's pocketing counts", () => {
     let s = round(round(round(game(), {}, { pocket: 4 }))); // Ben pockets in Act 1 only
     s = round(round(round(s, { pocket: 4 }, {}, callOut("ana")), { pocket: 4 }), { pocket: 4 }); // Ana keeps 12 in Act 2
-    expect(resolved(s)).toMatchObject([{ act: 2, caller: "ana", caught: false, amount: 10 }]);
-    expect([stash(s, "ana"), stash(s, "ben")]).toEqual([2, 14]);
+    expect(resolved(s)).toMatchObject([{ act: 2, caller: "ana", caught: false, amount: 8 }]);
+    expect([stash(s, "ana"), stash(s, "ben")]).toEqual([4, 12]);
   });
 
-  it("a wrong call pays the opponent 5 × the act number from the caller's stash", () => {
-    // Ana keeps 4 + 2 in Act 1; Ben hands everything in.
+  it("a wrong call pays the opponent a fixed 8 from the caller's stash (extension.md \"Shakedowns (fixed numbers)\")", () => {
+    // Ana keeps 4 + 2 + 4 in Act 1; Ben hands everything in.
     let s = round(game(), { pocket: 4 }, {}, callOut("ana"));
-    s = round(round(s, { pocket: 2 }));
-    expect(resolved(s)).toMatchObject([{ act: 1, caller: "ana", target: "ben", caught: false, amount: 5 }]);
-    expect([stash(s, "ana"), stash(s, "ben")]).toEqual([1, 5]);
+    s = round(round(s, { pocket: 2 }), { pocket: 4 });
+    expect(resolved(s)).toMatchObject([{ act: 1, caller: "ana", target: "ben", caught: false, amount: 8 }]);
+    expect([stash(s, "ana"), stash(s, "ben")]).toEqual([2, 8]);
   });
 
   it("a wrong call costs at most the caller's stash (provisional)", () => {
@@ -234,10 +233,10 @@ describe("checkpoints and Heat work as normal — design §16.1, §11.5, §7", (
   });
 
   it("the wrong-call number is content and can be overridden (design §17.4)", () => {
-    const overrides = { ...V01_NUMBERS, duel: { wrongCallOutPerAct: 1 } };
+    const overrides = { ...V01_NUMBERS, duel: { wrongCallOut: 1 } };
     const s = round(round(round(game(["rookie", "rookie"], { contentOverrides: overrides }), { pocket: 4 }, {}, callOut("ana"))));
     expect(resolved(s)).toMatchObject([{ caught: false, amount: 1 }]);
-    expect(validateConfig(config({ contentOverrides: { duel: { wrongCallOutPerAct: -1 } } })).length).toBe(1);
+    expect(validateConfig(config({ contentOverrides: { duel: { wrongCallOut: -1 } } })).length).toBe(1);
   });
 
   it("replays to the same state — design §17.2", () => {

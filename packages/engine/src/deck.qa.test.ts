@@ -18,7 +18,6 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
     rolePool: ["rookie", "lookout", "fence", "insideMan"],
-    mole: "off",
     eventsEnabled: true,
     voteVisibility: "open",
     starterMode: false,
@@ -32,7 +31,7 @@ function game(players: number, roles: string[] = [], extra: Partial<GameConfig> 
   const cfg = config(players, { ...extra, contentOverrides: { ...V06_NUMBERS, ...extra.contentOverrides } });
   let seat = 0;
   const log = setupEvents(cfg)
-    .filter((e) => e.type !== "snitchTargetAssigned" && e.type !== "moleAllies")
+    .filter((e) => e.type !== "snitchTargetAssigned")
     .map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: roles[seat++] ?? "rookie" } : e));
   return replay(cfg, log);
 }
@@ -112,15 +111,6 @@ describe("QA: Heat cards at the boundary — design §10, §7", () => {
   // perRound 45: Heat 45 after round 1, 90 after a plain round 2. 5 players, so card Heat is unscaled (design §10).
   const hot = (seed = "hot") => resolve(game(5, [], { seed, contentOverrides: { heat: { perRound: 45 } } }));
 
-  it("Police patrol taking Heat to exactly 100 raids the crew; without it the round ends at 90", () => {
-    const s = resolve(withCard(hot(), "policePatrol"));
-    expect(s.heat).toBe(100);
-    expect(s.phase).toMatchObject({ kind: "ended" });
-    expect(find(s.log, "copsRaided")).toEqual([{ type: "copsRaided", visibility: PUBLIC, round: 2, heat: 100 }]);
-    const plain = resolve(withCard(hot(), "audit"));
-    expect(plain.heat).toBe(90);
-    expect(plain.phase.kind).not.toBe("ended");
-  });
 
   it("Quiet night is part of the same round's Heat (90 − 10 = 80), not a separate step", () => {
     const s = resolve(withCard(hot(), "quietNight"));
@@ -274,7 +264,7 @@ describe("QA: Double-cross answers — design §10", () => {
 });
 
 describe("QA: Power cut vs info rooms and powers — design §10", () => {
-  it("6 players: no Security / Lookout / room-mate results; the Hacker's and Lookout's uses are recorded; the Server room still counts pockets", () => {
+  it("6 players: Security and Lookout read offline, no room-mate results; the Hacker's and Lookout's uses are recorded; the Server room still counts pockets", () => {
     const base = withCard(resolve(game(6, ["lookout", "hacker"], { rolePool: ["lookout", "hacker", "rookie"] })), "powerCut");
     const s = resolve(base, {
       p0: { room: "office", pocket: 1, ability: { kind: "lookout", rooms: ["vault"] } },
@@ -284,7 +274,11 @@ describe("QA: Power cut vs info rooms and powers — design §10", () => {
       p4: { room: "vault", pocket: 2 },
     });
     const events = lastResolution(s);
-    expect(events.filter((e) => e.type === "roomSighting" || e.type === "roomWatched")).toEqual([]);
+    expect(events.filter((e) => e.type === "roomSighting")).toEqual([]);
+    expect(find(events, "roomWatched").map((e) => [e.player, e.offline, e.seen])).toEqual([
+      ["p0", true, []],
+      ["p2", true, []],
+    ]); // extension.md "Camera offline": the Lookout's and Security's feeds both read offline
     expect(find(events, "abilityResolved").map((e) => e.player).sort()).toEqual(["p0", "p1"]);
     // Pocketed: p0 (1), p4 (2), p5 (Office, 0) → 2 players.
     expect(find(events, "pocketCount")).toEqual([{ type: "pocketCount", visibility: privateTo("p3"), player: "p3", round: 2, pocketed: 2 }]);

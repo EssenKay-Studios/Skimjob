@@ -17,11 +17,11 @@ function config(players: number, voteVisibility: VoteVisibility = "hiddenThenRev
     seed: "meeting-seed",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: [...STARTER_ROLES], // no Muscle, so no shakedown window (task 12)
-    mole: "off",
+    // Starter mode: no Muscle and no shop (so no Shield), so no shakedown window (extension.md "Shakedowns").
+    rolePool: [...STARTER_ROLES],
     eventsEnabled: false,
     voteVisibility,
-    starterMode: false,
+    starterMode: true,
     contentOverrides: V01_NUMBERS, // scripted against content 0.1.0 numbers (balance pass 1)
   };
 }
@@ -389,20 +389,14 @@ describe("quorum and majority — design §11.2", () => {
     expect(meetingResult(crew, cast, skip, targets)).toEqual(expected);
   });
 
-  // design §11.2 (owner answers, 1 Nov): from 9 players the top target needs only ⅓ of the votes cast, alone on top.
+  // extension.md "Voting": one rule at every crew size, more than half the weight cast (the ⅓ plurality from 9 is gone).
   it.each([
-    ["9p: 3 of 9 is a third", 9, 9, 2, m([["a", 3], ["b", 2], ["c", 2]]), 9, { kind: "shakedown", target: "a" }],
-    ["9p: 2 of 9 is under a third", 9, 9, 3, m([["a", 2], ["b", 1], ["c", 1], ["d", 1], ["e", 1]]), 9, { kind: "noMajority" }],
-    ["12p: 4 of 12 with a 4–4 tie is no shakedown", 12, 12, 4, m([["a", 4], ["b", 4]]), 12, { kind: "noMajority" }],
-    ["12p: 4 of 12, the rest scattered", 12, 12, 3, m([["a", 4], ["b", 3], ["c", 2]]), 12, { kind: "shakedown", target: "a" }],
-    ["12p: a skip majority still skips", 12, 12, 7, m([["a", 4], ["b", 1]]), 12, { kind: "skipped" }],
-    ["12p: quorum unchanged", 12, 5, 0, m([["a", 5]]), 5, { kind: "noQuorum" }],
-    // Weight counts: 3 of 10 is under ⅓, but a Smooth talker's double ballot makes it 4 of 11.
-    ["10p: 3 of 10 is under a third", 10, 10, 3, m([["a", 3], ["b", 2], ["c", 2]]), 10, { kind: "noMajority" }],
-    ["10p: Smooth talker weight counts toward the third", 10, 10, 3, m([["a", 4], ["b", 2], ["c", 2]]), 11, { kind: "shakedown", target: "a" }],
-    ["8p: below 9 a plurality isn't enough", 8, 8, 2, m([["a", 3], ["b", 2], ["c", 1]]), 8, { kind: "noMajority" }],
-  ] as const)("plurality: %s", (_name, crew, cast, skip, targets, weight, expected) => {
-    expect(meetingResult(crew, cast, skip, targets, weight, BANK_JOB.shakedown)).toEqual(expected);
+    ["9p: 3 of 9 is no longer enough", 9, 9, 2, m([["a", 3], ["b", 2], ["c", 2]]), 9, { kind: "noMajority" }],
+    ["12p: 4 of 12, the rest scattered, is no shakedown", 12, 12, 3, m([["a", 4], ["b", 3], ["c", 2]]), 12, { kind: "noMajority" }],
+    ["12p: 7 of 12 is a majority", 12, 12, 1, m([["a", 7], ["b", 4]]), 12, { kind: "shakedown", target: "a" }],
+    ["10p: weight counts: 5 ballots weighing 6 of 11", 10, 10, 3, m([["a", 6], ["b", 2]]), 11, { kind: "shakedown", target: "a" }],
+  ] as const)("big crews: %s", (_name, crew, cast, skip, targets, weight, expected) => {
+    expect(meetingResult(crew, cast, skip, targets, weight)).toEqual(expected);
   });
 
   it("no shakedown without a quorum, even if every vote names the same player", () => {
@@ -418,7 +412,7 @@ describe("quorum and majority — design §11.2", () => {
   });
 });
 
-describe("shakedowns — design §11.3", () => {
+describe("shakedowns — design §11.3, extension.md \"Shakedowns (fixed numbers)\"", () => {
   it("the stash is revealed and taken into the Haul", () => {
     const s = act1Meeting();
     expect([s.haul, s.players.p0?.stash]).toEqual([16, 6]);
@@ -429,6 +423,7 @@ describe("shakedowns — design §11.3", () => {
       meetingId: "act-1",
       target: "p0",
       stashRevealed: 6,
+      safeRevealed: 0,
       taken: 6,
       clean: false,
       compensation: 0,
@@ -437,11 +432,11 @@ describe("shakedowns — design §11.3", () => {
     expect(after.haul).toBe(22);
   });
 
-  it("the Fence safe is untouched and not shown, but counts toward the clean check: a full safe isn't clean (owner answers, 1 Nov)", () => {
+  it("the Fence safe is shown but not taken, and counts toward the clean check: a full safe isn't clean (owner answers, 1 Nov)", () => {
     const s = toMeeting(run(game(3, ["fence"]), mv("p0", "vault", 6, { ability: { kind: "fenceSafe", amount: 5 } })));
     expect(s.players.p0).toMatchObject({ stash: 1, safe: 5 });
     const after = run(s, vote("p1", "p0"), vote("p2", "p0"), CLOSE);
-    expect(LAST(after, "shakedownResolved")).toMatchObject({ stashRevealed: 1, taken: 1, clean: false, compensation: 0 });
+    expect(LAST(after, "shakedownResolved")).toMatchObject({ stashRevealed: 1, safeRevealed: 5, taken: 1, clean: false, compensation: 0 });
     expect(after.players.p0).toMatchObject({ stash: 0, safe: 5 });
   });
 
@@ -449,28 +444,29 @@ describe("shakedowns — design §11.3", () => {
     const s = toMeeting(run(game(3, ["fence"]), mv("p0", "lobby", 2, { ability: { kind: "fenceSafe", amount: 1 } })));
     expect(s.players.p0).toMatchObject({ stash: 1, safe: 1 });
     const after = run(s, vote("p1", "p0"), vote("p2", "p0"), CLOSE);
-    expect(LAST(after, "shakedownResolved")).toMatchObject({ stashRevealed: 1, taken: 1, clean: true, compensation: 5 });
-    expect(after.players.p0).toMatchObject({ stash: 5, safe: 1 });
+    expect(LAST(after, "shakedownResolved")).toMatchObject({ stashRevealed: 1, safeRevealed: 1, taken: 1, clean: true, compensation: 8 });
+    expect(after.players.p0).toMatchObject({ stash: 8, safe: 1 });
   });
 
-  it("clean below 3 × the act: the crew pays the target 5 × the act out of the Haul", () => {
+  it("clean below 6: the crew pays the target 8 out of the Haul", () => {
     const s = run(act1Meeting(), vote("p0", "p1"), vote("p2", "p1"), CLOSE);
-    expect(LAST(s, "shakedownResolved")).toMatchObject({ target: "p1", stashRevealed: 0, taken: 0, clean: true, compensation: 5 });
-    expect(s.players.p1).toMatchObject({ stash: 5, timesShakenDown: 1 });
-    expect(s.haul).toBe(11);
+    expect(LAST(s, "shakedownResolved")).toMatchObject({ target: "p1", stashRevealed: 0, taken: 0, clean: true, compensation: 8 });
+    expect(s.players.p1).toMatchObject({ stash: 8, timesShakenDown: 1 });
+    expect(s.haul).toBe(8);
   });
 
-  it("a stash of exactly 3 × the act is not clean", () => {
-    const s = toMeeting(run(game(3), mv("p0", "office", 3)));
+  it("a stash of 5 is clean; 6 (the line) is not", () => {
+    const s = toMeeting(run(game(3), mv("p0", "vault", 5)));
     const after = run(s, vote("p1", "p0"), vote("p2", "p0"), CLOSE);
-    expect(LAST(after, "shakedownResolved")).toMatchObject({ stashRevealed: 3, clean: false, compensation: 0 });
+    expect(LAST(after, "shakedownResolved")).toMatchObject({ stashRevealed: 5, clean: true, compensation: 8 });
+    expect(BANK_JOB.shakedown).toMatchObject({ cleanBelow: 6, payout: 8 });
   });
 
-  it("the threshold and payment scale with the act: Act 2 is clean below 6 and pays 10", () => {
+  it("the line and payout don't scale with the act: Act 2 is still clean below 6 and pays 8", () => {
     let s = run(game(2), mv("p0", "office", 4)); // p0 stash 4
     s = run(toMeeting(s), CLOSE);
     s = run(s, emergency("p1"), open("emergency-p1"), vote("p1", "p0"), CLOSE);
-    expect(LAST(s, "shakedownResolved")).toMatchObject({ stashRevealed: 4, clean: true, compensation: 10 });
+    expect(LAST(s, "shakedownResolved")).toMatchObject({ stashRevealed: 4, clean: true, compensation: 8 });
   });
 
   it("compensation never takes the Haul below zero (provisional)", () => {
@@ -487,9 +483,8 @@ describe("order at a checkpoint — design §11.4, §11.5", () => {
   it("meeting → shakedown → checkpoint: a shakedown can rescue the checkpoint", () => {
     const s = act1Meeting();
     const rescued = run(s, vote("p1", "p0"), vote("p2", "p0"), CLOSE);
-    // design §8.3 (v2 §2): the Rookies' Tails for the checkpoint made come before the next round.
-    const tails = Array<string>(s.playerOrder.length).fill("perkGranted");
-    expect(since(s, rescued).map((e) => e.type)).toEqual(["voteCast", "voteCast", "meetingClosed", "shakedownResolved", "checkpointChecked", ...tails, "roundStarted"]);
+    // Starter mode: no tokens for the target met (extension.md "Tokens and the perk shop").
+    expect(since(s, rescued).map((e) => e.type)).toEqual(["voteCast", "voteCast", "meetingClosed", "shakedownResolved", "checkpointChecked", "roundStarted"]);
     expect(LAST(rescued, "checkpointChecked")).toEqual({ type: "checkpointChecked", visibility: { kind: "public" }, act: 1, target: 18, haul: 22, met: true, heatPenalty: 0 });
     expect(rescued.heat).toBe(19);
   });

@@ -1,5 +1,5 @@
-// QA (PR #21, owner answers 1 Nov): big-crew plurality edges (§11.2), Inside Man
-// from 5 and one Mole (§8.1), uniqueRoles (§8.1, §15), scaled event Heat (§10),
+// QA (PR #21, owner answers 1 Nov; extension.md): the one vote rule at every
+// crew size, Inside Man from 5 (§8.1), uniqueRoles (§8.1, §15), scaled event Heat (§10),
 // Fence safe in the clean check (§11.3), the alibi phase (§5.4) with meetings,
 // shakedown windows, Duel mode and the last round, and repeating cards (§10).
 import { BANK_JOB, EVENTS, STARTER_ROLES, type RoleId } from "@skimjob/content";
@@ -12,8 +12,6 @@ import { meetingResult } from "./meeting";
 import { eventHeatScale, roundJob, scaledCardHeat } from "./deck";
 import { viewFor } from "./view";
 import { V01_NUMBERS } from "./v01-numbers.testkit";
-/** Role deck v2 R3b: the Embezzler is a saboteur too, dealt by the same setting. */
-const isSaboteur = (r: string): boolean => r === "mole" || r === "embezzler";
 
 const seats = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true }));
 function config(n: number, extra: Partial<GameConfig> = {}): GameConfig {
@@ -22,7 +20,6 @@ function config(n: number, extra: Partial<GameConfig> = {}): GameConfig {
     players: seats(n),
     job: "bank",
     rolePool: [...STARTER_ROLES],
-    mole: "off",
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     starterMode: false,
@@ -60,40 +57,34 @@ const LAST = <T extends GameEvent["type"]>(s: GameState, type: T) => s.log.filte
 const m = (entries: [string, number][]) => new Map(entries);
 const dealt = (cfg: GameConfig): RoleId[] => setupEvents(cfg).flatMap((e) => (e.type === "roleDealt" ? [e.role] : []));
 
-describe("QA plurality at 8 vs 9 players — design §11.2", () => {
+describe("QA one vote rule at 8 vs 9 players — extension.md \"One vote rule\", design §11.2", () => {
   it.each([
     // [name, crew, voters, skipWeight, targets, totalWeight, expected]
     ["8p: 4 of 8 is not more than half", 8, 8, 0, m([["a", 4], ["b", 3], ["c", 1]]), 8, "noMajority"],
-    ["9p: 3 of 9 exactly a third, alone on top, ahead of skip", 9, 9, 2, m([["a", 3], ["b", 2], ["c", 2]]), 9, "shakedown"],
-    ["9p: 3–3 tie at a third", 9, 9, 3, m([["a", 3], ["b", 3]]), 9, "noMajority"],
-    ["9p: one absent, 3 of 8", 9, 8, 2, m([["a", 3], ["b", 2], ["c", 1]]), 8, "shakedown"],
-    ["9p: bare quorum of 5, 2 of 5", 9, 5, 1, m([["a", 2], ["b", 1], ["c", 1]]), 5, "shakedown"],
+    ["8p: 5 of 8 is", 8, 8, 0, m([["a", 5], ["b", 3]]), 8, "shakedown"],
+    ["9p: 3 of 9, alone on top, is no longer enough (no plurality)", 9, 9, 2, m([["a", 3], ["b", 2], ["c", 2]]), 9, "noMajority"],
+    ["9p: 5 of 9", 9, 9, 2, m([["a", 5], ["b", 2]]), 9, "shakedown"],
+    ["9p: one absent, 5 of 8", 9, 8, 1, m([["a", 5], ["b", 2]]), 8, "shakedown"],
+    ["9p: bare quorum of 5, 3 of 5", 9, 5, 1, m([["a", 3], ["b", 1]]), 5, "shakedown"],
     ["9p: quorum missed by one (4 of 9)", 9, 4, 0, m([["a", 4]]), 4, "noQuorum"],
-    // Owner decision (PR #21): if skip leads, no shakedown.
-    ["9p: skip outvotes the leader but isn't a majority", 9, 9, 4, m([["a", 3], ["b", 2]]), 9, "noMajority"],
-    ["12p: skip leads 6 vs A 4 without a majority: no shakedown", 12, 12, 6, m([["a", 4], ["b", 2]]), 12, "noMajority"],
-    ["12p: skip ties the leader 4 vs A 4: no shakedown", 12, 12, 4, m([["a", 4], ["b", 3], ["c", 1]]), 12, "noMajority"],
+    ["12p: 6 of 12 is not more than half", 12, 12, 0, m([["a", 6], ["b", 6]]), 12, "noMajority"],
     ["12p: 7 skip of 12", 12, 12, 7, m([["a", 5]]), 12, "skipped"],
-    ["9p Smooth talker: 3 plain votes of weight 10 is under a third", 9, 9, 3, m([["a", 3], ["b", 2], ["c", 2]]), 10, "noMajority"],
-    ["9p Smooth talker: ST + 2 = 4 of 10", 9, 9, 3, m([["a", 4], ["b", 2], ["c", 1]]), 10, "shakedown"],
-    ["9p Smooth talker: 4–4 weight tie (ST+2 vs 4 plain)", 9, 9, 0, m([["a", 4], ["b", 4], ["c", 2]]), 10, "noMajority"],
+    ["12p: 7 of 12", 12, 12, 1, m([["a", 7], ["b", 4]]), 12, "shakedown"],
+    ["9p Smooth talker: ST + 3 = 5 of 10 is not more than half", 9, 9, 3, m([["a", 5], ["b", 2]]), 10, "noMajority"],
+    ["9p Smooth talker: ST + 4 = 6 of 10", 9, 9, 2, m([["a", 6], ["b", 2]]), 10, "shakedown"],
     ["9p Smooth talker skipping makes a skip majority", 9, 9, 6, m([["a", 4]]), 10, "skipped"],
-    ["9p Smooth talker skipping ties the leader by weight (skip 4 vs A 4 of 10)", 9, 9, 4, m([["a", 4], ["b", 2]]), 10, "noMajority"],
-    ["9p Smooth talker skipping, leader one ahead (A 4 vs skip 3 of 10)", 9, 9, 3, m([["a", 4], ["b", 2], ["c", 1]]), 10, "shakedown"],
-    ["9p: every voter skips 4, rest scattered singletons", 9, 9, 4, m([["a", 1], ["b", 1], ["c", 1], ["d", 1], ["e", 1]]), 9, "noMajority"],
   ] as const)("%s", (_n, crew, voters, skip, targets, weight, expected) => {
-    expect(meetingResult(crew, voters, skip, targets, weight, BANK_JOB.shakedown).kind).toBe(expected);
+    expect(meetingResult(crew, voters, skip, targets, weight).kind).toBe(expected);
   });
 
-  it("overrides: pluralityFromPlayers above the crew turns it off; validation rejects bad values", () => {
-    expect(meetingResult(12, 12, 3, m([["a", 4], ["b", 3], ["c", 2]]), 12, { pluralityFromPlayers: 13, pluralityShare: 1 / 3 }).kind).toBe("noMajority");
-    expect(validateConfig(config(9, { contentOverrides: { shakedown: { pluralityFromPlayers: 0 } } }))).not.toEqual([]);
-    expect(validateConfig(config(9, { contentOverrides: { shakedown: { pluralityShare: -0.1 } } }))).not.toEqual([]);
+  it("the plurality numbers are gone from content overrides", () => {
+    expect(validateConfig(config(9, { contentOverrides: { shakedown: { pluralityFromPlayers: 9 } } as never }))).not.toEqual([]);
   });
 
-  // An emergency meeting called in round 1's alibi window, with a Muscle in the pool (so a shakedown window).
+  // An emergency meeting called in round 1's alibi window, with a Muscle dealt (so a shakedown window).
   function emergencyVote(n: number, votes: [string, string | null][]): GameState {
-    let s = run(game(config(n, { rolePool: [...STARTER_ROLES, "muscle"] })), ROUND);
+    const roles = [...Array<string>(n - 1).fill("rookie"), "muscle"];
+    let s = run(game(config(n, { rolePool: [...STARTER_ROLES, "muscle"] }), roles), ROUND);
     expect(s.phase).toEqual({ kind: "alibis", round: 1 });
     s = run(s, { type: "callEmergency", player: "p8" }, open("emergency-p8"));
     expect(viewFor(s, "p0").alibiRound).toBe(1);
@@ -103,9 +94,10 @@ describe("QA plurality at 8 vs 9 players — design §11.2", () => {
     return run(s, close("emergency-p8"));
   }
   const ballots: [string, string | null][] = [["p1", "p0"], ["p2", "p0"], ["p3", "p0"], ["p4", "p5"], ["p5", "p4"], ["p6", "p4"], ["p7", null], ["p8", null]];
+  const majority: [string, string | null][] = [["p1", "p0"], ["p2", "p0"], ["p3", "p0"], ["p4", "p0"], ["p5", "p0"], ["p6", "p4"], ["p7", null], ["p8", null]];
 
-  it("9p integrated: 3 of 8 alone on top passes; alibi deadline stays paused through the shakedown window, then the alibi window resumes", () => {
-    let s = emergencyVote(9, ballots);
+  it("9p integrated: 5 of 8 passes; alibi deadline stays paused through the shakedown window, then the alibi window resumes", () => {
+    let s = emergencyVote(9, majority);
     expect(LAST(s, "meetingClosed")?.result).toEqual({ kind: "shakedown", target: "p0" });
     expect(s.phase.kind).toBe("shakedownPending");
     expect(refused(s, ALIBIS)).toMatch(/paused/);
@@ -120,7 +112,7 @@ describe("QA plurality at 8 vs 9 players — design §11.2", () => {
     expect(replay(s.config, s.log)).toEqual(s);
   });
 
-  it("8p integrated: the same 3-vote lead is no shakedown", () => {
+  it("8p integrated: a 3-vote lead is no shakedown (nor at 9p)", () => {
     let t = run(game(config(8, { rolePool: [...STARTER_ROLES, "muscle"] })), ROUND, { type: "callEmergency", player: "p7" }, open("emergency-p7"));
     t = run(t, ...ballots.slice(0, 7).map(([p, v]) => vote(p, v)), close("emergency-p7"));
     expect(LAST(t, "meetingClosed")?.result).toEqual({ kind: "noMajority" });
@@ -135,7 +127,7 @@ describe("QA dealing — design §8.1", () => {
     for (const n of [2, 3, 4]) {
       for (const seed of SEEDS) {
         for (const extra of [{}, { uniqueRoles: false }, { rolePool: ["insideMan"] }, { rolePool: ["insideMan"], uniqueRoles: false }, { starterMode: true }] as Partial<GameConfig>[]) {
-          expect(dealt(config(n, { seed, mole: "on", eventsEnabled: extra.starterMode ? false : true, ...extra, ...(extra.starterMode ? { mole: "off" } : {}) }))).not.toContain("insideMan");
+          expect(dealt(config(n, { seed, eventsEnabled: !extra.starterMode, ...extra }))).not.toContain("insideMan");
         }
       }
     }
@@ -144,39 +136,21 @@ describe("QA dealing — design §8.1", () => {
     expect(SEEDS.some((seed) => dealt(config(5, { seed })).includes("insideMan"))).toBe(true);
   });
 
-  it("exactly one Mole from 5 with 'on'; 'maybe' 0 or 1 at 5–8 and 1 at 9–12 (role deck v2 §3); never more with uniqueRoles false", () => {
-    for (const n of [5, 8, 9, 10, 11, 12]) {
-      const maybeCounts = new Set<number>();
-      for (const seed of SEEDS.slice(0, 60)) {
-        for (const uniqueRoles of [true, false]) {
-          const moles = (mole: "on" | "maybe") => dealt(config(n, { seed, mole, rolePool: [], uniqueRoles })).filter(isSaboteur).length;
-          // Since R3b a second saboteur (the Embezzler) can be dealt from 7; each saboteur role at most once.
-          expect([1, 2]).toContain(moles("on"));
-          const mb = moles("maybe");
-          expect(mb).toBeLessThanOrEqual(2);
-          maybeCounts.add(Math.min(1, mb));
-        }
-      }
-      expect([...maybeCounts].sort()).toEqual(n <= 8 ? [0, 1] : [1]);
-    }
-  });
-
   it("uniqueRoles false repeats roles; true never does; non-boolean rejected; deal is deterministic", () => {
     const repeats = (cfg: GameConfig) => {
-      const roles = dealt(cfg).filter((r) => r !== "rookie" && !isSaboteur(r));
+      const roles = dealt(cfg).filter((r) => r !== "rookie" && r !== "mole" && r !== "embezzler");
       return roles.length !== new Set(roles).size;
     };
     expect(SEEDS.slice(0, 40).some((seed) => repeats(config(12, { seed, rolePool: [], uniqueRoles: false })))).toBe(true);
     expect(SEEDS.slice(0, 40).some((seed) => repeats(config(12, { seed, rolePool: [] })))).toBe(false);
-    expect(dealt(config(6, { rolePool: ["lookout"], uniqueRoles: false, mole: "on" })).map((r) => (isSaboteur(r) ? "saboteur" : r)).sort()).toEqual(["lookout", "lookout", "lookout", "lookout", "lookout", "saboteur"]);
+    expect(dealt(config(6, { rolePool: ["lookout"], uniqueRoles: false, deal: "random" }))).toEqual(Array(6).fill("lookout"));
     expect(validateConfig({ ...config(6), uniqueRoles: "no" })).toContain("uniqueRoles must be a boolean");
-    const cfg = config(12, { seed: "det", rolePool: [], uniqueRoles: false, mole: "on" });
+    const cfg = config(12, { seed: "det", rolePool: [], uniqueRoles: false });
     expect(setupEvents(cfg)).toEqual(setupEvents(cfg));
   });
 });
 
 describe("QA event Heat scaling — design §10", () => {
-  const patrol = (EVENTS.policePatrol!.effect as { amount: number }).amount;
   const quiet = (EVENTS.quietNight!.effect as { amount: number }).amount;
   it.each([
     [2, 2, -4, 1.2],
@@ -184,8 +158,7 @@ describe("QA event Heat scaling — design §10", () => {
     [4, 4, -8, 1.4],
     [5, 5, -10, 1.5],
     [12, 5, -10, 1.5],
-  ])("%ip: Police patrol %i, Quiet night %i, Shift change Vault Heat ×%f", (n, p, q, mult) => {
-    expect(scaledCardHeat(patrol, n)).toBe(p);
+  ])("%ip (patrol scale %i, now police activity — not scaled): Quiet night %i, Shift change Vault Heat ×%f", (n, _p, q, mult) => {
     expect(scaledCardHeat(quiet, n)).toBe(q);
     expect(eventHeatScale(n)).toBeLessThanOrEqual(1);
     const base = BANK_JOB.rooms.vault!;
@@ -204,46 +177,29 @@ describe("QA event Heat scaling — design §10", () => {
     expect(scaledCardHeat(0, 3)).toBe(0);
   });
 
-  it("integrated: a Police patrol round adds the scaled amount at 2/3/4/5 players", () => {
-    for (const n of [2, 3, 4, 5]) {
-      let found = false;
-      for (let i = 0; i < 200 && !found; i++) {
-        const s1 = run(game(config(n, { seed: `heat-${n}-${i}`, eventsEnabled: true, rolePool: ["rookie"] })), ROUND, ALIBIS);
-        if (s1.card?.id !== "policePatrol") continue;
-        found = true;
-        const d1 = s1.heat;
-        const s2 = run(s1, ROUND);
-        const delta2 = s2.heat - d1;
-        // Round 1 (no card) and round 2 have the same default moves, so the difference is the card.
-        expect(delta2 - d1).toBe(scaledCardHeat(patrol, n));
-      }
-      expect(found).toBe(true);
-    }
-  });
 });
 
-describe("QA Fence safe in the clean check — design §11.3", () => {
-  // 3p, Fence at seat 0; emergency in round 1's alibi window (act 1: clean below 3).
+describe("QA Fence safe in the clean check — design §11.3, extension.md \"Shakedowns (fixed numbers)\"", () => {
+  // 3p, Fence at seat 0; emergency in round 1's alibi window (clean below 6).
   function shake(pocket: number, safe: number): GameState {
     let s = run(game(config(3), ["fence"]), mv("p0", "vault", pocket, { ability: { kind: "fenceSafe", amount: safe } }), ROUND);
     expect(s.players.p0).toMatchObject({ stash: pocket - safe, safe });
     s = run(s, { type: "callEmergency", player: "p1" }, open("emergency-p1"), vote("p1", "p0"), vote("p2", "p0"), close("emergency-p1"));
-    return s;
+    return s.phase.kind === "shakedownPending" ? run(s, { type: "advance", deadline: { kind: "resolveShakedown", meetingId: "emergency-p1" } }) : s;
   }
-  it("stash 1 + safe 2 = exactly 3 is not clean; the safe isn't taken or shown", () => {
-    const s = shake(3, 2);
-    expect(LAST(s, "shakedownResolved")).toMatchObject({ stashRevealed: 1, taken: 1, clean: false, compensation: 0 });
-    expect(s.players.p0).toMatchObject({ stash: 0, safe: 2 });
-    expect(JSON.stringify(LAST(s, "shakedownResolved"))).not.toMatch(/safe/);
+  it("stash 1 + safe 5 = exactly 6 is not clean; the safe is shown but not taken", () => {
+    const s = shake(6, 5);
+    expect(LAST(s, "shakedownResolved")).toMatchObject({ stashRevealed: 1, safeRevealed: 5, taken: 1, clean: false, compensation: 0 });
+    expect(s.players.p0).toMatchObject({ stash: 0, safe: 5 });
     expect(s.phase).toEqual({ kind: "alibis", round: 1 });
   });
-  it("safe 3 and an empty stash is not clean (stash shown as 0)", () => {
-    expect(LAST(shake(3, 3), "shakedownResolved")).toMatchObject({ stashRevealed: 0, clean: false, compensation: 0 });
+  it("a full safe of 5 and an empty stash is clean (stash shown as 0, safe shown as 5)", () => {
+    expect(LAST(shake(5, 5), "shakedownResolved")).toMatchObject({ stashRevealed: 0, safeRevealed: 5, clean: true }); // paid up to the Haul
   });
   it("stash 0 + safe 2 = 2 is clean and compensated", () => {
     const s = shake(2, 2);
-    expect(LAST(s, "shakedownResolved")).toMatchObject({ stashRevealed: 0, clean: true, compensation: 5 });
-    expect(s.players.p0).toMatchObject({ stash: 5, safe: 2 });
+    expect(LAST(s, "shakedownResolved")).toMatchObject({ stashRevealed: 0, clean: true, compensation: 8 });
+    expect(s.players.p0).toMatchObject({ stash: 8, safe: 2 });
   });
 });
 

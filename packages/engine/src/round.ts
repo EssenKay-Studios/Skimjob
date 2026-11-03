@@ -6,7 +6,7 @@
 import { MOLE_ROLE, type RoleId, type RoomId } from "@skimjob/content";
 import type { AbilityUse, GameEvent, GameState, Move, PlayerId, PlayerState } from "./types";
 import { PUBLIC, REVEAL, privateTo } from "./types";
-import { clampHeat, roomDef, roomLoot, roundHeatDelta } from "./job";
+import { clampHeat, roomDef, roomHeatParts, roomLoot, roundHeatDelta } from "./job";
 import { eventsFor, jobFor, powerOf, roleDefIn, rolesFor } from "./overrides";
 import { isObject, show } from "./check";
 import { actOfRound, isLastRoundOfAct } from "./acts";
@@ -16,8 +16,7 @@ import type { Draw } from "./handle";
 import { isDuel } from "./setup";
 import { endOfDuelAct } from "./duel";
 import { cardEffects, cardHeat, closedRoom, isAudit, isBlackout, roundJob, startRound } from "./deck";
-import { grantRewards, roundRewards, stopRaid } from "./crew";
-import { blackmailAllies, darkRoundEvents, playersOf } from "./accomplices";
+import { grantRewards, heatTokens, roundRewards, stopRaid } from "./crew";
 
 export { actOfRound, isLastRoundOfAct };
 
@@ -74,10 +73,8 @@ function checkAbility(state: GameState, player: PlayerState, raw: unknown): Abil
       if (player.roleState.usedThisAct >= power.perAct) return "you have already embezzled this act";
       return { kind: "embezzle" };
     }
-    case "tipOff": {
-      if (player.roleState.usedThisAct >= power.perAct) return "you have already tipped off the cops this act";
-      return { kind: "tipOff" };
-    }
+    case "tipOff":
+      return "the tip-off is used any time with useAbility, not in a move";
     case "voteWeight":
     case "cancelShakedown":
     case "snitch":
@@ -223,7 +220,7 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
     events.push({ type: "abilityResolved", visibility: privateTo(id), player: id, round, ability: { kind: "embezzle", amount } });
   }
   // Blackmailer (v2 §2): a right guess steals the target's vote at the next meeting (meeting.ts); the
-  // victim is told its vote is compromised. A saboteur guessed right and the Blackmailer learn each other.
+  // victim is told its vote is compromised. Nobody learns anyone else's side (extension.md "Build notes").
   for (const id of order) {
     const ability = abilityOf(id);
     if (ability?.kind !== "blackmail") continue;
@@ -231,11 +228,10 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
     events.push({ type: "abilityResolved", visibility: privateTo(id), player: id, round, ability: { ...ability, correct } });
     if (!correct) continue;
     events.push({ type: "voteCompromised", visibility: privateTo(ability.target), player: ability.target, round });
-    events.push(...blackmailAllies(state, id, ability.target));
   }
 
-  // §5.2 step 4, §7: baseline + room pressure, rounded, plus any Mole tip-off (§8, hidden in
-  // the round's total), then clamped once after every Heat source.
+  // §5.2 step 4, §7: baseline + room pressure, rounded, plus the card's Heat, then clamped once.
+  // The Mole's tip-off is no longer part of a round: it lands at a hidden police moment (police.ts).
   const counts = Object.fromEntries(Object.entries(visitors).map(([room, ids]) => [room, ids.length]));
   // Cleaner (v2 §2): its visit to its cooling room counts as `visitors` visitors for that room's Heat pressure.
   for (const id of order) {
@@ -245,15 +241,13 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
     // It counts as negative visitors, so it follows the room's pressure (and its sign) if a card or override changes it.
     if (power.kind === "getaway" && moveOf(id).room === power.room) counts[power.room] = (counts[power.room] ?? 0) - power.reverse - 1;
   }
-  let tipOffs = 0;
-  for (const id of order) {
-    const power = powerFor(id);
-    if (abilityOf(id)?.kind !== "tipOff" || power.kind !== "tipOff") continue;
-    tipOffs += power.heat;
-    events.push({ type: "abilityResolved", visibility: privateTo(id), player: id, round, ability: { kind: "tipOff", heat: power.heat } });
-  }
-  // design §10: Police patrol / Quiet night join the same single clamp.
-  const heat = clampHeat(job, state.heat + roundHeatDelta(job, crewSize, counts) + tipOffs + cardHeat(state));
+  // design §10: a card's Heat (Quiet night) joins the same single clamp.
+  const roomsHeat = roundHeatDelta(job, crewSize, counts);
+  const eventHeat = cardHeat(state);
+  const heat = clampHeat(job, state.heat + roomsHeat + eventHeat);
+  // extension.md "Build notes" (Heat breakdown): the public parts of this round's Heat, before the clamp.
+  const rooms = roomHeatParts(job, crewSize, counts, state.rooms);
+  const heatParts = { base: roomsHeat - Object.values(rooms).reduce((a, b) => a + b, 0), rooms, events: eventHeat };
 
   // §5.2 step 5: room-mates, then Hacker loops, Security / Lookout / Server-room results.
   // design §10 Power cut: nobody sees anybody (sightings, Security and Lookout); the Server room still counts.
@@ -262,7 +256,7 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
     const room = moveOf(id).room;
     if (!blackout) events.push({ type: "roomSighting", visibility: privateTo(id), player: id, round, room, others: others(room, id) });
   }
-  // Hacker (§8): a looped room shows as empty on Security this round (not to the Lookout or room-mates).
+  // Hacker (§8): a looped room's Security feed reads "camera offline" this round (not the Lookout's or room-mates').
   const looped = new Map<RoomId, PlayerId[]>();
   for (const id of order) {
     const ability = abilityOf(id);
@@ -270,10 +264,7 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
     looped.set(ability.room, [...(looped.get(ability.room) ?? []), id]);
     events.push({ type: "abilityResolved", visibility: privateTo(id), player: id, round, ability });
   }
-  // v2 §2: Hackers whose loop hid a saboteur from a crew Security watcher (their reward). Fooling the
-  // dark side, the Hacker itself included, earns nothing (PR #32 QA).
-  const saboteurs = playersOf(state, "saboteur");
-  const crew = playersOf(state, "crew");
+  // extension.md "Roles": Hackers whose loop hid, from a Security watcher of that room, a visitor who pocketed (their token).
   const hid = new Set<PlayerId>();
   // Forger (v2 §2): planted players show on every watch feed of the room this round (not to room-mates),
   // in seat order like real ones, unless really there or watching it themselves.
@@ -298,20 +289,25 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
     const ability = abilityOf(id);
     if (!blackout && roomDef(job, room).info === "watchRoom" && watch !== undefined) {
       const loopers = looped.get(watch);
-      if (loopers && crew.includes(id) && others(watch, id).some((x) => saboteurs.includes(x))) for (const h of loopers) hid.add(h);
+      if (loopers && others(watch, id).some((x) => (toStash.get(x) ?? 0) > 0)) for (const h of loopers) hid.add(h);
       const seen = loopers ? [] : feed(id, watch);
-      events.push({ type: "roomWatched", visibility: privateTo(id), player: id, round, source: "security", room: watch, seen });
+      events.push({ type: "roomWatched", visibility: privateTo(id), player: id, round, source: "security", room: watch, seen, offline: loopers !== undefined });
+    } else if (blackout && roomDef(job, room).info === "watchRoom" && watch !== undefined) {
+      // extension.md "Event cards": a Power cut reads exactly like a loop on every feed.
+      events.push({ type: "roomWatched", visibility: privateTo(id), player: id, round, source: "security", room: watch, seen: [], offline: true });
     }
     if (ability?.kind === "lookout") {
       events.push({ type: "abilityResolved", visibility: privateTo(id), player: id, round, ability });
-      for (const r of blackout ? [] : ability.rooms) {
-        events.push({ type: "roomWatched", visibility: privateTo(id), player: id, round, source: "lookout", room: r, seen: feed(id, r) });
+      for (const r of ability.rooms) {
+        const seen = blackout ? [] : feed(id, r);
+        events.push({ type: "roomWatched", visibility: privateTo(id), player: id, round, source: "lookout", room: r, seen, offline: blackout });
       }
     }
     // design §8.3 Tail: one more watched room, like the Lookout's (blinded by a Power cut, not by a camera loop).
     const tailed = player(id).roleState.tail;
-    if (tailed !== null && !blackout) {
-      events.push({ type: "roomWatched", visibility: privateTo(id), player: id, round, source: "tail", room: tailed, seen: feed(id, tailed) });
+    if (tailed !== null) {
+      const seen = blackout ? [] : feed(id, tailed);
+      events.push({ type: "roomWatched", visibility: privateTo(id), player: id, round, source: "tail", room: tailed, seen, offline: blackout });
     }
     if (roomDef(job, room).info === "pocketCount") {
       events.push({ type: "pocketCount", visibility: privateTo(id), player: id, round, pocketed });
@@ -336,11 +332,14 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
     haul: state.haul + haulDelta,
     heatDelta: heat - state.heat,
     heat,
+    heatParts,
   });
 
-  // design §8.3 (v2 §2): the Bagman's, Cleaner's and Hacker's rewards for this round, then what the dark side learns.
-  events.push(...roundRewards(state, events, round), ...grantRewards(state, "loopHidSaboteur", (p) => hid.has(p.id)));
-  events.push(...darkRoundEvents(events.reduce(applyEvent, before), round, draw));
+  // extension.md "Roles": this round's tokens (Bagman, Cleaner, Fence, Hacker, Embezzler's first take, Getaway Driver).
+  const resolved = events.reduce(applyEvent, before);
+  events.push(...roundRewards(resolved, round), ...grantRewards(state, "loopHidPocketer", (p) => hid.has(p.id)));
+  events.push(...grantRewards(state, "firstTake", (p) => embezzledFirst(resolved, p.id, round)));
+  events.push(...heatTokens(resolved));
 
   // §5.2 step 6: Heat at the max means the cops raid and the heist fails at once (§3, §7),
   // unless a Fixer stops it (v2 §2). Otherwise the round's alibis open (the fold of
@@ -352,6 +351,12 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
     events.push(gameEnded(before, events, "heat"));
   }
   return events;
+}
+
+/** Whether `player`'s first take this game was in `round` (the Embezzler's token, extension.md "Roles"). */
+function embezzledFirst(now: GameState, player: PlayerId, round: number): boolean {
+  const takes = now.log.flatMap((e) => (e.type === "abilityResolved" && e.player === player && e.ability.kind === "embezzle" && e.ability.amount > 0 ? [e.round] : []));
+  return takes[0] === round;
 }
 
 /**

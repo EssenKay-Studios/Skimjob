@@ -1,7 +1,8 @@
 // Role deck v2 crew roles, step R2b (docs/roles-v2.md §2, §3): Smooth Talker,
-// Muscle, Priest, Bagman, Cleaner, Fixer, Mastermind and their rewards;
-// eligibility; the PR #26 review notes (Auditor, Detective, an earned Peek);
-// a view-diff with these roles dealt. design §7, §8, §8.1, §8.3, §10, §11.3, §16.1
+// Muscle, Priest, Bagman, Cleaner, Fixer, Mastermind and their token rewards
+// (extension.md "Roles", "Tokens and the perk shop"); eligibility; the PR #26
+// review notes (Auditor, Detective, a bought Peek); a view-diff with these
+// roles dealt. design §7, §8, §8.1, §10, §11.3, §16.1
 import { describe, expect, it } from "vitest";
 import { handleThroughAlibis } from "./alibis.testkit";
 import { BANK_JOB, ROLES, STARTER_ROLES } from "@skimjob/content";
@@ -19,9 +20,8 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
     seed: "r2b-seed",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    // No Muscle or Shield earner in the pool, so passed shakedowns apply at once (design §8.3).
+    // `run` passes the shakedown window a dealt Shield opens (extension.md "Shakedowns").
     rolePool: [...STARTER_ROLES],
-    mole: "off",
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     starterMode: false,
@@ -53,6 +53,8 @@ function run(state: GameState, ...commands: Cmd[]): GameState {
     return r.state;
   }, state);
 }
+/** Resolve a waiting shakedown nobody cancels. */
+const settle = (s: GameState): GameState => (s.phase.kind === "shakedownPending" ? run(s, RESOLVE) : s);
 function reason(state: GameState, command: unknown): string {
   const r = handleThroughAlibis(state, command);
   if (r.ok) throw new Error("expected a rejection");
@@ -60,7 +62,8 @@ function reason(state: GameState, command: unknown): string {
 }
 const ofType = <T extends GameEvent["type"]>(events: readonly GameEvent[], type: T) =>
   events.filter((e): e is Extract<GameEvent, { type: T }> => e.type === type);
-const granted = (s: GameState, player: string) => ofType(s.log, "perkGranted").filter((e) => e.player === player).map((e) => e.perk);
+/** The triggers of the tokens `player` earned. extension.md "Tokens and the perk shop" */
+const granted = (s: GameState, player: string) => ofType(s.log, "tokenEarned").filter((e) => e.player === player).map((e) => e.trigger);
 const since = (before: GameState, after: GameState) => after.log.slice(before.log.length);
 
 const mv = (player: string, room: string, pocket = 0, extra: object = {}) => ({ type: "submitMove", player, move: { room, pocket, ...extra } });
@@ -75,8 +78,7 @@ const emergency = (s: GameState, caller: string, meetingId = `emergency-${caller
 const shakeDown = (s: GameState, caller: string, target: string): GameState => {
   s = emergency(s, caller);
   for (const id of s.playerOrder) if (id !== target) s = run(s, vote(id, target));
-  s = run(s, CLOSE);
-  return s.pendingShakedown ? run(s, RESOLVE) : s;
+  return settle(run(s, CLOSE));
 };
 /** Play the act's remaining rounds with `moves` each round, then its regular meeting (`inMeeting`, then closed). */
 const finishAct = (s: GameState, moves: Cmd[] = [], inMeeting: (s: GameState) => GameState = (x) => x): GameState => {
@@ -87,23 +89,28 @@ const finishAct = (s: GameState, moves: Cmd[] = [], inMeeting: (s: GameState) =>
     if (s.round === before) break;
   }
   s = run(s, { type: "scheduleMeeting", act, slot: "x" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: `act-${act}` } });
-  return run(inMeeting(s), CLOSE);
+  return settle(run(inMeeting(s), CLOSE));
 };
-const { cleanBelowPerAct, compensationPerAct } = BANK_JOB.shakedown;
+/** extension.md "Shakedowns": a fixed clean line and payout. */
+const { cleanBelow: cleanBelowPerAct, payout: compensationPerAct } = BANK_JOB.shakedown;
 
-describe("Smooth Talker: on the winning side of a dirty shakedown → one more emergency meeting — v2 §2, design §8.3, §11.1", () => {
+describe("Smooth Talker: on the winning side of a dirty shakedown → a token — extension.md \"Roles\"", () => {
   const caught = (stVote: string | null) => {
     let s = run(game(5, ["smoothTalker"]), mv("p1", "vault", 6), ROUND);
     s = emergency(s, "p2");
-    s = run(s, vote("p0", stVote), vote("p2", "p1"), vote("p3", "p1"), vote("p4", "p1"), CLOSE);
-    return s;
+    return settle(run(s, vote("p0", stVote), vote("p2", "p1"), vote("p3", "p1"), vote("p4", "p1"), CLOSE));
   };
 
-  it("voted for the dirty target → a private Emergency, spent by calling a second emergency meeting (its own id)", () => {
-    let s = caught("p1");
+  it("voted for the dirty target → a private token", () => {
+    const s = caught("p1");
     expect(ofType(s.log, "shakedownResolved")[0]?.clean).toBe(false);
-    expect(granted(s, "p0")).toEqual(["emergency"]);
-    expect(JSON.stringify(viewFor(s, "p1"))).not.toMatch(/"perk":"emergency"/);
+    expect(granted(s, "p0")).toEqual(["wonDirtyShakedown"]);
+    expect(ofType(s.log, "tokenEarned")[0]?.visibility).toEqual(privateTo("p0"));
+    expect(viewFor(s, "p1").caseFile.some(({ event }) => event.type === "tokenEarned")).toBe(false);
+  });
+
+  it("a bought Emergency is spent by calling a second emergency meeting (its own id)", () => {
+    let s = grantPerks(run(game(5, ["smoothTalker"]), ROUND), "p0", "emergency");
     s = run(emergency(s, "p0"), CLOSE); // its own one per game: no perk spent
     expect(s.players.p0?.roleState.perks).toEqual(["emergency"]);
     const before = s;
@@ -121,14 +128,14 @@ describe("Smooth Talker: on the winning side of a dirty shakedown → one more e
   it("not when it voted otherwise, nor for a clean target; its ballot still counts ×2 (its one number)", () => {
     expect(granted(caught(null), "p0")).toEqual([]);
     let s = emergency(game(5, ["smoothTalker"]), "p2");
-    s = run(s, vote("p0", "p1"), vote("p2", "p1"), vote("p3", "p1"), CLOSE);
+    s = settle(run(s, vote("p0", "p1"), vote("p2", "p1"), vote("p3", "p1"), CLOSE));
     expect(ofType(s.log, "shakedownResolved")[0]?.clean).toBe(true);
     expect(granted(s, "p0")).toEqual([]);
     expect(ROLES.smoothTalker?.power).toEqual({ kind: "voteWeight", weight: 2 });
   });
 });
 
-describe("Muscle: a clean save → Recharge; a dirty one names the Muscle — v2 §2, design §8, §11.3", () => {
+describe("Muscle: a clean save → a token and the power back; a dirty one names the Muscle — extension.md \"Roles\" (owner ruling 3 Nov)", () => {
   const pool = { rolePool: [...STARTER_ROLES, "muscle"] };
   const cancelled = (pocket: number, target = "p1") => {
     let s = run(game(5, ["muscle"], pool), mv(target, "vault", pocket), ROUND);
@@ -138,16 +145,16 @@ describe("Muscle: a clean save → Recharge; a dirty one names the Muscle — v2
     return [s, run(s, RESOLVE)] as const;
   };
 
-  it("target clean: a private Recharge, no compensation, nobody named; the Recharge gives the cancel back", () => {
+  it("target clean: a private token, no compensation, nobody named; the cancel comes back", () => {
     const [pending, s] = cancelled(cleanBelowPerAct - 1);
-    expect(since(pending, s).map((e) => e.type)).toEqual(["shakedownCancelled", "perkGranted"]);
-    expect(granted(s, "p0")).toEqual(["recharge"]);
+    expect(since(pending, s).map((e) => e.type)).toEqual(["shakedownCancelled", "tokenEarned"]);
+    expect(granted(s, "p0")).toEqual(["cancelledClean"]);
     expect(s.haul).toBe(pending.haul);
     expect(s.players.p1?.stash).toBe(cleanBelowPerAct - 1);
-    expect(run(s, use("p0", { kind: "recharge" })).players.p0?.roleState.usedThisGame).toBe(0);
+    expect(s.players.p0?.roleState.usedThisGame).toBe(0);
   });
 
-  it("target dirty: the ledger names the Muscle (public `muscleNamed`), no perk", () => {
+  it("target dirty: the ledger names the Muscle (public `muscleNamed`), no token", () => {
     const [pending, s] = cancelled(cleanBelowPerAct);
     expect(since(pending, s)).toEqual([
       { type: "shakedownCancelled", visibility: PUBLIC, meetingId: "emergency-p2", target: "p1" },
@@ -162,7 +169,7 @@ describe("Muscle: a clean save → Recharge; a dirty one names the Muscle — v2
 });
 
 describe("Priest: once per act, bless a player; a clean shakedown of them is paid by the bank — v2 §2, design §8", () => {
-  it("blessed and shaken down clean: the compensation goes back into the Haul (`blessingPaid`), and the Priest earns a Ballot", () => {
+  it("blessed and shaken down clean: the compensation goes back into the Haul (`blessingPaid`), and the Priest earns a token", () => {
     const blessed = run(game(5, ["priest"]), mv("p0", "office"), mv("p1", "office"), ROUND, use("p0", { kind: "bless", target: "p1" }));
     expect(blessed.log.at(-1)).toEqual({ type: "abilityResolved", visibility: privateTo("p0"), player: "p0", round: 2, ability: { kind: "bless", target: "p1", act: 1 } });
     expect(JSON.stringify(viewFor(blessed, "p1"))).not.toMatch(/"bless"/);
@@ -171,7 +178,7 @@ describe("Priest: once per act, bless a player; a clean shakedown of them is pai
     expect(ofType(s.log, "blessingPaid")).toEqual([{ type: "blessingPaid", visibility: PUBLIC, meetingId: "emergency-p2", target: "p1", amount: compensationPerAct }]);
     expect(s.haul).toBe(blessed.haul);
     expect(s.players.p1?.stash).toBe(compensationPerAct);
-    expect(granted(s, "p0")).toEqual(["ballot"]);
+    expect(granted(s, "p0")).toEqual(["blessedShakenClean"]);
     // Unblessed, the Haul pays.
     const plain = shakeDown(run(game(5, ["priest"]), mv("p0", "office"), mv("p1", "office"), ROUND), "p2", "p1");
     expect(plain.haul).toBe(blessed.haul - compensationPerAct);
@@ -211,7 +218,7 @@ describe("Priest: once per act, bless a player; a clean shakedown of them is pai
   });
 });
 
-describe("Bagman: all-in → the bank adds +1 to the Haul; an all-in act → Alibi — v2 §2, design §8", () => {
+describe("Bagman: all-in → the bank adds +1 to the Haul; 3 all-in rounds running → a token — extension.md \"Roles\"", () => {
   const STAY = [mv("p1", "lobby"), mv("p2", "lobby")];
   it("+1 inside the round's Haul change when it hands in everything (and something); private to it", () => {
     const bag = run(game(3, ["bagman"]), mv("p0", "office"), ...STAY, ROUND);
@@ -219,24 +226,24 @@ describe("Bagman: all-in → the bank adds +1 to the Haul; an all-in act → Ali
     expect(bag.haul).toBe(rookie.haul + 1);
     const note = ofType(bag.log, "abilityResolved").find((e) => e.ability.kind === "bagman");
     expect(note).toMatchObject({ visibility: privateTo("p0"), ability: { kind: "bagman", bonus: 1 } });
-    expect(JSON.stringify(viewFor(bag, "p1"))).not.toMatch(/"bagman"/);
+    expect(JSON.stringify(viewFor(bag, "p1"))).not.toMatch(/"kind":"bagman"/);
     expect(run(game(3, ["bagman"]), mv("p0", "office", 1), ...STAY, ROUND).haul).toBe(rookie.haul - 1);
     expect(run(game(3, ["bagman"]), mv("p0", "rooftop"), ...STAY, ROUND).haul).toBe(run(game(3, []), mv("p0", "rooftop"), ...STAY, ROUND).haul);
     const tuned = run(game(3, ["bagman"], { contentOverrides: { roles: { bagman: { bonus: 3 } } } }), mv("p0", "office"), ...STAY, ROUND);
     expect(tuned.haul).toBe(rookie.haul + 3);
   });
 
-  it("every round of an act pocketing nothing → an Alibi as the act's last round resolves; a pocket loses it", () => {
+  it("three rounds running handing in everything → a token as the third resolves; a pocket restarts the count", () => {
     const s = finishAct(game(3, ["bagman"]), [mv("p0", "office"), ...STAY]);
-    expect(granted(s, "p0")).toEqual(["alibi"]);
-    expect(ofType(s.log, "perkGranted")[0]).toMatchObject({ visibility: privateTo("p0"), player: "p0" });
-    let t = run(game(3, ["bagman"]), mv("p0", "office", 1), ...STAY, ROUND);
+    expect(granted(s, "p0")).toEqual(["allInStreak"]);
+    expect(ofType(s.log, "tokenEarned")[0]).toMatchObject({ visibility: privateTo("p0"), player: "p0" });
+    let t = run(game(3, ["bagman"]), mv("p0", "office"), ...STAY, ROUND, mv("p0", "office", 1), ...STAY, ROUND);
     t = finishAct(t, [mv("p0", "office"), ...STAY]);
     expect(granted(t, "p0")).toEqual([]);
   });
 });
 
-describe("Cleaner: its Rooftop visit counts as 2 for Heat; every 2nd Rooftop round → +Vote — v2 §2, design §7, §8", () => {
+describe("Cleaner: its Rooftop visit counts as 2 for Heat; every 2nd Rooftop round → a token — extension.md \"Roles\"", () => {
   const HOT = [mv("p1", "vault"), mv("p2", "vault")];
   it("cools like two visitors, inside the round's Heat change", () => {
     const job = BANK_JOB;
@@ -249,20 +256,20 @@ describe("Cleaner: its Rooftop visit counts as 2 for Heat; every 2nd Rooftop rou
     expect(run(game(3, ["cleaner"]), mv("p0", "vault"), ...HOT, ROUND).heat).toBe(run(game(3, []), mv("p0", "vault"), ...HOT, ROUND).heat);
   });
 
-  it("a private +Vote on its 2nd, 4th… Rooftop round", () => {
+  it("a private token on its 2nd, 4th… Rooftop round", () => {
     let s = run(game(3, ["cleaner"]), mv("p0", "rooftop"), ROUND, mv("p0", "lobby"), ROUND);
     expect(granted(s, "p0")).toEqual([]);
     s = run(s, mv("p0", "rooftop"), ROUND);
-    expect(granted(s, "p0")).toEqual(["extraVote"]);
-    expect(ofType(s.log, "perkGranted").at(-1)?.visibility).toEqual(privateTo("p0"));
+    expect(granted(s, "p0")).toEqual(["coolingRounds"]);
+    expect(ofType(s.log, "tokenEarned").at(-1)?.visibility).toEqual(privateTo("p0"));
   });
 });
 
-describe("Fixer: once per game a raid stops at 95 Heat; it loses ¼ of its stash and earns a Shield — v2 §2, design §7, §8", () => {
+describe("Fixer: once per game a raid stops at 95 Heat; it loses ¼ of its stash and earns a token — extension.md \"Roles\"", () => {
   const hot = (s: GameState, heat: number): GameState => ({ ...s, heat });
   const ALL_VAULT = [mv("p1", "vault"), mv("p2", "vault")];
 
-  it("mid-round: public `raidStopped` (no name), Heat 95, the Fixer pays privately and gets a Shield; the next raid ends the game", () => {
+  it("mid-round: public `raidStopped` (no name), Heat 95, the Fixer pays privately and gets a token; the next raid ends the game", () => {
     const before = hot(withStashes(game(3, ["fixer"]), { p0: 8 }), 99);
     const s = run(before, mv("p0", "lobby"), ...ALL_VAULT, ROUND);
     const events = since(before, s);
@@ -271,8 +278,8 @@ describe("Fixer: once per game a raid stops at 95 Heat; it loses ¼ of its stash
     expect(ofType(events, "abilityResolved")[0]).toEqual({ type: "abilityResolved", visibility: privateTo("p0"), player: "p0", round: 1, ability: { kind: "fixer", lost: 2 } });
     expect(ofType(events, "copsRaided")).toEqual([]);
     expect([s.heat, s.players.p0?.stash, s.phase.kind]).toEqual([95, 6, "planning"]);
-    expect(granted(s, "p0")).toEqual(["shield"]);
-    expect(JSON.stringify(viewFor(s, "p1"))).not.toMatch(/"fixer"|perkGranted/);
+    expect(granted(s, "p0")).toEqual(["raidStopped"]);
+    expect(JSON.stringify(viewFor(s, "p1"))).not.toMatch(/"kind":"fixer"|tokenEarned/);
     const again = run(hot(s, 99), mv("p0", "lobby"), ...ALL_VAULT, ROUND);
     expect(ofType(since(s, again), "copsRaided")).toHaveLength(1);
     expect(again.phase.kind).toBe("ended");
@@ -294,13 +301,13 @@ describe("Fixer: once per game a raid stops at 95 Heat; it loses ¼ of its stash
     expect(run(hot(game(3, []), 99), mv("p0", "lobby"), ...ALL_VAULT, ROUND).phase.kind).toBe("ended");
   });
 
-  it("the shakedown window opens whenever a Fixer (a Shield earner) could be dealt (v2 §1)", () => {
-    expect(opensShakedownWindow(ROLES, ["rookie", "fixer"])).toBe(true);
-    expect(opensShakedownWindow(ROLES, ["rookie", "bagman", "cleaner", "priest", "smoothTalker", "mastermind"])).toBe(false);
+  it("the Fixer no longer opens a shakedown window; only a Shield in the shop or a Muscle does (extension.md \"Shakedowns\")", () => {
+    expect(opensShakedownWindow(ROLES, ["rookie", "fixer"], [])).toBe(false);
+    expect(opensShakedownWindow(ROLES, ["rookie", "bagman", "cleaner", "priest", "smoothTalker", "mastermind"], ["tail", "alibi", "rig"])).toBe(false);
   });
 });
 
-describe("Mastermind: sees the next event card (events on only); a checkpoint made → Rig — v2 §2, design §8, §10", () => {
+describe("Mastermind: sees the next event card (events on only); target met → a token — extension.md \"Roles\"", () => {
   const cfg = config(3, { rolePool: ["mastermind"], eventsEnabled: true });
   const start = createGame(cfg);
   const mind = start.playerOrder.find((id) => start.players[id]?.role === "mastermind") as string;
@@ -329,10 +336,10 @@ describe("Mastermind: sees the next event card (events on only); a checkpoint ma
     expect(Math.max(...ofType(s.log, "cardForeseen").map((e) => e.round))).toBe(9);
   });
 
-  it("a checkpoint made → Rig (rewardCount is its number); dealt only with events on", () => {
+  it("target met → a token; dealt only with events on", () => {
     const s = finishAct(start, start.playerOrder.map((id) => mv(id, "office")));
     expect(ofType(s.log, "checkpointChecked")[0]?.met).toBe(true);
-    expect(granted(s, mind)).toEqual(["rig"]);
+    expect(granted(s, mind)).toEqual(["checkpointMade"]);
     expect(rolePoolFor(config(3, { rolePool: ["mastermind", "rookie"] }))).toEqual(["rookie"]);
     expect(rolePoolFor(cfg)).toEqual(["mastermind"]);
   });
@@ -340,7 +347,7 @@ describe("Mastermind: sees the next event card (events on only); a checkpoint ma
 
 describe("dealing limits — v2 §3, design §8.1, §16.1", () => {
   it("Smooth Talker, Muscle and Priest from 5 players and never in Duel; Bagman, Cleaner, Fixer anywhere; starter set", () => {
-    const at = (n: number, extra: Partial<GameConfig> = {}) => rolePoolFor(config(n, { rolePool: [], ...extra }));
+    const at = (n: number, extra: Partial<GameConfig> = {}) => rolePoolFor(config(n, { rolePool: [], deck: "everything", ...extra }));
     for (const r of ["smoothTalker", "muscle", "priest"]) {
       expect(at(4)).not.toContain(r);
       expect(at(5)).toContain(r);
@@ -364,19 +371,20 @@ describe("PR #26 review notes — v2 §2, design §8, §8.3", () => {
   });
 
   it("the Detective can't check a player whose shakedown is pending (a sure Shield); others yes", () => {
-    let s = run(game(4, ["detective"], { rolePool: [...STARTER_ROLES, "detective"] }), mv("p1", "vault", 6), ROUND);
+    // A Muscle could be dealt (5+), so the window opens. extension.md "Shakedowns"
+    let s = run(game(5, ["detective"], { rolePool: [...STARTER_ROLES, "detective", "muscle"] }), mv("p1", "vault", 6), ROUND);
     s = emergency(s, "p2");
-    for (const id of ["p0", "p2", "p3"]) s = run(s, vote(id, "p1"));
+    for (const id of ["p0", "p2", "p3", "p4"]) s = run(s, vote(id, "p1"));
     s = run(s, CLOSE);
     expect(s.phase.kind).toBe("shakedownPending");
     expect(reason(s, use("p0", { kind: "checkStash", target: "p1" }))).toMatch(/pending/);
     expect(run(s, use("p0", { kind: "checkStash", target: "p2" })).log.at(-1)).toMatchObject({ ability: { kind: "checkStash", target: "p2" } });
   });
 
-  it("an earned Peek (Lookout) is spent like any Peek: the role, privately", () => {
+  it("a held Peek is spent: the role, privately", () => {
     let s = run(game(3, ["lookout", "rookie", "auditor"]), mv("p0", "lobby", 0, { ability: { kind: "lookout", rooms: ["vault"] } }), mv("p1", "vault", 6), ROUND);
-    s = shakeDown(s, "p2", "p1");
-    expect(granted(s, "p0")).toEqual(["peek"]);
+    s = grantPerks(shakeDown(s, "p2", "p1"), "p0", "peek");
+    expect(granted(s, "p0")).toEqual(["watchedShakenDirty"]);
     s = run(s, use("p0", { kind: "peek", target: "p2" }));
     expect(s.log.at(-1)).toEqual({ type: "perkUsed", visibility: privateTo("p0"), player: "p0", round: 2, perk: { kind: "peek", target: "p2", role: "auditor" } });
     expect(s.players.p0?.roleState.perks).toEqual([]);
@@ -399,7 +407,7 @@ describe("view-diff with the seven dealt, and determinism — design §13, §17.
     expect(ofType(a.log, "shakedownResolved")[0]?.clean).toBe(false);
     expect(reason(a, use("p2", { kind: "bless", target: "p5" }))).toMatch(/caught dirty/);
     expect(run(b, use("p2", { kind: "bless", target: "p5" })).log.at(-1)).toMatchObject({ ability: { kind: "bless" } });
-    expect(granted(a, "p0")).toEqual(["emergency"]); // the Smooth Talker voted p7 in both
+    expect(granted(a, "p0")).toEqual(["wonDirtyShakedown"]); // the Smooth Talker voted p7 in both
     for (const viewer of a.playerOrder.filter((id) => id !== "p2")) {
       expect(viewFor(a, viewer)).toEqual(viewFor(b, viewer));
       expect(reason(a, use(viewer, { kind: "bless", target: "p5" }))).toBe(reason(b, use(viewer, { kind: "bless", target: "p5" })));

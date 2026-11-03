@@ -5,7 +5,7 @@
 // rules code never meets a shape it doesn't know. Configs are untrusted JSON,
 // so `validateOverrides` checks every field (own keys only, known keys only,
 // finite numbers, whole numbers where the engine counts loot or Heat).
-import { EVENTS, ROLES, type EventDef, type EventEffect, type Faction, type JobDef, type JobId, type RoleDef, type RoleId, type RolePower, type RoomDef } from "@skimjob/content";
+import { EVENTS, PERKS, POLICE_ACTIVITY, ROLES, type EventDef, type EventEffect, type FailureReason, type JobDef, type JobId, type PerkId, type RoleDef, type RoleId, type RolePower, type RoomDef, type Temperament } from "@skimjob/content";
 import type { ContentOverrides, EventOverride, GameConfig, RoleOverride, RoomOverride } from "./types";
 import { isObject } from "./check";
 import { jobById } from "./job";
@@ -42,29 +42,29 @@ function checkFields(raw: unknown, path: string, fields: Readonly<Record<string,
 }
 
 const ROOM_FIELDS = { loot: count, heatPressure: finite } as const;
-const ROLE_SCORING_FIELDS = { stashMultiplier: atLeast0, perLootOverFinalTarget: atLeast0 } as const;
+const ROLE_SCORING_FIELDS = { lootPerPointOverFinalTarget: count } as const;
 
 /** The numbers each power may have overridden: all of its own, never another role's. design §8 */
 const POWER_FIELDS: { readonly [K in RolePower["kind"]]: Readonly<Record<string, Rule>> } = {
   none: {},
   lookout: { extraRooms: positiveCount },
-  fenceSafe: { perAct: positiveCount, revealSafe: count },
+  fenceSafe: { perAct: positiveCount, tokenSafe: count },
   loopCameras: { perAct: positiveCount },
   voteWeight: { weight: positiveCount },
   cancelShakedown: { perGame: positiveCount },
   blackmail: { perAct: positiveCount },
   forge: { perAct: positiveCount },
   embezzle: { perAct: positiveCount, take: count },
-  snitch: { extraVotes: count },
+  snitch: {},
   audit: { perAct: positiveCount },
   checkStash: { perAct: positiveCount },
-  tipOff: { perAct: positiveCount, heat: count },
+  tipOff: { perAct: positiveCount },
   bless: { perAct: positiveCount },
   bagman: { bonus: count },
   cleaner: { visitors: positiveCount },
   fixer: { stopAt: count },
   foresee: {},
-  getaway: { reverse: count, revealHeat: count },
+  getaway: { reverse: count, tokenHeat: count },
 };
 
 /** The numbers each event effect may have overridden: its own only. design §10 */
@@ -90,7 +90,7 @@ export function validateOverrides(raw: unknown, job: JobDef, roles: RoleTable = 
   if (raw === undefined || raw === null) return [];
   const errors: string[] = [];
   if (!isObject(raw)) return ["contentOverrides must be an object"];
-  const known = ["rooms", "heat", "checkpoints", "shakedown", "duel", "roles", "events"];
+  const known = ["rooms", "heat", "checkpoints", "shakedown", "duel", "police", "perks", "roles", "events"];
   for (const key of Object.keys(raw)) if (!known.includes(key)) errors.push(`contentOverrides.${key} is not an overridable section`);
 
   if (raw.rooms !== undefined) {
@@ -123,15 +123,24 @@ export function validateOverrides(raw: unknown, job: JobDef, roles: RoleTable = 
     checkFields(raw.heat, "contentOverrides.heat", { max: positiveCount, perRound: finite, missedCheckpoint: count }, errors);
   }
   if (raw.shakedown !== undefined) {
-    checkFields(
-      raw.shakedown,
-      "contentOverrides.shakedown",
-      { cleanBelowPerAct: atLeast0, compensationPerAct: count, pluralityFromPlayers: positiveCount, pluralityShare: atLeast0 },
-      errors,
-    );
+    checkFields(raw.shakedown, "contentOverrides.shakedown", { cleanBelow: count, payout: count }, errors);
   }
   if (raw.duel !== undefined) {
-    checkFields(raw.duel, "contentOverrides.duel", { wrongCallOutPerAct: count }, errors);
+    checkFields(raw.duel, "contentOverrides.duel", { wrongCallOut: count }, errors);
+  }
+  if (raw.police !== undefined) {
+    const percent: Rule = (v) => count(v) && (v as number) <= 100;
+    RULE_TEXT.set(percent, "a whole number from 0 to 100");
+    checkFields(raw.police, "contentOverrides.police", { chancePercent: percent, heat: count }, errors);
+  }
+  if (raw.perks !== undefined) {
+    if (!isObject(raw.perks)) errors.push("contentOverrides.perks must be an object");
+    else
+      for (const [perk, o] of Object.entries(raw.perks)) {
+        const path = `contentOverrides.perks.${perk}`;
+        if (!Object.hasOwn(PERKS, perk)) errors.push(`${path}: no such perk`);
+        else checkFields(o, path, { cost: count }, errors);
+      }
   }
   if (raw.checkpoints !== undefined) {
     const path = "contentOverrides.checkpoints";
@@ -229,8 +238,7 @@ export function overrideRoles(roles: RoleTable, overrides: ContentOverrides | nu
     const power = { ...def.power, ...powerNumbers } as RolePower;
     const scoring = {
       ...def.scoring,
-      ...(o.stashMultiplier !== undefined && { stashMultiplier: o.stashMultiplier }),
-      ...(o.perLootOverFinalTarget !== undefined && { perLootOverFinalTarget: o.perLootOverFinalTarget }),
+      ...(o.lootPerPointOverFinalTarget !== undefined && { lootPerPointOverFinalTarget: o.lootPerPointOverFinalTarget }),
     };
     const rewards = o.rewardCount !== undefined && def.rewards ? def.rewards.map((r) => ({ ...r, count: o.rewardCount as number })) : def.rewards;
     out[id] = { ...def, power, scoring, ...(rewards && { rewards }) };
@@ -274,10 +282,21 @@ export function powerOf(config: Pick<GameConfig, "contentOverrides">, role: Role
   return roleDefIn(rolesFor(config), role)?.power ?? NO_POWER;
 }
 
-/** The side `role` plays for; a role id with no definition is crew. design §3 */
-export function factionIn(roles: RoleTable, role: RoleId): Faction {
-  return roleDefIn(roles, role)?.faction ?? "crew";
+/** `role`'s temperament tag; a role id with no definition is a Team player. extension.md "Roles" */
+export function tagIn(roles: RoleTable, role: RoleId): Temperament {
+  return roleDefIn(roles, role)?.tag ?? "teamPlayer";
 }
 
-/** Saboteurs and accomplices: the side that wins a failed heist. design §3 */
-export const isDarkSide = (roles: RoleTable, role: RoleId): boolean => factionIn(roles, role) !== "crew";
+/** Whether `role` also wins the failure `reason` (from the top group). extension.md "Winning and losing" */
+export const winsOn = (roles: RoleTable, role: RoleId, reason: FailureReason): boolean => roleDefIn(roles, role)?.winsOn.includes(reason) ?? false;
+
+/** Background police activity's numbers in this game. extension.md "Police activity" */
+export function policeFor(config: Pick<GameConfig, "contentOverrides">): { readonly [K in keyof typeof POLICE_ACTIVITY]: number } {
+  const o = config.contentOverrides?.police;
+  return o ? { ...POLICE_ACTIVITY, ...o } : POLICE_ACTIVITY;
+}
+
+/** What `perk` costs in the shop in this game. extension.md "Tokens and the perk shop" */
+export function perkCost(config: Pick<GameConfig, "contentOverrides">, perk: PerkId): number {
+  return config.contentOverrides?.perks?.[perk]?.cost ?? PERKS[perk].cost;
+}

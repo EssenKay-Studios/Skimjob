@@ -17,6 +17,7 @@ export * from "./duel";
 export * from "./claims";
 export * from "./evidence";
 export * from "./perks";
+export * from "./police";
 export * from "./handle";
 export * from "./view";
 export const ENGINE_VERSION = "0.1.0";

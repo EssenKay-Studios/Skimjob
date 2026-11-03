@@ -45,7 +45,13 @@ function perkEffect(state: GameState, player: PlayerId, perk: ResolvedPerk): Gam
     case "tail":
       return updatePlayer(state, player, (p) => withRoleState(p, { tail: perk.room }));
     case "recharge":
-      return updatePlayer(state, player, (p) => withRoleState(p, { usedThisAct: 0, usedThisGame: Math.max(0, p.roleState.usedThisGame - 1) }));
+      // extension.md gap-fills: one used-up use of the current stretch, else a once-per-game use.
+      return updatePlayer(state, player, (p) =>
+        withRoleState(
+          p,
+          p.roleState.usedThisAct > 0 ? { usedThisAct: p.roleState.usedThisAct - 1 } : { usedThisGame: Math.max(0, p.roleState.usedThisGame - 1) },
+        ),
+      );
     case "rig":
       return { ...state, rigs: [...state.rigs, { player, round: perk.round, cards: perk.cards, pick: perk.cards[0] as string }] };
     case "peek":
@@ -103,6 +109,8 @@ export function initialState(config: GameConfig): GameState {
     pendingEmergency: null,
     meeting: null,
     pendingShakedown: null,
+    shop: [],
+    police: null,
     log: [],
   };
 }
@@ -138,19 +146,27 @@ function applyChange(state: GameState, event: GameEvent): GameState {
     }
     case "snitchTargetAssigned":
       return updatePlayer(state, event.player, (p) => withRoleState(p, { target: event.target }));
-    case "moleAllies":
-      return updatePlayer(state, event.player, (p) => withRoleState(p, { allies: event.allies }));
-    case "alliesLearned":
-      // Role deck v2 §2: added to the allies already known.
-      return updatePlayer(state, event.player, (p) =>
-        withRoleState(p, { allies: [...p.roleState.allies, ...event.allies.filter((a) => !p.roleState.allies.includes(a))] }),
-      );
+    case "roleListShown":
+      return state;
+    case "shopDealt":
+      return { ...state, shop: event.perks };
+    case "policeScheduled":
+      return { ...state, police: { moment: event.moment, gapPermille: event.gapPermille, patrol: event.patrol, queue: state.police?.queue ?? [] } };
+    case "policeActivity":
+      return { ...state, heat: event.heat };
+    case "tipOffLanded": {
+      const police = state.police;
+      if (!police || police.queue[0] !== event.player) throw new Error(`tipOffLanded: ${event.player}'s tip-off isn't next in the queue`);
+      return { ...state, police: { ...police, queue: police.queue.slice(1) } };
+    }
     // ------------------------------------------------ round loop. design §5
     case "roundStarted": {
       // A Rig for this round has been used by its flip (deck.ts). design §8.3
       const rigs = state.rigs.filter((r) => r.round > event.round);
       const next: GameState = { ...state, phase: { kind: "planning", round: event.round }, round: event.round, moves: {}, card: null, rigs };
-      // Per-act powers (Fence safe, Hacker, Blackmailer, Forger, Mole, Embezzler) start again with each act. design §8
+      // "Once between meetings" powers start again with each stretch: the next act's first round starts right
+      // after the regular meeting (or Duel act end) closes with its target check; emergency meetings never
+      // reach here. extension.md gap-fills "Between meetings"
       return actOfRound(event.round) !== actOfRound(state.round) ? mapPlayers(next, (p) => withRoleState(p, { usedThisAct: 0 })) : next;
     }
     case "moveLocked":
@@ -178,14 +194,17 @@ function applyChange(state: GameState, event: GameEvent): GameState {
             safe: p.safe + ability.amount,
             ...withRoleState(p, { usedThisAct: p.roleState.usedThisAct + ability.amount }),
           }));
+        case "tipOff": {
+          // extension.md "Police activity": the use counts at once; it lands at the next free police moment.
+          const used = updatePlayer(state, event.player, (p) => withRoleState(p, { usedThisAct: p.roleState.usedThisAct + 1 }));
+          return used.police ? { ...used, police: { ...used.police, queue: [...used.police.queue, event.player] } } : used;
+        }
         case "loopCameras":
-        case "tipOff":
         case "audit":
         case "checkStash":
         case "bless":
         case "blackmail":
         case "forge":
-          // The tip-off's Heat is already in the round's `roundResolved` total. design §8
           return updatePlayer(state, event.player, (p) => withRoleState(p, { usedThisAct: p.roleState.usedThisAct + 1 }));
         case "embezzle":
           // v2 §2: the take left the Haul inside the round's `roundResolved` Haul change.
@@ -253,7 +272,8 @@ function applyChange(state: GameState, event: GameEvent): GameState {
     }
     case "gameEnded":
       // A round that ends the game has no alibi window (design §5.4, PR #21 QA).
-      return { ...state, phase: { kind: "ended", outcome: event.outcome }, alibisOpen: false };
+      // A tip-off still queued is lost (extension.md "Police activity").
+      return { ...state, phase: { kind: "ended", outcome: event.outcome }, alibisOpen: false, police: null };
     // ------------------------------------------------ events deck. design §10
     case "eventFlipped":
       return {
@@ -340,8 +360,6 @@ function applyChange(state: GameState, event: GameEvent): GameState {
       };
     case "shakedownCancelled":
       return afterShakedown(state);
-    case "snitchRewarded":
-      return updatePlayer(state, event.player, (p) => withRoleState(p, { bonusVotes: p.roleState.bonusVotes + event.votes }));
     case "shakedownResolved": {
       const next = { ...afterShakedown(state), haul: state.haul + event.taken - event.compensation };
       return updatePlayer(next, event.target, (p) => ({
@@ -352,8 +370,16 @@ function applyChange(state: GameState, event: GameEvent): GameState {
     case "checkpointChecked":
       return { ...state, heat: state.heat + event.heatPenalty };
     // ------------------------------------------------ perks. design §8.3
-    case "perkGranted":
-      return updatePlayer(state, event.player, (p) => withRoleState(p, { perks: [...p.roleState.perks, event.perk] }));
+    case "tokenEarned":
+      // extension.md owner ruling 6: a Muscle that saved an innocent also gets its power back.
+      return updatePlayer(state, event.player, (p) =>
+        withRoleState(p, {
+          tokens: p.roleState.tokens + 1,
+          ...(event.trigger === "cancelledClean" && { usedThisGame: Math.max(0, p.roleState.usedThisGame - 1) }),
+        }),
+      );
+    case "perkBought":
+      return updatePlayer(state, event.player, (p) => withRoleState(p, { tokens: p.roleState.tokens - event.cost, perks: [...p.roleState.perks, event.perk] }));
     case "perkUsed":
       return perkEffect(updatePlayer(state, event.player, (p) => spendToken(p, event.perk.kind)), event.player, event.perk);
     case "rigPicked": {

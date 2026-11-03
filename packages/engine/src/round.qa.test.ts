@@ -346,7 +346,7 @@ describe("QA private information — design §5.2 step 5, §17.2", () => {
         }
       }
       const summary = resolved(s)[0];
-      expect(Object.keys(summary ?? {}).sort()).toEqual(["haul", "haulDelta", "heat", "heatDelta", "round", "type", "visibility"]);
+      expect(Object.keys(summary ?? {}).sort()).toEqual(["haul", "haulDelta", "heat", "heatDelta", "heatParts", "round", "type", "visibility"]);
     });
   }
 });

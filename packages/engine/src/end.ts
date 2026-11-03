@@ -4,27 +4,23 @@
 // Pure: the round loop and the final meeting call `gameEnded` with the events
 // they have produced so far, which are folded first, so the ranking sees the
 // last round's splits and the final meeting's shakedown.
-import { SCORE_DECIMALS, type FailureReason, type RoleDef } from "@skimjob/content";
+import type { FailureReason, RoleDef } from "@skimjob/content";
 import type { GameEnded, GameEvent, GameState, Outcome, PlayerId, PlayerState, RankEntry } from "./types";
 import { PUBLIC } from "./types";
 import { applyEvent } from "./reduce";
 import { checkpointTarget } from "./job";
-import { isDarkSide, jobFor, roleDefIn, rolesFor, type RoleTable } from "./overrides";
-
-const roundScore = (n: number): number => {
-  const f = 10 ** SCORE_DECIMALS;
-  return Math.round(n * f) / f;
-};
+import { jobFor, roleDefIn, rolesFor, winsOn, type RoleTable } from "./overrides";
 
 /**
- * design §8: stash (Fence safe included) × the role's multiplier, plus its
- * points for every loot the Haul ends above the final target. A role id with
- * no definition scores its stash.
+ * extension.md "One crew, and how you win": stash plus any Fence safe, plus
+ * one point for every `lootPerPointOverFinalTarget` loot the Haul ends above
+ * the final target (Inside Man: 5). Whole numbers only. A role id with no
+ * definition scores its stash.
  */
 export function scoreFor(player: PlayerState, def: RoleDef | undefined, surplus: number): number {
   const stash = player.stash + player.safe;
-  if (!def) return stash;
-  return roundScore(stash * def.scoring.stashMultiplier + def.scoring.perLootOverFinalTarget * surplus);
+  const per = def?.scoring.lootPerPointOverFinalTarget ?? 0;
+  return per > 0 ? stash + Math.floor(surplus / per) : stash;
 }
 
 /** design §3: higher score, then fewer shakedowns, then more handed in. 0 means a full tie. */
@@ -62,20 +58,19 @@ export function leadersOf(ranked: readonly RankEntry[]): PlayerId[] {
 }
 
 /**
- * design §3 (role deck v2 §0): two sides, and the winning side's best score
- * wins (after role scoring and tie-breaks). A success is won by the best
- * Crew player; saboteurs and accomplices can't win it. A failure (Heat or
- * target) is won by the best saboteur or accomplice, and by nobody when no
- * one on that side was dealt. Roles are read as they are at the end (a
- * Double-cross may have swapped them). The full ranking is kept on failure
- * too, shown as a loss (design §19.1, provisional).
+ * extension.md "One crew, and how you win" (Build notes "Win rule"): the top
+ * group is everyone level at the top after the tie-breaks. A success is won by
+ * the top group, whatever their roles. A failure is won only by top-group
+ * members whose role wins that ending (`winsOn`), else by nobody. Roles are
+ * read as they are at the end (a Double-cross can hand over a failure win).
+ * The full ranking is always kept.
  */
 export function outcomeFor(state: GameState, failure: FailureReason | null, roles: RoleTable = rolesFor(state.config)): Outcome {
   const ranked = ranking(state, roles);
-  if (failure === null) {
-    return { result: "success", ranking: ranked, winners: leadersOf(ranked.filter((e) => !isDarkSide(roles, e.role))) };
-  }
-  return { result: "failed", reason: failure, ranking: ranked, winners: leadersOf(ranked.filter((e) => isDarkSide(roles, e.role))) };
+  const top = leadersOf(ranked);
+  if (failure === null) return { result: "success", ranking: ranked, winners: top };
+  const role = new Map(ranked.map((e) => [e.player, e.role]));
+  return { result: "failed", reason: failure, ranking: ranked, winners: top.filter((id) => winsOn(roles, role.get(id) ?? "", failure)) };
 }
 
 /** The `gameEnded` event after `events` (this command's events so far) are folded into `state`. */

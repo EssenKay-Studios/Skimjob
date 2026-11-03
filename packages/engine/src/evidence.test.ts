@@ -7,7 +7,7 @@ import { sampleEvents } from "./types/samples";
 
 describe("revealsRole (design §8, §12.1)", () => {
   it("flags the role deal and every entry that states a role or faction", () => {
-    for (const t of ["roleDealt", "moleAllies", "alliesLearned", "snitchTargetAssigned", "snitchRewarded", "voteCompromised", "insideTip", "doubleCrossResolved"] as const) {
+    for (const t of ["roleDealt", "snitchTargetAssigned", "tokenEarned", "tipOffLanded", "voteCompromised", "insideTip", "doubleCrossResolved"] as const) {
       expect(revealsRole(sampleEvents[t]), t).toBe(true);
     }
     // A Peek names the target's role; a Blackmail guess names one too.
@@ -17,7 +17,7 @@ describe("revealsRole (design §8, §12.1)", () => {
   });
 
   it("leaves ability results and moves shareable (sightings, cameras, audits, splits)", () => {
-    for (const t of ["roomSighting", "roomWatched", "pocketCount", "lootSplit", "moveSubmitted", "abilityResolved", "raidRumourHit", "voteCast", "perkGranted"] as const) {
+    for (const t of ["roomSighting", "roomWatched", "pocketCount", "lootSplit", "moveSubmitted", "abilityResolved", "raidRumourHit", "voteCast", "perkBought", "policeActivity", "shopDealt"] as const) {
       expect(revealsRole(sampleEvents[t]), t).toBe(false);
     }
   });

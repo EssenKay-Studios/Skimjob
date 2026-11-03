@@ -316,6 +316,8 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
     step([open]);
     for (const id of ids) step(ballots.get(id) ?? [], ballotsB.get(id) ?? []);
     step([{ type: "advance", deadline: { kind: "closeMeeting", meetingId: A.meeting?.id } }]);
+    // extension.md "Tokens and the perk shop": a Shield in the shop opens the shakedown window.
+    if (A.phase.kind === "shakedownPending") step([{ type: "advance", deadline: { kind: "resolveShakedown", meetingId: A.phase.meetingId } }]);
   }
 
   for (let round = 1; round <= 9 && !over(); round++) {
