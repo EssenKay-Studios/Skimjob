@@ -16,6 +16,7 @@
 - **Commits:** author `karthik24iyer <karthik24iyer@gmail.com>`. NEVER add Co-Authored-By, Claude-Session, Generated-by or any AI attribution lines; the merge gate refuses them.
 - **GitHub:** `gh` is logged in. Prefer `gh pr create`, `gh pr view`, `gh pr diff`, `gh pr review N --comment --body-file F`, `gh pr comment N --body-file F`; `gh api` (REST or GraphQL) for the rest. Rebase, `git reset --hard` and `git push --force-with-lease` to **your own feature branch** are fine. Never force-push `main`, and never push to someone else's branch while they work on it.
 - **CI:** poll `gh pr checks N` in short calls; never `gh pr checks --watch` (it gets backgrounded and stalls). Run long commands in the foreground.
+- **Docs-only lane:** a PR whose files are all `*.md` (`scripts/ci-docs-only.sh`) runs only "Typecheck and tests" in CI; e2e, sim smoke and Docker report skipped, which the gate accepts. Review APPROVE and QA PASS are still required.
 - **Commands** (repo root): `pnpm test`, `pnpm typecheck`. Postgres tests (`pnpm test:pg`) need Homebrew postgres and are optional.
 - **E2E:** install the browser once: `cd apps/web && npx playwright install chromium` (normal Mac cache, no `PLAYWRIGHT_BROWSERS_PATH`). 3–5 agents (subagents) run at once on this Mac, so:
   - give your run its own ports: `E2E_PORT=5<NN>79 E2E_SERVER_PORT=3<NN>79 E2E_FAST_PORT=5<NN>80 E2E_FAST_SERVER_PORT=3<NN>80` (pick an unused `<NN>`; defaults are 5179/3179/5180/3180);
