@@ -435,7 +435,7 @@ describe("guests and seats", () => {
     expect(await me(joiner)).toBeNull(); // no session fixation
   });
 
-  it("guest → existing Google account: becomes that account, no seat moves either way", async () => {
+  it("guest → existing Google account: becomes that account; the guest's seat moves in, nothing moves out", async () => {
     // Alice: a Google user hosting her own lobby.
     const alice = (await signIn("qa-alice", { claims: { name: "Alice" } })).session!;
     const aliceUser = (await me(alice))!;
@@ -448,16 +448,89 @@ describe("guests and seats", () => {
     expect(r.cb.statusCode).toBe(302);
     expect((await me(r.session))!.id).toBe(aliceUser.id);
     expect((await me(r.session))!.name).toBe("Alice");
-    // Alice's game is unchanged and has no Mallory seat; Mallory's seat still belongs to the guest user.
+    // Alice's game is unchanged; the guest's seat (under its nickname) is now the account's (adoptGuest).
     expect(await seatUsers(aliceGame)).toEqual(aliceSeatsBefore);
-    expect(await seatUsers(malloryGame)).toContain(malloryUser.id);
-    expect(await seatUsers(malloryGame)).not.toContain(aliceUser.id);
-    expect(await seatedAs(malloryGame, r.session!)).toBeNull();
+    expect(await seatUsers(malloryGame)).not.toContain(malloryUser.id);
+    expect(await seatUsers(malloryGame)).toContain(aliceUser.id);
+    expect((await seatedAs(malloryGame, r.session!))?.nickname).toBe("Mallory");
     // The guest user was not given Alice's external id.
     const [row] = await db.query<{ external_id: string | null }>("select external_id from users where id = $1", [malloryUser.id]);
     expect(row?.external_id).toBeNull();
     // Alice's own session still works.
     expect((await me(alice))!.id).toBe(aliceUser.id);
+  });
+
+  it("adoption only takes the signed-in browser's own guest: other guests' and accounts' seats stay put", async () => {
+    const { gameId, host, joiner: bystander } = await lobbyWithGuest("Bystander");
+    const hostUser = (await me(host))!;
+    const bystanderUser = (await me(bystander))!;
+    const before = await seatUsers(gameId);
+    // An unrelated guest signs in to an existing account: nothing in this lobby changes.
+    await signIn("qa-adopt-target");
+    const other = (await post("/auth/guest", null, { nickname: "Other" })).session!;
+    await signIn("qa-adopt-target", { session: other });
+    expect(await seatUsers(gameId)).toEqual(before);
+    // A Google user (not a guest) switching accounts carries nothing along.
+    const bob = (await signIn("qa-bob")).session!;
+    const bobUser = (await me(bob))!;
+    const bobGame = (await post("/games", bob)).body.id;
+    await signIn("qa-adopt-target", { session: bob });
+    expect(await seatUsers(bobGame)).toEqual([bobUser.id]);
+    expect(await seatUsers(gameId)).toEqual([hostUser.id, bystanderUser.id]);
+  });
+
+  it("guest and account in the same lobby: the account keeps its seat, the guest's goes, host role moves", async () => {
+    const acct = (await signIn("qa-same-lobby", { claims: { name: "Acct" } })).session!;
+    const acctUser = (await me(acct))!;
+    const guestHost = (await post("/auth/guest", null, { nickname: "GuestHost" })).session!;
+    const game = (await post("/games", guestHost)).body;
+    expect((await post(`/invites/${game.inviteCode}/join`, acct, { nickname: "AcctSeat" })).res.statusCode).toBe(200);
+    expect(await seatUsers(game.id)).toHaveLength(2);
+    const r = await signIn("qa-same-lobby", { session: guestHost });
+    expect(await seatUsers(game.id)).toEqual([acctUser.id]);
+    const view = (await get(`/games/${game.id}`, { [SESSION_COOKIE]: r.session! })).json() as LobbyView & { youAreHost?: boolean };
+    expect(view.seats.find((s) => s.you)?.nickname).toBe("AcctSeat");
+    const [g] = await db.query<{ host_user_id: string }>("select host_user_id from games where id = $1", [game.id]);
+    expect(g?.host_user_id).toBe(acctUser.id);
+  });
+
+  it("guest and account in the same started game: both seats stay, the guest's with the guest user", async () => {
+    const acct = (await signIn("qa-same-run")).session!;
+    const acctUser = (await me(acct))!;
+    const guestHost = (await post("/auth/guest", null, { nickname: "RunHost" })).session!;
+    const guestUser = (await me(guestHost))!;
+    const game = (await post("/games", guestHost)).body;
+    await post(`/invites/${game.inviteCode}/join`, acct, { nickname: "RunAcct" });
+    expect((await post(`/games/${game.id}/start`, guestHost)).res.statusCode).toBe(200);
+    await signIn("qa-same-run", { session: guestHost });
+    expect(await seatUsers(game.id)).toEqual([guestUser.id, acctUser.id]);
+  });
+
+  it("GET /me/games: signed out is 401; lists only your own seats; follows an adoption", async () => {
+    expect((await get("/me/games")).statusCode).toBe(401);
+    const { gameId, host, joiner } = await lobbyWithGuest("Lister");
+    const games = async (s: string) => ((await get("/me/games", { [SESSION_COOKIE]: s })).json() as { games: { id: string; nickname: string; youAreHost: boolean }[] }).games;
+    expect(await games(joiner)).toEqual([expect.objectContaining({ id: gameId, nickname: "Lister", youAreHost: false })]);
+    expect((await games(host)).map((g) => g.id)).toEqual([gameId]);
+    const stranger = (await signIn("qa-lister-acct")).session!;
+    expect(await games(stranger)).toEqual([]);
+    const r = await signIn("qa-lister-acct", { session: joiner });
+    expect((await games(r.session!)).map((g) => g.id)).toEqual([gameId]);
+    expect(await games(stranger)).toEqual([expect.objectContaining({ id: gameId, nickname: "Lister" })]);
+  });
+
+  it("GET /me/games leaks nothing hidden: no roles, player ids, invite codes or other seats' users", async () => {
+    const host = (await signIn("qa-mg-host")).session!;
+    const game = (await post("/games", host)).body;
+    await post(`/invites/${game.inviteCode}/join`, null, { nickname: "MgPal" });
+    expect((await post(`/games/${game.id}/start`, host)).res.statusCode).toBe(200);
+    const res = await get("/me/games", { [SESSION_COOKIE]: host });
+    const [row] = (res.json() as { games: Record<string, unknown>[] }).games;
+    expect(Object.keys(row!).sort()).toEqual(["host", "id", "nickname", "seats", "sessionLength", "status", "youAreHost"]);
+    expect(row).toMatchObject({ id: game.id, status: "running", youAreHost: true, seats: 2 });
+    const text = res.body;
+    expect(text).not.toContain(game.inviteCode);
+    expect(text).not.toMatch(/"(role|playerId|player_id|user_id|userId|seed|faction|stash)"/);
   });
 
   it("a Google user signing in to another Google account doesn't relink either account", async () => {
