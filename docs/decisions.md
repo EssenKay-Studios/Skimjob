@@ -23,7 +23,8 @@ Answers, all final (recorded in extension.md "Owner rulings (3 Nov)"):
 
 **Provisional (PM, 3 Nov fix round):**
 - **Background police activity runs only when a Mole could be in the game** (dealt, or possible under the role-list setting), whatever the events setting. Otherwise it is off (Starter, Quick and the Duel default). It exists only as the Mole's cover; its ~+1 Heat per round is a balance-pass tunable.
-- **A wrong Duel call-out pays the rival [8]**, the clean payout number (was 5 × act), tuned with it.
+- **The Mole's tip-off is used any time but lands at the next free hidden police moment.** At most one police activity per moment; a tip-off replaces a patrol drawn for that moment. This changes the 2 Nov "applied at once" reading; the owner should confirm.
+- **A wrong Duel call-out: the caller pays the rival [8]** from its own stash (never more than it holds), the clean payout number (was 5 × act), tuned with it.
 
 **Gap-fills (PM readings from review, the owner may change them):** when a "between meetings" stretch ends and how Recharge works; session default 1 h; Quick forces Starter with no shop; Duel's shop and events-off dealing; the Fixer stops any raid, including mid-round; Forger 7+ (kept from roles v2).
 

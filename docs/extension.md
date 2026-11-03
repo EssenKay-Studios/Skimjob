@@ -170,7 +170,7 @@ All 20 roles stay, with the same powers as today. What changes: every reward is 
 
 | Role | Power | Earns a token when | Also wins |
 | --- | --- | --- | --- |
-| Mole ★ | Once between meetings, any time: tips off the cops for +4 Heat, announced only as "police activity" | Each tip-off | Any failure, with the biggest stash |
+| Mole ★ | Once between meetings, any time: tips off the cops for +4 Heat, announced only as "police activity" (it lands at the next hidden police moment) | Each tip-off | Any failure, with the biggest stash |
 | Embezzler ★ | Once between meetings: moves 1 loot from the Haul into its stash; while holding a take, a shakedown always catches it | Its first take | A missed target, with the biggest stash |
 
 **Minimum crew sizes:** Snitch and Detective 4+; Inside Man, Smooth Talker, Muscle and Priest 5+; Blackmailer and Forger 7+. Nobody is told anyone else's role. You learn roles only through powers, perks, event cards or claims.
@@ -246,7 +246,7 @@ Also confirmed: **Police patrol option A**. The patrol leaves the event deck and
 - **Between meetings:** a stretch runs from the close of one regular meeting to the close of the next. Uses recharge when that meeting **closes**, after its vote, shakedown and target check, so a power used during a meeting spends the old charge. Emergency meetings never close a stretch. In Duel, a stretch closes when round 3's or 6's call-outs and target check settle. **Recharge** restores one used-up use of the current stretch, or a once-per-game use.
 - **Session length:** the default is **1 h** (the server's `DEFAULT_SETTINGS`); Quick is a playtest preset.
 - **Quick forces Starter:** it locks the deck picker, the per-role toggles and Event cards to Starter with events off, and the lobby says so. The host's other choices come back if the length changes. Quick has **no tokens and no shop** (it is the learning game, and 45-second rounds leave no time). Outside Quick, per-role toggles may add any role to any preset.
-- **Duel wrong call-out (provisional):** a wrong call pays the rival **[8]**, the clean payout number (was 5 × act), tuned with it.
+- **Duel wrong call-out (provisional):** the caller pays the rival **[8]** from its own stash, never more than it holds (as design §16.1 today), the clean payout number (was 5 × act), tuned with it.
 - **Shop dealing:** players start with 0 tokens and can buy any time. With **events off**, the Sway perk is dealt from +Vote or Emergency only. **Duel** deals three perks that work without meetings: Peek or Tail, Alibi or Recharge, and Rig with events on. With events off, the third perk is a seeded pick from the Learn and Protect perks that weren't dealt.
 - **Fixer:** the save stops **any** raid at any moment, including one from police activity between rounds or during a meeting (Heat set to 95).
 - **Forger 7+:** kept from roles v2; the minimum-size list above omitted it.
@@ -304,7 +304,7 @@ For the builders. This section carries over everything from `roles-v3.md` (owner
 
 - Every bot keeps a public ending forecast (chance of success, raid, missed target) from Haul pace, Heat and the role list, and an estimate of its own stash rank.
 - Most roles win only on success: they keep the job alive and skim when the forecast is safe.
-- The four ★ roles lean toward their failure once its forecast passes a lean point [0.4] *and* they rate themselves top; otherwise they play for success. The Mole tips off when Heat after the round would pass about [70].
+- The four ★ roles lean toward their failure once its forecast passes a lean point [0.4] *and* they rate themselves top; otherwise they play for success. The Mole tips off when Heat after the round would pass about [70], allowing for the delay until the next police moment (about one round).
 - Votes are on suspicion only; no ally logic. ★ holders and evidence-leaving roles (Hacker, Forger) bluff a low-risk role (Rookie, Bagman, Cleaner) when accused; the rest claim truthfully with chance 1 − lie. Public tells: rising Heat points at the Driver or Mole; "camera offline" at the Hacker or a Power cut; a big shown safe at the Fence.
 - Bots buy perks by simple priorities and spend tokens before the game ends.
 
@@ -312,7 +312,7 @@ For the builders. This section carries over everything from `roles-v3.md` (owner
 
 - The Police patrol is no longer an event card, so the deck is 9 cards and one card is still flipped every round from round 2.
 - **When it runs (provisional, PM 3 Nov):** only when a Mole could be in the game, whatever the events setting. "Could be" means a Mole is dealt (Exact role list) or is in the eligible deck for this crew size (Possible or Hidden). Otherwise there is no background activity: Starter, Quick and the Duel default have no Mole. It exists only as cover for the Mole. Its Heat, about +1 per round on average, is a balance-pass tunable.
-- **Game time:** police moments are measured in game time, which runs only while round deadlines run. It freezes, exactly like round deadlines, during:
+- **Game time:** police moments are measured in game time, which runs only while round deadlines run (planning and the alibi window both count). It freezes, exactly like round deadlines, during:
   - a host pause;
   - an emergency or regular meeting (including one waiting to open);
   - quiet hours.
@@ -322,7 +322,11 @@ For the builders. This section carries over everything from `roles-v3.md` (owner
   - At each moment, the background fires with chance [1 in 4] (`policeActivity.chance`).
   - The draws are secret state, reveal-only in the log.
   - The server fires each moment with `advance { kind: "policeMoment" }`. The sim, which has no clock, takes one moment per round, at the round's resolution.
-- **Mole tip-off, queued:** the Mole can order a tip-off any time, once between meetings; the use counts when it is ordered. It is queued and lands at the next police moment, the same way as a patrol, so timing can't tell them apart.
+- **Mole tip-off, queued:** the Mole may **use** its tip-off any time, once between meetings, as the 2 Nov answer says; the use counts at once. The tip-off **lands** at the next free police moment (provisional), the same way as a patrol, so timing can't tell them apart.
+- **One per moment:** at most **one** police activity fires at any hidden moment.
+  - A queued tip-off takes the next moment that no other tip-off has claimed; a second queued tip-off waits for the moment after.
+  - If a background patrol was drawn for that moment, the tip-off replaces it. The moment still shows a single "+4 police activity", so the public pattern is identical to patrol-only games.
+  - So a tip-off may absorb a patrol, leaving that moment's Heat unchanged. This is accepted and is a balance tunable.
   - A tip-off still queued when the game ends is lost.
   - The Mole earns its token when the tip-off lands.
 - **No leak (a server/engine requirement R6a must test):** police activity, whether patrol or tip-off, never gets its own client-visible deadline or timer.
@@ -337,7 +341,6 @@ For the builders. This section carries over everything from `roles-v3.md` (owner
   - Only the Mole gets a private note when the activity was its own.
 - **Heat breakdown:** police activity is a separate line ("police activity +4") under the round in progress, the latest round whose planning has opened. If that round's summary is already posted, the line is added under it.
 - **Remaining tells (accepted):**
-  - Two police activities at one moment mean at least one was the Mole.
   - "Camera offline" in one room, in a round with no Power cut, is always the Hacker. The Power cut is public and blinds every room, so it is only partial cover.
 - **No foresight:** the Mastermind doesn't foresee police activity.
 
@@ -347,6 +350,7 @@ For the builders. This section carries over everything from `roles-v3.md` (owner
 - Reports: the ending split (success / raid / miss), no-winner rate, shared-win rate, wins by success vs failure for each ★ role, token earning and spending per role, and Truly random and the role-list settings (no gate).
 - Watch: the Mole and Fence can win either way and may sit high; Hacker, Blackmailer, Forger and Inside Man may sit low. Tune stash-earning numbers first.
 - Run it on the sharded "Sim suite" GitHub workflow, not babysat in a chat.
+- Flag in the balance brief: police moments run on game time, so live games with many early round ends get fewer than one moment per round, while the sim takes exactly one. Live Heat can drift below the sim's; watch it in the M2-14 playtest.
 - Flag in the balance brief: background police activity adds about +1 Heat per round (about +9 a game) where a Mole could be, against the old card's ~+4.
 - Tunables include police activity's chance [1 in 4], the Duel wrong-call pay [8], alongside the clean line [6], pay [8] and shop costs.
 
