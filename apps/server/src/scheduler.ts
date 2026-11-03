@@ -209,12 +209,23 @@ interface Row {
 
 const sortTimers = (ts: Timer[]) => ts.sort((a, b) => a.dueAt - b.dueAt || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
 
+/**
+ * What `system` answers when, under the game's lock, the deadline turned out not
+ * to be due any more: the host paused the game (or a meeting paused the row), it
+ * was extended, or it's gone. Nothing was applied; the row stays as it is. M2-13
+ */
+export const DEADLINE_SKIPPED = "deadline-skipped" as const;
+
 export function createScheduler(deps: {
   readonly db: Db;
   readonly clock: Clock;
   readonly log: FastifyBaseLogger;
-  /** Sends a system command (`live.system`); throws `SystemRefused` when the engine refuses it. */
-  readonly system: (gameId: string, command: SystemCommand) => Promise<unknown>;
+  /**
+   * Sends deadline `key`'s system command (`live.system`), which first re-checks under the
+   * game's lock that the row is still due and nothing is paused (else `DEADLINE_SKIPPED`);
+   * throws `SystemRefused` when the engine refuses it.
+   */
+  readonly system: (gameId: string, command: SystemCommand, key: string) => Promise<unknown>;
   /** Re-runs the game's after-change step (`live.settle`), so `reconcile` re-plans its deadlines. */
   readonly resync: (gameId: string) => Promise<unknown>;
   /** TIME_SCALE (config.ts): multiplies every preset's wall times. Default 1. */
@@ -257,7 +268,11 @@ export function createScheduler(deps: {
         if (!row) break;
         const id = `${gameId} ${row.key}`;
         try {
-          await deps.system(gameId, row.command);
+          // The select ran outside the game's lock: a pause or an extend may have come in since.
+          if ((await deps.system(gameId, row.command, row.key)) === DEADLINE_SKIPPED) {
+            retries.delete(id);
+            break;
+          }
           retries.delete(id);
           sent++;
         } catch (err) {

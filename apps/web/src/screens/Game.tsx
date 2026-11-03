@@ -182,7 +182,7 @@ function Board({ view, timers, offset, send, autoMeetings, gameId, channel, dmNo
     <>
       <Away gameId={gameId} view={view} ctx={ctx} />
       <div className={outcome ? "game-grid is-over" : "game-grid"}>
-        <Hud view={view} timers={timers} offset={offset} />
+        <Hud view={view} timers={timers} offset={offset} hostPaused={channel.control.pausedAt !== null} />
         <BankBoard view={view} pick={planning !== null ? pick : null} />
         <Seats view={view} presence={channel.presence} offset={offset} marks={board.board} />
         <div className="game-grid__action">
@@ -214,7 +214,7 @@ function CrewBoard({ view, board }: { view: PlayerView; board: BoardChannel }) {
   return <SuspicionBoard people={people} board={board.board} error={board.error} onSave={board.save} />;
 }
 
-function Hud({ view, timers, offset }: { view: PlayerView; timers: readonly Timer[]; offset: number }) {
+function Hud({ view, timers, offset, hostPaused }: { view: PlayerView; timers: readonly Timer[]; offset: number; hostPaused: boolean }) {
   const phase = phaseInfo(view);
   const countdown = useCountdown(timers, phase.timerKey, offset);
   const emergency = view.pendingEmergency;
@@ -234,7 +234,7 @@ function Hud({ view, timers, offset }: { view: PlayerView; timers: readonly Time
             </span>
             <span>
               {phase.timerLabel} <b className="num">{countdown.text}</b>
-              {countdown.paused && " (paused for the meeting)"}
+              {countdown.paused && (hostPaused ? " (the host paused the game)" : " (paused for the meeting)")}
             </span>
           </p>
         )}

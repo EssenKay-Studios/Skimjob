@@ -9,7 +9,7 @@ import { fakeClock, type FakeClock } from "./clock";
 import type { Db } from "./db";
 import { CLOSE_SIGNED_OUT, type Control, type ServerMessage } from "./live";
 import type { LobbyView } from "./lobby";
-import { createScheduler, isHiddenDeadline } from "./scheduler";
+import { createScheduler, DEADLINE_SKIPPED, isHiddenDeadline } from "./scheduler";
 import { buildServer } from "./server";
 import { SESSION_TTL_MS, type LobbySettings } from "./settings";
 import { createGameStore, type GameStore } from "./store";
@@ -186,6 +186,40 @@ describe("pause and resume (design §15, §4.1)", () => {
     expect(after.paused).toBe(false);
     expect(after.due - clock.now()).toBe(left);
   });
+  it("a deadline already due when the host pauses never fires after the pause is acknowledged (the tick re-checks under the lock)", async () => {
+    const { id, seats } = await startGame(2, { sessionLength: "1h" });
+    clock.advance(H1.roundMs + 1000); // round:1 is due
+    const acked: number[] = [];
+    // The host's pause lands between the tick's select (outside the lock) and the apply.
+    const sched = createScheduler({
+      db,
+      clock,
+      log: app.log,
+      system: async (gameId, command, key) => {
+        acked.push((await req("POST", `/games/${id}/pause`, seats[0]!.who)).status);
+        return app.live.deadline(gameId, key, command);
+      },
+      resync: (gameId) => app.live.settle(gameId),
+    });
+    expect(await sched.tick()).toBe(0);
+    expect(acked).toEqual([200]);
+    expect((await load(id)).phase).toEqual({ kind: "planning", round: 1 });
+    expect((await deadlines(id)).find((r) => r.key === "round:1")).toMatchObject({ paused: true });
+    // After resume the round is due again (it was due when paused) and fires.
+    await req("POST", `/games/${id}/resume`, seats[0]!.who);
+    expect(await app.scheduler.tick()).toBeGreaterThan(0);
+    expect((await load(id)).resolvedRound).toBe(1);
+  });
+
+  it("the guarded send skips a row that was extended or removed since the select", async () => {
+    const { id } = await startGame(2, { sessionLength: "1h" });
+    clock.advance(H1.roundMs + 1000);
+    const cmd = { type: "advance", deadline: { kind: "round", round: 1 } } as const;
+    await db.query("update deadlines set due_at = due_at + interval '1 hour' where game_id = $1 and key = 'round:1'", [id]);
+    expect(await app.live.deadline(id, "round:1", cmd)).toBe(DEADLINE_SKIPPED);
+    expect(await app.live.deadline(id, "round:9", cmd)).toBe(DEADLINE_SKIPPED);
+    expect((await load(id)).phase).toEqual({ kind: "planning", round: 1 });
+  });
 });
 
 describe("extend (design §15)", () => {
@@ -326,7 +360,7 @@ describe("resilience", () => {
         if (gameId === a) await slow;
         sent.push(gameId);
         await db.query("delete from deadlines where game_id = $1 and command::text = $2", [gameId, JSON.stringify(command)]);
-        return null;
+        return true;
       },
       resync: async () => {},
     });

@@ -1,6 +1,7 @@
 // Host controls (M2-13, design §15): the paused note everyone sees, the note
 // for a player whose seat a bot is keeping warm, and the host's panel (pause /
 // resume, add time, replace an idle seat with a bot, hand a seat back).
+import { useState } from "react";
 import type { SeatOffer } from "../game/host";
 import { Button, DangerButton } from "./Button";
 import { Chip } from "./Chip";
@@ -48,9 +49,10 @@ export interface HostPanelProps {
 
 /** The host's panel, folded away under its heading until opened. */
 export function HostPanel({ paused, canExtend, offers, busy, onPause, onResume, onExtend, onReplace, onHandBack, open }: HostPanelProps) {
+  const [shown, setShown] = useState(open ?? false);
   return (
     <SketchFrame as="section" seed="host-panel" radius={14} shadow={0.4} className="host-panel" aria-label="Host controls">
-      <details open={open}>
+      <details open={shown} onToggle={(e) => setShown(e.currentTarget.open)}>
         <summary className="host-panel__summary">
           <span>Host controls</span>
           {paused && (
@@ -59,6 +61,9 @@ export function HostPanel({ paused, canExtend, offers, busy, onPause, onResume, 
             </span>
           )}
         </summary>
+        {/* Only while open: a closed <details> body isn't rendered, so a transition started there (a button
+            turning disabled) would never finish (and would stall anything waiting for animations). */}
+        {shown && (
         <div className="host-panel__body">
           <div className="host-panel__row">
             {paused ? (
@@ -97,6 +102,7 @@ export function HostPanel({ paused, canExtend, offers, busy, onPause, onResume, 
           )}
           <p className="meta host-panel__hint">Pausing stops every clock. Add time gives the current phase a little longer.</p>
         </div>
+        )}
       </details>
     </SketchFrame>
   );

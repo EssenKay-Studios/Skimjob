@@ -74,7 +74,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     }
   });
 
-  const scheduler = createScheduler({ db, clock: deps.clock, log: app.log, system: (gameId, command) => live.system(gameId, command), resync: (gameId) => live.settle(gameId), timeScale: deps.timeScale ?? 1 });
+  const scheduler = createScheduler({ db, clock: deps.clock, log: app.log, system: (gameId, command, key) => live.deadline(gameId, key, command), resync: (gameId) => live.settle(gameId), timeScale: deps.timeScale ?? 1 });
   const live = liveRoutes(app, db, store, s, {
     clock: deps.clock,
     allowedOrigins: deps.allowedOrigins ?? [],

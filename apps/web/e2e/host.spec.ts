@@ -21,6 +21,9 @@ test("the host pauses, the crew sees it, a reload keeps it, add time, then resum
   await panel.getByRole("button", { name: "Pause the game" }).click();
   await expect(page.getByText("Paused by the host")).toBeVisible();
   await expect(guest.getByText("Paused by the host")).toBeVisible();
+  // The round's countdown says who stopped it: no meeting is open (QA, PR #54).
+  await expect(guest.locator(".hud__timer")).toContainText("(the host paused the game)");
+  await expect(guest.locator(".hud__timer")).not.toContainText("meeting");
 
   await page.reload();
   await expect(page.getByText("Paused by the host")).toBeVisible();

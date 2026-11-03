@@ -60,7 +60,7 @@ import { createChat, parseChatRequest, type ChatHistory, type ChatMessage, type 
 import type { Clock } from "./clock";
 import type { Db } from "./db";
 import { HttpError, playerIdOf } from "./lobby";
-import type { Timer } from "./scheduler";
+import { DEADLINE_SKIPPED, type Timer } from "./scheduler";
 import type { GameStore } from "./store";
 
 /** Biggest client message accepted (a command is well under 1 KiB). */
@@ -133,6 +133,13 @@ export interface Live {
    * (any other error is a server failure: worth a retry).
    */
   system(gameId: string, command: SystemCommand): Promise<GameState>;
+  /**
+   * The scheduler's `system`: deadline `key`'s command, but first checks under the
+   * game's lock that the row is still there, due and unpaused, and the host hasn't
+   * paused the game; if not, applies nothing and answers `DEADLINE_SKIPPED` (a pause
+   * acknowledged to the host is never followed by a deadline firing, M2-13).
+   */
+  deadline(gameId: string, key: string, command: SystemCommand): Promise<GameState | typeof DEADLINE_SKIPPED>;
   /** Lets the bots act and pushes views (after the game starts, or a restart). */
   settle(gameId: string): Promise<void>;
   /** Lets the bots of every running game act (on boot: a crash may have cut a settle short). */
@@ -459,15 +466,27 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
     return settled;
   };
 
+  /** Applies a system command; the caller holds the game's lock. */
+  const runSystem = async (gameId: string, command: SystemCommand) => {
+    const state = await store.load(gameId);
+    if (!state) throw new Error(`game ${gameId} has not started`);
+    const r = await apply(gameId, state, command);
+    if (!r.ok) throw new SystemRefused(`system command refused: ${JSON.stringify(command)}: ${r.reason}`);
+    return afterChange(gameId, r.state);
+  };
+
   const live: Live = {
     botRefusals,
-    system: (gameId, command) =>
+    system: (gameId, command) => store.withGameLock(gameId, () => runSystem(gameId, command)),
+    deadline: (gameId, key, command) =>
       store.withGameLock(gameId, async () => {
-        const state = await store.load(gameId);
-        if (!state) throw new Error(`game ${gameId} has not started`);
-        const r = await apply(gameId, state, command);
-        if (!r.ok) throw new SystemRefused(`system command refused: ${JSON.stringify(command)}: ${r.reason}`);
-        return afterChange(gameId, r.state);
+        const due = await db.query(
+          `select 1 from deadlines d join games g on g.id = d.game_id
+           where d.game_id = $1 and d.key = $2 and d.paused_at is null and g.paused_at is null
+             and d.due_at <= to_timestamp($3::float8 / 1000)`,
+          [gameId, key, options.clock.now()],
+        );
+        return due.length === 0 ? DEADLINE_SKIPPED : runSystem(gameId, command);
       }),
     hostAction: (gameId, fn) =>
       store.withGameLock(gameId, async () => {
