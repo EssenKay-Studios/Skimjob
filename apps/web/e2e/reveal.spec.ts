@@ -88,6 +88,55 @@ for (const viewport of VIEWPORTS) {
   });
 }
 
+// The 12-seat Quick game QA (game.qa.spec.ts) sometimes ended 1 px or more
+// wider than a 390 px phone: a 24-character name with no break points ("W"×24)
+// in a timeline line, the "why" note or a token line would not wrap. Here the
+// gallery's game with 24-character names, every ending and every round, at
+// every launch width: nothing past the edge, not even 1 px.
+const LAUNCH_WIDTHS = [360, 390, 768, 1024, 1280];
+for (const width of LAUNCH_WIDTHS) {
+  test.describe(`gallery reveal with 24-character names at ${width}`, () => {
+    test.use({ viewport: { width, height: 800 }, hasTouch: width < 1024 });
+    test("no line pushes the page sideways, in any ending or round", async ({ page }, info) => {
+      test.skip(!info.project.name.startsWith("desktop") || info.project.name.endsWith("fast"), "the viewport is set here");
+      // Twelve round sheets on the whole gallery page: slow on a busy runner.
+      test.setTimeout(120_000);
+      const errors: string[] = [];
+      page.on("pageerror", (e) => errors.push(e.message));
+      await page.goto("/dev/gallery");
+      const section = page.getByRole("region", { name: "End-of-game reveal" });
+      await section.scrollIntoViewIfNeeded();
+      await section.getByRole("button", { name: "24 characters" }).click();
+      const reveal = section.getByRole("region", { name: "The reveal" });
+      await expect(reveal.locator(".reveal__why")).toContainText("WWWWWWWWWWWWWWWWWWWWWWWW");
+      for (const ending of ["Job done", "Raided (★ wins)", "Missed (nobody)"]) {
+        await section.getByRole("button", { name: ending }).click();
+        const rounds = reveal.getByRole("group", { name: "Rounds" }).getByRole("button");
+        const n = await rounds.count();
+        for (let i = 0; i < n; i++) {
+          await rounds.nth(i).click();
+          await expect(rounds.nth(i)).toHaveAttribute("aria-pressed", "true");
+          const where = `${ending}, round chip ${i + 1}`;
+          const o = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth }));
+          expect(o.scroll, `${where}: page wider than the viewport`).toBeLessThanOrEqual(o.client);
+          // No box of the reveal past either edge (the round chips scroll inside their own strip).
+          const out = await reveal.evaluate((el, w) => {
+            const xs: string[] = [];
+            for (const x of el.querySelectorAll<HTMLElement>("*")) {
+              if (x.closest(".reveal__rounds")) continue;
+              const r = x.getBoundingClientRect();
+              if (r.width > 0 && (r.right > w || r.left < 0)) xs.push(`${x.getAttribute("class") ?? x.tagName} ${r.left.toFixed(1)}..${r.right.toFixed(1)}`);
+            }
+            return xs;
+          }, width);
+          expect(out, where).toEqual([]);
+        }
+      }
+      expect(errors).toEqual([]);
+    });
+  });
+}
+
 test("a real game shows its reveal only once it has ended @fast-clock", async ({ page }, info) => {
   test.skip(info.project.name !== "desktop-fast", "one viewport is enough for the flow");
   test.setTimeout(300_000);

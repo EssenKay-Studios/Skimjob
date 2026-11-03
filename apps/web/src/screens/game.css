@@ -393,6 +393,10 @@ html.chat-sheet-open body {
 .over__title {
   font-size: 24px;
 }
+/* How it ended and who won: names are up to 24 characters with no break points. */
+.over > p {
+  overflow-wrap: anywhere;
+}
 .ranking {
   list-style: none;
   margin: 0;
