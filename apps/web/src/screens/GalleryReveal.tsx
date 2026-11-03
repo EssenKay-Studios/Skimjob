@@ -1,6 +1,8 @@
 // /dev/gallery section for M2-11: the end-of-game reveal on a small hand-made
 // game (no server), summarised by the engine's own `revealSummary`, with each
 // ending: a success, a Heat failure a ★ role wins, and a missed target nobody wins.
+// The names can switch to 24-character ones (the cap; "W" is the widest glyph
+// and has no break points) to check nothing pushes past a phone's edge.
 import { useMemo, useState, type ReactNode } from "react";
 import { EVENTS, ROLES } from "@skimjob/content";
 import { PUBLIC, REVEAL, privateTo, revealSummary, type GameEvent, type Outcome, type RankEntry } from "@skimjob/engine";
@@ -10,7 +12,13 @@ import { SketchFrame } from "../components/SketchFrame";
 import { Underline } from "../components/Underline";
 
 const NAMES: Record<string, string> = { p1: "Ana", p2: "Ben", p3: "Cy", p4: "Bot · Dot" };
-const ctx = { me: "p1", name: (p: string) => NAMES[p] ?? p };
+const LONG_NAMES: Record<string, string> = {
+  p1: "Maximiliana Wolfensteins",
+  p2: "WWWWWWWWWWWWWWWWWWWWWWWW",
+  p3: "MMMMMMMMMMMMMMMMMMMMMMMM",
+  p4: "Bot · WWWWWWWWWWWWWWWWWWWWWWWW",
+};
+const ctxFor = (names: Record<string, string>) => ({ me: "p1", name: (p: string) => names[p] ?? p });
 const looks = new Map([
   ["p1", { look: 0, bot: false }],
   ["p2", { look: 1, bot: false }],
@@ -117,6 +125,8 @@ const logFor = (ending: Ending): GameEvent[] =>
 
 export function RevealSection() {
   const [ending, setEnding] = useState<Ending>("success");
+  const [long, setLong] = useState(false);
+  const ctx = useMemo(() => ctxFor(long ? LONG_NAMES : NAMES), [long]);
   const summary = useMemo(() => revealSummary(logFor(ending), OUTCOMES[ending], { roles: ROLES, events: EVENTS }), [ending]);
   return (
     <Section id="reveal" title="End-of-game reveal" note="M2-11 · role envelopes, who won and why, round timeline with every hidden action">
@@ -131,6 +141,16 @@ export function RevealSection() {
           { value: "target", label: "Missed (nobody)" },
         ]}
         wide
+      />
+      <Segmented
+        label="Names"
+        seed="g-reveal-names"
+        value={long}
+        onChange={setLong}
+        options={[
+          { value: false, label: "Short" },
+          { value: true, label: "24 characters" },
+        ]}
       />
       <Reveal key={ending} summary={summary} ctx={ctx} looks={looks} />
     </Section>
