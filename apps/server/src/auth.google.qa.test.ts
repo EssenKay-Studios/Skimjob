@@ -3,6 +3,7 @@
 // tokens, state/nonce/PKCE abuse, open redirects, cookie flags, guest linking
 // without seat hijack, sign-out closing sockets, and Google off.
 import { createHash, createHmac, generateKeyPairSync, sign, type KeyObject } from "node:crypto";
+import { fileURLToPath } from "node:url";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { WebSocket } from "ws";
@@ -633,5 +634,79 @@ describe("Google off (no GOOGLE_CLIENT_ID/SECRET)", () => {
 
   it("production without Google lists no providers at all", async () => {
     expect(serverDeps(loadConfig({ NODE_ENV: "production", DEV_LOGIN: "1", PUBLIC_ORIGIN: "https://skimjob.example" })).auth).toEqual([]);
+  });
+});
+
+describe("callback under /api (dev proxy and production)", () => {
+  const PROD_REDIRECT = "https://skimjob.duckdns.org/api/auth/google/callback";
+  // A production-shaped server: Google from loadConfig, Secure cookies, serving a web app (SPA fallback on).
+  let prod: FastifyInstance;
+  beforeAll(async () => {
+    const config = loadConfig({ GOOGLE_CLIENT_ID: CLIENT_ID, GOOGLE_CLIENT_SECRET: CLIENT_SECRET, NODE_ENV: "production", PUBLIC_ORIGIN: "https://skimjob.duckdns.org" });
+    expect(config.google?.redirectUri).toBe(PROD_REDIRECT);
+    prod = buildServer({
+      db,
+      clock,
+      secureCookies: true,
+      webDir: fileURLToPath(new URL("../../web", import.meta.url)), // has an index.html
+      auth: [googleAuthProvider({ ...config.google!, fetch: fakeFetch, now: () => clock.now() })],
+    });
+    await prod.ready();
+  });
+  afterAll(() => prod.close());
+  const pget = (url: string, cookies: Record<string, string> = {}) => prod.inject({ method: "GET", url, cookies });
+
+  it("production: /api/auth/google/start → Google → /api/auth/google/callback signs in and returns to returnTo", async () => {
+    const s = await pget("/api/auth/google/start?returnTo=/games");
+    expect(s.statusCode).toBe(302);
+    expect(new URL(s.headers.location as string).searchParams.get("redirect_uri")).toBe(PROD_REDIRECT);
+    const signin = cookieOf(s, "sj_signin")!;
+    expect(signin).toMatchObject({ path: "/", secure: true, httpOnly: true });
+    const back = new URL(approve(s.headers.location as string, "qa-prod-api"), "https://x");
+    const registered = new URL(s.headers.location as string).searchParams.get("redirect_uri")!;
+    // The browser comes back to exactly the registered URI's path.
+    const cb = await pget(`${new URL(registered).pathname}${back.search}`, { sj_signin: signin.value });
+    expect(cb.statusCode).toBe(302);
+    expect(cb.headers.location).toBe("/games");
+    expect(cookieOf(cb, SESSION_COOKIE)?.secure).toBe(true);
+    const who = await prod.inject({ method: "GET", url: "/api/me", cookies: { [SESSION_COOKIE]: sessionOf(cb)! } });
+    expect(who.json().user).toMatchObject({ guest: false });
+  });
+
+  it("production: the callback is never the SPA page, under /api or at the old bare path", async () => {
+    for (const path of ["/api/auth/google/callback", "/auth/google/callback"]) {
+      const res = await pget(`${path}?code=c&state=s`);
+      expect(res.statusCode, path).toBe(400);
+      expect(res.headers["content-type"], path).toMatch(/json/);
+      expect(res.body, path).not.toContain("<div id=\"root\">");
+    }
+  });
+
+  it("the old bare path is the same route: a sign-in started under /api finishes there too, with the registered redirect_uri", async () => {
+    const s = await pget("/api/auth/google/start");
+    const back = new URL(approve(s.headers.location as string, "qa-prod-bare"), "https://x");
+    // The fake token endpoint refuses unless redirect_uri equals the one sent to Google.
+    const cb = await pget(`/auth/google/callback${back.search}`, { sj_signin: cookieOf(s, "sj_signin")!.value });
+    expect(cb.statusCode).toBe(302);
+    expect(sessionOf(cb)).not.toBeNull();
+  });
+
+  it("dev: the Vite proxy strips /api, so the bare route is what the server sees; the redirect URI defaults to Vite's /api path", async () => {
+    const dev = loadConfig({ GOOGLE_CLIENT_ID: CLIENT_ID, GOOGLE_CLIENT_SECRET: CLIENT_SECRET, DEV_LOGIN: "1" });
+    expect(dev.google?.redirectUri).toBe("http://localhost:5173/api/auth/google/callback");
+    // `app` (dev-shaped, REDIRECT under Vite's /api) via the proxied path and the direct /api one.
+    for (const path of ["/auth/google/callback", "/api/auth/google/callback"]) {
+      const s = await start();
+      expect(new URL(s.location).searchParams.get("redirect_uri")).toBe(REDIRECT);
+      const back = new URL(approve(s.location, `qa-dev-${path.length}`), "http://x");
+      const cb = await callback(`${path}${back.search}`, s.signin);
+      expect(cb.statusCode, path).toBe(302);
+      expect(sessionOf(cb), path).not.toBeNull();
+    }
+  });
+
+  it("an /api look-alike prefix isn't stripped (no route confusion)", async () => {
+    expect((await pget("/apiauth/google/callback?code=c&state=s")).headers["content-type"]).not.toMatch(/json/);
+    expect((await get("/apix/auth/google/start")).statusCode).toBe(404);
   });
 });
