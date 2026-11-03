@@ -1,4 +1,4 @@
-# Orchestrator handoff (snapshot 2026-11-03 morning, resumed on the owner's Mac)
+# Orchestrator handoff (snapshot 2026-11-03 morning, resumed)
 
 Read this together with `docs/STATUS.md`, which holds the canonical task list. This file covers how the work is run and what was in flight at the snapshot.
 
@@ -22,22 +22,21 @@ Read this together with `docs/STATUS.md`, which holds the canonical task list. T
 - Send the owner a short progress update about every 15 minutes.
 
 ## State at snapshot
-- **RESUMED 3 Nov:** the pipeline runs again, now on the owner's Mac (setup in the ops PR `ops/mac-pipeline`).
-- **`docs/extension.md` is the single R6 rules spec** (it carries roles v3; draft #45 closed, not merged) and is **approved for build, go-ahead given** (owner, 3 Nov morning; decisions.md "Owner answers, 3 Nov (morning)" and "One rules spec"). The open docs PR `docs/extension-approved` (#49) adds the 3 Nov owner rulings and the fix-round readings to it and brings `docs/design.md` v0.2 in line. Nothing of it is built yet; **R6a is next**. Out of scope: `docs/rebuild.md`, Books mode, the recruited Mole.
-- **Merged through #46** on 2 Nov: #41 (bank board + Claim role), #42 (owner answers docs), #43 (R5 parity balance, provisional), #44 (lock-in marks, presence, early round end, human-majority meeting lock), #46 (M2-10 ledger, case file, "While you were away", suspicion board), plus the 2 Nov docs fold.
+- **Resumed 3 Nov** (paused 2 Nov 16:23 IST, after M2-10). The pipeline now runs on the owner's Mac. Go-ahead given for `docs/extension.md`; owner answers of 3 Nov (morning) are in decisions.md. R6a is next.
+- Deploy workflow is manual-only until a host is chosen (owner, 3 Nov).
+- Draft #45 (roles v3 spec) was closed on 3 Nov: its content now lives in `docs/extension.md`, the single rules spec for R6. `docs/rebuild.md` is a separate proposal; don't build it.
+- **Merged through #46** on 2 Nov: #41 (bank board + Claim role), #42 (owner answers docs), #43 (R5 parity balance, provisional), #44 (lock-in marks, presence, early round end, human-majority meeting lock), #46 (M2-10 ledger, case file, "While you were away", suspicion board), plus this docs fold.
 - **The repo is public** (owner, 2 Nov: Actions minutes had run out). Never commit secrets; they stay in repo secrets.
-- **Deploy workflow is manual-only** until a host is chosen (owner, 3 Nov; done in the ops PR).
-- Player rulebook: claude.ai doc "Skimjob — How to play" (https://claude.ai/artifact/3dEyv4wdmiJ3a9DhrtsBtN); the role-list default there is now settled as Exact roles dealt.
+- Player rulebook: claude.ai doc "Skimjob — How to play" (https://claude.ai/artifact/3dEyv4wdmiJ3a9DhrtsBtN). Exact vs Possible is answered: Exact roles dealt is the default (owner, 3 Nov).
 
 ## Remaining plan
-1. **R6a + Extension rules** (engine, content, bots): everything in `docs/extension.md` ("Build notes" lists it): tokens and the 3-perk shop, "once between meetings", fixed shakedown numbers (clean 6, pay 8), one vote rule, whole-number scoring, "police activity" and "camera offline" cover, Heat breakdown, Standard deck, Quick uses Starter, the 3 Nov owner rulings. Spec: `docs/extension.md` (wins on any conflict); `docs/design.md` v0.2 follows it.
-2. **One balance pass** for all of it on the sharded "Sim suite" GitHub workflow: per-role parity ≤ 0.10, success 55–70%; the Extension's numbers (clean 6, pay 8, shop costs) are starting values to tune.
-3. **R6b + Extension UI:** role cards and Roles rulebook, "between meetings" wording, gap box, Haul target bar, Heat breakdown, shop sheet, lobby deck picker, visual cues for every power, last round shown faded while planning.
-4. M2-11: end-of-game reveal (include tokens and purchases).
-5. M2-13: host controls (pause, extend, replace with bot).
-6. M2-12: Google sign-in, stub-ready (needs a client id from the owner).
-7. M2-14: playtest pass.
-8. **M2-15: offline demo build.** Run the in-browser engine and bots with the same UI, and publish it as a **GitHub Pages** site the owner can verify (owner, 3 Nov). This is the deliverable the owner asked for.
+1. **R6a rules:** everything in `docs/extension.md` ("Build notes" lists it), the bots for all of it, and one balance pass on the sharded Sim suite workflow (parity ≤ 0.10, success 55–70%).
+2. **R6b roles UI:** lobby deck picker, Roles rulebook + tap-to-explain, visual cues for every power, last round shown faded while planning, plus the Extension's UI (between-meetings wording, gap box, target bar, Heat breakdown, shop).
+3. M2-11: end-of-game reveal (include tokens and purchases).
+4. M2-13: host controls (pause, extend, replace with bot).
+5. M2-12: Google sign-in, stub-ready (needs a client id from the owner).
+6. M2-14: playtest pass.
+7. **M2-15: offline demo build.** Run the in-browser engine and bots with the same UI, and publish it as a GitHub Pages site the owner can verify. This is the deliverable the owner asked for.
 
 Follow-ups from reviews: see STATUS "Open follow-ups" (board rate-limiter test, CaseFile memo names, double notes fetch, Quick-game e2e flake, R5 and #44 review notes, SHA-pinning the Actions).
 

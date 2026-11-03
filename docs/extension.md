@@ -1,10 +1,10 @@
 # Skimjob Extension: simplified rulebook
 
-*2–3 Nov 2026 · Karthik. The single rules spec for the R6 build. It replaces `roles-v3.md` (draft PR #45, closed), keeping its decisions and amending five of them (see "Build notes"). **Approved for build 3 Nov 2026 — owner go-ahead given.** Built as R6a (rules, content, bots), one balance pass, then R6b (UI). [`design.md`](design.md) is brought in line as R6a lands; where they differ, this doc wins. Items marked *provisional* are PM readings that the owner may change. Companion proposal: [`rebuild.md`](rebuild.md).*
+*2–3 Nov 2026 · Karthik. The single rules spec for the R6 build. It replaces `roles-v3.md` (draft PR #45, closed), keeping its decisions and amending five of them (see "Build notes"). Go-ahead given 3 Nov 2026; R6a builds it next. Companion proposal: [`rebuild.md`](rebuild.md).*
 
 ## Summary
 
-The Extension is the current game made lighter to learn, without changing how it is built. It includes everything from the roles v3 spec (one crew, failure wins for four roles, no automatic reveals, temperament tags, the two deal modes). The Rebuild is the jobs redesign in [`rebuild.md`](rebuild.md) (not approved, out of scope).
+The Extension is the current game made lighter to learn, without changing how it is built. It includes everything from the roles v3 spec (one crew, failure wins for four roles, no automatic reveals, temperament tags, the two deal modes). The Rebuild is the jobs redesign in [`rebuild.md`](rebuild.md).
 
 **What changes for players:**
 
@@ -76,7 +76,7 @@ Richer rooms raise Heat. If Heat ever reaches 100, the cops raid and the heist f
 - Vault: up to +20 by the share of the crew in it (a quarter of the crew = +5). Deposit boxes and Manager's office: up to +10.
 - Rooftop: up to −20 by the share laying low.
 - +15 if the Haul misses the target at meeting 1 or 2.
-- Police activity (the Mole's tip-off or the Police patrol card): +4.
+- Police activity (the Mole's tip-off or the hidden background patrol): +4.
 - Heat never drops below 0. In crews under 5, event Heat is scaled down.
 
 ## Meetings, votes and the Haul target
@@ -89,7 +89,6 @@ At each meeting the crew may vote to shake down one player, and then the Haul is
 - **Emergency:** each player can call one per game, at any time, after a short notice period.
 - **Can't make it?** Leave a sealed vote.
 - Rounds pause while a meeting is open.
-- **Between meetings** *(provisional)*: a stretch runs from the close of one regular meeting to the close of the next. Powers recharge when the regular meeting **closes**, after its vote, shakedown and target check, so a power used during meeting 1 uses up the old charge. Emergency meetings never recharge anything (owner ruling 2). See Build notes.
 
 **Voting (one rule for every crew size)**
 
@@ -115,7 +114,7 @@ The clean line (6) and payout (8) replace 3 × and 5 × the act number. They are
 
 ## Winning and losing
 
-At most one player wins (players still tied at the top share the win, below), never a team. If the heist succeeds, the biggest stash wins, whatever the role.
+At most one player wins, never a team. If the heist succeeds, the biggest stash wins, whatever the role.
 
 | How the game ends | Who wins |
 | --- | --- |
@@ -143,8 +142,8 @@ All 20 roles stay, with the same powers as today. What changes: every reward is 
 
 | Role | Power | Earns a token when |
 | --- | --- | --- |
-| Rookie | No power | The Haul target is met at a meeting (meeting 1 or 2; *provisional*) |
-| Inside Man | Can't pocket; +1 score per 5 loot the Haul ends above the final target | The Haul target is met at a meeting (meeting 1 or 2; *provisional*) |
+| Rookie | No power | The Haul target is met at a meeting |
+| Inside Man | Can't pocket; +1 score per 5 loot the Haul ends above the final target | The Haul target is met at a meeting |
 | Lookout | Sees who was in one extra room every round | Someone it saw is caught |
 | Auditor | Once between meetings: how much went missing in one room last round | A visitor of that room is caught |
 | Detective | Once between meetings: is one player's stash "dirty" (6 or more)? | That player is caught |
@@ -154,8 +153,8 @@ All 20 roles stay, with the same powers as today. What changes: every reward is 
 | Priest | Once between meetings: bless a player; if they're shaken down clean, the bank pays the 8 | A blessing pays out |
 | Bagman | When it hands in everything, the bank adds +1 to the Haul | It hands in everything 3 rounds running |
 | Cleaner | Its Rooftop visit cools Heat like two people | Every 2nd Rooftop round |
-| Fixer | Once, automatically: stops a raid at Heat 95, losing a quarter of its stash (any raid, at any moment, *provisional*: see Build notes) | That happens |
-| Mastermind | Sees the next event card early (events on only) | The Haul target is met at a meeting (meeting 1 or 2; *provisional*) |
+| Fixer | Once, automatically: stops a raid at Heat 95, losing a quarter of its stash | That happens |
+| Mastermind | Sees the next event card early (events on only) | The Haul target is met at a meeting |
 
 **Wildcards**
 
@@ -164,7 +163,7 @@ All 20 roles stay, with the same powers as today. What changes: every reward is 
 | Getaway Driver ★ | Its Rooftop visit doesn't really cool Heat | Heat reaches 75 | A raid, with the biggest stash |
 | Fence ★ | Hides up to 5 loot between meetings in a safe that shakedowns show but can't take | The safe reaches 10 | Any failure, with the biggest stash (safe counts) |
 | Hacker | Once between meetings: loops one room's cameras, which then read "camera offline" | A loop hid someone who pocketed | — |
-| Blackmailer | Once between meetings: guess a player's role; if right, it steals their vote at the next meeting | A vote it stole decides a shakedown (owner ruling 5) | — |
+| Blackmailer | Once between meetings: guess a player's role; if right, it steals their vote at the next meeting | — | — |
 | Forger | Once between meetings: plants a fake sighting on that round's camera and Lookout feeds | Someone it framed is shaken down clean | — |
 
 **Lone wolves**
@@ -174,20 +173,16 @@ All 20 roles stay, with the same powers as today. What changes: every reward is 
 | Mole ★ | Once between meetings, any time: tips off the cops for +4 Heat, announced only as "police activity" | Each tip-off | Any failure, with the biggest stash |
 | Embezzler ★ | Once between meetings: moves 1 loot from the Haul into its stash; while holding a take, a shakedown always catches it | Its first take | A missed target, with the biggest stash |
 
-**Minimum crew sizes:** Snitch and Detective 4+; Inside Man, Smooth Talker, Muscle and Priest 5+; Blackmailer 7+; Forger 7+ (*provisional*: kept from roles v2, which this list doesn't change). Nobody is told anyone else's role. You learn roles only through powers, perks, event cards or claims.
+**Minimum crew sizes:** Snitch and Detective 4+; Inside Man, Smooth Talker, Muscle and Priest 5+; Blackmailer and Forger 7+. Nobody is told anyone else's role. You learn roles only through powers, perks, event cards or claims.
 
 ## Tokens and the perk shop
 
 Roles earn tokens; tokens buy perks from a shop of three. Players learn one rule ("my role earns tokens") instead of eight different rewards.
 
-- Each game deals **one perk from each column** below into the shop, so every game has exactly three (Quick games have no shop; events-off and Duel games deal from the lists below).
+- Each game deals **one perk from each column** below into the shop, so every game has exactly three.
 - Tokens and purchases are private until a perk is used.
 - Use a perk any time after buying it, at most one per round.
 - Unspent tokens are worth nothing at the end.
-- *Provisional:* everyone starts with 0 tokens. You can buy any time, as often as your tokens allow, and the same perk more than once. "Per round" runs from a round's planning to the next round's planning, including its alibi window and any meeting after it.
-- *Events off (provisional):* Rig needs events, so the Sway perk is dealt from +Vote and Emergency only.
-- *Duel (provisional):* still three perks, but only ones that work without meetings: Peek or Tail, Alibi or Recharge, and Rig if events are on. With events off, the third slot gets whichever Peek/Tail or Alibi/Recharge perk wasn't dealt.
-- *Quick (provisional):* no tokens and no shop (see Host settings).
 
 | Learn | Protect | Sway |
 | --- | --- | --- |
@@ -199,11 +194,10 @@ These are the same nine perks the game already has. Only how they are earned and
 
 ## Situations
 
-From round 2, one event card is flipped every round for everyone to see. Cards can repeat, and they're on by default. Three of them now look exactly like sabotage, so the crew can't tell bad luck from a role's power.
+From round 2, one event card is flipped every round for everyone to see. Cards can repeat, and they're on by default. A Power cut looks like the Hacker's loop, and hidden police activity looks exactly like the Mole's tip-off, so the crew can't tell bad luck from a role's power.
 
 | Card | Effect this round | Looks the same as |
 | --- | --- | --- |
-| ~~Police patrol~~ | ~~+4 Heat at a random moment, announced as "police activity"~~ *(provisional: moved out of the deck, below)* | The Mole's tip-off |
 | Quiet night | Heat −10 | — |
 | Shift change | The Vault pays double, with 1.5× its Heat | — |
 | Payday | The Lobby pays 4 | — |
@@ -214,15 +208,13 @@ From round 2, one event card is flipped every round for everyone to see. Cards c
 | Inside tip | One random player secretly learns another's role | — |
 | Double-cross | Two players are offered a role swap; it happens only if both accept | — |
 
-Police patrol drops from +5 to +4 to match the tip-off. Unlike the other cards, it isn't shown at the start of the round, so a tip-off and a patrol look the same.
-
-*Provisional PM call (3 Nov), awaiting owner confirmation:* a patrol card that isn't shown leaves a round with no card, which gives the patrol away. So the **Police patrol leaves the deck** (9 cards; one is still flipped every round from round 2). Instead, every game, events on or off, has a hidden **background chance of police activity**: about 1 in 4 rounds [tunable] get "+4 Heat, police activity" at a random moment, in the same windows the Mole can tip off. The announcement is identical to a tip-off. Details are in Build notes, "Police activity". The Power cut is flipped publicly, so a single "camera offline" room in a round without a Power cut is always the Hacker's loop.
+**Police activity** (owner, 3 Nov, option A): the Police patrol is no longer a card. Instead, about **1 round in 4** [tunable] brings a hidden "police activity: +4 Heat" at a random moment: while planning, during the alibi window, or in the meeting after it. Between rounds counts too. It is announced exactly like the Mole's tip-off, so the two look the same. (Was the +5 Police patrol card.)
 
 ## Host settings
 
 | Setting | Options (default first) |
 | --- | --- |
-| Session length | 1 h, Quick (15 min), 3 h, 1 day, 3 days, 1 week *(default 1 h, as the server's `DEFAULT_SETTINGS`; Quick is a playtest preset)* |
+| Session length | 1 h, Quick (15 min), 3 h, 1 day, 3 days, 1 week |
 | Deck | Standard, Starter, Everything, or pick roles one by one |
 | Deal style | Balanced (a tested mix for the crew size), Truly random |
 | Role list shown to players | Exact roles dealt, roles that could be in the game, nothing |
@@ -234,22 +226,29 @@ Police patrol drops from +5 to +4 to match the tip-off. Unlike the other cards, 
 
 Quick games switch to the Starter deck automatically. 45-second rounds leave no time for powers and tokens.
 
-*Quick and Starter (provisional):* Quick locks the deck picker, the per-role toggles and Event cards (Starter, events off), and the lobby says "Quick games use the Starter deck". The host's other choices come back if the session length changes. Quick games have **no tokens and no shop**: 45-second rounds leave no time for them, and Starter is the learning game. A longer game on the Starter deck has tokens and the shop as normal. Outside Quick, per-role toggles can add any role to any preset (it then shows as Custom). "Starter never deals a Wildcard or Lone wolf" describes the preset as dealt.
-
 ## Owner rulings (3 Nov)
 
-The owner's answers of 3 Nov fill gaps the tables above leave open. All final.
+Owner answers of 3 Nov (morning), all final:
 
-1. **Getaway Driver, Fence, Mole and Embezzler** earn **1 token** for their trigger, not a free Peek.
-2. **Emergency meetings don't recharge** "once between meetings" powers. Only the regular meetings after rounds 3, 6 and 9 do.
-3. The **Detective's "dirty" line and the shakedown's clean line** stay one shared number (6), tuned together.
-4. The **Mole** earns a token for every tip-off (at most 3 per game).
-5. The **Blackmailer** earns a token when a vote it stole decides a shakedown.
-6. A **Muscle** that saves an innocent gets a token **and** its power back.
-7. **Duel mode:** "between meetings" limits reset after rounds 3 and 6.
-8. The **role list shown to players** defaults to **Exact roles dealt** (closes the Exact vs Possible question).
+1. Getaway Driver, Fence, Mole and Embezzler earn **1 token** for their trigger (not a free Peek).
+2. **Emergency meetings don't recharge** "once between meetings" powers; only the regular meetings after rounds 3, 6 and 9 do.
+3. The Detective's "dirty" line and the shakedown's clean line stay **one shared number (6)**, tuned together.
+4. The Mole earns a token for **every tip-off** (at most 3 per game).
+5. The Blackmailer earns a token when **a vote it stole decides a shakedown**.
+6. A Muscle that saves an innocent gets **a token and its power back**.
+7. **Duel:** "between meetings" limits reset after rounds 3 and 6.
+8. The role list shown to players defaults to **Exact roles dealt**.
 
-Also decided on 3 Nov: the offline demo (M2-15) ships as a GitHub Pages site, and the deploy workflow is manual-only until a host is chosen. [`design.md`](design.md) carries these rules too.
+Also confirmed: **Police patrol option A**. The patrol leaves the event deck and becomes hidden background police activity (see "Situations" and Build notes).
+
+**Gap-fills** (PM readings from the review; the owner may change them):
+
+- **Between meetings:** a stretch runs from the close of one regular meeting to the close of the next. Uses recharge when that meeting **closes**, after its vote, shakedown and target check, so a power used during a meeting spends the old charge. Emergency meetings never close a stretch. In Duel, a stretch closes when round 3's or 6's call-outs and target check settle. **Recharge** restores one used-up use of the current stretch, or a once-per-game use.
+- **Session length:** the default is **1 h** (the server's `DEFAULT_SETTINGS`); Quick is a playtest preset.
+- **Quick forces Starter:** it locks the deck picker, the per-role toggles and Event cards to Starter with events off, and the lobby says so. The host's other choices come back if the length changes. Quick has **no tokens and no shop** (it is the learning game, and 45-second rounds leave no time). Outside Quick, per-role toggles may add any role to any preset.
+- **Shop dealing:** players start with 0 tokens and can buy any time. With **events off**, the Sway perk is dealt from +Vote or Emergency only. **Duel** deals three perks that work without meetings: Peek or Tail, Alibi or Recharge, and Rig with events on. With events off, the third perk is whichever Learn or Protect perk wasn't dealt.
+- **Fixer:** the save stops **any** raid at any moment, including one from police activity between rounds or during a meeting (Heat set to 95).
+- **Forger 7+:** kept from roles v2; the minimum-size list above omitted it.
 
 ## Build notes (engine, bots, sim)
 
@@ -260,7 +259,7 @@ For the builders. This section carries over everything from `roles-v3.md` (owner
 1. The four reveal rewards that became Peeks (Getaway Driver, Fence, Mole, Embezzler), and every other role reward, are now **one token** each.
 2. "Once per act" reads "once between meetings" everywhere players see it. The engine keeps acts internally.
 3. Rookie ×1.05 and Inside Man +0.15 become no multiplier and +1 per 5 loot over the final target. Scores are whole numbers.
-4. The Mole's tip-off is still any time, once between meetings, +4 Heat. But it is announced only as "police activity", the same as the Police patrol card (now +4, at a random moment). *(Provisional, 3 Nov: the card becomes a hidden background chance; see "Police activity" below.)*
+4. The Mole's tip-off is still any time, once between meetings, +4 Heat. But it is announced only as "police activity", the same as the background patrol that replaces the Police patrol card: a hidden background chance [1 in 4] per round of +4 at a random moment (owner, 3 Nov, option A; see "Police activity" below).
 5. The plurality rule for crews of 9–12 is dropped; one vote rule for every size.
 
 **Win rule** (`end.ts`)
@@ -299,61 +298,34 @@ For the builders. This section carries over everything from `roles-v3.md` (owner
 - Votes are on suspicion only; no ally logic. ★ holders and evidence-leaving roles (Hacker, Forger) bluff a low-risk role (Rookie, Bagman, Cleaner) when accused; the rest claim truthfully with chance 1 − lie. Public tells: rising Heat points at the Driver or Mole; "camera offline" at the Hacker or a Power cut; a big shown safe at the Fence.
 - Bots buy perks by simple priorities and spend tokens before the game ends.
 
+**Police activity** (owner, 3 Nov: option A; the chance is a content number tuned by the balance pass)
+
+- The Police patrol is no longer an event card, so the deck is 9 cards and one card is still flipped every round from round 2.
+- **The draw:** as each round's planning opens (rounds 1–9, events on or off), the engine draws from the seeded RNG.
+  - With chance [1 in 4] (`policeActivity.chance`), that round's window gets one police activity.
+  - If it does, the engine draws a slot uniformly from the round's planning, its alibi window, and (after rounds 3, 6 and 9) its regular meeting.
+  - It also draws a fraction f in [0, 1) of that phase.
+  - The draw is secret state, reveal-only in the log.
+- **The moment:** the server fires it at the phase's start plus f × the phase's planned length (`advance { kind: "policeActivity" }`). If the phase ends sooner (an early round end, or a meeting closing), it fires as the phase closes, before the round resolves. The sim, which has no clock, fires it at the phase's close.
+- **Same as a tip-off:** it is the same public `policeActivity` event as a Mole's tip-off, with:
+  - no source;
+  - the same +[4], scaled by min(1, crew ÷ 5) in small crews;
+  - an immediate raid check (a Fixer can stop it).
+  - Only the Mole gets a private note that the activity was its own.
+- **Mole's "any time":** a tip-off can come during any planning phase, alibi window or open meeting, or while a meeting is waiting to open.
+- **Heat breakdown:** police activity is listed under the round whose window it fell in. If it falls in a meeting, it goes under the latest resolved round.
+- **Remaining tells (accepted):**
+  - Two police activities in one window mean at least one was the Mole.
+  - A tip-off during an emergency meeting, or while a meeting is waiting to open, is always the Mole.
+- **No foresight:** the Mastermind doesn't foresee police activity.
+
 **Sim**
 
 - Gates: per-role parity ≤ 0.10 (win credit ÷ 1/n, all 20 roles, Balanced, 4–12 players) and success 55–70%.
 - Reports: the ending split (success / raid / miss), no-winner rate, shared-win rate, wins by success vs failure for each ★ role, token earning and spending per role, and Truly random and the role-list settings (no gate).
 - Watch: the Mole and Fence can win either way and may sit high; Hacker, Blackmailer, Forger and Inside Man may sit low. Tune stash-earning numbers first.
 - Run it on the sharded "Sim suite" GitHub workflow, not babysat in a chat.
-- Tunables include the clean line [6] and pay [8], shop costs, the Inside Man's [5], police activity's chance [1 in 4] and Heat [4], the Fence cap [5], the Embezzler take [1], the Duel wrong-call pay [8], Balanced's mixes and the bots' lean points.
-
-**Between meetings** *(provisional PM definition, 3 Nov)*
-
-- A **stretch** runs from the close of one regular meeting to the close of the next. Stretch 1 runs from the deal to the close of meeting 1.
-- "Once between meetings" uses recharge **when the regular meeting closes**, after its vote, shakedown and target check. So a use during meeting 1 (Detective, Mole, Auditor) spends stretch 1's charge, and the new charge is available from round 4's planning.
-- Emergency meetings never close a stretch (owner ruling 2). The engine counts stretches by regular-meeting closes, not by `actOfRound`.
-- In Duel, a stretch closes when round 3's or round 6's call-outs and target check settle (owner ruling 7).
-- Role claims, the Fence's safe allowance and Duel call-outs use the same stretches. A Priest's blessing lasts until the next regular meeting closes.
-- **Recharge** restores one used-up use of the current stretch, or a once-per-game use. It is refused if nothing is used up. A restored use still unspent at the stretch's close adds nothing, because the normal recharge covers it.
-
-**Police activity** *(provisional PM call, 3 Nov, awaiting owner confirmation; replaces the Police patrol card)*
-
-- **Deck:** the Police patrol is no longer an event card, so the deck is 9 cards. A card is still flipped publicly every round from round 2 (events on), so no round starts blank.
-- **The draw:** as each round's planning opens (rounds 1–9, events on or off), the engine draws from the seeded RNG.
-  - With chance [1 in 4] (content `policeActivity.chance`), that round's **window** gets one police activity.
-  - If it does, the engine also draws a **slot**, uniformly from the phases a tip-off could land in: the round's planning, its alibi window, and (after rounds 3, 6 and 9) its regular meeting.
-  - It also draws a fraction f in [0, 1) of that phase.
-  - The draw is secret state: in no view, and reveal-only in the log.
-- **The moment:** the server fires it at the phase's start plus f × the phase's planned length (`advance { kind: "policeActivity" }`).
-  - If the phase ends sooner (an early round end after every lock-in, or a meeting closing), it fires as the phase closes, before the rest of the transition (so before the round resolves).
-  - The sim and engine tests have no clock, so they fire it at the drawn phase's close.
-  - Pauses delay it like any deadline.
-- **Mole's "any time":** a tip-off can come during any round's planning or alibi window, during any open meeting (regular or emergency), or while a meeting is waiting to open.
-- **Identical announcement:** the patrol and a tip-off produce the same public `policeActivity { heat }` event, with:
-  - no source and the same text, "Police activity: +4 Heat";
-  - the same small-crew scaling, min(1, crew ÷ 5), rounded;
-  - the Heat added at once and a raid check at once (a Fixer may stop it).
-  - Only the Mole gets a private "your tip-off" note. The source is reveal-only.
-- **Heat breakdown:** police activity counts in the round whose window it landed in. If it lands in a meeting, it counts in the latest resolved round. If it lands after that round's summary was posted, the summary gains a "+4 police activity" line. Each breakdown line is rounded on its own (halves up), and the round's change is the sum of its lines.
-- **Accepted leftover tells:**
-  - Two police activities in one window mean at least one was the Mole, but not which.
-  - A tip-off during an emergency meeting, or while a meeting is waiting to open, is always the Mole.
-  - With no Mole in the role list, every police activity is a patrol, so there is nothing to hide.
-- **The Mastermind** doesn't foresee police activity, because it isn't a card. The starting chance gives about 2.25 patrols (about +9 Heat) per game; the balance pass tunes the chance with the baseline Heat.
-
-**Fixer** *(provisional)*: the save stops **any** raid, whenever Heat would reach 100: at a round's resolution, from a missed target's +15, or from police activity at any moment, including between rounds and during a meeting. Heat is set to 95 and the public `raidStopped` names nobody.
-
-**Token readings** *(provisional PM readings where the tables are terse)*
-
-- **Snitch:** a token each time its target is caught. This replaces its +1 ballot weight.
-- **Smooth Talker:** "helps catch a cheater" means its last ballot in that meeting was for the caught player.
-- **Fixer:** a token, not a Shield.
-- **Rookie, Inside Man and Mastermind:** tokens only at meetings 1 and 2. The final check ends the game, and unspent tokens are worthless.
-- **Bagman:** one token per run of 3 all-in rounds in a row.
-- **Blackmailer:** "decides" means the shakedown passed and wouldn't have without the stolen weight.
-- **Duel:** a wrong call-out pays a fixed [8] from the caller's stash (it was 5 × the act).
-- **Balanced starting mixes** (Wildcards / Lone wolves, before the balance pass): 4 players 0/1, 5–8 players 1/1, 9–10 players 1/2, 11–12 players 2/2.
-- **Rulebook line on voluntary tells:** using a perk before the first shakedown (a second Emergency, a Shield's "cancelled", a Verified alibi) shows you earned tokens early, which narrows your possible roles.
+- Tunables include police activity's chance [1 in 4] alongside the clean line [6], pay [8] and shop costs.
 
 ## Code change estimate
 
@@ -381,11 +353,9 @@ The Extension changes about **1,500 lines of source and 1,500 lines of tests**, 
 - **Unaffected:** the end-of-game reveal (it should also list tokens and purchases), host controls, Google sign-in, the playtest pass and the offline demo.
 - **Untouched:** the engine core, server, lobby, chat, art and CI.
 
-**Not part of the Extension, not approved, out of scope** (adds one experiment each, if wanted later): Books mode, where the Haul is hidden and a public Banker reports it (about 600–900 more lines), and a Mole recruited mid-game instead of dealt (about 200–300).
+**Not part of the Extension** (adds one experiment each, if wanted later): Books mode, where the Haul is hidden and a public Banker reports it (about 600–900 more lines), and a Mole recruited mid-game instead of dealt (about 200–300).
 
 ## Extension vs Rebuild
-
-*Kept for the record. The owner chose the Extension on 3 Nov; the Rebuild and Books mode are not approved and out of scope.*
 
 The Extension is the cheaper and safer path; the Rebuild is the more original game. They aren't mutually exclusive: Books mode is the first step from the Extension toward the Rebuild.
 

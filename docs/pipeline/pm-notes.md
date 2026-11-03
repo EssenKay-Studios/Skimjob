@@ -15,4 +15,4 @@
 Lightsail needs: LIGHTSAIL_SSH_KEY, LIGHTSAIL_HOST, LIGHTSAIL_USER secrets; subdomain DNS A record; docker? proxy (nginx/caddy)? RAM.
 - ~~PM call: 5p never gets an accomplice (floor(n/3)=1) — accepted; revisit in R5 if parity fails at 5p.~~ (#43 lifted the cut)
 - ~~Bot fix before M2-14: bots must only BACK human meeting proposals (not propose first); queue small PR.~~ (done, #44)
-- ~~PAUSED by the owner 2 Nov 16:23 IST after M2-10. On resume: roles v3 approval (PR #45) first.~~ (resumed 3 Nov on the owner's Mac; the Extension, now the single R6 spec carrying roles v3, approved for build; #45 closed by the owner; docs PR #49 adds the rulings)
+- ~~PAUSED by the owner 2 Nov 16:23 IST after M2-10. On resume: roles v3 approval (PR #45) first.~~ Resumed 3 Nov; #45 closed, `docs/extension.md` approved for build.
