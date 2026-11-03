@@ -26,7 +26,7 @@ export interface ServerDeps {
   readonly db: Db;
   /** Session expiry and the scheduler's deadlines. */
   readonly clock: Clock;
-  /** Redirect sign-in providers (`dev` with DEV_LOGIN=1; Google in M2-12). Guests need none. */
+  /** Redirect sign-in providers (`google` with GOOGLE_CLIENT_ID/SECRET, `dev` with DEV_LOGIN=1). Guests need none. */
   readonly auth?: readonly AuthProvider[];
   /** Defaults to a fresh store on `db`. */
   readonly store?: GameStore;

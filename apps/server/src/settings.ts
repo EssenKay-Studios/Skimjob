@@ -49,6 +49,9 @@ export const DEFAULT_SETTINGS: LobbySettings = {
 export const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 export const NICKNAME_MAX = 24;
 
+/** "My games" (M2-12): the most games listed for one user. */
+export const MY_GAMES_LIMIT = 50;
+
 /** Chat limits (M2-8a): characters per message, messages per window per player, history sent on connect. */
 export const CHAT_MAX_CHARS = 500;
 export const CHAT_RATE = { messages: 8, windowMs: 10_000 } as const;

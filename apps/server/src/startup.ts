@@ -1,6 +1,7 @@
 // Opening the database at server start, with one-line errors instead of a
 // driver stack trace (bad DATABASE_URL, Postgres not running).
 import { devAuthProvider } from "./auth";
+import { googleAuthProvider } from "./google";
 import { StartupError, type ServerConfig } from "./config";
 import { openPglite, pgDb, type Db } from "./db";
 import { migrate } from "./migrate";
@@ -44,7 +45,10 @@ export async function openDatabase(config: ServerConfig): Promise<{ db: Db; appl
 export function serverDeps(config: ServerConfig): Pick<ServerDeps, "auth" | "allowedOrigins" | "webDir" | "secureCookies" | "trustProxy" | "timeScale"> {
   return {
     // loadConfig already turns DEV_LOGIN off in production; this is the only place providers are chosen.
-    auth: config.devLogin && !config.production ? [devAuthProvider()] : [],
+    auth: [
+      ...(config.google ? [googleAuthProvider(config.google)] : []),
+      ...(config.devLogin && !config.production ? [devAuthProvider()] : []),
+    ],
     allowedOrigins: config.allowedOrigins,
     webDir: config.webDir,
     secureCookies: config.production,

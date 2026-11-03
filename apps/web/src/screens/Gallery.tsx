@@ -12,6 +12,7 @@ import { ExtensionSections } from "./GalleryExtension";
 import { HostSection } from "./GalleryHost";
 import { Button, DangerButton } from "../components/Button";
 import { Chip } from "../components/Chip";
+import { MyGames } from "../components/MyGames";
 import { ArrowBack, Copy, Play, Plus, Star } from "../components/icons";
 import { Segmented } from "../components/Segmented";
 import { SketchFrame } from "../components/SketchFrame";
@@ -169,6 +170,18 @@ export function Gallery() {
                   Sign in with Google
                 </Button>
               </SketchFrame>
+            </Section>
+
+            <Section id="my-games" title="My games" note="M2-12 · signed-in landing · each row is a link back in">
+              <MyGames
+                seed="g-mygames"
+                games={[
+                  { id: "g1", status: "running", nickname: "Mara Vox", youAreHost: true, host: "Mara Vox", seats: 6, sessionLength: "1d" },
+                  { id: "g2", status: "lobby", nickname: "Dez", youAreHost: false, host: "Lucky Lou", seats: 3, sessionLength: "1h" },
+                  { id: "g3", status: "ended", nickname: "Extraordinarily Long Lou", youAreHost: false, host: "Priya K", seats: 12, sessionLength: "1w" },
+                ]}
+              />
+              <MyGames seed="g-mygames-empty" games={[]} />
             </Section>
 
             <Section id="avatars" title="Blob avatars" note="initials · crew colours · ready / away / turn / bot">

@@ -12,7 +12,7 @@ import { createGuestUser, type Sessions, type User } from "./auth";
 import type { Db, Queryable } from "./db";
 import type { GameStatus, GameStore } from "./store";
 import { TIMINGS } from "./timing";
-import { BOT_NAMES, checkNickname, DEFAULT_SETTINGS, isSettingKey, looksLikeBot, nicknameKey, parseSettings, storedSettings, type LobbySettings } from "./settings";
+import { BOT_NAMES, checkNickname, DEFAULT_SETTINGS, isSettingKey, looksLikeBot, MY_GAMES_LIMIT, nicknameKey, parseSettings, storedSettings, type LobbySettings } from "./settings";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CODE_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"; // no 0/o, 1/l/i
@@ -186,6 +186,33 @@ export function lobbyRoutes(app: FastifyInstance, db: Db, store: GameStore, s: S
   });
 
   app.get<{ Params: { id: string } }>("/games/:id", (req) => inGame(req, async (game, seats, user) => view(game, seats, user)));
+
+  // "My games" (m2-plan M2-12): every game the user has a seat in, live ones first, newest first.
+  app.get("/me/games", async (req) => {
+    const user = await signedIn(req);
+    const rows = await db.query<{ id: string; status: GameRow["status"]; nickname: string; you_host: boolean; host: string | null; seats: number; session_length: string | null }>(
+      `select g.id, g.status, s.nickname, g.host_user_id = $1 as you_host,
+         (select h.nickname from seats h where h.game_id = g.id and h.user_id = g.host_user_id) as host,
+         (select count(*) from seats x where x.game_id = g.id)::int as seats,
+         g.settings->>'sessionLength' as session_length
+       from seats s join games g on g.id = s.game_id
+       where s.user_id = $1
+       order by g.status = 'ended', g.updated_at desc, g.created_at desc
+       limit ${MY_GAMES_LIMIT}`,
+      [user.id],
+    );
+    return {
+      games: rows.map((r) => ({
+        id: r.id,
+        status: r.status,
+        nickname: r.nickname,
+        youAreHost: r.you_host,
+        host: r.host,
+        seats: Number(r.seats),
+        sessionLength: r.session_length ?? DEFAULT_SETTINGS.sessionLength,
+      })),
+    };
+  });
 
   // Invite page preview: no sign-in needed, says only whose game it is and how full.
   app.get<{ Params: { code: string } }>("/invites/:code", async (req) => {
