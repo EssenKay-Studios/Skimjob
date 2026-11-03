@@ -3,11 +3,14 @@
 _3 Nov 2026. Content 0.15.0 → 0.16.0. Gates from extension.md Build notes "Sim" and design §17.4: in Balanced, 4–12 players, Standard deck,
 events on and off, success 55–70% and per-role parity ≤ 0.10. Final run: "Sim suite" workflow
 [41601623086](https://github.com/EssenKay-Studios/Skimjob/actions/runs/41601623086) (20 shards, ±2 pp, 400–6000 games per cell, 110,400 games,
-seed `suite`, default bot mix). That run is the new `docs/balance/baseline.json`. The first full run with Fence token 10 was
+seed `suite`, default bot mix). That run was the baseline until the split-gate pass below, whose final run
+[41607419781](https://github.com/EssenKay-Studios/Skimjob/actions/runs/41607419781) (content 0.17.0, 116,600 games) is now `docs/balance/baseline.json`. The first full run with Fence token 10 was
 [41600605174](https://github.com/EssenKay-Studios/Skimjob/actions/runs/41600605174). About 20 candidate sets were screened locally first,
 with 600–1000 games per cell at 4–12p._
 
-**Result: success PASSES in all 18 gated cells. Parity is BLOCKED.** It FAILs in all 9 groups (spread 0.63–1.01, was 0.46–1.59).
+**Update (split gate, content 0.17.0): see "Split parity gate" below — success passes, every ★ role is in its band, Team-role parity is blocked by the Muscle at 9–10p.**
+
+**Result (content 0.16.0): success PASSES in all 18 gated cells. Parity is BLOCKED.** It FAILs in all 9 groups (spread 0.63–1.01, was 0.46–1.59).
 No content number can close it (see "Why parity is blocked"). The owner needs to decide on the gate or the rule.
 
 ## Numbers changed
@@ -101,3 +104,65 @@ Starter, Quick and Duel come from local `pnpm sim` runs: 1000 games per count, a
 Quick is the Starter deck with events off and no shop. The sim's Starter games have no tokens either.
 
 If the owner wants Starter nearer the band, the levers are a Starter-only target or Heat. A 90% learning game may be fine as it is.
+
+## Split parity gate (PM provisional, 3 Nov; owner to confirm)
+
+The PM took option 1 (owner away): the ≤ 0.10 spread now covers **Team roles only**, and each **★ role** must sit in a band
+relative to the Team-role average. The all-role spread is still printed, report-only. Balanced 4p 1 / 1 is accepted
+(provisional) and Starter stays as it is (learning mode, report-only). Code: `splitParityOf` in apps/sim/src/suite/report.ts,
+`STAR_BAND` in targets.ts. A ★ role's 95% range is its own interval divided by the Team-average interval.
+
+**Band: 0.9–1.8× the Team-role average.** Why: a Team role's ratio is about the success rate s. A ★ role with an average
+stash that also wins every failure it is top in scores about 1 ÷ s against that, which is 1.43 at s = 70% and 1.82 at
+the 55% floor; 1.4 is that ceiling only at the top of the success band. The low end, 0.9, lets the Getaway Driver (heat
+failures only, about 0.3 of them) sit near the Team roles but not below them. The data agree: across all runs the ★ roles sat
+at 0.9–2.6×, and in the final run at 0.98–1.83×. Values above 1.8 (2.0–2.6 at 10–12p before this pass) were ★ bots
+leaning to failure and being top, so they were tuned rather than allowed by a wider band.
+
+**Tuning (content 0.16.0 → 0.17.0):**
+
+| Number | Was | Now | Why |
+|---|---|---|---|
+| ★ lean point (bot setting, extension.md bracket) | 0.4 | 0.8 | ★ bots lean to failure only once it is likely; cuts the Fence and Mole by 0.2–0.5 at 7–12p. |
+| Teller line (9+) | 5 loot, no Heat | 6 loot, +10 Heat × share | Moves 9–12p failures from a missed target to Heat: the Embezzler (target only) drops from 2.1–2.6 to 1.6–1.8, the Driver (Heat only) rises to ~1.0. +1 loot keeps success in band. |
+
+Tried and dropped (Sim suite runs, Balanced only): Hacker 2 per act ([41604876333](https://github.com/EssenKay-Studios/Skimjob/actions/runs/41604876333)),
+Rooftop 1 loot + Heat 5 a round ([41604887037](https://github.com/EssenKay-Studios/Skimjob/actions/runs/41604887037)),
+Auditor and Detective 2 per act ([41604900059](https://github.com/EssenKay-Studios/Skimjob/actions/runs/41604900059)),
+Cleaner Rooftop counts as 3 ([41604910734](https://github.com/EssenKay-Studios/Skimjob/actions/runs/41604910734)): none moved Team parity or the ★ roles by
+more than noise. Lean 0.6 ([41604965583](https://github.com/EssenKay-Studios/Skimjob/actions/runs/41604965583)) did less than 0.8
+([41604977271](https://github.com/EssenKay-Studios/Skimjob/actions/runs/41604977271)). Teller +10 Heat at 5 loot sank 9–12p to 42–51% success
+([41606013869](https://github.com/EssenKay-Studios/Skimjob/actions/runs/41606013869)); Manager's office +20 Heat, 4 loot left the Embezzler at 2.2 at 11–12p
+([41606031652](https://github.com/EssenKay-Studios/Skimjob/actions/runs/41606031652)). Locally (600–1000 games a cell): clean line 4, Mole 2 tip-offs a game,
+Cleaner 1, lean never, TOP_FACTOR 4 — no gain. Current numbers before tuning: [41604814895](https://github.com/EssenKay-Studios/Skimjob/actions/runs/41604814895).
+
+**Final run** [41607419781](https://github.com/EssenKay-Studios/Skimjob/actions/runs/41607419781) (Balanced, events on / off pooled for parity;
+`?` = inconclusive, else confirmed):
+
+| Players | Success on / off | Team spread [95%] | Team high / low | ★ Embezzler / Fence / Driver / Mole (× Team avg) | All-role spread (report) |
+|---|---|---|---|---|---|
+| 4 | 65.1 / 67.7 | 0.10 [0.01–0.18] ? | Hacker 0.70 / Auditor 0.60 | 1.17 / 1.78? / 1.20 / 1.58 | 0.58 |
+| 5 | 63.6 / 65.8 | 0.12 [0.03–0.20] ? | Lookout 0.71 / Cleaner 0.59 | 1.24 / 1.83? / 1.25 / 1.63 | 0.58 |
+| 6 | 66.3 / 68.4 | 0.06 [0.00–0.15] ? | Muscle 0.68 / Cleaner 0.62 | 1.33 / 1.72? / 1.21 / 1.61 | 0.52 |
+| 7 | 68.3 / 69.6? | 0.13 [0.05–0.21] ? | Muscle 0.74 / Cleaner 0.62 | 1.47 / 1.81? / 1.15 / 1.56 | 0.62 |
+| 8 | 60.0 / 59.6 | 0.16 [0.07–0.25] ? | Smooth Talker 0.66 / Cleaner 0.50 | 1.66 / 1.81? / 1.13 / 1.70? | 0.58 |
+| 9 | 67.0 / 63.9 | **0.26 [0.17–0.35] FAIL** | Muscle 0.81 / Cleaner 0.55 | 1.60 / 1.63? / 1.07 / 1.54 | 0.52 |
+| 10 | 68.3 / 64.9 | **0.28 [0.18–0.37] FAIL** | Muscle 0.84 / Cleaner 0.56 | 1.56 / 1.61? / 0.98? / 1.58 | 0.51 |
+| 11 | 65.1 / 62.8 | 0.20 [0.10–0.31] ? | Muscle 0.76 / Cleaner 0.55 | 1.83? / 1.67? / 0.99? / 1.64 | 0.63 |
+| 12 | 67.2 / 64.2 | 0.20 [0.09–0.32] ? | Muscle 0.77 / Cleaner 0.56 | 1.76? / 1.73? / 1.05 / 1.63 | 0.59 |
+
+- **Success:** PASS in 17 of 18 cells, 7p events-off inconclusive at 69.6%.
+- **★ band:** 22 of 36 confirmed PASS, 14 inconclusive (mostly the Fence and Embezzler near 1.8), **no FAIL** (before this pass: 16 confirmed FAILs, run 41604814895).
+- **Team spread:** confirmed FAIL at 9–10p, inconclusive (point 0.06–0.20) elsewhere. A confirmed PASS needs ~20k games a group.
+- **All-role spread (report):** 0.51–0.63, was 0.63–1.01.
+
+**Team parity is BLOCKED.** The binding roles are the Muscle on top at 7–12p (its bot cancels a shakedown of itself, design §8)
+and the Cleaner at the bottom (it cools on the 0-loot Rooftop). No content number moved them: Rooftop loot lifts the Cleaner but
+adds ~10 pp success. Options for the owner:
+1. Muscle: no self-cancel (only a clean other player), or its cancel costs it the token / Recharge — a bot or rule change.
+2. Cleaner: its Rooftop visit pays 1–2 loot to the Cleaner only (a role change), so its stash is not the crew's lowest.
+3. Accept a Team spread of ≤ 0.20 at 7–12p (provisional) until playtests show whether bots or humans drive the gap.
+
+**Not gated, content 0.17.0:** Truly random 4–12p 58.8–68.2% success; Balanced 2p 44%, 3p 65%. Duel 44% (local, 2000 games,
+unchanged). Starter 9–12p 94–96% (local, 1000 games; was 86–93%, the Teller line's +1 loot outweighs its Heat for a cooperative
+crew) — Starter is left as it is (learning mode, report-only).

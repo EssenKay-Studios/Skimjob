@@ -159,7 +159,7 @@ More rooms keep the number of people per room, and so the number of witnesses, r
 |---|---|
 | 2–4 | Core only (5 rooms) |
 | 5–8 | **Deposit boxes**: 5 loot, holds 2 people (if more than 2 go, everyone there gets 4; R5, was 3), adds half the vault pressure. **Server room**: 0 loot, learn *how many* players pocketed loot this round, but not who. |
-| 9–12 | Everything above, plus **Teller line**: 5 loot. **Manager's office**: 3 loot, adds half the vault pressure. *(1 Nov: were 4 and 5; R5 put the Teller line back to 4; the R6 balance pass made them 5 and 3 — see r6-balance.md.)* |
+| 9–12 | Everything above, plus **Teller line**: 6 loot, adds half the vault pressure. **Manager's office**: 3 loot, adds half the vault pressure. *(1 Nov: were 4 and 5; R5 put the Teller line back to 4; the R6 balance pass made them 5 and 3, and its split-gate pass made the Teller line 6 loot with +10 Heat — see r6-balance.md.)* |
 
 ---
 
@@ -173,6 +173,7 @@ Heat runs from 0 to 100. If it reaches 100, the cops raid and the heist fails.
 | Vault pressure | +20 × (Vault visitors ÷ crew size) |
 | Deposit boxes | +10 × (visitors ÷ crew size) |
 | Manager's office | +10 × (visitors ÷ crew size) |
+| Teller line | +10 × (visitors ÷ crew size) (R6 split-gate pass) |
 | Rooftop | −20 × (Rooftop visitors ÷ crew size) |
 | Missed checkpoint | +15 |
 | Events | Varies (event Heat × min(1, crew ÷ 5) for crews of 2–4, §10) |

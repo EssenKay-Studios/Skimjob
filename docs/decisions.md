@@ -4,6 +4,9 @@ Newest first. Each entry: what was decided, and why. Add an entry whenever a rul
 
 ---
 
+### 2026-11-03 — PM provisional: split parity gate, ★ band, content 0.17.0
+Owner away; PM call, **provisional, owner to confirm**. Parity option (a): the ≤ 0.10 spread is measured over Team roles only, and each ★ role's win rate must sit at **0.9–1.8×** the Team-role average (the all-role spread is report-only). Band from the data: a Team role scores about s (success rate) and a ★ role with an average stash about 1 ÷ s, i.e. 1.43–1.82 over s = 70–55%; 0.9 keeps the Getaway Driver (Heat failures only) from sitting below the team. Balanced 4p 1 Lone wolf / 1 Wildcard accepted (provisional); Starter left as is (learning mode, report-only, 94–96% at 9–12p). Tuning to content 0.17.0: Teller line 5 → 6 loot and 0 → +10 Heat × share; ★ lean point 0.4 → 0.8 (extension.md bot bracket). Result (run 41607419781): success passes 17/18 (one inconclusive), every ★ role in band (no FAIL; was 16 FAILs), Team spread 0.06–0.28 with a confirmed FAIL at 9–10p — Muscle high (self-cancel), Cleaner low (0-loot Rooftop); no content number moved them. Owner options in `docs/balance/r6-balance.md` "Split parity gate".
+
 ### 2026-11-03 — R6a provisional decisions
 PM/builder readings made while building R6a (#50); the owner may change any of them.
 - **Deal and setup:** Balanced 5–6p is 1 Lone wolf / 1 Wildcard. The Exact role list is in content order. A Hidden role list falls back to the deck preset for bots. Mole and Embezzler can be dealt in Duel. Starter has no shop or tokens.
@@ -12,7 +15,7 @@ PM/builder readings made while building R6a (#50); the owner may change any of t
 - **Police:** moments are refused while a meeting is open; the server freezes them on game time (a meeting open or waiting to open). The server has no host pause or quiet hours yet (they must freeze moments too: M2-13). The next moment is due from when the previous one fired. Police Heat is scaled by min(1, crew ÷ 5). The sim runs one moment per round.
 - **Views:** Hacker loop = that room's Security feed offline; Power cut = all feeds offline. Gap box = alibi room loot − Haul delta. In the Heat breakdown, base absorbs rounding; a missed target sits under the stretch's last round.
 - **Settings:** the legacy `mole` lobby input is migrated rather than refused ("off" → Team players only; other values → plain deck).
-- **Bots:** forecast Heat = clamp((danger − 0.75) × 2); target = clamp((final − projected) ÷ final × 4 + 0.5). TOP_FACTOR 2, LEAN_AT 0.4. The Mole tips off when Heat + card + 2 × perRound ≥ 70%. Buy order: shield, peek, extraVote, alibi, tail, recharge, rig, emergency; the last round spends the remainder. ★ roles refuse the Double-cross. Bots skip a second audit of the same round after Recharge.
+- **Bots:** forecast Heat = clamp((danger − 0.75) × 2); target = clamp((final − projected) ÷ final × 4 + 0.5). TOP_FACTOR 2, LEAN_AT 0.4 (0.8 since the split-gate pass). The Mole tips off when Heat + card + 2 × perRound ≥ 70%. Buy order: shield, peek, extraVote, alibi, tail, recharge, rig, emergency; the last round spends the remainder. ★ roles refuse the Double-cross. Bots skip a second audit of the same round after Recharge.
 - **Sim:** the setup axis is balanced / random / possible / hidden (default the first three), on the Standard deck. Only Balanced 4–12 gates; other cells and the Mole win-rate row are report-only. sim-smoke uses the Everything deck.
 - **Tests:** server lockin.qa uses the 1 h session (Quick has no Muscle); the scenario test uses the Everything deck at 12p.
 - **Web:** `pluralityRule` is stubbed to false (R6b removes the callers). No new controls for deck / deal / role list yet (R6b).

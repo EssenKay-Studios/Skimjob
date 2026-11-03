@@ -67,7 +67,7 @@ Richer rooms raise Heat. If Heat ever reaches 100, the cops raid and the heist f
 | Rooftop | 0 | Lowers Heat | All |
 | Deposit boxes | 5 | Raises Heat; more than 2 visitors get 4 each | 5+ |
 | Server room | 0 | Learn how many pocketed this round, not who | 5+ |
-| Teller line | 5 | — | 9+ |
+| Teller line | 6 | Raises Heat (half the Vault's) | 9+ |
 | Manager's office | 3 | Raises Heat (half the Vault's) | 9+ |
 
 **Heat per round**
@@ -304,7 +304,7 @@ For the builders. This section carries over everything from `roles-v3.md` (owner
 
 - Every bot keeps a public ending forecast (chance of success, raid, missed target) from Haul pace, Heat and the role list, and an estimate of its own stash rank.
 - Most roles win only on success: they keep the job alive and skim when the forecast is safe.
-- The four ★ roles lean toward their failure once its forecast passes a lean point [0.4] *and* they rate themselves top; otherwise they play for success. The Mole tips off when Heat after the round would pass about [70], allowing for the delay until the next police moment (about one round).
+- The four ★ roles lean toward their failure once its forecast passes a lean point [0.8] (R6 balance pass; was 0.4) *and* they rate themselves top; otherwise they play for success. The Mole tips off when Heat after the round would pass about [70], allowing for the delay until the next police moment (about one round).
 - Votes are on suspicion only; no ally logic. ★ holders and evidence-leaving roles (Hacker, Forger) bluff a low-risk role (Rookie, Bagman, Cleaner) when accused; the rest claim truthfully with chance 1 − lie. Public tells: rising Heat points at the Driver or Mole; "camera offline" at the Hacker or a Power cut; a big shown safe at the Fence.
 - Bots buy perks by simple priorities and spend tokens before the game ends.
 
@@ -346,7 +346,7 @@ For the builders. This section carries over everything from `roles-v3.md` (owner
 
 **Sim**
 
-- Gates: per-role parity ≤ 0.10 (win credit ÷ 1/n, all 20 roles, Balanced, 4–12 players) and success 55–70%.
+- Gates: per-role parity ≤ 0.10 (win credit ÷ 1/n, Balanced, 4–12 players) and success 55–70%. **Split gate (PM provisional, 3 Nov; owner to confirm):** the ≤ 0.10 spread is taken over Team roles only; each ★ role's win rate must sit at 0.9–1.8× the Team-role average (a ★ role with an average stash wins about 1 ÷ success rate as often; docs/balance/r6-balance.md). The all-role spread is report-only.
 - Reports: the ending split (success / raid / miss), no-winner rate, shared-win rate, wins by success vs failure for each ★ role, token earning and spending per role, and Truly random and the role-list settings (no gate).
 - Watch: the Mole and Fence can win either way and may sit high; Hacker, Blackmailer, Forger and Inside Man may sit low. Tune stash-earning numbers first.
 - Run it on the sharded "Sim suite" GitHub workflow, not babysat in a chat.
@@ -354,6 +354,7 @@ For the builders. This section carries over everything from `roles-v3.md` (owner
 - Flag in the balance brief: background police activity adds about +1 Heat per round (about +9 a game) where a Mole could be, against the old card's ~+4.
 - Tunables include police activity's chance [30%], the Duel wrong-call pay [8], alongside the clean line [6], pay [8] and shop costs.
 - **R6 balance pass (content 0.16.0, docs/balance/r6-balance.md):** success passes 55–70% in all 18 gated cells. Parity fails everywhere (spread 0.63–1.01): the ★ roles also win failures, which numbers can't offset (owner decision pending). Tuned: Teller line 5, Manager's office 3, Shift change loot ×1.5 / Heat ×2, Quiet night −5, police chance 30%, Fence safe 1 an act (token at 3), Balanced 4p 1 / 1 and 8p 2 / 1. Kept: clean line 6, pay 8, Duel 8, shop costs.
+- **Split-gate pass (content 0.17.0, PM provisional):** Teller line 6 loot and +10 Heat (half the Vault's), ★ lean point 0.4 → 0.8. Success still passes in all 18 cells; every ★ role sits in the 0.9–1.8 band (no confirmed FAIL); Team-role spread is 0.06–0.28 and a confirmed FAIL at 9–10p (Muscle high, Cleaner low) — blocked, owner options in r6-balance.md.
 
 ## Code change estimate
 
