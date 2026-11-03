@@ -1,10 +1,10 @@
 # Skimjob Extension: simplified rulebook
 
-*2–3 Nov 2026 · Karthik. The single rules spec for the R6 build. It replaces `roles-v3.md` (draft PR #45, closed), keeping its decisions and amending five of them (see "Build notes"). Go-ahead given 3 Nov 2026; R6a builds it next. Companion proposal: [`rebuild.md`](rebuild.md).*
+*2–3 Nov 2026 · Karthik. The single rules spec for roles, tokens and the shop, built in R6 (live). Companion proposal, not for build: [`rebuild.md`](rebuild.md).*
 
 ## Summary
 
-The Extension is the current game made lighter to learn, without changing how it is built. It includes everything from the roles v3 spec (one crew, failure wins for four roles, no automatic reveals, temperament tags, the two deal modes). The Rebuild is the jobs redesign in [`rebuild.md`](rebuild.md).
+The Extension is the current game made lighter to learn, without changing how it is built. It covers one crew, failure wins for four roles, no automatic reveals, temperament tags and the two deal modes. The Rebuild is the jobs redesign in [`rebuild.md`](rebuild.md).
 
 **What changes for players:**
 
@@ -262,15 +262,15 @@ Also confirmed: **Police patrol option A**. The patrol leaves the event deck and
 
 ## Build notes (engine, bots, sim)
 
-For the builders. This section carries over everything from `roles-v3.md` (owner-approved 2 Nov) that this spec keeps. Numbers in [brackets] are tunables for the balance pass.
+For the builders. Numbers in [brackets] are tunables for the balance pass.
 
-**What the Extension amends in roles v3** (where they differ, this doc wins):
+**Five rules to keep in mind:**
 
-1. The four reveal rewards that became Peeks (Getaway Driver, Fence, Mole, Embezzler), and every other role reward, are now **one token** each.
+1. Every role reward is **one token**, the Getaway Driver, Fence, Mole and Embezzler included.
 2. "Once per act" reads "once between meetings" everywhere players see it. The engine keeps acts internally.
-3. Rookie ×1.05 and Inside Man +0.15 become no multiplier and +1 per 5 loot over the final target. Scores are whole numbers.
+3. The Rookie has no multiplier; the Inside Man scores +1 per 5 loot over the final target. Scores are whole numbers.
 4. The Mole's tip-off is still any time, once between meetings, +4 Heat. But it is announced only as "police activity", the same as the background patrol that replaces the Police patrol card: a hidden background chance [30%, tuned] per round of +4 at a random moment, run only when a Mole could be in the game (owner, 3 Nov, option A; see "Police activity" below). The tip-off is queued to the same hidden moments.
-5. The plurality rule for crews of 9–12 is dropped; one vote rule for every size.
+5. One vote rule for every crew size.
 
 **Win rule** (`end.ts`)
 
@@ -281,7 +281,7 @@ For the builders. This section carries over everything from `roles-v3.md` (owner
 
 **Reveals**
 
-- Removed: every automatic ally reveal (Hacker knows a saboteur; Getaway Driver at Heat 75; Fence at safe 10; Mole per tip-off; Embezzler's first take; Forger known to saboteurs; saboteurs knowing each other; the Blackmailer/saboteur special case). The `alliesLearned` event and `roleState.allies` go.
+- No automatic reveals: nobody is told another player's role or side, at the deal or later (no `alliesLearned` event, no `roleState.allies`).
 - Kept: every power a player *chooses* to use to learn a role: Peek, Inside tip, Detective, the Blackmailer's guess, claims and evidence cards.
 
 **Tokens and the shop**
@@ -293,10 +293,10 @@ For the builders. This section carries over everything from `roles-v3.md` (owner
 **Tags, decks and dealing**
 
 - Temperament tag replaces faction and changes no rule: Team player (13 roles), Wildcard (Getaway Driver, Fence, Hacker, Blackmailer, Forger), Lone wolf (Mole, Embezzler).
-- **Balanced** (default): a fixed mix per player count, decided by the balance pass (start from roles-v2 §3's most-weighted row under the round(n ÷ 3) cap; the R6 balance pass dealt 4 players 1 / 1, one over the cap, and 8 players 2 / 1). The host can't change it. Seats the deck can't fill go to Team players, Rookies last.
+- **Balanced** (default): a fixed mix per player count, decided by the balance pass (about round(n ÷ 3) Lone wolves + Wildcards at most; the R6 balance pass deals 4 players 1 / 1, one over that cap, and 8 players 2 / 1). The host can't change it. Seats the deck can't fill go to Team players, Rookies last.
 - **Truly random:** each seat drawn uniformly from the eligible deck, at most one Mole and one Embezzler.
-- Dropped: the saboteur Off / Maybe / On setting, "no wildcards without a lone wolf", and "at most lone wolves + 1 wildcards". A stored saboteur field is ignored on read: a saved *Off* becomes Balanced with every Wildcard and Lone wolf toggled off; *Maybe* and *On* become plain Balanced.
-- Presets: Starter (unchanged), Standard (the 11 roles above), Everything; plus per-role toggles. Quick games force Starter. The sim matrix drops its saboteur axis.
+- No other caps on the mix. A legacy stored `mole` lobby field is migrated on read: *off* becomes Balanced with every Wildcard and Lone wolf toggled off; any other value becomes plain Balanced.
+- Presets: Starter (unchanged), Standard (the 11 roles above), Everything; plus per-role toggles. Quick games force Starter. The sim matrix has no faction axis.
 
 **Kept from the 2 Nov owner answers:** Exact role list shown by default (Possible / Hidden as options); Fence safe shown on a shakedown but not seized; plain explainers: a "How you win" line and tag on every card, an Endings table in the rulebook, an end screen that says how it ended and badges the winner's reason, and tapping any role name shows its tag and win line.
 
@@ -374,9 +374,9 @@ The Extension changes about **1,500 lines of source and 1,500 lines of tests**, 
 | Token and shop stats in the simulator | Sim | ~60 | ~40 |
 | **Total** | | **~1,500** | **~1,500** |
 
-**How it fits the work that's still pending**
+**How it was built** (R6, all merged)
 
-- **R6a (rules):** builds this whole spec in one pass: the roles v3 parts and the Extension's changes touch the same files (rewards, dealing, the win rule), so nothing is changed twice.
+- **R6a (rules):** the whole spec in one pass (rewards, dealing, the win rule), so nothing was changed twice.
 - **R6b (roles UI):** role cards get a "How you win" line and a rulebook sheet there. The Extension's wording and the shop sheet join it.
 - **Balance:** one pass after R6a covers everything. That is computer time, not code.
 - **Unaffected:** the end-of-game reveal (it should also list tokens and purchases), host controls, Google sign-in, the playtest pass and the offline demo.

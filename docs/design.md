@@ -1,8 +1,8 @@
 # Skimjob — Game Design Document
 
-**For R6 rules, [`docs/extension.md`](extension.md) is the spec and wins on any conflict; sections here are brought in line as R6a lands.**
+**For roles, tokens and the shop, [`docs/extension.md`](extension.md) is the spec and wins on any conflict.**
 
-*Version 0.1 — 31 Oct 2026. All numbers are placeholders until the simulator has been run. Balance pass 1 (1 Nov 2026) changed the Deposit-box Heat, Teller-line loot, Insider scoring and checkpoint targets; see `docs/balance/balance-1.md`.*
+*31 Oct 2026, kept current since. Numbers are content (`packages/content`, version 0.17.0) and come from the balance passes; the latest is `docs/balance/r6-balance.md`.*
 
 ---
 
@@ -47,7 +47,7 @@ Skimjob is a social deduction game for groups of friends, played in a browser or
 
 ## 3. Winning and losing
 
-*(extension.md "Winning and losing", Build notes "Win rule"; R6a.)*
+*(extension.md "Winning and losing", Build notes "Win rule".)*
 
 - **One crew, at most one winner** (players still level after the tie-breaks share it). There are no teams or factions.
 - **Score** = stash, plus the Fence safe for the Fence, plus the Inside Man's bonus (+1 per 5 loot the Haul ends above the final target). Whole numbers only.
@@ -158,8 +158,8 @@ More rooms keep the number of people per room, and so the number of witnesses, r
 | Players | Rooms added |
 |---|---|
 | 2–4 | Core only (5 rooms) |
-| 5–8 | **Deposit boxes**: 5 loot, holds 2 people (if more than 2 go, everyone there gets 4; R5, was 3), adds half the vault pressure. **Server room**: 0 loot, learn *how many* players pocketed loot this round, but not who. |
-| 9–12 | Everything above, plus **Teller line**: 6 loot, adds half the vault pressure. **Manager's office**: 3 loot, adds half the vault pressure. *(1 Nov: were 4 and 5; R5 put the Teller line back to 4; the R6 balance pass made them 5 and 3, and its split-gate pass made the Teller line 6 loot with +10 Heat — see r6-balance.md.)* |
+| 5–8 | **Deposit boxes**: 5 loot, holds 2 people (if more than 2 go, everyone there gets 4), adds half the vault pressure. **Server room**: 0 loot, learn *how many* players pocketed loot this round, but not who. |
+| 9–12 | Everything above, plus **Teller line**: 6 loot, adds half the vault pressure. **Manager's office**: 3 loot, adds half the vault pressure. The Teller line also adds +10 Heat × share (`docs/balance/r6-balance.md`). |
 
 ---
 
@@ -193,7 +193,7 @@ Each round's room-and-baseline Heat change is rounded to a whole number (halves 
 
 Every player is dealt **one secret role** at the start of the game. Roles are designed so that **revealing your role is risky**: each one has a weakness once people know about it. Players can claim any role, truthfully or as a bluff. A formal claim (the **Claim** button, §12.1) goes on the public ledger: once per player between meetings, any role the game knows (even one that can't be in this game, so a refusal never hints at the hidden role pool), never in Duel mode. Like an alibi it changes no rule; it is evidence the crew weighs.
 
-**The roles are the 20 of extension.md "Roles"**, with today's powers. R6a changed, for every role: each reward is now **one private token** (§8.3), "once per act" reads **once between meetings** (§4.1), the scoring decimals are gone (§3), and a **temperament tag** (Team player, Wildcard, Lone wolf) replaces the faction. The tag changes no rule. ★ marks the four roles that can also win a failed heist (`RoleDef.winsOn`, §3).
+**The roles are the 20 of extension.md "Roles"**, For every role: each reward is **one private token** (§8.3), players see **once between meetings** where the engine counts acts (§4.1), scores are whole numbers (§3), and each role has a **temperament tag** (Team player, Wildcard, Lone wolf). The tag changes no rule. ★ marks the four roles that can also win a failed heist (`RoleDef.winsOn`, §3).
 
 | Tag | Roles | Token trigger (`RoleDef.rewards`) |
 |---|---|---|
@@ -214,24 +214,24 @@ Every player is dealt **one secret role** at the start of the game. Roles are de
 | Lone wolf | Mole ★ | Each tip-off, when it lands (§10); at most 3 tip-offs a game, Recharge included |
 | | Embezzler ★ | Its first (non-zero) take |
 
-*What changed from role deck v2 (R6a; the sections below were the v2 detail):*
+*Rules that apply across the roles (extension.md "Roles"):*
 - **No automatic reveals.** Nobody is told anyone else's role or side at the deal or later (no `alliesLearned`, no `roleState.allies`). Roles are learned only by choice: Peek, Inside tip, Detective, the Blackmailer's guess, claims and evidence cards.
 - **Rookie** has no multiplier; the **Inside Man** scores +1 per 5 loot the Haul ends above the final target.
 - **Mole:** once between meetings, any time (a `useAbility`, not part of the move): the tip-off is queued and **lands at the next hidden police moment** as public "police activity +4", the same as a background patrol (§10). Only the Mole is told it was its own (`tipOffLanded`). A tip-off still queued at the end is lost.
 - **Hacker:** a looped room's Security feed reads "camera offline" (`roomWatched.offline`), exactly as a Power cut reads for every feed.
 - **Fence:** a shakedown shows the safe but never takes it; the clean check counts it (§11.3).
 - **Detective:** "dirty" means at or above the clean line (6), the same number as the shakedown's.
-- Minimum crew sizes, Duel exclusions, the Embezzler's take, the Forger's feeds, the Priest's blessing, the Fixer's save (Heat set to 95; it also stops a raid from police activity), the Cleaner's double Rooftop visit and the Getaway Driver's Rooftop that cools nothing are unchanged from the v2 rules (roles-v2.md, the R2–R5 notes in git history).
+- Minimum crew sizes, Duel exclusions, the Embezzler's take, the Forger's feeds, the Priest's blessing, the Fixer's save (Heat set to 95; it also stops a raid from police activity), the Cleaner's double Rooftop visit and the Getaway Driver's Rooftop that cools nothing are as in extension.md "Roles".
 
 ### 8.1 Dealing roles
 
-*(extension.md "Roles" Decks, "Host settings", Build notes "Tags, decks and dealing"; R6a.)*
+*(extension.md "Roles" Decks, "Host settings", Build notes "Tags, decks and dealing".)*
 
 - **Decks:** Starter (Rookie, Inside Man, Lookout, Bagman, Cleaner; no events, no shop, no tokens), **Standard** (the default, 11 roles: Lookout, Auditor, Detective, Smooth Talker, Muscle, Cleaner, Hacker, Fence, Getaway Driver, Mole, Embezzler; Rookies fill spare seats) and Everything (all 20). The host can switch roles on or off one by one (the `roles` setting, which replaces the preset when not empty). **Quick games force Starter** with events off.
-- **Balanced** (default): a fixed mix per crew size from content (`BALANCED_MIX`: Lone wolves / Wildcards, starting from roles-v2 §3's most-weighted row under the round(n ÷ 3) cap; *R6a provisional: 5–6 players deal 1 / 1; the R6 balance pass deals 4 players 1 / 1, one over the cap, and 8 players 2 / 1*). The rest are Team players; seats the deck can't fill go to Team players, Rookies last. The host can't change the mix.
+- **Balanced** (default): a fixed mix per crew size from content (`BALANCED_MIX`: Lone wolves / Wildcards, about round(n ÷ 3) at most; 4–6 players deal 1 / 1 (4 is one over that cap) and 8 players 2 / 1, *provisional*). The rest are Team players; seats the deck can't fill go to Team players, Rookies last. The host can't change the mix.
 - **Truly random:** each seat drawn uniformly from the eligible deck, at most one Mole and one Embezzler.
 - **Role list shown** (host setting): **Exact** roles dealt (default, `roleListShown`, in content order), the roles that **could** be in the game (Possible: only what the deal can give, so Balanced at 2–3 players lists only Team players), or nothing (Hidden).
-- **Dropped:** the saboteur Off / Maybe / On setting and its caps. A stored saboteur field is migrated on read: *Off* becomes the deck with every Wildcard and Lone wolf toggled off; *Maybe* and *On* become the plain deck.
+- **Old lobby settings:** a stored legacy `mole` field is migrated on read: *off* becomes the deck with every Wildcard and Lone wolf toggled off; any other value becomes the plain deck.
 - **Eligibility** is unchanged: Snitch and Detective 4+; Inside Man, Smooth Talker, Muscle and Priest 5+; Blackmailer and Forger 7+; the Mastermind only with events on; meeting roles never in Duel. **Unique roles** (default on): each role at most once. Mole and Embezzler are always at most one each.
 
 ### 8.2 Shakedowns and roles
@@ -240,20 +240,18 @@ A shakedown reveals a player's **stash**, not their role. Roles only come out at
 
 ### 8.3 Perks
 
-*Role deck v2 §1 (`docs/roles-v2.md`); R1 builds the vocabulary, R2/R3 give roles the triggers that earn them (`RoleDef.rewards`; R2a: Rookie, Inside Man, Lookout, Auditor, Detective; R2b: Smooth Talker, Muscle, Priest, Bagman, Cleaner, Fixer, Mastermind, §8).*
+**Tokens and the shop** (extension.md "Tokens and the perk shop"). Every role reward is one private **token** (`tokenEarned`). At setup the seeded RNG deals a **shop of three perks**, one per column, public (`shopDealt`): Learn (Peek, Ballot, Tail), Protect (Shield, Alibi, Recharge), Sway (+Vote, Emergency, Rig). Costs are content: Peek and Shield 2, the rest 1. `buyPerk` spends tokens any time (private `perkBought`, nothing shown until the perk is used). Use a perk any time after buying it, **at most one per round** (the automatic Shield and Emergency don't count); unspent tokens are worth nothing. With events off the Sway perk is +Vote or Emergency; **Duel** deals Peek or Tail, Alibi or Recharge, and Rig (events on) or a seeded pick from the undealt Learn and Protect perks. Starter and Quick have no shop and no tokens. Spending a perk is a private `perkUsed`, with `useAbility`; a refused spend keeps it. The Shield is spent by itself.
 
-**Tokens and the shop** (extension.md "Tokens and the perk shop"; R6a). Every role reward is one private **token** (`tokenEarned`). At setup the seeded RNG deals a **shop of three perks**, one per column, public (`shopDealt`): Learn (Peek, Ballot, Tail), Protect (Shield, Alibi, Recharge), Sway (+Vote, Emergency, Rig). Costs are content: Peek and Shield 2, the rest 1. `buyPerk` spends tokens any time (private `perkBought`, nothing shown until the perk is used). Use a perk any time after buying it, **at most one per round** (the automatic Shield and Emergency don't count); unspent tokens are worth nothing. With events off the Sway perk is +Vote or Emergency; **Duel** deals Peek or Tail, Alibi or Recharge, and Rig (events on) or a seeded pick from the undealt Learn and Protect perks. Starter and Quick have no shop and no tokens. Spending a perk is a private `perkUsed`, with `useAbility`; a refused spend keeps it. The Shield is spent by itself.
-
-| Perk | Effect (R1, provisional details) |
+| Perk | Effect |
 |---|---|
 | **Peek** | Learn one other player's role, as it is now. Any time. |
 | **Shield** | Spent by itself: your next passed shakedown is cancelled. The ledger says only "cancelled", as for the Muscle; a Muscle cancel first keeps the Shield. |
 | **+Vote** | +1 ballot weight in the open meeting (once per meeting); counts toward the majority, not the public tally or quorum, like the Smooth talker. |
-| **Ballot** | In an open meeting, see one other player's ballot live, as it changes, in your own view only (never in an event). **Works in Secret mode too** (owner decision on role deck v2: the one exception to secret ballots, §11.2). Refused in Open mode, where ballots are public. |
+| **Ballot** | In an open meeting, see one other player's ballot live, as it changes, in your own view only (never in an event). **Works in Secret mode too** (owner decision: the one exception to secret ballots, §11.2). Refused in Open mode, where ballots are public. |
 | **Tail** | While planning, also see who is in one more room when the round resolves (like the Lookout; a Power cut blinds it, a camera loop doesn't). |
 | **Alibi** | Your posted alibi for the latest resolved round, if it is true, is stamped **Verified** in public (`alibiVerified`). A false alibi can't be stamped. One stamp per player per round. |
 | **Recharge** | One used-up use of your power between these meetings comes back, or a once-per-game use (Muscle). Refused if nothing is used. |
-| **Emergency** | *(R2b, the Smooth Talker's reward)* Spent by itself: once your own emergency meeting is used, calling another spends it. |
+| **Emergency** | Spent by itself: once your own emergency meeting is used, calling another spends it. |
 | **Rig** | Draw two different cards for the next round (events on); the first flips unless you pick the other, until that round starts. Another player's Rig of the same round never refuses yours (a refusal would hint at who holds what); if several players rig a round, the oldest Rig's pick flips. |
 
 - **Shakedown window:** opens after every passed shakedown when a Muscle is dealt or the Shield is in the shop (Exact role list; otherwise when a Muscle could be dealt), so it never shows more than the public list does (§11.3).
@@ -290,7 +288,7 @@ From round 2 onward, one event card is flipped at the start of each round and sh
 | **Inside tip** | One random player privately learns another player's role. |
 | **Double-cross** | Two random players are offered a role swap. It happens only if both secretly accept. |
 
-**Police activity** (extension.md "Situations", Build notes "Police activity"; owner, 3 Nov, option A): the Police patrol is no longer a card. When a Mole could be in the game (dealt, with the Exact list; otherwise one the deal could give: never Balanced at 2–3 players), the engine draws a hidden schedule of **police moments** from the seeded RNG (reveal-only `policeScheduled`): each gap is uniform in [0.5, 1.5] × the preset's round length (planning plus alibi window), in game time (§4.1), and each moment brings a background patrol with chance 30% (content `POLICE_ACTIVITY`; R6 balance, was 1 in 4). At most one activity per moment: a queued Mole tip-off takes the next free moment and replaces a patrol drawn for it. Either way the crew sees one public `policeActivity` (+4 × min(1, crew ÷ 5), no source) with an immediate raid check; the Mastermind doesn't foresee it. The server fires moments with `advance { policeMoment }` and never exposes a timer for them; the simulator takes one moment per round. *(R6a provisional: moments are refused while a meeting is open; the server freezes them then.)*
+**Police activity** (extension.md "Situations", Build notes "Police activity"; owner, 3 Nov, option A): police activity is not an event card. When a Mole could be in the game (dealt, with the Exact list; otherwise one the deal could give: never Balanced at 2–3 players), the engine draws a hidden schedule of **police moments** from the seeded RNG (reveal-only `policeScheduled`): each gap is uniform in [0.5, 1.5] × the preset's round length (planning plus alibi window), in game time (§4.1), and each moment brings a background patrol with chance 30% (content `POLICE_ACTIVITY`). At most one activity per moment: a queued Mole tip-off takes the next free moment and replaces a patrol drawn for it. Either way the crew sees one public `policeActivity` (+4 × min(1, crew ÷ 5), no source) with an immediate raid check; the Mastermind doesn't foresee it. The server fires moments with `advance { policeMoment }` and never exposes a timer for them; the simulator takes one moment per round. *(Provisional: moments are refused while a meeting is open; the server freezes them then, and during a host pause.)*
 
 A **Power cut** blinds every feed, which reads "camera offline", the same as a Hacker's loop reads for one room.
 
@@ -322,10 +320,10 @@ A **Power cut** blinds every feed, which reads "camera offline", the same as a H
 - **Vote visibility** is a host setting:
   - *Hidden then revealed* (default): nobody can see votes while they're being cast, and everyone's votes go into the ledger afterwards.
   - *Open*: votes are visible as they're cast.
-  - *Secret*: only the tally is ever shown, even at the end-of-game reveal. The one exception is the **Ballot** perk (§8.3): its holder sees one chosen ballot, live, in their own view only (owner decision on role deck v2).
+  - *Secret*: only the tally is ever shown, even at the end-of-game reveal. The one exception is the **Ballot** perk (§8.3): its holder sees one chosen ballot, live, in their own view only (owner decision).
 - **Players who can't make it** can leave a sealed vote in advance. Otherwise they count as abstaining.
 - **To pass**, a shakedown needs **more than half of the votes cast**, and at least half the crew has to take part (sealed votes count).
-- **One rule for every crew size** (extension.md; R6a dropped the ⅓ plurality rule for 9–12).
+- **One rule for every crew size** (extension.md).
 - When the window closes, the ballots are cleared from the screen. The **result** stays in the ledger permanently.
 
 *Smooth talker (provisional):* "more than half of the votes cast" counts the Smooth talker's ballot twice; "at least half the crew has to take part" counts people. The tally shown counts one per ballot (see §8).
@@ -349,7 +347,7 @@ A **Power cut** blinds every feed, which reads "camera offline", the same as a H
 |---|---|
 | End of Act 1 | 7 × crew size |
 | End of Act 2 | 15 × crew size |
-| Final | 23 × crew size *(R5; was 24)* |
+| Final | 23 × crew size |
 
 A missed Act 1 or Act 2 checkpoint adds +15 Heat. Because targets are cumulative, the shortfall carries into the next act.
 

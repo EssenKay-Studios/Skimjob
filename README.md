@@ -6,9 +6,10 @@ A social deduction heist game for groups of friends, played over an hour or a wh
 
 - Game design: [`docs/design.md`](docs/design.md)
 - Current status and next tasks: [`docs/STATUS.md`](docs/STATUS.md)
-- Decision log: [`docs/decisions.md`](docs/decisions.md)
+- Current decisions: [`docs/decisions.md`](docs/decisions.md) (history: [`docs/archive/decisions-history.md`](docs/archive/decisions-history.md))
 - Working on the code (humans and AI): [`CLAUDE.md`](CLAUDE.md)
-- Playtest server: not live yet; deploys are manual-only until a host is chosen — [`docs/deploy.md`](docs/deploy.md)
+- Rules for roles, tokens and the shop: [`docs/extension.md`](docs/extension.md)
+- Live playtest server: https://skimjob.duckdns.org (AWS Lightsail, manual deploys) — [`docs/deploy.md`](docs/deploy.md)
 
 ```
 pnpm install

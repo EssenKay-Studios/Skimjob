@@ -5,9 +5,6 @@ production app, **Arcway**, which no Skimjob step may touch. Deploys are manual:
 a symlink, restart. Nothing deploys on merge. Host, SSH user and key are in the owner's local `ssh-relay` skill,
 never in this (public) repo. The deployed build is in `docs/STATUS.md`.
 
-**Fly is unused.** Lightsail was chosen (3 Nov; `docs/decisions.md`). `Dockerfile`, `fly.toml` and
-`.github/workflows/deploy.yml` are kept (CI still builds and boots the Docker image) but nothing deploys to Fly.
-
 ## What runs
 
 | Piece | Where |
@@ -158,6 +155,5 @@ NODE_ENV=production PORT=8080 PUBLIC_ORIGIN=http://localhost:8080 WEB_DIR=$PWD/a
   PGLITE_DIR=memory node apps/server/dist/main.js
 ```
 
-Or with Docker: `docker build -t skimjob . && docker run --rm -p 8080:8080 -v skimjob-data:/data -e PUBLIC_ORIGIN=http://localhost:8080 skimjob`.
 (Chrome treats `localhost` as secure, so the `Secure` cookie works there over plain http; a LAN IP won't — use `pnpm dev` for LAN play.)
 

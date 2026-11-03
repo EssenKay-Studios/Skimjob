@@ -27,7 +27,7 @@ apps/sim/          CLI simulator and balance reports
 apps/server/       authoritative game server, scheduler, chat, push
 apps/web/          React browser client
 apps/mobile/       (later) Flutter app (Android/iOS) — talks to the server; no engine copy
-docs/              design.md, extension.md (R6 rules), STATUS.md, decisions.md, deploy.md, pipeline/
+docs/              design.md, extension.md (R6 rules), STATUS.md, decisions.md, deploy.md, pipeline/, archive/
 ```
 
 Dependency direction: `content` ← `engine` ← `bots` ← `sim`/`server`. The engine must never import from bots, sim, or any app.

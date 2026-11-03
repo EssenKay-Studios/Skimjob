@@ -1,4 +1,4 @@
-# Milestone 2 plan: playable web prototype (local only)
+# Milestone 2 plan: playable web prototype
 
 > **Live status is in `docs/STATUS.md`** (task ticks, what is paused). This plan is the original scope and acceptance criteria. Since written: the game is deployed on AWS Lightsail (`docs/deploy.md`), and the questions in §3 are answered (`docs/decisions.md`).
 
@@ -6,22 +6,10 @@
 
 _Planner, 1 Nov 2026. Inputs: CLAUDE.md, STATUS.md, design.md §4.1/§11–§15/§17.5/§18, decisions.md, ui-style.md, engine + bots APIs._
 
-Goal: friends on one LAN/laptop can create a game, invite people by link, fill seats with bots,
-play 9 rounds with meetings, chat, and see the ledger, case file and reveal. No deployment,
-no push, no mobile (M3). M1 tasks 12–16 (roles, events deck, Duel) carry on in parallel; M2
+Goal: friends can create a game in the browser, invite people by link, fill seats with bots,
+play 9 rounds with meetings, chat, and see the ledger, case file and reveal (live on Lightsail,
+`docs/deploy.md`). No push, no mobile (M3). M2
 code must handle any engine event type through exhaustive switches so new types fail typecheck.
-
-## Environment (checked here)
-- **Postgres 16 binaries are installed** (`/usr/lib/postgresql/16/bin`, `psql`), cluster down.
-  `initdb` + `pg_ctl` into a temp dir works, but we run as **root**, so it must run as the
-  `postgres` user (`su postgres -c ...`). Verified: start, query, stop.
-- **Docker:** client only, no daemon (`/var/run/docker.sock` missing). Can't use it here; fine for Karthik.
-- **Registry works:** `embedded-postgres` 18.6.0-beta.19 (beta, PG 18, refuses root), `pg-mem` 3.0.14
-  (partial SQL), `@electric-sql/pglite` 0.5.14 (real Postgres in WASM, in-process).
-- **Playwright 1.63** global, Chromium in `/opt/pw-browsers` (`PLAYWRIGHT_BROWSERS_PATH` set,
-  downloads disabled). Pin `@playwright/test@1.63.x` so it matches the installed browsers.
-- Node 22.23, pnpm 10.28.
-- **Google OAuth** needs a client id/secret from Karthik: build a dev-login stub behind the same interface.
 
 ## 1. Tech choices
 - **Server: Fastify** (`apps/server`). Boring, typed, `inject()` makes route tests easy without a port.
@@ -29,8 +17,8 @@ code must handle any engine event type through exhaustive switches so new types 
 - **DB driver: `pg`** with plain parameterised SQL behind a tiny `Db { query(sql, params) }`. No ORM.
 - **Tests and zero-setup dev: PGlite** (devDependency, and the fallback when `DATABASE_URL` is unset).
   It's real Postgres, has the same `query()` shape, needs no root or daemon. Rejected `pg-mem` (partial SQL).
-- **Real Postgres for `pnpm dev`:** `scripts/db.sh start|stop` (local `pg_ctl` into `.pgdata/`) plus
-  a `docker-compose.yml` for Karthik's machine. One test job runs the store tests against it.
+- **Real Postgres for `pnpm dev`:** `scripts/db.sh start|stop` (local `pg_ctl` into `.pgdata/`; Homebrew
+  Postgres on the Mac). `pnpm test:pg` runs the store tests against it.
 - **Migrations:** numbered `apps/server/migrations/NNN_*.sql` with a ~30-line runner and a
   `schema_migrations` table. No migration library.
 - **Sessions:** random token in an httpOnly, SameSite=Lax cookie (`@fastify/cookie`); the DB stores the
@@ -58,7 +46,7 @@ async lock, single process). Never send `seq` outside its owner's view (evidence
 
 ### M2-1 Server skeleton and game store (M)
 - `apps/server`: Fastify app factory `buildServer({ db, clock, auth })`, `/health`, config from env.
-- `Db` interface; `pg` and PGlite adapters; migration runner; `scripts/db.sh`; `docker-compose.yml`.
+- `Db` interface; `pg` and PGlite adapters; migration runner; `scripts/db.sh`.
 - Tables: `users`, `sessions`, `games` (status lobby/running/ended, settings jsonb, config jsonb,
   invite code, host), `seats` (player id, user id or null for bots, nickname, bot personality,
   last-seen seq), `game_events` (game id, idx, event jsonb), `deadlines`.
@@ -175,7 +163,7 @@ async lock, single process). Never send `seq` outside its owner's view (evidence
 - A static build of the web client with the engine and bots running in the browser (an in-browser adapter in
   place of the server channel), the same UI, no server or sign-in.
 - Published as a **GitHub Pages** site for Karthik to verify (owner, 3 Nov; replaces the claude.ai artifact).
-- Refs: STATUS M2-15, decisions.md "Owner answers, 3 Nov (morning)". **Accept:** a Quick game with bots plays
+- Refs: STATUS M2-15, decisions.md "Ops and deploy". **Accept:** a Quick game with bots plays
   through to the reveal on the Pages URL with no network calls beyond static assets.
 
 Order rationale: 1–4 give a working server playable by bots; 5–6 make it playable by people (thin slice);
@@ -184,8 +172,8 @@ Order rationale: 1–4 give a working server playable by bots; 5–6 make it pla
 ## 3. Questions for Karthik
 1. **Google OAuth client id/secret** (Web application, redirect `http://localhost:5173/api/auth/google/callback`
    and the deployed `…/api/auth/google/callback`; docs/deploy.md "Google sign-in"). *Default:* dev-login stub until provided; M2-12 runs last.
-2. **Local Postgres on your machine:** Docker or a native install? *Default:* `docker-compose.yml` for you;
-   PGlite fallback when `DATABASE_URL` is unset, so `pnpm dev` works with nothing installed.
+2. **Local Postgres on your machine:** a native install (`scripts/db.sh`, Homebrew Postgres); PGlite is the
+   fallback when `DATABASE_URL` is unset, so `pnpm dev` works with nothing installed.
 3. **Playtest presets:** OK to add a "Quick (15 min)" preset (about 1.5 min rounds, 2 min meetings) next to the
    §4.1 lengths? *Default:* yes, playtest/dev only.
 4. **Guests:** may guests (nickname only, no Google) host games, or only join? *Default:* anyone can host.
