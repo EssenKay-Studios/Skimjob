@@ -203,10 +203,12 @@
   }
 }
 
-/* The narrator blinks and bobs. */
-.raccoon__bob {
+/* The narrator blinks and bobs. The bob moves the whole <svg> box: a
+   transform animation on an inner <g> forces a full-page layout every frame
+   in Chromium, which made long pages (the gallery, the reveal) crawl. */
+.raccoon {
   animation: raccoon-bob 3.2s ease-in-out infinite;
-  transform-origin: 32px 56px;
+  transform-origin: 50% 87.5%;
 }
 .raccoon__eyes {
   animation: raccoon-blink 5s steps(1) infinite;
@@ -340,7 +342,7 @@
 @media (prefers-reduced-motion: reduce) {
   .away,
   .away__line,
-  .raccoon__bob,
+  .raccoon,
   .raccoon__eyes {
     animation: none;
   }
