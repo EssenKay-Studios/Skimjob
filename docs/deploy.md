@@ -14,7 +14,7 @@ never in this (public) repo. The deployed build is in `docs/STATUS.md`.
 |---|---|
 | Service | systemd unit `skimjob` (`/etc/systemd/system/skimjob.service`), system user `skimjob` (nologin), Node 22, listening on `127.0.0.1:3100` only. |
 | Code | `/srv/skimjob/releases/<REL>/{server,web}` (root-owned, read-only to the app), `REL` = `YYYYMMDD-HHMMSS-<sha>`. `/srv/skimjob/current` points at the live one. |
-| Settings | Non-secret ones in the unit's `Environment=` line (`NODE_ENV=production`, `HOST`, `PORT`, `PUBLIC_ORIGIN=https://skimjob.duckdns.org`, `WEB_DIR=/srv/skimjob/current/web`). Secrets (`DATABASE_URL`, later the Google pair) in `/etc/skimjob/env`, mode 0640 root:skimjob. Never print or commit them. |
+| Settings | Non-secret ones in the unit's `Environment=` line (`NODE_ENV=production`, `HOST`, `PORT`, `PUBLIC_ORIGIN=https://skimjob.duckdns.org`, `WEB_DIR=/srv/skimjob/current/web`). Secrets (`DATABASE_URL`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, all set) in `/etc/skimjob/env`, mode 0640 root:skimjob. Never print or commit them. |
 | Database | Postgres 16 on localhost: its own role and database `skimjob`. Migrations run on start and only add. |
 | Proxy | nginx: its own site `/etc/nginx/sites-available/skimjob` and shared zones in `/etc/nginx/conf.d/skimjob.conf`; Let's Encrypt certificate (HTTP-01 webroot, renewed by `certbot.timer`). Arcway's `default` site stays the default server. |
 | Backups | Weekly `pg_dump -Fc` (root crontab, Sundays 04:41 UTC, `/usr/local/sbin/skimjob-backup`) to `/var/backups/skimjob`, newest 8 kept; Lightsail daily snapshots cover the whole box. |
@@ -35,7 +35,7 @@ never `pm2 … all`; never touch Arcway's files, process or database.
      "select g.id, g.updated_at, count(s.*) from games g join seats s on s.game_id = g.id
       where g.status = 'running' group by g.id order by g.updated_at desc"
    ```
-   There is no broadcast to players; tell the hosts of those games directly (and, from builds with #54, they can
+   A paused, bots-only smoke-test game stays in the list; ignore it (the app can't end it). There is no broadcast to players; tell the hosts of those games directly (and, from builds with #54, they can
    pause first).
 1. **Build on the Mac** from a fresh clone of `main`, in a scratch folder (not `/tmp`), Node 22, pnpm 10.28:
    ```sh
@@ -76,8 +76,10 @@ never `pm2 … all`; never touch Arcway's files, process or database.
    - `journalctl -u skimjob -n 20 --no-pager` shows `database: Postgres` (and any migrations applied);
    - from the Mac, `https://skimjob.duckdns.org/health` and `/join/smoke` return 200;
    - Arcway is still healthy and its process didn't restart (its check is in the `ssh-relay` skill).
-8. **Roll back** if anything fails: point `current` at the previous release and restart. Migrations only add,
-   so an older release runs on the newer schema (a PR that ever changes or drops something must note its rollback).
+8. **Roll back** if anything fails: point `current` at the previous release and restart. Only roll back to a release
+   with the same event schema: `applyEvent` (`packages/engine/src/reduce.ts`) throws on any event type it doesn't know,
+   so games logged on the newer build may fail to load on an older one (38002fd lacks #55's `policeCause` and
+   `votesStolen`, and migration 008). Across a schema change, prefer fixing forward.
    ```sh
    sudo ln -sfn /srv/skimjob/releases/<previous> /srv/skimjob/current.new
    sudo mv -T /srv/skimjob/current.new /srv/skimjob/current
