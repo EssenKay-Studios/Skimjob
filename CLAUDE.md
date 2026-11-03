@@ -7,7 +7,7 @@ A social deduction heist game for groups of friends (web + Android/iOS). A crew 
 ## Start of every session
 
 1. Read `docs/STATUS.md` — current milestone, what's done, what's next.
-2. Read the relevant sections of `docs/design.md` (the full game design; canonical rules source).
+2. Read the relevant sections of `docs/design.md` (the full game design; canonical rules source) and, for roles, tokens and the shop, `docs/extension.md` (the R6 spec; it wins on conflict).
 3. Skim `docs/decisions.md` before changing anything that looks like a deliberate choice.
 4. Work on **one** task from STATUS.md (or the GitHub issue you were given). Keep sessions scoped.
 
@@ -25,10 +25,10 @@ packages/engine/   rules, state machine, event log, viewFor() — pure & determi
 packages/content/  rooms, roles, jobs, events, scaling numbers (data, not logic)
 packages/bots/     Agent interface + bot personalities
 apps/sim/          CLI simulator and balance reports
-apps/server/       (later) authoritative game server, scheduler, chat, push
-apps/web/          (later) React browser client
+apps/server/       authoritative game server, scheduler, chat, push
+apps/web/          React browser client
 apps/mobile/       (later) Flutter app (Android/iOS) — talks to the server; no engine copy
-docs/              design.md, STATUS.md, decisions.md
+docs/              design.md, extension.md (R6 rules), STATUS.md, decisions.md, deploy.md, pipeline/
 ```
 
 Dependency direction: `content` ← `engine` ← `bots` ← `sim`/`server`. The engine must never import from bots, sim, or any app.

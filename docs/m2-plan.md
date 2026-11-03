@@ -1,5 +1,7 @@
 # Milestone 2 plan: playable web prototype (local only)
 
+> **Live status is in `docs/STATUS.md`** (task ticks, what is paused). This plan is the original scope and acceptance criteria. Since written: the game is deployed on AWS Lightsail (`docs/deploy.md`), and the questions in §3 are answered (`docs/decisions.md`).
+
 > **Owner update (1 Nov):** the web app is the launch product — fully responsive on phones, tablets and laptops, installable as a PWA. Every UI task (M2-5 … M2-11, M2-14) must be checked at 360, 390, 768, 1024 and 1280 px. Native apps (M3) will use Flutter. See decisions.md.
 
 _Planner, 1 Nov 2026. Inputs: CLAUDE.md, STATUS.md, design.md §4.1/§11–§15/§17.5/§18, decisions.md, ui-style.md, engine + bots APIs._
@@ -150,7 +152,7 @@ async lock, single process). Never send `seq` outside its owner's view (evidence
 
 ### M2-12 Google sign-in (S, needs Karthik's client id)
 - `google` `AuthProvider`: code flow with PKCE and state, `GOOGLE_CLIENT_ID/SECRET`, redirect
-  `http://localhost:<port>/auth/google/callback`; user keyed by `sub`; "My games" list.
+  `<origin>/api/auth/google/callback`; user keyed by `sub`; "My games" list.
 - A guest who signs in keeps their seats (link the guest user). Dev stub stays for tests.
 - Refs: owner decision. **Accept:** stub and real provider share one test suite (real one mocked at fetch);
   bad state/nonce refused.

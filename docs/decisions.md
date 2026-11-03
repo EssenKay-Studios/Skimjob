@@ -4,6 +4,41 @@ Newest first. Each entry: what was decided, and why. Add an entry whenever a rul
 
 ---
 
+### 2026-11-03 — Deployment: AWS Lightsail; Fly unused
+The owner chose AWS Lightsail. Skimjob runs at https://skimjob.duckdns.org on the owner's existing Lightsail box, beside another production app (Arcway) that no Skimjob step may touch. Setup: a hardened systemd service `skimjob` (system user `skimjob`), releases under `/srv/skimjob/releases/<REL>` with a `current` symlink, env in `/etc/skimjob/env`, its own nginx site and Postgres role and database, weekly `pg_dump`. Built on the Mac and uploaded; no deploy from CI. Runbook: `docs/deploy.md`. The Fly files (`Dockerfile`, `fly.toml`, `deploy.yml`) stay but are unused. Supersedes "Fly.io deployment for playtests" (1 Nov) and the open "deploy target" questions.
+
+### 2026-11-03 — End-of-game reveal (M2-11, PR #55)
+- The summary is built only from the viewer's own `visibleLog` after the end (which then reveals everything), the outcome and config tables; never from live state, so it can't leak early and the leak scrub covers it.
+- Police: a `policeActivity` straight followed by `tipOffLanded` is that Mole's tip-off; anything else is a patrol. Camera offline: a blackout event card that round is a Power cut, otherwise a Hacker loop credited to the hackers who looped that room.
+- A stolen vote's `decided` is true only when the Blackmailer got a `stolenVoteDecided` token (so always false in starter mode, no tokens).
+- Tokens and perk purchases carry no round: they're filed by log position; meetings belong to the round before them. A setup "round 0" sheet shows only if something happened before round 1.
+- The stash trend includes the safe and matches the final `RankEntry.stash`.
+
+### 2026-11-03 — Host controls (M2-13, PR #54)
+Provisional, owner to confirm:
+- **Players can still act while the host has paused** (plan, lock in, chat); only the clocks stop. A pause also freezes hidden police moments, `roundEarly:<n>` and group-scheduled (ISO) meeting slots.
+- **Extend** per preset: Quick 20 s, 1h 2 min, 3h 5 min, 1d 30 min, 3d 1 h, 1w 2 h; no cap on uses. Police moments are never extended.
+- **Replace with bot** only after 2 missed rounds in a row (`REPLACE_AFTER_MISSED_ROUNDS`, content), never the host's own seat, default personality Opportunist. The host or the seat's own player can hand it back. Idle seats are public in `control` (already derivable from lock-in marks).
+- **Lobby kick:** any non-host seat, people or bots.
+- Scheduler ticks run per game in parallel (fixes the head-of-line follow-up); an open socket is closed when its session expires (4401).
+
+### 2026-11-03 — Google sign-in (M2-12, PR #53)
+Google is on only when both `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are set. Routes: `/api/auth/google/{start,callback}`. Provisional, owner to confirm:
+- **Redirect URI from env** (`GOOGLE_REDIRECT_URL`, else `PUBLIC_ORIGIN` + `/api/auth/google/callback`), never the request's Host header: Google needs an exact match and Host can be spoofed.
+- **Guest → account:** a guest signing in to a new account keeps its user, nickname and seats. Signing in to an existing account moves the guest's seats and host roles to it (`adoptGuest`, one transaction). **If both are seated in the same game, the account's seat is kept** (and takes the host role); the guest's seat is deleted from a lobby and stays, unreachable, in a running or ended game. Only the browser's own guest is merged, after the provider proved the account.
+- Display name: Google's `name` if it passes the nickname rules, else `given_name`, else "Crook". Scopes `openid profile` (no email); `prompt=select_account`. The landing page asks `/me` only when Google is on. The sign-in cookie path is `/`.
+
+### 2026-11-03 — Extension UI (R6b, PR #52)
+- **Starter deck ≠ starter mode:** the Starter deck keeps tokens, the shop and per-role toggles, with events off; only Quick (server-side `starterMode`) drops tokens and the shop. Per-role toggles send `roles: []` when the pick equals the deck preset; the last role can't be switched off.
+- Meeting perks (+Vote, Ballot) are hidden once a perk was used by choice this round (mirrors the engine's one-per-round rule).
+- **Heat breakdown data (no rule change):** the crew-size rounding remainder goes to the room lines, so `base` is exactly `heat.perRound`; a new `clamp` part records what the 0 / max bound took back, so the parts add up to the real change. Police activity at the top is folded in the same way; a stopped raid shows as `stopped`.
+- The case file's "All rounds" chip is "Whole job".
+
+### 2026-11-03 — R6a confirm items (#50 review)
+Provisional, owner to confirm (the Emergency/Shield one-per-round exemption is in "R6a provisional decisions" below):
+- **The Blackmailer keeps its token** if the shakedown its stolen vote decided is then cancelled (Muscle).
+- **The Mole tips off at most 3 times a game** (`tipOff.perGame` 3), even with Recharge; owner ruling 4's "at most 3" is read as a cap on tip-offs, so on tokens too.
+
 ### 2026-11-03 — PM provisional calls on the R6 parity gate (owner to confirm)
 Owner away; all PM calls, **provisional, owner to confirm** (`docs/balance/r6-balance.md` "Split parity gate", "Team-parity pass"):
 1. **Split gate** (option a): the parity spread is measured over Team roles only; the all-role spread is report-only.
@@ -30,6 +65,7 @@ PM/builder readings made while building R6a (#50); the owner may change any of t
 ---
 
 ### 2026-11-03 — R6 balance pass: success passes, parity blocked
+*Superseded by "PM provisional calls on the R6 parity gate" (content 0.17.0).*
 Content 0.16.0 (`docs/balance/r6-balance.md`). Teller line 4 → 5, Manager's office 4 → 3, Shift change Vault loot ×2 → ×1.5 and Heat ×1.5 → ×2, Quiet night −10 → −5, police patrol chance 25% → 30%, Fence safe 5 → 1 per stretch with its token at 3 (was 10, unreachable at 1), Balanced 4p 1/0 → 1/1 and 8p 1/1 → 2/1. Kept: clean line 6 (= Detective line), pay 8, Duel wrong call 8, shop costs. Why: success was 70–81% with events on and 52–56% at 9–12p with events off; now 57.7–68.2% in every gated cell. Parity (≤ 0.10) is not met (0.63–1.01): a ★ role wins on success like anyone and also on failure, so its ratio is about s + (1 − s)·φ against s for team roles; with no failure wins at all the spread is still 0.2–0.5. Needs an owner decision on the gate or the rule (STATUS "Questions").
 
 ### 2026-11-03 — Owner answers, 3 Nov (morning)
@@ -66,6 +102,7 @@ The owner merged the roles v3 spec into `docs/extension.md`, which is now the si
 ---
 
 ### 2026-11-02 — Owner answers, 2 Nov (afternoon): roles v3 direction
+*Superseded: roles v3 is retired; its decisions live on in `docs/extension.md` (see "One rules spec" above).*
 Owner-approved **direction**, not built. The spec is draft PR #45 (`docs/roles-v3.md` on `docs/roles-v3`); R6a builds it only after the owner signs off that PR. Earlier lines the same day conflicted: the later one wins. The owner withdrew "accomplices win only on failure" (09:57) and rejected task-based escape clauses (10:50, "too complex, forced").
 - **Concept:** no teams or secret groups. Everyone is one crew, in a glorified prisoner's dilemma. Roles differ in temperament, from most team impact to truly selfish.
 - **Win rule:** success → the biggest stash of **anyone** wins, Mole and Embezzler included. Failure → nobody wins, except the Getaway Driver (on a raid), the Mole (any failure), the Embezzler (a missed target) and the Fence (any failure), each only if it holds the biggest stash of everyone.
@@ -100,6 +137,7 @@ Builds the owner answers of 2 Nov (entry below). Design §4.1, §5.1, §11.1, §
 - Note for M2-13: shifting a round must shift `roundEarly:<n>` too.
 
 ### 2026-11-02 — R5 parity balance, provisional (PR #43)
+*Superseded by the R6 balance pass (content 0.17.0).*
 Content 0.14.0. Write-up: `docs/balance/balance-3.md`; baseline refreshed. Parity spread fell from 1.41–5.58 to 0.39–0.75 at 4–12p, but the ±0.10 gate is **not met**.
 - **(provisional) Target:** parity first. Equal seat chances need success ≈ crew seats ÷ n (65–75%); success was tuned to within ~4 pp of that with events off. *(the owner then confirmed parity ≤ 0.10 with success 55–70% and dropped the saboteur-win target; see roles v3 direction above)*
 - **(provisional) Dark-seat cap** = n ÷ 3 rounded (⌊(n+1)/3⌋) instead of ⌊n/3⌋, which lifts the 5-player accomplice cut. At 2–3p only the table's 0/0 row stops a dark side (#43 review). *(to be superseded by roles v3, PR #45: Balanced mixes from the sim)*
@@ -127,7 +165,7 @@ Karthik's answers to the STATUS questions, plus PM calls made the same day. "Con
 - **Accepted as is** (provisional calls now decisions): Heat whole numbers, floor 0; meetings open after the act's last round, sealed vote used by the next meeting (no withdrawing), no self-vote, compensation capped at the Haul; end of game one decimal, shared ties, failed-heist ranking shown as a loss; alibis only rooms in play; Hacker loop blinds cameras (Security) only; Smooth Talker plain public tally; Snitch paid every time (at or above the threshold); Double-cross swaps this round and Moles may be offered; Raid rumour and Power cut as is; perks (Shield automatic, +Vote and Ballot in meetings, no Ballot in Open mode, Alibi true-only, oldest Rig flips); Duel caps and no meeting-only roles in Duel; 2 players = Duel or bots only (lobby nudge, no 2p tuning); preset timings (tune after playtests); chat limits and evidence rules; R2a readings (Rookie ×1.2, Auditor latest round any time, rewards count any earlier time); R2b readings (Emergency perk, Priest Ballot, Fixer one Shield token); lobby (one invite link until start, hand over to a person before leaving, Opportunist default bots); engineering internals (routes, `/api`, 2 s poll, 64-character slot, Opportunist bot, sim metric and parity definitions incl. the R4a suite checks, landing copy and wordmark).
 - **Left to R5 balance:** Heat at 3–4 players and the 5-player accomplice cut (⌊n/3⌋ cap). PM call: left to the R5 sim data, not asked of the owner.
 - **Dropped as stale, no owner answer:** the Driver question (does "the biggest stash" on a Heat failure include Moles). The Driver role no longer exists: R2b replaced it with the Fixer, and R3a added the Getaway Driver.
-- **Still open:** deploy target (Fly or Lightsail), Fly always-on cost, Google OAuth client id (M2-12 stays stub-ready), art direction (owner has the preview screenshots, 2 Nov; *approved for now, see roles v3 direction entry*). Technical defaults are walked through with the owner in batches of 4.
+- **Still open** *(since answered: Lightsail, 3 Nov; Google sign-in built, #53)*: deploy target (Fly or Lightsail), Fly always-on cost, Google OAuth client id (M2-12 stays stub-ready), art direction (owner has the preview screenshots, 2 Nov; *approved for now, see roles v3 direction entry*). Technical defaults are walked through with the owner in batches of 4.
 
 ### 2026-11-02 — Bank board and Claim role (PR #41)
 Wires the M2-9 art into the game screen. Owner decisions (2 Nov, not provisional): Claim role is also on the role card, usable any time the engine allows (once per act, not in Duel), and the alibi-panel button stays; the board draws the rooms you watched (Security / Lookout / Tail `roomWatched`, your own case file only) as "seen on camera" (crook faded behind a CCTV wash with a camera badge), distinct from room-mates and dashed alibi ghosts; forged sightings look identical by design.
@@ -253,6 +291,7 @@ Commands are untrusted JSON (design §17.2). Refusal reasons print command value
 - **Hosting never swaps the session (PR #27 review):** `POST /games { nickname? }` seats the host under that name (checked like any nickname; default the account name). `/new` signs in a guest only when `/me` says there is no session (asked again at submit), so a guest hosting under another name keeps their other games.
 - **Playwright runs the server too:** `playwright.config.ts` starts `apps/server` (in-memory PGlite, port 3179) next to Vite, which proxies `/api` to it.
 ### 2026-11-01 — Fly.io deployment for playtests (ops/fly-deploy)
+*Superseded: the owner chose AWS Lightsail (3 Nov); Fly is unused. The one-origin server and production-mode points below still apply.*
 Owner: app `skimjob` (https://skimjob.fly.dev), region `bom`, one shared-cpu-1x 512 MB machine, PGlite on a Fly volume, automatic deploys. Details in `docs/deploy.md`.
 - **One origin:** the game server serves the built web app (`WEB_DIR`, `@fastify/static`) with an SPA fallback (any GET without a file extension that isn't `/api/...` gets `index.html`), the API and the sockets. Resolves M2-5a's "API prefix": the server's `rewriteUrl` strips a leading `/api`, so `/api/x` and `/x` are the same route (the dev proxy still strips it first). Consequence: a client route must not equal an API `GET` route (`/me`, `/games/:id`, `/invites/:code`, `/auth/*`, `/health`), or a reload of that page would get JSON. Today's client routes (`/join`, `/lobby`, `/game`, `/dev`) don't.
 - **`NODE_ENV=production`** means: `Secure` cookies (via @fastify/cookie's defaults), `trustProxy` (Fly terminates TLS), `HOST` defaults to 0.0.0.0, socket origins = own host + `PUBLIC_ORIGIN` (+ `ALLOWED_ORIGINS` if set, never the Vite dev origins), and the dev sign-in stub is off even with `DEV_LOGIN=1` (logged as a warning, not a crash).

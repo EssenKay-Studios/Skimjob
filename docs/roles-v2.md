@@ -1,5 +1,7 @@
 # Skimjob — Role deck proposal v2 (18 roles + 2 saboteurs)
 
+> **Historical.** Superseded by `docs/extension.md`, the single rules spec for roles from R6 on. Kept as the record of R1–R5.
+
 *Game-designer proposal, 1 Nov 2026, after owner feedback on v1. Numbers are placeholders for the sim. **Approved by Karthik (1 Nov) with one change: the Ballot perk also works in Secret vote mode** (it shows one chosen player's ballot to the perk holder only). Built in steps R1–R5; see `docs/decisions.md` and `docs/STATUS.md`.*
 
 ## 0. Three factions, one win rule
