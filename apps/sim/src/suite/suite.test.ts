@@ -182,6 +182,11 @@ describe("role parity — docs/roles-v2.md §5", () => {
     expect(star.fence).toMatchObject({ relative: 2.4, check: { verdict: "fail", sure: true } });
     expect(star.embezzler).toMatchObject({ relative: 0.8, check: { verdict: "fail", sure: true } });
   });
+  it("the team-role spread is gated at TEAM_PARITY_MAX_SPREAD (0.20, PM provisional), not the 0.10 target — docs/balance/r6-balance.md", () => {
+    const team = { auditor: seats(40000, 0.12), cleaner: seats(40000, 0.15) };
+    expect(splitParityOf(team).team).toMatchObject({ spread: 0.15, check: { verdict: "pass", sure: true } });
+    expect(parityOf(team).check).toEqual({ verdict: "fail", sure: true });
+  });
 });
 
 /** A finished cell with a made-up tally, for report/merge tests. */

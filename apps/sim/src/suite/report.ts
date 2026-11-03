@@ -7,7 +7,7 @@ import { ROLES } from "@skimjob/content";
 import { checkBand, wilson, type Band, type CheckResult, type Verdict } from "../stats";
 import type { Setup, SuiteOptions } from "./matrix";
 import type { CellResult } from "./run";
-import { PARITY_MAX_SPREAD, PARITY_MIN_SEATS, RATES, STAR_BAND } from "./targets";
+import { PARITY_MAX_SPREAD, PARITY_MIN_SEATS, RATES, STAR_BAND, TEAM_PARITY_MAX_SPREAD } from "./targets";
 import { addTallies, emptyTally, type SeatTally } from "./tally";
 
 export const REPORT_KIND = "skimjob-sim-suite";
@@ -163,7 +163,7 @@ function cellReport(c: CellResult): CellReport {
 }
 
 /** Role parity for a pool of games at one crew size. docs/roles-v2.md §5 */
-export function parityOf(roles: Readonly<Record<string, SeatTally>>): Pick<ParityGroup, "roles" | "fewSeats" | "spread" | "spreadLo" | "spreadHi" | "check"> {
+export function parityOf(roles: Readonly<Record<string, SeatTally>>, max: number = PARITY_MAX_SPREAD): Pick<ParityGroup, "roles" | "fewSeats" | "spread" | "spreadLo" | "spreadHi" | "check"> {
   const counted: ParityRole[] = [];
   const fewSeats: string[] = [];
   for (const [role, s] of Object.entries(roles)) {
@@ -181,8 +181,8 @@ export function parityOf(roles: Readonly<Record<string, SeatTally>>): Pick<Parit
   const spread = r3(Math.max(...ratios) - Math.min(...ratios));
   const spreadHi = r3(Math.max(...counted.map((r) => r.hi)) - Math.min(...counted.map((r) => r.lo)));
   const spreadLo = r3(Math.max(0, Math.max(...counted.map((r) => r.lo)) - Math.min(...counted.map((r) => r.hi))));
-  const verdict: Verdict = spread <= PARITY_MAX_SPREAD ? "pass" : "fail";
-  const sure = verdict === "pass" ? spreadHi <= PARITY_MAX_SPREAD : spreadLo > PARITY_MAX_SPREAD;
+  const verdict: Verdict = spread <= max ? "pass" : "fail";
+  const sure = verdict === "pass" ? spreadHi <= max : spreadLo > max;
   return { roles: counted, fewSeats, spread, spreadLo, spreadHi, check: { verdict, sure } };
 }
 
@@ -197,7 +197,7 @@ export const isStar = (role: string): boolean => (Object.hasOwn(ROLES, role) ? R
  */
 export function splitParityOf(roles: Readonly<Record<string, SeatTally>>): Pick<ParityGroup, "team" | "stars"> {
   const teamRoles = Object.fromEntries(Object.entries(roles).filter(([role]) => !isStar(role)));
-  const { spread, spreadLo, spreadHi, check, roles: counted } = parityOf(teamRoles);
+  const { spread, spreadLo, spreadHi, check, roles: counted } = parityOf(teamRoles, TEAM_PARITY_MAX_SPREAD);
   const pooled = counted.reduce((t, r) => { const s = teamRoles[r.role] as SeatTally; return { seats: t.seats + s.seats, credit: t.credit + s.credit, fair: t.fair + s.fair }; }, { seats: 0, credit: 0, fair: 0 });
   let average: TeamParity["average"] = null;
   if (pooled.fair > 0) {
@@ -351,7 +351,7 @@ export function formatSuiteReport(r: SuiteReport): string {
     ]),
   );
   const parity = table(
-    ["parity group (events pooled)", "games", `team spread ≤${PARITY_MAX_SPREAD.toFixed(2)}`, "95% range", "", "team highest", "team lowest", "team avg", "all-role spread (report)", ""],
+    ["parity group (events pooled)", "games", `team spread ≤${TEAM_PARITY_MAX_SPREAD.toFixed(2)}`, "95% range", "", "team highest", "team lowest", "team avg", "all-role spread (report)", ""],
     r.parity.map((p) => {
       const team = p.roles.filter((x) => !isStar(x.role)).sort((a, b) => b.ratio - a.ratio);
       const hi = team.length > 1 ? team[0] : undefined;
@@ -389,7 +389,8 @@ export function formatSuiteReport(r: SuiteReport): string {
     cells,
     "",
     "Role parity (docs/roles-v2.md §5): each role's win credit ÷ fair share 1/n, all games; spread = max − min across roles.",
-    "Split gate (PM 3 Nov, provisional): the spread over the team roles (win only a success) must be ≤ the limit, and each ★ role's",
+    "Split gate (PM 3 Nov, provisional): the spread over the team roles (win only a success) must be ≤ the limit",
+    `(${TEAM_PARITY_MAX_SPREAD.toFixed(2)} until the M2-14 playtests; the target is ${PARITY_MAX_SPREAD.toFixed(2)}, as the all-role column), and each ★ role's`,
     `ratio ÷ the team roles' pooled ratio must sit in ${STAR_BAND.lo}–${STAR_BAND.hi}. The all-role spread is reported, not counted.`,
     "The point spread is biased upward by noise, so the verdict uses the 95% range: FAIL only if even the closest the intervals allow is over the limit.",
     "Gated: Balanced at 4–12 players (extension.md Build notes \"Sim\"); Truly random and the role-list setups are reported only.",
