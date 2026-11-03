@@ -3,7 +3,7 @@
 **Live:** https://skimjob.duckdns.org, on the owner's existing AWS Lightsail box. The box also runs another
 production app, **Arcway**, which no Skimjob step may touch. Deploys are manual: build on the Mac, upload, switch
 a symlink, restart. Nothing deploys on merge. Host, SSH user and key are in the owner's local `ssh-relay` skill,
-never in this (public) repo. The deployed build and whether a redeploy is pending are in `docs/STATUS.md`.
+never in this (public) repo. The deployed build is in `docs/STATUS.md`.
 
 **Fly is unused.** Lightsail was chosen (3 Nov; `docs/decisions.md`). `Dockerfile`, `fly.toml` and
 `.github/workflows/deploy.yml` are kept (CI still builds and boots the Docker image) but nothing deploys to Fly.
@@ -14,7 +14,7 @@ never in this (public) repo. The deployed build and whether a redeploy is pendin
 |---|---|
 | Service | systemd unit `skimjob` (`/etc/systemd/system/skimjob.service`), system user `skimjob` (nologin), Node 22, listening on `127.0.0.1:3100` only. |
 | Code | `/srv/skimjob/releases/<REL>/{server,web}` (root-owned, read-only to the app), `REL` = `YYYYMMDD-HHMMSS-<sha>`. `/srv/skimjob/current` points at the live one. |
-| Settings | Non-secret ones in the unit's `Environment=` line (`NODE_ENV=production`, `HOST`, `PORT`, `PUBLIC_ORIGIN=https://skimjob.duckdns.org`, `WEB_DIR=/srv/skimjob/current/web`). Secrets (`DATABASE_URL`, later the Google pair) in `/etc/skimjob/env`, mode 0640 root:skimjob. Never print or commit them. |
+| Settings | Non-secret ones in the unit's `Environment=` line (`NODE_ENV=production`, `HOST`, `PORT`, `PUBLIC_ORIGIN=https://skimjob.duckdns.org`, `WEB_DIR=/srv/skimjob/current/web`). Secrets (`DATABASE_URL`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, all set) in `/etc/skimjob/env`, mode 0640 root:skimjob. Never print or commit them. |
 | Database | Postgres 16 on localhost: its own role and database `skimjob`. Migrations run on start and only add. |
 | Proxy | nginx: its own site `/etc/nginx/sites-available/skimjob` and shared zones in `/etc/nginx/conf.d/skimjob.conf`; Let's Encrypt certificate (HTTP-01 webroot, renewed by `certbot.timer`). Arcway's `default` site stays the default server. |
 | Backups | Weekly `pg_dump -Fc` (root crontab, Sundays 04:41 UTC, `/usr/local/sbin/skimjob-backup`) to `/var/backups/skimjob`, newest 8 kept; Lightsail daily snapshots cover the whole box. |
@@ -29,13 +29,13 @@ never `pm2 … all`; never touch Arcway's files, process or database.
 0. **Check for games in progress** on the box, and warn their players. A restart drops sockets for a few seconds
    (clients reconnect; the scheduler catches up on deadlines that passed). A game whose log holds event types removed
    since the deployed build won't replay, so finish those first (`git log -p <deployed sha>..main --
-   packages/engine/src/types/events.ts`; none were removed between 38002fd and 16a4a20).
+   packages/engine/src/types/events.ts`).
    ```sh
    sudo runuser -u postgres -- psql -d skimjob -Atc \
      "select g.id, g.updated_at, count(s.*) from games g join seats s on s.game_id = g.id
       where g.status = 'running' group by g.id order by g.updated_at desc"
    ```
-   There is no broadcast to players; tell the hosts of those games directly (and, from builds with #54, they can
+   A paused, bots-only smoke-test game stays in the list; ignore it (the app can't end it). There is no broadcast to players; tell the hosts of those games directly (and, from builds with #54, they can
    pause first).
 1. **Build on the Mac** from a fresh clone of `main`, in a scratch folder (not `/tmp`), Node 22, pnpm 10.28:
    ```sh
@@ -76,8 +76,10 @@ never `pm2 … all`; never touch Arcway's files, process or database.
    - `journalctl -u skimjob -n 20 --no-pager` shows `database: Postgres` (and any migrations applied);
    - from the Mac, `https://skimjob.duckdns.org/health` and `/join/smoke` return 200;
    - Arcway is still healthy and its process didn't restart (its check is in the `ssh-relay` skill).
-8. **Roll back** if anything fails: point `current` at the previous release and restart. Migrations only add,
-   so an older release runs on the newer schema (a PR that ever changes or drops something must note its rollback).
+8. **Roll back** if anything fails: point `current` at the previous release and restart. Only roll back to a release
+   with the same event schema: `applyEvent` (`packages/engine/src/reduce.ts`) throws on any event type it doesn't know,
+   so games logged on the newer build may fail to load on an older one (38002fd lacks #55's `policeCause` and
+   `votesStolen`, and migration 008). Across a schema change, prefer fixing forward.
    ```sh
    sudo ln -sfn /srv/skimjob/releases/<previous> /srv/skimjob/current.new
    sudo mv -T /srv/skimjob/current.new /srv/skimjob/current
@@ -118,8 +120,7 @@ Google's published keys (issuer, audience = the client id, expiry, nonce). Users
 
 **Status:** the owner's OAuth client exists with both redirect URIs registered
 (`http://localhost:5173/api/auth/google/callback` and `https://skimjob.duckdns.org/api/auth/google/callback`).
-Google is **not yet on** on Lightsail: that needs the two variables in `/etc/skimjob/env` and a redeploy of a build
-that includes #53.
+Google is **on** in production: both variables are set in `/etc/skimjob/env`.
 
 1. Google Cloud console → APIs & Services → **OAuth consent screen**: app name "Skimjob", user type External,
    scopes `openid` and `profile`. While it's in "Testing", add the playtesters' Google accounts as test users (or

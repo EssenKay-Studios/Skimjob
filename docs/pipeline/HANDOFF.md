@@ -10,12 +10,11 @@ Read this with `docs/STATUS.md` (the canonical task list and the owner's open qu
 - **Paused by the owner:** M2-14 playtest pass, M2-15 offline demo (GitHub Pages).
 - **Out of scope:** `docs/rebuild.md` (jobs redesign), Books mode, the recruited Mole.
 - **Specs:** `docs/design.md` plus `docs/extension.md` (the single R6 spec). Roles v3 is retired; `docs/roles-v2.md` is the historical R1–R5 record.
-- **Live:** https://skimjob.duckdns.org on the owner's AWS Lightsail box, running 38002fd (before #51–#55). The redeploy is pending and paused. Runbook: `docs/deploy.md`. Connection details are in the owner's local `ssh-relay` skill, never in the repo. Fly is unused.
+- **Live:** https://skimjob.duckdns.org on the owner's AWS Lightsail box, running 1a4e083 with Google sign-in on (release `20261103-172121-1a4e083`; the 38002fd release is kept, but is not a safe rollback target: see `docs/deploy.md` step 8). Runbook: `docs/deploy.md`. Connection details are in the owner's local `ssh-relay` skill, never in the repo. Fly is unused.
 
 ## How to resume
 1. Ask the owner to confirm the provisional decisions in STATUS "Questions for the owner".
-2. Redeploy Lightsail from the new main (`docs/deploy.md`), adding `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` to `/etc/skimjob/env` (both redirect URIs are already registered).
-3. M2-14 playtest pass, then M2-15 offline demo: the in-browser engine and bots with the same UI, published as a GitHub Pages site the owner can verify.
+2. M2-14 playtest pass, then M2-15 offline demo: the in-browser engine and bots with the same UI, published as a GitHub Pages site the owner can verify.
 
 ## How the pipeline works
 - The pipeline runs on the owner's Mac. Main clone: `/Users/karthikeyaniyer/Documents/Misc/Skimjob`; every agent works in its own git worktree under `/Users/karthikeyaniyer/Documents/Misc/skimjob-wt/<name>` (`git worktree add`, removed with `git worktree remove` when done). Setup and rules: `common.md`.

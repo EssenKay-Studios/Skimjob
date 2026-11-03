@@ -5,7 +5,7 @@ _Last updated: 3 Nov 2026. **Development is halted** (owner): every code PR is m
 ## Where things stand
 - **Specs:** `docs/design.md` is the game design; `docs/extension.md` is the single R6 rules spec and wins on any conflict. Roles v3 is retired (folded into the Extension); `docs/roles-v2.md` is the historical R1–R5 spec only. Out of scope: `docs/rebuild.md` (jobs redesign), Books mode, the recruited Mole.
 - **Content** 0.17.0 (R6 balance pass, provisional gates; `docs/balance/r6-balance.md`).
-- **Live:** https://skimjob.duckdns.org on the owner's AWS Lightsail box (`docs/deploy.md`). It runs 38002fd (#50), from before #51–#55. A redeploy is pending and paused. Google sign-in there needs `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` in `/etc/skimjob/env` plus that redeploy (both redirect URIs are registered). Fly is unused.
+- **Live:** https://skimjob.duckdns.org on the owner's AWS Lightsail box (`docs/deploy.md`). It runs 1a4e083 (all of M2-1 to M2-13 and R6), with Google sign-in on. A paused bot smoke-test game stays in its database (harmless; the app can't end it). Fly is unused.
 - **Next step:** on hold, owner to resume (M2-14, then M2-15; see `docs/pipeline/HANDOFF.md` "How to resume").
 
 ## Current milestone: M2 — playable web prototype
@@ -74,4 +74,4 @@ Every provisional call still to confirm, once each; the details are in the named
 6. **"Google sign-in (M2-12)"** (#53): the account's seat is kept on a same-game clash; redirect URI from env (`PUBLIC_ORIGIN` + `/api/auth/google/callback`); display-name fallback (`name` → `given_name` → "Crook"); `prompt=select_account`.
 7. **"Extension UI (R6b)"** (#52) and **"End-of-game reveal (M2-11)"** (#55): builder readings (Starter deck ≠ starter mode, Heat breakdown parts, reveal attribution of tip-offs, loops and stolen votes).
 8. **Older `(provisional)` markers** (1–2 Nov entries, M1 to M2-10, R1–R5; partly accepted in "Owner answers, 2 Nov"): accept the rest in bulk, or name any to revisit.
-9. **Resume:** when to restart development (M2-14, M2-15) and the Lightsail redeploy.
+9. **Resume:** when to restart development (M2-14, M2-15).
