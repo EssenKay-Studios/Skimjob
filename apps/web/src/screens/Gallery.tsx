@@ -10,6 +10,7 @@ import { ArtSections, BankSection } from "./GalleryArt";
 import { NotesSections } from "./GalleryNotes";
 import { ExtensionSections } from "./GalleryExtension";
 import { HostSection } from "./GalleryHost";
+import { RevealSection } from "./GalleryReveal";
 import { Button, DangerButton } from "../components/Button";
 import { Chip } from "../components/Chip";
 import { MyGames } from "../components/MyGames";
@@ -308,6 +309,8 @@ export function Gallery() {
             </Section>
 
             <NotesSections />
+
+            <RevealSection />
 
             <Section id="meet" title="Meetings kit" note="M2-7 · clock face, tally bars, result banners, vote dialog sheet">
               <MeetingKitSamples />

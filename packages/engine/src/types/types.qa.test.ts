@@ -45,6 +45,7 @@ type ExpectedVisibility = {
   raidStopped: "public";
   policeActivity: "public"; // extension.md "Police activity": "police activity +4", the same either way
   policeScheduled: "reveal"; // extension.md "Police activity": the hidden moments, never shown in play
+  policeCause: "reveal"; // extension.md "Police activity": patrol vs tip-off, told apart only in the reveal
   tipOffLanded: "private"; // extension.md "Police activity": only the Mole learns the tip-off landed
   cardForeseen: "private";
   blessingPaid: "public";
@@ -67,6 +68,7 @@ type ExpectedVisibility = {
   voteSealed: "private" | "secret"; // secret in "secret" vote mode, design §11.2
   voteCast: "public" | "private" | "secret";
   meetingClosed: "public";
+  votesStolen: "reveal"; // v2 §2: the Blackmailer's steals, told only in the end-of-game reveal
   shakedownPending: "public";
   shakedownCancelled: "public"; // design §8: says it was cancelled, not who did it
   shakedownResolved: "public";

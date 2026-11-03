@@ -12,6 +12,7 @@ import type {
   GameEvent,
   GameState,
   LoggedEvent,
+  Outcome,
   PlayerId,
   PlayerView,
   PublicEvent,
@@ -21,7 +22,8 @@ import { canSee } from "./types";
 import { actOfRound } from "./acts";
 import { ROUNDS_PER_ACT } from "@skimjob/content";
 import { roomDef, roomLoot } from "./job";
-import { eventsFor, jobFor, perkCost } from "./overrides";
+import { eventsFor, jobFor, perkCost, rolesFor } from "./overrides";
+import { revealSummary } from "./reveal";
 import { roundJob } from "./deck";
 
 const isPublic = (event: GameEvent): event is PublicEvent => event.visibility.kind === "public";
@@ -129,8 +131,18 @@ function buildView(state: GameState, playerId: PlayerId): PlayerView {
     ledger,
     caseFile,
     // design §13: everything opens up at the end, except others' secret-mode ballots (§11.2).
-    reveal: state.phase.kind === "ended" ? { outcome: state.phase.outcome, log: visibleLog(state.log, playerId, true) } : null,
+    reveal: state.phase.kind === "ended" ? revealOf(state, state.phase.outcome, visibleLog(state.log, playerId, true)) : null,
   };
+}
+
+/** design §13: the summary reads only the viewer's reveal log, so it can't leak more than that log. */
+function revealOf(state: GameState, outcome: Outcome, log: readonly LoggedEvent[]): NonNullable<PlayerView["reveal"]> {
+  const summary = revealSummary(
+    log.map((e) => e.event),
+    outcome,
+    { roles: rolesFor(state.config), events: eventsFor(state.config) },
+  );
+  return { outcome, log, summary };
 }
 
 function roleListOf(log: readonly GameEvent[]): PlayerView["roleList"] {

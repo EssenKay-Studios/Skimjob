@@ -36,6 +36,7 @@ export const sampleEvents: { readonly [T in GameEventType]: EventOfType<T> } = {
   roleListShown: { type: "roleListShown", visibility: PUBLIC, list: "exact", roles: ["fence", "rookie"] },
   shopDealt: { type: "shopDealt", visibility: PUBLIC, perks: ["peek", "alibi", "extraVote"] },
   policeScheduled: { type: "policeScheduled", visibility: REVEAL, moment: 1, gapPermille: 900, patrol: true },
+  policeCause: { type: "policeCause", visibility: REVEAL, round: 2, cause: "tipOff", mole: ben },
   policeActivity: { type: "policeActivity", visibility: PUBLIC, round: 2, heatAdded: 4, heat: 30 },
   tipOffLanded: { type: "tipOffLanded", visibility: privateTo(ben), player: ben, round: 2 },
   tokenEarned: { type: "tokenEarned", visibility: privateTo(ana), player: ana, trigger: "safeReached" },
@@ -124,6 +125,7 @@ export const sampleEvents: { readonly [T in GameEventType]: EventOfType<T> } = {
     vote: { kind: "shakedown", target: ana },
     sealed: false,
   },
+  votesStolen: { type: "votesStolen", visibility: REVEAL, meetingId: "act-1", steals: [{ victim: ana, blackmailer: ben, decided: true }] },
   meetingClosed: {
     type: "meetingClosed",
     visibility: PUBLIC,

@@ -4,6 +4,7 @@ import type { PerkId, RoleId, RoomId } from "@skimjob/content";
 import type { PlayerId, PlayerSeat, VoteVisibility } from "./config";
 import type { Move, VoteChoice } from "./commands";
 import type { ActNumber, GameEvent, Outcome } from "./events";
+import type { RevealSummary } from "./reveal";
 import type { MeetingProposal, PendingEmergency, Phase, RoleState, ScheduledMeeting } from "./state";
 import type { PrivateVisibility, PublicVisibility, SecretVisibility, Visibility } from "./visibility";
 
@@ -147,7 +148,8 @@ export interface PlayerView {
    * Null until the game ends; then every event this player may see after the
    * game (every role, every real room and split, every ability) for the reveal
    * timeline. Other players' secret-mode ballots are left out (design §11.2).
-   * `seq` numbers this stream (see `LoggedEvent`). design §13
+   * `seq` numbers this stream (see `LoggedEvent`). `summary` is worked out
+   * from this same log (engine `revealSummary`). design §13
    */
-  readonly reveal: { readonly outcome: Outcome; readonly log: readonly LoggedEvent[] } | null;
+  readonly reveal: { readonly outcome: Outcome; readonly log: readonly LoggedEvent[]; readonly summary: RevealSummary } | null;
 }

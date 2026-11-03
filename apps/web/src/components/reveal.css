@@ -1,0 +1,261 @@
+/* End-of-game reveal (M2-11): role envelopes, who won and why, the round
+   timeline. ui-style "End-of-game reveal", §9 motion. Tokens only. */
+
+.reveal {
+  gap: 16px;
+}
+.reveal__head {
+  display: grid;
+  gap: 6px;
+}
+.reveal__why {
+  margin: 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--clay);
+  background: var(--paper2);
+  border-radius: var(--radius-card);
+  font: 400 16px/1.35 var(--font-hand);
+}
+
+/* ---------- Role envelopes ---------- */
+.reveal__crew {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.reveal__card {
+  position: relative;
+  min-width: 0;
+  container-type: inline-size;
+  transform-origin: 50% 0;
+  animation: envelope-open 0.55s var(--spring) both;
+  animation-delay: calc(var(--i, 0) * 70ms);
+}
+@keyframes envelope-open {
+  from {
+    opacity: 0;
+    transform: perspective(600px) rotateX(-70deg);
+  }
+}
+.reveal__envelope {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px 14px;
+  --fr-fill: var(--manilla);
+}
+.reveal__card.is-winner .reveal__envelope {
+  --fr-fill: var(--good-l);
+}
+.reveal__card.is-void .reveal__envelope {
+  filter: grayscale(0.55);
+}
+.reveal__top {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+.reveal__place {
+  font-size: 15px;
+  color: var(--mute);
+}
+.reveal__who {
+  display: grid;
+  min-width: 0;
+}
+.reveal__who b {
+  font: 400 18px/1.15 var(--font-hand);
+  overflow-wrap: anywhere;
+}
+.reveal__card.is-you .reveal__who b {
+  color: var(--clay-d);
+}
+.reveal__role {
+  font-weight: 650;
+  overflow-wrap: break-word;
+}
+.reveal__score {
+  display: grid;
+  justify-items: end;
+}
+.reveal__score b {
+  font-size: 22px;
+}
+.reveal__card.is-void .reveal__score b {
+  text-decoration: line-through;
+  text-decoration-color: var(--bad);
+}
+.reveal__star {
+  margin: 0;
+  font: 400 14.5px/1.3 var(--font-hand);
+  color: var(--clay-d);
+}
+.reveal__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 0;
+}
+.reveal__facts div {
+  display: grid;
+}
+.reveal__facts dt {
+  font: 600 11.5px/1.3 var(--font-ui);
+  color: var(--mute);
+}
+.reveal__facts dd {
+  margin: 0;
+}
+.reveal__trend {
+  color: var(--clay-d);
+  max-width: 100%;
+}
+.reveal__shop {
+  display: grid;
+  gap: 6px;
+  padding-top: 6px;
+  border-top: 1.3px dashed var(--ink-faint);
+}
+.reveal__shop p {
+  margin: 0;
+}
+.reveal__perks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.reveal__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.reveal__badges:empty {
+  display: none;
+}
+/* The red rubber VOID stamp on a failed heist's losers (ui-style "End-of-game reveal"). */
+.reveal__void {
+  position: absolute;
+  top: 44%;
+  right: 14px;
+  padding: 2px 10px 4px;
+  border: 3px solid var(--bad);
+  border-radius: var(--radius-chip);
+  color: var(--bad);
+  font: 700 24px/1 var(--font-hand);
+  letter-spacing: 0.08em;
+  rotate: -12deg;
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+/* ---------- Timeline ---------- */
+.reveal__timeline {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.reveal__timeline h3 {
+  margin: 0;
+}
+.reveal__scrub {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+.reveal__rounds {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  padding: 4px 2px 6px;
+  scrollbar-width: thin;
+}
+.reveal__round {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1.6px solid var(--ink);
+  border-radius: var(--radius-card);
+  background: var(--paper-hi);
+  box-shadow: var(--shadow-card);
+  min-width: 0;
+}
+.reveal__round-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+}
+.reveal__round-head h4 {
+  margin: 0;
+  font: 400 20px/1.2 var(--font-hand);
+}
+.reveal__moves,
+.reveal__items {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.reveal__move {
+  display: grid;
+  grid-template-columns: minmax(0, 6em) minmax(0, 1fr);
+  align-items: baseline;
+  gap: 2px 10px;
+  padding: 4px 0;
+  border-bottom: 1.2px dashed var(--ink-faint);
+}
+.reveal__mover {
+  overflow-wrap: anywhere;
+}
+.reveal__facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 12px;
+  min-width: 0;
+}
+.reveal__move.is-lie .reveal__alibi {
+  color: var(--bad);
+  font-weight: 650;
+}
+.reveal__item {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+}
+.reveal__item > span:only-child {
+  grid-column: 2;
+}
+.reveal__item.is-hidden {
+  font-weight: 560;
+}
+.reveal__lock svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Narrow envelopes: the score caption gives its width to the role name. */
+@container (max-width: 260px) {
+  .reveal__score .meta {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal__card {
+    animation: none;
+  }
+}

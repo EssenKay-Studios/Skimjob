@@ -20,7 +20,7 @@ import type {
   SecretVisibility,
   VoteChoice,
 } from "./types";
-import { PUBLIC, privateTo, secretTo } from "./types";
+import { PUBLIC, REVEAL, privateTo, secretTo } from "./types";
 import { checkpointTarget, clampHeat } from "./job";
 import { jobFor, powerOf, roleDefIn, rolesFor, type RoleTable } from "./overrides";
 import { dealableRoles, roleListOf } from "./setup";
@@ -323,17 +323,21 @@ export function closeMeeting(state: GameState, meetingId: unknown, draw: Draw): 
       result,
     },
   ];
-  // extension.md owner ruling 5: a Blackmailer earns a token when a vote it stole decided the shakedown
-  // (it wouldn't have passed without that Blackmailer's steals).
-  if (result.kind === "shakedown") {
-    const decided = (id: PlayerId) => {
-      const without = new Map([...stolen].filter(([, by]) => by !== id));
-      if (without.size === stolen.size) return false;
-      const other = tally(state, without).result;
-      return other.kind !== "shakedown" || other.target !== result.target;
-    };
-    events.push(...grantRewards(state, "stolenVoteDecided", (p) => decided(p.id)));
+  // extension.md owner ruling 5: a Blackmailer's steals decided the shakedown when it
+  // wouldn't have passed without them.
+  const decided = (id: PlayerId) => {
+    if (result.kind !== "shakedown") return false;
+    const without = new Map([...stolen].filter(([, by]) => by !== id));
+    if (without.size === stolen.size) return false;
+    const other = tally(state, without).result;
+    return other.kind !== "shakedown" || other.target !== result.target;
+  };
+  if (stolen.size > 0) {
+    const steals = [...stolen].map(([victim, blackmailer]) => ({ victim, blackmailer, decided: decided(blackmailer) }));
+    events.push({ type: "votesStolen", visibility: REVEAL, meetingId: meeting.id, steals });
   }
+  // ...and it earns a token for that.
+  if (result.kind === "shakedown") events.push(...grantRewards(state, "stolenVoteDecided", (p) => decided(p.id)));
   const { kind, act } = meeting;
   if (result.kind === "shakedown" && shakedownWindow(state)) {
     // design §8: the Muscle may cancel it before it's applied (`useAbility`, then `advance { resolveShakedown }`).

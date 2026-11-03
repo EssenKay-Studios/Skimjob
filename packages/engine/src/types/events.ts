@@ -299,6 +299,19 @@ export interface PoliceScheduled {
   readonly patrol: boolean;
 }
 
+/**
+ * What the police activity just before it really was: a background patrol, or
+ * `mole`'s queued tip-off. Reveal-only, so the crew can't tell them apart in
+ * play; the end-of-game reveal reads it. extension.md "Police activity", design §13
+ */
+export interface PoliceCause {
+  readonly type: "policeCause";
+  readonly visibility: RevealVisibility;
+  readonly round: number;
+  readonly cause: "patrol" | "tipOff";
+  readonly mole: PlayerId | null;
+}
+
 /** Your queued tip-off landed as this police activity (only the Mole is told). extension.md "Police activity" */
 export interface TipOffLanded {
   readonly type: "tipOffLanded";
@@ -534,6 +547,19 @@ export interface MeetingClosed {
   readonly tally: { readonly skip: number; readonly targets: Readonly<Record<PlayerId, number>> };
   readonly ballots: Readonly<Record<PlayerId, VoteChoice>> | null;
   readonly result: MeetingResult;
+}
+
+/**
+ * The votes Blackmailers stole at the meeting that just closed (victim's vote
+ * cast by `blackmailer`), and whether each Blackmailer's steals decided its
+ * shakedown. Reveal-only, so it stays hidden until the end. Read by the
+ * end-of-game reveal, not by the token (a Double-cross can move the role). role deck v2 §2, design §13
+ */
+export interface VotesStolen {
+  readonly type: "votesStolen";
+  readonly visibility: RevealVisibility;
+  readonly meetingId: string;
+  readonly steals: readonly { readonly victim: PlayerId; readonly blackmailer: PlayerId; readonly decided: boolean }[];
 }
 
 /**
@@ -777,6 +803,7 @@ export type GameEvent =
   | RoundResolved
   | PoliceActivity
   | PoliceScheduled
+  | PoliceCause
   | TipOffLanded
   | CopsRaided
   | RaidStopped
@@ -799,6 +826,7 @@ export type GameEvent =
   | VoteSealed
   | VoteCast
   | MeetingClosed
+  | VotesStolen
   | ShakedownPending
   | ShakedownCancelled
   | ShakedownResolved

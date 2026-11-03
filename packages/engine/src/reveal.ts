@@ -1,0 +1,224 @@
+// The end-of-game reveal summary (design §13): every role and what it wins
+// on, who won and why, each round's real moves and hidden actions, and the
+// stash over time. Pure, and read only from the log handed in, which in a view
+// is the viewer's own reveal log (`visibleLog(..., true)`), so it can't say
+// anything that log doesn't (others' Secret-mode ballots stay hidden).
+import type { RoleId, RoomId, TokenTrigger, PerkId } from "@skimjob/content";
+import type { EventTable, RoleTable } from "./overrides";
+import { roleDefIn } from "./overrides";
+import { leadersOf } from "./end";
+import type { PlayerId } from "./types/config";
+import type { GameEvent, Outcome } from "./types/events";
+import type { RevealEnding, RevealItem, RevealMove, RevealRound, RevealSeat, RevealSummary } from "./types/reveal";
+
+/** Hidden or deciding events the timeline shows as they are. */
+const SHOWN: ReadonlySet<GameEvent["type"]> = new Set<GameEvent["type"]>([
+  "snitchTargetAssigned",
+  "perkBought",
+  "perkUsed",
+  "rigPicked",
+  "cardForeseen",
+  "sightingForged",
+  "raidRumourHit",
+  "insideTip",
+  "callOutMade",
+  "callOutResolved",
+  "meetingClosed",
+  "shakedownResolved",
+  "shakedownCancelled",
+  "muscleNamed",
+  "blessingPaid",
+  "checkpointChecked",
+  "raidStopped",
+  "copsRaided",
+]);
+
+interface Draft {
+  card: RevealRound["card"];
+  items: RevealItem[];
+  resolved: RevealRound["resolved"];
+  stashes: Record<PlayerId, number>;
+}
+
+/**
+ * The reveal summary of a finished game from `log` (a reveal log, in order)
+ * and its `outcome`. `roles` and `events` are the game's tables
+ * (`rolesFor(config)`, `eventsFor(config)`). design §13
+ */
+export function revealSummary(log: readonly GameEvent[], outcome: Outcome, tables: { readonly roles: RoleTable; readonly events: EventTable }): RevealSummary {
+  const ranking = outcome.ranking;
+  const seatOrder: PlayerId[] = [];
+  const dealt = new Map<PlayerId, RoleId>();
+  const role = new Map<PlayerId, RoleId>();
+  const tokens = new Map<PlayerId, TokenTrigger[]>();
+  const bought = new Map<PlayerId, PerkId[]>();
+  const used = new Map<PlayerId, number>();
+  const stash = new Map<PlayerId, number>();
+  const add = (p: PlayerId, n: number) => stash.set(p, (stash.get(p) ?? 0) + n);
+  const push = <T>(m: Map<PlayerId, T[]>, p: PlayerId, v: T) => m.set(p, [...(m.get(p) ?? []), v]);
+
+  const drafts: Draft[] = [];
+  let current: Draft = { card: null, items: [], resolved: null, stashes: {} };
+  drafts[0] = current;
+  let blackout = false;
+  /** This round's Hackers by looped room. */
+  let loops = new Map<RoomId, PlayerId[]>();
+  const doubleCrossSeen = new Set<string>();
+  const loot = new Map<number, Map<PlayerId, Omit<RevealMove, "missed" | "alibi">>>();
+  const missed = new Set<string>();
+  const alibi = new Map<string, RoomId>();
+  const key = (p: PlayerId, round: number) => `${round}\u0000${p}`;
+
+  for (let i = 0; i < log.length; i++) {
+    const e = log[i] as GameEvent;
+    const items = current.items;
+    switch (e.type) {
+      case "roleDealt":
+        seatOrder.push(e.player);
+        dealt.set(e.player, e.role);
+        role.set(e.player, e.role);
+        stash.set(e.player, 0);
+        break;
+      case "roundStarted":
+        current.stashes = Object.fromEntries(stash);
+        current = { card: null, items: [], resolved: null, stashes: {} };
+        drafts[e.round] = current;
+        blackout = false;
+        loops = new Map();
+        break;
+      case "eventFlipped":
+        current.card = { id: e.card, room: e.room };
+        blackout = tables.events[e.card]?.effect.kind === "blackout";
+        break;
+      case "defaultMoveAssigned":
+        missed.add(key(e.player, e.round));
+        break;
+      case "alibiPosted":
+        alibi.set(key(e.player, e.round), e.room);
+        break;
+      case "lootSplit": {
+        const byPlayer = loot.get(e.round) ?? new Map();
+        byPlayer.set(e.player, { player: e.player, room: e.room, loot: e.loot, toHaul: e.toHaul, toStash: e.toStash });
+        loot.set(e.round, byPlayer);
+        add(e.player, e.toStash);
+        break;
+      }
+      case "roundResolved":
+        current.resolved = { haulDelta: e.haulDelta, haul: e.haul, heatDelta: e.heatDelta, heat: e.heat };
+        break;
+      case "abilityResolved": {
+        const a = e.ability;
+        if (a.kind === "embezzle") add(e.player, a.amount);
+        if (a.kind === "fixer") add(e.player, -a.lost);
+        if (a.kind === "loopCameras") loops.set(a.room, [...(loops.get(a.room) ?? []), e.player]);
+        items.push({ kind: "event", event: e });
+        break;
+      }
+      case "roomWatched":
+        if (e.offline) {
+          const powerCut = blackout;
+          items.push({
+            kind: "cameraOffline",
+            watcher: e.player,
+            room: e.room,
+            source: e.source,
+            cause: powerCut ? "powerCut" : "hackerLoop",
+            hackers: powerCut ? [] : (loops.get(e.room) ?? []),
+          });
+        }
+        break;
+      case "policeActivity": {
+        // extension.md "Police activity": the reveal-only `policeCause` right after says which it was.
+        const next = log[i + 1];
+        const cause = next?.type === "policeCause" ? next : null;
+        items.push({ kind: "police", heatAdded: e.heatAdded, heat: e.heat, cause: cause?.cause ?? "patrol", mole: cause?.mole ?? null });
+        break;
+      }
+      case "votesStolen":
+        for (const st of e.steals) items.push({ kind: "voteStolen", blackmailer: st.blackmailer, victim: st.victim, meetingId: e.meetingId, decided: st.decided });
+        break;
+      case "tokenEarned": {
+        push(tokens, e.player, e.trigger);
+        items.push({ kind: "token", player: e.player, trigger: e.trigger });
+        break;
+      }
+      case "perkBought":
+        push(bought, e.player, e.perk);
+        break;
+      case "perkUsed":
+        used.set(e.player, (used.get(e.player) ?? 0) + 1);
+        break;
+      case "roleClaimed":
+        items.push({ kind: "claim", player: e.player, claimed: e.role, real: role.get(e.player) ?? e.role });
+        break;
+      case "doubleCrossResolved": {
+        if (e.swap) role.set(e.player, e.swap.role);
+        const pair = [e.player, e.partner].sort() as [PlayerId, PlayerId];
+        const k = `${e.round}\u0000${pair.join("\u0000")}`;
+        if (!doubleCrossSeen.has(k)) {
+          doubleCrossSeen.add(k);
+          items.push({ kind: "doubleCross", players: [e.player, e.partner], swapped: e.swap !== null });
+        }
+        break;
+      }
+      case "raidRumourHit":
+        add(e.player, -e.lost);
+        break;
+      case "shakedownResolved":
+        add(e.target, e.compensation - e.taken);
+        break;
+      case "callOutResolved": {
+        const [from, to] = e.caught ? [e.target, e.caller] : [e.caller, e.target];
+        add(from, -e.amount);
+        add(to, e.amount);
+        break;
+      }
+      default:
+        break;
+    }
+    if (SHOWN.has(e.type)) current.items.push({ kind: "event", event: e });
+  }
+  current.stashes = Object.fromEntries(stash);
+
+  const rounds: RevealRound[] = [];
+  drafts.forEach((d, round) => {
+    if (!d) return;
+    const byPlayer = loot.get(round);
+    const moves: RevealMove[] = byPlayer
+      ? seatOrder.flatMap((p) => {
+          const m = byPlayer.get(p);
+          return m ? [{ ...m, missed: missed.has(key(p, round)), alibi: alibi.get(key(p, round)) ?? null }] : [];
+        })
+      : [];
+    if (round === 0 && d.items.length === 0) return;
+    rounds.push({ round, card: d.card, moves, resolved: d.resolved, items: d.items, stashes: d.stashes });
+  });
+
+  const top = leadersOf(ranking);
+  const reason = outcome.result === "failed" ? outcome.reason : null;
+  const ending: RevealEnding = {
+    result: outcome.result,
+    reason,
+    topGroup: top,
+    winners: outcome.winners,
+    why: outcome.result === "success" ? "success" : outcome.winners.length > 0 ? "failedTopWins" : "failedNobody",
+  };
+  const seats: RevealSeat[] = ranking.map((r, i) => ({
+    player: r.player,
+    place: i + 1,
+    dealtRole: dealt.get(r.player) ?? r.role,
+    role: r.role,
+    winsOn: roleDefIn(tables.roles, r.role)?.winsOn ?? [],
+    score: r.score,
+    stash: r.stash,
+    safe: r.safe,
+    timesShakenDown: r.timesShakenDown,
+    totalHandedIn: r.totalHandedIn,
+    topGroup: top.includes(r.player),
+    winner: outcome.winners.includes(r.player),
+    tokens: tokens.get(r.player) ?? [],
+    perksBought: bought.get(r.player) ?? [],
+    perksUsed: used.get(r.player) ?? 0,
+  }));
+  return { ending, seats, rounds };
+}

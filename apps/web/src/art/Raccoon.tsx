@@ -9,7 +9,7 @@ export function RaccoonNarrator({ size = 56, className }: { size?: number; class
     <svg className={["raccoon", className].filter(Boolean).join(" ")} width={size} height={size} viewBox="0 0 64 64" role="img" aria-label="The crew's raccoon lookout">
       <title>The crew's raccoon lookout</title>
       <ellipse cx="33" cy="60" rx="20" ry="3.4" fill="var(--art-shade)" />
-      <g className="raccoon__bob">
+      <g>
         {/* Ears */}
         <path d="M14 22 11 8l13 7z" fill="var(--art-slate-l)" {...L} />
         <path d="M50 22l3-14-13 7z" fill="var(--art-slate-l)" {...L} />
