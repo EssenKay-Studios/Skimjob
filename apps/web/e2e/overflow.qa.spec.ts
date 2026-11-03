@@ -63,7 +63,8 @@ test("real Quick game over with W×24, emoji×24 and combining-mark names: no ov
   test.setTimeout(400_000);
   const opts = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };
   const ctxs = await Promise.all([0, 1, 2].map(() => browser.newContext(opts)));
-  const [host, g1, g2] = await Promise.all(ctxs.map((c) => c.newPage()));
+  const [host, g1, g2]: Page[] = await Promise.all(ctxs.map((c) => c.newPage()));
+  if (!host || !g1 || !g2) throw new Error("three pages");
   const errors: string[] = [];
   for (const p of [host, g1, g2]) p.on("pageerror", (e) => errors.push(e.message));
 
