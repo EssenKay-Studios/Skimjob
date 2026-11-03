@@ -19,7 +19,11 @@ Answers, all final (recorded in extension.md "Owner rulings (3 Nov)"):
 9. M2-15 offline demo is a GitHub Pages site (replaces the claude.ai artifact).
 10. The deploy workflow is manual-only until a host is chosen (done in the ops PR).
 
-**Police patrol, option A (confirmed):** the patrol leaves the event deck (9 cards). A hidden background chance, about 1 round in 4 (tunable), of "police activity +4" at a random moment, between rounds included, announced exactly like the Mole's tip-off. Timing is in extension.md Build notes, "Police activity".
+**Police patrol, option A (confirmed):** the patrol leaves the event deck (9 cards). A hidden background chance, about 1 round in 4 (tunable), of "police activity +4" at a random moment, between rounds included, announced exactly like the Mole's tip-off. Timing is in extension.md Build notes, "Police activity": hidden moments in game time (frozen by pauses, meetings and quiet hours). The Mole's tip-off is queued to the next moment. Moments never reach clients as timers.
+
+**Provisional (PM, 3 Nov fix round):**
+- **Background police activity runs only when a Mole could be in the game** (dealt, or possible under the role-list setting), whatever the events setting. Otherwise it is off (Starter, Quick and the Duel default). It exists only as the Mole's cover; its ~+1 Heat per round is a balance-pass tunable.
+- **A wrong Duel call-out pays the rival [8]**, the clean payout number (was 5 × act), tuned with it.
 
 **Gap-fills (PM readings from review, the owner may change them):** when a "between meetings" stretch ends and how Recharge works; session default 1 h; Quick forces Starter with no shop; Duel's shop and events-off dealing; the Fixer stops any raid, including mid-round; Forger 7+ (kept from roles v2).
 
@@ -40,7 +44,7 @@ Owner-approved **direction**, not built. The spec is draft PR #45 (`docs/roles-v
 - **Factions** become a descriptive temperament tag: Team player / Wildcard / Lone wolf.
 - **Dealing (11:00):** two deal modes only. **Balanced** is a fixed, researched mix per player count, decided by the sim. **Truly random** allows any mix, even more lone wolves than team players. The saboteur Off / Maybe / On setting goes, and there is no Few / Some / Many knob.
 - **Balance goal (confirmed):** every role has about the same chance to win (parity spread ≤ 0.10), and heists succeed 55–70%. The 30–40% saboteur-win target is dropped. The "raise the target when saboteurs are off" question has to be re-asked in v3 terms.
-- **Still open:** Exact or Possible as the default role list (see the rulebook doc "Skimjob — How to play", https://claude.ai/artifact/3dEyv4wdmiJ3a9DhrtsBtN).
+- **Still open:** Exact or Possible as the default role list (see the rulebook doc "Skimjob — How to play", https://claude.ai/artifact/3dEyv4wdmiJ3a9DhrtsBtN). *(Answered 3 Nov: Exact; see "Owner answers, 3 Nov (morning)".)*
 - Art direction **approved for now** (09:24): side view, stacked phone layout, gumdrop crooks (M2-9 provisional calls confirmed).
 
 ### 2026-11-02 — Repo public; CI minutes
