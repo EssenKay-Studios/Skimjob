@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # docs_only=true only for a pull_request whose base...head diff is all docs.
+  # docs_only=true only for a pull_request whose base...head diff is all *.md files.
   # Pushes to main, manual runs and any diff error give false: everything runs.
   changes:
     name: Changed files
@@ -23,7 +23,7 @@ jobs:
     outputs:
       docs_only: ${{ steps.diff.outputs.docs_only }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
       - id: diff
