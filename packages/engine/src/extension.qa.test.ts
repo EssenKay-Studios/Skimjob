@@ -611,3 +611,125 @@ describe("shared numbers: Detective line, Haul-paid compensation, Duel wrong cal
     }
   });
 });
+
+describe("QA re-check (PR #50 fixes): locked in", () => {
+  it("Mole: at most 3 tip-offs (so 3 tokens) a game, Recharge included; a 4th is refused privately", () => {
+    let s = game(MOLE_CFG, { roles: ["mole"], patrol: false, shop: ["peek", "recharge", "extraVote"], tokens: { p0: 3 } });
+    s = run(s, tipOff("p0"), MOMENT, buy("p0", "recharge"), use("p0", { kind: "recharge" }), tipOff("p0"), MOMENT);
+    expect(tokensOf(s, "p0", "tipOffLanded")).toBe(2);
+    s = closeAct(toActMeeting(s));
+    s = run(s, tipOff("p0"), MOMENT);
+    expect(tokensOf(s, "p0", "tipOffLanded")).toBe(3);
+    s = closeAct(toActMeeting(s));
+    const others = views(s, ["p1", "p2", "p3", "p4"]);
+    expect(reason(s, tipOff("p0"))).toMatch(/3 times/);
+    expect(views(s, ["p1", "p2", "p3", "p4"])).toEqual(others);
+    expect(ofType(s.log, "tipOffLanded")).toHaveLength(3);
+  });
+
+  it("Mole: tip-offs still queued count toward the 3 (Recharge each round, no police moment in between)", () => {
+    let s = game(MOLE_CFG, { roles: ["mole"], patrol: false, shop: ["peek", "recharge", "extraVote"], tokens: { p0: 5 } });
+    s = run(s, tipOff("p0"), ROUND, buy("p0", "recharge"), use("p0", { kind: "recharge" }), tipOff("p0"), ROUND, buy("p0", "recharge"), use("p0", { kind: "recharge" }), tipOff("p0"), ROUND);
+    expect(ofType(s.log, "tipOffLanded")).toHaveLength(0);
+    s = closeAct(toActMeeting(s));
+    expect(handleCommand(s, tipOff("p0")).ok).toBe(false);
+    for (let i = 0; i < 6 && s.phase.kind === "planning"; i++) s = run(s, MOMENT);
+    expect(ofType(s.log, "tipOffLanded")).toHaveLength(3);
+    expect(tokensOf(s, "p0", "tipOffLanded")).toBe(3);
+  });
+
+  const ALL = Object.keys(ROLES) as GameConfig["rolePool"][number][];
+  const cfgFor = (n: number, seed: string, extra: Partial<GameConfig>) => config(n, { seed, rolePool: ALL, ...(n === 2 && { duel: true }), ...extra });
+
+  it("Balanced at 2–3 players (Duel included): no police and the Possible list names only roles that can be dealt", () => {
+    for (const n of [2, 3]) {
+      for (const pool of [ALL, []]) {
+        for (const roleList of ["possible", "hidden"] as const) {
+          const dealt = new Set<string>();
+          let listed: readonly string[] | null = null;
+          for (let i = 0; i < 150; i++) {
+            const g = createGame(cfgFor(n, `bal-${n}-${i}`, { rolePool: pool, roleList }));
+            expect(g.police, `${n}p ${roleList}`).toBeNull();
+            for (const p of Object.values(g.players)) dealt.add(p.role);
+            const shown = viewFor(g, "p0").roleList;
+            if (roleList === "possible") {
+              expect(shown?.roles).toBeDefined();
+              if (listed) expect(shown?.roles).toEqual(listed);
+              listed = shown!.roles;
+            }
+          }
+          expect(dealt.has("mole")).toBe(false);
+          if (listed) {
+            expect(listed).not.toContain("mole");
+            // Everything dealt is listed; nothing listed is undealable (no Lone wolf or Wildcard at 2–3p Balanced).
+            for (const r of dealt) expect(listed, r).toContain(r);
+            for (const r of listed) expect(ROLES[r as keyof typeof ROLES]?.tag, r).toBe("teamPlayer");
+          }
+        }
+      }
+    }
+  });
+
+  it("the fix doesn't over-reach: Truly random at 3p and Balanced at 4p+ can deal a Mole, list it, and run police", () => {
+    for (const [n, deal] of [[3, "random"], [4, "balanced"], [12, "balanced"]] as const) {
+      let moles = 0;
+      for (let i = 0; i < 150; i++) {
+        const g = createGame(cfgFor(n, `over-${n}-${i}`, { deal, roleList: "possible" }));
+        expect(g.police, `${n}p ${deal}`).not.toBeNull();
+        expect(viewFor(g, "p0").roleList?.roles).toContain("mole");
+        if (Object.values(g.players).some((p) => p.role === "mole")) moles++;
+      }
+      expect(moles, `${n}p ${deal}`).toBeGreaterThan(0);
+    }
+  });
+
+  it("no refusal a player can see says \"act\" (Build notes item 2: once between meetings)", () => {
+    const reasons: string[] = [];
+    const twice = (roles: string[], first: object, again: object = first, n = 7) => {
+      const s = run(game(config(n), { roles }), first);
+      const r = handleCommand(s, again);
+      if (r.ok) throw new Error(`second use accepted: ${JSON.stringify(again)}`);
+      reasons.push(r.reason);
+    };
+    twice(["detective"], use("p0", { kind: "checkStash", target: "p1" }));
+    twice(["auditor"], ROUND, undefined as never, 7);
+    reasons.pop();
+    {
+      const s = run(game(config(7), { roles: ["auditor"] }), ROUND, use("p0", { kind: "audit", room: "vault" }));
+      const r = handleCommand(s, use("p0", { kind: "audit", room: "office" }));
+      if (!r.ok) reasons.push(r.reason);
+    }
+    for (const [role, ability] of [
+      ["hacker", { kind: "loopCameras", room: "vault" }],
+      ["blackmailer", { kind: "blackmail", target: "p1", role: "rookie" }],
+      ["forger", { kind: "forge", target: "p1", room: "vault" }],
+      ["embezzler", { kind: "embezzle" }],
+    ] as const) {
+      const s = run(game(config(7), { roles: [role] }), mv("p0", "lobby", 0, { ability }), ROUND);
+      const r = handleCommand(s, mv("p0", "lobby", 0, { ability }));
+      if (!r.ok) reasons.push(r.reason);
+    }
+    {
+      const s = run(game(config(5), { roles: ["fence"] }), mv("p0", "vault", 6, { ability: { kind: "fenceSafe", amount: 5 } }), ROUND);
+      const r = handleCommand(s, mv("p0", "vault", 6, { ability: { kind: "fenceSafe", amount: 1 } }));
+      if (!r.ok) reasons.push(r.reason);
+    }
+    {
+      const s = run(game(config(5), { roles: ["priest"] }), use("p0", { kind: "bless", target: "p1" }));
+      const r = handleCommand(s, use("p0", { kind: "bless", target: "p2" }));
+      if (!r.ok) reasons.push(r.reason);
+    }
+    {
+      const s = run(game(config(2, { duel: true })), { type: "callOut", player: "p0" });
+      const r = handleCommand(s, { type: "callOut", player: "p0" });
+      if (!r.ok) reasons.push(r.reason);
+    }
+    {
+      const s = run(game(config(5)), { type: "claimRole", player: "p0", role: "rookie" });
+      const r = handleCommand(s, { type: "claimRole", player: "p0", role: "lookout" });
+      if (!r.ok) reasons.push(r.reason);
+    }
+    expect(reasons.length).toBeGreaterThanOrEqual(10);
+    for (const r of reasons) expect(r).not.toMatch(/\bacts?\b/i);
+  });
+});
