@@ -47,13 +47,15 @@ Skimjob is a social deduction game for groups of friends, played in a browser or
 
 ## 3. Winning and losing
 
-- **Two sides** *(role deck v2 §0, `docs/roles-v2.md`)*: every role belongs to a faction. **Crew** roles help the job; **saboteurs** (the Mole) wreck it; **accomplices** help the saboteurs. Saboteurs and accomplices together are the **dark side**. The winning side's **biggest stash wins** (after role scoring, §8, and the tie-breaks below).
-- **The heist succeeds** if, after the final meeting, the Haul is at or above the final target and Heat is below 100. The biggest **Crew** stash wins. Saboteurs and accomplices can't win a success, however big their stash.
-- **The heist fails** if Heat reaches 100 at any point, or the final target is missed. The crew loses, and the biggest stash among the **saboteurs and accomplices** wins. A failure with no dark side dealt is won by nobody (accomplices are never dealt without a saboteur). Loot taken by sabotage is just stash, so "steal, then sink the job" is the saboteurs' plan.
-- **Ties** go to whoever was shaken down fewer times, then to whoever handed in more total loot. The engine tracks that figure but only reveals it at the end. *(Provisional: players still tied on all three share the win.)*
-- **Scores:** a Rookie's ×1.05 can give fractions; scores are kept to one decimal place. *(Provisional.)*
-- **A failed heist still shows the whole stash ranking** ("best of the losers"), clearly labelled as a loss for the crew; only the dark side's best stash wins. *(Provisional, §19.1.)*
-- Roles are read as they are at the end of the game, so a Double-cross (§10) can change a player's side.
+*(extension.md "Winning and losing", Build notes "Win rule"; R6a.)*
+
+- **One crew, at most one winner** (players still level after the tie-breaks share it). There are no teams or factions.
+- **Score** = stash, plus the Fence safe for the Fence, plus the Inside Man's bonus (+1 per 5 loot the Haul ends above the final target). Whole numbers only.
+- Every player is ranked by score, then by the **tie-breaks**: fewer shakedowns, then more loot handed in (tracked, revealed only at the end). The **top group** is everyone still level at the top.
+- **The heist succeeds** if, after the final meeting, the Haul is at or above the final target and Heat is below 100. The top group wins, whatever their roles.
+- **The heist fails** if Heat reaches 100 at any point (a **raid**) or the final target is missed. Nobody wins, except top-group players whose role wins that ending (`RoleDef.winsOn`): Getaway Driver ★ a raid; Embezzler ★ a missed target; Mole ★ and Fence ★ either. A ★ role outside the top group doesn't win.
+- **The full ranking is always shown**; on a failure it is labelled as a loss unless someone qualified.
+- Roles are read as they are at the end, so a Double-cross (§10) can hand over a failure win.
 
 ---
 
@@ -88,6 +90,8 @@ The engine doesn't know about real time. A scheduler on the server spreads the h
 - Rounds are **paused** while a vote window is open, so nothing resolves in the middle of a vote.
 - **Rounds end early once the whole crew has locked in** (owner decision, 2 Nov): the round resolves a short grace period after the last lock-in, or at its deadline if that comes first, so the last player can still change their move. Changing a move during the grace doesn't restart it. *Grace (provisional, `timing.ts`, scaled by TIME_SCALE):* Quick 5 s, 1 hour 10 s, 3 hours 30 s, 1 day 2 min, 3 days and 1 week 5 min. Alibi windows, meeting windows, emergency notices and the Muscle's window always run their full length.
 - The host can set "quiet hours", such as midnight to 7am, during which rounds don't resolve and no notifications are sent.
+- **Between meetings** (extension.md, owner ruling 2): players see "once between meetings", not "once per act". A stretch runs from the close of one regular meeting (after rounds 3, 6, 9) to the close of the next; uses recharge when that meeting closes, after its vote, shakedown and target check. Emergency meetings never recharge anything. In Duel, a stretch closes when round 3's or 6's call-outs and target check settle. The engine keeps acts internally.
+- **Police moments** (§10) run on game time: only while round deadlines run; they freeze during a meeting (including one waiting to open), like rounds. They never get a client-visible timer.
 
 ---
 
@@ -171,11 +175,14 @@ Heat runs from 0 to 100. If it reaches 100, the cops raid and the heist fails.
 | Manager's office | +10 × (visitors ÷ crew size) |
 | Rooftop | −20 × (Rooftop visitors ÷ crew size) |
 | Missed checkpoint | +15 |
-| Events / Mole tip-off | Varies (event Heat × min(1, crew ÷ 5) for crews of 2–4, §10) |
+| Events | Varies (event Heat × min(1, crew ÷ 5) for crews of 2–4, §10) |
+| Police activity (the Mole's tip-off or the hidden background patrol, §10) | +4 × min(1, crew ÷ 5) |
 
 Scaling by fractions of the crew means a crew of 12 and a crew of 3 feel the same pressure when the same *share* of players goes to the Vault.
 
 Each round's room-and-baseline Heat change is rounded to a whole number (halves round up), and Heat never drops below 0, so time on the Rooftop can't be banked ahead. *(provisional)*
+
+**Heat breakdown** (extension.md "What the app works out for you"): each round's public summary (`roundResolved.heatParts`) carries its parts: the baseline (which takes up any rounding), each room that changed Heat, and the event card. Police activity and a missed target are their own public events under the round, so the view's per-round breakdown adds base, rooms, police activity, missed target and events. *(R6a provisional: a missed target sits under the stretch's last round.)*
 
 *Sanity check (placeholder numbers):* the baseline alone adds 36 over 9 rounds. With a quarter of the crew in the Vault every round, total Heat is about 81, which is risky but survivable. With half the crew in the Vault, Heat goes bust unless people spend turns on the Rooftop.
 
@@ -183,95 +190,48 @@ Each round's room-and-baseline Heat change is rounded to a whole number (halves 
 
 ## 8. Roles
 
-Every player is dealt **one secret role** at the start of the game. Roles are designed so that **revealing your role is risky**: each one has a weakness once people know about it. Players can claim any role, truthfully or as a bluff. A formal claim (the **Claim** button, §12.1) goes on the public ledger: once per player per act, any role the game knows (even one that can't be in this game, so a refusal never hints at the hidden role pool), never in Duel mode. Like an alibi it changes no rule; it is evidence the crew weighs.
+Every player is dealt **one secret role** at the start of the game. Roles are designed so that **revealing your role is risky**: each one has a weakness once people know about it. Players can claim any role, truthfully or as a bluff. A formal claim (the **Claim** button, §12.1) goes on the public ledger: once per player between meetings, any role the game knows (even one that can't be in this game, so a refusal never hints at the hidden role pool), never in Duel mode. Like an alibi it changes no rule; it is evidence the crew weighs.
 
-| Role | Power | Weakness if revealed |
+**The roles are the 20 of extension.md "Roles"**, with today's powers. R6a changed, for every role: each reward is now **one private token** (§8.3), "once per act" reads **once between meetings** (§4.1), the scoring decimals are gone (§3), and a **temperament tag** (Team player, Wildcard, Lone wolf) replaces the faction. The tag changes no rule. ★ marks the four roles that can also win a failed heist (`RoleDef.winsOn`, §3).
+
+| Tag | Roles | Token trigger (`RoleDef.rewards`) |
 |---|---|---|
-| **Rookie** | No power. Final stash counts ×1.05 (R5; was ×1.2). *Reward:* each Act 1/2 checkpoint made → a Tail. | Seen as an easy target to pin blame on. |
-| **Lookout** | Each round, also sees who was in one extra room. *Reward:* someone it saw is shaken down dirty → a Peek. | People lie around them more carefully, or try to frame them. |
-| **Auditor** | Once per act, learns the latest resolved round's shortfall for one room (what its visitors pocketed). *Reward:* a visitor of that room, that round, is shaken down dirty → a Ballot. | Liars shake it down to discredit it. |
-| **Detective** *(4+ players, not in Duel)* | Once per act, learns whether one player's stash is at or above the clean threshold right now. *Reward:* a player it checked is shaken down dirty → a Shield. | Cheaters shake it down first (the Shield answers this). |
-| **Inside Man** *(5+ players)* | Can't pocket loot. Scores 0.15 points (R5; was 0.3) for every loot the Haul ends above the final target. *Reward:* each Act 1/2 checkpoint made → a Peek. | Others pocket more, knowing the Inside Man will cover the Haul. |
-| **Smooth Talker** *(5+ players, not in Duel)* | Their vote counts double (majority only). *Reward:* on the winning side of a dirty shakedown → one more emergency meeting (an Emergency perk). | Others coordinate their votes against them. |
-| **Muscle** *(5+ players, not in Duel)* | Once per game, can cancel a shakedown after the vote passes. *Reward:* the target was clean → a Recharge (no compensation is paid); the target was dirty → the ledger names the Muscle. | Everyone knows a vote against their friends may get blocked. |
-| **Priest** *(5+ players, not in Duel)* | Once per act, blesses another player for that act: blessed and shaken down clean → the bank pays the compensation, not the Haul. *Reward:* a Ballot when that happens. Blessed but caught dirty → no blessing next act. | Its flock becomes a free target. |
-| **Bagman** | Each round it hands in everything (from a room that pays), the bank adds +1 to the Haul, hidden in the round's Haul change. *Reward:* every round of an act all-in → an Alibi. | The +1 shows in the Haul maths, so others hide skims behind it. |
-| **Cleaner** | Its Rooftop visit counts as 2 visitors for Heat. *Reward:* every 2nd Rooftop round → a +Vote. | A Rooftop alibi is its easy cover; nobody believes it. |
-| **Fixer** | Once per game, automatically: a raid stops with Heat at 95, and the Fixer loses ¼ of its stash (rounded, halves up). *Reward:* a Shield. | The crew gets reckless with Heat. |
-| **Mastermind** *(events on only)* | Privately sees each next event card as a round starts (round 2's at setup). *Reward:* each Act 1/2 checkpoint made → a Rig. | Blamed for every bad card. |
-| **Snitch** *(4+ players, not in Duel)* | Secretly assigned a target. Each time that target is shaken down while holding more than the clean threshold, its ballot weighs +1 for the rest of the game. | Their target has a reason to frame them. |
-| **Getaway Driver** *(accomplice)* | Its Rooftop visit **cools nothing**: it counts as `reverse` × −1 visitors, and R5 set `reverse` to 0 (it used to *add* the Heat a visitor would remove), so the Heat a claimed Rooftop visit should have removed is missing (hidden in the round's Heat). *Reward:* Heat at 75 or more → it learns the saboteurs and they learn it. Knows nobody at the start. | Rooftop claims that don't cool Heat give it away. |
-| **Fence** *(accomplice)* | Can move up to 5 loot per act into a hidden safe that shakedowns can't touch. *Reward:* safe at 10 or more → learns one saboteur. Knows nobody at the start. | Assumed to be hoarding, so becomes the first shakedown target. |
-| **Hacker** *(accomplice)* | Once per act, can **loop the cameras** so one room shows as empty on Security that round. Knows one saboteur from the start. *Reward:* its loop hid a saboteur from a crew player watching on Security → a Peek. | Every empty camera result looks like their doing. |
-| **Blackmailer** *(accomplice, 7+ players, not in Duel)* | Once per act, secretly guesses one player's role. If right, it **steals that player's vote** at the next meeting; the victim is told only "your vote is compromised". *Reward:* guessed a saboteur → they become mutual allies. Knows nobody at the start. | Players hide their roles; victims out it. |
-| **Forger** *(accomplice, 7+ players, not in Duel)* | Once per act, plants a **fake sighting**: player X shows in room R on that round's watch feeds of R. *Reward:* a player it forged is shaken down clean → a Shield. Knows nobody, but the saboteurs are told who the Forger is at the deal. | Proof of the dark side: hunted at once. |
-| **Embezzler** *(saboteur, optional)* | Once per act, moves up to 1 (R5; was 4) of the round's handed-in loot from the Haul to its stash after the splits, hidden in the round's Haul change. *Reward:* the take itself; its first take → learns one accomplice. | Its stash is always dirty, and a shakedown returns the take. |
-| **Mole** *(saboteur, optional)* | Wins a failed heist with the dark side's best stash; never a successful one. Once per act, can **tip off** the cops (+4 Heat, hidden; R5, was +6). *Reward:* each tip-off → learns one accomplice it didn't know. | Revealed means hunted, and revealing it is rarely worth it. |
+| Team player | Rookie, Inside Man, Mastermind | The Haul target met at meeting 1 or 2 (the final check ends the game) |
+| | Lookout / Auditor / Detective | Someone it saw / a visitor of the audited room that round / a player it checked is caught (shaken down dirty), earlier this game |
+| | Snitch | Its secret target is caught (replaces the old +1 ballot weight) |
+| | Smooth Talker | Its ballot was for the player then caught |
+| | Muscle | Its cancel saved a clean player: a token **and** the power back; a dirty one names it in the ledger |
+| | Priest | A blessing pays out (a blessing lasts until the next regular meeting closes) |
+| | Bagman | It hands in everything 3 rounds running (meetings don't break the run; the count restarts after each token) |
+| | Cleaner | Every 2nd Rooftop round |
+| | Fixer | Its save stops a raid (any raid, police activity included) |
+| Wildcard | Getaway Driver ★ | Heat first reaches 75 (once per game) |
+| | Fence ★ | The safe reaches 10 |
+| | Hacker | Its loop hid a visitor who pocketed from a Security watcher of that room |
+| | Blackmailer | A vote it stole decides a shakedown (it wouldn't have passed without it) |
+| | Forger | Someone it framed is shaken down clean |
+| Lone wolf | Mole ★ | Each tip-off, when it lands (§10) |
+| | Embezzler ★ | Its first (non-zero) take |
 
-*Factions (role deck v2, R1, R3a, R3b):* the Mole and the Embezzler are the **saboteurs**. The **accomplices** are the Getaway Driver, Fence and Hacker (R3a) and the Blackmailer and Forger (R3b). Everyone else is **crew**. `RoleDef.faction` replaces the old `winsOnFailure` / `winsOnSuccess` fields. The Driver was split: its crew half is the Fixer (R2b), its dark half the Getaway Driver (R3a), and the old Driver's failure win is gone.
-
-*Accomplices and what the dark side learns (R3a, provisional details):*
-- **Allies:** everything the dark side learns about itself is a private `alliesLearned { allies, via }`, added to `roleState.allies` (bots never vote to shake down a known ally). `via`: `deal` (the Hacker's saboteur; R3b: each saboteur is told the Forger), `fence`, `getaway`, `tipOff`, `blackmail`, `embezzle` (R3b). Picks are drawn at random from the ones the player doesn't know yet; only the player named is told, except the Getaway Driver's reveal, which goes both ways. In a Double-cross what a player learned stays with the player (like perks); saboteur mates are recomputed.
-- **Getaway Driver:** passive: on the Rooftop it counts as −1 visitors for Heat (× `reverse`, 0 since R5, so it counts as no visitor). The reveal is checked after every round and after a missed checkpoint's penalty, once per Driver player, with the saboteurs as they are then; nothing if no saboteur is dealt. After a Double-cross nobody is re-told: a new Mole doesn't learn a Driver revealed earlier, and a player who takes the Driver card reveals again when Heat is high.
-- **Fence:** the reveal is checked as the round resolves (after the safe move), once per game. A **Recharge never refills the safe allowance** (it is refused for the Fence).
-- **Hacker:** the reward needs a **crew** Security watcher (not a Lookout or Tail, which a loop doesn't fool) watching the looped room while a saboteur was in it; fooling the dark side (a saboteur, or the Hacker watching its own loop) earns nothing. One Peek per loop, however many watchers.
-
-*Blackmailer, Forger and Embezzler (R3b, provisional details):*
-- **Blackmailer:** the guess is part of its move and resolves with the round. A right guess sends the victim a private `voteCompromised` (no name, no role). At the **next meeting that opens** (regular or emergency) the victim's ballot weighs 0 and the Blackmailer's ballot weighs exactly +1 more (`STOLEN_VOTE_WEIGHT`), whatever the victim's own weight (Smooth Talker, +Vote, Snitch reward: owner, 2 Nov); nothing is added if the Blackmailer doesn't vote; the public tally still counts one per ballot, so only a result the tally can't explain shows it, as with the Smooth Talker. Quorum still counts the victim's ballot. A right guess on a saboteur also sends both a private `alliesLearned` (`via: blackmail`), unless they already knew. A wrong guess tells nobody anything. Nothing is taken from any stash (the v1 steal is gone).
-- **Forger:** `{ forge, target, room }` in its move, any player (itself included) and any room in play. That round, every **watch feed** of the room (Security, Lookout and Tail `roomWatched`) lists the target as if it were there, in seat order like a real sighting; room-mates' own sightings don't (they were there), a feed of the target itself doesn't, a player really in the room isn't listed twice, a Hacker loop still shows Security empty, and a Power cut shows nothing. To a watcher a forged sighting is a plain `roomWatched`; only the reveal-only `sightingForged { forger, target, room, shownTo }` tells it apart (end-of-game reveal). The Shield comes when a player it forged earlier in the game (not itself) is shaken down clean.
-- **Embezzler:** the take comes right after the splits (and the Bagman's bonus), at most **this round's inflow** (what was handed in, plus any Bagman bonus), so the round's public Haul change is never negative and never gives a take away (PR #36 review); it is folded into that change; only the Embezzler is told (`abilityResolved embezzle`). While it holds a take (anything taken since its last shakedown) its shakedown is **never clean**, whatever the stash (no compensation; the Detective's check and the Muscle's clean test agree), and the shakedown takes the whole stash, take included, back into the Haul. Its first take of the game names one accomplice it doesn't know, if any.
-
-*Fence safe timing (provisional):* the safe move is part of the Fence's move and happens after that round's split, so it can include loot pocketed that round; it can't move more than the stash holds.
-
-*Info and vote roles (provisional, task 12):*
-- **Hacker:** the loop is part of the Hacker's move and names any room in play. Only **Security** shows it as empty; the Lookout's extra room and room-mates still see who was there.
-- **Smooth talker:** the double vote counts toward the majority (§11.2), not toward quorum, which counts voters. The public tally counts one per ballot, so it never points at the Smooth talker; only a result the plain count can't explain shows that one was on the winning side. A sealed vote counts double too.
-- **Muscle:** when a vote passes a shakedown, a short **shakedown window** opens before it is applied (§11.3). The Muscle can cancel it then, including a shakedown of themselves. The cancel stays private until the window ends; the ledger then says the shakedown was cancelled, not who cancelled it (R2b: unless the target wasn't clean, when it names the Muscle). The window opens after every passed shakedown whenever the Muscle is in the game's role pool, dealt or not, so it never shows that a Muscle is in the crew.
-- **Blackmailer:** see R3b above (role deck v2 replaced the v1 steal of 3 loot).
-- **Snitch:** the target is drawn at random from the other players at setup. "Holding more than the clean threshold" means the shakedown was **not clean** (stash plus any Fence safe at least 3 × the act number). Each time, its ballot weighs +1 more for the rest of the game (role deck v2; was +10 loot), counting toward the majority like the Smooth talker's, not the tally or quorum; a cancelled shakedown gives nothing.
-
-*Crew roles of role deck v2 (R2a, provisional details):*
-- **"Dirty"** means a shakedown that wasn't clean. Rewards come as private `perkGranted` events: after the checkpoint (Rookie, Inside Man; the final check grants nothing, the game is over) or right after the dirty shakedown (Lookout, Auditor, Detective). "Saw", "audited" and "checked" count anything earlier in the game by that player, and nobody is rewarded for their own shakedown. Each reward's count (1) is overridable (`rewardCount`).
-- **Auditor:** used with `useAbility` at any time after round 1 resolves; it audits the latest resolved round (so it can follow up an alibi). A Power cut doesn't stop it (it reads the books, not the cameras).
-- **Detective:** used with `useAbility` at any time; the threshold is the current act's (3 × act), and the Fence safe counts, as in the clean check.
-
-*Crew roles of role deck v2 (R2b, provisional details):*
-- **Smooth Talker:** "the winning side" means its last ballot in that meeting was for the target. The extra meeting is an **Emergency** perk (a ninth perk kind, spent by itself): with your own emergency used, calling one spends it; the meeting's id is `emergency2-<player>`, `emergency3-<player>`….
-- **Muscle:** whether the target was clean is the clean check at the window's end (stash plus Fence safe below 3 × act). Dirty → public `muscleNamed` after `shakedownCancelled`. Saving itself never earns the Recharge.
-- **Priest:** `useAbility { bless, target }`, any time, on another player whose shakedown isn't already pending. The blessing covers shakedowns in that act's meetings (regular or emergency). A clean one pays the usual compensation, then public `blessingPaid` puts it back into the Haul (the bank paid); it doesn't say who blessed. "No blessing next act" when any player it blessed in the act before was shaken down dirty later that act.
-- **Bagman:** the +1 needs a room with loot (the Rooftop doesn't count) and comes with a private note to the Bagman; the Alibi is granted as the act's last round resolves, so it can stamp that round's alibi.
-- **Cleaner:** counts only in the Rooftop's Heat pressure (the room is content); the +Vote comes as its 2nd, 4th… Rooftop round resolves.
-- **Fixer:** stops the raid of a round's Heat or of a missed checkpoint's +15. Public `raidStopped` (no name; Heat set to 95), private note of the loss; the loss leaves the game. If several are dealt (unique roles off), the first in seat order with its save left acts.
-- **Mastermind:** the foreseen card is drawn early from the game's RNG (only when a Mastermind is dealt) and flips unless a Rig picks another; a Rig of a foreseen round offers the foreseen card first. Nothing is foreseen past round 9.
-
-*Win-condition roles (provisional, task 13; role deck v2 R1):*
-- **Mole:** a saboteur: wins a failed heist (Heat or target) if its score is the best of the dark side, never a successful one. The tip-off is part of the Mole's move, at most once per act: +4 Heat (R5; +6 from balance pass 2, +10 before) is added to that round's Heat (after rounding, before the cap), so it only shows as part of the round's public Heat change. Only the Mole is told it happened. Saboteurs know each other: when two or more are dealt, each is told privately at the start who the others are.
+*What changed from role deck v2 (R6a; the sections below were the v2 detail):*
+- **No automatic reveals.** Nobody is told anyone else's role or side at the deal or later (no `alliesLearned`, no `roleState.allies`). Roles are learned only by choice: Peek, Inside tip, Detective, the Blackmailer's guess, claims and evidence cards.
+- **Rookie** has no multiplier; the **Inside Man** scores +1 per 5 loot the Haul ends above the final target.
+- **Mole:** once between meetings, any time (a `useAbility`, not part of the move): the tip-off is queued and **lands at the next hidden police moment** as public "police activity +4", the same as a background patrol (§10). Only the Mole is told it was its own (`tipOffLanded`). A tip-off still queued at the end is lost.
+- **Hacker:** a looped room's Security feed reads "camera offline" (`roomWatched.offline`), exactly as a Power cut reads for every feed.
+- **Fence:** a shakedown shows the safe but never takes it; the clean check counts it (§11.3).
+- **Detective:** "dirty" means at or above the clean line (6), the same number as the shakedown's.
+- Minimum crew sizes, Duel exclusions, the Embezzler's take, the Forger's feeds, the Priest's blessing, the Fixer's save (Heat set to 95; it also stops a raid from police activity), the Cleaner's double Rooftop visit and the Getaway Driver's Rooftop that cools nothing are unchanged from the v2 rules (roles-v2.md, the R2–R5 notes in git history).
 
 ### 8.1 Dealing roles
 
-*Role deck v2 §3 (`docs/roles-v2.md`).*
+*(extension.md "Roles" Decks, "Host settings", Build notes "Tags, decks and dealing"; R6a.)*
 
-- **First the dark side is rolled** (saboteurs and accomplices) from the weights below, then each faction's roles are drawn at random from its own eligible pool, at most one of each; the crew fills the remaining seats (Rookies when the crew pool runs out).
-- **Hard limits** at any crew size: at most n ÷ 3 dark seats, rounded to the nearest (⌊(n + 1) ÷ 3⌋: 1 at 4, 2 at 5–7, 3 at 8–10, 4 at 11–12; R5, was ⌊n ÷ 3⌋) (accomplices are dropped first, then saboteurs); no accomplices without a saboteur; at most saboteurs + 1 accomplices.
-- **Host saboteur setting** (the old Mole setting, same field): *off* deals crew only; *on* uses the weights; *maybe* is like *on* but with a 50% chance of no dark side at 4–8 players (at 9–12 it is the same as *on*).
-
-| Players | Saboteurs / Accomplices (weight) | Fair success rate |
-|---|---|---|
-| 2–3 | 0 / 0 (crew only; 2p is Duel or bots) | n/a |
-| 4 | 1 / 0 | 75% |
-| 5–6 | 1 / 0 (50), 1 / 1 (50) | 67–83% |
-| 7–8 | 1 / 1 (60), 2 / 0 (20), 1 / 2 (20) | 71–75% |
-| 9–10 | 2 / 1 (60), 1 / 2 (20), 2 / 2 (20) | 60–70% |
-| 11–12 | 2 / 2 (60), 2 / 1 (20), 3 / 1 (20) | 67–75% |
-
-  The cap trims the table only at **7**, where 1 / 2 becomes 1 / 1, and at **9–10**, where 2 / 2 becomes 2 / 1. *(R5: with ⌊n ÷ 3⌋ a 5-player game never dealt an accomplice, and 8 and 11 were trimmed too; see balance-3.md.)* The fair success rate s = crew seats ÷ n makes a crew seat's and a dark seat's chances equal.
-- **Pools cap the roll (R1, provisional):** a faction can't deal more distinct roles than its pool holds. There are two saboteur roles (Mole, Embezzler since R3b), so the table's two-saboteur mixes deal both and a 3 / 1 roll at 11–12 deals two; an unfilled dark seat goes to the crew. Saboteurs are dealt by the setting, never from the host's role pool.
-- **Inside Man:** dealt only in crews of 5 or more (a crew of 2–4 can't spare a player who never pockets). **Snitch and Detective** from 4 players (role deck v2 §3).
-- **Smooth Talker, Muscle and Priest** from 5 players; the **Mastermind** only with events on (`RoleDef.needsEvents`).
-- **Not in Duel:** roles that need meetings (`RoleDef.needsMeetings`: Smooth Talker, Muscle, Priest, Snitch, Detective, Blackmailer, Forger).
-- **Blackmailer and Forger** from 7 players (R3b).
-- **Unique roles** (host setting, default on): each special role is dealt at most once and Rookies fill the remaining crew seats. Off: crew and accomplice seats are drawn from their pools with replacement, so roles may repeat. Saboteurs are always distinct (one Mole and one Embezzler at most, owner answers 1 Nov; provisional).
-- **Starter mode** (first game in a group): only the starter crew roles (Rookie, Inside Man, Lookout, Bagman, Cleaner; the Fence left in R2b), no dark side and no events.
+- **Decks:** Starter (Rookie, Inside Man, Lookout, Bagman, Cleaner; no events, no shop, no tokens), **Standard** (the default, 11 roles: Lookout, Auditor, Detective, Smooth Talker, Muscle, Cleaner, Hacker, Fence, Getaway Driver, Mole, Embezzler; Rookies fill spare seats) and Everything (all 20). The host can switch roles on or off one by one (the `roles` setting, which replaces the preset when not empty). **Quick games force Starter** with events off.
+- **Balanced** (default): a fixed mix per crew size from content (`BALANCED_MIX`: Lone wolves / Wildcards, starting from roles-v2 §3's most-weighted row under the round(n ÷ 3) cap; *R6a provisional: 5–6 players deal 1 / 1*). The rest are Team players; seats the deck can't fill go to Team players, Rookies last. The host can't change the mix.
+- **Truly random:** each seat drawn uniformly from the eligible deck, at most one Mole and one Embezzler.
+- **Role list shown** (host setting): **Exact** roles dealt (default, `roleListShown`, in content order), the roles that **could** be in the game (Possible), or nothing (Hidden).
+- **Dropped:** the saboteur Off / Maybe / On setting and its caps. A stored saboteur field is migrated on read: *Off* becomes the deck with every Wildcard and Lone wolf toggled off; *Maybe* and *On* become the plain deck.
+- **Eligibility** is unchanged: Snitch and Detective 4+; Inside Man, Smooth Talker, Muscle and Priest 5+; Blackmailer and Forger 7+; the Mastermind only with events on; meeting roles never in Duel. **Unique roles** (default on): each role at most once. Mole and Embezzler are always at most one each.
 
 ### 8.2 Shakedowns and roles
 
@@ -281,7 +241,7 @@ A shakedown reveals a player's **stash**, not their role. Roles only come out at
 
 *Role deck v2 §1 (`docs/roles-v2.md`); R1 builds the vocabulary, R2/R3 give roles the triggers that earn them (`RoleDef.rewards`; R2a: Rookie, Inside Man, Lookout, Auditor, Detective; R2b: Smooth Talker, Muscle, Priest, Bagman, Cleaner, Fixer, Mastermind, §8).*
 
-A perk is a **private token**. Earning one is a private `perkGranted` (only you are told); your own tokens show in your view, nobody else's. Spending one is a private `perkUsed`, with `useAbility`; a refused spend keeps the token. The Shield is the exception: it is spent by itself.
+**Tokens and the shop** (extension.md "Tokens and the perk shop"; R6a). Every role reward is one private **token** (`tokenEarned`). At setup the seeded RNG deals a **shop of three perks**, one per column, public (`shopDealt`): Learn (Peek, Ballot, Tail), Protect (Shield, Alibi, Recharge), Sway (+Vote, Emergency, Rig). Costs are content: Peek and Shield 2, the rest 1. `buyPerk` spends tokens any time (private `perkBought`, nothing shown until the perk is used). Use a perk any time after buying it, **at most one per round** (the automatic Shield and Emergency don't count); unspent tokens are worth nothing. With events off the Sway perk is +Vote or Emergency; **Duel** deals Peek or Tail, Alibi or Recharge, and Rig (events on) or a seeded pick from the undealt Learn and Protect perks. Starter and Quick have no shop and no tokens. Spending a perk is a private `perkUsed`, with `useAbility`; a refused spend keeps it. The Shield is spent by itself.
 
 | Perk | Effect (R1, provisional details) |
 |---|---|
@@ -291,12 +251,12 @@ A perk is a **private token**. Earning one is a private `perkGranted` (only you 
 | **Ballot** | In an open meeting, see one other player's ballot live, as it changes, in your own view only (never in an event). **Works in Secret mode too** (owner decision on role deck v2: the one exception to secret ballots, §11.2). Refused in Open mode, where ballots are public. |
 | **Tail** | While planning, also see who is in one more room when the round resolves (like the Lookout; a Power cut blinds it, a camera loop doesn't). |
 | **Alibi** | Your posted alibi for the latest resolved round, if it is true, is stamped **Verified** in public (`alibiVerified`). A false alibi can't be stamped. One stamp per player per round. |
-| **Recharge** | Your power's uses this act come back, and one use this game (Muscle). Refused if nothing is used. |
+| **Recharge** | One used-up use of your power between these meetings comes back, or a once-per-game use (Muscle). Refused if nothing is used. |
 | **Emergency** | *(R2b, the Smooth Talker's reward)* Spent by itself: once your own emergency meeting is used, calling another spends it. |
 | **Rig** | Draw two different cards for the next round (events on); the first flips unless you pick the other, until that round starts. Another player's Rig of the same round never refuses yours (a refusal would hint at who holds what); if several players rig a round, the oldest Rig's pick flips. |
 
-- **Shakedown window:** opens after every passed shakedown whenever a Muscle **or any role that can earn a Shield** (Detective, Fixer) could be dealt in this game, so the window never shows that either exists (§11.3).
-- **Double-cross** (§10): perks and a spent Tail stay with the player; they were earned, not dealt *(provisional)*.
+- **Shakedown window:** opens after every passed shakedown when a Muscle is dealt or the Shield is in the shop (Exact role list; otherwise when a Muscle could be dealt), so it never shows more than the public list does (§11.3).
+- **Double-cross** (§10): tokens, perks and a spent Tail stay with the player *(provisional)*.
 
 ---
 
@@ -319,7 +279,6 @@ From round 2 onward, one event card is flipped at the start of each round and sh
 
 | Event | Effect |
 |---|---|
-| **Police patrol** | Heat +5. |
 | **Quiet night** | Heat −10. |
 | **Shift change** | The Vault yields double this round, and its Heat pressure is ×1.5. |
 | **Power cut** | No witnesses and no cameras this round. Nobody sees anybody. |
@@ -330,11 +289,15 @@ From round 2 onward, one event card is flipped at the start of each round and sh
 | **Inside tip** | One random player privately learns another player's role. |
 | **Double-cross** | Two random players are offered a role swap. It happens only if both secretly accept. |
 
+**Police activity** (extension.md "Situations", Build notes "Police activity"; owner, 3 Nov, option A): the Police patrol is no longer a card. When a Mole could be in the game (dealt, with the Exact list; in the eligible deck otherwise), the engine draws a hidden schedule of **police moments** from the seeded RNG (reveal-only `policeScheduled`): each gap is uniform in [0.5, 1.5] × the preset's round length (planning plus alibi window), in game time (§4.1), and each moment brings a background patrol with chance 1 in 4 (content `POLICE_ACTIVITY`). At most one activity per moment: a queued Mole tip-off takes the next free moment and replaces a patrol drawn for it. Either way the crew sees one public `policeActivity` (+4 × min(1, crew ÷ 5), no source) with an immediate raid check; the Mastermind doesn't foresee it. The server fires moments with `advance { policeMoment }` and never exposes a timer for them; the simulator takes one moment per round. *(R6a provisional: moments are refused while a meeting is open; the server freezes them then.)*
+
+A **Power cut** blinds every feed, which reads "camera offline", the same as a Hacker's loop reads for one room.
+
 *Events deck (provisional, task 14):*
 - The deck holds one of each card; every flip from round 2 draws from the **full deck**, so cards can repeat *(owner answers, 1 Nov)*. Events are a host setting (§15), off in starter mode.
-- **Event Heat for small crews:** a card's Heat (Police patrol, Quiet night) and the extra Heat of a surge (Shift change's ×1.5 beyond ×1) are scaled by **min(1, crew ÷ 5)**, rounded, so at 3 players Police patrol adds 3 and Quiet night removes 6. From 5 players cards play at full strength. *(Owner answers, 1 Nov.)*
+- **Event Heat for small crews:** a card's Heat (Quiet night; police activity likewise) and the extra Heat of a surge (Shift change's ×1.5 beyond ×1) are scaled by **min(1, crew ÷ 5)**, rounded, so at 3 players Quiet night removes 6. From 5 players cards play at full strength. *(Owner answers, 1 Nov.)*
 - The card is flipped as the round starts, so players can plan around it; its effects apply when the round resolves (§5.2 step 1). Lockdown names its closed room on the flip (any room but the Lobby, where missed moves go). Double-cross offers go privately to the two players on the flip, and each can accept or decline until the round deadline; the swap happens at step 1, so the new roles play that round. Each role card keeps its uses so far; Moles are told if their fellow Mole changed.
-- **Shift change** also raises the Vault's Heat pressure ×1.5 (balance pass 2; was ×2, and Police patrol was +10); **Payday** doubles the Lobby's loot (2 → 4).
+- **Shift change** also raises the Vault's Heat pressure ×1.5 (balance pass 2; was ×2); **Payday** doubles the Lobby's loot (2 → 4).
 - **Power cut:** no room-mates, no Security and no Lookout results. The Server room still counts pockets.
 - **Audit:** every room in play is listed with what it came up short (0 included).
 - **Raid rumour:** compares stashes, not the Fence safe (which it never touches); ties are broken at random; with every stash empty nobody is hit. The lost loot is gone.
@@ -361,7 +324,7 @@ From round 2 onward, one event card is flipped at the start of each round and sh
   - *Secret*: only the tally is ever shown, even at the end-of-game reveal. The one exception is the **Ballot** perk (§8.3): its holder sees one chosen ballot, live, in their own view only (owner decision on role deck v2).
 - **Players who can't make it** can leave a sealed vote in advance. Otherwise they count as abstaining.
 - **To pass**, a shakedown needs **more than half of the votes cast**, and at least half the crew has to take part (sealed votes count).
-- **Big crews (9–12 players):** the player with the most votes is shaken down if they received **at least ⅓ of the votes cast** and **more votes than skip** (Smooth talker weight counts); a tie for the most votes, or skip leading or tied, means no shakedown. The quorum is the same. *(Owner answers, 1 Nov.)*
+- **One rule for every crew size** (extension.md; R6a dropped the ⅓ plurality rule for 9–12).
 - When the window closes, the ballots are cleared from the screen. The **result** stays in the ledger permanently.
 
 *Smooth talker (provisional):* "more than half of the votes cast" counts the Smooth talker's ballot twice; "at least half the crew has to take part" counts people. The tally shown counts one per ballot (see §8).
@@ -370,10 +333,10 @@ From round 2 onward, one event card is flipped at the start of each round and sh
 
 ### 11.3 Shakedown results
 
-- The target's stash is revealed to everyone, and all of it except any Fence safe goes into the Haul.
-- **Clean threshold:** if the stash **plus any Fence safe** was below **3 × the act number** (3, 6 or 9), the target is declared clean, so a Fence with a full safe isn't clean and gets no compensation; the safe still can't be seized *(owner answers, 1 Nov)*. The crew pays them **5 × the act number** out of the Haul, so false accusations hurt everyone. *(Provisional: never more than the Haul holds.)* An emergency meeting uses the current act's numbers.
+- The target's stash is revealed to everyone and goes into the Haul. A Fence's safe is shown too, but not taken.
+- **Clean line (fixed, extension.md "Shakedowns"):** if the stash **plus any Fence safe** is under **6** (content `shakedown.cleanBelow`, shared with the Detective's "dirty" line), the target is declared clean and the crew pays them **8** (`shakedown.payout`) out of the Haul, so false accusations hurt everyone. *(Provisional: never more than the Haul holds.)* Every meeting uses the same numbers.
 - No player is ever eliminated.
-- *Muscle window (provisional):* when the role pool includes the Muscle, or any role that can earn a Shield (§8.3), a passed shakedown is applied only after a short window in which the Muscle may cancel it (§8); a Shield cancels it when the window ends. The checkpoint (§11.4) comes after that window.
+- *Shakedown pause (provisional):* when a Muscle is dealt or the Shield is in the shop (§8.3), a passed shakedown is applied only after a short window in which the Muscle may cancel it (§8); a Shield cancels it when the window ends. The checkpoint (§11.4) comes after that window.
 
 ### 11.4 Order at a checkpoint
 
@@ -442,7 +405,7 @@ Notifications respect the host's quiet hours.
 
 ## 15. Host controls
 
-- Setup: session length, job, role pool, unique roles (on by default, §8.1), saboteur setting (the Mole setting, §8.1), events on or off, vote visibility, meeting window length, quiet hours, starter mode. Defaults: events on, Mole "maybe", the full role pool.
+- Setup (extension.md "Host settings"): session length (default 1 h; Quick forces Starter), deck (Standard default, Starter, Everything) and per-role toggles, deal style (Balanced default, Truly random), role list shown (Exact default, Possible, Hidden), vote visibility, events (on), unique roles (on), Duel with two players, meeting window length, quiet hours. The saboteur setting is gone (migrated on read, §8.1).
 - During the game: pause or resume, extend the current round, replace an inactive player with a bot (offered automatically after 2 missed rounds in a row), add bots to empty seats before the game starts.
 - Before the start, the host can hand the host role to another person in the lobby (never a bot) and then leave; the host can't leave without handing over first. *(Owner request, M2-5b.)*
 
@@ -450,22 +413,22 @@ Notifications respect the host's quiet hours.
 
 ## 16. Player-count scaling summary
 
-| Players | Rooms | Dark side (§8.1) | Notes |
+| Players | Rooms | Balanced deal (§8.1) | Notes |
 |---|---|---|---|
-| 2 | 5 | No | Needs bots to vote properly. Without bots, use Duel mode (§16.1). |
-| 3–4 | 5 | 3: no; 4: one saboteur | Tight and personal. Every shortfall is easy to narrow down. |
-| 5–8 | 7 | 1–2 saboteurs, 0–1 accomplices | The sweet spot. |
-| 9–12 | 9 | 1–3 saboteurs, 0–2 accomplices | Chaotic. Lots of witnesses and lots of alliances. |
+| 2 | 5 | Team players | Needs bots to vote properly. Without bots, use Duel mode (§16.1). |
+| 3–4 | 5 | content `BALANCED_MIX` | Tight and personal. Every shortfall is easy to narrow down. |
+| 5–8 | 7 | content `BALANCED_MIX` | The sweet spot. |
+| 9–12 | 9 | content `BALANCED_MIX` | Chaotic. Lots of witnesses. |
 
 ### 16.1 Duel mode (exactly 2 humans, no bots)
 
-There are no votes. Instead, once per act, each player can **call out** the other. If the opponent pocketed anything during that act, the caller takes everything the opponent pocketed that act. If not, the caller pays them 5 × the act number. Checkpoints and Heat work as normal.
+There are no votes. Instead, once between meetings (stretches close after rounds 3 and 6, owner ruling 7), each player can **call out** the other. If the opponent pocketed anything during that stretch, the caller takes everything the opponent pocketed. If not, the caller pays them 8 (`duel.wrongCallOut`, the clean payout number). Checkpoints and Heat work as normal.
 
 *Duel mode (provisional, task 15):*
 - A host setting, valid only with exactly 2 players. No meetings, no emergency meetings and no votes; the meeting-only roles (Smooth Talker, Muscle, Priest, Snitch, Detective) are never dealt. Events can be on.
 - **Timing:** a call-out can be made while any of the act's rounds is being planned, at most once per player per act, and can't be withdrawn. It stays private until the act's last round resolves and its alibi window closes (§5.4); then every call-out of that act is settled (in seat order if both called), and the checkpoint is checked straight after, with no meeting (§11.4 order: call-outs → checkpoint). So a call-out covers the whole act, the last round included, however early it was made.
 - **Caught:** the caller takes everything the opponent pocketed that act (their real splits, whatever they claimed), out of the opponent's stash: never the Fence safe, and never more than the stash holds. The Haul is untouched.
-- **Wrong call:** the caller pays the opponent 5 × the act number (content: `duel.wrongCallOutPerAct`) from their own stash, never more than it holds.
+- **Wrong call:** the caller pays the opponent 8 (content) from their own stash, never more than it holds.
 - The result is public: who called, whether the opponent had pocketed, and how much moved. A Heat raid in the act's last round ends the game before its call-outs are settled.
 
 ---
