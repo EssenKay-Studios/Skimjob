@@ -514,3 +514,110 @@ describe("the end screen on a failed heist (extension.md \"Winning and losing\")
   });
 });
 
+
+describe("the Heat breakdown is exact (extension.md \"Heat\", \"What the app works out for you\"; PR #52 QA round 2)", () => {
+  const rng = (seed: number) => () => ((seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31);
+  const MAX = BANK_JOB.heat.max;
+  const BASE = BANK_JOB.heat.perRound;
+  const at = (s: GameState, heat: number): GameState => ({ ...s, heat });
+
+  /** Round 1 of an n-player game from `start` Heat, each seat in the room `pick` gives; the lines and the real change. */
+  function oneRound(n: number, start: number, pick: (i: number, rooms: readonly string[]) => string, extra: Partial<GameConfig> = {}) {
+    const s0 = at(createGame(config(n, { rolePool: ["rookie"], seed: `exact-${n}-${start}`, ...extra })), start);
+    const s = run(s0, ...ids(n).map((p, i) => mv(p, pick(i, s0.rooms), 0, pick(i, s0.rooms) === "security" ? { watch: "vault" } : {})), ROUND);
+    const counts: Record<string, number> = {};
+    ids(n).forEach((_, i) => (counts[pick(i, s0.rooms)] = (counts[pick(i, s0.rooms)] ?? 0) + 1));
+    return { h: heatRound(viewFor(s, "p0"), 1)!, change: s.heat - start, after: s.heat, counts };
+  }
+
+  it("at every crew size 2–12 and many room mixes, the baseline is exactly +4, rooms are honest and the lines sum to the change", () => {
+    for (let n = 2; n <= 12; n++) {
+      const r = rng(n * 7919);
+      for (let trial = 0; trial < 40; trial++) {
+        const picks = ids(n).map(() => r());
+        const { h, change, counts } = oneRound(n, 50, (i, rooms) => rooms[Math.floor(picks[i]! * rooms.length)]!);
+        const tag = `${n}p ${JSON.stringify(counts)}: ${h.text}`;
+        expect(h.lines.filter((l) => l.kind === "base"), tag).toEqual([{ label: "every round", value: BASE, kind: "base" }]);
+        expect(h.total, tag).toBe(change);
+        expect(h.lines.every((l) => Number.isInteger(l.value) && l.value !== 0), tag).toBe(true);
+        expect(h.lines.some((l) => l.kind === "clamp"), tag).toBe(false);
+        // Each room line is its exact share, rounded one way or the other (never more than 1 off).
+        for (const l of h.lines.filter((x) => x.kind === "room")) {
+          const room = Object.values(BANK_JOB.rooms).find((d) => d.name === l.label)!;
+          const exact = (room.heatPressure * (counts[room.id] ?? 0)) / n;
+          expect(Math.abs(l.value - exact), `${tag} (${l.label} exact ${exact})`).toBeLessThan(1);
+        }
+      }
+    }
+  });
+
+  it("a crew laying low at or near Heat 0 shows a clamp line and the lines sum to the real change", () => {
+    for (const n of [2, 3, 4, 5, 8, 12]) {
+      for (const start of [0, 1, 5, 9]) {
+        const { h, change, after } = oneRound(n, start, () => "rooftop");
+        const tag = `${n}p from ${start}: ${h.text}`;
+        expect(after, tag).toBe(0);
+        expect(h.total, tag).toBe(change);
+        expect(h.lines.find((l) => l.kind === "base")?.value, tag).toBe(BASE);
+        const clamp = h.lines.filter((l) => l.kind === "clamp");
+        expect(clamp, tag).toEqual([{ label: "Heat can't go below 0", value: expect.any(Number), kind: "clamp" }]);
+        expect(clamp[0]!.value, tag).toBeGreaterThan(0);
+        expect(h.text, tag).toContain("Heat can't go below 0");
+      }
+    }
+  });
+
+  it("no clamp line when Heat lands exactly on 0 or the floor isn't reached", () => {
+    // 4p, all on the Rooftop: +4 − 20 = −16, so from 16 Heat lands exactly on 0.
+    const exact = oneRound(4, 16, () => "rooftop");
+    expect(exact.after).toBe(0);
+    expect(exact.h.lines.some((l) => l.kind === "clamp"), exact.h.text).toBe(false);
+    expect(exact.h.total).toBe(-16);
+  });
+
+  it("a crew piling into the Vault at the top of the Heat track shows the top clamp and the lines sum to the real change", () => {
+    for (const n of [2, 3, 5, 8, 12]) {
+      for (const start of [MAX - 1, MAX - 5, MAX - 20]) {
+        const { h, change, after } = oneRound(n, start, () => "vault");
+        const tag = `${n}p from ${start}: ${h.text}`;
+        expect(after, tag).toBe(MAX);
+        expect(h.total, tag).toBe(change);
+        const clamp = h.lines.filter((l) => l.kind === "clamp");
+        expect(clamp.length, tag).toBe(1);
+        expect(clamp[0]!.value, tag).toBeLessThan(0);
+        expect(clamp[0]!.label, tag).toBe("Heat is at the top");
+      }
+    }
+  });
+
+  it("a Quiet night card at low Heat is clamped too, and the card keeps its own line", () => {
+    let s = createGame(config(5, { rolePool: ["rookie"], eventsEnabled: true, seed: "quiet" }));
+    s = run(s, ...ids(5).map((p) => mv(p, "office")), ROUND, ALIBIS);
+    s = replay(s.config, s.log.map((e) => (e.type === "eventFlipped" && e.round === 2 ? { ...e, card: "quietNight", room: null } : e)));
+    expect(s.log.some((e) => e.type === "eventFlipped" && e.round === 2 && e.card === "quietNight")).toBe(true);
+    s = at(s, 3);
+    s = run(s, ...ids(5).map((p) => mv(p, "office")), ROUND);
+    const h = heatRound(viewFor(s, "p0"), 2)!;
+    expect(s.heat).toBe(0);
+    expect(h.total, h.text).toBe(-3);
+    expect(h.lines.map((l) => l.kind)).toEqual(["base", "event", "clamp"]);
+    expect(h.lines.find((l) => l.kind === "event")).toMatchObject({ label: "Quiet night", value: -10 });
+  });
+
+  it("a missed target near the top adds only what fits, and its line says so", () => {
+    let s = createGame(config(3, { rolePool: ["rookie"], seed: "missed-top" }));
+    for (let r = 1; r <= 3; r++) {
+      s = run(s, ...ids(3).map((p) => mv(p, "rooftop")), ROUND, ALIBIS);
+      if (r < 3) s = at(s, 50);
+    }
+    // Rooftop all game: the target is missed. Push Heat near the top, then close the meeting.
+    s = at(s, MAX - 6);
+    const before = s.heat;
+    for (let guard = 0; guard < 4 && !s.log.some((e) => e.type === "checkpointChecked"); guard++) s = playOut1(s);
+    const checked = s.log.find((e) => e.type === "checkpointChecked") as Extract<GameEvent, { type: "checkpointChecked" }> | undefined;
+    if (!checked) throw new Error(`no checkpoint (phase ${s.phase.kind})`);
+    expect(checked.met).toBe(false);
+    const line = heatRound(viewFor(s, "p0"), 3)!.lines.find((l) => l.kind === "missed");
+    expect(line?.value).toBe(Math.min(BANK_JOB.heat.missedCheckpoint, MAX - before));
+  });
+});
