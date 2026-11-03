@@ -10,13 +10,12 @@ import { createBots, runBotGame } from "./run";
 
 const MIX: PersonalityId[] = ["honest", "opportunist", "greedy", "cautious"];
 
-function play(n: number, seed: string, rolePool: string[], mole: GameConfig["mole"]): GameState {
+function play(n: number, seed: string, rolePool: string[]): GameState {
   const c: GameConfig = {
     seed,
     players: Array.from({ length: n }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
     rolePool,
-    mole,
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     starterMode: false,
@@ -34,7 +33,7 @@ describe("R5 bot settings — v2 §4, docs/balance/balance-3.md", () => {
     expect(BAGMAN_ALL_IN_ACTS).toBe(1);
     let later = 0;
     for (let g = 0; g < 12; g++) {
-      const s = play(5, `bag-${g}`, ["bagman", "rookie", "lookout", "cleaner", "auditor"], "off");
+      const s = play(5, `bag-${g}`, ["bagman", "rookie", "lookout", "cleaner", "auditor"]);
       const bagman = holder(s, "bagman");
       expect(bagman).toBeDefined();
       for (const split of of(s, "lootSplit").filter((e) => e.player === bagman)) {
@@ -48,7 +47,7 @@ describe("R5 bot settings — v2 §4, docs/balance/balance-3.md", () => {
   it("a Hacker that skims loops its own room that round", () => {
     let skimmed = 0;
     for (let g = 0; g < 12; g++) {
-      const s = play(9, `hack-${g}`, ["hacker", "rookie", "lookout", "cleaner", "auditor", "bagman", "fence"], "on");
+      const s = play(9, `hack-${g}`, ["hacker", "rookie", "lookout", "cleaner", "auditor", "bagman", "fence"]);
       const hacker = holder(s, "hacker");
       if (hacker === undefined) continue;
       for (const loop of of(s, "abilityResolved").filter((e) => e.player === hacker && e.ability.kind === "loopCameras")) {

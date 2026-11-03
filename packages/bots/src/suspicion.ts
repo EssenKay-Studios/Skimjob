@@ -36,7 +36,7 @@ export interface SuspicionWeights {
   readonly doubleClaim: number;
   /** A claim I can't check, standing alone: a little trust. */
   readonly claimed: number;
-  /** My Peek or Inside tip says they are a saboteur or an accomplice. */
+  /** My Peek or Inside tip says they hold a Wildcard or Lone wolf role (half for a big shown safe: the Fence). */
   readonly knownDark: number;
 }
 
@@ -54,6 +54,9 @@ export const SUSPICION_WEIGHTS: SuspicionWeights = {
   claimed: -0.5,
   knownDark: 8,
 };
+
+/** A shown Fence safe this big is a tell (bot setting). */
+export const BIG_SAFE = 5;
 
 /** Suspicion of every other player, in seat order. Higher is more suspicious. */
 export function suspicion(view: PlayerView, w: SuspicionWeights = SUSPICION_WEIGHTS): Map<PlayerId, number> {
@@ -114,7 +117,9 @@ export function suspicion(view: PlayerView, w: SuspicionWeights = SUSPICION_WEIG
     for (const room of claims.values()) crowd.set(room, (crowd.get(room) ?? 0) + 1);
     let expected = 0;
     for (const room of claims.values()) expected += roomLoot(roomDef(job, room), crowd.get(room) ?? 1);
-    let unexplained = expected - (haulDelta - split.toHaul);
+    // My own hand-in, plus my Bagman bonus (paid on top of the split). v2 §2
+    const bonus = ofType(view.caseFile, "abilityResolved").reduce((t, e) => t + (e.round === round && e.ability.kind === "bagman" ? e.ability.bonus : 0), 0);
+    let unexplained = expected - (haulDelta - split.toHaul - bonus);
     // design §6.2: the Server room says how many pocketed; if nobody else did, the gap is someone's honest mistake.
     const count = ofType(view.caseFile, "pocketCount").find((e) => e.round === round);
     if (count && count.pocketed - (split.toStash > 0 ? 1 : 0) === 0) unexplained = 0;
@@ -150,7 +155,9 @@ export function suspicion(view: PlayerView, w: SuspicionWeights = SUSPICION_WEIG
     if (event.type === "roundResolved") judgeRound(event);
     else if (event.type === "abilityResolved") judgePower(event.ability);
     else if (event.type === "shakedownResolved" && event.target !== me) {
-      score.set(event.target, event.clean ? w.afterClean : w.afterDirty);
+      // extension.md Build notes "Bots": a big shown safe points at the Fence.
+      const fence = event.safeRevealed >= BIG_SAFE ? w.knownDark / 2 : -Infinity;
+      score.set(event.target, Math.max(event.clean ? w.afterClean : w.afterDirty, fence));
     }
   }
   judgeClaims(view, add, w);
@@ -171,7 +178,7 @@ export function knownRoles(view: PlayerView): Map<PlayerId, RoleId> {
 function judgeClaims(view: PlayerView, add: (id: PlayerId, n: number) => void, w: SuspicionWeights): void {
   const me = view.me.id;
   const known = knownRoles(view);
-  for (const [id, role] of known) if (id !== me && ROLES[role] && ROLES[role].faction !== "crew") add(id, w.knownDark);
+  for (const [id, role] of known) if (id !== me && ROLES[role] && ROLES[role].tag !== "teamPlayer") add(id, w.knownDark);
   const caughtDirty = new Set(ofType(view.ledger, "shakedownResolved").filter((x) => !x.clean).map((x) => x.target));
   for (const e of ofType(view.caseFile, "abilityResolved")) if (e.ability.kind === "checkStash" && e.ability.dirty) caughtDirty.add(e.ability.target);
   for (const [id, roles] of claimsOf(view)) {
