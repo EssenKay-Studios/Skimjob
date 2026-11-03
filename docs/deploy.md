@@ -1,6 +1,8 @@
 # Deployment (Fly.io)
 
-**Live:** https://skimjob.fly.dev — app `skimjob`, region `bom` (Mumbai), one machine.
+**Not live; deploys are manual-only** until the owner picks a host (Fly or Lightsail; decision 10A). Nothing
+deploys on merge. The Fly setup below is ready: running the workflow by hand deploys app `skimjob`, region `bom`
+(Mumbai), one machine, at https://skimjob.fly.dev.
 
 For playtests the deployment is as small as it can be: one Fly machine (shared-cpu-1x, 512 MB) runs the game
 server, which also serves the built web app, and keeps its database (PGlite, real Postgres compiled to WASM,
@@ -11,17 +13,16 @@ the same server uses real Postgres instead (below).
 
 1. Push or merge to `main`.
 2. `.github/workflows/ci.yml` runs (typecheck, tests, e2e, sim smoke, and a Docker image build that boots the
-   image and checks `/health` and an SPA route).
-3. When CI succeeds for a **push to main**, `.github/workflows/deploy.yml` starts (`workflow_run`). It deploys
-   the exact commit CI tested:
+   image and checks `/health` and an SPA route). It doesn't deploy.
+3. To deploy, run the workflow by hand: GitHub → Actions → **Deploy** → Run workflow (`.github/workflows/deploy.yml`,
+   `workflow_dispatch` only). It runs only on `main` and only if CI passed for that commit (a push run; the job
+   checks through the Actions API and stops otherwise). Then it deploys that commit:
    - installs `flyctl` (`superfly/flyctl-actions/setup-flyctl`) and uses the `FLY_API_TOKEN` repo secret;
    - creates the app if it's missing (`flyctl apps create skimjob --org personal`, "already exists" is fine);
    - creates the volume `skimjob_data` (1 GB, `bom`) if it's missing;
    - `flyctl deploy --remote-only --ha=false` (Fly's builders build the `Dockerfile`; `--ha=false` keeps it to
      one machine, because PGlite lives on one volume);
    - smoke-tests `https://skimjob.fly.dev/health` and `/join/smoke`.
-4. Or run it by hand: GitHub → Actions → **Deploy** → Run workflow. Only on `main`, and only if CI passed for
-   that commit (the job checks through the Actions API and stops otherwise).
 
 `FLY_API_TOKEN` is given only to the flyctl steps, never job-wide, and the third-party actions
 (`actions/checkout`, `superfly/flyctl-actions/setup-flyctl`) are pinned to full commit SHAs; bump them by hand.
