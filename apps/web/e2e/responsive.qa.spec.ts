@@ -103,6 +103,8 @@ test.describe("landing behaviour", () => {
     // With Google sign-in on (M2-12), so its button is there to tab to.
     await page.route("**/api/auth/providers", (r) => r.fulfill({ json: { providers: ["google"] } }));
     await page.goto("/");
+    // The button appears only after /auth/providers answers; tabbing earlier races it.
+    await expect(page.getByRole("button", { name: "Sign in with Google" })).toBeVisible();
     const seen = new Set<string>();
     for (let i = 0; i < 12; i++) {
       await page.keyboard.press("Tab");
