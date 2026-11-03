@@ -10,6 +10,7 @@ import { describeEvent, type DescribeContext } from "../game/describeEvent";
 import { ALL_RECORDS, filterChoices, filterRows, groupByRound, recordRows, roundLabel, type RecordFilter, type RecordSource } from "../game/records";
 import { Button } from "./Button";
 import { Lock } from "./icons";
+import { stretchName } from "../game/wording";
 import { SketchFrame } from "./SketchFrame";
 import "./casefile.css";
 
@@ -40,7 +41,6 @@ export const CaseFile = memo(
     a.view.ledger.length === b.view.ledger.length &&
     a.view.caseFile.length === b.view.caseFile.length &&
     a.ctx.me === b.ctx.me &&
-    a.ctx.plurality === b.ctx.plurality &&
     a.seed === b.seed,
 );
 
@@ -68,13 +68,13 @@ function CaseFileSheet({ view, ctx, initial = START, seed = "records" }: CaseFil
       <p className="meta records__note">{source.note}</p>
       {choices.acts.length > 0 && (
         <div className="records__filters">
-          <div className="records__chips" role="group" aria-label="Act">
+          <div className="records__chips" role="group" aria-label="Rounds">
             <Button variant="toggle" seed={`${seed}-act-all`} pressed={filter.act === null} onClick={() => set({ act: null, round: null })}>
-              All acts
+              Whole job
             </Button>
             {choices.acts.map((a) => (
               <Button key={a} variant="toggle" seed={`${seed}-act-${a}`} pressed={filter.act === a} onClick={() => set({ act: a, round: null })}>
-                Act {a}
+                {stretchName(a)}
               </Button>
             ))}
           </div>

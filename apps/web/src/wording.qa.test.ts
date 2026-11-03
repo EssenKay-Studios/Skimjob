@@ -1,4 +1,4 @@
-// QA (PR #50, R6a): extension.md Build notes item 2 — "once per act" reads
+// QA (PR #50, R6a; R6b adds the Act-label scan): extension.md Build notes item 2 — "once per act" reads
 // "once between meetings" everywhere players see it. Scans the UI copy and the
 // engine's refusal messages (the web toasts them) for per-act phrasing, skipping comments.
 import { readdirSync, readFileSync, statSync } from "node:fs";
@@ -22,6 +22,21 @@ function codeLines(src: string): string[] {
     .split("\n")
     .map((l) => l.replace(/(^|[^:"'`])\/\/.*$/, "$1"));
 }
+
+/** "Act 1", `Act ${n}` or "since the last meeting" in UI copy: the Extension says "meeting 1", "rounds 1–3", "between meetings". */
+const ACT_COPY = /(["'`>]|\s)(Act \d|Act \$\{)|since the last meeting/;
+
+describe("no \"Act N\" labels reach players (extension.md: between meetings)", () => {
+  it("web UI copy", () => {
+    const hits: string[] = [];
+    for (const f of files(join(__dirname, "."), /\.tsx?$/)) {
+      codeLines(readFileSync(f, "utf8")).forEach((l, i) => {
+        if (ACT_COPY.test(l)) hits.push(`${f}:${i + 1}: ${l.trim()}`);
+      });
+    }
+    expect(hits).toEqual([]);
+  });
+});
 
 describe("no \"once per act\" phrasing reaches players", () => {
   const roots = [join(__dirname, "."), join(__dirname, "../../../packages/engine/src")];

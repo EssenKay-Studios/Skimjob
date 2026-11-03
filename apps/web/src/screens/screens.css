@@ -222,6 +222,22 @@ hr.dashed {
   justify-items: start;
   gap: 10px;
 }
+/* Extension samples (R6b) */
+.g-stack {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  min-width: 0;
+}
+.g-stack dd {
+  margin: 0 0 6px;
+}
+.g-ext-role {
+  display: grid;
+  gap: 4px;
+  padding-top: 8px;
+  border-top: 1.3px dashed var(--ink-faint);
+}
 /* Chat samples (M2-8b) */
 .g-chat {
   display: grid;
@@ -435,6 +451,23 @@ hr.dashed {
 }
 .settings__list .seg--wide {
   grid-column: 1 / -1;
+}
+/* Deck: per-role toggles, grouped by tag (extension.md "Host settings"). */
+.deck-roles__toggle {
+  justify-self: start;
+}
+.deck-roles__groups {
+  display: grid;
+  gap: 10px;
+}
+.deck-roles__group {
+  display: grid;
+  gap: 6px;
+}
+.deck-roles__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
 }
 .addbot {
   display: grid;

@@ -11,6 +11,7 @@ import {
   type PlayerId,
   type PlayerView,
 } from "@skimjob/engine";
+import { meetingAfter, meetingName } from "./wording";
 
 /** A deadline as the live channel sends it (apps/server scheduler.ts `Timer`). */
 export interface Timer {
@@ -122,7 +123,7 @@ export function phaseInfo(view: PlayerView): PhaseInfo {
       return { title: "Alibi window", timerKey: `alibis:${p.round}`, timerLabel: "alibis close in" };
     case "awaitingMeeting":
       return {
-        title: `Act ${p.act} is over: meeting next`,
+        title: `Round ${meetingAfter(p.act)} done: ${meetingName(p.act)} next`,
         timerKey: view.scheduledMeeting ? `openMeeting:${view.scheduledMeeting.meetingId}` : null,
         timerLabel: "opens in",
       };
@@ -166,7 +167,7 @@ export function formatCountdown(ms: number): string {
   return `${Math.floor(h / 24)}d ${h % 24}h`;
 }
 
-/** The checkpoint the Haul is racing: this act's cumulative target. design §11.5 */
+/** The Haul target the next regular meeting checks (cumulative). design §11.5; extension.md "The Haul target" */
 export function nextTarget(view: PlayerView): { readonly act: 1 | 2 | 3; readonly target: number; readonly final: boolean } {
   return { act: view.act, target: checkpointTarget(jobOf(view), view.act, crewSize(view)), final: view.act === 3 };
 }

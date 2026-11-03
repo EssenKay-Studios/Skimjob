@@ -1,12 +1,13 @@
 // /lobby/:id: seats (people and clearly marked bots), the invite link, host
 // settings, bots, hand-over and start. Polls GET /games/:id every 2 s; when the
 // game starts every seated browser moves to /game/:id. design §15, §16
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError, inviteLink, sentence, type LobbySettings, type LobbyView, type Seat } from "../api";
 import { Avatar } from "../components/Avatar";
 import { Button, DangerButton } from "../components/Button";
 import { Chip } from "../components/Chip";
 import { Copy, Play, Plus } from "../components/icons";
+import { DeckSettings, effectiveDeck } from "../components/DeckSettings";
 import { Segmented, type SegmentedOption } from "../components/Segmented";
 import { SketchFrame } from "../components/SketchFrame";
 import { TextField } from "../components/TextField";
@@ -49,16 +50,17 @@ const SETTINGS = [
   },
   { key: "uniqueRoles", label: "Unique roles", hint: "Each role at most once", options: onOff },
   { key: "eventsEnabled", label: "Bank events", options: onOff },
-  { key: "starterMode", label: "Starter mode", hint: "Simple roles; no shop, no events", options: onOff },
   { key: "dmNotices", label: "DM notices", hint: "Everyone sees that a DM was sent", options: onOff },
 ] as const satisfies readonly { key: keyof LobbySettings; label: string; hint?: string; options: readonly SegmentedOption<string | boolean>[] }[];
 
 /** One change, plus what starter mode needs to stay valid (the server refuses the mix). */
 function settingsPatch(current: LobbySettings, key: keyof LobbySettings, value: string | boolean): Partial<LobbySettings> {
-  if (key === "starterMode" && value === true) return { starterMode: true, eventsEnabled: false };
   if (current.starterMode && key === "eventsEnabled" && value === true) return { [key]: value, starterMode: false };
   return { [key]: value };
 }
+
+/** Event cards are off in Quick games and with the Starter deck: shown, not changeable. */
+const eventsLocked = (s: LobbySettings) => s.sessionLength === "quick" || effectiveDeck(s) === "starter";
 
 const BLURBS: Record<string, string> = {
   honest: "hands in nearly everything",
@@ -218,8 +220,8 @@ export function Lobby({ id }: { id: string }) {
     }
   };
 
-  const changeSetting = (key: keyof LobbySettings, value: string | boolean) => {
-    const patch = settingsPatch(game.settings, key, value);
+  const changeSetting = (key: keyof LobbySettings, value: string | boolean) => changeSettings(settingsPatch(game.settings, key, value));
+  const changeSettings = (patch: Partial<LobbySettings>) => {
     void act("PATCH", `/games/${id}/settings`, { settings: patch }, { ...game, settings: { ...game.settings, ...patch } });
   };
 
@@ -318,20 +320,25 @@ export function Lobby({ id }: { id: string }) {
                 </h2>
                 {!game.youAreHost && <p className="meta">Only the host can change these.</p>}
                 <div className="settings__list">
-                {SETTINGS.map((def) => (
-                  <Segmented<string | boolean>
-                    key={def.key}
-                    seed={`set-${def.key}`}
-                    label={def.label}
-                    hint={"hint" in def ? def.hint : undefined}
-                    options={def.options}
-                    value={game.settings[def.key]}
-                    readOnly={!game.youAreHost}
-                    disabled={busy}
-                    onChange={(v) => changeSetting(def.key, v)}
-                    wide={def.options.length > 2}
-                  />
-                ))}
+                {SETTINGS.map((def) => {
+                  const locked = def.key === "eventsEnabled" && eventsLocked(game.settings);
+                  return (
+                    <Fragment key={def.key}>
+                      <Segmented<string | boolean>
+                        seed={`set-${def.key}`}
+                        label={def.label}
+                        hint={locked ? (game.settings.sessionLength === "quick" ? "Off in Quick games" : "Off with the Starter deck") : "hint" in def ? def.hint : undefined}
+                        options={def.options}
+                        value={locked ? false : game.settings[def.key]}
+                        readOnly={!game.youAreHost || locked}
+                        disabled={busy}
+                        onChange={(v) => changeSetting(def.key, v)}
+                        wide={def.options.length > 2}
+                      />
+                      {def.key === "voteVisibility" && <DeckSettings settings={game.settings} readOnly={!game.youAreHost} disabled={busy} onChange={changeSettings} />}
+                    </Fragment>
+                  );
+                })}
                 </div>
               </section>
             </aside>

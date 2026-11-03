@@ -48,7 +48,7 @@ describe("the case file sheet (design §13)", () => {
   it("opens on the ledger, as a list named Ledger, grouped under round cards", () => {
     const out = html(createElement(CaseFile, { view, ctx }));
     expect(out).toContain('role="list" aria-label="Ledger"');
-    expect(out).toContain("Round 1 · Act 1");
+    expect(out).toContain("Round 1");
     expect(out).toContain("Before the job");
     expect(out).toMatch(/aria-pressed="true"[^>]*>.*Ledger/);
     expect(out).not.toContain("is-private");

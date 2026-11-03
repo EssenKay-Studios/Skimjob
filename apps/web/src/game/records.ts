@@ -77,4 +77,4 @@ export function filterChoices(rows: readonly RecordRow[], act: number | null): {
 }
 
 /** A round group's heading. */
-export const roundLabel = (g: Pick<RoundGroup, "round" | "act">) => (g.round === 0 ? "Before the job" : `Round ${g.round} · Act ${g.act}`);
+export const roundLabel = (g: Pick<RoundGroup, "round" | "act">) => (g.round === 0 ? "Before the job" : `Round ${g.round}`);

@@ -3,7 +3,7 @@
 // offline", the Heat breakdown, the gap box and the role list.
 // docs/extension.md (THE spec for R6a)
 import { describe, expect, it } from "vitest";
-import { PERKS, POLICE_ACTIVITY, ROLES, SHOP_COLUMNS, SHOP_RULES, type PerkId } from "@skimjob/content";
+import { BANK_JOB, PERKS, POLICE_ACTIVITY, ROLES, SHOP_COLUMNS, SHOP_RULES, type PerkId } from "@skimjob/content";
 import { handleThroughAlibis } from "./alibis.testkit";
 import { handleCommand } from "./handle";
 import type { GameConfig, GameEvent, GameState, PlayerId } from "./types";
@@ -331,10 +331,48 @@ describe("the Heat breakdown and the gap box — extension.md \"What the app wor
     const total = (parts?.base ?? 0) + Object.values(parts?.rooms ?? {}).reduce((a, b) => a + b, 0) + (parts?.events ?? 0);
     expect(total).toBe(summary?.heatDelta);
     expect(parts?.rooms.vault).toBeGreaterThan(0);
-    expect(heatBreakdown(s.log, 1)).toEqual({ round: 1, ...parts, police: [4], missedTarget: 0 });
+    expect(heatBreakdown(s.log, 1)).toEqual({ round: 1, ...parts, clamp: 0, police: [4], missedTarget: 0, stopped: 0 });
     // The view's ledger is enough to work it out (public events only).
     const ledger = viewFor(s, "p3").ledger.map((e) => e.event);
     expect(heatBreakdown(ledger, 1)).toEqual(heatBreakdown(s.log, 1));
+  });
+
+  const partsSum = (p: { base: number; rooms: Readonly<Record<string, number>>; events: number; clamp?: number }) =>
+    p.base + Object.values(p.rooms).reduce((x, y) => x + y, 0) + p.events + (p.clamp ?? 0);
+
+  it("the baseline line is always its true value; crew-size rounding sits on the rooms (extension.md \"Heat\": +4 every round, no matter what)", () => {
+    // 3 players: one in the Vault, two on the Rooftop. The shares aren't whole numbers.
+    const s = run(game(config(3), { roles: [] }), mv("p0", "vault"), mv("p1", "rooftop"), mv("p2", "rooftop"), ROUND);
+    const summary = ofType(s.log, "roundResolved")[0]!;
+    expect(summary.heatParts.base).toBe(BANK_JOB.heat.perRound);
+    expect(partsSum(summary.heatParts)).toBe(summary.heatDelta);
+    for (const v of Object.values(summary.heatParts.rooms)) expect(Number.isInteger(v)).toBe(true);
+  });
+
+  it("at Heat 0 a crowd laying low shows what the floor took back, so the parts add up to the real change (extension.md \"Heat never drops below 0\")", () => {
+    const s = run(game(config(4), { roles: [] }), mv("p0", "rooftop"), mv("p1", "rooftop"), mv("p2", "rooftop"), mv("p3", "rooftop"), ROUND);
+    const summary = ofType(s.log, "roundResolved")[0]!;
+    expect(summary.heat).toBe(0);
+    expect(summary.heatDelta).toBe(0);
+    expect(summary.heatParts.rooms.rooftop).toBeLessThan(0);
+    expect(summary.heatParts.clamp).toBeGreaterThan(0);
+    expect(partsSum(summary.heatParts)).toBe(0);
+    expect(heatBreakdown(s.log, 1)?.clamp).toBe(summary.heatParts.clamp);
+  });
+
+  it("police activity at the top shows the full +4 and what the limit took back, so the parts add up to the real change (extension.md \"Police activity\")", () => {
+    const s = run(game(config(4), { roles: [] }), ROUND);
+    const top = BANK_JOB.heat.max;
+    const log: GameEvent[] = [
+      ...s.log,
+      { type: "policeActivity", visibility: PUBLIC, round: 1, heatAdded: top - 1 - s.heat, heat: top - 1 },
+      { type: "policeActivity", visibility: PUBLIC, round: 2, heatAdded: POLICE_ACTIVITY.heat, heat: top },
+    ];
+    const b = heatBreakdown(log, 2)!;
+    expect(b.police).toEqual([POLICE_ACTIVITY.heat]);
+    expect(b.clamp).toBe(1 - POLICE_ACTIVITY.heat);
+    expect(partsSum(b) + b.police.reduce((x, y) => x + y, 0)).toBe(1);
+    expect(heatBreakdown(log, 1)!.clamp).toBe(heatBreakdown(s.log, 1)!.clamp);
   });
 
   it("a missed target's penalty shows under the stretch's last round", () => {

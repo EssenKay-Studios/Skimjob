@@ -3,6 +3,7 @@
 // exhaustive, so a new event, ability, perk or meeting-result kind fails
 // typecheck until it has a line here. docs/m2-plan.md M2-6; design §13
 import { EVENTS, JOBS, PERKS, ROLES, type PerkId } from "@skimjob/content";
+import { meetingAfter, meetingName, targetName } from "./wording";
 import type { GameEvent, MeetingResult, PlayerId, ResolvedAbility, ResolvedPerk, RoomId, VoteChoice } from "@skimjob/engine";
 
 export interface DescribeContext {
@@ -12,8 +13,6 @@ export interface DescribeContext {
   readonly name: (player: PlayerId) => string;
   /** A meeting slot for people (the engine's slots are opaque labels, often ISO times). Default: as is. */
   readonly slot?: (slot: string) => string;
-  /** Unused since one vote rule covers every crew size (extension.md "Fixed numbers"); R6b drops it. */
-  readonly plurality?: boolean;
 }
 
 const ALL_ROOMS = Object.fromEntries(Object.values(JOBS).flatMap((j) => Object.values(j.rooms).map((r) => [r.id, r.name])));
@@ -68,11 +67,11 @@ function line(e: GameEvent, ctx: DescribeContext): string {
     case "roleListShown":
       return `${e.list === "exact" ? "Roles in play" : "Roles that could be in play"}: ${list(e.roles.map(roleName))}.`;
     case "shopDealt":
-      return `The shop has ${list(e.perks.map(perkName))} on sale.`;
+      return e.perks.length === 0 ? "No shop in this game." : `The shop has ${list(e.perks.map(perkName))} on sale.`;
     case "rngAdvanced":
       return "The dice rolled.";
     case "roundStarted":
-      return `Round ${e.round} begins (Act ${e.act}).`;
+      return `Round ${e.round} begins.`;
     case "moveLocked":
       return `${verb(e.player, "locked", "locked")} in a move for round ${e.round}.`;
     case "moveSubmitted":
@@ -95,6 +94,8 @@ function line(e: GameEvent, ctx: DescribeContext): string {
         : `Round ${e.round}: in the ${roomName(e.room)}, ${verb(e.player, "saw", "saw")} ${names(e.others)}.`;
     case "roomWatched": {
       const how = e.source === "security" ? "On the cameras" : e.source === "lookout" ? "On lookout" : "Tailing";
+      // extension.md "Situations": a Hacker's loop and a Power cut read exactly the same.
+      if (e.offline) return `Round ${e.round}, ${how.toLowerCase()}: camera offline in the ${roomName(e.room)}${you(e.player) ? "" : ` (seen by ${ctx.name(e.player)})`}.`;
       return `Round ${e.round}, ${how.toLowerCase()}: ${e.seen.length === 0 ? "nobody" : names(e.seen)} in the ${roomName(e.room)}${you(e.player) ? "" : ` (seen by ${ctx.name(e.player)})`}.`;
     }
     case "pocketCount":
@@ -134,21 +135,21 @@ function line(e: GameEvent, ctx: DescribeContext): string {
     case "roleClaimed":
       return `${verb(e.player, "claim", "claims")} to be the ${roleName(e.role)}.`;
     case "meetingProposed":
-      return `${verb(e.by, "proposed", "proposed")} the Act ${e.act} meeting for ${slot(e.slot)}.`;
+      return `${verb(e.by, "proposed", "proposed")} ${meetingName(e.act)} for ${slot(e.slot)}.`;
     case "meetingProposalAccepted":
       return `${verb(e.by, "backed", "backed")} a meeting time.`;
     case "meetingScheduled":
-      return `The Act ${e.act} meeting is set for ${slot(e.slot)}${e.proposalId === null ? " (picked by the app)" : ""}.`;
+      return `${cap(meetingName(e.act))} is set for ${slot(e.slot)}${e.proposalId === null ? " (picked by the app)" : ""}.`;
     case "emergencyMeetingCalled":
       return `${verb(e.by, "called", "called")} an emergency meeting.`;
     case "meetingOpened":
-      return `The ${e.kind === "emergency" ? "emergency meeting" : `Act ${e.act} meeting`} is open: time to vote.`;
+      return `${e.kind === "emergency" ? "The emergency meeting" : cap(meetingName(e.act))} is open: time to vote.`;
     case "voteSealed":
       return `${verb(e.player, "sealed", "sealed")} a vote ${choice(e.vote)}.`;
     case "voteCast":
       return `${verb(e.player, "voted", "voted")} ${choice(e.vote)}${e.sealed ? " (sealed earlier)" : ""}.`;
     case "meetingClosed":
-      return meetingResult(e.result, e.tally, who, ctx.plurality ?? false);
+      return meetingResult(e.result, e.tally, who);
     case "shakedownPending":
       return `The shakedown of ${who(e.target)} passed; it lands when the window closes.`;
     case "shakedownCancelled":
@@ -160,7 +161,7 @@ function line(e: GameEvent, ctx: DescribeContext): string {
     case "muscleNamed":
       return `${verb(e.player, "were", "was")} named as the ${roleName("muscle")}: ${you(e.player) ? "you" : "they"} called off the shakedown of ${who(e.target)}, who wasn't clean.`;
     case "checkpointChecked":
-      return `${e.act === 3 ? "Final target" : `Act ${e.act} checkpoint`}: Haul ${e.haul}, target ${e.target}, ${e.met ? "made it" : `missed${e.heatPenalty > 0 ? ` (Heat +${e.heatPenalty})` : ""}`}.`;
+      return `${targetName(e.act)}: Haul ${e.haul}, target ${e.target}, ${e.met ? "made it" : `missed${e.heatPenalty > 0 ? ` (Heat +${e.heatPenalty})` : ""}`}.`;
     case "tokenEarned":
       return `${verb(e.player, "earned", "earned")} a token.`;
     case "perkBought":
@@ -179,11 +180,11 @@ function line(e: GameEvent, ctx: DescribeContext): string {
     case "alibiVerified":
       return `Verified: ${who(e.player)} really ${you(e.player) ? "were" : "was"} in the ${roomName(e.room)} in round ${e.round}.`;
     case "callOutMade":
-      return `${verb(e.player, "called", "called")} out the other player for Act ${e.act}.`;
+      return `${verb(e.player, "called", "called")} out the other player before ${meetingName(e.act)}.`;
     case "callOutResolved":
       return e.caught
-        ? `Call-out, Act ${e.act}: ${who(e.caller)} caught ${who(e.target)} skimming; ${e.amount} moves to ${who(e.caller)}.`
-        : `Call-out, Act ${e.act}: ${who(e.caller)} got it wrong and ${you(e.caller) ? "pay" : "pays"} ${who(e.target)} ${e.amount}.`;
+        ? `Call-out, rounds ${meetingAfter(e.act - 1) + 1}–${meetingAfter(e.act)}: ${who(e.caller)} caught ${who(e.target)} skimming; ${e.amount} moves to ${who(e.caller)}.`
+        : `Call-out, rounds ${meetingAfter(e.act - 1) + 1}–${meetingAfter(e.act)}: ${who(e.caller)} got it wrong and ${you(e.caller) ? "pay" : "pays"} ${who(e.target)} ${e.amount}.`;
     case "gameEnded": {
       const o = e.outcome;
       const winners = o.winners.length === 0 ? "nobody wins" : `${names(o.winners)} ${o.winners.length === 1 && !you(o.winners[0]!) ? "wins" : "win"}`;
@@ -230,7 +231,7 @@ function ability(a: ResolvedAbility, player: PlayerId, round: number, { you, who
     case "checkStash":
       return `Stash check: ${who(a.target)} ${a.dirty ? `holds ${a.threshold} or more (not clean)` : `holds less than ${a.threshold} (clean)`}.`;
     case "bless":
-      return `${verb(player, "blessed", "blessed")} ${who(a.target)} for Act ${a.act}.`;
+      return `${verb(player, "blessed", "blessed")} ${who(a.target)} until the next meeting.`;
     case "bagman":
       return `Round ${round}: ${verb(player, "handed", "handed")} everything in, so the bank added +${a.bonus} to the Haul.`;
     case "fixer":
@@ -273,7 +274,6 @@ function meetingResult(
   r: MeetingResult,
   tally: { readonly skip: number; readonly targets: Readonly<Record<PlayerId, number>> },
   who: (p: PlayerId) => string,
-  plurality: boolean,
 ): string {
   const votes = (n: number) => (n === 1 ? "1 vote" : `${n} votes`);
   switch (r.kind) {
@@ -282,7 +282,7 @@ function meetingResult(
     case "skipped":
       return `The crew voted to skip (${votes(tally.skip)}).`;
     case "noMajority":
-      return plurality ? "No clear winner: nobody is shaken down." : "No majority: nobody is shaken down.";
+      return "No majority: nobody is shaken down.";
     case "noQuorum":
       return "Too few votes: nothing happens.";
     default: {

@@ -208,6 +208,15 @@ html.chat-sheet-open body {
   display: grid;
   gap: 2px;
 }
+.hud__extra {
+  grid-column: 1 / -1;
+  padding-top: 10px;
+  border-top: 1.3px dashed var(--ink-faint);
+  min-width: 0;
+}
+.ranking__loss {
+  color: var(--bad);
+}
 
 /* ---------- Crew (seats) ---------- */
 .crew {
@@ -461,9 +470,13 @@ html.chat-sheet-open body {
     padding: 16px 14px 18px;
   }
   .ranking__row {
-    grid-template-columns: 18px auto minmax(0, 1fr) auto;
+    grid-template-columns: 18px auto minmax(76px, 1fr) auto;
   }
-  .ranking__row .chip {
+  .ranking__score {
+    overflow-wrap: normal;
+  }
+  .ranking__row .chip,
+  .ranking__row .ranking__loss {
     grid-column: 3 / -1;
     justify-self: start;
   }

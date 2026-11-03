@@ -74,7 +74,7 @@ export function NotesSections() {
         {away ? (
           <AwayRecap
             seed="g-away"
-            lines={["Rounds 1–2 done: Haul +14 (now 14), Heat +20 (now 20).", "Act 1 checkpoint: Haul 14, target 12, made it.", "Only you: Round 1: in the Vault, you saw Ben.", "Now: round 3. Pick your room before the deadline."]}
+            lines={["Rounds 1–2 done: Haul +14 (now 14), Heat +20 (now 20).", "Meeting 1 target: Haul 14, target 12, made it.", "Only you: Round 1: in the Vault, you saw Ben.", "Now: round 3. Pick your room before the deadline."]}
             onDismiss={() => setAway(false)}
           />
         ) : (

@@ -102,7 +102,7 @@ describe("while you were away (design §13)", () => {
     const before = s;
     s = run(s, { type: "scheduleMeeting", act: 1, slot: "act-1" }, open("act-1"), ...ids(s).map(skip), close("act-1"));
     const lines = recapBetween(before, s);
-    expect(lines.some((l) => /^Act 1 checkpoint: Haul \d+, target \d+, (made it|missed)/.test(l))).toBe(true);
+    expect(lines.some((l) => /^Meeting 1 target: Haul \d+, target \d+, (made it|missed)/.test(l))).toBe(true);
     expect(lines.at(-1)).toBe("Now: round 4. Pick your room before the deadline.");
   });
 

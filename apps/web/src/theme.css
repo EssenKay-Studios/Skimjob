@@ -186,6 +186,7 @@
   --radius-bubble: 12px 14px 11px 15px;
   --radius-tab: 10px 13px 0 0;
   --radius-clip: 6px;
+  --radius-blob: 50% 46% 52% 48%; /* round-ish blobs: coins, dots */
   --shadow-card: 2px 3px 0 var(--shade);
 
   color-scheme: light;

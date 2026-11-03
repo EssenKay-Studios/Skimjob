@@ -245,9 +245,13 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
   const roomsHeat = roundHeatDelta(job, crewSize, counts);
   const eventHeat = cardHeat(state);
   const heat = clampHeat(job, state.heat + roomsHeat + eventHeat);
-  // extension.md "Build notes" (Heat breakdown): the public parts of this round's Heat, before the clamp.
+  // extension.md "Build notes" (Heat breakdown): the public parts of this round's Heat. The baseline is
+  // its true value; any rounding sits on the rooms. `clamp` is what the 0–max limit took back (only when it did),
+  // so the parts always add up to the real change ("Heat never drops below 0").
   const rooms = roomHeatParts(job, crewSize, counts, state.rooms);
-  const heatParts = { base: roomsHeat - Object.values(rooms).reduce((a, b) => a + b, 0), rooms, events: eventHeat };
+  const base = roomsHeat - Object.values(rooms).reduce((a, b) => a + b, 0);
+  const clamp = heat - (state.heat + roomsHeat + eventHeat);
+  const heatParts = { base, rooms, events: eventHeat, ...(clamp !== 0 ? { clamp } : {}) };
 
   // §5.2 step 5: room-mates, then Hacker loops, Security / Lookout / Server-room results.
   // design §10 Power cut: nobody sees anybody (sightings, Security and Lookout); the Server room still counts.

@@ -8,6 +8,7 @@ import { Avatar } from "../components/Avatar";
 import { BankDoodle } from "../components/BankDoodle";
 import { ArtSections, BankSection } from "./GalleryArt";
 import { NotesSections } from "./GalleryNotes";
+import { ExtensionSections } from "./GalleryExtension";
 import { Button, DangerButton } from "../components/Button";
 import { Chip } from "../components/Chip";
 import { ArrowBack, Copy, Play, Plus, Star } from "../components/icons";
@@ -297,6 +298,8 @@ export function Gallery() {
             <Section id="meet" title="Meetings kit" note="M2-7 · clock face, tally bars, result banners, vote dialog sheet">
               <MeetingKitSamples />
             </Section>
+
+            <ExtensionSections />
           </div>
         </SketchFrame>
       </main>
@@ -378,7 +381,7 @@ function MeetingKitSamples() {
         Open the dialog sheet
       </Button>
       <DialogSheet open={open} onClose={() => setOpen(false)} seed="g-dialog-sheet" labelledBy="g-dialog-h">
-        <p className="kicker">Act 1 meeting</p>
+        <p className="kicker">Meeting 1</p>
         <h2 id="g-dialog-h">Who's skimming?</h2>
         <p>The vote window opens in this sheet. Esc, the backdrop or the button closes it.</p>
         <Button variant="primary" seed="g-dialog-close" onClick={() => setOpen(false)}>

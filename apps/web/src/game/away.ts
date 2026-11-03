@@ -5,6 +5,7 @@
 // from public round results). docs/m2-plan.md M2-10
 import type { GameEvent, LoggedEvent, PlayerView } from "@skimjob/engine";
 import { describeEvent, type DescribeContext } from "./describeEvent";
+import { meetingAfter, meetingName } from "./wording";
 
 /** One recap line and the entries it was built from (for tests: they must all be in the viewer's view). */
 export interface RecapItem {
@@ -97,7 +98,7 @@ export function nextUp(view: PlayerView): string | null {
     case "shakedownPending":
       return "Now: a shakedown is about to land.";
     case "awaitingMeeting":
-      return `Now: Act ${p.act} is over; the crew meeting is next.`;
+      return `Now: round ${meetingAfter(p.act)} is done; ${meetingName(p.act)} is next.`;
     default:
       return null;
   }

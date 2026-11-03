@@ -16,12 +16,11 @@ import {
   type VoteVisibility,
 } from "@skimjob/engine";
 import { crewSize, jobOf, setupOf } from "./hud";
+import { meetingAfter } from "./wording";
 
 /** Duel games have no meetings or votes (design §16.1). */
 export const hasMeetings = (view: PlayerView): boolean => !setupOf(view)?.duel;
 
-/** One vote rule for every crew size: no plurality rule any more. extension.md (R6b removes the callers) */
-export const pluralityRule = (_view: PlayerView): boolean => false;
 
 /** Every other player, in seat order: who you may vote for (never yourself, design §11.2). */
 export function voteTargets(view: PlayerView): { readonly id: PlayerId; readonly name: string; readonly isBot: boolean }[] {
@@ -85,10 +84,10 @@ export function plannerOf(view: PlayerView): Planner {
   };
 }
 
-/** A meeting slot for people: ISO times as a local time, "act-2" as "the end of Act 2", other labels as they are. */
+/** A meeting slot for people: ISO times as a local time, "act-2" as "after round 6", other labels as they are. */
 export function slotText(slot: string): string {
   const act = /^act-(\d)$/.exec(slot);
-  if (act) return `the end of Act ${act[1]}`;
+  if (act) return `after round ${meetingAfter(Number(act[1]))}`;
   const t = /^\d{4}-\d{2}-\d{2}T/.test(slot) ? new Date(slot) : null;
   return t && !Number.isNaN(t.getTime()) ? t.toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" }) : slot;
 }
@@ -305,7 +304,7 @@ export function decidingOf(view: PlayerView): { readonly meetingId: string; read
 export type AbilityOffer =
   /** Muscle: call off the pending shakedown (once per game; irreversible). design §8, §11.3 */
   | { readonly kind: "cancelShakedown"; readonly target: PlayerId }
-  /** Priest: bless another player for this act (once per act). design §8 (v2 §2) */
+  /** Priest: bless another player until the next meeting (once between meetings). design §8 (v2 §2) */
   | { readonly kind: "bless"; readonly targets: readonly PlayerId[] }
   /** +Vote perk: your ballot weighs one more in this meeting. design §8.3 */
   | { readonly kind: "extraVote" }
@@ -328,7 +327,11 @@ export function abilityOffers(view: PlayerView): AbilityOffer[] {
     const pending = p.kind === "shakedownPending" ? p.target : null;
     out.push({ kind: "bless", targets: others.filter((o) => o !== pending) });
   }
-  if (p.kind === "meeting") {
+  // One perk use per round (Shield and Emergency spend themselves and don't count). extension.md
+  const usedPerk = view.caseFile.some(
+    ({ event: e }) => e.type === "perkUsed" && e.player === view.me.id && e.round === view.round && e.perk.kind !== "shield" && e.perk.kind !== "emergency",
+  );
+  if (p.kind === "meeting" && !usedPerk) {
     const spent = (kind: "extraVote") =>
       view.caseFile.some(({ event: e }) => e.type === "perkUsed" && e.perk.kind === kind && "meetingId" in e.perk && e.perk.meetingId === p.meetingId);
     if (perkCount(view, "extraVote") > 0 && !spent("extraVote")) out.push({ kind: "extraVote" });
@@ -358,7 +361,7 @@ export interface ClaimOption {
 
 /**
  * Your role claim for the current act: null in Duel (no claims, design §16.1),
- * else the roles on offer and the one you already claimed this act (once per act).
+ * else the roles on offer and the one you already claimed (once between meetings).
  */
 export function claimState(view: PlayerView): { readonly act: 1 | 2 | 3; readonly claimed: string | null; readonly options: readonly ClaimOption[] } | null {
   if (!hasMeetings(view) || view.phase.kind === "ended" || view.phase.kind === "setup") return null;

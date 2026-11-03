@@ -23,7 +23,6 @@ import {
   localInputValue,
   openMeetingOf,
   plannerOf,
-  pluralityRule,
   slotFromLocal,
   tallyRows,
 } from "./meeting";
@@ -146,13 +145,6 @@ describe("the vote window per vote mode (design §11.2)", () => {
   });
 });
 
-describe("no plurality rule (extension.md: one vote rule for every crew size)", () => {
-  it("never applies, even at 9 players", () => {
-    const crew = (n: number) => ({ ...config("open"), players: Array.from({ length: n }, (_, i) => ({ id: `p${i + 1}`, name: `P${i + 1}`, isBot: false })) });
-    expect(pluralityRule(viewFor(createGame(crew(8)), "p1"))).toBe(false);
-    expect(pluralityRule(viewFor(createGame(crew(9)), "p1"))).toBe(false);
-  });
-});
 
 describe("tally bars (ui-style 'Vote window')", () => {
   it("marks the single leader and the passed option", () => {

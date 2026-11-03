@@ -263,12 +263,13 @@ export interface RoundResolved {
   /**
    * The round's Heat change by part (before the clamp at 0): the baseline,
    * each room that changed Heat (rounded; the Cleaner's and Getaway Driver's
-   * visits included), and the event card. The baseline takes up any rounding,
-   * so the parts add up to the unclamped change. Police activity and a missed
+   * visits included), and the event card. The rooms take up any rounding, so
+   * the baseline is its true value; `clamp` (only when non-zero) is what the
+   * 0–max limit took back, so the parts add up to `heatDelta`. Police activity and a missed
    * target come as their own events under the round (`heatBreakdown`).
    * extension.md "What the app works out for you" (the Heat breakdown)
    */
-  readonly heatParts: { readonly base: number; readonly rooms: Readonly<Record<RoomId, number>>; readonly events: number };
+  readonly heatParts: { readonly base: number; readonly rooms: Readonly<Record<RoomId, number>>; readonly events: number; readonly clamp?: number };
 }
 
 /**

@@ -121,7 +121,7 @@ test("propose a meeting time, a second player backs it, and leave a sealed vote 
   await theirs.getByRole("button", { name: "Back this time" }).click();
   await expect(panel.getByText(/Set for .*9:30/)).toBeVisible();
   await expect(theirs.getByText(/Set for .*9:30/)).toBeVisible();
-  await expect(page.getByRole("list", { name: "Ledger" })).toContainText(/The Act 1 meeting is set for .*9:30/);
+  await expect(page.getByRole("list", { name: "Ledger" })).toContainText(/Meeting 1 is set for .*9:30/);
   await shot(page, "planner");
 
   await panel.getByText("Can't make the meeting?").click();
