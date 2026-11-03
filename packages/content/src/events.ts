@@ -3,12 +3,12 @@
 // each kind of effect. design §10
 import type { RoomId } from "./index";
 
-/** An event card, e.g. "policePatrol". design §10 */
+/** An event card, e.g. "quietNight". design §10 */
 export type EventId = string;
 
 /** What a card does. The engine has one small effect function per kind. design §10 */
 export type EventEffect =
-  /** Police patrol (+5, balance pass 2) / Quiet night (−10): added to the round's Heat before the clamp. design §7 */
+  /** Quiet night (−10): added to the round's Heat before the clamp. design §7 */
   | { readonly kind: "heat"; readonly amount: number }
   /**
    * Shift change (Vault: loot ×2, Heat ×1.5 since balance pass 2) / Payday (Lobby: loot ×2, so 4):
@@ -35,9 +35,8 @@ export interface EventDef {
   readonly effect: EventEffect;
 }
 
-/** The ten cards of design §10. */
+/** The nine cards of design §10. extension.md "Police activity": the Police patrol left the deck. */
 export const EVENTS: Readonly<Record<EventId, EventDef>> = {
-  policePatrol: { id: "policePatrol", name: "Police patrol", effect: { kind: "heat", amount: 5 } },
   quietNight: { id: "quietNight", name: "Quiet night", effect: { kind: "heat", amount: -10 } },
   shiftChange: { id: "shiftChange", name: "Shift change", effect: { kind: "roomSurge", room: "vault", lootMultiplier: 2, heatMultiplier: 1.5 } },
   powerCut: { id: "powerCut", name: "Power cut", effect: { kind: "blackout" } },
@@ -64,3 +63,19 @@ export const EVENTS_FROM_ROUND = 2;
  * 3 doesn't turn a card into a bust. design §10
  */
 export const EVENT_HEAT_FULL_CREW = 5;
+
+/**
+ * Hidden background police activity (extension.md "Police activity", owner
+ * 3 Nov option A). It runs only when a Mole could be in the game. The engine
+ * draws a hidden schedule of police moments: each gap is drawn uniformly from
+ * [gapMin, gapMax] × the preset's round length (in thousandths, so the draw
+ * stays whole), and at each moment a background patrol fires with chance
+ * `chancePercent`%. A patrol and a Mole's tip-off add the same `heat`, scaled
+ * by min(1, crew ÷ EVENT_HEAT_FULL_CREW). Tunables for the balance pass.
+ */
+export const POLICE_ACTIVITY = {
+  chancePercent: 25,
+  heat: 4,
+  gapMinPermille: 500,
+  gapMaxPermille: 1500,
+} as const;

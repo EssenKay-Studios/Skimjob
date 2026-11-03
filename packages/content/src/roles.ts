@@ -1,6 +1,8 @@
-// Role definitions: powers, restrictions and scoring, as data. design §8
+// Role definitions: powers, restrictions, scoring, tags and win endings, as data. design §8
+//
+// extension.md: "per act" in field names (`perAct`) means per stretch, the time
+// between two regular meetings ("once between meetings"). The engine keeps acts internally.
 import type { RoleId, RoomId } from "./index";
-import type { PerkId } from "./perks";
 
 /** A role's power. `kind` matches the engine's `AbilityUse` kind where the power is used in a move. design §8 */
 export type RolePower =
@@ -11,49 +13,45 @@ export type RolePower =
    */
   | { readonly kind: "lookout"; readonly extraRooms: number }
   /**
-   * Fence: may move up to `perAct` loot per act from stash into a hidden safe
-   * that shakedowns can't touch. Once its safe holds `revealSafe` or more, it
-   * learns one saboteur (once per game). design §8 (v2 §2)
+   * Fence: may move up to `perAct` loot per stretch (between meetings) from
+   * stash into a safe that shakedowns show but can't take. Its token comes once
+   * the safe holds `tokenSafe` (once per game). design §8, extension.md
    */
-  | { readonly kind: "fenceSafe"; readonly perAct: number; readonly revealSafe: number }
-  /** Hacker: `perAct` times per act, a move may loop the cameras so one room shows as empty on Security that round. */
+  | { readonly kind: "fenceSafe"; readonly perAct: number; readonly tokenSafe: number }
+  /** Hacker: `perAct` times per stretch, a move may loop the cameras so one room reads "camera offline" that round. */
   | { readonly kind: "loopCameras"; readonly perAct: number }
   /** Smooth talker: their ballot counts `weight` times toward a meeting's result (passive). design §11.2 */
   | { readonly kind: "voteWeight"; readonly weight: number }
   /** Muscle: `perGame` times per game, cancel a shakedown after the vote passes (`useAbility`). design §11.3 */
   | { readonly kind: "cancelShakedown"; readonly perGame: number }
   /**
-   * Blackmailer: `perAct` times per act, a move may guess one player's role.
+   * Blackmailer: `perAct` times per stretch, a move may guess one player's role.
    * Right → it steals their vote at the next meeting that opens (their ballot
    * weighs 0 there, and its own weighs `STOLEN_VOTE_WEIGHT` more); the victim is told only
-   * that its vote is compromised. A saboteur guessed right and the Blackmailer
-   * learn each other. design §8, §11.2 (v2 §2)
+   * that its vote is compromised. design §8, §11.2 (v2 §2)
    */
   | { readonly kind: "blackmail"; readonly perAct: number }
   /**
-   * Forger: `perAct` times per act, a move may plant a fake sighting: `target`
+   * Forger: `perAct` times per stretch, a move may plant a fake sighting: `target`
    * shows in `room` on every watch feed of that room this round (Security,
    * Lookout, Tail), as if it were there. design §6.1, §8 (v2 §2)
    */
   | { readonly kind: "forge"; readonly perAct: number }
   /**
-   * Embezzler: `perAct` times per act, a move may take `take` from the Haul into
+   * Embezzler: `perAct` times per stretch, a move may take `take` from the Haul into
    * its stash after the round's splits, hidden in the round's Haul change. Its
    * stash is never clean while it holds a take (since its last shakedown). design §8, §11.3 (v2 §2)
    */
   | { readonly kind: "embezzle"; readonly perAct: number; readonly take: number }
-  /** Auditor: `perAct` times per act (`useAbility`), learn the latest resolved round's shortfall for one room. design §8 (v2 §2) */
+  /** Auditor: `perAct` times per stretch (`useAbility`), learn the latest resolved round's shortfall for one room. design §8 (v2 §2) */
   | { readonly kind: "audit"; readonly perAct: number }
-  /** Detective: `perAct` times per act (`useAbility`), learn whether a player's stash is at or above the clean threshold. design §8 (v2 §2) */
+  /** Detective: `perAct` times per stretch (`useAbility`), learn whether a player's stash is at or above the clean threshold. design §8 (v2 §2) */
   | { readonly kind: "checkStash"; readonly perAct: number }
+  /** Snitch: dealt a secret target; a token each time that target is caught (extension.md: replaces the extra vote). design §8 */
+  | { readonly kind: "snitch" }
   /**
-   * Snitch: dealt a secret target; each time that target is shaken down and
-   * isn't clean, its ballot weighs `extraVotes` more for the rest of the game (passive). design §8 (v2 §2)
-   */
-  | { readonly kind: "snitch"; readonly extraVotes: number }
-  /**
-   * Priest: `perAct` times per act (`useAbility`), bless another player for the
-   * act. Blessed and shaken down clean in that act → the bank pays the
+   * Priest: `perAct` times per stretch (`useAbility`), bless another player until
+   * the next regular meeting closes. Blessed and shaken down clean meanwhile → the bank pays the
    * compensation, not the Haul. design §8 (v2 §2)
    */
   | { readonly kind: "bless"; readonly perAct: number }
@@ -70,86 +68,94 @@ export type RolePower =
   | { readonly kind: "foresee" }
   /**
    * Getaway Driver: its visit to `room` adds `reverse` × the Heat a visitor
-   * there would remove (hidden in the round's Heat). Once Heat reaches
-   * `revealHeat`, it learns the saboteurs and they learn it (once per game). design §7, §8 (v2 §2)
+   * there would remove (hidden in the round's Heat). Its token comes the first
+   * time Heat reaches `tokenHeat` (once per game). design §7, §8, extension.md
    */
-  | { readonly kind: "getaway"; readonly room: RoomId; readonly reverse: number; readonly revealHeat: number }
+  | { readonly kind: "getaway"; readonly room: RoomId; readonly reverse: number; readonly tokenHeat: number }
   /**
-   * Mole: `perAct` times per act, a move may tip off the cops: +`heat` Heat
-   * that round, hidden in the round's total. Each tip-off also tells it one
-   * accomplice it didn't know yet (v2 §2). design §7, §8
+   * Mole: `perAct` times per stretch, any time, tip off the cops. The tip-off
+   * is queued and lands at the next hidden police moment as public "police
+   * activity" (`POLICE_ACTIVITY.heat`), the same as a background patrol.
+   * extension.md "Police activity"
    */
-  | { readonly kind: "tipOff"; readonly perAct: number; readonly heat: number };
+  | { readonly kind: "tipOff"; readonly perAct: number };
 
 export interface RoleScoring {
-  /** Final stash is multiplied by this (Rookie ×1.05). design §8 */
-  readonly stashMultiplier: number;
-  /** Points for every loot the Haul ends above the final target (Inside Man: 0.3, balance pass 1). design §8 */
-  readonly perLootOverFinalTarget: number;
+  /**
+   * +1 score per this many loot the Haul ends above the final target (Inside
+   * Man: 5); 0 for none. Scores are whole numbers. extension.md "Winning and losing"
+   */
+  readonly lootPerPointOverFinalTarget: number;
 }
 
 /** Why a heist failed: Heat reached 100, or the final target was missed. design §3 */
 export type FailureReason = "heat" | "target";
 
 /**
- * The side a role plays for (role deck v2 §0, docs/roles-v2.md). design §3
- * - crew: helps the job; wins a successful heist with the best crew stash.
- * - saboteur: wrecks the job (Mole); dealt by the saboteur setting, never from the pool.
- * - accomplice: helps the saboteurs; never dealt without one.
- * Saboteurs and accomplices are "the dark side": a failed heist is won by
- * the best stash among them, and by nobody if none was dealt.
+ * How selfish a power is: it describes, never changes a rule (no teams).
+ * extension.md "Roles", Build notes "Tags, decks and dealing"
  */
-export type Faction = "crew" | "accomplice" | "saboteur";
+export type Temperament = "teamPlayer" | "wildcard" | "loneWolf";
 
 /**
- * What earns a role its perk (role deck v2 §2, docs/roles-v2.md). "Dirty"
- * means a shakedown that found the target holding at least the clean
- * threshold (`shakedownResolved` with `clean: false`). design §8.3
+ * What earns a role a token (extension.md "Roles"). "Caught" means a
+ * shakedown that found the target dirty (`shakedownResolved` with `clean: false`). design §8.3
  */
-export type PerkTrigger =
-  /** Each Act 1 or 2 checkpoint made (Rookie: Tail; Inside Man: Peek). The final check ends the game, so it grants nothing. */
+export type TokenTrigger =
+  /** The Haul target is met at meeting 1 or 2 (Rookie, Inside Man, Mastermind). The final check ends the game, so it grants nothing. */
   | "checkpointMade"
-  /** A player this role's Lookout power saw, earlier this game, is shaken down dirty (Lookout: Peek). */
+  /** A player this role's Lookout power saw, earlier this game, is caught. */
   | "watchedShakenDirty"
-  /** A visitor of a room this role audited, in the audited round, is shaken down dirty (Auditor: Ballot). */
+  /** A visitor of a room this role audited, in the audited round, is caught. */
   | "auditedShakenDirty"
-  /** A player this role checked, earlier this game, is shaken down dirty (Detective: Shield). */
+  /** A player this role checked, earlier this game, is caught. */
   | "checkedShakenDirty"
-  /** This role voted to shake down a player who was then shaken down dirty (Smooth Talker: an extra emergency meeting). */
+  /** Its secret target is caught (Snitch). */
+  | "targetShakenDirty"
+  /** Its ballot was for a player who was then caught (Smooth Talker). */
   | "wonDirtyShakedown"
-  /** This role's cancel saved a player who was clean (Muscle: Recharge). Never for its own shakedown. */
+  /** Its cancel saved a player who was clean (Muscle; it also gets the power back). Never for its own shakedown. */
   | "cancelledClean"
-  /** A player this role blessed this act is shaken down clean (Priest: Ballot). */
+  /** A player it blessed is shaken down clean (Priest). */
   | "blessedShakenClean"
-  /** This role pocketed nothing in every round of an act (Bagman: Alibi), granted as the act's last round resolves. */
-  | "actAllIn"
-  /** Every `CLEANER_REWARD_EVERY`th round this role spends in its cooling room (Cleaner: +Vote). */
+  /** It handed in everything `BAGMAN_STREAK` rounds running (Bagman); the count restarts after each token. */
+  | "allInStreak"
+  /** Every `CLEANER_REWARD_EVERY`th round it spends in its cooling room (Cleaner). */
   | "coolingRounds"
-  /** This role's power stopped a raid (Fixer: Shield). */
+  /** Its power stopped a raid (Fixer). */
   | "raidStopped"
-  /** This role's camera loop hid a saboteur from a Security watcher that round (Hacker: Peek). */
-  | "loopHidSaboteur"
-  /** A player this role forged into a watch feed, earlier this game, is shaken down clean (Forger: Shield). */
-  | "forgedShakenClean";
+  /** Its camera loop hid, from a watcher of that room, a visitor who pocketed (Hacker). */
+  | "loopHidPocketer"
+  /** A player it forged into a watch feed, earlier this game, is shaken down clean (Forger). */
+  | "forgedShakenClean"
+  /** Heat first reaches its `tokenHeat` (Getaway Driver), once per game. */
+  | "heatReached"
+  /** Its safe first reaches its `tokenSafe` (Fence), once per game. */
+  | "safeReached"
+  /** A vote it stole decided a shakedown: it wouldn't have passed without it (Blackmailer, owner ruling 5). */
+  | "stolenVoteDecided"
+  /** Each of its tip-offs, when it lands (Mole, owner ruling 4). */
+  | "tipOffLanded"
+  /** Its first take (Embezzler). */
+  | "firstTake";
 
 /**
  * What a stolen vote adds to the Blackmailer's ballot, whatever the victim's
- * own weight (Smooth Talker, +Vote, Snitch reward): the victim's counts 0 (v2 §2; owner, 2 Nov).
+ * own weight (Smooth Talker, +Vote): the victim's counts 0 (v2 §2; owner, 2 Nov).
  */
 export const STOLEN_VOTE_WEIGHT = 1;
 
-/** The Cleaner is rewarded on every this-many-th round in its cooling room (v2 §2: every 2nd Rooftop round). */
+/** The Cleaner earns a token on every this-many-th round in its cooling room (v2 §2: every 2nd Rooftop round). */
 export const CLEANER_REWARD_EVERY = 2;
 
-/** A role's reward: `count` tokens of `perk` each time `on` happens. design §8.3 */
-export interface PerkReward {
-  readonly on: PerkTrigger;
-  readonly perk: PerkId;
+/** The Bagman earns a token per this many rounds in a row of handing in everything. extension.md gap-fills */
+export const BAGMAN_STREAK = 3;
+
+/** A role's reward: `count` tokens each time `on` happens (1, extension.md). design §8.3 */
+export interface TokenReward {
+  readonly on: TokenTrigger;
   readonly count: number;
 }
-
-/** Scores are rounded to this many decimal places (Rookie ×1.05 gives fractions). docs/decisions.md */
-export const SCORE_DECIMALS = 1;
 
 export interface RoleDef {
   readonly id: RoleId;
@@ -158,99 +164,82 @@ export interface RoleDef {
   /** false: every move must hand everything in (Inside Man). design §8 */
   readonly canPocket: boolean;
   readonly scoring: RoleScoring;
-  /** Which side the role wins with. design §3 */
-  readonly faction: Faction;
+  /** Temperament tag (changes no rule). extension.md */
+  readonly tag: Temperament;
   /**
-   * The perks this role earns, and how (design §8.3). Absent: none. Also read
-   * by rules that must not depend on who was dealt (e.g. the shakedown window
-   * opens whenever a Shield is possible from the pool).
+   * Failure endings this role also wins, from the top group (★ roles).
+   * Empty: wins only a success. extension.md "Winning and losing"
    */
-  readonly rewards?: readonly PerkReward[];
+  readonly winsOn: readonly FailureReason[];
+  /** The tokens this role earns, and how. Absent: none. design §8.3 */
+  readonly rewards?: readonly TokenReward[];
   /** Dealt only in crews of at least this size (Inside Man: 5). Absent: any size. design §8.1 */
   readonly minPlayers?: number;
   /** Needs meetings, so never dealt in Duel mode (role deck v2 §3). design §16.1 */
   readonly needsMeetings?: boolean;
   /** Needs the events deck, so dealt only with events on (Mastermind, role deck v2 §3). design §8.1, §10 */
   readonly needsEvents?: boolean;
-  /** Told this many saboteurs (at random) at the deal (Hacker: 1, role deck v2 §2). Absent: none. design §8.1 */
-  readonly knowsSaboteurs?: number;
-  /** The saboteurs are told who holds this role at the deal (the Forger, role deck v2 §2). design §8.1 */
-  readonly knownToSaboteurs?: boolean;
 }
 
-const PLAIN_SCORING: RoleScoring = { stashMultiplier: 1, perLootOverFinalTarget: 0 };
+const PLAIN_SCORING: RoleScoring = { lootPerPointOverFinalTarget: 0 };
+const TEAM = { tag: "teamPlayer", winsOn: [] } as const;
+const WILD = { tag: "wildcard", winsOn: [] } as const;
+const token = (on: TokenTrigger): readonly TokenReward[] => [{ on, count: 1 }];
 
-/** Every role. Saboteurs (the Mole) are dealt by the saboteur setting, never from the pool. design §8, §8.1 */
+/** Every role (extension.md "Roles": all 20 stay, with the same powers). design §8 */
 export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
-  rookie: {
-    id: "rookie",
-    name: "Rookie",
-    power: { kind: "none" },
-    canPocket: true,
-    // ×1.2 → ×1.05 in R5 (balance-3.md): the Rookie topped the crew's parity at most counts.
-    scoring: { stashMultiplier: 1.05, perLootOverFinalTarget: 0 },
-    faction: "crew",
-    rewards: [{ on: "checkpointMade", perk: "tail", count: 1 }],
-  },
+  rookie: { id: "rookie", name: "Rookie", power: { kind: "none" }, canPocket: true, scoring: PLAIN_SCORING, ...TEAM, rewards: token("checkpointMade") },
   lookout: {
     id: "lookout",
     name: "Lookout",
     power: { kind: "lookout", extraRooms: 1 },
     canPocket: true,
     scoring: PLAIN_SCORING,
-    faction: "crew",
-    rewards: [{ on: "watchedShakenDirty", perk: "peek", count: 1 }],
+    ...TEAM,
+    rewards: token("watchedShakenDirty"),
   },
   insideMan: {
     id: "insideMan",
     name: "Inside Man",
     power: { kind: "none" },
     canPocket: false,
-    // 0.3 → 0.15 per loot in R5 (balance-3.md): with the lower final target, overshoot came easier
-    // and it topped the parity table at 5–12 players.
-    scoring: { stashMultiplier: 1, perLootOverFinalTarget: 0.15 },
-    faction: "crew",
-    rewards: [{ on: "checkpointMade", perk: "peek", count: 1 }],
+    // extension.md: +1 per 5 loot over the final target (was +0.15 per loot).
+    scoring: { lootPerPointOverFinalTarget: 5 },
+    ...TEAM,
+    rewards: token("checkpointMade"),
     // Owner answers, 1 Nov: a crew of 2–4 can't spare a player who never pockets.
     minPlayers: 5,
   },
-  // Accomplices (role deck v2 §2): help the saboteurs; dealt only with one.
   getawayDriver: {
     id: "getawayDriver",
     name: "Getaway Driver",
-    // The Driver's dark half; the Fixer is its crew half.
-    // reverse ×1 → ×0 in R5 (balance-3.md): its Rooftop visit cools nothing (it only looks like it
-    // does) instead of adding Heat; adding Heat made it the dark side's top seat at 5–10p.
-    power: { kind: "getaway", room: "rooftop", reverse: 0, revealHeat: 75 },
+    // reverse ×0 since R5 (balance-3.md): its Rooftop visit cools nothing (it only looks like it does).
+    power: { kind: "getaway", room: "rooftop", reverse: 0, tokenHeat: 75 },
     canPocket: true,
     scoring: PLAIN_SCORING,
-    faction: "accomplice",
+    tag: "wildcard",
+    winsOn: ["heat"],
+    rewards: token("heatReached"),
   },
   fence: {
     id: "fence",
     name: "Fence",
-    power: { kind: "fenceSafe", perAct: 5, revealSafe: 10 },
+    power: { kind: "fenceSafe", perAct: 5, tokenSafe: 10 },
     canPocket: true,
     scoring: PLAIN_SCORING,
-    faction: "accomplice",
+    tag: "wildcard",
+    winsOn: ["heat", "target"],
+    rewards: token("safeReached"),
   },
-  hacker: {
-    id: "hacker",
-    name: "Hacker",
-    power: { kind: "loopCameras", perAct: 1 },
-    canPocket: true,
-    scoring: PLAIN_SCORING,
-    faction: "accomplice",
-    rewards: [{ on: "loopHidSaboteur", perk: "peek", count: 1 }],
-    knowsSaboteurs: 1,
-  },
+  hacker: { id: "hacker", name: "Hacker", power: { kind: "loopCameras", perAct: 1 }, canPocket: true, scoring: PLAIN_SCORING, ...WILD, rewards: token("loopHidPocketer") },
   blackmailer: {
     id: "blackmailer",
     name: "Blackmailer",
     power: { kind: "blackmail", perAct: 1 },
     canPocket: true,
     scoring: PLAIN_SCORING,
-    faction: "accomplice",
+    ...WILD,
+    rewards: token("stolenVoteDecided"),
     minPlayers: 7,
     needsMeetings: true,
   },
@@ -260,11 +249,10 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     power: { kind: "forge", perAct: 1 },
     canPocket: true,
     scoring: PLAIN_SCORING,
-    faction: "accomplice",
-    rewards: [{ on: "forgedShakenClean", perk: "shield", count: 1 }],
+    ...WILD,
+    rewards: token("forgedShakenClean"),
     minPlayers: 7,
     needsMeetings: true,
-    knownToSaboteurs: true,
   },
   smoothTalker: {
     id: "smoothTalker",
@@ -272,8 +260,8 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     power: { kind: "voteWeight", weight: 2 },
     canPocket: true,
     scoring: PLAIN_SCORING,
-    faction: "crew",
-    rewards: [{ on: "wonDirtyShakedown", perk: "emergency", count: 1 }],
+    ...TEAM,
+    rewards: token("wonDirtyShakedown"),
     minPlayers: 5,
     needsMeetings: true,
   },
@@ -283,38 +271,31 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     power: { kind: "cancelShakedown", perGame: 1 },
     canPocket: true,
     scoring: PLAIN_SCORING,
-    faction: "crew",
-    rewards: [{ on: "cancelledClean", perk: "recharge", count: 1 }],
+    ...TEAM,
+    rewards: token("cancelledClean"),
     minPlayers: 5,
     needsMeetings: true,
   },
   snitch: {
     id: "snitch",
     name: "Snitch",
-    power: { kind: "snitch", extraVotes: 1 },
+    power: { kind: "snitch" },
     canPocket: true,
     scoring: PLAIN_SCORING,
-    faction: "crew",
+    ...TEAM,
+    rewards: token("targetShakenDirty"),
     minPlayers: 4,
     needsMeetings: true,
   },
-  auditor: {
-    id: "auditor",
-    name: "Auditor",
-    power: { kind: "audit", perAct: 1 },
-    canPocket: true,
-    scoring: PLAIN_SCORING,
-    faction: "crew",
-    rewards: [{ on: "auditedShakenDirty", perk: "ballot", count: 1 }],
-  },
+  auditor: { id: "auditor", name: "Auditor", power: { kind: "audit", perAct: 1 }, canPocket: true, scoring: PLAIN_SCORING, ...TEAM, rewards: token("auditedShakenDirty") },
   detective: {
     id: "detective",
     name: "Detective",
     power: { kind: "checkStash", perAct: 1 },
     canPocket: true,
     scoring: PLAIN_SCORING,
-    faction: "crew",
-    rewards: [{ on: "checkedShakenDirty", perk: "shield", count: 1 }],
+    ...TEAM,
+    rewards: token("checkedShakenDirty"),
     minPlayers: 4,
     needsMeetings: true,
   },
@@ -324,38 +305,29 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     power: { kind: "bless", perAct: 1 },
     canPocket: true,
     scoring: PLAIN_SCORING,
-    faction: "crew",
-    rewards: [{ on: "blessedShakenClean", perk: "ballot", count: 1 }],
+    ...TEAM,
+    rewards: token("blessedShakenClean"),
     minPlayers: 5,
     needsMeetings: true,
   },
-  bagman: {
-    id: "bagman",
-    name: "Bagman",
-    power: { kind: "bagman", bonus: 1 },
-    canPocket: true,
-    scoring: PLAIN_SCORING,
-    faction: "crew",
-    rewards: [{ on: "actAllIn", perk: "alibi", count: 1 }],
-  },
+  bagman: { id: "bagman", name: "Bagman", power: { kind: "bagman", bonus: 1 }, canPocket: true, scoring: PLAIN_SCORING, ...TEAM, rewards: token("allInStreak") },
   cleaner: {
     id: "cleaner",
     name: "Cleaner",
     power: { kind: "cleaner", room: "rooftop", visitors: 2 },
     canPocket: true,
     scoring: PLAIN_SCORING,
-    faction: "crew",
-    rewards: [{ on: "coolingRounds", perk: "extraVote", count: 1 }],
+    ...TEAM,
+    rewards: token("coolingRounds"),
   },
   fixer: {
     id: "fixer",
     name: "Fixer",
-    // The Driver's crew half (role deck v2 §2); the Getaway Driver is its accomplice half.
     power: { kind: "fixer", stopAt: 95, lossShare: 0.25 },
     canPocket: true,
     scoring: PLAIN_SCORING,
-    faction: "crew",
-    rewards: [{ on: "raidStopped", perk: "shield", count: 1 }],
+    ...TEAM,
+    rewards: token("raidStopped"),
   },
   mastermind: {
     id: "mastermind",
@@ -363,29 +335,29 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     power: { kind: "foresee" },
     canPocket: true,
     scoring: PLAIN_SCORING,
-    faction: "crew",
-    rewards: [{ on: "checkpointMade", perk: "rig", count: 1 }],
+    ...TEAM,
+    rewards: token("checkpointMade"),
     needsEvents: true,
   },
   mole: {
     id: "mole",
     name: "Mole",
-    // +6 → +4 Heat in R5 (balance-3.md).
-    power: { kind: "tipOff", perAct: 1, heat: 4 },
+    power: { kind: "tipOff", perAct: 1 },
     canPocket: true,
     scoring: PLAIN_SCORING,
-    // design §3, §8: a saboteur; wins a failed heist with the best dark-side stash, never a success.
-    faction: "saboteur",
+    tag: "loneWolf",
+    winsOn: ["heat", "target"],
+    rewards: token("tipOffLanded"),
   },
   embezzler: {
     id: "embezzler",
     name: "Embezzler",
-    // Take 4 → 1 in R5 (balance-3.md): the take made it the dark side's best stash in almost every
-    // failure (parity 1.8–5.7× fair share).
+    // Take 4 → 1 in R5 (balance-3.md).
     power: { kind: "embezzle", perAct: 1, take: 1 },
     canPocket: true,
     scoring: PLAIN_SCORING,
-    // v2 §2: a saboteur, dealt by the saboteur setting like the Mole.
-    faction: "saboteur",
+    tag: "loneWolf",
+    winsOn: ["target"],
+    rewards: token("firstTake"),
   },
 };
