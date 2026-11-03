@@ -306,7 +306,8 @@ const SEEDS: readonly (readonly [number, string])[] = [
   [5, "qa55-5-3"], // a tip-off lands on a patrol's moment
   [5, "qa55-5-18"], // a Hacker loop hides a pocketer
   [5, "qa55-5-20"], // a Hacker loop in a Power cut round
-  [8, "qa55-8-10"], // forged sightings, framed player shaken down clean
+  [8, "qa55-8-10"], // forged sightings
+  [8, "qa55-8-6"], // a framed player shaken down clean (re-swept after the R6 balance numbers, #51)
   [8, "qa55-8-11"], // a stolen vote decides a shakedown
   [12, "qa55-12-6"],
   [12, "qa55-12-23"],
@@ -349,7 +350,7 @@ describe("QA #55 reveal summary vs the engine's truth — design §13", () => {
 
   it("Duel (2 players): success, raid and missed target, no stolen votes, still true", () => {
     const cov: Coverage = new Set();
-    for (const seed of ["qa55-2-0", "qa55-2-2", "qa55-2-21"]) {
+    for (const seed of ["qa55-2-0", "qa55-2-1", "qa55-2-2", "qa55-2-21"]) {
       const summary = audit(play(config(2, seed)), cov);
       expect(summary.seats).toHaveLength(2);
       expect(summary.rounds.flatMap((r) => r.items).some((i) => i.kind === "voteStolen")).toBe(false);
