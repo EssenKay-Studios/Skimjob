@@ -3,12 +3,12 @@
 _3 Nov 2026. Content 0.15.0 → 0.16.0. Gates from extension.md Build notes "Sim" and design §17.4: in Balanced, 4–12 players, Standard deck,
 events on and off, success 55–70% and per-role parity ≤ 0.10. Final run: "Sim suite" workflow
 [41601623086](https://github.com/EssenKay-Studios/Skimjob/actions/runs/41601623086) (20 shards, ±2 pp, 400–6000 games per cell, 110,400 games,
-seed `suite`, default bot mix). That run was the baseline until the split-gate pass below, whose final run
-[41607419781](https://github.com/EssenKay-Studios/Skimjob/actions/runs/41607419781) (content 0.17.0, 116,600 games) is now `docs/balance/baseline.json`. The first full run with Fence token 10 was
+seed `suite`, default bot mix). That run was the baseline until the split-gate pass below, and then the team-parity pass
+(run [41611375754](https://github.com/EssenKay-Studios/Skimjob/actions/runs/41611375754), content 0.17.0, Muscle bot 2, 117,200 games) is now `docs/balance/baseline.json`. The first full run with Fence token 10 was
 [41600605174](https://github.com/EssenKay-Studios/Skimjob/actions/runs/41600605174). About 20 candidate sets were screened locally first,
 with 600–1000 games per cell at 4–12p._
 
-**Update (split gate, content 0.17.0): see "Split parity gate" below — success passes, every ★ role is in its band, Team-role parity is blocked by the Muscle at 9–10p.**
+**Update (split gate, content 0.17.0, team gate 0.20): see "Split parity gate" and "Team-parity pass" below — no gated check is a confirmed FAIL; every ★ role is in its band; the team-role spread is 0.10–0.20 against a provisional 0.20 gate (0.10 stays the target).**
 
 **Result (content 0.16.0): success PASSES in all 18 gated cells. Parity is BLOCKED.** It FAILs in all 9 groups (spread 0.63–1.01, was 0.46–1.59).
 No content number can close it (see "Why parity is blocked"). The owner needs to decide on the gate or the rule.
@@ -136,7 +136,7 @@ more than noise. Lean 0.6 ([41604965583](https://github.com/EssenKay-Studios/Ski
 ([41606031652](https://github.com/EssenKay-Studios/Skimjob/actions/runs/41606031652)). Locally (600–1000 games a cell): clean line 4, Mole 2 tip-offs a game,
 Cleaner 1, lean never, TOP_FACTOR 4 — no gain. Current numbers before tuning: [41604814895](https://github.com/EssenKay-Studios/Skimjob/actions/runs/41604814895).
 
-**Final run** [41607419781](https://github.com/EssenKay-Studios/Skimjob/actions/runs/41607419781) (Balanced, events on / off pooled for parity;
+**Split-gate run** [41607419781](https://github.com/EssenKay-Studios/Skimjob/actions/runs/41607419781) (Balanced, events on / off pooled for parity;
 `?` = inconclusive, else confirmed):
 
 | Players | Success on / off | Team spread [95%] | Team high / low | ★ Embezzler / Fence / Driver / Mole (× Team avg) | All-role spread (report) |
@@ -156,7 +156,7 @@ Cleaner 1, lean never, TOP_FACTOR 4 — no gain. Current numbers before tuning: 
 - **Team spread:** confirmed FAIL at 9–10p, inconclusive (point 0.06–0.20) elsewhere. A confirmed PASS needs ~20k games a group.
 - **All-role spread (report):** 0.51–0.63, was 0.63–1.01.
 
-**Team parity is BLOCKED.** The binding roles are the Muscle on top at 7–12p (its bot cancels a shakedown of itself, design §8)
+**Team parity was BLOCKED at this point (see "Team-parity pass" below).** The binding roles are the Muscle on top at 7–12p (its bot cancels a shakedown of itself, design §8)
 and the Cleaner at the bottom (it cools on the 0-loot Rooftop). No content number moved them: Rooftop loot lifts the Cleaner but
 adds ~10 pp success. Options for the owner:
 1. Muscle: no self-cancel (only a clean other player), or its cancel costs it the token / Recharge — a bot or rule change.
@@ -166,3 +166,48 @@ adds ~10 pp success. Options for the owner:
 **Not gated, content 0.17.0:** Truly random 4–12p 58.8–68.2% success; Balanced 2p 44%, 3p 65%. Duel 44% (local, 2000 games,
 unchanged). Starter 9–12p 94–96% (local, 1000 games; was 86–93%, the Teller line's +1 loot outweighs its Heat for a cooperative
 crew) — Starter is left as it is (learning mode, report-only).
+
+## Team-parity pass (PM provisional, 3 Nov; owner to confirm)
+
+PM call: one focused attempt, numbers only (no new rules), at most two Sim suite iterations, on the Muscle and the Cleaner;
+if the team-role spread is still over 0.10, gate it at **≤ 0.20** provisionally (`TEAM_PARITY_MAX_SPREAD`; 0.10 stays the
+target, and the all-role column still reports against 0.10), to revisit after the M2-14 playtests.
+
+What content offers: the Muscle has one number (`perGame`, already 1, the minimum) and no per-crew-size values; its reward
+count can't go to 0 without dropping the power-back (owner ruling 6). The Cleaner has `visitors` (tried earlier) and its
+token cadence.
+
+| Iteration | Candidate | Run | Team spread 9 / 10 / 11 / 12p | Verdict |
+|---|---|---|---|---|
+| 1 | Cleaner token every Rooftop round (`CLEANER_REWARD_EVERY` 2 → 1) | [41608714220](https://github.com/EssenKay-Studios/Skimjob/actions/runs/41608714220) | 0.27 / 0.28 / 0.20 / 0.20 | no change |
+| 1 | Cleaner 2 tokens every 2nd round | [41608719423](https://github.com/EssenKay-Studios/Skimjob/actions/runs/41608719423) | 0.27 / 0.29 / 0.21 / 0.20 | no change |
+| 2 | Recharge costs 2 (the Muscle's way back to a self-cancel) | [41609634074](https://github.com/EssenKay-Studios/Skimjob/actions/runs/41609634074) | 0.27 / 0.29 / 0.21 / 0.23 | no change |
+| 2 | Recharge costs 3 | [41609638823](https://github.com/EssenKay-Studios/Skimjob/actions/runs/41609638823) | same | no change |
+| 2 | Shield costs 1 (everyone can protect themselves) | [41609644224](https://github.com/EssenKay-Studios/Skimjob/actions/runs/41609644224) | 0.25 / 0.22 / 0.17 / 0.22 | worse: success 8p 54.6%, Embezzler 2.1–2.2 |
+| 2 | **Muscle bot rescues below suspicion 2 (was 1)** | [41609657562](https://github.com/EssenKay-Studios/Skimjob/actions/runs/41609657562) | **0.20 / 0.18 / 0.17 / 0.17** | **adopted** |
+
+The Muscle bot setting (`MUSCLE_CLEAN_BELOW`, packages/bots/src/bot.ts) is a number in the bot's existing habit (design §8:
+rescue itself or someone it thinks clean): it rescues others more often, so it more often has no cancel left for itself.
+Muscle 0.83–0.85 → 0.74–0.78 at 9–12p; the Cleaner stays lowest (0.57–0.61), with nothing that moves it short of Rooftop loot.
+
+**Final run** [41611375754](https://github.com/EssenKay-Studios/Skimjob/actions/runs/41611375754) (all setups, 117,200 games; the baseline):
+
+| Players | Success on / off | Team spread [95%] (≤ 0.20) | Team high / low | ★ Emb / Fence / Driver / Mole | All-role (report) |
+|---|---|---|---|---|---|
+| 4 | 65.1 / 67.7 | 0.10 [0.01–0.18] PASS | Hacker 0.70 / Auditor 0.60 | 1.17 / 1.78? / 1.20 / 1.58 | 0.58 |
+| 5 | 64.2 / 66.5 | 0.11 [0.02–0.20] PASS | Lookout 0.71 / Cleaner 0.60 | 1.26 / 1.76? / 1.20 / 1.60 | 0.54 |
+| 6 | 67.3 / 69.3? | 0.10 [0.02–0.18] PASS | Muscle 0.72 / Cleaner 0.62 | 1.35 / 1.69? / 1.17 / 1.60 | 0.52 |
+| 7 | 69.0? / 70.6? | 0.13 [0.05–0.21] ? | Muscle 0.76 / Cleaner 0.63 | 1.49 / 1.73? / 1.16 / 1.51 | 0.56 |
+| 8 | 60.6 / 60.2 | 0.14 [0.05–0.23] ? | Smooth Talker 0.65 / Cleaner 0.51 | 1.69? / 1.71? / 1.08 / 1.66? | 0.52 |
+| 9 | 67.7 / 65.0 | 0.20 [0.12–0.29] ? (0.204) | Muscle 0.77 / Cleaner 0.57 | 1.64 / 1.63? / 1.04 / 1.52 | 0.52 |
+| 10 | 69.3? / 64.9 | 0.18 [0.08–0.28] ? | Muscle 0.78 / Cleaner 0.61 | 1.62 / 1.58 / 0.99? / 1.57 | 0.49 |
+| 11 | 65.4 / 63.9 | 0.17 [0.07–0.28] ? | Muscle 0.74 / Cleaner 0.57 | 1.86? / 1.67? / 0.95? / 1.62 | 0.64 |
+| 12 | 68.2 / 64.5 | 0.17 [0.06–0.28] ? | Muscle 0.74 / Cleaner 0.57 | 1.78? / 1.66? / 0.99? / 1.62 | 0.61 |
+
+**Result: no gated check is a confirmed FAIL.** Success: 14 PASS, 4 inconclusive (6p off 69.3, 7p on 69.0, 7p off 70.6,
+10p on 69.3 — the Muscle change lifted success ~1 pp at 6–7p). Team spread: PASS at 4–6p, inconclusive elsewhere, with every
+point ≤ 0.20 except 9p (0.204). ★ band: no FAIL. Not gated: Truly random 4–12p 58.3–71.0%.
+
+A confirmed PASS for the team spread or for success near 70% needs ~20k games a cell; the suite stops at 6000. If the owner
+wants margin: one notch of 7p difficulty (for example its Balanced mix or a checkpoint number) and either a Cleaner change
+(Rooftop loot for the Cleaner only) or accepting the Cleaner low.
