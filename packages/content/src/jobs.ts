@@ -98,7 +98,7 @@ export const BANK_JOB: JobDef = {
     // ⅓-plurality shakedowns made big crews succeed ~85%); Manager's office adds half the vault pressure (§7).
     // Teller line back to 4 in R5 (balance-3.md): two saboteurs and up to two accomplices sank 9–12p crews to 17–31%.
     // R6 balance (r6-balance.md): Teller line 5, Manager's office 3 — 9–12p sat below the band with events off.
-    tellerLine: { id: "tellerLine", name: "Teller line", loot: 5, heatPressure: 0, capacity: null, info: "none" },
+    tellerLine: { id: "tellerLine", name: "Teller line", loot: 6, heatPressure: 10, capacity: null, info: "none" },
     managersOffice: {
       id: "managersOffice",
       name: "Manager's office",

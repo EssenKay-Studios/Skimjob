@@ -76,9 +76,9 @@ describe("First National Bank rooms — design §6.1, §6.2", () => {
     expect(r.serverRoom?.info).toBe("pocketCount");
   });
 
-  it("9–12: Teller line 4 loot (R5, balance-3.md); Manager's office 4 loot (owner-answers pass, 1 Nov)", () => {
+  it("9–12: Teller line 6 loot (R6 split-gate pass, r6-balance.md); Manager's office 3 loot (R6 balance pass)", () => {
     expect(BANK_JOB.roomTiers[2]).toEqual({ minPlayers: 9, rooms: ["tellerLine", "managersOffice"] });
-    expect(r.tellerLine?.loot).toBe(5);
+    expect(r.tellerLine?.loot).toBe(6);
     expect(r.managersOffice?.loot).toBe(3);
   });
 });
@@ -88,7 +88,7 @@ describe("First National Bank Heat numbers — design §7", () => {
     expect(BANK_JOB.heat).toEqual({ max: 100, perRound: 4, missedCheckpoint: 15 });
   });
 
-  it("Vault +20, Manager's office half of that, Deposit boxes +10, Rooftop −20 (per crew share); other rooms 0", () => {
+  it("Vault +20, Manager's office and Teller line half of that (R6 split-gate pass), Deposit boxes +10, Rooftop −20 (per crew share); other rooms 0", () => {
     const pressure = Object.fromEntries(Object.values(BANK_JOB.rooms).map((d) => [d.id, d.heatPressure]));
     expect(pressure).toEqual({
       vault: 20,
@@ -98,7 +98,7 @@ describe("First National Bank Heat numbers — design §7", () => {
       rooftop: -20,
       depositBoxes: 10,
       serverRoom: 0,
-      tellerLine: 0,
+      tellerLine: 10,
       managersOffice: 10,
     });
   });

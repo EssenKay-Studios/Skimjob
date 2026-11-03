@@ -14,7 +14,7 @@ describe("bank room data — design §6, §7", () => {
       rooftop: [0, -20],
       depositBoxes: [5, 10],
       serverRoom: [0, 0],
-      tellerLine: [5, 0],
+      tellerLine: [6, 10], // R6 split-gate pass (r6-balance.md)
       managersOffice: [3, 10],
     });
   });

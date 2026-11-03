@@ -1,12 +1,12 @@
 // Test helper (not exported from the package): the content 0.1.0 numbers that
-// balance pass 1 (and, for the Manager's office, the 1 Nov owner-answers pass) changed (docs/balance/balance-1.md). Scripted rule tests play
+// balance pass 1 (and, for the Manager's office, the 1 Nov owner-answers pass; for the Teller line Heat, the R6 split-gate pass) changed (docs/balance/balance-1.md). Scripted rule tests play
 // exact Hauls, Heat and scores against these numbers, so they pin them through
 // GameConfig.contentOverrides and test the rules, not the current balance.
 // Tests that assert the shipped numbers themselves read @skimjob/content.
 import type { ContentOverrides } from "./types";
 
 export const V01_NUMBERS: ContentOverrides = {
-  rooms: { depositBoxes: { heatPressure: 0, capacity: { max: 2, crowdedLoot: 3 } }, tellerLine: { loot: 3 }, managersOffice: { loot: 5 } },
+  rooms: { depositBoxes: { heatPressure: 0, capacity: { max: 2, crowdedLoot: 3 } }, tellerLine: { loot: 3, heatPressure: 0 }, managersOffice: { loot: 5 } },
   checkpoints: { perPlayer: [6, 14, 22] },
   // The Inside Man's bonus is whole points since 0.15.0 (extension.md "Scoring"): 1 per loot pins the old +1 per loot.
   // The Fence's safe: 5 an act, a token at 10 until the R6 balance pass (docs/balance/r6-balance.md).
