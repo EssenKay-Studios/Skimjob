@@ -1,4 +1,5 @@
 # CI: typecheck, unit + property + integration tests, web e2e, simulator smoke, Docker image.
+# Docs-only PRs (scripts/ci-docs-only.sh) skip e2e, sim smoke and Docker; tests always run.
 # Deploys are manual-only for now (deploy.yml, docs/deploy.md).
 # Layers and how to run each locally: docs/testing.md
 name: CI
@@ -13,6 +14,32 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # docs_only=true only for a pull_request whose base...head diff is all docs.
+  # Pushes to main, manual runs and any diff error give false: everything runs.
+  changes:
+    name: Changed files
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      docs_only: ${{ steps.diff.outputs.docs_only }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          docs_only=false
+          if [ "$EVENT" = pull_request ] && files=$(git diff --name-only --no-renames "$BASE...$HEAD"); then
+            echo "$files"
+            docs_only=$(bash scripts/ci-docs-only.sh <<<"$files") || docs_only=false
+          fi
+          echo "docs_only=$docs_only"
+          echo "docs_only=$docs_only" >> "$GITHUB_OUTPUT"
+
   test:
     name: Typecheck and tests
     runs-on: ubuntu-latest
@@ -41,6 +68,8 @@ jobs:
       - run: pnpm test
 
   e2e:
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
     # Six shards in parallel (the heaviest of four took 11 min) (Playwright --shard), each with its own servers (playwright.config.ts).
     name: Web e2e (Playwright, shard ${{ matrix.shard }}/6)
     runs-on: ubuntu-latest
@@ -71,6 +100,8 @@ jobs:
           if-no-files-found: ignore
 
   sim-smoke:
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
     name: Simulator smoke (200 games at 3/6/12 players)
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -85,6 +116,8 @@ jobs:
       - run: bash scripts/sim-smoke.sh 200
 
   docker:
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
     name: Docker image builds and serves
     runs-on: ubuntu-latest
     timeout-minutes: 20
