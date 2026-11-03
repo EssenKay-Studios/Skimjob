@@ -1,7 +1,8 @@
 #!/bin/bash
 # usage: bash docs/pipeline/gate.qa.test.sh
 # Offline tests for verdicts.sh / merge.sh: a fake `gh` first on PATH serves canned JSON
-# (filtered with jq, as gh's --jq would) and records any `gh pr merge` call. Needs jq.
+# (filtered with jq, as gh's --jq would), records the merge PUT and branch DELETE, and
+# refuses anything that isn't `gh api` REST (the scripts must run where GraphQL is blocked). Needs jq.
 set -u
 DIR=$(cd "$(dirname "$0")" && pwd)
 WORK=$(cd "$DIR/../.." && pwd)/.gate-qa-test
@@ -9,35 +10,38 @@ rm -rf "$WORK"; mkdir -p "$WORK/bin"; trap 'rm -rf "$WORK"' EXIT
 FIX=$WORK/fix
 cat >"$WORK/bin/gh" <<'EOF'
 #!/bin/bash
+# REST only: anything but `gh api` (gh pr …, GraphQL) is a test failure.
 FIX=${GATE_FIX:?}
-q=.; path=; json=; sub="$1 $2"
+q=.; path=; method=GET; sub=$1
+[ "$sub" = api ] || { echo "fake gh: not REST: $*" >&2; echo "$*" >>"$FIX/NOT_REST"; exit 1; }
+shift
 while [ $# -gt 0 ]; do
-  case $1 in --jq) q=$2; shift ;; --json) json=$2; shift ;; -R|-H|--match-head-commit) shift ;;
-    repos/*) path=$1 ;; esac; shift
+  case $1 in --jq) q=$2; shift ;; -X) method=$2; shift ;; -H|-f|-F) shift ;; --paginate) ;;
+    repos/*) path=${1%%\?*} ;; graphql) echo graphql >>"$FIX/NOT_REST"; exit 1 ;; esac; shift
 done
-case $sub in
-  "pr merge") echo merged >"$FIX/MERGED"; exit 0 ;;
-  "pr view") f=pr.json; [ "$json" = commits ] && key=pr-commits ;;
-  api*) case $path in
-      */reviews) f=reviews.json ;; */comments) f=comments.json ;;
-      */compare/*) f=compare.json ;; */check-runs*) f=checks.json ;; */status) f=status.json ;;
-      */commits/*) f=commit-${path##*/}.json ;; *) exit 0 ;; esac ;;
-  *) echo "fake gh: unexpected: $sub" >&2; exit 1 ;;
+case "$method $path" in
+  "PUT "*/pulls/*/merge) echo merged >"$FIX/MERGED"; f=merge.json ;;
+  "DELETE "*/git/refs/heads/*) echo "${path#*/git/refs/heads/}" >"$FIX/DELETED"; exit 0 ;;
+  "GET "*/pulls/*/reviews) f=reviews.json ;; "GET "*/issues/*/comments) f=comments.json ;;
+  "GET "*/pulls/*/commits) f=pr-commits.json ;; "GET "*/pulls/*) f=pr.json ;;
+  "GET "*/compare/*) f=compare.json ;; "GET "*/check-runs) f=checks.json ;; "GET "*/status) f=status.json ;;
+  "GET "*/commits/*) f=commit-${path##*/}.json ;; "GET "*/contents/*) exit 0 ;;
+  *) echo "fake gh: unexpected: $method $path" >&2; exit 1 ;;
 esac
 [ -f "$FIX/$f" ] || { echo "fake gh: no $f" >&2; exit 1; }
-# fail-<file|pr-commits>: print the data (an earlier page), then fail (a later page).
-if [ -f "$FIX/fail-${key:-$f}" ]; then jq -r "$q" "$FIX/$f"; echo "fake gh: HTTP 502" >&2; exit 1; fi
+# fail-<file>: print the data (an earlier page), then fail (a later page).
+if [ -f "$FIX/fail-$f" ]; then jq -r "$q" "$FIX/$f"; echo "fake gh: HTTP 502" >&2; exit 1; fi
 jq -r "$q" "$FIX/$f"
 EOF
 chmod +x "$WORK/bin/gh"
 export PATH=$WORK/bin:$PATH GATE_FIX=$FIX
 
 H=$(printf 'a%.0s' {1..40}); R=$(printf 'b%.0s' {1..40}); C=$(printf 'c%.0s' {1..40})
-OK_AUTHOR='[{"name":"karthik24iyer","email":"karthik24iyer@gmail.com"}]'
+OK_AUTHOR='{"name":"karthik24iyer","email":"karthik24iyer@gmail.com"}'
 # Fixture defaults: everything mergeable at head H.
 reset() {
   rm -rf "$FIX"; mkdir -p "$FIX"
-  draft=false; mstate=CLEAN; state=OPEN; authors=$OK_AUTHOR; body=""
+  draft=false; mstate=clean; mable=true; state=open; merged=false; authors=$OK_AUTHOR; body=""
   review="VERDICT: APPROVE\nHead: $H"; qa="QA: PASS\nHead: $H"; review_new=""; qa_new=""
   review_new_by=karthik24iyer; qa_new_by=karthik24iyer; review_new_state=COMMENTED
   qa_as_review=""; review_as_comment=""; statuses=""
@@ -46,9 +50,12 @@ reset() {
 }
 write() {
   cat >"$FIX/pr.json" <<J
-{"headRefOid":"$H","isDraft":$draft,"mergeStateStatus":"$mstate","state":"$state",
- "commits":[{"oid":"$C","authors":$authors,"messageHeadline":"feat: x","messageBody":"$body"}]}
+{"head":{"sha":"$H","ref":"feat/x","repo":{"full_name":"EssenKay-Studios/Skimjob"}},"draft":$draft,
+ "mergeable_state":"$mstate","mergeable":$mable,"state":"$state","merged":$merged}
 J
+  jq -n --arg c "$C" --argjson a "$authors" --arg m "feat: x\n\n$body" \
+    '[{sha: $c, commit: {author: $a, message: ($m | gsub("\\\\n"; "\n"))}}]' >"$FIX/pr-commits.json"
+  echo "{\"merged\":true,\"sha\":\"$(printf 'd%.0s' {1..40})\"}" >"$FIX/merge.json"
   # *_new: a newer review / comment after the first one.
   # Times: review, then QA, then the *_new ones, then the cross-channel ones (newest).
   jq -n --arg a "$review" --arg b "$review_new" --arg by "$review_new_by" --arg st "$review_new_state" --arg x "$qa_as_review" '[
@@ -73,11 +80,18 @@ fails=0
 expect() {
   write
   out=$(bash "$DIR/verdicts.sh" 1); rc=$?
-  bash "$DIR/merge.sh" 1 >/dev/null 2>&1
-  merged=no; [ -f "$FIX/MERGED" ] && merged=yes
+  mout=$(bash "$DIR/merge.sh" 1 2>&1)
+  did=no; [ -f "$FIX/MERGED" ] && did=yes
   want_rc=1; [ "$1" = yes ] && want_rc=0
-  if [ $rc -eq $want_rc ] && [ $merged = "$1" ]; then echo "ok   $2"
-  else echo "FAIL $2 (verdicts rc=$rc, merge called=$merged)"; echo "$out" | tail -1; fails=$((fails + 1)); fi
+  why=
+  [ $rc -eq $want_rc ] && [ $did = "$1" ] || why="verdicts rc=$rc, merge called=$did"
+  [ -f "$FIX/NOT_REST" ] && why="non-REST gh call: $(head -1 "$FIX/NOT_REST")"
+  if [ "$1" = yes ] && [ -z "$why" ]; then
+    [ "$(cat "$FIX/DELETED" 2>/dev/null)" = feat/x ] || why="branch not deleted"
+    [[ $(tail -1 <<<"$mout") == "merged #1 -> main ddddddd | next: "* ]] || why="merge line: $(tail -1 <<<"$mout")"
+  fi
+  if [ -z "$why" ]; then echo "ok   $2"
+  else echo "FAIL $2 ($why)"; echo "$out" | tail -1; fails=$((fails + 1)); fi
 }
 
 reset; expect yes "all green, review and QA on head"
@@ -98,13 +112,16 @@ reset; checks='{"name":"e2e","status":"in_progress","conclusion":null}'; expect 
 reset; checks='{"name":"e2e","status":"completed","conclusion":"failure"}'; expect no "CI failing"
 reset; checks='{"name":"e2e","status":"completed","conclusion":"cancelled"}'; expect no "CI cancelled"
 reset; checks=''; expect no "no check-runs"
-reset; authors='[{"name":"someone","email":"someone@example.com"}]'; expect no "commit by another author"
-reset; authors='[{"name":"karthik24iyer","email":"karthik24iyer@gmail.com"},{"name":"Claude","email":"noreply@anthropic.com"}]'; expect no "co-author in authors list"
+reset; authors='{"name":"someone","email":"someone@example.com"}'; expect no "commit by another author"
+reset; authors='{"name":"karthik24iyer","email":"noreply@anthropic.com"}'; expect no "right name, wrong email"
 reset; body='more\n\nCo-authored-by: Claude <noreply@anthropic.com>'; expect no "Co-authored-by line in message"
 reset; body='Claude-Session: abc'; expect no "Claude-Session line in message"
 reset; draft=true; expect no "draft PR"
-reset; state=CLOSED; expect no "closed PR"
-reset; mstate=BLOCKED; expect no "merge state BLOCKED"
+reset; state=closed; expect no "closed PR"
+reset; state=closed; merged=true; expect no "merged PR"
+reset; mstate=blocked; expect no "merge state blocked"
+reset; mstate=unstable; expect no "merge state unstable"
+reset; mstate=unknown; mable=null; expect no "mergeability still unknown after the retry"
 # Renames and removals: the old path counts too.
 reset; review="VERDICT: APPROVE\nHead: $R"; since_files='["src/rules.qa.test.ts"]'; prev=src/rules.ts; expect no "source renamed to a QA name since review"
 reset; review="VERDICT: APPROVE\nHead: $R"; since_files='["src/old.qa.test.ts"]'; prev=src/older.qa.test.ts; expect yes "QA test renamed to another QA test since review"
@@ -144,7 +161,7 @@ reset; touch "$FIX/fail-status.json"; expect no "commit status read fails"
 reset; touch "$FIX/fail-reviews.json"; expect no "reviews read fails"
 reset; touch "$FIX/fail-comments.json"; expect no "comments read fails"
 reset; touch "$FIX/fail-checks.json"; expect no "check-runs read fails"
-reset; touch "$FIX/fail-pr-commits"; expect no "PR commits read fails"
+reset; touch "$FIX/fail-pr-commits.json"; expect no "PR commits read fails"
 reset; review="VERDICT: APPROVE\nHead: $R"; touch "$FIX/fail-compare.json"; expect no "compare fails"
 reset; review="VERDICT: APPROVE\nHead: $R"; touch "$FIX/fail-commit-$C.json"; expect no "commit files read fails"
 reset; touch "$FIX/fail-pr.json"; expect no "PR read fails"
