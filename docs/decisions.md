@@ -8,6 +8,7 @@ Newest first. Each entry: what was decided, and why. Add an entry whenever a rul
 The owner chose AWS Lightsail. Skimjob runs at https://skimjob.duckdns.org on the owner's existing Lightsail box, beside another production app (Arcway) that no Skimjob step may touch. Setup: a hardened systemd service `skimjob` (system user `skimjob`), releases under `/srv/skimjob/releases/<REL>` with a `current` symlink, env in `/etc/skimjob/env`, its own nginx site and Postgres role and database, weekly `pg_dump`. Built on the Mac and uploaded; no deploy from CI. Runbook: `docs/deploy.md`. The Fly files (`Dockerfile`, `fly.toml`, `deploy.yml`) stay but are unused. Supersedes "Fly.io deployment for playtests" (1 Nov) and the open "deploy target" questions.
 
 ### 2026-11-03 — End-of-game reveal (M2-11, PR #55)
+Builder readings, provisional, owner to confirm:
 - The summary is built only from the viewer's own `visibleLog` after the end (which then reveals everything), the outcome and config tables; never from live state, so it can't leak early and the leak scrub covers it.
 - Police: a `policeActivity` straight followed by `tipOffLanded` is that Mole's tip-off; anything else is a patrol. Camera offline: a blackout event card that round is a Power cut, otherwise a Hacker loop credited to the hackers who looped that room.
 - A stolen vote's `decided` is true only when the Blackmailer got a `stolenVoteDecided` token (so always false in starter mode, no tokens).
@@ -29,6 +30,7 @@ Google is on only when both `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are se
 - Display name: Google's `name` if it passes the nickname rules, else `given_name`, else "Crook". Scopes `openid profile` (no email); `prompt=select_account`. The landing page asks `/me` only when Google is on. The sign-in cookie path is `/`.
 
 ### 2026-11-03 — Extension UI (R6b, PR #52)
+Builder readings, provisional, owner to confirm:
 - **Starter deck ≠ starter mode:** the Starter deck keeps tokens, the shop and per-role toggles, with events off; only Quick (server-side `starterMode`) drops tokens and the shop. Per-role toggles send `roles: []` when the pick equals the deck preset; the last role can't be switched off.
 - Meeting perks (+Vote, Ballot) are hidden once a perk was used by choice this round (mirrors the engine's one-per-round rule).
 - **Heat breakdown data (no rule change):** the crew-size rounding remainder goes to the room lines, so `base` is exactly `heat.perRound`; a new `clamp` part records what the 0 / max bound took back, so the parts add up to the real change. Police activity at the top is folded in the same way; a stopped raid shows as `stopped`.

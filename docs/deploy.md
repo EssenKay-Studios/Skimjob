@@ -26,9 +26,17 @@ never in this (public) repo. The deployed build and whether a redeploy is pendin
 Rules on the box: only ever `sudo nginx -t && sudo systemctl reload nginx`; never restart nginx or Postgres;
 never `pm2 … all`; never touch Arcway's files, process or database.
 
-Before deploying, check running games: a game whose log holds event types removed since the deployed build won't
-replay on the new one. Finish or abandon those first.
-
+0. **Check for games in progress** on the box, and warn their players. A restart drops sockets for a few seconds
+   (clients reconnect; the scheduler catches up on deadlines that passed). A game whose log holds event types removed
+   since the deployed build won't replay, so finish those first (`git log -p <deployed sha>..main --
+   packages/engine/src/types/events.ts`; none were removed between 38002fd and 16a4a20).
+   ```sh
+   sudo runuser -u postgres -- psql -d skimjob -Atc \
+     "select g.id, g.updated_at, count(s.*) from games g join seats s on s.game_id = g.id
+      where g.status = 'running' group by g.id order by g.updated_at desc"
+   ```
+   There is no broadcast to players; tell the hosts of those games directly (and, from builds with #54, they can
+   pause first).
 1. **Build on the Mac** from a fresh clone of `main`, in a scratch folder (not `/tmp`), Node 22, pnpm 10.28:
    ```sh
    export PATH=/opt/homebrew/opt/node@22/bin:$PATH CI=1 PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
@@ -146,7 +154,7 @@ lists "My games" (`GET /api/me/games`). To turn Google off, remove both variable
 ```
 pnpm --filter @skimjob/web build && pnpm --filter @skimjob/server build
 NODE_ENV=production PORT=8080 PUBLIC_ORIGIN=http://localhost:8080 WEB_DIR=$PWD/apps/web/dist \
-  PGLITE_DIR=/tmp/skimjob-pglite node apps/server/dist/main.js
+  PGLITE_DIR=memory node apps/server/dist/main.js
 ```
 
 Or with Docker: `docker build -t skimjob . && docker run --rm -p 8080:8080 -v skimjob-data:/data -e PUBLIC_ORIGIN=http://localhost:8080 skimjob`.

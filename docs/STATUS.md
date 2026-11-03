@@ -65,9 +65,13 @@ Plan and acceptance criteria: `docs/m2-plan.md`. This is the canonical task list
 - **M4** — more content (museum, casino, roles, events).
 
 ## Questions for the owner
-All provisional; each is recorded in `docs/decisions.md`.
-- **R6a rules** (decisions.md "R6a provisional decisions", "R6a confirm items"): automatic perks (Shield, Emergency) are exempt from one-per-round; the Blackmailer keeps its token if the shakedown is then cancelled; the Mole tips off at most 3 times a game, even with Recharge.
-- **Balance** (decisions.md "PM provisional calls on the R6 parity gate"): the split parity gate; ★ band 0.9–1.8× the Team average; ★ lean point 0.8; Balanced 4p 1 Lone wolf / 1 Wildcard; Team parity ≤ 0.20 until M2-14 (0.10 target); Muscle bot rescue threshold 2.
-- **Host pause** (decisions.md "Host controls (M2-13)"): players can still plan, lock in and chat while the game is paused; only clocks stop.
-- **Google sign-in** (decisions.md "Google sign-in (M2-12)"): when a guest's seat and the account's seat are in the same game, the account's seat is kept; the redirect URI comes from env (`PUBLIC_ORIGIN` + `/api/auth/google/callback`), never the request's Host.
-- **Resume:** when to restart development (M2-14, M2-15) and the Lightsail redeploy.
+Every provisional call still to confirm, once each; the details are in the named `docs/decisions.md` entry (3 Nov unless dated).
+1. **"R6a provisional decisions"** (#50): Balanced 5–6p deal; token triggers; automatic perks (Shield, Emergency) exempt from one-per-round; police moments on game time; view readings; legacy `mole` setting migration; bot and sim tunables.
+2. **"R6a confirm items"**: the Blackmailer keeps its token if the shakedown is cancelled; the Mole tips off at most 3 times a game, even with Recharge.
+3. **"PM provisional calls on the R6 parity gate"** (#51): the split parity gate; ★ band 0.9–1.8×; ★ lean point 0.8; Balanced 4p 1/1; Team parity ≤ 0.20 until M2-14; Muscle bot threshold 2.
+4. **"Owner answers, 3 Nov (morning)"**, "Provisional (PM, 3 Nov fix round)" and "Gap-fills": background police only when a Mole could be dealt; a tip-off lands at the next free hidden police moment; a wrong Duel call-out pays [8]; the between-meetings end, Recharge, 1 h default session, Quick = Starter with no shop, Duel shop and dealing, the Fixer stopping any raid, Forger 7+.
+5. **"Host controls (M2-13)"** (#54): players can act while paused; Extend amounts per preset, no cap; replace with bot after 2 missed rounds (never the host, Opportunist), handed back by host or player; lobby kick of any non-host seat.
+6. **"Google sign-in (M2-12)"** (#53): the account's seat is kept on a same-game clash; redirect URI from env (`PUBLIC_ORIGIN` + `/api/auth/google/callback`); display-name fallback (`name` → `given_name` → "Crook"); `prompt=select_account`.
+7. **"Extension UI (R6b)"** (#52) and **"End-of-game reveal (M2-11)"** (#55): builder readings (Starter deck ≠ starter mode, Heat breakdown parts, reveal attribution of tip-offs, loops and stolen votes).
+8. **Older `(provisional)` markers** (1–2 Nov entries, M1 to M2-10, R1–R5; partly accepted in "Owner answers, 2 Nov"): accept the rest in bulk, or name any to revisit.
+9. **Resume:** when to restart development (M2-14, M2-15) and the Lightsail redeploy.

@@ -17,7 +17,7 @@
 - **GitHub:** `gh` is logged in. Prefer `gh pr create`, `gh pr view`, `gh pr diff`, `gh pr review N --comment --body-file F`, `gh pr comment N --body-file F`; `gh api` (REST or GraphQL) for the rest. Rebase, `git reset --hard` and `git push --force-with-lease` to **your own feature branch** are fine. Never force-push `main`, and never push to someone else's branch while they work on it.
 - **CI:** poll `gh pr checks N` in short calls; never `gh pr checks --watch` (it gets backgrounded and stalls). Run long commands in the foreground.
 - **Commands** (repo root): `pnpm test`, `pnpm typecheck`. Postgres tests (`pnpm test:pg`) need Homebrew postgres and are optional.
-- **E2E:** install the browser once: `cd apps/web && npx playwright install chromium` (normal Mac cache, no `PLAYWRIGHT_BROWSERS_PATH`). 3–5 agents (Opus subagents) run at once on this Mac, so:
+- **E2E:** install the browser once: `cd apps/web && npx playwright install chromium` (normal Mac cache, no `PLAYWRIGHT_BROWSERS_PATH`). 3–5 agents (subagents) run at once on this Mac, so:
   - give your run its own ports: `E2E_PORT=5<NN>79 E2E_SERVER_PORT=3<NN>79 E2E_FAST_PORT=5<NN>80 E2E_FAST_SERVER_PORT=3<NN>80` (pick an unused `<NN>`; defaults are 5179/3179/5180/3180);
   - while iterating, run only the affected specs: `npx playwright test e2e/chat.spec.ts e2e/chat.qa.spec.ts`;
   - rely on CI for the full suite (unit and e2e); never skip or disable a test. Known flaky tests: `docs/pipeline/HANDOFF.md`.

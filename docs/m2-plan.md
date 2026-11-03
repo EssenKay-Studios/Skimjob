@@ -46,7 +46,7 @@ code must handle any engine event type through exhaustive switches so new types 
 - **Art:** inline React SVG components drawn by agents per ui-style.md (2D cel-shaded look, ink outlines,
   seeded wobble). No WebGL, no image assets. Fonts Pangolin + Inter self-hosted woff2 (OFL).
 - **Testing:** vitest for everything (server via `inject()` + real WS clients on PGlite; web pure helpers);
-  **one Playwright E2E** (`apps/e2e`): two browser contexts plus bots play a short game to the reveal.
+  **one Playwright E2E** (`apps/web/e2e`): two browser contexts plus bots play a short game to the reveal.
 - **Clock:** the server owns time through an injected `Clock` (real or fake), so scheduler tests are instant.
 
 ## 2. Tasks
@@ -107,7 +107,7 @@ async lock, single process). Never send `seq` outside its owner's view (evidence
 - Move panel: room list (loot, Heat hint), split slider, Lock it in; default move shown if missed.
 - Alibi button; plain ledger and case-file lists; a one-line text for every event type (exhaustive switch,
   in a pure `describeEvent()` with tests); game-over panel with the ranking.
-- Playwright E2E (`apps/e2e`): host + one guest + bots play a Quick game to the end and see the ledger.
+- Playwright E2E (`apps/web/e2e`): host + one guest + bots play a Quick game to the end and see the ledger.
 - Refs: §5, §5.4, §13. **Accept:** a human can finish a game against bots in the browser; E2E green.
 
 ### M2-7 Meetings and voting UI (M)

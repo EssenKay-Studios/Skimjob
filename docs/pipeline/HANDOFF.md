@@ -40,12 +40,13 @@ Read this with `docs/STATUS.md` (the canonical task list and the owner's open qu
 ## Agent quirks and testing
 - **Never `gh pr checks --watch`:** it gets backgrounded and stalls agents. Poll `gh pr checks N` in short calls instead. Run long commands in the foreground.
 - **Testing policy:** while iterating, run only the tests relevant to the PR (affected unit tests and e2e specs); rely on CI for the full suite. Never skip or disable a test.
-- **Known flaky tests** (rerun once; if it fails again, treat it as real):
-  - `game.qa` line 82 [mobile-fast], also flaky in CI;
-  - `responsive.qa` line 130 [mobile];
-  - a mobile landing-page touch-target test;
-  - "junk is refused without a request";
-  - `notes.spec` line 18.
+- **Known flaky tests** (rerun once; if it fails again, treat it as real). E2E files are in `apps/web/e2e/`; `[project]` is the Playwright project:
+  - `game.qa.spec.ts` "12 seats, 24-char names: a Quick game to the end with moves changed, alibis, no leaks, no overflow" [mobile-fast], also flaky in CI;
+  - `responsive.qa.spec.ts` "landing behaviour › reduced motion › turns off the sheet entrance and toast animations" [mobile];
+  - `responsive.qa.spec.ts` "<width>x<height> touch › touch targets are at least 44px on /" [mobile];
+  - `responsive.qa.spec.ts` "landing behaviour › invite field: links, spaces and dashes are tidied; junk is refused without a request" (project not recorded);
+  - `notes.spec.ts` "the recap shows what changed while you were away, once, and the board stays private" [desktop];
+  - `packages/bots/src/hunch.test.ts` timed out once under load (vitest).
 - **QA pushes once,** at the end (each push restarts CI); its comment names the head after that push.
 - **Verdicts name a sha.** After any non-QA-test commit, get a delta re-review naming the new head.
 - **The PM can't self-QA a docs PR:** spawn a QA agent to check it before merging.
@@ -65,5 +66,5 @@ Read this with `docs/STATUS.md` (the canonical task list and the owner's open qu
 - Goal: finish development and testing and hand over an artifact to verify (the M2-15 offline demo), with the live Lightsail site for playtests.
 - Ask the owner only for real decisions, as MCQs with a recommended option; batch technical defaults (about 4 at a time). Otherwise keep going.
 - UI: the cityrt-style cartoon notebook on every screen (`docs/ui-style.md`, CLAUDE.md UI rules). Style only: never their logo, name or art.
-- **The repo is public.** Never commit secrets, SSH key names, connection details or backup destinations.
+- **The repo is public.** Never commit secrets, SSH key names, connection details (host, IP, user) or any off-box backup destination or its credentials. On-box paths, service and file names, and the backup script and schedule may be named (`docs/deploy.md` does).
 - Player rulebook: claude.ai doc "Skimjob — How to play" (https://claude.ai/artifact/3dEyv4wdmiJ3a9DhrtsBtN). Exact roles dealt is the default.
