@@ -86,8 +86,8 @@ Rooms in play by crew size: 3–4 players 5 rooms; 5–8 players 7 rooms; 9–12
 4. Optionally **use your role's power** (§11) and **one perk** (§12).
 5. **Lock in.** A move can be changed until the round ends.
 
-- **A short bank** *(provisional, PM, 4 Nov)*: when the bank can't cover every grab, coins are handed out one at a time, round-robin, from a seeded random seat, until the bank is empty. A grab that is cut loses its pocket-bound coins first, then its duffel-bound ones. Rings count the coins actually grabbed. When the possible grabs add up to more than the bank holds, the preview says "the bank may run short this round".
-- A grab in a coin room is always at least 1 coin while the bank has coins.
+- **A short bank** *(provisional, PM, 4 Nov)*: when the bank can't cover every grab, coins are handed out one at a time, round-robin, from a seeded random seat, until the bank is empty. A grab that is cut loses its pocket-bound coins first, then its duffel-bound ones. Rings count the coins actually grabbed. When the **maximum** possible grabs (every player's highest grab, from public information) add up to more than the bank holds, the preview says "the bank may run short this round".
+- A move in a coin room asks for at least 1 coin (a short bank can still leave it with 0, as above).
 - **No room has a visitor limit,** the Rooftop included: a limit would reveal secret moves ("the Office is full") and reward whoever locks in first.
 
 ### 3.3 Missed move
@@ -118,7 +118,7 @@ After the round, each player learns **who else was in their room** (none in a bl
 8. **End check:** bank empty or round cap reached (§6.2). If the game ends, nothing below runs.
 9. **Meeting check** (only if the game goes on): a police briefing after a raid; a regular meeting when the bank passes a third (§9.1).
 
-Raids come before cooling, so the Rooftop can't save a room in the same round, and the bell preview stays exact.
+Raids come before cooling, so the Rooftop can't save a room in the same round, and the bell preview stays exact (unless the bank runs short, §3.2).
 
 ---
 
@@ -185,7 +185,7 @@ There are no acts, checkpoints or targets. A game that empties the bank early si
 
 ### 6.3 The getaway car
 
-At the end, whatever is left in the kitty pays for the getaway car and leaves the game.
+At the end, whatever is left on the table (the kitty and any coins waiting to be split) pays for the getaway car and leaves the game.
 
 ---
 
@@ -245,11 +245,16 @@ Only Rooftop players escape; the biggest stash among them wins; nobody on the Ro
 
 ### 8.4 Sunk by theft
 
-If honesty is **below two-thirds** at the end (bank or round cap), the heist fails: **nobody wins, except the Mole or the Fixer, if one of them holds the biggest stash** (§11, their handlers).
+If honesty is **below two-thirds** at the end (bank or round cap), the heist fails: **nobody wins, except the Mole or the Fixer, if one of them holds (or ties for) the biggest stash of all players** (§8.5; §11, their handlers).
 
 ### 8.5 Ties
 
-*(provisional, PM, 4 Nov)* Only **eligible** players can win: everyone on a success, the escapees on a bust, only the Mole and the Fixer on a heist sunk by theft. Among eligible players tied for the biggest stash, the one with **fewer shakedowns passed against them** wins (a Bail-cancelled one doesn't count); players still tied **share the win**. So on a heist sunk by theft, a Mole or Fixer tied with a non-eligible player still wins, and a Mole and a Fixer tied with each other share it.
+**Who can win, by ending** *(PM, 4 Nov)*:
+- **Success:** the biggest stash among all players; the whole crew together if no coin was pocketed (§8.2).
+- **Bust:** the biggest stash among the Rooftop escapees, any role (§5.5).
+- **Sunk by theft:** the Mole or the Fixer, only if they hold (or tie for) the biggest stash of **all** players; a tie with a player who can't win still goes to the Mole or Fixer. Otherwise nobody.
+
+**Tie-breaks** *(provisional, PM, 4 Nov)*: among the players who can win in that top group, the one with **fewer shakedowns passed against them** wins (a Bail-cancelled one doesn't count); players still tied **share the win**. A Mole and a Fixer tied for the biggest stash still go through this, then share.
 
 ### 8.6 The ranking
 
@@ -323,12 +328,12 @@ Every role has a one-sentence power, a "How you win" line and a "How to spot it"
 | **Hacker** | Shadows | One room's bell is hidden from everyone this round (it shows "?"). | Once between meetings |
 | **Electrician** | Shadows | Black out one room next round: nobody there sees who else is there, and its cameras are offline. Its bell still rings. Announced at the start of that round as "Power cut in the Office", with no source. | Once between meetings |
 | **Priest** | Eyes | Secretly absolve one player: whatever they hold above the fair share goes back on the table (coins spent on perks are not taken). The Priest learns how much. Not the same player twice in a row; the absolved player is told "your sins were absolved". | Once between meetings |
-| **Mole** | Shadows | Secretly ring any room once, except the Rooftop (a police tip-off). Wins a heist sunk by theft with the biggest stash. | Once between meetings |
-| **Fixer** | Shadows | Tear the tape off a raided room and reopen it from next round. Wins a heist sunk by theft with the biggest stash. | Once per game |
+| **Mole** | Shadows | Secretly ring any room once, except the Rooftop (a police tip-off). Wins a heist sunk by theft if theirs is the biggest stash of all players. | Once between meetings |
+| **Fixer** | Shadows | Tear the tape off a raided room and reopen it from next round. Wins a heist sunk by theft if theirs is the biggest stash of all players. | Once per game |
 
 *Readings (provisional, builder S1):* the Hacker sees the real bell; the hidden bell reappears when the next round starts, and a raid is always public. The Mole's ring is applied at step 2 of §4.2, can cause a raid, shows as an ordinary ring, and can't target the Rooftop (§5.5). A Lookout's or Security's look into a blacked-out room shows nobody. No power or perk can target yourself; a player put on a feed by Plant evidence still shows in their real room too.
 
-*The Priest* *(provisional, PM, 4 Nov)*: the target is chosen while planning and resolved at the split step (§4.2 step 5) of that round, after this round's pocketing and purchases, against the fair share **before** this round's split. The returned coins go into **next round's** pot and earn honesty credit when they reach the table. On a bust they are lost with the rest (§5.5).
+*The Priest* *(provisional, PM, 4 Nov)*: the target is chosen while planning and resolved at the split step (§4.2 step 5) of that round, after this round's pocketing and purchases, against the fair share **before** this round's split. The returned coins go onto **the table** for the next split and earn honesty credit when they reach it; in the last round they join the kitty and go to the getaway car (§6.3). **On a bust the absolve never resolves** (a bust skips the split step): the target keeps their whole stash (an escapee keeps it for the win) and the Priest's use is still spent *(provisional, PM, 4 Nov)*.
 
 ### 11.2 The frequency rule
 
@@ -352,7 +357,7 @@ Every role has a one-sentence power, a "How you win" line and a "How to spot it"
 - **There are no tokens.** Perks are bought with coins **from your own stash**, which lowers your score. The coins **leave the game** (paid to fixers and cops); buying doesn't change the crew take or honesty.
 - **The shop:** each game deals **one perk per tier** (3 items), picked with the game's seed. The "This game" rulebook lists only those.
 - **Stock** *(provisional, PM, 4 Nov)*: each of the 3 items has unlimited stock, and any player may buy any item, again in later rounds.
-- **One perk per player per round**, each single-use, bought and used while planning, except **Bail**, the one held item: it waits until your next shakedown. *Provisional (builder S1):* you pay from your stash as it stood at the start of the round; this round's pocket can't pay.
+- **One perk per player per round**, each single-use, bought and used while planning, except **Bail**, the one held item: it waits until your next shakedown. You can hold only one Bail at a time *(provisional, builder S1)*. *Provisional (builder S1):* you pay from your stash as it stood at the start of the round; this round's pocket can't pay.
 - **Every purchase is logged at once, without a name:** "🛒 Someone bought Soft shoes (2 coins)". Who bought it opens at the reveal.
 - **Laundering is allowed:** coins spent on perks can't be taken by a shakedown or the Priest, but they no longer count toward winning.
 
@@ -547,9 +552,9 @@ One-line texts the UI, the rulebook and the tips read from content, so they neve
 | Smooth Talker | Your vote counts twice. | Like everyone: the biggest stash on a good heist. | A vote passed with fewer hands than it should have. |
 | Hacker | Once between meetings, hide one room's bell from everyone this round. | Like everyone: the biggest stash on a good heist. | A bell shows "?" and someone seems calm about it. |
 | Electrician | Once between meetings, cut the power in one room next round: no sightings, no cameras. | Like everyone: the biggest stash on a good heist. | A power cut lands where someone wanted no witnesses. |
-| Priest | Once between meetings, secretly take back whatever one player holds above the fair share. | Like everyone: the biggest stash on a good heist. | Coins come back to the table with no shakedown. |
-| Mole | Once between meetings, secretly ring any room once (not the Rooftop). | The biggest stash on a good heist, or on a heist sunk by theft. | A bell rang more than the people in the room can explain. |
-| Fixer | Once a game, tear the police tape off a raided room and reopen it. | The biggest stash on a good heist, or on a heist sunk by theft. | A taped-off room is suddenly open again. |
+| Priest | Once between meetings, secretly take back whatever one player holds above the fair share (not on a bust). | Like everyone: the biggest stash on a good heist. | Coins come back to the table with no shakedown. |
+| Mole | Once between meetings, secretly ring any room once (not the Rooftop). | The biggest stash on a good heist, or the biggest of all on a heist sunk by theft. | A bell rang more than the people in the room can explain. |
+| Fixer | Once a game, tear the police tape off a raided room and reopen it. | The biggest stash on a good heist, or the biggest of all on a heist sunk by theft. | A taped-off room is suddenly open again. |
 
 Plain crew: "No power. Your choices are your tool."
 Bust (every role): "On a bust, only the Rooftop gets away."
@@ -587,7 +592,7 @@ Bust (every role): "On a bust, only the Rooftop gets away."
 | Kitty | Coins that didn't split evenly. They wait for the next split. |
 | Duffel | Coins here are shared equally by the whole crew. |
 | Pocket | Coins here are yours alone. Nobody sees them, unless you're shaken down or absolved. |
-| Stash | Everything you hold. The biggest stash wins, if the heist holds. |
+| Stash | Everything you hold. The biggest stash wins, if the heist holds or you escape a bust. |
 | Crew take | This round's coins on the table, about to be split equally. |
 | Missing | Coins taken this round that never reached the duffel. Nobody knows whose. |
 | Raid | The police hit a room: its visitors lose this round's grab, and Wanted goes up a star. |
@@ -605,9 +610,11 @@ Bust (every role): "On a bust, only the Rooftop gets away."
 | G2 | **Raids** | 1–3 raids per game on average; at least one raid in 50–90% of games | 3, 6, 12 |
 | G3 | **Bust rate** | 8–20% of games | 3, 6, 12 |
 | G4 | **Rooftop stalls** (a round with more than half the crew on the Rooftop) | ≤ 15% of rounds; ≤ 10% of games end at the round cap with over a quarter of the bank left | 3, 6, 12 |
-| G5 | **Role win rate vs. the cell average** (a role's win credit per game held ÷ the average win credit per seat in the same cell, a cell being crew size × ending; shared wins split) | Every role, and plain crew, within 0.75–1.33 | 6, 12 (reported at 3) |
+| G5 | **Role win rate vs. the cell average** (a role's win credit per game held ÷ the average win credit per seat in the same cell, a cell being one crew size (and bot mix / events setting), **pooled over all endings**; shared wins split; the split by ending is reported, not gated) | Every role, and plain crew, within 0.75–1.33 | 6, 12 (reported at 3) |
 | G6 | **All-honest wins:** the share of successful games in which no coin was pocketed (§8.2) | 5–20% of successful games | 3, 6, 12 |
-| G7 | **Perks don't decide games** | Buyers' win rate ÷ non-buyers' within 0.8–1.25; no single perk's buyers above 1.3× the cell average (as in G5) | 6, 12 (reported at 3) |
+| G7 | **Perks don't decide games** | Buyers' win rate ÷ non-buyers' within 0.8–1.25; no single perk's buyers above 1.3× the cell average (pooled over all endings, as in G5) | 6, 12 (reported at 3) |
 | G8 | **Sunk by theft** (report only) | Reported, with Mole and Fixer wins in it | 3, 6, 12 |
+
+*Watch in S5:* with the per-coin rule, a Locksmith's grab is always silent, so Soft shoes adds nothing for them; G5 should show whether the Locksmith sits high.
 
 `docs/balance/baseline.json` is refreshed in S5 against these gates.
