@@ -82,7 +82,16 @@ R7 is built with ten seams (`docs/simplified.md` A12) so Advanced is mostly cont
 | Server | Everything | Filing deadlines (like alibi windows), the Advanced setting and paid access |
 | Web | Everything | The record form (generic), role badges and the "Reported by" levels, the swap vote, a Learn chapter |
 
-**Rough size:** about **70–80% shared**. The new work is mostly role design, content and bot behaviour for each role, not engine changes: roughly 40–50% of R7's size measured in PRs (about 15–20 PRs, against R7's 30–35), about 3–5 days of agent work through the same pipeline; most of it is content and bots rather than engine. **It is not a rewrite**, provided R7 keeps A12's seams; if they're skipped (for example roles fixed at setup, or the Mole's win in the end-of-game code), roles and facts have to be found and reworked later, which roughly doubles the cost.
+**Rough size:** about **70–80% shared**. The new work is **added code**, not replaced code: about 40–50% of R7's size measured in PRs (about 15–20 PRs, against R7's 30–35), about 3–5 days of agent work through the same pipeline, mostly content, role handlers and bot behaviour. Edits to existing R7 code should total a few hundred lines (registering the new pieces, the lobby's mode choice, filing deadlines in the scheduler). **It is not a rewrite**, provided R7 keeps A12's seams; if they're skipped (for example roles fixed at setup, or the Mole's win in the end-of-game code), R7 code has to be found and reworked, which roughly doubles the cost.
+
+## Additive only (owner, 4 Nov)
+
+Advanced **adds** to R7 and does not replace it. R7 stays a complete game on its own, and every Advanced PR keeps it that way:
+
+1. **New code goes in new files:** the Advanced ruleset in content, new and redesigned roles as new handlers, the record command, the swap motion, bots for the new roles, the record form and badges. R7's roles (the Mole, Fixer and the rest) are never deleted or rewritten; the Advanced ruleset simply doesn't include them, and a redesigned role (for example the Advanced Auditor) is a separate handler.
+2. **R7 code changes only at registration points:** the registries for rulesets, roles, perks, events, motions, trust levels and record formats; the lobby's mode choice; the scheduler's filing deadline. Any other change to an R7 file needs a written reason in the PR body and the orchestrator's approval, and is then made as a general extension (a new seam) rather than an Advanced-specific branch.
+3. **R7's whole test suite passes unchanged on every Advanced PR.** No R7 test may be edited or deleted in an Advanced PR; new tests are added alongside. CI runs the R7 suite in full whenever R7 files change.
+4. **Reviewers reject** an Advanced PR that rewrites R7 behaviour, branches on the ruleset's name, or touches R7 files beyond point 2. Each PR body lists its edits to existing files.
 
 ## Paid version
 
