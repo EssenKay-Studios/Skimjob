@@ -13,7 +13,7 @@ Update in place: change or delete an entry when a decision changes; never add "w
 - **Bots are players:** they get only `viewFor()`, emit normal commands, use their own seeded RNG (never the game seed) and rebuild suspicion from the view each time. Personalities are parameter sets in `packages/bots`, not content. *Confirmed.*
 - **`GameConfig` holds only settings that change the rules;** session length, deadlines, pauses and bot replacement are the server's. Only resting phases are modelled; `advance` names the deadline that passed. *Confirmed.*
 - **Player ids** match `/^[A-Za-z0-9_-]{1,32}$/` and are never `__proto__`/`constructor`/`prototype` (they are record keys). *Confirmed.*
-- **Commands are untrusted JSON:** refusal reasons print values with `show()` (never throws, cuts long strings). *Confirmed.*
+- **Commands are untrusted JSON:** refusal reasons print values with `show()` (never throws, cuts long strings); a meeting slot is at most 64 characters. *Confirmed.*
 - **Content overrides** replace numbers only, validated as untrusted JSON; they can't add rooms or roles. `gameCreated` carries the content version and overrides. *Confirmed.*
 - **No new runtime dependencies in the engine** without an entry here; `fast-check` is a test-only devDependency. *Confirmed.*
 
@@ -31,18 +31,19 @@ Full text: `docs/simplified.md` Part A (section numbers below). Numbers marked [
 - **A7, the plan board:** a shared board per round with pledges; nothing is binding. Only the per-round snapshot goes into the game log, as evidence.
 - **A8, roles are tools:** about 5-7 roles per game from Lookout, Locksmith, Detective, Auditor, Smooth Talker, Hacker, Electrician, Priest, Mole, Fixer; every role is dealt at random, balanced between eyes (spot theft) and shadows (make it possible). Frequency rule: narrowing suspicion is every round, proving theft or opening blind spots is once between meetings, a big swing is once per game. Cleaner, Bagman and Muscle are cut (with one winner, nobody has a reason to protect anyone else).
 - **A9, the black market:** no tokens. Perks cost coins from your own stash, which leave the game; one perk per tier per game (3 items), one purchase per player per round, each single-use, every purchase logged without a name. Laundering is allowed.
+- **A10, what goes away from R6:** tokens, the R6 shop and role list, temperament tags, acts and checkpoint targets, fixed 9 rounds, Heat 0-100 and hidden police moments, the gap box, the clean line and payout (6/8).
 - **A11, also decided:** the event deck is Lockdown, Shift change, Audit and Inside tip, with a 4-in-10 chance of a card from round 2. Duel is removed (3+ players, bots fill seats). "Learn the game" replaces Quick: single-player, about 5 minutes, scripted, its own PR in S4. The Server room is an ordinary 2-coin room. The Mole and Fixer are dealt like any role.
 - **A12, seams for Skimjob Advanced:** R7 builds ten seams (facts public by content, generic trust levels, rulesets as content, registries by id, one "said" event, bots read `viewFor` only, per-role holder/result settings, deal counts from content, roles held by event, motions by id), and no stub code. Advanced only adds (`docs/advanced.md` "Additive only").
 
+### Owner decisions, 4 Nov
+
+- **Raid seizure happens before the split:** seized coins are never pocketed or handed in, so stash = fair share received + coins pocketed − coins taken back by shakedowns and the Priest − coins spent on perks. *Confirmed (owner, 4 Nov).*
+- **End-of-round order:** moves resolve → rings light bulbs → raid check (4th bulb: seize that room's grabs, tape 2 rounds, Wanted +1) → bust check (Wanted 3: the game ends at once, that round's duffel is not split, escapees keep only the stash they already had, the biggest among them wins) → split of the duffel and kitty (only if no bust) → cooling (−1 every room, then each Rooftop player cools the hottest). Raids come before cooling, so the Rooftop can't save a room in the same round and the bell preview stays exact. A police briefing follows a raid. *Confirmed (owner, 4 Nov).*
+- **Every bell is always visible,** except a room the Hacker hides. **Loot stays "coins".** **Books mode is dropped** (superseded by Skimjob Advanced). *Confirmed (owner, 4 Nov).*
+
 ### Provisional readings (PM, 4 Nov), owner to confirm
 
-From the #69 and #72 reviews:
-
 - **Crew take and honesty:** the kitty carry-over is counted once, in the round it was handed in, not again when re-split. Seized coins count neither as "taken" nor as "missing". Shakedown and Priest returns raise the crew take, and so honesty. "N coins went missing" = coins taken (excluding seized) − coins handed in that round, never negative.
-- **Raid seizure happens before the split:** seized coins are never pocketed or handed in, so stash = fair share received + coins pocketed − coins spent on perks.
-- **End-of-round order:** moves resolve → rings light bulbs → raid check (4th bulb: seize, tape, Wanted +1) → split of the duffel and kitty → bust check (Wanted 3) → cooling (−1 every room, then each Rooftop player cools the hottest). The Rooftop can't stop a raid in the same round. A police briefing follows a raid.
-- **Every bell is always visible,** except a room the Hacker hides.
-- **Books mode is dropped:** not in R7 or Advanced.
 - **Advanced drops the Inside tip card** (roles are public there), leaving three event cards (`docs/advanced.md`).
 
 ## Balance
@@ -67,6 +68,7 @@ From the #69 and #72 reviews:
 - **No timing leaks:** a view is pushed only when it changed; bots act only when their own view changed. *Confirmed.*
 - **Preset timings** (1 hour to 1 week) and the auto-meeting presets are server data; tune after playtests. *Confirmed.*
 - **Host controls** (#54), provisional, owner to confirm: players can still act while paused (only the clocks stop); Extend per preset (1h 2 min, 3h 5 min, 1d 30 min, 3d 1 h, 1w 2 h), no cap; replace a seat with a bot only after 2 missed rounds in a row, never the host's seat, default Opportunist, handed back by the host or the seat's player; lobby kick of any non-host seat.
+- **Notes** (case-board seen marks, suspicion board) live outside the engine log, over REST (`apps/server/src/notes.ts`), if that code survives the C and S4 clean-up. *Provisional.*
 - **Chat** is server-only, plain text, random UUID ids, 500 characters, 8 per 10 s; DM notices on by default; bots don't chat. *Confirmed.*
 - **One origin:** the server serves the built web app, the API (a leading `/api` is stripped) and the sockets, so a client route must not equal an API `GET` route. `NODE_ENV=production` means secure cookies, trusted proxy and no dev stub. *Confirmed.*
 

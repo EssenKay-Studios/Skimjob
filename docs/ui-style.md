@@ -335,8 +335,8 @@ sketchbook paper. Below, `[frame]` means the sketch frame from §4.
 ### Round-move panel (pick a room, grab coins, split them)
 - A **bottom drawer sub-panel** (§8). Header: "Round 3 · Pick your room" in Pangolin 17px with a
   clay squiggle. The hint on the right reads "locks in 4h 12m".
-- Room picker: a row of **item tiles** (92x88) with a room icon on a colour blob, the room name in
-  Inter 600 12px and a coins-and-noise hint. Number keys 1-9 are shown as `<kbd>` on hover.
+- Room picker: a row of **item tiles** (92×88) with a room icon on a colour blob, the room name in
+  Inter 600 12px and a coins-and-noise hint. Number keys 1–9 are shown as `<kbd>` on hover.
 - After picking, the player taps coins on the room's counter, then drags each coin into the
   **crew duffel** (olive hatched fill) or **your pocket** (clay hatched fill). The numbers use
   tabular Inter 650, and the pocket flashes `sk-pulse-b` (scale 1.08, red) as it fills. The room's
@@ -358,7 +358,7 @@ sketchbook paper. Below, `[frame]` means the sketch frame from §4.
 ### Ledger / case board
 - A full-page **sheet** (tape, spiral holes, dashed header) styled as a **manila case file**: body
   fill `--manilla` with a folder tab on top, paper-clipped polaroid-style round cards (rotated
-  +-1.5deg), and typewriter-ish rows in Inter.
+  ±1.5°), and typewriter-ish rows in Inter.
 - Public entries are rows separated by dashed rules. Private notes ("only you") get a
   `--clay-l` highlighter band and a small lock icon. Redacted lines are ink bars with a pencil
   hatch. Entries show their trust level (fact, seen by you, shared evidence, said) as in
