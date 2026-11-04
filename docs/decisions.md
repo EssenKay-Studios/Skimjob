@@ -26,7 +26,7 @@ Full text: `docs/simplified.md` Part A (section numbers below). Numbers marked [
 - **A2, bells, raids, Wanted:** every room has a public 4-bulb alarm bell (except a room the Hacker hides) that coins light up as they ring. The 4th bulb raids the room: the visitors' grabs are seized, the room is taped off for 2 rounds, Wanted +1, a police briefing follows. Wanted 3 is a bust. Cooling: every room −1, then each Rooftop player cools the hottest room by 1. No room has a visitor limit (it would leak secret moves and reward fast lock-ins).
 - **A3, the bank:** about 16 coins per player. The game ends when the bank is empty, at a round cap of about 12, or on a bust; the host's session length is divided by the round cap.
 - **A4, equal shares:** each round the crew take (hand-ins, shakedown and Priest returns, the kitty) is split equally; the remainder stays on the table as the kitty and pays for the getaway car at the end. The fair share and "N coins went missing" are public, never who. Stashes are private.
-- **A5, honesty and winning:** honesty = crew take ÷ coins taken. Below two-thirds at the end the heist fails (sunk by theft: nobody wins, except a Mole or Fixer holding the biggest stash). Otherwise the biggest stash wins; if nobody stole, the whole crew wins together. On a bust only the players on the Rooftop that round escape and the biggest stash among them wins; if nobody was up there, nobody wins. Ties go to fewer shakedowns, then share.
+- **A5, honesty and winning:** honesty = crew take ÷ coins taken (a coin counts once, when it first reaches the table: see "Crew take and honesty" below). Below two-thirds at the end the heist fails (sunk by theft: nobody wins, except a Mole or Fixer holding the biggest stash). Otherwise the biggest stash wins; if nobody stole, the whole crew wins together. On a bust only the players on the Rooftop that round escape and the biggest stash among them wins; if nobody was up there, nobody wins. Ties go to fewer shakedowns, then share.
 - **A6, meetings:** a regular meeting each time a third of the bank is gone (only these recharge "once between meetings" powers), a police briefing after every raid, one emergency per player. A shakedown opens the target's stash and puts whatever is above the fair share back on the table; coins already spent on perks are not taken.
 - **A7, the plan board:** a shared board per round with pledges; nothing is binding. Only the per-round snapshot goes into the game log, as evidence.
 - **A8, roles are tools:** about 5-7 roles per game from Lookout, Locksmith, Detective, Auditor, Smooth Talker, Hacker, Electrician, Priest, Mole, Fixer; every role is dealt at random, balanced between eyes (spot theft) and shadows (make it possible). Frequency rule: narrowing suspicion is every round, proving theft or opening blind spots is once between meetings, a big swing is once per game. Cleaner, Bagman and Muscle are cut (with one winner, nobody has a reason to protect anyone else).
@@ -45,7 +45,7 @@ Full text: `docs/simplified.md` Part A (section numbers below). Numbers marked [
 
 ### Provisional readings (PM, 4 Nov), owner to confirm
 
-- **Missing:**  *Provisional:* "N coins went missing" = coins taken (excluding seized) − coins handed in that round, never negative.
+- **Missing:** *provisional:* "N coins went missing" = coins taken (excluding seized) − coins handed in that round, never negative.
 - **Advanced drops the Inside tip card** (roles are public there), leaving three event cards (`docs/advanced.md`).
 
 ## Balance
