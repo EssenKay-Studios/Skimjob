@@ -5,7 +5,7 @@ Read this with `docs/STATUS.md` (the canonical task list and the owner's open qu
 **Standing rule: keep status and orchestration docs clean.** Update in place, delete stale or contradictory content, no history narratives (history lives in git, the PRs and `docs/archive/decisions-history.md`).
 
 ## Current state (4 Nov 2026)
-- **In flight:** R7 step S0 (record the 4 Nov decisions, clean the docs); nothing else.
+- **In flight:** R7 step S1 (spec freeze, PR #76); nothing else.
 - **Parked by the owner:** M2-14 playtest pass and M2-15 offline demo.
 - **Out of scope for now:** Skimjob Advanced (`docs/advanced.md`, a later paid version built on R7), the recruited Mole.
 - **Specs:** `docs/design.md` is the single rules spec; `docs/simplified.md` is the R7 plan. Current decisions: `docs/decisions.md`.
