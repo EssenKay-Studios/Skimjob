@@ -56,7 +56,7 @@ Each player still sees **their own share** each round, so the crew take is alway
 
 ### Events
 
-R7's **Inside tip** card (learn a player's role) has no use when roles are public; Advanced replaces it.
+R7's **Inside tip** card (learn a player's role) has no use when roles are public, so Advanced drops it and deals the other three cards (Lockdown, Shift change, Audit). *Provisional (PM, 4 Nov).*
 
 ### Winning
 
@@ -82,7 +82,7 @@ R7 is built with ten seams (`docs/simplified.md` A12) so Advanced is mostly cont
 | Server | Everything | Filing deadlines (like alibi windows), the Advanced setting and paid access |
 | Web | Everything | The record form (generic), role badges and the "Reported by" levels, the swap vote, a Learn chapter |
 
-**Rough size:** about **70–80% shared**. The new work is **added code**, not replaced code: about 40–50% of R7's size measured in PRs (about 15–20 PRs, against R7's 30–35), about 3–5 days of agent work through the same pipeline, mostly content, role handlers and bot behaviour. Edits to existing R7 code stay small: registering the new pieces plus the pre-approved general extensions listed under "Additive only" (point 2), roughly 1–2k lines in all, against several times that added. **It is not a rewrite**, provided R7 keeps A12's seams; if they're skipped (for example roles fixed at setup, or the Mole's win in the end-of-game code), R7 code has to be found and reworked, which roughly doubles the cost.
+**Rough size:** about **70–80% shared**. The new work is **added code**: about 40–50% of R7's size measured in PRs (about 15–20 PRs, against R7's 30–35), about 3–5 days of agent work through the same pipeline, mostly content, role handlers and bot behaviour. Edits to existing R7 code stay small: registering the new pieces plus the pre-approved general extensions listed under "Additive only" (point 2), roughly 1–2k lines in all, against several times that added. **It is not a rewrite**, provided R7 keeps A12's seams; if they're skipped (for example roles fixed at setup, or the Mole's win in the end-of-game code), R7 code has to be found and reworked, which roughly doubles the cost.
 
 ## Additive only (owner, 4 Nov)
 

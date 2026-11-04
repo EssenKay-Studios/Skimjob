@@ -309,8 +309,8 @@ sketchbook paper. Below, `[frame]` means the sketch frame from §4.
 ### Bank cutaway (main board)
 - Draw a **3/4 isometric cutaway** of one bank, like a doll's house with the front wall removed.
   Floors stack vertically: Rooftop (top), Security + Office (upper floor), Lobby (ground), Vault
-  (basement). Extra rooms (Server Room, Teller Cage, Manager's Suite, Loading Dock, Archive,
-  Air Ducts) attach as side wings or mezzanines.
+  (basement). Extra rooms (Deposit boxes, Server room, Manager's office) attach as side wings or
+  mezzanines. Each door carries its alarm bell and, when raided, police tape.
 - Render it in the CityRT building style: cel-shaded 2–3 tones, a warm-ink outline (~1.5px),
   brick, stone and terracotta materials, chunky simplified props (a vault door wheel, desks, a
   camera bank, an HVAC unit and a helipad-style hatch on the roof).
@@ -318,8 +318,8 @@ sketchbook paper. Below, `[frame]` means the sketch frame from §4.
   outline. A selected room gets a line-boiling clay outline plus a pin (like their scenario pins:
   a bobbing marker with a ring pulse).
 - **Time-of-day lighting tracks session progress.** Early rounds are daylight. The final round is
-  night, with windows lit room by room (their signature cue). The Heat level tints the sky: calm
-  sage/blue at low Heat, sirens with a red-blue rim glow near 100.
+  night, with windows lit room by room (their signature cue). The Wanted stars tint the sky: calm
+  sage/blue at 0, a red-blue siren rim glow at 2 stars.
 - Show the sky and street around the bank as a washed-out backdrop. Full-screen sheets get the
   radial cream shade over the scene.
 
@@ -332,39 +332,37 @@ sketchbook paper. Below, `[frame]` means the sketch frame from §4.
 - Status marks: a clay dot for "move submitted", line boil when it's that player's turn to vote,
   and a grey wash when the player is away.
 
-### Round-move panel (pick room + split loot)
+### Round-move panel (pick a room, grab coins, split them)
 - A **bottom drawer sub-panel** (§8). Header: "Round 3 · Pick your room" in Pangolin 17px with a
   clay squiggle. The hint on the right reads "locks in 4h 12m".
 - Room picker: a row of **item tiles** (92×88) with a room icon on a colour blob, the room name in
-  Inter 600 12px, and a risk/loot hint as a mini `sw` swatch bar. Number keys 1–9 are shown as
-  `<kbd>` on hover.
-- After looting, the **split slider** sits on a paper track, 9px tall with an ink border. Left of
-  the handle is "To Haul" (olive hatched fill) and right of it is "Pocket → Stash" (clay hatched
-  fill). The handle is a 24px wobbly circle with a hatched shadow. The live numbers above it use
-  tabular Inter 650, and the Pocket side flashes `sk-pulse-b` (scale 1.08, red) as greed grows.
-  End with a **Primary** "Lock it in ▶" button.
+  Inter 600 12px and a coins-and-noise hint. Number keys 1–9 are shown as `<kbd>` on hover.
+- After picking, the player taps coins on the room's counter, then drags each coin into the
+  **crew duffel** (olive hatched fill) or **your pocket** (clay hatched fill). The numbers use
+  tabular Inter 650, and the pocket flashes `sk-pulse-b` (scale 1.08, red) as it fills. The room's
+  bell previews the rings before locking in. End with a **Primary** "Lock it in" button.
 
-### Heat meter
-- A vertical **thermometer bar** in the top HUD (a scaled-up `sk-bar`: 16×80px, ink border, radius
-  `3px 4px 2px 5px`). The fill is hatched and moves from `--olive` through `--gold` and `--clay`
-  to `--bad` as Heat rises, with spring easing over .8s.
-- Above 70 the bar gets `.hot` (a 2px bob) and its frame starts to boil. At 90+ a red pause-style
-  frame pulses around the viewport edge. The label "Heat 64/100" is set in Pangolin 12px.
+### Alarm bells and Wanted stars
+- Each room has a **4-bulb alarm bell** over its door. Bulbs fill from `--olive` through `--gold`
+  and `--clay` to `--bad`, with spring easing over .8s, and the bell wobbles when it rings.
+- A raided room gets police tape, a blue-red siren light and a "CLOSED 2" sign that counts down.
+- **Wanted** is 3 sheriff stars at the top of the screen; the third star is a bust.
 
-### Haul counter
-- A **stats card** at the top centre: a drawn duffel-bag or vault icon, then "$ 48,200" in Inter
-  650 18px tabular, with "target $60,000" captioned underneath. A thin horizontal hatched meter
-  shows progress to the target, with a gold notch at the target.
-- When money is added, show a floating "+$4,000" in `--good` drifting up from the room. If the
-  final target is missed, the counter shakes and turns `--bad`.
+### Bank pile and honesty meter
+- A **stats card** at the top centre: a pile of money drawn in the Vault that visibly shrinks as
+  coins are taken, with the coins left captioned underneath.
+- Beside it the **honesty meter**, a thin hatched bar against a gold notch at the two-thirds
+  line. It shakes and turns `--bad` if it ends below the line.
+- When coins move, show a floating "+2" in `--good` drifting up from the room.
 
-### Ledger / case file
+### Ledger / case board
 - A full-page **sheet** (tape, spiral holes, dashed header) styled as a **manila case file**: body
   fill `--manilla` with a folder tab on top, paper-clipped polaroid-style round cards (rotated
   ±1.5°), and typewriter-ish rows in Inter.
-- Public ledger entries are rows separated by dashed rules. Private notes ("only you") get a
+- Public entries are rows separated by dashed rules. Private notes ("only you") get a
   `--clay-l` highlighter band and a small lock icon. Redacted lines are ink bars with a pencil
-  hatch.
+  hatch. Entries show their trust level (fact, seen by you, shared evidence, said) as in
+  `docs/simplified.md` Part B.
 - A "While you were away" recap uses the **feed chirp** pattern, stacked, with a mascot-style
   narrator (our own creature, for example a raccoon in a mask).
 
@@ -379,7 +377,7 @@ sketchbook paper. Below, `[frame]` means the sketch frame from §4.
 ### Vote window
 - A centred **dialog sheet**, `width:min(520px,100%)`, rotated -0.5°. It enters from -30px with a
   -3° rotation (like their `st-vote`).
-- Title in Pangolin 24px: "Abort the job?" or "Who's skimming?". Show options as tiles or avatar
+- Title in Pangolin 24px: "Who's skimming?". Show options as tiles or avatar
   chips. The tally bars fill with hatched gold (`#f2b640`) for the leading option and green
   (`#2f6b2a`) for passed. Yes/No buttons use the **danger → armed** confirm pattern for
   irreversible votes.

@@ -1,13 +1,13 @@
 # Skimjob
 
-A social deduction heist game for groups of friends (web + Android/iOS). A crew robs one bank over a session lasting 1 hour to 7 days. Each round, every player secretly picks a room, loots it, and decides how much to hand to the crew's Haul and how much to pocket into their own Stash. The biggest stash wins — but if the heist fails (Heat hits 100 or the final target is missed), nobody wins.
+A social deduction heist game for groups of friends (web + Android/iOS). A crew robs one bank over a session lasting 1 hour to 7 days. Each round, every player secretly picks a room, grabs coins there (more coins ring more of the room's alarm bell) and drags each coin into the crew duffel or their own pocket. The duffel is split equally among everyone; the pocket is yours alone. The bank holds a fixed pile of coins and the game ends when it is empty, at the round cap, or on a bust. Alarm bells that fill up bring a police raid and raise Wanted (3 stars is a bust). If less than two-thirds of the coins taken reached the table, the heist fails and nobody wins; otherwise the biggest stash wins (or the whole crew together, if nobody stole).
 
 **Pitch:** *Steal from your crew — just don't sink the job.*
 
 ## Start of every session
 
 1. Read `docs/STATUS.md` — current milestone, what's done, what's next.
-2. Read the relevant sections of `docs/design.md` (the full game design; canonical rules source) and, for roles, tokens and the shop, `docs/extension.md` (the R6 spec; it wins on conflict).
+2. Read the rules: `docs/simplified.md` Part A is the rules spec for the current milestone (R7 Simplified) until step S1 makes `docs/design.md` the single spec.
 3. Skim `docs/decisions.md` before changing anything that looks like a deliberate choice.
 4. Work on **one** task from STATUS.md (or the GitHub issue you were given). Keep sessions scoped.
 
@@ -21,13 +21,13 @@ A social deduction heist game for groups of friends (web + Android/iOS). A crew 
 
 ```
 packages/engine/   rules, state machine, event log, viewFor() — pure & deterministic
-packages/content/  rooms, roles, jobs, events, scaling numbers (data, not logic)
+packages/content/  rooms, roles, perks, events, numbers (data, not logic)
 packages/bots/     Agent interface + bot personalities
 apps/sim/          CLI simulator and balance reports
 apps/server/       authoritative game server, scheduler, chat, push
 apps/web/          React browser client
 apps/mobile/       (later) Flutter app (Android/iOS) — talks to the server; no engine copy
-docs/              design.md, extension.md (R6 rules), simplified.md (R7 plan), advanced.md (later paid version), STATUS.md, decisions.md, deploy.md, pipeline/, archive/
+docs/              simplified.md (R7 plan and rules), design.md (the spec once S1 lands), advanced.md (later paid version), STATUS.md, decisions.md, testing.md, deploy.md, ui-style.md, pipeline/, archive/
 ```
 
 Dependency direction: `content` ← `engine` ← `bots` ← `sim`/`server`. The engine must never import from bots, sim, or any app.
@@ -45,11 +45,11 @@ pnpm sim -- --help   # run the simulator (once implemented)
 
 - **Deterministic.** All randomness goes through the seeded RNG in the game state. Same seed + same commands = same game. No `Math.random()`, no `Date.now()` inside the engine.
 - **No clock.** The engine knows rounds and phases, not wall time. The server/sim calls `advance()` when a deadline passes. Elastic session timing lives outside the engine.
-- **Event-sourced.** State = fold over the event log. Ledger, case files, "while you were away" recaps and the end-game reveal are all views over the log.
+- **Event-sourced.** State = fold over the event log. The ledger, case board, "while you were away" recaps and the end-game reveal are all views over the log.
 - **Visibility-scoped.** Every event is tagged `public`, `private:<playerId>`, `reveal`, or `secret:<playerId>` (secret-mode ballots: visible only to the voter, even after the game). `viewFor(state, playerId)` must never leak hidden information. Write a test whenever you add an event type.
 - **Content is data.** Numbers, rooms, roles, events live in `packages/content`. If you're hard-coding a number in the engine, it probably belongs in content.
 - **Bots are players.** Bots only receive `viewFor()` output and emit the same commands a human client would.
-- Every rule in `docs/design.md` that's implemented should have a test that names the design section (e.g. `// design §11.3`).
+- Every implemented rule should have a test that names its spec section (e.g. `// design §11.3`; until S1, a `simplified.md` A-number).
 
 ## UI rules (non-negotiable for every page, panel and component)
 
