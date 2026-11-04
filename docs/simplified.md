@@ -1,6 +1,8 @@
 # R7 Simplified: plan
 
-*3 Nov 2026 · Karthik (owner) + PM. Status: **approved direction, not built.** This is the plan for the next milestone, and the brief for the orchestrator that runs it.*
+*3–4 Nov 2026 · Karthik (owner) + PM. Status: **approved, not built.** Every rule below was agreed with the owner on 4 Nov; numbers marked [tunable] are starting values for the simulator. This is the plan for the next milestone, and the brief for the orchestrator that runs it. A later, separate paid version, **Skimjob Advanced**, builds on this one: `docs/advanced.md`.*
+
+**Words used throughout:** a **raid** is the police hitting one room; a **bust** is the whole heist failing because Wanted reached 3.
 
 ## Why
 
@@ -16,28 +18,243 @@ After the owner's own playtest (3 Nov), the verdict was: **beautiful, but very m
 - **No "Tips" setting**, and no pop-ups that teach a rule when it first matters.
 - **The look is great** (theme and artwork). The structure isn't.
 
-Two separate problems, two fixes: **Part A** simplifies the rules (fewer, rounder numbers; results as icons and words, not formulas). **Part B** fixes how information is presented. B is needed whatever A becomes. A is the cheap test of "simpler numbers fix the feel" before anything as large as `docs/rebuild.md`.
+Two fixes: **Part A** remakes the rules around a few visible things (coins, bells, a bank, equal shares) and the players' own choices. **Part B** fixes how information is presented.
+
+**Design principle (owner, 4 Nov):** no role is good or evil, and nothing pays anyone to be nice. Every player faces the same temptation: hand in or pocket. It is the players' own attitude that makes a crew honest or greedy, and the crew's attitude decides how well everyone does. Roles are tools that can be used either way; perks are for the buyer's own benefit.
 
 ## Ideas we're borrowing
 
 - **Few parts, many combinations:**
   - Coup: Rebellion G54 plays 5 of 25 characters per game.
   - Marvel Snap keeps the rules tiny and gets variety from short, one-line location effects.
-  - → Deal a small set of roles and twists per game.
-- **One-bit results:** The Resistance's mission is pass/fail, and the question is who on it failed it. → Each room is "clean" or "came up short", not an amount to subtract.
-- **Threat as a track:** Pandemic's outbreak marker moves one step per outbreak, and the game is lost at the end of the track. → Heat in whole steps.
+  - → Deal a small set of roles and perks per game.
+- **Detection meters** (Payday, Hitman): a bar that fills as you get noticed. → Each room's alarm bell.
+- **Push your luck together** (Incan Gold): everyone secretly decides how far to push, and if it blows, everyone there loses. → Raids.
+- **The public-goods dilemma:** what you hand in is shared by all; what you keep is yours alone. → The equal split.
 - **Show consequences before committing:**
   - Into the Breach shows every enemy's move in advance.
-  - Slay the Spire puts each enemy's next move, with its exact damage, above its head.
-  - → Picking a room previews its effect, and the Heat meter shows what's coming.
+  - Slay the Spire puts each enemy's next move above its head.
+  - → Picking a room and coins previews the rings; every bell is always visible.
 - **Explain every term in place:** Slay the Spire gives every keyword a one-line tooltip. → An info button on everything.
-- **A rule sheet for this game only:** Blood on the Clocktower's character sheet lists only that game's characters, in a fixed order. → A "This game" rulebook.
-- **Tips and role tracking:**
-  - Town of Salem has a role card and an optional Tips mode.
-  - Its players use add-ons to track roles.
-  - → Tips on by default, and the game does the tracking.
+- **A rule sheet for this game only:** Blood on the Clocktower's character sheet lists only that game's characters. → A "This game" rulebook.
+- **Tips and role tracking:** Town of Salem has a role card and an optional Tips mode; its players use add-ons to track roles. → Tips on by default, and the game does the tracking.
 - **A notebook that collects clues:** Return of the Obra Dinn's logbook. → The ledger becomes a case board.
 - **Just-in-time teaching:** explain a situational rule when it first comes up, not before.
+
+---
+
+## Part A — the new rules (agreed 4 Nov; frozen into `design.md` in S1)
+
+### A1. A round: pick a room, grab coins, split them
+
+1. **Pick a room.** Each room offers a number of coins per visitor per round [tunable]:
+
+   | Room | Coins per visitor | Noise | Players |
+   |---|---|---|---|
+   | Lobby | 1 | Silent | All |
+   | Office | 2 | The 1st coin is silent; each extra coin rings once | All |
+   | Deposit boxes | 2 | As the Office | 5+ |
+   | Manager's office | 2 | As the Office | 9+ |
+   | Vault | 3 | Every coin rings (or the 1st is silent: the simulator picks) | All |
+   | Security | 0 | Watch one room's cameras: see who was in it | All |
+   | Server room | 2 | As the Office | 5+ |
+   | Rooftop | 0 | Lie low: automatically cools the hottest room (A2), and it's the only escape on a bust (A5) | All |
+
+2. **Grab 1 coin up to the room's limit** (tap the coins). Fewer coins mean less noise. A visitor's coins are their own; several visitors don't share a room's limit.
+3. **Split your coins in secret:** drag each into the **crew duffel** or **your pocket**.
+4. **Lock in.** The round ends when everyone has locked in or at its deadline. A missed move is the Lobby, 1 coin, handed in.
+
+### A2. Bells, raids and Wanted (replaces Heat 0–100)
+
+- **Every room has an alarm bell with 4 bulbs** [tunable], public to everyone.
+- **Rings add bulbs:** each ring lights one bulb in that room. Rings from everyone in the room add up.
+- **Cooling, at the end of every round:**
+  1. every room turns off 1 bulb;
+  2. then **each player on the Rooftop automatically cools the hottest room by 1 more bulb**. Several Rooftop players cool one after another, each time the room that is hottest at that moment. Ties are broken at random, with the game's seeded randomness. Nobody chooses a room; it's what a crew lying low would do anyway.
+- **Raid:** when a room's 4th bulb lights, the police raid it:
+  - everyone inside loses that round's grab (the police seize it; it leaves the game);
+  - the room is taped off for 2 rounds [tunable];
+  - **Wanted** goes up 1 star;
+  - a **police briefing** meeting is called.
+- **Wanted 3 stars** [tunable] = **bust**: the heist fails at once (who escapes: A5).
+- **Crew size:** bigger crews get more rooms (5+, 9+). If big crews still get raided too often, the raid line rises behind the scenes; players only see a strip of bulbs.
+- **No room has a visitor limit,** the Rooftop included: a limit would reveal secret moves ("the Office is full") and reward whoever locks in first, which is unfair in async games.
+
+### A3. The bank and the end of the game (replaces acts, checkpoints and fixed rounds)
+
+- **The bank holds about 16 coins per player** [tunable], shown as a pile of money in the Vault art that visibly shrinks.
+- Every coin grabbed comes out of the bank, whether it's handed in or pocketed (seized coins too).
+- **The game ends** when the bank is empty, at a **round cap of about 12** [tunable], or at a bust (Wanted 3). The host's session length is divided by the round cap, so long games keep a predictable end; a game that empties the bank early simply ends early.
+
+### A4. Equal shares, the kitty and the fair share
+
+- **Each round, the crew take is split equally among all players:** everything handed in, plus coins returned by shakedowns and the Priest, plus last round's leftover.
+- **The kitty:** whatever doesn't divide evenly stays on the table for next round. At the end, what's left pays for the getaway car and leaves the game.
+- **Fair share:** the coins split to each player so far, the same for everyone, and public.
+- **Missing:** each round the game shows coins taken from the bank, the crew take, and **"N coins went missing"**, never who.
+- **Stashes stay private.** A stash = fair share received + coins pocketed − coins seized in raids − coins spent on perks.
+
+### A5. The honesty line and winning
+
+- **Crew honesty** = crew take ÷ coins taken from the bank (seized coins don't count as taken). It's shown as a meter against the line.
+- **The honesty line is two-thirds:** at the end, if less than two-thirds of everything taken reached the table, **the heist fails** (too much was stolen).
+- **The heist succeeds** if the game ends by the bank or the round cap, with honesty at or above two-thirds and no bust. Then **the biggest stash wins**. If nobody stole, everyone is level and **the whole crew wins together**. Only stealing and getting away with it separates players.
+- **Bust (Wanted 3):** only the players **on the Rooftop that round escape**; everyone else is arrested and loses everything. **The biggest stash among the escapees wins** (any role, the Mole and Fixer included). If nobody was on the Rooftop, nobody wins. This makes the endgame tense: at Wanted 2, every player weighs "keep grabbing, or go up and wait?".
+- **Sunk by theft (honesty below two-thirds at the end):** nobody wins, **except the Mole or the Fixer, if one of them holds the biggest stash**.
+- Ties go to fewer shakedowns, then share the win.
+
+### A6. Meetings and shakedowns
+
+- **Regular meetings** each time a third of the bank is gone. Only these recharge "once between meetings" powers.
+- **A police briefing** after every raid (no recharge).
+- **One emergency meeting per player** per game, as today.
+- **Voting** as today: shake down one player or skip; a shakedown passes with at least half the crew voting and more than half of the votes cast. Vote visibility stays a host setting.
+- **A shakedown opens the target's stash** and compares it with the fair share. Whatever is above the fair share (the pocketed coins still held) goes back on the table, to be split next round. **Coins already spent on perks are gone and are not taken.** A target at or below the fair share is clean, and nothing happens.
+
+### A7. The plan board (planning without meetings)
+
+- **A shared board for each round**, open the whole round: a miniature of the bank where anyone drags crew avatars onto rooms ("A → Office"), and each player marks their own spot (✋).
+- **Pledges:** "I'll use my power on the Vault." A pledge is a claim, not a commitment, and can be a bluff.
+- **Nothing is binding;** breaking the plan is the betrayal. Seats show who has agreed.
+- **Async-friendly:** the plan persists and can change until the deadline.
+- **Bots** take a sensible spot and sometimes break it.
+- **The plan is evidence** (see B6): each round's final plan, its pledges and a compact edit history ("B moved themselves to the Vault 2 minutes before the deadline") go into the ledger when the round resolves.
+- **Build note:** the live board can work like chat (server-side, fast to update); only the per-round snapshot is written into the game log, so bots, the case board and the reveal can read it.
+
+### A8. Roles: tools, not sides
+
+Each game deals about **5–7 roles** [tunable]. Every role has a one-sentence power, a "How you win" line and a "How to spot it" line.
+
+| Role | Power | Frequency |
+|---|---|---|
+| **Lookout** | You also see who was in one extra room. | Every round |
+| **Locksmith** | Your coins ring one less time. | Every round (passive) |
+| **Detective** | Learn how many coins one player grabbed last round (not how many they kept). | Every round |
+| **Auditor** | Learn how many coins reached the duffel from one room last round. | Once between meetings |
+| **Smooth Talker** | Your vote counts twice. | Every meeting (passive) |
+| **Hacker** | One room's bell is hidden from everyone this round (it shows "?"). | Once between meetings |
+| **Electrician** | Black out one room next round: nobody there sees who else is there, and its cameras are offline. Its bell still rings. Announced at the start of the round as "Power cut in the Office", with no source. | Once between meetings |
+| **Priest** | Secretly absolve one player: whatever they hold above the fair share goes back on the table (coins spent on perks are not taken). The Priest learns how much that was. Not the same player twice in a row; the absolved player is told "your sins were absolved". | Once between meetings |
+| **Mole** | Secretly ring any room once (a police tip-off). **Wins a heist sunk by theft** with the biggest stash; on a bust, the Rooftop rule applies like for anyone. | Once between meetings |
+| **Fixer** | Tear the tape off a raided room and reopen it. **Wins a heist sunk by theft** with the biggest stash; on a bust, the Rooftop rule applies like for anyone. | Once per game |
+
+**The frequency rule:**
+- powers that only narrow suspicion are **every round**;
+- powers that can prove theft, or that open blind spots, are **once between meetings**;
+- a big swing is **once per game**.
+
+**Dealing:** every role, the Mole and Fixer included, is dealt at random from the pool, within the eyes/shadows balance below.
+
+**Balancing a deal, eyes vs. shadows:** eyes (Lookout, Detective, Auditor, Priest, Smooth Talker) spot theft; shadows (Locksmith, Hacker, Electrician, Mole, Fixer) make it possible. A deal has roughly equal numbers of each. No role should be so strong or so weak that claiming it puts its holder at a disadvantage; the simulator checks each role's win rate against fair share.
+
+**Cut from R6:** Cleaner, Bagman and Muscle (and the other R6-only roles). Muscle: with a single winner, nobody has a reason to protect anyone but themselves.
+
+### A9. Perks: a black market paid in coins (replaces tokens)
+
+- **There are no tokens.** Perks are bought with coins **from your own stash**, which lowers your score.
+- **The coins leave the game** (paid to fixers and cops); buying doesn't change the crew take or honesty.
+- **Each game's shop deals one perk per tier**, so 3 items, picked by the game's seed. The "This game" rulebook lists only those.
+- **One perk per player per round**, each single-use.
+- **Every purchase is logged at once, without a name:** "🛒 Someone bought Soft shoes (2 coins)".
+- **Laundering is allowed:** stolen coins spent on perks are gone, so shakedowns and the Priest can't take them, but they no longer count toward winning.
+
+| Cost | Perk | Effect |
+|---|---|---|
+| 1 | **Tail** | Next round, also see who was in one extra room. |
+| 1 | **Stamped alibi** | Your real room this round is stamped "verified" in the ledger (only if your alibi is true). |
+| 1 | **Check ballot** | See one player's vote at the next meeting. |
+| 2 | **Soft shoes** | Next round, your coins don't ring at all. |
+| 2 | **Blackout** | Next round, one room goes dark: no sightings, cameras offline. Its bell still rings. |
+| 3 | **Bail** | Your next shakedown is cancelled automatically (the ledger says only "a shakedown fell through"). |
+| 3 | **Plant evidence** | One player of your choice appears in one room's camera and Lookout feeds this round. |
+
+### A10. What goes away from R6
+
+Tokens and their 20 triggers; the R6 shop and perk pool; temperament tags; the R6 role list; acts; checkpoint targets (7 / 15 / 23 × players); fixed 9 rounds; Heat 0–100 and its crew-share formula; hidden police moments; the gap box; the clean line (6) and payout (8). The finite bank comes from the earlier jobs redesign, now `docs/advanced.md`.
+
+### A11. Also decided (4 Nov)
+
+1. **Event cards:** from round 2, each round has a **4-in-10 chance** that one card flips (6 in 10: nothing happens). The deck has 4 cards, each a sentence:
+   - **Lockdown:** one room is closed this round.
+   - **Shift change:** Vault visitors can grab 1 extra coin this round.
+   - **Audit:** every room shows how many coins reached the duffel from it this round.
+   - **Inside tip:** one random player privately learns another player's role.
+
+   Dropped: Payday, Double-cross, Power cut (now the Electrician and Blackout), Quiet night, Police patrol, Raid rumour.
+2. **Duel mode is removed.** Games need 3+ players; bots fill seats.
+3. **"Learn the game"** replaces Quick:
+   - a **single-player** game (you plus bots), about 5 minutes;
+   - a small bank and about 6 short rounds;
+   - a fixed set of roles (Lookout, Locksmith, Detective, Hacker), no shop and no events;
+   - scripted pop-ups and guides at every step.
+
+   It is built as **its own PR after the core game works** (S4).
+4. **The Server room** becomes an ordinary 2-coin room for 5+ players (A1); its old "how many pocketed" power is redundant now that missing coins are public.
+5. **Mole and Fixer** are dealt at random like every other role.
+
+### A12. Built so Skimjob Advanced can follow
+
+`docs/advanced.md` is a later, separate paid version in which **players keep some of the facts by hand** (and can fake them) instead of the system showing them. For it to be a layer on R7 rather than another rewrite, R7 follows two engineering rules:
+
+1. **Which facts are public is content, never hard-coded.** Bells, the duffel total per round, the bank pile, missing coins and honesty are each produced as events whose visibility comes from a content setting (public in R7). Advanced switches some to private-to-a-job.
+2. **The case board's reliability levels are generic.** "Fact", "Seen by you", "Shared evidence" and "Said" are data, so Advanced can add "Reported by the Banker" (a job's record) without redesigning the ledger.
+
+Rule changes keep the engine's non-negotiables (`CLAUDE.md`): deterministic, event-sourced, content as data, `viewFor` never leaks. Each changed rule gets a test citing its new design section.
+
+---
+
+## Part B — presentation
+
+1. **One screen, no long scroll:**
+   - The bank board in the middle, with every room's coins, bell and tape.
+   - A **"This round"** panel: your move, its preview, the plan board and the event card.
+   - **The ledger, chat and rules** in tabs or drawers.
+   - Phones: swipeable bottom sheets. Laptops: three columns.
+   - Nothing needed for this round sits below the fold at 360–1280 px.
+2. **The move as a picture:** tap coins on the room's counter, then drag each into the **crew duffel** or **your pocket**. The bell previews the rings before you lock in.
+3. **The artwork carries the state:**
+   - a 4-bulb alarm bell over each door, glowing green → amber → red, with a wobble when it rings;
+   - a raided room: police tape, a blue-red siren light, and a "CLOSED 2" sign counting down;
+   - **Wanted** as 3 sheriff stars at the top of the screen;
+   - the bank as a pile of money in the Vault, visibly shrinking;
+   - the honesty meter against its two-thirds line.
+4. **Info on everything:** one shared `InfoTip` component (tap on phones, hover and focus on desktop, ≥ 44 px target) on every icon, room, bell, perk, role name and meter, with one line plus "More". The text comes from content, so the UI, rulebook and tips never drift apart.
+5. **"This game" rulebook:** only the roles dealt (or possible, per the role-list setting), the rooms in play, the events that can come up, and this game's 3 shop items. Reachable from anywhere in one tap.
+6. **The ledger becomes a case board:**
+   - **Evidence only.** Lock-in marks, presence, meeting-time proposals and other housekeeping move to the seats and the meeting panel. The ledger keeps public facts (coins taken, crew take, missing, bells, raids, Wanted, purchases, events), what you saw or learned, what people said (plans, pledges, alibis, role claims), and what the crew did (votes, shakedowns).
+   - **Every entry shows how far to trust it:**
+     - **Fact:** a solid card in print, from the game.
+     - **Seen by you:** a solid card with an eye icon, from you or your power.
+     - **Shared evidence:** stamped "from X's case file".
+     - **Said:** a dashed outline in handwriting (plans, alibis, claims, pledges).
+   - **Colour by type** (theme tokens only): money gold, noise and police red/blue, sightings blue, said grey, votes purple, events their card art.
+   - **Three views of the same entries, one tap apart:**
+     - **Rounds:** the default, newest open. Each round's header reads "Taken · Crew take · Missing · Honesty"; older rounds collapse to one line.
+     - **Players:** a grid of players by rounds; each cell shows planned / claimed / seen.
+     - **Rooms:** a grid of rooms by rounds, with bells, raids and claimed vs. seen visitors.
+   - **⚠ "doesn't add up" flags, never verdicts:**
+     - a claim contradicts what you saw;
+     - a claim differs from the plan;
+     - more claims than a bell allows;
+     - a role claimed twice.
+
+     A **"Show only ⚠"** filter lists the open questions. The checks are pure functions over your own view, with tests.
+   - **Dossiers:** tap a player for their row, claims, votes, shakedowns, ⚠ count and your own tag and notes. Tap a room for its bell history, raids and visitors.
+   - **Filters:** player, room, round, type, "first-hand only", "⚠ only".
+   - **Pins: your own evidence board.** Pin any entry (or row) to your private board, alongside your trusted / unsure / suspicious tags and notes.
+   - **A "Full log" tab** keeps the raw chronological list.
+   - **On phones,** Rounds and dossiers are the default; the grids scroll sideways inside their own frame, so the page never overflows.
+   - **Built only from your own `viewFor`:** nothing new is revealed, it's only shown better.
+   - **The usability test for S2:** a new player can answer "who might have stolen in round 4?" within about 10 seconds, starting from the Rounds view and following one ⚠.
+7. **Teaching pop-ups and Tips:**
+   - A short card ("What just happened / What it means / What you can do") the first time each thing happens: a bell rings, a raid, the crew one star from a bust, a power cut, a shakedown, coins go missing, your first chance to use your power, the shop affordable.
+   - Controlled by a per-user **Tips** setting, **on by default**, kept on the user (guest or Google account) so it follows them across games.
+8. **Opponents' roles:**
+   - The roles-in-play strip opens each role's full card, including "How to spot it".
+   - When something happens that a role could cause, the explanation names the candidates ("a room rang with nobody claiming it: the Mole, or someone lying").
+9. **The reveal** replays each round's plan against what everyone really did.
+
+**UI rules still apply** (`CLAUDE.md`, `docs/ui-style.md`): one notebook look, theme tokens and shared components only, new components in `/dev/gallery`, checked at 360/390/768/1024/1280 px.
 
 ---
 
@@ -45,76 +262,14 @@ Two separate problems, two fixes: **Part A** simplifies the rules (fewer, rounde
 
 | Step | What | Owner checkpoint |
 |---|---|---|
-| **S0** | Decide how far Part A goes: answer the open questions below. | Answers |
-| **S1** | Spec freeze: fold the simplified rules into `docs/design.md` as the single spec, archive `docs/extension.md`. | Approve the spec PR |
-| **S2** | Mockups of 4 screens, made with the Design artifact type, no code. | Approve the mockups |
-| **S3** | Build Part B on the existing art and kit, on the current rules (B doesn't depend on A). | Try it on the live site |
-| **S4** | Build Part A's rule changes in engine, content and bots; update the UI to match. | — |
+| **S0** | Record the 4 Nov decisions (Part A, A11) in `docs/decisions.md`. | — |
+| **S1** | Spec freeze: rewrite `docs/design.md` as the single spec from Part A, archive `docs/extension.md`. | Approve the spec PR |
+| **S2** | Mockups of 5 screens, made with the Design artifact type, no code. | Approve the mockups |
+| **S3** | In parallel: **(a)** the new rules in engine, content, bots and sim; **(b)** interface foundations that don't depend on rule details. | — |
+| **S4** | Wire the game screens to the new rules (Part B), then the single-player "Learn the game" mode as its own PR. | Try it on a test deploy |
 | **S5** | One balance pass (Sim suite workflow), deploy to Lightsail. | Playtest again |
 
-### S0 — open questions (from the 3 Nov discussion; PM recommendation first)
-
-1. **Shop and tokens:**
-   - (a) keep them, with visible progress toward each token (recommended to try first);
-   - (b) cut the shop to 2 perks;
-   - (c) remove tokens and the shop.
-2. **Hidden police activity:**
-   - (a) make it a visible event card, which loses the Mole's cover;
-   - (b) keep it hidden as the Mole's cover but explain it with a pop-up;
-   - (c) drop it.
-3. **Roles per game:**
-   - (a) deal about 5–7 from the pool, each with a one-sentence power and one-sentence win line (recommended);
-   - (b) keep today's decks.
-4. **How round the numbers get** (Part A, items 1–3 below):
-   - (a) all of them (recommended);
-   - (b) loot and Heat only.
-
----
-
-## Part A — simpler rules (proposal; frozen in S1)
-
-1. **Loot in coin bags:** every room pays 1, 2 or 3 bags (shown as coin icons), not 2–6. Special rooms (Security, Rooftop, Server room) pay 0 and do one plain thing.
-2. **Heat as an alarm track:** about 10 whole steps in four bands, **Calm / Nervous / Alert / Raid**. Each round adds 1 step; a risky room shows 1–2 alarm pips and adds them when visited; the Rooftop removes 1. No crew-share fractions: crew size changes the track's length behind the scenes, never the per-visit numbers players see. A missed meeting target is a fixed jump, e.g. +2 steps.
-3. **Shortfalls as lights:** after each round, every room shows **clean** or **came up short** (and how many bags short only where a power or event says so, e.g. Audit). The gap box and alibi arithmetic go away; deduction becomes *who was there and who lied about it*.
-4. **Fewer roles per game** (S0 Q3): a "script" of about 5–7 roles per game from the pool; the lobby shows them as cards. Every role gets:
-   - a one-sentence power;
-   - a one-sentence "How you win";
-   - one sentence for "Earn a token when…", with a progress bar;
-   - one or two "How to spot it" lines (e.g. "camera offline → the Hacker or a Power cut").
-5. **Tokens and perks** (S0 Q1): if kept, the trigger is shown as progress ("Take once: 0/1"), the shop shows what you can afford, and bots and the UI nudge a player who hasn't used their power by mid-game.
-6. **Events as cards:** name, picture, a one-line effect, and "What this means for you". Police activity is per S0 Q2.
-7. **Meeting numbers:** the clean line and payout become round, memorable values; the targets show only as the existing progress bar, never as "× players" maths.
-
-Rule changes keep the engine's non-negotiables (`CLAUDE.md`): deterministic, event-sourced, content as data, `viewFor` never leaks. Each changed rule gets a test citing its new design section.
-
-## Part B — presentation (built in S3, on the current rules)
-
-1. **One screen, no long scroll:**
-   - Bank board in the middle; a **"This round"** panel (your move, its preview, the event card).
-   - **Ledger, chat and rules** in tabs or drawers.
-   - Phones: swipeable bottom sheets. Laptops: three columns.
-   - Nothing you need for this round sits below the fold at 360–1280 px.
-2. **Previews everywhere:**
-   - Room tiles show loot icons and Heat pips.
-   - Choosing a room and split shows "+X to you, +Y to the Haul, Heat +Z" before you lock in.
-   - The Heat meter shows "this round: about +N".
-   - The Heat breakdown becomes sentences with icons ("2 crooks hit the Vault: +7"), not a bare list.
-3. **Info on everything:** one shared `InfoTip` component (tap on phones, hover and focus on desktop, ≥ 44 px target) on every icon, room, event, perk, role name and meter, with one line plus "More". The text comes from content, so the UI, rulebook and tips never drift apart.
-4. **"This game" rulebook:** only the roles dealt (or possible, per the role-list setting), the rooms in play, the events that can come up, and this game's shop items. Reachable from anywhere in one tap.
-5. **Teaching pop-ups and Tips:**
-   - A short card ("What just happened / What it means / What you can do") the first time each thing happens: an event flips, police activity, a shakedown, your first chance to use your power, a token earned, the shop affordable.
-   - Controlled by a per-user **Tips** setting, **on by default**, kept on the user (guest or Google account) so it follows them across games.
-6. **The ledger becomes a case board:**
-   - **Colour-coded by type** (from theme tokens only): coins gold, Heat red, sightings blue, claims grey and dashed, votes purple, your private entries highlighted.
-   - **Grid view:** rounds as columns, players as rows; each cell shows the claimed room against what you saw, with contradictions flagged automatically; each room's clean/short light per round.
-   - **Filters:** by player and by round.
-   - The current list stays as a "Full log" tab.
-   - Everything is built only from your own `viewFor` (no new information, only better shown).
-7. **Opponents' roles:**
-   - The roles-in-play strip opens each role's full card, including "How to spot it".
-   - When something happens that a role could cause, the explanation names the candidates ("could be the Mole, or bad luck").
-
-**UI rules still apply** (`CLAUDE.md`, `docs/ui-style.md`): one notebook look, theme tokens and shared components only, new components in `/dev/gallery`, checked at 360/390/768/1024/1280 px.
+The rules change at the core, so the screens are built once, against the new rules (S4), rather than on the old rules first.
 
 ---
 
@@ -129,10 +284,10 @@ Rule changes keep the engine's non-negotiables (`CLAUDE.md`): deterministic, eve
 | **Reviewer** | Opus 5.5 | Reviews a PR from the diff (`reviewer.md`). Never merges, never pushes. |
 | **QA** | Opus 5.5 | Adversarial tests, pushes once, posts the verdict (`qa.md`). Never merges. |
 
-**Sonnet or Opus for the developer?** Sonnet 5.5 is the right default for tasks the spec and mockups pin down: Part B components and screens, content edits, copy, CSS, docs, mechanical refactors. It's faster and cheaper, and an Opus reviewer and an Opus QA agent check every PR. Use **Opus 5.5 for the developer** on:
+**Sonnet or Opus for the developer?** Sonnet 5.5 is the right default for tasks the spec and mockups pin down: components and screens, content edits, copy, CSS, docs, mechanical refactors. It's faster and cheaper, and an Opus reviewer and an Opus QA agent check every PR. Use **Opus 5.5 for the developer** on:
 
-- engine rule changes (Part A), where determinism, visibility and `viewFor` leaks are subtle and a mistake is expensive;
-- the case board's data layer (it must use only `viewFor`);
+- engine rule changes (S3a), where determinism, visibility and `viewFor` leaks are subtle and a mistake is expensive;
+- the case board's data layer and its ⚠ checks (it must use only `viewFor`);
 - bot changes;
 - any fix round where a Sonnet build failed review twice.
 
@@ -144,7 +299,7 @@ The orchestrator picks the model per task and says which in the brief (Agent too
 >
 > Start by cloning the repo and reading CLAUDE.md, docs/simplified.md, docs/STATUS.md, docs/decisions.md, docs/pipeline/HANDOFF.md and the briefs in docs/pipeline/ ("Where you run" in common.md). Rebuild the live state from GitHub: list open PRs and run `bash docs/pipeline/verdicts.sh <PR>` on each. Treat agents from earlier sessions as dead.
 >
-> Begin with step S0: ask me the open questions in docs/simplified.md as multiple-choice questions with your recommendation first. Don't start S1 until I've answered. Owner checkpoints in the plan are hard stops.
+> Begin with step S0 (record the agreed decisions), then S1. Owner checkpoints in the plan are hard stops: don't pass one without my approval.
 >
 > Run builds and tests on my Mac when it's reachable; otherwise work in the cloud and rely on CI. Merge only with `docs/pipeline/merge.sh <PR>` when the latest head has a reviewer APPROVE, a QA PASS and green CI; only you merge. Commits are authored as karthik24iyer <karthik24iyer@gmail.com>, with no Claude co-author or session lines.
 >
@@ -152,44 +307,66 @@ The orchestrator picks the model per task and says which in the brief (Agent too
 
 ### Step by step
 
-**S0 — questions.** The orchestrator asks the four S0 questions and records the answers in `docs/decisions.md` (a PM docs PR, reviewed and QA'd like any other).
+**S0 — record decisions.** Everything in Part A was agreed with the owner on 4 Nov. The orchestrator writes it into `docs/decisions.md` (a PM docs PR, reviewed and QA'd like any other) and asks the owner only about genuinely new questions that come up.
 
 **S1 — spec freeze (docs only, one Opus developer).**
-- Rewrite `docs/design.md` so it is the **single** rules spec. Fold in everything from `docs/extension.md` that stays, plus Part A as decided in S0.
-- Move `docs/extension.md` to `docs/archive/extension.md`.
+- Rewrite `docs/design.md` as the **single** rules spec from Part A: rooms and coins, bells, raids and busts, the bank and the end, equal shares and the kitty, honesty and winning, meetings and shakedowns, the plan board, roles, perks, events. Remove what A10 lists.
+- Move `docs/extension.md`, `docs/m2-plan.md` and `docs/balance/r6-balance.md` to `docs/archive/`.
 - Update every reference to it: CLAUDE.md, STATUS, HANDOFF, decisions, testing, ui-style, the briefs, code comments citing "extension.md".
-- Add to `design.md` a short **"Content text"** section: the one-line texts for every role, room, event and perk. S3's info buttons and rulebook read these, via content.
+- Add a **"Content text"** section to `design.md`: the one-line texts for every room, role ("power", "How you win", "How to spot it"), perk and event. The info buttons, rulebook and tips read these, via content.
 - Owner approves the PR before S2.
 
 **S2 — mockups (no code).**
 - One agent (Opus) creates the mockups from the **Design** artifact type, with the notebook look from `docs/ui-style.md`:
-  1. the game screen on a phone and a laptop, with the "This round" panel and previews;
-  2. the case board;
+  1. the game screen on a phone and a laptop: the board with coins, bells, tape and Wanted stars, the "This round" panel with the coins-into-two-bags move, and the plan board;
+  2. the case board's Rounds, Players and Rooms views, with ⚠ flags and pins;
   3. a role card and the "This game" rulebook;
-  4. an event pop-up and a tip.
-- The owner comments and approves. Approved mockups are linked from STATUS and are the reference for S3 reviewers.
+  4. a teaching pop-up and a tip;
+  5. the black market and a shakedown result.
+- The owner comments and approves. Approved mockups are linked from STATUS and are the reference for S4 reviewers.
 
-**S3 — Part B (Sonnet developers, a few PRs in parallel when they don't touch the same files).** Suggested PRs:
-1. `InfoTip` component + content text plumbing (texts from `packages/content`), in `/dev/gallery`.
-2. Layout: the one-screen game screen and bottom sheets at all five widths.
-3. Previews: room tiles, the split preview, the Heat "this round" meter and the sentence-style breakdown.
-4. The "This game" rulebook and full role cards with "How to spot it".
-5. Teaching pop-ups and the per-user Tips setting (server: one field on the user, default on; migration add-only).
-6. The case board: colours, grid, contradictions, filters (data layer Opus, UI Sonnet).
+**S3 — two tracks in parallel.**
+- **(a) New rules (Opus developers, one area per PR):**
+  1. rooms, coins and grabs;
+  2. bells, cooling (including the Rooftop's automatic cooling), raids, Wanted, and the bust with the Rooftop escape;
+  3. the bank, round cap and endings;
+  4. equal shares, the kitty, fair share, missing and honesty;
+  5. meetings at bank thirds and briefings, and shakedowns against the fair share;
+  6. roles (A8), with powers and frequencies;
+  7. perks and the shop (A9);
+  8. the 4-card event deck at a 4-in-10 chance;
+  9. the plan-board snapshot as a public event.
 
-**S4 — Part A (Opus developers, one rule area per PR):**
-1. Loot bags + room content.
-2. The Heat alarm track (engine + content + Heat UI).
-3. Shortfall lights (replace the gap box).
-4. Role scripts per game + role texts.
-5. Tokens/shop per S0.
-6. Events and police per S0.
+  Remove Duel mode and Quick. Follow A12's two rules throughout.
 
-Each updates bots and the sim's metrics for its rule, adds its events to the leak scrub and property tests, and runs a sim smoke.
+  The first PR removes what A10 lists, so later PRs read a smaller codebase. Each PR updates bots and the sim's metrics for its rule, adds its events to the leak scrub and property tests, and runs a sim smoke.
+- **(b) Interface foundations (Sonnet developers):**
+  1. `InfoTip` + content-text plumbing, in `/dev/gallery`;
+  2. the one-screen layout shell and bottom sheets at all five widths;
+  3. the per-user Tips setting (one field on the user, default on; the migration only adds);
+  4. the plan board's live server channel (like chat);
+  5. the case board shell: views, filters, pins (data from a typed adapter, filled in S4).
+
+**S4 — wire the screens (Sonnet for UI, Opus for the case board's data layer):**
+1. the board art (bells, tape, Wanted, the bank pile);
+2. the move (coins into two bags) with previews;
+3. the plan board UI;
+4. the case board data and ⚠ checks;
+5. role cards, the rulebook and opponents' explanations;
+6. teaching pop-ups;
+7. the black market;
+8. the meeting and shakedown screens;
+9. the reveal (plan vs. what happened);
+10. **Learn the game**, the single-player guided mode (A11.3), as its own PR.
 
 **S5 — balance and deploy.**
-- One balance pass on the **Sim suite GitHub workflow**, never babysat in chat, with the same gates as today unless S0 changes them.
-- Refresh `docs/balance/baseline.json`.
+- One balance pass on the **Sim suite GitHub workflow**, never babysat in chat. New gates, set in S1:
+  - heist success rate;
+  - raid and bust rates, and how often an endgame stalls with everyone on the Rooftop;
+  - each role's win rate within a band of fair share;
+  - the share of all-honest shared wins;
+  - perks not deciding games.
+- Tune the [tunable] numbers; refresh `docs/balance/baseline.json`.
 - Deploy to Lightsail by `docs/deploy.md`: back up first; games logged on the old rules won't replay, so clear running games after the backup.
 - The owner playtests again.
 
@@ -202,8 +379,9 @@ Each updates bots and the sim's metrics for its rule, adds its events to the lea
 - **Only the orchestrator merges.** Reviewer and QA agents never merge, even when the gate would pass.
 - **Every bug fix adds a test** that would have caught it (`docs/testing.md`).
 - **Verdicts name a sha;** a rebase or a non-QA-test commit needs a delta re-review.
+- **Branch deletion after a merge can fail from a cloud session;** delete it from the Mac.
 - **Lightsail:** never touch Arcway; take a `pg_dump` before any database change; no secrets or connection details in the (public) repo.
 
 ## Out of scope for R7
 
-M2-14 and M2-15 (parked), M3 (Flutter, push, quiet hours), M4 (more jobs), and `docs/rebuild.md` (the jobs redesign, kept as a proposal; R7's Part B carries over to it if the owner later chooses it).
+M2-14 and M2-15 (parked), M3 (Flutter, push, quiet hours), M4 (more content), and **Skimjob Advanced** (`docs/advanced.md`), the later paid version.
