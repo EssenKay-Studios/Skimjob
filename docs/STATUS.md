@@ -6,21 +6,21 @@ _Last updated: 4 Nov 2026._
 - **Specs:** `docs/design.md` is the single rules spec (R7 Simplified); `docs/simplified.md` is the plan. Current decisions: `docs/decisions.md`. Later: Skimjob Advanced (`docs/advanced.md`). Out of scope: the recruited Mole.
 - **Content** 0.17.0 (the live R6 build; R7 replaces it).
 - **Live:** https://skimjob.duckdns.org on the owner's AWS Lightsail box (`docs/deploy.md`), commit 1a4e083, Google sign-in on. The live game has no real players, so R7 is built straight on `main`.
-- **Next step:** R7 step **S0** (this docs clean-up), then S1.
+- **Next step:** R7 step **S1** (spec freeze), then C alongside S2.
 
 ## Current milestone: R7 Simplified (`docs/simplified.md`)
 
 Approved after the owner's playtest (3 Nov): simpler rules (Part A) and clearer presentation (Part B). Run as "How to run it" says.
 
-- [ ] **S0** Record the 4 Nov decisions; clean the docs so every live `.md` describes R7 only. **In progress.**
-- [ ] **S1** Spec freeze: `docs/design.md` becomes the single spec; the R6 extension spec, the M2 plan and the R6 balance report move to `docs/archive/`; "Content text" section; S5 balance gates. **Owner approves the spec.**
-- [ ] **C** Clean the code (alongside S2): C1 audit (checker + `docs/cleanup-audit.md`), C2 delete in about four PRs (engine+content+bots+sim; server; web+e2e; test consolidation), C3 guardrails (scoped tests, `knip` in CI, builder/reviewer cleanup rules).
-- [ ] **S2** Mockups of 5 screens (Design artifact type), no code. **Owner approves the mockups.**
-- [ ] **S3** Two tracks, straight on `main`:
-  - (a) new rules: 1 rooms, coins and grabs; 2 bells, cooling, raids, Wanted and the bust; 3 the bank, round cap and endings; 4 equal shares, kitty, fair share, missing, honesty; 5 meetings at bank thirds, briefings and shakedowns; 6 roles; 7 perks and the shop; 8 the 4-card event deck; 9 the plan-board snapshot.
-  - (b) interface foundations: 1 `InfoTip` and content-text plumbing; 2 the one-screen shell and bottom sheets; 3 the per-user Tips setting; 4 the plan board's live channel; 5 the case board shell.
-- [ ] **S4** Wire the screens: 1 board art; 2 the move; 3 plan board UI; 4 case board data and ⚠ checks; 5 role cards, rulebook, opponents; 6 teaching pop-ups; 7 black market; 8 meeting and shakedown screens; 9 reveal; 10 "Learn the game". **Owner tries a test deploy.**
-- [ ] **S5** Final dead-code audit, one balance pass (Sim suite workflow), deploy. **Owner playtests.**
+1. [x] **S0** Record the 4 Nov decisions; clean the docs so every live `.md` describes R7 only (#74).
+2. [ ] **S1** Spec freeze: `docs/design.md` becomes the single spec; the R6 extension spec, the M2 plan and the R6 balance report move to `docs/archive/`; "Content text" section; S5 balance gates. **In progress.** **Owner approves the spec.**
+3. [ ] **C** Clean the code (alongside S2): C1 audit (checker + `docs/cleanup-audit.md`), C2 delete in about four PRs (engine+content+bots+sim; server; web+e2e; test consolidation), C3 guardrails (scoped tests, `knip` in CI, builder/reviewer cleanup rules).
+4. [ ] **S2** Mockups of 5 screens (Design artifact type), no code. **Owner approves the mockups.**
+5. [ ] **S3** Two tracks, straight on `main`:
+   - (a) new rules: 1 rooms, coins and grabs; 2 bells, cooling, raids, Wanted and the bust; 3 the bank, round cap and endings; 4 equal shares, kitty, fair share, missing, honesty; 5 meetings at bank thirds, briefings and shakedowns; 6 roles; 7 perks and the shop; 8 the 4-card event deck; 9 the plan-board snapshot.
+   - (b) interface foundations: 1 `InfoTip` and content-text plumbing; 2 the one-screen shell and bottom sheets; 3 the per-user Tips setting; 4 the plan board's live channel; 5 the case board shell.
+6. [ ] **S4** Wire the screens: 1 board art; 2 the move; 3 plan board UI; 4 case board data and ⚠ checks; 5 role cards, rulebook, opponents; 6 teaching pop-ups; 7 black market; 8 meeting and shakedown screens; 9 reveal; 10 "Learn the game". **Owner tries a test deploy.**
+7. [ ] **S5** Final dead-code audit, one balance pass (Sim suite workflow), deploy. **Owner playtests.**
 
 Record: M1 (engine, simulator, bots), M2-1 to M2-13 (server, web, chat, Google sign-in, host controls) and R6 are built and live; M2-14 and M2-15 are parked. History: git, the PRs and `docs/archive/`.
 
