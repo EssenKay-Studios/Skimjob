@@ -39,7 +39,7 @@ Records are a new reliability level: **"Reported by the Teller"**, shown with th
 - "the Teller says 12 taken, but the crew take is 9 and nobody reports pocketing: 3 missing, or the Teller is lying";
 - "the Bellkeeper said the Office was at 2, then it was raided".
 
-That's R7's ledger with one more source type, built on A12's rule 2 in `docs/simplified.md`.
+That's R7's ledger with one more source type, built on A12's seam 2 in `docs/simplified.md`.
 
 ### Roles in Advanced
 
@@ -47,9 +47,10 @@ The same R7 roles. Some gain a second use against records; for example the Audit
 
 ## Parity with R7, and the effort
 
-R7 is built with two rules (`docs/simplified.md` A12):
+R7 is built with six seams (`docs/simplified.md` A12), above all:
 1. **which facts are public is content, never hard-coded;**
-2. **the case board's reliability levels are generic.**
+2. **the case board's trust levels are generic;**
+3. **rulesets select content, and nothing branches on the ruleset's name.**
 
 With those in place, Advanced reuses almost all of R7:
 
@@ -62,7 +63,7 @@ With those in place, Advanced reuses almost all of R7:
 | Server | Everything | Filing deadlines (like alibi windows), the Advanced setting and paid access |
 | Web | Everything | The job panel and record form, the "Reported by" level in the case board, a Learn chapter for jobs |
 
-**Rough size:** about **80–85% shared**. The new work is about 15–25% of R7's size: roughly 3–5k lines of source plus tests, about 10–15 PRs, 1–2 days of agent work through the same pipeline. **It is not a rewrite**, provided A12's two rules are followed in R7. If they're skipped, every hard-coded "public" fact has to be found and reworked later, which roughly doubles the cost.
+**Rough size:** about **80–85% shared**. The new work is about 15–25% of R7's size: roughly 3–5k lines of source plus tests, about 10–15 PRs, 1–2 days of agent work through the same pipeline. **It is not a rewrite**, provided A12's seams are followed in R7. If they're skipped, every hard-coded "public" fact has to be found and reworked later, which roughly doubles the cost.
 
 ## Paid version
 

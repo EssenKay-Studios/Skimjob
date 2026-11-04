@@ -6,7 +6,7 @@ _Last updated: 3 Nov 2026. **Development is halted** (owner): every code PR is m
 - **Specs:** `docs/design.md` is the game design; `docs/extension.md` is the rules spec for roles, tokens and the shop and wins on any conflict. Current decisions: `docs/decisions.md`. Next milestone: `docs/simplified.md` (R7). Later: Skimjob Advanced (`docs/advanced.md`). Out of scope: the recruited Mole.
 - **Content** 0.17.0 (R6 balance pass, provisional gates; `docs/balance/r6-balance.md`).
 - **Live:** https://skimjob.duckdns.org on the owner's AWS Lightsail box (`docs/deploy.md`). It runs 1a4e083 (all of M2-1 to M2-13 and R6), with Google sign-in on.
-- **Next step:** milestone **R7 Simplified** (`docs/simplified.md`), approved direction after the owner's playtest (3 Nov): simpler rules (Part A) and clearer presentation (Part B). It starts at step S0 (owner questions). M2-14 and M2-15 are parked: the owner playtests on the live site himself, and the offline demo isn't needed for now.
+- **Next step:** milestone **R7 Simplified** (`docs/simplified.md`), approved direction after the owner's playtest (3 Nov): simpler rules (Part A) and clearer presentation (Part B). It starts at step S0 (record decisions, clean the docs), then S1, then the code cleanup. M2-14 and M2-15 are parked: the owner playtests on the live site himself, and the offline demo isn't needed for now.
 
 ## Current milestone: M2 — playable web prototype
 

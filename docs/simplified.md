@@ -1,6 +1,6 @@
 # R7 Simplified: plan
 
-*3–4 Nov 2026 · Karthik (owner) + PM. Status: **approved, not built.** Every rule below was agreed with the owner on 4 Nov; numbers marked [tunable] are starting values for the simulator. This is the plan for the next milestone, and the brief for the orchestrator that runs it. A later, separate paid version, **Skimjob Advanced**, builds on this one: `docs/advanced.md`.*
+*3–4 Nov 2026 · Karthik (owner) + PM. Status: **approved, not built.** Built straight on `main`; cleanup first (S0 docs, C code). Every rule below was agreed with the owner on 4 Nov; numbers marked [tunable] are starting values for the simulator. This is the plan for the next milestone, and the brief for the orchestrator that runs it. A later, separate paid version, **Skimjob Advanced**, builds on this one: `docs/advanced.md`.*
 
 **Words used throughout:** a **raid** is the police hitting one room; a **bust** is the whole heist failing because Wanted reached 3.
 
@@ -194,10 +194,14 @@ Tokens and their 20 triggers; the R6 shop and perk pool; temperament tags; the R
 
 ### A12. Built so Skimjob Advanced can follow
 
-`docs/advanced.md` is a later, separate paid version in which **players keep some of the facts by hand** (and can fake them) instead of the system showing them. For it to be a layer on R7 rather than another rewrite, R7 follows two engineering rules:
+`docs/advanced.md` is a later, separate paid version in which **players keep some of the facts by hand** (and can fake them) instead of the system showing them. For it to be a layer on R7 rather than another rewrite, R7 builds in six seams. They are seams, not stub code: nothing for Advanced is built now. The reviewer checks them on every S3/S4 PR.
 
-1. **Which facts are public is content, never hard-coded.** Bells, the duffel total per round, the bank pile, missing coins and honesty are each produced as events whose visibility comes from a content setting (public in R7). Advanced switches some to private-to-a-job.
-2. **The case board's reliability levels are generic.** "Fact", "Seen by you", "Shared evidence" and "Said" are data, so Advanced can add "Reported by the Banker" (a job's record) without redesigning the ledger.
+1. **Which facts are public is content, never hard-coded.** Bells, the duffel total per round, the bank pile, missing coins and honesty are entries in a content fact catalogue with a visibility setting (all public in R7). The engine emits every such fact through one helper that reads it. Advanced switches some to private-to-a-job.
+2. **The case board's trust levels are generic.** "Fact", "Seen by you", "Shared evidence" and "Said" are data, and an entry's level comes from its event's source, so Advanced adds "Reported by the Teller" (a job's record) without redesigning the ledger.
+3. **Rulesets are content.** A game names its ruleset (`simplified`), and the ruleset only selects content (fact visibility, rooms, roles, perks, events). The engine and UI never branch on the ruleset's name; Advanced is another ruleset entry plus a jobs module, never a fork.
+4. **Roles, perks and events register by id:** a content entry plus one handler. Advanced's jobs plug in the same way.
+5. **Player statements are one "said" event type** (plans, claims, alibis, pledges). Advanced's records add their own command and events (`fileRecord`, `docs/advanced.md`) and show in the case board at their own trust level, through seam 2.
+6. **Bots read facts only through `viewFor`,** so hidden facts need no bot rewrite.
 
 Rule changes keep the engine's non-negotiables (`CLAUDE.md`): deterministic, event-sourced, content as data, `viewFor` never leaks. Each changed rule gets a test citing its new design section.
 
@@ -258,18 +262,26 @@ Rule changes keep the engine's non-negotiables (`CLAUDE.md`): deterministic, eve
 
 ---
 
-## Order of work (each step ends with an owner checkpoint)
+## Order of work
 
-| Step | What | Owner checkpoint |
+**Approach (owner, 4 Nov):** the live game has no real players, so R7 is built **straight on `main`** with no concern for downtime: no integration branch, no feature flags, no R6 path kept alive. The goal is a codebase **and** docs set with nothing dead, bloated or out of date in them.
+
+| Step | What | Checkpoint |
 |---|---|---|
-| **S0** | Record the 4 Nov decisions (Part A, A11) in `docs/decisions.md`. | — |
-| **S1** | Spec freeze: rewrite `docs/design.md` as the single spec from Part A, archive `docs/extension.md`. | Approve the spec PR |
-| **S2** | Mockups of 5 screens, made with the Design artifact type, no code. | Approve the mockups |
-| **S3** | In parallel: **(a)** the new rules in engine, content, bots and sim; **(b)** interface foundations that don't depend on rule details. | — |
-| **S4** | Wire the game screens to the new rules (Part B), then the single-player "Learn the game" mode as its own PR. | Try it on a test deploy |
-| **S5** | One balance pass (Sim suite workflow), deploy to Lightsail. | Playtest again |
+| **S0** | Record the 4 Nov decisions; **clean the docs** so every live `.md` describes R7 only. | Reviewer + QA |
+| **S1** | Spec freeze: `docs/design.md` becomes the single spec. | **Owner approves the spec** |
+| **C** | **Clean the code** (audit, then delete), before any R7 code. Runs alongside S2. | Reviewer + QA approve the audit; owner sees a one-page summary |
+| **S2** | Mockups of 5 screens (Design artifact type), no code. | **Owner approves the mockups** |
+| **S3** | The new rules (engine, content, bots, sim) ∥ interface foundations. Replace, don't add. | Reviewer + QA per PR |
+| **S4** | Wire the screens (Part B); "Learn the game" as its own PR. | **Owner tries a test deploy** |
+| **S5** | Final dead-code audit by a fresh agent, balance pass, deploy. | **Owner playtests** |
 
-The rules change at the core, so the screens are built once, against the new rules (S4), rather than on the old rules first.
+Three cleanup rules hold from start to finish:
+1. **Replace, don't add.** A PR that supersedes R6 code deletes it in the same PR. No flags, fallbacks, compatibility shims, "legacy" folders or commented-out code.
+2. **Docs say only what is true now.** Anything no longer applicable leaves the live docs. History lives only in `docs/archive/` (and git); nothing live links to it as guidance.
+3. **No placeholders for Advanced.** Advanced gets seams (A12), not stub code.
+
+"Straight on `main`" means each PR merges into `main` through the usual gate (`CLAUDE.md`: never push to `main`); there is just no integration branch.
 
 ---
 
@@ -299,7 +311,7 @@ The orchestrator picks the model per task and says which in the brief (Agent too
 >
 > Start by cloning the repo and reading CLAUDE.md, docs/simplified.md, docs/STATUS.md, docs/decisions.md, docs/pipeline/HANDOFF.md and the briefs in docs/pipeline/ ("Where you run" in common.md). Rebuild the live state from GitHub: list open PRs and run `bash docs/pipeline/verdicts.sh <PR>` on each. Treat agents from earlier sessions as dead.
 >
-> Begin with step S0 (record the agreed decisions), then S1. Owner checkpoints in the plan are hard stops: don't pass one without my approval.
+> Begin with step S0 (record the agreed decisions and clean the docs), then S1, then the code cleanup (C) alongside the mockups (S2). Build straight on main: no downtime concerns, no R6 code kept alive. Owner checkpoints in the plan are hard stops: don't pass one without my approval.
 >
 > Run builds and tests on my Mac when it's reachable; otherwise work in the cloud and rely on CI. Merge only with `docs/pipeline/merge.sh <PR>` when the latest head has a reviewer APPROVE, a QA PASS and green CI; only you merge. Commits are authored as karthik24iyer <karthik24iyer@gmail.com>, with no Claude co-author or session lines.
 >
@@ -307,14 +319,31 @@ The orchestrator picks the model per task and says which in the brief (Agent too
 
 ### Step by step
 
-**S0 — record decisions.** Everything in Part A was agreed with the owner on 4 Nov. The orchestrator writes it into `docs/decisions.md` (a PM docs PR, reviewed and QA'd like any other) and asks the owner only about genuinely new questions that come up.
+**S0 — record decisions and clean the docs (PM docs PR, reviewed and QA'd).**
+- Write Part A into `docs/decisions.md` as the current decisions. Every R6-era entry that R7 overrides or makes moot is **removed** from it (git and `docs/archive/decisions-history.md` already hold the history), including the "listed in the archive" pointers to old provisional readings; `decisions.md` ends up short and R7-only.
+- Go through **every** live `.md` (CLAUDE.md, STATUS, HANDOFF, the pipeline briefs, testing, deploy, ui-style) and remove or rewrite anything that no longer applies: R6 rules and numbers, tokens, Heat, Duel, Quick, the cut roles, old follow-ups, finished-milestone detail beyond a one-line record. STATUS keeps only: where things stand, the R7 task list, open items.
+- Fold in the review notes from #69: crew take vs. the kitty and seized coins (A4/A5), the end-of-round order, Books mode.
+- Ask the owner only about genuinely new questions.
 
 **S1 — spec freeze (docs only, one Opus developer).**
-- Rewrite `docs/design.md` as the **single** rules spec from Part A: rooms and coins, bells, raids and busts, the bank and the end, equal shares and the kitty, honesty and winning, meetings and shakedowns, the plan board, roles, perks, events. Remove what A10 lists.
-- Move `docs/extension.md`, `docs/m2-plan.md` and `docs/balance/r6-balance.md` to `docs/archive/`.
-- Update every reference to it: CLAUDE.md, STATUS, HANDOFF, decisions, testing, ui-style, the briefs, code comments citing "extension.md".
-- Add a **"Content text"** section to `design.md`: the one-line texts for every room, role ("power", "How you win", "How to spot it"), perk and event. The info buttons, rulebook and tips read these, via content.
-- Owner approves the PR before S2.
+- Rewrite `docs/design.md` as the **single** rules spec from Part A: rooms and coins, bells, raids and busts, the bank and the end, equal shares and the kitty, honesty and winning, meetings and shakedowns, the plan board, roles, perks, events. Nothing from R6 that R7 drops stays in it.
+- Move `docs/extension.md`, `docs/m2-plan.md` and `docs/balance/r6-balance.md` to `docs/archive/`; fix every reference (including code comments citing "extension.md" or old design sections).
+- Add a **"Content text"** section: the one-line texts for every room, role ("power", "How you win", "How to spot it"), perk and event, read by the UI through content.
+- Set the S5 balance gates.
+- Owner approves the PR.
+
+**C — clean the code (before any R7 code; runs alongside S2).**
+- **C1 Audit (one Opus agent; deletes nothing).** Its PR adds only the checker and the audit file. Run a dead-code checker (`knip`, added as a root dev dependency) across every workspace, then read each area by hand. Produce `docs/cleanup-audit.md` (deleted again at S5) sorting every file and module into:
+  1. **Dead now:** nothing uses it.
+  2. **Cut by R7 regardless:** Duel, Quick, Cleaner/Bagman/Muscle, the dropped events (A11.1), the Server room's old power, the old bot fallbacks, v0.1 number testkits, anything only they use.
+  3. **Replaced in S3/S4:** Heat arithmetic, loot formulas, acts and checkpoints, tokens, the R6 shop, the R6 ledger/case file/suspicion board. Each is assigned to the S3/S4 PR that deletes it.
+  4. **Keep:** seeded RNG, event log and reduce, visibility and `viewFor`, meetings and voting, chat, server, lobby, auth, scheduler, host controls, the UI kit, the art.
+  Plus a **test audit:** duplicated coverage between `*.test.ts` and `*.qa.test.ts`, tests of removed rules, slow tests with no unique value.
+- **The reviewer and QA review the audit itself** (their verdicts on the audit PR), and the owner gets a one-page summary (for information, not a hard stop). Deletion starts only after both pass.
+- **C2 Delete lists 1 and 2** in about four PRs: engine + content + bots + sim; server; web + e2e; test consolidation. Sonnet developers (Opus for the engine PR). After each, the game still runs (R6 minus the cut features).
+  - Reviewer: every deletion is on the approved audit; nothing on the keep list changed behaviour.
+  - QA: full suite on the Mac, the 12-seat game, a sim smoke, and one game played start to finish.
+- **C3 Guardrails, permanent:** the scoped test setup (see "Test plan" below); `knip` in CI fails on unused files, exports or dependencies; each PR body reports lines added/removed per package; `builder.md` gets the three cleanup rules; `reviewer.md` checks them.
 
 **S2 — mockups (no code).**
 - One agent (Opus) creates the mockups from the **Design** artifact type, with the notebook look from `docs/ui-style.md`:
@@ -325,8 +354,8 @@ The orchestrator picks the model per task and says which in the brief (Agent too
   5. the black market and a shakedown result.
 - The owner comments and approves. Approved mockups are linked from STATUS and are the reference for S4 reviewers.
 
-**S3 — two tracks in parallel.**
-- **(a) New rules (Opus developers, one area per PR):**
+**S3 — two tracks in parallel, straight on `main`.**
+- **(a) New rules (Opus developers, one area per PR, in order):**
   1. rooms, coins and grabs;
   2. bells, cooling (including the Rooftop's automatic cooling), raids, Wanted, and the bust with the Rooftop escape;
   3. the bank, round cap and endings;
@@ -337,15 +366,15 @@ The orchestrator picks the model per task and says which in the brief (Agent too
   8. the 4-card event deck at a 4-in-10 chance;
   9. the plan-board snapshot as a public event.
 
-  Remove Duel mode and Quick. Follow A12's two rules throughout.
-
-  The first PR removes what A10 lists, so later PRs read a smaller codebase. Each PR updates bots and the sim's metrics for its rule, adds its events to the leak scrub and property tests, and runs a sim smoke.
+  Each PR deletes the R6 code it replaces (its audit list-3 items), updates bots and the sim's metrics for its rule, adds its events to the leak scrub and property tests, and runs a sim smoke. The web app may show the old screens against new rules in between; that is fine.
 - **(b) Interface foundations (Sonnet developers):**
   1. `InfoTip` + content-text plumbing, in `/dev/gallery`;
   2. the one-screen layout shell and bottom sheets at all five widths;
-  3. the per-user Tips setting (one field on the user, default on; the migration only adds);
+  3. the per-user Tips setting (one field on the user, default on);
   4. the plan board's live server channel (like chat);
   5. the case board shell: views, filters, pins (data from a typed adapter, filled in S4).
+
+**Seams for Skimjob Advanced:** every S3/S4 PR follows A12's six seams; the reviewer checks them.
 
 **S4 — wire the screens (Sonnet for UI, Opus for the case board's data layer):**
 1. the board art (bells, tape, Wanted, the bank pile);
@@ -359,21 +388,65 @@ The orchestrator picks the model per task and says which in the brief (Agent too
 9. the reveal (plan vs. what happened);
 10. **Learn the game**, the single-player guided mode (A11.3), as its own PR.
 
-**S5 — balance and deploy.**
-- One balance pass on the **Sim suite GitHub workflow**, never babysat in chat. New gates, set in S1:
-  - heist success rate;
-  - raid and bust rates, and how often an endgame stalls with everyone on the Rooftop;
-  - each role's win rate within a band of fair share;
-  - the share of all-honest shared wins;
-  - perks not deciding games.
-- Tune the [tunable] numbers; refresh `docs/balance/baseline.json`.
-- Deploy to Lightsail by `docs/deploy.md`: back up first; games logged on the old rules won't replay, so clear running games after the backup.
+Each deletes the old screen, component, gallery page and e2e spec it replaces. Then a test deploy for the owner.
+
+**S5 — final audit, balance and deploy.**
+- **Final audit by a fresh Opus agent** that built nothing: `knip` clean, no R6 names left (tokens, Heat, acts, Duel, Quick, cut roles) in code, tests, content or live docs, every audit list-3 item gone; delete `docs/cleanup-audit.md`. Reviewer + QA pass it.
+- One balance pass on the **Sim suite GitHub workflow**, never babysat in chat, against the gates set in S1 (heist success; raid and bust rates and Rooftop stalls; each role's win rate within a band; the share of all-honest wins; perks not deciding games). Tune the [tunable] numbers; refresh `docs/balance/baseline.json`.
+- Deploy to Lightsail by `docs/deploy.md`: back up, then clear old games (R6 logs won't replay).
 - The owner playtests again.
+
+### Test plan: scoped per feature, full suite after merge
+
+**Goal:** a PR waits only for the tests of what it touched, while `main` is still fully tested. Target: a typical PR's CI finishes in **about 5–8 minutes**.
+
+**1. Feature tags, worked out from imports.**
+- Every e2e spec carries exactly one feature tag in its title: `@board`, `@move`, `@plan`, `@caseboard`, `@meeting`, `@chat`, `@shop`, `@roles`, `@reveal`, `@lobby`, `@auth`, `@host`, `@learn`.
+- `apps/web/e2e/features.json` maps only **entry points** to tags: screens and top-level panels on the web side, and the engine, bots and server modules that implement a feature (for example `packages/engine/src/meeting.ts` → `@meeting`, `apps/server/src/chat.ts` → `@chat`).
+- For a changed file, CI follows the **import graph** up to the entry points that depend on it and runs the union of their tags. A shared module (`api.ts`, `router.ts`, game state, `InfoTip`) therefore runs every feature that uses it. If a changed file reaches **no** entry point, or **3+ tags**, CI runs everything.
+- A CI check fails if any e2e spec has no tag or any screen/panel/feature module has no entry. Everything is in the repo, so nothing depends on PR-body text, and a re-push re-runs it.
+
+**2. What a PR runs (the `changes` job decides from the diff):**
+
+| Changed | Runs |
+|---|---|
+| Docs only | Typecheck, unit tests (as today) |
+| Any code | Typecheck and `knip` across the repo (fast); unit, property and server tests **only for changed packages and those depending on them** (`pnpm --filter "...[origin/main]"`); the always-on `@smoke` e2e (2 specs: create a game, play one round with bots, finish); the tags from step 1 |
+| Engine, content or bots | Also the engine property tests and the `viewFor` leak scrub (always, whichever rule changed), and a **50-game** sim smoke at 3/6/12 players |
+| Server | Also `@lobby @host`; the live channel or store (`live.ts`, `store.ts`, `db.ts`) count as shared and run everything |
+| Shared kit (`theme.css`, `SketchFrame`, `Button`, layout shell), any root or workspace config (`package.json`, lockfile, `tsconfig*`, `vitest`/`playwright` config, `.github/`, `scripts/`), `features.json` or the scoping script itself | **Everything** (the full tier) |
+
+A single always-on **"CI ok"** job depends on all the others and passes when each either passed or was deliberately skipped; branch protection and `merge.sh` gate on it.
+
+**3. The full tier runs on every push to `main`** (after each merge), nightly, and at owner checkpoints (S4 test deploy, S5): all unit tests, all e2e on 6 shards (including the 12-seat game), and the 200-game sim smoke.
+- If a post-merge run fails, the orchestrator **stops merging** until a fix-forward PR (with a test that would have caught it in the scoped tier) is green.
+- `features.json` gets the missing mapping, so the same gap can't recur.
+
+**4. Lean tests, rebuilt with the features.**
+- Rules are tested in the engine (fast, deterministic, citing the design section), not through the browser.
+- e2e covers user journeys only: per feature, one happy path plus its key edge cases, at 360 and 1280 px; the full tier adds the five widths.
+- Each R7 PR **replaces** the specs for the feature it rebuilds. QA's adversarial cases go in `<feature>.qa.spec.ts` under the same tag, never a parallel copy of the normal spec.
+- Bot games in e2e use the fastest timing preset and a fixed seed. Only the full tier runs 12 seats.
+- CI caches the Playwright browser and pnpm store.
+
+**5. Review and QA stay solid:**
+- **Reviewer:**
+  - checks that `features.json` has an entry for every new screen, panel or feature module, and that the scoped run listed in CI covers the change;
+  - that each new rule has an engine test naming its design section;
+  - that each new event type is in the leak scrub;
+  - that deleted R6 tests went with their code.
+- **QA:**
+  - runs the PR's scoped set on the Mac (`pnpm test:scoped`, which uses the same diff logic as CI, plus `--workers=2` for the browser);
+  - writes adversarial tests inside the feature;
+  - for engine PRs, also a 200-game sim run locally.
+- **The gate** is unchanged: APPROVE + PASS on the head, green scoped CI. The full tier on `main` is the safety net, not the gate.
+
+**Built in step C (C3):** the tags, `features.json` with its coverage check, the import-graph scoping script, `pnpm test:scoped`, the "CI ok" job, and the post-merge/nightly full tier; plus the docs that describe testing (CLAUDE.md, `docs/testing.md`, `builder.md`, `qa.md`, `reviewer.md`, `common.md`) updated in the same PR. They land before any R7 code, so every R7 PR uses them.
 
 ### Rules learned on 3 Nov (put in every brief)
 
 - **Build and test on the Mac** (18 cores) when reachable; the cloud box has 2 cores.
-- **Run only the specs you touched**, `pnpm typecheck` before pushing, **push once**, and let CI's 6 e2e shards run the rest.
+- **Run only the scoped set** (`pnpm test:scoped`, see the Test plan), `pnpm typecheck` before pushing, **push once**; the full suite runs on `main` after the merge.
 - **At most 2 browser games at a time** (Playwright `--workers=2`): 10 parallel 12-seat games on a busy Mac produced a false failure.
 - **Review and QA start together** as soon as a PR opens. **Hard time limits** in every brief (builder 30–50 min, reviewer 10–30, QA 15–35).
 - **Only the orchestrator merges.** Reviewer and QA agents never merge, even when the gate would pass.
