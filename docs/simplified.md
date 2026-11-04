@@ -400,21 +400,23 @@ Each deletes the old screen, component, gallery page and e2e spec it replaces. T
 
 **Goal:** a PR waits only for the tests of what it touched, while `main` is still fully tested. Target: a typical PR's CI finishes in **about 5–8 minutes**.
 
-**1. Feature tags, mapped from paths.**
+**1. Feature tags, worked out from imports.**
 - Every e2e spec carries exactly one feature tag in its title: `@board`, `@move`, `@plan`, `@caseboard`, `@meeting`, `@chat`, `@shop`, `@roles`, `@reveal`, `@lobby`, `@auth`, `@host`, `@learn`.
-- `apps/web/e2e/features.json` maps source globs to tags (for example `apps/web/src/components/CaseBoard*` → `@caseboard`).
-- A CI check fails if any e2e spec has no tag, or any web source file matches no entry. **An unmapped file therefore can't skip its tests.**
+- `apps/web/e2e/features.json` maps only **entry points** to tags: screens and top-level panels on the web side, and the engine, bots and server modules that implement a feature (for example `packages/engine/src/meeting.ts` → `@meeting`, `apps/server/src/chat.ts` → `@chat`).
+- For a changed file, CI follows the **import graph** up to the entry points that depend on it and runs the union of their tags. A shared module (`api.ts`, `router.ts`, game state, `InfoTip`) therefore runs every feature that uses it. If a changed file reaches **no** entry point, or **3+ tags**, CI runs everything.
+- A CI check fails if any e2e spec has no tag or any screen/panel/feature module has no entry. Everything is in the repo, so nothing depends on PR-body text, and a re-push re-runs it.
 
 **2. What a PR runs (the `changes` job decides from the diff):**
 
 | Changed | Runs |
 |---|---|
 | Docs only | Typecheck, unit tests (as today) |
-| Any code | Typecheck and `knip` across the repo (fast); unit, property and server tests **only for changed packages and those depending on them** (`pnpm --filter "...[origin/main]"`); the always-on `@smoke` e2e (2 specs: create a game, play one round with bots, finish) |
-| Web files | The e2e specs for the tags those files map to |
-| Engine, content or bots | Engine property tests and the `viewFor` leak scrub (always, whichever rule changed); a **50-game** sim smoke at 3/6/12 players; e2e for the tags the rule touches (the PR declares them in a `E2E-tags:` line, and the reviewer checks it) |
-| Server | Server scenario tests; `@lobby @host @smoke` e2e |
-| Shared kit (`theme.css`, `SketchFrame`, `Button`, layout shell), `package.json`/lockfile, Playwright or CI config, `features.json` itself | **Everything** (the full tier) |
+| Any code | Typecheck and `knip` across the repo (fast); unit, property and server tests **only for changed packages and those depending on them** (`pnpm --filter "...[origin/main]"`); the always-on `@smoke` e2e (2 specs: create a game, play one round with bots, finish); the tags from step 1 |
+| Engine, content or bots | Also the engine property tests and the `viewFor` leak scrub (always, whichever rule changed), and a **50-game** sim smoke at 3/6/12 players |
+| Server | Also `@lobby @host`; the live channel or store (`live.ts`, `store.ts`, `db.ts`) count as shared and run everything |
+| Shared kit (`theme.css`, `SketchFrame`, `Button`, layout shell), any root or workspace config (`package.json`, lockfile, `tsconfig*`, `vitest`/`playwright` config, `.github/`, `scripts/`), `features.json` or the scoping script itself | **Everything** (the full tier) |
+
+A single always-on **"CI ok"** job depends on all the others and passes when each either passed or was deliberately skipped; branch protection and `merge.sh` gate on it.
 
 **3. The full tier runs on every push to `main`** (after each merge), nightly, and at owner checkpoints (S4 test deploy, S5): all unit tests, all e2e on 6 shards (including the 12-seat game), and the 200-game sim smoke.
 - If a post-merge run fails, the orchestrator **stops merging** until a fix-forward PR (with a test that would have caught it in the scoped tier) is green.
@@ -429,7 +431,7 @@ Each deletes the old screen, component, gallery page and e2e spec it replaces. T
 
 **5. Review and QA stay solid:**
 - **Reviewer:**
-  - checks that the tag mapping and `E2E-tags:` line cover the change;
+  - checks that `features.json` has an entry for every new screen, panel or feature module, and that the scoped run listed in CI covers the change;
   - that each new rule has an engine test naming its design section;
   - that each new event type is in the leak scrub;
   - that deleted R6 tests went with their code.
@@ -439,7 +441,7 @@ Each deletes the old screen, component, gallery page and e2e spec it replaces. T
   - for engine PRs, also a 200-game sim run locally.
 - **The gate** is unchanged: APPROVE + PASS on the head, green scoped CI. The full tier on `main` is the safety net, not the gate.
 
-**Built in step C (C3):** the tags, `features.json` with its coverage check, the scoped `changes` logic, `pnpm test:scoped`, and the post-merge/nightly full tier. They land before any R7 code, so every R7 PR uses them.
+**Built in step C (C3):** the tags, `features.json` with its coverage check, the import-graph scoping script, `pnpm test:scoped`, the "CI ok" job, and the post-merge/nightly full tier; plus the docs that describe testing (CLAUDE.md, `docs/testing.md`, `builder.md`, `qa.md`, `reviewer.md`, `common.md`) updated in the same PR. They land before any R7 code, so every R7 PR uses them.
 
 ### Rules learned on 3 Nov (put in every brief)
 
