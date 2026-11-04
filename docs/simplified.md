@@ -194,10 +194,14 @@ Tokens and their 20 triggers; the R6 shop and perk pool; temperament tags; the R
 
 ### A12. Built so Skimjob Advanced can follow
 
-`docs/advanced.md` is a later, separate paid version in which **players keep some of the facts by hand** (and can fake them) instead of the system showing them. For it to be a layer on R7 rather than another rewrite, R7 follows two engineering rules:
+`docs/advanced.md` is a later, separate paid version in which **players keep some of the facts by hand** (and can fake them) instead of the system showing them. For it to be a layer on R7 rather than another rewrite, R7 builds in six seams. They are seams, not stub code: nothing for Advanced is built now. The reviewer checks them on every S3/S4 PR.
 
-1. **Which facts are public is content, never hard-coded.** Bells, the duffel total per round, the bank pile, missing coins and honesty are each produced as events whose visibility comes from a content setting (public in R7). Advanced switches some to private-to-a-job.
-2. **The case board's reliability levels are generic.** "Fact", "Seen by you", "Shared evidence" and "Said" are data, so Advanced can add "Reported by the Banker" (a job's record) without redesigning the ledger.
+1. **Which facts are public is content, never hard-coded.** Bells, the duffel total per round, the bank pile, missing coins and honesty are entries in a content fact catalogue with a visibility setting (all public in R7). The engine emits every such fact through one helper that reads it. Advanced switches some to private-to-a-job.
+2. **The case board's trust levels are generic.** "Fact", "Seen by you", "Shared evidence" and "Said" are data, and an entry's level comes from its event's source, so Advanced adds "Reported by the Teller" (a job's record) without redesigning the ledger.
+3. **Rulesets are content.** A game names its ruleset (`simplified`), and the ruleset only selects content (fact visibility, rooms, roles, perks, events). The engine and UI never branch on the ruleset's name; Advanced is another ruleset entry plus a jobs module, never a fork.
+4. **Roles, perks and events register by id:** a content entry plus one handler. Advanced's jobs plug in the same way.
+5. **Player statements are one "said" event type** (plans, claims, alibis, pledges). Advanced's records add their own command and events (`fileRecord`, `docs/advanced.md`) and show in the case board at their own trust level, through seam 2.
+6. **Bots read facts only through `viewFor`,** so hidden facts need no bot rewrite.
 
 Rule changes keep the engine's non-negotiables (`CLAUDE.md`): deterministic, event-sourced, content as data, `viewFor` never leaks. Each changed rule gets a test citing its new design section.
 
@@ -277,6 +281,8 @@ Three cleanup rules hold from start to finish:
 2. **Docs say only what is true now.** Anything no longer applicable leaves the live docs. History lives only in `docs/archive/` (and git); nothing live links to it as guidance.
 3. **No placeholders for Advanced.** Advanced gets seams (A12), not stub code.
 
+"Straight on `main`" means each PR merges into `main` through the usual gate (`CLAUDE.md`: never push to `main`); there is just no integration branch.
+
 ---
 
 ## How to run it: orchestrator and agents
@@ -314,7 +320,7 @@ The orchestrator picks the model per task and says which in the brief (Agent too
 ### Step by step
 
 **S0 — record decisions and clean the docs (PM docs PR, reviewed and QA'd).**
-- Write Part A into `docs/decisions.md` as the current decisions. Every R6-era entry that R7 overrides or makes moot is **removed** from it (git and `docs/archive/decisions-history.md` already hold the history); `decisions.md` ends up short and R7-only.
+- Write Part A into `docs/decisions.md` as the current decisions. Every R6-era entry that R7 overrides or makes moot is **removed** from it (git and `docs/archive/decisions-history.md` already hold the history), including the "listed in the archive" pointers to old provisional readings; `decisions.md` ends up short and R7-only.
 - Go through **every** live `.md` (CLAUDE.md, STATUS, HANDOFF, the pipeline briefs, testing, deploy, ui-style) and remove or rewrite anything that no longer applies: R6 rules and numbers, tokens, Heat, Duel, Quick, the cut roles, old follow-ups, finished-milestone detail beyond a one-line record. STATUS keeps only: where things stand, the R7 task list, open items.
 - Fold in the review notes from #69: crew take vs. the kitty and seized coins (A4/A5), the end-of-round order, Books mode.
 - Ask the owner only about genuinely new questions.
@@ -327,13 +333,13 @@ The orchestrator picks the model per task and says which in the brief (Agent too
 - Owner approves the PR.
 
 **C — clean the code (before any R7 code; runs alongside S2).**
-- **C1 Audit (one Opus agent, read-only).** Run a dead-code checker (`knip`, added as a root dev dependency) across every workspace, then read each area by hand. Produce `docs/cleanup-audit.md` (deleted again at S5) sorting every file and module into:
+- **C1 Audit (one Opus agent; deletes nothing).** Its PR adds only the checker and the audit file. Run a dead-code checker (`knip`, added as a root dev dependency) across every workspace, then read each area by hand. Produce `docs/cleanup-audit.md` (deleted again at S5) sorting every file and module into:
   1. **Dead now:** nothing uses it.
   2. **Cut by R7 regardless:** Duel, Quick, Cleaner/Bagman/Muscle, the dropped events (A11.1), the Server room's old power, the old bot fallbacks, v0.1 number testkits, anything only they use.
   3. **Replaced in S3/S4:** Heat arithmetic, loot formulas, acts and checkpoints, tokens, the R6 shop, the R6 ledger/case file/suspicion board. Each is assigned to the S3/S4 PR that deletes it.
   4. **Keep:** seeded RNG, event log and reduce, visibility and `viewFor`, meetings and voting, chat, server, lobby, auth, scheduler, host controls, the UI kit, the art.
   Plus a **test audit:** duplicated coverage between `*.test.ts` and `*.qa.test.ts`, tests of removed rules, slow tests with no unique value.
-- **The reviewer and QA review the audit itself** (their verdicts on the audit PR), and the owner gets a one-page summary. Deletion starts only after both pass.
+- **The reviewer and QA review the audit itself** (their verdicts on the audit PR), and the owner gets a one-page summary (for information, not a hard stop). Deletion starts only after both pass.
 - **C2 Delete lists 1 and 2** in about four PRs: engine + content + bots + sim; server; web + e2e; test consolidation. Sonnet developers (Opus for the engine PR). After each, the game still runs (R6 minus the cut features).
   - Reviewer: every deletion is on the approved audit; nothing on the keep list changed behaviour.
   - QA: full suite on the Mac, the 12-seat game, a sim smoke, and one game played start to finish.
@@ -368,13 +374,7 @@ The orchestrator picks the model per task and says which in the brief (Agent too
   4. the plan board's live server channel (like chat);
   5. the case board shell: views, filters, pins (data from a typed adapter, filled in S4).
 
-**Seams for Skimjob Advanced (checked by the reviewer on every S3/S4 PR; A12):**
-1. **A fact catalogue in content.** Bells, the bank pile, the duffel per round, missing coins and honesty are entries with a visibility setting (all public in R7). The engine emits every such fact through one helper that reads it.
-2. **Rulesets are content.** A game names its ruleset (`simplified`); Advanced is another ruleset entry plus a jobs module, never an engine fork.
-3. **Roles, perks and events register by id:** a content entry plus one handler. Jobs plug in the same way.
-4. **Case-board trust levels are data** ("Fact", "Seen by you", "Shared evidence", "Said"), so "Reported by the Teller" is one more entry.
-5. **One "said" event type** for plans, claims, alibis and pledges; Advanced's records reuse it.
-6. **Bots read facts only through `viewFor`,** so hidden facts need no bot rewrite.
+**Seams for Skimjob Advanced:** every S3/S4 PR follows A12's six seams; the reviewer checks them.
 
 **S4 — wire the screens (Sonnet for UI, Opus for the case board's data layer):**
 1. the board art (bells, tape, Wanted, the bank pile);
