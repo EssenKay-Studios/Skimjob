@@ -14,13 +14,15 @@
     "sim:suite": "pnpm --filter @skimjob/sim suite",
     "dev": "pnpm --filter @skimjob/server dev",
     "web": "pnpm --filter @skimjob/web dev",
-    "test:e2e": "pnpm --filter @skimjob/web test:e2e"
+    "test:e2e": "pnpm --filter @skimjob/web test:e2e",
+    "knip": "knip"
   },
   "devDependencies": {
-    "typescript": "^5.9.0",
-    "vitest": "^3.2.0",
+    "@types/node": "^22.0.0",
+    "knip": "^6.44.1",
     "tsx": "^4.20.0",
-    "@types/node": "^22.0.0"
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
