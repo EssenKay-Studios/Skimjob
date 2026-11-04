@@ -84,7 +84,7 @@ The rules are `docs/design.md` and `docs/extension.md`. The choices behind them:
 - **CI:** typecheck and tests, 6 e2e shards (with a fast-clock server), sim smoke; docs-only PRs (every path `*.md`) skip e2e and sim smoke. *Confirmed.*
 - **The M2-15 offline demo is a GitHub Pages site** (engine and bots in the browser, same UI). *Confirmed;* parked by the owner (3 Nov): not needed while the live site exists.
 - **M2-14 playtest pass is parked** (owner, 3 Nov): the owner playtests on the live site himself. *Confirmed.*
-- **Out of scope:** `docs/rebuild.md` (a proposal), Books mode, the recruited Mole. *Confirmed.*
+- **Out of scope for now:** Skimjob Advanced (`docs/advanced.md`, a later paid version on top of R7; the original jobs redesign is archived as `docs/archive/rebuild-2026-11-02.md`), the recruited Mole. *Confirmed.*
 
 ## Pipeline and git
 

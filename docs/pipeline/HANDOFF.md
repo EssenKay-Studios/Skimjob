@@ -8,7 +8,7 @@ Read this with `docs/STATUS.md` (the canonical task list and the owner's open qu
 - **Development is halted** (owner): every code PR is merged (M2-1 to M2-13 and R6, through #65); start nothing new until the owner says so.
 - **In flight:** nothing.
 - **Parked by the owner (3 Nov):** M2-14 playtest pass (the owner playtests on the live site himself) and M2-15 offline demo (not needed while the live site exists).
-- **Out of scope:** `docs/rebuild.md` (jobs redesign proposal), Books mode, the recruited Mole.
+- **Out of scope for now:** Skimjob Advanced (`docs/advanced.md`, a later paid version built on R7), the recruited Mole.
 - **Specs:** `docs/design.md` plus `docs/extension.md` (roles, tokens, shop; wins on conflict). Current decisions: `docs/decisions.md`.
 - **Live:** https://skimjob.duckdns.org on the owner's AWS Lightsail box, running 1a4e083 with Google sign-in on (release `20261103-172121-1a4e083`; the 38002fd release is kept, but is not a safe rollback target: see `docs/deploy.md` step 8). Runbook: `docs/deploy.md`. Connection details are in the owner's local `ssh-relay` skill, never in the repo.
 
