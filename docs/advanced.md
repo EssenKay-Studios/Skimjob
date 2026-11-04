@@ -14,12 +14,12 @@ Skimjob (R7) hides **who you are**: roles are secret, and the system shows the f
 
 - **The deal is announced:** every player gets one role, and everyone sees who holds what from the start. No secret roles exist in Advanced.
 - **Every player has a task:** each role has a job to do each round or between meetings (see a fact, publish a record, act on a room). A player who doesn't file is visible at once, and that is what looks suspicious.
-- **Role swap:** at a meeting the crew can vote to move a role to another player (instead of a shakedown), for example after two missed or doubtful filings. The new holder takes over from the next round; the old holder gets the other player's role.
+- **Role swap:** at a meeting the crew can vote to move a role to another player (instead of a shakedown), for example after two missed or doubtful filings. The new holder takes over from the next round; what the old holder gets is open question 4.
 - **Up to about 10 roles in play,** one per player, scaled by crew size.
 
 ### Advanced has its own role list
 
-Roles that only work in secret (in R7: the **Mole, Fixer, Electrician and Priest**) are **removed or redesigned** for Advanced. New roles are added so every player in a 10-player game has a job. The list is designed when Advanced starts; candidates:
+Roles that only work in secret (in R7: the **Mole, Fixer, Electrician, Priest and Hacker**) are **removed or redesigned** for Advanced. New roles are added so every player in a 10-player game has a job. The list is designed when Advanced starts; candidates:
 
 | Role | Sees privately | Publishes | Checked by |
 |---|---|---|---|
@@ -27,7 +27,7 @@ Roles that only work in secret (in R7: the **Mole, Fixer, Electrician and Priest
 | **Bellkeeper** (new) | Every room's bulbs | Each room's bulbs | Raids (a room raided at "2 bulbs" exposes a lie), the Lookout |
 | **Lookout** (from R7) | Who was in a room | The sighting | Other sightings, claims |
 | **Detective** (from R7) | Coins one player grabbed | The finding | The Teller's count, the crew take |
-| **Auditor** (from R7) | Whether a player's hand-in adds up | The audit | The crew take |
+| **Auditor** (redesigned from R7) | Whether a player's hand-in adds up | The audit | The crew take |
 | **Camera keeper** (from the Hacker) | The camera feed for a room | Who the camera saw | The Lookout, claims |
 | **Getaway driver** (new) | Who reached the Rooftop | The roll call | Claims, the bells |
 | **Fence** (new) | Black-market purchases | The purchase log | The shop's public "a perk was bought" |
@@ -54,6 +54,10 @@ Each player still sees **their own share** each round, so the crew take is alway
 - **No pay for roles** (R7's principle: nothing pays anyone to be nice). A holder files because they want the heist to work, and because a missing record makes them the suspect.
 - **The case board** shows each record at its own trust level, "Reported by the Teller", with the role's badge. The ⚠ checks compare records with each other and with your evidence: "the Teller says 12 taken, but the crew take is 9", "the Bellkeeper said the Office was at 2, then it was raided".
 
+### Events
+
+R7's **Inside tip** card (learn a player's role) has no use when roles are public; Advanced replaces it.
+
 ### Winning
 
 As R7: on success, the biggest stash wins; a heist sunk by theft has no winner. Role-specific wins in R7 (the Mole and Fixer) don't exist in Advanced, since those roles don't.
@@ -78,7 +82,7 @@ R7 is built with ten seams (`docs/simplified.md` A12) so Advanced is mostly cont
 | Server | Everything | Filing deadlines (like alibi windows), the Advanced setting and paid access |
 | Web | Everything | The record form (generic), role badges and the "Reported by" levels, the swap vote, a Learn chapter |
 
-**Rough size:** about **70–80% shared**. The new work is mostly role design, content and bot behaviour for each role, not engine changes: roughly 20–30% of R7's size, about 15–20 PRs, 2–3 days of agent work through the same pipeline. **It is not a rewrite**, provided R7 keeps A12's seams; if they're skipped (for example roles fixed at setup, or the Mole's win in the end-of-game code), roles and facts have to be found and reworked later, which roughly doubles the cost.
+**Rough size:** about **70–80% shared**. The new work is mostly role design, content and bot behaviour for each role, not engine changes: roughly 40–50% of R7's size measured in PRs (about 15–20 PRs, against R7's 30–35), about 3–5 days of agent work through the same pipeline; most of it is content and bots rather than engine. **It is not a rewrite**, provided R7 keeps A12's seams; if they're skipped (for example roles fixed at setup, or the Mole's win in the end-of-game code), roles and facts have to be found and reworked later, which roughly doubles the cost.
 
 ## Paid version
 

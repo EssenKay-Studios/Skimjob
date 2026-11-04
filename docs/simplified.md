@@ -170,7 +170,7 @@ Each game deals about **5–7 roles** [tunable]. Every role has a one-sentence p
 
 ### A10. What goes away from R6
 
-Tokens and their 20 triggers; the R6 shop and perk pool; temperament tags; the R6 role list; acts; checkpoint targets (7 / 15 / 23 × players); fixed 9 rounds; Heat 0–100 and its crew-share formula; hidden police moments; the gap box; the clean line (6) and payout (8). The finite bank comes from the earlier jobs redesign, now `docs/advanced.md`.
+Tokens and their 20 triggers; the R6 shop and perk pool; temperament tags; the R6 role list; acts; checkpoint targets (7 / 15 / 23 × players); fixed 9 rounds; Heat 0–100 and its crew-share formula; hidden police moments; the gap box; the clean line (6) and payout (8). The finite bank comes from the earlier jobs redesign (archived as `docs/archive/rebuild-2026-11-02.md`).
 
 ### A11. Also decided (4 Nov)
 
@@ -197,13 +197,13 @@ Tokens and their 20 triggers; the R6 shop and perk pool; temperament tags; the R
 `docs/advanced.md` is a later, separate paid version in which **players keep some of the facts by hand** (and can fake them) instead of the system showing them. For it to be a layer on R7 rather than another rewrite, R7 builds in ten seams. They are seams, not stub code: nothing for Advanced is built now. The reviewer checks them on every S3/S4 PR.
 
 1. **Which facts are public is content, never hard-coded.** Bells, the duffel total per round, the bank pile, missing coins and honesty are entries in a content fact catalogue with a visibility setting (all public in R7). The engine emits every such fact through one helper that reads it. Advanced switches some to private-to-a-job.
-2. **The case board's trust levels are generic.** "Fact", "Seen by you", "Shared evidence" and "Said" are data, and an entry's level comes from its event's source, so Advanced adds one level per job ("Reported by the Teller", "Reported by the Lookout"), each with its badge from content, without redesigning the ledger.
+2. **The case board's trust levels are generic.** "Fact", "Seen by you", "Shared evidence" and "Said" are data, and an entry's level comes from its event's source, so Advanced adds one level per role ("Reported by the Teller", "Reported by the Lookout"), each with its badge from content, without redesigning the ledger.
 3. **Rulesets are content.** A game names its ruleset (`simplified`), and the ruleset only selects content (fact visibility, rooms, its own role list, perks, events). The engine and UI never branch on the ruleset's name; Advanced is another ruleset entry with its own roles, never a fork.
 4. **Roles, perks and events register by id:** a content entry plus one handler, **including any role-specific win rule** (the Mole's and Fixer's win lives in their handlers, not in the end-of-game code). A role can be removed from or added to a ruleset without touching anything else.
-5. **Player statements are one "said" event type** (plans, claims, alibis, pledges). Advanced's records are **one generic record command** whose per-job format comes from content, so a 10th job needs no new command, event type or screen; records show in the case board through seam 2.
+5. **Player statements are one "said" event type** (plans, claims, alibis, pledges). Advanced's records are **one generic record command** whose per-job format comes from content, so a 10th role needs no new command, event type or screen; records show in the case board through seam 2.
 6. **Bots read facts only through `viewFor`,** so hidden facts need no bot rewrite.
-7. **Whether a role's holder is secret or announced, and whether its result goes privately to the holder or into a record they file, is a content setting per role.** In R7 every holder is secret and every result private.
-8. **The deal reads its counts from content:** how many roles of which kinds, by player count. Nothing hard-codes a number of roles or jobs.
+7. **Whether a role's holder is secret or announced, and whether its result goes privately to the holder or into a record they file, is a content setting per role.** In R7 every holder is secret and every result private, and **R7 builds only that path**: the setting exists as data, with no unused announced/filed code until Advanced.
+8. **The deal reads its counts from content:** how many roles of which kinds, by player count. Nothing hard-codes a number of roles.
 9. **Holding a role is an event, not a setup field.** The current holder of each role is derived from the log, and "once between meetings" style uses are tracked per role and holder, so a role can change hands mid-game (Advanced's swap vote) with one more event.
 10. **Meeting motions register by id** (the shakedown in R7), so Advanced's role-swap vote is one more motion.
 
@@ -365,7 +365,7 @@ The orchestrator picks the model per task and says which in the brief (Agent too
   3. the bank, round cap and endings;
   4. equal shares, the kitty, fair share, missing and honesty;
   5. meetings at bank thirds and briefings, and shakedowns against the fair share;
-  6. roles (A8), with powers and frequencies;
+  6. roles (A8), with powers and frequencies, including the Mole and Fixer's win rule in their handlers (A12 seam 4; step 4 builds the ending without it);
   7. perks and the shop (A9);
   8. the 4-card event deck at a 4-in-10 chance;
   9. the plan-board snapshot as a public event.
