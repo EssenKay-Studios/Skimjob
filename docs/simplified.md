@@ -194,14 +194,18 @@ Tokens and their 20 triggers; the R6 shop and perk pool; temperament tags; the R
 
 ### A12. Built so Skimjob Advanced can follow
 
-`docs/advanced.md` is a later, separate paid version in which **players keep some of the facts by hand** (and can fake them) instead of the system showing them. For it to be a layer on R7 rather than another rewrite, R7 builds in six seams. They are seams, not stub code: nothing for Advanced is built now. The reviewer checks them on every S3/S4 PR.
+`docs/advanced.md` is a later, separate paid version in which **players keep some of the facts by hand** (and can fake them) instead of the system showing them. For it to be a layer on R7 rather than another rewrite, R7 builds in ten seams. They are seams, not stub code: nothing for Advanced is built now. The reviewer checks them on every S3/S4 PR.
 
 1. **Which facts are public is content, never hard-coded.** Bells, the duffel total per round, the bank pile, missing coins and honesty are entries in a content fact catalogue with a visibility setting (all public in R7). The engine emits every such fact through one helper that reads it. Advanced switches some to private-to-a-job.
-2. **The case board's trust levels are generic.** "Fact", "Seen by you", "Shared evidence" and "Said" are data, and an entry's level comes from its event's source, so Advanced adds "Reported by the Teller" (a job's record) without redesigning the ledger.
-3. **Rulesets are content.** A game names its ruleset (`simplified`), and the ruleset only selects content (fact visibility, rooms, roles, perks, events). The engine and UI never branch on the ruleset's name; Advanced is another ruleset entry plus a jobs module, never a fork.
-4. **Roles, perks and events register by id:** a content entry plus one handler. Advanced's jobs plug in the same way.
-5. **Player statements are one "said" event type** (plans, claims, alibis, pledges). Advanced's records add their own command and events (`fileRecord`, `docs/advanced.md`) and show in the case board at their own trust level, through seam 2.
+2. **The case board's trust levels are generic.** "Fact", "Seen by you", "Shared evidence" and "Said" are data, and an entry's level comes from its event's source, so Advanced adds one level per job ("Reported by the Teller", "Reported by the Lookout"), each with its badge from content, without redesigning the ledger.
+3. **Rulesets are content.** A game names its ruleset (`simplified`), and the ruleset only selects content (fact visibility, rooms, its own role list, perks, events). The engine and UI never branch on the ruleset's name; Advanced is another ruleset entry with its own roles, never a fork.
+4. **Roles, perks and events register by id:** a content entry plus one handler, **including any role-specific win rule** (the Mole's and Fixer's win lives in their handlers, not in the end-of-game code). A role can be removed from or added to a ruleset without touching anything else.
+5. **Player statements are one "said" event type** (plans, claims, alibis, pledges). Advanced's records are **one generic record command** whose per-job format comes from content, so a 10th job needs no new command, event type or screen; records show in the case board through seam 2.
 6. **Bots read facts only through `viewFor`,** so hidden facts need no bot rewrite.
+7. **Whether a role's holder is secret or announced, and whether its result goes privately to the holder or into a record they file, is a content setting per role.** In R7 every holder is secret and every result private.
+8. **The deal reads its counts from content:** how many roles of which kinds, by player count. Nothing hard-codes a number of roles or jobs.
+9. **Holding a role is an event, not a setup field.** The current holder of each role is derived from the log, and "once between meetings" style uses are tracked per role and holder, so a role can change hands mid-game (Advanced's swap vote) with one more event.
+10. **Meeting motions register by id** (the shakedown in R7), so Advanced's role-swap vote is one more motion.
 
 Rule changes keep the engine's non-negotiables (`CLAUDE.md`): deterministic, event-sourced, content as data, `viewFor` never leaks. Each changed rule gets a test citing its new design section.
 
@@ -374,7 +378,7 @@ The orchestrator picks the model per task and says which in the brief (Agent too
   4. the plan board's live server channel (like chat);
   5. the case board shell: views, filters, pins (data from a typed adapter, filled in S4).
 
-**Seams for Skimjob Advanced:** every S3/S4 PR follows A12's six seams; the reviewer checks them.
+**Seams for Skimjob Advanced:** every S3/S4 PR follows A12's ten seams; the reviewer checks them.
 
 **S4 — wire the screens (Sonnet for UI, Opus for the case board's data layer):**
 1. the board art (bells, tape, Wanted, the bank pile);
