@@ -76,8 +76,7 @@ never `pm2 … all`; never touch Arcway's files, process or database.
    - Arcway is still healthy and its process didn't restart (its check is in the `ssh-relay` skill).
 8. **Roll back** if anything fails: point `current` at the previous release and restart. Only roll back to a release
    with the same event schema: `applyEvent` (`packages/engine/src/reduce.ts`) throws on any event type it doesn't know,
-   so games logged on the newer build may fail to load on an older one (38002fd lacks #55's `policeCause` and
-   `votesStolen`, and migration 008). Across a schema change, prefer fixing forward.
+   so games logged on the newer build may fail to load on an older one. Across a schema change, prefer fixing forward.
    ```sh
    sudo ln -sfn /srv/skimjob/releases/<previous> /srv/skimjob/current.new
    sudo mv -T /srv/skimjob/current.new /srv/skimjob/current

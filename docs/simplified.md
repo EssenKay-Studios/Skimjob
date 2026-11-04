@@ -34,7 +34,7 @@ Two fixes: **Part A** remakes the rules around a few visible things (coins, bell
 - **Show consequences before committing:**
   - Into the Breach shows every enemy's move in advance.
   - Slay the Spire puts each enemy's next move above its head.
-  - → Picking a room and coins previews the rings; every bell is always visible.
+  - → Picking a room and coins previews the rings; every bell is always visible, except a room the Hacker hides.
 - **Explain every term in place:** Slay the Spire gives every keyword a one-line tooltip. → An info button on everything.
 - **A rule sheet for this game only:** Blood on the Clocktower's character sheet lists only that game's characters. → A "This game" rulebook.
 - **Tips and role tracking:** Town of Salem has a role card and an optional Tips mode; its players use add-ons to track roles. → Tips on by default, and the game does the tracking.
@@ -66,17 +66,18 @@ Two fixes: **Part A** remakes the rules around a few visible things (coins, bell
 
 ### A2. Bells, raids and Wanted (replaces Heat 0–100)
 
-- **Every room has an alarm bell with 4 bulbs** [tunable], public to everyone.
+- **Every room has an alarm bell with 4 bulbs** [tunable], public to everyone (except a room the Hacker hides this round).
 - **Rings add bulbs:** each ring lights one bulb in that room. Rings from everyone in the room add up.
-- **Cooling, at the end of every round:**
+- **Cooling, at the end of every round** (after the split and the bust check; the full order is below):
   1. every room turns off 1 bulb;
   2. then **each player on the Rooftop automatically cools the hottest room by 1 more bulb**. Several Rooftop players cool one after another, each time the room that is hottest at that moment. Ties are broken at random, with the game's seeded randomness. Nobody chooses a room; it's what a crew lying low would do anyway.
 - **Raid:** when a room's 4th bulb lights, the police raid it:
-  - everyone inside loses that round's grab (the police seize it; it leaves the game);
+  - everyone inside loses that round's grab (the police seize it; it leaves the game). Seizure happens **before** the split, so seized coins are never pocketed or handed in;
   - the room is taped off for 2 rounds [tunable];
   - **Wanted** goes up 1 star;
   - a **police briefing** meeting is called.
 - **Wanted 3 stars** [tunable] = **bust**: the heist fails at once (who escapes: A5).
+- **End-of-round order** *(provisional (PM, 4 Nov))*: moves resolve → rings light bulbs → **raid check** (a 4th bulb: seize, tape, Wanted +1) → **split** of the duffel and kitty → **bust check** (Wanted 3) → **cooling** (−1 in every room, then each Rooftop player cools the hottest). So the Rooftop can't stop a raid in the same round. A police briefing follows a raid.
 - **Crew size:** bigger crews get more rooms (5+, 9+). If big crews still get raided too often, the raid line rises behind the scenes; players only see a strip of bulbs.
 - **No room has a visitor limit,** the Rooftop included: a limit would reveal secret moves ("the Office is full") and reward whoever locks in first, which is unfair in async games.
 
@@ -91,12 +92,13 @@ Two fixes: **Part A** remakes the rules around a few visible things (coins, bell
 - **Each round, the crew take is split equally among all players:** everything handed in, plus coins returned by shakedowns and the Priest, plus last round's leftover.
 - **The kitty:** whatever doesn't divide evenly stays on the table for next round. At the end, what's left pays for the getaway car and leaves the game.
 - **Fair share:** the coins split to each player so far, the same for everyone, and public.
-- **Missing:** each round the game shows coins taken from the bank, the crew take, and **"N coins went missing"**, never who.
-- **Stashes stay private.** A stash = fair share received + coins pocketed − coins seized in raids − coins spent on perks.
+- **Missing:** each round the game shows coins taken from the bank, the crew take, and **"N coins went missing"**, never who. *Provisional (PM, 4 Nov):* N = coins taken (excluding seized) − coins handed in that round, never negative.
+- **Crew take and honesty counting** *(provisional (PM, 4 Nov))*: the kitty carry-over is counted once, in the round it was handed in, not again when re-split. Seized coins count neither as "taken" nor as "missing". Shakedown and Priest returns raise the crew take, and so honesty.
+- **Stashes stay private.** A stash = fair share received + coins pocketed − coins spent on perks. Seized coins are never pocketed or handed in, so there is nothing to subtract for raids *(provisional (PM, 4 Nov))*.
 
 ### A5. The honesty line and winning
 
-- **Crew honesty** = crew take ÷ coins taken from the bank (seized coins don't count as taken). It's shown as a meter against the line.
+- **Crew honesty** = crew take ÷ coins taken from the bank (seized coins don't count as taken; the counting rules are in A4). It's shown as a meter against the line.
 - **The honesty line is two-thirds:** at the end, if less than two-thirds of everything taken reached the table, **the heist fails** (too much was stolen).
 - **The heist succeeds** if the game ends by the bank or the round cap, with honesty at or above two-thirds and no bust. Then **the biggest stash wins**. If nobody stole, everyone is level and **the whole crew wins together**. Only stealing and getting away with it separates players.
 - **Bust (Wanted 3):** only the players **on the Rooftop that round escape**; everyone else is arrested and loses everything. **The biggest stash among the escapees wins** (any role, the Mole and Fixer included). If nobody was on the Rooftop, nobody wins. This makes the endgame tense: at Wanted 2, every player weighs "keep grabbing, or go up and wait?".
@@ -196,11 +198,11 @@ Tokens and their 20 triggers; the R6 shop and perk pool; temperament tags; the R
 
 `docs/advanced.md` is a later, separate paid version in which **players keep some of the facts by hand** (and can fake them) instead of the system showing them. For it to be a layer on R7 rather than another rewrite, R7 builds in ten seams. They are seams, not stub code: nothing for Advanced is built now. The reviewer checks them on every S3/S4 PR.
 
-1. **Which facts are public is content, never hard-coded.** Bells, the duffel total per round, the bank pile, missing coins and honesty are entries in a content fact catalogue with a visibility setting (all public in R7). The engine emits every such fact through one helper that reads it. Advanced switches some to private-to-a-job.
+1. **Which facts are public is content, never hard-coded.** Bells, the duffel total per round, the bank pile, missing coins and honesty are entries in a content fact catalogue with a visibility setting (all public in R7). The engine emits every such fact through one helper that reads it. Advanced switches some to private-to-a-role.
 2. **The case board's trust levels are generic.** "Fact", "Seen by you", "Shared evidence" and "Said" are data, and an entry's level comes from its event's source, so Advanced adds one level per role ("Reported by the Teller", "Reported by the Lookout"), each with its badge from content, without redesigning the ledger.
 3. **Rulesets are content.** A game names its ruleset (`simplified`), and the ruleset only selects content (fact visibility, rooms, its own role list, perks, events). The engine and UI never branch on the ruleset's name; Advanced is another ruleset entry with its own roles, never a fork.
 4. **Roles, perks and events register by id:** a content entry plus one handler, **including any role-specific win rule** (the Mole's and Fixer's win lives in their handlers, not in the end-of-game code). A role can be removed from or added to a ruleset without touching anything else.
-5. **Player statements are one "said" event type** (plans, claims, alibis, pledges). Advanced's records are **one generic record command** whose per-job format comes from content, so a 10th role needs no new command, event type or screen; records show in the case board through seam 2.
+5. **Player statements are one "said" event type** (plans, claims, alibis, pledges). Advanced's records are **one generic record command** whose per-role format comes from content, so a 10th role needs no new command, event type or screen; records show in the case board through seam 2.
 6. **Bots read facts only through `viewFor`,** so hidden facts need no bot rewrite.
 7. **Whether a role's holder is secret or announced, and whether its result goes privately to the holder or into a record they file, is a content setting per role.** In R7 every holder is secret and every result private, and **R7 builds only that path**: the setting exists as data, with no unused announced/filed code until Advanced.
 8. **The deal reads its counts from content:** how many roles of which kinds, by player count. Nothing hard-codes a number of roles.
@@ -326,7 +328,7 @@ The orchestrator picks the model per task and says which in the brief (Agent too
 **S0 — record decisions and clean the docs (PM docs PR, reviewed and QA'd).**
 - Write Part A into `docs/decisions.md` as the current decisions. Every R6-era entry that R7 overrides or makes moot is **removed** from it (git and `docs/archive/decisions-history.md` already hold the history), including the "listed in the archive" pointers to old provisional readings; `decisions.md` ends up short and R7-only.
 - Go through **every** live `.md` (CLAUDE.md, STATUS, HANDOFF, the pipeline briefs, testing, deploy, ui-style) and remove or rewrite anything that no longer applies: R6 rules and numbers, tokens, Heat, Duel, Quick, the cut roles, old follow-ups, finished-milestone detail beyond a one-line record. STATUS keeps only: where things stand, the R7 task list, open items.
-- Fold in the review notes from #69: crew take vs. the kitty and seized coins (A4/A5), the end-of-round order, Books mode.
+- Fold in the review notes from #69: crew take vs. the kitty and seized coins (A4/A5), the end-of-round order, the hidden-bell exception. Books mode is dropped (not in R7 or Advanced).
 - Ask the owner only about genuinely new questions.
 
 **S1 — spec freeze (docs only, one Opus developer).**
@@ -365,7 +367,7 @@ The orchestrator picks the model per task and says which in the brief (Agent too
   3. the bank, round cap and endings;
   4. equal shares, the kitty, fair share, missing and honesty;
   5. meetings at bank thirds and briefings, and shakedowns against the fair share;
-  6. roles (A8), with powers and frequencies, including the Mole and Fixer's win rule in their handlers (A12 seam 4; step 4 builds the ending without it);
+  6. roles (A8), with powers and frequencies, including the Mole and Fixer's win rule in their handlers (A12 seam 4; steps 3–4 build the ending without it);
   7. perks and the shop (A9);
   8. the 4-card event deck at a 4-in-10 chance;
   9. the plan-board snapshot as a public event.

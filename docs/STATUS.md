@@ -1,58 +1,39 @@
 # Status
 
-_Last updated: 3 Nov 2026. **Development is halted** (owner): every code PR is merged; nothing new starts until the owner says so._
+_Last updated: 4 Nov 2026._
 
 ## Where things stand
-- **Specs:** `docs/design.md` is the game design; `docs/extension.md` is the rules spec for roles, tokens and the shop and wins on any conflict. Current decisions: `docs/decisions.md`. Next milestone: `docs/simplified.md` (R7). Later: Skimjob Advanced (`docs/advanced.md`). Out of scope: the recruited Mole.
-- **Content** 0.17.0 (R6 balance pass, provisional gates; `docs/balance/r6-balance.md`).
-- **Live:** https://skimjob.duckdns.org on the owner's AWS Lightsail box (`docs/deploy.md`). It runs 1a4e083 (all of M2-1 to M2-13 and R6), with Google sign-in on.
-- **Next step:** milestone **R7 Simplified** (`docs/simplified.md`), approved direction after the owner's playtest (3 Nov): simpler rules (Part A) and clearer presentation (Part B). It starts at step S0 (record decisions, clean the docs), then S1, then the code cleanup. M2-14 and M2-15 are parked: the owner playtests on the live site himself, and the offline demo isn't needed for now.
+- **Specs:** the rules spec is `docs/simplified.md` Part A (R7 Simplified) until step S1 makes `docs/design.md` the single spec. Current decisions: `docs/decisions.md`. Later: Skimjob Advanced (`docs/advanced.md`). Out of scope: the recruited Mole.
+- **Content** 0.17.0 (the live R6 build; R7 replaces it).
+- **Live:** https://skimjob.duckdns.org on the owner's AWS Lightsail box (`docs/deploy.md`), commit 1a4e083, Google sign-in on. The live game has no real players, so R7 is built straight on `main`.
+- **Next step:** R7 step **S0** (this docs clean-up), then S1.
 
-## Current milestone: M2 — playable web prototype
+## Current milestone: R7 Simplified (`docs/simplified.md`)
 
-Plan and acceptance criteria: `docs/m2-plan.md`. This is the canonical task list.
+Approved after the owner's playtest (3 Nov): simpler rules (Part A) and clearer presentation (Part B). Run as "How to run it" says.
 
-1. [x] **M2-1** Server skeleton and game store (Fastify, `pg` + PGlite, migrations, `GameStore`).
-2. [x] **M2-2** Identity, invites and lobby API (guest sessions, dev auth stub, lobby routes).
-3. [x] **M2-3** Live game channel and server bots (WebSocket, per-seat views).
-4. [x] **M2-4** Scheduler and elastic timing (deadlines, presets incl. Quick).
-5. [x] **M2-5** Web shell, style kit, lobby screens and host hand-over.
-6. [x] **M2-6** Game screen thin slice (first playable build).
-7. [x] **M2-7** Meetings and voting UI (#35).
-8. [x] **M2-8** Chat: server, feed UI, DMs, evidence cards (#38).
-9. [x] **M2-9** Art: bank cutaway, room icons, crooks (#33; wired in with Claim role, #41).
-10. [x] **M2-10** Ledger, case file, "While you were away", suspicion board (#46). Also #44: public lock-in marks, presence, early round end, people-majority meeting lock.
-11. [x] **M2-11** End-of-game reveal (incl. tokens and purchases) (#55): roles and win rules, ending and why, scores, a scrubbable round timeline (tokens, perks, tip-offs vs patrols, loops vs power cuts, forged sightings, stolen votes), beside #52's final ranking.
-12. [x] **M2-12** Google sign-in, stub-ready, and "My games" (#53). Routes `/api/auth/google/{start,callback}`.
-13. [x] **M2-13** Host controls and resilience (#54): pause/resume, extend, replace with bot + hand back, lobby kick.
-14. [ ] **M2-14** Playtest pass — **parked** (owner, 3 Nov): the owner playtests on the live site himself.
-15. [ ] **M2-15** Offline demo (in-browser engine and bots, same UI) as a GitHub Pages site — **parked** (owner, 3 Nov): not needed while the live site exists.
+- [ ] **S0** Record the 4 Nov decisions; clean the docs so every live `.md` describes R7 only. **In progress.**
+- [ ] **S1** Spec freeze: `docs/design.md` becomes the single spec; `extension.md`, `m2-plan.md` and `balance/r6-balance.md` move to the archive; "Content text" section; S5 balance gates. **Owner approves the spec.**
+- [ ] **C** Clean the code (alongside S2): C1 audit (checker + `docs/cleanup-audit.md`), C2 delete in about four PRs (engine+content+bots+sim; server; web+e2e; test consolidation), C3 guardrails (scoped tests, `knip` in CI, builder/reviewer cleanup rules).
+- [ ] **S2** Mockups of 5 screens (Design artifact type), no code. **Owner approves the mockups.**
+- [ ] **S3** Two tracks, straight on `main`:
+  - (a) new rules: 1 rooms, coins and grabs; 2 bells, cooling, raids, Wanted and the bust; 3 the bank, round cap and endings; 4 equal shares, kitty, fair share, missing, honesty; 5 meetings at bank thirds, briefings and shakedowns; 6 roles; 7 perks and the shop; 8 the 4-card event deck; 9 the plan-board snapshot.
+  - (b) interface foundations: 1 `InfoTip` and content-text plumbing; 2 the one-screen shell and bottom sheets; 3 the per-user Tips setting; 4 the plan board's live channel; 5 the case board shell.
+- [ ] **S4** Wire the screens: 1 board art; 2 the move; 3 plan board UI; 4 case board data and ⚠ checks; 5 role cards, rulebook, opponents; 6 teaching pop-ups; 7 black market; 8 meeting and shakedown screens; 9 reveal; 10 "Learn the game". **Owner tries a test deploy.**
+- [ ] **S5** Final dead-code audit, one balance pass (Sim suite workflow), deploy. **Owner playtests.**
 
-- [x] **R6 — the Extension** (`docs/extension.md`), built inside M2: R6a rules in engine, content, bots and sim (#50); balance pass, content 0.17.0 (#51); R6b Extension UI: deck picker, rulebook, role cards, shop, Heat breakdown, gap box (#52).
-- [x] **Ops:** Lightsail deployment (systemd, nginx, Postgres, weekly `pg_dump`); Mac pipeline and SHA-bound merge gate (#48).
+Record: M1 (engine, simulator, bots), M2-1 to M2-13 (server, web, chat, Google sign-in, host controls) and R6 are built and live; M2-14 and M2-15 are parked. History: git, the PRs and `docs/archive/`.
 
-## Done before M2 (record)
-- **M1** — engine, simulator and bots (tasks 1–16): rules, `viewFor`, events deck, Duel, sim CLI, the first balance passes.
-- **Role deck R1–R5** (#34, #36, #37, #43 and earlier): roles, perks, bot claims, the sim suite; replaced by R6.
-- History: `docs/archive/decisions-history.md` and the PRs.
-
-## Open follow-ups (from reviews and QA)
-- **R6 balance** (`docs/balance/r6-balance.md`): Heat share of failures 34–54% at 4–6p (design target 10–20%, not gated); Starter succeeds 86–96% and Duel 44% (report-only); the Cleaner sits lowest of the Team roles; revisit team parity 0.10 (gated at 0.20) after the owner's playtests.
-- **Quiet hours** must freeze police moments and deadlines (M3; host pause already does, #54).
-- **Flaky tests:** see `docs/pipeline/HANDOFF.md` "Known flaky tests"; stabilise them. The 12-seat game QA test's real bugs are fixed: reveal overflow (#62) and alibi-window timing (#63).
-- **Board PATCH rate limiter has no test** (#46): `apps/server/src/notes.ts` `rateLimiter`; add one with the fake clock.
-- **`CaseFile` memo misses name changes** (#46): a mid-game rename (a bot takes over) shows old names until a new entry arrives.
-- **Notes endpoint fetched twice** (#46): `useAwayRecap` and `useSuspicionBoard` each call `GET /games/:id/notes`.
-- **#44 notes:** absent people in the people-majority denominator; the faint offline dot.
-- **CI actions pinned to `@v4` tags, not SHAs** (#35): `ci.yml`, `sim-suite.yml`.
-- Smaller: the hunch can outweigh a certain Peek; `live.hostile.qa.test.ts` has no `claimRole` row; server bots re-roll claim chances on every `decide()`; a slow test in `packages/bots/src/run.test.ts` needs an explicit timeout; the `viewFor` deep-copy speedup (35–40% of sim time) is left for the owner (#34).
-- **Reveal:** the "stolen vote decided" flag needs tokens on, so it always reads false in Quick (starter mode) (#55).
-- **Before playtests:** check bot pace (bots react to every change they can see; an instant public reaction to something private is a mild tell); server-picked meeting slots must avoid quiet hours once they exist.
+## Open follow-ups
+- **Flaky tests:** see `docs/pipeline/HANDOFF.md` "Known flaky tests"; stabilise them.
+- **Board PATCH rate limiter has no test** (`apps/server/src/notes.ts` `rateLimiter`); add one with the fake clock, if the notes code survives C.
+- **CI actions pinned to `@v4` tags, not SHAs:** `ci.yml`, `sim-suite.yml`.
+- **Quiet hours** must freeze deadlines (M3; host pause already does).
 
 ## Engineering notes (standing rules)
-- **Engine:** handlers draw randomness only through the `Draw` that `handleCommand` passes them (`withRng` appends `rngAdvanced`); never read `state.rng`. New commands go in `HANDLERS` (`handle.ts`) and return a reason string to refuse; `applyEvent` throws on unfolded event types, so add cases in `reduce.ts`. Every ending goes through `gameEnded` (`end.ts`); every shakedown path through `afterVote` (`meeting.ts`); any new place that starts a round uses `startRound`. Read powers with `powerOf(config, role)`.
-- **Views and leaks:** clients and bots get only `viewFor()` (a deep copy). A view's `seq` counts only what that player can see; never send a full-log index, `games.config` (has the seed) or `game_events.idx`. A new state field a view shows is added to `viewFor` by hand, and `view.leak.test.ts`'s scrub must hide it if private. `samples.ts` needs one sample per event and command type (the compiler enforces it). `secret` visibility never opens, even after the game; Ballot-perk views live only in `me.seenBallots`.
-- **Server:** `command.player` always comes from the session. Run commands as `store.withGameLock(id, …load → handleCommand → append…)`. Deadlines go through `app.live.system` and the scheduler's `reconcile`; never write `deadlines` by hand. A new deadline kind gets one entry in `DEADLINE_RULES`. A view is pushed only when it changed and bots act only when their own view changed (no timing leaks); a Muscle shakedown window always runs its full length. A command's `{ ok }` reply goes out before its pushes, so tests reading views right after need a barrier. The server must stay one process (per-game lock, scheduler). Migrations are add-only (latest 008).
+- **Engine:** handlers draw randomness only through the `Draw` that `handleCommand` passes them (`withRng` appends `rngAdvanced`); never read `state.rng`. New commands go in `HANDLERS` (`handle.ts`) and return a reason string to refuse; `applyEvent` throws on unfolded event types, so add cases in `reduce.ts`. Every ending goes through `gameEnded` (`end.ts`); any new place that starts a round uses `startRound`.
+- **Views and leaks:** clients and bots get only `viewFor()` (a deep copy). A view's `seq` counts only what that player can see; never send a full-log index, `games.config` (has the seed) or `game_events.idx`. A new state field a view shows is added to `viewFor` by hand, and `view.leak.test.ts`'s scrub must hide it if private. `samples.ts` needs one sample per event and command type (the compiler enforces it). `secret` visibility never opens, even after the game.
+- **Server:** `command.player` always comes from the session. Run commands as `store.withGameLock(id, …load → handleCommand → append…)`. Deadlines go through `app.live.system` and the scheduler's `reconcile`; never write `deadlines` by hand. A new deadline kind gets one entry in `DEADLINE_RULES`. A view is pushed only when it changed and bots act only when their own view changed (no timing leaks). A command's `{ ok }` reply goes out before its pushes, so tests reading views right after need a barrier. The server must stay one process (per-game lock, scheduler). Migrations are add-only.
 - **Chat:** stored and sent exactly as typed; render as text only (never `dangerouslySetInnerHTML` or markdown). Message ids are random UUIDs. The rate limit is in memory per process. Bots don't chat.
 - **Database:** no `DATABASE_URL` = PGlite in `.pglite/` (`PGLITE_DIR=memory` for in-memory); tests share one PGlite per file; `pnpm test:pg` runs them on real Postgres.
 - **Content:** numbers live in `packages/content`; tunables that should be overridable go in `ContentOverrides` and `validateOverrides`. After any rule, number or bot change, run the sim suite (or the "Sim suite" workflow) with `--compare docs/balance/baseline.json` (`docs/testing.md`).
@@ -60,17 +41,12 @@ Plan and acceptance criteria: `docs/m2-plan.md`. This is the canonical task list
 - **Player ids** match `/^[A-Za-z0-9_-]{1,32}$/` and are never `__proto__`/`constructor`/`prototype`.
 
 ## Upcoming milestones
+- **Skimjob Advanced** (`docs/advanced.md`): after R7 is built and playtested; additive only.
 - **M3** — mobile apps (Flutter), push notifications, quiet hours.
 - **M4** — more content (museum, casino, roles, events).
 
 ## Questions for the owner
-Every provisional call still to confirm, once each; each is marked *provisional* in the named `docs/decisions.md` section (details of the older ones: `docs/archive/decisions-history.md`).
-1. **Rules and roles, R6a readings** (#50): Balanced 5–6p deal; token triggers; automatic perks (Shield, Emergency) exempt from one-per-round; police moments on game time (refused during meetings, next due from the previous, Heat × min(1, crew ÷ 5), one per round in the sim); view readings; the legacy `mole` setting migrated; Exact list in content order; Hidden list falls back to the preset for bots; Mole and Embezzler in Duel; bot and sim tunables.
-2. **Rules and roles, R6 confirm items:** the Blackmailer keeps its token if the shakedown is cancelled; the Mole tips off at most 3 times a game, even with Recharge.
-3. **Balance gates** (#51): the split parity gate; ★ band 0.9–1.8×; ★ lean point 0.8 with content 0.17.0's numbers; Balanced 4p 1/1 and 8p 2/1; Team parity ≤ 0.20 until the owner's playtests; Muscle bot threshold 2; Heat share and Starter/Duel success report-only.
-4. **Rules and roles, police and gap-fills:** background police only when a Mole could be dealt; a tip-off lands at the next free police moment; a wrong Duel call-out pays 8; when a between-meetings stretch ends and how Recharge works; 1 h default session; Quick = Starter with no shop; Duel shop and events-off dealing; the Fixer stopping any raid; Forger 7+.
-5. **Server and timing, host controls** (#54): players can act while paused; Extend amounts per preset, no cap; replace with bot after 2 missed rounds (never the host, Opportunist), handed back by host or player; lobby kick of any non-host seat.
-6. **Server and timing, Google sign-in** (#53): the account's seat is kept on a same-game clash; redirect URI from env; display-name fallback (`name` → `given_name` → "Crook"); scopes `openid profile`; `prompt=select_account`.
-7. **Web and UI** (#52, #55, #62): Extension UI readings and end-of-game reveal readings (Starter deck ≠ starter mode, Heat breakdown parts, reveal attribution of tip-offs, loops and stolen votes); the reveal-overflow regression coverage (pipeline and git).
-8. **Older provisional readings** (1–2 Nov, M1 to M2-10; partly accepted 2 Nov): accept the rest in bulk, or name any to revisit.
-9. **Resume:** what to build next (M2-14 and M2-15 are parked).
+Each is marked *provisional* in the named `docs/decisions.md` section.
+1. **Host controls** (#54): players can act while paused; Extend amounts per preset, no cap; replace with bot after 2 missed rounds (never the host, Opportunist), handed back by host or player; lobby kick of any non-host seat.
+2. **Google sign-in** (#53): the account's seat is kept on a same-game clash; redirect URI from env; display-name fallback (`name` → `given_name` → "Crook"); scopes `openid profile`; `prompt=select_account`.
+3. **R7 provisional readings (PM, 4 Nov)**, `docs/decisions.md` "Provisional readings": the kitty is counted once in the crew take; seized coins count as neither taken nor missing; shakedown and Priest returns raise honesty; seizure happens before the split (stash = share + pocketed − perks); end-of-round order (raid, split, bust check, cooling, so the Rooftop can't stop a raid the same round); every bell visible except a Hacker-hidden room; Books mode dropped; Advanced drops the Inside tip card.

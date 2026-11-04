@@ -4,17 +4,15 @@ Read this with `docs/STATUS.md` (the canonical task list and the owner's open qu
 
 **Standing rule: keep status and orchestration docs clean.** Update in place, delete stale or contradictory content, no history narratives (history lives in git, the PRs and `docs/archive/decisions-history.md`).
 
-## Current state (3 Nov 2026)
-- **Development is halted** (owner): every code PR is merged (M2-1 to M2-13 and R6, through #65); start nothing new until the owner says so.
-- **In flight:** nothing.
-- **Parked by the owner (3 Nov):** M2-14 playtest pass (the owner playtests on the live site himself) and M2-15 offline demo (not needed while the live site exists).
+## Current state (4 Nov 2026)
+- **In flight:** R7 step S0 (record the 4 Nov decisions, clean the docs); nothing else.
+- **Parked by the owner:** M2-14 playtest pass and M2-15 offline demo.
 - **Out of scope for now:** Skimjob Advanced (`docs/advanced.md`, a later paid version built on R7), the recruited Mole.
-- **Specs:** `docs/design.md` plus `docs/extension.md` (roles, tokens, shop; wins on conflict). Current decisions: `docs/decisions.md`.
-- **Live:** https://skimjob.duckdns.org on the owner's AWS Lightsail box, running 1a4e083 with Google sign-in on (release `20261103-172121-1a4e083`; the 38002fd release is kept, but is not a safe rollback target: see `docs/deploy.md` step 8). Runbook: `docs/deploy.md`. Connection details are in the owner's local `ssh-relay` skill, never in the repo.
+- **Specs:** `docs/simplified.md` Part A is the rules spec until S1 makes `docs/design.md` the single spec. Current decisions: `docs/decisions.md`.
+- **Live:** https://skimjob.duckdns.org on the owner's AWS Lightsail box, running 1a4e083 with Google sign-in on. Runbook: `docs/deploy.md`. Connection details are in the owner's local `ssh-relay` skill, never in the repo.
 
 ## How to resume
-1. Next milestone: **R7 Simplified**, run exactly as `docs/simplified.md` "How to run it" says (roles and models, kickoff prompt, steps S0–S5 with owner checkpoints).
-2. Separately, the owner may confirm the provisional decisions in STATUS "Questions for the owner". M2-14 and M2-15 are parked.
+Run milestone **R7 Simplified** exactly as `docs/simplified.md` "How to run it" says (roles and models, kickoff prompt, steps S0–S5 with owner checkpoints). The owner's open questions are in STATUS.
 
 ## How the pipeline works
 - **Where it runs:** three setups, all covered in `common.md` "Where you run": (a) the owner's Mac directly (main clone `/Users/karthikeyaniyer/Documents/Misc/Skimjob`, one worktree per agent under `…/Misc/skimjob-wt/<name>`); (b) a cloud session whose agents run commands on the Mac through the local terminal tool (≈60 s per call: background long runs with nohup and poll logs; never `/tmp`); (c) a cloud session working entirely in its Linux container (clone under `/home/claude`, Node 22 preinstalled, GraphQL blocked so REST only, slow 2-core box: run only affected specs and rely on CI). Tell each agent which setup it is in.
