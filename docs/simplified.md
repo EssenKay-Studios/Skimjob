@@ -43,7 +43,7 @@ Two fixes: **Part A** remakes the rules around a few visible things (coins, bell
 
 ---
 
-## Part A — the new rules (agreed 4 Nov; frozen into `design.md` in S1)
+## Part A — the new rules (agreed 4 Nov; frozen into `docs/design.md` in S1, which is now the spec and wins on any conflict)
 
 ### A1. A round: pick a room, grab coins, split them
 
@@ -333,7 +333,7 @@ The orchestrator picks the model per task and says which in the brief (Agent too
 
 **S1 — spec freeze (docs only, one Opus developer).**
 - Rewrite `docs/design.md` as the **single** rules spec from Part A: rooms and coins, bells, raids and busts, the bank and the end, equal shares and the kitty, honesty and winning, meetings and shakedowns, the plan board, roles, perks, events. Nothing from R6 that R7 drops stays in it.
-- Move `docs/extension.md`, `docs/m2-plan.md` and `docs/balance/r6-balance.md` to `docs/archive/`; fix every reference (including code comments citing "extension.md" or old design sections).
+- Move the R6 extension spec, the M2 plan and the R6 balance report to `docs/archive/`; fix every reference (including code comments citing them or old design sections).
 - Add a **"Content text"** section: the one-line texts for every room, role ("power", "How you win", "How to spot it"), perk and event, read by the UI through content.
 - Set the S5 balance gates.
 - Owner approves the PR.

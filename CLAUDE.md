@@ -7,7 +7,7 @@ A social deduction heist game for groups of friends (web + Android/iOS). A crew 
 ## Start of every session
 
 1. Read `docs/STATUS.md` — current milestone, what's done, what's next.
-2. Read the rules: `docs/simplified.md` Part A is the rules spec for the current milestone (R7 Simplified) until step S1 makes `docs/design.md` the single spec.
+2. Read the rules: `docs/design.md` is the single rules spec (R7 Simplified). `docs/simplified.md` is the R7 plan and how it is run.
 3. Skim `docs/decisions.md` before changing anything that looks like a deliberate choice.
 4. Work on **one** task from STATUS.md (or the GitHub issue you were given). Keep sessions scoped.
 
@@ -27,7 +27,7 @@ apps/sim/          CLI simulator and balance reports
 apps/server/       authoritative game server, scheduler, chat, push
 apps/web/          React browser client
 apps/mobile/       (later) Flutter app (Android/iOS) — talks to the server; no engine copy
-docs/              simplified.md (R7 plan and rules), design.md (the spec once S1 lands), advanced.md (later paid version), STATUS.md, decisions.md, testing.md, deploy.md, ui-style.md, pipeline/, archive/
+docs/              design.md (the rules spec), simplified.md (the R7 plan), advanced.md (later paid version), STATUS.md, decisions.md, testing.md, deploy.md, ui-style.md, pipeline/, archive/
 ```
 
 Dependency direction: `content` ← `engine` ← `bots` ← `sim`/`server`. The engine must never import from bots, sim, or any app.
@@ -49,7 +49,7 @@ pnpm sim -- --help   # run the simulator (once implemented)
 - **Visibility-scoped.** Every event is tagged `public`, `private:<playerId>`, `reveal`, or `secret:<playerId>` (secret-mode ballots: visible only to the voter, even after the game). `viewFor(state, playerId)` must never leak hidden information. Write a test whenever you add an event type.
 - **Content is data.** Numbers, rooms, roles, events live in `packages/content`. If you're hard-coding a number in the engine, it probably belongs in content.
 - **Bots are players.** Bots only receive `viewFor()` output and emit the same commands a human client would.
-- Every implemented rule should have a test that names its spec section (e.g. `// design §11.3`; until S1, a `simplified.md` A-number).
+- Every implemented rule should have a test that names its spec section (e.g. `// design §5.3`).
 
 ## UI rules (non-negotiable for every page, panel and component)
 

@@ -1,6 +1,6 @@
 # Decisions
 
-The decisions that hold today, one short entry each with its why, grouped by topic. Each is **confirmed** (the owner decided or accepted it) or **provisional** (a PM or builder call, owner to confirm; STATUS "Questions for the owner" lists them). The rules are `docs/simplified.md` Part A until S1 makes `docs/design.md` the single spec; this file records the choices behind them.
+The decisions that hold today, one short entry each with its why, grouped by topic. Each is **confirmed** (the owner decided or accepted it) or **provisional** (a PM or builder call, owner to confirm; STATUS "Questions for the owner" lists them). The rules are `docs/design.md`, the single spec; this file records the choices behind them.
 
 Update in place: change or delete an entry when a decision changes; never add "was X" notes. History lives in git and `docs/archive/decisions-history.md`.
 
@@ -19,7 +19,7 @@ Update in place: change or delete an entry when a decision changes; never add "w
 
 ## R7 rules (agreed with the owner, 4 Nov 2026)
 
-Full text: `docs/simplified.md` Part A (section numbers below). Numbers marked [tunable] there are simulator starting values. *All confirmed* unless marked provisional.
+Full text: `docs/design.md` (the rules spec, frozen in S1); the A-numbers below are the plan's sections in `docs/simplified.md` Part A. Numbers marked [tunable] are simulator starting values. *All confirmed* unless marked provisional.
 
 - **Design principle:** no role is good or evil and nothing pays anyone to be nice. Every player faces the same temptation (hand in or pocket); the crew's attitude decides how well everyone does. Roles are tools; perks are for the buyer.
 - **A1, a round:** pick a room, grab 1 coin up to its limit (fewer coins, less noise), split the coins in secret between the crew duffel and your pocket, lock in. A missed move is the Lobby, 1 coin, handed in. Rooms with player-count minimums: Deposit boxes and Server room 5+, Manager's office 9+.
@@ -50,7 +50,7 @@ Full text: `docs/simplified.md` Part A (section numbers below). Numbers marked [
 
 ## Balance
 
-- **Targets are set in S1 and tuned once in S5** on the Sim suite workflow, never babysat in chat: heist success, raid and bust rates and Rooftop stalls, each role's win rate within a band, the share of all-honest wins, perks not deciding games. `docs/balance/baseline.json` is the comparison baseline; re-run after any rule, number or bot change. *Confirmed.*
+- **Targets are set in S1 (`docs/design.md` §21, provisional) and tuned once in S5** on the Sim suite workflow, never babysat in chat: heist success, raid and bust rates and Rooftop stalls, each role's win rate within a band, the share of all-honest wins, perks not deciding games. `docs/balance/baseline.json` is the comparison baseline; re-run after any rule, number or bot change. *Confirmed.*
 - **A check passes or fails only when its whole 95% interval is in or out of the target;** otherwise it is inconclusive. *Confirmed.*
 
 ## Social layer

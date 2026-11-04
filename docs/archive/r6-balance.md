@@ -1,3 +1,5 @@
+*Archived 4 Nov 2026, replaced by `docs/design.md` (R7).*
+
 # R6 balance pass: the Extension's numbers
 
 _3 Nov 2026. Content 0.15.0 → 0.16.0. Gates from extension.md Build notes "Sim" and design §17.4: in Balanced, 4–12 players, Standard deck,

@@ -3,7 +3,7 @@
 _Last updated: 4 Nov 2026._
 
 ## Where things stand
-- **Specs:** the rules spec is `docs/simplified.md` Part A (R7 Simplified) until step S1 makes `docs/design.md` the single spec. Current decisions: `docs/decisions.md`. Later: Skimjob Advanced (`docs/advanced.md`). Out of scope: the recruited Mole.
+- **Specs:** `docs/design.md` is the single rules spec (R7 Simplified); `docs/simplified.md` is the plan. Current decisions: `docs/decisions.md`. Later: Skimjob Advanced (`docs/advanced.md`). Out of scope: the recruited Mole.
 - **Content** 0.17.0 (the live R6 build; R7 replaces it).
 - **Live:** https://skimjob.duckdns.org on the owner's AWS Lightsail box (`docs/deploy.md`), commit 1a4e083, Google sign-in on. The live game has no real players, so R7 is built straight on `main`.
 - **Next step:** R7 step **S0** (this docs clean-up), then S1.
@@ -13,7 +13,7 @@ _Last updated: 4 Nov 2026._
 Approved after the owner's playtest (3 Nov): simpler rules (Part A) and clearer presentation (Part B). Run as "How to run it" says.
 
 - [ ] **S0** Record the 4 Nov decisions; clean the docs so every live `.md` describes R7 only. **In progress.**
-- [ ] **S1** Spec freeze: `docs/design.md` becomes the single spec; `extension.md`, `m2-plan.md` and `balance/r6-balance.md` move to the archive; "Content text" section; S5 balance gates. **Owner approves the spec.**
+- [ ] **S1** Spec freeze: `docs/design.md` becomes the single spec; the R6 extension spec, the M2 plan and the R6 balance report move to `docs/archive/`; "Content text" section; S5 balance gates. **Owner approves the spec.**
 - [ ] **C** Clean the code (alongside S2): C1 audit (checker + `docs/cleanup-audit.md`), C2 delete in about four PRs (engine+content+bots+sim; server; web+e2e; test consolidation), C3 guardrails (scoped tests, `knip` in CI, builder/reviewer cleanup rules).
 - [ ] **S2** Mockups of 5 screens (Design artifact type), no code. **Owner approves the mockups.**
 - [ ] **S3** Two tracks, straight on `main`:

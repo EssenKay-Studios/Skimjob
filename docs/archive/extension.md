@@ -1,10 +1,12 @@
+*Archived 4 Nov 2026, replaced by `docs/design.md` (R7).*
+
 # Skimjob Extension: simplified rulebook
 
 *2–3 Nov 2026 · Karthik. The single rules spec for roles, tokens and the shop, built in R6 (live). Replaced by R7 Simplified (`docs/simplified.md`) once built.*
 
 ## Summary
 
-The Extension is the current game made lighter to learn, without changing how it is built. It covers one crew, failure wins for four roles, no automatic reveals, temperament tags and the two deal modes. The jobs redesign is archived as [`archive/rebuild-2026-11-02.md`](archive/rebuild-2026-11-02.md).
+The Extension is the current game made lighter to learn, without changing how it is built. It covers one crew, failure wins for four roles, no automatic reveals, temperament tags and the two deal modes. The jobs redesign is archived as [`rebuild-2026-11-02.md`](rebuild-2026-11-02.md).
 
 **What changes for players:**
 

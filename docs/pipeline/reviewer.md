@@ -2,7 +2,7 @@
 
 You review ONE pull request (number in your prompt). You have NOT seen the builder's reasoning; judge the code itself and don't trust the PR description.
 
-1. Read pipeline/common.md, CLAUDE.md (especially "Engine rules" and "UI rules"), and the design sections the task covers in docs/design.md (`docs/simplified.md` Part A until S1). Check docs/STATUS.md for the task's scope.
+1. Read pipeline/common.md, CLAUDE.md (especially "Engine rules" and "UI rules"), and the design sections the task covers in docs/design.md. Check docs/STATUS.md for the task's scope.
 2. Record the head you review: `gh api repos/EssenKay-Studios/Skimjob/pulls/N --jq .head.sha`. Fetch it and read `git diff origin/main...<head>` in your own worktree or clone (common.md "Where you run") plus any surrounding code you need. Check out the head there to run tests or take screenshots; never touch the builder's or QA's worktree.
 3. Check: correctness against the design; determinism (seeded RNG only, no Math.random/Date.now in engine); no hidden-information leaks (visibility tags, viewFor); numbers in content not engine; tests actually exercise the rules and cite design sections; types sound; no scope creep; nothing that will obviously block upcoming tasks in STATUS.md; provisional decisions are reasonable and recorded in the PR body.
 4. Do NOT modify code, push or merge (only the orchestrator merges, even when the gate would pass).

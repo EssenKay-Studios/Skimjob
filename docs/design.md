@@ -1,8 +1,6 @@
-# Skimjob — Game Design Document
+# Skimjob — Game Design (R7 rules spec)
 
-**For roles, tokens and the shop, [`docs/extension.md`](extension.md) is the spec and wins on any conflict.**
-
-*31 Oct 2026, kept current since. Numbers are content (`packages/content`, version 0.17.0) and come from the balance passes; the latest is `docs/balance/r6-balance.md`.*
+*The single rules spec for R7 Simplified, frozen in step S1 (4 Nov 2026) from the owner-approved plan (`docs/simplified.md` Part A, with the owner's 4 Nov decisions). The plan and its run method stay in `simplified.md`; the reasons behind each choice are in `docs/decisions.md`. Numbers marked **[tunable]** are starting values for the simulator; the content package (`packages/content`) holds them, and the S5 balance pass (§21) sets them. Calls marked *provisional* are PM or builder readings for the owner to confirm. Tests cite sections as `// design §5.3`.*
 
 ---
 
@@ -10,513 +8,594 @@
 
 **Pitch:** *Steal from your crew — just don't sink the job.*
 
-Skimjob is a social deduction game for groups of friends, played in a browser or on an Android/iOS app. A crew robs one bank together over a session the host sets, anywhere from an hour to a week. Every round each player secretly picks a room to loot and decides how much to hand to the crew and how much to pocket. The player with the biggest stash at the end wins, **but if the heist fails, nobody wins.**
+Skimjob is a social deduction heist game for groups of friends, in a browser (and later an Android/iOS app). A crew robs one bank together over a session the host sets, from an hour to a week. Each round every player secretly picks a room, grabs coins there (more coins ring more of the room's alarm bell) and drags each coin into the **crew duffel** or **their own pocket**. The duffel is split equally among everyone; the pocket is yours alone. If too much goes missing the heist fails and nobody wins; otherwise the biggest stash wins, or the whole crew together if nobody stole.
 
-**Players:** 2–12 humans, with bots available to fill seats. The ideal range is 4–8.
-**Session length:** set by the host, from 1 hour to 7 days. The rules stay the same at every length; only the pace changes.
-**Platforms:** web, Android and iOS, all on one shared game server. A player can switch devices mid-game.
+- **Players:** 3–12; bots fill empty seats. Best at 4–8.
+- **Session length:** set by the host, 1 hour to 1 week (§17). The rules are the same at every length; only the pace changes.
+- **Platforms:** the responsive web app is the launch product; native apps come later as thin clients of the same server. A player can switch devices mid-game.
 
-### 1.1 Design pillars
+### 1.1 Design principle
 
-1. **One simple core choice.** Each round is a single decision: pick a room, then split the loot. Anyone can learn it in a minute.
-2. **Depth comes from layers.** Roles, jobs and events add the complexity, and each one is explained on its own card when it shows up. New players only need to learn their own card.
-3. **Discussion is the game.** The app supplies the facts. The arguing happens in the in-app chat, in WhatsApp, or in person.
-4. **Async-first.** A week-long game should need about 15 minutes a day. The only moments when everyone needs to be online together are the scheduled votes.
-5. **Nobody sits out.** No player is ever eliminated. Getting caught costs you loot, not your seat.
-6. **A big reveal at the end.** Every game ends with a full replay showing who did what.
+No role is good or evil, and nothing pays anyone to be nice. Every player faces the same temptation: hand in or pocket. The players' own attitude makes a crew honest or greedy, and the crew's attitude decides how well everyone does. Roles are tools that can be used either way; perks are for the buyer's own benefit.
+
+### 1.2 Pillars
+
+1. **One simple choice a round:** a room, some coins, two bags.
+2. **Everything visible is a thing:** coins, bells, a bank pile, three stars, a meter. No hidden formulas.
+3. **Discussion is the game.** The app supplies the facts; the arguing happens in chat, WhatsApp or in person.
+4. **Async-first.** A week-long game needs about 15 minutes a day; only meetings ask people to be online together.
+5. **Nobody sits out.** No player is eliminated; getting caught costs coins, never the seat.
+6. **A big reveal at the end** replays who really did what.
 
 ---
 
-## 2. Core concepts
+## 2. Words
 
-| Term | Meaning |
+| Word | Meaning |
 |---|---|
-| **Loot** | Points collected from a room each round. |
-| **Haul** | The crew's shared pot. Everyone can see the total, but not who put in what. |
-| **Stash** | A player's private pocket. Only they can see it until a shakedown or the end of the game. |
-| **Heat** | A shared danger meter from 0 to 100. If it reaches 100, the cops raid and the heist fails immediately. |
-| **Round** | One shift inside the bank. There are 9 rounds per game. |
-| **Act** | A group of 3 rounds. Each act ends with a crew meeting and a checkpoint. |
-| **Checkpoint** | A minimum the Haul has to reach by the end of each act. |
-| **Shakedown** | The result of a successful vote: the target's stash is revealed and taken into the Haul. |
-| **Alibi** | A formal, logged claim of which room you were in. It can be a lie. |
-| **Case file** | A player's private log of everything they personally saw. |
-| **Ledger** | The public log of everything everyone can see. |
+| **Coin** | The only loot. Every coin comes out of the bank. |
+| **Bank** | The fixed pile of coins the crew is robbing (§6). |
+| **Grab** | The coins a player takes in their room this round. |
+| **Crew duffel** | Where handed-in coins go. Split equally every round (§7). |
+| **Pocket** | Coins a player keeps for themselves this round. |
+| **Stash** | A player's private total (§7.6). The biggest stash wins. |
+| **Crew take** | The coins split this round: hand-ins, coins recovered by shakedowns and the Priest, and the kitty. |
+| **Kitty** | What didn't divide evenly; it stays on the table for the next split. |
+| **Fair share** | The coins split to each player so far: the same for everyone, and public. |
+| **Missing** | Coins taken this round that didn't reach the duffel: "N coins went missing", never who (§7.4). |
+| **Honesty** | Coins that reached the table ÷ coins taken from the bank, shown as a meter against the two-thirds line (§7.5). |
+| **Bell** | Each room's alarm bell: 4 bulbs [tunable] (§5). |
+| **Ring** | One noisy coin; it lights one bulb. |
+| **Raid** | The police hitting one room when its last bulb lights (§5.3). |
+| **Taped off** | A raided room, closed for 2 rounds [tunable]. |
+| **Wanted** | Up to 3 sheriff stars; +1 per raid (§5.4). |
+| **Bust** | Wanted reaches 3: the whole heist fails at once (§5.5). |
+| **Rooftop escape** | On a bust, only the players on the Rooftop that round get away (§5.5). |
+| **Meeting** | A vote on a shakedown: regular, police briefing or emergency (§9). |
+| **Shakedown** | Opening one player's stash and putting what's above the fair share back on the table (§9.6). |
+| **Plan board** | The shared, non-binding board for planning each round (§10). |
+| **Perk** | A single-use item from the black market, paid in coins from your stash (§12). |
+| **Event card** | A one-sentence twist that may flip at the start of a round (§13). |
 
 ---
 
-## 3. Winning and losing
+## 3. Rooms and coins
 
-*(extension.md "Winning and losing", Build notes "Win rule".)*
+### 3.1 The rooms
 
-- **One crew, at most one winner** (players still level after the tie-breaks share it). There are no teams or factions.
-- **Score** = stash, plus the Fence safe for the Fence, plus the Inside Man's bonus (+1 per 5 loot the Haul ends above the final target). Whole numbers only.
-- Every player is ranked by score, then by the **tie-breaks**: fewer shakedowns, then more loot handed in (tracked, revealed only at the end). The **top group** is everyone still level at the top.
-- **The heist succeeds** if, after the final meeting, the Haul is at or above the final target and Heat is below 100. The top group wins, whatever their roles.
-- **The heist fails** if Heat reaches 100 at any point (a **raid**) or the final target is missed. Nobody wins, except top-group players whose role wins that ending (`RoleDef.winsOn`): Getaway Driver ★ a raid; Embezzler ★ a missed target; Mole ★ and Fence ★ either. A ★ role outside the top group doesn't win.
-- **The full ranking is always shown**; on a failure it is labelled as a loss unless someone qualified.
-- Roles are read as they are at the end, so a Double-cross (§10) can hand over a failure win.
+Each room offers a number of coins **per visitor** per round [tunable]. Visitors don't share a room's limit.
 
----
-
-## 4. Game structure
-
-```
-Setup → [Act 1: R1 R2 R3 → Crew meeting → Checkpoint 1]
-      → [Act 2: R4 R5 R6 → Crew meeting → Checkpoint 2]
-      → [Act 3: R7 R8 R9 → Final meeting → Final check]
-      → Reveal and replay
-```
-
-| Act | Name | Feel |
-|---|---|---|
-| 1 | Casing the joint | Trust is high and skims are small. Not much information yet. |
-| 2 | The job | The first shortfalls appear, and with them accusations, alibis and alliances. |
-| 3 | The getaway | Everyone can see the maths. Greed, Heat and suspicion all peak. |
-
-### 4.1 Elastic timing
-
-The engine doesn't know about real time. A scheduler on the server spreads the host's chosen duration across the 9 rounds and the meeting windows.
-
-| Session length | Round length (about) | Meetings |
-|---|---|---|
-| 1 hour | 5–6 min | Auto-scheduled, 3-minute windows |
-| 3 hours | ~18 min | Auto-scheduled, 5-minute windows |
-| 1 day | ~2.5 h | Group-scheduled, 5–15 minute windows |
-| 3 days | ~8 h | Group-scheduled, 10–30 minute windows |
-| 1 week | ~18 h | Group-scheduled, 10–30 minute windows |
-
-- In sessions shorter than 3 hours, meetings are always auto-scheduled.
-- Rounds are **paused** while a vote window is open, so nothing resolves in the middle of a vote.
-- **Rounds end early once the whole crew has locked in** (owner decision, 2 Nov): the round resolves a short grace period after the last lock-in, or at its deadline if that comes first, so the last player can still change their move. Changing a move during the grace doesn't restart it. *Grace (provisional, `timing.ts`, scaled by TIME_SCALE):* Quick 5 s, 1 hour 10 s, 3 hours 30 s, 1 day 2 min, 3 days and 1 week 5 min. Alibi windows, meeting windows, emergency notices and the Muscle's window always run their full length.
-- The host can set "quiet hours", such as midnight to 7am, during which rounds don't resolve and no notifications are sent.
-- **Between meetings** (extension.md, owner ruling 2): players see "once between meetings", not "once per act". A stretch runs from the close of one regular meeting (after rounds 3, 6, 9) to the close of the next; uses recharge when that meeting closes, after its vote, shakedown and target check. Emergency meetings never recharge anything. In Duel, a stretch closes when round 3's or 6's call-outs and target check settle. The engine keeps acts internally.
-- **Police moments** (§10) run on game time: only while round deadlines run; they freeze during a meeting (including one waiting to open), like rounds. They never get a client-visible timer.
-
----
-
-## 5. A round in detail
-
-### 5.1 Planning (simultaneous and secret)
-
-Every player submits a **move**:
-1. **Room**: where they go this round.
-2. **Split**: how much of that room's loot goes to the Haul. The rest goes to their stash.
-3. **Ability** (optional): a role power, if their role has one.
-
-Moves can be changed until the round deadline. If a player misses the deadline, they get a **default move**: Lobby, hand everything in.
-
-**Lock-ins are public** (owner decision, 2 Nov): everyone sees which players have locked in a move this round (a mark on their seat, and a `moveLocked` line in the ledger), never the room, split or ability. Only the first move of a round counts as locking in; changing it afterwards shows nothing new. Bots lock in like anyone. A default move never shows as locked in.
-
-**Presence is public** (owner decision, 2 Nov): each person's seat shows whether they are online now or when they were last seen. It comes from the server (who has the game open), never from the game log. Bots show as bots, never as online.
-
-### 5.2 Resolution order
-
-1. Event card effects apply (see §10).
-2. Room yields and capacity rules are worked out.
-3. Splits are applied: the Haul increases, and stashes increase.
-4. Heat changes are applied.
-5. Information goes out:
-   - Each player learns **who else was in their room**.
-   - Security, Lookout and other information results go to the players they belong to.
-   - The ledger posts the **round summary**: Haul change, Heat, and any public event results.
-6. If Heat ≥ 100, the cops raid and the game ends.
-
-### 5.3 How the deduction works
-
-Room yields are public, so the crew can compare what the Haul *should* have grown by with what it actually grew by.
-
-> Four alibis are posted: Vault (6), Office (4), Lobby (2), Lobby (2). Those add up to 14. The Haul grew by 9, so **5 is missing.** Either someone pocketed loot, or someone's alibi is a lie that covers a bigger skim.
-
-The strongest cheating move is to loot the Vault, pocket the difference, and claim the Lobby. It's only safe if nobody else was in the Vault, and nobody checked the Vault cameras.
-
-### 5.4 Alibis
-
-- After a round resolves, each player can post one **Alibi** ("I was in the Office") to the ledger.
-- Alibis are posted **before the next round's planning**: a short alibi window follows every round. When its deadline passes (the server times it), the round's alibis close and the next round starts; after an act's last round, the act's meeting comes next. An emergency meeting may interrupt the window, which then resumes. *(Owner answers, 1 Nov.)*
-- Alibis are optional and can be lies. Posting none is suspicious in itself.
-- Alibis are structured data, so both bots and the auto-recap can reason about them.
-
----
-
-## 6. Rooms (default job: First National Bank)
-
-### 6.1 Core rooms (all player counts)
-
-| Room | Loot | Effect |
-|---|---|---|
-| **Vault** | 6 | Adds vault pressure to Heat (see §7) |
-| **Office** | 4 | — |
-| **Lobby** | 2 | — |
-| **Security** | 0 | Pick one room and see everyone who was in it this round |
-| **Rooftop** | 0 | Removes Heat (laying low) |
-
-### 6.2 Extra rooms for bigger crews
-
-More rooms keep the number of people per room, and so the number of witnesses, roughly steady as the crew grows.
-
-| Players | Rooms added |
-|---|---|
-| 2–4 | Core only (5 rooms) |
-| 5–8 | **Deposit boxes**: 5 loot, holds 2 people (if more than 2 go, everyone there gets 4), adds half the vault pressure. **Server room**: 0 loot, learn *how many* players pocketed loot this round, but not who. |
-| 9–12 | Everything above, plus **Teller line**: 6 loot, adds half the vault pressure. **Manager's office**: 3 loot, adds half the vault pressure. The Teller line also adds +10 Heat × share (`docs/balance/r6-balance.md`). |
-
----
-
-## 7. Heat
-
-Heat runs from 0 to 100. If it reaches 100, the cops raid and the heist fails.
-
-| Source | Change |
-|---|---|
-| Each round (baseline) | +4 |
-| Vault pressure | +20 × (Vault visitors ÷ crew size) |
-| Deposit boxes | +10 × (visitors ÷ crew size) |
-| Manager's office | +10 × (visitors ÷ crew size) |
-| Teller line | +10 × (visitors ÷ crew size) (R6 split-gate pass) |
-| Rooftop | −20 × (Rooftop visitors ÷ crew size) |
-| Missed checkpoint | +15 |
-| Events | Varies (event Heat × min(1, crew ÷ 5) for crews of 2–4, §10) |
-| Police activity (the Mole's tip-off or the hidden background patrol, §10) | +4 × min(1, crew ÷ 5) |
-
-Scaling by fractions of the crew means a crew of 12 and a crew of 3 feel the same pressure when the same *share* of players goes to the Vault.
-
-Each round's room-and-baseline Heat change is rounded to a whole number (halves round up), and Heat never drops below 0, so time on the Rooftop can't be banked ahead. *(provisional)*
-
-**Heat breakdown** (extension.md "What the app works out for you"): each round's public summary (`roundResolved.heatParts`) carries its parts: the baseline (which takes up any rounding), each room that changed Heat, and the event card. Police activity and a missed target are their own public events under the round, so the view's per-round breakdown adds base, rooms, police activity, missed target and events. *(R6a provisional: a missed target sits under the stretch's last round.)*
-
-*Sanity check (placeholder numbers):* the baseline alone adds 36 over 9 rounds. With a quarter of the crew in the Vault every round, total Heat is about 81, which is risky but survivable. With half the crew in the Vault, Heat goes bust unless people spend turns on the Rooftop.
-
----
-
-## 8. Roles
-
-Every player is dealt **one secret role** at the start of the game. Roles are designed so that **revealing your role is risky**: each one has a weakness once people know about it. Players can claim any role, truthfully or as a bluff. A formal claim (the **Claim** button, §12.1) goes on the public ledger: once per player between meetings, any role the game knows (even one that can't be in this game, so a refusal never hints at the hidden role pool), never in Duel mode. Like an alibi it changes no rule; it is evidence the crew weighs.
-
-**The roles are the 20 of extension.md "Roles"**, For every role: each reward is **one private token** (§8.3), players see **once between meetings** where the engine counts acts (§4.1), scores are whole numbers (§3), and each role has a **temperament tag** (Team player, Wildcard, Lone wolf). The tag changes no rule. ★ marks the four roles that can also win a failed heist (`RoleDef.winsOn`, §3).
-
-| Tag | Roles | Token trigger (`RoleDef.rewards`) |
-|---|---|---|
-| Team player | Rookie, Inside Man, Mastermind | The Haul target met at meeting 1 or 2 (the final check ends the game) |
-| | Lookout / Auditor / Detective | Someone it saw / a visitor of the audited room that round / a player it checked is caught (shaken down dirty), earlier this game |
-| | Snitch | Its secret target is caught (replaces the old +1 ballot weight) |
-| | Smooth Talker | Its ballot was for the player then caught |
-| | Muscle | Its cancel saved a clean player: a token **and** the power back; a dirty one names it in the ledger |
-| | Priest | A blessing pays out (a blessing lasts until the next regular meeting closes) |
-| | Bagman | It hands in everything 3 rounds running (meetings don't break the run; the count restarts after each token) |
-| | Cleaner | Every 2nd Rooftop round |
-| | Fixer | Its save stops a raid (any raid, police activity included) |
-| Wildcard | Getaway Driver ★ | Heat first reaches 75 (once per game) |
-| | Fence ★ | The safe reaches 3 |
-| | Hacker | Its loop hid a visitor who pocketed from a Security watcher of that room |
-| | Blackmailer | A vote it stole decides a shakedown (it wouldn't have passed without it) |
-| | Forger | Someone it framed is shaken down clean |
-| Lone wolf | Mole ★ | Each tip-off, when it lands (§10); at most 3 tip-offs a game, Recharge included |
-| | Embezzler ★ | Its first (non-zero) take |
-
-*Rules that apply across the roles (extension.md "Roles"):*
-- **No automatic reveals.** Nobody is told anyone else's role or side at the deal or later (no `alliesLearned`, no `roleState.allies`). Roles are learned only by choice: Peek, Inside tip, Detective, the Blackmailer's guess, claims and evidence cards.
-- **Rookie** has no multiplier; the **Inside Man** scores +1 per 5 loot the Haul ends above the final target.
-- **Mole:** once between meetings, any time (a `useAbility`, not part of the move): the tip-off is queued and **lands at the next hidden police moment** as public "police activity +4", the same as a background patrol (§10). Only the Mole is told it was its own (`tipOffLanded`). A tip-off still queued at the end is lost.
-- **Hacker:** a looped room's Security feed reads "camera offline" (`roomWatched.offline`), exactly as a Power cut reads for every feed.
-- **Fence:** a shakedown shows the safe but never takes it; the clean check counts it (§11.3).
-- **Detective:** "dirty" means at or above the clean line (6), the same number as the shakedown's.
-- Minimum crew sizes, Duel exclusions, the Embezzler's take, the Forger's feeds, the Priest's blessing, the Fixer's save (Heat set to 95; it also stops a raid from police activity), the Cleaner's double Rooftop visit and the Getaway Driver's Rooftop that cools nothing are as in extension.md "Roles".
-
-### 8.1 Dealing roles
-
-*(extension.md "Roles" Decks, "Host settings", Build notes "Tags, decks and dealing".)*
-
-- **Decks:** Starter (Rookie, Inside Man, Lookout, Bagman, Cleaner; no events, no shop, no tokens), **Standard** (the default, 11 roles: Lookout, Auditor, Detective, Smooth Talker, Muscle, Cleaner, Hacker, Fence, Getaway Driver, Mole, Embezzler; Rookies fill spare seats) and Everything (all 20). The host can switch roles on or off one by one (the `roles` setting, which replaces the preset when not empty). **Quick games force Starter** with events off.
-- **Balanced** (default): a fixed mix per crew size from content (`BALANCED_MIX`: Lone wolves / Wildcards, about round(n ÷ 3) at most; 4–6 players deal 1 / 1 (4 is one over that cap) and 8 players 2 / 1, *provisional*). The rest are Team players; seats the deck can't fill go to Team players, Rookies last. The host can't change the mix.
-- **Truly random:** each seat drawn uniformly from the eligible deck, at most one Mole and one Embezzler.
-- **Role list shown** (host setting): **Exact** roles dealt (default, `roleListShown`, in content order), the roles that **could** be in the game (Possible: only what the deal can give, so Balanced at 2–3 players lists only Team players), or nothing (Hidden).
-- **Old lobby settings:** a stored legacy `mole` field is migrated on read: *off* becomes the deck with every Wildcard and Lone wolf toggled off; any other value becomes the plain deck.
-- **Eligibility** is unchanged: Snitch and Detective 4+; Inside Man, Smooth Talker, Muscle and Priest 5+; Blackmailer and Forger 7+; the Mastermind only with events on; meeting roles never in Duel. **Unique roles** (default on): each role at most once. Mole and Embezzler are always at most one each.
-
-### 8.2 Shakedowns and roles
-
-A shakedown reveals a player's **stash**, not their role. Roles only come out at the end, or when a player chooses to say what they are, truthfully or not.
-
-### 8.3 Perks
-
-**Tokens and the shop** (extension.md "Tokens and the perk shop"). Every role reward is one private **token** (`tokenEarned`). At setup the seeded RNG deals a **shop of three perks**, one per column, public (`shopDealt`): Learn (Peek, Ballot, Tail), Protect (Shield, Alibi, Recharge), Sway (+Vote, Emergency, Rig). Costs are content: Peek and Shield 2, the rest 1. `buyPerk` spends tokens any time (private `perkBought`, nothing shown until the perk is used). Use a perk any time after buying it, **at most one per round** (the automatic Shield and Emergency don't count); unspent tokens are worth nothing. With events off the Sway perk is +Vote or Emergency; **Duel** deals Peek or Tail, Alibi or Recharge, and Rig (events on) or a seeded pick from the undealt Learn and Protect perks. Starter and Quick have no shop and no tokens. Spending a perk is a private `perkUsed`, with `useAbility`; a refused spend keeps it. The Shield is spent by itself.
-
-| Perk | Effect |
-|---|---|
-| **Peek** | Learn one other player's role, as it is now. Any time. |
-| **Shield** | Spent by itself: your next passed shakedown is cancelled. The ledger says only "cancelled", as for the Muscle; a Muscle cancel first keeps the Shield. |
-| **+Vote** | +1 ballot weight in the open meeting (once per meeting); counts toward the majority, not the public tally or quorum, like the Smooth talker. |
-| **Ballot** | In an open meeting, see one other player's ballot live, as it changes, in your own view only (never in an event). **Works in Secret mode too** (owner decision: the one exception to secret ballots, §11.2). Refused in Open mode, where ballots are public. |
-| **Tail** | While planning, also see who is in one more room when the round resolves (like the Lookout; a Power cut blinds it, a camera loop doesn't). |
-| **Alibi** | Your posted alibi for the latest resolved round, if it is true, is stamped **Verified** in public (`alibiVerified`). A false alibi can't be stamped. One stamp per player per round. |
-| **Recharge** | One used-up use of your power between these meetings comes back, or a once-per-game use (Muscle). Refused if nothing is used. |
-| **Emergency** | Spent by itself: once your own emergency meeting is used, calling another spends it. |
-| **Rig** | Draw two different cards for the next round (events on); the first flips unless you pick the other, until that round starts. Another player's Rig of the same round never refuses yours (a refusal would hint at who holds what); if several players rig a round, the oldest Rig's pick flips. |
-
-- **Shakedown window:** opens after every passed shakedown when a Muscle is dealt or the Shield is in the shop (Exact role list; otherwise when a Muscle could be dealt), so it never shows more than the public list does (§11.3).
-- **Double-cross** (§10): tokens, perks and a spent Tail stay with the player *(provisional)*.
-
----
-
-## 9. Jobs
-
-A job is the location. It changes the strategy without adding new rules to memorise.
-
-| Job | Twist |
-|---|---|
-| **First National Bank** (starter) | The standard rooms above. |
-| **Art museum** | Rooms hold **items** of fixed value (a painting worth 8, a sculpture worth 5). An item goes either to the Haul or to your stash, never split, so every theft is all-or-nothing. |
-| **Casino** | One secret round pays **triple**, and nobody knows which one. Baseline Heat is +5. |
-| *(future)* Train, cruise ship, museum gala… | — |
-
----
-
-## 10. Events
-
-From round 2 onward, one event card is flipped at the start of each round and shown to everyone. Starter mode has no events.
-
-| Event | Effect |
-|---|---|
-| **Quiet night** | Heat −5. |
-| **Shift change** | The Vault yields ×1.5 this round, and its Heat pressure is ×2. |
-| **Power cut** | No witnesses and no cameras this round. Nobody sees anybody. |
-| **Payday** | The Lobby yields 4 this round. |
-| **Lockdown** | One random room is closed this round. |
-| **Audit** | This round's shortfall is shown **per room** ("the Vault came up 4 short"). |
-| **Raid rumour** | The player with the biggest stash secretly loses 3. Only they are told. |
-| **Inside tip** | One random player privately learns another player's role. |
-| **Double-cross** | Two random players are offered a role swap. It happens only if both secretly accept. |
-
-**Police activity** (extension.md "Situations", Build notes "Police activity"; owner, 3 Nov, option A): police activity is not an event card. When a Mole could be in the game (dealt, with the Exact list; otherwise one the deal could give: never Balanced at 2–3 players), the engine draws a hidden schedule of **police moments** from the seeded RNG (reveal-only `policeScheduled`): each gap is uniform in [0.5, 1.5] × the preset's round length (planning plus alibi window), in game time (§4.1), and each moment brings a background patrol with chance 30% (content `POLICE_ACTIVITY`). At most one activity per moment: a queued Mole tip-off takes the next free moment and replaces a patrol drawn for it. Either way the crew sees one public `policeActivity` (+4 × min(1, crew ÷ 5), no source) with an immediate raid check; the Mastermind doesn't foresee it. The server fires moments with `advance { policeMoment }` and never exposes a timer for them; the simulator takes one moment per round. *(Provisional: moments are refused while a meeting is open; the server freezes them then, and during a host pause.)*
-
-A **Power cut** blinds every feed, which reads "camera offline", the same as a Hacker's loop reads for one room.
-
-*Events deck (provisional, task 14):*
-- The deck holds one of each card; every flip from round 2 draws from the **full deck**, so cards can repeat *(owner answers, 1 Nov)*. Events are a host setting (§15), off in starter mode.
-- **Event Heat for small crews:** a card's Heat (Quiet night; police activity likewise) and the extra Heat of a surge (Shift change's ×2 beyond ×1) are scaled by **min(1, crew ÷ 5)**, rounded, so at 3 players Quiet night removes 3. From 5 players cards play at full strength. *(Owner answers, 1 Nov.)*
-- The card is flipped as the round starts, so players can plan around it; its effects apply when the round resolves (§5.2 step 1). Lockdown names its closed room on the flip (any room but the Lobby, where missed moves go). Double-cross offers go privately to the two players on the flip, and each can accept or decline until the round deadline; the swap happens at step 1, so the new roles play that round. Each role card keeps its uses so far; Moles are told if their fellow Mole changed.
-- **Shift change** also raises the Vault's Heat pressure ×2 and pays its loot ×1.5 (R6 balance pass; were ×1.5 and ×2); **Payday** doubles the Lobby's loot (2 → 4).
-- **Power cut:** no room-mates, no Security and no Lookout results. The Server room still counts pockets.
-- **Audit:** every room in play is listed with what it came up short (0 included).
-- **Raid rumour:** compares stashes, not the Fence safe (which it never touches); ties are broken at random; with every stash empty nobody is hit. The lost loot is gone.
-- **Inside tip:** the tip is a player's current role.
-
----
-
-## 11. Crew meetings and voting
-
-### 11.1 Scheduling
-
-- **Regular meeting:** each act has one meeting, which must take place before that act's checkpoint. Any player can propose a time, and it's locked in once a majority of the **people** (human players) accepts; bots' backing doesn't count toward the lock (owner decision, 2 Nov). With no people at all (simulator, all-bot tests), a majority of the crew locks it. Bots never propose a time, they only back existing proposals. If nobody schedules one by the act deadline, the server picks a time.
-- **Emergency meeting:** each player can call **one** emergency meeting per game, at any point. Others are notified and it opens after a short notice period that the host sets.
-- **Window length:** set by the host, from 5 to 30 minutes.
-
-*Meeting timing (provisional):* the act's slot can be proposed and locked in at any time during the act (the proposer counts as accepting, so one person in a crew of bots locks a slot by proposing it; a majority is more than half the crew's people), but the meeting only **opens after the act's last round has resolved**: rounds 1–3, then the Act 1 meeting, then checkpoint 1. An emergency meeting can open mid-act; rounds pause while any meeting is open, and only one meeting is open at a time. Only one emergency meeting can be waiting to open at once.
-
-### 11.2 Voting
-
-- During the window, each player either votes for one player to be shaken down or votes to skip.
-- **Vote visibility** is a host setting:
-  - *Hidden then revealed* (default): nobody can see votes while they're being cast, and everyone's votes go into the ledger afterwards.
-  - *Open*: votes are visible as they're cast.
-  - *Secret*: only the tally is ever shown, even at the end-of-game reveal. The one exception is the **Ballot** perk (§8.3): its holder sees one chosen ballot, live, in their own view only (owner decision).
-- **Players who can't make it** can leave a sealed vote in advance. Otherwise they count as abstaining.
-- **To pass**, a shakedown needs **more than half of the votes cast**, and at least half the crew has to take part (sealed votes count).
-- **One rule for every crew size** (extension.md).
-- When the window closes, the ballots are cleared from the screen. The **result** stays in the ledger permanently.
-
-*Smooth talker (provisional):* "more than half of the votes cast" counts the Smooth talker's ballot twice; "at least half the crew has to take part" counts people. The tally shown counts one per ballot (see §8).
-
-*Ballots (provisional):* you can't vote to shake yourself down, and you can change your vote until the window closes. A sealed vote counts in the **next meeting that opens, regular or emergency**, and is then used up; sealing again replaces it, it can't be withdrawn, and a player who turns up can override it with a live vote.
-
-### 11.3 Shakedown results
-
-- The target's stash is revealed to everyone and goes into the Haul. A Fence's safe is shown too, but not taken.
-- **Clean line (fixed, extension.md "Shakedowns"):** if the stash **plus any Fence safe** is under **6** (content `shakedown.cleanBelow`, shared with the Detective's "dirty" line), the target is declared clean and the crew pays them **8** (`shakedown.payout`) out of the Haul, so false accusations hurt everyone. *(Provisional: never more than the Haul holds.)* Every meeting uses the same numbers.
-- No player is ever eliminated.
-- *Shakedown pause (provisional):* when a Muscle is dealt or the Shield is in the shop (§8.3), a passed shakedown is applied only after a short window in which the Muscle may cancel it (§8); a Shield cancels it when the window ends. The checkpoint (§11.4) comes after that window.
-
-### 11.4 Order at a checkpoint
-
-**Meeting → shakedown applied → checkpoint checked.** At the end of the game, this means the final meeting can still rescue a failing heist by shaking down the greediest player. That stops everyone from grabbing everything in the last round.
-
-### 11.5 Checkpoint targets (cumulative)
-
-| Checkpoint | Target |
-|---|---|
-| End of Act 1 | 7 × crew size |
-| End of Act 2 | 15 × crew size |
-| Final | 23 × crew size |
-
-A missed Act 1 or Act 2 checkpoint adds +15 Heat. Because targets are cumulative, the shortfall carries into the next act.
-
----
-
-## 12. Communication
-
-### 12.1 In-app chat
-
-- **Crew chat:** everyone.
-- **Direct messages:** private side deals. Everyone can see *that* two players messaged, but not what they said (host setting, on by default).
-- **Evidence cards:** a player can share a **verified** item from their case file into a chat, such as a camera result. "Verified" means only **"from their own case file"**: the app really showed it to that player. That doesn't make the cameras right: a Hacker's loop or a Forger's fake sighting (R3b) can make a camera feed false, so every card says so: "Verified: from their own case file. Cameras can be tampered with." (`EVIDENCE_CARD_NOTE` in `apps/web/src/game/describeEvent.ts`). Claims typed in chat, or screenshots from WhatsApp, can't be verified.
-- **Alibi button:** posts a formal Alibi to the ledger (§5.4).
-- **Claim button:** posts a formal role claim to the ledger ("I'm the Lookout"), true or not (§8). Bots claim and bluff only this way, since they don't read chat.
-
-### 12.2 Outside the app
-
-Players are expected to talk in WhatsApp, other social media, and in person. The game doesn't try to stop that. The ledger and evidence cards exist so that the facts stay trustworthy even when the talk happens elsewhere.
-
-### 12.3 Suspicion board
-
-Each player has a private board where they can tag every other player as *trusted*, *unsure* or *suspicious*, with optional notes. Only they can see it.
-
----
-
-## 13. Ledger, case file and catching up
-
-| View | Contents | Visible to |
-|---|---|---|
-| **Public ledger** | Round summaries (Haul change, Heat), who has locked in a move each round (never the move), events, alibis, meeting times, vote results, shakedown results, checkpoints | Everyone |
-| **Case file** | Who you saw in your room, Security/Lookout/Server results, your own moves and splits, private event results | You only |
-| **While you were away** | A 2–4 line summary of what changed since your last visit, shown at the top of the screen | You only |
-| **End-of-game reveal** | Every role; every player's real room and split for each round; every stash over time; every ability used | Everyone, after the game ends |
-
-Seats also show each person's **presence** (online now, or last seen), from the server and never in the ledger (owner decision, 2 Nov).
-
-The end-of-game reveal works like a timeline you can scrub through, round by round, so the group can relive the big moments ("you were in the Vault in round 4?!").
-
----
-
-## 14. Notifications
-
-- A round has resolved, with a short summary.
-- One hour left to submit your move (scaled down for short games).
-- A meeting has been proposed, scheduled, is starting in 10 minutes, or is open.
-- Someone called an emergency meeting.
-- You were shaken down, or someone else was, and what they had.
-- A checkpoint was made or missed.
-- The game is over and the reveal is ready.
-
-Notifications respect the host's quiet hours.
-
----
-
-## 15. Host controls
-
-- Setup (extension.md "Host settings"): session length (default 1 h; Quick forces Starter), deck (Standard default, Starter, Everything) and per-role toggles, deal style (Balanced default, Truly random), role list shown (Exact default, Possible, Hidden), vote visibility, events (on), unique roles (on), Duel with two players, meeting window length, quiet hours. A legacy `mole` setting is migrated on read (§8.1).
-- During the game: pause or resume, extend the current round, replace an inactive player with a bot (offered automatically after 2 missed rounds in a row), add bots to empty seats before the game starts.
-- *How it works (M2-13, provisional):* a pause stops every deadline, hidden ones included (police moments, the early round end), and resume moves each on by the length of the pause; players can still plan and chat while paused, and everyone sees a "paused by the host" note. Extend adds a preset-scaled amount (20 s Quick … 2 h for a week) to the current planning round (and its early end), alibi window or open meeting, never to a police moment. Replace with a bot: after 2 missed rounds in a row (content `REPLACE_AFTER_MISSED_ROUNDS`) the host can put a stand-in bot (Opportunist) in that seat (never the host's own); it plays from the seat's own view until the host or the player hands the seat back. In the lobby the host can remove any other seat.
-- Before the start, the host can hand the host role to another person in the lobby (never a bot) and then leave; the host can't leave without handing over first. *(Owner request, M2-5b.)*
-
----
-
-## 16. Player-count scaling summary
-
-| Players | Rooms | Balanced deal (§8.1) | Notes |
+| Room | Coins per visitor | Noise | In play |
 |---|---|---|---|
-| 2 | 5 | Team players | Needs bots to vote properly. Without bots, use Duel mode (§16.1). |
-| 3–4 | 5 | content `BALANCED_MIX` | Tight and personal. Every shortfall is easy to narrow down. |
-| 5–8 | 7 | content `BALANCED_MIX` | The sweet spot. |
-| 9–12 | 9 | content `BALANCED_MIX` | Chaotic. Lots of witnesses. |
+| **Lobby** | 1 | Silent | Always |
+| **Office** | 2 | The 1st coin is silent; each extra coin rings once | Always |
+| **Deposit boxes** | 2 | As the Office | 5+ players |
+| **Manager's office** | 2 | As the Office | 9+ players |
+| **Server room** | 2 | As the Office | 5+ players |
+| **Vault** | 3 | Every coin rings [tunable: or the 1st is silent; the simulator picks] | Always |
+| **Security** | 0 | — Watch one room's cameras: see who was in it this round | Always |
+| **Rooftop** | 0 | — Lie low: automatically cools the hottest room (§5.6); the only escape on a bust (§5.5) | Always |
 
-### 16.1 Duel mode (exactly 2 humans, no bots)
+Rooms in play by crew size: 3–4 players 5 rooms; 5–8 players 7 rooms; 9–12 players 8 rooms (`docs/decisions.md`: more rooms keep witnesses per room roughly steady).
 
-There are no votes. Instead, once between meetings (stretches close after rounds 3 and 6, owner ruling 7), each player can **call out** the other. If the opponent pocketed anything during that stretch, the caller takes everything the opponent pocketed. If not, the caller pays them 8 (`duel.wrongCallOut`, the clean payout number). Checkpoints and Heat work as normal.
+### 3.2 A move
 
-*Duel mode (provisional, task 15):*
-- A host setting, valid only with exactly 2 players. No meetings, no emergency meetings and no votes; the meeting-only roles (Smooth Talker, Muscle, Priest, Snitch, Detective) are never dealt. Events can be on.
-- **Timing:** a call-out can be made while any of the act's rounds is being planned, at most once per player per act, and can't be withdrawn. It stays private until the act's last round resolves and its alibi window closes (§5.4); then every call-out of that act is settled (in seat order if both called), and the checkpoint is checked straight after, with no meeting (§11.4 order: call-outs → checkpoint). So a call-out covers the whole act, the last round included, however early it was made.
-- **Caught:** the caller takes everything the opponent pocketed that act (their real splits, whatever they claimed), out of the opponent's stash: never the Fence safe, and never more than the stash holds. The Haul is untouched.
-- **Wrong call:** the caller pays the opponent 8 (content) from their own stash, never more than it holds.
-- The result is public: who called, whether the opponent had pocketed, and how much moved. A Heat raid in the act's last round ends the game before its call-outs are settled.
+1. **Pick a room** that is in play and not closed (taped off, §5.3, or locked down, §13).
+2. **Grab 1 coin up to the room's limit** (0 in Security and on the Rooftop). Fewer coins mean less noise; the bell previews the rings before you lock in (§5.2).
+3. **Split your coins in secret:** each coin goes into the crew duffel or your pocket.
+4. Optionally **use your role's power** (§11) and **one perk** (§12).
+5. **Lock in.** A move can be changed until the round ends.
+
+- A player can't grab more than the bank holds; when the bank has fewer coins than the moves ask for, grabs are filled in seat order starting from a seeded random seat *(provisional, builder S1)*.
+- **No room has a visitor limit,** the Rooftop included: a limit would reveal secret moves ("the Office is full") and reward whoever locks in first.
+
+### 3.3 Missed move
+
+A player who hasn't locked in when the round's deadline passes plays the **Lobby, 1 coin, handed in**. A missed move never shows as locked in.
+
+### 3.4 Who you see
+
+After the round, each player learns **who else was in their room** (none in a blacked-out room, §11, §12). Security shows who was in one chosen room (cameras offline in a blacked-out room). These results are private to the player.
 
 ---
 
-## 17. Game engine, simulator and bots
+## 4. A round
 
-### 17.1 Yes, we need a dedicated rules engine
+### 4.1 Phases
 
-All the rules live in **one engine that has no knowledge of the UI or the clock**. The web app, the mobile apps, the server, the bots and the simulator all use the same engine. That way rules never drift between platforms, and we can run thousands of simulated games to balance the numbers.
+**Round start** (event card, §13; power-cut announcements) → **Planning** (moves, powers, perks, plan board, chat; until everyone has locked in plus a short grace, or the deadline, §17.3) → **Resolution** (§4.2) → a meeting if one is due (§9) → the next round, or the end (§6.2).
 
-### 17.2 Engine design
+### 4.2 End-of-round order *(owner, 4 Nov)*
 
-- **Language:** TypeScript. The engine runs on the Node server (authoritative) and in the simulator; the web client may import its types. Native apps (Flutter) only consume `viewFor` JSON from the server.
-- **Deterministic:** every game has a random seed. The same seed and the same inputs always produce the same game, which makes replays, bug reports and simulations reproducible.
-- **Content as data:** rooms, roles, jobs, events, targets and Heat formulas are JSON config, not code. Balancing means editing numbers, not rewriting logic.
-- **Event-sourced:** the game is a log of events, and the current state is built by replaying that log. The ledger, case files, the "while you were away" summary and the end-of-game reveal are all views over that same log.
-- **Visibility-scoped events:** every event is tagged *public*, *private to player X* (opens up at the reveal), *secret to player X* (never opens up; Secret-mode ballots, §11.2), or *reveal-only*. A projection function, `viewFor(state, playerId)`, returns only what that player is allowed to see. The server is authoritative, and clients never receive hidden information.
-- **Phase state machine:** `Setup → Planning → Resolving → (MeetingScheduled → MeetingOpen) → Checkpoint → … → FinalCheck → Reveal`.
-- **Commands in, events out:** `submitMove`, `postAlibi`, `useAbility`, `proposeMeeting`, `acceptMeeting`, `callEmergency`, `castVote`, `sealVote`, plus `advance()`, which the scheduler (or the simulator) calls when a deadline passes.
+1. **Moves resolve:** grabs come out of the bank; powers and perks that act this round apply (Locksmith, Soft shoes, Hacker, Mole's ring, Plant evidence…).
+2. **Rings light bulbs:** each ring lights one bulb in its room (§5.2).
+3. **Raid check:** every room whose 4th bulb lit is raided: its visitors' grabs are seized, the room is taped off for 2 rounds, and Wanted goes up 1 star per raided room (§5.3).
+4. **Bust check:** if Wanted is 3, the game ends at once (§5.5); that round's duffel is **not** split.
+5. **Split** (only if no bust): the crew take is split equally; the remainder stays as the kitty (§7.2).
+6. **Cooling:** every room turns off 1 bulb, then each Rooftop player cools the hottest room by 1 more (§5.6).
+7. **Information goes out:** who was in your room, Security and power results, the round summary (taken, crew take, missing, honesty, fair share), raids and Wanted.
+8. **Meeting check:** a police briefing after a raid; a regular meeting when the bank passes a third (§9.1).
+9. **End check:** bank empty or round cap reached (§6.2).
 
-### 17.3 Bots
+Raids come before cooling, so the Rooftop can't save a room in the same round, and the bell preview stays exact.
 
-Bots implement the same `Agent` interface a human client does: they receive their own `viewFor` and return commands. They can't cheat, because they can only see what a human in their seat would see.
+---
 
-**Personalities**, defined by tunable parameters:
+## 5. Bells, raids, Wanted and the bust
 
-| Bot | Greed | Lies | Suspicion | Notes |
-|---|---|---|---|---|
-| Honest | Low | Never | Medium | Hands in nearly everything and votes on the evidence |
-| Opportunist | Medium | When safe | Medium | Pockets loot when it's alone in a room |
-| Greedy | High | Often | Low | Stress-tests the Heat and checkpoint rules |
-| Cautious | Low | Rarely | High | Spends turns on the Rooftop and checks Security often |
-| Mole | n/a | Often | Fakes it | Tries to make the heist fail without being noticed |
-| Random | Random | Random | Random | Baseline for comparison |
+### 5.1 Bells
 
-Under the hood, each bot keeps a **suspicion score** for every other player, updated from shortfalls, alibis, witness sightings, its own powers and perks (an Audit, a Detective check, a Peek), and role claims (a claim it knows is false, a role claimed twice, a changed claim). It votes when one player's score passes its threshold. At a vote it misjudges like people do: a small misreading of its own plus a hunch the whole crew shares at that meeting, which can carry a majority to a clean player (this keeps shakedown accuracy near the 50–70% target). Bots communicate only through alibis and role claims (§12.1): crew bots tell the truth when accused, dark bots bluff a hard-to-disprove crew role nobody has claimed. They back meeting times people propose and only propose one themselves late in the act (§11.1).
+Every room has an **alarm bell with 4 bulbs** [tunable]. Every bell is **public**, always, except a room the Hacker hides this round (§11): it shows "?" to everyone else.
 
-### 17.4 Simulator
+### 5.2 Rings
 
-A command-line tool that runs batches of all-bot games:
+- Each ring lights one bulb in that room; rings from everyone in the room add up.
+- Ring counts per coin come from the room's noise (§3.1). The Locksmith rings one time fewer (never below 0); Soft shoes ring nothing; the Mole adds one ring to any room.
+- **Preview:** while planning, the bell shows the bulbs your own grab would add. Other players' rings are unknown until the round resolves.
 
-- **Inputs:** player count (2–12), mix of bot personalities, job, role pool, config overrides, number of games, seed.
-- **Outputs:** CSV/JSON results and a summary report.
+### 5.3 Raids
 
-**Balance metrics and rough targets:**
+When a room's **4th bulb** lights:
+- everyone inside **loses that round's grab**: the police seize it and it leaves the game. Seizure happens **before** the split, so seized coins are never handed in or pocketed;
+- the room is **taped off for 2 rounds** [tunable] ("CLOSED 2" counting down): nobody can pick it, and its bell resets to 0 *(provisional, builder S1)*;
+- **Wanted goes up 1 star**;
+- a **police briefing** is called (§9.2).
 
-| Metric | Target |
+### 5.4 Wanted
+
+Three sheriff stars at the top of the screen, public. Wanted never goes down *(provisional, builder S1: nothing in R7 lowers it)*.
+
+### 5.5 The bust and the Rooftop escape
+
+- **Wanted 3 stars** [tunable] is a **bust**: the heist ends at once, before that round's split.
+- Only the players **on the Rooftop that round escape**; everyone else is arrested and loses everything.
+- **The biggest stash among the escapees wins**, whatever their role (the Mole and Fixer included). Escapees keep only the stash they already had. If nobody was on the Rooftop, nobody wins.
+- So at Wanted 2 every player weighs "keep grabbing, or go up and wait?"
+
+### 5.6 Cooling
+
+At the end of every round, after the split:
+1. every room turns off 1 bulb (never below 0);
+2. then **each player on the Rooftop automatically cools the hottest room by 1 more bulb**, one after another, each time the room that is hottest at that moment. Ties are broken with the game's seeded randomness. Nobody chooses the room.
+
+### 5.7 Crew size
+
+Bigger crews get more rooms (§3.1). If big crews still get raided too often, the raid line rises behind the scenes [tunable, per crew size]; players only ever see a strip of bulbs.
+
+---
+
+## 6. The bank and the end of the game
+
+### 6.1 The bank
+
+- The bank holds **16 coins per player** [tunable], shown as a pile of money in the Vault art that visibly shrinks. Its count is public.
+- Every coin grabbed comes out of the bank, whether it's handed in, pocketed or seized.
+
+### 6.2 How the game ends
+
+The game ends after the round in which:
+- **the bank is empty**;
+- the **round cap** is reached: **12 rounds** [tunable]; or
+- **a bust** happens (§5.5), at once, mid-resolution.
+
+There are no acts, checkpoints or targets. A game that empties the bank early simply ends early. No meeting is held after the last round *(provisional, builder S1: the end checks run straight after the round)*.
+
+### 6.3 The getaway car
+
+At the end, whatever is left in the kitty pays for the getaway car and leaves the game.
+
+---
+
+## 7. Equal shares, the kitty and honesty
+
+### 7.1 Crew take
+
+Each round the **crew take** is everything handed in that round, plus coins returned by shakedowns and the Priest since the last split, plus the kitty.
+
+### 7.2 Split and kitty
+
+The crew take is **split equally among all players**. Whatever doesn't divide evenly stays on the table as the **kitty**, for the next split. On a bust there is no split for that round (§4.2).
+
+### 7.3 Fair share
+
+The coins split to each player so far: the same for everyone, public, shown with every round summary.
+
+### 7.4 Missing
+
+Each round the summary shows coins taken from the bank, the crew take, and **"N coins went missing"**, never who.
+*Provisional (PM, 4 Nov):* N = coins taken that round (excluding seized coins) − coins handed in that round, never negative.
+
+### 7.5 Honesty *(owner, 4 Nov)*
+
+- **Honesty = coins that reached the table ÷ coins taken from the bank**, over the whole game, shown as a meter against the **two-thirds line**.
+- **A coin counts once,** when it first reaches the table: handed in, or recovered by a shakedown or the Priest. Coins carried in the kitty or re-split never count again.
+- **Seized coins count neither as taken nor as missing.**
+- Before any coin has been taken, the meter reads full *(provisional, builder S1)*.
+
+### 7.6 Stashes
+
+Stashes are **private** (open only in a shakedown and at the reveal).
+
+**Stash = fair share received + coins pocketed − coins taken back by shakedowns and the Priest − coins spent on perks.**
+
+Seized coins were never pocketed or handed in, so raids subtract nothing.
+
+### 7.7 Conservation
+
+At every point: bank left + table (kitty and coins waiting to be split) + every stash + seized + spent on perks + getaway car = starting bank. The engine tests this as a property.
+
+---
+
+## 8. Winning
+
+### 8.1 Success
+
+The heist **succeeds** when the game ends by the bank or the round cap, **honesty is at or above two-thirds**, and there was no bust. Then **the biggest stash wins**.
+
+### 8.2 The whole crew wins together
+
+If nobody stole (every stash equals the fair share minus perks bought), everyone is level after the tie-break and **the whole crew wins together**. Only stealing and getting away with it separates players.
+
+### 8.3 Bust
+
+Only Rooftop players escape; the biggest stash among them wins; nobody on the Rooftop means nobody wins (§5.5).
+
+### 8.4 Sunk by theft
+
+If honesty is **below two-thirds** at the end (bank or round cap), the heist fails: **nobody wins, except the Mole or the Fixer, if one of them holds the biggest stash** (§11, their handlers).
+
+### 8.5 Ties
+
+Ties go to **fewer shakedowns** (passed against the player), then **share the win**.
+
+### 8.6 The ranking
+
+The full ranking by stash is always shown at the end; on a failure it's labelled as a loss unless someone won (§8.3, §8.4).
+
+---
+
+## 9. Meetings and shakedowns
+
+### 9.1 Regular meetings
+
+A regular meeting is held **each time a third of the bank is gone** (after the round in which the bank first drops to two-thirds, then to one-third, of its start). Only regular meetings **recharge "once between meetings" powers**. If one round crosses both thirds, one regular meeting is held *(provisional, builder S1)*.
+
+### 9.2 Police briefings
+
+A **police briefing** follows every raid, after that round's resolution. It votes like any meeting but **recharges nothing**. If a regular meeting and a briefing fall due after the same round, one meeting is held and it counts as regular *(provisional, builder S1)*.
+
+### 9.3 Emergency meetings
+
+Each player can call **one emergency meeting** per game, at any point; it opens after a short notice set by the host. It recharges nothing. Only one emergency can be waiting to open at once.
+
+### 9.4 Scheduling and pausing
+
+- Rounds **pause** while a meeting is open (or waiting to open), so nothing resolves mid-vote; only one meeting is open at a time.
+- In short sessions (under 3 hours) meetings open automatically for a fixed window. In longer ones any player can propose a slot (at most 64 characters); it locks once **more than half of the human seats** back it (the proposer counts). Bots only back proposals, never propose. If nobody locks a slot, the server picks one. With no humans (simulator), a majority of the crew locks it.
+- **Window length:** a host setting, 5–30 minutes (§17).
+
+### 9.5 Voting
+
+- Each player votes to shake down one other player, or to skip. You can't vote for yourself, and you can change your vote until the window closes.
+- **To pass**, a shakedown needs at least **half the crew voting** (people, sealed votes included) and **more than half of the votes cast**. The Smooth Talker's ballot counts twice in "votes cast"; the tally shown counts one per ballot.
+- **Sealed votes:** a player can leave a vote in advance; it counts in the next meeting that opens and is then used up. A live vote overrides it.
+- **Vote visibility** is a host setting: *Hidden then revealed* (default: secret while voting, in the ledger afterwards), *Open* (live), or *Secret* (only the tally, ever; the one exception is the **Check ballot** perk, §12).
+- Meeting motions register by id (the shakedown is R7's only motion; §19 seam 10).
+
+### 9.6 Shakedown result
+
+- The target's stash is opened and compared with the fair share. **Whatever is above the fair share** (the pocketed coins still held) goes **back on the table**, to be split next round; it counts toward honesty when it lands (§7.5).
+- **Coins already spent on perks are gone and are not taken.**
+- A target at or below the fair share is **clean**, and nothing happens.
+- The result is public: the target, their stash and how much went back. **Bail** cancels it (§12).
+- No player is ever eliminated.
+
+---
+
+## 10. The plan board
+
+- **A shared board for each round,** open the whole round: a miniature of the bank where anyone drags crew avatars onto rooms ("A → Office"), and each player marks their own spot (✋). Seats show who has agreed.
+- **Pledges:** "I'll use my power on the Vault." A pledge is a claim, not a commitment, and can be a bluff.
+- **Nothing is binding;** breaking the plan is the betrayal.
+- **Async-friendly:** the plan persists and can change until the deadline.
+- **Bots** take a sensible spot and sometimes break it.
+- **The plan is evidence:** when the round resolves, its final plan, its pledges and a compact edit history ("B moved themselves to the Vault 2 minutes before the deadline") go into the log as one public **said** snapshot (§19 seam 5), read by bots, the case board and the reveal.
+- **Build:** the live board runs server-side like chat (fast updates, not in the game log); only the per-round snapshot enters the engine.
+
+---
+
+## 11. Roles
+
+### 11.1 The roles
+
+Every role has a one-sentence power, a "How you win" line and a "How to spot it" line (§20.2). **Eyes** spot theft; **shadows** make it possible.
+
+| Role | Kind | Power | Frequency |
+|---|---|---|---|
+| **Lookout** | Eyes | You also see who was in one extra room. | Every round |
+| **Locksmith** | Shadows | Your coins ring one less time. | Every round (passive) |
+| **Detective** | Eyes | Learn how many coins one player grabbed last round (not how many they kept). | Every round |
+| **Auditor** | Eyes | Learn how many coins reached the duffel from one room last round. | Once between meetings |
+| **Smooth Talker** | Eyes | Your vote counts twice. | Every meeting (passive) |
+| **Hacker** | Shadows | One room's bell is hidden from everyone this round (it shows "?"). | Once between meetings |
+| **Electrician** | Shadows | Black out one room next round: nobody there sees who else is there, and its cameras are offline. Its bell still rings. Announced at the start of that round as "Power cut in the Office", with no source. | Once between meetings |
+| **Priest** | Eyes | Secretly absolve one player: whatever they hold above the fair share goes back on the table (coins spent on perks are not taken). The Priest learns how much. Not the same player twice in a row; the absolved player is told "your sins were absolved". | Once between meetings |
+| **Mole** | Shadows | Secretly ring any room once (a police tip-off). Wins a heist sunk by theft with the biggest stash. | Once between meetings |
+| **Fixer** | Shadows | Tear the tape off a raided room and reopen it from next round. Wins a heist sunk by theft with the biggest stash. | Once per game |
+
+*Readings (provisional, builder S1):* the Hacker sees the real bell; the hidden bell reappears when the next round starts, and a raid is always public. The Mole's ring is applied at step 2 of §4.2 and can cause a raid; it shows as an ordinary ring. The Priest's returned coins are split at the next split. A Lookout's or Security's extra room shows nobody in a blacked-out room.
+
+### 11.2 The frequency rule
+
+- Powers that only **narrow suspicion** are **every round**.
+- Powers that can **prove theft or open blind spots** are **once between meetings** (recharged only by regular meetings, §9.1). The first stretch runs from the start of the game.
+- A **big swing** is **once per game**.
+
+### 11.3 Dealing
+
+- Each game deals **5–7 roles** [tunable], read from a content table by crew size (§19 seam 8). *Provisional (builder S1):* 3 players 3 roles, 4 → 4, 5–6 → 5, 7–9 → 6, 10–12 → 7. At most one of each role. Players beyond the role count are **plain crew**: same move, no power.
+- Every role, the Mole and Fixer included, is dealt at **random** with the seeded RNG, within the **eyes/shadows balance**: a deal has roughly equal numbers of each (they differ by at most one).
+- Roles are **secret**; holding a role is an event in the log (§19 seam 9). The game shows a **role list** per host setting: *Exact* (default: the roles dealt), *Possible* (the pool), or *Hidden*.
+- **Claims:** a player can formally claim a role ("I'm the Lookout"), true or a bluff, as a **said** entry in the ledger. A claim changes no rule.
+- No role should be so strong or weak that claiming it hurts its holder; §21 gates each role's win rate.
+
+---
+
+## 12. Perks and the black market
+
+- **There are no tokens.** Perks are bought with coins **from your own stash**, which lowers your score. The coins **leave the game** (paid to fixers and cops); buying doesn't change the crew take or honesty.
+- **The shop:** each game deals **one perk per tier** (3 items), picked with the game's seed. The "This game" rulebook lists only those.
+- **One perk per player per round**, each single-use, bought and used while planning. *Provisional (builder S1):* you pay from your stash as it stood at the start of the round; this round's pocket can't pay.
+- **Every purchase is logged at once, without a name:** "🛒 Someone bought Soft shoes (2 coins)". Who bought it opens at the reveal.
+- **Laundering is allowed:** coins spent on perks can't be taken by a shakedown or the Priest, but they no longer count toward winning.
+
+| Tier | Cost | Perk | Effect |
+|---|---|---|---|
+| 1 | 1 [tunable] | **Tail** | Next round, also see who was in one extra room. |
+| 1 | 1 | **Stamped alibi** | Your real room this round is stamped "verified" in the ledger (only if your alibi is true). |
+| 1 | 1 | **Check ballot** | See one player's vote at the next meeting (also in Secret mode). |
+| 2 | 2 | **Soft shoes** | Next round, your coins don't ring at all. |
+| 2 | 2 | **Blackout** | Next round, one room goes dark: no sightings, cameras offline. Its bell still rings. Announced like a power cut. |
+| 3 | 3 | **Bail** | Your next passed shakedown is cancelled automatically (the ledger says only "a shakedown fell through"). |
+| 3 | 3 | **Plant evidence** | One player of your choice appears in one room's camera, Lookout and Tail feeds this round. |
+
+---
+
+## 13. Events
+
+From **round 2**, each round has a **4-in-10 chance** [tunable] that one card flips at the start of the round (6 in 10: nothing happens), drawn with the game's seed. The host can turn events off. *Provisional (builder S1):* cards are drawn without replacement (each at most once a game); a card that can't apply is skipped.
+
+| Card | Effect |
 |---|---|
-| Heist success rate (owner gate) | 55–70% |
-| Heat-bust rate | 10–20% of failures come from Heat |
-| Pocketing vs. honest | Moderate pocketing should win more often than pure honesty. Heavy pocketing should lose more often than it wins. |
-| Shakedown accuracy | 50–70% of shakedowns catch a real cheater |
-| Per-role parity (owner gate; split gate PM provisional 3 Nov, owner to confirm) | Win credit ÷ (1 ÷ crew size), Balanced deal, 4–12 players (extension.md Build notes, "Sim"). Team roles: spread (max − min) ≤ 0.20 until the owner's playtests, target 0.10. ★ roles: each at 0.9–1.8× the Team-role average. The all-role spread is report-only. (docs/balance/r6-balance.md) |
-| Comeback rate | The leader after Act 1 wins less than 50% of the time |
-| Decided early | Less than 15% of games are effectively settled before Act 3 |
-
-These results are measured at every player count from 2 to 12, so the scaling tables in §6, §7, §11 and §16 can be tuned from data.
-
-### 17.5 System architecture (overview)
-
-- **Game server (Node):** runs the engine, stores the event logs, runs the scheduler for round deadlines and meeting windows, runs bots, and handles chat.
-- **Real-time updates:** WebSockets for chat, meeting windows and live updates.
-- **Push notifications:** FCM for Android, APNs for iOS, and web push for browsers.
-- **Clients:** a responsive React web app (the launch product, installable as a PWA) and, later, a **Flutter** app for Android and iOS. Both are thin clients over the server's `viewFor` JSON; only the web app shares the engine's TypeScript types.
+| **Lockdown** | One room is closed this round (never the Lobby or the Rooftop, *provisional*). |
+| **Shift change** | Vault visitors can grab 1 extra coin this round. |
+| **Audit** | Every room shows how many coins reached the duffel from it this round. |
+| **Inside tip** | One random player privately learns another player's role (drawn among role holders, *provisional*). |
 
 ---
 
-## 18. Visual direction
+## 14. Learn the game
 
-Chosen direction: **Option A, a cartoon cutaway of the building.** The bank is seen from the side like a dollhouse, players are characters with expressions, and they move between rooms when a round resolves. Detailed UI design comes later.
-
----
-
-## 19. Open questions
-
-1. Should a failed heist still show a "best of the losers" ranking? *(Provisionally yes, labelled as a loss; see §3.)*
-2. Should a shakedown ever reveal the Mole's role, or only their stash?
-3. Should rounds stay at 9, or should very long sessions get more rounds (for example 12 in a week-long game)?
-4. Are clean-threshold and compensation values the right size? This needs simulation.
-5. Should a player have to post an alibi every round, or should it stay optional?
-6. How long should the notice period be for an emergency meeting in a week-long game?
+**Learn the game** is a single-player guided game (you plus bots), about 5 minutes: a small bank, about 6 short rounds [tunable], a fixed set of roles (Lookout, Locksmith, Detective, Hacker), no shop and no events, with scripted pop-ups and guides at every step. It is a **ruleset and content entry** (§19 seam 3), not engine branches, and it is built as its own PR once the core game works (S4).
 
 ---
 
-## 20. Roadmap
+## 15. Lobby, chat, the case board and the reveal
 
-1. **Engine plus simulator** with the bank job, core roles and bots. Tune the numbers from simulation results.
-2. **Playable web prototype** with a minimal UI, chat and ledger. Playtest with real friends.
-3. **Mobile apps**, push notifications, and the cartoon art style.
-4. **More content:** the museum and casino jobs, more roles and more events.
-5. **Nice-to-haves:** stats across games within a friend group, cosmetics.
+### 15.1 Lobby and sign-in
+
+- **Invite link + nickname** (guests may host), plus **Google sign-in** for a persistent identity, on when the server has Google credentials (provisional details: `docs/decisions.md` "Server and timing").
+- The host sets the game up (§16), adds bots to empty seats, can remove any other seat, and can hand the host role to another person (never a bot) before leaving the lobby. A game needs 3+ seats; bots fill the rest.
+
+### 15.2 Chat
+
+- **Crew chat** for everyone; **direct messages** for side deals (that two players messaged is public if the host setting is on, which it is by default; never what they said).
+- **Evidence cards:** a player can share an item from their own case file. "Verified" means only that the app really showed it to them; cameras can be tampered with (Blackout, Plant evidence), and every card says so.
+- Plain text only, 500 characters, 8 messages per 10 s; bots don't chat. Discussion can happen anywhere (WhatsApp, in person); the ledger keeps the facts trustworthy.
+
+### 15.3 Notes and pins
+
+Each player has a private board: tags (trusted / unsure / suspicious), notes and pinned case-board entries. Only they can see it. It lives outside the game log, on the server *(provisional)*.
+
+### 15.4 The case board (the ledger)
+
+- **Evidence only:** public facts (coins taken, crew take, missing, bells, raids, Wanted, purchases, events), what you saw or learned, what people said (plans, pledges, alibis, claims), and what the crew did (votes, shakedowns). Lock-in marks, presence and meeting-time housekeeping live on the seats and the meeting panel.
+- **Trust levels** (§19 seam 2): **Fact** (from the game), **Seen by you** (you or your power), **Shared evidence** ("from X's case file"), **Said** (a claim, in handwriting).
+- **Three views of the same entries:** Rounds (default; each header reads "Taken · Crew take · Missing · Honesty"), Players (players × rounds) and Rooms (rooms × rounds).
+- **⚠ "doesn't add up" flags, never verdicts:** a claim contradicts what you saw; a claim differs from the plan; more claims than a bell allows; a role claimed twice. The checks are pure functions over your own view.
+- **Dossiers, filters, pins** and a **Full log** tab. Built only from your own `viewFor`: nothing new is revealed, only shown better.
+- **While you were away:** a short recap of what changed since your last visit, once.
+
+### 15.5 The reveal
+
+When the game ends, every reveal event opens (§18): every role, every move and split, every stash over time, every power and perk used. The reveal is a timeline scrubbed round by round, replaying each round's plan against what everyone really did.
+
+### 15.6 UI principles
+
+- **One look everywhere:** the hand-drawn notebook style of `docs/ui-style.md`, from the shared kit and `theme.css` tokens only.
+- **One screen, no long scroll:** the bank board in the middle (coins, bells, tape, Wanted, the bank pile), a "This round" panel (your move and its preview, the plan board, the event card), and the ledger, chat and rules in tabs or drawers; bottom sheets on phones, three columns on laptops. Checked at 360, 390, 768, 1024 and 1280 px.
+- **The move as a picture:** tap coins, drag each into the duffel or the pocket; the bell previews the rings.
+- **Info on everything:** one shared `InfoTip` (tap, hover or focus; ≥ 44 px target) on every icon, room, bell, perk, role and meter, with its line from content (§20).
+- **"This game" rulebook:** only this game's roles (per the role list), rooms, events and 3 shop items, one tap from anywhere.
+- **Teaching pop-ups** ("What just happened / What it means / What you can do") the first time each thing happens, controlled by a per-user **Tips** setting, on by default.
+- **Opponents' roles:** the roles-in-play strip opens each role's card, "How to spot it" included; explanations name the candidates ("a room rang with nobody claiming it: the Mole, or someone lying").
+
+---
+
+## 16. Host controls
+
+- **Setup:** session length (§17, default 1 hour), vote visibility (§9.5), role list shown (§11.3), events on/off (§13), DM notices (§15.2), meeting window length (§9.4).
+- **During the game:** pause and resume (every clock stops; players can still plan and chat); extend the current round or meeting by a per-preset amount; replace a seat with a bot (Opportunist) after 2 missed rounds in a row (never the host's seat), handed back by the host or the player. Provisional details: `docs/decisions.md` "Host controls".
+- Quiet hours (no deadlines or notifications at night) come with the mobile apps (M3) and must freeze deadlines.
+
+---
+
+## 17. Session timing
+
+### 17.1 Round length
+
+The server divides the host's session length by the **round cap** (§6.2) to get the round deadline; a game that empties the bank early ends early. Meeting windows pause round clocks, so a game can run a little past its session length.
+
+| Session | Round (cap 12) | Meetings |
+|---|---|---|
+| 1 hour | 5 min | Automatic, 3-minute window |
+| 3 hours | 15 min | Automatic, 5-minute window |
+| 1 day | 2 h | Scheduled by the crew, 5–15 min |
+| 3 days | 6 h | Scheduled by the crew, 10–30 min |
+| 1 week | 14 h | Scheduled by the crew, 10–30 min |
+
+These are server data, tuned after playtests.
+
+### 17.2 The engine has no clock
+
+The engine knows rounds and phases, not time. The server's scheduler calls `advance()` when a deadline passes (round end, early end, meeting notice, meeting close).
+
+### 17.3 Deadlines and lock-ins
+
+- A round ends at its deadline, or a short **grace** after everyone has locked in, whichever comes first; changing a move during the grace doesn't restart it. *Provisional grace:* 1 h 10 s, 3 h 30 s, 1 d 2 min, 3 d 5 min, 1 w 5 min.
+- A missed move is the Lobby, 1 coin, handed in (§3.3).
+- **Lock-ins are public** (who has locked in, never what); **presence is public** (online now, or last seen), from the server and never the log. Bots show as bots.
+
+### 17.4 Notifications
+
+A round resolved (with a one-line summary); an hour left to move (scaled for short games); a meeting proposed, scheduled, about to start or open; an emergency called; a shakedown result; a raid and Wanted; the game over and the reveal ready.
+
+---
+
+## 18. Visibility
+
+Every event has one visibility; `viewFor(state, playerId)` returns only what that player may see.
+
+| Level | Who sees it | R7 contents |
+|---|---|---|
+| **Public** | Everyone, live | Every bell (except a hidden one), rings and raids, taped rooms, Wanted, the bank count; each round's taken / crew take / missing / honesty / fair share / kitty; lock-in marks; event cards; power-cut announcements (no source); anonymous purchases; meeting slots, results and votes (per the visibility setting); shakedown results; "a shakedown fell through"; said entries (plan snapshots, pledges, alibis, claims); verified stamps |
+| **Private** | One player, until the reveal | Your role, move, split and stash; who was in your room; Security, Lookout, Tail, Detective, Auditor and Priest results; Inside tip; perks you hold; "your sins were absolved"; the Hacker's real bell |
+| **Reveal** | Everyone, at the end | Every private event: roles, every move and split, every stash over time, every power use (the Mole's ring, the Hacker's hide, Plant evidence), every buyer; the seed |
+| **Secret** | Only the voter, forever | Secret-mode ballots (except one seen through Check ballot) |
+
+Which facts are public is **content** (§19 seam 1): in R7 every fact above is public.
+
+---
+
+## 19. Architecture constraints
+
+### 19.1 The engine
+
+- **Pure, deterministic and event-sourced:** seeded RNG only, no clock, state = fold over the log, numbers and texts in `packages/content`. Same seed + same commands = same game.
+- **Visibility-scoped:** `public`, `private:<player>`, `reveal`, `secret:<player>`; `viewFor` returns a deep copy and never leaks. Every new event type gets a leak test.
+- **Commands in, events out;** `advance()` names the deadline that passed. Every ending goes through one end-of-game path.
+- Dependency direction: `content` ← `engine` ← `bots` ← `sim` / `server`.
+
+### 19.2 Seams for Skimjob Advanced
+
+R7 builds these ten seams (seams, not stub code; `docs/advanced.md` is additive only). Reviewers check them on every S3/S4 PR.
+
+1. **Which facts are public is content.** Bells, the duffel total per round, the bank pile, missing coins and honesty are entries in a content fact catalogue with a visibility (all public in R7); the engine emits each through one helper that reads it.
+2. **Case-board trust levels are generic data** ("Fact", "Seen by you", "Shared evidence", "Said"); an entry's level comes from its event's source, with its badge from content.
+3. **Rulesets are content.** A game names its ruleset (`simplified`; Learn the game is another); a ruleset only selects content (fact visibility, rooms, roles, perks, events). Engine and UI never branch on its name.
+4. **Roles, perks and events register by id:** a content entry plus one handler, **including any role-specific win rule** (the Mole's and Fixer's live in their handlers, not in the end-of-game code).
+5. **Player statements are one "said" event type** (plans, claims, alibis, pledges).
+6. **Bots read facts only through `viewFor`.**
+7. **Holder secrecy and result routing are content settings per role;** R7 builds only "secret holder, private result".
+8. **The deal reads its counts from content** (how many roles of which kinds, by crew size).
+9. **Holding a role is an event,** not a setup field; per-holder use counts are tracked per role and holder.
+10. **Meeting motions register by id** (the shakedown in R7).
+
+### 19.3 Bots and the simulator
+
+- **Bots are players:** they get only `viewFor()`, emit the same commands, use their own seeded RNG, and rebuild suspicion from their view each time. Personalities (Honest, Opportunist, Greedy, Cautious, Random; the Mole and Fixer play to their win) are parameter sets in `packages/bots`. Bots use the plan board, claims and alibis; they don't chat.
+- **The simulator** (`apps/sim`) runs batches of all-bot games by crew size, bot mix, overrides and seed, and reports the gates of §21 (`docs/testing.md`).
+
+### 19.4 System
+
+One authoritative Node server (engine, event log in Postgres, scheduler, bots, chat, the plan board's live channel) serves the web app, the API and the sockets on one origin. Clients are thin: they read `viewFor` JSON, and the web app imports engine and content for types, names, numbers and texts only.
+
+---
+
+## 20. Content text
+
+One-line texts the UI, the rulebook and the tips read from content, so they never drift. Plain, short and friendly. Numbers in these lines come from content when rendered.
+
+### 20.1 Rooms
+
+| Room | Text |
+|---|---|
+| Lobby | 1 coin, and not a sound. The safe choice. |
+| Office | Up to 2 coins. The first is quiet; the second rings the bell. |
+| Deposit boxes | Up to 2 coins. The first is quiet; the second rings the bell. |
+| Manager's office | Up to 2 coins. The first is quiet; the second rings the bell. |
+| Server room | Up to 2 coins. The first is quiet; the second rings the bell. |
+| Vault | Up to 3 coins, and every one rings. Big money, big noise. |
+| Security | No coins, but you watch one room's cameras and see who was there. |
+| Rooftop | No coins. Lie low, cool the hottest bell, and it's the only way out of a bust. |
+
+### 20.2 Roles
+
+| Role | Power | How you win | How to spot it |
+|---|---|---|---|
+| Lookout | Each round, also see who was in one more room. | Like everyone: the biggest stash on a good heist. | Knows who was where, sometimes a little too well. |
+| Locksmith | Your coins ring one time less. | Like everyone: the biggest stash on a good heist. | A room rang less than its visitors' claims add up to. |
+| Detective | Each round, learn how many coins one player grabbed last round. | Like everyone: the biggest stash on a good heist. | Knows exact grab counts nobody announced. |
+| Auditor | Once between meetings, learn how many coins reached the duffel from one room. | Like everyone: the biggest stash on a good heist. | Talks about one room's hand-ins with odd certainty. |
+| Smooth Talker | Your vote counts twice. | Like everyone: the biggest stash on a good heist. | A vote passed with fewer hands than it should have. |
+| Hacker | Once between meetings, hide one room's bell from everyone this round. | Like everyone: the biggest stash on a good heist. | A bell shows "?" and someone seems calm about it. |
+| Electrician | Once between meetings, cut the power in one room next round: no sightings, no cameras. | Like everyone: the biggest stash on a good heist. | A power cut lands where someone wanted no witnesses. |
+| Priest | Once between meetings, secretly take back whatever one player holds above the fair share. | Like everyone: the biggest stash on a good heist. | Coins come back to the table with no shakedown. |
+| Mole | Once between meetings, secretly ring any room once. | The biggest stash on a good heist, or on a heist sunk by theft. | A bell rang more than the people in the room can explain. |
+| Fixer | Once a game, tear the police tape off a raided room and reopen it. | The biggest stash on a good heist, or on a heist sunk by theft. | A taped-off room is suddenly open again. |
+
+Plain crew: "No power. Your choices are your tool."
+Bust (every role): "On a bust, only the Rooftop gets away."
+
+### 20.3 Perks
+
+| Perk | Text |
+|---|---|
+| Tail | Next round, also see who was in one more room. |
+| Stamped alibi | If your alibi is true, the ledger stamps it "verified". |
+| Check ballot | See one player's vote at the next meeting. |
+| Soft shoes | Next round, your coins make no sound at all. |
+| Blackout | Next round, one room goes dark: no sightings, no cameras. |
+| Bail | Your next shakedown falls through. |
+| Plant evidence | Put one player on one room's cameras this round. |
+
+### 20.4 Events
+
+| Card | Text |
+|---|---|
+| Lockdown | One room is closed this round. |
+| Shift change | Vault visitors can grab 1 extra coin this round. |
+| Audit | This round, every room shows how many coins reached the duffel from it. |
+| Inside tip | Someone just learned another player's role. |
+
+### 20.5 InfoTips
+
+| Thing | Text |
+|---|---|
+| Bell | Every noisy coin lights a bulb. Light the 4th and the police raid the room. |
+| Wanted | One star per raid. Three stars is a bust: only the Rooftop gets away. |
+| Bank | Coins left to steal. When it's empty, the game ends. |
+| Honesty meter | How much of what was taken reached the table. Below the line at the end, the heist fails. |
+| Fair share | What the duffel has paid each player so far. The same for everyone. |
+| Kitty | Coins that didn't split evenly. They wait for the next split. |
+| Duffel | Coins here are shared equally by the whole crew. |
+| Pocket | Coins here are yours alone. Nobody sees them, unless you're shaken down. |
+
+---
+
+## 21. S5 balance gates
+
+*Provisional (PM): set in S1 for the owner to confirm; the S5 pass tunes the [tunable] numbers against them on the Sim suite workflow. Applies at **3, 6 and 12 players**, standard bot mix, events on, the standard deal and shop. A gate passes or fails only when its whole 95% interval is inside or outside the band; otherwise it's inconclusive (`docs/decisions.md` "Balance").*
+
+| # | Gate | Target | Crew sizes |
+|---|---|---|---|
+| G1 | **Heist success** (bank or cap, honesty ≥ ⅔, no bust) | 55–70% of games | 3, 6, 12 |
+| G2 | **Raids** | 1–3 raids per game on average; at least one raid in 50–90% of games | 3, 6, 12 |
+| G3 | **Bust rate** | 8–20% of games | 3, 6, 12 |
+| G4 | **Rooftop stalls** (a round with more than half the crew on the Rooftop) | ≤ 15% of rounds; ≤ 10% of games end at the round cap with over a quarter of the bank left | 3, 6, 12 |
+| G5 | **Role win rate vs. fair share** (wins ÷ games held, ÷ 1/crew size; shared wins split) | Every role, and plain crew, within 0.75–1.33 | 6, 12 (reported at 3) |
+| G6 | **All-honest wins** (the whole crew wins together) | 5–20% of games | 3, 6, 12 |
+| G7 | **Perks don't decide games** | Buyers' win rate ÷ non-buyers' within 0.8–1.25; no single perk's buyers above 1.3× fair share | 6, 12 (reported at 3) |
+| G8 | **Sunk by theft** (report only) | Reported, with Mole and Fixer wins in it | 3, 6, 12 |
+
+`docs/balance/baseline.json` is refreshed in S5 against these gates.

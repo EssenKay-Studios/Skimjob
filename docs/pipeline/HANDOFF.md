@@ -8,7 +8,7 @@ Read this with `docs/STATUS.md` (the canonical task list and the owner's open qu
 - **In flight:** R7 step S0 (record the 4 Nov decisions, clean the docs); nothing else.
 - **Parked by the owner:** M2-14 playtest pass and M2-15 offline demo.
 - **Out of scope for now:** Skimjob Advanced (`docs/advanced.md`, a later paid version built on R7), the recruited Mole.
-- **Specs:** `docs/simplified.md` Part A is the rules spec until S1 makes `docs/design.md` the single spec. Current decisions: `docs/decisions.md`.
+- **Specs:** `docs/design.md` is the single rules spec; `docs/simplified.md` is the R7 plan. Current decisions: `docs/decisions.md`.
 - **Live:** https://skimjob.duckdns.org on the owner's AWS Lightsail box, running 1a4e083 with Google sign-in on. Runbook: `docs/deploy.md`. Connection details are in the owner's local `ssh-relay` skill, never in the repo.
 
 ## How to resume
