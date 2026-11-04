@@ -41,9 +41,11 @@ Full text: `docs/simplified.md` Part A (section numbers below). Numbers marked [
 - **End-of-round order:** moves resolve → rings light bulbs → raid check (4th bulb: seize that room's grabs, tape 2 rounds, Wanted +1) → bust check (Wanted 3: the game ends at once, that round's duffel is not split, escapees keep only the stash they already had, the biggest among them wins) → split of the duffel and kitty (only if no bust) → cooling (−1 every room, then each Rooftop player cools the hottest). Raids come before cooling, so the Rooftop can't save a room in the same round and the bell preview stays exact. A police briefing follows a raid. *Confirmed (owner, 4 Nov).*
 - **Every bell is always visible,** except a room the Hacker hides. **Loot stays "coins".** **Books mode is dropped** (superseded by Skimjob Advanced). *Confirmed (owner, 4 Nov).*
 
+- **Crew take and honesty:** a coin counts toward honesty once, when it first reaches the table: handed in, or recovered by a shakedown or the Priest. Coins carried in the kitty or re-split are never counted again. Seized coins count neither as "taken" nor as "missing". A stash drops by any coins taken back by a shakedown or the Priest. *Confirmed (owner, 4 Nov).*
+
 ### Provisional readings (PM, 4 Nov), owner to confirm
 
-- **Crew take and honesty:** the kitty carry-over is counted once, in the round it was handed in, not again when re-split. Seized coins count neither as "taken" nor as "missing". Shakedown and Priest returns raise the crew take, and so honesty. "N coins went missing" = coins taken (excluding seized) − coins handed in that round, never negative.
+- **Missing:**  *Provisional:* "N coins went missing" = coins taken (excluding seized) − coins handed in that round, never negative.
 - **Advanced drops the Inside tip card** (roles are public there), leaving three event cards (`docs/advanced.md`).
 
 ## Balance
