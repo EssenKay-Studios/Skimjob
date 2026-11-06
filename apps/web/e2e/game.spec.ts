@@ -35,12 +35,22 @@ test("a host and a guest play a 15-min game against bots to the end", async ({ p
   let moves = 0;
   let votes = 0;
   while (!(await over.isVisible())) {
-    // Each act's meeting (M2-7): the vote dialog opens by itself; the host skips.
+    // Each act's meeting (M2-7): the vote dialog opens by itself; the host skips. Dismiss it only once the
+    // vote has landed: a click that times out under load while the sheet animates in must be retried on the
+    // next pass (the 12 s window is long enough), not followed by "Back to the board", which would close the
+    // dialog with no vote cast (issue #127: votes stayed 0 on a slow CI shard).
     const dialog = page.getByRole("dialog", { name: "Who's skimming?" });
     if (await dialog.isVisible().catch(() => false)) {
-      await dialog.getByRole("group", { name: "Your vote" }).getByRole("button", { name: "Skip" }).click({ timeout: 1000 }).catch(() => {});
-      await dialog.getByRole("button", { name: "Cast vote" }).click({ timeout: 1000 }).then(() => votes++, () => {});
-      await dialog.getByRole("button", { name: "Back to the board" }).click({ timeout: 1000 }).catch(() => {});
+      const voted = await dialog
+        .getByRole("group", { name: "Your vote" })
+        .getByRole("button", { name: "Skip" })
+        .click({ timeout: 5000 })
+        .then(() => dialog.getByRole("button", { name: "Cast vote" }).click({ timeout: 5000 }))
+        .then(() => true, () => false);
+      if (voted) {
+        votes++;
+        await dialog.getByRole("button", { name: "Back to the board" }).click({ timeout: 5000 }).catch(() => {});
+      }
     }
     const lock = page.getByRole("button", { name: "Lock it in" });
     if (await lock.isVisible().catch(() => false)) {
