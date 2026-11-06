@@ -78,8 +78,6 @@ type ExpectedVisibility = {
   perkUsed: "private";
   rigPicked: "private";
   alibiVerified: "public"; // design §8.3: the Verified stamp is for everyone
-  callOutMade: "private"; // design §16.1: hidden until the act's end (provisional)
-  callOutResolved: "public";
   gameEnded: "public";
 };
 

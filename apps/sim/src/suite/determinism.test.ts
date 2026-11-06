@@ -15,7 +15,7 @@ const versions = { engine: "e", content: "c" };
 // Two cheap cells; a wide target so a cell can stop early, and lookahead batches get thrown away.
 const options: SuiteOptions = {
   seed: "determinism",
-  playerCounts: [2, 4],
+  playerCounts: [3, 4],
   setups: ["balanced"],
   events: [true],
   mix: [
@@ -59,7 +59,7 @@ describe("suite determinism across workers and shards", () => {
   });
 
   it("pnpm sim's records are the same with 1 or 2 workers", { timeout: 120_000 }, async () => {
-    const parsed = parseSimArgs(["-n", "30", "-p", "2,3", "-s", "w"]);
+    const parsed = parseSimArgs(["-n", "30", "-p", "3,4", "-s", "w"]);
     if (parsed.kind !== "run") throw new Error("should parse");
     const pool = createPool(2);
     try {

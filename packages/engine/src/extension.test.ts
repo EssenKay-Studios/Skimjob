@@ -107,19 +107,6 @@ describe("the perk shop — extension.md \"Tokens and the perk shop\", gap-fills
     expect(shopOf(config(5, { starterMode: true }))).toEqual([]);
   });
 
-  it("Duel deals Peek or Tail, Alibi or Recharge, and Rig with events on (else another Learn or Protect perk)", () => {
-    for (const seed of SEEDS) {
-      const on = shopOf(config(2, { seed, duel: true, eventsEnabled: true }));
-      expect(SHOP_RULES.duel[0]).toContain(on[0]);
-      expect(SHOP_RULES.duel[1]).toContain(on[1]);
-      expect(on[2]).toBe("rig");
-      const off = shopOf(config(2, { seed, duel: true }));
-      expect(off).toHaveLength(3);
-      expect([...SHOP_COLUMNS.learn, ...SHOP_COLUMNS.protect]).toContain(off[2]);
-      expect(new Set(off).size).toBe(3);
-    }
-  });
-
   it("costs come from content: Peek and Shield 2, the rest 1; overridable", () => {
     for (const [id, perk] of Object.entries(PERKS)) expect(perk.cost, id).toBe(id === "peek" || id === "shield" ? 2 : 1);
     const s = game(config(5, { contentOverrides: { perks: { tail: { cost: 3 } } } }), { shop: ["tail", "shield", "extraVote"] });
@@ -264,8 +251,8 @@ describe("the Mole's tip-off cap — extension.md owner ruling 4 (\"at most 3 pe
 });
 
 describe("what the deal can give — extension.md \"Host settings\", Build notes \"Police activity\" (QA on R6a)", () => {
-  it("Balanced at 2–3 players deals no Lone wolf or Wildcard: no police, and the Possible list names only Team players", () => {
-    for (const n of [2, 3]) {
+  it("Balanced at 3 players deals no Lone wolf or Wildcard: no police, and the Possible list names only Team players", () => {
+    for (const n of [3]) {
       for (const roleList of ["possible", "hidden"] as const) {
         const cfg = config(n, { deck: "everything", roleList, eventsEnabled: true });
         expect(dealableRoles(cfg)).not.toContain("mole");

@@ -137,7 +137,7 @@ describe("move panel", () => {
   });
 
   it("shows a missed deadline's default move (design §5.1)", () => {
-    let s = createGame(config(2));
+    let s = createGame(config(3));
     s = run(s, { type: "submitMove", player: "p2", move: { room: "office", pocket: 0 } }, round(1));
     expect(justMissed(viewFor(s, "p1"))).toEqual({ round: 1, room: "lobby" });
     expect(justMissed(viewFor(s, "p2"))).toBeNull();
@@ -148,7 +148,7 @@ describe("move panel", () => {
   });
 
   it("knows who may pocket (design §8: the Inside Man may not)", () => {
-    expect(canPocket(viewFor(createGame(config(2)), "p1"))).toBe(true);
+    expect(canPocket(viewFor(createGame(config(3)), "p1"))).toBe(true);
     const s = createGame(config(5, { rolePool: ["insideMan"], starterMode: false }));
     expect(s.players.p1!.role).toBe("insideMan");
     expect(canPocket(viewFor(s, "p1"))).toBe(false);
@@ -157,7 +157,7 @@ describe("move panel", () => {
 
 describe("alibis", () => {
   it("opens for the resolved round and remembers your claim (design §5.4)", () => {
-    let s = createGame(config(2));
+    let s = createGame(config(3));
     expect(alibiState(viewFor(s, "p1"))).toBeNull();
     s = run(s, round(1));
     expect(alibiState(viewFor(s, "p1"))).toEqual({ round: 1, posted: null });
@@ -169,6 +169,6 @@ describe("alibis", () => {
 
 describe("game over", () => {
   it("has no outcome until the game ends", () => {
-    expect(outcomeOf(viewFor(createGame(config(2)), "p1"))).toBeNull();
+    expect(outcomeOf(viewFor(createGame(config(3)), "p1"))).toBeNull();
   });
 });

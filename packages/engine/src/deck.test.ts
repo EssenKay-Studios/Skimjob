@@ -144,7 +144,7 @@ describe("the deck — design §10", () => {
   });
 
   it("flips one public card at the start of every round from round 2, drawn from the full deck (owner answers, 1 Nov)", () => {
-    for (const n of [2, 4, 7]) {
+    for (const n of [3, 4, 7]) {
       const end = playThrough(createGame(config(n, { seed: `flip-${n}` })));
       const flipped = flips(end);
       expect(flipped.map((e) => e.round)).toEqual([2, 3, 4, 5, 6, 7, 8, 9]);
@@ -196,8 +196,8 @@ describe("card effects — design §10, §5.2", () => {
   });
 
   it("event-card Heat is scaled by min(1, crew ÷ 5) for small crews, rounded (owner answers, 1 Nov)", () => {
-    // design §10: Quiet night −10 gives −4 / −6 / −8 / −10 at 2 / 3 / 4 / 5+ players.
-    for (const [n, quiet] of [[2, 4], [3, 6], [4, 8], [5, 10], [9, 10]] as const) {
+    // design §10: Quiet night −10 gives −6 / −8 / −10 at 3 / 4 / 5+ players.
+    for (const [n, quiet] of [[3, 6], [4, 8], [5, 10], [9, 10]] as const) {
       const base = atRound2(n, [], { contentOverrides: { heat: { perRound: 30 } } });
       expect(resolve(withCard(base, "quietNight")).heat - base.heat).toBe(30 - quiet);
     }

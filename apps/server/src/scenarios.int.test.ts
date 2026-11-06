@@ -469,42 +469,6 @@ describe("scenarios: end-to-end stories over HTTP + WebSocket", () => {
     expect(final.log.filter((e) => e.type === "meetingOpened" && e.kind === "emergency")).toHaveLength(1);
   }, 60_000);
 
-  it("a Duel game: no meetings over the socket, call-outs settle at the act's end, and the reveal ranks both (design §16.1)", async () => {
-    // The lobby has no Duel setting yet, so this one game starts through the store with duel: true.
-    const { id, sessions } = await openLobby(2, 0, { roles: TEAM_ROLES });
-    const seats = (await lobby(id, sessions[0]!)).seats;
-    const config: GameConfig = {
-      ...gameConfig({ ...(await lobby(id, sessions[0]!)).settings }, seats.map((x) => ({ nickname: x.nickname, bot_personality: x.bot })), "duel-scenario"),
-      duel: true,
-    };
-    await store.start(id, config, async (tx) => {
-      for (const [i, seat] of seats.entries()) await tx.query("update seats set player_id = $3 where game_id = $1 and seat_no = $2", [id, seat.seat, playerIdFor(i)]);
-    });
-    const game = await seated(id, sessions);
-    const clients = await Promise.all(game.humans.map((h) => Client.open(game.id, h)));
-    const a = clients[0]!;
-    for (const cmd of [{ type: "callEmergency" }, { type: "proposeMeeting", slot: "now" }, { type: "sealVote", vote: { kind: "skip" } }]) {
-      expect(await a.send(cmd)).toMatchObject({ rejected: true, reason: expect.stringMatching(/Duel/) });
-    }
-    // b skims; a calls b out in act 1 (caught) and act 2.
-    expect(await a.send({ type: "callOut" })).toMatchObject({ ok: true });
-    expect(await a.send({ type: "callOut" })).toMatchObject({ rejected: true });
-    const skimmer: Brain = (view) =>
-      view.phase.kind === "planning" && !view.me.move
-        ? [{ type: "submitMove", move: { room: view.card?.room === "office" ? "vault" : "office", pocket: view.me.role === "insideMan" ? 0 : 2 } }]
-        : [];
-    const caller: Brain = (view) => {
-      const out: unknown[] = steadyBrain("lobby")(view).slice();
-      if (view.phase.kind === "planning" && view.round === 4) out.push({ type: "callOut" });
-      return out;
-    };
-    const refused = await play(game, clients, [caller, skimmer]);
-    const final = await finish(game, clients, refused, app.live.botRefusals.length);
-    const resolved = final.log.filter((e) => e.type === "callOutResolved");
-    expect(resolved.length).toBeGreaterThanOrEqual(2);
-    expect(typesIn(final).has("meetingOpened")).toBe(false);
-  }, 60_000);
-
   it("a 12-player Everything game deals different roles, and plays to the reveal (extension.md \"Decks and dealing\")", async () => {
     const before = app.live.botRefusals.length;
     const game = await startGame(2, 10, { deck: "everything", eventsEnabled: true, voteVisibility: "secret" });

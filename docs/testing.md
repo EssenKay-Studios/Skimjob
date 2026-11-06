@@ -17,7 +17,7 @@ All tests are seeded and deterministic. Nothing reads the wall clock (the server
 | Simulator smoke | `scripts/sim-smoke.sh` | 200 all-bot games each at 3/6/12 players (events on, Everything deck) end with no refused bot command. | `bash scripts/sim-smoke.sh [games]` |
 | Typecheck | every workspace | Strict TS. New event or command types must fail exhaustive switches. | `pnpm typecheck` |
 
-Tests that check the R6 rules (Heat, loot, Duel, tokens) are replaced in S3 by tests of the R7 rules.
+Tests that check the R6 rules (Heat, loot, tokens) are replaced in S3 by tests of the R7 rules.
 
 CI (`.github/workflows/ci.yml`) runs all of these except the simulation suite on every push to `main` and every PR (docs-only PRs skip e2e and sim smoke: `docs/pipeline/common.md`). Nothing deploys from CI; releases go to Lightsail by hand (`docs/deploy.md`).
 
@@ -87,7 +87,6 @@ A failure prints the broken invariant, the config and `seed`/`path`. Re-run with
 - Idle people get default moves.
 - Server restart mid-round.
 - Emergency meeting during its notice period.
-- Duel.
 - 12 players with every role.
 - The heist fails by Heat.
 - The heist fails by target.

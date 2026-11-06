@@ -445,12 +445,12 @@ function afterVote(
 }
 
 /**
- * design §11.4, §11.5: the act's checkpoint, after its meeting (or, in Duel
- * mode, its call-outs, §16.1), then the next act or the end of the game.
+ * design §11.4, §11.5: the act's checkpoint, after its meeting, then the
+ * next act or the end of the game.
  * `prior` (this command's events so far) is folded into `state` first, so the
  * Haul and Heat are as they stand now.
  */
-export function checkpoint(state: GameState, prior: readonly GameEvent[], act: ActNumber, draw: Draw): GameEvent[] {
+function checkpoint(state: GameState, prior: readonly GameEvent[], act: ActNumber, draw: Draw): GameEvent[] {
   const now = prior.reduce(applyEvent, state);
   const job = jobFor(state.config);
   const events: GameEvent[] = [];

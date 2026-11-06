@@ -14,16 +14,7 @@ function heatAfter(crew: number, start: number, rounds: Record<string, number>[]
   return rounds.reduce((h, v) => clampHeat(bank, h + roundHeatDelta(bank, crew, v)), start);
 }
 
-describe("Heat at 2, 3 and 12 players — design §7", () => {
-  it("2 players: each visitor is half the crew", () => {
-    expect(roundHeatDelta(bank, 2, {})).toBe(4);
-    expect(roundHeatDelta(bank, 2, { vault: 1 })).toBe(14);
-    expect(roundHeatDelta(bank, 2, { vault: 2 })).toBe(24);
-    expect(roundHeatDelta(bank, 2, { rooftop: 1 })).toBe(-6);
-    expect(roundHeatDelta(bank, 2, { rooftop: 2 })).toBe(-16);
-    expect(roundHeatDelta(bank, 2, { vault: 1, rooftop: 1 })).toBe(4);
-  });
-
+describe("Heat at 3 and 12 players — design §7", () => {
   it("3 players: thirds round to the nearest whole number", () => {
     expect(roundHeatDelta(bank, 3, { vault: 1 })).toBe(11); // 10.67
     expect(roundHeatDelta(bank, 3, { vault: 2 })).toBe(17); // 17.33
@@ -50,7 +41,7 @@ describe("Heat at 2, 3 and 12 players — design §7", () => {
   });
 
   it("result is always a whole number at every crew size and mix", () => {
-    for (let n = 2; n <= 12; n++) {
+    for (let n = 3; n <= 12; n++) {
       for (let v = 0; v <= n; v++) {
         for (let r = 0; r <= n - v; r++) {
           expect(Number.isInteger(roundHeatDelta(bank, n, { vault: v, rooftop: r }))).toBe(true);
@@ -81,7 +72,7 @@ describe("Heat floor and ceiling — design §7", () => {
 
 describe("room tiers at the boundaries — design §6.2, §16", () => {
   it("4 → core only; 5 → + Deposit boxes, Server room; 8 → same; 9 and 12 → + Teller line, Manager's office", () => {
-    expect(roomsInPlay(bank, 2)).toEqual(CORE);
+    expect(roomsInPlay(bank, 3)).toEqual(CORE);
     expect(roomsInPlay(bank, 4)).toEqual(CORE);
     expect(roomsInPlay(bank, 5)).toEqual(MID);
     expect(roomsInPlay(bank, 8)).toEqual(MID);

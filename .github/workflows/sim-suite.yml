@@ -1,5 +1,5 @@
 # The full simulation suite (docs/testing.md "Running the suite"): the design §17.4
-# matrix at 2–12 players, sharded across runners, merged into one report and
+# matrix at 3–12 players, sharded across runners, merged into one report and
 # compared with docs/balance/baseline.json. Long, so manual only.
 name: Sim suite
 

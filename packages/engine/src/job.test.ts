@@ -14,8 +14,8 @@ describe("jobById", () => {
 });
 
 describe("rooms in play — design §6.2, §16", () => {
-  it("5 rooms at 2–4, 7 at 5–8, 9 at 9–12", () => {
-    for (let n = 2; n <= 12; n++) expect(roomsInPlay(bank, n)).toHaveLength(n <= 4 ? 5 : n <= 8 ? 7 : 9);
+  it("5 rooms at 3–4, 7 at 5–8, 9 at 9–12", () => {
+    for (let n = 3; n <= 12; n++) expect(roomsInPlay(bank, n)).toHaveLength(n <= 4 ? 5 : n <= 8 ? 7 : 9);
   });
 
   it("roomDef rejects rooms the job doesn't have", () => {
@@ -95,7 +95,7 @@ describe("round Heat — design §7", () => {
 
 describe("checkpoint targets — design §11.5", () => {
   it("7, 15 and 23 × crew size, cumulative (R5: final 24 → 23)", () => {
-    for (let n = 2; n <= 12; n++) {
+    for (let n = 3; n <= 12; n++) {
       expect([1, 2, 3].map((act) => checkpointTarget(bank, act as 1 | 2 | 3, n))).toEqual([7 * n, 15 * n, 23 * n]);
     }
   });

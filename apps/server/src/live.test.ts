@@ -132,7 +132,7 @@ describe("connecting (GET /games/:id/ws)", () => {
   });
 
   it("refuses a browser from another origin (403); its own host, a listed origin or no Origin is fine", async () => {
-    const { id, humans } = await startGame(2, 0);
+    const { id, humans } = await startGame(2, 1);
     const cookie = `${SESSION_COOKIE}=${humans[0]!.who}`;
     await expect(app.injectWS(`/games/${id}/ws`, { headers: { cookie, host: "localhost:3000", origin: "https://evil.example" } })).rejects.toThrow(/403/);
     const ws = await app.injectWS(`/games/${id}/ws`, { headers: { cookie, host: "localhost:3000", origin: "http://localhost:3000" } });
@@ -144,7 +144,7 @@ describe("connecting (GET /games/:id/ws)", () => {
   });
 
   it("signing out closes that session's sockets (4401), not other people's", async () => {
-    const { id, humans } = await startGame(2, 0);
+    const { id, humans } = await startGame(2, 1);
     const a = await Client.open(id, humans[0]!);
     const b = await Client.open(id, humans[1]!);
     await app.inject({ method: "POST", url: "/auth/logout", cookies: { [SESSION_COOKIE]: humans[0]!.who } });
@@ -293,7 +293,7 @@ describe("connect order (review of #44)", () => {
 
 describe("flooding", () => {
   it(`a socket with more than ${MAX_QUEUED_MESSAGES} messages waiting is closed (1008); others carry on`, async () => {
-    const { id, humans } = await startGame(2, 0);
+    const { id, humans } = await startGame(2, 1);
     const a = await Client.open(id, humans[0]!);
     const b = await Client.open(id, humans[1]!);
     for (let i = 0; i < MAX_QUEUED_MESSAGES * 3; i++) a.ws.send(JSON.stringify({ id: i, cmd: { type: "submitMove", move: { room: "lobby", pocket: i % 2 } } }));
@@ -305,7 +305,7 @@ describe("flooding", () => {
 
 describe("pushing views", () => {
   it("pushes a fresh view to every seat a public change touches, and nothing for a hidden one", async () => {
-    const { id, humans } = await startGame(2, 0);
+    const { id, humans } = await startGame(2, 1);
     const a = await Client.open(id, humans[0]!);
     const b = await Client.open(id, humans[1]!);
     const tab2 = await Client.open(id, humans[1]!); // same seat, second tab

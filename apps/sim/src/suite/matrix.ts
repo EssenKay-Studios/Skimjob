@@ -82,7 +82,6 @@ export function cellSimOptions(o: SuiteOptions, cell: Cell): SimOptions {
     rolePool: [],
     starterMode: false,
     eventsEnabled: cell.events,
-    duel: false,
     deck: "standard",
     deal: SETUPS[cell.setup].deal,
     roleList: SETUPS[cell.setup].roleList,

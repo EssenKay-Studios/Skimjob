@@ -33,12 +33,11 @@ function config(n: number, seed: string, extra: Partial<GameConfig> = {}): GameC
     seed,
     players: Array.from({ length: n }, (_, i) => ({ id: `q${i}`, name: `Q${i}`, isBot: true })),
     job: "bank",
-    rolePool: n === 2 ? [] : (Object.keys(ROLES) as RoleId[]),
+    rolePool: Object.keys(ROLES) as RoleId[],
     deck: "everything",
     eventsEnabled: true,
     voteVisibility: "secret",
     starterMode: false,
-    ...(n === 2 && { duel: true }),
     ...extra,
   };
 }
@@ -346,16 +345,6 @@ describe("QA #55 reveal summary vs the engine's truth — design §13", () => {
     const summary = audit(state, cov);
     expect(cov).toContain("missed");
     expect(summary.rounds.flatMap((r) => r.moves).filter((m) => m.player === "q2").every((m) => m.missed)).toBe(true);
-  }, 60_000);
-
-  it("Duel (2 players): success, raid and missed target, no stolen votes, still true", () => {
-    const cov: Coverage = new Set();
-    for (const seed of ["qa55-2-0", "qa55-2-1", "qa55-2-2", "qa55-2-21"]) {
-      const summary = audit(play(config(2, seed)), cov);
-      expect(summary.seats).toHaveLength(2);
-      expect(summary.rounds.flatMap((r) => r.items).some((i) => i.kind === "voteStolen")).toBe(false);
-    }
-    for (const k of ["success", "failed:heat", "failed:target", "failedNobody", "perkBought"]) expect(cov, k).toContain(k);
   }, 60_000);
 
   it("Quick (Starter, tokens off): no tokens, no shop, no police activity, still true", () => {

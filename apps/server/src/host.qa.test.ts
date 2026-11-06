@@ -458,7 +458,7 @@ describe("kick in the lobby vs in the game (design §15)", () => {
 
 describe("session expiry (M2-13 resilience)", () => {
   it("a socket closes 4401 on its own at expiry, and a message after expiry is never delivered", async () => {
-    const { id, seats } = await startGame(1, NO_POLICE);
+    const { id, seats } = await startGame(2, NO_POLICE);
     const host = await Client.open(id, seats[0]!.who);
     // The guest's session ends one second (of game clock) from now.
     const [row] = await db.query<{ e: number }>("select (extract(epoch from expires_at) * 1000)::float8 as e from sessions order by expires_at desc limit 1");

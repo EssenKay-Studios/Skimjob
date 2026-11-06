@@ -117,13 +117,7 @@ export type PlayerCommand =
   /** Accept (or decline) this round's Double-cross offer; the last answer before the deadline counts. design §10 */
   | { readonly type: "answerDoubleCross"; readonly player: PlayerId; readonly accept: boolean }
   /** Buy one of the shop's perks with tokens; any time. extension.md "Tokens and the perk shop" */
-  | { readonly type: "buyPerk"; readonly player: PlayerId; readonly perk: PerkId }
-  /**
-   * Duel mode: call out the opponent for this act, at most once per act, while
-   * one of its rounds is being planned. Settled when the act's last round
-   * resolves; can't be withdrawn. design §16.1
-   */
-  | { readonly type: "callOut"; readonly player: PlayerId };
+  | { readonly type: "buyPerk"; readonly player: PlayerId; readonly perk: PerkId };
 
 /**
  * Which deadline has passed. The engine has no clock, and several deadlines can

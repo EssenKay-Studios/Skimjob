@@ -225,15 +225,14 @@ describe("Detective: once per act, is a stash at or above the clean threshold? �
   });
 });
 
-describe("dealing limits — v2 §3, design §8.1, §16.1", () => {
-  it("Snitch and Detective from 4 players; the Detective never in Duel; the Auditor anywhere", () => {
+describe("dealing limits — v2 §3, design §8.1", () => {
+  it("Snitch and Detective from 4 players; the Auditor anywhere", () => {
     const at = (n: number, extra: Partial<GameConfig> = {}) => rolePoolFor(config(n, { rolePool: [], deck: "everything", ...extra }));
     for (const r of ["snitch", "detective"]) {
       expect(at(3)).not.toContain(r);
       expect(at(4)).toContain(r);
     }
-    expect(at(2, { duel: true })).not.toContain("detective");
-    expect(at(2, { duel: true })).toContain("auditor");
+    expect(at(3)).toContain("auditor");
     for (const r of ["auditor", "detective"]) expect(POOL_ROLES).toContain(r);
   });
 

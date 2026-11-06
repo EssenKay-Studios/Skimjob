@@ -99,10 +99,12 @@ for (const mode of ["hiddenThenRevealed", "open", "secret"] as const) {
 test("propose a meeting time, a second player backs it, and leave a sealed vote (design §11.1, §11.2)", async ({ page, browser }, info) => {
   test.skip(info.project.name !== "desktop", "one viewport is enough");
   test.setTimeout(60_000);
-  // One-week preset: the crew picks the slot. Two people and no bots (bots lock "the end of the act" at once).
+  // One-week preset: the crew picks the slot. Three people (one stays away) and no bots (bots lock "the end of the act" at once).
+  // A majority of 3 people is 2, so the guest's backing still locks it.
   const guestCtx = await browser.newContext({ viewport: page.viewportSize()! });
   const guest = await guestCtx.newPage();
-  const game = await startGame(page.request, { bots: 0, guests: [guest.request], sessionLength: "1w" });
+  const away = await browser.newContext();
+  const game = await startGame(page.request, { bots: 0, guests: [guest.request, away.request], sessionLength: "1w" });
   await page.goto(`/game/${game.id}`);
   await guest.goto(`/game/${game.id}`);
   const panel = page.getByRole("region", { name: "Crew meetings" });
@@ -131,4 +133,5 @@ test("propose a meeting time, a second player backs it, and leave a sealed vote 
   await page.getByRole("button", { name: /Case file/ }).click();
   await expect(page.getByRole("list", { name: "Case file" })).toContainText("You sealed a vote to skip.");
   await guestCtx.close();
+  await away.close();
 });

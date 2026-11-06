@@ -175,8 +175,6 @@ export interface RoleDef {
   readonly rewards?: readonly TokenReward[];
   /** Dealt only in crews of at least this size (Inside Man: 5). Absent: any size. design §8.1 */
   readonly minPlayers?: number;
-  /** Needs meetings, so never dealt in Duel mode (role deck v2 §3). design §16.1 */
-  readonly needsMeetings?: boolean;
   /** Needs the events deck, so dealt only with events on (Mastermind, role deck v2 §3). design §8.1, §10 */
   readonly needsEvents?: boolean;
 }
@@ -207,7 +205,7 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     scoring: { lootPerPointOverFinalTarget: 5 },
     ...TEAM,
     rewards: token("checkpointMade"),
-    // Owner answers, 1 Nov: a crew of 2–4 can't spare a player who never pockets.
+    // Owner answers, 1 Nov: a crew of 3–4 can't spare a player who never pockets.
     minPlayers: 5,
   },
   getawayDriver: {
@@ -241,7 +239,6 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     ...WILD,
     rewards: token("stolenVoteDecided"),
     minPlayers: 7,
-    needsMeetings: true,
   },
   forger: {
     id: "forger",
@@ -252,7 +249,6 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     ...WILD,
     rewards: token("forgedShakenClean"),
     minPlayers: 7,
-    needsMeetings: true,
   },
   smoothTalker: {
     id: "smoothTalker",
@@ -263,7 +259,6 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     ...TEAM,
     rewards: token("wonDirtyShakedown"),
     minPlayers: 5,
-    needsMeetings: true,
   },
   muscle: {
     id: "muscle",
@@ -274,7 +269,6 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     ...TEAM,
     rewards: token("cancelledClean"),
     minPlayers: 5,
-    needsMeetings: true,
   },
   snitch: {
     id: "snitch",
@@ -285,7 +279,6 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     ...TEAM,
     rewards: token("targetShakenDirty"),
     minPlayers: 4,
-    needsMeetings: true,
   },
   auditor: { id: "auditor", name: "Auditor", power: { kind: "audit", perAct: 1 }, canPocket: true, scoring: PLAIN_SCORING, ...TEAM, rewards: token("auditedShakenDirty") },
   detective: {
@@ -297,7 +290,6 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     ...TEAM,
     rewards: token("checkedShakenDirty"),
     minPlayers: 4,
-    needsMeetings: true,
   },
   priest: {
     id: "priest",
@@ -308,7 +300,6 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     ...TEAM,
     rewards: token("blessedShakenClean"),
     minPlayers: 5,
-    needsMeetings: true,
   },
   bagman: { id: "bagman", name: "Bagman", power: { kind: "bagman", bonus: 1 }, canPocket: true, scoring: PLAIN_SCORING, ...TEAM, rewards: token("allInStreak") },
   cleaner: {

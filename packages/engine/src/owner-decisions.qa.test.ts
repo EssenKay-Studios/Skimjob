@@ -1,7 +1,7 @@
 // QA (PR #21, owner answers 1 Nov; extension.md): the one vote rule at every
 // crew size, Inside Man from 5 (§8.1), uniqueRoles (§8.1, §15), scaled event Heat (§10),
 // Fence safe in the clean check (§11.3), the alibi phase (§5.4) with meetings,
-// shakedown windows, Duel mode and the last round, and repeating cards (§10).
+// shakedown windows and the last round, and repeating cards (§10).
 import { BANK_JOB, EVENTS, STARTER_ROLES, type RoleId } from "@skimjob/content";
 import { describe, expect, it } from "vitest";
 import type { GameConfig, GameEvent, GameState } from "./types";
@@ -123,8 +123,8 @@ describe("QA one vote rule at 8 vs 9 players — extension.md \"One vote rule\",
 describe("QA dealing — design §8.1", () => {
   const SEEDS = Array.from({ length: 150 }, (_, i) => `deal-${i}`);
 
-  it("the Inside Man is never dealt at 2–4 players (any setting); it is dealt at 5", () => {
-    for (const n of [2, 3, 4]) {
+  it("the Inside Man is never dealt at 3–4 players (any setting); it is dealt at 5", () => {
+    for (const n of [3, 4]) {
       for (const seed of SEEDS) {
         for (const extra of [{}, { uniqueRoles: false }, { rolePool: ["insideMan"] }, { rolePool: ["insideMan"], uniqueRoles: false }, { starterMode: true }] as Partial<GameConfig>[]) {
           expect(dealt(config(n, { seed, eventsEnabled: !extra.starterMode, ...extra }))).not.toContain("insideMan");
@@ -254,26 +254,11 @@ describe("QA alibi phase — design §5.4", () => {
     expect(s.phase.kind).toBe("ended");
     expect(refused(s, alibiAt(9))).toMatch(/over/);
   });
-
-  it("Duel: callOut refused during alibis; closing round 3's alibis settles call-outs and the checkpoint at once", () => {
-    const cfg = config(2, { duel: true, rolePool: [] });
-    let s = run(game(cfg), ROUND);
-    expect(refused(s, { type: "callOut", player: "p0", target: "p1" })).toMatch(/planned/);
-    s = run(s, ALIBIS, ROUND, ALIBIS, ROUND);
-    expect(s.phase).toEqual({ kind: "alibis", round: 3 });
-    const r = handleCommand(s, ALIBIS(s));
-    expect(r.ok).toBe(true);
-    if (!r.ok) return;
-    expect(r.events[0]).toMatchObject({ type: "alibisClosed", round: 3 });
-    expect(r.events.some((e) => e.type === "checkpointChecked")).toBe(true);
-    expect(["planning", "ended"]).toContain(r.state.phase.kind);
-    expect(r.state.alibisOpen).toBe(false);
-  });
 });
 
 describe("QA game end closes the alibi window — design §5.4 (PR #21 QA repro)", () => {
-  it("2p, both in the Vault every round until the game ends: no alibi window in state or view", () => {
-    let s = game(config(2));
+  it("3p, all in the Vault every round until the game ends: no alibi window in state or view", () => {
+    let s = game(config(3));
     for (let i = 0; i < 12 && s.phase.kind !== "ended"; i++) {
       if (s.phase.kind === "alibis") s = run(s, ALIBIS);
       if (s.phase.kind === "awaitingMeeting") {
@@ -281,11 +266,11 @@ describe("QA game end closes the alibi window — design §5.4 (PR #21 QA repro)
         s = run(s, { type: "scheduleMeeting", act, slot: "x" }, open(`act-${act}`), close(`act-${act}`));
         if (s.phase.kind === "ended") break;
       }
-      s = run(s, mv("p0", "vault"), mv("p1", "vault"), ROUND);
+      s = run(s, mv("p0", "vault"), mv("p1", "vault"), mv("p2", "vault"), ROUND);
     }
     expect(s.phase.kind).toBe("ended");
     expect(s.alibisOpen).toBe(false);
-    for (const p of ["p0", "p1"]) expect(viewFor(s, p).alibiRound).toBeNull();
+    for (const p of ["p0", "p1", "p2"]) expect(viewFor(s, p).alibiRound).toBeNull();
     expect(replay(s.config, s.log)).toEqual(s);
   });
 });

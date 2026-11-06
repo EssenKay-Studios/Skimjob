@@ -194,7 +194,7 @@ test("the bank board: tap a room to pick it, see who you saw and the alibi claim
 
 test("shows the default move after a missed round (design §5.1)", async ({ page }) => {
   test.setTimeout(60_000);
-  const game = await startGame(page.request, { bots: 1 });
+  const game = await startGame(page.request, { bots: 2 });
   await page.goto(`/game/${game.id}`);
   await expect(page.getByRole("heading", { name: "Round 2 · Pick your room", level: 2 })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole("status").filter({ hasText: "You missed round 1: the default move sent you to the Lobby" })).toBeVisible();

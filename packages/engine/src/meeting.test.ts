@@ -197,7 +197,7 @@ describe("opening and closing the act's meeting — design §11.1, §4.1, §11.4
   });
 
   it("all three deadline kinds are refused when stale, retried or unknown", () => {
-    let s = run(game(2), ROUND, ROUND, ROUND);
+    let s = run(game(3), ROUND, ROUND, ROUND);
     expect(reason(s, ROUND(s))).toMatch(/no round deadline/);
     expect(reason(s, open("act-1"))).toMatch(/not waiting to open/); // nothing scheduled yet
     s = run(s, sched(1));
@@ -214,7 +214,7 @@ describe("opening and closing the act's meeting — design §11.1, §4.1, §11.4
   });
 
   it("after the act's meeting and checkpoint, the next act starts at round 4 (Fence allowance reset)", () => {
-    let s = run(game(2, ["fence"]), mv("p0", "vault", 6, { ability: { kind: "fenceSafe", amount: 5 } }), ROUND, ROUND, ROUND);
+    let s = run(game(3, ["fence"]), mv("p0", "vault", 6, { ability: { kind: "fenceSafe", amount: 5 } }), ROUND, ROUND, ROUND);
     expect(s.players.p0).toMatchObject({ safe: 5, roleState: expect.objectContaining({ usedThisAct: 5 }) });
     s = run(s, sched(1), open("act-1"));
     const before = s;
@@ -264,7 +264,7 @@ describe("emergency meetings — design §11.1, §4.1", () => {
   });
 
   it("called while the act's meeting is awaited, it returns there; the regular can't open while it's open", () => {
-    let s = run(game(2), ROUND, ROUND, ROUND, sched(1), emergency("p0"), open("emergency-p0"));
+    let s = run(game(3), ROUND, ROUND, ROUND, sched(1), emergency("p0"), open("emergency-p0"));
     expect(reason(s, open("act-1"))).toMatch(/emergency-p0 is already open/);
     s = run(s, close("emergency-p0"));
     expect(s.phase).toEqual({ kind: "awaitingMeeting", act: 1 });
@@ -273,7 +273,7 @@ describe("emergency meetings — design §11.1, §4.1", () => {
   });
 
   it("a pending emergency waits out the regular meeting and opens in the next act", () => {
-    let s = run(game(2), ROUND, ROUND, ROUND, sched(1), emergency("p1"), open("act-1"));
+    let s = run(game(3), ROUND, ROUND, ROUND, sched(1), emergency("p1"), open("act-1"));
     expect(reason(s, open("emergency-p1"))).toMatch(/already open/);
     s = run(s, close("act-1"), open("emergency-p1"));
     expect(s.meeting).toMatchObject({ id: "emergency-p1", act: 2 });
@@ -463,17 +463,17 @@ describe("shakedowns — design §11.3, extension.md \"Shakedowns (fixed numbers
   });
 
   it("the line and payout don't scale with the act: Act 2 is still clean below 6 and pays 8", () => {
-    let s = run(game(2), mv("p0", "office", 4)); // p0 stash 4
+    let s = run(game(3), mv("p0", "office", 4)); // p0 stash 4
     s = run(toMeeting(s), CLOSE);
-    s = run(s, emergency("p1"), open("emergency-p1"), vote("p1", "p0"), CLOSE);
+    s = run(s, emergency("p1"), open("emergency-p1"), vote("p1", "p0"), vote("p2", "p0"), CLOSE);
     expect(LAST(s, "shakedownResolved")).toMatchObject({ stashRevealed: 4, clean: true, compensation: 8 });
   });
 
   it("compensation never takes the Haul below zero (provisional)", () => {
-    let s = game(2);
-    for (let i = 0; i < 3; i++) s = run(s, mv("p0", "rooftop"), mv("p1", "rooftop"), ROUND);
+    let s = game(3);
+    for (let i = 0; i < 3; i++) s = run(s, mv("p0", "rooftop"), mv("p1", "rooftop"), mv("p2", "rooftop"), ROUND);
     expect(s.haul).toBe(0);
-    s = run(s, sched(1), open("act-1"), vote("p0", "p1"), CLOSE);
+    s = run(s, sched(1), open("act-1"), vote("p0", "p1"), vote("p2", "p1"), CLOSE);
     expect(LAST(s, "shakedownResolved")).toMatchObject({ clean: true, compensation: 0 });
     expect(s.haul).toBe(0);
   });
@@ -497,9 +497,9 @@ describe("order at a checkpoint — design §11.4, §11.5", () => {
   });
 
   it("the missed-checkpoint penalty is clamped once and a raid at 100 ends the game", () => {
-    let s = { ...game(2), heat: 80 };
-    for (let i = 0; i < 3; i++) s = run(s, mv("p0", "lobby", 2), ROUND); // Haul 6 of 12, Heat 92
-    expect([s.haul, s.heat]).toEqual([6, 92]);
+    let s = { ...game(3), heat: 80 };
+    for (let i = 0; i < 3; i++) s = run(s, mv("p0", "lobby", 2), ROUND); // p1 and p2 default to the Lobby: Haul 12 of 18, Heat 92
+    expect([s.haul, s.heat]).toEqual([12, 92]);
     const before = run(s, sched(1), open("act-1"));
     const after = run(before, CLOSE);
     expect(since(before, after).map((e) => e.type)).toEqual(["meetingClosed", "checkpointChecked", "copsRaided", "gameEnded"]);
@@ -510,11 +510,11 @@ describe("order at a checkpoint — design §11.4, §11.5", () => {
 });
 
 describe("the final meeting comes before the final check — design §3, §4, §11.4", () => {
-  /** p0 in the Vault, p1 on the Rooftop: Haul +6 and Heat +4 a round. Act 3: p0 pockets everything if `greedy`. */
+  /** p0 in the Vault, p1 on the Rooftop, p2 in the Lobby: Haul +8 and Heat +4 a round. Act 3: p0 pockets everything if `greedy`. */
   function toFinalMeeting(greedy: boolean): GameState {
-    let s = game(2);
+    let s = game(3);
     for (let round = 1; round <= 9; round++) {
-      s = run(s, mv("p0", "vault", greedy && round > 6 ? 6 : 0), mv("p1", "rooftop"), ROUND);
+      s = run(s, mv("p0", "vault", greedy && round > 6 ? 6 : 0), mv("p1", "rooftop"), mv("p2", "lobby"), ROUND);
       if (round % 3 === 0) s = run(s, sched(round / 3), OPEN_ACT);
       if (round % 3 === 0 && round < 9) s = run(s, CLOSE);
     }
@@ -526,7 +526,7 @@ describe("the final meeting comes before the final check — design §3, §4, §
     const s = toFinalMeeting(false);
     const after = run(s, CLOSE);
     expect(since(s, after).map((e) => e.type)).toEqual(["meetingClosed", "checkpointChecked", "gameEnded"]);
-    expect(LAST(after, "checkpointChecked")).toMatchObject({ act: 3, target: 44, haul: 54, met: true, heatPenalty: 0 });
+    expect(LAST(after, "checkpointChecked")).toMatchObject({ act: 3, target: 66, haul: 72, met: true, heatPenalty: 0 });
     // Nobody pocketed; p0 handed in more (tie-break 2, end.test.ts).
     expect(after.phase).toMatchObject({ kind: "ended", outcome: { result: "success", winners: ["p0"] } });
   });
@@ -534,15 +534,15 @@ describe("the final meeting comes before the final check — design §3, §4, §
   it("missing the final target fails the heist, with no Heat penalty", () => {
     const s = toFinalMeeting(true);
     const after = run(s, CLOSE);
-    expect(LAST(after, "checkpointChecked")).toMatchObject({ act: 3, haul: 36, met: false, heatPenalty: 0 });
+    expect(LAST(after, "checkpointChecked")).toMatchObject({ act: 3, haul: 54, met: false, heatPenalty: 0 });
     expect(after.heat).toBe(s.heat);
     expect(after.phase).toMatchObject({ kind: "ended", outcome: { result: "failed", reason: "target" } });
   });
 
   it("the final meeting can rescue the heist by shaking down the greediest player", () => {
-    const s = run(toFinalMeeting(true), vote("p1", "p0"), CLOSE);
+    const s = run(toFinalMeeting(true), vote("p1", "p0"), vote("p2", "p0"), CLOSE);
     expect(LAST(s, "shakedownResolved")).toMatchObject({ target: "p0", taken: 18, clean: false });
-    expect(LAST(s, "checkpointChecked")).toMatchObject({ act: 3, haul: 54, met: true });
+    expect(LAST(s, "checkpointChecked")).toMatchObject({ act: 3, haul: 72, met: true });
     expect(s.phase).toMatchObject({ kind: "ended", outcome: { result: "success" } });
   });
 });
@@ -571,9 +571,9 @@ describe("determinism and the event log — design §17.2", () => {
   });
 
   it("a player called toString can be voted for and shaken down (__proto__ is refused at setup)", () => {
-    const cfg: GameConfig = { ...config(2), players: [{ id: "toString", name: "T", isBot: false }, { id: "p1", name: "P1", isBot: true }] };
+    const cfg: GameConfig = { ...config(3), players: [{ id: "toString", name: "T", isBot: false }, { id: "p1", name: "P1", isBot: true }, { id: "p2", name: "P2", isBot: true }] };
     const log = setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: "rookie" } : e));
-    let s = run(replay(cfg, log), mv("toString", "vault", 6), ROUND, ROUND, ROUND, sched(1), open("act-1"), vote("p1", "toString"), seal("toString", "p1"));
+    let s = run(replay(cfg, log), mv("toString", "vault", 6), ROUND, ROUND, ROUND, sched(1), open("act-1"), vote("p1", "toString"), vote("p2", "toString"), seal("toString", "p1"));
     s = run(s, CLOSE);
     const closed = LAST(s, "meetingClosed")!;
     expect(Object.hasOwn(closed.tally.targets, "toString")).toBe(true);

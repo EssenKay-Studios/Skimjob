@@ -3,7 +3,7 @@
 // exhaustive, so a new event, ability, perk or meeting-result kind fails
 // typecheck until it has a line here. docs/m2-plan.md M2-6; design §13
 import { EVENTS, JOBS, PERKS, ROLES, type PerkId } from "@skimjob/content";
-import { meetingAfter, meetingName, targetName } from "./wording";
+import { meetingName, targetName } from "./wording";
 import type { GameEvent, MeetingResult, PlayerId, ResolvedAbility, ResolvedPerk, RoomId, VoteChoice } from "@skimjob/engine";
 
 export interface DescribeContext {
@@ -55,7 +55,7 @@ function line(e: GameEvent, ctx: DescribeContext): string {
 
   switch (e.type) {
     case "gameCreated":
-      return `${e.players.length} players set out to rob ${JOBS[e.job]?.name ?? e.job}${e.duel ? " (Duel)" : ""}.`;
+      return `${e.players.length} players set out to rob ${JOBS[e.job]?.name ?? e.job}.`;
     case "rngSeeded":
       return `The deck was shuffled with seed ${e.seed}.`;
     case "roomsSet":
@@ -183,12 +183,6 @@ function line(e: GameEvent, ctx: DescribeContext): string {
       return `${verb(e.player, "rigged", "rigged")} round ${e.round}'s card: ${cardName(e.card)}.`;
     case "alibiVerified":
       return `Verified: ${who(e.player)} really ${you(e.player) ? "were" : "was"} in the ${roomName(e.room)} in round ${e.round}.`;
-    case "callOutMade":
-      return `${verb(e.player, "called", "called")} out the other player before ${meetingName(e.act)}.`;
-    case "callOutResolved":
-      return e.caught
-        ? `Call-out, rounds ${meetingAfter(e.act - 1) + 1}–${meetingAfter(e.act)}: ${who(e.caller)} caught ${who(e.target)} skimming; ${e.amount} moves to ${who(e.caller)}.`
-        : `Call-out, rounds ${meetingAfter(e.act - 1) + 1}–${meetingAfter(e.act)}: ${who(e.caller)} got it wrong and ${you(e.caller) ? "pay" : "pays"} ${who(e.target)} ${e.amount}.`;
     case "gameEnded": {
       const o = e.outcome;
       const winners = o.winners.length === 0 ? "nobody wins" : `${names(o.winners)} ${o.winners.length === 1 && !you(o.winners[0]!) ? "wins" : "win"}`;

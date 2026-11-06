@@ -168,7 +168,7 @@ function applyChange(state: GameState, event: GameEvent): GameState {
       const rigs = state.rigs.filter((r) => r.round > event.round);
       const next: GameState = { ...state, phase: { kind: "planning", round: event.round }, round: event.round, moves: {}, card: null, rigs };
       // "Once between meetings" powers start again with each stretch: the next act's first round starts right
-      // after the regular meeting (or Duel act end) closes with its target check; emergency meetings never
+      // after the regular meeting closes with its target check; emergency meetings never
       // reach here. extension.md gap-fills "Between meetings"
       return actOfRound(event.round) !== actOfRound(state.round) ? mapPlayers(next, (p) => withRoleState(p, { usedThisAct: 0 })) : next;
     }
@@ -391,15 +391,6 @@ function applyChange(state: GameState, event: GameEvent): GameState {
     }
     case "alibiVerified":
       return { ...state, alibisVerified: [...state.alibisVerified, event.player] };
-    // ------------------------------------------------ Duel mode. design §16.1
-    case "callOutMade":
-      // Whether a player has called this act is read from the log (duel.ts); nothing else changes.
-      return state;
-    case "callOutResolved": {
-      const [from, to] = event.caught ? [event.target, event.caller] : [event.caller, event.target];
-      const paid = updatePlayer(state, from, (p) => ({ stash: p.stash - event.amount }));
-      return updatePlayer(paid, to, (p) => ({ stash: p.stash + event.amount }));
-    }
     default: {
       const unknown: never = event;
       throw new Error(`applyEvent: unknown event ${JSON.stringify(unknown)}`);

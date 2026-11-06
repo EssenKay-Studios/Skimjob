@@ -61,11 +61,6 @@ export interface GameConfig {
    */
   readonly starterMode: boolean;
   /**
-   * Duel mode: exactly 2 players, no meetings or votes; once per act each may
-   * call out the other instead. Absent means false. design §16.1
-   */
-  readonly duel?: boolean;
-  /**
    * Each deck role is dealt at most once, Rookies filling the rest (true, the
    * default when absent); false draws with replacement, so roles may repeat
    * (never more than one Mole or Embezzler). design §8.1, §15
@@ -119,7 +114,6 @@ export interface ContentOverrides {
   readonly heat?: { readonly max?: number; readonly perRound?: number; readonly missedCheckpoint?: number };
   readonly checkpoints?: { readonly perPlayer?: readonly [number, number, number] };
   readonly shakedown?: { readonly cleanBelow?: number; readonly payout?: number };
-  readonly duel?: { readonly wrongCallOut?: number };
   /** Background police activity (extension.md "Police activity"). */
   readonly police?: { readonly chancePercent?: number; readonly heat?: number };
   /** Shop costs (extension.md "Tokens and the perk shop"). */

@@ -15,11 +15,10 @@ function config(n: number, seed: string, extra: Partial<GameConfig> = {}): GameC
     seed,
     players: Array.from({ length: n }, (_, i) => ({ id: `q${i}`, name: `Q${i}`, isBot: true })),
     job: "bank",
-    rolePool: n === 2 ? [] : ALL_ROLES,
+    rolePool: ALL_ROLES,
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     starterMode: false,
-    ...(n === 2 && { duel: true }),
     ...extra,
   };
 }
@@ -31,7 +30,7 @@ const SLOW = 60_000;
 const play = (c: GameConfig, botSeed = c.seed) => runBotGame(c, createBots(c.players, (_, i) => PERSONALITIES[IDS[i % IDS.length] as PersonalityId], botSeed));
 
 const CASES: { n: number; extra: Partial<GameConfig> }[] = [];
-for (const n of [2, 3, 5, 8, 12])
+for (const n of [3, 5, 8, 12])
   for (const events of [false, true])
     for (const roleList of ["exact", "possible", "hidden"] as RoleListSetting[]) CASES.push({ n, extra: { eventsEnabled: events, roleList } });
 CASES.push({ n: 5, extra: { starterMode: true, rolePool: [] } }, { n: 12, extra: { starterMode: true, rolePool: [] } });
@@ -93,8 +92,8 @@ describe("QA: full bot games under the Extension rules", () => {
         const police = state.log.filter((e) => e.type === "policeActivity" || e.type === "policeScheduled");
         const start = createGame(c);
         if (start.police === null) expect(police).toEqual([]);
-        // Starter/Quick and the Duel default (Exact list) never run police.
-        if (c.starterMode || (n === 2 && extra.roleList === "exact")) expect(start.police).toBeNull();
+        // Starter/Quick never runs police.
+        if (c.starterMode) expect(start.police).toBeNull();
         // Under Exact, police run iff a Mole was dealt.
         if (extra.roleList === "exact") expect(start.police !== null).toBe(Object.values(start.players).some((p) => p.role === "mole"));
       }

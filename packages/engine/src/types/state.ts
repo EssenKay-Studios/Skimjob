@@ -33,8 +33,8 @@ export type Phase =
   /**
    * `round` has resolved; players post their alibis for it until the alibi
    * deadline (`advance { kind: "alibis", round }`). Then the next round's
-   * planning starts, or after an act's last round its meeting is awaited
-   * (in Duel mode, the act's call-outs and checkpoint follow). design §5.4
+   * planning starts, or after an act's last round its meeting is awaited.
+   * design §5.4
    */
   | { readonly kind: "alibis"; readonly round: number }
   /** The act's last round has resolved; waiting for its regular meeting to open. */
@@ -83,7 +83,7 @@ export interface RoleState {
   /**
    * Uses this stretch (extension.md "between meetings"; acts internally):
    * reset as the next stretch's first round starts, which is right after a
-   * regular meeting (or a Duel act end) closes with its target check;
+   * regular meeting closes with its target check;
    * emergency meetings never reset it. Loot moved into the safe (Fence),
    * camera loops (Hacker), role guesses (Blackmailer), tip-offs (Mole),
    * audits (Auditor), stash checks (Detective), blessings (Priest).

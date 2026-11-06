@@ -232,10 +232,10 @@ describe("12 players — design §3, §6.2, §8", () => {
   });
 });
 
-describe("2 players: a raid exactly at the checkpoint penalty — design §3, §7, §11.5", () => {
-  // Both in the Lobby (+4 Heat a round); p0 pockets 1 in round 1, so the Haul is 11 of 12.
+describe("3 players: a raid exactly at the checkpoint penalty — design §3, §7, §11.5", () => {
+  // All in the Lobby (+4 Heat a round); p0 pockets 1 in round 1, so the Haul is 17 of 18.
   function act1(heat: number): GameState {
-    let s = { ...game(2, ["fence", "rookie"]), heat };
+    let s = { ...game(3, ["fence", "rookie", "rookie"]), heat };
     s = run(s, mv("p0", "lobby", 1, SAFE1), ROUND, ROUND, ROUND);
     return run(s, sched(1), OPEN, CLOSE);
   }
@@ -248,6 +248,7 @@ describe("2 players: a raid exactly at the checkpoint penalty — design §3, §
     expect(o.ranking).toEqual([
       { player: "p0", role: "fence", score: 1, stash: 1, safe: 1, timesShakenDown: 0, totalHandedIn: 5 },
       { player: "p1", role: "rookie", score: 0, stash: 0, safe: 0, timesShakenDown: 0, totalHandedIn: 6 },
+      { player: "p2", role: "rookie", score: 0, stash: 0, safe: 0, timesShakenDown: 0, totalHandedIn: 6 },
     ]);
   });
 
@@ -290,9 +291,9 @@ describe("tie-breaks at every level — design §3", () => {
     expect(o.ranking.slice(0, 4).map((e) => e.player)).toEqual(["p3", "p7", "p11", "p0"]);
   });
 
-  it("2 players fully tied: both win a success, neither wins a failure", () => {
-    const s = withPlayers(game(2), 0, { p0: { stash: 3, totalHandedIn: 2 }, p1: { stash: 3, totalHandedIn: 2 } });
-    expect(outcomeFor(s, null).winners).toEqual(["p0", "p1"]);
+  it("3 players fully tied: all win a success, none wins a failure", () => {
+    const s = withPlayers(game(3), 0, { p0: { stash: 3, totalHandedIn: 2 }, p1: { stash: 3, totalHandedIn: 2 }, p2: { stash: 3, totalHandedIn: 2 } });
+    expect(outcomeFor(s, null).winners).toEqual(["p0", "p1", "p2"]);
     expect(outcomeFor(s, "heat").winners).toEqual([]);
     expect(outcomeFor(s, "target").winners).toEqual([]);
   });

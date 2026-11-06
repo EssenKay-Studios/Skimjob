@@ -13,8 +13,6 @@ import { actOfRound, isLastRoundOfAct } from "./acts";
 import { gameEnded } from "./end";
 import { applyEvent } from "./reduce";
 import type { Draw } from "./handle";
-import { isDuel } from "./setup";
-import { endOfDuelAct } from "./duel";
 import { cardEffects, cardHeat, closedRoom, isAudit, isBlackout, roundJob, startRound } from "./deck";
 import { grantRewards, heatTokens, roundRewards, stopRaid } from "./crew";
 
@@ -366,12 +364,10 @@ function embezzledFirst(now: GameState, player: PlayerId, round: number): boolea
 /**
  * design §5.4: the alibi deadline for `round` has passed. The next round
  * starts (flipping its card); after an act's last round the game awaits the
- * act's meeting (the fold of `alibisClosed`), or in Duel mode the act's
- * call-outs and checkpoint follow at once (design §16.1).
+ * act's meeting (the fold of `alibisClosed`).
  */
 export function closeAlibis(state: GameState, round: number, draw: Draw): GameEvent[] {
   const events: GameEvent[] = [{ type: "alibisClosed", visibility: PUBLIC, round }];
   if (!isLastRoundOfAct(round)) return [...events, ...startRound(state, round + 1, draw)];
-  if (isDuel(state.config)) return [...events, ...endOfDuelAct(state, events, actOfRound(round), draw)];
   return events;
 }

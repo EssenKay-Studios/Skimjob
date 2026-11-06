@@ -65,7 +65,7 @@ export interface RevealMove {
 /**
  * A line of the timeline. Most hidden actions come as the event itself
  * (`event`: powers used, perks bought and used, Rigs, foreseen cards, forged
- * sightings, Inside tips, Raid rumours, Snitch targets, call-outs) next to the
+ * sightings, Inside tips, Raid rumours, Snitch targets) next to the
  * public ones that matter (meetings, shakedowns, checkpoints, raids). The rest
  * are worked out, because one event alone can't say them.
  */

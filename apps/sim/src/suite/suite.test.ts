@@ -48,10 +48,10 @@ describe("Wilson 95% intervals", () => {
   });
 });
 
-describe("the matrix — design §17.4 (2–12 players), extension.md Build notes \"Sim\" (setups, gates), §10 (events)", () => {
+describe("the matrix — design §17.4 (3–12 players), extension.md Build notes \"Sim\" (setups, gates), §10 (events)", () => {
   it("has every player count × setup × events on and off; only Balanced at 4–12 is gated", () => {
     const cells = buildMatrix(opts());
-    expect(cells).toHaveLength(11 * 3 * 2);
+    expect(cells).toHaveLength(10 * 3 * 2);
     expect(cells.filter((c) => c.players === 6).map((c) => `${c.setup}/${c.events}`)).toEqual([
       "balanced/true", "balanced/false", "random/true", "random/false", "possible/true", "possible/false",
     ]);
@@ -287,7 +287,7 @@ describe("suite arguments", () => {
     const r = parseSuiteArgs([]);
     if (r.kind !== "run") throw new Error("should parse");
     expect(r.options).toMatchObject({ seed: "suite", setups: ["balanced", "random", "possible"], events: [true, false], ciHalfWidth: 0.02, minGames: 400, maxGames: 6000, batch: 200 });
-    expect(r.options.playerCounts).toEqual([2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+    expect(r.options.playerCounts).toEqual([3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
     expect(r.settings).toMatchObject({ shard: null, out: "sim-output/suite.json", strict: false });
   });
 

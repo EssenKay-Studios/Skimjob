@@ -23,7 +23,7 @@ describe("crewFor — the bot mix by weight", () => {
   it("is deterministic per seed and always fills the crew", () => {
     const m = mix(["honest", 1], ["opportunist", 1], ["greedy", 1], ["cautious", 1]);
     expect(crewFor(m, 6, "a")).toEqual(crewFor(m, 6, "a"));
-    for (let n = 2; n <= 12; n++) expect(crewFor(m, n, `n${n}`)).toHaveLength(n);
+    for (let n = 3; n <= 12; n++) expect(crewFor(m, n, `n${n}`)).toHaveLength(n);
   });
 
   it("over many games, leftover seats are shared fairly (no list-order bias)", () => {

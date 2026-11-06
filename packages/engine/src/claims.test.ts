@@ -92,9 +92,7 @@ describe("role claims — design §8, §12.1", () => {
     for (const viewer of ["p1", "p2", "p3"]) expect(viewFor(bluff, viewer)).toEqual(viewFor(truth, viewer));
   });
 
-  it("is refused in Duel mode (no meetings to claim at) and after the game", () => {
-    const duel = createGame({ ...cfg, players: cfg.players.slice(0, 2), rolePool: [], duel: true });
-    expect(reason(duel, claim("p0", "rookie"))).toMatch(/Duel/);
+  it("is refused after the game", () => {
     const ended: GameState = { ...start, phase: { kind: "ended", outcome: sampleEvents.gameEnded.outcome } };
     expect(reason(ended, claim("p0", "rookie"))).toMatch(/over/);
   });

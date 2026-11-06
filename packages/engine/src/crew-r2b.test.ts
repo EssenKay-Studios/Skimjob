@@ -345,15 +345,15 @@ describe("Mastermind: sees the next event card (events on only); target met → 
   });
 });
 
-describe("dealing limits — v2 §3, design §8.1, §16.1", () => {
-  it("Smooth Talker, Muscle and Priest from 5 players and never in Duel; Bagman, Cleaner, Fixer anywhere; starter set", () => {
+describe("dealing limits — v2 §3, design §8.1", () => {
+  it("Smooth Talker, Muscle and Priest from 5 players; Bagman, Cleaner, Fixer anywhere; starter set", () => {
     const at = (n: number, extra: Partial<GameConfig> = {}) => rolePoolFor(config(n, { rolePool: [], deck: "everything", ...extra }));
     for (const r of ["smoothTalker", "muscle", "priest"]) {
       expect(at(4)).not.toContain(r);
       expect(at(5)).toContain(r);
     }
-    for (const r of ["bagman", "cleaner", "fixer"]) expect(at(2, { duel: true })).toContain(r);
-    expect(at(2, { duel: true, eventsEnabled: true })).toContain("mastermind");
+    for (const r of ["bagman", "cleaner", "fixer"]) expect(at(3)).toContain(r);
+    expect(at(3, { eventsEnabled: true })).toContain("mastermind");
     expect(STARTER_ROLES).toEqual(["rookie", "insideMan", "lookout", "bagman", "cleaner"]);
     expect(Object.keys(ROLES)).not.toContain("driver");
   });

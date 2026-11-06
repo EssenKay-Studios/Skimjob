@@ -124,7 +124,7 @@ describe("recordGame — a scripted game", () => {
 
 describe("recordGame — bot games agree with the engine's ranking", () => {
   it("the ranking at the final checkpoint is the engine's final ranking", () => {
-    const o = options(["-p", "2-12"]);
+    const o = options(["-p", "3-12"]);
     for (const n of [3, 6, 12]) {
       for (let i = 0; i < 3; i++) {
         const { state } = runBotGameFor(o, n, i);
@@ -138,8 +138,8 @@ describe("recordGame — bot games agree with the engine's ranking", () => {
   });
 
   it("stashes, winners and win credit match gameEnded", () => {
-    const o = options(["-p", "2-12"]);
-    for (const n of [2, 5, 9, 12]) {
+    const o = options(["-p", "3-12"]);
+    for (const n of [3, 5, 9, 12]) {
       for (let i = 0; i < 3; i++) {
         const rec = runOne(o, n, i);
         const { state } = runBotGameFor(o, n, i);

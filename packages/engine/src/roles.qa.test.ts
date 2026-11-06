@@ -418,8 +418,10 @@ describe("QA Smooth talker: majority counts weight, quorum counts voters, in eve
     expect(result(4, [], [["p0", "p3"], ["p1", null]], mode)?.result).toEqual({ kind: "noMajority" });
     // One voter in a crew of 4 is short of quorum, double weight or not.
     expect(result(4, ST, [["p0", "p3"]], mode)?.result).toEqual({ kind: "noQuorum" });
-    // 2 players: the Smooth talker alone is quorum.
-    expect(result(2, ST, [["p0", "p1"]], mode)?.result).toEqual({ kind: "shakedown", target: "p1" });
+    // 3 players: the Smooth talker alone is short of quorum (voters count, not weight); with one skip
+    // beside it, quorum is met and its weight 2 of 3 is a majority.
+    expect(result(3, ST, [["p0", "p1"]], mode)?.result).toEqual({ kind: "noQuorum" });
+    expect(result(3, ST, [["p0", "p2"], ["p1", null]], mode)?.result).toEqual({ kind: "shakedown", target: "p2" });
     // A weighted tie: p4 2 vs p3 2 of 4 → no majority.
     expect(result(5, ST, [["p0", "p4"], ["p1", "p3"], ["p2", "p3"]], mode)?.result).toEqual({ kind: "noMajority" });
     // The Smooth talker's skip blocks a plain-count majority: p4 2 vs skip 2 of 4.
@@ -592,16 +594,10 @@ describe("QA Snitch: payout edges — design §8, §11.3", () => {
     expect([final(false), final(true)]).toEqual([1, 0]);
   });
 
-  it("not paid when the Snitch is the one shaken down; at 2 players the target is the other player", () => {
+  it("not paid when the Snitch is the one shaken down", () => {
     let s = run(game(3, ["snitch"], NO_WINDOW, { p0: "p1" }), mv("p0", "vault", 6), ROUND);
     s = closeAll(run(emergency(s, "p2"), vote("p1", "p0"), vote("p2", "p0")));
     expect(paid(s)).toEqual([]);
-    for (let i = 0; i < 10; i++) {
-      const events = setupEvents(config(2, { seed: `two-${i}`, rolePool: ["snitch", "rookie"] }));
-      const snitch = ofType(events, "roleDealt").find((e) => e.role === "snitch")?.player;
-      const t = ofType(events, "snitchTargetAssigned");
-      expect(t.map((e) => [e.player, e.target])).toEqual(snitch ? [[snitch, snitch === "p0" ? "p1" : "p0"]] : []);
-    }
   });
 });
 

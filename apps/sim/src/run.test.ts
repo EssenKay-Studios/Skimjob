@@ -14,9 +14,9 @@ const options = (argv: string[]): SimOptions => {
 describe("runBatch", () => {
   it("runs N games at each player count, in order", () => {
     const seen: number[] = [];
-    const records = runBatch(options(["-n", "3", "-p", "2,7"]), (n) => seen.push(n));
-    expect(records.map((r) => r.players)).toEqual([2, 2, 2, 7, 7, 7]);
-    expect(seen).toEqual([2, 7]);
+    const records = runBatch(options(["-n", "3", "-p", "3,7"]), (n) => seen.push(n));
+    expect(records.map((r) => r.players)).toEqual([3, 3, 3, 7, 7, 7]);
+    expect(seen).toEqual([3, 7]);
     expect(records.every((r) => r.rejections === 0)).toBe(true);
   });
 

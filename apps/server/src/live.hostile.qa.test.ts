@@ -128,7 +128,6 @@ const commandFields = (room: string, proposalId: string, other: string): readonl
   [{ type: "answerDoubleCross", accept: true }, [[["accept"], ALL.filter((v) => v !== "true")]]],
   // No fields but the seat: a hostile `player` is overwritten, so only `type` is left to attack.
   [{ type: "callEmergency" }, []],
-  [{ type: "callOut" }, []],
 ];
 const BAD_TYPES = ALL.map((t) => `{"cmd":{"type":${t}}}`).concat(['{"cmd":{"__proto__":{"type":"submitMove"},"move":{"room":"lobby","pocket":0}}}']);
 

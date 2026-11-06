@@ -4,7 +4,7 @@
 import type { RoleId } from "./index";
 import { ROLES } from "./roles";
 
-export const MIN_PLAYERS = 2;
+export const MIN_PLAYERS = 3;
 export const MAX_PLAYERS = 12;
 
 /**
@@ -71,7 +71,6 @@ export interface BalancedMix {
  * 4p and 8p gained a seat over the cap); the host can't change it. extension.md Build notes "Tags, decks and dealing"
  */
 export const BALANCED_MIX: Readonly<Record<number, BalancedMix>> = {
-  2: { loneWolves: 0, wildcards: 0 },
   3: { loneWolves: 0, wildcards: 0 },
   4: { loneWolves: 1, wildcards: 1 },
   5: { loneWolves: 1, wildcards: 1 },

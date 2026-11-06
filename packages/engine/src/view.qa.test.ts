@@ -348,7 +348,7 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
 }
 
 const KINDS: readonly Kind[] = ["role", "split", "swap", "fence", "watch", "miss", "churn", "voteChurn", "ballotSwap", "seal"];
-const COUNTS = [2, 3, 4, 6, 9, 12];
+const COUNTS = [3, 4, 6, 9, 12];
 /** Seeds per player count; raise locally (QA_SEEDS=20) for a wider sweep. */
 const SEEDS = Number(process.env.QA_SEEDS ?? 1);
 

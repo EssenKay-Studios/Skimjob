@@ -100,9 +100,6 @@ function scenarioStates(): GameState[] {
   // A Double-cross offer to p0 and p1 this round (design §10), forged onto planning.
   const planning = out[2] as GameState;
   keep({ ...planning, card: { round: planning.round, id: "doubleCross", room: null, offer: { players: ["p0", "p1"], accepted: [] } } });
-  // Duel mode (design §16.1): call-outs.
-  const duel = config({ players: [0, 1].map((i) => ({ id: `p${i}`, name: `P${i}`, isBot: false })), rolePool: [], voteVisibility: "hiddenThenRevealed", duel: true });
-  keep(game(duel, ["rookie", "rookie"]));
   return out;
 }
 
@@ -165,7 +162,6 @@ function baseCommands(s: GameState): Record<string, unknown>[] {
       out.push({ type, player, vote: { kind: "skip" } });
     }
     out.push({ type: "answerDoubleCross", player, accept: true });
-    out.push({ type: "callOut", player });
   }
   const meetingIds = [s.scheduledMeeting?.meetingId, s.pendingEmergency?.meetingId, s.meeting?.id, s.pendingShakedown?.meetingId];
   out.push({ type: "advance", deadline: { kind: "round", round: s.round } });

@@ -32,8 +32,8 @@ const CORE = ["vault", "office", "lobby", "security", "rooftop"];
 afterEach(() => vi.restoreAllMocks());
 
 describe("rooms by player count — design §6.2, §16", () => {
-  it("2–4 players: core rooms only (5)", () => {
-    for (const n of [2, 3, 4]) expect(roomsFor("bank", n)).toEqual(CORE);
+  it("3–4 players: core rooms only (5)", () => {
+    for (const n of [3, 4]) expect(roomsFor("bank", n)).toEqual(CORE);
   });
 
   it("5–8 players: adds Deposit boxes and Server room (7)", () => {
@@ -53,7 +53,7 @@ describe("rooms by player count — design §6.2, §16", () => {
 
 describe("dealing roles — design §8.1", () => {
   it("every seat gets exactly one role", () => {
-    for (let n = 2; n <= 12; n++) {
+    for (let n = 3; n <= 12; n++) {
       const state = createGame(config(n));
       expect(Object.keys(state.players).sort()).toEqual(state.playerOrder.slice().sort());
       expect(state.log.filter((e) => e.type === "roleDealt")).toHaveLength(n);
@@ -61,7 +61,7 @@ describe("dealing roles — design §8.1", () => {
   });
 
   it("starter mode: only Rookie, Inside Man, Lookout, Bagman and Cleaner (role deck v2 §3); no Mole", () => {
-    for (let n = 2; n <= 12; n++) {
+    for (let n = 3; n <= 12; n++) {
       for (const seed of ["a", "b", "c"]) {
         const roles = rolesOf(config(n, { seed, starterMode: true, rolePool: ["fence"] }));
         for (const role of roles) expect(STARTER_ROLES).toContain(role);
@@ -75,7 +75,7 @@ describe("dealing roles — design §8.1", () => {
   });
 
   it("the Inside Man is dealt only from 5 players (design §8.1, owner answers 1 Nov)", () => {
-    for (const n of [2, 3, 4]) {
+    for (const n of [3, 4]) {
       for (let s = 0; s < 30; s++) expect(rolesOf(config(n, { seed: `ins-${n}-${s}`, rolePool: ["insideMan", "fence"] }))).not.toContain("insideMan");
     }
     expect(rolesOf(config(5, { rolePool: ["insideMan"] }))).toContain("insideMan");
@@ -89,9 +89,14 @@ describe("dealing roles — design §8.1", () => {
 
   it("small crews get a random subset of the pool", () => {
     const seen = new Set<string>();
-    for (let s = 0; s < 50; s++) for (const r of rolesOf(config(2, { seed: `s${s}`, starterMode: true }))) seen.add(r);
-    // Rookies only fill (Balanced deals them last), so a 2-seat starter crew draws from the other three.
-    expect([...seen].sort()).toEqual(["bagman", "cleaner", "lookout"]);
+    for (let s = 0; s < 50; s++) {
+      const roles = rolesOf(config(3, { seed: `s${s}`, rolePool: ["lookout", "bagman", "cleaner", "auditor"] }));
+      expect(new Set(roles).size).toBe(3);
+      for (const r of roles) seen.add(r);
+    }
+    // Rookies only fill (Balanced deals them last), so a 3-seat crew draws three of a four-role pool,
+    // a different three across seeds.
+    expect([...seen].sort()).toEqual(["auditor", "bagman", "cleaner", "lookout"]);
   });
 
   it("uniqueRoles false deals every seat from the deck with replacement, so roles may repeat; never two Moles or Embezzlers (design §8.1, §15; extension.md \"Truly random\")", () => {
@@ -139,7 +144,7 @@ describe("dealing roles — design §8.1", () => {
 
   // extension.md "Host settings" (Balanced), Build notes start values.
   it("Balanced deals the fixed Lone wolf / Wildcard mix for the crew size, the rest Team players", () => {
-    for (let n = 2; n <= 12; n++) {
+    for (let n = 3; n <= 12; n++) {
       const mix = BALANCED_MIX[n]!;
       for (let s = 0; s < 15; s++) {
         const roles = rolesOf(config(n, { seed: `bal-${n}-${s}`, deck: "everything", eventsEnabled: true }));
@@ -326,7 +331,7 @@ describe("determinism and replay — design §17.2", () => {
   });
 
   it("rngSeeded sets the RNG from the seed; rngAdvanced replaces it", () => {
-    const cfg = config(2);
+    const cfg = config(3);
     const seeded = applyEvent(initialState(cfg), { type: "rngSeeded", visibility: { kind: "reveal" }, seed: "x" });
     expect(seeded.rng).toEqual(seedRng("x"));
     const advanced = applyEvent(seeded, { type: "rngAdvanced", visibility: { kind: "reveal" }, words: [9, 8, 7, 6] });

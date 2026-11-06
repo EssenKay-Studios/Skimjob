@@ -129,7 +129,7 @@ describe("crew chat (design §12.1)", () => {
   });
 
   it("limits length and rate, and refuses empty or control-character text", async () => {
-    const { id, humans } = await startGame(2);
+    const { id, humans } = await startGame(2, 1);
     const a = await Client.open(id, humans[0]!);
     expect(await a.chat({ text: "x".repeat(CHAT_MAX_CHARS + 1) })).toMatchObject({ rejected: true });
     expect(await a.chat({ text: "   " })).toMatchObject({ rejected: true, reason: "message is empty" });
@@ -156,7 +156,7 @@ describe("rate limiter memory", () => {
   it("forgets senders whose window has passed", async () => {
     const own = fakeClock(Date.UTC(2026, 10, 2));
     const chat = createChat(db, own);
-    const { id, humans } = await startGame(2);
+    const { id, humans } = await startGame(2, 1);
     const state = (await createGameStore(db).load(id))!;
     for (const h of humans) expect(await chat.post(id, state, h.player, { to: null, text: "hi" })).toMatchObject({ ok: true });
     expect(chat.rateTracked()).toBe(2);
@@ -224,8 +224,8 @@ describe("history on (re)connect", () => {
   });
 
   it("a non-member can't read or send: no socket, and another game's chat never shows", async () => {
-    const g1 = await startGame(2);
-    const g2 = await startGame(2);
+    const g1 = await startGame(2, 1);
+    const g2 = await startGame(2, 1);
     const a = await Client.open(g1.id, g1.humans[0]!);
     await a.chat({ text: "game one only" });
     await expect(app.injectWS(`/games/${g1.id}/ws`, { headers: { cookie: `${SESSION_COOKIE}=${g2.humans[1]!.who}` } })).rejects.toThrow(/404/);
@@ -253,7 +253,7 @@ describe("evidence cards (design §12.1)", () => {
   });
 
   it("refuses role cards: your deal, or any entry stating a role or faction (design §8, PM decision on PR #38)", async () => {
-    const { id, humans } = await startGame(2);
+    const { id, humans } = await startGame(2, 1);
     const [a, b] = await Promise.all(humans.map((h) => Client.open(id, h)));
     const deal = a!.view().caseFile.find((e) => e.event.type === "roleDealt")!;
     const reason = "role cards can't be shared: role claims stay unverified";
@@ -271,7 +271,7 @@ describe("evidence cards (design §12.1)", () => {
   });
 
   it("refuses a forged entry, a ledger entry, or anything but your own case-file seq", async () => {
-    const { id, humans } = await startGame(2);
+    const { id, humans } = await startGame(2, 1);
     const [a, b] = await Promise.all(humans.map((h) => Client.open(id, h)));
     const ledgerSeq = a!.view().ledger[0]!.seq;
     const theirs = await movedEntry(b!);
