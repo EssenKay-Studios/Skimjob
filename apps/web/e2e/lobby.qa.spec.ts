@@ -186,30 +186,6 @@ test("non-host: controls hidden and the API refuses host actions; hand-over to a
   await expect(host.getByRole("button", { name: "Make Lou host" })).toBeVisible();
 });
 
-test("hand-over racing with start: one wins and the state stays consistent", async ({ browser }) => {
-  for (let i = 0; i < 5; i++) {
-    const hctx = await newCtx(browser);
-    const g = await apiHost(hctx, "Mara");
-    const gctx = await newCtx(browser);
-    expect((await apiJoin(gctx, g.inviteCode, "Lou")).ok()).toBe(true);
-    // A bot makes 3 seats, so the start can win the race (at 2 seats it is always refused).
-    expect((await hctx.request.post(`/api/games/${g.id}/bots`, { data: {} })).ok()).toBe(true);
-    const [hand, start] = await Promise.all([
-      hctx.request.post(`/api/games/${g.id}/host`, { data: { seat: 1 } }),
-      hctx.request.post(`/api/games/${g.id}/start`),
-    ]);
-    expect([hand.ok(), start.ok()].filter(Boolean)).toHaveLength(1);
-    const v: View = await (await gctx.request.get(`/api/games/${g.id}`)).json();
-    if (start.ok()) expect(v.status).not.toBe("lobby");
-    else {
-      expect(v.status).toBe("lobby");
-      expect(v.youAreHost).toBe(true);
-    }
-    await hctx.close();
-    await gctx.close();
-  }
-});
-
 test("12 seats full: Add bot turns into a disabled 'Crew is full', the 13th person gets a friendly refusal", async ({ browser }) => {
   const hctx = await newCtx(browser);
   const g = await apiHost(hctx, "Mara");

@@ -113,7 +113,7 @@ describe("all-bot games — design §17.3", () => {
     }
     expect(seen.size).toBe(4); // extension.md "Police activity": the Police patrol left the deck
     expect(lockdowns).toBeGreaterThan(0);
-   }, 30_000); // many full games: over the 5 s default on a busy machine
+  }, 30_000); // many full games: over the 5 s default on a busy machine
 
   it("bots never propose a slot, so the server picks every act's meeting — design §11.1 (STATUS bot scheduling)", () => {
     const { state } = play(5, "schedule", ["honest"]);
