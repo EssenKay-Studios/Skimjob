@@ -244,7 +244,7 @@ describe("view-diff with the seven dealt, and determinism — design §13, §17.
     return finishAct(s);
   };
 
-  it("uninvolved players' views and rejections are the same whether or not the blessing went bad", () => {
+  it("uninvolved players' views and rejections are the same whether or not the blessing went bad; same seed + same commands → identical log, and replay rebuilds the state", () => {
     const [a, b] = [play(true), play(false)];
     expect(ofType(a.log, "shakedownResolved")[0]?.clean).toBe(false);
     expect(reason(a, use("p2", { kind: "bless", target: "p5" }))).toMatch(/caught dirty/);
@@ -258,11 +258,8 @@ describe("view-diff with the seven dealt, and determinism — design §13, §17.
       const json = JSON.stringify(viewFor(a, viewer));
       for (const other of a.playerOrder) if (other !== viewer) expect(json).not.toContain(`"private:${other}"`);
     }
-  });
-
-  it("same seed + same commands → identical log, and replay rebuilds the state", () => {
-    const [a, b] = [play(true), play(true)];
-    expect(a.log).toEqual(b.log);
+    // Determinism: the same play again gives the same log, and replay rebuilds the state.
+    expect(play(true).log).toEqual(a.log);
     expect(replay(a.config, a.log)).toEqual(a);
   });
 });

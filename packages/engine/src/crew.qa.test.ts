@@ -234,7 +234,7 @@ describe("QA: view-diff with all six dealt, and determinism — design §13, §1
     return run(s, ROUND);
   };
 
-  it("the uninvolved players' views and rejections are identical whether or not three rewards fired", () => {
+  it("the uninvolved players' views and rejections are identical whether or not three rewards fired; same seed + same commands → identical log, and replay rebuilds the state", () => {
     const [a, b] = [play(true), play(false)];
     expect(ofType(a.log, "shakedownResolved")[0]?.clean).toBe(false);
     expect(ofType(a.log, "tokenEarned").map((e) => e.trigger).sort()).toEqual(["auditedShakenDirty", "checkedShakenDirty", "watchedShakenDirty"]);
@@ -247,11 +247,8 @@ describe("QA: view-diff with all six dealt, and determinism — design §13, §1
       const json = JSON.stringify(viewFor(a, viewer));
       for (const other of a.playerOrder) if (other !== viewer) expect(json).not.toContain(`"private:${other}"`);
     }
-  });
-
-  it("same seed + same commands → identical log, and replay rebuilds the state", () => {
-    const [a, b] = [play(true), play(true)];
-    expect(a.log).toEqual(b.log);
+    // Determinism: the same play again gives the same log, and replay rebuilds the state.
+    expect(play(true).log).toEqual(a.log);
     expect(replay(a.config, a.log)).toEqual(a);
   });
 });

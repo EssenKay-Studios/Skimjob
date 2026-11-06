@@ -1,4 +1,4 @@
-// QA for PR #43 (R5): the sim gives its bots a crewSeed from the hidden game
+// QA for PR #43: the sim gives its bots a crewSeed from the hidden game
 // seed (never from public data), and the sim stays deterministic: same seed →
 // identical event log, and the same records on one thread or two workers.
 // design §17.2, §17.3, §17.4
