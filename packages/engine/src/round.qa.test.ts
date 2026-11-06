@@ -16,8 +16,7 @@ function config(players: number): GameConfig {
     seed: "qa-round",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: [...STARTER_ROLES], // no Muscle, so no shakedown window (task 12)
-    mole: "off",
+    rolePool: [...STARTER_ROLES], // a shakedown window only if the shop holds a Shield
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     contentOverrides: V01_NUMBERS, // scripted against content 0.1.0 numbers (balance pass 1)
@@ -86,7 +85,7 @@ function checkLedger(s: GameState): void {
     for (const e of splits) expect(e.toHaul + e.toStash).toBe(e.loot);
   }
   const loot = ofType(s, "lootSplit").reduce((n, e) => n + e.loot, 0);
-  const kept = Object.values(s.players).reduce((n, p) => n + p.stash + p.safe, 0);
+  const kept = Object.values(s.players).reduce((n, p) => n + p.stash, 0);
   expect(s.haul + kept).toBe(loot);
 }
 
@@ -106,18 +105,17 @@ const ROOKIES: (Move | null)[][] = [
   [m("office", 1), m("vault"), m("lobby")], //                          haul +11, +11 → 70
 ];
 
-/** 3 players: Inside Man, Lookout, Fence. Heat Δ = round(4 + 20·(V − R)/3). */
+/** 3 players: Priest, Lookout, Hacker. Heat Δ = round(4 + 20·(V − R)/3). */
 const L = (room: string) => ({ ability: { kind: "lookout" as const, rooms: [room] } });
-const F = (amount: number) => ({ ability: { kind: "fenceSafe" as const, amount } });
 const THREE: (Move | null)[][] = [
-  [m("vault"), m("office", 1, L("vault")), m("lobby", 2, F(5))], //          haul +9, +11 → 11; safe +2 (stash-capped)
-  [m("vault"), m("vault", 6), m("vault", 6, F(3))], //                       haul +6, +24 → 35; safe +3 (act cap)
+  [m("vault"), m("office", 1, L("vault")), m("lobby", 2)], //          haul +9, +11 → 11
+  [m("vault"), m("vault", 6), m("vault", 6)], //                       haul +6, +24 → 35
   [m("rooftop"), m("rooftop"), m("security", 0, { watch: "rooftop" })], //  haul 0,  −9 → 26
-  [null, m("lobby", 2, L("lobby")), m("office", 4, F(5))], //                haul +2, +4 → 30; safe +5 (new act)
+  [null, m("lobby", 2, L("lobby")), m("office", 4)], //                haul +2, +4 → 30
   [m("office"), m("office", 4), m("office", 4)], //                          haul +4, +4 → 34
   [m("vault"), m("vault"), m("vault")], //                                   haul +18, +24 → 58
   [m("vault"), m("rooftop"), m("rooftop")], //                               haul +6, −3 → 55
-  [m("vault"), m("vault", 6), m("office", 0, F(5))], //                      haul +10, +17 → 72; safe +5
+  [m("vault"), m("vault", 6), m("office", 0)], //                      haul +10, +17 → 72
   [m("office"), m("security", 0, { watch: "vault" }), m("vault", 6)], //     haul +4, +11 → 83
 ];
 
@@ -160,27 +158,6 @@ describe("QA scripted full games — design §5, §6, §7", () => {
     checkLedger(s);
   });
 
-  it("3 players (Inside Man, Lookout, Fence): 9 rounds, safe caps per act", () => {
-    let s = play(game(3, ["insideMan", "lookout", "fence"]), THREE.slice(0, 1));
-    // Round 2: 2 of the Fence's 5 already moved this act, so 5 is refused and 3 is fine.
-    expect(handleThroughAlibis(s, submit("p2", m("vault", 6, F(5)))).ok).toBe(false);
-    expect(handleThroughAlibis(s, submit("p0", m("vault", 1))).ok).toBe(false); // Inside Man can't pocket
-    s = play(s, THREE.slice(1));
-    expect(resolved(s).map((e) => e.type === "roundResolved" && e.haulDelta)).toEqual([9, 6, 0, 2, 4, 18, 6, 10, 4]);
-    expect(resolved(s).map((e) => e.type === "roundResolved" && e.heat)).toEqual([11, 35, 26, 30, 34, 58, 55, 72, 83]);
-    expect([s.haul, s.heat]).toEqual([59, 83]);
-    expect(stashes(s)).toEqual([0, 19, 7]);
-    expect(s.players.p2?.safe).toBe(15);
-    expect(ofType(s, "abilityResolved").filter((e) => e.ability.kind === "fenceSafe").map((e) => e.ability.kind === "fenceSafe" && e.ability.amount)).toEqual([2, 3, 5, 5]);
-    expect(ofType(s, "roomWatched").map((e) => [e.player, e.round, e.source, e.room, e.seen])).toEqual([
-      ["p1", 1, "lookout", "vault", ["p0"]],
-      ["p2", 3, "security", "rooftop", ["p0", "p1"]],
-      ["p1", 4, "lookout", "lobby", ["p0"]],
-      ["p1", 9, "security", "vault", ["p2"]],
-    ]);
-    checkLedger(s);
-  });
-
   it("12 players: 9 rounds over every room, Deposit-box capacity, Heat halves and the 0 floor", () => {
     const s = play(game(12), TWELVE);
     expect(resolved(s).map((e) => e.type === "roundResolved" && e.haulDelta)).toEqual([27, 20, 0, 60, 24, 0, 35, 63, 29]);
@@ -201,19 +178,6 @@ describe("QA scripted full games — design §5, §6, §7", () => {
 });
 
 describe("QA resubmitting a move — design §5.1", () => {
-  it("a new move replaces the old one entirely: Security watch and Fence safe don't linger", () => {
-    let s = game(3, ["rookie", "fence"]);
-    s = ok(s, submit("p0", m("security", 0, { watch: "vault" })));
-    s = ok(s, submit("p1", m("vault", 6, F(5))));
-    s = ok(s, submit("p0", m("vault", 6)));
-    s = ok(s, submit("p1", m("vault", 6)));
-    expect(s.moves).toEqual({ p0: { room: "vault", pocket: 6 }, p1: { room: "vault", pocket: 6 } });
-    s = ok(s, ROUND);
-    expect(ofType(s, "roomWatched")).toEqual([]);
-    expect(ofType(s, "abilityResolved")).toEqual([]);
-    expect(s.players.p1).toMatchObject({ stash: 6, safe: 0 });
-  });
-
   it("a rejected resubmission keeps the earlier move", () => {
     let s = ok(game(3), submit("p0", m("office", 3)));
     expect(handleThroughAlibis(s, submit("p0", m("office", 5))).ok).toBe(false);
@@ -224,7 +188,7 @@ describe("QA resubmitting a move — design §5.1", () => {
 
 describe("QA rejected commands leave state unchanged", () => {
   // Mid-round, with a move already in, on a frozen state: any mutation would throw.
-  const base = deepFreeze(ok(game(3, ["insideMan", "lookout", "fence"]), submit("p1", m("office", 2))));
+  const base = deepFreeze(ok(game(3, ["priest", "lookout", "hacker"]), submit("p1", m("office", 2))));
   const snapshot = JSON.stringify(base);
   const cases: [string, unknown][] = [
     ["null command", null],
@@ -244,16 +208,11 @@ describe("QA rejected commands leave state unchanged", () => {
     ["NaN pocket", submit("p1", m("lobby", Number.NaN))],
     ["negative fractional pocket", submit("p1", m("lobby", -0.5))],
     ["Security watching an unknown room", submit("p1", m("security", 0, { watch: "kitchen" }))],
-    ["Inside Man pockets 1", submit("p0", m("vault", 1))],
-    ["Inside Man uses the Lookout's power", submit("p0", m("vault", 0, L("office")))],
+    ["the Priest uses the Lookout's power", submit("p0", m("vault", 0, L("office")))],
     ["Lookout watches no rooms", submit("p1", m("lobby", 0, { ability: { kind: "lookout", rooms: [] } }))],
     ["Lookout watches 2 rooms", submit("p1", m("lobby", 0, { ability: { kind: "lookout", rooms: ["vault", "office"] } }))],
     ["Lookout watches a closed room", submit("p1", m("lobby", 0, L("depositBoxes")))],
     ["Lookout rooms not an array", submit("p1", m("lobby", 0, { ability: { kind: "lookout", rooms: "vault" } as never }))],
-    ["Fence safe 0", submit("p2", m("lobby", 0, F(0)))],
-    ["Fence safe 6", submit("p2", m("lobby", 0, F(6)))],
-    ["Fence safe 2.5", submit("p2", m("lobby", 0, F(2.5)))],
-    ["Fence safe NaN", submit("p2", m("lobby", 0, F(Number.NaN)))],
     ["ability kind none", submit("p2", m("lobby", 0, { ability: { kind: "none" } as never }))],
     ["ability is null", submit("p2", m("lobby", 0, { ability: null as never }))],
     ["deadline is a string", { type: "advance", deadline: "round" }],
@@ -309,7 +268,7 @@ describe("QA Heat raid — design §5.2 step 6, §7", () => {
 describe("QA determinism — design §17.2", () => {
   for (const [n, script, roles] of [
     [3, ROOKIES, []],
-    [3, THREE, ["insideMan", "lookout", "fence"]],
+    [3, THREE, ["priest", "lookout", "hacker"]],
     [12, TWELVE, []],
   ] as const) {
     it(`${n} players: same seed + same commands → identical log; replay (also via JSON) rebuilds the state`, () => {
@@ -326,7 +285,7 @@ describe("QA private information — design §5.2 step 5, §17.2", () => {
   const PRIVATE = new Set(["moveSubmitted", "defaultMoveAssigned", "lootSplit", "abilityResolved", "roomSighting", "roomWatched", "pocketCount", "roleDealt"]);
   const games = [
     play(game(3), ROOKIES),
-    play(game(3, ["insideMan", "lookout", "fence"]), THREE),
+    play(game(3, ["priest", "lookout", "hacker"]), THREE),
     play(game(12), TWELVE),
   ];
   for (const s of games) {

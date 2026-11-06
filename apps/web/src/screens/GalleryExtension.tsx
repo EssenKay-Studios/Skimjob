@@ -34,8 +34,7 @@ const config = (extra: Partial<GameConfig> = {}): GameConfig => ({
   seed: "gallery-ext",
   players: NAMES.map((name, i) => ({ id: `p${i + 1}`, name, isBot: false })),
   job: "bank",
-  rolePool: [],
-  mole: "off",
+  rolePool: ["lookout", "auditor", "detective", "smoothTalker"],
   eventsEnabled: true,
   voteVisibility: "hiddenThenRevealed",
   uniqueRoles: true,
@@ -110,7 +109,7 @@ export function ExtensionSections() {
 
 function RoleSections() {
   const game = useLocalGame(() => createGame(config()));
-  const sample: RoleId[] = ["rookie", "fence", "hacker", "mole", "embezzler"];
+  const sample: RoleId[] = ["rookie", "lookout", "hacker", "mole", "fixer"];
   return (
     <>
       <Section id="ext-role-card" title="Role card" note="extension.md Roles · tag, power, token trigger, How you win, tokens, role list, rulebook">
@@ -256,7 +255,7 @@ function DeckSection() {
 
 function EndSection() {
   const base = useMemo(() => viewFor(playedGame(), "p1"), []);
-  const ranking = base.players.map((p, i) => ({ player: p.id, role: (["fence", "rookie", "lookout", "mole"] as const)[i]!, score: 30 - i * 6 + (i === 0 ? 5 : 0), stash: 30 - i * 6, safe: i === 0 ? 5 : 0, timesShakenDown: 0, totalHandedIn: 10 }));
+  const ranking = base.players.map((p, i) => ({ player: p.id, role: (["hacker", "rookie", "lookout", "mole"] as const)[i]!, score: 30 - i * 6, stash: 30 - i * 6, timesShakenDown: 0, totalHandedIn: 10 }));
   const ended = (outcome: Extract<PlayerView["phase"], { kind: "ended" }>["outcome"]): PlayerView => ({ ...base, phase: { kind: "ended", outcome } });
   return (
     <>

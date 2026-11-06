@@ -18,9 +18,7 @@ export interface RevealSeat {
   /** The failure endings `role` also wins from the top group (★ roles). extension.md "Winning and losing" */
   readonly winsOn: readonly FailureReason[];
   readonly score: number;
-  /** Stash with any Fence safe. */
   readonly stash: number;
-  readonly safe: number;
   readonly timesShakenDown: number;
   readonly totalHandedIn: number;
   /** Level with the first place after the tie-breaks. extension.md "Winning and losing" */
@@ -64,8 +62,8 @@ export interface RevealMove {
 
 /**
  * A line of the timeline. Most hidden actions come as the event itself
- * (`event`: powers used, perks bought and used, Rigs, foreseen cards, forged
- * sightings, Inside tips, Raid rumours, Snitch targets) next to the
+ * (`event`: powers used, perks bought and used, Rigs, Inside tips, Raid
+ * rumours) next to the
  * public ones that matter (meetings, shakedowns, checkpoints, raids). The rest
  * are worked out, because one event alone can't say them.
  */
@@ -87,8 +85,6 @@ export type RevealItem =
       readonly cause: "powerCut" | "hackerLoop";
       readonly hackers: readonly PlayerId[];
     }
-  /** A Blackmailer's right guess took `victim`'s vote at `meetingId`; `decided`: it decided a shakedown (ruling 5). */
-  | { readonly kind: "voteStolen"; readonly blackmailer: PlayerId; readonly victim: PlayerId; readonly meetingId: string; readonly decided: boolean }
   /** A public role claim next to the truth (the claimer's role when they claimed). design §12.1 */
   | { readonly kind: "claim"; readonly player: PlayerId; readonly claimed: RoleId; readonly real: RoleId }
   /** A Double-cross offer between the two, and whether they swapped. design §10 */
@@ -96,7 +92,7 @@ export type RevealItem =
 
 /**
  * Round `round` of the timeline (0: setup), with the meeting that follows it.
- * `stashes` is each player's stash (safe included) once the round and its
+ * `stashes` is each player's stash once the round and its
  * meeting are done: the stash over time. design §13
  */
 export interface RevealRound {

@@ -42,7 +42,7 @@ test("a person's lock-in shows on others' seats, a change shows nothing; presenc
   const crewBefore = await page.locator(".crew-seat").evaluateAll((els) => els.map((e) => e.outerHTML).join("\n"));
 
   // A change: the guest's crew list is unchanged.
-  // A room change (any role: an Inside Man has no split slider; 5 seats can deal one).
+  // A room change.
   await host.locator('.room-tile[data-room="Office"]').click();
   await host.getByRole("button", { name: "Update move" }).click();
   await expect(host.getByText(/Locked in: Office/)).toBeVisible();

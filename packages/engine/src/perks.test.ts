@@ -10,7 +10,6 @@ import { setupEvents } from "./setup";
 import { replay } from "./reduce";
 import { handleCommand } from "./handle";
 import { viewFor } from "./view";
-import { opensShakedownWindow } from "./meeting";
 import { grantPerks } from "./perks.testkit";
 
 function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
@@ -18,7 +17,7 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
     seed: "perk-seed",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: ["rookie", "lookout", "fence", "hacker"], // no Muscle: a window only if the shop holds a Shield
+    rolePool: ["rookie", "lookout", "hacker"], // a window only if the shop holds a Shield
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     ...extra,
@@ -78,7 +77,7 @@ describe("perk tokens — design §8.3", () => {
   });
 
   it("spending needs a token; a refusal keeps it and writes nothing; one token goes per spend", () => {
-    let s = game(4, ["rookie", "lookout", "fence"]);
+    let s = game(4, ["rookie", "lookout", "hacker"]);
     expect(reason(s, use("p0", { kind: "peek", target: "p1" }))).toMatch(/no Peek perk/);
     s = grantPerks(s, "p0", "peek", "peek");
     expect(reason(s, use("p0", { kind: "peek", target: "p0" }))).toMatch(/another player/);
@@ -99,9 +98,9 @@ describe("perk tokens — design §8.3", () => {
 
 describe("Peek — design §8.3", () => {
   it("learn one player's role, privately", () => {
-    const s = grantPerks(game(4, ["rookie", "lookout", "fence"]), "p0", "peek");
+    const s = grantPerks(game(4, ["rookie", "lookout", "hacker"]), "p0", "peek");
     const after = run(s, use("p0", { kind: "peek", target: "p2" }));
-    expect(since(s, after)).toEqual([{ type: "perkUsed", visibility: privateTo("p0"), player: "p0", round: 1, perk: { kind: "peek", target: "p2", role: "fence" } }]);
+    expect(since(s, after)).toEqual([{ type: "perkUsed", visibility: privateTo("p0"), player: "p0", round: 1, perk: { kind: "peek", target: "p2", role: "hacker" } }]);
   });
 });
 
@@ -121,24 +120,17 @@ describe("Shield — design §8.3, §11.3", () => {
     const again = settle(run(after, ...emergency("p2"), vote("p1", "p0"), vote("p2", "p0"), vote("p3", "p0"), CLOSE));
     expect(since(after, again).some((e) => e.type === "shakedownResolved")).toBe(true);
   });
+});
 
-  it("with a shakedown window, it applies when the window ends; a Muscle cancel first keeps the Shield", () => {
-    const pool = ["rookie", "muscle"]; // a Muscle could be dealt at 5: the window opens
-    const s = grantPerks(withStash(game(5, ["rookie", "muscle"], { rolePool: pool }), "p0", 6), "p0", "shield");
+describe("Shield with a shakedown window — design §8.3, §11.3", () => {
+  it("with a shakedown window (a Shield in the shop), it applies when the window ends", () => {
+    const s = grantPerks(withStash({ ...game(5), shop: ["peek", "shield", "extraVote"] }, "p0", 6), "p0", "shield");
     const pending = run(s, ...emergency("p2"), vote("p1", "p0"), vote("p2", "p0"), vote("p3", "p0"), CLOSE);
     expect(pending.phase.kind).toBe("shakedownPending");
     expect(perks(pending, "p0")).toEqual(["shield"]); // nothing shown before the window ends
     const shielded = run(pending, RESOLVE);
     expect(since(pending, shielded).map((e) => e.type)).toEqual(["perkUsed", "shakedownCancelled"]);
-    const muscled = run(pending, use("p1", { kind: "cancelShakedown" }), RESOLVE);
-    expect(perks(muscled, "p0")).toEqual(["shield"]);
-    expect(since(pending, muscled).filter((e) => e.type === "perkUsed")).toEqual([]);
-  });
-
-  it("the window opens when the shop holds a Shield or a Muscle could be dealt (extension.md \"Shakedowns\")", () => {
-    expect(opensShakedownWindow(ROLES, ["rookie", "lookout"], ["peek", "alibi", "extraVote"])).toBe(false);
-    expect(opensShakedownWindow(ROLES, ["rookie", "lookout"], ["peek", "shield", "extraVote"])).toBe(true);
-    expect(opensShakedownWindow(ROLES, ["rookie", "muscle"], [])).toBe(true);
+    expect(shielded.players.p0?.stash).toBe(6);
   });
 });
 
@@ -263,14 +255,6 @@ describe("Recharge — design §8.3", () => {
     expect(s.players.p0?.roleState.usedThisAct).toBe(0);
     s = run(s, mv("p0", "lobby", 0, { ability: { kind: "loopCameras", room: "office" } }));
     expect(s.moves.p0?.ability).toEqual({ kind: "loopCameras", room: "office" });
-  });
-
-  it("gives a once-per-game use back (Muscle)", () => {
-    // p2 is dirty, so the cancel stays spent (a clean save gives it back, extension.md "Roles").
-    let s = grantPerks(withStash(game(5, ["muscle"], { rolePool: ["rookie", "muscle"] }), "p2", 6), "p0", "recharge");
-    s = run(s, ...emergency("p1"), vote("p1", "p2"), vote("p3", "p2"), vote("p4", "p2"), CLOSE, use("p0", { kind: "cancelShakedown" }), RESOLVE);
-    expect(s.players.p0?.roleState.usedThisGame).toBe(1);
-    expect(run(s, use("p0", { kind: "recharge" })).players.p0?.roleState.usedThisGame).toBe(0);
   });
 });
 

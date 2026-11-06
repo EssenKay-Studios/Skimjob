@@ -12,7 +12,7 @@
 //   text is never verified. Secret-mode ballots can't be shared (decisions.md),
 //   nor can anything that states a role or faction (engine `revealsRole`).
 //   "Verified" means only "from their own case file": a camera feed can be
-//   false (Hacker loop, Forger's planted sighting), so the client shows the
+//   false (a Hacker loop), so the client shows the
 //   card with the web's `EVIDENCE_CARD_NOTE` (design §12.1, v2 §2).
 // - Text is plain text: stored and sent as typed. Clients must render it as
 //   text, never as HTML.

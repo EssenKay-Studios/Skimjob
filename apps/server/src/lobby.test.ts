@@ -195,15 +195,6 @@ describe("create a game (design §15 setup)", () => {
     expect((await host(settings)).game.settings).toEqual(settings);
   });
 
-  // extension.md Build notes "Tags, decks and dealing": the saboteur setting is dropped; a saved
-  // "off" becomes the deck with every Wildcard and Lone wolf toggled off, "maybe"/"on" the plain deck.
-  it("migrates the dropped saboteur setting", async () => {
-    const teamPlayers = DECKS.standard.filter((r) => ROLES[r]?.tag === "teamPlayer");
-    expect((await host({ mole: "off" })).game.settings).toEqual({ ...DEFAULT_SETTINGS, roles: teamPlayers });
-    expect((await host({ mole: "on" })).game.settings).toEqual(DEFAULT_SETTINGS);
-    expect((await host({ mole: "maybe", deck: "everything" })).game.settings).toEqual({ ...DEFAULT_SETTINGS, deck: "everything" });
-  });
-
   it.each([
     [{ sessionLength: "2h" }],
     [{ voteVisibility: "loud" }],

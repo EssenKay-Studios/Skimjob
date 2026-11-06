@@ -73,11 +73,11 @@ describe("parseSimArgs", () => {
 
   it("reads every option", () => {
     const o = run([
-      "-n", "7", "-p", "3-4", "-b", "random", "-s", "x", "--job", "bank", "--role-pool", "lookout, fence",
+      "-n", "7", "-p", "3-4", "-b", "random", "-s", "x", "--job", "bank", "--role-pool", "lookout, hacker",
       "--deck", "everything", "--deal", "random", "--role-list", "hidden", "--votes", "secret", "--out", "here", "--json",
     ]);
     expect(o).toMatchObject({
-      games: 7, playerCounts: [3, 4], mix: [{ personality: "random", weight: 1 }], seed: "x", rolePool: ["lookout", "fence"],
+      games: 7, playerCounts: [3, 4], mix: [{ personality: "random", weight: 1 }], seed: "x", rolePool: ["lookout", "hacker"],
       deck: "everything", deal: "random", roleList: "hidden", voteVisibility: "secret", outDir: "here", json: true,
     });
     expect(run(["--no-files"]).outDir).toBeNull();

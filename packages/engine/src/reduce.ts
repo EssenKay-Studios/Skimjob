@@ -134,7 +134,6 @@ function applyChange(state: GameState, event: GameEvent): GameState {
         isBot: seat.isBot,
         role: event.role,
         stash: 0,
-        safe: 0,
         roleState: NO_ROLE_STATE,
         totalHandedIn: 0,
         timesShakenDown: 0,
@@ -144,8 +143,6 @@ function applyChange(state: GameState, event: GameEvent): GameState {
       };
       return { ...state, players: { ...state.players, [seat.id]: player } };
     }
-    case "snitchTargetAssigned":
-      return updatePlayer(state, event.player, (p) => withRoleState(p, { target: event.target }));
     case "roleListShown":
       return state;
     case "shopDealt":
@@ -155,7 +152,6 @@ function applyChange(state: GameState, event: GameEvent): GameState {
     case "policeActivity":
       return { ...state, heat: event.heat };
     case "policeCause":
-    case "votesStolen":
       return state;
     case "tipOffLanded": {
       const police = state.police;
@@ -191,12 +187,6 @@ function applyChange(state: GameState, event: GameEvent): GameState {
     case "abilityResolved": {
       const { ability } = event;
       switch (ability.kind) {
-        case "fenceSafe":
-          return updatePlayer(state, event.player, (p) => ({
-            stash: p.stash - ability.amount,
-            safe: p.safe + ability.amount,
-            ...withRoleState(p, { usedThisAct: p.roleState.usedThisAct + ability.amount }),
-          }));
         case "tipOff": {
           // extension.md "Police activity": the use counts at once; it lands at the next free police moment.
           const used = updatePlayer(state, event.player, (p) => withRoleState(p, { usedThisAct: p.roleState.usedThisAct + 1 }));
@@ -206,42 +196,20 @@ function applyChange(state: GameState, event: GameEvent): GameState {
         case "audit":
         case "checkStash":
         case "bless":
-        case "blackmail":
-        case "forge":
           return updatePlayer(state, event.player, (p) => withRoleState(p, { usedThisAct: p.roleState.usedThisAct + 1 }));
-        case "embezzle":
-          // v2 §2: the take left the Haul inside the round's `roundResolved` Haul change.
-          return updatePlayer(state, event.player, (p) => ({
-            stash: p.stash + ability.amount,
-            ...withRoleState(p, { usedThisAct: p.roleState.usedThisAct + 1 }),
-          }));
-        case "cancelShakedown": {
-          const pending = state.pendingShakedown;
-          if (!pending) throw new Error("cancelShakedown: no shakedown is pending");
-          return updatePlayer({ ...state, pendingShakedown: { ...pending, cancelled: true } }, event.player, (p) =>
-            withRoleState(p, { usedThisGame: p.roleState.usedThisGame + 1 }),
-          );
-        }
         case "fixer":
           return updatePlayer(state, event.player, (p) => ({
             stash: p.stash - ability.lost,
             ...withRoleState(p, { usedThisGame: p.roleState.usedThisGame + 1 }),
           }));
         case "lookout":
-        case "bagman":
           return state;
       }
     }
-    case "voteCompromised":
-    case "sightingForged":
-      // v2 §2: the stolen vote is read from the log when the meeting closes (meeting.ts).
-      return state;
     case "roomSighting":
     case "roomWatched":
     case "pocketCount":
     case "copsRaided":
-    case "cardForeseen":
-    case "muscleNamed":
       // Information only; no state changes. (copsRaided is followed by gameEnded.)
       return state;
     case "raidStopped":
@@ -359,7 +327,7 @@ function applyChange(state: GameState, event: GameEvent): GameState {
       return {
         ...state,
         phase: { kind: "shakedownPending", meetingId: event.meetingId, target: event.target },
-        pendingShakedown: { meetingId: event.meetingId, kind: event.kind, act: event.act, target: event.target, cancelled: false },
+        pendingShakedown: { meetingId: event.meetingId, kind: event.kind, act: event.act, target: event.target },
       };
     case "shakedownCancelled":
       return afterShakedown(state);
@@ -374,13 +342,7 @@ function applyChange(state: GameState, event: GameEvent): GameState {
       return { ...state, heat: state.heat + event.heatPenalty };
     // ------------------------------------------------ perks. design §8.3
     case "tokenEarned":
-      // extension.md owner ruling 6: a Muscle that saved an innocent also gets its power back.
-      return updatePlayer(state, event.player, (p) =>
-        withRoleState(p, {
-          tokens: p.roleState.tokens + 1,
-          ...(event.trigger === "cancelledClean" && { usedThisGame: Math.max(0, p.roleState.usedThisGame - 1) }),
-        }),
-      );
+      return updatePlayer(state, event.player, (p) => withRoleState(p, { tokens: p.roleState.tokens + 1 }));
     case "perkBought":
       return updatePlayer(state, event.player, (p) => withRoleState(p, { tokens: p.roleState.tokens - event.cost, perks: [...p.roleState.perks, event.perk] }));
     case "perkUsed":

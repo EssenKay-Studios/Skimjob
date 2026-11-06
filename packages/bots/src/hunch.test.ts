@@ -16,7 +16,6 @@ const config = (n: number, seed: string): GameConfig => ({
   players: Array.from({ length: n }, (_, i) => ({ id: `p${i + 1}`, name: `${personality(i).name} ${i + 1}`, isBot: true })),
   job: "bank",
   rolePool: [],
-  mole: "off",
   eventsEnabled: false,
   voteVisibility: "hiddenThenRevealed",
 });

@@ -35,7 +35,6 @@ const config = (mode: VoteVisibility, extra: Partial<GameConfig> = {}): GameConf
   players: ["Ana", "Ben", "Cy", "Dee", "Eve"].map((name, i) => ({ id: `p${i + 1}`, name, isBot: false })),
   job: "bank",
   rolePool: ["rookie"],
-  mole: "off",
   eventsEnabled: false,
   voteVisibility: mode,
   uniqueRoles: false,
@@ -147,7 +146,6 @@ describe("the vote window per vote mode (design §11.2)", () => {
   });
 });
 
-
 describe("tally bars (ui-style 'Vote window')", () => {
   it("marks the single leader and the passed option", () => {
     const rows = tallyRows({ skip: 1, targets: { p2: 3, p3: 1 } }, { kind: "shakedown", target: "p2" });
@@ -202,25 +200,7 @@ describe("scheduling and emergencies (design §11.1)", () => {
 });
 
 describe("the shakedown window and results (design §11.3, §11.4)", () => {
-  const muscles = (mode: VoteVisibility = "hiddenThenRevealed") => run(voting(mode, { rolePool: ["muscle"] }), close("emergency-p2"));
-
-  it("the window looks the same to everyone, and after a cancel; only the Muscle's own card offers the cancel", () => {
-    const s = muscles();
-    expect(s.phase.kind).toBe("shakedownPending");
-    const before = [1, 2, 3, 4, 5].map((i) => decidingOf(viewFor(s, `p${i}`)));
-    expect(new Set(before.map((d) => JSON.stringify(d))).size).toBe(1);
-    expect(before[0]).toEqual({ meetingId: "emergency-p2", target: "p2" });
-    expect(abilityOffers(viewFor(s, "p1"))).toEqual([{ kind: "cancelShakedown", target: "p2" }]);
-    const cancelled = run(s, { type: "useAbility", player: "p1", ability: { kind: "cancelShakedown" } });
-    for (const i of [1, 2, 3, 4, 5]) {
-      expect(decidingOf(viewFor(cancelled, `p${i}`))).toEqual(before[0]);
-      expect(latestOutcome(viewFor(cancelled, `p${i}`))).toEqual(latestOutcome(viewFor(s, `p${i}`)));
-    }
-    expect(abilityOffers(viewFor(cancelled, "p1"))).toEqual([]);
-    // A role without the cancel never sees it, in the same state.
-    const rookies = run(voting("hiddenThenRevealed", { rolePool: ["rookie", "detective"] }), close("emergency-p2"));
-    expect(abilityOffers(viewFor(rookies, "p1")).some((o) => o.kind === "cancelShakedown")).toBe(false);
-  });
+  const smoothTalkerMeeting = (mode: VoteVisibility = "hiddenThenRevealed") => run(voting(mode, { rolePool: ["smoothTalker"] }), close("emergency-p2"));
 
   it("results: shakedown, clean compensation; the banner stays until the next round resolves", () => {
     // Starter roles: no window, the shakedown lands as the meeting closes.

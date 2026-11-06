@@ -18,7 +18,6 @@ const config = (n: number, seed: string, extra: Partial<GameConfig> = {}): GameC
   players: Array.from({ length: n }, (_, i) => ({ id: `q${i}`, name: `Q${i}`, isBot: true })),
   job: "bank",
   rolePool: [],
-  mole: "on",
   eventsEnabled: true,
   voteVisibility: "hiddenThenRevealed",
   ...extra,
@@ -35,7 +34,8 @@ function claimsWithTruth(c: GameConfig, log: readonly GameEvent[]) {
 }
 
 describe("bot claims in whole games — QA PR #37", () => {
-  const games = [3, 6, 12].flatMap((n) => MODES.map((mode, k) => ({ n, mode, c: config(n, `qa37-${n}-${k}`, { voteVisibility: mode }) })));
+  // Two seeds per cell: with the Rookie the one safe bluff left (R7 cut), bluffs are rarer.
+  const games = [3, 6, 12].flatMap((n) => MODES.flatMap((mode, k) => [0, 1].map((x) => ({ n, mode, c: config(n, `qa37-${n}-${k}${x ? `-${x}` : ""}`, { voteVisibility: mode }) }))));
   const results = games.map((g) => ({ ...g, r: play(g.c) }));
 
   it("all-bot games finish in every vote mode at 3, 6 and 12 players with zero refused commands — design §17.3", () => {
@@ -69,9 +69,9 @@ describe("bot claims in whole games — QA PR #37", () => {
           continue;
         }
         bluffed++;
-        expect(SAFE_BLUFFS).toContain(claim.role);
         const before = r.state.log.slice(0, i).filter((e): e is Claim => e.type === "roleClaimed");
-        if (before.some((b) => b.player === claim.player && b.role === claim.role)) continue; // sticking to its story
+        if (before.some((b) => b.player === claim.player && b.role === claim.role)) continue; // sticking to its story (made before a Double-cross, maybe)
+        expect(SAFE_BLUFFS).toContain(claim.role);
         expect(before.filter((b) => b.role === claim.role).map((b) => b.player), `${c.seed}: ${claim.player} bluffs ${claim.role}`).toEqual([]);
       }
     }

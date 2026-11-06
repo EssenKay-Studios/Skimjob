@@ -6,7 +6,7 @@
 import { randomBytes } from "node:crypto";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { PERSONALITIES, type PersonalityId } from "@skimjob/bots";
-import { MAX_PLAYERS, MIN_PLAYERS } from "@skimjob/content";
+import { MAX_PLAYERS, MIN_PLAYERS, POOL_ROLES } from "@skimjob/content";
 import { validateConfig, type GameConfig } from "@skimjob/engine";
 import { createGuestUser, type Sessions, type User } from "./auth";
 import type { Db, Queryable } from "./db";
@@ -107,7 +107,7 @@ function view(game: GameRow, seats: readonly SeatRow[], user: User): LobbyView {
     id: game.id,
     status: game.status,
     inviteCode: game.invite_code,
-    // Games made before a setting existed get its default (e.g. uniqueRoles); a saboteur setting is migrated.
+    // Games made before a setting existed get its default (e.g. uniqueRoles).
     settings: storedSettings(game.settings),
     youAreHost: game.host_user_id === user.id,
     autoMeetings: (TIMINGS[game.settings.sessionLength] ?? TIMINGS[DEFAULT_SETTINGS.sessionLength]).autoMeetings,
@@ -328,7 +328,11 @@ export function lobbyRoutes(app: FastifyInstance, db: Db, store: GameStore, s: S
   app.post<{ Params: { id: string } }>("/games/:id/start", async (req) => {
     const started = await asHost(req, async (game, seats, user) => {
       if (seats.length < MIN_PLAYERS) refuse(409, `a game needs at least ${MIN_PLAYERS} seats`);
-      const config = gameConfig(storedSettings(game.settings), seats, randomBytes(16).toString("hex"));
+      const settings = storedSettings(game.settings);
+      // A lobby saved before R7 C2c may still toggle on a role that no longer exists.
+      const gone = settings.roles.filter((r) => !POOL_ROLES.includes(r));
+      if (gone.length > 0) refuse(409, `these roles are no longer in the game: ${gone.join(", ")}; pick the roles again`);
+      const config = gameConfig(settings, seats, randomBytes(16).toString("hex"));
       const errors = validateConfig(config);
       if (errors.length > 0) throw new Error(`lobby made a bad config: ${errors.join("; ")}`);
       await store.start(game.id, config, async (tx) => {

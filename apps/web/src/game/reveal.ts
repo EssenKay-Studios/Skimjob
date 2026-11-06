@@ -17,34 +17,16 @@ export function triggerText(t: TokenTrigger): string {
       return "catching someone in a room they audited";
     case "checkedShakenDirty":
       return "catching someone they checked";
-    case "targetShakenDirty":
-      return "their target caught dirty";
     case "wonDirtyShakedown":
       return "voting for a dirty shakedown";
-    case "cancelledClean":
-      return "saving a clean player";
     case "blessedShakenClean":
       return "a blessed player shaken down clean";
-    case "allInStreak":
-      return "handing everything in, round after round";
-    case "coolingRounds":
-      return "rounds spent cooling things down";
     case "raidStopped":
       return "stopping a raid";
     case "loopHidPocketer":
       return "a loop that hid a pocketer";
-    case "forgedShakenClean":
-      return "a forged player shaken down clean";
-    case "heatReached":
-      return "the Heat climbing high";
-    case "safeReached":
-      return "a full safe";
-    case "stolenVoteDecided":
-      return "a stolen vote that decided a shakedown";
     case "tipOffLanded":
       return "a tip-off landing";
-    case "firstTake":
-      return "their first take";
   }
 }
 
@@ -93,8 +75,6 @@ export function itemText(item: RevealItem, ctx: DescribeContext): string {
         ? cap(`${whose} ${feed} on the ${roomName(item.room)} went offline in the Power cut.`)
         : cap(`${whose} ${feed} on the ${roomName(item.room)} went offline: ${list(item.hackers.map(who))} looped it.`);
     }
-    case "voteStolen":
-      return cap(`${who(item.blackmailer)} stole ${you(item.victim) ? "your" : `${ctx.name(item.victim)}'s`} vote${item.decided ? ", and it decided the shakedown" : ""}.`);
     case "claim":
       return item.claimed === item.real
         ? cap(`${who(item.player)} claimed ${roleName(item.claimed)}, and it was true.`)

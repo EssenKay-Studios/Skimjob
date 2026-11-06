@@ -16,8 +16,7 @@ function config(players: number, contentOverrides?: unknown): GameConfig {
     seed: "override-seed",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: [...STARTER_ROLES], // no Muscle, so no shakedown window (task 12)
-    mole: "off",
+    rolePool: [...STARTER_ROLES], // a shakedown window only if the shop holds a Shield
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     ...(contentOverrides !== undefined && { contentOverrides: contentOverrides as ContentOverrides }),
@@ -63,7 +62,7 @@ describe("validateOverrides — configs are untrusted JSON (design §17.4)", () 
         shakedown: { cleanBelow: 5, payout: 4 },
         police: { chancePercent: 50, heat: 6 },
         perks: { peek: { cost: 3 } },
-        roles: { rookie: { rewardCount: 2 }, lookout: { extraRooms: 2 }, fence: { perAct: 6 }, insideMan: { lootPerPointOverFinalTarget: 4 } },
+        roles: { rookie: { rewardCount: 2 }, lookout: { extraRooms: 2 }, hacker: { perAct: 6 }, fixer: { stopAt: 90 } },
       }),
     ).toEqual([]);
   });
@@ -95,7 +94,7 @@ describe("validateOverrides — configs are untrusted JSON (design §17.4)", () 
     expect(errs({ police: { chancePercent: 101 } })).toHaveLength(1);
     expect(errs({ perks: { peek: { cost: -1 } } })).toHaveLength(1);
     expect(errs({ perks: { jetpack: { cost: 1 } } })).toEqual(["contentOverrides.perks.jetpack: no such perk"]);
-    expect(errs({ roles: { insideMan: { lootPerPointOverFinalTarget: -1 } } })).toHaveLength(1);
+    expect(errs({ roles: { fixer: { stopAt: -1 } } })).toHaveLength(1);
   });
 
   it("rejects unknown fields, so a typo isn't silently ignored", () => {
@@ -114,9 +113,9 @@ describe("validateOverrides — configs are untrusted JSON (design §17.4)", () 
   it("capacity only for rooms that have one; powers only for the role that has them", () => {
     expect(errs({ rooms: { vault: { capacity: { max: 2 } } } })).toEqual(["contentOverrides.rooms.vault.capacity: the Vault has no capacity"]);
     expect(errs({ rooms: { depositBoxes: { capacity: { max: 0 } } } })).toHaveLength(1);
-    expect(errs({ roles: { fence: { extraRooms: 2 } } })).toEqual(["contentOverrides.roles.fence.extraRooms is not an overridable field"]);
+    expect(errs({ roles: { hacker: { extraRooms: 2 } } })).toEqual(["contentOverrides.roles.hacker.extraRooms is not an overridable field"]);
     expect(errs({ roles: { lookout: { perAct: 2 } } })).toHaveLength(1);
-    expect(errs({ roles: { getaway: { rewardCount: 2 } } })).toEqual(["contentOverrides.roles.getaway: no such role"]);
+    expect(errs({ roles: { wizard: { rewardCount: 2 } } })).toEqual(["contentOverrides.roles.wizard: no such role"]);
     // extension.md "Police activity": the tip-off's Heat is the police number, not the Mole's.
     expect(errs({ roles: { mole: { perAct: 2 } } })).toEqual([]);
     expect(errs({ roles: { mole: { heat: 15 } } })).toEqual(["contentOverrides.roles.mole.heat is not an overridable field"]);
@@ -165,9 +164,9 @@ describe("merging overrides (design §17.4)", () => {
     expect(job.rooms.depositBoxes?.capacity).toEqual({ max: 2, crowdedLoot: 1 });
     expect(job.heat).toEqual({ ...BANK_JOB.heat, perRound: 2 });
     expect(job.checkpoints).toBe(BANK_JOB.checkpoints);
-    const roles = overrideRoles(ROLES, { roles: { lookout: { extraRooms: 2, lootPerPointOverFinalTarget: 3 } } });
+    const roles = overrideRoles(ROLES, { roles: { lookout: { extraRooms: 2, rewardCount: 3 } } });
     expect(roles.lookout?.power).toEqual({ kind: "lookout", extraRooms: 2 });
-    expect(roles.lookout?.scoring).toEqual({ lootPerPointOverFinalTarget: 3 });
+    expect(roles.lookout?.rewards).toEqual([{ on: "watchedShakenDirty", count: 3 }]);
     expect(roles.rookie).toBe(ROLES.rookie);
     expect(JSON.stringify([BANK_JOB, ROLES])).toBe(before);
   });

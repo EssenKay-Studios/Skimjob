@@ -240,8 +240,6 @@ export interface MeetingOutcome {
   readonly deciding: boolean;
   readonly shakedown: ShakedownResolved | null;
   readonly cancelled: boolean;
-  /** The Muscle who called off a dirty player's shakedown (public `muscleNamed`). */
-  readonly muscle: PlayerId | null;
   /** The bank paid a blessed player's compensation (Priest): the amount back in the Haul. */
   readonly blessing: number | null;
   readonly checkpoint: CheckpointChecked | null;
@@ -267,7 +265,6 @@ export function latestOutcome(view: PlayerView): MeetingOutcome | null {
   for (const { event: e } of view.ledger) if (e.type === "meetingOpened" && e.meetingId === id) ({ kind, act } = e);
   let shakedown: ShakedownResolved | null = null;
   let cancelled = false;
-  let muscle: PlayerId | null = null;
   let blessing: number | null = null;
   let checkpoint: CheckpointChecked | null = null;
   let fresh = true;
@@ -278,19 +275,18 @@ export function latestOutcome(view: PlayerView): MeetingOutcome | null {
     }
     if (e.type === "shakedownResolved" && e.meetingId === id) shakedown = e;
     else if (e.type === "shakedownCancelled" && e.meetingId === id) cancelled = true;
-    else if (e.type === "muscleNamed" && e.meetingId === id) muscle = e.player;
     else if (e.type === "blessingPaid" && e.meetingId === id) blessing = e.amount;
     else if (e.type === "checkpointChecked" && checkpoint === null) checkpoint = e;
   }
   const ballots = closed.ballots ? voteTargetsAll(view).filter((p) => Object.hasOwn(closed.ballots!, p)).map((p) => ({ player: p, vote: closed.ballots![p]! })) : null;
   const deciding = view.phase.kind === "shakedownPending" && view.phase.meetingId === id;
-  return { meetingId: id, kind, act, result: closed.result, tally: closed.tally, ballots, deciding, shakedown, cancelled, muscle, blessing, checkpoint, fresh };
+  return { meetingId: id, kind, act, result: closed.result, tally: closed.tally, ballots, deciding, shakedown, cancelled, blessing, checkpoint, fresh };
 }
 
 /** Everyone in seat order, you included. */
 const voteTargetsAll = (view: PlayerView): PlayerId[] => (setupOf(view)?.players ?? [...view.players, { id: view.me.id }]).map((p) => p.id);
 
-/** The shakedown window: who the vote went against. Identical for every player, Muscle or not, cancelled or not. design §11.3 */
+/** The shakedown window: who the vote went against. Identical for every player, Shield or not, cancelled or not. design §11.3 */
 export function decidingOf(view: PlayerView): { readonly meetingId: string; readonly target: PlayerId } | null {
   return view.phase.kind === "shakedownPending" ? { meetingId: view.phase.meetingId, target: view.phase.target } : null;
 }
@@ -298,8 +294,6 @@ export function decidingOf(view: PlayerView): { readonly meetingId: string; read
 // ---------------------------------------------------------------- abilities during meetings
 
 export type AbilityOffer =
-  /** Muscle: call off the pending shakedown (once per game; irreversible). design §8, §11.3 */
-  | { readonly kind: "cancelShakedown"; readonly target: PlayerId }
   /** Priest: bless another player until the next meeting (once between meetings). design §8 (v2 §2) */
   | { readonly kind: "bless"; readonly targets: readonly PlayerId[] }
   /** +Vote perk: your ballot weighs one more in this meeting. design §8.3 */
@@ -315,10 +309,6 @@ export function abilityOffers(view: PlayerView): AbilityOffer[] {
   const others = voteTargets(view).map((t) => t.id);
   const out: AbilityOffer[] = [];
   const p = view.phase;
-  if (power?.kind === "cancelShakedown" && p.kind === "shakedownPending" && view.me.roleState.usedThisGame < power.perGame) {
-    const done = view.caseFile.some(({ event: e }) => e.type === "abilityResolved" && e.ability.kind === "cancelShakedown" && e.ability.meetingId === p.meetingId);
-    if (!done) out.push({ kind: "cancelShakedown", target: p.target });
-  }
   if (power?.kind === "bless" && view.me.roleState.usedThisAct < power.perAct) {
     const pending = p.kind === "shakedownPending" ? p.target : null;
     out.push({ kind: "bless", targets: others.filter((o) => o !== pending) });

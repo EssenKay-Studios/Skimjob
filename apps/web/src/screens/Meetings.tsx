@@ -403,7 +403,7 @@ export function ResultsBanner({ view }: { view: PlayerView }) {
       {o.ballots ? <BallotList rows={o.ballots} who={who} label="How everyone voted" /> : <p className="meta">{MODE_NOTE.secret}</p>}
       {o.cancelled && (
         <Banner seed="res-cancel" title="The shakedown was called off.">
-          {o.muscle ? `${cap(who(o.muscle))} ${o.muscle === view.me.id ? "were" : "was"} named as the ${roleName("muscle")}: the target wasn't clean.` : "Nobody's stash was touched."}
+          Nobody's stash was touched.
         </Banner>
       )}
       {s &&
@@ -454,12 +454,6 @@ export function RoleCard({ view, send, claim = true }: { view: PlayerView; send:
         </div>
         <span className="role-card__stash">
           <span className="meta">stash</span> <b className="num">{view.me.stash}</b>
-          {view.me.safe > 0 && (
-            <>
-              {" "}
-              <span className="meta">safe</span> <b className="num">{view.me.safe}</b>
-            </>
-          )}
         </span>
       </div>
       <MyRoleFacts view={view} />
@@ -514,17 +508,6 @@ function AbilityRow({ view, offer, send, done }: { view: PlayerView; offer: Abil
     </div>
   );
   switch (offer.kind) {
-    case "cancelShakedown":
-      return (
-        <div className="ability">
-          <p>
-            <b>Call off the shakedown of {who(offer.target)}.</b> Once per game, and it can't be undone. Nobody sees it until the window ends; if they weren't clean, the ledger names you.
-          </p>
-          <DangerButton seed="ab-cancel" armedLabel="Sure? Tap again" onConfirm={() => void use({ type: "useAbility", ability: { kind: "cancelShakedown" } }, "You leaned on the crew.")}>
-            Call it off
-          </DangerButton>
-        </div>
-      );
     case "bless":
       return (
         <div className="ability">

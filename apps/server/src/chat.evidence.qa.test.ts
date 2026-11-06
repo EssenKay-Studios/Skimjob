@@ -15,11 +15,9 @@ const ROLE_REASON = "role cards can't be shared: role claims stay unverified";
 const holding = (event: Record<string, unknown>): PlayerView =>
   ({ caseFile: [{ seq: 3, event: { visibility: { kind: "private", player: "ana" }, player: "ana", ...event } }], ledger: [] }) as unknown as PlayerView;
 
-describe("QA: role, faction and compromised-vote cards are refused (design §8, PR #38)", () => {
+describe("QA: role and faction cards are refused (design §8, PR #38)", () => {
   it.each([
     ["the deal", sampleEvents.roleDealt],
-    ["a compromised vote (Blackmailer guessed your role)", sampleEvents.voteCompromised],
-    ["a Snitch target (says you're the Snitch)", sampleEvents.snitchTargetAssigned],
     ["a token earned (its trigger names the role, extension.md \"Tokens and the perk shop\")", sampleEvents.tokenEarned],
     ["a landed tip-off (says you're the Mole, extension.md \"Police activity\")", sampleEvents.tipOffLanded],
     ["an Inside tip naming a role", sampleEvents.insideTip],
@@ -31,13 +29,9 @@ describe("QA: role, faction and compromised-vote cards are refused (design §8, 
   });
 
   it("a faction or role key anywhere in the payload, however deep, is refused", () => {
-    for (const extra of [{ faction: "saboteur" }, { info: { faction: "accomplice" } }, { list: [{ x: [{ role: "mole" }] }] }, { roles: {} }, { allies: [] }]) {
+    for (const extra of [{ faction: "loneWolf" }, { info: { faction: "accomplice" } }, { list: [{ x: [{ role: "mole" }] }] }, { roles: {} }, { allies: [] }]) {
       expect(evidenceCard(holding({ type: "roomSighting", round: 1, room: "vault", others: [], ...extra }), 3), JSON.stringify(extra)).toEqual({ ok: false, reason: ROLE_REASON });
     }
-  });
-
-  it("a compromised vote is refused before any other check (it isn't mistaken for a ballot)", () => {
-    expect(evidenceCard(holding({ type: "voteCompromised", round: 2 }), 3)).toEqual({ ok: false, reason: ROLE_REASON });
   });
 
   it.each([
@@ -61,7 +55,6 @@ const config: GameConfig = {
   players: Array.from({ length: 4 }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: false })),
   job: "bank",
   rolePool: [],
-  mole: "off",
   eventsEnabled: false,
   voteVisibility: "open",
 } as GameConfig;

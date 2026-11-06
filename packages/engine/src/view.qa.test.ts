@@ -2,7 +2,7 @@
 //
 // Two games run side by side from the same seed and the same commands, except
 // that one or two players make different hidden choices in game B (split, room,
-// watch, Fence safe, missed move, move churn, ballots, sealed votes). After every
+// watch, missed move, move churn, ballots, sealed votes). After every
 // step, every other player's view must be byte-identical in both games — lengths,
 // seq numbers, ids and order included — until the rules make a difference public
 // (a shakedown of an involved player, the ballots at close or as cast, the end).
@@ -15,7 +15,7 @@ import { handleCommand } from "./handle";
 import { eventsSince, viewFor } from "./view";
 
 type Cmd = Record<string, unknown>;
-type Kind = "role" | "split" | "swap" | "fence" | "watch" | "miss" | "churn" | "voteChurn" | "ballotSwap" | "seal" | "control";
+type Kind = "role" | "split" | "swap" | "watch" | "miss" | "churn" | "voteChurn" | "ballotSwap" | "seal" | "control";
 const MODES: readonly VoteVisibility[] = ["hiddenThenRevealed", "open", "secret"];
 const LOOT: Record<string, number> = { vault: 6, office: 4, lobby: 2, depositBoxes: 5, tellerLine: 3, managersOffice: 3 };
 
@@ -30,14 +30,12 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-// v2 §2 (R3a): the Fence is an accomplice, dealt only with a saboteur, so its games deal a Mole (6+ players).
-const config = (n: number, voteVisibility: VoteVisibility, seed: string, mole: GameConfig["mole"] = "off"): GameConfig => ({
+const config = (n: number, voteVisibility: VoteVisibility, seed: string): GameConfig => ({
   seed,
   players: Array.from({ length: n }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: i % 2 === 0 })),
   job: "bank",
-  // No Muscle, so no shakedown window (task 12); no Bagman or Cleaner, whose powers show in the public Haul and Heat by design (v2 §2).
-  rolePool: ["rookie", "lookout", "insideMan", "fence"],
-  mole,
+  // Team players only (no Hacker loop, which changes others' feeds by design; no Mole tip-offs).
+  rolePool: ["rookie", "lookout", "priest", "auditor"],
   eventsEnabled: false,
   voteVisibility,
 });
@@ -66,7 +64,7 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
   const rand = mulberry32(seed);
   const int = (k: number): number => Math.floor(rand() * k);
   const pick = <T>(xs: readonly T[]): T => xs[int(xs.length)] as T;
-  let A = createGame(config(n, mode, `qa-${seed}`, kind === "fence" ? "on" : "off"));
+  let A = createGame(config(n, mode, `qa-${seed}`));
   let B = A;
   const ids = A.playerOrder;
   const involved = new Set<PlayerId>();
@@ -81,7 +79,7 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
   const allowed = (e: GameEvent | undefined): boolean => {
     if (!e) return false;
     if (e.type === "gameEnded") return kind !== "control" && !strict;
-    if (e.type === "shakedownResolved") return ["split", "swap", "fence"].includes(kind) && involved.has(e.target);
+    if (e.type === "shakedownResolved") return ["split", "swap"].includes(kind) && involved.has(e.target);
     if (e.type === "voteCast") return mode === "open" && involved.has(e.player);
     if (e.type === "meetingClosed") return mode === "hiddenThenRevealed" && kind === "ballotSwap";
     // Owner decision (2 Nov), design §5.1: whether someone locked in is public, so a missed move shows.
@@ -105,7 +103,6 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
       log: A.log.map((e) => (e.type === "roleDealt" && (e.player === x || e.player === z) ? { ...e, role: e.player === x ? pz.role : px.role } : e)),
     };
   }
-  const noPocket = [...restricted].some((id) => A.players[id]?.role === "insideMan");
 
   const compare = (): void => {
     const end = over();
@@ -146,13 +143,10 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
     const role = A.players[id]?.role;
     const room = pick(A.rooms);
     const loot = LOOT[room] ?? 0;
-    const keep = role !== "insideMan" && !(noPocket && restricted.has(id));
-    const move: Cmd = { room, pocket: keep && loot > 0 && rand() < 0.5 ? int(loot + 1) : 0 };
+    const move: Cmd = { room, pocket: loot > 0 && rand() < 0.5 ? int(loot + 1) : 0 };
     if (room === "security") move.watch = pick(A.rooms);
     if (restricted.has(id)) return move;
     if (role === "lookout" && rand() < 0.8) move.ability = { kind: "lookout", rooms: [pick(A.rooms)] };
-    // The safe only in an act's first round, so a changed amount in B is never refused later.
-    if (role === "fence" && round % 3 === 1 && rand() < 0.7) move.ability = { kind: "fenceSafe", amount: 1 + int(1) };
     return move;
   };
   const submit = (player: PlayerId, move: Cmd): Cmd => ({ type: "submitMove", player, move });
@@ -161,7 +155,6 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
     return t === id || rand() < 0.15 ? { kind: "skip" } : { kind: "shakedown", target: t };
   };
   const roleHolder = (role: string): PlayerId | undefined => ids.find((id) => A.players[id]?.role === role);
-  const canPocket = (id: PlayerId): boolean => A.players[id]?.role !== "insideMan";
   const due = (round: number): boolean => !applied && round >= start;
 
   function planRound(round: number): void {
@@ -173,7 +166,7 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
     const planB = new Map(plan);
     const last = (id: PlayerId): Cmd => ((plan.get(id) ?? []).at(-1)?.move as Cmd | undefined) ?? { room: "lobby", pocket: 0 };
     const pair = (): [PlayerId, PlayerId] | null => {
-      const ok = ids.filter(canPocket);
+      const ok = [...ids];
       if (ok.length < 2) return null;
       const x = pick(ok);
       return [x, pick(ok.filter((id) => id !== x))];
@@ -216,15 +209,6 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
             const looked = (m.ability as { rooms?: string[] } | undefined)?.rooms ?? [];
             if (rooms.has(m.room) || rooms.has(m.watch) || looked.some((r) => rooms.has(r))) tainted.add(y);
           }
-        }
-      } else if (kind === "fence") {
-        const f = roleHolder("fence");
-        if (f && round % 3 === 1) {
-          applied = true;
-          involved.add(f);
-          const m = { ...last(f), room: "office", pocket: 4, watch: undefined };
-          plan.set(f, [submit(f, { ...m, ability: undefined })]);
-          planB.set(f, [submit(f, { ...m, ability: { kind: "fenceSafe", amount: 1 + int(1) } })]);
         }
       } else if (kind === "watch") {
         const x = pick(ids);
@@ -346,7 +330,7 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
   return { a: A, applied, diverged, effective, compared };
 }
 
-const KINDS: readonly Kind[] = ["role", "split", "swap", "fence", "watch", "miss", "churn", "voteChurn", "ballotSwap", "seal"];
+const KINDS: readonly Kind[] = ["role", "split", "swap", "watch", "miss", "churn", "voteChurn", "ballotSwap", "seal"];
 const COUNTS = [3, 4, 6, 9, 12];
 /** Seeds per player count; raise locally (QA_SEEDS=20) for a wider sweep. */
 const SEEDS = Number(process.env.QA_SEEDS ?? 1);
@@ -366,7 +350,7 @@ describe("QA: changing one player's hidden choices never changes another player'
         if (r.diverged) firstPublic.add(r.diverged.type);
       }
     });
-    expect(applied, "the change was made in most games").toBeGreaterThanOrEqual((kind === "fence" ? 2 : 4) * SEEDS);
+    expect(applied, "the change was made in most games").toBeGreaterThanOrEqual(4 * SEEDS);
     expect(compared).toBeGreaterThan(200 * SEEDS);
     // design §11.2: in Secret mode ballots never surface, not even in the reveal.
     if (mode === "secret" && ["voteChurn", "ballotSwap", "seal"].includes(kind)) expect([...firstPublic]).toEqual([]);

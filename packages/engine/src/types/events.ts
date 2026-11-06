@@ -21,7 +21,7 @@ export interface GameCreated {
   readonly visibility: PublicVisibility;
   readonly players: readonly PlayerSeat[];
   readonly job: JobId;
-  /** The deck preset (after the stored saboteur-setting migration). extension.md "Decks" */
+  /** The deck preset. extension.md "Decks" */
   readonly deck: DeckId;
   readonly deal: DealStyle;
   readonly roleList: RoleListSetting;
@@ -52,14 +52,6 @@ export interface RoleDealt {
   readonly visibility: PrivateVisibility;
   readonly player: PlayerId;
   readonly role: RoleId;
-}
-
-/** The Snitch's secret target, drawn at setup from the other players. design §8 */
-export interface SnitchTargetAssigned {
-  readonly type: "snitchTargetAssigned";
-  readonly visibility: PrivateVisibility;
-  readonly player: PlayerId;
-  readonly target: PlayerId;
 }
 
 /**
@@ -148,32 +140,19 @@ export interface LootSplit {
   readonly toStash: number;
 }
 
-/**
- * What a used power did. Move powers as submitted (the Fence's `amount` is
- * what actually moved), plus the Blackmailer's verdict and the Muscle's cancel.
- * design §8
- */
+/** What a used power did. Move powers as submitted, plus what each instant power answered. design §8 */
 export type ResolvedAbility =
-  | Exclude<AbilityUse, { readonly kind: "blackmail" | "embezzle" }>
-  /** Blackmailer: right → `target`'s vote at the next meeting that opens is yours (v2 §2). */
-  | { readonly kind: "blackmail"; readonly target: PlayerId; readonly role: RoleId; readonly correct: boolean }
-  /** Embezzler: `amount` moved from the Haul to your stash (inside the round's Haul change; at most what the Haul held). design §8 (v2 §2) */
-  | { readonly kind: "embezzle"; readonly amount: number }
-  /** Muscle: the pending shakedown of `meetingId` will be cancelled when its window ends. design §11.3 */
-  | { readonly kind: "cancelShakedown"; readonly meetingId: string; readonly target: PlayerId }
+  | AbilityUse
   /** Mole: a tip-off is queued; it lands at the next free hidden police moment (`tipOffLanded`). extension.md "Police activity" */
   | { readonly kind: "tipOff" }
   /** Auditor: `room` came up `shortfall` short in `round` (its visitors' pockets; 0 if none). design §8 (v2 §2) */
   | { readonly kind: "audit"; readonly round: number; readonly room: RoomId; readonly shortfall: number }
   /**
-   * Detective: whether `target`'s stash (with any Fence safe, as the clean
-   * check counts it) is at or above `threshold`, the current act's clean threshold. design §8 (v2 §2)
+   * Detective: whether `target`'s stash is at or above `threshold`, the current act's clean threshold. design §8 (v2 §2)
    */
   | { readonly kind: "checkStash"; readonly target: PlayerId; readonly threshold: number; readonly dirty: boolean }
   /** Priest: `target` is blessed for `act` (a clean shakedown of them that act is paid by the bank). design §8 (v2 §2) */
   | { readonly kind: "bless"; readonly target: PlayerId; readonly act: ActNumber }
-  /** Bagman: it pocketed nothing this round, so the bank added `bonus` to the Haul (inside the round's Haul change). design §8 (v2 §2) */
-  | { readonly kind: "bagman"; readonly bonus: number }
   /** Fixer: its once-per-game save stopped a raid; it lost `lost` from its stash. design §8 (v2 §2) */
   | { readonly kind: "fixer"; readonly lost: number };
 
@@ -184,33 +163,6 @@ export interface AbilityResolved {
   readonly player: PlayerId;
   readonly round: number;
   readonly ability: ResolvedAbility;
-}
-
-/**
- * Blackmail (v2 §2): someone guessed your role in `round`, so your vote is
- * compromised: at the next meeting that opens your ballot weighs nothing (the
- * Blackmailer's carries it). It doesn't say who. design §8, §11.2
- */
-export interface VoteCompromised {
-  readonly type: "voteCompromised";
-  readonly visibility: PrivateVisibility;
-  readonly player: PlayerId;
-  readonly round: number;
-}
-
-/**
- * Forger (v2 §2): `forger` planted `target` in `room` in `round`; the watch
- * feeds of `shownTo` (players, seat order) showed it as if real. Reveal-only:
- * to watchers a forged sighting is a plain `roomWatched`. design §8, §13
- */
-export interface SightingForged {
-  readonly type: "sightingForged";
-  readonly visibility: RevealVisibility;
-  readonly forger: PlayerId;
-  readonly round: number;
-  readonly target: PlayerId;
-  readonly room: RoomId;
-  readonly shownTo: readonly PlayerId[];
 }
 
 /** Who else was in your room. design §5.2 step 5 */
@@ -259,8 +211,7 @@ export interface RoundResolved {
   readonly heat: number;
   /**
    * The round's Heat change by part (before the clamp at 0): the baseline,
-   * each room that changed Heat (rounded; the Cleaner's and Getaway Driver's
-   * visits included), and the event card. The rooms take up any rounding, so
+   * each room that changed Heat (rounded), and the event card. The rooms take up any rounding, so
    * the baseline is its true value; `clamp` (only when non-zero) is what the
    * 0–max limit took back, so the parts add up to `heatDelta`. Police activity and a missed
    * target come as their own events under the round (`heatBreakdown`).
@@ -337,18 +288,6 @@ export interface RaidStopped {
 }
 
 // ---------------------------------------------------------------- events deck (§10)
-
-/**
- * Mastermind: the card that flips at the start of `round`, unless a Rig
- * changes it. Only the Mastermind is told. design §8, §10 (v2 §2)
- */
-export interface CardForeseen {
-  readonly type: "cardForeseen";
-  readonly visibility: PrivateVisibility;
-  readonly player: PlayerId;
-  readonly round: number;
-  readonly card: EventId;
-}
 
 /**
  * The round's event card, flipped for everyone at the start of the round
@@ -547,21 +486,7 @@ export interface MeetingClosed {
 }
 
 /**
- * The votes Blackmailers stole at the meeting that just closed (victim's vote
- * cast by `blackmailer`), and whether each Blackmailer's steals decided its
- * shakedown. Reveal-only, so it stays hidden until the end. Read by the
- * end-of-game reveal, not by the token (a Double-cross can move the role). role deck v2 §2, design §13
- */
-export interface VotesStolen {
-  readonly type: "votesStolen";
-  readonly visibility: RevealVisibility;
-  readonly meetingId: string;
-  readonly steals: readonly { readonly victim: PlayerId; readonly blackmailer: PlayerId; readonly decided: boolean }[];
-}
-
-/**
- * Stash revealed and taken into the Haul; the Fence safe is untouched and not
- * shown. If the target was clean, the crew pays compensation. design §11.3
+ * Stash revealed and taken into the Haul. If the target was clean, the crew pays compensation. design §11.3
  */
 export interface ShakedownResolved {
   readonly type: "shakedownResolved";
@@ -569,8 +494,6 @@ export interface ShakedownResolved {
   readonly meetingId: string;
   readonly target: PlayerId;
   readonly stashRevealed: number;
-  /** A Fence's safe is shown too, but not taken. extension.md "Shakedowns (fixed numbers)" */
-  readonly safeRevealed: number;
   readonly taken: number;
   readonly clean: boolean;
   readonly compensation: number;
@@ -578,8 +501,8 @@ export interface ShakedownResolved {
 
 /**
  * The vote passed a shakedown on `target`; it is applied when the window ends
- * (`advance { resolveShakedown }`), unless the Muscle cancels it. Only opened
- * when the role pool holds the Muscle. design §8, §11.3
+ * (`advance { resolveShakedown }`), unless a Shield cancels it. Only opened
+ * when the shop holds the Shield. design §8.3, §11.3
  */
 export interface ShakedownPending {
   readonly type: "shakedownPending";
@@ -590,7 +513,7 @@ export interface ShakedownPending {
   readonly target: PlayerId;
 }
 
-/** The Muscle blocked the shakedown. It doesn't say who did. design §8 */
+/** A Shield blocked the shakedown. design §8.3 */
 export interface ShakedownCancelled {
   readonly type: "shakedownCancelled";
   readonly visibility: PublicVisibility;
@@ -609,15 +532,6 @@ export interface BlessingPaid {
   readonly meetingId: string;
   readonly target: PlayerId;
   readonly amount: number;
-}
-
-/** The Muscle cancelled the shakedown of a player who wasn't clean, so the ledger names it. design §8 (v2 §2) */
-export interface MuscleNamed {
-  readonly type: "muscleNamed";
-  readonly visibility: PublicVisibility;
-  readonly meetingId: string;
-  readonly player: PlayerId;
-  readonly target: PlayerId;
 }
 
 /** design §11.4, §11.5 */
@@ -707,12 +621,10 @@ export interface RankEntry {
   readonly player: PlayerId;
   /** Revealed at the end. design §13 */
   readonly role: RoleId;
-  /** Stash (safe included) plus the Inside Man's bonus; a whole number. extension.md "Winning and losing" */
+  /** The final stash; a whole number. extension.md "Winning and losing" */
   readonly score: number;
-  /** Final stash before role scoring, including any Fence safe. design §8 */
+  /** Final stash. design §8 */
   readonly stash: number;
-  /** The part of `stash` hidden in the Fence safe (0 for other roles). design §8 */
-  readonly safe: number;
   /** Tie-break 1: fewer is better. design §3 */
   readonly timesShakenDown: number;
   /** Tie-break 2: more is better. Only revealed at the end. design §3 */
@@ -752,7 +664,6 @@ export type GameEvent =
   | RngSeeded
   | RoomsSet
   | RoleDealt
-  | SnitchTargetAssigned
   | RoleListShown
   | ShopDealt
   | RngAdvanced
@@ -762,8 +673,6 @@ export type GameEvent =
   | DefaultMoveAssigned
   | LootSplit
   | AbilityResolved
-  | VoteCompromised
-  | SightingForged
   | RoomSighting
   | RoomWatched
   | PocketCount
@@ -774,7 +683,6 @@ export type GameEvent =
   | TipOffLanded
   | CopsRaided
   | RaidStopped
-  | CardForeseen
   | EventFlipped
   | DoubleCrossOffered
   | DoubleCrossAnswered
@@ -793,12 +701,10 @@ export type GameEvent =
   | VoteSealed
   | VoteCast
   | MeetingClosed
-  | VotesStolen
   | ShakedownPending
   | ShakedownCancelled
   | ShakedownResolved
   | BlessingPaid
-  | MuscleNamed
   | CheckpointChecked
   | TokenEarned
   | PerkBought

@@ -188,7 +188,7 @@ describe("every preset finishes all-bot games (design §4.1)", () => {
 });
 
 describe("kill/restart at every step = an uninterrupted run (same seed)", () => {
-  // The host calls an emergency in round 2's planning, so a notice, a meeting and (with luck) a Muscle window are hit.
+  // The host calls an emergency in round 2's planning, so a notice, a meeting and (with luck) a shakedown window are hit.
   const emergencyAt = async (s: GameState, _i: number, id: string, host: string) => {
     if (s.phase.kind === "planning" && s.phase.round === 2 && !s.pendingEmergency && count(s, "emergencyMeetingCalled") === 0) {
       expect(await send(id, host, { type: "callEmergency" })).toMatchObject({ ok: true });
@@ -365,7 +365,6 @@ describe("emergency during an open alibi window (design §5.4)", () => {
     expect(await app.scheduler.tick()).toBe(1);
     expect(await deadlines(id)).toEqual([{ key: "round:2", due: clock.now() + left, paused: false }]);
   });
-
 });
 
 describe("restart matrix after the fix (30c9f9e): bots, 10+ seeds", () => {
@@ -393,7 +392,8 @@ describe("transient database errors on a deadline (30c9f9e retry/backoff)", () =
   async function playWithFault(fault: RegExp | null, at: number) {
     await fresh();
     forcedSeed = "qa-fault";
-    const { id } = await startGame(5, { sessionLength: "quick" });
+    // No Mole, so no police moments: the backoff's idle time is game time, so a police moment would land elsewhere.
+    const { id } = await startGame(5, { sessionLength: "quick", roles: ["lookout", "auditor", "detective", "smoothTalker", "hacker"] });
     let idle = 0;
     for (let i = 0; i < 2000; i++) {
       if ((await load(id)).phase.kind === "ended") break;

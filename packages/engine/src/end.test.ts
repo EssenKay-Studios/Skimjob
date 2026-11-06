@@ -17,7 +17,7 @@ function config(players: number): GameConfig {
     seed: "end-seed",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: [...STARTER_ROLES], // no Muscle, so no shakedown window (task 12)
+    rolePool: [...STARTER_ROLES], // a shakedown window only if the shop holds a Shield
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     contentOverrides: V01_NUMBERS, // scripted against content 0.1.0 numbers (balance pass 1)
@@ -68,16 +68,14 @@ function withPlayers(s: GameState, haul: number, change: Record<string, Partial<
 
 describe("a successful heist — design §3, §8", () => {
   /**
-   * 3 players. p0 (Fence) in the Vault pockets 1 a round and puts 1 a round in
-   * the safe in Act 3; p1 (Inside Man) on the Rooftop; p2 (Rookie) in the
+   * 3 players. p0 (Hacker) in the Vault pockets 1 a round; p1 (Priest) on the Rooftop; p2 (Rookie) in the
    * Office pockets 1 a round until round 9. Haul +8 a round (+9 in round 9):
    * 24 ≥ 18, 48 ≥ 42, 73 ≥ 66. Heat 4 + (20 − 20) ÷ 3 = +4 a round.
    */
   function fullGame(): GameState {
-    let s = game(3, ["fence", "insideMan", "rookie"]);
+    let s = game(3, ["hacker", "priest", "rookie"]);
     for (let round = 1; round <= 9; round++) {
-      const safe = round > 6 ? { ability: { kind: "fenceSafe", amount: 1 } } : {};
-      s = run(s, mv("p0", "vault", 1, safe), mv("p1", "rooftop"), mv("p2", "office", round < 9 ? 1 : 0), ROUND);
+      s = run(s, mv("p0", "vault", 1), mv("p1", "rooftop"), mv("p2", "office", round < 9 ? 1 : 0), ROUND);
       if (round % 3 === 0) s = run(s, sched(round / 3), OPEN, CLOSE);
     }
     return s;
@@ -89,11 +87,9 @@ describe("a successful heist — design §3, §8", () => {
     expect(outcome(s)).toEqual({
       result: "success",
       ranking: [
-        // design §8: the stash includes the Fence safe.
-        { player: "p0", role: "fence", score: 9, stash: 9, safe: 3, timesShakenDown: 0, totalHandedIn: 45 },
-        { player: "p2", role: "rookie", score: 8, stash: 8, safe: 0, timesShakenDown: 0, totalHandedIn: 28 },
-        // design §8: the Inside Man scores 1 per loot above the final target (73 − 66).
-        { player: "p1", role: "insideMan", score: 7, stash: 0, safe: 0, timesShakenDown: 0, totalHandedIn: 0 },
+        { player: "p0", role: "hacker", score: 9, stash: 9, timesShakenDown: 0, totalHandedIn: 45 },
+        { player: "p2", role: "rookie", score: 8, stash: 8, timesShakenDown: 0, totalHandedIn: 28 },
+        { player: "p1", role: "priest", score: 0, stash: 0, timesShakenDown: 0, totalHandedIn: 0 },
       ],
       winners: ["p0"],
     });
@@ -119,22 +115,7 @@ describe("role scoring — design §8", () => {
     ]);
   });
 
-  it("Inside Man: surplus over the final target is added to the stash; none below it", () => {
-    const above = withPlayers(game(3, ["insideMan", "rookie"]), 72, { p0: { stash: 5 } });
-    expect(ranking(above).find((e) => e.player === "p0")?.score).toBe(11); // 5 + (72 − 66), V01 numbers: 1 point per loot
-    const below = withPlayers(game(3, ["insideMan", "rookie"]), 60, { p0: { stash: 5 } });
-    expect(ranking(below).find((e) => e.player === "p0")?.score).toBe(5);
-  });
-
   // extension.md "Winning and losing": +1 per 5 loot over the final target, rounded down.
-  it("Inside Man (shipped numbers): +1 point per 5 loot over the final target", () => {
-    const cfg = { ...config(3), contentOverrides: null };
-    const log = setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" && e.player === "p0" ? { ...e, role: "insideMan" } : e));
-    const target = checkpointTarget(jobFor(cfg), 3, 3);
-    const at = (haul: number) => ranking(withPlayers(replay(cfg, log), haul, { p0: { stash: 5 } })).find((e) => e.player === "p0")?.score;
-    expect(target).toBeGreaterThan(0);
-    expect([at(target + 4), at(target + 5), at(target + 14), at(target - 3)]).toEqual([5, 6, 7, 5]);
-  });
 
   it("the Mole scores its stash", () => {
     const s = withPlayers(game(3, ["mole", "rookie"]), 0, { p0: { stash: 4 } });
@@ -230,20 +211,10 @@ describe("one crew: the top group wins (extension.md \"How you win\", Build note
     expect(o.ranking.map((e) => e.player)).toEqual(["p1", "p2", "p0"]);
   });
 
-  it("winsOn: Getaway Driver [heat], Embezzler [target], Fence and Mole both", () => {
-    const top = (role: string, reason: "heat" | "target") =>
-      outcomeFor(withPlayers(game(3, [role, "rookie"]), 0, { p0: { stash: 9 }, p1: { stash: 1 } }), reason).winners;
-    expect([top("getawayDriver", "heat"), top("getawayDriver", "target")]).toEqual([["p0"], []]);
-    expect([top("embezzler", "heat"), top("embezzler", "target")]).toEqual([[], ["p0"]]);
-    expect([top("fence", "heat"), top("fence", "target")]).toEqual([["p0"], ["p0"]]);
-    expect([top("mole", "heat"), top("mole", "target")]).toEqual([["p0"], ["p0"]]);
-    expect([top("lookout", "heat"), top("lookout", "target")]).toEqual([[], []]);
-  });
-
   it("a tied top group: on success all win; on failure only those whose role wins it", () => {
-    const s = withPlayers(game(4, ["mole", "lookout", "rookie", "fence"]), 0, { p0: { stash: 6 }, p1: { stash: 6 }, p2: { stash: 5 }, p3: { stash: 6 } });
+    const s = withPlayers(game(4, ["mole", "lookout", "rookie", "hacker"]), 0, { p0: { stash: 6 }, p1: { stash: 6 }, p2: { stash: 5 }, p3: { stash: 6 } });
     expect(outcomeFor(s, null).winners).toEqual(["p0", "p1", "p3"]);
-    expect(outcomeFor(s, "heat").winners).toEqual(["p0", "p3"]);
+    expect(outcomeFor(s, "heat").winners).toEqual(["p0"]);
   });
 
   it("tie-breaks come first: a failure-winner behind on shakedowns is out of the top group", () => {

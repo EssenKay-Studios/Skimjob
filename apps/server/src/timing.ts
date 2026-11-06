@@ -20,7 +20,7 @@ export interface Timing {
   /** An emergency meeting's notice period, from the call to the window opening. */
   readonly emergencyNoticeMs: number;
   /**
-   * The Muscle's shakedown window. Always runs its full length, cancel or not:
+   * The shakedown window (the Shield's). Always runs its full length, cancel or not:
    * ending early would show that someone cancelled (STATUS, PR #12 review).
    */
   readonly shakedownWindowMs: number;

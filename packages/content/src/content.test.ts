@@ -124,28 +124,20 @@ describe("starter roles — design §8, §8.1", () => {
   });
 
   it("Rookie: no power, plain stash (extension.md: no multiplier)", () => {
-    expect(ROLES.rookie).toMatchObject({ power: { kind: "none" }, canPocket: true, scoring: { lootPerPointOverFinalTarget: 0 } });
+    expect(ROLES.rookie).toMatchObject({ power: { kind: "none" } });
   });
 
   it("Lookout: sees who was in one extra room each round", () => {
-    expect(ROLES.lookout).toMatchObject({ power: { kind: "lookout", extraRooms: 1 }, canPocket: true });
-  });
-
-  it("Inside Man: can't pocket; +1 per 5 loot the Haul ends above the final target (extension.md \"Winning and losing\")", () => {
-    expect(ROLES.insideMan).toMatchObject({ power: { kind: "none" }, canPocket: false, scoring: { lootPerPointOverFinalTarget: 5 } });
-  });
-
-  it("Fence: up to 5 loot per stretch into a safe; token at 10", () => {
-    expect(ROLES.fence).toMatchObject({ power: { kind: "fenceSafe", perAct: 1, tokenSafe: 3 }, canPocket: true });
+    expect(ROLES.lookout).toMatchObject({ power: { kind: "lookout", extraRooms: 1 } });
   });
 
   it("tags and winsOn (extension.md Build notes \"Win rule\", \"Tags\")", () => {
     const tagged = (tag: string) => Object.values(ROLES).filter((r) => r.tag === tag).map((r) => r.id).sort();
-    expect(tagged("wildcard")).toEqual(["blackmailer", "fence", "forger", "getawayDriver", "hacker"]);
-    expect(tagged("loneWolf")).toEqual(["embezzler", "mole"]);
-    expect(tagged("teamPlayer")).toHaveLength(13);
+    expect(tagged("wildcard")).toEqual(["hacker"]);
+    expect(tagged("loneWolf")).toEqual(["mole"]);
+    expect(tagged("teamPlayer")).toHaveLength(7);
     const winners = Object.fromEntries(Object.values(ROLES).filter((r) => r.winsOn.length > 0).map((r) => [r.id, r.winsOn]));
-    expect(winners).toEqual({ getawayDriver: ["heat"], fence: ["heat", "target"], mole: ["heat", "target"], embezzler: ["target"] });
+    expect(winners).toEqual({ mole: ["heat", "target"] });
     for (const id of STARTER_ROLES) expect(ROLES[id]?.tag).toBe("teamPlayer");
   });
 
@@ -164,9 +156,10 @@ describe("starter roles — design §8, §8.1", () => {
     expect(PERK_RULES).toEqual({ extraVoteWeight: 1, rigOptions: 2 });
   });
 
-  it("decks: Starter 5, Standard 11, Everything 20 (extension.md \"Decks\")", () => {
-    expect(DECKS.starter).toHaveLength(5);
-    expect(DECKS.standard).toHaveLength(11);
+  it("decks: Starter 2, Standard 6, Everything 9 (extension.md \"Decks\", R7 cut)", () => {
+    expect(DECKS.starter).toHaveLength(2);
+    expect(DECKS.standard).toHaveLength(6);
+    expect(DECKS.everything).toHaveLength(9);
     expect([...DECKS.everything].sort()).toEqual(Object.keys(ROLES).sort());
   });
 

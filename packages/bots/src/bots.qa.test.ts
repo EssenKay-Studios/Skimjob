@@ -1,6 +1,6 @@
 // QA (PR #9): adversarial checks on the bots and the all-bot runner. design §17.3
 // (bots play by the same rules and see only their own view), §17.2 (determinism),
-// §5.1 (absent players get default moves), §8 (Inside Man can't pocket), §11.2 (votes).
+// §5.1 (absent players get default moves), §11.2 (votes).
 import { describe, expect, it } from "vitest";
 import {
   createGame,
@@ -9,7 +9,6 @@ import {
   type Command,
   type GameConfig,
   type GameState,
-  type MoleSetting,
   type PlayerCommand,
   type PlayerView,
   type VoteVisibility,
@@ -59,24 +58,20 @@ const expectClean = (r: BotGameResult, label: string) => {
 
 describe("QA: sweep — every personality at 2, 3, 8, 12 players over many seeds (design §17.3)", () => {
   const MODES = VOTE_MODES;
-  const MOLES: MoleSetting[] = ["off", "maybe", "on"];
 
   it.each(IDS)("%s crews: zero refused commands, no exceptions, every game ends", (id) => {
     for (const n of SIZES) {
       for (let s = 0; s < 6; s++) {
-        const c = config(n, `sweep-${id}-${n}-${s}`, { voteVisibility: cyc(MODES, s), mole: cyc(MOLES, s) });
+        const c = config(n, `sweep-${id}-${n}-${s}`, { voteVisibility: cyc(MODES, s) });
         expectClean(runBotGame(c, createBots(c.players, only(id), `b-${s}`)), `${id} n=${n} s=${s}`);
       }
     }
   });
 
-  it("mixed crews in every seat order, vote mode and Mole setting", () => {
+  it("mixed crews in every seat order and vote mode", () => {
     for (const n of SIZES) {
       for (let s = 0; s < 10; s++) {
-        const c = config(n, `mix-${n}-${s}`, {
-          voteVisibility: cyc(MODES, s),
-          mole: s % 2 === 0 ? cyc(MOLES, s) : "off",
-        });
+        const c = config(n, `mix-${n}-${s}`, { voteVisibility: cyc(MODES, s) });
         expectClean(runBotGame(c, createBots(c.players, rotate(s), `m-${s}`)), `n=${n} s=${s}`);
       }
     }
@@ -84,7 +79,7 @@ describe("QA: sweep — every personality at 2, 3, 8, 12 players over many seeds
 
   it("all-Mole-setting 'on' at 12 players (one Mole, design §8.1) still plays clean", () => {
     for (let s = 0; s < 5; s++) {
-      const c = config(12, `moles-${s}`, { mole: "on" });
+      const c = config(12, `moles-${s}`, {});
       const r = runBotGame(c, createBots(c.players, rotate(s), `mo-${s}`));
       expectClean(r, `s=${s}`);
       expect(Object.values(r.state.players).filter((p) => p.role === "mole").length).toBe(1);
@@ -95,7 +90,7 @@ describe("QA: sweep — every personality at 2, 3, 8, 12 players over many seeds
 describe("QA: determinism — design §17.2", () => {
   it.each(SIZES)("same game seed + bot seed → identical log and identical command stream (%i players)", (n) => {
     const once = () => {
-      const c = config(n, `det-${n}`, { mole: "maybe" });
+      const c = config(n, `det-${n}`, {});
       const rec = recording(createBots(c.players, rotate(n), "det-bots"));
       const r = runBotGame(c, rec.wrapped);
       return { log: JSON.stringify(r.state.log), cmds: JSON.stringify(rec.sent.map((x) => x.command)), steps: r.steps };
@@ -280,52 +275,18 @@ describe("QA: commands are well-formed — design §8, §11.2", () => {
     }),
   );
 
-  it("the batch is not vacuous: it has emergencies, shakedowns, Fence and Lookout uses", () => {
+  it("the batch is not vacuous: it has emergencies, shakedowns, Hacker and Lookout uses", () => {
     const log = games.flatMap(({ r }) => r.state.log);
     const has = (test: (e: (typeof log)[number]) => boolean) => expect(log.some(test)).toBe(true);
     has((e) => e.type === "emergencyMeetingCalled");
     has((e) => e.type === "shakedownResolved");
     // Since R3b five accomplices share the dark seats, so any accomplice's move power counts here.
-    has((e) => e.type === "abilityResolved" && ["fenceSafe", "loopCameras", "forge", "blackmail"].includes(e.ability.kind));
+    has((e) => e.type === "abilityResolved" && ["loopCameras"].includes(e.ability.kind));
     has((e) => e.type === "abilityResolved" && e.ability.kind === "lookout");
   });
 
   it("every command is in the bot's own name", () => {
     for (const { sent } of games) for (const { view, command } of sent) expect(command.player).toBe(view.me.id);
-  });
-
-  it("Inside Man bots never try to pocket, whatever the personality (Random included)", () => {
-    let insiderMoves = 0;
-    for (const { sent } of games) {
-      for (const { view, command } of sent) {
-        if (command.type !== "submitMove" || view.me.role !== "insideMan") continue;
-        insiderMoves++;
-        expect(command.move.pocket).toBe(0);
-      }
-    }
-    expect(insiderMoves).toBeGreaterThan(20);
-  });
-
-  it("Inside Man bots never pocket: forced Inside Man seat for every personality at every size", () => {
-    for (const id of IDS) {
-      for (const n of SIZES) {
-        // rolePool ["insideMan"] guarantees exactly one Inside Man; find it from the full state (scheduler side).
-        const c = config(n, `ins-${id}-${n}`, { rolePool: ["insideMan"] });
-        const rec = recording(createBots(c.players, only(id), `ins-${id}`));
-        const r = runBotGame(c, rec.wrapped);
-        expectClean(r, `${id} n=${n}`);
-        const insider = r.state.playerOrder.find((p) => r.state.players[p]?.role === "insideMan");
-        // design §8.1 (owner answers, 1 Nov): no Inside Man below 5 players.
-        if (n < 5) {
-          expect(insider).toBeUndefined();
-          continue;
-        }
-        expect(insider).toBeDefined();
-        const moves = rec.sent.filter((x) => x.command.player === insider && x.command.type === "submitMove");
-        expect(moves.length).toBeGreaterThan(0);
-        for (const { command } of moves) if (command.type === "submitMove") expect(command.move.pocket).toBe(0);
-      }
-    }
   });
 
   it("votes are a skip or a shakedown of another seated player — never self, never unknown", () => {

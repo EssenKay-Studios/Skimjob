@@ -10,7 +10,6 @@ export function seat(over: Partial<PlayerRecord> = {}): PlayerRecord {
     tokensEarned: 0,
     tokensSpent: 0,
     star: false,
-    canPocket: true,
     score: 0,
     stash: 0,
     looted: 20,

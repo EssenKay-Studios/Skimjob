@@ -94,7 +94,6 @@ function buildView(state: GameState, playerId: PlayerId): PlayerView {
       id: me.id,
       role: me.role,
       stash: me.stash,
-      safe: me.safe,
       roleState: me.roleState,
       emergencyMeetingUsed: me.emergencyMeetingUsed,
       tipOffs: state.police?.tipOffs[me.id] ?? 0,

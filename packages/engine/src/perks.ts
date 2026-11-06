@@ -12,7 +12,7 @@ import { EVENT_DECK, PERKS, PERK_RULES, type PerkId } from "@skimjob/content";
 import type { GameEvent, GameState, PlayerId, PlayerState, ResolvedPerk } from "./types";
 import { PUBLIC, privateTo } from "./types";
 import type { Draw } from "./handle";
-import { cardRound, foreseenCard } from "./deck";
+import { cardRound } from "./deck";
 import { perkCost, powerOf } from "./overrides";
 import { isObject, playerFor, show } from "./check";
 
@@ -95,9 +95,8 @@ function alibi(state: GameState, player: PlayerState): Result {
   ];
 }
 
-/** Recharge: a use of your power since the last meeting, or a once-per-game use, comes back. Never the Fence's safe allowance (v2 §2, R1 follow-up). */
+/** Recharge: a use of your power since the last meeting, or a once-per-game use, comes back. */
 function recharge(state: GameState, player: PlayerState): Result {
-  if (powerOf(state.config, player.role).kind === "fenceSafe") return "a Recharge doesn't refill the Fence's safe";
   const { usedThisAct, usedThisGame } = player.roleState;
   if (usedThisAct === 0 && usedThisGame === 0) return "your power has nothing to recharge";
   return [spent(state, player, { kind: "recharge" })];
@@ -114,18 +113,13 @@ function nextCardRound(state: GameState): number | null {
  * first flips unless you pick another (`rigPick`). Someone else's Rig of the
  * same round never refuses yours (a refusal would tell you who holds what,
  * e.g. after a Double-cross; PR #25 review): if several players rig a round,
- * the oldest Rig's pick flips. One Rig of a round per player. If a
- * Mastermind already foresaw the card (v2 §2), it is the first option, so
- * the Mastermind's view stays true unless someone picks the other.
+ * the oldest Rig's pick flips. One Rig of a round per player.
  */
 function rig(state: GameState, player: PlayerState, draw: Draw): Result {
   const round = nextCardRound(state);
   if (round === null) return "there is no next event card to rig";
   if (state.rigs.some((r) => r.player === player.id && r.round === round)) return "you already rigged the next event card";
-  const known = foreseenCard(state, round);
-  const cards = known
-    ? [known, ...draw.shuffle(EVENT_DECK.filter((c) => c !== known)).slice(0, PERK_RULES.rigOptions - 1)]
-    : draw.shuffle(EVENT_DECK).slice(0, PERK_RULES.rigOptions);
+  const cards = draw.shuffle(EVENT_DECK).slice(0, PERK_RULES.rigOptions);
   return [spent(state, player, { kind: "rig", round, cards })];
 }
 

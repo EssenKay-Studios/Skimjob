@@ -37,12 +37,4 @@ describe("role data — design §8", () => {
     expect(POOL_ROLES).toContain(MOLE_ROLE);
     for (const [id, def] of Object.entries(ROLES)) expect(def.id).toBe(id);
   });
-
-  it("only the Inside Man can't pocket", () => {
-    expect(Object.values(ROLES).filter((r) => !r.canPocket).map((r) => r.id)).toEqual(["insideMan"]);
-  });
-
-  it("only the Inside Man scores on the Haul", () => {
-    expect(Object.values(ROLES).filter((r) => r.scoring.lootPerPointOverFinalTarget !== 0).map((r) => r.id)).toEqual(["insideMan"]);
-  });
 });

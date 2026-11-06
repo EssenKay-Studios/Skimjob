@@ -59,9 +59,9 @@ export function skimEstimate(view: PlayerView): number {
   return total;
 }
 
-/** Whether the bot rates itself top: its stash and safe against the others' estimated share of the skim. */
+/** Whether the bot rates itself top: its stash against the others' estimated share of the skim. */
 export function ratesSelfTop(view: PlayerView): boolean {
-  const mine = view.me.stash + view.me.safe;
+  const mine = view.me.stash;
   if (mine === 0) return false;
   const pocketed = ofType(view.caseFile, "lootSplit").reduce((sum, e) => sum + e.toStash, 0);
   const others = Math.max(1, view.players.length);

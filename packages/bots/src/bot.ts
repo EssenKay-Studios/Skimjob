@@ -4,7 +4,7 @@
 // Bots are deterministic: all their randomness comes from their own seeded RNG
 // (the engine's sfc32), never Math.random, so same seed + same views = same
 // commands. Their seed is their own, not the game's (which is secret).
-import { FILLER_ROLE, ROUNDS_PER_ACT, type RoomId } from "@skimjob/content";
+import { ROUNDS_PER_ACT, type RoomId } from "@skimjob/content";
 import {
   checkpointTarget,
   nextUint32,
@@ -19,8 +19,8 @@ import {
   type VoteChoice,
 } from "@skimjob/engine";
 import type { Personality } from "./personalities";
-import { claimsOf, crewSize, isStar, jobOf, lastResolvedRound, ofType, roleOf, roomsWhere, totalRounds } from "./read";
-import { knownRoles, mostSuspicious, suspicion } from "./suspicion";
+import { crewSize, isStar, jobOf, lastResolvedRound, ofType, roleOf, roomsWhere, totalRounds } from "./read";
+import { mostSuspicious, suspicion } from "./suspicion";
 import { claimCommands, meetingTime } from "./claims";
 import { alibiPerk, buyPerks, hasPerk, meetingPerks, perkSpender, planningPerks } from "./perks";
 import { cardHeatNow, heatDanger, jobThisRound } from "./heat";
@@ -83,22 +83,8 @@ export function createBot({ player, personality, seed, crewSeed }: BotOptions): 
  */
 export const MOLE_TIP_AT = 0.7;
 
-/**
- * A Muscle bot rescues a shakedown target whose suspicion (to it) is below this
- * (bot setting; no dice, since the bot may be asked again during the window). design §8
- * 2 since the R6 balance pass (was 1): it spends its cancel on others more often, so it is
- * less often the one player a shakedown can't touch (team parity, docs/balance/r6-balance.md).
- */
-const MUSCLE_CLEAN_BELOW = 2;
-
-/** A Snitch bot votes for its own target at this share of its usual vote threshold (bot setting). design §8 */
-const SNITCH_EAGERNESS = 0.5;
-
 /** Chance a bot accepts a Double-cross offer (bot setting, not a game rule; minimal until task 16). design §10 */
 const DOUBLE_CROSS_ACCEPT = 0.5;
-
-/** A Bagman bot goes all-in in every round of this many acts, then plays its personality (bot setting, R5). */
-export const BAGMAN_ALL_IN_ACTS = 1;
 
 const pick = <T>(items: readonly T[], random: Random): T => items[Math.floor(random() * items.length)] as T;
 
@@ -128,18 +114,8 @@ export function decide(view: PlayerView, p: Personality, random: Random, crewSee
     return out;
   }
   if (phase.kind === "shakedownPending") {
-    // v2 §4: a target can still claim (the Inside Man: "only to defend against a shakedown").
+    // v2 §4: a target can still claim.
     out.push(...claimCommands(view, p, random, true));
-    // design §8, §11.3: a Muscle with its cancel left keeps itself out of trouble, and
-    // stops a shakedown of someone it thinks is clean (the Haul would pay them compensation).
-    const { power } = roleOf(view);
-    const cancelled = ofType(view.caseFile, "abilityResolved").some((e) => e.ability.kind === "cancelShakedown" && e.ability.meetingId === phase.meetingId);
-    if (power.kind === "cancelShakedown" && view.me.roleState.usedThisGame < power.perGame && !cancelled) {
-      const looksClean = phase.target !== player && (suspicion(view).get(phase.target) ?? 0) < MUSCLE_CLEAN_BELOW;
-      if (phase.target === player || looksClean) {
-        out.push({ type: "useAbility", player, ability: { kind: "cancelShakedown" } });
-      }
-    }
     return out;
   }
   out.push(...scheduleMeeting(view));
@@ -240,38 +216,9 @@ export function chooseMove(view: PlayerView, p: Personality, random: Random): Mo
     // design §8: one extra room's visitors; a looting room other than mine.
     const target = weighted(byLoot(lootRooms.filter((r) => r !== room)), random);
     if (target !== undefined) ability = { kind: "lookout", rooms: [target] };
-  } else if (power.kind === "fenceSafe") {
-    // design §8: hide what the act's allowance and the stash allow.
-    // The role's uses this act (they travel with the card in a Double-cross, design §10).
-    const left = power.perAct - view.me.roleState.usedThisAct;
-    const hideable = view.me.stash + pocket;
-    if (left >= 1 && hideable >= 1) ability = { kind: "fenceSafe", amount: Math.min(left, hideable) };
   } else if (power.kind === "loopCameras" && view.me.roleState.usedThisAct < power.perAct) {
     // v2 §4: hide its own skim (no allies to cover since the Extension).
     if (pocket > 0) ability = { kind: "loopCameras", room };
-  } else if (power.kind === "blackmail" && view.me.roleState.usedThisAct < power.perAct && view.players.length > 0) {
-    // v2 §4: guess only with a role from a Peek or an Inside tip (sure, unless stale after
-    // a Double-cross) or, failing those, someone's claim of a unique role; otherwise skip.
-    const others = new Set(view.players.map((o) => o.id));
-    const known = [...knownRoles(view)].filter(([id]) => others.has(id));
-    const claimed = [...claimsOf(view)].filter(([id]) => others.has(id) && !knownRoles(view).has(id)).map(([id, roles]) => [id, roles.at(-1) as string] as const);
-    const guesses = known.length > 0 ? known : claimed.filter(([, role]) => role !== FILLER_ROLE);
-    if (guesses.length > 0) {
-      const [target, role] = pick(guesses, random);
-      ability = { kind: "blackmail", target, role };
-    }
-  } else if (power.kind === "forge" && view.me.roleState.usedThisAct < power.perAct) {
-    // v2 §4: plant its most-trusted rival (lowest suspicion) in the room
-    // likely to come up short: where it skims itself, else the richest room, in the act's last round.
-    const scores = suspicion(view);
-    const rival = view.players.map((o) => o.id).sort((a, b) => (scores.get(a) ?? 0) - (scores.get(b) ?? 0))[0];
-    const richest = [...byLoot(lootRooms)].sort((a, b) => b[1] - a[1])[0]?.[0];
-    const short = pocket > 0 ? room : view.round % ROUNDS_PER_ACT === 0 ? richest : undefined;
-    if (rival !== undefined && short !== undefined) ability = { kind: "forge", target: rival, room: short };
-  } else if (power.kind === "embezzle" && view.me.roleState.usedThisAct < power.perAct) {
-    // v2 §4: take when it is in the richest room (a crowd there to blame), or in the act's last round.
-    const richest = [...byLoot(lootRooms)].sort((a, b) => b[1] - a[1])[0]?.[0];
-    if (room === richest || view.round % ROUNDS_PER_ACT === 0) ability = { kind: "embezzle" };
   }
   return ability ? { ...move, ability } : move;
 }
@@ -286,12 +233,10 @@ function chooseRoom(view: PlayerView, p: Personality, random: Random): RoomId {
   // The most any room pushes Heat on a normal round: a surged room is avoided harder.
   const usual = Math.max(1, ...roomsWhere(view, base, (d) => d.heatPressure > 0).map((r) => roomDef(base, r).heatPressure));
   const cooler = roomsWhere(view, job, (d) => d.heatPressure < 0)[0];
-  // extension.md Build notes "Bots": a ★ role leaning toward a raid heats the job
-  // (the Driver on its Rooftop), toward a missed target it skims the richest room.
+  // extension.md Build notes "Bots": a ★ role leaning toward a raid heats the job,
+  // toward a missed target it skims the richest room.
   const lean = leaning(view);
-  const { power } = roleOf(view);
   if (lean === "heat") {
-    if (power.kind === "getaway" && view.rooms.includes(power.room)) return power.room;
     const hottest = roomsWhere(view, job, (d) => d.heatPressure > 0).sort((a, b) => roomDef(job, b).heatPressure - roomDef(job, a).heatPressure)[0];
     if (hottest !== undefined) return hottest;
   }
@@ -313,11 +258,7 @@ function chooseRoom(view: PlayerView, p: Personality, random: Random): RoomId {
 
 /** How much to keep. design §5.1; §11.5 (team-minded bots keep the Haul on pace for the checkpoint) */
 function choosePocket(view: PlayerView, p: Personality, random: Random, loot: number): number {
-  // v2 §4: the Bagman leans honest: all-in through Act 1 (its bonus, and the Alibi it
-  // needs), then it plays its personality, covered by that Alibi (R5: all-in every
-  // round, it almost never had the top stash; docs/balance/balance-3.md).
-  const bagmanAllIn = roleOf(view).power.kind === "bagman" && view.act <= BAGMAN_ALL_IN_ACTS;
-  if (loot === 0 || !roleOf(view).canPocket || bagmanAllIn) return 0;
+  if (loot === 0) return 0;
   if (random() < p.noise) return Math.floor(random() * (loot + 1));
   if (random() >= p.pocketChance) return 0;
   let pocket = Math.min(loot, Math.max(1, Math.round(loot * p.greed * (0.5 + random()))));
@@ -415,12 +356,6 @@ export function chooseVote(view: PlayerView, p: Personality, random: Random, cre
     return target === null ? { kind: "skip" } : { kind: "shakedown", target };
   }
   const scores = misjudged(view, suspicion(view), p, random, crewSeed);
-  // design §8: a Snitch is paid when its target is caught holding loot, so it moves on less evidence.
-  const { power } = roleOf(view);
-  const mark = power.kind === "snitch" ? view.me.roleState.target : null;
-  if (mark !== null && mark !== undefined && (scores.get(mark) ?? 0) >= p.voteAt * SNITCH_EAGERNESS) {
-    return { kind: "shakedown", target: mark };
-  }
   const top = mostSuspicious(scores);
   return top !== null && top.score >= p.voteAt ? { kind: "shakedown", target: top.player } : { kind: "skip" };
 }

@@ -3,23 +3,20 @@
 //
 // Both are pure: they read state and return events (or a rejection reason).
 // `handleCommand` (handle.ts) folds the events.
-import { MOLE_ROLE, type RoleId, type RoomId } from "@skimjob/content";
+import type { RoomId } from "@skimjob/content";
 import type { AbilityUse, GameEvent, GameState, Move, PlayerId, PlayerState } from "./types";
-import { PUBLIC, REVEAL, privateTo } from "./types";
+import { PUBLIC, privateTo } from "./types";
 import { clampHeat, roomDef, roomHeatParts, roomLoot, roundHeatDelta } from "./job";
-import { eventsFor, jobFor, powerOf, roleDefIn, rolesFor } from "./overrides";
+import { eventsFor, jobFor, powerOf } from "./overrides";
 import { isObject, show } from "./check";
 import { actOfRound, isLastRoundOfAct } from "./acts";
 import { gameEnded } from "./end";
 import { applyEvent } from "./reduce";
 import type { Draw } from "./handle";
 import { cardEffects, cardHeat, closedRoom, isAudit, isBlackout, roundJob, startRound } from "./deck";
-import { grantRewards, heatTokens, roundRewards, stopRaid } from "./crew";
+import { grantRewards, stopRaid } from "./crew";
 
 export { actOfRound, isLastRoundOfAct };
-
-/** Whether `role` may pocket loot (Inside Man can't, design §8). A role id with no definition may. */
-const canPocket = (state: GameState, role: RoleId): boolean => roleDefIn(rolesFor(state.config), role)?.canPocket ?? true;
 
 const isCount = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v >= 0;
 
@@ -40,50 +37,18 @@ function checkAbility(state: GameState, player: PlayerState, raw: unknown): Abil
       if (new Set(rooms).size !== rooms.length) return "the Lookout can't watch the same room twice";
       return { kind: "lookout", rooms: [...rooms] };
     }
-    case "fenceSafe": {
-      const left = power.perAct - player.roleState.usedThisAct;
-      if (!isCount(raw.amount) || raw.amount < 1 || raw.amount > left) {
-        return `the safe takes a whole number from 1 to ${left} between these meetings`;
-      }
-      return { kind: "fenceSafe", amount: raw.amount };
-    }
     case "loopCameras": {
       if (player.roleState.usedThisAct >= power.perAct) return "you have already looped the cameras since the last meeting";
       if (typeof raw.room !== "string" || !state.rooms.includes(raw.room)) return "loop the cameras of a room in play";
       return { kind: "loopCameras", room: raw.room };
     }
-    case "blackmail": {
-      if (player.roleState.usedThisAct >= power.perAct) return "you have already blackmailed someone since the last meeting";
-      const { target, role } = raw;
-      if (typeof target !== "string" || !Object.hasOwn(state.players, target)) return `unknown player ${show(target)}`;
-      if (target === player.id) return "you can't blackmail yourself";
-      if (typeof role !== "string" || !(Object.hasOwn(rolesFor(state.config), role) || role === MOLE_ROLE)) return `unknown role ${show(role)}`;
-      return { kind: "blackmail", target, role };
-    }
-    case "forge": {
-      if (player.roleState.usedThisAct >= power.perAct) return "you have already forged a sighting since the last meeting";
-      const { target, room } = raw;
-      if (typeof target !== "string" || !Object.hasOwn(state.players, target)) return `unknown player ${show(target)}`;
-      if (typeof room !== "string" || !state.rooms.includes(room)) return "forge a sighting in a room in play";
-      return { kind: "forge", target, room };
-    }
-    case "embezzle": {
-      if (player.roleState.usedThisAct >= power.perAct) return "you have already embezzled since the last meeting";
-      return { kind: "embezzle" };
-    }
     case "tipOff":
       return "the tip-off is used any time with useAbility, not in a move";
     case "voteWeight":
-    case "cancelShakedown":
-    case "snitch":
     case "audit":
     case "checkStash":
     case "bless":
-    case "bagman":
-    case "cleaner":
     case "fixer":
-    case "foresee":
-    case "getaway":
       return "your role's power isn't used in a move";
     case "none":
       return "your role has no ability";
@@ -106,7 +71,6 @@ export function checkMove(state: GameState, player: PlayerState, raw: unknown): 
   if (!isCount(pocket)) return "pocket must be a whole number, 0 or more";
   // The real yield can only drop below the room's loot (crowded Deposit boxes), so this is the upper bound.
   if (pocket > def.loot) return `you can pocket at most ${def.loot} in the ${def.name}`;
-  if (pocket > 0 && !canPocket(state, player.role)) return "your role can't pocket loot";
 
   let move: Move = { room, pocket };
   if (def.info === "watchRoom") {
@@ -125,7 +89,7 @@ export function checkMove(state: GameState, player: PlayerState, raw: unknown): 
 
 /**
  * Every event for resolving the current round, in the order of design §5.2:
- * default moves (§5.1), yields and capacity, splits (then the Fence safe),
+ * default moves (§5.1), yields and capacity, splits,
  * Heat (rounded, then clamped once), information, the public summary, and
  * finally the raid, or nothing more: the fold of `roundResolved` opens the
  * round's alibis (design §5.4) and `closeAlibis` goes on. Step 1 is the round's event card (§10): its
@@ -175,70 +139,22 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
   for (const id of order) (visitors[moveOf(id).room] ??= []).push(id);
   const others = (room: RoomId, self: PlayerId): PlayerId[] => (visitors[room] ?? []).filter((p) => p !== self);
 
-  // §5.2 step 3: splits. Pocket is capped at the real yield; the Inside Man never pockets (§8).
+  // §5.2 step 3: splits. Pocket is capped at the real yield.
   let haulDelta = 0;
   let pocketed = 0;
   const toStash = new Map<PlayerId, number>();
   for (const id of order) {
     const { room, pocket } = moveOf(id);
     const loot = roomLoot(roomDef(job, room), visitors[room]?.length ?? 0);
-    const kept = canPocket(state, player(id).role) ? Math.min(pocket, loot) : 0;
+    const kept = Math.min(pocket, loot);
     toStash.set(id, kept);
     haulDelta += loot - kept;
     if (kept > 0) pocketed++;
     events.push({ type: "lootSplit", visibility: privateTo(id), player: id, round, room, loot, toHaul: loot - kept, toStash: kept });
-    // Bagman (v2 §2): handed in everything (and something) → the bank adds its bonus, hidden in the round's Haul change.
-    const power = powerFor(id);
-    if (power.kind === "bagman" && kept === 0 && loot > 0 && power.bonus > 0) {
-      haulDelta += power.bonus;
-      events.push({ type: "abilityResolved", visibility: privateTo(id), player: id, round, ability: { kind: "bagman", bonus: power.bonus } });
-    }
   }
-  // Each stash as the round's splits, safe moves and takes change it.
-  const stash = new Map<PlayerId, number>(order.map((id) => [id, player(id).stash + (toStash.get(id) ?? 0)]));
-  const stashOf = (id: PlayerId): number => stash.get(id) as number;
-  // Fence (§8): move loot from the stash, including this round's pocket, into the safe.
-  for (const id of order) {
-    const ability = abilityOf(id);
-    if (ability?.kind !== "fenceSafe") continue;
-    const power = powerFor(id);
-    const left = power.kind === "fenceSafe" ? power.perAct - player(id).roleState.usedThisAct : 0;
-    const amount = Math.max(0, Math.min(ability.amount, left, stashOf(id)));
-    stash.set(id, stashOf(id) - amount);
-    events.push({ type: "abilityResolved", visibility: privateTo(id), player: id, round, ability: { kind: "fenceSafe", amount } });
-  }
-  // Embezzler (v2 §2): after the splits, its take moves from this round's inflow to its stash, inside the Haul change.
-  // Capped at the inflow (PR #36 review): the public Haul change never goes below 0, so a take never shows.
-  for (const id of order) {
-    const power = powerFor(id);
-    if (abilityOf(id)?.kind !== "embezzle" || power.kind !== "embezzle") continue;
-    const amount = Math.max(0, Math.min(power.take, haulDelta));
-    haulDelta -= amount;
-    stash.set(id, stashOf(id) + amount);
-    events.push({ type: "abilityResolved", visibility: privateTo(id), player: id, round, ability: { kind: "embezzle", amount } });
-  }
-  // Blackmailer (v2 §2): a right guess steals the target's vote at the next meeting (meeting.ts); the
-  // victim is told its vote is compromised. Nobody learns anyone else's side (extension.md "Build notes").
-  for (const id of order) {
-    const ability = abilityOf(id);
-    if (ability?.kind !== "blackmail") continue;
-    const correct = player(ability.target).role === ability.role;
-    events.push({ type: "abilityResolved", visibility: privateTo(id), player: id, round, ability: { ...ability, correct } });
-    if (!correct) continue;
-    events.push({ type: "voteCompromised", visibility: privateTo(ability.target), player: ability.target, round });
-  }
-
   // §5.2 step 4, §7: baseline + room pressure, rounded, plus the card's Heat, then clamped once.
   // The Mole's tip-off is no longer part of a round: it lands at a hidden police moment (police.ts).
   const counts = Object.fromEntries(Object.entries(visitors).map(([room, ids]) => [room, ids.length]));
-  // Cleaner (v2 §2): its visit to its cooling room counts as `visitors` visitors for that room's Heat pressure.
-  for (const id of order) {
-    const power = powerFor(id);
-    if (power.kind === "cleaner" && moveOf(id).room === power.room) counts[power.room] = (counts[power.room] ?? 0) + power.visitors - 1;
-    // Getaway Driver (v2 §2): its visit there adds `reverse` × the Heat a visitor would remove (0 since R5: it cools nothing), hidden in the total.
-    // It counts as negative visitors, so it follows the room's pressure (and its sign) if a card or override changes it.
-    if (power.kind === "getaway" && moveOf(id).room === power.room) counts[power.room] = (counts[power.room] ?? 0) - power.reverse - 1;
-  }
   // design §10: a card's Heat (Quiet night) joins the same single clamp.
   const roomsHeat = roundHeatDelta(job, crewSize, counts);
   const eventHeat = cardHeat(state);
@@ -268,31 +184,13 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
   }
   // extension.md "Roles": Hackers whose loop hid, from a Security watcher of that room, a visitor who pocketed (their token).
   const hid = new Set<PlayerId>();
-  // Forger (v2 §2): planted players show on every watch feed of the room this round (not to room-mates),
-  // in seat order like real ones, unless really there or watching it themselves.
-  const forged = new Map<RoomId, Set<PlayerId>>();
-  const forgers: { readonly forger: PlayerId; readonly target: PlayerId; readonly room: RoomId }[] = [];
-  for (const id of order) {
-    const ability = abilityOf(id);
-    if (ability?.kind !== "forge") continue;
-    events.push({ type: "abilityResolved", visibility: privateTo(id), player: id, round, ability });
-    forgers.push({ forger: id, target: ability.target, room: ability.room });
-    if (!(visitors[ability.room] ?? []).includes(ability.target)) forged.set(ability.room, (forged.get(ability.room) ?? new Set()).add(ability.target));
-  }
-  const fooled = new Map<string, PlayerId[]>();
-  const feed = (watcher: PlayerId, r: RoomId): PlayerId[] => {
-    const fakes = [...(forged.get(r) ?? [])].filter((x) => x !== watcher);
-    for (const x of fakes) fooled.set(`${x}\u0000${r}`, [...(fooled.get(`${x}\u0000${r}`) ?? []), watcher]);
-    const seen = new Set([...others(r, watcher), ...fakes]);
-    return order.filter((x) => seen.has(x));
-  };
   for (const id of order) {
     const { room, watch } = moveOf(id);
     const ability = abilityOf(id);
     if (!blackout && roomDef(job, room).info === "watchRoom" && watch !== undefined) {
       const loopers = looped.get(watch);
       if (loopers && others(watch, id).some((x) => (toStash.get(x) ?? 0) > 0)) for (const h of loopers) hid.add(h);
-      const seen = loopers ? [] : feed(id, watch);
+      const seen = loopers ? [] : others(watch, id);
       events.push({ type: "roomWatched", visibility: privateTo(id), player: id, round, source: "security", room: watch, seen, offline: loopers !== undefined });
     } else if (blackout && roomDef(job, room).info === "watchRoom" && watch !== undefined) {
       // extension.md "Event cards": a Power cut reads exactly like a loop on every feed.
@@ -301,24 +199,19 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
     if (ability?.kind === "lookout") {
       events.push({ type: "abilityResolved", visibility: privateTo(id), player: id, round, ability });
       for (const r of ability.rooms) {
-        const seen = blackout ? [] : feed(id, r);
+        const seen = blackout ? [] : others(r, id);
         events.push({ type: "roomWatched", visibility: privateTo(id), player: id, round, source: "lookout", room: r, seen, offline: blackout });
       }
     }
     // design §8.3 Tail: one more watched room, like the Lookout's (blinded by a Power cut, not by a camera loop).
     const tailed = player(id).roleState.tail;
     if (tailed !== null) {
-      const seen = blackout ? [] : feed(id, tailed);
+      const seen = blackout ? [] : others(tailed, id);
       events.push({ type: "roomWatched", visibility: privateTo(id), player: id, round, source: "tail", room: tailed, seen, offline: blackout });
     }
     if (roomDef(job, room).info === "pocketCount") {
       events.push({ type: "pocketCount", visibility: privateTo(id), player: id, round, pocketed });
     }
-  }
-  // v2 §2: which feeds a forged sighting fooled, for the end-of-game reveal only.
-  for (const f of forgers) {
-    const shownTo = fooled.get(`${f.target}\u0000${f.room}`) ?? [];
-    events.push({ type: "sightingForged", visibility: REVEAL, forger: f.forger, round, target: f.target, room: f.room, shownTo: order.filter((x) => shownTo.includes(x)) });
   }
   // design §10 Audit: what each room came up short (its visitors' pockets), every room in play listed.
   if (isAudit(state)) {
@@ -337,11 +230,8 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
     heatParts,
   });
 
-  // extension.md "Roles": this round's tokens (Bagman, Cleaner, Fence, Hacker, Embezzler's first take, Getaway Driver).
-  const resolved = events.reduce(applyEvent, before);
-  events.push(...roundRewards(resolved, round), ...grantRewards(state, "loopHidPocketer", (p) => hid.has(p.id)));
-  events.push(...grantRewards(state, "firstTake", (p) => embezzledFirst(resolved, p.id, round)));
-  events.push(...heatTokens(resolved));
+  // extension.md "Roles": this round's tokens (Hacker).
+  events.push(...grantRewards(state, "loopHidPocketer", (p) => hid.has(p.id)));
 
   // §5.2 step 6: Heat at the max means the cops raid and the heist fails at once (§3, §7),
   // unless a Fixer stops it (v2 §2). Otherwise the round's alibis open (the fold of
@@ -353,12 +243,6 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
     events.push(gameEnded(before, events, "heat"));
   }
   return events;
-}
-
-/** Whether `player`'s first take this game was in `round` (the Embezzler's token, extension.md "Roles"). */
-function embezzledFirst(now: GameState, player: PlayerId, round: number): boolean {
-  const takes = now.log.flatMap((e) => (e.type === "abilityResolved" && e.player === player && e.ability.kind === "embezzle" && e.ability.amount > 0 ? [e.round] : []));
-  return takes[0] === round;
 }
 
 /**
