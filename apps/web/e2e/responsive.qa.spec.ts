@@ -164,9 +164,8 @@ test.describe("landing behaviour", () => {
       await join.click();
       await expect(page.getByRole("alert")).toContainText("doesn't look like an invite code");
       await expect(field).toHaveAttribute("aria-invalid", "true");
-      // Typing again clears the error.
-      await field.press("End");
-      await field.press("Backspace");
+      // Typing again clears the error. (Not End+Backspace: the caret is not at the end after the click.)
+      await field.pressSequentially("x");
       await expect(page.getByRole("alert")).toHaveCount(0);
     }
     expect(api).toEqual([]);

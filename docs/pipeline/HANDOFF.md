@@ -48,11 +48,8 @@ Run milestone **R7 Simplified** exactly as `docs/simplified.md` "How to run it" 
 - **Never `gh pr checks --watch`:** it gets backgrounded and stalls agents. Poll the check-runs in short calls instead (common.md). On the Mac directly, run long commands in the foreground; through the terminal tool, background them with nohup and poll.
 - **Testing policy:** run only the specs and unit tests the PR touches, `pnpm typecheck` before pushing (QA too), push once, and let CI's unit suite and 6 e2e shards run the rest. Never skip or disable a test.
 - **Known flaky tests** (rerun once; if it fails again, treat it as real). E2E files are in `apps/web/e2e/`; `[project]` is the Playwright project:
-  - `responsive.qa.spec.ts` "landing behaviour › reduced motion › turns off the sheet entrance and toast animations" [mobile];
-  - `responsive.qa.spec.ts` "<width>x<height> touch › touch targets are at least 44px on /" [mobile];
-  - `responsive.qa.spec.ts` "landing behaviour › invite field: links, spaces and dashes are tidied; junk is refused without a request" (project not recorded);
-  - `notes.spec.ts` "the recap shows what changed while you were away, once, and the board stays private" [desktop];
-  - `packages/bots/src/hunch.test.ts` timed out once under load (vitest).
+  - `responsive.qa.spec.ts` "landing behaviour › reduced motion › turns off the sheet entrance and toast animations" [mobile]; not reproduced in 80 runs under load on 7 Nov;
+  - `notes.spec.ts` "the recap shows what changed while you were away, once, and the board stays private" [desktop]; not reproduced in 40 runs under load on 7 Nov.
 - **QA pushes once,** at the end (each push restarts CI); its comment names the head after that push.
 - **Verdicts name a sha.** After any non-QA-test commit, get a delta re-review naming the new head.
 - **The PM can't self-QA a docs PR:** spawn a QA agent to check it before merging.

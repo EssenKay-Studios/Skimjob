@@ -229,6 +229,28 @@ describe("QA: races", () => {
     expect(seats.every((x) => x.playerId !== null)).toBe(true);
   });
 
+  it("hand-over racing with start: one wins and the state stays consistent (needs the game lock)", async () => {
+    // Each request stalls after it read the game and before it reads the seats, so without the per-game lock
+    // both pass the host and lobby checks before either writes, and both succeed.
+    const slow: Db = { ...db, query: async (...a: Parameters<Db["query"]>) => (/^select seat_no, player_id/.test(a[0]) && (await new Promise((r) => setTimeout(r, 100))), db.query(...a)) };
+    const racing = buildServer({ db: slow, clock, auth: [devAuthProvider()] });
+    try {
+      for (let i = 0; i < 5; i++) {
+        const { who, game } = await host();
+        await join(game.inviteCode, "Lou");
+        await call("POST", `/games/${game.id}/bots`, who, {});
+        const post = (url: string, payload?: object) => racing.inject({ method: "POST", url, cookies: { [SESSION_COOKIE]: who }, ...(payload ? { payload } : {}) });
+        const [hand, start] = await Promise.all([post(`/games/${game.id}/host`, { seat: 1 }), post(`/games/${game.id}/start`)]);
+        expect([hand.statusCode, start.statusCode].filter((s) => s === 200)).toHaveLength(1);
+        const [row] = await db.query<{ status: string }>("select status from games where id = $1", [game.id]);
+        if (start.statusCode === 200) expect(row!.status).not.toBe("lobby");
+        else expect(row!.status).toBe("lobby");
+      }
+    } finally {
+      await racing.close();
+    }
+  });
+
   it("the same session double-clicking join gets one seat", async () => {
     const { who, game } = await host();
     const me = await guest("Twice");

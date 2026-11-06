@@ -52,7 +52,7 @@ describe("crew hunch — design §17.3 (v2 §5)", () => {
       if (closed?.result.kind === "shakedown") targets.set(closed.result.target, (targets.get(closed.result.target) ?? 0) + 1);
     }
     for (let i = 1; i <= 6; i++) expect(targets.get(`p${i}`) ?? 0, `p${i} in ${JSON.stringify([...targets])}`).toBeGreaterThan(0);
-  });
+  }, 30_000); // 60 full games: about 1 s alone, over the 5 s default on a busy machine
 
   it("with the harness's hidden crewSeed it can't be computed from public data: the same view gives a different hunch per seed (STATUS follow-up, PR #37 review)", () => {
     const g = meetingViews("g-a");
