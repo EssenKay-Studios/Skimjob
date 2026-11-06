@@ -36,7 +36,7 @@ Your prompt says which of the three setups you are in. The rules below are the s
 - **Commits:** author `karthik24iyer <karthik24iyer@gmail.com>`. NEVER add Co-Authored-By, Claude-Session, Generated-by or any AI attribution lines; the merge gate refuses them.
 - **GitHub, REST commands that work everywhere** (`R=repos/EssenKay-Studios/Skimjob`):
   - open a PR: `gh api $R/pulls -f title="…" -f head=<branch> -f base=main -F body=@pr.md --jq .number`
-  - head sha: `gh api $R/pulls/N --jq .head.sha`; files: `gh api --paginate $R/pulls/N/files --jq '.[].filename'`; diff: `git diff origin/main...origin/<branch>` in your worktree
+  - head sha: `gh api $R/pulls/N --jq .head.sha`; files: `gh api "$R/pulls/N/files?per_page=100" --jq '.[].filename'` (add `&page=2`… for more; `--paginate` fails from the cloud proxy); diff: `git diff origin/main...origin/<branch>` in your worktree
   - review: `gh api $R/pulls/N/reviews -f event=COMMENT -F body=@review.md`; comment: `gh api $R/issues/N/comments -F body=@qa.md`
   - CI: `gh api "$R/commits/<sha>/check-runs?per_page=100" --jq '.check_runs[] | [.name, .status, .conclusion] | @tsv'`
   - The `gh pr …` forms also work on the Mac, but prefer these. Rebase, `git reset --hard` and `git push --force-with-lease` to **your own feature branch** are fine. Never force-push `main`, and never push to someone else's branch while they work on it.

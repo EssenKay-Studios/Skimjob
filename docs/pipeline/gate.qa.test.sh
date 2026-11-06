@@ -12,12 +12,12 @@ cat >"$WORK/bin/gh" <<'EOF'
 #!/bin/bash
 # REST only: anything but `gh api` (gh pr …, GraphQL) is a test failure.
 FIX=${GATE_FIX:?}
-q=.; path=; method=GET; sub=$1
+q=.; path=; method=GET; page=1; sub=$1
 [ "$sub" = api ] || { echo "fake gh: not REST: $*" >&2; echo "$*" >>"$FIX/NOT_REST"; exit 1; }
 shift
 while [ $# -gt 0 ]; do
   case $1 in --jq) q=$2; shift ;; -X) method=$2; shift ;; -H|-f|-F) shift ;; --paginate) ;;
-    repos/*) path=${1%%\?*} ;; graphql) echo graphql >>"$FIX/NOT_REST"; exit 1 ;; esac; shift
+    repos/*) path=${1%%\?*}; pg=${1##*[?&]page=}; [[ $1 == *[?\&]page=* && $pg =~ ^[0-9]+$ ]] && page=$pg ;; graphql) echo graphql >>"$FIX/NOT_REST"; exit 1 ;; esac; shift
 done
 case "$method $path" in
   "PUT "*/pulls/*/merge) echo merged >"$FIX/MERGED"; f=merge.json ;;
@@ -29,6 +29,14 @@ case "$method $path" in
   *) echo "fake gh: unexpected: $method $path" >&2; exit 1 ;;
 esac
 [ -f "$FIX/$f" ] || { echo "fake gh: no $f" >&2; exit 1; }
+[ -f "$FIX/IGNORE_PAGE" ] && page=1   # an API that ignores `page` (the 100-page cap must stop it)
+# Pages: page 1 is <file>, page N is <file>.pN, past the last one the arrays are empty.
+# failp2-<file>: page 2 fails (an error on a later page).
+if [ "$page" -gt 1 ]; then
+  [ -f "$FIX/failp2-$f" ] && [ "$page" = 2 ] && { echo "fake gh: HTTP 502" >&2; exit 1; }
+  if [ -f "$FIX/$f.p$page" ]; then f=$f.p$page
+  else jq 'if type == "array" then [] else map_values(if type == "array" then [] else . end) end' "$FIX/$f" >"$FIX/empty.json"; f=empty.json; fi
+fi
 # fail-<file>: print the data (an earlier page), then fail (a later page).
 if [ -f "$FIX/fail-$f" ]; then jq -r "$q" "$FIX/$f"; echo "fake gh: HTTP 502" >&2; exit 1; fi
 jq -r "$q" "$FIX/$f"
@@ -40,7 +48,7 @@ H=$(printf 'a%.0s' {1..40}); R=$(printf 'b%.0s' {1..40}); C=$(printf 'c%.0s' {1.
 OK_AUTHOR='{"name":"karthik24iyer","email":"karthik24iyer@gmail.com"}'
 # Fixture defaults: everything mergeable at head H.
 reset() {
-  rm -rf "$FIX"; mkdir -p "$FIX"
+  rm -rf "$FIX"; mkdir -p "$FIX"; after=
   draft=false; mstate=clean; mable=true; state=open; merged=false; authors=$OK_AUTHOR; body=""
   review="VERDICT: APPROVE\nHead: $H"; qa="QA: PASS\nHead: $H"; review_new=""; qa_new=""
   review_new_by=karthik24iyer; qa_new_by=karthik24iyer; review_new_state=COMMENTED
@@ -78,10 +86,18 @@ J
     '{files: [$f[] | {filename: .} + (if $p == "" then {} else {previous_filename: $p, status: "renamed"} end)]}' \
     >"$FIX/commit-$C.json"
 }
+# split FILE [KEY]: page 1 keeps the first item of the array (at .KEY), page 2 gets the rest.
+split() {
+  local k=${2:-}
+  jq "(.$k) |= .[:1]" "$FIX/$1" >"$FIX/$1.tmp"
+  jq "(.$k) |= .[1:]" "$FIX/$1" >"$FIX/$1.p2"; mv "$FIX/$1.tmp" "$FIX/$1"
+}
 fails=0
 # expect yes|no NAME: runs verdicts.sh and merge.sh; merge must be attempted iff yes.
+# `after` (eval'd once the fixtures are written) edits them, e.g. to split a list over two pages.
 expect() {
   write
+  [ -z "$after" ] || eval "$after"
   out=$(bash "$DIR/verdicts.sh" 1); rc=$?
   mout=$(bash "$DIR/merge.sh" 1 2>&1)
   did=no; [ -f "$FIX/MERGED" ] && did=yes
@@ -215,6 +231,29 @@ reset; touch "$FIX/fail-pr-commits.json"; expect no "PR commits read fails"
 reset; review="VERDICT: APPROVE\nHead: $R"; touch "$FIX/fail-compare.json"; expect no "compare fails"
 reset; review="VERDICT: APPROVE\nHead: $R"; touch "$FIX/fail-commit-$C.json"; expect no "commit files read fails"
 reset; touch "$FIX/fail-pr.json"; expect no "PR read fails"
+
+# Paging (no --paginate: the cloud proxy blocks the Link-header URLs): data on page 2 counts; an error on page 2 is a no.
+reset; review_new="VERDICT: CHANGES REQUESTED\nHead: $H"; after='split reviews.json'; expect no "reviews: CHANGES REQUESTED on page 2 is seen"
+reset; qa_new="QA: FAIL\nHead: $H"; after='split comments.json'; expect no "comments: QA FAIL on page 2 is seen"
+reset; review="VERDICT: CHANGES REQUESTED\nHead: $H"; review_new="VERDICT: APPROVE\nHead: $H"; after='split reviews.json'; expect yes "reviews: APPROVE on page 2 is seen"
+bot_approve; pr_files='[{"filename":"apps/web/a.ts"},{"filename":".github/x.yml"}]'; after='split pr-files.json'; expect no "files: a .github/ file on page 2 is seen"
+reset; checks='{"name":"a","status":"completed","conclusion":"success"},{"name":"b","status":"completed","conclusion":"failure"}'; after='split checks.json check_runs'; expect no "check-runs: a failure on page 2 is seen"
+reset; checks='{"name":"a","status":"completed","conclusion":"success"},{"name":"b","status":"completed","conclusion":"success"}'; after='split checks.json check_runs'; expect yes "check-runs: green over two pages"
+reset; after='jq ".[1:] = [.[0] | .commit.author.name = \"x\"]" "$FIX/pr-commits.json" >"$FIX/pr-commits.json.p2"'; expect no "PR commits: a wrong author on page 2 is seen"
+reset; review="VERDICT: APPROVE\nHead: $R"; since_files='["x.qa.test.ts","src/rules.ts"]'; after='split commit-$C.json files'; expect no "commit files: a non-QA file on page 2 is seen"
+reset; statuses='{"context":"a","state":"success"},{"context":"b","state":"failure"}'; after='split status.json statuses'; expect no "statuses: a failure on page 2 is seen"
+reset; review_new="VERDICT: CHANGES REQUESTED\nHead: $H"; after='split reviews.json'; touch "$FIX/failp2-reviews.json"; expect no "reviews: error on page 2"
+reset; qa_new="QA: FAIL\nHead: $H"; after='split comments.json'; touch "$FIX/failp2-comments.json"; expect no "comments: error on page 2"
+bot_approve; pr_files='[{"filename":"a.ts"},{"filename":"b.ts"}]'; after='split pr-files.json'; touch "$FIX/failp2-pr-files.json"; expect no "files: error on page 2"
+reset; checks='{"name":"a","status":"completed","conclusion":"success"},{"name":"b","status":"completed","conclusion":"success"}'; after='split checks.json check_runs'; touch "$FIX/failp2-checks.json"; expect no "check-runs: error on page 2"
+reset; after='jq ".[1:] = [.[0]]" "$FIX/pr-commits.json" >"$FIX/pr-commits.json.p2"'; touch "$FIX/failp2-pr-commits.json"; expect no "PR commits: error on page 2"
+reset; review="VERDICT: APPROVE\nHead: $R"; since_files='["x.qa.test.ts","y.qa.test.ts"]'; after='split commit-$C.json files'; touch "$FIX/failp2-commit-$C.json"; expect no "commit files: error on page 2"
+reset; statuses='{"context":"a","state":"success"},{"context":"b","state":"success"}'; after='split status.json statuses'; touch "$FIX/failp2-status.json"; expect no "statuses: error on page 2"
+# A later page without the expected key fails closed; an API that ignores `page` hits the 100-page cap.
+reset; checks='{"name":"a","status":"completed","conclusion":"success"},{"name":"b","status":"completed","conclusion":"success"}'; after='split checks.json check_runs; echo "{}" >"$FIX/checks.json.p2"'; expect no "check-runs: page 2 without check_runs"
+reset; statuses='{"context":"a","state":"success"},{"context":"b","state":"success"}'; after='split status.json statuses; echo "{}" >"$FIX/status.json.p2"'; expect no "statuses: page 2 without statuses"
+reset; review="VERDICT: APPROVE\nHead: $R"; since_files='["x.qa.test.ts","y.qa.test.ts"]'; after='split commit-$C.json files; echo "{}" >"$FIX/commit-$C.json.p2"'; expect no "commit files: page 2 without files"
+reset; touch "$FIX/IGNORE_PAGE"; expect no "API ignores page: the 100-page cap fails closed"
 
 # The "next" lookup is fail-safe: an issues API error still merges and prints a fallback.
 reset; write; touch "$FIX/NO_ISSUES"; mout=$(bash "$DIR/merge.sh" 1 2>&1)
