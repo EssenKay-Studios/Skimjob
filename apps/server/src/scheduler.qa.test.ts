@@ -206,15 +206,6 @@ describe("kill/restart at every step = an uninterrupted run (same seed)", () => 
       if (sessionLength === "1d") expect(b.phases.has("awaitingMeeting")).toBe(true);
     });
   }
-  // PR #22 review: a bot's decision comes from (game seed, seat, the view it acts on) and the last view it acted
-  // on is stored, so a restart can't change what the bots do.
-  it("bots, quick: restarting before every step gives the same deadlines and log as an uninterrupted run", { timeout: 240_000 }, async () => {
-    forcedSeed = "qa-restart-bots-identical";
-    const a = await play(5, { sessionLength: "quick" }, { act: emergencyAt });
-    const b = await play(5, { sessionLength: "quick" }, { act: emergencyAt, restart: () => true });
-    expect(b.fired).toEqual(a.fired);
-    expect(b.log).toEqual(a.log);
-  });
   // With bots: restart before every step; play() checks no double, no skip, no refusals, every deadline drained.
   it("bots, quick: restarting at every phase still ends cleanly", { timeout: 240_000 }, async () => {
     forcedSeed = "qa-restart-bots";

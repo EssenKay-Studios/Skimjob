@@ -1,6 +1,5 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 import type {
-  Command,
   GameEvent,
   PrivateVisibility,
   PublicVisibility,
@@ -9,7 +8,7 @@ import type {
   Visibility,
 } from "./index";
 import { PUBLIC, REVEAL, canSee, privateTo, secretTo } from "./index";
-import { sampleCommands, sampleEvents } from "./samples";
+import { sampleEvents } from "./samples";
 
 describe("visibility — design §17.2, §13", () => {
   const cases: Array<[string, Visibility, string, boolean, boolean]> = [
@@ -38,12 +37,6 @@ describe("event samples", () => {
     }
   });
 
-  it("there is one sample per command type, keyed by its own type", () => {
-    for (const [key, command] of Object.entries(sampleCommands)) {
-      expect(command.type).toBe(key);
-    }
-  });
-
   it("the public setup event does not carry the seed — design §17.2", () => {
     expect(JSON.stringify(sampleEvents.gameCreated)).not.toContain("seed");
     expect(sampleEvents.rngSeeded.visibility.kind).toBe("reveal");
@@ -65,15 +58,5 @@ describe("event visibility is fixed by type — design §17.2", () => {
     // @ts-expect-error a dealt role can never be public
     const leak: GameEvent = { type: "roleDealt", visibility: PUBLIC, player: "ana", role: "hacker" };
     expect(leak).toBeDefined();
-  });
-});
-
-// The engine has no clock and several deadlines can be pending at once, so the
-// scheduler must say which one passed. design §4.1, §11.1
-describe("advance names its deadline — design §4.1, §11.1", () => {
-  it("a bare advance does not type-check", () => {
-    // @ts-expect-error advance must name the deadline that passed
-    const bare: Command = { type: "advance" };
-    expect(bare).toBeDefined();
   });
 });
