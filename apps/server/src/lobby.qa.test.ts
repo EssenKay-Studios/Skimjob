@@ -251,6 +251,40 @@ describe("QA: races", () => {
     }
   });
 
+  it("QA #145: both requests hit the stall, the loser is refused, and the host moves iff the hand-over won", async () => {
+    // Guards the test above: if the seats query text changes, its stall stops matching and it passes even without the lock.
+    let stalls = 0;
+    const slow: Db = { ...db, query: async (...a: Parameters<Db["query"]>) => (/^select seat_no, player_id/.test(a[0]) && (stalls++, await new Promise((r) => setTimeout(r, 100))), db.query(...a)) };
+    const racing = buildServer({ db: slow, clock, auth: [devAuthProvider()] });
+    try {
+      for (let i = 0; i < 3; i++) {
+        const { who, game } = await host();
+        await join(game.inviteCode, "Lou");
+        await call("POST", `/games/${game.id}/bots`, who, {});
+        const [before] = await db.query<{ host_user_id: string }>("select host_user_id from games where id = $1", [game.id]);
+        const post = (url: string, payload?: object) => racing.inject({ method: "POST", url, cookies: { [SESSION_COOKIE]: who }, ...(payload ? { payload } : {}) });
+        stalls = 0;
+        const [hand, start] = await Promise.all([post(`/games/${game.id}/host`, { seat: 1 }), post(`/games/${game.id}/start`)]);
+        expect(stalls).toBeGreaterThanOrEqual(2);
+        const loser = hand.statusCode === 200 ? start : hand;
+        expect([403, 409]).toContain(loser.statusCode);
+        const [row] = await db.query<{ status: string; host_user_id: string }>("select status, host_user_id from games where id = $1", [game.id]);
+        const seats = await db.query<{ player_id: string | null }>("select player_id from seats where game_id = $1", [game.id]);
+        if (hand.statusCode === 200) {
+          expect(row!.host_user_id).not.toBe(before!.host_user_id);
+          expect(row!.status).toBe("lobby");
+          expect(seats.every((x) => x.player_id === null)).toBe(true);
+        } else {
+          expect(row!.host_user_id).toBe(before!.host_user_id);
+          expect(row!.status).not.toBe("lobby");
+          expect(seats.every((x) => x.player_id !== null)).toBe(true);
+        }
+      }
+    } finally {
+      await racing.close();
+    }
+  });
+
   it("the same session double-clicking join gets one seat", async () => {
     const { who, game } = await host();
     const me = await guest("Twice");
