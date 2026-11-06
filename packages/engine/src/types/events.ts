@@ -185,19 +185,10 @@ export interface RoomWatched {
   readonly room: RoomId;
   readonly seen: readonly PlayerId[];
   /**
-   * "Camera offline": a Hacker's loop or a Power cut blinded this feed (`seen`
-   * is empty). Both read exactly the same. extension.md "Situations"
+   * "Camera offline": a Hacker's loop blinded this feed (`seen`
+   * is empty). extension.md "Situations"
    */
   readonly offline: boolean;
-}
-
-/** Server room: how many pocketed, not who. design §6.2 */
-export interface PocketCount {
-  readonly type: "pocketCount";
-  readonly visibility: PrivateVisibility;
-  readonly player: PlayerId;
-  readonly round: number;
-  readonly pocketed: number;
 }
 
 /** The public round summary on the ledger. design §5.2 step 5 */
@@ -211,13 +202,13 @@ export interface RoundResolved {
   readonly heat: number;
   /**
    * The round's Heat change by part (before the clamp at 0): the baseline,
-   * each room that changed Heat (rounded), and the event card. The rooms take up any rounding, so
+   * and each room that changed Heat (rounded). The rooms take up any rounding, so
    * the baseline is its true value; `clamp` (only when non-zero) is what the
    * 0–max limit took back, so the parts add up to `heatDelta`. Police activity and a missed
    * target come as their own events under the round (`heatBreakdown`).
    * extension.md "What the app works out for you" (the Heat breakdown)
    */
-  readonly heatParts: { readonly base: number; readonly rooms: Readonly<Record<RoomId, number>>; readonly events: number; readonly clamp?: number };
+  readonly heatParts: { readonly base: number; readonly rooms: Readonly<Record<RoomId, number>>; readonly clamp?: number };
 }
 
 /**
@@ -299,47 +290,6 @@ export interface EventFlipped {
   readonly round: number;
   readonly card: EventId;
   readonly room: RoomId | null;
-}
-
-/** Double-cross: you and `partner` are offered a role swap this round. Sent to each of the two. design §10 */
-export interface DoubleCrossOffered {
-  readonly type: "doubleCrossOffered";
-  readonly visibility: PrivateVisibility;
-  readonly player: PlayerId;
-  readonly round: number;
-  readonly partner: PlayerId;
-}
-
-/** Your (changeable until the round deadline) answer to a Double-cross offer. design §10 */
-export interface DoubleCrossAnswered {
-  readonly type: "doubleCrossAnswered";
-  readonly visibility: PrivateVisibility;
-  readonly player: PlayerId;
-  readonly round: number;
-  readonly accept: boolean;
-}
-
-/**
- * Double-cross outcome at the round's resolution, to each of the two. `swap`
- * is null unless both accepted; then it is your new role and its uses so far
- * (they travel with the role card). design §10, §5.2 step 1
- */
-export interface DoubleCrossResolved {
-  readonly type: "doubleCrossResolved";
-  readonly visibility: PrivateVisibility;
-  readonly player: PlayerId;
-  readonly round: number;
-  readonly partner: PlayerId;
-  readonly swap: { readonly role: RoleId; readonly roleState: RoleState } | null;
-}
-
-/** Raid rumour: you had the biggest stash and lost `lost` from it. Only you are told. design §10 */
-export interface RaidRumourHit {
-  readonly type: "raidRumourHit";
-  readonly visibility: PrivateVisibility;
-  readonly player: PlayerId;
-  readonly round: number;
-  readonly lost: number;
 }
 
 /** Inside tip: you learn `subject`'s role. design §10 */
@@ -675,7 +625,6 @@ export type GameEvent =
   | AbilityResolved
   | RoomSighting
   | RoomWatched
-  | PocketCount
   | RoundResolved
   | PoliceActivity
   | PoliceScheduled
@@ -684,10 +633,6 @@ export type GameEvent =
   | CopsRaided
   | RaidStopped
   | EventFlipped
-  | DoubleCrossOffered
-  | DoubleCrossAnswered
-  | DoubleCrossResolved
-  | RaidRumourHit
   | InsideTip
   | AuditReport
   | AlibiPosted

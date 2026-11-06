@@ -6,9 +6,7 @@ import type { RoomId } from "./index";
 export type RoomInfo =
   | "none"
   /** Security: pick one room and see everyone who was in it this round. design §6.1 */
-  | "watchRoom"
-  /** Server room: learn *how many* players pocketed loot this round, not who. design §6.2 */
-  | "pocketCount";
+  | "watchRoom";
 
 /** A room that only holds a few people at full yield. design §6.2 (Deposit boxes) */
 export interface RoomCapacity {

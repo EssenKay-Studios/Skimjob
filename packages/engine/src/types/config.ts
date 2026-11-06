@@ -101,12 +101,9 @@ export interface ContentOverrides {
 
 /**
  * New numbers for one event card. A card may only set its own effect's
- * numbers: `amount` (Quiet night), `lootMultiplier` and
- * `heatMultiplier` (Shift change / Payday), `loss` (Raid rumour). design §10
+ * numbers: `lootMultiplier` and `heatMultiplier` (Shift change). design §10
  */
 export interface EventOverride {
-  readonly amount?: number;
   readonly lootMultiplier?: number;
   readonly heatMultiplier?: number;
-  readonly loss?: number;
 }

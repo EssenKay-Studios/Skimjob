@@ -1,14 +1,14 @@
 // The end-of-game reveal summary (design §13; extension.md "Winning and
 // losing", "Tokens and the perk shop", "Police activity", "Situations").
 import { describe, expect, it } from "vitest";
-import { EVENTS, ROLES } from "@skimjob/content";
+import { ROLES } from "@skimjob/content";
 import type { GameConfig, GameEvent, Outcome, RankEntry } from "./types";
 import { PUBLIC, REVEAL, privateTo, secretTo } from "./types";
 import { revealSummary } from "./reveal";
 import { createGame } from "./setup";
 import { viewFor } from "./view";
 
-const TABLES = { roles: ROLES, events: EVENTS };
+const TABLES = { roles: ROLES };
 
 const dealt = (player: string, role: string): GameEvent => ({ type: "roleDealt", visibility: privateTo(player), player, role });
 const started = (round: number): GameEvent => ({ type: "roundStarted", visibility: PUBLIC, round, act: 1 });
@@ -56,46 +56,37 @@ describe("reveal summary — design §13", () => {
     ]);
   });
 
-  it("tells a Hacker's loop from a Power cut on \"camera offline\" (extension.md \"Situations\")", () => {
+  it("shows who looped a feed that read \"camera offline\" (extension.md \"Situations\")", () => {
     const watched = (round: number): GameEvent => ({ type: "roomWatched", visibility: privateTo("p2"), player: "p2", round, source: "security", room: "vault", seen: [], offline: true });
     const log: GameEvent[] = [
       ...SETUP,
       started(1),
       { type: "abilityResolved", visibility: privateTo("p1"), player: "p1", round: 1, ability: { kind: "loopCameras", room: "vault" } },
       watched(1),
-      started(2),
-      { type: "eventFlipped", visibility: PUBLIC, round: 2, card: "powerCut", room: null },
-      { type: "abilityResolved", visibility: privateTo("p1"), player: "p1", round: 2, ability: { kind: "loopCameras", room: "vault" } },
-      watched(2),
     ];
     const s = revealSummary(log, success([rank("p1", "hacker", 0)]), TABLES);
     const offline = s.rounds.map((r) => r.items.filter((i) => i.kind === "cameraOffline"));
     expect(offline).toEqual([
-      [{ kind: "cameraOffline", watcher: "p2", room: "vault", source: "security", cause: "hackerLoop", hackers: ["p1"] }],
-      [{ kind: "cameraOffline", watcher: "p2", room: "vault", source: "security", cause: "powerCut", hackers: [] }],
+      [{ kind: "cameraOffline", watcher: "p2", room: "vault", source: "security", hackers: ["p1"] }],
     ]);
-    expect(s.rounds[1]?.card).toEqual({ id: "powerCut", room: null });
   });
 
-  it("follows a Double-cross swap: dealt role, end role, and its winsOn (design §10)", () => {
+  it("shows each seat's role, its winsOn and a claim next to the truth (design §10)", () => {
     const log: GameEvent[] = [
       dealt("p0", "mole"),
       dealt("p1", "rookie"),
       started(2),
       { type: "roleClaimed", visibility: PUBLIC, player: "p0", role: "rookie", act: 1 },
-      { type: "doubleCrossResolved", visibility: privateTo("p0"), player: "p0", round: 2, partner: "p1", swap: { role: "rookie", roleState: { usedThisAct: 0, usedThisGame: 0 } } } as GameEvent,
-      { type: "doubleCrossResolved", visibility: privateTo("p1"), player: "p1", round: 2, partner: "p0", swap: { role: "mole", roleState: { usedThisAct: 0, usedThisGame: 0 } } } as GameEvent,
     ];
-    const outcome: Outcome = { result: "failed", reason: "heat", ranking: [rank("p1", "mole", 9), rank("p0", "rookie", 3)], winners: ["p1"] };
+    const outcome: Outcome = { result: "failed", reason: "heat", ranking: [rank("p0", "mole", 9), rank("p1", "rookie", 3)], winners: ["p0"] };
     const s = revealSummary(log, outcome, TABLES);
     expect(s.seats.map((x) => [x.player, x.dealtRole, x.role, x.winsOn, x.winner])).toEqual([
-      ["p1", "rookie", "mole", ROLES.mole?.winsOn, true],
-      ["p0", "mole", "rookie", [], false],
+      ["p0", "mole", "mole", ROLES.mole?.winsOn, true],
+      ["p1", "rookie", "rookie", [], false],
     ]);
     const items = s.rounds[0]?.items ?? [];
     expect(items).toContainEqual({ kind: "claim", player: "p0", claimed: "rookie", real: "mole" });
-    expect(items.filter((i) => i.kind === "doubleCross")).toEqual([{ kind: "doubleCross", players: ["p0", "p1"], swapped: true }]);
-    expect(s.ending).toEqual({ result: "failed", reason: "heat", topGroup: ["p1"], winners: ["p1"], why: "failedTopWins" });
+    expect(s.ending).toEqual({ result: "failed", reason: "heat", topGroup: ["p0"], winners: ["p0"], why: "failedTopWins" });
   });
 
   it("says who won and why: the top group on a success, ★ roles or nobody on a failure (extension.md \"Winning and losing\")", () => {

@@ -44,7 +44,7 @@ describe("reveal summary in whole bot games — design §13", () => {
         const log = reveal.log.map((e) => e.event);
         const { summary } = reveal;
         // design §13: built only from the viewer's own reveal log (so it can't leak past it).
-        expect(summary).toEqual(revealSummary(log, reveal.outcome, { roles: rolesFor(state.config), events: eventsFor(state.config) }));
+        expect(summary).toEqual(revealSummary(log, reveal.outcome, { roles: rolesFor(state.config) }));
         // The stash over time ends at each player's final stash (safe included).
         const last = summary.rounds.at(-1)?.stashes ?? {};
         for (const seat of summary.seats) expect(last[seat.player], `${seed} ${viewer} ${seat.player}`).toBe(seat.stash);
@@ -55,11 +55,11 @@ describe("reveal summary in whole bot games — design §13", () => {
         expect(police.filter((i) => i.cause === "tipOff").length).toBe(count(log, (e) => e.type === "tipOffLanded"));
         const offline = items.filter((i) => i.kind === "cameraOffline");
         expect(offline.length).toBe(count(log, (e) => e.type === "roomWatched" && e.offline));
-        for (const o of offline) if (o.cause === "hackerLoop") expect(o.hackers.length).toBeGreaterThan(0);
+        for (const o of offline) expect(o.hackers.length).toBeGreaterThan(0);
         expect(items.filter((i) => i.kind === "token").length).toBe(count(log, (e) => e.type === "tokenEarned"));
-        for (const i of items) seen.add(i.kind === "police" || i.kind === "cameraOffline" ? `${i.kind}:${i.cause}` : i.kind === "event" ? i.event.type : i.kind);
+        for (const i of items) seen.add(i.kind === "police" ? `${i.kind}:${i.cause}` : i.kind === "event" ? i.event.type : i.kind);
       }
     }
-    expect([...seen].sort()).toEqual(expect.arrayContaining(["police:patrol", "police:tipOff", "cameraOffline:hackerLoop", "cameraOffline:powerCut", "token", "perkBought", "perkUsed", "doubleCross"]));
+    expect([...seen].sort()).toEqual(expect.arrayContaining(["police:patrol", "police:tipOff", "cameraOffline", "token", "perkBought", "perkUsed"]));
   }, 120_000);
 });

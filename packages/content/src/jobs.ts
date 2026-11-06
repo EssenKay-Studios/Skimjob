@@ -85,7 +85,7 @@ export const BANK_JOB: JobDef = {
       capacity: { max: 2, crowdedLoot: 4 },
       info: "none",
     },
-    serverRoom: { id: "serverRoom", name: "Server room", loot: 0, heatPressure: 0, capacity: null, info: "pocketCount" },
+    serverRoom: { id: "serverRoom", name: "Server room", loot: 0, heatPressure: 0, capacity: null, info: "none" },
     // 9–12 players. design §6.2 (Teller line 3, Manager's office 4 since the owner-answers pass, 1 Nov: the
     // ⅓-plurality shakedowns made big crews succeed ~85%); Manager's office adds half the vault pressure (§7).
     // Teller line back to 4 in R5 (balance-3.md): two Lone wolves and up to two Wildcards sank 9–12p crews to 17–31%.

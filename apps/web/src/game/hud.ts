@@ -205,7 +205,6 @@ export function roomOptions(view: PlayerView): RoomOption[] {
     }
     if (def?.capacity) notes.push(`more than ${def.capacity.max} here: ${def.capacity.crowdedLoot} each`);
     if (def?.info === "watchRoom") notes.push("watch one room");
-    if (def?.info === "pocketCount") notes.push("counts who pocketed");
     const closed = effect?.kind === "lockdown" && card?.room === id;
     return { id, name: def?.name ?? id, loot, heat: pressure > 0 ? "up" : pressure < 0 ? "down" : "none", closed, notes, watcher: def?.info === "watchRoom" };
   });

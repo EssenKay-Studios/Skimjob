@@ -58,12 +58,11 @@ for (const viewport of VIEWPORTS) {
       await expect(sheet).toContainText("You bought a Peek perk");
       await expect(sheet).toContainText("Ben claimed Lookout, but was really the Mole.");
 
-      // A round chip jumps straight there: the Power cut.
+      // A round chip jumps straight there: Shift change.
       const r3 = reveal.getByRole("group", { name: "Rounds" }).getByRole("button", { name: "Round 3" });
       await r3.click();
       await expect(r3).toHaveAttribute("aria-pressed", "true");
-      await expect(sheet).toContainText("Power cut");
-      await expect(sheet).toContainText("Your camera on the Deposit boxes went offline in the Power cut.");
+      await expect(sheet).toContainText("Shift change");
       await expect(reveal.getByRole("button", { name: "Next round" })).toBeDisabled();
       const box = await r3.boundingBox();
       expect(box!.height).toBeGreaterThanOrEqual(44);

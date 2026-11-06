@@ -187,7 +187,7 @@ function HudSections() {
           <TargetBar view={{ ...fresh, haul: 40, act: 3 }} />
         </div>
       </Section>
-      <Section id="ext-heat" title="Heat breakdown" note="per round: every round, rooms, event card, police activity, missed target · newest first">
+      <Section id="ext-heat" title="Heat breakdown" note="per round: every round, rooms, police activity, missed target · newest first">
         <HeatBreakdown view={played} />
       </Section>
       <Section id="ext-gap" title="Gap box" note="alibis vs the Haul's growth, event effects included">
@@ -202,7 +202,7 @@ function HudSections() {
   );
 }
 
-/** extension.md Situations: a Hacker's loop reads like a Power cut, a Mole's tip-off like police activity. */
+/** extension.md Situations: a Mole's tip-off reads like police activity. */
 function NoTellsSection() {
   const ctx = { me: "p1", name: (p: string) => NAMES[Number(p.slice(1)) - 1] ?? p };
   const feed = { type: "roomWatched", visibility: privateTo("p1"), player: "p1", round: 4, source: "security", room: "vault", seen: [], offline: true } as const;
@@ -211,8 +211,6 @@ function NoTellsSection() {
     <Section id="ext-notells" title="Camera offline and police activity" note="the same line whatever caused it: no tells">
       <dl className="g-stack">
         <dt className="meta">Hacker's loop</dt>
-        <dd>{describeEvent(feed, ctx)}</dd>
-        <dt className="meta">Power cut</dt>
         <dd>{describeEvent(feed, ctx)}</dd>
         <dt className="meta">Mole's tip-off</dt>
         <dd>{describeEvent(police, ctx)}</dd>

@@ -365,7 +365,7 @@ export function Tokens({ view, send }: { view: PlayerView; send: Send }) {
 }
 
 /** The three-perk shop: buy with tokens; what you own stays private until you use it. extension.md "Tokens and the perk shop" */
-export function ShopSheet({ view, send, open, onClose }: { view: PlayerView; send: Send; open: boolean; onClose: () => void }) {
+function ShopSheet({ view, send, open, onClose }: { view: PlayerView; send: Send; open: boolean; onClose: () => void }) {
   const shop = shopState(view);
   const [busy, setBusy] = useState(false);
   const buy = async (perk: (typeof shop.items)[number]) => {

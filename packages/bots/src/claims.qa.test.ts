@@ -28,14 +28,14 @@ const play = (c: GameConfig, agents?: Agent[]) =>
 
 type Claim = Extract<GameEvent, { type: "roleClaimed" }>;
 
-/** Every claim with the claimant's real role at that moment (roles can move in a Double-cross). */
+/** Every claim with the claimant's real role at that moment. */
 function claimsWithTruth(c: GameConfig, log: readonly GameEvent[]) {
   return log.flatMap((e, i) => (e.type === "roleClaimed" ? [{ i, claim: e, real: replay(c, log.slice(0, i)).players[e.player]?.role as string }] : []));
 }
 
 describe("bot claims in whole games — QA PR #37", () => {
-  // Two seeds per cell: with the Rookie the one safe bluff left (R7 cut), bluffs are rarer.
-  const games = [3, 6, 12].flatMap((n) => MODES.flatMap((mode, k) => [0, 1].map((x) => ({ n, mode, c: config(n, `qa37-${n}-${k}${x ? `-${x}` : ""}`, { voteVisibility: mode }) }))));
+  // Three seeds per cell: with the Rookie the one safe bluff left (R7 cut), bluffs are rarer.
+  const games = [3, 6, 12].flatMap((n) => MODES.flatMap((mode, k) => [0, 1, 2].map((x) => ({ n, mode, c: config(n, `qa37-${n}-${k}${x ? `-${x}` : ""}`, { voteVisibility: mode }) }))));
   const results = games.map((g) => ({ ...g, r: play(g.c) }));
 
   it("all-bot games finish in every vote mode at 3, 6 and 12 players with zero refused commands — design §17.3", () => {
@@ -70,7 +70,7 @@ describe("bot claims in whole games — QA PR #37", () => {
         }
         bluffed++;
         const before = r.state.log.slice(0, i).filter((e): e is Claim => e.type === "roleClaimed");
-        if (before.some((b) => b.player === claim.player && b.role === claim.role)) continue; // sticking to its story (made before a Double-cross, maybe)
+        if (before.some((b) => b.player === claim.player && b.role === claim.role)) continue; // sticking to its story
         expect(SAFE_BLUFFS).toContain(claim.role);
         expect(before.filter((b) => b.role === claim.role).map((b) => b.player), `${c.seed}: ${claim.player} bluffs ${claim.role}`).toEqual([]);
       }

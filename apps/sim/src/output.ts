@@ -43,7 +43,7 @@ export function playerRows(records: readonly GameRecord[]): Cell[][] {
   );
 }
 
-export const OUTPUT_FILES = ["games.csv", "players.csv", "games.json", "summary.json"] as const;
+const OUTPUT_FILES = ["games.csv", "players.csv", "games.json", "summary.json"] as const;
 
 /**
  * Make sure `dir` can take the output before any game runs: create it if

@@ -43,7 +43,7 @@ export function seatLooks(view: PlayerView): ReadonlyMap<PlayerId, SeatLook> {
 }
 
 /** Seat names carry a "Bot · " prefix for bots; the art draws its own bot badge. */
-export const plainName = (name: string) => name.replace(/^Bot · /, "");
+const plainName = (name: string) => name.replace(/^Bot · /, "");
 
 /** Act 1 daylight, Act 2 dusk, Act 3 night (ui-style "time-of-day lighting tracks session progress"). */
 export const timeOfRound = (round: number): TimeOfDay => {

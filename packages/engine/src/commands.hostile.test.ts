@@ -94,9 +94,9 @@ function scenarioStates(): GameState[] {
   s = keep(run(s, alibis(s))); // awaiting the act 1 meeting
   expect(s.phase.kind).toBe("awaitingMeeting");
   s = keep(run(s, { type: "scheduleMeeting", act: 1, slot: "server" }));
-  // A Double-cross offer to p0 and p1 this round (design §10), forged onto planning.
+  // A Lockdown card forged onto planning (design §10).
   const planning = out[2] as GameState;
-  keep({ ...planning, card: { round: planning.round, id: "doubleCross", room: null, offer: { players: ["p0", "p1"], accepted: [] } } });
+  keep({ ...planning, card: { round: planning.round, id: "lockdown", room: "vault" } });
   return out;
 }
 
@@ -149,7 +149,6 @@ function baseCommands(s: GameState): Record<string, unknown>[] {
       out.push({ type, player, vote: { kind: "shakedown", target: other(player) } });
       out.push({ type, player, vote: { kind: "skip" } });
     }
-    out.push({ type: "answerDoubleCross", player, accept: true });
   }
   const meetingIds = [s.scheduledMeeting?.meetingId, s.pendingEmergency?.meetingId, s.meeting?.id, s.pendingShakedown?.meetingId];
   out.push({ type: "advance", deadline: { kind: "round", round: s.round } });

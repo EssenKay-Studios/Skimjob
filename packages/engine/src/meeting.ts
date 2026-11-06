@@ -36,12 +36,12 @@ type Result = GameEvent[] | string;
 type Raw = Record<string, unknown>;
 
 /** The act's regular meeting. Ids are names, never RNG draws (STATUS.md). */
-export const regularMeetingId = (act: ActNumber): string => `act-${act}`;
+const regularMeetingId = (act: ActNumber): string => `act-${act}`;
 /**
  * The `n`th emergency meeting `player` calls (a Smooth Talker may earn more
  * than one, v2 §2). Unique: the prefix tells them apart for any player id. design §11.1
  */
-export const emergencyMeetingId = (player: PlayerId, n = 1): string => (n === 1 ? `emergency-${player}` : `emergency${n}-${player}`);
+const emergencyMeetingId = (player: PlayerId, n = 1): string => (n === 1 ? `emergency-${player}` : `emergency${n}-${player}`);
 
 /** The act being played: the act of the latest round started. */
 const currentAct = (state: GameState): ActNumber => actOfRound(state.round);

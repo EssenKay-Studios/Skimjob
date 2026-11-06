@@ -117,8 +117,8 @@ function buildView(state: GameState, playerId: PlayerId): PlayerView {
     rooms: state.rooms,
     haul: state.haul,
     heat: state.heat,
-    // design §10: the card is public; a Double-cross offer is not (each of the two has it in their case file).
-    card: state.card && { round: state.card.round, id: state.card.id, room: state.card.room },
+    // design §10: the card is public.
+    card: state.card,
     voteVisibility: state.config.voteVisibility,
     scheduledMeeting: state.scheduledMeeting,
     pendingEmergency: state.pendingEmergency,
@@ -139,7 +139,7 @@ function revealOf(state: GameState, outcome: Outcome, log: readonly LoggedEvent[
   const summary = revealSummary(
     log.map((e) => e.event),
     outcome,
-    { roles: rolesFor(state.config), events: eventsFor(state.config) },
+    { roles: rolesFor(state.config) },
   );
   return { outcome, log, summary };
 }
@@ -158,7 +158,7 @@ export function gapBox(state: GameState): GapBox | null {
   const alibis: string[] = [];
   for (const e of state.log) {
     if (e.type === "roundResolved" && e.round === round) haulGrowth = e.haulDelta;
-    else if (e.type === "eventFlipped" && e.round === round) card = { round, id: e.card, room: e.room, offer: null };
+    else if (e.type === "eventFlipped" && e.round === round) card = { round, id: e.card, room: e.room };
     else if (e.type === "alibiPosted" && e.round === round) alibis.push(e.room);
   }
   const job = roundJob(jobFor(state.config), card, eventsFor(state.config), state.playerOrder.length);
@@ -199,7 +199,7 @@ export function heatBreakdown(log: readonly GameEvent[], round: number): HeatBre
     }
   }
   if (!parts && police.length === 0 && stopped === 0) return null;
-  const p = parts ?? { round, base: 0, rooms: {}, events: 0, clamp: 0 };
+  const p = parts ?? { round, base: 0, rooms: {}, clamp: 0 };
   return { ...p, clamp: p.clamp + policeClamp, police, missedTarget, stopped };
 }
 

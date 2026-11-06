@@ -121,7 +121,6 @@ const commandFields = (room: string, proposalId: string, other: string): readonl
   [{ type: "useAbility", ability: { kind: "tail", room } }, [id(["ability", "room"])]],
   [{ type: "useAbility", ability: { kind: "peek", target: other } }, [id(["ability", "target"])]],
   [{ type: "useAbility", ability: { kind: "rigPick", card: "blackout" } }, [id(["ability", "card"])]],
-  [{ type: "answerDoubleCross", accept: true }, [[["accept"], ALL.filter((v) => v !== "true")]]],
   // No fields but the seat: a hostile `player` is overwritten, so only `type` is left to attack.
   [{ type: "callEmergency" }, []],
 ];

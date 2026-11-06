@@ -13,7 +13,7 @@ export interface RevealSeat {
   readonly place: number;
   /** The role dealt at setup. */
   readonly dealtRole: RoleId;
-  /** The role at the end (differs after a Double-cross swap); the one scored and judged. design §10 */
+  /** The role at the end; the one scored and judged. design §10 */
   readonly role: RoleId;
   /** The failure endings `role` also wins from the top group (★ roles). extension.md "Winning and losing" */
   readonly winsOn: readonly FailureReason[];
@@ -74,21 +74,18 @@ export type RevealItem =
   /** Police activity, now told apart: a background patrol, or `mole`'s tip-off landing. extension.md "Police activity" */
   | { readonly kind: "police"; readonly heatAdded: number; readonly heat: number; readonly cause: "patrol" | "tipOff"; readonly mole: PlayerId | null }
   /**
-   * A watch feed that read "camera offline", now told apart: a Power cut (the
-   * card blinded every feed) or the Hacker loop of `hackers`. extension.md "Situations"
+   * A watch feed that read "camera offline", now told apart: the Hacker loop of
+   * `hackers`. extension.md "Situations"
    */
   | {
       readonly kind: "cameraOffline";
       readonly watcher: PlayerId;
       readonly room: RoomId;
       readonly source: "security" | "lookout" | "tail";
-      readonly cause: "powerCut" | "hackerLoop";
       readonly hackers: readonly PlayerId[];
     }
   /** A public role claim next to the truth (the claimer's role when they claimed). design §12.1 */
-  | { readonly kind: "claim"; readonly player: PlayerId; readonly claimed: RoleId; readonly real: RoleId }
-  /** A Double-cross offer between the two, and whether they swapped. design §10 */
-  | { readonly kind: "doubleCross"; readonly players: readonly [PlayerId, PlayerId]; readonly swapped: boolean };
+  | { readonly kind: "claim"; readonly player: PlayerId; readonly claimed: RoleId; readonly real: RoleId };
 
 /**
  * Round `round` of the timeline (0: setup), with the meeting that follows it.

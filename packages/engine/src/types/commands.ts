@@ -97,8 +97,6 @@ export type PlayerCommand =
   | { readonly type: "sealVote"; readonly player: PlayerId; readonly vote: VoteChoice }
   /** A role power used outside a move (Auditor, Detective, Priest, Mole), or a perk spent. design §17.2, §8.3 */
   | { readonly type: "useAbility"; readonly player: PlayerId; readonly ability: InstantAbility }
-  /** Accept (or decline) this round's Double-cross offer; the last answer before the deadline counts. design §10 */
-  | { readonly type: "answerDoubleCross"; readonly player: PlayerId; readonly accept: boolean }
   /** Buy one of the shop's perks with tokens; any time. extension.md "Tokens and the perk shop" */
   | { readonly type: "buyPerk"; readonly player: PlayerId; readonly perk: PerkId };
 

@@ -22,7 +22,6 @@ describe("QA: role and faction cards are refused (design §8, PR #38)", () => {
     ["a landed tip-off (says you're the Mole, extension.md \"Police activity\")", sampleEvents.tipOffLanded],
     ["an Inside tip naming a role", sampleEvents.insideTip],
     ["a Peek naming a role", sampleEvents.perkUsed],
-    ["a Double-cross swap naming roles", sampleEvents.doubleCrossResolved],
   ] as [string, GameEvent][])("%s", (_label, event) => {
     const { visibility: _v, ...rest } = event as GameEvent & Record<string, unknown>;
     expect(evidenceCard(holding(rest), 3)).toEqual({ ok: false, reason: ROLE_REASON });
@@ -40,7 +39,6 @@ describe("QA: role and faction cards are refused (design §8, PR #38)", () => {
     ["an audit", { type: "abilityResolved", round: 2, ability: { kind: "audit", round: 1, room: "vault", shortfall: 4 } }],
     ["a stash check", { type: "abilityResolved", round: 2, ability: { kind: "checkStash", target: "ben", threshold: 12, dirty: true } }],
     ["a loot split", { type: "lootSplit", round: 1, room: "vault", loot: 6, toHaul: 4, toStash: 2 }],
-    ["a pocket count", { type: "pocketCount", round: 1, pocketed: 1 }],
   ])("%s still goes through, verified, with its payload intact", (_label, event) => {
     const r = evidenceCard(holding(event), 3);
     const { type, ...payload } = event;

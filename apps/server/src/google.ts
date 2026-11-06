@@ -41,7 +41,7 @@ const FALLBACK_NAME = "Crook";
 const FETCH_TIMEOUT_MS = 10_000;
 
 /** The PKCE S256 challenge for a verifier (RFC 7636 §4.2). */
-export const pkceChallenge = (verifier: string) => createHash("sha256").update(verifier).digest("base64url");
+const pkceChallenge = (verifier: string) => createHash("sha256").update(verifier).digest("base64url");
 
 export function googleAuthProvider(opts: GoogleAuthOptions): AuthProvider {
   const http = opts.fetch ?? fetch;

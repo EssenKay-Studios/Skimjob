@@ -86,12 +86,10 @@ function line(e: GameEvent, ctx: DescribeContext): string {
         : `Round ${e.round}: in the ${roomName(e.room)}, ${verb(e.player, "saw", "saw")} ${names(e.others)}.`;
     case "roomWatched": {
       const how = e.source === "security" ? "On the cameras" : e.source === "lookout" ? "On lookout" : "Tailing";
-      // extension.md "Situations": a Hacker's loop and a Power cut read exactly the same.
+      // extension.md "Situations": a Hacker's loop reads as a camera offline.
       if (e.offline) return `Round ${e.round}, ${how.toLowerCase()}: camera offline in the ${roomName(e.room)}${you(e.player) ? "" : ` (seen by ${ctx.name(e.player)})`}.`;
       return `Round ${e.round}, ${how.toLowerCase()}: ${e.seen.length === 0 ? "nobody" : names(e.seen)} in the ${roomName(e.room)}${you(e.player) ? "" : ` (seen by ${ctx.name(e.player)})`}.`;
     }
-    case "pocketCount":
-      return `Round ${e.round}, Server room: ${e.pocketed === 1 ? "1 player" : `${e.pocketed} players`} pocketed loot${you(e.player) ? "" : ` (seen by ${ctx.name(e.player)})`}.`;
     case "roundResolved":
       return `Round ${e.round}: Haul ${signed(e.haulDelta)} (now ${e.haul}), Heat ${signed(e.heatDelta)} (now ${e.heat}).`;
     case "copsRaided":
@@ -100,16 +98,6 @@ function line(e: GameEvent, ctx: DescribeContext): string {
       return `The cops were about to raid in round ${e.round}, but the raid was stopped: Heat is back to ${e.heat}.`;
     case "eventFlipped":
       return `Round ${e.round} event: ${cardName(e.card)}${e.room ? ` (the ${roomName(e.room)} is closed)` : ""}.`;
-    case "doubleCrossOffered":
-      return `Double-cross: ${who(e.player)} and ${who(e.partner)} may swap roles in round ${e.round}.`;
-    case "doubleCrossAnswered":
-      return `${verb(e.player, e.accept ? "accepted" : "declined", e.accept ? "accepted" : "declined")} the double-cross in round ${e.round}.`;
-    case "doubleCrossResolved":
-      return e.swap
-        ? `Double-cross done: ${who(e.player)} and ${who(e.partner)} swapped roles; ${verb(e.player, "are", "is")} now the ${roleName(e.swap.role)}.`
-        : `No swap: the double-cross between ${who(e.player)} and ${who(e.partner)} fell through.`;
-    case "raidRumourHit":
-      return `Raid rumour: ${verb(e.player, "had", "had")} the biggest stash and lost ${e.lost}.`;
     case "insideTip":
       return `Inside tip${you(e.player) ? "" : ` for ${ctx.name(e.player)}`}: ${who(e.subject)} ${you(e.subject) ? "are" : "is"} the ${roleName(e.role)}.`;
     case "auditReport": {

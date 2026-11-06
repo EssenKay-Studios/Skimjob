@@ -187,7 +187,7 @@ export function parityOf(roles: Readonly<Record<string, SeatTally>>, max: number
 }
 
 /** A ★ role: one that also wins some failures (`winsOn`). extension.md "Winning and losing" */
-export const isStar = (role: string): boolean => (Object.hasOwn(ROLES, role) ? ROLES[role as keyof typeof ROLES]?.winsOn.length ?? 0 : 0) > 0;
+const isStar = (role: string): boolean => (Object.hasOwn(ROLES, role) ? ROLES[role as keyof typeof ROLES]?.winsOn.length ?? 0 : 0) > 0;
 
 /**
  * The split parity gate for one pool (PM 3 Nov, provisional): the spread over
@@ -306,7 +306,7 @@ export const shardJson = (s: ShardFile): string => stringifyJson(s) + "\n";
 // ---- text ----
 
 /** min = max: a fixed number of games per cell (`-n`), not adaptive. */
-export const fixedGames = (o: SuiteOptions): boolean => o.minGames === o.maxGames;
+const fixedGames = (o: SuiteOptions): boolean => o.minGames === o.maxGames;
 
 const pp = (v: number | null): string => (v === null ? "—" : (v * 100).toFixed(1));
 

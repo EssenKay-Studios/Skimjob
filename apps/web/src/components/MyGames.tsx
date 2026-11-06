@@ -11,7 +11,7 @@ const STATUS: Record<MyGame["status"], { label: string; colour: string }> = {
 };
 const LENGTH: Record<SessionLength, string> = { quick: "15 min", "1h": "1 hour", "3h": "3 hours", "1d": "1 day", "3d": "3 days", "1w": "1 week" };
 
-export const myGameHref = (g: Pick<MyGame, "id" | "status">) => `/${g.status === "lobby" ? "lobby" : "game"}/${encodeURIComponent(g.id)}`;
+const myGameHref = (g: Pick<MyGame, "id" | "status">) => `/${g.status === "lobby" ? "lobby" : "game"}/${encodeURIComponent(g.id)}`;
 
 export function MyGames({ games, seed = "my-games" }: { games: readonly MyGame[]; seed?: string }) {
   return (

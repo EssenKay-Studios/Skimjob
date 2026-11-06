@@ -169,7 +169,6 @@ describe("QA scripted full games — design §5, §6, §7", () => {
     // Deposit boxes: 3 people → 3 each (pocket capped); exactly 2 → 5 each; 3 handing in → 3 each. design §6.2
     const boxes = ofType(s, "lootSplit").filter((e) => e.room === "depositBoxes").map((e) => [e.round, e.loot, e.toStash]);
     expect(boxes).toEqual([[1, 3, 3], [1, 3, 3], [1, 3, 2], [2, 5, 5], [2, 5, 5], [8, 3, 0], [8, 3, 0], [8, 3, 0]]);
-    expect(ofType(s, "pocketCount")).toMatchObject([{ player: "p9", round: 1, pocketed: 6 }]);
     expect(ofType(s, "roomWatched")).toMatchObject([{ player: "p10", room: "depositBoxes", seen: ["p3", "p4", "p5"] }]);
     expect(ofType(s, "defaultMoveAssigned")).toHaveLength(12);
     expect(Object.values(s.players).every((p) => p.consecutiveMissedMoves === 0)).toBe(true);
@@ -282,7 +281,7 @@ describe("QA determinism — design §17.2", () => {
 });
 
 describe("QA private information — design §5.2 step 5, §17.2", () => {
-  const PRIVATE = new Set(["moveSubmitted", "defaultMoveAssigned", "lootSplit", "abilityResolved", "roomSighting", "roomWatched", "pocketCount", "roleDealt"]);
+  const PRIVATE = new Set(["moveSubmitted", "defaultMoveAssigned", "lootSplit", "abilityResolved", "roomSighting", "roomWatched", "roleDealt"]);
   const games = [
     play(game(3), ROOKIES),
     play(game(3, ["priest", "lookout", "hacker"]), THREE),

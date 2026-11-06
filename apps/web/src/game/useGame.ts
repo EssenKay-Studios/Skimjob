@@ -46,7 +46,7 @@ export function presenceOf(msg: Record<string, unknown>): Presence | null {
 }
 
 /** Waits before reconnect attempt n (0-based): 0.5 s, 1 s, 2 s, 4 s, then every 8 s. */
-export const backoffMs = (attempt: number) => Math.min(8000, 500 * 2 ** attempt);
+const backoffMs = (attempt: number) => Math.min(8000, 500 * 2 ** attempt);
 /** The server closes with this when the session signs out (live.ts CLOSE_SIGNED_OUT): don't retry. */
 const CLOSE_SIGNED_OUT = 4401;
 
@@ -74,7 +74,7 @@ export function chatActionOf(msg: Record<string, unknown>): ChatAction | null {
   return null;
 }
 
-export function socketUrl(gameId: string, loc: Pick<Location, "protocol" | "host"> = location): string {
+function socketUrl(gameId: string, loc: Pick<Location, "protocol" | "host"> = location): string {
   return `${loc.protocol === "https:" ? "wss" : "ws"}://${loc.host}/api/games/${encodeURIComponent(gameId)}/ws`;
 }
 

@@ -53,8 +53,8 @@ const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "obj
  * plain objects treat specially. Ids are used as record keys throughout the
  * state and views (a `__proto__` seat lost its entries in a copied view, PR #9 QA).
  */
-export const PLAYER_ID_PATTERN = /^[A-Za-z0-9_-]{1,32}$/;
-export const RESERVED_PLAYER_IDS: readonly string[] = ["__proto__", "constructor", "prototype"];
+const PLAYER_ID_PATTERN = /^[A-Za-z0-9_-]{1,32}$/;
+const RESERVED_PLAYER_IDS: readonly string[] = ["__proto__", "constructor", "prototype"];
 
 export const isSafePlayerId = (id: unknown): id is string =>
   typeof id === "string" && PLAYER_ID_PATTERN.test(id) && !RESERVED_PLAYER_IDS.includes(id);
@@ -115,7 +115,7 @@ export function roomsFor(job: JobId, playerCount: number): RoomId[] {
 const dealable = (config: GameConfig, roles: RoleTable, role: RoleId): boolean => (roleDefIn(roles, role)?.minPlayers ?? 0) <= config.players.length;
 
 /** The deck preset this game uses: the host's (Standard by default). extension.md "Decks" */
-export const deckIdOf = (config: GameConfig): DeckId => (config.deck ?? DEFAULT_DECK);
+const deckIdOf = (config: GameConfig): DeckId => (config.deck ?? DEFAULT_DECK);
 
 export const dealStyleOf = (config: GameConfig): DealStyle => config.deal ?? "balanced";
 
@@ -234,7 +234,7 @@ export function dealRoles(
  * list that means one was dealt; otherwise that the deal could give one
  * (`dealableRoles`: so never with Balanced at 2–3 players).
  */
-export function policeRuns(config: GameConfig, dealt: readonly RoleId[], roles: RoleTable = rolesFor(config)): boolean {
+function policeRuns(config: GameConfig, dealt: readonly RoleId[], roles: RoleTable = rolesFor(config)): boolean {
   const isMole = (r: RoleId) => powerOf(config, r).kind === "tipOff" || r === MOLE_ROLE;
   return roleListOf(config) === "exact" ? dealt.some(isMole) : dealableRoles(config, roles).some(isMole);
 }
@@ -257,7 +257,7 @@ export function drawPoliceMoment(config: GameConfig, moment: number, int: (n: nu
  * (extension.md "Tokens and the perk shop", gap-fills "Shop dealing"):
  * with events off the Sway perk is +Vote or Emergency.
  */
-export function dealShop(config: GameConfig, rng: RngState): { readonly value: PerkId[]; readonly rng: RngState } {
+function dealShop(config: GameConfig, rng: RngState): { readonly value: PerkId[]; readonly rng: RngState } {
   const perks: PerkId[] = [];
   const take = (from: readonly PerkId[]) => {
     const drawn = pick(rng, from);

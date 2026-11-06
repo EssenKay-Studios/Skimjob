@@ -36,7 +36,6 @@ type ExpectedVisibility = {
   abilityResolved: "private";
   roomSighting: "private";
   roomWatched: "private";
-  pocketCount: "private";
   roundResolved: "public";
   copsRaided: "public";
   raidStopped: "public";
@@ -46,10 +45,6 @@ type ExpectedVisibility = {
   tipOffLanded: "private"; // extension.md "Police activity": only the Mole learns the tip-off landed
   blessingPaid: "public";
   eventFlipped: "public"; // design §10: the card is shown to everyone
-  doubleCrossOffered: "private"; // design §10: only the two players know
-  doubleCrossAnswered: "private"; // design §10: acceptance is secret
-  doubleCrossResolved: "private";
-  raidRumourHit: "private"; // design §10: only the affected player is told
   insideTip: "private"; // design §10: private to the recipient
   auditReport: "public"; // design §10: per-room shortfall on the ledger
   alibiPosted: "public";

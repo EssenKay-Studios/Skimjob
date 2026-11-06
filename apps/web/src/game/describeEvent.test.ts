@@ -124,7 +124,7 @@ describe("describeEvent", () => {
     tail: [{ kind: "tail", room: "vault" }],
     alibi: [{ kind: "alibi", round: 2, room: "lobby" }],
     recharge: [{ kind: "recharge" }],
-    rig: [{ kind: "rig", round: 3, cards: ["audit", "payday"] }],
+    rig: [{ kind: "rig", round: 3, cards: ["audit", "lockdown"] }],
     emergency: [{ kind: "emergency", meetingId: "m2" }],
   };
   it.each(flat(perks))("describes the $kind perk", (perk) => {
@@ -133,7 +133,7 @@ describe("describeEvent", () => {
   });
   it("names perks and cards", () => {
     expect(describeEvent(sampleEvents.perkUsed, asAna)).toBe("Peek: Ben is the Mole.");
-    expect(describeEvent({ ...sampleEvents.perkUsed, perk: perks.rig[0] }, asAna)).toBe("You rigged round 3's card: Audit and Payday to pick from.");
+    expect(describeEvent({ ...sampleEvents.perkUsed, perk: perks.rig[0] }, asAna)).toBe("You rigged round 3's card: Audit and Lockdown to pick from.");
     // design §8.3: the Smooth Talker's Emergency
     expect(describeEvent({ ...sampleEvents.perkUsed, perk: perks.emergency[0] }, asAna)).toBe("You spent an Emergency perk to call an extra emergency meeting.");
   });

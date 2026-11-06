@@ -11,7 +11,7 @@ export const CHAT_RATE = { messages: 8, windowMs: 10_000 } as const;
 /** The counter shows from here on. */
 export const CHAT_WARN_AT = 400;
 /** Longest run of combining marks on one character (server CHAT_MAX_MARKS). */
-export const CHAT_MAX_MARKS = 8;
+const CHAT_MAX_MARKS = 8;
 
 // ---------- Wire types (apps/server chat.ts) ----------
 
@@ -258,7 +258,7 @@ export function composerStatus(text: string, sent: readonly number[], now: numbe
 // ---------- Evidence cards ----------
 
 /** The case-file event a card was copied from, as the sender saw it (for describeEvent). */
-export const cardEvent = (card: EvidenceCard, from: PlayerId): GameEvent =>
+const cardEvent = (card: EvidenceCard, from: PlayerId): GameEvent =>
   ({ ...card.payload, type: card.type, visibility: { kind: "private", player: from } }) as unknown as GameEvent;
 
 /** One line for a shared card, from the reader's side ("Dez saw…"); a plain fallback for a type this client doesn't know. */

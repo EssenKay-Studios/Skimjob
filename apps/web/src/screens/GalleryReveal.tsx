@@ -4,7 +4,7 @@
 // The names can switch to 24-character ones (the cap; "W" is the widest glyph
 // and has no break points) to check nothing pushes past a phone's edge.
 import { useMemo, useState, type ReactNode } from "react";
-import { EVENTS, ROLES } from "@skimjob/content";
+import { ROLES } from "@skimjob/content";
 import { PUBLIC, REVEAL, privateTo, revealSummary, type GameEvent, type Outcome, type RankEntry } from "@skimjob/engine";
 import { Reveal } from "../components/Reveal";
 import { Segmented } from "../components/Segmented";
@@ -44,7 +44,7 @@ const resolved = (round: number, haulDelta: number, haul: number, heatDelta: num
   haul,
   heatDelta,
   heat,
-  heatParts: { base: heatDelta, rooms: {}, events: 0 },
+  heatParts: { base: heatDelta, rooms: {} },
 });
 
 /** Ana (Rookie, you), Ben (Mole), Cy (Hacker), Dot (Detective): three rounds and a meeting. */
@@ -87,12 +87,11 @@ const LOG: GameEvent[] = [
   { type: "shakedownResolved", visibility: PUBLIC, meetingId: "m1", target: "p3", stashRevealed: 0, taken: 0, clean: true, compensation: 3 },
   { type: "checkpointChecked", visibility: PUBLIC, act: 1, target: 20, haul: 19, met: false, heatPenalty: 10 },
   { type: "roundStarted", visibility: PUBLIC, round: 3, act: 2 },
-  { type: "eventFlipped", visibility: PUBLIC, round: 3, card: "powerCut", room: null },
+  { type: "eventFlipped", visibility: PUBLIC, round: 3, card: "shiftChange", room: null },
   split("p1", 3, "security", 0, 0),
   split("p2", 3, "depositBoxes", 5, 5),
   split("p3", 3, "vault", 6, 2),
   split("p4", 3, "lobby", 2, 0),
-  { type: "roomWatched", visibility: privateTo("p1"), player: "p1", round: 3, source: "security", room: "depositBoxes", seen: [], offline: true },
   resolved(3, 6, 25, 12, 86),
 ];
 
@@ -122,7 +121,7 @@ export function RevealSection() {
   const [ending, setEnding] = useState<Ending>("success");
   const [long, setLong] = useState(false);
   const ctx = useMemo(() => ctxFor(long ? LONG_NAMES : NAMES), [long]);
-  const summary = useMemo(() => revealSummary(logFor(ending), OUTCOMES[ending], { roles: ROLES, events: EVENTS }), [ending]);
+  const summary = useMemo(() => revealSummary(logFor(ending), OUTCOMES[ending], { roles: ROLES }), [ending]);
   return (
     <Section id="reveal" title="End-of-game reveal" note="M2-11 · role envelopes, who won and why, round timeline with every hidden action">
       <Segmented

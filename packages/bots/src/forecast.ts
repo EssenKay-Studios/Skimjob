@@ -19,7 +19,7 @@ export interface Forecast {
 export const LEAN_AT = 0.8;
 
 /** It rates itself top when its score is at least this many times the average other player's estimated stash (bot setting). */
-export const TOP_FACTOR = 2;
+const TOP_FACTOR = 2;
 
 const clamp = (x: number): number => Math.min(1, Math.max(0, x));
 
@@ -46,7 +46,7 @@ export function forecast(view: PlayerView): Forecast {
  * Loot the alibis claim but the Haul never got, summed over the resolved
  * rounds: roughly what the crew has skimmed (cover-up alibis hide some).
  */
-export function skimEstimate(view: PlayerView): number {
+function skimEstimate(view: PlayerView): number {
   const job = jobOf(view);
   let total = 0;
   for (const r of ofType(view.ledger, "roundResolved")) {
@@ -60,7 +60,7 @@ export function skimEstimate(view: PlayerView): number {
 }
 
 /** Whether the bot rates itself top: its stash against the others' estimated share of the skim. */
-export function ratesSelfTop(view: PlayerView): boolean {
+function ratesSelfTop(view: PlayerView): boolean {
   const mine = view.me.stash;
   if (mine === 0) return false;
   const pocketed = ofType(view.caseFile, "lootSplit").reduce((sum, e) => sum + e.toStash, 0);

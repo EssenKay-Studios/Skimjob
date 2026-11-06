@@ -4,7 +4,7 @@
 // is the viewer's own reveal log (`visibleLog(..., true)`), so it can't say
 // anything that log doesn't (others' Secret-mode ballots stay hidden).
 import type { RoleId, RoomId, TokenTrigger, PerkId } from "@skimjob/content";
-import type { EventTable, RoleTable } from "./overrides";
+import type { RoleTable } from "./overrides";
 import { roleDefIn } from "./overrides";
 import { leadersOf } from "./end";
 import type { PlayerId } from "./types/config";
@@ -16,7 +16,6 @@ const SHOWN: ReadonlySet<GameEvent["type"]> = new Set<GameEvent["type"]>([
   "perkBought",
   "perkUsed",
   "rigPicked",
-  "raidRumourHit",
   "insideTip",
   "meetingClosed",
   "shakedownResolved",
@@ -36,10 +35,10 @@ interface Draft {
 
 /**
  * The reveal summary of a finished game from `log` (a reveal log, in order)
- * and its `outcome`. `roles` and `events` are the game's tables
- * (`rolesFor(config)`, `eventsFor(config)`). design §13
+ * and its `outcome`. `roles` is the game's table
+ * (`rolesFor(config)`). design §13
  */
-export function revealSummary(log: readonly GameEvent[], outcome: Outcome, tables: { readonly roles: RoleTable; readonly events: EventTable }): RevealSummary {
+export function revealSummary(log: readonly GameEvent[], outcome: Outcome, tables: { readonly roles: RoleTable }): RevealSummary {
   const ranking = outcome.ranking;
   const seatOrder: PlayerId[] = [];
   const dealt = new Map<PlayerId, RoleId>();
@@ -54,10 +53,8 @@ export function revealSummary(log: readonly GameEvent[], outcome: Outcome, table
   const drafts: Draft[] = [];
   let current: Draft = { card: null, items: [], resolved: null, stashes: {} };
   drafts[0] = current;
-  let blackout = false;
   /** This round's Hackers by looped room. */
   let loops = new Map<RoomId, PlayerId[]>();
-  const doubleCrossSeen = new Set<string>();
   const loot = new Map<number, Map<PlayerId, Omit<RevealMove, "missed" | "alibi">>>();
   const missed = new Set<string>();
   const alibi = new Map<string, RoomId>();
@@ -77,12 +74,10 @@ export function revealSummary(log: readonly GameEvent[], outcome: Outcome, table
         current.stashes = Object.fromEntries(stash);
         current = { card: null, items: [], resolved: null, stashes: {} };
         drafts[e.round] = current;
-        blackout = false;
         loops = new Map();
         break;
       case "eventFlipped":
         current.card = { id: e.card, room: e.room };
-        blackout = tables.events[e.card]?.effect.kind === "blackout";
         break;
       case "defaultMoveAssigned":
         missed.add(key(e.player, e.round));
@@ -109,15 +104,7 @@ export function revealSummary(log: readonly GameEvent[], outcome: Outcome, table
       }
       case "roomWatched":
         if (e.offline) {
-          const powerCut = blackout;
-          items.push({
-            kind: "cameraOffline",
-            watcher: e.player,
-            room: e.room,
-            source: e.source,
-            cause: powerCut ? "powerCut" : "hackerLoop",
-            hackers: powerCut ? [] : (loops.get(e.room) ?? []),
-          });
+          items.push({ kind: "cameraOffline", watcher: e.player, room: e.room, source: e.source, hackers: loops.get(e.room) ?? [] });
         }
         break;
       case "policeActivity": {
@@ -140,19 +127,6 @@ export function revealSummary(log: readonly GameEvent[], outcome: Outcome, table
         break;
       case "roleClaimed":
         items.push({ kind: "claim", player: e.player, claimed: e.role, real: role.get(e.player) ?? e.role });
-        break;
-      case "doubleCrossResolved": {
-        if (e.swap) role.set(e.player, e.swap.role);
-        const pair = [e.player, e.partner].sort() as [PlayerId, PlayerId];
-        const k = `${e.round}\u0000${pair.join("\u0000")}`;
-        if (!doubleCrossSeen.has(k)) {
-          doubleCrossSeen.add(k);
-          items.push({ kind: "doubleCross", players: [e.player, e.partner], swapped: e.swap !== null });
-        }
-        break;
-      }
-      case "raidRumourHit":
-        add(e.player, -e.lost);
         break;
       case "shakedownResolved":
         add(e.target, e.compensation - e.taken);

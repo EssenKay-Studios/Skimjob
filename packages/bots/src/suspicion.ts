@@ -1,6 +1,6 @@
 // The bots' suspicion model: a score for every other player, worked out from
 // the view alone. design §17.3 (and §5.3 shortfalls, §5.4 alibis, §6 Security
-// and Server room, §8 Lookout, §11.3 shakedown results)
+//, §8 Lookout, §11.3 shakedown results)
 //
 // Rebuilt from the ledger and case file each time it's needed, so a bot keeps
 // no hidden memory of its own: same view, same scores.
@@ -116,9 +116,6 @@ export function suspicion(view: PlayerView, w: SuspicionWeights = SUSPICION_WEIG
     for (const room of claims.values()) expected += roomLoot(roomDef(job, room), crowd.get(room) ?? 1);
     // My own hand-in.
     let unexplained = expected - (haulDelta - split.toHaul);
-    // design §6.2: the Server room says how many pocketed; if nobody else did, the gap is someone's honest mistake.
-    const count = ofType(view.caseFile, "pocketCount").find((e) => e.round === round);
-    if (count && count.pocketed - (split.toStash > 0 ? 1 : 0) === 0) unexplained = 0;
     if (unexplained <= 0) return;
 
     // Shared by how much each could have taken: their claimed room's loot (+1, since a claim can be a lie).
@@ -156,7 +153,7 @@ export function suspicion(view: PlayerView, w: SuspicionWeights = SUSPICION_WEIG
   return score;
 }
 
-/** What I know of other players' roles: my latest Peek or Inside tip on each (it can be stale after a Double-cross). */
+/** What I know of other players' roles: my latest Peek or Inside tip on each. */
 export function knownRoles(view: PlayerView): Map<PlayerId, RoleId> {
   const known = new Map<PlayerId, RoleId>();
   for (const { event: e } of view.caseFile) {
