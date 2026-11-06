@@ -52,11 +52,11 @@ Full text: `docs/design.md` (the rules spec, frozen in S1); the A-numbers below 
 - **Emergency meetings are a crew pool by crew size** (design §9.3): 1 for 3–6 players, 2 for 7–12 [tunable, content table]. Any player may spend one, only after a round's result is shown and before the next round's planning starts; nothing recharges the pool. *Confirmed (owner, 6 Nov);* the caller being named publicly is *provisional*.
 - **Every player gets a role; any role may repeat** (design §11.3): roles dealt = number of players (3–12), up to 10 distinct; at 11–12 players the extra seats get a repeated role, any role (the Mole and Fixer included), eyes and shadows within one, at most two copies. Counts come from the content table (seam 8). Each holder has their own uses and charges (seam 9); each Mole or Fixer copy wins under its own handler; the Exact role list shows counts; the case board flags a role claimed more often than dealt; §21 gates win rates per role, copies counted per seat. *Confirmed (owner, 6 Nov).*
 
-### Provisional readings (PM, 4 and 6 Nov), owner to confirm
+### Readings (PM, 4 and 6 Nov)
 
-- **Missing:** *provisional:* "N coins went missing" = coins taken (excluding seized) − coins handed in that round, never negative.
+- **Missing:** "N coins went missing" = coins taken (excluding seized) − coins handed in that round, never negative. *Confirmed (owner, 6 Nov).*
 - **Copies of a role on the same target in one round** (design §11.4, PM, 6 Nov): the uses resolve one after another from a seeded seat; effects that add up stack (two Mole rings are two rings); a use that finds nothing left to act on because the other copy already did it has no effect and is not spent (the second Priest learns 0). *Provisional.*
-- **Advanced drops the Inside tip card** (roles are public there), leaving three event cards (`docs/advanced.md`).
+- **Advanced drops the Inside tip card** (roles are public there), leaving three event cards (`docs/advanced.md`). *Confirmed (owner, 6 Nov).*
 
 ## Balance
 
@@ -67,7 +67,7 @@ Full text: `docs/design.md` (the rules spec, frozen in S1); the A-numbers below 
 
 - **Votes:** group-scheduled live windows; sealed votes for absentees; hidden while voting and revealed after by default (prevents bandwagoning). The Check ballot perk works in Secret mode (the one exception to secret ballots). *Confirmed.*
 - **A meeting slot locks once more than half of the human seats back it;** bots only back, never propose. *Confirmed.*
-- **Lock-in marks and presence are public** (who has locked in, never what; online dot and last seen). **Rounds end early once everyone has locked in,** after a short grace set once per preset. *Confirmed;* grace lengths per preset (1h 10 s, 3h 30 s, 1d 2 min, 3d 5 min, 1w 5 min) *provisional*.
+- **Lock-in marks and presence are public** (who has locked in, never what; online dot and last seen). **Rounds end early once everyone has locked in,** after a short grace set once per preset. *Confirmed;* grace lengths per preset (1h 10 s, 3h 30 s, 1d 2 min, 3d 5 min, 1w 5 min) [tunable] *confirmed (owner, 6 Nov)*.
 - **Discussion can happen anywhere** (in-app chat and DMs, WhatsApp, in person); verified evidence cards keep facts trustworthy. Secret-mode ballots are never shareable. *Confirmed.*
 - **No player elimination;** getting caught costs coins, never the seat (essential for week-long games). *Confirmed.*
 
@@ -75,12 +75,12 @@ Full text: `docs/design.md` (the rules spec, frozen in S1); the A-numbers below 
 
 - **Node + Fastify + Postgres (`pg`), PGlite** for tests and zero-setup dev; plain SQL, add-only numbered migrations, no ORM. Replay inputs are `json`, not `jsonb` (key order must survive). *Confirmed.*
 - **One server process** (per-game lock, in-memory rate limits, scheduler). *Confirmed.*
-- **Sign-in:** invite link + nickname (guests may host), plus Google for a persistent identity (on when both `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are set). *Confirmed.* Provisional, owner to confirm (#53): the redirect URI from env (`GOOGLE_REDIRECT_URL`, else `PUBLIC_ORIGIN` + `/api/auth/google/callback`), never the Host header; the account's seat is kept on a same-game clash; display name `name` → `given_name` → "Crook"; scopes `openid profile` (no email); `prompt=select_account`.
+- **Sign-in:** invite link + nickname (guests may host), plus Google for a persistent identity (on when both `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are set). *Confirmed.* Also confirmed (owner, 6 Nov): the redirect URI from env (`GOOGLE_REDIRECT_URL`, else `PUBLIC_ORIGIN` + `/api/auth/google/callback`), never the Host header; the account's seat is kept on a same-game clash; display name `name` → `given_name` → "Crook"; scopes `openid profile` (no email: a player is keyed by Google's stable `sub`, which is enough for game history and future leaderboards; email only if notifications need it later); `prompt=select_account`.
 - **Scheduler reconciles, never schedules by events:** `planDeadlines` lists what the state calls for, one rule per kind in `DEADLINE_RULES`; a restart changes no due time; refused deadlines are dropped, other failures retried with backoff. *Confirmed.*
 - **No timing leaks:** a view is pushed only when it changed; bots act only when their own view changed. *Confirmed.*
 - **Preset timings** (1 hour to 1 week) and the auto-meeting presets are server data; tune after playtests. *Confirmed.*
-- **Host controls** (#54), provisional, owner to confirm: players can still act while paused (only the clocks stop); Extend per preset (1h 2 min, 3h 5 min, 1d 30 min, 3d 1 h, 1w 2 h), no cap; replace a seat with a bot only after 2 missed rounds in a row, never the host's seat, default Opportunist, handed back by the host or the seat's player; lobby kick of any non-host seat.
-- **Notes** (case-board seen marks, suspicion board) live outside the engine log, over REST (`apps/server/src/notes.ts`), if that code survives the C and S4 clean-up. *Provisional.*
+- **Host controls** (#54), *confirmed (owner, 6 Nov)*: players can still act while paused (only the clocks stop); Extend per preset (1h 2 min, 3h 5 min, 1d 30 min, 3d 1 h, 1w 2 h), no cap; replace a seat with a bot only after 2 missed rounds in a row, never the host's seat, default Opportunist, handed back by the host or the seat's player; lobby kick of any non-host seat.
+- **Notes** (case-board seen marks, suspicion board) live outside the engine log, over REST (`apps/server/src/notes.ts`), and R7's case-board pins, tags and notes stay there too: private, editable any time, never part of the game record or the reveal. *Confirmed (owner, 6 Nov).*
 - **Chat** is server-only, plain text, random UUID ids, 500 characters, 8 per 10 s; DM notices on by default; bots don't chat. *Confirmed.*
 - **One origin:** the server serves the built web app, the API (a leading `/api` is stripped) and the sockets, so a client route must not equal an API `GET` route. `NODE_ENV=production` means secure cookies, trusted proxy and no dev stub. *Confirmed.*
 
