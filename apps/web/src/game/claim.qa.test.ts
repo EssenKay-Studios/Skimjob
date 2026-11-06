@@ -14,7 +14,6 @@ const config = (n: number, extra: Partial<GameConfig> = {}): GameConfig => ({
   mole: "off",
   eventsEnabled: false,
   voteVisibility: "hiddenThenRevealed",
-  starterMode: true,
   uniqueRoles: false,
   ...extra,
 });
@@ -46,8 +45,8 @@ describe("QA: Claim role (PR #41)", () => {
     const all = Object.keys(ROLES).sort();
     const lists = [
       config(3),
-      config(3, { rolePool: ["lookout", "bagman"], starterMode: false }),
-      config(12, { rolePool: ["auditor", "detective", "fixer"], starterMode: false, mole: "on" }),
+      config(3, { rolePool: ["lookout", "bagman"] }),
+      config(12, { rolePool: ["auditor", "detective", "fixer"], mole: "on" }),
     ].map((c) => {
       const s = createGame(c);
       return Object.keys(s.players).map((id) => claimState(viewFor(s, id))!.options);

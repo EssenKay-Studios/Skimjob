@@ -38,7 +38,6 @@ const config = (extra: Partial<GameConfig> = {}): GameConfig => ({
   mole: "off",
   eventsEnabled: true,
   voteVisibility: "hiddenThenRevealed",
-  starterMode: false,
   uniqueRoles: true,
   ...extra,
 });
@@ -153,7 +152,6 @@ function ShopSection() {
   const { state, setState, view, send } = game;
   const earn = () => setState(applyEvent(state, { type: "tokenEarned", visibility: privateTo("p1"), player: "p1", trigger: "checkpointMade" }));
   const next = () => setState(step(step(state, round(state.round)), alibis(state.round)));
-  const starter = viewFor(createGame(config({ starterMode: true, eventsEnabled: false })), "p1");
   return (
     <Section id="ext-shop" title="Tokens and the shop" note="extension.md Tokens and the perk shop · live local game: buy, own privately, one use per round">
       <div className="g-stack" data-testid="shop-demo">
@@ -171,11 +169,6 @@ function ShopSection() {
         <SketchFrame seed="g-tokens" radius={14} fill="var(--card-sand)" className="panel">
           <Tokens view={view} send={send} />
           <PerkUses view={view} send={send} />
-        </SketchFrame>
-        <p className="meta">Quick games have no tokens or shop: nothing shows. (The Starter deck keeps them.)</p>
-        <SketchFrame seed="g-tokens-starter" radius={14} fill="var(--card-sand)" className="panel">
-          <Tokens view={starter} send={send} />
-          <p className="meta">(no tokens line)</p>
         </SketchFrame>
       </div>
     </Section>
@@ -239,7 +232,6 @@ const LOBBY: LobbySettings = {
   deal: "balanced",
   roleList: "exact",
   eventsEnabled: true,
-  starterMode: false,
   dmNotices: true,
   uniqueRoles: true,
 };
@@ -247,7 +239,7 @@ const LOBBY: LobbySettings = {
 function DeckSection() {
   const [s, setS] = useState(LOBBY);
   return (
-    <Section id="ext-deck" title="Lobby: deck, deal, role list" note="extension.md Host settings · Starter, Standard, Everything, roles one by one · Quick locks Starter">
+    <Section id="ext-deck" title="Lobby: deck, deal, role list" note="extension.md Host settings · Starter, Standard, Everything, roles one by one">
       <div className="g-stack">
         <div className="settings__list">
           <DeckSettings settings={s} readOnly={false} disabled={false} onChange={(p) => setS({ ...s, ...p })} />
@@ -256,11 +248,6 @@ function DeckSection() {
         <p className="meta">Guest view (read-only), custom pick:</p>
         <div className="settings__list">
           <DeckSettings settings={{ ...LOBBY, roles: DECKS.standard.filter((r) => r !== "mole") }} readOnly disabled={false} onChange={() => {}} />
-        </div>
-        <hr className="dashed" />
-        <p className="meta">Quick game:</p>
-        <div className="settings__list">
-          <DeckSettings settings={{ ...LOBBY, sessionLength: "quick" }} readOnly={false} disabled={false} onChange={() => {}} />
         </div>
       </div>
     </Section>

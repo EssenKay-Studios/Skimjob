@@ -26,15 +26,12 @@ describe("runBatch", () => {
     expect(runBatch(options(["-n", "4", "-p", "5", "-s", "other"]))).not.toEqual(runBatch(o));
   });
 
-  it("plays every setting: starter mode, decks, deals, role lists, vote modes, Random bots", () => {
-    for (const argv of [["--starter"], ["--deck", "everything", "-p", "9"], ["--deal", "random", "-p", "7"], ["--role-list", "hidden"], ["--role-list", "possible"], ["--votes", "secret"], ["--votes", "open"], ["-b", "random"], ["--role-pool", "lookout,fence"]]) {
+  it("plays every setting: decks, deals, role lists, vote modes, Random bots", () => {
+    for (const argv of [["--deck", "everything", "-p", "9"], ["--deal", "random", "-p", "7"], ["--role-list", "hidden"], ["--role-list", "possible"], ["--votes", "secret"], ["--votes", "open"], ["-b", "random"], ["--role-pool", "lookout,fence"]]) {
       const o = options(["-n", "2", ...argv]);
       expect(checkOptions(o)).toEqual([]);
       expect(runBatch(o).every((r) => r.rejections === 0)).toBe(true);
     }
-    // extension.md "Decks and dealing": Starter mode plays the Starter deck whatever --deck says.
-    const starter = runBatch(options(["-n", "2", "-p", "5", "--starter", "--deck", "everything"]));
-    expect(starter[0]?.playerRecords.every((p) => !p.star)).toBe(true);
   });
 });
 

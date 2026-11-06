@@ -18,7 +18,6 @@ function config(players: number, overrides: Partial<GameConfig> = {}): GameConfi
     rolePool: [],
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
-    starterMode: false,
     ...overrides,
   };
 }
@@ -60,18 +59,9 @@ describe("dealing roles — design §8.1", () => {
     }
   });
 
-  it("starter mode: only Rookie, Inside Man, Lookout, Bagman and Cleaner (role deck v2 §3); no Mole", () => {
-    for (let n = 3; n <= 12; n++) {
-      for (const seed of ["a", "b", "c"]) {
-        const roles = rolesOf(config(n, { seed, starterMode: true, rolePool: ["fence"] }));
-        for (const role of roles) expect(STARTER_ROLES).toContain(role);
-      }
-    }
-  });
-
-  it("4 players, starter mode: one of each starter role but the Inside Man (from 5 players)", () => {
-    expect(rolesOf(config(4, { starterMode: true })).sort()).toEqual(["bagman", "cleaner", "lookout", "rookie"]);
-    expect(rolesOf(config(5, { starterMode: true })).sort()).toEqual([...STARTER_ROLES].sort());
+  it("4 players, Starter deck: one of each starter role but the Inside Man (from 5 players)", () => {
+    expect(rolesOf(config(4, { deck: "starter" })).sort()).toEqual(["bagman", "cleaner", "lookout", "rookie"]);
+    expect(rolesOf(config(5, { deck: "starter" })).sort()).toEqual([...STARTER_ROLES].sort());
   });
 
   it("the Inside Man is dealt only from 5 players (design §8.1, owner answers 1 Nov)", () => {
@@ -82,7 +72,7 @@ describe("dealing roles — design §8.1", () => {
   });
 
   it("pool roles are dealt at most once each; Rookie fills the remaining seats (provisional)", () => {
-    const roles = rolesOf(config(12, { starterMode: true }));
+    const roles = rolesOf(config(12, { deck: "starter" }));
     for (const r of ["lookout", "insideMan", "bagman", "cleaner"]) expect(roles.filter((x) => x === r)).toHaveLength(1);
     expect(roles.filter((x) => x === "rookie")).toHaveLength(8);
   });
@@ -126,11 +116,10 @@ describe("dealing roles — design §8.1", () => {
   });
 
   // extension.md "Decks": Standard is the default; the preset or the host's own picks.
-  it("decks: Standard by default, Starter in starter mode, Everything; host picks replace the preset", () => {
+  it("decks: Standard by default, Starter, Everything; host picks replace the preset", () => {
     expect(deckFor(config(8))).toEqual(STANDARD_ROLES);
     expect(deckFor(config(8, { deck: "starter" }))).toEqual(STARTER_ROLES);
     expect(deckFor(config(8, { deck: "everything" }))).toEqual(Object.keys(ROLES));
-    expect(deckFor(config(8, { deck: "everything", starterMode: true }))).toEqual(STARTER_ROLES);
     expect(deckFor(config(8, { deck: "starter", rolePool: ["mole", "fence"] }))).toEqual(["mole", "fence"]);
     for (let s = 0; s < 20; s++) for (const r of rolesOf(config(10, { seed: `std-${s}` }))) expect([...STANDARD_ROLES, "rookie"]).toContain(r);
   });
@@ -175,7 +164,7 @@ describe("dealing roles — design §8.1", () => {
 
   it("the deal is shuffled across seats", () => {
     const fenceSeats = new Set<number>();
-    for (let s = 0; s < 40; s++) fenceSeats.add(rolesOf(config(4, { seed: `seat${s}`, starterMode: true })).indexOf("bagman"));
+    for (let s = 0; s < 40; s++) fenceSeats.add(rolesOf(config(4, { seed: `seat${s}`, deck: "starter" })).indexOf("bagman"));
     expect(fenceSeats).toEqual(new Set([0, 1, 2, 3]));
   });
 });
@@ -199,11 +188,10 @@ describe("config validation — design §1, §15", () => {
     expect(() => setupEvents(config(6, { rolePool: ["mole"] }))).not.toThrow();
   });
 
-  it("starter mode rejects events, and plays the Starter deck whatever the saboteur setting (design §8.1)", () => {
-    expect(() => setupEvents(config(6, { starterMode: true, eventsEnabled: true }))).toThrow(/events/);
-    for (const r of rolesOf(config(6, { starterMode: true, mole: "on" }))) expect(STARTER_ROLES).toContain(r);
-    const created = setupEvents(config(6, { starterMode: true }))[0];
-    expect(created).toMatchObject({ type: "gameCreated", starterMode: true, deck: "starter", deal: "balanced", roleList: "exact", eventsEnabled: false });
+  it("plays the Starter deck whatever the saboteur setting, and gameCreated records the deck (design §8.1)", () => {
+    for (const r of rolesOf(config(6, { deck: "starter", mole: "on" }))) expect(STARTER_ROLES).toContain(r);
+    const created = setupEvents(config(6, { deck: "starter", eventsEnabled: false }))[0];
+    expect(created).toMatchObject({ type: "gameCreated", deck: "starter", deal: "balanced", roleList: "exact", eventsEnabled: false });
   });
 
   it("rejects unknown deck, deal and role-list settings", () => {
@@ -236,8 +224,7 @@ describe("config validation — design §1, §15", () => {
     }
   });
 
-  it("rejects non-boolean starterMode / eventsEnabled / isBot and other wrong types", () => {
-    expect(validateConfig({ ...config(6), starterMode: "false" })).toEqual([expect.stringMatching(/starterMode/)]);
+  it("rejects non-boolean eventsEnabled / isBot and other wrong types", () => {
     expect(validateConfig({ ...config(6), eventsEnabled: 0 })).toEqual([expect.stringMatching(/eventsEnabled/)]);
     const players = config(3).players.map((p) => ({ ...p, isBot: "no" }));
     expect(validateConfig({ ...config(3), players })).toEqual([expect.stringMatching(/isBot/)]);
@@ -246,9 +233,6 @@ describe("config validation — design §1, §15", () => {
     expect(validateConfig({ ...config(3), players: "abc" })).toEqual(["players must be an array"]);
   });
 
-  it("starter mode ignores the role pool (GameConfig.rolePool)", () => {
-    expect(() => setupEvents(config(3, { starterMode: true, rolePool: ["wizard"] }))).not.toThrow();
-  });
 });
 
 describe("setup events and visibility — design §17.2", () => {
@@ -320,12 +304,10 @@ describe("determinism and replay — design §17.2", () => {
   });
 
   it("replaying the log rebuilds the same state, RNG included", () => {
-    // No Snitch or Mole in the deck, and starter mode has no shop, so the deal is the setup's only draw.
-    const cfg = config(7, { starterMode: true });
+    const cfg = config(7, { deck: "starter" });
     const state = createGame(cfg);
     const rebuilt = replay(cfg, JSON.parse(JSON.stringify(state.log)) as GameEvent[]);
     expect(rebuilt).toEqual(state);
-    expect(state.rng.words).toEqual(dealRoles(cfg, seedRng(cfg.seed)).rng.words);
     const full = config(9, { deck: "everything", eventsEnabled: true, roleList: "possible" });
     expect(replay(full, JSON.parse(JSON.stringify(createGame(full).log)) as GameEvent[])).toEqual(createGame(full));
   });

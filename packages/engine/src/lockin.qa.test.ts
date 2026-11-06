@@ -17,7 +17,6 @@ function config(humans: readonly boolean[], seed = "lockin-qa"): GameConfig {
     mole: "off",
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
-    starterMode: false,
   };
 }
 const crew = (n: number, humans = n) => createGame(config(Array.from({ length: n }, (_, i) => i < humans)));

@@ -1,5 +1,5 @@
-// QA (PR #51): with the 0.17.0 numbers, Starter and Quick (starter mode)
-// still play to the end with no refused bot command, at 3–12 players.
+// QA (PR #51): with the 0.17.0 numbers, the Starter deck
+// still plays to the end with no refused bot command, at 3–12 players.
 // design §8.1 (Starter), extension.md "Tags, decks and dealing"
 import { PERSONALITIES, createBots, runBotGame } from "@skimjob/bots";
 import { describe, expect, it } from "vitest";
@@ -25,10 +25,9 @@ function play(argv: string[], players: readonly number[], games = 2) {
   }
 }
 
-describe("QA #51: Starter and Quick still play at 3–12 players", { timeout: 120_000 }, () => {
+describe("QA #51: the Starter deck still plays at 3–12 players", { timeout: 120_000 }, () => {
   it("Starter deck, events on and off", () => {
     play(["--deck", "starter"], PLAYERS);
     play(["--deck", "starter", "--events"], PLAYERS, 1);
   });
-  it("Quick (starter mode: Starter roles, no events)", () => play(["--starter"], PLAYERS));
 });

@@ -18,7 +18,6 @@ function play(n: number, seed: string, rolePool: string[]): GameState {
     rolePool,
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
-    starterMode: false,
   };
   const r = runBotGame(c, createBots(c.players, (_, i) => PERSONALITIES[MIX[(i + seed.length) % MIX.length] as PersonalityId], c.seed));
   expect(r.rejections).toEqual([]);

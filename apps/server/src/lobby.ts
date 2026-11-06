@@ -346,23 +346,19 @@ export function lobbyRoutes(app: FastifyInstance, db: Db, store: GameStore, s: S
 
 /**
  * The engine config for a lobby: seats in seat order, bank job, the host's
- * deck, toggles, deal and role list. Quick forces Starter with events off
- * (no shop, no tokens); the host's other choices stay stored for when the
- * length changes. extension.md "Host settings"
+ * deck, toggles, deal and role list. extension.md "Host settings"
  */
 export function gameConfig(settings: LobbySettings, seats: readonly Pick<SeatRow, "nickname" | "bot_personality">[], seed: string): GameConfig {
-  const quick = settings.sessionLength === "quick";
   return {
     seed,
     players: seats.map((x, i) => ({ id: playerIdFor(i), name: x.nickname, isBot: x.bot_personality !== null })),
     job: "bank",
-    rolePool: quick ? [] : [...settings.roles],
+    rolePool: [...settings.roles],
     deck: settings.deck,
     deal: settings.deal,
     roleList: settings.roleList,
-    eventsEnabled: quick ? false : settings.eventsEnabled,
+    eventsEnabled: settings.eventsEnabled,
     voteVisibility: settings.voteVisibility,
-    starterMode: quick || settings.starterMode,
     uniqueRoles: settings.uniqueRoles !== false,
   };
 }

@@ -24,7 +24,6 @@ export const sampleEvents: { readonly [T in GameEventType]: EventOfType<T> } = {
     roleList: "exact",
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
-    starterMode: true,
     contentVersion: "0.1.0",
     contentOverrides: { heat: { perRound: 5 } },
   },

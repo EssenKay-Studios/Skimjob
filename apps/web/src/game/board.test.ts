@@ -13,7 +13,6 @@ const config = (n = 4): GameConfig => ({
   mole: "off",
   eventsEnabled: false,
   voteVisibility: "hiddenThenRevealed",
-  starterMode: true,
   uniqueRoles: false,
 });
 

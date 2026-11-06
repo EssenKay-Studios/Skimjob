@@ -64,7 +64,6 @@ const config: GameConfig = {
   mole: "off",
   eventsEnabled: false,
   voteVisibility: "open",
-  starterMode: false,
 } as GameConfig;
 
 /** Seat i dealt roles[i] (Rookie if missing). */

@@ -21,7 +21,6 @@ function config(players: number): GameConfig {
     rolePool: [...STARTER_ROLES], // no Muscle; the shop's Shield may still open the window (run passes it)
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
-    starterMode: false,
     contentOverrides: V01_NUMBERS, // scripted against content 0.1.0 numbers (balance pass 1)
   };
 }

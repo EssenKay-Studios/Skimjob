@@ -25,7 +25,6 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
     rolePool: ["rookie", "lookout", "insideMan", "fence"],
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
-    starterMode: false,
     ...extra,
   };
 }

@@ -4,7 +4,7 @@ import { startGame } from "./setupGame";
 
 // M2-11: the end-of-game reveal (design §13). The gallery's hand-made game at
 // every launch width (role envelopes, who won and why, the round timeline with
-// its hidden causes; no sideways scroll), and a real Quick game played out by
+// its hidden causes; no sideways scroll), and a real 15-min game played out by
 // bots, whose reveal only appears once it has ended.
 // SHOTS_DIR=… saves the gallery section per viewport.
 const SHOTS = process.env.SHOTS_DIR;
@@ -88,7 +88,7 @@ for (const viewport of VIEWPORTS) {
   });
 }
 
-// The 12-seat Quick game QA (game.qa.spec.ts) sometimes ended 1 px or more
+// The 12-seat 15-min game QA (game.qa.spec.ts) sometimes ended 1 px or more
 // wider than a 390 px phone: a 24-character name with no break points ("W"×24)
 // in a timeline line, the "why" note or a token line would not wrap. Here the
 // gallery's game with 24-character names, every ending and every round, at

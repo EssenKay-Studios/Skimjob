@@ -22,7 +22,6 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
     rolePool: [...STARTER_ROLES],
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
-    starterMode: false,
     ...extra,
   };
 }
@@ -253,7 +252,6 @@ describe("eligibility at 3 and 12 players, events — design §8.1", () => {
     expect(pool(3, { eventsEnabled: true }).sort()).toEqual(["bagman", "cleaner", "fixer", "mastermind"]);
     expect(pool(12).sort()).toEqual(SEVEN.filter((r) => r !== "mastermind").sort());
     expect(pool(12, { eventsEnabled: true }).sort()).toEqual([...SEVEN].sort());
-    expect(validateConfig(config(3, { starterMode: true, eventsEnabled: true })).length).toBeGreaterThan(0);
   });
 
   it("dealt over many seeds: never below the minimum, never Mastermind with events off, each at most once at 12", () => {

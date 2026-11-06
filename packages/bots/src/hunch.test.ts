@@ -19,7 +19,6 @@ const config = (n: number, seed: string): GameConfig => ({
   mole: "off",
   eventsEnabled: false,
   voteVisibility: "hiddenThenRevealed",
-  starterMode: false,
 });
 
 const play = (c: GameConfig) => runBotGame(c, createBots(c.players, (_, i) => personality(i), c.seed));

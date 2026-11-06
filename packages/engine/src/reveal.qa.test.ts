@@ -23,7 +23,6 @@ function game(roles: RoleId[], stashes: number[]): GameState {
     rolePool: [],
     eventsEnabled: true,
     voteVisibility: "secret",
-    starterMode: false,
   };
   const base = createGame(cfg);
   const players = Object.fromEntries(
@@ -83,7 +82,6 @@ describe("QA #55 stolen vote decided across a Double-cross — extension.md owne
     rolePool: [],
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
-    starterMode: false,
   });
   const start = (c: GameConfig): GameState => {
     let seat = 0;

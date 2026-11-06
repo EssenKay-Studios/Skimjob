@@ -8,7 +8,7 @@ import { defineConfig, devices } from "@playwright/test";
 // PGlite, never a dev server's ports):
 // - the main one at TIME_SCALE 0.1 (E2E_TIME_SCALE), for everything that
 //   needs time to look around (30 s rounds and 18 s vote windows in the 1-hour preset);
-// - a fast one at TIME_SCALE 0.05 (E2E_FAST_TIME_SCALE) for the full Quick
+// - a fast one at TIME_SCALE 0.05 (E2E_FAST_TIME_SCALE) for the full 15-min
 //   games tagged @fast-clock (the slowest tests), run by the *-fast projects.
 // Ports come from the environment so two clones can run E2E side by side:
 // E2E_PORT (web, default 5179), E2E_SERVER_PORT (3179), E2E_FAST_PORT (5180), E2E_FAST_SERVER_PORT (3180).
@@ -21,7 +21,7 @@ const fastServerPort = num("E2E_FAST_SERVER_PORT", 3180);
 const scale = process.env.E2E_TIME_SCALE ?? "0.1";
 const fastScale = process.env.E2E_FAST_TIME_SCALE ?? "0.05";
 
-/** Tests that play a whole Quick game: they run on the fast clock only. */
+/** Tests that play a whole 15-min game: they run on the fast clock only. */
 const FAST = /@fast-clock/;
 
 const servers = (web: number, api: number, timeScale: string) => [

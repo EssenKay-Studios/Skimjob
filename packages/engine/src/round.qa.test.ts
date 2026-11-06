@@ -20,7 +20,6 @@ function config(players: number): GameConfig {
     mole: "off",
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
-    starterMode: false,
     contentOverrides: V01_NUMBERS, // scripted against content 0.1.0 numbers (balance pass 1)
   };
 }

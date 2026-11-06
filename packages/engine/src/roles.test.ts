@@ -20,7 +20,6 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
     mole: "off",
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
-    starterMode: false,
     ...extra,
   };
 }
@@ -226,9 +225,6 @@ describe("Muscle: cancel a shakedown after the vote passes — design §8, §11.
     expect(opensShakedownWindow(ROLES, ["rookie", "muscle"], [])).toBe(true);
     expect(opensShakedownWindow(ROLES, ["rookie"], ["shield"])).toBe(true);
     expect(opensShakedownWindow(ROLES, ["rookie"], ["peek"])).toBe(false);
-    const starter = setup([], { rolePool: [...STARTER_ROLES], starterMode: true }); // no shop, no Muscle
-    expect(starter.phase.kind).toBe("planning");
-    expect(ofType(starter.log, "shakedownResolved")).toHaveLength(1);
   });
 
   it("without a cancel, the shakedown is applied when the window ends", () => {
@@ -312,7 +308,7 @@ describe("Snitch: a secret target — design §8", () => {
       expect(setupEvents(cfg)).toEqual(events);
     }
     // No Snitch, no target.
-    expect(ofType(setupEvents(config(4, { starterMode: true })), "snitchTargetAssigned")).toEqual([]);
+    expect(ofType(setupEvents(config(4, { rolePool: ["rookie"] })), "snitchTargetAssigned")).toEqual([]);
   });
 
   // p0 Snitch with target p1; p1 pockets `pocket` in round 1 and is shaken down in an emergency meeting (act 1).

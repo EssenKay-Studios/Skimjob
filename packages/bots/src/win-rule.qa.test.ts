@@ -21,7 +21,6 @@ function config(n: number, seed: string, deck: "standard" | "everything", events
     roleList: deck === "standard" ? "exact" : "possible",
     eventsEnabled,
     voteVisibility: "hiddenThenRevealed",
-    starterMode: false,
   };
 }
 

@@ -27,7 +27,6 @@ const config = (n = 4, extra: Partial<GameConfig> = {}): GameConfig => ({
   mole: "off",
   eventsEnabled: false,
   voteVisibility: "hiddenThenRevealed",
-  starterMode: true,
   uniqueRoles: false,
   ...extra,
 });
@@ -149,7 +148,7 @@ describe("move panel", () => {
 
   it("knows who may pocket (design §8: the Inside Man may not)", () => {
     expect(canPocket(viewFor(createGame(config(3)), "p1"))).toBe(true);
-    const s = createGame(config(5, { rolePool: ["insideMan"], starterMode: false }));
+    const s = createGame(config(5, { rolePool: ["insideMan"] }));
     expect(s.players.p1!.role).toBe("insideMan");
     expect(canPocket(viewFor(s, "p1"))).toBe(false);
   });

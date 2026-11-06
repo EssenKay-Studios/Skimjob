@@ -389,7 +389,7 @@ test("QA: chat survives phase changes (draft kept, event rows), and still works 
   const [g1, g2] = [await player(browser, page), await player(browser, page)];
   for (const p of [page, g1, g2]) p.on("pageerror", (e) => errors.push(e.message));
   const g2Frames = recordFrames(g2);
-  const game = await startGame(page.request, { bots: 1, guests: [g1.request, g2.request] }); // Quick, ×10 speed
+  const game = await startGame(page.request, { bots: 1, guests: [g1.request, g2.request] }); // 15 min, ×10 speed
   for (const p of [page, g1, g2]) await p.goto(`/game/${game.id}`);
   for (const p of [page, g1, g2]) await openChat(p);
 

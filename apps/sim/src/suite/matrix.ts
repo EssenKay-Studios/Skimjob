@@ -80,7 +80,6 @@ export function cellSimOptions(o: SuiteOptions, cell: Cell): SimOptions {
     seed: `${o.seed}/${cell.key}`,
     job: "bank",
     rolePool: [],
-    starterMode: false,
     eventsEnabled: cell.events,
     deck: "standard",
     deal: SETUPS[cell.setup].deal,

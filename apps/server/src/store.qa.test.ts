@@ -21,7 +21,6 @@ function config(n: number, seed: string, extra: Partial<GameConfig> = {}): GameC
     mole: "on",
     eventsEnabled: true,
     voteVisibility: "hiddenThenRevealed",
-    starterMode: false,
     ...extra,
   };
 }

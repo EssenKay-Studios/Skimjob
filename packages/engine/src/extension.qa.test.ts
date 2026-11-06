@@ -23,7 +23,6 @@ function config(n: number, extra: Partial<GameConfig> = {}): GameConfig {
     rolePool: [],
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
-    starterMode: false,
     ...extra,
   };
 }
@@ -131,8 +130,8 @@ describe("police activity: hidden moments never leak (extension.md Build notes \
     }
   });
 
-  it("only when a Mole could be in the game: Starter, Quick-style starter mode and no-Mole decks have none", () => {
-    expect(createGame(config(5, { starterMode: true })).police).toBeNull();
+  it("only when a Mole could be in the game: Starter and no-Mole decks have none", () => {
+    expect(createGame(config(5, { deck: "starter", rolePool: [] })).police).toBeNull();
     expect(createGame(config(8, { rolePool: ["rookie", "lookout", "auditor", "hacker"] })).police).toBeNull();
     // Exact list: runs exactly when a Mole was dealt.
     for (let i = 0; i < 40; i++) {
@@ -344,12 +343,6 @@ describe("tokens: every trigger (extension.md \"Roles\", owner rulings 1, 4, 5, 
     expect(tokensOf(s, "p0", "allInStreak")).toBe(1);
     s = run(s, mv("p0", "vault"), ROUND, mv("p0", "vault", 1), ROUND, mv("p0", "vault"), ROUND);
     expect(tokensOf(s, "p0", "allInStreak")).toBe(1);
-  });
-
-  it("starter mode (Quick) earns no tokens at all", () => {
-    let s = game(config(3, { starterMode: true }), { roles: ["rookie", "bagman", "rookie"] });
-    s = run(s, mv("p1", "vault"), ROUND, mv("p1", "vault"), ROUND, mv("p1", "vault"), ROUND);
-    expect(ofType(s.log, "tokenEarned")).toEqual([]);
   });
 
   it("tokens are private: earning one changes no other player's view", () => {

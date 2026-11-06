@@ -128,11 +128,9 @@ export function useCrewPower(state: GameState, player: PlayerState, power: RoleP
 
 /**
  * `count` tokens (one per `tokenEarned`) for each player whose role has a
- * reward on `trigger` and for whom `earned` holds. Nothing in starter mode
- * (Quick and first games have no shop). extension.md "Tokens and the perk shop", gap-fills
+ * reward on `trigger` and for whom `earned` holds. extension.md "Tokens and the perk shop", gap-fills
  */
 export function grantRewards(state: GameState, trigger: TokenTrigger, earned: (player: PlayerState) => boolean): GameEvent[] {
-  if (state.config.starterMode) return [];
   const roles = rolesFor(state.config);
   const out: GameEvent[] = [];
   for (const id of state.playerOrder) {

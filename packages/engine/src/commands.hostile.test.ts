@@ -40,7 +40,6 @@ function config(extra: Partial<GameConfig> = {}): GameConfig {
     eventsEnabled: true,
     // Secret mode, so the Ballot perk can be spent (it's refused in Open mode).
     voteVisibility: "secret",
-    starterMode: false,
     ...extra,
   };
 }

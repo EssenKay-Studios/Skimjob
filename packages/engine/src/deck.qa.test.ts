@@ -20,7 +20,6 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
     rolePool: ["rookie", "lookout", "fence", "insideMan"],
     eventsEnabled: true,
     voteVisibility: "open",
-    starterMode: false,
     ...extra,
   };
 }
@@ -289,11 +288,10 @@ describe("QA: Power cut vs info rooms and powers — design §10", () => {
 });
 
 describe("QA: when the deck is on — design §10, §8.1", () => {
-  it("round 1 never has a card; starter + events is refused; events off flips nothing over a whole game", () => {
+  it("round 1 never has a card; events off flips nothing over a whole game", () => {
     const g = createGame(config(4));
     expect(g.card).toBeNull();
     expect(viewFor(g, "p0").card).toBeNull();
-    expect(validateConfig({ ...config(4), starterMode: true, rolePool: [] }).some((e) => /event/i.test(e))).toBe(true);
     const off = playThrough(createGame(config(4, { eventsEnabled: false })));
     expect(find(off.log, "eventFlipped")).toEqual([]);
     expect(off.cardsFlipped).toEqual([]);

@@ -21,13 +21,12 @@ export interface GameCreated {
   readonly visibility: PublicVisibility;
   readonly players: readonly PlayerSeat[];
   readonly job: JobId;
-  /** The deck preset (after the stored saboteur-setting migration and starter mode). extension.md "Decks" */
+  /** The deck preset (after the stored saboteur-setting migration). extension.md "Decks" */
   readonly deck: DeckId;
   readonly deal: DealStyle;
   readonly roleList: RoleListSetting;
   readonly eventsEnabled: boolean;
   readonly voteVisibility: VoteVisibility;
-  readonly starterMode: boolean;
   /** `CONTENT_VERSION` the game was set up with, so an old log can be replayed against the right numbers. design §17.4 */
   readonly contentVersion: string;
   /** The config's content overrides (public: they are the rules everyone plays by), or null. design §17.4 */
@@ -76,7 +75,7 @@ export interface RoleListShown {
   readonly roles: readonly RoleId[];
 }
 
-/** The shop's three perks, one per column, dealt at setup (none in starter mode). extension.md "Tokens and the perk shop" */
+/** The shop's three perks, one per column, dealt at setup. extension.md "Tokens and the perk shop" */
 export interface ShopDealt {
   readonly type: "shopDealt";
   readonly visibility: PublicVisibility;

@@ -13,8 +13,8 @@ import { playerFor } from "./check";
 
 type Result = GameEvent[] | string;
 
-/** Events are off in starter mode (validateConfig also refuses starter + events) and when the host turns them off. design §8.1, §15 */
-export const eventsOn = (config: GameConfig): boolean => config.eventsEnabled && !config.starterMode;
+/** Events are on unless the host turns them off. design §8.1, §15 */
+export const eventsOn = (config: GameConfig): boolean => config.eventsEnabled;
 
 /** Whether a card flips at the start of `round`: events on, from `EVENTS_FROM_ROUND`, not past the last round. design §10 */
 export function cardRound(config: GameConfig, round: number): boolean {

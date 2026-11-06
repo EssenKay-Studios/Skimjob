@@ -42,7 +42,7 @@ export interface GameConfig {
   /**
    * The host's per-role picks: when not empty, exactly these roles make the
    * deck (any of the 20; the preset is ignored). Empty means the `deck`
-   * preset. Ignored in starter mode. extension.md "Decks"
+   * preset. extension.md "Decks"
    */
   readonly rolePool: readonly RoleId[];
   /** Deck preset; absent means Standard. extension.md "Decks" */
@@ -55,11 +55,6 @@ export interface GameConfig {
   readonly mole?: MoleSetting;
   readonly eventsEnabled: boolean;
   readonly voteVisibility: VoteVisibility;
-  /**
-   * The Starter deck with events off and no shop: a first game, and Quick
-   * games (extension.md gap-fills "Quick forces Starter"). design §8.1
-   */
-  readonly starterMode: boolean;
   /**
    * Each deck role is dealt at most once, Rookies filling the rest (true, the
    * default when absent); false draws with replacement, so roles may repeat

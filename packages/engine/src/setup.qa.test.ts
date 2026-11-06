@@ -20,7 +20,6 @@ function config(players: number, overrides: Partial<GameConfig> = {}): GameConfi
     rolePool: [],
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
-    starterMode: false,
     ...overrides,
   };
 }
@@ -118,10 +117,10 @@ describe("QA role dealing — design §8.1", () => {
     expect([count(narrow, "fence"), count(narrow, "rookie")]).toEqual([1, 11]);
   });
 
-  it("starter mode at 3 and 12 never deals a Mole, even with the Mole in the (ignored) pool", () => {
+  it("the Starter deck at 3 and 12 never deals a Mole, even with the saboteur setting on", () => {
     for (const n of [3, 12]) {
       for (let s = 0; s < 20; s++) {
-        const dealt = roles(config(n, { starterMode: true, seed: `st-${s}`, rolePool: ["mole", "fence", "fence"] }));
+        const dealt = roles(config(n, { deck: "starter", mole: "on", seed: `st-${s}` }));
         expect(dealt).not.toContain(MOLE_ROLE);
         for (const r of dealt) expect(STARTER_ROLES).toContain(r);
       }
@@ -145,7 +144,7 @@ describe("QA config validation — design §8.1, §15", () => {
   });
 
   it("a stored saboteur setting is still read but never refused (extension.md Build notes: migrated on read)", () => {
-    for (const mole of ["off", "maybe", "on"] as const) expect(() => setupEvents(config(3, { starterMode: true, mole }))).not.toThrow();
+    for (const mole of ["off", "maybe", "on"] as const) expect(() => setupEvents(config(3, { mole }))).not.toThrow();
   });
 });
 

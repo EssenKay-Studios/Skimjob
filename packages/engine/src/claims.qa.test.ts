@@ -16,7 +16,6 @@ const cfg = (n: number, extra: Partial<GameConfig> = {}): GameConfig => ({
   mole: "off",
   eventsEnabled: false,
   voteVisibility: "hiddenThenRevealed",
-  starterMode: false,
   ...extra,
 });
 

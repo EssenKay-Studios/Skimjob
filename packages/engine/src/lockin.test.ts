@@ -17,7 +17,6 @@ function config(humans: readonly boolean[]): GameConfig {
     mole: "off",
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
-    starterMode: false,
   };
 }
 

@@ -3,7 +3,7 @@
 // emergency-meeting timing; stale and wrong-id deadlines; shakedown edge cases;
 // the missed-checkpoint raid; ballot visibility per mode; determinism.
 // design §11, §4, §3
-import { STARTER_ROLES } from "@skimjob/content";
+import { STARTER_ROLES, type PerkId } from "@skimjob/content";
 import { handleThroughAlibis } from "./alibis.testkit";
 import { describe, expect, it } from "vitest";
 import type { GameConfig, GameEvent, GameState, VoteVisibility } from "./types";
@@ -13,16 +13,18 @@ import { replay } from "./reduce";
 import { handleCommand } from "./handle";
 import { V01_NUMBERS } from "./v01-numbers.testkit";
 
+/** One perk per column and no Shield, whatever the seed: a Shield in the shop opens a shakedown window at every meeting. */
+const SHOP_NO_SHIELD: readonly PerkId[] = ["peek", "alibi", "extraVote"];
+
 function config(players: number, voteVisibility: VoteVisibility = "hiddenThenRevealed"): GameConfig {
   return {
     seed: "qa-meeting",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    // Starter mode: no Muscle and no shop (so no Shield), so no shakedown window (extension.md "Shakedowns").
+    // Starter roles: no Muscle. The shop is pinned (see `game`): a Shield would open a shakedown window.
     rolePool: [...STARTER_ROLES],
     eventsEnabled: false,
     voteVisibility,
-    starterMode: true,
     contentOverrides: V01_NUMBERS, // scripted against content 0.1.0 numbers (balance pass 1)
   };
 }
@@ -31,7 +33,9 @@ function config(players: number, voteVisibility: VoteVisibility = "hiddenThenRev
 function game(players: number, roles: string[] = [], mode?: VoteVisibility): GameState {
   const cfg = config(players, mode);
   let seat = 0;
-  const log = setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: roles[seat++] ?? "rookie" } : e));
+  const log = setupEvents(cfg).map(
+    (e): GameEvent => (e.type === "roleDealt" ? { ...e, role: roles[seat++] ?? "rookie" } : e.type === "shopDealt" ? { ...e, perks: SHOP_NO_SHIELD } : e),
+  );
   return replay(cfg, log);
 }
 

@@ -26,7 +26,7 @@ import { describeEvent } from "../game/describeEvent";
 import { namesOf } from "../game/hud";
 import { gapInfo, heatRound, perkUses, roleInfo, roleListInfo, shopState, targetBar } from "../game/extension";
 import { GapBox, HeatBreakdown, RoleList, RulebookSheet, TargetBar, Tokens } from "./Extension";
-import { DeckSettings, deckPatch, deckRoles, effectiveDeck, rolePatch } from "./DeckSettings";
+import { DeckSettings, deckPatch, deckRoles, rolePatch } from "./DeckSettings";
 import { GameOver } from "../screens/Game";
 import type { LobbySettings } from "../api";
 
@@ -41,7 +41,6 @@ function config(n: number, extra: Partial<GameConfig> = {}): GameConfig {
     rolePool: [],
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
-    starterMode: false,
     ...extra,
   };
 }
@@ -175,11 +174,6 @@ describe("the shop's edges (extension.md \"Tokens and the perk shop\")", () => {
     expect(peek!.kind === "peek" && peek!.targets).not.toContain("p0");
   });
 
-  it("Starter and Quick (starterMode) games show no tokens and no shop", () => {
-    const v = viewFor(createGame(config(5, { starterMode: true, eventsEnabled: false })), "p0");
-    expect(shopState(v).open).toBe(false);
-    expect(html(createElement(Tokens, { view: v, send: noop }))).toBe("");
-  });
 });
 
 // ---------------------------------------------------------------- no tells
@@ -430,7 +424,7 @@ describe("role list views (extension.md \"Host settings\": exact, possible, noth
 
 // ---------------------------------------------------------------- lobby
 
-describe("lobby deck settings (extension.md \"Host settings\", gap-fill \"Quick forces Starter\")", () => {
+describe("lobby deck settings (extension.md \"Host settings\")", () => {
   const base: LobbySettings = {
     sessionLength: "1h",
     voteVisibility: "hiddenThenRevealed",
@@ -439,7 +433,6 @@ describe("lobby deck settings (extension.md \"Host settings\", gap-fill \"Quick 
     deal: "balanced",
     roleList: "exact",
     eventsEnabled: true,
-    starterMode: false,
     dmNotices: true,
     uniqueRoles: true,
   };
@@ -451,16 +444,11 @@ describe("lobby deck settings (extension.md \"Host settings\", gap-fill \"Quick 
     expect(deckRoles(base)).toEqual(DECKS.standard);
   });
 
-  it("Quick forces Starter but keeps the host's stored choices for when the length changes", () => {
+  it("every session length shows the host's deck and role picker", () => {
     const custom = { ...base, deck: "everything" as const, roles: ["fence", "mole"], sessionLength: "quick" as const };
-    expect(effectiveDeck(custom)).toBe("starter");
-    const ui = render(custom);
-    expect(ui).toContain("Quick games play the Starter deck");
-    expect(ui).not.toContain("Pick roles one by one");
-    expect(ui).not.toMatch(/<button[^>]*>Everything</);
-    const back = { ...custom, sessionLength: "1h" as const };
-    expect(effectiveDeck(back)).toBe("everything");
-    expect(deckRoles(back)).toEqual(["fence", "mole"]);
+    expect(deckRoles(custom)).toEqual(["fence", "mole"]);
+    expect(render(custom)).toContain("Pick roles one by one");
+    expect(render({ ...custom, roles: [] })).toContain(">Everything<");
   });
 
   it("per-role toggles add any role to a preset and keep the pick in content order", () => {
@@ -470,10 +458,9 @@ describe("lobby deck settings (extension.md \"Host settings\", gap-fill \"Quick 
     expect(rolePatch({ ...base, ...p }, "priest")).toEqual({ roles: [] });
   });
 
-  it("switching decks clears the per-role pick; leaving Starter turns starter mode off", () => {
+  it("switching decks clears the per-role pick", () => {
     const picked = { ...base, roles: ["fence"] };
-    expect(deckPatch(picked, "everything").roles).toEqual([]);
-    expect(deckPatch({ ...base, deck: "starter", starterMode: true }, "standard")).toMatchObject({ starterMode: false });
+    expect(deckPatch("everything").roles).toEqual([]);
   });
 
   it("all three role-list options and both deal styles are offered; a guest sees them read-only", () => {

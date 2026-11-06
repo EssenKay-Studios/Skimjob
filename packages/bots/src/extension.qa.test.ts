@@ -18,7 +18,6 @@ function config(n: number, seed: string, extra: Partial<GameConfig> = {}): GameC
     rolePool: ALL_ROLES,
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
-    starterMode: false,
     ...extra,
   };
 }
@@ -33,7 +32,7 @@ const CASES: { n: number; extra: Partial<GameConfig> }[] = [];
 for (const n of [3, 5, 8, 12])
   for (const events of [false, true])
     for (const roleList of ["exact", "possible", "hidden"] as RoleListSetting[]) CASES.push({ n, extra: { eventsEnabled: events, roleList } });
-CASES.push({ n: 5, extra: { starterMode: true, rolePool: [] } }, { n: 12, extra: { starterMode: true, rolePool: [] } });
+CASES.push({ n: 5, extra: { deck: "starter", rolePool: [] } }, { n: 12, extra: { deck: "starter", rolePool: [] } });
 
 describe("QA: full bot games under the Extension rules", () => {
   it("the same seed plays the same game; the log replays to the same state (design §17.2)", () => {
@@ -92,8 +91,8 @@ describe("QA: full bot games under the Extension rules", () => {
         const police = state.log.filter((e) => e.type === "policeActivity" || e.type === "policeScheduled");
         const start = createGame(c);
         if (start.police === null) expect(police).toEqual([]);
-        // Starter/Quick never runs police.
-        if (c.starterMode) expect(start.police).toBeNull();
+        // The Starter deck never runs police.
+        if (c.deck === "starter") expect(start.police).toBeNull();
         // Under Exact, police run iff a Mole was dealt.
         if (extra.roleList === "exact") expect(start.police !== null).toBe(Object.values(start.players).some((p) => p.role === "mole"));
       }

@@ -31,7 +31,6 @@ function config(n: number, seed: string, extra: Partial<GameConfig> = {}): GameC
     rolePool: [],
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
-    starterMode: false,
     ...extra,
   };
 }
@@ -71,13 +70,12 @@ describe("QA: sweep — every personality at 2, 3, 8, 12 players over many seeds
     }
   });
 
-  it("mixed crews in every seat order, vote mode, Mole setting and starter mode", () => {
+  it("mixed crews in every seat order, vote mode and Mole setting", () => {
     for (const n of SIZES) {
       for (let s = 0; s < 10; s++) {
         const c = config(n, `mix-${n}-${s}`, {
           voteVisibility: cyc(MODES, s),
           mole: s % 2 === 0 ? cyc(MOLES, s) : "off",
-          starterMode: s % 2 === 1,
         });
         expectClean(runBotGame(c, createBots(c.players, rotate(s), `m-${s}`)), `n=${n} s=${s}`);
       }

@@ -20,7 +20,6 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
     rolePool: ["rookie", "lookout", "fence", "hacker"], // no Muscle: a window only if the shop holds a Shield
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
-    starterMode: false,
     ...extra,
   };
 }

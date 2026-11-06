@@ -26,7 +26,7 @@
 import { isDeepStrictEqual } from "node:util";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { BALANCED_MIX, FILLER_ROLE, RANDOM_DEAL_SINGLETONS, ROLES, STARTER_ROLES, type DeckId } from "@skimjob/content";
+import { BALANCED_MIX, FILLER_ROLE, RANDOM_DEAL_SINGLETONS, ROLES, type DeckId } from "@skimjob/content";
 import type { Command, DealStyle, GameConfig, GameEvent, GameState, Move, PlayerId, PlayerState, RoleListSetting, VoteVisibility } from "./types";
 import { REVEAL, canSee, secretTo } from "./types";
 import { createGame, dealStyleOf, rolePoolFor } from "./setup";
@@ -36,9 +36,9 @@ import { replay } from "./reduce";
 import { viewFor } from "./view";
 import { jobFor } from "./overrides";
 
-const RUNS = Number(process.env.FC_RUNS ?? 45);
-// Role deck v2 R1 changed the deal's draws, so 20261101's 45 games no longer happened to reach a
-// Muscle cancel (coverage below is statistical; seeds 1, 2, 3 and 20261102 all reach it).
+const RUNS = Number(process.env.FC_RUNS ?? 90);
+// Coverage of the endings and event types below is statistical, so 90 runs; the Heat ending also has
+// its own deterministic case. Any FC_SEED should reach all of it.
 const SEED = Number(process.env.FC_SEED ?? 20261102);
 const TIMEOUT = 60_000 + RUNS * 1_000;
 const ALL_ROLES = Object.keys(ROLES);
@@ -58,12 +58,11 @@ const configArb = fc
     deal: fc.constantFrom(...DEALS),
     roleList: fc.constantFrom(...ROLE_LISTS),
     events: fc.boolean(),
-    starter: fc.boolean(),
     // design §8.1, §15: absent = unique (the default); false lets roles repeat.
     unique: fc.constantFrom(undefined, true, false),
     seed: fc.string({ minLength: 1, maxLength: 12 }),
   })
-  .map(({ players, vote, deck, deal, roleList, events, starter, unique, seed }): GameConfig => ({
+  .map(({ players, vote, deck, deal, roleList, events, unique, seed }): GameConfig => ({
     seed,
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i + 1}`, name: `P${i + 1}`, isBot: i % 2 === 1 })),
     job: "bank",
@@ -71,10 +70,8 @@ const configArb = fc
     deck,
     deal,
     roleList,
-    // Starter mode needs events off (validateConfig).
-    eventsEnabled: starter ? false : events,
+    eventsEnabled: events,
     voteVisibility: vote,
-    starterMode: starter,
     ...(unique === undefined ? {} : { uniqueRoles: unique }),
   }));
 /** The command stream: each step reads a few numbers from this tape; when it runs out, only deadlines pass. */
@@ -328,7 +325,6 @@ function checkDeal(state: GameState): void {
   for (const r of RANDOM_DEAL_SINGLETONS) check(roles.filter((x) => x === r).length <= 1, `at most one ${r}`, roles);
   if (state.config.uniqueRoles !== false) check(new Set(dealt).size === dealt.length, "uniqueRoles: each non-Rookie role dealt at most once (design §8.1)", roles);
   check(dealt.every((r) => pool.includes(r)), "roles come from the deck", roles);
-  if (state.config.starterMode) check(roles.every((r) => STARTER_ROLES.includes(r)), "starter roles only (design §8.1)", roles);
   if (dealStyleOf(state.config) === "balanced") {
     const mix = BALANCED_MIX[roles.length] ?? { loneWolves: 0, wildcards: 0 };
     for (const [tag, want] of [["loneWolf", mix.loneWolves], ["wildcard", mix.wildcards]] as const) {
@@ -566,7 +562,6 @@ const threeSeats: GameConfig = {
   rolePool: [],
   eventsEnabled: false,
   voteVisibility: "open",
-  starterMode: false,
 };
 
 const params = { numRuns: RUNS, seed: SEED, endOnFailure: true } as const;
@@ -611,6 +606,19 @@ describe("engine invariants under fuzzing — design §17.2", () => {
       expect(stats.types, t).toContain(t);
     }
   }, TIMEOUT);
+
+  it("a game at one point below max Heat ends as a Heat raid, with the end invariants holding (design §7)", () => {
+    const start = createGame({ ...threeSeats, seed: "heat-end" });
+    let state: GameState = { ...start, heat: jobFor(start.config).heat.max - 1 };
+    for (let steps = 0; state.phase.kind !== "ended"; steps++) {
+      if (steps > 200) throw new Failure("game did not end in 200 steps");
+      const next = nextDeadlines(state).map((c) => handleCommand(state, c)).find((r) => r.ok);
+      if (!next || !next.ok) throw new Failure("no deadline accepted");
+      state = next.state;
+    }
+    expect(state.phase).toMatchObject({ kind: "ended", outcome: { result: "failed", reason: "heat" } });
+    checkEnd(state);
+  });
 
   it("same seed + same commands = identical log; replaying the commands rebuilds the game", () => {
     assertProperty(

@@ -2,7 +2,7 @@ import { mkdirSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 import { startGame } from "./setupGame";
 
-// M2-6 acceptance (docs/m2-plan.md): a host and a guest play a Quick game
+// M2-6 acceptance (docs/m2-plan.md): a host and a guest play a 15-min game
 // against bots to the end in the browser and see the ledger and the ranking.
 // The server runs with TIME_SCALE=0.1 (playwright.config.ts): 4.5 s rounds and
 // 12 s meetings, enough for the host to vote (the fast clock's 6 s windows weren't).
@@ -16,7 +16,7 @@ async function shot(page: Page, name: string) {
   await page.screenshot({ path: `${SHOTS}/game-${name}-${page.viewportSize()!.width}.png`, fullPage: true });
 }
 
-test("a host and a guest play a Quick game against bots to the end", async ({ page, browser }) => {
+test("a host and a guest play a 15-min game against bots to the end", async ({ page, browser }) => {
   test.setTimeout(300_000);
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));

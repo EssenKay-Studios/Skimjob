@@ -22,8 +22,7 @@ export interface SimOptions {
   readonly seed: string;
   readonly job: string;
   readonly rolePool: readonly string[];
-  readonly starterMode: boolean;
-  /** The events deck (design §10). Off by default, and never with starter mode. */
+  /** The events deck (design §10). Off by default. */
   readonly eventsEnabled: boolean;
   /** Deck preset, deal style and role list (extension.md "Decks and dealing", "Role list"). */
   readonly deck: DeckId;
@@ -57,8 +56,7 @@ Usage: pnpm sim -- [options]
   -s, --seed <seed>       base seed; same options + seed = same results (default "sim")
       --job <id>          job (default bank)
       --role-pool <ids>   comma-separated roles to deal from (default: the content default)
-      --starter           starter mode (Rookie/Inside Man/Lookout/Bagman/Cleaner, no Mole, no events)
-      --events            flip an event card each round from round 2 (design §10; not with --starter)
+      --events            flip an event card each round from round 2 (design §10)
       --deck <preset>     starter | standard | everything (default standard; --role-pool overrides)
       --deal <style>      balanced | random (default balanced)
       --role-list <mode>  exact | possible | hidden (default exact)
@@ -142,7 +140,6 @@ export function parseSimArgs(argv: readonly string[], readFile?: (path: string) 
         seed: { type: "string", short: "s" },
         job: { type: "string" },
         "role-pool": { type: "string" },
-        starter: { type: "boolean" },
         events: { type: "boolean" },
         deck: { type: "string" },
         deal: { type: "string" },
@@ -184,7 +181,6 @@ export function parseSimArgs(argv: readonly string[], readFile?: (path: string) 
       return error(`--overrides: ${(e as Error).message}`);
     }
   }
-  if (values.events && values.starter) return error("--events can't be used with --starter (starter mode has no events)");
   if (values.out !== undefined && values.out.trim() === "") return error("--out needs a directory (use --no-files for none)");
   if (values.out !== undefined && values.out.includes("\0")) return error("--out is not a valid path");
   const workers = values.workers === undefined ? defaultWorkers() : /^\d+$/.test(values.workers.trim()) ? Number(values.workers) : NaN;
@@ -201,7 +197,6 @@ export function parseSimArgs(argv: readonly string[], readFile?: (path: string) 
       seed: values.seed ?? "sim",
       job: values.job ?? "bank",
       rolePool,
-      starterMode: values.starter ?? false,
       eventsEnabled: values.events ?? false,
       deck: deck as DeckId,
       deal: deal as DealStyle,

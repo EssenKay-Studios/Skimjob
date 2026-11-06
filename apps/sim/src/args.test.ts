@@ -55,7 +55,6 @@ describe("parseSimArgs", () => {
       seed: "sim",
       job: "bank",
       rolePool: [],
-      starterMode: false,
       eventsEnabled: false,
       deck: "standard",
       deal: "balanced",
@@ -75,16 +74,15 @@ describe("parseSimArgs", () => {
   it("reads every option", () => {
     const o = run([
       "-n", "7", "-p", "3-4", "-b", "random", "-s", "x", "--job", "bank", "--role-pool", "lookout, fence",
-      "--starter", "--deck", "everything", "--deal", "random", "--role-list", "hidden", "--votes", "secret", "--out", "here", "--json",
+      "--deck", "everything", "--deal", "random", "--role-list", "hidden", "--votes", "secret", "--out", "here", "--json",
     ]);
     expect(o).toMatchObject({
       games: 7, playerCounts: [3, 4], mix: [{ personality: "random", weight: 1 }], seed: "x", rolePool: ["lookout", "fence"],
-      starterMode: true, deck: "everything", deal: "random", roleList: "hidden", voteVisibility: "secret", outDir: "here", json: true,
+      deck: "everything", deal: "random", roleList: "hidden", voteVisibility: "secret", outDir: "here", json: true,
     });
     expect(run(["--no-files"]).outDir).toBeNull();
-    // design §10: the events deck; starter mode has none (§8.1).
+    // design §10: the events deck.
     expect(run(["--events"]).eventsEnabled).toBe(true);
-    expect(error(["--events", "--starter"])).toMatch(/starter/);
   });
 
   it("reads overrides inline or from a file, and reports bad JSON", () => {

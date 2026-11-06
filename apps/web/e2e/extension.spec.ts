@@ -88,7 +88,7 @@ test("a real game shows the target bar, the Heat breakdown and the gap box", asy
   }
 });
 
-test("lobby: deck, per-role picks, deal and role list persist; Quick locks Starter", async ({ page }, info) => {
+test("lobby: deck, per-role picks, deal and role list persist", async ({ page }, info) => {
   test.skip(info.project.name !== "desktop", "one run is enough");
   await page.goto("/");
   await page.getByRole("button", { name: "Plan a heist" }).click();
@@ -121,12 +121,10 @@ test("lobby: deck, per-role picks, deal and role list persist; Quick locks Start
   await expect(page.locator(".deck-roles__chips").getByRole("button").first()).toBeVisible(); // the open picker stays
   await expect(page.getByText("Off with the Starter deck")).toBeVisible();
 
-  // Quick: Starter, read-only, with the note.
+  // The 15-minute length keeps the host's deck and the role picker.
   await group("Deck").getByRole("button", { name: "Standard" }).click();
-  await group("Session length").getByRole("button", { name: "Quick 15 min" }).click();
-  await expect(page.getByText("Quick games play the Starter deck")).toBeVisible();
-  await expect(group("Deck").getByRole("button")).toHaveCount(0);
-  await expect(group("Deck")).toContainText("Starter");
-  await expect(page.getByRole("button", { name: "Pick roles one by one" })).toHaveCount(0);
-  await expect(page.getByText("Off in Quick games")).toBeVisible();
+  await group("Session length").getByRole("button", { name: "15 min" }).click();
+  await expect(group("Session length").getByRole("button", { name: "15 min" })).toHaveAttribute("aria-pressed", "true");
+  await expect(group("Deck").getByRole("button", { name: "Standard" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator(".deck-roles__toggle")).toBeVisible();
 });

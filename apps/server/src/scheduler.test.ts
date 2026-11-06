@@ -111,7 +111,7 @@ describe("presets (design §4.1)", () => {
 
 describe("all-bot games on a fake clock (M2-4 acceptance)", () => {
   for (const voteVisibility of ["hiddenThenRevealed", "open", "secret"] as VoteVisibility[]) {
-    it(`a Quick game finishes in ${voteVisibility} mode; deadlines move only by pauses, rounds take 45 s and alibis 15 s, the Muscle window runs in full`, { timeout: 60_000 }, async () => {
+    it(`a 15-min game finishes in ${voteVisibility} mode; deadlines move only by pauses, rounds take 45 s and alibis 15 s, the Muscle window runs in full`, { timeout: 60_000 }, async () => {
       const { id } = await startGame(5, { sessionLength: "quick", voteVisibility });
       const started = clock.now();
       const seen = new Map<string, number>();

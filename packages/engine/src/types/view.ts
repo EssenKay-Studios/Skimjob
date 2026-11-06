@@ -134,7 +134,7 @@ export interface PlayerView {
   readonly lockedIn: readonly PlayerId[];
   /** Open proposals for the act's regular meeting (public, design §11.1). */
   readonly proposals: readonly MeetingProposal[];
-  /** This game's perk shop (public; empty in starter mode), with each perk's cost in tokens. extension.md "Tokens and the perk shop" */
+  /** This game's perk shop (public), with each perk's cost in tokens. extension.md "Tokens and the perk shop" */
   readonly shop: readonly { readonly perk: PerkId; readonly cost: number }[];
   /** The roles shown at setup (public): exactly those dealt, or every role that could be; null when Hidden. extension.md "Settings" */
   readonly roleList: { readonly list: "exact" | "possible"; readonly roles: readonly RoleId[] } | null;

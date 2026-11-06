@@ -1,7 +1,7 @@
 // Crew meetings and votes: scheduling, emergency meetings, ballots and their
 // visibility, sealed votes, quorum and majority, shakedowns, the checkpoint
 // order and the move to the next act. design §11, §4, §3
-import { BANK_JOB, MAX_SLOT_LENGTH, STARTER_ROLES } from "@skimjob/content";
+import { BANK_JOB, MAX_SLOT_LENGTH, STARTER_ROLES, type PerkId } from "@skimjob/content";
 import { handleThroughAlibis } from "./alibis.testkit";
 import { describe, expect, it } from "vitest";
 import type { GameConfig, GameEvent, GameState, VoteVisibility } from "./types";
@@ -12,16 +12,18 @@ import { handleCommand } from "./handle";
 import { V01_NUMBERS } from "./v01-numbers.testkit";
 import { meetingResult } from "./meeting";
 
+/** One perk per column and no Shield, whatever the seed: a Shield in the shop opens a shakedown window at every meeting. */
+const SHOP_NO_SHIELD: readonly PerkId[] = ["peek", "alibi", "extraVote"];
+
 function config(players: number, voteVisibility: VoteVisibility = "hiddenThenRevealed"): GameConfig {
   return {
     seed: "meeting-seed",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    // Starter mode: no Muscle and no shop (so no Shield), so no shakedown window (extension.md "Shakedowns").
+    // Starter roles: no Muscle. The shop is pinned (see `game`): a Shield would open a shakedown window.
     rolePool: [...STARTER_ROLES],
     eventsEnabled: false,
     voteVisibility,
-    starterMode: true,
     contentOverrides: V01_NUMBERS, // scripted against content 0.1.0 numbers (balance pass 1)
   };
 }
@@ -30,6 +32,7 @@ function config(players: number, voteVisibility: VoteVisibility = "hiddenThenRev
 function game(players: number, roles: string[] = [], mode?: VoteVisibility): GameState {
   const cfg = config(players, mode);
   const log = setupEvents(cfg).map((e, i, all): GameEvent => {
+    if (e.type === "shopDealt") return { ...e, perks: SHOP_NO_SHIELD };
     if (e.type !== "roleDealt") return e;
     const seat = all.slice(0, i).filter((x) => x.type === "roleDealt").length;
     return { ...e, role: roles[seat] ?? "rookie" };
@@ -483,8 +486,8 @@ describe("order at a checkpoint — design §11.4, §11.5", () => {
   it("meeting → shakedown → checkpoint: a shakedown can rescue the checkpoint", () => {
     const s = act1Meeting();
     const rescued = run(s, vote("p1", "p0"), vote("p2", "p0"), CLOSE);
-    // Starter mode: no tokens for the target met (extension.md "Tokens and the perk shop").
-    expect(since(s, rescued).map((e) => e.type)).toEqual(["voteCast", "voteCast", "meetingClosed", "shakedownResolved", "checkpointChecked", "roundStarted"]);
+    // Token grants are not what this checks (extension.md "Tokens and the perk shop").
+    expect(since(s, rescued).map((e) => e.type).filter((t) => t !== "tokenEarned")).toEqual(["voteCast", "voteCast", "meetingClosed", "shakedownResolved", "checkpointChecked", "roundStarted"]);
     expect(LAST(rescued, "checkpointChecked")).toEqual({ type: "checkpointChecked", visibility: { kind: "public" }, act: 1, target: 18, haul: 22, met: true, heatPenalty: 0 });
     expect(rescued.heat).toBe(19);
   });
@@ -572,7 +575,7 @@ describe("determinism and the event log — design §17.2", () => {
 
   it("a player called toString can be voted for and shaken down (__proto__ is refused at setup)", () => {
     const cfg: GameConfig = { ...config(3), players: [{ id: "toString", name: "T", isBot: false }, { id: "p1", name: "P1", isBot: true }, { id: "p2", name: "P2", isBot: true }] };
-    const log = setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: "rookie" } : e));
+    const log = setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: "rookie" } : e.type === "shopDealt" ? { ...e, perks: SHOP_NO_SHIELD } : e));
     let s = run(replay(cfg, log), mv("toString", "vault", 6), ROUND, ROUND, ROUND, sched(1), open("act-1"), vote("p1", "toString"), vote("p2", "toString"), seal("toString", "p1"));
     s = run(s, CLOSE);
     const closed = LAST(s, "meetingClosed")!;

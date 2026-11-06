@@ -23,7 +23,6 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
     rolePool: ["rookie", "lookout", "fence", "insideMan"], // no Muscle, so no shakedown window
     eventsEnabled: true,
     voteVisibility: "open",
-    starterMode: false,
     ...extra,
   };
 }
@@ -167,11 +166,10 @@ describe("the deck — design §10", () => {
     expect(new Set(seeds).size).toBeGreaterThan(1);
   });
 
-  it("flips nothing when events are off, and starter mode can't turn them on (design §8.1)", () => {
+  it("flips nothing when events are off (design §8.1)", () => {
     const end = playThrough(createGame(config(4, { eventsEnabled: false })));
     expect(flips(end)).toEqual([]);
     expect(end.cardsFlipped).toEqual([]);
-    expect(validateConfig(config(4, { starterMode: true }))).not.toEqual([]);
   });
 
   it("shows the card in every view while its round is planned, and clears it when the round resolves", () => {
