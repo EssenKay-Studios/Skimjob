@@ -159,3 +159,59 @@ describe("Smooth talker: their vote counts double — design §8, §11.2", () =>
   });
 });
 
+
+describe("the shakedown window (a Shield in the shop) — design §8.3, §11.3", () => {
+  // The shop pinned with a Shield, so a passed shakedown waits for its window (extension.md "Shakedowns").
+  const shielded = (s: GameState): GameState => ({ ...s, shop: ["peek", "shield", "extraVote"] });
+  // 3 players; p1 pockets the Vault's 6 in round 1, then p0 and p2 vote p1 down.
+  const setup = () => {
+    const s = run(shielded(game(3, [])), mv("p1", "vault", 6), ROUND);
+    return run(emergency(s, "p2"), vote("p0", "p1"), vote("p2", "p1"), CLOSE);
+  };
+
+  it("the window opens only when the shop holds a Shield", () => {
+    expect(opensShakedownWindow(["peek", "alibi", "extraVote"])).toBe(false);
+    expect(opensShakedownWindow(["peek", "shield", "extraVote"])).toBe(true);
+    // No Shield in the shop: a passed shakedown is applied at once, no shakedownPending.
+    const s = run({ ...game(3, []), shop: ["peek", "alibi", "extraVote"] }, mv("p1", "vault", 6), ROUND);
+    const closed = run(emergency(s, "p2"), vote("p0", "p1"), vote("p2", "p1"), CLOSE);
+    expect(closed.log.some((e) => e.type === "shakedownPending")).toBe(false);
+    expect(closed.players.p1?.stash).toBe(0);
+  });
+
+  it("a passed shakedown waits in a public window; nothing is taken yet", () => {
+    const s = setup();
+    expect(s.phase).toEqual({ kind: "shakedownPending", meetingId: "emergency-p2", target: "p1" });
+    expect(s.log.at(-1)).toMatchObject({ type: "shakedownPending", visibility: { kind: "public" }, kind: "emergency", act: 1, target: "p1" });
+    expect(s.players.p1?.stash).toBe(6);
+  });
+
+  it("without a Shield, the shakedown is applied when the window ends", () => {
+    const s = setup();
+    const after = run(s, RESOLVE);
+    expect(since(s, after).map((e) => e.type)).toEqual(["shakedownResolved"]);
+    expect(after.players.p1?.stash).toBe(0);
+    expect(after.phase).toEqual({ kind: "planning", round: 2 });
+  });
+
+  it("while the window is open: no rounds, no new meetings or proposals, and only the pending meeting's deadline", () => {
+    const s = setup();
+    expect(reason(s, ROUND(s))).toMatch(/paused/);
+    expect(reason(s, mv("p0", "lobby"))).toMatch(/round is being planned/);
+    expect(reason(s, { type: "callEmergency", player: "p0" })).toMatch(/shakedown is pending/);
+    expect(reason(s, { type: "advance", deadline: { kind: "resolveShakedown", meetingId: "act-1" } })).toMatch(/no shakedown is pending/);
+    expect(reason(s, CLOSE(s))).toMatch(/not open/);
+  });
+
+  it("after the act's regular meeting the checkpoint comes once the window ends (design §11.4)", () => {
+    let s = run(shielded(game(3, [])), mv("p1", "vault", 6), ROUND, ROUND, ROUND);
+    s = run(s, { type: "scheduleMeeting", act: 1, slot: "x" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: "act-1" } });
+    s = run(s, vote("p0", "p1"), vote("p2", "p1"), CLOSE);
+    expect(s.phase.kind).toBe("shakedownPending");
+    expect(reason(s, { type: "proposeMeeting", player: "p0", slot: "y" })).toMatch(/already scheduled/);
+    const after = run(s, RESOLVE);
+    // extension.md "Tokens": the three Rookies each earn a token for the target made.
+    expect(since(s, after).map((e) => e.type)).toEqual(["shakedownResolved", "checkpointChecked", "tokenEarned", "tokenEarned", "tokenEarned", "roundStarted"]);
+    expect(after.round).toBe(4);
+  });
+});

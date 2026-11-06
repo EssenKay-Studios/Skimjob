@@ -10,7 +10,6 @@ import type { GameConfig, GameEvent, GameState, PlayerState } from "./types";
 import { PUBLIC, privateTo } from "./types";
 import { createGame, rolePoolFor, setupEvents, validateConfig } from "./setup";
 import { replay } from "./reduce";
-import { opensShakedownWindow } from "./meeting";
 import { roundHeatDelta } from "./job";
 import { viewFor } from "./view";
 import { grantPerks } from "./perks.testkit";
@@ -265,5 +264,27 @@ describe("view-diff with the seven dealt, and determinism — design §13, §17.
     const [a, b] = [play(true), play(true)];
     expect(a.log).toEqual(b.log);
     expect(replay(a.config, a.log)).toEqual(a);
+  });
+});
+
+describe("powers refused while a shakedown is pending (a Shield in the shop opens the window) — v2 §2, design §8, §8.3", () => {
+  const pendingOn = (roles: string[], pool: string[], pocket: number) => {
+    let s = run({ ...game(5, roles, { rolePool: pool }), shop: ["peek", "shield", "extraVote"] }, mv("p1", "vault", pocket), ROUND);
+    s = emergency(s, "p2");
+    for (const id of ["p0", "p2", "p3", "p4"]) s = run(s, vote(id, "p1"));
+    s = run(s, CLOSE);
+    expect(s.phase.kind).toBe("shakedownPending");
+    return s;
+  };
+
+  it("the Priest can't bless a player whose shakedown is already pending (the window is public)", () => {
+    const s = pendingOn(["priest"], [...STARTER_ROLES, "priest"], 0);
+    expect(reason(s, use("p0", { kind: "bless", target: "p1" }))).toMatch(/pending/);
+  });
+
+  it("the Detective can't check a player whose shakedown is pending (a sure Shield); others yes", () => {
+    const s = pendingOn(["detective"], [...STARTER_ROLES, "detective"], 6);
+    expect(reason(s, use("p0", { kind: "checkStash", target: "p1" }))).toMatch(/pending/);
+    expect(run(s, use("p0", { kind: "checkStash", target: "p2" })).log.at(-1)).toMatchObject({ ability: { kind: "checkStash", target: "p2" } });
   });
 });

@@ -11,7 +11,6 @@ import type { GameConfig, GameEvent, GameState } from "./types";
 import { privateTo } from "./types";
 import { rolePoolFor, setupEvents, validateConfig } from "./setup";
 import { replay } from "./reduce";
-import { opensShakedownWindow } from "./meeting";
 import { rolesFor } from "./overrides";
 import { viewFor } from "./view";
 import { V015_NUMBERS } from "./v01-numbers.testkit";

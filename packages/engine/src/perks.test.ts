@@ -10,7 +10,6 @@ import { setupEvents } from "./setup";
 import { replay } from "./reduce";
 import { handleCommand } from "./handle";
 import { viewFor } from "./view";
-import { opensShakedownWindow } from "./meeting";
 import { grantPerks } from "./perks.testkit";
 
 function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
@@ -120,6 +119,18 @@ describe("Shield — design §8.3, §11.3", () => {
     // Spent: the next one goes through.
     const again = settle(run(after, ...emergency("p2"), vote("p1", "p0"), vote("p2", "p0"), vote("p3", "p0"), CLOSE));
     expect(since(after, again).some((e) => e.type === "shakedownResolved")).toBe(true);
+  });
+});
+
+describe("Shield with a shakedown window — design §8.3, §11.3", () => {
+  it("with a shakedown window (a Shield in the shop), it applies when the window ends", () => {
+    const s = grantPerks(withStash({ ...game(5), shop: ["peek", "shield", "extraVote"] }, "p0", 6), "p0", "shield");
+    const pending = run(s, ...emergency("p2"), vote("p1", "p0"), vote("p2", "p0"), vote("p3", "p0"), CLOSE);
+    expect(pending.phase.kind).toBe("shakedownPending");
+    expect(perks(pending, "p0")).toEqual(["shield"]); // nothing shown before the window ends
+    const shielded = run(pending, RESOLVE);
+    expect(since(pending, shielded).map((e) => e.type)).toEqual(["perkUsed", "shakedownCancelled"]);
+    expect(shielded.players.p0?.stash).toBe(6);
   });
 });
 

@@ -199,3 +199,25 @@ describe("12 players with all seven dealt: leaks and determinism — design §13
     expect(replay(a.config, a.log)).toEqual(a);
   });
 });
+
+describe("Shield vs Priest in one shakedown — design §8, §8.3, §11.3", () => {
+  // p1 Priest, p2 the target (blessed, holding a Shield); a Shield in the shop opens the window.
+  const pending = (pocket: number) => {
+    let s = run(game(5, ["rookie", "priest"], { rolePool: [...STARTER_ROLES, "priest"] }), mv("p2", "vault", pocket), ROUND);
+    s = { ...s, shop: ["peek", "shield", "extraVote"] };
+    s = grantPerks(run(s, use("p1", { kind: "bless", target: "p2" })), "p2", "shield");
+    s = emergency(s, "p3");
+    for (const id of ["p0", "p1", "p3", "p4"]) s = run(s, vote(id, "p2"));
+    s = run(s, CLOSE);
+    expect(s.phase.kind).toBe("shakedownPending");
+    return s;
+  };
+
+  it("no cancel: the Shield is spent, no compensation and no blessing/token", () => {
+    const p = pending(0);
+    const s = run(p, RESOLVE);
+    expect(ofType(since(p, s), "perkUsed")[0]?.perk).toMatchObject({ kind: "shield" });
+    expect(ofType(s.log, "blessingPaid")).toEqual([]);
+    expect([granted(s, "p1"), s.haul]).toEqual([[], p.haul]);
+  });
+});

@@ -103,7 +103,6 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
       log: A.log.map((e) => (e.type === "roleDealt" && (e.player === x || e.player === z) ? { ...e, role: e.player === x ? pz.role : px.role } : e)),
     };
   }
-  const noPocket = [...restricted].some((id) => A.players[id]?.role === "priest");
 
   const compare = (): void => {
     const end = over();
@@ -144,8 +143,7 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
     const role = A.players[id]?.role;
     const room = pick(A.rooms);
     const loot = LOOT[room] ?? 0;
-    const keep = role !== "priest" && !(noPocket && restricted.has(id));
-    const move: Cmd = { room, pocket: keep && loot > 0 && rand() < 0.5 ? int(loot + 1) : 0 };
+    const move: Cmd = { room, pocket: loot > 0 && rand() < 0.5 ? int(loot + 1) : 0 };
     if (room === "security") move.watch = pick(A.rooms);
     if (restricted.has(id)) return move;
     if (role === "lookout" && rand() < 0.8) move.ability = { kind: "lookout", rooms: [pick(A.rooms)] };
@@ -157,7 +155,6 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
     return t === id || rand() < 0.15 ? { kind: "skip" } : { kind: "shakedown", target: t };
   };
   const roleHolder = (role: string): PlayerId | undefined => ids.find((id) => A.players[id]?.role === role);
-  const canPocket = (id: PlayerId): boolean => A.players[id]?.role !== "priest";
   const due = (round: number): boolean => !applied && round >= start;
 
   function planRound(round: number): void {
@@ -169,7 +166,7 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
     const planB = new Map(plan);
     const last = (id: PlayerId): Cmd => ((plan.get(id) ?? []).at(-1)?.move as Cmd | undefined) ?? { room: "lobby", pocket: 0 };
     const pair = (): [PlayerId, PlayerId] | null => {
-      const ok = ids.filter(canPocket);
+      const ok = [...ids];
       if (ok.length < 2) return null;
       const x = pick(ok);
       return [x, pick(ok.filter((id) => id !== x))];

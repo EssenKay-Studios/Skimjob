@@ -75,6 +75,14 @@ describe("lobby requests naming a cut role or the dropped mole setting are refus
     expect(started.status).toBe(200);
     expect(started.body.status).toBe("running");
   });
-  // BUG (recorded in the QA comment, not asserted here): a lobby stored with a cut role in `roles`
-  // answers POST /start with 500 "internal error" and refuses every other settings change.
+  it("a lobby stored before the deploy with a cut role toggled on: /start is a clean 409 naming it; re-picking the roles starts it", async () => {
+    const { who, game } = await host();
+    await addBots(who, game.id, 4);
+    await setStored(game.id, { ...DEFAULT_SETTINGS, roles: ["lookout", "muscle", "hacker"] });
+    const refused = await call("POST", `/games/${game.id}/start`, who);
+    expect(refused.status).toBe(409);
+    expect(refused.body.error).toBe("these roles are no longer in the game: muscle; pick the roles again");
+    expect((await call("PATCH", `/games/${game.id}/settings`, who, { settings: { roles: ["lookout", "hacker"] } })).status).toBe(200);
+    expect((await call("POST", `/games/${game.id}/start`, who)).status).toBe(200);
+  });
 });

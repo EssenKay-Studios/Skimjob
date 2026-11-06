@@ -18,6 +18,7 @@ import { replay } from "./reduce";
 import { handleCommand } from "./handle";
 import { meetingResult } from "./meeting";
 import { viewFor } from "./view";
+import { grantPerks } from "./perks.testkit";
 
 const MODES: readonly VoteVisibility[] = ["hiddenThenRevealed", "open", "secret"];
 
@@ -77,8 +78,6 @@ const closeAll = (s: GameState): GameState => {
   return closed.phase.kind === "shakedownPending" ? run(closed, RESOLVE) : closed;
 };
 const INFO_VOTE_ROLES = ["hacker", "smoothTalker"] as const;
-// The R6a start value (5 an act), so a hand-worked safe of 4 fits one act; content tunes it (docs/balance/r6-balance.md).
-const FENCE_5: Partial<GameConfig> = { contentOverrides: { roles: { hacker: { perAct: 5 } } } };
 const NO_WINDOW = { rolePool: [...STARTER_ROLES, ...INFO_VOTE_ROLES.filter((r) => r !== "smoothTalker")] };
 
 // ------------------------------------------------------------------ 1. counterfactual leak pairs
@@ -404,5 +403,60 @@ describe("QA Hacker: loop vs Security and the Lookout — design §8", () => {
     s = closeAll(actMeeting(s, 1));
     expect(s.players.p0?.roleState.usedThisAct).toBe(0);
     expect(() => run(s, loop("office"))).not.toThrow();
+  });
+});
+
+describe("QA shakedown window (a Shield in the shop): deadline, wrong phase — design §8.3, §11.3", () => {
+  const shielded = (s: GameState): GameState => ({ ...s, shop: ["peek", "shield", "extraVote"] });
+  const passed = () => {
+    const s = run(shielded(game(3, [])), mv("p1", "vault", 6), ROUND);
+    return run(emergency(s, "p2"), vote("p0", "p1"), vote("p2", "p1"), CLOSE);
+  };
+
+  it("the window's deadline is named and single-use", () => {
+    const s = passed();
+    expect(s.phase.kind).toBe("shakedownPending");
+    const after = run(s, RESOLVE);
+    expect(reason(after, RESOLVE(s))).toMatch(/no shakedown is pending/);
+    expect(reason(s, { type: "advance", deadline: { kind: "resolveShakedown" } })).toMatch(/no shakedown is pending/);
+    expect(reason(s, { type: "advance", deadline: { kind: "openMeeting", meetingId: "act-1" } })).toMatch(/pending/);
+  });
+
+  it("an emergency window mid-round returns to planning with submitted moves intact", () => {
+    let s = run(shielded(game(3, [])), mv("p1", "vault", 6), ROUND, mv("p0", "office", 2));
+    s = run(emergency(s, "p2"), vote("p0", "p1"), vote("p2", "p1"), CLOSE);
+    expect(s.phase.kind).toBe("shakedownPending");
+    s = run(s, RESOLVE);
+    expect(s.phase).toEqual({ kind: "planning", round: 2 });
+    expect(s.moves.p0).toEqual({ room: "office", pocket: 2 });
+    s = run(s, ROUND);
+    expect(s.players.p0?.stash).toBe(2);
+  });
+
+  it("an emergency window after an act's last round returns to awaiting the act meeting", () => {
+    let s = run(shielded(game(3, [])), mv("p1", "vault", 6), ROUND, ROUND, ROUND);
+    expect(s.phase.kind).toBe("awaitingMeeting");
+    s = run(emergency(s, "p2"), vote("p0", "p1"), vote("p2", "p1"), CLOSE);
+    expect(s.phase.kind).toBe("shakedownPending");
+    s = run(s, RESOLVE);
+    expect(s.phase).toEqual({ kind: "awaitingMeeting", act: 1 });
+    s = closeAll(actMeeting(s, 1));
+    expect(s.round).toBe(4);
+  });
+
+  it("a Shield cancel in the final meeting's window: the target keeps the stash and the game ends after it", () => {
+    let s = shielded(game(3, []));
+    for (let act = 1; act <= 3; act++) {
+      for (let r = 0; r < 3; r++) s = run(s, mv("p1", "vault", act === 3 ? 6 : 0), mv("p2", "office"), mv("p0", "office"), ROUND);
+      s = actMeeting(s, act);
+      if (act === 3) {
+        s = grantPerks(s, "p1", "shield");
+        s = run(s, vote("p0", "p1"), vote("p2", "p1"), CLOSE);
+      } else s = closeAll(s);
+    }
+    expect(s.phase.kind).toBe("shakedownPending");
+    const end = run(s, RESOLVE);
+    expect(since(s, end).map((e) => e.type)).toEqual(["perkUsed", "shakedownCancelled", "checkpointChecked", "gameEnded"]);
+    expect(end.phase.kind === "ended" && end.phase.outcome.ranking.find((e) => e.player === "p1")?.stash).toBe(18);
   });
 });

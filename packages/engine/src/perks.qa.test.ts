@@ -54,6 +54,8 @@ const RESOLVE = (s: GameState) => ({ type: "advance", deadline: { kind: "resolve
 const vote = (player: string, target: string | null) => ({ type: "castVote", player, vote: target ? { kind: "shakedown", target } : { kind: "skip" } });
 const perks = (s: GameState, id: string): readonly PerkId[] => (s.players[id] as PlayerState).roleState.perks;
 const withStash = (s: GameState, id: string, stash: number): GameState => ({ ...s, players: { ...s.players, [id]: { ...(s.players[id] as PlayerState), stash } } });
+/** The shop pinned with a Shield, so a passed shakedown waits for its window (extension.md "Shakedowns"). */
+const withShield = (s: GameState): GameState => ({ ...s, shop: ["peek", "shield", "extraVote"] });
 const closed = (s: GameState) => s.log.filter((e) => e.type === "meetingClosed").at(-1);
 
 /** Each spendable perk: the state it can be spent in, and the spend. */
@@ -85,18 +87,20 @@ describe("QA: one token, one spend — design §8.3", () => {
 });
 
 describe("QA: wrong phase — design §8.3", () => {
-  it("Tail only while planning: refused in the alibis and a meeting", () => {
-    const pool = { rolePool: ["rookie", "smoothTalker", "fixer"] };
-    const s = grantPerks(game(4, ["rookie", "smoothTalker"], pool), "p0", "tail");
+  it("Tail only while planning: refused in the alibis, a meeting and a shakedown window", () => {
+    const s = grantPerks(withShield(game(4)), "p0", "tail");
     const tail = use("p0", { kind: "tail", room: "vault" });
     expect(refused(run(s, ROUND), tail)).toMatch(/being planned/);
     expect(refused(run(s, ...emergency("p1")), tail)).toMatch(/being planned/);
+    const pending = run(s, ...emergency("p1"), vote("p1", "p2"), vote("p2", "p3"), vote("p3", "p2"), vote("p0", "p2"), CLOSE);
+    expect(pending.phase.kind).toBe("shakedownPending");
+    expect(refused(pending, tail)).toMatch(/being planned/);
   });
 
   it("+Vote and Ballot are refused once the vote is tallied (shakedown window) and in the alibis", () => {
-    const pool = { rolePool: ["rookie", "smoothTalker", "fixer"] };
-    const s = grantPerks(game(4, ["rookie", "smoothTalker"], pool), "p0", "extraVote", "ballot");
+    const s = grantPerks(withShield(game(4)), "p0", "extraVote", "ballot");
     const pending = run(s, ...emergency("p1"), vote("p1", "p2"), vote("p2", "p3"), vote("p3", "p2"), vote("p0", "p2"), CLOSE);
+    expect(pending.phase.kind).toBe("shakedownPending");
     for (const st of [pending, run(s, ROUND)]) {
       expect(refused(st, use("p0", { kind: "extraVote" }))).toMatch(/meeting is open/);
       expect(refused(st, use("p0", { kind: "ballot", target: "p1" }))).toMatch(/meeting is open/);
@@ -206,5 +210,43 @@ describe("QA: determinism with perks — design §17.2", () => {
     expect(b.log).toEqual(a.log);
     expect(a.log.some((e) => e.type === "perkUsed" && e.perk.kind === "shield")).toBe(true);
     expect(replay(a.config, a.log)).toEqual(a);
+  });
+});
+
+describe("QA: Shield vs a plain shakedown — design §8.3, §11.3", () => {
+  const passOnP0 = (s: GameState, by = "p1") => run(s, ...emergency(by), vote("p1", "p0"), vote("p2", "p0"), vote("p3", "p0"), CLOSE);
+
+  it("plain: the stash goes to the Haul; Shield: stash kept, Haul unchanged, no compensation, one Shield per passed shakedown", () => {
+    const base = withStash(game(4), "p0", 6);
+    const plain = passOnP0(base);
+    expect(plain.players.p0?.stash).toBe(0);
+    expect(plain.haul).toBe(base.haul + 6);
+
+    const two = grantPerks(base, "p0", "shield", "shield");
+    const first = passOnP0(two);
+    expect(first.players.p0).toMatchObject({ stash: 6, timesShakenDown: 0 });
+    expect(first.haul).toBe(base.haul);
+    expect(Object.fromEntries(Object.entries(first.players).map(([id, p]) => [id, p.stash]))).toEqual(
+      Object.fromEntries(Object.entries(two.players).map(([id, p]) => [id, p.stash])),
+    );
+    expect(perks(first, "p0")).toEqual(["shield"]);
+    const second = passOnP0(first, "p2");
+    expect(perks(second, "p0")).toEqual([]);
+    expect(second.players.p0?.stash).toBe(6);
+  });
+
+  it("a clean Shield holder gets no compensation either (nobody pays out for a cancel)", () => {
+    const s = grantPerks(game(4), "p0", "shield");
+    const after = passOnP0(s);
+    expect(Object.values(after.players).map((p) => p.stash)).toEqual(Object.values(s.players).map((p) => p.stash));
+  });
+
+  it("not spent when the shakedown doesn't pass, or targets someone else", () => {
+    const s = grantPerks(withStash(game(4), "p0", 6), "p0", "shield");
+    const skipped = run(s, ...emergency("p1"), vote("p1", null), vote("p2", null), vote("p3", "p0"), CLOSE);
+    expect(perks(skipped, "p0")).toEqual(["shield"]);
+    const other = run(s, ...emergency("p1"), vote("p1", "p2"), vote("p0", "p2"), vote("p3", "p2"), CLOSE);
+    expect(perks(other, "p0")).toEqual(["shield"]);
+    expect(other.players.p0?.stash).toBe(6);
   });
 });

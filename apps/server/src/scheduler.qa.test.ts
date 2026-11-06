@@ -392,7 +392,7 @@ describe("transient database errors on a deadline (30c9f9e retry/backoff)", () =
   async function playWithFault(fault: RegExp | null, at: number) {
     await fresh();
     forcedSeed = "qa-fault";
-    // No Mole, so no police moments: the backoff's idle seconds move game time, and with it a police moment.
+    // No Mole, so no police moments: the backoff's idle time is game time, so a police moment would land elsewhere.
     const { id } = await startGame(5, { sessionLength: "quick", roles: ["lookout", "auditor", "detective", "smoothTalker", "hacker"] });
     let idle = 0;
     for (let i = 0; i < 2000; i++) {

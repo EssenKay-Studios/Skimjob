@@ -115,8 +115,6 @@ describe("describeEvent", () => {
     expect(as(abilities.fixer[0])).toBe("Round 1: you stopped the raid and lost 3 from your stash.");
   });
 
-  // v2 §2 (R3b): the victim never learns who or which role; a forgery is only told apart in the reveal.
-
   // design §8.3: every perk spent.
   const perks: SamplesOf<ResolvedPerk> = {
     peek: [{ kind: "peek", target: "ben", role: "mole" }],

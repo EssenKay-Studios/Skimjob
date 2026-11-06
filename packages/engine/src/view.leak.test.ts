@@ -293,7 +293,7 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
   };
   // A Rig is its holder's secret. design §8.3
   const rigs = [...state.rigs.filter((r) => r.player === viewer), { player: other, round: 9, cards: ["audit", "lockdown"], pick: "lockdown" }];
-    // design §10: a Double-cross offer is hidden from everyone else, and the partner's answer from both.
+  // design §10: a Double-cross offer is hidden from everyone else, and the partner's answer from both.
   const offer = state.card?.offer;
   let card = state.card;
   if (card && offer) {

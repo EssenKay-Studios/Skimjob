@@ -200,7 +200,7 @@ describe("scheduling and emergencies (design §11.1)", () => {
 });
 
 describe("the shakedown window and results (design §11.3, §11.4)", () => {
-  const muscles = (mode: VoteVisibility = "hiddenThenRevealed") => run(voting(mode, { rolePool: ["smoothTalker"] }), close("emergency-p2"));
+  const smoothTalkerMeeting = (mode: VoteVisibility = "hiddenThenRevealed") => run(voting(mode, { rolePool: ["smoothTalker"] }), close("emergency-p2"));
 
   it("results: shakedown, clean compensation; the banner stays until the next round resolves", () => {
     // Starter roles: no window, the shakedown lands as the meeting closes.

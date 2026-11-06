@@ -77,7 +77,7 @@ describe("dealing roles — design §8.1", () => {
     expect([...seen].sort()).toEqual(["auditor", "fixer", "lookout"]);
   });
 
-  it("uniqueRoles false deals every seat from the deck with replacement, so roles may repeat; never two Moles or Embezzlers (design §8.1, §15; extension.md \"Truly random\")", () => {
+  it("uniqueRoles false deals every seat from the deck with replacement, so roles may repeat; never two Moles (design §8.1, §15; extension.md \"Truly random\")", () => {
     let repeated = false;
     for (let s = 0; s < 20; s++) {
       for (const deal of ["balanced", "random"] as const) {
@@ -144,9 +144,9 @@ describe("dealing roles — design §8.1", () => {
   });
 
   it("the deal is shuffled across seats", () => {
-    const fenceSeats = new Set<number>();
-    for (let s = 0; s < 40; s++) fenceSeats.add(rolesOf(config(4, { seed: `seat${s}`, deck: "starter" })).indexOf("lookout"));
-    expect(fenceSeats).toEqual(new Set([0, 1, 2, 3]));
+    const lookoutSeats = new Set<number>();
+    for (let s = 0; s < 40; s++) lookoutSeats.add(rolesOf(config(4, { seed: `seat${s}`, deck: "starter" })).indexOf("lookout"));
+    expect(lookoutSeats).toEqual(new Set([0, 1, 2, 3]));
   });
 });
 
