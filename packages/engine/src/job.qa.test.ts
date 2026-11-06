@@ -52,14 +52,14 @@ describe("Heat at 3 and 12 players — design §7", () => {
 });
 
 describe("Heat floor and ceiling — design §7", () => {
-  it("Rooftop turns can't bank Heat below 0 (2, 3, 12 players)", () => {
-    expect(heatAfter(2, 0, [{ rooftop: 2 }, {}])).toBe(4);
+  it("Rooftop turns can't bank Heat below 0 (3 and 12 players)", () => {
+    expect(heatAfter(3, 0, [{ rooftop: 3 }, {}])).toBe(4); // 4 − 20 → 0, then +4
     expect(heatAfter(3, 5, [{ rooftop: 3 }, { rooftop: 3 }, {}])).toBe(4);
     expect(heatAfter(12, 2, [{ rooftop: 12 }, { vault: 3 }])).toBe(9);
   });
 
   it("landing exactly on 100 reaches the max; overshoot is capped at 100", () => {
-    expect(heatAfter(2, 76, [{ vault: 2 }])).toBe(bank.heat.max);
+    expect(heatAfter(3, 76, [{ vault: 3 }])).toBe(bank.heat.max); // 76 + 24
     expect(heatAfter(12, 99, [{ vault: 12 }])).toBe(bank.heat.max);
     expect(heatAfter(3, 75, [{ vault: 3 }])).toBe(99);
   });

@@ -50,7 +50,7 @@ describe("round Heat — design §7", () => {
   it("the same share of the crew gives the same Heat at any crew size", () => {
     expect(roundHeatDelta(bank, 12, { vault: 3 })).toBe(roundHeatDelta(bank, 4, { vault: 1 }));
     expect(roundHeatDelta(bank, 12, { vault: 4 })).toBe(roundHeatDelta(bank, 3, { vault: 1 }));
-    expect(roundHeatDelta(bank, 10, { vault: 5, rooftop: 5 })).toBe(roundHeatDelta(bank, 2, { vault: 1, rooftop: 1 }));
+    expect(roundHeatDelta(bank, 10, { vault: 5, rooftop: 5 })).toBe(roundHeatDelta(bank, 4, { vault: 2, rooftop: 2 }));
   });
 
   it("Manager's office adds half the vault pressure", () => {

@@ -478,7 +478,7 @@ describe("the win rule (extension.md \"Winning and losing\", Build notes \"Win r
 
 describe("one vote rule for every crew size, 3..12 (extension.md \"Voting\")", () => {
   it("passes when at least half the crew votes and one player has more than half the votes cast", () => {
-    for (let n = 2; n <= 12; n++) {
+    for (let n = 3; n <= 12; n++) {
       const half = Math.ceil(n / 2);
       expect(meetingResult(n, half, 0, new Map([["x", half]]), half), `n=${n} quorum`).toEqual({ kind: "shakedown", target: "x" });
       expect(meetingResult(n, half - 1, 0, new Map([["x", half - 1]]), half - 1).kind, `n=${n} below quorum`).toBe("noQuorum");

@@ -1,4 +1,4 @@
-// QA (PR #16, M2-1): store round-trips at 2/6/12 players, every event type
+// QA (PR #16, M2-1): store round-trips at 3/6/12 players, every event type
 // through the json column, concurrent appends, rollback, concurrent migrate.
 // design §17.2 (event-sourced, deterministic), §17.5; docs/m2-plan.md M2-1
 import { createBots, PERSONALITIES, runBotGame, type PersonalityId } from "@skimjob/bots";

@@ -115,7 +115,7 @@ test("bad and started invite codes show a friendly page", async ({ browser }) =>
   await page.goto("/join/%E2%80%8B%20..%2F");
   await expect(page.getByRole("heading", { name: "That invite doesn't open anything." })).toBeVisible();
 
-  await hctx.request.post(`/api/games/${g.id}/bots`, { data: {} });
+  for (let i = 0; i < 2; i++) await hctx.request.post(`/api/games/${g.id}/bots`, { data: {} }); // 3 seats, the minimum
   expect((await hctx.request.post(`/api/games/${g.id}/start`)).ok()).toBe(true);
   await page.goto(`/join/${g.inviteCode}`);
   await expect(page.getByRole("heading", { name: "This job already started." })).toBeVisible();
@@ -192,6 +192,8 @@ test("hand-over racing with start: one wins and the state stays consistent", asy
     const g = await apiHost(hctx, "Mara");
     const gctx = await newCtx(browser);
     expect((await apiJoin(gctx, g.inviteCode, "Lou")).ok()).toBe(true);
+    // A bot makes 3 seats, so the start can win the race (at 2 seats it is always refused).
+    expect((await hctx.request.post(`/api/games/${g.id}/bots`, { data: {} })).ok()).toBe(true);
     const [hand, start] = await Promise.all([
       hctx.request.post(`/api/games/${g.id}/host`, { data: { seat: 1 } }),
       hctx.request.post(`/api/games/${g.id}/start`),
@@ -263,6 +265,8 @@ test("leave and rejoin; back button and refresh on every route", async ({ browse
   await guest.getByRole("button", { name: "Join the crew" }).click();
   await expect(guest.getByText("Waiting for Mara to start the job")).toBeVisible();
   await expect(guest.locator(".seat")).toHaveCount(2);
+  await hctx.request.post(`/api/games/${g.id}/bots`, { data: {} }); // 3 seats, the minimum
+  await expect(guest.locator(".seat")).toHaveCount(3);
 
   await hctx.request.post(`/api/games/${g.id}/start`);
   await expect(guest).toHaveURL(/\/game\//, { timeout: 10_000 });

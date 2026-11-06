@@ -1,6 +1,6 @@
 // The suite's fixed matrix of game settings, one cell per combination, and the
 // options every cell's games are built from. design §17.4 ("measured at every
-// player count from 2 to 12"), §10 (events); extension.md "Decks and dealing",
+// player count from 3 to 12"), §10 (events); extension.md "Decks and dealing",
 // "Role list" and Build notes "Sim" (the saboteur axis is gone).
 import type { DealStyle, RoleListSetting } from "@skimjob/engine";
 import type { MixEntry, SimOptions } from "../args";
