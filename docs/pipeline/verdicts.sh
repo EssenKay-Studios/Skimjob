@@ -11,7 +11,8 @@
 # GATE_REVIEW_BOTS (default github-actions[bot], the login the "Claude review" workflow's
 # post job uses) count for reviewer `VERDICT:` reviews/comments ONLY, never for `QA:`
 # verdicts, and only when the PR changes nothing under .github/ or docs/pipeline/ (else
-# a PR could add a workflow that posts a fake verdict as that login). DISMISSED and
+# a PR could add a workflow that posts a fake verdict as that login) and no Claude config
+# (.claude/, .claude.json, .mcp.json, CLAUDE.md, CLAUDE.local.md). DISMISSED and
 # PENDING reviews never count.
 # Mergeable iff: the latest verdict-like review/comment is exactly
 # `VERDICT: APPROVE` + `Head: <sha S_r>` (a malformed latest one is a no, never a
@@ -70,9 +71,9 @@ if [ -n "$GATE_REVIEW_BOTS" ]; then allowv="[\"${GATE_AUTHORS//,/\",\"}\",\"${GA
 # Unreadable file list: fail closed. 3000 is the API's cap on listed files: treat it as touched.
 if [ -n "$GATE_REVIEW_BOTS" ]; then
   pfiles=$(gh api --paginate "$A/pulls/$N/files" --jq '.[] | .filename, (.previous_filename // empty)') || fatal "cannot read the files of PR #$N"
-  if grep -qiE '^(\.github|docs/pipeline)/' <<<"$pfiles" || [ "$(grep -c . <<<"$pfiles")" -ge 3000 ]; then
+  if grep -qiE '^(\.github/|docs/pipeline/|\.claude/|\.claude\.json$|\.mcp\.json$|claude(\.local)?\.md$)|/\.claude/' <<<"$pfiles" || [ "$(grep -c . <<<"$pfiles")" -ge 3000 ]; then
     allowv=$allow
-    echo "bots:   ignored (PR touches .github/ or docs/pipeline/: needs a human-account review)"
+    echo "bots:   ignored (PR touches .github/, docs/pipeline/ or Claude config: needs a human-account review)"
   fi
 fi
 # Reviews and PR comments are both scanned for both kinds (an agent may post on
