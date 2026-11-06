@@ -36,10 +36,10 @@ import { replay } from "./reduce";
 import { viewFor } from "./view";
 import { jobFor } from "./overrides";
 
-const RUNS = Number(process.env.FC_RUNS ?? 45);
-// Role deck v2 R1 changed the deal's draws, so 20261101's 45 games no longer happened to reach a
-// Muscle cancel (coverage below is statistical; seeds 1, 2, 3 and 20261102 all reach it).
-const SEED = Number(process.env.FC_SEED ?? 20261103);
+const RUNS = Number(process.env.FC_RUNS ?? 90);
+// Coverage of the endings and event types below is statistical, so 90 runs; the Heat ending also has
+// its own deterministic case. Any FC_SEED should reach all of it.
+const SEED = Number(process.env.FC_SEED ?? 20261102);
 const TIMEOUT = 60_000 + RUNS * 1_000;
 const ALL_ROLES = Object.keys(ROLES);
 
@@ -606,6 +606,19 @@ describe("engine invariants under fuzzing — design §17.2", () => {
       expect(stats.types, t).toContain(t);
     }
   }, TIMEOUT);
+
+  it("a game at one point below max Heat ends as a Heat raid, with the end invariants holding (design §7)", () => {
+    const start = createGame({ ...threeSeats, seed: "heat-end" });
+    let state: GameState = { ...start, heat: jobFor(start.config).heat.max - 1 };
+    for (let steps = 0; state.phase.kind !== "ended"; steps++) {
+      if (steps > 200) throw new Failure("game did not end in 200 steps");
+      const next = nextDeadlines(state).map((c) => handleCommand(state, c)).find((r) => r.ok);
+      if (!next || !next.ok) throw new Failure("no deadline accepted");
+      state = next.state;
+    }
+    expect(state.phase).toMatchObject({ kind: "ended", outcome: { result: "failed", reason: "heat" } });
+    checkEnd(state);
+  });
 
   it("same seed + same commands = identical log; replaying the commands rebuilds the game", () => {
     assertProperty(

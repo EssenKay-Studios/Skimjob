@@ -81,8 +81,7 @@ function migrateMole(raw: Record<string, unknown>): Record<string, unknown> {
 
 /**
  * Host settings from untrusted JSON: missing fields take the defaults, unknown
- * fields are refused, a stored saboteur setting is migrated. Starter mode
- * needs events off (the engine refuses the mix, decisions.md "Starter mode requires…").
+ * fields are refused, a stored saboteur setting is migrated.
  */
 export function parseSettings(input: unknown): { ok: true; settings: LobbySettings } | { ok: false; error: string } {
   if (input === undefined || input === null) return { ok: true, settings: DEFAULT_SETTINGS };

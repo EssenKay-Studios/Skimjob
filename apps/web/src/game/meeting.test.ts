@@ -27,8 +27,11 @@ import {
   tallyRows,
 } from "./meeting";
 
+/** A new game with a pinned shop of no Shield, whatever the seed: a Shield opens a shakedown window at every meeting. */
+const newGame = (cfg: GameConfig): GameState => ({ ...createGame(cfg), shop: ["peek", "alibi", "extraVote"] });
+
 const config = (mode: VoteVisibility, extra: Partial<GameConfig> = {}): GameConfig => ({
-  seed: "meeting-ui-2",
+  seed: "meeting-ui",
   players: ["Ana", "Ben", "Cy", "Dee", "Eve"].map((name, i) => ({ id: `p${i + 1}`, name, isBot: false })),
   job: "bank",
   rolePool: ["rookie"],
@@ -54,7 +57,7 @@ const close = (id: string): SystemCommand => ({ type: "advance", deadline: { kin
 
 /** p2 calls an emergency meeting; p1 (the viewer) votes Ben, p3 and p4 vote Ben, p5 skips. */
 function voting(mode: VoteVisibility, extra: Partial<GameConfig> = {}): GameState {
-  let s = createGame(config(mode, extra));
+  let s = newGame(config(mode, extra));
   s = run(s, { type: "callEmergency", player: "p2" }, open("emergency-p2"));
   return run(s, shake("p1", "p2"), shake("p3", "p2"), shake("p4", "p2"), skip("p5"));
 }
@@ -108,7 +111,7 @@ describe("the vote window per vote mode (design §11.2)", () => {
   });
 
   it("Ballot perk: its holder sees the one ballot they unlocked, also in Secret mode (design §8.3)", () => {
-    let s = createGame(config("secret"));
+    let s = newGame(config("secret"));
     s = applyEvent(s, { type: "perkBought", visibility: privateTo("p1"), player: "p1", perk: "ballot", cost: 0 });
     s = run(s, { type: "callEmergency", player: "p2" }, open("emergency-p2"), shake("p3", "p2"), skip("p4"));
     expect(abilityOffers(viewFor(s, "p1"))).toContainEqual({ kind: "ballot", targets: ["p2", "p3", "p4", "p5"] });
@@ -123,14 +126,14 @@ describe("the vote window per vote mode (design §11.2)", () => {
   });
 
   it("Ballot is never offered in Open mode, where ballots are public anyway", () => {
-    let s = createGame(config("open"));
+    let s = newGame(config("open"));
     s = applyEvent(s, { type: "perkBought", visibility: privateTo("p1"), player: "p1", perk: "ballot", cost: 0 });
     s = run(s, { type: "callEmergency", player: "p2" }, open("emergency-p2"));
     expect(abilityOffers(viewFor(s, "p1"))).toEqual([]);
   });
 
   it("a sealed vote is marked as yours when the window opens (design §11.2)", () => {
-    let s = createGame(config("hiddenThenRevealed"));
+    let s = newGame(config("hiddenThenRevealed"));
     s = run(s, { type: "sealVote", player: "p1", vote: { kind: "skip" } }, { type: "callEmergency", player: "p2" }, open("emergency-p2"));
     expect(openMeetingOf(viewFor(s, "p1"))).toMatchObject({ mine: { kind: "skip" }, fromSealed: true });
     s = run(s, shake("p1", "p3"));
@@ -162,7 +165,7 @@ describe("tally bars (ui-style 'Vote window')", () => {
 
 describe("scheduling and emergencies (design §11.1)", () => {
   it("proposals, backers and the locked slot", () => {
-    let s = createGame(config("hiddenThenRevealed"));
+    let s = newGame(config("hiddenThenRevealed"));
     s = run(s, { type: "proposeMeeting", player: "p2", slot: "2026-11-03T15:30:00.000Z" });
     let p = plannerOf(viewFor(s, "p1"));
     expect(p).toMatchObject({ act: 1, locked: null, needed: 3, open: true });
@@ -184,7 +187,7 @@ describe("scheduling and emergencies (design §11.1)", () => {
   });
 
   it("one emergency per player per game, one waiting at a time, more with the Emergency perk (design §8.3)", () => {
-    let s = createGame(config("hiddenThenRevealed"));
+    let s = newGame(config("hiddenThenRevealed"));
     expect(emergencyOf(viewFor(s, "p1")).canCall).toBe(true);
     s = run(s, { type: "callEmergency", player: "p1" });
     expect(emergencyOf(viewFor(s, "p1"))).toMatchObject({ canCall: false, note: expect.stringMatching(/already|You've called/) });
@@ -230,7 +233,7 @@ describe("the shakedown window and results (design §11.3, §11.4)", () => {
   });
 
   it("the act's meeting ends at its checkpoint (made or missed)", () => {
-    let s = createGame(config("open"));
+    let s = newGame(config("open"));
     for (let r = 1; r <= 3; r++) s = run(s, { type: "advance", deadline: { kind: "round", round: r } }, { type: "advance", deadline: { kind: "alibis", round: r } });
     s = run(s, { type: "scheduleMeeting", act: 1, slot: "act-1" }, open("act-1"), skip("p1"), skip("p2"), skip("p3"), close("act-1"));
     const o = latestOutcome(viewFor(s, "p4"))!;
@@ -242,7 +245,7 @@ describe("the shakedown window and results (design §11.3, §11.4)", () => {
 
 describe("role claims (R4b, design §8, §12.1)", () => {
   it("offers every content role, once per act", () => {
-    let s = createGame(config("open"));
+    let s = newGame(config("open"));
     const before = claimState(viewFor(s, "p1"))!;
     expect(before.act).toBe(1);
     expect(before.claimed).toBeNull();
