@@ -73,7 +73,8 @@ jobs:
     # Six shards in parallel (the heaviest of four took 11 min) (Playwright --shard), each with its own servers (playwright.config.ts).
     name: Web e2e (Playwright, shard ${{ matrix.shard }}/6)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Main push runs are slower and unbalanced: a shard reached 14.6 min and two hit 15 (cancelled while passing).
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
