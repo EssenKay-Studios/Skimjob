@@ -64,6 +64,7 @@ pnpm sim -- --help   # run the simulator (once implemented)
 - TypeScript, strict mode, ESM. Node 22.
 - Tests with vitest, colocated as `*.test.ts`.
 - Prefer small pure functions and plain data types over classes.
+- **Minimal change.** Every change is the smallest that fully delivers its task. Delete what it supersedes in the same PR. No speculative abstractions, options, config, flags, shims, fallbacks or commented-out code (the cleanup rules in `docs/simplified.md`). Quality is not negotiable: tests for every rule including edge cases, design citations, the UI rules and the notebook look.
 - No new runtime dependencies in `packages/engine` without a decision-log entry.
 
 ## Git

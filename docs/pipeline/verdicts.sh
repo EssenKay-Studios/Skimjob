@@ -37,6 +37,24 @@ join() { local sep=$1 out=$2; shift 2; for x in "$@"; do out+="$sep$x"; done; ec
 # Any gh api failure (on any page) is a no: never fall back to partial or older data.
 fatal() { echo "MERGEABLE: no ($1)"; exit 1; }
 
+# pages PATH ITEMS FILTER: pages `repos/…/PATH?per_page=100&page=N` until an empty page and
+# prints FILTER's output for every item of ITEMS (a jq path to the array: `.`, `.files`, …).
+# No `gh api --paginate`: it follows the `repositories/{id}` URLs in GitHub's Link headers,
+# which the cloud proxy blocks. Any error (or more than 100 pages) returns 1.
+pages() {
+  local path=$1 items=$2 filter=$3 n=1 out cnt sep='?'
+  [[ $path == *\?* ]] && sep='&'
+  while :; do
+    out=$(gh api "$A/$path${sep}per_page=100&page=$n" \
+      --jq "($items // []) as \$a | (\$a | length), (\$a[] | $filter)") || return 1
+    cnt=${out%%$'\n'*}
+    [[ $cnt =~ ^[0-9]+$ ]] || return 1
+    [ "$cnt" -gt 0 ] || return 0
+    [[ $out == *$'\n'* ]] && printf '%s\n' "${out#*$'\n'}"
+    n=$((n + 1)); [ $n -le 100 ] || return 1
+  done
+}
+
 # REST only (gh api), so this runs anywhere gh is logged in, GraphQL or not.
 prq='[.head.sha, (.draft | tostring), (.mergeable_state // "unknown"), .state, (.merged | tostring), (.mergeable | tostring)] | @tsv'
 pr=$(gh api "$A/pulls/$N" --jq "$prq") || fatal "cannot read PR #$N"
@@ -70,7 +88,7 @@ if [ -n "$GATE_REVIEW_BOTS" ]; then allowv="[\"${GATE_AUTHORS//,/\",\"}\",\"${GA
 # Bots count only if the PR touches nothing under .github/ or docs/pipeline/ (old and new paths).
 # Unreadable file list: fail closed. 3000 is the API's cap on listed files: treat it as touched.
 if [ -n "$GATE_REVIEW_BOTS" ]; then
-  pfiles=$(gh api --paginate "$A/pulls/$N/files" --jq '.[] | .filename, (.previous_filename // empty)') || fatal "cannot read the files of PR #$N"
+  pfiles=$(pages "pulls/$N/files" . '.filename, (.previous_filename // empty)') || fatal "cannot read the files of PR #$N"
   if grep -qiE '^(\.github/|docs/pipeline/|\.claude/|\.claude\.json$|\.mcp\.json$)|/\.claude/|(^|/)claude(\.local)?\.md$' <<<"$pfiles" || [ "$(grep -c . <<<"$pfiles")" -ge 3000 ]; then
     allowv=$allow
     echo "bots:   ignored (PR touches .github/, docs/pipeline/ or Claude config: needs a human-account review)"
@@ -82,7 +100,7 @@ fi
 # review mentioning "verdict" anywhere, or a comment with "qa:" / "qa —" anywhere.
 # Output per match: "<time>\t<kind>\t<line 1>\t<line 2>". The newest of each kind
 # is used and must be in the exact format; there is no fall-back to older ones.
-scan='.[] | select((.state // "") != "PENDING" and (.state // "") != "DISMISSED")
+scan='select((.state // "") != "PENDING" and (.state // "") != "DISMISSED")
   | select(.user.login as $u | '"$allowv"' | any(. == $u))
   | (.body // "") as $b | ($b | gsub("\r"; "") | split("\n")) as $l
   | (if ($b | test("^[\\s\\x{feff}*#>_]*verdict"; "i")) then "verdict"
@@ -92,8 +110,8 @@ scan='.[] | select((.state // "") != "PENDING" and (.state // "") != "DISMISSED"
      else empty end) as $k
   | select($k == "verdict" or (.user.login as $u | '"$allow"' | any(. == $u)))
   | [(.submitted_at // .created_at // ""), $k, $l[0], ($l[1] // "")] | @tsv'
-found=$(gh api --paginate "$A/pulls/$N/reviews" --jq "\"review\" as \$ch | $scan") || fatal "cannot read reviews"
-c=$(gh api --paginate "$A/issues/$N/comments" --jq "\"comment\" as \$ch | $scan") || fatal "cannot read PR comments"
+found=$(pages "pulls/$N/reviews" . "\"review\" as \$ch | $scan") || fatal "cannot read reviews"
+c=$(pages "issues/$N/comments" . "\"comment\" as \$ch | $scan") || fatal "cannot read PR comments"
 found=$(printf '%s\n%s\n' "$found" "$c" | grep . | sort -s -t $'\t' -k1,1)
 newest() { awk -F'\t' -v k="$1" '$2 == k { l = $3 "\t" $4 } END { print l }' <<<"$found"; }
 IFS=$'\t' read -r rv1 rv2 <<<"$(newest verdict)"
@@ -135,7 +153,7 @@ if [ -n "$rsha" ] && [ "$rsha" != "$head" ]; then
     bad=(); apierr=
     for c in $csha; do
       # Old and new path of every file (renames, removals too) must be a QA test file.
-      if ! files=$(gh api --paginate "$A/commits/$c" --jq '.files[] | .filename, (.previous_filename // empty)'); then
+      if ! files=$(pages "commits/$c" .files '.filename, (.previous_filename // empty)'); then
         apierr+=" ${c:0:7}"; continue
       fi
       # A commit with no files (e.g. an empty merge) also needs a look.
@@ -160,8 +178,7 @@ elif [ -n "$rsha" ]; then
 fi
 
 # CI: latest check-run per name on the head.
-runs=$(gh api --paginate "$A/commits/$head/check-runs?per_page=100" \
-  --jq '.check_runs[] | [.name, .status, (.conclusion // "")] | @tsv') || fatal "cannot read check-runs on head"
+runs=$(pages "commits/$head/check-runs" .check_runs '[.name, .status, (.conclusion // "")] | @tsv') || fatal "cannot read check-runs on head"
 total=0; failing=(); pending=()
 while IFS=$'\t' read -r name st concl; do
   [ -z "$name" ] && continue
@@ -170,7 +187,7 @@ while IFS=$'\t' read -r name st concl; do
   else case "$concl" in success|skipped|neutral) ;; *) failing+=("$name ($concl)") ;; esac; fi
 done <<<"$runs"
 # Commit statuses too (latest per context); none is fine.
-sts=$(gh api "$A/commits/$head/status" --jq '.statuses[] | [.context, .state] | @tsv') || fatal "cannot read commit statuses on head"
+sts=$(pages "commits/$head/status" .statuses '[.context, .state] | @tsv') || fatal "cannot read commit statuses on head"
 while IFS=$'\t' read -r name st; do
   [ -z "$name" ] && continue
   case "$st" in success) ;; pending) pending+=("$name (status)") ;; *) failing+=("$name (status $st)") ;; esac
@@ -184,7 +201,7 @@ else
 fi
 
 # Authorship and attribution lines, every commit on the branch.
-commits=$(gh api --paginate "$A/pulls/$N/commits?per_page=100" --jq '.[] |
+commits=$(pages "pulls/$N/commits" . '
   [.sha[0:7], "\(.commit.author.name) <\(.commit.author.email)>",
    (.commit.message | test("(?im)^\\s*(co-authored-by|claude-session|generated-by)") | tostring)] | @tsv') || fatal "cannot read the PR's commits"
 [ -n "$commits" ] || fatal "no commits read for PR #$N"
