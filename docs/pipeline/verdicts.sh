@@ -40,13 +40,13 @@ fatal() { echo "MERGEABLE: no ($1)"; exit 1; }
 # pages PATH ITEMS FILTER: pages `repos/…/PATH?per_page=100&page=N` until an empty page and
 # prints FILTER's output for every item of ITEMS (a jq path to the array: `.`, `.files`, …).
 # No `gh api --paginate`: it follows the `repositories/{id}` URLs in GitHub's Link headers,
-# which the cloud proxy blocks. Any error (or more than 100 pages) returns 1.
+# which the cloud proxy blocks. Any error, a page without the array, or more than 100 pages returns 1.
 pages() {
   local path=$1 items=$2 filter=$3 n=1 out cnt sep='?'
   [[ $path == *\?* ]] && sep='&'
   while :; do
     out=$(gh api "$A/$path${sep}per_page=100&page=$n" \
-      --jq "($items // []) as \$a | (\$a | length), (\$a[] | $filter)") || return 1
+      --jq "($items | if type == \"array\" then . else error(\"not an array\") end) as \$a | (\$a | length), (\$a[] | $filter)") || return 1
     cnt=${out%%$'\n'*}
     [[ $cnt =~ ^[0-9]+$ ]] || return 1
     [ "$cnt" -gt 0 ] || return 0

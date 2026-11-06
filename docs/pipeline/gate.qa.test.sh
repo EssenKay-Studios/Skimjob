@@ -29,6 +29,7 @@ case "$method $path" in
   *) echo "fake gh: unexpected: $method $path" >&2; exit 1 ;;
 esac
 [ -f "$FIX/$f" ] || { echo "fake gh: no $f" >&2; exit 1; }
+[ -f "$FIX/IGNORE_PAGE" ] && page=1   # an API that ignores `page` (the 100-page cap must stop it)
 # Pages: page 1 is <file>, page N is <file>.pN, past the last one the arrays are empty.
 # failp2-<file>: page 2 fails (an error on a later page).
 if [ "$page" -gt 1 ]; then
@@ -248,6 +249,11 @@ reset; checks='{"name":"a","status":"completed","conclusion":"success"},{"name":
 reset; after='jq ".[1:] = [.[0]]" "$FIX/pr-commits.json" >"$FIX/pr-commits.json.p2"'; touch "$FIX/failp2-pr-commits.json"; expect no "PR commits: error on page 2"
 reset; review="VERDICT: APPROVE\nHead: $R"; since_files='["x.qa.test.ts","y.qa.test.ts"]'; after='split commit-$C.json files'; touch "$FIX/failp2-commit-$C.json"; expect no "commit files: error on page 2"
 reset; statuses='{"context":"a","state":"success"},{"context":"b","state":"success"}'; after='split status.json statuses'; touch "$FIX/failp2-status.json"; expect no "statuses: error on page 2"
+# A later page without the expected key fails closed; an API that ignores `page` hits the 100-page cap.
+reset; checks='{"name":"a","status":"completed","conclusion":"success"},{"name":"b","status":"completed","conclusion":"success"}'; after='split checks.json check_runs; echo "{}" >"$FIX/checks.json.p2"'; expect no "check-runs: page 2 without check_runs"
+reset; statuses='{"context":"a","state":"success"},{"context":"b","state":"success"}'; after='split status.json statuses; echo "{}" >"$FIX/status.json.p2"'; expect no "statuses: page 2 without statuses"
+reset; review="VERDICT: APPROVE\nHead: $R"; since_files='["x.qa.test.ts","y.qa.test.ts"]'; after='split commit-$C.json files; echo "{}" >"$FIX/commit-$C.json.p2"'; expect no "commit files: page 2 without files"
+reset; touch "$FIX/IGNORE_PAGE"; expect no "API ignores page: the 100-page cap fails closed"
 
 # The "next" lookup is fail-safe: an issues API error still merges and prints a fallback.
 reset; write; touch "$FIX/NO_ISSUES"; mout=$(bash "$DIR/merge.sh" 1 2>&1)
