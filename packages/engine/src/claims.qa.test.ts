@@ -13,10 +13,8 @@ const cfg = (n: number, extra: Partial<GameConfig> = {}): GameConfig => ({
   players: Array.from({ length: n }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: false })),
   job: "bank",
   rolePool: [...STARTER_ROLES],
-  mole: "off",
   eventsEnabled: false,
   voteVisibility: "hiddenThenRevealed",
-  starterMode: false,
   ...extra,
 });
 
@@ -53,8 +51,8 @@ describe("claimRole — QA PR #37, design §8, §12.1", () => {
   });
 
   it("a repeated or changed claim in the same act is refused, and the refusal leaves the log as it was", () => {
-    const first = step(createGame(cfg(4)), { type: "claimRole", player: "p0", role: "cleaner" }).state;
-    for (const role of ["cleaner", "bagman", "mole"]) expect(refused(first, { type: "claimRole", player: "p0", role })).toMatch(/already claimed/);
+    const first = step(createGame(cfg(4)), { type: "claimRole", player: "p0", role: "fixer" }).state;
+    for (const role of ["fixer", "auditor", "mole"]) expect(refused(first, { type: "claimRole", player: "p0", role })).toMatch(/already claimed/);
     // An unknown role is reported as unknown, even after an earlier claim (no hint either way).
     expect(refused(first, { type: "claimRole", player: "p0", role: "zzz" })).toMatch(/unknown role/);
     expect(first.log.filter((e) => e.type === "roleClaimed")).toHaveLength(1);
@@ -70,11 +68,11 @@ describe("claimRole — QA PR #37, design §8, §12.1", () => {
     tryClaim("p0", "rookie"); // planning, act 1
     s = step(s, { type: "advance", deadline: { kind: "round", round: 1 } }).state;
     expect(s.phase.kind).toBe("alibis");
-    tryClaim("p1", "bagman");
+    tryClaim("p1", "auditor");
     s = step(s, { type: "advance", deadline: { kind: "alibis", round: 1 } }).state;
     s = roundAdvance(roundAdvance(s));
     expect(s.phase.kind).toBe("awaitingMeeting");
-    tryClaim("p2", "cleaner");
+    tryClaim("p2", "fixer");
     s = step(s, { type: "scheduleMeeting", act: 1, slot: "now" }).state;
     s = step(s, { type: "advance", deadline: { kind: "openMeeting", meetingId: "act-1" } }).state;
     tryClaim("p3", "lookout");
@@ -127,17 +125,9 @@ describe("claimRole — QA PR #37, design §8, §12.1", () => {
   });
 
   it("accepts known roles outside the game's pool (the pool stays hidden) — design §8", () => {
-    const s = createGame(cfg(4, { rolePool: ["rookie"], mole: "off" }));
+    const s = createGame(cfg(4, { rolePool: ["rookie"] }));
     // Not in this game's pool, but known content: accepted.
     expect(step(s, { type: "claimRole", player: "p0", role: "fixer" }).events[0]).toMatchObject({ role: "fixer" });
-    expect(step(s, { type: "claimRole", player: "p1", role: "blackmailer" }).events[0]).toMatchObject({ role: "blackmailer" });
-  });
-
-  it("refused in Duel mode in every phase — design §16.1", () => {
-    let s = createGame(cfg(2, { rolePool: [], duel: true }));
-    for (let i = 0; i < 4 && s.phase.kind !== "ended"; i++) {
-      expect(refused(s, { type: "claimRole", player: "p0", role: "rookie" })).toMatch(/Duel/);
-      s = s.phase.kind === "alibis" ? step(s, { type: "advance", deadline: { kind: "alibis", round: s.phase.round } }).state : roundAdvance(s);
-    }
+    expect(step(s, { type: "claimRole", player: "p1", role: "hacker" }).events[0]).toMatchObject({ role: "hacker" });
   });
 });

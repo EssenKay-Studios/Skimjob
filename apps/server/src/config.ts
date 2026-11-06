@@ -13,7 +13,7 @@ export interface ServerConfig {
   readonly allowedOrigins: readonly string[];
   /**
    * TIME_SCALE (0 < x ≤ 1, default 1): every preset's wall times are multiplied
-   * by it, so a Quick game runs in a minute or two for E2E tests and solo dev
+   * by it, so a 15-min game runs in a minute or two for E2E tests and solo dev
    * play. Always 1 in production, whatever TIME_SCALE says.
    */
   readonly timeScale: number;

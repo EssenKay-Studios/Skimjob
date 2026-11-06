@@ -1,26 +1,27 @@
 // Powers used with `useAbility` outside a move (docs/roles-v2.md §2): the
 // Auditor's, Detective's and Priest's, and the Mole's tip-off; the Fixer's
-// save, the Muscle's and Priest's shakedown hooks, and every role's tokens.
+// save, the Priest's shakedown hook, and every role's tokens.
 // design §8, §8.3; extension.md "Roles", "Tokens and the perk shop"
 //
 // The powers are answered with a private `abilityResolved`. Every reward is one
 // private `tokenEarned`, emitted where its trigger happens: after a round
-// resolves (`roundRewards`), after a checkpoint is made (`checkpointRewards`),
-// after a shakedown (`dirtyShakedownRewards`, `muscleCancelEvents`,
-// `blessingEvents`), when a raid is stopped (`stopRaid`), when Heat first
-// reaches the Getaway Driver's level (`heatTokens`), and when a tip-off lands (police.ts).
-import { BAGMAN_STREAK, CLEANER_REWARD_EVERY, type RolePower, type TokenTrigger } from "@skimjob/content";
+// resolves (round.ts), after a checkpoint is made (`checkpointRewards`),
+// after a shakedown (`dirtyShakedownRewards`, `blessingEvents`), when a raid
+// is stopped (`stopRaid`), and when a tip-off lands (police.ts).
+import type { RolePower, TokenTrigger } from "@skimjob/content";
 import type { ActNumber, GameEvent, GameState, PlayerId, PlayerState } from "./types";
 import { PUBLIC, privateTo } from "./types";
 import { jobFor, powerOf, roleDefIn, rolesFor } from "./overrides";
 import { actOfRound } from "./acts";
 import { isObject, show } from "./check";
-import { holdsDirty } from "./accomplices";
 
 type Result = GameEvent[] | string;
 
-/** The clean line: a stash (with any Fence safe) below it is clean; the Detective's "dirty" line too (owner ruling 3). extension.md "Shakedowns (fixed numbers)" */
+/** The clean line: a stash below it is clean; the Detective's "dirty" line too (owner ruling 3). extension.md "Shakedowns (fixed numbers)" */
 export const cleanThreshold = (state: GameState): number => jobFor(state.config).shakedown.cleanBelow;
+
+/** Whether `target`'s stash isn't clean at `threshold`. The shakedown and the Detective read this. design §11.3 */
+export const holdsDirty = (state: GameState, target: PlayerId, threshold: number): boolean => (state.players[target] as PlayerState).stash >= threshold;
 
 /**
  * Auditor (v2 §2): once per act, the latest resolved round's shortfall for
@@ -128,11 +129,9 @@ export function useCrewPower(state: GameState, player: PlayerState, power: RoleP
 
 /**
  * `count` tokens (one per `tokenEarned`) for each player whose role has a
- * reward on `trigger` and for whom `earned` holds. Nothing in starter mode
- * (Quick and first games have no shop). extension.md "Tokens and the perk shop", gap-fills
+ * reward on `trigger` and for whom `earned` holds. extension.md "Tokens and the perk shop", gap-fills
  */
 export function grantRewards(state: GameState, trigger: TokenTrigger, earned: (player: PlayerState) => boolean): GameEvent[] {
-  if (state.config.starterMode) return [];
   const roles = rolesFor(state.config);
   const out: GameEvent[] = [];
   for (const id of state.playerOrder) {
@@ -145,30 +144,14 @@ export function grantRewards(state: GameState, trigger: TokenTrigger, earned: (p
   return out;
 }
 
-/** Whether `player` already earned a token for `trigger` (once-per-game triggers). */
-const earnedBefore = (state: GameState, player: PlayerId, trigger: TokenTrigger): boolean =>
-  state.log.some((e) => e.type === "tokenEarned" && e.player === player && e.trigger === trigger);
-
-/**
- * Getaway Driver (extension.md gap-fills): its token the first time Heat
- * reaches its `tokenHeat`, at any moment (police activity included); once per
- * game. Read after anything that raises Heat.
- */
-export const heatTokens = (now: GameState): GameEvent[] =>
-  grantRewards(now, "heatReached", (p) => {
-    const power = powerOf(now.config, p.role);
-    return power.kind === "getaway" && now.heat >= power.tokenHeat && !earnedBefore(now, p.id, "heatReached");
-  });
-
-/** extension.md gap-fills: the target was met at meeting 1 or 2. Rookie, Inside Man and Mastermind earn a token. */
+/** extension.md gap-fills: the target was met at meeting 1 or 2. The Rookie earns a token. */
 export const checkpointRewards = (state: GameState): GameEvent[] => grantRewards(state, "checkpointMade", () => true);
 
 /**
  * extension.md "Roles": `target` was just caught (shaken down dirty). A token
  * for: the Lookout if its power saw them; the Auditor if they visited a room
  * it audited, in that round; the Detective if it checked them (earlier this
- * game, by this player, provisional); the Snitch if they are its target; the
- * Smooth Talker if its last ballot in `meetingId` was for them. Nobody earns
+ * game, by this player, provisional); the Smooth Talker if its last ballot in `meetingId` was for them. Nobody earns
  * one for their own shakedown.
  */
 export function dirtyShakedownRewards(state: GameState, target: PlayerId, meetingId: string): GameEvent[] {
@@ -186,24 +169,8 @@ export function dirtyShakedownRewards(state: GameState, target: PlayerId, meetin
       mine(p).some((e) => e.type === "abilityResolved" && e.ability.kind === "audit" && roomOf(e.ability.round) === e.ability.room),
     ),
     ...grantRewards(state, "checkedShakenDirty", (p) => mine(p).some((e) => e.type === "abilityResolved" && e.ability.kind === "checkStash" && e.ability.target === target)),
-    ...grantRewards(state, "targetShakenDirty", (p) => p.id !== target && p.roleState.target === target),
     ...grantRewards(state, "wonDirtyShakedown", (p) => p.id !== target && ballots.get(p.id) === target),
   ];
-}
-
-/**
- * Muscle (v2 §2), as its cancel of `target`'s shakedown takes effect: a
- * target who wasn't clean gets the Muscle named in public (`muscleNamed`); a
- * clean one earns it a token and its power back (owner ruling 6; the fold of
- * `tokenEarned` gives the use back), never for its own shakedown. No
- * compensation is paid either way: nothing was taken.
- */
-export function muscleCancelEvents(state: GameState, meetingId: string, target: PlayerId): GameEvent[] {
-  const cancel = state.log.find((e) => e.type === "abilityResolved" && e.ability.kind === "cancelShakedown" && e.ability.meetingId === meetingId);
-  if (cancel?.type !== "abilityResolved") return [];
-  const muscle = cancel.player;
-  if (holdsDirty(state, target, cleanThreshold(state))) return [{ type: "muscleNamed", visibility: PUBLIC, meetingId, player: muscle, target }];
-  return grantRewards(state, "cancelledClean", (p) => p.id === muscle && muscle !== target);
 }
 
 /**
@@ -216,39 +183,6 @@ export function blessingEvents(state: GameState, meetingId: string, target: Play
   if (priests.length === 0) return [];
   const paid: GameEvent[] = compensation > 0 ? [{ type: "blessingPaid", visibility: PUBLIC, meetingId, target, amount: compensation }] : [];
   return [...paid, ...grantRewards(state, "blessedShakenClean", (p) => priests.includes(p.id))];
-}
-
-/**
- * extension.md "Roles", after round `round` resolves (`now` has its events
- * folded): a Bagman earns a token for every
- * `BAGMAN_STREAK` rounds running in which it handed everything in (meetings
- * don't break the run; it restarts after each token); a Cleaner on every
- * `CLEANER_REWARD_EVERY`th round it spends in its cooling room; a Fence the
- * first time its safe holds `tokenSafe`.
- */
-export function roundRewards(now: GameState, round: number): GameEvent[] {
-  const splits = (p: PlayerState) => now.log.flatMap((e) => (e.type === "lootSplit" && e.player === p.id ? [e] : []));
-  const streak = (p: PlayerState) => {
-    let run = 0;
-    let earned = false;
-    for (const e of splits(p)) {
-      run = e.toStash === 0 ? run + 1 : 0;
-      earned = run === BAGMAN_STREAK;
-      if (earned) run = 0;
-    }
-    return earned && splits(p).at(-1)?.round === round;
-  };
-  const cooled = (p: PlayerState) => {
-    const power = powerOf(now.config, p.role);
-    if (power.kind !== "cleaner") return false;
-    const visits = splits(p).filter((e) => e.room === power.room);
-    return visits.at(-1)?.round === round && visits.length % CLEANER_REWARD_EVERY === 0;
-  };
-  const safe = (p: PlayerState) => {
-    const power = powerOf(now.config, p.role);
-    return power.kind === "fenceSafe" && p.safe >= power.tokenSafe && !earnedBefore(now, p.id, "safeReached");
-  };
-  return [...grantRewards(now, "allInStreak", streak), ...grantRewards(now, "coolingRounds", cooled), ...grantRewards(now, "safeReached", safe)];
 }
 
 /**

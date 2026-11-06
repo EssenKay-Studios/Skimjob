@@ -16,14 +16,6 @@ export interface PlayerSeat {
   readonly isBot: boolean;
 }
 
-/**
- * The old saboteur setting, dropped by the Extension. Still read from stored
- * configs and lobby settings: "off" becomes Balanced with every Wildcard and
- * Lone wolf toggled off; "maybe" and "on" become plain Balanced. extension.md
- * Build notes "Tags, decks and dealing"
- */
-export type MoleSetting = "off" | "maybe" | "on";
-
 /** How seats are dealt: a fixed mix per crew size, or uniformly from the deck. extension.md "Host settings" */
 export type DealStyle = "balanced" | "random";
 
@@ -42,7 +34,7 @@ export interface GameConfig {
   /**
    * The host's per-role picks: when not empty, exactly these roles make the
    * deck (any of the 20; the preset is ignored). Empty means the `deck`
-   * preset. Ignored in starter mode. extension.md "Decks"
+   * preset. extension.md "Decks"
    */
   readonly rolePool: readonly RoleId[];
   /** Deck preset; absent means Standard. extension.md "Decks" */
@@ -51,24 +43,12 @@ export interface GameConfig {
   readonly deal?: DealStyle;
   /** Absent means Exact (owner ruling 8). extension.md "Host settings" */
   readonly roleList?: RoleListSetting;
-  /** Legacy saboteur setting (see `MoleSetting`): only "off" changes anything. */
-  readonly mole?: MoleSetting;
   readonly eventsEnabled: boolean;
   readonly voteVisibility: VoteVisibility;
   /**
-   * The Starter deck with events off and no shop: a first game, and Quick
-   * games (extension.md gap-fills "Quick forces Starter"). design §8.1
-   */
-  readonly starterMode: boolean;
-  /**
-   * Duel mode: exactly 2 players, no meetings or votes; once per act each may
-   * call out the other instead. Absent means false. design §16.1
-   */
-  readonly duel?: boolean;
-  /**
    * Each deck role is dealt at most once, Rookies filling the rest (true, the
    * default when absent); false draws with replacement, so roles may repeat
-   * (never more than one Mole or Embezzler). design §8.1, §15
+   * (never more than one Mole). design §8.1, §15
    */
   readonly uniqueRoles?: boolean;
   /**
@@ -90,27 +70,18 @@ export interface RoomOverride {
 
 /**
  * New numbers for one role. A role may only set its own power's numbers
- * (`extraRooms`, `perAct`, `weight`, `perGame`, `take`, …), its scoring, and,
- * for a role with a reward, `rewardCount` (tokens per trigger). design §8, §8.3
+ * (`extraRooms`, `perAct`, `weight`, `perGame`, …) and, for a role with a
+ * reward, `rewardCount` (tokens per trigger). design §8, §8.3
  */
 export interface RoleOverride {
-  readonly lootPerPointOverFinalTarget?: number;
   readonly extraRooms?: number;
   readonly perAct?: number;
   readonly weight?: number;
   readonly perGame?: number;
   /** Tokens each reward trigger grants. design §8.3 */
   readonly rewardCount?: number;
-  /** Bagman's Haul bonus, Cleaner's Rooftop visitors, Fixer's raid stop (v2 §2). design §8 */
-  readonly bonus?: number;
-  readonly visitors?: number;
+  /** Fixer's raid stop (v2 §2). design §8 */
   readonly stopAt?: number;
-  /** Fence: safe size that earns its token; Getaway Driver: Heat multiplier and token Heat. extension.md */
-  readonly tokenSafe?: number;
-  readonly reverse?: number;
-  readonly tokenHeat?: number;
-  /** Embezzler: loot taken from the Haul per use (v2 §2). design §8 */
-  readonly take?: number;
 }
 
 /** Every field is optional; whatever is left out keeps the content value. design §17.4 */
@@ -119,7 +90,6 @@ export interface ContentOverrides {
   readonly heat?: { readonly max?: number; readonly perRound?: number; readonly missedCheckpoint?: number };
   readonly checkpoints?: { readonly perPlayer?: readonly [number, number, number] };
   readonly shakedown?: { readonly cleanBelow?: number; readonly payout?: number };
-  readonly duel?: { readonly wrongCallOut?: number };
   /** Background police activity (extension.md "Police activity"). */
   readonly police?: { readonly chancePercent?: number; readonly heat?: number };
   /** Shop costs (extension.md "Tokens and the perk shop"). */

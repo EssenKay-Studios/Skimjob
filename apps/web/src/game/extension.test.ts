@@ -21,7 +21,7 @@ import { EndingNote } from "../components/Extension";
 import { describeEvent } from "./describeEvent";
 import { endingText, gapInfo, heatRound, heatRounds, howYouWin, perkUses, roleInfo, roleListInfo, shopState, targetBar, usedPerkThisRound } from "./extension";
 import { abilityOffers } from "./meeting";
-import { deckPatch, deckRoles, effectiveDeck, rolePatch } from "../components/DeckSettings";
+import { deckPatch, deckRoles, rolePatch } from "../components/DeckSettings";
 import type { LobbySettings } from "../api";
 
 const config = (extra: Partial<GameConfig> = {}): GameConfig => ({
@@ -29,10 +29,8 @@ const config = (extra: Partial<GameConfig> = {}): GameConfig => ({
   players: Array.from({ length: 4 }, (_, i) => ({ id: `p${i + 1}`, name: i === 0 ? "Ana" : `Bot · ${i}`, isBot: i > 0 })),
   job: "bank",
   rolePool: ["rookie"],
-  mole: "off",
   eventsEnabled: false,
   voteVisibility: "hiddenThenRevealed",
-  starterMode: false,
   uniqueRoles: false,
   ...extra,
 });
@@ -55,9 +53,10 @@ const tokens = (s: GameState, n: number, player = "p1") => {
 describe("role facts (extension.md Roles)", () => {
   it("gives every role a tag and a How you win line; ★ roles name the failures they win", () => {
     expect(roleInfo("rookie")).toMatchObject({ tagLabel: "Team player", star: false, howYouWin: "Have the biggest stash when the job succeeds." });
-    expect(roleInfo("fence")).toMatchObject({ tagLabel: "Wildcard", star: true, howYouWin: "Have the biggest stash when the job succeeds, or when it fails either way." });
-    expect(roleInfo("getawayDriver").howYouWin).toMatch(/or when the cops raid\.$/);
-    expect(roleInfo("embezzler").howYouWin).toMatch(/or when the final target is missed\.$/);
+    expect(roleInfo("hacker")).toMatchObject({ tagLabel: "Wildcard", star: false, howYouWin: "Have the biggest stash when the job succeeds." });
+    expect(roleInfo("mole")).toMatchObject({ tagLabel: "Lone wolf", star: true, howYouWin: "Have the biggest stash when the job succeeds, or when it fails either way." });
+    expect(howYouWin(["heat"])).toMatch(/or when the cops raid\.$/);
+    expect(howYouWin(["target"])).toMatch(/or when the final target is missed\.$/);
     expect(howYouWin(["heat", "target"])).toBe(howYouWin(ROLES.mole!.winsOn));
   });
 
@@ -134,8 +133,7 @@ describe("the target bar, Heat breakdown and gap box (extension.md: What the app
 describe("tokens and the perk shop (extension.md)", () => {
   const withShop = (shop: GameState["shop"]) => ({ ...createGame(config()), shop });
 
-  it("has no shop in Quick games (starter mode), but the Starter deck keeps it", () => {
-    expect(shopState(viewFor(createGame(config({ starterMode: true })), "p1")).open).toBe(false);
+  it("the Starter deck keeps the shop", () => {
     expect(shopState(viewFor(createGame(config({ deck: "starter", rolePool: [...DECKS.starter] })), "p1")).open).toBe(true);
   });
 
@@ -219,26 +217,23 @@ describe("lobby deck settings (extension.md Host settings)", () => {
     deal: "balanced",
     roleList: "exact",
     eventsEnabled: true,
-    starterMode: false,
     dmNotices: true,
     uniqueRoles: true,
   };
 
-  it("plays Quick games on the Starter deck", () => {
-    expect(effectiveDeck({ ...base, sessionLength: "quick" })).toBe("starter");
-    expect(deckRoles({ ...base, sessionLength: "quick" })).toEqual(DECKS.starter);
+  it("plays the host's deck at every session length", () => {
+    expect(deckRoles({ ...base, sessionLength: "quick" })).toEqual(DECKS.standard);
   });
 
-  it("makes Starter only the no-events deck (never starter mode) and clears a stored starter mode", () => {
-    expect(deckPatch(base, "starter")).toEqual({ deck: "starter", roles: [], eventsEnabled: false });
-    expect(deckPatch(base, "everything")).toEqual({ deck: "everything", roles: [] });
-    expect(deckPatch({ ...base, deck: "starter", starterMode: true }, "everything")).toEqual({ deck: "everything", roles: [], starterMode: false });
+  it("makes Starter only the no-events deck", () => {
+    expect(deckPatch("starter")).toEqual({ deck: "starter", roles: [], eventsEnabled: false });
+    expect(deckPatch("everything")).toEqual({ deck: "everything", roles: [] });
   });
 
   it("toggles roles one by one, back to the preset when they match, never to none", () => {
-    const off = rolePatch(base, "fence")!;
-    expect(off.roles).toEqual(DECKS.standard.filter((r) => r !== "fence"));
-    expect(rolePatch({ ...base, roles: off.roles! }, "fence")).toEqual({ roles: [] });
+    const off = rolePatch(base, "hacker")!;
+    expect(off.roles).toEqual(DECKS.standard.filter((r) => r !== "hacker"));
+    expect(rolePatch({ ...base, roles: off.roles! }, "hacker")).toEqual({ roles: [] });
     expect(rolePatch({ ...base, roles: ["rookie"] }, "rookie")).toBeNull();
   });
 });

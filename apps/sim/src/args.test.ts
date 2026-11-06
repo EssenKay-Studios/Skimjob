@@ -13,16 +13,16 @@ const error = (argv: string[]): string => {
   return r.message;
 };
 
-describe("player counts — design §17.4 (2–12)", () => {
+describe("player counts — design §17.4 (3–12)", () => {
   it("takes one count, a range or a list, sorted and deduplicated", () => {
     expect(parsePlayerCounts("6")).toEqual([6]);
-    expect(parsePlayerCounts("2-12")).toEqual([2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+    expect(parsePlayerCounts("3-12")).toEqual([3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
     expect(parsePlayerCounts("8,4,6,4")).toEqual([4, 6, 8]);
-    expect(parsePlayerCounts("2-4,10")).toEqual([2, 3, 4, 10]);
+    expect(parsePlayerCounts("3-5,10")).toEqual([3, 4, 5, 10]);
   });
-  it("refuses counts outside 2–12 and junk", () => {
-    expect(parsePlayerCounts("1")).toMatch(/2–12/);
-    expect(parsePlayerCounts("2-13")).toMatch(/2–12/);
+  it("refuses counts outside 3–12 and junk", () => {
+    expect(parsePlayerCounts("2")).toMatch(/3–12/);
+    expect(parsePlayerCounts("3-13")).toMatch(/3–12/);
     expect(parsePlayerCounts("6-4")).toMatch(/range/);
     expect(parsePlayerCounts("six")).toMatch(/bad player count/);
     expect(parsePlayerCounts("")).toMatch(/bad player count/);
@@ -55,9 +55,7 @@ describe("parseSimArgs", () => {
       seed: "sim",
       job: "bank",
       rolePool: [],
-      starterMode: false,
       eventsEnabled: false,
-      duel: false,
       deck: "standard",
       deal: "balanced",
       roleList: "exact",
@@ -75,20 +73,16 @@ describe("parseSimArgs", () => {
 
   it("reads every option", () => {
     const o = run([
-      "-n", "7", "-p", "3-4", "-b", "random", "-s", "x", "--job", "bank", "--role-pool", "lookout, fence",
-      "--starter", "--deck", "everything", "--deal", "random", "--role-list", "hidden", "--votes", "secret", "--out", "here", "--json",
+      "-n", "7", "-p", "3-4", "-b", "random", "-s", "x", "--job", "bank", "--role-pool", "lookout, hacker",
+      "--deck", "everything", "--deal", "random", "--role-list", "hidden", "--votes", "secret", "--out", "here", "--json",
     ]);
     expect(o).toMatchObject({
-      games: 7, playerCounts: [3, 4], mix: [{ personality: "random", weight: 1 }], seed: "x", rolePool: ["lookout", "fence"],
-      starterMode: true, deck: "everything", deal: "random", roleList: "hidden", voteVisibility: "secret", outDir: "here", json: true,
+      games: 7, playerCounts: [3, 4], mix: [{ personality: "random", weight: 1 }], seed: "x", rolePool: ["lookout", "hacker"],
+      deck: "everything", deal: "random", roleList: "hidden", voteVisibility: "secret", outDir: "here", json: true,
     });
     expect(run(["--no-files"]).outDir).toBeNull();
-    // design §10: the events deck; starter mode has none (§8.1).
+    // design §10: the events deck.
     expect(run(["--events"]).eventsEnabled).toBe(true);
-    expect(error(["--events", "--starter"])).toMatch(/starter/);
-    // design §16.1: Duel mode is 2 players only.
-    expect(run(["--duel", "-p", "2"]).duel).toBe(true);
-    expect(error(["--duel", "-p", "2-3"])).toMatch(/2 players/);
   });
 
   it("reads overrides inline or from a file, and reports bad JSON", () => {

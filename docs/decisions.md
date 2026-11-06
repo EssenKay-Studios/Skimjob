@@ -85,7 +85,7 @@ Full text: `docs/design.md` (the rules spec, frozen in S1); the A-numbers below 
 
 ## Ops and deploy
 
-- **Hosting: AWS Lightsail,** https://skimjob.duckdns.org, on the owner's box beside Arcway, which no Skimjob step may touch. systemd service, releases with a `current` symlink, nginx, Postgres, weekly `pg_dump`. Built on the Mac and uploaded by hand; nothing deploys from CI. Runbook: `docs/deploy.md`. *Confirmed.*
+- **Hosting: AWS Lightsail,** https://skimjob.duckdns.org, on the owner's box, shared with another app (Arcway) that no Skimjob step may touch. systemd service, releases with a `current` symlink, nginx, Postgres, weekly `pg_dump`. Built on the Mac and uploaded by hand; nothing deploys from CI. Runbook: `docs/deploy.md`. *Confirmed.*
 - **The repo is public,** so nothing secret or connection detail is ever committed. *Confirmed.*
 - **CI:** typecheck and tests, 6 e2e shards (with a fast-clock server), sim smoke; docs-only PRs (every path `*.md`) skip e2e and sim smoke. The scoped test setup comes in step C3. *Confirmed.*
 - **R7 is built straight on `main`** with no integration branch, flags or kept R6 path; the live game has no real players. Replace, don't add; docs say only what is true now; no placeholders for Advanced. *Confirmed.*
@@ -96,5 +96,5 @@ Full text: `docs/design.md` (the rules spec, frozen in S1); the A-numbers below 
 - **Everything goes through a PR; only the PM merges,** with `docs/pipeline/merge.sh` once the SHA-bound gate (`verdicts.sh`) passes: an APPROVE review naming the reviewed head, a QA PASS naming the current head, only QA-test commits after the review, green CI, a clean merge state, clean authorship. Any API error fails closed. *Confirmed.*
 - **The gate scripts use only the GitHub REST API** (`gh api`), so the pipeline runs from the Mac and from cloud sessions where GraphQL is blocked. *Confirmed.*
 - **Commits are authored as karthik24iyer <karthik24iyer@gmail.com>, with no AI attribution lines;** the gate refuses them. *Confirmed.*
-- **Builders and QA don't edit STATUS or this file;** they put `## Decisions` and `## STATUS updates` in the PR body and the PM folds them in. *Confirmed.*
+- **Tasks, follow-ups and owner questions are GitHub issues** (milestone "R7 Simplified", the private R7 board); rules and decisions stay in the repo. Builders and QA don't edit STATUS or this file: they put "Closes #N", `## Decisions` and `## Follow-ups` in the PR body, the PM folds decisions in and creates the follow-up issues. *Confirmed (owner, 4 Nov).*
 - **Testing speed:** run only the specs you touched, push once, let CI run the full suite; never skip or disable a test. *Confirmed.*

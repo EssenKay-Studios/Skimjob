@@ -14,10 +14,8 @@ function config(humans: readonly boolean[]): GameConfig {
     players: humans.map((human, i) => ({ id: `p${i}`, name: `P${i}`, isBot: !human })),
     job: "bank",
     rolePool: [...STARTER_ROLES],
-    mole: "off",
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
-    starterMode: false,
   };
 }
 
@@ -61,7 +59,7 @@ describe("public lock-in marks — design §5.1 (owner decision, 2 Nov)", () => 
   });
 
   it("a missed move (default at the deadline) never shows as locked in", () => {
-    const s = run(createGame(config([true, true])), move("p0"), { type: "advance", deadline: { kind: "round", round: 1 } });
+    const s = run(createGame(config([true, true, true])), move("p0"), { type: "advance", deadline: { kind: "round", round: 1 } });
     expect(s.log.filter((e) => e.type === "moveLocked").map((e) => (e as { player: string }).player)).toEqual(["p0"]);
   });
 });

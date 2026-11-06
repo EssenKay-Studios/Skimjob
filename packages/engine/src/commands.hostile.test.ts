@@ -25,22 +25,19 @@ import { show } from "./check";
 /** Every perk spent with `useAbility` (the Shield spends itself). design §8.3 */
 const ALL_PERKS: readonly PerkId[] = ["peek", "extraVote", "ballot", "tail", "alibi", "recharge", "rig"];
 
-// v2 §2 (R3a): the Getaway Driver is passive (no command fields of its own) but plays every move.
-// R3b: the Forger's and the Embezzler's move powers too.
-const ROLES_BY_SEAT = ["lookout", "fence", "hacker", "blackmailer", "muscle", "auditor", "detective", "mole", "priest", "getawayDriver", "forger", "embezzler"];
+const ROLES_BY_SEAT = ["lookout", "fixer", "hacker", "rookie", "smoothTalker", "auditor", "detective", "mole", "priest", "rookie", "rookie", "rookie"];
 
 function config(extra: Partial<GameConfig> = {}): GameConfig {
   return {
     seed: "hostile-seed",
     players: ROLES_BY_SEAT.map((_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: false })),
     job: "bank",
-    rolePool: ROLES_BY_SEAT,
+    rolePool: [...new Set(ROLES_BY_SEAT)],
     // A Mole could be in the game, so the hidden police moments run. extension.md "Police activity"
     roleList: "possible",
     eventsEnabled: true,
     // Secret mode, so the Ballot perk can be spent (it's refused in Open mode).
     voteVisibility: "secret",
-    starterMode: false,
     ...extra,
   };
 }
@@ -87,7 +84,7 @@ function scenarioStates(): GameState[] {
   s = keep(run(s, { type: "callEmergency", player: "p1" })); // waiting to open
   s = keep(run(s, { type: "advance", deadline: { kind: "openMeeting", meetingId: "emergency-p1" } })); // voting
   s = run(s, ...["p0", "p1", "p2", "p3", "p4", "p5", "p6"].map((id) => ({ type: "castVote", player: id, vote: { kind: "shakedown", target: "p8" } })));
-  s = keep(run(s, { type: "advance", deadline: { kind: "closeMeeting", meetingId: "emergency-p1" } })); // the Muscle's window
+  s = keep(run(s, { type: "advance", deadline: { kind: "closeMeeting", meetingId: "emergency-p1" } })); // the shakedown window
   expect(s.phase.kind).toBe("shakedownPending");
   s = keep(run(s, { type: "advance", deadline: { kind: "resolveShakedown", meetingId: "emergency-p1" } }));
   s = keep(run(s, alibis(s))); // planning round 2
@@ -100,9 +97,6 @@ function scenarioStates(): GameState[] {
   // A Double-cross offer to p0 and p1 this round (design §10), forged onto planning.
   const planning = out[2] as GameState;
   keep({ ...planning, card: { round: planning.round, id: "doubleCross", room: null, offer: { players: ["p0", "p1"], accepted: [] } } });
-  // Duel mode (design §16.1): call-outs.
-  const duel = config({ players: [0, 1].map((i) => ({ id: `p${i}`, name: `P${i}`, isBot: false })), rolePool: [], voteVisibility: "hiddenThenRevealed", duel: true });
-  keep(game(duel, ["rookie", "rookie"]));
   return out;
 }
 
@@ -123,20 +117,11 @@ function baseCommands(s: GameState): Record<string, unknown>[] {
     const ability =
       power.kind === "lookout"
         ? { kind: "lookout", rooms: [room] }
-        : power.kind === "fenceSafe"
-          ? { kind: "fenceSafe", amount: 1 }
-          : power.kind === "loopCameras"
-            ? { kind: "loopCameras", room }
-            : power.kind === "blackmail"
-              ? { kind: "blackmail", target: other(player), role: "fence" }
-              : power.kind === "forge"
-                  ? { kind: "forge", target: other(player), room }
-                  : power.kind === "embezzle"
-                    ? { kind: "embezzle" }
-                    : null;
+        : power.kind === "loopCameras"
+          ? { kind: "loopCameras", room }
+          : null;
     if (ability) out.push({ type: "submitMove", player, move: { room, pocket: 0, ability } });
     // Powers used outside a move. design §8
-    if (power.kind === "cancelShakedown") out.push({ type: "useAbility", player, ability: { kind: "cancelShakedown" } });
     if (power.kind === "audit") out.push({ type: "useAbility", player, ability: { kind: "audit", room } });
     if (power.kind === "checkStash") out.push({ type: "useAbility", player, ability: { kind: "checkStash", target: other(player) } });
     if (power.kind === "tipOff") out.push({ type: "useAbility", player, ability: { kind: "tipOff" } }); // extension.md "Police activity"
@@ -165,7 +150,6 @@ function baseCommands(s: GameState): Record<string, unknown>[] {
       out.push({ type, player, vote: { kind: "skip" } });
     }
     out.push({ type: "answerDoubleCross", player, accept: true });
-    out.push({ type: "callOut", player });
   }
   const meetingIds = [s.scheduledMeeting?.meetingId, s.pendingEmergency?.meetingId, s.meeting?.id, s.pendingShakedown?.meetingId];
   out.push({ type: "advance", deadline: { kind: "round", round: s.round } });

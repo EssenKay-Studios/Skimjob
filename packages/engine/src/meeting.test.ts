@@ -1,7 +1,7 @@
 // Crew meetings and votes: scheduling, emergency meetings, ballots and their
 // visibility, sealed votes, quorum and majority, shakedowns, the checkpoint
 // order and the move to the next act. design §11, §4, §3
-import { BANK_JOB, MAX_SLOT_LENGTH, STARTER_ROLES } from "@skimjob/content";
+import { BANK_JOB, MAX_SLOT_LENGTH, STARTER_ROLES, type PerkId } from "@skimjob/content";
 import { handleThroughAlibis } from "./alibis.testkit";
 import { describe, expect, it } from "vitest";
 import type { GameConfig, GameEvent, GameState, VoteVisibility } from "./types";
@@ -12,16 +12,18 @@ import { handleCommand } from "./handle";
 import { V01_NUMBERS } from "./v01-numbers.testkit";
 import { meetingResult } from "./meeting";
 
+/** One perk per column and no Shield, whatever the seed: a Shield in the shop opens a shakedown window at every meeting. */
+const SHOP_NO_SHIELD: readonly PerkId[] = ["peek", "alibi", "extraVote"];
+
 function config(players: number, voteVisibility: VoteVisibility = "hiddenThenRevealed"): GameConfig {
   return {
     seed: "meeting-seed",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    // Starter mode: no Muscle and no shop (so no Shield), so no shakedown window (extension.md "Shakedowns").
+    // Starter roles. The shop is pinned (see `game`): a Shield would open a shakedown window.
     rolePool: [...STARTER_ROLES],
     eventsEnabled: false,
     voteVisibility,
-    starterMode: true,
     contentOverrides: V01_NUMBERS, // scripted against content 0.1.0 numbers (balance pass 1)
   };
 }
@@ -30,6 +32,7 @@ function config(players: number, voteVisibility: VoteVisibility = "hiddenThenRev
 function game(players: number, roles: string[] = [], mode?: VoteVisibility): GameState {
   const cfg = config(players, mode);
   const log = setupEvents(cfg).map((e, i, all): GameEvent => {
+    if (e.type === "shopDealt") return { ...e, perks: SHOP_NO_SHIELD };
     if (e.type !== "roleDealt") return e;
     const seat = all.slice(0, i).filter((x) => x.type === "roleDealt").length;
     return { ...e, role: roles[seat] ?? "rookie" };
@@ -197,7 +200,7 @@ describe("opening and closing the act's meeting — design §11.1, §4.1, §11.4
   });
 
   it("all three deadline kinds are refused when stale, retried or unknown", () => {
-    let s = run(game(2), ROUND, ROUND, ROUND);
+    let s = run(game(3), ROUND, ROUND, ROUND);
     expect(reason(s, ROUND(s))).toMatch(/no round deadline/);
     expect(reason(s, open("act-1"))).toMatch(/not waiting to open/); // nothing scheduled yet
     s = run(s, sched(1));
@@ -211,21 +214,6 @@ describe("opening and closing the act's meeting — design §11.1, §4.1, §11.4
     expect(reason(s, close("act-1"))).toMatch(/not open/); // retried
     expect(reason(s, open("act-1"))).toMatch(/not waiting/);
     expect(s.phase).toEqual({ kind: "planning", round: 4 });
-  });
-
-  it("after the act's meeting and checkpoint, the next act starts at round 4 (Fence allowance reset)", () => {
-    let s = run(game(2, ["fence"]), mv("p0", "vault", 6, { ability: { kind: "fenceSafe", amount: 5 } }), ROUND, ROUND, ROUND);
-    expect(s.players.p0).toMatchObject({ safe: 5, roleState: expect.objectContaining({ usedThisAct: 5 }) });
-    s = run(s, sched(1), open("act-1"));
-    const before = s;
-    s = run(s, close("act-1"));
-    expect(since(before, s).map((e) => e.type)).toEqual(["meetingClosed", "checkpointChecked", "roundStarted"]);
-    expect(LAST(s, "roundStarted")).toMatchObject({ round: 4, act: 2 });
-    expect(s.phase).toEqual({ kind: "planning", round: 4 });
-    expect(s.players.p0).toMatchObject({ safe: 5, roleState: expect.objectContaining({ usedThisAct: 0 }) });
-    // Act 2 has its own meeting, which can be proposed and scheduled anew.
-    s = run(s, propose("p1", "act2-slot"), (x: GameState) => accept("p0", x.proposals[0]!.id));
-    expect(s.scheduledMeeting).toEqual({ meetingId: "act-2", act: 2, slot: "act2-slot" });
   });
 });
 
@@ -264,7 +252,7 @@ describe("emergency meetings — design §11.1, §4.1", () => {
   });
 
   it("called while the act's meeting is awaited, it returns there; the regular can't open while it's open", () => {
-    let s = run(game(2), ROUND, ROUND, ROUND, sched(1), emergency("p0"), open("emergency-p0"));
+    let s = run(game(3), ROUND, ROUND, ROUND, sched(1), emergency("p0"), open("emergency-p0"));
     expect(reason(s, open("act-1"))).toMatch(/emergency-p0 is already open/);
     s = run(s, close("emergency-p0"));
     expect(s.phase).toEqual({ kind: "awaitingMeeting", act: 1 });
@@ -273,7 +261,7 @@ describe("emergency meetings — design §11.1, §4.1", () => {
   });
 
   it("a pending emergency waits out the regular meeting and opens in the next act", () => {
-    let s = run(game(2), ROUND, ROUND, ROUND, sched(1), emergency("p1"), open("act-1"));
+    let s = run(game(3), ROUND, ROUND, ROUND, sched(1), emergency("p1"), open("act-1"));
     expect(reason(s, open("emergency-p1"))).toMatch(/already open/);
     s = run(s, close("act-1"), open("emergency-p1"));
     expect(s.meeting).toMatchObject({ id: "emergency-p1", act: 2 });
@@ -423,29 +411,12 @@ describe("shakedowns — design §11.3, extension.md \"Shakedowns (fixed numbers
       meetingId: "act-1",
       target: "p0",
       stashRevealed: 6,
-      safeRevealed: 0,
       taken: 6,
       clean: false,
       compensation: 0,
     });
     expect(after.players.p0).toMatchObject({ stash: 0, timesShakenDown: 1 });
     expect(after.haul).toBe(22);
-  });
-
-  it("the Fence safe is shown but not taken, and counts toward the clean check: a full safe isn't clean (owner answers, 1 Nov)", () => {
-    const s = toMeeting(run(game(3, ["fence"]), mv("p0", "vault", 6, { ability: { kind: "fenceSafe", amount: 5 } })));
-    expect(s.players.p0).toMatchObject({ stash: 1, safe: 5 });
-    const after = run(s, vote("p1", "p0"), vote("p2", "p0"), CLOSE);
-    expect(LAST(after, "shakedownResolved")).toMatchObject({ stashRevealed: 1, safeRevealed: 5, taken: 1, clean: false, compensation: 0 });
-    expect(after.players.p0).toMatchObject({ stash: 0, safe: 5 });
-  });
-
-  it("a Fence whose stash and safe together are below the threshold is clean and compensated", () => {
-    const s = toMeeting(run(game(3, ["fence"]), mv("p0", "lobby", 2, { ability: { kind: "fenceSafe", amount: 1 } })));
-    expect(s.players.p0).toMatchObject({ stash: 1, safe: 1 });
-    const after = run(s, vote("p1", "p0"), vote("p2", "p0"), CLOSE);
-    expect(LAST(after, "shakedownResolved")).toMatchObject({ stashRevealed: 1, safeRevealed: 1, taken: 1, clean: true, compensation: 8 });
-    expect(after.players.p0).toMatchObject({ stash: 8, safe: 1 });
   });
 
   it("clean below 6: the crew pays the target 8 out of the Haul", () => {
@@ -463,17 +434,17 @@ describe("shakedowns — design §11.3, extension.md \"Shakedowns (fixed numbers
   });
 
   it("the line and payout don't scale with the act: Act 2 is still clean below 6 and pays 8", () => {
-    let s = run(game(2), mv("p0", "office", 4)); // p0 stash 4
+    let s = run(game(3), mv("p0", "office", 4)); // p0 stash 4
     s = run(toMeeting(s), CLOSE);
-    s = run(s, emergency("p1"), open("emergency-p1"), vote("p1", "p0"), CLOSE);
+    s = run(s, emergency("p1"), open("emergency-p1"), vote("p1", "p0"), vote("p2", "p0"), CLOSE);
     expect(LAST(s, "shakedownResolved")).toMatchObject({ stashRevealed: 4, clean: true, compensation: 8 });
   });
 
   it("compensation never takes the Haul below zero (provisional)", () => {
-    let s = game(2);
-    for (let i = 0; i < 3; i++) s = run(s, mv("p0", "rooftop"), mv("p1", "rooftop"), ROUND);
+    let s = game(3);
+    for (let i = 0; i < 3; i++) s = run(s, mv("p0", "rooftop"), mv("p1", "rooftop"), mv("p2", "rooftop"), ROUND);
     expect(s.haul).toBe(0);
-    s = run(s, sched(1), open("act-1"), vote("p0", "p1"), CLOSE);
+    s = run(s, sched(1), open("act-1"), vote("p0", "p1"), vote("p2", "p1"), CLOSE);
     expect(LAST(s, "shakedownResolved")).toMatchObject({ clean: true, compensation: 0 });
     expect(s.haul).toBe(0);
   });
@@ -483,8 +454,8 @@ describe("order at a checkpoint — design §11.4, §11.5", () => {
   it("meeting → shakedown → checkpoint: a shakedown can rescue the checkpoint", () => {
     const s = act1Meeting();
     const rescued = run(s, vote("p1", "p0"), vote("p2", "p0"), CLOSE);
-    // Starter mode: no tokens for the target met (extension.md "Tokens and the perk shop").
-    expect(since(s, rescued).map((e) => e.type)).toEqual(["voteCast", "voteCast", "meetingClosed", "shakedownResolved", "checkpointChecked", "roundStarted"]);
+    // Token grants are not what this checks (extension.md "Tokens and the perk shop").
+    expect(since(s, rescued).map((e) => e.type).filter((t) => t !== "tokenEarned")).toEqual(["voteCast", "voteCast", "meetingClosed", "shakedownResolved", "checkpointChecked", "roundStarted"]);
     expect(LAST(rescued, "checkpointChecked")).toEqual({ type: "checkpointChecked", visibility: { kind: "public" }, act: 1, target: 18, haul: 22, met: true, heatPenalty: 0 });
     expect(rescued.heat).toBe(19);
   });
@@ -497,9 +468,9 @@ describe("order at a checkpoint — design §11.4, §11.5", () => {
   });
 
   it("the missed-checkpoint penalty is clamped once and a raid at 100 ends the game", () => {
-    let s = { ...game(2), heat: 80 };
-    for (let i = 0; i < 3; i++) s = run(s, mv("p0", "lobby", 2), ROUND); // Haul 6 of 12, Heat 92
-    expect([s.haul, s.heat]).toEqual([6, 92]);
+    let s = { ...game(3), heat: 80 };
+    for (let i = 0; i < 3; i++) s = run(s, mv("p0", "lobby", 2), ROUND); // p1 and p2 default to the Lobby: Haul 12 of 18, Heat 92
+    expect([s.haul, s.heat]).toEqual([12, 92]);
     const before = run(s, sched(1), open("act-1"));
     const after = run(before, CLOSE);
     expect(since(before, after).map((e) => e.type)).toEqual(["meetingClosed", "checkpointChecked", "copsRaided", "gameEnded"]);
@@ -510,11 +481,11 @@ describe("order at a checkpoint — design §11.4, §11.5", () => {
 });
 
 describe("the final meeting comes before the final check — design §3, §4, §11.4", () => {
-  /** p0 in the Vault, p1 on the Rooftop: Haul +6 and Heat +4 a round. Act 3: p0 pockets everything if `greedy`. */
+  /** p0 in the Vault, p1 on the Rooftop, p2 in the Lobby: Haul +8 and Heat +4 a round. Act 3: p0 pockets everything if `greedy`. */
   function toFinalMeeting(greedy: boolean): GameState {
-    let s = game(2);
+    let s = game(3);
     for (let round = 1; round <= 9; round++) {
-      s = run(s, mv("p0", "vault", greedy && round > 6 ? 6 : 0), mv("p1", "rooftop"), ROUND);
+      s = run(s, mv("p0", "vault", greedy && round > 6 ? 6 : 0), mv("p1", "rooftop"), mv("p2", "lobby"), ROUND);
       if (round % 3 === 0) s = run(s, sched(round / 3), OPEN_ACT);
       if (round % 3 === 0 && round < 9) s = run(s, CLOSE);
     }
@@ -526,7 +497,7 @@ describe("the final meeting comes before the final check — design §3, §4, §
     const s = toFinalMeeting(false);
     const after = run(s, CLOSE);
     expect(since(s, after).map((e) => e.type)).toEqual(["meetingClosed", "checkpointChecked", "gameEnded"]);
-    expect(LAST(after, "checkpointChecked")).toMatchObject({ act: 3, target: 44, haul: 54, met: true, heatPenalty: 0 });
+    expect(LAST(after, "checkpointChecked")).toMatchObject({ act: 3, target: 66, haul: 72, met: true, heatPenalty: 0 });
     // Nobody pocketed; p0 handed in more (tie-break 2, end.test.ts).
     expect(after.phase).toMatchObject({ kind: "ended", outcome: { result: "success", winners: ["p0"] } });
   });
@@ -534,22 +505,22 @@ describe("the final meeting comes before the final check — design §3, §4, §
   it("missing the final target fails the heist, with no Heat penalty", () => {
     const s = toFinalMeeting(true);
     const after = run(s, CLOSE);
-    expect(LAST(after, "checkpointChecked")).toMatchObject({ act: 3, haul: 36, met: false, heatPenalty: 0 });
+    expect(LAST(after, "checkpointChecked")).toMatchObject({ act: 3, haul: 54, met: false, heatPenalty: 0 });
     expect(after.heat).toBe(s.heat);
     expect(after.phase).toMatchObject({ kind: "ended", outcome: { result: "failed", reason: "target" } });
   });
 
   it("the final meeting can rescue the heist by shaking down the greediest player", () => {
-    const s = run(toFinalMeeting(true), vote("p1", "p0"), CLOSE);
+    const s = run(toFinalMeeting(true), vote("p1", "p0"), vote("p2", "p0"), CLOSE);
     expect(LAST(s, "shakedownResolved")).toMatchObject({ target: "p0", taken: 18, clean: false });
-    expect(LAST(s, "checkpointChecked")).toMatchObject({ act: 3, haul: 54, met: true });
+    expect(LAST(s, "checkpointChecked")).toMatchObject({ act: 3, haul: 72, met: true });
     expect(s.phase).toMatchObject({ kind: "ended", outcome: { result: "success" } });
   });
 });
 
 describe("determinism and the event log — design §17.2", () => {
   const script = (): GameState => {
-    let s = run(game(4, ["fence", "lookout", "insideMan"]), mv("p3", "vault", 6), seal("p2", "p3"), propose("p1", "x"));
+    let s = run(game(4, ["hacker", "lookout", "priest"]), mv("p3", "vault", 6), seal("p2", "p3"), propose("p1", "x"));
     s = run(s, (x: GameState) => accept("p0", x.proposals[0]!.id), (x: GameState) => accept("p3", x.proposals[0]!.id), ROUND);
     s = run(s, emergency("p0"), open("emergency-p0"), vote("p0", "p3"), vote("p1", "p3"), CLOSE, ROUND, ROUND, OPEN_ACT, vote("p0", null), CLOSE);
     return s;
@@ -571,9 +542,9 @@ describe("determinism and the event log — design §17.2", () => {
   });
 
   it("a player called toString can be voted for and shaken down (__proto__ is refused at setup)", () => {
-    const cfg: GameConfig = { ...config(2), players: [{ id: "toString", name: "T", isBot: false }, { id: "p1", name: "P1", isBot: true }] };
-    const log = setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: "rookie" } : e));
-    let s = run(replay(cfg, log), mv("toString", "vault", 6), ROUND, ROUND, ROUND, sched(1), open("act-1"), vote("p1", "toString"), seal("toString", "p1"));
+    const cfg: GameConfig = { ...config(3), players: [{ id: "toString", name: "T", isBot: false }, { id: "p1", name: "P1", isBot: true }, { id: "p2", name: "P2", isBot: true }] };
+    const log = setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: "rookie" } : e.type === "shopDealt" ? { ...e, perks: SHOP_NO_SHIELD } : e));
+    let s = run(replay(cfg, log), mv("toString", "vault", 6), ROUND, ROUND, ROUND, sched(1), open("act-1"), vote("p1", "toString"), vote("p2", "toString"), seal("toString", "p1"));
     s = run(s, CLOSE);
     const closed = LAST(s, "meetingClosed")!;
     expect(Object.hasOwn(closed.tally.targets, "toString")).toBe(true);

@@ -1,6 +1,6 @@
 // QA (PR #41): Claim role offers and limits, against the real engine.
-// Once per act, never in Duel, the offer list never hints at the hidden pool,
-// and every offer is a claim the engine accepts. design §8, §12.1, §16.1
+// Once per act, the offer list never hints at the hidden pool, and every
+// offer is a claim the engine accepts. design §8, §12.1
 import { ROLES } from "@skimjob/content";
 import { createGame, handleCommand, viewFor, type GameConfig, type GameState, type PlayerCommand, type SystemCommand } from "@skimjob/engine";
 import { describe, expect, it } from "vitest";
@@ -11,10 +11,8 @@ const config = (n: number, extra: Partial<GameConfig> = {}): GameConfig => ({
   players: Array.from({ length: n }, (_, i) => ({ id: `p${i + 1}`, name: `P${i + 1}`, isBot: false })),
   job: "bank",
   rolePool: ["rookie"],
-  mole: "off",
   eventsEnabled: false,
   voteVisibility: "hiddenThenRevealed",
-  starterMode: true,
   uniqueRoles: false,
   ...extra,
 });
@@ -46,8 +44,8 @@ describe("QA: Claim role (PR #41)", () => {
     const all = Object.keys(ROLES).sort();
     const lists = [
       config(3),
-      config(3, { rolePool: ["lookout", "bagman"], starterMode: false }),
-      config(12, { rolePool: ["auditor", "detective", "fixer"], starterMode: false, mole: "on" }),
+      config(3, { rolePool: ["lookout", "auditor"] }),
+      config(12, { rolePool: ["auditor", "detective", "fixer"] }),
     ].map((c) => {
       const s = createGame(c);
       return Object.keys(s.players).map((id) => claimState(viewFor(s, id))!.options);
@@ -65,7 +63,7 @@ describe("QA: Claim role (PR #41)", () => {
   it("once per act: claimed shows in every phase of the act, resets in the next act, matches the engine", () => {
     let s = createGame(config(3));
     s = step(s, claim("p1", "lookout"));
-    expect(handleCommand(s, claim("p1", "bagman")).ok).toBe(false);
+    expect(handleCommand(s, claim("p1", "auditor")).ok).toBe(false);
     // Rounds 1-3 (act 1), through the alibi windows and the act's meeting.
     for (let r = 0; r < 3; r++) {
       expect(claimState(viewFor(s, "p1"))).toMatchObject({ act: 1, claimed: "lookout" });
@@ -74,9 +72,9 @@ describe("QA: Claim role (PR #41)", () => {
     expect(s.phase).toEqual({ kind: "planning", round: 4 });
     const v = claimState(viewFor(s, "p1"))!;
     expect(v).toMatchObject({ act: 2, claimed: null });
-    expect(handleCommand(s, claim("p1", "bagman")).ok).toBe(true);
+    expect(handleCommand(s, claim("p1", "auditor")).ok).toBe(true);
     // Another player's claim never marks yours.
-    expect(claimState(viewFor(step(s, claim("p2", "bagman")), "p1"))!.claimed).toBeNull();
+    expect(claimState(viewFor(step(s, claim("p2", "auditor")), "p1"))!.claimed).toBeNull();
   });
 
   it("the claimed act agrees with the engine in the alibi window of an act's last round", () => {
@@ -93,13 +91,7 @@ describe("QA: Claim role (PR #41)", () => {
     expect(after).toMatchObject({ act: before.act, claimed: "rookie" });
   });
 
-  it("never in Duel (2 seats), in any phase; and none once the game is over", () => {
-    let s = createGame(config(2, { duel: true }));
-    for (let r = 0; r < 3 && s.phase.kind === "planning"; r++) {
-      expect(claimState(viewFor(s, "p1"))).toBeNull();
-      expect(handleCommand(s, claim("p1", "lookout")).ok).toBe(false);
-      s = round(s);
-    }
+  it("none once the game is over", () => {
     let g = createGame(config(3));
     for (let i = 0; i < 20 && g.phase.kind !== "ended"; i++) g = round(g);
     expect(g.phase.kind).toBe("ended");

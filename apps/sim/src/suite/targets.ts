@@ -97,9 +97,8 @@ export const PARITY_MAX_SPREAD = 0.1;
 export const STAR_BAND = { lo: 0.9, hi: 1.8 } as const;
 /**
  * The team-role spread's gate (PM 3 Nov, provisional, owner to confirm): 0.20
- * until the M2-14 playtests; PARITY_MAX_SPREAD (0.10) stays the target. The
- * Muscle (self-cancel) and the Cleaner (cools on the 0-loot Rooftop) hold it
- * at 0.2–0.3 at 9–12p, and no number moves them. docs/balance/r6-balance.md
+ * until the M2-14 playtests; PARITY_MAX_SPREAD (0.10) stays the target.
+ * docs/balance/r6-balance.md
  */
 export const TEAM_PARITY_MAX_SPREAD = 0.2;
 /** Roles with fewer seats than this in a parity group are listed but left out of its spread. */

@@ -17,10 +17,9 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
     seed: "deck-qa",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: ["rookie", "lookout", "fence", "insideMan"],
+    rolePool: ["rookie", "lookout", "hacker", "priest"],
     eventsEnabled: true,
     voteVisibility: "open",
-    starterMode: false,
     ...extra,
   };
 }
@@ -31,7 +30,6 @@ function game(players: number, roles: string[] = [], extra: Partial<GameConfig> 
   const cfg = config(players, { ...extra, contentOverrides: { ...V06_NUMBERS, ...extra.contentOverrides } });
   let seat = 0;
   const log = setupEvents(cfg)
-    .filter((e) => e.type !== "snitchTargetAssigned")
     .map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: roles[seat++] ?? "rookie" } : e));
   return replay(cfg, log);
 }
@@ -111,7 +109,6 @@ describe("QA: Heat cards at the boundary — design §10, §7", () => {
   // perRound 45: Heat 45 after round 1, 90 after a plain round 2. 5 players, so card Heat is unscaled (design §10).
   const hot = (seed = "hot") => resolve(game(5, [], { seed, contentOverrides: { heat: { perRound: 45 } } }));
 
-
   it("Quiet night is part of the same round's Heat (90 − 10 = 80), not a separate step", () => {
     const s = resolve(withCard(hot(), "quietNight"));
     expect(s.heat).toBe(80);
@@ -173,8 +170,8 @@ describe("QA: Lockdown vs moves — design §10", () => {
     expect(find(lastResolution(done), "lootSplit").find((e) => e.player === "p0")).toMatchObject({ room: "office", toStash: 3 });
   });
 
-  it("the drawn closed room is never the Lobby at 2, 5 and 12 players", () => {
-    for (const n of [2, 5, 12]) {
+  it("the drawn closed room is never the Lobby at 3, 5 and 12 players", () => {
+    for (const n of [3, 5, 12]) {
       for (let i = 0; i < 25; i++) {
         let g = createGame(config(n, { seed: `lock-qa-${n}-${i}` }));
         while (g.phase.kind !== "ended" && g.card?.id !== "lockdown") g = step(g);
@@ -186,9 +183,9 @@ describe("QA: Lockdown vs moves — design §10", () => {
 
 describe("QA: Audit numbers — design §10", () => {
   it("crowded Deposit boxes: shortfalls are what was actually kept; they sum to the pockets, and pockets + Haul = loot", () => {
-    const base = withCard(resolve(game(6, ["insideMan"])), "audit");
+    const base = withCard(resolve(game(6, ["priest"])), "audit");
     const s = resolve(base, {
-      p0: { room: "vault", pocket: 0 }, // Inside Man: hands in all 6
+      p0: { room: "vault", pocket: 0 }, // hands in all 6
       p1: { room: "depositBoxes", pocket: 5 },
       p2: { room: "depositBoxes", pocket: 5 },
       p3: { room: "depositBoxes", pocket: 1 },
@@ -207,18 +204,6 @@ describe("QA: Audit numbers — design §10", () => {
 });
 
 describe("QA: Raid rumour edges — design §10", () => {
-  it("a top stash of 1 loses 1 (to 0) before this round's pocket; the loss is not in the Haul; a bigger safe doesn't count", () => {
-    const r1 = resolve(game(3, ["fence"]), { p0: { room: "office", pocket: 4, ability: { kind: "fenceSafe", amount: 4 } }, p1: { room: "lobby", pocket: 1 } });
-    const moves = { p1: { room: "office", pocket: 2 } };
-    const hit = resolve(withCard(r1, "raidRumour"), moves);
-    const control = resolve(withCard(r1, "audit"), moves);
-    expect(find(lastResolution(hit), "raidRumourHit")).toEqual([{ type: "raidRumourHit", visibility: privateTo("p1"), player: "p1", round: 2, lost: 1 }]);
-    expect(hit.players.p1?.stash).toBe(2);
-    expect(control.players.p1?.stash).toBe(3);
-    expect(hit.haul).toBe(control.haul);
-    expect(hit.players.p0?.safe).toBe(4);
-  });
-
   it("a tie is broken at random, not by seat: over seeds both tied players get hit", () => {
     const hitPlayers = new Set<PlayerId>();
     for (let i = 0; i < 20; i++) {
@@ -233,24 +218,27 @@ describe("QA: Raid rumour edges — design §10", () => {
 });
 
 describe("QA: Inside tip — design §10", () => {
-  it("at 2 players the tip is about the other player, and shows a role swapped by an earlier Double-cross", () => {
-    const r2 = run(withCard(resolve(game(2, ["lookout", "fence"])), "doubleCross", null, ["p0", "p1"]), answer("p0", true), answer("p1", true));
+  it("the tip is about another player, and shows a role swapped by an earlier Double-cross", () => {
+    const r2 = run(withCard(resolve(game(3, ["lookout", "hacker", "rookie"])), "doubleCross", null, ["p0", "p1"]), answer("p0", true), answer("p1", true));
     const s = resolve(withCard(resolve(r2), "insideTip"));
     const tip = find(lastResolution(s), "insideTip")[0];
     expect(tip?.subject).not.toBe(tip?.player);
-    expect(tip?.role).toBe(tip?.subject === "p0" ? "fence" : "lookout");
+    // The swap holds: p0 now has the Hacker, p1 the Lookout.
+    expect([s.players.p0?.role, s.players.p1?.role]).toEqual(["hacker", "lookout"]);
+    expect(["p0", "p1"]).toContain(tip?.subject);
+    expect(tip?.role).toBe(tip?.subject === "p0" ? "hacker" : "lookout");
   });
 });
 
 describe("QA: Double-cross answers — design §10", () => {
-  const offered = () => withCard(resolve(game(4, ["lookout", "fence", "rookie", "rookie"])), "doubleCross", null, ["p0", "p1"]);
+  const offered = () => withCard(resolve(game(4, ["lookout", "hacker", "rookie", "rookie"])), "doubleCross", null, ["p0", "p1"]);
   const roles = (s: GameState) => [s.players.p0?.role, s.players.p1?.role];
 
   it("one-sided either way, or accept-then-decline, swaps nothing; decline-then-accept by both swaps", () => {
     for (const answers of [[answer("p0", true), answer("p1", false)], [answer("p1", true)], [answer("p0", true), answer("p1", true), answer("p0", false)]]) {
-      expect(roles(resolve(run(offered(), ...answers)))).toEqual(["lookout", "fence"]);
+      expect(roles(resolve(run(offered(), ...answers)))).toEqual(["lookout", "hacker"]);
     }
-    expect(roles(resolve(run(offered(), answer("p0", false), answer("p1", false), answer("p0", true), answer("p1", true))))).toEqual(["fence", "lookout"]);
+    expect(roles(resolve(run(offered(), answer("p0", false), answer("p1", false), answer("p0", true), answer("p1", true))))).toEqual(["hacker", "lookout"]);
   });
 
   it("an answer is refused in round 1, during a meeting, and from an unknown player", () => {
@@ -286,11 +274,10 @@ describe("QA: Power cut vs info rooms and powers — design §10", () => {
 });
 
 describe("QA: when the deck is on — design §10, §8.1", () => {
-  it("round 1 never has a card; starter + events is refused; events off flips nothing over a whole game", () => {
+  it("round 1 never has a card; events off flips nothing over a whole game", () => {
     const g = createGame(config(4));
     expect(g.card).toBeNull();
     expect(viewFor(g, "p0").card).toBeNull();
-    expect(validateConfig({ ...config(4), starterMode: true, rolePool: [] }).some((e) => /event/i.test(e))).toBe(true);
     const off = playThrough(createGame(config(4, { eventsEnabled: false })));
     expect(find(off.log, "eventFlipped")).toEqual([]);
     expect(off.cardsFlipped).toEqual([]);
@@ -332,7 +319,7 @@ describe("QA: determinism and event sourcing — design §17.2", () => {
 });
 
 describe("QA: Double-cross view-diff leaks — design §10, §13", () => {
-  const base = () => withCard(resolve(game(4, ["lookout", "fence", "rookie", "rookie"])), "doubleCross", null, ["p0", "p1"]);
+  const base = () => withCard(resolve(game(4, ["lookout", "hacker", "rookie", "rookie"])), "doubleCross", null, ["p0", "p1"]);
   const combos: [boolean, boolean][] = [[true, true], [true, false], [false, true], [false, false]];
   const v = (s: GameState, id: PlayerId) => JSON.stringify(viewFor(s, id));
 

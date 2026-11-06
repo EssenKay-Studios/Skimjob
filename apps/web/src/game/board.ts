@@ -6,7 +6,7 @@
 // window, meetings, game over) it shows that round as you know it: you in your
 // room, the players your case file says you saw there, the players you watched
 // on camera (Security, the Lookout, a Tail perk: `roomWatched`, drawn as
-// "seen on camera"; a forged sighting looks the same, by design), and every
+// "seen on camera"), and every
 // public alibi claim for the round as a dashed ghost. Nothing else: never another player's
 // move or room unless the view itself says so.
 import { EVENTS, type RoomId } from "@skimjob/content";

@@ -18,7 +18,6 @@ function config(players: number, overrides: Partial<GameConfig> = {}): GameConfi
     rolePool: [],
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
-    starterMode: false,
     ...overrides,
   };
 }
@@ -32,8 +31,8 @@ const CORE = ["vault", "office", "lobby", "security", "rooftop"];
 afterEach(() => vi.restoreAllMocks());
 
 describe("rooms by player count — design §6.2, §16", () => {
-  it("2–4 players: core rooms only (5)", () => {
-    for (const n of [2, 3, 4]) expect(roomsFor("bank", n)).toEqual(CORE);
+  it("3–4 players: core rooms only (5)", () => {
+    for (const n of [3, 4]) expect(roomsFor("bank", n)).toEqual(CORE);
   });
 
   it("5–8 players: adds Deposit boxes and Server room (7)", () => {
@@ -53,54 +52,38 @@ describe("rooms by player count — design §6.2, §16", () => {
 
 describe("dealing roles — design §8.1", () => {
   it("every seat gets exactly one role", () => {
-    for (let n = 2; n <= 12; n++) {
+    for (let n = 3; n <= 12; n++) {
       const state = createGame(config(n));
       expect(Object.keys(state.players).sort()).toEqual(state.playerOrder.slice().sort());
       expect(state.log.filter((e) => e.type === "roleDealt")).toHaveLength(n);
     }
   });
 
-  it("starter mode: only Rookie, Inside Man, Lookout, Bagman and Cleaner (role deck v2 §3); no Mole", () => {
-    for (let n = 2; n <= 12; n++) {
-      for (const seed of ["a", "b", "c"]) {
-        const roles = rolesOf(config(n, { seed, starterMode: true, rolePool: ["fence"] }));
-        for (const role of roles) expect(STARTER_ROLES).toContain(role);
-      }
-    }
-  });
-
-  it("4 players, starter mode: one of each starter role but the Inside Man (from 5 players)", () => {
-    expect(rolesOf(config(4, { starterMode: true })).sort()).toEqual(["bagman", "cleaner", "lookout", "rookie"]);
-    expect(rolesOf(config(5, { starterMode: true })).sort()).toEqual([...STARTER_ROLES].sort());
-  });
-
-  it("the Inside Man is dealt only from 5 players (design §8.1, owner answers 1 Nov)", () => {
-    for (const n of [2, 3, 4]) {
-      for (let s = 0; s < 30; s++) expect(rolesOf(config(n, { seed: `ins-${n}-${s}`, rolePool: ["insideMan", "fence"] }))).not.toContain("insideMan");
-    }
-    expect(rolesOf(config(5, { rolePool: ["insideMan"] }))).toContain("insideMan");
-  });
-
   it("pool roles are dealt at most once each; Rookie fills the remaining seats (provisional)", () => {
-    const roles = rolesOf(config(12, { starterMode: true }));
-    for (const r of ["lookout", "insideMan", "bagman", "cleaner"]) expect(roles.filter((x) => x === r)).toHaveLength(1);
-    expect(roles.filter((x) => x === "rookie")).toHaveLength(8);
+    const roles = rolesOf(config(12, { deck: "starter" }));
+    expect(roles.filter((x) => x === "lookout")).toHaveLength(1);
+    expect(roles.filter((x) => x === "rookie")).toHaveLength(11);
   });
 
   it("small crews get a random subset of the pool", () => {
     const seen = new Set<string>();
-    for (let s = 0; s < 50; s++) for (const r of rolesOf(config(2, { seed: `s${s}`, starterMode: true }))) seen.add(r);
-    // Rookies only fill (Balanced deals them last), so a 2-seat starter crew draws from the other three.
-    expect([...seen].sort()).toEqual(["bagman", "cleaner", "lookout"]);
+    for (let s = 0; s < 50; s++) {
+      const roles = rolesOf(config(3, { seed: `s${s}`, rolePool: ["lookout", "fixer", "auditor"] }));
+      expect(new Set(roles).size).toBe(3);
+      for (const r of roles) seen.add(r);
+    }
+    // Rookies only fill (Balanced deals them last), so a 3-seat crew draws three of a four-role pool,
+    // a different three across seeds.
+    expect([...seen].sort()).toEqual(["auditor", "fixer", "lookout"]);
   });
 
-  it("uniqueRoles false deals every seat from the deck with replacement, so roles may repeat; never two Moles or Embezzlers (design §8.1, §15; extension.md \"Truly random\")", () => {
+  it("uniqueRoles false deals every seat from the deck with replacement, so roles may repeat; never two Moles (design §8.1, §15; extension.md \"Truly random\")", () => {
     let repeated = false;
     for (let s = 0; s < 20; s++) {
       for (const deal of ["balanced", "random"] as const) {
         const roles = rolesOf(config(12, { seed: `rep-${s}`, deal, uniqueRoles: false }));
         expect(roles.filter((r) => r === MOLE_ROLE).length).toBeLessThanOrEqual(1);
-        expect(roles.filter((r) => r === "embezzler").length).toBeLessThanOrEqual(1);
+        expect(roles.filter((r) => r === "mole").length).toBeLessThanOrEqual(1);
         if (new Set(roles.filter((r) => r !== "rookie")).size < roles.filter((r) => r !== "rookie").length) repeated = true;
       }
     }
@@ -116,35 +99,27 @@ describe("dealing roles — design §8.1", () => {
   });
 
   it("the host's role pool is respected", () => {
-    const roles = rolesOf(config(3, { rolePool: ["bagman", "lookout"] }));
-    expect(roles.sort()).toEqual(["bagman", "lookout", "rookie"]);
+    const roles = rolesOf(config(3, { rolePool: ["auditor", "lookout"] }));
+    expect(roles.sort()).toEqual(["auditor", "lookout", "rookie"]);
   });
 
   // extension.md "Decks": Standard is the default; the preset or the host's own picks.
-  it("decks: Standard by default, Starter in starter mode, Everything; host picks replace the preset", () => {
+  it("decks: Standard by default, Starter, Everything; host picks replace the preset", () => {
     expect(deckFor(config(8))).toEqual(STANDARD_ROLES);
     expect(deckFor(config(8, { deck: "starter" }))).toEqual(STARTER_ROLES);
     expect(deckFor(config(8, { deck: "everything" }))).toEqual(Object.keys(ROLES));
-    expect(deckFor(config(8, { deck: "everything", starterMode: true }))).toEqual(STARTER_ROLES);
-    expect(deckFor(config(8, { deck: "starter", rolePool: ["mole", "fence"] }))).toEqual(["mole", "fence"]);
+    expect(deckFor(config(8, { deck: "starter", rolePool: ["mole", "hacker"] }))).toEqual(["mole", "hacker"]);
     for (let s = 0; s < 20; s++) for (const r of rolesOf(config(10, { seed: `std-${s}` }))) expect([...STANDARD_ROLES, "rookie"]).toContain(r);
   });
 
-  // extension.md Build notes "Tags, decks and dealing": a stored saboteur "off" toggles the Wildcards and Lone wolves off.
-  it("the legacy saboteur setting: off deals Team players only; maybe and on are plain Balanced", () => {
-    for (let s = 0; s < 20; s++) for (const r of rolesOf(config(10, { seed: `off-${s}`, mole: "off" }))) expect(tagOf(r)).toBe("teamPlayer");
-    expect(rolesOf(config(10, { mole: "on" }))).toEqual(rolesOf(config(10)));
-    expect(rolesOf(config(10, { mole: "maybe" }))).toEqual(rolesOf(config(10)));
-  });
-
   // extension.md "Host settings" (Balanced), Build notes start values.
-  it("Balanced deals the fixed Lone wolf / Wildcard mix for the crew size, the rest Team players", () => {
-    for (let n = 2; n <= 12; n++) {
+  it("Balanced deals the fixed Lone wolf / Wildcard mix for the crew size (capped at the deck's one of each), the rest Team players", () => {
+    for (let n = 3; n <= 12; n++) {
       const mix = BALANCED_MIX[n]!;
       for (let s = 0; s < 15; s++) {
         const roles = rolesOf(config(n, { seed: `bal-${n}-${s}`, deck: "everything", eventsEnabled: true }));
-        expect(countTag(roles, "loneWolf"), `${n}p`).toBe(mix.loneWolves);
-        expect(countTag(roles, "wildcard"), `${n}p`).toBe(mix.wildcards);
+        expect(countTag(roles, "loneWolf"), `${n}p`).toBe(Math.min(mix.loneWolves, 1));
+        expect(countTag(roles, "wildcard"), `${n}p`).toBe(Math.min(mix.wildcards, 1));
       }
     }
     expect(BALANCED_MIX[8]).toEqual({ loneWolves: 2, wildcards: 1 });
@@ -152,26 +127,26 @@ describe("dealing roles — design §8.1", () => {
 
   it("Balanced: a tag the deck can't fill goes to Team players", () => {
     // No Lone wolves in this deck.
-    const roles = rolesOf(config(9, { rolePool: ["lookout", "hacker", "auditor", "detective", "fence", "muscle", "cleaner", "bagman", "smoothTalker"] }));
+    const roles = rolesOf(config(9, { rolePool: ["lookout", "hacker", "auditor", "detective", "fixer", "smoothTalker"] }));
     expect(countTag(roles, "loneWolf")).toBe(0);
     expect(countTag(roles, "wildcard")).toBe(BALANCED_MIX[9]!.wildcards);
   });
 
-  // extension.md "Truly random": uniform from the eligible deck; any mix, at most one Mole and one Embezzler.
-  it("Truly random deals any mix, sometimes none and sometimes more than Balanced would", () => {
+  // extension.md "Truly random": uniform from the eligible deck; any mix, at most one Mole.
+  it("Truly random deals any mix, sometimes no Lone wolf at all", () => {
     const loneCounts = new Set<number>();
     for (let s = 0; s < 200; s++) {
-      const roles = rolesOf(config(8, { seed: `rnd-${s}`, deal: "random" }));
+      const roles = rolesOf(config(8, { seed: `rnd-${s}`, deal: "random", deck: "everything" }));
       loneCounts.add(countTag(roles, "loneWolf"));
       expect(roles.filter((r) => r === MOLE_ROLE).length).toBeLessThanOrEqual(1);
     }
-    expect(loneCounts).toEqual(new Set([0, 1, 2]));
+    expect(loneCounts).toEqual(new Set([0, 1]));
   });
 
   it("the deal is shuffled across seats", () => {
-    const fenceSeats = new Set<number>();
-    for (let s = 0; s < 40; s++) fenceSeats.add(rolesOf(config(4, { seed: `seat${s}`, starterMode: true })).indexOf("bagman"));
-    expect(fenceSeats).toEqual(new Set([0, 1, 2, 3]));
+    const lookoutSeats = new Set<number>();
+    for (let s = 0; s < 40; s++) lookoutSeats.add(rolesOf(config(4, { seed: `seat${s}`, deck: "starter" })).indexOf("lookout"));
+    expect(lookoutSeats).toEqual(new Set([0, 1, 2, 3]));
   });
 });
 
@@ -190,15 +165,8 @@ describe("config validation — design §1, §15", () => {
   it("rejects an unknown job and unknown or duplicate pool roles; any role may be toggled on (extension.md \"Decks\")", () => {
     expect(() => setupEvents(config(3, { job: "casino" }))).toThrow(/job/);
     expect(() => setupEvents(config(3, { rolePool: ["wizard"] }))).toThrow(/role/);
-    expect(() => setupEvents(config(3, { rolePool: ["fence", "fence"] }))).toThrow(/duplicates/);
+    expect(() => setupEvents(config(3, { rolePool: ["hacker", "hacker"] }))).toThrow(/duplicates/);
     expect(() => setupEvents(config(6, { rolePool: ["mole"] }))).not.toThrow();
-  });
-
-  it("starter mode rejects events, and plays the Starter deck whatever the saboteur setting (design §8.1)", () => {
-    expect(() => setupEvents(config(6, { starterMode: true, eventsEnabled: true }))).toThrow(/events/);
-    for (const r of rolesOf(config(6, { starterMode: true, mole: "on" }))) expect(STARTER_ROLES).toContain(r);
-    const created = setupEvents(config(6, { starterMode: true }))[0];
-    expect(created).toMatchObject({ type: "gameCreated", starterMode: true, deck: "starter", deal: "balanced", roleList: "exact", eventsEnabled: false });
   });
 
   it("rejects unknown deck, deal and role-list settings", () => {
@@ -219,11 +187,6 @@ describe("config validation — design §1, §15", () => {
     expect(() => setupEvents({ ...config(6), voteVisibility: "loud" as never })).toThrow(/voteVisibility/);
   });
 
-  it("rejects an unknown mole setting with a validation error, not a TypeError", () => {
-    expect(validateConfig({ ...config(6), mole: "sometimes" })).toEqual([expect.stringMatching(/mole/)]);
-    expect(() => setupEvents({ ...config(6), mole: "sometimes" as never })).toThrow(/invalid game config/);
-  });
-
   it("looks jobs up by own key only (toString, __proto__ are unknown jobs)", () => {
     for (const job of ["toString", "__proto__", "constructor"]) {
       expect(validateConfig({ ...config(6), job })).toEqual([`unknown job ${job}`]);
@@ -231,25 +194,20 @@ describe("config validation — design §1, §15", () => {
     }
   });
 
-  it("rejects non-boolean starterMode / eventsEnabled / isBot and other wrong types", () => {
-    expect(validateConfig({ ...config(6), starterMode: "false" })).toEqual([expect.stringMatching(/starterMode/)]);
+  it("rejects non-boolean eventsEnabled / isBot and other wrong types", () => {
     expect(validateConfig({ ...config(6), eventsEnabled: 0 })).toEqual([expect.stringMatching(/eventsEnabled/)]);
     const players = config(3).players.map((p) => ({ ...p, isBot: "no" }));
     expect(validateConfig({ ...config(3), players })).toEqual([expect.stringMatching(/isBot/)]);
     expect(validateConfig({ ...config(3), seed: 42 })).toEqual(["seed must be a string"]);
-    expect(validateConfig({ ...config(3), rolePool: "fence" })).toEqual([expect.stringMatching(/rolePool/)]);
+    expect(validateConfig({ ...config(3), rolePool: "hacker" })).toEqual([expect.stringMatching(/rolePool/)]);
     expect(validateConfig({ ...config(3), players: "abc" })).toEqual(["players must be an array"]);
-  });
-
-  it("starter mode ignores the role pool (GameConfig.rolePool)", () => {
-    expect(() => setupEvents(config(3, { starterMode: true, rolePool: ["wizard"] }))).not.toThrow();
   });
 });
 
 describe("setup events and visibility — design §17.2", () => {
   it("emits gameCreated, rngSeeded, roomsSet, one roleDealt per seat, the role list, the shop, roundStarted, then rngAdvanced", () => {
-    // No Snitch in this pool, so no snitchTargetAssigned; no Mole, so no police schedule.
-    const events = setupEvents(config(3, { rolePool: ["rookie", "lookout", "fence"] }));
+    // No Mole, so no police schedule.
+    const events = setupEvents(config(3, { rolePool: ["rookie", "lookout", "hacker"] }));
     expect(events.map((e) => e.type)).toEqual([
       "gameCreated",
       "rngSeeded",
@@ -315,18 +273,16 @@ describe("determinism and replay — design §17.2", () => {
   });
 
   it("replaying the log rebuilds the same state, RNG included", () => {
-    // No Snitch or Mole in the deck, and starter mode has no shop, so the deal is the setup's only draw.
-    const cfg = config(7, { starterMode: true });
+    const cfg = config(7, { deck: "starter" });
     const state = createGame(cfg);
     const rebuilt = replay(cfg, JSON.parse(JSON.stringify(state.log)) as GameEvent[]);
     expect(rebuilt).toEqual(state);
-    expect(state.rng.words).toEqual(dealRoles(cfg, seedRng(cfg.seed)).rng.words);
     const full = config(9, { deck: "everything", eventsEnabled: true, roleList: "possible" });
     expect(replay(full, JSON.parse(JSON.stringify(createGame(full).log)) as GameEvent[])).toEqual(createGame(full));
   });
 
   it("rngSeeded sets the RNG from the seed; rngAdvanced replaces it", () => {
-    const cfg = config(2);
+    const cfg = config(3);
     const seeded = applyEvent(initialState(cfg), { type: "rngSeeded", visibility: { kind: "reveal" }, seed: "x" });
     expect(seeded.rng).toEqual(seedRng("x"));
     const advanced = applyEvent(seeded, { type: "rngAdvanced", visibility: { kind: "reveal" }, words: [9, 8, 7, 6] });

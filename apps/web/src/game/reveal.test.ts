@@ -22,7 +22,6 @@ describe("reveal lines", () => {
     expect(itemText({ kind: "cameraOffline", watcher: "p2", room: "vault", source: "lookout", cause: "powerCut", hackers: [] }, ctx)).toBe(
       "Ben's lookout on the Vault went offline in the Power cut.",
     );
-    expect(itemText({ kind: "voteStolen", blackmailer: "p3", victim: "p1", meetingId: "m1", decided: true }, ctx)).toBe("Cy stole your vote, and it decided the shakedown.");
     expect(itemText({ kind: "token", player: "p2", trigger: "tipOffLanded" }, ctx)).toBe("Ben earned a token for a tip-off landing.");
     expect(itemText({ kind: "claim", player: "p2", claimed: "lookout", real: "mole" }, ctx)).toBe("Ben claimed Lookout, but was really the Mole.");
   });

@@ -58,7 +58,7 @@ interface Human {
   readonly player: string;
 }
 /** `people` signed-in seats (host first), then `bots` bot seats. */
-async function startGame(people: number, bots: number, settings: Partial<LobbySettings> = { sessionLength: "quick" }) {
+async function startGame(people: number, bots: number, settings: Partial<LobbySettings> = { sessionLength: "quick", deck: "starter", eventsEnabled: false }) {
   const host = (await post("/auth/guest", null, { nickname: "Host" })).session!;
   const game = (await post("/games", host, { settings })).body;
   const sessions = [host];
@@ -104,9 +104,9 @@ const moveFor = (s: GameState, player: string, k = 0) => ({ type: "submitMove", 
 
 const t = TIMINGS.quick;
 
-describe("early end with 2, 3 and 12 seats (design §4.1)", () => {
+describe("early end with 3 and 12 seats (design §4.1)", () => {
   for (const [people, bots] of [
-    [2, 0],
+    [2, 1],
     [3, 0],
     [1, 11],
     [3, 9],
@@ -230,14 +230,14 @@ describe("restart mid-grace: no double, no skip", () => {
   });
 });
 
-describe("an emergency meeting / Muscle window opening during the grace pauses and resumes it (design §4.1, §11)", () => {
+describe("an emergency meeting / shakedown window opening during the grace pauses and resumes it (design §4.1, §11)", () => {
   it("both round rows pause while the meeting (and any shakedown window) is open, then keep their time left", { timeout: 120_000 }, async () => {
     const t1h = TIMINGS["1h"];
     let sawShakedown = false;
-    for (let k = 0; k < 6; k++) {
+    for (let k = 0; k < 12; k++) {
       forcedSeed = `qa-lockin-emerg-${k}`;
       await fresh();
-      // Not Quick: Quick forces the Starter deck, which has no Muscle and no shop (extension.md "Host settings").
+      // The default deck and its shop: a Shield there opens the shakedown window (extension.md "Shakedowns").
       const { id, humans } = await startGame(4, 2, { sessionLength: "1h" });
       const host = humans[0]!;
       for (const h of humans.slice(1)) expect(await send(id, h.who, moveFor(await load(id), h.player))).toMatchObject({ ok: true });
@@ -255,10 +255,10 @@ describe("an emergency meeting / Muscle window opening during the grace pauses a
       expect(await app.scheduler.tick()).toBe(1);
       expect((await load(id)).phase.kind).toBe("meeting");
       const pausedAt = clock.now();
-      // Every person votes to shake down the first bot: a majority, so a Muscle/Shield window may open.
+      // Every person votes to shake down the first bot: a majority, so a Shield window may open.
       const target = (await load(id)).playerOrder.find((p) => !humans.some((h) => h.player === p))!;
       for (const h of humans) await send(id, h.who, { type: "castVote", vote: { kind: "shakedown", target } });
-      // Through the meeting and any Muscle window: the round rows stay paused; the round never resolves.
+      // Through the meeting and any shakedown window: the round rows stay paused; the round never resolves.
       for (let i = 0; i < 20; i++) {
         s = await load(id);
         if (!meetingOpen(s)) break;
@@ -287,7 +287,7 @@ describe("an emergency meeting / Muscle window opening during the grace pauses a
       expect(count(end, "roundResolved", (e) => e.round === 1)).toBe(1);
       expect(count(end, "defaultMoveAssigned")).toBe(0);
     }
-    expect(sawShakedown, "no Muscle window seen in 6 seeds").toBe(true);
+    expect(sawShakedown, "no shakedown window seen in 12 seeds").toBe(true);
   });
 });
 

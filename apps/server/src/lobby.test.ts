@@ -180,7 +180,7 @@ describe("create a game (design §15 setup)", () => {
     expect(game.seats).toEqual([{ seat: 0, nickname: "Karthik", bot: null, host: true, you: true, playerId: null, standIn: null }]);
   });
 
-  it("takes the host's settings: session length, vote visibility, deck, toggles, deal, role list, events, starter mode, DM notices", async () => {
+  it("takes the host's settings: session length, vote visibility, deck, toggles, deal, role list, events, DM notices", async () => {
     const settings = {
       sessionLength: "quick",
       voteVisibility: "secret",
@@ -189,20 +189,10 @@ describe("create a game (design §15 setup)", () => {
       deal: "random",
       roleList: "hidden",
       eventsEnabled: false,
-      starterMode: true,
       dmNotices: false,
       uniqueRoles: false,
     };
     expect((await host(settings)).game.settings).toEqual(settings);
-  });
-
-  // extension.md Build notes "Tags, decks and dealing": the saboteur setting is dropped; a saved
-  // "off" becomes the deck with every Wildcard and Lone wolf toggled off, "maybe"/"on" the plain deck.
-  it("migrates the dropped saboteur setting", async () => {
-    const teamPlayers = DECKS.standard.filter((r) => ROLES[r]?.tag === "teamPlayer");
-    expect((await host({ mole: "off" })).game.settings).toEqual({ ...DEFAULT_SETTINGS, roles: teamPlayers });
-    expect((await host({ mole: "on" })).game.settings).toEqual(DEFAULT_SETTINGS);
-    expect((await host({ mole: "maybe", deck: "everything" })).game.settings).toEqual({ ...DEFAULT_SETTINGS, deck: "everything" });
   });
 
   it.each([
@@ -215,7 +205,6 @@ describe("create a game (design §15 setup)", () => {
     [{ roles: ["nobody"] }],
     [{ dmNotices: "no" }],
     [{ seed: "mine" }],
-    [{ starterMode: true }], // design §8.1: starter mode has no Mole and no events
     ["settings"],
   ])("refuses settings %j", async (settings) => {
     const who = await guest("H");
@@ -287,6 +276,7 @@ describe("invites", () => {
   it("a code is used once its game has started: 410 for newcomers, the game for those seated", async () => {
     const { who, game } = await host();
     const ana = (await join(game.inviteCode, "Ana")).session;
+    await call("POST", `/games/${game.id}/bots`, who, {});
     expect((await call("POST", `/games/${game.id}/start`, who)).status).toBe(200);
     expect((await call("GET", `/invites/${game.inviteCode}`)).status).toBe(410);
     expect((await join(game.inviteCode, "Late")).status).toBe(410);
@@ -308,11 +298,12 @@ describe("my games", () => {
     const { who: other, game: theirs } = await host();
     await join(theirs.inviteCode, "Kay", who);
     const ana = (await join(lobby.inviteCode, "Ana")).session;
+    await call("POST", `/games/${lobby.id}/bots`, who, {});
     await call("POST", `/games/${lobby.id}/start`, who);
     const listed = await call("GET", "/me/games", who);
     expect(listed.status).toBe(200);
     expect(listed.body.games).toEqual([
-      { id: lobby.id, status: "running", nickname: "Karthik", youAreHost: true, host: "Karthik", seats: 2, sessionLength: "1h" },
+      { id: lobby.id, status: "running", nickname: "Karthik", youAreHost: true, host: "Karthik", seats: 3, sessionLength: "1h" },
       { id: theirs.id, status: "lobby", nickname: "Kay", youAreHost: false, host: "Karthik", seats: 2, sessionLength: DEFAULT_SETTINGS.sessionLength },
     ]);
     expect((await call("GET", "/me/games", ana)).body.games).toEqual([expect.objectContaining({ id: lobby.id, youAreHost: false, nickname: "Ana" })]);
@@ -364,11 +355,12 @@ describe("host hand-over", () => {
     expect((await call("POST", `/games/${game.id}/bots`, who, {})).status).toBe(403);
     expect((await call("POST", `/games/${game.id}/host`, who, { seat: 0 })).status).toBe(403);
     expect((await call("POST", `/games/${game.id}/leave`, who)).status).toBe(200);
-    // The new host adds a bot and starts.
+    // The new host adds bots and starts.
+    expect((await call("POST", `/games/${game.id}/bots`, ana, {})).status).toBe(201);
     expect((await call("POST", `/games/${game.id}/bots`, ana, {})).status).toBe(201);
     const started = await call("POST", `/games/${game.id}/start`, ana);
     expect(started.status).toBe(200);
-    expect(started.body.seats!.map((s) => [s.nickname, s.playerId])).toEqual([["Ana", "p1"], ["Bot · Riya", "p2"]]);
+    expect(started.body.seats!.map((s) => [s.nickname, s.playerId])).toEqual([["Ana", "p1"], ["Bot · Riya", "p2"], ["Bot · Max", "p3"]]);
   });
 
   it("refuses a bot, yourself, an empty seat, a non-host, and after the start", async () => {
@@ -395,7 +387,7 @@ describe("host settings in the lobby", () => {
     expect((await call("PATCH", `/games/${game.id}/settings`, ana, { settings: { deck: "starter" } })).status).toBe(403);
   });
 
-  it.each([[{ deck: "yes" }], [{ seed: "x" }], [{ starterMode: true }], ["x"], [[]], [null]])("refuses %j", async (settings) => {
+  it.each([[{ deck: "yes" }], [{ seed: "x" }], ["x"], [[]], [null]])("refuses %j", async (settings) => {
     const { who, game } = await host();
     expect((await call("PATCH", `/games/${game.id}/settings`, who, { settings })).status).toBe(400);
     expect((await call("GET", `/games/${game.id}`, who)).body.settings).toEqual(DEFAULT_SETTINGS);
@@ -409,19 +401,19 @@ describe("host settings in the lobby", () => {
     expect(gameConfig({ ...DEFAULT_SETTINGS, uniqueRoles: false }, seats, "s").uniqueRoles).toBe(false);
   });
 
-  // extension.md "Host settings": Quick forces the Starter deck (events off, no toggles); others play the host's deck.
-  it("Quick plays Starter; other lengths take the deck, toggles, deal and role list", async () => {
+  // extension.md "Host settings": every session length plays the host's deck, toggles, deal, role list and events.
+  it("every length takes the deck, toggles, deal and role list", async () => {
     const { gameConfig } = await import("./lobby");
     const seats = [{ nickname: "A", bot_personality: null }, { nickname: "B", bot_personality: null }];
     const host = { ...DEFAULT_SETTINGS, deck: "everything", roles: ["lookout", "mole"], deal: "random", roleList: "hidden" } as const;
-    expect(gameConfig({ ...host, sessionLength: "1h" }, seats, "s")).toMatchObject({ deck: "everything", rolePool: ["lookout", "mole"], deal: "random", roleList: "hidden", eventsEnabled: true, starterMode: false });
-    expect(gameConfig({ ...host, sessionLength: "quick" }, seats, "s")).toMatchObject({ rolePool: [], eventsEnabled: false, starterMode: true });
+    expect(gameConfig({ ...host, sessionLength: "1h" }, seats, "s")).toMatchObject({ deck: "everything", rolePool: ["lookout", "mole"], deal: "random", roleList: "hidden", eventsEnabled: true });
+    expect(gameConfig({ ...host, sessionLength: "quick" }, seats, "s")).toMatchObject({ deck: "everything", rolePool: ["lookout", "mole"], deal: "random", roleList: "hidden", eventsEnabled: true });
   });
 
   it("lists bot personalities and the seat limits", async () => {
     const { game } = await host();
     expect(game.personalities!.map((p) => p.id)).toContain("opportunist");
-    expect([game.minSeats, game.maxSeats]).toEqual([2, 12]);
+    expect([game.minSeats, game.maxSeats]).toEqual([3, 12]);
   });
 
   // design §11.1, M2-7: the game screen offers slot proposals only when the group schedules meetings.
@@ -466,11 +458,14 @@ describe("bots fill seats", () => {
 });
 
 describe("start", () => {
-  it("needs the host and at least 2 seats (design §16)", async () => {
+  it("needs the host and at least 3 seats (design §16)", async () => {
     const { who, game } = await host();
     expect((await call("POST", `/games/${game.id}/start`, who)).status).toBe(409);
     const ana = (await join(game.inviteCode, "Ana")).session;
+    expect((await call("POST", `/games/${game.id}/start`, who)).status).toBe(409);
+    await call("POST", `/games/${game.id}/bots`, who, {});
     expect((await call("POST", `/games/${game.id}/start`, ana)).status).toBe(403);
+    expect((await call("POST", `/games/${game.id}/start`, who)).status).toBe(200);
   });
 
   it("makes safe player ids, a fresh seed and the config; stores the setup; never sends the config", async () => {
@@ -491,7 +486,7 @@ describe("start", () => {
       { id: "p2", name: "__proto__", isBot: false },
       { id: "p3", name: "Bot · Riya", isBot: true },
     ]);
-    expect(state.config).toMatchObject({ job: "bank", voteVisibility: "open", deck: "everything", deal: "random", roleList: "possible", eventsEnabled: true, starterMode: false });
+    expect(state.config).toMatchObject({ job: "bank", voteVisibility: "open", deck: "everything", deal: "random", roleList: "possible", eventsEnabled: true });
     expect(state.config.seed).toMatch(/^[0-9a-f]{32}$/);
 
     expect((await call("POST", `/games/${game.id}/start`, who)).status).toBe(409);
@@ -504,6 +499,7 @@ describe("start", () => {
     const anaId = ((await call("GET", "/me", ana)).body.user as { id: string }).id;
     const hostId = ((await call("GET", "/me", who)).body.user as { id: string }).id;
     expect(await playerIdOf(db, game.id, anaId)).toBeNull(); // lobby: no ids yet
+    await call("POST", `/games/${game.id}/bots`, who, {});
     await call("POST", `/games/${game.id}/start`, who);
     expect([await playerIdOf(db, game.id, hostId), await playerIdOf(db, game.id, anaId)]).toEqual(["p1", "p2"]);
     expect(await playerIdOf(db, game.id, ((await call("GET", "/me", await guest("X"))).body.user as { id: string }).id)).toBeNull();
@@ -514,6 +510,7 @@ describe("start", () => {
     const seeds = [];
     for (let i = 0; i < 2; i++) {
       const { who, game } = await host();
+      await call("POST", `/games/${game.id}/bots`, who, {});
       await call("POST", `/games/${game.id}/bots`, who, {});
       await call("POST", `/games/${game.id}/start`, who);
       seeds.push((await store.load(game.id))!.config.seed);

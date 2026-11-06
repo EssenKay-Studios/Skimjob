@@ -1,5 +1,5 @@
 // Role deck v2 crew roles, step R2b (docs/roles-v2.md §2, §3): Smooth Talker,
-// Muscle, Priest, Bagman, Cleaner, Fixer, Mastermind and their token rewards
+// Priest, Fixer and their token rewards
 // (extension.md "Roles", "Tokens and the perk shop"); eligibility; the PR #26
 // review notes (Auditor, Detective, a bought Peek); a view-diff with these
 // roles dealt. design §7, §8, §8.1, §10, §11.3, §16.1
@@ -10,7 +10,6 @@ import type { GameConfig, GameEvent, GameState, PlayerState } from "./types";
 import { PUBLIC, privateTo } from "./types";
 import { createGame, rolePoolFor, setupEvents, validateConfig } from "./setup";
 import { replay } from "./reduce";
-import { opensShakedownWindow } from "./meeting";
 import { roundHeatDelta } from "./job";
 import { viewFor } from "./view";
 import { grantPerks } from "./perks.testkit";
@@ -24,7 +23,6 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
     rolePool: [...STARTER_ROLES],
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
-    starterMode: false,
     ...extra,
   };
 }
@@ -135,39 +133,6 @@ describe("Smooth Talker: on the winning side of a dirty shakedown → a token �
   });
 });
 
-describe("Muscle: a clean save → a token and the power back; a dirty one names the Muscle — extension.md \"Roles\" (owner ruling 3 Nov)", () => {
-  const pool = { rolePool: [...STARTER_ROLES, "muscle"] };
-  const cancelled = (pocket: number, target = "p1") => {
-    let s = run(game(5, ["muscle"], pool), mv(target, "vault", pocket), ROUND);
-    s = emergency(s, "p2");
-    for (const id of s.playerOrder) if (id !== target) s = run(s, vote(id, target));
-    s = run(s, CLOSE, use("p0", { kind: "cancelShakedown" }));
-    return [s, run(s, RESOLVE)] as const;
-  };
-
-  it("target clean: a private token, no compensation, nobody named; the cancel comes back", () => {
-    const [pending, s] = cancelled(cleanBelowPerAct - 1);
-    expect(since(pending, s).map((e) => e.type)).toEqual(["shakedownCancelled", "tokenEarned"]);
-    expect(granted(s, "p0")).toEqual(["cancelledClean"]);
-    expect(s.haul).toBe(pending.haul);
-    expect(s.players.p1?.stash).toBe(cleanBelowPerAct - 1);
-    expect(s.players.p0?.roleState.usedThisGame).toBe(0);
-  });
-
-  it("target dirty: the ledger names the Muscle (public `muscleNamed`), no token", () => {
-    const [pending, s] = cancelled(cleanBelowPerAct);
-    expect(since(pending, s)).toEqual([
-      { type: "shakedownCancelled", visibility: PUBLIC, meetingId: "emergency-p2", target: "p1" },
-      { type: "muscleNamed", visibility: PUBLIC, meetingId: "emergency-p2", player: "p0", target: "p1" },
-    ]);
-    expect(granted(s, "p0")).toEqual([]);
-  });
-
-  it("never rewarded for saving itself", () => {
-    expect(granted(cancelled(0, "p0")[1], "p0")).toEqual([]);
-  });
-});
-
 describe("Priest: once per act, bless a player; a clean shakedown of them is paid by the bank — v2 §2, design §8", () => {
   it("blessed and shaken down clean: the compensation goes back into the Haul (`blessingPaid`), and the Priest earns a token", () => {
     const blessed = run(game(5, ["priest"]), mv("p0", "office"), mv("p1", "office"), ROUND, use("p0", { kind: "bless", target: "p1" }));
@@ -207,62 +172,6 @@ describe("Priest: once per act, bless a player; a clean shakedown of them is pai
     s = finishAct(s);
     expect(run(s, use("p0", { kind: "bless", target: "p2" })).log.at(-1)).toMatchObject({ ability: { kind: "bless", act: 3 } });
   });
-
-  it("refused for a player whose shakedown is already pending (the window is public)", () => {
-    let s = run(game(5, ["priest"], { rolePool: [...STARTER_ROLES, "muscle"] }), ROUND);
-    s = emergency(s, "p2");
-    for (const id of ["p0", "p2", "p3"]) s = run(s, vote(id, "p1"));
-    s = run(s, CLOSE);
-    expect(s.phase.kind).toBe("shakedownPending");
-    expect(reason(s, use("p0", { kind: "bless", target: "p1" }))).toMatch(/pending/);
-  });
-});
-
-describe("Bagman: all-in → the bank adds +1 to the Haul; 3 all-in rounds running → a token — extension.md \"Roles\"", () => {
-  const STAY = [mv("p1", "lobby"), mv("p2", "lobby")];
-  it("+1 inside the round's Haul change when it hands in everything (and something); private to it", () => {
-    const bag = run(game(3, ["bagman"]), mv("p0", "office"), ...STAY, ROUND);
-    const rookie = run(game(3, ["rookie"]), mv("p0", "office"), ...STAY, ROUND);
-    expect(bag.haul).toBe(rookie.haul + 1);
-    const note = ofType(bag.log, "abilityResolved").find((e) => e.ability.kind === "bagman");
-    expect(note).toMatchObject({ visibility: privateTo("p0"), ability: { kind: "bagman", bonus: 1 } });
-    expect(JSON.stringify(viewFor(bag, "p1"))).not.toMatch(/"kind":"bagman"/);
-    expect(run(game(3, ["bagman"]), mv("p0", "office", 1), ...STAY, ROUND).haul).toBe(rookie.haul - 1);
-    expect(run(game(3, ["bagman"]), mv("p0", "rooftop"), ...STAY, ROUND).haul).toBe(run(game(3, []), mv("p0", "rooftop"), ...STAY, ROUND).haul);
-    const tuned = run(game(3, ["bagman"], { contentOverrides: { roles: { bagman: { bonus: 3 } } } }), mv("p0", "office"), ...STAY, ROUND);
-    expect(tuned.haul).toBe(rookie.haul + 3);
-  });
-
-  it("three rounds running handing in everything → a token as the third resolves; a pocket restarts the count", () => {
-    const s = finishAct(game(3, ["bagman"]), [mv("p0", "office"), ...STAY]);
-    expect(granted(s, "p0")).toEqual(["allInStreak"]);
-    expect(ofType(s.log, "tokenEarned")[0]).toMatchObject({ visibility: privateTo("p0"), player: "p0" });
-    let t = run(game(3, ["bagman"]), mv("p0", "office"), ...STAY, ROUND, mv("p0", "office", 1), ...STAY, ROUND);
-    t = finishAct(t, [mv("p0", "office"), ...STAY]);
-    expect(granted(t, "p0")).toEqual([]);
-  });
-});
-
-describe("Cleaner: its Rooftop visit counts as 2 for Heat; every 2nd Rooftop round → a token — extension.md \"Roles\"", () => {
-  const HOT = [mv("p1", "vault"), mv("p2", "vault")];
-  it("cools like two visitors, inside the round's Heat change", () => {
-    const job = BANK_JOB;
-    const cleaner = run(game(3, ["cleaner"]), mv("p0", "rooftop"), ...HOT, ROUND);
-    const rookie = run(game(3, ["rookie"]), mv("p0", "rooftop"), ...HOT, ROUND);
-    expect(rookie.heat).toBe(Math.max(0, roundHeatDelta(job, 3, { vault: 2, rooftop: 1 })));
-    expect(cleaner.heat).toBe(Math.max(0, roundHeatDelta(job, 3, { vault: 2, rooftop: 2 })));
-    expect(cleaner.heat).toBeLessThan(rookie.heat);
-    // Elsewhere it is one visitor like anyone.
-    expect(run(game(3, ["cleaner"]), mv("p0", "vault"), ...HOT, ROUND).heat).toBe(run(game(3, []), mv("p0", "vault"), ...HOT, ROUND).heat);
-  });
-
-  it("a private token on its 2nd, 4th… Rooftop round", () => {
-    let s = run(game(3, ["cleaner"]), mv("p0", "rooftop"), ROUND, mv("p0", "lobby"), ROUND);
-    expect(granted(s, "p0")).toEqual([]);
-    s = run(s, mv("p0", "rooftop"), ROUND);
-    expect(granted(s, "p0")).toEqual(["coolingRounds"]);
-    expect(ofType(s.log, "tokenEarned").at(-1)?.visibility).toEqual(privateTo("p0"));
-  });
 });
 
 describe("Fixer: once per game a raid stops at 95 Heat; it loses ¼ of its stash and earns a token — extension.md \"Roles\"", () => {
@@ -300,63 +209,6 @@ describe("Fixer: once per game a raid stops at 95 Heat; it loses ¼ of its stash
     expect(s.heat).toBe(80);
     expect(run(hot(game(3, []), 99), mv("p0", "lobby"), ...ALL_VAULT, ROUND).phase.kind).toBe("ended");
   });
-
-  it("the Fixer no longer opens a shakedown window; only a Shield in the shop or a Muscle does (extension.md \"Shakedowns\")", () => {
-    expect(opensShakedownWindow(ROLES, ["rookie", "fixer"], [])).toBe(false);
-    expect(opensShakedownWindow(ROLES, ["rookie", "bagman", "cleaner", "priest", "smoothTalker", "mastermind"], ["tail", "alibi", "rig"])).toBe(false);
-  });
-});
-
-describe("Mastermind: sees the next event card (events on only); target met → a token — extension.md \"Roles\"", () => {
-  const cfg = config(3, { rolePool: ["mastermind"], eventsEnabled: true });
-  const start = createGame(cfg);
-  const mind = start.playerOrder.find((id) => start.players[id]?.role === "mastermind") as string;
-  const others = start.playerOrder.filter((id) => id !== mind);
-  const LOBBY = start.playerOrder.map((id) => mv(id, "lobby"));
-
-  it("told round 2's card at setup and each next card as a round starts; that card flips; private to it", () => {
-    const seen = ofType(start.log, "cardForeseen");
-    expect(seen).toEqual([{ type: "cardForeseen", visibility: privateTo(mind), player: mind, round: 2, card: expect.any(String) }]);
-    const s = run(start, ...LOBBY, ROUND);
-    expect(ofType(s.log, "eventFlipped")[0]?.card).toBe(seen[0]?.card);
-    expect(ofType(s.log, "cardForeseen").at(-1)).toMatchObject({ round: 3 });
-    for (const id of others) expect(JSON.stringify(viewFor(s, id))).not.toMatch(/cardForeseen/);
-    expect(viewFor(s, mind).caseFile.some((e) => e.event.type === "cardForeseen")).toBe(true);
-  });
-
-  it("a Rig of a foreseen round offers the foreseen card first; nothing is foreseen past the last round", () => {
-    let s = run(start, ...LOBBY, ROUND);
-    const next = ofType(s.log, "cardForeseen").at(-1)?.card;
-    s = run(grantPerks(s, others[0] as string, "rig"), use(others[0] as string, { kind: "rig" }));
-    expect(s.rigs[0]?.cards[0]).toBe(next);
-    expect(s.rigs[0]?.cards[1]).not.toBe(next);
-    for (let r = 0; r < 20 && s.phase.kind !== "ended"; r++) {
-      s = s.phase.kind === "planning" ? run(s, ...s.playerOrder.map((id) => mv(id, "lobby")), ROUND) : finishAct(s);
-    }
-    expect(Math.max(...ofType(s.log, "cardForeseen").map((e) => e.round))).toBe(9);
-  });
-
-  it("target met → a token; dealt only with events on", () => {
-    const s = finishAct(start, start.playerOrder.map((id) => mv(id, "office")));
-    expect(ofType(s.log, "checkpointChecked")[0]?.met).toBe(true);
-    expect(granted(s, mind)).toEqual(["checkpointMade"]);
-    expect(rolePoolFor(config(3, { rolePool: ["mastermind", "rookie"] }))).toEqual(["rookie"]);
-    expect(rolePoolFor(cfg)).toEqual(["mastermind"]);
-  });
-});
-
-describe("dealing limits — v2 §3, design §8.1, §16.1", () => {
-  it("Smooth Talker, Muscle and Priest from 5 players and never in Duel; Bagman, Cleaner, Fixer anywhere; starter set", () => {
-    const at = (n: number, extra: Partial<GameConfig> = {}) => rolePoolFor(config(n, { rolePool: [], deck: "everything", ...extra }));
-    for (const r of ["smoothTalker", "muscle", "priest"]) {
-      expect(at(4)).not.toContain(r);
-      expect(at(5)).toContain(r);
-    }
-    for (const r of ["bagman", "cleaner", "fixer"]) expect(at(2, { duel: true })).toContain(r);
-    expect(at(2, { duel: true, eventsEnabled: true })).toContain("mastermind");
-    expect(STARTER_ROLES).toEqual(["rookie", "insideMan", "lookout", "bagman", "cleaner"]);
-    expect(Object.keys(ROLES)).not.toContain("driver");
-  });
 });
 
 describe("PR #26 review notes — v2 §2, design §8, §8.3", () => {
@@ -368,17 +220,6 @@ describe("PR #26 review notes — v2 §2, design §8, §8.3", () => {
     expect(s.round).toBe(4);
     expect(reason(s, use("p0", { kind: "audit", room: "office" }))).toMatch(/already audited round 3/);
     expect(run(s, ROUND, use("p0", { kind: "audit", room: "office" })).log.at(-1)).toMatchObject({ ability: { kind: "audit", round: 4 } });
-  });
-
-  it("the Detective can't check a player whose shakedown is pending (a sure Shield); others yes", () => {
-    // A Muscle could be dealt (5+), so the window opens. extension.md "Shakedowns"
-    let s = run(game(5, ["detective"], { rolePool: [...STARTER_ROLES, "detective", "muscle"] }), mv("p1", "vault", 6), ROUND);
-    s = emergency(s, "p2");
-    for (const id of ["p0", "p2", "p3", "p4"]) s = run(s, vote(id, "p1"));
-    s = run(s, CLOSE);
-    expect(s.phase.kind).toBe("shakedownPending");
-    expect(reason(s, use("p0", { kind: "checkStash", target: "p1" }))).toMatch(/pending/);
-    expect(run(s, use("p0", { kind: "checkStash", target: "p2" })).log.at(-1)).toMatchObject({ ability: { kind: "checkStash", target: "p2" } });
   });
 
   it("a held Peek is spent: the role, privately", () => {
@@ -393,10 +234,11 @@ describe("PR #26 review notes — v2 §2, design §8, §8.3", () => {
 });
 
 describe("view-diff with the seven dealt, and determinism — design §13, §17.2", () => {
-  const SEVEN = ["smoothTalker", "muscle", "priest", "bagman", "cleaner", "fixer", "mastermind"];
+  const SEVEN = ["smoothTalker", "priest", "auditor", "fixer", "lookout"];
+  const SEATS = ["smoothTalker", "rookie", "priest", "auditor", "fixer", "rookie", "lookout"];
   // A: the Priest blesses p7, who is then caught dirty (so it is barred next act); B: it blesses p6. Same public play.
   const play = (a: boolean): GameState => {
-    let s = game(8, SEVEN, { rolePool: SEVEN, voteVisibility: "secret" });
+    let s = game(8, SEATS, { rolePool: SEVEN, voteVisibility: "secret" });
     s = run(s, mv("p7", "vault", 6), mv("p3", "office"), mv("p4", "rooftop"), ROUND, use("p2", { kind: "bless", target: a ? "p7" : "p6" }));
     s = shakeDown(s, "p1", "p7");
     return finishAct(s);
@@ -422,5 +264,27 @@ describe("view-diff with the seven dealt, and determinism — design §13, §17.
     const [a, b] = [play(true), play(true)];
     expect(a.log).toEqual(b.log);
     expect(replay(a.config, a.log)).toEqual(a);
+  });
+});
+
+describe("powers refused while a shakedown is pending (a Shield in the shop opens the window) — v2 §2, design §8, §8.3", () => {
+  const pendingOn = (roles: string[], pool: string[], pocket: number) => {
+    let s = run({ ...game(5, roles, { rolePool: pool }), shop: ["peek", "shield", "extraVote"] }, mv("p1", "vault", pocket), ROUND);
+    s = emergency(s, "p2");
+    for (const id of ["p0", "p2", "p3", "p4"]) s = run(s, vote(id, "p1"));
+    s = run(s, CLOSE);
+    expect(s.phase.kind).toBe("shakedownPending");
+    return s;
+  };
+
+  it("the Priest can't bless a player whose shakedown is already pending (the window is public)", () => {
+    const s = pendingOn(["priest"], [...STARTER_ROLES, "priest"], 0);
+    expect(reason(s, use("p0", { kind: "bless", target: "p1" }))).toMatch(/pending/);
+  });
+
+  it("the Detective can't check a player whose shakedown is pending (a sure Shield); others yes", () => {
+    const s = pendingOn(["detective"], [...STARTER_ROLES, "detective"], 6);
+    expect(reason(s, use("p0", { kind: "checkStash", target: "p1" }))).toMatch(/pending/);
+    expect(run(s, use("p0", { kind: "checkStash", target: "p2" })).log.at(-1)).toMatchObject({ ability: { kind: "checkStash", target: "p2" } });
   });
 });

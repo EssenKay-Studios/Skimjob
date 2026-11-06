@@ -26,16 +26,13 @@ export function jobOf(view: PlayerView): JobDef {
   return overrideJob(jobById(created.job), created.contentOverrides);
 }
 
-/** Duel mode (design §16.1): call-outs instead of meetings and votes. */
-export const isDuel = (view: PlayerView): boolean => createdOf(view).duel === true;
-
 export const crewSize = (view: PlayerView): number => view.players.length + 1;
 
-/** The bot's role definition (content plus the game's overrides); an id with none plays with no power and may pocket, as in the engine. */
-export function roleOf(view: PlayerView): Pick<RoleDef, "power" | "canPocket" | "winsOn" | "tag"> {
+/** The bot's role definition (content plus the game's overrides); an id with none plays with no power, as in the engine. */
+export function roleOf(view: PlayerView): Pick<RoleDef, "power" | "winsOn" | "tag"> {
   const roles = overrideRoles(ROLES, createdOf(view).contentOverrides);
   const def = Object.hasOwn(roles, view.me.role) ? roles[view.me.role] : undefined;
-  return def ?? { power: { kind: "none" }, canPocket: true, winsOn: [], tag: "teamPlayer" };
+  return def ?? { power: { kind: "none" }, winsOn: [], tag: "teamPlayer" };
 }
 
 /** A ★ role: one that can also win when the job fails (`winsOn`). extension.md "How you win" */
@@ -43,7 +40,7 @@ export const isStar = (role: RoleId): boolean => (Object.hasOwn(ROLES, role) ? (
 
 /**
  * Could `role` be in this game, as far as the public setup says: the shown
- * role list (Exact or Possible), else the deck, crew size, events and Duel.
+ * role list (Exact or Possible), else the deck and crew size.
  * extension.md "Host settings"
  */
 export function couldBeDealt(view: PlayerView, role: RoleId): boolean {
@@ -54,8 +51,6 @@ export function couldBeDealt(view: PlayerView, role: RoleId): boolean {
   if (role === FILLER_ROLE) return true;
   if (!DECKS[created.deck].includes(role)) return false;
   if (def.minPlayers !== undefined && crewSize(view) < def.minPlayers) return false;
-  if (def.needsEvents && !created.eventsEnabled) return false;
-  if (def.needsMeetings && created.duel) return false;
   return true;
 }
 

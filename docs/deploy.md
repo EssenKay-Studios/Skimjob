@@ -1,7 +1,7 @@
 # Deployment (AWS Lightsail)
 
-**Live:** https://skimjob.duckdns.org, on the owner's existing AWS Lightsail box. The box also runs another
-production app, **Arcway**, which no Skimjob step may touch. Deploys are manual: build on the Mac, upload, switch
+**Live:** https://skimjob.duckdns.org, on the owner's existing AWS Lightsail box. The box is shared with another
+app (Arcway): never touch its nginx site, process, config, user or database. Deploys are manual: build on the Mac, upload, switch
 a symlink, restart. Nothing deploys on merge. Host, SSH user and key are in the owner's local `ssh-relay` skill,
 never in this (public) repo. The deployed build is in `docs/STATUS.md`.
 
@@ -13,7 +13,7 @@ never in this (public) repo. The deployed build is in `docs/STATUS.md`.
 | Code | `/srv/skimjob/releases/<REL>/{server,web}` (root-owned, read-only to the app), `REL` = `YYYYMMDD-HHMMSS-<sha>`. `/srv/skimjob/current` points at the live one. |
 | Settings | Non-secret ones in the unit's `Environment=` line (`NODE_ENV=production`, `HOST`, `PORT`, `PUBLIC_ORIGIN=https://skimjob.duckdns.org`, `WEB_DIR=/srv/skimjob/current/web`). Secrets (`DATABASE_URL`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, all set) in `/etc/skimjob/env`, mode 0640 root:skimjob. Never print or commit them. |
 | Database | Postgres 16 on localhost: its own role and database `skimjob`. Migrations run on start and only add. |
-| Proxy | nginx: its own site `/etc/nginx/sites-available/skimjob` and shared zones in `/etc/nginx/conf.d/skimjob.conf`; Let's Encrypt certificate (HTTP-01 webroot, renewed by `certbot.timer`). Arcway's `default` site stays the default server. |
+| Proxy | nginx: its own site `/etc/nginx/sites-available/skimjob` and shared zones in `/etc/nginx/conf.d/skimjob.conf`; Let's Encrypt certificate (HTTP-01 webroot, renewed by `certbot.timer`). |
 | Backups | Weekly `pg_dump -Fc` (root crontab, Sundays 04:41 UTC, `/usr/local/sbin/skimjob-backup`) to `/var/backups/skimjob`, newest 8 kept; Lightsail daily snapshots cover the whole box. |
 | One origin | The server serves `WEB_DIR` (hashed `/assets/*` cached a year), the API both bare and under `/api/...` (`stripApiPrefix`), and the game sockets (`/api/games/:id/ws`). Any other `GET` without a file extension gets `index.html`. Unknown `/api/...` and missing files are a JSON 404. |
 | Production mode | `NODE_ENV=production`: cookies are `Secure`, the server trusts `X-Forwarded-*` (nginx overwrites `X-Forwarded-For`), the socket Origin check allows only the server's host and `PUBLIC_ORIGIN`, and the dev sign-in stub is off. |
@@ -21,7 +21,7 @@ never in this (public) repo. The deployed build is in `docs/STATUS.md`.
 ## Deploy an update
 
 Rules on the box: only ever `sudo nginx -t && sudo systemctl reload nginx`; never restart nginx or Postgres;
-never `pm2 … all`; never touch Arcway's files, process or database.
+never touch the other app's site, process, config, user or database.
 
 0. **Check for games in progress** on the box, and warn their players. A restart drops sockets for a few seconds
    (clients reconnect; the scheduler catches up on deadlines that passed). A game whose log holds event types removed
@@ -73,7 +73,7 @@ never `pm2 … all`; never touch Arcway's files, process or database.
    - `curl -s localhost:3100/health` returns `{"ok":true}`;
    - `journalctl -u skimjob -n 20 --no-pager` shows `database: Postgres` (and any migrations applied);
    - from the Mac, `https://skimjob.duckdns.org/health` and `/join/smoke` return 200;
-   - Arcway is still healthy and its process didn't restart (its check is in the `ssh-relay` skill).
+   - the other app (Arcway) is still healthy and didn't restart (its check is in the `ssh-relay` skill).
 8. **Roll back** if anything fails: point `current` at the previous release and restart. Only roll back to a release
    with the same event schema: `applyEvent` (`packages/engine/src/reduce.ts`) throws on any event type it doesn't know,
    so games logged on the newer build may fail to load on an older one. Across a schema change, prefer fixing forward.
@@ -87,7 +87,7 @@ never `pm2 … all`; never touch Arcway's files, process or database.
 10. **Clean up** on the Mac: `rm -rf ~/Documents/Misc/.skimjob-deploy`.
 
 Logs and status: `journalctl -u skimjob -f`, `systemctl status skimjob`, `systemd-analyze security skimjob`;
-nginx logs are shared with Arcway. Restore a backup: `sudo runuser -u postgres -- pg_restore --clean -d skimjob <file>`.
+Restore a backup: `sudo runuser -u postgres -- pg_restore --clean -d skimjob <file>`.
 
 ## Hardening (summary)
 - **Service:** unprivileged `skimjob` user with no shell, password, sudo or SSH; no capabilities, `NoNewPrivileges`,
@@ -100,11 +100,9 @@ nginx logs are shared with Arcway. Restore a backup: `sudo runuser -u postgres -
   1 MB body limit; per-IP rate limits (auth 5 r/s, API 20 r/s, 20 connections incl. WebSockets, 429 on excess);
   `X-Forwarded-For` overwritten with the client address so it can't be spoofed.
 - **Postgres:** role `skimjob` is least-privilege (no superuser, createdb, createrole or replication; 20
-  connections); `CONNECT` is revoked from `PUBLIC` on both the Skimjob and Arcway databases, so neither app can
-  reach the other's data.
+  connections) and can only reach its own database.
 - **Host:** port 3100 is bound to localhost; the Lightsail firewall allows 22, 80 and 443 only; a 1 GB swapfile
-  (`vm.swappiness=10`). The `skimjob` user can't read Arcway's config or any TLS private key, and Arcway's user
-  can't read `/etc/skimjob/env`.
+  (`vm.swappiness=10`). The `skimjob` user can't read any TLS private key, and no other app's user can read `/etc/skimjob/env`.
 
 ## Google sign-in
 

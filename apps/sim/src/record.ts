@@ -27,10 +27,8 @@ export interface PlayerRecord {
   readonly tag: Temperament;
   /** A ★ role: it also wins some failures (`winsOn` non-empty). extension.md "One crew, and how you win" */
   readonly star: boolean;
-  /** False for roles that can't pocket (Inside Man): left out of the pocketing metric. */
-  readonly canPocket: boolean;
   readonly score: number;
-  /** Final stash, Fence safe included. */
+  /** Final stash. */
   readonly stash: number;
   /** Loot collected from rooms over the game. */
   readonly looted: number;
@@ -217,7 +215,6 @@ export function recordGame(state: GameState, crew: readonly PersonalityId[], rej
         role,
         tag: def?.tag ?? "teamPlayer",
         star: (def?.winsOn.length ?? 0) > 0,
-        canPocket: def?.canPocket ?? true,
         score: entry?.score ?? 0,
         stash: entry?.stash ?? 0,
         looted: looted.get(id) ?? 0,

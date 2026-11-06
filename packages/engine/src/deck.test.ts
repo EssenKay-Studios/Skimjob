@@ -20,10 +20,9 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
     seed: "deck-seed",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: ["rookie", "lookout", "fence", "insideMan"], // no Muscle, so no shakedown window
+    rolePool: ["rookie", "lookout", "hacker", "priest"], // a window only if the shop holds a Shield
     eventsEnabled: true,
     voteVisibility: "open",
-    starterMode: false,
     ...extra,
   };
 }
@@ -33,7 +32,6 @@ function game(players: number, roles: string[] = [], extra: Partial<GameConfig> 
   // Pin the 0.6.0 card numbers (balance pass 2 changed them); an extra override still wins.
   const cfg = config(players, { ...extra, contentOverrides: { ...V06_NUMBERS, ...extra.contentOverrides } });
   const log = setupEvents(cfg)
-    .filter((e) => e.type !== "snitchTargetAssigned")
     .map((e, i, all): GameEvent => {
       if (e.type !== "roleDealt") return e;
       const seat = all.slice(0, i).filter((x) => x.type === "roleDealt").length;
@@ -144,7 +142,7 @@ describe("the deck — design §10", () => {
   });
 
   it("flips one public card at the start of every round from round 2, drawn from the full deck (owner answers, 1 Nov)", () => {
-    for (const n of [2, 4, 7]) {
+    for (const n of [3, 4, 7]) {
       const end = playThrough(createGame(config(n, { seed: `flip-${n}` })));
       const flipped = flips(end);
       expect(flipped.map((e) => e.round)).toEqual([2, 3, 4, 5, 6, 7, 8, 9]);
@@ -167,11 +165,10 @@ describe("the deck — design §10", () => {
     expect(new Set(seeds).size).toBeGreaterThan(1);
   });
 
-  it("flips nothing when events are off, and starter mode can't turn them on (design §8.1)", () => {
+  it("flips nothing when events are off (design §8.1)", () => {
     const end = playThrough(createGame(config(4, { eventsEnabled: false })));
     expect(flips(end)).toEqual([]);
     expect(end.cardsFlipped).toEqual([]);
-    expect(validateConfig(config(4, { starterMode: true }))).not.toEqual([]);
   });
 
   it("shows the card in every view while its round is planned, and clears it when the round resolves", () => {
@@ -196,8 +193,8 @@ describe("card effects — design §10, §5.2", () => {
   });
 
   it("event-card Heat is scaled by min(1, crew ÷ 5) for small crews, rounded (owner answers, 1 Nov)", () => {
-    // design §10: Quiet night −10 gives −4 / −6 / −8 / −10 at 2 / 3 / 4 / 5+ players.
-    for (const [n, quiet] of [[2, 4], [3, 6], [4, 8], [5, 10], [9, 10]] as const) {
+    // design §10: Quiet night −10 gives −6 / −8 / −10 at 3 / 4 / 5+ players.
+    for (const [n, quiet] of [[3, 6], [4, 8], [5, 10], [9, 10]] as const) {
       const base = atRound2(n, [], { contentOverrides: { heat: { perRound: 30 } } });
       expect(resolve(withCard(base, "quietNight")).heat - base.heat).toBe(30 - quiet);
     }
@@ -256,7 +253,7 @@ describe("card effects — design §10, §5.2", () => {
   });
 
   it("Audit: the round's shortfall is posted per room, publicly, every room in play listed", () => {
-    const base = withCard(atRound2(4, ["rookie", "rookie", "fence", "lookout"]), "audit");
+    const base = withCard(atRound2(4, ["rookie", "rookie", "hacker", "lookout"]), "audit");
     const s = resolve(base, {
       p0: { room: "vault", pocket: 4 },
       p1: { room: "vault", pocket: 1 },
@@ -272,22 +269,6 @@ describe("card effects — design §10, §5.2", () => {
     });
   });
 
-  it("Raid rumour: the biggest stash loses 3, only that player is told; the Fence safe doesn't count", () => {
-    // Round 1: p0 (Fence) pockets 4 and hides it all; p1 pockets 2; p2 pockets 1.
-    const r1 = resolve(game(3, ["fence", "rookie", "rookie"]), {
-      p0: { room: "office", pocket: 4, ability: { kind: "fenceSafe", amount: 4 } },
-      p1: { room: "office", pocket: 2 },
-      p2: { room: "lobby", pocket: 1 },
-    });
-    const s = resolve(withCard(r1, "raidRumour"));
-    const hits = lastResolution(s).filter((e) => e.type === "raidRumourHit");
-    expect(hits).toEqual([{ type: "raidRumourHit", visibility: privateTo("p1"), player: "p1", round: 2, lost: 2 }]);
-    expect(s.players.p1?.stash).toBe(0);
-    expect(s.players.p0?.safe).toBe(4);
-    expect(viewFor(s, "p2").caseFile.some((e) => e.event.type === "raidRumourHit")).toBe(false);
-    expect(viewFor(s, "p1").caseFile.some((e) => e.event.type === "raidRumourHit")).toBe(true);
-  });
-
   it("Raid rumour: a tie for the biggest stash is drawn at random; nobody is hit when every stash is empty", () => {
     const tied = resolve(game(3), { p0: { room: "office", pocket: 4 }, p1: { room: "office", pocket: 4 }, p2: { room: "office", pocket: 1 } });
     const s = resolve(withCard(tied, "raidRumour"));
@@ -300,7 +281,7 @@ describe("card effects — design §10, §5.2", () => {
   });
 
   it("Inside tip: one player privately learns another player's real role", () => {
-    const s = resolve(withCard(atRound2(4, ["rookie", "lookout", "fence", "insideMan"]), "insideTip"));
+    const s = resolve(withCard(atRound2(4, ["rookie", "lookout", "hacker", "priest"]), "insideTip"));
     const tips = lastResolution(s).filter((e): e is Extract<GameEvent, { type: "insideTip" }> => e.type === "insideTip");
     expect(tips).toHaveLength(1);
     const tip = tips[0] as Extract<GameEvent, { type: "insideTip" }>;
@@ -331,18 +312,18 @@ describe("Double-cross — design §10", () => {
   });
 
   it("swaps the two roles at the round's resolution only if both accept; the last answer counts", () => {
-    const base = offerFor(3, ["lookout", "fence", "rookie"], ["p0", "p1"]);
+    const base = offerFor(3, ["lookout", "hacker", "rookie"], ["p0", "p1"]);
     const both = resolve(run(base, answer("p0", true), answer("p1", true)));
-    expect([both.players.p0?.role, both.players.p1?.role]).toEqual(["fence", "lookout"]);
+    expect([both.players.p0?.role, both.players.p1?.role]).toEqual(["hacker", "lookout"]);
     const resolved = lastResolution(both).filter((e) => e.type === "doubleCrossResolved");
     expect(resolved.map((e) => e.visibility)).toEqual([privateTo("p0"), privateTo("p1")]);
-    expect(resolved[0]).toMatchObject({ player: "p0", partner: "p1", swap: { role: "fence" } });
+    expect(resolved[0]).toMatchObject({ player: "p0", partner: "p1", swap: { role: "hacker" } });
     // The view shows the new role.
-    expect(viewFor(both, "p0").me.role).toBe("fence");
+    expect(viewFor(both, "p0").me.role).toBe("hacker");
 
     for (const answers of [[answer("p0", true)], [answer("p0", true), answer("p1", true), answer("p1", false)], []]) {
       const s = resolve(run(base, ...answers));
-      expect([s.players.p0?.role, s.players.p1?.role]).toEqual(["lookout", "fence"]);
+      expect([s.players.p0?.role, s.players.p1?.role]).toEqual(["lookout", "hacker"]);
       expect(lastResolution(s).filter((e) => e.type === "doubleCrossResolved").every((e) => e.type === "doubleCrossResolved" && e.swap === null)).toBe(true);
     }
   });
@@ -358,29 +339,6 @@ describe("Double-cross — design §10", () => {
     // Not after the round has resolved.
     expect(handleThroughAlibis(resolve(base), answer("p0", true)).ok).toBe(false);
   });
-
-  it("the swapped role plays this round: a new Inside Man can't pocket, a stale move power is ignored", () => {
-    const base = run(offerFor(3, ["insideMan", "lookout", "rookie"], ["p0", "p1"]), answer("p0", true), answer("p1", true));
-    const s = resolve(base, {
-      p0: { room: "office", pocket: 0 },
-      p1: { room: "vault", pocket: 3, ability: { kind: "lookout", rooms: ["office"] } },
-    });
-    const events = lastResolution(s);
-    expect(events.find((e) => e.type === "lootSplit" && e.player === "p1")).toMatchObject({ toStash: 0, toHaul: 6 });
-    expect(events.some((e) => e.type === "abilityResolved" || e.type === "roomWatched")).toBe(false);
-    // Effects come first in the resolution (§5.2 step 1).
-    expect(events.findIndex((e) => e.type === "doubleCrossResolved")).toBeLessThan(events.findIndex((e) => e.type === "lootSplit"));
-  });
-
-  it("uses travel with the card, and a Snitch's target that would be its new holder becomes the other swapper", () => {
-    const snitchTarget: GameEvent = { type: "snitchTargetAssigned", visibility: privateTo("p0"), player: "p0", target: "p1" };
-    const base = run(offerFor(3, ["snitch", "rookie", "rookie"], ["p0", "p1"], { rolePool: ["snitch", "rookie"] }, [snitchTarget]), answer("p0", true), answer("p1", true));
-    const s = resolve(base);
-    expect(s.players.p1?.role).toBe("snitch");
-    expect(s.players.p1?.roleState.target).toBe("p0");
-    expect(s.players.p0?.roleState.target).toBeNull();
-  });
-
 });
 
 describe("event-card visibility (leak tests) — design §10, §13, §17.2", () => {
@@ -422,7 +380,7 @@ describe("event-card visibility (leak tests) — design §10, §13, §17.2", () 
       JSON.stringify(viewFor(s, "p0").caseFile) + JSON.stringify([viewFor(s, "p0").haul, viewFor(s, "p0").heat]);
     expect(strip(hit)).toBe(strip(miss));
 
-    const tipped = resolve(withCard(resolve(game(4, ["rookie", "lookout", "fence", "insideMan"])), "insideTip"));
+    const tipped = resolve(withCard(resolve(game(4, ["rookie", "lookout", "hacker", "priest"])), "insideTip"));
     const tip = tipped.log.find((e) => e.type === "insideTip");
     for (const id of tipped.playerOrder) expect(sees(tipped, id, "insideTip")).toBe(tip?.type === "insideTip" && tip.player === id);
   });

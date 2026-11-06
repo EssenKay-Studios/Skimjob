@@ -10,14 +10,12 @@ const config = (n: number, seed: string): GameConfig => ({
   players: Array.from({ length: n }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
   job: "bank",
   rolePool: [],
-  mole: "maybe",
   eventsEnabled: true,
   voteVisibility: "hiddenThenRevealed",
-  starterMode: false,
 });
 
 describe("bots never propose; games still finish with 0 refused commands", () => {
-  for (const n of [2, 3, 8, 12]) {
+  for (const n of [3, 8, 12]) {
     it(`${n} bots, 15 seeds: no meetingProposed, no refusals, every game ends`, () => {
       for (let k = 0; k < 15; k++) {
         const c = config(n, `qa44-${n}-${k}`);

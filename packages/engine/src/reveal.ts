@@ -13,20 +13,14 @@ import type { RevealEnding, RevealItem, RevealMove, RevealRound, RevealSeat, Rev
 
 /** Hidden or deciding events the timeline shows as they are. */
 const SHOWN: ReadonlySet<GameEvent["type"]> = new Set<GameEvent["type"]>([
-  "snitchTargetAssigned",
   "perkBought",
   "perkUsed",
   "rigPicked",
-  "cardForeseen",
-  "sightingForged",
   "raidRumourHit",
   "insideTip",
-  "callOutMade",
-  "callOutResolved",
   "meetingClosed",
   "shakedownResolved",
   "shakedownCancelled",
-  "muscleNamed",
   "blessingPaid",
   "checkpointChecked",
   "raidStopped",
@@ -108,7 +102,6 @@ export function revealSummary(log: readonly GameEvent[], outcome: Outcome, table
         break;
       case "abilityResolved": {
         const a = e.ability;
-        if (a.kind === "embezzle") add(e.player, a.amount);
         if (a.kind === "fixer") add(e.player, -a.lost);
         if (a.kind === "loopCameras") loops.set(a.room, [...(loops.get(a.room) ?? []), e.player]);
         items.push({ kind: "event", event: e });
@@ -134,9 +127,6 @@ export function revealSummary(log: readonly GameEvent[], outcome: Outcome, table
         items.push({ kind: "police", heatAdded: e.heatAdded, heat: e.heat, cause: cause?.cause ?? "patrol", mole: cause?.mole ?? null });
         break;
       }
-      case "votesStolen":
-        for (const st of e.steals) items.push({ kind: "voteStolen", blackmailer: st.blackmailer, victim: st.victim, meetingId: e.meetingId, decided: st.decided });
-        break;
       case "tokenEarned": {
         push(tokens, e.player, e.trigger);
         items.push({ kind: "token", player: e.player, trigger: e.trigger });
@@ -167,12 +157,6 @@ export function revealSummary(log: readonly GameEvent[], outcome: Outcome, table
       case "shakedownResolved":
         add(e.target, e.compensation - e.taken);
         break;
-      case "callOutResolved": {
-        const [from, to] = e.caught ? [e.target, e.caller] : [e.caller, e.target];
-        add(from, -e.amount);
-        add(to, e.amount);
-        break;
-      }
       default:
         break;
     }
@@ -211,7 +195,6 @@ export function revealSummary(log: readonly GameEvent[], outcome: Outcome, table
     winsOn: roleDefIn(tables.roles, r.role)?.winsOn ?? [],
     score: r.score,
     stash: r.stash,
-    safe: r.safe,
     timesShakenDown: r.timesShakenDown,
     totalHandedIn: r.totalHandedIn,
     topGroup: top.includes(r.player),

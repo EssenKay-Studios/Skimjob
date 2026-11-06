@@ -14,9 +14,9 @@ const options = (argv: string[]): SimOptions => {
 describe("runBatch", () => {
   it("runs N games at each player count, in order", () => {
     const seen: number[] = [];
-    const records = runBatch(options(["-n", "3", "-p", "2,7"]), (n) => seen.push(n));
-    expect(records.map((r) => r.players)).toEqual([2, 2, 2, 7, 7, 7]);
-    expect(seen).toEqual([2, 7]);
+    const records = runBatch(options(["-n", "3", "-p", "3,7"]), (n) => seen.push(n));
+    expect(records.map((r) => r.players)).toEqual([3, 3, 3, 7, 7, 7]);
+    expect(seen).toEqual([3, 7]);
     expect(records.every((r) => r.rejections === 0)).toBe(true);
   });
 
@@ -26,15 +26,12 @@ describe("runBatch", () => {
     expect(runBatch(options(["-n", "4", "-p", "5", "-s", "other"]))).not.toEqual(runBatch(o));
   });
 
-  it("plays every setting: starter mode, decks, deals, role lists, vote modes, Random bots", () => {
-    for (const argv of [["--starter"], ["--deck", "everything", "-p", "9"], ["--deal", "random", "-p", "7"], ["--role-list", "hidden"], ["--role-list", "possible"], ["--votes", "secret"], ["--votes", "open"], ["-b", "random"], ["--role-pool", "lookout,fence"]]) {
+  it("plays every setting: decks, deals, role lists, vote modes, Random bots", () => {
+    for (const argv of [["--deck", "everything", "-p", "9"], ["--deal", "random", "-p", "7"], ["--role-list", "hidden"], ["--role-list", "possible"], ["--votes", "secret"], ["--votes", "open"], ["-b", "random"], ["--role-pool", "lookout,hacker"]]) {
       const o = options(["-n", "2", ...argv]);
       expect(checkOptions(o)).toEqual([]);
       expect(runBatch(o).every((r) => r.rejections === 0)).toBe(true);
     }
-    // extension.md "Decks and dealing": Starter mode plays the Starter deck whatever --deck says.
-    const starter = runBatch(options(["-n", "2", "-p", "5", "--starter", "--deck", "everything"]));
-    expect(starter[0]?.playerRecords.every((p) => !p.star)).toBe(true);
   });
 });
 
@@ -43,7 +40,7 @@ describe("checkOptions — the engine's validateConfig on the sim's settings", (
     expect(checkOptions(options([]))).toEqual([]);
   });
   it("reports bad role pools, jobs and overrides (untrusted JSON, design §17.4)", () => {
-    expect(checkOptions(options(["--role-pool", "getaway"]))).toEqual(["unknown role getaway"]);
+    expect(checkOptions(options(["--role-pool", "wizard"]))).toEqual(["unknown role wizard"]);
     expect(checkOptions(options(["--job", "casino"]))).toEqual(["unknown job casino"]);
     expect(checkOptions(options(["--overrides", '{"heat":{"perRound":"lots"}}']))).toEqual(["contentOverrides.heat.perRound must be a finite number"]);
   });

@@ -7,7 +7,7 @@
 //   their due time, ones the game has moved past are deleted, and the rest
 //   keep the due time they were given. So a restart changes nothing, and a
 //   fired deadline is gone once its change is stored.
-// - While a meeting (or the Muscle's window after it) is open, pausable
+// - While a meeting (or the shakedown window after it) is open, pausable
 //   deadlines (the round, the alibi window, an emergency's notice) stop: `paused_at` is set,
 //   and when the meeting is over their due time moves on by the pause.
 // - Hidden police moments (`police:<n>`, extension.md "Police activity") run
@@ -49,7 +49,7 @@ export interface PlannedDeadline {
   readonly gameTime?: true;
 }
 
-/** A vote window, or the Muscle's window after one, is open. design §4.1 */
+/** A vote window, or the shakedown window after one, is open. design §4.1 */
 export const meetingOpen = (s: GameState) => s.phase.kind === "meeting" || s.phase.kind === "shakedownPending";
 
 /** Game time is frozen: a meeting is open or the act's meeting waits to open. extension.md "Police activity" */

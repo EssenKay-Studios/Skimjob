@@ -1,6 +1,6 @@
-// QA (PR #51): with the 0.17.0 numbers, Starter, Quick (starter mode) and the
-// Duel still play to the end with no refused bot command, at 2–12 players.
-// design §8.1 (Starter), §16.1 (Duel), extension.md "Tags, decks and dealing"
+// QA (PR #51): with the 0.17.0 numbers, the Starter deck
+// still plays to the end with no refused bot command, at 3–12 players.
+// design §8.1 (Starter), extension.md "Tags, decks and dealing"
 import { PERSONALITIES, createBots, runBotGame } from "@skimjob/bots";
 import { describe, expect, it } from "vitest";
 import { parseSimArgs } from "./args";
@@ -11,7 +11,7 @@ const opts = (argv: string[]) => {
   if (r.kind !== "run") throw new Error(JSON.stringify(r));
   return r.options;
 };
-const PLAYERS = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+const PLAYERS = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
 function play(argv: string[], players: readonly number[], games = 2) {
   const o = opts([...argv, "-s", "qa51", "--no-files"]);
@@ -25,11 +25,9 @@ function play(argv: string[], players: readonly number[], games = 2) {
   }
 }
 
-describe("QA #51: Starter, Quick and Duel still play at 2–12 players", { timeout: 120_000 }, () => {
+describe("QA #51: the Starter deck still plays at 3–12 players", { timeout: 120_000 }, () => {
   it("Starter deck, events on and off", () => {
     play(["--deck", "starter"], PLAYERS);
     play(["--deck", "starter", "--events"], PLAYERS, 1);
   });
-  it("Quick (starter mode: Starter roles, no events)", () => play(["--starter"], PLAYERS));
-  it("Duel (2 players)", () => play(["--duel", "-p", "2"], [2], 8));
 });

@@ -15,7 +15,7 @@ const withRole = (s: GameState, player: string, role: string): GameState => {
   const me = s.players[player] as GameState["players"][string];
   return { ...s, players: { ...s.players, [player]: { ...me, role } } };
 };
-/** Ana is the target of a shakedown that has just passed (the Muscle's window). */
+/** Ana is the target of a shakedown that has just passed (the shakedown window). */
 const pending = (s: GameState, target = "ana"): GameState => ({ ...s, phase: { kind: "shakedownPending", meetingId: "act-1", target } });
 /** The act's meeting is next: claims are made now (v2 §4), but nobody accuses ana. */
 const awaiting = (s: GameState): GameState => ({ ...s, phase: { kind: "awaitingMeeting", act: 1 } });
@@ -42,14 +42,12 @@ describe("bot claims — docs/roles-v2.md §4", () => {
     expect(chooseClaim(viewFor(withRole(game(5), "ana", "rookie"), "ana"), exact(PERSONALITIES.honest), rolls(0))).toBeNull();
   });
 
-  it("per-role lines: Rookie, Bagman and Cleaner claim freely; Inside Man only against a shakedown; Snitch never", () => {
+  it("per-role lines: the Rookie claims freely; the Auditor, Fixer and Priest don't unprompted", () => {
     const free = (role: string) => chooseClaim(viewFor(awaiting(withRole(game(5), "ana", role)), "ana"), exact(PERSONALITIES.honest), rolls(0));
     expect(free("rookie")).toBe("rookie");
-    expect(free("bagman")).toBe("bagman");
-    expect(free("cleaner")).toBe("cleaner");
-    expect(free("insideMan")).toBeNull();
-    expect(chooseClaim(viewFor(pending(withRole(game(5), "ana", "insideMan")), "ana"), exact(PERSONALITIES.greedy), rolls(0.99))).toBe("insideMan"); // always: it's clean
-    expect(chooseClaim(viewFor(pending(withRole(game(5), "ana", "snitch")), "ana"), exact(PERSONALITIES.honest), rolls(0))).toBeNull();
+    expect(free("auditor")).toBeNull();
+    expect(free("fixer")).toBeNull();
+    expect(free("priest")).toBeNull();
   });
 
   it("the Priest claims only after its own vote", () => {
@@ -62,19 +60,17 @@ describe("bot claims — docs/roles-v2.md §4", () => {
 
   // extension.md Build notes "Bots": ★ and evidence-leaving roles bluff a low-risk role on the role list nobody else claimed.
   it("a ★ bot bluffs a safe role when accused, never one someone else claimed", () => {
-    // The Starter pool's Exact role list: rookie, insideMan, lookout, bagman, cleaner.
+    // The Starter pool's Exact role list: rookie, lookout.
     const mole = pending(withRole(game(5), "ana", "mole"));
     expect(chooseClaim(viewFor(mole, "ana"), exact(PERSONALITIES.greedy), rolls(0))).toBe("rookie");
     const taken = run(mole, { type: "claimRole", player: "ben", role: "rookie" });
-    expect(bluffFor(viewFor(taken, "ana"))).toBe("bagman");
-    const both = run(taken, { type: "claimRole", player: "carl", role: "bagman" });
-    expect(bluffFor(viewFor(both, "ana"))).toBe("cleaner");
+    expect(bluffFor(viewFor(taken, "ana"))).toBeNull();
     expect(bluffFor(viewFor(pending(withRole(game(5), "ana", "hacker")), "ana"))).toBe("rookie");
     // Not accused: it keeps quiet.
     expect(chooseClaim(viewFor(awaiting(withRole(game(5), "ana", "mole")), "ana"), exact(PERSONALITIES.greedy), rolls(0))).toBeNull();
     // It sticks to its story in later acts.
-    const told = run(mole, { type: "claimRole", player: "ana", role: "cleaner" });
-    expect(bluffFor(viewFor(told, "ana"))).toBe("cleaner");
+    const told = run(mole, { type: "claimRole", player: "ana", role: "fixer" });
+    expect(bluffFor(viewFor(told, "ana"))).toBe("fixer");
   });
 
   it("someone else claiming my (unique) role counts as an accusation, and I know they lie", () => {
@@ -98,32 +94,20 @@ describe("claims in the suspicion model — v2 §4", () => {
   });
 
   it("a Peek catches a lie, and a Peek of a dark role is damning", () => {
-    const s = run(game(5), { type: "claimRole", player: "ben", role: "bagman" });
+    const s = run(game(5), { type: "claimRole", player: "ben", role: "auditor" });
     const peek = (role: string): GameState => ({
       ...s,
       log: [...s.log, { type: "perkUsed", visibility: { kind: "private", player: "ana" }, player: "ana", round: 1, perk: { kind: "peek", target: "ben", role } }],
     });
-    expect(suspicion(viewFor(peek("bagman"), "ana")).get("ben")).toBe(SUSPICION_WEIGHTS.claimed);
+    expect(suspicion(viewFor(peek("auditor"), "ana")).get("ben")).toBe(SUSPICION_WEIGHTS.claimed);
     expect(suspicion(viewFor(peek("rookie"), "ana")).get("ben")).toBe(SUSPICION_WEIGHTS.falseClaim);
     expect(suspicion(viewFor(peek("mole"), "ana")).get("ben")).toBe(SUSPICION_WEIGHTS.falseClaim + SUSPICION_WEIGHTS.knownDark);
-  });
-
-  it("a Detective's dirty read on a claimed Inside Man (who can't pocket) catches the lie", () => {
-    const s = run(game(5), { type: "claimRole", player: "ben", role: "insideMan" });
-    const checked: GameState = {
-      ...s,
-      log: [
-        ...s.log,
-        { type: "abilityResolved", visibility: { kind: "private", player: "ana" }, player: "ana", round: 1, ability: { kind: "checkStash", target: "ben", threshold: 5, dirty: true } },
-      ],
-    };
-    expect(suspicion(viewFor(checked, "ana")).get("ben")).toBe(SUSPICION_WEIGHTS.checkedDirty + SUSPICION_WEIGHTS.falseClaim);
   });
 
   it("changing one's claimed role is suspicious", () => {
     let s = run(game(5), { type: "claimRole", player: "ben", role: "rookie" });
     s = { ...s, round: 4 }; // act 2
-    const r = handleCommand(s, { type: "claimRole", player: "ben", role: "cleaner" });
+    const r = handleCommand(s, { type: "claimRole", player: "ben", role: "fixer" });
     expect(r.ok).toBe(true);
     if (r.ok) expect(suspicion(viewFor(r.state, "ana")).get("ben")).toBe(SUSPICION_WEIGHTS.falseClaim / 2 + SUSPICION_WEIGHTS.claimed);
   });

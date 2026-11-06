@@ -24,10 +24,9 @@ function config(players: number): GameConfig {
     seed: "record-seed",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: [...STARTER_ROLES], // no Muscle, so no shakedown window (task 12)
+    rolePool: [...STARTER_ROLES], // a shakedown window only if the shop holds a Shield
     eventsEnabled: false,
     voteVisibility: "open",
-    starterMode: false,
     // scripted against content 0.1.0 checkpoint targets (balance pass 1); whole-number scores, no Rookie multiplier (extension.md "Scoring")
     contentOverrides: { checkpoints: { perPlayer: [6, 14, 22] } },
   };
@@ -114,7 +113,7 @@ describe("recordGame — a scripted game", () => {
     const [p0, p1, p2] = rec.playerRecords;
     expect(p0).toMatchObject({ id: "p0", personality: "greedy", role: "rookie", looted: 18 + 12, pocketed: 18, stash: 0, timesShakenDown: 1 });
     expect(p1).toMatchObject({ personality: "opportunist", looted: 18, pocketed: 3, stash: 3, score: 3, winner: false, winCredit: 0 });
-    expect(p2).toMatchObject({ personality: "honest", looted: 18, pocketed: 0, canPocket: true });
+    expect(p2).toMatchObject({ personality: "honest", looted: 18, pocketed: 0 });
   });
 
   it("refuses a game that isn't over", () => {
@@ -124,7 +123,7 @@ describe("recordGame — a scripted game", () => {
 
 describe("recordGame — bot games agree with the engine's ranking", () => {
   it("the ranking at the final checkpoint is the engine's final ranking", () => {
-    const o = options(["-p", "2-12"]);
+    const o = options(["-p", "3-12"]);
     for (const n of [3, 6, 12]) {
       for (let i = 0; i < 3; i++) {
         const { state } = runBotGameFor(o, n, i);
@@ -138,8 +137,8 @@ describe("recordGame — bot games agree with the engine's ranking", () => {
   });
 
   it("stashes, winners and win credit match gameEnded", () => {
-    const o = options(["-p", "2-12"]);
-    for (const n of [2, 5, 9, 12]) {
+    const o = options(["-p", "3-12"]);
+    for (const n of [3, 5, 9, 12]) {
       for (let i = 0; i < 3; i++) {
         const rec = runOne(o, n, i);
         const { state } = runBotGameFor(o, n, i);
@@ -156,7 +155,6 @@ describe("recordGame — bot games agree with the engine's ranking", () => {
         expect(credit).toBeCloseTo(rec.winners.length > 0 ? 1 : 0);
         for (const p of rec.playerRecords) {
           expect(p.pocketed).toBeLessThanOrEqual(p.looted);
-          if (!p.canPocket) expect(p.pocketed).toBe(0);
         }
       }
     }

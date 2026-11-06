@@ -4,7 +4,7 @@
 import type { RoleId } from "./index";
 import { ROLES } from "./roles";
 
-export const MIN_PLAYERS = 2;
+export const MIN_PLAYERS = 3;
 export const MAX_PLAYERS = 12;
 
 /**
@@ -25,25 +25,13 @@ export const MOLE_ROLE: RoleId = "mole";
 /** A deck preset. extension.md "Decks" */
 export type DeckId = "starter" | "standard" | "everything";
 
-/** Starter (first game, no events): unchanged from role deck v2 §3. */
-export const STARTER_ROLES: readonly RoleId[] = ["rookie", "insideMan", "lookout", "bagman", "cleaner"];
+/** Starter (first game, no events): role deck v2 §3 minus the roles cut in R7. */
+export const STARTER_ROLES: readonly RoleId[] = ["rookie", "lookout"];
 
-/** Standard, the default: 11 roles; Rookies fill any spare seats. */
-export const STANDARD_ROLES: readonly RoleId[] = [
-  "lookout",
-  "auditor",
-  "detective",
-  "smoothTalker",
-  "muscle",
-  "cleaner",
-  "hacker",
-  "fence",
-  "getawayDriver",
-  "mole",
-  "embezzler",
-];
+/** Standard, the default: 6 roles; Rookies fill any spare seats. */
+export const STANDARD_ROLES: readonly RoleId[] = ["lookout", "auditor", "detective", "smoothTalker", "hacker", "mole"];
 
-/** Everything: all 20 roles. */
+/** Everything: every role. */
 export const EVERYTHING_ROLES: readonly RoleId[] = Object.keys(ROLES);
 
 export const DECKS: Readonly<Record<DeckId, readonly RoleId[]>> = {
@@ -65,13 +53,12 @@ export interface BalancedMix {
 
 /**
  * The Balanced deal's fixed mix by crew size (index = players). Start values
- * from roles-v2 §3's most-weighted row under the round(n ÷ 3) cap (saboteurs →
+ * from roles-v2 §3's most-weighted row under the round(n ÷ 3) cap (its spoilers →
  * Lone wolves, accomplices → Wildcards; at 5–6 the 50/50 tie takes the row
  * with a Wildcard, provisional). Tuned by the R6 balance pass (r6-balance.md:
  * 4p and 8p gained a seat over the cap); the host can't change it. extension.md Build notes "Tags, decks and dealing"
  */
 export const BALANCED_MIX: Readonly<Record<number, BalancedMix>> = {
-  2: { loneWolves: 0, wildcards: 0 },
   3: { loneWolves: 0, wildcards: 0 },
   4: { loneWolves: 1, wildcards: 1 },
   5: { loneWolves: 1, wildcards: 1 },
@@ -85,7 +72,7 @@ export const BALANCED_MIX: Readonly<Record<number, BalancedMix>> = {
 };
 
 /** Truly random deals: at most this many of each of these roles. extension.md "Truly random" */
-export const RANDOM_DEAL_SINGLETONS: readonly RoleId[] = ["mole", "embezzler"];
+export const RANDOM_DEAL_SINGLETONS: readonly RoleId[] = ["mole"];
 
 /** The host is offered "replace with a bot" for a player who missed this many rounds in a row. design §15 */
 export const REPLACE_AFTER_MISSED_ROUNDS = 2;

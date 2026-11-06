@@ -12,11 +12,9 @@ const cfg: GameConfig = {
   seed: "alibi-seed",
   players: ["p0", "p1", "p2"].map((id) => ({ id, name: id.toUpperCase(), isBot: true })),
   job: "bank",
-  rolePool: [...STARTER_ROLES], // no Muscle, so no shakedown window (task 12)
-  mole: "off",
+  rolePool: [...STARTER_ROLES], // a shakedown window only if the shop holds a Shield
   eventsEnabled: false,
   voteVisibility: "hiddenThenRevealed",
-  starterMode: false,
 };
 
 const alibi = (player: string, room: unknown): Command => ({ type: "postAlibi", player, room }) as Command;

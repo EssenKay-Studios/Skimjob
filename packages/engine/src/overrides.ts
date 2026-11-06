@@ -42,29 +42,18 @@ function checkFields(raw: unknown, path: string, fields: Readonly<Record<string,
 }
 
 const ROOM_FIELDS = { loot: count, heatPressure: finite } as const;
-const ROLE_SCORING_FIELDS = { lootPerPointOverFinalTarget: count } as const;
 
 /** The numbers each power may have overridden: all of its own, never another role's. design §8 */
 const POWER_FIELDS: { readonly [K in RolePower["kind"]]: Readonly<Record<string, Rule>> } = {
   none: {},
   lookout: { extraRooms: positiveCount },
-  fenceSafe: { perAct: positiveCount, tokenSafe: count },
   loopCameras: { perAct: positiveCount },
   voteWeight: { weight: positiveCount },
-  cancelShakedown: { perGame: positiveCount },
-  blackmail: { perAct: positiveCount },
-  forge: { perAct: positiveCount },
-  embezzle: { perAct: positiveCount, take: count },
-  snitch: {},
   audit: { perAct: positiveCount },
   checkStash: { perAct: positiveCount },
   tipOff: { perAct: positiveCount, perGame: positiveCount },
   bless: { perAct: positiveCount },
-  bagman: { bonus: count },
-  cleaner: { visitors: positiveCount },
   fixer: { stopAt: count },
-  foresee: {},
-  getaway: { reverse: count, tokenHeat: count },
 };
 
 /** The numbers each event effect may have overridden: its own only. design §10 */
@@ -90,7 +79,7 @@ export function validateOverrides(raw: unknown, job: JobDef, roles: RoleTable = 
   if (raw === undefined || raw === null) return [];
   const errors: string[] = [];
   if (!isObject(raw)) return ["contentOverrides must be an object"];
-  const known = ["rooms", "heat", "checkpoints", "shakedown", "duel", "police", "perks", "roles", "events"];
+  const known = ["rooms", "heat", "checkpoints", "shakedown", "police", "perks", "roles", "events"];
   for (const key of Object.keys(raw)) if (!known.includes(key)) errors.push(`contentOverrides.${key} is not an overridable section`);
 
   if (raw.rooms !== undefined) {
@@ -124,9 +113,6 @@ export function validateOverrides(raw: unknown, job: JobDef, roles: RoleTable = 
   }
   if (raw.shakedown !== undefined) {
     checkFields(raw.shakedown, "contentOverrides.shakedown", { cleanBelow: count, payout: count }, errors);
-  }
-  if (raw.duel !== undefined) {
-    checkFields(raw.duel, "contentOverrides.duel", { wrongCallOut: count }, errors);
   }
   if (raw.police !== undefined) {
     const percent: Rule = (v) => count(v) && (v as number) <= 100;
@@ -165,7 +151,7 @@ export function validateOverrides(raw: unknown, job: JobDef, roles: RoleTable = 
         }
         // Each role may tune only its own power's numbers, and its reward's count if it has one. design §8, §8.3
         const reward = def.rewards && def.rewards.length > 0 ? { rewardCount: count } : {};
-        checkFields(o, path, { ...ROLE_SCORING_FIELDS, ...POWER_FIELDS[def.power.kind], ...reward }, errors);
+        checkFields(o, path, { ...POWER_FIELDS[def.power.kind], ...reward }, errors);
       }
   }
   if (raw.events !== undefined) {
@@ -223,7 +209,6 @@ export function overrideJob(job: JobDef, overrides: ContentOverrides | null | un
     heat: { ...job.heat, ...overrides.heat },
     checkpoints: overrides.checkpoints?.perPlayer ? { perPlayer: overrides.checkpoints.perPlayer } : job.checkpoints,
     shakedown: { ...job.shakedown, ...overrides.shakedown },
-    duel: { ...job.duel, ...overrides.duel },
   };
 }
 
@@ -236,12 +221,8 @@ export function overrideRoles(roles: RoleTable, overrides: ContentOverrides | nu
     // Validated: only this power's own fields are present.
     const powerNumbers = Object.fromEntries(Object.entries(o).filter(([key]) => Object.hasOwn(POWER_FIELDS[def.power.kind], key)));
     const power = { ...def.power, ...powerNumbers } as RolePower;
-    const scoring = {
-      ...def.scoring,
-      ...(o.lootPerPointOverFinalTarget !== undefined && { lootPerPointOverFinalTarget: o.lootPerPointOverFinalTarget }),
-    };
     const rewards = o.rewardCount !== undefined && def.rewards ? def.rewards.map((r) => ({ ...r, count: o.rewardCount as number })) : def.rewards;
-    out[id] = { ...def, power, scoring, ...(rewards && { rewards }) };
+    out[id] = { ...def, power, ...(rewards && { rewards }) };
   }
   return out;
 }

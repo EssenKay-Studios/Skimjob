@@ -5,54 +5,46 @@
 // and the same in the simulator and on the server.
 //
 // Default policy (extension.md Build notes "Bots"): ★ holders and the roles
-// that leave evidence (Hacker, Forger) bluff a low-risk role (Rookie, Bagman,
-// Cleaner) nobody else has claimed when accused; the rest claim truthfully
+// that leave evidence (the Hacker) bluff a low-risk role (the Rookie) nobody
+// else has claimed when accused; the rest claim truthfully
 // with chance 1 − their "lie". Each role's own line in the v2 §4 table adjusts
 // when it claims (`CLAIM_STYLE`). These are bot settings, not game rules.
 import type { RoleId } from "@skimjob/content";
 import { roomDef, roomLoot, type PlayerCommand, type PlayerId, type PlayerView } from "@skimjob/engine";
 import type { Personality } from "./personalities";
 import type { Random } from "./bot";
-import { claimantsOf, claimsOf, couldBeDealt, isDuel, isStar, jobOf, ofType, roleOf, uniqueRole } from "./read";
+import { claimantsOf, claimsOf, couldBeDealt, isStar, jobOf, ofType, roleOf, uniqueRole } from "./read";
 import { suspicion } from "./suspicion";
 
 /**
  * How a crew role claims (v2 §4 "Claim" column):
  * - accused: the default, when accused, with chance 1 − lie;
  * - free: also without being accused (a low-risk claim);
- * - defend: only when a shakedown of it is in the air (it is always clean);
  * - evidence: also when it holds evidence it is about to vote on (its sightings, audit, check);
  * - rarely: when accused, at `RARELY` of the usual chance;
- * - afterSave: also after its power saved someone (Muscle: a clean cancel; Fixer: a stopped raid);
- * - afterVote: only once its own vote is in (Priest: never before a vote);
- * - never: not even when accused (Snitch: the target would frame it).
+ * - afterSave: also after its power saved someone (Fixer: a stopped raid);
+ * - afterVote: only once its own vote is in (Priest: never before a vote).
  */
-export type ClaimStyle = "accused" | "free" | "defend" | "evidence" | "rarely" | "afterSave" | "afterVote" | "never";
+export type ClaimStyle = "accused" | "free" | "evidence" | "rarely" | "afterSave" | "afterVote";
 
 export const CLAIM_STYLE: Readonly<Record<RoleId, ClaimStyle>> = {
   rookie: "free",
-  insideMan: "defend",
   lookout: "evidence",
   auditor: "evidence",
   detective: "evidence",
-  snitch: "never",
   smoothTalker: "rarely",
-  muscle: "afterSave",
   priest: "afterVote",
-  bagman: "free",
-  cleaner: "free",
   fixer: "afterSave",
-  mastermind: "rarely",
 };
 
 /** Share of the usual claim chance for the "rarely" roles (bot setting). */
 export const RARELY = 0.25;
 
 /** The low-risk roles a bluffing bot claims, in order. extension.md Build notes "Bots" */
-export const SAFE_BLUFFS: readonly RoleId[] = ["rookie", "bagman", "cleaner"];
+export const SAFE_BLUFFS: readonly RoleId[] = ["rookie"];
 
 /** Roles whose power leaves evidence, so they bluff too. extension.md Build notes "Bots" */
-export const EVIDENCE_ROLES: readonly RoleId[] = ["hacker", "forger"];
+export const EVIDENCE_ROLES: readonly RoleId[] = ["hacker"];
 
 /** Whether this role bluffs when accused: a ★ role or one that leaves evidence. */
 export const bluffs = (role: RoleId): boolean => isStar(role) || EVIDENCE_ROLES.includes(role);
@@ -162,21 +154,20 @@ function holdsEvidence(view: PlayerView): boolean {
   return false;
 }
 
-/** v2 §4 "afterSave": the Muscle's cancel saved a clean player (it got its Recharge), or the Fixer stopped a raid. */
+/** v2 §4 "afterSave": the Fixer stopped a raid. */
 function saved(view: PlayerView): boolean {
   const { power } = roleOf(view);
   if (power.kind === "fixer") return ofType(view.ledger, "raidStopped").length > 0 && ofType(view.caseFile, "abilityResolved").some((e) => e.ability.kind === "fixer");
-  if (power.kind === "cancelShakedown") return ofType(view.caseFile, "tokenEarned").some((e) => e.trigger === "cancelledClean");
   return false;
 }
 
 /**
  * The role to claim now, or null. Only around meetings (v2 §4: "when accused
- * at a meeting"), once per act, never in Duel. Most bots tell the truth;
+ * at a meeting"), once per act. Most bots tell the truth;
  * ★ and evidence-leaving roles bluff (`bluffFor`).
  */
 export function chooseClaim(view: PlayerView, p: Personality, random: Random, voted = view.me.vote !== null): RoleId | null {
-  if (isDuel(view) || !meetingTime(view)) return null;
+  if (!meetingTime(view)) return null;
   if (ofType(view.ledger, "roleClaimed").some((c) => c.player === view.me.id && c.act === view.act)) return null;
   const blame = accused(view);
   if (bluffs(view.me.role)) {
@@ -187,12 +178,8 @@ export function chooseClaim(view: PlayerView, p: Personality, random: Random, vo
   const truth = 1 - p.lie;
   const chance = (() => {
     switch (CLAIM_STYLE[role] ?? "accused") {
-      case "never":
-        return 0;
       case "free":
         return truth;
-      case "defend":
-        return blame === "shakedown" ? 1 : 0;
       case "evidence":
         return holdsEvidence(view) && view.phase.kind === "meeting" ? 1 : blame ? truth : 0;
       case "rarely":

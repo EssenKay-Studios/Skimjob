@@ -5,7 +5,6 @@ import { presenceOf } from "./useGame";
 import {
   agoText,
   alibiState,
-  canPocket,
   formatCountdown,
   justMissed,
   namesOf,
@@ -24,10 +23,8 @@ const config = (n = 4, extra: Partial<GameConfig> = {}): GameConfig => ({
   players: Array.from({ length: n }, (_, i) => ({ id: `p${i + 1}`, name: i === 0 ? "Ana" : `Bot · ${i}`, isBot: i > 0 })),
   job: "bank",
   rolePool: ["rookie"],
-  mole: "off",
   eventsEnabled: false,
   voteVisibility: "hiddenThenRevealed",
-  starterMode: true,
   uniqueRoles: false,
   ...extra,
 });
@@ -137,7 +134,7 @@ describe("move panel", () => {
   });
 
   it("shows a missed deadline's default move (design §5.1)", () => {
-    let s = createGame(config(2));
+    let s = createGame(config(3));
     s = run(s, { type: "submitMove", player: "p2", move: { room: "office", pocket: 0 } }, round(1));
     expect(justMissed(viewFor(s, "p1"))).toEqual({ round: 1, room: "lobby" });
     expect(justMissed(viewFor(s, "p2"))).toBeNull();
@@ -146,18 +143,11 @@ describe("move panel", () => {
     s = run(s, { type: "submitMove", player: "p1", move: { room: "office", pocket: 0 } }, round(2));
     expect(justMissed(viewFor(s, "p1"))).toBeNull();
   });
-
-  it("knows who may pocket (design §8: the Inside Man may not)", () => {
-    expect(canPocket(viewFor(createGame(config(2)), "p1"))).toBe(true);
-    const s = createGame(config(5, { rolePool: ["insideMan"], starterMode: false }));
-    expect(s.players.p1!.role).toBe("insideMan");
-    expect(canPocket(viewFor(s, "p1"))).toBe(false);
-  });
 });
 
 describe("alibis", () => {
   it("opens for the resolved round and remembers your claim (design §5.4)", () => {
-    let s = createGame(config(2));
+    let s = createGame(config(3));
     expect(alibiState(viewFor(s, "p1"))).toBeNull();
     s = run(s, round(1));
     expect(alibiState(viewFor(s, "p1"))).toEqual({ round: 1, posted: null });
@@ -169,6 +159,6 @@ describe("alibis", () => {
 
 describe("game over", () => {
   it("has no outcome until the game ends", () => {
-    expect(outcomeOf(viewFor(createGame(config(2)), "p1"))).toBeNull();
+    expect(outcomeOf(viewFor(createGame(config(3)), "p1"))).toBeNull();
   });
 });

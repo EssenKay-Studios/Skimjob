@@ -4,7 +4,7 @@ import { startGame } from "./setupGame";
 
 // M2-11: the end-of-game reveal (design §13). The gallery's hand-made game at
 // every launch width (role envelopes, who won and why, the round timeline with
-// its hidden causes; no sideways scroll), and a real Quick game played out by
+// its hidden causes; no sideways scroll), and a real 15-min game played out by
 // bots, whose reveal only appears once it has ended.
 // SHOTS_DIR=… saves the gallery section per viewport.
 const SHOTS = process.env.SHOTS_DIR;
@@ -36,7 +36,7 @@ for (const viewport of VIEWPORTS) {
       // Job done: the top of the ranking wins; four envelopes with roles and the Mole's ★.
       const crew = reveal.getByRole("list", { name: "Every role, best first" });
       await expect(crew.locator(".reveal__card")).toHaveCount(4);
-      for (const role of ["Rookie", "Mole", "Hacker", "Blackmailer"]) await expect(crew).toContainText(role);
+      for (const role of ["Rookie", "Mole", "Hacker", "Detective"]) await expect(crew).toContainText(role);
       await expect(reveal.locator(".reveal__why")).toContainText("Job done, so the top of the ranking wins: Ben.");
       await expect(crew).toContainText("★ Also wins if the cops raid or the target is missed");
       await expect(reveal.locator(".reveal__void")).toHaveCount(0);
@@ -49,15 +49,14 @@ for (const viewport of VIEWPORTS) {
       await expect(sheet).toContainText("Your camera on the Vault went offline: Cy looped it.");
       await expect(sheet).toContainText("Cy earned a token for a loop that hid a pocketer.");
 
-      // Next: police activity told apart, the stolen vote, the perk and the false claim.
+      // Next: police activity told apart, the Detective's check, the perk and the false claim.
       await reveal.getByRole("button", { name: "Next round" }).click();
       await expect(sheet.getByRole("heading", { name: "Round 2" })).toBeVisible();
       await expect(sheet).toContainText("Police activity (Heat +6) was a routine patrol.");
       await expect(sheet).toContainText("Police activity (Heat +6) was Ben's tip-off.");
-      await expect(sheet).toContainText("Bot · Dot stole your vote, and it decided the shakedown.");
+      await expect(sheet).toContainText("Stash check: Ben holds 6 or more (not clean).");
       await expect(sheet).toContainText("You bought a Peek perk");
       await expect(sheet).toContainText("Ben claimed Lookout, but was really the Mole.");
-      await expect(sheet).toContainText("Forged:");
 
       // A round chip jumps straight there: the Power cut.
       const r3 = reveal.getByRole("group", { name: "Rounds" }).getByRole("button", { name: "Round 3" });
@@ -88,7 +87,7 @@ for (const viewport of VIEWPORTS) {
   });
 }
 
-// The 12-seat Quick game QA (game.qa.spec.ts) sometimes ended 1 px or more
+// The 12-seat 15-min game QA (game.qa.spec.ts) sometimes ended 1 px or more
 // wider than a 390 px phone: a 24-character name with no break points ("W"×24)
 // in a timeline line, the "why" note or a token line would not wrap. Here the
 // gallery's game with 24-character names, every ending and every round, at

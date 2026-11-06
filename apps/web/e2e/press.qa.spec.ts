@@ -27,7 +27,7 @@ async function guest(browser: Browser) {
   const ctx = await browser.newContext({ viewport: { width: 1024, height: 800 } });
   return ctx.newPage();
 }
-const LONG = (tag: string) => `${tag} ` + "the vault, the vents, the van and the getaway plan again ".repeat(8);
+const LONG = (tag: string) => `${tag} ` + "the vault, the vents, the van and the escape plan again ".repeat(8);
 
 test("QA: the chat's New messages pill stays inside the viewport with no sideways scroll at 1280 and 390 px", async ({ page, browser }, info) => {
   test.skip(info.project.name !== "mobile", "the viewport is set here");

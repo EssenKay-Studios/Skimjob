@@ -63,7 +63,7 @@ describe("event visibility is fixed by type — design §17.2", () => {
     >();
 
     // @ts-expect-error a dealt role can never be public
-    const leak: GameEvent = { type: "roleDealt", visibility: PUBLIC, player: "ana", role: "fence" };
+    const leak: GameEvent = { type: "roleDealt", visibility: PUBLIC, player: "ana", role: "hacker" };
     expect(leak).toBeDefined();
   });
 });

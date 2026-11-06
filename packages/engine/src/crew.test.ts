@@ -1,7 +1,7 @@
 // Role deck v2 crew roles, step R2a (docs/roles-v2.md §2, §3): Rookie,
-// Inside Man, Lookout, Auditor, Detective and their token rewards
+// Lookout, Auditor, Detective and their token rewards
 // (extension.md "Roles", "Tokens and the perk shop"); dealing limits for the
-// Snitch and Detective. The Snitch's reward is in roles.test.ts.
+// Detective.
 // design §8, §8.1, §16.1
 import { describe, expect, it } from "vitest";
 import { handleThroughAlibis } from "./alibis.testkit";
@@ -11,7 +11,6 @@ import type { GameConfig, GameEvent, GameState } from "./types";
 import { privateTo } from "./types";
 import { rolePoolFor, setupEvents, validateConfig } from "./setup";
 import { replay } from "./reduce";
-import { opensShakedownWindow } from "./meeting";
 import { rolesFor } from "./overrides";
 import { viewFor } from "./view";
 import { V015_NUMBERS } from "./v01-numbers.testkit";
@@ -21,11 +20,10 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
     seed: "crew-seed",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    // No Muscle in the pool; `run` passes the shop's Shield window (extension.md "Shakedowns").
+    // `run` passes the shop's Shield window (extension.md "Shakedowns").
     rolePool: [...STARTER_ROLES],
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
-    starterMode: false,
     ...extra,
   };
 }
@@ -92,40 +90,6 @@ const cleanBelowPerAct = BANK_JOB.shakedown.cleanBelow;
 /** 10 a round: makes every checkpoint at 3 players without much Heat. */
 const STEADY = [mv("p0", "office"), mv("p1", "office"), mv("p2", "lobby")];
 
-describe("Rookie and Inside Man: target met earns a token — extension.md \"Roles\"", () => {
-  it("each meeting 1/2 target met: a token each for the Rookie and the Inside Man, privately, before the next round", () => {
-    const s = finishAct(game(3, ["rookie", "insideMan", "lookout"]), ...STEADY);
-    expect(ofType(s.log, "checkpointChecked")[0]?.met).toBe(true);
-    expect(granted(s, "p0")).toEqual(["checkpointMade"]);
-    expect(granted(s, "p1")).toEqual(["checkpointMade"]);
-    expect(granted(s, "p2")).toEqual([]);
-    expect(ofType(s.log, "tokenEarned")[0]?.visibility).toEqual(privateTo("p0"));
-    expect(s.players.p0?.roleState.tokens).toBe(1);
-    expect(viewFor(s, "p2").caseFile.some(({ event }) => event.type === "tokenEarned")).toBe(false);
-  });
-
-  it("a missed checkpoint earns nothing; nor does the final check", () => {
-    const missed = finishAct(game(3, ["rookie", "insideMan"]), ...["p0", "p1", "p2"].map((p) => mv(p, "rooftop")));
-    expect(ofType(missed.log, "checkpointChecked")[0]?.met).toBe(false);
-    expect(ofType(missed.log, "tokenEarned")).toEqual([]);
-    let s = game(3, ["rookie"]);
-    for (let act = 1; act <= 3; act++) s = finishAct(s, ...STEADY);
-    expect(s.phase.kind).toBe("ended");
-    expect(ofType(s.log, "checkpointChecked").map((c) => c.met)).toEqual([true, true, true]);
-    expect(granted(s, "p0")).toEqual(["checkpointMade", "checkpointMade"]);
-  });
-
-  it("the count per trigger is the role's one tunable number (content override `rewardCount`, design §17.4)", () => {
-    const overrides = { roles: { rookie: { rewardCount: 2 } } };
-    expect(validateConfig(config(3, { contentOverrides: overrides }))).toEqual([]);
-    expect(validateConfig(config(3, { contentOverrides: { roles: { fence: { rewardCount: -1 } } } }))).toEqual([expect.stringMatching(/fence\.rewardCount/)]);
-    const s = finishAct(game(3, ["rookie"], { contentOverrides: overrides }), ...STEADY);
-    expect(granted(s, "p0")).toEqual(["checkpointMade", "checkpointMade"]);
-    expect(s.players.p0?.roleState.tokens).toBe(2);
-    expect(rolesFor({ contentOverrides: overrides }).rookie?.rewards?.[0]?.count).toBe(2);
-  });
-});
-
 describe("Lookout: someone it saw is caught → a token — extension.md \"Roles\"", () => {
   const watched = (pocket: number) => {
     const s = run(game(3, ["lookout"]), mv("p0", "lobby", 0, { ability: { kind: "lookout", rooms: ["vault"] } }), mv("p1", "vault", pocket), ROUND);
@@ -187,22 +151,6 @@ describe("Auditor: once per act, a room's shortfall in the latest round — v2 �
 });
 
 describe("Detective: once per act, is a stash at or above the clean threshold? — v2 §2, design §8", () => {
-  it("private yes/no against this act's threshold, counting the Fence safe like the clean check", () => {
-    let s = run(game(3, ["detective", "fence"], { contentOverrides: V015_NUMBERS }), mv("p1", "vault", 6, { ability: { kind: "fenceSafe", amount: 4 } }), mv("p2", "vault", cleanBelowPerAct - 1), ROUND);
-    s = run(s, use("p0", { kind: "checkStash", target: "p1" }));
-    expect(s.log.at(-1)).toEqual({
-      type: "abilityResolved",
-      visibility: privateTo("p0"),
-      player: "p0",
-      round: 2,
-      ability: { kind: "checkStash", target: "p1", threshold: cleanBelowPerAct, dirty: true },
-    });
-    expect(JSON.stringify(viewFor(s, "p1"))).not.toMatch(/checkStash/);
-    expect(reason(s, use("p0", { kind: "checkStash", target: "p2" }))).toMatch(/already checked/);
-    const t = run(game(3, ["detective"]), mv("p2", "vault", cleanBelowPerAct - 1), ROUND, use("p0", { kind: "checkStash", target: "p2" }));
-    expect(t.log.at(-1)).toMatchObject({ ability: { dirty: false } });
-  });
-
   it("refused on yourself, an unknown player, or for other roles", () => {
     const s = game(3, ["detective"]);
     expect(reason(s, use("p0", { kind: "checkStash", target: "p0" }))).toMatch(/another player/);
@@ -225,21 +173,14 @@ describe("Detective: once per act, is a stash at or above the clean threshold? �
   });
 });
 
-describe("dealing limits — v2 §3, design §8.1, §16.1", () => {
-  it("Snitch and Detective from 4 players; the Detective never in Duel; the Auditor anywhere", () => {
+describe("dealing limits — v2 §3, design §8.1", () => {
+  it("the Detective from 4 players; the Auditor anywhere", () => {
     const at = (n: number, extra: Partial<GameConfig> = {}) => rolePoolFor(config(n, { rolePool: [], deck: "everything", ...extra }));
-    for (const r of ["snitch", "detective"]) {
+    for (const r of ["detective"]) {
       expect(at(3)).not.toContain(r);
       expect(at(4)).toContain(r);
     }
-    expect(at(2, { duel: true })).not.toContain("detective");
-    expect(at(2, { duel: true })).toContain("auditor");
+    expect(at(3)).toContain("auditor");
     for (const r of ["auditor", "detective"]) expect(POOL_ROLES).toContain(r);
-  });
-
-  it("the shakedown window opens when the shop holds a Shield or a Muscle could be dealt (extension.md \"Shakedowns\")", () => {
-    expect(opensShakedownWindow(ROLES, ["rookie", "detective"], ["shield"])).toBe(true);
-    expect(opensShakedownWindow(ROLES, ["rookie", "muscle"], [])).toBe(true);
-    expect(opensShakedownWindow(ROLES, ["rookie", "auditor", "lookout", "insideMan", "snitch", "detective"], ["peek", "alibi", "ballot"])).toBe(false);
   });
 });

@@ -36,7 +36,6 @@ import { boardScene, seatLooks } from "../game/board";
 import { cardName, describeEvent, roleName, roomName } from "../game/describeEvent";
 import {
   alibiState,
-  canPocket,
   defaultRoom,
   jobOf,
   justMissed,
@@ -49,7 +48,7 @@ import {
   type Presence,
   type Timer,
 } from "../game/hud";
-import { hasMeetings, slotText } from "../game/meeting";
+import { slotText } from "../game/meeting";
 import { ClaimRole, DecidingPanel, MeetingNow, MeetingsPanel, ResultsBanner, RoleCard } from "./Meetings";
 import { useCountdown, useGame, useNow, type ClientCommand, type Connection, type GameChannel, type Reply } from "../game/useGame";
 import { api, ApiError, sentence, UNREACHABLE, type LobbyView } from "../api";
@@ -359,11 +358,10 @@ function Seats({ view, presence, offset, marks }: { view: PlayerView; presence: 
 function Actions({ view, timers, offset, send, autoMeetings, pick }: BoardProps & { pick: Pick }) {
   const alibi = alibiState(view);
   const p = view.phase;
-  const meetings = hasMeetings(view);
   const voting = p.kind === "meeting" || p.kind === "shakedownPending";
   return (
     <>
-      {meetings && <ResultsBanner view={view} />}
+      <ResultsBanner view={view} />
       {p.kind === "meeting" && <MeetingNow view={view} timers={timers} offset={offset} send={send} />}
       {p.kind === "shakedownPending" && <DecidingPanel view={view} timers={timers} offset={offset} />}
       {alibi && <AlibiPanel view={view} round={alibi.round} posted={alibi.posted} send={send} />}
@@ -375,7 +373,7 @@ function Actions({ view, timers, offset, send, autoMeetings, pick }: BoardProps 
       )}
       {/* During the alibi window the claim sits next to the alibi button instead of on the card. */}
       <RoleCard view={view} send={send} claim={!alibi} />
-      {meetings && !voting && <MeetingsPanel view={view} timers={timers} offset={offset} send={send} autoMeetings={autoMeetings} />}
+      {!voting && <MeetingsPanel view={view} timers={timers} offset={offset} send={send} autoMeetings={autoMeetings} />}
     </>
   );
 }
@@ -403,9 +401,8 @@ function MovePanel({ view, round, timers, offset, send, pick }: BoardProps & { r
   const [busy, setBusy] = useState(false);
   const countdown = useCountdown(timers, `round:${round}`, offset);
   const picked = options.find((o) => o.id === room) ?? null;
-  const pocketOk = canPocket(view);
   const loot = picked?.loot ?? 0;
-  const p = pocketOk ? Math.min(pocket, loot) : 0;
+  const p = Math.min(pocket, loot);
   const missed = justMissed(view);
   const changed = !mine || mine.room !== room || mine.pocket !== p || (mine.watch ?? null) !== (picked?.watcher ? watch : null);
   const ready = picked !== null && !picked.closed && (!picked.watcher || watch !== null);
@@ -461,13 +458,7 @@ function MovePanel({ view, round, timers, offset, send, pick }: BoardProps & { r
           </div>
         </div>
       )}
-      {picked && loot > 0 && (
-        pocketOk ? (
-          <SplitSlider id="split" loot={loot} pocket={p} onChange={setPocket} />
-        ) : (
-          <p className="meta">As the {roleName(view.me.role)} you hand everything in.</p>
-        )
-      )}
+      {picked && loot > 0 && <SplitSlider id="split" loot={loot} pocket={p} onChange={setPocket} />}
       <div className="move__foot">
         <Button variant="primary" seed="lock" icon={<Play />} disabled={!ready || busy || !changed} onClick={lock} className="move__lock">
           {mine && !changed ? "Locked in" : mine ? "Update move" : "Lock it in"}
@@ -562,7 +553,6 @@ export function GameOver({ view }: { view: PlayerView }) {
                 <b className="num">{r.score}</b>
                 <span className="meta">
                   stash {r.stash}
-                  {r.safe > 0 ? ` (safe ${r.safe})` : ""}
                 </span>
               </span>
               {winner && <Chip on>Winner</Chip>}

@@ -333,7 +333,7 @@ describe("kick in the lobby (design §15)", () => {
 
 describe("resilience", () => {
   it("an open socket is closed (4401) once its session expires", async () => {
-    const { id, seats } = await startGame(1, { sessionLength: "1h" });
+    const { id, seats } = await startGame(2, { sessionLength: "1h" });
     const c = await Client.open(id, seats[1]!.who);
     expect(await c.send({ chat: { text: "hi" } })).toMatchObject({ ok: true });
     clock.advance(SESSION_TTL_MS + 1000);

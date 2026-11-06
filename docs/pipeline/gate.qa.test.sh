@@ -25,7 +25,7 @@ case "$method $path" in
   "GET "*/pulls/*/reviews) f=reviews.json ;; "GET "*/issues/*/comments) f=comments.json ;;
   "GET "*/pulls/*/commits) f=pr-commits.json ;; "GET "*/pulls/*) f=pr.json ;;
   "GET "*/compare/*) f=compare.json ;; "GET "*/check-runs) f=checks.json ;; "GET "*/status) f=status.json ;;
-  "GET "*/commits/*) f=commit-${path##*/}.json ;; "GET "*/contents/*) exit 0 ;;
+  "GET "*/commits/*) f=commit-${path##*/}.json ;; "GET "*/issues) [ -f "$FIX/NO_ISSUES" ] && exit 1; f=issues.json ;;
   *) echo "fake gh: unexpected: $method $path" >&2; exit 1 ;;
 esac
 [ -f "$FIX/$f" ] || { echo "fake gh: no $f" >&2; exit 1; }
@@ -55,6 +55,7 @@ write() {
 J
   jq -n --arg c "$C" --argjson a "$authors" --arg m "feat: x\n\n$body" \
     '[{sha: $c, commit: {author: $a, message: ($m | gsub("\\\\n"; "\n"))}}]' >"$FIX/pr-commits.json"
+  echo '[{"number":90,"title":"S3a.3 — later"},{"number":79,"title":"S1 — Spec freeze: design.md single spec"}]' >"$FIX/issues.json"
   echo "{\"merged\":true,\"sha\":\"$(printf 'd%.0s' {1..40})\"}" >"$FIX/merge.json"
   # *_new: a newer review / comment after the first one.
   # Times: review, then QA, then the *_new ones, then the cross-channel ones (newest).
@@ -88,7 +89,7 @@ expect() {
   [ -f "$FIX/NOT_REST" ] && why="non-REST gh call: $(head -1 "$FIX/NOT_REST")"
   if [ "$1" = yes ] && [ -z "$why" ]; then
     [ "$(cat "$FIX/DELETED" 2>/dev/null)" = feat/x ] || why="branch not deleted"
-    [[ $(tail -1 <<<"$mout") == "merged #1 -> main ddddddd | next: "* ]] || why="merge line: $(tail -1 <<<"$mout")"
+    [[ $(tail -1 <<<"$mout") == "merged #1 -> main ddddddd | next: #79 S1 — Spec freeze: design.md single spec" ]] || why="merge line: $(tail -1 <<<"$mout")"
   fi
   if [ -z "$why" ]; then echo "ok   $2"
   else echo "FAIL $2 ($why)"; echo "$out" | tail -1; fails=$((fails + 1)); fi
@@ -165,5 +166,10 @@ reset; touch "$FIX/fail-pr-commits.json"; expect no "PR commits read fails"
 reset; review="VERDICT: APPROVE\nHead: $R"; touch "$FIX/fail-compare.json"; expect no "compare fails"
 reset; review="VERDICT: APPROVE\nHead: $R"; touch "$FIX/fail-commit-$C.json"; expect no "commit files read fails"
 reset; touch "$FIX/fail-pr.json"; expect no "PR read fails"
+
+# The "next" lookup is fail-safe: an issues API error still merges and prints a fallback.
+reset; write; touch "$FIX/NO_ISSUES"; mout=$(bash "$DIR/merge.sh" 1 2>&1)
+if [[ $(tail -1 <<<"$mout") == "merged #1 -> main ddddddd | next: see the board" ]]; then echo "ok   next lookup fails safe"
+else echo "FAIL next lookup fails safe ($(tail -1 <<<"$mout"))"; fails=$((fails + 1)); fi
 
 [ $fails -eq 0 ] && echo "all gate tests passed" || { echo "$fails gate test(s) failed"; exit 1; }

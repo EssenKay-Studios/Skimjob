@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { PERSONALITIES, createBots, runBotGame } from "@skimjob/bots";
-import { checkpointTarget, jobFor, leadersOf, ranking, replay, rolesFor, scoreFor, type GameEvent, type GameState } from "@skimjob/engine";
+import { leadersOf, ranking, replay, type GameEvent, type GameState } from "@skimjob/engine";
 import { parseSimArgs, type SimOptions } from "./args";
 import { setupGame } from "./crew";
 import { summarize } from "./metrics";
@@ -58,7 +58,7 @@ describe("design §17.4 config overrides — hostile JSON is refused, nothing po
     '{"rooms":{"vault":{"capacity":{"max":2}}}}', '{"rooms":[]}', '{"heat":null}',
   ];
   it.each(hostile)("%s", (json) => {
-    const o = opts(["-p", "2,12", "--overrides", json]);
+    const o = opts(["-p", "3,12", "--overrides", json]);
     expect(checkOptions(o).length).toBeGreaterThan(0);
     expect(({} as Record<string, unknown>).polluted).toBeUndefined();
     expect(({} as Record<string, unknown>).loot).toBeUndefined();
@@ -89,7 +89,7 @@ describe("design §17.4 outputs — same seed, same files; files only in the out
   });
 
   it("two runs with the same options write byte-identical files, and only the four files", () => {
-    const o = opts(["-n", "3", "-p", "2,3,8,12", "-s", "qa-det", "--overrides", '{"heat":{"perRound":4}}']);
+    const o = opts(["-n", "3", "-p", "3,8,12", "-s", "qa-det", "--overrides", '{"heat":{"perRound":4}}']);
     const dirs = [mkdtempSync(join(tmpdir(), "sim-qa-")), mkdtempSync(join(tmpdir(), "sim-qa-"))];
     try {
       for (const d of dirs) {
@@ -112,7 +112,7 @@ describe("design §17.4 outputs — same seed, same files; files only in the out
 // Hand-check: rebuild each record from the engine's state (replaying the log up
 // to each checkpoint) and recompute the headline metrics straight from the logs.
 describe("design §17.4 metrics — hand-checked against the engine on a fixed set", () => {
-  const o = opts(["-n", "4", "-p", "2,3,8,12", "-s", "qa-hand"]);
+  const o = opts(["-n", "4", "-p", "3,8,12", "-s", "qa-hand"]);
   const games: { state: GameState; rejections: number; n: number; i: number }[] = [];
   for (const n of o.playerCounts) {
     for (let i = 0; i < o.games; i++) {
@@ -141,12 +141,10 @@ describe("design §17.4 metrics — hand-checked against the engine on a fixed s
       expect(rec.winners).toEqual(outcome.winners);
       for (const p of rec.playerRecords) {
         const ps = state.players[p.id]!;
-        expect(p.stash).toBe(ps.stash + ps.safe);
+        expect(p.stash).toBe(ps.stash);
         expect(p.role).toBe(ps.role);
         expect(p.pocketed).toBeLessThanOrEqual(p.looted);
       }
-      const roles = rolesFor(state.config);
-      const finalTarget = checkpointTarget(jobFor(state.config), 3, rec.players);
       const log = state.log as readonly GameEvent[];
       for (const act of [1, 2] as const) {
         const at = log.findIndex((e) => e.type === "checkpointChecked" && e.act === act);
@@ -158,7 +156,7 @@ describe("design §17.4 metrics — hand-checked against the engine on a fixed s
         const mid = replay(state.config, log.slice(0, at + 1));
         const scores = mid.playerOrder.map((id) => {
           const ps = mid.players[id]!;
-          return { id, s: scoreFor(ps, roles[ps.role as keyof typeof roles], Math.max(0, mid.haul - finalTarget)) };
+          return { id, s: ps.stash };
         });
         const top = Math.max(...scores.map((x) => x.s));
         expect(recorded?.topScore).toBe(top);
@@ -173,8 +171,8 @@ describe("design §17.4 metrics — hand-checked against the engine on a fixed s
     const s = summarize(records).overall;
     const ended = games.map((g) => (g.state.phase.kind === "ended" ? g.state.phase.outcome : null)!);
     const failed = ended.filter((e) => e.result === "failed");
-    expect(s.games).toBe(16);
-    expect(s.successRate).toBe((16 - failed.length) / 16);
+    expect(s.games).toBe(12);
+    expect(s.successRate).toBe((12 - failed.length) / 12);
     expect(s.heatBustShare).toBe(failed.filter((e) => e.result === "failed" && e.reason === "heat").length / failed.length);
     const sd = games.flatMap((g) => (g.state.log as readonly GameEvent[]).filter((e) => e.type === "shakedownResolved"));
     expect(s.shakedowns.count).toBe(sd.length);
@@ -184,6 +182,6 @@ describe("design §17.4 metrics — hand-checked against the engine on a fixed s
     const credit = lookoutSeats.reduce((t, { r, p }) => t + (r.winners.includes(p.id) ? 1 / r.winners.length : 0), 0);
     expect(s.roles.lookout?.successWinShare).toBeCloseTo(credit / lookoutSeats.length, 12);
     // Per-count summaries partition the games.
-    expect(Object.values(summarize(records).byPlayers).reduce((t, m) => t + m.games, 0)).toBe(16);
+    expect(Object.values(summarize(records).byPlayers).reduce((t, m) => t + m.games, 0)).toBe(12);
   });
 });

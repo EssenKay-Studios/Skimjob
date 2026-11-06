@@ -33,8 +33,7 @@ export interface SelfView {
   readonly id: PlayerId;
   readonly role: RoleId;
   readonly stash: number;
-  readonly safe: number;
-  /** Your power's uses this act / game, and the Snitch's target. design §8 */
+  /** Your power's uses this act / game. design §8 */
   readonly roleState: RoleState;
   readonly emergencyMeetingUsed: boolean;
   /** Your own tip-offs this game (Mole; at most 3, extension.md owner ruling 4). 0 for everyone else. */
@@ -58,7 +57,7 @@ export interface SelfView {
  * recaps and for evidence cards that point at one case-file entry. design §12.1, §13
  *
  * `seq` is *not* the index in the full log: gaps there would let a player count
- * hidden events (e.g. a Fence using the safe, or who sat in Security). It is
+ * hidden events (e.g. a Hacker looping a camera, or who sat in Security). It is
  * the index among the events this player can see during the game (public, plus
  * private or secret to them), so ledger and case file share one numbering and
  * new events always get higher numbers. The reveal log numbers its own,
@@ -134,7 +133,7 @@ export interface PlayerView {
   readonly lockedIn: readonly PlayerId[];
   /** Open proposals for the act's regular meeting (public, design §11.1). */
   readonly proposals: readonly MeetingProposal[];
-  /** This game's perk shop (public; empty in starter mode), with each perk's cost in tokens. extension.md "Tokens and the perk shop" */
+  /** This game's perk shop (public), with each perk's cost in tokens. extension.md "Tokens and the perk shop" */
   readonly shop: readonly { readonly perk: PerkId; readonly cost: number }[];
   /** The roles shown at setup (public): exactly those dealt, or every role that could be; null when Hidden. extension.md "Settings" */
   readonly roleList: { readonly list: "exact" | "possible"; readonly roles: readonly RoleId[] } | null;

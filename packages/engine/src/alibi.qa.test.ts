@@ -13,11 +13,9 @@ function config(players: number, seed = "qa-alibi"): GameConfig {
     seed,
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: [...STARTER_ROLES], // no Muscle, so no shakedown window (task 12)
-    mole: "off",
+    rolePool: [...STARTER_ROLES], // a shakedown window only if the shop holds a Shield
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
-    starterMode: false,
   };
 }
 
@@ -60,8 +58,8 @@ function refused(s: GameState, command: unknown): string {
 }
 
 describe("QA alibis — design §5.4", () => {
-  it("one per player per round at 2, 3 and 12 players; every player can post once", () => {
-    for (const n of [2, 3, 12]) {
+  it("one per player per round at 3 and 12 players; every player can post once", () => {
+    for (const n of [3, 12]) {
       let s = run(createGame(config(n)), ROUND);
       const ids = s.playerOrder;
       for (const id of ids) s = ok(s, alibi(id, "lobby"));
@@ -85,7 +83,7 @@ describe("QA alibis — design §5.4", () => {
   });
 
   it("at the act boundary: round 3's alibis come before the act's meeting is awaited", () => {
-    let s = run(createGame(config(2)), ROUND, ALIBIS, ROUND, ALIBIS, ROUND);
+    let s = run(createGame(config(3)), ROUND, ALIBIS, ROUND, ALIBIS, ROUND);
     expect(s.phase).toEqual({ kind: "alibis", round: 3 });
     s = run(s, alibi("p0", "rooftop"), ALIBIS);
     expect(s.phase.kind).toBe("awaitingMeeting");
@@ -96,7 +94,7 @@ describe("QA alibis — design §5.4", () => {
   });
 
   it("lies are allowed: an alibi naming a room nobody visited is accepted", () => {
-    const s = run(createGame(config(2)), { type: "submitMove", player: "p0", move: { room: "vault", pocket: 0 } }, ROUND);
+    const s = run(createGame(config(3)), { type: "submitMove", player: "p0", move: { room: "vault", pocket: 0 } }, ROUND);
     expect(handleCommand(s, alibi("p0", "security")).ok).toBe(true);
   });
 
@@ -118,7 +116,7 @@ describe("QA alibis — design §5.4", () => {
     for (const p of [undefined, 0, "", "P0", "hasOwnProperty"]) refused(s, { type: "postAlibi", player: p, room: "lobby" });
 
     // Raid: everyone in the Vault every round until Heat hits 100.
-    let g = createGame(config(2));
+    let g = createGame(config(3));
     for (let i = 0; i < 12 && g.phase.kind !== "ended"; i++) {
       if (g.phase.kind === "alibis") g = run(g, ALIBIS);
       if (g.phase.kind === "awaitingMeeting") g = nextAct(g);
@@ -152,7 +150,7 @@ describe("QA round-named deadline — design §5", () => {
   });
 
   it("the act's last-round deadline can't be repeated while the meeting is awaited", () => {
-    const s = run(createGame(config(2)), ROUND, ALIBIS, ROUND, ALIBIS, ROUND, ALIBIS);
+    const s = run(createGame(config(3)), ROUND, ALIBIS, ROUND, ALIBIS, ROUND, ALIBIS);
     expect(s.phase.kind).toBe("awaitingMeeting");
     for (const round of [3, 4]) refused(s, deadline(round));
   });
@@ -160,7 +158,7 @@ describe("QA round-named deadline — design §5", () => {
   it("determinism: same seed + same commands give an identical log, and replay matches", () => {
     const play = () => {
       let s = run(createGame(config(5, "det")), ROUND, alibi("p3", "depositBoxes"), alibi("p0", "vault"));
-      s = run(s, ALIBIS, { type: "submitMove", player: "p1", move: { room: "office", pocket: s.players.p1?.role === "insideMan" ? 0 : 1 } }, ROUND, alibi("p1", "lobby"));
+      s = run(s, ALIBIS, { type: "submitMove", player: "p1", move: { room: "office", pocket: s.players.p1?.role === "priest" ? 0 : 1 } }, ROUND, alibi("p1", "lobby"));
       return s;
     };
     const a = play();

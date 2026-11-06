@@ -83,7 +83,7 @@ async function playOn(id: string, stop: (s: GameState) => boolean = () => false)
 describe("QA: another seat, another game, not seated (design §12.3, §13)", () => {
   it("a seat can only ever read and write its own notes, by game", async () => {
     const g1 = await startGame(3);
-    const g2 = await startGame(2);
+    const g2 = await startGame(2, 1);
     const [a, b] = g1.humans;
     const [x, y] = g2.humans;
     expect((await board(g1.id, a!.who, { subject: b!.player, tag: "suspicious", note: "a's secret on b" })).status).toBe(200);
@@ -115,7 +115,7 @@ describe("QA: another seat, another game, not seated (design §12.3, §13)", () 
   });
 
   it("not signed in, a forged session, a stranger, a lobby game, unknown and non-uuid ids", async () => {
-    const g = await startGame(2);
+    const g = await startGame(2, 1);
     const [a, b] = g.humans;
     const stranger = (await call("POST", "/auth/guest", null, { nickname: "Nosy" })).session!;
     for (const url of [`/games/${g.id}/notes`]) {
@@ -143,7 +143,7 @@ describe("QA: another seat, another game, not seated (design §12.3, §13)", () 
 
 describe("QA: bad bodies are 4xx, never 500 or a write", () => {
   it("bad JSON, wrong content types, arrays, null, strings, huge bodies", async () => {
-    const g = await startGame(2);
+    const g = await startGame(2, 1);
     const [a, b] = g.humans;
     for (const path of ["seen", "board"]) {
       const url = `/games/${g.id}/notes/${path}`;
@@ -189,7 +189,7 @@ describe("QA: bad bodies are 4xx, never 500 or a write", () => {
 
 describe("QA: note text (design §12.3)", () => {
   it("huge, invisible, control, accent-stacked notes are refused; scripts and emoji are stored as plain text", async () => {
-    const g = await startGame(2);
+    const g = await startGame(2, 1);
     const [a, b] = g.humans;
     const put = (note: unknown, tag: string | null = "unsure") => board(g.id, a!.who, { subject: b!.player, tag, note });
     expect((await put("y".repeat(10_000))).status).toBe(400);
@@ -210,7 +210,7 @@ describe("QA: note text (design §12.3)", () => {
   });
 
   it("20 racing edits of one mark: no 500s, and one row survives", async () => {
-    const g = await startGame(2);
+    const g = await startGame(2, 1);
     const [a, b] = g.humans;
     const tags = ["trusted", "unsure", "suspicious"] as const;
     const rs = await Promise.all(Array.from({ length: 20 }, (_, i) => board(g.id, a!.who, { subject: b!.player, tag: tags[i % 3], note: `edit ${i}` })));
@@ -220,9 +220,9 @@ describe("QA: note text (design §12.3)", () => {
   });
 });
 
-describe("QA: 2, 3 and 12 seats; the board and last seen after the game ends", () => {
+describe("QA: 3 and 12 seats; the board and last seen after the game ends", () => {
   for (const [people, bots] of [
-    [2, 0],
+    [2, 1],
     [3, 0],
     [4, 8],
   ] as const) {

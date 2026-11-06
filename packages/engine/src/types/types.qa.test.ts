@@ -25,7 +25,6 @@ type ExpectedVisibility = {
   rngSeeded: "reveal";
   roomsSet: "public";
   roleDealt: "private";
-  snitchTargetAssigned: "private"; // design §8: the Snitch's target is secret
   roleListShown: "public"; // extension.md "Host settings": the Exact / Possible list
   shopDealt: "public"; // extension.md "Tokens and the perk shop": the three perks on offer
   rngAdvanced: "reveal";
@@ -35,8 +34,6 @@ type ExpectedVisibility = {
   defaultMoveAssigned: "private";
   lootSplit: "private";
   abilityResolved: "private";
-  voteCompromised: "private"; // v2 §2: only the victim learns its vote is compromised, not by whom
-  sightingForged: "reveal"; // v2 §2: a forged sighting is told apart only in the end-of-game reveal
   roomSighting: "private";
   roomWatched: "private";
   pocketCount: "private";
@@ -47,9 +44,7 @@ type ExpectedVisibility = {
   policeScheduled: "reveal"; // extension.md "Police activity": the hidden moments, never shown in play
   policeCause: "reveal"; // extension.md "Police activity": patrol vs tip-off, told apart only in the reveal
   tipOffLanded: "private"; // extension.md "Police activity": only the Mole learns the tip-off landed
-  cardForeseen: "private";
   blessingPaid: "public";
-  muscleNamed: "public";
   eventFlipped: "public"; // design §10: the card is shown to everyone
   doubleCrossOffered: "private"; // design §10: only the two players know
   doubleCrossAnswered: "private"; // design §10: acceptance is secret
@@ -68,7 +63,6 @@ type ExpectedVisibility = {
   voteSealed: "private" | "secret"; // secret in "secret" vote mode, design §11.2
   voteCast: "public" | "private" | "secret";
   meetingClosed: "public";
-  votesStolen: "reveal"; // v2 §2: the Blackmailer's steals, told only in the end-of-game reveal
   shakedownPending: "public";
   shakedownCancelled: "public"; // design §8: says it was cancelled, not who did it
   shakedownResolved: "public";
@@ -78,8 +72,6 @@ type ExpectedVisibility = {
   perkUsed: "private";
   rigPicked: "private";
   alibiVerified: "public"; // design §8.3: the Verified stamp is for everyone
-  callOutMade: "private"; // design §16.1: hidden until the act's end (provisional)
-  callOutResolved: "public";
   gameEnded: "public";
 };
 
@@ -232,7 +224,7 @@ describe("canSee — design §17.2, §13", () => {
 
   it("only ballots can be secret — design §11.2", () => {
     // @ts-expect-error a dealt role is revealed at the end, it can't be secret
-    const role: GameEvent = { type: "roleDealt", visibility: secretTo("ana"), player: "ana", role: "fence" };
+    const role: GameEvent = { type: "roleDealt", visibility: secretTo("ana"), player: "ana", role: "hacker" };
     expect(role).toBeDefined();
   });
 });

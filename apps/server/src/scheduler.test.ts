@@ -111,7 +111,7 @@ describe("presets (design §4.1)", () => {
 
 describe("all-bot games on a fake clock (M2-4 acceptance)", () => {
   for (const voteVisibility of ["hiddenThenRevealed", "open", "secret"] as VoteVisibility[]) {
-    it(`a Quick game finishes in ${voteVisibility} mode; deadlines move only by pauses, rounds take 45 s and alibis 15 s, the Muscle window runs in full`, { timeout: 60_000 }, async () => {
+    it(`a 15-min game finishes in ${voteVisibility} mode; deadlines move only by pauses, rounds take 45 s and alibis 15 s, the shakedown window runs in full`, { timeout: 60_000 }, async () => {
       const { id } = await startGame(5, { sessionLength: "quick", voteVisibility });
       const started = clock.now();
       const seen = new Map<string, number>();
@@ -123,7 +123,7 @@ describe("all-bot games on a fake clock (M2-4 acceptance)", () => {
             if (d.key.startsWith("round:") && !d.paused) expect(d.due - clock.now()).toBe(QUICK.roundMs); // design §4.1
             if (d.key.startsWith("alibis:") && !d.paused) expect(d.due - clock.now()).toBe(QUICK.alibiMs); // design §5.4
             if (d.key.startsWith("closeMeeting:")) expect(d.due - clock.now()).toBe(QUICK.meetingMs);
-            // STATUS: the Muscle's window always runs its full server-set length. design §11.3
+            // STATUS: the shakedown window always runs its full server-set length. design §11.3
             if (d.key.startsWith("resolveShakedown:")) expect(d.due - clock.now()).toBe(QUICK.shakedownWindowMs);
           }
           // A row's due time is fixed when it is made; only a pause (a bot's emergency meeting) moves it on, by the pause.
@@ -305,7 +305,7 @@ describe("early round end under a pause (review of #44; owner decision, 2 Nov; d
     expect(await app.scheduler.tick()).toBe(1);
     expect((await load(id)).phase).toEqual({ kind: "meeting", meetingId });
     const pausedAt = clock.now();
-    // Through the meeting (and any Muscle window): both rows stay paused, the round never resolves.
+    // Through the meeting (and any shakedown window): both rows stay paused, the round never resolves.
     for (let i = 0; i < 20; i++) {
       const s = await load(id);
       if (s.phase.kind !== "meeting" && s.phase.kind !== "shakedownPending") break;

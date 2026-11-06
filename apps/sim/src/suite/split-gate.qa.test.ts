@@ -14,7 +14,7 @@ const n = 5;
 /** `s` seats of a role at crew size 5 winning `share` of them: ratio = share × 5. */
 const seats = (s: number, share: number): SeatTally => ({ seats: s, credit: s * share, fair: s / n, successCredit: 0, earned: 0, spent: 0 });
 const BIG = 40000;
-const team = { auditor: seats(BIG, 0.15), cleaner: seats(BIG, 0.15) }; // pooled ratio 0.75
+const team = { auditor: seats(BIG, 0.15), fixer: seats(BIG, 0.15) }; // pooled ratio 0.75
 const starOf = (roles: Record<string, SeatTally>, role: string) => splitParityOf(roles).stars.find((x) => x.role === role);
 
 describe("QA #51: team-role spread gate — TEAM_PARITY_MAX_SPREAD", { timeout: 10_000 }, () => {
@@ -24,20 +24,20 @@ describe("QA #51: team-role spread gate — TEAM_PARITY_MAX_SPREAD", { timeout: 
   });
 
   it("FAILs a team spread of 0.25 (confirmed with many seats, inconclusive with few)", () => {
-    const sure = splitParityOf({ auditor: seats(BIG, 0.12), cleaner: seats(BIG, 0.17) }).team;
+    const sure = splitParityOf({ auditor: seats(BIG, 0.12), fixer: seats(BIG, 0.17) }).team;
     expect(sure.spread).toBe(0.25);
     expect(sure.check).toEqual({ verdict: "fail", sure: true });
-    const noisy = splitParityOf({ auditor: seats(150, 0.12), cleaner: seats(150, 0.17) }).team;
+    const noisy = splitParityOf({ auditor: seats(150, 0.12), fixer: seats(150, 0.17) }).team;
     expect(noisy.check).toEqual({ verdict: "fail", sure: false });
   });
 
   it("passes exactly 0.20 (inclusive) and a tight 0.10", () => {
-    expect(splitParityOf({ auditor: seats(BIG, 0.12), cleaner: seats(BIG, 0.16) }).team.check).toEqual({ verdict: "pass", sure: false });
-    expect(splitParityOf({ auditor: seats(BIG, 0.14), cleaner: seats(BIG, 0.16) }).team.check).toEqual({ verdict: "pass", sure: true });
+    expect(splitParityOf({ auditor: seats(BIG, 0.12), fixer: seats(BIG, 0.16) }).team.check).toEqual({ verdict: "pass", sure: false });
+    expect(splitParityOf({ auditor: seats(BIG, 0.14), fixer: seats(BIG, 0.16) }).team.check).toEqual({ verdict: "pass", sure: true });
   });
 
   it("★ roles never enter the team spread, however far off they are", () => {
-    const t = splitParityOf({ ...team, fence: seats(BIG, 0.5), mole: seats(BIG, 0.01) }).team;
+    const t = splitParityOf({ ...team, mole: seats(BIG, 0.01) }).team;
     expect(t.spread).toBe(0);
     expect(t.average?.ratio).toBe(0.75);
   });
@@ -45,25 +45,23 @@ describe("QA #51: team-role spread gate — TEAM_PARITY_MAX_SPREAD", { timeout: 
 
 describe("QA #51: ★ band — STAR_BAND 0.9–1.8 × the team average", { timeout: 10_000 }, () => {
   it("FAILs a ★ role at 0.8× and at 2.0× (confirmed)", () => {
-    const roles = { ...team, mole: seats(BIG, 0.12), fence: seats(BIG, 0.3) };
-    expect(starOf(roles, "mole")).toMatchObject({ relative: 0.8, check: { verdict: "fail", sure: true } });
-    expect(starOf(roles, "fence")).toMatchObject({ relative: 2, check: { verdict: "fail", sure: true } });
+    expect(starOf({ ...team, mole: seats(BIG, 0.12) }, "mole")).toMatchObject({ relative: 0.8, check: { verdict: "fail", sure: true } });
+    expect(starOf({ ...team, mole: seats(BIG, 0.3) }, "mole")).toMatchObject({ relative: 2, check: { verdict: "fail", sure: true } });
   });
 
   it("passes inside the band, and exactly at 0.9 and 1.8 (inclusive, inconclusive)", () => {
-    const roles = { ...team, getawayDriver: seats(BIG, 0.2), embezzler: seats(BIG, 0.27), mole: seats(BIG, 0.135) };
-    expect(starOf(roles, "getawayDriver")).toMatchObject({ relative: 1.333, check: { verdict: "pass", sure: true } });
-    expect(starOf(roles, "embezzler")).toMatchObject({ relative: 1.8, check: { verdict: "pass", sure: false } });
-    expect(starOf(roles, "mole")).toMatchObject({ relative: 0.9, check: { verdict: "pass", sure: false } });
+    expect(starOf({ ...team, mole: seats(BIG, 0.2) }, "mole")).toMatchObject({ relative: 1.333, check: { verdict: "pass", sure: true } });
+    expect(starOf({ ...team, mole: seats(BIG, 0.27) }, "mole")).toMatchObject({ relative: 1.8, check: { verdict: "pass", sure: false } });
+    expect(starOf({ ...team, mole: seats(BIG, 0.135) }, "mole")).toMatchObject({ relative: 0.9, check: { verdict: "pass", sure: false } });
   });
 
   it("a 2.0× ★ role with few seats is a FAIL within noise, not confirmed; under 100 seats it is left out", () => {
-    expect(starOf({ ...team, fence: seats(200, 0.3) }, "fence")?.check).toEqual({ verdict: "fail", sure: false });
-    expect(starOf({ ...team, fence: seats(99, 0.3) }, "fence")).toBeUndefined();
+    expect(starOf({ ...team, mole: seats(200, 0.3) }, "mole")?.check).toEqual({ verdict: "fail", sure: false });
+    expect(starOf({ ...team, mole: seats(99, 0.3) }, "mole")).toBeUndefined();
   });
 
   it("the ★ range divides by the team-average interval (★ lo ÷ team hi … ★ hi ÷ team lo)", () => {
-    const thinTeam = { auditor: seats(300, 0.15), cleaner: seats(300, 0.15) };
+    const thinTeam = { auditor: seats(300, 0.15), fixer: seats(300, 0.15) };
     const x = starOf({ ...thinTeam, mole: seats(BIG, 0.25) }, "mole");
     // The ★ role is measured tightly; the noisy team average alone widens its range past the band.
     expect(x?.relative).toBeCloseTo(1.667, 3);
@@ -97,8 +95,8 @@ describe("QA #51: success band 55–70% and the report's check counts", { timeou
   });
 
   it("a confirmed ★ or team FAIL counts towards --strict in a gated group; an ungated group (3p) only reports it", () => {
-    const bad = { ...team, fence: seats(BIG, 0.4), mole: seats(BIG, 0.12), smoothTalker: seats(BIG, 0.2) };
-    const good = { ...team, fence: seats(BIG, 0.2), mole: seats(BIG, 0.2) };
+    const bad = { ...team, mole: seats(BIG, 0.4), smoothTalker: seats(BIG, 0.2) };
+    const good = { ...team, mole: seats(BIG, 0.2) };
     const ok = buildReport(o, versions, [cell("5p/balanced/events-on", 20000, 12400, good)]);
     const r = buildReport(o, versions, [cell("5p/balanced/events-on", 20000, 12400, bad), cell("3p/balanced/events-on", 20000, 12400, bad)]);
     const g5 = r.parity.find((p) => p.key.startsWith("5p"));
@@ -107,22 +105,22 @@ describe("QA #51: success band 55–70% and the report's check counts", { timeou
     expect(g5?.stars.map((x) => verdictText(x.check))).toEqual(expect.arrayContaining(["FAIL"]));
     expect(g3?.team.check.verdict).toBe("n/a");
     expect(g3?.stars.every((x) => x.check.verdict === "n/a")).toBe(true);
-    // team + fence + mole = 3 more confirmed FAILs than the clean report; the all-role spread is report-only.
+    // team + mole = 2 more confirmed FAILs than the clean report; the all-role spread is report-only.
     expect(ok.parity[0]?.check.verdict).toBe("fail"); // all-role spread 0.25 > 0.10, but not counted
     // Same rates in both (the fake tallies' Heat share FAILs either way), so the difference is the parity checks.
-    expect(r.checks.fail - ok.checks.fail).toBe(3);
-    expect(formatSuiteReport(r)).toMatch(/5p\/balanced\s+fence\s+2\.40\s+\S+\s+FAIL/);
+    expect(r.checks.fail - ok.checks.fail).toBe(2);
+    expect(formatSuiteReport(r)).toMatch(/5p\/balanced\s+mole\s+2\.40\s+\S+\s+FAIL/);
   });
 
   it("compares against a pre-split baseline (no team / stars) and flags a ★ verdict flip against a new one", () => {
-    const good = { ...team, fence: seats(BIG, 0.2) };
+    const good = { ...team, mole: seats(BIG, 0.2) };
     const before = JSON.parse(stringifyJson(buildReport(o, versions, [cell("5p/balanced/events-on", 20000, 12400, good)])));
     const old = { ...before, parity: before.parity.map(({ team: _t, stars: _s, ...p }: Record<string, unknown>) => p) };
     expect(typeof checkReport(old)).toBe("object");
-    const now = buildReport(o, versions, [cell("5p/balanced/events-on", 20000, 12400, { ...team, fence: seats(BIG, 0.3) })]);
+    const now = buildReport(o, versions, [cell("5p/balanced/events-on", 20000, 12400, { ...team, mole: seats(BIG, 0.3) })]);
     expect(() => compareReports(old, now)).not.toThrow();
-    expect(compareReports(before, now)).toMatch(/fence ★ band: PASS → FAIL/);
+    expect(compareReports(before, now)).toMatch(/mole ★ band: PASS → FAIL/);
     expect(checkReport({ ...before, parity: [{ ...before.parity[0], team: { spread: "x" } }] })).toMatch(/team isn't/);
-    expect(checkReport({ ...before, parity: [{ ...before.parity[0], stars: [{ role: "fence" }] }] })).toMatch(/stars isn't/);
+    expect(checkReport({ ...before, parity: [{ ...before.parity[0], stars: [{ role: "mole" }] }] })).toMatch(/stars isn't/);
   });
 });

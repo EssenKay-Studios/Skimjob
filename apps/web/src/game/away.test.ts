@@ -11,10 +11,8 @@ const config = (n = 5, extra: Partial<GameConfig> = {}): GameConfig => ({
   players: ["Ana", "Ben", "Cy", "Dee", "Eve", "Fay", "Gus", "Hal", "Ivy", "Jo", "Kit", "Lu"].slice(0, n).map((name, i) => ({ id: `p${i + 1}`, name, isBot: false })),
   job: "bank",
   rolePool: ["rookie"],
-  mole: "off",
   eventsEnabled: false,
   voteVisibility: "hiddenThenRevealed",
-  starterMode: true,
   uniqueRoles: false,
   ...extra,
 });
@@ -164,8 +162,8 @@ function step(s: GameState): GameState {
 describe("leaks: a recap holds only the viewer's own view (design §13, §17.2)", () => {
   for (const n of [3, 5, 9]) {
     it(`whole game at ${n} seats: every line comes from the viewer's ledger or own case file`, () => {
-      const roles = n >= 5 ? ["rookie", "lookout", "insideMan", "fence", "hacker", "auditor", "snitch"] : ["rookie"];
-      let s = createGame(config(n, { rolePool: roles, eventsEnabled: true, starterMode: false }));
+      const roles = n >= 5 ? ["rookie", "lookout", "priest", "hacker", "auditor", "detective"] : ["rookie"];
+      let s = createGame(config(n, { rolePool: roles, eventsEnabled: true }));
       const states = [s];
       for (let guard = 0; guard < 300 && s.phase.kind !== "ended"; guard++) states.push((s = step(s)));
       expect(s.phase.kind).toBe("ended");

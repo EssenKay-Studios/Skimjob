@@ -1,4 +1,4 @@
-// QA (PR #16, M2-1): store round-trips at 2/6/12 players, every event type
+// QA (PR #16, M2-1): store round-trips at 3/6/12 players, every event type
 // through the json column, concurrent appends, rollback, concurrent migrate.
 // design §17.2 (event-sourced, deterministic), §17.5; docs/m2-plan.md M2-1
 import { createBots, PERSONALITIES, runBotGame, type PersonalityId } from "@skimjob/bots";
@@ -18,10 +18,8 @@ function config(n: number, seed: string, extra: Partial<GameConfig> = {}): GameC
     players: Array.from({ length: n }, (_, i) => ({ id: `p${i}`, name: `Player ${i}`, isBot: true })),
     job: "bank",
     rolePool: [],
-    mole: "on",
     eventsEnabled: true,
     voteVisibility: "hiddenThenRevealed",
-    starterMode: false,
     ...extra,
   };
 }
@@ -53,12 +51,12 @@ beforeAll(async () => {
 }, 60_000);
 afterAll(() => db.close());
 
-describe("QA: round-trips at 2 / 6 / 12 players — design §17.2", () => {
-  const allRoles = ["rookie", "lookout", "insideMan", "fence", "hacker", "smoothTalker", "muscle", "blackmailer", "snitch", "auditor", "detective", "bagman", "cleaner", "priest", "fixer", "mastermind"];
+describe("QA: round-trips at 3 / 6 / 12 players — design §17.2", () => {
+  const allRoles = ["rookie", "lookout", "hacker", "smoothTalker", "auditor", "detective", "priest", "fixer"];
   it.each([
-    ["2 players (not Duel)", config(2, "qa-2", { mole: "off" })],
+    ["3 players", config(3, "qa-3", {})],
     ["6 players, full role pool, Open votes", config(6, "qa-6", { rolePool: allRoles, voteVisibility: "open" })],
-    ["12 players, Secret votes, Mole maybe", config(12, "qa-12", { voteVisibility: "secret", mole: "maybe" })],
+    ["12 players, Secret votes, Mole maybe", config(12, "qa-12", { voteVisibility: "secret" })],
   ])("saved in uneven batches and reloaded by a fresh store is the same game (%s)", { timeout: 60_000 }, async (_name, c) => {
     const game = botGame(c);
     const id = await newGame();
@@ -80,7 +78,7 @@ describe("QA: round-trips at 2 / 6 / 12 players — design §17.2", () => {
   });
 
   it("a whole 12-player log stored as one batch reloads the same", { timeout: 60_000 }, async () => {
-    const c = config(12, "qa-12", { voteVisibility: "secret", mole: "maybe" });
+    const c = config(12, "qa-12", { voteVisibility: "secret" });
     const game = botGame(c);
     const id = await newGame();
     const started = await store.start(id, c);

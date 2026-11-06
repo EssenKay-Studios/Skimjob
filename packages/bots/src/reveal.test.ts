@@ -14,12 +14,10 @@ function config(n: number, seed: string, extra: Partial<GameConfig> = {}): GameC
     seed,
     players: Array.from({ length: n }, (_, i) => ({ id: `r${i}`, name: `R${i}`, isBot: true })),
     job: "bank",
-    rolePool: n === 2 ? [] : (Object.keys(ROLES) as GameConfig["rolePool"][number][]),
+    rolePool: Object.keys(ROLES) as GameConfig["rolePool"][number][],
     deck: "everything",
     eventsEnabled: true,
     voteVisibility: "secret",
-    starterMode: false,
-    ...(n === 2 && { duel: true }),
     ...extra,
   };
 }
@@ -31,7 +29,7 @@ describe("reveal summary in whole bot games — design §13", () => {
   it("adds up to the ranking and explains every police activity and offline camera, for every viewer", () => {
     const seen = new Set<string>();
     for (const [n, seed] of [
-      [2, "rv-a"],
+      [3, "rv-a"],
       [5, "rv-b"],
       [8, "rv-c"],
       [12, "rv-d"],
@@ -55,8 +53,6 @@ describe("reveal summary in whole bot games — design §13", () => {
         const police = items.filter((i) => i.kind === "police");
         expect(police.length).toBe(count(log, (e) => e.type === "policeActivity"));
         expect(police.filter((i) => i.cause === "tipOff").length).toBe(count(log, (e) => e.type === "tipOffLanded"));
-        const steals = log.flatMap((e) => (e.type === "votesStolen" ? e.steals : []));
-        expect(items.filter((i) => i.kind === "voteStolen").map((i) => i.kind === "voteStolen" && i.decided)).toEqual(steals.map((st) => st.decided));
         const offline = items.filter((i) => i.kind === "cameraOffline");
         expect(offline.length).toBe(count(log, (e) => e.type === "roomWatched" && e.offline));
         for (const o of offline) if (o.cause === "hackerLoop") expect(o.hackers.length).toBeGreaterThan(0);
@@ -64,6 +60,6 @@ describe("reveal summary in whole bot games — design §13", () => {
         for (const i of items) seen.add(i.kind === "police" || i.kind === "cameraOffline" ? `${i.kind}:${i.cause}` : i.kind === "event" ? i.event.type : i.kind);
       }
     }
-    expect([...seen].sort()).toEqual(expect.arrayContaining(["police:patrol", "police:tipOff", "cameraOffline:hackerLoop", "cameraOffline:powerCut", "token", "perkBought", "perkUsed", "voteStolen", "sightingForged", "doubleCross"]));
+    expect([...seen].sort()).toEqual(expect.arrayContaining(["police:patrol", "police:tipOff", "cameraOffline:hackerLoop", "cameraOffline:powerCut", "token", "perkBought", "perkUsed", "doubleCross"]));
   }, 120_000);
 });

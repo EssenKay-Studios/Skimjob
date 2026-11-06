@@ -502,6 +502,7 @@ describe("guests and seats", () => {
     const guestUser = (await me(guestHost))!;
     const game = (await post("/games", guestHost)).body;
     await post(`/invites/${game.inviteCode}/join`, acct, { nickname: "RunAcct" });
+    await post(`/games/${game.id}/bots`, guestHost);
     expect((await post(`/games/${game.id}/start`, guestHost)).res.statusCode).toBe(200);
     await signIn("qa-same-run", { session: guestHost });
     expect(await seatUsers(game.id)).toEqual([guestUser.id, acctUser.id]);
@@ -524,11 +525,12 @@ describe("guests and seats", () => {
     const host = (await signIn("qa-mg-host")).session!;
     const game = (await post("/games", host)).body;
     await post(`/invites/${game.inviteCode}/join`, null, { nickname: "MgPal" });
+    await post(`/games/${game.id}/bots`, host);
     expect((await post(`/games/${game.id}/start`, host)).res.statusCode).toBe(200);
     const res = await get("/me/games", { [SESSION_COOKIE]: host });
     const [row] = (res.json() as { games: Record<string, unknown>[] }).games;
     expect(Object.keys(row!).sort()).toEqual(["host", "id", "nickname", "seats", "sessionLength", "status", "youAreHost"]);
-    expect(row).toMatchObject({ id: game.id, status: "running", youAreHost: true, seats: 2 });
+    expect(row).toMatchObject({ id: game.id, status: "running", youAreHost: true, seats: 3 });
     const text = res.body;
     expect(text).not.toContain(game.inviteCode);
     expect(text).not.toMatch(/"(role|playerId|player_id|user_id|userId|seed|faction|stash)"/);
@@ -574,6 +576,7 @@ describe("sign-out and re-sign-in close sockets", () => {
     const host = (await signIn(sub, { claims: { name: "Boss" } })).session!;
     const game = (await app.inject({ method: "POST", url: "/games", payload: {}, cookies: { [SESSION_COOKIE]: host } })).json() as LobbyView;
     const guest = sessionOf(await app.inject({ method: "POST", url: `/invites/${game.inviteCode}/join`, payload: { nickname: "Pal" } }))!;
+    await app.inject({ method: "POST", url: `/games/${game.id}/bots`, payload: {}, cookies: { [SESSION_COOKIE]: host } });
     const started = await app.inject({ method: "POST", url: `/games/${game.id}/start`, payload: {}, cookies: { [SESSION_COOKIE]: host } });
     expect(started.statusCode).toBe(200);
     const open = async (s: string) => new Sock(await app.injectWS(`/games/${game.id}/ws`, { headers: { cookie: `${SESSION_COOKIE}=${s}` } }));

@@ -1,0 +1,36 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignoreExportsUsedInFile": { "interface": true, "type": true },
+  "workspaces": {
+    ".": {
+      "project": ["*.ts"]
+    },
+    "packages/engine": {
+      "entry": ["src/**/*.test.ts"],
+      "project": ["src/**/*.ts"],
+      "includeEntryExports": true
+    },
+    "packages/content": {
+      "entry": ["src/**/*.test.ts"],
+      "project": ["src/**/*.ts"],
+      "includeEntryExports": true
+    },
+    "packages/bots": {
+      "entry": ["src/**/*.test.ts"],
+      "project": ["src/**/*.ts"],
+      "includeEntryExports": true
+    },
+    "apps/sim": {
+      "entry": ["src/worker.ts", "src/**/*.test.ts"],
+      "project": ["src/**/*.ts"]
+    },
+    "apps/server": {
+      "entry": ["src/**/*.test.ts"],
+      "project": ["src/**/*.ts"]
+    },
+    "apps/web": {
+      "entry": ["src/**/*.test.ts", "e2e/art-harness.qa.tsx"],
+      "project": ["src/**/*.{ts,tsx}", "e2e/**/*.{ts,tsx}"]
+    }
+  }
+}

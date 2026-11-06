@@ -1,5 +1,4 @@
-// QA (PR #22, M2-4): scheduler attacks on a fake clock. design §4.1, §5.4, §11.1, §11.3, §16.1
-import { DECKS, ROLES } from "@skimjob/content";
+// QA (PR #22, M2-4): scheduler attacks on a fake clock. design §4.1, §5.4, §11.1, §11.3
 import { viewFor, type GameState, type VoteVisibility } from "@skimjob/engine";
 import type { FastifyInstance } from "fastify";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -14,17 +13,13 @@ import { createGameStore, type GameStore } from "./store";
 import { testDb } from "./testkit";
 import { scaleTiming, TIMINGS } from "./timing";
 
-/** The Standard deck with every Wildcard and Lone wolf toggled off: no Mole, so no police moments (was saboteur "off"). */
-const TEAM_ROLES = DECKS.standard.filter((r) => ROLES[r]?.tag === "teamPlayer");
-
 const T0 = Date.UTC(2026, 10, 2, 9);
 let db: Db;
 let clock: FakeClock;
 let store: GameStore;
 let app: FastifyInstance;
-/** Seed forced on the next started game (so two runs can be compared); Duel when it has 2 seats. */
+/** Seed forced on the next started game (so two runs can be compared). */
 let forcedSeed = "qa-sched-1";
-let duelForTwo = false;
 
 /** Queries matching one of these fail once each (a transient database error), then the pattern is spent. */
 let faults: RegExp[] = [];
@@ -47,7 +42,7 @@ async function boot() {
   store = {
     ...inner,
     start: (gameId, config, inTx) =>
-      inner.start(gameId, { ...config, seed: forcedSeed, ...(duelForTwo && config.players.length === 2 ? { duel: true, roles: TEAM_ROLES } : {}) }, inTx),
+      inner.start(gameId, { ...config, seed: forcedSeed }, inTx),
   };
   app = buildServer({ db: sdb, clock, store });
   await app.ready();
@@ -66,7 +61,6 @@ beforeAll(async () => {
 afterEach(async () => {
   await db.query("delete from deadlines");
   await db.query("update games set status = 'ended' where status = 'running'");
-  duelForTwo = false;
   faults = [];
 });
 afterAll(async () => {
@@ -118,7 +112,7 @@ const count = (s: GameState, type: string, pick: (e: Record<string, unknown>) =>
 
 /** The phase a kill can land in (the brief's list). */
 const label = (s: GameState) =>
-  s.pendingEmergency && !meetingOpen(s) ? "notice" : s.phase.kind === "alibis" && s.config.duel && s.phase.round % 3 === 0 ? "checkpoint" : s.phase.kind;
+  s.pendingEmergency && !meetingOpen(s) ? "notice" : s.phase.kind;
 
 interface Run {
   log: GameState["log"];
@@ -183,23 +177,18 @@ const PRESETS: SessionLength[] = ["quick", "1h", "3h", "1d", "3d", "1w"];
 
 describe("every preset finishes all-bot games (design §4.1)", () => {
   for (const sessionLength of PRESETS) {
-    it(`${sessionLength}: all three vote modes and Duel`, { timeout: 240_000 }, async () => {
+    it(`${sessionLength}: all three vote modes`, { timeout: 240_000 }, async () => {
       for (const voteVisibility of ["hiddenThenRevealed", "open", "secret"] as VoteVisibility[]) {
         forcedSeed = `qa-${sessionLength}-${voteVisibility}`;
         const r = await play(5, { sessionLength, voteVisibility });
         expect(r.log.some((e) => e.type === "meetingOpened")).toBe(true);
       }
-      duelForTwo = true;
-      forcedSeed = `qa-${sessionLength}-duel`;
-      const duel = await play(1, { sessionLength, roles: TEAM_ROLES });
-      expect(duel.phases.has("checkpoint")).toBe(true);
-      expect(duel.log.some((e) => e.type === "meetingOpened")).toBe(false);
     });
   }
 });
 
 describe("kill/restart at every step = an uninterrupted run (same seed)", () => {
-  // The host calls an emergency in round 2's planning, so a notice, a meeting and (with luck) a Muscle window are hit.
+  // The host calls an emergency in round 2's planning, so a notice, a meeting and (with luck) a shakedown window are hit.
   const emergencyAt = async (s: GameState, _i: number, id: string, host: string) => {
     if (s.phase.kind === "planning" && s.phase.round === 2 && !s.pendingEmergency && count(s, "emergencyMeetingCalled") === 0) {
       expect(await send(id, host, { type: "callEmergency" })).toMatchObject({ ok: true });
@@ -227,16 +216,14 @@ describe("kill/restart at every step = an uninterrupted run (same seed)", () => 
     expect(b.log).toEqual(a.log);
   });
   // With bots: restart before every step; play() checks no double, no skip, no refusals, every deadline drained.
-  it("bots, quick and Duel 1w: restarting at every phase still ends cleanly", { timeout: 240_000 }, async () => {
+  it("bots, quick: restarting at every phase still ends cleanly", { timeout: 240_000 }, async () => {
     forcedSeed = "qa-restart-bots";
     const phases = new Set<string>();
     for (const seed of ["s1", "s2", "s3"]) {
       forcedSeed = `qa-restart-bots-${seed}`;
       for (const p of (await play(5, { sessionLength: "quick" }, { act: emergencyAt, restart: () => true })).phases) phases.add(p);
     }
-    duelForTwo = true;
-    for (const p of (await play(1, { sessionLength: "1w", roles: TEAM_ROLES }, { restart: () => true })).phases) phases.add(p);
-    for (const p of ["planning", "alibis", "notice", "meeting", "checkpoint"]) expect(phases.has(p), p).toBe(true);
+    for (const p of ["planning", "alibis", "notice", "meeting"]) expect(phases.has(p), p).toBe(true);
     console.log("QA restart phases covered:", [...phases].join(","));
   });
 });
@@ -378,10 +365,9 @@ describe("emergency during an open alibi window (design §5.4)", () => {
     expect(await app.scheduler.tick()).toBe(1);
     expect(await deadlines(id)).toEqual([{ key: "round:2", due: clock.now() + left, paused: false }]);
   });
-
 });
 
-describe("restart matrix after the fix (30c9f9e): bots, 10+ seeds, Duel included", () => {
+describe("restart matrix after the fix (30c9f9e): bots, 10+ seeds", () => {
   const emergencyAt = async (s: GameState, _i: number, id: string, host: string) => {
     if (s.phase.kind === "planning" && s.phase.round === 2 && !s.pendingEmergency && count(s, "emergencyMeetingCalled") === 0) {
       expect(await send(id, host, { type: "callEmergency" })).toMatchObject({ ok: true });
@@ -390,20 +376,13 @@ describe("restart matrix after the fix (30c9f9e): bots, 10+ seeds, Duel included
   for (let k = 0; k < 10; k++) {
     const sessionLength = PRESETS[k % PRESETS.length]!;
     const voteVisibility = (["hiddenThenRevealed", "open", "secret"] as VoteVisibility[])[k % 3]!;
-    it(`seed ${k}: ${sessionLength}, ${voteVisibility}, 6 seats and Duel — restart at every step = uninterrupted`, { timeout: 240_000 }, async () => {
+    it(`seed ${k}: ${sessionLength}, ${voteVisibility}, 6 seats — restart at every step = uninterrupted`, { timeout: 240_000 }, async () => {
       forcedSeed = `qa-matrix-${k}`;
       const opts = { act: emergencyAt };
       const a = await play(5, { sessionLength, voteVisibility }, opts);
       const b = await play(5, { sessionLength, voteVisibility }, { ...opts, restart: () => true });
       expect(b.fired).toEqual(a.fired);
       expect(b.log).toEqual(a.log);
-      duelForTwo = true;
-      forcedSeed = `qa-matrix-duel-${k}`;
-      const da = await play(1, { sessionLength, roles: TEAM_ROLES });
-      const db2 = await play(1, { sessionLength, roles: TEAM_ROLES }, { restart: () => true });
-      expect(db2.phases.has("checkpoint")).toBe(true);
-      expect(db2.fired).toEqual(da.fired);
-      expect(db2.log).toEqual(da.log);
     });
   }
 });
@@ -413,7 +392,8 @@ describe("transient database errors on a deadline (30c9f9e retry/backoff)", () =
   async function playWithFault(fault: RegExp | null, at: number) {
     await fresh();
     forcedSeed = "qa-fault";
-    const { id } = await startGame(5, { sessionLength: "quick" });
+    // No Mole, so no police moments: the backoff's idle time is game time, so a police moment would land elsewhere.
+    const { id } = await startGame(5, { sessionLength: "quick", roles: ["lookout", "auditor", "detective", "smoothTalker", "hacker"] });
     let idle = 0;
     for (let i = 0; i < 2000; i++) {
       if ((await load(id)).phase.kind === "ended") break;

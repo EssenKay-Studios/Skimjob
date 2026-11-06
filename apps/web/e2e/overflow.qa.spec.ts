@@ -2,7 +2,7 @@
 // 24-character names). Long names with no break points: "W"×24 (the widest
 // glyph), 24 emoji, and "W" + combining diaeresis ×12 (24 code points), all
 // within the nickname rules (1–24 code points, visible). Checked on the
-// gallery reveal and on a real fast-clock Quick game's game-over screen
+// gallery reveal and on a real fast-clock 15-min game's game-over screen
 // (ranking, reveal and its timeline, case file sheet) at 360, 390 and 768 px:
 // nothing past the edge, and every name still whole in the DOM (wrapped, not cut).
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
@@ -58,7 +58,7 @@ for (const width of WIDTHS) {
   });
 }
 
-test("real Quick game over with W×24, emoji×24 and combining-mark names: no overflow at 360/390/768 @fast-clock", async ({ browser }, info) => {
+test("real 15-min game over with W×24, emoji×24 and combining-mark names: no overflow at 360/390/768 @fast-clock", async ({ browser }, info) => {
   test.skip(info.project.name !== "mobile-fast", "one game, the widths are set here");
   test.setTimeout(400_000);
   const opts = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };

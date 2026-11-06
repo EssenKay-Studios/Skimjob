@@ -1,8 +1,8 @@
 import { mkdirSync } from "node:fs";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import { startGame } from "./setupGame";
 
-// M2-6 acceptance (docs/m2-plan.md): a host and a guest play a Quick game
+// M2-6 acceptance (docs/m2-plan.md): a host and a guest play a 15-min game
 // against bots to the end in the browser and see the ledger and the ranking.
 // The server runs with TIME_SCALE=0.1 (playwright.config.ts): 4.5 s rounds and
 // 12 s meetings, enough for the host to vote (the fast clock's 6 s windows weren't).
@@ -16,7 +16,7 @@ async function shot(page: Page, name: string) {
   await page.screenshot({ path: `${SHOTS}/game-${name}-${page.viewportSize()!.width}.png`, fullPage: true });
 }
 
-test("a host and a guest play a Quick game against bots to the end", async ({ page, browser }) => {
+test("a host and a guest play a 15-min game against bots to the end", async ({ page, browser }) => {
   test.setTimeout(300_000);
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
@@ -24,6 +24,18 @@ test("a host and a guest play a Quick game against bots to the end", async ({ pa
   const guest = await guestCtx.newPage();
   const game = await startGame(page.request, { bots: 2, guests: [guest.request] });
 
+  // The alibi window is well under a second of real time at this clock, shorter than a loaded runner's
+  // click round trips, so the host's alibi is posted from inside the page (no round trips): pick the
+  // Lobby, post, and note that the confirmation ("You told the crew ...") was shown (issue #127).
+  await page.addInitScript(() => {
+    const w = window as unknown as { __alibiShown?: boolean };
+    setInterval(() => {
+      const btn = (t: string, root: ParentNode = document) => [...root.querySelectorAll("button")].find((b) => b.textContent?.trim() === t);
+      const post = btn("Post alibi");
+      if (post) (post.disabled ? btn("Lobby", document.querySelector('[aria-label="Alibi room"]') ?? document) : post)?.click();
+      if (document.body.innerText.includes("You told the crew you were in the")) w.__alibiShown = true;
+    }, 25);
+  });
   await page.goto(`/game/${game.id}`);
   await guest.goto(`/game/${game.id}`);
   await expect(page.locator(".hud__kicker")).toContainText(/Round \d of 9/);
@@ -35,29 +47,36 @@ test("a host and a guest play a Quick game against bots to the end", async ({ pa
   let moves = 0;
   let votes = 0;
   while (!(await over.isVisible())) {
+    // Every interaction below waits generously for its click and counts only what the UI confirms ("Vote cast",
+    // "Locked in: Office", "You told the crew ..."), never the click itself. A click that fails under load (the
+    // sheet still animating, the round gone) is retried on the next pass. The three steps run side by side:
+    // one that stalls on a vanished button (a 5 s click timeout) must not eat the alibi or vote window.
+    // Issue #127: 1 s clicks that were counted, or followed by "Back to the board", left votes/alibis at 0.
+    const landed = (l: Locator) => l.waitFor({ state: "visible", timeout: 5000 }).then(() => true, () => false);
+    const click = (l: Locator) => l.click({ timeout: 5000 }).catch(() => {});
+
     // Each act's meeting (M2-7): the vote dialog opens by itself; the host skips.
-    const dialog = page.getByRole("dialog", { name: "Who's skimming?" });
-    if (await dialog.isVisible().catch(() => false)) {
-      await dialog.getByRole("group", { name: "Your vote" }).getByRole("button", { name: "Skip" }).click({ timeout: 1000 }).catch(() => {});
-      await dialog.getByRole("button", { name: "Cast vote" }).click({ timeout: 1000 }).then(() => votes++, () => {});
-      await dialog.getByRole("button", { name: "Back to the board" }).click({ timeout: 1000 }).catch(() => {});
-    }
-    const lock = page.getByRole("button", { name: "Lock it in" });
-    if (await lock.isVisible().catch(() => false)) {
-      await page.locator('.room-tile[data-room="Office"]').click({ timeout: 1000 }).catch(() => {});
-      // isEnabled waits for the element: the round can end (and the button go) in between.
-      if (await lock.isEnabled({ timeout: 500 }).catch(() => false)) {
-        await lock.click({ timeout: 1000 }).then(() => moves++, () => {});
+    const vote = async () => {
+      const dialog = page.getByRole("dialog", { name: "Who's skimming?" });
+      if (!(await dialog.isVisible().catch(() => false))) return;
+      await click(dialog.getByRole("group", { name: "Your vote" }).getByRole("button", { name: "Skip" }));
+      await click(dialog.getByRole("button", { name: "Cast vote" }));
+      if (await landed(dialog.getByRole("button", { name: "Vote cast" }))) {
+        votes++;
+        await click(dialog.getByRole("button", { name: "Back to the board" }));
       }
-    }
-    const post = page.getByRole("button", { name: "Post alibi" });
-    if (await post.isVisible().catch(() => false)) {
-      await page.getByRole("group", { name: "Alibi room" }).getByRole("button", { name: "Lobby" }).click({ timeout: 1000 }).catch(() => {});
-      await post.click({ timeout: 1000 }).then(() => alibis++, () => {});
-    }
+    };
+    const move = async () => {
+      if (!(await page.getByRole("button", { name: "Lock it in" }).isVisible().catch(() => false))) return;
+      await click(page.locator('.room-tile[data-room="Office"]'));
+      await click(page.getByRole("button", { name: "Lock it in" }));
+      if (await landed(page.getByText(/Locked in: Office/))) moves++;
+    };
+    await Promise.all([vote(), move()]);
     await page.waitForTimeout(150);
   }
   expect(moves).toBeGreaterThan(0);
+  alibis = (await page.evaluate(() => (window as unknown as { __alibiShown?: boolean }).__alibiShown)) ? 1 : 0;
   expect(alibis).toBeGreaterThan(0);
   expect(votes).toBeGreaterThan(0);
 
@@ -111,18 +130,14 @@ test("the move panel: pick a room, split the loot, lock it in, change it; reconn
   await expect(page.getByText("Miss the deadline and you go to the Lobby, handing everything in.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Lock it in" })).toBeDisabled();
 
-  // The Vault, pocketing 2 (the slider's value is the Haul share). A role that can't pocket
-  // (an Inside Man, which R5's dealing can give the host) has no slider: it hands everything in.
+  // The Vault, pocketing 2 (the slider's value is the Haul share).
   await page.locator('.room-tile[data-room="Vault"]').click();
   await expect(page.getByRole("button", { name: "Lock it in" })).toBeEnabled();
-  const pockets = (await page.locator("#split").count()) > 0;
-  if (pockets) {
-    await page.locator("#split").fill("4");
-    await expect(page.locator(".split__pocket")).toContainText("2");
-  }
+  await page.locator("#split").fill("4");
+  await expect(page.locator(".split__pocket")).toContainText("2");
   await page.getByRole("button", { name: "Lock it in" }).click();
   await expect(page.getByRole("button", { name: "Locked in" })).toBeDisabled();
-  await expect(page.getByText(pockets ? "Locked in: Vault, pocket 2." : "Locked in: Vault, all to the Haul.")).toBeVisible();
+  await expect(page.getByText("Locked in: Vault, pocket 2.")).toBeVisible();
   await expect(page.locator(".crew-seat.is-you .crook-avatar--ready")).toBeVisible(); // your own "locked in" mark (everyone's is public)
   // Lock-ins are public (owner decision, 2 Nov): the bots have locked in, the idle guest hasn't; never a room or split.
   await expect(page.locator(".crew-seat:not(.is-you) .crook-avatar--ready")).toHaveCount(3);
@@ -194,7 +209,7 @@ test("the bank board: tap a room to pick it, see who you saw and the alibi claim
 
 test("shows the default move after a missed round (design §5.1)", async ({ page }) => {
   test.setTimeout(60_000);
-  const game = await startGame(page.request, { bots: 1 });
+  const game = await startGame(page.request, { bots: 2 });
   await page.goto(`/game/${game.id}`);
   await expect(page.getByRole("heading", { name: "Round 2 · Pick your room", level: 2 })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole("status").filter({ hasText: "You missed round 1: the default move sent you to the Lobby" })).toBeVisible();

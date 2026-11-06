@@ -21,10 +21,8 @@ const config = (n: number, extra: Partial<GameConfig> = {}): GameConfig => ({
   players: Array.from({ length: n }, (_, i) => ({ id: `p${i + 1}`, name: i === 0 ? "Ana" : `Bot · B${i}`, isBot: i > 0 })),
   job: "bank",
   rolePool: ["rookie"],
-  mole: "off",
   eventsEnabled: false,
   voteVisibility: "hiddenThenRevealed",
-  starterMode: true,
   uniqueRoles: false,
   ...extra,
 });
@@ -106,9 +104,9 @@ function playAll(cfg: GameConfig, max = 400): GameState[] {
 }
 
 describe("QA: board figures come only from the viewer's view (PR #41)", () => {
-  for (const n of [2, 3, 12]) {
+  for (const n of [3, 12]) {
     it(`whole game at ${n} seats: every figure on every board, every phase, is backed by your own view`, () => {
-      const cfg = config(n, n === 2 ? { duel: true } : n === 12 ? { rolePool: ["rookie", "security", "lookout"] } : {});
+      const cfg = config(n, n === 12 ? { rolePool: ["rookie", "auditor", "lookout"] } : {});
       const states = playAll(cfg);
       const phases = new Set<string>();
       const kinds = new Set<string>();
@@ -176,7 +174,7 @@ describe("QA: Lockdown on the board from a real card flip (design §10)", () => 
   it("tapes off the shut room while planning that round, and only that round", () => {
     let found = false;
     for (let k = 0; k < 60 && !found; k++) {
-      const states = playAll(config(3, { seed: `lock-${k}`, eventsEnabled: true, starterMode: false }));
+      const states = playAll(config(3, { seed: `lock-${k}`, eventsEnabled: true }));
       for (const s of states) {
         const v = viewFor(s, "p1");
         const scene = boardScene(v);

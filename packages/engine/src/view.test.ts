@@ -18,11 +18,9 @@ const config = (voteVisibility: GameConfig["voteVisibility"] = "hiddenThenReveal
     { id: "carl", name: "Carl", isBot: false },
   ],
   job: "bank",
-  rolePool: [...STARTER_ROLES], // no Muscle, so no shakedown window (task 12)
-  mole: "off",
+  rolePool: [...STARTER_ROLES], // a shakedown window only if the shop holds a Shield
   eventsEnabled: false,
   voteVisibility,
-  starterMode: false,
 });
 
 const VIEWERS = ["ana", "ben", "carl"]; // carl owns no sample event
@@ -86,7 +84,7 @@ describe("ledger and case file are narrowed by type — design §13", () => {
 });
 
 describe("viewFor — the viewer's own data and public state — design §13", () => {
-  it("me: own role, stash, safe, move and ballots; others: seat info only", () => {
+  it("me: own role, stash, move and ballots; others: seat info only", () => {
     let s = createGame(config());
     s = run(s, { type: "submitMove", player: "ana", move: { room: "office", pocket: 1 } }, { type: "sealVote", player: "ben", vote: { kind: "skip" } });
     const ana = viewFor(s, "ana");
@@ -94,8 +92,7 @@ describe("viewFor — the viewer's own data and public state — design §13", (
       id: "ana",
       role: s.players.ana?.role,
       stash: 0,
-      safe: 0,
-      roleState: { usedThisAct: 0, usedThisGame: 0, target: null, perks: [], tail: null, tokens: 0 },
+      roleState: { usedThisAct: 0, usedThisGame: 0, perks: [], tail: null, tokens: 0 },
       emergencyMeetingUsed: false,
       tipOffs: 0,
       move: { room: "office", pocket: 1 },
@@ -150,7 +147,7 @@ describe("seq numbers count only what you can see — design §13, docs/decision
     }
   });
 
-  it("hidden events (e.g. a Fence using the safe) don't shift your numbers", () => {
+  it("hidden events (e.g. a Hacker's camera loop) don't shift your numbers", () => {
     const s = createGame(config());
     const hidden: GameEvent[] = [
       { ...sampleEvents.abilityResolved, visibility: privateTo("ben"), player: "ben" },

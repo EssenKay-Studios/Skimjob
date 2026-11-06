@@ -211,12 +211,6 @@ export function roomOptions(view: PlayerView): RoomOption[] {
   });
 }
 
-/** Your role may pocket (the Inside Man hands everything in). design §8 */
-export function canPocket(view: PlayerView): boolean {
-  const setup = setupOf(view);
-  return rolesFor({ contentOverrides: setup?.contentOverrides ?? null })[view.me.role]?.canPocket ?? true;
-}
-
 /** The room a missed deadline sends you to. design §5.1 */
 export const defaultRoom = (view: PlayerView): RoomId => jobOf(view).defaultRoom;
 

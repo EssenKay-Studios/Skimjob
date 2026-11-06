@@ -6,7 +6,7 @@
 // command is refused. `handleCommand` (handle.ts) folds the events. Nothing
 // here draws randomness except the next act's event card (deck.ts, design §10):
 // meeting and proposal ids are names and log positions.
-import { MAX_SLOT_LENGTH, PERK_RULES, ROUNDS_PER_ACT, STOLEN_VOTE_WEIGHT, type PerkId, type RoleId } from "@skimjob/content";
+import { MAX_SLOT_LENGTH, PERK_RULES, ROUNDS_PER_ACT, type PerkId } from "@skimjob/content";
 import type {
   ActNumber,
   GameEvent,
@@ -20,13 +20,11 @@ import type {
   SecretVisibility,
   VoteChoice,
 } from "./types";
-import { PUBLIC, REVEAL, privateTo, secretTo } from "./types";
+import { PUBLIC, privateTo, secretTo } from "./types";
 import { checkpointTarget, clampHeat } from "./job";
-import { jobFor, powerOf, roleDefIn, rolesFor, type RoleTable } from "./overrides";
-import { dealableRoles, roleListOf } from "./setup";
+import { jobFor, powerOf } from "./overrides";
 import { emergencySpent, isPerkSpend, perkCount, shieldFor, usePerk } from "./perks";
-import { forgedBy, holdsDirty, stolenVotes } from "./accomplices";
-import { blessingEvents, checkpointRewards, dirtyShakedownRewards, grantRewards, heatTokens, muscleCancelEvents, stopRaid, useCrewPower } from "./crew";
+import { blessingEvents, checkpointRewards, dirtyShakedownRewards, holdsDirty, stopRaid, useCrewPower } from "./crew";
 import { actOfRound } from "./acts";
 import { gameEnded } from "./end";
 import { applyEvent } from "./reduce";
@@ -240,40 +238,13 @@ function baseWeight(state: GameState, player: PlayerId): number {
 }
 
 /**
- * The ballot weights at the open meeting: `baseWeight`, except that a
- * Blackmailer's victim weighs 0 and the Blackmailer's own ballot weighs
- * `STOLEN_VOTE_WEIGHT` (+1) more per stolen vote, whatever the victim's weight
- * (v2 §2; owner, 2 Nov; nothing if it doesn't vote). design §8, §11.2
- */
-function voteWeights(state: GameState, stolen: ReadonlyMap<PlayerId, PlayerId>): (player: PlayerId) => number {
-  return (player) => {
-    let w = stolen.has(player) ? 0 : baseWeight(state, player);
-    for (const by of stolen.values()) if (by === player) w += STOLEN_VOTE_WEIGHT;
-    return w;
-  };
-}
-
-/**
  * Whether a passed shakedown waits for a cancel window (extension.md Build
- * notes "Tokens and the shop"): when a Muscle is dealt or a Shield is in the
- * shop, with the Exact role list; with the Possible or Hidden list, when a
- * Muscle could be dealt or a Shield is in the shop, so the public phase tells
- * nothing the list doesn't. design §8, §8.3
+ * notes "Tokens and the shop"): when a Shield is in the shop. design §8.3
  */
-export function opensShakedownWindow(roles: RoleTable, inGame: readonly RoleId[], shop: readonly PerkId[]): boolean {
-  return shop.includes("shield") || inGame.some((r) => roleDefIn(roles, r)?.power.kind === "cancelShakedown");
-}
+export const opensShakedownWindow = (shop: readonly PerkId[]): boolean => shop.includes("shield");
 
-const shakedownWindow = (state: GameState): boolean => {
-  const dealt = state.log.flatMap((e) => (e.type === "roleDealt" ? [e.role] : []));
-  return opensShakedownWindow(rolesFor(state.config), roleListOf(state.config) === "exact" ? dealt : dealableRoles(state.config), state.shop);
-};
-
-/**
- * The tally of the open meeting's ballots with `stolen` votes applied: the
- * public counts, the result by weight, in seat order.
- */
-function tally(state: GameState, stolen: ReadonlyMap<PlayerId, PlayerId>) {
+/** The tally of the open meeting's ballots: the public counts, the result by weight, in seat order. */
+function tally(state: GameState) {
   const meeting = state.meeting as NonNullable<GameState["meeting"]>;
   // Tally in seat order, so the event is the same however the votes arrived.
   // The public tally counts ballots; the result counts weight (Smooth talker, design §8).
@@ -284,9 +255,8 @@ function tally(state: GameState, stolen: ReadonlyMap<PlayerId, PlayerId>) {
   let weight = 0;
   const counts = new Map<PlayerId, number>();
   const weights = new Map<PlayerId, number>();
-  const voteWeight = voteWeights(state, stolen);
   for (const [voter, vote] of ballots) {
-    const w = voteWeight(voter);
+    const w = baseWeight(state, voter);
     weight += w;
     if (vote.kind === "skip") {
       skip++;
@@ -310,8 +280,7 @@ function tally(state: GameState, stolen: ReadonlyMap<PlayerId, PlayerId>) {
 export function closeMeeting(state: GameState, meetingId: unknown, draw: Draw): Result {
   const meeting = state.meeting;
   if (!meeting || meeting.id !== meetingId) return `meeting ${show(meetingId)} is not open`;
-  const stolen = stolenVotes(state, meeting.id);
-  const { ballots, skip, counts, result } = tally(state, stolen);
+  const { ballots, skip, counts, result } = tally(state);
   const events: GameEvent[] = [
     {
       type: "meetingClosed",
@@ -323,44 +292,24 @@ export function closeMeeting(state: GameState, meetingId: unknown, draw: Draw): 
       result,
     },
   ];
-  // extension.md owner ruling 5: a Blackmailer's steals decided the shakedown when it
-  // wouldn't have passed without them.
-  const decided = (id: PlayerId) => {
-    if (result.kind !== "shakedown") return false;
-    const without = new Map([...stolen].filter(([, by]) => by !== id));
-    if (without.size === stolen.size) return false;
-    const other = tally(state, without).result;
-    return other.kind !== "shakedown" || other.target !== result.target;
-  };
-  if (stolen.size > 0) {
-    const steals = [...stolen].map(([victim, blackmailer]) => ({ victim, blackmailer, decided: decided(blackmailer) }));
-    events.push({ type: "votesStolen", visibility: REVEAL, meetingId: meeting.id, steals });
-  }
-  // ...and it earns a token for that.
-  if (result.kind === "shakedown") events.push(...grantRewards(state, "stolenVoteDecided", (p) => decided(p.id)));
   const { kind, act } = meeting;
-  if (result.kind === "shakedown" && shakedownWindow(state)) {
-    // design §8: the Muscle may cancel it before it's applied (`useAbility`, then `advance { resolveShakedown }`).
+  if (result.kind === "shakedown" && opensShakedownWindow(state.shop)) {
+    // design §8.3: a Shield may cancel it before it's applied (`advance { resolveShakedown }`).
     events.push({ type: "shakedownPending", visibility: PUBLIC, meetingId: meeting.id, kind, act, target: result.target });
     return events;
   }
-  const shakedown = result.kind === "shakedown" ? { target: result.target, cancelled: false } : null;
+  const shakedown = result.kind === "shakedown" ? { target: result.target } : null;
   return [...events, ...afterVote(state, events, { meetingId: meeting.id, kind, act }, shakedown, draw)];
 }
 
-/** The shakedown window has ended: apply the shakedown (or announce the cancel), then go on. design §8, §11.3 */
+/** The shakedown window has ended: apply the shakedown (or the Shield's cancel), then go on. design §8.3, §11.3 */
 export function resolveShakedown(state: GameState, meetingId: unknown, draw: Draw): Result {
   const pending = state.pendingShakedown;
   if (!pending || pending.meetingId !== meetingId) return `no shakedown is pending for meeting ${show(meetingId)}`;
   return afterVote(state, [], pending, pending, draw);
 }
 
-/**
- * Muscle (design §8): once per game, cancel the pending shakedown. Private
- * until the window ends, when `shakedownCancelled` says only that it was
- * cancelled. Perks are spent here too (perks.ts, design §8.3), and the
- * Auditor's and Detective's powers (crew.ts).
- */
+/** `useAbility`: a perk spent (perks.ts, design §8.3), or a power used outside a move (crew.ts). design §8 */
 export function useAbility(state: GameState, command: Raw, draw: Draw): Result {
   const player = playerFor(state, command);
   if (typeof player === "string") return player;
@@ -368,27 +317,12 @@ export function useAbility(state: GameState, command: Raw, draw: Draw): Result {
   if (!isObject(ability) || typeof ability.kind !== "string") return "ability must be an object with a kind";
   if (isPerkSpend(ability.kind)) return usePerk(state, player, ability, draw);
   const power = powerOf(state.config, player.role);
-  const crew = useCrewPower(state, player, power, ability);
-  if (crew !== null) return crew;
-  if (ability.kind !== "cancelShakedown" || power.kind !== "cancelShakedown") return `your role has no ${ability.kind} ability to use now`;
-  if (player.roleState.usedThisGame >= power.perGame) return "you have already cancelled a shakedown this game";
-  const pending = state.pendingShakedown;
-  if (!pending) return "no shakedown is pending";
-  if (pending.cancelled) return "this shakedown is already cancelled";
-  return [
-    {
-      type: "abilityResolved",
-      visibility: privateTo(player.id),
-      player: player.id,
-      round: state.round,
-      ability: { kind: "cancelShakedown", meetingId: pending.meetingId, target: pending.target },
-    },
-  ];
+  return useCrewPower(state, player, power, ability) ?? `your role has no ${ability.kind} ability to use now`;
 }
 
 /**
  * After the vote (and any shakedown window): the shakedown or its cancel,
- * Snitch payouts, then for the act's regular meeting the checkpoint and what
+ * then for the act's regular meeting the checkpoint and what
  * follows (`checkpoint`). design §11.3, §11.4. `prior` are this command's
  * events so far.
  */
@@ -396,27 +330,23 @@ function afterVote(
   state: GameState,
   prior: readonly GameEvent[],
   meeting: { readonly meetingId: string; readonly kind: MeetingKind; readonly act: ActNumber },
-  shakedown: { readonly target: PlayerId; readonly cancelled: boolean } | null,
+  shakedown: { readonly target: PlayerId } | null,
   draw: Draw,
 ): GameEvent[] {
   const job = jobFor(state.config);
   const { act } = meeting;
   const events: GameEvent[] = [];
 
-  // design §11.3: the stash (never the Fence safe) goes into the Haul; a clean target is compensated.
-  // The clean check counts the Fence safe (owner answers, 1 Nov), so a Fence with a full safe isn't clean.
+  // design §11.3: the stash goes into the Haul; a clean target is compensated.
   const haul = state.haul;
-  // design §8.3: a Shield cancels it by itself, announced just like the Muscle's cancel.
-  const shield = shakedown && !shakedown.cancelled ? shieldFor(state, shakedown.target, meeting.meetingId) : [];
-  if (shakedown && (shakedown.cancelled || shield.length > 0)) {
+  // design §8.3: a Shield cancels it by itself.
+  const shield = shakedown ? shieldFor(state, shakedown.target, meeting.meetingId) : [];
+  if (shakedown && shield.length > 0) {
     events.push(...shield, { type: "shakedownCancelled", visibility: PUBLIC, meetingId: meeting.meetingId, target: shakedown.target });
-    // v2 §2: the Muscle is named if the target wasn't clean, else earns a Recharge.
-    if (shakedown.cancelled) events.push(...muscleCancelEvents(state, meeting.meetingId, shakedown.target));
   } else if (shakedown) {
     const { target } = shakedown;
-    const { stash, safe } = state.players[target] as PlayerState;
-    // v2 §2: an Embezzler holding a take is never clean; the whole stash, take and all, goes back.
-    // extension.md "Shakedowns (fixed numbers)": clean under 6 (safe counted), paid 8; the safe is shown, not taken.
+    const { stash } = state.players[target] as PlayerState;
+    // extension.md "Shakedowns (fixed numbers)": clean under 6, paid 8.
     const clean = !holdsDirty(state, target, job.shakedown.cleanBelow);
     // Paid out of the Haul, so never more than it holds (provisional).
     const compensation = clean ? Math.min(job.shakedown.payout, haul + stash) : 0;
@@ -426,31 +356,26 @@ function afterVote(
       meetingId: meeting.meetingId,
       target,
       stashRevealed: stash,
-      safeRevealed: safe,
       taken: stash,
       clean,
       compensation,
     });
-    // The roles whose token a caught cheater earns (Snitch, Lookout, Auditor, Detective, Smooth Talker). extension.md "Roles"
+    // The roles whose token a caught cheater earns (Lookout, Auditor, Detective, Smooth Talker). extension.md "Roles"
     if (!clean) events.push(...dirtyShakedownRewards(state, target, meeting.meetingId));
-    // Priest (v2 §2): a blessed target shaken down clean is compensated by the bank; a Forger that planted them earns a token.
-    else
-      events.push(
-        ...blessingEvents(state, meeting.meetingId, target, act, compensation),
-        ...grantRewards(state, "forgedShakenClean", (p) => p.id !== target && forgedBy(state, p.id).includes(target)),
-      );
+    // Priest (v2 §2): a blessed target shaken down clean is compensated by the bank.
+    else events.push(...blessingEvents(state, meeting.meetingId, target, act, compensation));
   }
   if (meeting.kind === "emergency") return events;
   return [...events, ...checkpoint(state, [...prior, ...events], act, draw)];
 }
 
 /**
- * design §11.4, §11.5: the act's checkpoint, after its meeting (or, in Duel
- * mode, its call-outs, §16.1), then the next act or the end of the game.
+ * design §11.4, §11.5: the act's checkpoint, after its meeting, then the
+ * next act or the end of the game.
  * `prior` (this command's events so far) is folded into `state` first, so the
  * Haul and Heat are as they stand now.
  */
-export function checkpoint(state: GameState, prior: readonly GameEvent[], act: ActNumber, draw: Draw): GameEvent[] {
+function checkpoint(state: GameState, prior: readonly GameEvent[], act: ActNumber, draw: Draw): GameEvent[] {
   const now = prior.reduce(applyEvent, state);
   const job = jobFor(state.config);
   const events: GameEvent[] = [];
@@ -460,10 +385,8 @@ export function checkpoint(state: GameState, prior: readonly GameEvent[], act: A
   const final = act === job.checkpoints.perPlayer.length;
   const heat = met || final ? now.heat : clampHeat(job, now.heat + job.heat.missedCheckpoint);
   events.push({ type: "checkpointChecked", visibility: PUBLIC, act, target, haul: now.haul, met, heatPenalty: heat - now.heat });
-  // extension.md gap-fills: a target met at meeting 1 or 2 earns the Rookie, Inside Man and Mastermind a token.
+  // extension.md gap-fills: a target met at meeting 1 or 2 earns the Rookie a token.
   if (met && !final) events.push(...checkpointRewards(now));
-  // extension.md gap-fills: a penalty that takes Heat to the Getaway Driver's level earns its token.
-  if (heat > now.heat) events.push(...heatTokens(events.reduce(applyEvent, now)));
   // v2 §2: a Fixer stops the penalty's raid.
   const saved = heat >= job.heat.max ? stopRaid(events.reduce(applyEvent, now), now.round) : [];
   events.push(...saved);

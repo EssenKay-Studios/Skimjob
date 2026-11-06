@@ -9,10 +9,8 @@ const config: GameConfig = {
   players: ["Ana", "Ben", "Cy"].map((name, i) => ({ id: `p${i + 1}`, name, isBot: false })),
   job: "bank",
   rolePool: ["rookie"],
-  mole: "off",
   eventsEnabled: false,
   voteVisibility: "hiddenThenRevealed",
-  starterMode: true,
   uniqueRoles: false,
 };
 function run(state: GameState, ...commands: (PlayerCommand | SystemCommand)[]): GameState {

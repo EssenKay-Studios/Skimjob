@@ -14,10 +14,8 @@ function config(humans: readonly boolean[], seed = "lockin-qa"): GameConfig {
     players: humans.map((human, i) => ({ id: `p${i}`, name: `P${i}`, isBot: !human })),
     job: "bank",
     rolePool: [...POOL_ROLES],
-    mole: "off",
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
-    starterMode: false,
   };
 }
 const crew = (n: number, humans = n) => createGame(config(Array.from({ length: n }, (_, i) => i < humans)));
@@ -39,7 +37,7 @@ const alibiDeadline = (round: number) => ({ type: "advance", deadline: { kind: "
 const other = (s: GameState) => s.rooms.find((r) => r !== "lobby" && r !== "security") ?? "lobby";
 
 describe("a move change after the first lock-in is invisible to others — design §5.1", () => {
-  for (const n of [2, 3, 12]) {
+  for (const n of [3, 12]) {
     it(`${n} players: every other seat's view is byte-identical before and after a change (room and split)`, () => {
       const s1 = run(crew(n), move("p0", "lobby", 0));
       const views1 = s1.playerOrder.map((p) => JSON.stringify(viewFor(s1, p)));
@@ -62,19 +60,19 @@ describe("a move change after the first lock-in is invisible to others — desig
   });
 
   it("out of phase: no move and no mark during alibis", () => {
-    const s = run(crew(2), move("p0"), move("p1"), roundDeadline(1));
+    const s = run(crew(3), move("p0"), move("p1"), roundDeadline(1));
     expect(s.phase.kind).toBe("alibis");
     expect(handleCommand(s, move("p0")).ok).toBe(false);
     expect(lockedIn(s)).toEqual([]);
   });
 
   it("a spoofed player id can't lock in someone else's seat when the command names an unknown seat", () => {
-    expect(handleCommand(crew(2), move("p9")).ok).toBe(false);
+    expect(handleCommand(crew(3), move("p9")).ok).toBe(false);
   });
 });
 
 describe("the default move never shows as locked in — design §5.1", () => {
-  for (const n of [2, 3, 12]) {
+  for (const n of [3, 12]) {
     it(`${n} players: only seats that moved are marked; defaults never emit moveLocked and are never in lockedIn`, () => {
       let s = run(crew(n), move("p0"));
       expect(lockedIn(s)).toEqual(["p0"]);
@@ -171,8 +169,8 @@ describe("slot lock by people — design §11.1 (owner decision, 2 Nov)", () => 
     const t = run(crew(3), propose("p0"));
     expect(t.scheduledMeeting).toBeNull();
     expect(run(t, accept("p1")).scheduledMeeting).not.toBeNull();
-    // 2 people: both needed, at 2 seats too.
-    const two = run(crew(2), propose("p1"));
+    // 2 people + 1 bot: both people needed; the bot's backing never tips it.
+    const two = run(crew(3, 2), propose("p1"), accept("p2"));
     expect(two.scheduledMeeting).toBeNull();
     expect(run(two, accept("p0")).scheduledMeeting).not.toBeNull();
   });

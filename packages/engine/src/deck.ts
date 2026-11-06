@@ -13,36 +13,13 @@ import { playerFor } from "./check";
 
 type Result = GameEvent[] | string;
 
-/** Events are off in starter mode (validateConfig also refuses starter + events) and when the host turns them off. design §8.1, §15 */
-export const eventsOn = (config: GameConfig): boolean => config.eventsEnabled && !config.starterMode;
+/** Events are on unless the host turns them off. design §8.1, §15 */
+export const eventsOn = (config: GameConfig): boolean => config.eventsEnabled;
 
 /** Whether a card flips at the start of `round`: events on, from `EVENTS_FROM_ROUND`, not past the last round. design §10 */
 export function cardRound(config: GameConfig, round: number): boolean {
   const last = jobFor(config).checkpoints.perPlayer.length * ROUNDS_PER_ACT;
   return eventsOn(config) && round >= EVENTS_FROM_ROUND && round <= last;
-}
-
-/** The card a Mastermind foresaw for `round` (it flips unless a Rig changes it), or undefined. design §8 (v2 §2) */
-export function foreseenCard(state: GameState, round: number): EventId | undefined {
-  for (let i = state.log.length - 1; i >= 0; i--) {
-    const e = state.log[i] as GameEvent;
-    if (e.type === "cardForeseen" && e.round === round) return e.card;
-  }
-  return undefined;
-}
-
-/**
- * Mastermind (v2 §2): as round `round` starts, the next round's card is drawn
- * now and each Mastermind is told it privately. Nothing is drawn when no
- * Mastermind is dealt, so the public game is the same either way.
- */
-export function foresee(config: GameConfig, roles: ReadonlyMap<PlayerId, string>, round: number, pickCard: () => EventId): GameEvent[] {
-  const next = round + 1;
-  if (!cardRound(config, next)) return [];
-  const minds = [...roles].filter(([, role]) => powerOf(config, role).kind === "foresee").map(([id]) => id);
-  if (minds.length === 0) return [];
-  const card = pickCard();
-  return minds.map((player): GameEvent => ({ type: "cardForeseen", visibility: privateTo(player), player, round: next, card }));
 }
 
 /** The card's definition. Throws for ids the content doesn't have (the log only holds drawn ones). */
@@ -66,16 +43,13 @@ const effectIs = <K extends EventEffect["kind"]>(state: GameState, kind: K): Ext
  * closed room (any room in play but the default room) and Double-cross
  * privately offers two random players a swap, both as the card is flipped, so
  * players can plan around them. A Rig for this round flips its holder's pick
- * instead of a drawn card (the oldest, if several; design §8.3); else a card a
- * Mastermind foresaw flips. Then any Mastermind foresees the next one. design §10
+ * instead of a drawn card (the oldest, if several; design §8.3). design §10
  */
 export function startRound(state: GameState, round: number, draw: Draw): GameEvent[] {
   const events: GameEvent[] = [{ type: "roundStarted", visibility: PUBLIC, round, act: actOfRound(round) }];
-  const roles = new Map(state.playerOrder.map((id) => [id, playerIn(state, id).role]));
-  const ahead = (): GameEvent[] => foresee(state.config, roles, round, () => draw.pick(EVENT_DECK));
-  if (!eventsOn(state.config) || round < EVENTS_FROM_ROUND) return [...events, ...ahead()];
+  if (!eventsOn(state.config) || round < EVENTS_FROM_ROUND) return events;
   // The oldest Rig of this round wins; later ones were spent without effect (they never learn more than the flip shows).
-  const card = state.rigs.find((r) => r.round === round)?.pick ?? foreseenCard(state, round) ?? draw.pick(EVENT_DECK);
+  const card = state.rigs.find((r) => r.round === round)?.pick ?? draw.pick(EVENT_DECK);
   const effect = cardDef(card, eventsFor(state.config)).effect;
   let room: RoomId | null = null;
   if (effect.kind === "lockdown") {
@@ -89,7 +63,7 @@ export function startRound(state: GameState, round: number, draw: Draw): GameEve
     events.push({ type: "doubleCrossOffered", visibility: privateTo(a), player: a, round, partner: b });
     events.push({ type: "doubleCrossOffered", visibility: privateTo(b), player: b, round, partner: a });
   }
-  return [...events, ...ahead()];
+  return events;
 }
 
 /**
@@ -148,8 +122,7 @@ function insideTip(state: GameState, round: number, draw: Draw): GameEvent[] {
 /**
  * Double-cross: the swap happens only if both accepted. Each role card takes
  * its uses so far with it; tokens, perks and a spent Tail stay with the player
- * (they were earned, not dealt; provisional, design §8.3); a Snitch's target
- * that would become its new holder becomes the other swapper. Nobody else is
+ * (they were earned, not dealt; provisional, design §8.3). Nobody else is
  * told (extension.md: no automatic reveals).
  */
 function doubleCross(state: GameState, round: number): GameEvent[] {
@@ -167,16 +140,15 @@ function doubleCross(state: GameState, round: number): GameEvent[] {
   }
   // Same role on both sides: nothing changes hands, so each keeps its own uses.
   const same = pa.role === pb.role;
-  const taken = (self: PlayerId, partner: PlayerId, from: PlayerState): RoleState => ({
+  const taken = (self: PlayerId, from: PlayerState): RoleState => ({
     ...from.roleState,
-    target: from.roleState.target === self ? partner : from.roleState.target,
     tokens: playerIn(state, self).roleState.tokens,
     perks: playerIn(state, self).roleState.perks,
     tail: playerIn(state, self).roleState.tail,
   });
   return [
-    { type: "doubleCrossResolved", visibility: privateTo(a), player: a, round, partner: b, swap: { role: pb.role, roleState: taken(a, b, same ? pa : pb) } },
-    { type: "doubleCrossResolved", visibility: privateTo(b), player: b, round, partner: a, swap: { role: pa.role, roleState: taken(b, a, same ? pb : pa) } },
+    { type: "doubleCrossResolved", visibility: privateTo(a), player: a, round, partner: b, swap: { role: pb.role, roleState: taken(a, same ? pa : pb) } },
+    { type: "doubleCrossResolved", visibility: privateTo(b), player: b, round, partner: a, swap: { role: pa.role, roleState: taken(b, same ? pb : pa) } },
   ];
 }
 

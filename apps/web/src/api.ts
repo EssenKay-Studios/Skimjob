@@ -17,7 +17,6 @@ export interface LobbySettings {
   readonly deal: DealStyle;
   readonly roleList: RoleListSetting;
   readonly eventsEnabled: boolean;
-  readonly starterMode: boolean;
   readonly dmNotices: boolean;
   readonly uniqueRoles: boolean;
 }

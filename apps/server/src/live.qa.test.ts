@@ -204,7 +204,7 @@ describe("QA: flooding and many sockets", () => {
     const a = await Client.open(id, humans[0]!);
     const b = await Client.open(id, humans[1]!);
     const N = MAX_QUEUED_MESSAGES;
-    // Pocket 0 (an Inside Man can't pocket); alternate two rooms that need no watch target, so "last wins" shows.
+    // Pocket 0; alternate two rooms that need no watch target, so "last wins" shows.
     const rooms = (await loadVia(id)).rooms.filter((r) => r !== "security").slice(0, 2);
     // a's first lock-in is public (moveLocked, owner decision 2 Nov); only the changes after it are hidden.
     expect(await a.send({ type: "submitMove", move: { room: rooms[1], pocket: 0 } })).toMatchObject({ ok: true });

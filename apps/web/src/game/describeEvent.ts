@@ -3,7 +3,7 @@
 // exhaustive, so a new event, ability, perk or meeting-result kind fails
 // typecheck until it has a line here. docs/m2-plan.md M2-6; design §13
 import { EVENTS, JOBS, PERKS, ROLES, type PerkId } from "@skimjob/content";
-import { meetingAfter, meetingName, targetName } from "./wording";
+import { meetingName, targetName } from "./wording";
 import type { GameEvent, MeetingResult, PlayerId, ResolvedAbility, ResolvedPerk, RoomId, VoteChoice } from "@skimjob/engine";
 
 export interface DescribeContext {
@@ -19,7 +19,7 @@ const ALL_ROOMS = Object.fromEntries(Object.values(JOBS).flatMap((j) => Object.v
 
 /** A room's display name, e.g. "Deposit boxes". */
 export const roomName = (room: RoomId): string => ALL_ROOMS[room] ?? room;
-/** A role's display name, e.g. "Inside Man". */
+/** A role's display name, e.g. "Smooth Talker". */
 export const roleName = (role: string): string => ROLES[role]?.name ?? role;
 /** An event card's display name, e.g. "Police patrol". */
 export const cardName = (card: string): string => EVENTS[card]?.name ?? card;
@@ -34,7 +34,7 @@ const shakeDown = (target: PlayerId, who: (p: PlayerId) => string) => (who(targe
 /**
  * The note every evidence card carries (design §12.1, v2 §2): "verified" only
  * means the app really showed it in that player's own case file; a Hacker's
- * loop or a Forger's fake sighting can make a camera feed false.
+ * loop can make a camera feed false.
  */
 export const EVIDENCE_CARD_NOTE = "Verified: from their own case file. Cameras can be tampered with.";
 
@@ -55,15 +55,13 @@ function line(e: GameEvent, ctx: DescribeContext): string {
 
   switch (e.type) {
     case "gameCreated":
-      return `${e.players.length} players set out to rob ${JOBS[e.job]?.name ?? e.job}${e.duel ? " (Duel)" : ""}.`;
+      return `${e.players.length} players set out to rob ${JOBS[e.job]?.name ?? e.job}.`;
     case "rngSeeded":
       return `The deck was shuffled with seed ${e.seed}.`;
     case "roomsSet":
       return `Rooms in play: ${list(e.rooms.map(roomName))}.`;
     case "roleDealt":
       return you(e.player) ? `You were dealt the ${roleName(e.role)}.` : `${ctx.name(e.player)} was the ${roleName(e.role)}.`;
-    case "snitchTargetAssigned":
-      return `${whose(e.player)} Snitch target is ${who(e.target)}.`;
     case "roleListShown":
       return `${e.list === "exact" ? "Roles in play" : "Roles that could be in play"}: ${list(e.roles.map(roleName))}.`;
     case "shopDealt":
@@ -82,12 +80,6 @@ function line(e: GameEvent, ctx: DescribeContext): string {
       return `Round ${e.round}, ${roomName(e.room)}: ${verb(e.player, "found", "found")} ${e.loot} loot, ${e.toHaul} to the Haul and ${e.toStash} pocketed.`;
     case "abilityResolved":
       return ability(e.ability, e.player, e.round, { you, who, whose, verb });
-    case "voteCompromised":
-      // v2 §2: never says who, or which role was guessed.
-      return `Someone has dirt on ${who(e.player)} (round ${e.round}): ${whose(e.player)} vote is compromised at the next meeting.`;
-    case "sightingForged":
-      // Reveal-only (v2 §2): the one place a forged sighting is told apart from a real one.
-      return `Forged: ${verb(e.forger, "planted", "planted")} ${who(e.target)} in the ${roomName(e.room)} on round ${e.round}'s cameras${e.shownTo.length === 0 ? " (nobody was watching)" : `, fooling ${names(e.shownTo)}`}.`;
     case "roomSighting":
       return e.others.length === 0
         ? `Round ${e.round}: ${verb(e.player, "were", "was")} alone in the ${roomName(e.room)}.`
@@ -106,8 +98,6 @@ function line(e: GameEvent, ctx: DescribeContext): string {
       return `The cops raided in round ${e.round} at Heat ${e.heat}. The job is blown.`;
     case "raidStopped":
       return `The cops were about to raid in round ${e.round}, but the raid was stopped: Heat is back to ${e.heat}.`;
-    case "cardForeseen":
-      return `${verb(e.player, "foresaw", "foresaw")} round ${e.round}'s card: ${cardName(e.card)}.`;
     case "eventFlipped":
       return `Round ${e.round} event: ${cardName(e.card)}${e.room ? ` (the ${roomName(e.room)} is closed)` : ""}.`;
     case "doubleCrossOffered":
@@ -158,8 +148,6 @@ function line(e: GameEvent, ctx: DescribeContext): string {
       return `${who(e.target)} ${you(e.target) ? "were" : "was"} shaken down: a stash of ${e.stashRevealed}, ${e.taken} into the Haul.${e.clean ? ` Clean! The crew paid ${e.compensation} in compensation.` : ""}`;
     case "blessingPaid":
       return `${who(e.target)} ${you(e.target) ? "were" : "was"} blessed: the bank paid the compensation, so ${e.amount} went back into the Haul.`;
-    case "muscleNamed":
-      return `${verb(e.player, "were", "was")} named as the ${roleName("muscle")}: ${you(e.player) ? "you" : "they"} called off the shakedown of ${who(e.target)}, who wasn't clean.`;
     case "checkpointChecked":
       return `${targetName(e.act)}: Haul ${e.haul}, target ${e.target}, ${e.met ? "made it" : `missed${e.heatPenalty > 0 ? ` (Heat +${e.heatPenalty})` : ""}`}.`;
     case "tokenEarned":
@@ -175,20 +163,12 @@ function line(e: GameEvent, ctx: DescribeContext): string {
       return `${whose(e.player)} tip-off landed in round ${e.round}.`;
     case "policeCause":
       return `That police activity was ${e.mole === null ? "a patrol" : `${whose(e.mole)} tip-off`}.`;
-    case "votesStolen":
-      return e.steals.map((st) => `${verb(st.blackmailer, "stole", "stole")} ${whose(st.victim)} vote${st.decided ? ", and it decided the shakedown" : ""}.`).join(" ");
     case "perkUsed":
       return perk(e.perk, e.player, { you, who, whose, verb });
     case "rigPicked":
       return `${verb(e.player, "rigged", "rigged")} round ${e.round}'s card: ${cardName(e.card)}.`;
     case "alibiVerified":
       return `Verified: ${who(e.player)} really ${you(e.player) ? "were" : "was"} in the ${roomName(e.room)} in round ${e.round}.`;
-    case "callOutMade":
-      return `${verb(e.player, "called", "called")} out the other player before ${meetingName(e.act)}.`;
-    case "callOutResolved":
-      return e.caught
-        ? `Call-out, rounds ${meetingAfter(e.act - 1) + 1}–${meetingAfter(e.act)}: ${who(e.caller)} caught ${who(e.target)} skimming; ${e.amount} moves to ${who(e.caller)}.`
-        : `Call-out, rounds ${meetingAfter(e.act - 1) + 1}–${meetingAfter(e.act)}: ${who(e.caller)} got it wrong and ${you(e.caller) ? "pay" : "pays"} ${who(e.target)} ${e.amount}.`;
     case "gameEnded": {
       const o = e.outcome;
       const winners = o.winners.length === 0 ? "nobody wins" : `${names(o.winners)} ${o.winners.length === 1 && !you(o.winners[0]!) ? "wins" : "win"}`;
@@ -214,20 +194,8 @@ function ability(a: ResolvedAbility, player: PlayerId, round: number, { you, who
   switch (a.kind) {
     case "lookout":
       return `Round ${round}: ${verb(player, "kept", "kept")} lookout on the ${list(a.rooms.map(roomName))}.`;
-    case "fenceSafe":
-      return `Round ${round}: ${verb(player, "moved", "moved")} ${a.amount} into the Fence safe.`;
     case "loopCameras":
       return `Round ${round}: ${verb(player, "looped", "looped")} the cameras on the ${roomName(a.room)}.`;
-    case "blackmail":
-      return a.correct
-        ? `Round ${round}: ${verb(player, "blackmailed", "blackmailed")} ${who(a.target)} (the ${roleName(a.role)}): ${whose(a.target)} vote at the next meeting is ${you(player) ? "yours" : "theirs"}.`
-        : `Round ${round}: ${verb(player, "guessed", "guessed")} ${who(a.target)} was the ${roleName(a.role)}, wrongly.`;
-    case "forge":
-      return `Round ${round}: ${verb(player, "forged", "forged")} a sighting of ${who(a.target)} in the ${roomName(a.room)}.`;
-    case "embezzle":
-      return `Round ${round}: ${verb(player, "embezzled", "embezzled")} ${a.amount} from the Haul.`;
-    case "cancelShakedown":
-      return `${verb(player, "leaned", "leaned")} on the crew: the shakedown of ${who(a.target)} is off.`;
     case "tipOff":
       return `Round ${round}: ${verb(player, "tipped", "tipped")} off the cops.`;
     case "audit":
@@ -236,8 +204,6 @@ function ability(a: ResolvedAbility, player: PlayerId, round: number, { you, who
       return `Stash check: ${who(a.target)} ${a.dirty ? `holds ${a.threshold} or more (not clean)` : `holds less than ${a.threshold} (clean)`}.`;
     case "bless":
       return `${verb(player, "blessed", "blessed")} ${who(a.target)} until the next meeting.`;
-    case "bagman":
-      return `Round ${round}: ${verb(player, "handed", "handed")} everything in, so the bank added +${a.bonus} to the Haul.`;
     case "fixer":
       return `Round ${round}: ${verb(player, "stopped", "stopped")} the raid and lost ${a.lost} from ${whose(player)} stash.`;
     default: {

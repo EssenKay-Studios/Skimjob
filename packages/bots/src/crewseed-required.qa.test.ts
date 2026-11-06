@@ -16,10 +16,8 @@ const config = (seed: string, n: number): GameConfig => ({
   job: "bank",
   rolePool: ["rookie"],
   uniqueRoles: false,
-  mole: "off",
   eventsEnabled: false,
   voteVisibility: "hiddenThenRevealed",
-  starterMode: false,
 });
 
 /** Bots with fixed per-seat seeds; only the crewSeed varies. Records every command each bot emits. */
@@ -48,7 +46,7 @@ const play = (seed: string, n: number, crewSeed: string) => {
 };
 
 describe("QA PR #64: crewSeed required", () => {
-  for (const n of [2, 3, 8, 12]) {
+  for (const n of [3, 8, 12]) {
     it(`${n} players: same seed + same crewSeed => identical bot commands and event log, no refusals`, () => {
       const a = play(`qa64-${n}`, n, "crew-A");
       const b = play(`qa64-${n}`, n, "crew-A");

@@ -12,12 +12,12 @@ All tests are seeded and deterministic. Nothing reads the wall clock (the server
 | QA tests | `*.qa.test.ts` | Adversarial and edge cases per feature (written by QA for each PR). | `pnpm test` |
 | Engine properties | `packages/engine/src/invariants.prop.test.ts` | Invariants under random configs and command streams (below). | `pnpm test` or `npx vitest run packages/engine/src/invariants.prop.test.ts` |
 | Server scenarios | `apps/server/src/scenarios.int.test.ts` | Named end-to-end stories over the real HTTP + WebSocket API on PGlite. | `pnpm test` (`pnpm test:pg` for real Postgres) |
-| Web e2e | `apps/web/e2e/*.spec.ts` | Screens in Chromium at phone and desktop sizes, responsive rules. Size checks wait for the entrance animations to finish first: a box measured mid-animation can come out at 43.99 px. | `pnpm test:e2e` (CI: 6 shards, `--shard=i/6`; ports and clock via `E2E_*` env, see `playwright.config.ts`) |
+| Web e2e | `apps/web/e2e/*.spec.ts` | Screens in Chromium at phone and desktop sizes, responsive rules. Size checks wait for the entrance animations to finish first: a box measured mid-animation can come out at 43.99 px. | `pnpm test:e2e` (CI: 6 shards, `--shard=i/6`, job timeout 30 min because main push shards run 1.5-15+ min unbalanced; ports and clock via `E2E_*` env, see `playwright.config.ts`) |
 | Simulation suite | `apps/sim/src/suite/` | The balance targets and role parity over the whole settings matrix, with confidence intervals (below). Manual: long. | `pnpm sim:suite`, or the "Sim suite" workflow |
 | Simulator smoke | `scripts/sim-smoke.sh` | 200 all-bot games each at 3/6/12 players (events on, Everything deck) end with no refused bot command. | `bash scripts/sim-smoke.sh [games]` |
 | Typecheck | every workspace | Strict TS. New event or command types must fail exhaustive switches. | `pnpm typecheck` |
 
-Tests that check the R6 rules (Heat, loot, Duel, tokens) are replaced in S3 by tests of the R7 rules.
+Tests that check the R6 rules (Heat, loot, tokens) are replaced in S3 by tests of the R7 rules.
 
 CI (`.github/workflows/ci.yml`) runs all of these except the simulation suite on every push to `main` and every PR (docs-only PRs skip e2e and sim smoke: `docs/pipeline/common.md`). Nothing deploys from CI; releases go to Lightsail by hand (`docs/deploy.md`).
 
@@ -33,7 +33,7 @@ pnpm sim:suite -- --compare docs/balance/baseline.json
 pnpm sim:suite -- --help
 ```
 
-- **Matrix:** player counts 2–12 × setup × events on/off, with setups (`--setups`) such as `balanced` (Balanced deal, Exact role list) and `random` (Truly random). The matrix is rebuilt for the R7 rules in S3 and tuned in S5.
+- **Matrix:** player counts 3–12 × setup × events on/off, with setups (`--setups`) such as `balanced` (Balanced deal, Exact role list) and `random` (Truly random). The matrix is rebuilt for the R7 rules in S3 and tuned in S5.
 - **Adaptive:** each cell plays batches of 200 games (`--batch`, at most `--min-games`), starting with at least 400. It stops once every checked rate's 95% interval (Wilson) is within `--ci` (±2 pp), or at `--max-games` (6000). `-n N` plays a fixed N per cell instead.
 - **Checks (gates):** the S5 balance gates (heist success, raid and bust rates, role win rates within a band, the share of all-honest wins, perks not deciding games) are set in S1 and wired in S3. Cells outside the gated set are reported only and stop at `--min-games`.
 - **Reports:** the ending split, the no-winner and shared-win rates per cell, and a per-role table over all cells (win ÷ fair share).
@@ -87,7 +87,6 @@ A failure prints the broken invariant, the config and `seed`/`path`. Re-run with
 - Idle people get default moves.
 - Server restart mid-round.
 - Emergency meeting during its notice period.
-- Duel.
 - 12 players with every role.
 - The heist fails by Heat.
 - The heist fails by target.

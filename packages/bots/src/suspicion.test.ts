@@ -4,9 +4,8 @@
 import { describe, expect, it } from "vitest";
 import { viewFor, type GameState, type PlayerId } from "@skimjob/engine";
 import { SUSPICION_WEIGHTS as W, mostSuspicious, suspicion } from "./suspicion";
-import { closeAlibis, game as scripted, notInsider, round, run, type Plan } from "./testkit";
+import { closeAlibis, game, round, run, type Plan } from "./testkit";
 
-const game = (n: number, pocketers: PlayerId[] = []): GameState => scripted(n, notInsider(...pocketers));
 const scoresOf = (s: GameState, viewer: PlayerId) => suspicion(viewFor(s, viewer));
 
 describe("suspicion — design §17.3", () => {
@@ -20,7 +19,7 @@ describe("suspicion — design §17.3", () => {
 
   it("a shortfall is shared by who could have taken it, weighted by their claimed room's loot — design §5.3", () => {
     // Ben loots the Vault and pockets 4, truthfully claiming the Vault; Carl hands in the Lobby's 2.
-    const s = round(game(3, ["ben"]), {
+    const s = round(game(3), {
       ana: { room: "office" },
       ben: { room: "vault", pocket: 4 },
       carl: { room: "lobby" },
@@ -52,7 +51,7 @@ describe("suspicion — design §17.3", () => {
 
   it("an alibi that contradicts my own sighting is a lie — design §5.4, §5.2", () => {
     // Ana and Ben were both in the Vault; Ben pockets 4 and claims the Lobby (which covers the gap).
-    const s = round(game(3, ["ben"]), {
+    const s = round(game(3), {
       ana: { room: "vault" },
       ben: { room: "vault", pocket: 4, alibi: "lobby" },
       carl: { room: "office" },
@@ -105,7 +104,7 @@ describe("suspicion — design §17.3", () => {
   });
 
   it("a shakedown resets the target's score: low if clean, a little raised if not — design §11.3", () => {
-    let s = game(3, ["ben"]);
+    let s = game(3);
     for (let r = 1; r <= 3; r++) s = round(s, { ana: { room: "vault" }, ben: { room: "vault", pocket: 3, alibi: "lobby" }, carl: { room: "lobby" } });
     expect(scoresOf(s, "ana").get("ben")).toBe(3 * W.lie);
     // Act 1 meeting: Ana and Carl shake Ben down (9 in stash: not clean), then Carl, who is clean.
@@ -117,6 +116,9 @@ describe("suspicion — design §17.3", () => {
       { type: "castVote", player: "carl", vote: { kind: "shakedown", target: "ben" } },
       { type: "advance", deadline: { kind: "closeMeeting", meetingId: "act-1" } },
     );
+    // A Shield in the shop opens the shakedown window first (design §8.3).
+    const resolve = (x: GameState) => (x.pendingShakedown ? run(x, { type: "advance", deadline: { kind: "resolveShakedown", meetingId: x.pendingShakedown.meetingId } }) : x);
+    s = resolve(s);
     expect(scoresOf(s, "ana").get("ben")).toBe(W.afterDirty);
     s = run(
       s,
@@ -126,6 +128,7 @@ describe("suspicion — design §17.3", () => {
       { type: "castVote", player: "ben", vote: { kind: "shakedown", target: "carl" } },
       { type: "advance", deadline: { kind: "closeMeeting", meetingId: "emergency-ana" } },
     );
+    s = resolve(s);
     expect(scoresOf(s, "ana").get("carl")).toBe(W.afterClean);
   });
 });

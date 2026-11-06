@@ -206,19 +206,21 @@ describe("QA: races", () => {
   it("double start: one starts the game, the other is 409, and the setup is stored once", async () => {
     const { who, game } = await host();
     await join(game.inviteCode, "Ana");
+    await join(game.inviteCode, "Ben");
     const res = await Promise.all([call("POST", `/games/${game.id}/start`, who), call("POST", `/games/${game.id}/start`, who)]);
     expect(res.map((r) => r.status).sort()).toEqual([200, 409]);
     const [ev] = await db.query<{ n: number; first: number }>("select count(*)::int as n, count(distinct idx)::int as first from game_events where game_id = $1", [game.id]);
     expect(ev!.n).toBe(ev!.first);
     const [g] = await db.query<{ seed: string }>("select config->>'seed' as seed from games where id = $1", [game.id]);
     const { body } = await call("GET", `/games/${game.id}`, who);
-    expect(body.seats!.map((s) => s.playerId)).toEqual(["p1", "p2"]);
+    expect(body.seats!.map((s) => s.playerId)).toEqual(["p1", "p2", "p3"]);
     expect(g!.seed).toMatch(/^[0-9a-f]{32}$/);
   });
 
   it("join racing start: the joiner is either seated with a player id or turned away with 410", async () => {
     const { who, game } = await host();
     await join(game.inviteCode, "Ana");
+    await join(game.inviteCode, "Ben");
     const [s, j] = await Promise.all([call("POST", `/games/${game.id}/start`, who), join(game.inviteCode, "Racer")]);
     expect(s.status).toBe(200);
     const seats = (await call("GET", `/games/${game.id}`, who)).body.seats!;
@@ -280,6 +282,7 @@ describe("QA: host-only routes and other games", () => {
   it("after start: no leave, no bots, no second start", async () => {
     const { who, game } = await host();
     const ana = (await join(game.inviteCode, "Ana")).session!;
+    await join(game.inviteCode, "Ben");
     await call("POST", `/games/${game.id}/start`, who);
     expect((await call("POST", `/games/${game.id}/leave`, ana)).status).toBe(409);
     expect((await call("POST", `/games/${game.id}/bots`, who, {})).status).toBe(409);
@@ -289,6 +292,7 @@ describe("QA: host-only routes and other games", () => {
   it("the lobby view carries no user ids, seed or config", async () => {
     const { who, game } = await host();
     await join(game.inviteCode, "Ana");
+    await join(game.inviteCode, "Ben");
     await call("POST", `/games/${game.id}/start`, who);
     const text = JSON.stringify((await call("GET", `/games/${game.id}`, who)).body);
     const ids = await db.query<{ id: string }>("select user_id::text as id from seats where game_id = $1", [game.id]);
@@ -311,7 +315,7 @@ describe("QA: malformed bodies are 4xx, not 500", () => {
     expect(res.statusCode).toBeLessThan(500);
   });
 
-  it.each([["[]"], ['"x"'], ["{\"settings\":[]}"], ["{\"settings\":{\"constructor\":1}}"], ["{\"settings\":{\"mole\":\"on\",\"starterMode\":true}}"]])(
+  it.each([["[]"], ['"x"'], ["{\"settings\":[]}"], ["{\"settings\":{\"constructor\":1}}"], ["{\"settings\":{\"mole\":\"on\",\"seed\":\"x\"}}"]])(
     "POST /games %s",
     async (raw) => {
       const who = await guest("H");

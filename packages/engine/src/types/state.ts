@@ -33,8 +33,8 @@ export type Phase =
   /**
    * `round` has resolved; players post their alibis for it until the alibi
    * deadline (`advance { kind: "alibis", round }`). Then the next round's
-   * planning starts, or after an act's last round its meeting is awaited
-   * (in Duel mode, the act's call-outs and checkpoint follow). design §5.4
+   * planning starts, or after an act's last round its meeting is awaited.
+   * design §5.4
    */
   | { readonly kind: "alibis"; readonly round: number }
   /** The act's last round has resolved; waiting for its regular meeting to open. */
@@ -43,9 +43,9 @@ export type Phase =
   | { readonly kind: "meeting"; readonly meetingId: string }
   /**
    * The vote passed a shakedown on `target`; it is applied when this window's
-   * deadline passes, unless the Muscle cancels it. Opens after every passed
-   * shakedown when the role pool holds the Muscle, so it never tells anyone a
-   * Muscle was dealt. design §8, §11.3
+   * deadline passes, unless a Shield cancels it. Opens after every passed
+   * shakedown when the shop holds the Shield, so it never tells anyone who
+   * holds one. design §8.3, §11.3
    */
   | { readonly kind: "shakedownPending"; readonly meetingId: string; readonly target: PlayerId }
   /** Game over; everything is revealed. design §13 */
@@ -59,8 +59,6 @@ export interface PlayerState {
   readonly isBot: boolean;
   readonly role: RoleId;
   readonly stash: number;
-  /** Fence's hidden safe: survives shakedowns. design §8 */
-  readonly safe: number;
   /** Uses of the role's power so far (all roles share the shape). design §8 */
   readonly roleState: RoleState;
   readonly totalHandedIn: number;
@@ -77,22 +75,19 @@ export interface PlayerState {
 
 /**
  * Generic per-player role state: once-between-meetings and once-per-game uses,
- * the Snitch's target, tokens and perks. Private to the player. design §8
+ * tokens and perks. Private to the player. design §8
  */
 export interface RoleState {
   /**
    * Uses this stretch (extension.md "between meetings"; acts internally):
    * reset as the next stretch's first round starts, which is right after a
-   * regular meeting (or a Duel act end) closes with its target check;
-   * emergency meetings never reset it. Loot moved into the safe (Fence),
-   * camera loops (Hacker), role guesses (Blackmailer), tip-offs (Mole),
+   * regular meeting closes with its target check;
+   * emergency meetings never reset it. Camera loops (Hacker), tip-offs (Mole),
    * audits (Auditor), stash checks (Detective), blessings (Priest).
    */
   readonly usedThisAct: number;
-  /** Uses this game: cancelled shakedowns (Muscle). */
+  /** Uses this game: raid stops (Fixer). */
   readonly usedThisGame: number;
-  /** The Snitch's secret target; null for every other role. */
-  readonly target: PlayerId | null;
   /** Unspent tokens (extension.md "Tokens and the perk shop"); they stay with the player on a Double-cross. */
   readonly tokens: number;
   /** Perks bought and not yet used, in the order bought. design §8.3 */
@@ -101,7 +96,7 @@ export interface RoleState {
   readonly tail: RoomId | null;
 }
 
-export const NO_ROLE_STATE: RoleState = { usedThisAct: 0, usedThisGame: 0, target: null, tokens: 0, perks: [], tail: null };
+export const NO_ROLE_STATE: RoleState = { usedThisAct: 0, usedThisGame: 0, tokens: 0, perks: [], tail: null };
 
 /**
  * The hidden police schedule (extension.md "Police activity"). Never in a
@@ -127,14 +122,12 @@ export interface RiggedCard {
   readonly pick: EventId;
 }
 
-/** A shakedown the vote passed, waiting for its window to end. Hidden: whether it was cancelled. design §11.3 */
+/** A shakedown the vote passed, waiting for its window to end. design §11.3 */
 export interface PendingShakedown {
   readonly meetingId: string;
   readonly kind: MeetingKind;
   readonly act: ActNumber;
   readonly target: PlayerId;
-  /** The Muscle cancelled it. Never in a view: the cancel is only announced when the window ends. */
-  readonly cancelled: boolean;
 }
 
 /** A Double-cross offer: the two players, and who has accepted so far. Hidden from everyone else. design §10 */

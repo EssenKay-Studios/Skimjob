@@ -1,5 +1,5 @@
 // Command-line options for the simulator. Node built-ins only (util.parseArgs).
-// design §17.4 "Inputs: player count (2–12), mix of bot personalities, job,
+// design §17.4 "Inputs: player count (3–12), mix of bot personalities, job,
 // role pool, config overrides, number of games, seed."
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -22,11 +22,8 @@ export interface SimOptions {
   readonly seed: string;
   readonly job: string;
   readonly rolePool: readonly string[];
-  readonly starterMode: boolean;
-  /** The events deck (design §10). Off by default, and never with starter mode. */
+  /** The events deck (design §10). Off by default. */
   readonly eventsEnabled: boolean;
-  /** Duel mode (design §16.1): 2 players only, call-outs instead of meetings. */
-  readonly duel: boolean;
   /** Deck preset, deal style and role list (extension.md "Decks and dealing", "Role list"). */
   readonly deck: DeckId;
   readonly deal: DealStyle;
@@ -52,16 +49,14 @@ export const USAGE = `Skimjob simulator: runs batches of all-bot games and repor
 Usage: pnpm sim -- [options]
 
   -n, --games <N>         games per player count (default 100)
-  -p, --players <spec>    player counts: 6, 2-12 or 4,6,8 (default 6)
+  -p, --players <spec>    player counts: 6, 3-12 or 4,6,8 (default 6)
   -b, --bots <mix>        bot personalities with optional weights, e.g.
                           honest:2,greedy:1 (default honest,opportunist,greedy,cautious)
                           personalities: ${Object.keys(PERSONALITIES).join(", ")}
   -s, --seed <seed>       base seed; same options + seed = same results (default "sim")
       --job <id>          job (default bank)
       --role-pool <ids>   comma-separated roles to deal from (default: the content default)
-      --starter           starter mode (Rookie/Inside Man/Lookout/Bagman/Cleaner, no Mole, no events)
-      --events            flip an event card each round from round 2 (design §10; not with --starter)
-      --duel              Duel mode: call-outs instead of meetings (design §16.1; needs -p 2)
+      --events            flip an event card each round from round 2 (design §10)
       --deck <preset>     starter | standard | everything (default standard; --role-pool overrides)
       --deal <style>      balanced | random (default balanced)
       --role-list <mode>  exact | possible | hidden (default exact)
@@ -81,12 +76,12 @@ export type ParsedArgs =
   | { readonly kind: "run"; readonly options: SimOptions; readonly workers: number }
   | { readonly kind: "error"; readonly message: string };
 
-/** "6", "2-12" or "4,6,8" (combinations allowed: "2-4,8"), sorted and deduplicated. */
+/** "6", "3-12" or "4,6,8" (combinations allowed: "3-5,8"), sorted and deduplicated. */
 export function parsePlayerCounts(spec: string): number[] | string {
   const counts = new Set<number>();
   for (const part of spec.split(",")) {
     const m = /^\s*(\d+)\s*(?:-\s*(\d+)\s*)?$/.exec(part);
-    if (!m) return `bad player count "${part}" (use 6, 2-12 or 4,6,8)`;
+    if (!m) return `bad player count "${part}" (use 6, 3-12 or 4,6,8)`;
     const from = Number(m[1]);
     const to = m[2] === undefined ? from : Number(m[2]);
     if (from > to) return `bad player range "${part}"`;
@@ -145,9 +140,7 @@ export function parseSimArgs(argv: readonly string[], readFile?: (path: string) 
         seed: { type: "string", short: "s" },
         job: { type: "string" },
         "role-pool": { type: "string" },
-        starter: { type: "boolean" },
         events: { type: "boolean" },
-        duel: { type: "boolean" },
         deck: { type: "string" },
         deal: { type: "string" },
         "role-list": { type: "string" },
@@ -188,8 +181,6 @@ export function parseSimArgs(argv: readonly string[], readFile?: (path: string) 
       return error(`--overrides: ${(e as Error).message}`);
     }
   }
-  if (values.events && values.starter) return error("--events can't be used with --starter (starter mode has no events)");
-  if (values.duel && playerCounts.some((n) => n !== 2)) return error("--duel needs exactly 2 players (-p 2)");
   if (values.out !== undefined && values.out.trim() === "") return error("--out needs a directory (use --no-files for none)");
   if (values.out !== undefined && values.out.includes("\0")) return error("--out is not a valid path");
   const workers = values.workers === undefined ? defaultWorkers() : /^\d+$/.test(values.workers.trim()) ? Number(values.workers) : NaN;
@@ -206,9 +197,7 @@ export function parseSimArgs(argv: readonly string[], readFile?: (path: string) 
       seed: values.seed ?? "sim",
       job: values.job ?? "bank",
       rolePool,
-      starterMode: values.starter ?? false,
       eventsEnabled: values.events ?? false,
-      duel: values.duel ?? false,
       deck: deck as DeckId,
       deal: deal as DealStyle,
       roleList: roleList as RoleListSetting,

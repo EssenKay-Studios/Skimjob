@@ -10,8 +10,8 @@
 //  - handleCommand never throws, and a rejection leaves the state untouched
 //    (states are deep-frozen, so any mutation throws). [§17.2]
 //  - a command for a seat that isn't in the game is always refused. [§17.2]
-//  - loot is conserved: Haul + stashes + safes = loot split from rooms
-//    + Snitch payouts − Raid-rumour losses; nothing goes negative. [§5.2, §8, §10, §11.3, §16.1]
+//  - loot is conserved: Haul + stashes = loot split from rooms
+//    − Raid-rumour losses; nothing goes negative. [§5.2, §8, §10, §11.3]
 //  - Heat is a whole number in 0..max, and the game is over once it hits max. [§7]
 //  - the phase machine never sticks: until the game ends, some scheduler
 //    deadline is accepted; and every game ends. [§4.1, §11, §17.2]
@@ -26,7 +26,7 @@
 import { isDeepStrictEqual } from "node:util";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { BALANCED_MIX, FILLER_ROLE, RANDOM_DEAL_SINGLETONS, ROLES, STARTER_ROLES, type DeckId } from "@skimjob/content";
+import { BALANCED_MIX, FILLER_ROLE, RANDOM_DEAL_SINGLETONS, ROLES, type DeckId } from "@skimjob/content";
 import type { Command, DealStyle, GameConfig, GameEvent, GameState, Move, PlayerId, PlayerState, RoleListSetting, VoteVisibility } from "./types";
 import { REVEAL, canSee, secretTo } from "./types";
 import { createGame, dealStyleOf, rolePoolFor } from "./setup";
@@ -36,12 +36,11 @@ import { replay } from "./reduce";
 import { viewFor } from "./view";
 import { jobFor } from "./overrides";
 
-const RUNS = Number(process.env.FC_RUNS ?? 45);
-// Role deck v2 R1 changed the deal's draws, so 20261101's 45 games no longer happened to reach a
-// Muscle cancel (coverage below is statistical; seeds 1, 2, 3 and 20261102 all reach it).
+const RUNS = Number(process.env.FC_RUNS ?? 90);
+// Coverage of the endings and event types below is statistical, so 90 runs; the Heat ending also has
+// its own deterministic case. Any FC_SEED should reach all of it.
 const SEED = Number(process.env.FC_SEED ?? 20261102);
 const TIMEOUT = 60_000 + RUNS * 1_000;
-const ALL_ROLES = Object.keys(ROLES);
 
 // ---------------------------------------------------------------- configs
 
@@ -50,20 +49,19 @@ const DECK_IDS: readonly DeckId[] = ["starter", "standard", "everything"];
 const DEALS: readonly DealStyle[] = ["balanced", "random"];
 const ROLE_LISTS: readonly RoleListSetting[] = ["exact", "possible", "hidden"];
 
-const normalConfig = fc
+const configArb = fc
   .record({
-    players: fc.integer({ min: 2, max: 12 }),
+    players: fc.integer({ min: 3, max: 12 }),
     vote: fc.constantFrom(...VOTES),
     deck: fc.constantFrom(...DECK_IDS),
     deal: fc.constantFrom(...DEALS),
     roleList: fc.constantFrom(...ROLE_LISTS),
     events: fc.boolean(),
-    starter: fc.boolean(),
     // design §8.1, §15: absent = unique (the default); false lets roles repeat.
     unique: fc.constantFrom(undefined, true, false),
     seed: fc.string({ minLength: 1, maxLength: 12 }),
   })
-  .map(({ players, vote, deck, deal, roleList, events, starter, unique, seed }): GameConfig => ({
+  .map(({ players, vote, deck, deal, roleList, events, unique, seed }): GameConfig => ({
     seed,
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i + 1}`, name: `P${i + 1}`, isBot: i % 2 === 1 })),
     job: "bank",
@@ -71,32 +69,10 @@ const normalConfig = fc
     deck,
     deal,
     roleList,
-    // Starter mode needs events off (validateConfig).
-    eventsEnabled: starter ? false : events,
+    eventsEnabled: events,
     voteVisibility: vote,
-    starterMode: starter,
     ...(unique === undefined ? {} : { uniqueRoles: unique }),
   }));
-
-/** design §16.1: Duel is exactly 2 players. */
-const duelConfig = fc
-  .record({ events: fc.boolean(), deck: fc.constantFrom(...DECK_IDS), seed: fc.string({ minLength: 1, maxLength: 12 }) })
-  .map(({ events, deck, seed }): GameConfig => ({
-    seed,
-    players: [
-      { id: "p1", name: "P1", isBot: false },
-      { id: "p2", name: "P2", isBot: true },
-    ],
-    job: "bank",
-    rolePool: [],
-    deck,
-    eventsEnabled: events,
-    voteVisibility: "hiddenThenRevealed",
-    starterMode: false,
-    duel: true,
-  }));
-
-const configArb = fc.oneof({ arbitrary: normalConfig, weight: 5 }, { arbitrary: duelConfig, weight: 1 });
 /** The command stream: each step reads a few numbers from this tape; when it runs out, only deadlines pass. */
 const tapeArb = fc.array(fc.nat({ max: 0xffff }), { minLength: 400, maxLength: 4000, size: "max" });
 
@@ -154,11 +130,8 @@ type Style = "mixed" | "hot" | "careful";
 
 function playerCommand(state: GameState, t: Tape, style: Style): { command: Record<string, unknown>; seated: boolean } {
   const seated = t.chance(92);
-  // In a shakedown window, lean on the Muscle (if dealt), so cancels happen. design §8
-  const muscle = state.phase.kind === "shakedownPending" ? state.playerOrder.find((id) => state.players[id]?.role === "muscle") : undefined;
-  const player = !seated ? t.pick(BOGUS_PLAYERS) : muscle && t.chance(50) ? muscle : t.pick(state.playerOrder);
+  const player = !seated ? t.pick(BOGUS_PLAYERS) : t.pick(state.playerOrder);
   const p = seated ? (state.players[player as string] as PlayerState) : undefined;
-  const others = state.playerOrder.filter((id) => id !== player);
   const room = (): string => {
     if (style === "hot" && t.chance(60)) return t.pick(["vault", "depositBoxes", "managersOffice"].filter((r) => state.rooms.includes(r)));
     if (style === "careful" && t.chance(60)) return t.pick(["office", "lobby", "tellerLine", "rooftop"].filter((r) => state.rooms.includes(r)));
@@ -188,18 +161,10 @@ function playerCommand(state: GameState, t: Tape, style: Style): { command: Reco
           switch (ROLES[p.role]?.power.kind) {
             case "lookout":
               return { kind: "lookout", rooms: [room()] };
-            case "fenceSafe":
-              return { kind: "fenceSafe", amount: 1 + t.int(6) };
             case "loopCameras":
               return { kind: "loopCameras", room: room() };
-            case "blackmail":
-              return { kind: "blackmail", target: t.pick(others.length ? others : state.playerOrder), role: t.pick(ALL_ROLES) };
-            case "forge":
-              return { kind: "forge", target: t.pick(state.playerOrder), room: room() };
-            case "embezzle":
-              return { kind: "embezzle" };
             default:
-              return t.chance(20) ? { kind: t.pick(["lookout", "fenceSafe", "tipOff", "loopCameras"]) } : undefined;
+              return t.chance(20) ? { kind: t.pick(["lookout", "tipOff", "loopCameras"]) } : undefined;
           }
         })();
         if (ability) move.ability = ability;
@@ -222,7 +187,7 @@ function playerCommand(state: GameState, t: Tape, style: Style): { command: Reco
     case 11:
       return { command: { ...base, type: "sealVote", vote: vote() }, seated };
     case 12:
-      return { command: { ...base, type: "useAbility", ability: { kind: "cancelShakedown" } }, seated };
+      return { command: { ...base, type: "useAbility", ability: { kind: t.pick(["audit", "checkStash", "bless"]) } }, seated };
     case 13: {
       // extension.md "Tokens and the perk shop", "Police activity": shop buys and the Mole's tip-off.
       if (t.chance(50)) return { command: { ...base, type: "useAbility", ability: { kind: "tipOff" } }, seated };
@@ -230,9 +195,7 @@ function playerCommand(state: GameState, t: Tape, style: Style): { command: Reco
       return { command: { ...base, type: "buyPerk", perk }, seated };
     }
     default:
-      return t.chance(50)
-        ? { command: { ...base, type: "answerDoubleCross", accept: t.chance(60) }, seated }
-        : { command: { ...base, type: "callOut" }, seated };
+      return { command: { ...base, type: "answerDoubleCross", accept: t.chance(60) }, seated };
   }
 }
 
@@ -260,7 +223,7 @@ function garbageCommand(state: GameState, t: Tape): unknown {
     { type: "submitMove", player, move: { room: "vault", pocket: 1e9 } },
     { type: "submitMove", player, move: { room: "lobby", pocket: 0, watch: "vault" } },
     { type: "submitMove", player, move: { room: "security", pocket: 0 } },
-    { type: "submitMove", player, move: { room: "lobby", pocket: 0, ability: { kind: "fenceSafe", amount: -3 } } },
+    { type: "submitMove", player, move: { room: "lobby", pocket: 0, ability: { kind: "lookout", rooms: -3 } } },
     { type: "submitMove", player, move: { room: "lobby", pocket: 0, ability: "tipOff" } },
     { type: "castVote", player, vote: null },
     { type: "castVote", player, vote: { kind: "shakedown" } },
@@ -304,8 +267,7 @@ function lootFlow(events: readonly GameEvent[]): number {
   for (const e of events) {
     if (e.type === "lootSplit") n += e.toHaul + e.toStash;
     else if (e.type === "raidRumourHit") n -= e.lost;
-    // Role deck v2 R2b: the bank's Bagman bonus and Priest blessing pay in; the Fixer's save pays out.
-    else if (e.type === "abilityResolved" && e.ability.kind === "bagman") n += e.ability.bonus;
+    // Role deck v2 R2b: the Priest blessing pays in; the Fixer's save pays out.
     else if (e.type === "abilityResolved" && e.ability.kind === "fixer") n -= e.ability.lost;
     else if (e.type === "blessingPaid") n += e.amount;
   }
@@ -313,7 +275,7 @@ function lootFlow(events: readonly GameEvent[]): number {
 }
 
 function holdings(state: GameState): number {
-  return state.haul + Object.values(state.players).reduce((sum, p) => sum + p.stash + p.safe, 0);
+  return state.haul + Object.values(state.players).reduce((sum, p) => sum + p.stash, 0);
 }
 
 const isCount = (n: number): boolean => Number.isInteger(n) && n >= 0;
@@ -329,8 +291,8 @@ function checkState(state: GameState, inflow: number): void {
   check(Number.isInteger(state.heat) && state.heat >= 0 && state.heat <= heatMax, "Heat within 0..max (design §7)", state.heat);
   if (state.heat >= heatMax) check(state.phase.kind === "ended", "the game is over at max Heat (design §7)", state.phase);
   check(isCount(state.haul), "Haul is a whole number ≥ 0", state.haul);
-  for (const p of Object.values(state.players)) check(isCount(p.stash) && isCount(p.safe), "stash and safe are whole numbers ≥ 0", p);
-  check(holdings(state) === inflow, "loot conservation (Haul + stashes + safes = loot in − loot out)", { holdings: holdings(state), inflow });
+  for (const p of Object.values(state.players)) check(isCount(p.stash), "stashes are whole numbers ≥ 0", p);
+  check(holdings(state) === inflow, "loot conservation (Haul + stashes = loot in − loot out)", { holdings: holdings(state), inflow });
   // Phase companions. design §17.2
   check((state.phase.kind === "meeting") === (state.meeting !== null), "meeting set exactly in the meeting phase", state.phase);
   check((state.phase.kind === "shakedownPending") === (state.pendingShakedown !== null), "pendingShakedown set exactly in its phase", state.phase);
@@ -339,10 +301,9 @@ function checkState(state: GameState, inflow: number): void {
   // design §5.4: alibis are open exactly in the alibi phase (or in a meeting called during it), for the round just resolved.
   if (state.phase.kind === "alibis") check(state.alibisOpen && state.phase.round === state.resolvedRound && state.phase.round === state.round, "alibi phase for the round just resolved", state.phase);
   if (state.phase.kind === "planning" || state.phase.kind === "awaitingMeeting") check(!state.alibisOpen, "alibis closed outside their phase", state.phase);
-  if (state.config.duel) check(state.meeting === null && state.scheduledMeeting === null && state.pendingEmergency === null, "Duel has no meetings (design §16.1)");
 }
 
-/** extension.md "Decks", "Host settings": deck roles (Rookies fill), unique by default, one Mole/Embezzler at most, the Balanced mix. */
+/** extension.md "Decks", "Host settings": deck roles (Rookies fill), unique by default, one Mole at most, the Balanced mix. */
 function checkDeal(state: GameState): void {
   const roles = state.playerOrder.map((id) => (state.players[id] as PlayerState).role);
   const table = rolesFor(state.config);
@@ -351,12 +312,13 @@ function checkDeal(state: GameState): void {
   for (const r of RANDOM_DEAL_SINGLETONS) check(roles.filter((x) => x === r).length <= 1, `at most one ${r}`, roles);
   if (state.config.uniqueRoles !== false) check(new Set(dealt).size === dealt.length, "uniqueRoles: each non-Rookie role dealt at most once (design §8.1)", roles);
   check(dealt.every((r) => pool.includes(r)), "roles come from the deck", roles);
-  if (state.config.starterMode) check(roles.every((r) => STARTER_ROLES.includes(r)), "starter roles only (design §8.1)", roles);
   if (dealStyleOf(state.config) === "balanced") {
     const mix = BALANCED_MIX[roles.length] ?? { loneWolves: 0, wildcards: 0 };
     for (const [tag, want] of [["loneWolf", mix.loneWolves], ["wildcard", mix.wildcards]] as const) {
       const inDeck = pool.filter((r) => tagIn(table, r) === tag).length;
-      const cap = state.config.uniqueRoles === false ? want : Math.min(want, inDeck);
+      // drawRoles: with replacement only while a non-singleton of the tag is left (the Mole is dealt at most once).
+      const repeats = state.config.uniqueRoles === false && pool.some((r) => tagIn(table, r) === tag && !RANDOM_DEAL_SINGLETONS.includes(r));
+      const cap = repeats ? want : Math.min(want, inDeck);
       check(roles.filter((r) => tagIn(table, r) === tag).length === (inDeck === 0 ? 0 : cap), `Balanced: ${tag} seats by the mix`, roles);
     }
   }
@@ -364,7 +326,7 @@ function checkDeal(state: GameState): void {
 
 /**
  * The state with everything hidden from `viewer` changed: other players'
- * private fields, moves and ballots, the seed and RNG, the Muscle's cancel,
+ * private fields, moves and ballots, the seed and RNG,
  * other players' Double-cross offer, and hidden events (dropped, junk added).
  */
 function scrub(state: GameState, viewer: PlayerId): GameState {
@@ -381,10 +343,9 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
         ? p
         : {
             ...p,
-            role: p.role === "insideMan" ? "fence" : "insideMan",
+            role: p.role === "priest" ? "hacker" : "priest",
             stash: p.stash + 101,
-            safe: p.safe + 7,
-            roleState: { usedThisAct: 4, usedThisGame: 1, target: viewer, tokens: p.roleState.tokens + 3, perks: ["peek", "shield"], tail: "vault" },
+            roleState: { usedThisAct: 4, usedThisGame: 1, tokens: p.roleState.tokens + 3, perks: ["peek", "shield"], tail: "vault" },
             totalHandedIn: p.totalHandedIn + 33,
             consecutiveMissedMoves: 5,
             sealedVote: { kind: "shakedown", target: viewer },
@@ -415,7 +376,6 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
     players,
     moves: fakeMoves,
     meeting: state.meeting && { ...state.meeting, votes: fakeFor(state.meeting.votes, { kind: "shakedown", target: viewer }) },
-    pendingShakedown: state.pendingShakedown && { ...state.pendingShakedown, cancelled: !state.pendingShakedown.cancelled },
     card,
     // extension.md "Police activity": the schedule and the queued tip-offs are hidden from everyone.
     police: state.police && { moment: state.police.moment + 3, gapPermille: 1, patrol: !state.police.patrol, queue: [other], tipOffs: { [other]: 7, [viewer]: state.police.tipOffs[viewer] ?? 0 } },
@@ -453,7 +413,7 @@ function checkEnd(state: GameState): void {
   check(outcome.ranking.length === state.playerOrder.length, "everyone is ranked (design §13)");
   for (const r of outcome.ranking) {
     const p = state.players[r.player] as PlayerState;
-    check(r.role === p.role && r.stash === p.stash + p.safe && r.safe === p.safe, "ranking matches the final stashes", { r, p });
+    check(r.role === p.role && r.stash === p.stash, "ranking matches the final stashes", { r, p });
   }
   for (let i = 1; i < outcome.ranking.length; i++) {
     check((outcome.ranking[i - 1]?.score ?? 0) >= (outcome.ranking[i]?.score ?? 0), "ranking is by score", outcome.ranking);
@@ -507,7 +467,6 @@ function play(config: GameConfig, tapeNumbers: readonly number[], checks = true)
     state = deepFreeze(r.state);
   };
 
-  const triedCancel = new Set<string>();
   let steps = 0;
   let lastPhase = state.phase.kind;
   while (state.phase.kind !== "ended") {
@@ -518,15 +477,8 @@ function play(config: GameConfig, tapeNumbers: readonly number[], checks = true)
       check(deadlines.some((d) => handleCommand(state, d).ok), "some deadline is pending", state.phase);
     }
     if (t.done) {
-      // Out of tape: only deadlines pass, except that a dealt Muscle cancels the first window it can (design §8).
-      const muscle = state.phase.kind === "shakedownPending" ? state.playerOrder.find((id) => state.players[id]?.role === "muscle") : undefined;
-      const window = state.pendingShakedown?.meetingId ?? "";
-      if (muscle && !triedCancel.has(window)) {
-        triedCancel.add(window);
-        apply({ type: "useAbility", player: muscle, ability: { kind: "cancelShakedown" } }, false);
-      } else {
-        apply(deadlines[0], true);
-      }
+      // Out of tape: only deadlines pass.
+      apply(deadlines[0], true);
     } else {
       const kind = t.int(100);
       if (kind < 86) {
@@ -578,7 +530,7 @@ const hostileCommands = (player: PlayerId): unknown[] => [
   { type: "advance", deadline: { kind: "openMeeting", meetingId: HOSTILE } },
 ];
 
-const duelFree: GameConfig = {
+const threeSeats: GameConfig = {
   seed: "x",
   players: [
     { id: "p1", name: "P1", isBot: false },
@@ -589,7 +541,6 @@ const duelFree: GameConfig = {
   rolePool: [],
   eventsEnabled: false,
   voteVisibility: "open",
-  starterMode: false,
 };
 
 const params = { numRuns: RUNS, seed: SEED, endOnFailure: true } as const;
@@ -630,10 +581,23 @@ describe("engine invariants under fuzzing — design §17.2", () => {
     expect(stats.rejected).toBeGreaterThan(stats.games * 5);
     expect(stats.players.size).toBeGreaterThanOrEqual(8);
     expect([...stats.outcomes].sort()).toEqual(["heat", "success", "target"]);
-    for (const t of ["shakedownResolved", "shakedownCancelled", "copsRaided", "callOutResolved", "doubleCrossResolved", "raidRumourHit", "voteSealed"]) {
+    for (const t of ["shakedownResolved", "copsRaided", "doubleCrossResolved", "raidRumourHit", "voteSealed"]) {
       expect(stats.types, t).toContain(t);
     }
   }, TIMEOUT);
+
+  it("a game at one point below max Heat ends as a Heat raid, with the end invariants holding (design §7)", () => {
+    const start = createGame({ ...threeSeats, seed: "heat-end" });
+    let state: GameState = { ...start, heat: jobFor(start.config).heat.max - 1 };
+    for (let steps = 0; state.phase.kind !== "ended"; steps++) {
+      if (steps > 200) throw new Failure("game did not end in 200 steps");
+      const next = nextDeadlines(state).map((c) => handleCommand(state, c)).find((r) => r.ok);
+      if (!next || !next.ok) throw new Failure("no deadline accepted");
+      state = next.state;
+    }
+    expect(state.phase).toMatchObject({ kind: "ended", outcome: { result: "failed", reason: "heat" } });
+    checkEnd(state);
+  });
 
   it("same seed + same commands = identical log; replaying the commands rebuilds the game", () => {
     assertProperty(
@@ -648,7 +612,7 @@ describe("engine invariants under fuzzing — design §17.2", () => {
   }, TIMEOUT);
 
   it("a value with no string form ({\"toString\":null}) is refused, not thrown — see HOSTILE", () => {
-    const state = createGame({ ...duelFree, seed: "hostile" });
+    const state = createGame({ ...threeSeats, seed: "hostile" });
     for (const c of hostileCommands("p1")) expect(handleCommand(state, c).ok).toBe(false);
   });
 
