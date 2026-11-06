@@ -123,22 +123,18 @@ describe("validateOverrides — configs are untrusted JSON (design §17.4)", () 
   });
 
   it("event cards: each card tunes only its own effect's numbers (design §10, balance pass 2)", () => {
-    expect(errs({ events: { quietNight: { amount: -10 }, shiftChange: { lootMultiplier: 2, heatMultiplier: 2 }, raidRumour: { loss: 5 } } })).toEqual([]);
-    expect(errs({ events: { quietNight: { loss: 3 } } })).toEqual(["contentOverrides.events.quietNight.loss is not an overridable field"]);
+    expect(errs({ events: { shiftChange: { lootMultiplier: 2, heatMultiplier: 2 } } })).toEqual([]);
+    expect(errs({ events: { shiftChange: { loss: 3 } } })).toEqual(["contentOverrides.events.shiftChange.loss is not an overridable field"]);
     // extension.md "Police activity": Police patrol has left the deck.
     expect(errs({ events: { policePatrol: { amount: 10 } } })).toEqual(["contentOverrides.events.policePatrol: no such event card"]);
     expect(errs({ events: { audit: { amount: 1 } } })).toHaveLength(1);
-    expect(errs({ events: { raidRumour: { loss: 2.5 } } })).toHaveLength(1);
-    // design §7: Heat is whole numbers, so a Heat card's amount is a signed whole number.
-    expect(errs({ events: { quietNight: { amount: -15 } } })).toEqual([]);
-    expect(errs({ events: { quietNight: { amount: 2.5 } } })).toEqual(["contentOverrides.events.quietNight.amount must be a whole number"]);
-    expect(errs({ events: { quietNight: { amount: "5" } } })).toHaveLength(1);
-    expect(errs({ events: { quietNight: { amount: Infinity } } })).toHaveLength(1);
+    expect(errs({ events: { shiftChange: { heatMultiplier: "2" } } })).toHaveLength(1);
+    expect(errs({ events: { shiftChange: { lootMultiplier: Infinity } } })).toHaveLength(1);
     expect(errs({ events: { meteor: { amount: 1 } } })).toEqual(["contentOverrides.events.meteor: no such event card"]);
     expect(errs({ events: [] })).toHaveLength(1);
     const tuned = overrideEvents(EVENTS, { events: { shiftChange: { heatMultiplier: 3 } } });
     expect(tuned.shiftChange?.effect).toEqual({ kind: "roomSurge", room: "vault", lootMultiplier: 1.5, heatMultiplier: 3 });
-    expect(tuned.quietNight).toBe(EVENTS.quietNight);
+    expect(tuned.audit).toBe(EVENTS.audit);
     expect(eventsFor({ contentOverrides: null })).toBe(EVENTS);
   });
 

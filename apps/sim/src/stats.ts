@@ -6,7 +6,7 @@
 // fractional (joint winners share one win), which the formula takes as is.
 
 /** z for a two-sided 95% interval. */
-export const Z95 = 1.959963984540054;
+const Z95 = 1.959963984540054;
 
 export interface Interval {
   /** Successes ÷ trials, or null with no trials. */

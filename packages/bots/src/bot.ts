@@ -19,11 +19,11 @@ import {
   type VoteChoice,
 } from "@skimjob/engine";
 import type { Personality } from "./personalities";
-import { crewSize, isStar, jobOf, lastResolvedRound, ofType, roleOf, roomsWhere, totalRounds } from "./read";
+import { crewSize, jobOf, lastResolvedRound, ofType, roleOf, roomsWhere, totalRounds } from "./read";
 import { mostSuspicious, suspicion } from "./suspicion";
 import { claimCommands, meetingTime } from "./claims";
 import { alibiPerk, buyPerks, hasPerk, meetingPerks, perkSpender, planningPerks } from "./perks";
-import { cardHeatNow, heatDanger, jobThisRound } from "./heat";
+import { heatDanger, jobThisRound } from "./heat";
 import { leaning } from "./forecast";
 
 /**
@@ -83,9 +83,6 @@ export function createBot({ player, personality, seed, crewSeed }: BotOptions): 
  */
 export const MOLE_TIP_AT = 0.7;
 
-/** Chance a bot accepts a Double-cross offer (bot setting, not a game rule; minimal until task 16). design §10 */
-const DOUBLE_CROSS_ACCEPT = 0.5;
-
 const pick = <T>(items: readonly T[], random: Random): T => items[Math.floor(random() * items.length)] as T;
 
 function weighted<T>(items: readonly (readonly [T, number])[], random: Random): T | undefined {
@@ -127,15 +124,6 @@ export function decide(view: PlayerView, p: Personality, random: Random, crewSee
     const move = view.me.move ?? chooseMove(view, p, random);
     if (view.me.move === null) out.push({ type: "submitMove", player, move });
     out.push(...spend(planningPerks(view, move.room)));
-    // design §10: answer a Double-cross offer once (minimal: a coin flip; a Mole keeps its card).
-    const round = phase.round;
-    const offered = ofType(view.caseFile, "doubleCrossOffered").some((e) => e.round === round);
-    const answered = ofType(view.caseFile, "doubleCrossAnswered").some((e) => e.round === round);
-    if (offered && !answered) {
-      // A ★ role keeps its card (it can win when the job fails).
-      const accept = !isStar(view.me.role) && random() < DOUBLE_CROSS_ACCEPT;
-      out.push({ type: "answerDoubleCross", player, accept });
-    }
   }
   return out;
 }
@@ -189,7 +177,7 @@ function moleTipOff(view: PlayerView): PlayerCommand[] {
   const { power } = roleOf(view);
   if (power.kind !== "tipOff" || view.me.roleState.usedThisAct >= power.perAct || view.me.tipOffs >= power.perGame) return [];
   const job = jobOf(view);
-  const soon = view.heat + cardHeatNow(view) + 2 * job.heat.perRound;
+  const soon = view.heat + 2 * job.heat.perRound;
   if (soon < MOLE_TIP_AT * job.heat.max && leaning(view) !== "heat") return [];
   return [{ type: "useAbility", player: view.me.id, ability: { kind: "tipOff" } }];
 }
@@ -225,9 +213,9 @@ export function chooseMove(view: PlayerView, p: Personality, random: Random): Mo
 
 function chooseRoom(view: PlayerView, p: Personality, random: Random): RoomId {
   const base = jobOf(view);
-  // design §10: this round's card can surge a room's loot and Heat (Shift change, Payday).
+  // design §10: this round's card can surge a room's loot and Heat (Shift change).
   const job = jobThisRound(view, base);
-  // design §7: Heat now plus this round's card, the baseline still to come and,
+  // design §7: Heat now, the baseline still to come and,
   // when a Mole could be in play, the police activity still to come (heat.ts), against the raid level.
   const danger = heatDanger(view, base);
   // The most any room pushes Heat on a normal round: a surged room is avoided harder.

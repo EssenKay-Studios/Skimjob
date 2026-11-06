@@ -8,7 +8,7 @@ import { RoleTip } from "./Extension";
 import { Segmented, type SegmentedOption } from "./Segmented";
 import { TAG_LABEL, rolesByTag } from "../game/extension";
 
-export const DECK_OPTIONS: readonly SegmentedOption<DeckId>[] = [
+const DECK_OPTIONS: readonly SegmentedOption<DeckId>[] = [
   { value: "starter", label: "Starter" },
   { value: "standard", label: "Standard" },
   { value: "everything", label: "Everything" },

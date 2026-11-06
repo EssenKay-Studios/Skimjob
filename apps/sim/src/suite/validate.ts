@@ -31,7 +31,7 @@ export function tallyProblem(v: unknown): string | null {
   return seatsProblem(v.roles, "tally.roles") ?? seatsProblem(v.personalities, "tally.personalities");
 }
 
-export function optionsProblem(v: unknown): string | null {
+function optionsProblem(v: unknown): string | null {
   if (!isObj(v)) return "options isn't an object";
   const o = v as Partial<Record<keyof SuiteOptions, unknown>>;
   if (!isStr(o.seed)) return "options.seed isn't a string";

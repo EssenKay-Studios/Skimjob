@@ -398,7 +398,7 @@ describe("between-meetings windows (extension.md Build notes \"Between meetings\
   });
 });
 
-describe("\"camera offline\" (extension.md \"Event cards\": Power cut reads exactly like the Hacker's loop)", () => {
+describe("\"camera offline\" (extension.md \"Situations\": the Hacker's loop)", () => {
   it("a looped feed reads the same whether the room was empty, visited, or pocketed in", () => {
     const watched = (visitor: object | null) => {
       let s = game(config(4), { roles: ["hacker", "rookie"] });

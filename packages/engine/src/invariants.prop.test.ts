@@ -195,7 +195,7 @@ function playerCommand(state: GameState, t: Tape, style: Style): { command: Reco
       return { command: { ...base, type: "buyPerk", perk }, seated };
     }
     default:
-      return { command: { ...base, type: "answerDoubleCross", accept: t.chance(60) }, seated };
+      return { command: { ...base, type: "callEmergency" }, seated };
   }
 }
 
@@ -233,7 +233,6 @@ function garbageCommand(state: GameState, t: Tape): unknown {
     { type: "acceptMeeting", player, proposalId: { id: 1 } },
     { type: "proposeMeeting", player, slot: 9 },
     { type: "useAbility", player, ability: { kind: "tipOff" } },
-    { type: "answerDoubleCross", player, accept: "yes" },
     // Wrong or malformed deadlines.
     { type: "advance" },
     { type: "advance", deadline: null },
@@ -266,7 +265,6 @@ function lootFlow(events: readonly GameEvent[]): number {
   let n = 0;
   for (const e of events) {
     if (e.type === "lootSplit") n += e.toHaul + e.toStash;
-    else if (e.type === "raidRumourHit") n -= e.lost;
     // Role deck v2 R2b: the Priest blessing pays in; the Fixer's save pays out.
     else if (e.type === "abilityResolved" && e.ability.kind === "fixer") n -= e.ability.lost;
     else if (e.type === "blessingPaid") n += e.amount;
@@ -327,7 +325,7 @@ function checkDeal(state: GameState): void {
 /**
  * The state with everything hidden from `viewer` changed: other players'
  * private fields, moves and ballots, the seed and RNG,
- * other players' Double-cross offer, and hidden events (dropped, junk added).
+ * and hidden events (dropped, junk added).
  */
 function scrub(state: GameState, viewer: PlayerId): GameState {
   const over = state.phase.kind === "ended";
@@ -364,11 +362,6 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
   for (const id of state.playerOrder) {
     if (Object.hasOwn(state.moves, id)) fakeMoves[id] = id === viewer ? (state.moves[id] as Move) : { room: "vault", pocket: 6 };
   }
-  const offer = state.card?.offer;
-  const card =
-    state.card && offer && !offer.players.includes(viewer)
-      ? { ...state.card, offer: { players: offer.players, accepted: offer.accepted.length ? [] : [...offer.players] } }
-      : state.card;
   return {
     ...state,
     config: { ...state.config, seed: "scrubbed" },
@@ -376,7 +369,6 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
     players,
     moves: fakeMoves,
     meeting: state.meeting && { ...state.meeting, votes: fakeFor(state.meeting.votes, { kind: "shakedown", target: viewer }) },
-    card,
     // extension.md "Police activity": the schedule and the queued tip-offs are hidden from everyone.
     police: state.police && { moment: state.police.moment + 3, gapPermille: 1, patrol: !state.police.patrol, queue: [other], tipOffs: { [other]: 7, [viewer]: state.police.tipOffs[viewer] ?? 0 } },
     log,
@@ -581,7 +573,7 @@ describe("engine invariants under fuzzing — design §17.2", () => {
     expect(stats.rejected).toBeGreaterThan(stats.games * 5);
     expect(stats.players.size).toBeGreaterThanOrEqual(8);
     expect([...stats.outcomes].sort()).toEqual(["heat", "success", "target"]);
-    for (const t of ["shakedownResolved", "copsRaided", "doubleCrossResolved", "raidRumourHit", "voteSealed"]) {
+    for (const t of ["shakedownResolved", "copsRaided", "voteSealed"]) {
       expect(stats.types, t).toContain(t);
     }
   }, TIMEOUT);

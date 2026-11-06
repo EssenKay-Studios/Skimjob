@@ -25,7 +25,7 @@ import { HttpError } from "./lobby";
 import type { Scheduler } from "./scheduler";
 
 /** The personality a stand-in bot plays with unless the host picks one. */
-export const DEFAULT_STAND_IN: PersonalityId = "opportunist";
+const DEFAULT_STAND_IN: PersonalityId = "opportunist";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

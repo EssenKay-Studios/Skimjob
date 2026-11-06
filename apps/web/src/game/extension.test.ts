@@ -183,7 +183,7 @@ describe("tokens and the perk shop (extension.md)", () => {
 });
 
 describe("no tells (extension.md Situations)", () => {
-  it("reads a Hacker's loop and a Power cut the same: camera offline", () => {
+  it("reads a Hacker's loop as camera offline", () => {
     const ctx = { me: "p1", name: (p: string) => p };
     const feed = { type: "roomWatched", visibility: privateTo("p1"), player: "p1", round: 3, source: "security", room: "vault", seen: [], offline: true } as const;
     expect(describeEvent(feed, ctx)).toBe("Round 3, on the cameras: camera offline in the Vault.");

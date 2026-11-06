@@ -1,5 +1,5 @@
 // The events deck: one public card per round from round 2, its effects at
-// §5.2 step 1 and through the round, and the Double-cross answer. design §10, §5.2
+// §5.2 step 1 and through the round. design §10, §5.2
 import { describe, expect, it } from "vitest";
 import { handleThroughAlibis } from "./alibis.testkit";
 import { V06_NUMBERS } from "./v01-numbers.testkit";
@@ -77,24 +77,15 @@ function lastResolution(s: GameState): GameEvent[] {
 }
 
 /**
- * Replace the card flipped for the current round (and any Double-cross offers)
- * with `card`, by rewriting the log and replaying it: still a fold over the log.
+ * Replace the card flipped for the current round with `card`, by rewriting the
+ * log and replaying it: still a fold over the log.
  */
-function withCard(state: GameState, card: string, room: RoomId | null = null, pair?: [PlayerId, PlayerId]): GameState {
+function withCard(state: GameState, card: string, room: RoomId | null = null): GameState {
   const log = [...state.log];
   let i = log.length - 1;
   while (i >= 0 && log[i]?.type !== "eventFlipped") i--;
   if (i < 0) throw new Error("no card flipped");
-  let j = i + 1;
-  while (log[j]?.type === "doubleCrossOffered") j++;
-  const round = state.round;
-  const added: GameEvent[] = [{ type: "eventFlipped", visibility: PUBLIC, round, card, room }];
-  if (pair) {
-    const [a, b] = pair;
-    added.push({ type: "doubleCrossOffered", visibility: privateTo(a), player: a, round, partner: b });
-    added.push({ type: "doubleCrossOffered", visibility: privateTo(b), player: b, round, partner: a });
-  }
-  log.splice(i, j - i, ...added);
+  log.splice(i, 1, { type: "eventFlipped", visibility: PUBLIC, round: state.round, card, room });
   return replay(state.config, log);
 }
 
@@ -129,15 +120,10 @@ const flips = (s: GameState) => s.log.filter((e): e is Extract<GameEvent, { type
 describe("the deck — design §10", () => {
   it("has the cards of §10 as data, without Police patrol (extension.md \"Police activity\")", () => {
     expect(EVENT_DECK.map((id) => EVENTS[id]?.name)).toEqual([
-      "Quiet night",
       "Shift change",
-      "Power cut",
-      "Payday",
       "Lockdown",
       "Audit",
-      "Raid rumour",
       "Inside tip",
-      "Double-cross",
     ]);
   });
 
@@ -148,7 +134,7 @@ describe("the deck — design §10", () => {
       expect(flipped.map((e) => e.round)).toEqual([2, 3, 4, 5, 6, 7, 8, 9]);
       expect(EVENTS_FROM_ROUND).toBe(2);
       expect(flipped.every((e) => e.visibility.kind === "public" && EVENT_DECK.includes(e.card))).toBe(true);
-      // Repeats allowed: each flip draws from all ten cards (the game's seeds give a repeat here).
+      // Repeats allowed: each flip draws from all four cards (the game's seeds give a repeat here).
       expect(new Set(flipped.map((e) => e.card)).size).toBeLessThan(8);
       // Flipped straight after its round starts, so players can plan around it.
       for (const e of flipped) {
@@ -184,20 +170,7 @@ describe("the deck — design §10", () => {
 describe("card effects — design §10, §5.2", () => {
   const atRound2 = (n: number, roles: string[] = [], extra: Partial<GameConfig> = {}) => resolve(game(n, roles, extra));
 
-  it("Quiet night removes 10 (clamped at 0), in the round's one Heat change", () => {
-    const base = atRound2(5);
-    const heat0 = base.heat;
-    const quiet = resolve(withCard(base, "quietNight"));
-    expect(quiet.heat).toBe(Math.max(0, heat0 + BANK.heat.perRound - 10));
-    expect(lastResolution(quiet).find((e) => e.type === "roundResolved")).toMatchObject({ heatDelta: quiet.heat - heat0 });
-  });
-
   it("event-card Heat is scaled by min(1, crew ÷ 5) for small crews, rounded (owner answers, 1 Nov)", () => {
-    // design §10: Quiet night −10 gives −6 / −8 / −10 at 3 / 4 / 5+ players.
-    for (const [n, quiet] of [[3, 6], [4, 8], [5, 10], [9, 10]] as const) {
-      const base = atRound2(n, [], { contentOverrides: { heat: { perRound: 30 } } });
-      expect(resolve(withCard(base, "quietNight")).heat - base.heat).toBe(30 - quiet);
-    }
     expect(eventHeatScale(3)).toBeCloseTo(0.6);
     expect(scaledCardHeat(-10, 3)).toBe(-6);
     expect(scaledCardHeat(5, 3)).toBe(3);
@@ -215,26 +188,6 @@ describe("card effects — design §10, §5.2", () => {
     // Without the card the same pocket is refused.
     const plain = withCard(atRound2(4, ["rookie"]), "audit");
     expect(handleThroughAlibis(plain, move("p0", "vault", 12)).ok).toBe(false);
-  });
-
-  it("Payday: the Lobby yields 4", () => {
-    const s = resolve(withCard(atRound2(3), "payday"), { p1: { room: "lobby", pocket: 0 } });
-    expect(lastResolution(s).find((e) => e.type === "lootSplit" && e.player === "p1")).toMatchObject({ room: "lobby", loot: 4, toHaul: 4 });
-  });
-
-  it("Power cut: no sightings, Security reads \"camera offline\", no Lookout results; loot, splits and the Lookout's use still happen", () => {
-    const base = withCard(atRound2(3, ["lookout", "rookie", "rookie"]), "powerCut");
-    const s = resolve(base, {
-      p0: { room: "office", pocket: 0, ability: { kind: "lookout", rooms: ["vault"] } },
-      p1: { room: "security", pocket: 0, watch: "vault" },
-      p2: { room: "vault", pocket: 1 },
-    });
-    const events = lastResolution(s);
-    expect(events.filter((e) => e.type === "roomSighting")).toEqual([]);
-    // extension.md "Camera offline": the feed reads offline, the same as a Hacker loop.
-    expect(events.filter((e) => e.type === "roomWatched").every((e) => e.type === "roomWatched" && e.offline && e.seen.length === 0)).toBe(true);
-    expect(events.filter((e) => e.type === "lootSplit")).toHaveLength(3);
-    expect(events.some((e) => e.type === "abilityResolved" && e.player === "p0")).toBe(true);
   });
 
   it("Lockdown: the named room is refused for the round; it is never the default room and always in play", () => {
@@ -269,17 +222,6 @@ describe("card effects — design §10, §5.2", () => {
     });
   });
 
-  it("Raid rumour: a tie for the biggest stash is drawn at random; nobody is hit when every stash is empty", () => {
-    const tied = resolve(game(3), { p0: { room: "office", pocket: 4 }, p1: { room: "office", pocket: 4 }, p2: { room: "office", pocket: 1 } });
-    const s = resolve(withCard(tied, "raidRumour"));
-    const hits = lastResolution(s).filter((e) => e.type === "raidRumourHit");
-    expect(hits).toHaveLength(1);
-    expect(["p0", "p1"]).toContain(hits[0]?.type === "raidRumourHit" ? hits[0].player : null);
-    expect(hits[0]).toMatchObject({ lost: EVENTS.raidRumour?.effect.kind === "raidRumour" ? EVENTS.raidRumour.effect.loss : -1 });
-    const empty = resolve(withCard(atRound2(3), "raidRumour"));
-    expect(lastResolution(empty).filter((e) => e.type === "raidRumourHit")).toEqual([]);
-  });
-
   it("Inside tip: one player privately learns another player's real role", () => {
     const s = resolve(withCard(atRound2(4, ["rookie", "lookout", "hacker", "priest"]), "insideTip"));
     const tips = lastResolution(s).filter((e): e is Extract<GameEvent, { type: "insideTip" }> => e.type === "insideTip");
@@ -291,60 +233,9 @@ describe("card effects — design §10, §5.2", () => {
   });
 });
 
-describe("Double-cross — design §10", () => {
-  const offerFor = (n: number, roles: string[], pair: [PlayerId, PlayerId], extra: Partial<GameConfig> = {}, more: GameEvent[] = []) =>
-    withCard(resolve(game(n, roles, extra, more)), "doubleCross", null, pair);
-  const answer = (player: PlayerId, accept: boolean) => ({ type: "answerDoubleCross", player, accept });
-
-  it("offers two different random players a swap, privately, as the card is flipped", () => {
-    for (let i = 0; i < 30; i++) {
-      const g = untilCard(createGame(config(5, { seed: `dc-${i}` })), "doubleCross");
-      if (g.card?.id !== "doubleCross") continue;
-      const offers = g.log.filter((e): e is Extract<GameEvent, { type: "doubleCrossOffered" }> => e.type === "doubleCrossOffered");
-      expect(offers).toHaveLength(2);
-      const [a, b] = offers as [Extract<GameEvent, { type: "doubleCrossOffered" }>, Extract<GameEvent, { type: "doubleCrossOffered" }>];
-      expect(a.player).not.toBe(b.player);
-      expect([a.partner, b.partner]).toEqual([b.player, a.player]);
-      expect(a.visibility).toEqual(privateTo(a.player));
-      return;
-    }
-    throw new Error("no Double-cross drawn");
-  });
-
-  it("swaps the two roles at the round's resolution only if both accept; the last answer counts", () => {
-    const base = offerFor(3, ["lookout", "hacker", "rookie"], ["p0", "p1"]);
-    const both = resolve(run(base, answer("p0", true), answer("p1", true)));
-    expect([both.players.p0?.role, both.players.p1?.role]).toEqual(["hacker", "lookout"]);
-    const resolved = lastResolution(both).filter((e) => e.type === "doubleCrossResolved");
-    expect(resolved.map((e) => e.visibility)).toEqual([privateTo("p0"), privateTo("p1")]);
-    expect(resolved[0]).toMatchObject({ player: "p0", partner: "p1", swap: { role: "hacker" } });
-    // The view shows the new role.
-    expect(viewFor(both, "p0").me.role).toBe("hacker");
-
-    for (const answers of [[answer("p0", true)], [answer("p0", true), answer("p1", true), answer("p1", false)], []]) {
-      const s = resolve(run(base, ...answers));
-      expect([s.players.p0?.role, s.players.p1?.role]).toEqual(["lookout", "hacker"]);
-      expect(lastResolution(s).filter((e) => e.type === "doubleCrossResolved").every((e) => e.type === "doubleCrossResolved" && e.swap === null)).toBe(true);
-    }
-  });
-
-  it("only the offered players may answer, only while the round is planned, with a boolean", () => {
-    const base = offerFor(3, [], ["p0", "p1"]);
-    expect(handleThroughAlibis(base, answer("p2", true)).ok).toBe(false);
-    expect(handleThroughAlibis(base, { type: "answerDoubleCross", player: "p0", accept: "yes" }).ok).toBe(false);
-    const answered = handleThroughAlibis(base, answer("p0", true));
-    expect(answered.ok && answered.events[0]).toMatchObject({ type: "doubleCrossAnswered", visibility: privateTo("p0"), accept: true });
-    // No offer in a round without the card.
-    expect(handleThroughAlibis(withCard(resolve(game(3)), "audit"), answer("p0", true)).ok).toBe(false);
-    // Not after the round has resolved.
-    expect(handleThroughAlibis(resolve(base), answer("p0", true)).ok).toBe(false);
-  });
-});
-
 describe("event-card visibility (leak tests) — design §10, §13, §17.2", () => {
   const sees = (s: GameState, viewer: PlayerId, type: GameEvent["type"]) =>
     [...viewFor(s, viewer).ledger, ...viewFor(s, viewer).caseFile].some((e) => e.event.type === type);
-  const answer = (player: PlayerId, accept: boolean) => ({ type: "answerDoubleCross", player, accept });
 
   it("the flipped card and the Audit are public; nothing else about the card is", () => {
     const s = resolve(withCard(resolve(game(3)), "audit"), { p0: { room: "office", pocket: 2 } });
@@ -354,49 +245,9 @@ describe("event-card visibility (leak tests) — design §10, §13, §17.2", () 
     }
   });
 
-  it("Double-cross: only the two see the offer; nobody sees the other's answer; views can't tell answers apart", () => {
-    const base = withCard(resolve(game(3)), "doubleCross", null, ["p0", "p1"]);
-    expect(sees(base, "p2", "doubleCrossOffered")).toBe(false);
-    expect(viewFor(base, "p2").card).toEqual({ round: 2, id: "doubleCross", room: null });
-    const accepted = run(base, answer("p1", true));
-    const declined = run(base, answer("p1", false));
-    // p0 (the partner) and p2 (outside) see exactly the same whatever p1 answered.
-    for (const viewer of ["p0", "p2"]) expect(JSON.stringify(viewFor(accepted, viewer))).toBe(JSON.stringify(viewFor(declined, viewer)));
-    expect(sees(accepted, "p1", "doubleCrossAnswered")).toBe(true);
-    // The outcome goes to the two only.
-    const done = resolve(run(accepted, answer("p0", true)));
-    expect(sees(done, "p2", "doubleCrossResolved")).toBe(false);
-    expect(sees(done, "p0", "doubleCrossResolved") && sees(done, "p1", "doubleCrossResolved")).toBe(true);
-  });
-
-  it("Raid rumour and Inside tip reach only their player; an outsider's view is the same with or without them", () => {
-    const r1 = resolve(game(3), { p1: { room: "office", pocket: 3 } });
-    const hit = resolve(withCard(r1, "raidRumour"));
-    const miss = resolve(withCard(r1, "audit"));
-    expect(sees(hit, "p1", "raidRumourHit")).toBe(true);
-    expect(sees(hit, "p0", "raidRumourHit") || sees(hit, "p2", "raidRumourHit")).toBe(false);
-    // The Haul and Heat don't show the loss: p0's view differs only by the public card (and Audit report).
-    const strip = (s: GameState) =>
-      JSON.stringify(viewFor(s, "p0").caseFile) + JSON.stringify([viewFor(s, "p0").haul, viewFor(s, "p0").heat]);
-    expect(strip(hit)).toBe(strip(miss));
-
+  it("Inside tip reaches only its player", () => {
     const tipped = resolve(withCard(resolve(game(4, ["rookie", "lookout", "hacker", "priest"])), "insideTip"));
     const tip = tipped.log.find((e) => e.type === "insideTip");
     for (const id of tipped.playerOrder) expect(sees(tipped, id, "insideTip")).toBe(tip?.type === "insideTip" && tip.player === id);
-  });
-
-  it("Power cut leaves no private sighting events to compare (everyone's case file has only their own split)", () => {
-    const s = resolve(withCard(resolve(game(3)), "powerCut"), { p0: { room: "security", pocket: 0, watch: "office" } });
-    for (const id of s.playerOrder) {
-      const round2 = viewFor(s, id).caseFile.filter((e) => "round" in e.event && e.event.round === 2).map((e) => e.event.type);
-      expect(round2.sort()).toEqual(id === "p0" ? ["lootSplit", "moveSubmitted", "roomWatched"] : ["lootSplit", "moveSubmitted"]);
-    }
-  });
-
-  it("after the game, the reveal shows the offers, answers and private card results (design §13)", () => {
-    const base = run(withCard(resolve(game(3)), "doubleCross", null, ["p0", "p1"]), answer("p0", true));
-    const end = playThrough(base);
-    const reveal = viewFor(end, "p2").reveal?.log.map((e) => e.event.type) ?? [];
-    for (const t of ["doubleCrossOffered", "doubleCrossAnswered", "doubleCrossResolved"]) expect(reveal).toContain(t);
   });
 });

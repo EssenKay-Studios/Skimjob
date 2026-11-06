@@ -13,14 +13,14 @@ const NAMES: Record<string, string> = { p1: "Ana", p2: "Ben", p3: "Cy" };
 const ctx = { me: "p1", name: (p: string) => NAMES[p] ?? p };
 
 describe("reveal lines", () => {
-  it("tell a patrol from a tip-off, and a Power cut from a Hacker loop", () => {
+  it("tell a patrol from a tip-off, and name who looped a camera", () => {
     expect(itemText({ kind: "police", heatAdded: 6, heat: 40, cause: "patrol", mole: null }, ctx)).toBe("Police activity (Heat +6) was a routine patrol.");
     expect(itemText({ kind: "police", heatAdded: 6, heat: 46, cause: "tipOff", mole: "p2" }, ctx)).toBe("Police activity (Heat +6) was Ben's tip-off.");
-    expect(itemText({ kind: "cameraOffline", watcher: "p1", room: "vault", source: "security", cause: "hackerLoop", hackers: ["p3"] }, ctx)).toBe(
+    expect(itemText({ kind: "cameraOffline", watcher: "p1", room: "vault", source: "security", hackers: ["p3"] }, ctx)).toBe(
       "Your camera on the Vault went offline: Cy looped it.",
     );
-    expect(itemText({ kind: "cameraOffline", watcher: "p2", room: "vault", source: "lookout", cause: "powerCut", hackers: [] }, ctx)).toBe(
-      "Ben's lookout on the Vault went offline in the Power cut.",
+    expect(itemText({ kind: "cameraOffline", watcher: "p2", room: "vault", source: "lookout", hackers: ["p3"] }, ctx)).toBe(
+      "Ben's lookout on the Vault went offline: Cy looped it.",
     );
     expect(itemText({ kind: "token", player: "p2", trigger: "tipOffLanded" }, ctx)).toBe("Ben earned a token for a tip-off landing.");
     expect(itemText({ kind: "claim", player: "p2", claimed: "lookout", real: "mole" }, ctx)).toBe("Ben claimed Lookout, but was really the Mole.");
@@ -66,7 +66,7 @@ describe("<Reveal>", () => {
         items: [{ kind: "police", heatAdded: 6, heat: 46, cause: "tipOff", mole: "p2" }],
         stashes: { p1: 0, p2: 4, p3: 0 },
       },
-      { round: 2, card: { id: "powerCut", room: null }, moves: [], resolved: null, items: [], stashes: { p1: 0, p2: 9, p3: 0 } },
+      { round: 2, card: { id: "audit", room: null }, moves: [], resolved: null, items: [], stashes: { p1: 0, p2: 9, p3: 0 } },
     ],
   };
   const html = renderToStaticMarkup(createElement(Reveal, { summary, ctx, looks: new Map() }));

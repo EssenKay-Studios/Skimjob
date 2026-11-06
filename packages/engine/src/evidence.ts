@@ -11,7 +11,7 @@ import type { GameEvent, GameEventType } from "./types";
  */
 const ROLE_CARD_TYPES: ReadonlySet<GameEventType> = new Set<GameEventType>(["roleDealt", "tokenEarned", "tipOffLanded"]);
 
-/** Payload keys that state a role or a faction (anyone's): a Peek, an Inside tip, a Double-cross swap, allies. */
+/** Payload keys that state a role or a faction (anyone's): a Peek, an Inside tip, allies. */
 const ROLE_KEYS: ReadonlySet<string> = new Set(["role", "roles", "faction", "allies"]);
 
 function namesRole(value: unknown, depth = 0): boolean {

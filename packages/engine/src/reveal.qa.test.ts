@@ -2,7 +2,7 @@
 // `outcomeFor` on ties with ★ roles (extension.md "Winning and losing":
 // a failure is won only by top-group members whose role wins that ending).
 import { describe, expect, it } from "vitest";
-import { EVENTS, ROLES, type RoleId } from "@skimjob/content";
+import { ROLES, type RoleId } from "@skimjob/content";
 import type { GameConfig, GameEvent, GameState, PlayerState } from "./types";
 import { privateTo } from "./types";
 import { createGame, setupEvents } from "./setup";
@@ -12,7 +12,7 @@ import { handleThroughAlibis } from "./alibis.testkit";
 import { outcomeFor } from "./end";
 import { revealSummary } from "./reveal";
 
-const TABLES = { roles: ROLES, events: EVENTS };
+const TABLES = { roles: ROLES };
 
 /** A finished-looking 4-seat game with these roles and stashes (nothing else to break the tie). */
 function game(roles: RoleId[], stashes: number[]): GameState {

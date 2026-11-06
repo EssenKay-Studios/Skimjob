@@ -14,7 +14,7 @@ import { join } from "node:path";
 import fastifyStatic from "@fastify/static";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
-export const API_PREFIX = "/api";
+const API_PREFIX = "/api";
 
 /** `/api/games/1?x` → `/games/1?x`, `/api` → `/`; anything else unchanged (`/apix` too). */
 export function stripApiPrefix(url: string): string {

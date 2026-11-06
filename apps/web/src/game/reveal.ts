@@ -71,16 +71,12 @@ export function itemText(item: RevealItem, ctx: DescribeContext): string {
     case "cameraOffline": {
       const feed = item.source === "security" ? "camera" : item.source === "lookout" ? "lookout" : "tail";
       const whose = you(item.watcher) ? "your" : `${ctx.name(item.watcher)}'s`;
-      return item.cause === "powerCut"
-        ? cap(`${whose} ${feed} on the ${roomName(item.room)} went offline in the Power cut.`)
-        : cap(`${whose} ${feed} on the ${roomName(item.room)} went offline: ${list(item.hackers.map(who))} looped it.`);
+      return cap(`${whose} ${feed} on the ${roomName(item.room)} went offline: ${list(item.hackers.map(who))} looped it.`);
     }
     case "claim":
       return item.claimed === item.real
         ? cap(`${who(item.player)} claimed ${roleName(item.claimed)}, and it was true.`)
         : cap(`${who(item.player)} claimed ${roleName(item.claimed)}, but ${you(item.player) ? "were" : "was"} really the ${roleName(item.real)}.`);
-    case "doubleCross":
-      return `Double-cross: ${list(item.players.map(who))} ${item.swapped ? "swapped roles" : "kept their roles"}.`;
   }
 }
 

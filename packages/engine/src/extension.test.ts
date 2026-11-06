@@ -270,18 +270,11 @@ describe("what the deal can give — extension.md \"Host settings\", Build notes
 });
 
 describe("camera offline — extension.md \"Camera offline\"", () => {
-  it("a Hacker loop on a watched room and a Power cut read the same to Security", () => {
+  it("a Hacker loop on a watched room reads as camera offline to Security", () => {
     // Round 1: p0 Hacker loops the Vault; p1 in Security watches it; p2 pockets there.
     const looped = run(game(config(3), { roles: ["hacker"] }), mv("p0", "office", 0, { ability: { kind: "loopCameras", room: "vault" } }), mv("p1", "security", 0, { watch: "vault" }), mv("p2", "vault", 2), ROUND);
     const fromLoop = ofType(looped.log, "roomWatched").find((e) => e.player === "p1");
     expect(fromLoop).toEqual({ type: "roomWatched", visibility: privateTo("p1"), player: "p1", round: 1, source: "security", room: "vault", seen: [], offline: true });
-    // Round 2 under a Power cut (events on), nobody loops.
-    let cut = run(game(config(3, { eventsEnabled: true }), { roles: ["rookie"] }), ROUND);
-    while (cut.phase.kind === "alibis") cut = run(cut, { type: "advance", deadline: { kind: "alibis", round: cut.resolvedRound } });
-    const log = cut.log.map((e) => (e.type === "eventFlipped" && e.round === 2 ? { ...e, card: "powerCut", room: null } : e));
-    cut = run(replay(cut.config, log), mv("p1", "security", 0, { watch: "vault" }), mv("p2", "vault", 2), ROUND);
-    const fromCut = ofType(cut.log, "roomWatched").find((e) => e.player === "p1");
-    expect({ ...fromCut, round: 1 }).toEqual(fromLoop);
   });
 });
 
@@ -293,7 +286,7 @@ describe("the Heat breakdown and the gap box — extension.md \"What the app wor
     const summary = ofType(s.log, "roundResolved")[0];
     const parts = summary?.heatParts;
     expect(parts).toBeDefined();
-    const total = (parts?.base ?? 0) + Object.values(parts?.rooms ?? {}).reduce((a, b) => a + b, 0) + (parts?.events ?? 0);
+    const total = (parts?.base ?? 0) + Object.values(parts?.rooms ?? {}).reduce((a, b) => a + b, 0);
     expect(total).toBe(summary?.heatDelta);
     expect(parts?.rooms.vault).toBeGreaterThan(0);
     expect(heatBreakdown(s.log, 1)).toEqual({ round: 1, ...parts, clamp: 0, police: [4], missedTarget: 0, stopped: 0 });
@@ -302,8 +295,8 @@ describe("the Heat breakdown and the gap box — extension.md \"What the app wor
     expect(heatBreakdown(ledger, 1)).toEqual(heatBreakdown(s.log, 1));
   });
 
-  const partsSum = (p: { base: number; rooms: Readonly<Record<string, number>>; events: number; clamp?: number }) =>
-    p.base + Object.values(p.rooms).reduce((x, y) => x + y, 0) + p.events + (p.clamp ?? 0);
+  const partsSum = (p: { base: number; rooms: Readonly<Record<string, number>>; clamp?: number }) =>
+    p.base + Object.values(p.rooms).reduce((x, y) => x + y, 0) + (p.clamp ?? 0);
 
   it("the baseline line is always its true value; crew-size rounding sits on the rooms (extension.md \"Heat\": +4 every round, no matter what)", () => {
     // 3 players: one in the Vault, two on the Rooftop. The shares aren't whole numbers.

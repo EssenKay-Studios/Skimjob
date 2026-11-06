@@ -93,7 +93,6 @@ export function cardHeatScore(view: PlayerView, card: EventId): number {
   const cards = overrideEvents(EVENTS, createdOf(view).contentOverrides);
   const effect = Object.hasOwn(cards, card) ? cards[card]?.effect : undefined;
   if (!effect) return 0;
-  if (effect.kind === "heat") return effect.amount;
   if (effect.kind === "roomSurge") return effect.heatMultiplier > 1 ? 2 : 0;
   return 0;
 }

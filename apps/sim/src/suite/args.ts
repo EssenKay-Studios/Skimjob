@@ -74,7 +74,7 @@ function list<T extends string>(spec: string, allowed: readonly T[], name: strin
 
 const wholeNumber = (v: string | undefined, fallback: number): number => (v === undefined ? fallback : /^\d+$/.test(v.trim()) ? Number(v) : NaN);
 
-export function parseShard(spec: string): { index: number; count: number } | string {
+function parseShard(spec: string): { index: number; count: number } | string {
   const m = /^\s*(\d+)\s*\/\s*(\d+)\s*$/.exec(spec);
   if (!m) return `--shard must look like 2/4`;
   const index = Number(m[1]);

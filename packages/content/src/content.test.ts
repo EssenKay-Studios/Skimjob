@@ -68,12 +68,12 @@ describe("First National Bank rooms — design §6.1, §6.2", () => {
     for (const id of ["vault", "office", "lobby", "rooftop"]) expect(r[id]?.info).toBe("none");
   });
 
-  it("5–8: Deposit boxes 5 loot, holds 2, everyone gets 4 if more go (R5; was 3); Server room counts pocketers", () => {
+  it("5–8: Deposit boxes 5 loot, holds 2, everyone gets 4 if more go (R5; was 3); the Server room is an ordinary room for now", () => {
     expect(BANK_JOB.roomTiers[1]).toEqual({ minPlayers: 5, rooms: ["depositBoxes", "serverRoom"] });
     expect(r.depositBoxes?.loot).toBe(5);
     expect(r.depositBoxes?.capacity).toEqual({ max: 2, crowdedLoot: 4 }); // R5 (balance-3.md): 3 → 4
     expect(r.serverRoom?.loot).toBe(0);
-    expect(r.serverRoom?.info).toBe("pocketCount");
+    expect(r.serverRoom?.info).toBe("none");
   });
 
   it("9–12: Teller line 6 loot (R6 split-gate pass, r6-balance.md); Manager's office 3 loot (R6 balance pass)", () => {
@@ -176,8 +176,8 @@ describe("starter roles — design §8, §8.1", () => {
 });
 
 describe("events deck content — design §10", () => {
-  it("has nine cards with matching ids (Police patrol left, extension.md \"Police activity\"), and room cards name rooms of the bank", () => {
-    expect(EVENT_DECK).toHaveLength(9);
+  it("has four cards with matching ids (Police patrol left, extension.md \"Police activity\"), and room cards name rooms of the bank", () => {
+    expect(EVENT_DECK).toHaveLength(4);
     expect(EVENT_DECK).not.toContain("policePatrol");
     expect(POLICE_ACTIVITY).toMatchObject({ chancePercent: 30, heat: 4 });
     for (const id of EVENT_DECK) {
@@ -186,7 +186,5 @@ describe("events deck content — design §10", () => {
       if (def?.effect.kind === "roomSurge") expect(Object.keys(BANK_JOB.rooms)).toContain(def.effect.room);
     }
     expect(EVENTS.shiftChange?.effect).toEqual({ kind: "roomSurge", room: "vault", lootMultiplier: 1.5, heatMultiplier: 2 });
-    expect(EVENTS.quietNight?.effect).toEqual({ kind: "heat", amount: -5 });
-    expect(EVENTS.raidRumour?.effect).toEqual({ kind: "raidRumour", loss: 3 });
   });
 });

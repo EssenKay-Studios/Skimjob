@@ -22,7 +22,7 @@ const BODY: Record<0 | 1 | 2, { d: string; top: number }> = {
 };
 
 /** Top of each hat (y in the 64 box, head top at 10), for the bot antenna and head tags. */
-export const HAT_TOP: Record<Hat, number> = {
+const HAT_TOP: Record<Hat, number> = {
   beanie: 6.6,
   stripes: 6.6,
   pompom: 0.2,

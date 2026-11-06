@@ -13,7 +13,7 @@ import { namesOf, seatsOf } from "../game/hud";
 import type { GameChannel } from "../game/useGame";
 
 /** The side panel takes over from here (docs: "on 1024+ px it is a side panel"). */
-export const CHAT_DOCK_QUERY = "(min-width: 1024px)";
+const CHAT_DOCK_QUERY = "(min-width: 1024px)";
 
 function useMedia(query: string): boolean {
   const [on, setOn] = useState(() => typeof matchMedia === "function" && matchMedia(query).matches);
@@ -46,7 +46,7 @@ function loadRead(key: string): ReadState {
  * wins) and other tabs' writes are merged in as they happen, so a thread read
  * in one tab never turns unread again in another (QA, PR #38).
  */
-export function useChatRead(gameId: string, player: string): [ReadState, (thread: ThreadId, at: string) => void] {
+function useChatRead(gameId: string, player: string): [ReadState, (thread: ThreadId, at: string) => void] {
   const key = readKey(gameId, player);
   const [read, setRead] = useState<ReadState>(() => loadRead(key));
   useEffect(() => {

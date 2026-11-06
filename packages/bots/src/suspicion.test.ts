@@ -88,21 +88,6 @@ describe("suspicion — design §17.3", () => {
     expect(scoresOf(s, "ana").get("carl")).toBe(W.noAlibi);
   });
 
-  it("the Server room's count clears a gap when nobody else pocketed — design §6.2", () => {
-    // Dee hands in the Lobby's 2 but claims the Vault: 4 unexplained, yet the count says nobody pocketed.
-    const plan: Plan = {
-      ana: { room: "serverRoom" },
-      ben: { room: "office" },
-      carl: { room: "office" },
-      dee: { room: "lobby", alibi: "vault" },
-      eve: { room: "lobby" },
-    };
-    const s = round(game(5), plan);
-    expect([...scoresOf(s, "ana").values()]).toEqual([0, 0, 0, 0]);
-    // Ben has no count, so he blames the claimers.
-    expect(scoresOf(s, "ben").get("dee")).toBeGreaterThan(0);
-  });
-
   it("a shakedown resets the target's score: low if clean, a little raised if not — design §11.3", () => {
     let s = game(3);
     for (let r = 1; r <= 3; r++) s = round(s, { ana: { room: "vault" }, ben: { room: "vault", pocket: 3, alibi: "lobby" }, carl: { room: "lobby" } });

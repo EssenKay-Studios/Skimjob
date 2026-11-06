@@ -2,7 +2,7 @@
 // truth in seeded whole bot games (design §13; extension.md "Winning and
 // losing", "Tokens and the perk shop", "Police activity", "Situations",
 // owner ruling 5). Truth comes from folding the full log with the reducer
-// (police queue, Power cut, stashes), not from the reveal's own heuristics.
+// (police queue, loops, stashes), not from the reveal's own heuristics.
 import { describe, expect, it } from "vitest";
 import { ROLES, type PerkId, type RoleId } from "@skimjob/content";
 import {
@@ -10,7 +10,6 @@ import {
   createGame,
   handleCommand,
   initialState,
-  isBlackout,
   leadersOf,
   perkCost,
   viewFor,
@@ -156,7 +155,7 @@ function audit(state: GameState, cov: Coverage): RevealSummary {
   const bought = new Map<PlayerId, PerkId[]>();
   const used = new Map<PlayerId, number>();
   const policeTruth: { cause: string; mole: PlayerId | null; replaced: boolean; round: number }[] = [];
-  const offlineTruth: { round: number; watcher: PlayerId; room: string; cause: string; hackers: PlayerId[] }[] = [];
+  const offlineTruth: { round: number; watcher: PlayerId; room: string; hackers: PlayerId[] }[] = [];
   let loops = new Map<string, PlayerId[]>();
   const stashAt = new Map<number, Record<PlayerId, number>>();
   const snap = () => Object.fromEntries(state.playerOrder.map((p) => [p, s.players[p]!.stash]));
@@ -188,10 +187,8 @@ function audit(state: GameState, cov: Coverage): RevealSummary {
         break;
       case "roomWatched":
         if (e.offline) {
-          const cut = isBlackout(s);
-          offlineTruth.push({ round, watcher: e.player, room: e.room, cause: cut ? "powerCut" : "hackerLoop", hackers: cut ? [] : (loops.get(e.room) ?? []) });
-          if (cut && loops.size > 0) cov.add("loopAndPowerCut");
-          if (!cut) expect(e.source).toBe("security");
+          offlineTruth.push({ round, watcher: e.player, room: e.room, hackers: loops.get(e.room) ?? [] });
+          expect(e.source).toBe("security");
         }
         break;
       default:
@@ -234,13 +231,13 @@ function audit(state: GameState, cov: Coverage): RevealSummary {
     if (p.replaced) cov.add("tipOffReplacedPatrol");
   }
 
-  // Camera offline: Hacker loop vs Power cut from the reducer's card.
+  // Camera offline: the Hacker loop.
   const offline = has((i) => i.kind === "cameraOffline").map((x) => {
     const o = x.item as Extract<RevealItem, { kind: "cameraOffline" }>;
-    return { round: x.round, watcher: o.watcher, room: o.room, cause: o.cause, hackers: [...o.hackers] };
+    return { round: x.round, watcher: o.watcher, room: o.room, hackers: [...o.hackers] };
   });
   expect(offline).toEqual(offlineTruth);
-  for (const o of offlineTruth) cov.add(`offline:${o.cause}`);
+  if (offlineTruth.length > 0) cov.add("offline:hackerLoop");
 
   // Real moves: every split, with its alibi and missed flag.
   const splits = state.log.filter((e) => e.type === "lootSplit");
@@ -261,7 +258,7 @@ const SEEDS: readonly (readonly [number, string])[] = [
   [5, "qa55-5-1"], // target missed, a ★ wins from the top
   [5, "qa55-5-3"], // a tip-off lands on a patrol's moment
   [5, "qa55-5-18"], // a Hacker loop hides a pocketer
-  [5, "qa55-5-20"], // a Hacker loop in a Power cut round
+  [5, "qa55-5-20"], // another Hacker loop
   [8, "qa55-8-6"],
   [12, "qa55-12-6"],
   [12, "qa55-12-23"],
@@ -275,8 +272,6 @@ const MUST = [
   "police:tipOff",
   "tipOffReplacedPatrol",
   "offline:hackerLoop",
-  "offline:powerCut",
-  "loopAndPowerCut",
   "perkBought",
   "perkUsed",
   "token:tipOffLanded",

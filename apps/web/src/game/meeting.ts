@@ -182,7 +182,7 @@ export interface Tally {
   readonly targets: Readonly<Record<PlayerId, number>>;
 }
 
-export function tallyOf(votes: readonly VoteChoice[]): Tally {
+function tallyOf(votes: readonly VoteChoice[]): Tally {
   let skip = 0;
   const targets: Record<PlayerId, number> = {};
   for (const v of votes) {

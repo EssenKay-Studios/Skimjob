@@ -26,7 +26,7 @@ export function Meter({ value, max, notch, tone = "var(--olive)", label }: Meter
 }
 
 /** Heat bands: calm, warm, hot, critical (ui-style: olive → gold → clay → bad). */
-export const heatBand = (heat: number, max = 100) => (heat >= 0.9 * max ? "crit" : heat >= 0.7 * max ? "hot" : heat >= 0.4 * max ? "warm" : "calm");
+const heatBand = (heat: number, max = 100) => (heat >= 0.9 * max ? "crit" : heat >= 0.7 * max ? "hot" : heat >= 0.4 * max ? "warm" : "calm");
 
 export function HeatMeter({ heat, max = 100, size = "md" }: { heat: number; max?: number; size?: "sm" | "md" }) {
   const band = heatBand(heat, max);

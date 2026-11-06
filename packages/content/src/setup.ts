@@ -31,19 +31,16 @@ export const STARTER_ROLES: readonly RoleId[] = ["rookie", "lookout"];
 /** Standard, the default: 6 roles; Rookies fill any spare seats. */
 export const STANDARD_ROLES: readonly RoleId[] = ["lookout", "auditor", "detective", "smoothTalker", "hacker", "mole"];
 
-/** Everything: every role. */
-export const EVERYTHING_ROLES: readonly RoleId[] = Object.keys(ROLES);
+/** Every role id the host may toggle on (any role, on top of any preset outside Quick); also the Everything deck. */
+export const POOL_ROLES: readonly RoleId[] = Object.keys(ROLES);
 
 export const DECKS: Readonly<Record<DeckId, readonly RoleId[]>> = {
   starter: STARTER_ROLES,
   standard: STANDARD_ROLES,
-  everything: EVERYTHING_ROLES,
+  everything: POOL_ROLES,
 };
 
 export const DEFAULT_DECK: DeckId = "standard";
-
-/** Every role id the host may toggle on (any role, on top of any preset outside Quick). */
-export const POOL_ROLES: readonly RoleId[] = EVERYTHING_ROLES;
 
 /** How many Lone wolf and Wildcard seats the Balanced deal fills; the rest are Team players. */
 export interface BalancedMix {

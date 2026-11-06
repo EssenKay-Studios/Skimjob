@@ -1,11 +1,11 @@
 // QA (PR #14): adversarial tests for the events deck — boundaries, card
-// interactions, deck exhaustion, determinism and Double-cross leaks. design §10
+// interactions, deck exhaustion, and determinism. design §10
 import { describe, expect, it } from "vitest";
 import { handleThroughAlibis } from "./alibis.testkit";
 import { V06_NUMBERS } from "./v01-numbers.testkit";
 import type { RoomId } from "@skimjob/content";
 import type { GameConfig, GameEvent, GameState, PlayerId } from "./types";
-import { PUBLIC, privateTo } from "./types";
+import { PUBLIC } from "./types";
 import { createGame, setupEvents, validateConfig } from "./setup";
 import { replay } from "./reduce";
 import { handleCommand } from "./handle";
@@ -43,7 +43,6 @@ function run(state: GameState, ...commands: unknown[]): GameState {
 }
 
 const move = (player: PlayerId, room: RoomId, pocket = 0, rest: Record<string, unknown> = {}) => ({ type: "submitMove", player, move: { room, pocket, ...rest } });
-const answer = (player: PlayerId, accept: boolean) => ({ type: "answerDoubleCross", player, accept });
 const refused = (s: GameState, c: unknown) => !handleThroughAlibis(s, c).ok;
 
 /** Everyone not in `moves` goes to the Office (Lobby if the Office is closed); `skip` players submit nothing. */
@@ -61,26 +60,17 @@ function lastResolution(s: GameState): GameEvent[] {
   let end = s.log.length - 1;
   while (s.log[end]?.type !== "roundResolved") end--;
   let start = end;
-  while (start > 0 && s.log[start - 1]?.type !== "moveSubmitted" && s.log[start - 1]?.type !== "eventFlipped" && s.log[start - 1]?.type !== "doubleCrossAnswered") start--;
+  while (start > 0 && s.log[start - 1]?.type !== "moveSubmitted" && s.log[start - 1]?.type !== "eventFlipped") start--;
   return s.log.slice(start, end + 1);
 }
 
-/** Replace the current round's card (and offers) by rewriting the log and replaying it. */
-function withCard(state: GameState, card: string, room: RoomId | null = null, pair?: [PlayerId, PlayerId]): GameState {
+/** Replace the current round's card by rewriting the log and replaying it. */
+function withCard(state: GameState, card: string, room: RoomId | null = null): GameState {
   const log = [...state.log];
   let i = log.length - 1;
   while (i >= 0 && log[i]?.type !== "eventFlipped") i--;
   if (i < 0) throw new Error("no card flipped");
-  let j = i + 1;
-  while (log[j]?.type === "doubleCrossOffered") j++;
-  const round = state.round;
-  const added: GameEvent[] = [{ type: "eventFlipped", visibility: PUBLIC, round, card, room }];
-  if (pair) {
-    const [a, b] = pair;
-    added.push({ type: "doubleCrossOffered", visibility: privateTo(a), player: a, round, partner: b });
-    added.push({ type: "doubleCrossOffered", visibility: privateTo(b), player: b, round, partner: a });
-  }
-  log.splice(i, j - i, ...added);
+  log.splice(i, 1, { type: "eventFlipped", visibility: PUBLIC, round: state.round, card, room });
   return replay(state.config, log);
 }
 
@@ -105,17 +95,6 @@ const find = <T extends GameEvent["type"]>(events: readonly GameEvent[], type: T
   events.filter((e): e is Extract<GameEvent, { type: T }> => e.type === type);
 const roundResolved = (s: GameState) => find(lastResolution(s), "roundResolved")[0] as Extract<GameEvent, { type: "roundResolved" }>;
 
-describe("QA: Heat cards at the boundary — design §10, §7", () => {
-  // perRound 45: Heat 45 after round 1, 90 after a plain round 2. 5 players, so card Heat is unscaled (design §10).
-  const hot = (seed = "hot") => resolve(game(5, [], { seed, contentOverrides: { heat: { perRound: 45 } } }));
-
-  it("Quiet night is part of the same round's Heat (90 − 10 = 80), not a separate step", () => {
-    const s = resolve(withCard(hot(), "quietNight"));
-    expect(s.heat).toBe(80);
-    expect(roundResolved(s)).toMatchObject({ heatDelta: 35, heat: 80 });
-  });
-});
-
 describe("QA: room surges — design §10", () => {
   // design §10: at 3 players the surge's extra Heat is scaled by 3/5, so the Vault's ×2 pressure is ×1.6 (32 per visitor).
   it("Shift change: two of three in the Vault → Heat round(4 + 2·32/3) = 25 (15 for one); 12 accepted, 13 refused; next round back to 6", () => {
@@ -138,15 +117,6 @@ describe("QA: room surges — design §10", () => {
     // round(4 + (10 + 10)/12) = 6.
     expect(s.heat - h0).toBe(6);
     expect(refused(base, move("p0", "depositBoxes", 6))).toBe(true);
-  });
-
-  it("Payday: pocket 4 in the Lobby accepted, 5 refused; Heat unchanged; a missed move lands in the Lobby and hands in 4", () => {
-    const base = withCard(resolve(game(3)), "payday");
-    expect(refused(base, move("p0", "lobby", 5))).toBe(true);
-    const h0 = base.heat;
-    const s = resolve(base, { p0: { room: "lobby", pocket: 4 } }, ["p2"]);
-    expect(s.heat - h0).toBe(4);
-    expect(find(lastResolution(s), "lootSplit").find((e) => e.player === "p2")).toMatchObject({ room: "lobby", loot: 4, toHaul: 4 });
   });
 });
 
@@ -203,73 +173,12 @@ describe("QA: Audit numbers — design §10", () => {
   });
 });
 
-describe("QA: Raid rumour edges — design §10", () => {
-  it("a tie is broken at random, not by seat: over seeds both tied players get hit", () => {
-    const hitPlayers = new Set<PlayerId>();
-    for (let i = 0; i < 20; i++) {
-      const r1 = resolve(game(3, [], { seed: `tie-${i}` }), { p1: { room: "office", pocket: 2 }, p2: { room: "office", pocket: 2 } });
-      const hits = find(lastResolution(resolve(withCard(r1, "raidRumour"))), "raidRumourHit");
-      expect(hits).toHaveLength(1);
-      expect(hits[0]?.lost).toBe(2);
-      hitPlayers.add(hits[0]?.player as PlayerId);
-    }
-    expect([...hitPlayers].sort()).toEqual(["p1", "p2"]);
-  });
-});
-
 describe("QA: Inside tip — design §10", () => {
-  it("the tip is about another player, and shows a role swapped by an earlier Double-cross", () => {
-    const r2 = run(withCard(resolve(game(3, ["lookout", "hacker", "rookie"])), "doubleCross", null, ["p0", "p1"]), answer("p0", true), answer("p1", true));
-    const s = resolve(withCard(resolve(r2), "insideTip"));
+  it("the tip is about another player and shows that player's real role", () => {
+    const s = resolve(withCard(resolve(game(3, ["lookout", "hacker", "rookie"])), "insideTip"));
     const tip = find(lastResolution(s), "insideTip")[0];
     expect(tip?.subject).not.toBe(tip?.player);
-    // The swap holds: p0 now has the Hacker, p1 the Lookout.
-    expect([s.players.p0?.role, s.players.p1?.role]).toEqual(["hacker", "lookout"]);
-    expect(["p0", "p1"]).toContain(tip?.subject);
-    expect(tip?.role).toBe(tip?.subject === "p0" ? "hacker" : "lookout");
-  });
-});
-
-describe("QA: Double-cross answers — design §10", () => {
-  const offered = () => withCard(resolve(game(4, ["lookout", "hacker", "rookie", "rookie"])), "doubleCross", null, ["p0", "p1"]);
-  const roles = (s: GameState) => [s.players.p0?.role, s.players.p1?.role];
-
-  it("one-sided either way, or accept-then-decline, swaps nothing; decline-then-accept by both swaps", () => {
-    for (const answers of [[answer("p0", true), answer("p1", false)], [answer("p1", true)], [answer("p0", true), answer("p1", true), answer("p0", false)]]) {
-      expect(roles(resolve(run(offered(), ...answers)))).toEqual(["lookout", "hacker"]);
-    }
-    expect(roles(resolve(run(offered(), answer("p0", false), answer("p1", false), answer("p0", true), answer("p1", true))))).toEqual(["hacker", "lookout"]);
-  });
-
-  it("an answer is refused in round 1, during a meeting, and from an unknown player", () => {
-    expect(refused(game(4), answer("p0", true))).toBe(true);
-    expect(refused(offered(), answer("nobody", true))).toBe(true);
-    let s = createGame(config(3));
-    while (s.phase.kind === "planning") s = resolve(s);
-    expect(s.phase.kind).toBe("awaitingMeeting");
-    expect(refused(s, answer("p0", true))).toBe(true);
-  });
-});
-
-describe("QA: Power cut vs info rooms and powers — design §10", () => {
-  it("6 players: Security and Lookout read offline, no room-mate results; the Hacker's and Lookout's uses are recorded; the Server room still counts pockets", () => {
-    const base = withCard(resolve(game(6, ["lookout", "hacker"], { rolePool: ["lookout", "hacker", "rookie"] })), "powerCut");
-    const s = resolve(base, {
-      p0: { room: "office", pocket: 1, ability: { kind: "lookout", rooms: ["vault"] } },
-      p1: { room: "office", pocket: 0, ability: { kind: "loopCameras", room: "vault" } },
-      p2: { room: "security", pocket: 0, watch: "office" },
-      p3: { room: "serverRoom", pocket: 0 },
-      p4: { room: "vault", pocket: 2 },
-    });
-    const events = lastResolution(s);
-    expect(events.filter((e) => e.type === "roomSighting")).toEqual([]);
-    expect(find(events, "roomWatched").map((e) => [e.player, e.offline, e.seen])).toEqual([
-      ["p0", true, []],
-      ["p2", true, []],
-    ]); // extension.md "Camera offline": the Lookout's and Security's feeds both read offline
-    expect(find(events, "abilityResolved").map((e) => e.player).sort()).toEqual(["p0", "p1"]);
-    // Pocketed: p0 (1), p4 (2), p5 (Office, 0) → 2 players.
-    expect(find(events, "pocketCount")).toEqual([{ type: "pocketCount", visibility: privateTo("p3"), player: "p3", round: 2, pocketed: 2 }]);
+    expect(tip?.role).toBe(s.players[tip?.subject as PlayerId]?.role);
   });
 });
 
@@ -302,41 +211,17 @@ describe("QA: when the deck is on — design §10, §8.1", () => {
 });
 
 describe("QA: determinism and event sourcing — design §17.2", () => {
-  it("same seed + same commands → identical log; replaying the log rebuilds the same state (with a swap and a raid)", () => {
+  it("same seed + same commands → identical log; replaying the log rebuilds the same state (with a pocket and a tip)", () => {
     const play = () => {
       let s = createGame(config(4, { seed: "det-qa" }));
       s = resolve(s, { p0: { room: "office", pocket: 3 } });
-      s = resolve(run(withCard(s, "doubleCross", null, ["p0", "p1"]), answer("p0", true), answer("p1", true)));
-      s = resolve(withCard(s, "raidRumour"));
+      s = resolve(withCard(s, "insideTip"));
       return playThrough(s);
     };
     const a = play();
     const b = play();
     expect(JSON.stringify(a.log)).toBe(JSON.stringify(b.log));
-    expect(find(a.log, "raidRumourHit")).toHaveLength(1);
+    expect(find(a.log, "insideTip").length).toBeGreaterThan(0);
     expect(JSON.stringify(replay(a.config, a.log))).toBe(JSON.stringify(a));
-  });
-});
-
-describe("QA: Double-cross view-diff leaks — design §10, §13", () => {
-  const base = () => withCard(resolve(game(4, ["lookout", "hacker", "rookie", "rookie"])), "doubleCross", null, ["p0", "p1"]);
-  const combos: [boolean, boolean][] = [[true, true], [true, false], [false, true], [false, false]];
-  const v = (s: GameState, id: PlayerId) => JSON.stringify(viewFor(s, id));
-
-  it("outsiders' views are identical for all four answer combinations, before and after the round resolves", () => {
-    const planned = combos.map(([a, b]) => run(base(), answer("p0", a), answer("p1", b)));
-    const done = planned.map((s) => resolve(s));
-    for (const id of ["p2", "p3"]) {
-      for (const s of [planned, done]) expect(new Set(s.map((x) => v(x, id))).size, id).toBe(1);
-    }
-    expect(viewFor(planned[0] as GameState, "p2").card).toEqual({ round: 2, id: "doubleCross", room: null });
-  });
-
-  it("a player who declined can't tell, even after the round, whether the partner accepted", () => {
-    const declinedP1 = (p0: boolean) => resolve(run(base(), answer("p0", p0), answer("p1", false)));
-    expect(v(declinedP1(true), "p1")).toBe(v(declinedP1(false), "p1"));
-    // Same for p0. (The end-of-game reveal shows answers: decided in docs/decisions.md.)
-    const declinedP0 = (p1: boolean) => resolve(run(base(), answer("p0", false), answer("p1", p1)));
-    expect(v(declinedP0(true), "p0")).toBe(v(declinedP0(false), "p0"));
   });
 });

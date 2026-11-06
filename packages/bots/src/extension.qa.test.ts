@@ -55,10 +55,10 @@ describe("QA: full bot games under the Extension rules", () => {
         let heat = createGame(c).heat;
         for (const e of state.log as GameEvent[]) {
           if (e.type === "roundResolved") {
-            const sum = e.heatParts.base + Object.values(e.heatParts.rooms).reduce((x, y) => x + y, 0) + e.heatParts.events;
+            const sum = e.heatParts.base + Object.values(e.heatParts.rooms).reduce((x, y) => x + y, 0);
             const expected = Math.max(0, heat + sum);
             if (expected < 100) expect(e.heat, `round ${e.round}`).toBe(expected);
-            for (const v of [e.heatParts.base, e.heatParts.events, ...Object.values(e.heatParts.rooms)]) expect(Number.isInteger(v)).toBe(true);
+            for (const v of [e.heatParts.base, ...Object.values(e.heatParts.rooms)]) expect(Number.isInteger(v)).toBe(true);
             heat = e.heat;
           } else if (e.type === "policeActivity") {
             if (heat + e.heatAdded < 100) expect(e.heat).toBe(heat + e.heatAdded);

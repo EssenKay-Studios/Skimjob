@@ -13,7 +13,7 @@ import { actOfRound, isLastRoundOfAct } from "./acts";
 import { gameEnded } from "./end";
 import { applyEvent } from "./reduce";
 import type { Draw } from "./handle";
-import { cardEffects, cardHeat, closedRoom, isAudit, isBlackout, roundJob, startRound } from "./deck";
+import { cardEffects, closedRoom, isAudit, roundJob, startRound } from "./deck";
 import { grantRewards, stopRaid } from "./crew";
 
 export { actOfRound, isLastRoundOfAct };
@@ -66,7 +66,7 @@ export function checkMove(state: GameState, player: PlayerState, raw: unknown): 
   if (typeof room !== "string" || !state.rooms.includes(room)) return `room ${show(room)} is not open in this game`;
   // design §10 Lockdown: the card names a room closed for this round.
   if (room === closedRoom(state)) return `the ${roomDef(jobFor(state.config), room).name} is closed this round (Lockdown)`;
-  // design §10: Shift change / Payday raise a room's loot this round.
+  // design §10: Shift change raises a room's loot this round.
   const def = roomDef(roundJob(jobFor(state.config), state.card, eventsFor(state.config), state.playerOrder.length), room);
   if (!isCount(pocket)) return "pocket must be a whole number, 0 or more";
   // The real yield can only drop below the room's loot (crowded Deposit boxes), so this is the upper bound.
@@ -93,9 +93,8 @@ export function checkMove(state: GameState, player: PlayerState, raw: unknown): 
  * Heat (rounded, then clamped once), information, the public summary, and
  * finally the raid, or nothing more: the fold of `roundResolved` opens the
  * round's alibis (design §5.4) and `closeAlibis` goes on. Step 1 is the round's event card (§10): its
- * player effects (Raid rumour, Inside tip, Double-cross) come first and are
- * folded before the rest is worked out, so a swapped role plays this round;
- * the others change yields, Heat and information below.
+ * player effects (Inside tip) come first and are
+ * folded before the rest is worked out; the others change yields, Heat and information below.
  */
 export function resolveRound(before: GameState, round: number, draw: Draw): GameEvent[] {
   const job = roundJob(jobFor(before.config), before.card, eventsFor(before.config), before.playerOrder.length);
@@ -128,7 +127,7 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
   const cardEvents = cardEffects(before, round, draw);
   events.push(...cardEvents);
   const state = cardEvents.reduce(applyEvent, before);
-  // A move's power only works if it still matches the player's role (a Double-cross may have swapped it).
+  // A move's power only works if it still matches the player's role.
   const abilityOf = (id: PlayerId): AbilityUse | undefined => {
     const ability = moveOf(id).ability;
     return ability && ability.kind === powerFor(id).kind ? ability : undefined;
@@ -141,7 +140,6 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
 
   // §5.2 step 3: splits. Pocket is capped at the real yield.
   let haulDelta = 0;
-  let pocketed = 0;
   const toStash = new Map<PlayerId, number>();
   for (const id of order) {
     const { room, pocket } = moveOf(id);
@@ -149,30 +147,25 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
     const kept = Math.min(pocket, loot);
     toStash.set(id, kept);
     haulDelta += loot - kept;
-    if (kept > 0) pocketed++;
     events.push({ type: "lootSplit", visibility: privateTo(id), player: id, round, room, loot, toHaul: loot - kept, toStash: kept });
   }
-  // §5.2 step 4, §7: baseline + room pressure, rounded, plus the card's Heat, then clamped once.
+  // §5.2 step 4, §7: baseline + room pressure, rounded, then clamped once.
   // The Mole's tip-off is no longer part of a round: it lands at a hidden police moment (police.ts).
   const counts = Object.fromEntries(Object.entries(visitors).map(([room, ids]) => [room, ids.length]));
-  // design §10: a card's Heat (Quiet night) joins the same single clamp.
   const roomsHeat = roundHeatDelta(job, crewSize, counts);
-  const eventHeat = cardHeat(state);
-  const heat = clampHeat(job, state.heat + roomsHeat + eventHeat);
+  const heat = clampHeat(job, state.heat + roomsHeat);
   // extension.md "Build notes" (Heat breakdown): the public parts of this round's Heat. The baseline is
   // its true value; any rounding sits on the rooms. `clamp` is what the 0–max limit took back (only when it did),
   // so the parts always add up to the real change ("Heat never drops below 0").
   const rooms = roomHeatParts(job, crewSize, counts, state.rooms);
   const base = roomsHeat - Object.values(rooms).reduce((a, b) => a + b, 0);
-  const clamp = heat - (state.heat + roomsHeat + eventHeat);
-  const heatParts = { base, rooms, events: eventHeat, ...(clamp !== 0 ? { clamp } : {}) };
+  const clamp = heat - (state.heat + roomsHeat);
+  const heatParts = { base, rooms, ...(clamp !== 0 ? { clamp } : {}) };
 
   // §5.2 step 5: room-mates, then Hacker loops, Security / Lookout / Server-room results.
-  // design §10 Power cut: nobody sees anybody (sightings, Security and Lookout); the Server room still counts.
-  const blackout = isBlackout(state);
   for (const id of order) {
     const room = moveOf(id).room;
-    if (!blackout) events.push({ type: "roomSighting", visibility: privateTo(id), player: id, round, room, others: others(room, id) });
+    events.push({ type: "roomSighting", visibility: privateTo(id), player: id, round, room, others: others(room, id) });
   }
   // Hacker (§8): a looped room's Security feed reads "camera offline" this round (not the Lookout's or room-mates').
   const looped = new Map<RoomId, PlayerId[]>();
@@ -187,30 +180,22 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
   for (const id of order) {
     const { room, watch } = moveOf(id);
     const ability = abilityOf(id);
-    if (!blackout && roomDef(job, room).info === "watchRoom" && watch !== undefined) {
+    if (roomDef(job, room).info === "watchRoom" && watch !== undefined) {
       const loopers = looped.get(watch);
       if (loopers && others(watch, id).some((x) => (toStash.get(x) ?? 0) > 0)) for (const h of loopers) hid.add(h);
       const seen = loopers ? [] : others(watch, id);
       events.push({ type: "roomWatched", visibility: privateTo(id), player: id, round, source: "security", room: watch, seen, offline: loopers !== undefined });
-    } else if (blackout && roomDef(job, room).info === "watchRoom" && watch !== undefined) {
-      // extension.md "Event cards": a Power cut reads exactly like a loop on every feed.
-      events.push({ type: "roomWatched", visibility: privateTo(id), player: id, round, source: "security", room: watch, seen: [], offline: true });
     }
     if (ability?.kind === "lookout") {
       events.push({ type: "abilityResolved", visibility: privateTo(id), player: id, round, ability });
       for (const r of ability.rooms) {
-        const seen = blackout ? [] : others(r, id);
-        events.push({ type: "roomWatched", visibility: privateTo(id), player: id, round, source: "lookout", room: r, seen, offline: blackout });
+        events.push({ type: "roomWatched", visibility: privateTo(id), player: id, round, source: "lookout", room: r, seen: others(r, id), offline: false });
       }
     }
-    // design §8.3 Tail: one more watched room, like the Lookout's (blinded by a Power cut, not by a camera loop).
+    // design §8.3 Tail: one more watched room, like the Lookout's (not blinded by a camera loop).
     const tailed = player(id).roleState.tail;
     if (tailed !== null) {
-      const seen = blackout ? [] : others(tailed, id);
-      events.push({ type: "roomWatched", visibility: privateTo(id), player: id, round, source: "tail", room: tailed, seen, offline: blackout });
-    }
-    if (roomDef(job, room).info === "pocketCount") {
-      events.push({ type: "pocketCount", visibility: privateTo(id), player: id, round, pocketed });
+      events.push({ type: "roomWatched", visibility: privateTo(id), player: id, round, source: "tail", room: tailed, seen: others(tailed, id), offline: false });
     }
   }
   // design §10 Audit: what each room came up short (its visitors' pockets), every room in play listed.

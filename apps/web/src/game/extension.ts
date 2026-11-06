@@ -20,12 +20,8 @@ import {
   type TokenTrigger,
 } from "@skimjob/content";
 import { heatBreakdown, rolesFor, type GameEvent, type PlayerId, type PlayerView, type RoomId } from "@skimjob/engine";
-import { cardName, roleName, roomName } from "./describeEvent";
+import { roleName, roomName } from "./describeEvent";
 import { crewSize, jobOf, nextTarget, setupOf } from "./hud";
-
-// ---------------------------------------------------------------- wording
-
-export { meetingName, MeetingName, meetingAfter } from "./wording";
 
 const signed = (n: number) => (n >= 0 ? `+${n}` : `−${Math.abs(n)}`);
 
@@ -38,7 +34,7 @@ export const TAG_BLURB: Readonly<Record<Temperament, string>> = {
   wildcard: "Its power can help or hurt the crew.",
   loneWolf: "Its power works against the crew.",
 };
-export const TAG_ORDER: readonly Temperament[] = ["teamPlayer", "wildcard", "loneWolf"];
+const TAG_ORDER: readonly Temperament[] = ["teamPlayer", "wildcard", "loneWolf"];
 
 /** The role table of a game (content overrides included), or plain content outside a game. */
 export const rolesOf = (view: PlayerView | null): Readonly<Record<RoleId, RoleDef>> =>
@@ -58,7 +54,7 @@ export function howYouWin(winsOn: readonly FailureReason[]): string {
 const times = (n: number) => (n === 1 ? "Once" : `${n} times`);
 
 /** A role's power in one line, numbers from content (and the job's). extension.md "Roles" */
-export function powerText(power: RolePower, job: JobDef = BANK_JOB): string {
+function powerText(power: RolePower, job: JobDef = BANK_JOB): string {
   const between = (n: number) => `${times(n)} between meetings`;
   switch (power.kind) {
     case "none":
@@ -87,7 +83,7 @@ export function powerText(power: RolePower, job: JobDef = BANK_JOB): string {
 }
 
 /** When a role earns a token, in one line. extension.md "Roles" */
-export function earnsText(trigger: TokenTrigger): string {
+function earnsText(trigger: TokenTrigger): string {
   switch (trigger) {
     case "checkpointMade":
       return "The Haul target is met at meeting 1 or 2.";
@@ -190,7 +186,7 @@ export function targetBar(view: PlayerView): TargetBar {
 export interface HeatLine {
   readonly label: string;
   readonly value: number;
-  readonly kind: "base" | "room" | "event" | "police" | "missed" | "stopped" | "clamp";
+  readonly kind: "base" | "room" | "police" | "missed" | "stopped" | "clamp";
 }
 
 export interface HeatRound {
@@ -204,7 +200,7 @@ export interface HeatRound {
 const ledgerEvents = (view: Pick<PlayerView, "ledger">): GameEvent[] => view.ledger.map((x) => x.event);
 
 /**
- * One round's Heat change by part: the baseline, each room, the event card,
+ * One round's Heat change by part: the baseline, each room,
  * police activity (never its source) and a missed target. extension.md
  * "What the app works out for you", Build notes "Police activity".
  */
@@ -212,11 +208,9 @@ export function heatRound(view: Pick<PlayerView, "ledger">, round: number): Heat
   const log = ledgerEvents(view);
   const b = heatBreakdown(log, round);
   if (!b) return null;
-  const card = log.find((e) => e.type === "eventFlipped" && e.round === round);
   const lines: HeatLine[] = [];
   if (b.base !== 0) lines.push({ label: "every round", value: b.base, kind: "base" });
   for (const [room, v] of Object.entries(b.rooms)) if (v !== 0) lines.push({ label: roomName(room), value: v, kind: "room" });
-  if (b.events !== 0) lines.push({ label: card?.type === "eventFlipped" ? cardName(card.card) : "event card", value: b.events, kind: "event" });
   for (const v of b.police) lines.push({ label: "police activity", value: v, kind: "police" });
   if (b.missedTarget !== 0) lines.push({ label: "missed target", value: b.missedTarget, kind: "missed" });
   if (b.stopped !== 0) lines.push({ label: "raid stopped", value: b.stopped, kind: "stopped" });

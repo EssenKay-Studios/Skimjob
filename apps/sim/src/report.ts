@@ -3,7 +3,7 @@
 import type { GroupWins, Metrics, Summary } from "./metrics";
 import { HONEST_MAX_SHARE, MODERATE_MAX_SHARE, POCKET_BANDS } from "./metrics";
 
-export const pct = (v: number | null): string => (v === null ? "—" : `${Math.round(v * 100)}%`);
+const pct = (v: number | null): string => (v === null ? "—" : `${Math.round(v * 100)}%`);
 const num = (v: number | null): string => (v === null ? "—" : v.toFixed(2));
 const signed = (v: number | null): string => (v === null ? "" : `${v >= 0 ? "+" : ""}${Math.round(v)}`);
 
