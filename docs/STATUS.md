@@ -3,7 +3,7 @@
 _Last updated: 6 Nov 2026._
 
 ## Where things stand
-- **Specs:** the rules spec is `docs/simplified.md` Part A (R7 Simplified) until step S1 makes `docs/design.md` the single spec. Current decisions: `docs/decisions.md`. Later: Skimjob Advanced (`docs/advanced.md`). Out of scope: the recruited Mole.
+- **Specs:** `docs/design.md` is the single rules spec (R7 Simplified); `docs/simplified.md` is the plan. Current decisions: `docs/decisions.md`. Later: Skimjob Advanced (`docs/advanced.md`). Out of scope: the recruited Mole.
 - **Content** 0.17.0 (the live R6 build; R7 replaces it).
 - **Live:** https://skimjob.duckdns.org on the owner's AWS Lightsail box (`docs/deploy.md`), commit 1a4e083, Google sign-in on. The live game has no real players, so R7 is built straight on `main`.
 - **Next step:** the lowest-numbered open `type:task` issue in the R7 Simplified milestone (S0 and S1 first).

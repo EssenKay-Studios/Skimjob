@@ -43,7 +43,7 @@ Two fixes: **Part A** remakes the rules around a few visible things (coins, bell
 
 ---
 
-## Part A — the new rules (agreed 4 Nov; frozen into `design.md` in S1)
+## Part A — the new rules (agreed 4 Nov; frozen into `docs/design.md` in S1, which is now the spec and wins on any conflict)
 
 ### A1. A round: pick a room, grab coins, split them
 
@@ -109,7 +109,8 @@ Two fixes: **Part A** remakes the rules around a few visible things (coins, bell
 
 - **Regular meetings** each time a third of the bank is gone. Only these recharge "once between meetings" powers.
 - **A police briefing** after every raid (no recharge).
-- **One emergency meeting per player** per game, as today.
+- **Emergency meetings: a crew pool by crew size** *(owner, 6 Nov)*: 1 per game for 3–6 players, 2 for 7–12 [tunable]. Any player may spend one, only after a round's result is shown and before the next round's planning starts. Nothing recharges the pool.
+- **Shakedown protection** *(owner, 6 Nov)*: once a shakedown passes against a player (bailed or not), no other shakedown can target them until the next regular meeting; briefings and emergencies don't lift it. The UI and the ledger show them as protected.
 - **Voting** as today: shake down one player or skip; a shakedown passes with at least half the crew voting and more than half of the votes cast. Vote visibility stays a host setting.
 - **A shakedown opens the target's stash** and compares it with the fair share. Whatever is above the fair share (the pocketed coins still held) goes back on the table, to be split next round. **Coins already spent on perks are gone and are not taken.** A target at or below the fair share is clean, and nothing happens.
 
@@ -125,7 +126,7 @@ Two fixes: **Part A** remakes the rules around a few visible things (coins, bell
 
 ### A8. Roles: tools, not sides
 
-Each game deals about **5–7 roles** [tunable]. Every role has a one-sentence power, a "How you win" line and a "How to spot it" line.
+**Every player gets a role** *(owner, 6 Nov)*: roles dealt = number of players (3–12), with up to 10 distinct roles; at 11–12 players the extra seats get a repeated role (any role, the Mole and Fixer included; at most two copies, eyes and shadows within one). Counts come from a content table. Each holder has their own uses and charges, each Mole or Fixer copy wins on its own, and the Exact role list shows counts ("Lookout ×2"). Every role has a one-sentence power, a "How you win" line and a "How to spot it" line.
 
 | Role | Power | Frequency |
 |---|---|---|
@@ -167,7 +168,7 @@ Each game deals about **5–7 roles** [tunable]. Every role has a one-sentence p
 | 1 | **Check ballot** | See one player's vote at the next meeting. |
 | 2 | **Soft shoes** | Next round, your coins don't ring at all. |
 | 2 | **Blackout** | Next round, one room goes dark: no sightings, cameras offline. Its bell still rings. |
-| 3 | **Bail** | Your next shakedown is cancelled automatically (the ledger says only "a shakedown fell through"). |
+| 3 | **Bail** | A choice *(owner, 6 Nov)*: when a shakedown passes against you, before your stash opens, you choose to use it (the shakedown falls through, the ledger says only "a shakedown fell through", Bail spent) or not (your stash opens, you keep Bail). A short choice window [tunable]; no answer means don't use. Bots decide by policy. One Bail held at a time. |
 | 3 | **Plant evidence** | One player of your choice appears in one room's camera and Lookout feeds this round. |
 
 ### A10. What goes away from R6
@@ -246,7 +247,7 @@ Rule changes keep the engine's non-negotiables (`CLAUDE.md`): deterministic, eve
      - a claim contradicts what you saw;
      - a claim differs from the plan;
      - more claims than a bell allows;
-     - a role claimed twice.
+     - a role claimed more often than it was dealt.
 
      A **"Show only ⚠"** filter lists the open questions. The checks are pure functions over your own view, with tests.
    - **Dossiers:** tap a player for their row, claims, votes, shakedowns, ⚠ count and your own tag and notes. Tap a room for its bell history, raids and visitors.
@@ -297,7 +298,7 @@ Three cleanup rules hold from start to finish:
 
 | Agent | Model | Does |
 |---|---|---|
-| **Orchestrator (PM)** | Opus 5.5 | Plans, writes briefs, merges via the gate, folds `## Decisions` / `## STATUS updates` into docs, reports to the owner. Never writes code. |
+| **Orchestrator (PM)** | Opus 5.5 | Plans, writes briefs, merges via the gate, folds `## Decisions` into `docs/decisions.md`, turns `## Follow-ups` into GitHub issues and keeps the R7 board current, reports to the owner. Never writes code. |
 | **Developer** | **Sonnet 5.5** for well-specified work; **Opus 5.5** for engine rules (see below) | Builds one task per PR (`docs/pipeline/builder.md`). |
 | **Reviewer** | Opus 5.5 | Reviews a PR from the diff (`reviewer.md`). Never merges, never pushes. |
 | **QA** | Opus 5.5 | Adversarial tests, pushes once, posts the verdict (`qa.md`). Never merges. |
@@ -333,7 +334,7 @@ The orchestrator picks the model per task and says which in the brief (Agent too
 
 **S1 — spec freeze (docs only, one Opus developer).**
 - Rewrite `docs/design.md` as the **single** rules spec from Part A: rooms and coins, bells, raids and busts, the bank and the end, equal shares and the kitty, honesty and winning, meetings and shakedowns, the plan board, roles, perks, events. Nothing from R6 that R7 drops stays in it.
-- Move `docs/extension.md`, `docs/m2-plan.md` and `docs/balance/r6-balance.md` to `docs/archive/`; fix every reference (including code comments citing "extension.md" or old design sections).
+- Move the R6 extension spec, the M2 plan and the R6 balance report to `docs/archive/`; fix every reference (including code comments citing them or old design sections).
 - Add a **"Content text"** section: the one-line texts for every room, role ("power", "How you win", "How to spot it"), perk and event, read by the UI through content.
 - Set the S5 balance gates.
 - Owner approves the PR.

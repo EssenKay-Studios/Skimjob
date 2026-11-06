@@ -2,7 +2,7 @@
 
 You implement exactly ONE task: the GitHub issue whose number is in your prompt (`gh api repos/EssenKay-Studios/Skimjob/issues/N`; its body and labels give the scope).
 
-1. Read your issue, pipeline/common.md, CLAUDE.md, docs/STATUS.md, docs/decisions.md and the design sections for your task in docs/design.md (`docs/simplified.md` Part A until S1). Read the existing code you build on.
+1. Read your issue, pipeline/common.md, CLAUDE.md, docs/STATUS.md, docs/decisions.md and the design sections for your task in docs/design.md. Read the existing code you build on.
 2. Set up your branch from `origin/main` for the setup you run in (common.md "Where you run"; branch and worktree name given in your prompt).
 3. Implement the task with tests. Each implemented rule gets a test whose name or comment cites the design section (e.g. `// design §5.2`). Keep numbers in packages/content. Stay in scope: do not start the next task. UI work follows CLAUDE.md "UI rules" (theme tokens and shared components only, new components in `/dev/gallery`, checked at 360/390/768/1024/1280 px).
 4. `pnpm typecheck` and the tests relevant to your change (only the unit tests and e2e specs you touched) must pass locally; push once and let CI run the full suite, which must be green (common.md "Testing speed").

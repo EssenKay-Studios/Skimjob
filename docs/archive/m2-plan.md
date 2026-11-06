@@ -1,3 +1,5 @@
+*Archived 4 Nov 2026, replaced by `docs/design.md` (R7).*
+
 # Milestone 2 plan: playable web prototype
 
 > **Live status is in `docs/STATUS.md`** (task ticks, what is paused). This plan is the original scope and acceptance criteria. Since written: the game is deployed on AWS Lightsail (`docs/deploy.md`), and the questions in §3 are answered (`docs/decisions.md`).
