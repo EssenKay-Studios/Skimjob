@@ -1,5 +1,5 @@
 import { mkdirSync } from "node:fs";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import { startGame } from "./setupGame";
 
 // M2-6 acceptance (docs/m2-plan.md): a host and a guest play a 15-min game
@@ -24,6 +24,18 @@ test("a host and a guest play a 15-min game against bots to the end", async ({ p
   const guest = await guestCtx.newPage();
   const game = await startGame(page.request, { bots: 2, guests: [guest.request] });
 
+  // The alibi window is well under a second of real time at this clock, shorter than a loaded runner's
+  // click round trips, so the host's alibi is posted from inside the page (no round trips): pick the
+  // Lobby, post, and note that the confirmation ("You told the crew ...") was shown (issue #127).
+  await page.addInitScript(() => {
+    const w = window as unknown as { __alibiShown?: boolean };
+    setInterval(() => {
+      const btn = (t: string, root: ParentNode = document) => [...root.querySelectorAll("button")].find((b) => b.textContent?.trim() === t);
+      const post = btn("Post alibi");
+      if (post) (post.disabled ? btn("Lobby", document.querySelector('[aria-label="Alibi room"]') ?? document) : post)?.click();
+      if (document.body.innerText.includes("You told the crew you were in the")) w.__alibiShown = true;
+    }, 25);
+  });
   await page.goto(`/game/${game.id}`);
   await guest.goto(`/game/${game.id}`);
   await expect(page.locator(".hud__kicker")).toContainText(/Round \d of 9/);
@@ -35,39 +47,36 @@ test("a host and a guest play a 15-min game against bots to the end", async ({ p
   let moves = 0;
   let votes = 0;
   while (!(await over.isVisible())) {
-    // Each act's meeting (M2-7): the vote dialog opens by itself; the host skips. Dismiss it only once the
-    // vote has landed: a click that times out under load while the sheet animates in must be retried on the
-    // next pass (the 12 s window is long enough), not followed by "Back to the board", which would close the
-    // dialog with no vote cast (issue #127: votes stayed 0 on a slow CI shard).
-    const dialog = page.getByRole("dialog", { name: "Who's skimming?" });
-    if (await dialog.isVisible().catch(() => false)) {
-      const voted = await dialog
-        .getByRole("group", { name: "Your vote" })
-        .getByRole("button", { name: "Skip" })
-        .click({ timeout: 5000 })
-        .then(() => dialog.getByRole("button", { name: "Cast vote" }).click({ timeout: 5000 }))
-        .then(() => true, () => false);
-      if (voted) {
+    // Every interaction below waits generously for its click and counts only what the UI confirms ("Vote cast",
+    // "Locked in: Office", "You told the crew ..."), never the click itself. A click that fails under load (the
+    // sheet still animating, the round gone) is retried on the next pass. The three steps run side by side:
+    // one that stalls on a vanished button (a 5 s click timeout) must not eat the alibi or vote window.
+    // Issue #127: 1 s clicks that were counted, or followed by "Back to the board", left votes/alibis at 0.
+    const landed = (l: Locator) => l.waitFor({ state: "visible", timeout: 5000 }).then(() => true, () => false);
+    const click = (l: Locator) => l.click({ timeout: 5000 }).catch(() => {});
+
+    // Each act's meeting (M2-7): the vote dialog opens by itself; the host skips.
+    const vote = async () => {
+      const dialog = page.getByRole("dialog", { name: "Who's skimming?" });
+      if (!(await dialog.isVisible().catch(() => false))) return;
+      await click(dialog.getByRole("group", { name: "Your vote" }).getByRole("button", { name: "Skip" }));
+      await click(dialog.getByRole("button", { name: "Cast vote" }));
+      if (await landed(dialog.getByRole("button", { name: "Vote cast" }))) {
         votes++;
-        await dialog.getByRole("button", { name: "Back to the board" }).click({ timeout: 5000 }).catch(() => {});
+        await click(dialog.getByRole("button", { name: "Back to the board" }));
       }
-    }
-    const lock = page.getByRole("button", { name: "Lock it in" });
-    if (await lock.isVisible().catch(() => false)) {
-      await page.locator('.room-tile[data-room="Office"]').click({ timeout: 1000 }).catch(() => {});
-      // isEnabled waits for the element: the round can end (and the button go) in between.
-      if (await lock.isEnabled({ timeout: 500 }).catch(() => false)) {
-        await lock.click({ timeout: 1000 }).then(() => moves++, () => {});
-      }
-    }
-    const post = page.getByRole("button", { name: "Post alibi" });
-    if (await post.isVisible().catch(() => false)) {
-      await page.getByRole("group", { name: "Alibi room" }).getByRole("button", { name: "Lobby" }).click({ timeout: 1000 }).catch(() => {});
-      await post.click({ timeout: 1000 }).then(() => alibis++, () => {});
-    }
+    };
+    const move = async () => {
+      if (!(await page.getByRole("button", { name: "Lock it in" }).isVisible().catch(() => false))) return;
+      await click(page.locator('.room-tile[data-room="Office"]'));
+      await click(page.getByRole("button", { name: "Lock it in" }));
+      if (await landed(page.getByText(/Locked in: Office/))) moves++;
+    };
+    await Promise.all([vote(), move()]);
     await page.waitForTimeout(150);
   }
   expect(moves).toBeGreaterThan(0);
+  alibis = (await page.evaluate(() => (window as unknown as { __alibiShown?: boolean }).__alibiShown)) ? 1 : 0;
   expect(alibis).toBeGreaterThan(0);
   expect(votes).toBeGreaterThan(0);
 
