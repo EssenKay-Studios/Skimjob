@@ -71,7 +71,7 @@ if [ -n "$GATE_REVIEW_BOTS" ]; then allowv="[\"${GATE_AUTHORS//,/\",\"}\",\"${GA
 # Unreadable file list: fail closed. 3000 is the API's cap on listed files: treat it as touched.
 if [ -n "$GATE_REVIEW_BOTS" ]; then
   pfiles=$(gh api --paginate "$A/pulls/$N/files" --jq '.[] | .filename, (.previous_filename // empty)') || fatal "cannot read the files of PR #$N"
-  if grep -qiE '^(\.github/|docs/pipeline/|\.claude/|\.claude\.json$|\.mcp\.json$|claude(\.local)?\.md$)|/\.claude/' <<<"$pfiles" || [ "$(grep -c . <<<"$pfiles")" -ge 3000 ]; then
+  if grep -qiE '^(\.github/|docs/pipeline/|\.claude/|\.claude\.json$|\.mcp\.json$)|/\.claude/|(^|/)claude(\.local)?\.md$' <<<"$pfiles" || [ "$(grep -c . <<<"$pfiles")" -ge 3000 ]; then
     allowv=$allow
     echo "bots:   ignored (PR touches .github/, docs/pipeline/ or Claude config: needs a human-account review)"
   fi

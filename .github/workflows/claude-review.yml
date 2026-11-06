@@ -14,7 +14,7 @@
 # Setup (owner, once): add the repository secret CLAUDE_CODE_OAUTH_TOKEN (`claude setup-token`).
 # With github_token set the action skips the Claude GitHub App token exchange, so the app
 # does not need to be installed and id-token is not requested. Never commit a token.
-# Follow-up: pin the third-party actions by commit SHA instead of tags.
+# Third-party actions are pinned by commit SHA (tag in the comment); bump them deliberately.
 name: Claude review
 
 on:
@@ -177,7 +177,7 @@ jobs:
         # A failure here (e.g. the Pro usage limit) must not leave a red check on the head
         # that blocks the merge gate; the PM falls back to an Opus reviewer subagent.
         continue-on-error: true
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@c0949c50a78c1ec8ce2647db36629b870e715d0c # v1.0.268
         env:
           CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"
         with:
@@ -239,16 +239,37 @@ jobs:
             if [ -n "$hits" ]; then echo "::warning::$t value found in: $hits"; else echo "$t value is in no file under the workspace, ~/.claude or ~/.config"; fi
           done
 
+      # Guard (non-AI): the AI step has no way to change files, but verify instead of assuming.
+      # HEAD must still be the main commit we checked out, and nothing in the workspace may
+      # differ except our own plain-data dirs (and what the action itself creates). Else: no review.
+      - name: Guard - workspace is still trusted main, nothing else changed
+        id: guard
+        if: always() && steps.pr.outputs.run == 'true'
+        env:
+          MAIN: ${{ steps.pr.outputs.main }}
+        run: |
+          set -uo pipefail
+          bad=0
+          [ "$(git rev-parse HEAD)" = "$MAIN" ] || { echo "::error::HEAD moved: $(git rev-parse HEAD) is not $MAIN"; bad=1; }
+          sed 's|^\./||' "$RUNNER_TEMP/symlinks-removed.txt" > "$RUNNER_TEMP/allowed-changes.txt" 2>/dev/null || : > "$RUNNER_TEMP/allowed-changes.txt"
+          extra=$(git status --porcelain --untracked-files=all | sed 's/^...//' \
+            | grep -v -e '^\.review-input/' -e '^pr/' -e '^\.claude-pr/' -e '^\.review-input\.from-main' -e '^pr\.from-main' -e '^review\.md\.from-main' \
+            | grep -vxF -f "$RUNNER_TEMP/allowed-changes.txt" || true)
+          if [ -n "$extra" ]; then echo "::error::unexpected changes in the workspace:"; echo "$extra" | head -20; bad=1; fi
+          [ "$bad" = 0 ] || { echo "::error::guard failed: no review will be posted"; exit 1; }
+          echo "workspace is main $MAIN plus only .review-input/ and pr/"
+
       - name: Turn Claude's final message into review.md
         id: out
         if: always() && steps.pr.outputs.run == 'true'
         env:
+          GUARD: ${{ steps.guard.outcome }}
           EXEC: ${{ steps.claude.outputs.execution_file }}
           CLAUDE_OUTCOME: ${{ steps.claude.outcome }}
         run: |
           out="$RUNNER_TEMP/review.md"
           : > "$out"
-          if [ -s "${EXEC:-}" ]; then
+          if [ "$GUARD" = success ] && [ -s "${EXEC:-}" ]; then
             # The last result message; drop anything before the first exact VERDICT line.
             jq -r '(if type == "array" then . else [.] end) | map(select(.type == "result" and .subtype == "success")) | last | .result // empty' "$EXEC" \
               | awk '/^VERDICT: (APPROVE|CHANGES REQUESTED)$/ { p = 1 } p' > "$out" || true
@@ -257,7 +278,7 @@ jobs:
 
       - name: Upload review.md
         if: always() && steps.out.outputs.produced == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: claude-review-${{ github.run_id }}
           path: ${{ runner.temp }}/review.md
@@ -274,7 +295,7 @@ jobs:
     permissions:
       pull-requests: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: claude-review-${{ github.run_id }}
           path: ${{ runner.temp }}/review
