@@ -94,7 +94,8 @@ jobs:
   e2e:
     needs: changes
     if: needs.changes.outputs.tags != ''
-    # Six shards in parallel (Playwright --shard), each with its own servers (playwright.config.ts).
+    # Six shards in parallel, each with its own servers (playwright.config.ts) and a balanced set of spec
+    # files (scripts/scope.mjs --shard, weights in apps/web/e2e/shard-weights.json).
     name: Web e2e (Playwright, shard ${{ matrix.shard }}/6)
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -118,9 +119,11 @@ jobs:
         env:
           TAGS: ${{ needs.changes.outputs.tags }}
         run: |
-          args=(--shard=${{ matrix.shard }}/6 --pass-with-no-tests)
+          files=$(node ../../scripts/scope.mjs --shard ${{ matrix.shard }}/6)
+          [ -n "$files" ] || exit 0
+          args=(--pass-with-no-tests)
           if [ "$TAGS" != all ]; then args+=(--grep "$TAGS"); fi
-          npx playwright test "${args[@]}"
+          npx playwright test "${args[@]}" $files
       - if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:

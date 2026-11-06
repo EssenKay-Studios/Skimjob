@@ -44,7 +44,7 @@ A PR waits only for the tests of what it touched; `main` is tested in full after
 
 **Adding a feature.** Give each new screen, panel or feature module an entry in `features.json`, tag its specs, and run `node scripts/scope.mjs --check` (CI runs it). QA's adversarial specs go in `<feature>.qa.spec.ts` under the same tag.
 
-**Shards.** SHARDS_PLACEHOLDER
+**Shards.** CI splits the e2e specs over 6 jobs by file, heaviest first onto the lightest shard (`node scripts/scope.mjs --shard i/6`), using `apps/web/e2e/shard-weights.json` (seconds per spec file from a local run; a file without an entry counts 60). Playwright's own `--shard` slices by test count, which put the slow full-game tests (`@fast-clock` and the 15-minute bot games) and the skipped per-project tests in a few shards: 23 min against 2 min on a main run. Locally the shards are within 1% of each other. After adding or reworking slow specs, refresh the weights: run `npx playwright test --reporter=json` in `apps/web`, sum each file's test durations.
 
 ## Running the suite
 

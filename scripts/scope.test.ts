@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildGraph, scope } from "./scope.mjs";
+import { buildGraph, scope, shard } from "./scope.mjs";
 
 // A tiny repo: web -> engine -> content, one shared web module, entry points for chat and meeting.
 const text: Record<string, string> = {
@@ -80,5 +80,19 @@ describe("scope", () => {
   });
   it("combines files and ignores docs next to code", () => {
     expect(run("docs/x.md", "apps/web/src/Chat.tsx", "apps/web/src/Meeting.tsx")).toMatchObject({ tags: "@chat|@meeting", unit: "apps/web" });
+  });
+});
+
+describe("shard", () => {
+  const weights = { "e2e/a.spec.ts": 300, "e2e/b.spec.ts": 200, "e2e/c.spec.ts": 150, "e2e/d.spec.ts": 150 };
+  const specs = [...Object.keys(weights), "e2e/new.spec.ts"];
+  it("gives every spec file to exactly one shard", () => {
+    const all = [1, 2, 3].flatMap((i) => shard(specs, weights, i, 3));
+    expect(all.sort()).toEqual([...specs].sort());
+  });
+  it("puts the heaviest files on different shards and counts an unlisted file as 60 s", () => {
+    expect(shard(specs, weights, 1, 3)).toEqual(["e2e/a.spec.ts"]);
+    expect(shard(specs, weights, 2, 3)).toEqual(["e2e/b.spec.ts", "e2e/new.spec.ts"]);
+    expect(shard(specs, weights, 3, 3)).toEqual(["e2e/c.spec.ts", "e2e/d.spec.ts"]);
   });
 });

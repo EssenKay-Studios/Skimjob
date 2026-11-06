@@ -3,6 +3,7 @@
 //   node scripts/scope.mjs --full    the full tier (pushes to main, nightly)
 //   node scripts/scope.mjs --check   features.json coverage; fails if an e2e test lacks exactly one feature tag
 //   node scripts/scope.mjs --run     `pnpm test:scoped`: scope the diff against origin/main and run it
+//   node scripts/scope.mjs --shard 3/6   the e2e spec files of CI shard 3 of 6, balanced by apps/web/e2e/shard-weights.json
 // unit: "all", "" (none) or package dirs; tags: "all", "" (none) or a Playwright --grep regex; sim: games.
 import { execFileSync, spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -102,6 +103,19 @@ export function scope(changed, graph, features, readFile) {
   return { full: false, unit: files.length ? [...unit].sort().join(" ") : "all", tags: [...tags].sort().join("|"), sim, reason: "scoped" };
 }
 
+// Heaviest spec file first onto the lightest shard (Playwright's own --shard slices by test count, which
+// bunches the slow full-game tests). Weights are seconds per file on a local run; a file without one counts 60.
+export function shard(specs, weights, i, n) {
+  const weight = (f) => weights[f] ?? 60;
+  const loads = Array.from({ length: n }, () => ({ total: 0, files: [] }));
+  for (const f of [...specs].sort((a, b) => weight(b) - weight(a) || a.localeCompare(b))) {
+    const lightest = loads.reduce((m, x) => (x.total < m.total ? x : m));
+    lightest.total += weight(f);
+    lightest.files.push(f);
+  }
+  return loads[i - 1].files.sort();
+}
+
 const out = (cmd, args, cwd = root) => execFileSync(cmd, args, { cwd, encoding: "utf8", maxBuffer: 1 << 28 });
 const lines = (s) => s.split("\n").filter(Boolean);
 
@@ -139,6 +153,12 @@ function main(mode) {
     const problems = check(files, features);
     problems.forEach((p) => console.error(p));
     return process.exit(problems.length ? 1 : 0);
+  }
+  if (mode === "--shard") {
+    const [i, n] = process.argv[3].split("/").map(Number);
+    const specs = files.filter((f) => SPEC.test(f)).map((f) => f.replace("apps/web/", ""));
+    const weights = JSON.parse(read("apps/web/e2e/shard-weights.json"));
+    return console.log(shard(specs, Object.fromEntries(Object.entries(weights).map(([f, w]) => [`e2e/${f}`, w])), i, n).join(" "));
   }
   const graph = buildGraph(files, read);
   if (mode !== "--run") return console.log(JSON.stringify(scope(lines(readFileSync(0, "utf8")), graph, features, read)));
