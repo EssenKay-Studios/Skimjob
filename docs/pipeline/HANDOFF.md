@@ -5,10 +5,10 @@ Read this with `docs/STATUS.md` (where things stand; it links the GitHub issues 
 **Standing rule: keep status and orchestration docs clean.** Update in place, delete stale or contradictory content, no history narratives (history lives in git, the PRs and `docs/archive/decisions-history.md`).
 
 ## Current state (6 Nov 2026)
-- **Merged:** R7 S0, S1 (`docs/design.md` is the single spec, owner-approved 6 Nov), C1, C2a-C2d. **In flight:** C2e (#135), in its last fix round. **Next:** C3 guardrails (#87) and S2 mockups (#81); they can run in parallel. The board is the task list.
+- **Merged:** R7 S0, S1 (`docs/design.md` is the single spec, owner-approved 6 Nov), C1, C2a-C2e. **In flight:** nothing. **Next:** C3 guardrails (#87) and S2 mockups (#81); they can run in parallel. The board is the task list.
 - **Review:** the Claude review Action (Pro subscription, Opus) reviews every PR automatically and its verdict counts, except on PRs touching `.github/`, `docs/pipeline/` or Claude config, where the PM's Opus reviewer is required. The PM posts a `Review focus:` comment on each PR.
 - **Owner questions** are open issues labelled `owner-decision` (#119-#123).
-- **Mac:** prefix `gh` with `GH_TOKEN=$(gh auth token --user karthik24iyer)`, because a work account may be active. Merges work from the cloud once the manual-paging gate (PR #138) has landed.
+- **Mac:** prefix `gh` with `GH_TOKEN=$(gh auth token --user karthik24iyer)`, because a work account may be active. Merges work from the cloud too (the gate pages manually).
 - **Parked by the owner:** M2-14 playtest pass and M2-15 offline demo. **Out of scope for now:** Skimjob Advanced (`docs/advanced.md`), the recruited Mole.
 - **Specs:** `docs/design.md` (rules), `docs/simplified.md` (R7 plan), `docs/decisions.md` (current decisions).
 - **Live:** https://skimjob.duckdns.org on the owner's AWS Lightsail box, Google sign-in on. Runbook: `docs/deploy.md`. Connection details are in the owner's local `ssh-relay` skill, never in the repo.
