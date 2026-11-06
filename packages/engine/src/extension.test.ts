@@ -47,7 +47,6 @@ function game(cfg: GameConfig, setup: Setup = {}): GameState {
       const earned: GameEvent[] = Array.from({ length: tokens }, () => ({ type: "tokenEarned", visibility: privateTo(e.player), player: e.player, trigger: "checkpointMade" }));
       return [{ ...e, role }, ...earned];
     }
-    if (e.type === "snitchTargetAssigned" && setup.roles) return [];
     if (e.type === "roleListShown" && setup.roles && e.list === "exact") return [];
     if (e.type === "shopDealt" && setup.shop) return [{ ...e, perks: setup.shop }];
     if (e.type === "policeScheduled" && setup.patrol !== undefined && e.moment === 1) return [{ ...e, patrol: setup.patrol }];
@@ -267,46 +266,6 @@ describe("what the deal can give — extension.md \"Host settings\", Build notes
   it("Truly random at 3 and Balanced at 4 can deal the Mole, so the police run", () => {
     expect(createGame(config(3, { deck: "everything", roleList: "possible", deal: "random" })).police).not.toBeNull();
     expect(createGame(config(4, { deck: "everything", roleList: "possible" })).police).not.toBeNull();
-  });
-});
-
-describe("the Blackmailer's token — extension.md owner ruling 5 (reviewer note 11)", () => {
-  const vote = (player: string, target: string | null) => ({ type: "castVote", player, vote: target === null ? { kind: "skip" } : { kind: "shakedown", target } });
-  const blackmail = (role: string) => mv("p0", "lobby", 0, { ability: { kind: "blackmail", target: "p1", role } });
-  const meeting = [{ type: "callEmergency", player: "p6" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: "emergency-p6" } }];
-  const close = { type: "advance", deadline: { kind: "closeMeeting", meetingId: "emergency-p6" } };
-  const blackmailTokens = (s: GameState) => ofType(s.log, "tokenEarned").filter((e) => e.trigger === "stolenVoteDecided").length;
-
-  it("only when the stolen votes changed the outcome: none when no shakedown passes, none for a wrong guess", () => {
-    // 7 players; p0 Blackmailer, p1 Rookie. p0's 2 weight (its own and p1's) plus p3 on p2 is 3 of 7: no majority.
-    const right = run(game(config(7), { roles: ["blackmailer"] }), blackmail("rookie"), ROUND, ...meeting);
-    const failed = run(right, vote("p0", "p2"), vote("p3", "p2"), vote("p4", null), vote("p5", null), vote("p6", null), close);
-    expect(ofType(failed.log, "meetingClosed")[0]?.result.kind).not.toBe("shakedown");
-    expect(blackmailTokens(failed)).toBe(0);
-    // A wrong guess steals nothing: the same ballots that a right guess would decide earn nothing.
-    const wrong = run(game(config(7), { roles: ["blackmailer"] }), blackmail("lookout"), ROUND, ...meeting);
-    const ballots = [vote("p0", "p2"), vote("p3", "p2"), vote("p4", "p2"), vote("p1", null), vote("p5", null), vote("p6", null), close];
-    expect(blackmailTokens(run(wrong, ...ballots))).toBe(0);
-    expect(blackmailTokens(run(right, ...ballots))).toBe(1);
-  });
-
-  it("records the steals at the close in a reveal-only votesStolen, with whether they decided it (design §13)", () => {
-    const right = run(game(config(7), { roles: ["blackmailer"] }), blackmail("rookie"), ROUND, ...meeting);
-    const decided = run(right, vote("p0", "p2"), vote("p3", "p2"), vote("p4", "p2"), vote("p1", null), vote("p5", null), vote("p6", null), close);
-    const steal = { type: "votesStolen", visibility: REVEAL, meetingId: "emergency-p6" };
-    expect(ofType(decided.log, "votesStolen")).toEqual([{ ...steal, steals: [{ victim: "p1", blackmailer: "p0", decided: true }] }]);
-    const failed = run(right, vote("p0", "p2"), vote("p3", "p2"), vote("p4", null), vote("p5", null), vote("p6", null), close);
-    expect(ofType(failed.log, "votesStolen")).toEqual([{ ...steal, steals: [{ victim: "p1", blackmailer: "p0", decided: false }] }]);
-    const wrong = run(game(config(7), { roles: ["blackmailer"] }), blackmail("lookout"), ROUND, ...meeting, vote("p0", "p2"), close);
-    expect(ofType(wrong.log, "votesStolen")).toEqual([]);
-    // A Double-cross that moves the Blackmailer role away before the meeting: no token, but the reveal still knows.
-    const at = right.log.findIndex((e) => e.type === "meetingOpened");
-    const swap = { role: "rookie", roleState: { usedThisAct: 0, usedThisGame: 0, target: null, tokens: 0, perks: [], tail: null } } as const;
-    const crossed = replay(right.config, [...right.log.slice(0, at), { type: "doubleCrossResolved", visibility: privateTo("p0"), player: "p0", round: 1, partner: "p3", swap }, ...right.log.slice(at)]);
-    const after = run(crossed, vote("p0", "p2"), vote("p3", "p2"), vote("p4", "p2"), vote("p1", null), vote("p5", null), vote("p6", null), close);
-    expect(blackmailTokens(after)).toBe(0);
-    expect(ofType(after.log, "votesStolen")[0]?.steals).toEqual([{ victim: "p1", blackmailer: "p0", decided: true }]);
-    for (const id of after.playerOrder) expect(JSON.stringify(viewFor(after, id))).not.toContain("votesStolen");
   });
 });
 

@@ -24,7 +24,7 @@ import type { LobbySettings } from "./settings";
 import { createGameStore, type GameStore } from "./store";
 import { testDb } from "./testkit";
 
-/** The Standard deck with every Wildcard and Lone wolf toggled off: no Mole, so no police moments (was saboteur "off"). */
+/** The Standard deck with every Wildcard and Lone wolf toggled off: no Mole, so no police moments . */
 const TEAM_ROLES = DECKS.standard.filter((r) => ROLES[r]?.tag === "teamPlayer");
 
 const quick = { interval: 1, timeout: 5000 };
@@ -283,7 +283,7 @@ function assertReveal(c: Client, final: GameState) {
   expect(ranking.map((r) => r.player).sort()).toEqual([...final.playerOrder].sort());
   for (const r of ranking) {
     const p = final.players[r.player]!;
-    expect([r.role, r.stash, r.safe]).toEqual([p.role, p.stash + p.safe, p.safe]);
+    expect([r.role, r.stash]).toEqual([p.role, p.stash]);
   }
   for (let i = 1; i < ranking.length; i++) expect(ranking[i - 1]!.score).toBeGreaterThanOrEqual(ranking[i]!.score);
   if (reveal.outcome.result === "success") expect(winners.length).toBeGreaterThan(0);
@@ -475,8 +475,8 @@ describe("scenarios: end-to-end stories over HTTP + WebSocket", () => {
     const clients = await Promise.all(game.humans.map((h) => Client.open(game.id, h)));
     const state = await load(game.id);
     const roles = state.playerOrder.map((p) => state.players[p]!.role).sort();
-    // Unique roles (the default) from the 20-role Everything deck: twelve different roles.
-    expect(new Set(roles).size).toBe(12);
+    // Unique roles (the default) from the 9-role Everything deck: every role, Rookies filling the rest.
+    expect(new Set(roles).size).toBe(9);
     for (const r of roles) expect(POOL_ROLES).toContain(r);
     const refused = await play(game, clients, brainsFor(game));
     const final = await finish(game, clients, refused, before);

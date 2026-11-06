@@ -4,11 +4,10 @@
 // "Tokens and the perk shop", Build notes "Tags, decks and dealing", "Police activity"
 //
 // Emits, in order: gameCreated (public, no seed), rngSeeded (reveal),
-// roomsSet (public), one roleDealt per seat in seat order (private), the
-// Snitch's target (private), roleListShown (public, unless the list is
-// hidden), shopDealt (public), policeScheduled (reveal) when police activity
-// runs, roundStarted for round 1 (public), what a Mastermind foresees, and
-// rngAdvanced (reveal) with the RNG state after setup. Nobody is told anyone
+// roomsSet (public), one roleDealt per seat in seat order (private),
+// roleListShown (public, unless the list is hidden), shopDealt (public),
+// policeScheduled (reveal) when police activity runs, roundStarted for
+// round 1 (public), and rngAdvanced (reveal) with the RNG state after setup. Nobody is told anyone
 // else's role (no automatic reveals).
 import {
   CONTENT_VERSION,
@@ -21,7 +20,6 @@ import {
   MIN_PLAYERS,
   MOLE_ROLE,
   POOL_ROLES,
-  EVENT_DECK,
   RANDOM_DEAL_SINGLETONS,
   ROLES,
   SHOP_COLUMNS,
@@ -33,16 +31,15 @@ import {
   type RoomId,
   type Temperament,
 } from "@skimjob/content";
-import type { DealStyle, GameConfig, GameEvent, GameState, MoleSetting, RngState, RoleListSetting, VoteVisibility } from "./types";
+import type { DealStyle, GameConfig, GameEvent, GameState, RngState, RoleListSetting, VoteVisibility } from "./types";
 import { PUBLIC, REVEAL, privateTo } from "./types";
 import { pick, randomInt, seedRng, shuffle } from "./rng";
 import { replay } from "./reduce";
-import { eventsOn, foresee } from "./deck";
+import { eventsOn } from "./deck";
 import { show } from "./check";
 import { jobById, roomsInPlay } from "./job";
 import { policeFor, powerOf, roleDefIn, rolesFor, tagIn, validateOverrides, type RoleTable } from "./overrides";
 
-const MOLE_SETTINGS: readonly string[] = ["off", "maybe", "on"] satisfies readonly MoleSetting[];
 const VOTE_VISIBILITIES: readonly string[] = ["hiddenThenRevealed", "open", "secret"] satisfies readonly VoteVisibility[];
 const DECK_IDS: readonly string[] = Object.keys(DECKS);
 const DEAL_STYLES: readonly string[] = ["balanced", "random"] satisfies readonly DealStyle[];
@@ -70,10 +67,9 @@ const isStringArray = (v: unknown): v is string[] => Array.isArray(v) && v.every
 export function validateConfig(config: unknown): string[] {
   if (!isObject(config)) return ["config must be an object"];
   const errors: string[] = [];
-  const { seed, players, job, rolePool, mole, deck, deal, roleList, eventsEnabled, voteVisibility, contentOverrides, uniqueRoles } = config;
+  const { seed, players, job, rolePool, deck, deal, roleList, eventsEnabled, voteVisibility, contentOverrides, uniqueRoles } = config;
   if (typeof seed !== "string") errors.push("seed must be a string");
   if (typeof eventsEnabled !== "boolean") errors.push("eventsEnabled must be a boolean");
-  if (mole !== undefined && (typeof mole !== "string" || !MOLE_SETTINGS.includes(mole))) errors.push(`mole must be one of ${MOLE_SETTINGS.join(", ")}`);
   if (deck !== undefined && (typeof deck !== "string" || !DECK_IDS.includes(deck))) errors.push(`deck must be one of ${DECK_IDS.join(", ")}`);
   if (deal !== undefined && (typeof deal !== "string" || !DEAL_STYLES.includes(deal))) errors.push(`deal must be one of ${DEAL_STYLES.join(", ")}`);
   if (roleList !== undefined && (typeof roleList !== "string" || !ROLE_LISTS.includes(roleList))) errors.push(`roleList must be one of ${ROLE_LISTS.join(", ")}`);
@@ -115,40 +111,22 @@ export function roomsFor(job: JobId, playerCount: number): RoomId[] {
   return roomsInPlay(jobById(job), playerCount);
 }
 
-/**
- * Dealable for this crew: not below the role's `minPlayers`, and with events
- * off not a role that needs the deck (`needsEvents`: the Mastermind).
- * design §8.1 (role deck v2 §3)
- */
-function dealable(config: GameConfig, roles: RoleTable, role: RoleId): boolean {
-  const def = roleDefIn(roles, role);
-  return (
-    (def?.minPlayers ?? 0) <= config.players.length &&
-    !(def?.needsEvents === true && !eventsOn(config))
-  );
-}
+/** Dealable for this crew: not below the role's `minPlayers`. design §8.1 (role deck v2 §3) */
+const dealable = (config: GameConfig, roles: RoleTable, role: RoleId): boolean => (roleDefIn(roles, role)?.minPlayers ?? 0) <= config.players.length;
 
 /** The deck preset this game uses: the host's (Standard by default). extension.md "Decks" */
 export const deckIdOf = (config: GameConfig): DeckId => (config.deck ?? DEFAULT_DECK);
 
 export const dealStyleOf = (config: GameConfig): DealStyle => config.deal ?? "balanced";
 
-export const roleListOf = (config: GameConfig): RoleListSetting => config.roleList ?? "exact";
+const roleListOf = (config: GameConfig): RoleListSetting => config.roleList ?? "exact";
 
-/**
- * The deck: the preset, or the host's per-role picks (`rolePool`) when any.
- * A stored saboteur setting of
- * "off" (`mole`, migrated on read) toggles every Wildcard and Lone wolf off.
- * extension.md "Decks", Build notes "Tags, decks and dealing"
- */
-export function deckFor(config: GameConfig, roles: RoleTable = rolesFor(config)): readonly RoleId[] {
-  const deck = config.rolePool.length > 0 ? config.rolePool : DECKS[deckIdOf(config)];
-  return config.mole === "off" ? deck.filter((r) => tagIn(roles, r) === "teamPlayer") : deck;
-}
+/** The deck: the preset, or the host's per-role picks (`rolePool`) when any. extension.md "Decks" */
+export const deckFor = (config: GameConfig): readonly RoleId[] => (config.rolePool.length > 0 ? config.rolePool : DECKS[deckIdOf(config)]);
 
 /** The roles of the deck this crew can be dealt (`dealable`). design §8.1 */
 export function rolePoolFor(config: GameConfig, roles: RoleTable = rolesFor(config)): readonly RoleId[] {
-  return deckFor(config, roles).filter((r) => dealable(config, roles, r));
+  return deckFor(config).filter((r) => dealable(config, roles, r));
 }
 
 /**
@@ -202,8 +180,8 @@ export function dealableRoles(config: GameConfig, roles: RoleTable = rolesFor(co
 
 /**
  * Draw up to `count` roles from `pool`, one at a time: each drawn role leaves
- * the pool with `unique`, and a role in `RANDOM_DEAL_SINGLETONS` (Mole,
- * Embezzler) always does. Fewer when the pool runs out.
+ * the pool with `unique`, and a role in `RANDOM_DEAL_SINGLETONS` (the Mole)
+ * always does. Fewer when the pool runs out.
  */
 function drawRoles(rng: RngState, pool: readonly RoleId[], count: number, unique: boolean): { readonly value: RoleId[]; readonly rng: RngState } {
   let left = [...pool];
@@ -226,7 +204,7 @@ function drawRoles(rng: RngState, pool: readonly RoleId[], count: number, unique
  *   Rookie. The deck is then shuffled and dealt.
  * - Truly random: each seat drawn uniformly from the eligible deck.
  * With `uniqueRoles` (the default) each role is dealt at most once; never
- * more than one Mole or Embezzler.
+ * more than one Mole.
  */
 export function dealRoles(
   config: GameConfig,
@@ -305,28 +283,12 @@ function roleListEvents(config: GameConfig, dealt: readonly RoleId[]): GameEvent
   return [{ type: "roleListShown", visibility: PUBLIC, list, roles: inContentOrder(list === "exact" ? dealt : dealableRoles(config)) }];
 }
 
-/**
- * design §8: each Snitch is secretly given a target, drawn from the other
- * players (in seat order, after the deal). No draws when no Snitch is dealt.
- */
-function snitchTargets(config: GameConfig, roles: readonly RoleId[], rng: RngState): { readonly value: GameEvent[]; readonly rng: RngState } {
-  const events: GameEvent[] = [];
-  config.players.forEach((seat, i) => {
-    if (powerOf(config, roles[i] as RoleId).kind !== "snitch") return;
-    const target = pick(rng, config.players.filter((p) => p.id !== seat.id).map((p) => p.id));
-    rng = target.rng;
-    events.push({ type: "snitchTargetAssigned", visibility: privateTo(seat.id), player: seat.id, target: target.value });
-  });
-  return { value: events, rng };
-}
-
 /** The setup events for a new game. Pure: same config, same events. */
 export function setupEvents(config: GameConfig): GameEvent[] {
   const errors = validateConfig(config);
   if (errors.length > 0) throw new Error(`invalid game config: ${errors.join("; ")}`);
   const dealt = dealRoles(config, seedRng(config.seed));
-  const targets = snitchTargets(config, dealt.value, dealt.rng);
-  const shop = dealShop(config, targets.rng);
+  const shop = dealShop(config, dealt.rng);
   let rng = shop.rng;
   // extension.md "Police activity": the first moment is drawn like every later one (provisional).
   const police: GameEvent[] = policeRuns(config, dealt.value)
@@ -338,13 +300,6 @@ export function setupEvents(config: GameConfig): GameEvent[] {
         }),
       ]
     : [];
-  // design §8 (v2 §2): a Mastermind foresees round 2's card as round 1 opens.
-  const seats = new Map(config.players.map((p, i) => [p.id, dealt.value[i] as RoleId]));
-  const foreseen = foresee(config, seats, 1, () => {
-    const card = pick(rng, EVENT_DECK);
-    rng = card.rng;
-    return card.value;
-  });
   return [
     {
       type: "gameCreated",
@@ -369,13 +324,11 @@ export function setupEvents(config: GameConfig): GameEvent[] {
         role: dealt.value[i] as RoleId,
       }),
     ),
-    ...targets.value,
     ...roleListEvents(config, dealt.value),
     { type: "shopDealt", visibility: PUBLIC, perks: shop.value },
     ...police,
     // Round 1 opens for planning as soon as the game is set up. design §4, §5.1
     { type: "roundStarted", visibility: PUBLIC, round: 1, act: 1 },
-    ...foreseen,
     { type: "rngAdvanced", visibility: REVEAL, words: rng.words },
   ];
 }

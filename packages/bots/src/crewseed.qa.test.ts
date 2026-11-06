@@ -30,7 +30,6 @@ const config = (seed: string, n = 6): GameConfig => ({
   job: "bank",
   rolePool: ["rookie"],
   uniqueRoles: false,
-  mole: "off",
   eventsEnabled: false,
   voteVisibility: "hiddenThenRevealed",
 });

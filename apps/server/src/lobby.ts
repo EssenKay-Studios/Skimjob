@@ -107,7 +107,7 @@ function view(game: GameRow, seats: readonly SeatRow[], user: User): LobbyView {
     id: game.id,
     status: game.status,
     inviteCode: game.invite_code,
-    // Games made before a setting existed get its default (e.g. uniqueRoles); a saboteur setting is migrated.
+    // Games made before a setting existed get its default (e.g. uniqueRoles).
     settings: storedSettings(game.settings),
     youAreHost: game.host_user_id === user.id,
     autoMeetings: (TIMINGS[game.settings.sessionLength] ?? TIMINGS[DEFAULT_SETTINGS.sessionLength]).autoMeetings,

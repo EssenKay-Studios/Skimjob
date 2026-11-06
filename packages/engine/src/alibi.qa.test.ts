@@ -13,8 +13,7 @@ function config(players: number, seed = "qa-alibi"): GameConfig {
     seed,
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: [...STARTER_ROLES], // no Muscle, so no shakedown window (task 12)
-    mole: "off",
+    rolePool: [...STARTER_ROLES], // a shakedown window only if the shop holds a Shield
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
   };
@@ -159,7 +158,7 @@ describe("QA round-named deadline — design §5", () => {
   it("determinism: same seed + same commands give an identical log, and replay matches", () => {
     const play = () => {
       let s = run(createGame(config(5, "det")), ROUND, alibi("p3", "depositBoxes"), alibi("p0", "vault"));
-      s = run(s, ALIBIS, { type: "submitMove", player: "p1", move: { room: "office", pocket: s.players.p1?.role === "insideMan" ? 0 : 1 } }, ROUND, alibi("p1", "lobby"));
+      s = run(s, ALIBIS, { type: "submitMove", player: "p1", move: { room: "office", pocket: s.players.p1?.role === "priest" ? 0 : 1 } }, ROUND, alibi("p1", "lobby"));
       return s;
     };
     const a = play();

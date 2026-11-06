@@ -14,7 +14,6 @@ function config(humans: readonly boolean[]): GameConfig {
     players: humans.map((human, i) => ({ id: `p${i}`, name: `P${i}`, isBot: !human })),
     job: "bank",
     rolePool: [...STARTER_ROLES],
-    mole: "off",
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
   };

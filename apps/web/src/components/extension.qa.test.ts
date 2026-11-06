@@ -61,7 +61,6 @@ function game(cfg: GameConfig, setup: Setup = {}): GameState {
       const earned: GameEvent[] = Array.from({ length: setup.tokens?.[e.player] ?? 0 }, () => ({ type: "tokenEarned", visibility: privateTo(e.player), player: e.player, trigger: "checkpointMade" }));
       return [{ ...e, role }, ...earned];
     }
-    if (e.type === "snitchTargetAssigned" && setup.roles) return [];
     if (e.type === "shopDealt" && setup.shop) return [{ ...e, perks: setup.shop }];
     if (e.type === "policeScheduled" && setup.patrol !== undefined) return [{ ...e, patrol: setup.patrol }];
     return [e];
@@ -173,7 +172,6 @@ describe("the shop's edges (extension.md \"Tokens and the perk shop\")", () => {
     expect(peek).toBeDefined();
     expect(peek!.kind === "peek" && peek!.targets).not.toContain("p0");
   });
-
 });
 
 // ---------------------------------------------------------------- no tells
@@ -347,13 +345,13 @@ function playOut1(s: GameState): GameState {
 // ---------------------------------------------------------------- roles and rulebook vs the spec
 
 describe("role cards and the rulebook match extension.md \"Roles\"", () => {
-  const TEAM = ["rookie", "insideMan", "lookout", "auditor", "detective", "snitch", "smoothTalker", "muscle", "priest", "bagman", "cleaner", "fixer", "mastermind"];
-  const WILD = ["getawayDriver", "fence", "hacker", "blackmailer", "forger"];
-  const LONE = ["mole", "embezzler"];
-  const STARS = ["getawayDriver", "fence", "mole", "embezzler"];
-  const MIN: Record<string, number> = { snitch: 4, detective: 4, insideMan: 5, smoothTalker: 5, muscle: 5, priest: 5, blackmailer: 7, forger: 7 };
+  const TEAM = ["rookie", "lookout", "auditor", "detective", "smoothTalker", "priest", "fixer"];
+  const WILD = ["hacker"];
+  const LONE = ["mole"];
+  const STARS = ["mole"];
+  const MIN: Record<string, number> = { detective: 4, smoothTalker: 5, priest: 5 };
 
-  it("every one of the 20 roles has the spec's tag, ★, minimum crew and a token line", () => {
+  it("every one of the 9 roles has the spec's tag, ★, minimum crew and a token line", () => {
     expect(Object.keys(ROLES).sort()).toEqual([...TEAM, ...WILD, ...LONE].sort());
     for (const id of Object.keys(ROLES) as RoleId[]) {
       const info = roleInfo(id);
@@ -369,31 +367,25 @@ describe("role cards and the rulebook match extension.md \"Roles\"", () => {
   });
 
   it("★ win lines follow the endings table", () => {
-    expect(roleInfo("getawayDriver").howYouWin).toMatch(/cops raid/);
-    expect(roleInfo("getawayDriver").howYouWin).not.toMatch(/target/);
-    expect(roleInfo("embezzler").howYouWin).toMatch(/final target is missed/);
-    expect(roleInfo("embezzler").howYouWin).not.toMatch(/raid/);
-    for (const r of ["mole", "fence"] as const) expect(roleInfo(r).howYouWin).toMatch(/fails either way/);
+    expect(roleInfo("mole").howYouWin).toMatch(/fails either way/);
+    expect(roleInfo("hacker").howYouWin).not.toMatch(/raid|target/);
   });
 
   it("powers say \"between meetings\" where the spec does, and spec numbers", () => {
-    for (const r of ["auditor", "detective", "priest", "hacker", "blackmailer", "forger", "mole", "embezzler"] as const) {
+    for (const r of ["auditor", "detective", "priest", "hacker", "mole"] as const) {
       expect(roleInfo(r).power, r).toMatch(/^Once between meetings/);
     }
-    expect(roleInfo("muscle").power).toMatch(/^Once per game/);
     expect(roleInfo("detective").power).toContain(`(${BANK_JOB.shakedown.cleanBelow} or more)`);
     expect(roleInfo("smoothTalker").power).toBe("Its vote counts double.");
-    expect(roleInfo("cleaner").power).toBe("Its Rooftop visit cools Heat like two people.");
     expect(roleInfo("mole").earns).toMatch(/each tip-off/i);
   });
 
-  it("the rulebook lists all 20 roles, the endings with the right ★ roles, and marks the roles in this game", () => {
+  it("the rulebook lists all 9 roles, the endings with the right ★ roles, and marks the roles in this game", () => {
     const s = createGame(config(5, { rolePool: ["rookie", "hacker"], seed: "rb" }));
     const ui = html(createElement(RulebookSheet, { open: true, onClose: () => {}, view: viewFor(s, "p0") }));
     for (const def of Object.values(ROLES)) expect(ui, def.name).toContain(def.name);
-    expect(ui).toMatch(/Cops raid \(Heat 100\)<\/td><td>Nobody, unless [^<]*Getaway Driver[^<]* has the biggest stash/);
-    expect(ui).toMatch(/Final target missed<\/td><td>Nobody, unless [^<]*Embezzler[^<]* has the biggest stash/);
-    expect(ui).not.toMatch(/Final target missed<\/td><td>[^<]*Getaway Driver/);
+    expect(ui).toMatch(/Cops raid \(Heat 100\)<\/td><td>Nobody, unless [^<]*Mole[^<]* has the biggest stash/);
+    expect(ui).toMatch(/Final target missed<\/td><td>Nobody, unless [^<]*Mole[^<]* has the biggest stash/);
     expect(ui).toContain("in this game");
     expect(ui).toContain("Unspent tokens are worth nothing at the end.");
     expect(ui).not.toMatch(/\bact\b|this act|per act/i);
@@ -438,15 +430,15 @@ describe("lobby deck settings (extension.md \"Host settings\")", () => {
   };
   const render = (s: LobbySettings, readOnly = false) => html(createElement(DeckSettings, { settings: s, readOnly, disabled: false, onChange: () => {} }));
 
-  it("Standard is the default deck with the spec's 11 roles; Starter has its 5", () => {
-    expect([...DECKS.standard].sort()).toEqual(["auditor", "cleaner", "detective", "embezzler", "fence", "getawayDriver", "hacker", "lookout", "mole", "muscle", "smoothTalker"]);
-    expect([...DECKS.starter].sort()).toEqual(["bagman", "cleaner", "insideMan", "lookout", "rookie"]);
+  it("Standard is the default deck with its 6 roles; Starter has its 2", () => {
+    expect([...DECKS.standard].sort()).toEqual(["auditor", "detective", "hacker", "lookout", "mole", "smoothTalker"]);
+    expect([...DECKS.starter].sort()).toEqual(["lookout", "rookie"]);
     expect(deckRoles(base)).toEqual(DECKS.standard);
   });
 
   it("every session length shows the host's deck and role picker", () => {
-    const custom = { ...base, deck: "everything" as const, roles: ["fence", "mole"], sessionLength: "quick" as const };
-    expect(deckRoles(custom)).toEqual(["fence", "mole"]);
+    const custom = { ...base, deck: "everything" as const, roles: ["hacker", "mole"], sessionLength: "quick" as const };
+    expect(deckRoles(custom)).toEqual(["hacker", "mole"]);
     expect(render(custom)).toContain("Pick roles one by one");
     expect(render({ ...custom, roles: [] })).toContain(">Everything<");
   });
@@ -459,7 +451,7 @@ describe("lobby deck settings (extension.md \"Host settings\")", () => {
   });
 
   it("switching decks clears the per-role pick", () => {
-    const picked = { ...base, roles: ["fence"] };
+    const picked = { ...base, roles: ["hacker"] };
     expect(deckPatch("everything").roles).toEqual([]);
   });
 
@@ -501,7 +493,6 @@ describe("the end screen on a failed heist (extension.md \"Winning and losing\")
     expect(ui).not.toContain(">Loss<");
   });
 });
-
 
 describe("the Heat breakdown is exact (extension.md \"Heat\", \"What the app works out for you\"; PR #52 QA round 2)", () => {
   const rng = (seed: number) => () => ((seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31);

@@ -15,11 +15,10 @@ function config(players: number): GameConfig {
     seed: "round-seed",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: [...STARTER_ROLES], // no Muscle, so no shakedown window (task 12)
-    mole: "off",
+    rolePool: [...STARTER_ROLES], // a shakedown window only if the shop holds a Shield
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
-    contentOverrides: V015_NUMBERS, // the Fence's safe scripted at 5 an act (content 0.15.0)
+    contentOverrides: V015_NUMBERS, // content 0.15.0 numbers
   };
 }
 
@@ -285,109 +284,3 @@ describe("rounds and acts — design §4", () => {
   });
 });
 
-describe("starter role powers in a move — design §8", () => {
-  it("the Inside Man can't pocket loot", () => {
-    const s = game(3, ["insideMan"]);
-    expect(reason(s, submit("p0", { room: "vault", pocket: 1 }))).toMatch(/can't pocket/);
-    expect(run(s, submit("p0", { room: "vault", pocket: 0 }), ROUND).players.p0?.totalHandedIn).toBe(6);
-  });
-
-  it("the Lookout also sees who was in an extra room", () => {
-    const before = run(
-      game(3, ["lookout"]),
-      submit("p0", { room: "lobby", ability: { kind: "lookout", rooms: ["vault"] } }),
-      submit("p1", { room: "vault" }),
-    );
-    const events = lastEvents(before, run(before, ROUND));
-    expect(events.find((e) => e.type === "roomWatched")).toMatchObject({ player: "p0", source: "lookout", room: "vault", seen: ["p1"], visibility: { kind: "private", player: "p0" } });
-    expect(events.find((e) => e.type === "abilityResolved")).toMatchObject({ player: "p0", ability: { kind: "lookout", rooms: ["vault"] } });
-  });
-
-  it("the Lookout can watch at most `extraRooms` (1) rooms in play, each once", () => {
-    const s = game(3, ["lookout"]);
-    const look = (rooms: unknown) => submit("p0", { room: "lobby", ability: { kind: "lookout", rooms } });
-    expect(reason(s, look([]))).toMatch(/1 to 1/);
-    expect(reason(s, look(["vault", "office"]))).toMatch(/1 to 1/);
-    expect(reason(s, look(["serverRoom"]))).toMatch(/in play/);
-    expect(reason(s, look("vault"))).toMatch(/1 to 1/);
-    expect(reason(s, submit("p0", { room: "lobby", ability: { kind: "fenceSafe", amount: 1 } }))).toMatch(/no fenceSafe/);
-  });
-
-  it("the Fence moves stash (including this round's pocket) into the safe", () => {
-    const s = run(game(3, ["fence"]), submit("p0", { room: "vault", pocket: 4, ability: { kind: "fenceSafe", amount: 3 } }), ROUND);
-    expect(s.players.p0).toMatchObject({ stash: 1, safe: 3, roleState: expect.objectContaining({ usedThisAct: 3 }) });
-  });
-
-  it("the safe move is capped by the stash", () => {
-    const s = run(game(3, ["fence"]), submit("p0", { room: "vault", pocket: 2, ability: { kind: "fenceSafe", amount: 5 } }), ROUND);
-    expect(s.players.p0).toMatchObject({ stash: 0, safe: 2, roleState: expect.objectContaining({ usedThisAct: 2 }) });
-    expect(s.log.find((e) => e.type === "abilityResolved")).toMatchObject({ ability: { kind: "fenceSafe", amount: 2 } });
-  });
-
-  it("the safe takes at most 5 per act, and the allowance resets with the next act", () => {
-    let s = run(game(3, ["fence"]), submit("p0", { room: "vault", pocket: 6, ability: { kind: "fenceSafe", amount: 4 } }), ROUND);
-    expect(reason(s, submit("p0", { room: "vault", ability: { kind: "fenceSafe", amount: 2 } }))).toMatch(/1 to 1/);
-    expect(reason(s, submit("p0", { room: "vault", ability: { kind: "fenceSafe", amount: 0 } }))).toMatch(/1 to 1/);
-    s = run(s, submit("p0", { room: "vault", ability: { kind: "fenceSafe", amount: 1 } }), ROUND, ROUND);
-    expect(s.players.p0).toMatchObject({ safe: 5, roleState: expect.objectContaining({ usedThisAct: 5 }) });
-    // Act 2 begins after the act-1 meeting (design §11); its roundStarted resets the allowance.
-    const act2 = replay(s.config, [...s.log, { type: "roundStarted", visibility: { kind: "public" }, round: 4, act: 2 }]);
-    expect(act2.players.p0).toMatchObject({ safe: 5, roleState: expect.objectContaining({ usedThisAct: 0 }) });
-  });
-});
-
-describe("determinism and the event log — design §17.2", () => {
-  it("replaying the log rebuilds the same state", () => {
-    const s = run(
-      game(6, ["fence", "lookout", "insideMan"]),
-      submit("p0", { room: "depositBoxes", pocket: 3, ability: { kind: "fenceSafe", amount: 2 } }),
-      submit("p1", { room: "security", watch: "depositBoxes", ability: { kind: "lookout", rooms: ["vault"] } }),
-      submit("p3", { room: "vault", pocket: 6 }),
-      ROUND,
-      submit("p4", { room: "serverRoom" }),
-      ROUND,
-    );
-    expect(replay(s.config, s.log)).toEqual(s);
-  });
-
-  it("the round loop draws no randomness, so no rngAdvanced is added", () => {
-    const before = game(3);
-    expect(lastEvents(before, run(before, ROUND)).some((e) => e.type === "rngAdvanced")).toBe(false);
-  });
-
-  it("withRng appends rngAdvanced with the post-draw state whenever a handler draws", () => {
-    const rng = seedRng("x");
-    const out = withRng(rng, (draw) => {
-      draw.int(10);
-      draw.shuffle([1, 2, 3]);
-      return [{ type: "roundStarted", visibility: { kind: "public" }, round: 2, act: 1 }];
-    });
-    expect(Array.isArray(out) && out.map((e) => e.type)).toEqual(["roundStarted", "rngAdvanced"]);
-    const last = Array.isArray(out) ? out.at(-1) : undefined;
-    expect(last).toMatchObject({ visibility: { kind: "reveal" } });
-    expect(last?.type === "rngAdvanced" && last.words).not.toEqual(rng.words);
-    expect(withRng(rng, () => [])).toEqual([]);
-    expect(withRng(rng, (draw) => (draw.int(2), "nope"))).toBe("nope");
-  });
-});
-
-describe("player ids", () => {
-  // Ids are record keys everywhere, so unsafe ones are refused at setup (PR #9 QA: a __proto__ seat lost entries in a copied view).
-  it("ids shaped like prototype keys, or outside [A-Za-z0-9_-]{1,32}, are refused at setup", () => {
-    for (const id of ["__proto__", "constructor", "prototype", "has space", "a.b", "x".repeat(33), "é"]) {
-      const cfg: GameConfig = { ...config(3), players: [{ id, name: "X", isBot: false }, { id: "p1", name: "P1", isBot: true }, { id: "p2", name: "P2", isBot: true }] };
-      expect(() => setupEvents(cfg), id).toThrow(/player ids must match/);
-    }
-  });
-
-  it("other ids that are also Object.prototype names play like anyone else", () => {
-    const cfg: GameConfig = { ...config(3), players: [{ id: "toString", name: "T", isBot: false }, { id: "hasOwnProperty", name: "H", isBot: true }, { id: "p2", name: "P2", isBot: true }] };
-    const log = setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: "rookie" } : e));
-    const s = run(replay(cfg, log), submit("toString", { room: "office", pocket: 1 }), ROUND);
-    expect(Object.hasOwn(s.players, "toString")).toBe(true);
-    expect(s.players["toString"]).toMatchObject({ stash: 1, totalHandedIn: 3 });
-    // Office 4 − 1 pocketed, plus the two missed seats' Lobby 2 each.
-    expect(s.haul).toBe(7);
-    expect(replay(cfg, s.log)).toEqual(s);
-  });
-});

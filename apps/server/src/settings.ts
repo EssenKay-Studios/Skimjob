@@ -1,6 +1,6 @@
 // Host lobby settings and the server's own limits (not game rules, so not in
 // @skimjob/content). design §15 setup, docs/m2-plan.md M2-2
-import { DECKS, POOL_ROLES, ROLES, type DeckId, type RoleId } from "@skimjob/content";
+import { POOL_ROLES, type DeckId, type RoleId } from "@skimjob/content";
 import type { DealStyle, RoleListSetting, VoteVisibility } from "@skimjob/engine";
 
 /** Session-length presets (design §4.1, plus "quick" for playtests). M2-4 gives them their timings. */
@@ -11,8 +11,6 @@ const VOTE_VISIBILITIES: readonly VoteVisibility[] = ["hiddenThenRevealed", "ope
 const DECK_IDS: readonly DeckId[] = ["starter", "standard", "everything"];
 const DEAL_STYLES: readonly DealStyle[] = ["balanced", "random"];
 const ROLE_LISTS: readonly RoleListSetting[] = ["exact", "possible", "hidden"];
-/** The dropped saboteur setting: still read from stored games and old clients, never kept. extension.md Build notes "Tags, decks and dealing" */
-const LEGACY_MOLE = "mole";
 
 export interface LobbySettings {
   readonly sessionLength: SessionLength;
@@ -62,32 +60,18 @@ export const BOT_NAMES = ["Riya", "Max", "Nico", "Juno", "Kofi", "Lena", "Omar",
 
 const own = (o: object, k: string) => Object.hasOwn(o, k);
 
-/** A setting key the server reads: the current ones, plus the dropped saboteur setting (migrated). */
-export const isSettingKey = (k: string) => own(DEFAULT_SETTINGS, k) || k === LEGACY_MOLE;
-
-/**
- * The dropped saboteur setting, read from a stored game or an old client: a
- * saved "off" becomes the deck with every Wildcard and Lone wolf toggled off;
- * "maybe" and "on" become the plain deck. extension.md Build notes "Tags, decks and dealing"
- */
-function migrateMole(raw: Record<string, unknown>): Record<string, unknown> {
-  if (!own(raw, LEGACY_MOLE)) return raw;
-  const { [LEGACY_MOLE]: mole, ...rest } = raw;
-  if (mole !== "off") return rest;
-  const deck = typeof rest.deck === "string" && (DECK_IDS as readonly string[]).includes(rest.deck) ? (rest.deck as DeckId) : DEFAULT_SETTINGS.deck;
-  const from = Array.isArray(rest.roles) && rest.roles.length > 0 ? (rest.roles as RoleId[]) : DECKS[deck];
-  return { ...rest, roles: from.filter((r) => Object.hasOwn(ROLES, r) && ROLES[r]?.tag === "teamPlayer") };
-}
+/** A setting key the server reads. */
+export const isSettingKey = (k: string) => own(DEFAULT_SETTINGS, k);
 
 /**
  * Host settings from untrusted JSON: missing fields take the defaults, unknown
- * fields are refused, a stored saboteur setting is migrated.
+ * fields are refused.
  */
 export function parseSettings(input: unknown): { ok: true; settings: LobbySettings } | { ok: false; error: string } {
   if (input === undefined || input === null) return { ok: true, settings: DEFAULT_SETTINGS };
   if (typeof input !== "object" || Array.isArray(input)) return { ok: false, error: "settings must be an object" };
   for (const k of Object.keys(input)) if (!isSettingKey(k)) return { ok: false, error: `unknown setting ${JSON.stringify(k)}` };
-  const raw = migrateMole(input as Record<string, unknown>);
+  const raw = input as Record<string, unknown>;
   const s = { ...DEFAULT_SETTINGS, ...raw } as Record<keyof LobbySettings, unknown>;
   if (!(SESSION_LENGTHS as readonly unknown[]).includes(s.sessionLength)) return { ok: false, error: `sessionLength must be one of ${SESSION_LENGTHS.join(", ")}` };
   if (!(VOTE_VISIBILITIES as readonly unknown[]).includes(s.voteVisibility)) return { ok: false, error: `voteVisibility must be one of ${VOTE_VISIBILITIES.join(", ")}` };
@@ -106,14 +90,14 @@ export function parseSettings(input: unknown): { ok: true; settings: LobbySettin
 
 /**
  * A game's stored settings as the server uses them: missing fields take the
- * defaults (games made before a setting existed) and a saboteur setting is
- * migrated. A row that no longer parses keeps its own fields over the defaults.
+ * defaults (games made before a setting existed) and keys the server no longer
+ * reads are dropped. A row that no longer parses keeps its own fields over the defaults.
  */
 export function storedSettings(stored: unknown): LobbySettings {
   const raw = typeof stored === "object" && stored !== null && !Array.isArray(stored) ? (stored as Record<string, unknown>) : {};
   const known = Object.fromEntries(Object.entries(raw).filter(([k]) => isSettingKey(k)));
   const parsed = parseSettings({ ...DEFAULT_SETTINGS, ...known });
-  return parsed.ok ? parsed.settings : ({ ...DEFAULT_SETTINGS, ...migrateMole(known) } as LobbySettings);
+  return parsed.ok ? parsed.settings : ({ ...DEFAULT_SETTINGS, ...known } as LobbySettings);
 }
 
 // Control characters, and invisible / bidi-control ones (format characters

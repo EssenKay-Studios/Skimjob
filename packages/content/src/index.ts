@@ -8,7 +8,7 @@ export const CONTENT_VERSION = "0.17.0";
 /** A room in a job, e.g. "vault", "office", "lobby", "security", "rooftop". design §6 */
 export type RoomId = string;
 
-/** A secret role, e.g. "rookie", "lookout", "insideMan", "fence". design §8 */
+/** A secret role, e.g. "rookie", "lookout", "hacker", "mole". design §8 */
 export type RoleId = string;
 
 /** A job (location), e.g. "bank". design §9 */

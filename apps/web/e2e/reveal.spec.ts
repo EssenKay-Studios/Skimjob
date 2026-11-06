@@ -36,7 +36,7 @@ for (const viewport of VIEWPORTS) {
       // Job done: the top of the ranking wins; four envelopes with roles and the Mole's ★.
       const crew = reveal.getByRole("list", { name: "Every role, best first" });
       await expect(crew.locator(".reveal__card")).toHaveCount(4);
-      for (const role of ["Rookie", "Mole", "Hacker", "Blackmailer"]) await expect(crew).toContainText(role);
+      for (const role of ["Rookie", "Mole", "Hacker", "Detective"]) await expect(crew).toContainText(role);
       await expect(reveal.locator(".reveal__why")).toContainText("Job done, so the top of the ranking wins: Ben.");
       await expect(crew).toContainText("★ Also wins if the cops raid or the target is missed");
       await expect(reveal.locator(".reveal__void")).toHaveCount(0);

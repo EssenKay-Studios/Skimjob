@@ -21,7 +21,7 @@ function config(players: number, voteVisibility: VoteVisibility = "hiddenThenRev
     seed: "qa-meeting",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    // Starter roles: no Muscle. The shop is pinned (see `game`): a Shield would open a shakedown window.
+    // Starter roles. The shop is pinned (see `game`): a Shield would open a shakedown window.
     rolePool: [...STARTER_ROLES],
     eventsEnabled: false,
     voteVisibility,
@@ -287,18 +287,6 @@ describe("QA: stale, duplicate and wrong-id deadlines — design §4.1", () => {
 });
 
 describe("QA: shakedowns — design §11.3, extension.md \"Shakedowns (fixed numbers)\"", () => {
-  it("Fence: the safe is shown but not taken; only the stash outside it goes to the Haul", () => {
-    let s = run(game(3, ["fence"]), mv("p0", "vault", 6, { ability: { kind: "fenceSafe", amount: 2 } }), ROUND);
-    s = run(s, mv("p0", "vault", 6), ROUND); // stash 10, safe 2
-    expect(s.players.p0).toMatchObject({ stash: 10, safe: 2 });
-    s = toActMeeting(s);
-    const haul = s.haul;
-    s = run(s, vote("p1", "p0"), vote("p2", "p0"), CLOSE);
-    expect(LAST(s, "shakedownResolved")).toMatchObject({ stashRevealed: 10, safeRevealed: 2, taken: 10, clean: false, compensation: 0 });
-    expect(s.players.p0).toMatchObject({ stash: 0, safe: 2 });
-    expect(s.haul).toBe(haul + 10);
-  });
-
   it.each([
     [1, 6, false],
     [1, 5, true],

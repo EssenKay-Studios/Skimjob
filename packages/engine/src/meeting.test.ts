@@ -20,7 +20,7 @@ function config(players: number, voteVisibility: VoteVisibility = "hiddenThenRev
     seed: "meeting-seed",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    // Starter roles: no Muscle. The shop is pinned (see `game`): a Shield would open a shakedown window.
+    // Starter roles. The shop is pinned (see `game`): a Shield would open a shakedown window.
     rolePool: [...STARTER_ROLES],
     eventsEnabled: false,
     voteVisibility,
@@ -214,21 +214,6 @@ describe("opening and closing the act's meeting — design §11.1, §4.1, §11.4
     expect(reason(s, close("act-1"))).toMatch(/not open/); // retried
     expect(reason(s, open("act-1"))).toMatch(/not waiting/);
     expect(s.phase).toEqual({ kind: "planning", round: 4 });
-  });
-
-  it("after the act's meeting and checkpoint, the next act starts at round 4 (Fence allowance reset)", () => {
-    let s = run(game(3, ["fence"]), mv("p0", "vault", 6, { ability: { kind: "fenceSafe", amount: 5 } }), ROUND, ROUND, ROUND);
-    expect(s.players.p0).toMatchObject({ safe: 5, roleState: expect.objectContaining({ usedThisAct: 5 }) });
-    s = run(s, sched(1), open("act-1"));
-    const before = s;
-    s = run(s, close("act-1"));
-    expect(since(before, s).map((e) => e.type)).toEqual(["meetingClosed", "checkpointChecked", "roundStarted"]);
-    expect(LAST(s, "roundStarted")).toMatchObject({ round: 4, act: 2 });
-    expect(s.phase).toEqual({ kind: "planning", round: 4 });
-    expect(s.players.p0).toMatchObject({ safe: 5, roleState: expect.objectContaining({ usedThisAct: 0 }) });
-    // Act 2 has its own meeting, which can be proposed and scheduled anew.
-    s = run(s, propose("p1", "act2-slot"), (x: GameState) => accept("p0", x.proposals[0]!.id));
-    expect(s.scheduledMeeting).toEqual({ meetingId: "act-2", act: 2, slot: "act2-slot" });
   });
 });
 
@@ -426,29 +411,12 @@ describe("shakedowns — design §11.3, extension.md \"Shakedowns (fixed numbers
       meetingId: "act-1",
       target: "p0",
       stashRevealed: 6,
-      safeRevealed: 0,
       taken: 6,
       clean: false,
       compensation: 0,
     });
     expect(after.players.p0).toMatchObject({ stash: 0, timesShakenDown: 1 });
     expect(after.haul).toBe(22);
-  });
-
-  it("the Fence safe is shown but not taken, and counts toward the clean check: a full safe isn't clean (owner answers, 1 Nov)", () => {
-    const s = toMeeting(run(game(3, ["fence"]), mv("p0", "vault", 6, { ability: { kind: "fenceSafe", amount: 5 } })));
-    expect(s.players.p0).toMatchObject({ stash: 1, safe: 5 });
-    const after = run(s, vote("p1", "p0"), vote("p2", "p0"), CLOSE);
-    expect(LAST(after, "shakedownResolved")).toMatchObject({ stashRevealed: 1, safeRevealed: 5, taken: 1, clean: false, compensation: 0 });
-    expect(after.players.p0).toMatchObject({ stash: 0, safe: 5 });
-  });
-
-  it("a Fence whose stash and safe together are below the threshold is clean and compensated", () => {
-    const s = toMeeting(run(game(3, ["fence"]), mv("p0", "lobby", 2, { ability: { kind: "fenceSafe", amount: 1 } })));
-    expect(s.players.p0).toMatchObject({ stash: 1, safe: 1 });
-    const after = run(s, vote("p1", "p0"), vote("p2", "p0"), CLOSE);
-    expect(LAST(after, "shakedownResolved")).toMatchObject({ stashRevealed: 1, safeRevealed: 1, taken: 1, clean: true, compensation: 8 });
-    expect(after.players.p0).toMatchObject({ stash: 8, safe: 1 });
   });
 
   it("clean below 6: the crew pays the target 8 out of the Haul", () => {
@@ -552,7 +520,7 @@ describe("the final meeting comes before the final check — design §3, §4, §
 
 describe("determinism and the event log — design §17.2", () => {
   const script = (): GameState => {
-    let s = run(game(4, ["fence", "lookout", "insideMan"]), mv("p3", "vault", 6), seal("p2", "p3"), propose("p1", "x"));
+    let s = run(game(4, ["hacker", "lookout", "priest"]), mv("p3", "vault", 6), seal("p2", "p3"), propose("p1", "x"));
     s = run(s, (x: GameState) => accept("p0", x.proposals[0]!.id), (x: GameState) => accept("p3", x.proposals[0]!.id), ROUND);
     s = run(s, emergency("p0"), open("emergency-p0"), vote("p0", "p3"), vote("p1", "p3"), CLOSE, ROUND, ROUND, OPEN_ACT, vote("p0", null), CLOSE);
     return s;

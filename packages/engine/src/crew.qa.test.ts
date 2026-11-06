@@ -1,7 +1,7 @@
 // QA for role deck v2 R2a (docs/roles-v2.md §2, §3): power limits, generic
-// refusals, exact token triggers at the threshold, Snitch target edges, Inside
-// Man and Rookie scoring under the one-crew win rule, eligibility at 3–12, a
-// view-diff leak check with all six dealt, determinism.
+// refusals, exact token triggers at the threshold, Rookie scoring under the
+// one-crew win rule, eligibility at 3–12, a view-diff leak check with all
+// dealt, determinism.
 // extension.md "One crew, and how you win", "Shakedowns", "Tokens and the perk shop"; design §8, §13
 import { describe, expect, it } from "vitest";
 import { handleThroughAlibis } from "./alibis.testkit";
@@ -13,7 +13,7 @@ import { outcomeFor } from "./end";
 import { viewFor } from "./view";
 import { grantPerks } from "./perks.testkit";
 
-const SIX = ["rookie", "insideMan", "lookout", "auditor", "detective", "snitch"];
+const SIX = ["rookie", "priest", "lookout", "auditor", "detective"];
 /** extension.md "Shakedowns": one fixed clean line (6) in every act, shared with the Detective. */
 const cleanBelowPerAct = BANK_JOB.shakedown.cleanBelow;
 
@@ -22,33 +22,18 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
     seed: "crew-qa",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: ["rookie", "lookout", "insideMan", "fence"],
+    rolePool: ["rookie", "lookout", "priest", "hacker"],
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     ...extra,
   };
 }
 
-/** Seat i gets roles[i] (Rookie if missing); a dealt Snitch gets `snitchTarget` if given. */
-function game(players: number, roles: string[], extra: Partial<GameConfig> = {}, snitchTarget?: string): GameState {
+/** Seat i gets roles[i] (Rookie if missing). */
+function game(players: number, roles: string[], extra: Partial<GameConfig> = {}): GameState {
   const cfg = config(players, extra);
   let seat = 0;
-  const log: GameEvent[] = [];
-  const setup = setupEvents(cfg);
-  for (const e of setup) {
-    if (e.type === "roleDealt") {
-      const role = roles[seat++] ?? "rookie";
-      log.push({ ...e, role });
-      if (role === "snitch" && snitchTarget && !setup.some((x) => x.type === "snitchTargetAssigned" && x.player === e.player)) {
-        log.push({ type: "snitchTargetAssigned", visibility: e.visibility, player: e.player, target: snitchTarget } as GameEvent);
-      }
-    } else if (e.type === "snitchTargetAssigned") {
-      // The real deal may have put a Snitch on a seat this test gives another role.
-      const role = roles[setup.filter((x) => x.type === "roleDealt").findIndex((x) => x.type === "roleDealt" && x.player === e.player)] ?? "rookie";
-      if (role === "snitch") log.push(snitchTarget ? { ...e, target: snitchTarget } : e);
-    } else log.push(e);
-  }
-  return replay(cfg, log);
+  return replay(cfg, setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: roles[seat++] ?? "rookie" } : e)));
 }
 
 type Cmd = unknown | ((s: GameState) => unknown);
@@ -213,73 +198,11 @@ describe("QA: Lookout sightings and reward counts — v2 §2, design §8.3", () 
   });
 });
 
-describe("QA: Snitch target edges — v2 §2, design §8, §11.2", () => {
-  it("a token at exactly the threshold, not one below, nor when the target's Shield cancels it (extension.md \"Roles\")", () => {
-    const atPocket = (pocket: number, shield = false) => {
-      let s = game(4, ["snitch"], {}, "p1");
-      if (shield) s = grantPerks(s, "p1", "shield");
-      s = run(s, mv("p1", "vault", pocket), ROUND);
-      return shakeDown(s, "p2", "p1");
-    };
-    expect(granted(atPocket(cleanBelowPerAct), "p0")).toEqual(["targetShakenDirty"]);
-    expect(granted(atPocket(cleanBelowPerAct - 1), "p0")).toEqual([]);
-    const shielded = atPocket(cleanBelowPerAct, true);
-    expect(ofType(shielded.log, "shakedownCancelled")).toHaveLength(1);
-    expect(granted(shielded, "p0")).toEqual([]);
-  });
-
-  it("the target is always another player, at every crew size the Snitch can be dealt", () => {
-    for (let n = 4; n <= 12; n++) {
-      for (let i = 0; i < 15; i++) {
-        const events = setupEvents(config(n, { seed: `snitch-${n}-${i}`, rolePool: ["snitch", "rookie"] }));
-        for (const e of ofType(events, "snitchTargetAssigned")) {
-          expect(e.target).not.toBe(e.player);
-          expect(events.some((x) => x.type === "roleDealt" && x.player === e.player && x.role === "snitch")).toBe(true);
-        }
-      }
-    }
-  });
-});
-
-describe("QA: Inside Man and Rookie under the one-crew win rule — extension.md \"One crew, and how you win\"", () => {
-  it("Inside Man: never pockets, a token per meeting 1/2 target met, and +1 per 5 loot over the final target", () => {
-    let s = game(3, ["rookie", "insideMan"]);
-    expect(reason(s, mv("p1", "office", 4))).toMatch(/can't pocket/);
-    const moves = STEADY;
-    s = finishAct(finishAct(finishAct(s, moves), moves), moves);
-    expect(s.phase.kind).toBe("ended");
-    expect(granted(s, "p1")).toEqual(["checkpointMade", "checkpointMade"]);
-    expect(granted(s, "p0")).toEqual(["checkpointMade", "checkpointMade"]);
-    const end = ofType(s.log, "gameEnded")[0]!.outcome;
-    expect(end.result).toBe("success");
-    const target = BANK_JOB.checkpoints.perPlayer.at(-1)! * 3;
-    const im = end.ranking.find((r) => r.player === "p1")!;
-    expect(ROLES.insideMan?.scoring.lootPerPointOverFinalTarget).toBe(5);
-    expect(im.score).toBe(Math.floor(Math.max(0, s.haul - target) / 5));
-  });
-
-  it("the Rookie scores its plain stash; the top group wins a success whatever its roles, and only winsOn roles win a failure", () => {
-    const base = game(4, ["rookie", "lookout", "mole", "auditor"]);
-    const withStashes = (st: Record<string, number>): GameState => ({
-      ...base,
-      players: Object.fromEntries(Object.entries(base.players).map(([id, p]) => [id, { ...p, stash: st[id] ?? 0 }])),
-    });
-    const s = withStashes({ p0: 40, p1: 41, p2: 60, p3: 0 });
-    const won = outcomeFor(s, null);
-    expect(won.ranking.find((r) => r.player === "p0")?.score).toBe(40);
-    expect(won.winners).toEqual(["p2"]); // one crew: the Mole tops a success too
-    expect(outcomeFor(s, "heat").winners).toEqual(["p2"]);
-    expect(outcomeFor(withStashes({ p0: 20, p1: 20 }), null).winners).toEqual(["p0", "p1"]); // a full tie: joint winners
-    expect(outcomeFor(withStashes({ p0: 20, p1: 20 }), "target").winners).toEqual([]); // nobody on top wins on a failure
-  });
-});
-
 describe("QA: eligibility at 3–12 players — v2 §3, design §8.1", () => {
   it("rolePoolFor and real deals respect minPlayers", () => {
     for (let n = 3; n <= 12; n++) {
       const pool = rolePoolFor(config(n, { rolePool: SIX }));
-      expect(pool.includes("insideMan"), `insideMan @${n}`).toBe(n >= 5);
-      expect(pool.includes("snitch"), `snitch @${n}`).toBe(n >= 4);
+      expect(pool.includes("priest"), `priest @${n}`).toBe(n >= 5);
       expect(pool.includes("detective"), `detective @${n}`).toBe(n >= 4);
       for (const r of ["rookie", "lookout", "auditor"]) expect(pool).toContain(r);
       for (let i = 0; i < 10; i++) {
@@ -295,7 +218,7 @@ describe("QA: eligibility at 3–12 players — v2 §3, design §8.1", () => {
 describe("QA: view-diff with all six dealt, and determinism — design §13, §17.2", () => {
   // Variant A: every reader points at p0, who is caught dirty; B: they point elsewhere. Same public play.
   const play = (a: boolean): GameState => {
-    let s = game(6, SIX, { rolePool: SIX }, a ? "p0" : "p1");
+    let s = game(6, SIX, { rolePool: SIX });
     s = run(
       s,
       mv("p0", "vault", 6),
@@ -311,10 +234,10 @@ describe("QA: view-diff with all six dealt, and determinism — design §13, §1
     return run(s, ROUND);
   };
 
-  it("the uninvolved players' views and rejections are identical whether or not four rewards fired", () => {
+  it("the uninvolved players' views and rejections are identical whether or not three rewards fired", () => {
     const [a, b] = [play(true), play(false)];
     expect(ofType(a.log, "shakedownResolved")[0]?.clean).toBe(false);
-    expect(ofType(a.log, "tokenEarned").map((e) => e.trigger).sort()).toEqual(["auditedShakenDirty", "checkedShakenDirty", "targetShakenDirty", "watchedShakenDirty"]);
+    expect(ofType(a.log, "tokenEarned").map((e) => e.trigger).sort()).toEqual(["auditedShakenDirty", "checkedShakenDirty", "watchedShakenDirty"]);
     expect(ofType(b.log, "tokenEarned")).toEqual([]);
     for (const viewer of ["p0", "p1"]) {
       expect(viewFor(a, viewer)).toEqual(viewFor(b, viewer));

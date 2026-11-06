@@ -21,7 +21,6 @@ const config = (n: number, extra: Partial<GameConfig> = {}): GameConfig => ({
   players: Array.from({ length: n }, (_, i) => ({ id: `p${i + 1}`, name: i === 0 ? "Ana" : `Bot · B${i}`, isBot: i > 0 })),
   job: "bank",
   rolePool: ["rookie"],
-  mole: "off",
   eventsEnabled: false,
   voteVisibility: "hiddenThenRevealed",
   uniqueRoles: false,

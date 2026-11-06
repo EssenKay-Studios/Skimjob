@@ -147,7 +147,6 @@ function RoleEnvelope({
             <dt>Stash</dt>
             <dd className="num">
               {s.stash}
-              {s.safe > 0 && <span className="meta"> (safe {s.safe})</span>}
             </dd>
           </div>
           <div>

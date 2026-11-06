@@ -3,9 +3,7 @@
 // the Heat breakdown, the gap box, and the token shop with its perk uses.
 // Every number comes from content (with the game's overrides) or the view.
 import {
-  BAGMAN_STREAK,
   BANK_JOB,
-  CLEANER_REWARD_EVERY,
   PERKS,
   POLICE_ACTIVITY,
   ROUNDS_PER_ACT,
@@ -60,49 +58,25 @@ export function howYouWin(winsOn: readonly FailureReason[]): string {
 const times = (n: number) => (n === 1 ? "Once" : `${n} times`);
 
 /** A role's power in one line, numbers from content (and the job's). extension.md "Roles" */
-export function powerText(power: RolePower, job: JobDef = BANK_JOB, def?: RoleDef): string {
+export function powerText(power: RolePower, job: JobDef = BANK_JOB): string {
   const between = (n: number) => `${times(n)} between meetings`;
   switch (power.kind) {
     case "none":
-      return def && def.scoring.lootPerPointOverFinalTarget > 0
-        ? `Can't pocket; +1 score per ${def.scoring.lootPerPointOverFinalTarget} loot the Haul ends above the final target.`
-        : def && !def.canPocket
-          ? "Can't pocket."
-          : "No power.";
+      return "No power.";
     case "lookout":
       return `Sees who was in ${power.extraRooms === 1 ? "one extra room" : `${power.extraRooms} extra rooms`} every round.`;
-    case "fenceSafe":
-      return `Hides up to ${power.perAct} loot between meetings in a safe that shakedowns show but can't take.`;
     case "loopCameras":
       return `${between(power.perAct)}: loops one room's cameras, which then read "camera offline".`;
     case "voteWeight":
       return `Its vote counts ${power.weight === 2 ? "double" : `${power.weight} times`}.`;
-    case "cancelShakedown":
-      return `${power.perGame === 1 ? "Once" : `${power.perGame} times`} per game: cancel a shakedown that passed.`;
-    case "blackmail":
-      return `${between(power.perAct)}: guess a player's role; if right, it steals their vote at the next meeting.`;
-    case "forge":
-      return `${between(power.perAct)}: plants a fake sighting on that round's camera and Lookout feeds.`;
-    case "embezzle":
-      return `${between(power.perAct)}: moves ${power.take} loot from the Haul into its stash; while holding a take, a shakedown always catches it.`;
     case "audit":
       return `${between(power.perAct)}: how much went missing in one room last round.`;
     case "checkStash":
       return `${between(power.perAct)}: is one player's stash "dirty" (${job.shakedown.cleanBelow} or more)?`;
-    case "snitch":
-      return "Has a secret target.";
     case "bless":
       return `${between(power.perAct)}: bless a player; if they're shaken down clean, the bank pays the ${job.shakedown.payout}.`;
-    case "bagman":
-      return `When it hands in everything, the bank adds +${power.bonus} to the Haul.`;
-    case "cleaner":
-      return `Its ${roomName(power.room)} visit cools Heat like ${power.visitors === 2 ? "two people" : `${power.visitors} people`}.`;
     case "fixer":
       return `Once, automatically: stops a raid at Heat ${power.stopAt}, losing ${power.lossShare === 0.25 ? "a quarter" : `${Math.round(power.lossShare * 100)}%`} of its stash.`;
-    case "foresee":
-      return "Sees the next event card early (events on only).";
-    case "getaway":
-      return `Its ${roomName(power.room)} visit doesn't really cool Heat.`;
     case "tipOff":
       return `${between(power.perAct)}, any time: tips off the cops for +${POLICE_ACTIVITY.heat} Heat, announced only as "police activity".`;
     default: {
@@ -113,8 +87,7 @@ export function powerText(power: RolePower, job: JobDef = BANK_JOB, def?: RoleDe
 }
 
 /** When a role earns a token, in one line. extension.md "Roles" */
-export function earnsText(trigger: TokenTrigger, def?: RoleDef): string {
-  const p = def?.power;
+export function earnsText(trigger: TokenTrigger): string {
   switch (trigger) {
     case "checkpointMade":
       return "The Haul target is met at meeting 1 or 2.";
@@ -124,34 +97,16 @@ export function earnsText(trigger: TokenTrigger, def?: RoleDef): string {
       return "A visitor of a room it audited is caught.";
     case "checkedShakenDirty":
       return "A player it checked is caught.";
-    case "targetShakenDirty":
-      return "Its target is caught.";
     case "wonDirtyShakedown":
       return "It votes to catch a cheater who is then caught.";
-    case "cancelledClean":
-      return "It saved an innocent (and it gets the power back).";
     case "blessedShakenClean":
       return "A blessing pays out.";
-    case "allInStreak":
-      return `It hands in everything ${BAGMAN_STREAK} rounds running.`;
-    case "coolingRounds":
-      return `Every ${CLEANER_REWARD_EVERY === 2 ? "2nd" : `${CLEANER_REWARD_EVERY}th`} ${p?.kind === "cleaner" ? roomName(p.room) : "cooling"} round.`;
     case "raidStopped":
       return "It stops a raid.";
     case "loopHidPocketer":
       return "A loop hid someone who pocketed.";
-    case "forgedShakenClean":
-      return "Someone it framed is shaken down clean.";
-    case "heatReached":
-      return `Heat reaches ${p?.kind === "getaway" ? p.tokenHeat : "its mark"}.`;
-    case "safeReached":
-      return `The safe reaches ${p?.kind === "fenceSafe" ? p.tokenSafe : "its mark"}.`;
-    case "stolenVoteDecided":
-      return "A vote it stole decides a shakedown.";
     case "tipOffLanded":
       return "Each tip-off.";
-    case "firstTake":
-      return "Its first take.";
     default: {
       const never: never = trigger;
       return String(never);
@@ -183,8 +138,8 @@ export function roleInfo(id: RoleId, roles: Readonly<Record<RoleId, RoleDef>> = 
     tag: def.tag,
     tagLabel: TAG_LABEL[def.tag],
     star: def.winsOn.length > 0,
-    power: powerText(def.power, job, def),
-    earns: reward ? `${reward.count === 1 ? "A token" : `${reward.count} tokens`} when: ${earnsText(reward.on, def).replace(/^./, (c) => c.toLowerCase())}` : null,
+    power: powerText(def.power, job),
+    earns: reward ? `${reward.count === 1 ? "A token" : `${reward.count} tokens`} when: ${earnsText(reward.on).replace(/^./, (c) => c.toLowerCase())}` : null,
     howYouWin: howYouWin(def.winsOn),
     minPlayers: def.minPlayers ?? null,
   };
@@ -412,7 +367,7 @@ export function perkUses(view: PlayerView): PerkUse[] {
     const verified = view.ledger.some((x) => x.event.type === "alibiVerified" && x.event.player === view.me.id && x.event.round === round);
     if (round > 0 && posted?.type === "alibiPosted" && !verified) out.push({ kind: "alibi", round, room: posted.room });
   }
-  if (own.has("recharge") && (view.me.roleState.usedThisAct > 0 || view.me.roleState.usedThisGame > 0) && rolesOf(view)[view.me.role]?.power.kind !== "fenceSafe") {
+  if (own.has("recharge") && (view.me.roleState.usedThisAct > 0 || view.me.roleState.usedThisGame > 0)) {
     out.push({ kind: "recharge" });
   }
   if (own.has("rig") && view.round < 3 * ROUNDS_PER_ACT && setupOf(view)?.eventsEnabled !== false && !out.some((u) => u.kind === "rigPick")) out.push({ kind: "rig" });

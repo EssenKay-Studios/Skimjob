@@ -14,7 +14,6 @@ function config(humans: readonly boolean[], seed = "lockin-qa"): GameConfig {
     players: humans.map((human, i) => ({ id: `p${i}`, name: `P${i}`, isBot: !human })),
     job: "bank",
     rolePool: [...POOL_ROLES],
-    mole: "off",
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
   };

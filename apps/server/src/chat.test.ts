@@ -263,7 +263,7 @@ describe("evidence cards (design §12.1)", () => {
     expect(b!.chats()).toEqual([]);
     const pv = (event: Record<string, unknown>) => ({ caseFile: [{ seq: 3, event: { visibility: { kind: "private", player: "p1" }, player: "p1", ...event } }], ledger: [] }) as unknown as PlayerView;
     expect(evidenceCard(pv({ type: "insideTip", round: 2, subject: "p2", role: "mole" }), 3)).toEqual({ ok: false, reason });
-    expect(evidenceCard(pv({ type: "perkUsed", round: 2, perk: { kind: "peek", target: "p2", role: "fence" } }), 3)).toEqual({ ok: false, reason });
+    expect(evidenceCard(pv({ type: "perkUsed", round: 2, perk: { kind: "peek", target: "p2", role: "hacker" } }), 3)).toEqual({ ok: false, reason });
     expect(evidenceCard(pv({ type: "alliesLearned", allies: ["p2"], via: "deal" }), 3)).toEqual({ ok: false, reason });
     // Ability results stay shareable.
     expect(evidenceCard(pv({ type: "roomSighting", round: 1, room: "vault", others: ["p2"] }), 3)).toMatchObject({ ok: true });

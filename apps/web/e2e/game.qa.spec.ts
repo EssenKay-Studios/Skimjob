@@ -63,7 +63,7 @@ async function leaks(guest: Page): Promise<string[]> {
       const out: string[] = [];
       for (const seat of document.querySelectorAll(".crew-seat:not(.is-you)")) {
         // Who has locked in is public (owner decision, 2 Nov); the room and split never are.
-        if (/inside man|security chief|role|stash|pocket|\d+ loot/i.test(seat.textContent ?? "")) out.push(`seat text: ${seat.textContent}`);
+        if (/security chief|role|stash|pocket|\d+ loot/i.test(seat.textContent ?? "")) out.push(`seat text: ${seat.textContent}`);
         const title = seat.querySelector("[title]")?.getAttribute("title") ?? "";
         if (/pocket|loot|stash/i.test(title)) out.push(`seat title: ${title}`);
       }

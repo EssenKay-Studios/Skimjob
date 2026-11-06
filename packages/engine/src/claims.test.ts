@@ -15,7 +15,6 @@ const cfg: GameConfig = {
   players: ["p0", "p1", "p2", "p3"].map((id) => ({ id, name: id.toUpperCase(), isBot: false })),
   job: "bank",
   rolePool: [...STARTER_ROLES],
-  mole: "off",
   eventsEnabled: false,
   voteVisibility: "hiddenThenRevealed",
 };
@@ -56,7 +55,7 @@ describe("role claims — design §8, §12.1", () => {
 
   it("once per player per act; the next act opens a new claim", () => {
     let s = ok(start, claim("p0", "rookie")).state;
-    expect(reason(s, claim("p0", "bagman"))).toMatch(/already claimed a role since the last meeting/);
+    expect(reason(s, claim("p0", "auditor"))).toMatch(/already claimed a role since the last meeting/);
     expect(reason(s, claim("p0", "rookie"))).toMatch(/already claimed/);
     s = ok(s, claim("p1", "rookie")).state; // a double claim is allowed: the crew judges it
     // Play out act 1 to its meeting, then into act 2.
@@ -66,13 +65,13 @@ describe("role claims — design §8, §12.1", () => {
       s = r.state;
     }
     expect(s.phase.kind).toBe("awaitingMeeting");
-    expect(reason(s, claim("p0", "bagman"))).toMatch(/already claimed/); // the stretch runs until its meeting closes
+    expect(reason(s, claim("p0", "auditor"))).toMatch(/already claimed/); // the stretch runs until its meeting closes
     s = ok(s, { type: "scheduleMeeting", act: 1, slot: "now" }).state;
     s = ok(s, { type: "advance", deadline: { kind: "openMeeting", meetingId: "act-1" } }).state;
-    expect(ok(s, claim("p2", "cleaner")).events[0]).toMatchObject({ act: 1 }); // during the vote window too
+    expect(ok(s, claim("p2", "fixer")).events[0]).toMatchObject({ act: 1 }); // during the vote window too
     s = ok(s, { type: "advance", deadline: { kind: "closeMeeting", meetingId: "act-1" } }).state;
     expect(s.round).toBe(4);
-    expect(ok(s, claim("p0", "bagman")).events[0]).toMatchObject({ role: "bagman", act: 2 });
+    expect(ok(s, claim("p0", "auditor")).events[0]).toMatchObject({ role: "auditor", act: 2 });
   });
 
   it("refuses unknown players and roles, prototype keys included, never throwing", () => {
@@ -85,9 +84,9 @@ describe("role claims — design §8, §12.1", () => {
   it("leaks nothing: the same claim reads the same to others whatever the claimant was really dealt — design §13, §17.2", () => {
     const dealt = (role: string): GameState => {
       const log = start.log.map((e) => (e.type === "roleDealt" && e.player === "p0" ? { ...e, role } : e));
-      return ok(replay(cfg, log), claim("p0", "bagman")).state;
+      return ok(replay(cfg, log), claim("p0", "auditor")).state;
     };
-    const [truth, bluff] = [dealt("bagman"), dealt("lookout")];
+    const [truth, bluff] = [dealt("auditor"), dealt("lookout")];
     for (const viewer of ["p1", "p2", "p3"]) expect(viewFor(bluff, viewer)).toEqual(viewFor(truth, viewer));
   });
 

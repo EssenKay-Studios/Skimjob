@@ -19,7 +19,7 @@ import { scaledCardHeat } from "./deck";
 import { applyEvent } from "./reduce";
 import { gameEnded } from "./end";
 import { drawPoliceMoment } from "./setup";
-import { grantRewards, heatTokens, stopRaid } from "./crew";
+import { grantRewards, stopRaid } from "./crew";
 
 /** The police moment `moment` has come. Refused unless it is the next one scheduled, or while a meeting is open (game time is frozen). */
 export function policeMoment(state: GameState, moment: unknown, draw: Draw): GameEvent[] | string {
@@ -47,7 +47,6 @@ export function policeMoment(state: GameState, moment: unknown, draw: Draw): Gam
       }
       events.push(...saved);
     }
-    events.push(...heatTokens(events.reduce(applyEvent, state)));
   }
   return [...events, drawPoliceMoment(state.config, police.moment + 1, (n) => draw.int(n))];
 }

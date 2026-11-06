@@ -230,67 +230,6 @@ describe("restart mid-grace: no double, no skip", () => {
   });
 });
 
-describe("an emergency meeting / Muscle window opening during the grace pauses and resumes it (design §4.1, §11)", () => {
-  it("both round rows pause while the meeting (and any shakedown window) is open, then keep their time left", { timeout: 120_000 }, async () => {
-    const t1h = TIMINGS["1h"];
-    let sawShakedown = false;
-    for (let k = 0; k < 6; k++) {
-      forcedSeed = `qa-lockin-emerg-${k}`;
-      await fresh();
-      // The default deck, not Starter: it has the Muscle and a shop (extension.md "Host settings").
-      const { id, humans } = await startGame(4, 2, { sessionLength: "1h" });
-      const host = humans[0]!;
-      for (const h of humans.slice(1)) expect(await send(id, h.who, moveFor(await load(id), h.player))).toMatchObject({ ok: true });
-      let s = await load(id);
-      if (!s.pendingEmergency) expect(await send(id, host.who, { type: "callEmergency" })).toMatchObject({ ok: true });
-      s = await load(id);
-      const open = await rowOf(id, `openMeeting:${s.pendingEmergency!.meetingId}`);
-      // Lock in 3 s before the meeting opens: the grace (10 s) runs past it.
-      clock.advance(open!.due - clock.now() - 3000);
-      expect(await send(id, host.who, moveFor(s, host.player))).toMatchObject({ ok: true });
-      const early = (await rowOf(id, "roundEarly:1"))!;
-      const round = (await rowOf(id, "round:1"))!;
-      expect(early.due - open!.due).toBe(t1h.lockInGraceMs - 3000);
-      clock.advance(3000);
-      expect(await app.scheduler.tick()).toBe(1);
-      expect((await load(id)).phase.kind).toBe("meeting");
-      const pausedAt = clock.now();
-      // Every person votes to shake down the first bot: a majority, so a Muscle/Shield window may open.
-      const target = (await load(id)).playerOrder.find((p) => !humans.some((h) => h.player === p))!;
-      for (const h of humans) await send(id, h.who, { type: "castVote", vote: { kind: "shakedown", target } });
-      // Through the meeting and any Muscle window: the round rows stay paused; the round never resolves.
-      for (let i = 0; i < 20; i++) {
-        s = await load(id);
-        if (!meetingOpen(s)) break;
-        if (s.phase.kind === "shakedownPending") sawShakedown = true;
-        for (const key of ["roundEarly:1", "round:1"]) expect((await rowOf(id, key))?.paused, `${key} in ${s.phase.kind}`).toBe(true);
-        const next = (await deadlines(id)).filter((d) => !d.paused)[0]!;
-        clock.advance(Math.max(0, next.due - clock.now()));
-        expect(await app.scheduler.tick()).toBeGreaterThan(0);
-      }
-      s = await load(id);
-      if (s.phase.kind === "ended") continue; // a raid at the checkpoint penalty can't happen in act 1, but be safe
-      expect(s.phase).toEqual({ kind: "planning", round: 1 });
-      expect(count(s, "roundResolved")).toBe(0);
-      const paused = clock.now() - pausedAt;
-      expect(await rowOf(id, "roundEarly:1")).toEqual({ key: "roundEarly:1", due: early.due + paused, paused: false });
-      expect(await rowOf(id, "round:1")).toEqual({ key: "round:1", due: round.due + paused, paused: false });
-      // A change after the resume still doesn't restart it; it fires 2 s after the meeting.
-      expect(await send(id, host.who, moveFor(s, host.player, 1))).toMatchObject({ ok: true });
-      expect((await rowOf(id, "roundEarly:1"))!.due).toBe(early.due + paused);
-      clock.advance(t1h.lockInGraceMs - 3000 - 1);
-      expect(await app.scheduler.tick()).toBe(0);
-      clock.advance(1);
-      // >= 1: an earlier seed's game (same clock) may have a row due at this instant too.
-      expect(await app.scheduler.tick()).toBeGreaterThanOrEqual(1);
-      const end = await load(id);
-      expect(count(end, "roundResolved", (e) => e.round === 1)).toBe(1);
-      expect(count(end, "defaultMoveAssigned")).toBe(0);
-    }
-    expect(sawShakedown, "no Muscle window seen in 6 seeds").toBe(true);
-  });
-});
-
 // ---------------------------------------------------------------- presence
 
 class Client {

@@ -27,7 +27,7 @@ describe("runBatch", () => {
   });
 
   it("plays every setting: decks, deals, role lists, vote modes, Random bots", () => {
-    for (const argv of [["--deck", "everything", "-p", "9"], ["--deal", "random", "-p", "7"], ["--role-list", "hidden"], ["--role-list", "possible"], ["--votes", "secret"], ["--votes", "open"], ["-b", "random"], ["--role-pool", "lookout,fence"]]) {
+    for (const argv of [["--deck", "everything", "-p", "9"], ["--deal", "random", "-p", "7"], ["--role-list", "hidden"], ["--role-list", "possible"], ["--votes", "secret"], ["--votes", "open"], ["-b", "random"], ["--role-pool", "lookout,hacker"]]) {
       const o = options(["-n", "2", ...argv]);
       expect(checkOptions(o)).toEqual([]);
       expect(runBatch(o).every((r) => r.rejections === 0)).toBe(true);
@@ -40,7 +40,7 @@ describe("checkOptions — the engine's validateConfig on the sim's settings", (
     expect(checkOptions(options([]))).toEqual([]);
   });
   it("reports bad role pools, jobs and overrides (untrusted JSON, design §17.4)", () => {
-    expect(checkOptions(options(["--role-pool", "getaway"]))).toEqual(["unknown role getaway"]);
+    expect(checkOptions(options(["--role-pool", "wizard"]))).toEqual(["unknown role wizard"]);
     expect(checkOptions(options(["--job", "casino"]))).toEqual(["unknown job casino"]);
     expect(checkOptions(options(["--overrides", '{"heat":{"perRound":"lots"}}']))).toEqual(["contentOverrides.heat.perRound must be a finite number"]);
   });

@@ -339,7 +339,7 @@ describe("pushing views", () => {
     const { id, humans } = game;
     const a = await Client.open(id, humans[0]!);
     const b = await Client.open(id, humans[1]!);
-    // Pocket 0 (an Inside Man can't pocket) in two rooms that need no watch target.
+    // Pocket 0 in two rooms that need no watch target.
     const rooms = (await load(id)).rooms.filter((r) => r !== "security").slice(0, 2);
     // The first lock-in is public (moveLocked, owner decision 2 Nov); every change after it is hidden.
     expect(await a.send({ type: "submitMove", move: { room: rooms[1], pocket: 0 } })).toMatchObject({ ok: true });

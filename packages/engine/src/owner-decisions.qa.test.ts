@@ -1,6 +1,6 @@
 // QA (PR #21, owner answers 1 Nov; extension.md): the one vote rule at every
-// crew size, Inside Man from 5 (§8.1), uniqueRoles (§8.1, §15), scaled event Heat (§10),
-// Fence safe in the clean check (§11.3), the alibi phase (§5.4) with meetings,
+// crew size, uniqueRoles (§8.1, §15), scaled event Heat (§10),
+// the alibi phase (§5.4) with meetings,
 // shakedown windows and the last round, and repeating cards (§10).
 import { BANK_JOB, EVENTS, STARTER_ROLES, type RoleId } from "@skimjob/content";
 import { describe, expect, it } from "vitest";
@@ -80,10 +80,10 @@ describe("QA one vote rule at 8 vs 9 players — extension.md \"One vote rule\",
     expect(validateConfig(config(9, { contentOverrides: { shakedown: { pluralityFromPlayers: 9 } } as never }))).not.toEqual([]);
   });
 
-  // An emergency meeting called in round 1's alibi window, with a Muscle dealt (so a shakedown window).
+  // An emergency meeting called in round 1's alibi window.
   function emergencyVote(n: number, votes: [string, string | null][]): GameState {
-    const roles = [...Array<string>(n - 1).fill("rookie"), "muscle"];
-    let s = run(game(config(n, { rolePool: [...STARTER_ROLES, "muscle"] }), roles), ROUND);
+    const roles = [...Array<string>(n - 1).fill("rookie"), "smoothTalker"];
+    let s = run(game(config(n, { rolePool: [...STARTER_ROLES, "smoothTalker"] }), roles), ROUND);
     expect(s.phase).toEqual({ kind: "alibis", round: 1 });
     s = run(s, { type: "callEmergency", player: "p8" }, open("emergency-p8"));
     expect(viewFor(s, "p0").alibiRound).toBe(1);
@@ -112,7 +112,7 @@ describe("QA one vote rule at 8 vs 9 players — extension.md \"One vote rule\",
   });
 
   it("8p integrated: a 3-vote lead is no shakedown (nor at 9p)", () => {
-    let t = run(game(config(8, { rolePool: [...STARTER_ROLES, "muscle"] })), ROUND, { type: "callEmergency", player: "p7" }, open("emergency-p7"));
+    let t = run(game(config(8, { rolePool: [...STARTER_ROLES, "smoothTalker"] })), ROUND, { type: "callEmergency", player: "p7" }, open("emergency-p7"));
     t = run(t, ...ballots.slice(0, 7).map(([p, v]) => vote(p, v)), close("emergency-p7"));
     expect(LAST(t, "meetingClosed")?.result).toEqual({ kind: "noMajority" });
     expect(t.phase).toEqual({ kind: "alibis", round: 1 });
@@ -122,22 +122,9 @@ describe("QA one vote rule at 8 vs 9 players — extension.md \"One vote rule\",
 describe("QA dealing — design §8.1", () => {
   const SEEDS = Array.from({ length: 150 }, (_, i) => `deal-${i}`);
 
-  it("the Inside Man is never dealt at 3–4 players (any setting); it is dealt at 5", () => {
-    for (const n of [3, 4]) {
-      for (const seed of SEEDS) {
-        for (const extra of [{}, { uniqueRoles: false }, { rolePool: ["insideMan"] }, { rolePool: ["insideMan"], uniqueRoles: false }, { eventsEnabled: false }] as Partial<GameConfig>[]) {
-          expect(dealt(config(n, { seed, ...extra }))).not.toContain("insideMan");
-        }
-      }
-    }
-    // An Inside Man-only pool at 4p deals all Rookies, also with uniqueRoles false.
-    expect(dealt(config(4, { rolePool: ["insideMan"], uniqueRoles: false }))).toEqual(["rookie", "rookie", "rookie", "rookie"]);
-    expect(SEEDS.some((seed) => dealt(config(5, { seed })).includes("insideMan"))).toBe(true);
-  });
-
   it("uniqueRoles false repeats roles; true never does; non-boolean rejected; deal is deterministic", () => {
     const repeats = (cfg: GameConfig) => {
-      const roles = dealt(cfg).filter((r) => r !== "rookie" && r !== "mole" && r !== "embezzler");
+      const roles = dealt(cfg).filter((r) => r !== "rookie" && r !== "mole" && r !== "mole");
       return roles.length !== new Set(roles).size;
     };
     expect(SEEDS.slice(0, 40).some((seed) => repeats(config(12, { seed, rolePool: [], uniqueRoles: false })))).toBe(true);
@@ -175,31 +162,6 @@ describe("QA event Heat scaling — design §10", () => {
     expect(scaledCardHeat(-3, 2)).toBe(-1); // -1.2
     expect(scaledCardHeat(-1, 2)).toBe(-0); // -0.4 rounds to -0
     expect(scaledCardHeat(0, 3)).toBe(0);
-  });
-
-});
-
-describe("QA Fence safe in the clean check — design §11.3, extension.md \"Shakedowns (fixed numbers)\"", () => {
-  // 3p, Fence at seat 0; emergency in round 1's alibi window (clean below 6).
-  function shake(pocket: number, safe: number): GameState {
-    let s = run(game(config(3), ["fence"]), mv("p0", "vault", pocket, { ability: { kind: "fenceSafe", amount: safe } }), ROUND);
-    expect(s.players.p0).toMatchObject({ stash: pocket - safe, safe });
-    s = run(s, { type: "callEmergency", player: "p1" }, open("emergency-p1"), vote("p1", "p0"), vote("p2", "p0"), close("emergency-p1"));
-    return s.phase.kind === "shakedownPending" ? run(s, { type: "advance", deadline: { kind: "resolveShakedown", meetingId: "emergency-p1" } }) : s;
-  }
-  it("stash 1 + safe 5 = exactly 6 is not clean; the safe is shown but not taken", () => {
-    const s = shake(6, 5);
-    expect(LAST(s, "shakedownResolved")).toMatchObject({ stashRevealed: 1, safeRevealed: 5, taken: 1, clean: false, compensation: 0 });
-    expect(s.players.p0).toMatchObject({ stash: 0, safe: 5 });
-    expect(s.phase).toEqual({ kind: "alibis", round: 1 });
-  });
-  it("a full safe of 5 and an empty stash is clean (stash shown as 0, safe shown as 5)", () => {
-    expect(LAST(shake(5, 5), "shakedownResolved")).toMatchObject({ stashRevealed: 0, safeRevealed: 5, clean: true }); // paid up to the Haul
-  });
-  it("stash 0 + safe 2 = 2 is clean and compensated", () => {
-    const s = shake(2, 2);
-    expect(LAST(s, "shakedownResolved")).toMatchObject({ stashRevealed: 0, clean: true, compensation: 8 });
-    expect(s.players.p0).toMatchObject({ stash: 8, safe: 2 });
   });
 });
 

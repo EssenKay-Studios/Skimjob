@@ -46,7 +46,6 @@ function game(cfg: GameConfig, setup: Setup = {}): GameState {
       const earned: GameEvent[] = Array.from({ length: setup.tokens?.[e.player] ?? 0 }, () => ({ type: "tokenEarned", visibility: privateTo(e.player), player: e.player, trigger: "checkpointMade" }));
       return [{ ...e, role }, ...earned];
     }
-    if (e.type === "snitchTargetAssigned" && setup.roles) return [];
     if (e.type === "roleListShown" && setup.roles && e.list === "exact") return [];
     if (e.type === "shopDealt" && setup.shop) return [{ ...e, perks: setup.shop }];
     if (e.type === "policeScheduled") return [{ ...e, ...(setup.patrol !== undefined && { patrol: setup.patrol }), ...(setup.gap !== undefined && { gapPermille: setup.gap }) }];
@@ -227,124 +226,9 @@ describe("police activity: hidden moments never leak (extension.md Build notes \
     expect(hotFixed.heat).toBe(95);
     expect(tokensOf(hotFixed, "p1", "raidStopped")).toBe(1);
   });
-
 });
 
 describe("tokens: every trigger (extension.md \"Roles\", owner rulings 1, 4, 5, 6, gap-fills \"Token triggers\")", () => {
-  it("Getaway Driver: one token the first time Heat reaches 75, police activity included; once per game (ruling 1)", () => {
-    let s = game(MOLE_CFG, { roles: ["mole", "getawayDriver"], patrol: true });
-    s = { ...s, heat: 72 };
-    s = forcePatrols(s, true);
-    s = { ...s, heat: 72 };
-    s = run(s, MOMENT);
-    expect(s.heat).toBe(76);
-    expect(tokensOf(s, "p1", "heatReached")).toBe(1);
-    expect(viewFor(s, "p1").me.roleState.tokens).toBe(1);
-    // Heat dropping and rising past 75 again (e.g. a Fixer's stop) earns nothing more.
-    s = run({ ...s, heat: 74 }, ROUND);
-    expect(s.heat).toBeGreaterThanOrEqual(75);
-    expect(tokensOf(s, "p1", "heatReached")).toBe(1);
-  });
-
-  it("Fence: one token when the safe reaches 10, never again (ruling 1)", () => {
-    let s = game(config(5, { contentOverrides: V015_NUMBERS }), { roles: ["fence"] }); // scripted at 5 an act, token at 10
-    s = run(s, mv("p0", "vault", 6, { ability: { kind: "fenceSafe", amount: 5 } }));
-    s = closeAct(toActMeeting(s));
-    expect(s.players.p0?.safe).toBe(5);
-    expect(tokensOf(s, "p0")).toBe(0);
-    s = run(s, mv("p0", "vault", 6, { ability: { kind: "fenceSafe", amount: 5 } }), ROUND);
-    expect(s.players.p0?.safe).toBe(10);
-    expect(tokensOf(s, "p0", "safeReached")).toBe(1);
-    s = closeAct(toActMeeting(s));
-    s = run(s, mv("p0", "vault", 6, { ability: { kind: "fenceSafe", amount: 5 } }), ROUND);
-    expect(s.players.p0?.safe).toBe(15);
-    expect(tokensOf(s, "p0", "safeReached")).toBe(1);
-  });
-
-  it("Embezzler: a token for its first take only (ruling 1)", () => {
-    let s = game(config(5), { roles: ["embezzler"] });
-    s = run(s, mv("p0", "lobby", 0, { ability: { kind: "embezzle" } }), mv("p1", "vault"), ROUND);
-    expect(tokensOf(s, "p0", "firstTake")).toBe(1);
-    s = closeAct(toActMeeting(s));
-    s = run(s, mv("p0", "lobby", 0, { ability: { kind: "embezzle" } }), mv("p1", "vault"), ROUND);
-    expect(ofType(s.log, "abilityResolved").filter((e) => e.ability.kind === "embezzle")).toHaveLength(2);
-    expect(tokensOf(s, "p0")).toBe(1);
-  });
-
-  // 7 players: p0 Blackmailer guesses p1 (Rookie) right in round 1; an emergency meeting follows.
-  const blackmailed = () => run(game(config(7), { roles: ["blackmailer"] }), mv("p0", "lobby", 0, { ability: { kind: "blackmail", target: "p1", role: "rookie" } }), ROUND, ...emergency("p6"));
-
-  it("Blackmailer: a token when a vote it stole decides the shakedown (ruling 5)", () => {
-    // With the stolen vote: p2 gets 2 (p0) + 2 (p3, p4) = 4 of 6 → passes. Without: 3 of 7 → no majority.
-    const s = run(blackmailed(), vote("p0", "p2"), vote("p3", "p2"), vote("p4", "p2"), vote("p1", null), vote("p5", null), vote("p6", null), closeEm("p6"));
-    expect(ofType(s.log, "meetingClosed")[0]?.result).toEqual({ kind: "shakedown", target: "p2" });
-    expect(tokensOf(s, "p0", "stolenVoteDecided")).toBe(1);
-  });
-
-  it("Blackmailer: no token when the shakedown would have passed anyway", () => {
-    const s = run(blackmailed(), vote("p0", "p2"), vote("p3", "p2"), vote("p4", "p2"), vote("p5", "p2"), vote("p1", null), vote("p6", null), closeEm("p6"));
-    expect(ofType(s.log, "meetingClosed")[0]?.result).toEqual({ kind: "shakedown", target: "p2" });
-    expect(tokensOf(s, "p0")).toBe(0);
-  });
-
-  const muscleGame = (pocket: number) =>
-    run(
-      game(config(5), { roles: ["muscle"] }),
-      mv("p2", "vault", pocket),
-      ROUND,
-      ...emergency("p1"),
-      vote("p1", "p2"),
-      vote("p3", "p2"),
-      vote("p4", "p2"),
-      closeEm("p1"),
-    );
-
-  it("Muscle saves an innocent: a token and its once-per-game power back (ruling 6)", () => {
-    let s = muscleGame(0);
-    expect(s.phase.kind).toBe("shakedownPending");
-    s = run(s, use("p0", { kind: "cancelShakedown" }), { type: "advance", deadline: { kind: "resolveShakedown", meetingId: "emergency-p1" } });
-    expect(tokensOf(s, "p0", "cancelledClean")).toBe(1);
-    expect(ofType(s.log, "muscleNamed")).toEqual([]);
-    // Power back: it can cancel again at the next meeting.
-    s = run(s, ...emergency("p3"), vote("p1", "p4"), vote("p3", "p4"), vote("p2", "p4"), closeEm("p3"));
-    expect(s.phase.kind).toBe("shakedownPending");
-    expect(handleCommand(s, use("p0", { kind: "cancelShakedown" })).ok).toBe(true);
-  });
-
-  it("Muscle saves a cheater: named in the ledger, no token, power spent", () => {
-    let s = muscleGame(6);
-    s = run(s, use("p0", { kind: "cancelShakedown" }), { type: "advance", deadline: { kind: "resolveShakedown", meetingId: "emergency-p1" } });
-    expect(tokensOf(s, "p0")).toBe(0);
-    expect(ofType(s.log, "muscleNamed")).toHaveLength(1);
-    s = run(s, ...emergency("p3"), vote("p1", "p4"), vote("p3", "p4"), vote("p2", "p4"), closeEm("p3"));
-    expect(reason(s, use("p0", { kind: "cancelShakedown" }))).toMatch(/already/);
-  });
-
-  it("Rookie, Inside Man and Mastermind earn at meetings 1 and 2 only when met; never at the final check", () => {
-    let s = game(config(3), { roles: ["rookie", "insideMan", "mastermind"] });
-    const allVault = (x: GameState) => run({ ...x, heat: 0 }, mv("p0", "vault"), mv("p1", "vault"), mv("p2", "vault"));
-    for (let guard = 0; s.phase.kind !== "ended" && guard < 30; guard++) {
-      s = s.phase.kind === "planning" ? run(allVault(s), ROUND) : closeAct(toActMeeting({ ...s, heat: 0 }));
-    }
-    const checks = ofType(s.log, "checkpointChecked");
-    expect(checks).toHaveLength(3);
-    const expected = checks.slice(0, 2).filter((c) => c.met).length;
-    for (const p of ["p0", "p1", "p2"]) expect(tokensOf(s, p, "checkpointMade"), p).toBe(expected);
-    // The final meeting's check never pays a token.
-    const lastCheck = s.log.lastIndexOf(checks[2]!);
-    expect(s.log.slice(lastCheck).some((e) => e.type === "tokenEarned")).toBe(false);
-  });
-
-  it("Bagman: a token per 3 rounds running of handing in everything, across a meeting, then the count restarts", () => {
-    let s = game(config(3), { roles: ["bagman"] });
-    s = run(s, mv("p0", "vault"), ROUND, mv("p0", "vault"), ROUND);
-    expect(tokensOf(s, "p0")).toBe(0);
-    s = closeAct(toActMeeting(run(s, mv("p0", "vault"))));
-    expect(tokensOf(s, "p0", "allInStreak")).toBe(1);
-    s = run(s, mv("p0", "vault"), ROUND, mv("p0", "vault", 1), ROUND, mv("p0", "vault"), ROUND);
-    expect(tokensOf(s, "p0", "allInStreak")).toBe(1);
-  });
-
   it("tokens are private: earning one changes no other player's view", () => {
     const s = game(MOLE_CFG, { roles: ["mole"], patrol: false });
     const after = applyEvent(s, { type: "tokenEarned", visibility: privateTo("p0"), player: "p0", trigger: "tipOffLanded" });
@@ -423,13 +307,8 @@ describe("buyPerk (extension.md \"Tokens and the perk shop\")", () => {
 });
 
 describe("the win rule (extension.md \"Winning and losing\", Build notes \"Win rule\")", () => {
-  const base = () => game(config(4), { roles: ["rookie", "getawayDriver", "mole", "embezzler"] });
-  const flat = { stash: 10, safe: 0, timesShakenDown: 0, totalHandedIn: 5 };
-
-  it("winsOn per role: Driver [heat], Mole [heat, target], Embezzler [target], Fence [heat, target]; every other role none", () => {
-    const want: Record<string, string[]> = { getawayDriver: ["heat"], mole: ["heat", "target"], embezzler: ["target"], fence: ["heat", "target"] };
-    for (const [id, def] of Object.entries(ROLES)) expect([...def.winsOn].sort(), id).toEqual((want[id] ?? []).sort());
-  });
+  const base = () => game(config(4), { roles: ["rookie", "hacker", "mole"] });
+  const flat = { stash: 10, timesShakenDown: 0, totalHandedIn: 5 };
 
   it("success: the top group wins, whatever the roles; full ties share", () => {
     const s = withPlayers(base(), { p0: flat, p1: flat, p2: { ...flat, stash: 9 }, p3: { ...flat, stash: 1 } });
@@ -443,29 +322,17 @@ describe("the win rule (extension.md \"Winning and losing\", Build notes \"Win r
 
   it("a raid: only top-group members whose role wins on heat; a ★ outside the top group never wins", () => {
     const tied = withPlayers(base(), { p0: flat, p1: flat, p2: flat, p3: flat });
-    // Top group = all four; Driver and Mole win on heat, the Embezzler and Rookie don't.
-    expect([...outcomeFor(tied, "heat").winners].sort()).toEqual(["p1", "p2"]);
-    expect([...outcomeFor(tied, "target").winners].sort()).toEqual(["p2", "p3"]);
+    // Top group = all four; only the Mole (★) wins on heat or target.
+    expect([...outcomeFor(tied, "heat").winners].sort()).toEqual(["p2"]);
+    expect([...outcomeFor(tied, "target").winners].sort()).toEqual(["p2"]);
     const rookieTop = withPlayers(base(), { p0: { ...flat, stash: 30 }, p1: flat, p2: flat, p3: flat });
     const out = outcomeFor(rookieTop, "heat");
     expect(out.winners).toEqual([]);
     expect(out).toMatchObject({ result: "failed", reason: "heat" });
     // The full ranking is still shown on a failure.
     expect(out.ranking.map((r) => r.player)).toEqual(["p0", "p1", "p2", "p3"]);
-    // Embezzler top on a raid: nobody.
+    // A non-★ role top on a raid: nobody.
     expect(outcomeFor(withPlayers(base(), { p3: { ...flat, stash: 30 } }), "heat").winners).toEqual([]);
-  });
-
-  it("scores are whole numbers; the Inside Man gets +1 per 5 loot over the final target (no Rookie multiplier)", () => {
-    const s = game(config(3), { roles: ["insideMan", "rookie", "rookie"] });
-    const finalTarget = 23 * 3;
-    for (const [over, bonus] of [[0, 0], [4, 0], [5, 1], [14, 2], [15, 3]] as const) {
-      const x = withPlayers({ ...s, haul: finalTarget + over }, { p0: { stash: 7 }, p1: { stash: 7 } });
-      const r = ranking(x);
-      expect(r.find((e) => e.player === "p0")?.score).toBe(7 + bonus);
-      expect(r.find((e) => e.player === "p1")?.score).toBe(7);
-      for (const e of r) expect(Number.isInteger(e.score)).toBe(true);
-    }
   });
 });
 
@@ -487,10 +354,9 @@ describe("one vote rule for every crew size, 3..12 (extension.md \"Voting\")", (
 });
 
 describe("fixed shakedown numbers (extension.md \"Shakedowns (fixed numbers)\")", () => {
-  const shaken = (roles: string[], move: object, safe?: number) => {
+  const shaken = (roles: string[], move: object) => {
     let s = game(config(5), { roles });
     s = run(s, move, ROUND);
-    if (safe !== undefined) s = withPlayers(s, { p2: { safe } });
     return run(s, ...emergency("p1"), vote("p1", "p2"), vote("p3", "p2"), vote("p4", "p2"), closeEm("p1"));
   };
 
@@ -501,13 +367,6 @@ describe("fixed shakedown numbers (extension.md \"Shakedowns (fixed numbers)\")"
     const dirty = shaken([], mv("p2", "vault", 6));
     expect(ofType(dirty.log, "shakedownResolved")[0]).toMatchObject({ clean: false, compensation: 0, stashRevealed: 6, taken: 6 });
     expect(dirty.players.p2?.stash).toBe(0);
-  });
-
-  it("the Fence's safe counts for the clean line and is shown, but not taken", () => {
-    const s = shaken(["rookie", "rookie", "fence"], mv("p2", "vault", 3), 3);
-    const r = ofType(s.log, "shakedownResolved")[0];
-    expect(r).toMatchObject({ clean: false, stashRevealed: 3, safeRevealed: 3, taken: 3 });
-    expect(s.players.p2?.safe).toBe(3);
   });
 });
 
@@ -634,50 +493,5 @@ describe("QA re-check (PR #50 fixes): locked in", () => {
       }
       expect(moles, `${n}p ${deal}`).toBeGreaterThan(0);
     }
-  });
-
-  it("no refusal a player can see says \"act\" (Build notes item 2: once between meetings)", () => {
-    const reasons: string[] = [];
-    const twice = (roles: string[], first: object, again: object = first, n = 7) => {
-      const s = run(game(config(n), { roles }), first);
-      const r = handleCommand(s, again);
-      if (r.ok) throw new Error(`second use accepted: ${JSON.stringify(again)}`);
-      reasons.push(r.reason);
-    };
-    twice(["detective"], use("p0", { kind: "checkStash", target: "p1" }));
-    twice(["auditor"], ROUND, undefined as never, 7);
-    reasons.pop();
-    {
-      const s = run(game(config(7), { roles: ["auditor"] }), ROUND, use("p0", { kind: "audit", room: "vault" }));
-      const r = handleCommand(s, use("p0", { kind: "audit", room: "office" }));
-      if (!r.ok) reasons.push(r.reason);
-    }
-    for (const [role, ability] of [
-      ["hacker", { kind: "loopCameras", room: "vault" }],
-      ["blackmailer", { kind: "blackmail", target: "p1", role: "rookie" }],
-      ["forger", { kind: "forge", target: "p1", room: "vault" }],
-      ["embezzler", { kind: "embezzle" }],
-    ] as const) {
-      const s = run(game(config(7), { roles: [role] }), mv("p0", "lobby", 0, { ability }), ROUND);
-      const r = handleCommand(s, mv("p0", "lobby", 0, { ability }));
-      if (!r.ok) reasons.push(r.reason);
-    }
-    {
-      const s = run(game(config(5), { roles: ["fence"] }), mv("p0", "vault", 6, { ability: { kind: "fenceSafe", amount: 1 } }), ROUND);
-      const r = handleCommand(s, mv("p0", "vault", 6, { ability: { kind: "fenceSafe", amount: 1 } }));
-      if (!r.ok) reasons.push(r.reason);
-    }
-    {
-      const s = run(game(config(5), { roles: ["priest"] }), use("p0", { kind: "bless", target: "p1" }));
-      const r = handleCommand(s, use("p0", { kind: "bless", target: "p2" }));
-      if (!r.ok) reasons.push(r.reason);
-    }
-    {
-      const s = run(game(config(5)), { type: "claimRole", player: "p0", role: "rookie" });
-      const r = handleCommand(s, { type: "claimRole", player: "p0", role: "lookout" });
-      if (!r.ok) reasons.push(r.reason);
-    }
-    expect(reasons.length).toBeGreaterThanOrEqual(9);
-    for (const r of reasons) expect(r).not.toMatch(/\bacts?\b/i);
   });
 });

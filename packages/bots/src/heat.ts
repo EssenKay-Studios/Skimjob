@@ -53,16 +53,8 @@ export function policeToCome(view: PlayerView): number {
   return rate * (totalRounds(jobOf(view)) - view.round + 1) * policeHeat(view);
 }
 
-/** Heat of the next round's card if a Mastermind foresaw it (v2 §2, §4: it feeds its Heat forecast), else 0. */
-export function foreseenCardHeat(view: PlayerView): number {
-  const foreseen = ofType(view.caseFile, "cardForeseen").find((e) => e.round === view.round + 1);
-  const cards = cardsOf(view);
-  const effect = foreseen && Object.hasOwn(cards, foreseen.card) ? cards[foreseen.card]?.effect : undefined;
-  return effect?.kind === "heat" ? scaledCardHeat(effect.amount, crewSize(view)) : 0;
-}
-
-/** (Heat now + this round's card + a foreseen next card + the baseline still to come + police activity to come) ÷ the raid level. design §7 */
+/** (Heat now + this round's card + the baseline still to come + police activity to come) ÷ the raid level. design §7 */
 export function heatDanger(view: PlayerView, job: JobDef = jobOf(view)): number {
   const roundsLeft = totalRounds(job) - view.round + 1;
-  return (view.heat + cardHeatNow(view) + foreseenCardHeat(view) + job.heat.perRound * roundsLeft + policeToCome(view)) / job.heat.max;
+  return (view.heat + cardHeatNow(view) + job.heat.perRound * roundsLeft + policeToCome(view)) / job.heat.max;
 }

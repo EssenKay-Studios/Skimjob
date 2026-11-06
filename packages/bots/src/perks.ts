@@ -1,12 +1,12 @@
 // Perk spending for bots: minimal and sensible (docs/roles-v2.md §1 perks, §4
 // "Play"; design §8.3). Bot settings, not game rules.
 //
-// - Peek: while planning, its top suspect whose role it doesn't know yet (Inside Man, Lookout, Hacker).
+// - Peek: while planning, its top suspect whose role it doesn't know yet (Lookout, Hacker).
 // - Tail: while planning, the richest looting room other than its own (Rookie: "the biggest-shortfall room").
-// - +Vote: in a meeting, when it votes to shake someone down (Cleaner).
-// - Alibi: right after posting a true alibi, if the crew could suspect it (Bagman).
-// - Recharge: once its power is used up (Muscle).
-// - Rig: while planning, then pick the most Heat-calming of the two cards (Mastermind).
+// - +Vote: in a meeting, when it votes to shake someone down.
+// - Alibi: right after posting a true alibi, if the crew could suspect it.
+// - Recharge: once its power is used up.
+// - Rig: while planning, then pick the most Heat-calming of the two cards.
 // - Ballot is kept: bots don't read others' ballots (they don't talk). The Shield spends itself.
 // - Buying (extension.md "Tokens and the perk shop"): `buyPerks`, by a fixed priority.
 import { EVENTS, ROUNDS_PER_ACT, type EventId, type PerkId, type RoomId } from "@skimjob/content";
@@ -49,7 +49,7 @@ function worthBuying(view: PlayerView, perk: PerkId): boolean {
   switch (perk) {
     case "recharge": {
       const { power } = roleOf(view);
-      return ("perAct" in power || "perGame" in power) && power.kind !== "fenceSafe";
+      return "perAct" in power;
     }
     case "rig":
       return createdOf(view).eventsEnabled;
@@ -88,7 +88,7 @@ export function buyPerks(view: PlayerView): PlayerCommand[] {
 /** Public suspicion of me at or above this makes a true alibi worth stamping (bot setting). */
 const STAMP_ALIBI_AT = 0.5;
 
-/** How much a card would heat the job (lower is calmer; v2 §4 Mastermind "Rigs Heat-calming cards"). */
+/** How much a card would heat the job (lower is calmer; v2 §4 "Rigs Heat-calming cards"). */
 export function cardHeatScore(view: PlayerView, card: EventId): number {
   const cards = overrideEvents(EVENTS, createdOf(view).contentOverrides);
   const effect = Object.hasOwn(cards, card) ? cards[card]?.effect : undefined;
@@ -134,13 +134,11 @@ export function planningPerks(view: PlayerView, room: RoomId | undefined = view.
   return out;
 }
 
-/** v2 §1 Recharge: the power's uses this act (or its one use this game) are spent. Never the Fence's safe. */
+/** v2 §1 Recharge: the power's uses this act are spent. */
 function usedUp(view: PlayerView): boolean {
   const { power } = roleOf(view);
-  const { usedThisAct, usedThisGame } = view.me.roleState;
-  if ("perAct" in power && power.kind !== "fenceSafe") return usedThisAct >= power.perAct;
-  if ("perGame" in power) return usedThisGame >= power.perGame;
-  return false;
+  const { usedThisAct } = view.me.roleState;
+  return "perAct" in power && usedThisAct >= power.perAct;
 }
 
 /** +Vote with a shakedown ballot, once per meeting. design §8.3 */

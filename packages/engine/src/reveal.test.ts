@@ -27,7 +27,6 @@ const rank = (player: string, role: string, score: number, extra: Partial<RankEn
   role,
   score,
   stash: score,
-  safe: 0,
   timesShakenDown: 0,
   totalHandedIn: 0,
   ...extra,
@@ -78,80 +77,6 @@ describe("reveal summary — design §13", () => {
     expect(s.rounds[1]?.card).toEqual({ id: "powerCut", room: null });
   });
 
-  it("marks a Blackmailer's stolen votes from votesStolen, decided or not, with or without its token (ruling 5)", () => {
-    const closed = (id: string): GameEvent => ({ type: "meetingClosed", visibility: PUBLIC, meetingId: id, tally: { skip: 0, targets: { p1: 2 } }, ballots: null, result: { kind: "shakedown", target: "p1" } });
-    const log: GameEvent[] = [
-      dealt("p0", "blackmailer"),
-      dealt("p1", "rookie"),
-      started(1),
-      { type: "abilityResolved", visibility: privateTo("p0"), player: "p0", round: 1, ability: { kind: "blackmail", target: "p1", role: "rookie", correct: true } },
-      { type: "voteCompromised", visibility: privateTo("p1"), player: "p1", round: 1 },
-      { type: "meetingOpened", visibility: PUBLIC, meetingId: "m1", kind: "regular", act: 1 },
-      closed("m1"),
-      { type: "votesStolen", visibility: REVEAL, meetingId: "m1", steals: [{ victim: "p1", blackmailer: "p0", decided: true }] },
-      { type: "tokenEarned", visibility: privateTo("p0"), player: "p0", trigger: "stolenVoteDecided" },
-      started(2),
-      // A Double-cross moved the role away: the steal still decided it, but nobody earns the token.
-      { type: "doubleCrossResolved", visibility: privateTo("p0"), player: "p0", round: 2, partner: "p1", swap: { role: "rookie", roleState: { usedThisAct: 0, usedThisGame: 0, target: null, tokens: 1, perks: [], tail: null } } },
-      { type: "meetingOpened", visibility: PUBLIC, meetingId: "m2", kind: "regular", act: 2 },
-      closed("m2"),
-      { type: "votesStolen", visibility: REVEAL, meetingId: "m2", steals: [{ victim: "p1", blackmailer: "p0", decided: true }] },
-    ];
-    const s = revealSummary(log, success([rank("p0", "rookie", 0), rank("p1", "rookie", 0)]), TABLES);
-    const stolen = (r: number) => (s.rounds[r]?.items ?? []).filter((i) => i.kind === "voteStolen");
-    expect(stolen(0)).toEqual([{ kind: "voteStolen", blackmailer: "p0", victim: "p1", meetingId: "m1", decided: true }]);
-    expect(stolen(1)).toEqual([{ kind: "voteStolen", blackmailer: "p0", victim: "p1", meetingId: "m2", decided: true }]);
-    expect(s.seats[0]?.tokens).toEqual(["stolenVoteDecided"]);
-  });
-
-  it("puts tokens, perks and forged sightings in the round they happened, and tracks every stash (extension.md \"Tokens and the perk shop\")", () => {
-    const log: GameEvent[] = [
-      ...SETUP,
-      { type: "snitchTargetAssigned", visibility: privateTo("p2"), player: "p2", target: "p0" },
-      started(1),
-      split("p0", 1, "vault", 10, 4),
-      split("p1", 1, "lobby", 6, 0),
-      split("p2", 1, "security", 0, 0),
-      { type: "alibiPosted", visibility: PUBLIC, player: "p0", round: 1, room: "lobby" },
-      { type: "sightingForged", visibility: REVEAL, forger: "p1", round: 1, target: "p0", room: "lobby", shownTo: ["p2"] },
-      { type: "roundResolved", visibility: PUBLIC, round: 1, haulDelta: 12, haul: 12, heatDelta: 5, heat: 25, heatParts: { base: 5, rooms: {}, events: 0 } },
-      { type: "tokenEarned", visibility: privateTo("p2"), player: "p2", trigger: "checkpointMade" },
-      started(2),
-      { type: "defaultMoveAssigned", visibility: privateTo("p2"), player: "p2", round: 2, move: { room: "lobby", pocket: 0 } },
-      split("p0", 2, "vault", 10, 10),
-      split("p1", 2, "lobby", 6, 0),
-      split("p2", 2, "lobby", 6, 0),
-      { type: "abilityResolved", visibility: privateTo("p0"), player: "p0", round: 2, ability: { kind: "fenceSafe", amount: 5 } },
-      { type: "perkBought", visibility: privateTo("p2"), player: "p2", perk: "peek", cost: 1 },
-      { type: "perkUsed", visibility: privateTo("p2"), player: "p2", round: 2, perk: { kind: "peek", target: "p0", role: "mole" } },
-      { type: "meetingOpened", visibility: PUBLIC, meetingId: "m1", kind: "regular", act: 1 },
-      { type: "voteSealed", visibility: secretTo("p1"), player: "p1", vote: { kind: "skip" } } as GameEvent,
-      { type: "shakedownResolved", visibility: PUBLIC, meetingId: "m1", target: "p0", stashRevealed: 9, safeRevealed: 5, taken: 9, clean: false, compensation: 0 },
-    ];
-    const ranking = [rank("p0", "mole", 5, { safe: 5 }), rank("p2", "rookie", 2), rank("p1", "hacker", 0)];
-    const s = revealSummary(log, success(ranking), TABLES);
-    expect(s.rounds.map((r) => r.round)).toEqual([0, 1, 2]);
-    expect(s.rounds[0]?.items).toEqual([{ kind: "event", event: log[3] }]);
-    expect(s.rounds[1]?.moves).toEqual([
-      { player: "p0", room: "vault", loot: 10, toHaul: 6, toStash: 4, missed: false, alibi: "lobby" },
-      { player: "p1", room: "lobby", loot: 6, toHaul: 6, toStash: 0, missed: false, alibi: null },
-      { player: "p2", room: "security", loot: 0, toHaul: 0, toStash: 0, missed: false, alibi: null },
-    ]);
-    expect(s.rounds[2]?.moves.find((m) => m.player === "p2")?.missed).toBe(true);
-    expect(s.rounds[1]?.items.map((i) => i.kind)).toEqual(["event", "token"]);
-    expect(s.rounds[1]?.resolved).toEqual({ haulDelta: 12, haul: 12, heatDelta: 5, heat: 25 });
-    expect(s.rounds[2]?.items.map((i) => (i.kind === "event" ? i.event.type : i.kind))).toEqual([
-      "abilityResolved",
-      "perkBought",
-      "perkUsed",
-      "shakedownResolved",
-    ]);
-    // Stash with the safe: p0 4, then 14 (the Fence safe moves nothing out), then shaken down for 9.
-    expect(s.rounds[1]?.stashes).toEqual({ p0: 4, p1: 0, p2: 0 });
-    expect(s.rounds[2]?.stashes).toEqual({ p0: 5, p1: 0, p2: 0 });
-    expect(s.seats.find((x) => x.player === "p2")).toMatchObject({ tokens: ["checkpointMade"], perksBought: ["peek"], perksUsed: 1 });
-  });
-
   it("follows a Double-cross swap: dealt role, end role, and its winsOn (design §10)", () => {
     const log: GameEvent[] = [
       dealt("p0", "mole"),
@@ -199,5 +124,4 @@ describe("reveal summary leaks nothing — design §13, §11.2, §17.2", () => {
     const state = createGame(cfg);
     for (const p of state.playerOrder) expect(viewFor(state, p).reveal).toBeNull();
   });
-
 });

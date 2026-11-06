@@ -2,8 +2,7 @@
 // truth in seeded whole bot games (design §13; extension.md "Winning and
 // losing", "Tokens and the perk shop", "Police activity", "Situations",
 // owner ruling 5). Truth comes from folding the full log with the reducer
-// (police queue, Power cut, stashes) and from re-closing meetings without a
-// Blackmailer's steal, not from the reveal's own heuristics.
+// (police queue, Power cut, stashes), not from the reveal's own heuristics.
 import { describe, expect, it } from "vitest";
 import { ROLES, type PerkId, type RoleId } from "@skimjob/content";
 import {
@@ -92,18 +91,6 @@ function play(c: GameConfig, absent: readonly PlayerId[] = []): GameState {
   return state;
 }
 
-/** Whether removing `blackmailer`'s right guesses changes the meeting's shakedown: re-close it without them. */
-function decidedTruth(before: GameState, meetingId: string, blackmailer: PlayerId, closed: Extract<GameEvent, { type: "meetingClosed" }>): boolean {
-  const log = before.log.filter((e) => !(e.type === "abilityResolved" && e.player === blackmailer && e.ability.kind === "blackmail"));
-  const r = handleCommand({ ...before, log }, { type: "advance", deadline: { kind: "closeMeeting", meetingId } });
-  if (!r.ok) throw new Error(r.reason);
-  const again = r.state.log.find((e, i) => i >= log.length && e.type === "meetingClosed");
-  if (again?.type !== "meetingClosed") throw new Error("no meetingClosed");
-  const a = closed.result;
-  const b = again.result;
-  return a.kind === "shakedown" && (b.kind !== "shakedown" || b.target !== a.target);
-}
-
 type Coverage = Set<string>;
 
 /** Checks the summary every viewer gets against the truth; adds what the game exercised to `cov`. */
@@ -152,9 +139,8 @@ function audit(state: GameState, cov: Coverage): RevealSummary {
     const p = state.players[seat.player]!;
     expect(seat.place).toBe(i + 1);
     expect(seat.score).toBe(r.score);
-    expect(seat.stash).toBe(p.stash + p.safe);
+    expect(seat.stash).toBe(p.stash);
     expect(seat.stash).toBe(r.stash);
-    expect(seat.safe).toBe(p.safe);
     expect(seat.role).toBe(p.role);
     expect(seat.winner).toBe(outcome.winners.includes(seat.player));
     expect(seat.topGroup).toBe(top.includes(seat.player));
@@ -173,10 +159,7 @@ function audit(state: GameState, cov: Coverage): RevealSummary {
   const offlineTruth: { round: number; watcher: PlayerId; room: string; cause: string; hackers: PlayerId[] }[] = [];
   let loops = new Map<string, PlayerId[]>();
   const stashAt = new Map<number, Record<PlayerId, number>>();
-  const snap = () => Object.fromEntries(state.playerOrder.map((p) => [p, s.players[p]!.stash + s.players[p]!.safe]));
-  const stealTruth: { meetingId: string; blackmailer: PlayerId; victim: PlayerId; decided: boolean }[] = [];
-  let pending: [PlayerId, PlayerId][] = [];
-  let open: { meetingId: string; steals: [PlayerId, PlayerId][] } | null = null;
+  const snap = () => Object.fromEntries(state.playerOrder.map((p) => [p, s.players[p]!.stash]));
   for (const e of state.log) {
     switch (e.type) {
       case "roundStarted":
@@ -202,7 +185,6 @@ function audit(state: GameState, cov: Coverage): RevealSummary {
       }
       case "abilityResolved":
         if (e.ability.kind === "loopCameras") loops.set(e.ability.room, [...(loops.get(e.ability.room) ?? []), e.player]);
-        if (e.ability.kind === "blackmail" && e.ability.correct) pending.push([e.ability.target, e.player]);
         break;
       case "roomWatched":
         if (e.offline) {
@@ -212,19 +194,6 @@ function audit(state: GameState, cov: Coverage): RevealSummary {
           if (!cut) expect(e.source).toBe("security");
         }
         break;
-      case "meetingOpened":
-        open = { meetingId: e.meetingId, steals: pending };
-        pending = [];
-        break;
-      case "meetingClosed":
-        if (open && open.meetingId === e.meetingId) {
-          for (const [victim, blackmailer] of open.steals) {
-            const decided = decidedTruth(s, e.meetingId, blackmailer, e);
-            stealTruth.push({ meetingId: e.meetingId, blackmailer, victim, decided });
-            cov.add(decided ? "stealDecided" : "stealNotDecided");
-          }
-        }
-        break;
       default:
         break;
     }
@@ -232,7 +201,7 @@ function audit(state: GameState, cov: Coverage): RevealSummary {
   }
   stashAt.set(round, snap());
 
-  // Stash over time: each round's sheet ends at the reducer's stash (+ safe) when the next round starts.
+  // Stash over time: each round's sheet ends at the reducer's stash when the next round starts.
   for (const r of summary.rounds) if (r.round > 0) expect(r.stashes, `stash after round ${r.round}`).toEqual(stashAt.get(r.round));
   expect(summary.rounds.filter((r) => r.round > 0).map((r) => r.round)).toEqual([...stashAt.keys()]);
 
@@ -273,17 +242,6 @@ function audit(state: GameState, cov: Coverage): RevealSummary {
   expect(offline).toEqual(offlineTruth);
   for (const o of offlineTruth) cov.add(`offline:${o.cause}`);
 
-  // Forged sightings and the Forger's uses are all shown.
-  expect(eventItems("sightingForged")).toEqual(state.log.filter((e) => e.type === "sightingForged"));
-  if (state.log.some((e) => e.type === "sightingForged")) cov.add("forged");
-
-  // Blackmailer: every steal, at its meeting, and "decided" per ruling 5 (re-closed without it).
-  const steals = has((i) => i.kind === "voteStolen").map((x) => {
-    const v = x.item as Extract<RevealItem, { kind: "voteStolen" }>;
-    return { meetingId: v.meetingId, blackmailer: v.blackmailer, victim: v.victim, decided: v.decided };
-  });
-  expect(steals).toEqual(stealTruth);
-
   // Real moves: every split, with its alibi and missed flag.
   const splits = state.log.filter((e) => e.type === "lootSplit");
   const moves = summary.rounds.flatMap((r) => r.moves.map((m) => ({ ...m, round: r.round })));
@@ -304,9 +262,7 @@ const SEEDS: readonly (readonly [number, string])[] = [
   [5, "qa55-5-3"], // a tip-off lands on a patrol's moment
   [5, "qa55-5-18"], // a Hacker loop hides a pocketer
   [5, "qa55-5-20"], // a Hacker loop in a Power cut round
-  [8, "qa55-8-10"], // forged sightings
-  [8, "qa55-8-6"], // a framed player shaken down clean (re-swept after the R6 balance numbers, #51)
-  [8, "qa55-8-11"], // a stolen vote decides a shakedown
+  [8, "qa55-8-6"],
   [12, "qa55-12-6"],
   [12, "qa55-12-23"],
 ];
@@ -323,12 +279,8 @@ const MUST = [
   "loopAndPowerCut",
   "perkBought",
   "perkUsed",
-  "forged",
-  "token:forgedShakenClean",
   "token:tipOffLanded",
   "token:loopHidPocketer",
-  "stealDecided",
-  "stealNotDecided",
 ];
 
 describe("QA #55 reveal summary vs the engine's truth — design §13", () => {

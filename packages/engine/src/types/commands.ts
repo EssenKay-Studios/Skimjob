@@ -14,20 +14,8 @@ export type AbilityUse =
    * `extraRooms` (content) distinct rooms in play.
    */
   | { readonly kind: "lookout"; readonly rooms: readonly RoomId[] }
-  /**
-   * Fence: move loot from stash into the hidden safe after this round's split.
-   * Submitted: 1 to what is left of the per-act cap (content). Resolved
-   * (`abilityResolved`): what actually moved, capped by the stash.
-   */
-  | { readonly kind: "fenceSafe"; readonly amount: number }
   /** Hacker: Security shows `room` as empty this round. Once per act (content). design §8 */
-  | { readonly kind: "loopCameras"; readonly room: RoomId }
-  /** Blackmailer: guess `target`'s role; if right, steal their vote at the next meeting. Once per act (content). design §8 (v2 §2) */
-  | { readonly kind: "blackmail"; readonly target: PlayerId; readonly role: RoleId }
-  /** Forger: `target` shows in `room` on this round's watch feeds of that room. Once per act (content). design §8 (v2 §2) */
-  | { readonly kind: "forge"; readonly target: PlayerId; readonly room: RoomId }
-  /** Embezzler: take the role's `take` (content) from the Haul after this round's splits. Once per stretch (content). design §8 (v2 §2) */
-  | { readonly kind: "embezzle" };
+  | { readonly kind: "loopCameras"; readonly room: RoomId };
 
 /**
  * Spending a perk token (design §8.3, docs/roles-v2.md §1), with `useAbility`.
@@ -51,13 +39,8 @@ export type PerkSpend =
   /** Not a spend: choose which of your Rig's cards flips next; changeable until that round starts. */
   | { readonly kind: "rigPick"; readonly card: EventId };
 
-/**
- * Role powers and perks used outside a move, with `useAbility`. design §17.2
- * Muscle: cancel the shakedown that is pending (between the vote passing and
- * the shakedown being applied). Once per game (content). design §8, §11.3
- */
+/** Role powers and perks used outside a move, with `useAbility`. design §17.2 */
 export type InstantAbility =
-  | { readonly kind: "cancelShakedown" }
   /** Auditor: the latest resolved round's shortfall for `room`. Once per act (content). design §8 (v2 §2) */
   | { readonly kind: "audit"; readonly room: RoomId }
   /** Detective: is `target`'s stash at or above the clean threshold? Once per act (content). design §8 (v2 §2) */
@@ -112,7 +95,7 @@ export type PlayerCommand =
   | { readonly type: "castVote"; readonly player: PlayerId; readonly vote: VoteChoice }
   /** Leave a vote in advance for the next meeting you might miss. design §11.2 */
   | { readonly type: "sealVote"; readonly player: PlayerId; readonly vote: VoteChoice }
-  /** A role power used outside a move (Muscle), or a perk spent. design §17.2, §8.3 */
+  /** A role power used outside a move (Auditor, Detective, Priest, Mole), or a perk spent. design §17.2, §8.3 */
   | { readonly type: "useAbility"; readonly player: PlayerId; readonly ability: InstantAbility }
   /** Accept (or decline) this round's Double-cross offer; the last answer before the deadline counts. design §10 */
   | { readonly type: "answerDoubleCross"; readonly player: PlayerId; readonly accept: boolean }
@@ -144,7 +127,7 @@ export type Deadline =
   | { readonly kind: "closeMeeting"; readonly meetingId: string }
   /**
    * The window after a shakedown vote passed (`shakedownPending`) has ended:
-   * apply the shakedown, unless the Muscle cancelled it, then go on as after
+   * apply the shakedown, unless a Shield cancelled it, then go on as after
    * the meeting (checkpoint, next act or final check). design §8, §11.3, §11.4
    */
   | { readonly kind: "resolveShakedown"; readonly meetingId: string }

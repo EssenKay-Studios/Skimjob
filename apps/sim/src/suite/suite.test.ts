@@ -166,24 +166,20 @@ describe("role parity — extension.md Build notes \"Sim\"", () => {
     expect(parityOf({ a: seats(400, 0.2) }).check.verdict).toBe("n/a");
   });
   it("split gate (PM 3 Nov): the spread over team roles only, ★ roles in STAR_BAND of the team roles' pooled ratio — docs/balance/r6-balance.md", () => {
-    // auditor and cleaner win only a success; mole, fence and embezzler are ★ (winsOn).
+    // auditor and fixer win only a success; the mole is ★ (winsOn).
     const split = splitParityOf({
       auditor: seats(40000, 0.12),
-      cleaner: seats(40000, 0.13),
+      fixer: seats(40000, 0.13),
       mole: seats(40000, 0.2),
-      fence: seats(40000, 0.3),
-      embezzler: seats(40000, 0.1),
     });
     expect(split.team.spread).toBe(0.05);
     expect(split.team.check).toEqual({ verdict: "pass", sure: true });
     expect(split.team.average?.ratio).toBe(0.625);
     const star = Object.fromEntries(split.stars.map((x) => [x.role, x]));
     expect(star.mole).toMatchObject({ relative: 1.6, check: { verdict: "pass", sure: true } });
-    expect(star.fence).toMatchObject({ relative: 2.4, check: { verdict: "fail", sure: true } });
-    expect(star.embezzler).toMatchObject({ relative: 0.8, check: { verdict: "fail", sure: true } });
   });
   it("the team-role spread is gated at TEAM_PARITY_MAX_SPREAD (0.20, PM provisional), not the 0.10 target — docs/balance/r6-balance.md", () => {
-    const team = { auditor: seats(40000, 0.12), cleaner: seats(40000, 0.15) };
+    const team = { auditor: seats(40000, 0.12), fixer: seats(40000, 0.15) };
     expect(splitParityOf(team).team).toMatchObject({ spread: 0.15, check: { verdict: "pass", sure: true } });
     expect(parityOf(team).check).toEqual({ verdict: "fail", sure: true });
   });

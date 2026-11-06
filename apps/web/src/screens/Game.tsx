@@ -36,7 +36,6 @@ import { boardScene, seatLooks } from "../game/board";
 import { cardName, describeEvent, roleName, roomName } from "../game/describeEvent";
 import {
   alibiState,
-  canPocket,
   defaultRoom,
   jobOf,
   justMissed,
@@ -402,9 +401,8 @@ function MovePanel({ view, round, timers, offset, send, pick }: BoardProps & { r
   const [busy, setBusy] = useState(false);
   const countdown = useCountdown(timers, `round:${round}`, offset);
   const picked = options.find((o) => o.id === room) ?? null;
-  const pocketOk = canPocket(view);
   const loot = picked?.loot ?? 0;
-  const p = pocketOk ? Math.min(pocket, loot) : 0;
+  const p = Math.min(pocket, loot);
   const missed = justMissed(view);
   const changed = !mine || mine.room !== room || mine.pocket !== p || (mine.watch ?? null) !== (picked?.watcher ? watch : null);
   const ready = picked !== null && !picked.closed && (!picked.watcher || watch !== null);
@@ -460,13 +458,7 @@ function MovePanel({ view, round, timers, offset, send, pick }: BoardProps & { r
           </div>
         </div>
       )}
-      {picked && loot > 0 && (
-        pocketOk ? (
-          <SplitSlider id="split" loot={loot} pocket={p} onChange={setPocket} />
-        ) : (
-          <p className="meta">As the {roleName(view.me.role)} you hand everything in.</p>
-        )
-      )}
+      {picked && loot > 0 && <SplitSlider id="split" loot={loot} pocket={p} onChange={setPocket} />}
       <div className="move__foot">
         <Button variant="primary" seed="lock" icon={<Play />} disabled={!ready || busy || !changed} onClick={lock} className="move__lock">
           {mine && !changed ? "Locked in" : mine ? "Update move" : "Lock it in"}
@@ -561,7 +553,6 @@ export function GameOver({ view }: { view: PlayerView }) {
                 <b className="num">{r.score}</b>
                 <span className="meta">
                   stash {r.stash}
-                  {r.safe > 0 ? ` (safe ${r.safe})` : ""}
                 </span>
               </span>
               {winner && <Chip on>Winner</Chip>}

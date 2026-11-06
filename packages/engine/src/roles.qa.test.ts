@@ -1,11 +1,9 @@
-// QA (PR #12): info and vote roles — Hacker, Smooth talker, Muscle, Blackmailer,
-// Snitch. design §8, §11.2, §11.3
+// QA (PR #12): info and vote roles — Hacker, Smooth talker. design §8, §11.2, §11.3
 //
 // 1. Counterfactual leak pairs (the view.qa.test.ts approach, with these roles
 //    dealt): games A and B run the same commands from the same seed, except for
-//    one hidden difference (a Muscle or Smooth talker dealt or not, a Muscle
-//    cancel, a camera loop, a right vs wrong blackmail guess, another Snitch
-//    target). After every step every other player's view must be identical
+//    one hidden difference (a Smooth talker dealt or not, a camera loop).
+//    After every step every other player's view must be identical
 //    until the rules make a difference public, and every other player's
 //    rejection reasons for role commands must be the same in both games.
 // 2. Edge cases per role: limits, wrong phase / wrong role, vote maths at ties
@@ -35,18 +33,11 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
   };
 }
 
-/** A new game with seat i dealt roles[i] (Rookie if missing) and the given Snitch targets. */
-function game(players: number, roles: string[], extra: Partial<GameConfig> = {}, snitchTargets: Record<PlayerId, PlayerId> = {}): GameState {
+/** A new game with seat i dealt roles[i] (Rookie if missing). */
+function game(players: number, roles: string[], extra: Partial<GameConfig> = {}): GameState {
   const cfg = config(players, extra);
   let seat = 0;
-  const log = setupEvents(cfg)
-    .filter((e) => e.type !== "snitchTargetAssigned")
-    .flatMap((e): GameEvent[] => {
-      if (e.type !== "roleDealt") return [e];
-      const dealt: GameEvent = { ...e, role: roles[seat++] ?? "rookie" };
-      const target = snitchTargets[e.player];
-      return target ? [dealt, { type: "snitchTargetAssigned", visibility: privateTo(e.player), player: e.player, target }] : [dealt];
-    });
+  const log = setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: roles[seat++] ?? "rookie" } : e));
   return replay(cfg, log);
 }
 
@@ -76,7 +67,6 @@ const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", r
 const vote = (player: string, target: string | null) => ({ type: "castVote", player, vote: target === null ? { kind: "skip" } : { kind: "shakedown", target } });
 const CLOSE = (s: GameState) => ({ type: "advance", deadline: { kind: "closeMeeting", meetingId: s.meeting?.id } });
 const RESOLVE = (s: GameState) => ({ type: "advance", deadline: { kind: "resolveShakedown", meetingId: s.pendingShakedown?.meetingId } });
-const cancel = (player: string) => ({ type: "useAbility", player, ability: { kind: "cancelShakedown" } });
 const emergency = (s: GameState, caller: string): GameState =>
   run(s, { type: "callEmergency", player: caller }, { type: "advance", deadline: { kind: "openMeeting", meetingId: `emergency-${caller}` } });
 const actMeeting = (s: GameState, act: number): GameState =>
@@ -86,14 +76,14 @@ const closeAll = (s: GameState): GameState => {
   const closed = run(s, CLOSE);
   return closed.phase.kind === "shakedownPending" ? run(closed, RESOLVE) : closed;
 };
-const INFO_VOTE_ROLES = ["hacker", "smoothTalker", "muscle", "blackmailer", "snitch"] as const;
+const INFO_VOTE_ROLES = ["hacker", "smoothTalker"] as const;
 // The R6a start value (5 an act), so a hand-worked safe of 4 fits one act; content tunes it (docs/balance/r6-balance.md).
-const FENCE_5: Partial<GameConfig> = { contentOverrides: { roles: { fence: { perAct: 5 } } } };
-const NO_WINDOW = { rolePool: [...STARTER_ROLES, ...INFO_VOTE_ROLES.filter((r) => r !== "muscle")] };
+const FENCE_5: Partial<GameConfig> = { contentOverrides: { roles: { hacker: { perAct: 5 } } } };
+const NO_WINDOW = { rolePool: [...STARTER_ROLES, ...INFO_VOTE_ROLES.filter((r) => r !== "smoothTalker")] };
 
 // ------------------------------------------------------------------ 1. counterfactual leak pairs
 
-type Kind = "muscleDealt" | "muscleCancel" | "smoothDealt" | "hackerLoop" | "blackmail" | "snitchTarget";
+type Kind = "smoothDealt" | "hackerLoop";
 const LOOT: Record<string, number> = { vault: 6, office: 4, lobby: 2, depositBoxes: 5, tellerLine: 3, managersOffice: 3 };
 
 function mulberry32(seed: number): () => number {
@@ -146,8 +136,7 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
   const int = (k: number): number => Math.floor(rand() * k);
   const pick = <T>(xs: readonly T[]): T => xs[int(xs.length)] as T;
   const hacking = kind === "hackerLoop";
-  const blackmailing = kind === "blackmail";
-  const pool = hacking || blackmailing || n <= 5 ? [...INFO_VOTE_ROLES] : [];
+  const pool = hacking || n <= 5 ? [...INFO_VOTE_ROLES] : [];
   // extension.md "Host settings": the counterfactual holds where the role list doesn't name the dealt
   // roles ("Possible"); with "Exact" the dealt roles are public by design.
   const cfg = config(n, { seed: `rqa-${seed}`, voteVisibility: mode, rolePool: pool, deck: "everything", roleList: "possible" });
@@ -164,52 +153,28 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
 
   // Setup differences.
   let B = A;
-  if (kind === "muscleDealt" || kind === "smoothDealt") {
-    const x = holder(kind === "muscleDealt" ? "muscle" : "smoothTalker");
+  if (kind === "smoothDealt") {
+    const x = holder("smoothTalker");
     if (x) {
       B = withRole(A, x, "rookie");
       involved.add(x);
       applied = true;
     }
   }
-  if (kind === "snitchTarget") {
-    const x = holder("snitch");
-    const old = x ? A.players[x]?.roleState.target : null;
-    const other = ids.filter((id) => id !== x && id !== old);
-    if (x && other.length > 0) {
-      const target = pick(other);
-      const p = B.players[x] as PlayerState;
-      B = {
-        ...B,
-        players: { ...B.players, [x]: { ...p, roleState: { ...p.roleState, target } } },
-        log: B.log.map((e) => (e.type === "snitchTargetAssigned" && e.player === x ? { ...e, target } : e)),
-      };
-      involved.add(x);
-      applied = true;
-    }
-  }
-
   const allowed = (e: GameEvent | undefined): boolean => {
     if (!e) return false;
     if (e.type === "gameEnded") return true;
-    if (e.type === "shakedownResolved" || e.type === "shakedownCancelled") return kind === "muscleCancel" || involved.has(e.target) || tainted.has(e.target);
-    // A ballot's weight (Smooth Talker; a Snitch's earned +1; a vote the Blackmailer stole, v2 §2) shows only in a result the plain tally can't explain.
-    if (e.type === "meetingClosed") return kind === "smoothDealt" || kind === "snitchTarget" || kind === "blackmail";
+    if (e.type === "shakedownResolved" || e.type === "shakedownCancelled") return involved.has(e.target) || tainted.has(e.target);
+    // A ballot's weight (Smooth Talker) shows only in a result the plain tally can't explain.
+    if (e.type === "meetingClosed") return kind === "smoothDealt";
     return false;
   };
   const over = (): boolean => A.phase.kind === "ended" || B.phase.kind === "ended" || diverged !== null;
 
   // Rejections a player sees for role commands must depend only on what they may know.
   const probes = (s: GameState, y: PlayerId): string[] => {
-    const next = ids[(ids.indexOf(y) + 1) % ids.length] as PlayerId;
     const room = s.rooms[0] as string;
-    return [
-      { type: "useAbility", player: y, ability: { kind: "cancelShakedown" } },
-      { type: "useAbility", player: y, ability: { kind: "loopCameras" } },
-      mv(y, room, 0, { ability: { kind: "loopCameras", room } }),
-      mv(y, room, 0, { ability: { kind: "blackmail", target: next, role: "muscle" } }),
-      mv(y, room, 0, { ability: { kind: "cancelShakedown" } }),
-    ].map((c) => {
+    return [{ type: "useAbility", player: y, ability: { kind: "loopCameras" } }, mv(y, room, 0, { ability: { kind: "loopCameras", room } })].map((c) => {
       const r = handleThroughAlibis(s, c);
       return r.ok ? "ok" : r.reason;
     });
@@ -259,22 +224,15 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
   };
 
   const changeRound = 1 + int(8);
-  let cancelled = false;
 
   const move = (id: PlayerId, round: number): Record<string, unknown> => {
     const role = A.players[id]?.role;
     const room = pick(A.rooms);
     const loot = LOOT[room] ?? 0;
-    const m: Record<string, unknown> = { room, pocket: role !== "insideMan" && loot > 0 && rand() < 0.6 ? int(loot + 1) : 0 };
+    const m: Record<string, unknown> = { room, pocket: loot > 0 && rand() < 0.6 ? int(loot + 1) : 0 };
     if (room === "security") m.watch = pick(A.rooms);
     // Baseline power use, identical in both games (not for the kind that changes it).
     if (role === "hacker" && kind !== "hackerLoop" && round % 3 === 1 && rand() < 0.7) m.ability = { kind: "loopCameras", room: pick(A.rooms) };
-    if (role === "blackmailer" && kind !== "blackmail" && round % 3 === 2 && rand() < 0.7) {
-      const target = pick(ids.filter((p) => p !== id));
-      m.ability = { kind: "blackmail", target, role: pick(["rookie", "fence", "hacker", "snitch", "muscle", "smoothTalker"]) };
-      // A guess at a player whose role or stash differs can legitimately turn out differently.
-      if (involved.has(target) || tainted.has(target)) tainted.add(id);
-    }
     return m;
   };
 
@@ -296,25 +254,6 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
         for (const y of ids) if (lastMove(y).room === "security" && lastMove(y).watch === room) tainted.add(y);
       }
     }
-    if (round === changeRound && kind === "blackmail") {
-      const bm = holder("blackmailer");
-      const t = bm ? pick(ids.filter((p) => p !== bm)) : undefined;
-      if (bm && t) {
-        const real = A.players[t]?.role as string;
-        const wrong = real === "rookie" ? "fence" : "rookie";
-        applied = true;
-        involved.add(bm).add(t);
-        const base = lastMove(bm);
-        planA.set(bm, [{ type: "submitMove", player: bm, move: { ...base, ability: { kind: "blackmail", target: t, role: wrong } } }]);
-        planB.set(bm, [{ type: "submitMove", player: bm, move: { ...base, ability: { kind: "blackmail", target: t, role: real } } }]);
-        // The target pockets something (v1 took loot; v2 §2 steals its vote at the next meeting instead).
-        if (real !== "insideMan") {
-          const tm = [{ type: "submitMove", player: t, move: { room: "office", pocket: 3 } }];
-          planA.set(t, tm);
-          planB.set(t, tm);
-        }
-      }
-    }
     for (const id of ids) step(planA.get(id) ?? [], planB.get(id) ?? []);
   }
 
@@ -328,13 +267,6 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
     }
     step([{ type: "advance", deadline: { kind: "closeMeeting", meetingId: A.meeting?.id } }]);
     if (over() || A.phase.kind !== "shakedownPending") return;
-    const m = holder("muscle");
-    if (kind === "muscleCancel" && m && !cancelled) {
-      cancelled = true;
-      applied = true;
-      involved.add(m);
-      step([], [cancel(m)]); // nobody else's view may change yet
-    }
     step([{ type: "advance", deadline: { kind: "resolveShakedown", meetingId: A.pendingShakedown?.meetingId } }]);
   }
 
@@ -356,8 +288,8 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
   return { applied, effective, diverged, compared, a: A, commands };
 }
 
-const KINDS: readonly Kind[] = ["muscleDealt", "muscleCancel", "smoothDealt", "hackerLoop", "blackmail", "snitchTarget"];
-// From 5: the Muscle and Smooth Talker are dealt only in crews of 5 or more (role deck v2 §3).
+const KINDS: readonly Kind[] = ["smoothDealt", "hackerLoop"];
+// From 5: the Smooth Talker is dealt only in crews of 5 or more (role deck v2 §3).
 const COUNTS = [5, 7, 9, 12];
 /** Seeds per player count; raise locally (QA_SEEDS=10) for a wider sweep. */
 const SEEDS = Number(process.env.QA_SEEDS ?? 1);
@@ -373,28 +305,23 @@ describe("QA: one hidden role difference never changes another player's view or 
         if (!r.applied) continue;
         applied++;
         compared += r.compared;
-        // The change reached the involved player (a Muscle or Smooth talker who never acts may not see one until the end).
-        if (kind !== "muscleDealt" && kind !== "smoothDealt") expect(r.effective, `${kind} ${n}p seed ${s}`).toBe(true);
+        // The change reached the involved player (a Smooth talker who never acts may not see one until the end).
+        if (kind !== "smoothDealt") expect(r.effective, `${kind} ${n}p seed ${s}`).toBe(true);
         if (r.diverged) firstPublic.add(r.diverged);
       }
     });
     expect(applied).toBeGreaterThanOrEqual(2 * SEEDS);
     expect(compared).toBeGreaterThan(100 * SEEDS);
-    // A dealt-but-unused Muscle or a loop only ever shows at the end, or in the shakedown of
-    // someone whose stash a Blackmailer's guess changed. No meeting result or window differs.
-    // The harness sees the cancel once the window ends (and only then).
-    if (kind === "muscleCancel") expect([...firstPublic].filter((t) => t !== "shakedownResolved" && t !== "shakedownCancelled")).toEqual([]);
-    if (kind === "muscleCancel") expect(firstPublic.size).toBeGreaterThan(0);
-    if (kind === "muscleDealt" || kind === "hackerLoop") for (const t of firstPublic) expect(["gameEnded", "shakedownResolved"]).toContain(t);
+    // A loop only ever shows at the end, or in a shakedown. No meeting result or window differs.
+    if (kind === "hackerLoop") for (const t of firstPublic) expect(["gameEnded", "shakedownResolved"]).toContain(t);
   }, 60_000);
 
   it("determinism: same seed + same commands → identical event log, and replay rebuilds the state", () => {
     for (const n of [5, 12]) {
-      const r = runPair("muscleCancel", n, "hiddenThenRevealed", 4242 + n);
+      const r = runPair("hackerLoop", n, "hiddenThenRevealed", 4242 + n);
       const again = r.commands.reduce<GameState>((s, c) => run(s, c), createGame(r.a.config));
       expect(again.log).toEqual(r.a.log);
       expect(replay(r.a.config, r.a.log)).toEqual(r.a);
-      expect(r.a.log.some((e) => e.type === "shakedownPending")).toBe(true);
     }
   });
 });
@@ -402,7 +329,7 @@ describe("QA: one hidden role difference never changes another player's view or 
 // ------------------------------------------------------------------ 2. edges per role
 
 describe("QA Smooth talker: majority counts weight, quorum counts voters, in every mode — design §8, §11.2", () => {
-  // Pool without the Muscle, so meetings close straight to their result.
+  // Meetings close straight to their result unless the shop holds a Shield.
   const result = (players: number, roles: string[], ballots: [string, string | null][], mode: VoteVisibility, extra: Partial<GameConfig> = {}) => {
     const caller = ballots[0]?.[0] ?? "p0";
     let s = emergency(game(players, roles, { voteVisibility: mode, ...NO_WINDOW, ...extra }), caller);
@@ -441,162 +368,6 @@ describe("QA Smooth talker: majority counts weight, quorum counts voters, in eve
     expect(meetingResult(4, 2, 1, t({ p3: 2 }), 3)).toEqual({ kind: "shakedown", target: "p3" });
     expect(meetingResult(5, 2, 0, t({ p3: 4 }), 4)).toEqual({ kind: "noQuorum" });
     expect(meetingResult(5, 3, 2, t({ p3: 2 }), 4)).toEqual({ kind: "noMajority" });
-  });
-});
-
-describe("QA Muscle: window, limits, wrong phase — design §8, §11.3", () => {
-  const passed = (roles: string[], players = 3) => {
-    const s = run(game(players, roles), mv("p1", "vault", 6), ROUND);
-    return run(emergency(s, "p2"), vote("p0", "p1"), vote("p2", "p1"), CLOSE);
-  };
-
-  it("other players' views are identical through the window whether a Muscle is dealt or not", () => {
-    for (const other of ["rookie", "hacker"]) {
-      // extension.md "Host settings": with the "Possible" list the window opens either way.
-      const extra: Partial<GameConfig> = { roleList: "possible", rolePool: [...STARTER_ROLES, "muscle", "hacker"] };
-      let a = run(game(5, ["muscle"], extra), mv("p1", "vault", 6), ROUND);
-      let b = run(game(5, [other], extra), mv("p1", "vault", 6), ROUND);
-      for (const c of [{ type: "callEmergency", player: "p2" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: "emergency-p2" } }, vote("p0", "p1"), vote("p2", "p1"), vote("p3", "p1"), CLOSE, RESOLVE]) {
-        a = run(a, c);
-        b = run(b, c);
-        for (const y of ["p1", "p2", "p3"]) expect(JSON.stringify(viewFor(b, y))).toBe(JSON.stringify(viewFor(a, y)));
-      }
-      expect(a.players.p1?.stash).toBe(0);
-    }
-  });
-
-  it("wrong phase or wrong role: refused with no state change, and a non-Muscle's reason is the same whether a Muscle is dealt or has cancelled", () => {
-    const fresh = game(3, ["muscle"]);
-    expect(reason(fresh, cancel("p0"))).toMatch(/no shakedown is pending/);
-    const open = emergency(run(fresh, mv("p1", "vault", 6), ROUND), "p2");
-    expect(reason(open, cancel("p0"))).toMatch(/no shakedown is pending/); // vote window still open
-    expect(reason(open, mv("p0", "lobby", 0, { ability: { kind: "cancelShakedown" } }))).toMatch(/round is being planned/);
-    expect(reason(fresh, mv("p0", "lobby", 0, { ability: { kind: "cancelShakedown" } }))).toMatch(/isn't used in a move/);
-    const pending = passed(["muscle"]);
-    const r = [reason(pending, cancel("p2")), reason(passed(["rookie"]), cancel("p2")), reason(run(pending, cancel("p0")), cancel("p2"))];
-    expect(new Set(r).size).toBe(1);
-    expect(r[0]).not.toMatch(/muscle|cancelled/i);
-    // Not a player, or a malformed ability.
-    expect(reason(pending, { type: "useAbility", player: "p9", ability: { kind: "cancelShakedown" } })).toMatch(/p9|player/);
-    expect(reason(pending, { type: "useAbility", player: "p0" })).toMatch(/object with a kind/);
-  });
-
-  it("the window's deadline is named and single-use", () => {
-    const s = passed(["muscle"]);
-    const after = run(s, RESOLVE);
-    expect(reason(after, RESOLVE(s))).toMatch(/no shakedown is pending/);
-    expect(reason(s, { type: "advance", deadline: { kind: "resolveShakedown" } })).toMatch(/no shakedown is pending/);
-    expect(reason(s, { type: "advance", deadline: { kind: "openMeeting", meetingId: "act-1" } })).toMatch(/pending/);
-  });
-
-  it("an emergency window mid-round returns to planning with submitted moves intact", () => {
-    let s = run(game(3, ["muscle"]), mv("p1", "vault", 6), ROUND, mv("p0", "office", 2));
-    s = run(emergency(s, "p2"), vote("p0", "p1"), vote("p2", "p1"), CLOSE);
-    expect(s.phase.kind).toBe("shakedownPending");
-    s = run(s, RESOLVE);
-    expect(s.phase).toEqual({ kind: "planning", round: 2 });
-    expect(s.moves.p0).toEqual({ room: "office", pocket: 2 });
-    s = run(s, ROUND);
-    expect(s.players.p0?.stash).toBe(2);
-  });
-
-  it("an emergency window after an act's last round returns to awaiting the act meeting", () => {
-    let s = run(game(3, ["muscle"]), mv("p1", "vault", 6), ROUND, ROUND, ROUND);
-    expect(s.phase.kind).toBe("awaitingMeeting");
-    s = run(emergency(s, "p2"), vote("p0", "p1"), vote("p2", "p1"), CLOSE, RESOLVE);
-    expect(s.phase).toEqual({ kind: "awaitingMeeting", act: 1 });
-    s = closeAll(actMeeting(s, 1));
-    expect(s.round).toBe(4);
-  });
-
-  it("a cancel in the final meeting's window: the target keeps the stash and the game ends after it", () => {
-    let s = game(3, ["muscle"]);
-    for (let act = 1; act <= 3; act++) {
-      for (let r = 0; r < 3; r++) s = run(s, mv("p1", "vault", act === 3 ? 6 : 0), mv("p2", "office"), mv("p0", "office"), ROUND);
-      s = actMeeting(s, act);
-      if (act === 3) s = run(s, vote("p0", "p1"), vote("p2", "p1"), CLOSE, cancel("p0"));
-      else s = closeAll(s);
-    }
-    expect(s.phase.kind).toBe("shakedownPending");
-    const end = run(s, RESOLVE);
-    expect(since(s, end).map((e) => e.type)).toEqual(["shakedownCancelled", "muscleNamed", "checkpointChecked", "gameEnded"]);
-    expect(end.phase.kind === "ended" && end.phase.outcome.ranking.find((e) => e.player === "p1")?.stash).toBe(18);
-  });
-});
-
-describe("QA Blackmailer: limits, wrong phase — design §8", () => {
-  const guess = (target: string, role: string) => mv("p0", "lobby", 0, { ability: { kind: "blackmail", target, role } });
-
-  it("only a resolved guess uses the act's turn: a guess replaced before the deadline doesn't count; the turn comes back next act", () => {
-    let s = run(game(3, ["blackmailer"]), guess("p1", "rookie"), mv("p0", "lobby"), ROUND);
-    expect(s.players.p0?.roleState.usedThisAct).toBe(0);
-    s = run(s, mv("p0", "lobby"), ROUND, guess("p1", "rookie"), ROUND); // round 3, last of act 1
-    expect(reason(s, guess("p2", "rookie"))).toMatch(/round is being planned/);
-    s = closeAll(actMeeting(s, 1));
-    expect(s.round).toBe(4);
-    expect(() => run(s, guess("p2", "rookie"))).not.toThrow();
-  });
-
-  it("the victim's event never names the Blackmailer", () => {
-    const s = run(game(3, ["blackmailer"]), guess("p1", "rookie"), mv("p1", "office", 4), ROUND);
-    const e = ofType(viewFor(s, "p1").caseFile.map((x) => x.event), "voteCompromised")[0];
-    expect(Object.keys(e ?? {}).sort()).toEqual(["player", "round", "type", "visibility"]);
-    expect(JSON.stringify(viewFor(s, "p2"))).not.toMatch(/blackmail/);
-  });
-});
-
-describe("QA Snitch: payout edges — design §8, §11.3", () => {
-  // extension.md "Tokens": the Snitch earns one private token, no extra vote.
-  const bonus = "targetShakenDirty";
-  const paid = (s: GameState) => ofType(s.log, "tokenEarned").filter((e) => e.player === "p0").map((e) => e.trigger);
-
-  it.each([
-    [6, true],
-    [5, false],
-  ])("act 2 emergency: target stash %i → paid %s (one line of 6)", (stash, pays) => {
-    let s = run(game(3, ["snitch"], NO_WINDOW, { p0: "p1" }), ROUND, ROUND, ROUND);
-    s = run(closeAll(actMeeting(s, 1)), mv("p1", "vault", stash), ROUND);
-    s = closeAll(run(emergency(s, "p2"), vote("p0", "p1"), vote("p2", "p1")));
-    expect(ofType(s.log, "shakedownResolved")[0]).toMatchObject({ stashRevealed: stash, clean: !pays });
-    expect(paid(s)).toEqual(pays ? [bonus] : []);
-  });
-
-  it("a Fence target's safe counts toward the clean check (owner answers, 1 Nov): stash 2 + safe 4 isn't clean, so the Snitch is paid", () => {
-    let s = run(game(3, ["snitch", "fence"], { ...NO_WINDOW, ...FENCE_5 }, { p0: "p1" }), mv("p1", "vault", 6, { ability: { kind: "fenceSafe", amount: 4 } }), ROUND);
-    s = closeAll(run(emergency(s, "p2"), vote("p0", "p1"), vote("p2", "p1")));
-    expect(ofType(s.log, "shakedownResolved")[0]).toMatchObject({ stashRevealed: 2, taken: 2, clean: false, compensation: 0 });
-    expect(s.players.p1).toMatchObject({ stash: 0, safe: 4 });
-    expect(paid(s)).toEqual([bonus]);
-  });
-
-  it("paid each time, and paid when the window ends (not when the vote closes)", () => {
-    let s = run(game(3, ["snitch", "rookie", "muscle"], {}, { p0: "p1" }), mv("p1", "vault", 6), ROUND);
-    s = run(emergency(s, "p2"), vote("p0", "p1"), vote("p2", "p1"), CLOSE);
-    expect(paid(s)).toEqual([]);
-    s = run(s, RESOLVE, mv("p1", "vault", 6), ROUND);
-    s = closeAll(run(emergency(s, "p1"), vote("p0", "p1"), vote("p2", "p1")));
-    expect(paid(s)).toEqual([bonus, bonus]);
-    expect(s.players.p0?.roleState.tokens).toBe(2);
-  });
-
-  it("a reward in the final meeting's window is granted; a cancel there grants nothing", () => {
-    const final = (cancelIt: boolean) => {
-      let s = game(3, ["snitch", "rookie", "muscle"], {}, { p0: "p1" });
-      for (let act = 1; act <= 3; act++) {
-        for (let r = 0; r < 3; r++) s = run(s, mv("p1", "vault", act === 3 ? 6 : 0), ROUND);
-        s = actMeeting(s, act);
-        if (act === 3) s = run(s, vote("p0", "p1"), vote("p2", "p1"), CLOSE, ...(cancelIt ? [cancel("p2")] : []), RESOLVE);
-        else s = closeAll(s);
-      }
-      return s.phase.kind === "ended" ? paid(s).length : "not ended";
-    };
-    expect([final(false), final(true)]).toEqual([1, 0]);
-  });
-
-  it("not paid when the Snitch is the one shaken down", () => {
-    let s = run(game(3, ["snitch"], NO_WINDOW, { p0: "p1" }), mv("p0", "vault", 6), ROUND);
-    s = closeAll(run(emergency(s, "p2"), vote("p1", "p0"), vote("p2", "p0")));
-    expect(paid(s)).toEqual([]);
   });
 });
 

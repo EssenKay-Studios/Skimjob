@@ -187,7 +187,7 @@ export function metrics(records: readonly GameRecord[]): Metrics {
     endedBeforeAct3: rate(records.filter((g) => g.endedAct < 3).length, records.length),
     checkpointsMissedPerGame: rate(records.reduce((s, g) => s + g.checkpointsMissed, 0), records.length),
     shakedowns: shakedownMetrics(records),
-    pocketing: groupWins(records, (p) => (p.canPocket ? pocketBand(p) : null)),
+    pocketing: groupWins(records, pocketBand),
     roles: groupWins(records, (p) => p.role),
     personalities: groupWins(records, (p) => p.personality),
     comeback: comebackMetric(records),
