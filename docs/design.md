@@ -279,9 +279,10 @@ A **police briefing** follows every raid, after that round's resolution. It vote
 
 *(Owner, 6 Nov.)* The crew shares an **emergency pool**: **1** emergency meeting per game for 3–6 players, **2** for 7–12 [tunable, content table by crew size]. It replaces any per-player allowance.
 - **Any player** may spend one from the pool, but only in the **result window**: after a round's result is shown (§4.2 step 7, and after any meeting held for that round) and before the next round's planning starts. Not during planning, a meeting or after the last round.
-- The emergency opens after a short notice set by the host (§9.4) and recharges nothing, and nothing refills the pool.
+- The emergency opens after a **notice** so players can get online: a server value per preset [tunable], not a host setting *(provisional, builder S1 fix)*. It recharges nothing, and nothing refills the pool.
+- A call **can't be withdrawn**, and the emergency stays spent even if its meeting misses the quorum or the vote passes nobody *(provisional, builder S1 fix)*.
 - **The caller is named** on the public ledger ("B called an emergency meeting"), like a vote, and the pool's count left is public *(provisional, builder S1 fix: a public act that spends a shared resource, so the crew can weigh it)*.
-- *Provisional (builder S1 fix):* the result window lasts a short time per preset [tunable] and is skipped when the pool is empty; only one emergency can be called per window.
+- *Provisional (builder S1 fix):* the result window lasts a short time per preset [tunable] and is skipped when the pool is empty; only one emergency can be called per window. No round clock runs during it: the next round's deadline starts when the window closes (or when the called meeting closes).
 
 ### 9.4 Scheduling and pausing
 
@@ -312,7 +313,7 @@ A **police briefing** follows every raid, after that round's resolution. It vote
 
 ### 9.7 Shakedown protection
 
-*(Owner, 6 Nov.)* Once a shakedown **passes** against a player, bailed or not, that player is **protected**: no further shakedown can target them until the **next regular meeting** (§9.1) opens, where they can be voted on again. Police briefings and emergency meetings don't lift it. The protection is public, shown on the player's seat and in the ledger ("protected until the next regular meeting"). It limits only shakedowns: the Priest's absolve (§11.1) still works.
+*(Owner, 6 Nov.)* Once a shakedown **passes** against a player, bailed or not, that player is **protected**: no further shakedown can target them until the **next regular meeting** (§9.1) opens, where they can be voted on again. Police briefings and emergency meetings don't lift it. The protection is public, shown on the player's seat and in the ledger ("protected until the next regular meeting"). It limits only shakedowns: the Priest's absolve (§11.1) still works. A player protected after the last regular meeting (once the bank is at or below one-third) stays protected for the rest of the game.
 
 ---
 
@@ -362,11 +363,22 @@ Every role has a one-sentence power, a "How you win" line and a "How to spot it"
 - **Every player gets a role** *(owner, 6 Nov)*: the roles dealt equal the number of players (3–12), with the counts by crew size read from a content table (§19 seam 8). There is no plain crew.
 - **Any role may repeat:** up to 10 players get 10 distinct roles at most (one each); at 11–12 players the extra seats get a repeated role, any role (the Mole and Fixer included), with **at most two copies** of a role.
 - Every role, the Mole and Fixer included, is dealt at **random** with the seeded RNG, within the **eyes/shadows balance**: a deal has roughly equal numbers of each (they differ by at most one).
-- **Copies are separate holders:** each holder has their own uses and their own "once between meetings" or "once per game" charge (§19 seam 9, per holder); the Priest's "not the same player twice in a row" is per Priest; each Mole or Fixer copy wins under its own handler (§8.4, §8.5).
+- **Copies are separate holders:** each holder has their own uses and their own "once between meetings" or "once per game" charge (§19 seam 9, per holder); the Priest's "not the same player twice in a row" is per Priest; each Mole or Fixer copy wins under its own handler (§8.4, §8.5). Two copies acting on one target in one round: §11.4.
 - Roles are **secret**; holding a role is an event in the log (§19 seam 9). The game shows a **role list** per host setting: *Exact* (default: the roles dealt, with counts, e.g. "Lookout ×2"), *Possible* (the pool), or *Hidden*.
 - **Claims:** a player can formally claim a role ("I'm the Lookout"), true or a bluff, as a **said** entry in the ledger. A claim changes no rule.
 - **Alibis** *(provisional, builder S1)*: a player can post an alibi (a room and a round, "I was in the Office in round 3") as a **said** entry at any time; there is no alibi window. Stamped alibi (§12) checks it.
 - No role should be so strong or weak that claiming it hurts its holder; §21 gates each role's win rate (per seat holding it, copies included).
+
+### 11.4 Copies acting on the same target
+
+*(Provisional, PM, 6 Nov.)* At 11–12 players a role can have two holders (§11.3). When both use their power on the **same target in the same round**, the uses resolve **one after another**, in seat order from a seeded random seat. Effects that add up simply **stack**. A use that then finds nothing left to act on, because the other copy's use this round already did it, **has no effect and is not spent** (the charge stays for later); its holder is told privately "already done this round" (§18). By role:
+- **Lookout, Detective, Auditor:** they only learn, so nothing interferes; each holder learns the same result, and both uses count.
+- **Locksmith, Smooth Talker:** passive and personal (your own coins, your own vote), so they never share a target; two Smooth Talkers' ballots each count twice.
+- **Hacker:** the second Hacker on an already hidden room has no effect and is not spent (it learns the room was already hidden).
+- **Electrician:** the second Electrician on a room already blacked out for next round has no effect and is not spent.
+- **Priest:** the first absolve takes whatever is above the fair share; the second finds nothing above it, **learns 0** with "already absolved this round", has no effect and is not spent, and doesn't count toward its "not the same player twice in a row". The target is told "your sins were absolved" once. If the first absolve found nothing either (the target was already clean), the second is an ordinary absolve of a clean player: spent, and it learns 0, like a single Priest's.
+- **Mole:** rings stack: two Mole rings on one room are two rings.
+- **Fixer:** the second Fixer on a room the first already reopened has no effect and is not spent.
 
 ---
 
@@ -478,7 +490,7 @@ These are server data, tuned after playtests.
 
 ### 17.2 The engine has no clock
 
-The engine knows rounds and phases, not time. The server's scheduler calls `advance()` when a deadline passes (round end, early end, meeting notice, meeting close).
+The engine knows rounds and phases, not time. The server's scheduler calls `advance()` when a deadline passes (round end, early end, the result window's close, emergency notice, meeting notice, the Bail choice window's close, meeting close).
 
 ### 17.3 Deadlines and lock-ins
 
@@ -499,7 +511,7 @@ Every event has one visibility; `viewFor(state, playerId)` returns only what tha
 | Level | Who sees it | R7 contents |
 |---|---|---|
 | **Public** | Everyone, live | Every bell (except a hidden one), rings and raids, taped rooms, Wanted, the bank count; each round's taken / crew take / missing / honesty / fair share / kitty; lock-in marks; event cards; power-cut announcements (no source); anonymous purchases; meeting slots, results and votes (per the visibility setting); shakedown results; "a shakedown fell through"; who is protected (§9.7); emergencies called, with the caller, and the pool left (§9.3); said entries (plan snapshots, pledges, alibis, claims); verified stamps |
-| **Private** | One player, until the reveal | Your role, move, split and stash; who was in your room; Security, Lookout, Tail, Detective, Auditor and Priest results; Inside tip; perks you hold; your Bail choice; "your sins were absolved"; the Hacker's real bell |
+| **Private** | One player, until the reveal | Your role, move, split and stash; who was in your room; Security, Lookout, Tail, Detective, Auditor and Priest results; Inside tip; perks you hold; your Bail choice; "already done this round" when another copy of your role used it on the same target first (the Priest learns 0, §11.4); "your sins were absolved"; the Hacker's real bell |
 | **Reveal** | Everyone, at the end | Every private event: roles, every move and split, every stash over time, every power use (the Mole's ring, the Hacker's hide, Plant evidence), every buyer, every Bail choice; the seed |
 | **Secret** | Only the voter, forever | Secret-mode ballots (except one seen through Check ballot) |
 

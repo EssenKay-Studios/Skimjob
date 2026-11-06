@@ -52,9 +52,10 @@ Full text: `docs/design.md` (the rules spec, frozen in S1); the A-numbers below 
 - **Emergency meetings are a crew pool by crew size** (design §9.3): 1 for 3–6 players, 2 for 7–12 [tunable, content table]. Any player may spend one, only after a round's result is shown and before the next round's planning starts; nothing recharges the pool. *Confirmed (owner, 6 Nov);* the caller being named publicly is *provisional*.
 - **Every player gets a role; any role may repeat** (design §11.3): roles dealt = number of players (3–12), up to 10 distinct; at 11–12 players the extra seats get a repeated role, any role (the Mole and Fixer included), eyes and shadows within one, at most two copies. Counts come from the content table (seam 8). Each holder has their own uses and charges (seam 9); each Mole or Fixer copy wins under its own handler; the Exact role list shows counts; the case board flags a role claimed more often than dealt; §21 gates win rates per role, copies counted per seat. *Confirmed (owner, 6 Nov).*
 
-### Provisional readings (PM, 4 Nov), owner to confirm
+### Provisional readings (PM, 4 and 6 Nov), owner to confirm
 
 - **Missing:** *provisional:* "N coins went missing" = coins taken (excluding seized) − coins handed in that round, never negative.
+- **Copies of a role on the same target in one round** (design §11.4, PM, 6 Nov): the uses resolve one after another from a seeded seat; effects that add up stack (two Mole rings are two rings); a use that finds nothing left to act on because the other copy already did it has no effect and is not spent (the second Priest learns 0). *Provisional.*
 - **Advanced drops the Inside tip card** (roles are public there), leaving three event cards (`docs/advanced.md`).
 
 ## Balance
