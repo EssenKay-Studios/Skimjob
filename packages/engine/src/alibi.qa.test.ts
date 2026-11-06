@@ -17,7 +17,6 @@ function config(players: number, seed = "qa-alibi"): GameConfig {
     mole: "off",
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
-    starterMode: false,
   };
 }
 

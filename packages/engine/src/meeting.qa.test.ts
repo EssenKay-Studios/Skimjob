@@ -18,11 +18,10 @@ function config(players: number, voteVisibility: VoteVisibility = "hiddenThenRev
     seed: "qa-meeting",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    // Starter mode: no Muscle and no shop (so no Shield), so no shakedown window (extension.md "Shakedowns").
+    // Starter roles: no Muscle; the seed's shop has no Shield, so no shakedown window (extension.md "Shakedowns").
     rolePool: [...STARTER_ROLES],
     eventsEnabled: false,
     voteVisibility,
-    starterMode: true,
     contentOverrides: V01_NUMBERS, // scripted against content 0.1.0 numbers (balance pass 1)
   };
 }

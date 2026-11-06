@@ -315,7 +315,7 @@ describe("QA: malformed bodies are 4xx, not 500", () => {
     expect(res.statusCode).toBeLessThan(500);
   });
 
-  it.each([["[]"], ['"x"'], ["{\"settings\":[]}"], ["{\"settings\":{\"constructor\":1}}"], ["{\"settings\":{\"mole\":\"on\",\"starterMode\":true}}"]])(
+  it.each([["[]"], ['"x"'], ["{\"settings\":[]}"], ["{\"settings\":{\"constructor\":1}}"], ["{\"settings\":{\"mole\":\"on\",\"seed\":\"x\"}}"]])(
     "POST /games %s",
     async (raw) => {
       const who = await guest("H");

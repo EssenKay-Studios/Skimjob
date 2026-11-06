@@ -26,7 +26,6 @@ import {
   ROLES,
   SHOP_COLUMNS,
   SHOP_RULES,
-  STARTER_ROLES,
   type DeckId,
   type JobId,
   type PerkId,
@@ -71,10 +70,9 @@ const isStringArray = (v: unknown): v is string[] => Array.isArray(v) && v.every
 export function validateConfig(config: unknown): string[] {
   if (!isObject(config)) return ["config must be an object"];
   const errors: string[] = [];
-  const { seed, players, job, rolePool, mole, deck, deal, roleList, eventsEnabled, voteVisibility, starterMode, contentOverrides, uniqueRoles } = config;
+  const { seed, players, job, rolePool, mole, deck, deal, roleList, eventsEnabled, voteVisibility, contentOverrides, uniqueRoles } = config;
   if (typeof seed !== "string") errors.push("seed must be a string");
   if (typeof eventsEnabled !== "boolean") errors.push("eventsEnabled must be a boolean");
-  if (typeof starterMode !== "boolean") errors.push("starterMode must be a boolean");
   if (mole !== undefined && (typeof mole !== "string" || !MOLE_SETTINGS.includes(mole))) errors.push(`mole must be one of ${MOLE_SETTINGS.join(", ")}`);
   if (deck !== undefined && (typeof deck !== "string" || !DECK_IDS.includes(deck))) errors.push(`deck must be one of ${DECK_IDS.join(", ")}`);
   if (deal !== undefined && (typeof deal !== "string" || !DEAL_STYLES.includes(deal))) errors.push(`deal must be one of ${DEAL_STYLES.join(", ")}`);
@@ -101,14 +99,11 @@ export function validateConfig(config: unknown): string[] {
     } else if (new Set(players.map((p) => p.id)).size !== players.length) errors.push("player ids must be unique");
   }
 
-  // design §8.1: starter mode has no events. Reject rather than ignore, so
-  // gameCreated never claims events the game won't have.
-  if (starterMode === true && eventsEnabled !== false) errors.push("starter mode requires eventsEnabled: false");
   if (uniqueRoles !== undefined && typeof uniqueRoles !== "boolean") errors.push("uniqueRoles must be a boolean");
 
   if (!isStringArray(rolePool)) {
     errors.push("rolePool must be an array of role ids");
-  } else if (starterMode !== true) {
+  } else {
     if (new Set(rolePool).size !== rolePool.length) errors.push("role pool has duplicates");
     for (const role of rolePool) if (!POOL_ROLES.includes(role)) errors.push(`unknown role ${role}`);
   }
@@ -133,21 +128,20 @@ function dealable(config: GameConfig, roles: RoleTable, role: RoleId): boolean {
   );
 }
 
-/** The deck preset this game uses: Starter in starter mode (and so in Quick games), else the host's (Standard by default). extension.md "Decks" */
-export const deckIdOf = (config: GameConfig): DeckId => (config.starterMode ? "starter" : (config.deck ?? DEFAULT_DECK));
+/** The deck preset this game uses: the host's (Standard by default). extension.md "Decks" */
+export const deckIdOf = (config: GameConfig): DeckId => (config.deck ?? DEFAULT_DECK);
 
 export const dealStyleOf = (config: GameConfig): DealStyle => config.deal ?? "balanced";
 
 export const roleListOf = (config: GameConfig): RoleListSetting => config.roleList ?? "exact";
 
 /**
- * The deck: the preset, or the host's per-role picks (`rolePool`) when any;
- * starter mode always plays the Starter deck. A stored saboteur setting of
+ * The deck: the preset, or the host's per-role picks (`rolePool`) when any.
+ * A stored saboteur setting of
  * "off" (`mole`, migrated on read) toggles every Wildcard and Lone wolf off.
  * extension.md "Decks", Build notes "Tags, decks and dealing"
  */
 export function deckFor(config: GameConfig, roles: RoleTable = rolesFor(config)): readonly RoleId[] {
-  if (config.starterMode) return STARTER_ROLES;
   const deck = config.rolePool.length > 0 ? config.rolePool : DECKS[deckIdOf(config)];
   return config.mole === "off" ? deck.filter((r) => tagIn(roles, r) === "teamPlayer") : deck;
 }
@@ -283,11 +277,9 @@ export function drawPoliceMoment(config: GameConfig, moment: number, int: (n: nu
 /**
  * The shop's three perks, one per column, drawn with the seeded RNG
  * (extension.md "Tokens and the perk shop", gap-fills "Shop dealing"):
- * with events off the Sway perk is +Vote or Emergency. Starter mode (and
- * Quick) has no shop.
+ * with events off the Sway perk is +Vote or Emergency.
  */
 export function dealShop(config: GameConfig, rng: RngState): { readonly value: PerkId[]; readonly rng: RngState } {
-  if (config.starterMode) return { value: [], rng };
   const perks: PerkId[] = [];
   const take = (from: readonly PerkId[]) => {
     const drawn = pick(rng, from);
@@ -364,7 +356,6 @@ export function setupEvents(config: GameConfig): GameEvent[] {
       roleList: roleListOf(config),
       eventsEnabled: config.eventsEnabled,
       voteVisibility: config.voteVisibility,
-      starterMode: config.starterMode,
       contentVersion: CONTENT_VERSION,
       contentOverrides: config.contentOverrides ?? null,
     },

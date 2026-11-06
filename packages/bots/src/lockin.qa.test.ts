@@ -13,7 +13,6 @@ const config = (n: number, seed: string): GameConfig => ({
   mole: "maybe",
   eventsEnabled: true,
   voteVisibility: "hiddenThenRevealed",
-  starterMode: false,
 });
 
 describe("bots never propose; games still finish with 0 refused commands", () => {

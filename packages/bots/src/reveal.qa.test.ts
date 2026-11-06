@@ -37,7 +37,6 @@ function config(n: number, seed: string, extra: Partial<GameConfig> = {}): GameC
     deck: "everything",
     eventsEnabled: true,
     voteVisibility: "secret",
-    starterMode: false,
     ...extra,
   };
 }
@@ -345,20 +344,5 @@ describe("QA #55 reveal summary vs the engine's truth — design §13", () => {
     const summary = audit(state, cov);
     expect(cov).toContain("missed");
     expect(summary.rounds.flatMap((r) => r.moves).filter((m) => m.player === "q2").every((m) => m.missed)).toBe(true);
-  }, 60_000);
-
-  it("Quick (Starter, tokens off): no tokens, no shop, no police activity, still true", () => {
-    const cov: Coverage = new Set();
-    for (const n of [3, 6]) {
-      const state = play(config(n, `qa55-quick-${n}`, { starterMode: true, eventsEnabled: false, deck: "starter", voteVisibility: "open" }));
-      const summary = audit(state, cov);
-      for (const seat of summary.seats) {
-        expect(seat.tokens).toEqual([]);
-        expect(seat.perksBought).toEqual([]);
-      }
-      const kinds = summary.rounds.flatMap((r) => r.items).map((i) => i.kind);
-      expect(kinds).not.toContain("token");
-      expect(kinds).not.toContain("police");
-    }
   }, 60_000);
 });

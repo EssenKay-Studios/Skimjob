@@ -19,7 +19,6 @@ const config = (seed: string, n: number): GameConfig => ({
   mole: "off",
   eventsEnabled: false,
   voteVisibility: "hiddenThenRevealed",
-  starterMode: false,
 });
 
 /** Bots with fixed per-seat seeds; only the crewSeed varies. Records every command each bot emits. */

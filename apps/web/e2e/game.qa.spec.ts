@@ -1,4 +1,4 @@
-// QA for M2-6 (PR #31): the game screen under abuse. Full Quick games with 12
+// QA for M2-6 (PR #31): the game screen under abuse. Full 15-min games with 12
 // seats and 24-character names at 390×844 touch and 1280×800; reloads mid-round
 // and mid-alibi window; a killed socket; a client clock an hour off; an alibi
 // posted after its window closed; and nothing on screen giving away another
@@ -79,7 +79,7 @@ async function contexts(browser: Browser, mobile: boolean) {
   return { hostCtx, guestCtx, host: await hostCtx.newPage(), guest: await guestCtx.newPage() };
 }
 
-test("12 seats, 24-char names: a Quick game to the end with moves changed, alibis, no leaks, no overflow @fast-clock", async ({ browser }, info) => {
+test("12 seats, 24-char names: a 15-min game to the end with moves changed, alibis, no leaks, no overflow @fast-clock", async ({ browser }, info) => {
   test.setTimeout(420_000);
   const mobile = info.project.name.startsWith("mobile");
   const { hostCtx, guestCtx, host, guest } = await contexts(browser, mobile);

@@ -15,7 +15,6 @@ function config(n: number, seed: string, voteVisibility: VoteVisibility = "hidde
     rolePool: [],
     eventsEnabled: false,
     voteVisibility,
-    starterMode: false,
   };
 }
 

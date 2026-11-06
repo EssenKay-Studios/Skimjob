@@ -58,7 +58,7 @@ interface Human {
   readonly player: string;
 }
 /** `people` signed-in seats (host first), then `bots` bot seats. */
-async function startGame(people: number, bots: number, settings: Partial<LobbySettings> = { sessionLength: "quick" }) {
+async function startGame(people: number, bots: number, settings: Partial<LobbySettings> = { sessionLength: "quick", deck: "starter" }) {
   const host = (await post("/auth/guest", null, { nickname: "Host" })).session!;
   const game = (await post("/games", host, { settings })).body;
   const sessions = [host];
@@ -237,7 +237,7 @@ describe("an emergency meeting / Muscle window opening during the grace pauses a
     for (let k = 0; k < 6; k++) {
       forcedSeed = `qa-lockin-emerg-${k}`;
       await fresh();
-      // Not Quick: Quick forces the Starter deck, which has no Muscle and no shop (extension.md "Host settings").
+      // The default deck, not Starter: it has the Muscle and a shop (extension.md "Host settings").
       const { id, humans } = await startGame(4, 2, { sessionLength: "1h" });
       const host = humans[0]!;
       for (const h of humans.slice(1)) expect(await send(id, h.who, moveFor(await load(id), h.player))).toMatchObject({ ok: true });

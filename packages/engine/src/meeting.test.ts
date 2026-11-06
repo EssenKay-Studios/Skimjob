@@ -14,14 +14,13 @@ import { meetingResult } from "./meeting";
 
 function config(players: number, voteVisibility: VoteVisibility = "hiddenThenRevealed"): GameConfig {
   return {
-    seed: "meeting-seed",
+    seed: "meeting-seed-2",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    // Starter mode: no Muscle and no shop (so no Shield), so no shakedown window (extension.md "Shakedowns").
+    // Starter roles: no Muscle; this seed's shop has no Shield, so no shakedown window (extension.md "Shakedowns").
     rolePool: [...STARTER_ROLES],
     eventsEnabled: false,
     voteVisibility,
-    starterMode: true,
     contentOverrides: V01_NUMBERS, // scripted against content 0.1.0 numbers (balance pass 1)
   };
 }
@@ -483,8 +482,8 @@ describe("order at a checkpoint — design §11.4, §11.5", () => {
   it("meeting → shakedown → checkpoint: a shakedown can rescue the checkpoint", () => {
     const s = act1Meeting();
     const rescued = run(s, vote("p1", "p0"), vote("p2", "p0"), CLOSE);
-    // Starter mode: no tokens for the target met (extension.md "Tokens and the perk shop").
-    expect(since(s, rescued).map((e) => e.type)).toEqual(["voteCast", "voteCast", "meetingClosed", "shakedownResolved", "checkpointChecked", "roundStarted"]);
+    // Token grants are not what this checks (extension.md "Tokens and the perk shop").
+    expect(since(s, rescued).map((e) => e.type).filter((t) => t !== "tokenEarned")).toEqual(["voteCast", "voteCast", "meetingClosed", "shakedownResolved", "checkpointChecked", "roundStarted"]);
     expect(LAST(rescued, "checkpointChecked")).toEqual({ type: "checkpointChecked", visibility: { kind: "public" }, act: 1, target: 18, haul: 22, met: true, heatPenalty: 0 });
     expect(rescued.heat).toBe(19);
   });

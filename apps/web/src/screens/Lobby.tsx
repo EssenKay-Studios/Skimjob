@@ -8,7 +8,7 @@ import { Avatar } from "../components/Avatar";
 import { Button, DangerButton } from "../components/Button";
 import { Chip } from "../components/Chip";
 import { Copy, Play, Plus } from "../components/icons";
-import { DeckSettings, effectiveDeck } from "../components/DeckSettings";
+import { DeckSettings } from "../components/DeckSettings";
 import { Segmented, type SegmentedOption } from "../components/Segmented";
 import { SketchFrame } from "../components/SketchFrame";
 import { TextField } from "../components/TextField";
@@ -32,7 +32,7 @@ const SETTINGS = [
     key: "sessionLength",
     label: "Session length",
     options: [
-      { value: "quick", label: "Quick 15 min" },
+      { value: "quick", label: "15 min" },
       { value: "1h", label: "1 hour" },
       { value: "3h", label: "3 hours" },
       { value: "1d", label: "1 day" },
@@ -54,14 +54,8 @@ const SETTINGS = [
   { key: "dmNotices", label: "DM notices", hint: "Everyone sees that a DM was sent", options: onOff },
 ] as const satisfies readonly { key: keyof LobbySettings; label: string; hint?: string; options: readonly SegmentedOption<string | boolean>[] }[];
 
-/** One change, plus what starter mode needs to stay valid (the server refuses the mix). */
-function settingsPatch(current: LobbySettings, key: keyof LobbySettings, value: string | boolean): Partial<LobbySettings> {
-  if (current.starterMode && key === "eventsEnabled" && value === true) return { [key]: value, starterMode: false };
-  return { [key]: value };
-}
-
-/** Event cards are off in Quick games and with the Starter deck: shown, not changeable. */
-const eventsLocked = (s: LobbySettings) => s.sessionLength === "quick" || effectiveDeck(s) === "starter";
+/** Event cards are off with the Starter deck: shown, not changeable. */
+const eventsLocked = (s: LobbySettings) => s.deck === "starter";
 
 const BLURBS: Record<string, string> = {
   honest: "hands in nearly everything",
@@ -221,7 +215,7 @@ export function Lobby({ id }: { id: string }) {
     }
   };
 
-  const changeSetting = (key: keyof LobbySettings, value: string | boolean) => changeSettings(settingsPatch(game.settings, key, value));
+  const changeSetting = (key: keyof LobbySettings, value: string | boolean) => changeSettings({ [key]: value });
   const changeSettings = (patch: Partial<LobbySettings>) => {
     void act("PATCH", `/games/${id}/settings`, { settings: patch }, { ...game, settings: { ...game.settings, ...patch } });
   };
@@ -328,7 +322,7 @@ export function Lobby({ id }: { id: string }) {
                       <Segmented<string | boolean>
                         seed={`set-${def.key}`}
                         label={def.label}
-                        hint={locked ? (game.settings.sessionLength === "quick" ? "Off in Quick games" : "Off with the Starter deck") : "hint" in def ? def.hint : undefined}
+                        hint={locked ? "Off with the Starter deck" : "hint" in def ? def.hint : undefined}
                         options={def.options}
                         value={locked ? false : game.settings[def.key]}
                         readOnly={!game.youAreHost || locked}

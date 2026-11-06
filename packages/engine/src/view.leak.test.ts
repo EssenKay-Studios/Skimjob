@@ -31,7 +31,6 @@ function config(players: number, voteVisibility: VoteVisibility): GameConfig {
     deck: "everything",
     eventsEnabled: true,
     voteVisibility,
-    starterMode: false,
   };
 }
 

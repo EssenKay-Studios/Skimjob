@@ -40,7 +40,6 @@ const config = (n: number, voteVisibility: VoteVisibility, seed: string, mole: G
   mole,
   eventsEnabled: false,
   voteVisibility,
-  starterMode: false,
 });
 
 function apply(s: GameState, c: Cmd, game: string): GameState {

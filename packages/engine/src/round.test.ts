@@ -19,7 +19,6 @@ function config(players: number): GameConfig {
     mole: "off",
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
-    starterMode: false,
     contentOverrides: V015_NUMBERS, // the Fence's safe scripted at 5 an act (content 0.15.0)
   };
 }

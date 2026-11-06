@@ -327,7 +327,7 @@ export interface ShopItem {
 }
 
 export interface ShopState {
-  /** This game has a shop (not in Quick games). */
+  /** This game has a shop. */
   readonly open: boolean;
   readonly tokens: number;
   readonly items: readonly ShopItem[];

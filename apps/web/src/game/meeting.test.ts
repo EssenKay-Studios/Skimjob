@@ -28,14 +28,13 @@ import {
 } from "./meeting";
 
 const config = (mode: VoteVisibility, extra: Partial<GameConfig> = {}): GameConfig => ({
-  seed: "meeting-ui",
+  seed: "meeting-ui-2",
   players: ["Ana", "Ben", "Cy", "Dee", "Eve"].map((name, i) => ({ id: `p${i + 1}`, name, isBot: false })),
   job: "bank",
   rolePool: ["rookie"],
   mole: "off",
   eventsEnabled: false,
   voteVisibility: mode,
-  starterMode: true,
   uniqueRoles: false,
   ...extra,
 });
@@ -139,7 +138,7 @@ describe("the vote window per vote mode (design §11.2)", () => {
   });
 
   it("the Smooth Talker's double weight never shows in the live tally (design §8, §11.2)", () => {
-    const s = voting("open", { rolePool: ["smoothTalker"], starterMode: false });
+    const s = voting("open", { rolePool: ["smoothTalker"] });
     expect(openMeetingOf(viewFor(s, "p1"))!.live).toEqual({ skip: 1, targets: { p2: 3 } });
     expect(abilityOffers(viewFor(s, "p1"))).toEqual([]);
   });
@@ -200,7 +199,7 @@ describe("scheduling and emergencies (design §11.1)", () => {
 });
 
 describe("the shakedown window and results (design §11.3, §11.4)", () => {
-  const muscles = (mode: VoteVisibility = "hiddenThenRevealed") => run(voting(mode, { rolePool: ["muscle"], starterMode: false }), close("emergency-p2"));
+  const muscles = (mode: VoteVisibility = "hiddenThenRevealed") => run(voting(mode, { rolePool: ["muscle"] }), close("emergency-p2"));
 
   it("the window looks the same to everyone, and after a cancel; only the Muscle's own card offers the cancel", () => {
     const s = muscles();
@@ -216,7 +215,7 @@ describe("the shakedown window and results (design §11.3, §11.4)", () => {
     }
     expect(abilityOffers(viewFor(cancelled, "p1"))).toEqual([]);
     // A role without the cancel never sees it, in the same state.
-    const rookies = run(voting("hiddenThenRevealed", { rolePool: ["rookie", "detective"], starterMode: false }), close("emergency-p2"));
+    const rookies = run(voting("hiddenThenRevealed", { rolePool: ["rookie", "detective"] }), close("emergency-p2"));
     expect(abilityOffers(viewFor(rookies, "p1")).some((o) => o.kind === "cancelShakedown")).toBe(false);
   });
 

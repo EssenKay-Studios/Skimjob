@@ -10,7 +10,7 @@ export function seats(n: number): GameConfig["players"] {
 
 export function config(n: number, seed: string, voteVisibility: VoteVisibility = "hiddenThenRevealed"): GameConfig {
   // Starter pool: no Muscle, so scripted shakedowns need no window (task 12).
-  return { seed, players: seats(n), job: "bank", rolePool: [...STARTER_ROLES], mole: "off", eventsEnabled: false, voteVisibility, starterMode: false };
+  return { seed, players: seats(n), job: "bank", rolePool: [...STARTER_ROLES], mole: "off", eventsEnabled: false, voteVisibility };
 }
 
 /** A game where `want` holds for the dealt roles (e.g. a pocketer who isn't the Inside Man), trying seeds in order. */

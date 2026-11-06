@@ -21,7 +21,7 @@ import { EndingNote } from "../components/Extension";
 import { describeEvent } from "./describeEvent";
 import { endingText, gapInfo, heatRound, heatRounds, howYouWin, perkUses, roleInfo, roleListInfo, shopState, targetBar, usedPerkThisRound } from "./extension";
 import { abilityOffers } from "./meeting";
-import { deckPatch, deckRoles, effectiveDeck, rolePatch } from "../components/DeckSettings";
+import { deckPatch, deckRoles, rolePatch } from "../components/DeckSettings";
 import type { LobbySettings } from "../api";
 
 const config = (extra: Partial<GameConfig> = {}): GameConfig => ({
@@ -32,7 +32,6 @@ const config = (extra: Partial<GameConfig> = {}): GameConfig => ({
   mole: "off",
   eventsEnabled: false,
   voteVisibility: "hiddenThenRevealed",
-  starterMode: false,
   uniqueRoles: false,
   ...extra,
 });
@@ -134,8 +133,7 @@ describe("the target bar, Heat breakdown and gap box (extension.md: What the app
 describe("tokens and the perk shop (extension.md)", () => {
   const withShop = (shop: GameState["shop"]) => ({ ...createGame(config()), shop });
 
-  it("has no shop in Quick games (starter mode), but the Starter deck keeps it", () => {
-    expect(shopState(viewFor(createGame(config({ starterMode: true })), "p1")).open).toBe(false);
+  it("the Starter deck keeps the shop", () => {
     expect(shopState(viewFor(createGame(config({ deck: "starter", rolePool: [...DECKS.starter] })), "p1")).open).toBe(true);
   });
 
@@ -219,20 +217,17 @@ describe("lobby deck settings (extension.md Host settings)", () => {
     deal: "balanced",
     roleList: "exact",
     eventsEnabled: true,
-    starterMode: false,
     dmNotices: true,
     uniqueRoles: true,
   };
 
-  it("plays Quick games on the Starter deck", () => {
-    expect(effectiveDeck({ ...base, sessionLength: "quick" })).toBe("starter");
-    expect(deckRoles({ ...base, sessionLength: "quick" })).toEqual(DECKS.starter);
+  it("plays the host's deck at every session length", () => {
+    expect(deckRoles({ ...base, sessionLength: "quick" })).toEqual(DECKS.standard);
   });
 
-  it("makes Starter only the no-events deck (never starter mode) and clears a stored starter mode", () => {
-    expect(deckPatch(base, "starter")).toEqual({ deck: "starter", roles: [], eventsEnabled: false });
-    expect(deckPatch(base, "everything")).toEqual({ deck: "everything", roles: [] });
-    expect(deckPatch({ ...base, deck: "starter", starterMode: true }, "everything")).toEqual({ deck: "everything", roles: [], starterMode: false });
+  it("makes Starter only the no-events deck", () => {
+    expect(deckPatch("starter")).toEqual({ deck: "starter", roles: [], eventsEnabled: false });
+    expect(deckPatch("everything")).toEqual({ deck: "everything", roles: [] });
   });
 
   it("toggles roles one by one, back to the preset when they match, never to none", () => {

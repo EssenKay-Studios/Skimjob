@@ -18,7 +18,6 @@ function config(n: number, seed: string, extra: Partial<GameConfig> = {}): GameC
     deck: "everything",
     eventsEnabled: true,
     voteVisibility: "secret",
-    starterMode: false,
     ...extra,
   };
 }

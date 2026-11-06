@@ -17,7 +17,7 @@ const LEGACY_MOLE = "mole";
 export interface LobbySettings {
   readonly sessionLength: SessionLength;
   readonly voteVisibility: VoteVisibility;
-  /** Deck preset (extension.md "Decks"); Quick games play Starter whatever this says. */
+  /** Deck preset (extension.md "Decks"). */
   readonly deck: DeckId;
   /** Per-role toggles: the roles in the deck; empty = the preset's. */
   readonly roles: readonly RoleId[];
@@ -25,7 +25,6 @@ export interface LobbySettings {
   readonly deal: DealStyle;
   readonly roleList: RoleListSetting;
   readonly eventsEnabled: boolean;
-  readonly starterMode: boolean;
   /** Others see that a DM happened (design §12.1). Server-only; M2-8. */
   readonly dmNotices: boolean;
   /** Each pool role at most once (design §8.1, `GameConfig.uniqueRoles`). */
@@ -40,7 +39,6 @@ export const DEFAULT_SETTINGS: LobbySettings = {
   deal: "balanced",
   roleList: "exact",
   eventsEnabled: true,
-  starterMode: false,
   dmNotices: true,
   uniqueRoles: true,
 };
@@ -101,10 +99,9 @@ export function parseSettings(input: unknown): { ok: true; settings: LobbySettin
   if (!Array.isArray(roles) || !roles.every((r) => (POOL_ROLES as readonly unknown[]).includes(r)) || new Set(roles).size !== roles.length) {
     return { ok: false, error: "roles must be a list of distinct role ids" };
   }
-  for (const k of ["eventsEnabled", "starterMode", "dmNotices", "uniqueRoles"] as const) {
+  for (const k of ["eventsEnabled", "dmNotices", "uniqueRoles"] as const) {
     if (typeof s[k] !== "boolean") return { ok: false, error: `${k} must be true or false` };
   }
-  if (s.starterMode === true && s.eventsEnabled !== false) return { ok: false, error: "starter mode needs eventsEnabled false" };
   return { ok: true, settings: s as unknown as LobbySettings };
 }
 

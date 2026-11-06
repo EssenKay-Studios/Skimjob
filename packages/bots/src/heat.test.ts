@@ -7,7 +7,7 @@ import { cardHeatNow, heatDanger, jobThisRound, policeHeat, policeInPlay, police
 import { seats } from "./testkit";
 
 function heatGame(n: number, extra: Partial<GameConfig> = {}, seed = "heat"): GameState {
-  const config: GameConfig = { seed, players: seats(n), job: "bank", rolePool: [...STARTER_ROLES], eventsEnabled: false, voteVisibility: "hiddenThenRevealed", starterMode: false, ...extra };
+  const config: GameConfig = { seed, players: seats(n), job: "bank", rolePool: [...STARTER_ROLES], eventsEnabled: false, voteVisibility: "hiddenThenRevealed", ...extra };
   return createGame(config);
 }
 
@@ -22,7 +22,7 @@ describe("bot Heat projection — design §7, §10; extension.md \"Police activi
     expect(policeInPlay(viewFor(heatGame(6, { rolePool: ["rookie", "mole"], roleList: "possible" }), "ana"))).toBe(true);
     // Hidden: the deck preset (Standard has the Mole; Starter doesn't).
     expect(policeInPlay(viewFor(heatGame(6, { rolePool: [], roleList: "hidden" }), "ana"))).toBe(true);
-    expect(policeInPlay(viewFor(heatGame(6, { rolePool: [], roleList: "hidden", starterMode: true }), "ana"))).toBe(false);
+    expect(policeInPlay(viewFor(heatGame(6, { rolePool: [], roleList: "hidden", deck: "starter" }), "ana"))).toBe(false);
     expect(policeToCome(viewFor(heatGame(6), "ana"))).toBe(0);
   });
 

@@ -22,7 +22,6 @@ const config = (voteVisibility: GameConfig["voteVisibility"] = "hiddenThenReveal
   mole: "off",
   eventsEnabled: false,
   voteVisibility,
-  starterMode: false,
 });
 
 const VIEWERS = ["ana", "ben", "carl"]; // carl owns no sample event

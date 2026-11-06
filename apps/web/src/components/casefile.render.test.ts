@@ -21,7 +21,6 @@ const config: GameConfig = {
   mole: "off",
   eventsEnabled: false,
   voteVisibility: "hiddenThenRevealed",
-  starterMode: true,
   uniqueRoles: false,
 };
 function run(state: GameState, ...commands: (PlayerCommand | SystemCommand)[]): GameState {

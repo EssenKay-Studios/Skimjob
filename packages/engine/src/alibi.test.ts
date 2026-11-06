@@ -16,7 +16,6 @@ const cfg: GameConfig = {
   mole: "off",
   eventsEnabled: false,
   voteVisibility: "hiddenThenRevealed",
-  starterMode: false,
 };
 
 const alibi = (player: string, room: unknown): Command => ({ type: "postAlibi", player, room }) as Command;

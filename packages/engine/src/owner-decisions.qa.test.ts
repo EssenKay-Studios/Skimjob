@@ -22,7 +22,6 @@ function config(n: number, extra: Partial<GameConfig> = {}): GameConfig {
     rolePool: [...STARTER_ROLES],
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
-    starterMode: false,
     contentOverrides: V01_NUMBERS,
     ...extra,
   };
@@ -126,8 +125,8 @@ describe("QA dealing — design §8.1", () => {
   it("the Inside Man is never dealt at 3–4 players (any setting); it is dealt at 5", () => {
     for (const n of [3, 4]) {
       for (const seed of SEEDS) {
-        for (const extra of [{}, { uniqueRoles: false }, { rolePool: ["insideMan"] }, { rolePool: ["insideMan"], uniqueRoles: false }, { starterMode: true }] as Partial<GameConfig>[]) {
-          expect(dealt(config(n, { seed, eventsEnabled: !extra.starterMode, ...extra }))).not.toContain("insideMan");
+        for (const extra of [{}, { uniqueRoles: false }, { rolePool: ["insideMan"] }, { rolePool: ["insideMan"], uniqueRoles: false }, { eventsEnabled: false }] as Partial<GameConfig>[]) {
+          expect(dealt(config(n, { seed, ...extra }))).not.toContain("insideMan");
         }
       }
     }

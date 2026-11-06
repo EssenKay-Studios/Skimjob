@@ -33,7 +33,6 @@ const config = (seed: string, n = 6): GameConfig => ({
   mole: "off",
   eventsEnabled: false,
   voteVisibility: "hiddenThenRevealed",
-  starterMode: false,
 });
 
 const must = (state: GameState, c: Command): GameState => {

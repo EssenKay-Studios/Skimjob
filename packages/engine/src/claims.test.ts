@@ -18,7 +18,6 @@ const cfg: GameConfig = {
   mole: "off",
   eventsEnabled: false,
   voteVisibility: "hiddenThenRevealed",
-  starterMode: false,
 };
 
 const claim = (player: unknown, role: unknown): Command => ({ type: "claimRole", player, role }) as Command;

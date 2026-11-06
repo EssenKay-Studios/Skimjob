@@ -216,7 +216,7 @@ export function RulebookSheet({ open, onClose, view }: { open: boolean; onClose:
           <ul className="rulebook__list">
             <li>Your role earns tokens; tokens buy perks. Each game's shop has one perk from each column.</li>
             <li>Tokens and what you buy stay private until you use a perk. Use at most one per round.</li>
-            <li>Unspent tokens are worth nothing at the end. Quick games have no tokens and no shop.</li>
+            <li>Unspent tokens are worth nothing at the end.</li>
           </ul>
           {shop.length > 0 ? (
             <ul className="rulebook__perks" aria-label="This game's shop">
@@ -345,7 +345,7 @@ export function GapBox({ view }: { view: PlayerView }) {
 
 // ---------------------------------------------------------------- tokens and the shop
 
-/** Your tokens and the shop button, on the role card. Nothing in games without a shop (Quick). */
+/** Your tokens and the shop button, on the role card. */
 export function Tokens({ view, send }: { view: PlayerView; send: Send }) {
   const shop = shopState(view);
   const [open, setOpen] = useState(false);

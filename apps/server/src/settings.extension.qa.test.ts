@@ -50,26 +50,3 @@ describe("a stored saboteur setting is migrated on read, never kept", () => {
     }
   });
 });
-
-describe("Quick forces Starter with events off (no shop, no tokens), whatever else the host chose", () => {
-  it("everything deck, events on, Possible list: Quick still deals Starter, no shop, no police", () => {
-    const s = { ...ok({ deck: "everything", roleList: "possible", eventsEnabled: true }), sessionLength: "quick" as const };
-    for (const n of [3, 5, 8, 12]) {
-      for (let i = 0; i < 10; i++) {
-        const cfg = gameConfig(s, seats(n), `quick-${n}-${i}`);
-        expect(cfg).toMatchObject({ starterMode: true, eventsEnabled: false, rolePool: [] });
-        const g = createGame(cfg);
-        expect(g.shop).toEqual([]);
-        expect(g.police).toBeNull();
-        for (const p of Object.values(g.players)) expect(DECKS.starter, p.role).toContain(p.role);
-        expect(viewFor(g, g.playerOrder[0]!).shop).toEqual([]);
-      }
-    }
-  });
-
-  it("the host's stored choices survive for when the length changes back", () => {
-    const s = ok({ deck: "everything", roleList: "hidden", eventsEnabled: true, sessionLength: "quick" });
-    expect(s).toMatchObject({ deck: "everything", roleList: "hidden", eventsEnabled: true });
-    expect(gameConfig({ ...s, sessionLength: "1h" }, seats(5), "x")).toMatchObject({ starterMode: false, eventsEnabled: true });
-  });
-});

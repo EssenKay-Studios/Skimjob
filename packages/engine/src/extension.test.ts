@@ -21,7 +21,6 @@ function config(n: number, extra: Partial<GameConfig> = {}): GameConfig {
     rolePool: [],
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
-    starterMode: false,
     ...extra,
   };
 }
@@ -102,9 +101,8 @@ describe("the perk shop — extension.md \"Tokens and the perk shop\", gap-fills
     for (const id of s.playerOrder) expect(viewFor(s, id).shop.map((o) => o.perk)).toEqual(s.shop);
   });
 
-  it("with events off the Sway perk is +Vote or Emergency; starter mode has no shop", () => {
+  it("with events off the Sway perk is +Vote or Emergency", () => {
     for (const seed of SEEDS) expect(SHOP_RULES.swayEventsOff).toContain(shopOf(config(5, { seed }))[2]);
-    expect(shopOf(config(5, { starterMode: true }))).toEqual([]);
   });
 
   it("costs come from content: Peek and Shield 2, the rest 1; overridable", () => {
@@ -136,7 +134,6 @@ describe("buying perks — extension.md \"Tokens and the perk shop\"", () => {
     expect(reason(s, buy("p0", "peek"))).toMatch(/token/);
     expect(reason(s, buy("p1", "extraVote"))).toMatch(/token/);
     expect(reason(s, buy("zz", "extraVote"))).toMatch(/not in this game|unknown|player/);
-    expect(reason(game(config(5, { starterMode: true }), { tokens: { p0: 3 } }), buy("p0", "peek"))).toMatch(/shop/);
   });
 
   it("unspent tokens are worth nothing at the end", () => {

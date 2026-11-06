@@ -31,7 +31,6 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
     rolePool: [],
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
-    starterMode: false,
     ...extra,
   };
 }

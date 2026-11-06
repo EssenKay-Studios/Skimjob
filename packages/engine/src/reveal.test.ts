@@ -195,7 +195,6 @@ describe("reveal summary leaks nothing — design §13, §11.2, §17.2", () => {
       rolePool: [],
       eventsEnabled: true,
       voteVisibility: "secret",
-      starterMode: false,
     };
     const state = createGame(cfg);
     for (const p of state.playerOrder) expect(viewFor(state, p).reveal).toBeNull();

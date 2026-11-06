@@ -20,7 +20,6 @@ function config(players: number, contentOverrides?: unknown): GameConfig {
     mole: "off",
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
-    starterMode: false,
     ...(contentOverrides !== undefined && { contentOverrides: contentOverrides as ContentOverrides }),
   };
 }

@@ -84,15 +84,6 @@ test.describe("private tokens and no police tells, two real clients", () => {
     }
   });
 
-  test("Quick games have no tokens and no shop", async ({ page }) => {
-    test.setTimeout(60_000);
-    const game = await start(page.request, { sessionLength: "quick", deck: "everything" }, [], 4);
-    await page.goto(`/game/${game.id}`);
-    await expect(page.locator(".role-card")).toBeVisible({ timeout: 20_000 });
-    await expect(page.locator(".tokens")).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Shop", exact: true })).toHaveCount(0);
-  });
-
   test("a Hidden role list says so on the role card; Possible lists roles that could be in play", async ({ page }) => {
     test.setTimeout(60_000);
     const hidden = await start(page.request, { sessionLength: "1h", roleList: "hidden" }, [], 4);

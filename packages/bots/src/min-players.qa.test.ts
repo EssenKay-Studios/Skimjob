@@ -15,7 +15,6 @@ function config(players: number, extra: Record<string, unknown> = {}): GameConfi
     rolePool: [],
     eventsEnabled: true,
     voteVisibility: "hiddenThenRevealed",
-    starterMode: false,
     ...extra,
   } as GameConfig;
 }

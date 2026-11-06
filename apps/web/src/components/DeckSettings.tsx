@@ -1,6 +1,5 @@
 // Lobby: the deck, per-role toggles, deal style and role list (extension.md
-// "Host settings", "Roles"). Quick games play the Starter deck with no events,
-// shown read-only. Role names and tags come from content.
+// "Host settings", "Roles"). Role names and tags come from content.
 import { useId, useState } from "react";
 import { DECKS, POOL_ROLES, ROLES, type RoleId } from "@skimjob/content";
 import type { DeckId, LobbySettings } from "../api";
@@ -35,22 +34,17 @@ const LIST_HINT: Record<LobbySettings["roleList"], string> = {
   hidden: "Nobody is told which roles are in play",
 };
 
-export const QUICK_NOTE = "Quick games play the Starter deck with no event cards, tokens or shop.";
-
-/** The deck players will get: Starter for Quick (or a game stored in starter mode), else the stored deck. */
-export const effectiveDeck = (s: LobbySettings): DeckId => (s.sessionLength === "quick" || s.starterMode ? "starter" : s.deck);
-
 /** The roles switched on: the toggles, or the deck's preset when there are none. */
-export const deckRoles = (s: LobbySettings): readonly RoleId[] => (s.roles.length > 0 ? (s.roles as RoleId[]) : DECKS[effectiveDeck(s)]);
+export const deckRoles = (s: LobbySettings): readonly RoleId[] => (s.roles.length > 0 ? (s.roles as RoleId[]) : DECKS[s.deck]);
 
 const sameSet = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((x) => b.includes(x));
 
 /**
  * A deck choice as a settings patch; the toggles reset. Starter only turns the
- * event cards off: tokens, the shop and the toggles stay (only Quick drops them).
+ * event cards off: tokens, the shop and the toggles stay.
  */
-export function deckPatch(s: LobbySettings, deck: DeckId): Partial<LobbySettings> {
-  return { deck, roles: [], ...(deck === "starter" ? { eventsEnabled: false } : {}), ...(s.starterMode ? { starterMode: false } : {}) };
+export function deckPatch(deck: DeckId): Partial<LobbySettings> {
+  return { deck, roles: [], ...(deck === "starter" ? { eventsEnabled: false } : {}) };
 }
 
 /** One role toggled, as a settings patch; back to [] when it matches the preset. Never empties the deck. */
@@ -62,9 +56,7 @@ export function rolePatch(s: LobbySettings, role: RoleId): Partial<LobbySettings
 }
 
 export function DeckSettings({ settings, readOnly, disabled, onChange }: { settings: LobbySettings; readOnly: boolean; disabled: boolean; onChange: (patch: Partial<LobbySettings>) => void }) {
-  const quick = settings.sessionLength === "quick";
-  const deck = effectiveDeck(settings);
-  const locked = quick || settings.starterMode;
+  const deck = settings.deck;
   const on = deckRoles(settings);
   const custom = settings.roles.length > 0;
   const [open, setOpen] = useState(false);
@@ -74,61 +66,59 @@ export function DeckSettings({ settings, readOnly, disabled, onChange }: { setti
       <Segmented<DeckId>
         seed="set-deck"
         label="Deck"
-        hint={quick ? QUICK_NOTE : custom ? `${DECK_HINT[deck]} · your own pick of roles` : DECK_HINT[deck]}
+        hint={custom ? `${DECK_HINT[deck]} · your own pick of roles` : DECK_HINT[deck]}
         options={DECK_OPTIONS}
         value={deck}
-        readOnly={readOnly || quick}
+        readOnly={readOnly}
         disabled={disabled}
-        onChange={(v) => onChange(deckPatch(settings, v))}
+        onChange={(v) => onChange(deckPatch(v))}
         wide
       />
-      {!locked && (
-        <div className="seg seg--wide deck-roles">
-          <div className="seg__head">
-            <span className="seg__label">Roles</span>
-            <span className="meta">
-              {on.length} of {POOL_ROLES.length} on{custom ? " (your pick)" : ""}
-            </span>
-          </div>
-          {!readOnly && (
-            <Button variant="small" seed="deck-roles" aria-expanded={open} aria-controls={panel} onClick={() => setOpen(!open)} className="deck-roles__toggle">
-              {open ? "Done" : "Pick roles one by one"}
-            </Button>
-          )}
-          {(open || readOnly) && (
-            <div id={panel} className="deck-roles__groups">
-              {rolesByTag(readOnly ? on : POOL_ROLES).map((g) => (
-                <div key={g.tag} className="deck-roles__group" role="group" aria-label={TAG_LABEL[g.tag]}>
-                  <p className="meta">{g.label}</p>
-                  <div className="deck-roles__chips">
-                    {g.roles.map((r) =>
-                      readOnly ? (
-                        <RoleTip key={r} id={r} />
-                      ) : (
-                        <Button
-                          key={r}
-                          variant="toggle"
-                          seed={`role-${r}`}
-                          pressed={on.includes(r)}
-                          disabled={disabled}
-                          onClick={() => {
-                            const p = rolePatch(settings, r);
-                            if (p) onChange(p);
-                          }}
-                        >
-                          {ROLES[r]?.name ?? r}
-                          {ROLES[r]?.winsOn.length ? " ★" : ""}
-                        </Button>
-                      ),
-                    )}
-                  </div>
-                </div>
-              ))}
-              <p className="meta">★ can also win when the heist fails. Some roles need a bigger crew and sit out of small games.</p>
-            </div>
-          )}
+      <div className="seg seg--wide deck-roles">
+        <div className="seg__head">
+          <span className="seg__label">Roles</span>
+          <span className="meta">
+            {on.length} of {POOL_ROLES.length} on{custom ? " (your pick)" : ""}
+          </span>
         </div>
-      )}
+        {!readOnly && (
+          <Button variant="small" seed="deck-roles" aria-expanded={open} aria-controls={panel} onClick={() => setOpen(!open)} className="deck-roles__toggle">
+            {open ? "Done" : "Pick roles one by one"}
+          </Button>
+        )}
+        {(open || readOnly) && (
+          <div id={panel} className="deck-roles__groups">
+            {rolesByTag(readOnly ? on : POOL_ROLES).map((g) => (
+              <div key={g.tag} className="deck-roles__group" role="group" aria-label={TAG_LABEL[g.tag]}>
+                <p className="meta">{g.label}</p>
+                <div className="deck-roles__chips">
+                  {g.roles.map((r) =>
+                    readOnly ? (
+                      <RoleTip key={r} id={r} />
+                    ) : (
+                      <Button
+                        key={r}
+                        variant="toggle"
+                        seed={`role-${r}`}
+                        pressed={on.includes(r)}
+                        disabled={disabled}
+                        onClick={() => {
+                          const p = rolePatch(settings, r);
+                          if (p) onChange(p);
+                        }}
+                      >
+                        {ROLES[r]?.name ?? r}
+                        {ROLES[r]?.winsOn.length ? " ★" : ""}
+                      </Button>
+                    ),
+                  )}
+                </div>
+              </div>
+            ))}
+            <p className="meta">★ can also win when the heist fails. Some roles need a bigger crew and sit out of small games.</p>
+          </div>
+        )}
+      </div>
       <Segmented<LobbySettings["deal"]>
         seed="set-deal"
         label="Deal"
