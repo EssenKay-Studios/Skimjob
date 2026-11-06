@@ -426,7 +426,7 @@ From **round 2**, each round has a **4-in-10 chance** [tunable] that one card fl
 
 ### 15.1 Lobby and sign-in
 
-- **Invite link + nickname** (guests may host), plus **Google sign-in** for a persistent identity, on when the server has Google credentials (provisional details: `docs/decisions.md` "Server and timing").
+- **Invite link + nickname** (guests may host), plus **Google sign-in** for a persistent identity, on when the server has Google credentials (details: `docs/decisions.md` "Server and timing"; no email is collected, a player is keyed by Google's stable id).
 - The host sets the game up (§16), adds bots to empty seats, can remove any other seat, and can hand the host role to another person (never a bot) before leaving the lobby. A game needs 3+ seats; bots fill the rest.
 
 ### 15.2 Chat
@@ -437,7 +437,7 @@ From **round 2**, each round has a **4-in-10 chance** [tunable] that one card fl
 
 ### 15.3 Notes and pins
 
-Each player has a private board: tags (trusted / unsure / suspicious), notes and pinned case-board entries. Only they can see it. It lives outside the game log, on the server *(provisional)*.
+Each player has a private board: tags (trusted / unsure / suspicious), notes and pinned case-board entries. Only they can see it. It lives outside the game log, on the server *(owner, 6 Nov)*.
 
 ### 15.4 The case board (the ledger)
 
@@ -494,7 +494,7 @@ The engine knows rounds and phases, not time. The server's scheduler calls `adva
 
 ### 17.3 Deadlines and lock-ins
 
-- A round ends at its deadline, or a short **grace** after everyone has locked in, whichever comes first; changing a move during the grace doesn't restart it. *Provisional grace:* 1 h 10 s, 3 h 30 s, 1 d 2 min, 3 d 5 min, 1 w 5 min.
+- A round ends at its deadline, or a short **grace** after everyone has locked in, whichever comes first; changing a move during the grace doesn't restart it. Grace [tunable] *(owner, 6 Nov)*: 1 h 10 s, 3 h 30 s, 1 d 2 min, 3 d 5 min, 1 w 5 min.
 - A missed move is the Lobby, 1 coin, handed in (§3.3).
 - **Lock-ins are public** (who has locked in, never what); **presence is public** (online now, or last seen), from the server and never the log. Bots show as bots.
 

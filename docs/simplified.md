@@ -92,7 +92,7 @@ Two fixes: **Part A** remakes the rules around a few visible things (coins, bell
 - **Each round, the crew take is split equally among all players:** everything handed in, plus coins returned by shakedowns and the Priest, plus last round's leftover.
 - **The kitty:** whatever doesn't divide evenly stays on the table for next round. At the end, what's left pays for the getaway car and leaves the game.
 - **Fair share:** the coins split to each player so far, the same for everyone, and public.
-- **Missing:** each round the game shows coins taken from the bank, the crew take, and **"N coins went missing"**, never who. *Provisional (PM, 4 Nov):* N = coins taken (excluding seized) − coins handed in that round, never negative.
+- **Missing:** each round the game shows coins taken from the bank, the crew take, and **"N coins went missing"**, never who. *Confirmed (owner, 6 Nov):* N = coins taken (excluding seized) − coins handed in that round, never negative.
 - **Crew take and honesty counting** *(owner, 4 Nov)*: a coin counts toward honesty once, when it first reaches the table: handed in, or recovered by a shakedown or the Priest. Coins carried in the kitty or re-split are never counted again. Seized coins count neither as "taken" nor as "missing". A stash drops by any coins taken back by a shakedown or the Priest.
 - **Stashes stay private.** A stash = fair share received + coins pocketed − coins taken back by shakedowns and the Priest − coins spent on perks. Seized coins are never pocketed or handed in, so there is nothing to subtract for raids *(owner, 4 Nov)*. Conservation check: bank left + table (kitty) + stashes + seized + spent on perks + getaway car = starting bank.
 

@@ -56,7 +56,7 @@ Each player still sees **their own share** each round, so the crew take is alway
 
 ### Events
 
-R7's **Inside tip** card (learn a player's role) has no use when roles are public, so Advanced drops it and deals the other three cards (Lockdown, Shift change, Audit). *Provisional (PM, 4 Nov).*
+R7's **Inside tip** card (learn a player's role) has no use when roles are public, so Advanced drops it and deals the other three cards (Lockdown, Shift change, Audit). *Confirmed (owner, 6 Nov).*
 
 ### Winning
 
