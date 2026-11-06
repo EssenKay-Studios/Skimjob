@@ -69,7 +69,7 @@ function ballot(state: GameState, player: PlayerState, raw: Raw): Result {
   return [spent(state, player, { kind: "ballot", meetingId: meeting.id, target })];
 }
 
-/** Tail: while planning, also see who is in one room when this round resolves (like the Lookout; a Power cut blinds it). */
+/** Tail: while planning, also see who is in one room when this round resolves (like the Lookout). */
 function tail(state: GameState, player: PlayerState, raw: Raw): Result {
   if (state.phase.kind !== "planning") return "a Tail is spent while a round is being planned";
   if (player.roleState.tail !== null) return "you are already tailing a room this round";
@@ -111,8 +111,8 @@ function nextCardRound(state: GameState): number | null {
 /**
  * Rig: draw `PERK_RULES.rigOptions` different cards for the next round; the
  * first flips unless you pick another (`rigPick`). Someone else's Rig of the
- * same round never refuses yours (a refusal would tell you who holds what,
- * e.g. after a Double-cross; PR #25 review): if several players rig a round,
+ * same round never refuses yours (a refusal would tell you who holds what;
+ * PR #25 review): if several players rig a round,
  * the oldest Rig's pick flips. One Rig of a round per player.
  */
 function rig(state: GameState, player: PlayerState, draw: Draw): Result {

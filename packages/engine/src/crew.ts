@@ -18,7 +18,7 @@ import { isObject, show } from "./check";
 type Result = GameEvent[] | string;
 
 /** The clean line: a stash below it is clean; the Detective's "dirty" line too (owner ruling 3). extension.md "Shakedowns (fixed numbers)" */
-export const cleanThreshold = (state: GameState): number => jobFor(state.config).shakedown.cleanBelow;
+const cleanThreshold = (state: GameState): number => jobFor(state.config).shakedown.cleanBelow;
 
 /** Whether `target`'s stash isn't clean at `threshold`. The shakedown and the Detective read this. design §11.3 */
 export const holdsDirty = (state: GameState, target: PlayerId, threshold: number): boolean => (state.players[target] as PlayerState).stash >= threshold;

@@ -63,7 +63,7 @@ function playAll(cfg: GameConfig): GameState[] {
   return states;
 }
 /** Your own deliberate actions (away.ts): not news. */
-const OWN = new Set(["moveSubmitted", "voteSealed", "voteCast", "doubleCrossAnswered", "lootSplit"]);
+const OWN = new Set(["moveSubmitted", "voteSealed", "voteCast", "lootSplit"]);
 const ctxOf = (view: ReturnType<typeof viewFor>, me: PlayerId) => ({ me, name: namesOf(view) });
 
 describe("QA: recaps at 3 and 12 seats only ever hold the viewer's own view (design §13, §17.2)", () => {

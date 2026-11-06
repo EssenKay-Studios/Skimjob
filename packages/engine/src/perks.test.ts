@@ -203,15 +203,6 @@ describe("Tail — design §8.3", () => {
     // Not outside planning (the round's alibis are open now).
     expect(reason(grantPerks(resolved, "p1", "tail"), use("p1", { kind: "tail", room: "vault" }))).toMatch(/being planned/);
   });
-
-  it("a Power cut blinds it, as it does the Lookout: \"camera offline\" (design §10, extension.md \"Camera offline\")", () => {
-    const s = grantPerks(game(4), "p0", "tail");
-    const dark: GameState = { ...s, card: { round: 1, id: "powerCut", room: null, offer: null } };
-    const resolved = run(dark, use("p0", { kind: "tail", room: "vault" }), mv("p1", "vault"), ROUND);
-    expect(since(dark, resolved).filter((e) => e.type === "roomWatched")).toEqual([
-      { type: "roomWatched", visibility: privateTo("p0"), player: "p0", round: 1, source: "tail", room: "vault", seen: [], offline: true },
-    ]);
-  });
 });
 
 describe("Alibi — design §8.3, §5.4", () => {

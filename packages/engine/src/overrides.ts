@@ -58,15 +58,10 @@ const POWER_FIELDS: { readonly [K in RolePower["kind"]]: Readonly<Record<string,
 
 /** The numbers each event effect may have overridden: its own only. design §10 */
 const EFFECT_FIELDS: { readonly [K in EventEffect["kind"]]: Readonly<Record<string, Rule>> } = {
-  // Heat is whole numbers (design §7), so a Heat card's amount is a signed whole number.
-  heat: { amount: integer },
   roomSurge: { lootMultiplier: atLeast0, heatMultiplier: atLeast0 },
-  blackout: {},
   lockdown: {},
   audit: {},
-  raidRumour: { loss: count },
   insideTip: {},
-  doubleCross: {},
 };
 
 export type EventTable = Readonly<Record<string, EventDef>>;

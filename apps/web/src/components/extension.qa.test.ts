@@ -217,37 +217,23 @@ describe("no tells: police activity and camera offline (extension.md \"Situation
     }
   });
 
-  /** p1 watches the Vault from Security; p2 is in the Vault; either a Hacker loop or a Power cut. */
-  function cameraWorld(cause: "loop" | "powerCut") {
-    const cfg = config(5, { rolePool: ["rookie", "hacker"], eventsEnabled: cause === "powerCut", seed: "cam" });
+  /** p1 watches the Vault from Security; p2 is in the Vault; the Hacker loops the Vault. */
+  function cameraWorld() {
+    const cfg = config(5, { rolePool: ["rookie", "hacker"], eventsEnabled: false, seed: "cam" });
     let s = game(cfg, { roles: ["hacker"] });
-    // Round 1 plain, so round 2 has a card; force it to Power cut (or anything harmless for the loop).
     s = run(s, ...ids(5).map((p) => mv(p, "office")), ROUND, ALIBIS);
-    if (cause === "powerCut") {
-      s = replay(s.config, s.log.map((e) => (e.type === "eventFlipped" && e.round === 2 ? { ...e, card: "powerCut", room: null } : e)));
-      expect(s.log.some((e) => e.type === "eventFlipped" && e.round === 2 && e.card === "powerCut")).toBe(true);
-    }
-    const hacker = cause === "loop" ? { ability: { kind: "loopCameras", room: "vault" } } : {};
+    const hacker = { ability: { kind: "loopCameras", room: "vault" } };
     const moves = [mv("p0", "office", 0, hacker), mv("p1", "security", 0, { watch: "vault" }), mv("p2", "vault", 2), mv("p3", "office"), mv("p4", "office")];
-    s = run(s, ...moves, ROUND);
-    return s;
+    return run(s, ...moves, ROUND);
   }
 
-  it("a Hacker's loop and a Power cut read the same on the watcher's feed (text, case file markup)", () => {
-    const loop = cameraWorld("loop");
-    const cut = cameraWorld("powerCut");
-    const feed = (s: GameState) => {
-      const v = viewFor(s, "p1");
-      const e = v.caseFile.map((x) => x.event).filter((x) => x.type === "roomWatched" && x.round === 2);
-      expect(e).toHaveLength(1);
-      return { event: { ...e[0]!, visibility: undefined }, text: describeEvent(e[0]!, { me: "p1", name: namesOf(v) }) };
-    };
-    const a = feed(loop);
-    const b = feed(cut);
-    expect(a.event).toEqual(b.event);
-    expect(a.text).toBe(b.text);
-    expect(a.text).toMatch(/camera offline in the Vault/);
-    expect(a.text).not.toMatch(/hack|loop|power cut/i);
+  it("a Hacker's loop reads as plain \"camera offline\" on the watcher's feed (text, case file markup)", () => {
+    const v = viewFor(cameraWorld(), "p1");
+    const e = v.caseFile.map((x) => x.event).filter((x) => x.type === "roomWatched" && x.round === 2);
+    expect(e).toHaveLength(1);
+    const text = describeEvent(e[0]!, { me: "p1", name: namesOf(v) });
+    expect(text).toMatch(/camera offline in the Vault/);
+    expect(text).not.toMatch(/hack|loop|power cut/i);
   });
 });
 
@@ -298,10 +284,10 @@ describe("the Heat breakdown adds up to the real Heat change (extension.md \"Wha
     expect(r3.lines.find((l) => l.kind === "missed")?.value).toBe(BANK_JOB.heat.missedCheckpoint);
   });
 
-  it("the gap box matches the view's arithmetic, Payday's double Lobby included", () => {
-    const cfg = config(5, { rolePool: ["rookie"], eventsEnabled: true, seed: "payday" });
+  it("the gap box matches the view's arithmetic", () => {
+    const cfg = config(5, { rolePool: ["rookie"], eventsEnabled: true, seed: "gap" });
     let s = run(createGame(cfg), ...ids(5).map((p) => mv(p, "office")), ROUND, ALIBIS);
-    s = replay(s.config, s.log.map((e) => (e.type === "eventFlipped" && e.round === 2 ? { ...e, card: "payday", room: null } : e)));
+    s = replay(s.config, s.log.map((e) => (e.type === "eventFlipped" && e.round === 2 ? { ...e, card: "audit", room: null } : e)));
     // Everyone honest in the Lobby, everyone posts the truth: the gap must add up.
     s = run(s, ...ids(5).map((p) => mv(p, "lobby")), ROUND, ...ids(5).map((p) => ({ type: "postAlibi", player: p, room: "lobby" })));
     const v = viewFor(s, "p0");
@@ -567,21 +553,6 @@ describe("the Heat breakdown is exact (extension.md \"Heat\", \"What the app wor
         expect(clamp[0]!.label, tag).toBe("Heat is at the top");
       }
     }
-  });
-
-  it("a Quiet night card at low Heat is clamped too, and the card keeps its own line", () => {
-    let s = createGame(config(5, { rolePool: ["rookie"], eventsEnabled: true, seed: "quiet" }));
-    s = run(s, ...ids(5).map((p) => mv(p, "office")), ROUND, ALIBIS);
-    s = replay(s.config, s.log.map((e) => (e.type === "eventFlipped" && e.round === 2 ? { ...e, card: "quietNight", room: null } : e)));
-    expect(s.log.some((e) => e.type === "eventFlipped" && e.round === 2 && e.card === "quietNight")).toBe(true);
-    // Heat 0, so the tuned Quiet night (−5, content 0.17.0, r6-balance.md) still clamps: 0 + 4 − 5 → 0.
-    s = at(s, 0);
-    s = run(s, ...ids(5).map((p) => mv(p, "office")), ROUND);
-    const h = heatRound(viewFor(s, "p0"), 2)!;
-    expect(s.heat).toBe(0);
-    expect(h.total, h.text).toBe(0);
-    expect(h.lines.map((l) => l.kind)).toEqual(["base", "event", "clamp"]);
-    expect(h.lines.find((l) => l.kind === "event")).toMatchObject({ label: "Quiet night", value: -5 });
   });
 
   /**

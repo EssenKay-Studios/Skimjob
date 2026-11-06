@@ -65,8 +65,7 @@ function darkGame(cfg: GameConfig): GameState {
  * Hacker, Auditor, Detective and Mole powers (tip-off, Mole allies), alibis,
  * proposals, an emergency meeting, sealed and changed ballots (Smooth talker
  * weight), shakedown windows, shakedowns and
- * checkpoints, and the event cards (Lockdown avoided; Double-cross offers
- * accepted by both in even rounds, by one in odd rounds), and perks (design §8.3: granted by the test hook,
+ * checkpoints, and the event cards (Lockdown avoided), and perks (design §8.3: granted by the test hook,
  * then Peek, Tail, Rig and its pick, +Vote, Ballot, a verified Alibi, Recharge and a Shield that cancels
  * the Act 1 shakedown). Returns the state after every command. (The script reads the
  * full state to pick moves, as a scheduler would; views are what's checked.)
@@ -170,10 +169,6 @@ function playGame(players: number, voteVisibility: VoteVisibility, dark = false)
       if (i === 0) step({ type: "submitMove", player: id, move: { room: "lobby", pocket: 0 } }); // later changed
       step({ type: "submitMove", player: id, move });
     });
-    // design §10 Double-cross: both accept in even rounds (a swap), only the first in odd ones (none).
-    s.card?.offer?.players.forEach((id, k) => {
-      if (round % 2 === 0 || k === 0) step({ type: "answerDoubleCross", player: id, accept: true });
-    });
     step({ type: "advance", deadline: { kind: "round", round } });
     // extension.md "Police activity": one hidden police moment per round, as the simulator takes them.
     if (s.police) step({ type: "advance", deadline: { kind: "policeMoment", moment: s.police.moment } });
@@ -233,10 +228,6 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
           { type: "perkBought", visibility: privateTo(other), player: other, perk: "shield", cost: 2 },
           { type: "abilityResolved", visibility: privateTo(other), player: other, round: 1, ability: { kind: "audit", round: 1, room: "vault", shortfall: 4 } },
           { type: "abilityResolved", visibility: privateTo(other), player: other, round: 1, ability: { kind: "checkStash", target: viewer, threshold: 3, dirty: true } },
-          { type: "doubleCrossOffered", visibility: privateTo(other), player: other, round: 2, partner: viewer },
-          { type: "doubleCrossAnswered", visibility: privateTo(other), player: other, round: 2, accept: true },
-          { type: "doubleCrossResolved", visibility: privateTo(other), player: other, round: 2, partner: viewer, swap: { role: "mole", roleState: { usedThisAct: 1, usedThisGame: 0, tokens: 3, perks: ["shield"], tail: "vault" } } },
-          { type: "raidRumourHit", visibility: privateTo(other), player: other, round: 2, lost: 3 },
           { type: "insideTip", visibility: privateTo(other), player: other, round: 2, subject: viewer, role: "mole" },
           { type: "perkUsed", visibility: privateTo(other), player: other, round: 1, perk: { kind: "ballot", meetingId: "act-1", target: viewer } },
           { type: "rigPicked", visibility: privateTo(other), player: other, round: 2, card: "audit" },
@@ -293,27 +284,10 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
   };
   // A Rig is its holder's secret. design §8.3
   const rigs = [...state.rigs.filter((r) => r.player === viewer), { player: other, round: 9, cards: ["audit", "lockdown"], pick: "lockdown" }];
-  // design §10: a Double-cross offer is hidden from everyone else, and the partner's answer from both.
-  const offer = state.card?.offer;
-  let card = state.card;
-  if (card && offer) {
-    const [a, b] = offer.players;
-    const toggled = (id: PlayerId): boolean => !offer.accepted.includes(id);
-    if (a === viewer || b === viewer) {
-      const partner = a === viewer ? b : a;
-      const accepted = [...offer.accepted.filter((id) => id === viewer), ...(toggled(partner) ? [partner] : [])];
-      card = { ...card, offer: { players: offer.players, accepted } };
-    } else {
-      const others = state.playerOrder.filter((id) => id !== viewer);
-      const pair: [PlayerId, PlayerId] = [others[others.length - 1] as PlayerId, others[0] as PlayerId];
-      card = { ...card, offer: { players: pair, accepted: toggled(a) ? pair : [] } };
-    }
-  }
   // extension.md "Police activity": the schedule and the tip-off queue are nobody's to see.
   const police = { moment: (state.police?.moment ?? 0) + 5, gapPermille: 1234, patrol: !state.police?.patrol, queue: [other, other], tipOffs: { [other]: 7, [viewer]: state.police?.tipOffs[viewer] ?? 0 } };
   return {
     ...state,
-    card,
     police,
     rigs,
     config: { ...state.config, seed: "scrubbed" },
@@ -369,7 +343,6 @@ describe("no leaks in real games — design §17.2, §13, §11.2", () => {
   const earned = new Set<string>();
   const seenWatch = new Set<string>();
   const seenCards = new Set<string>();
-  let swapped = false;
   const cases = [3, 5, 9, 12].flatMap((n) => (["hiddenThenRevealed", "open", "secret"] as const).map((mode) => [n, mode] as const));
 
   it.each(cases)("%i players, %s votes", (players, mode) => {
@@ -381,14 +354,12 @@ describe("no leaks in real games — design §17.2, §13, §11.2", () => {
     for (const t of ["moveSubmitted", "defaultMoveAssigned", "roomWatched", "abilityResolved", "voteSealed", "voteCast", "shakedownResolved", "checkpointChecked", "meetingProposalAccepted"]) {
       expect(types, t).toContain(t);
     }
-    if (players >= 5) expect(types).toContain("pocketCount");
     for (const t of types) seenTypes.add(t);
     for (const e of final.log) if (e.type === "abilityResolved") seenAbilities.add(e.ability.kind);
     for (const e of final.log) if (e.type === "perkUsed") seenPerks.add(e.perk.kind);
     for (const e of final.log) if (e.type === "tokenEarned") earned.add(e.trigger);
     for (const e of final.log) if (e.type === "roomWatched") seenWatch.add(e.source);
     for (const e of final.log) if (e.type === "eventFlipped") seenCards.add(e.card);
-    if (final.log.some((e) => e.type === "doubleCrossResolved" && e.swap !== null)) swapped = true;
 
     for (const state of states) {
       for (const viewer of state.playerOrder) {
@@ -433,11 +404,10 @@ describe("no leaks in real games — design §17.2, §13, §11.2", () => {
 
   it("the games above reach every info, vote, Mole and event-card event (design §8, §8.1, §10)", () => {
     for (const t of ["shakedownPending", "shakedownCancelled", "alibisClosed", "roleListShown", "shopDealt"]) expect(seenTypes, t).toContain(t);
-    for (const t of ["eventFlipped", "doubleCrossOffered", "doubleCrossAnswered", "doubleCrossResolved", "raidRumourHit", "insideTip", "auditReport"]) {
+    for (const t of ["eventFlipped", "insideTip", "auditReport"]) {
       expect(seenTypes, t).toContain(t);
     }
     for (const c of EVENT_DECK) expect(seenCards, c).toContain(c);
-    expect(swapped, "a Double-cross swap happened").toBe(true);
     for (const k of ["lookout", "loopCameras", "tipOff", "audit", "checkStash"]) expect(seenAbilities, k).toContain(k);
     // design §8.3: every perk event and every perk's effect.
     for (const t of ["tokenEarned", "perkBought", "perkUsed", "rigPicked", "alibiVerified"]) expect(seenTypes, t).toContain(t);

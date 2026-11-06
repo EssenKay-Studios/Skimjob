@@ -26,7 +26,7 @@ export type PocketBand = (typeof POCKET_BANDS)[number];
 export const HONEST_MAX_SHARE = 0.1;
 export const MODERATE_MAX_SHARE = 0.4;
 /** A sole Act 2 leader "has it settled" with a lead of at least this share of the most anyone can add in Act 3. */
-export const DECIDED_EARLY_LEAD_SHARE = 0.5;
+const DECIDED_EARLY_LEAD_SHARE = 0.5;
 
 /** num ÷ den, or null when there is nothing to divide. */
 export const rate = (num: number, den: number): number | null => (den === 0 ? null : num / den);
@@ -176,7 +176,7 @@ export interface Metrics {
   readonly rejections: number;
 }
 
-export function metrics(records: readonly GameRecord[]): Metrics {
+function metrics(records: readonly GameRecord[]): Metrics {
   const failed = records.filter((g) => g.result === "failed");
   return {
     games: records.length,

@@ -30,9 +30,6 @@ export const HATS = [
 ] as const;
 export type Hat = (typeof HATS)[number];
 
-/** Number of accessory colours (`--acc-1` … `--acc-6`). */
-export const ACC_COLOURS = 6;
-
 export const EXPRESSIONS = ["neutral", "smug", "nervous", "caught"] as const;
 export type Expression = (typeof EXPRESSIONS)[number];
 

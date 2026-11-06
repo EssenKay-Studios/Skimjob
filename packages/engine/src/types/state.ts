@@ -51,8 +51,6 @@ export type Phase =
   /** Game over; everything is revealed. design §13 */
   | { readonly kind: "ended"; readonly outcome: Outcome };
 
-export type PhaseKind = Phase["kind"];
-
 export interface PlayerState {
   readonly id: PlayerId;
   readonly name: string;
@@ -88,7 +86,7 @@ export interface RoleState {
   readonly usedThisAct: number;
   /** Uses this game: raid stops (Fixer). */
   readonly usedThisGame: number;
-  /** Unspent tokens (extension.md "Tokens and the perk shop"); they stay with the player on a Double-cross. */
+  /** Unspent tokens (extension.md "Tokens and the perk shop"). */
   readonly tokens: number;
   /** Perks bought and not yet used, in the order bought. design §8.3 */
   readonly perks: readonly PerkId[];
@@ -130,20 +128,12 @@ export interface PendingShakedown {
   readonly target: PlayerId;
 }
 
-/** A Double-cross offer: the two players, and who has accepted so far. Hidden from everyone else. design §10 */
-export interface DoubleCrossOffer {
-  readonly players: readonly [PlayerId, PlayerId];
-  readonly accepted: readonly PlayerId[];
-}
-
 /** The event card flipped for `round`; cleared when the round resolves. design §10 */
 export interface ActiveCard {
   readonly round: number;
   readonly id: EventId;
   /** The room Lockdown closes; null for other cards. Public. */
   readonly room: RoomId | null;
-  /** Double-cross only. Never in a view: each of the two learns their own offer from the case file. */
-  readonly offer: DoubleCrossOffer | null;
 }
 
 export interface MeetingProposal {

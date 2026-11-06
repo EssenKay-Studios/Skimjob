@@ -3,7 +3,7 @@
 import { describe, expect, it } from "vitest";
 import { EVENTS, POLICE_ACTIVITY, STARTER_ROLES } from "@skimjob/content";
 import { createGame, viewFor, type GameConfig, type GameState, type PlayerView } from "@skimjob/engine";
-import { cardHeatNow, heatDanger, jobThisRound, policeHeat, policeInPlay, policeToCome } from "./heat";
+import { heatDanger, jobThisRound, policeHeat, policeInPlay, policeToCome } from "./heat";
 import { seats } from "./testkit";
 
 function heatGame(n: number, extra: Partial<GameConfig> = {}, seed = "heat"): GameState {
@@ -36,13 +36,10 @@ describe("bot Heat projection — design §7, §10; extension.md \"Police activi
     expect(heatDanger(withActivity(withActivity(view, 1), 1))).toBeGreaterThan(heatDanger(view));
   });
 
-  it("this round's Heat card counts toward danger, and Shift change surges the Vault (design §10, scaled ×4/5 at 4 players)", () => {
+  it("Shift change surges the Vault (design §10, scaled ×4/5 at 4 players)", () => {
     const s = heatGame(4);
     const scale = 4 / 5;
-    const withCard = (id: string): GameState => ({ ...s, card: { round: 1, id, room: null, offer: null } });
-    expect(cardHeatNow(viewFor(withCard("quietNight"), "ana"))).toBe(-4); // Quiet night −5 × 4/5
-    expect(cardHeatNow(viewFor(withCard("audit"), "ana"))).toBe(0);
-    expect(heatDanger(viewFor(withCard("quietNight"), "ana"))).toBeCloseTo(heatDanger(viewFor(s, "ana")) - 4 / 100);
+    const withCard = (id: string): GameState => ({ ...s, card: { round: 1, id, room: null } });
     const vault = jobThisRound(viewFor(withCard("shiftChange"), "ana")).rooms.vault;
     expect(vault?.loot).toBe(9); // 6 × 1.5
     expect(vault?.heatPressure).toBeCloseTo(20 * (1 + ((EVENTS.shiftChange?.effect as { heatMultiplier: number }).heatMultiplier - 1) * scale));

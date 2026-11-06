@@ -27,7 +27,7 @@ import { suspicion } from "./suspicion";
  */
 export type ClaimStyle = "accused" | "free" | "evidence" | "rarely" | "afterSave" | "afterVote";
 
-export const CLAIM_STYLE: Readonly<Record<RoleId, ClaimStyle>> = {
+const CLAIM_STYLE: Readonly<Record<RoleId, ClaimStyle>> = {
   rookie: "free",
   lookout: "evidence",
   auditor: "evidence",
@@ -38,25 +38,25 @@ export const CLAIM_STYLE: Readonly<Record<RoleId, ClaimStyle>> = {
 };
 
 /** Share of the usual claim chance for the "rarely" roles (bot setting). */
-export const RARELY = 0.25;
+const RARELY = 0.25;
 
 /** The low-risk roles a bluffing bot claims, in order. extension.md Build notes "Bots" */
 export const SAFE_BLUFFS: readonly RoleId[] = ["rookie"];
 
 /** Roles whose power leaves evidence, so they bluff too. extension.md Build notes "Bots" */
-export const EVIDENCE_ROLES: readonly RoleId[] = ["hacker"];
+const EVIDENCE_ROLES: readonly RoleId[] = ["hacker"];
 
 /** Whether this role bluffs when accused: a ★ role or one that leaves evidence. */
 export const bluffs = (role: RoleId): boolean => isStar(role) || EVIDENCE_ROLES.includes(role);
 
 /** Chance a bluffing bot bluffs once accused (bot setting). */
-export const BLUFF_WHEN_ACCUSED = 0.8;
+const BLUFF_WHEN_ACCUSED = 0.8;
 
 /**
  * A bot counts as accused once its public suspicion (what anyone could work
  * out from the ledger, `publicSuspicion`) is at least this and the most of anyone's (bot setting).
  */
-export const ACCUSED_AT = 1.5;
+const ACCUSED_AT = 1.5;
 
 /** Is a meeting about to happen or open: the time to claim. design §11.1 */
 export function meetingTime(view: PlayerView): boolean {
@@ -97,7 +97,7 @@ export function publicSuspicion(view: PlayerView): Map<PlayerId, number> {
 }
 
 /** Unique roles claimed by more than one player, and who claimed them. */
-export function doubleClaims(view: PlayerView): Map<RoleId, PlayerId[]> {
+function doubleClaims(view: PlayerView): Map<RoleId, PlayerId[]> {
   const out = new Map<RoleId, PlayerId[]>();
   for (const role of new Set(ofType(view.ledger, "roleClaimed").map((c) => c.role))) {
     const who = claimantsOf(view, role);

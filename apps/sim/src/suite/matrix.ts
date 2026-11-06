@@ -11,7 +11,7 @@ import type { MixEntry, SimOptions } from "../args";
  * role list. The Standard deck throughout. extension.md Build notes "Sim"
  */
 export type Setup = "balanced" | "random" | "possible" | "hidden";
-export const SETUPS: Readonly<Record<Setup, { readonly deal: DealStyle; readonly roleList: RoleListSetting }>> = {
+const SETUPS: Readonly<Record<Setup, { readonly deal: DealStyle; readonly roleList: RoleListSetting }>> = {
   balanced: { deal: "balanced", roleList: "exact" },
   random: { deal: "random", roleList: "exact" },
   possible: { deal: "balanced", roleList: "possible" },
@@ -20,7 +20,7 @@ export const SETUPS: Readonly<Record<Setup, { readonly deal: DealStyle; readonly
 export const isSetup = (v: unknown): v is Setup => typeof v === "string" && Object.hasOwn(SETUPS, v);
 
 /** The gates (success band, role parity) cover Balanced games at 4–12 players. extension.md Build notes "Sim" */
-export const GATED_FROM_PLAYERS = 4;
+const GATED_FROM_PLAYERS = 4;
 
 /** What a whole suite run is: the same SuiteOptions give the same report, whatever the workers or shards. */
 export interface SuiteOptions {
@@ -50,7 +50,7 @@ export interface Cell {
   readonly gated: boolean;
 }
 
-export const cellKey = (players: number, setup: Setup, events: boolean): string => `${players}p/${setup}/events-${events ? "on" : "off"}`;
+const cellKey = (players: number, setup: Setup, events: boolean): string => `${players}p/${setup}/events-${events ? "on" : "off"}`;
 
 /** Every cell, in report order: player count, then setup, then events. */
 export function buildMatrix(o: Pick<SuiteOptions, "playerCounts" | "setups" | "events">): Cell[] {

@@ -69,8 +69,7 @@ describe("bot perks — v2 §1, §4", () => {
 
   it("Rig: the bot rigs, then picks the most Heat-calming card", () => {
     const view = viewFor(game(5), "ana");
-    expect(cardHeatScore(view, "quietNight")).toBeLessThan(cardHeatScore(view, "audit"));
-    expect(cardHeatScore(view, "shiftChange")).toBeGreaterThan(cardHeatScore(view, "audit"));
+        expect(cardHeatScore(view, "shiftChange")).toBeGreaterThan(cardHeatScore(view, "audit"));
     for (let i = 0; i < 20; i++) {
       const base = createGame({ ...config(5, `rig-${i}`), eventsEnabled: true });
       let s = grant({ ...base, players: { ...base.players, ana: { ...(base.players.ana as GameState["players"][string]), role: "lookout" } } }, "ana", "rig");

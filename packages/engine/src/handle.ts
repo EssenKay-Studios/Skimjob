@@ -14,7 +14,6 @@ import { pick, randomInt, shuffle } from "./rng";
 import { applyEvent } from "./reduce";
 import { checkMove, closeAlibis, resolveRound } from "./round";
 import { isObject, playerFor, show } from "./check";
-import { answerDoubleCross } from "./deck";
 import { claimRole } from "./claims";
 import { buyPerk } from "./perks";
 import { policeMoment } from "./police";
@@ -141,7 +140,6 @@ const HANDLERS: Readonly<Record<string, Handler>> = {
   castVote,
   sealVote,
   useAbility,
-  answerDoubleCross,
   buyPerk: (state, command) => buyPerk(state, command),
   advance,
   scheduleMeeting,

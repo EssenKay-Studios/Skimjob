@@ -43,7 +43,7 @@ export interface SeatNotes {
 type Result<T> = { ok: true; value: T } | { ok: false; reason: string };
 
 /** A board edit from the client, or why not. design §12.3 */
-export function parseBoardEdit(body: unknown, state: GameState, owner: PlayerId): Result<{ subject: PlayerId; mark: BoardMark }> {
+function parseBoardEdit(body: unknown, state: GameState, owner: PlayerId): Result<{ subject: PlayerId; mark: BoardMark }> {
   if (typeof body !== "object" || body === null || Array.isArray(body)) return { ok: false, reason: "expected { subject, tag, note }" };
   const raw = body as Record<string, unknown>;
   for (const k of Object.keys(raw)) if (k !== "subject" && k !== "tag" && k !== "note") return { ok: false, reason: `unknown field ${JSON.stringify(k)}` };
@@ -58,7 +58,7 @@ export function parseBoardEdit(body: unknown, state: GameState, owner: PlayerId)
 }
 
 /** A note: may be empty; otherwise the chat's text rules, at most BOARD_NOTE_MAX_CHARS. */
-export function checkNote(input: unknown): Result<string> {
+function checkNote(input: unknown): Result<string> {
   if (typeof input !== "string") return { ok: false, reason: "note must be a string" };
   if (input.trim() === "") return { ok: true, value: "" };
   const text = checkChatText(input);
@@ -77,7 +77,7 @@ export const topSeq = (state: GameState, player: PlayerId): number => {
  * A per-key sliding-window limit (memory only): `allow(key)` is false once `limit.writes`
  * were allowed for that key within `limit.windowMs`. Keys with nothing in the window are swept.
  */
-export function rateLimiter(clock: Clock, limit: { readonly writes: number; readonly windowMs: number }) {
+function rateLimiter(clock: Clock, limit: { readonly writes: number; readonly windowMs: number }) {
   const recent = new Map<string, number[]>();
   let lastSweep = clock.now();
   return {

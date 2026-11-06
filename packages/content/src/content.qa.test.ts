@@ -25,9 +25,9 @@ describe("bank room data — design §6, §7", () => {
     expect(rooftop?.heatPressure).toBe(-(vault?.heatPressure ?? 0));
   });
 
-  it("only Security and Server room give extra info", () => {
+  it("only Security gives extra info", () => {
     const info = Object.values(BANK_JOB.rooms).filter((r) => r.info !== "none").map((r) => [r.id, r.info]);
-    expect(info).toEqual([["security", "watchRoom"], ["serverRoom", "pocketCount"]]);
+    expect(info).toEqual([["security", "watchRoom"]]);
   });
 });
 

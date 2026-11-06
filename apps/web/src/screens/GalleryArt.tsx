@@ -19,7 +19,7 @@ const TIERS = {
   big: BANK_ROOMS,
 } as const;
 
-export function ArtSection({ id, title, note, wide, children }: { id: string; title: string; note?: string; wide?: boolean; children: ReactNode }) {
+function ArtSection({ id, title, note, wide, children }: { id: string; title: string; note?: string; wide?: boolean; children: ReactNode }) {
   return (
     <SketchFrame as="section" seed={`g-${id}`} radius={16} shadow={0.5} className={wide ? "g-section g-section--wide" : "g-section"} aria-labelledby={`g-${id}`}>
       <header className="g-section__head">

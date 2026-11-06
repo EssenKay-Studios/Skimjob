@@ -44,8 +44,7 @@ export function leadersOf(ranked: readonly RankEntry[]): PlayerId[] {
  * extension.md "One crew, and how you win" (Build notes "Win rule"): the top
  * group is everyone level at the top after the tie-breaks. A success is won by
  * the top group, whatever their roles. A failure is won only by top-group
- * members whose role wins that ending (`winsOn`), else by nobody. Roles are
- * read as they are at the end (a Double-cross can hand over a failure win).
+ * members whose role wins that ending (`winsOn`), else by nobody.
  * The full ranking is always kept.
  */
 export function outcomeFor(state: GameState, failure: FailureReason | null, roles: RoleTable = rolesFor(state.config)): Outcome {

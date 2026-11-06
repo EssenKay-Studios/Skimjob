@@ -208,7 +208,6 @@ function applyChange(state: GameState, event: GameEvent): GameState {
     }
     case "roomSighting":
     case "roomWatched":
-    case "pocketCount":
     case "copsRaided":
       // Information only; no state changes. (copsRaided is followed by gameEnded.)
       return state;
@@ -249,27 +248,9 @@ function applyChange(state: GameState, event: GameEvent): GameState {
     case "eventFlipped":
       return {
         ...state,
-        card: { round: event.round, id: event.card, room: event.room, offer: null },
+        card: { round: event.round, id: event.card, room: event.room },
         cardsFlipped: [...state.cardsFlipped, event.card],
       };
-    case "doubleCrossOffered": {
-      const card = state.card;
-      if (!card) throw new Error("doubleCrossOffered: no card flipped");
-      // One event per player; the first sets the pair.
-      return card.offer ? state : { ...state, card: { ...card, offer: { players: [event.player, event.partner], accepted: [] } } };
-    }
-    case "doubleCrossAnswered": {
-      const offer = state.card?.offer;
-      if (!state.card || !offer) throw new Error("doubleCrossAnswered: no offer");
-      const rest = offer.accepted.filter((p) => p !== event.player);
-      return { ...state, card: { ...state.card, offer: { ...offer, accepted: event.accept ? [...rest, event.player] : rest } } };
-    }
-    case "doubleCrossResolved": {
-      const swap = event.swap;
-      return swap ? updatePlayer(state, event.player, () => ({ role: swap.role, roleState: swap.roleState })) : state;
-    }
-    case "raidRumourHit":
-      return updatePlayer(state, event.player, (p) => ({ stash: p.stash - event.lost }));
     case "insideTip":
     case "auditReport":
       return state;

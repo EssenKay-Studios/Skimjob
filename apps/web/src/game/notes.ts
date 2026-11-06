@@ -53,11 +53,11 @@ function usePageVisible(): boolean {
 }
 
 /** How long the seen mark waits before it's sent (so a burst of events is one request). */
-export const SEEN_DEBOUNCE_MS = 1200;
+const SEEN_DEBOUNCE_MS = 1200;
 /** After coming back (load, or the tab back in front), how long news still opens the recap rather than being marked seen: the view may arrive late (a reconnect). */
-export const CATCH_UP_MS = 4000;
+const CATCH_UP_MS = 4000;
 /** A tab hidden for less than this isn't "away" (a quick switch, or a browser shuffling tabs): no recap when it's back. */
-export const AWAY_MIN_HIDDEN_MS = 10_000;
+const AWAY_MIN_HIDDEN_MS = 10_000;
 /** Retry waits after a failed seen mark: 2 s, 4 s, … at most a minute. */
 export const seenRetryMs = (failures: number) => Math.min(60_000, 1000 * 2 ** failures);
 
