@@ -64,7 +64,7 @@ As R7: on success, the biggest stash wins; a heist sunk by theft has no winner. 
 
 ## Parity with R7, and the effort
 
-R7 is built with ten seams (`docs/simplified.md` A12) so Advanced is mostly content. The ones that matter most here:
+R7 is built with ten seams (`docs/design.md` §19.2) so Advanced is mostly content. The ones that matter most here:
 - which facts are public is content (seam 1);
 - each ruleset brings its own role list, and role-specific win rules live in role handlers (seams 3–4);
 - whether a holder is announced, and whether a result is private or filed, is a per-role content setting (seam 7);

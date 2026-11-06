@@ -472,7 +472,7 @@ Lines (`wc -l`, tests included; list 2/3 partly estimated, ±30%):
 ## Decisions (provisional)
 
 1. **Quick split:** the mode goes in C2b; the 15-minute preset stays, relabelled "15 min" in C2b, its id renamed in S3a.3. Reason: a 15-minute session is a valid R7 length (session ÷ round cap), and e2e and server tests run on it.
-2. **Rookie kept** until S3a.6: R7 deals 5–7 roles to up to 12 players, so S3a.6 decides what a roleless seat is; deleting the filler now would break every deal.
+2. **Rookie kept** until S3a.6: deleting the filler now would break every R6 deal. R7 gives every player a role (design §11.3, owner, 6 Nov), so S3a.6 deletes the Rookie with the new deal.
 3. **Embezzler and all Wildcards cut in C2c**, the Balanced mix capped by pool size (no deal code change needed), rather than kept for the deal's sake.
 4. **Rig stays until S3a.7** with the rest of the R6 shop (review): `SHOP_COLUMNS` and `SHOP_RULES.swayEventsOff` are untouched in C2.
 5. **`V01_NUMBERS`/`V06_NUMBERS`/`V015_NUMBERS`** stay until their last test user goes in S3; only the dead `V013_NUMBERS` goes (C2d), and C2c/C2d strip their keys for cut roles and cards. Repinning R6 tests that S3 deletes anyway has no value. **This departs from the spec bullet** that lists "v0.1 number testkits" in list 2: flagged for the PM.

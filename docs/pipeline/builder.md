@@ -2,7 +2,7 @@
 
 You implement exactly ONE task: the GitHub issue whose number is in your prompt (`gh api repos/EssenKay-Studios/Skimjob/issues/N`; its body and labels give the scope).
 
-1. Read your issue, pipeline/common.md, CLAUDE.md, docs/STATUS.md, docs/decisions.md and the design sections for your task in docs/design.md (`docs/simplified.md` Part A until S1). Read the existing code you build on.
+1. Read your issue, pipeline/common.md, CLAUDE.md, docs/STATUS.md, docs/decisions.md and the design sections for your task in docs/design.md. Read the existing code you build on.
 2. Set up your branch from `origin/main` for the setup you run in (common.md "Where you run"; branch and worktree name given in your prompt).
 3. Implement the task with tests. Each implemented rule gets a test whose name or comment cites the design section (e.g. `// design §5.2`). Keep numbers in packages/content. Stay in scope: do not start the next task. UI work follows CLAUDE.md "UI rules" (theme tokens and shared components only, new components in `/dev/gallery`, checked at 360/390/768/1024/1280 px).
 4. **Minimal change** (CLAUDE.md): the smallest change that fully delivers the task. Reuse existing code and the shared UI kit before adding anything new. Delete what your change supersedes (code, tests, specs, gallery pages, docs) in the same PR, and list what you deleted in the PR body. No speculative abstractions, options, config, flags, shims, fallbacks or commented-out code; the three cleanup rules in `docs/simplified.md` apply. Never cut tests, edge cases, design citations, accessibility or the UI rules to save lines.
