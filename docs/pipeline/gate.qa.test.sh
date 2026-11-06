@@ -23,7 +23,7 @@ case "$method $path" in
   "PUT "*/pulls/*/merge) echo merged >"$FIX/MERGED"; f=merge.json ;;
   "DELETE "*/git/refs/heads/*) echo "${path#*/git/refs/heads/}" >"$FIX/DELETED"; exit 0 ;;
   "GET "*/pulls/*/reviews) f=reviews.json ;; "GET "*/issues/*/comments) f=comments.json ;;
-  "GET "*/pulls/*/commits) f=pr-commits.json ;; "GET "*/pulls/*) f=pr.json ;;
+  "GET "*/pulls/*/files) f=pr-files.json ;; "GET "*/pulls/*/commits) f=pr-commits.json ;; "GET "*/pulls/*) f=pr.json ;;
   "GET "*/compare/*) f=compare.json ;; "GET "*/check-runs) f=checks.json ;; "GET "*/status) f=status.json ;;
   "GET "*/commits/*) f=commit-${path##*/}.json ;; "GET "*/issues) [ -f "$FIX/NO_ISSUES" ] && exit 1; f=issues.json ;;
   *) echo "fake gh: unexpected: $method $path" >&2; exit 1 ;;
@@ -46,6 +46,7 @@ reset() {
   review_new_by=karthik24iyer; qa_new_by=karthik24iyer; review_new_state=COMMENTED
   qa_as_review=""; review_as_comment=""; statuses=""
   checks='{"name":"Typecheck","status":"completed","conclusion":"success"}'
+  pr_files='[{"filename":"apps/web/src/x.ts"},{"filename":"apps/web/src/x.qa.test.ts"}]'
   compare_status=ahead; since_files='["apps/web/src/x.qa.test.ts"]'; prev=""
 }
 write() {
@@ -69,6 +70,7 @@ J
       {body: $b, user: {login: $by}, created_at: "2026-01-01T00:00:04Z"},
       {body: $x, user: {login: "karthik24iyer"}, created_at: "2026-01-01T00:00:06Z"}
     ] | map(select(.body != "") | .body |= gsub("\\\\n"; "\n"))' >"$FIX/comments.json"
+  echo "$pr_files" >"$FIX/pr-files.json"
   echo "{\"statuses\":[$statuses]}" >"$FIX/status.json"
   echo "{\"check_runs\":[$checks]}" >"$FIX/checks.json"
   echo "{\"status\":\"$compare_status\",\"total_commits\":1,\"commits\":[{\"sha\":\"$C\"}]}" >"$FIX/compare.json"
@@ -148,26 +150,44 @@ reset; review_new="VERDICT: CHANGES REQUESTED\nHead: $H"; review_new_by=mallory;
 reset; qa_new="QA: FAIL\nHead: $H"; qa_new_by=mallory; expect yes "foreign QA FAIL doesn't block"
 reset; review_new="VERDICT: CHANGES REQUESTED\nHead: $H"; review_new_by=pm-bot; export GATE_AUTHORS=karthik24iyer,pm-bot; expect no "GATE_AUTHORS adds an account"; unset GATE_AUTHORS
 reset; review="VERDICT: CHANGES REQUESTED\nHead: $H"; review_new="VERDICT: APPROVE\nHead: $H"; review_new_state=PENDING; expect no "pending APPROVE doesn't count"
-# Review bots (claude[bot]): reviewer VERDICTs only, never QA; same exact format and newest-wins rules.
-reset; review=""; review_new="VERDICT: APPROVE\nHead: $H"; review_new_by='claude[bot]'; expect yes "bot APPROVE on head counts"
-reset; review="VERDICT: CHANGES REQUESTED\nHead: $H"; review_new="VERDICT: APPROVE\nHead: $H"; review_new_by='claude[bot]'; expect yes "newer bot APPROVE after a human CHANGES REQUESTED"
-reset; review_new="VERDICT: CHANGES REQUESTED\nHead: $H"; review_new_by='claude[bot]'; expect no "newer bot CHANGES REQUESTED blocks a human APPROVE"
-reset; review_new="VERDICT: CHANGES REQUESTED\nHead: $H"; review_new_by='claude[bot]'; review_as_comment="VERDICT: APPROVE\nHead: $H"; expect yes "newest of bot and human counts (human newer)"
-reset; review=""; review_new="VERDICT: APPROVE\nHead: $R"; review_new_by='claude[bot]'; since_files='["packages/engine/src/rules.ts"]'; expect no "bot APPROVE on an old head with a non-QA commit since"
-reset; review=""; review_new="VERDICT: APPROVE\nHead: $R"; review_new_by='claude[bot]'; expect yes "bot APPROVE on an older head, only QA tests since"
-reset; review=""; review_new="**VERDICT: APPROVE**\nHead: $H"; review_new_by='claude[bot]'; expect no "bot verdict in a malformed format"
-reset; review=""; review_new="VERDICT: APPROVE"; review_new_by='claude[bot]'; expect no "bot APPROVE without a Head line"
-reset; qa="QA: FAIL\nHead: $H"; qa_new="QA: PASS\nHead: $H"; qa_new_by='claude[bot]'; expect no "bot QA: PASS does not override a QA FAIL"
-reset; qa=""; qa_new="QA: PASS\nHead: $H"; qa_new_by='claude[bot]'; expect no "bot QA: PASS alone is not a QA verdict"
-reset; qa_new="QA: FAIL\nHead: $H"; qa_new_by='claude[bot]'; expect yes "bot QA: FAIL is ignored"
-reset; qa_as_review="QA: FAIL\nHead: $H"; review_new="QA: PASS\nHead: $H"; review_new_by='claude[bot]'; qa=""; expect no "bot QA: PASS posted as a review is not a QA verdict"
+# Review bots (github-actions[bot]): reviewer VERDICTs only, never QA; same exact format and newest-wins rules.
+reset; review=""; review_new="VERDICT: APPROVE\nHead: $H"; review_new_by='github-actions[bot]'; expect yes "bot APPROVE on head counts"
+reset; review="VERDICT: CHANGES REQUESTED\nHead: $H"; review_new="VERDICT: APPROVE\nHead: $H"; review_new_by='github-actions[bot]'; expect yes "newer bot APPROVE after a human CHANGES REQUESTED"
+reset; review_new="VERDICT: CHANGES REQUESTED\nHead: $H"; review_new_by='github-actions[bot]'; expect no "newer bot CHANGES REQUESTED blocks a human APPROVE"
+reset; review_new="VERDICT: CHANGES REQUESTED\nHead: $H"; review_new_by='github-actions[bot]'; review_as_comment="VERDICT: APPROVE\nHead: $H"; expect yes "newest of bot and human counts (human newer)"
+reset; review=""; review_new="VERDICT: APPROVE\nHead: $R"; review_new_by='github-actions[bot]'; since_files='["packages/engine/src/rules.ts"]'; expect no "bot APPROVE on an old head with a non-QA commit since"
+reset; review=""; review_new="VERDICT: APPROVE\nHead: $R"; review_new_by='github-actions[bot]'; expect yes "bot APPROVE on an older head, only QA tests since"
+reset; review=""; review_new="**VERDICT: APPROVE**\nHead: $H"; review_new_by='github-actions[bot]'; expect no "bot verdict in a malformed format"
+reset; review=""; review_new="VERDICT: APPROVE"; review_new_by='github-actions[bot]'; expect no "bot APPROVE without a Head line"
+reset; qa="QA: FAIL\nHead: $H"; qa_new="QA: PASS\nHead: $H"; qa_new_by='github-actions[bot]'; expect no "bot QA: PASS does not override a QA FAIL"
+reset; qa=""; qa_new="QA: PASS\nHead: $H"; qa_new_by='github-actions[bot]'; expect no "bot QA: PASS alone is not a QA verdict"
+reset; qa_new="QA: FAIL\nHead: $H"; qa_new_by='github-actions[bot]'; expect yes "bot QA: FAIL is ignored"
+reset; qa_as_review="QA: FAIL\nHead: $H"; review_new="QA: PASS\nHead: $H"; review_new_by='github-actions[bot]'; qa=""; expect no "bot QA: PASS posted as a review is not a QA verdict"
 reset; review=""; review_new="VERDICT: APPROVE\nHead: $H"; review_new_by=mallory; expect no "a random user's VERDICT does not count"
 reset; review=""; review_new="VERDICT: APPROVE\nHead: $H"; review_new_by=claude; expect no "login claude (no [bot]) does not count"
 reset; review=""; review_new="VERDICT: APPROVE\nHead: $H"; review_new_by='claude-bot[bot]'; expect no "another bot does not count"
-reset; review=""; review_new="VERDICT: APPROVE\nHead: $H"; review_new_by='claude[bot]'; export GATE_REVIEW_BOTS=; expect no "GATE_REVIEW_BOTS empty trusts no bot"; unset GATE_REVIEW_BOTS
-reset; review=""; review_new="VERDICT: APPROVE\nHead: $H"; review_new_by='other[bot]'; export GATE_REVIEW_BOTS='claude[bot],other[bot]'; expect yes "GATE_REVIEW_BOTS adds a bot"; unset GATE_REVIEW_BOTS
-reset; review=""; review_new="VERDICT: APPROVE\nHead: $H"; review_new_by='claude[bot]'; export GATE_REVIEW_BOTS='bad login'; expect no "bad GATE_REVIEW_BOTS fails closed"; unset GATE_REVIEW_BOTS
-reset; review="VERDICT: CHANGES REQUESTED\nHead: $H"; review_new="VERDICT: APPROVE\nHead: $H"; review_new_by='claude[bot]'; review_new_state=PENDING; expect no "pending bot APPROVE doesn't count"
+reset; review=""; review_new="VERDICT: APPROVE\nHead: $H"; review_new_by='github-actions[bot]'; export GATE_REVIEW_BOTS=; expect no "GATE_REVIEW_BOTS empty trusts no bot"; unset GATE_REVIEW_BOTS
+reset; review=""; review_new="VERDICT: APPROVE\nHead: $H"; review_new_by='other[bot]'; export GATE_REVIEW_BOTS='github-actions[bot],other[bot]'; expect yes "GATE_REVIEW_BOTS adds a bot"; unset GATE_REVIEW_BOTS
+reset; review=""; review_new="VERDICT: APPROVE\nHead: $H"; review_new_by='github-actions[bot]'; export GATE_REVIEW_BOTS='bad login'; expect no "bad GATE_REVIEW_BOTS fails closed"; unset GATE_REVIEW_BOTS
+reset; review="VERDICT: CHANGES REQUESTED\nHead: $H"; review_new="VERDICT: APPROVE\nHead: $H"; review_new_by='github-actions[bot]'; review_new_state=PENDING; expect no "pending bot APPROVE doesn't count"
+reset; review=""; review_new="VERDICT: APPROVE\nHead: $H"; review_new_by='claude[bot]'; expect no "claude[bot] is no longer trusted (default is github-actions[bot])"
+# Bots count only when the PR touches nothing under .github/ or docs/pipeline/ (old or new path); humans always count.
+bot_approve() { reset; review=""; review_new="VERDICT: APPROVE\nHead: $H"; review_new_by='github-actions[bot]'; }
+bot_approve; pr_files='[{"filename":".github/workflows/ci.yml"}]'; expect no "bot APPROVE on a PR that touches .github/"
+bot_approve; pr_files='[{"filename":"apps/web/a.ts"},{"filename":"docs/pipeline/verdicts.sh"}]'; expect no "bot APPROVE on a PR that touches docs/pipeline/"
+bot_approve; pr_files='[{"filename":"docs/x.md","previous_filename":".github/workflows/old.yml"}]'; expect no "bot APPROVE when a rename leaves .github/"
+bot_approve; pr_files='[{"filename":".github/workflows/x.yml","previous_filename":"docs/x.md"}]'; expect no "bot APPROVE when a rename enters .github/"
+bot_approve; pr_files='[{"filename":".GitHub/workflows/x.yml"}]'; expect no "bot APPROVE: .github path match ignores case"
+bot_approve; pr_files='[{"filename":".githubx/a.yml"},{"filename":"docs/pipeline-notes.md"},{"filename":"docs/pipelines/a.md"}]'; expect yes "bot APPROVE: look-alike paths are not .github/ or docs/pipeline/"
+bot_approve; touch "$FIX/fail-pr-files.json"; expect no "file list unreadable fails closed"
+bot_approve; pr_files='[]'; expect yes "bot APPROVE on a PR with an empty file list"
+reset; pr_files='[{"filename":".github/workflows/ci.yml"},{"filename":"docs/pipeline/gate.qa.test.sh"}]'; expect yes "human APPROVE still counts on a PR that touches .github/ and docs/pipeline/"
+reset; review="VERDICT: CHANGES REQUESTED\nHead: $H"; review_new="VERDICT: APPROVE\nHead: $H"; review_new_by='github-actions[bot]'; pr_files='[{"filename":".github/workflows/ci.yml"}]'; expect no "bot APPROVE ignored on .github/ PR: the human CHANGES REQUESTED stands"
+reset; review="VERDICT: CHANGES REQUESTED\nHead: $H"; review_new="VERDICT: APPROVE\nHead: $H"; review_new_by=karthik24iyer; pr_files='[{"filename":".github/workflows/ci.yml"}]'; expect yes "human APPROVE newer than a human CHANGES REQUESTED on a .github/ PR"
+reset; review="VERDICT: APPROVE\nHead: $H"; review_new="VERDICT: CHANGES REQUESTED\nHead: $H"; review_new_by='github-actions[bot]'; pr_files='[{"filename":".github/workflows/ci.yml"}]'; expect yes "bot CHANGES REQUESTED is ignored on a .github/ PR (human APPROVE stands)"
+# DISMISSED reviews never count.
+reset; review="VERDICT: CHANGES REQUESTED\nHead: $H"; review_new="VERDICT: APPROVE\nHead: $H"; review_new_state=DISMISSED; expect no "dismissed APPROVE doesn't count"
+reset; review_new="VERDICT: CHANGES REQUESTED\nHead: $H"; review_new_state=DISMISSED; expect yes "dismissed CHANGES REQUESTED doesn't block"
 # Verdicts on the wrong channel still count; malformed QA without a colon too.
 reset; review_as_comment="VERDICT: CHANGES REQUESTED\nHead: $H"; expect no "CHANGES REQUESTED posted as a comment"
 reset; qa_as_review="QA: FAIL\nHead: $H"; expect no "QA FAIL posted as a review"
