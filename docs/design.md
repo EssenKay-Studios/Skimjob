@@ -209,7 +209,7 @@ The coins split to each player so far: the same for everyone, public, shown with
 ### 7.4 Missing
 
 Each round the summary shows coins taken from the bank, the crew take, and **"N coins went missing"**, never who.
-*Provisional (PM, 4 Nov):* N = coins taken that round (excluding seized coins) − coins handed in that round, never negative.
+*Confirmed (owner, 6 Nov):* N = coins taken that round (excluding seized coins) − coins handed in that round, never negative.
 
 ### 7.5 Honesty *(owner, 4 Nov)*
 
@@ -467,7 +467,7 @@ When the game ends, every reveal event opens (§18): every role, every move and 
 ## 16. Host controls
 
 - **Setup:** session length (§17, default 1 hour), vote visibility (§9.5), role list shown (§11.3), events on/off (§13), DM notices (§15.2), meeting window length (§9.4).
-- **During the game:** pause and resume (every clock stops; players can still plan and chat); extend the current round or meeting by a per-preset amount; replace a seat with a bot (Opportunist) after 2 missed rounds in a row (never the host's seat), handed back by the host or the player. Provisional details: `docs/decisions.md` "Host controls".
+- **During the game:** pause and resume (every clock stops; players can still plan and chat); extend the current round or meeting by a per-preset amount; replace a seat with a bot (Opportunist) after 2 missed rounds in a row (never the host's seat), handed back by the host or the player. Details: `docs/decisions.md` "Host controls" *(owner, 6 Nov)*.
 - Quiet hours (no deadlines or notifications at night) come with the mobile apps (M3) and must freeze deadlines.
 
 ---
