@@ -9,6 +9,11 @@ on:
     branches: [main]
   pull_request:
 
+# Read-only default token: nothing here writes to the repo, and no workflow that runs PR code may
+# post as github-actions[bot] (the merge gate trusts that login for review verdicts).
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
