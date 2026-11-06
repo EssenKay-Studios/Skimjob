@@ -79,7 +79,7 @@ async function contexts(browser: Browser, mobile: boolean) {
   return { hostCtx, guestCtx, host: await hostCtx.newPage(), guest: await guestCtx.newPage() };
 }
 
-test("12 seats, 24-char names: a 15-min game to the end with moves changed, alibis, no leaks, no overflow @fast-clock", async ({ browser }, info) => {
+test("12 seats, 24-char names: a 15-min game to the end with moves changed, alibis, no leaks, no overflow @fast-clock @move", async ({ browser }, info) => {
   test.setTimeout(420_000);
   const mobile = info.project.name.startsWith("mobile");
   const { hostCtx, guestCtx, host, guest } = await contexts(browser, mobile);
@@ -168,7 +168,7 @@ const clock = (t: string | null) => {
 };
 const ledgerRows = (p: Page) => p.getByRole("list", { name: "Ledger" }).locator(".records__row").allTextContents();
 
-test("reloads, a killed socket, a skewed clock and a late alibi (3h preset: 102 s rounds, 6 s alibi window)", async ({ browser }, info) => {
+test("reloads, a killed socket, a skewed clock and a late alibi (3h preset: 102 s rounds, 6 s alibi window) @move", async ({ browser }, info) => {
   test.skip(info.project.name !== "desktop", "one viewport is enough for the channel behaviour");
   test.setTimeout(240_000);
   const { hostCtx, guestCtx, host, guest } = await contexts(browser, false);

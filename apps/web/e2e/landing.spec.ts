@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 // Smoke test: the landing page renders its main actions (m2-plan M2-5), with
 // no console errors, and the invite field rejects junk without a request.
-test("landing renders", async ({ page }) => {
+test("landing renders @lobby", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   page.on("console", (m) => {

@@ -26,7 +26,7 @@ async function joinAs(browser: Browser, link: string, name: string): Promise<Pag
   return page;
 }
 
-test("host creates, copies the invite, guest joins, host adds bots, start lands both on the game", async ({ browser }, info) => {
+test("host creates, copies the invite, guest joins, host adds bots, start lands both on the game @lobby", async ({ browser }, info) => {
   test.skip(info.project.name !== "desktop", "one run is enough: two browsers each");
   const host = await hostGame(browser, "Mara");
 
@@ -61,7 +61,7 @@ test("host creates, copies the invite, guest joins, host adds bots, start lands 
   await expect(guest.getByRole("img", { name: "Lucky Lou (you)" })).toBeVisible();
 });
 
-test("the host hands over to another player, then leaves", async ({ browser }, info) => {
+test("the host hands over to another player, then leaves @lobby", async ({ browser }, info) => {
   test.skip(info.project.name !== "desktop", "one run is enough");
   const host = await hostGame(browser, "Dez");
   const code = (await host.locator(".invite-card .num").textContent())!.trim();
@@ -82,7 +82,7 @@ test("the host hands over to another player, then leaves", async ({ browser }, i
 });
 
 // PR #27 review: a signed-in player who hosts under another name keeps their session and their other games.
-test("hosting under a different name keeps the session", async ({ browser }, info) => {
+test("hosting under a different name keeps the session @lobby", async ({ browser }, info) => {
   test.skip(info.project.name !== "desktop", "one run is enough");
   const page = await hostGame(browser, "Mara");
   const first = page.url();
@@ -99,7 +99,7 @@ test("hosting under a different name keeps the session", async ({ browser }, inf
   await expect(page.getByRole("heading", { name: "Assemble the crew" })).toBeVisible(); // still in the first game
 });
 
-test("a bad invite says so", async ({ page }) => {
+test("a bad invite says so @lobby", async ({ page }) => {
   await page.goto("/join/zzzzzzzzzz");
   await expect(page.getByRole("heading", { name: "That invite doesn't open anything." })).toBeVisible();
 });
@@ -114,7 +114,7 @@ test.describe("lobby and invite at every width", () => {
     { width: 1024, height: 768 },
     { width: 1280, height: 800 },
   ]) {
-    test(`${width}x${height}: no overflow, targets ≥44px`, async ({ browser }) => {
+    test(`${width}x${height}: no overflow, targets ≥44px @lobby`, async ({ browser }) => {
       const ctx = await browser.newContext({ viewport: { width, height }, hasTouch: true, isMobile: true });
       const page = await ctx.newPage();
       // Set up through the API (same origin, so the session cookie sticks).
@@ -181,7 +181,7 @@ test.describe("lobby while the server is unreachable", () => {
     return { ctx, page, id };
   }
 
-  test("an 'online' event mid-poll never starts a second poll loop", async ({ browser }) => {
+  test("an 'online' event mid-poll never starts a second poll loop @lobby", async ({ browser }) => {
     const { page, id } = await lobbyPage(browser);
     let polls = 0;
     await page.route(`**/api/games/${id}`, async (r) => {
@@ -201,7 +201,7 @@ test.describe("lobby while the server is unreachable", () => {
     expect(polls).toBeLessThanOrEqual(4);
   });
 
-  test("opening the lobby with the server down shows the offline state, then the lobby", async ({ browser }) => {
+  test("opening the lobby with the server down shows the offline state, then the lobby @lobby", async ({ browser }) => {
     const { page, id } = await lobbyPage(browser);
     await page.route("**/api/**", (r) => r.fulfill({ status: 502, body: "" }));
     await page.goto(`/lobby/${id}`);
@@ -214,7 +214,7 @@ test.describe("lobby while the server is unreachable", () => {
     await expect(page.getByText(/can't reach the hideout/i)).toHaveCount(0);
   });
 
-  test("settings can't be changed while offline, so nothing looks saved and reverts", async ({ browser }) => {
+  test("settings can't be changed while offline, so nothing looks saved and reverts @lobby", async ({ browser }) => {
     const { ctx, page, id } = await lobbyPage(browser);
     await page.goto(`/lobby/${id}`);
     const off = page.getByRole("group", { name: "Unique roles" }).getByRole("button", { name: "Off" });
@@ -228,7 +228,7 @@ test.describe("lobby while the server is unreachable", () => {
     await expect(off).toBeEnabled({ timeout: 10_000 });
   });
 
-  test("a change that fails to reach the server says it wasn't saved", async ({ browser }) => {
+  test("a change that fails to reach the server says it wasn't saved @lobby", async ({ browser }) => {
     const { page, id } = await lobbyPage(browser);
     await page.goto(`/lobby/${id}`);
     const group = page.getByRole("group", { name: "Unique roles" });

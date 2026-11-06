@@ -15,7 +15,7 @@ const VIEWPORTS = [
 /** The seen mark reaching the server (debounced on the page). */
 const seenSaved = (page: Page) => page.waitForResponse((r) => r.url().includes("/notes/seen") && r.request().method() === "PATCH" && r.ok());
 
-test("the recap shows what changed while you were away, once, and the board stays private", async ({ browser }, info) => {
+test("the recap shows what changed while you were away, once, and the board stays private @caseboard", async ({ browser }, info) => {
   test.skip(info.project.name !== "desktop", "one viewport is enough for the flow; widths are checked below");
   test.setTimeout(90_000);
   const hostCtx = await browser.newContext();
@@ -77,7 +77,7 @@ test("the recap shows what changed while you were away, once, and the board stay
   await guestCtx.close();
 });
 
-test("a hidden tab coming back to the front shows the recap, and the missed events stay unseen until then (QA, PR #46)", async ({ browser }, info) => {
+test("a hidden tab coming back to the front shows the recap, and the missed events stay unseen until then (QA, PR #46) @caseboard", async ({ browser }, info) => {
   test.skip(info.project.name !== "desktop", "one viewport is enough for the flow");
   test.setTimeout(90_000);
   const hostCtx = await browser.newContext();
@@ -150,7 +150,7 @@ async function smallTargets(page: Page) {
 const overflow = (page: Page) => page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth, viewport: window.innerWidth }));
 
 for (const viewport of VIEWPORTS) {
-  test(`recap, case file filters and the board at ${viewport.width}x${viewport.height}: no overflow, targets ≥44px`, async ({ browser }, info) => {
+  test(`recap, case file filters and the board at ${viewport.width}x${viewport.height}: no overflow, targets ≥44px @caseboard`, async ({ browser }, info) => {
     test.skip(info.project.name !== "mobile", "viewports are set per test");
     const ctx = await browser.newContext({ viewport, hasTouch: viewport.width < 1024, isMobile: viewport.width < 1024 });
     const page = await ctx.newPage();

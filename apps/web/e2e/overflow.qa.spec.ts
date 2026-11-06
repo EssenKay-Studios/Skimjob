@@ -34,7 +34,7 @@ async function overflow(page: Page): Promise<string[]> {
 }
 
 for (const width of WIDTHS) {
-  test(`gallery reveal, 24-character names at ${width}: no overflow, names whole`, async ({ page }, info) => {
+  test(`gallery reveal, 24-character names at ${width}: no overflow, names whole @reveal`, async ({ page }, info) => {
     test.skip(info.project.name !== "mobile", "the viewport is set here");
     test.setTimeout(90_000);
     await page.setViewportSize({ width, height: 800 });
@@ -58,7 +58,7 @@ for (const width of WIDTHS) {
   });
 }
 
-test("real 15-min game over with W×24, emoji×24 and combining-mark names: no overflow at 360/390/768 @fast-clock", async ({ browser }, info) => {
+test("real 15-min game over with W×24, emoji×24 and combining-mark names: no overflow at 360/390/768 @fast-clock @reveal", async ({ browser }, info) => {
   test.skip(info.project.name !== "mobile-fast", "one game, the widths are set here");
   test.setTimeout(400_000);
   const opts = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };

@@ -58,7 +58,7 @@ async function overflowAndTargets(page: Page) {
 }
 
 for (const { width, height } of WIDTHS) {
-  test(`create → invite → join → start by touch at ${width}px`, async ({ browser }) => {
+  test(`create → invite → join → start by touch at ${width}px @lobby`, async ({ browser }) => {
     const hctx = await newCtx(browser, width, height, true);
     const host = await hctx.newPage();
     await host.goto("/");
@@ -105,7 +105,7 @@ for (const { width, height } of WIDTHS) {
   });
 }
 
-test("bad and started invite codes show a friendly page", async ({ browser }) => {
+test("bad and started invite codes show a friendly page @lobby", async ({ browser }) => {
   const hctx = await newCtx(browser);
   const g = await apiHost(hctx);
   const page = await (await newCtx(browser, 390, 844, true)).newPage();
@@ -122,7 +122,7 @@ test("bad and started invite codes show a friendly page", async ({ browser }) =>
   await shot(page, "invite-started");
 });
 
-test("duplicate, invisible-character and Bot nicknames get friendly errors", async ({ browser }) => {
+test("duplicate, invisible-character and Bot nicknames get friendly errors @lobby", async ({ browser }) => {
   const hctx = await newCtx(browser);
   const g = await apiHost(hctx, "Mara");
   const page = await (await newCtx(browser, 360, 740, true)).newPage();
@@ -149,7 +149,7 @@ test("duplicate, invisible-character and Bot nicknames get friendly errors", asy
   await shot(page, "invite-nickname-error");
 });
 
-test("non-host: controls hidden and the API refuses host actions; hand-over to a bot or a non-member is refused", async ({ browser }) => {
+test("non-host: controls hidden and the API refuses host actions; hand-over to a bot or a non-member is refused @lobby", async ({ browser }) => {
   const hctx = await newCtx(browser);
   const g = await apiHost(hctx, "Mara");
   const gctx = await newCtx(browser);
@@ -186,7 +186,7 @@ test("non-host: controls hidden and the API refuses host actions; hand-over to a
   await expect(host.getByRole("button", { name: "Make Lou host" })).toBeVisible();
 });
 
-test("12 seats full: Add bot turns into a disabled 'Crew is full', the 13th person gets a friendly refusal", async ({ browser }) => {
+test("12 seats full: Add bot turns into a disabled 'Crew is full', the 13th person gets a friendly refusal @lobby", async ({ browser }) => {
   const hctx = await newCtx(browser);
   const g = await apiHost(hctx, "Mara");
   const gctx = await newCtx(browser);
@@ -209,7 +209,7 @@ test("12 seats full: Add bot turns into a disabled 'Crew is full', the 13th pers
   await shot(late, "invite-full");
 });
 
-test("leave and rejoin; back button and refresh on every route", async ({ browser }) => {
+test("leave and rejoin; back button and refresh on every route @lobby", async ({ browser }) => {
   const hctx = await newCtx(browser);
   const g = await apiHost(hctx, "Mara");
   const gctx = await newCtx(browser);
@@ -259,7 +259,7 @@ test("leave and rejoin; back button and refresh on every route", async ({ browse
   await expect(host.getByRole("button", { name: "Plan a heist" }).or(host.locator("body"))).toBeVisible();
 });
 
-test("offline and server errors show friendly messages", async ({ browser }) => {
+test("offline and server errors show friendly messages @lobby", async ({ browser }) => {
   const hctx = await newCtx(browser, 390, 844, true);
   const g = await apiHost(hctx, "Mara");
   const host = await hctx.newPage();
@@ -277,7 +277,7 @@ test("offline and server errors show friendly messages", async ({ browser }) => 
   await expect(host.getByRole("heading", { name: "Assemble the crew" })).toBeVisible();
 });
 
-test("server down (vite proxy 502, empty body) on invite and new game", async ({ browser }) => {
+test("server down (vite proxy 502, empty body) on invite and new game @lobby", async ({ browser }) => {
   const ctx = await newCtx(browser, 390, 844, true);
   const page = await ctx.newPage();
   await page.route("**/api/**", (r) => r.fulfill({ status: 502, body: "" }));

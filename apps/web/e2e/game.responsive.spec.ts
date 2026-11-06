@@ -43,7 +43,7 @@ const overflow = (page: Page) =>
 
 for (const viewport of VIEWPORTS) {
   for (const touch of [false, true]) {
-    test(`game screen at ${viewport.width}x${viewport.height}${touch ? " touch" : ""}: no overflow, targets ≥44px`, async ({ browser }) => {
+    test(`game screen at ${viewport.width}x${viewport.height}${touch ? " touch" : ""}: no overflow, targets ≥44px @move`, async ({ browser }) => {
       const ctx = await browser.newContext({ viewport, hasTouch: touch, isMobile: touch });
       const page = await ctx.newPage();
       // One-week preset: the first round lasts long enough to look around.
@@ -92,7 +92,7 @@ for (const viewport of VIEWPORTS) {
 // vote), the vote dialog and the results banner at every launch width.
 for (const viewport of VIEWPORTS) {
   for (const touch of [false, true]) {
-    test(`meetings at ${viewport.width}x${viewport.height}${touch ? " touch" : ""}: planner, vote dialog, results`, async ({ browser }) => {
+    test(`meetings at ${viewport.width}x${viewport.height}${touch ? " touch" : ""}: planner, vote dialog, results @meeting`, async ({ browser }) => {
       test.setTimeout(90_000);
       const ctx = await browser.newContext({ viewport, hasTouch: touch, isMobile: touch });
       const page = await ctx.newPage();

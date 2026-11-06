@@ -14,7 +14,7 @@ const GAMES = [
 ];
 const myGames = (page: Page, games: object[] = GAMES) => page.route("**/api/me/games", (r) => r.fulfill({ json: { games } }));
 
-test("without a Google client id there's no Google button and Sign in explains nicknames", async ({ page }) => {
+test("without a Google client id there's no Google button and Sign in explains nicknames @auth", async ({ page }) => {
   const providers = page.waitForResponse((r) => r.url().endsWith("/api/auth/providers"));
   await page.goto("/");
   await expect(page.getByRole("button", { name: "Plan a heist" })).toBeVisible();
@@ -29,7 +29,7 @@ for (const [label, name] of [
   ["Sign in with Google", "Sign in with Google"],
   ["top bar Sign in", "Sign in"],
 ] as const) {
-  test(`with Google on, ${label} goes to the server's Google start (back to /)`, async ({ page }) => {
+  test(`with Google on, ${label} goes to the server's Google start (back to /) @auth`, async ({ page }) => {
     await googleOn(page);
     let started: URL | null = null;
     await page.route("**/api/auth/google/start**", (r) => {
@@ -44,7 +44,7 @@ for (const [label, name] of [
   });
 }
 
-test("signed in with Google: the top bar shows the name and the sign-in card is gone", async ({ page }) => {
+test("signed in with Google: the top bar shows the name and the sign-in card is gone @auth", async ({ page }) => {
   await googleOn(page);
   await signedIn(page, "Riya");
   await page.goto("/");
@@ -53,7 +53,7 @@ test("signed in with Google: the top bar shows the name and the sign-in card is 
   await expect(page.getByRole("button", { name: "Sign in", exact: true })).toHaveCount(0);
 });
 
-test("signed in with Google: My games lists each game as a link back in", async ({ page }) => {
+test("signed in with Google: My games lists each game as a link back in @auth", async ({ page }) => {
   await googleOn(page);
   await signedIn(page, "Riya");
   await myGames(page);
@@ -71,7 +71,7 @@ test("signed in with Google: My games lists each game as a link back in", async 
   await expect(page).toHaveURL(/\/lobby\/g-lob$/);
 });
 
-test("signed in with no games yet: My games says how to get one", async ({ page }) => {
+test("signed in with no games yet: My games says how to get one @auth", async ({ page }) => {
   await googleOn(page);
   await signedIn(page, "Riya");
   await myGames(page, []);
@@ -81,7 +81,7 @@ test("signed in with no games yet: My games says how to get one", async ({ page 
 
 // UI rules: 360–1280 px, no overflow, touch targets ≥ 44 px (the card and the longest name).
 for (const width of [360, 390, 768, 1024, 1280]) {
-  test(`fits at ${width}px with the Google card, and signed in with a long name and My games`, async ({ page }) => {
+  test(`fits at ${width}px with the Google card, and signed in with a long name and My games @auth`, async ({ page }) => {
     await page.setViewportSize({ width, height: 800 });
     await googleOn(page);
     await page.goto("/");

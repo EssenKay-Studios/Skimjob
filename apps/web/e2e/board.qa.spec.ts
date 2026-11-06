@@ -54,7 +54,7 @@ async function check(page: Page, where: string) {
 
 for (const seats of [12, 3]) {
   for (const viewport of VIEWPORTS) {
-    test(`QA board, ${seats} seats at ${viewport.width}: fits, keyboard picks, only you while planning, claim list`, async ({ browser }) => {
+    test(`QA board, ${seats} seats at ${viewport.width}: fits, keyboard picks, only you while planning, claim list @board`, async ({ browser }) => {
       const ctx = await browser.newContext({ viewport, hasTouch: viewport.width < 1024, isMobile: viewport.width < 1024 });
       const page = await ctx.newPage();
       const errors: string[] = [];

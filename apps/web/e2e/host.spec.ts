@@ -4,7 +4,7 @@ import { startGame } from "./setupGame";
 // M2-13 (design §15): the host pauses (everyone sees it, it survives a reload),
 // adds time and resumes; in the lobby the host removes a guest's seat.
 
-test("the host pauses, the crew sees it, a reload keeps it, add time, then resume", async ({ page, browser }) => {
+test("the host pauses, the crew sees it, a reload keeps it, add time, then resume @host", async ({ page, browser }) => {
   test.setTimeout(120_000);
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
@@ -41,7 +41,7 @@ test("the host pauses, the crew sees it, a reload keeps it, add time, then resum
   await guestCtx.close();
 });
 
-test("in the lobby the host removes a guest's seat", async ({ page, browser }) => {
+test("in the lobby the host removes a guest's seat @host", async ({ page, browser }) => {
   const guestCtx = await browser.newContext({ viewport: page.viewportSize()! });
   const guest = await guestCtx.newPage();
   const created = await page.request.post("/api/auth/guest", { data: { nickname: "Host" } });

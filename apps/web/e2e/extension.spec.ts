@@ -10,7 +10,7 @@ const SHOTS = process.env.SHOTS_DIR;
 
 const overflow = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
 
-test("gallery shop: earn tokens, buy a perk privately, use it once this round", async ({ page }) => {
+test("gallery shop: earn tokens, buy a perk privately, use it once this round @shop", async ({ page }) => {
   await page.goto("/dev/gallery");
   const demo = page.getByTestId("shop-demo");
   await demo.scrollIntoViewIfNeeded();
@@ -39,7 +39,7 @@ test("gallery shop: earn tokens, buy a perk privately, use it once this round", 
   await expect(uses).toHaveCount(0); // nothing owned, nothing used this round
 });
 
-test("gallery extension sections fit every viewport", async ({ page }, info) => {
+test("gallery extension sections fit every viewport @shop", async ({ page }, info) => {
   test.skip(info.project.name !== "mobile", "viewports are set per test");
   test.setTimeout(120_000);
   for (const width of [360, 768, 1280]) {
@@ -66,7 +66,7 @@ test("gallery extension sections fit every viewport", async ({ page }, info) => 
   }
 });
 
-test("a real game shows the target bar, the Heat breakdown and the gap box", async ({ page }) => {
+test("a real game shows the target bar, the Heat breakdown and the gap box @shop", async ({ page }) => {
   test.setTimeout(90_000);
   const game = await startGame(page.request, { bots: 4 });
   await page.goto(`/game/${game.id}`);
@@ -88,7 +88,7 @@ test("a real game shows the target bar, the Heat breakdown and the gap box", asy
   }
 });
 
-test("lobby: deck, per-role picks, deal and role list persist", async ({ page }, info) => {
+test("lobby: deck, per-role picks, deal and role list persist @lobby", async ({ page }, info) => {
   test.skip(info.project.name !== "desktop", "one run is enough");
   await page.goto("/");
   await page.getByRole("button", { name: "Plan a heist" }).click();

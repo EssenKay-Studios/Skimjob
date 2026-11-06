@@ -33,7 +33,7 @@ async function say(page: Page, text: string) {
   await expect(composer(page)).toHaveValue("");
 }
 
-test("crew chat reaches everyone; a DM reaches only its two players", async ({ page, browser }) => {
+test("crew chat reaches everyone; a DM reaches only its two players @chat", async ({ page, browser }) => {
   test.setTimeout(120_000);
   const errors: string[] = [];
   const guest1 = await player(browser, page);
@@ -120,7 +120,7 @@ test("crew chat reaches everyone; a DM reaches only its two players", async ({ p
   await guest2.context().close();
 });
 
-test("two tabs of one player share read marks: a DM read in one stays read (QA, PR #38)", async ({ page, browser }) => {
+test("two tabs of one player share read marks: a DM read in one stays read (QA, PR #38) @chat", async ({ page, browser }) => {
   test.setTimeout(90_000);
   const guest = await player(browser, page);
   const game = await startGame(page.request, { bots: 1, guests: [guest.request], sessionLength: "1w" });
@@ -155,7 +155,7 @@ test("two tabs of one player share read marks: a DM read in one stays read (QA, 
   await guest.context().close();
 });
 
-test("the composer explains the length and rate limits", async ({ page, browser }) => {
+test("the composer explains the length and rate limits @chat", async ({ page, browser }) => {
   test.setTimeout(90_000);
   const guest = await player(browser, page);
   const game = await startGame(page.request, { bots: 1, guests: [guest.request], sessionLength: "1w" });
@@ -185,7 +185,7 @@ test("the composer explains the length and rate limits", async ({ page, browser 
   await guest.context().close();
 });
 
-test("a dropped connection says so and catches up on reconnect", async ({ page, browser }) => {
+test("a dropped connection says so and catches up on reconnect @chat", async ({ page, browser }) => {
   test.setTimeout(90_000);
   // Lets the test drop the game socket and hold off reconnects.
   await page.addInitScript(() => {
