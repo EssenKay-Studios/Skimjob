@@ -7,7 +7,9 @@
 # Read-only. GitHub REST API only (`gh api`; no GraphQL, no `gh pr`), so it runs on
 # the Mac and in cloud sessions alike. Works from any directory (REPO overrides the repo).
 #
-# Only reviews/comments by GATE_AUTHORS count (see below).
+# Only reviews/comments by GATE_AUTHORS count (see below); the review bots in
+# GATE_REVIEW_BOTS (default claude[bot], the "Claude review" Action) count for
+# reviewer `VERDICT:` reviews/comments ONLY, never for `QA:` verdicts.
 # Mergeable iff: the latest verdict-like review/comment is exactly
 # `VERDICT: APPROVE` + `Head: <sha S_r>` (a malformed latest one is a no, never a
 # fall-back to an older one); the latest QA-like one is exactly
@@ -56,6 +58,11 @@ echo "head:   $head"
 GATE_AUTHORS=${GATE_AUTHORS:-karthik24iyer}
 [[ $GATE_AUTHORS =~ ^[A-Za-z0-9-]+(,[A-Za-z0-9-]+)*$ ]] || fatal "bad GATE_AUTHORS '$GATE_AUTHORS'"
 allow="[\"${GATE_AUTHORS//,/\",\"}\"]"
+# Review bots (may post reviewer VERDICTs, never QA): GATE_REVIEW_BOTS, comma-separated
+# logins as GitHub reports them (the Claude app is `claude[bot]`); set it empty to trust none.
+GATE_REVIEW_BOTS=${GATE_REVIEW_BOTS-claude[bot]}
+[[ -z $GATE_REVIEW_BOTS || $GATE_REVIEW_BOTS =~ ^[A-Za-z0-9-]+(\[bot\])?(,[A-Za-z0-9-]+(\[bot\])?)*$ ]] || fatal "bad GATE_REVIEW_BOTS '$GATE_REVIEW_BOTS'"
+if [ -n "$GATE_REVIEW_BOTS" ]; then allowv="[\"${GATE_AUTHORS//,/\",\"}\",\"${GATE_REVIEW_BOTS//,/\",\"}\"]"; else allowv=$allow; fi
 # Reviews and PR comments are both scanned for both kinds (an agent may post on
 # the wrong channel). Each body is one kind at most, any case, leading markdown
 # (* # > _ blanks) ignored: its first line starts with "verdict" or "qa"; else a
@@ -63,13 +70,14 @@ allow="[\"${GATE_AUTHORS//,/\",\"}\"]"
 # Output per match: "<time>\t<kind>\t<line 1>\t<line 2>". The newest of each kind
 # is used and must be in the exact format; there is no fall-back to older ones.
 scan='.[] | select((.state // "") != "PENDING")
-  | select(.user.login as $u | '"$allow"' | any(. == $u))
+  | select(.user.login as $u | '"$allowv"' | any(. == $u))
   | (.body // "") as $b | ($b | gsub("\r"; "") | split("\n")) as $l
   | (if ($b | test("^[\\s\\x{feff}*#>_]*verdict"; "i")) then "verdict"
      elif ($b | test("^[\\s\\x{feff}*#>_]*qa\\b"; "i")) then "qa"
      elif $ch == "review" and ($b | test("verdict"; "i")) then "verdict"
      elif $ch == "comment" and ($b | test("\\bqa\\s*[:\u2014\u2013]"; "i")) then "qa"
      else empty end) as $k
+  | select($k == "verdict" or (.user.login as $u | '"$allow"' | any(. == $u)))
   | [(.submitted_at // .created_at // ""), $k, $l[0], ($l[1] // "")] | @tsv'
 found=$(gh api --paginate "$A/pulls/$N/reviews" --jq "\"review\" as \$ch | $scan") || fatal "cannot read reviews"
 c=$(gh api --paginate "$A/issues/$N/comments" --jq "\"comment\" as \$ch | $scan") || fatal "cannot read PR comments"

@@ -148,6 +148,26 @@ reset; review_new="VERDICT: CHANGES REQUESTED\nHead: $H"; review_new_by=mallory;
 reset; qa_new="QA: FAIL\nHead: $H"; qa_new_by=mallory; expect yes "foreign QA FAIL doesn't block"
 reset; review_new="VERDICT: CHANGES REQUESTED\nHead: $H"; review_new_by=pm-bot; export GATE_AUTHORS=karthik24iyer,pm-bot; expect no "GATE_AUTHORS adds an account"; unset GATE_AUTHORS
 reset; review="VERDICT: CHANGES REQUESTED\nHead: $H"; review_new="VERDICT: APPROVE\nHead: $H"; review_new_state=PENDING; expect no "pending APPROVE doesn't count"
+# Review bots (claude[bot]): reviewer VERDICTs only, never QA; same exact format and newest-wins rules.
+reset; review=""; review_new="VERDICT: APPROVE\nHead: $H"; review_new_by='claude[bot]'; expect yes "bot APPROVE on head counts"
+reset; review="VERDICT: CHANGES REQUESTED\nHead: $H"; review_new="VERDICT: APPROVE\nHead: $H"; review_new_by='claude[bot]'; expect yes "newer bot APPROVE after a human CHANGES REQUESTED"
+reset; review_new="VERDICT: CHANGES REQUESTED\nHead: $H"; review_new_by='claude[bot]'; expect no "newer bot CHANGES REQUESTED blocks a human APPROVE"
+reset; review_new="VERDICT: CHANGES REQUESTED\nHead: $H"; review_new_by='claude[bot]'; review_as_comment="VERDICT: APPROVE\nHead: $H"; expect yes "newest of bot and human counts (human newer)"
+reset; review=""; review_new="VERDICT: APPROVE\nHead: $R"; review_new_by='claude[bot]'; since_files='["packages/engine/src/rules.ts"]'; expect no "bot APPROVE on an old head with a non-QA commit since"
+reset; review=""; review_new="VERDICT: APPROVE\nHead: $R"; review_new_by='claude[bot]'; expect yes "bot APPROVE on an older head, only QA tests since"
+reset; review=""; review_new="**VERDICT: APPROVE**\nHead: $H"; review_new_by='claude[bot]'; expect no "bot verdict in a malformed format"
+reset; review=""; review_new="VERDICT: APPROVE"; review_new_by='claude[bot]'; expect no "bot APPROVE without a Head line"
+reset; qa="QA: FAIL\nHead: $H"; qa_new="QA: PASS\nHead: $H"; qa_new_by='claude[bot]'; expect no "bot QA: PASS does not override a QA FAIL"
+reset; qa=""; qa_new="QA: PASS\nHead: $H"; qa_new_by='claude[bot]'; expect no "bot QA: PASS alone is not a QA verdict"
+reset; qa_new="QA: FAIL\nHead: $H"; qa_new_by='claude[bot]'; expect yes "bot QA: FAIL is ignored"
+reset; qa_as_review="QA: FAIL\nHead: $H"; review_new="QA: PASS\nHead: $H"; review_new_by='claude[bot]'; qa=""; expect no "bot QA: PASS posted as a review is not a QA verdict"
+reset; review=""; review_new="VERDICT: APPROVE\nHead: $H"; review_new_by=mallory; expect no "a random user's VERDICT does not count"
+reset; review=""; review_new="VERDICT: APPROVE\nHead: $H"; review_new_by=claude; expect no "login claude (no [bot]) does not count"
+reset; review=""; review_new="VERDICT: APPROVE\nHead: $H"; review_new_by='claude-bot[bot]'; expect no "another bot does not count"
+reset; review=""; review_new="VERDICT: APPROVE\nHead: $H"; review_new_by='claude[bot]'; export GATE_REVIEW_BOTS=; expect no "GATE_REVIEW_BOTS empty trusts no bot"; unset GATE_REVIEW_BOTS
+reset; review=""; review_new="VERDICT: APPROVE\nHead: $H"; review_new_by='other[bot]'; export GATE_REVIEW_BOTS='claude[bot],other[bot]'; expect yes "GATE_REVIEW_BOTS adds a bot"; unset GATE_REVIEW_BOTS
+reset; review=""; review_new="VERDICT: APPROVE\nHead: $H"; review_new_by='claude[bot]'; export GATE_REVIEW_BOTS='bad login'; expect no "bad GATE_REVIEW_BOTS fails closed"; unset GATE_REVIEW_BOTS
+reset; review="VERDICT: CHANGES REQUESTED\nHead: $H"; review_new="VERDICT: APPROVE\nHead: $H"; review_new_by='claude[bot]'; review_new_state=PENDING; expect no "pending bot APPROVE doesn't count"
 # Verdicts on the wrong channel still count; malformed QA without a colon too.
 reset; review_as_comment="VERDICT: CHANGES REQUESTED\nHead: $H"; expect no "CHANGES REQUESTED posted as a comment"
 reset; qa_as_review="QA: FAIL\nHead: $H"; expect no "QA FAIL posted as a review"

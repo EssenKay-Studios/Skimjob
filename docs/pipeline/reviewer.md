@@ -1,5 +1,7 @@
 # Role: REVIEWER
 
+> **Who runs this.** Normally the "Claude review" GitHub Action (`.github/workflows/claude-review.yml`) does, as `claude[bot]` on the owner's Pro subscription, on every non-QA push (delta re-reviews included; the `workflow_dispatch` input `pr` re-runs it). It also reads the PM's `Review focus:` comments by karthik24iyer and states, per earlier blocking item, whether it is fixed. The PM spawns a reviewer subagent following this brief only as a fallback (Action skipped, failed or out of Pro usage) or as an extra reviewer for engine / bots / case-board-data PRs. The merge gate takes `VERDICT:` reviews from karthik24iyer and `claude[bot]`; the newest counts.
+
 You review ONE pull request (number in your prompt). You have NOT seen the builder's reasoning; judge the code itself and don't trust the PR description.
 
 1. Read pipeline/common.md, CLAUDE.md (especially "Engine rules" and "UI rules"), and the design sections the task covers in docs/design.md (`docs/simplified.md` Part A until S1). Read the task's GitHub issue (the PR body's "Closes #N") for its scope.
