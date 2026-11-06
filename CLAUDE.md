@@ -6,15 +6,15 @@ A social deduction heist game for groups of friends (web + Android/iOS). A crew 
 
 ## Start of every session
 
-1. Read `docs/STATUS.md` — current milestone, what's done, what's next.
+1. Read `docs/STATUS.md` — where things stand and the standing engineering notes. Tasks, follow-ups and owner questions are GitHub issues (R7 board and milestone, linked from STATUS).
 2. Read the rules: `docs/simplified.md` Part A is the rules spec for the current milestone (R7 Simplified) until step S1 makes `docs/design.md` the single spec.
 3. Skim `docs/decisions.md` before changing anything that looks like a deliberate choice.
-4. Work on **one** task from STATUS.md (or the GitHub issue you were given). Keep sessions scoped.
+4. Work on **one** task: the GitHub issue you were given. Keep sessions scoped.
 
 ## End of every session
 
 1. Run typecheck and the tests relevant to your change (commands below); CI runs the full suite and must be green.
-2. Don't edit `docs/STATUS.md` or `docs/decisions.md` in a feature PR: put `## Decisions` and `## STATUS updates` sections in the PR body; the PM folds them in (in its own docs PR). If a rule changed, update `docs/design.md` in the PR.
+2. Don't edit `docs/STATUS.md` or `docs/decisions.md` in a feature PR: put "Closes #N" (your issue) in the PR body, provisional rule calls under `## Decisions` and new follow-ups under `## Follow-ups`; the PM folds decisions into `docs/decisions.md` (in its own docs PR) and creates issues from the follow-ups. If a rule changed, update `docs/design.md` in the PR.
 3. Commit to your branch, push it and open a PR (`docs/pipeline/common.md`).
 
 ## Repo layout (pnpm monorepo)

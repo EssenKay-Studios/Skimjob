@@ -1,6 +1,6 @@
 # Orchestrator handoff
 
-Read this with `docs/STATUS.md` (the canonical task list and the owner's open questions). This file covers how the work is run, the current state and how to resume.
+Read this with `docs/STATUS.md` (where things stand; it links the GitHub issues and the R7 board, which hold the tasks, follow-ups and the owner's open questions). This file covers how the work is run, the current state and how to resume.
 
 **Standing rule: keep status and orchestration docs clean.** Update in place, delete stale or contradictory content, no history narratives (history lives in git, the PRs and `docs/archive/decisions-history.md`).
 
@@ -12,10 +12,10 @@ Read this with `docs/STATUS.md` (the canonical task list and the owner's open qu
 - **Live:** https://skimjob.duckdns.org on the owner's AWS Lightsail box, running 1a4e083 with Google sign-in on. Runbook: `docs/deploy.md`. Connection details are in the owner's local `ssh-relay` skill, never in the repo.
 
 ## How to resume
-Run milestone **R7 Simplified** exactly as `docs/simplified.md` "How to run it" says (roles and models, kickoff prompt, steps S0–S5 with owner checkpoints). The owner's open questions are in STATUS.
+Run milestone **R7 Simplified** exactly as `docs/simplified.md` "How to run it" says (roles and models, kickoff prompt, steps S0–S5 with owner checkpoints). Tasks are GitHub issues in the milestone "R7 Simplified" (one per task, labelled `type:task`, `step:*`, `feature:*`); the owner's open questions are issues labelled `owner-decision`.
 
 ## How the pipeline works
-- **Where it runs:** three setups, all covered in `common.md` "Where you run": (a) the owner's Mac directly (main clone `/Users/karthikeyaniyer/Documents/Misc/Skimjob`, one worktree per agent under `…/Misc/skimjob-wt/<name>`); (b) a cloud session whose agents run commands on the Mac through the local terminal tool (≈60 s per call: background long runs with nohup and poll logs; never `/tmp`); (c) a cloud session working entirely in its Linux container (clone under `/home/claude`, Node 22 preinstalled, GraphQL blocked so REST only, slow 2-core box: run only affected specs and rely on CI). Tell each agent which setup it is in.
+- **Where it runs:** three setups, all covered in `common.md` "Where you run": (a) the owner's Mac directly (main clone `~/Documents/Misc/Skimjob`, one worktree per agent under `…/Misc/skimjob-wt/<name>`); (b) a cloud session whose agents run commands on the Mac through the local terminal tool (≈60 s per call: background long runs with nohup and poll logs; never `/tmp`); (c) a cloud session working entirely in its Linux container (clone under `/home/claude`, Node 22 preinstalled, GraphQL blocked so REST only, slow 2-core box: run only affected specs and rely on CI). Tell each agent which setup it is in.
 - The orchestrator (PM) never writes code itself. It spawns subagents, one per task, up to about 3–5 at once. Each pipeline brief lives in this folder:
   - `builder.md` writes code and opens a PR (REST `gh api …/pulls`).
   - `reviewer.md` posts a review (`gh api …/pulls/N/reviews -f event=COMMENT`); first line `VERDICT: APPROVE` or `VERDICT: CHANGES REQUESTED`, second line `Head: <40-char sha reviewed>`.
@@ -29,9 +29,10 @@ Run milestone **R7 Simplified** exactly as `docs/simplified.md` "How to run it" 
   - every check-run on the head completed as success/skipped/neutral, and every commit status is success (docs-only PRs too);
   - the PR is open, not a draft, REST `mergeable_state` `clean` (asked again once while GitHub is still computing it);
   - every commit is authored by `karthik24iyer <karthik24iyer@gmail.com>` and no message has a co-authored-by / claude-session / generated-by line.
-- Merge with `docs/pipeline/merge.sh <PR>`: it runs the gate, then `PUT …/pulls/N/merge` (squash, `sha=<gated head>`) and `DELETE …/git/refs/heads/<branch>`, and prints `merged #N -> main <sha> | next: <first unticked STATUS task>`. Both scripts use only the REST API (`gh api`), so they work in all three setups; `bash docs/pipeline/gate.qa.test.sh` tests them offline.
+- Merge with `docs/pipeline/merge.sh <PR>`: it runs the gate, then `PUT …/pulls/N/merge` (squash, `sha=<gated head>`) and `DELETE …/git/refs/heads/<branch>`, and prints `merged #N -> main <sha> | next: #<lowest open R7 task issue>` (or `next: see the board` if the API call fails). Both scripts use only the REST API (`gh api`), so they work in all three setups; `bash docs/pipeline/gate.qa.test.sh` tests them offline.
 - **Merge order and rebases:** merge one PR at a time; after each merge, the remaining open PRs rebase onto the new main (and a non-QA-test change in the rebase needs a delta re-review).
-- Builders do NOT edit `docs/decisions.md` or `STATUS.md`. They put `## Decisions` and `## STATUS updates` sections in the PR body, and the PM folds those in (once, concisely) after merging.
+- **Issues and the board:** every task is a GitHub issue; the PM gives each builder an issue number. Builders put "Closes #N" in the PR body, so merging closes the issue. The PM moves the board card (Todo / In progress / In review / Owner review / Done, field PR) and closes issues on merge, from the Mac: the cloud can't reach Projects (GraphQL is blocked), but it can read and write issues, labels and milestones over REST.
+- Builders do NOT edit `docs/decisions.md` or `STATUS.md`, and write no "STATUS updates". They put provisional rule calls under `## Decisions` in the PR body (the PM folds them into `docs/decisions.md` once, concisely, after merging) and new follow-ups under `## Follow-ups` (the PM creates the issues: `type:follow-up`, plus `flaky` / `feature:*` where they fit).
 - Send the owner a short progress update about every 15 minutes while work is running.
 
 ## Agent quirks and testing
