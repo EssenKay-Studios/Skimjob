@@ -133,7 +133,7 @@ jobs:
           set -euo pipefail
           A=repos/$GITHUB_REPOSITORY
           # Main is trusted, but be defensive: no symlinks in the workspace, our dirs start empty.
-          find . -path ./.git -prune -o -type l -print -delete > "$RUNNER_TEMP/symlinks-removed.txt"
+          find . -not -path './.git/*' -type l -print -delete > "$RUNNER_TEMP/symlinks-removed.txt"
           for d in .review-input pr review.md; do [ ! -e "$d" ] || mv "$d" "$d.from-main"; done
           mkdir .review-input pr
           gh api "$A/pulls/$PR" --jq '{number, title, body, author: .user.login, base: .base.ref, head: .head.sha}' > .review-input/pr.json
