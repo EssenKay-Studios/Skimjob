@@ -100,10 +100,10 @@ Two fixes: **Part A** remakes the rules around a few visible things (coins, bell
 
 - **Crew honesty** = crew take ÷ coins taken from the bank (seized coins don't count as taken; the counting rules are in A4). It's shown as a meter against the line.
 - **The honesty line is two-thirds:** at the end, if less than two-thirds of everything taken reached the table, **the heist fails** (too much was stolen).
-- **The heist succeeds** if the game ends by the bank or the round cap, with honesty at or above two-thirds and no bust. Then **the biggest stash wins**. If nobody stole, everyone is level and **the whole crew wins together**. Only stealing and getting away with it separates players.
+- **The heist succeeds** if the game ends by the bank or the round cap, with honesty at or above two-thirds and no bust. Then **the biggest stash wins**. If every stash is equal, **the whole crew wins together** (an honest player who bought a perk ends lower and doesn't win).
 - **Bust (Wanted 3):** only the players **on the Rooftop that round escape**; everyone else is arrested and loses everything. **The biggest stash among the escapees wins** (a bust ends the game before that round's split, so escapees keep only the stash they already had) (any role, the Mole and Fixer included). If nobody was on the Rooftop, nobody wins. This makes the endgame tense: at Wanted 2, every player weighs "keep grabbing, or go up and wait?".
-- **Sunk by theft (honesty below two-thirds at the end):** nobody wins, **except the Mole or the Fixer, if one of them holds the biggest stash**.
-- Ties go to fewer shakedowns, then share the win.
+- **Sunk by theft (honesty below two-thirds at the end):** nobody wins, **except the Mole or the Fixer, if one of them holds (or ties for) the biggest stash**.
+- **Everyone tied at the top wins** *(owner, 6 Nov)*: no tie-break, so a game can have any number of winners (on a bust, among the escapees; sunk by theft, among the Mole and Fixer holders).
 
 ### A6. Meetings and shakedowns
 
@@ -177,7 +177,7 @@ Tokens and their 20 triggers; the R6 shop and perk pool; temperament tags; the R
 
 ### A11. Also decided (4 Nov)
 
-1. **Event cards:** from round 2, each round has a **4-in-10 chance** that one card flips (6 in 10: nothing happens). The deck has 4 cards, each a sentence:
+1. **Event cards:** from round 2, each round has a **4-in-10 chance** that one card flips (6 in 10: nothing happens), drawn at random from the whole deck every time, so a card can repeat *(owner, 6 Nov)*; the host can turn events off. The deck has 4 cards, each a sentence:
    - **Lockdown:** one room is closed this round.
    - **Shift change:** Vault visitors can grab 1 extra coin this round.
    - **Audit:** every room shows how many coins reached the duffel from it this round.
@@ -399,7 +399,7 @@ Each deletes the old screen, component, gallery page and e2e spec it replaces. T
 
 **S5 — final audit, balance and deploy.**
 - **Final audit by a fresh Opus agent** that built nothing: `knip` clean, no R6 names left (tokens, Heat, acts, Duel, Quick, cut roles) in code, tests, content or live docs, every audit list-3 item gone; delete `docs/cleanup-audit.md`. Reviewer + QA pass it.
-- One balance pass on the **Sim suite GitHub workflow**, never babysat in chat, against the gates set in S1 (heist success; raid and bust rates and Rooftop stalls; each role's win rate within a band; the share of all-honest wins; perks not deciding games). Tune the [tunable] numbers; refresh `docs/balance/baseline.json`.
+- One balance pass on the **Sim suite GitHub workflow**, never babysat in chat, against the gates set in S1 (heist success; raid and bust rates and Rooftop stalls; each role's win rate within a band; the share of whole-crew wins; perks not deciding games). Tune the [tunable] numbers; refresh `docs/balance/baseline.json`.
 - Deploy to Lightsail by `docs/deploy.md`: back up, then clear old games (R6 logs won't replay).
 - The owner playtests again.
 

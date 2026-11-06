@@ -35,7 +35,7 @@ pnpm sim:suite -- --help
 
 - **Matrix:** player counts 3–12 × setup × events on/off, with setups (`--setups`) such as `balanced` (Balanced deal, Exact role list) and `random` (Truly random). The matrix is rebuilt for the R7 rules in S3 and tuned in S5.
 - **Adaptive:** each cell plays batches of 200 games (`--batch`, at most `--min-games`), starting with at least 400. It stops once every checked rate's 95% interval (Wilson) is within `--ci` (±2 pp), or at `--max-games` (6000). `-n N` plays a fixed N per cell instead.
-- **Checks (gates):** the S5 balance gates (heist success, raid and bust rates, role win rates within a band, the share of all-honest wins, perks not deciding games) are set in S1 and wired in S3. Cells outside the gated set are reported only and stop at `--min-games`.
+- **Checks (gates):** the S5 balance gates (heist success, raid and bust rates, role win rates within a band, the share of whole-crew wins, perks not deciding games) are set in S1 and wired in S3. Cells outside the gated set are reported only and stop at `--min-games`.
 - **Reports:** the ending split, the no-winner and shared-win rates per cell, and a per-role table over all cells (win ÷ fair share).
   - A check is **PASS** or **FAIL** only when its whole 95% interval is inside or outside the target. Otherwise it is **inconclusive** (`inconcl.`, more games needed); the point estimate is still printed.
   - Parity's point spread is biased upward by noise: the max − min of many noisy ratios is wide even for a balanced deck. So parity FAILs only when even the closest the per-role intervals allow (`max lo − min hi`) is over 0.10, and PASSes only when the widest (`max hi − min lo`) is within it.
