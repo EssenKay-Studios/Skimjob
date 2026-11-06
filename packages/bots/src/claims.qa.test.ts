@@ -48,15 +48,6 @@ describe("bot claims in whole games — QA PR #37", () => {
     expect(results.flatMap(({ r }) => r.state.log.filter((e) => e.type === "roleClaimed")).length).toBeGreaterThan(0);
   });
 
-  it("Duel: games finish with zero refusals and no claims — design §16.1", () => {
-    for (const seed of ["d0", "d1", "d2"]) {
-      const r = play(config(2, `qa37-duel-${seed}`, { duel: true, mole: "off", rolePool: [] }));
-      expect(r.state.phase.kind).toBe("ended");
-      expect(r.rejections).toEqual([]);
-      expect(r.state.log.some((e) => e.type === "roleClaimed")).toBe(false);
-    }
-  });
-
   it("every claim is public and carries only player, role and act; one per player per act — design §8, §12.1", () => {
     for (const { r } of results) {
       const claims = r.state.log.filter((e): e is Claim => e.type === "roleClaimed");

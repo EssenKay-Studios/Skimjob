@@ -106,9 +106,9 @@ function playAll(cfg: GameConfig, max = 400): GameState[] {
 }
 
 describe("QA: board figures come only from the viewer's view (PR #41)", () => {
-  for (const n of [2, 3, 12]) {
+  for (const n of [3, 12]) {
     it(`whole game at ${n} seats: every figure on every board, every phase, is backed by your own view`, () => {
-      const cfg = config(n, n === 2 ? { duel: true } : n === 12 ? { rolePool: ["rookie", "security", "lookout"] } : {});
+      const cfg = config(n, n === 12 ? { rolePool: ["rookie", "security", "lookout"] } : {});
       const states = playAll(cfg);
       const phases = new Set<string>();
       const kinds = new Set<string>();

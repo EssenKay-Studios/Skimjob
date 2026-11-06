@@ -127,7 +127,6 @@ describe("reveal summary — design §13", () => {
       { type: "meetingOpened", visibility: PUBLIC, meetingId: "m1", kind: "regular", act: 1 },
       { type: "voteSealed", visibility: secretTo("p1"), player: "p1", vote: { kind: "skip" } } as GameEvent,
       { type: "shakedownResolved", visibility: PUBLIC, meetingId: "m1", target: "p0", stashRevealed: 9, safeRevealed: 5, taken: 9, clean: false, compensation: 0 },
-      { type: "callOutResolved", visibility: PUBLIC, act: 1, caller: "p1", target: "p2", caught: false, amount: 2 },
     ];
     const ranking = [rank("p0", "mole", 5, { safe: 5 }), rank("p2", "rookie", 2), rank("p1", "hacker", 0)];
     const s = revealSummary(log, success(ranking), TABLES);
@@ -146,11 +145,10 @@ describe("reveal summary — design §13", () => {
       "perkBought",
       "perkUsed",
       "shakedownResolved",
-      "callOutResolved",
     ]);
     // Stash with the safe: p0 4, then 14 (the Fence safe moves nothing out), then shaken down for 9.
     expect(s.rounds[1]?.stashes).toEqual({ p0: 4, p1: 0, p2: 0 });
-    expect(s.rounds[2]?.stashes).toEqual({ p0: 5, p1: -2, p2: 2 });
+    expect(s.rounds[2]?.stashes).toEqual({ p0: 5, p1: 0, p2: 0 });
     expect(s.seats.find((x) => x.player === "p2")).toMatchObject({ tokens: ["checkpointMade"], perksBought: ["peek"], perksUsed: 1 });
   });
 

@@ -21,8 +21,6 @@ const SHOWN: ReadonlySet<GameEvent["type"]> = new Set<GameEvent["type"]>([
   "sightingForged",
   "raidRumourHit",
   "insideTip",
-  "callOutMade",
-  "callOutResolved",
   "meetingClosed",
   "shakedownResolved",
   "shakedownCancelled",
@@ -167,12 +165,6 @@ export function revealSummary(log: readonly GameEvent[], outcome: Outcome, table
       case "shakedownResolved":
         add(e.target, e.compensation - e.taken);
         break;
-      case "callOutResolved": {
-        const [from, to] = e.caught ? [e.target, e.caller] : [e.caller, e.target];
-        add(from, -e.amount);
-        add(to, e.amount);
-        break;
-      }
       default:
         break;
     }

@@ -48,7 +48,6 @@ describe("GameStore — design §17.2", () => {
   it.each([
     ["5 players, Mole and events", config(5, "store-5")],
     ["9 players, Secret votes", config(9, "store-9", { voteVisibility: "secret" })],
-    ["Duel", config(2, "store-duel", { duel: true, mole: "off" })],
   ])("a bot game saved event by event and reloaded is the same game (%s)", { timeout: 30_000 }, async (_name, c) => {
     const played = botGame(c);
     const id = await newGame();

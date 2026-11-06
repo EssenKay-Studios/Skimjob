@@ -35,6 +35,7 @@ async function setup(timeScale = 1) {
   const host = (await call("/auth/guest", null, { nickname: "Host" })).session!;
   const game = (await call("/games", host, { settings: { sessionLength: "quick" } })).body;
   const guest = (await call(`/invites/${game.inviteCode}/join`, null, { nickname: "Guest" })).session!;
+  await call(`/invites/${game.inviteCode}/join`, null, { nickname: "Guest 2" });
   await call(`/games/${game.id}/start`, host);
   return { app, clock, id: game.id, host, guest };
 }

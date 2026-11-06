@@ -131,10 +131,9 @@ describe("police activity: hidden moments never leak (extension.md Build notes \
     }
   });
 
-  it("only when a Mole could be in the game: Starter, Quick-style starter mode, no-Mole decks and Duel defaults have none", () => {
+  it("only when a Mole could be in the game: Starter, Quick-style starter mode and no-Mole decks have none", () => {
     expect(createGame(config(5, { starterMode: true })).police).toBeNull();
     expect(createGame(config(8, { rolePool: ["rookie", "lookout", "auditor", "hacker"] })).police).toBeNull();
-    for (let i = 0; i < 20; i++) expect(createGame(config(2, { seed: `duel-${i}`, duel: true })).police).toBeNull();
     // Exact list: runs exactly when a Mole was dealt.
     for (let i = 0; i < 40; i++) {
       const s = createGame(config(6, { seed: `ex-${i}`, deck: "everything" }));
@@ -414,31 +413,17 @@ describe("buyPerk (extension.md \"Tokens and the perk shop\")", () => {
     expect(views(after, ["p1", "p2", "p3", "p4"])).toEqual(views(s, ["p1", "p2", "p3", "p4"]));
   });
 
-  it("the shop is three different perks, one per column, the same for every player count and seed replay (2..12)", () => {
-    for (let n = 2; n <= 12; n++) {
+  it("the shop is three different perks, one per column, the same for every player count and seed replay (3..12)", () => {
+    for (let n = 3; n <= 12; n++) {
       for (let i = 0; i < 10; i++) {
-        const cfg = config(n, { seed: `shop-${n}-${i}`, eventsEnabled: true, ...(n === 2 && { duel: true }) });
+        const cfg = config(n, { seed: `shop-${n}-${i}`, eventsEnabled: true });
         const a = createGame(cfg).shop;
         expect(a).toHaveLength(3);
         expect(new Set(a).size).toBe(3);
         expect(createGame(cfg).shop).toEqual(a);
-        if (n > 2) {
-          expect(SHOP_COLUMNS.learn).toContain(a[0]);
-          expect(SHOP_COLUMNS.protect).toContain(a[1]);
-          expect(SHOP_COLUMNS.sway).toContain(a[2]);
-        }
-      }
-    }
-  });
-
-  it("Duel deals Peek|Tail, Alibi|Recharge, then Rig (events on) or a Learn/Protect perk not dealt (events off)", () => {
-    for (let i = 0; i < 80; i++) {
-      for (const events of [false, true]) {
-        const shop = createGame(config(2, { seed: `d-${i}`, duel: true, eventsEnabled: events })).shop;
-        expect(["peek", "tail"]).toContain(shop[0]);
-        expect(["alibi", "recharge"]).toContain(shop[1]);
-        if (events) expect(shop[2]).toBe("rig");
-        else expect([...SHOP_COLUMNS.learn, ...SHOP_COLUMNS.protect].filter((p) => !shop.slice(0, 2).includes(p))).toContain(shop[2]);
+        expect(SHOP_COLUMNS.learn).toContain(a[0]);
+        expect(SHOP_COLUMNS.protect).toContain(a[1]);
+        expect(SHOP_COLUMNS.sway).toContain(a[2]);
       }
     }
   });
@@ -491,9 +476,9 @@ describe("the win rule (extension.md \"Winning and losing\", Build notes \"Win r
   });
 });
 
-describe("one vote rule for every crew size, 2..12 (extension.md \"Voting\")", () => {
+describe("one vote rule for every crew size, 3..12 (extension.md \"Voting\")", () => {
   it("passes when at least half the crew votes and one player has more than half the votes cast", () => {
-    for (let n = 2; n <= 12; n++) {
+    for (let n = 3; n <= 12; n++) {
       const half = Math.ceil(n / 2);
       expect(meetingResult(n, half, 0, new Map([["x", half]]), half), `n=${n} quorum`).toEqual({ kind: "shakedown", target: "x" });
       expect(meetingResult(n, half - 1, 0, new Map([["x", half - 1]]), half - 1).kind, `n=${n} below quorum`).toBe("noQuorum");
@@ -559,20 +544,6 @@ describe("between-meetings windows (extension.md Build notes \"Between meetings\
     s = closeAct(s);
     expect(handleCommand(s, tipOff("p0")).ok).toBe(true);
   });
-
-  it("Duel: limits reset when round 3's call-outs and target check settle, not before", () => {
-    let s = game(config(2, { duel: true }), { roles: ["hacker", "rookie"] });
-    s = run(s, loop("p0"), ROUND);
-    for (let guard = 0; s.round < 4 && s.phase.kind !== "ended" && guard < 10; guard++) {
-      if (s.phase.kind === "planning") {
-        expect(handleCommand(s, loop("p0")).ok, `round ${s.round}`).toBe(false);
-        s = run(s, ROUND);
-      } else s = run(s, { type: "advance", deadline: { kind: "alibis", round: s.round } });
-    }
-    expect(s.round).toBe(4);
-    expect(s.phase.kind).toBe("planning");
-    expect(handleCommand(s, loop("p0")).ok).toBe(true);
-  });
 });
 
 describe("\"camera offline\" (extension.md \"Event cards\": Power cut reads exactly like the Hacker's loop)", () => {
@@ -591,24 +562,12 @@ describe("\"camera offline\" (extension.md \"Event cards\": Power cut reads exac
   });
 });
 
-describe("shared numbers: Detective line, Haul-paid compensation, Duel wrong call (extension.md gap-fills 3, \"Duel wrong call-out\")", () => {
+describe("shared numbers: Detective line, Haul-paid compensation (extension.md gap-fills 3)", () => {
   it("the Detective's dirty line is the same 6 as the clean line: 5 reads clean, 6 dirty", () => {
     for (const [stash, dirty] of [[5, false], [6, true]] as const) {
       const s = run(withPlayers(game(config(5), { roles: ["detective"] }), { p2: { stash } }), use("p0", { kind: "checkStash", target: "p2" }));
       const r = ofType(s.log, "abilityResolved").at(-1);
       expect(r?.ability).toMatchObject({ kind: "checkStash", threshold: 6, dirty });
-    }
-  });
-
-  it("a wrong Duel call-out pays the rival 8, never more than the caller holds", () => {
-    for (const [stash, paid] of [[20, 8], [3, 3], [0, 0]] as const) {
-      let s = game(config(2, { duel: true }), { roles: ["rookie", "rookie"] });
-      s = run(withPlayers(s, { p0: { stash } }), { type: "callOut", player: "p0" });
-      for (let guard = 0; s.round < 4 && s.phase.kind !== "ended" && guard < 10; guard++) {
-        s = s.phase.kind === "planning" ? run(s, mv("p0", "lobby"), mv("p1", "lobby"), ROUND) : run(s, { type: "advance", deadline: { kind: "alibis", round: s.round } });
-      }
-      expect(ofType(s.log, "callOutResolved")).toEqual([expect.objectContaining({ caller: "p0", caught: false, amount: paid })]);
-      expect(s.players.p0?.stash).toBe(stash - paid);
     }
   });
 });
@@ -640,10 +599,10 @@ describe("QA re-check (PR #50 fixes): locked in", () => {
   });
 
   const ALL = Object.keys(ROLES) as GameConfig["rolePool"][number][];
-  const cfgFor = (n: number, seed: string, extra: Partial<GameConfig>) => config(n, { seed, rolePool: ALL, ...(n === 2 && { duel: true }), ...extra });
+  const cfgFor = (n: number, seed: string, extra: Partial<GameConfig>) => config(n, { seed, rolePool: ALL, ...extra });
 
-  it("Balanced at 2–3 players (Duel included): no police and the Possible list names only roles that can be dealt", () => {
-    for (const n of [2, 3]) {
+  it("Balanced at 3 players: no police and the Possible list names only roles that can be dealt", () => {
+    for (const n of [3]) {
       for (const pool of [ALL, []]) {
         for (const roleList of ["possible", "hidden"] as const) {
           const dealt = new Set<string>();
@@ -662,7 +621,7 @@ describe("QA re-check (PR #50 fixes): locked in", () => {
           expect(dealt.has("mole")).toBe(false);
           if (listed) {
             expect(listed).not.toContain("mole");
-            // Everything dealt is listed; nothing listed is undealable (no Lone wolf or Wildcard at 2–3p Balanced).
+            // Everything dealt is listed; nothing listed is undealable (no Lone wolf or Wildcard at 3p Balanced).
             for (const r of dealt) expect(listed, r).toContain(r);
             for (const r of listed) expect(ROLES[r as keyof typeof ROLES]?.tag, r).toBe("teamPlayer");
           }
@@ -721,16 +680,11 @@ describe("QA re-check (PR #50 fixes): locked in", () => {
       if (!r.ok) reasons.push(r.reason);
     }
     {
-      const s = run(game(config(2, { duel: true })), { type: "callOut", player: "p0" });
-      const r = handleCommand(s, { type: "callOut", player: "p0" });
-      if (!r.ok) reasons.push(r.reason);
-    }
-    {
       const s = run(game(config(5)), { type: "claimRole", player: "p0", role: "rookie" });
       const r = handleCommand(s, { type: "claimRole", player: "p0", role: "lookout" });
       if (!r.ok) reasons.push(r.reason);
     }
-    expect(reasons.length).toBeGreaterThanOrEqual(10);
+    expect(reasons.length).toBeGreaterThanOrEqual(9);
     for (const r of reasons) expect(r).not.toMatch(/\bacts?\b/i);
   });
 });

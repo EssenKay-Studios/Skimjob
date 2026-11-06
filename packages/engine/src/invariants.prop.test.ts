@@ -11,7 +11,7 @@
 //    (states are deep-frozen, so any mutation throws). [§17.2]
 //  - a command for a seat that isn't in the game is always refused. [§17.2]
 //  - loot is conserved: Haul + stashes + safes = loot split from rooms
-//    + Snitch payouts − Raid-rumour losses; nothing goes negative. [§5.2, §8, §10, §11.3, §16.1]
+//    + Snitch payouts − Raid-rumour losses; nothing goes negative. [§5.2, §8, §10, §11.3]
 //  - Heat is a whole number in 0..max, and the game is over once it hits max. [§7]
 //  - the phase machine never sticks: until the game ends, some scheduler
 //    deadline is accepted; and every game ends. [§4.1, §11, §17.2]
@@ -50,9 +50,9 @@ const DECK_IDS: readonly DeckId[] = ["starter", "standard", "everything"];
 const DEALS: readonly DealStyle[] = ["balanced", "random"];
 const ROLE_LISTS: readonly RoleListSetting[] = ["exact", "possible", "hidden"];
 
-const normalConfig = fc
+const configArb = fc
   .record({
-    players: fc.integer({ min: 2, max: 12 }),
+    players: fc.integer({ min: 3, max: 12 }),
     vote: fc.constantFrom(...VOTES),
     deck: fc.constantFrom(...DECK_IDS),
     deal: fc.constantFrom(...DEALS),
@@ -77,26 +77,6 @@ const normalConfig = fc
     starterMode: starter,
     ...(unique === undefined ? {} : { uniqueRoles: unique }),
   }));
-
-/** design §16.1: Duel is exactly 2 players. */
-const duelConfig = fc
-  .record({ events: fc.boolean(), deck: fc.constantFrom(...DECK_IDS), seed: fc.string({ minLength: 1, maxLength: 12 }) })
-  .map(({ events, deck, seed }): GameConfig => ({
-    seed,
-    players: [
-      { id: "p1", name: "P1", isBot: false },
-      { id: "p2", name: "P2", isBot: true },
-    ],
-    job: "bank",
-    rolePool: [],
-    deck,
-    eventsEnabled: events,
-    voteVisibility: "hiddenThenRevealed",
-    starterMode: false,
-    duel: true,
-  }));
-
-const configArb = fc.oneof({ arbitrary: normalConfig, weight: 5 }, { arbitrary: duelConfig, weight: 1 });
 /** The command stream: each step reads a few numbers from this tape; when it runs out, only deadlines pass. */
 const tapeArb = fc.array(fc.nat({ max: 0xffff }), { minLength: 400, maxLength: 4000, size: "max" });
 
@@ -230,9 +210,7 @@ function playerCommand(state: GameState, t: Tape, style: Style): { command: Reco
       return { command: { ...base, type: "buyPerk", perk }, seated };
     }
     default:
-      return t.chance(50)
-        ? { command: { ...base, type: "answerDoubleCross", accept: t.chance(60) }, seated }
-        : { command: { ...base, type: "callOut" }, seated };
+      return { command: { ...base, type: "answerDoubleCross", accept: t.chance(60) }, seated };
   }
 }
 
@@ -339,7 +317,6 @@ function checkState(state: GameState, inflow: number): void {
   // design §5.4: alibis are open exactly in the alibi phase (or in a meeting called during it), for the round just resolved.
   if (state.phase.kind === "alibis") check(state.alibisOpen && state.phase.round === state.resolvedRound && state.phase.round === state.round, "alibi phase for the round just resolved", state.phase);
   if (state.phase.kind === "planning" || state.phase.kind === "awaitingMeeting") check(!state.alibisOpen, "alibis closed outside their phase", state.phase);
-  if (state.config.duel) check(state.meeting === null && state.scheduledMeeting === null && state.pendingEmergency === null, "Duel has no meetings (design §16.1)");
 }
 
 /** extension.md "Decks", "Host settings": deck roles (Rookies fill), unique by default, one Mole/Embezzler at most, the Balanced mix. */
@@ -578,7 +555,7 @@ const hostileCommands = (player: PlayerId): unknown[] => [
   { type: "advance", deadline: { kind: "openMeeting", meetingId: HOSTILE } },
 ];
 
-const duelFree: GameConfig = {
+const threeSeats: GameConfig = {
   seed: "x",
   players: [
     { id: "p1", name: "P1", isBot: false },
@@ -630,7 +607,7 @@ describe("engine invariants under fuzzing — design §17.2", () => {
     expect(stats.rejected).toBeGreaterThan(stats.games * 5);
     expect(stats.players.size).toBeGreaterThanOrEqual(8);
     expect([...stats.outcomes].sort()).toEqual(["heat", "success", "target"]);
-    for (const t of ["shakedownResolved", "shakedownCancelled", "copsRaided", "callOutResolved", "doubleCrossResolved", "raidRumourHit", "voteSealed"]) {
+    for (const t of ["shakedownResolved", "shakedownCancelled", "copsRaided", "doubleCrossResolved", "raidRumourHit", "voteSealed"]) {
       expect(stats.types, t).toContain(t);
     }
   }, TIMEOUT);
@@ -648,7 +625,7 @@ describe("engine invariants under fuzzing — design §17.2", () => {
   }, TIMEOUT);
 
   it("a value with no string form ({\"toString\":null}) is refused, not thrown — see HOSTILE", () => {
-    const state = createGame({ ...duelFree, seed: "hostile" });
+    const state = createGame({ ...threeSeats, seed: "hostile" });
     for (const c of hostileCommands("p1")) expect(handleCommand(state, c).ok).toBe(false);
   });
 

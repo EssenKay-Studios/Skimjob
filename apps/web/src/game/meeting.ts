@@ -18,10 +18,6 @@ import {
 import { crewSize, jobOf, setupOf } from "./hud";
 import { meetingAfter } from "./wording";
 
-/** Duel games have no meetings or votes (design §16.1). */
-export const hasMeetings = (view: PlayerView): boolean => !setupOf(view)?.duel;
-
-
 /** Every other player, in seat order: who you may vote for (never yourself, design §11.2). */
 export function voteTargets(view: PlayerView): { readonly id: PlayerId; readonly name: string; readonly isBot: boolean }[] {
   const order = setupOf(view)?.players ?? view.players;
@@ -313,7 +309,7 @@ export type AbilityOffer =
 
 /** The meeting-time powers and perks you can use right now. The Smooth Talker's weight is automatic and never shown. */
 export function abilityOffers(view: PlayerView): AbilityOffer[] {
-  if (view.phase.kind === "ended" || view.phase.kind === "setup" || !hasMeetings(view)) return [];
+  if (view.phase.kind === "ended" || view.phase.kind === "setup") return [];
   const setup = setupOf(view);
   const power = rolesFor({ contentOverrides: setup?.contentOverrides ?? null })[view.me.role]?.power;
   const others = voteTargets(view).map((t) => t.id);
@@ -360,11 +356,11 @@ export interface ClaimOption {
 }
 
 /**
- * Your role claim for the current act: null in Duel (no claims, design §16.1),
- * else the roles on offer and the one you already claimed (once between meetings).
+ * Your role claim for the current act: the roles on offer and the one you
+ * already claimed (once between meetings); null before or after the game.
  */
 export function claimState(view: PlayerView): { readonly act: 1 | 2 | 3; readonly claimed: string | null; readonly options: readonly ClaimOption[] } | null {
-  if (!hasMeetings(view) || view.phase.kind === "ended" || view.phase.kind === "setup") return null;
+  if (view.phase.kind === "ended" || view.phase.kind === "setup") return null;
   const act = view.act;
   let claimed: string | null = null;
   for (const { event } of view.ledger) if (event.type === "roleClaimed" && event.player === view.me.id && event.act === act) claimed = event.role;

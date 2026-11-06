@@ -103,9 +103,10 @@ for (const viewport of VIEWPORTS) {
         expect(await smallTargets(page), `${where}: small targets`).toEqual([]);
       };
 
-      // Two people, no bots: bots lock "the end of the act" at once, which hides the planner.
+      // Three people, no bots: bots lock "the end of the act" at once, which hides the planner.
       const other = await browser.newContext();
-      const week = await startGame(page.request, { bots: 0, guests: [other.request], sessionLength: "1w" });
+      const third = await browser.newContext();
+      const week = await startGame(page.request, { bots: 0, guests: [other.request, third.request], sessionLength: "1w" });
       await page.goto(`/game/${week.id}`);
       const panel = page.getByRole("region", { name: "Crew meetings" });
       await expect(panel.getByLabel("Propose a time")).toBeVisible();
@@ -113,6 +114,7 @@ for (const viewport of VIEWPORTS) {
       await expect(panel.getByRole("group", { name: "Sealed vote" })).toBeVisible();
       await check("planner");
       await other.close();
+      await third.close();
 
       // A fresh game in the 1-hour preset: call an emergency, vote in the dialog, see the results.
       const hour = await startGame(page.request, { bots: 5, sessionLength: "1h", voteVisibility: "open" });

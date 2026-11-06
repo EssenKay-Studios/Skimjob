@@ -531,8 +531,8 @@ describe("the Heat breakdown is exact (extension.md \"Heat\", \"What the app wor
     return { h: heatRound(viewFor(s, "p0"), 1)!, change: s.heat - start, after: s.heat, counts };
   }
 
-  it("at every crew size 2–12 and many room mixes, the baseline is exactly +4, rooms are honest and the lines sum to the change", () => {
-    for (let n = 2; n <= 12; n++) {
+  it("at every crew size 3–12 and many room mixes, the baseline is exactly +4, rooms are honest and the lines sum to the change", () => {
+    for (let n = 3; n <= 12; n++) {
       const r = rng(n * 7919);
       for (let trial = 0; trial < 40; trial++) {
         const picks = ids(n).map(() => r());
@@ -553,7 +553,7 @@ describe("the Heat breakdown is exact (extension.md \"Heat\", \"What the app wor
   });
 
   it("a crew laying low at or near Heat 0 shows a clamp line and the lines sum to the real change", () => {
-    for (const n of [2, 3, 4, 5, 8, 12]) {
+    for (const n of [3, 4, 5, 8, 12]) {
       for (const start of [0, 1, 5, 9]) {
         const { h, change, after } = oneRound(n, start, () => "rooftop");
         const tag = `${n}p from ${start}: ${h.text}`;
@@ -577,7 +577,7 @@ describe("the Heat breakdown is exact (extension.md \"Heat\", \"What the app wor
   });
 
   it("a crew piling into the Vault at the top of the Heat track shows the top clamp and the lines sum to the real change", () => {
-    for (const n of [2, 3, 5, 8, 12]) {
+    for (const n of [3, 5, 8, 12]) {
       for (const start of [MAX - 1, MAX - 5, MAX - 20]) {
         const { h, change, after } = oneRound(n, start, () => "vault");
         const tag = `${n}p from ${start}: ${h.text}`;

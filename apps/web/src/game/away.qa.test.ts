@@ -65,11 +65,11 @@ function playAll(cfg: GameConfig): GameState[] {
   return states;
 }
 /** Your own deliberate actions (away.ts): not news. */
-const OWN = new Set(["moveSubmitted", "voteSealed", "voteCast", "doubleCrossAnswered", "lootSplit", "callOutMade"]);
+const OWN = new Set(["moveSubmitted", "voteSealed", "voteCast", "doubleCrossAnswered", "lootSplit"]);
 const ctxOf = (view: ReturnType<typeof viewFor>, me: PlayerId) => ({ me, name: namesOf(view) });
 
-describe("QA: recaps at 2 and 12 seats only ever hold the viewer's own view (design §13, §17.2)", () => {
-  for (const n of [2, 12]) {
+describe("QA: recaps at 3 and 12 seats only ever hold the viewer's own view (design §13, §17.2)", () => {
+  for (const n of [3, 12]) {
     it(`${n} seats, every (last seen, came back) pair: at most ${RECAP_MAX_LINES} lines, sources all in the viewer's view`, () => {
       const states = playAll(config(n));
       const end = states.at(-1)!;
@@ -196,8 +196,8 @@ describe("QA: recap after a meeting, a shakedown, the end and a reconnect (desig
   });
 });
 
-describe("QA: ledger / case file filters at 2, 3 and 12 seats (design §13)", () => {
-  for (const n of [2, 3, 12]) {
+describe("QA: ledger / case file filters at 3 and 12 seats (design §13)", () => {
+  for (const n of [3, 12]) {
     it(`${n} seats: the filters partition the sheet; private rows are only the viewer's own`, () => {
       const end = playAll(config(n)).at(-1)!;
       for (const id of ids(end)) {

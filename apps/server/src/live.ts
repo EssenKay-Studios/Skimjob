@@ -93,7 +93,6 @@ const PLAYER_COMMANDS: { readonly [T in PlayerCommand["type"]]: true } = {
   sealVote: true,
   useAbility: true,
   answerDoubleCross: true,
-  callOut: true,
   buyPerk: true,
 };
 

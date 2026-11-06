@@ -563,7 +563,7 @@ function AbilityRow({ view, offer, send, done }: { view: PlayerView; offer: Abil
   }
 }
 
-/** A formal, public, possibly false role claim, once between meetings (R4b; design §8, §12.1). Not in Duel. */
+/** A formal, public, possibly false role claim, once between meetings (R4b; design §8, §12.1). */
 export function ClaimRole({ view, send, where }: { view: PlayerView; send: Send; where: "alibi" | "card" }) {
   const claim = claimState(view);
   const [open, setOpen] = useState(false);

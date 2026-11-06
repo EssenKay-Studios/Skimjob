@@ -170,12 +170,6 @@ describe("describeEvent", () => {
     expect(describeEvent(sampleEvents.cardForeseen, { ...asAna, me: "ben" })).toBe("You foresaw round 3's card: Quiet night.");
   });
 
-  // design §16.1: Duel call-outs both ways.
-  it("describes call-outs", () => {
-    expect(describeEvent(sampleEvents.callOutResolved, asCyd)).toBe("Call-out, rounds 1–3: Ana caught Ben skimming; 4 moves to Ana.");
-    expect(describeEvent({ ...sampleEvents.callOutResolved, caught: false }, asAna)).toBe("Call-out, rounds 1–3: you got it wrong and pay Ben 4.");
-  });
-
   // design §3: every ending.
   it("describes every ending", () => {
     expect(describeEvent(sampleEvents.gameEnded, asCyd)).toBe("Job done! The crew got away with it: Ana wins.");

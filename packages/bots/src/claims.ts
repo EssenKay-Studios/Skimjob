@@ -13,7 +13,7 @@ import type { RoleId } from "@skimjob/content";
 import { roomDef, roomLoot, type PlayerCommand, type PlayerId, type PlayerView } from "@skimjob/engine";
 import type { Personality } from "./personalities";
 import type { Random } from "./bot";
-import { claimantsOf, claimsOf, couldBeDealt, isDuel, isStar, jobOf, ofType, roleOf, uniqueRole } from "./read";
+import { claimantsOf, claimsOf, couldBeDealt, isStar, jobOf, ofType, roleOf, uniqueRole } from "./read";
 import { suspicion } from "./suspicion";
 
 /**
@@ -172,11 +172,11 @@ function saved(view: PlayerView): boolean {
 
 /**
  * The role to claim now, or null. Only around meetings (v2 §4: "when accused
- * at a meeting"), once per act, never in Duel. Most bots tell the truth;
+ * at a meeting"), once per act. Most bots tell the truth;
  * ★ and evidence-leaving roles bluff (`bluffFor`).
  */
 export function chooseClaim(view: PlayerView, p: Personality, random: Random, voted = view.me.vote !== null): RoleId | null {
-  if (isDuel(view) || !meetingTime(view)) return null;
+  if (!meetingTime(view)) return null;
   if (ofType(view.ledger, "roleClaimed").some((c) => c.player === view.me.id && c.act === view.act)) return null;
   const blame = accused(view);
   if (bluffs(view.me.role)) {

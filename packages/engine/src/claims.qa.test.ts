@@ -132,12 +132,4 @@ describe("claimRole — QA PR #37, design §8, §12.1", () => {
     expect(step(s, { type: "claimRole", player: "p0", role: "fixer" }).events[0]).toMatchObject({ role: "fixer" });
     expect(step(s, { type: "claimRole", player: "p1", role: "blackmailer" }).events[0]).toMatchObject({ role: "blackmailer" });
   });
-
-  it("refused in Duel mode in every phase — design §16.1", () => {
-    let s = createGame(cfg(2, { rolePool: [], duel: true }));
-    for (let i = 0; i < 4 && s.phase.kind !== "ended"; i++) {
-      expect(refused(s, { type: "claimRole", player: "p0", role: "rookie" })).toMatch(/Duel/);
-      s = s.phase.kind === "alibis" ? step(s, { type: "advance", deadline: { kind: "alibis", round: s.phase.round } }).state : roundAdvance(s);
-    }
-  });
 });

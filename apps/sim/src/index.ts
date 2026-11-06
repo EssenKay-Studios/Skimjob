@@ -12,7 +12,7 @@ import { prepareOutDir, writeOutputs } from "./output";
 function title(o: SimOptions, seconds: number): string {
   const counts = o.playerCounts.length === 1 ? `${o.playerCounts[0]} players` : `players ${o.playerCounts.join(",")}`;
   const mix = o.mix.map((m) => `${m.personality}:${m.weight}`).join(",");
-  const settings = [o.job, o.starterMode ? "starter" : `pool ${o.rolePool.length ? o.rolePool.join(",") : "default"}`, `deck ${o.deck}`, `deal ${o.deal}`, `role list ${o.roleList}`, `votes ${o.voteVisibility}`, `events ${o.eventsEnabled ? "on" : "off"}`, ...(o.duel ? ["duel"] : [])];
+  const settings = [o.job, o.starterMode ? "starter" : `pool ${o.rolePool.length ? o.rolePool.join(",") : "default"}`, `deck ${o.deck}`, `deal ${o.deal}`, `role list ${o.roleList}`, `votes ${o.voteVisibility}`, `events ${o.eventsEnabled ? "on" : "off"}`];
   if (o.contentOverrides) settings.push(`overrides ${JSON.stringify(o.contentOverrides)}`);
   return [
     `Skimjob simulator (engine ${ENGINE_VERSION}, content ${CONTENT_VERSION})`,

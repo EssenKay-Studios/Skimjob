@@ -104,9 +104,9 @@ const moveFor = (s: GameState, player: string, k = 0) => ({ type: "submitMove", 
 
 const t = TIMINGS.quick;
 
-describe("early end with 2, 3 and 12 seats (design §4.1)", () => {
+describe("early end with 3 and 12 seats (design §4.1)", () => {
   for (const [people, bots] of [
-    [2, 0],
+    [2, 1],
     [3, 0],
     [1, 11],
     [3, 9],

@@ -1,6 +1,6 @@
 // QA (PR #41): Claim role offers and limits, against the real engine.
-// Once per act, never in Duel, the offer list never hints at the hidden pool,
-// and every offer is a claim the engine accepts. design §8, §12.1, §16.1
+// Once per act, the offer list never hints at the hidden pool, and every
+// offer is a claim the engine accepts. design §8, §12.1
 import { ROLES } from "@skimjob/content";
 import { createGame, handleCommand, viewFor, type GameConfig, type GameState, type PlayerCommand, type SystemCommand } from "@skimjob/engine";
 import { describe, expect, it } from "vitest";
@@ -93,13 +93,7 @@ describe("QA: Claim role (PR #41)", () => {
     expect(after).toMatchObject({ act: before.act, claimed: "rookie" });
   });
 
-  it("never in Duel (2 seats), in any phase; and none once the game is over", () => {
-    let s = createGame(config(2, { duel: true }));
-    for (let r = 0; r < 3 && s.phase.kind === "planning"; r++) {
-      expect(claimState(viewFor(s, "p1"))).toBeNull();
-      expect(handleCommand(s, claim("p1", "lookout")).ok).toBe(false);
-      s = round(s);
-    }
+  it("none once the game is over", () => {
     let g = createGame(config(3));
     for (let i = 0; i < 20 && g.phase.kind !== "ended"; i++) g = round(g);
     expect(g.phase.kind).toBe("ended");

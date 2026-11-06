@@ -28,8 +28,6 @@ export interface GameCreated {
   readonly eventsEnabled: boolean;
   readonly voteVisibility: VoteVisibility;
   readonly starterMode: boolean;
-  /** Duel mode: call-outs instead of meetings and votes. design §16.1 */
-  readonly duel: boolean;
   /** `CONTENT_VERSION` the game was set up with, so an old log can be replayed against the right numbers. design §17.4 */
   readonly contentVersion: string;
   /** The config's content overrides (public: they are the rules everyone plays by), or null. design §17.4 */
@@ -700,36 +698,6 @@ export interface AlibiVerified {
   readonly room: RoomId;
 }
 
-// ---------------------------------------------------------------- Duel mode (§16.1)
-
-/**
- * A Duel player called out their opponent for this act. Private until the
- * act's last round resolves, when `callOutResolved` settles it. design §16.1
- */
-export interface CallOutMade {
-  readonly type: "callOutMade";
-  readonly visibility: PrivateVisibility;
-  readonly player: PlayerId;
-  readonly act: ActNumber;
-}
-
-/**
- * design §16.1, at the end of the act (before the checkpoint): if `target`
- * pocketed anything this act (`caught`), `amount` moves from their stash to
- * the caller's (everything they pocketed this act, capped by the stash; never
- * the Fence safe); otherwise `amount` (the job's wrong-call-out × act, capped
- * by the caller's stash) moves from the caller to `target`.
- */
-export interface CallOutResolved {
-  readonly type: "callOutResolved";
-  readonly visibility: PublicVisibility;
-  readonly act: ActNumber;
-  readonly caller: PlayerId;
-  readonly target: PlayerId;
-  readonly caught: boolean;
-  readonly amount: number;
-}
-
 // ---------------------------------------------------------------- end of game (§3, §13)
 
 /**
@@ -838,8 +806,6 @@ export type GameEvent =
   | PerkUsed
   | RigPicked
   | AlibiVerified
-  | CallOutMade
-  | CallOutResolved
   | GameEnded;
 
 export type GameEventType = GameEvent["type"];

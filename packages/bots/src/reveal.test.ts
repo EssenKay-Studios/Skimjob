@@ -14,12 +14,11 @@ function config(n: number, seed: string, extra: Partial<GameConfig> = {}): GameC
     seed,
     players: Array.from({ length: n }, (_, i) => ({ id: `r${i}`, name: `R${i}`, isBot: true })),
     job: "bank",
-    rolePool: n === 2 ? [] : (Object.keys(ROLES) as GameConfig["rolePool"][number][]),
+    rolePool: Object.keys(ROLES) as GameConfig["rolePool"][number][],
     deck: "everything",
     eventsEnabled: true,
     voteVisibility: "secret",
     starterMode: false,
-    ...(n === 2 && { duel: true }),
     ...extra,
   };
 }
@@ -31,7 +30,7 @@ describe("reveal summary in whole bot games — design §13", () => {
   it("adds up to the ranking and explains every police activity and offline camera, for every viewer", () => {
     const seen = new Set<string>();
     for (const [n, seed] of [
-      [2, "rv-a"],
+      [3, "rv-a"],
       [5, "rv-b"],
       [8, "rv-c"],
       [12, "rv-d"],

@@ -12,7 +12,7 @@
 
 Skimjob is a social deduction game for groups of friends, played in a browser or on an Android/iOS app. A crew robs one bank together over a session the host sets, anywhere from an hour to a week. Every round each player secretly picks a room to loot and decides how much to hand to the crew and how much to pocket. The player with the biggest stash at the end wins, **but if the heist fails, nobody wins.**
 
-**Players:** 2–12 humans, with bots available to fill seats. The ideal range is 4–8.
+**Players:** 3–12 seats (humans, with bots filling seats). The ideal range is 4–8.
 **Session length:** set by the host, from 1 hour to 7 days. The rules stay the same at every length; only the pace changes.
 **Platforms:** web, Android and iOS, all on one shared game server. A player can switch devices mid-game.
 
@@ -90,7 +90,7 @@ The engine doesn't know about real time. A scheduler on the server spreads the h
 - Rounds are **paused** while a vote window is open, so nothing resolves in the middle of a vote.
 - **Rounds end early once the whole crew has locked in** (owner decision, 2 Nov): the round resolves a short grace period after the last lock-in, or at its deadline if that comes first, so the last player can still change their move. Changing a move during the grace doesn't restart it. *Grace (provisional, `timing.ts`, scaled by TIME_SCALE):* Quick 5 s, 1 hour 10 s, 3 hours 30 s, 1 day 2 min, 3 days and 1 week 5 min. Alibi windows, meeting windows, emergency notices and the Muscle's window always run their full length.
 - The host can set "quiet hours", such as midnight to 7am, during which rounds don't resolve and no notifications are sent.
-- **Between meetings** (extension.md, owner ruling 2): players see "once between meetings", not "once per act". A stretch runs from the close of one regular meeting (after rounds 3, 6, 9) to the close of the next; uses recharge when that meeting closes, after its vote, shakedown and target check. Emergency meetings never recharge anything. In Duel, a stretch closes when round 3's or 6's call-outs and target check settle. The engine keeps acts internally.
+- **Between meetings** (extension.md, owner ruling 2): players see "once between meetings", not "once per act". A stretch runs from the close of one regular meeting (after rounds 3, 6, 9) to the close of the next; uses recharge when that meeting closes, after its vote, shakedown and target check. Emergency meetings never recharge anything. The engine keeps acts internally.
 - **Police moments** (§10) run on game time: only while round deadlines run; they freeze during a meeting (including one waiting to open), like rounds. They never get a client-visible timer.
 
 ---
@@ -157,7 +157,7 @@ More rooms keep the number of people per room, and so the number of witnesses, r
 
 | Players | Rooms added |
 |---|---|
-| 2–4 | Core only (5 rooms) |
+| 3–4 | Core only (5 rooms) |
 | 5–8 | **Deposit boxes**: 5 loot, holds 2 people (if more than 2 go, everyone there gets 4), adds half the vault pressure. **Server room**: 0 loot, learn *how many* players pocketed loot this round, but not who. |
 | 9–12 | Everything above, plus **Teller line**: 6 loot, adds half the vault pressure. **Manager's office**: 3 loot, adds half the vault pressure. The Teller line also adds +10 Heat × share (`docs/balance/r6-balance.md`). |
 
@@ -176,7 +176,7 @@ Heat runs from 0 to 100. If it reaches 100, the cops raid and the heist fails.
 | Teller line | +10 × (visitors ÷ crew size) (R6 split-gate pass) |
 | Rooftop | −20 × (Rooftop visitors ÷ crew size) |
 | Missed checkpoint | +15 |
-| Events | Varies (event Heat × min(1, crew ÷ 5) for crews of 2–4, §10) |
+| Events | Varies (event Heat × min(1, crew ÷ 5) for crews of 3–4, §10) |
 | Police activity (the Mole's tip-off or the hidden background patrol, §10) | +4 × min(1, crew ÷ 5) |
 
 Scaling by fractions of the crew means a crew of 12 and a crew of 3 feel the same pressure when the same *share* of players goes to the Vault.
@@ -191,7 +191,7 @@ Each round's room-and-baseline Heat change is rounded to a whole number (halves 
 
 ## 8. Roles
 
-Every player is dealt **one secret role** at the start of the game. Roles are designed so that **revealing your role is risky**: each one has a weakness once people know about it. Players can claim any role, truthfully or as a bluff. A formal claim (the **Claim** button, §12.1) goes on the public ledger: once per player between meetings, any role the game knows (even one that can't be in this game, so a refusal never hints at the hidden role pool), never in Duel mode. Like an alibi it changes no rule; it is evidence the crew weighs.
+Every player is dealt **one secret role** at the start of the game. Roles are designed so that **revealing your role is risky**: each one has a weakness once people know about it. Players can claim any role, truthfully or as a bluff. A formal claim (the **Claim** button, §12.1) goes on the public ledger: once per player between meetings, any role the game knows (even one that can't be in this game, so a refusal never hints at the hidden role pool). Like an alibi it changes no rule; it is evidence the crew weighs.
 
 **The roles are the 20 of extension.md "Roles"**, For every role: each reward is **one private token** (§8.3), players see **once between meetings** where the engine counts acts (§4.1), scores are whole numbers (§3), and each role has a **temperament tag** (Team player, Wildcard, Lone wolf). The tag changes no rule. ★ marks the four roles that can also win a failed heist (`RoleDef.winsOn`, §3).
 
@@ -221,7 +221,7 @@ Every player is dealt **one secret role** at the start of the game. Roles are de
 - **Hacker:** a looped room's Security feed reads "camera offline" (`roomWatched.offline`), exactly as a Power cut reads for every feed.
 - **Fence:** a shakedown shows the safe but never takes it; the clean check counts it (§11.3).
 - **Detective:** "dirty" means at or above the clean line (6), the same number as the shakedown's.
-- Minimum crew sizes, Duel exclusions, the Embezzler's take, the Forger's feeds, the Priest's blessing, the Fixer's save (Heat set to 95; it also stops a raid from police activity), the Cleaner's double Rooftop visit and the Getaway Driver's Rooftop that cools nothing are as in extension.md "Roles".
+- Minimum crew sizes, the Embezzler's take, the Forger's feeds, the Priest's blessing, the Fixer's save (Heat set to 95; it also stops a raid from police activity), the Cleaner's double Rooftop visit and the Getaway Driver's Rooftop that cools nothing are as in extension.md "Roles".
 
 ### 8.1 Dealing roles
 
@@ -230,9 +230,9 @@ Every player is dealt **one secret role** at the start of the game. Roles are de
 - **Decks:** Starter (Rookie, Inside Man, Lookout, Bagman, Cleaner; no events, no shop, no tokens), **Standard** (the default, 11 roles: Lookout, Auditor, Detective, Smooth Talker, Muscle, Cleaner, Hacker, Fence, Getaway Driver, Mole, Embezzler; Rookies fill spare seats) and Everything (all 20). The host can switch roles on or off one by one (the `roles` setting, which replaces the preset when not empty). **Quick games force Starter** with events off.
 - **Balanced** (default): a fixed mix per crew size from content (`BALANCED_MIX`: Lone wolves / Wildcards, about round(n ÷ 3) at most; 4–6 players deal 1 / 1 (4 is one over that cap) and 8 players 2 / 1, *provisional*). The rest are Team players; seats the deck can't fill go to Team players, Rookies last. The host can't change the mix.
 - **Truly random:** each seat drawn uniformly from the eligible deck, at most one Mole and one Embezzler.
-- **Role list shown** (host setting): **Exact** roles dealt (default, `roleListShown`, in content order), the roles that **could** be in the game (Possible: only what the deal can give, so Balanced at 2–3 players lists only Team players), or nothing (Hidden).
+- **Role list shown** (host setting): **Exact** roles dealt (default, `roleListShown`, in content order), the roles that **could** be in the game (Possible: only what the deal can give, so Balanced at 3 players lists only Team players), or nothing (Hidden).
 - **Old lobby settings:** a stored legacy `mole` field is migrated on read: *off* becomes the deck with every Wildcard and Lone wolf toggled off; any other value becomes the plain deck.
-- **Eligibility** is unchanged: Snitch and Detective 4+; Inside Man, Smooth Talker, Muscle and Priest 5+; Blackmailer and Forger 7+; the Mastermind only with events on; meeting roles never in Duel. **Unique roles** (default on): each role at most once. Mole and Embezzler are always at most one each.
+- **Eligibility** is unchanged: Snitch and Detective 4+; Inside Man, Smooth Talker, Muscle and Priest 5+; Blackmailer and Forger 7+; the Mastermind only with events on. **Unique roles** (default on): each role at most once. Mole and Embezzler are always at most one each.
 
 ### 8.2 Shakedowns and roles
 
@@ -240,7 +240,7 @@ A shakedown reveals a player's **stash**, not their role. Roles only come out at
 
 ### 8.3 Perks
 
-**Tokens and the shop** (extension.md "Tokens and the perk shop"). Every role reward is one private **token** (`tokenEarned`). At setup the seeded RNG deals a **shop of three perks**, one per column, public (`shopDealt`): Learn (Peek, Ballot, Tail), Protect (Shield, Alibi, Recharge), Sway (+Vote, Emergency, Rig). Costs are content: Peek and Shield 2, the rest 1. `buyPerk` spends tokens any time (private `perkBought`, nothing shown until the perk is used). Use a perk any time after buying it, **at most one per round** (the automatic Shield and Emergency don't count); unspent tokens are worth nothing. With events off the Sway perk is +Vote or Emergency; **Duel** deals Peek or Tail, Alibi or Recharge, and Rig (events on) or a seeded pick from the undealt Learn and Protect perks. Starter and Quick have no shop and no tokens. Spending a perk is a private `perkUsed`, with `useAbility`; a refused spend keeps it. The Shield is spent by itself.
+**Tokens and the shop** (extension.md "Tokens and the perk shop"). Every role reward is one private **token** (`tokenEarned`). At setup the seeded RNG deals a **shop of three perks**, one per column, public (`shopDealt`): Learn (Peek, Ballot, Tail), Protect (Shield, Alibi, Recharge), Sway (+Vote, Emergency, Rig). Costs are content: Peek and Shield 2, the rest 1. `buyPerk` spends tokens any time (private `perkBought`, nothing shown until the perk is used). Use a perk any time after buying it, **at most one per round** (the automatic Shield and Emergency don't count); unspent tokens are worth nothing. With events off the Sway perk is +Vote or Emergency. Starter and Quick have no shop and no tokens. Spending a perk is a private `perkUsed`, with `useAbility`; a refused spend keeps it. The Shield is spent by itself.
 
 | Perk | Effect |
 |---|---|
@@ -404,7 +404,7 @@ Notifications respect the host's quiet hours.
 
 ## 15. Host controls
 
-- Setup (extension.md "Host settings"): session length (default 1 h; Quick forces Starter), deck (Standard default, Starter, Everything) and per-role toggles, deal style (Balanced default, Truly random), role list shown (Exact default, Possible, Hidden), vote visibility, events (on), unique roles (on), Duel with two players, meeting window length, quiet hours. A legacy `mole` setting is migrated on read (§8.1).
+- Setup (extension.md "Host settings"): session length (default 1 h; Quick forces Starter), deck (Standard default, Starter, Everything) and per-role toggles, deal style (Balanced default, Truly random), role list shown (Exact default, Possible, Hidden), vote visibility, events (on), unique roles (on), meeting window length, quiet hours. A legacy `mole` setting is migrated on read (§8.1).
 - During the game: pause or resume, extend the current round, replace an inactive player with a bot (offered automatically after 2 missed rounds in a row), add bots to empty seats before the game starts.
 - *How it works (M2-13, provisional):* a pause stops every deadline, hidden ones included (police moments, the early round end), and resume moves each on by the length of the pause; players can still plan and chat while paused, and everyone sees a "paused by the host" note. Extend adds a preset-scaled amount (20 s Quick … 2 h for a week) to the current planning round (and its early end), alibi window or open meeting, never to a police moment. Replace with a bot: after 2 missed rounds in a row (content `REPLACE_AFTER_MISSED_ROUNDS`) the host can put a stand-in bot (Opportunist) in that seat (never the host's own); it plays from the seat's own view until the host or the player hands the seat back. In the lobby the host can remove any other seat.
 - Before the start, the host can hand the host role to another person in the lobby (never a bot) and then leave; the host can't leave without handing over first. *(Owner request, M2-5b.)*
@@ -413,23 +413,13 @@ Notifications respect the host's quiet hours.
 
 ## 16. Player-count scaling summary
 
+A game needs 3–12 players (`MIN_PLAYERS`, `MAX_PLAYERS`); bots fill seats.
+
 | Players | Rooms | Balanced deal (§8.1) | Notes |
 |---|---|---|---|
-| 2 | 5 | Team players | Needs bots to vote properly. Without bots, use Duel mode (§16.1). |
 | 3–4 | 5 | content `BALANCED_MIX` | Tight and personal. Every shortfall is easy to narrow down. |
 | 5–8 | 7 | content `BALANCED_MIX` | The sweet spot. |
 | 9–12 | 9 | content `BALANCED_MIX` | Chaotic. Lots of witnesses. |
-
-### 16.1 Duel mode (exactly 2 humans, no bots)
-
-There are no votes. Instead, once between meetings (stretches close after rounds 3 and 6, owner ruling 7), each player can **call out** the other. If the opponent pocketed anything during that stretch, the caller takes everything the opponent pocketed. If not, the caller pays them 8 (`duel.wrongCallOut`, the clean payout number). Checkpoints and Heat work as normal.
-
-*Duel mode (provisional, task 15):*
-- A host setting, valid only with exactly 2 players. No meetings, no emergency meetings and no votes; the meeting-only roles (Smooth Talker, Muscle, Priest, Snitch, Detective) are never dealt. Events can be on.
-- **Timing:** a call-out can be made while any of the act's rounds is being planned, at most once per player per act, and can't be withdrawn. It stays private until the act's last round resolves and its alibi window closes (§5.4); then every call-out of that act is settled (in seat order if both called), and the checkpoint is checked straight after, with no meeting (§11.4 order: call-outs → checkpoint). So a call-out covers the whole act, the last round included, however early it was made.
-- **Caught:** the caller takes everything the opponent pocketed that act (their real splits, whatever they claimed), out of the opponent's stash: never the Fence safe, and never more than the stash holds. The Haul is untouched.
-- **Wrong call:** the caller pays the opponent 8 (content) from their own stash, never more than it holds.
-- The result is public: who called, whether the opponent had pocketed, and how much moved. A Heat raid in the act's last round ends the game before its call-outs are settled.
 
 ---
 
@@ -485,7 +475,7 @@ A command-line tool that runs batches of all-bot games:
 | Comeback rate | The leader after Act 1 wins less than 50% of the time |
 | Decided early | Less than 15% of games are effectively settled before Act 3 |
 
-These results are measured at every player count from 2 to 12, so the scaling tables in §6, §7, §11 and §16 can be tuned from data.
+These results are measured at every player count from 3 to 12, so the scaling tables in §6, §7, §11 and §16 can be tuned from data.
 
 ### 17.5 System architecture (overview)
 

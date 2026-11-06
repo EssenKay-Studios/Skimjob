@@ -78,7 +78,7 @@ describe("Agent — design §17.3", () => {
 
 describe("moves — design §5.1, §6, §7, §8", () => {
   it("every personality's moves are accepted by the engine, at every crew size", () => {
-    for (const n of [2, 5, 9, 12]) {
+    for (const n of [3, 5, 9, 12]) {
       const s = game(n);
       for (const personality of Object.values(PERSONALITIES)) {
         for (const id of s.playerOrder) {

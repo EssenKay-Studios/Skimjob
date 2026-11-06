@@ -227,16 +227,6 @@ describe("Fixer: exactly at the raid threshold, once per game, ¼ stash, a token
     expect(granted(s, "p0")).toEqual(["raidStopped"]);
     expect([s.players.p0?.roleState.tokens, s.players.p0?.roleState.perks]).toEqual([1, []]);
   });
-
-  it("Duel: a missed checkpoint's raid is stopped too", () => {
-    let s = game(2, ["fixer"], { duel: true, rolePool: ["rookie", "fixer"] });
-    const ROOF = [mv("p0", "lobby", 2), mv("p1", "lobby", 2)];
-    s = run(s, ...ROOF, ROUND, ...ROOF, ROUND);
-    s = run({ ...s, heat: 90 - roundHeatDelta(BANK_JOB, 2, { lobby: 2 }) }, ...ROOF, ROUND);
-    expect(ofType(s.log, "checkpointChecked")[0]?.met).toBe(false);
-    expect(ofType(s.log, "raidStopped")).toHaveLength(1);
-    expect([s.heat, s.round, s.phase.kind]).toEqual([95, 4, "planning"]);
-  });
 });
 
 describe("Mastermind: Rig choice over a foreseen card — design §8.3, §10", () => {
@@ -256,12 +246,11 @@ describe("Mastermind: Rig choice over a foreseen card — design §8.3, §10", (
   });
 });
 
-describe("eligibility at 2 and 12 players, Duel, events — design §8.1, §16.1", () => {
+describe("eligibility at 3 and 12 players, events — design §8.1", () => {
   const pool = (n: number, extra: Partial<GameConfig> = {}) => [...rolePoolFor(config(n, { rolePool: SEVEN, ...extra }))];
-  it("2: only Bagman, Cleaner, Fixer (+Mastermind with events); Duel the same; 12: all seven", () => {
-    expect(pool(2).sort()).toEqual(["bagman", "cleaner", "fixer"]);
-    expect(pool(2, { eventsEnabled: true }).sort()).toEqual(["bagman", "cleaner", "fixer", "mastermind"]);
-    expect(pool(2, { duel: true, eventsEnabled: true }).sort()).toEqual(["bagman", "cleaner", "fixer", "mastermind"]);
+  it("3: only Bagman, Cleaner, Fixer (+Mastermind with events); 12: all seven", () => {
+    expect(pool(3).sort()).toEqual(["bagman", "cleaner", "fixer"]);
+    expect(pool(3, { eventsEnabled: true }).sort()).toEqual(["bagman", "cleaner", "fixer", "mastermind"]);
     expect(pool(12).sort()).toEqual(SEVEN.filter((r) => r !== "mastermind").sort());
     expect(pool(12, { eventsEnabled: true }).sort()).toEqual([...SEVEN].sort());
     expect(validateConfig(config(3, { starterMode: true, eventsEnabled: true })).length).toBeGreaterThan(0);
@@ -269,7 +258,7 @@ describe("eligibility at 2 and 12 players, Duel, events — design §8.1, §16.1
 
   it("dealt over many seeds: never below the minimum, never Mastermind with events off, each at most once at 12", () => {
     for (let i = 0; i < 40; i++) {
-      for (const n of [2, 4, 5, 12]) {
+      for (const n of [3, 4, 5, 12]) {
         const events = i % 2 === 0;
         const s = createGame(config(n, { seed: `elig-${i}`, rolePool: SEVEN, eventsEnabled: events }));
         const roles = s.playerOrder.map((id) => s.players[id]?.role as string);

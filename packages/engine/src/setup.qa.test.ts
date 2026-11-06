@@ -37,9 +37,9 @@ const roles = (cfg: GameConfig): RoleId[] => Object.values(createGame(cfg).playe
 const count = (list: readonly string[], x: string): number => list.filter((r) => r === x).length;
 
 describe("QA determinism — design §17.2", () => {
-  it("same config gives identical events and state at 2, 3, 8, 12 players; config and content untouched", () => {
+  it("same config gives identical events and state at 3, 8, 12 players; config and content untouched", () => {
     const starterBefore = [...STARTER_ROLES];
-    for (const n of [2, 3, 8, 12]) {
+    for (const n of [3, 8, 12]) {
       for (const deal of SETTINGS) {
         const cfg = deepFreeze(config(n, { deal }));
         const events = setupEvents(cfg);
@@ -59,8 +59,8 @@ describe("QA determinism — design §17.2", () => {
 });
 
 describe("QA replay rebuilds identical state, RNG included — design §17.2", () => {
-  it("replaying a JSON round-tripped log equals the live state at 2, 5, 9, 12 players", () => {
-    for (const n of [2, 5, 9, 12]) {
+  it("replaying a JSON round-tripped log equals the live state at 3, 5, 9, 12 players", () => {
+    for (const n of [3, 5, 9, 12]) {
       const cfg = config(n, { deal: "random", seed: `replay-${n}` });
       const live = createGame(cfg);
       const rebuilt = replay(cfg, JSON.parse(JSON.stringify(live.log)) as GameEvent[]);
@@ -80,8 +80,8 @@ describe("QA replay rebuilds identical state, RNG included — design §17.2", (
 });
 
 describe("QA rooms by player count — design §6.2, §16", () => {
-  it("2/3/4 → 5 rooms, 5/8 → 7, 9/12 → 9; roomsSet is public and matches state", () => {
-    const expected: Record<number, number> = { 2: 5, 3: 5, 4: 5, 5: 7, 8: 7, 9: 9, 12: 9 };
+  it("3/4 → 5 rooms, 5/8 → 7, 9/12 → 9; roomsSet is public and matches state", () => {
+    const expected: Record<number, number> = { 3: 5, 4: 5, 5: 7, 8: 7, 9: 9, 12: 9 };
     for (const [n, size] of Object.entries(expected).map(([k, v]) => [Number(k), v] as const)) {
       const state = createGame(config(n));
       expect(state.rooms).toHaveLength(size);
@@ -94,8 +94,8 @@ describe("QA rooms by player count — design §6.2, §16", () => {
 });
 
 describe("QA role dealing — design §8.1", () => {
-  it("invariants for every size 2–12, both deal styles, many seeds (extension.md \"Decks\", \"Host settings\")", () => {
-    for (let n = 2; n <= 12; n++) {
+  it("invariants for every size 3–12, both deal styles, many seeds (extension.md \"Decks\", \"Host settings\")", () => {
+    for (let n = 3; n <= 12; n++) {
       for (const deal of SETTINGS) {
         for (let s = 0; s < 15; s++) {
           const dealt = roles(config(n, { deal, seed: `inv-${n}-${deal}-${s}` }));
@@ -118,8 +118,8 @@ describe("QA role dealing — design §8.1", () => {
     expect([count(narrow, "fence"), count(narrow, "rookie")]).toEqual([1, 11]);
   });
 
-  it("starter mode at 2 and 12 never deals a Mole, even with the Mole in the (ignored) pool", () => {
-    for (const n of [2, 12]) {
+  it("starter mode at 3 and 12 never deals a Mole, even with the Mole in the (ignored) pool", () => {
+    for (const n of [3, 12]) {
       for (let s = 0; s < 20; s++) {
         const dealt = roles(config(n, { starterMode: true, seed: `st-${s}`, rolePool: ["mole", "fence", "fence"] }));
         expect(dealt).not.toContain(MOLE_ROLE);
@@ -130,9 +130,10 @@ describe("QA role dealing — design §8.1", () => {
 });
 
 describe("QA config validation — design §8.1, §15", () => {
-  it("accepts exactly 2 and exactly 12; rejects 0 and 13", () => {
-    expect(validateConfig(config(2))).toEqual([]);
+  it("accepts exactly 3 and exactly 12; rejects 2 and 13", () => {
+    expect(validateConfig(config(3))).toEqual([]);
     expect(validateConfig(config(12, { mole: "on", deck: "everything", deal: "random", roleList: "hidden" }))).toEqual([]);
+    expect(() => setupEvents(config(2))).toThrow(/players/);
     expect(() => setupEvents(config(0))).toThrow(/players/);
     expect(() => setupEvents(config(13))).toThrow(/players/);
   });
@@ -144,13 +145,13 @@ describe("QA config validation — design §8.1, §15", () => {
   });
 
   it("a stored saboteur setting is still read but never refused (extension.md Build notes: migrated on read)", () => {
-    for (const mole of ["off", "maybe", "on"] as const) expect(() => setupEvents(config(2, { starterMode: true, mole }))).not.toThrow();
+    for (const mole of ["off", "maybe", "on"] as const) expect(() => setupEvents(config(3, { starterMode: true, mole }))).not.toThrow();
   });
 });
 
 describe("QA RNG state is never in a player's view — design §17.2", () => {
   it("no event visible to any seat during the game carries a seed or RNG words", () => {
-    for (const n of [2, 12]) {
+    for (const n of [3, 12]) {
       const cfg = config(n, { deal: "random" });
       const log = createGame(cfg).log;
       for (const viewer of cfg.players.map((p) => p.id)) {

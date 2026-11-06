@@ -111,9 +111,8 @@ describe("First National Bank checkpoint targets — design §11.5", () => {
 });
 
 describe("First National Bank shakedowns — extension.md \"Shakedowns (fixed numbers)\"", () => {
-  it("clean below 6, payout 8; the Duel wrong call pays 8; no plurality rule", () => {
+  it("clean below 6, payout 8; no plurality rule", () => {
     expect(BANK_JOB.shakedown).toEqual({ cleanBelow: 6, payout: 8 });
-    expect(BANK_JOB.duel).toEqual({ wrongCallOut: 8 });
   });
 });
 
@@ -173,7 +172,7 @@ describe("starter roles — design §8, §8.1", () => {
 
   // extension.md Build notes "Tags, decks and dealing": the balance pass decides the mix; r6-balance.md lifted 4p one over the cap.
   it("Balanced mix: under the round(n ÷ 3) cap except the tuned 4p row", () => {
-    for (let n = 2; n <= 12; n++) {
+    for (let n = MIN_PLAYERS; n <= 12; n++) {
       const mix = BALANCED_MIX[n];
       expect(mix, `${n}`).toBeDefined();
       expect((mix?.loneWolves ?? 0) + (mix?.wildcards ?? 0)).toBeLessThanOrEqual(Math.round(n / 3) + (n === 4 ? 1 : 0));

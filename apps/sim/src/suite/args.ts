@@ -21,7 +21,7 @@ export type ParsedSuiteArgs =
   | { readonly kind: "run"; readonly options: SuiteOptions; readonly settings: RunSettings }
   | { readonly kind: "merge"; readonly files: readonly string[]; readonly settings: RunSettings };
 
-export const DEFAULTS = { seed: "suite", players: "2-12", setups: "balanced,random,possible", events: "on,off", ci: 2, minGames: 400, maxGames: 6000, batch: 200 } as const;
+export const DEFAULTS = { seed: "suite", players: "3-12", setups: "balanced,random,possible", events: "on,off", ci: 2, minGames: 400, maxGames: 6000, batch: 200 } as const;
 
 export const SUITE_USAGE = `Skimjob simulation suite: a fixed matrix of all-bot game settings, each played until its
 rates are known to within a target, checked against the design §17.4 targets and role
@@ -31,7 +31,7 @@ Usage: pnpm sim:suite -- [options]
        pnpm sim:suite -- merge <shard.json>... [--out f] [--compare f] [--strict] [--json]
 
 Matrix (one cell per combination):
-  -p, --players <spec>    player counts, e.g. 2-12 or 4,6,8 (default ${DEFAULTS.players})
+  -p, --players <spec>    player counts, e.g. 3-12 or 4,6,8 (default ${DEFAULTS.players})
       --setups <list>     dealing setups (default ${DEFAULTS.setups}): balanced (Exact role
                           list; the gates), random (Truly random), possible / hidden (Balanced
                           with that role list); the Standard deck throughout

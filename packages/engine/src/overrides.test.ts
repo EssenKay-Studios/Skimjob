@@ -62,7 +62,6 @@ describe("validateOverrides — configs are untrusted JSON (design §17.4)", () 
         heat: { max: 120, perRound: 3.5, missedCheckpoint: 10 },
         checkpoints: { perPlayer: [5, 12, 20] },
         shakedown: { cleanBelow: 5, payout: 4 },
-        duel: { wrongCallOut: 6 },
         police: { chancePercent: 50, heat: 6 },
         perks: { peek: { cost: 3 } },
         roles: { rookie: { rewardCount: 2 }, lookout: { extraRooms: 2 }, fence: { perAct: 6 }, insideMan: { lootPerPointOverFinalTarget: 4 } },
@@ -192,23 +191,23 @@ describe("overrides in play (design §17.4)", () => {
   });
 
   it("room loot and Heat numbers change resolution (design §6, §7)", () => {
-    const s0 = game(config(2, { rooms: { vault: { loot: 9, heatPressure: 0 } }, heat: { perRound: 10 } }));
-    const s1 = after(s0, () => submit("p0", { room: "vault", pocket: 9 }), () => submit("p1", { room: "vault" }), ROUND);
+    const s0 = game(config(3, { rooms: { vault: { loot: 9, heatPressure: 0 } }, heat: { perRound: 10 } }));
+    const s1 = after(s0, () => submit("p0", { room: "vault", pocket: 9 }), () => submit("p1", { room: "vault" }), () => submit("p2", { room: "vault" }), ROUND);
     expect(s1.players.p0?.stash).toBe(9);
-    expect(s1.haul).toBe(9);
+    expect(s1.haul).toBe(18);
     expect(s1.heat).toBe(10);
     // A pocket above the overridden loot is refused, like the shipped one.
     expect(handleThroughAlibis(s1, submit("p0", { room: "vault", pocket: 10 })).ok).toBe(false);
   });
 
   it("checkpoint targets and the missed-checkpoint penalty change (design §11.5)", () => {
-    const s0 = game(config(2, { checkpoints: { perPlayer: [1, 2, 3] }, heat: { missedCheckpoint: 0 } }));
+    const s0 = game(config(3, { checkpoints: { perPlayer: [1, 2, 3] }, heat: { missedCheckpoint: 0 } }));
     let s = s0;
-    for (let i = 0; i < 3; i++) s = after(s, () => submit("p0", { room: "lobby" }), () => submit("p1", { room: "lobby" }), ROUND);
+    for (let i = 0; i < 3; i++) s = after(s, () => submit("p0", { room: "lobby" }), () => submit("p1", { room: "lobby" }), () => submit("p2", { room: "lobby" }), ROUND);
     s = run(s, { type: "scheduleMeeting", act: 1, slot: "x" });
     s = run(s, { type: "advance", deadline: { kind: "openMeeting", meetingId: "act-1" } });
     s = run(s, { type: "advance", deadline: { kind: "closeMeeting", meetingId: "act-1" } });
-    expect(s.log.find((e) => e.type === "checkpointChecked")).toMatchObject({ target: 2, met: true });
+    expect(s.log.find((e) => e.type === "checkpointChecked")).toMatchObject({ target: 3, met: true });
   });
 
   it("shakedown numbers change the clean line and payout (extension.md \"Shakedowns\")", () => {

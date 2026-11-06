@@ -14,16 +14,7 @@ function heatAfter(crew: number, start: number, rounds: Record<string, number>[]
   return rounds.reduce((h, v) => clampHeat(bank, h + roundHeatDelta(bank, crew, v)), start);
 }
 
-describe("Heat at 2, 3 and 12 players — design §7", () => {
-  it("2 players: each visitor is half the crew", () => {
-    expect(roundHeatDelta(bank, 2, {})).toBe(4);
-    expect(roundHeatDelta(bank, 2, { vault: 1 })).toBe(14);
-    expect(roundHeatDelta(bank, 2, { vault: 2 })).toBe(24);
-    expect(roundHeatDelta(bank, 2, { rooftop: 1 })).toBe(-6);
-    expect(roundHeatDelta(bank, 2, { rooftop: 2 })).toBe(-16);
-    expect(roundHeatDelta(bank, 2, { vault: 1, rooftop: 1 })).toBe(4);
-  });
-
+describe("Heat at 3 and 12 players — design §7", () => {
   it("3 players: thirds round to the nearest whole number", () => {
     expect(roundHeatDelta(bank, 3, { vault: 1 })).toBe(11); // 10.67
     expect(roundHeatDelta(bank, 3, { vault: 2 })).toBe(17); // 17.33
@@ -50,7 +41,7 @@ describe("Heat at 2, 3 and 12 players — design §7", () => {
   });
 
   it("result is always a whole number at every crew size and mix", () => {
-    for (let n = 2; n <= 12; n++) {
+    for (let n = 3; n <= 12; n++) {
       for (let v = 0; v <= n; v++) {
         for (let r = 0; r <= n - v; r++) {
           expect(Number.isInteger(roundHeatDelta(bank, n, { vault: v, rooftop: r }))).toBe(true);
@@ -61,14 +52,14 @@ describe("Heat at 2, 3 and 12 players — design §7", () => {
 });
 
 describe("Heat floor and ceiling — design §7", () => {
-  it("Rooftop turns can't bank Heat below 0 (2, 3, 12 players)", () => {
-    expect(heatAfter(2, 0, [{ rooftop: 2 }, {}])).toBe(4);
+  it("Rooftop turns can't bank Heat below 0 (3 and 12 players)", () => {
+    expect(heatAfter(3, 0, [{ rooftop: 3 }, {}])).toBe(4); // 4 − 20 → 0, then +4
     expect(heatAfter(3, 5, [{ rooftop: 3 }, { rooftop: 3 }, {}])).toBe(4);
     expect(heatAfter(12, 2, [{ rooftop: 12 }, { vault: 3 }])).toBe(9);
   });
 
   it("landing exactly on 100 reaches the max; overshoot is capped at 100", () => {
-    expect(heatAfter(2, 76, [{ vault: 2 }])).toBe(bank.heat.max);
+    expect(heatAfter(3, 76, [{ vault: 3 }])).toBe(bank.heat.max); // 76 + 24
     expect(heatAfter(12, 99, [{ vault: 12 }])).toBe(bank.heat.max);
     expect(heatAfter(3, 75, [{ vault: 3 }])).toBe(99);
   });
@@ -81,7 +72,7 @@ describe("Heat floor and ceiling — design §7", () => {
 
 describe("room tiers at the boundaries — design §6.2, §16", () => {
   it("4 → core only; 5 → + Deposit boxes, Server room; 8 → same; 9 and 12 → + Teller line, Manager's office", () => {
-    expect(roomsInPlay(bank, 2)).toEqual(CORE);
+    expect(roomsInPlay(bank, 3)).toEqual(CORE);
     expect(roomsInPlay(bank, 4)).toEqual(CORE);
     expect(roomsInPlay(bank, 5)).toEqual(MID);
     expect(roomsInPlay(bank, 8)).toEqual(MID);

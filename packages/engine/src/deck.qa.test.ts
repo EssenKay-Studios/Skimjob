@@ -173,8 +173,8 @@ describe("QA: Lockdown vs moves — design §10", () => {
     expect(find(lastResolution(done), "lootSplit").find((e) => e.player === "p0")).toMatchObject({ room: "office", toStash: 3 });
   });
 
-  it("the drawn closed room is never the Lobby at 2, 5 and 12 players", () => {
-    for (const n of [2, 5, 12]) {
+  it("the drawn closed room is never the Lobby at 3, 5 and 12 players", () => {
+    for (const n of [3, 5, 12]) {
       for (let i = 0; i < 25; i++) {
         let g = createGame(config(n, { seed: `lock-qa-${n}-${i}` }));
         while (g.phase.kind !== "ended" && g.card?.id !== "lockdown") g = step(g);
@@ -233,11 +233,14 @@ describe("QA: Raid rumour edges — design §10", () => {
 });
 
 describe("QA: Inside tip — design §10", () => {
-  it("at 2 players the tip is about the other player, and shows a role swapped by an earlier Double-cross", () => {
-    const r2 = run(withCard(resolve(game(2, ["lookout", "fence"])), "doubleCross", null, ["p0", "p1"]), answer("p0", true), answer("p1", true));
+  it("the tip is about another player, and shows a role swapped by an earlier Double-cross", () => {
+    const r2 = run(withCard(resolve(game(3, ["lookout", "fence", "rookie"])), "doubleCross", null, ["p0", "p1"]), answer("p0", true), answer("p1", true));
     const s = resolve(withCard(resolve(r2), "insideTip"));
     const tip = find(lastResolution(s), "insideTip")[0];
     expect(tip?.subject).not.toBe(tip?.player);
+    // The swap holds: p0 now has the Fence, p1 the Lookout.
+    expect([s.players.p0?.role, s.players.p1?.role]).toEqual(["fence", "lookout"]);
+    expect(["p0", "p1"]).toContain(tip?.subject);
     expect(tip?.role).toBe(tip?.subject === "p0" ? "fence" : "lookout");
   });
 });

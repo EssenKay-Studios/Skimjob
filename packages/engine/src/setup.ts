@@ -71,7 +71,7 @@ const isStringArray = (v: unknown): v is string[] => Array.isArray(v) && v.every
 export function validateConfig(config: unknown): string[] {
   if (!isObject(config)) return ["config must be an object"];
   const errors: string[] = [];
-  const { seed, players, job, rolePool, mole, deck, deal, roleList, eventsEnabled, voteVisibility, starterMode, contentOverrides, duel, uniqueRoles } = config;
+  const { seed, players, job, rolePool, mole, deck, deal, roleList, eventsEnabled, voteVisibility, starterMode, contentOverrides, uniqueRoles } = config;
   if (typeof seed !== "string") errors.push("seed must be a string");
   if (typeof eventsEnabled !== "boolean") errors.push("eventsEnabled must be a boolean");
   if (typeof starterMode !== "boolean") errors.push("starterMode must be a boolean");
@@ -104,9 +104,6 @@ export function validateConfig(config: unknown): string[] {
   // design §8.1: starter mode has no events. Reject rather than ignore, so
   // gameCreated never claims events the game won't have.
   if (starterMode === true && eventsEnabled !== false) errors.push("starter mode requires eventsEnabled: false");
-  // design §16.1: Duel mode is for exactly 2 players.
-  if (duel !== undefined && typeof duel !== "boolean") errors.push("duel must be a boolean");
-  if (duel === true && Array.isArray(players) && players.length !== 2) errors.push(`Duel mode needs exactly 2 players, got ${players.length}`);
   if (uniqueRoles !== undefined && typeof uniqueRoles !== "boolean") errors.push("uniqueRoles must be a boolean");
 
   if (!isStringArray(rolePool)) {
@@ -123,20 +120,15 @@ export function roomsFor(job: JobId, playerCount: number): RoomId[] {
   return roomsInPlay(jobById(job), playerCount);
 }
 
-/** Whether this is a Duel game (2 players, call-outs instead of votes). design §16.1 */
-export const isDuel = (config: GameConfig): boolean => config.duel === true;
-
 /**
- * Dealable for this crew: not below the role's `minPlayers`, in Duel mode
- * not a role that needs meetings (`needsMeetings`: no votes there), and with
- * events off not a role that needs the deck (`needsEvents`: the Mastermind).
- * design §8.1, §16.1 (role deck v2 §3)
+ * Dealable for this crew: not below the role's `minPlayers`, and with events
+ * off not a role that needs the deck (`needsEvents`: the Mastermind).
+ * design §8.1 (role deck v2 §3)
  */
 function dealable(config: GameConfig, roles: RoleTable, role: RoleId): boolean {
   const def = roleDefIn(roles, role);
   return (
     (def?.minPlayers ?? 0) <= config.players.length &&
-    !(isDuel(config) && def?.needsMeetings === true) &&
     !(def?.needsEvents === true && !eventsOn(config))
   );
 }
@@ -291,9 +283,8 @@ export function drawPoliceMoment(config: GameConfig, moment: number, int: (n: nu
 /**
  * The shop's three perks, one per column, drawn with the seeded RNG
  * (extension.md "Tokens and the perk shop", gap-fills "Shop dealing"):
- * with events off the Sway perk is +Vote or Emergency; Duel deals Peek or
- * Tail, Alibi or Recharge, and Rig (events on) or a pick from the Learn and
- * Protect perks not dealt. Starter mode (and Quick) has no shop.
+ * with events off the Sway perk is +Vote or Emergency. Starter mode (and
+ * Quick) has no shop.
  */
 export function dealShop(config: GameConfig, rng: RngState): { readonly value: PerkId[]; readonly rng: RngState } {
   if (config.starterMode) return { value: [], rng };
@@ -303,12 +294,6 @@ export function dealShop(config: GameConfig, rng: RngState): { readonly value: P
     rng = drawn.rng;
     perks.push(drawn.value);
   };
-  if (isDuel(config)) {
-    for (const pair of SHOP_RULES.duel) take(pair);
-    if (eventsOn(config)) perks.push(SHOP_RULES.duelThird);
-    else take([...SHOP_COLUMNS.learn, ...SHOP_COLUMNS.protect].filter((p) => !perks.includes(p)));
-    return { value: perks, rng };
-  }
   take(SHOP_COLUMNS.learn);
   take(SHOP_COLUMNS.protect);
   take(eventsOn(config) ? SHOP_COLUMNS.sway : SHOP_RULES.swayEventsOff);
@@ -380,7 +365,6 @@ export function setupEvents(config: GameConfig): GameEvent[] {
       eventsEnabled: config.eventsEnabled,
       voteVisibility: config.voteVisibility,
       starterMode: config.starterMode,
-      duel: isDuel(config),
       contentVersion: CONTENT_VERSION,
       contentOverrides: config.contentOverrides ?? null,
     },

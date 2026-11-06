@@ -30,7 +30,7 @@ const opts = (argv: string[]) => {
 };
 
 describe("QA PR #43: sim crewSeed and determinism", () => {
-  const options = opts(["-n", "6", "-p", "2,3,5,8,12", "--deck", "everything", "--events", "-s", "qa43", "--no-files"]);
+  const options = opts(["-n", "6", "-p", "3,5,8,12", "--deck", "everything", "--events", "-s", "qa43", "--no-files"]);
 
   it("runOne seeds the bots (and so their crewSeed) with the game's hidden seed, which no player's view contains", () => {
     for (const n of [3, 5, 12]) {
@@ -50,8 +50,8 @@ describe("QA PR #43: sim crewSeed and determinism", () => {
     }
   });
 
-  it("same seed → identical event log, at 2, 3, 8 and 12 players, with no refused bot commands", () => {
-    for (const n of [2, 3, 8, 12]) {
+  it("same seed → identical event log, at 3, 8 and 12 players, with no refused bot commands", () => {
+    for (const n of [3, 8, 12]) {
       const { config, crew } = setupGame(options, n, 1);
       const play = () => runBotGame(config, createBots(config.players, (_s, i) => PERSONALITIES[crew[i]!], config.seed));
       const a = play();

@@ -1,7 +1,7 @@
 // QA for role deck v2 R2a (docs/roles-v2.md §2, §3): power limits, generic
 // refusals, exact token triggers at the threshold, Snitch target edges, Inside
-// Man and Rookie scoring under the one-crew win rule, eligibility at 2–12 and
-// Duel, a view-diff leak check with all six dealt, determinism.
+// Man and Rookie scoring under the one-crew win rule, eligibility at 3–12, a
+// view-diff leak check with all six dealt, determinism.
 // extension.md "One crew, and how you win", "Shakedowns", "Tokens and the perk shop"; design §8, §13
 import { describe, expect, it } from "vitest";
 import { handleThroughAlibis } from "./alibis.testkit";
@@ -275,9 +275,9 @@ describe("QA: Inside Man and Rookie under the one-crew win rule — extension.md
   });
 });
 
-describe("QA: eligibility at 2–12 players and Duel — v2 §3, design §8.1, §16.1", () => {
-  it("rolePoolFor and real deals respect minPlayers and needsMeetings", () => {
-    for (let n = 2; n <= 12; n++) {
+describe("QA: eligibility at 3–12 players — v2 §3, design §8.1", () => {
+  it("rolePoolFor and real deals respect minPlayers", () => {
+    for (let n = 3; n <= 12; n++) {
       const pool = rolePoolFor(config(n, { rolePool: SIX }));
       expect(pool.includes("insideMan"), `insideMan @${n}`).toBe(n >= 5);
       expect(pool.includes("snitch"), `snitch @${n}`).toBe(n >= 4);
@@ -290,8 +290,6 @@ describe("QA: eligibility at 2–12 players and Duel — v2 §3, design §8.1, �
         expect(new Set(specials).size).toBe(specials.length);
       }
     }
-    const duel = rolePoolFor(config(2, { duel: true, rolePool: SIX }));
-    expect([...duel].sort()).toEqual(["auditor", "lookout", "rookie"]);
   });
 });
 

@@ -244,7 +244,7 @@ describe("QA: emergency meetings — design §11.1", () => {
   });
 
   it("an emergency called in the final act's awaited phase can still open before the final meeting", () => {
-    let s = game(2);
+    let s = game(3);
     for (let act = 1; act <= 2; act++) s = run(toActMeeting(s), CLOSE);
     while (s.phase.kind === "planning") s = run(s, ROUND);
     s = run(s, emergency("p0"), open("emergency-p0"), CLOSE);
@@ -318,15 +318,16 @@ describe("QA: shakedowns — design §11.3, extension.md \"Shakedowns (fixed num
   });
 
   it("compensation larger than a non-empty Haul empties the Haul and never goes negative (provisional)", () => {
-    // Round 1: both in the Lobby; p1 pockets 1 (Haul 3). Then nobody loots.
-    let s = run(game(2), mv("p0", "lobby", 0), mv("p1", "lobby", 1), ROUND);
+    // Round 1: all in the Lobby; p1 pockets 1 (Haul 5). Then nobody loots.
+    let s = run(game(3), mv("p0", "lobby", 0), mv("p1", "lobby", 1), mv("p2", "lobby", 0), ROUND);
     expect(s.players.p1?.stash).toBe(1);
     const haul = s.haul;
     expect(haul).toBeGreaterThan(0);
     expect(haul + 1).toBeLessThan(8);
-    s = run(s, mv("p0", "rooftop"), mv("p1", "rooftop"), ROUND, mv("p0", "rooftop"), mv("p1", "rooftop"), ROUND);
+    const roof = [mv("p0", "rooftop"), mv("p1", "rooftop"), mv("p2", "rooftop")];
+    s = run(s, ...roof, ROUND, ...roof, ROUND);
     expect(s.haul).toBe(haul);
-    s = run(s, sched(1), open("act-1"), vote("p0", "p1"), CLOSE);
+    s = run(s, sched(1), open("act-1"), vote("p0", "p1"), vote("p2", "p1"), CLOSE);
     expect(LAST(s, "shakedownResolved")).toMatchObject({ stashRevealed: 1, clean: true, compensation: haul + 1 });
     expect(s.haul).toBe(0);
     expect(s.players.p1?.stash).toBe(haul + 1);
@@ -335,9 +336,9 @@ describe("QA: shakedowns — design §11.3, extension.md \"Shakedowns (fixed num
 });
 
 describe("QA: missed checkpoint and the raid at 100 — design §11.5, §7", () => {
-  /** Two players in Security (no loot, no pressure) for three rounds from a chosen Heat; the Act 1 checkpoint is missed. */
+  /** Two of the three in Security (no loot, no pressure; p2 defaults to the Lobby) for three rounds from a chosen Heat; the Act 1 checkpoint is missed. */
   function missFrom(heat: number): GameState {
-    let s = { ...game(2), heat };
+    let s = { ...game(3), heat };
     for (let r = 0; r < 3; r++) s = run(s, mv("p0", "security", 0, { watch: "vault" }), mv("p1", "security", 0, { watch: "vault" }), ROUND);
     return run(s, sched(1), open("act-1"));
   }
@@ -356,12 +357,12 @@ describe("QA: missed checkpoint and the raid at 100 — design §11.5, §7", () 
   });
 
   it("a missed Act 2 checkpoint adds +15 too, and the shortfall carries over", () => {
-    let s = run(toActMeeting(game(2)), CLOSE);
+    let s = run(toActMeeting(game(3)), CLOSE);
     const heat = s.heat;
     s = toActMeeting(s);
     const before = s.heat;
     s = run(s, CLOSE);
-    expect(LAST(s, "checkpointChecked")).toMatchObject({ act: 2, target: 28, met: false, heatPenalty: 15 });
+    expect(LAST(s, "checkpointChecked")).toMatchObject({ act: 2, target: 42, met: false, heatPenalty: 15 });
     expect(s.heat).toBe(before + 15);
     expect(heat).toBeLessThan(before);
   });

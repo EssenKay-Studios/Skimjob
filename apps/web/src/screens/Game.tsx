@@ -49,7 +49,7 @@ import {
   type Presence,
   type Timer,
 } from "../game/hud";
-import { hasMeetings, slotText } from "../game/meeting";
+import { slotText } from "../game/meeting";
 import { ClaimRole, DecidingPanel, MeetingNow, MeetingsPanel, ResultsBanner, RoleCard } from "./Meetings";
 import { useCountdown, useGame, useNow, type ClientCommand, type Connection, type GameChannel, type Reply } from "../game/useGame";
 import { api, ApiError, sentence, UNREACHABLE, type LobbyView } from "../api";
@@ -359,11 +359,10 @@ function Seats({ view, presence, offset, marks }: { view: PlayerView; presence: 
 function Actions({ view, timers, offset, send, autoMeetings, pick }: BoardProps & { pick: Pick }) {
   const alibi = alibiState(view);
   const p = view.phase;
-  const meetings = hasMeetings(view);
   const voting = p.kind === "meeting" || p.kind === "shakedownPending";
   return (
     <>
-      {meetings && <ResultsBanner view={view} />}
+      <ResultsBanner view={view} />
       {p.kind === "meeting" && <MeetingNow view={view} timers={timers} offset={offset} send={send} />}
       {p.kind === "shakedownPending" && <DecidingPanel view={view} timers={timers} offset={offset} />}
       {alibi && <AlibiPanel view={view} round={alibi.round} posted={alibi.posted} send={send} />}
@@ -375,7 +374,7 @@ function Actions({ view, timers, offset, send, autoMeetings, pick }: BoardProps 
       )}
       {/* During the alibi window the claim sits next to the alibi button instead of on the card. */}
       <RoleCard view={view} send={send} claim={!alibi} />
-      {meetings && !voting && <MeetingsPanel view={view} timers={timers} offset={offset} send={send} autoMeetings={autoMeetings} />}
+      {!voting && <MeetingsPanel view={view} timers={timers} offset={offset} send={send} autoMeetings={autoMeetings} />}
     </>
   );
 }

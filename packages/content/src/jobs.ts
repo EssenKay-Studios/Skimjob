@@ -1,5 +1,5 @@
 // Job definitions: rooms by player count, Heat formula numbers and checkpoint
-// targets, shakedown and Duel call-out numbers. design §6, §7, §9, §11.3, §11.5, §16.1
+// targets and shakedown numbers. design §6, §7, §9, §11.3, §11.5
 //
 // Heat and targets live on the job because jobs may change them (the Casino's
 // baseline Heat is +5, design §9). Engine helpers take a `JobDef` rather than
@@ -44,12 +44,6 @@ export interface ShakedownRules {
   readonly payout: number;
 }
 
-/** design §16.1 Duel mode (2 players, call-outs instead of votes). */
-export interface DuelRules {
-  /** A call-out on an opponent who pocketed nothing since the last check costs the caller this (capped at its stash), paid to the opponent. extension.md gap-fills */
-  readonly wrongCallOut: number;
-}
-
 export interface JobDef {
   readonly id: JobId;
   readonly name: string;
@@ -63,8 +57,6 @@ export interface JobDef {
   readonly checkpoints: CheckpointRules;
   /** Kept on the job so simulator content overrides can tune it with the rest (design §17.4, §19 Q4). */
   readonly shakedown: ShakedownRules;
-  /** Duel mode's call-out numbers, kept on the job like the shakedown's (design §16.1). */
-  readonly duel: DuelRules;
 }
 
 /** First National Bank, the starter job. design §6.1, §6.2, §7, §11.5 */
@@ -72,7 +64,7 @@ export const BANK_JOB: JobDef = {
   id: "bank",
   name: "First National Bank",
   roomTiers: [
-    { minPlayers: 2, rooms: ["vault", "office", "lobby", "security", "rooftop"] },
+    { minPlayers: 3, rooms: ["vault", "office", "lobby", "security", "rooftop"] },
     { minPlayers: 5, rooms: ["depositBoxes", "serverRoom"] },
     { minPlayers: 9, rooms: ["tellerLine", "managersOffice"] },
   ],
@@ -114,8 +106,6 @@ export const BANK_JOB: JobDef = {
   checkpoints: { perPlayer: [7, 15, 23] },
   // extension.md: fixed clean line 6 and payout 8 (were 3 × and 5 × the act); starting values for the balance pass.
   shakedown: { cleanBelow: 6, payout: 8 },
-  // extension.md gap-fills: the Duel wrong call pays the clean payout number (was 5 × act).
-  duel: { wrongCallOut: 8 },
 };
 
 export const JOBS: Readonly<Record<JobId, JobDef>> = { bank: BANK_JOB };

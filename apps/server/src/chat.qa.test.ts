@@ -193,8 +193,8 @@ describe("QA: history on reconnect", () => {
   });
 
   it("messages stay in send order per game across a server restart (same clock time, games interleaved)", async () => {
-    const g1 = await startGame(2);
-    const g2 = await startGame(2);
+    const g1 = await startGame(2, 1);
+    const g2 = await startGame(2, 1);
     let a = await Client.open(g1.id, g1.humans[0]!);
     let x = await Client.open(g2.id, g2.humans[0]!);
     for (const t of ["1", "2", "3"]) {
@@ -215,7 +215,7 @@ describe("QA: history on reconnect", () => {
 
 describe("QA: evidence cards (design §12.1, §11.2)", () => {
   it("refuses non-integer, string, __proto__, negative, out-of-range and other-game seqs; the card is the sender's own entry", async () => {
-    const g1 = await startGame(2);
+    const g1 = await startGame(2, 1);
     const g2 = await startGame(6);
     const [a, b] = await Promise.all(g1.humans.map((h) => Client.open(g1.id, h)));
     const other = await Client.open(g2.id, g2.humans[0]!);
@@ -253,7 +253,7 @@ describe("QA: evidence cards (design §12.1, §11.2)", () => {
 
 describe("QA: text limits", () => {
   it("exactly 500 code points is fine, 501 isn't; empty/whitespace refused; HTML stays literal text in delivery and history", async () => {
-    const { id, humans } = await startGame(2);
+    const { id, humans } = await startGame(2, 1);
     const [a, b] = await Promise.all(humans.map((h) => Client.open(id, h)));
     expect(await a!.chat({ text: "é".repeat(CHAT_MAX_CHARS + 1) })).toMatchObject({ rejected: true });
     expect(await a!.chat({ text: "𝔸".repeat(CHAT_MAX_CHARS + 1) })).toMatchObject({ rejected: true });
@@ -272,7 +272,7 @@ describe("QA: text limits", () => {
 
 describe("QA: rate limit (8 per 10 s)", () => {
   it("is exact at the boundary, shared by two tabs, per player, and not spent by refused messages", async () => {
-    const { id, humans } = await startGame(2);
+    const { id, humans } = await startGame(2, 1);
     const [a1, a2, b] = await Promise.all([0, 0, 1].map((i) => Client.open(id, humans[i]!)));
     for (let i = 0; i < 20; i++) expect(await a1!.chat({ text: "" })).toMatchObject({ rejected: true, reason: "message is empty" });
     for (let i = 0; i < CHAT_RATE.messages; i++) {

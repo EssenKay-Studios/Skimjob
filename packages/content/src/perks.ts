@@ -51,12 +51,8 @@ export const SHOP_COLUMNS: Readonly<Record<PerkColumn, readonly PerkId[]>> = {
 
 /**
  * Shop dealing variants (extension.md gap-fills "Shop dealing"): with events
- * off the Sway perk is dealt from these; Duel deals one perk from each of
- * these that work without meetings, and Rig with events on (else a pick from
- * the Learn and Protect perks not dealt).
+ * off the Sway perk is dealt from these.
  */
 export const SHOP_RULES = {
   swayEventsOff: ["extraVote", "emergency"] as readonly PerkId[],
-  duel: [["peek", "tail"], ["alibi", "recharge"]] as readonly (readonly PerkId[])[],
-  duelThird: "rig" as PerkId,
 } as const;

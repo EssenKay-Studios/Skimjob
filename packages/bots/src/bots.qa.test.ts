@@ -19,7 +19,7 @@ import { PERSONALITIES, type Personality, type PersonalityId } from "./personali
 import { createBots, runBotGame, type BotGameResult } from "./run";
 
 const IDS: PersonalityId[] = ["honest", "opportunist", "greedy", "cautious", "random"];
-const SIZES = [2, 3, 8, 12];
+const SIZES = [3, 8, 12];
 const VOTE_MODES: readonly VoteVisibility[] = ["hiddenThenRevealed", "open", "secret"];
 const cyc = <T>(xs: readonly T[], i: number): T => xs[i % xs.length] as T;
 
@@ -128,7 +128,7 @@ describe("QA: bots never read the state, only their view — design §17.3", () 
   };
 
   it("a view shares no object with the game state, so nothing hidden is reachable from it", () => {
-    for (const n of [2, 12]) {
+    for (const n of [3, 12]) {
       const c = config(n, `reach-${n}`);
       const { state } = runBotGame(c, createBots(c.players, rotate(0), "reach"));
       const mid = midGame(c);

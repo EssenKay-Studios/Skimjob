@@ -15,9 +15,7 @@ import { applyEvent } from "./reduce";
 import { checkMove, closeAlibis, resolveRound } from "./round";
 import { isObject, playerFor, show } from "./check";
 import { answerDoubleCross } from "./deck";
-import { callOut } from "./duel";
 import { claimRole } from "./claims";
-import { isDuel } from "./setup";
 import { buyPerk } from "./perks";
 import { policeMoment } from "./police";
 import {
@@ -144,7 +142,6 @@ const HANDLERS: Readonly<Record<string, Handler>> = {
   sealVote,
   useAbility,
   answerDoubleCross,
-  callOut,
   buyPerk: (state, command) => buyPerk(state, command),
   advance,
   scheduleMeeting,
@@ -153,9 +150,6 @@ const HANDLERS: Readonly<Record<string, Handler>> = {
 /** Every command type the engine handles. */
 export const COMMAND_TYPES: readonly string[] = Object.keys(HANDLERS);
 
-/** design §16.1: Duel mode has no meetings or votes (nor role claims, which are meeting talk). */
-const MEETING_COMMANDS: readonly string[] = ["claimRole", "proposeMeeting", "acceptMeeting", "scheduleMeeting", "callEmergency", "castVote", "sealVote"];
-
 /** Apply one command. Never throws for bad input; a rejection leaves state as it was. */
 export function handleCommand(state: GameState, command: unknown): CommandResult {
   if (!isObject(command) || typeof command.type !== "string") return { ok: false, reason: "command must be an object with a type" };
@@ -163,7 +157,6 @@ export function handleCommand(state: GameState, command: unknown): CommandResult
   if (state.phase.kind === "setup") return { ok: false, reason: "the game has not started" };
   const handler = Object.hasOwn(HANDLERS, command.type) ? HANDLERS[command.type] : undefined;
   if (!handler) return { ok: false, reason: `command ${command.type} is not supported` };
-  if (isDuel(state.config) && MEETING_COMMANDS.includes(command.type)) return { ok: false, reason: "Duel mode has no meetings or votes" };
   const out = withRng(state.rng, (draw) => handler(state, command, draw));
   if (typeof out === "string") return { ok: false, reason: out };
   return { ok: true, state: out.reduce(applyEvent, state), events: out };

@@ -32,10 +32,10 @@ const outcome = (s: GameState) => (s.phase.kind === "ended" ? s.phase.outcome : 
 afterEach(() => vi.restoreAllMocks());
 
 describe("all-bot games — design §17.3", () => {
-  const sizes = Array.from({ length: 11 }, (_, i) => i + 2);
+  const sizes = Array.from({ length: 10 }, (_, i) => i + 3);
   const mixes: [string, PersonalityId[]][] = [...Object.keys(PERSONALITIES).map((id) => [id, [id as PersonalityId]] as [string, PersonalityId[]]), ["mixed", MIXED]];
 
-  it.each(mixes)("%s bots finish a game at every crew size from 2 to 12 with no refused command", (_name, ids) => {
+  it.each(mixes)("%s bots finish a game at every crew size from 3 to 12 with no refused command", (_name, ids) => {
     for (const n of sizes) {
       const { state, rejections, steps } = play(n, `size-${n}`, ids);
       expect(state.phase.kind, `${n} players`).toBe("ended");
@@ -325,22 +325,5 @@ describe("bots with Moles and the Driver dealt — design §8, §8.1, §17.3 (ta
       moleWins += (o?.winners ?? []).filter((id) => r.state.players[id]?.role === "mole").length;
     }
     expect(moleWins).toBeGreaterThan(0);
-  });
-});
-
-describe("Duel games — design §16.1", () => {
-  it("bots finish Duel games (events on and off) with no refused command, calling out but never meeting", () => {
-    const verdicts = new Set<boolean>();
-    for (let g = 0; g < 30; g++) {
-      const c: GameConfig = { ...config(2, `duel-${g}`), duel: true, eventsEnabled: g % 2 === 0 };
-      const { state, rejections } = runBotGame(c, createBots(c.players, mix(MIXED.slice(g % 4)), `bots-duel-${g}`));
-      expect(state.phase.kind).toBe("ended");
-      expect(rejections).toEqual([]);
-      const types = new Set(state.log.map((e) => e.type));
-      for (const t of ["meetingProposed", "meetingOpened", "voteCast", "emergencyMeetingCalled"]) expect(types.has(t as never), t).toBe(false);
-      for (const e of state.log) if (e.type === "callOutResolved") verdicts.add(e.caught);
-    }
-    // Caught and wrong call-outs both happen.
-    expect([...verdicts].sort()).toEqual([false, true]);
   });
 });
