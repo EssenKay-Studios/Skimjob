@@ -208,10 +208,12 @@ describe("kill/restart at every step = an uninterrupted run (same seed)", () => 
   }
   // With bots: restart before every step; play() checks no double, no skip, no refusals, every deadline drained.
   it("bots, quick: restarting at every phase still ends cleanly", { timeout: 240_000 }, async () => {
-    // One game is enough: the restart matrix below runs ten more, each compared with an uninterrupted run.
-    forcedSeed = "qa-restart-bots-s1";
+    forcedSeed = "qa-restart-bots";
     const phases = new Set<string>();
-    for (const p of (await play(5, { sessionLength: "quick" }, { act: emergencyAt, restart: () => true })).phases) phases.add(p);
+    for (const seed of ["s1", "s2", "s3"]) {
+      forcedSeed = `qa-restart-bots-${seed}`;
+      for (const p of (await play(5, { sessionLength: "quick" }, { act: emergencyAt, restart: () => true })).phases) phases.add(p);
+    }
     for (const p of ["planning", "alibis", "notice", "meeting"]) expect(phases.has(p), p).toBe(true);
     console.log("QA restart phases covered:", [...phases].join(","));
   });
