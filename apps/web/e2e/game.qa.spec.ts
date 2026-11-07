@@ -86,6 +86,36 @@ test("12 seats, 24-char names: a 15-min game to the end with moves changed, alib
   const errors: string[] = [];
   for (const p of [host, guest]) p.on("pageerror", (e) => errors.push(e.message));
   const game = await start(host.request, guest.request, 10, "quick");
+  // At the fast clock a round is 2.25 s and an alibi window 750 ms (× 0.05): under
+  // CI load a round of taps outlasts them, so the test could miss all nine. Until
+  // the host has changed a move, and then posted an alibi, it pauses the game from
+  // the push that opens the phase it needs (a pause stops every deadline and players
+  // can still plan and post, design §15) and resumes once that is done. Both steps
+  // are counted from the host's own view, not from a tap's promise: under load a
+  // tap can time out after its click went through.
+  let changed = 0; // rounds where the host resubmitted its move (design §5.1)
+  let alibis = 0; // alibis the host posted (design §5.4)
+  let phase = "";
+  const holding = () => (phase === "planning" && changed === 0) || (phase === "alibis" && alibis === 0);
+  let pausing: ReturnType<APIRequestContext["post"]> | null = null;
+  let pausedAt = 0;
+  type Logged = { event: { type: string; player?: string; round?: number } };
+  host.on("websocket", (ws) =>
+    ws.on("framereceived", ({ payload }) => {
+      if (typeof payload !== "string" || !payload.startsWith('{"view"')) return;
+      const { view } = JSON.parse(payload) as { view: { phase: { kind: string }; me: { id: string }; ledger: Logged[]; caseFile: Logged[] } };
+      const mine = (log: Logged[], type: string) => log.filter(({ event }) => event.type === type && event.player === view.me.id).map(({ event }) => event.round);
+      const submitted = mine(view.caseFile, "moveSubmitted");
+      phase = view.phase.kind;
+      changed = new Set(submitted.filter((r, i) => submitted.indexOf(r) !== i)).size;
+      alibis = mine(view.ledger, "alibiPosted").length;
+      if (!holding() || pausing) return;
+      pausedAt = Date.now();
+      pausing = host.request.post(`/api/games/${game.id}/pause`, { data: {} });
+      // Awaited in the loop, where a rejection fails the test; this keeps it from going unhandled first.
+      pausing.catch(() => {});
+    }),
+  );
   await host.goto(`/game/${game.id}`);
   await guest.goto(`/game/${game.id}`);
   await expect(host.locator(".crew-seat")).toHaveCount(12);
@@ -101,49 +131,60 @@ test("12 seats, 24-char names: a 15-min game to the end with moves changed, alib
     await shot(p, name);
   };
   const over = host.getByRole("list", { name: "Final ranking" });
-  let changed = 0;
-  let alibis = 0;
   let round = 0;
   const post = host.getByRole("button", { name: "Post alibi" });
-  while (!(await over.isVisible())) {
-    const heading = await host.locator("#move-h").textContent({ timeout: 200 }).catch(() => null);
-    const lock = host.getByRole("button", { name: /Lock it in|Update move/ });
-    if (heading && (await lock.isVisible().catch(() => false))) {
-      const r = Number(/Round (\d+)/.exec(heading)?.[1] ?? 0);
-      if (r !== round) {
-        round = r;
-        if (r > 1) await once("missed-or-move", host);
-        // Vault, pocket what the slider allows, lock; then change to the Office.
-        await tap(host, host.locator('.room-tile[data-room="Vault"]')).catch(() => {});
-        await host.locator("#split").fill("1", { timeout: 500 }).catch(() => {});
-        await once("move-picked", host);
-        if (await lock.isEnabled({ timeout: 500 }).catch(() => false)) await tap(host, lock).catch(() => {});
-        await once("locked", host);
-        for (const x of await leaks(guest)) leaked.add(`round ${r}: ${x}`);
-        await once("guest-view", guest);
-        await tap(host, host.locator('.room-tile[data-room="Office"]')).catch(() => {});
-        const upd = host.getByRole("button", { name: "Update move" });
-        if (await upd.isEnabled({ timeout: 500 }).catch(() => false)) await tap(host, upd).then(() => changed++, () => {});
-        // The guest locks in on even rounds only (odd rounds: missed deadline).
-        if (r % 2 === 0) {
-          await tap(guest, guest.locator('.room-tile[data-room="Lobby"]')).catch(() => {});
-          await tap(guest, guest.getByRole("button", { name: "Lock it in" })).catch(() => {});
-          for (const x of await leaks(host)) leaked.add(`host sees guest round ${r}: ${x}`);
+  try {
+    while (!(await over.isVisible())) {
+      const heading = await host.locator("#move-h").textContent({ timeout: 200 }).catch(() => null);
+      const lock = host.getByRole("button", { name: /Lock it in|Update move/ });
+      if (heading && (await host.locator(".move__lock").isVisible().catch(() => false))) {
+        const r = Number(/Round (\d+)/.exec(heading)?.[1] ?? 0);
+        // Once a round; again until the view shows the change (a tap can still miss).
+        if (r !== round || changed === 0) {
+          round = r;
+          if (r > 1) await once("missed-or-move", host);
+          // Vault, pocket what the slider allows, lock; then change to another open room
+          // (a Lockdown event can close a room for the round, design §13).
+          await tap(host, host.locator('.room-tile[data-room="Vault"]')).catch(() => {});
+          await host.locator("#split").fill("1", { timeout: 500 }).catch(() => {});
+          await once("move-picked", host);
+          if (await lock.isEnabled({ timeout: 500 }).catch(() => false)) await tap(host, lock).catch(() => {});
+          await once("locked", host);
+          for (const x of await leaks(guest)) leaked.add(`round ${r}: ${x}`);
+          await once("guest-view", guest);
+          await tap(host, host.locator('.room-tile:enabled:not([aria-pressed="true"])').first()).catch(() => {});
+          const upd = host.getByRole("button", { name: "Update move" });
+          if (await upd.isEnabled({ timeout: 500 }).catch(() => false)) await tap(host, upd).catch(() => {});
+          // The guest locks in on even rounds only (odd rounds: missed deadline).
+          if (r % 2 === 0) {
+            await tap(guest, guest.locator('.room-tile[data-room="Lobby"]')).catch(() => {});
+            await tap(guest, guest.getByRole("button", { name: "Lock it in" })).catch(() => {});
+            for (const x of await leaks(host)) leaked.add(`host sees guest round ${r}: ${x}`);
+          }
         }
       }
+      if (await post.isVisible().catch(() => false)) {
+        await once("alibi-open", host);
+        await tap(host, host.getByRole("group", { name: "Alibi room" }).getByRole("button", { name: "Vault" })).catch(() => {});
+        await tap(host, post).catch(() => {});
+        await once("alibi-posted", host);
+      }
+      // A step that never lands fails here, readably, instead of holding the game paused.
+      if (pausing) expect(Date.now() - pausedAt, `paused in ${phase} with ${changed} changes and ${alibis} alibis`).toBeLessThan(60_000);
+      // Resume once the step is done, or at once if the pause landed in another phase.
+      if (pausing && !holding()) {
+        await ok(await pausing);
+        pausing = null;
+        await ok(await host.request.post(`/api/games/${game.id}/resume`, { data: {} }));
+      }
+      if (await host.locator(".panel[aria-live=polite]").isVisible().catch(() => false)) await once("waiting", host);
+      // Wake as soon as an alibi window opens rather than on a fixed 120 ms tick.
+      await post.waitFor({ state: "visible", timeout: 120 }).catch(() => {});
     }
-    // At the fast clock an alibi window is under a second: act first, check the
-    // layout after. Until one alibi is in, tap straight away; the open panel is
-    // checked on a later window, once the count no longer depends on it.
-    if (await post.isVisible().catch(() => false)) {
-      if (alibis > 0) await once("alibi-open", host);
-      await tap(host, host.getByRole("group", { name: "Alibi room" }).getByRole("button", { name: "Vault" })).catch(() => {});
-      await tap(host, post).then(() => alibis++, () => {});
-      await once("alibi-posted", host);
-    }
-    if (await host.locator(".panel[aria-live=polite]").isVisible().catch(() => false)) await once("waiting", host);
-    // Wake as soon as an alibi window opens rather than on a fixed 120 ms tick.
-    await post.waitFor({ state: "visible", timeout: 120 }).catch(() => {});
+  } finally {
+    // Never leave the game paused, even when a step above throws (set in the frame handler, so TS can't see it).
+    const held = pausing as ReturnType<APIRequestContext["post"]> | null;
+    if (held) await held.then(() => host.request.post(`/api/games/${game.id}/resume`, { data: {} })).catch(() => {});
   }
   await expect(over.locator(".ranking__row")).toHaveCount(12);
   await expect(host.locator(".over__stamp")).toHaveText(/JOB DONE|BUSTED/);

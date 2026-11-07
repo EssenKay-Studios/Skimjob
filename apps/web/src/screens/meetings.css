@@ -200,6 +200,11 @@
 }
 .results__title {
   font-size: 22px;
+  overflow-wrap: anywhere;
+}
+/* A 24-character name like W×24 has no break point of its own. */
+.deciding p {
+  overflow-wrap: anywhere;
 }
 
 /* ---------- Role card ---------- */
