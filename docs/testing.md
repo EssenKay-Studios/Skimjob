@@ -17,6 +17,7 @@ All tests are seeded and deterministic. Nothing reads the wall clock (the server
 | Simulator smoke | `scripts/sim-smoke.sh` | 200 all-bot games each at 3/6/12 players (events on, Everything deck) end with no refused bot command. | `bash scripts/sim-smoke.sh [games]` |
 | Typecheck | every workspace | Strict TS. New event or command types must fail exhaustive switches. | `pnpm typecheck` |
 | Dead code | every workspace | `knip` fails on unused files, exports and dependencies (`knip.json`; zero today, keep it so). | `pnpm knip` |
+| Theme tokens | `apps/web/src` (`.css`, `.ts`, `.tsx`), `scripts/theme-lint.mjs` | No raw colours, fonts, shadows or radii outside `theme.css` (CLAUDE.md UI rules). One lint for the whole app; it replaces the per-module token tests. | `pnpm lint:theme` |
 | Feature coverage | `apps/web/e2e/features.json` | Every e2e test has exactly one feature tag, every tag has a test, every screen, panel or feature module reaches an entry. | `node scripts/scope.mjs --check` |
 
 Tests that check the R6 rules (Heat, loot, tokens) are replaced in S3 by tests of the R7 rules.
@@ -32,7 +33,7 @@ A PR waits only for the tests of what it touched; `main` is tested in full after
 | Changed | Runs |
 |---|---|
 | Docs only | Typecheck, knip, all unit tests |
-| Any code | Typecheck and knip (whole repo); unit, property and server tests of the changed packages and the packages that depend on them; the e2e tags from the graph |
+| Any code | Typecheck, knip and the theme-token lint (whole repo); unit, property and server tests of the changed packages and the packages that depend on them; the e2e tags from the graph |
 | A unit test file | That package's unit tests only. A changed spec runs its own tag |
 | Engine, content or bots | Also the engine package (property tests, `viewFor` leak scrub) and a 50-game sim smoke at 3/6/12 players |
 | Server | Also `@lobby @host` |
@@ -44,7 +45,19 @@ A PR waits only for the tests of what it touched; `main` is tested in full after
 
 **Adding a feature.** Give each new screen, panel or feature module an entry in `features.json`, tag its specs, and run `node scripts/scope.mjs --check` (CI runs it). QA's adversarial specs go in `<feature>.qa.spec.ts` under the same tag.
 
-**Shards.** CI splits the e2e specs over 6 jobs by file, heaviest first onto the lightest shard (`node scripts/scope.mjs --shard i/6`), using `apps/web/e2e/shard-weights.json` (seconds per spec file from a local run; a file without an entry counts 60). Playwright's own `--shard` slices by test count, which put the slow full-game tests (`@fast-clock` and the 15-minute bot games) and the skipped per-project tests in a few shards: 23 min against 2 min on a main run. Locally the shards are within 1% of each other. After adding or reworking slow specs, refresh the weights: run `npx playwright test --reporter=json` in `apps/web`, sum each file's test durations.
+**Shards.** CI splits the e2e specs over 6 jobs by file, heaviest first onto the lightest shard (`node scripts/scope.mjs --shard i/6`), using `apps/web/e2e/shard-weights.json` (seconds per spec file from a local run; a file without an entry counts 60). Playwright's own `--shard` slices by test count, which put the slow full-game tests (`@fast-clock` and the 15-minute bot games) and the skipped per-project tests in a few shards: 23 min against 2 min on a main run. Locally the shards are within 1% of each other. CI caches the pnpm store (`setup-node`'s `cache: pnpm`) and the Playwright browser download (`actions/cache`, keyed on the Playwright version; the system libraries are still installed each run). After adding or reworking slow specs, refresh the weights: run `npx playwright test --reporter=json` in `apps/web`, sum each file's test durations.
+
+## Precheck
+
+`pnpm precheck` is the one command to run before every push (builder and QA, `docs/pipeline/common.md`). It runs what CI would fail on, so a push is green the first time:
+
+1. In parallel: `pnpm typecheck`, `pnpm knip` and `pnpm lint:theme`.
+2. `pnpm test:scoped` (the tests the diff needs, as in "Scoped tests").
+3. Playwright `--repeat-each=3` on the e2e specs the branch adds or changes against `origin/main` (`changedPaths()` and `SPEC` from `scripts/scope.mjs`), so a flaky new spec fails here, not on the PM's merge.
+
+It stops at the first failing step, and does nothing at all when only `.md` files changed. Locally Playwright runs up to 4 workers per run, and reuses a server already listening on the agent's own ports (`playwright.config.ts`); CI always starts its own.
+
+**Theme-token lint.** `scripts/theme-lint.mjs` checks every `.css`, `.ts` and `.tsx` file under `apps/web/src` except `theme.css` and tests: no raw colour (`#hex`, `rgb()`, `hsl()`, ...), `font-family`/`font` only a `--font-*` token or `inherit`, and `border-radius`, `box-shadow` and `text-shadow` only `var(--...)`, `0`, `none` or `inherit`. `scripts/theme-lint.baseline.json` holds the number of violations per file that predate the lint; it can only go down (a file over its count, or any count for a file not listed, fails). When you clean a file up, run `node scripts/theme-lint.mjs --update` to lower it. New styles use or add a `theme.css` token.
 
 ## Running the suite
 

@@ -14,7 +14,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const FEATURES = "apps/web/e2e/features.json";
 const SOURCE = /^(apps|packages)\/[^/]+\/(src|e2e)\/.*\.(tsx?|css)$/;
 const TEST = /\.(test|testkit)\.tsx?$/;
-const SPEC = /\/e2e\/.*\.spec\.ts$/;
+export const SPEC = /\/e2e\/.*\.spec\.ts$/;
 const TAG = /@[a-z][a-z-]*/g;
 const RULES = ["packages/engine", "packages/content", "packages/bots"];
 const FULL = { full: true, unit: "all", tags: "all", sim: 200 };
@@ -133,6 +133,12 @@ export function shard(specs, weights, i, n) {
 const out = (cmd, args, cwd = root) => execFileSync(cmd, args, { cwd, encoding: "utf8", maxBuffer: 1 << 28 });
 const lines = (s) => s.split("\n").filter(Boolean);
 
+// Paths this checkout changed against origin/main (committed, staged, unstaged and untracked).
+export function changedPaths() {
+  const base = out("git", ["merge-base", "origin/main", "HEAD"]).trim();
+  return [...lines(out("git", ["diff", "--name-only", "--no-renames", base])), ...lines(out("git", ["ls-files", "--others", "--exclude-standard"]))];
+}
+
 function check(files, features) {
   const vocab = vocabOf(features);
   const problems = Object.keys(features).filter((f) => !files.includes(f)).map((f) => `${FEATURES}: ${f} does not exist`);
@@ -176,13 +182,11 @@ function main(mode) {
   }
   const graph = buildGraph(files, read);
   if (mode !== "--run") return console.log(JSON.stringify(scope(lines(readFileSync(0, "utf8")), graph, features, read)));
-  const base = out("git", ["merge-base", "origin/main", "HEAD"]).trim();
-  const changed = [...lines(out("git", ["diff", "--name-only", "--no-renames", base])), ...lines(out("git", ["ls-files", "--others", "--exclude-standard"]))];
-  const s = scope(changed, graph, features, read);
+  const s = scope(changedPaths(), graph, features, read);
   console.log(JSON.stringify(s));
   const run = (cmd, args, cwd = root) => spawnSync(cmd, args, { cwd, stdio: "inherit" }).status === 0 || process.exit(1);
   if (s.unit) run("pnpm", ["test", ...(s.unit === "all" ? [] : s.unit.split(" "))]);
-  if (s.tags) run("npx", ["playwright", "test", "--workers=2", "--pass-with-no-tests", ...(s.tags === "all" ? [] : ["--grep", s.tags])], join(root, "apps/web"));
+  if (s.tags) run("npx", ["playwright", "test", "--pass-with-no-tests", ...(s.tags === "all" ? [] : ["--grep", s.tags])], join(root, "apps/web"));
   if (s.sim) run("bash", ["scripts/sim-smoke.sh", String(s.sim)]);
 }
 

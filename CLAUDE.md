@@ -13,7 +13,7 @@ A social deduction heist game for groups of friends (web + Android/iOS). A crew 
 
 ## End of every session
 
-1. Run `pnpm typecheck` and `pnpm test:scoped` (commands below); CI runs the same scoped set and must be green, and the full tier runs on `main` after the merge (`docs/testing.md`).
+1. Run `pnpm precheck` (commands below) before every push; CI runs the same checks and the scoped set, and must be green, and the full tier runs on `main` after the merge (`docs/testing.md`).
 2. Don't edit `docs/STATUS.md` or `docs/decisions.md` in a feature PR: put "Closes #N" (your issue) in the PR body, provisional rule calls under `## Decisions` and new follow-ups under `## Follow-ups`; the PM folds decisions into `docs/decisions.md` (in its own docs PR) and creates issues from the follow-ups. If a rule changed, update `docs/design.md` in the PR.
 3. Commit to your branch, push it and open a PR (`docs/pipeline/common.md`).
 
@@ -38,6 +38,8 @@ Dependency direction: `content` ← `engine` ← `bots` ← `sim`/`server`. The 
 pnpm install         # install all workspaces
 pnpm test            # run all tests (vitest)
 pnpm test:scoped     # only the tests your diff needs (same logic as CI)
+pnpm precheck        # before every push: typecheck, knip, theme-token lint, test:scoped, new e2e specs x3
+pnpm lint:theme      # raw colours, fonts, shadows, radii outside theme.css
 pnpm knip            # unused files, exports and dependencies (CI fails on any)
 pnpm typecheck       # tsc --noEmit across workspaces
 pnpm sim -- --help   # run the simulator (once implemented)

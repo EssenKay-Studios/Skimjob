@@ -432,7 +432,7 @@ A single always-on **"CI ok"** job depends on all the others and passes when eac
   - that each new event type is in the leak scrub;
   - that deleted R6 tests went with their code.
 - **QA:**
-  - runs the PR's scoped set on the Mac (`pnpm test:scoped`, which uses the same diff logic as CI, plus `--workers=2` for the browser);
+  - runs the PR's scoped set on the Mac (`pnpm precheck`, whose `test:scoped` uses the same diff logic as CI);
   - writes adversarial tests inside the feature;
   - for engine PRs, also a 200-game sim run locally.
 - **The gate** is unchanged: APPROVE + PASS on the head, green scoped CI. The full tier on `main` is the safety net, not the gate.
@@ -442,8 +442,8 @@ A single always-on **"CI ok"** job depends on all the others and passes when eac
 ### Rules learned on 3 Nov (put in every brief)
 
 - **Build and test on the Mac** (18 cores) when reachable; the cloud box has 2 cores.
-- **Run only the scoped set** (`pnpm test:scoped`, see the Test plan), `pnpm typecheck` before pushing, **push once**; the full suite runs on `main` after the merge.
-- **At most 2 browser games at a time** (Playwright `--workers=2`): 10 parallel 12-seat games on a busy Mac produced a false failure.
+- **Run only the scoped set** (`pnpm precheck`, see the Test plan) before pushing, **push once**; the full suite runs on `main` after the merge.
+- **At most 2 e2e runs on the Mac at a time, 4 browser workers each** (`playwright.config.ts`): 10 parallel 12-seat games on a busy Mac produced a false failure.
 - **Review and QA start together** as soon as a PR opens. **Hard time limits** in every brief (builder 30–50 min, reviewer 10–30, QA 15–35).
 - **Only the orchestrator merges.** Reviewer and QA agents never merge, even when the gate would pass.
 - **Every bug fix adds a test** that would have caught it (`docs/testing.md`).

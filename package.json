@@ -9,6 +9,7 @@
   "scripts": {
     "test": "vitest run",
     "test:scoped": "node scripts/scope.mjs --run",
+    "precheck": "node scripts/precheck.mjs",
     "test:pg": "bash scripts/db.sh start && DATABASE_URL=$(bash scripts/db.sh url) vitest run apps/server",
     "typecheck": "pnpm -r --if-present typecheck",
     "sim": "pnpm --filter @skimjob/sim start",
@@ -16,7 +17,8 @@
     "dev": "pnpm --filter @skimjob/server dev",
     "web": "pnpm --filter @skimjob/web dev",
     "test:e2e": "pnpm --filter @skimjob/web test:e2e",
-    "knip": "knip"
+    "knip": "knip",
+    "lint:theme": "node scripts/theme-lint.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

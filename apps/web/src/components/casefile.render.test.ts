@@ -1,7 +1,7 @@
 // Render checks for M2-10: the ledger / case file sheet, the "While you were
 // away" recap and the suspicion board. Lists keep the names the game screen's
 // E2E reads; private rows carry the lock; nothing shows another player's hidden
-// entries; theme tokens only. design §12.3, §13
+// entries. design §12.3, §13
 import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -104,16 +104,10 @@ describe("the recap and the board", () => {
     expect(html(createElement(SuspicionMark, { tag: null }))).toBe("");
   });
 
-  it("take radii and shadows from theme.css tokens (review, PR #46)", () => {
-    const css = readFileSync(new URL("./casefile.css", import.meta.url), "utf8");
-    for (const m of css.matchAll(/(border-radius|box-shadow):\s*([^;]+);/g)) expect(m[2], m[0]).toMatch(/^(var\(--[\w-]+\)|0|none)$/);
-  });
-
-  it("use theme tokens only and never inject HTML (UI rules)", () => {
+  it("never inject HTML (UI rules)", () => {
     for (const f of ["./CaseFile.tsx", "./AwayRecap.tsx", "./SuspicionBoard.tsx", "./casefile.css", "../art/Raccoon.tsx", "../game/away.ts", "../game/records.ts", "../game/notes.ts", "../screens/GalleryNotes.tsx"]) {
       const src = readFileSync(new URL(f, import.meta.url), "utf8");
       expect(src, f).not.toMatch(/dangerouslySetInnerHTML|innerHTML/);
-      expect(src.replace(/^\s*(\/\/|\/?\*).*$/gm, ""), f).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba?\(/);
     }
   });
 });

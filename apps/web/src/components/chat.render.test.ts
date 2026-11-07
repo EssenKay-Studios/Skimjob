@@ -1,6 +1,6 @@
 // Render checks for the chat panel (M2-8b): plain text only, evidence cards
 // say they're verified and that cameras can be fooled, DM notices, unread
-// badges, limits feedback, and no raw colours. design §12.1
+// badges, limits feedback. design §12.1
 import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -109,11 +109,10 @@ describe("ChatBadge", () => {
 });
 
 describe("chat sources", () => {
-  it("never inject HTML and use theme tokens only (UI rules)", () => {
+  it("never inject HTML (UI rules)", () => {
     for (const f of ["./Chat.tsx", "./chat.css", "../screens/GameChat.tsx", "../game/chat.ts"]) {
       const src = readFileSync(new URL(f, import.meta.url), "utf8");
       expect(src, f).not.toMatch(/dangerouslySetInnerHTML|innerHTML/);
-      expect(src.replace(/^\s*(\/\/|\/?\*).*$/gm, ""), f).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba?\(/);
     }
   });
 });
