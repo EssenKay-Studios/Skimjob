@@ -9,6 +9,8 @@ import { Close } from "./icons";
 import { SketchFrame } from "./SketchFrame";
 import "./infotip.css";
 
+/** How long the tip stays open after the pointer leaves, so the pointer can cross the gap onto it (WCAG 1.4.13). */
+const GRACE_MS = 200;
 const MARGIN = 8;
 const GAP = 4;
 const WIDTH = 260;
@@ -20,6 +22,9 @@ export function InfoTip({ info }: { readonly info: InfoRef }) {
   const button = useRef<HTMLButtonElement>(null);
   const tip = useRef<HTMLDivElement>(null);
   const pinned = useRef(false);
+  const leaving = useRef<number>(0);
+  /** True for the frames in which the scroll caused by focusing the "i" arrives; it must not close the tip. */
+  const focusScroll = useRef(false);
   const [open, setOpen] = useState(false);
 
   const close = useCallback(() => {
@@ -54,8 +59,20 @@ export function InfoTip({ info }: { readonly info: InfoRef }) {
     const outside = (e: Event) => {
       if (!root.current?.contains(e.target as Node)) close();
     };
+    const scrolled = () => {
+      if (!focusScroll.current) close();
+    };
+    // Esc closes the tip only, not the sheet it may sit in, wherever the focus is.
+    const escape = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (root.current?.contains(document.activeElement)) button.current?.focus();
+      close();
+    };
     document.addEventListener("pointerdown", outside);
-    window.addEventListener("scroll", close, true);
+    document.addEventListener("keydown", escape, true);
+    window.addEventListener("scroll", scrolled, true);
     // Only a new width closes it: a phone's keyboard or address bar changes the height alone.
     let width = window.innerWidth;
     const resized = () => {
@@ -64,23 +81,20 @@ export function InfoTip({ info }: { readonly info: InfoRef }) {
     window.addEventListener("resize", resized);
     return () => {
       document.removeEventListener("pointerdown", outside);
-      window.removeEventListener("scroll", close, true);
+      document.removeEventListener("keydown", escape, true);
+      window.removeEventListener("scroll", scrolled, true);
       window.removeEventListener("resize", resized);
     };
   }, [open, close]);
 
+  useEffect(() => () => window.clearTimeout(leaving.current), []);
+
   if (!entry) return null;
 
-  const onKeyDown = (e: KeyboardEvent) => {
-    if (e.key !== "Escape" || !open) return;
-    // Esc closes the tip only, not the sheet it may sit in.
-    e.preventDefault();
-    e.stopPropagation();
-    close();
-    button.current?.focus();
-  };
+  // Focus moving to another control closes it; a tap on the tip's own text (no new focus) does not.
   const onBlur = (e: FocusEvent) => {
-    if (!root.current?.contains(e.relatedTarget as Node | null)) close();
+    const to = e.relatedTarget as Node | null;
+    if (to && !root.current?.contains(to)) close();
   };
   const mouse = (e: PointerEvent) => e.pointerType === "mouse";
 
@@ -88,10 +102,16 @@ export function InfoTip({ info }: { readonly info: InfoRef }) {
     <span
       ref={root}
       className="infotip"
-      onKeyDown={onKeyDown}
       onBlur={onBlur}
-      onPointerEnter={(e) => mouse(e) && setOpen(true)}
-      onPointerLeave={(e) => mouse(e) && !pinned.current && setOpen(false)}
+      onPointerEnter={(e) => {
+        if (!mouse(e)) return;
+        window.clearTimeout(leaving.current);
+        setOpen(true);
+      }}
+      onPointerLeave={(e) => {
+        if (!mouse(e) || pinned.current) return;
+        leaving.current = window.setTimeout(() => setOpen(false), GRACE_MS);
+      }}
     >
       <button
         ref={button}
@@ -100,9 +120,14 @@ export function InfoTip({ info }: { readonly info: InfoRef }) {
         aria-label={`About ${entry.name}`}
         aria-expanded={open}
         aria-controls={id}
+        aria-describedby={`${id}-text`}
         onFocus={(e) => {
           // Focus coming back from the tip's own close button must not reopen it.
-          if (!root.current?.contains(e.relatedTarget as Node | null) && e.currentTarget.matches(":focus-visible")) setOpen(true);
+          if (root.current?.contains(e.relatedTarget as Node | null) || !e.currentTarget.matches(":focus-visible")) return;
+          // Focusing can scroll the "i" into view; that scroll arrives within a frame or two.
+          focusScroll.current = true;
+          requestAnimationFrame(() => requestAnimationFrame(() => (focusScroll.current = false)));
+          setOpen(true);
         }}
         onClick={() => {
           if (open && pinned.current) return close();
@@ -125,7 +150,7 @@ export function InfoTip({ info }: { readonly info: InfoRef }) {
               <Close />
             </button>
           </header>
-          <p>{entry.text}</p>
+          <p id={`${id}-text`}>{entry.text}</p>
         </SketchFrame>
       </div>
     </span>

@@ -130,6 +130,54 @@ test("a tip opened near the bottom of the screen stays on it and does not cover 
   await p.context().close();
 });
 
+test("tabbing onto an i below the screen scrolls to it and keeps its preview open @infotip", async ({ browser }) => {
+  const p = await open(browser, { width: 1280, height: 800 }, false);
+  const duffel = tipButton(p, "Duffel");
+  await duffel.focus();
+  await p.keyboard.press("Shift+Tab");
+  await duffel.evaluate((el) => window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY - window.innerHeight - 58));
+  expect((await duffel.boundingBox())!.y).toBeGreaterThan(800);
+  await p.keyboard.press("Tab");
+  await expect(duffel).toBeFocused();
+  await p.waitForTimeout(300);
+  await expect(popover(p)).toContainText(TERMS.duffel.text);
+  await p.context().close();
+});
+
+test("the pointer can cross from the i onto the tip, and a tap on the tip's text keeps it open @infotip", async ({ browser }) => {
+  const p = await open(browser, { width: 1280, height: 800 }, false);
+  const vault = tipButton(p, "Vault");
+  await vault.hover();
+  const b = (await vault.boundingBox())!;
+  const t = (await popover(p).boundingBox())!;
+  await p.mouse.move(b.x + b.width / 2, t.y + t.height / 2, { steps: 12 });
+  await p.waitForTimeout(500);
+  await expect(popover(p)).toBeVisible();
+  await popover(p).locator("p").click();
+  await p.waitForTimeout(300);
+  await expect(popover(p)).toBeVisible();
+  await p.context().close();
+});
+
+test("a tap on the tip's text keeps it open on a phone @infotip", async ({ browser }) => {
+  const p = await open(browser, { width: 390, height: 844 });
+  await tipButton(p, "Vault").click();
+  await popover(p).locator("p").click();
+  await p.waitForTimeout(300);
+  await expect(popover(p)).toBeVisible();
+  await p.context().close();
+});
+
+test("the i announces its line, and Esc closes a hover preview wherever the focus is @infotip", async ({ browser }) => {
+  const p = await open(browser, { width: 1280, height: 800 }, false);
+  await expect(tipButton(p, "Bell")).toHaveAccessibleDescription(TIPS.bell.text);
+  await tipButton(p, "Bell").hover();
+  await expect(popover(p)).toBeVisible();
+  await p.keyboard.press("Escape");
+  await expect(popover(p)).toHaveCount(0);
+  await p.context().close();
+});
+
 test("a mouse hover previews the tip and leaving closes it, unless a click pinned it @infotip", async ({ browser }) => {
   const p = await open(browser, { width: 1280, height: 800 }, false);
   const vault = tipButton(p, "Vault");
