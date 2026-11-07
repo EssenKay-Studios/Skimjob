@@ -89,3 +89,43 @@ test("the Tips row uses the notebook kit at every launch width @auth", async ({ 
     await page.screenshot({ path: info.outputPath(`tips-${width}.png`), fullPage: true });
   }
 });
+
+test("on a slow network a quick Off then On ends On, in the page and on the server @auth", async ({ page }) => {
+  await guestIn(page);
+  await page.route("**/api/me", async (r) => {
+    if (r.request().method() === "PATCH") await new Promise((done) => setTimeout(done, 800));
+    await r.fallback();
+  });
+  await page.goto("/");
+  const on = tipsGroup(page).getByRole("button", { name: "On" });
+  const off = tipsGroup(page).getByRole("button", { name: "Off" });
+  await off.click();
+  await expect(on).toBeDisabled();
+  await on.click(); // waits until the first save is back, then saves On
+  await expect(on).toHaveAttribute("aria-pressed", "true");
+  await expect(on).toBeEnabled();
+  await expect(off).toBeEnabled();
+  expect(await serverTips(page)).toBe(true);
+  await page.reload();
+  await expect(on).toHaveAttribute("aria-pressed", "true");
+});
+
+test("a slow failed save disables the buttons, then re-enables them with the old value @auth", async ({ page }) => {
+  await guestIn(page);
+  await page.route("**/api/me", async (r) => {
+    if (r.request().method() !== "PATCH") return r.fallback();
+    await new Promise((done) => setTimeout(done, 600));
+    return r.fulfill({ status: 503, json: { error: "down" } });
+  });
+  await page.goto("/");
+  const on = tipsGroup(page).getByRole("button", { name: "On" });
+  const off = tipsGroup(page).getByRole("button", { name: "Off" });
+  await off.click();
+  await expect(off).toBeDisabled();
+  await expect(on).toBeDisabled();
+  await expect(page.locator(".toast").first()).toBeVisible();
+  await expect(off).toBeEnabled();
+  await expect(on).toBeEnabled();
+  await expect(on).toHaveAttribute("aria-pressed", "true");
+  expect(await serverTips(page)).toBe(true);
+});
