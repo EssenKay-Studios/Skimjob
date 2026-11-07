@@ -5,7 +5,7 @@
 // roles dealt. design §7, §8, §8.1, §10, §11.3, §16.1
 import { describe, expect, it } from "vitest";
 import { handleThroughAlibis } from "./alibis.testkit";
-import { BANK_JOB, ROLES, STARTER_ROLES } from "@skimjob/content";
+import { ROLES, STARTER_ROLES } from "@skimjob/content";
 import type { GameConfig, GameEvent, GameState, PlayerState } from "./types";
 import { PUBLIC, privateTo } from "./types";
 import { createGame, rolePoolFor, setupEvents, validateConfig } from "./setup";
@@ -13,6 +13,9 @@ import { replay } from "./reduce";
 import { roundHeatDelta } from "./job";
 import { viewFor } from "./view";
 import { grantPerks } from "./perks.testkit";
+import { fullGrab } from "./grab.testkit";
+import { R6_COINS } from "./v01-numbers.testkit";
+import { jobFor } from "./overrides";
 
 function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
   return {
@@ -24,6 +27,7 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     ...extra,
+    contentOverrides: { ...R6_COINS, ...extra.contentOverrides }, // R6 room yields as coins (R6 role rules)
   };
 }
 
@@ -64,7 +68,7 @@ const ofType = <T extends GameEvent["type"]>(events: readonly GameEvent[], type:
 const granted = (s: GameState, player: string) => ofType(s.log, "tokenEarned").filter((e) => e.player === player).map((e) => e.trigger);
 const since = (before: GameState, after: GameState) => after.log.slice(before.log.length);
 
-const mv = (player: string, room: string, pocket = 0, extra: object = {}) => ({ type: "submitMove", player, move: { room, pocket, ...extra } });
+const mv = (player: string, room: string, pocket = 0, extra: object = {}) => ({ type: "submitMove", player, move: { ...fullGrab(room, pocket, R6_COINS), ...extra } });
 const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
 const vote = (player: string, target: string | null) => ({ type: "castVote", player, vote: target === null ? { kind: "skip" } : { kind: "shakedown", target } });
 const CLOSE = (s: GameState) => ({ type: "advance", deadline: { kind: "closeMeeting", meetingId: s.meeting?.id } });
@@ -90,7 +94,7 @@ const finishAct = (s: GameState, moves: Cmd[] = [], inMeeting: (s: GameState) =>
   return settle(run(inMeeting(s), CLOSE));
 };
 /** extension.md "Shakedowns": a fixed clean line and payout. */
-const { cleanBelow: cleanBelowPerAct, payout: compensationPerAct } = BANK_JOB.shakedown;
+const { cleanBelow: cleanBelowPerAct, payout: compensationPerAct } = jobFor(config(3)).shakedown; // the R6 pin
 
 describe("Smooth Talker: on the winning side of a dirty shakedown → a token — extension.md \"Roles\"", () => {
   const caught = (stVote: string | null) => {

@@ -41,7 +41,7 @@ describe("bot Heat projection — design §7, §10; extension.md \"Police activi
     const scale = 4 / 5;
     const withCard = (id: string): GameState => ({ ...s, card: { round: 1, id, room: null } });
     const vault = jobThisRound(viewFor(withCard("shiftChange"), "ana")).rooms.vault;
-    expect(vault?.loot).toBe(9); // 6 × 1.5
+    expect(vault?.coins).toBe(4); // 3 + 1, design §13
     expect(vault?.heatPressure).toBeCloseTo(20 * (1 + ((EVENTS.shiftChange?.effect as { heatMultiplier: number }).heatMultiplier - 1) * scale));
   });
 });

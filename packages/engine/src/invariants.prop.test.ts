@@ -26,7 +26,7 @@
 import { isDeepStrictEqual } from "node:util";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { BALANCED_MIX, FILLER_ROLE, RANDOM_DEAL_SINGLETONS, ROLES, type DeckId } from "@skimjob/content";
+import { BALANCED_MIX, BANK_JOB, FILLER_ROLE, RANDOM_DEAL_SINGLETONS, ROLES, type DeckId } from "@skimjob/content";
 import type { Command, DealStyle, GameConfig, GameEvent, GameState, Move, PlayerId, PlayerState, RoleListSetting, VoteVisibility } from "./types";
 import { REVEAL, canSee, secretTo } from "./types";
 import { createGame, dealStyleOf, rolePoolFor } from "./setup";
@@ -134,7 +134,7 @@ function playerCommand(state: GameState, t: Tape, style: Style): { command: Reco
   const p = seated ? (state.players[player as string] as PlayerState) : undefined;
   const room = (): string => {
     if (style === "hot" && t.chance(60)) return t.pick(["vault", "depositBoxes", "managersOffice"].filter((r) => state.rooms.includes(r)));
-    if (style === "careful" && t.chance(60)) return t.pick(["office", "lobby", "tellerLine", "rooftop"].filter((r) => state.rooms.includes(r)));
+    if (style === "careful" && t.chance(60)) return t.pick(["office", "lobby", "rooftop"].filter((r) => state.rooms.includes(r)));
     return t.chance(95) ? t.pick(state.rooms) : t.pick(["nowhere", "__proto__", "vault"]);
   };
   // Votes lean on one suspect per round, so shakedowns sometimes pass.
@@ -154,7 +154,10 @@ function playerCommand(state: GameState, t: Tape, style: Style): { command: Reco
     case 3:
     case 4: {
       const r = room();
-      const move: Record<string, unknown> = { room: r, pocket: t.chance(style === "careful" ? 90 : 60) ? 0 : t.int(t.chance(80) ? 3 : 8) };
+      const pocket = t.chance(style === "careful" ? 90 : 60) ? 0 : t.int(t.chance(80) ? 3 : 8);
+      // design §3.2: mostly a grab that fills the room's limit, sometimes any number.
+      const coins = BANK_JOB.rooms[r]?.coins ?? 0;
+      const move: Record<string, unknown> = { room: r, duffel: t.chance(80) ? Math.max(0, coins - pocket) : t.int(5), pocket };
       if (r === "security" || t.chance(5)) move.watch = room();
       if (p && t.chance(50)) {
         const ability = (() => {
@@ -213,18 +216,22 @@ function garbageCommand(state: GameState, t: Tape): unknown {
     { type: "toString" },
     { type: "__proto__" },
     { type: "constructor", player },
-    JSON.parse(`{"type":"submitMove","player":"${player}","move":{"room":"lobby","pocket":0},"__proto__":{"pocket":5}}`),
+    JSON.parse(`{"type":"submitMove","player":"${player}","move":{"room":"lobby","duffel":1,"pocket":0},"__proto__":{"pocket":5}}`),
     { type: "submitMove", player },
     { type: "submitMove", player, move: null },
-    { type: "submitMove", player, move: { room: "lobby", pocket: -1 } },
-    { type: "submitMove", player, move: { room: "lobby", pocket: 1.5 } },
-    { type: "submitMove", player, move: { room: "lobby", pocket: Number.NaN } },
-    { type: "submitMove", player, move: { room: "lobby", pocket: "1" } },
-    { type: "submitMove", player, move: { room: "vault", pocket: 1e9 } },
-    { type: "submitMove", player, move: { room: "lobby", pocket: 0, watch: "vault" } },
+    { type: "submitMove", player, move: { room: "lobby", duffel: 1, pocket: -1 } },
+    { type: "submitMove", player, move: { room: "lobby", duffel: 1, pocket: 1.5 } },
+    { type: "submitMove", player, move: { room: "lobby", duffel: 1, pocket: Number.NaN } },
+    { type: "submitMove", player, move: { room: "lobby", duffel: 1, pocket: "1" } },
+    { type: "submitMove", player, move: { room: "vault", duffel: 0, pocket: 1e9 } },
+    { type: "submitMove", player, move: { room: "vault", duffel: 1e9, pocket: 0 } },
+    { type: "submitMove", player, move: { room: "vault", duffel: -1, pocket: 2 } },
+    { type: "submitMove", player, move: { room: "vault", duffel: 0, pocket: 0 } },
+    { type: "submitMove", player, move: { room: "rooftop", duffel: 1, pocket: 0 } },
+    { type: "submitMove", player, move: { room: "lobby", duffel: 1, pocket: 0, watch: "vault" } },
     { type: "submitMove", player, move: { room: "security", pocket: 0 } },
-    { type: "submitMove", player, move: { room: "lobby", pocket: 0, ability: { kind: "lookout", rooms: -3 } } },
-    { type: "submitMove", player, move: { room: "lobby", pocket: 0, ability: "tipOff" } },
+    { type: "submitMove", player, move: { room: "lobby", duffel: 1, pocket: 0, ability: { kind: "lookout", rooms: -3 } } },
+    { type: "submitMove", player, move: { room: "lobby", duffel: 1, pocket: 0, ability: "tipOff" } },
     { type: "castVote", player, vote: null },
     { type: "castVote", player, vote: { kind: "shakedown" } },
     { type: "castVote", player, vote: { kind: "shakedown", target: player } },
@@ -264,7 +271,7 @@ function deepFreeze<T>(value: T): T {
 function lootFlow(events: readonly GameEvent[]): number {
   let n = 0;
   for (const e of events) {
-    if (e.type === "lootSplit") n += e.toHaul + e.toStash;
+    if (e.type === "coinsGrabbed") n += e.duffel + e.pocket;
     // Role deck v2 R2b: the Priest blessing pays in; the Fixer's save pays out.
     else if (e.type === "abilityResolved" && e.ability.kind === "fixer") n -= e.ability.lost;
     else if (e.type === "blessingPaid") n += e.amount;
@@ -291,6 +298,10 @@ function checkState(state: GameState, inflow: number): void {
   check(isCount(state.haul), "Haul is a whole number ≥ 0", state.haul);
   for (const p of Object.values(state.players)) check(isCount(p.stash), "stashes are whole numbers ≥ 0", p);
   check(holdings(state) === inflow, "loot conservation (Haul + stashes = loot in − loot out)", { holdings: holdings(state), inflow });
+  // design §6.1, §7.7: every coin grabbed came out of the bank, and the bank never goes below 0.
+  const filled = state.log.find((e) => e.type === "bankFilled");
+  const grabbed = state.log.reduce((n, e) => n + (e.type === "coinsGrabbed" ? e.duffel + e.pocket : 0), 0);
+  check(isCount(state.bank) && filled?.type === "bankFilled" && state.bank === filled.coins - grabbed, "bank conservation (bank = filled − grabbed ≥ 0)", { bank: state.bank, grabbed });
   // Phase companions. design §17.2
   check((state.phase.kind === "meeting") === (state.meeting !== null), "meeting set exactly in the meeting phase", state.phase);
   check((state.phase.kind === "shakedownPending") === (state.pendingShakedown !== null), "pendingShakedown set exactly in its phase", state.phase);
@@ -360,7 +371,7 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
   // Who has locked in a move is public (owner decision, 2 Nov; design §5.1), what they picked is not.
   const fakeMoves: Record<PlayerId, Move> = {};
   for (const id of state.playerOrder) {
-    if (Object.hasOwn(state.moves, id)) fakeMoves[id] = id === viewer ? (state.moves[id] as Move) : { room: "vault", pocket: 6 };
+    if (Object.hasOwn(state.moves, id)) fakeMoves[id] = id === viewer ? (state.moves[id] as Move) : { room: "vault", duffel: 0, pocket: 3 };
   }
   return {
     ...state,

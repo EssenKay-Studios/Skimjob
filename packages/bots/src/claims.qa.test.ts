@@ -34,8 +34,12 @@ function claimsWithTruth(c: GameConfig, log: readonly GameEvent[]) {
 }
 
 describe("bot claims in whole games — QA PR #37", () => {
-  // Three seeds per cell: with the Rookie the one safe bluff left (R7 cut), bluffs are rarer.
-  const games = [3, 6, 12].flatMap((n) => MODES.flatMap((mode, k) => [0, 1, 2].map((x) => ({ n, mode, c: config(n, `qa37-${n}-${k}${x ? `-${x}` : ""}`, { voteVisibility: mode }) }))));
+  // Three seeds per cell: with the Rookie the one safe bluff left (R7 cut), bluffs are rarer;
+  // plus one 12-seat game where a bluff is known to come up (S3a.1's coins made them rarer still).
+  const games = [
+    ...[3, 6, 12].flatMap((n) => MODES.flatMap((mode, k) => [0, 1, 2].map((x) => ({ n, mode, c: config(n, `qa37-${n}-${k}${x ? `-${x}` : ""}`, { voteVisibility: mode }) })))),
+    { n: 12, mode: "hiddenThenRevealed" as const, c: config(12, "qa37-12-8") },
+  ];
   const results = games.map((g) => ({ ...g, r: play(g.c) }));
 
   it("all-bot games finish in every vote mode at 3, 6 and 12 players with zero refused commands — design §17.3", () => {

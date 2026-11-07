@@ -76,8 +76,8 @@ export interface OtherPlayerView extends PlayerSeat {
 /**
  * The gap box (data only; the app draws it): what the round's public alibis
  * say the Haul should have grown by, against what it really grew.
- * `alibis` counts each alibi's room loot (event effects and crowding by
- * alibis included), as if everything were handed in. extension.md "What the app works out for you"
+ * `alibis` counts each alibi's room coin limit (event effects included),
+ * as if everything were handed in. extension.md "What the app works out for you"
  */
 export interface GapBox {
   readonly round: number;
@@ -116,6 +116,8 @@ export interface PlayerView {
   /** The round whose alibis may still be posted (also while a meeting interrupts them), or null. design §5.4 */
   readonly alibiRound: number | null;
   readonly rooms: readonly RoomId[];
+  /** Coins left in the bank (public). design §6.1 */
+  readonly bank: number;
   readonly haul: number;
   readonly heat: number;
   /** This round's event card (public): its id and the room Lockdown closes. design §10 */

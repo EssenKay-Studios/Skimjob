@@ -60,6 +60,8 @@ function line(e: GameEvent, ctx: DescribeContext): string {
       return `The deck was shuffled with seed ${e.seed}.`;
     case "roomsSet":
       return `Rooms in play: ${list(e.rooms.map(roomName))}.`;
+    case "bankFilled":
+      return `The bank holds ${e.coins} coins.`;
     case "roleDealt":
       return you(e.player) ? `You were dealt the ${roleName(e.role)}.` : `${ctx.name(e.player)} was the ${roleName(e.role)}.`;
     case "roleListShown":
@@ -73,11 +75,11 @@ function line(e: GameEvent, ctx: DescribeContext): string {
     case "moveLocked":
       return `${verb(e.player, "locked", "locked")} in a move for round ${e.round}.`;
     case "moveSubmitted":
-      return `${verb(e.player, "picked", "picked")} the ${roomName(e.move.room)} for round ${e.round}${e.move.pocket > 0 ? `, pocketing up to ${e.move.pocket}` : ", handing everything in"}${e.move.watch ? `, watching the ${roomName(e.move.watch)}` : ""}.`;
+      return `${verb(e.player, "picked", "picked")} the ${roomName(e.move.room)} for round ${e.round}${e.move.pocket > 0 ? `, pocketing ${e.move.pocket} of ${e.move.duffel + e.move.pocket}` : ", handing everything in"}${e.move.watch ? `, watching the ${roomName(e.move.watch)}` : ""}.`;
     case "defaultMoveAssigned":
       return `${verb(e.player, "missed", "missed")} round ${e.round}'s deadline: the default move went to the ${roomName(e.move.room)}, handing everything in.`;
-    case "lootSplit":
-      return `Round ${e.round}, ${roomName(e.room)}: ${verb(e.player, "found", "found")} ${e.loot} loot, ${e.toHaul} to the Haul and ${e.toStash} pocketed.`;
+    case "coinsGrabbed":
+      return `Round ${e.round}, ${roomName(e.room)}: ${verb(e.player, "grabbed", "grabbed")} ${e.duffel + e.pocket} coins, ${e.duffel} to the duffel and ${e.pocket} pocketed.`;
     case "abilityResolved":
       return ability(e.ability, e.player, e.round, { you, who, whose, verb });
     case "roomSighting":

@@ -7,6 +7,7 @@ import { createGame } from "./setup";
 import { replay } from "./reduce";
 import { handleCommand } from "./handle";
 import { viewFor } from "./view";
+import { fullGrab } from "./grab.testkit";
 
 const cfg: GameConfig = {
   seed: "alibi-seed",
@@ -63,7 +64,7 @@ describe("alibis — design §5.4", () => {
   it("a round's alibis close at its alibi deadline, before the next round's planning (owner answers, 1 Nov)", () => {
     expect(afterRound1.phase).toEqual({ kind: "alibis", round: 1 });
     // No moves for round 2 until the alibi deadline has passed.
-    expect(reason(afterRound1, { type: "submitMove", player: "p0", move: { room: "lobby", pocket: 0 } } as Command)).toMatch(/while a round is being planned/);
+    expect(reason(afterRound1, { type: "submitMove", player: "p0", move: fullGrab("lobby") } as Command)).toMatch(/while a round is being planned/);
     expect(reason(afterRound1, roundDeadline(2))).toMatch(/no round deadline is pending/);
     const { state, events } = ok(afterRound1, alibiDeadline(1));
     expect(events.map((e) => e.type)).toEqual(["alibisClosed", "roundStarted"]);

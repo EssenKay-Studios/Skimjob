@@ -48,7 +48,6 @@ export function BankSection() {
     lobby: [crew(1), crew(5, { bot: true }), crew(2, { ghost: true })],
     rooftop: [crew(4, { expression: "neutral" }), crew(2, { camera: true })],
     ...(rooms.includes("serverRoom") && { serverRoom: [crew(6, { bot: true, expression: "smug" })] }),
-    ...(rooms.includes("tellerLine") && { tellerLine: [crew(7), crew(8, { expression: "caught" })] }),
     ...(rooms.includes("managersOffice") && { managersOffice: [crew(9), crew(10, { expression: "smug" }), crew(11, { bot: true })] }),
   };
   return (

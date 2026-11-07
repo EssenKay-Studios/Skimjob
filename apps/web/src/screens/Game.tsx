@@ -410,7 +410,8 @@ function MovePanel({ view, round, timers, offset, send, pick }: BoardProps & { r
   const lock = async () => {
     if (!picked || !ready) return;
     setBusy(true);
-    await send({ type: "submitMove", move: { room: picked.id, pocket: p, ...(picked.watcher && watch ? { watch } : {}) } }, mine ? "Move updated." : "Locked in.");
+    // design §3.2: the old panel grabs the room's whole limit; the slider splits it between the two bags.
+    await send({ type: "submitMove", move: { room: picked.id, duffel: loot - p, pocket: p, ...(picked.watcher && watch ? { watch } : {}) } }, mine ? "Move updated." : "Locked in.");
     setBusy(false);
   };
 

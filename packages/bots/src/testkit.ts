@@ -1,6 +1,6 @@
 // Test helpers: scripted engine games for the bot tests. Not exported from the package.
 import { STARTER_ROLES } from "@skimjob/content";
-import { createGame, handleCommand, type GameConfig, type GameState, type PlayerId, type VoteVisibility } from "@skimjob/engine";
+import { createGame, handleCommand, jobFor, type ContentOverrides, type GameConfig, type GameState, type PlayerId, type VoteVisibility } from "@skimjob/engine";
 
 const IDS = ["ana", "ben", "carl", "dee", "eve"];
 
@@ -8,9 +8,21 @@ export function seats(n: number): GameConfig["players"] {
   return Array.from({ length: n }, (_, i) => ({ id: IDS[i] ?? `p${i}`, name: IDS[i] ?? `P${i}`, isBot: true }));
 }
 
+/**
+ * R6's room yields as coin limits, its checkpoint targets, clean line and payout,
+ * and a bank too big to run short (design §3.2), so the R6 bot heuristics (alibis, suspicion, perks,
+ * claims, endings) keep their numbers until the S3a steps that replace them.
+ */
+export const R6_COINS: ContentOverrides = {
+  rooms: { vault: { coins: 6 }, office: { coins: 4 }, lobby: { coins: 2 }, depositBoxes: { coins: 5 } },
+  bank: { coinsPerPlayer: 100 },
+  checkpoints: { perPlayer: [7, 15, 23] },
+  shakedown: { cleanBelow: 6, payout: 8 },
+};
+
 export function config(n: number, seed: string, voteVisibility: VoteVisibility = "hiddenThenRevealed"): GameConfig {
   // Starter pool (the shop may still hold a Shield).
-  return { seed, players: seats(n), job: "bank", rolePool: [...STARTER_ROLES], eventsEnabled: false, voteVisibility };
+  return { seed, players: seats(n), job: "bank", rolePool: [...STARTER_ROLES], eventsEnabled: false, voteVisibility, contentOverrides: R6_COINS };
 }
 
 /** A game where `want` holds for the dealt roles trying seeds in order. */
@@ -49,7 +61,8 @@ export function round(state: GameState, plan: Plan): GameState {
     ...Object.entries(plan).map(([player, m]) => ({
       type: "submitMove",
       player,
-      move: { room: m.room, pocket: m.pocket ?? 0, ...(m.watch ? { watch: m.watch } : {}) },
+      // A full grab of the room's coins (design §3.2), `pocket` of them pocketed.
+      move: { room: m.room, duffel: (jobFor(open.config).rooms[m.room]?.coins ?? 0) - (m.pocket ?? 0), pocket: m.pocket ?? 0, ...(m.watch ? { watch: m.watch } : {}) },
     })),
     { type: "advance", deadline: { kind: "round", round: r } },
   );

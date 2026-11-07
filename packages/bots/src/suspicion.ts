@@ -5,7 +5,7 @@
 // Rebuilt from the ledger and case file each time it's needed, so a bot keeps
 // no hidden memory of its own: same view, same scores.
 import { ROLES, type RoleId, type RoomId } from "@skimjob/content";
-import { roomDef, roomLoot, type AbilityResolved, type PlayerId, type PlayerView, type RoundResolved } from "@skimjob/engine";
+import { roomDef, type AbilityResolved, type PlayerId, type PlayerView, type RoundResolved } from "@skimjob/engine";
 import { claimantsOf, claimsOf, jobOf, ofType, uniqueRole } from "./read";
 
 /** How much each kind of evidence moves a score. Shared by every personality; they differ in when they act on it. */
@@ -70,11 +70,11 @@ export function suspicion(view: PlayerView, w: SuspicionWeights = SUSPICION_WEIG
     if (!alibis.has(a.round)) alibis.set(a.round, new Map());
     alibis.get(a.round)?.set(a.player, a.room);
   }
-  const loot = (room: RoomId): number => roomDef(job, room).loot;
-  const maxLoot = Math.max(...view.rooms.map(loot));
+  const coins = (room: RoomId): number => roomDef(job, room).coins;
+  const maxCoins = Math.max(...view.rooms.map(coins));
 
   function judgeRound({ round, haulDelta }: RoundResolved): void {
-    const split = ofType(view.caseFile, "lootSplit").find((e) => e.round === round);
+    const split = ofType(view.caseFile, "coinsGrabbed").find((e) => e.round === round);
     if (!split) return;
     // Others' alibis only: my own contribution I know exactly.
     const claims = new Map([...(alibis.get(round) ?? [])].filter(([id]) => id !== me));
@@ -109,24 +109,22 @@ export function suspicion(view: PlayerView, w: SuspicionWeights = SUSPICION_WEIG
       else if (at === claim) add(id, -w.verified);
     }
 
-    // design §5.3: what the claimed rooms should have paid vs what the others really handed in.
-    const crowd = new Map<RoomId, number>([[split.room, 1]]);
-    for (const room of claims.values()) crowd.set(room, (crowd.get(room) ?? 0) + 1);
+    // What the claimed rooms could have paid (their coin limits) vs what the others really handed in.
     let expected = 0;
-    for (const room of claims.values()) expected += roomLoot(roomDef(job, room), crowd.get(room) ?? 1);
+    for (const room of claims.values()) expected += roomDef(job, room).coins;
     // My own hand-in.
-    let unexplained = expected - (haulDelta - split.toHaul);
+    let unexplained = expected - (haulDelta - split.duffel);
     if (unexplained <= 0) return;
 
-    // Shared by how much each could have taken: their claimed room's loot (+1, since a claim can be a lie).
-    // Someone I saw in the 0-loot room they claimed is in the clear; the silent could have been anywhere.
+    // Shared by how much each could have taken: their claimed room's coins (+1, since a claim can be a lie).
+    // Someone I saw in the 0-coin room they claimed is in the clear; the silent could have been anywhere.
     const weights = new Map<PlayerId, number>();
     for (const id of others) {
       const claim = claims.get(id);
       if (claim === undefined) {
-        if (windowClosed) weights.set(id, maxLoot + 1);
-      } else if (!(seenIn.get(id) === claim && loot(claim) === 0)) {
-        weights.set(id, loot(claim) + 1);
+        if (windowClosed) weights.set(id, maxCoins + 1);
+      } else if (!(seenIn.get(id) === claim && coins(claim) === 0)) {
+        weights.set(id, coins(claim) + 1);
       }
     }
     const total = [...weights.values()].reduce((a, b) => a + b, 0);

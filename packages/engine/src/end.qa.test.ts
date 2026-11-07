@@ -12,6 +12,7 @@ import { replay } from "./reduce";
 import { handleCommand } from "./handle";
 import { V01_NUMBERS } from "./v01-numbers.testkit";
 import { outcomeFor, ranking } from "./end";
+import { fullGrab } from "./grab.testkit";
 
 function config(players: number): GameConfig {
   return {
@@ -46,7 +47,7 @@ function run(state: GameState, ...commands: Cmd[]): GameState {
   }, state);
 }
 
-const mv = (player: string, room: string, pocket = 0, extra: object = {}) => ({ type: "submitMove", player, move: { room, pocket, ...extra } });
+const mv = (player: string, room: string, pocket = 0, extra: object = {}) => ({ type: "submitMove", player, move: { ...fullGrab(room, pocket, V01_NUMBERS), ...extra } });
 const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
 const OPEN = (s: GameState) => ({ type: "advance", deadline: { kind: "openMeeting", meetingId: s.scheduledMeeting?.meetingId } });
 const CLOSE = (s: GameState) => ({ type: "advance", deadline: { kind: "closeMeeting", meetingId: s.meeting?.id } });
@@ -84,8 +85,8 @@ function game3(r9extra: number, finalVotes: unknown[] = []): GameState {
 }
 
 describe("12 players — design §3, §6.2, §8", () => {
-  // Rooms by seat. Heat +4 a round (2 Vault, 2 Rooftop). Loot 44 a round.
-  const ROOMS = ["vault", "vault", "rooftop", "office", "rooftop", "office", "office", "office", "depositBoxes", "depositBoxes", "tellerLine", "tellerLine"];
+  // Rooms by seat. Heat +6 a round (2 Vault and 2 Rooftop cancel; 2 Manager's office +10 each). Coins 48 a round.
+  const ROOMS = ["vault", "vault", "rooftop", "office", "rooftop", "office", "office", "office", "depositBoxes", "depositBoxes", "managersOffice", "managersOffice"];
   const POCKET: Record<string, number> = { p0: 2, p1: 3, p3: 2 };
   function game12(): GameState {
     let s = game(12, ["rookie", "lookout", "priest", "hacker"]);

@@ -20,6 +20,7 @@ const ROWS: readonly Row[] = [
   { label: "Heat-bust share of failures", target: "10–20%", cell: (m) => (m.failures === 0 ? "—" : pct(m.heatBustShare)) },
   { label: "Raided before Act 3", target: "", cell: (m) => pct(m.endedBeforeAct3) },
   { label: "Checkpoints missed per game", target: "", cell: (m) => num(m.checkpointsMissedPerGame) },
+  { label: "Bank emptied", target: "", cell: (m) => pct(m.bankEmptied) },
   { label: "Shakedowns per game", target: "", cell: (m) => num(m.shakedowns.perGame) },
   { label: "Shakedown accuracy (caught loot)", target: "50–70%", cell: (m) => pct(m.shakedowns.accuracy) },
   { label: "Shakedown target had pocketed", target: "", cell: (m) => pct(m.shakedowns.hitPocketer) },

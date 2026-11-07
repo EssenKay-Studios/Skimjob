@@ -15,6 +15,7 @@ import {
 } from "@skimjob/engine";
 import { describe, expect, it } from "vitest";
 import { boardScene, seatLooks } from "./board";
+import { BANK_JOB } from "@skimjob/content";
 
 const config = (n: number, extra: Partial<GameConfig> = {}): GameConfig => ({
   seed: "board-qa",
@@ -32,7 +33,7 @@ function step(state: GameState, c: PlayerCommand | SystemCommand): GameState {
   if (!r.ok) throw new Error(`${c.type}: ${r.reason}`);
   return r.state;
 }
-const move = (player: string, room: string): PlayerCommand => ({ type: "submitMove", player, move: { room, pocket: 0 } }) as PlayerCommand;
+const move = (player: string, room: string): PlayerCommand => ({ type: "submitMove", player, move: { room, duffel: BANK_JOB.rooms[room]?.coins ?? 0, pocket: 0 } }) as PlayerCommand;
 const ids = (s: GameState): PlayerId[] => Object.keys(s.players);
 
 const figures = (scene: ReturnType<typeof boardScene>) =>
@@ -72,7 +73,7 @@ function playAll(cfg: GameConfig, max = 400): GameState[] {
       const rooms = s.rooms.filter((r) => !(s.card?.round === p.round && s.card.room === r));
       ids(s).forEach((id, i) => {
         const room = rooms[(i + p.round) % rooms.length]!;
-        const c = { type: "submitMove", player: id, move: { room, pocket: i % 2, ...(room === "security" ? { watch: rooms[0] } : {}) } } as PlayerCommand;
+        const c = { type: "submitMove", player: id, move: { room, duffel: Math.max(0, (BANK_JOB.rooms[room]?.coins ?? 0) - (i % 2)), pocket: i % 2, ...(room === "security" ? { watch: rooms[0] } : {}) } } as PlayerCommand;
         const r = handleCommand(s, c);
         if (r.ok) {
           s = r.state;

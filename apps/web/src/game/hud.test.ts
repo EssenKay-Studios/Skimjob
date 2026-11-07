@@ -1,4 +1,5 @@
 // Game screen helpers, from real engine views. docs/m2-plan.md M2-6
+import { BANK_JOB } from "@skimjob/content";
 import { createGame, handleCommand, viewFor, type GameConfig, type GameState, type PlayerCommand, type SystemCommand } from "@skimjob/engine";
 import { describe, expect, it } from "vitest";
 import { presenceOf } from "./useGame";
@@ -50,7 +51,7 @@ describe("HUD", () => {
 
   it("races the act's checkpoint: per-player target × crew (design §11.5)", () => {
     const v = viewFor(createGame(config(4)), "p1");
-    expect(nextTarget(v)).toEqual({ act: 1, target: 7 * 4, final: false });
+    expect(nextTarget(v)).toEqual({ act: 1, target: BANK_JOB.checkpoints.perPlayer[0] * 4, final: false });
   });
 
   it("counts down from the server clock, frozen while paused", () => {
@@ -83,7 +84,7 @@ describe("seats", () => {
       ["p2", true, false],
       ["p3", false, false],
     ]);
-    s = run(s, { type: "submitMove", player: "p1", move: { room: "office", pocket: 0 } });
+    s = run(s, { type: "submitMove", player: "p1", move: { room: "office", duffel: 2, pocket: 0 } });
     // p1's lock-in is public; its room and split are not.
     for (const viewer of ["p1", "p2", "p3"]) expect(seatsOf(viewFor(s, viewer)).map((x) => x.lockedIn)).toEqual([true, false, false]);
     expect(viewFor(s, "p2").me.move).toBeNull();
@@ -123,24 +124,25 @@ describe("seats", () => {
 });
 
 describe("move panel", () => {
-  it("offers the rooms in play with loot and Heat hints (design §6, §7)", () => {
+  it("offers the rooms in play with their coins and Heat hints (design §3.1)", () => {
     const opts = roomOptions(viewFor(createGame(config(5)), "p1"));
     const by = Object.fromEntries(opts.map((o) => [o.id, o]));
     expect(opts.map((o) => o.id)).toEqual(["vault", "office", "lobby", "security", "rooftop", "depositBoxes", "serverRoom"]);
-    expect(by.vault).toMatchObject({ loot: 6, heat: "up", watcher: false, closed: false });
+    expect(by.vault).toMatchObject({ loot: 3, heat: "up", watcher: false, closed: false });
+    expect(by.serverRoom).toMatchObject({ loot: 2, notes: [] });
     expect(by.rooftop).toMatchObject({ loot: 0, heat: "down" });
     expect(by.security).toMatchObject({ watcher: true, notes: ["watch one room"] });
-    expect(by.depositBoxes!.notes).toEqual(["more than 2 here: 4 each"]);
+    expect(by.depositBoxes).toMatchObject({ loot: 2, notes: [] }); // no visitor limit (design §3.2)
   });
 
   it("shows a missed deadline's default move (design §5.1)", () => {
     let s = createGame(config(3));
-    s = run(s, { type: "submitMove", player: "p2", move: { room: "office", pocket: 0 } }, round(1));
+    s = run(s, { type: "submitMove", player: "p2", move: { room: "office", duffel: 2, pocket: 0 } }, round(1));
     expect(justMissed(viewFor(s, "p1"))).toEqual({ round: 1, room: "lobby" });
     expect(justMissed(viewFor(s, "p2"))).toBeNull();
     s = run(s, alibis(1));
     expect(justMissed(viewFor(s, "p1"))).toEqual({ round: 1, room: "lobby" });
-    s = run(s, { type: "submitMove", player: "p1", move: { room: "office", pocket: 0 } }, round(2));
+    s = run(s, { type: "submitMove", player: "p1", move: { room: "office", duffel: 2, pocket: 0 } }, round(2));
     expect(justMissed(viewFor(s, "p1"))).toBeNull();
   });
 });

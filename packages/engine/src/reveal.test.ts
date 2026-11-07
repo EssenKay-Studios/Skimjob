@@ -12,16 +12,6 @@ const TABLES = { roles: ROLES };
 
 const dealt = (player: string, role: string): GameEvent => ({ type: "roleDealt", visibility: privateTo(player), player, role });
 const started = (round: number): GameEvent => ({ type: "roundStarted", visibility: PUBLIC, round, act: 1 });
-const split = (player: string, round: number, room: string, loot: number, toStash: number): GameEvent => ({
-  type: "lootSplit",
-  visibility: privateTo(player),
-  player,
-  round,
-  room,
-  loot,
-  toHaul: loot - toStash,
-  toStash,
-});
 const rank = (player: string, role: string, score: number, extra: Partial<RankEntry> = {}): RankEntry => ({
   player,
   role,

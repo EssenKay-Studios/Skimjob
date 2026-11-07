@@ -339,7 +339,7 @@ function RoundSheet({
                     )}
                   </span>
                   <span className="num">
-                    {m.loot} found · {m.toStash} pocketed
+                    {m.duffel + m.pocket} grabbed · {m.pocket} pocketed
                   </span>
                   <span className="reveal__alibi">
                     {m.alibi === null ? (

@@ -42,10 +42,10 @@ describe("design §17.4 inputs — bad arguments are clean errors, never throws"
 describe("design §17.4 config overrides — hostile JSON is refused, nothing polluted", () => {
   const hostile = [
     '{"__proto__":{"polluted":1}}',
-    '{"rooms":{"__proto__":{"loot":1}}}',
-    '{"rooms":{"vault":{"__proto__":{"loot":99}}}}',
+    '{"rooms":{"__proto__":{"coins":1}}}',
+    '{"rooms":{"vault":{"__proto__":{"coins":99}}}}',
     '{"rooms":{"depositBoxes":{"capacity":{"__proto__":{"max":0}}}}}',
-    '{"rooms":{"constructor":{"loot":1}}}',
+    '{"rooms":{"constructor":{"coins":1}}}',
     '{"heat":{"__proto__":{"max":1}}}',
     '{"heat":{"constructor":1}}',
     '{"checkpoints":{"__proto__":[1,2,3]}}',
@@ -53,7 +53,7 @@ describe("design §17.4 config overrides — hostile JSON is refused, nothing po
     '{"roles":{"__proto__":{"stashMultiplier":9}}}',
     '{"roles":{"rookie":{"__proto__":{"stashMultiplier":9}}}}',
     '{"roles":{"toString":{}}}',
-    '{"heat":{"max":0}}', '{"heat":{"perRound":"5"}}', '{"rooms":{"vault":{"loot":1.5}}}', '{"rooms":{"vault":{"loot":-1}}}',
+    '{"heat":{"max":0}}', '{"heat":{"perRound":"5"}}', '{"rooms":{"vault":{"coins":1.5}}}', '{"rooms":{"vault":{"coins":-1}}}',
     '{"checkpoints":{"perPlayer":[1,2]}}', '{"checkpoints":{"perPlayer":[1,2,-3]}}', '{"roles":{"lookout":{"perAct":1}}}',
     '{"rooms":{"vault":{"capacity":{"max":2}}}}', '{"rooms":[]}', '{"heat":null}',
   ];
@@ -61,7 +61,7 @@ describe("design §17.4 config overrides — hostile JSON is refused, nothing po
     const o = opts(["-p", "3,12", "--overrides", json]);
     expect(checkOptions(o).length).toBeGreaterThan(0);
     expect(({} as Record<string, unknown>).polluted).toBeUndefined();
-    expect(({} as Record<string, unknown>).loot).toBeUndefined();
+    expect(({} as Record<string, unknown>).coins).toBeUndefined();
     expect(({} as Record<string, unknown>).max).toBeUndefined();
   });
 
@@ -143,7 +143,7 @@ describe("design §17.4 metrics — hand-checked against the engine on a fixed s
         const ps = state.players[p.id]!;
         expect(p.stash).toBe(ps.stash);
         expect(p.role).toBe(ps.role);
-        expect(p.pocketed).toBeLessThanOrEqual(p.looted);
+        expect(p.pocketed).toBeLessThanOrEqual(p.grabbed);
       }
       const log = state.log as readonly GameEvent[];
       for (const act of [1, 2] as const) {

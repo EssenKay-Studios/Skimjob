@@ -10,7 +10,7 @@
 // with chance 1 − their "lie". Each role's own line in the v2 §4 table adjusts
 // when it claims (`CLAIM_STYLE`). These are bot settings, not game rules.
 import type { RoleId } from "@skimjob/content";
-import { roomDef, roomLoot, type PlayerCommand, type PlayerId, type PlayerView } from "@skimjob/engine";
+import { roomDef, type PlayerCommand, type PlayerId, type PlayerView } from "@skimjob/engine";
 import type { Personality } from "./personalities";
 import type { Random } from "./bot";
 import { claimantsOf, claimsOf, couldBeDealt, isStar, jobOf, ofType, roleOf, uniqueRole } from "./read";
@@ -75,17 +75,15 @@ export function publicSuspicion(view: PlayerView): Map<PlayerId, number> {
   const ids = [view.me.id, ...view.players.map((o) => o.id)];
   const score = new Map<PlayerId, number>(ids.map((id) => [id, 0]));
   const add = (id: PlayerId, n: number) => score.has(id) && score.set(id, (score.get(id) ?? 0) + n);
-  const maxLoot = Math.max(...view.rooms.map((r) => roomDef(job, r).loot));
+  const maxCoins = Math.max(...view.rooms.map((r) => roomDef(job, r).coins));
   for (const { event: e } of view.ledger) {
     if (e.type === "shakedownResolved") score.set(e.target, e.clean ? -3 : 1);
     if (e.type !== "roundResolved" || e.round === view.alibiRound) continue;
     const claims = new Map(ofType(view.ledger, "alibiPosted").filter((a) => a.round === e.round).map((a) => [a.player, a.room]));
-    const crowd = new Map<string, number>();
-    for (const room of claims.values()) crowd.set(room, (crowd.get(room) ?? 0) + 1);
     let expected = 0;
-    for (const room of claims.values()) expected += roomLoot(roomDef(job, room), crowd.get(room) ?? 1);
+    for (const room of claims.values()) expected += roomDef(job, room).coins;
     const short = expected - e.haulDelta;
-    const weights = ids.map((id) => [id, claims.has(id) ? roomDef(job, claims.get(id) as string).loot + 1 : maxLoot + 1] as const);
+    const weights = ids.map((id) => [id, claims.has(id) ? roomDef(job, claims.get(id) as string).coins + 1 : maxCoins + 1] as const);
     const total = weights.reduce((s, [, w]) => s + w, 0);
     for (const [id, w] of weights) {
       if (!claims.has(id)) add(id, 1.5);

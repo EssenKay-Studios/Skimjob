@@ -26,20 +26,21 @@ const looks = new Map([
   ["p4", { look: 3, bot: true }],
 ]);
 
-const split = (player: string, round: number, room: string, loot: number, toStash: number): GameEvent => ({
-  type: "lootSplit",
+/** `player` grabbed `coins` in `room`, pocketing `pocket` of them. design §3.2 (the R6 story's amounts, until S4.9 redraws the reveal) */
+const split = (player: string, round: number, room: string, coins: number, pocket: number): GameEvent => ({
+  type: "coinsGrabbed",
   visibility: privateTo(player),
   player,
   round,
   room,
-  loot,
-  toHaul: loot - toStash,
-  toStash,
+  duffel: coins - pocket,
+  pocket,
 });
-const resolved = (round: number, haulDelta: number, haul: number, heatDelta: number, heat: number): GameEvent => ({
+const resolved = (round: number, bank: number, haulDelta: number, haul: number, heatDelta: number, heat: number): GameEvent => ({
   type: "roundResolved",
   visibility: PUBLIC,
   round,
+  bank,
   haulDelta,
   haul,
   heatDelta,
@@ -61,7 +62,7 @@ const LOG: GameEvent[] = [
   split("p3", 1, "office", 4, 0),
   split("p4", 1, "vault", 6, 2),
   { type: "roomWatched", visibility: privateTo("p1"), player: "p1", round: 1, source: "security", room: "vault", seen: [], offline: true },
-  resolved(1, 11, 11, 18, 38),
+  resolved(1, 48, 11, 11, 18, 38),
   { type: "tokenEarned", visibility: privateTo("p3"), player: "p3", trigger: "loopHidPocketer" },
   { type: "alibiPosted", visibility: PUBLIC, player: "p2", round: 1, room: "lobby" },
   { type: "alibiPosted", visibility: PUBLIC, player: "p3", round: 1, room: "office" },
@@ -74,11 +75,11 @@ const LOG: GameEvent[] = [
   { type: "tipOffLanded", visibility: privateTo("p2"), player: "p2", round: 2 },
   { type: "tokenEarned", visibility: privateTo("p2"), player: "p2", trigger: "tipOffLanded" },
   { type: "abilityResolved", visibility: privateTo("p4"), player: "p4", round: 2, ability: { kind: "checkStash", target: "p2", threshold: 6, dirty: true } },
-  split("p1", 2, "tellerLine", 4, 1),
+  split("p1", 2, "office", 4, 1),
   split("p2", 2, "vault", 6, 4),
   split("p3", 2, "lobby", 2, 0),
   split("p4", 2, "office", 4, 0),
-  resolved(2, 11, 22, 14, 64),
+  resolved(2, 32, 11, 22, 14, 64),
   { type: "perkBought", visibility: privateTo("p1"), player: "p1", perk: "peek", cost: 1 },
   { type: "perkUsed", visibility: privateTo("p1"), player: "p1", round: 2, perk: { kind: "peek", target: "p2", role: "mole" } },
   { type: "meetingOpened", visibility: PUBLIC, meetingId: "m1", kind: "regular", act: 1 },
@@ -92,7 +93,7 @@ const LOG: GameEvent[] = [
   split("p2", 3, "depositBoxes", 5, 5),
   split("p3", 3, "vault", 6, 2),
   split("p4", 3, "lobby", 2, 0),
-  resolved(3, 6, 25, 12, 86),
+  resolved(3, 19, 6, 25, 12, 86),
 ];
 
 const rank = (player: string, role: string, score: number, totalHandedIn: number): RankEntry => ({
@@ -115,7 +116,7 @@ const OUTCOMES: Record<Ending, Outcome> = {
 const logFor = (ending: Ending): GameEvent[] =>
   ending !== "target"
     ? LOG
-    : LOG.map((e) => (e.type === "lootSplit" && e.round === 3 && e.player === "p2" ? split("p2", 3, "depositBoxes", 5, 0) : e.type === "lootSplit" && e.round === 3 && e.player === "p3" ? split("p3", 3, "vault", 6, 6) : e));
+    : LOG.map((e) => (e.type === "coinsGrabbed" && e.round === 3 && e.player === "p2" ? split("p2", 3, "depositBoxes", 5, 0) : e.type === "coinsGrabbed" && e.round === 3 && e.player === "p3" ? split("p3", 3, "vault", 6, 6) : e));
 
 export function RevealSection() {
   const [ending, setEnding] = useState<Ending>("success");

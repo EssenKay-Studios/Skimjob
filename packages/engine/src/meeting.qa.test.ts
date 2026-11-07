@@ -12,6 +12,7 @@ import { setupEvents } from "./setup";
 import { replay } from "./reduce";
 import { handleCommand } from "./handle";
 import { V01_NUMBERS } from "./v01-numbers.testkit";
+import { fullGrab } from "./grab.testkit";
 
 /** One perk per column and no Shield, whatever the seed: a Shield in the shop opens a shakedown window at every meeting. */
 const SHOP_NO_SHIELD: readonly PerkId[] = ["peek", "alibi", "extraVote"];
@@ -59,7 +60,7 @@ const ofType = <T extends GameEvent["type"]>(events: readonly GameEvent[], type:
 const LAST = <T extends GameEvent["type"]>(s: GameState, type: T) => ofType(s.log, type).at(-1);
 
 const ids = (n: number) => Array.from({ length: n }, (_, i) => `p${i}`);
-const mv = (player: string, room: string, pocket = 0, extra: object = {}) => ({ type: "submitMove", player, move: { room, pocket, ...extra } });
+const mv = (player: string, room: string, pocket = 0, extra: object = {}) => ({ type: "submitMove", player, move: { ...fullGrab(room, pocket, V01_NUMBERS), ...extra } });
 const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
 const open = (meetingId: unknown) => ({ type: "advance", deadline: { kind: "openMeeting", meetingId } });
 const close = (meetingId: unknown) => ({ type: "advance", deadline: { kind: "closeMeeting", meetingId } });

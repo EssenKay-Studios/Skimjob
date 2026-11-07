@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { recap, recapItems, RECAP_MAX_LINES, topSeq } from "./away";
 import { namesOf } from "./hud";
 import { ALL_RECORDS, filterChoices, filterRows, groupByRound, recordRows } from "./records";
+import { BANK_JOB } from "@skimjob/content";
 
 const NAMES = ["Ana", "Ben", "Cy", "Dee", "Eve", "Fay", "Gus", "Hal", "Ivy", "Jo", "Kit", "Lu"];
 const config = (n: number, extra: Partial<GameConfig> = {}): GameConfig => ({
@@ -40,7 +41,7 @@ function step(s: GameState): GameState {
     const rooms = s.rooms.filter((r) => !(s.card?.round === p.round && s.card.room === r));
     for (const [i, id] of ids(s).entries()) {
       const room = rooms[(i * 3 + p.round) % rooms.length]!;
-      s = tryRun(s, { type: "submitMove", player: id, move: { room, pocket: (i + p.round) % 3, ...(room === "security" ? { watch: rooms[(i + 1) % rooms.length] } : {}) } } as PlayerCommand);
+      s = tryRun(s, { type: "submitMove", player: id, move: { room, duffel: Math.max(0, (BANK_JOB.rooms[room]?.coins ?? 0) - ((i + p.round) % 3)), pocket: (i + p.round) % 3, ...(room === "security" ? { watch: rooms[(i + 1) % rooms.length] } : {}) } } as PlayerCommand);
     }
     return run(s, { type: "advance", deadline: { kind: "round", round: p.round } });
   }
@@ -63,7 +64,7 @@ function playAll(cfg: GameConfig): GameState[] {
   return states;
 }
 /** Your own deliberate actions (away.ts): not news. */
-const OWN = new Set(["moveSubmitted", "voteSealed", "voteCast", "lootSplit"]);
+const OWN = new Set(["moveSubmitted", "voteSealed", "voteCast", "coinsGrabbed"]);
 const ctxOf = (view: ReturnType<typeof viewFor>, me: PlayerId) => ({ me, name: namesOf(view) });
 
 describe("QA: recaps at 3 and 12 seats only ever hold the viewer's own view (design §13, §17.2)", () => {
@@ -116,7 +117,7 @@ describe("QA: recaps at 3 and 12 seats only ever hold the viewer's own view (des
     const s = createGame(config(12));
     const after = run(
       s,
-      ...ids(s).map((p) => ({ type: "submitMove", player: p, move: { room: "security", pocket: 0, watch: "vault" } }) as PlayerCommand),
+      ...ids(s).map((p) => ({ type: "submitMove", player: p, move: { room: "security", duffel: 0, pocket: 0, watch: "vault" } }) as PlayerCommand),
       { type: "advance", deadline: { kind: "round", round: 1 } },
     );
     for (const id of ids(s)) {

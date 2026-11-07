@@ -174,16 +174,16 @@ export function nextTarget(view: PlayerView): { readonly act: 1 | 2 | 3; readonl
 
 export type HeatTrend = "up" | "down" | "none";
 
-/** One room in the move panel: its loot this round and how it moves the Heat. design §6, §7, §10 */
+/** One room in the move panel: its coins this round and how it moves the Heat. design §3.1, §13 */
 export interface RoomOption {
   readonly id: RoomId;
   readonly name: string;
-  /** Listed loot this round (event surges included); a crowded room pays less. */
+  /** The most coins a visitor grabs here this round (Shift change included). design §3.1 */
   readonly loot: number;
   readonly heat: HeatTrend;
   /** Lockdown closed it this round. */
   readonly closed: boolean;
-  /** Short notes: "×2 loot today", "crowded: 3 each above 2", "watch a room". */
+  /** Short notes: "+1 coin this round", "watch one room". */
   readonly notes: readonly string[];
   /** Security: the move must name a room to watch. design §6.1 */
   readonly watcher: boolean;
@@ -196,14 +196,13 @@ export function roomOptions(view: PlayerView): RoomOption[] {
   return view.rooms.map((id) => {
     const def = job.rooms[id];
     const notes: string[] = [];
-    let loot = def?.loot ?? 0;
+    let loot = def?.coins ?? 0;
     let pressure = def?.heatPressure ?? 0;
     if (effect?.kind === "roomSurge" && effect.room === id) {
-      loot = Math.round(loot * effect.lootMultiplier);
+      loot += effect.extraCoins;
       pressure *= effect.heatMultiplier;
-      if (effect.lootMultiplier !== 1) notes.push(`×${effect.lootMultiplier} loot this round`);
+      if (effect.extraCoins !== 0) notes.push(`+${effect.extraCoins} coin this round`);
     }
-    if (def?.capacity) notes.push(`more than ${def.capacity.max} here: ${def.capacity.crowdedLoot} each`);
     if (def?.info === "watchRoom") notes.push("watch one room");
     const closed = effect?.kind === "lockdown" && card?.room === id;
     return { id, name: def?.name ?? id, loot, heat: pressure > 0 ? "up" : pressure < 0 ? "down" : "none", closed, notes, watcher: def?.info === "watchRoom" };

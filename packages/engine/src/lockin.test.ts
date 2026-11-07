@@ -7,6 +7,7 @@ import { canSee } from "./types";
 import { createGame } from "./setup";
 import { handleCommand } from "./handle";
 import { viewFor } from "./view";
+import { fullGrab } from "./grab.testkit";
 
 function config(humans: readonly boolean[]): GameConfig {
   return {
@@ -29,7 +30,7 @@ function run(state: GameState, ...commands: unknown[]): GameState {
   return s;
 }
 
-const move = (player: string, room = "lobby") => ({ type: "submitMove", player, move: { room, pocket: 0 } });
+const move = (player: string, room = "lobby") => ({ type: "submitMove", player, move: fullGrab(room) });
 const since = (before: GameState, after: GameState): GameEvent[] => after.log.slice(before.log.length);
 
 describe("public lock-in marks — design §5.1 (owner decision, 2 Nov)", () => {

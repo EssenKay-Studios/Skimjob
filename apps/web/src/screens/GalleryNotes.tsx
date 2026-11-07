@@ -19,13 +19,13 @@ const events: (PublicEvent | CaseFileEvent)[] = [
   { type: "roleDealt", visibility: privateTo("p1"), player: "p1", role: "rookie" },
   { type: "roundStarted", visibility: PUBLIC, round: 1, act: 1 },
   { type: "moveLocked", visibility: PUBLIC, player: "p2", round: 1 },
-  { type: "moveSubmitted", visibility: privateTo("p1"), player: "p1", round: 1, move: { room: "vault", pocket: 2 } },
-  { type: "lootSplit", visibility: privateTo("p1"), player: "p1", round: 1, room: "vault", loot: 6, toHaul: 4, toStash: 2 },
+  { type: "moveSubmitted", visibility: privateTo("p1"), player: "p1", round: 1, move: { room: "vault", duffel: 1, pocket: 2 } },
+  { type: "coinsGrabbed", visibility: privateTo("p1"), player: "p1", round: 1, room: "vault", duffel: 1, pocket: 2 },
   { type: "roomSighting", visibility: privateTo("p1"), player: "p1", round: 1, room: "vault", others: ["p2"] },
-  { type: "roundResolved", visibility: PUBLIC, round: 1, haulDelta: 9, haul: 9, heatDelta: 12, heat: 12, heatParts: { base: 12, rooms: {} } },
+  { type: "roundResolved", visibility: PUBLIC, round: 1, bank: 58, haulDelta: 9, haul: 9, heatDelta: 12, heat: 12, heatParts: { base: 12, rooms: {} } },
   { type: "alibiPosted", visibility: PUBLIC, player: "p2", round: 1, room: "lobby" },
   { type: "roundStarted", visibility: PUBLIC, round: 2, act: 1 },
-  { type: "roundResolved", visibility: PUBLIC, round: 2, haulDelta: 5, haul: 14, heatDelta: 8, heat: 20, heatParts: { base: 8, rooms: {} } },
+  { type: "roundResolved", visibility: PUBLIC, round: 2, bank: 51, haulDelta: 5, haul: 14, heatDelta: 8, heat: 20, heatParts: { base: 8, rooms: {} } },
   { type: "checkpointChecked", visibility: PUBLIC, act: 1, target: 12, haul: 14, met: true, heatPenalty: 0 },
 ];
 let ledger: LoggedEvent<PublicEvent>[] = [];

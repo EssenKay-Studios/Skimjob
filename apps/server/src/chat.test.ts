@@ -105,7 +105,7 @@ const closeAll = (...cs: Client[]) => cs.forEach((c) => c.ws.close());
 
 /** Submits a move (Office, all in) and returns its private `moveSubmitted` case-file entry: a shareable card. */
 async function movedEntry(c: Client) {
-  expect(await c.sendRaw({ cmd: { type: "submitMove", move: { room: "office", pocket: 0 } } })).toMatchObject({ ok: true });
+  expect(await c.sendRaw({ cmd: { type: "submitMove", move: { room: "office", duffel: 2, pocket: 0 } } })).toMatchObject({ ok: true });
   let entry: PlayerView["caseFile"][number] | undefined;
   await vi.waitFor(() => {
     entry = c.view().caseFile.find((e) => e.event.type === "moveSubmitted");
@@ -243,7 +243,7 @@ describe("evidence cards (design §12.1)", () => {
     expect(await a!.chat({ evidence: own.seq })).toMatchObject({ ok: true });
     await vi.waitFor(() => expect(b!.chats()).toHaveLength(1), quick);
     const card = b!.chats()[0]!;
-    expect(card).toMatchObject({ from: humans[0]!.player, verified: true, card: { type: "moveSubmitted", payload: { player: humans[0]!.player, move: { room: "office", pocket: 0 } } } });
+    expect(card).toMatchObject({ from: humans[0]!.player, verified: true, card: { type: "moveSubmitted", payload: { player: humans[0]!.player, move: { room: "office", duffel: 2, pocket: 0 } } } });
     expect(JSON.stringify(card)).not.toMatch(/"seq"|"visibility"/);
     // Typed claims are never verified.
     await a!.chat({ text: "I'm the Lookout, honest" });

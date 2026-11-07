@@ -1,8 +1,8 @@
-// Job helpers: rooms by crew size, room yields, the Heat formula, checkpoint
-// targets. design §6, §7, §11.5
+// Job helpers: rooms by crew size, the Heat formula, checkpoint targets.
+// design §3.1
 import { describe, expect, it } from "vitest";
 import { BANK_JOB, type JobDef } from "@skimjob/content";
-import { checkpointTarget, clampHeat, jobById, roomDef, roomLoot, roomsInPlay, roundHeatDelta } from "./job";
+import { checkpointTarget, clampHeat, jobById, roomDef, roomsInPlay, roundHeatDelta } from "./job";
 
 const bank = BANK_JOB;
 
@@ -13,26 +13,15 @@ describe("jobById", () => {
   });
 });
 
-describe("rooms in play — design §6.2, §16", () => {
-  it("5 rooms at 3–4, 7 at 5–8, 9 at 9–12", () => {
-    for (let n = 3; n <= 12; n++) expect(roomsInPlay(bank, n)).toHaveLength(n <= 4 ? 5 : n <= 8 ? 7 : 9);
+describe("rooms in play — design §3.1", () => {
+  it("5 rooms at 3–4, 7 at 5–8, 8 at 9–12", () => {
+    for (let n = 3; n <= 12; n++) expect(roomsInPlay(bank, n)).toHaveLength(n <= 4 ? 5 : n <= 8 ? 7 : 8);
   });
 
   it("roomDef rejects rooms the job doesn't have", () => {
-    expect(roomDef(bank, "vault").loot).toBe(6);
+    expect(roomDef(bank, "vault").coins).toBe(3);
     expect(() => roomDef(bank, "casinoFloor")).toThrow(/no room/);
     expect(() => roomDef(bank, "constructor")).toThrow(/no room/);
-  });
-});
-
-describe("room yields — design §6.1, §6.2", () => {
-  it("each visitor collects the room's loot, however many go (no capacity)", () => {
-    for (const v of [1, 2, 5, 12]) expect(roomLoot(roomDef(bank, "vault"), v)).toBe(6);
-  });
-
-  it("Deposit boxes: 5 each for up to 2 people, 4 each if more than 2 go (R5; was 3)", () => {
-    const boxes = roomDef(bank, "depositBoxes");
-    expect([1, 2, 3, 4].map((v) => roomLoot(boxes, v))).toEqual([5, 5, 4, 4]);
   });
 });
 
@@ -94,16 +83,16 @@ describe("round Heat — design §7", () => {
 });
 
 describe("checkpoint targets — design §11.5", () => {
-  it("7, 15 and 23 × crew size, cumulative (R5: final 24 → 23)", () => {
+  it("3, 7 and 11 × crew size, cumulative (scaled to R7 coins until S3a.3)", () => {
     for (let n = 3; n <= 12; n++) {
-      expect([1, 2, 3].map((act) => checkpointTarget(bank, act as 1 | 2 | 3, n))).toEqual([7 * n, 15 * n, 23 * n]);
+      expect([1, 2, 3].map((act) => checkpointTarget(bank, act as 1 | 2 | 3, n))).toEqual([3 * n, 7 * n, 11 * n]);
     }
   });
 
-  it("a crew of 5 needs 35, 75 and 115", () => {
-    expect(checkpointTarget(bank, 1, 5)).toBe(35);
-    expect(checkpointTarget(bank, 2, 5)).toBe(75);
-    expect(checkpointTarget(bank, 3, 5)).toBe(115);
+  it("a crew of 5 needs 15, 35 and 55", () => {
+    expect(checkpointTarget(bank, 1, 5)).toBe(15);
+    expect(checkpointTarget(bank, 2, 5)).toBe(35);
+    expect(checkpointTarget(bank, 3, 5)).toBe(55);
   });
 
   it("rejects an act outside 1–3", () => {

@@ -1,5 +1,6 @@
 // Meetings and voting UI helpers, from real engine views: each vote mode shows
 // only what the view allows. docs/m2-plan.md M2-7; design §11.1–§11.5
+import { BANK_JOB } from "@skimjob/content";
 import {
   applyEvent,
   createGame,
@@ -218,7 +219,7 @@ describe("the shakedown window and results (design §11.3, §11.4)", () => {
     s = run(s, { type: "scheduleMeeting", act: 1, slot: "act-1" }, open("act-1"), skip("p1"), skip("p2"), skip("p3"), close("act-1"));
     const o = latestOutcome(viewFor(s, "p4"))!;
     expect(o.result).toEqual({ kind: "skipped" });
-    expect(o.checkpoint).toMatchObject({ act: 1, target: 35 });
+    expect(o.checkpoint).toMatchObject({ act: 1, target: BANK_JOB.checkpoints.perPlayer[0] * 5 });
     expect(o.fresh).toBe(true);
   });
 });

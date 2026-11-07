@@ -135,7 +135,7 @@ describe("suspicion board (design §12.3)", () => {
     await vi.waitFor(() => expect(raw.some((t) => t.includes('"presence"')) && mine.some((t) => t.includes('"presence"'))).toBe(true), { interval: 1, timeout: 5000 });
     expect((await call("PATCH", `/games/${id}/notes/board`, a!.who, { subject: b!.player, tag: "suspicious", note: secret })).status).toBe(200);
     // A change in the game afterwards pushes fresh views to both.
-    wsA.send(JSON.stringify({ cmd: { type: "submitMove", move: { room: "office", pocket: 0 } }, id: "m1" }));
+    wsA.send(JSON.stringify({ cmd: { type: "submitMove", move: { room: "office", duffel: 2, pocket: 0 } }, id: "m1" }));
     await vi.waitFor(() => expect(mine.some((t) => t.includes('"m1"'))).toBe(true), { interval: 1, timeout: 5000 });
     const state = (await store.load(id))!;
     expect(JSON.stringify(state)).not.toContain(secret);

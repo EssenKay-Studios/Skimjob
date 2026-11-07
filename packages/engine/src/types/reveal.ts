@@ -47,13 +47,12 @@ export interface RevealEnding {
   readonly why: "success" | "failedTopWins" | "failedNobody";
 }
 
-/** One player's real move in a round: room, loot and split, and the alibi they posted. design §13 */
+/** One player's real move in a round: room, the coins grabbed into each bag, and the alibi they posted. design §3.2, §15.5 */
 export interface RevealMove {
   readonly player: PlayerId;
   readonly room: RoomId;
-  readonly loot: number;
-  readonly toHaul: number;
-  readonly toStash: number;
+  readonly duffel: number;
+  readonly pocket: number;
   /** Missed the deadline and got the default move. design §5.1 */
   readonly missed: boolean;
   /** The room in their posted alibi for this round, or null if they posted none. design §5.4 */

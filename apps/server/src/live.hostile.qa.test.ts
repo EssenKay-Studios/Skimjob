@@ -15,6 +15,7 @@ import type { LobbyView } from "./lobby";
 import { buildServer } from "./server";
 import { createGameStore } from "./store";
 import { testDb } from "./testkit";
+import { BANK_JOB } from "@skimjob/content";
 
 const quick = { interval: 2, timeout: 20_000 };
 let db: Db;
@@ -106,10 +107,10 @@ function mutate(base: object, path: readonly string[], value: string): string {
 type Fields = readonly (readonly [path: readonly string[], values: readonly string[]])[];
 const id = (p: string[]) => [p, ALL] as const;
 const commandFields = (room: string, proposalId: string, other: string): readonly [object, Fields][] => [
-  [{ type: "submitMove", move: { room, pocket: 0 } }, [id(["move"]), id(["move", "room"]), [["move", "pocket"], NOT_NUMBER], id(["move", "watch"]), id(["move", "ability"])]],
-  [{ type: "submitMove", move: { room, pocket: 0, ability: { kind: "loopCameras", room } } }, [id(["move", "ability", "kind"]), id(["move", "ability", "room"])]],
+  [{ type: "submitMove", move: { room, duffel: BANK_JOB.rooms[room]?.coins ?? 0, pocket: 0 } }, [id(["move"]), id(["move", "room"]), [["move", "duffel"], NOT_NUMBER], [["move", "pocket"], NOT_NUMBER], id(["move", "watch"]), id(["move", "ability"])]],
+  [{ type: "submitMove", move: { room, duffel: BANK_JOB.rooms[room]?.coins ?? 0, pocket: 0, ability: { kind: "loopCameras", room } } }, [id(["move", "ability", "kind"]), id(["move", "ability", "room"])]],
   // '["lobby"]' is a valid rooms list, accepted when the (randomly dealt) attacker is a Lookout, so it isn't tried there.
-  [{ type: "submitMove", move: { room, pocket: 0, ability: { kind: "lookout", rooms: [room] } } }, [[["move", "ability", "rooms"], ALL.filter((v) => v !== '["lobby"]')], id(["move", "ability", "rooms", "0"])]],
+  [{ type: "submitMove", move: { room, duffel: BANK_JOB.rooms[room]?.coins ?? 0, pocket: 0, ability: { kind: "lookout", rooms: [room] } } }, [[["move", "ability", "rooms"], ALL.filter((v) => v !== '["lobby"]')], id(["move", "ability", "rooms", "0"])]],
   [{ type: "postAlibi", room }, [id(["room"])]],
   [{ type: "proposeMeeting", slot: "s" }, [[["slot"], NON_STRING]]],
   [{ type: "acceptMeeting", proposalId }, [id(["proposalId"])]],
@@ -167,7 +168,7 @@ describe("QA: hostile command values over the socket (PR #28)", () => {
     tried += await attack(id, a!, [b!, c!], state, players);
     // Control: the unmutated bases are accepted here, so the hostile value is what got them refused.
     const room = state.rooms.find((r) => r !== "security")!;
-    expect(await a!.send({ type: "submitMove", move: { room, pocket: 0 } })).toMatchObject({ ok: true });
+    expect(await a!.send({ type: "submitMove", move: { room, duffel: BANK_JOB.rooms[room]?.coins ?? 0, pocket: 0 } })).toMatchObject({ ok: true });
     expect(await a!.send({ type: "acceptMeeting", proposalId: state.proposals[0]!.id })).toMatchObject({ ok: true });
 
     // Alibis for round 1.

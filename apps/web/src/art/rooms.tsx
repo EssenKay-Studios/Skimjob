@@ -565,49 +565,6 @@ function Lobby({ w, h, uid }: RoomCtx) {
   );
 }
 
-// ---------------------------------------------------------------- Teller line
-
-function TellerLine({ w, h }: RoomCtx) {
-  const F = h - 8;
-  const top = F - 50; // counter top
-  const n = clamp(Math.floor((w - 24) / 72), 1, 4);
-  const ww = (w - 24) / n;
-  return (
-    <g>
-      <Skirting w={w} h={h} fill="var(--art-stucco-d)" />
-      <Floor w={w} h={h} fill="var(--art-stone-d)" />
-      {/* Cash and stamps behind the glass */}
-      {Array.from({ length: n }, (_, i) => {
-        const x = 12 + i * ww;
-        return (
-          <g key={i}>
-            <path d={`M${x + 4} ${top - 2}V${top - 46}c0-14 ${ww - 8} -14 ${ww - 8} 0V${top - 2}`} fill="var(--art-glass)" fillOpacity=".55" {...L} strokeWidth={2.2} stroke="var(--art-wood-d)" />
-            <path d={`M${x + 4} ${top - 2}V${top - 46}c0-14 ${ww - 8} -14 ${ww - 8} 0V${top - 2}`} fill="none" {...T} />
-            {Array.from({ length: Math.max(2, Math.floor((ww - 12) / 10)) }, (_, b) => {
-              const bx = x + 10 + b * 10;
-              return bx < x + ww - 8 ? <path key={b} d={`M${bx} ${top - 4}V${top - 50 + Math.abs(bx - (x + ww / 2)) * 0.3}`} stroke="var(--art-gold-d)" strokeWidth="1.6" strokeLinecap="round" /> : null;
-            })}
-            <rect x={x + ww / 2 - 13} y={top - 12} width="26" height="10" rx="1.6" fill="var(--art-leaf)" {...T} />
-            <path d={`M${x + ww / 2} ${top - 12}v10`} stroke="var(--paper-hi)" strokeWidth="2.4" />
-            <path d={`M${x + 14} ${top - 54 - 2}h${ww - 28}`} stroke="var(--art-hi)" strokeWidth="2" strokeLinecap="round" />
-          </g>
-        );
-      })}
-      {/* Counter */}
-      <rect x="0" y={top} width={w} height={F - top} fill="var(--art-wood)" {...L} />
-      {Array.from({ length: n }, (_, i) => (
-        <rect key={i} x={12 + i * ww + 8} y={top + 12} width={ww - 16} height={F - top - 22} rx="2" fill="none" stroke="var(--art-wood-d)" strokeWidth="1.8" />
-      ))}
-      <rect x="-2" y={top - 6} width={w + 4} height="8" rx="2" fill="var(--art-stone-l)" {...L} />
-      {/* Bell */}
-      <g transform={`translate(${12 + ww / 2 + 22} ${top - 6})`}>
-        <path d="M-7 0c0-8 14-8 14 0z" fill="var(--gold)" {...T} />
-        <path d="M-9 0h18M0-6v-3" {...T} />
-      </g>
-    </g>
-  );
-}
-
 // ---------------------------------------------------------------- Vault
 
 function Vault({ w, h, uid }: RoomCtx) {
@@ -744,7 +701,6 @@ const ROOMS: Record<BankRoomId, (c: RoomCtx) => ReactNode> = {
   managersOffice: ManagersOffice,
   serverRoom: ServerRoom,
   lobby: Lobby,
-  tellerLine: TellerLine,
   vault: Vault,
   depositBoxes: DepositBoxes,
 };
@@ -757,7 +713,6 @@ export const ROOM_WALL: Record<BankRoomId, string | null> = {
   managersOffice: "var(--art-wall-manager)",
   serverRoom: "var(--art-wall-server)",
   lobby: "var(--art-wall-lobby)",
-  tellerLine: "var(--art-wall-teller)",
   vault: "var(--art-wall-vault)",
   depositBoxes: "var(--art-wall-boxes)",
 };

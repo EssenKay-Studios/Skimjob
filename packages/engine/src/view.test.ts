@@ -9,6 +9,7 @@ import { sampleEvents } from "./types/samples";
 import { createGame, validateConfig } from "./setup";
 import { handleCommand } from "./handle";
 import { eventsSince, viewFor } from "./view";
+import { fullGrab } from "./grab.testkit";
 
 const config = (voteVisibility: GameConfig["voteVisibility"] = "hiddenThenRevealed"): GameConfig => ({
   seed: "view",
@@ -86,7 +87,7 @@ describe("ledger and case file are narrowed by type — design §13", () => {
 describe("viewFor — the viewer's own data and public state — design §13", () => {
   it("me: own role, stash, move and ballots; others: seat info only", () => {
     let s = createGame(config());
-    s = run(s, { type: "submitMove", player: "ana", move: { room: "office", pocket: 1 } }, { type: "sealVote", player: "ben", vote: { kind: "skip" } });
+    s = run(s, { type: "submitMove", player: "ana", move: fullGrab("office", 1) }, { type: "sealVote", player: "ben", vote: { kind: "skip" } });
     const ana = viewFor(s, "ana");
     expect(ana.me).toEqual({
       id: "ana",
@@ -95,7 +96,7 @@ describe("viewFor — the viewer's own data and public state — design §13", (
       roleState: { usedThisAct: 0, usedThisGame: 0, perks: [], tail: null, tokens: 0 },
       emergencyMeetingUsed: false,
       tipOffs: 0,
-      move: { room: "office", pocket: 1 },
+      move: fullGrab("office", 1),
       sealedVote: null,
       vote: null,
       seenBallots: {},
@@ -172,8 +173,8 @@ describe("eventsSince — 'while you were away' input, design §13", () => {
     const last = Math.max(...[...viewFor(s, "ana").ledger, ...viewFor(s, "ana").caseFile].map((e) => e.seq));
     s = run(
       s,
-      { type: "submitMove", player: "ana", move: { room: "office", pocket: 0 } },
-      { type: "submitMove", player: "ben", move: { room: "vault", pocket: 0 } },
+      { type: "submitMove", player: "ana", move: fullGrab("office") },
+      { type: "submitMove", player: "ben", move: fullGrab("vault") },
     );
     const since = eventsSince(viewFor(s, "ana"), last);
     // Ana's own lock-in, her move, then Ben's public lock-in (owner decision, 2 Nov; design §5.1).
@@ -188,13 +189,13 @@ describe("views are copies — design §17.3 (bots only get viewFor), task 8 rev
     // A game with a Security watch, a resolved round, an alibi, a proposal, a sealed vote and a pending move.
     let s = run(
       createGame(config()),
-      { type: "submitMove", player: "ana", move: { room: "security", pocket: 0, watch: "vault" } },
+      { type: "submitMove", player: "ana", move: { ...fullGrab("security"), watch: "vault" } },
       { type: "advance", deadline: { kind: "round", round: 1 } },
       { type: "postAlibi", player: "ana", room: "office" },
       { type: "advance", deadline: { kind: "alibis", round: 1 } },
       { type: "proposeMeeting", player: "ana", slot: "fri" },
       { type: "sealVote", player: "ana", vote: { kind: "shakedown", target: "ben" } },
-      { type: "submitMove", player: "ana", move: { room: "office", pocket: 1 } },
+      { type: "submitMove", player: "ana", move: fullGrab("office", 1) },
     );
     const before = JSON.stringify(s);
     const view = viewFor(s, "ana");

@@ -1,6 +1,6 @@
-// Small pure helpers over job content: rooms by crew size, room yields, the
-// Heat formula and checkpoint targets. The numbers live in @skimjob/content;
-// these only apply them. design §6, §7, §11.5
+// Small pure helpers over job content: rooms by crew size, the Heat formula
+// and checkpoint targets. The numbers live in @skimjob/content; these only
+// apply them. design §3.1
 //
 // Every helper takes the `JobDef` itself, so a simulator content override
 // (design §17.4, STATUS.md task 10) only has to change what `jobById` returns.
@@ -14,7 +14,7 @@ export function jobById(id: JobId): JobDef {
   return job;
 }
 
-/** Rooms in play for a crew of `crewSize`: every tier at or below it, in order. design §6.2 */
+/** Rooms in play for a crew of `crewSize`: every tier at or below it, in order. design §3.1 */
 export function roomsInPlay(job: JobDef, crewSize: number): RoomId[] {
   return job.roomTiers.filter((t) => t.minPlayers <= crewSize).flatMap((t) => t.rooms);
 }
@@ -24,16 +24,6 @@ export function roomDef(job: JobDef, room: RoomId): RoomDef {
   const def = Object.hasOwn(job.rooms, room) ? job.rooms[room] : undefined;
   if (!def) throw new Error(`job ${job.id} has no room ${room}`);
   return def;
-}
-
-/**
- * Loot each visitor collects from a room with `visitors` people in it. A room
- * with a capacity pays `crowdedLoot` to everyone once more than `max` go.
- * design §6.1, §6.2 (Deposit boxes)
- */
-export function roomLoot(room: RoomDef, visitors: number): number {
-  if (room.capacity && visitors > room.capacity.max) return room.capacity.crowdedLoot;
-  return room.loot;
 }
 
 /**

@@ -38,7 +38,7 @@ function audit(state: GameState, player: PlayerState, perAct: number, raw: Recor
   if (typeof raw.room !== "string" || !state.rooms.includes(raw.room)) return "audit a room in play";
   const room = raw.room;
   let shortfall = 0;
-  for (const e of state.log) if (e.type === "lootSplit" && e.round === round && e.room === room) shortfall += e.toStash;
+  for (const e of state.log) if (e.type === "coinsGrabbed" && e.round === round && e.room === room) shortfall += e.pocket;
   return [{ type: "abilityResolved", visibility: privateTo(player.id), player: player.id, round: state.round, ability: { kind: "audit", round, room, shortfall } }];
 }
 
@@ -160,8 +160,8 @@ export function dirtyShakedownRewards(state: GameState, target: PlayerId, meetin
   for (const e of state.log) if (e.type === "voteCast" && e.meetingId === meetingId) ballots.set(e.player, e.vote.kind === "shakedown" ? e.vote.target : "");
   const mine = (player: PlayerState) => state.log.filter((e) => "player" in e && e.player === player.id && e.player !== target);
   const roomOf = (round: number): string | undefined => {
-    const split = state.log.find((e) => e.type === "lootSplit" && e.player === target && e.round === round);
-    return split?.type === "lootSplit" ? split.room : undefined;
+    const split = state.log.find((e) => e.type === "coinsGrabbed" && e.player === target && e.round === round);
+    return split?.type === "coinsGrabbed" ? split.room : undefined;
   };
   return [
     ...grantRewards(state, "watchedShakenDirty", (p) => mine(p).some((e) => e.type === "roomWatched" && e.source === "lookout" && e.seen.includes(target))),

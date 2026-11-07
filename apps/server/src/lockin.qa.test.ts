@@ -1,5 +1,6 @@
 // QA (PR #44): early round end (`roundEarly:<n>` after `lockInGraceMs`) and
 // server-only presence. Owner decisions, 2 Nov. design §4.1, §5.1, §11, §13
+import { BANK_JOB } from "@skimjob/content";
 import { viewFor, type GameState } from "@skimjob/engine";
 import type { FastifyInstance } from "fastify";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -100,7 +101,10 @@ const rowOf = async (id: string, key: string) => (await deadlines(id)).find((r) 
 const load = async (id: string) => (await store.load(id))!;
 const count = (s: GameState, type: string, pick: (e: Record<string, unknown>) => boolean = () => true) =>
   s.log.filter((e) => e.type === type && pick(e as unknown as Record<string, unknown>)).length;
-const moveFor = (s: GameState, player: string, k = 0) => ({ type: "submitMove", move: { room: k ? viewFor(s, player).rooms.find((r) => r !== "lobby" && r !== "security")! : "lobby", pocket: 0 } });
+const moveFor = (s: GameState, player: string, k = 0) => {
+  const room = k ? viewFor(s, player).rooms.find((r) => r !== "lobby" && r !== "security")! : "lobby";
+  return { type: "submitMove", move: { room, duffel: BANK_JOB.rooms[room]?.coins ?? 0, pocket: 0 } };
+};
 
 const t = TIMINGS.quick;
 
@@ -373,7 +377,7 @@ describe("presence (server only; owner decision, 2 Nov)", () => {
       { presence: fake },
       { cmd: { type: "presence", presence: fake } },
       { cmd: { type: "setPresence", player: hb.player, online: true } },
-      { cmd: { type: "submitMove", move: { room: "lobby", pocket: 0 }, presence: fake } },
+      { cmd: { type: "submitMove", move: { room: "lobby", duffel: 1, pocket: 0 }, presence: fake } },
       { chat: { text: "hi" }, presence: fake },
     ];
     for (const msg of attempts) await a.sendRaw(msg);

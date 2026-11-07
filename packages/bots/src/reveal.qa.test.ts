@@ -23,6 +23,7 @@ import {
 } from "@skimjob/engine";
 import { PERSONALITIES, type PersonalityId } from "./personalities";
 import { createBots } from "./run";
+import { R6_COINS } from "./testkit";
 
 const IDS: PersonalityId[] = ["honest", "opportunist", "greedy", "cautious", "random"];
 
@@ -35,6 +36,7 @@ function config(n: number, seed: string, extra: Partial<GameConfig> = {}): GameC
     deck: "everything",
     eventsEnabled: true,
     voteVisibility: "secret",
+    contentOverrides: R6_COINS,
     ...extra,
   };
 }
@@ -240,14 +242,14 @@ function audit(state: GameState, cov: Coverage): RevealSummary {
   if (offlineTruth.length > 0) cov.add("offline:hackerLoop");
 
   // Real moves: every split, with its alibi and missed flag.
-  const splits = state.log.filter((e) => e.type === "lootSplit");
+  const splits = state.log.filter((e) => e.type === "coinsGrabbed");
   const moves = summary.rounds.flatMap((r) => r.moves.map((m) => ({ ...m, round: r.round })));
   expect(moves.length).toBe(splits.length);
   for (const sp of splits) {
     const m = moves.find((x) => x.round === sp.round && x.player === sp.player);
     const alibi = state.log.find((e) => e.type === "alibiPosted" && e.player === sp.player && e.round === sp.round);
     const missed = state.log.some((e) => e.type === "defaultMoveAssigned" && e.player === sp.player && e.round === sp.round);
-    expect(m).toEqual({ player: sp.player, round: sp.round, room: sp.room, loot: sp.loot, toHaul: sp.toHaul, toStash: sp.toStash, missed, alibi: alibi?.type === "alibiPosted" ? alibi.room : null });
+    expect(m).toEqual({ player: sp.player, round: sp.round, room: sp.room, duffel: sp.duffel, pocket: sp.pocket, missed, alibi: alibi?.type === "alibiPosted" ? alibi.room : null });
     if (missed) cov.add("missed");
   }
   return summary;

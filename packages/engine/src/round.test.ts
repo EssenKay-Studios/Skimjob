@@ -1,5 +1,5 @@
-// The round loop: moves, default moves, resolution, Heat, information, raids.
-// design §5, §6, §7, §8 (starter role powers used in a move)
+// The round loop: moves (rooms, coins and grabs), missed moves, the bank and
+// the short bank, resolution, R6 Heat, information. design §3, §4.2, §6.1
 import { STARTER_ROLES } from "@skimjob/content";
 import { handleThroughAlibis } from "./alibis.testkit";
 import { describe, expect, it } from "vitest";
@@ -7,10 +7,10 @@ import type { Command, GameConfig, GameEvent, GameState } from "./types";
 import { setupEvents } from "./setup";
 import { replay } from "./reduce";
 import { handleCommand, withRng } from "./handle";
-import { seedRng } from "./rng";
-import { V015_NUMBERS } from "./v01-numbers.testkit";
+import { randomInt, seedRng } from "./rng";
+import { viewFor } from "./view";
 
-function config(players: number): GameConfig {
+function config(players: number, contentOverrides: GameConfig["contentOverrides"] = null): GameConfig {
   return {
     seed: "round-seed",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
@@ -18,13 +18,13 @@ function config(players: number): GameConfig {
     rolePool: [...STARTER_ROLES], // a shakedown window only if the shop holds a Shield
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
-    contentOverrides: V015_NUMBERS, // content 0.15.0 numbers
+    contentOverrides,
   };
 }
 
 /** A new game with chosen roles (seat i gets roles[i], Rookie if missing). */
-function game(players: number, roles: string[] = []): GameState {
-  const cfg = config(players);
+function game(players: number, roles: string[] = [], contentOverrides: GameConfig["contentOverrides"] = null): GameState {
+  const cfg = config(players, contentOverrides);
   const log = setupEvents(cfg).map((e, i, all): GameEvent => {
     if (e.type !== "roleDealt") return e;
     const seat = all.slice(0, i).filter((x) => x.type === "roleDealt").length;
@@ -42,9 +42,9 @@ function run(state: GameState, ...commands: unknown[]): GameState {
   }, state);
 }
 
-/** A submitMove command; `move` is loose on purpose so tests can send malformed moves. */
+/** A submitMove command (empty bags unless given); `move` is loose on purpose so tests can send malformed moves. */
 const submit = (player: string, move: Record<string, unknown>): Command =>
-  ({ type: "submitMove", player, move: { pocket: 0, ...move } }) as Command;
+  ({ type: "submitMove", player, move: { duffel: 0, pocket: 0, ...move } }) as Command;
 /** The deadline for the round being planned in `s`. */
 const ROUND = (s: GameState): Command => ({ type: "advance", deadline: { kind: "round", round: s.round } });
 
@@ -59,41 +59,64 @@ function reason(state: GameState, command: unknown): string {
   return r.reason;
 }
 
-describe("planning — design §5.1", () => {
+describe("planning — design §3.2", () => {
   it("a submitted move is private to its player and can be changed until the deadline; the last one counts", () => {
     let s = game(3);
-    s = run(s, submit("p0", { room: "vault", pocket: 6 }));
+    s = run(s, submit("p0", { room: "vault", pocket: 3 }));
     const ev = s.log.at(-1);
     expect(ev).toMatchObject({ type: "moveSubmitted", player: "p0", round: 1, visibility: { kind: "private", player: "p0" } });
-    s = run(s, submit("p0", { room: "office", pocket: 1 }));
-    expect(s.moves.p0).toEqual({ room: "office", pocket: 1 });
+    s = run(s, submit("p0", { room: "office", duffel: 1, pocket: 1 }));
+    expect(s.moves.p0).toEqual({ room: "office", duffel: 1, pocket: 1 });
     const before = s;
     s = run(s, ROUND);
-    expect(lastEvents(before, s).find((e) => e.type === "lootSplit" && e.player === "p0")).toMatchObject({ room: "office", loot: 4, toStash: 1, toHaul: 3 });
+    expect(lastEvents(before, s).find((e) => e.type === "coinsGrabbed" && e.player === "p0")).toMatchObject({ room: "office", duffel: 1, pocket: 1 });
   });
 
-  it("a player who misses the deadline gets the default move: Lobby, hand everything in", () => {
+  it("a missed move is the Lobby, 1 coin, handed in (design §3.3)", () => {
     const before = game(3);
     const s = run(before, ROUND);
     const defaults = lastEvents(before, s).filter((e) => e.type === "defaultMoveAssigned");
     expect(defaults.map((e) => e.player)).toEqual(["p0", "p1", "p2"]);
     for (const e of defaults) {
-      expect(e).toMatchObject({ move: { room: "lobby", pocket: 0 }, visibility: { kind: "private", player: e.player } });
+      expect(e).toMatchObject({ move: { room: "lobby", duffel: 1, pocket: 0 }, visibility: { kind: "private", player: e.player } });
     }
-    expect(s.haul).toBe(6);
-    expect(s.players.p0?.consecutiveMissedMoves).toBe(1);
+    expect(s.haul).toBe(3);
+    expect(s.bank).toBe(48 - 3);
+    expect(s.players.p0).toMatchObject({ stash: 0, totalHandedIn: 1, consecutiveMissedMoves: 1 });
   });
 
-  it("missed rounds are counted in a row and reset by submitting (design §15)", () => {
+  it("missed rounds are counted in a row and reset by submitting (design §16)", () => {
     let s = run(game(3), ROUND, ROUND);
     expect(s.players.p0?.consecutiveMissedMoves).toBe(2);
-    s = run(s, submit("p0", { room: "office" }));
+    s = run(s, submit("p0", { room: "office", duffel: 2 }));
     expect(s.players.p0?.consecutiveMissedMoves).toBe(0);
   });
 
   it("the stored move is normalised: unknown fields are dropped", () => {
-    const s = run(game(3), { type: "submitMove", player: "p0", move: { room: "lobby", pocket: 0, junk: 1 } });
-    expect(s.moves.p0).toEqual({ room: "lobby", pocket: 0 });
+    const s = run(game(3), { type: "submitMove", player: "p0", move: { room: "lobby", duffel: 1, pocket: 0, junk: 1 } });
+    expect(s.moves.p0).toEqual({ room: "lobby", duffel: 1, pocket: 0 });
+  });
+
+  it("grab 1 coin up to the room's limit, split any way between the duffel and the pocket (design §3.1, §3.2)", () => {
+    const limits = { lobby: 1, office: 2, vault: 3, depositBoxes: 2, serverRoom: 2, managersOffice: 2 };
+    const s = game(9);
+    for (const [room, limit] of Object.entries(limits)) {
+      for (let pocket = 0; pocket <= limit; pocket++) {
+        for (const grab of [1, limit]) if (pocket <= grab) expect(handleThroughAlibis(s, submit("p0", { room, duffel: grab - pocket, pocket })).ok, `${room} ${grab}/${pocket}`).toBe(true);
+      }
+      expect(reason(s, submit("p0", { room, duffel: limit + 1 }))).toMatch(new RegExp(`at most ${limit}`));
+      expect(reason(s, submit("p0", { room, duffel: limit, pocket: 1 }))).toMatch(new RegExp(`at most ${limit}`));
+      // design §3.2: a move in a coin room asks for at least 1 coin.
+      expect(reason(s, submit("p0", { room }))).toMatch(/at least 1 coin/);
+    }
+  });
+
+  it("Security and the Rooftop grab nothing (design §3.1, §3.2)", () => {
+    const s = game(3);
+    expect(handleThroughAlibis(s, submit("p0", { room: "rooftop" })).ok).toBe(true);
+    expect(handleThroughAlibis(s, submit("p0", { room: "security", watch: "vault" })).ok).toBe(true);
+    expect(reason(s, submit("p0", { room: "rooftop", duffel: 1 }))).toMatch(/no coins to grab/);
+    expect(reason(s, submit("p0", { room: "security", pocket: 1, watch: "vault" }))).toMatch(/no coins to grab/);
   });
 });
 
@@ -104,21 +127,25 @@ describe("rejected commands leave state untouched", () => {
     ["no type", { player: "p0" }],
     ["unknown command", { type: "teleport" }],
     ["unsupported command", { type: "useAbility", player: "p0" }],
-    ["unknown player", submit("zed", { room: "lobby" })],
+    ["unknown player", submit("zed", { room: "lobby", duffel: 1 })],
     ["missing move", { type: "submitMove", player: "p0" }],
-    ["unknown room", submit("p0", { room: "kitchen" })],
-    ["room not in play for 3 players (closed)", submit("p0", { room: "depositBoxes" })],
-    ["prototype key as room", submit("p0", { room: "constructor" })],
-    ["negative pocket", submit("p0", { room: "vault", pocket: -1 })],
-    ["pocket over the room's loot", submit("p0", { room: "vault", pocket: 7 })],
+    ["unknown room", submit("p0", { room: "kitchen", duffel: 1 })],
+    ["room not in play for 3 players (closed)", submit("p0", { room: "depositBoxes", duffel: 1 })],
+    ["the Teller line is gone (design §3.1)", submit("p0", { room: "tellerLine", duffel: 1 })],
+    ["prototype key as room", submit("p0", { room: "constructor", duffel: 1 })],
+    ["negative pocket", submit("p0", { room: "vault", duffel: 2, pocket: -1 })],
+    ["negative duffel", submit("p0", { room: "vault", duffel: -1, pocket: 2 })],
+    ["grab over the room's limit", submit("p0", { room: "vault", duffel: 2, pocket: 2 })],
+    ["no coins in a coin room", submit("p0", { room: "vault" })],
     ["fractional pocket", submit("p0", { room: "vault", pocket: 1.5 })],
     ["NaN pocket", submit("p0", { room: "vault", pocket: Number.NaN })],
-    ["infinite pocket", submit("p0", { room: "vault", pocket: Number.POSITIVE_INFINITY })],
+    ["infinite duffel", submit("p0", { room: "vault", duffel: Number.POSITIVE_INFINITY })],
     ["string pocket", submit("p0", { room: "vault", pocket: "2" })],
+    ["missing duffel", { type: "submitMove", player: "p0", move: { room: "vault", pocket: 1 } }],
     ["Security without a watched room", submit("p0", { room: "security" })],
     ["Security watching a closed room", submit("p0", { room: "security", watch: "serverRoom" })],
-    ["watching from outside Security", submit("p0", { room: "vault", watch: "office" })],
-    ["a Rookie using an ability", submit("p0", { room: "vault", ability: { kind: "lookout", rooms: ["office"] } })],
+    ["watching from outside Security", submit("p0", { room: "vault", duffel: 1, watch: "office" })],
+    ["a Rookie using an ability", submit("p0", { room: "vault", duffel: 1, ability: { kind: "lookout", rooms: ["office"] } })],
     ["advance without a deadline", { type: "advance" }],
     ["unknown deadline", { type: "advance", deadline: { kind: "lunch" } }],
     ["meeting deadline (none pending)", { type: "advance", deadline: { kind: "openMeeting", meetingId: "m1" } }],
@@ -135,41 +162,48 @@ describe("rejected commands leave state untouched", () => {
   it("moves and round deadlines are refused outside planning (after an act's last round)", () => {
     const after = run(game(3), ROUND, ROUND, ROUND);
     expect(after.phase).toEqual({ kind: "awaitingMeeting", act: 1 });
-    expect(reason(after, submit("p0", { room: "lobby" }))).toMatch(/planned/);
+    expect(reason(after, submit("p0", { room: "lobby", duffel: 1 }))).toMatch(/planned/);
     expect(reason(after, ROUND(after))).toMatch(/no round deadline/);
   });
 });
 
-describe("resolution — design §5.2, §6", () => {
-  it("splits go to the Haul and the stash; the round summary is public and the splits private", () => {
-    const before = run(game(3), submit("p0", { room: "vault", pocket: 2 }), submit("p1", { room: "office" }), submit("p2", { room: "lobby", pocket: 2 }));
+describe("resolution — design §3.2, §4.2 step 1", () => {
+  it("duffel coins go to the Haul and pocket coins to the stash; the round summary is public and the grabs private", () => {
+    const before = run(game(3), submit("p0", { room: "vault", duffel: 1, pocket: 2 }), submit("p1", { room: "office", duffel: 2 }), submit("p2", { room: "lobby", pocket: 1 }));
     const s = run(before, ROUND);
-    expect(s.haul).toBe(4 + 4 + 0);
-    expect(s.players.p0).toMatchObject({ stash: 2, totalHandedIn: 4 });
-    expect(s.players.p2).toMatchObject({ stash: 2, totalHandedIn: 0 });
+    expect(s.haul).toBe(1 + 2 + 0);
+    expect(s.players.p0).toMatchObject({ stash: 2, totalHandedIn: 1 });
+    expect(s.players.p2).toMatchObject({ stash: 1, totalHandedIn: 0 });
     const events = lastEvents(before, s);
-    for (const e of events.filter((x) => x.type === "lootSplit")) expect(e.visibility).toEqual({ kind: "private", player: e.player });
+    const grabs = events.filter((x) => x.type === "coinsGrabbed");
+    expect(grabs.map((e) => e.type === "coinsGrabbed" && [e.player, e.room, e.duffel, e.pocket])).toEqual([
+      ["p0", "vault", 1, 2],
+      ["p1", "office", 2, 0],
+      ["p2", "lobby", 0, 1],
+    ]);
+    for (const e of grabs) expect(e.visibility).toEqual({ kind: "private", player: e.player });
     expect(events.find((e) => e.type === "roundResolved")).toEqual({
       type: "roundResolved",
       visibility: { kind: "public" },
       round: 1,
-      haulDelta: 8,
-      haul: 8,
-      heatDelta: 11, // 4 + 20 × 1/3 = 10.67 → 11 (design §7)
+      bank: 48 - 6, // design §6.1: every coin grabbed leaves the bank, handed in or pocketed
+      haulDelta: 3,
+      haul: 3,
+      heatDelta: 11, // 4 + 20 × 1/3 = 10.67 → 11 (R6 Heat until bells)
       heat: 11,
-      heatParts: { base: 4, rooms: { vault: 7 } }, // extension.md "What the app works out for you"
+      heatParts: { base: 4, rooms: { vault: 7 } },
     });
   });
 
-  it("events follow the resolution order: splits, Heat summary after information, then the next round", () => {
+  it("events follow the resolution order: grabs, sightings and watches, the summary, then the next round", () => {
     const before = run(game(3), submit("p0", { room: "security", watch: "vault" }));
     const types = lastEvents(before, run(before, ROUND)).map((e) => e.type);
     expect(types).toEqual([
       "defaultMoveAssigned",
       "defaultMoveAssigned",
-      "lootSplit",
-      "lootSplit",
-      "lootSplit",
+      "coinsGrabbed",
+      "coinsGrabbed",
+      "coinsGrabbed",
       "roomSighting",
       "roomSighting",
       "roomSighting",
@@ -181,23 +215,14 @@ describe("resolution — design §5.2, §6", () => {
     ]);
   });
 
-  it("Deposit boxes pay 5 to up to 2 people, and 4 to everyone there when more go (R5; was 3); pocket is capped at the real yield (§6.2)", () => {
-    const two = run(game(5), submit("p0", { room: "depositBoxes", pocket: 5 }), submit("p1", { room: "depositBoxes" }), ROUND);
-    expect(two.players.p0?.stash).toBe(5);
-    expect(two.players.p1?.totalHandedIn).toBe(5);
-    const three = run(
-      game(5),
-      submit("p0", { room: "depositBoxes", pocket: 5 }),
-      submit("p1", { room: "depositBoxes" }),
-      submit("p2", { room: "depositBoxes" }),
-      ROUND,
-    );
-    expect(three.players.p0).toMatchObject({ stash: 4, totalHandedIn: 0 });
-    expect(three.players.p1).toMatchObject({ stash: 0, totalHandedIn: 4 });
+  it("visitors don't share a room's limit: everyone in the Vault grabs up to 3 (design §3.1)", () => {
+    const s = run(game(5), ...["p0", "p1", "p2", "p3", "p4"].map((p) => submit(p, { room: "vault", duffel: 3 })), ROUND);
+    expect(s.haul).toBe(15);
+    for (const id of s.playerOrder) expect(s.players[id]?.totalHandedIn).toBe(3);
   });
 
-  it("each player learns who else was in their room (§5.2 step 5)", () => {
-    const before = run(game(4), submit("p0", { room: "vault" }), submit("p1", { room: "vault" }), submit("p2", { room: "office" }));
+  it("each player learns who else was in their room (design §3.4)", () => {
+    const before = run(game(4), submit("p0", { room: "vault", duffel: 1 }), submit("p1", { room: "vault", duffel: 1 }), submit("p2", { room: "office", duffel: 1 }));
     const sightings = lastEvents(before, run(before, ROUND)).filter((e) => e.type === "roomSighting");
     expect(sightings.map((e) => [e.player, e.room, e.others])).toEqual([
       ["p0", "vault", ["p1"]],
@@ -208,8 +233,8 @@ describe("resolution — design §5.2, §6", () => {
     for (const e of sightings) expect(e.visibility).toEqual({ kind: "private", player: e.player });
   });
 
-  it("Security sees everyone in the watched room, privately (§6.1)", () => {
-    const before = run(game(4), submit("p0", { room: "security", watch: "vault" }), submit("p1", { room: "vault" }), submit("p2", { room: "vault" }));
+  it("Security sees everyone in the watched room, privately (design §3.1)", () => {
+    const before = run(game(4), submit("p0", { room: "security", watch: "vault" }), submit("p1", { room: "vault", duffel: 1 }), submit("p2", { room: "vault", duffel: 1 }));
     const watched = lastEvents(before, run(before, ROUND)).filter((e) => e.type === "roomWatched");
     expect(watched).toEqual([
       { type: "roomWatched", visibility: { kind: "private", player: "p0" }, player: "p0", round: 1, source: "security", room: "vault", seen: ["p1", "p2"], offline: false },
@@ -217,7 +242,91 @@ describe("resolution — design §5.2, §6", () => {
   });
 });
 
-describe("Heat — design §7", () => {
+describe("the bank — design §6.1", () => {
+  it("holds 16 coins per player, filled publicly at setup and shown in every view", () => {
+    for (const n of [3, 7, 12]) {
+      const s = game(n);
+      expect(s.bank).toBe(16 * n);
+      expect(s.log.find((e) => e.type === "bankFilled")).toEqual({ type: "bankFilled", visibility: { kind: "public" }, coins: 16 * n });
+      expect(viewFor(s, "p1").bank).toBe(16 * n);
+    }
+  });
+
+  it("every coin grabbed comes out of the bank; the count left is public", () => {
+    const s = run(game(3), submit("p0", { room: "vault", pocket: 3 }), submit("p1", { room: "rooftop" }), ROUND);
+    expect(s.bank).toBe(48 - 3 - 1);
+    expect(viewFor(s, "p2").bank).toBe(44);
+  });
+});
+
+describe("a short bank — design §3.2", () => {
+  const tiny = (players: number, coinsPerPlayer: number) => game(players, [], { bank: { coinsPerPlayer } });
+  const grabsOf = (before: GameState, after: GameState) =>
+    Object.fromEntries(lastEvents(before, after).flatMap((e) => (e.type === "coinsGrabbed" ? [[e.player, [e.duffel, e.pocket]]] : [])));
+
+  it("when the bank covers every grab, nothing is cut and no randomness is drawn", () => {
+    const before = run(tiny(3, 3), ...["p0", "p1", "p2"].map((p) => submit(p, { room: "vault", duffel: 3 })));
+    const s = run(before, ROUND);
+    expect(s.bank).toBe(0);
+    expect(grabsOf(before, s)).toEqual({ p0: [3, 0], p1: [3, 0], p2: [3, 0] });
+    expect(s.rng).toEqual(before.rng);
+    expect(lastEvents(before, s).some((e) => e.type === "rngAdvanced")).toBe(false);
+  });
+
+  it("coins go out one at a time, round-robin in seat order from a seeded random seat, until the bank is empty", () => {
+    // Bank 6, less 1 for p0's Lobby grab in round 1: 5 left for three grabs of 3.
+    const r1 = run(tiny(3, 2), submit("p0", { room: "lobby", duffel: 1 }), submit("p1", { room: "rooftop" }), submit("p2", { room: "rooftop" }), ROUND);
+    const before = run(r1, ...["p0", "p1", "p2"].map((p) => submit(p, { room: "vault", duffel: 3 })));
+    expect(before.bank).toBe(5);
+    const start = randomInt(before.rng, 3).value;
+    const s = run(before, ROUND);
+    expect(s.bank).toBe(0);
+    // The drawn seat and the next get 2, the third 1.
+    const got = grabsOf(before, s);
+    for (const [i, coins] of [2, 2, 1].entries()) expect(got[before.playerOrder[(start + i) % 3] as string]).toEqual([coins, 0]);
+    expect(lastEvents(before, s).some((e) => e.type === "rngAdvanced")).toBe(true);
+  });
+
+  it("the round-robin skips grabs that are full", () => {
+    // Bank 8, less 2 in round 1: 6 left. p0 asks 1, p1 and p2 ask 3, p3 nothing (Rooftop):
+    // p0 gets its 1, and p1 and p2 share 5, the extra coin to whichever comes first from the drawn seat.
+    const r1 = run(tiny(4, 2), submit("p0", { room: "lobby", duffel: 1 }), submit("p1", { room: "lobby", duffel: 1 }), submit("p2", { room: "rooftop" }), submit("p3", { room: "rooftop" }), ROUND);
+    const before = run(r1, submit("p0", { room: "lobby", duffel: 1 }), submit("p1", { room: "vault", duffel: 3 }), submit("p2", { room: "vault", duffel: 3 }), submit("p3", { room: "rooftop" }));
+    expect(before.bank).toBe(6);
+    const start = randomInt(before.rng, 4).value;
+    const first = [0, 1, 2, 3].map((i) => before.playerOrder[(start + i) % 4]).find((id) => id === "p1" || id === "p2");
+    const s = run(before, ROUND);
+    expect(grabsOf(before, s)).toEqual({ p0: [1, 0], p1: [first === "p1" ? 3 : 2, 0], p2: [first === "p2" ? 3 : 2, 0], p3: [0, 0] });
+    expect(s.bank).toBe(0);
+  });
+
+  it("a cut grab loses its pocket-bound coins first, then its duffel-bound ones", () => {
+    const before = run(tiny(3, 1), submit("p0", { room: "vault", duffel: 1, pocket: 2 }), submit("p1", { room: "vault", duffel: 2, pocket: 1 }), submit("p2", { room: "vault", pocket: 3 }));
+    const s = run(before, ROUND);
+    // Bank 3, three grabs of 3: one coin each.
+    expect(grabsOf(before, s)).toEqual({ p0: [1, 0], p1: [1, 0], p2: [0, 1] });
+    expect(s.haul).toBe(2);
+    expect(s.players.p2?.stash).toBe(1);
+  });
+
+  it("an empty bank cuts every grab to 0; the moves stay legal", () => {
+    let s = run(tiny(3, 1), ROUND); // three missed moves empty the bank of 3
+    expect(s.bank).toBe(0);
+    const before = run(s, submit("p0", { room: "vault", pocket: 3 }));
+    s = run(before, ROUND);
+    expect(grabsOf(before, s)).toEqual({ p0: [0, 0], p1: [0, 0], p2: [0, 0] });
+    expect([s.bank, s.haul, s.players.p0?.stash]).toEqual([0, 3, 0]);
+  });
+
+  it("is deterministic: the same seed and commands cut the same grabs", () => {
+    const play = () => run(tiny(5, 1), ...["p0", "p1", "p2", "p3", "p4"].map((p) => submit(p, { room: "vault", duffel: 1, pocket: 2 })), ROUND);
+    expect(JSON.stringify(play().log)).toBe(JSON.stringify(play().log));
+    const s = play();
+    expect(replay(s.config, JSON.parse(JSON.stringify(s.log)) as GameEvent[])).toEqual(s);
+  });
+});
+
+describe("R6 Heat (until bells, S3a.2)", () => {
   it("baseline +4 when nobody is in a Heat room", () => {
     expect(run(game(3), ROUND).heat).toBe(4);
   });
@@ -231,17 +340,17 @@ describe("Heat — design §7", () => {
 
   it("is clamped once per round, after all sources: Vault and Rooftop cancel before clamping", () => {
     // 4 + (20 − 20) / 3 = 4: if the Rooftop were clamped on its own first, this would differ at Heat 0.
-    const s = run(game(3), submit("p0", { room: "vault" }), submit("p1", { room: "rooftop" }), ROUND);
+    const s = run(game(3), submit("p0", { room: "vault", duffel: 3 }), submit("p1", { room: "rooftop" }), ROUND);
     expect(s.heat).toBe(4);
   });
 
   it("Heat at 100 means the cops raid and the game ends (§5.2 step 6, §3)", () => {
     const hot: GameState = { ...game(3), heat: 90 };
-    const s = run(hot, submit("p0", { room: "vault" }), submit("p1", { room: "vault" }), ROUND);
+    const s = run(hot, submit("p0", { room: "vault", duffel: 3 }), submit("p1", { room: "vault", duffel: 3 }), ROUND);
     expect(s.heat).toBe(100); // 90 + 4 + 20 × 2/3 ≈ 107, capped
     expect(s.log.slice(-2).map((e) => e.type)).toEqual(["copsRaided", "gameEnded"]);
     expect(s.phase).toMatchObject({ kind: "ended", outcome: { result: "failed", reason: "heat" } });
-    expect(reason(s, submit("p0", { room: "lobby" }))).toMatch(/over/);
+    expect(reason(s, submit("p0", { room: "lobby", duffel: 1 }))).toMatch(/over/);
   });
 
   it("Heat just under 100 does not raid", () => {
@@ -267,7 +376,7 @@ describe("rounds and acts — design §4", () => {
   });
 
   it("moves are cleared between rounds", () => {
-    const s = run(game(3), submit("p0", { room: "vault", pocket: 6 }), ROUND);
+    const s = run(game(3), submit("p0", { room: "vault", pocket: 3 }), ROUND);
     expect(s.moves).toEqual({});
   });
 });

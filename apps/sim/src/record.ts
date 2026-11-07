@@ -30,8 +30,8 @@ export interface PlayerRecord {
   readonly score: number;
   /** Final stash. */
   readonly stash: number;
-  /** Loot collected from rooms over the game. */
-  readonly looted: number;
+  /** Coins grabbed over the game, after any short-bank cut. design §3.2 */
+  readonly grabbed: number;
   /** Of that, kept for the stash. */
   readonly pocketed: number;
   readonly timesShakenDown: number;
@@ -75,6 +75,8 @@ export interface GameRecord {
   readonly endedRound: number;
   readonly endedAct: number;
   readonly haul: number;
+  /** Coins left in the bank at the end. design §6.1 */
+  readonly bankLeft: number;
   readonly finalTarget: number;
   readonly heat: number;
   readonly checkpointsMissed: number;
@@ -84,7 +86,7 @@ export interface GameRecord {
   /** Standings after the Act 1 and Act 2 checkpoints (null if the game ended first). */
   readonly afterAct1: Standing | null;
   readonly afterAct2: Standing | null;
-  /** Most score one player could add in Act 3: rounds × the best room's loot (whole-number scores, no multiplier). */
+  /** Most score one player could add in Act 3: rounds × the best room's coins (whole-number scores, no multiplier). */
   readonly act3MaxGain: number;
   readonly playerRecords: readonly PlayerRecord[];
   /** Bot commands the engine refused (should be 0). */
@@ -126,7 +128,7 @@ export function recordGame(state: GameState, crew: readonly PersonalityId[], rej
   const finalTarget = checkpointTarget(job, 3, n);
   const roleOf = new Map<PlayerId, RoleId>(order.map((id) => [id, state.players[id]?.role ?? "?"]));
 
-  const looted = new Map<PlayerId, number>(order.map((id) => [id, 0]));
+  const grabbed = new Map<PlayerId, number>(order.map((id) => [id, 0]));
   const pocketed = new Map<PlayerId, number>(order.map((id) => [id, 0]));
   const sinceShakedown = new Map<PlayerId, number>(order.map((id) => [id, 0]));
   const earned = new Map<PlayerId, number>();
@@ -140,10 +142,10 @@ export function recordGame(state: GameState, crew: readonly PersonalityId[], rej
   const add = (m: Map<PlayerId, number>, id: PlayerId, v: number) => m.set(id, (m.get(id) ?? 0) + v);
   for (const event of state.log as readonly GameEvent[]) {
     switch (event.type) {
-      case "lootSplit":
-        add(looted, event.player, event.loot);
-        add(pocketed, event.player, event.toStash);
-        add(sinceShakedown, event.player, event.toStash);
+      case "coinsGrabbed":
+        add(grabbed, event.player, event.duffel + event.pocket);
+        add(pocketed, event.player, event.pocket);
+        add(sinceShakedown, event.player, event.pocket);
         break;
       case "roundResolved":
         endedRound = event.round;
@@ -185,7 +187,7 @@ export function recordGame(state: GameState, crew: readonly PersonalityId[], rej
   const { outcome } = phase;
   const winners = outcome.winners;
   const ranked = new Map(outcome.ranking.map((e) => [e.player, e]));
-  const maxLoot = Math.max(...state.rooms.map((r) => job.rooms[r]?.loot ?? 0));
+  const maxCoins = Math.max(...state.rooms.map((r) => job.rooms[r]?.coins ?? 0));
 
   return {
     seed: config.seed,
@@ -195,6 +197,7 @@ export function recordGame(state: GameState, crew: readonly PersonalityId[], rej
     endedRound,
     endedAct: Math.ceil(endedRound / ROUNDS_PER_ACT),
     haul: state.haul,
+    bankLeft: state.bank,
     finalTarget,
     heat: state.heat,
     checkpointsMissed,
@@ -203,7 +206,7 @@ export function recordGame(state: GameState, crew: readonly PersonalityId[], rej
     winners,
     afterAct1: standingAfter(1),
     afterAct2: standingAfter(2),
-    act3MaxGain: ROUNDS_PER_ACT * maxLoot,
+    act3MaxGain: ROUNDS_PER_ACT * maxCoins,
     playerRecords: order.map((id, i): PlayerRecord => {
       const entry = ranked.get(id);
       const role = roleOf.get(id) as RoleId;
@@ -217,7 +220,7 @@ export function recordGame(state: GameState, crew: readonly PersonalityId[], rej
         star: (def?.winsOn.length ?? 0) > 0,
         score: entry?.score ?? 0,
         stash: entry?.stash ?? 0,
-        looted: looted.get(id) ?? 0,
+        grabbed: grabbed.get(id) ?? 0,
         pocketed: pocketed.get(id) ?? 0,
         timesShakenDown: entry?.timesShakenDown ?? 0,
         winner,

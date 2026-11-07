@@ -4,7 +4,7 @@
 // Numbers only: an override can't add or remove rooms, roles or tiers, so the
 // rules code never meets a shape it doesn't know. Configs are untrusted JSON,
 // so `validateOverrides` checks every field (own keys only, known keys only,
-// finite numbers, whole numbers where the engine counts loot or Heat).
+// finite numbers, whole numbers where the engine counts coins or Heat).
 import { EVENTS, PERKS, POLICE_ACTIVITY, ROLES, type EventDef, type EventEffect, type FailureReason, type JobDef, type JobId, type PerkId, type RoleDef, type RoleId, type RolePower, type RoomDef, type Temperament } from "@skimjob/content";
 import type { ContentOverrides, EventOverride, GameConfig, RoleOverride, RoomOverride } from "./types";
 import { isObject } from "./check";
@@ -41,7 +41,10 @@ function checkFields(raw: unknown, path: string, fields: Readonly<Record<string,
   return true;
 }
 
-const ROOM_FIELDS = { loot: count, heatPressure: finite } as const;
+// A coin room keeps at least 1 coin, so a move there can always grab one (design §3.2, §3.3);
+// Security and the Rooftop grab nothing, so their 0 isn't overridable.
+const COIN_ROOM_FIELDS = { coins: positiveCount, heatPressure: finite } as const;
+const NO_COIN_ROOM_FIELDS = { heatPressure: finite } as const;
 
 /** The numbers each power may have overridden: all of its own, never another role's. design §8 */
 const POWER_FIELDS: { readonly [K in RolePower["kind"]]: Readonly<Record<string, Rule>> } = {
@@ -58,7 +61,7 @@ const POWER_FIELDS: { readonly [K in RolePower["kind"]]: Readonly<Record<string,
 
 /** The numbers each event effect may have overridden: its own only. design §10 */
 const EFFECT_FIELDS: { readonly [K in EventEffect["kind"]]: Readonly<Record<string, Rule>> } = {
-  roomSurge: { lootMultiplier: atLeast0, heatMultiplier: atLeast0 },
+  roomSurge: { extraCoins: count, heatMultiplier: atLeast0 },
   lockdown: {},
   audit: {},
   insideTip: {},
@@ -74,7 +77,7 @@ export function validateOverrides(raw: unknown, job: JobDef, roles: RoleTable = 
   if (raw === undefined || raw === null) return [];
   const errors: string[] = [];
   if (!isObject(raw)) return ["contentOverrides must be an object"];
-  const known = ["rooms", "heat", "checkpoints", "shakedown", "police", "perks", "roles", "events"];
+  const known = ["rooms", "bank", "heat", "checkpoints", "shakedown", "police", "perks", "roles", "events"];
   for (const key of Object.keys(raw)) if (!known.includes(key)) errors.push(`contentOverrides.${key} is not an overridable section`);
 
   if (raw.rooms !== undefined) {
@@ -87,21 +90,11 @@ export function validateOverrides(raw: unknown, job: JobDef, roles: RoleTable = 
           errors.push(`${path}: job ${job.id} has no such room`);
           continue;
         }
-        const { capacity, ...rest } = isObject(o) ? o : {};
-        if (!isObject(o)) errors.push(`${path} must be an object`);
-        else checkFields(rest, path, ROOM_FIELDS, errors);
-        if (capacity === undefined) continue;
-        if (!def.capacity) errors.push(`${path}.capacity: the ${def.name} has no capacity`);
-        else checkFields(capacity, `${path}.capacity`, { max: positiveCount, crowdedLoot: count }, errors);
+        checkFields(o, path, def.coins > 0 ? COIN_ROOM_FIELDS : NO_COIN_ROOM_FIELDS, errors);
       }
   }
-  // A crowded room pays less, never more: checkMove bounds a pocket by the room's loot. design §6.2
-  if (errors.length === 0 && isObject(raw.rooms)) {
-    for (const [room, def] of Object.entries(overrideJob(job, { rooms: raw.rooms } as ContentOverrides).rooms)) {
-      if (def.capacity && def.capacity.crowdedLoot > def.loot) {
-        errors.push(`contentOverrides.rooms.${room}: crowded loot (${def.capacity.crowdedLoot}) can't be more than loot (${def.loot})`);
-      }
-    }
+  if (raw.bank !== undefined) {
+    checkFields(raw.bank, "contentOverrides.bank", { coinsPerPlayer: positiveCount }, errors);
   }
   if (raw.heat !== undefined) {
     checkFields(raw.heat, "contentOverrides.heat", { max: positiveCount, perRound: finite, missedCheckpoint: count }, errors);
@@ -193,14 +186,14 @@ export function overrideJob(job: JobDef, overrides: ContentOverrides | null | un
     const def = job.rooms[id] as RoomDef;
     rooms[id] = {
       ...def,
-      ...(o.loot !== undefined && { loot: o.loot }),
+      ...(o.coins !== undefined && { coins: o.coins }),
       ...(o.heatPressure !== undefined && { heatPressure: o.heatPressure }),
-      capacity: def.capacity && o.capacity ? { ...def.capacity, ...o.capacity } : def.capacity,
     };
   }
   return {
     ...job,
     rooms,
+    bank: { ...job.bank, ...overrides.bank },
     heat: { ...job.heat, ...overrides.heat },
     checkpoints: overrides.checkpoints?.perPlayer ? { perPlayer: overrides.checkpoints.perPlayer } : job.checkpoints,
     shakedown: { ...job.shakedown, ...overrides.shakedown },

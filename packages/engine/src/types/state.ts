@@ -181,8 +181,10 @@ export interface GameState {
   readonly phase: Phase;
   /** The latest round started (1–9); 0 before round 1. Set by `roundStarted`. */
   readonly round: number;
-  /** Rooms in play for this player count. design §6.2 */
+  /** Rooms in play for this player count. design §3.1 */
   readonly rooms: readonly RoomId[];
+  /** Coins left in the bank (public). design §6.1 */
+  readonly bank: number;
   /** Seat order, matching config.players. */
   readonly playerOrder: readonly PlayerId[];
   readonly players: Readonly<Record<PlayerId, PlayerState>>;

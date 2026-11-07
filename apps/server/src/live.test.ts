@@ -14,6 +14,7 @@ import { buildServer } from "./server";
 import type { LobbySettings } from "./settings";
 import { createGameStore, type GameStore } from "./store";
 import { testDb } from "./testkit";
+import { BANK_JOB } from "@skimjob/content";
 
 // Socket messages arrive within a tick or two: poll fast.
 const quick = { interval: 1, timeout: 5000 };
@@ -170,10 +171,10 @@ describe("commands from a socket", () => {
     const { id, humans } = await startGame(2, 1);
     const [a, b] = humans as [Human, Human];
     const c = await Client.open(id, a);
-    const reply = await c.send({ type: "submitMove", player: b.player, move: { room: "lobby", pocket: 0 } });
+    const reply = await c.send({ type: "submitMove", player: b.player, move: { room: "lobby", duffel: 1, pocket: 0 } });
     expect(reply).toEqual({ ok: true, id: "m1" });
     const state = await load(id);
-    expect(state.moves[a.player]).toEqual({ room: "lobby", pocket: 0 });
+    expect(state.moves[a.player]).toEqual({ room: "lobby", duffel: 1, pocket: 0 });
     expect(state.moves[b.player]).toBeUndefined();
     expect(parseClientMessage(JSON.stringify({ cmd: { type: "callEmergency", player: "p2" } }), "p1")).toEqual({
       ok: true,
@@ -200,7 +201,7 @@ describe("commands from a socket", () => {
     c.ws.send(Buffer.from([1, 2, 3]), { binary: true });
     await vi.waitFor(() => expect(c.messages.filter((m) => "rejected" in m && !("id" in m))).toHaveLength(2), quick);
     expect(await load(id)).toBe(before); // nothing ran
-    expect((await c.send({ type: "submitMove", move: { room: "lobby", pocket: 0 } }))).toMatchObject({ ok: true });
+    expect((await c.send({ type: "submitMove", move: { room: "lobby", duffel: 1, pocket: 0 } }))).toMatchObject({ ok: true });
     c.ws.close();
   });
 
@@ -209,10 +210,10 @@ describe("commands from a socket", () => {
     const a = await Client.open(id, humans[0]!);
     const b = await Client.open(id, humans[1]!);
     // a's first move is public (moveLocked, owner decision 2 Nov); the changes after it are hidden.
-    expect(await a.send({ type: "submitMove", move: { room: "lobby", pocket: 0 } })).toMatchObject({ ok: true });
+    expect(await a.send({ type: "submitMove", move: { room: "lobby", duffel: 1, pocket: 0 } })).toMatchObject({ ok: true });
     const seen = await b.barrier();
     a.ws.send(JSON.stringify({ id: 1, cmd: { type: "submitMove", move: { room: "nowhere", pocket: 0 } } }));
-    a.ws.send(JSON.stringify({ id: 2, cmd: { type: "submitMove", move: { room: "lobby", pocket: 0 } } }));
+    a.ws.send(JSON.stringify({ id: 2, cmd: { type: "submitMove", move: { room: "lobby", duffel: 1, pocket: 0 } } }));
     await vi.waitFor(() => expect(a.messages.filter((m) => "id" in m && typeof m.id === "number")).toHaveLength(2), quick);
     const replies = a.messages.filter((m) => "id" in m && typeof m.id === "number");
     expect(replies[0]).toMatchObject({ id: 1, rejected: true, reason: expect.any(String) });
@@ -296,9 +297,9 @@ describe("flooding", () => {
     const { id, humans } = await startGame(2, 1);
     const a = await Client.open(id, humans[0]!);
     const b = await Client.open(id, humans[1]!);
-    for (let i = 0; i < MAX_QUEUED_MESSAGES * 3; i++) a.ws.send(JSON.stringify({ id: i, cmd: { type: "submitMove", move: { room: "lobby", pocket: i % 2 } } }));
+    for (let i = 0; i < MAX_QUEUED_MESSAGES * 3; i++) a.ws.send(JSON.stringify({ id: i, cmd: { type: "submitMove", move: { room: "lobby", duffel: 1 - (i % 2), pocket: i % 2 } } }));
     await vi.waitFor(() => expect(a.closed).toBe(CLOSE_TOO_MANY), quick);
-    expect(await b.send({ type: "submitMove", move: { room: "lobby", pocket: 0 } })).toMatchObject({ ok: true });
+    expect(await b.send({ type: "submitMove", move: { room: "lobby", duffel: 1, pocket: 0 } })).toMatchObject({ ok: true });
     b.ws.close();
   });
 });
@@ -342,10 +343,10 @@ describe("pushing views", () => {
     // Pocket 0 in two rooms that need no watch target.
     const rooms = (await load(id)).rooms.filter((r) => r !== "security").slice(0, 2);
     // The first lock-in is public (moveLocked, owner decision 2 Nov); every change after it is hidden.
-    expect(await a.send({ type: "submitMove", move: { room: rooms[1], pocket: 0 } })).toMatchObject({ ok: true });
+    expect(await a.send({ type: "submitMove", move: { room: rooms[1], duffel: BANK_JOB.rooms[rooms[1]!]?.coins ?? 0, pocket: 0 } })).toMatchObject({ ok: true });
     const seen = await b.barrier();
     const before = (await load(id)).log.length;
-    for (let i = 0; i < 100; i++) expect(await a.send({ type: "submitMove", move: { room: rooms[i % 2], pocket: 0 } })).toMatchObject({ ok: true });
+    for (let i = 0; i < 100; i++) expect(await a.send({ type: "submitMove", move: { room: rooms[i % 2], duffel: BANK_JOB.rooms[rooms[i % 2]!]?.coins ?? 0, pocket: 0 } })).toMatchObject({ ok: true });
     const after = await load(id);
     expect(after.log.slice(before).map((e) => e.type)).toEqual(Array(100).fill("moveSubmitted"));
     expect(await b.barrier()).toBe(seen + 1);
@@ -361,7 +362,7 @@ describe("pushing views", () => {
       const before = await load(id);
       const seen = await db.query<{ bot_seen: string }>("select bot_seen from seats where game_id = $1 and bot_seen is not null order by seat_no", [id]);
       const room = before.rooms.find((r) => r !== "security")!;
-      expect(await a.send({ type: "submitMove", move: { room, pocket: 0 } })).toMatchObject({ ok: true });
+      expect(await a.send({ type: "submitMove", move: { room, duffel: BANK_JOB.rooms[room]?.coins ?? 0, pocket: 0 } })).toMatchObject({ ok: true });
       const after = await load(id);
       expect(after.log.slice(before.log.length).map((e) => e.type)).toEqual(["moveLocked", "moveSubmitted"]);
       expect(await db.query("select bot_seen from seats where game_id = $1 and bot_seen is not null order by seat_no", [id])).toEqual(seen);

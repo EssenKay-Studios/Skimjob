@@ -61,7 +61,7 @@ describe("<Reveal>", () => {
       {
         round: 1,
         card: null,
-        moves: [{ player: "p2", room: "vault", loot: 6, toHaul: 2, toStash: 4, missed: false, alibi: "lobby" }],
+        moves: [{ player: "p2", room: "vault", duffel: 2, pocket: 4, missed: false, alibi: "lobby" }],
         resolved: { haulDelta: 2, haul: 2, heatDelta: 20, heat: 40 },
         items: [{ kind: "police", heatAdded: 6, heat: 46, cause: "tipOff", mole: "p2" }],
         stashes: { p1: 0, p2: 4, p3: 0 },

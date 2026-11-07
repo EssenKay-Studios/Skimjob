@@ -15,6 +15,7 @@ import type {
 } from "./index";
 import { PUBLIC, REVEAL, canSee, privateTo, secretTo } from "./index";
 import { sampleCommands, sampleEvents } from "./samples";
+import { fullGrab } from "../grab.testkit";
 
 type VisKind<T extends GameEventType> = EventOfType<T>["visibility"]["kind"];
 
@@ -24,6 +25,7 @@ type ExpectedVisibility = {
   gameCreated: "public";
   rngSeeded: "reveal";
   roomsSet: "public";
+  bankFilled: "public"; // design §6.1, §18: the bank count is public
   roleDealt: "private";
   roleListShown: "public"; // extension.md "Host settings": the Exact / Possible list
   shopDealt: "public"; // extension.md "Tokens and the perk shop": the three perks on offer
@@ -32,7 +34,7 @@ type ExpectedVisibility = {
   moveLocked: "public";
   moveSubmitted: "private";
   defaultMoveAssigned: "private";
-  lootSplit: "private";
+  coinsGrabbed: "private";
   abilityResolved: "private";
   roomSighting: "private";
   roomWatched: "private";
@@ -78,16 +80,15 @@ describe("event visibility per type — design §13, §17.2", () => {
   it("secret events cannot be constructed with a looser tag", () => {
     // @ts-expect-error the seed must never be public
     const seed: GameEvent = { type: "rngSeeded", visibility: PUBLIC, seed: "s" };
-    // @ts-expect-error a real split is private, not reveal-only
+    // @ts-expect-error a real grab is private, not reveal-only
     const split: GameEvent = {
-      type: "lootSplit",
+      type: "coinsGrabbed",
       visibility: REVEAL,
       player: "ana",
       round: 1,
       room: "vault",
-      loot: 6,
-      toHaul: 6,
-      toStash: 0,
+      duffel: 3,
+      pocket: 0,
     };
     // @ts-expect-error a sealed vote is private to the voter
     const sealed: GameEvent = { type: "voteSealed", visibility: PUBLIC, player: "ana", vote: { kind: "skip" } };
@@ -137,7 +138,7 @@ describe("commands — design §17.2", () => {
   it("every player command names its player", () => {
     expectTypeOf<PlayerCommand["player"]>().toEqualTypeOf<string>();
     // @ts-expect-error submitMove without a player
-    const anon: Command = { type: "submitMove", move: { room: "vault", pocket: 0 } };
+    const anon: Command = { type: "submitMove", move: fullGrab("vault") };
     expect(anon).toBeDefined();
   });
 

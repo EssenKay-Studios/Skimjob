@@ -12,6 +12,7 @@ import { handleCommand } from "./handle";
 import { viewFor } from "./view";
 import { closedRoom, eventHeatScale, scaledCardHeat } from "./deck";
 import { jobById } from "./job";
+import { fullGrab } from "./grab.testkit";
 
 const BANK = jobById("bank");
 
@@ -53,7 +54,7 @@ function run(state: GameState, ...commands: unknown[]): GameState {
 const move = (player: PlayerId, room: RoomId, pocket = 0, rest: Record<string, unknown> = {}) => ({
   type: "submitMove",
   player,
-  move: { room, pocket, ...rest },
+  move: { ...fullGrab(room, pocket), ...rest },
 });
 const advance = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
 
@@ -61,13 +62,13 @@ const advance = (s: GameState) => ({ type: "advance", deadline: { kind: "round",
 function resolve(state: GameState, moves: Record<PlayerId, Record<string, unknown>> = {}): GameState {
   let s = state;
   for (const id of s.playerOrder) {
-    const m = moves[id] ?? { room: closedRoom(s) === "office" ? "lobby" : "office", pocket: 0 };
+    const m = moves[id] ?? fullGrab(closedRoom(s) === "office" ? "lobby" : "office");
     s = run(s, { type: "submitMove", player: id, move: m });
   }
   return run(s, advance(s));
 }
 
-/** The command events of the latest round's resolution (from its first lootSplit / card effect to roundResolved). */
+/** The command events of the latest round's resolution (from its first coinsGrabbed / card effect to roundResolved). */
 function lastResolution(s: GameState): GameEvent[] {
   let end = s.log.length - 1;
   while (s.log[end]?.type !== "roundResolved") end--;
@@ -177,17 +178,18 @@ describe("card effects — design §10, §5.2", () => {
     expect(scaledCardHeat(5, 12)).toBe(5);
   });
 
-  it("Shift change: the Vault yields double and its Heat pressure doubles (×1.8 at 4 players, design §10 scaling); a pocket up to the doubled loot is accepted", () => {
+  it("Shift change: Vault visitors can grab 1 extra coin (design §13) and its Heat pressure doubles (×1.8 at 4 players, R6 scaling)", () => {
     const base = withCard(atRound2(4, ["rookie"]), "shiftChange");
     const heat0 = base.heat;
-    const s = resolve(base, { p0: { room: "vault", pocket: 12 } });
-    const split = lastResolution(s).find((e) => e.type === "lootSplit" && e.player === "p0");
-    expect(split).toMatchObject({ loot: 12, toStash: 12, toHaul: 0 });
+    const s = resolve(base, { p0: { room: "vault", duffel: 1, pocket: 3 } });
+    const split = lastResolution(s).find((e) => e.type === "coinsGrabbed" && e.player === "p0");
+    expect(split).toMatchObject({ duffel: 1, pocket: 3 });
     // One of 4 in the Vault: the surge's extra ×1 is scaled by 4/5, so 4 + 1.8 × 20 × 1/4 = 13.
     expect(s.heat - heat0).toBe(BANK.heat.perRound + Math.round((1.8 * 20) / 4));
-    // Without the card the same pocket is refused.
+    // 5 is one too many with the card; without it, 4 is.
+    expect(handleThroughAlibis(base, { type: "submitMove", player: "p0", move: { room: "vault", duffel: 1, pocket: 4 } }).ok).toBe(false);
     const plain = withCard(atRound2(4, ["rookie"]), "audit");
-    expect(handleThroughAlibis(plain, move("p0", "vault", 12)).ok).toBe(false);
+    expect(handleThroughAlibis(plain, { type: "submitMove", player: "p0", move: { room: "vault", duffel: 1, pocket: 3 } }).ok).toBe(false);
   });
 
   it("Lockdown: the named room is refused for the round; it is never the default room and always in play", () => {
@@ -208,17 +210,17 @@ describe("card effects — design §10, §5.2", () => {
   it("Audit: the round's shortfall is posted per room, publicly, every room in play listed", () => {
     const base = withCard(atRound2(4, ["rookie", "rookie", "hacker", "lookout"]), "audit");
     const s = resolve(base, {
-      p0: { room: "vault", pocket: 4 },
-      p1: { room: "vault", pocket: 1 },
-      p2: { room: "office", pocket: 0 },
-      p3: { room: "lobby", pocket: 2 },
+      p0: fullGrab("vault", 3),
+      p1: fullGrab("vault", 1),
+      p2: fullGrab("office"),
+      p3: fullGrab("lobby", 1),
     });
     const audit = lastResolution(s).find((e) => e.type === "auditReport");
     expect(audit).toEqual({
       type: "auditReport",
       visibility: PUBLIC,
       round: 2,
-      shortfalls: { vault: 5, office: 0, lobby: 2, security: 0, rooftop: 0 },
+      shortfalls: { vault: 4, office: 0, lobby: 1, security: 0, rooftop: 0 },
     });
   });
 
@@ -238,7 +240,7 @@ describe("event-card visibility (leak tests) — design §10, §13, §17.2", () 
     [...viewFor(s, viewer).ledger, ...viewFor(s, viewer).caseFile].some((e) => e.event.type === type);
 
   it("the flipped card and the Audit are public; nothing else about the card is", () => {
-    const s = resolve(withCard(resolve(game(3)), "audit"), { p0: { room: "office", pocket: 2 } });
+    const s = resolve(withCard(resolve(game(3)), "audit"), { p0: fullGrab("office", 2) });
     for (const id of s.playerOrder) {
       expect(sees(s, id, "eventFlipped")).toBe(true);
       expect(sees(s, id, "auditReport")).toBe(true);

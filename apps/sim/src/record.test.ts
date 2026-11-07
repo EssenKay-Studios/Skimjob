@@ -1,7 +1,7 @@
 // Flattening a finished game for the metrics. design §17.4
 import { STARTER_ROLES } from "@skimjob/content";
 import { describe, expect, it } from "vitest";
-import { handleCommand, replay, setupEvents, type Command, type GameConfig, type GameEvent, type GameState } from "@skimjob/engine";
+import { handleCommand, replay, setupEvents, type Command, type ContentOverrides, type GameConfig, type GameEvent, type GameState } from "@skimjob/engine";
 import { checkpointRankings, recordGame, standing } from "./record";
 import { runOne } from "./run";
 import { setupGame } from "./crew";
@@ -19,6 +19,13 @@ const options = (argv: string[] = []): SimOptions => {
   return r.options;
 };
 
+const R6: ContentOverrides = {
+  rooms: { vault: { coins: 6 }, lobby: { coins: 2 } },
+  bank: { coinsPerPlayer: 100 },
+  checkpoints: { perPlayer: [6, 14, 22] },
+  shakedown: { cleanBelow: 6, payout: 8 },
+};
+
 function config(players: number): GameConfig {
   return {
     seed: "record-seed",
@@ -27,8 +34,9 @@ function config(players: number): GameConfig {
     rolePool: [...STARTER_ROLES], // a shakedown window only if the shop holds a Shield
     eventsEnabled: false,
     voteVisibility: "open",
-    // scripted against content 0.1.0 checkpoint targets (balance pass 1); whole-number scores, no Rookie multiplier (extension.md "Scoring")
-    contentOverrides: { checkpoints: { perPlayer: [6, 14, 22] } },
+    // scripted against content 0.1.0 checkpoint targets (balance pass 1); whole-number scores, no Rookie multiplier (extension.md "Scoring");
+    // R6's room yields as coin limits, its clean line and a bank too big to run short, until S3a.3–S3a.5 replace those rules
+    contentOverrides: R6,
   };
 }
 
@@ -43,7 +51,8 @@ function apply(state: GameState, c: Command): GameState {
   if (!r.ok) throw new Error(`rejected ${JSON.stringify(c)}: ${r.reason}`);
   return r.state;
 }
-const move = (player: string, room: string, pocket = 0): Command => ({ type: "submitMove", player, move: { room, pocket } });
+/** A full grab of the room's (pinned) coins, `pocket` of them pocketed. design §3.2 */
+const move = (player: string, room: string, pocket = 0): Command => ({ type: "submitMove", player, move: { room, duffel: (R6.rooms?.[room]?.coins ?? 0) - pocket, pocket } });
 /** The round's deadline, then (design §5.4) its alibi deadline. */
 const roundDeadline = (s: GameState): Command => ({ type: "advance", deadline: { kind: "round", round: s.round } });
 const alibiDeadline = (s: GameState): Command => ({ type: "advance", deadline: { kind: "alibis", round: s.resolvedRound } });
@@ -74,18 +83,19 @@ describe("standing — leaders and lead from the engine's ranking (design §3 ti
 });
 
 describe("recordGame — a scripted game", () => {
-  // Act 1: p0 skims 6 in the Vault every round, p1 skims 1 in the Lobby; p1 and
-  // p2 shake p0 down. Then everyone defaults to the Lobby (6 a round): checkpoints
+  // Act 1: p0 skims 6 in the Vault every round, p1 skims 1 in the Lobby, p2 hands the Lobby's 2 in; p1 and
+  // p2 shake p0 down. Then everyone hands in the Lobby's 2 (6 a round): checkpoints
   // 1 and 2 are met (27 ≥ 18, 45 ≥ 42), the final target is missed (63 < 66).
+  const lobby = (st: GameState) => run(st, move("p0", "lobby"), move("p1", "lobby"), move("p2", "lobby"), roundDeadline(st));
   let s = rookies(3);
-  for (let r = 0; r < 3; r++) s = run(s, move("p0", "vault", 6), move("p1", "lobby", 1), roundDeadline(s));
+  for (let r = 0; r < 3; r++) s = run(s, move("p0", "vault", 6), move("p1", "lobby", 1), move("p2", "lobby"), roundDeadline(s));
   s = meeting(s, 1, [
     { type: "castVote", player: "p1", vote: { kind: "shakedown", target: "p0" } },
     { type: "castVote", player: "p2", vote: { kind: "shakedown", target: "p0" } },
   ]);
-  for (let r = 0; r < 3; r++) s = run(s, roundDeadline(s));
+  for (let r = 0; r < 3; r++) s = lobby(s);
   s = meeting(s, 2);
-  for (let r = 0; r < 3; r++) s = run(s, roundDeadline(s));
+  for (let r = 0; r < 3; r++) s = lobby(s);
   s = meeting(s, 3);
   const rec = recordGame(s, ["greedy", "opportunist", "honest"]);
 
@@ -111,9 +121,9 @@ describe("recordGame — a scripted game", () => {
 
   it("records each seat's looting and pocketing", () => {
     const [p0, p1, p2] = rec.playerRecords;
-    expect(p0).toMatchObject({ id: "p0", personality: "greedy", role: "rookie", looted: 18 + 12, pocketed: 18, stash: 0, timesShakenDown: 1 });
-    expect(p1).toMatchObject({ personality: "opportunist", looted: 18, pocketed: 3, stash: 3, score: 3, winner: false, winCredit: 0 });
-    expect(p2).toMatchObject({ personality: "honest", looted: 18, pocketed: 0 });
+    expect(p0).toMatchObject({ id: "p0", personality: "greedy", role: "rookie", grabbed: 18 + 12, pocketed: 18, stash: 0, timesShakenDown: 1 });
+    expect(p1).toMatchObject({ personality: "opportunist", grabbed: 18, pocketed: 3, stash: 3, score: 3, winner: false, winCredit: 0 });
+    expect(p2).toMatchObject({ personality: "honest", grabbed: 18, pocketed: 0 });
   });
 
   it("refuses a game that isn't over", () => {
@@ -154,7 +164,7 @@ describe("recordGame — bot games agree with the engine's ranking", () => {
         const credit = rec.playerRecords.reduce((t, p) => t + p.winCredit, 0);
         expect(credit).toBeCloseTo(rec.winners.length > 0 ? 1 : 0);
         for (const p of rec.playerRecords) {
-          expect(p.pocketed).toBeLessThanOrEqual(p.looted);
+          expect(p.pocketed).toBeLessThanOrEqual(p.grabbed);
         }
       }
     }

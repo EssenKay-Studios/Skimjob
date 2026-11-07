@@ -41,8 +41,9 @@ function run(state: GameState, ...commands: Command[]): GameState {
   }, state);
 }
 
+/** A submitMove; with no `duffel`, the rest of the room's 1-coin-or-more grab goes into the duffel. */
 const submit = (player: string, move: Record<string, unknown>): Command =>
-  ({ type: "submitMove", player, move: { pocket: 0, ...move } }) as Command;
+  ({ type: "submitMove", player, move: { duffel: 1, pocket: 0, ...move } }) as Command;
 const ROUND = (s: GameState): Command => ({ type: "advance", deadline: { kind: "round", round: s.round } });
 const after = (s: GameState, ...commands: ((s: GameState) => Command)[]): GameState =>
   commands.reduce((st, c) => run(st, c(st)), s);
@@ -56,7 +57,8 @@ describe("validateOverrides — configs are untrusted JSON (design §17.4)", () 
     expect(errs({})).toEqual([]);
     expect(
       errs({
-        rooms: { vault: { loot: 7, heatPressure: 25.5 }, depositBoxes: { capacity: { max: 3, crowdedLoot: 2 } } },
+        rooms: { vault: { coins: 7, heatPressure: 25.5 }, rooftop: { heatPressure: -10 } },
+        bank: { coinsPerPlayer: 20 },
         heat: { max: 120, perRound: 3.5, missedCheckpoint: 10 },
         checkpoints: { perPlayer: [5, 12, 20] },
         shakedown: { cleanBelow: 5, payout: 4 },
@@ -76,15 +78,18 @@ describe("validateOverrides — configs are untrusted JSON (design §17.4)", () 
   });
 
   it("rejects rooms the job doesn't have, including prototype keys from JSON.parse", () => {
-    expect(errs({ rooms: { casinoFloor: { loot: 3 } } })).toEqual(["contentOverrides.rooms.casinoFloor: job bank has no such room"]);
-    expect(errs(JSON.parse('{"rooms":{"__proto__":{"loot":3}}}'))).toHaveLength(1);
-    expect(errs({ rooms: { toString: { loot: 3 } } })).toHaveLength(1);
+    expect(errs({ rooms: { casinoFloor: { coins: 3 } } })).toEqual(["contentOverrides.rooms.casinoFloor: job bank has no such room"]);
+    expect(errs(JSON.parse('{"rooms":{"__proto__":{"coins":3}}}'))).toHaveLength(1);
+    expect(errs({ rooms: { toString: { coins: 3 } } })).toHaveLength(1);
   });
 
-  it("rejects bad numbers: fractions where loot is counted, NaN, Infinity, strings, negatives", () => {
-    expect(errs({ rooms: { vault: { loot: 6.5 } } })).toEqual(["contentOverrides.rooms.vault.loot must be a whole number, 0 or more"]);
-    expect(errs({ rooms: { vault: { loot: -1 } } })).toHaveLength(1);
-    expect(errs({ rooms: { vault: { loot: "6" } } })).toHaveLength(1);
+  it("rejects bad numbers: fractions where coins are counted, NaN, Infinity, strings, negatives", () => {
+    expect(errs({ rooms: { vault: { coins: 6.5 } } })).toEqual(["contentOverrides.rooms.vault.coins must be a whole number, 1 or more"]);
+    expect(errs({ rooms: { vault: { coins: -1 } } })).toHaveLength(1);
+    expect(errs({ rooms: { vault: { coins: "6" } } })).toHaveLength(1);
+    expect(errs({ bank: { coinsPerPlayer: 0 } })).toEqual(["contentOverrides.bank.coinsPerPlayer must be a whole number, 1 or more"]);
+    expect(errs({ bank: { coinsPerPlayer: 2.5 } })).toHaveLength(1);
+    expect(errs({ bank: { perPlayer: 16 } })).toEqual(["contentOverrides.bank.perPlayer is not an overridable field"]);
     expect(errs({ rooms: { vault: { heatPressure: Number.NaN } } })).toHaveLength(1);
     expect(errs({ heat: { perRound: Number.POSITIVE_INFINITY } })).toHaveLength(1);
     expect(errs({ heat: { max: 0 } })).toHaveLength(1);
@@ -110,9 +115,11 @@ describe("validateOverrides — configs are untrusted JSON (design §17.4)", () 
     expect(errs({ checkpoints: { perPlayer: "6,14,22" } })).toHaveLength(1);
   });
 
-  it("capacity only for rooms that have one; powers only for the role that has them", () => {
-    expect(errs({ rooms: { vault: { capacity: { max: 2 } } } })).toEqual(["contentOverrides.rooms.vault.capacity: the Vault has no capacity"]);
-    expect(errs({ rooms: { depositBoxes: { capacity: { max: 0 } } } })).toHaveLength(1);
+  it("a coin room keeps 1 coin or more and a no-coin room stays at 0 (design §3.2); powers only for the role that has them", () => {
+    expect(errs({ rooms: { lobby: { coins: 0 } } })).toEqual(["contentOverrides.rooms.lobby.coins must be a whole number, 1 or more"]);
+    expect(errs({ rooms: { rooftop: { coins: 2 } } })).toEqual(["contentOverrides.rooms.rooftop.coins is not an overridable field"]);
+    expect(errs({ rooms: { security: { coins: 0 } } })).toEqual(["contentOverrides.rooms.security.coins is not an overridable field"]);
+    expect(errs({ rooms: { depositBoxes: { capacity: { max: 2 } } } })).toEqual(["contentOverrides.rooms.depositBoxes.capacity is not an overridable field"]);
     expect(errs({ roles: { hacker: { extraRooms: 2 } } })).toEqual(["contentOverrides.roles.hacker.extraRooms is not an overridable field"]);
     expect(errs({ roles: { lookout: { perAct: 2 } } })).toHaveLength(1);
     expect(errs({ roles: { wizard: { rewardCount: 2 } } })).toEqual(["contentOverrides.roles.wizard: no such role"]);
@@ -123,25 +130,21 @@ describe("validateOverrides — configs are untrusted JSON (design §17.4)", () 
   });
 
   it("event cards: each card tunes only its own effect's numbers (design §10, balance pass 2)", () => {
-    expect(errs({ events: { shiftChange: { lootMultiplier: 2, heatMultiplier: 2 } } })).toEqual([]);
+    expect(errs({ events: { shiftChange: { extraCoins: 2, heatMultiplier: 2 } } })).toEqual([]);
+    expect(errs({ events: { shiftChange: { lootMultiplier: 2 } } })).toEqual(["contentOverrides.events.shiftChange.lootMultiplier is not an overridable field"]);
+    expect(errs({ events: { shiftChange: { extraCoins: 0.5 } } })).toHaveLength(1);
     expect(errs({ events: { shiftChange: { loss: 3 } } })).toEqual(["contentOverrides.events.shiftChange.loss is not an overridable field"]);
     // extension.md "Police activity": Police patrol has left the deck.
     expect(errs({ events: { policePatrol: { amount: 10 } } })).toEqual(["contentOverrides.events.policePatrol: no such event card"]);
     expect(errs({ events: { audit: { amount: 1 } } })).toHaveLength(1);
     expect(errs({ events: { shiftChange: { heatMultiplier: "2" } } })).toHaveLength(1);
-    expect(errs({ events: { shiftChange: { lootMultiplier: Infinity } } })).toHaveLength(1);
+    expect(errs({ events: { shiftChange: { extraCoins: Infinity } } })).toHaveLength(1);
     expect(errs({ events: { meteor: { amount: 1 } } })).toEqual(["contentOverrides.events.meteor: no such event card"]);
     expect(errs({ events: [] })).toHaveLength(1);
     const tuned = overrideEvents(EVENTS, { events: { shiftChange: { heatMultiplier: 3 } } });
-    expect(tuned.shiftChange?.effect).toEqual({ kind: "roomSurge", room: "vault", lootMultiplier: 1.5, heatMultiplier: 3 });
+    expect(tuned.shiftChange?.effect).toEqual({ kind: "roomSurge", room: "vault", extraCoins: 1, heatMultiplier: 3 });
     expect(tuned.audit).toBe(EVENTS.audit);
     expect(eventsFor({ contentOverrides: null })).toBe(EVENTS);
-  });
-
-  it("a crowded room can't pay more than its loot (checkMove bounds pockets by loot, design §6.2)", () => {
-    expect(errs({ rooms: { depositBoxes: { loot: 2 } } })).toEqual(["contentOverrides.rooms.depositBoxes: crowded loot (4) can't be more than loot (2)"]);
-    expect(errs({ rooms: { depositBoxes: { capacity: { crowdedLoot: 6 } } } })).toHaveLength(1);
-    expect(errs({ rooms: { depositBoxes: { loot: 2, capacity: { crowdedLoot: 2 } } } })).toEqual([]);
   });
 
   it("validateConfig reports override errors, and setupEvents refuses them", () => {
@@ -155,9 +158,10 @@ describe("validateOverrides — configs are untrusted JSON (design §17.4)", () 
 describe("merging overrides (design §17.4)", () => {
   it("changes only the named numbers and never the shipped content", () => {
     const before = JSON.stringify([BANK_JOB, ROLES]);
-    const job = overrideJob(BANK_JOB, { rooms: { vault: { loot: 9 }, depositBoxes: { capacity: { crowdedLoot: 1 } } }, heat: { perRound: 2 } });
-    expect(job.rooms.vault).toEqual({ ...BANK_JOB.rooms.vault, loot: 9 });
-    expect(job.rooms.depositBoxes?.capacity).toEqual({ max: 2, crowdedLoot: 1 });
+    const job = overrideJob(BANK_JOB, { rooms: { vault: { coins: 9 } }, bank: { coinsPerPlayer: 5 }, heat: { perRound: 2 } });
+    expect(job.rooms.vault).toEqual({ ...BANK_JOB.rooms.vault, coins: 9 });
+    expect(job.rooms.office).toBe(BANK_JOB.rooms.office);
+    expect(job.bank).toEqual({ coinsPerPlayer: 5 });
     expect(job.heat).toEqual({ ...BANK_JOB.heat, perRound: 2 });
     expect(job.checkpoints).toBe(BANK_JOB.checkpoints);
     const roles = overrideRoles(ROLES, { roles: { lookout: { extraRooms: 2, rewardCount: 3 } } });
@@ -184,14 +188,16 @@ describe("overrides in play (design §17.4)", () => {
     expect(viewFor(s, "p1").ledger[0]?.event).toMatchObject({ contentOverrides: overrides });
   });
 
-  it("room loot and Heat numbers change resolution (design §6, §7)", () => {
-    const s0 = game(config(3, { rooms: { vault: { loot: 9, heatPressure: 0 } }, heat: { perRound: 10 } }));
-    const s1 = after(s0, () => submit("p0", { room: "vault", pocket: 9 }), () => submit("p1", { room: "vault" }), () => submit("p2", { room: "vault" }), ROUND);
+  it("room coins, the bank and Heat numbers change resolution (design §3.1, §6.1)", () => {
+    const s0 = game(config(3, { rooms: { vault: { coins: 9, heatPressure: 0 } }, bank: { coinsPerPlayer: 20 }, heat: { perRound: 10 } }));
+    expect(s0.bank).toBe(60);
+    const s1 = after(s0, () => submit("p0", { room: "vault", duffel: 0, pocket: 9 }), () => submit("p1", { room: "vault", duffel: 9 }), () => submit("p2", { room: "vault", duffel: 9 }), ROUND);
     expect(s1.players.p0?.stash).toBe(9);
     expect(s1.haul).toBe(18);
+    expect(s1.bank).toBe(60 - 27);
     expect(s1.heat).toBe(10);
-    // A pocket above the overridden loot is refused, like the shipped one.
-    expect(handleThroughAlibis(s1, submit("p0", { room: "vault", pocket: 10 })).ok).toBe(false);
+    // A grab above the overridden limit is refused, like the shipped one.
+    expect(handleThroughAlibis(s1, submit("p0", { room: "vault", duffel: 0, pocket: 10 })).ok).toBe(false);
   });
 
   it("checkpoint targets and the missed-checkpoint penalty change (design §11.5)", () => {
@@ -209,7 +215,7 @@ describe("overrides in play (design §17.4)", () => {
     const s0 = game(config(3, { shakedown: { cleanBelow: 10, payout: 2 } }));
     let s = s0;
     for (let i = 0; i < 3; i++) {
-      s = after(s, () => submit("p0", { room: "vault", pocket: i === 0 ? 6 : 0 }), () => submit("p1", { room: "lobby" }), () => submit("p2", { room: "lobby" }), ROUND);
+      s = after(s, () => submit("p0", { room: "vault", duffel: i < 2 ? 0 : 3, pocket: i < 2 ? 3 : 0 }), () => submit("p1", { room: "lobby" }), () => submit("p2", { room: "lobby" }), ROUND);
     }
     s = run(s, { type: "scheduleMeeting", act: 1, slot: "x" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: "act-1" } });
     s = run(

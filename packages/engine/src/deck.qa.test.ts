@@ -11,6 +11,7 @@ import { replay } from "./reduce";
 import { handleCommand } from "./handle";
 import { viewFor } from "./view";
 import { closedRoom } from "./deck";
+import { fullGrab } from "./grab.testkit";
 
 function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
   return {
@@ -42,7 +43,7 @@ function run(state: GameState, ...commands: unknown[]): GameState {
   }, state);
 }
 
-const move = (player: PlayerId, room: RoomId, pocket = 0, rest: Record<string, unknown> = {}) => ({ type: "submitMove", player, move: { room, pocket, ...rest } });
+const move = (player: PlayerId, room: RoomId, pocket = 0, rest: Record<string, unknown> = {}) => ({ type: "submitMove", player, move: { ...fullGrab(room, pocket), ...rest } });
 const refused = (s: GameState, c: unknown) => !handleThroughAlibis(s, c).ok;
 
 /** Everyone not in `moves` goes to the Office (Lobby if the Office is closed); `skip` players submit nothing. */
@@ -50,7 +51,7 @@ function resolve(state: GameState, moves: Record<PlayerId, Record<string, unknow
   let s = state;
   for (const id of s.playerOrder) {
     if (skip.includes(id)) continue;
-    s = run(s, { type: "submitMove", player: id, move: moves[id] ?? { room: closedRoom(s) === "office" ? "lobby" : "office", pocket: 0 } });
+    s = run(s, { type: "submitMove", player: id, move: moves[id] ?? fullGrab(closedRoom(s) === "office" ? "lobby" : "office") });
   }
   return run(s, { type: "advance", deadline: { kind: "round", round: s.round } });
 }
@@ -97,26 +98,28 @@ const roundResolved = (s: GameState) => find(lastResolution(s), "roundResolved")
 
 describe("QA: room surges — design §10", () => {
   // design §10: at 3 players the surge's extra Heat is scaled by 3/5, so the Vault's ×2 pressure is ×1.6 (32 per visitor).
-  it("Shift change: two of three in the Vault → Heat round(4 + 2·32/3) = 25 (15 for one); 12 accepted, 13 refused; next round back to 6", () => {
+  it("Shift change: two of three in the Vault → Heat round(4 + 2·32/3) = 25 (15 for one); 4 coins accepted, 5 refused; next round back to 3", () => {
+    const grab = (n: number) => ({ room: "vault", duffel: 0, pocket: n });
     const base = withCard(resolve(game(3)), "shiftChange");
-    expect(refused(base, move("p0", "vault", 13))).toBe(true);
+    expect(refused(base, { type: "submitMove", player: "p0", move: grab(5) })).toBe(true);
     const h0 = base.heat;
-    const two = resolve(base, { p0: { room: "vault", pocket: 12 }, p1: { room: "vault", pocket: 0 } });
+    const two = resolve(base, { p0: grab(4), p1: { room: "vault", duffel: 4, pocket: 0 } });
     expect(two.heat - h0).toBe(25);
-    expect(find(lastResolution(two), "lootSplit").filter((e) => e.room === "vault").map((e) => e.loot)).toEqual([12, 12]);
-    const one = resolve(base, { p0: { room: "vault", pocket: 0 } });
+    expect(find(lastResolution(two), "coinsGrabbed").filter((e) => e.room === "vault").map((e) => e.duffel + e.pocket)).toEqual([4, 4]);
+    const one = resolve(base, { p0: { room: "vault", duffel: 1, pocket: 0 } });
     expect(one.heat - h0).toBe(15);
-    // The card is gone next round: with another card the Vault is back to 6.
-    expect(refused(withCard(two, "audit"), move("p0", "vault", 7))).toBe(true);
+    // The card is gone next round: with another card the Vault is back to 3.
+    expect(refused(withCard(two, "audit"), { type: "submitMove", player: "p0", move: grab(4) })).toBe(true);
   });
 
   it("Shift change leaves the Deposit boxes and Manager's office alone (12 players)", () => {
     const base = withCard(resolve(game(12)), "shiftChange");
     const h0 = base.heat;
-    const s = resolve(base, { p0: { room: "depositBoxes", pocket: 5 }, p1: { room: "managersOffice", pocket: 3 } });
+    const s = resolve(base, { p0: fullGrab("depositBoxes", 2), p1: fullGrab("managersOffice", 2) });
     // round(4 + (10 + 10)/12) = 6.
     expect(s.heat - h0).toBe(6);
-    expect(refused(base, move("p0", "depositBoxes", 6))).toBe(true);
+    expect(refused(base, move("p0", "depositBoxes", 3))).toBe(true);
+    expect(refused(base, move("p0", "managersOffice", 3))).toBe(true);
   });
 });
 
@@ -134,10 +137,10 @@ describe("QA: Lockdown vs moves — design §10", () => {
   });
 
   it("a refused move to the closed room doesn't replace an earlier valid move", () => {
-    const s = run(withCard(resolve(game(3)), "lockdown", "vault"), move("p0", "office", 3));
-    expect(refused(s, move("p0", "vault", 6))).toBe(true);
+    const s = run(withCard(resolve(game(3)), "lockdown", "vault"), move("p0", "office", 2));
+    expect(refused(s, move("p0", "vault", 3))).toBe(true);
     const done = resolve(s, {}, ["p0"]);
-    expect(find(lastResolution(done), "lootSplit").find((e) => e.player === "p0")).toMatchObject({ room: "office", toStash: 3 });
+    expect(find(lastResolution(done), "coinsGrabbed").find((e) => e.player === "p0")).toMatchObject({ room: "office", duffel: 0, pocket: 2 });
   });
 
   it("the drawn closed room is never the Lobby at 3, 5 and 12 players", () => {
@@ -152,24 +155,24 @@ describe("QA: Lockdown vs moves — design §10", () => {
 });
 
 describe("QA: Audit numbers — design §10", () => {
-  it("crowded Deposit boxes: shortfalls are what was actually kept; they sum to the pockets, and pockets + Haul = loot", () => {
+  it("shortfalls are what was actually pocketed; they sum to the pockets, and pockets + Haul = coins grabbed", () => {
     const base = withCard(resolve(game(6, ["priest"])), "audit");
     const s = resolve(base, {
-      p0: { room: "vault", pocket: 0 }, // hands in all 6
-      p1: { room: "depositBoxes", pocket: 5 },
-      p2: { room: "depositBoxes", pocket: 5 },
-      p3: { room: "depositBoxes", pocket: 1 },
-      p4: { room: "serverRoom", pocket: 0 },
+      p0: fullGrab("vault"), // hands in all 3
+      p1: fullGrab("depositBoxes", 2),
+      p2: fullGrab("depositBoxes", 2),
+      p3: fullGrab("depositBoxes", 1),
+      p4: fullGrab("serverRoom"),
     });
     const events = lastResolution(s);
     const audit = find(events, "auditReport")[0];
-    const splits = find(events, "lootSplit");
+    const splits = find(events, "coinsGrabbed");
     expect(Object.keys(audit?.shortfalls ?? {}).sort()).toEqual([...s.rooms].sort());
-    // Three in the Deposit boxes (max 2) yield 4 each (R5; was 3): kept 4 + 4 + 1.
-    expect(audit?.shortfalls).toMatchObject({ vault: 0, depositBoxes: 9, office: 0, serverRoom: 0 });
-    const kept = splits.reduce((n, e) => n + e.toStash, 0);
+    // Three in the Deposit boxes each grab 2 (no room is shared, design §3.1): kept 2 + 2 + 1.
+    expect(audit?.shortfalls).toMatchObject({ vault: 0, depositBoxes: 5, office: 0, serverRoom: 0 });
+    const kept = splits.reduce((n, e) => n + e.pocket, 0);
     expect(Object.values(audit?.shortfalls ?? {}).reduce((a, b) => a + b, 0)).toBe(kept);
-    expect(kept + roundResolved(s).haulDelta).toBe(splits.reduce((n, e) => n + e.loot, 0));
+    expect(kept + roundResolved(s).haulDelta).toBe(splits.reduce((n, e) => n + e.duffel + e.pocket, 0));
   });
 });
 
@@ -214,7 +217,7 @@ describe("QA: determinism and event sourcing — design §17.2", () => {
   it("same seed + same commands → identical log; replaying the log rebuilds the same state (with a pocket and a tip)", () => {
     const play = () => {
       let s = createGame(config(4, { seed: "det-qa" }));
-      s = resolve(s, { p0: { room: "office", pocket: 3 } });
+      s = resolve(s, { p0: fullGrab("office", 2) });
       s = resolve(withCard(s, "insideTip"));
       return playThrough(s);
     };

@@ -64,7 +64,7 @@ function ownRoom(view: PlayerView, round: number): RoomId | null {
   let room: RoomId | null = null;
   for (const { event: e } of view.caseFile) {
     if (!("round" in e) || e.round !== round || !("player" in e) || e.player !== view.me.id) continue;
-    if (e.type === "roomSighting" || e.type === "lootSplit") return e.room;
+    if (e.type === "roomSighting" || e.type === "coinsGrabbed") return e.room;
     if (e.type === "moveSubmitted" || e.type === "defaultMoveAssigned") room = e.move.room;
   }
   return room;

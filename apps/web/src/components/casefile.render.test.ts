@@ -32,9 +32,9 @@ function run(state: GameState, ...commands: (PlayerCommand | SystemCommand)[]): 
 }
 const game = run(
   createGame(config),
-  { type: "submitMove", player: "p1", move: { room: "office", pocket: 0 } },
-  { type: "submitMove", player: "p2", move: { room: "vault", pocket: 3 } },
-  { type: "submitMove", player: "p3", move: { room: "lobby", pocket: 0 } },
+  { type: "submitMove", player: "p1", move: { room: "office", duffel: 2, pocket: 0 } },
+  { type: "submitMove", player: "p2", move: { room: "vault", duffel: 0, pocket: 3 } },
+  { type: "submitMove", player: "p3", move: { room: "lobby", duffel: 1, pocket: 0 } },
   { type: "advance", deadline: { kind: "round", round: 1 } },
 );
 const html = (el: Parameters<typeof renderToStaticMarkup>[0]) => renderToStaticMarkup(el);

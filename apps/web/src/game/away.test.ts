@@ -5,6 +5,7 @@ import { createGame, eventsSince, handleCommand, viewFor, type GameConfig, type 
 import { describe, expect, it } from "vitest";
 import { nextUp, recap, recapItems, RECAP_MAX_LINES, topSeq } from "./away";
 import { namesOf } from "./hud";
+import { BANK_JOB } from "@skimjob/content";
 
 const config = (n = 5, extra: Partial<GameConfig> = {}): GameConfig => ({
   seed: "away-test",
@@ -26,7 +27,7 @@ function run(state: GameState, ...commands: (PlayerCommand | SystemCommand)[]): 
   return state;
 }
 const ids = (s: GameState) => s.config.players.map((p) => p.id);
-const allMove = (s: GameState, room = "office") => run(s, ...ids(s).map((p) => ({ type: "submitMove", player: p, move: { room, pocket: 0 } }) as PlayerCommand));
+const allMove = (s: GameState, room = "office") => run(s, ...ids(s).map((p) => ({ type: "submitMove", player: p, move: { room, duffel: BANK_JOB.rooms[room]?.coins ?? 0, pocket: 0 } }) as PlayerCommand));
 const round = (r: number): SystemCommand => ({ type: "advance", deadline: { kind: "round", round: r } });
 const alibisClose = (r: number): SystemCommand => ({ type: "advance", deadline: { kind: "alibis", round: r } });
 const open = (id: string): SystemCommand => ({ type: "advance", deadline: { kind: "openMeeting", meetingId: id } });
@@ -53,7 +54,7 @@ describe("while you were away (design §13)", () => {
   it("says nothing when nothing happened, or only lock-in marks", () => {
     const s = createGame(config());
     expect(recapBetween(s, s)).toEqual([]);
-    const locked = run(s, { type: "submitMove", player: "p2", move: { room: "vault", pocket: 0 } });
+    const locked = run(s, { type: "submitMove", player: "p2", move: { room: "vault", duffel: 3, pocket: 0 } });
     expect(recapBetween(s, locked)).toEqual([]);
   });
 
@@ -107,7 +108,7 @@ describe("while you were away (design §13)", () => {
   it("your case file: one entry in full, several as a count; your own moves aren't news", () => {
     const s = createGame(config());
     // Everyone goes to the Security room and watches the vault: a sighting and a camera result each.
-    const after = run(s, ...ids(s).map((p) => ({ type: "submitMove", player: p, move: { room: "security", pocket: 0, watch: "vault" } }) as PlayerCommand), round(1));
+    const after = run(s, ...ids(s).map((p) => ({ type: "submitMove", player: p, move: { room: "security", duffel: 0, pocket: 0, watch: "vault" } }) as PlayerCommand), round(1));
     const lines = recapBetween(s, after);
     const news = lines.filter((l) => /case file|^Only you:/.test(l));
     expect(news).toHaveLength(1);
@@ -133,7 +134,7 @@ function step(s: GameState): GameState {
     const rooms = s.rooms.filter((r) => !(s.card?.round === p.round && s.card.room === r));
     for (const [i, id] of ids(s).entries()) {
       const room = rooms[(i + p.round) % rooms.length]!;
-      const r = handleCommand(s, { type: "submitMove", player: id, move: { room, pocket: i % 2, ...(room === "security" ? { watch: rooms[0] } : {}) } } as PlayerCommand);
+      const r = handleCommand(s, { type: "submitMove", player: id, move: { room, duffel: Math.max(0, (BANK_JOB.rooms[room]?.coins ?? 0) - (i % 2)), pocket: i % 2, ...(room === "security" ? { watch: rooms[0] } : {}) } } as PlayerCommand);
       if (r.ok) s = r.state;
     }
     return run(s, round(p.round));

@@ -11,6 +11,7 @@ import { V01_NUMBERS } from "./v01-numbers.testkit";
 import { outcomeFor, ranking } from "./end";
 import { checkpointTarget } from "./job";
 import { jobFor } from "./overrides";
+import { fullGrab } from "./grab.testkit";
 
 function config(players: number): GameConfig {
   return {
@@ -46,7 +47,7 @@ function run(state: GameState, ...commands: Cmd[]): GameState {
   }, state);
 }
 
-const mv = (player: string, room: string, pocket = 0, extra: object = {}) => ({ type: "submitMove", player, move: { room, pocket, ...extra } });
+const mv = (player: string, room: string, pocket = 0, extra: object = {}) => ({ type: "submitMove", player, move: { ...fullGrab(room, pocket, V01_NUMBERS), ...extra } });
 const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
 const sched = (act: number) => ({ type: "scheduleMeeting", act, slot: "slot" });
 const OPEN = (s: GameState) => ({ type: "advance", deadline: { kind: "openMeeting", meetingId: s.scheduledMeeting?.meetingId } });
@@ -163,7 +164,7 @@ describe("a failed heist — design §3, §19.1", () => {
 
   it("a raid from the missed-checkpoint penalty is ranked after the meeting's shakedown", () => {
     let s = { ...game(3), heat: 80 };
-    for (let i = 0; i < 3; i++) s = run(s, mv("p0", "lobby", 2), ROUND); // p1 and p2 default to the Lobby: Haul 12 of 18, Heat 92
+    for (let i = 0; i < 3; i++) s = run(s, mv("p0", "lobby", 2), mv("p1", "lobby"), mv("p2", "lobby"), ROUND); // p1 and p2 hand in the Lobby's 2: Haul 12 of 18, Heat 92
     s = run(s, sched(1), OPEN, vote("p0", "p1"), vote("p2", "p1"), CLOSE, RESOLVE); // p1 is clean: paid 8 from the Haul (12 → 4), checkpoint missed
     expect(s.log.slice(-3).map((e) => e.type)).toEqual(["checkpointChecked", "copsRaided", "gameEnded"]);
     const o = outcome(s);
