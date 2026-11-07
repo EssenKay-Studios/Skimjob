@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "r
 import { eventsSince, type PlayerId, type PlayerView } from "@skimjob/engine";
 import { api, ApiError, sentence } from "../api";
 import { recap, topSeq } from "./away";
+import { togglePin } from "./caseBoard";
 import type { DescribeContext } from "./describeEvent";
 
 export const SUSPICION_TAGS = ["trusted", "unsure", "suspicious"] as const;
@@ -23,6 +24,7 @@ export type Board = Readonly<Record<PlayerId, BoardMark>>;
 interface SeatNotes {
   readonly lastSeen: number;
   readonly board: Board;
+  readonly pins: readonly string[];
 }
 
 /** The board and a way to change one mark; `error` if it couldn't be loaded. */
@@ -271,4 +273,52 @@ export function useSuspicionBoard(gameId: string): BoardChannel {
     [gameId],
   );
   return useMemo(() => ({ board, error, save }), [board, error, save]);
+}
+
+/** The case board's pins (design §15.4): loaded once, private to this seat, saved as one list. */
+export interface PinsChannel {
+  readonly pins: ReadonlySet<string>;
+  /** Null until loaded; pinning waits for the load, so it can't overwrite saved pins. */
+  readonly ready: boolean;
+  readonly error: string | null;
+  readonly toggle: (id: string) => void;
+}
+
+export function usePins(gameId: string): PinsChannel {
+  const [list, setList] = useState<readonly string[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const latest = useRef<readonly string[] | null>(null);
+  useEffect(() => {
+    let live = true;
+    api<SeatNotes>("GET", `/games/${encodeURIComponent(gameId)}/notes`).then(
+      (n) => {
+        if (!live) return;
+        latest.current = n.pins;
+        setList(n.pins);
+      },
+      (e: unknown) => live && setError(why(e)),
+    );
+    return () => {
+      live = false;
+    };
+  }, [gameId]);
+  const toggle = useCallback(
+    (id: string) => {
+      const before = latest.current;
+      if (!before) return;
+      const next = togglePin(before, id);
+      latest.current = next;
+      setList(next);
+      setError(null);
+      api("PUT", `/games/${encodeURIComponent(gameId)}/notes/pins`, { pins: next }).catch((e: unknown) => {
+        // Undo only this change; a newer one made meanwhile stands.
+        latest.current = latest.current === next ? before : latest.current;
+        setList(latest.current);
+        setError(why(e));
+      });
+    },
+    [gameId],
+  );
+  const pins = useMemo(() => new Set(list ?? []), [list]);
+  return useMemo(() => ({ pins, ready: list !== null, error, toggle }), [pins, list, error, toggle]);
 }

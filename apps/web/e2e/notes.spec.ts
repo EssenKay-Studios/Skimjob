@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { startGame } from "./setupGame";
 
 // M2-10: "While you were away" (design §13), the suspicion board (§12.3) and
-// the ledger / case file sheet with its filters, at every launch width.
+// the case board, at every launch width.
 
 const VIEWPORTS = [
   { width: 360, height: 740 },
@@ -108,7 +108,6 @@ test("a hidden tab coming back to the front shows the recap, and the missed even
   await guest.getByRole("button", { name: "Call an emergency meeting" }).click();
   await guest.getByRole("button", { name: "Sure? Tap again to call it" }).click();
   // It reaches the hidden tab's view, but nobody is looking: the mark stays put.
-  await expect(host.getByRole("list", { name: "Ledger" })).toContainText("Guest 1 called an emergency meeting.");
   await host.waitForTimeout(2500);
   expect(await lastSeen()).toBe(before);
   // Away long enough to count (AWAY_MIN_HIDDEN_MS, 10 s): a quick tab switch gets no recap.
@@ -150,7 +149,7 @@ async function smallTargets(page: Page) {
 const overflow = (page: Page) => page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth, viewport: window.innerWidth }));
 
 for (const viewport of VIEWPORTS) {
-  test(`recap, case file filters and the board at ${viewport.width}x${viewport.height}: no overflow, targets ≥44px @caseboard`, async ({ browser }, info) => {
+  test(`recap, the case board and the suspicion board at ${viewport.width}x${viewport.height}: no overflow, targets ≥44px @caseboard`, async ({ browser }, info) => {
     test.skip(info.project.name !== "mobile", "viewports are set per test");
     const ctx = await browser.newContext({ viewport, hasTouch: viewport.width < 1024, isMobile: viewport.width < 1024 });
     const page = await ctx.newPage();
@@ -163,11 +162,7 @@ for (const viewport of VIEWPORTS) {
     const box = await recap.boundingBox();
     expect(box!.y).toBeLessThan(200);
 
-    const sheet = page.getByRole("region", { name: "Ledger and case file" });
-    await sheet.getByRole("button", { name: /^Both/ }).click();
-    await sheet.getByRole("group", { name: "Rounds" }).getByRole("button", { name: "Rounds 1–3" }).click();
-    await sheet.getByRole("group", { name: "Round" }).getByRole("button", { name: "Round 1" }).click();
-    await expect(sheet.getByRole("list", { name: "Ledger and case file" })).toContainText("Round 1");
+    await expect(page.getByRole("region", { name: "Case board" })).toBeVisible();
 
     const board = page.getByRole("region", { name: "Your suspicion board" });
     const first = board.getByRole("group").first();

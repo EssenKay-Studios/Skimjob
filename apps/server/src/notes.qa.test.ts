@@ -137,7 +137,7 @@ describe("QA: another seat, another game, not seated (design §12.3, §13)", () 
     expect((await seen(lobby.id, host, { seq: 0 })).status).toBe(404);
     expect((await board(lobby.id, host, { subject: "p2", tag: "trusted" })).status).toBe(404);
     // Nothing was written by any of it.
-    expect(await notes(g.id, a!.who)).toEqual({ lastSeen: -1, board: {} });
+    expect(await notes(g.id, a!.who)).toEqual({ lastSeen: -1, board: {}, pins: [] });
   });
 });
 
@@ -172,7 +172,7 @@ describe("QA: bad bodies are 4xx, never 500 or a write", () => {
     for (const p of [{ subject: b!.player, tag: "trusted", note: 7 }, { subject: b!.player, tag: ["trusted"] }, { subject: b!.player, tag: "TRUSTED" }, { subject: [b!.player], tag: "trusted" }, { subject: "__proto__", tag: "trusted" }, { subject: "constructor", tag: "trusted" }, { tag: "trusted" }, {}]) {
       expect((await board(g.id, a!.who, p)).status, JSON.stringify(p)).toBe(400);
     }
-    expect(await notes(g.id, a!.who)).toEqual({ lastSeen: -1, board: {} });
+    expect(await notes(g.id, a!.who)).toEqual({ lastSeen: -1, board: {}, pins: [] });
   });
 
   it("-1 is allowed (and changes nothing); a seq only ever grows, also under a race", async () => {

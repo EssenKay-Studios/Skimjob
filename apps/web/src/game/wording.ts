@@ -9,7 +9,5 @@ export const meetingName = (act: number): string => (act >= 3 ? "the final meeti
 export const MeetingName = (act: number): string => (act >= 3 ? "Final meeting" : `Meeting ${act}`);
 /** The last round before that meeting (3, 6, 9). */
 export const meetingAfter = (act: number): number => act * ROUNDS_PER_ACT;
-/** "Rounds 1–3" for stretch `act`. */
-export const stretchName = (act: number): string => `Rounds ${meetingAfter(act - 1) + 1}–${meetingAfter(act)}`;
 /** The Haul target checked at that meeting: "Meeting 1 target", "Final target". */
 export const targetName = (act: number): string => (act >= 3 ? "Final target" : `Meeting ${act} target`);

@@ -9,7 +9,7 @@ import type { Db } from "./db";
 import type { LobbyView } from "./lobby";
 import { topSeq, type SeatNotes } from "./notes";
 import { buildServer } from "./server";
-import { BOARD_NOTE_MAX_CHARS } from "./settings";
+import { BOARD_NOTE_MAX_CHARS, BOARD_RATE, PINS_MAX } from "./settings";
 import { createGameStore, type GameStore } from "./store";
 import { testDb } from "./testkit";
 
@@ -57,7 +57,7 @@ describe("last seen seq (design §13, while you were away)", () => {
   it("starts at -1, only moves forward, and never past the seat's own view", async () => {
     const { id, humans } = await startGame(2);
     const [a, b] = humans;
-    expect(await notes(id, a!.who)).toEqual({ lastSeen: -1, board: {} });
+    expect(await notes(id, a!.who)).toEqual({ lastSeen: -1, board: {}, pins: [] });
     const top = topSeq((await store.load(id))!, a!.player);
     expect(top).toBeGreaterThan(0);
 
@@ -146,5 +146,55 @@ describe("suspicion board (design §12.3)", () => {
     }
     ws.close();
     wsA.close();
+  });
+});
+
+describe("case board pins (design §15.4)", () => {
+  it("keeps the seat's pinned ids across reads, private to the seat", async () => {
+    const { id, humans } = await startGame(2);
+    const [a, b] = humans;
+    const put = (who: string, payload: unknown) => app.inject({ method: "PUT", url: `/games/${id}/notes/pins`, payload: payload as object, cookies: { [SESSION_COOKIE]: who } });
+    expect((await put(a!.who, { pins: ["lead:r4.vault", "fact:r4.vault.2"] })).json()).toEqual({ pins: ["lead:r4.vault", "fact:r4.vault.2"] });
+    expect((await notes(id, a!.who)).pins).toEqual(["lead:r4.vault", "fact:r4.vault.2"]);
+    // A change replaces the list; unpinning everything empties it.
+    await put(a!.who, { pins: ["fact:r4.vault.2"] });
+    expect((await notes(id, a!.who)).pins).toEqual(["fact:r4.vault.2"]);
+    expect((await notes(id, b!.who)).pins).toEqual([]);
+    await put(a!.who, { pins: [] });
+    expect((await notes(id, a!.who)).pins).toEqual([]);
+  });
+
+  it("refuses bad lists, extra fields, strangers and the signed out", async () => {
+    const { id, humans } = await startGame(1);
+    const put = (who: string | null, payload: unknown) => app.inject({ method: "PUT", url: `/games/${id}/notes/pins`, payload: payload as object, cookies: who ? { [SESSION_COOKIE]: who } : {} });
+    const who = humans[0]!.who;
+    for (const pins of ["x", [1], ["has space"], ["a", "a"], [""], ["x".repeat(81)], Array.from({ length: PINS_MAX + 1 }, (_, i) => `p${i}`)]) {
+      expect((await put(who, { pins })).statusCode, JSON.stringify(pins).slice(0, 40)).toBe(400);
+    }
+    expect((await put(who, { pins: [], extra: 1 })).statusCode).toBe(400);
+    expect((await put(who, { pins: Array.from({ length: PINS_MAX }, (_, i) => `p${i}`) })).statusCode).toBe(200);
+    expect((await put(null, { pins: [] })).statusCode).toBe(401);
+    const stranger = (await call("POST", "/auth/guest", null, { nickname: "Nosy" })).session!;
+    expect((await put(stranger, { pins: [] })).statusCode).toBe(404);
+  });
+});
+
+describe("write limits (follow-up #114)", () => {
+  it("allows BOARD_RATE.writes board edits and pin changes per window per seat, then 429 until the window passes", async () => {
+    const { id, humans } = await startGame(2);
+    const [a, b] = humans;
+    const edit = (who: string) => call("PATCH", `/games/${id}/notes/board`, who, { subject: b!.player, tag: "unsure" });
+    const pin = (who: string) => app.inject({ method: "PUT", url: `/games/${id}/notes/pins`, payload: { pins: [] }, cookies: { [SESSION_COOKIE]: who } });
+    for (let i = 0; i < BOARD_RATE.writes; i++) {
+      expect((await edit(a!.who)).status).toBe(200);
+      expect((await pin(a!.who)).statusCode).toBe(200);
+    }
+    expect((await edit(a!.who)).status).toBe(429);
+    expect((await pin(a!.who)).statusCode).toBe(429);
+    // Per seat: the other seat is not slowed down.
+    expect((await call("PATCH", `/games/${id}/notes/board`, b!.who, { subject: a!.player, tag: "unsure" })).status).toBe(200);
+    clock.advance(BOARD_RATE.windowMs + 1);
+    expect((await edit(a!.who)).status).toBe(200);
+    expect((await pin(a!.who)).statusCode).toBe(200);
   });
 });

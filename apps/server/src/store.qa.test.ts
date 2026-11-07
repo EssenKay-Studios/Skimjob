@@ -189,7 +189,7 @@ describe("QA: migrations", () => {
     const fresh = await freshDb();
     try {
       const runs = await Promise.all([migrate(fresh), migrate(fresh), migrate(fresh)]);
-      const all = ["001_init.sql", "002_identity.sql", "003_chat.sql", "004_deadline_pause.sql", "005_bot_seen.sql", "006_seat_last_seen.sql", "007_suspicion_board.sql", "008_host_controls.sql", "009_tips.sql", "010_plan_board.sql"];
+      const all = ["001_init.sql", "002_identity.sql", "003_chat.sql", "004_deadline_pause.sql", "005_bot_seen.sql", "006_seat_last_seen.sql", "007_suspicion_board.sql", "008_host_controls.sql", "009_tips.sql", "010_plan_board.sql", "011_case_pins.sql"];
       expect(runs.flat().sort()).toEqual(all);
       expect(await fresh.query("select version from schema_migrations order by version")).toEqual(all.map((version) => ({ version })));
       expect(await migrate(fresh)).toEqual([]);

@@ -42,10 +42,6 @@ test("a 15-min game with events on, played to the end: kept cards flip, no dropp
     }
     await page.waitForTimeout(250);
   }
-  const ledger = page.getByRole("list", { name: "Ledger" });
-  await expect(ledger).toContainText(KEPT);
-  seen.push(await text(page));
-  await page.getByRole("button", { name: /Case file/ }).click();
   seen.push(await text(page));
   for (const t of seen) expect(t).not.toMatch(DROPPED);
   expect(errors).toEqual([]);

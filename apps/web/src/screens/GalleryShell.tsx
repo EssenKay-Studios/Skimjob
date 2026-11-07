@@ -8,6 +8,7 @@ import { GameShell, type ShellPanel } from "../components/GameShell";
 import { ArrowBack, Bubble, Clock, Door, Evidence, Star } from "../components/icons";
 import { SketchFrame } from "../components/SketchFrame";
 import { Underline } from "../components/Underline";
+import { CaseBoardDemo } from "./GalleryNotes";
 import { navigate } from "../router";
 import { TopBar } from "./TopBar";
 
@@ -15,7 +16,7 @@ const Placeholder = ({ children }: { children: ReactNode }) => <p className="met
 
 const PANELS: readonly ShellPanel[] = [
   { id: "crew", title: "Crew", place: "left", tab: { icon: <Star /> }, node: <Placeholder>Seats and who has locked in.</Placeholder> },
-  { id: "case", title: "Case", place: "left", tab: { icon: <Evidence /> }, node: <Placeholder>The case board.</Placeholder> },
+  { id: "case", title: "Case", place: "left", tab: { icon: <Evidence /> }, node: <CaseBoardDemo seed="shell-case" /> },
   { id: "chat", title: "Chat", place: "left", tab: { icon: <Bubble />, badge: 3 }, node: <Placeholder>The crew chat.</Placeholder> },
   { id: "plan", title: "Plan board", place: "centre", tab: { icon: <Door /> }, node: <Placeholder>Who says they are going where.</Placeholder> },
   { id: "round", title: "This round", place: "right", tab: { icon: <Clock /> }, node: <Placeholder>Your move and its preview.</Placeholder> },

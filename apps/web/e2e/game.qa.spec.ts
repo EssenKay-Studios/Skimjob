@@ -190,9 +190,6 @@ test("12 seats, 24-char names: a 15-min game to the end with moves changed, alib
   await expect(host.locator(".over__stamp")).toHaveText(/JOB DONE|BUSTED/);
   await once("over", host);
   await once("over-guest", guest);
-  await guest.getByRole("button", { name: /Case file/ }).click();
-  await expect(guest.getByRole("list", { name: "Case file" })).toContainText("You missed round 1's deadline");
-  await once("over-guest-casefile", guest);
 
   expect(changed, "moves changed after locking").toBeGreaterThan(0);
   expect(alibis, "alibis posted").toBeGreaterThan(0);
@@ -207,7 +204,6 @@ const clock = (t: string | null) => {
   const m = /(?:(\d+)h\s*)?(\d+):(\d\d)/.exec(t ?? "");
   return m ? Number(m[1] ?? 0) * 3600 + Number(m[2]) * 60 + Number(m[3]) : NaN;
 };
-const ledgerRows = (p: Page) => p.getByRole("list", { name: "Ledger" }).locator(".records__row").allTextContents();
 
 test("reloads, a killed socket, a skewed clock and a late alibi (3h preset: 102 s rounds, 6 s alibi window) @move", async ({ browser }, info) => {
   test.skip(info.project.name !== "desktop", "one viewport is enough for the channel behaviour");
@@ -255,16 +251,11 @@ test("reloads, a killed socket, a skewed clock and a late alibi (3h preset: 102 
   expect(Math.abs(hostT - guestT), `host ${hostT}s, skewed guest ${guestT}s`).toBeLessThanOrEqual(2);
   await shot(guest, "skewed-clock");
 
-  // Kill the socket: banner, reconnect, and the ledger matches a fresh load (no duplicates).
-  const ledger0 = await ledgerRows(host);
+  // Kill the socket: banner, then reconnect.
   routes.at(-1)!.close({ code: 4000, reason: "qa kill" });
   await expect(host.getByText("Reconnecting…")).toBeVisible();
   await shot(host, "reconnecting");
   await expect(host.getByText("Reconnecting…")).toBeHidden({ timeout: 15_000 });
-  const ledger1 = await ledgerRows(host);
-  expect(ledger1).toEqual(ledger0);
-  const count = Number(/\d+/.exec((await host.getByRole("button", { name: /Ledger/ }).textContent()) ?? "")?.[0]);
-  expect(ledger1.filter((t) => t !== "Nothing yet.").length).toBe(count);
   await expect(status).toHaveText(before!);
 
   // Round 1 resolves (≈102 s). The guest reloads mid-alibi window and the panel comes back.
@@ -289,7 +280,7 @@ test("reloads, a killed socket, a skewed clock and a late alibi (3h preset: 102 
   freeze = false;
   await host.reload();
   await expect(host.getByRole("heading", { name: "Round 2 · Pick your room", level: 2 })).toBeVisible();
-  await expect(host.getByRole("list", { name: "Ledger" })).not.toContainText("You say you were in the Office");
+  await expect(host.getByText("You say you were in the Office")).toHaveCount(0);
   await hostCtx.close();
   await guestCtx.close();
 });
