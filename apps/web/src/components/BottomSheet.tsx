@@ -22,6 +22,9 @@ export function BottomSheet({ open, onClose, title, seed, children }: BottomShee
     if (!d) return;
     if (open && !d.open) d.showModal();
     if (!open && d.open) d.close();
+    if (!open) return;
+    document.documentElement.classList.add("sheet-open");
+    return () => document.documentElement.classList.remove("sheet-open");
   }, [open]);
   return (
     <dialog

@@ -134,3 +134,47 @@ test("bottom sheet: no slide under reduced motion, and the gallery section opens
   await expect(opener).toBeFocused();
   await ctx.close();
 });
+
+// QA round 2: the plan board keeps its size on short laptop windows (the column scrolls instead).
+for (const viewport of [
+  { width: 1366, height: 768 },
+  { width: 1280, height: 600 },
+]) {
+  test(`plan board at ${viewport.width}x${viewport.height} keeps its heading inside its frame @shell`, async ({ browser }) => {
+    const ctx = await browser.newContext({ viewport });
+    const page = await ctx.newPage();
+    await page.goto("/dev/gallery/shell");
+    await expect(page.getByRole("heading", { name: "Plan board" })).toBeAttached();
+    await settle(page);
+    const plan = await box(page, ".shell__plan");
+    const head = (await page.getByRole("heading", { name: "Plan board" }).boundingBox())!;
+    expect(plan.height).toBeGreaterThanOrEqual(160);
+    expect(head.y + head.height).toBeLessThanOrEqual(plan.y + plan.height);
+    expect(await page.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight)).toBe(true);
+    await ctx.close();
+  });
+}
+
+test("a sheet locks the page behind it and gives the scroll back on close @shell", async ({ browser }) => {
+  const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, hasTouch: true, isMobile: true });
+  const page = await ctx.newPage();
+  await page.goto("/dev/gallery/shell");
+  await expect(page.getByText("The bank board")).toBeVisible();
+  await page.evaluate(() => window.scrollTo(0, 120));
+  const before = await page.evaluate(() => window.scrollY);
+  expect(before).toBeGreaterThan(0);
+  await page.getByRole("navigation", { name: "Game panels" }).getByRole("button", { name: "Case" }).click();
+  await expect(page.getByRole("dialog", { name: "Case" })).toBeVisible();
+  await settle(page);
+  await page.mouse.move(420, 20); // the backdrop
+  await page.mouse.wheel(0, 300);
+  await page.mouse.move(420, 380); // the sheet's header area
+  await page.mouse.wheel(0, 300);
+  expect(await page.evaluate(() => window.scrollY)).toBe(before);
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toBeHidden();
+  expect(await page.evaluate(() => document.documentElement.classList.contains("sheet-open"))).toBe(false);
+  await page.mouse.wheel(0, 100);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(before);
+  await ctx.close();
+});
