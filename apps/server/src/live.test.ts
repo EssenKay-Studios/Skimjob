@@ -62,7 +62,7 @@ async function startGame(people: number, bots: number, settings: Partial<LobbySe
 
 /** The kinds of a socket's first three messages. */
 const firstKinds = (messages: readonly ServerMessage[]) =>
-  messages.slice(0, 3).map((m) => ["view", "chatHistory", "presence", "chat", "dmNotice"].find((k) => k in m) ?? JSON.stringify(m));
+  messages.slice(0, 4).map((m) => ["view", "chatHistory", "plan", "presence", "chat", "dmNotice"].find((k) => k in m) ?? JSON.stringify(m));
 
 /** A test socket that keeps every message it got, raw. */
 class Client {
@@ -82,7 +82,7 @@ class Client {
     // The first view, then the chat history (M2-8a), then presence (owner decision, 2 Nov), and nothing before.
     await vi.waitFor(() => expect(c.messages.some((m) => "presence" in m)).toBe(true), quick);
     expect(c.views()).toHaveLength(1);
-    expect(firstKinds(c.messages)).toEqual(["view", "chatHistory", "presence"]);
+    expect(firstKinds(c.messages)).toEqual(["view", "chatHistory", "plan", "presence"]);
     return c;
   }
   get messages(): ServerMessage[] {
@@ -278,7 +278,7 @@ describe("connect order (review of #44)", () => {
       b.ws = await opening;
       for (const reply of await Promise.all(chats)) expect(reply).toMatchObject({ ok: true });
       await vi.waitFor(() => expect(b.messages.some((m) => "presence" in m)).toBe(true), quick);
-      expect(firstKinds(b.messages)).toEqual(["view", "chatHistory", "presence"]);
+      expect(firstKinds(b.messages)).toEqual(["view", "chatHistory", "plan", "presence"]);
       // Every chat line reached b once: in its history or live after it, never both.
       await b.barrier();
       const history = b.messages.flatMap((m) => ("chatHistory" in m ? m.chatHistory.messages.map((x) => x.id) : []));
@@ -325,7 +325,7 @@ describe("pushing views", () => {
     expect(b.views()).toHaveLength(2);
     expect(b.lastView().proposals).toHaveLength(1);
     await vi.waitFor(() => expect(tab2.views()).toHaveLength(2), quick);
-    expect(tab2.messages.filter((m) => !("view" in m) && !("chatHistory" in m) && !("presence" in m))).toHaveLength(0);
+    expect(tab2.messages.filter((m) => !("view" in m) && !("chatHistory" in m) && !("plan" in m) && !("presence" in m))).toHaveLength(0);
     for (const c of [a, b, tab2]) c.ws.close();
   });
 
@@ -486,7 +486,7 @@ describe("acceptance: a full game over sockets (docs/m2-plan.md M2-3)", () => {
           } else if ("presence" in msg) {
             // Human seats only, never in the engine log (owner decision, 2 Nov).
             for (const p of Object.values(msg.presence)) expect(Object.keys(p).sort()).toEqual(["lastSeen", "online"]);
-          } else if (!("chatHistory" in msg)) {
+          } else if (!("chatHistory" in msg) && !("plan" in msg)) {
             expect(Object.keys(msg).sort()).toEqual("ok" in msg ? ["id", "ok"] : ["id", "reason", "rejected"]);
           }
         }
