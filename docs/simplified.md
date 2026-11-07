@@ -34,7 +34,7 @@ Two fixes: **Part A** remakes the rules around a few visible things (coins, bell
 - **Show consequences before committing:**
   - Into the Breach shows every enemy's move in advance.
   - Slay the Spire puts each enemy's next move above its head.
-  - → Picking a room and coins previews the rings; every bell is always visible, except a room the Hacker hides.
+  - → Picking a room and coins previews the rings; every bell is always visible, except a room the Hacker hides and a taped-off room (its bell is off until it reopens).
 - **Explain every term in place:** Slay the Spire gives every keyword a one-line tooltip. → An info button on everything.
 - **A rule sheet for this game only:** Blood on the Clocktower's character sheet lists only that game's characters. → A "This game" rulebook.
 - **Tips and role tracking:** Town of Salem has a role card and an optional Tips mode; its players use add-ons to track roles. → Tips on by default, and the game does the tracking.
@@ -66,7 +66,7 @@ Two fixes: **Part A** remakes the rules around a few visible things (coins, bell
 
 ### A2. Bells, raids and Wanted (replaces Heat 0–100)
 
-- **Every room has an alarm bell with 4 bulbs** [tunable], public to everyone (except a room the Hacker hides this round).
+- **Every room has an alarm bell with 4 bulbs** [tunable], public to everyone (except a room the Hacker hides this round, and a taped-off room, whose bell is off until it reopens).
 - **Rings add bulbs:** each ring lights one bulb in that room. Rings from everyone in the room add up.
 - **Cooling, at the end of every round** (after the raid check, the bust check and the split; the full order is below):
   1. every room turns off 1 bulb;

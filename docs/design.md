@@ -130,19 +130,19 @@ Raids come before cooling, so the Rooftop can't save a room in the same round, a
 
 ### 5.1 Bells
 
-Every room has an **alarm bell with 4 bulbs** [tunable]. Every bell is **public**, always, except a room the Hacker hides this round (§11): it shows "?" to everyone else.
+Every room has an **alarm bell with 4 bulbs** [tunable]. Every bell is **public**, always, with two exceptions: a room the Hacker hides this round (§11) shows "?" to everyone else, and a taped-off room's bell is off (§5.3).
 
 ### 5.2 Rings
 
 - Each ring lights one bulb in that room; rings from everyone in the room add up.
-- Ring counts per coin come from the room's noise (§3.1). The Locksmith's coins each ring one time fewer, never below 0, so a Locksmith's Office or Vault grab is silent *(owner, 4 Nov)*. Soft shoes ring nothing. The Mole adds one ring to any room except the Rooftop (§11.1).
+- Ring counts per coin come from the room's noise (§3.1). The Locksmith's coins each ring one time fewer, never below 0, so a Locksmith's Office or Vault grab is silent *(owner, 4 Nov)*. Soft shoes ring nothing. The Mole adds one ring to any room except the Rooftop or a taped-off room (§11.1).
 - **Preview:** while planning, the bell shows the bulbs your own grab would add. Other players' rings are unknown until the round resolves.
 
 ### 5.3 Raids
 
 When a room's **4th bulb** lights:
 - everyone inside **loses that round's grab**: the police seize it and it leaves the game. Seizure happens **before** the split, so seized coins are never handed in or pocketed;
-- the room is **taped off for 2 rounds** [tunable] ("CLOSED 2" counting down): nobody can pick it, and its bell resets to 0 *(owner, 6 Nov)*;
+- the room is **taped off for 2 rounds** [tunable] ("CLOSED 2" counting down): nobody can pick it, and its bell resets to 0 *(owner, 6 Nov)*. While taped off, its bell is **off**: not shown, and nothing can ring it (no grabs; the Mole and the Hacker can't target it). It reappears at 0 when the room reopens, also when the Fixer reopens it early;
 - **Wanted goes up 1 star**;
 - a **police briefing** is called (§9.2).
 
@@ -345,13 +345,13 @@ Every role has a one-sentence power, a "How you win" line and a "How to spot it"
 | **Detective** | Eyes | Learn how many coins one player grabbed last round (not how many they kept). | Every round |
 | **Auditor** | Eyes | Learn how many coins reached the duffel from one room last round. | Once between meetings |
 | **Smooth Talker** | Eyes | Your vote counts twice. | Every meeting (passive) |
-| **Hacker** | Shadows | One room's bell is hidden from everyone this round (it shows "?"). | Once between meetings |
+| **Hacker** | Shadows | One open room's bell is hidden from everyone this round (it shows "?"); not a taped-off room. | Once between meetings |
 | **Electrician** | Shadows | Black out one room next round: nobody there sees who else is there, and its cameras are offline. Its bell still rings. Announced at the start of that round as "Power cut in the Office", with no source. | Once between meetings |
 | **Priest** | Eyes | Secretly absolve one player: whatever they hold above their share is set aside in the duffel for the next split (coins spent on perks are not taken). The Priest learns how much. Not the same player twice in a row; the absolved player is told "your sins were absolved". | Once between meetings |
-| **Mole** | Shadows | Secretly ring any room once, except the Rooftop (a police tip-off). Wins a heist sunk by theft if theirs is (or ties for) the biggest stash of all players. | Once between meetings |
+| **Mole** | Shadows | Secretly ring any room once, except the Rooftop or a taped-off room (a police tip-off). Wins a heist sunk by theft if theirs is (or ties for) the biggest stash of all players. | Once between meetings |
 | **Fixer** | Shadows | Tear the tape off a raided room and reopen it from next round. Wins a heist sunk by theft if theirs is (or ties for) the biggest stash of all players. | Once per game |
 
-*Readings (owner, 6 Nov):* the Hacker sees the real bell; the hidden bell reappears when the next round starts, and a raid is always public. The Mole's ring is applied at step 2 of §4.2, can cause a raid, shows as an ordinary ring, and can't target the Rooftop (§5.5). A Lookout's or Security's look into a blacked-out room shows nobody. No power or perk can target yourself; a player put on a feed by Plant evidence still shows in their real room too.
+*Readings (owner, 6 Nov):* the Hacker sees the real bell; the hidden bell reappears when the next round starts, and a raid is always public. The Mole's ring is applied at step 2 of §4.2, can cause a raid, shows as an ordinary ring, and can't target the Rooftop (§5.5) or a taped-off room (§5.3). A Lookout's or Security's look into a blacked-out room shows nobody. No power or perk can target yourself; a player put on a feed by Plant evidence still shows in their real room too.
 
 *The Priest* *(owner, 6 Nov)*: the target is chosen while planning and resolved at the split step (§4.2 step 5) of that round, after this round's pocketing and purchases, against their share **before** this round's split. The returned coins are **set aside** in the duffel for the next split, not this one, and earn honesty credit when they reach it; in the last round they join the kitty and go to the getaway car (§6.3). **On a bust the absolve never resolves** (a bust skips the split step): the target keeps their whole stash (an escapee keeps it for the win) and the Priest's use is still spent.
 
@@ -473,7 +473,7 @@ When the game ends, every reveal event opens (§18): every role, every move and 
 - **Info on everything:** one shared `InfoTip` (tap, hover or focus; ≥ 44 px target) on every icon, room, bell, perk, role and meter, with its line from content (§20).
 - **"This game" rulebook:** only this game's roles (per the role list), rooms, events and 3 shop items, plus a **Terms** glossary (§20.5), one tap from anywhere.
 - **Role icons:** every role has its own drawn icon (Lookout binoculars, Locksmith key, Detective magnifier, Auditor adding machine, Smooth Talker two speech bubbles, Hacker laptop, Electrician plug, Priest praying hands, Mole a mole, Fixer scissors), used everywhere the role appears: role card, roles in play, rulebook, plan-board claims, case board and power buttons.
-- **Board motion:** a raided, taped-off room shows a constant siren, and its bell is hidden until it reopens; the Vault door swings slowly shut and open; the Office screen cycles and its desk lamp flicks off and on; a security camera pans across the Lobby. All of it stops under `prefers-reduced-motion` (doors open, lamp on, camera still).
+- **Board motion:** a raided, taped-off room shows a constant siren, and its bell is off until it reopens (§5.3); the Vault door swings slowly shut and open; the Office screen cycles and its desk lamp flicks off and on; a security camera pans across the Lobby. All of it stops under `prefers-reduced-motion` (doors open, lamp on, camera still).
 - **Crowded rooms:** avatars shrink to fit their room, so a room holds every visitor (6 of 12 in the Vault).
 - **Grab:** the control for choosing your coins is labelled "Grab".
 - **Teaching pop-ups** ("What just happened / What it means / What you can do") the first time each thing happens, controlled by a per-user **Tips** setting, on by default.
@@ -527,7 +527,7 @@ Every event has one visibility; `viewFor(state, playerId)` returns only what tha
 
 | Level | Who sees it | R7 contents |
 |---|---|---|
-| **Public** | Everyone, live | Every bell (except a hidden one), rings and raids, taped rooms, Wanted, the bank count; each round's taken / duffel / missing / honesty / share / kitty; lock-in marks; event cards; power-cut announcements (no source); anonymous purchases; meeting slots, results and votes (per the visibility setting); shakedown results; "a shakedown fell through"; who is protected (§9.7); emergencies called, with the caller, and the pool left (§9.3); said entries (plan snapshots, pledges, alibis, claims); verified stamps |
+| **Public** | Everyone, live | Every bell (except a hidden one, and a taped-off room's, which is off), rings and raids, taped rooms, Wanted, the bank count; each round's taken / duffel / missing / honesty / share / kitty; lock-in marks; event cards; power-cut announcements (no source); anonymous purchases; meeting slots, results and votes (per the visibility setting); shakedown results; "a shakedown fell through"; who is protected (§9.7); emergencies called, with the caller, and the pool left (§9.3); said entries (plan snapshots, pledges, alibis, claims); verified stamps |
 | **Private** | One player, until the reveal | Your role, move, split and stash; who was in your room; Security, Lookout, Tail, Detective, Auditor and Priest results; Inside tip; perks you hold; your Bail choice; "already done this round" when another copy of your role used it on the same target first (the Priest learns 0, §11.4); "your sins were absolved"; the Hacker's real bell |
 | **Reveal** | Everyone, at the end | Every private event: roles, every move and split, every stash over time, every power use (the Mole's ring, the Hacker's hide, Plant evidence), every buyer, every Bail choice; the seed |
 | **Secret** | Only the voter, forever | Secret-mode ballots (except one seen through Check ballot) |
@@ -597,10 +597,10 @@ One-line texts the UI, the rulebook and the tips read from content, so they neve
 | Detective | Each round, learn how many coins one player grabbed last round. | Like everyone: the biggest stash (or a tie for it) on a good heist. | Knows exact grab counts nobody announced. |
 | Auditor | Once between meetings, learn how many coins reached the duffel from one room last round. | Like everyone: the biggest stash (or a tie for it) on a good heist. | Talks about one room's hand-ins with odd certainty. |
 | Smooth Talker | Your vote counts twice. | Like everyone: the biggest stash (or a tie for it) on a good heist. | A vote passed with fewer hands than it should have. |
-| Hacker | Once between meetings, hide one room's bell from everyone this round. | Like everyone: the biggest stash (or a tie for it) on a good heist. | A bell shows "?" and someone seems calm about it. |
+| Hacker | Once between meetings, hide one open room's bell from everyone this round. | Like everyone: the biggest stash (or a tie for it) on a good heist. | A bell shows "?" and someone seems calm about it. |
 | Electrician | Once between meetings, cut the power in one room next round: no sightings, no cameras. | Like everyone: the biggest stash (or a tie for it) on a good heist. | A power cut lands where someone wanted no witnesses. |
 | Priest | Once between meetings, secretly take back whatever one player holds above their share (not on a bust). | Like everyone: the biggest stash (or a tie for it) on a good heist. | Coins come back with no shakedown. |
-| Mole | Once between meetings, secretly ring any room once (not the Rooftop). | The biggest stash (or a tie for it) on a good heist, or the biggest of all on a heist sunk by theft. | A bell rang more than the people in the room can explain. |
+| Mole | Once between meetings, secretly ring any room once (not the Rooftop or a taped-off room). | The biggest stash (or a tie for it) on a good heist, or the biggest of all on a heist sunk by theft. | A bell rang more than the people in the room can explain. |
 | Fixer | Once a game, tear the police tape off a raided room and reopen it. | The biggest stash (or a tie for it) on a good heist, or the biggest of all on a heist sunk by theft. | A taped-off room is suddenly open again. |
 
 Bust (every role): "On a bust, only the Rooftop gets away."
