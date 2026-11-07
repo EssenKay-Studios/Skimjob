@@ -146,7 +146,7 @@ export function Gallery() {
               </div>
             </Section>
 
-            <Section id="segmented" title="Segmented choice" note="host settings, bot picker · read-only shows the chosen chip">
+            <Section id="segmented" title="Segmented choice" note="host settings, bot picker · busy ignores presses but keeps focus · read-only shows the chosen chip">
               <Segmented
                 seed="g-seg"
                 label="Saboteur (the dark side)"
@@ -158,6 +158,17 @@ export function Gallery() {
                 ]}
                 value={mole}
                 onChange={setMole}
+              />
+              <Segmented
+                seed="g-seg-busy"
+                label="Busy (saving)"
+                hint="Stays focusable, ignores presses"
+                options={[
+                  { value: "on", label: "On" },
+                  { value: "off", label: "Off" },
+                ]}
+                value="on"
+                busy
               />
               <Segmented seed="g-seg-ro" label="Read-only (guests)" options={[{ value: mole, label: mole }]} value={mole} readOnly />
             </Section>

@@ -430,7 +430,7 @@ describe("guests and seats", () => {
     const r = await signIn("qa-new-for-guest", { session: joiner, claims: { name: "Different Name" } });
     expect(r.cb.statusCode).toBe(302);
     const after = (await me(r.session))!;
-    expect(after).toEqual({ id: before.id, name: "Rookie", guest: false });
+    expect(after).toEqual({ id: before.id, name: "Rookie", guest: false, tips: true });
     expect((await seatedAs(gameId, r.session!))?.nickname).toBe("Rookie");
     expect(r.session).not.toBe(joiner);
     expect(await me(joiner)).toBeNull(); // no session fixation

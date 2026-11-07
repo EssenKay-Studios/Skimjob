@@ -102,7 +102,7 @@ afterAll(async () => {
 const sessionOf = (res: { cookies: { name: string; value: string }[] }) => res.cookies.find((c) => c.name === SESSION_COOKIE && c.value)?.value ?? null;
 const me = async (session: string | null) => {
   const res = await app.inject({ method: "GET", url: "/me", cookies: session ? { [SESSION_COOKIE]: session } : {} });
-  return res.statusCode === 200 ? (res.json().user as { id: string; name: string; guest: boolean }) : null;
+  return res.statusCode === 200 ? (res.json().user as { id: string; name: string; guest: boolean; tips: boolean }) : null;
 };
 const guest = async (nickname: string) => sessionOf(await app.inject({ method: "POST", url: "/auth/guest", payload: { nickname } }))!;
 const api = async (method: "GET" | "POST", url: string, session: string, payload?: object) =>
@@ -245,6 +245,48 @@ describe.each(Object.entries(flows))("redirect sign-in: %s (m2-plan M2-12, share
     expect(sessionOf(res)).toBeNull();
     // ...but only for a sign-in this browser started.
     expect((await callback(`http://x/auth/${name}/callback?error=access_denied&state=other`, s.signin.value)).statusCode).toBe(400);
+  });
+});
+
+// design §15.6: the Tips setting is one field on the user, on by default.
+describe("Tips setting (S3b.3)", () => {
+  const patch = (session: string | null, payload: unknown) =>
+    app.inject({ method: "PATCH", url: "/me", cookies: session ? { [SESSION_COOKIE]: session } : {}, payload: payload as object });
+  const tipsOf = async (session: string) => (await me(session))!.tips;
+
+  it("is on by default for a guest and for an account", async () => {
+    expect(await tipsOf(await guest("Tipsy"))).toBe(true);
+    const s = await start("dev", "?hint=TipsAcct");
+    expect(await tipsOf(sessionOf(await callback(s.location, s.signin.value))!)).toBe(true);
+  });
+
+  it("saves on the signed-in user, across sessions, and only for them", async () => {
+    const a = await guest("Offa");
+    const b = await guest("Staysa");
+    const res = await patch(a, { tips: false });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().user).toMatchObject({ name: "Offa", tips: false });
+    expect(await tipsOf(a)).toBe(false);
+    expect(await tipsOf(b)).toBe(true);
+    expect((await patch(a, { tips: true })).json().user.tips).toBe(true);
+    expect(await tipsOf(a)).toBe(true);
+  });
+
+  it("follows an account to a new session and survives a guest signing in to it", async () => {
+    const g = await guest("Wasguest");
+    expect((await patch(g, { tips: false })).statusCode).toBe(200);
+    const s = await start("dev", "?hint=Linked", g);
+    const signedIn = sessionOf(await callback(s.location, s.signin.value, g))!;
+    expect(await tipsOf(signedIn)).toBe(false);
+    const again = await start("dev", "?hint=Linked");
+    expect(await tipsOf(sessionOf(await callback(again.location, again.signin.value))!)).toBe(false);
+  });
+
+  it("refuses a signed-out caller and anything that is not a boolean", async () => {
+    expect((await patch(null, { tips: false })).statusCode).toBe(401);
+    const g = await guest("Strict");
+    for (const bad of [{}, { tips: "no" }, { tips: 0 }, { tips: null }, { tips: false, name: "Hacked" }, { tips: false, guest: false }, null]) expect((await patch(g, bad)).statusCode).toBe(400);
+    expect(await tipsOf(g)).toBe(true);
   });
 });
 

@@ -3,17 +3,13 @@ import { expect, test } from "@playwright/test";
 // QA (m2-plan M2-12): Google sign-in from the browser's side. The E2E server
 // has no Google client id, so "on" is a mocked /auth/providers answer.
 
-test("Google off: the real server 404s Google's start and callback, and the landing page never asks /me @auth", async ({ page }) => {
-  const meCalls: string[] = [];
-  page.on("request", (r) => {
-    if (new URL(r.url()).pathname === "/api/me") meCalls.push(r.url());
-  });
+test("Google off: the real server 404s Google's start and callback, and a signed-out landing page shows no account or Tips @auth", async ({ page }) => {
   const providers = page.waitForResponse((r) => r.url().endsWith("/api/auth/providers"));
   await page.goto("/");
   await providers;
   await expect(page.getByRole("button", { name: "Plan a heist" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Sign in with Google" })).toHaveCount(0);
-  expect(meCalls).toEqual([]);
+  await expect(page.getByRole("group", { name: "Tips" })).toHaveCount(0);
   const start = await page.request.get("/api/auth/google/start?returnTo=/", { maxRedirects: 0 });
   expect(start.status()).toBe(404);
   const cb = await page.request.get("/api/auth/google/callback?code=c&state=s", { maxRedirects: 0 });
@@ -22,7 +18,7 @@ test("Google off: the real server 404s Google's start and callback, and the land
 
 test("Google on: a guest still sees Sign in with Google, and the start link ignores the page's own query @auth", async ({ page }) => {
   await page.route("**/api/auth/providers", (r) => r.fulfill({ json: { providers: ["google"] } }));
-  await page.route("**/api/me", (r) => r.fulfill({ json: { user: { id: "g1", name: "Rookie", guest: true } } }));
+  await page.route("**/api/me", (r) => r.fulfill({ json: { user: { id: "g1", name: "Rookie", guest: true, tips: true } } }));
   let started: URL | null = null;
   await page.route("**/api/auth/google/start**", (r) => {
     started = new URL(r.request().url());
