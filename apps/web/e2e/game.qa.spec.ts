@@ -100,7 +100,10 @@ test("12 seats, 24-char names: a 15-min game to the end with moves changed, alib
     ws.on("framereceived", ({ payload }) => {
       if (typeof payload !== "string" || !payload.startsWith('{"view"')) return;
       phase = (JSON.parse(payload) as { view: { phase: { kind: string } } }).view.phase.kind;
-      if (holding() && !pausing) pausing = host.request.post(`/api/games/${game.id}/pause`, { data: {} });
+      if (!holding() || pausing) return;
+      pausing = host.request.post(`/api/games/${game.id}/pause`, { data: {} });
+      // Awaited in the loop, where a rejection fails the test; this keeps it from going unhandled first.
+      pausing.catch(() => {});
     }),
   );
   await host.goto(`/game/${game.id}`);
