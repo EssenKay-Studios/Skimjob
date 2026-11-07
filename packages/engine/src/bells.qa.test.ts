@@ -440,3 +440,78 @@ describe("QA: viewFor leaks for every new event — design §18", () => {
     expect(reopened && Object.keys(reopened).sort()).toEqual(["room", "round", "type", "visibility"]);
   });
 });
+
+describe("QA: a missed move into a taped-off Lobby sits the round out — design §3.3 (owner, 7 Nov), §5.5", () => {
+  /** The Lobby taped off through round 2 (its bell off); the rest dark, or as given. */
+  const lobbyTaped = (g: GameState, bells: Record<string, number> = {}): GameState => ({
+    ...g,
+    taped: { lobby: 2 },
+    bells: { ...Object.fromEntries(Object.entries(g.bells).filter(([r]) => r !== "lobby")), ...bells },
+  });
+
+  for (const n of [3, 12]) {
+    it(`at ${n} players, everyone missing: nobody plays, nothing is grabbed or rung, the bells still cool; no lock-in marks`, () => {
+      const before = lobbyTaped(game(n), { vault: 2 });
+      const s = run(before, ROUND);
+      const tail = since(before, s);
+      expect(ofType(tail, "defaultMoveAssigned").map((e) => [e.player, e.move])).toEqual(before.playerOrder.map((id) => [id, null]));
+      for (const t of ["coinsGrabbed", "roomSighting", "roomWatched", "roomRaided", "moveLocked"] as const) expect(ofType(tail, t)).toEqual([]);
+      expect(ofType(tail, "bellsRung")[0]?.bells.vault).toBe(2);
+      expect(ofType(tail, "bellsCooled")[0]?.bells.vault).toBe(1);
+      expect([s.bank, s.haul, s.round]).toEqual([before.bank, 0, 2]);
+      for (const p of Object.values(s.players)) expect([p.stash, p.consecutiveMissedMoves]).toEqual([0, 1]);
+      // Round 2: the Lobby is still taped, so they sit out again; round 3 it reopens and the default is the Lobby again.
+      const r2 = run(s, ROUND);
+      expect(ofType(since(s, r2), "defaultMoveAssigned").every((e) => e.move === null)).toBe(true);
+      const r3 = run(r2, ROUND);
+      expect(ofType(since(r2, r3), "defaultMoveAssigned").every((e) => e.move?.room === "lobby" && e.move.duffel === 1)).toBe(true);
+    });
+  }
+
+  it("at 12 players, a bust that round: the sitters-out are arrested, only the Rooftop escapes", () => {
+    const g = withStash(lobbyTaped({ ...game(12), wanted: 2 }, { vault: 3 }), { p5: 50, p1: 3 });
+    const s = run(g, mv("p0", "vault", 1), mv("p1", "rooftop"), mv("p2", "office", 1));
+    expect(viewFor(s, "p0").lockedIn).toEqual(["p0", "p1", "p2"]);
+    const after = run(s, ROUND);
+    expect(ofType(since(s, after), "defaultMoveAssigned")).toHaveLength(9);
+    expect(outcome(after)).toMatchObject({ reason: "bust", escapees: ["p1"], winners: ["p1"] });
+  });
+
+  it("at 3 players, a bust with everyone else sitting out: nobody escapes, nobody wins", () => {
+    const s = run(lobbyTaped({ ...game(3), wanted: 2 }, { vault: 3 }), mv("p0", "vault", 1), ROUND);
+    expect(outcome(s)).toMatchObject({ reason: "bust", escapees: [], winners: [] });
+  });
+
+  it("a short bank shares out only among the players who play", () => {
+    const s = run({ ...lobbyTaped(game(4)), bank: 3 }, mv("p0", "vault", 3), mv("p1", "vault", 3), ROUND);
+    const grabs = ofType(s.log, "coinsGrabbed");
+    expect(grabs.map((e) => e.player)).toEqual(["p0", "p1"]);
+    expect(grabs.reduce((n, e) => n + e.duffel + e.pocket + e.seized, 0)).toBe(3);
+    expect(s.bank).toBe(0);
+  });
+
+  it("viewFor: only the sitter-out learns it; the others' views are the same as if it had sat in Security", () => {
+    const g = lobbyTaped(game(4));
+    const sat = run(g, mv("p0", "office", 2), mv("p1", "office", 0, 2), mv("p2", "vault", 1), ROUND);
+    expect(viewFor(sat, "p3").caseFile.map((e) => e.event)).toContainEqual({ type: "defaultMoveAssigned", visibility: { kind: "private", player: "p3" }, player: "p3", round: 1, move: null });
+    expect(viewFor(sat, "p3").me.move).toBeNull();
+    for (const id of ["p0", "p1", "p2"]) {
+      const v = viewFor(sat, id);
+      expect(v.caseFile.some((e) => e.event.type === "defaultMoveAssigned")).toBe(false);
+      for (const e of v.ledger) expect(e.event.visibility.kind).toBe("public");
+      expect(JSON.stringify(v.caseFile)).not.toContain('"p3"');
+    }
+    // Nothing public tells a sit-out from a silent Security watcher (bar the lock-in mark, which is public by design).
+    const watched = run(g, mv("p0", "office", 2), mv("p1", "office", 0, 2), mv("p2", "vault", 1), mv("p3", "security", 0, 0, { watch: "rooftop" }), ROUND);
+    const pub = (s: GameState) => viewFor(s, "p0").ledger.map((e) => e.event).filter((e) => e.type !== "moveLocked");
+    expect(pub(sat)).toEqual(pub(watched));
+  });
+
+  it("replays deterministically, and the reveal still builds", () => {
+    const play = () => run(lobbyTaped({ ...game(4), wanted: 2 }, { vault: 3 }), mv("p0", "vault", 1), mv("p1", "rooftop"), ROUND);
+    const s = play();
+    expect(play().log).toEqual(s.log);
+    expect(outcome(s)).toMatchObject({ escapees: ["p1"] });
+    for (const id of s.playerOrder) expect(viewFor(s, id).reveal).not.toBeNull();
+  });
+});
