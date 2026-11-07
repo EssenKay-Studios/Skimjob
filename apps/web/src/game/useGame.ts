@@ -29,7 +29,7 @@ export interface GameChannel {
   readonly sendChat: (req: ChatRequest) => Promise<Reply>;
   /** The latest round's plan board, live (S3b.4). Null until the server sends it. */
   readonly plan: PlanBoard | null;
-  /** Edits your own entry on the plan board; replied to like a command. */
+  /** Places anyone's avatar and edits your own claims on the plan board; replied to like a command. */
   readonly sendPlan: (edit: PlanEdit) => Promise<Reply>;
   /** Each person's seat: online now or last seen (owner decision, 2 Nov). Null until the server sends it. */
   readonly presence: Presence | null;

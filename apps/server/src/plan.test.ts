@@ -434,4 +434,35 @@ describe("open for the round's span, as the scheduler's deadline is (design §10
     expect(await open()).toBe(true);
     closeAll(a);
   });
+
+  it("an edit after the deadline but before the scheduler's tick is refused (design §10: until the deadline)", async () => {
+    const { id, humans } = await startGame(2, 1);
+    const a = await Client.open(id, humans[0]!);
+    const [left] = await db.query<{ ms: number }>("select (extract(epoch from due_at - to_timestamp($2::float8 / 1000)) * 1000)::float8 as ms from deadlines where game_id = $1 and key = 'round:1'", [id, clock.now()]);
+    clock.advance(Math.round(Number(left!.ms)) - 1000);
+    expect(await a.plan({ agree: true })).toMatchObject({ ok: true });
+    clock.advance(2000);
+    expect(await a.plan({ agree: false })).toMatchObject({ rejected: true });
+    expect((await createPlan(db, clock).history(id, 1)).map((h) => h.value)).toEqual(["true"]);
+    closeAll(a);
+  });
+
+  it("a meeting opened mid-round keeps the board open; time left is what remained when the pause began (design §10)", async () => {
+    const { id, humans, rooms } = await startGame(2, 1);
+    const a = await Client.open(id, humans[0]!);
+    clock.advance(1000);
+    expect(await a.sendRaw({ cmd: { type: "callEmergency" } })).toMatchObject({ ok: true });
+    const pending = (await createGameStore(db).load(id))!.pendingEmergency!;
+    await app.live.system(id, { type: "advance", deadline: { kind: "openMeeting", meetingId: pending.meetingId } });
+    const state = (await createGameStore(db).load(id))!;
+    expect(state.phase.kind).toBe("meeting");
+    expect(state.round).toBeGreaterThan(state.resolvedRound);
+    const [row] = await db.query<{ ms: number; paused: boolean }>("select (extract(epoch from due_at - paused_at) * 1000)::float8 as ms, paused_at is not null as paused from deadlines where game_id = $1 and key = 'round:1'", [id]);
+    expect(row!.paused).toBe(true);
+    clock.advance(60_000); // the pause holds the time still
+    expect(await a.plan({ room: rooms[0] })).toMatchObject({ ok: true });
+    const [edit] = await createPlan(db, clock).history(id, 1);
+    expect(edit!.msBeforeDeadline).toBe(Math.round(Number(row!.ms)));
+    closeAll(a);
+  });
 });

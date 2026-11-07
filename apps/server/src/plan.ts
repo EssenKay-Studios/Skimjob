@@ -174,6 +174,14 @@ export function createPlan(db: Db, clock: Clock): Plan {
     async edit(gameId, state, actor, edit) {
       // design §10: open from the round's start until it resolves, the span of its `round:<n>` deadline.
       if (state.phase.kind === "ended" || state.round <= state.resolvedRound) return { ok: false, reason: "the plan board is closed until the next round" };
+      // ...but not past the deadline while the scheduler's tick is yet to come (unless the round is paused).
+      const now = clock.now();
+      const [left] = await db.query<{ ms: number | null; paused: boolean }>(
+        `select (extract(epoch from (due_at - coalesce(paused_at, to_timestamp($3::float8 / 1000)))) * 1000)::float8 as ms, paused_at is not null as paused from deadlines where game_id = $1 and key = $2`,
+        [gameId, `round:${state.round}`, now],
+      );
+      const ms = left?.ms == null ? null : Math.round(Number(left.ms));
+      if (left && !left.paused && ms !== null && ms <= 0) return { ok: false, reason: "the plan board is closed: the round's time is up" };
       if (!rate.allow(`${gameId}\0${actor}`)) return { ok: false, reason: "slow down: too many plan changes" };
       const round = state.round;
       const entries = new Map<PlayerId, PlanEntry>();
@@ -202,12 +210,6 @@ export function createPlan(db: Db, clock: Clock): Plan {
       if (edit.agree !== undefined && (await read(actor)).agreed !== edit.agree) await set(actor, { agreed: edit.agree }, { kind: "agree", value: String(edit.agree), target: null });
       if (changes.length === 0) return { ok: true, value: undefined };
 
-      const now = clock.now();
-      const [left] = await db.query<{ ms: number | null }>(
-        `select (extract(epoch from (due_at - coalesce(paused_at, to_timestamp($3::float8 / 1000)))) * 1000)::float8 as ms from deadlines where game_id = $1 and key = $2`,
-        [gameId, `round:${round}`, now],
-      );
-      const ms = left?.ms == null ? null : Math.round(Number(left.ms));
       for (const e of entries.values()) {
         await db.query(
           `insert into plan_entries (game_id, round, player_id, placed, room, power_role, power_target, agreed) values ($1, $2, $3, $4, $5, $6, $7, $8)
