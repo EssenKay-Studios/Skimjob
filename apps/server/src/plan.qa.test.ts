@@ -323,6 +323,33 @@ describe("QA: when the board takes edits (design §10: the round's span)", () =>
   });
 });
 
+describe("QA: past the deadline, before the scheduler's tick (design §10: until the deadline)", () => {
+  it("an edit at due − 1 ms is taken; at due + 1 ms refused and stored nowhere; a round paused before its deadline still takes edits long after it", async () => {
+    const { id, humans, rooms } = await startGame(2, 1);
+    const a = await Client.open(id, humans[0]!);
+    const dl = (await roundDeadline(id, 1))!;
+    clock.advance(dl.due - 1 - clock.now());
+    expect(await a.plan({ room: rooms[0] })).toMatchObject({ ok: true });
+    expect((await createPlan(db, clock).history(id, 1))[0]!.msBeforeDeadline).toBe(1);
+    clock.advance(2);
+    for (const plan of [{ room: rooms[1] }, { agree: true }, { place: { player: humans[1]!.player, room: rooms[0] } }]) {
+      expect(await a.plan(plan)).toMatchObject({ rejected: true, reason: "the plan board is closed: the round's time is up" });
+    }
+    expect(await db.query("select room, agreed, placed from plan_entries where game_id = $1", [id])).toEqual([{ room: rooms[0], agreed: false, placed: null }]);
+    expect((await createPlan(db, clock).history(id, 1)).every((h) => h.msBeforeDeadline! > 0)).toBe(true);
+
+    const g = await startGame(2, 1);
+    const b = await Client.open(g.id, g.humans[0]!);
+    const gdl = (await roundDeadline(g.id, 1))!;
+    clock.advance(gdl.due - 5_000 - clock.now());
+    expect((await app.inject({ method: "POST", url: `/games/${g.id}/pause`, cookies: { [SESSION_COOKIE]: g.humans[0]!.who } })).statusCode).toBe(200);
+    clock.advance(60_000); // well past the original due time, but paused
+    expect(await b.plan({ room: g.rooms[0] })).toMatchObject({ ok: true });
+    expect((await createPlan(db, clock).history(g.id, 1))[0]!.msBeforeDeadline).toBe(5_000);
+    closeAll(a, b);
+  });
+});
+
 describe("QA: limits and hostile payloads", () => {
   it("the rate limit is per seat across its tabs, per game, and refused or invalid edits don't spend it", async () => {
     const { id, humans, rooms } = await startGame(2, 1);
