@@ -107,7 +107,7 @@ describe("presets (design §17)", () => {
 
 describe("all-bot games on a fake clock (M2-4 acceptance)", () => {
   for (const voteVisibility of ["hiddenThenRevealed", "open", "secret"] as VoteVisibility[]) {
-    it(`a 15-min game finishes in ${voteVisibility} mode; deadlines move only by pauses, rounds take 45 s and alibis 15 s, the shakedown window runs in full`, { timeout: 60_000 }, async () => {
+    it(`a 15-min game finishes in ${voteVisibility} mode; deadlines move only by pauses, rounds take the session ÷ the round cap, the shakedown window runs in full`, { timeout: 60_000 }, async () => {
       const { id } = await startGame(5, { sessionLength: "15m", voteVisibility });
       const started = clock.now();
       const seen = new Map<string, number>();
@@ -116,7 +116,7 @@ describe("all-bot games on a fake clock (M2-4 acceptance)", () => {
         for (const d of await deadlines(id)) {
           if (!seen.has(d.key)) {
             seen.set(d.key, d.due);
-            if (d.key.startsWith("round:") && !d.paused) expect(d.due - clock.now()).toBe(QUICK.roundMs); // design §4.1
+            if (d.key.startsWith("round:") && !d.paused) expect(d.due - clock.now()).toBe(QUICK.roundMs); // design §17.1
             if (d.key.startsWith("alibis:") && !d.paused) expect(d.due - clock.now()).toBe(QUICK.alibiMs); // design §5.4
             if (d.key.startsWith("closeMeeting:")) expect(d.due - clock.now()).toBe(QUICK.meetingMs);
             // STATUS: the shakedown window always runs its full server-set length. design §11.3
@@ -134,10 +134,11 @@ describe("all-bot games on a fake clock (M2-4 acceptance)", () => {
       }
       const end = await load(id);
       expect(end.phase.kind).toBe("ended");
-      expect(count(end, "meetingOpened")).toBeGreaterThan(0);
+      // A bust can end a bot game before round 3's meeting (design §5.5); past it, a regular meeting was held.
+      if (end.resolvedRound > 3) expect(count(end, "meetingOpened")).toBeGreaterThan(0);
       expect(await deadlines(id)).toEqual([]);
       expect(app.live.botRefusals.filter((r) => r.gameId === id)).toEqual([]);
-      for (let r = 1; r <= 9; r++) if (end.resolvedRound >= r) expect(count(end, "roundResolved", (e) => e.round === r)).toBe(1);
+      for (let r = 1; r <= BANK_JOB.roundCap; r++) if (end.resolvedRound >= r) expect(count(end, "roundResolved", (e) => e.round === r)).toBe(1);
       expect(clock.now() - started).toBeGreaterThanOrEqual(end.resolvedRound * QUICK.roundMs);
     });
   }
