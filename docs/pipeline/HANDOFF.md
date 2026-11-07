@@ -46,7 +46,7 @@ Run milestone **R7 Simplified** exactly as `docs/simplified.md` "How to run it" 
 
 ## Agent quirks and testing
 - **Never `gh pr checks --watch`:** it gets backgrounded and stalls agents. Poll the check-runs in short calls instead (common.md). On the Mac directly, run long commands in the foreground; through the terminal tool, background them with nohup and poll.
-- **Testing policy:** `pnpm typecheck` and `pnpm test:scoped` before pushing (QA too), push once, and let CI run the scoped set; the full tier runs on `main` after each merge and nightly. Never skip or disable a test.
+- **Testing policy:** `pnpm precheck` before pushing (QA too), push once, and let CI run the scoped set; the full tier runs on `main` after each merge and nightly. Never skip or disable a test.
 - **Known flaky tests** (rerun once; if it fails again, treat it as real). E2E files are in `apps/web/e2e/`; `[project]` is the Playwright project:
   - `responsive.qa.spec.ts` "landing behaviour › reduced motion › turns off the sheet entrance and toast animations" [mobile]; not reproduced in 80 runs under load on 7 Nov;
   - `notes.spec.ts` "the recap shows what changed while you were away, once, and the board stays private" [desktop]; not reproduced in 40 runs under load on 7 Nov.
@@ -58,6 +58,7 @@ Run milestone **R7 Simplified** exactly as `docs/simplified.md` "How to run it" 
 
 ## Environment gotchas
 - Setup per environment (paths, Node 22, ports, the terminal tool's limits, the cloud container): `common.md` "Where you run".
+- **At most 2 e2e runs on the Mac at once** (PM rule; each uses 4 browser workers): start at most 2 agents that run Playwright on the Mac; the others work in setup (c) (the cloud box, then CI). Long commands go through `scripts/bg.sh` (common.md).
 - Concurrent agents on the Mac must use their own `E2E_*` ports; a killed run can leave vite/server processes holding them (`lsof -iTCP:<port> -sTCP:LISTEN`, kill by PID). Several agents share the machine, so local runs are slower under load.
 - `pnpm test:pg` needs a local Postgres (`scripts/db.sh`); optional, CI covers PGlite.
 - Rebase, `reset --hard` and force-push to an agent's own feature branch are fine. Never force-push `main`.

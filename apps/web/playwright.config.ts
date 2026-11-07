@@ -1,3 +1,4 @@
+import { availableParallelism } from "node:os";
 import { defineConfig, devices } from "@playwright/test";
 
 // Chromium: run `npx playwright install chromium` once (it goes to the normal
@@ -12,6 +13,10 @@ import { defineConfig, devices } from "@playwright/test";
 //   games tagged @fast-clock (the slowest tests), run by the *-fast projects.
 // Ports come from the environment so two clones can run E2E side by side:
 // E2E_PORT (web, default 5179), E2E_SERVER_PORT (3179), E2E_FAST_PORT (5180), E2E_FAST_SERVER_PORT (3180).
+// Locally a server that is already listening on a port is reused (a repeat run skips the ~10 s start; the
+// agent's own ports only, so stop it when you switch branches: it serves the code it started with). CI always
+// starts its own. Locally up to 4 workers per run (CI keeps Playwright's default, 50% of the cores); the PM
+// allows at most 2 runs at once (docs/pipeline/HANDOFF.md).
 // CI shards the suite by spec file: `node scripts/scope.mjs --shard i/6` (.github/workflows/ci.yml).
 const num = (name: string, fallback: number) => Number(process.env[name] ?? fallback);
 const port = num("E2E_PORT", 5179);
@@ -30,14 +35,14 @@ const servers = (web: number, api: number, timeScale: string) => [
     // The page's origin is the Vite port, which may be any port here.
     env: { PORT: String(api), PGLITE_DIR: "memory", TIME_SCALE: timeScale, ALLOWED_ORIGINS: `http://localhost:${web},http://127.0.0.1:${web}` },
     url: `http://127.0.0.1:${api}/health`,
-    reuseExistingServer: false,
+    reuseExistingServer: !process.env.CI,
     timeout: 60_000,
   },
   {
     command: `pnpm exec vite --port ${web} --strictPort`,
     env: { SKIMJOB_SERVER: `http://127.0.0.1:${api}` },
     url: `http://localhost:${web}`,
-    reuseExistingServer: false,
+    reuseExistingServer: !process.env.CI,
     timeout: 60_000,
   },
 ];
@@ -48,6 +53,7 @@ const desktop = { ...devices["Desktop Chrome"], viewport: { width: 1280, height:
 export default defineConfig({
   testDir: "e2e",
   fullyParallel: true,
+  workers: process.env.CI ? "50%" : Math.min(4, availableParallelism()),
   reporter: process.env.CI ? [["list"], ["github"]] : "list",
   use: { baseURL: `http://localhost:${port}` },
   // Project names start with "mobile" or "desktop": specs that pick a viewport check the prefix.

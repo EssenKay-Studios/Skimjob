@@ -1,4 +1,4 @@
-# CI: typecheck, knip, scoped unit + property + integration tests, scoped web e2e, simulator smoke.
+# CI: typecheck, knip, theme-token lint, scoped unit + property + integration tests, scoped web e2e, simulator smoke.
 # A PR runs what its diff touches (scripts/scope.mjs, docs/testing.md "Scoped tests"); a push to main
 # and the nightly run (02:17 UTC) are the full tier. "CI ok" is the one check branch protection
 # and the merge gate need. Nothing deploys from CI: releases go to Lightsail by hand (docs/deploy.md).
@@ -78,6 +78,8 @@ jobs:
       - run: pnpm typecheck
       # Fails on unused files, exports and dependencies (knip.json).
       - run: pnpm knip
+      # No raw colours, fonts, shadows or radii outside theme.css (scripts/theme-lint.mjs).
+      - run: pnpm lint:theme
       # Every e2e test has exactly one feature tag and every feature module has an entry (apps/web/e2e/features.json).
       - run: node scripts/scope.mjs --check
       # Unit, QA, engine property (*.prop.test.ts, seeded) and server scenario (*.int.test.ts, PGlite) tests.
@@ -111,6 +113,15 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # The browser download (about 15 s) is cached per Playwright version; the system libraries are
+      # installed every run (the runner is fresh), and `install` skips a browser that is already there.
+      - id: playwright
+        working-directory: apps/web
+        run: echo "version=$(npx playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
       - name: Install Chromium
         working-directory: apps/web
         run: npx playwright install --with-deps chromium

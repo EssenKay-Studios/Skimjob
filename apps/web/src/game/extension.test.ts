@@ -13,7 +13,6 @@ import {
   type PlayerCommand,
   type SystemCommand,
 } from "@skimjob/engine";
-import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
@@ -235,12 +234,5 @@ describe("lobby deck settings (extension.md Host settings)", () => {
     expect(off.roles).toEqual(DECKS.standard.filter((r) => r !== "hacker"));
     expect(rolePatch({ ...base, roles: off.roles! }, "hacker")).toEqual({ roles: [] });
     expect(rolePatch({ ...base, roles: ["rookie"] }, "rookie")).toBeNull();
-  });
-});
-
-describe("extension.css uses theme tokens (CLAUDE.md UI rules)", () => {
-  it("has no raw radii or shadows", () => {
-    const css = readFileSync(new URL("../components/extension.css", import.meta.url), "utf8");
-    for (const m of css.matchAll(/(border-radius|box-shadow):\s*([^;]+);/g)) expect(m[2], m[0]).toMatch(/^(var\(--[\w-]+\)|0|none)$/);
   });
 });
