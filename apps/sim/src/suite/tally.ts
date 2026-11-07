@@ -3,6 +3,7 @@
 // records. Plain JSON data: shard files carry tallies and `merge` adds them.
 // design §17.4, extension.md Build notes "Sim"
 import type { GameRecord } from "../record";
+import { wholeCrewWin } from "../metrics";
 
 export interface SeatTally {
   readonly seats: number;
@@ -25,6 +26,8 @@ export interface Tally {
   readonly busts: number;
   /** Sunk by theft: honesty below the line at the end. design §8.4 */
   readonly theftFailures: number;
+  /** Successes the whole crew won, every stash equal. design §8.2 */
+  readonly wholeCrewWins: number;
   /** Ended at the round cap with over a quarter of the bank left. design §21 G4 */
   readonly capStalls: number;
   /** Games nobody won (a failure no top-group role wins on), and games two or more shared. extension.md "One crew, and how you win" */
@@ -45,6 +48,7 @@ export const emptyTally = (): Tally => ({
   failures: 0,
   busts: 0,
   theftFailures: 0,
+  wholeCrewWins: 0,
   capStalls: 0,
   noWinner: 0,
   sharedWin: 0,
@@ -76,6 +80,7 @@ export function tallyGames(records: readonly GameRecord[], start: Tally = emptyT
     else t.failures++;
     if (!success && g.reason === "bust") t.busts++;
     if (!success && g.reason === "theft") t.theftFailures++;
+    if (wholeCrewWin(g)) t.wholeCrewWins++;
     if (g.capWithBankLeft) t.capStalls++;
     if (g.winners.length === 0) t.noWinner++;
     if (g.winners.length > 1) t.sharedWin++;
@@ -103,6 +108,7 @@ export function addTallies(a: Tally, b: Tally): Tally {
     failures: a.failures + b.failures,
     busts: a.busts + b.busts,
     theftFailures: a.theftFailures + b.theftFailures,
+    wholeCrewWins: a.wholeCrewWins + b.wholeCrewWins,
     capStalls: a.capStalls + b.capStalls,
     noWinner: a.noWinner + b.noWinner,
     sharedWin: a.sharedWin + b.sharedWin,

@@ -108,7 +108,9 @@ describe("tallies", () => {
 
   it("count what the rates need: endings, no-winner and shared wins, credit by ending, tokens — extension.md Build notes \"Sim\"", () => {
     const t = tallyGames(games);
-    expect(t).toMatchObject({ games: 3, successes: 1, failures: 2, busts: 1, theftFailures: 1, capStalls: 1, noWinner: 1, sharedWin: 1 });
+    expect(t).toMatchObject({ games: 3, successes: 1, failures: 2, busts: 1, theftFailures: 1, wholeCrewWins: 0, capStalls: 1, noWinner: 1, sharedWin: 1 });
+    // design §8.2, §21 G6: a success every seat won is a whole-crew win.
+    expect(tallyGames([gameRec({ players: 2, winners: ["a", "b"] })]).wholeCrewWins).toBe(1);
     expect(t.roles.rookie).toEqual({ seats: 3, credit: 0.5, fair: 0.75, successCredit: 0.5, earned: 2, spent: 1 });
     expect(t.roles.mole).toEqual({ seats: 2, credit: 1.5, fair: 0.5, successCredit: 0.5, earned: 3, spent: 2 });
     expect(Object.keys(t.roles)).toEqual(["lookout", "mole", "rookie"]);

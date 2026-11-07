@@ -71,9 +71,10 @@ function meeting(s: GameState, act: 1 | 2 | 3, votes: Command[] = []): GameState
 }
 
 describe("recordGame — a scripted game", () => {
-  // Rounds 1–3: p0 skims 6 in the Vault every round, p1 skims 1 in the Lobby, p2 hands the Lobby's 2 in; p1 and
-  // p2 shake p0 down. Then everyone hands in the Lobby's 2 (6 a round) to the 9-round cap: the Haul is 63 of the
-  // 66 coins taken, above the honesty line (design §7.5), so the heist succeeds and p1's 3 is the biggest stash.
+  // Rounds 1–3: p0 skims 6 in the Vault every round, p1 skims 1 in the Lobby, p2 hands the Lobby's 2 in (a cut
+  // of 1 each); p1 and p2 shake p0's 18 above the share back into the duffel. Then everyone hands in the Lobby's 2
+  // (6 a round) to the 9-round cap, round 4's split sharing the 18 too: share 21. 45 of the 66 coins taken were
+  // handed in, above the honesty line (design §7.5), so the heist succeeds and p1's 3 above the share is the biggest stash.
   const lobby = (st: GameState) => run(st, move("p0", "lobby"), move("p1", "lobby"), move("p2", "lobby"), roundDeadline(st));
   let s = rookies(3);
   for (let r = 0; r < 3; r++) s = run(s, move("p0", "vault", 6), move("p1", "lobby", 1), move("p2", "lobby"), roundDeadline(s));
@@ -88,7 +89,8 @@ describe("recordGame — a scripted game", () => {
 
   it("records the ending (design §6.2, §8.1, §21 G4)", () => {
     expect(rec).toMatchObject({ seed: "record-seed", players: 3, result: "success", reason: null, endedRound: 9 });
-    expect(rec.haul).toBe(63);
+    // design §7.5: 45 of the 66 taken were handed in; the 18 shaken back earn their credit with S3a.5's meeting rules.
+    expect(rec.honesty).toBe(45 / 66);
     expect(rec.bankLeft).toBe(300 - 66);
     expect(rec.capWithBankLeft).toBe(true); // at the cap, with over a quarter of the bank left
     expect(rec.meetings).toBe(2); // none after the last round
@@ -103,14 +105,14 @@ describe("recordGame — a scripted game", () => {
   });
 
   it("records the shakedown (design §11.3)", () => {
-    expect(rec.shakedowns).toEqual([{ act: 1, emergency: false, target: "p0", stashRevealed: 18, clean: false, targetHadPocketed: true }]);
+    expect(rec.shakedowns).toEqual([{ act: 1, emergency: false, target: "p0", stashRevealed: 18 + 3, clean: false, targetHadPocketed: true }]);
   });
 
   it("records each seat's looting and pocketing", () => {
     const [p0, p1, p2] = rec.playerRecords;
-    expect(p0).toMatchObject({ id: "p0", personality: "greedy", role: "rookie", grabbed: 18 + 12, pocketed: 18, stash: 0, timesShakenDown: 1 });
-    expect(p1).toMatchObject({ personality: "opportunist", grabbed: 18, pocketed: 3, stash: 3, score: 3, winner: true, winCredit: 1 });
-    expect(p2).toMatchObject({ personality: "honest", grabbed: 18, pocketed: 0 });
+    expect(p0).toMatchObject({ id: "p0", personality: "greedy", role: "rookie", grabbed: 18 + 12, pocketed: 18, stash: 21, timesShakenDown: 1 });
+    expect(p1).toMatchObject({ personality: "opportunist", grabbed: 18, pocketed: 3, stash: 3 + 21, winner: true, winCredit: 1 });
+    expect(p2).toMatchObject({ personality: "honest", grabbed: 18, pocketed: 0, stash: 21 });
   });
 
   it("refuses a game that isn't over", () => {
@@ -130,7 +132,6 @@ describe("recordGame — bot games agree with the engine's ranking", () => {
         const engine = new Map(state.phase.outcome.ranking.map((e) => [e.player, e]));
         for (const p of rec.playerRecords) {
           expect(p.stash).toBe(engine.get(p.id)?.stash);
-          expect(p.score).toBe(engine.get(p.id)?.score);
           expect(p.timesShakenDown).toBe(state.log.filter((e) => e.type === "shakedownResolved" && e.target === p.id).length);
         }
         expect(rec.playerRecords).toHaveLength(n);

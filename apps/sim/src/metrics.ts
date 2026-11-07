@@ -17,6 +17,8 @@
 //   successful games, against the fair share 1 ÷ crew size (±5 pp target).
 // - sunk by theft: games that ended below the honesty line ÷ games (design §21
 //   G8, reported only).
+// - whole-crew wins: successful games every player won, every stash equal ÷
+//   successful games (design §8.2, §21 G6: 5–20%).
 // - cap stalls: games that ended at the round cap with over a quarter of the
 //   bank left ÷ games (G4: at most 10%).
 import type { GameRecord, PlayerRecord } from "./record";
@@ -95,6 +97,9 @@ export function theftRate(records: readonly GameRecord[]): number | null {
   return rate(records.filter((g) => g.reason === "theft").length, records.length);
 }
 
+/** A success the whole crew won together: every stash equal. design §8.2 */
+export const wholeCrewWin = (g: Pick<GameRecord, "result" | "players" | "winners">): boolean => g.result === "success" && g.winners.length === g.players;
+
 /** Share of games that ended in a bust. design §21 G3: 8–20% */
 export function bustRate(records: readonly GameRecord[]): number | null {
   return rate(records.filter((g) => g.reason === "bust").length, records.length);
@@ -159,6 +164,8 @@ export interface Metrics {
   readonly bustRate: number | null;
   readonly raids: RaidMetrics;
   readonly theftRate: number | null;
+  /** Successful games won by the whole crew ÷ successful games. design §21 G6: 5–20% */
+  readonly wholeCrewRate: number | null;
   /** Games ended at the round cap with over a quarter of the bank left. design §21 G4: ≤ 10% */
   readonly capStalls: number | null;
   /** Share of games the empty bank ended (design §6.2). */
@@ -181,6 +188,7 @@ function metrics(records: readonly GameRecord[]): Metrics {
     bustRate: bustRate(records),
     raids: raidMetrics(records),
     theftRate: theftRate(records),
+    wholeCrewRate: rate(records.filter(wholeCrewWin).length, records.filter((g) => g.result === "success").length),
     capStalls: rate(records.filter((g) => g.capWithBankLeft).length, records.length),
     bankEmptied: rate(records.filter((g) => g.bankLeft === 0).length, records.length),
     shakedowns: shakedownMetrics(records),

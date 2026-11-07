@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { PERSONALITIES, createBots, runBotGame } from "@skimjob/bots";
 import { BANK_JOB } from "@skimjob/content";
-import { type GameEvent, type GameState } from "@skimjob/engine";
+import { honesty, viewFor, type GameEvent, type GameState } from "@skimjob/engine";
 import { parseSimArgs, type SimOptions } from "./args";
 import { setupGame } from "./crew";
 import { summarize } from "./metrics";
@@ -137,7 +137,7 @@ describe("design §17.4 metrics — hand-checked against the engine on a fixed s
       if (state.phase.kind !== "ended") throw new Error("not ended");
       const { outcome } = state.phase;
       expect(rec.result).toBe(outcome.result);
-      expect(rec.haul).toBe(state.haul);
+      expect(rec.honesty).toBe(honesty(viewFor(state, state.playerOrder[0]!).honesty));
       expect(rec.winners).toEqual(outcome.winners);
       for (const p of rec.playerRecords) {
         const ps = state.players[p.id]!;

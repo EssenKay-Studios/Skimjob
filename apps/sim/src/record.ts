@@ -4,7 +4,7 @@
 // Pure: a finished GameState (plus the bot crew) in, plain data out.
 import type { RoleId, Temperament } from "@skimjob/content";
 import type { PersonalityId } from "@skimjob/bots";
-import { jobFor, rolesFor, type GameConfig, type GameEvent, type GameState, type PlayerId } from "@skimjob/engine";
+import { honesty, jobFor, rolesFor, type GameConfig, type GameEvent, type GameState, type PlayerId } from "@skimjob/engine";
 
 export interface PlayerRecord {
   readonly id: PlayerId;
@@ -14,8 +14,7 @@ export interface PlayerRecord {
   readonly tag: Temperament;
   /** A ★ role: it also wins some failures (`winsOn` non-empty). extension.md "One crew, and how you win" */
   readonly star: boolean;
-  readonly score: number;
-  /** Final stash. */
+  /** Final stash: share received + pocketed − taken back. design §7.6 */
   readonly stash: number;
   /** Coins grabbed over the game, after any short-bank cut. design §3.2 */
   readonly grabbed: number;
@@ -48,7 +47,8 @@ export interface GameRecord {
   readonly reason: "bust" | "theft" | null;
   /** Round the game ended in: the bust, the one that emptied the bank, or the round cap. design §6.2 */
   readonly endedRound: number;
-  readonly haul: number;
+  /** Honesty at the end: coins that reached the duffel ÷ coins taken. design §7.5 */
+  readonly honesty: number;
   /** Coins left in the bank at the end. design §6.1 */
   readonly bankLeft: number;
   /** It ended at the round cap with over a quarter of the bank left (design §21 G4). */
@@ -140,7 +140,7 @@ export function recordGame(state: GameState, crew: readonly PersonalityId[], rej
     result: outcome.result,
     reason: outcome.result === "failed" ? outcome.reason : null,
     endedRound,
-    haul: state.haul,
+    honesty: honesty({ reached: state.reached, taken: job.bank.coinsPerPlayer * n - state.bank - state.seized }),
     bankLeft: state.bank,
     capWithBankLeft: !(outcome.result === "failed" && outcome.reason === "bust") && endedRound === job.roundCap && state.bank * 4 > job.bank.coinsPerPlayer * n,
     wanted: state.wanted,
@@ -160,7 +160,6 @@ export function recordGame(state: GameState, crew: readonly PersonalityId[], rej
         role,
         tag: def?.tag ?? "teamPlayer",
         star: (def?.winsOn.length ?? 0) > 0,
-        score: entry?.score ?? 0,
         stash: entry?.stash ?? 0,
         grabbed: grabbed.get(id) ?? 0,
         pocketed: pocketed.get(id) ?? 0,
