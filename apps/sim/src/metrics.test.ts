@@ -2,9 +2,6 @@
 import { describe, expect, it } from "vitest";
 import {
   moleWinMetric,
-  comebackMetric,
-  decidedEarly,
-  decidedEarlyMetric,
   groupWins,
   bustRate,
   raidMetrics,
@@ -13,18 +10,19 @@ import {
   shakedownMetrics,
   successRate,
   summarize,
+  theftRate,
 } from "./metrics";
 import { gameRec, seat, shake } from "./testkit";
 
-const failed = (reason: "bust" | "target", over = {}) => gameRec({ result: "failed", reason, ...over });
+const failed = (reason: "bust" | "theft", over = {}) => gameRec({ result: "failed", reason, ...over });
 
 describe("success, failure, busts and raids — design §21 (success 55–70%, G2 raids, G3 busts 8–20%, G4 stalls)", () => {
   it("success rate is successes ÷ games", () => {
-    expect(successRate([gameRec(), gameRec(), failed("target"), failed("bust")])).toBe(0.5);
+    expect(successRate([gameRec(), gameRec(), failed("theft"), failed("bust")])).toBe(0.5);
     expect(successRate([])).toBeNull();
   });
   it("bust rate is busts ÷ games", () => {
-    expect(bustRate([gameRec(), failed("bust"), failed("target"), gameRec()])).toBe(0.25);
+    expect(bustRate([gameRec(), failed("bust"), failed("theft"), gameRec()])).toBe(0.25);
     expect(bustRate([])).toBeNull();
   });
   it("raids per game, games with a raid, and Rooftop stalls per round played", () => {
@@ -53,7 +51,7 @@ describe("group win rates — design §17.4 (each role within ±5 pp of 1 ÷ cre
   const games = [
     gameRec({ players: 4, playerRecords: players, winners: ["a"] }),
     gameRec({ players: 4, playerRecords: players, winners: ["b", "c"] }),
-    failed("target", { players: 4, playerRecords: players }),
+    failed("theft", { players: 4, playerRecords: players }),
   ];
   const byRole = groupWins(games, (p) => p.role);
 
@@ -89,39 +87,15 @@ describe("shakedown accuracy — design §17.4 (50–70% catch a real cheater)",
   });
 });
 
-describe("comeback — design §17.4 (the Act 1 leader wins under 50%)", () => {
-  const lead = (leaders: string[], topScore = 5) => ({ leaders, topScore, lead: 1 });
-  it("counts successful games with a sole Act 1 leader, and whether that leader won", () => {
-    const m = comebackMetric([
-      gameRec({ afterAct1: lead(["a"]), winners: ["a"] }),
-      gameRec({ afterAct1: lead(["a", "b"]), winners: ["b"] }), // still fully tied after tie-breaks: left out
-      gameRec({ afterAct1: lead(["a"]), winners: ["c"] }),
-      gameRec({ afterAct1: lead(["c"]), winners: ["d", "c"] }),
-      gameRec({ afterAct1: lead(["a"], 0), winners: ["a"] }), // nobody had anything yet
-      failed("target", { afterAct1: lead(["a"]) }), // no winner
-      gameRec({ afterAct1: null, winners: ["a"] }),
-    ]);
-    expect(m).toEqual({ games: 3, rate: 2 / 3 });
+describe("sunk by theft and cap stalls — design §21 G4, G8", () => {
+  it("theft rate is games sunk by theft ÷ games (reported)", () => {
+    expect(theftRate([gameRec(), failed("theft"), failed("bust"), gameRec()])).toBe(0.25);
+    expect(theftRate([])).toBeNull();
   });
-});
-
-describe("decided early — design §17.4 (under 15% settled before Act 3)", () => {
-  const act2 = (leaders: string[], lead: number) => ({ leaders, topScore: 20, lead });
-  it("a sole Act 2 leader who wins with a lead of at least half the most anyone can add in Act 3", () => {
-    expect(decidedEarly(gameRec({ afterAct2: act2(["a"], 10), act3MaxGain: 20, winners: ["a"] }))).toBe(true);
-    expect(decidedEarly(gameRec({ afterAct2: act2(["a"], 9.9), act3MaxGain: 20, winners: ["a"] }))).toBe(false);
-    expect(decidedEarly(gameRec({ afterAct2: act2(["a"], 15), act3MaxGain: 20, winners: ["b"] }))).toBe(false);
-    expect(decidedEarly(gameRec({ afterAct2: act2(["a", "b"], 15), act3MaxGain: 20, winners: ["a"] }))).toBe(false);
-    expect(decidedEarly(failed("target", { afterAct2: act2(["a"], 15), act3MaxGain: 20 }))).toBe(false);
-  });
-  it("counts successful games only, so it doesn't move with the success rate", () => {
-    const m = decidedEarlyMetric([
-      gameRec({ afterAct2: act2(["a"], 15), winners: ["a"] }),
-      gameRec(),
-      failed("bust", { endedRound: 5, endedAct: 2 }),
-      failed("target", { afterAct2: act2(["a"], 15) }),
-    ]);
-    expect(m).toEqual({ games: 2, rate: 0.5 });
+  it("cap stalls are games that ended at the cap with over a quarter of the bank left ÷ games", () => {
+    const s = summarize([gameRec({ capWithBankLeft: true }), gameRec(), gameRec(), gameRec()]);
+    expect(s.overall.capStalls).toBe(0.25);
+    expect(s.overall.theftRate).toBe(0);
   });
 });
 
@@ -141,7 +115,7 @@ describe("Mole win rate — design §17.4, §3", () => {
     const mole = (id: string) => seat({ id, role: "mole" });
     const records = [
       gameRec({ result: "failed", reason: "bust", playerRecords: [mole("m0"), mole("m1"), seat({ id: "d", role: "fixer" })], winners: ["m0", "m1", "d"] }),
-      gameRec({ result: "failed", reason: "target", playerRecords: [mole("m0")], winners: ["m0"] }),
+      gameRec({ result: "failed", reason: "theft", playerRecords: [mole("m0")], winners: ["m0"] }),
       gameRec({ playerRecords: [mole("m0"), seat({ id: "x" })], winners: ["x"] }),
       gameRec({ playerRecords: [seat({ id: "x" })], winners: ["x"] }), // no Mole: left out
     ];

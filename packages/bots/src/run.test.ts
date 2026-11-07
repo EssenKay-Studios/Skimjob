@@ -190,7 +190,7 @@ describe("personalities behave as design §17.3 describes", () => {
 
   it("sanity: honest crews usually pull the job off, and most shakedowns in a mixed crew catch someone with loot", () => {
     // Loose bounds so the balance pass can retune numbers without breaking this; the simulator reports the real figures.
-    // 0.6 (was 0.8) while R6's checkpoints run on R7's coins, bank and raids (S3a.1–S3a.2), until S3a.3 replaces them.
+    // 0.6 (was 0.8): R7's raids and busts (S3a.2) end some honest games too, until the S5 balance pass tunes them.
     expect(stats(["honest"], 5, 20).success).toBeGreaterThanOrEqual(0.6);
     expect(all.shakedowns).toBeGreaterThan(0);
     // 0.15 (was 0.5): raids seize whole grabs, pockets included, so stashes are smaller against R6's clean line
@@ -225,7 +225,7 @@ describe("bots with the Wildcards and the Mole dealt — extension.md Build note
     expect(log.filter((e) => e.type === "abilityResolved" && e.ability.kind === "loopCameras").length).toBeGreaterThan(0);
   });
 
-  // design §5.2, §8.4: the Mole rings only while it leans toward a missed target, which is rare, so over 30 smaller games.
+  // design §5.2, §8.4: the Mole rings only while it leans toward a heist sunk by theft, which is rare, so over 30 smaller games.
   it("the Mole rings in real games, and its rings are never refused", () => {
     const small = Array.from({ length: 30 }, (_, g) => {
       const c = { ...config(5, `probe-5-${g}`), rolePool: ["hacker", "mole", "lookout", "rookie", "auditor"] };

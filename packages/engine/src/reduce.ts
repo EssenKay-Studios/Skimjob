@@ -149,8 +149,6 @@ function applyChange(state: GameState, event: GameEvent): GameState {
         role: event.role,
         stash: 0,
         roleState: NO_ROLE_STATE,
-        totalHandedIn: 0,
-        timesShakenDown: 0,
         emergencyMeetingUsed: false,
         consecutiveMissedMoves: 0,
         sealedVote: null,
@@ -191,10 +189,7 @@ function applyChange(state: GameState, event: GameEvent): GameState {
         consecutiveMissedMoves: p.consecutiveMissedMoves + 1,
       }));
     case "coinsGrabbed":
-      return updatePlayer(state, event.player, (p) => ({
-        stash: p.stash + event.pocket,
-        totalHandedIn: p.totalHandedIn + event.duffel,
-      }));
+      return updatePlayer(state, event.player, (p) => ({ stash: p.stash + event.pocket }));
     case "abilityResolved": {
       const { ability } = event;
       switch (ability.kind) {
@@ -325,13 +320,8 @@ function applyChange(state: GameState, event: GameEvent): GameState {
       return afterShakedown(state);
     case "shakedownResolved": {
       const next = { ...afterShakedown(state), haul: state.haul + event.taken - event.compensation };
-      return updatePlayer(next, event.target, (p) => ({
-        stash: p.stash - event.taken + event.compensation,
-        timesShakenDown: p.timesShakenDown + 1,
-      }));
+      return updatePlayer(next, event.target, (p) => ({ stash: p.stash - event.taken + event.compensation }));
     }
-    case "checkpointChecked":
-      return state;
     // ------------------------------------------------ perks. design §8.3
     case "tokenEarned":
       return updatePlayer(state, event.player, (p) => withRoleState(p, { tokens: p.roleState.tokens + 1 }));

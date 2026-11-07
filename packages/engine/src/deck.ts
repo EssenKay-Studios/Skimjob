@@ -3,7 +3,7 @@
 //
 // Cards are data in @skimjob/content; each kind of effect is one small
 // function here. All draws go through the command's `Draw`.
-import { EVENTS, EVENT_DECK, EVENTS_FROM_ROUND, ROUNDS_PER_ACT, type EventDef, type EventEffect, type EventId, type JobDef, type RoomId } from "@skimjob/content";
+import { EVENTS, EVENT_DECK, EVENTS_FROM_ROUND, type EventDef, type EventEffect, type EventId, type JobDef, type RoomId } from "@skimjob/content";
 import type { ActiveCard, GameConfig, GameEvent, GameState, PlayerId, PlayerState } from "./types";
 import { PUBLIC, privateTo } from "./types";
 import type { Draw } from "./handle";
@@ -13,10 +13,9 @@ import { actOfRound } from "./acts";
 /** Events are on unless the host turns them off. design §8.1, §15 */
 export const eventsOn = (config: GameConfig): boolean => config.eventsEnabled;
 
-/** Whether a card flips at the start of `round`: events on, from `EVENTS_FROM_ROUND`, not past the last round. design §10 */
+/** Whether a card flips at the start of `round`: events on, from `EVENTS_FROM_ROUND`, not past the round cap. design §6.2, §13 */
 export function cardRound(config: GameConfig, round: number): boolean {
-  const last = jobFor(config).checkpoints.perPlayer.length * ROUNDS_PER_ACT;
-  return eventsOn(config) && round >= EVENTS_FROM_ROUND && round <= last;
+  return eventsOn(config) && round >= EVENTS_FROM_ROUND && round <= jobFor(config).roundCap;
 }
 
 /** The card's definition. Throws for ids the content doesn't have (the log only holds drawn ones). */

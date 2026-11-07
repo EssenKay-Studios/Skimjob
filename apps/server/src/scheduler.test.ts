@@ -1,4 +1,5 @@
 // Scheduler and elastic timing. docs/m2-plan.md M2-4; design §4.1, §11.1, §11.3
+import { BANK_JOB } from "@skimjob/content";
 import type { GameState, VoteVisibility } from "@skimjob/engine";
 import type { FastifyInstance } from "fastify";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -13,7 +14,7 @@ import { createGameStore, type GameStore } from "./store";
 import { testDb } from "./testkit";
 import { tickFor, TICK_MS, TIMINGS } from "./timing";
 
-const QUICK = TIMINGS.quick;
+const QUICK = TIMINGS["15m"];
 
 let db: Db;
 let clock: FakeClock;
@@ -83,7 +84,7 @@ async function step(gameId: string) {
   return app.scheduler.tick();
 }
 
-describe("presets (design §4.1)", () => {
+describe("presets (design §17)", () => {
   it("the scheduler tick shrinks with TIME_SCALE (dev and E2E), never below 100 ms", () => {
     expect(tickFor(1)).toBe(TICK_MS);
     expect(tickFor(0.1)).toBe(100);
@@ -91,18 +92,13 @@ describe("presets (design §4.1)", () => {
     expect(tickFor(0.01)).toBe(100);
   });
 
-  it("spread 9 rounds and 3 meetings over about the chosen length; Quick is about 15 minutes", () => {
-    const total = (k: keyof typeof TIMINGS) => (9 * (TIMINGS[k].roundMs + TIMINGS[k].alibiMs) + 3 * TIMINGS[k].meetingMs) / 60_000;
-    expect(total("quick")).toBe(15);
-    expect(total("1h")).toBeGreaterThan(50);
-    expect(total("1h")).toBeLessThanOrEqual(60);
-    expect(total("3h")).toBeGreaterThan(160);
-    expect(total("3h")).toBeLessThanOrEqual(180);
-    expect(total("1d") / 60).toBeLessThanOrEqual(24);
-    expect(total("3d") / 60).toBeLessThanOrEqual(72 + 1);
-    expect(total("1w") / 60).toBeLessThanOrEqual(7 * 24);
-    // §4.1: under 3 hours meetings are auto-scheduled; window lengths in the table's ranges.
-    expect([TIMINGS.quick, TIMINGS["1h"], TIMINGS["3h"]].every((t) => t.autoMeetings)).toBe(true);
+  it("the round deadline is the session length ÷ the round cap (design §17.1), with §17.3's grace", () => {
+    const rounds = (k: keyof typeof TIMINGS) => (BANK_JOB.roundCap * TIMINGS[k].roundMs) / 60_000;
+    expect([rounds("15m"), rounds("1h"), rounds("3h"), rounds("1d") / 60, rounds("3d") / 60, rounds("1w") / 60]).toEqual([15, 60, 180, 24, 72, 168]);
+    expect([TIMINGS["1h"].roundMs, TIMINGS["3h"].roundMs, TIMINGS["1d"].roundMs, TIMINGS["3d"].roundMs, TIMINGS["1w"].roundMs].map((ms) => ms / 60_000)).toEqual([5, 15, 120, 360, 840]);
+    expect(["1h", "3h", "1d", "3d", "1w"].map((k) => TIMINGS[k as keyof typeof TIMINGS].lockInGraceMs / 1000)).toEqual([10, 30, 120, 300, 300]);
+    // §9.4, §17.1: 3 hours or less, meetings open automatically; window lengths in the table's ranges.
+    expect([TIMINGS["15m"], TIMINGS["1h"], TIMINGS["3h"]].every((t) => t.autoMeetings)).toBe(true);
     expect(TIMINGS["1h"].meetingMs).toBe(3 * 60_000);
     expect(TIMINGS["3h"].meetingMs).toBe(5 * 60_000);
     for (const k of ["1d", "3d", "1w"] as const) expect(TIMINGS[k].autoMeetings).toBe(false);
@@ -111,8 +107,8 @@ describe("presets (design §4.1)", () => {
 
 describe("all-bot games on a fake clock (M2-4 acceptance)", () => {
   for (const voteVisibility of ["hiddenThenRevealed", "open", "secret"] as VoteVisibility[]) {
-    it(`a 15-min game finishes in ${voteVisibility} mode; deadlines move only by pauses, rounds take 45 s and alibis 15 s, the shakedown window runs in full`, { timeout: 60_000 }, async () => {
-      const { id } = await startGame(5, { sessionLength: "quick", voteVisibility });
+    it(`a 15-min game finishes in ${voteVisibility} mode; deadlines move only by pauses, rounds take the session ÷ the round cap, the shakedown window runs in full`, { timeout: 60_000 }, async () => {
+      const { id } = await startGame(5, { sessionLength: "15m", voteVisibility });
       const started = clock.now();
       const seen = new Map<string, number>();
       const pausedSince = new Map<string, number>();
@@ -120,7 +116,7 @@ describe("all-bot games on a fake clock (M2-4 acceptance)", () => {
         for (const d of await deadlines(id)) {
           if (!seen.has(d.key)) {
             seen.set(d.key, d.due);
-            if (d.key.startsWith("round:") && !d.paused) expect(d.due - clock.now()).toBe(QUICK.roundMs); // design §4.1
+            if (d.key.startsWith("round:") && !d.paused) expect(d.due - clock.now()).toBe(QUICK.roundMs); // design §17.1
             if (d.key.startsWith("alibis:") && !d.paused) expect(d.due - clock.now()).toBe(QUICK.alibiMs); // design §5.4
             if (d.key.startsWith("closeMeeting:")) expect(d.due - clock.now()).toBe(QUICK.meetingMs);
             // STATUS: the shakedown window always runs its full server-set length. design §11.3
@@ -138,10 +134,11 @@ describe("all-bot games on a fake clock (M2-4 acceptance)", () => {
       }
       const end = await load(id);
       expect(end.phase.kind).toBe("ended");
-      expect(count(end, "meetingOpened")).toBeGreaterThan(0);
+      // A bust can end a bot game before round 3's meeting (design §5.5); past it, a regular meeting was held.
+      if (end.resolvedRound > 3) expect(count(end, "meetingOpened")).toBeGreaterThan(0);
       expect(await deadlines(id)).toEqual([]);
       expect(app.live.botRefusals.filter((r) => r.gameId === id)).toEqual([]);
-      for (let r = 1; r <= 9; r++) if (end.resolvedRound >= r) expect(count(end, "roundResolved", (e) => e.round === r)).toBe(1);
+      for (let r = 1; r <= BANK_JOB.roundCap; r++) if (end.resolvedRound >= r) expect(count(end, "roundResolved", (e) => e.round === r)).toBe(1);
       expect(clock.now() - started).toBeGreaterThanOrEqual(end.resolvedRound * QUICK.roundMs);
     });
   }
@@ -149,7 +146,7 @@ describe("all-bot games on a fake clock (M2-4 acceptance)", () => {
 
 describe("restarts (M2-4 acceptance)", () => {
   it("killing and rebuilding the server mid-round keeps the deadline: it fires once, on time", { timeout: 60_000 }, async () => {
-    const { id } = await startGame(0, { sessionLength: "quick" }, 2);
+    const { id } = await startGame(0, { sessionLength: "15m" }, 2);
     const [round1] = await deadlines(id);
     expect(round1).toMatchObject({ key: "round:1", paused: false });
     clock.advance(QUICK.roundMs / 2);
@@ -172,7 +169,7 @@ describe("restarts (M2-4 acceptance)", () => {
   });
 
   it("a crash after a deadline was stored but before its row was cleaned up: no double, no skip", { timeout: 60_000 }, async () => {
-    const { id } = await startGame(0, { sessionLength: "quick" }, 2);
+    const { id } = await startGame(0, { sessionLength: "15m" }, 2);
     clock.advance(QUICK.roundMs);
     await app.scheduler.tick();
     // As if the process died between storing round 1's events and reconciling.
@@ -192,7 +189,7 @@ describe("restarts (M2-4 acceptance)", () => {
 
 describe("failures (PR #22 review)", () => {
   it("a server failure keeps the deadline and retries it with backoff; it fires once it works", { timeout: 60_000 }, async () => {
-    const { id } = await startGame(0, { sessionLength: "quick" }, 2);
+    const { id } = await startGame(0, { sessionLength: "15m" }, 2);
     let failures = 2;
     const sched = createScheduler({
       db,
@@ -220,7 +217,7 @@ describe("failures (PR #22 review)", () => {
   });
 
   it("a refused (stale) deadline is dropped and the game's real next deadline is planned", { timeout: 60_000 }, async () => {
-    const { id } = await startGame(0, { sessionLength: "quick" }, 2);
+    const { id } = await startGame(0, { sessionLength: "15m" }, 2);
     clock.advance(QUICK.roundMs);
     await app.scheduler.tick();
     // As if reconcile failed after round 1 resolved: the fired row is left and nothing is planned.
@@ -238,7 +235,7 @@ describe("failures (PR #22 review)", () => {
 
 describe("pausing (design §4.1, §11.1)", () => {
   it("an emergency opens after its notice; the round is paused while it is open and resumes with the time it had left", { timeout: 60_000 }, async () => {
-    const { id, host } = await startGame(0, { sessionLength: "quick" }, 2);
+    const { id, host } = await startGame(0, { sessionLength: "15m" }, 2);
     const [round1] = await deadlines(id);
     clock.advance(10_000);
     const ws = await app.injectWS(`/games/${id}/ws`, { headers: { cookie: `${SESSION_COOKIE}=${host}` } });
@@ -273,7 +270,7 @@ describe("pausing (design §4.1, §11.1)", () => {
 
 describe("early round end under a pause (review of #44; owner decision, 2 Nov; design §4.1, §11.1)", () => {
   it("everyone locks in just before an emergency opens: roundEarly and round both pause, resume with the time they had left, and the round resolves once", { timeout: 60_000 }, async () => {
-    const { id, host } = await startGame(2, { sessionLength: "quick" });
+    const { id, host } = await startGame(2, { sessionLength: "15m" });
     const ws = await app.injectWS(`/games/${id}/ws`, { headers: { cookie: `${SESSION_COOKIE}=${host}` } });
     const replies: string[] = [];
     ws.on("message", (d) => replies.push(String(d)));
@@ -339,7 +336,7 @@ describe("early round end under a pause (review of #44; owner decision, 2 Nov; d
 
 describe("planDeadlines", () => {
   it("an ended game has none", async () => {
-    const { id } = await startGame(1, { sessionLength: "quick" });
+    const { id } = await startGame(1, { sessionLength: "15m" });
     const s = await load(id);
     expect(planDeadlines({ ...s, phase: { kind: "ended", outcome: { kind: "success" } as never } }, QUICK, 0)).toEqual([]);
   });
@@ -352,7 +349,7 @@ describe("planDeadlines", () => {
     const open = (t: typeof QUICK, now: number) => planDeadlines(waiting, t, now).find((d) => d.key === "openMeeting:act-1")!.dueAt;
     expect(open(TIMINGS["1d"], at - 5000)).toBe(at);
     expect(open(TIMINGS["1d"], at + 5000)).toBe(at + 5000);
-    expect(open(TIMINGS.quick, at - 5000)).toBe(at - 5000);
+    expect(open(TIMINGS["15m"], at - 5000)).toBe(at - 5000);
     // A slot that isn't a time ("act-1", as bots propose) opens as soon as the act's last round has resolved.
     expect(planDeadlines({ ...waiting, scheduledMeeting: { meetingId: "act-1", act: 1, slot: "act-1" } }, TIMINGS["1d"], 7)[0]!.dueAt).toBe(7);
     // Nobody locked a slot: the server picks one meetingLeadMs ahead, at once. design §11.1

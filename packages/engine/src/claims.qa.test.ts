@@ -79,7 +79,7 @@ describe("claimRole — QA PR #37, design §8, §12.1", () => {
     expect(phases).toEqual(["planning", "alibis", "awaitingMeeting", "meeting"]);
   });
 
-  it("claims in all three acts, then refused once the game really ends (played out, not a patched phase)", () => {
+  it("claims in every act up to the round cap, then refused once the game really ends (played out, not a patched phase)", () => {
     let s = createGame(cfg(3));
     const acts: number[] = [];
     for (let guard = 0; s.phase.kind !== "ended" && guard < 100; guard++) {
@@ -101,7 +101,7 @@ describe("claimRole — QA PR #37, design §8, §12.1", () => {
       } else if (s.phase.kind !== "ended") throw new Error(`unexpected phase ${s.phase.kind}`);
     }
     expect(s.phase.kind).toBe("ended");
-    expect(acts).toEqual([1, 2, 3]);
+    expect(acts).toEqual([1, 2, 3, 4]); // rounds 10–12 are act 4, with no meeting after them (design §6.2)
     expect(refused(s, { type: "claimRole", player: "p1", role: "rookie" })).toMatch(/over/);
   });
 

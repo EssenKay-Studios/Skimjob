@@ -9,8 +9,6 @@ import { describeEvent, roleName, roomName, type DescribeContext } from "./descr
 /** What earned a token, after "for". */
 export function triggerText(t: TokenTrigger): string {
   switch (t) {
-    case "checkpointMade":
-      return "a checkpoint made";
     case "watchedShakenDirty":
       return "catching someone they watched";
     case "auditedShakenDirty":
@@ -26,9 +24,9 @@ export function triggerText(t: TokenTrigger): string {
   }
 }
 
-const FAILURE: Record<FailureReason, string> = { bust: "the crew is busted", target: "the target is missed" };
+const FAILURE: Record<FailureReason, string> = { bust: "the crew is busted", theft: "the heist is sunk by theft" };
 
-/** "★ Also wins if the target is missed", or "" for a role that wins only a success. */
+/** "★ Also wins if the heist is sunk by theft", or "" for a role that wins only a success. */
 export function winsOnText(winsOn: readonly FailureReason[]): string {
   return winsOn.length === 0 ? "" : `★ Also wins if ${winsOn.map((r) => FAILURE[r]).join(" or ")}`;
 }
@@ -45,7 +43,7 @@ export function whyText(ending: RevealEnding, ctx: DescribeContext): string {
       ? `Busted. ${BUST_ROLE_TEXT} The biggest stash up there wins: ${list(ending.winners.map(who))}.`
       : `Busted. ${BUST_ROLE_TEXT} Nobody was on the Rooftop, so nobody wins: the ranking is a loss.`;
   }
-  const reason = "the crew missed the Haul target";
+  const reason = "sunk by theft: under two-thirds of the coins taken reached the crew";
   switch (ending.why) {
     case "success":
       return `Job done, so the top of the ranking wins: ${top}.`;

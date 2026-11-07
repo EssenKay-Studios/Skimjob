@@ -6,7 +6,7 @@
 import { PERKS, type PerkId } from "@skimjob/content";
 import {
   rolesFor,
-  type CheckpointChecked,
+  type ActNumber,
   type MeetingKind,
   type MeetingResult,
   type PlayerId,
@@ -49,7 +49,7 @@ export interface ProposalRow {
 }
 
 export interface Planner {
-  readonly act: 1 | 2 | 3;
+  readonly act: ActNumber;
   /** The act's meeting is locked in (and not yet open). */
   readonly locked: { readonly meetingId: string; readonly slot: string } | null;
   readonly proposals: readonly ProposalRow[];
@@ -134,7 +134,7 @@ export interface BallotRow {
 export interface OpenMeeting {
   readonly meetingId: string;
   readonly kind: MeetingKind;
-  readonly act: 1 | 2 | 3;
+  readonly act: ActNumber;
   readonly calledBy: PlayerId | null;
   readonly mode: VoteVisibility;
   /** Your ballot so far, and whether it came from your sealed vote. */
@@ -231,7 +231,7 @@ export function tallyRows(tally: Tally, result: MeetingResult | null = null): Ta
 export interface MeetingOutcome {
   readonly meetingId: string;
   readonly kind: MeetingKind;
-  readonly act: 1 | 2 | 3;
+  readonly act: ActNumber;
   readonly result: MeetingResult;
   readonly tally: Tally;
   /** Everyone's ballot once the window closed (Hidden and Open modes); null in Secret mode. design §11.2 */
@@ -242,12 +242,11 @@ export interface MeetingOutcome {
   readonly cancelled: boolean;
   /** The bank paid a blessed player's compensation (Priest): the amount back in the Haul. */
   readonly blessing: number | null;
-  readonly checkpoint: CheckpointChecked | null;
   /** Still the latest news: no round has resolved and no meeting opened since. */
   readonly fresh: boolean;
 }
 
-/** The latest closed meeting and what followed it: shakedown, compensation, blessing, checkpoint. */
+/** The latest closed meeting and what followed it: shakedown, compensation, blessing. */
 export function latestOutcome(view: PlayerView): MeetingOutcome | null {
   let start = -1;
   for (let i = view.ledger.length - 1; i >= 0; i--) {
@@ -266,7 +265,6 @@ export function latestOutcome(view: PlayerView): MeetingOutcome | null {
   let shakedown: ShakedownResolved | null = null;
   let cancelled = false;
   let blessing: number | null = null;
-  let checkpoint: CheckpointChecked | null = null;
   let fresh = true;
   for (const { event: e } of view.ledger.slice(start + 1)) {
     if (e.type === "roundResolved" || e.type === "meetingOpened") {
@@ -276,11 +274,10 @@ export function latestOutcome(view: PlayerView): MeetingOutcome | null {
     if (e.type === "shakedownResolved" && e.meetingId === id) shakedown = e;
     else if (e.type === "shakedownCancelled" && e.meetingId === id) cancelled = true;
     else if (e.type === "blessingPaid" && e.meetingId === id) blessing = e.amount;
-    else if (e.type === "checkpointChecked" && checkpoint === null) checkpoint = e;
   }
   const ballots = closed.ballots ? voteTargetsAll(view).filter((p) => Object.hasOwn(closed.ballots!, p)).map((p) => ({ player: p, vote: closed.ballots![p]! })) : null;
   const deciding = view.phase.kind === "shakedownPending" && view.phase.meetingId === id;
-  return { meetingId: id, kind, act, result: closed.result, tally: closed.tally, ballots, deciding, shakedown, cancelled, blessing, checkpoint, fresh };
+  return { meetingId: id, kind, act, result: closed.result, tally: closed.tally, ballots, deciding, shakedown, cancelled, blessing, fresh };
 }
 
 /** Everyone in seat order, you included. */
@@ -349,7 +346,7 @@ export interface ClaimOption {
  * Your role claim for the current act: the roles on offer and the one you
  * already claimed (once between meetings); null before or after the game.
  */
-export function claimState(view: PlayerView): { readonly act: 1 | 2 | 3; readonly claimed: string | null; readonly options: readonly ClaimOption[] } | null {
+export function claimState(view: PlayerView): { readonly act: ActNumber; readonly claimed: string | null; readonly options: readonly ClaimOption[] } | null {
   if (view.phase.kind === "ended" || view.phase.kind === "setup") return null;
   const act = view.act;
   let claimed: string | null = null;

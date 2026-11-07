@@ -266,7 +266,7 @@ describe("QA: hostile frames are dropped, never half-rendered", () => {
 describe("QA: game events in the crew feed while phases change", () => {
   const ev = (type: string, visibility: GameEvent["visibility"] = { kind: "public" }) => ({ type, visibility }) as unknown as GameEvent;
   it("phase changes and the end of the game get a row; private and secret events never do", () => {
-    for (const type of ["roundResolved", "meetingOpened", "meetingClosed", "gameEnded", "eventFlipped", "checkpointChecked"]) expect(feedWorthy(ev(type)), type).toBe(true);
+    for (const type of ["roundResolved", "meetingOpened", "meetingClosed", "gameEnded", "eventFlipped"]) expect(feedWorthy(ev(type)), type).toBe(true);
     for (const type of ["roundStarted", "alibisClosed", "alibiPosted"]) expect(feedWorthy(ev(type)), type).toBe(false);
     expect(feedWorthy(ev("roundResolved", { kind: "private", player: "p1" }))).toBe(false);
     expect(feedWorthy(ev("voteCast", { kind: "secret", player: "p1" }))).toBe(false);

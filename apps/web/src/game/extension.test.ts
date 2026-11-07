@@ -1,5 +1,5 @@
 // Extension helpers (docs/extension.md), from real engine views: role facts,
-// the target bar, gap box, shop and perk uses, endings.
+// the gap box, shop and perk uses, endings.
 import { BANK_JOB, DECKS, PERKS, ROLES } from "@skimjob/content";
 import {
   PUBLIC,
@@ -18,7 +18,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { EndingNote } from "../components/Extension";
 import { describeEvent } from "./describeEvent";
-import { endingText, gapInfo, howYouWin, perkUses, roleInfo, roleListInfo, shopState, targetBar, usedPerkThisRound } from "./extension";
+import { endingText, gapInfo, howYouWin, perkUses, roleInfo, roleListInfo, shopState, usedPerkThisRound } from "./extension";
 import { abilityOffers } from "./meeting";
 import { deckPatch, deckRoles, rolePatch } from "../components/DeckSettings";
 import type { LobbySettings } from "../api";
@@ -45,7 +45,7 @@ function run(state: GameState, ...commands: (PlayerCommand | SystemCommand)[]): 
 const round = (r: number): SystemCommand => ({ type: "advance", deadline: { kind: "round", round: r } });
 const alibis = (r: number): SystemCommand => ({ type: "advance", deadline: { kind: "alibis", round: r } });
 const tokens = (s: GameState, n: number, player = "p1") => {
-  for (let i = 0; i < n; i++) s = applyEvent(s, { type: "tokenEarned", visibility: privateTo(player), player, trigger: "checkpointMade" });
+  for (let i = 0; i < n; i++) s = applyEvent(s, { type: "tokenEarned", visibility: privateTo(player), player, trigger: "watchedShakenDirty" });
   return s;
 };
 
@@ -53,9 +53,9 @@ describe("role facts (extension.md Roles)", () => {
   it("gives every role a tag and a How you win line; ★ roles name the failures they win", () => {
     expect(roleInfo("rookie")).toMatchObject({ tagLabel: "Team player", star: false, howYouWin: "Have the biggest stash when the job succeeds." });
     expect(roleInfo("hacker")).toMatchObject({ tagLabel: "Wildcard", star: false, howYouWin: "Have the biggest stash when the job succeeds." });
-    expect(roleInfo("mole")).toMatchObject({ tagLabel: "Lone wolf", star: true, howYouWin: "Have the biggest stash when the job succeeds, or when the final target is missed." });
-    expect(howYouWin(["target"])).toMatch(/or when the final target is missed\.$/);
-    expect(howYouWin(["target"])).toBe(howYouWin(ROLES.mole!.winsOn));
+    expect(roleInfo("mole")).toMatchObject({ tagLabel: "Lone wolf", star: true, howYouWin: "Have the biggest stash when the job succeeds, or the biggest of all when the heist is sunk by theft." });
+    expect(howYouWin(["theft"])).toMatch(/when the heist is sunk by theft\.$/);
+    expect(howYouWin(["theft"])).toBe(howYouWin(ROLES.mole!.winsOn));
   });
 
   it("reads powers and rewards between meetings, with numbers from content", () => {
@@ -77,14 +77,7 @@ describe("role facts (extension.md Roles)", () => {
   });
 });
 
-describe("the target bar and gap box (extension.md: What the app works out for you)", () => {
-  it("shows the Haul against the next meeting's target", () => {
-    const v = viewFor(createGame(config()), "p1");
-    const t = targetBar(v);
-    expect(t.text).toBe(`Haul 0 / ${BANK_JOB.checkpoints.perPlayer[0]! * 4} needed by the next meeting`);
-    expect(t.ifMissed).toBe("nothing lost if missed");
-  });
-
+describe("the gap box (extension.md: What the app works out for you)", () => {
   it("adds up the alibis against the Haul's growth", () => {
     let s = run(createGame(config()), round(1));
     const v0 = viewFor(s, "p1");
@@ -160,14 +153,14 @@ describe("no tells (extension.md Situations)", () => {
 
 describe("endings (extension.md Winning and losing)", () => {
   it("says how it ended and marks a failure with no qualified winner as a loss", () => {
-    expect(endingText({ result: "success", winners: ["p1"] })).toEqual({ title: "Final target met with no bust", badge: "Biggest stash", loss: false });
+    expect(endingText({ result: "success", winners: ["p1"] })).toEqual({ title: "Job done: honest enough, and no bust", badge: "Biggest stash", loss: false });
     expect(endingText({ result: "failed", reason: "bust", winners: [] })).toMatchObject({ badge: "Wins over the Rooftop", loss: true });
-    expect(endingText({ result: "failed", reason: "target", winners: [] })).toMatchObject({ badge: "Wins on a missed target", loss: true });
+    expect(endingText({ result: "failed", reason: "theft", winners: [] })).toMatchObject({ badge: "Wins a heist sunk by theft", loss: true });
   });
 
   it("doesn't call a failure with a ★ winner a loss", () => {
     expect(endingText({ result: "failed", reason: "bust", winners: ["p2"] })).toMatchObject({ title: "Busted. On a bust, only the Rooftop gets away", badge: "Wins over the Rooftop", loss: false });
-    expect(endingText({ result: "failed", reason: "target", winners: ["p3"] }).loss).toBe(false);
+    expect(endingText({ result: "failed", reason: "theft", winners: ["p3"] }).loss).toBe(false);
     const note = (winners: string[]) => renderToStaticMarkup(createElement(EndingNote, { outcome: { result: "failed", reason: "bust", winners }, name: (id: string) => (id === "p1" ? "You" : id === "p2" ? "Ben" : "Cy") }));
     expect(note(["p2"])).toContain("Ben wins over the Rooftop.");
     expect(note(["p2"])).not.toContain("loss");
@@ -190,7 +183,7 @@ describe("lobby deck settings (extension.md Host settings)", () => {
   };
 
   it("plays the host's deck at every session length", () => {
-    expect(deckRoles({ ...base, sessionLength: "quick" })).toEqual(DECKS.standard);
+    expect(deckRoles({ ...base, sessionLength: "15m" })).toEqual(DECKS.standard);
   });
 
   it("makes Starter only the no-events deck", () => {

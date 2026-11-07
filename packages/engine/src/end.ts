@@ -1,21 +1,15 @@
-// End of game: the final ranking, tie-breaks and winners.
-// design §3 (winning and losing), §13 (the reveal)
+// End of game: the end check after a round, the final ranking and the winners.
+// design §6.2 (how the game ends), §8 (winning), §15.5 (the reveal)
 //
-// Pure: the round loop and the final meeting call `gameEnded` with the events
-// they have produced so far, which are folded first, so the ranking sees the
-// last round's splits and the final meeting's shakedown.
+// Pure: the round loop calls `gameEnded` with the events it has produced so
+// far, which are folded first, so the ranking sees the last round's coins.
 import type { FailureReason } from "@skimjob/content";
 import type { GameEnded, GameEvent, GameState, Outcome, PlayerId, PlayerState, RankEntry } from "./types";
 import { PUBLIC } from "./types";
 import { applyEvent } from "./reduce";
-import { rolesFor, winsOn, type RoleTable } from "./overrides";
+import { jobFor, rolesFor, winsOn, type RoleTable } from "./overrides";
 
-/** design §3: higher score, then fewer shakedowns, then more handed in. 0 means a full tie. */
-function compare(a: RankEntry, b: RankEntry): number {
-  return b.score - a.score || a.timesShakenDown - b.timesShakenDown || b.totalHandedIn - a.totalHandedIn;
-}
-
-/** Everyone, best first, scored by final stash (extension.md "One crew, and how you win"); a full tie keeps seat order. design §3 */
+/** Everyone, biggest stash first; equal stashes keep seat order (no tie-break, design §8.5). design §8.6 */
 export function ranking(state: GameState): RankEntry[] {
   const entries = state.playerOrder.map((id): RankEntry => {
     const p = state.players[id] as PlayerState;
@@ -24,28 +18,23 @@ export function ranking(state: GameState): RankEntry[] {
       role: p.role,
       score: p.stash,
       stash: p.stash,
-      timesShakenDown: p.timesShakenDown,
-      totalHandedIn: p.totalHandedIn,
     };
   });
-  return entries.sort(compare); // stable: seat order breaks full ties
+  return entries.sort((a, b) => b.score - a.score); // stable: seat order for equal stashes
 }
 
-/**
- * Players tied with the first place on every tie-break (joint winners,
- * provisional). Also the simulator's "leader" at a checkpoint. design §3
- */
+/** Every player tied for the biggest stash: all of them win (design §8.5), the whole crew when every stash is equal (§8.2). */
 export function leadersOf(ranked: readonly RankEntry[]): PlayerId[] {
   const first = ranked[0];
-  return first ? ranked.filter((e) => compare(e, first) === 0).map((e) => e.player) : [];
+  return first ? ranked.filter((e) => e.score === first.score).map((e) => e.player) : [];
 }
 
 /**
- * extension.md "One crew, and how you win" (Build notes "Win rule"): the top
- * group is everyone level at the top after the tie-breaks. A success is won by
- * the top group, whatever their roles. A failure is won only by top-group
- * members whose role wins that ending (`winsOn`), else by nobody.
- * The full ranking is always kept.
+ * design §8.5 "Who can win, by ending": a success is won by every player tied
+ * for the biggest stash. A heist sunk by theft is won only by those of them
+ * whose role wins it (`winsOn`: the Mole and the Fixer, each copy on its own, until S3a.6 moves
+ * it into their handlers), else by nobody. A bust is won by the escapees tied for the biggest
+ * stash among them, any role (§5.5). The full ranking is always kept (§8.6).
  */
 export function outcomeFor(state: GameState, failure: FailureReason | null, roles: RoleTable = rolesFor(state.config), escapees: readonly PlayerId[] = []): Outcome {
   const ranked = ranking(state);
@@ -59,6 +48,32 @@ export function outcomeFor(state: GameState, failure: FailureReason | null, role
   }
   const role = new Map(ranked.map((e) => [e.player, e.role]));
   return { result: "failed", reason: failure, ranking: ranked, winners: top.filter((id) => winsOn(roles, role.get(id) ?? "", failure)) };
+}
+
+/**
+ * design §7.5: coins that reached the duffel ÷ coins taken from the bank, over
+ * the whole game; seized coins count neither way, and before any coin is taken
+ * it reads full. The coins that reached the duffel are the Haul until S3a.4
+ * builds the duffel.
+ */
+export const honesty = (reached: number, taken: number): number => (taken === 0 ? 1 : reached / taken);
+
+/** Coins taken from the bank so far, seized ones left out (design §7.5): the bank's start less what is left and what was seized. */
+function coinsTaken(state: GameState): number {
+  return jobFor(state.config).bank.coinsPerPlayer * state.playerOrder.length - state.bank - state.seized;
+}
+
+/**
+ * design §4.2 step 8, §6.2: the end check after a round that didn't bust. The
+ * game ends once the bank is empty or `round` is the round cap; the heist then
+ * succeeds at or above the honesty line (§8.1) and is sunk by theft below it
+ * (§8.4). `events` are this command's events so far; null means play on.
+ */
+export function endCheck(state: GameState, events: readonly GameEvent[], round: number): GameEnded | null {
+  const after = events.reduce(applyEvent, state);
+  const job = jobFor(state.config);
+  if (after.bank > 0 && round < job.roundCap) return null;
+  return gameEnded(state, events, honesty(after.haul, coinsTaken(after)) >= job.honestyLine ? null : "theft");
 }
 
 /**

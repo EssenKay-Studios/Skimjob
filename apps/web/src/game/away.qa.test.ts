@@ -144,7 +144,7 @@ describe("QA: recap after a meeting, a shakedown, the end and a reconnect (desig
     const lines = recap(eventsSince(view, topSeq(viewFor(states[i]!, "p1"))), view, ctxOf(view, "p1"));
     expect(lines.length).toBeGreaterThanOrEqual(2);
     expect(lines.length).toBeLessThanOrEqual(RECAP_MAX_LINES);
-    expect(lines.join("\n")).toMatch(/target|voted/);
+    expect(lines.join("\n")).toMatch(/votes?|shaken|skip/i);
     expect(lines.at(-1)).toMatch(/^Now: round \d+/);
   });
 
@@ -168,7 +168,7 @@ describe("QA: recap after a meeting, a shakedown, the end and a reconnect (desig
         const lines = recap(eventsSince(view, topSeq(viewFor(states[i]!, id))), view, ctxOf(view, id));
         expect(lines.length).toBeGreaterThanOrEqual(1);
         expect(lines.length).toBeLessThanOrEqual(RECAP_MAX_LINES);
-        expect(lines.some((l) => /^(Job done|Busted)/.test(l)), lines.join(" | ")).toBe(true);
+        expect(lines.some((l) => /^(Job done|Busted|The heist was sunk by theft)/.test(l)), lines.join(" | ")).toBe(true);
         expect(lines.some((l) => l.startsWith("Now:"))).toBe(false);
         // The reveal opens others' case files, but the recap stays on the seat's own ledger and case file.
         expect(view.reveal).not.toBeNull();

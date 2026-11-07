@@ -10,7 +10,7 @@
 //    and quorum edges in every vote mode, threshold and stash edges.
 import { describe, expect, it } from "vitest";
 import { handleThroughAlibis } from "./alibis.testkit";
-import { STARTER_ROLES } from "@skimjob/content";
+import { STARTER_ROLES, BANK_JOB } from "@skimjob/content";
 import type { GameConfig, GameEvent, GameState, PlayerId, PlayerState, PlayerView, VoteVisibility } from "./types";
 import { privateTo } from "./types";
 import { createGame, setupEvents } from "./setup";
@@ -274,7 +274,7 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
     step([{ type: "advance", deadline: { kind: "resolveShakedown", meetingId: A.pendingShakedown?.meetingId } }]);
   }
 
-  for (let round = 1; round <= 9 && !over(); round++) {
+  for (let round = 1; round <= BANK_JOB.roundCap && !over(); round++) {
     const caller = ids.find((id) => !A.players[id]?.emergencyMeetingUsed);
     if (caller && rand() < 0.3) {
       step([{ type: "callEmergency", player: caller }]);
@@ -449,7 +449,7 @@ describe("QA shakedown window (a Shield in the shop): deadline, wrong phase — 
     expect(s.round).toBe(4);
   });
 
-  it("a Shield cancel in the final meeting's window: the target keeps the stash and the game ends after it", () => {
+  it("a Shield cancel in the act 3 meeting's window: the target keeps the stash and the next round starts", () => {
     let s = shielded(game(3, []));
     for (let act = 1; act <= 3; act++) {
       for (let r = 0; r < 3; r++) s = run(s, mv("p1", "vault", act === 3 ? 6 : 0), mv("p2", "office"), mv("p0", "office"), ROUND);
@@ -461,7 +461,7 @@ describe("QA shakedown window (a Shield in the shop): deadline, wrong phase — 
     }
     expect(s.phase.kind).toBe("shakedownPending");
     const end = run(s, RESOLVE);
-    expect(since(s, end).map((e) => e.type)).toEqual(["perkUsed", "shakedownCancelled", "checkpointChecked", "gameEnded"]);
-    expect(end.phase.kind === "ended" && end.phase.outcome.ranking.find((e) => e.player === "p1")?.stash).toBe(18);
+    expect(since(s, end).map((e) => e.type)).toEqual(["perkUsed", "shakedownCancelled", "roundStarted"]);
+    expect(end.players.p1?.stash).toBe(18);
   });
 });

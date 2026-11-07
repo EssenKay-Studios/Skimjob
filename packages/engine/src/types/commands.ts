@@ -124,12 +124,12 @@ export type Deadline =
   | { readonly kind: "alibis"; readonly round: number }
   /** A scheduled regular meeting's slot, or an emergency's notice period, has arrived: open the vote window. design §11.1 */
   | { readonly kind: "openMeeting"; readonly meetingId: string }
-  /** The open vote window has ended: tally, shakedown, then checkpoint / final check. design §11.2–§11.4 */
+  /** The open vote window has ended: tally and shakedown; after a regular meeting the next round starts. design §9.5, §9.6 */
   | { readonly kind: "closeMeeting"; readonly meetingId: string }
   /**
    * The window after a shakedown vote passed (`shakedownPending`) has ended:
    * apply the shakedown, unless a Shield cancelled it, then go on as after
-   * the meeting (checkpoint, next act or final check). design §8, §11.3, §11.4
+   * the meeting (the next round, after a regular one). design §9.6, §12
    */
   | { readonly kind: "resolveShakedown"; readonly meetingId: string };
 

@@ -206,8 +206,8 @@ describe("the shakedown window (a Shield in the shop) — design §8.3, §11.3",
     expect(reason(s, CLOSE(s))).toMatch(/not open/);
   });
 
-  it("after the act's regular meeting the checkpoint comes once the window ends (design §11.4)", () => {
-    // p1 pockets the Vault's 6; everyone else hands in the Lobby's 2: Haul 16, 22 after the shakedown (target 18).
+  it("after the act's regular meeting the next round starts once the window ends (design §6.2: no checkpoint)", () => {
+    // p1 pockets the Vault's 6; everyone else hands in the Lobby's 2.
     const lobby = (...ids: string[]) => ids.map((id) => mv(id, "lobby"));
     let s = run(shielded(game(3, [])), mv("p1", "vault", 6), ...lobby("p0", "p2"), ROUND, ...lobby("p0", "p1", "p2"), ROUND, ...lobby("p0", "p1", "p2"), ROUND);
     s = run(s, { type: "scheduleMeeting", act: 1, slot: "x" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: "act-1" } });
@@ -215,8 +215,7 @@ describe("the shakedown window (a Shield in the shop) — design §8.3, §11.3",
     expect(s.phase.kind).toBe("shakedownPending");
     expect(reason(s, { type: "proposeMeeting", player: "p0", slot: "y" })).toMatch(/already scheduled/);
     const after = run(s, RESOLVE);
-    // extension.md "Tokens": the three Rookies each earn a token for the target made.
-    expect(since(s, after).map((e) => e.type)).toEqual(["shakedownResolved", "checkpointChecked", "tokenEarned", "tokenEarned", "tokenEarned", "roundStarted"]);
+    expect(since(s, after).map((e) => e.type)).toEqual(["shakedownResolved", "roundStarted"]);
     expect(after.round).toBe(4);
   });
 });

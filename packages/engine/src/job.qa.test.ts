@@ -1,9 +1,9 @@
 // QA (PR #3): adversarial tests for the bank job helpers — room tiers at the
-// boundaries, checkpoint targets.
+// boundaries.
 // design §3.1
 import { describe, expect, it } from "vitest";
 import { BANK_JOB as bank } from "@skimjob/content";
-import { checkpointTarget, roomsInPlay } from "./job";
+import { roomsInPlay } from "./job";
 
 const CORE = ["vault", "office", "lobby", "security", "rooftop"];
 const MID = [...CORE, "depositBoxes", "serverRoom"];
@@ -17,17 +17,5 @@ describe("room tiers at the boundaries — design §3.1", () => {
     expect(roomsInPlay(bank, 8)).toEqual(MID);
     expect(roomsInPlay(bank, 9)).toEqual(BIG);
     expect(roomsInPlay(bank, 12)).toEqual(BIG);
-  });
-});
-
-describe("checkpoint targets per crew size — design §11.5", () => {
-  it("2, 3 and 12 players", () => {
-    expect([1, 2, 3].map((a) => checkpointTarget(bank, a as 1 | 2 | 3, 2))).toEqual([4, 8, 12]);
-    expect([1, 2, 3].map((a) => checkpointTarget(bank, a as 1 | 2 | 3, 3))).toEqual([6, 12, 18]);
-    expect([1, 2, 3].map((a) => checkpointTarget(bank, a as 1 | 2 | 3, 12))).toEqual([24, 48, 72]);
-  });
-
-  it("rejects act 0", () => {
-    expect(() => checkpointTarget(bank, 0 as 1, 4)).toThrow(/no checkpoint/);
   });
 });

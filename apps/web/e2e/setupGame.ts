@@ -22,7 +22,7 @@ export async function startGame(
   {
     bots,
     guests = [],
-    sessionLength = "quick",
+    sessionLength = "15m",
     nickname = "Host",
     voteVisibility,
   }: { bots: number; guests?: readonly APIRequestContext[]; sessionLength?: string; nickname?: string; voteVisibility?: "hiddenThenRevealed" | "open" | "secret" },

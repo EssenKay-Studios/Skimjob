@@ -397,7 +397,7 @@ test("QA: chat survives phase changes (draft kept, event rows), and still works 
   await composer(page).fill(draft);
   // A round resolves and the next phase starts while the draft sits there.
   const kicker = page.locator(".hud__kicker");
-  await expect(kicker).toContainText(/Round [2-9] of 9/, { timeout: 60_000 });
+  await expect(kicker).toContainText(/Round ([2-9]|1[0-2]) of 12/, { timeout: 60_000 });
   await expect(composer(page)).toHaveValue(draft);
   await expect(feed(page).locator(".chat-event").first()).toBeVisible();
   await sendBtn(page).click();

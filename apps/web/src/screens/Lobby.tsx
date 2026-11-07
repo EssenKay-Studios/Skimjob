@@ -32,7 +32,7 @@ const SETTINGS = [
     key: "sessionLength",
     label: "Session length",
     options: [
-      { value: "quick", label: "15 min" },
+      { value: "15m", label: "15 min" },
       { value: "1h", label: "1 hour" },
       { value: "3h", label: "3 hours" },
       { value: "1d", label: "1 day" },

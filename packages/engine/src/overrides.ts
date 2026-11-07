@@ -71,7 +71,7 @@ export function validateOverrides(raw: unknown, job: JobDef, roles: RoleTable = 
   if (raw === undefined || raw === null) return [];
   const errors: string[] = [];
   if (!isObject(raw)) return ["contentOverrides must be an object"];
-  const known = ["rooms", "bank", "alarm", "checkpoints", "shakedown", "perks", "roles", "events"];
+  const known = ["rooms", "bank", "alarm", "roundCap", "shakedown", "perks", "roles", "events"];
   for (const key of Object.keys(raw)) if (!known.includes(key)) errors.push(`contentOverrides.${key} is not an overridable section`);
 
   if (raw.rooms !== undefined) {
@@ -105,17 +105,7 @@ export function validateOverrides(raw: unknown, job: JobDef, roles: RoleTable = 
         else checkFields(o, path, { cost: count }, errors);
       }
   }
-  if (raw.checkpoints !== undefined) {
-    const path = "contentOverrides.checkpoints";
-    if (!isObject(raw.checkpoints)) errors.push(`${path} must be an object`);
-    else
-      for (const [key, v] of Object.entries(raw.checkpoints)) {
-        if (key !== "perPlayer") errors.push(`${path}.${key} is not an overridable field`);
-        else if (!Array.isArray(v) || v.length !== job.checkpoints.perPlayer.length || !v.every(count)) {
-          errors.push(`${path}.perPlayer must be ${job.checkpoints.perPlayer.length} whole numbers, 0 or more`);
-        }
-      }
-  }
+  if (raw.roundCap !== undefined && !positiveCount(raw.roundCap)) errors.push("contentOverrides.roundCap must be a whole number, 1 or more");
   if (raw.roles !== undefined) {
     if (!isObject(raw.roles)) errors.push("contentOverrides.roles must be an object");
     else
@@ -184,7 +174,7 @@ export function overrideJob(job: JobDef, overrides: ContentOverrides | null | un
     rooms,
     bank: { ...job.bank, ...overrides.bank },
     alarm: { ...job.alarm, ...overrides.alarm },
-    checkpoints: overrides.checkpoints?.perPlayer ? { perPlayer: overrides.checkpoints.perPlayer } : job.checkpoints,
+    roundCap: overrides.roundCap ?? job.roundCap,
     shakedown: { ...job.shakedown, ...overrides.shakedown },
   };
 }

@@ -46,8 +46,8 @@ export interface LobbyView {
   readonly settings: LobbySettings;
   readonly youAreHost: boolean;
   /**
-   * Meetings open as soon as the act's last round resolves (the Quick, 1 h and
-   * 3 h presets), so the game screen offers no slot proposals. design §11.1, M2-7
+   * Meetings open as soon as they are due (the 15 min, 1 h and 3 h presets),
+   * so the game screen offers no slot proposals. design §9.4, M2-7
    */
   readonly autoMeetings: boolean;
   /** Seats needed to start, and the most a game can have (bots included). */
@@ -141,7 +141,14 @@ const refuse = (status: number, message: string): never => {
 const body = (req: FastifyRequest) => (req.body ?? {}) as Record<string, unknown>;
 
 /** `onStart` runs once a game has started, outside its lock (the live channel lets the bots move). */
-export function lobbyRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Sessions, onStart: (gameId: string) => Promise<void> = async () => {}): void {
+export function lobbyRoutes(
+  app: FastifyInstance,
+  db: Db,
+  store: GameStore,
+  s: Sessions,
+  onStart: (gameId: string) => Promise<void> = async () => {},
+  gameSeed: () => string = () => randomBytes(16).toString("hex"),
+): void {
   const signedIn = async (req: FastifyRequest) => (await s.user(req)) ?? refuse(401, "not signed in");
 
   /** Runs `fn` on a game the user is seated in, under the game's lock. Not seated reads as not found. */
@@ -332,7 +339,7 @@ export function lobbyRoutes(app: FastifyInstance, db: Db, store: GameStore, s: S
       // A lobby saved before R7 C2c may still toggle on a role that no longer exists.
       const gone = settings.roles.filter((r) => !POOL_ROLES.includes(r));
       if (gone.length > 0) refuse(409, `these roles are no longer in the game: ${gone.join(", ")}; pick the roles again`);
-      const config = gameConfig(settings, seats, randomBytes(16).toString("hex"));
+      const config = gameConfig(settings, seats, gameSeed());
       const errors = validateConfig(config);
       if (errors.length > 0) throw new Error(`lobby made a bad config: ${errors.join("; ")}`);
       await store.start(game.id, config, async (tx) => {

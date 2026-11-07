@@ -10,7 +10,7 @@ const LONG = "Wolfgang Amadeus Mozartt"; // 24 characters, the most a name can h
 const GAMES = [
   { id: "g-run", status: "running", nickname: LONG, youAreHost: true, host: LONG, seats: 12, sessionLength: "1w" },
   { id: "g-lob", status: "lobby", nickname: "Riya", youAreHost: false, host: "Dez", seats: 3, sessionLength: "1h" },
-  { id: "g-end", status: "ended", nickname: "Riya", youAreHost: false, host: LONG, seats: 5, sessionLength: "quick" },
+  { id: "g-end", status: "ended", nickname: "Riya", youAreHost: false, host: LONG, seats: 5, sessionLength: "15m" },
 ];
 const myGames = (page: Page, games: object[] = GAMES) => page.route("**/api/me/games", (r) => r.fulfill({ json: { games } }));
 

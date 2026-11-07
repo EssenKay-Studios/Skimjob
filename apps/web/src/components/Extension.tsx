@@ -1,14 +1,13 @@
 // The Extension's player-facing pieces (docs/extension.md): role facts with a
-// "How you win" line, tappable role names, the rulebook sheet, the Haul target
-// bar, the gap box, and your tokens with the perk shop.
+// "How you win" line, tappable role names, the rulebook sheet, the gap box,
+// and your tokens with the perk shop.
 // Everything is read from the player's own view (or content, outside a game).
 import { useId, useState, type ReactNode } from "react";
-import { BANK_JOB, PERKS, POOL_ROLES, ROUNDS_PER_ACT, SHOP_COLUMNS, type FailureReason, type PerkColumn, type RoleDef, type RoleId } from "@skimjob/content";
+import { BANK_JOB, PERKS, POOL_ROLES, SHOP_COLUMNS, type FailureReason, type PerkColumn, type RoleDef, type RoleId } from "@skimjob/content";
 import type { PlayerId, PlayerView, RoomId } from "@skimjob/engine";
 import { Button } from "./Button";
 import { Chip } from "./Chip";
 import { DialogSheet } from "./MeetingKit";
-import { Meter } from "./Meter";
 import { cardName, roomName } from "../game/describeEvent";
 import {
   COLUMN_LABEL,
@@ -21,7 +20,6 @@ import {
   rolesByTag,
   rolesOf,
   shopState,
-  targetBar,
   type PerkUse,
   type RoleInfo,
 } from "../game/extension";
@@ -122,7 +120,6 @@ export function RoleList({ view }: { view: PlayerView }) {
 export function RulebookSheet({ open, onClose, view }: { open: boolean; onClose: () => void; view: PlayerView | null }) {
   const roles = rolesOf(view);
   const job = view ? jobOf(view) : BANK_JOB;
-  const rounds = 3 * ROUNDS_PER_ACT;
   const ids = POOL_ROLES.filter((r) => roles[r]);
   const inGame = new Set(view?.roleList?.roles ?? []);
   const stars = (reason: FailureReason) => ids.filter((r) => roles[r]!.winsOn.includes(reason)).map((r) => roles[r]!.name);
@@ -144,8 +141,8 @@ export function RulebookSheet({ open, onClose, view }: { open: boolean; onClose:
               Each round, pick a room in secret and split its loot between the crew's Haul and your own stash.
             </li>
             <li>
-              {rounds} rounds, with a crew meeting after rounds {ROUNDS_PER_ACT}, {2 * ROUNDS_PER_ACT} and {rounds}. Each meeting checks the Haul against its target;
-              missing the final one fails the heist.
+              The game ends when the bank is empty, or after round {job.roundCap}. If less than two-thirds of the coins taken reached the
+              crew, the heist is sunk by theft.
             </li>
             <li>
               Noisy coins light the room's alarm bell. When all {job.alarm.bulbs} bulbs light, the police raid it: its grabs are seized, it is taped off for{" "}
@@ -165,7 +162,7 @@ export function RulebookSheet({ open, onClose, view }: { open: boolean; onClose:
             </thead>
             <tbody>
               <tr>
-                <td>Final target met, no bust</td>
+                <td>Bank empty or round {job.roundCap}, two-thirds handed in, no bust</td>
                 <td>The biggest stash</td>
               </tr>
               <tr>
@@ -173,8 +170,8 @@ export function RulebookSheet({ open, onClose, view }: { open: boolean; onClose:
                 <td>Only the Rooftop gets away: the biggest stash up there</td>
               </tr>
               <tr>
-                <td>Final target missed</td>
-                <td>Nobody, unless {orList(stars("target"))} has the biggest stash</td>
+                <td>Sunk by theft</td>
+                <td>Nobody, unless {orList(stars("theft"))} has the biggest stash</td>
               </tr>
             </tbody>
           </table>
@@ -261,26 +258,7 @@ export function RulebookButton({ view, seed = "rulebook-open" }: { view: PlayerV
   );
 }
 
-// ---------------------------------------------------------------- target bar, gap box
-
-/** "Haul 40 / 63 needed by the next meeting". extension.md "What the app works out for you" */
-export function TargetBar({ view }: { view: PlayerView }) {
-  const t = targetBar(view);
-  return (
-    <div className="target-bar">
-      <span className="meta">Haul</span>
-      <span className="num hud__big">{t.haul}</span>
-      <Meter value={Math.min(t.haul, t.target)} max={Math.max(t.target, 1)} tone={t.haul >= t.target ? "var(--good)" : "var(--olive)"} label={t.text} />
-      <span className="meta target-bar__text">
-        <b className="num">
-          {t.haul} / {t.target}
-        </b>{" "}
-        needed by {t.final ? "the final meeting" : "the next meeting"}
-        <span className="target-bar__miss"> ({t.ifMissed})</span>
-      </span>
-    </div>
-  );
-}
+// ---------------------------------------------------------------- gap box
 
 /** "Alibis say +14, the Haul grew 9: 5 unaccounted for." extension.md "The gap box" */
 export function GapBox({ view }: { view: PlayerView }) {

@@ -1,4 +1,4 @@
-// QA (PR #128): the Quick/starter mode is gone; the 15-min ("quick") timing preset stays and plays a normal game.
+// QA (PR #128): the Quick/starter mode is gone; the 15-min ("15m") timing preset stays and plays a normal game.
 // extension.md "Host settings", design §8.1, §17.2
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -14,7 +14,7 @@ import { testDb } from "./testkit";
 
 const seats = (n: number) => Array.from({ length: n }, (_, i) => ({ nickname: `S${i}`, bot_personality: i === 0 ? null : ("honest" as const) }));
 const quick = (over: Record<string, unknown> = {}) => {
-  const p = parseSettings({ sessionLength: "quick", ...over });
+  const p = parseSettings({ sessionLength: "15m", ...over });
   if (!p.ok) throw new Error(p.error);
   return p.settings;
 };
@@ -23,15 +23,15 @@ const types = (log: readonly GameEvent[]) => log.map((e) => e.type);
 describe("QA: the old starter/Quick mode is refused or dropped, never half-applied", () => {
   it("lobby settings refuse starterMode (true or false) with a clear error", () => {
     for (const v of [true, false, "yes"]) {
-      const p = parseSettings({ sessionLength: "quick", starterMode: v });
+      const p = parseSettings({ sessionLength: "15m", starterMode: v });
       expect(p).toEqual({ ok: false, error: 'unknown setting "starterMode"' });
     }
   });
 
   it("a stored Quick lobby row with starterMode is read without it: no throw, a normal 15-min game", () => {
-    const s = storedSettings({ ...DEFAULT_SETTINGS, sessionLength: "quick", starterMode: true, eventsEnabled: false });
+    const s = storedSettings({ ...DEFAULT_SETTINGS, sessionLength: "15m", starterMode: true, eventsEnabled: false });
     expect(s).not.toHaveProperty("starterMode");
-    expect(s.sessionLength).toBe("quick");
+    expect(s.sessionLength).toBe("15m");
     const cfg = gameConfig(s, seats(5), "qa-stored");
     expect(cfg).not.toHaveProperty("starterMode");
     expect(validateConfig(cfg)).toEqual([]);
@@ -100,13 +100,13 @@ const call = async (method: "POST" | "PATCH", url: string, who: string | null, p
 describe("QA: the lobby API has no way back to Quick/starter mode", () => {
   it("create and settings PATCH refuse starterMode with 400, the lobby is untouched", async () => {
     const who = (await call("POST", "/auth/guest", null, { nickname: "Host" })).session!;
-    const bad = await call("POST", "/games", who, { settings: { sessionLength: "quick", starterMode: true } });
+    const bad = await call("POST", "/games", who, { settings: { sessionLength: "15m", starterMode: true } });
     expect(bad.status).toBe(400);
     expect(JSON.stringify(bad.body)).toContain("starterMode");
-    const ok = await call("POST", "/games", who, { settings: { sessionLength: "quick" } });
+    const ok = await call("POST", "/games", who, { settings: { sessionLength: "15m" } });
     expect(ok.status).toBe(201);
     const id = ok.body.id as string;
-    for (const patch of [{ starterMode: true }, { starterMode: true, eventsEnabled: false }, { sessionLength: "quick", starterMode: false }]) {
+    for (const patch of [{ starterMode: true }, { starterMode: true, eventsEnabled: false }, { sessionLength: "15m", starterMode: false }]) {
       const r = await call("PATCH", `/games/${id}/settings`, who, { settings: patch });
       expect(r.status, JSON.stringify(patch)).toBe(400);
     }

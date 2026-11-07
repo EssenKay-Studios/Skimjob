@@ -19,16 +19,16 @@ export interface RngState {
 }
 
 /**
- * Resting phases of the state machine. design §17.2 lists
- * Setup → Planning → Resolving → (MeetingScheduled → MeetingOpen) → Checkpoint → … → FinalCheck → Reveal.
- * Resolving, Checkpoint and FinalCheck happen inside a single `advance()` and
- * leave only events behind, so they are not resting phases here.
+ * Resting phases of the state machine: Setup → Planning → Resolving (with the
+ * end check, design §4.2) → (MeetingScheduled → MeetingOpen) → … → Reveal.
+ * Resolving and the end check happen inside a single `advance()` and leave
+ * only events behind, so they are not resting phases here.
  * A scheduled-but-not-open meeting is not a phase either: it can coexist with
  * planning, so it lives in `GameState.scheduledMeeting` / `pendingEmergency`.
  */
 export type Phase =
   | { readonly kind: "setup" }
-  /** Players are submitting moves for `round` (1–9). */
+  /** Players are submitting moves for `round` (1 up to the round cap, design §6.2). */
   | { readonly kind: "planning"; readonly round: number }
   /**
    * `round` has resolved; players post their alibis for it until the alibi
@@ -37,7 +37,7 @@ export type Phase =
    * design §5.4
    */
   | { readonly kind: "alibis"; readonly round: number }
-  /** The act's last round has resolved; waiting for its regular meeting to open. */
+  /** Every 3rd round has resolved and the game goes on; waiting for its regular meeting to open. */
   | { readonly kind: "awaitingMeeting"; readonly act: ActNumber }
   /** A vote window is open. Rounds are paused. design §4.1 */
   | { readonly kind: "meeting"; readonly meetingId: string }
@@ -59,8 +59,6 @@ export interface PlayerState {
   readonly stash: number;
   /** Uses of the role's power so far (all roles share the shape). design §8 */
   readonly roleState: RoleState;
-  readonly totalHandedIn: number;
-  readonly timesShakenDown: number;
   readonly emergencyMeetingUsed: boolean;
   /** For the host's "replace with a bot" prompt after 2 missed rounds. design §15 */
   readonly consecutiveMissedMoves: number;
@@ -79,7 +77,7 @@ export interface RoleState {
   /**
    * Uses this stretch (extension.md "between meetings"; acts internally):
    * reset as the next stretch's first round starts, which is right after a
-   * regular meeting closes with its target check;
+   * regular meeting closes;
    * emergency meetings never reset it. Camera loops (Hacker),
    * audits (Auditor), stash checks (Detective), blessings (Priest), rings (Mole).
    */
@@ -163,7 +161,7 @@ export interface GameState {
   readonly config: GameConfig;
   readonly rng: RngState;
   readonly phase: Phase;
-  /** The latest round started (1–9); 0 before round 1. Set by `roundStarted`. */
+  /** The latest round started (1 up to the round cap); 0 before round 1. Set by `roundStarted`. */
   readonly round: number;
   /** Rooms in play for this player count. design §3.1 */
   readonly rooms: readonly RoomId[];

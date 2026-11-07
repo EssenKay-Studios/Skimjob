@@ -57,7 +57,7 @@ export type BannerTone = "good" | "bad" | "info";
 
 const BANNER_FILL: Record<BannerTone, string> = { good: "var(--good-l)", bad: "var(--bad-l)", info: "var(--card-sand)" };
 
-/** A taped result note: shakedown results, compensation, checkpoints. */
+/** A taped result note: shakedown results and compensation. */
 export function Banner({ tone = "info", seed, title, children }: { tone?: BannerTone; seed: string; title: ReactNode; children?: ReactNode }) {
   return (
     <SketchFrame seed={seed} radius={12} shadow={0.35} fill={BANNER_FILL[tone]} className={`banner banner--${tone}`} role="status">

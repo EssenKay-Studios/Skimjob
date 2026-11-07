@@ -17,8 +17,6 @@ const rank = (player: string, role: string, score: number, extra: Partial<RankEn
   role,
   score,
   stash: score,
-  timesShakenDown: 0,
-  totalHandedIn: 0,
   ...extra,
 });
 
@@ -50,7 +48,7 @@ describe("reveal summary — design §13", () => {
       started(2),
       { type: "roleClaimed", visibility: PUBLIC, player: "p0", role: "rookie", act: 1 },
     ];
-    const outcome: Outcome = { result: "failed", reason: "target", ranking: [rank("p0", "mole", 9), rank("p1", "rookie", 3)], winners: ["p0"] };
+    const outcome: Outcome = { result: "failed", reason: "theft", ranking: [rank("p0", "mole", 9), rank("p1", "rookie", 3)], winners: ["p0"] };
     const s = revealSummary(log, outcome, TABLES);
     expect(s.seats.map((x) => [x.player, x.dealtRole, x.role, x.winsOn, x.winner])).toEqual([
       ["p0", "mole", "mole", ROLES.mole?.winsOn, true],
@@ -58,14 +56,14 @@ describe("reveal summary — design §13", () => {
     ]);
     const items = s.rounds[0]?.items ?? [];
     expect(items).toContainEqual({ kind: "claim", player: "p0", claimed: "rookie", real: "mole" });
-    expect(s.ending).toEqual({ result: "failed", reason: "target", topGroup: ["p0"], winners: ["p0"], why: "failedTopWins" });
+    expect(s.ending).toEqual({ result: "failed", reason: "theft", topGroup: ["p0"], winners: ["p0"], why: "failedTopWins" });
   });
 
   it("says who won and why: the top group on a success, ★ roles or nobody on a failure (extension.md \"Winning and losing\")", () => {
     const tied = [rank("p0", "rookie", 5), rank("p1", "rookie", 5), rank("p2", "mole", 1)];
     expect(revealSummary(SETUP, { result: "success", ranking: tied, winners: ["p0", "p1"] }, TABLES).ending).toMatchObject({ topGroup: ["p0", "p1"], why: "success" });
-    const nobody = revealSummary(SETUP, { result: "failed", reason: "target", ranking: tied, winners: [] }, TABLES);
-    expect(nobody.ending).toEqual({ result: "failed", reason: "target", topGroup: ["p0", "p1"], winners: [], why: "failedNobody" });
+    const nobody = revealSummary(SETUP, { result: "failed", reason: "theft", ranking: tied, winners: [] }, TABLES);
+    expect(nobody.ending).toEqual({ result: "failed", reason: "theft", topGroup: ["p0", "p1"], winners: [], why: "failedNobody" });
     expect(nobody.seats.map((x) => [x.place, x.topGroup, x.winner])).toEqual([
       [1, true, false],
       [2, true, false],

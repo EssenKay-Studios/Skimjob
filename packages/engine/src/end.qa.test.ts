@@ -1,8 +1,6 @@
-// QA (PR #7): complete scripted games through every ending (success, missed
-// final target, raid mid-round, raid at a checkpoint), the final meeting's
-// shakedown rescuing or sinking the heist, role scoring in the ranking,
-// tie-breaks at every level, 2/3/12 players, commands after the end, and
-// determinism / replay of a finished game. design §3, §8, §11.3, §13
+// QA (PR #7): complete scripted games to the round cap and a bust, the
+// ranking, ties at every level, 3/12 players, commands after the end, and
+// determinism / replay of a finished game. design §5.5, §6.2, §8
 import { STARTER_ROLES } from "@skimjob/content";
 import { handleThroughAlibis } from "./alibis.testkit";
 import { describe, expect, it } from "vitest";
@@ -67,37 +65,19 @@ function withPlayers(s: GameState, haul: number, change: Record<string, Partial<
   return { ...s, haul, players };
 }
 
-/**
- * 3 players. p0 Rookie in
- * the Vault, p1 Hacker in the Office, p2 Priest on the Rooftop. Rounds 1–6:
- * p0 and p1 pocket 1 (Haul +8). Rounds 7–9: both pocket 2
- * (Haul +6), p0 pockets `r9extra` more in round 9. Haul before the final
- * meeting: 66 − r9extra (final target 3 × 22 = 66).
- */
-function game3(r9extra: number, finalVotes: unknown[] = []): GameState {
-  let s = game(3, ["rookie", "hacker", "priest"]);
-  for (let round = 1; round <= 9; round++) {
-    const act3 = round > 6;
-    s = run(s, mv("p0", "vault", (act3 ? 2 : 1) + (round === 9 ? r9extra : 0)), mv("p1", "office", act3 ? 2 : 1), mv("p2", "rooftop"), ROUND);
-    if (round === 9) s = run(s, sched(3), OPEN, ...finalVotes, CLOSE);
-    else if (round % 3 === 0) s = run(s, sched(round / 3), OPEN, CLOSE);
-  }
-  return s;
-}
-
 describe("12 players — design §3, §6.2, §8", () => {
   // Rooms by seat. Coins 48 a round.
   const ROOMS = ["vault", "vault", "rooftop", "office", "rooftop", "office", "office", "office", "depositBoxes", "depositBoxes", "managersOffice", "managersOffice"];
   const POCKET: Record<string, number> = { p0: 2, p1: 3, p3: 2 };
   function game12(): GameState {
     let s = game(12, ["rookie", "lookout", "priest", "hacker"]);
-    for (let round = 1; round <= 9; round++) {
+    for (let round = 1; round <= 12; round++) {
       for (const [i, room] of ROOMS.entries()) {
         const id = `p${i}`;
         s = run(s, mv(id, room, POCKET[id] ?? 0));
       }
       s = run(s, ROUND);
-      if (round % 3 === 0) s = run(s, sched(round / 3), OPEN, CLOSE);
+      if (round % 3 === 0 && round < 12) s = run(s, sched(round / 3), OPEN, CLOSE);
     }
     return s;
   }
@@ -148,32 +128,33 @@ describe("12 players — design §3, §6.2, §8", () => {
   });
 });
 
-describe("tie-breaks at every level — design §3", () => {
-  it("score beats shakedowns, shakedowns beat handed in", () => {
+describe("ties at every level — design §8.5", () => {
+  it("the ranking is by stash only: equal stashes keep seat order", () => {
     const s = withPlayers(game(3, ["lookout", "lookout", "lookout"]), 0, {
-      p0: { stash: 4, timesShakenDown: 0, totalHandedIn: 99 },
-      p1: { stash: 5, timesShakenDown: 3, totalHandedIn: 0 },
-      p2: { stash: 4, timesShakenDown: 1, totalHandedIn: 100 },
+      p0: { stash: 4 },
+      p1: { stash: 5 },
+      p2: { stash: 4 },
     });
     expect(ranking(s).map((e) => e.player)).toEqual(["p1", "p0", "p2"]);
+    expect(outcomeFor(withPlayers(s, 0, { p1: { stash: 4 } }), null).winners).toEqual(["p0", "p1", "p2"]);
   });
 
-  it("a full tie at the top shares the win; a lower full tie does not", () => {
+  it("a tie at the top shares the win; a lower tie does not", () => {
     const s = withPlayers(game(12), 0, {
-      p3: { stash: 5, totalHandedIn: 4 },
-      p7: { stash: 5, totalHandedIn: 4 },
-      p11: { stash: 5, totalHandedIn: 4 },
-      p0: { stash: 5, totalHandedIn: 3 },
+      p3: { stash: 5 },
+      p7: { stash: 5 },
+      p11: { stash: 5 },
+      p0: { stash: 5 },
     });
     const o = outcomeFor(s, null);
-    expect(o.winners).toEqual(["p3", "p7", "p11"]);
-    expect(o.ranking.slice(0, 4).map((e) => e.player)).toEqual(["p3", "p7", "p11", "p0"]);
+    expect(o.winners).toEqual(["p0", "p3", "p7", "p11"]);
+    expect(o.ranking.slice(0, 4).map((e) => e.player)).toEqual(["p0", "p3", "p7", "p11"]);
   });
 
   it("3 players fully tied: all win a success, none wins a failure", () => {
-    const s = withPlayers(game(3), 0, { p0: { stash: 3, totalHandedIn: 2 }, p1: { stash: 3, totalHandedIn: 2 }, p2: { stash: 3, totalHandedIn: 2 } });
+    const s = withPlayers(game(3), 0, { p0: { stash: 3 }, p1: { stash: 3 }, p2: { stash: 3 } });
     expect(outcomeFor(s, null).winners).toEqual(["p0", "p1", "p2"]);
-    expect(outcomeFor(s, "target").winners).toEqual([]);
+    expect(outcomeFor(s, "theft").winners).toEqual([]);
     expect(outcomeFor(s, "bust").winners).toEqual([]);
   });
 });

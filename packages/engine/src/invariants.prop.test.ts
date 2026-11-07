@@ -65,8 +65,8 @@ const configArb = fc
     // design §8.1, §15: absent = unique (the default); false lets roles repeat.
     unique: fc.constantFrom(undefined, true, false),
     // Random streams ring a lot and seize coins, so some games move the bust line out of reach (design §5.5
-    // [tunable]), with low R6 targets (an easy job, which can succeed) or high ones (a hard job, which misses them).
-    tuning: fc.constantFrom("shipped", "easy", "hard"),
+    // [tunable]), and some of those also have a short round cap (§6.2), so games end by the cap as well as the bank.
+    tuning: fc.constantFrom("shipped", "calm", "short"),
     seed: fc.string({ minLength: 1, maxLength: 12 }),
   })
   .map(({ players, vote, deck, deal, roleList, events, unique, tuning, seed }): GameConfig => ({
@@ -80,7 +80,7 @@ const configArb = fc
     eventsEnabled: events,
     voteVisibility: vote,
     ...(unique === undefined ? {} : { uniqueRoles: unique }),
-    ...(tuning === "shipped" ? {} : { contentOverrides: { alarm: { bustStars: 9 }, checkpoints: { perPlayer: tuning === "easy" ? [1, 2, 3] : [9, 18, 27] } } }),
+    ...(tuning === "shipped" ? {} : { contentOverrides: { alarm: { bustStars: 9 }, ...(tuning === "short" && { roundCap: 4 }) } }),
   }));
 /** The command stream: each step reads a few numbers from this tape; when it runs out, only deadlines pass. */
 const tapeArb = fc.array(fc.nat({ max: 0xffff }), { minLength: 400, maxLength: 4000, size: "max" });
@@ -326,7 +326,10 @@ function checkState(state: GameState, inflow: number): void {
   // Phase companions. design §17.2
   check((state.phase.kind === "meeting") === (state.meeting !== null), "meeting set exactly in the meeting phase", state.phase);
   check((state.phase.kind === "shakedownPending") === (state.pendingShakedown !== null), "pendingShakedown set exactly in its phase", state.phase);
-  check(state.round >= 1 && state.round <= 9 && state.resolvedRound <= state.round, "rounds 1..9, resolved ≤ started", [state.round, state.resolvedRound]);
+  const { roundCap } = jobFor(state.config);
+  check(state.round >= 1 && state.round <= roundCap && state.resolvedRound <= state.round, "rounds 1 up to the cap, resolved ≤ started (design §6.2)", [state.round, state.resolvedRound]);
+  // design §6.2: the game ends after the round that empties the bank or reaches the cap; no round or meeting follows.
+  if (state.resolvedRound > 0 && (state.bank === 0 || state.resolvedRound === roundCap)) check(state.phase.kind === "ended", "the game is over once the bank is empty or the cap is reached", state.phase);
   if (state.phase.kind === "planning") check(state.phase.round === state.round, "planning the latest round");
   // design §5.4: alibis are open exactly in the alibi phase (or in a meeting called during it), for the round just resolved.
   if (state.phase.kind === "alibis") check(state.alibisOpen && state.phase.round === state.resolvedRound && state.phase.round === state.round, "alibi phase for the round just resolved", state.phase);
@@ -376,7 +379,6 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
             role: p.role === "priest" ? "hacker" : "priest",
             stash: p.stash + 101,
             roleState: { usedThisAct: 4, usedThisGame: 1, tokens: p.roleState.tokens + 3, perks: ["peek", "shield"], tail: "vault" },
-            totalHandedIn: p.totalHandedIn + 33,
             consecutiveMissedMoves: 5,
             sealedVote: { kind: "shakedown", target: viewer },
           };
@@ -430,7 +432,16 @@ function checkEnd(state: GameState): void {
   check(state.phase.kind === "ended", "the game ended", state.phase);
   if (state.phase.kind !== "ended") return;
   const { outcome } = state.phase;
-  if (outcome.result === "failed" && outcome.reason === "bust") check(state.wanted >= jobFor(state.config).alarm.bustStars, "a bust is at the bust line");
+  const job = jobFor(state.config);
+  if (outcome.result === "failed" && outcome.reason === "bust") check(state.wanted >= job.alarm.bustStars, "a bust is at the bust line");
+  else {
+    // design §6.2, §8.1, §8.4: otherwise the bank or the cap ended it, and honesty (the Haul ÷ the coins taken, seized
+    // ones left out, §7.5) at or above the line is a success, below it sunk by theft.
+    check(state.bank === 0 || state.resolvedRound === job.roundCap, "the bank or the round cap ended the game", [state.bank, state.resolvedRound]);
+    const taken = (state.log.find((e) => e.type === "bankFilled") as { coins: number }).coins - state.bank - state.seized;
+    const honest = taken === 0 || state.haul / taken >= job.honestyLine;
+    check(outcome.result === (honest ? "success" : "failed"), "success at or above the honesty line, sunk by theft below it", { haul: state.haul, taken, outcome: outcome.result });
+  }
   check(outcome.ranking.length === state.playerOrder.length, "everyone is ranked (design §13)");
   for (const r of outcome.ranking) {
     const p = state.players[r.player] as PlayerState;
@@ -440,11 +451,11 @@ function checkEnd(state: GameState): void {
     check((outcome.ranking[i - 1]?.score ?? 0) >= (outcome.ranking[i]?.score ?? 0), "ranking is by score", outcome.ranking);
   }
   check(outcome.winners.every((w) => state.playerOrder.includes(w)), "winners are players");
-  // extension.md "How you win": the top group (level with first on score and tie-breaks) wins a success;
-  // a failure only its members whose role wins on that cause.
+  // design §8.5: the top group (everyone tied for the biggest stash, no tie-break) wins a success;
+  // a heist sunk by theft only its members whose role wins it.
   const roles = rolesFor(state.config);
   const first = outcome.ranking[0];
-  const level = (r: (typeof outcome.ranking)[number]) => first !== undefined && r.score === first.score && r.timesShakenDown === first.timesShakenDown && r.totalHandedIn === first.totalHandedIn;
+  const level = (r: (typeof outcome.ranking)[number]) => first !== undefined && r.score === first.score;
   // design §5.5: on a bust, the escapees (the round's Rooftop players) with the biggest stash among them, any role.
   const escaped = outcome.result === "failed" && outcome.reason === "bust" ? outcome.ranking.filter((r) => outcome.escapees.includes(r.player)) : [];
   const best = Math.max(...escaped.map((r) => r.stash));
@@ -607,7 +618,7 @@ describe("engine invariants under fuzzing — design §17.2", () => {
     expect(stats.accepted).toBeGreaterThan(stats.games * 10);
     expect(stats.rejected).toBeGreaterThan(stats.games * 5);
     expect(stats.players.size).toBeGreaterThanOrEqual(8);
-    expect([...stats.outcomes].sort()).toEqual(["bust", "success", "target"]);
+    expect([...stats.outcomes].sort()).toEqual(["bust", "success", "theft"]);
     for (const t of ["shakedownResolved", "roomRaided", "bellsCooled", "roomReopened", "ability:ring", "voteSealed"]) {
       expect(stats.types, t).toContain(t);
     }

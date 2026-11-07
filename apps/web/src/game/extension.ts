@@ -1,12 +1,10 @@
 // Pure helpers for the Extension's player-facing pieces (docs/extension.md):
-// role cards (tag, power, token trigger, "How you win"), the Haul target bar,
-// the gap box, and the token shop with its perk uses.
+// role cards (tag, power, token trigger, "How you win"), the gap box, and the token shop with its perk uses.
 // Every number comes from content (with the game's overrides) or the view.
 import {
   BANK_JOB,
   BUST_ROLE_TEXT,
   PERKS,
-  ROUNDS_PER_ACT,
   ROLES,
   SHOP_COLUMNS,
   type FailureReason,
@@ -21,7 +19,7 @@ import {
 } from "@skimjob/content";
 import { rolesFor, type PlayerId, type PlayerView, type RoomId } from "@skimjob/engine";
 import { roleName, roomName } from "./describeEvent";
-import { crewSize, jobOf, nextTarget, setupOf } from "./hud";
+import { crewSize, jobOf, setupOf } from "./hud";
 
 const signed = (n: number) => (n >= 0 ? `+${n}` : `−${Math.abs(n)}`);
 
@@ -43,7 +41,7 @@ export const rolesOf = (view: PlayerView | null): Readonly<Record<RoleId, RoleDe
 /** "How you win" (extension.md "Winning and losing"), from `winsOn`. */
 export function howYouWin(winsOn: readonly FailureReason[]): string {
   const base = "Have the biggest stash when the job succeeds";
-  if (winsOn.includes("target")) return `${base}, or when the final target is missed.`;
+  if (winsOn.includes("theft")) return `${base}, or the biggest of all when the heist is sunk by theft.`;
   return `${base}.`;
 }
 
@@ -81,8 +79,6 @@ function powerText(power: RolePower, job: JobDef = BANK_JOB): string {
 /** When a role earns a token, in one line. extension.md "Roles" */
 function earnsText(trigger: TokenTrigger): string {
   switch (trigger) {
-    case "checkpointMade":
-      return "The Haul target is met at meeting 1 or 2.";
     case "watchedShakenDirty":
       return "Someone it saw is caught.";
     case "auditedShakenDirty":
@@ -143,33 +139,6 @@ export function roleListInfo(view: PlayerView): { readonly title: string; readon
   const l = view.roleList;
   if (!l) return { title: "The role list is hidden in this game.", roles: [] };
   return { title: l.list === "exact" ? "Roles in play" : "Roles that could be in play", roles: l.roles };
-}
-
-// ---------------------------------------------------------------- target bar
-
-export interface TargetBar {
-  readonly haul: number;
-  readonly target: number;
-  /** Meeting 1, 2 or 3 (final). */
-  readonly meeting: 1 | 2 | 3;
-  readonly final: boolean;
-  /** "Haul 40 / 63 needed by the next meeting". */
-  readonly text: string;
-  /** What missing it costs: "nothing lost if missed" at meetings 1 and 2, "the heist fails if missed" at the final one. */
-  readonly ifMissed: string;
-}
-
-/** The Haul target as a progress bar to the next meeting. extension.md "What the app works out for you" */
-export function targetBar(view: PlayerView): TargetBar {
-  const t = nextTarget(view);
-  return {
-    haul: view.haul,
-    target: t.target,
-    meeting: t.act,
-    final: t.final,
-    text: `Haul ${view.haul} / ${t.target} needed by ${t.final ? "the final meeting" : "the next meeting"}`,
-    ifMissed: t.final ? "the heist fails if missed" : "nothing lost if missed",
-  };
 }
 
 // ---------------------------------------------------------------- gap box
@@ -304,7 +273,7 @@ export function perkUses(view: PlayerView): PerkUse[] {
   if (own.has("recharge") && (view.me.roleState.usedThisAct > 0 || view.me.roleState.usedThisGame > 0)) {
     out.push({ kind: "recharge" });
   }
-  if (own.has("rig") && view.round < 3 * ROUNDS_PER_ACT && setupOf(view)?.eventsEnabled !== false && !out.some((u) => u.kind === "rigPick")) out.push({ kind: "rig" });
+  if (own.has("rig") && view.round < jobOf(view).roundCap && setupOf(view)?.eventsEnabled !== false && !out.some((u) => u.kind === "rigPick")) out.push({ kind: "rig" });
   return out;
 }
 
@@ -317,9 +286,9 @@ type Ending = ({ readonly result: "success" } | { readonly result: "failed"; rea
  * ranking is a loss only when nobody qualified through winsOn. extension.md "Winning and losing"
  */
 export function endingText(outcome: Ending): { title: string; badge: string; loss: boolean } {
-  if (outcome.result === "success") return { title: "Final target met with no bust", badge: "Biggest stash", loss: false };
+  if (outcome.result === "success") return { title: "Job done: honest enough, and no bust", badge: "Biggest stash", loss: false };
   const loss = outcome.winners.length === 0;
   return outcome.reason === "bust"
     ? { title: `Busted. ${BUST_ROLE_TEXT.replace(/\.$/, "")}`, badge: "Wins over the Rooftop", loss } // design §20.2
-    : { title: "The final target was missed", badge: "Wins on a missed target", loss };
+    : { title: "Sunk by theft: too many coins went missing", badge: "Wins a heist sunk by theft", loss };
 }

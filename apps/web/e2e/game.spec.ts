@@ -38,7 +38,7 @@ test("a host and a guest play a 15-min game against bots to the end @move", asyn
   });
   await page.goto(`/game/${game.id}`);
   await guest.goto(`/game/${game.id}`);
-  await expect(page.locator(".hud__kicker")).toContainText(/Round \d of 9/);
+  await expect(page.locator(".hud__kicker")).toContainText(/Round \d+ of 12/);
   await expect(page.locator(".crew-seat")).toHaveCount(4);
 
   // Until the end: the host moves every round (Office, all in) and posts alibis; the guest never moves.
@@ -81,10 +81,10 @@ test("a host and a guest play a 15-min game against bots to the end @move", asyn
   expect(votes).toBeGreaterThan(0);
 
   // Game over: stamp, ranking of all four, winners marked.
-  // The server seeds each game afresh, so read the ending this game reached and check its own lines (design §5.5, §11.5, §20.2).
+  // The server seeds each game afresh, so read the ending this game reached and check its own lines (design §5.5, §8, §20.2).
   const panel = page.locator("section.over");
   const ending = await panel.getAttribute("data-ending");
-  const STAMPS: Record<string, string> = { success: "JOB DONE", bust: "BUSTED", target: "BUSTED" };
+  const STAMPS: Record<string, string> = { success: "JOB DONE", bust: "BUSTED", theft: "BUSTED" };
   expect(Object.keys(STAMPS), `ending ${ending}`).toContain(ending);
   await expect(page.locator(".over__stamp")).toHaveText(STAMPS[ending!]!);
   if (ending === "bust") await expect(panel).toContainText("Busted. On a bust, only the Rooftop gets away.");

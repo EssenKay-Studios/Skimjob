@@ -37,7 +37,7 @@ import {
   type MeetingOutcome,
   type Tally,
 } from "../game/meeting";
-import { MeetingName, targetName } from "../game/wording";
+import { MeetingName } from "../game/wording";
 import { useCountdown, type ClientCommand, type Reply } from "../game/useGame";
 import "./meetings.css";
 
@@ -384,7 +384,7 @@ const RESULT_TITLE = (o: MeetingOutcome, who: (p: PlayerId) => string, me: Playe
   }
 };
 
-/** The latest meeting's result: tally, ballots (per vote mode), shakedown, compensation, blessing and checkpoint. */
+/** The latest meeting's result: tally, ballots (per vote mode), shakedown, compensation and blessing. */
 export function ResultsBanner({ view }: { view: PlayerView }) {
   const o = latestOutcome(view);
   const [dismissed, setDismissed] = useState<string | null>(null);
@@ -418,16 +418,6 @@ export function ResultsBanner({ view }: { view: PlayerView }) {
             {s.taken} went into the Haul.
           </Banner>
         ))}
-      {o.checkpoint && (
-        <Banner
-          tone={o.checkpoint.met ? "good" : "bad"}
-          seed="res-checkpoint"
-          title={`${targetName(o.checkpoint.act)} ${o.checkpoint.met ? "made" : "missed"}`}
-        >
-          Haul <b className="num">{o.checkpoint.haul}</b> against a target of <b className="num">{o.checkpoint.target}</b>
-          .
-        </Banner>
-      )}
       <Button variant="secondary" seed="results-ok" onClick={() => setDismissed(o.meetingId)} className="results__ok">
         Got it
       </Button>

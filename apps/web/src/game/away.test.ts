@@ -1,5 +1,5 @@
 // "While you were away" (design §13), from real engine views. M2-10 acceptance:
-// recaps for a quiet round, a meeting, a shakedown and a checkpoint; nothing
+// recaps for a quiet round, a meeting and a shakedown; nothing
 // in a recap comes from outside the viewer's own view.
 import { createGame, eventsSince, handleCommand, viewFor, type GameConfig, type GameState, type PlayerCommand, type PlayerId, type SystemCommand } from "@skimjob/engine";
 import { describe, expect, it } from "vitest";
@@ -96,14 +96,14 @@ describe("while you were away (design §13)", () => {
     expect(lines.some((l) => /voted to shake down/.test(l))).toBe(false);
   });
 
-  it("a checkpoint: made or missed, with the Haul and the target", () => {
+  it("after a regular meeting: no checkpoint line, the next round is news (design §6.2)", () => {
     let s = createGame(config());
     while (s.phase.kind === "planning") s = playRound(s);
     expect(s.phase.kind).toBe("awaitingMeeting");
     const before = s;
     s = run(s, { type: "scheduleMeeting", act: 1, slot: "act-1" }, open("act-1"), ...ids(s).map(skip), close("act-1"));
     const lines = recapBetween(before, s);
-    expect(lines.some((l) => /^Meeting 1 target: Haul \d+, target \d+, (made it|missed)/.test(l))).toBe(true);
+    expect(lines.some((l) => /target/.test(l))).toBe(false);
     expect(lines.at(-1)).toBe("Now: round 4. Pick your room before the deadline.");
   });
 

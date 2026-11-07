@@ -137,7 +137,7 @@ describe("raids — design §5.3, §4.2 step 3", () => {
       ["p2", 2, 0, 0],
     ]);
     // Seized coins are never handed in or pocketed, and they left the bank. design §5.3, §6.1, §7.6
-    expect([s.players.p0?.stash, s.players.p0?.totalHandedIn, s.haul, s.bank, s.seized]).toEqual([0, 0, 2, 48 - 7, 5]);
+    expect([s.players.p0?.stash, s.haul, s.bank, s.seized]).toEqual([0, 2, 48 - 7, 5]);
     expect(ofType(lastRound(s), "roundResolved")[0]).toMatchObject({ haulDelta: 2, bank: 41 });
   });
 

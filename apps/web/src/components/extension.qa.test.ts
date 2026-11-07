@@ -1,13 +1,12 @@
 // QA (PR #52, R6b): adversarial checks of the Extension UI against docs/extension.md,
 // on real engine games (no fabricated events where the engine can make them):
-// the shop's edges and privacy, no tells for camera offline, the gap box and target bar,
+// the shop's edges and privacy, no tells for camera offline, the gap box,
 // "between meetings" wording, lobby deck settings, role facts vs the spec tables,
 // and the end screen on a failed heist.
 import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { BANK_JOB, DECKS, PERKS, ROLES, SHOP_COLUMNS, type PerkId, type RoleId } from "@skimjob/content";
 import {
-  checkpointTarget,
   createGame,
   handleCommand,
   privateTo,
@@ -22,8 +21,8 @@ import {
 import { describe, expect, it } from "vitest";
 import { describeEvent } from "../game/describeEvent";
 import { namesOf } from "../game/hud";
-import { gapInfo, perkUses, roleInfo, roleListInfo, shopState, targetBar } from "../game/extension";
-import { GapBox, RoleList, RulebookSheet, TargetBar, Tokens } from "./Extension";
+import { gapInfo, perkUses, roleInfo, roleListInfo, shopState } from "../game/extension";
+import { GapBox, RoleList, RulebookSheet, Tokens } from "./Extension";
 import { DeckSettings, deckPatch, deckRoles, rolePatch } from "./DeckSettings";
 import { GameOver } from "../screens/Game";
 import type { LobbySettings } from "../api";
@@ -57,7 +56,7 @@ function game(cfg: GameConfig, setup: Setup = {}): GameState {
     if (e.type === "roleDealt") {
       const role = setup.roles ? (setup.roles[seat] ?? "rookie") : e.role;
       seat++;
-      const earned: GameEvent[] = Array.from({ length: setup.tokens?.[e.player] ?? 0 }, () => ({ type: "tokenEarned", visibility: privateTo(e.player), player: e.player, trigger: "checkpointMade" }));
+      const earned: GameEvent[] = Array.from({ length: setup.tokens?.[e.player] ?? 0 }, () => ({ type: "tokenEarned", visibility: privateTo(e.player), player: e.player, trigger: "watchedShakenDirty" }));
       return [{ ...e, role }, ...earned];
     }
     if (e.type === "shopDealt" && setup.shop) return [{ ...e, perks: setup.shop }];
@@ -194,9 +193,9 @@ describe("no tells: camera offline (extension.md \"Situations\")", () => {
   });
 });
 
-// ---------------------------------------------------------------- gap box, target bar
+// ---------------------------------------------------------------- gap box
 
-describe("the gap box and the target bar (extension.md \"What the app works out for you\")", () => {
+describe("the gap box (extension.md \"What the app works out for you\")", () => {
   it("the gap box matches the view's arithmetic", () => {
     const cfg = config(5, { rolePool: ["rookie"], eventsEnabled: true, seed: "gap" });
     let s = run(createGame(cfg), ...ids(5).map((p) => mv(p, "office")), ROUND, ALIBIS);
@@ -216,20 +215,6 @@ describe("the gap box and the target bar (extension.md \"What the app works out 
     expect(g2.unaccounted).toBe(2);
     expect(g2.text).toBe(`Alibis say +${viewFor(t, "p1").gap!.alibis}, the Haul grew ${viewFor(t, "p1").gap!.haulGrowth}: 2 unaccounted for.`);
   });
-
-  it("the target bar tracks each meeting's cumulative target and says what missing it costs", () => {
-    let s = createGame(config(4, { rolePool: ["rookie"], seed: "target" }));
-    const at = (st: GameState) => targetBar(viewFor(st, "p0"));
-    expect(at(s)).toMatchObject({ target: checkpointTarget(BANK_JOB, 1, 4), final: false, ifMissed: "nothing lost if missed" });
-    expect(at(s).target).toBe(BANK_JOB.checkpoints.perPlayer[0]! * 4);
-    // Through meeting 1: the bar moves on to meeting 2's target, then the final.
-    for (let guard = 0; guard < 60 && viewFor(s, "p0").act < 3; guard++) s = playOut1(s);
-    expect(viewFor(s, "p0").act).toBe(3);
-    expect(at(s)).toMatchObject({ target: checkpointTarget(BANK_JOB, 3, 4), final: true, ifMissed: "the heist fails if missed" });
-    const ui = html(createElement(TargetBar, { view: viewFor(s, "p0") }));
-    expect(ui).toContain("needed by the final meeting");
-    expect(ui).toContain(`${s.haul} / ${checkpointTarget(BANK_JOB, 3, 4)}`);
-  });
 });
 
 /** One step of play (as in playOut). */
@@ -247,10 +232,10 @@ describe("role cards and the rulebook match extension.md \"Roles\"", () => {
   const TEAM = ["rookie", "lookout", "auditor", "detective", "smoothTalker", "priest", "fixer"];
   const WILD = ["hacker"];
   const LONE = ["mole"];
-  const STARS = ["mole"];
+  const STARS = ["mole", "fixer"]; // design §8.4
   const MIN: Record<string, number> = { detective: 4, smoothTalker: 5, priest: 5 };
   // design §5.2, §5.3: the Mole's ring and the Fixer's reopen replace the R6 tip-off and raid stop, which had the token.
-  const NO_TOKEN = ["mole", "fixer"];
+  const NO_TOKEN = ["rookie", "mole", "fixer"];
 
   it("every one of the 9 roles has the spec's tag, ★, minimum crew and a token line where it earns one", () => {
     expect(Object.keys(ROLES).sort()).toEqual([...TEAM, ...WILD, ...LONE].sort());
@@ -269,8 +254,8 @@ describe("role cards and the rulebook match extension.md \"Roles\"", () => {
   });
 
   it("★ win lines follow the endings table", () => {
-    expect(roleInfo("mole").howYouWin).toMatch(/or when the final target is missed/);
-    expect(roleInfo("hacker").howYouWin).not.toMatch(/bust|target/);
+    expect(roleInfo("mole").howYouWin).toMatch(/when the heist is sunk by theft/);
+    expect(roleInfo("hacker").howYouWin).not.toMatch(/bust|theft/);
   });
 
   it("powers say \"between meetings\" where the spec does, and spec numbers", () => {
@@ -288,7 +273,7 @@ describe("role cards and the rulebook match extension.md \"Roles\"", () => {
     const ui = html(createElement(RulebookSheet, { open: true, onClose: () => {}, view: viewFor(s, "p0") }));
     for (const def of Object.values(ROLES)) expect(ui, def.name).toContain(def.name);
     expect(ui).toMatch(/Busted \(Wanted 3\)<\/td><td>Only the Rooftop gets away/);
-    expect(ui).toMatch(/Final target missed<\/td><td>Nobody, unless [^<]*Mole[^<]* has the biggest stash/);
+    expect(ui).toMatch(/Sunk by theft<\/td><td>Nobody, unless [^<]*Mole[^<]* has the biggest stash/);
     expect(ui).toContain("in this game");
     expect(ui).toContain("Unspent tokens are worth nothing at the end.");
     expect(ui).not.toMatch(/\bact\b|this act|per act/i);
@@ -340,7 +325,7 @@ describe("lobby deck settings (extension.md \"Host settings\")", () => {
   });
 
   it("every session length shows the host's deck and role picker", () => {
-    const custom = { ...base, deck: "everything" as const, roles: ["hacker", "mole"], sessionLength: "quick" as const };
+    const custom = { ...base, deck: "everything" as const, roles: ["hacker", "mole"], sessionLength: "15m" as const };
     expect(deckRoles(custom)).toEqual(["hacker", "mole"]);
     expect(render(custom)).toContain("Pick roles one by one");
     expect(render({ ...custom, roles: [] })).toContain(">Everything<");

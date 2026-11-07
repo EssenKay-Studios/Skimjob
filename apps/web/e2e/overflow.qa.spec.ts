@@ -43,7 +43,7 @@ for (const width of WIDTHS) {
     await section.scrollIntoViewIfNeeded();
     await section.getByRole("button", { name: "24 characters" }).click();
     const reveal = section.getByRole("region", { name: "The reveal" });
-    for (const ending of ["Job done", "Busted (Rooftop)", "Missed (nobody)"]) {
+    for (const ending of ["Job done", "Busted (Rooftop)", "Sunk by theft (nobody)"]) {
       await section.getByRole("button", { name: ending }).click();
       await expect(reveal).toContainText(WIDE);
       await expect(reveal).toContainText("M".repeat(24));
@@ -69,7 +69,7 @@ test("real 15-min game over with W×24, emoji×24 and combining-mark names: no o
   for (const p of [host, g1, g2]) p.on("pageerror", (e) => errors.push(e.message));
 
   await ok(await host.request.post("/api/auth/guest", { data: { nickname: WIDE } }));
-  const game = await ok<{ id: string; inviteCode: string }>(await host.request.post("/api/games", { data: { settings: { sessionLength: "quick" } } }));
+  const game = await ok<{ id: string; inviteCode: string }>(await host.request.post("/api/games", { data: { settings: { sessionLength: "15m" } } }));
   await ok(await g1.request.post(`/api/invites/${game.inviteCode}/join`, { data: { nickname: EMOJI } }));
   await ok(await g2.request.post(`/api/invites/${game.inviteCode}/join`, { data: { nickname: COMBINING } }));
   for (let i = 0; i < 2; i++) await ok(await host.request.post(`/api/games/${game.id}/bots`, { data: {} }));

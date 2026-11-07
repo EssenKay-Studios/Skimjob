@@ -7,13 +7,12 @@
 // suspicion board (game/notes.ts), the host strip (M2-13, GameHost.tsx) and
 // (M2-11) the end-of-game reveal (components/Reveal.tsx, from `view.reveal.summary`).
 import { useEffect, useMemo, useState } from "react";
-import { ROUNDS_PER_ACT } from "@skimjob/content";
 import type { PlayerView, RoomId } from "@skimjob/engine";
 import { Button } from "../components/Button";
 import { Chip } from "../components/Chip";
 import { Clock, Play } from "../components/icons";
 import { Meter } from "../components/Meter";
-import { EndingNote, GapBox, TargetBar } from "../components/Extension";
+import { EndingNote, GapBox } from "../components/Extension";
 import { endingText } from "../game/extension";
 import { MeetingName, meetingAfter } from "../game/wording";
 import { BankCutaway } from "../art/BankCutaway";
@@ -228,11 +227,12 @@ function Hud({ view, timers, offset, hostPaused }: { view: PlayerView; timers: r
   const emergency = view.pendingEmergency;
   const emergencyIn = useCountdown(timers, emergency ? `openMeeting:${emergency.meetingId}` : null, offset);
   const bust = bustOf(view);
+  const { roundCap } = jobOf(view); // design §6.2
   return (
     <SketchFrame as="section" seed="game-hud" radius={18} shadow={0.5} className="hud" aria-label="Heist status">
       <div className="hud__phase">
         <p className="kicker hud__kicker">
-          {view.round > 0 ? `Round ${view.round} of ${3 * ROUNDS_PER_ACT} · ${MeetingName(view.act)} after round ${meetingAfter(view.act)}` : "Setting up"}
+          {view.round > 0 ? `Round ${view.round} of ${roundCap}${meetingAfter(view.act) < roundCap ? ` · ${MeetingName(view.act)} after round ${meetingAfter(view.act)}` : ""}` : "Setting up"}
         </p>
         <h1 className="hud__title">{phase.title}</h1>
         {countdown && (
@@ -253,7 +253,8 @@ function Hud({ view, timers, offset, hostPaused }: { view: PlayerView; timers: r
         )}
       </div>
       <div className="hud__stat hud__haul">
-        <TargetBar view={view} />
+        <span className="meta">Haul</span>
+        <span className="num hud__big">{view.haul}</span>
       </div>
       {/* design §5.4: Wanted stars, public; at the bust line the heist is busted (§5.5). */}
       <div className="hud__stat hud__wanted">
@@ -384,7 +385,7 @@ function Actions({ view, timers, offset, send, autoMeetings, pick }: BoardProps 
 
 function WaitPanel({ view }: { view: PlayerView }) {
   const p = view.phase;
-  const text = p.kind === "awaitingMeeting" ? `Round ${meetingAfter(p.act)} is done. ${MeetingName(p.act)} opens next, then the Haul is checked against its target.` : "Hang tight.";
+  const text = p.kind === "awaitingMeeting" ? `Round ${meetingAfter(p.act)} is done. ${MeetingName(p.act)} opens next.` : "Hang tight.";
   return (
     <SketchFrame as="section" seed="game-wait" radius={16} shadow={0.4} className="panel wait" aria-live="polite">
       <h2 className="panel__title">

@@ -21,8 +21,8 @@ const ROWS: readonly Row[] = [
   { label: "Raids per game", target: "1–3", cell: (m) => num(m.raids.perGame) },
   { label: "Games with a raid", target: "50–90%", cell: (m) => pct(m.raids.games) },
   { label: "Rooftop stalls (rounds)", target: "≤ 15%", cell: (m) => pct(m.raids.stalls) },
-  { label: "Busted before Act 3", target: "", cell: (m) => pct(m.endedBeforeAct3) },
-  { label: "Checkpoints missed per game", target: "", cell: (m) => num(m.checkpointsMissedPerGame) },
+  { label: "Ended at the cap, over ¼ of the bank left", target: "≤ 10%", cell: (m) => pct(m.capStalls) },
+  { label: "Sunk by theft", target: "report", cell: (m) => pct(m.theftRate) },
   { label: "Bank emptied", target: "", cell: (m) => pct(m.bankEmptied) },
   { label: "Shakedowns per game", target: "", cell: (m) => num(m.shakedowns.perGame) },
   { label: "Shakedown accuracy (caught loot)", target: "50–70%", cell: (m) => pct(m.shakedowns.accuracy) },
@@ -30,8 +30,6 @@ const ROWS: readonly Row[] = [
   { label: `Win rate, honest (pocket ≤${share(HONEST_MAX_SHARE)})`, target: "< moderate", cell: (m) => pct(m.pocketing.honest?.winRate ?? null) },
   { label: `Win rate, moderate (≤${share(MODERATE_MAX_SHARE)})`, target: "> honest", cell: (m) => pct(m.pocketing.moderate?.winRate ?? null) },
   { label: `Win rate, heavy (>${share(MODERATE_MAX_SHARE)})`, target: "< 50%", cell: (m) => pct(m.pocketing.heavy?.winRate ?? null) },
-  { label: "Comeback: Act 1 leader wins (successes)", target: "< 50%", cell: (m) => pct(m.comeback.rate) },
-  { label: "Decided before Act 3 (successes)", target: "< 15%", cell: (m) => pct(m.decidedEarly.rate) },
 ];
 
 function table(header: readonly string[], rows: readonly (readonly string[])[]): string {

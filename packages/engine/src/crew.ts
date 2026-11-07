@@ -5,8 +5,7 @@
 //
 // The powers are answered with a private `abilityResolved`. Every reward is one
 // private `tokenEarned`, emitted where its trigger happens: after a round
-// resolves (round.ts), after a checkpoint is made (`checkpointRewards`),
-// after a shakedown (`dirtyShakedownRewards`, `blessingEvents`).
+// resolves (round.ts), after a shakedown (`dirtyShakedownRewards`, `blessingEvents`).
 import type { RolePower, TokenTrigger } from "@skimjob/content";
 import type { ActNumber, GameEvent, GameState, PlayerId, PlayerState } from "./types";
 import { PUBLIC, privateTo } from "./types";
@@ -128,9 +127,6 @@ export function grantRewards(state: GameState, trigger: TokenTrigger, earned: (p
   }
   return out;
 }
-
-/** extension.md gap-fills: the target was met at meeting 1 or 2. The Rookie earns a token. */
-export const checkpointRewards = (state: GameState): GameEvent[] => grantRewards(state, "checkpointMade", () => true);
 
 /**
  * extension.md "Roles": `target` was just caught (shaken down dirty). A token

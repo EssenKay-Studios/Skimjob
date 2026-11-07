@@ -9,7 +9,7 @@ export function seats(n: number): GameConfig["players"] {
 }
 
 /**
- * R6's room yields as coin limits, its checkpoint targets, clean line and payout,
+ * R6's room yields as coin limits, its clean line and payout,
  * a bank too big to run short (design §3.2) and bells too big to raid (§5.3), so the R6 bot heuristics (alibis, suspicion, perks,
  * claims, endings) keep their numbers until the S3a steps that replace them.
  */
@@ -17,7 +17,6 @@ export const R6_COINS: ContentOverrides = {
   rooms: { vault: { coins: 6 }, office: { coins: 4 }, lobby: { coins: 2 }, depositBoxes: { coins: 5 } },
   bank: { coinsPerPlayer: 100 },
   alarm: { bulbs: 1000 },
-  checkpoints: { perPlayer: [7, 15, 23] },
   shakedown: { cleanBelow: 6, payout: 8 },
 };
 

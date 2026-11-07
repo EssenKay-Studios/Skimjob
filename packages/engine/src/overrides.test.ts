@@ -61,10 +61,10 @@ describe("validateOverrides — configs are untrusted JSON (design §17.4)", () 
         rooms: { vault: { coins: 7, quietCoins: 1 } },
         bank: { coinsPerPlayer: 20 },
         alarm: { bulbs: 5, tapedRounds: 3, bustStars: 4 },
-        checkpoints: { perPlayer: [5, 12, 20] },
+        roundCap: 9,
         shakedown: { cleanBelow: 5, payout: 4 },
         perks: { peek: { cost: 3 } },
-        roles: { rookie: { rewardCount: 2 }, lookout: { extraRooms: 2 }, hacker: { perAct: 6 }, mole: { perAct: 2 } },
+        roles: { auditor: { rewardCount: 2 }, lookout: { extraRooms: 2 }, hacker: { perAct: 6 }, mole: { perAct: 2 } },
       }),
     ).toEqual([]);
   });
@@ -111,13 +111,14 @@ describe("validateOverrides — configs are untrusted JSON (design §17.4)", () 
     expect(errs({ rooms: { vault: { lot: 7 } } })).toEqual(["contentOverrides.rooms.vault.lot is not an overridable field"]);
     expect(errs({ alarm: { bulb: 3 } })).toHaveLength(1);
     expect(errs({ rooms: { vault: { name: "Big vault" } } })).toHaveLength(1);
-    expect(errs({ checkpoints: { perAct: [1, 2, 3] } })).toHaveLength(1);
+    // R6's checkpoint targets are gone (design §6.2: no targets).
+    expect(errs({ checkpoints: { perPlayer: [1, 2, 3] } })).toEqual(["contentOverrides.checkpoints is not an overridable section"]);
   });
 
-  it("checkpoints need one whole number per act", () => {
-    expect(errs({ checkpoints: { perPlayer: [6, 14] } })).toHaveLength(1);
-    expect(errs({ checkpoints: { perPlayer: [6, 14, 22.5] } })).toHaveLength(1);
-    expect(errs({ checkpoints: { perPlayer: "6,14,22" } })).toHaveLength(1);
+  it("the round cap is a whole number, 1 or more (design §6.2)", () => {
+    for (const bad of [0, 2.5, -1, "12", Number.NaN, null]) {
+      expect(errs({ roundCap: bad }), String(bad)).toEqual(["contentOverrides.roundCap must be a whole number, 1 or more"]);
+    }
   });
 
   it("a coin room keeps 1 coin or more and a no-coin room stays at 0 (design §3.2); powers only for the role that has them", () => {
@@ -168,7 +169,8 @@ describe("merging overrides (design §17.4)", () => {
     expect(job.rooms.office).toBe(BANK_JOB.rooms.office);
     expect(job.bank).toEqual({ coinsPerPlayer: 5 });
     expect(job.alarm).toEqual({ ...BANK_JOB.alarm, bustStars: 2 });
-    expect(job.checkpoints).toBe(BANK_JOB.checkpoints);
+    expect(job.roundCap).toBe(BANK_JOB.roundCap);
+    expect(overrideJob(BANK_JOB, { roundCap: 6 }).roundCap).toBe(6);
     const roles = overrideRoles(ROLES, { roles: { lookout: { extraRooms: 2, rewardCount: 3 } } });
     expect(roles.lookout?.power).toEqual({ kind: "lookout", extraRooms: 2 });
     expect(roles.lookout?.rewards).toEqual([{ on: "watchedShakenDirty", count: 3 }]);
@@ -211,14 +213,11 @@ describe("overrides in play (design §17.4)", () => {
     expect(handleThroughAlibis(s1, submit("p0", { room: "vault", duffel: 0, pocket: 10 })).ok).toBe(false);
   });
 
-  it("checkpoint targets change (design §11.5)", () => {
-    const s0 = game(config(3, { checkpoints: { perPlayer: [1, 2, 3] } }));
-    let s = s0;
-    for (let i = 0; i < 3; i++) s = after(s, () => submit("p0", { room: "lobby" }), () => submit("p1", { room: "lobby" }), () => submit("p2", { room: "lobby" }), ROUND);
-    s = run(s, { type: "scheduleMeeting", act: 1, slot: "x" });
-    s = run(s, { type: "advance", deadline: { kind: "openMeeting", meetingId: "act-1" } });
-    s = run(s, { type: "advance", deadline: { kind: "closeMeeting", meetingId: "act-1" } });
-    expect(s.log.find((e) => e.type === "checkpointChecked")).toMatchObject({ target: 3, met: true });
+  it("the round cap changes when the game ends (design §6.2)", () => {
+    let s = game(config(3, { roundCap: 2 }));
+    for (let i = 0; i < 2; i++) s = after(s, () => submit("p0", { room: "lobby" }), () => submit("p1", { room: "lobby" }), () => submit("p2", { room: "lobby" }), ROUND);
+    expect(s.phase).toMatchObject({ kind: "ended", outcome: { result: "success" } });
+    expect(s.round).toBe(2);
   });
 
   it("shakedown numbers change the clean line and payout (extension.md \"Shakedowns\")", () => {

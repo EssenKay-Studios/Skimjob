@@ -101,6 +101,7 @@ describe("QA: refusals are generic and power limits hold — v2 §2, design §8"
     }
     let end = game(3, ["auditor", "detective"]);
     for (let act = 1; act <= 3; act++) end = finishAct(end, STEADY);
+    while (end.phase.kind === "planning") end = run(end, ...STEADY, ROUND); // to the round cap (design §6.2)
     expect(end.phase.kind).toBe("ended");
     expect(reason(end, use("p0", { kind: "audit", room: "office" }))).toBe("the game is over");
     expect(reason(end, use("p1", { kind: "checkStash", target: "p0" }))).toBe("the game is over");

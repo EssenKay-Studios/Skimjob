@@ -3,7 +3,6 @@
 // docs/m2-plan.md M2-6; design §5, §5.4, §6, §11.5, §13
 import { EVENTS, type JobDef, type RoomId } from "@skimjob/content";
 import {
-  checkpointTarget,
   jobFor,
   rolesFor,
   type GameCreated,
@@ -165,11 +164,6 @@ export function formatCountdown(ms: number): string {
   if (m < 24 * 60) return `${Math.floor(m / 60)}h ${m % 60}m`;
   const h = Math.ceil(m / 60);
   return `${Math.floor(h / 24)}d ${h % 24}h`;
-}
-
-/** The Haul target the next regular meeting checks (cumulative). design §11.5; extension.md "The Haul target" */
-export function nextTarget(view: PlayerView): { readonly act: 1 | 2 | 3; readonly target: number; readonly final: boolean } {
-  return { act: view.act, target: checkpointTarget(jobOf(view), view.act, crewSize(view)), final: view.act === 3 };
 }
 
 /** One room in the move panel: its coins this round and its bell. design §3.1, §5.1, §13 */

@@ -23,7 +23,7 @@ test("a 15-min game with events on, played to the end: kept cards flip, no dropp
   page.on("pageerror", (e) => errors.push(e.message));
   const game = await startGame(page.request, { bots: 5 });
   await page.goto(`/game/${game.id}`);
-  await expect(page.locator(".hud__kicker")).toContainText(/Round \d of 9/);
+  await expect(page.locator(".hud__kicker")).toContainText(/Round \d+ of 12/);
   const over = page.getByRole("list", { name: "Final ranking" });
   const seen: string[] = [];
   while (!(await over.isVisible())) {

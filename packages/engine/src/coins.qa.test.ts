@@ -397,7 +397,7 @@ describe("QA: a short bank — design §3.2", () => {
           expect(r.s2.bank).toBeGreaterThanOrEqual(0);
           checked++;
           s = r.s2;
-          if (s.bank === 0 || s.round > 3) break; // the bank doesn't end the game until S3a.3
+          if (s.bank === 0 || s.round > 3) break; // an empty bank ends the game (design §6.2)
         }
         expect(s.bank).toBe(filled - taken);
       }
@@ -435,16 +435,11 @@ describe("QA: a short bank — design §3.2", () => {
     expect(s2.bank).toBe(0);
   });
 
-  it("once the bank is empty every grab is 0 and nothing is drawn beyond the seat", () => {
-    let s = run(game(3, { bank: { coinsPerPlayer: 1 } }), ROUND); // three missed moves take the 3 coins
+  it("once the bank is empty the game is over: no round grabs from an empty bank (design §6.2)", () => {
+    const s = run(game(3, { bank: { coinsPerPlayer: 1 } }), ROUND); // three missed moves take the 3 coins
     expect(s.bank).toBe(0);
-    for (let k = 0; k < 2; k++) {
-      const before = run(s, submit("p0", { room: "vault", duffel: 0, pocket: 3 }), submit("p1", { room: "office", duffel: 1, pocket: 1 }));
-      s = run(before, ROUND);
-      expect(grabsIn(after(before, s)).map((e) => e.duffel + e.pocket)).toEqual([0, 0, 0]);
-      expect(resolvedIn(after(before, s))).toMatchObject({ bank: 0, haulDelta: 0 });
-      expect(s.players.p0?.stash).toBe(0);
-    }
+    expect(s.phase.kind).toBe("ended");
+    expect(handleCommand(s, submit("p0", { room: "vault", duffel: 0, pocket: 3 }))).toMatchObject({ ok: false, reason: "the game is over" });
   });
 });
 
@@ -549,14 +544,13 @@ describe("QA: viewFor never leaks the new events", () => {
     ]);
   });
 
-  it("swapping two players' splits (same rooms) changes nothing in a third player's view, short bank or not", () => {
-    for (const coinsPerPlayer of [16, 1]) {
-      const s = game(3, { bank: { coinsPerPlayer } }, { seed: "swap" });
-      const a = run(s, submit("p0", { room: "vault", duffel: 0, pocket: 3 }), submit("p1", { room: "vault", duffel: 3, pocket: 0 }), submit("p2", { room: "office", duffel: 2, pocket: 0 }), ROUND);
-      const b = run(s, submit("p0", { room: "vault", duffel: 3, pocket: 0 }), submit("p1", { room: "vault", duffel: 0, pocket: 3 }), submit("p2", { room: "office", duffel: 2, pocket: 0 }), ROUND);
-      expect(viewFor(a, "p2")).toEqual(viewFor(b, "p2"));
-      expect(viewFor(a, "p0")).not.toEqual(viewFor(b, "p0"));
-    }
+  // A short bank empties it, which ends the game and opens the reveal (design §6.2), so this is a full-bank round.
+  it("swapping two players' splits (same rooms) changes nothing in a third player's view", () => {
+    const s = game(3, null, { seed: "swap" });
+    const a = run(s, submit("p0", { room: "vault", duffel: 0, pocket: 3 }), submit("p1", { room: "vault", duffel: 3, pocket: 0 }), submit("p2", { room: "office", duffel: 2, pocket: 0 }), ROUND);
+    const b = run(s, submit("p0", { room: "vault", duffel: 3, pocket: 0 }), submit("p1", { room: "vault", duffel: 0, pocket: 3 }), submit("p2", { room: "office", duffel: 2, pocket: 0 }), ROUND);
+    expect(viewFor(a, "p2")).toEqual(viewFor(b, "p2"));
+    expect(viewFor(a, "p0")).not.toEqual(viewFor(b, "p0"));
   });
 
   it("who was cut by a short bank is not public: the drawn seat is in no visible event", () => {
@@ -565,7 +559,7 @@ describe("QA: viewFor never leaks the new events", () => {
       return run(s, ...s.playerOrder.map((id) => submit(id, { room: "vault", duffel: 3, pocket: 0 })), ROUND);
     };
     const short = play(1);
-    const full = play(16);
+    const full = play(3); // exactly covered: it empties the bank too, so both games end (design §6.2)
     for (const id of short.playerOrder) {
       const v = viewFor(short, id);
       expect(v.caseFile.filter((l) => l.event.type === "coinsGrabbed").every((l) => (l.event as Grabbed).player === id)).toBe(true);

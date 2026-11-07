@@ -174,7 +174,7 @@ async function play(
   return { log: end.log, fired, phases };
 }
 
-const PRESETS: SessionLength[] = ["quick", "1h", "3h", "1d", "3d", "1w"];
+const PRESETS: SessionLength[] = ["15m", "1h", "3h", "1d", "3d", "1w"];
 
 describe("every preset finishes all-bot games (design §4.1)", () => {
   for (const sessionLength of PRESETS) {
@@ -196,7 +196,7 @@ describe("kill/restart at every step = an uninterrupted run (same seed)", () => 
     }
   };
   // Absent humans (default moves) here; the bots' version is below.
-  for (const sessionLength of ["quick", "1d"] as SessionLength[]) {
+  for (const sessionLength of ["15m", "1d"] as SessionLength[]) {
     it(`${sessionLength}, 3 absent humans: identical deadlines and log`, { timeout: 240_000 }, async () => {
       forcedSeed = `qa-restart-${sessionLength}`;
       const a = await play(0, { sessionLength }, { guests: 2, act: emergencyAt });
@@ -208,12 +208,12 @@ describe("kill/restart at every step = an uninterrupted run (same seed)", () => 
     });
   }
   // With bots: restart before every step; play() checks no double, no skip, no refusals, every deadline drained.
-  it("bots, quick: restarting at every phase still ends cleanly", { timeout: 240_000 }, async () => {
+  it("bots, 15m: restarting at every phase still ends cleanly", { timeout: 240_000 }, async () => {
     forcedSeed = "qa-restart-bots";
     const phases = new Set<string>();
     for (const seed of ["s1", "s2", "s3"]) {
       forcedSeed = `qa-restart-bots-${seed}`;
-      for (const p of (await play(5, { sessionLength: "quick" }, { act: emergencyAt, restart: () => true })).phases) phases.add(p);
+      for (const p of (await play(5, { sessionLength: "15m" }, { act: emergencyAt, restart: () => true })).phases) phases.add(p);
     }
     for (const p of ["planning", "alibis", "notice", "meeting"]) expect(phases.has(p), p).toBe(true);
     console.log("QA restart phases covered:", [...phases].join(","));
@@ -266,7 +266,7 @@ describe("clock jumps (laptop sleep)", () => {
 describe("humans before a deadline (design §5)", () => {
   it("a move sent before the deadline is used; with others still to lock in the round runs its full length; after it, moves are refused", { timeout: 60_000 }, async () => {
     await fresh();
-    const { id, host } = await startGame(0, { sessionLength: "quick" }, 2);
+    const { id, host } = await startGame(0, { sessionLength: "15m" }, 2);
     const [round1] = await deadlines(id);
     const room = viewFor(await load(id), (await load(id)).playerOrder[0]!).rooms[0]!;
     clock.advance(QUICK_MS - 1);
@@ -289,8 +289,8 @@ const byDue = async (id: string) => (await deadlines(id)).sort((a, b) => a.due -
 describe("early round end once the whole crew has locked in (owner decision, 2 Nov; design §4.1, §5.1)", () => {
   it("the round resolves lockInGraceMs after the last lock-in; a change during the grace doesn't restart it; alibis stay timed", { timeout: 60_000 }, async () => {
     await fresh();
-    const { id, host } = await startGame(2, { sessionLength: "quick" });
-    const t = TIMINGS.quick;
+    const { id, host } = await startGame(2, { sessionLength: "15m" });
+    const t = TIMINGS["15m"];
     let s = await load(id);
     const hostId = s.playerOrder[0]!;
     // The bots locked in at the start; the host hasn't, so only the full-length round is planned.
@@ -326,11 +326,11 @@ describe("early round end once the whole crew has locked in (owner decision, 2 N
       expect(t.lockInGraceMs, k).toBeGreaterThan(0);
       expect(t.lockInGraceMs, k).toBeLessThan(t.roundMs / 4);
     }
-    expect(scaleTiming(TIMINGS.quick, 0.1).lockInGraceMs).toBe(TIMINGS.quick.lockInGraceMs / 10);
+    expect(scaleTiming(TIMINGS["15m"], 0.1).lockInGraceMs).toBe(TIMINGS["15m"].lockInGraceMs / 10);
   });
 });
 
-const QUICK_MS = TIMINGS.quick.roundMs;
+const QUICK_MS = TIMINGS["15m"].roundMs;
 
 describe("emergency during an open alibi window (design §5.4)", () => {
   it("the alibi deadline keeps running through the notice, pauses while the meeting is open, then keeps its time left", { timeout: 60_000 }, async () => {
@@ -384,7 +384,7 @@ describe("transient database errors on a deadline (30c9f9e retry/backoff)", () =
   async function playWithFault(fault: RegExp | null, at: number) {
     await fresh();
     forcedSeed = "qa-fault";
-    const { id } = await startGame(5, { sessionLength: "quick", roles: ["lookout", "auditor", "detective", "smoothTalker", "hacker"] });
+    const { id } = await startGame(5, { sessionLength: "15m", roles: ["lookout", "auditor", "detective", "smoothTalker", "hacker"] });
     let idle = 0;
     for (let i = 0; i < 2000; i++) {
       if ((await load(id)).phase.kind === "ended") break;

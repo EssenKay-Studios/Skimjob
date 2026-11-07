@@ -5,7 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { PERSONALITIES, createBots, runBotGame } from "@skimjob/bots";
-import { leadersOf, ranking, replay, type GameEvent, type GameState } from "@skimjob/engine";
+import { BANK_JOB } from "@skimjob/content";
+import { type GameEvent, type GameState } from "@skimjob/engine";
 import { parseSimArgs, type SimOptions } from "./args";
 import { setupGame } from "./crew";
 import { summarize } from "./metrics";
@@ -48,13 +49,13 @@ describe("design §17.4 config overrides — hostile JSON is refused, nothing po
     '{"rooms":{"constructor":{"coins":1}}}',
     '{"alarm":{"__proto__":{"bulbs":1}}}',
     '{"alarm":{"constructor":1}}',
-    '{"checkpoints":{"__proto__":[1,2,3]}}',
+    '{"roundCap":{"__proto__":12}}',
     '{"shakedown":{"__proto__":{"cleanBelowPerAct":0}}}',
     '{"roles":{"__proto__":{"stashMultiplier":9}}}',
     '{"roles":{"rookie":{"__proto__":{"stashMultiplier":9}}}}',
     '{"roles":{"toString":{}}}',
     '{"alarm":{"bulbs":0}}', '{"alarm":{"bulbs":"5"}}', '{"rooms":{"vault":{"coins":1.5}}}', '{"rooms":{"vault":{"coins":-1}}}',
-    '{"checkpoints":{"perPlayer":[1,2]}}', '{"checkpoints":{"perPlayer":[1,2,-3]}}', '{"roles":{"lookout":{"perAct":1}}}',
+    '{"roundCap":0}', '{"roundCap":"12"}', '{"roundCap":2.5}', '{"checkpoints":{"perPlayer":[1,2,3]}}', '{"roles":{"lookout":{"perAct":1}}}',
     '{"rooms":{"vault":{"capacity":{"max":2}}}}', '{"rooms":[]}', '{"alarm":null}',
   ];
   it.each(hostile)("%s", (json) => {
@@ -109,8 +110,7 @@ describe("design §17.4 outputs — same seed, same files; files only in the out
   });
 });
 
-// Hand-check: rebuild each record from the engine's state (replaying the log up
-// to each checkpoint) and recompute the headline metrics straight from the logs.
+// Hand-check: rebuild each record from the engine's state and recompute the headline metrics straight from the logs.
 describe("design §17.4 metrics — hand-checked against the engine on a fixed set", () => {
   const o = opts(["-n", "4", "-p", "3,8,12", "-s", "qa-hand"]);
   const games: { state: GameState; rejections: number; n: number; i: number }[] = [];
@@ -130,7 +130,7 @@ describe("design §17.4 metrics — hand-checked against the engine on a fixed s
     expect(games.every((g) => g.rejections === 0)).toBe(true);
   });
 
-  it("records match the finished state and the checkpoint standings match a replay", () => {
+  it("records match the finished state, and the bank, the round cap or a bust ended it", () => {
     games.forEach((g, k) => {
       const rec = records[k]!;
       const { state } = g;
@@ -145,25 +145,10 @@ describe("design §17.4 metrics — hand-checked against the engine on a fixed s
         expect(p.role).toBe(ps.role);
         expect(p.pocketed).toBeLessThanOrEqual(p.grabbed);
       }
-      const log = state.log as readonly GameEvent[];
-      for (const act of [1, 2] as const) {
-        const at = log.findIndex((e) => e.type === "checkpointChecked" && e.act === act);
-        const recorded = act === 1 ? rec.afterAct1 : rec.afterAct2;
-        if (at < 0) {
-          expect(recorded).toBeNull();
-          continue;
-        }
-        const mid = replay(state.config, log.slice(0, at + 1));
-        const scores = mid.playerOrder.map((id) => {
-          const ps = mid.players[id]!;
-          return { id, s: ps.stash };
-        });
-        const top = Math.max(...scores.map((x) => x.s));
-        expect(recorded?.topScore).toBe(top);
-        // Leaders use the engine's tie-breaks (PR #10 review): a subset of the top scorers.
-        expect(recorded?.leaders).toEqual(leadersOf(ranking(mid)));
-        for (const id of recorded?.leaders ?? []) expect(scores.find((x) => x.id === id)?.s).toBe(top);
-      }
+      // design §6.2: the bank, the round cap or a bust ended it, in the round recorded.
+      expect(rec.endedRound).toBe(state.resolvedRound);
+      if (rec.reason !== "bust") expect(state.bank === 0 || rec.endedRound === BANK_JOB.roundCap).toBe(true);
+      expect(rec.bankLeft).toBe(state.bank);
     });
   });
 

@@ -119,7 +119,7 @@ describe("QA: wrong phase — design §8.3", () => {
 
   it("Rig: refused with no next card (last round), allowed for round 2 from round 1", () => {
     const s = grantPerks(game(4, [], { eventsEnabled: true }), "p0", "rig");
-    expect(refused({ ...s, round: 9 }, use("p0", { kind: "rig" }))).toMatch(/no next event card/);
+    expect(refused({ ...s, round: 12 }, use("p0", { kind: "rig" }))).toMatch(/no next event card/); // the round cap (design §6.2)
     expect(since(s, run(s, use("p0", { kind: "rig" })))[0]).toMatchObject({ type: "perkUsed", perk: { kind: "rig", round: 2 } });
   });
 });
@@ -226,7 +226,7 @@ describe("QA: Shield vs a plain shakedown — design §8.3, §11.3", () => {
 
     const two = grantPerks(base, "p0", "shield", "shield");
     const first = passOnP0(two);
-    expect(first.players.p0).toMatchObject({ stash: 6, timesShakenDown: 0 });
+    expect(first.players.p0).toMatchObject({ stash: 6 });
     expect(first.haul).toBe(base.haul);
     expect(Object.fromEntries(Object.entries(first.players).map(([id, p]) => [id, p.stash]))).toEqual(
       Object.fromEntries(Object.entries(two.players).map(([id, p]) => [id, p.stash])),

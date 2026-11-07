@@ -191,14 +191,14 @@ describe("QA: when the deck is on — design §10, §8.1", () => {
     expect(off.cardsFlipped).toEqual([]);
   });
 
-  it("over 9 rounds: one card per round 2..9 from the full deck (repeats allowed, owner answers 1 Nov), right after each roundStarted (3 and 12 players)", () => {
+  it("over a whole game: one card per round from 2 to the last from the full deck (repeats allowed, owner answers 1 Nov), right after each roundStarted (3 and 12 players)", () => {
     let repeats = 0;
     for (const n of [3, 12]) {
       for (let i = 0; i < 8; i++) {
         const end = playThrough(createGame(config(n, { seed: `exhaust-${n}-${i}` })));
         const flips = find(end.log, "eventFlipped");
-        expect(flips.map((f) => f.round)).toEqual([2, 3, 4, 5, 6, 7, 8, 9]);
-        if (new Set(flips.map((f) => f.card)).size < 8) repeats++;
+        expect(flips.map((f) => f.round)).toEqual(Array.from({ length: end.round - 1 }, (_, i) => i + 2));
+        if (new Set(flips.map((f) => f.card)).size < flips.length) repeats++;
         for (const f of flips) {
           const at = end.log.indexOf(f);
           expect(end.log[at - 1]).toMatchObject({ type: "roundStarted", round: f.round });

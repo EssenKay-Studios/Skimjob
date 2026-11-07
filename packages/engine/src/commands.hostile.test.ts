@@ -73,7 +73,7 @@ function scenarioStates(): GameState[] {
   for (const id of s.playerOrder) {
     s = grantPerks(s, id, ...ALL_PERKS, ...ALL_PERKS);
     // Tokens to buy from the shop. extension.md "Tokens and the perk shop"
-    for (let i = 0; i < 4; i++) s = applyEvent(s, { type: "tokenEarned", visibility: privateTo(id), player: id, trigger: "checkpointMade" });
+    for (let i = 0; i < 4; i++) s = applyEvent(s, { type: "tokenEarned", visibility: privateTo(id), player: id, trigger: "watchedShakenDirty" });
   }
   keep(s); // planning round 1
   s = keep(run(s, { type: "useAbility", player: "p8", ability: { kind: "rig" } })); // the Rig's pick is open

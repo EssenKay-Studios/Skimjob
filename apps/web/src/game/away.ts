@@ -53,7 +53,6 @@ export function recapItems(events: readonly LoggedEvent[], view: PlayerView, ctx
       from: rounds.map((e) => e.seq),
     });
   }
-  for (const e of of("checkpointChecked")) picks.push({ prio: 3, ...say(e) });
 
   // Meetings: the shakedown's result says more than the vote that called it.
   const settled = new Set([...of("shakedownResolved"), ...of("shakedownCancelled")].map((e) => e.event.target));

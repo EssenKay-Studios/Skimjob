@@ -64,11 +64,9 @@ describe("describeEvent", () => {
     );
   });
 
-  it("gives the round summary, card and checkpoint with signs", () => {
+  it("gives the round summary and card with signs", () => {
     expect(describeEvent(sampleEvents.roundResolved, asAna)).toBe("Round 1: Haul +6 (now 6), 58 coins left in the bank.");
     expect(describeEvent(sampleEvents.eventFlipped, asAna)).toBe("Round 2 event: Lockdown (the Vault is closed).");
-    expect(describeEvent(sampleEvents.checkpointChecked, asAna)).toBe("Meeting 1 target: Haul 10, target 12, missed.");
-    expect(describeEvent({ ...sampleEvents.checkpointChecked, act: 3, met: true }, asAna)).toBe("Final target: Haul 10, target 12, made it.");
     expect(describeEvent(sampleEvents.auditReport, asAna)).toBe("Audit of round 6: Vault 4 short.");
   });
 
@@ -163,8 +161,8 @@ describe("describeEvent", () => {
     expect(describeEvent({ ...sampleEvents.gameEnded, outcome: { result: "failed", reason: "bust", escapees: ["ana"], ranking, winners: ["ana"] } }, asCyd)).toBe(
       "Busted: Wanted hit the bust line and the heist failed; Ana got away over the Rooftop; Ana wins.",
     );
-    expect(describeEvent({ ...sampleEvents.gameEnded, outcome: { result: "failed", reason: "target", ranking, winners: ["ben"] } }, asAna)).toBe(
-      "The heist failed: the target was missed; Ben wins.",
+    expect(describeEvent({ ...sampleEvents.gameEnded, outcome: { result: "failed", reason: "theft", ranking, winners: ["ben"] } }, asAna)).toBe(
+      "The heist was sunk by theft: under two-thirds of the coins taken reached the crew; Ben wins.",
     );
   });
 

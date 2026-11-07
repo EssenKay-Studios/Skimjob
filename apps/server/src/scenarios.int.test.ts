@@ -33,9 +33,14 @@ const clock = fakeClock(Date.UTC(2026, 10, 1));
 let db: Db;
 let store: GameStore;
 let app: FastifyInstance;
+/**
+ * Every game's seed, set by `startGame` from the test's name, so each story
+ * replays the same game (and the same bot decisions) on every run (#147).
+ */
+let nextSeed = "";
 const boot = async () => {
   store = createGameStore(db);
-  const a = buildServer({ db, clock, store });
+  const a = buildServer({ db, clock, store, gameSeed: () => nextSeed });
   await a.ready();
   return a;
 };
@@ -89,8 +94,13 @@ async function seated(id: string, sessions: readonly string[]): Promise<Game> {
   return { id, humans };
 }
 
+const startedPerTest = new Map<string, number>();
 async function startGame(people: number, bots: number, settings: Partial<LobbySettings> = {}): Promise<Game> {
   const { id, sessions } = await openLobby(people, bots, settings);
+  const name = expect.getState().currentTestName ?? "";
+  const n = (startedPerTest.get(name) ?? 0) + 1;
+  startedPerTest.set(name, n);
+  nextSeed = `scenario\0${name}\0${n}`;
   const started = await post(`/games/${id}/start`, sessions[0]!);
   expect(started.status).toBe(200);
   expect(started.body.status).toBe("running");
@@ -311,15 +321,16 @@ async function finish(game: Game, clients: readonly Client[], refused: readonly 
 
 /** A person who plays a fixed room with nothing pocketed, votes skip, and does nothing else. */
 const steadyBrain =
-  (room: string): Brain =>
+  (room: string, pocketAll = false): Brain =>
   (view) => {
     if (view.phase.kind === "meeting") return view.me.vote ? [] : [{ type: "castVote", vote: { kind: "skip" } }];
     if (view.phase.kind !== "planning" || view.me.move) return [];
     // design §13 Lockdown, §5.3: a closed or taped-off room is refused, so the Lobby (or the Office) instead.
     const closed = (r: string) => r === view.card?.room || Object.hasOwn(view.taped, r);
     const pick = closed(room) ? (closed("lobby") ? "office" : "lobby") : room;
-    // A full grab of the room's coins, all handed in (design §3.2).
-    return [{ type: "submitMove", move: pick === "security" ? { room: pick, duffel: 0, pocket: 0, watch: "vault" } : { room: pick, duffel: BANK_JOB.rooms[pick]?.coins ?? 0, pocket: 0 } }];
+    // A full grab of the room's coins, all handed in or all pocketed (design §3.2).
+    const coins = BANK_JOB.rooms[pick]?.coins ?? 0;
+    return [{ type: "submitMove", move: pick === "security" ? { room: pick, duffel: 0, pocket: 0, watch: "vault" } : { room: pick, duffel: pocketAll ? 0 : coins, pocket: pocketAll ? coins : 0 } }];
   };
 
 const typesIn = (s: GameState) => new Set(s.log.map((e) => e.type));
@@ -500,15 +511,16 @@ describe("scenarios: end-to-end stories over HTTP + WebSocket", () => {
     for (const c of clients) expect(c.lastView().ledger.filter((e) => e.event.type === "roomRaided")).toHaveLength(3);
   }, 60_000);
 
-  it("the heist fails by target: a crew on the Rooftop misses every checkpoint and the final target (design §11.5)", async () => {
+  it("the heist is sunk by theft: a crew pocketing every Lobby coin plays to the round cap below the honesty line (design §6.2, §8.4)", async () => {
     const game = await startGame(3, 0, { roles: TEAM_ROLES, eventsEnabled: false });
     const clients = await Promise.all(game.humans.map((h) => Client.open(game.id, h)));
-    const refused = await play(game, clients, clients.map(() => steadyBrain("rooftop")));
+    const refused = await play(game, clients, clients.map(() => steadyBrain("lobby", true)));
     const final = await finish(game, clients, refused, app.live.botRefusals.length);
-    expect(final.phase).toMatchObject({ kind: "ended", outcome: { result: "failed", reason: "target" } });
-    expect(final.haul).toBe(0);
-    const checks = final.log.filter((e) => e.type === "checkpointChecked");
-    expect(checks.map((e) => [e.act, e.met])).toEqual([[1, false], [2, false], [3, false]]);
+    // Every stash is equal, but no team role wins a heist sunk by theft.
+    expect(final.phase).toMatchObject({ kind: "ended", outcome: { result: "failed", reason: "theft", winners: [] } });
+    expect([final.round, final.haul, final.bank]).toEqual([BANK_JOB.roundCap, 0, 48 - 3 * BANK_JOB.roundCap]);
+    // design §6.2: no meeting after the last round.
+    expect(final.log.filter((e) => e.type === "meetingOpened").every((e) => e.type === "meetingOpened" && e.act <= 3)).toBe(true);
   }, 60_000);
 
   it("hostile input over a socket is refused and the game carries on (bad shapes, forged ids, system commands)", async () => {

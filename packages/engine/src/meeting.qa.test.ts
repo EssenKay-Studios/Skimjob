@@ -1,8 +1,8 @@
-// QA (PR #6): full 9-round games with all three meetings at 3, 4 and 12
+// QA (PR #6): full 12-round games with all three meetings at 3, 4 and 12
 // players; quorum, ties, absentees and sealed votes at the boundaries;
 // emergency-meeting timing; stale and wrong-id deadlines; shakedown edge cases;
-// the missed-checkpoint raid; ballot visibility per mode; determinism.
-// design §11, §4, §3
+// ballot visibility per mode; determinism.
+// design §9, §6.2
 import { STARTER_ROLES, type PerkId } from "@skimjob/content";
 import { handleThroughAlibis } from "./alibis.testkit";
 import { describe, expect, it } from "vitest";
@@ -96,12 +96,13 @@ function lockByVote(s: GameState, slot: string): GameState {
 }
 
 /**
- * A full 9-round game exercising every kind of meeting:
+ * A full 12-round game (the round cap, design §6.2) exercising every kind of meeting:
  * - Act 1 slot voted in; p1's emergency in round 2 (notice period across a round deadline) ends `skipped`;
  *   p2 seals a vote on p0; the Act 1 meeting shakes p0 down (everyone but p0, who is absent).
  * - Act 2 slot picked by the server; p0's emergency in the awaited phase ends `noMajority` (tie);
  *   the Act 2 meeting is all-skip.
- * - Act 3 slot voted in; the final meeting has fewer than half the crew voting (no quorum).
+ * - Act 3 slot voted in; that meeting has fewer than half the crew voting (no quorum). Rounds 10–12
+ *   follow, and the game ends after round 12 with no meeting.
  */
 function fullGame(n: number, mode: VoteVisibility): GameState {
   const crew = ids(n);
@@ -138,10 +139,10 @@ function fullGame(n: number, mode: VoteVisibility): GameState {
   const turnout = Math.ceil(n / 2) - 1;
   s = run(s, ...crew.slice(1, 1 + turnout).map((p) => vote(p, "p0")), CLOSE);
   expect(LAST(s, "meetingClosed")?.result).toEqual({ kind: "noQuorum" });
-  return s;
+  return run(s, ROUND, ROUND, ROUND);
 }
 
-describe("QA: full 9-round games with all three meetings — design §11, §4, §3", () => {
+describe("QA: full 12-round games with all three meetings — design §9, §6.2", () => {
   const cases: [number, VoteVisibility][] = [
     [3, "hiddenThenRevealed"],
     [4, "open"],
@@ -160,9 +161,8 @@ describe("QA: full 9-round games with all three meetings — design §11, §4, �
       ["act-3", "regular", 3],
     ]);
     expect(ofType(a.log, "meetingClosed")).toHaveLength(5);
-    // One checkpoint per act, after the regular meeting; rounds 1–9 each resolved once.
-    expect(ofType(a.log, "checkpointChecked").map((e) => e.act)).toEqual([1, 2, 3]);
-    expect(ofType(a.log, "roundResolved").map((e) => e.round)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    // Rounds 1–12 each resolved once; no meeting after the last (design §6.2).
+    expect(ofType(a.log, "roundResolved").map((e) => e.round)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
     // Same seed + same commands → same log; replay (via JSON too) rebuilds the state.
     expect(fullGame(n, mode).log).toEqual(a.log);
     expect(replay(a.config, JSON.parse(JSON.stringify(a.log)) as GameEvent[])).toEqual(a);
@@ -204,12 +204,12 @@ describe("QA: quorum, ties and absent players at the boundaries — design §11.
     expect(LAST(seven, "meetingClosed")?.result).toEqual({ kind: "shakedown", target: "p0" });
   });
 
-  it("an all-skip meeting still runs the checkpoint; a sealed vote overridden live counts once", () => {
+  it("an all-skip meeting goes on to the next round; a sealed vote overridden live counts once", () => {
     let s = run(game(4), seal("p1", "p0"));
     s = toActMeeting(s);
     s = run(s, ...ids(4).map((p) => vote(p, null)), CLOSE);
     expect(LAST(s, "meetingClosed")).toMatchObject({ result: { kind: "skipped" }, tally: { skip: 4, targets: {} } });
-    expect(ofType(s.log, "checkpointChecked")).toHaveLength(1);
+    expect(s.phase).toEqual({ kind: "planning", round: 4 });
   });
 });
 
@@ -247,15 +247,14 @@ describe("QA: emergency meetings — design §11.1", () => {
     expect(s.meeting).toMatchObject({ act: 2, calledBy: "p2" });
   });
 
-  it("an emergency called in the final act's awaited phase can still open before the final meeting", () => {
+  it("an emergency called in the act 3 awaited phase can still open before its meeting", () => {
     let s = game(3);
     for (let act = 1; act <= 2; act++) s = run(toActMeeting(s), CLOSE);
     while (s.phase.kind === "planning") s = run(s, ROUND);
     s = run(s, emergency("p0"), open("emergency-p0"), CLOSE);
     expect(s.phase).toEqual({ kind: "awaitingMeeting", act: 3 });
-    expect(ofType(s.log, "checkpointChecked")).toHaveLength(2);
     s = run(s, sched(3), open("act-3"), CLOSE);
-    expect(s.phase.kind).toBe("ended");
+    expect(s.phase).toEqual({ kind: "planning", round: 10 });
   });
 });
 
@@ -323,16 +322,16 @@ describe("QA: shakedowns — design §11.3, extension.md \"Shakedowns (fixed num
     expect(LAST(s, "shakedownResolved")).toMatchObject({ stashRevealed: 1, clean: true, compensation: haul + 1 });
     expect(s.haul).toBe(0);
     expect(s.players.p1?.stash).toBe(haul + 1);
-    expect(LAST(s, "checkpointChecked")).toMatchObject({ haul: 0, met: false });
   });
 });
 
 describe("QA: ballot visibility per mode, during and after the game — design §11.2, §17.2", () => {
-  /** p2 seals a vote on p0; p1 votes live; the game then ends at the Act 3 meeting. */
+  /** p2 seals a vote on p0; p1 votes live; the game then plays to the round cap (design §6.2). */
   function played(mode: VoteVisibility): GameState {
     let s = run(game(3, [], mode), seal("p2", "p0"));
     s = run(toActMeeting(s), vote("p1", "p0"), CLOSE);
     for (let act = 2; act <= 3; act++) s = run(toActMeeting(s), CLOSE);
+    while (s.phase.kind === "planning") s = run(s, ROUND);
     expect(s.phase.kind).toBe("ended");
     return s;
   }

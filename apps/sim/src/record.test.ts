@@ -2,7 +2,7 @@
 import { STARTER_ROLES } from "@skimjob/content";
 import { describe, expect, it } from "vitest";
 import { handleCommand, replay, setupEvents, type Command, type ContentOverrides, type GameConfig, type GameEvent, type GameState } from "@skimjob/engine";
-import { checkpointRankings, recordGame, standing } from "./record";
+import { recordGame } from "./record";
 import { runOne } from "./run";
 import { setupGame } from "./crew";
 import { PERSONALITIES, createBots, runBotGame } from "@skimjob/bots";
@@ -23,7 +23,7 @@ const R6: ContentOverrides = {
   rooms: { vault: { coins: 6 }, lobby: { coins: 2 } },
   bank: { coinsPerPlayer: 100 },
   alarm: { bulbs: 1000 },
-  checkpoints: { perPlayer: [6, 14, 22] },
+  roundCap: 9,
   shakedown: { cleanBelow: 6, payout: 8 },
 };
 
@@ -35,8 +35,8 @@ function config(players: number): GameConfig {
     rolePool: [...STARTER_ROLES], // a shakedown window only if the shop holds a Shield
     eventsEnabled: false,
     voteVisibility: "open",
-    // scripted against content 0.1.0 checkpoint targets (balance pass 1); whole-number scores, no Rookie multiplier (extension.md "Scoring");
-    // R6's room yields as coin limits, its clean line, a bank too big to run short and bells too big to raid, until S3a.3–S3a.5 replace those rules
+    // R6's room yields as coin limits, its clean line, a bank too big to run short and bells too big to raid, until S3a.4–S3a.5
+    // replace those rules; a 9-round cap keeps the script short (design §6.2)
     contentOverrides: R6,
   };
 }
@@ -70,23 +70,10 @@ function meeting(s: GameState, act: 1 | 2 | 3, votes: Command[] = []): GameState
   return run(s, ...votes, { type: "advance", deadline: { kind: "closeMeeting", meetingId: id } });
 }
 
-describe("standing — leaders and lead from the engine's ranking (design §3 tie-breaks)", () => {
-  const entry = (player: string, score: number, timesShakenDown = 0, totalHandedIn = 0) =>
-    ({ player, role: "rookie", score, stash: score, safe: 0, timesShakenDown, totalHandedIn });
-  it("leaders are tied on score and both tie-breaks; the lead is over the best of the rest", () => {
-    expect(standing([entry("a", 5, 0, 9), entry("b", 5, 0, 9), entry("c", 2)])).toEqual({ leaders: ["a", "b"], topScore: 5, lead: 3 });
-    expect(standing([entry("a", 6), entry("b", 2)])).toEqual({ leaders: ["a"], topScore: 6, lead: 4 });
-  });
-  it("a tie on score broken by fewer shakedowns or more handed in gives one leader, with lead 0", () => {
-    expect(standing([entry("a", 5, 0), entry("b", 5, 1)])).toEqual({ leaders: ["a"], topScore: 5, lead: 0 });
-    expect(standing([entry("a", 5, 0, 10), entry("b", 5, 0, 4)])).toEqual({ leaders: ["a"], topScore: 5, lead: 0 });
-  });
-});
-
 describe("recordGame — a scripted game", () => {
-  // Act 1: p0 skims 6 in the Vault every round, p1 skims 1 in the Lobby, p2 hands the Lobby's 2 in; p1 and
-  // p2 shake p0 down. Then everyone hands in the Lobby's 2 (6 a round): checkpoints
-  // 1 and 2 are met (27 ≥ 18, 45 ≥ 42), the final target is missed (63 < 66).
+  // Rounds 1–3: p0 skims 6 in the Vault every round, p1 skims 1 in the Lobby, p2 hands the Lobby's 2 in; p1 and
+  // p2 shake p0 down. Then everyone hands in the Lobby's 2 (6 a round) to the 9-round cap: the Haul is 63 of the
+  // 66 coins taken, above the honesty line (design §7.5), so the heist succeeds and p1's 3 is the biggest stash.
   const lobby = (st: GameState) => run(st, move("p0", "lobby"), move("p1", "lobby"), move("p2", "lobby"), roundDeadline(st));
   let s = rookies(3);
   for (let r = 0; r < 3; r++) s = run(s, move("p0", "vault", 6), move("p1", "lobby", 1), move("p2", "lobby"), roundDeadline(s));
@@ -97,33 +84,32 @@ describe("recordGame — a scripted game", () => {
   for (let r = 0; r < 3; r++) s = lobby(s);
   s = meeting(s, 2);
   for (let r = 0; r < 3; r++) s = lobby(s);
-  s = meeting(s, 3);
   const rec = recordGame(s, ["greedy", "opportunist", "honest"]);
 
-  it("records the ending (design §3, §11.5)", () => {
-    expect(rec).toMatchObject({ seed: "record-seed", players: 3, result: "failed", reason: "target", endedRound: 9, endedAct: 3 });
-    expect(rec.finalTarget).toBe(66);
+  it("records the ending (design §6.2, §8.1, §21 G4)", () => {
+    expect(rec).toMatchObject({ seed: "record-seed", players: 3, result: "success", reason: null, endedRound: 9 });
     expect(rec.haul).toBe(63);
-    expect(rec.checkpointsMissed).toBe(1);
-    expect(rec.meetings).toBe(3);
-    expect(rec.winners).toEqual([]);
+    expect(rec.bankLeft).toBe(300 - 66);
+    expect(rec.capWithBankLeft).toBe(true); // at the cap, with over a quarter of the bank left
+    expect(rec.meetings).toBe(2); // none after the last round
+    expect(rec.winners).toEqual(["p1"]);
+  });
+
+  it("records a heist sunk by theft (design §8.4)", () => {
+    const cfg = { ...config(3), contentOverrides: { ...R6, roundCap: 1 } };
+    let t = replay(cfg, setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: "rookie" } : e)));
+    t = run(t, move("p0", "lobby", 2), move("p1", "lobby", 2), move("p2", "lobby"), roundDeadline(t));
+    expect(recordGame(t, ["greedy", "greedy", "honest"])).toMatchObject({ result: "failed", reason: "theft", endedRound: 1, capWithBankLeft: true });
   });
 
   it("records the shakedown (design §11.3)", () => {
     expect(rec.shakedowns).toEqual([{ act: 1, emergency: false, target: "p0", stashRevealed: 18, clean: false, targetHadPocketed: true }]);
   });
 
-  it("records the standings after Act 1, after its shakedown (design §11.4)", () => {
-    // p0 lost 18; p1 has 3 (whole numbers, no Rookie multiplier: extension.md "Scoring").
-    expect(rec.afterAct1).toEqual({ leaders: ["p1"], topScore: 3, lead: 3 });
-    expect(rec.afterAct2).toEqual({ leaders: ["p1"], topScore: 3, lead: 3 });
-    expect(rec.act3MaxGain).toBe(18); // 3 rounds × Vault 6
-  });
-
   it("records each seat's looting and pocketing", () => {
     const [p0, p1, p2] = rec.playerRecords;
     expect(p0).toMatchObject({ id: "p0", personality: "greedy", role: "rookie", grabbed: 18 + 12, pocketed: 18, stash: 0, timesShakenDown: 1 });
-    expect(p1).toMatchObject({ personality: "opportunist", grabbed: 18, pocketed: 3, stash: 3, score: 3, winner: false, winCredit: 0 });
+    expect(p1).toMatchObject({ personality: "opportunist", grabbed: 18, pocketed: 3, stash: 3, score: 3, winner: true, winCredit: 1 });
     expect(p2).toMatchObject({ personality: "honest", grabbed: 18, pocketed: 0 });
   });
 
@@ -133,20 +119,6 @@ describe("recordGame — a scripted game", () => {
 });
 
 describe("recordGame — bot games agree with the engine's ranking", () => {
-  it("the ranking at the final checkpoint is the engine's final ranking", () => {
-    const o = options(["-p", "3-12"]);
-    for (const n of [3, 6, 12]) {
-      for (let i = 0; i < 3; i++) {
-        const { state } = runBotGameFor(o, n, i);
-        if (state.phase.kind !== "ended") throw new Error("not over");
-        const rankings = checkpointRankings(state.config, state.log);
-        if (state.phase.outcome.result === "success" || state.phase.outcome.reason === "target") {
-          expect(rankings[2]).toEqual(state.phase.outcome.ranking);
-        }
-      }
-    }
-  });
-
   it("stashes, winners and win credit match gameEnded", () => {
     const o = options(["-p", "3-12"]);
     for (const n of [3, 5, 9, 12]) {
@@ -159,7 +131,7 @@ describe("recordGame — bot games agree with the engine's ranking", () => {
         for (const p of rec.playerRecords) {
           expect(p.stash).toBe(engine.get(p.id)?.stash);
           expect(p.score).toBe(engine.get(p.id)?.score);
-          expect(p.timesShakenDown).toBe(engine.get(p.id)?.timesShakenDown);
+          expect(p.timesShakenDown).toBe(state.log.filter((e) => e.type === "shakedownResolved" && e.target === p.id).length);
         }
         expect(rec.playerRecords).toHaveLength(n);
         const credit = rec.playerRecords.reduce((t, p) => t + p.winCredit, 0);

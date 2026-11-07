@@ -1,6 +1,5 @@
 // /dev/gallery sections for the Extension UI (docs/extension.md): role facts
-// and tappable role names, the rulebook, the target bar,
-// the gap box, a live shop on a local engine game, the no-tells feed lines,
+// and tappable role names, the rulebook, the gap box, a live shop on a local engine game, the no-tells feed lines,
 // the lobby deck settings and the end screen. No server: a local engine game.
 import { useMemo, useState, type ReactNode } from "react";
 import { DECKS, type RoleId } from "@skimjob/content";
@@ -19,7 +18,7 @@ import {
 import type { LobbySettings } from "../api";
 import { Button } from "../components/Button";
 import { DeckSettings } from "../components/DeckSettings";
-import { GapBox, PerkUses, RoleFacts, RoleList, RoleTip, RulebookButton, TargetBar, Tokens } from "../components/Extension";
+import { GapBox, PerkUses, RoleFacts, RoleList, RoleTip, RulebookButton, Tokens } from "../components/Extension";
 import { SketchFrame } from "../components/SketchFrame";
 import { useToast } from "../components/Toast";
 import { Underline } from "../components/Underline";
@@ -47,7 +46,7 @@ const step = (s: GameState, c: Parameters<typeof handleCommand>[1]) => {
   return r.ok ? r.state : s;
 };
 
-/** Rounds 1–3 played with default moves, then meeting 1 closes (a missed target). */
+/** Rounds 1–3 played with default moves, then meeting 1 closes. */
 function playedGame(): GameState {
   let s = createGame(config({ eventsEnabled: false }));
   for (let r = 1; r <= 3; r++) {
@@ -148,7 +147,7 @@ function RoleSections() {
 function ShopSection() {
   const game = useLocalGame(() => ({ ...createGame(config()), shop: ["peek", "shield", "rig"] }));
   const { state, setState, view, send } = game;
-  const earn = () => setState(applyEvent(state, { type: "tokenEarned", visibility: privateTo("p1"), player: "p1", trigger: "checkpointMade" }));
+  const earn = () => setState(applyEvent(state, { type: "tokenEarned", visibility: privateTo("p1"), player: "p1", trigger: "watchedShakenDirty" }));
   const next = () => setState(step(step(state, round(state.round)), alibis(state.round)));
   return (
     <Section id="ext-shop" title="Tokens and the shop" note="extension.md Tokens and the perk shop · live local game: buy, own privately, one use per round">
@@ -175,17 +174,9 @@ function ShopSection() {
 
 function HudSections() {
   const played = useMemo(() => viewFor(playedGame(), "p1"), []);
-  const fresh = useMemo(() => viewFor(createGame(config()), "p1"), []);
   const gap = (g: PlayerView["gap"]): PlayerView => ({ ...played, gap: g });
   return (
     <>
-      <Section id="ext-target" title="Haul target bar" note="Haul X / Y needed by the next meeting · what missing it costs">
-        <div className="g-stack">
-          <TargetBar view={fresh} />
-          <TargetBar view={{ ...fresh, haul: 40 }} />
-          <TargetBar view={{ ...fresh, haul: 40, act: 3 }} />
-        </div>
-      </Section>
       <Section id="ext-gap" title="Gap box" note="alibis vs the Haul's growth, event effects included">
         <div className="g-stack">
           <GapBox view={gap({ round: 4, posted: 0, alibis: 0, haulGrowth: 9, unaccounted: -9 })} />
@@ -249,7 +240,7 @@ function DeckSection() {
 
 function EndSection() {
   const base = useMemo(() => viewFor(playedGame(), "p1"), []);
-  const ranking = base.players.map((p, i) => ({ player: p.id, role: (["hacker", "rookie", "lookout", "mole"] as const)[i]!, score: 30 - i * 6, stash: 30 - i * 6, timesShakenDown: 0, totalHandedIn: 10 }));
+  const ranking = base.players.map((p, i) => ({ player: p.id, role: (["hacker", "rookie", "lookout", "mole"] as const)[i]!, score: 30 - i * 6, stash: 30 - i * 6 }));
   const ended = (outcome: Extract<PlayerView["phase"], { kind: "ended" }>["outcome"]): PlayerView => ({ ...base, phase: { kind: "ended", outcome } });
   return (
     <>

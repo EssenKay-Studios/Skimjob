@@ -178,21 +178,20 @@ describe("QA alibi phase — design §5.4", () => {
     expect(s.phase.kind).toBe("meeting");
   });
 
-  it("last round of the game: round 9 has an alibi window, then the act-3 meeting ends the game", () => {
+  it("last round of the game: the round cap ends it at once, with no alibi window after it (design §6.2)", () => {
     let s = game(config(3));
-    while (s.round < 9 || s.phase.kind === "planning") {
+    while (s.phase.kind !== "ended") {
       if (s.phase.kind === "planning") s = run(s, ROUND);
-      else if (s.phase.kind === "alibis") { if (s.round === 9) break; s = run(s, ALIBIS); }
+      else if (s.phase.kind === "alibis") s = run(s, ALIBIS);
       else if (s.phase.kind === "awaitingMeeting") {
         const act = s.phase.act;
         s = run(s, { type: "scheduleMeeting", act, slot: "x" }, open(`act-${act}`), close(`act-${act}`));
       } else throw new Error(`unexpected ${s.phase.kind}`);
-      if (s.phase.kind === "ended") break;
     }
-    expect(s.phase).toEqual({ kind: "alibis", round: 9 });
-    s = run(s, { type: "postAlibi", player: "p0", room: "vault" }, ALIBIS, { type: "scheduleMeeting", act: 3, slot: "x" }, open("act-3"), close("act-3"));
-    expect(s.phase.kind).toBe("ended");
-    expect(refused(s, alibiAt(9))).toMatch(/over/);
+    // Missed moves: 3 Lobby coins a round, so the 48-coin bank outlasts the 12 rounds.
+    expect(s.round).toBe(12);
+    expect(s.log.filter((e) => e.type === "alibisClosed").map((e) => (e as { round: number }).round)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+    expect(refused(s, alibiAt(12))).toMatch(/over/);
   });
 });
 

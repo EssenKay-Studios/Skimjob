@@ -25,20 +25,20 @@ describe("reveal lines", () => {
     expect(itemText({ kind: "cameraOffline", watcher: "p2", room: "vault", source: "lookout", hackers: ["p3"] }, ctx)).toBe(
       "Ben's lookout on the Vault went offline: Cy looped it.",
     );
-    expect(itemText({ kind: "token", player: "p2", trigger: "checkpointMade" }, ctx)).toBe("Ben earned a token for a checkpoint made.");
+    expect(itemText({ kind: "token", player: "p2", trigger: "watchedShakenDirty" }, ctx)).toBe("Ben earned a token for catching someone they watched.");
     expect(itemText({ kind: "claim", player: "p2", claimed: "lookout", real: "mole" }, ctx)).toBe("Ben claimed Lookout, but was really the Mole.");
   });
 
   it("say who won and why, and what a ★ role also wins on", () => {
     const base: RevealEnding = { result: "success", reason: null, topGroup: ["p1", "p2"], winners: ["p1", "p2"], why: "success" };
     expect(whyText(base, ctx)).toBe("Job done, so the top of the ranking wins: you and Ben.");
-    expect(whyText({ ...base, result: "failed", reason: "target", winners: ["p2"], why: "failedTopWins" }, ctx)).toContain("A ★ role wins this ending from the top of the ranking: Ben.");
+    expect(whyText({ ...base, result: "failed", reason: "theft", winners: ["p2"], why: "failedTopWins" }, ctx)).toContain("A ★ role wins this ending from the top of the ranking: Ben.");
     // design §5.5: on a bust only the Rooftop gets away.
     expect(whyText({ ...base, result: "failed", reason: "bust", winners: ["p2"], why: "failedTopWins" }, ctx)).toContain("Busted. On a bust, only the Rooftop gets away. The biggest stash up there wins: Ben.");
     expect(whyText({ ...base, result: "failed", reason: "bust", winners: [], why: "failedNobody" }, ctx)).toContain("Nobody was on the Rooftop, so nobody wins");
-    expect(whyText({ ...base, result: "failed", reason: "target", winners: [], why: "failedNobody" }, ctx)).toContain("nobody wins: the ranking is a loss");
+    expect(whyText({ ...base, result: "failed", reason: "theft", winners: [], why: "failedNobody" }, ctx)).toContain("nobody wins: the ranking is a loss");
     expect(winsOnText([])).toBe("");
-    expect(winsOnText(["target"])).toBe("★ Also wins if the target is missed");
+    expect(winsOnText(["theft"])).toBe("★ Also wins if the heist is sunk by theft");
   });
 });
 
@@ -48,20 +48,18 @@ describe("<Reveal>", () => {
     place,
     dealtRole: role,
     role,
-    winsOn: role === "mole" ? (["target"] as const) : [],
+    winsOn: role === "mole" ? (["theft"] as const) : [],
     score: 10 - place,
     stash: 10 - place,
     safe: 0,
-    timesShakenDown: 0,
-    totalHandedIn: 4,
     topGroup: place === 1,
     winner,
-    tokens: role === "hacker" ? (["checkpointMade", "checkpointMade"] as const) : [],
+    tokens: role === "hacker" ? (["loopHidPocketer", "loopHidPocketer"] as const) : [],
     perksBought: [],
     perksUsed: 0,
   });
   const summary: RevealSummary = {
-    ending: { result: "failed", reason: "target", topGroup: ["p2"], winners: ["p2"], why: "failedTopWins" },
+    ending: { result: "failed", reason: "theft", topGroup: ["p2"], winners: ["p2"], why: "failedTopWins" },
     seats: [seat("p2", "mole", 1, true), seat("p1", "rookie", 2, false), seat("p3", "hacker", 3, false)],
     rounds: [
       {
@@ -79,7 +77,7 @@ describe("<Reveal>", () => {
 
   it("opens every role, marks the ★ winner and voids the rest on a failure", () => {
     for (const role of ["Mole", "Rookie", "Hacker"]) expect(html).toContain(role);
-    expect(html).toContain("★ Also wins if the target is missed");
+    expect(html).toContain("★ Also wins if the heist is sunk by theft");
     expect(html).toContain("2 tokens");
     expect(html.match(/reveal__void/g)).toHaveLength(2);
     expect(html).toContain("stash over time: 4, 9");

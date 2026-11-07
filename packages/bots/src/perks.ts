@@ -11,7 +11,7 @@
 // - Buying (extension.md "Tokens and the perk shop"): `buyPerks`, by a fixed priority.
 import { EVENTS, ROUNDS_PER_ACT, type EventId, type PerkId, type RoomId } from "@skimjob/content";
 import { overrideEvents, roomDef, type PlayerCommand, type PlayerView, type VoteChoice } from "@skimjob/engine";
-import { createdOf, lastResolvedRound, ofType, roleOf, roomsWhere, totalRounds } from "./read";
+import { createdOf, lastResolvedRound, ofType, roleOf, roomsWhere } from "./read";
 import { mostSuspicious, knownRoles, suspicion } from "./suspicion";
 import { publicSuspicion } from "./claims";
 import { jobThisRound } from "./alarm";
@@ -68,7 +68,7 @@ function worthBuying(view: PlayerView, perk: PerkId): boolean {
 export function buyPerks(view: PlayerView): PlayerCommand[] {
   if (view.phase.kind !== "planning" || view.shop.length === 0) return [];
   let tokens = view.me.roleState.tokens;
-  const last = view.round >= totalRounds(jobThisRound(view));
+  const last = view.round >= jobThisRound(view).roundCap;
   const out: PlayerCommand[] = [];
   const buy = (perk: PerkId, cost: number) => {
     out.push({ type: "buyPerk", player: view.me.id, perk });
@@ -116,7 +116,7 @@ export function planningPerks(view: PlayerView, room: RoomId | undefined = view.
     if (target !== undefined) out.push({ type: "useAbility", player, ability: { kind: "tail", room: target } });
   }
   if (has(view, "recharge") && usedUp(view)) out.push({ type: "useAbility", player, ability: { kind: "recharge" } });
-  if (has(view, "rig") && createdOf(view).eventsEnabled && view.round < totalRounds(jobThisRound(view))) {
+  if (has(view, "rig") && createdOf(view).eventsEnabled && view.round < jobThisRound(view).roundCap) {
     const next = view.round + 1;
     if (!ofType(view.caseFile, "perkUsed").some((e) => e.perk.kind === "rig" && e.perk.round === next)) {
       out.push({ type: "useAbility", player, ability: { kind: "rig" } });

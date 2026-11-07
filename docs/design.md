@@ -498,6 +498,7 @@ The server divides the host's session length by the **round cap** (§6.2) to get
 
 | Session | Round (cap 12) | Meetings |
 |---|---|---|
+| 15 minutes *(provisional: a playtest length kept from R6's Quick timing, docs/cleanup-audit.md note 1)* | 75 s | Automatic, 2-minute window |
 | 1 hour | 5 min | Automatic, 3-minute window |
 | 3 hours | 15 min | Automatic, 5-minute window |
 | 1 day | 2 h | Scheduled by the crew, 5–15 min |
@@ -512,7 +513,7 @@ The engine knows rounds and phases, not time. The server's scheduler calls `adva
 
 ### 17.3 Deadlines and lock-ins
 
-- A round ends at its deadline, or a short **grace** after everyone has locked in, whichever comes first; changing a move during the grace doesn't restart it. Grace [tunable] *(owner, 6 Nov)*: 1 h 10 s, 3 h 30 s, 1 d 2 min, 3 d 5 min, 1 w 5 min.
+- A round ends at its deadline, or a short **grace** after everyone has locked in, whichever comes first; changing a move during the grace doesn't restart it. Grace [tunable] *(owner, 6 Nov)*: 15 min 5 s (provisional), 1 h 10 s, 3 h 30 s, 1 d 2 min, 3 d 5 min, 1 w 5 min.
 - A missed move is the Lobby, 1 coin, handed in (§3.3).
 - **Lock-ins are public** (who has locked in, never what); **presence is public** (online now, or last seen), from the server and never the log. Bots show as bots.
 

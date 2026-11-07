@@ -129,15 +129,14 @@ export const sampleEvents: { readonly [T in GameEventType]: EventOfType<T> } = {
     clean: true,
     compensation: 5,
   },
-  checkpointChecked: { type: "checkpointChecked", visibility: PUBLIC, act: 1, target: 12, haul: 10, met: false },
   gameEnded: {
     type: "gameEnded",
     visibility: PUBLIC,
     outcome: {
       result: "success",
       ranking: [
-        { player: ana, role: "rookie", score: 9, stash: 9, timesShakenDown: 0, totalHandedIn: 30 },
-        { player: ben, role: "hacker", score: 4, stash: 4, timesShakenDown: 1, totalHandedIn: 40 },
+        { player: ana, role: "rookie", score: 9, stash: 9 },
+        { player: ben, role: "hacker", score: 4, stash: 4 },
       ],
       winners: [ana],
     },

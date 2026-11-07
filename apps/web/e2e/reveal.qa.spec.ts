@@ -97,12 +97,12 @@ for (const viewport of VIEWPORTS) {
       await section.getByRole("button", { name: "Busted (Rooftop)" }).click();
       await expect(reveal.locator(".reveal__void")).toHaveCount(3);
       await expect(cards.nth(3).locator(".reveal__void")).toHaveCount(0);
-      await expect(cards.nth(0)).toContainText("★ Also wins if the target is missed");
+      await expect(cards.nth(0)).toContainText("★ Also wins if the heist is sunk by theft");
       // The timeline restarts at round 1 for the new ending.
       await expect(reveal.locator(".reveal__round").getByRole("heading", { name: "Round 1" })).toBeVisible();
 
-      // Missed, nobody wins: Cy (Hacker, no ★) on top, top-of-ranking chip but no Winner, all VOID.
-      await section.getByRole("button", { name: "Missed (nobody)" }).click();
+      // Sunk by theft, nobody wins: Cy (Hacker, no ★) on top, top-of-ranking chip but no Winner, all VOID.
+      await section.getByRole("button", { name: "Sunk by theft (nobody)" }).click();
       await expect(cards.locator(".reveal__who b")).toHaveText(["Cy", "Ben", "Bot · Dot", "You"]);
       await expect(reveal.getByText("Winner", { exact: true })).toHaveCount(0);
       await expect(cards.nth(0)).toContainText("Top of the ranking");

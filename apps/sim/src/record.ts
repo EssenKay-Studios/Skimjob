@@ -2,22 +2,9 @@
 // the event log (the full record of the game). design §17.4
 //
 // Pure: a finished GameState (plus the bot crew) in, plain data out.
-import { ROUNDS_PER_ACT, type RoleId, type Temperament } from "@skimjob/content";
+import type { RoleId, Temperament } from "@skimjob/content";
 import type { PersonalityId } from "@skimjob/bots";
-import {
-  applyEvent,
-  checkpointTarget,
-  initialState,
-  jobFor,
-  leadersOf,
-  ranking,
-  rolesFor,
-  type GameConfig,
-  type GameEvent,
-  type GameState,
-  type PlayerId,
-  type RankEntry,
-} from "@skimjob/engine";
+import { jobFor, rolesFor, type GameConfig, type GameEvent, type GameState, type PlayerId } from "@skimjob/engine";
 
 export interface PlayerRecord {
   readonly id: PlayerId;
@@ -54,70 +41,29 @@ export interface ShakedownRecord {
   readonly targetHadPocketed: boolean;
 }
 
-/**
- * The engine's ranking at a checkpoint (after its shakedown), scored as at the
- * end of the game. `leaders` are tied with first place on score and both
- * tie-breaks (design §3), as for joint winners; usually one player.
- */
-export interface Standing {
-  readonly leaders: readonly PlayerId[];
-  readonly topScore: number;
-  /** Top score minus the best score outside the leaders (0 if everyone is tied). */
-  readonly lead: number;
-}
-
 export interface GameRecord {
   readonly seed: string;
   readonly players: number;
   readonly result: "success" | "failed";
-  readonly reason: "bust" | "target" | null;
-  /** Round the game ended in (9 if it reached the final check). */
+  readonly reason: "bust" | "theft" | null;
+  /** Round the game ended in: the bust, the one that emptied the bank, or the round cap. design §6.2 */
   readonly endedRound: number;
-  readonly endedAct: number;
   readonly haul: number;
   /** Coins left in the bank at the end. design §6.1 */
   readonly bankLeft: number;
-  readonly finalTarget: number;
+  /** It ended at the round cap with over a quarter of the bank left (design §21 G4). */
+  readonly capWithBankLeft: boolean;
   /** Wanted at the end, and the raids that raised it. design §5.3, §5.4 */
   readonly wanted: number;
   readonly raids: number;
   /** Rounds with more than half the crew on the Rooftop (design §21 G4). */
   readonly stalls: number;
-  readonly checkpointsMissed: number;
   readonly meetings: number;
   readonly shakedowns: readonly ShakedownRecord[];
   readonly winners: readonly PlayerId[];
-  /** Standings after the Act 1 and Act 2 checkpoints (null if the game ended first). */
-  readonly afterAct1: Standing | null;
-  readonly afterAct2: Standing | null;
-  /** Most score one player could add in Act 3: rounds × the best room's coins (whole-number scores, no multiplier). */
-  readonly act3MaxGain: number;
   readonly playerRecords: readonly PlayerRecord[];
   /** Bot commands the engine refused (should be 0). */
   readonly rejections: number;
-}
-
-/** Leaders and lead from an engine ranking (best first). design §3 */
-export function standing(ranked: readonly RankEntry[]): Standing {
-  const leaders = leadersOf(ranked);
-  const topScore = ranked[0]?.score ?? 0;
-  const rest = ranked.filter((e) => !leaders.includes(e.player)).map((e) => e.score);
-  return { leaders, topScore, lead: rest.length === 0 ? 0 : topScore - Math.max(...rest) };
-}
-
-/**
- * The engine's ranking after each act's checkpoint (index 0 = Act 1), folding
- * the log with the engine's own `applyEvent`, so no rule is re-implemented
- * here. Acts the game didn't reach are missing.
- */
-export function checkpointRankings(config: GameConfig, log: readonly GameEvent[]): (RankEntry[] | undefined)[] {
-  const out: (RankEntry[] | undefined)[] = [];
-  let state = initialState(config);
-  for (const event of log) {
-    state = applyEvent(state, event);
-    if (event.type === "checkpointChecked") out[event.act - 1] = ranking(state);
-  }
-  return out;
 }
 
 /** Flatten a finished game. `crew[i]` is the personality in seat i. */
@@ -129,7 +75,6 @@ export function recordGame(state: GameState, crew: readonly PersonalityId[], rej
   const roles = rolesFor(config);
   const order = state.playerOrder;
   const n = order.length;
-  const finalTarget = checkpointTarget(job, 3, n);
   const roleOf = new Map<PlayerId, RoleId>(order.map((id) => [id, state.players[id]?.role ?? "?"]));
 
   const grabbed = new Map<PlayerId, number>(order.map((id) => [id, 0]));
@@ -140,7 +85,6 @@ export function recordGame(state: GameState, crew: readonly PersonalityId[], rej
   const shakedowns: ShakedownRecord[] = [];
   let meetingKind: { emergency: boolean; act: number } = { emergency: false, act: 1 };
   let meetings = 0;
-  let checkpointsMissed = 0;
   let endedRound = 0;
   let raids = 0;
   const lyingLow = new Map<number, number>();
@@ -175,9 +119,6 @@ export function recordGame(state: GameState, crew: readonly PersonalityId[], rej
         });
         sinceShakedown.set(event.target, 0);
         break;
-      case "checkpointChecked":
-        if (!event.met) checkpointsMissed++;
-        break;
       case "tokenEarned":
         add(earned, event.player, 1);
         break;
@@ -189,15 +130,9 @@ export function recordGame(state: GameState, crew: readonly PersonalityId[], rej
     }
   }
 
-  const rankings = checkpointRankings(config, state.log);
-  const standingAfter = (act: 1 | 2): Standing | null => {
-    const r = rankings[act - 1];
-    return r ? standing(r) : null;
-  };
   const { outcome } = phase;
   const winners = outcome.winners;
   const ranked = new Map(outcome.ranking.map((e) => [e.player, e]));
-  const maxCoins = Math.max(...state.rooms.map((r) => job.rooms[r]?.coins ?? 0));
 
   return {
     seed: config.seed,
@@ -205,20 +140,15 @@ export function recordGame(state: GameState, crew: readonly PersonalityId[], rej
     result: outcome.result,
     reason: outcome.result === "failed" ? outcome.reason : null,
     endedRound,
-    endedAct: Math.ceil(endedRound / ROUNDS_PER_ACT),
     haul: state.haul,
     bankLeft: state.bank,
-    finalTarget,
+    capWithBankLeft: !(outcome.result === "failed" && outcome.reason === "bust") && endedRound === job.roundCap && state.bank * 4 > job.bank.coinsPerPlayer * n,
     wanted: state.wanted,
     raids,
     stalls: [...lyingLow.values()].filter((k) => k > n / 2).length,
-    checkpointsMissed,
     meetings,
     shakedowns,
     winners,
-    afterAct1: standingAfter(1),
-    afterAct2: standingAfter(2),
-    act3MaxGain: ROUNDS_PER_ACT * maxCoins,
     playerRecords: order.map((id, i): PlayerRecord => {
       const entry = ranked.get(id);
       const role = roleOf.get(id) as RoleId;
@@ -234,7 +164,7 @@ export function recordGame(state: GameState, crew: readonly PersonalityId[], rej
         stash: entry?.stash ?? 0,
         grabbed: grabbed.get(id) ?? 0,
         pocketed: pocketed.get(id) ?? 0,
-        timesShakenDown: entry?.timesShakenDown ?? 0,
+        timesShakenDown: shakedowns.filter((s) => s.target === id).length,
         winner,
         winCredit: winner ? 1 / winners.length : 0,
         tokensEarned: earned.get(id) ?? 0,

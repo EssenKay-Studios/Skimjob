@@ -50,8 +50,8 @@ export const POWER_CLAIM_TARGET: Readonly<Partial<Record<RolePower["kind"], "roo
   bless: "player",
 };
 
-/** Why a heist failed: a bust (Wanted 3, design §5.5), or the final target was missed. */
-export type FailureReason = "bust" | "target";
+/** Why a heist failed: a bust (Wanted 3, design §5.5), or sunk by theft (honesty below the line at the end, §8.4). */
+export type FailureReason = "bust" | "theft";
 
 /**
  * How selfish a power is: it describes, never changes a rule (no teams).
@@ -64,8 +64,6 @@ export type Temperament = "teamPlayer" | "wildcard" | "loneWolf";
  * shakedown that found the target dirty (`shakedownResolved` with `clean: false`). design §8.3
  */
 export type TokenTrigger =
-  /** The Haul target is met at meeting 1 or 2 (Rookie). The final check ends the game, so it grants nothing. */
-  | "checkpointMade"
   /** A player this role's Lookout power saw, earlier this game, is caught. */
   | "watchedShakenDirty"
   /** A visitor of a room this role audited, in the audited round, is caught. */
@@ -108,7 +106,7 @@ const token = (on: TokenTrigger): readonly TokenReward[] => [{ on, count: 1 }];
 
 /** Every role (R7 C2c: the 9 kept of R6's 20). design §8 */
 export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
-  rookie: { id: "rookie", name: "Rookie", power: { kind: "none" }, ...TEAM, rewards: token("checkpointMade") },
+  rookie: { id: "rookie", name: "Rookie", power: { kind: "none" }, ...TEAM },
   lookout: {
     id: "lookout",
     name: "Lookout",
@@ -142,7 +140,8 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     rewards: token("blessedShakenClean"),
     minPlayers: 5,
   },
-  fixer: { id: "fixer", name: "Fixer", power: { kind: "reopen" }, ...TEAM },
-  // On a bust only the Rooftop wins, whatever the role (design §5.5), so the Mole's ★ ending is the missed target.
-  mole: { id: "mole", name: "Mole", power: { kind: "ring", perAct: 1 }, tag: "loneWolf", winsOn: ["target"] },
+  // design §8.4: the Mole and the Fixer win a heist sunk by theft from the top of the ranking (their handlers in S3a.6);
+  // on a bust only the Rooftop wins, whatever the role (§5.5).
+  fixer: { id: "fixer", name: "Fixer", power: { kind: "reopen" }, ...TEAM, winsOn: ["theft"] },
+  mole: { id: "mole", name: "Mole", power: { kind: "ring", perAct: 1 }, tag: "loneWolf", winsOn: ["theft"] },
 };
