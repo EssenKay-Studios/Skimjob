@@ -24,7 +24,7 @@ import type { LobbySettings } from "./settings";
 import { createGameStore, type GameStore } from "./store";
 import { testDb } from "./testkit";
 
-/** The Standard deck with every Wildcard and Lone wolf toggled off: no Mole, so no police moments . */
+/** The Standard deck with every Wildcard and Lone wolf toggled off: Team players only. */
 const TEAM_ROLES = DECKS.standard.filter((r) => ROLES[r]?.tag === "teamPlayer");
 
 const quick = { interval: 1, timeout: 5000 };

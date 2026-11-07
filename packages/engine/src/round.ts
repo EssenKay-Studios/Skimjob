@@ -161,21 +161,21 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
   // design §3.3: anyone without a move gets the default.
   // Maps, not objects, because player ids are host-chosen strings (e.g. "__proto__").
   const moves = new Map<PlayerId, Move>();
-  // A taped-off default room can't be entered either (§5.3): the missed move lies low on the Rooftop instead (provisional).
-  const rooftop = before.rooms.find((r) => roomDef(job, r).lieLow);
-  const fallback: Move =
-    isTaped(before, job.defaultRoom) && rooftop !== undefined ? { room: rooftop, duffel: 0, pocket: 0 } : { room: job.defaultRoom, duffel: 1, pocket: 0 };
+  // design §3.3 (owner, 7 Nov): with the default room taped off (§5.3), a missed move sits the round out.
+  const fallback: Move | null = isTaped(before, job.defaultRoom) ? null : { room: job.defaultRoom, duffel: 1, pocket: 0 };
   for (const id of order) {
     const submitted = Object.hasOwn(before.moves, id) ? before.moves[id] : undefined;
     if (submitted) {
       moves.set(id, submitted);
     } else {
       // design §3.3: a missed move is the Lobby, 1 coin, handed in.
-      moves.set(id, fallback);
+      if (fallback) moves.set(id, fallback);
       events.push({ type: "defaultMoveAssigned", visibility: privateTo(id), player: id, round, move: fallback });
     }
   }
   const moveOf = (id: PlayerId): Move => moves.get(id) as Move;
+  // Who plays the round: someone sitting it out is in no room, grabs and rings nothing, and doesn't escape a bust.
+  const playing = order.filter((id) => moves.has(id));
 
   // The event card's player effects (design §13), folded so the rest of the round sees them.
   const cardEvents = cardEffects(before, round, draw);
@@ -189,15 +189,15 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
 
   // Who is where. design §3.4
   const visitors: Record<RoomId, PlayerId[]> = {};
-  for (const id of order) (visitors[moveOf(id).room] ??= []).push(id);
+  for (const id of playing) (visitors[moveOf(id).room] ??= []).push(id);
   const others = (room: RoomId, self: PlayerId): PlayerId[] => (visitors[room] ?? []).filter((p) => p !== self);
 
   // §4.2 step 1: grabs come out of the bank, cut by a short bank (§3.2); the Fixer's and the Mole's powers act.
-  const got = grabbed(order, (id) => moveOf(id).duffel + moveOf(id).pocket, state.bank, draw);
+  const got = grabbed(playing, (id) => moveOf(id).duffel + moveOf(id).pocket, state.bank, draw);
   const rings = new Map<RoomId, number>();
   const ring = (room: RoomId, n: number) => rings.set(room, (rings.get(room) ?? 0) + n);
   const reopened: RoomId[] = [];
-  for (const id of order) {
+  for (const id of playing) {
     const { room } = moveOf(id);
     // design §5.2: rings count the coins actually grabbed.
     ring(room, ringsOf(roomDef(job, room), got.get(id) ?? 0));
@@ -219,7 +219,7 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
   let haulDelta = 0;
   let taken = 0;
   const pocketed = new Map<PlayerId, number>();
-  for (const id of order) {
+  for (const id of playing) {
     const { room } = moveOf(id);
     const coins = got.get(id) ?? 0;
     taken += coins;
@@ -247,7 +247,7 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
   events.push(...raidEvents);
 
   // §4.2 step 4: Wanted at the bust line ends the game at once (§5.5); only the Rooftop escapes.
-  const lyingLow = order.filter((id) => roomDef(job, moveOf(id).room).lieLow);
+  const lyingLow = playing.filter((id) => roomDef(job, moveOf(id).room).lieLow);
   const busted = wanted >= bustStars;
   if (!busted) {
     // §4.2 step 6: cooling; a room the Fixer reopened comes back from the next round, its bell at 0.
@@ -257,13 +257,13 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
   for (const room of reopened) events.push({ type: "roomReopened", visibility: PUBLIC, round, room });
 
   // §4.2 step 7: room-mates, then Hacker loops, Security / Lookout results.
-  for (const id of order) {
+  for (const id of playing) {
     const room = moveOf(id).room;
     events.push({ type: "roomSighting", visibility: privateTo(id), player: id, round, room, others: others(room, id) });
   }
   // Hacker (§8): a looped room's Security feed reads "camera offline" this round (not the Lookout's or room-mates').
   const looped = new Map<RoomId, PlayerId[]>();
-  for (const id of order) {
+  for (const id of playing) {
     const ability = abilityOf(id);
     if (ability?.kind !== "loopCameras" || powerFor(id).kind !== "loopCameras") continue;
     looped.set(ability.room, [...(looped.get(ability.room) ?? []), id]);
@@ -271,7 +271,7 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
   }
   // extension.md "Roles": Hackers whose loop hid, from a Security watcher of that room, a visitor who pocketed (their token).
   const hid = new Set<PlayerId>();
-  for (const id of order) {
+  for (const id of playing) {
     const { room, watch } = moveOf(id);
     const ability = abilityOf(id);
     if (roomDef(job, room).info === "watchRoom" && watch !== undefined) {

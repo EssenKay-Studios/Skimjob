@@ -21,7 +21,7 @@ const ALL_ROOMS = Object.fromEntries(Object.values(JOBS).flatMap((j) => Object.v
 export const roomName = (room: RoomId): string => ALL_ROOMS[room] ?? room;
 /** A role's display name, e.g. "Smooth Talker". */
 export const roleName = (role: string): string => ROLES[role]?.name ?? role;
-/** An event card's display name, e.g. "Police patrol". */
+/** An event card's display name, e.g. "Shift change". */
 export const cardName = (card: string): string => EVENTS[card]?.name ?? card;
 export const perkName = (perk: PerkId): string => PERKS[perk]?.name ?? perk;
 
@@ -82,7 +82,10 @@ function line(e: GameEvent, ctx: DescribeContext): string {
     case "moveSubmitted":
       return `${verb(e.player, "picked", "picked")} the ${roomName(e.move.room)} for round ${e.round}${e.move.pocket > 0 ? `, pocketing ${e.move.pocket} of ${e.move.duffel + e.move.pocket}` : ", handing everything in"}${e.move.watch ? `, watching the ${roomName(e.move.watch)}` : ""}.`;
     case "defaultMoveAssigned":
-      return `${verb(e.player, "missed", "missed")} round ${e.round}'s deadline: the default move went to the ${roomName(e.move.room)}, handing everything in.`;
+      // design §3.3 (owner, 7 Nov): with the Lobby taped off, a missed move sits the round out.
+      return e.move
+        ? `${verb(e.player, "missed", "missed")} round ${e.round}'s deadline: the default move went to the ${roomName(e.move.room)}, handing everything in.`
+        : `${verb(e.player, "missed", "missed")} round ${e.round}'s deadline: the default room is taped off, so ${you(e.player) ? "you sat" : "they sat"} the round out.`;
     case "coinsGrabbed":
       // design §5.3: in a raided room the police seized the whole grab.
       return e.seized > 0
@@ -168,7 +171,7 @@ function line(e: GameEvent, ctx: DescribeContext): string {
       return o.result === "success"
         ? `Job done! The crew got away with it: ${winners}.`
         : o.reason === "bust"
-          ? `Busted: Wanted hit 3 and the heist failed; ${o.escapees.length === 0 ? "nobody was on the Rooftop" : `${names(o.escapees)} got away over the Rooftop`}; ${winners}.`
+          ? `Busted: Wanted hit the bust line and the heist failed; ${o.escapees.length === 0 ? "nobody was on the Rooftop" : `${names(o.escapees)} got away over the Rooftop`}; ${winners}.`
           : `The heist failed: the target was missed; ${winners}.`;
     }
     default: {

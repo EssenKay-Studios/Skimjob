@@ -1,7 +1,7 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 
 // Adversarial QA for R6b, the extension UI (docs/extension.md): private tokens
-// across clients, no police tells on the wire, the role list host setting in a
+// across clients, the role list host setting in a
 // real game, and the gallery's extension parts at 360/768/1280 by touch and keyboard.
 
 async function ok<T>(res: Awaited<ReturnType<APIRequestContext["post"]>>): Promise<T> {
@@ -36,10 +36,10 @@ function find(value: unknown, types: readonly string[], out: Record<string, unkn
   return out;
 }
 
-test.describe("private tokens and no police tells, two real clients", () => {
+test.describe("private tokens, two real clients", () => {
   test.beforeEach(() => test.skip(test.info().project.name !== "desktop", "one run is enough"));
 
-  test("each player sees only their own tokens; no frame carries another's tokens or a police timer @shop", async ({ browser }) => {
+  test("each player sees only their own tokens; no frame carries another's tokens @shop", async ({ browser }) => {
     test.setTimeout(90_000);
     const hostCtx = await browser.newContext();
     const guestCtx = await browser.newContext();
@@ -76,8 +76,6 @@ test.describe("private tokens and no police tells, two real clients", () => {
       const meIds = new Set([...wire.matchAll(/"me":\{"id":"([^"]+)"/g)].map((m) => m[1]));
       expect(meIds.size).toBe(1);
       for (const e of find(msgs, ["tokenEarned", "perkBought", "perkUsed"])) expect(meIds.has(e.player as string), JSON.stringify(e)).toBe(true);
-      expect(wire).not.toMatch(/policeScheduled|policeMoment/);
-      expect(wire).not.toMatch(/"patrol"\s*:/);
     } finally {
       await hostCtx.close();
       await guestCtx.close();

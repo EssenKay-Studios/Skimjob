@@ -39,7 +39,7 @@ describe("all-bot games — design §17.3", () => {
       const { state, rejections, steps } = play(n, `size-${n}`, ids);
       expect(state.phase.kind, `${n} players`).toBe("ended");
       expect(rejections, `${n} players`).toEqual([]);
-      expect(steps).toBeLessThan(60); // a round is ~3 steps, police moment included
+      expect(steps).toBeLessThan(60); // a round is ~3 steps
     }
   });
 
@@ -220,10 +220,19 @@ describe("bots with the Wildcards and the Mole dealt — extension.md Build note
   });
   const log = games.flatMap((g) => g.state.log);
 
-  it("finish with no refused command; the Hacker loops and the Mole rings (design §5.2, §11.1)", () => {
+  it("finish with no refused command; the Hacker loops (design §11.1)", () => {
     for (const g of games) expect([g.state.phase.kind, g.rejections]).toEqual(["ended", []]);
-    const used = (kind: string) => log.filter((e) => e.type === "abilityResolved" && e.ability.kind === kind);
-    for (const k of ["loopCameras", "ring"]) expect(used(k).length, k).toBeGreaterThan(0);
+    expect(log.filter((e) => e.type === "abilityResolved" && e.ability.kind === "loopCameras").length).toBeGreaterThan(0);
+  });
+
+  // design §5.2, §8.4: the Mole rings only while it leans toward a missed target, which is rare, so over 30 smaller games.
+  it("the Mole rings in real games, and its rings are never refused", () => {
+    const small = Array.from({ length: 30 }, (_, g) => {
+      const c = { ...config(5, `probe-5-${g}`), rolePool: ["hacker", "mole", "lookout", "rookie", "auditor"] };
+      return runBotGame(c, createBots(c.players, mix(MIXED), `bots-${c.seed}`));
+    });
+    for (const g of small) expect(g.rejections).toEqual([]);
+    expect(small.flatMap((g) => g.state.log).filter((e) => e.type === "abilityResolved" && e.ability.kind === "ring").length).toBeGreaterThan(0);
   });
 
   it("bots earn tokens and buy perks from the shop", () => {

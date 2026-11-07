@@ -48,12 +48,30 @@ describe("the Mole's ring — design §5.2, §11.1", () => {
     const move = decide(viewFor(s, "ana"), exact, () => 0.5, "test-crew").find((c) => c.type === "submitMove");
     return move?.type === "submitMove" ? move.move.ability : undefined;
   };
+  /** A Mole on top of a cold job (leaning toward a missed target), with the Office and Deposit boxes lit. */
+  const leaningMole = (): GameState => {
+    const s = as(cold(), "mole", { stash: 10 });
+    return { ...s, bells: { ...s.bells, office: 2, depositBoxes: 1 } };
+  };
   it("rings the loudest lit bell elsewhere, once between meetings; never the Rooftop; nothing when every bell is dark", () => {
-    const s = as(game(5), "mole");
-    expect(rings(s)).toBeUndefined();
-    const lit = { ...s, bells: { ...s.bells, office: 2, depositBoxes: 1 } };
+    const lit = leaningMole();
     expect(rings(lit)).toEqual({ kind: "ring", room: "office" });
     expect(rings(as(lit, "mole", {}, { usedThisAct: 1 }))).toBeUndefined();
+    const dark = Object.fromEntries(Object.keys(lit.bells).map((r) => [r, 0]));
+    expect(rings({ ...lit, bells: dark })).toBeUndefined();
+  });
+
+  // design §8.4, §19.3: the Mole plays to its own win, a heist sunk by theft.
+  it("rings only while it leans toward a missed target: not on a job on pace, not when it isn't top", () => {
+    const lit = leaningMole();
+    expect(rings({ ...as(game(5), "mole", { stash: 10 }), bells: lit.bells })).toBeUndefined();
+    expect(rings(as(lit, "mole", { stash: 0 }))).toBeUndefined();
+  });
+
+  // design §5.5: one raid from the bust line any ring could bust the crew, and off the Rooftop the Mole loses a bust.
+  it("keeps quiet one raid from the bust line", () => {
+    expect(rings({ ...leaningMole(), wanted: 1 })).toEqual({ kind: "ring", room: "office" });
+    expect(rings({ ...leaningMole(), wanted: 2 })).toBeUndefined();
   });
 });
 

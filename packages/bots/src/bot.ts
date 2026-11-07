@@ -4,7 +4,7 @@
 // Bots are deterministic: all their randomness comes from their own seeded RNG
 // (the engine's sfc32), never Math.random, so same seed + same views = same
 // commands. Their seed is their own, not the game's (which is secret).
-import { ROUNDS_PER_ACT, type RoomId } from "@skimjob/content";
+import { ROUNDS_PER_ACT, type JobDef, type RoomId } from "@skimjob/content";
 import {
   checkpointTarget,
   nextUint32,
@@ -187,7 +187,7 @@ export function chooseMove(view: PlayerView, p: Personality, random: Random): Mo
   } else if (power.kind === "loopCameras" && view.me.roleState.usedThisAct < power.perAct) {
     // v2 §4: hide its own skim (no allies to cover since the Extension).
     if (pocket > 0) ability = { kind: "loopCameras", room };
-  } else if (power.kind === "ring" && view.me.roleState.usedThisAct < power.perAct) {
+  } else if (power.kind === "ring" && view.me.roleState.usedThisAct < power.perAct && ringServesWin(view, job, room)) {
     // design §5.2, §11.1: the Mole tips the police off on the loudest open bell elsewhere, if any is lit.
     const loudest = openRooms(view)
       .filter((r) => r !== room && !roomDef(job, r).lieLow && (view.bells[r] ?? 0) > 0)
@@ -199,6 +199,16 @@ export function chooseMove(view: PlayerView, p: Personality, random: Random): Mo
     if (richest !== undefined) ability = { kind: "reopen", room: richest };
   }
   return ability ? { ...move, ability } : move;
+}
+
+/**
+ * Whether the Mole's ring serves its own win (design §8.4, §19.3): it wins a heist sunk by theft, so it
+ * rings (a raid seizes the crew's coins) only while it leans toward a missed target. One raid from the
+ * bust line, any ring could bust the crew, and off the Rooftop a bust loses (§5.5), so then it keeps quiet.
+ */
+function ringServesWin(view: PlayerView, job: JobDef, room: RoomId): boolean {
+  if (view.wanted >= job.alarm.bustStars - 1 && !roomDef(job, room).lieLow) return false;
+  return leaning(view) === "target";
 }
 
 function chooseRoom(view: PlayerView, p: Personality, random: Random): RoomId {

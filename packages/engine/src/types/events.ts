@@ -123,13 +123,16 @@ export interface MoveLocked {
   readonly round: number;
 }
 
-/** Missed the deadline: Lobby, hand everything in. design §5.1 */
+/**
+ * Missed the deadline: Lobby, hand everything in; `null` when the Lobby is taped off and the
+ * player sits the round out (owner, 7 Nov). design §3.3
+ */
 export interface DefaultMoveAssigned {
   readonly type: "defaultMoveAssigned";
   readonly visibility: PrivateVisibility;
   readonly player: PlayerId;
   readonly round: number;
-  readonly move: Move;
+  readonly move: Move | null;
 }
 
 /**

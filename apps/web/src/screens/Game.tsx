@@ -422,7 +422,9 @@ function MovePanel({ view, round, timers, offset, send, pick }: BoardProps & { r
       </div>
       {missed && (
         <p className="move__missed" role="status">
-          You missed round {missed.round}: the default move sent you to the {roomName(missed.room)}, handing everything in.
+          {missed.room === null
+            ? `You missed round ${missed.round}: the default room is taped off, so you sat the round out.`
+            : `You missed round ${missed.round}: the default move sent you to the ${roomName(missed.room)}, handing everything in.`}
         </p>
       )}
       <div className="move__rooms" role="group" aria-label="Rooms">

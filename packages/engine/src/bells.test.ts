@@ -306,10 +306,33 @@ describe("the Fixer's reopen — design §5.3, §11.1", () => {
   });
 });
 
-describe("a missed move into a taped-off default room — design §3.3, §5.3 (provisional)", () => {
-  it("lies low on the Rooftop instead of entering the closed Lobby", () => {
-    const s = run({ ...game(3), taped: { lobby: 2 }, bells: { vault: 0, office: 0, security: 0, rooftop: 0 } }, mv("p0", "office", 1), mv("p1", "office", 1));
+describe("a missed move into a taped-off default room sits the round out — design §3.3 (owner, 7 Nov), §5.3", () => {
+  const LOBBY_TAPED = { taped: { lobby: 2 }, bells: { vault: 0, office: 0, security: 0, rooftop: 0 } };
+
+  it("is in no room: grabs nothing, rings nothing, seen by nobody, and never shows as locked in", () => {
+    const s = run({ ...game(3), ...LOBBY_TAPED }, mv("p0", "office", 2), mv("p1", "office", 2));
+    expect(viewFor(s, "p2").me.move).toBeNull();
     const after = run(s, ROUND);
-    expect(ofType(after.log, "defaultMoveAssigned")).toMatchObject([{ player: "p2", move: { room: "rooftop", duffel: 0, pocket: 0 } }]);
+    const round = lastRound(after);
+    expect(ofType(after.log, "defaultMoveAssigned")).toMatchObject([{ player: "p2", round: 1, move: null }]);
+    expect(ofType(after.log, "moveLocked").some((e) => e.player === "p2")).toBe(false);
+    expect(ofType(round, "coinsGrabbed").map((e) => e.player)).toEqual(["p0", "p1"]);
+    expect(ofType(round, "roomSighting").map((e) => e.player)).toEqual(["p0", "p1"]);
+    expect(ofType(round, "roomSighting")[0]?.others).toEqual(["p1"]);
+    expect(rung(after)).toMatchObject({ office: 2 }); // only p0's and p1's 2nd coins
+    expect(after.players.p2?.stash).toBe(0);
+    expect(after.players.p2?.consecutiveMissedMoves).toBe(1);
+  });
+
+  it("is not on the Rooftop: a bust that round leaves it behind (design §5.5)", () => {
+    const s = run({ ...game(3), ...LOBBY_TAPED, bells: { ...LOBBY_TAPED.bells, vault: 1 }, wanted: 2 }, mv("p0", "vault", 3), mv("p1", "rooftop"));
+    const after = run(s, ROUND);
+    expect(after.phase).toMatchObject({ kind: "ended", outcome: { reason: "bust", escapees: ["p1"], winners: ["p1"] } });
+  });
+
+  it("cools nothing extra: only Rooftop players do (design §5.6)", () => {
+    const s = run({ ...game(3), ...LOBBY_TAPED, bells: { vault: 2, office: 0, security: 0, rooftop: 0 } }, mv("p0", "office", 1), mv("p1", "office", 1));
+    const cooled = ofType(lastRound(run(s, ROUND)), "bellsCooled")[0]?.bells;
+    expect(cooled).toMatchObject({ vault: 1 });
   });
 });

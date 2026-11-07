@@ -187,7 +187,7 @@ function applyChange(state: GameState, event: GameEvent): GameState {
         consecutiveMissedMoves: 0,
       }));
     case "defaultMoveAssigned":
-      return updatePlayer({ ...state, moves: { ...state.moves, [event.player]: event.move } }, event.player, (p) => ({
+      return updatePlayer(event.move ? { ...state, moves: { ...state.moves, [event.player]: event.move } } : state, event.player, (p) => ({
         consecutiveMissedMoves: p.consecutiveMissedMoves + 1,
       }));
     case "coinsGrabbed":

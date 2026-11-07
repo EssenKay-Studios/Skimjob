@@ -58,6 +58,10 @@ describe("describeEvent", () => {
     expect(describeEvent(sampleEvents.defaultMoveAssigned, { ...asAna, me: "ben" })).toBe(
       "You missed round 1's deadline: the default move went to the Lobby, handing everything in.",
     );
+    // design §3.3 (owner, 7 Nov): with the default room taped off, the round is sat out.
+    expect(describeEvent({ ...sampleEvents.defaultMoveAssigned, move: null }, { ...asAna, me: "ben" })).toBe(
+      "You missed round 1's deadline: the default room is taped off, so you sat the round out.",
+    );
   });
 
   it("gives the round summary, card and checkpoint with signs", () => {
@@ -154,10 +158,10 @@ describe("describeEvent", () => {
     const ranking = sampleEvents.gameEnded.outcome.ranking;
     // design §5.5: a bust; only the Rooftop gets away.
     expect(describeEvent({ ...sampleEvents.gameEnded, outcome: { result: "failed", reason: "bust", escapees: [], ranking, winners: [] } }, asAna)).toBe(
-      "Busted: Wanted hit 3 and the heist failed; nobody was on the Rooftop; nobody wins.",
+      "Busted: Wanted hit the bust line and the heist failed; nobody was on the Rooftop; nobody wins.",
     );
     expect(describeEvent({ ...sampleEvents.gameEnded, outcome: { result: "failed", reason: "bust", escapees: ["ana"], ranking, winners: ["ana"] } }, asCyd)).toBe(
-      "Busted: Wanted hit 3 and the heist failed; Ana got away over the Rooftop; Ana wins.",
+      "Busted: Wanted hit the bust line and the heist failed; Ana got away over the Rooftop; Ana wins.",
     );
     expect(describeEvent({ ...sampleEvents.gameEnded, outcome: { result: "failed", reason: "target", ranking, winners: ["ben"] } }, asAna)).toBe(
       "The heist failed: the target was missed; Ben wins.",

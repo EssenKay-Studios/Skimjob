@@ -211,12 +211,12 @@ export function roomOptions(view: PlayerView): RoomOption[] {
 /** The room a missed deadline sends you to. design §5.1 */
 export const defaultRoom = (view: PlayerView): RoomId => jobOf(view).defaultRoom;
 
-/** The latest round you missed, if it is the round that just resolved (shown on the move panel). design §5.1 */
-export function justMissed(view: PlayerView): { readonly round: number; readonly room: RoomId } | null {
+/** The latest round you missed, if it is the round that just resolved (shown on the move panel); room null when you sat it out. design §3.3 */
+export function justMissed(view: PlayerView): { readonly round: number; readonly room: RoomId | null } | null {
   const latest = view.caseFile.filter((x) => x.event.type === "defaultMoveAssigned").at(-1)?.event;
   if (!latest || latest.type !== "defaultMoveAssigned") return null;
   const lastResolved = view.phase.kind === "planning" ? view.phase.round - 1 : view.phase.kind === "alibis" ? view.phase.round : view.round;
-  return latest.round === lastResolved ? { round: latest.round, room: latest.move.room } : null;
+  return latest.round === lastResolved ? { round: latest.round, room: latest.move?.room ?? null } : null;
 }
 
 /** The round whose alibi you may post, and the room you already claimed for it (if any). design §5.4 */

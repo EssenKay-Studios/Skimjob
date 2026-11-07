@@ -34,7 +34,7 @@ function config(extra: Partial<GameConfig> = {}): GameConfig {
     players: ROLES_BY_SEAT.map((_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: false })),
     job: "bank",
     rolePool: [...new Set(ROLES_BY_SEAT)],
-    // A Mole could be in the game, so the hidden police moments run. extension.md "Police activity"
+    // The role list may name roles nobody holds.
     roleList: "possible",
     eventsEnabled: true,
     // Secret mode, so the Ballot perk can be spent (it's refused in Open mode).
