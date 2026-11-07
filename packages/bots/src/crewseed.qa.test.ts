@@ -7,7 +7,7 @@
 // Also QA for PR #64 (merged in from crewseed-required.qa.test.ts): crewSeed is
 // required and the public gameDigest fallback is gone. Determinism (same seed +
 // same crewSeed => same commands and log), the hunch follows the crewSeed, and
-// the public data gameDigest used to read (seat names, round haul/heat) no
+// the public data gameDigest used to read (seat names, round haul) no
 // longer moves it.
 import { createGame, handleCommand, viewFor, type Command, type GameConfig, type GameState, type PlayerCommand, type PlayerView } from "@skimjob/engine";
 import { describe, expect, it, vi } from "vitest";
@@ -38,6 +38,8 @@ const config = (seed: string, n = 6): GameConfig => ({
   uniqueRoles: false,
   eventsEnabled: false,
   voteVisibility: "hiddenThenRevealed",
+  // The script sends everyone to one room each round; a quiet alarm keeps raids (design §5) out.
+  contentOverrides: { alarm: { bulbs: 1000 } },
 });
 
 const must = (state: GameState, c: Command): GameState => {
@@ -191,7 +193,7 @@ describe("QA PR #64: crewSeed required", () => {
     expect(differ).toBeGreaterThan(0);
   });
 
-  it("changing only the public data the old gameDigest read (seat names, round haul/heat) does not change the hunch", () => {
+  it("changing only the public data the old gameDigest read (seat names, round haul) does not change the hunch", () => {
     const { meetingViews } = play("qa64-digest", 6, "crew-A");
     const view = meetingViews[0]!;
     const tamper = (x: unknown): unknown => {
@@ -200,7 +202,7 @@ describe("QA PR #64: crewSeed required", () => {
         const o: Record<string, unknown> = {};
         for (const [k, v] of Object.entries(x)) {
           if (k === "name" && typeof v === "string") o[k] = `Renamed ${v}`;
-          else if ((k === "haul" || k === "heat") && typeof v === "number") o[k] = v + 7;
+          else if (k === "haul" && typeof v === "number") o[k] = v + 7;
           else o[k] = tamper(v);
         }
         return o;

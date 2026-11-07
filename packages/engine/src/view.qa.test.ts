@@ -37,7 +37,7 @@ const config = (n: number, voteVisibility: VoteVisibility, seed: string): GameCo
   seed,
   players: Array.from({ length: n }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: i % 2 === 0 })),
   job: "bank",
-  // Team players only (no Hacker loop, which changes others' feeds by design; no Mole tip-offs).
+  // Team players only (no Hacker loop, which changes others' feeds by design; no Mole rings).
   rolePool: ["rookie", "lookout", "priest", "auditor"],
   eventsEnabled: false,
   voteVisibility,

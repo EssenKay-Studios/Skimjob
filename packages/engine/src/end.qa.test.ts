@@ -68,7 +68,7 @@ function withPlayers(s: GameState, haul: number, change: Record<string, Partial<
 }
 
 /**
- * 3 players, Heat +4 a round (Vault +20 and Rooftop −20 cancel). p0 Rookie in
+ * 3 players. p0 Rookie in
  * the Vault, p1 Hacker in the Office, p2 Priest on the Rooftop. Rounds 1–6:
  * p0 and p1 pocket 1 (Haul +8). Rounds 7–9: both pocket 2
  * (Haul +6), p0 pockets `r9extra` more in round 9. Haul before the final
@@ -86,7 +86,7 @@ function game3(r9extra: number, finalVotes: unknown[] = []): GameState {
 }
 
 describe("12 players — design §3, §6.2, §8", () => {
-  // Rooms by seat. Heat +6 a round (2 Vault and 2 Rooftop cancel; 2 Manager's office +10 each). Coins 48 a round.
+  // Rooms by seat. Coins 48 a round.
   const ROOMS = ["vault", "vault", "rooftop", "office", "rooftop", "office", "office", "office", "depositBoxes", "depositBoxes", "managersOffice", "managersOffice"];
   const POCKET: Record<string, number> = { p0: 2, p1: 3, p3: 2 };
   function game12(): GameState {

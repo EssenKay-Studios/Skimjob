@@ -2,8 +2,8 @@ import { mkdirSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 import { startGame } from "./setupGame";
 
-// R6b, the extension UI (docs/extension.md): the perk shop, the Heat
-// breakdown and the gap box in a real game, and the lobby's deck, deal and
+// R6b, the extension UI (docs/extension.md): the perk shop, the Wanted
+// meter (design §5.4) and the gap box in a real game, and the lobby's deck, deal and
 // role-list settings. Numbers are never asserted: the balance pass tunes them
 // in packages/content. SHOTS_DIR=… saves the gallery sections per viewport.
 const SHOTS = process.env.SHOTS_DIR;
@@ -45,11 +45,11 @@ test("gallery extension sections fit every viewport @shop", async ({ page }, inf
   for (const width of [360, 768, 1280]) {
     await page.setViewportSize({ width, height: 1400 });
     await page.goto("/dev/gallery");
-    await expect(page.getByRole("heading", { name: "Heat breakdown", level: 3 })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Gap box", level: 3 })).toBeVisible();
     expect(await overflow(page)).toBeLessThanOrEqual(0);
     if (!SHOTS) continue;
     mkdirSync(SHOTS, { recursive: true });
-    for (const id of ["ext-role-card", "ext-rulebook", "ext-shop", "ext-target", "ext-heat", "ext-gap", "ext-notells", "ext-deck", "ext-end-fail"]) {
+    for (const id of ["ext-role-card", "ext-rulebook", "ext-shop", "ext-target", "ext-gap", "ext-notells", "ext-deck", "ext-end-fail"]) {
       // Viewport shots: Chromium paints tall element shots of this long page blank.
       const box = await page.locator(`section[aria-labelledby="g-${id}"]`).evaluate((el) => {
         el.scrollIntoView({ block: "start" });
@@ -66,18 +66,18 @@ test("gallery extension sections fit every viewport @shop", async ({ page }, inf
   }
 });
 
-test("a real game shows the target bar, the Heat breakdown and the gap box @shop", async ({ page }) => {
+test("a real game shows the target bar, the Wanted meter and the gap box @shop", async ({ page }) => {
   test.setTimeout(90_000);
   const game = await startGame(page.request, { bots: 4 });
   await page.goto(`/game/${game.id}`);
   await expect(page.locator(".hud__kicker")).toContainText(/Round 1 of 9 · Meeting 1 after round 3/);
   await expect(page.locator(".target-bar")).toContainText(/needed by the next meeting/);
 
-  // Round 1 ends: its Heat lines and the gap box; posting an alibi counts in it.
-  const heat = page.getByRole("region", { name: "Heat breakdown" });
-  await expect(heat).toContainText("Heat, round 1", { timeout: 30_000 });
+  // design §5.4: Wanted is public from the start.
+  await expect(page.getByRole("meter", { name: /^Wanted \d of 3$/ })).toBeVisible();
+  // Round 1 ends: the gap box; posting an alibi counts in it.
   const gap = page.getByRole("region", { name: /^Round 1 gap$/ });
-  await expect(gap).toBeVisible();
+  await expect(gap).toBeVisible({ timeout: 30_000 });
   await page.getByRole("group", { name: "Alibi room" }).getByRole("button", { name: "Lobby" }).click();
   await page.getByRole("button", { name: "Post alibi" }).click();
   await expect(gap).toContainText(/[1-9] of 5 alibis in/);

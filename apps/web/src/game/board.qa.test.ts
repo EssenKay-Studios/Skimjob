@@ -172,7 +172,8 @@ describe("QA: board figures come only from the viewer's view (PR #41)", () => {
 });
 
 describe("QA: Lockdown on the board from a real card flip (design §10)", () => {
-  it("tapes off the shut room while planning that round, and only that round", () => {
+  // design §5.4: a raided room is taped off too, while its tape lasts.
+  it("tapes off the shut room while planning that round, and only that round, besides raided rooms", () => {
     let found = false;
     for (let k = 0; k < 60 && !found; k++) {
       const states = playAll(config(3, { seed: `lock-${k}`, eventsEnabled: true }));
@@ -180,14 +181,15 @@ describe("QA: Lockdown on the board from a real card flip (design §10)", () => 
         const v = viewFor(s, "p1");
         const scene = boardScene(v);
         const lock = s.card && s.card.id === "lockdown" && s.card.room ? s.card : null;
+        const taped = scene.round === v.round ? Object.keys(v.taped) : [];
         if (v.phase.kind === "planning") {
           if (lock && lock.round === v.phase.round) {
             found = true;
-            expect(scene.closed).toEqual([lock.room]);
-          } else expect(scene.closed).toEqual([]);
+            expect(scene.closed).toEqual([lock.room, ...taped]);
+          } else expect(scene.closed).toEqual(taped);
         }
-        // Never closes a room that the card of the board's round didn't name.
-        for (const r of scene.closed) expect(v.card?.id === "lockdown" && v.card.round === scene.round && v.card.room === r).toBe(true);
+        // Never closes a room that neither the card of the board's round named nor a raid taped off.
+        for (const r of scene.closed) expect(taped.includes(r) || (v.card?.id === "lockdown" && v.card.round === scene.round && v.card.room === r)).toBe(true);
       }
     }
     expect(found, "a Lockdown with a room in 60 seeded games").toBe(true);

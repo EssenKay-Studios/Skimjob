@@ -550,7 +550,7 @@ export function BankCutaway({
         </defs>
 
         <Sky layout={lay} uid={uid} time={time} />
-        {tint > 0 && <rect width={lay.width} height={lay.streetY} fill="var(--art-siren-r)" opacity={tint * 0.3} className="bank-heat" />}
+        {tint > 0 && <rect width={lay.width} height={lay.streetY} fill="var(--art-siren-r)" opacity={tint * 0.3} className="bank-alarm" />}
         {scenery && mode === "wide" && <Scenery layout={lay} uid={uid} time={time} />}
         <g filter={`url(#${uid}-wob)`}>
           <Shell layout={lay} uid={uid} time={time} />

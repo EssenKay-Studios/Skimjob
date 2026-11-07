@@ -18,7 +18,7 @@ import { cardEffects, closedRoom, isAudit, roundJob, startRound } from "./deck";
 import { grantRewards } from "./crew";
 import { coolBells, factVisibility, isTaped, raidedRooms, ringBells } from "./bells";
 
-export { actOfRound, isLastRoundOfAct };
+export { actOfRound };
 
 const isCount = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v >= 0;
 

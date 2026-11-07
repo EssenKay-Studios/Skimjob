@@ -71,7 +71,7 @@ describe("a successful heist — design §3, §8", () => {
   /**
    * 3 players. p0 (Hacker) in the Vault pockets 1 a round; p1 (Priest) on the Rooftop; p2 (Rookie) in the
    * Office pockets 1 a round until round 9. Haul +8 a round (+9 in round 9):
-   * 24 ≥ 18, 48 ≥ 42, 73 ≥ 66. Heat 4 + (20 − 20) ÷ 3 = +4 a round.
+   * 24 ≥ 18, 48 ≥ 42, 73 ≥ 66.
    */
   function fullGame(): GameState {
     let s = game(3, ["hacker", "priest", "rookie"]);

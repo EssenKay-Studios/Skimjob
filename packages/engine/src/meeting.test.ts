@@ -84,7 +84,7 @@ function toMeeting(s: GameState): GameState {
 
 /**
  * 3 Rookies. Round 1: p0 pockets the Vault's 6; p1 and p2 hand in the Lobby's 2.
- * Rounds 2–3: everyone hands in the Lobby's 2. Haul 16, Heat 19, act-1 target 18.
+ * Rounds 2–3: everyone hands in the Lobby's 2. Haul 16, act-1 target 18.
  */
 function act1Meeting(roles: string[] = [], mode?: VoteVisibility): GameState {
   const lobby = (s: GameState) => run(s, ...["p0", "p1", "p2"].filter((p) => !s.moves[p]).map((p) => mv(p, "lobby")), ROUND);

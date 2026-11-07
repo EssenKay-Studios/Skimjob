@@ -79,7 +79,7 @@ describe("the case file sheet (design §13)", () => {
 describe("the recap and the board", () => {
   it("draws nothing without lines, and the narrator and every line with them", () => {
     expect(html(createElement(AwayRecap, { lines: [], onDismiss: () => {} }))).toBe("");
-    const out = html(createElement(AwayRecap, { lines: ["Round 1 done: Haul +3 (now 3), Heat +4 (now 4).", "Now: round 2."], onDismiss: () => {} }));
+    const out = html(createElement(AwayRecap, { lines: ["Round 1 done: Haul +3 (now 3), 61 coins left in the bank.", "Now: round 2."], onDismiss: () => {} }));
     expect(out).toContain("While you were away");
     expect(out).toContain('role="img" aria-label="The crew&#x27;s raccoon lookout"');
     expect(out.match(/class="away__line"/g)).toHaveLength(2);

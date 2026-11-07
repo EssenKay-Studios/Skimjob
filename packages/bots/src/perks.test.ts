@@ -67,7 +67,7 @@ describe("bot perks — v2 §1, §4", () => {
     expect(after.log.some((e) => e.type === "alibiVerified")).toBe(true);
   });
 
-  it("Rig: the bot rigs, then picks the most Heat-calming card", () => {
+  it("Rig: the bot rigs, then picks the least risky card", () => {
     const view = viewFor(game(5), "ana");
         expect(cardRiskScore(view, "shiftChange")).toBeGreaterThan(cardRiskScore(view, "audit"));
     for (let i = 0; i < 20; i++) {

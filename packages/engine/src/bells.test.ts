@@ -207,6 +207,15 @@ describe("the bust and the Rooftop escape — design §5.5, §4.2 step 4, §8.3"
     expect(handleCommand(s, mv("p0", "lobby", 1))).toEqual({ ok: false, reason: "the game is over" });
   });
 
+  it("a bust on a meeting's last round ends the game instead of waiting for the meeting", () => {
+    // Rounds 1–2 in the Lobby (silent), then the 4th Vault bulb in round 3 at Wanted 2.
+    const lobby = [mv("p0", "lobby", 1), mv("p1", "lobby", 1), mv("p2", "lobby", 1), ROUND];
+    const s = run({ ...run(game(3), ...lobby, ...lobby), wanted: 2 }, mv("p0", "vault", 3), mv("p1", "vault", 1), mv("p2", "lobby", 1), ROUND);
+    expect(s.wanted).toBe(3);
+    expect(s.phase).toMatchObject({ kind: "ended", outcome: { reason: "bust" } });
+    expect(ofType(s.log, "roundStarted").map((e) => e.round)).toEqual([1, 2, 3]);
+  });
+
   it("the biggest stash among the escapees wins, every escapee tied for it, any role (the Mole included)", () => {
     const hot = (g: GameState): GameState => ({ ...g, wanted: 2, bells: { ...g.bells, vault: 1 } });
     const s = run(hot(game(4, ["mole"])), mv("p0", "rooftop"), mv("p1", "rooftop"), mv("p2", "vault", 3), mv("p3", "rooftop"), ROUND);

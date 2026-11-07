@@ -124,13 +124,13 @@ describe("seats", () => {
 });
 
 describe("move panel", () => {
-  it("offers the rooms in play with their coins and Heat hints (design §3.1)", () => {
+  it("offers the rooms in play with their coins and bells (design §3.1, §5.1)", () => {
     const opts = roomOptions(viewFor(createGame(config(5)), "p1"));
     const by = Object.fromEntries(opts.map((o) => [o.id, o]));
     expect(opts.map((o) => o.id)).toEqual(["vault", "office", "lobby", "security", "rooftop", "depositBoxes", "serverRoom"]);
-    expect(by.vault).toMatchObject({ loot: 3, heat: "up", watcher: false, closed: false });
+    expect(by.vault).toMatchObject({ loot: 3, bell: "Bell 0 of 4", watcher: false, closed: null });
     expect(by.serverRoom).toMatchObject({ loot: 2, notes: [] });
-    expect(by.rooftop).toMatchObject({ loot: 0, heat: "down" });
+    expect(by.rooftop).toMatchObject({ loot: 0, bell: "Bell 0 of 4" });
     expect(by.security).toMatchObject({ watcher: true, notes: ["watch one room"] });
     expect(by.depositBoxes).toMatchObject({ loot: 2, notes: [] }); // no visitor limit (design §3.2)
   });

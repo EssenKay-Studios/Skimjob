@@ -46,9 +46,8 @@ describe("describeEvent", () => {
     expect(describeEvent(sampleEvents.roleDealt, asCyd)).toBe("Ana was the Hacker."); // the reveal
   });
 
-  // extension.md "Police activity", "Tokens and the shop": a patrol and a tip-off read the same; tokens never say why.
-  it("describes police activity, tokens and the shop", () => {
-    expect(describeEvent(sampleEvents.policeActivity, asCyd)).toBe("Police activity: Heat +4.");
+  // extension.md "Tokens and the shop": tokens never say why.
+  it("describes tokens and the shop", () => {
     expect(describeEvent(sampleEvents.tokenEarned, asAna)).toBe("You earned a token.");
     expect(describeEvent(sampleEvents.perkBought, asAna)).toBe("You bought a Peek perk for 2 tokens: Learn one player's role.");
     expect(describeEvent(sampleEvents.shopDealt, asCyd)).toBe("The shop has Peek, Alibi and +Vote on sale.");
@@ -62,11 +61,10 @@ describe("describeEvent", () => {
   });
 
   it("gives the round summary, card and checkpoint with signs", () => {
-    expect(describeEvent(sampleEvents.roundResolved, asAna)).toBe("Round 1: Haul +6 (now 6), Heat +14 (now 14).");
-    expect(describeEvent({ ...sampleEvents.roundResolved, heatDelta: -6, heat: 8 }, asAna)).toBe("Round 1: Haul +6 (now 6), Heat −6 (now 8).");
+    expect(describeEvent(sampleEvents.roundResolved, asAna)).toBe("Round 1: Haul +6 (now 6), 58 coins left in the bank.");
     expect(describeEvent(sampleEvents.eventFlipped, asAna)).toBe("Round 2 event: Lockdown (the Vault is closed).");
-    expect(describeEvent(sampleEvents.checkpointChecked, asAna)).toBe("Meeting 1 target: Haul 10, target 12, missed (Heat +15).");
-    expect(describeEvent({ ...sampleEvents.checkpointChecked, act: 3, met: true, heatPenalty: 0 }, asAna)).toBe("Final target: Haul 10, target 12, made it.");
+    expect(describeEvent(sampleEvents.checkpointChecked, asAna)).toBe("Meeting 1 target: Haul 10, target 12, missed.");
+    expect(describeEvent({ ...sampleEvents.checkpointChecked, act: 3, met: true }, asAna)).toBe("Final target: Haul 10, target 12, made it.");
     expect(describeEvent(sampleEvents.auditReport, asAna)).toBe("Audit of round 6: Vault 4 short.");
   });
 
@@ -93,14 +91,14 @@ describe("describeEvent", () => {
   const abilities: SamplesOf<ResolvedAbility> = {
     lookout: [{ kind: "lookout", rooms: ["vault", "office"] }],
     loopCameras: [{ kind: "loopCameras", room: "vault" }],
-    tipOff: [{ kind: "tipOff" }],
+    ring: [{ kind: "ring", room: "office" }],
+    reopen: [{ kind: "reopen", room: "vault" }],
     audit: [{ kind: "audit", round: 2, room: "office", shortfall: 1 }],
     checkStash: [
       { kind: "checkStash", target: "ben", threshold: 3, dirty: true },
       { kind: "checkStash", target: "ben", threshold: 3, dirty: false },
     ],
     bless: [{ kind: "bless", target: "ben", act: 2 }],
-    fixer: [{ kind: "fixer", lost: 3 }],
   };
   it.each(flat(abilities))("describes the $kind ability", (ability) => {
     expectSentence(describeEvent({ ...sampleEvents.abilityResolved, ability }, asAna));
@@ -110,9 +108,10 @@ describe("describeEvent", () => {
     const as = (ability: ResolvedAbility) => describeEvent({ ...sampleEvents.abilityResolved, ability }, asAna);
     expect(as(abilities.lookout[0])).toBe("Round 1: you kept lookout on the Vault and Office.");
     expect(as(abilities.checkStash[0])).toBe("Stash check: Ben holds 3 or more (not clean).");
-    // design §8 (v2 §2): Priest, Fixer
+    // design §8 (v2 §2): Priest; §5.2, §5.3, §11.1: the Mole's ring and the Fixer's reopen
     expect(as(abilities.bless[0])).toBe("You blessed Ben until the next meeting.");
-    expect(as(abilities.fixer[0])).toBe("Round 1: you stopped the raid and lost 3 from your stash.");
+    expect(as(abilities.ring[0])).toBe("Round 1: you tipped off the police: the Office's bell rang once more.");
+    expect(as(abilities.reopen[0])).toBe("Round 1: you tore the tape off the Vault.");
   });
 
   // design §8.3: every perk spent.
@@ -138,9 +137,13 @@ describe("describeEvent", () => {
     expect(describeEvent({ ...sampleEvents.perkUsed, perk: perks.emergency[0] }, asAna)).toBe("You spent an Emergency perk to call an extra emergency meeting.");
   });
 
-  // design §7, §8 (v2 §2): the R2b public lines never name who acted unless the rule does.
-  it("describes the R2b events without naming hidden actors", () => {
-    expect(describeEvent(sampleEvents.raidStopped, asCyd)).toBe("The cops were about to raid in round 4, but the raid was stopped: Heat is back to 95.");
+  // design §5, §8 (v2 §2): the public lines never name who acted unless the rule does.
+  it("describes bells, raids, a reopened room and a blessing without naming hidden actors", () => {
+    expect(describeEvent(sampleEvents.bellsRung, asCyd)).toBe("Round 1 bells: Vault 4 bulbs and Office 1 bulb.");
+    expect(describeEvent(sampleEvents.roomRaided, asCyd)).toBe("Raid! The police hit the Vault in round 1 and seized 3 coins. It is taped off through round 3. Wanted 1.");
+    expect(describeEvent(sampleEvents.bellsCooled, asCyd)).toBe("After round 1 the bells cooled: all dark.");
+    expect(describeEvent(sampleEvents.roomReopened, asCyd)).toBe("The tape is off the Vault: it opens again next round.");
+    expect(describeEvent({ ...sampleEvents.coinsGrabbed, duffel: 0, pocket: 0, seized: 3 }, asAna)).toBe("Round 1, Vault: you grabbed 3 coins, and the police seized them all.");
     expect(describeEvent(sampleEvents.blessingPaid, asCyd)).toBe("Ana was blessed: the bank paid the compensation, so 5 went back into the Haul.");
   });
 
@@ -149,11 +152,15 @@ describe("describeEvent", () => {
     expect(describeEvent(sampleEvents.gameEnded, asCyd)).toBe("Job done! The crew got away with it: Ana wins.");
     expect(describeEvent(sampleEvents.gameEnded, asAna)).toBe("Job done! The crew got away with it: you win.");
     const ranking = sampleEvents.gameEnded.outcome.ranking;
-    expect(describeEvent({ ...sampleEvents.gameEnded, outcome: { result: "failed", reason: "heat", ranking, winners: [] } }, asAna)).toBe(
-      "Busted: the heist failed (the Heat hit the top); nobody wins.",
+    // design §5.5: a bust; only the Rooftop gets away.
+    expect(describeEvent({ ...sampleEvents.gameEnded, outcome: { result: "failed", reason: "bust", escapees: [], ranking, winners: [] } }, asAna)).toBe(
+      "Busted: Wanted hit 3 and the heist failed; nobody was on the Rooftop; nobody wins.",
+    );
+    expect(describeEvent({ ...sampleEvents.gameEnded, outcome: { result: "failed", reason: "bust", escapees: ["ana"], ranking, winners: ["ana"] } }, asCyd)).toBe(
+      "Busted: Wanted hit 3 and the heist failed; Ana got away over the Rooftop; Ana wins.",
     );
     expect(describeEvent({ ...sampleEvents.gameEnded, outcome: { result: "failed", reason: "target", ranking, winners: ["ben"] } }, asAna)).toBe(
-      "Busted: the heist failed (the target was missed); Ben wins.",
+      "The heist failed: the target was missed; Ben wins.",
     );
   });
 

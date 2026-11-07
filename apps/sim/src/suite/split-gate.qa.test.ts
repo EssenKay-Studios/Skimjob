@@ -107,7 +107,7 @@ describe("QA #51: success band 55–70% and the report's check counts", { timeou
     expect(g3?.stars.every((x) => x.check.verdict === "n/a")).toBe(true);
     // team + mole = 2 more confirmed FAILs than the clean report; the all-role spread is report-only.
     expect(ok.parity[0]?.check.verdict).toBe("fail"); // all-role spread 0.25 > 0.10, but not counted
-    // Same rates in both (the fake tallies' Heat share FAILs either way), so the difference is the parity checks.
+    // Same rates in both (the fake tallies' rate FAILs either way), so the difference is the parity checks.
     expect(r.checks.fail - ok.checks.fail).toBe(2);
     expect(formatSuiteReport(r)).toMatch(/5p\/balanced\s+mole\s+2\.40\s+\S+\s+FAIL/);
   });

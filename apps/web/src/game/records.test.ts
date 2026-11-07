@@ -12,6 +12,8 @@ const config: GameConfig = {
   eventsEnabled: false,
   voteVisibility: "hiddenThenRevealed",
   uniqueRoles: false,
+  // The script sends everyone to the Office each round; a quiet alarm keeps raids (design §5) out.
+  contentOverrides: { alarm: { bulbs: 1000 } },
 };
 function run(state: GameState, ...commands: (PlayerCommand | SystemCommand)[]): GameState {
   for (const c of commands) {

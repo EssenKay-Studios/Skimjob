@@ -1,5 +1,5 @@
 // QA (PR #21, owner answers 1 Nov; extension.md): the one vote rule at every
-// crew size, uniqueRoles (§8.1, §15), scaled event Heat (§10),
+// crew size, uniqueRoles (§8.1, §15),
 // the alibi phase (§5.4) with meetings,
 // shakedown windows and the last round, and repeating cards (§10).
 import { BANK_JOB, EVENTS, STARTER_ROLES, type RoleId } from "@skimjob/content";

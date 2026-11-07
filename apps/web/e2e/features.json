@@ -60,7 +60,7 @@
   "packages/engine/src/claims.ts": "@move",
   "packages/engine/src/meeting.ts": "@meeting",
   "packages/engine/src/perks.ts": "@shop",
-  "packages/engine/src/police.ts": "@move",
+  "packages/engine/src/bells.ts": "@move",
   "packages/engine/src/reveal.ts": "@reveal",
   "packages/engine/src/round.ts": "@move"
 }

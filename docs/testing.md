@@ -94,7 +94,7 @@ pnpm sim:suite -- --help
 
 - `handleCommand` never throws, and states are deep-frozen, so a mutation anywhere throws. A refusal has a reason. A command for an unseated player is always refused.
 - Loot is conserved across the Haul, stashes and safes. Nothing goes negative or fractional.
-- Heat is a whole number in 0..max, and the game is over once it reaches max.
+- Every open bell is a whole number below its size, a taped-off room has no bell, Wanted equals the raids so far, and the game is over once Wanted reaches the bust line (design §5).
 - The game never gets stuck: until it ends, a deadline the scheduler would send is accepted, and every game ends.
 - The phase agrees with `meeting` / `pendingShakedown`, and alibis are open in the alibi phase only.
 - The deal follows the design, `replay(config, log)` equals the state, and running the same commands again gives the same log.
@@ -126,7 +126,7 @@ A failure prints the broken invariant, the config and `seed`/`path`. Re-run with
 - Server restart mid-round.
 - Emergency meeting during its notice period.
 - 12 players with every role.
-- The heist fails by Heat.
+- The crew is busted (Wanted 3); only the Rooftop gets away.
 - The heist fails by target.
 - Hostile socket input.
 

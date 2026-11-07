@@ -15,6 +15,8 @@ const config = (n = 5, extra: Partial<GameConfig> = {}): GameConfig => ({
   eventsEnabled: false,
   voteVisibility: "hiddenThenRevealed",
   uniqueRoles: false,
+  // Everyone visits the Office each round; a quiet alarm keeps raids (design §5) out of these recaps.
+  contentOverrides: { alarm: { bulbs: 1000 } },
   ...extra,
 });
 
@@ -58,12 +60,12 @@ describe("while you were away (design §13)", () => {
     expect(recapBetween(s, locked)).toEqual([]);
   });
 
-  it("a quiet round: the round's Haul and Heat, then what's next", () => {
+  it("a quiet round: the round's Haul and the bank, then what's next", () => {
     const s = createGame(config());
     const lines = recapBetween(s, playRound(s));
     expect(lines.length).toBeGreaterThanOrEqual(2);
     expect(lines.length).toBeLessThanOrEqual(RECAP_MAX_LINES);
-    expect(lines.find((l) => l.startsWith("Round 1 done"))).toMatch(/^Round 1 done: Haul \+\d+ \(now \d+\), Heat [+−]\d+ \(now \d+\)\.$/);
+    expect(lines.find((l) => l.startsWith("Round 1 done"))).toMatch(/^Round 1 done: Haul \+\d+ \(now \d+\), \d+ coins left in the bank\.$/);
     expect(lines.at(-1)).toBe("Now: round 2. Pick your room before the deadline.");
   });
 
