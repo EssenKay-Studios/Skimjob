@@ -174,14 +174,15 @@ export function createPlan(db: Db, clock: Clock): Plan {
     async edit(gameId, state, actor, edit) {
       // design §10: open from the round's start until it resolves, the span of its `round:<n>` deadline.
       if (state.phase.kind === "ended" || state.round <= state.resolvedRound) return { ok: false, reason: "the plan board is closed until the next round" };
-      // ...but not past the deadline while the scheduler's tick is yet to come (unless the round is paused).
+      // ...but not once its time is up, even in the scheduler's gap before the tick: time left is measured to `paused_at` while
+      // paused, so a pause can't reopen an expired round.
       const now = clock.now();
-      const [left] = await db.query<{ ms: number | null; paused: boolean }>(
-        `select (extract(epoch from (due_at - coalesce(paused_at, to_timestamp($3::float8 / 1000)))) * 1000)::float8 as ms, paused_at is not null as paused from deadlines where game_id = $1 and key = $2`,
+      const [left] = await db.query<{ ms: number | null }>(
+        `select (extract(epoch from (due_at - coalesce(paused_at, to_timestamp($3::float8 / 1000)))) * 1000)::float8 as ms from deadlines where game_id = $1 and key = $2`,
         [gameId, `round:${state.round}`, now],
       );
       const ms = left?.ms == null ? null : Math.round(Number(left.ms));
-      if (left && !left.paused && ms !== null && ms <= 0) return { ok: false, reason: "the plan board is closed: the round's time is up" };
+      if (ms !== null && ms <= 0) return { ok: false, reason: "the plan board is closed: the round's time is up" };
       if (!rate.allow(`${gameId}\0${actor}`)) return { ok: false, reason: "slow down: too many plan changes" };
       const round = state.round;
       const entries = new Map<PlayerId, PlanEntry>();
