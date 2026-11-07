@@ -69,15 +69,15 @@ describe("QA: 009_tips migration (design §15.6; STATUS: migrations are add-only
 });
 
 describe("QA: PATCH /me only ever touches the session's own user (design §15.6)", () => {
-  it("ignores a forged id, user id or name in the body and the query", async () => {
+  it("refuses a forged id, user id or name in the body (400, no write) and ignores one in the query", async () => {
     const a = await guest("Alice");
     const b = await guest("Bobby");
+    const alice = (await me(a))!;
     const bob = (await me(b))!;
-    for (const body of [{ tips: false, id: bob.id }, { tips: false, userId: bob.id, user: { id: bob.id } }, { tips: false, name: "Hacked", guest: false }]) {
-      const res = await patch(a, body);
-      expect(res.statusCode).toBe(200);
-      expect(res.json().user).toMatchObject({ name: "Alice", guest: true, tips: false });
+    for (const body of [{ tips: false, id: bob.id }, { tips: false, userId: bob.id, user: { id: bob.id } }, { tips: false, name: "Hacked", guest: false }, { tips: false, __proto__x: 1 }]) {
+      expect((await patch(a, body)).statusCode, JSON.stringify(body)).toBe(400);
     }
+    expect(await me(a)).toEqual(alice); // nothing written: still on, same name
     expect((await patch(a, { tips: false }, { url: `/me?id=${bob.id}` })).statusCode).toBe(200);
     expect(await me(b)).toEqual(bob); // Bob untouched: still on, same name
     expect(await me(a)).toMatchObject({ name: "Alice", guest: true, tips: false });
