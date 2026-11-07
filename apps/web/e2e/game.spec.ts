@@ -81,12 +81,23 @@ test("a host and a guest play a 15-min game against bots to the end @move", asyn
   expect(votes).toBeGreaterThan(0);
 
   // Game over: stamp, ranking of all four, winners marked; the ledger has the rounds.
-  await expect(page.locator(".over__stamp")).toHaveText(/JOB DONE|BUSTED/);
+  // The server seeds each game afresh, so read the ending this game reached and check its own lines (design §5.5, §11.5, §20.2).
+  const panel = page.locator("section.over");
+  const ending = await panel.getAttribute("data-ending");
+  const LINES: Record<string, { stamp: string; ledger: string }> = {
+    success: { stamp: "JOB DONE", ledger: "Job done! The crew got away with it" },
+    bust: { stamp: "BUSTED", ledger: "Busted: Wanted hit the bust line and the heist failed" },
+    target: { stamp: "BUSTED", ledger: "The heist failed: the target was missed" },
+  };
+  expect(Object.keys(LINES), `ending ${ending}`).toContain(ending);
+  const expected = LINES[ending!]!;
+  await expect(page.locator(".over__stamp")).toHaveText(expected.stamp);
+  if (ending === "bust") await expect(panel).toContainText("Busted: on a bust, only the Rooftop gets away");
   await expect(over.locator(".ranking__row")).toHaveCount(4);
   const ledger = page.getByRole("list", { name: "Ledger" });
   await expect(ledger).toContainText("Round 1: Haul");
   await expect(ledger).toContainText("You say you were in the Lobby");
-  await expect(ledger).toContainText(/Job done!|Busted:/);
+  await expect(ledger).toContainText(expected.ledger);
   await page.getByRole("button", { name: /Case file/ }).click();
   await expect(page.getByRole("list", { name: "Case file" })).toContainText(/Round \d, Office: you grabbed 2 coins/);
   // The act's meetings: the host's ballot (private in the default Hidden mode), and the results in the ledger.

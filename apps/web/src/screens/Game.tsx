@@ -526,7 +526,7 @@ export function GameOver({ view }: { view: PlayerView }) {
   const ending = endingText(outcome);
   const end = view.ledger.find((x) => x.event.type === "gameEnded");
   return (
-    <SketchFrame as="section" seed="game-over" radius={20} shadow={0.55} tape className={won ? "panel over" : "panel over is-busted"} aria-labelledby="over-h">
+    <SketchFrame as="section" seed="game-over" radius={20} shadow={0.55} tape className={won ? "panel over" : "panel over is-busted"} aria-labelledby="over-h" data-ending={won ? "success" : outcome.reason}>
       <p className={won ? "over__stamp" : "over__stamp is-busted"} aria-hidden="true">
         {won ? "JOB DONE" : "BUSTED"}
       </p>

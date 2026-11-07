@@ -34,7 +34,7 @@ describe("reveal lines", () => {
     expect(whyText(base, ctx)).toBe("Job done, so the top of the ranking wins: you and Ben.");
     expect(whyText({ ...base, result: "failed", reason: "target", winners: ["p2"], why: "failedTopWins" }, ctx)).toContain("A ★ role wins this ending from the top of the ranking: Ben.");
     // design §5.5: on a bust only the Rooftop gets away.
-    expect(whyText({ ...base, result: "failed", reason: "bust", winners: ["p2"], why: "failedTopWins" }, ctx)).toContain("Only the Rooftop got away, and the biggest stash up there wins: Ben.");
+    expect(whyText({ ...base, result: "failed", reason: "bust", winners: ["p2"], why: "failedTopWins" }, ctx)).toContain("Busted: on a bust, only the Rooftop gets away. The biggest stash up there wins: Ben.");
     expect(whyText({ ...base, result: "failed", reason: "bust", winners: [], why: "failedNobody" }, ctx)).toContain("nobody was on the Rooftop");
     expect(whyText({ ...base, result: "failed", reason: "target", winners: [], why: "failedNobody" }, ctx)).toContain("nobody wins: the ranking is a loss");
     expect(winsOnText([])).toBe("");

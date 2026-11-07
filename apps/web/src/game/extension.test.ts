@@ -166,7 +166,7 @@ describe("endings (extension.md Winning and losing)", () => {
   });
 
   it("doesn't call a failure with a ★ winner a loss", () => {
-    expect(endingText({ result: "failed", reason: "bust", winners: ["p2"] })).toMatchObject({ title: "Busted: Wanted hit the bust line, only the Rooftop got away", badge: "Wins over the Rooftop", loss: false });
+    expect(endingText({ result: "failed", reason: "bust", winners: ["p2"] })).toMatchObject({ title: "Busted: on a bust, only the Rooftop gets away", badge: "Wins over the Rooftop", loss: false });
     expect(endingText({ result: "failed", reason: "target", winners: ["p3"] }).loss).toBe(false);
     const note = (winners: string[]) => renderToStaticMarkup(createElement(EndingNote, { outcome: { result: "failed", reason: "bust", winners }, name: (id: string) => (id === "p1" ? "You" : id === "p2" ? "Ben" : "Cy") }));
     expect(note(["p2"])).toContain("Ben wins over the Rooftop.");

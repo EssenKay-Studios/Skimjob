@@ -39,11 +39,11 @@ const list = (xs: readonly string[]) => (xs.length <= 1 ? (xs[0] ?? "") : `${xs.
 export function whyText(ending: RevealEnding, ctx: DescribeContext): string {
   const who = (p: string) => (p === ctx.me ? "you" : ctx.name(p));
   const top = list(ending.topGroup.map(who));
-  // design §5.5: on a bust only the Rooftop gets away, whatever the role.
+  // design §5.5, §20.2: "On a bust, only the Rooftop gets away", whatever the role.
   if (ending.reason === "bust") {
     return ending.winners.length > 0
-      ? `Busted: Wanted hit the bust line. Only the Rooftop got away, and the biggest stash up there wins: ${list(ending.winners.map(who))}.`
-      : "Busted: Wanted hit the bust line and nobody was on the Rooftop, so nobody wins: the ranking is a loss.";
+      ? `Busted: on a bust, only the Rooftop gets away. The biggest stash up there wins: ${list(ending.winners.map(who))}.`
+      : "Busted: on a bust, only the Rooftop gets away, and nobody was on the Rooftop, so nobody wins: the ranking is a loss.";
   }
   const reason = "the crew missed the Haul target";
   switch (ending.why) {
