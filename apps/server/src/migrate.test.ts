@@ -36,7 +36,7 @@ afterAll(async () => {
 describe("migrate (the real migrations)", () => {
   it("creates every table", async () => {
     expect(await migrate(real)).toEqual(ALL);
-    expect(await tables(real)).toEqual(["chat_messages", "deadlines", "game_events", "games", "plan_entries", "schema_migrations", "seats", "sessions", "suspicion_marks", "users"]);
+    expect(await tables(real)).toEqual(["chat_messages", "deadlines", "game_events", "games", "plan_edits", "plan_entries", "schema_migrations", "seats", "sessions", "suspicion_marks", "users"]);
   });
 
   it("is idempotent: a second run applies nothing and changes nothing", async () => {

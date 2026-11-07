@@ -7,8 +7,8 @@ describe("asPlanBoard", () => {
     const frame = {
       round: 2,
       entries: [
-        { player: "p1", room: "vault", power: { role: "hacker", target: "office" }, agreed: true },
-        { player: "p2", room: null, power: null, agreed: false },
+        { player: "p1", placed: "office", room: "vault", power: { role: "hacker", target: "office" }, agreed: true },
+        { player: "p2", placed: null, room: null, power: null, agreed: false },
       ],
     };
     expect(asPlanBoard(frame)).toEqual(frame);
@@ -19,12 +19,12 @@ describe("asPlanBoard", () => {
     const board = asPlanBoard({
       round: 1,
       entries: [
-        { player: "p1", room: 5, power: null, agreed: false },
-        { player: "p2", room: "vault", power: { role: "hacker" }, agreed: false },
-        { player: "p3", room: "vault", power: null, agreed: "yes" },
-        { player: "p4", room: "vault", power: null, agreed: true, extra: "ignored" },
+        { player: "p1", placed: null, room: 5, power: null, agreed: false },
+        { player: "p2", placed: null, room: "vault", power: { role: "hacker" }, agreed: false },
+        { player: "p3", placed: null, room: "vault", power: null, agreed: "yes" },
+        { player: "p4", placed: null, room: "vault", power: null, agreed: true, extra: "ignored" },
       ],
     });
-    expect(board).toEqual({ round: 1, entries: [{ player: "p4", room: "vault", power: null, agreed: true }] });
+    expect(board).toEqual({ round: 1, entries: [{ player: "p4", placed: null, room: "vault", power: null, agreed: true }] });
   });
 });
