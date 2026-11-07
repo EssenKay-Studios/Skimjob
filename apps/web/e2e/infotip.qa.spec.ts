@@ -180,3 +180,76 @@ test("inside a bottom sheet a tap elsewhere in the sheet closes the tip and keep
   await expect(sheet).toBeVisible();
   await p.context().close();
 });
+
+test("tabbing onto an i below the screen opens its preview right next to the scrolled-in i @infotip", async ({ browser }) => {
+  const v = { width: 1280, height: 800 };
+  const p = await gallery(browser, v);
+  const duffel = tipButton(p, "Duffel");
+  await duffel.focus();
+  await p.keyboard.press("Shift+Tab");
+  await duffel.evaluate((el) => window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY - window.innerHeight - 58));
+  await p.keyboard.press("Tab");
+  await expect(duffel).toBeFocused();
+  await p.waitForTimeout(300);
+  await expect(popover(p)).toContainText(TERMS.duffel.text);
+  const t = (await popover(p).boundingBox())!;
+  const b = (await duffel.boundingBox())!;
+  inside(t, v);
+  // Placed for where the i is after the scroll: just under or just over it.
+  expect(Math.min(Math.abs(t.y - (b.y + b.height)), Math.abs(b.y - (t.y + t.height)))).toBeLessThanOrEqual(8);
+  await p.context().close();
+});
+
+test("Esc closes a hover preview with the focus elsewhere, and takes the Esc: the page stays put @infotip", async ({ browser }) => {
+  const p = await gallery(browser, { width: 1280, height: 800 });
+  await tipButton(p, "Vault").hover();
+  await expect(popover(p)).toBeVisible();
+  await p.keyboard.press("Escape");
+  await expect(popover(p)).toHaveCount(0);
+  await expect(p).toHaveURL(/\/dev\/gallery$/);
+  await p.keyboard.press("Escape"); // with no tip open, the app's Esc goes back to the start
+  await expect(p).not.toHaveURL(/\/dev\/gallery$/);
+  await p.context().close();
+});
+
+test("in a sheet, Esc on a hover preview (focus elsewhere in the sheet) closes the tip first, then the sheet @infotip", async ({ browser }) => {
+  const p = await gallery(browser, { width: 1280, height: 800 });
+  await p.getByRole("button", { name: "Open a sheet with a tip" }).click();
+  const sheet = p.getByRole("dialog", { name: "Pocket" });
+  await sheet.getByRole("button", { name: "About Pocket" }).hover();
+  await expect(popover(p)).toBeVisible();
+  await p.keyboard.press("Escape");
+  await expect(popover(p)).toHaveCount(0);
+  await expect(sheet).toBeVisible();
+  await p.keyboard.press("Escape");
+  await expect(sheet).toBeHidden();
+  await p.context().close();
+});
+
+test("hover grace: a quick out-and-back keeps the tip, staying out closes it, and moving to the next i leaves only that one @infotip", async ({ browser }) => {
+  const p = await gallery(browser, { width: 1280, height: 800 });
+  const vault = tipButton(p, "Vault");
+  const b = (await vault.boundingBox())!;
+  const away = { x: b.x + b.width / 2, y: b.y - 40 };
+  await vault.hover();
+  await expect(popover(p)).toBeVisible();
+  await p.mouse.move(away.x, away.y);
+  await p.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+  await p.waitForTimeout(400);
+  await expect(popover(p)).toHaveCount(1);
+  await p.mouse.move(away.x, away.y);
+  await p.waitForTimeout(400);
+  await expect(popover(p)).toHaveCount(0);
+  await vault.hover();
+  await tipButton(p, "Mole").hover();
+  await p.waitForTimeout(400);
+  await expect(popover(p)).toHaveCount(1);
+  await expect(popover(p)).toContainText("ring any room once");
+  await p.context().close();
+});
+
+test("screen reader: the i's description is its line @infotip", async ({ browser }) => {
+  const p = await gallery(browser, { width: 390, height: 844 }, true);
+  for (const [name, text] of [["Duffel", TERMS.duffel.text], ["Suspect", TIPS.suspect.text]] as const) await expect(tipButton(p, name)).toHaveAccessibleDescription(text);
+  await p.context().close();
+});
