@@ -20,3 +20,4 @@ export * from "./jobs";
 export * from "./setup";
 export * from "./events";
 export * from "./perks";
+export * from "./text";

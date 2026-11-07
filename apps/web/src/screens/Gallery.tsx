@@ -11,6 +11,7 @@ import { NotesSections } from "./GalleryNotes";
 import { ExtensionSections } from "./GalleryExtension";
 import { HostSection } from "./GalleryHost";
 import { RevealSection } from "./GalleryReveal";
+import { InfoTipSection } from "./GalleryInfoTip";
 import { ShellSection } from "./GalleryShell";
 import { Button, DangerButton } from "../components/Button";
 import { Chip } from "../components/Chip";
@@ -322,6 +323,7 @@ export function Gallery() {
             <HostSection />
 
             <ShellSection />
+            <InfoTipSection />
           </div>
         </SketchFrame>
       </main>

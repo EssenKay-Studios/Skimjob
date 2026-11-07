@@ -1,0 +1,98 @@
+/* InfoTip (design §15.6, §20.5): the "i" button and its popover. Theme tokens only. */
+.infotip {
+  display: inline-flex;
+  vertical-align: middle;
+}
+/* A 44 px target around a small drawn ring. */
+.infotip__btn {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  cursor: pointer;
+}
+.infotip__i {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 1.6px solid var(--ink);
+  border-radius: var(--radius-blob);
+  background: var(--paper-hi);
+  font: 700 13px/1 var(--font-hand);
+  transition: background-color 0.15s;
+}
+.infotip__btn[aria-expanded="true"] .infotip__i {
+  background: var(--clay);
+}
+/* The native popover brings its own box: reset it, then place it from the script. */
+.infotip__pop {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  overflow: visible;
+  color: inherit;
+}
+.infotip__pop:popover-open {
+  animation: infotip-in 0.18s var(--slide) both;
+}
+.infotip__tip {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 4px 12px 12px;
+  --fr-fill: var(--paper-hi);
+}
+.infotip__tip p {
+  padding-right: 8px;
+  color: var(--ink);
+  font-size: 13.5px;
+}
+.infotip__head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.infotip__head h3 {
+  flex: 1;
+  min-width: 0;
+  font-size: 16px;
+}
+.infotip__close {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  cursor: pointer;
+}
+.infotip__close svg {
+  width: 16px;
+  height: 16px;
+}
+@keyframes infotip-in {
+  from {
+    transform: translateY(-4px);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .infotip__pop:popover-open {
+    animation: none;
+  }
+  .infotip__i {
+    transition: none;
+  }
+}
