@@ -22,9 +22,9 @@ describe("room tiers at the boundaries — design §3.1", () => {
 
 describe("checkpoint targets per crew size — design §11.5", () => {
   it("2, 3 and 12 players", () => {
-    expect([1, 2, 3].map((a) => checkpointTarget(bank, a as 1 | 2 | 3, 2))).toEqual([6, 14, 22]);
-    expect([1, 2, 3].map((a) => checkpointTarget(bank, a as 1 | 2 | 3, 3))).toEqual([9, 21, 33]);
-    expect([1, 2, 3].map((a) => checkpointTarget(bank, a as 1 | 2 | 3, 12))).toEqual([36, 84, 132]);
+    expect([1, 2, 3].map((a) => checkpointTarget(bank, a as 1 | 2 | 3, 2))).toEqual([4, 8, 12]);
+    expect([1, 2, 3].map((a) => checkpointTarget(bank, a as 1 | 2 | 3, 3))).toEqual([6, 12, 18]);
+    expect([1, 2, 3].map((a) => checkpointTarget(bank, a as 1 | 2 | 3, 12))).toEqual([24, 48, 72]);
   });
 
   it("rejects act 0", () => {

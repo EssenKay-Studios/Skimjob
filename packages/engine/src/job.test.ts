@@ -39,16 +39,16 @@ describe("rings — design §3.1, §5.2", () => {
 });
 
 describe("checkpoint targets — design §11.5", () => {
-  it("3, 7 and 11 × crew size, cumulative (scaled to R7 coins until S3a.3)", () => {
+  it("2, 4 and 6 × crew size, cumulative (scaled to R7 coins and raids until S3a.3)", () => {
     for (let n = 3; n <= 12; n++) {
-      expect([1, 2, 3].map((act) => checkpointTarget(bank, act as 1 | 2 | 3, n))).toEqual([3 * n, 7 * n, 11 * n]);
+      expect([1, 2, 3].map((act) => checkpointTarget(bank, act as 1 | 2 | 3, n))).toEqual([2 * n, 4 * n, 6 * n]);
     }
   });
 
-  it("a crew of 5 needs 15, 35 and 55", () => {
-    expect(checkpointTarget(bank, 1, 5)).toBe(15);
-    expect(checkpointTarget(bank, 2, 5)).toBe(35);
-    expect(checkpointTarget(bank, 3, 5)).toBe(55);
+  it("a crew of 5 needs 10, 20 and 30", () => {
+    expect(checkpointTarget(bank, 1, 5)).toBe(10);
+    expect(checkpointTarget(bank, 2, 5)).toBe(20);
+    expect(checkpointTarget(bank, 3, 5)).toBe(30);
   });
 
   it("rejects an act outside 1–3", () => {

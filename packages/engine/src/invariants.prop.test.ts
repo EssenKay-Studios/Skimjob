@@ -64,12 +64,12 @@ const configArb = fc
     events: fc.boolean(),
     // design §8.1, §15: absent = unique (the default); false lets roles repeat.
     unique: fc.constantFrom(undefined, true, false),
-    // Random streams ring a lot and seize coins, so some games are an easy job: the bust line out of reach
-    // (design §5.5 [tunable]) and low R6 targets, so they can succeed.
-    easy: fc.boolean(),
+    // Random streams ring a lot and seize coins, so some games move the bust line out of reach (design §5.5
+    // [tunable]), with low R6 targets (an easy job, which can succeed) or high ones (a hard job, which misses them).
+    tuning: fc.constantFrom("shipped", "easy", "hard"),
     seed: fc.string({ minLength: 1, maxLength: 12 }),
   })
-  .map(({ players, vote, deck, deal, roleList, events, unique, easy, seed }): GameConfig => ({
+  .map(({ players, vote, deck, deal, roleList, events, unique, tuning, seed }): GameConfig => ({
     seed,
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i + 1}`, name: `P${i + 1}`, isBot: i % 2 === 1 })),
     job: "bank",
@@ -80,7 +80,7 @@ const configArb = fc
     eventsEnabled: events,
     voteVisibility: vote,
     ...(unique === undefined ? {} : { uniqueRoles: unique }),
-    ...(easy ? { contentOverrides: { alarm: { bustStars: 9 }, checkpoints: { perPlayer: [1, 2, 3] } } } : {}),
+    ...(tuning === "shipped" ? {} : { contentOverrides: { alarm: { bustStars: 9 }, checkpoints: { perPlayer: tuning === "easy" ? [1, 2, 3] : [9, 18, 27] } } }),
   }));
 /** The command stream: each step reads a few numbers from this tape; when it runs out, only deadlines pass. */
 const tapeArb = fc.array(fc.nat({ max: 0xffff }), { minLength: 400, maxLength: 4000, size: "max" });

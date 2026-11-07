@@ -100,8 +100,8 @@ describe("First National Bank alarm — design §3.1, §5", () => {
 });
 
 describe("First National Bank checkpoint targets — design §11.5", () => {
-  it("3, 7 and 11 × crew size at the end of Acts 1, 2 and 3", () => {
-    expect(BANK_JOB.checkpoints.perPlayer).toEqual([3, 7, 11]); // scaled to R7 coins in S3a.1 (was 7, 15, 23)
+  it("2, 4 and 6 × crew size at the end of Acts 1, 2 and 3", () => {
+    expect(BANK_JOB.checkpoints.perPlayer).toEqual([2, 4, 6]); // scaled to R7 coins in S3a.1 and to raids in S3a.2 (was 7, 15, 23)
   });
 });
 

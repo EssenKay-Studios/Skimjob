@@ -80,10 +80,8 @@ function play(c: GameConfig, absent: readonly PlayerId[] = []): GameState {
     else if (phase.kind === "shakedownPending") system({ type: "advance", deadline: { kind: "resolveShakedown", meetingId: phase.meetingId } });
     else if (state.pendingEmergency && (phase.kind === "planning" || phase.kind === "alibis" || phase.kind === "awaitingMeeting"))
       system({ type: "advance", deadline: { kind: "openMeeting", meetingId: state.pendingEmergency.meetingId } });
-    else if (phase.kind === "planning") {
-      if (state.police) system({ type: "advance", deadline: { kind: "policeMoment", moment: state.police.moment } });
-      if (state.phase.kind === "planning") system({ type: "advance", deadline: { kind: "round", round: phase.round } });
-    } else if (phase.kind === "alibis") system({ type: "advance", deadline: { kind: "alibis", round: phase.round } });
+    else if (phase.kind === "planning") system({ type: "advance", deadline: { kind: "round", round: phase.round } });
+    else if (phase.kind === "alibis") system({ type: "advance", deadline: { kind: "alibis", round: phase.round } });
     else if (phase.kind === "awaitingMeeting") {
       if (!state.scheduledMeeting) system({ type: "scheduleMeeting", act: phase.act, slot: `server-act-${phase.act}` });
       system({ type: "advance", deadline: { kind: "openMeeting", meetingId: state.scheduledMeeting?.meetingId as string } });
@@ -129,7 +127,12 @@ function audit(state: GameState, cov: Coverage): RevealSummary {
   } else {
     expect(summary.ending.reason).toBe(outcome.reason);
     cov.add(`failed:${outcome.reason}`);
-    const shouldWin = top.filter((p) => (ROLES[state.players[p]?.role as RoleId]?.winsOn ?? []).includes(outcome.reason));
+    // design §5.5: on a bust, the escapees with the biggest stash among them, whatever their role.
+    const escaped = outcome.reason === "bust" ? outcome.ranking.filter((r) => outcome.escapees.includes(r.player)) : [];
+    const shouldWin =
+      outcome.reason === "bust"
+        ? escaped.filter((r) => r.stash === Math.max(...escaped.map((e) => e.stash))).map((r) => r.player)
+        : top.filter((p) => (ROLES[state.players[p]?.role as RoleId]?.winsOn ?? []).includes(outcome.reason));
     expect([...outcome.winners].sort()).toEqual([...shouldWin].sort());
     expect(summary.ending.why).toBe(shouldWin.length > 0 ? "failedTopWins" : "failedNobody");
     cov.add(summary.ending.why);
@@ -156,7 +159,6 @@ function audit(state: GameState, cov: Coverage): RevealSummary {
   const tokenRounds: string[] = [];
   const bought = new Map<PlayerId, PerkId[]>();
   const used = new Map<PlayerId, number>();
-  const policeTruth: { cause: string; mole: PlayerId | null; replaced: boolean; round: number }[] = [];
   const offlineTruth: { round: number; watcher: PlayerId; room: string; hackers: PlayerId[] }[] = [];
   let loops = new Map<string, PlayerId[]>();
   const stashAt = new Map<number, Record<PlayerId, number>>();
@@ -179,11 +181,6 @@ function audit(state: GameState, cov: Coverage): RevealSummary {
       case "perkUsed":
         used.set(e.player, (used.get(e.player) ?? 0) + 1);
         break;
-      case "policeActivity": {
-        const q = s.police?.queue[0];
-        policeTruth.push({ cause: q === undefined ? "patrol" : "tipOff", mole: q ?? null, replaced: q !== undefined && s.police?.patrol === true, round });
-        break;
-      }
       case "abilityResolved":
         if (e.ability.kind === "loopCameras") loops.set(e.ability.room, [...(loops.get(e.ability.room) ?? []), e.player]);
         break;
@@ -222,16 +219,9 @@ function audit(state: GameState, cov: Coverage): RevealSummary {
   expect(eventItems("perkBought")).toEqual(state.log.filter((e) => e.type === "perkBought"));
   expect(eventItems("perkUsed")).toEqual(state.log.filter((e) => e.type === "perkUsed"));
 
-  // Police: patrol vs tip-off from the reducer's queue, incl. a tip-off taking a patrol's moment.
-  const police = has((i) => i.kind === "police").map((x) => {
-    const p = x.item as Extract<RevealItem, { kind: "police" }>;
-    return { cause: p.cause, mole: p.mole, round: x.round };
-  });
-  expect(police).toEqual(policeTruth.map(({ cause, mole, round: r }) => ({ cause, mole, round: r })));
-  for (const p of policeTruth) {
-    cov.add(`police:${p.cause}`);
-    if (p.replaced) cov.add("tipOffReplacedPatrol");
-  }
+  // design §5.3: every raid is in the timeline, in its round.
+  expect(eventItems("roomRaided")).toEqual(state.log.filter((e) => e.type === "roomRaided"));
+  if (eventItems("roomRaided").length > 0) cov.add("raid");
 
   // Camera offline: the Hacker loop.
   const offline = has((i) => i.kind === "cameraOffline").map((x) => {
@@ -257,8 +247,7 @@ function audit(state: GameState, cov: Coverage): RevealSummary {
 
 // Seeds picked by a sweep so that together they hit every case below.
 const SEEDS: readonly (readonly [number, string])[] = [
-  [5, "qa55-5-1"], // target missed, a ★ wins from the top
-  [5, "qa55-5-3"], // a tip-off lands on a patrol's moment
+  [5, "qa55-5-10"], // target missed, a ★ wins from the top
   [5, "qa55-5-18"], // a Hacker loop hides a pocketer
   [5, "qa55-5-20"], // another Hacker loop
   [8, "qa55-8-6"],
@@ -270,13 +259,10 @@ const MUST = [
   "failed:target",
   "failedTopWins",
   "starFailureWin",
-  "police:patrol",
-  "police:tipOff",
-  "tipOffReplacedPatrol",
+  "raid",
   "offline:hackerLoop",
   "perkBought",
   "perkUsed",
-  "token:tipOffLanded",
   "token:loopHidPocketer",
 ];
 
@@ -284,6 +270,8 @@ describe("QA #55 reveal summary vs the engine's truth — design §13", () => {
   it("full games at 5/8/12 players: hidden before the end, identical for every viewer after, and true", () => {
     const cov: Coverage = new Set();
     for (const [n, seed] of SEEDS) audit(play(config(n, seed)), cov);
+    // Content bells (no R6 pins), so raids happen (design §5.3).
+    audit(play(config(8, "qa55-8-raids", { contentOverrides: null })), cov);
     for (const k of MUST) expect(cov, k).toContain(k);
   }, 120_000);
 

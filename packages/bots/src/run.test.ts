@@ -190,10 +190,12 @@ describe("personalities behave as design §17.3 describes", () => {
 
   it("sanity: honest crews usually pull the job off, and most shakedowns in a mixed crew catch someone with loot", () => {
     // Loose bounds so the balance pass can retune numbers without breaking this; the simulator reports the real figures.
-    // 0.6 (was 0.8) while R6's checkpoints and Heat run on R7's coins and bank (S3a.1), until S3a.2–S3a.3 replace them.
+    // 0.6 (was 0.8) while R6's checkpoints run on R7's coins, bank and raids (S3a.1–S3a.2), until S3a.3 replaces them.
     expect(stats(["honest"], 5, 20).success).toBeGreaterThanOrEqual(0.6);
     expect(all.shakedowns).toBeGreaterThan(0);
-    expect(all.dirty / all.shakedowns).toBeGreaterThan(0.5);
+    // 0.15 (was 0.5): raids seize whole grabs, pockets included, so stashes are smaller against R6's clean line
+    // (S3a.2), until S3a.5's shakedowns against the share replace it.
+    expect(all.dirty / all.shakedowns).toBeGreaterThan(0.15);
   });
 });
 
@@ -218,12 +220,10 @@ describe("bots with the Wildcards and the Mole dealt — extension.md Build note
   });
   const log = games.flatMap((g) => g.state.log);
 
-  it("finish with no refused command; the Hacker loops, the Mole's tip-offs land as police activity", () => {
+  it("finish with no refused command; the Hacker loops and the Mole rings (design §5.2, §11.1)", () => {
     for (const g of games) expect([g.state.phase.kind, g.rejections]).toEqual(["ended", []]);
     const used = (kind: string) => log.filter((e) => e.type === "abilityResolved" && e.ability.kind === kind);
-    for (const k of ["loopCameras", "tipOff"]) expect(used(k).length, k).toBeGreaterThan(0);
-    expect(log.filter((e) => e.type === "tipOffLanded").length).toBeGreaterThan(0);
-    expect(log.filter((e) => e.type === "policeActivity").length).toBeGreaterThan(log.filter((e) => e.type === "tipOffLanded").length);
+    for (const k of ["loopCameras", "ring"]) expect(used(k).length, k).toBeGreaterThan(0);
   });
 
   it("bots earn tokens and buy perks from the shop", () => {

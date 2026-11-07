@@ -22,7 +22,7 @@ import { suspicion } from "./suspicion";
  * - free: also without being accused (a low-risk claim);
  * - evidence: also when it holds evidence it is about to vote on (its sightings, audit, check);
  * - rarely: when accused, at `RARELY` of the usual chance;
- * - afterSave: also after its power saved someone (Fixer: a stopped raid);
+ * - afterSave: also after its power saved the crew (Fixer: a reopened room);
  * - afterVote: only once its own vote is in (Priest: never before a vote).
  */
 export type ClaimStyle = "accused" | "free" | "evidence" | "rarely" | "afterSave" | "afterVote";
@@ -152,11 +152,9 @@ function holdsEvidence(view: PlayerView): boolean {
   return false;
 }
 
-/** v2 §4 "afterSave": the Fixer stopped a raid. */
+/** v2 §4 "afterSave": the Fixer reopened a taped-off room (design §11.1). */
 function saved(view: PlayerView): boolean {
-  const { power } = roleOf(view);
-  if (power.kind === "fixer") return ofType(view.ledger, "raidStopped").length > 0 && ofType(view.caseFile, "abilityResolved").some((e) => e.ability.kind === "fixer");
-  return false;
+  return roleOf(view).power.kind === "reopen" && ofType(view.caseFile, "abilityResolved").some((e) => e.ability.kind === "reopen");
 }
 
 /**

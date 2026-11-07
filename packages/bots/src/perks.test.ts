@@ -4,7 +4,7 @@ import { applyEvent, createGame, viewFor, type GameState, type PlayerCommand } f
 import type { PerkId } from "@skimjob/content";
 import { PERSONALITIES, type Personality } from "./personalities";
 import { botRandom, decide } from "./bot";
-import { alibiPerk, cardHeatScore, meetingPerks, planningPerks } from "./perks";
+import { alibiPerk, cardRiskScore, meetingPerks, planningPerks } from "./perks";
 import { closeAlibis, config, game, round, run } from "./testkit";
 
 const exact = (base: Personality): Personality => ({ ...base, noise: 0, misread: 0, hunch: 0 });
@@ -69,7 +69,7 @@ describe("bot perks — v2 §1, §4", () => {
 
   it("Rig: the bot rigs, then picks the most Heat-calming card", () => {
     const view = viewFor(game(5), "ana");
-        expect(cardHeatScore(view, "shiftChange")).toBeGreaterThan(cardHeatScore(view, "audit"));
+        expect(cardRiskScore(view, "shiftChange")).toBeGreaterThan(cardRiskScore(view, "audit"));
     for (let i = 0; i < 20; i++) {
       const base = createGame({ ...config(5, `rig-${i}`), eventsEnabled: true });
       let s = grant({ ...base, players: { ...base.players, ana: { ...(base.players.ana as GameState["players"][string]), role: "lookout" } } }, "ana", "rig");
@@ -79,8 +79,8 @@ describe("bot perks — v2 §1, §4", () => {
       const picks = planningPerks(viewFor(s, "ana"), "lobby");
       s = run(s, ...picks);
       const chosen = s.rigs.find((r) => r.player === "ana")?.pick;
-      const calmest = Math.min(...(rig?.cards ?? []).map((c) => cardHeatScore(view, c)));
-      expect(cardHeatScore(view, chosen as string)).toBe(calmest);
+      const calmest = Math.min(...(rig?.cards ?? []).map((c) => cardRiskScore(view, c)));
+      expect(cardRiskScore(view, chosen as string)).toBe(calmest);
       expect(planningPerks(viewFor(s, "ana"), "lobby")).toEqual([]); // done for this round
     }
   });

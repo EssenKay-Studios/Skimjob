@@ -91,10 +91,11 @@ export const BANK_JOB: JobDef = {
   bank: { coinsPerPlayer: 16 },
   // design §5.1, §5.3, §5.5
   alarm: { bulbs: 4, tapedRounds: 2, bustStars: 3 },
-  // R6's coin-measured numbers, scaled to R7's smaller grabs and 16-a-player bank (S3a.1, provisional) until
-  // S3a.3 (endings) and S3a.5 (shakedowns) replace them: checkpoints were [7, 15, 23], the clean line 6 and payout 8.
+  // R6's coin-measured numbers, scaled to R7's smaller grabs and 16-a-player bank (S3a.1) and to the coins raids
+  // seize and quiet grabs leave behind (S3a.2), provisional until S3a.3 (endings) and S3a.5 (shakedowns) replace
+  // them: checkpoints were [7, 15, 23], then [3, 7, 11]; the clean line 6 and payout 8.
   // With these the sim's success rate and shakedown accuracy stay near R6's.
-  checkpoints: { perPlayer: [3, 7, 11] },
+  checkpoints: { perPlayer: [2, 4, 6] },
   shakedown: { cleanBelow: 3, payout: 4 },
 };
 

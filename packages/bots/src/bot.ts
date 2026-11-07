@@ -23,7 +23,7 @@ import { crewSize, jobOf, lastResolvedRound, ofType, roleOf, roomsWhere, totalRo
 import { mostSuspicious, suspicion } from "./suspicion";
 import { claimCommands, meetingTime } from "./claims";
 import { alibiPerk, buyPerks, hasPerk, meetingPerks, perkSpender, planningPerks } from "./perks";
-import { heatDanger, jobThisRound } from "./heat";
+import { bustDanger, jobThisRound, openRooms, quietGrab, raidRisk } from "./alarm";
 import { leaning } from "./forecast";
 
 /**
@@ -76,13 +76,6 @@ export function createBot({ player, personality, seed, crewSeed }: BotOptions): 
   };
 }
 
-/**
- * A Mole bot tips off when Heat two rounds on (this round, then about one
- * round's wait for the next police moment) would reach this share of the raid
- * level [70 of 100], or when it leans toward a raid. extension.md Build notes "Bots"
- */
-export const MOLE_TIP_AT = 0.7;
-
 const pick = <T>(items: readonly T[], random: Random): T => items[Math.floor(random() * items.length)] as T;
 
 function weighted<T>(items: readonly (readonly [T, number])[], random: Random): T | undefined {
@@ -118,7 +111,7 @@ export function decide(view: PlayerView, p: Personality, random: Random, crewSee
   out.push(...scheduleMeeting(view));
   // v2 §4: claims are made around meetings (the act's meeting is next, or an emergency is called).
   if (meetingTime(view)) out.push(...claimCommands(view, p, random, false));
-  out.push(...crewPowers(view), ...moleTipOff(view), ...buyPerks(view));
+  out.push(...crewPowers(view), ...buyPerks(view));
   if (phase.kind === "planning") {
     if (wantsEmergency(view, p, random)) out.push({ type: "callEmergency", player });
     const move = view.me.move ?? chooseMove(view, p, random);
@@ -167,21 +160,6 @@ function crewPowers(view: PlayerView): PlayerCommand[] {
   return claim ? [{ type: "useAbility", player, ability: { kind: "audit", room: claim.room } }] : [];
 }
 
-/**
- * The Mole's tip-off: any time outside meetings, once between meetings. It
- * lands at the next police moment, so the bot tips off when Heat after this
- * round and about one more would pass `MOLE_TIP_AT` of the raid level, or when
- * it leans toward a raid. extension.md "Police activity", Build notes "Bots"
- */
-function moleTipOff(view: PlayerView): PlayerCommand[] {
-  const { power } = roleOf(view);
-  if (power.kind !== "tipOff" || view.me.roleState.usedThisAct >= power.perAct || view.me.tipOffs >= power.perGame) return [];
-  const job = jobOf(view);
-  const soon = view.heat + 2 * job.heat.perRound;
-  if (soon < MOLE_TIP_AT * job.heat.max && leaning(view) !== "heat") return [];
-  return [{ type: "useAbility", player: view.me.id, ability: { kind: "tipOff" } }];
-}
-
 // ---------------------------------------------------------------- moves (§5.1)
 
 /** Room, grab, split and role power for this round. design §3.2, §11 */
@@ -189,13 +167,14 @@ export function chooseMove(view: PlayerView, p: Personality, random: Random): Mo
   const job = jobThisRound(view);
   const coinRooms = roomsWhere(view, job, (d) => d.coins > 0);
   const byCoins = (rooms: readonly RoomId[]) => rooms.map((r) => [r, roomDef(job, r).coins] as const);
-  const chosen = random() < p.noise ? pick(view.rooms, random) : chooseRoom(view, p, random);
-  // design §10 Lockdown: the closed room is refused, so go to the default room (never closed) instead.
-  const room = view.card?.room === chosen ? job.defaultRoom : chosen;
+  // design §5.3, §13: a taped-off or locked-down room is refused, so the bot only picks open rooms.
+  const room = random() < p.noise ? pick(openRooms(view), random) : chooseRoom(view, p, random);
   const def = roomDef(job, room);
-  // design §3.2: the bot grabs the room's limit and splits it between the two bags.
-  const pocket = choosePocket(view, p, random, def.coins);
-  let move: Move = { room, duffel: def.coins - pocket, pocket };
+  // design §3.2, §5.2: the bot grabs the room's limit, or (cautiously) only what keeps the bell below a raid,
+  // and splits it between the two bags.
+  const coins = def.coins > 0 && random() < p.caution ? quietGrab(view, job, room, def.coins) : def.coins;
+  const pocket = choosePocket(view, p, random, coins);
+  let move: Move = { room, duffel: coins - pocket, pocket };
   // design §3.1: Security watches one room; a coin room, more often the richer ones.
   if (def.info === "watchRoom") move = { ...move, watch: weighted(byCoins(coinRooms), random) ?? room };
 
@@ -208,41 +187,41 @@ export function chooseMove(view: PlayerView, p: Personality, random: Random): Mo
   } else if (power.kind === "loopCameras" && view.me.roleState.usedThisAct < power.perAct) {
     // v2 §4: hide its own skim (no allies to cover since the Extension).
     if (pocket > 0) ability = { kind: "loopCameras", room };
+  } else if (power.kind === "ring" && view.me.roleState.usedThisAct < power.perAct) {
+    // design §5.2, §11.1: the Mole tips the police off on the loudest open bell elsewhere, if any is lit.
+    const loudest = openRooms(view)
+      .filter((r) => r !== room && !roomDef(job, r).lieLow && (view.bells[r] ?? 0) > 0)
+      .sort((a, b) => (view.bells[b] ?? 0) - (view.bells[a] ?? 0))[0];
+    if (loudest !== undefined) ability = { kind: "ring", room: loudest };
+  } else if (power.kind === "reopen" && view.me.roleState.usedThisGame < 1) {
+    // design §5.3, §11.1: the Fixer reopens the richest taped-off room.
+    const richest = Object.keys(view.taped).sort((a, b) => roomDef(job, b).coins - roomDef(job, a).coins)[0];
+    if (richest !== undefined) ability = { kind: "reopen", room: richest };
   }
   return ability ? { ...move, ability } : move;
 }
 
 function chooseRoom(view: PlayerView, p: Personality, random: Random): RoomId {
   const base = jobOf(view);
-  // design §10: this round's card can surge a room's loot and Heat (Shift change).
+  // design §13: this round's card can add coins to a room (Shift change).
   const job = jobThisRound(view, base);
-  // design §7: Heat now, the baseline still to come and,
-  // when a Mole could be in play, the police activity still to come (heat.ts), against the raid level.
-  const danger = heatDanger(view, base);
-  // The most any room pushes Heat on a normal round: a surged room is avoided harder.
-  const usual = Math.max(1, ...roomsWhere(view, base, (d) => d.heatPressure > 0).map((r) => roomDef(base, r).heatPressure));
-  const cooler = roomsWhere(view, job, (d) => d.heatPressure < 0)[0];
-  // extension.md Build notes "Bots": a ★ role leaning toward a raid heats the job,
-  // toward a missed target it skims the richest room.
-  const lean = leaning(view);
-  if (lean === "heat") {
-    const hottest = roomsWhere(view, job, (d) => d.heatPressure > 0).sort((a, b) => roomDef(job, b).heatPressure - roomDef(job, a).heatPressure)[0];
-    if (hottest !== undefined) return hottest;
-  }
-  if (lean === "target") return roomsWhere(view, job, (d) => d.coins > 0).sort((a, b) => roomDef(job, b).coins - roomDef(job, a).coins)[0] ?? job.defaultRoom;
-  if (cooler && danger > p.heatCaution && random() < Math.min(0.8, (danger - p.heatCaution) * 4)) return cooler;
-  const watcher = roomsWhere(view, job, (d) => d.info === "watchRoom")[0];
+  const open = openRooms(view);
+  const coinRooms = open.filter((r) => roomDef(job, r).coins > 0);
+  const fallback = open.includes(job.defaultRoom) ? job.defaultRoom : (open.find((r) => roomDef(job, r).lieLow) ?? (open[0] as RoomId));
+  // extension.md Build notes "Bots": a ★ role leaning toward a missed target skims the richest room.
+  if (leaning(view) === "target") return [...coinRooms].sort((a, b) => roomDef(job, b).coins - roomDef(job, a).coins)[0] ?? fallback;
+  // design §5.5: near the bust line the Rooftop is the only way out, so the cautious go up and wait.
+  const roof = open.find((r) => roomDef(job, r).lieLow);
+  if (roof && random() < p.caution * bustDanger(view, base) ** 2) return roof;
+  const watcher = open.find((r) => roomDef(job, r).info === "watchRoom");
   if (watcher && random() < p.watch) return watcher;
-  // Richer rooms are likelier, more so for the greedy. Heat-raising rooms get
-  // less likely once danger passes the bot's Heat caution (the same point and
-  // slope as the Rooftop above): a greedy player doesn't avoid the Vault at Heat 10.
-  const avoid = Math.max(0, danger - p.heatCaution) * 4;
-  const options = roomsWhere(view, job, (d) => d.coins > 0).map((r) => {
-    const d = roomDef(job, r);
-    const heatFactor = d.heatPressure > 0 ? Math.max(0.05, 1 - avoid * Math.max(1, d.heatPressure / usual)) : 1;
-    return [r, d.coins ** (0.5 + p.greed) * heatFactor] as const;
+  // Richer rooms are likelier, more so for the greedy; a bell close to a raid (design §5.3) puts the cautious off.
+  const options = coinRooms.map((r) => {
+    const coins = roomDef(job, r).coins;
+    const risk = Math.min(1, raidRisk(view, job, r, coins));
+    return [r, coins ** (0.5 + p.greed) * Math.max(0.05, 1 - p.caution * risk ** 2)] as const;
   });
-  return weighted(options, random) ?? job.defaultRoom;
+  return weighted(options, random) ?? fallback;
 }
 
 /** How many of the grabbed `coins` to pocket. design §3.2; R6 checkpoints (team-minded bots keep the Haul on pace) */
