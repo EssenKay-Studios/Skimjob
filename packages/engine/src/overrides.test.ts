@@ -1,6 +1,7 @@
 // Content overrides on the game config: validation (untrusted JSON) and their
 // effect on the rules. design §17.4 "config overrides"
 import { describe, expect, it } from "vitest";
+import { NO_RAIDS } from "./v01-numbers.testkit";
 import { handleThroughAlibis } from "./alibis.testkit";
 import { BANK_JOB, CONTENT_VERSION, EVENTS, ROLES, STARTER_ROLES } from "@skimjob/content";
 import type { Command, ContentOverrides, GameConfig, GameEvent, GameState } from "./types";
@@ -222,7 +223,7 @@ describe("overrides in play (design §17.4)", () => {
 
   it("shakedown numbers change the clean line and payout (extension.md \"Shakedowns\")", () => {
     // Clean below 10; a clean target is paid 2.
-    const s0 = game(config(3, { shakedown: { cleanBelow: 10, payout: 2 } }));
+    const s0 = game(config(3, { ...NO_RAIDS, shakedown: { cleanBelow: 10, payout: 2 } }));
     let s = s0;
     for (let i = 0; i < 3; i++) {
       s = after(s, () => submit("p0", { room: "vault", duffel: i < 2 ? 0 : 3, pocket: i < 2 ? 3 : 0 }), () => submit("p1", { room: "lobby" }), () => submit("p2", { room: "lobby" }), ROUND);
