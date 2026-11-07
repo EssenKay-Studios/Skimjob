@@ -36,6 +36,15 @@ const inside = (t: { x: number; y: number; width: number; height: number }, v: {
   expect(t.y + t.height).toBeLessThanOrEqual(v.height);
 };
 
+type Box = { x: number; y: number; width: number; height: number };
+/** The tip hangs on its i: just under or just over it (within 8 px), and across from it. */
+const attached = (t: Box, b: Box) => {
+  expect(Math.min(Math.abs(t.y - (b.y + b.height)), Math.abs(b.y - (t.y + t.height)))).toBeLessThanOrEqual(8);
+  expect(t.x).toBeLessThanOrEqual(b.x + b.width);
+  expect(t.x + t.width).toBeGreaterThanOrEqual(b.x);
+};
+const boxes = async (p: Page, i: ReturnType<typeof tipButton>) => [(await popover(p).boundingBox())!, (await i.boundingBox())!] as const;
+
 for (const v of SIZES) {
   test(`at ${v.width}x${v.height} the longest tip stays inside the screen at every edge and corner, clear of its i @infotip`, async ({ browser }, info) => {
     test.setTimeout(90_000); // nine placements on the long gallery page
@@ -135,16 +144,20 @@ test("a scroll keeps an open tip until its i leaves the screen; a resize keeps i
   await p.evaluate(() => window.scrollBy(0, -120));
   await p.waitForTimeout(150);
   await expect(popover(p)).toHaveCount(1);
+  attached(...(await boxes(p, tipButton(p, "Duffel"))));
   await p.evaluate(() => window.scrollTo(0, 0));
   await expect(popover(p)).toHaveCount(0);
   await tipButton(p, "Duffel").tap();
   await p.setViewportSize({ width: 390, height: 500 });
   await p.waitForTimeout(150);
   await expect(popover(p)).toHaveCount(1);
+  attached(...(await boxes(p, tipButton(p, "Duffel"))));
   await p.setViewportSize({ width: 430, height: 500 });
   await p.waitForTimeout(150);
   await expect(popover(p)).toHaveCount(1);
-  inside((await popover(p).boundingBox())!, { width: 430, height: 500 });
+  const [t, b] = await boxes(p, tipButton(p, "Duffel"));
+  inside(t, { width: 430, height: 500 });
+  attached(t, b);
   await p.context().close();
 });
 
@@ -171,6 +184,7 @@ test("in a scrolling GameShell column the tip is not clipped, and scrolling its 
   await p.locator(".shell__right").evaluate((el) => el.scrollBy(0, 10));
   await p.waitForTimeout(150);
   await expect(popover(p)).toHaveCount(1);
+  attached(...(await boxes(p, btn)));
   await p.locator(".shell__right").evaluate((el) => el.scrollBy(0, 200));
   await expect(popover(p)).toHaveCount(0);
   await p.context().close();
@@ -264,5 +278,82 @@ test("hover grace: a quick out-and-back keeps the tip, staying out closes it, an
 test("screen reader: the i's description is its line @infotip", async ({ browser }) => {
   const p = await gallery(browser, { width: 390, height: 844 }, true);
   for (const [name, text] of [["Duffel", TERMS.duffel.text], ["Suspect", TIPS.suspect.text]] as const) await expect(tipButton(p, name)).toHaveAccessibleDescription(text);
+  await p.context().close();
+});
+
+test("fast wheel scrolling keeps the tip on its i in every frame, and scrolling the i off the screen closes it @infotip", async ({ browser }) => {
+  const p = await gallery(browser, { width: 1280, height: 800 });
+  const i = tipButton(p, "Mole");
+  await i.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await i.click();
+  await p.mouse.move(40, 400); // off the tip and the i: the tip stays pinned
+  await expect(popover(p)).toHaveCount(1);
+  // Each frame, just before paint (a ResizeObserver runs after every animation-frame callback and layout):
+  // how far the tip is from where it hangs on the i.
+  await p.evaluate(() => {
+    const w = window as unknown as { drift: number[] };
+    w.drift = [];
+    const probe = document.body.appendChild(document.createElement("div"));
+    let n = 0;
+    new ResizeObserver(() => {
+      const t = document.querySelector(".infotip__pop:popover-open")?.getBoundingClientRect();
+      const b = document.querySelector('[aria-label="About Mole"]')!.getBoundingClientRect();
+      if (t) w.drift.push(Math.min(Math.abs(t.top - b.bottom), Math.abs(b.top - t.bottom)));
+    }).observe(probe);
+    const tick = () => {
+      probe.style.width = `${++n % 2}px`;
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+  const y0 = await p.evaluate(() => window.scrollY);
+  const ys: number[] = [];
+  for (const dy of [-120, -120, 120, 120, -120, 120, -90, 90, -200]) {
+    await p.mouse.wheel(0, dy);
+    await p.waitForTimeout(60);
+    ys.push(await p.evaluate(() => window.scrollY));
+  }
+  await p.waitForTimeout(300);
+  expect(await p.evaluate(() => window.scrollY)).not.toBe(y0);
+  await expect(popover(p)).toHaveCount(1);
+  const drift = await p.evaluate(() => (window as unknown as { drift: number[] }).drift);
+  expect(drift.length).toBeGreaterThan(5);
+  expect(Math.max(...drift)).toBeLessThanOrEqual(8);
+  attached(...(await boxes(p, i)));
+  await p.mouse.wheel(0, -900); // the i leaves the bottom of the screen
+  await expect(popover(p)).toHaveCount(0);
+  await p.context().close();
+});
+
+test("on a phone a touch scroll that starts off the tip closes it, like any tap elsewhere @infotip", async ({ browser }) => {
+  const p = await gallery(browser, { width: 390, height: 844 }, true);
+  const i = tipButton(p, "Mole");
+  await i.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await i.tap();
+  await expect(popover(p)).toHaveCount(1);
+  const y0 = await p.evaluate(() => window.scrollY);
+  // A quick flick down the left margin: touch start, ten fast moves, release.
+  const cdp = await p.context().newCDPSession(p);
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: 30, y: 300 }] });
+  for (let k = 1; k <= 10; k++) await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: 30, y: 300 + k * 30 }] });
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  await expect.poll(() => p.evaluate(() => window.scrollY)).toBeLessThan(y0);
+  await expect(popover(p)).toHaveCount(0);
+  await p.context().close();
+});
+
+test("pinning during the hover grace keeps the tip: Enter on a focused i just after the mouse left it @infotip", async ({ browser }) => {
+  const p = await gallery(browser, { width: 1280, height: 800 });
+  const duffel = tipButton(p, "Duffel");
+  await duffel.focus();
+  await p.keyboard.press("Shift+Tab");
+  await p.keyboard.press("Tab"); // the focus preview
+  const b = (await duffel.boundingBox())!;
+  await p.mouse.move(b.x + 22, b.y + 22);
+  await p.mouse.move(b.x + 22, b.y - 40); // the grace starts
+  await p.keyboard.press("Enter"); // pinned within it
+  await p.waitForTimeout(400);
+  await expect(popover(p)).toHaveCount(1);
+  await expect(duffel).toHaveAttribute("aria-expanded", "true");
   await p.context().close();
 });
