@@ -11,21 +11,10 @@ import { feedWorthy, markRead, mergeRead, shareableEntries, totalUnread, type Fe
 import { describeEvent } from "../game/describeEvent";
 import { namesOf, seatsOf } from "../game/hud";
 import type { GameChannel } from "../game/useGame";
+import { useMedia } from "../game/useMedia";
 
 /** The side panel takes over from here (docs: "on 1024+ px it is a side panel"). */
 const CHAT_DOCK_QUERY = "(min-width: 1024px)";
-
-function useMedia(query: string): boolean {
-  const [on, setOn] = useState(() => typeof matchMedia === "function" && matchMedia(query).matches);
-  useEffect(() => {
-    const m = matchMedia(query);
-    const f = () => setOn(m.matches);
-    f();
-    m.addEventListener("change", f);
-    return () => m.removeEventListener("change", f);
-  }, [query]);
-  return on;
-}
 
 /** Per game and seat, so a shared device doesn't mix two players' marks. */
 const readKey = (gameId: string, player: string) => `skimjob:chat-read:${gameId}:${player}`;
