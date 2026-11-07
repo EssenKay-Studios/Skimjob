@@ -39,6 +39,18 @@ export type RolePower =
    */
   | { readonly kind: "tipOff"; readonly perAct: number; readonly perGame: number };
 
+/**
+ * What a plan-board power claim points at (design §10: "Hacker → Vault", "Detective → Eli"):
+ * a room or a player. A power with no target (passive, or the Mole's hidden tip-off) can't be claimed.
+ */
+export const POWER_CLAIM_TARGET: Readonly<Partial<Record<RolePower["kind"], "room" | "player">>> = {
+  lookout: "room",
+  loopCameras: "room",
+  audit: "room",
+  checkStash: "player",
+  bless: "player",
+};
+
 /** Why a heist failed: Heat reached 100, or the final target was missed. design §3 */
 export type FailureReason = "heat" | "target";
 

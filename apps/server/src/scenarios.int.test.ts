@@ -260,6 +260,9 @@ async function assertCleanSocket(c: Client, final: GameState) {
     } else if ("chatHistory" in msg) {
       msg.chatHistory.messages.forEach(chatFor);
       msg.chatHistory.dmNotices.forEach(noticeFor);
+    } else if ("plan" in msg) {
+      // design §10, §18: seat ids, claims and agreement only; nothing private.
+      expect(Object.keys(msg.plan).sort()).toEqual(["entries", "round"]);
     } else if ("chat" in msg) {
       chatFor(msg.chat);
     } else if ("dmNotice" in msg) {

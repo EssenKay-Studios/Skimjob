@@ -65,7 +65,7 @@ describe("hidden police moments never reach a client (extension.md \"Police acti
       ws.send(JSON.stringify({ id: tag }));
       await vi.waitFor(() => expect(messages.some((m) => m.includes(`"id":"${tag}"`))).toBe(true), { interval: 1, timeout: 10_000 });
     };
-    const views = () => messages.filter((m) => !m.includes('"id":"barrier-'));
+    const views = () => messages.filter((m) => !m.includes('"id":"barrier-') && !m.startsWith('{"plan":'));
     await settle();
 
     let policeFired = 0;
