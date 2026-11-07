@@ -5,9 +5,12 @@
   --gutter: 20px;
   --gutter-l: max(var(--gutter), env(safe-area-inset-left));
   --gutter-r: max(var(--gutter), env(safe-area-inset-right));
+  /* The top bar's height; the game shell fills the window below it. */
+  --topbar-h: calc(max(14px, env(safe-area-inset-top)) + 52px);
 }
 
 .topbar {
+  min-height: var(--topbar-h);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -258,6 +261,11 @@ hr.dashed {
 .g-section__head {
   display: grid;
   gap: 2px;
+}
+.shell-demo__board {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 3 / 2;
 }
 .g-row {
   display: flex;

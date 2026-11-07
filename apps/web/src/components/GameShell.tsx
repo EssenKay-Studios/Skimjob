@@ -4,9 +4,10 @@
 // tablets show the board with a dock and a tab bar, and each panel opens as a
 // bottom sheet. The shell only places things: what goes inside comes from the
 // caller. Each panel is rendered once, for the layout in use.
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useMedia } from "../game/useMedia";
 import { BottomSheet } from "./BottomSheet";
+import { Button } from "./Button";
 import { SketchFrame } from "./SketchFrame";
 
 /** Where a panel lives on laptops. `sheet` panels exist only as phone sheets (pick a room, grab and split). */
@@ -39,6 +40,11 @@ const SHELL_WIDE_QUERY = "(min-width: 1024px)";
 
 export function GameShell(props: GameShellProps) {
   const wide = useMedia(SHELL_WIDE_QUERY);
+  const { open, onOpen } = props;
+  // A sheet left open on a phone must not pop up again when the window narrows.
+  useEffect(() => {
+    if (wide && open !== null) onOpen(null);
+  }, [wide, open, onOpen]);
   return wide ? <WideShell {...props} /> : <NarrowShell {...props} />;
 }
 
@@ -57,9 +63,9 @@ function WideShell({ status, board, panels }: GameShellProps) {
         <SketchFrame as="aside" seed="shell-left" radius={16} shadow={0.5} className="shell__left" aria-label="Crew, case and chat">
           <div className="shell__seg" role="group" aria-label="Side panel">
             {left.map((p) => (
-              <button key={p.id} type="button" aria-pressed={p.id === shown.id} onClick={() => setLeftId(p.id)}>
+              <Button key={p.id} variant="toggle" seed={`shell-tab-${p.id}`} pressed={p.id === shown.id} onClick={() => setLeftId(p.id)}>
                 {p.title}
-              </button>
+              </Button>
             ))}
           </div>
           <div className="shell__scroll">{shown.node}</div>

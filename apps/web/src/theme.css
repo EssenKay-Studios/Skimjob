@@ -187,6 +187,7 @@
   --radius-tab: 10px 13px 0 0;
   --radius-clip: 6px;
   --radius-blob: 50% 46% 52% 48%; /* round-ish blobs: coins, dots */
+  --radius-grip: 3px; /* the bottom sheet's grip */
   --shadow-card: 2px 3px 0 var(--shade);
 
   color-scheme: light;
