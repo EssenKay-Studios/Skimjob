@@ -132,6 +132,7 @@ test("a tip opened near the bottom of the screen stays on it and does not cover 
 
 test("tabbing onto an i below the screen scrolls to it and keeps its preview open @infotip", async ({ browser }) => {
   const p = await open(browser, { width: 1280, height: 800 }, false);
+  await p.emulateMedia({ reducedMotion: "reduce" }); // no slide-in, so the box is where the tip was placed
   const duffel = tipButton(p, "Duffel");
   await duffel.focus();
   await p.keyboard.press("Shift+Tab");
@@ -141,6 +142,42 @@ test("tabbing onto an i below the screen scrolls to it and keeps its preview ope
   await expect(duffel).toBeFocused();
   await p.waitForTimeout(300);
   await expect(popover(p)).toContainText(TERMS.duffel.text);
+  // Placed for where the i is after the scroll: GAP (4 px) under it or over it, not on it.
+  const t = (await popover(p).boundingBox())!;
+  const b = (await duffel.boundingBox())!;
+  expect(b.y + b.height).toBeLessThanOrEqual(800);
+  const under = t.y - (b.y + b.height);
+  const over = b.y - (t.y + t.height);
+  expect([under, over].some((gap) => Math.abs(gap - 4) <= 1)).toBe(true);
+  await p.context().close();
+});
+
+test("pinning a tip just after the mouse leaves it keeps it open @infotip", async ({ browser }) => {
+  const p = await open(browser, { width: 1280, height: 800 }, false);
+  const duffel = tipButton(p, "Duffel");
+  await duffel.focus();
+  await p.keyboard.press("Shift+Tab");
+  await p.keyboard.press("Tab");
+  await expect(popover(p)).toContainText(TERMS.duffel.text);
+  const b = (await duffel.boundingBox())!;
+  await p.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+  await p.mouse.move(b.x + b.width / 2, b.y - 40);
+  await p.keyboard.press("Enter"); // within the 200 ms grace
+  await p.waitForTimeout(400);
+  await expect(popover(p)).toContainText(TERMS.duffel.text);
+  await expect(duffel).toHaveAttribute("aria-expanded", "true");
+  await p.context().close();
+});
+
+test("moving the mouse from one i to the next shows only the next tip @infotip", async ({ browser }) => {
+  const p = await open(browser, { width: 1280, height: 800 }, false);
+  await tipButton(p, "Vault").hover();
+  await expect(popover(p)).toHaveCount(1);
+  await tipButton(p, "Mole").hover();
+  await expect(tipButton(p, "Mole")).toHaveAttribute("aria-expanded", "true");
+  // At once, inside the first tip's 200 ms grace.
+  expect(await popover(p).count()).toBe(1);
+  await expect(tipButton(p, "Vault")).toHaveAttribute("aria-expanded", "false");
   await p.context().close();
 });
 

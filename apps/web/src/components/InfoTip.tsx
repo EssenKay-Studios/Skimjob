@@ -14,6 +14,8 @@ const GRACE_MS = 200;
 const MARGIN = 8;
 const GAP = 4;
 const WIDTH = 260;
+/** Closes the tip that is open now, if any. */
+let openTip: (() => void) | undefined;
 
 export function InfoTip({ info }: { readonly info: InfoRef }) {
   const entry = infoText(info);
@@ -23,25 +25,21 @@ export function InfoTip({ info }: { readonly info: InfoRef }) {
   const tip = useRef<HTMLDivElement>(null);
   const pinned = useRef(false);
   const leaving = useRef<number>(0);
-  /** True for the frames in which the scroll caused by focusing the "i" arrives; it must not close the tip. */
+  /** True for the frames in which the scroll caused by focusing the "i" arrives; that scroll moves the tip, not closes it. */
   const focusScroll = useRef(false);
   const [open, setOpen] = useState(false);
 
   const close = useCallback(() => {
+    window.clearTimeout(leaving.current);
     pinned.current = false;
     setOpen(false);
   }, []);
 
-  // Show the popover and put it under the button (or above, when there is no room), inside the viewport.
-  useLayoutEffect(() => {
+  // Put the tip under the button (or above, when there is no room), inside the viewport.
+  const place = useCallback(() => {
     const el = tip.current;
     const b = button.current;
     if (!el || !b) return;
-    if (!open) {
-      if (el.matches(":popover-open")) el.hidePopover();
-      return;
-    }
-    el.showPopover();
     const r = b.getBoundingClientRect();
     const width = Math.min(WIDTH, window.innerWidth - 2 * MARGIN);
     // The width first: the height depends on how the line wraps.
@@ -52,15 +50,30 @@ export function InfoTip({ info }: { readonly info: InfoRef }) {
     const top = Math.max(MARGIN, Math.min(wanted, window.innerHeight - height - MARGIN));
     el.style.left = `${Math.min(Math.max(r.left + r.width / 2 - width / 2, MARGIN), window.innerWidth - width - MARGIN)}px`;
     el.style.top = `${top}px`;
-  }, [open]);
+  }, []);
+
+  useLayoutEffect(() => {
+    const el = tip.current;
+    if (!el) return;
+    if (!open) {
+      if (el.matches(":popover-open")) el.hidePopover();
+      return;
+    }
+    el.showPopover();
+    place();
+  }, [open, place]);
 
   useEffect(() => {
     if (!open) return;
+    // One tip at a time: opening this one closes the one before (say, still in its hover grace).
+    openTip?.();
+    openTip = close;
     const outside = (e: Event) => {
       if (!root.current?.contains(e.target as Node)) close();
     };
     const scrolled = () => {
-      if (!focusScroll.current) close();
+      if (focusScroll.current) place();
+      else close();
     };
     // Esc closes the tip only, not the sheet it may sit in, wherever the focus is.
     const escape = (e: globalThis.KeyboardEvent) => {
@@ -84,8 +97,9 @@ export function InfoTip({ info }: { readonly info: InfoRef }) {
       document.removeEventListener("keydown", escape, true);
       window.removeEventListener("scroll", scrolled, true);
       window.removeEventListener("resize", resized);
+      if (openTip === close) openTip = undefined;
     };
-  }, [open, close]);
+  }, [open, close, place]);
 
   useEffect(() => () => window.clearTimeout(leaving.current), []);
 
@@ -110,7 +124,7 @@ export function InfoTip({ info }: { readonly info: InfoRef }) {
       }}
       onPointerLeave={(e) => {
         if (!mouse(e) || pinned.current) return;
-        leaving.current = window.setTimeout(() => setOpen(false), GRACE_MS);
+        leaving.current = window.setTimeout(close, GRACE_MS);
       }}
     >
       <button
@@ -124,6 +138,7 @@ export function InfoTip({ info }: { readonly info: InfoRef }) {
         onFocus={(e) => {
           // Focus coming back from the tip's own close button must not reopen it.
           if (root.current?.contains(e.relatedTarget as Node | null) || !e.currentTarget.matches(":focus-visible")) return;
+          window.clearTimeout(leaving.current);
           // Focusing can scroll the "i" into view; that scroll arrives within a frame or two.
           focusScroll.current = true;
           requestAnimationFrame(() => requestAnimationFrame(() => (focusScroll.current = false)));
@@ -131,6 +146,7 @@ export function InfoTip({ info }: { readonly info: InfoRef }) {
         }}
         onClick={() => {
           if (open && pinned.current) return close();
+          window.clearTimeout(leaving.current);
           pinned.current = true;
           setOpen(true);
         }}
