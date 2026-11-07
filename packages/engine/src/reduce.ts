@@ -84,6 +84,14 @@ function afterShakedown(state: GameState): GameState {
   return state.pendingShakedown ? { ...state, pendingShakedown: null, phase: phaseAfterMeeting(state) } : state;
 }
 
+/** The taped-off rooms for which `open` holds reopen, each with its bell back at 0. design §5.3 */
+function reopen(state: GameState, open: (room: string) => boolean): GameState {
+  const rooms = Object.keys(state.taped).filter(open);
+  if (rooms.length === 0) return state;
+  const taped = Object.fromEntries(Object.entries(state.taped).filter(([room]) => !rooms.includes(room)));
+  return { ...state, taped, bells: { ...state.bells, ...Object.fromEntries(rooms.map((r) => [r, 0])) } };
+}
+
 /** State before any event: only the host's config is known. */
 export function initialState(config: GameConfig): GameState {
   return {
@@ -97,7 +105,10 @@ export function initialState(config: GameConfig): GameState {
     playerOrder: [],
     players: {},
     haul: 0,
-    heat: 0,
+    bells: {},
+    taped: {},
+    wanted: 0,
+    seized: 0,
     card: null,
     cardsFlipped: [],
     moves: {},
@@ -111,7 +122,6 @@ export function initialState(config: GameConfig): GameState {
     meeting: null,
     pendingShakedown: null,
     shop: [],
-    police: null,
     log: [],
   };
 }
@@ -125,7 +135,8 @@ function applyChange(state: GameState, event: GameEvent): GameState {
     case "rngAdvanced":
       return { ...state, rng: { words: event.words } };
     case "roomsSet":
-      return { ...state, rooms: event.rooms };
+      // design §5.1: every bell starts dark.
+      return { ...state, rooms: event.rooms, bells: Object.fromEntries(event.rooms.map((r) => [r, 0])) };
     case "bankFilled":
       return { ...state, bank: event.coins };
     case "roleDealt": {
@@ -150,22 +161,19 @@ function applyChange(state: GameState, event: GameEvent): GameState {
       return state;
     case "shopDealt":
       return { ...state, shop: event.perks };
-    case "policeScheduled":
-      return { ...state, police: { moment: event.moment, gapPermille: event.gapPermille, patrol: event.patrol, queue: state.police?.queue ?? [], tipOffs: state.police?.tipOffs ?? {} } };
-    case "policeActivity":
-      return { ...state, heat: event.heat };
-    case "policeCause":
-      return state;
-    case "tipOffLanded": {
-      const police = state.police;
-      if (!police || police.queue[0] !== event.player) throw new Error(`tipOffLanded: ${event.player}'s tip-off isn't next in the queue`);
-      return { ...state, police: { ...police, queue: police.queue.slice(1) } };
-    }
     // ------------------------------------------------ round loop. design §5
     case "roundStarted": {
       // A Rig for this round has been used by its flip (deck.ts). design §8.3
       const rigs = state.rigs.filter((r) => r.round > event.round);
-      const next: GameState = { ...state, phase: { kind: "planning", round: event.round }, round: event.round, moves: {}, card: null, rigs };
+      // design §5.3: a room whose tape has run out reopens with its bell at 0.
+      const next: GameState = {
+        ...reopen(state, (room) => (state.taped[room] as number) < event.round),
+        phase: { kind: "planning", round: event.round },
+        round: event.round,
+        moves: {},
+        card: null,
+        rigs,
+      };
       // "Once between meetings" powers start again with each stretch: the next act's first round starts right
       // after the regular meeting closes with its target check; emergency meetings never
       // reach here. extension.md gap-fills "Between meetings"
@@ -190,38 +198,39 @@ function applyChange(state: GameState, event: GameEvent): GameState {
     case "abilityResolved": {
       const { ability } = event;
       switch (ability.kind) {
-        case "tipOff": {
-          // extension.md "Police activity": the use counts at once; it lands at the next free police moment.
-          const used = updatePlayer(state, event.player, (p) => withRoleState(p, { usedThisAct: p.roleState.usedThisAct + 1 }));
-          return used.police ? { ...used, police: { ...used.police, queue: [...used.police.queue, event.player], tipOffs: { ...used.police.tipOffs, [event.player]: (used.police.tipOffs[event.player] ?? 0) + 1 } } } : used;
-        }
         case "loopCameras":
+        case "ring":
         case "audit":
         case "checkStash":
         case "bless":
           return updatePlayer(state, event.player, (p) => withRoleState(p, { usedThisAct: p.roleState.usedThisAct + 1 }));
-        case "fixer":
-          return updatePlayer(state, event.player, (p) => ({
-            stash: p.stash - ability.lost,
-            ...withRoleState(p, { usedThisGame: p.roleState.usedThisGame + 1 }),
-          }));
+        case "reopen":
+          return updatePlayer(state, event.player, (p) => withRoleState(p, { usedThisGame: p.roleState.usedThisGame + 1 }));
         case "lookout":
           return state;
       }
     }
     case "roomSighting":
     case "roomWatched":
-    case "copsRaided":
-      // Information only; no state changes. (copsRaided is followed by gameEnded.)
+      // Information only; no state changes.
       return state;
-    case "raidStopped":
-      // design §8 (v2 §2): a Fixer stopped the raid; Heat is set back.
-      return { ...state, heat: event.heat };
+    // ------------------------------------------------ bells, raids and Wanted. design §5
+    case "bellsRung":
+    case "bellsCooled":
+      return { ...state, bells: event.bells };
+    case "roomRaided": {
+      // design §5.3: the grabs are seized, the room is taped off and its bell goes off; Wanted +1 (§5.4).
+      const bells = Object.fromEntries(Object.entries(state.bells).filter(([room]) => room !== event.room));
+      return { ...state, bells, taped: { ...state.taped, [event.room]: event.closedThrough }, wanted: event.wanted, seized: state.seized + event.seized };
+    }
+    case "roomReopened":
+      // design §5.3, §11.1: the Fixer tore the tape off; open from the next round, its bell at 0.
+      return reopen(state, (room) => room === event.room);
     case "blessingPaid":
       // design §8 (v2 §2): the bank pays the blessed player's compensation, so it goes back into the Haul.
       return { ...state, haul: state.haul + event.amount };
     case "roundResolved":
-      // Haul and Heat are public totals. The round's alibis open (design §5.4); the next
+      // The bank and the Haul are public totals. The round's alibis open (design §5.4); the next
       // round, or after an act's last round its meeting (design §11), waits for their deadline.
       // Tails watched this round (design §8.3); Verified stamps are for the round just ended.
       return {
@@ -229,7 +238,6 @@ function applyChange(state: GameState, event: GameEvent): GameState {
         phase: { kind: "alibis", round: event.round },
         bank: event.bank,
         haul: event.haul,
-        heat: event.heat,
         moves: {},
         card: null,
         resolvedRound: event.round,
@@ -246,8 +254,7 @@ function applyChange(state: GameState, event: GameEvent): GameState {
     }
     case "gameEnded":
       // A round that ends the game has no alibi window (design §5.4, PR #21 QA).
-      // A tip-off still queued is lost (extension.md "Police activity").
-      return { ...state, phase: { kind: "ended", outcome: event.outcome }, alibisOpen: false, police: null };
+      return { ...state, phase: { kind: "ended", outcome: event.outcome }, alibisOpen: false };
     // ------------------------------------------------ events deck. design §10
     case "eventFlipped":
       return {
@@ -324,7 +331,7 @@ function applyChange(state: GameState, event: GameEvent): GameState {
       }));
     }
     case "checkpointChecked":
-      return { ...state, heat: state.heat + event.heatPenalty };
+      return state;
     // ------------------------------------------------ perks. design §8.3
     case "tokenEarned":
       return updatePlayer(state, event.player, (p) => withRoleState(p, { tokens: p.roleState.tokens + 1 }));

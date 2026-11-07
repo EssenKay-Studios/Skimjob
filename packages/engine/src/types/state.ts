@@ -80,11 +80,11 @@ export interface RoleState {
    * Uses this stretch (extension.md "between meetings"; acts internally):
    * reset as the next stretch's first round starts, which is right after a
    * regular meeting closes with its target check;
-   * emergency meetings never reset it. Camera loops (Hacker), tip-offs (Mole),
-   * audits (Auditor), stash checks (Detective), blessings (Priest).
+   * emergency meetings never reset it. Camera loops (Hacker),
+   * audits (Auditor), stash checks (Detective), blessings (Priest), rings (Mole).
    */
   readonly usedThisAct: number;
-  /** Uses this game: raid stops (Fixer). */
+  /** Uses this game: reopened rooms (Fixer). */
   readonly usedThisGame: number;
   /** Unspent tokens (extension.md "Tokens and the perk shop"). */
   readonly tokens: number;
@@ -95,22 +95,6 @@ export interface RoleState {
 }
 
 export const NO_ROLE_STATE: RoleState = { usedThisAct: 0, usedThisGame: 0, tokens: 0, perks: [], tail: null };
-
-/**
- * The hidden police schedule (extension.md "Police activity"). Never in a
- * view. `moment` is the next police moment's number, `gapPermille` how long
- * after the previous one it falls (thousandths of a round length, game time),
- * `patrol` whether a background patrol fires there; `queue` the Moles whose
- * tip-offs wait for a moment, oldest first; `tipOffs` each player's tip-offs
- * this game (queued or landed; Recharge never gives one back).
- */
-export interface PoliceState {
-  readonly moment: number;
-  readonly gapPermille: number;
-  readonly patrol: boolean;
-  readonly queue: readonly PlayerId[];
-  readonly tipOffs: Readonly<Record<PlayerId, number>>;
-}
 
 /** A spent Rig: `player` picks which of `cards` flips at the start of `round`. Hidden from everyone else. design §8.3 */
 export interface RiggedCard {
@@ -189,8 +173,17 @@ export interface GameState {
   readonly playerOrder: readonly PlayerId[];
   readonly players: Readonly<Record<PlayerId, PlayerState>>;
   readonly haul: number;
-  /** 0–100. design §7 */
-  readonly heat: number;
+  /**
+   * Lit bulbs on each open room's bell (public). A taped-off room's bell is
+   * off, so it has no entry; it comes back at 0 when the room reopens. design §5.1, §5.3
+   */
+  readonly bells: Readonly<Record<RoomId, number>>;
+  /** Taped-off rooms (public): each stays closed through this round. design §5.3 */
+  readonly taped: Readonly<Record<RoomId, number>>;
+  /** Wanted stars (public); never goes down. design §5.4 */
+  readonly wanted: number;
+  /** Coins the police have seized this game (public): they left the game. design §5.3, §7.7 */
+  readonly seized: number;
   /** This round's event card, if one was flipped (cleared when the round resolves). design §10 */
   readonly card: ActiveCard | null;
   /** Every card flipped so far this game, in order (public); every flip draws from the full deck. design §10 */
@@ -222,7 +215,5 @@ export interface GameState {
   readonly pendingShakedown: PendingShakedown | null;
   /** The shop's perks (public), dealt at setup. extension.md "Tokens and the perk shop" */
   readonly shop: readonly PerkId[];
-  /** Hidden police schedule; null when no Mole could be in the game (or the game is over). */
-  readonly police: PoliceState | null;
   readonly log: readonly GameEvent[];
 }

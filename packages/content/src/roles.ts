@@ -27,20 +27,19 @@ export type RolePower =
    */
   | { readonly kind: "bless"; readonly perAct: number }
   /**
-   * Fixer: once per game, automatically, a raid stops with Heat at `stopAt`;
-   * the Fixer loses `lossShare` of its stash (rounded, halves up). design §7, §8 (v2 §2)
+   * Fixer: once per game, a move may tear the tape off a taped-off room, which
+   * reopens from the next round with its bell at 0. design §5.3, §11.1
    */
-  | { readonly kind: "fixer"; readonly stopAt: number; readonly lossShare: number }
+  | { readonly kind: "reopen" }
   /**
-   * Mole: `perAct` times per stretch, any time, tip off the cops. The tip-off
-   * is queued and lands at the next hidden police moment as public "police
-   * activity" (`POLICE_ACTIVITY.heat`), the same as a background patrol.
-   * extension.md "Police activity"
+   * Mole: `perAct` times per stretch, a move may ring any open room once
+   * except the Rooftop (a police tip-off); it lights a bulb like any ring.
+   * design §5.2, §11.1
    */
-  | { readonly kind: "tipOff"; readonly perAct: number; readonly perGame: number };
+  | { readonly kind: "ring"; readonly perAct: number };
 
-/** Why a heist failed: Heat reached 100, or the final target was missed. design §3 */
-export type FailureReason = "heat" | "target";
+/** Why a heist failed: a bust (Wanted 3, design §5.5), or the final target was missed. */
+export type FailureReason = "bust" | "target";
 
 /**
  * How selfish a power is: it describes, never changes a rule (no teams).
@@ -65,12 +64,8 @@ export type TokenTrigger =
   | "wonDirtyShakedown"
   /** A player it blessed is shaken down clean (Priest). */
   | "blessedShakenClean"
-  /** Its power stopped a raid (Fixer). */
-  | "raidStopped"
   /** Its camera loop hid, from a watcher of that room, a visitor who pocketed (Hacker). */
-  | "loopHidPocketer"
-  /** Each of its tip-offs, when it lands (Mole, owner ruling 4). */
-  | "tipOffLanded";
+  | "loopHidPocketer";
 
 /** A role's reward: `count` tokens each time `on` happens (1, extension.md). design §8.3 */
 export interface TokenReward {
@@ -135,20 +130,7 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     rewards: token("blessedShakenClean"),
     minPlayers: 5,
   },
-  fixer: {
-    id: "fixer",
-    name: "Fixer",
-    power: { kind: "fixer", stopAt: 95, lossShare: 0.25 },
-    ...TEAM,
-    rewards: token("raidStopped"),
-  },
-  mole: {
-    id: "mole",
-    name: "Mole",
-    // extension.md owner ruling 4: at most 3 tip-offs (so tokens) a game, Recharge included.
-    power: { kind: "tipOff", perAct: 1, perGame: 3 },
-    tag: "loneWolf",
-    winsOn: ["heat", "target"],
-    rewards: token("tipOffLanded"),
-  },
+  fixer: { id: "fixer", name: "Fixer", power: { kind: "reopen" }, ...TEAM },
+  // On a bust only the Rooftop wins, whatever the role (design §5.5), so the Mole's ★ ending is the missed target.
+  mole: { id: "mole", name: "Mole", power: { kind: "ring", perAct: 1 }, tag: "loneWolf", winsOn: ["target"] },
 };

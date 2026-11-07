@@ -39,12 +39,10 @@ type ExpectedVisibility = {
   roomSighting: "private";
   roomWatched: "private";
   roundResolved: "public";
-  copsRaided: "public";
-  raidStopped: "public";
-  policeActivity: "public"; // extension.md "Police activity": "police activity +4", the same either way
-  policeScheduled: "reveal"; // extension.md "Police activity": the hidden moments, never shown in play
-  policeCause: "reveal"; // extension.md "Police activity": patrol vs tip-off, told apart only in the reveal
-  tipOffLanded: "private"; // extension.md "Police activity": only the Mole learns the tip-off landed
+  bellsRung: "public"; // design §5.1: every bell is public
+  roomRaided: "public"; // design §5.3, §5.4: raids and Wanted are public, never who was inside
+  bellsCooled: "public"; // design §5.6
+  roomReopened: "public"; // design §11.1: "a taped-off room is suddenly open again", no name
   blessingPaid: "public";
   eventFlipped: "public"; // design §10: the card is shown to everyone
   insideTip: "private"; // design §10: private to the recipient

@@ -84,7 +84,7 @@ describe("a successful heist — design §3, §8", () => {
 
   it("the heist succeeds after the final meeting and the top score wins, whatever the role (extension.md \"How you win\")", () => {
     const s = fullGame();
-    expect([s.haul, s.heat]).toEqual([73, 36]);
+    expect(s.haul).toBe(73);
     expect(outcome(s)).toEqual({
       result: "success",
       ranking: [
@@ -148,34 +148,6 @@ describe("tie-breaks — design §3", () => {
 });
 
 describe("a failed heist — design §3, §19.1", () => {
-  it("a Heat raid after a round: ranked with that round's splits, nobody wins", () => {
-    let s = { ...game(3), heat: 89 };
-    s = run(s, mv("p0", "vault", 3), mv("p1", "lobby", 1), mv("p2", "lobby"), ROUND); // +4 baseline, +20 ÷ 3 Vault: round(10.67) = 11 → 100
-    expect(s.log.slice(-2).map((e) => e.type)).toEqual(["copsRaided", "gameEnded"]);
-    const o = outcome(s);
-    expect(o).toMatchObject({ result: "failed", reason: "heat", winners: [] });
-    // "Best of the losers" ranking, shown as a loss (provisional).
-    expect(o.ranking.map((e) => [e.player, e.score, e.stash, e.totalHandedIn])).toEqual([
-      ["p0", 3, 3, 3],
-      ["p1", 1, 1, 1],
-      ["p2", 0, 0, 2],
-    ]);
-  });
-
-  it("a raid from the missed-checkpoint penalty is ranked after the meeting's shakedown", () => {
-    let s = { ...game(3), heat: 80 };
-    for (let i = 0; i < 3; i++) s = run(s, mv("p0", "lobby", 2), mv("p1", "lobby"), mv("p2", "lobby"), ROUND); // p1 and p2 hand in the Lobby's 2: Haul 12 of 18, Heat 92
-    s = run(s, sched(1), OPEN, vote("p0", "p1"), vote("p2", "p1"), CLOSE, RESOLVE); // p1 is clean: paid 8 from the Haul (12 → 4), checkpoint missed
-    expect(s.log.slice(-3).map((e) => e.type)).toEqual(["checkpointChecked", "copsRaided", "gameEnded"]);
-    const o = outcome(s);
-    expect(o).toMatchObject({ result: "failed", reason: "heat", winners: [] });
-    expect(o.ranking.map((e) => [e.player, e.score, e.timesShakenDown])).toEqual([
-      ["p1", 8, 1],
-      ["p0", 6, 0],
-      ["p2", 0, 0],
-    ]);
-  });
-
   it("missing the final target fails the heist; the ranking is kept, nobody wins", () => {
     let s = game(3);
     for (let round = 1; round <= 9; round++) {
@@ -201,25 +173,23 @@ describe("one crew: the top group wins (extension.md \"How you win\", Build note
   });
 
   it("failure: only a top-group member whose role wins that ending; a failure-winner outside the top group doesn't win", () => {
-    expect(outcomeFor(state(2, 12), "heat").winners).toEqual(["p0"]);
     expect(outcomeFor(state(2, 12), "target").winners).toEqual(["p0"]);
-    expect(outcomeFor(state(9), "heat").winners).toEqual([]);
     expect(outcomeFor(state(9), "target").winners).toEqual([]);
   });
 
   it("the full ranking is kept on a loss", () => {
-    const o = outcomeFor(state(9), "heat");
+    const o = outcomeFor(state(9), "target");
     expect(o.ranking.map((e) => e.player)).toEqual(["p1", "p2", "p0"]);
   });
 
   it("a tied top group: on success all win; on failure only those whose role wins it", () => {
     const s = withPlayers(game(4, ["mole", "lookout", "rookie", "hacker"]), 0, { p0: { stash: 6 }, p1: { stash: 6 }, p2: { stash: 5 }, p3: { stash: 6 } });
     expect(outcomeFor(s, null).winners).toEqual(["p0", "p1", "p3"]);
-    expect(outcomeFor(s, "heat").winners).toEqual(["p0"]);
+    expect(outcomeFor(s, "target").winners).toEqual(["p0"]);
   });
 
   it("tie-breaks come first: a failure-winner behind on shakedowns is out of the top group", () => {
     const s = withPlayers(game(3, ["mole", "lookout"]), 0, { p0: { stash: 6, timesShakenDown: 1 }, p1: { stash: 6 } });
-    expect(outcomeFor(s, "heat").winners).toEqual([]);
+    expect(outcomeFor(s, "target").winners).toEqual([]);
   });
 });

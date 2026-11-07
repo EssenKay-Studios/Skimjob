@@ -1,5 +1,5 @@
-// Room definitions: how many coins each room offers, how it moves Heat, and
-// what it tells its visitors. Data only; the engine applies it. design §3.1
+// Room definitions: how many coins each room offers, how loud they are, and
+// what it tells its visitors. Data only; the engine applies it. design §3.1, §5.2
 import type { RoomId } from "./index";
 
 /** What a room tells its visitors, beyond who else was there (everyone gets that). design §3.4 */
@@ -17,9 +17,17 @@ export interface RoomDef {
    */
   readonly coins: number;
   /**
-   * Heat per round × (this room's visitors ÷ crew size). Negative removes Heat
-   * (Rooftop). 0 for rooms that don't move Heat. R6 Heat, until bells (S3a.2).
+   * The room's noise: each visitor's first `quietCoins` coins are silent, and
+   * every coin after them rings once (lights one bulb of the room's bell)
+   * [tunable]. The Lobby's one coin is silent; the Office's first coin is.
+   * design §3.1, §5.2
    */
-  readonly heatPressure: number;
+  readonly quietCoins: number;
+  /**
+   * The Rooftop: lying low there cools the hottest bell (design §5.6), it is
+   * the only escape on a bust (§5.5), and nothing can ring it, so it is never
+   * raided (§5.5, §11.1).
+   */
+  readonly lieLow: boolean;
   readonly info: RoomInfo;
 }

@@ -1,17 +1,16 @@
 // Powers used with `useAbility` outside a move (docs/roles-v2.md §2): the
-// Auditor's, Detective's and Priest's, and the Mole's tip-off; the Fixer's
-// save, the Priest's shakedown hook, and every role's tokens.
+// Auditor's, Detective's and Priest's; the Priest's shakedown hook, and every
+// role's tokens.
 // design §8, §8.3; extension.md "Roles", "Tokens and the perk shop"
 //
 // The powers are answered with a private `abilityResolved`. Every reward is one
 // private `tokenEarned`, emitted where its trigger happens: after a round
 // resolves (round.ts), after a checkpoint is made (`checkpointRewards`),
-// after a shakedown (`dirtyShakedownRewards`, `blessingEvents`), when a raid
-// is stopped (`stopRaid`), and when a tip-off lands (police.ts).
+// after a shakedown (`dirtyShakedownRewards`, `blessingEvents`).
 import type { RolePower, TokenTrigger } from "@skimjob/content";
 import type { ActNumber, GameEvent, GameState, PlayerId, PlayerState } from "./types";
 import { PUBLIC, privateTo } from "./types";
-import { jobFor, powerOf, roleDefIn, rolesFor } from "./overrides";
+import { jobFor, roleDefIn, rolesFor } from "./overrides";
 import { actOfRound } from "./acts";
 import { isObject, show } from "./check";
 
@@ -104,23 +103,9 @@ function bless(state: GameState, player: PlayerState, perAct: number, raw: Recor
   return [{ type: "abilityResolved", visibility: privateTo(player.id), player: player.id, round: state.round, ability: { kind: "bless", target, act } }];
 }
 
-/**
- * Mole: once between meetings, any time, tip off the cops. The use counts at
- * once and joins the police queue (folded); it lands at the next free hidden
- * police moment (police.ts). extension.md "Police activity"
- */
-function tipOff(state: GameState, player: PlayerState, perAct: number, perGame: number): Result {
-  if (!state.police) return "there is no police activity in this game";
-  // extension.md owner ruling 4: at most 3 a game, even with Recharge.
-  if ((state.police.tipOffs[player.id] ?? 0) >= perGame) return `you have already tipped off the cops ${perGame} times this game`;
-  if (player.roleState.usedThisAct >= perAct) return "you have already tipped off the cops since the last meeting";
-  return [{ type: "abilityResolved", visibility: privateTo(player.id), player: player.id, round: state.round, ability: { kind: "tipOff" } }];
-}
-
-/** `useAbility` with the Auditor's, Detective's, Priest's or Mole's power, or null if `power` is none of them. */
+/** `useAbility` with the Auditor's, Detective's or Priest's power, or null if `power` is none of them. */
 export function useCrewPower(state: GameState, player: PlayerState, power: RolePower, raw: unknown): Result | null {
   if (!isObject(raw) || raw.kind !== power.kind) return null;
-  if (power.kind === "tipOff") return tipOff(state, player, power.perAct, power.perGame);
   if (power.kind === "audit") return audit(state, player, power.perAct, raw);
   if (power.kind === "checkStash") return checkStash(state, player, power.perAct, raw);
   if (power.kind === "bless") return bless(state, player, power.perAct, raw);
@@ -183,26 +168,4 @@ export function blessingEvents(state: GameState, meetingId: string, target: Play
   if (priests.length === 0) return [];
   const paid: GameEvent[] = compensation > 0 ? [{ type: "blessingPaid", visibility: PUBLIC, meetingId, target, amount: compensation }] : [];
   return [...paid, ...grantRewards(state, "blessedShakenClean", (p) => priests.includes(p.id))];
-}
-
-/**
- * Fixer (v2 §2): Heat has reached the max in `round`. The first Fixer in seat
- * order with its once-per-game save left stops the raid: Heat goes to its
- * `stopAt` (public `raidStopped`, without a name), it loses `lossShare` of its
- * stash (rounded, halves up; private) and earns a token. [] if there is none.
- * It stops any raid, at any moment (extension.md gap-fills "Fixer").
- */
-export function stopRaid(now: GameState, round: number): GameEvent[] {
-  for (const id of now.playerOrder) {
-    const player = now.players[id] as PlayerState;
-    const power = powerOf(now.config, player.role);
-    if (power.kind !== "fixer" || player.roleState.usedThisGame >= 1) continue;
-    const lost = Math.min(player.stash, Math.round(player.stash * power.lossShare));
-    return [
-      { type: "abilityResolved", visibility: privateTo(id), player: id, round, ability: { kind: "fixer", lost } },
-      { type: "raidStopped", visibility: PUBLIC, round, heat: Math.min(power.stopAt, jobFor(now.config).heat.max - 1) },
-      ...grantRewards(now, "raidStopped", (p) => p.id === id),
-    ];
-  }
-  return [];
 }

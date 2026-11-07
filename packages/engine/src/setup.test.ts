@@ -1,7 +1,7 @@
 // Deterministic setup: rooms by player count, dealing roles, RNG on replay.
 // design §6.2, §8.1, §16, §17.2
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { BALANCED_MIX, MOLE_ROLE, ROLES, STANDARD_ROLES, STARTER_ROLES } from "@skimjob/content";
+import { BALANCED_MIX, ROLES, STANDARD_ROLES, STARTER_ROLES } from "@skimjob/content";
 import type { GameConfig, GameEvent } from "./types";
 import { canSee } from "./types";
 import { createGame, dealRoles, deckFor, roomsFor, setupEvents, validateConfig } from "./setup";
@@ -82,7 +82,6 @@ describe("dealing roles — design §8.1", () => {
     for (let s = 0; s < 20; s++) {
       for (const deal of ["balanced", "random"] as const) {
         const roles = rolesOf(config(12, { seed: `rep-${s}`, deal, uniqueRoles: false }));
-        expect(roles.filter((r) => r === MOLE_ROLE).length).toBeLessThanOrEqual(1);
         expect(roles.filter((r) => r === "mole").length).toBeLessThanOrEqual(1);
         if (new Set(roles.filter((r) => r !== "rookie")).size < roles.filter((r) => r !== "rookie").length) repeated = true;
       }
@@ -138,7 +137,7 @@ describe("dealing roles — design §8.1", () => {
     for (let s = 0; s < 200; s++) {
       const roles = rolesOf(config(8, { seed: `rnd-${s}`, deal: "random", deck: "everything" }));
       loneCounts.add(countTag(roles, "loneWolf"));
-      expect(roles.filter((r) => r === MOLE_ROLE).length).toBeLessThanOrEqual(1);
+      expect(roles.filter((r) => r === "mole").length).toBeLessThanOrEqual(1);
     }
     expect(loneCounts).toEqual(new Set([0, 1]));
   });

@@ -5,6 +5,7 @@
 // bells in S3a.2; here the coins actually grabbed are pinned in `coinsGrabbed`,
 // which is what the rings will read.
 import { BANK_JOB, MAX_PLAYERS, MIN_PLAYERS, type RoomId } from "@skimjob/content";
+import { NO_RAIDS } from "./v01-numbers.testkit";
 import { describe, expect, it } from "vitest";
 import { handleThroughAlibis } from "./alibis.testkit";
 import type { Command, GameConfig, GameEvent, GameState, PlayerId, PlayerView } from "./types";
@@ -29,7 +30,8 @@ function config(players: number, contentOverrides: Overrides = null, extra: Part
     rolePool: ["rookie"],
     eventsEnabled: false,
     voteVisibility: "open",
-    contentOverrides,
+    // Bells too big to raid: these scripts test coins and the bank (rings and raids: bells.test.ts).
+    contentOverrides: { ...NO_RAIDS, ...contentOverrides },
     ...extra,
   };
 }

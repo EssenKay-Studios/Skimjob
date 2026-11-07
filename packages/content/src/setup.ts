@@ -19,9 +19,6 @@ export const ROUNDS_PER_ACT = 3;
 /** The powerless role. Fills any seat the deck can't cover. design §8 */
 export const FILLER_ROLE: RoleId = "rookie";
 
-/** The Mole: background police activity runs only when one could be in the game. extension.md "Police activity" */
-export const MOLE_ROLE: RoleId = "mole";
-
 /** A deck preset. extension.md "Decks" */
 export type DeckId = "starter" | "standard" | "everything";
 

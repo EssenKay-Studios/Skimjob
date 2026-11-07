@@ -27,24 +27,6 @@ const SETUP: GameEvent[] = [dealt("p0", "mole"), dealt("p1", "hacker"), dealt("p
 const success = (ranking: RankEntry[]): Outcome => ({ result: "success", ranking, winners: [ranking[0]?.player ?? ""] });
 
 describe("reveal summary — design §13", () => {
-  it("tells a police patrol from a Mole's tip-off (extension.md \"Police activity\")", () => {
-    const log: GameEvent[] = [
-      ...SETUP,
-      started(1),
-      { type: "abilityResolved", visibility: privateTo("p0"), player: "p0", round: 1, ability: { kind: "tipOff" } },
-      { type: "policeActivity", visibility: PUBLIC, round: 1, heatAdded: 8, heat: 30 },
-      { type: "policeCause", visibility: REVEAL, round: 1, cause: "patrol", mole: null },
-      { type: "policeActivity", visibility: PUBLIC, round: 1, heatAdded: 8, heat: 38 },
-      { type: "policeCause", visibility: REVEAL, round: 1, cause: "tipOff", mole: "p0" },
-      { type: "tipOffLanded", visibility: privateTo("p0"), player: "p0", round: 1 },
-    ];
-    const s = revealSummary(log, success([rank("p0", "mole", 0)]), TABLES);
-    const police = s.rounds[0]?.items.filter((i) => i.kind === "police");
-    expect(police).toEqual([
-      { kind: "police", heatAdded: 8, heat: 30, cause: "patrol", mole: null },
-      { kind: "police", heatAdded: 8, heat: 38, cause: "tipOff", mole: "p0" },
-    ]);
-  });
 
   it("shows who looped a feed that read \"camera offline\" (extension.md \"Situations\")", () => {
     const watched = (round: number): GameEvent => ({ type: "roomWatched", visibility: privateTo("p2"), player: "p2", round, source: "security", room: "vault", seen: [], offline: true });
@@ -68,7 +50,7 @@ describe("reveal summary — design §13", () => {
       started(2),
       { type: "roleClaimed", visibility: PUBLIC, player: "p0", role: "rookie", act: 1 },
     ];
-    const outcome: Outcome = { result: "failed", reason: "heat", ranking: [rank("p0", "mole", 9), rank("p1", "rookie", 3)], winners: ["p0"] };
+    const outcome: Outcome = { result: "failed", reason: "target", ranking: [rank("p0", "mole", 9), rank("p1", "rookie", 3)], winners: ["p0"] };
     const s = revealSummary(log, outcome, TABLES);
     expect(s.seats.map((x) => [x.player, x.dealtRole, x.role, x.winsOn, x.winner])).toEqual([
       ["p0", "mole", "mole", ROLES.mole?.winsOn, true],
@@ -76,7 +58,7 @@ describe("reveal summary — design §13", () => {
     ]);
     const items = s.rounds[0]?.items ?? [];
     expect(items).toContainEqual({ kind: "claim", player: "p0", claimed: "rookie", real: "mole" });
-    expect(s.ending).toEqual({ result: "failed", reason: "heat", topGroup: ["p0"], winners: ["p0"], why: "failedTopWins" });
+    expect(s.ending).toEqual({ result: "failed", reason: "target", topGroup: ["p0"], winners: ["p0"], why: "failedTopWins" });
   });
 
   it("says who won and why: the top group on a success, ★ roles or nobody on a failure (extension.md \"Winning and losing\")", () => {

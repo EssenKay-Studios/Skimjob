@@ -60,26 +60,23 @@ export interface GameConfig {
   readonly contentOverrides?: ContentOverrides | null;
 }
 
-/** New numbers for one room. `coins` only for coin rooms (1 or more). design §3.1 */
+/** New numbers for one coin room: `coins` (1 or more) and `quietCoins`. design §3.1, §5.2 */
 export interface RoomOverride {
   readonly coins?: number;
-  readonly heatPressure?: number;
+  readonly quietCoins?: number;
 }
 
 /**
  * New numbers for one role. A role may only set its own power's numbers
- * (`extraRooms`, `perAct`, `weight`, `perGame`, …) and, for a role with a
+ * (`extraRooms`, `perAct`, `weight`, …) and, for a role with a
  * reward, `rewardCount` (tokens per trigger). design §8, §8.3
  */
 export interface RoleOverride {
   readonly extraRooms?: number;
   readonly perAct?: number;
   readonly weight?: number;
-  readonly perGame?: number;
   /** Tokens each reward trigger grants. design §8.3 */
   readonly rewardCount?: number;
-  /** Fixer's raid stop (v2 §2). design §8 */
-  readonly stopAt?: number;
 }
 
 /** Every field is optional; whatever is left out keeps the content value. design §17.4 */
@@ -87,11 +84,10 @@ export interface ContentOverrides {
   readonly rooms?: Readonly<Record<RoomId, RoomOverride>>;
   /** design §6.1 */
   readonly bank?: { readonly coinsPerPlayer?: number };
-  readonly heat?: { readonly max?: number; readonly perRound?: number; readonly missedCheckpoint?: number };
+  /** Bells, tape and Wanted. design §5 */
+  readonly alarm?: { readonly bulbs?: number; readonly tapedRounds?: number; readonly bustStars?: number };
   readonly checkpoints?: { readonly perPlayer?: readonly [number, number, number] };
   readonly shakedown?: { readonly cleanBelow?: number; readonly payout?: number };
-  /** Background police activity (extension.md "Police activity"). */
-  readonly police?: { readonly chancePercent?: number; readonly heat?: number };
   /** Shop costs (extension.md "Tokens and the perk shop"). */
   readonly perks?: Readonly<Partial<Record<PerkId, { readonly cost?: number }>>>;
   readonly roles?: Readonly<Record<RoleId, RoleOverride>>;
@@ -101,9 +97,8 @@ export interface ContentOverrides {
 
 /**
  * New numbers for one event card. A card may only set its own effect's
- * numbers: `extraCoins` and `heatMultiplier` (Shift change). design §13
+ * numbers: `extraCoins` (Shift change). design §13
  */
 export interface EventOverride {
   readonly extraCoins?: number;
-  readonly heatMultiplier?: number;
 }

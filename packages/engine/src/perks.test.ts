@@ -3,6 +3,7 @@
 // from the test-only `grantPerks` hook (a free `perkBought`); buying is in
 // extension.test.ts.
 import { describe, expect, it } from "vitest";
+import { NO_RAIDS } from "./v01-numbers.testkit";
 import { EVENT_DECK, PERK_RULES, ROLES, type PerkId } from "@skimjob/content";
 import type { GameConfig, GameEvent, GameState, PlayerState } from "./types";
 import { PUBLIC, privateTo } from "./types";
@@ -21,6 +22,8 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
     rolePool: ["rookie", "lookout", "hacker"], // a window only if the shop holds a Shield
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
+    // Bells too big to raid: these scripts test the perks (bells and raids: bells.test.ts).
+    contentOverrides: NO_RAIDS,
     ...extra,
   };
 }

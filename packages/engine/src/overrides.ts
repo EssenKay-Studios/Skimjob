@@ -4,8 +4,8 @@
 // Numbers only: an override can't add or remove rooms, roles or tiers, so the
 // rules code never meets a shape it doesn't know. Configs are untrusted JSON,
 // so `validateOverrides` checks every field (own keys only, known keys only,
-// finite numbers, whole numbers where the engine counts coins or Heat).
-import { EVENTS, PERKS, POLICE_ACTIVITY, ROLES, type EventDef, type EventEffect, type FailureReason, type JobDef, type JobId, type PerkId, type RoleDef, type RoleId, type RolePower, type RoomDef, type Temperament } from "@skimjob/content";
+// whole numbers: the engine counts coins, rounds, bulbs and stars).
+import { EVENTS, PERKS, ROLES, type EventDef, type EventEffect, type FailureReason, type JobDef, type JobId, type PerkId, type RoleDef, type RoleId, type RolePower, type RoomDef, type Temperament } from "@skimjob/content";
 import type { ContentOverrides, EventOverride, GameConfig, RoleOverride, RoomOverride } from "./types";
 import { isObject } from "./check";
 import { jobById } from "./job";
@@ -13,16 +13,10 @@ import { jobById } from "./job";
 export type RoleTable = Readonly<Record<RoleId, RoleDef>>;
 
 type Rule = (v: unknown) => boolean;
-const finite: Rule = (v) => typeof v === "number" && Number.isFinite(v);
-const atLeast0: Rule = (v) => finite(v) && (v as number) >= 0;
-const integer: Rule = (v) => typeof v === "number" && Number.isInteger(v);
 const count: Rule = (v) => typeof v === "number" && Number.isInteger(v) && v >= 0;
 const positiveCount: Rule = (v) => count(v) && (v as number) >= 1;
 
 const RULE_TEXT = new Map<Rule, string>([
-  [finite, "a finite number"],
-  [atLeast0, "a number, 0 or more"],
-  [integer, "a whole number"],
   [count, "a whole number, 0 or more"],
   [positiveCount, "a whole number, 1 or more"],
 ]);
@@ -42,9 +36,9 @@ function checkFields(raw: unknown, path: string, fields: Readonly<Record<string,
 }
 
 // A coin room keeps at least 1 coin, so a move there can always grab one (design §3.2, §3.3);
-// Security and the Rooftop grab nothing, so their 0 isn't overridable.
-const COIN_ROOM_FIELDS = { coins: positiveCount, heatPressure: finite } as const;
-const NO_COIN_ROOM_FIELDS = { heatPressure: finite } as const;
+// Security and the Rooftop grab nothing, so their 0 (and their noise) isn't overridable.
+const COIN_ROOM_FIELDS = { coins: positiveCount, quietCoins: count } as const;
+const NO_COIN_ROOM_FIELDS = {} as const;
 
 /** The numbers each power may have overridden: all of its own, never another role's. design §8 */
 const POWER_FIELDS: { readonly [K in RolePower["kind"]]: Readonly<Record<string, Rule>> } = {
@@ -54,14 +48,14 @@ const POWER_FIELDS: { readonly [K in RolePower["kind"]]: Readonly<Record<string,
   voteWeight: { weight: positiveCount },
   audit: { perAct: positiveCount },
   checkStash: { perAct: positiveCount },
-  tipOff: { perAct: positiveCount, perGame: positiveCount },
+  ring: { perAct: positiveCount },
   bless: { perAct: positiveCount },
-  fixer: { stopAt: count },
+  reopen: {},
 };
 
 /** The numbers each event effect may have overridden: its own only. design §10 */
 const EFFECT_FIELDS: { readonly [K in EventEffect["kind"]]: Readonly<Record<string, Rule>> } = {
-  roomSurge: { extraCoins: count, heatMultiplier: atLeast0 },
+  roomSurge: { extraCoins: count },
   lockdown: {},
   audit: {},
   insideTip: {},
@@ -77,7 +71,7 @@ export function validateOverrides(raw: unknown, job: JobDef, roles: RoleTable = 
   if (raw === undefined || raw === null) return [];
   const errors: string[] = [];
   if (!isObject(raw)) return ["contentOverrides must be an object"];
-  const known = ["rooms", "bank", "heat", "checkpoints", "shakedown", "police", "perks", "roles", "events"];
+  const known = ["rooms", "bank", "alarm", "checkpoints", "shakedown", "perks", "roles", "events"];
   for (const key of Object.keys(raw)) if (!known.includes(key)) errors.push(`contentOverrides.${key} is not an overridable section`);
 
   if (raw.rooms !== undefined) {
@@ -96,16 +90,11 @@ export function validateOverrides(raw: unknown, job: JobDef, roles: RoleTable = 
   if (raw.bank !== undefined) {
     checkFields(raw.bank, "contentOverrides.bank", { coinsPerPlayer: positiveCount }, errors);
   }
-  if (raw.heat !== undefined) {
-    checkFields(raw.heat, "contentOverrides.heat", { max: positiveCount, perRound: finite, missedCheckpoint: count }, errors);
+  if (raw.alarm !== undefined) {
+    checkFields(raw.alarm, "contentOverrides.alarm", { bulbs: positiveCount, tapedRounds: positiveCount, bustStars: positiveCount }, errors);
   }
   if (raw.shakedown !== undefined) {
     checkFields(raw.shakedown, "contentOverrides.shakedown", { cleanBelow: count, payout: count }, errors);
-  }
-  if (raw.police !== undefined) {
-    const percent: Rule = (v) => count(v) && (v as number) <= 100;
-    RULE_TEXT.set(percent, "a whole number from 0 to 100");
-    checkFields(raw.police, "contentOverrides.police", { chancePercent: percent, heat: count }, errors);
   }
   if (raw.perks !== undefined) {
     if (!isObject(raw.perks)) errors.push("contentOverrides.perks must be an object");
@@ -187,14 +176,14 @@ export function overrideJob(job: JobDef, overrides: ContentOverrides | null | un
     rooms[id] = {
       ...def,
       ...(o.coins !== undefined && { coins: o.coins }),
-      ...(o.heatPressure !== undefined && { heatPressure: o.heatPressure }),
+      ...(o.quietCoins !== undefined && { quietCoins: o.quietCoins }),
     };
   }
   return {
     ...job,
     rooms,
     bank: { ...job.bank, ...overrides.bank },
-    heat: { ...job.heat, ...overrides.heat },
+    alarm: { ...job.alarm, ...overrides.alarm },
     checkpoints: overrides.checkpoints?.perPlayer ? { perPlayer: overrides.checkpoints.perPlayer } : job.checkpoints,
     shakedown: { ...job.shakedown, ...overrides.shakedown },
   };
@@ -258,12 +247,6 @@ export function tagIn(roles: RoleTable, role: RoleId): Temperament {
 
 /** Whether `role` also wins the failure `reason` (from the top group). extension.md "Winning and losing" */
 export const winsOn = (roles: RoleTable, role: RoleId, reason: FailureReason): boolean => roleDefIn(roles, role)?.winsOn.includes(reason) ?? false;
-
-/** Background police activity's numbers in this game. extension.md "Police activity" */
-export function policeFor(config: Pick<GameConfig, "contentOverrides">): { readonly [K in keyof typeof POLICE_ACTIVITY]: number } {
-  const o = config.contentOverrides?.police;
-  return o ? { ...POLICE_ACTIVITY, ...o } : POLICE_ACTIVITY;
-}
 
 /** What `perk` costs in the shop in this game. extension.md "Tokens and the perk shop" */
 export function perkCost(config: Pick<GameConfig, "contentOverrides">, perk: PerkId): number {

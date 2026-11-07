@@ -10,6 +10,7 @@ import type { GameConfig, GameEvent, GameState, Outcome, PlayerState } from "./t
 import { setupEvents } from "./setup";
 import { replay } from "./reduce";
 import { handleCommand } from "./handle";
+import { jobFor } from "./overrides";
 import { V01_NUMBERS } from "./v01-numbers.testkit";
 import { outcomeFor, ranking } from "./end";
 import { fullGrab } from "./grab.testkit";
@@ -112,15 +113,15 @@ describe("12 players — design §3, §6.2, §8", () => {
     expect(replay(a.config, JSON.parse(JSON.stringify(a.log)) as GameEvent[])).toEqual(a);
   });
 
-  /** All 12 in the Vault: Heat +24 a round → 24, 48, 72, 96, 100 (raid in round 5). p0 pockets 1; p1 is the Priest. */
+  /** Wanted 2 and the Vault's bell one bulb short; all 12 grab there in round 4: a raid and a bust (design §5.5). p0 pockets 1; p1 is the Priest. */
   function raid12(): GameState {
     let s = game(12, ["rookie", "priest"]);
-    for (let round = 1; round <= 5; round++) {
-      for (let i = 0; i < 12; i++) s = run(s, mv(`p${i}`, "vault", i === 0 ? 1 : 0));
-      s = run(s, ROUND);
-      if (round === 3) s = run(s, sched(1), OPEN, CLOSE);
-    }
-    return s;
+    for (let round = 1; round <= 3; round++) s = run(s, ...Array.from({ length: 12 }, (_, i) => mv(`p${i}`, "lobby")), ROUND);
+    s = run(s, sched(1), OPEN, CLOSE);
+    const bulbs = jobFor(s.config).alarm.bulbs;
+    s = { ...s, wanted: 2, bells: { ...s.bells, vault: bulbs - 1 } };
+    for (let i = 0; i < 12; i++) s = run(s, mv(`p${i}`, "vault", i === 0 ? 1 : 0));
+    return run(s, ROUND);
   }
 
   it("nothing is accepted after the game ends, and the state is untouched", () => {
@@ -144,21 +145,6 @@ describe("12 players — design §3, §6.2, §8", () => {
     // Also after a replay of the finished log.
     expect(handleThroughAlibis(replay(s.config, s.log), mv("p0", "lobby"))).toEqual({ ok: false, reason: "the game is over" });
     expect(JSON.stringify(s)).toBe(before);
-  });
-});
-
-describe("3 players: a raid exactly at the checkpoint penalty — design §3, §7, §11.5", () => {
-  // All in the Lobby (+4 Heat a round); p0 pockets 1 in round 1, so the Haul is 17 of 18.
-  function act1(heat: number): GameState {
-    let s = { ...game(3, ["hacker", "rookie", "rookie"]), heat };
-    s = run(s, mv("p0", "lobby", 1), ROUND, ROUND, ROUND);
-    return run(s, sched(1), OPEN, CLOSE);
-  }
-
-  it("Heat 72 → 99: no raid, the game goes on to round 4", () => {
-    const s = act1(72);
-    expect([s.phase.kind, s.round, s.heat]).toEqual(["planning", 4, 99]);
-    expect(s.log.some((e) => e.type === "gameEnded")).toBe(false);
   });
 });
 
@@ -187,7 +173,7 @@ describe("tie-breaks at every level — design §3", () => {
   it("3 players fully tied: all win a success, none wins a failure", () => {
     const s = withPlayers(game(3), 0, { p0: { stash: 3, totalHandedIn: 2 }, p1: { stash: 3, totalHandedIn: 2 }, p2: { stash: 3, totalHandedIn: 2 } });
     expect(outcomeFor(s, null).winners).toEqual(["p0", "p1", "p2"]);
-    expect(outcomeFor(s, "heat").winners).toEqual([]);
     expect(outcomeFor(s, "target").winners).toEqual([]);
+    expect(outcomeFor(s, "bust").winners).toEqual([]);
   });
 });

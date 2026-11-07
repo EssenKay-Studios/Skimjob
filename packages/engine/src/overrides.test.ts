@@ -57,14 +57,13 @@ describe("validateOverrides — configs are untrusted JSON (design §17.4)", () 
     expect(errs({})).toEqual([]);
     expect(
       errs({
-        rooms: { vault: { coins: 7, heatPressure: 25.5 }, rooftop: { heatPressure: -10 } },
+        rooms: { vault: { coins: 7, quietCoins: 1 } },
         bank: { coinsPerPlayer: 20 },
-        heat: { max: 120, perRound: 3.5, missedCheckpoint: 10 },
+        alarm: { bulbs: 5, tapedRounds: 3, bustStars: 4 },
         checkpoints: { perPlayer: [5, 12, 20] },
         shakedown: { cleanBelow: 5, payout: 4 },
-        police: { chancePercent: 50, heat: 6 },
         perks: { peek: { cost: 3 } },
-        roles: { rookie: { rewardCount: 2 }, lookout: { extraRooms: 2 }, hacker: { perAct: 6 }, fixer: { stopAt: 90 } },
+        roles: { rookie: { rewardCount: 2 }, lookout: { extraRooms: 2 }, hacker: { perAct: 6 }, mole: { perAct: 2 } },
       }),
     ).toEqual([]);
   });
@@ -74,7 +73,10 @@ describe("validateOverrides — configs are untrusted JSON (design §17.4)", () 
     expect(errs([])).toEqual(["contentOverrides must be an object"]);
     expect(errs({ deck: {} })).toEqual(["contentOverrides.deck is not an overridable section"]);
     expect(errs({ rooms: [] })).toEqual(["contentOverrides.rooms must be an object"]);
-    expect(errs({ heat: "hot" })).toEqual(["contentOverrides.heat must be an object"]);
+    expect(errs({ alarm: "loud" })).toEqual(["contentOverrides.alarm must be an object"]);
+    // R6 Heat and police activity are gone (design §5).
+    expect(errs({ heat: {} })).toEqual(["contentOverrides.heat is not an overridable section"]);
+    expect(errs({ police: {} })).toEqual(["contentOverrides.police is not an overridable section"]);
   });
 
   it("rejects rooms the job doesn't have, including prototype keys from JSON.parse", () => {
@@ -90,21 +92,23 @@ describe("validateOverrides — configs are untrusted JSON (design §17.4)", () 
     expect(errs({ bank: { coinsPerPlayer: 0 } })).toEqual(["contentOverrides.bank.coinsPerPlayer must be a whole number, 1 or more"]);
     expect(errs({ bank: { coinsPerPlayer: 2.5 } })).toHaveLength(1);
     expect(errs({ bank: { perPlayer: 16 } })).toEqual(["contentOverrides.bank.perPlayer is not an overridable field"]);
-    expect(errs({ rooms: { vault: { heatPressure: Number.NaN } } })).toHaveLength(1);
-    expect(errs({ heat: { perRound: Number.POSITIVE_INFINITY } })).toHaveLength(1);
-    expect(errs({ heat: { max: 0 } })).toHaveLength(1);
+    expect(errs({ rooms: { vault: { quietCoins: Number.NaN } } })).toHaveLength(1);
+    expect(errs({ rooms: { vault: { quietCoins: -1 } } })).toHaveLength(1);
+    expect(errs({ alarm: { bulbs: Number.POSITIVE_INFINITY } })).toHaveLength(1);
+    expect(errs({ alarm: { bulbs: 0 } })).toEqual(["contentOverrides.alarm.bulbs must be a whole number, 1 or more"]);
+    expect(errs({ alarm: { tapedRounds: 0 } })).toHaveLength(1);
+    expect(errs({ alarm: { bustStars: 1.5 } })).toHaveLength(1);
     expect(errs({ shakedown: { payout: 1.5 } })).toHaveLength(1);
     // extension.md "One vote rule": no plurality numbers any more.
     expect(errs({ shakedown: { pluralityFromPlayers: 10 } })).toHaveLength(1);
-    expect(errs({ police: { chancePercent: 101 } })).toHaveLength(1);
     expect(errs({ perks: { peek: { cost: -1 } } })).toHaveLength(1);
     expect(errs({ perks: { jetpack: { cost: 1 } } })).toEqual(["contentOverrides.perks.jetpack: no such perk"]);
-    expect(errs({ roles: { fixer: { stopAt: -1 } } })).toHaveLength(1);
+    expect(errs({ roles: { mole: { perAct: 0 } } })).toHaveLength(1);
   });
 
   it("rejects unknown fields, so a typo isn't silently ignored", () => {
     expect(errs({ rooms: { vault: { lot: 7 } } })).toEqual(["contentOverrides.rooms.vault.lot is not an overridable field"]);
-    expect(errs({ heat: { perround: 3 } })).toHaveLength(1);
+    expect(errs({ alarm: { bulb: 3 } })).toHaveLength(1);
     expect(errs({ rooms: { vault: { name: "Big vault" } } })).toHaveLength(1);
     expect(errs({ checkpoints: { perAct: [1, 2, 3] } })).toHaveLength(1);
   });
@@ -119,37 +123,37 @@ describe("validateOverrides — configs are untrusted JSON (design §17.4)", () 
     expect(errs({ rooms: { lobby: { coins: 0 } } })).toEqual(["contentOverrides.rooms.lobby.coins must be a whole number, 1 or more"]);
     expect(errs({ rooms: { rooftop: { coins: 2 } } })).toEqual(["contentOverrides.rooms.rooftop.coins is not an overridable field"]);
     expect(errs({ rooms: { security: { coins: 0 } } })).toEqual(["contentOverrides.rooms.security.coins is not an overridable field"]);
+    expect(errs({ rooms: { rooftop: { quietCoins: 1 } } })).toEqual(["contentOverrides.rooms.rooftop.quietCoins is not an overridable field"]);
     expect(errs({ rooms: { depositBoxes: { capacity: { max: 2 } } } })).toEqual(["contentOverrides.rooms.depositBoxes.capacity is not an overridable field"]);
     expect(errs({ roles: { hacker: { extraRooms: 2 } } })).toEqual(["contentOverrides.roles.hacker.extraRooms is not an overridable field"]);
     expect(errs({ roles: { lookout: { perAct: 2 } } })).toHaveLength(1);
     expect(errs({ roles: { wizard: { rewardCount: 2 } } })).toEqual(["contentOverrides.roles.wizard: no such role"]);
-    // extension.md "Police activity": the tip-off's Heat is the police number, not the Mole's.
     expect(errs({ roles: { mole: { perAct: 2 } } })).toEqual([]);
-    expect(errs({ roles: { mole: { heat: 15 } } })).toEqual(["contentOverrides.roles.mole.heat is not an overridable field"]);
-    expect(errs({ roles: { fixer: { heat: 15 } } })).toEqual(["contentOverrides.roles.fixer.heat is not an overridable field"]);
+    expect(errs({ roles: { mole: { perGame: 3 } } })).toEqual(["contentOverrides.roles.mole.perGame is not an overridable field"]);
+    expect(errs({ roles: { fixer: { stopAt: 90 } } })).toEqual(["contentOverrides.roles.fixer.stopAt is not an overridable field"]);
   });
 
   it("event cards: each card tunes only its own effect's numbers (design §10, balance pass 2)", () => {
-    expect(errs({ events: { shiftChange: { extraCoins: 2, heatMultiplier: 2 } } })).toEqual([]);
+    expect(errs({ events: { shiftChange: { extraCoins: 2 } } })).toEqual([]);
     expect(errs({ events: { shiftChange: { lootMultiplier: 2 } } })).toEqual(["contentOverrides.events.shiftChange.lootMultiplier is not an overridable field"]);
     expect(errs({ events: { shiftChange: { extraCoins: 0.5 } } })).toHaveLength(1);
     expect(errs({ events: { shiftChange: { loss: 3 } } })).toEqual(["contentOverrides.events.shiftChange.loss is not an overridable field"]);
-    // extension.md "Police activity": Police patrol has left the deck.
+    // Police patrol has left the deck.
     expect(errs({ events: { policePatrol: { amount: 10 } } })).toEqual(["contentOverrides.events.policePatrol: no such event card"]);
     expect(errs({ events: { audit: { amount: 1 } } })).toHaveLength(1);
-    expect(errs({ events: { shiftChange: { heatMultiplier: "2" } } })).toHaveLength(1);
+    expect(errs({ events: { shiftChange: { heatMultiplier: 2 } } })).toEqual(["contentOverrides.events.shiftChange.heatMultiplier is not an overridable field"]);
     expect(errs({ events: { shiftChange: { extraCoins: Infinity } } })).toHaveLength(1);
     expect(errs({ events: { meteor: { amount: 1 } } })).toEqual(["contentOverrides.events.meteor: no such event card"]);
     expect(errs({ events: [] })).toHaveLength(1);
-    const tuned = overrideEvents(EVENTS, { events: { shiftChange: { heatMultiplier: 3 } } });
-    expect(tuned.shiftChange?.effect).toEqual({ kind: "roomSurge", room: "vault", extraCoins: 1, heatMultiplier: 3 });
+    const tuned = overrideEvents(EVENTS, { events: { shiftChange: { extraCoins: 3 } } });
+    expect(tuned.shiftChange?.effect).toEqual({ kind: "roomSurge", room: "vault", extraCoins: 3 });
     expect(tuned.audit).toBe(EVENTS.audit);
     expect(eventsFor({ contentOverrides: null })).toBe(EVENTS);
   });
 
   it("validateConfig reports override errors, and setupEvents refuses them", () => {
-    expect(validateConfig(config(4, { heat: { perRound: "4" } }))).toEqual(["contentOverrides.heat.perRound must be a finite number"]);
-    expect(validateConfig(config(4, { heat: { perRound: 5 } }))).toEqual([]);
+    expect(validateConfig(config(4, { alarm: { bulbs: "4" } } as never))).toEqual(["contentOverrides.alarm.bulbs must be a whole number, 1 or more"]);
+    expect(validateConfig(config(4, { alarm: { bulbs: 5 } }))).toEqual([]);
     expect(validateConfig(config(4, null))).toEqual([]);
     expect(() => setupEvents(config(4, { rooms: { moon: {} } }))).toThrow(/no such room/);
   });
@@ -158,11 +162,11 @@ describe("validateOverrides — configs are untrusted JSON (design §17.4)", () 
 describe("merging overrides (design §17.4)", () => {
   it("changes only the named numbers and never the shipped content", () => {
     const before = JSON.stringify([BANK_JOB, ROLES]);
-    const job = overrideJob(BANK_JOB, { rooms: { vault: { coins: 9 } }, bank: { coinsPerPlayer: 5 }, heat: { perRound: 2 } });
+    const job = overrideJob(BANK_JOB, { rooms: { vault: { coins: 9 } }, bank: { coinsPerPlayer: 5 }, alarm: { bustStars: 2 } });
     expect(job.rooms.vault).toEqual({ ...BANK_JOB.rooms.vault, coins: 9 });
     expect(job.rooms.office).toBe(BANK_JOB.rooms.office);
     expect(job.bank).toEqual({ coinsPerPlayer: 5 });
-    expect(job.heat).toEqual({ ...BANK_JOB.heat, perRound: 2 });
+    expect(job.alarm).toEqual({ ...BANK_JOB.alarm, bustStars: 2 });
     expect(job.checkpoints).toBe(BANK_JOB.checkpoints);
     const roles = overrideRoles(ROLES, { roles: { lookout: { extraRooms: 2, rewardCount: 3 } } });
     expect(roles.lookout?.power).toEqual({ kind: "lookout", extraRooms: 2 });
@@ -179,7 +183,7 @@ describe("merging overrides (design §17.4)", () => {
 
 describe("overrides in play (design §17.4)", () => {
   it("gameCreated is public and carries the content version and overrides", () => {
-    const overrides = { heat: { perRound: 7 } };
+    const overrides = { alarm: { bulbs: 7 } };
     const created = setupEvents(config(3, overrides))[0];
     expect(created).toMatchObject({ type: "gameCreated", visibility: { kind: "public" }, contentVersion: CONTENT_VERSION, contentOverrides: overrides });
     expect(setupEvents(config(3))[0]).toMatchObject({ contentOverrides: null });
@@ -188,20 +192,26 @@ describe("overrides in play (design §17.4)", () => {
     expect(viewFor(s, "p1").ledger[0]?.event).toMatchObject({ contentOverrides: overrides });
   });
 
-  it("room coins, the bank and Heat numbers change resolution (design §3.1, §6.1)", () => {
-    const s0 = game(config(3, { rooms: { vault: { coins: 9, heatPressure: 0 } }, bank: { coinsPerPlayer: 20 }, heat: { perRound: 10 } }));
+  it("room coins and noise, the bank and the alarm numbers change resolution (design §3.1, §5, §6.1)", () => {
+    const s0 = game(config(3, { rooms: { vault: { coins: 9, quietCoins: 9 } }, bank: { coinsPerPlayer: 20 }, alarm: { bulbs: 2 } }));
     expect(s0.bank).toBe(60);
     const s1 = after(s0, () => submit("p0", { room: "vault", duffel: 0, pocket: 9 }), () => submit("p1", { room: "vault", duffel: 9 }), () => submit("p2", { room: "vault", duffel: 9 }), ROUND);
     expect(s1.players.p0?.stash).toBe(9);
     expect(s1.haul).toBe(18);
     expect(s1.bank).toBe(60 - 27);
-    expect(s1.heat).toBe(10);
+    // A silent Vault: no ring, so no raid.
+    expect(s1.bells.vault).toBe(0);
+    expect(s1.wanted).toBe(0);
+    // Two Office grabs of 2 ring twice: a 2-bulb bell raids. design §5.3
+    const s2 = after(s1, () => submit("p0", { room: "office", duffel: 2 }), () => submit("p1", { room: "office", duffel: 2 }), ROUND);
+    expect(s2.taped).toEqual({ office: 4 });
+    expect(s2.wanted).toBe(1);
     // A grab above the overridden limit is refused, like the shipped one.
     expect(handleThroughAlibis(s1, submit("p0", { room: "vault", duffel: 0, pocket: 10 })).ok).toBe(false);
   });
 
-  it("checkpoint targets and the missed-checkpoint penalty change (design §11.5)", () => {
-    const s0 = game(config(3, { checkpoints: { perPlayer: [1, 2, 3] }, heat: { missedCheckpoint: 0 } }));
+  it("checkpoint targets change (design §11.5)", () => {
+    const s0 = game(config(3, { checkpoints: { perPlayer: [1, 2, 3] } }));
     let s = s0;
     for (let i = 0; i < 3; i++) s = after(s, () => submit("p0", { room: "lobby" }), () => submit("p1", { room: "lobby" }), () => submit("p2", { room: "lobby" }), ROUND);
     s = run(s, { type: "scheduleMeeting", act: 1, slot: "x" });

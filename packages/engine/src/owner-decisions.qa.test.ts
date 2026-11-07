@@ -9,7 +9,7 @@ import { createGame, setupEvents, validateConfig } from "./setup";
 import { replay } from "./reduce";
 import { handleCommand } from "./handle";
 import { meetingResult } from "./meeting";
-import { eventHeatScale, roundJob, scaledCardHeat } from "./deck";
+import { roundJob } from "./deck";
 import { viewFor } from "./view";
 import { V01_NUMBERS } from "./v01-numbers.testkit";
 import { fullGrab } from "./grab.testkit";
@@ -137,28 +137,10 @@ describe("QA dealing — design §8.1", () => {
   });
 });
 
-describe("QA event Heat scaling — design §10", () => {
-  it.each([
-    // Content 0.16.0 (r6-balance.md): Shift change Vault Heat ×2; R7 (design §13): +1 coin.
-    [2, 1.4],
-    [3, 1.6],
-    [4, 1.8],
-    [5, 2],
-    [12, 2],
-  ])("%ip: Shift change Vault Heat ×%f", (n, mult) => {
-    expect(eventHeatScale(n)).toBeLessThanOrEqual(1);
-    const base = BANK_JOB.rooms.vault!;
-    const vault = roundJob(BANK_JOB, { round: 2, id: "shiftChange", room: null } as never, EVENTS, n).rooms.vault!;
-    expect(vault.heatPressure).toBeCloseTo(base.heatPressure * mult, 9);
-    expect(vault.coins).toBe(base.coins + 1); // coins aren't scaled
-  });
-
-  it("rounding of odd amounts, negatives included (halves toward +∞)", () => {
-    expect(scaledCardHeat(7, 3)).toBe(4); // 4.2
-    expect(scaledCardHeat(-7, 3)).toBe(-4); // -4.2
-    expect(scaledCardHeat(-3, 2)).toBe(-1); // -1.2
-    expect(scaledCardHeat(-1, 2)).toBe(-0); // -0.4 rounds to -0
-    expect(scaledCardHeat(0, 3)).toBe(0);
+describe("QA Shift change — design §13", () => {
+  it("the Vault gives 1 extra coin and nothing else changes (no crew-size scaling)", () => {
+    const surged = roundJob(BANK_JOB, { round: 2, id: "shiftChange", room: null } as never, EVENTS);
+    expect(surged.rooms.vault).toEqual({ ...BANK_JOB.rooms.vault, coins: (BANK_JOB.rooms.vault?.coins ?? 0) + 1 });
   });
 });
 

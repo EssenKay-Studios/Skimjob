@@ -16,7 +16,6 @@ export * from "./deck";
 export * from "./claims";
 export * from "./evidence";
 export * from "./perks";
-export * from "./police";
 export * from "./handle";
 export * from "./view";
 export * from "./reveal";

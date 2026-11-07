@@ -51,7 +51,7 @@ describe("QA #55 reveal ending vs outcomeFor on ties — extension.md \"Winning 
 
   it("a ★ role just below the top wins nothing on a failure (failedNobody)", () => {
     const state = game(["rookie", "mole", "lookout", "auditor"], [9, 8, 2, 1]);
-    const outcome = outcomeFor(state, "heat");
+    const outcome = outcomeFor(state, "target");
     const s = revealSummary(state.log, outcome, TABLES);
     expect(s.ending).toMatchObject({ topGroup: ["p0"], winners: [], why: "failedNobody" });
     expect(s.seats.find((x) => x.player === "p1")).toMatchObject({ topGroup: false, winner: false, winsOn: ROLES.mole?.winsOn });

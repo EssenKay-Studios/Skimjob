@@ -1,13 +1,12 @@
 // Deterministic game setup: validate the config, pick rooms by player count,
-// deal one secret role per seat, deal the shop and draw the hidden police
-// schedule. design §6.2, §8.1, §15; extension.md "Decks", "Host settings",
-// "Tokens and the perk shop", Build notes "Tags, decks and dealing", "Police activity"
+// deal one secret role per seat and deal the shop. design §6.2, §8.1, §15;
+// extension.md "Decks", "Host settings", "Tokens and the perk shop", Build
+// notes "Tags, decks and dealing"
 //
 // Emits, in order: gameCreated (public, no seed), rngSeeded (reveal),
 // roomsSet (public), bankFilled (public), one roleDealt per seat in seat order (private),
 // roleListShown (public, unless the list is hidden), shopDealt (public),
-// policeScheduled (reveal) when police activity runs, roundStarted for
-// round 1 (public), and rngAdvanced (reveal) with the RNG state after setup. Nobody is told anyone
+// roundStarted for round 1 (public), and rngAdvanced (reveal) with the RNG state after setup. Nobody is told anyone
 // else's role (no automatic reveals).
 import {
   CONTENT_VERSION,
@@ -18,7 +17,6 @@ import {
   JOBS,
   MAX_PLAYERS,
   MIN_PLAYERS,
-  MOLE_ROLE,
   POOL_ROLES,
   RANDOM_DEAL_SINGLETONS,
   ROLES,
@@ -33,12 +31,12 @@ import {
 } from "@skimjob/content";
 import type { DealStyle, GameConfig, GameEvent, GameState, RngState, RoleListSetting, VoteVisibility } from "./types";
 import { PUBLIC, REVEAL, privateTo } from "./types";
-import { pick, randomInt, seedRng, shuffle } from "./rng";
+import { pick, seedRng, shuffle } from "./rng";
 import { replay } from "./reduce";
 import { eventsOn } from "./deck";
 import { show } from "./check";
 import { jobById, roomsInPlay } from "./job";
-import { jobFor, policeFor, powerOf, roleDefIn, rolesFor, tagIn, validateOverrides, type RoleTable } from "./overrides";
+import { jobFor, roleDefIn, rolesFor, tagIn, validateOverrides, type RoleTable } from "./overrides";
 
 const VOTE_VISIBILITIES: readonly string[] = ["hiddenThenRevealed", "open", "secret"] satisfies readonly VoteVisibility[];
 const DECK_IDS: readonly string[] = Object.keys(DECKS);
@@ -156,9 +154,8 @@ function balancedDraws(config: GameConfig, roles: RoleTable) {
  * Every role this game could actually deal (QA on R6a): with Balanced, only
  * the tags the crew size's mix gives a seat (so no Mole at 2–3 players);
  * with Truly random, the eligible deck; plus Rookies when they fill a seat.
- * None of it depends on the draws. The "possible" role list, whether police
- * activity runs, and rules that must not reveal who was dealt read this.
- * extension.md "Host settings", Build notes "Police activity"
+ * None of it depends on the draws. The "possible" role list and rules that
+ * must not reveal who was dealt read this. extension.md "Host settings"
  */
 export function dealableRoles(config: GameConfig, roles: RoleTable = rolesFor(config)): readonly RoleId[] {
   if (dealStyleOf(config) === "random") {
@@ -229,30 +226,6 @@ export function dealRoles(
 }
 
 /**
- * Whether background police activity runs (extension.md "Police activity",
- * provisional): only when a Mole could be in the game. With the Exact role
- * list that means one was dealt; otherwise that the deal could give one
- * (`dealableRoles`: so never with Balanced at 2–3 players).
- */
-function policeRuns(config: GameConfig, dealt: readonly RoleId[], roles: RoleTable = rolesFor(config)): boolean {
-  const isMole = (r: RoleId) => powerOf(config, r).kind === "tipOff" || r === MOLE_ROLE;
-  return roleListOf(config) === "exact" ? dealt.some(isMole) : dealableRoles(config, roles).some(isMole);
-}
-
-/**
- * Police moment `moment`'s secret draws (reveal-only `policeScheduled`): its
- * gap after the previous moment, uniform in [gapMin, gapMax] thousandths of a
- * round length, then whether a background patrol fires there. `int(n)` draws
- * from the seeded RNG. extension.md "Police activity"
- */
-export function drawPoliceMoment(config: GameConfig, moment: number, int: (n: number) => number): GameEvent {
-  const numbers = policeFor(config);
-  const gapPermille = numbers.gapMinPermille + int(numbers.gapMaxPermille - numbers.gapMinPermille + 1);
-  const patrol = int(100) < numbers.chancePercent;
-  return { type: "policeScheduled", visibility: REVEAL, moment, gapPermille, patrol };
-}
-
-/**
  * The shop's three perks, one per column, drawn with the seeded RNG
  * (extension.md "Tokens and the perk shop", gap-fills "Shop dealing"):
  * with events off the Sway perk is +Vote or Emergency.
@@ -289,17 +262,6 @@ export function setupEvents(config: GameConfig): GameEvent[] {
   if (errors.length > 0) throw new Error(`invalid game config: ${errors.join("; ")}`);
   const dealt = dealRoles(config, seedRng(config.seed));
   const shop = dealShop(config, dealt.rng);
-  let rng = shop.rng;
-  // extension.md "Police activity": the first moment is drawn like every later one (provisional).
-  const police: GameEvent[] = policeRuns(config, dealt.value)
-    ? [
-        drawPoliceMoment(config, 1, (n) => {
-          const r = randomInt(rng, n);
-          rng = r.rng;
-          return r.value;
-        }),
-      ]
-    : [];
   return [
     {
       type: "gameCreated",
@@ -327,10 +289,9 @@ export function setupEvents(config: GameConfig): GameEvent[] {
     ),
     ...roleListEvents(config, dealt.value),
     { type: "shopDealt", visibility: PUBLIC, perks: shop.value },
-    ...police,
     // Round 1 opens for planning as soon as the game is set up. design §4, §5.1
     { type: "roundStarted", visibility: PUBLIC, round: 1, act: 1 },
-    { type: "rngAdvanced", visibility: REVEAL, words: rng.words },
+    { type: "rngAdvanced", visibility: REVEAL, words: shop.rng.words },
   ];
 }
 

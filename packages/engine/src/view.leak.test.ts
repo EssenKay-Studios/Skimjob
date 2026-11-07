@@ -28,10 +28,13 @@ function config(players: number, voteVisibility: VoteVisibility): GameConfig {
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: i % 2 === 1 })),
     job: "bank",
     rolePool: [],
-    // extension.md "Host settings": every role can be dealt, so Moles (and police activity) come up.
+    // extension.md "Host settings": every role can be dealt, so Moles and Fixers come up.
     deck: "everything",
     eventsEnabled: true,
     voteVisibility,
+    // design §5: bells ring, raids tape rooms off and Wanted rises, but no bust, so the script reaches every meeting;
+    // the R6 targets are lowered for the seized coins, so the Rookie's checkpoint token still comes up.
+    contentOverrides: { alarm: { bustStars: 99 }, checkpoints: { perPlayer: [1, 2, 3] } },
   };
 }
 
@@ -63,7 +66,7 @@ function darkGame(cfg: GameConfig): GameState {
 /**
  * A full game exercising every event type the default pool can produce: moves
  * (some changed, some missed), Security watches, the Server room, Lookout,
- * Hacker, Auditor, Detective and Mole powers (tip-off, Mole allies), alibis,
+ * Hacker, Auditor, Detective, Mole (a ring) and Fixer (a reopen) powers, bells and raids, alibis,
  * proposals, an emergency meeting, sealed and changed ballots (Smooth talker
  * weight), shakedown windows, shakedowns and
  * checkpoints, and the event cards (Lockdown avoided), and perks (design §8.3: granted by the test hook,
@@ -156,7 +159,7 @@ function playGame(players: number, voteVisibility: VoteVisibility, dark = false)
       const role = (s.players[id] as PlayerState).role;
       // The Act 3 meeting's target is in the Vault in each act's first round (the one the Auditor audits).
       const drawn = id === ids[3 % ids.length] && round % 3 === 1 ? "vault" : (s.rooms[(i + round) % s.rooms.length] as string);
-      const room = drawn === s.card?.room ? "lobby" : drawn; // design §10 Lockdown
+      const room = drawn === s.card?.room || Object.hasOwn(s.taped, drawn) ? "lobby" : drawn; // design §10 Lockdown, §5.3 taped off
       const canKeep = !NO_COINS.has(room);
       // The Act 3 meeting's target pockets everything it can, so that shakedown is dirty.
       const greedy = id === ids[3 % ids.length];
@@ -165,14 +168,15 @@ function playGame(players: number, voteVisibility: VoteVisibility, dark = false)
       if (role === "lookout") move.ability = { kind: "lookout", rooms: [s.rooms[(i + round + 1) % s.rooms.length]] };
       // design §8: the Hacker loops the Vault once per act.
       if (role === "hacker" && round % 3 === 1) move.ability = { kind: "loopCameras", room: "vault" };
-      // extension.md "Police activity": each Mole tips off the cops once, in round 8 (late, so the script still reaches every meeting).
-      if (role === "mole" && round === 8) step({ type: "useAbility", player: id, ability: { kind: "tipOff" } });
+      // design §5.2, §11.1: each Mole rings the Office once, in round 8, unless it is taped off.
+      if (role === "mole" && round === 8 && !Object.hasOwn(s.taped, "office")) move.ability = { kind: "ring", room: "office" };
+      // design §5.3, §11.1: a Fixer reopens the first taped-off room once.
+      const taped = Object.keys(s.taped)[0];
+      if (role === "fixer" && taped !== undefined && s.players[id]?.roleState.usedThisGame === 0) move.ability = { kind: "reopen", room: taped };
       if (i === 0) step({ type: "submitMove", player: id, move: fullGrab("lobby") }); // later changed
       step({ type: "submitMove", player: id, move });
     });
     step({ type: "advance", deadline: { kind: "round", round } });
-    // extension.md "Police activity": one hidden police moment per round, as the simulator takes them.
-    if (s.police) step({ type: "advance", deadline: { kind: "policeMoment", moment: s.police.moment } });
     ids.forEach((id, i) => {
       // design §8.3: in round 2 the last player posts a true alibi and has it stamped Verified.
       if (round === 2 && id === last) {
@@ -221,16 +225,15 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
           { type: "rngAdvanced", visibility: REVEAL, words: [9, 9, 9, 9] },
           { type: "roleDealt", visibility: privateTo(other), player: other, role: "hacker" },
           { type: "abilityResolved", visibility: privateTo(other), player: other, round: 1, ability: { kind: "loopCameras", room: "vault" } },
-          { type: "abilityResolved", visibility: privateTo(other), player: other, round: 1, ability: { kind: "tipOff" } },
-          { type: "tipOffLanded", visibility: privateTo(other), player: other, round: 1 },
-          { type: "policeScheduled", visibility: REVEAL, moment: 3, gapPermille: 700, patrol: true },
-          { type: "policeCause", visibility: REVEAL, round: 1, cause: "tipOff", mole: other },
-          { type: "tokenEarned", visibility: privateTo(other), player: other, trigger: "tipOffLanded" },
+          { type: "abilityResolved", visibility: privateTo(other), player: other, round: 1, ability: { kind: "ring", room: "office" } },
+          { type: "abilityResolved", visibility: privateTo(other), player: other, round: 1, ability: { kind: "reopen", room: "vault" } },
+          { type: "tokenEarned", visibility: privateTo(other), player: other, trigger: "loopHidPocketer" },
           { type: "perkBought", visibility: privateTo(other), player: other, perk: "shield", cost: 2 },
           { type: "abilityResolved", visibility: privateTo(other), player: other, round: 1, ability: { kind: "audit", round: 1, room: "vault", shortfall: 4 } },
           { type: "abilityResolved", visibility: privateTo(other), player: other, round: 1, ability: { kind: "checkStash", target: viewer, threshold: 3, dirty: true } },
           { type: "insideTip", visibility: privateTo(other), player: other, round: 2, subject: viewer, role: "mole" },
-          { type: "coinsGrabbed", visibility: privateTo(other), player: other, round: 1, room: "vault", duffel: 0, pocket: 3 },
+          { type: "coinsGrabbed", visibility: privateTo(other), player: other, round: 1, room: "vault", duffel: 0, pocket: 3, seized: 0 },
+          { type: "coinsGrabbed", visibility: privateTo(other), player: other, round: 1, room: "vault", duffel: 0, pocket: 0, seized: 3 },
           { type: "perkUsed", visibility: privateTo(other), player: other, round: 1, perk: { kind: "ballot", meetingId: "act-1", target: viewer } },
           { type: "rigPicked", visibility: privateTo(other), player: other, round: 2, card: "audit" },
         ] satisfies GameEvent[])),
@@ -286,11 +289,8 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
   };
   // A Rig is its holder's secret. design §8.3
   const rigs = [...state.rigs.filter((r) => r.player === viewer), { player: other, round: 9, cards: ["audit", "lockdown"], pick: "lockdown" }];
-  // extension.md "Police activity": the schedule and the tip-off queue are nobody's to see.
-  const police = { moment: (state.police?.moment ?? 0) + 5, gapPermille: 1234, patrol: !state.police?.patrol, queue: [other, other], tipOffs: { [other]: 7, [viewer]: state.police?.tipOffs[viewer] ?? 0 } };
   return {
     ...state,
-    police,
     rigs,
     config: { ...state.config, seed: "scrubbed" },
     rng: { words: [1, 2, 3, 4] },
@@ -399,18 +399,21 @@ describe("no leaks in real games — design §17.2, §13, §11.2", () => {
     }
   }, 30_000);
 
-  it("the all-wildcard games reach every lone-wolf and wildcard token, police activity and the queued tip-off (extension.md \"Roles\", \"Police activity\")", () => {
-    for (const t of ["loopHidPocketer", "tipOffLanded"]) expect(earned, t).toContain(t);
-    for (const t of ["policeScheduled", "policeActivity", "policeCause", "tipOffLanded"]) expect(darkTypes, t).toContain(t);
+  it("the all-wildcard games reach the Hacker's token, the Mole's ring and the Fixer's reopen (extension.md \"Roles\", design §5.2, §5.3)", () => {
+    expect(earned).toContain("loopHidPocketer");
+    expect(darkTypes).toContain("roomReopened");
+    for (const k of ["ring", "reopen"]) expect(seenAbilities, k).toContain(k);
   });
 
   it("the games above reach every info, vote, Mole and event-card event (design §8, §8.1, §10)", () => {
     for (const t of ["shakedownPending", "shakedownCancelled", "alibisClosed", "roleListShown", "shopDealt"]) expect(seenTypes, t).toContain(t);
+    // design §5: bells, raids and cooling.
+    for (const t of ["bellsRung", "roomRaided", "bellsCooled"]) expect(seenTypes, t).toContain(t);
     for (const t of ["eventFlipped", "insideTip", "auditReport"]) {
       expect(seenTypes, t).toContain(t);
     }
     for (const c of EVENT_DECK) expect(seenCards, c).toContain(c);
-    for (const k of ["lookout", "loopCameras", "tipOff", "audit", "checkStash"]) expect(seenAbilities, k).toContain(k);
+    for (const k of ["lookout", "loopCameras", "audit", "checkStash"]) expect(seenAbilities, k).toContain(k);
     // design §8.3: every perk event and every perk's effect.
     for (const t of ["tokenEarned", "perkBought", "perkUsed", "rigPicked", "alibiVerified"]) expect(seenTypes, t).toContain(t);
     for (const k of ["peek", "shield", "extraVote", "ballot", "tail", "alibi", "recharge", "rig"]) expect(seenPerks, k).toContain(k);

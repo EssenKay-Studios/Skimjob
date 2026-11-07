@@ -1,8 +1,8 @@
 // The events deck: one public card per round from round 2, its effects at
 // §5.2 step 1 and through the round. design §10, §5.2
 import { describe, expect, it } from "vitest";
+import { NO_RAIDS } from "./v01-numbers.testkit";
 import { handleThroughAlibis } from "./alibis.testkit";
-import { V06_NUMBERS } from "./v01-numbers.testkit";
 import { EVENTS, EVENT_DECK, EVENTS_FROM_ROUND, type RoomId } from "@skimjob/content";
 import type { GameConfig, GameEvent, GameState, PlayerId } from "./types";
 import { PUBLIC, privateTo } from "./types";
@@ -10,7 +10,7 @@ import { createGame, setupEvents, validateConfig } from "./setup";
 import { replay } from "./reduce";
 import { handleCommand } from "./handle";
 import { viewFor } from "./view";
-import { closedRoom, eventHeatScale, scaledCardHeat } from "./deck";
+import { closedRoom } from "./deck";
 import { jobById } from "./job";
 import { fullGrab } from "./grab.testkit";
 
@@ -24,14 +24,15 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
     rolePool: ["rookie", "lookout", "hacker", "priest"], // a window only if the shop holds a Shield
     eventsEnabled: true,
     voteVisibility: "open",
+    // Bells too big to raid: these scripts test other rules (bells and raids: bells.test.ts).
+    contentOverrides: NO_RAIDS,
     ...extra,
   };
 }
 
 /** A new game with chosen roles (seat i gets roles[i], Rookie if missing), plus any extra setup events. */
 function game(players: number, roles: string[] = [], extra: Partial<GameConfig> = {}, more: GameEvent[] = []): GameState {
-  // Pin the 0.6.0 card numbers (balance pass 2 changed them); an extra override still wins.
-  const cfg = config(players, { ...extra, contentOverrides: { ...V06_NUMBERS, ...extra.contentOverrides } });
+  const cfg = config(players, extra);
   const log = setupEvents(cfg)
     .map((e, i, all): GameEvent => {
       if (e.type !== "roleDealt") return e;
@@ -171,21 +172,13 @@ describe("the deck — design §10", () => {
 describe("card effects — design §10, §5.2", () => {
   const atRound2 = (n: number, roles: string[] = [], extra: Partial<GameConfig> = {}) => resolve(game(n, roles, extra));
 
-  it("event-card Heat is scaled by min(1, crew ÷ 5) for small crews, rounded (owner answers, 1 Nov)", () => {
-    expect(eventHeatScale(3)).toBeCloseTo(0.6);
-    expect(scaledCardHeat(-10, 3)).toBe(-6);
-    expect(scaledCardHeat(5, 3)).toBe(3);
-    expect(scaledCardHeat(5, 12)).toBe(5);
-  });
-
-  it("Shift change: Vault visitors can grab 1 extra coin (design §13) and its Heat pressure doubles (×1.8 at 4 players, R6 scaling)", () => {
+  it("Shift change: Vault visitors can grab 1 extra coin (design §13), and every one rings (§5.2)", () => {
     const base = withCard(atRound2(4, ["rookie"]), "shiftChange");
-    const heat0 = base.heat;
     const s = resolve(base, { p0: { room: "vault", duffel: 1, pocket: 3 } });
     const split = lastResolution(s).find((e) => e.type === "coinsGrabbed" && e.player === "p0");
-    expect(split).toMatchObject({ duffel: 1, pocket: 3 });
-    // One of 4 in the Vault: the surge's extra ×1 is scaled by 4/5, so 4 + 1.8 × 20 × 1/4 = 13.
-    expect(s.heat - heat0).toBe(BANK.heat.perRound + Math.round((1.8 * 20) / 4));
+    expect(split).toMatchObject({ duffel: 1, pocket: 3, seized: 0 });
+    // All 4 coins ring (on a 4-bulb bell they would raid the Vault: deck.qa.test.ts).
+    expect(lastResolution(s).find((e) => e.type === "bellsRung")).toMatchObject({ bells: { vault: 4 } });
     // 5 is one too many with the card; without it, 4 is.
     expect(handleThroughAlibis(base, { type: "submitMove", player: "p0", move: { room: "vault", duffel: 1, pocket: 4 } }).ok).toBe(false);
     const plain = withCard(atRound2(4, ["rookie"]), "audit");

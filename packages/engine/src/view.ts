@@ -8,7 +8,6 @@ import type {
   ActiveCard,
   CaseFileEvent,
   GapBox,
-  HeatBreakdown,
   GameEvent,
   GameState,
   LoggedEvent,
@@ -20,7 +19,6 @@ import type {
 } from "./types";
 import { canSee } from "./types";
 import { actOfRound } from "./acts";
-import { ROUNDS_PER_ACT } from "@skimjob/content";
 import { roomDef } from "./job";
 import { eventsFor, jobFor, perkCost, rolesFor } from "./overrides";
 import { revealSummary } from "./reveal";
@@ -96,7 +94,6 @@ function buildView(state: GameState, playerId: PlayerId): PlayerView {
       stash: me.stash,
       roleState: me.roleState,
       emergencyMeetingUsed: me.emergencyMeetingUsed,
-      tipOffs: state.police?.tipOffs[me.id] ?? 0,
       move: ownMove ?? null,
       sealedVote: me.sealedVote,
       vote: ownVote ?? null,
@@ -118,7 +115,10 @@ function buildView(state: GameState, playerId: PlayerId): PlayerView {
     // design §6.1: the bank count is public.
     bank: state.bank,
     haul: state.haul,
-    heat: state.heat,
+    // design §5.1, §5.3, §5.4: bells (a taped-off room's is off), the tape and Wanted are public.
+    bells: state.bells,
+    taped: state.taped,
+    wanted: state.wanted,
     // design §10: the card is public.
     card: state.card,
     voteVisibility: state.config.voteVisibility,
@@ -163,46 +163,9 @@ export function gapBox(state: GameState): GapBox | null {
     else if (e.type === "eventFlipped" && e.round === round) card = { round, id: e.card, room: e.room };
     else if (e.type === "alibiPosted" && e.round === round) alibis.push(e.room);
   }
-  const job = roundJob(jobFor(state.config), card, eventsFor(state.config), state.playerOrder.length);
+  const job = roundJob(jobFor(state.config), card, eventsFor(state.config));
   const claimed = alibis.reduce((sum, room) => sum + roomDef(job, room).coins, 0);
   return { round, posted: alibis.length, alibis: claimed, haulGrowth, unaccounted: claimed - haulGrowth };
-}
-
-/**
- * The Heat breakdown of `round` from public events (a ledger is enough):
- * the round summary's parts, police activity under it, and a missed target's
- * penalty at the stretch's last round. Null if the round has nothing yet.
- * extension.md "What the app works out for you", "Police activity"
- */
-export function heatBreakdown(log: readonly GameEvent[], round: number): HeatBreakdown | null {
-  let parts: HeatBreakdown | null = null;
-  const police: number[] = [];
-  let missedTarget = 0;
-  let policeClamp = 0;
-  let stopped = 0;
-  // Heat before each event, so police activity at the top shows what the limit took back.
-  let heat = 0;
-  for (const e of log) {
-    if (e.type === "roundResolved") {
-      if (e.round === round) parts = { round, ...e.heatParts, clamp: e.heatParts.clamp ?? 0, police: [], missedTarget: 0, stopped: 0 };
-      heat = e.heat;
-    } else if (e.type === "policeActivity") {
-      if (e.round === round) {
-        police.push(e.heatAdded);
-        policeClamp += e.heat - (heat + e.heatAdded);
-      }
-      heat = e.heat;
-    } else if (e.type === "raidStopped") {
-      if (e.round === round) stopped += e.heat - heat;
-      heat = e.heat;
-    } else if (e.type === "checkpointChecked") {
-      if (e.act * ROUNDS_PER_ACT === round) missedTarget = e.heatPenalty;
-      heat += e.heatPenalty;
-    }
-  }
-  if (!parts && police.length === 0 && stopped === 0) return null;
-  const p = parts ?? { round, base: 0, rooms: {}, clamp: 0 };
-  return { ...p, clamp: p.clamp + policeClamp, police, missedTarget, stopped };
 }
 
 /**

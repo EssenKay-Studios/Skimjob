@@ -1,16 +1,16 @@
 // QA (PR #50, R6a): adversarial tests against docs/extension.md, the R6 rules spec.
-// Written against the spec, not the implementation: police activity, tokens and
-// the shop, the win rule, "between meetings" windows, fixed shakedown numbers,
-// the one vote rule, whole-number scoring, camera offline, the Heat breakdown.
+// Written against the spec, not the implementation: tokens and the shop, the
+// win rule, "between meetings" windows, fixed shakedown numbers, the one vote
+// rule, whole-number scoring, camera offline.
 import { describe, expect, it } from "vitest";
-import { PERKS, POLICE_ACTIVITY, ROLES, SHOP_COLUMNS, type PerkId } from "@skimjob/content";
+import { PERKS, ROLES, SHOP_COLUMNS, type PerkId } from "@skimjob/content";
 import { handleThroughAlibis } from "./alibis.testkit";
 import { handleCommand } from "./handle";
 import type { GameConfig, GameEvent, GameState, PlayerId, PlayerState } from "./types";
 import { privateTo } from "./types";
 import { createGame, setupEvents } from "./setup";
 import { applyEvent, replay } from "./reduce";
-import { heatBreakdown, viewFor } from "./view";
+import { viewFor } from "./view";
 import { outcomeFor, ranking } from "./end";
 import { meetingResult } from "./meeting";
 import { R6_COINS } from "./v01-numbers.testkit";
@@ -33,9 +33,6 @@ interface Setup {
   readonly roles?: readonly string[];
   readonly shop?: readonly PerkId[];
   readonly tokens?: Readonly<Record<PlayerId, number>>;
-  /** Patrol draws for police moments 1.. (when police are scheduled). */
-  readonly patrol?: boolean;
-  readonly gap?: number;
 }
 
 /** A new game with the setup events rewritten as `setup` asks (seat i gets roles[i], Rookie if missing). */
@@ -50,18 +47,9 @@ function game(cfg: GameConfig, setup: Setup = {}): GameState {
     }
     if (e.type === "roleListShown" && setup.roles && e.list === "exact") return [];
     if (e.type === "shopDealt" && setup.shop) return [{ ...e, perks: setup.shop }];
-    if (e.type === "policeScheduled") return [{ ...e, ...(setup.patrol !== undefined && { patrol: setup.patrol }), ...(setup.gap !== undefined && { gapPermille: setup.gap }) }];
     return [e];
   });
   return replay(cfg, log);
-}
-
-/** Every later police moment drawn is forced to `patrol` (rewrites the log and replays). */
-function forcePatrols(s: GameState, patrol: boolean): GameState {
-  return replay(
-    s.config,
-    s.log.map((e) => (e.type === "policeScheduled" ? { ...e, patrol } : e)),
-  );
 }
 
 type Cmd = unknown | ((s: GameState) => unknown);
@@ -83,10 +71,8 @@ const tokensOf = (s: GameState, p: PlayerId, trigger?: string) => ofType(s.log, 
 
 const mv = (player: string, room: string, pocket = 0, extra: object = {}) => ({ type: "submitMove", player, move: { ...fullGrab(room, pocket, R6_COINS), ...extra } });
 const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
-const MOMENT = (s: GameState) => ({ type: "advance", deadline: { kind: "policeMoment", moment: s.police?.moment } });
 const buy = (player: string, perk: string) => ({ type: "buyPerk", player, perk });
 const use = (player: string, ability: object) => ({ type: "useAbility", player, ability });
-const tipOff = (player: string) => use(player, { kind: "tipOff" });
 const vote = (player: string, target: string | null) => ({ type: "castVote", player, vote: target === null ? { kind: "skip" } : { kind: "shakedown", target } });
 const emergency = (p: string) => [{ type: "callEmergency", player: p }, { type: "advance", deadline: { kind: "openMeeting", meetingId: `emergency-${p}` } }];
 const closeEm = (p: string) => ({ type: "advance", deadline: { kind: "closeMeeting", meetingId: `emergency-${p}` } });
@@ -103,137 +89,10 @@ const withPlayers = (s: GameState, patch: Record<PlayerId, Partial<PlayerState>>
   players: Object.fromEntries(Object.entries(s.players).map(([id, p]) => [id, { ...p, ...(patch[id] ?? {}) }])),
 });
 
-// 5 players, the Possible list names the Mole: police run whoever is dealt.
-const MOLE_CFG = config(5, { rolePool: ["rookie", "lookout", "mole"], roleList: "possible" });
-
-describe("police activity: hidden moments never leak (extension.md Build notes \"Police activity\", \"No leak\")", () => {
-  it("no player's view depends on the hidden draws (gap, patrol) until a moment fires: the Mole's included", () => {
-    const variants = [
-      game(MOLE_CFG, { roles: ["mole"], patrol: true, gap: 500 }),
-      game(MOLE_CFG, { roles: ["mole"], patrol: false, gap: 1500 }),
-      game(MOLE_CFG, { roles: ["mole"], patrol: true, gap: 1000 }),
-    ];
-    const ids = variants[0]!.playerOrder;
-    const base = views(variants[0]!, ids);
-    for (const v of variants) expect(views(v, ids)).toEqual(base);
-    // Still identical after a round and a tip-off (queued, not landed).
-    const later = variants.map((v) => run(v, tipOff("p0"), ROUND));
-    for (const v of later) expect(views(v, ids)).toEqual(views(later[0]!, ids));
-  });
-
-  it("whether police run at all is invisible under the Possible and Hidden role lists (whether or not a Mole was dealt)", () => {
-    for (const roleList of ["possible", "hidden"] as const) {
-      for (let i = 0; i < 30; i++) {
-        const s = createGame(config(6, { seed: `pl-${i}`, roleList, deck: "everything" }));
-        // The Mole is in the eligible deck, so the police run whether or not it was dealt.
-        expect(s.police, `${roleList} seed ${i}`).not.toBeNull();
-      }
-    }
-  });
-
-  it("only when a Mole could be in the game: Starter and no-Mole decks have none", () => {
-    expect(createGame(config(5, { deck: "starter", rolePool: [] })).police).toBeNull();
-    expect(createGame(config(8, { rolePool: ["rookie", "lookout", "auditor", "hacker"] })).police).toBeNull();
-    // Exact list: runs exactly when a Mole was dealt.
-    for (let i = 0; i < 40; i++) {
-      const s = createGame(config(6, { seed: `ex-${i}`, deck: "everything" }));
-      const mole = Object.values(s.players).some((p) => p.role === "mole");
-      expect(s.police !== null, `seed ${i}`).toBe(mole);
-    }
-  });
-
-  it("the police run whatever the events setting (events on: the 9-card deck never has a Police patrol card)", () => {
-    const on = createGame(config(5, { rolePool: ["rookie", "mole"], roleList: "possible", eventsEnabled: true }));
-    expect(on.police).not.toBeNull();
-    const s = closeAct(toActMeeting(closeAct(toActMeeting(on))));
-    expect(ofType(s.log, "eventFlipped").length).toBeGreaterThanOrEqual(5);
-    for (const e of ofType(s.log, "eventFlipped")) expect(String(e.card).toLowerCase()).not.toMatch(/police|patrol/);
-  });
-
-  it("no tip-off without a Mole possible; non-Moles can't tip off; tip-off only once between meetings", () => {
-    // Exact list, a Mole in the deck but not dealt: no police and nobody can tip off.
-    const s = game(config(5, { rolePool: ["rookie", "lookout"] }), { roles: ["rookie"] });
-    expect(s.police).toBeNull();
-    expect(reason(s, tipOff("p0"))).toBeTruthy();
-    const m = game(MOLE_CFG, { roles: ["mole"], patrol: false });
-    for (const p of ["p1", "p2", "p3", "p4"]) expect(() => reason(m, tipOff(p))).not.toThrow();
-    const once = run(m, tipOff("p0"));
-    expect(() => reason(once, tipOff("p0"))).not.toThrow();
-    // Landing the first doesn't free a second use in the same stretch.
-    const landed = run(once, MOMENT, ROUND);
-    expect(() => reason(landed, tipOff("p0"))).not.toThrow();
-  });
-
-  it("one activity per moment: two queued tip-offs land at two successive moments, +4 each, never +8 at once", () => {
-    let s = game(MOLE_CFG, { roles: ["mole"], patrol: true });
-    // Stretch 1: tip off in round 3, not landed before the meeting.
-    s = run(s, ROUND, ROUND, tipOff("p0"));
-    s = closeAct(toActMeeting(s));
-    expect(s.round).toBe(4);
-    s = run(s, tipOff("p0"));
-    expect(s.police?.queue).toEqual(["p0", "p0"]);
-    const first = run(s, MOMENT);
-    const firstActs = ofType(first.log.slice(s.log.length), "policeActivity");
-    expect(firstActs).toHaveLength(1);
-    expect(firstActs[0]?.heatAdded).toBe(POLICE_ACTIVITY.heat);
-    expect(first.police?.queue).toEqual(["p0"]);
-    const second = run(first, MOMENT);
-    expect(ofType(second.log.slice(first.log.length), "policeActivity")).toHaveLength(1);
-    expect(second.police?.queue).toEqual([]);
-    expect(tokensOf(second, "p0", "tipOffLanded")).toBe(2);
-  });
-
-  it("a police moment is refused while a meeting is open, a shakedown is pending, or the game is over; fine during the alibi window", () => {
-    const s = game(MOLE_CFG, { roles: ["mole"], patrol: true });
-    const meeting = run(s, ...emergency("p1"));
-    expect(reason(meeting, MOMENT(meeting))).toMatch(/paused|meeting/);
-    // After it closes, the frozen moment lands.
-    const after = run(meeting, closeEm("p1"), MOMENT);
-    expect(ofType(after.log, "policeActivity")).toHaveLength(1);
-    // Alibi window: game time runs (planning and the alibi window both count).
-    const r = handleCommand(s, ROUND(s));
-    if (!r.ok) throw new Error(r.reason);
-    expect(r.state.phase.kind).toBe("alibis");
-    const inAlibis = run(r.state, MOMENT);
-    const act = ofType(inAlibis.log, "policeActivity")[0];
-    expect(act?.heat).toBe(r.state.heat + POLICE_ACTIVITY.heat);
-    // The police line sits under round 1, whose summary is already posted.
-    expect(heatBreakdown(inAlibis.log, 1)?.police).toEqual([POLICE_ACTIVITY.heat]);
-  });
-
-  it("a tip-off still queued when the game ends is lost: no landing and no token", () => {
-    let s = game(config(5, { rolePool: ["rookie", "mole"], roleList: "possible", contentOverrides: { heat: { perRound: 0 } } }), { roles: ["mole"], patrol: false });
-    s = closeAct(toActMeeting(s));
-    s = closeAct(toActMeeting(s));
-    s = toActMeeting(s);
-    s = run(s, tipOff("p0"));
-    s = closeAct(s);
-    expect(s.phase.kind).toBe("ended");
-    expect(ofType(s.log, "tipOffLanded")).toEqual([]);
-    expect(tokensOf(s, "p0", "tipOffLanded")).toBe(0);
-  });
-
-  it("police activity can raid: Heat 100 ends the game at once (Mole with the biggest stash wins); a Fixer stops it at 95", () => {
-    const hot = config(5, { rolePool: ["rookie", "mole", "fixer"], roleList: "possible" });
-    let s = game(hot, { roles: ["mole", "rookie"], patrol: true });
-    s = { ...s, heat: 98 };
-    s = withPlayers(s, { p0: { stash: 20 } });
-    const raided = run(s, MOMENT);
-    expect(raided.phase.kind).toBe("ended");
-    if (raided.phase.kind !== "ended") return;
-    expect(raided.phase.outcome).toMatchObject({ result: "failed", reason: "heat", winners: ["p0"] });
-    const fixed = withPlayers(game(hot, { roles: ["mole", "fixer"], patrol: true }), { p1: { stash: 8 } });
-    const hotFixed = run({ ...fixed, heat: 98 }, MOMENT);
-    expect(hotFixed.phase.kind).not.toBe("ended");
-    expect(hotFixed.heat).toBe(95);
-    expect(tokensOf(hotFixed, "p1", "raidStopped")).toBe(1);
-  });
-});
-
 describe("tokens: every trigger (extension.md \"Roles\", owner rulings 1, 4, 5, 6, gap-fills \"Token triggers\")", () => {
   it("tokens are private: earning one changes no other player's view", () => {
-    const s = game(MOLE_CFG, { roles: ["mole"], patrol: false });
-    const after = applyEvent(s, { type: "tokenEarned", visibility: privateTo("p0"), player: "p0", trigger: "tipOffLanded" });
+    const s = game(config(5), { roles: ["hacker"] });
+    const after = applyEvent(s, { type: "tokenEarned", visibility: privateTo("p0"), player: "p0", trigger: "loopHidPocketer" });
     expect(views(after, ["p1", "p2", "p3", "p4"])).toEqual(views(s, ["p1", "p2", "p3", "p4"]));
     expect(viewFor(after, "p0").me.roleState.tokens).toBe(1);
     // Nor is any other player's token count anywhere in a view.
@@ -281,7 +140,8 @@ describe("buyPerk (extension.md \"Tokens and the perk shop\")", () => {
     expect(handleCommand(r.state, buy("p0", "tail")).ok).toBe(true);
     const meeting = run(s, ...emergency("p2"));
     expect(handleCommand(meeting, buy("p1", "extraVote")).ok).toBe(true);
-    const ended = run(game(config(3, { contentOverrides: { heat: { perRound: 60 } } }), { shop: SHOP, tokens: { p0: 2 } }), ROUND, ROUND);
+    // A bust in round 1: a one-bulb bell, one star, and a Vault grab.
+    const ended = run(game(config(3, { contentOverrides: { alarm: { bulbs: 1, bustStars: 1 } } }), { shop: SHOP, tokens: { p0: 2 } }), mv("p1", "vault"), ROUND);
     expect(ended.phase.kind).toBe("ended");
     expect(reason(ended, buy("p0", "tail"))).toMatch(/over/);
   });
@@ -322,19 +182,22 @@ describe("the win rule (extension.md \"Winning and losing\", Build notes \"Win r
     expect(outcomeFor(s, null).winners).toEqual(["p2"]);
   });
 
-  it("a raid: only top-group members whose role wins on heat; a ★ outside the top group never wins", () => {
+  it("a missed target: only top-group members whose role wins on it; a ★ outside the top group never wins", () => {
     const tied = withPlayers(base(), { p0: flat, p1: flat, p2: flat, p3: flat });
-    // Top group = all four; only the Mole (★) wins on heat or target.
-    expect([...outcomeFor(tied, "heat").winners].sort()).toEqual(["p2"]);
+    // Top group = all four; only the Mole (★) wins on a missed target.
     expect([...outcomeFor(tied, "target").winners].sort()).toEqual(["p2"]);
     const rookieTop = withPlayers(base(), { p0: { ...flat, stash: 30 }, p1: flat, p2: flat, p3: flat });
-    const out = outcomeFor(rookieTop, "heat");
+    const out = outcomeFor(rookieTop, "target");
     expect(out.winners).toEqual([]);
-    expect(out).toMatchObject({ result: "failed", reason: "heat" });
+    expect(out).toMatchObject({ result: "failed", reason: "target" });
     // The full ranking is still shown on a failure.
     expect(out.ranking.map((r) => r.player)).toEqual(["p0", "p1", "p2", "p3"]);
-    // A non-★ role top on a raid: nobody.
-    expect(outcomeFor(withPlayers(base(), { p3: { ...flat, stash: 30 } }), "heat").winners).toEqual([]);
+  });
+
+  it("a bust: the Mole's ★ doesn't help; only the escapees with the biggest stash among them win (design §5.5, §8.3)", () => {
+    const tied = withPlayers(base(), { p0: flat, p1: flat, p2: flat, p3: { ...flat, stash: 30 } });
+    expect(outcomeFor(tied, "bust", undefined, ["p0", "p2"]).winners).toEqual(["p0", "p2"]);
+    expect(outcomeFor(tied, "bust", undefined, []).winners).toEqual([]);
   });
 });
 
@@ -388,16 +251,6 @@ describe("between-meetings windows (extension.md Build notes \"Between meetings\
     expect(handleCommand(s, loop("p0")).ok).toBe(true);
   });
 
-  it("a tip-off used during the regular meeting spends the old stretch's charge; the next stretch has a fresh one", () => {
-    let s = game(MOLE_CFG, { roles: ["mole"], patrol: false });
-    s = run(s, ROUND, ROUND, ROUND);
-    s = toActMeeting(s);
-    expect(s.phase.kind).toBe("meeting");
-    s = run(s, tipOff("p0"));
-    expect(handleCommand(s, tipOff("p0")).ok).toBe(false);
-    s = closeAct(s);
-    expect(handleCommand(s, tipOff("p0")).ok).toBe(true);
-  });
 });
 
 describe("\"camera offline\" (extension.md \"Situations\": the Hacker's loop)", () => {
@@ -427,35 +280,11 @@ describe("shared numbers: Detective line, Haul-paid compensation (extension.md g
 });
 
 describe("QA re-check (PR #50 fixes): locked in", () => {
-  it("Mole: at most 3 tip-offs (so 3 tokens) a game, Recharge included; a 4th is refused privately", () => {
-    let s = game(MOLE_CFG, { roles: ["mole"], patrol: false, shop: ["peek", "recharge", "extraVote"], tokens: { p0: 3 } });
-    s = run(s, tipOff("p0"), MOMENT, buy("p0", "recharge"), use("p0", { kind: "recharge" }), tipOff("p0"), MOMENT);
-    expect(tokensOf(s, "p0", "tipOffLanded")).toBe(2);
-    s = closeAct(toActMeeting(s));
-    s = run(s, tipOff("p0"), MOMENT);
-    expect(tokensOf(s, "p0", "tipOffLanded")).toBe(3);
-    s = closeAct(toActMeeting(s));
-    const others = views(s, ["p1", "p2", "p3", "p4"]);
-    expect(reason(s, tipOff("p0"))).toMatch(/3 times/);
-    expect(views(s, ["p1", "p2", "p3", "p4"])).toEqual(others);
-    expect(ofType(s.log, "tipOffLanded")).toHaveLength(3);
-  });
-
-  it("Mole: tip-offs still queued count toward the 3 (Recharge each round, no police moment in between)", () => {
-    let s = game(MOLE_CFG, { roles: ["mole"], patrol: false, shop: ["peek", "recharge", "extraVote"], tokens: { p0: 5 } });
-    s = run(s, tipOff("p0"), ROUND, buy("p0", "recharge"), use("p0", { kind: "recharge" }), tipOff("p0"), ROUND, buy("p0", "recharge"), use("p0", { kind: "recharge" }), tipOff("p0"), ROUND);
-    expect(ofType(s.log, "tipOffLanded")).toHaveLength(0);
-    s = closeAct(toActMeeting(s));
-    expect(handleCommand(s, tipOff("p0")).ok).toBe(false);
-    for (let i = 0; i < 6 && s.phase.kind === "planning"; i++) s = run(s, MOMENT);
-    expect(ofType(s.log, "tipOffLanded")).toHaveLength(3);
-    expect(tokensOf(s, "p0", "tipOffLanded")).toBe(3);
-  });
 
   const ALL = Object.keys(ROLES) as GameConfig["rolePool"][number][];
   const cfgFor = (n: number, seed: string, extra: Partial<GameConfig>) => config(n, { seed, rolePool: ALL, ...extra });
 
-  it("Balanced at 3 players: no police and the Possible list names only roles that can be dealt", () => {
+  it("Balanced at 3 players: the Possible list names only roles that can be dealt", () => {
     for (const n of [3]) {
       for (const pool of [ALL, []]) {
         for (const roleList of ["possible", "hidden"] as const) {
@@ -463,7 +292,6 @@ describe("QA re-check (PR #50 fixes): locked in", () => {
           let listed: readonly string[] | null = null;
           for (let i = 0; i < 150; i++) {
             const g = createGame(cfgFor(n, `bal-${n}-${i}`, { rolePool: pool, roleList }));
-            expect(g.police, `${n}p ${roleList}`).toBeNull();
             for (const p of Object.values(g.players)) dealt.add(p.role);
             const shown = viewFor(g, "p0").roleList;
             if (roleList === "possible") {
@@ -484,12 +312,11 @@ describe("QA re-check (PR #50 fixes): locked in", () => {
     }
   });
 
-  it("the fix doesn't over-reach: Truly random at 3p and Balanced at 4p+ can deal a Mole, list it, and run police", () => {
+  it("the fix doesn't over-reach: Truly random at 3p and Balanced at 4p+ can deal a Mole and list it", () => {
     for (const [n, deal] of [[3, "random"], [4, "balanced"], [12, "balanced"]] as const) {
       let moles = 0;
       for (let i = 0; i < 150; i++) {
         const g = createGame(cfgFor(n, `over-${n}-${i}`, { deal, roleList: "possible" }));
-        expect(g.police, `${n}p ${deal}`).not.toBeNull();
         expect(viewFor(g, "p0").roleList?.roles).toContain("mole");
         if (Object.values(g.players).some((p) => p.role === "mole")) moles++;
       }

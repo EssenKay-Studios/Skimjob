@@ -100,8 +100,9 @@ describe("alibis — design §5.4", () => {
   });
 
   it("a round that ends the game leaves no alibi window open (design §5.4, PR #21 QA)", () => {
-    let s = createGame({ ...cfg, contentOverrides: { heat: { perRound: 100 } } });
-    s = run(s, roundDeadline(1));
+    // A bust in round 1 (design §5.5): a one-bulb bell, one star, and a Vault grab.
+    let s = createGame({ ...cfg, contentOverrides: { alarm: { bulbs: 1, bustStars: 1 } } });
+    s = run(s, { type: "submitMove", player: "p0", move: { room: "vault", duffel: 1, pocket: 0 } }, roundDeadline(1));
     expect(s.phase.kind).toBe("ended");
     expect(s.alibisOpen).toBe(false);
     expect(viewFor(s, "p0").alibiRound).toBeNull();

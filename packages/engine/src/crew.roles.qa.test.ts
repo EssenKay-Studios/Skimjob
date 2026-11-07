@@ -7,7 +7,6 @@ import { BANK_JOB, STARTER_ROLES } from "@skimjob/content";
 import type { GameConfig, GameEvent, GameState, PlayerState } from "./types";
 import { createGame, rolePoolFor, setupEvents, validateConfig } from "./setup";
 import { replay } from "./reduce";
-import { roundHeatDelta } from "./job";
 import { viewFor } from "./view";
 import { privateTo } from "./types";
 import { grantPerks } from "./perks.testkit";
@@ -103,48 +102,6 @@ describe("Smooth Talker's Emergency perk vs the one-per-player emergency — des
     s = settle(run(s, vote("p0", "p1"), vote("p2", "p1"), vote("p3", "p1"), vote("p4", "p1"), vote("p0", null), CLOSE));
     expect(ofType(s.log, "shakedownResolved")[0]?.clean).toBe(false);
     expect(granted(s, "p0")).toEqual([]);
-  });
-});
-
-describe("Fixer: exactly at the raid threshold, once per game, ¼ stash, a token — extension.md \"Roles\", design §7", () => {
-  const VAULT = [mv("p0", "vault"), mv("p1", "vault"), mv("p2", "vault")];
-  const delta = roundHeatDelta(BANK_JOB, 3, { vault: 3 });
-  const at = (heat: number, stash = 8, extra: Partial<GameConfig> = {}) => ({ ...withStash(game(3, ["fixer"], extra), "p0", stash), heat });
-
-  it("landing on 99 is no raid (no save spent); landing on exactly 100 is stopped", () => {
-    const max = BANK_JOB.heat.max;
-    const below = run(at(max - 1 - delta), ...VAULT, ROUND);
-    expect([below.heat, ofType(below.log, "raidStopped").length, below.players.p0?.roleState.usedThisGame]).toEqual([max - 1, 0, 0]);
-    const exact = run(at(max - delta), ...VAULT, ROUND);
-    expect(ofType(exact.log, "roundResolved")[0]?.heat).toBe(max);
-    expect([exact.heat, ofType(exact.log, "raidStopped").length, exact.phase.kind]).toEqual([95, 1, "planning"]);
-  });
-
-  it("loss is round(¼ stash), halves up, never more than the stash", () => {
-    for (const [stash, lost] of [[0, 0], [1, 0], [2, 1], [6, 2], [7, 2], [10, 3]] as const) {
-      const s = run(at(99, stash), ...VAULT, ROUND);
-      expect(ofType(s.log, "abilityResolved").find((e) => e.ability.kind === "fixer")?.ability).toEqual({ kind: "fixer", lost });
-      expect(s.players.p0?.stash).toBe(stash - lost + (ofType(s.log, "coinsGrabbed").find((e) => e.player === "p0")?.pocket ?? 0));
-    }
-  });
-
-  it("a save in an act's last round, then a missed checkpoint's raid: no second save, the heist fails on Heat", () => {
-    const POCKET = ["p0", "p1", "p2"].map((id) => mv(id, "lobby", 2));
-    let s = run(game(3, ["fixer"]), ...POCKET, ROUND, ...POCKET, ROUND);
-    s = run({ ...s, heat: BANK_JOB.heat.max - roundHeatDelta(BANK_JOB, 3, { lobby: 3 }) }, ...POCKET, ROUND);
-    expect(ofType(s.log, "raidStopped")).toHaveLength(1);
-    expect(s.phase.kind).toBe("awaitingMeeting");
-    s = run(meeting(s), CLOSE);
-    expect(ofType(s.log, "checkpointChecked")[0]?.met).toBe(false);
-    expect(ofType(s.log, "raidStopped")).toHaveLength(1);
-    expect(ofType(s.log, "copsRaided")).toHaveLength(1);
-    expect(ofType(s.log, "gameEnded")[0]).toMatchObject({ outcome: { reason: "heat", result: "failed" } });
-  });
-
-  it("the stop earns a private token, not a perk", () => {
-    const s = run(at(99, 8, { rolePool: [...STARTER_ROLES, "fixer"] }), ...VAULT, ROUND);
-    expect(granted(s, "p0")).toEqual(["raidStopped"]);
-    expect([s.players.p0?.roleState.tokens, s.players.p0?.roleState.perks]).toEqual([1, []]);
   });
 });
 

@@ -98,6 +98,9 @@ function scenarioStates(): GameState[] {
   // A Lockdown card forged onto planning (design §10).
   const planning = out[2] as GameState;
   keep({ ...planning, card: { round: planning.round, id: "lockdown", room: "vault" } });
+  // A raided Office, taped off, forged onto planning: the Fixer's reopen (design §5.3).
+  const { office: _off, ...bells } = planning.bells;
+  keep({ ...planning, bells, taped: { office: planning.round + 1 } });
   return out;
 }
 
@@ -118,14 +121,15 @@ function baseCommands(s: GameState): Record<string, unknown>[] {
     const ability =
       power.kind === "lookout"
         ? { kind: "lookout", rooms: [room] }
-        : power.kind === "loopCameras"
-          ? { kind: "loopCameras", room }
-          : null;
+        : power.kind === "loopCameras" || power.kind === "ring"
+          ? { kind: power.kind, room }
+          : power.kind === "reopen"
+            ? { kind: "reopen", room: Object.keys(s.taped)[0] ?? room }
+            : null;
     if (ability) out.push({ type: "submitMove", player, move: { ...fullGrab(room), ability } });
     // Powers used outside a move. design §8
     if (power.kind === "audit") out.push({ type: "useAbility", player, ability: { kind: "audit", room } });
     if (power.kind === "checkStash") out.push({ type: "useAbility", player, ability: { kind: "checkStash", target: other(player) } });
-    if (power.kind === "tipOff") out.push({ type: "useAbility", player, ability: { kind: "tipOff" } }); // extension.md "Police activity"
     if (power.kind === "bless") out.push({ type: "useAbility", player, ability: { kind: "bless", target: other(player) } });
     // Perks. extension.md "Tokens and the perk shop"
     for (const perk of s.shop) out.push({ type: "buyPerk", player, perk });
@@ -154,7 +158,6 @@ function baseCommands(s: GameState): Record<string, unknown>[] {
   const meetingIds = [s.scheduledMeeting?.meetingId, s.pendingEmergency?.meetingId, s.meeting?.id, s.pendingShakedown?.meetingId];
   out.push({ type: "advance", deadline: { kind: "round", round: s.round } });
   out.push({ type: "advance", deadline: { kind: "alibis", round: s.resolvedRound } });
-  if (s.police) out.push({ type: "advance", deadline: { kind: "policeMoment", moment: s.police.moment } });
   for (const kind of ["openMeeting", "closeMeeting", "resolveShakedown"]) {
     for (const meetingId of meetingIds) if (meetingId) out.push({ type: "advance", deadline: { kind, meetingId } });
   }

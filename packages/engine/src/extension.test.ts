@@ -1,16 +1,15 @@
 // The Extension rules not covered by a role's own tests: the perk shop, buying
-// perks, hidden police activity and the Mole's queued tip-off, "camera
-// offline", the Heat breakdown, the gap box and the role list.
+// perks, "camera offline", the gap box and the role list.
 // docs/extension.md (THE spec for R6a)
 import { describe, expect, it } from "vitest";
-import { BANK_JOB, PERKS, POLICE_ACTIVITY, ROLES, SHOP_COLUMNS, SHOP_RULES, type PerkId } from "@skimjob/content";
+import { PERKS, ROLES, SHOP_COLUMNS, SHOP_RULES, type PerkId } from "@skimjob/content";
 import { handleThroughAlibis } from "./alibis.testkit";
 import { handleCommand } from "./handle";
 import type { GameConfig, GameEvent, GameState, PlayerId } from "./types";
-import { PUBLIC, REVEAL, privateTo } from "./types";
+import { PUBLIC, privateTo } from "./types";
 import { createGame, dealableRoles, setupEvents } from "./setup";
 import { replay } from "./reduce";
-import { gapBox, heatBreakdown, viewFor } from "./view";
+import { gapBox, viewFor } from "./view";
 import { ranking } from "./end";
 import { fullGrab } from "./grab.testkit";
 
@@ -33,8 +32,6 @@ interface Setup {
   readonly shop?: readonly PerkId[];
   /** Tokens each player holds at the start. */
   readonly tokens?: Readonly<Record<PlayerId, number>>;
-  /** Whether the first police moment is a patrol (when police are scheduled). */
-  readonly patrol?: boolean;
 }
 
 /** A new game, with the setup events rewritten as `setup` asks. */
@@ -50,7 +47,6 @@ function game(cfg: GameConfig, setup: Setup = {}): GameState {
     }
     if (e.type === "roleListShown" && setup.roles && e.list === "exact") return [];
     if (e.type === "shopDealt" && setup.shop) return [{ ...e, perks: setup.shop }];
-    if (e.type === "policeScheduled" && setup.patrol !== undefined && e.moment === 1) return [{ ...e, patrol: setup.patrol }];
     return [e];
   });
   return replay(cfg, log);
@@ -77,9 +73,7 @@ const shopOf = (cfg: GameConfig) => ofType(setupEvents(cfg), "shopDealt")[0]?.pe
 
 const mv = (player: string, room: string, pocket = 0, extra: object = {}) => ({ type: "submitMove", player, move: { ...fullGrab(room, pocket), ...extra } });
 const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
-const MOMENT = (s: GameState) => ({ type: "advance", deadline: { kind: "policeMoment", moment: s.police?.moment } });
 const buy = (player: string, perk: string) => ({ type: "buyPerk", player, perk });
-const tipOff = (player: string) => ({ type: "useAbility", player, ability: { kind: "tipOff" } });
 const views = (s: GameState, ids: readonly PlayerId[]) => ids.map((id) => JSON.stringify(viewFor(s, id)));
 const SEEDS = Array.from({ length: 60 }, (_, i) => `shop-${i}`);
 
@@ -137,124 +131,23 @@ describe("buying perks — extension.md \"Tokens and the perk shop\"", () => {
   });
 
   it("unspent tokens are worth nothing at the end", () => {
-    const plain = game(config(3, { contentOverrides: { heat: { perRound: 40 } } }));
-    const rich = game(config(3, { contentOverrides: { heat: { perRound: 40 } } }), { roles: [plain.players.p0?.role ?? "rookie", plain.players.p1?.role ?? "rookie", plain.players.p2?.role ?? "rookie"], tokens: { p0: 5 } });
-    const end = (s: GameState) => run(s, ROUND, ROUND, ROUND);
+    // A bust after round 1 (a one-bulb bell, one star): the Vault rings.
+    const quick = { contentOverrides: { alarm: { bulbs: 1, bustStars: 1 } } };
+    const plain = game(config(3, quick));
+    const rich = game(config(3, quick), { roles: [plain.players.p0?.role ?? "rookie", plain.players.p1?.role ?? "rookie", plain.players.p2?.role ?? "rookie"], tokens: { p0: 5 } });
+    const end = (s: GameState) => run(s, mv("p0", "vault"), ROUND);
     expect(end(plain).phase.kind).toBe("ended");
     expect(ranking(end(rich)).map((r) => r.score)).toEqual(ranking(end(plain)).map((r) => r.score));
   });
 });
 
-describe("police activity — extension.md \"Police activity\" (owner, 3 Nov), Build notes", () => {
-  // 5 players; the "Possible" role list names the Mole, so the police are in play whoever was dealt.
-  const cfg = config(5, { rolePool: ["rookie", "lookout", "mole"], roleList: "possible" });
-  const others = ["p1", "p2", "p3", "p4"];
-
-  it("only when a Mole could be in the game: none without one; scheduled (reveal-only) with one", () => {
-    const none = createGame(config(5, { rolePool: ["rookie", "lookout"] }));
-    expect(none.police).toBeNull();
-    expect(ofType(none.log, "policeScheduled")).toEqual([]);
-    expect(reason(none, { type: "advance", deadline: { kind: "policeMoment", moment: 1 } })).toMatch(/no police moment/);
-    const s = game(cfg, { roles: ["mole"] });
-    expect(s.police).toMatchObject({ moment: 1, queue: [] });
-    const [scheduled] = ofType(s.log, "policeScheduled");
-    expect(scheduled?.visibility).toEqual({ kind: "reveal" });
-    expect(scheduled?.gapPermille).toBeGreaterThanOrEqual(POLICE_ACTIVITY.gapMinPermille);
-    expect(scheduled?.gapPermille).toBeLessThanOrEqual(POLICE_ACTIVITY.gapMaxPermille);
-    // Never in a view during play: no player can tell when the next moment comes.
-    for (const id of s.playerOrder) expect(JSON.stringify(viewFor(s, id))).not.toMatch(/policeScheduled|gapPermille|patrol/);
-  });
-
-  it("a patrol moment adds +4 Heat as a public \"police activity\", then the next moment is drawn", () => {
-    const s = game(cfg, { roles: ["mole"], patrol: true });
-    const after = run(s, MOMENT);
-    const events = since(s, after);
-    expect(events[0]).toEqual({ type: "policeActivity", visibility: PUBLIC, round: 1, heatAdded: POLICE_ACTIVITY.heat, heat: s.heat + 4 });
-    // design §13: which it was is recorded reveal-only, right after.
-    expect(events[1]).toEqual({ type: "policeCause", visibility: REVEAL, round: 1, cause: "patrol", mole: null });
-    expect(ofType(events, "policeScheduled")).toMatchObject([{ moment: 2 }]);
-    expect(after.heat).toBe(s.heat + 4);
-    expect(after.police?.moment).toBe(2);
-  });
-
-  it("a quiet moment does nothing visible", () => {
-    const s = game(cfg, { roles: ["mole"], patrol: false });
-    const after = run(s, MOMENT);
-    expect(since(s, after).map((e) => e.type).filter((t) => t !== "rngAdvanced")).toEqual(["policeScheduled"]);
-    for (const id of s.playerOrder) expect(viewFor(after, id).ledger).toEqual(viewFor(s, id).ledger);
-  });
-
-  it("the Mole's tip-off is queued and lands at the next moment, replacing a patrol: one activity, and the crew can't tell", () => {
-    for (const patrol of [true, false]) {
-      const base = game(cfg, { roles: ["mole"], patrol });
-      const tipped = run(base, tipOff("p0"));
-      expect(since(base, tipped)).toEqual([{ type: "abilityResolved", visibility: privateTo("p0"), player: "p0", round: 1, ability: { kind: "tipOff" } }]);
-      expect(tipped.police?.queue).toEqual(["p0"]);
-      const landed = run(tipped, MOMENT);
-      const events = since(tipped, landed);
-      expect(ofType(events, "policeActivity")).toHaveLength(1);
-      expect(ofType(events, "policeCause")).toEqual([{ type: "policeCause", visibility: REVEAL, round: 1, cause: "tipOff", mole: "p0" }]);
-      expect(ofType(events, "tipOffLanded")).toEqual([{ type: "tipOffLanded", visibility: privateTo("p0"), player: "p0", round: 1 }]);
-      expect(ofType(events, "tokenEarned")).toEqual([{ type: "tokenEarned", visibility: privateTo("p0"), player: "p0", trigger: "tipOffLanded" }]);
-      expect(landed.police?.queue).toEqual([]);
-      // Everyone else sees exactly what a plain patrol shows.
-      const patrolled = run(game(cfg, { roles: ["mole"], patrol: true }), MOMENT);
-      expect(views(landed, others)).toEqual(views(patrolled, others));
-    }
-  });
-
-  it("once between meetings: emergencies don't reset it, the regular meeting after round 3 does", () => {
-    let s = run(game(cfg, { roles: ["mole"], patrol: false }), tipOff("p0"));
-    expect(reason(s, tipOff("p0"))).toMatch(/already tipped off the cops since the last meeting/);
-    s = run(s, { type: "callEmergency", player: "p1" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: "emergency-p1" } });
-    s = run(s, { type: "advance", deadline: { kind: "closeMeeting", meetingId: "emergency-p1" } });
-    expect(reason(s, tipOff("p0"))).toMatch(/already tipped off/);
-    s = run(s, ROUND, ROUND, ROUND, { type: "scheduleMeeting", act: 1, slot: "x" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: "act-1" } });
-    s = run(s, { type: "advance", deadline: { kind: "closeMeeting", meetingId: "act-1" } });
-    expect(s.round).toBe(4);
-    expect(run(s, tipOff("p0")).police?.queue.length).toBeGreaterThan(0);
-  });
-
-  it("refused while a meeting is open, for the wrong moment, and for anyone but the Mole", () => {
-    const s = game(cfg, { roles: ["mole"] });
-    expect(reason(s, { type: "advance", deadline: { kind: "policeMoment", moment: 2 } })).toMatch(/not the next one/);
-    const meeting = run(s, { type: "callEmergency", player: "p1" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: "emergency-p1" } });
-    expect(reason(meeting, MOMENT(meeting))).toMatch(/paused/);
-    expect(reason(s, tipOff("p1"))).toMatch(/no tipOff/);
-    expect(reason(s, mv("p0", "lobby", 0, { ability: { kind: "tipOff" } }))).toMatch(/any time with useAbility|not in a move/);
-  });
-
-  it("is deterministic and replays", () => {
-    const play = () => run(game(cfg, { roles: ["mole"] }), tipOff("p0"), MOMENT, ROUND, MOMENT, MOMENT);
-    expect(play().log).toEqual(play().log);
-    const s = play();
-    expect(replay(s.config, s.log)).toEqual(s);
-  });
-});
-
-describe("the Mole's tip-off cap — extension.md owner ruling 4 (\"at most 3 per game\")", () => {
-  it("a fourth tip-off is refused even with Recharge, so no fourth token; the Mole's view counts them", () => {
-    const cfg = config(5, { rolePool: ["rookie", "lookout", "mole"], roleList: "possible" });
-    let s = game(cfg, { roles: ["mole"], patrol: false, shop: ["peek", "recharge", "extraVote"], tokens: { p0: 3 } });
-    s = run(s, tipOff("p0"), MOMENT, buy("p0", "recharge"), { type: "useAbility", player: "p0", ability: { kind: "recharge" } }, tipOff("p0"), MOMENT, ROUND);
-    s = run(s, buy("p0", "recharge"), { type: "useAbility", player: "p0", ability: { kind: "recharge" } }, tipOff("p0"), MOMENT, ROUND);
-    expect(viewFor(s, "p0").me.tipOffs).toBe(3);
-    expect(viewFor(s, "p1").me.tipOffs).toBe(0);
-    s = run(s, buy("p0", "recharge"), { type: "useAbility", player: "p0", ability: { kind: "recharge" } });
-    expect(reason(s, tipOff("p0"))).toMatch(/already tipped off the cops 3 times this game/);
-    expect(ofType(s.log, "tipOffLanded")).toHaveLength(3);
-    expect(ofType(s.log, "tokenEarned").filter((e) => e.trigger === "tipOffLanded")).toHaveLength(3);
-  });
-});
-
-describe("what the deal can give — extension.md \"Host settings\", Build notes \"Police activity\" (QA on R6a)", () => {
-  it("Balanced at 3 players deals no Lone wolf or Wildcard: no police, and the Possible list names only Team players", () => {
+describe("what the deal can give — extension.md \"Host settings\" (QA on R6a)", () => {
+  it("Balanced at 3 players deals no Lone wolf or Wildcard: the Possible list names only Team players", () => {
     for (const n of [3]) {
       for (const roleList of ["possible", "hidden"] as const) {
         const cfg = config(n, { deck: "everything", roleList, eventsEnabled: true });
         expect(dealableRoles(cfg)).not.toContain("mole");
         const s = createGame(cfg);
-        expect(s.police, `${n}p ${roleList}`).toBeNull();
         if (roleList === "possible") {
           const listed = viewFor(s, "p0").roleList?.roles ?? [];
           expect(listed.length).toBeGreaterThan(0);
@@ -264,10 +157,6 @@ describe("what the deal can give — extension.md \"Host settings\", Build notes
     }
   });
 
-  it("Truly random at 3 and Balanced at 4 can deal the Mole, so the police run", () => {
-    expect(createGame(config(3, { deck: "everything", roleList: "possible", deal: "random" })).police).not.toBeNull();
-    expect(createGame(config(4, { deck: "everything", roleList: "possible" })).police).not.toBeNull();
-  });
 });
 
 describe("camera offline — extension.md \"Camera offline\"", () => {
@@ -279,71 +168,10 @@ describe("camera offline — extension.md \"Camera offline\"", () => {
   });
 });
 
-describe("the Heat breakdown and the gap box — extension.md \"What the app works out for you\"", () => {
-  it("each round's summary carries its Heat parts, which add up to the change; police activity sits under the round", () => {
-    const cfg = config(5, { rolePool: ["rookie", "mole"], roleList: "possible" });
-    let s = game(cfg, { roles: ["mole"], patrol: true });
-    s = run(s, mv("p0", "vault", 0), mv("p1", "vault", 0), MOMENT, ROUND);
-    const summary = ofType(s.log, "roundResolved")[0];
-    const parts = summary?.heatParts;
-    expect(parts).toBeDefined();
-    const total = (parts?.base ?? 0) + Object.values(parts?.rooms ?? {}).reduce((a, b) => a + b, 0);
-    expect(total).toBe(summary?.heatDelta);
-    expect(parts?.rooms.vault).toBeGreaterThan(0);
-    expect(heatBreakdown(s.log, 1)).toEqual({ round: 1, ...parts, clamp: 0, police: [4], missedTarget: 0, stopped: 0 });
-    // The view's ledger is enough to work it out (public events only).
-    const ledger = viewFor(s, "p3").ledger.map((e) => e.event);
-    expect(heatBreakdown(ledger, 1)).toEqual(heatBreakdown(s.log, 1));
-  });
+describe("the gap box — extension.md \"What the app works out for you\"", () => {
 
   const partsSum = (p: { base: number; rooms: Readonly<Record<string, number>>; clamp?: number }) =>
     p.base + Object.values(p.rooms).reduce((x, y) => x + y, 0) + (p.clamp ?? 0);
-
-  it("the baseline line is always its true value; crew-size rounding sits on the rooms (extension.md \"Heat\": +4 every round, no matter what)", () => {
-    // 3 players: one in the Vault, two on the Rooftop. The shares aren't whole numbers.
-    const s = run(game(config(3), { roles: [] }), mv("p0", "vault"), mv("p1", "rooftop"), mv("p2", "rooftop"), ROUND);
-    const summary = ofType(s.log, "roundResolved")[0]!;
-    expect(summary.heatParts.base).toBe(BANK_JOB.heat.perRound);
-    expect(partsSum(summary.heatParts)).toBe(summary.heatDelta);
-    for (const v of Object.values(summary.heatParts.rooms)) expect(Number.isInteger(v)).toBe(true);
-  });
-
-  it("at Heat 0 a crowd laying low shows what the floor took back, so the parts add up to the real change (extension.md \"Heat never drops below 0\")", () => {
-    const s = run(game(config(4), { roles: [] }), mv("p0", "rooftop"), mv("p1", "rooftop"), mv("p2", "rooftop"), mv("p3", "rooftop"), ROUND);
-    const summary = ofType(s.log, "roundResolved")[0]!;
-    expect(summary.heat).toBe(0);
-    expect(summary.heatDelta).toBe(0);
-    expect(summary.heatParts.rooms.rooftop).toBeLessThan(0);
-    expect(summary.heatParts.clamp).toBeGreaterThan(0);
-    expect(partsSum(summary.heatParts)).toBe(0);
-    expect(heatBreakdown(s.log, 1)?.clamp).toBe(summary.heatParts.clamp);
-  });
-
-  it("police activity at the top shows the full +4 and what the limit took back, so the parts add up to the real change (extension.md \"Police activity\")", () => {
-    const s = run(game(config(4), { roles: [] }), ROUND);
-    const top = BANK_JOB.heat.max;
-    const log: GameEvent[] = [
-      ...s.log,
-      { type: "policeActivity", visibility: PUBLIC, round: 1, heatAdded: top - 1 - s.heat, heat: top - 1 },
-      { type: "policeActivity", visibility: PUBLIC, round: 2, heatAdded: POLICE_ACTIVITY.heat, heat: top },
-    ];
-    const b = heatBreakdown(log, 2)!;
-    expect(b.police).toEqual([POLICE_ACTIVITY.heat]);
-    expect(b.clamp).toBe(1 - POLICE_ACTIVITY.heat);
-    expect(partsSum(b) + b.police.reduce((x, y) => x + y, 0)).toBe(1);
-    expect(heatBreakdown(log, 1)!.clamp).toBe(heatBreakdown(s.log, 1)!.clamp);
-  });
-
-  it("a missed target's penalty shows under the stretch's last round", () => {
-    let s = game(config(3), { roles: [] });
-    // Missed moves hand in 1 each (design §3.3), and p0 grabs nothing in round 3: 8 of the 9 needed.
-    s = run(s, ROUND, ROUND, mv("p0", "rooftop"), ROUND, { type: "scheduleMeeting", act: 1, slot: "x" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: "act-1" } });
-    s = run(s, { type: "advance", deadline: { kind: "closeMeeting", meetingId: "act-1" } });
-    const missed = ofType(s.log, "checkpointChecked")[0];
-    expect(missed?.met).toBe(false);
-    expect(heatBreakdown(s.log, 3)?.missedTarget).toBe(missed?.heatPenalty);
-    expect(heatBreakdown(s.log, 2)?.missedTarget).toBe(0);
-  });
 
   it("the gap box sets the alibis' room loot against the Haul's growth, event effects included", () => {
     // Round 1: p0 Vault (pockets 2), p1 Lobby, p2 Office. Then all three post true alibis.

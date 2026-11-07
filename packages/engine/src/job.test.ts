@@ -1,8 +1,8 @@
-// Job helpers: rooms by crew size, the Heat formula, checkpoint targets.
+// Job helpers: rooms by crew size, rings, checkpoint targets.
 // design §3.1
 import { describe, expect, it } from "vitest";
-import { BANK_JOB, type JobDef } from "@skimjob/content";
-import { checkpointTarget, clampHeat, jobById, roomDef, roomsInPlay, roundHeatDelta } from "./job";
+import { BANK_JOB } from "@skimjob/content";
+import { checkpointTarget, jobById, ringsOf, roomDef, roomsInPlay } from "./job";
 
 const bank = BANK_JOB;
 
@@ -25,60 +25,16 @@ describe("rooms in play — design §3.1", () => {
   });
 });
 
-describe("round Heat — design §7", () => {
-  it("baseline +4 when nobody is in a Heat room", () => {
-    expect(roundHeatDelta(bank, 4, {})).toBe(4);
-    expect(roundHeatDelta(bank, 4, { office: 2, lobby: 1, security: 1 })).toBe(4);
-  });
-
-  it("vault pressure is +20 × (Vault visitors ÷ crew size)", () => {
-    expect(roundHeatDelta(bank, 4, { vault: 1 })).toBe(4 + 5);
-    expect(roundHeatDelta(bank, 4, { vault: 4 })).toBe(4 + 20);
-  });
-
-  it("the same share of the crew gives the same Heat at any crew size", () => {
-    expect(roundHeatDelta(bank, 12, { vault: 3 })).toBe(roundHeatDelta(bank, 4, { vault: 1 }));
-    expect(roundHeatDelta(bank, 12, { vault: 4 })).toBe(roundHeatDelta(bank, 3, { vault: 1 }));
-    expect(roundHeatDelta(bank, 10, { vault: 5, rooftop: 5 })).toBe(roundHeatDelta(bank, 4, { vault: 2, rooftop: 2 }));
-  });
-
-  it("Manager's office adds half the vault pressure", () => {
-    expect(roundHeatDelta(bank, 10, { managersOffice: 2 })).toBe(4 + 2);
-    expect(roundHeatDelta(bank, 10, { vault: 2 })).toBe(4 + 4);
-  });
-
-  it("Rooftop removes −20 × (Rooftop visitors ÷ crew size)", () => {
-    expect(roundHeatDelta(bank, 4, { rooftop: 2 })).toBe(4 - 10);
-    expect(roundHeatDelta(bank, 4, { vault: 1, rooftop: 1 })).toBe(4);
-  });
-
-  it("sanity check: a quarter of the crew in the Vault every round totals 81 over 9 rounds", () => {
-    expect(9 * roundHeatDelta(bank, 8, { vault: 2 })).toBe(81);
-  });
-
-  it("sanity check: half the crew in the Vault every round busts without the Rooftop", () => {
-    expect(9 * roundHeatDelta(bank, 6, { vault: 3 })).toBeGreaterThanOrEqual(bank.heat.max);
-  });
-
-  it("the round total is rounded to a whole number, halves up (provisional)", () => {
-    expect(roundHeatDelta(bank, 3, { vault: 1 })).toBe(11); // 4 + 6.67
-    expect(roundHeatDelta(bank, 8, { vault: 1 })).toBe(7); // 4 + 2.5
-    expect(roundHeatDelta(bank, 8, { rooftop: 3 })).toBe(-3); // 4 − 7.5
-    expect(roundHeatDelta(bank, 7, { vault: 1, managersOffice: 1, rooftop: 1 })).toBe(5); // 4 + 10/7
-  });
-
-  it("rejects rooms the job doesn't have and bad crew sizes", () => {
-    expect(() => roundHeatDelta(bank, 4, { kitchen: 1 })).toThrow(/no room/);
-    for (const n of [0, -1, 2.5, Number.NaN]) expect(() => roundHeatDelta(bank, n, {})).toThrow(/crew size/);
-  });
-
-  it("reads its numbers from the job, not the engine", () => {
-    const hot: JobDef = { ...bank, heat: { ...bank.heat, perRound: 5 } }; // Casino-style baseline, design §9
-    expect(roundHeatDelta(hot, 4, {})).toBe(5);
-  });
-
-  it("Heat stays within 0–100", () => {
-    expect([-12, 0, 57, 100, 130].map((h) => clampHeat(bank, h))).toEqual([0, 0, 57, 100, 100]);
+describe("rings — design §3.1, §5.2", () => {
+  it("each coin after the room's quiet ones rings once", () => {
+    const ring = (room: string, coins: number) => ringsOf(roomDef(bank, room), coins);
+    // The Lobby is silent; the Office's 1st coin is silent; every Vault coin rings.
+    expect(ring("lobby", 1)).toBe(0);
+    expect([1, 2].map((n) => ring("office", n))).toEqual([0, 1]);
+    for (const room of ["depositBoxes", "managersOffice", "serverRoom"]) expect(ring(room, 2), room).toBe(1);
+    expect([1, 2, 3].map((n) => ring("vault", n))).toEqual([1, 2, 3]);
+    // Nothing grabbed, nothing rung (Security, the Rooftop, a cut grab).
+    for (const room of ["security", "rooftop", "vault", "office"]) expect(ring(room, 0), room).toBe(0);
   });
 });
 

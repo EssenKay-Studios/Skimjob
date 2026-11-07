@@ -76,10 +76,10 @@ const power = <K extends string>(role: string, kind: K) => {
 
 describe("content — design §8", () => {
   it("content overrides can tune each power's own numbers, never another role's (design §17.4)", () => {
-    const roles = { hacker: { perAct: 2 }, smoothTalker: { weight: 3 }, mole: { perGame: 2 } };
+    const roles = { hacker: { perAct: 2 }, smoothTalker: { weight: 3 }, mole: { perAct: 2 } };
     expect(validateConfig(config(5, { contentOverrides: { roles } }))).toEqual([]);
     expect(validateConfig(config(5, { contentOverrides: { roles: { hacker: { steal: 5 } as never } } }))).toEqual([expect.stringMatching(/hacker\.steal/)]);
-    expect(validateConfig(config(5, { contentOverrides: { roles: { mole: { perGame: 0 } } } }))).toEqual([expect.stringMatching(/perGame/)]);
+    expect(validateConfig(config(5, { contentOverrides: { roles: { mole: { perAct: 0 } } } }))).toEqual([expect.stringMatching(/mole\.perAct/)]);
   });
 });
 

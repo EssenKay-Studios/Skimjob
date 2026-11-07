@@ -458,32 +458,19 @@ describe("order at a checkpoint — design §11.4, §11.5", () => {
     const rescued = run(s, vote("p1", "p0"), vote("p2", "p0"), CLOSE);
     // Token grants are not what this checks (extension.md "Tokens and the perk shop").
     expect(since(s, rescued).map((e) => e.type).filter((t) => t !== "tokenEarned")).toEqual(["voteCast", "voteCast", "meetingClosed", "shakedownResolved", "checkpointChecked", "roundStarted"]);
-    expect(LAST(rescued, "checkpointChecked")).toEqual({ type: "checkpointChecked", visibility: { kind: "public" }, act: 1, target: 18, haul: 22, met: true, heatPenalty: 0 });
-    expect(rescued.heat).toBe(19);
+    expect(LAST(rescued, "checkpointChecked")).toEqual({ type: "checkpointChecked", visibility: { kind: "public" }, act: 1, target: 18, haul: 22, met: true });
   });
 
-  it("a missed Act 1 checkpoint adds +15 Heat", () => {
+  it("a missed Act 1 checkpoint costs nothing more: the next act starts", () => {
     const s = run(act1Meeting(), CLOSE);
-    expect(LAST(s, "checkpointChecked")).toMatchObject({ act: 1, target: 18, haul: 16, met: false, heatPenalty: 15 });
-    expect(s.heat).toBe(34);
+    expect(LAST(s, "checkpointChecked")).toEqual({ type: "checkpointChecked", visibility: { kind: "public" }, act: 1, target: 18, haul: 16, met: false });
     expect(LAST(s, "roundStarted")).toMatchObject({ round: 4, act: 2 });
   });
 
-  it("the missed-checkpoint penalty is clamped once and a raid at 100 ends the game", () => {
-    let s = { ...game(3), heat: 80 };
-    for (let i = 0; i < 3; i++) s = run(s, mv("p0", "lobby", 2), mv("p1", "lobby"), mv("p2", "lobby"), ROUND); // p1 and p2 hand in the Lobby's 2: Haul 12 of 18, Heat 92
-    expect([s.haul, s.heat]).toEqual([12, 92]);
-    const before = run(s, sched(1), open("act-1"));
-    const after = run(before, CLOSE);
-    expect(since(before, after).map((e) => e.type)).toEqual(["meetingClosed", "checkpointChecked", "copsRaided", "gameEnded"]);
-    expect(LAST(after, "checkpointChecked")).toMatchObject({ met: false, heatPenalty: 8 });
-    expect(LAST(after, "copsRaided")).toMatchObject({ round: 3, heat: 100 });
-    expect(after.phase).toMatchObject({ kind: "ended", outcome: { result: "failed", reason: "heat" } });
-  });
 });
 
 describe("the final meeting comes before the final check — design §3, §4, §11.4", () => {
-  /** p0 in the Vault, p1 on the Rooftop, p2 in the Lobby: Haul +8 and Heat +4 a round. Act 3: p0 pockets everything if `greedy`. */
+  /** p0 in the Vault, p1 on the Rooftop, p2 in the Lobby: Haul +8 a round. Act 3: p0 pockets everything if `greedy`. */
   function toFinalMeeting(greedy: boolean): GameState {
     let s = game(3);
     for (let round = 1; round <= 9; round++) {
@@ -495,20 +482,19 @@ describe("the final meeting comes before the final check — design §3, §4, §
     return s;
   }
 
-  it("Haul at the final target after the final meeting: the heist succeeds (no Heat penalty)", () => {
+  it("Haul at the final target after the final meeting: the heist succeeds", () => {
     const s = toFinalMeeting(false);
     const after = run(s, CLOSE);
     expect(since(s, after).map((e) => e.type)).toEqual(["meetingClosed", "checkpointChecked", "gameEnded"]);
-    expect(LAST(after, "checkpointChecked")).toMatchObject({ act: 3, target: 66, haul: 72, met: true, heatPenalty: 0 });
+    expect(LAST(after, "checkpointChecked")).toMatchObject({ act: 3, target: 66, haul: 72, met: true });
     // Nobody pocketed; p0 handed in more (tie-break 2, end.test.ts).
     expect(after.phase).toMatchObject({ kind: "ended", outcome: { result: "success", winners: ["p0"] } });
   });
 
-  it("missing the final target fails the heist, with no Heat penalty", () => {
+  it("missing the final target fails the heist", () => {
     const s = toFinalMeeting(true);
     const after = run(s, CLOSE);
-    expect(LAST(after, "checkpointChecked")).toMatchObject({ act: 3, haul: 54, met: false, heatPenalty: 0 });
-    expect(after.heat).toBe(s.heat);
+    expect(LAST(after, "checkpointChecked")).toMatchObject({ act: 3, haul: 54, met: false });
     expect(after.phase).toMatchObject({ kind: "ended", outcome: { result: "failed", reason: "target" } });
   });
 

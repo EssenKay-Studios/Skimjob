@@ -14,6 +14,7 @@ import { createGame } from "./setup";
 import { handleCommand } from "./handle";
 import { eventsSince, viewFor } from "./view";
 import { fullGrab } from "./grab.testkit";
+import { NO_RAIDS } from "./v01-numbers.testkit";
 
 type Cmd = Record<string, unknown>;
 type Kind = "role" | "split" | "swap" | "watch" | "miss" | "churn" | "voteChurn" | "ballotSwap" | "seal" | "control";
@@ -40,6 +41,8 @@ const config = (n: number, voteVisibility: VoteVisibility, seed: string): GameCo
   rolePool: ["rookie", "lookout", "priest", "auditor"],
   eventsEnabled: false,
   voteVisibility,
+  // Bells too big to raid, so a random room is never taped off (raids in leak tests: view.leak.test.ts).
+  contentOverrides: NO_RAIDS,
 });
 
 function apply(s: GameState, c: Cmd, game: string): GameState {

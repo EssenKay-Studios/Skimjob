@@ -1,8 +1,7 @@
-// Job definitions: rooms by player count, the bank, Heat formula numbers,
-// checkpoint targets and shakedown numbers. design §3.1, §6.1
+// Job definitions: rooms by player count, the bank, the alarm (bells, tape and
+// Wanted), checkpoint targets and shakedown numbers. design §3.1, §5, §6.1
 //
-// Heat and targets live on the job because jobs may change them (the Casino's
-// baseline Heat is +5, design §9). Engine helpers take a `JobDef` rather than
+// The numbers live on the job, and engine helpers take a `JobDef` rather than
 // reading these constants, so the simulator's content overrides (design §17.4)
 // only need to swap the definition.
 import type { JobId, RoomId } from "./index";
@@ -14,14 +13,14 @@ export interface RoomTier {
   readonly rooms: readonly RoomId[];
 }
 
-/** design §7 */
-export interface HeatRules {
-  /** Heat at which the cops raid and the heist fails. */
-  readonly max: number;
-  /** Added every round, whatever the crew does. */
-  readonly perRound: number;
-  /** Added when the Act 1 or Act 2 checkpoint is missed. design §11.5 */
-  readonly missedCheckpoint: number;
+/** Bells, raids and Wanted. design §5 */
+export interface AlarmRules {
+  /** Bulbs on every room's bell; lighting the last one raids the room [tunable]. design §5.1, §5.3 */
+  readonly bulbs: number;
+  /** Rounds a raided room stays taped off [tunable]. design §5.3 */
+  readonly tapedRounds: number;
+  /** Wanted stars that make a bust [tunable]. design §5.4, §5.5 */
+  readonly bustStars: number;
 }
 
 /** design §11.5 */
@@ -60,7 +59,7 @@ export interface JobDef {
   /** Where a player who misses the round deadline goes (1 coin, handed in). Must be a core coin room. design §3.3 */
   readonly defaultRoom: RoomId;
   readonly bank: BankRules;
-  readonly heat: HeatRules;
+  readonly alarm: AlarmRules;
   readonly checkpoints: CheckpointRules;
   /** Kept on the job so simulator content overrides can tune it with the rest (design §17.4, §19 Q4). */
   readonly shakedown: ShakedownRules;
@@ -76,20 +75,22 @@ export const BANK_JOB: JobDef = {
     { minPlayers: 5, rooms: ["depositBoxes", "serverRoom"] },
     { minPlayers: 9, rooms: ["managersOffice"] },
   ],
-  // Coins per visitor [tunable]. design §3.1. `heatPressure` is R6 Heat until bells replace it (S3a.2).
+  // Coins per visitor and noise [tunable]: the Lobby is silent, the Office-like rooms' 1st coin is silent,
+  // every Vault coin rings (or its 1st is silent; the simulator picks). design §3.1
   rooms: {
-    vault: { id: "vault", name: "Vault", coins: 3, heatPressure: 20, info: "none" },
-    office: { id: "office", name: "Office", coins: 2, heatPressure: 0, info: "none" },
-    lobby: { id: "lobby", name: "Lobby", coins: 1, heatPressure: 0, info: "none" },
-    security: { id: "security", name: "Security", coins: 0, heatPressure: 0, info: "watchRoom" },
-    rooftop: { id: "rooftop", name: "Rooftop", coins: 0, heatPressure: -20, info: "none" },
-    depositBoxes: { id: "depositBoxes", name: "Deposit boxes", coins: 2, heatPressure: 10, info: "none" },
-    serverRoom: { id: "serverRoom", name: "Server room", coins: 2, heatPressure: 0, info: "none" },
-    managersOffice: { id: "managersOffice", name: "Manager's office", coins: 2, heatPressure: 10, info: "none" },
+    vault: { id: "vault", name: "Vault", coins: 3, quietCoins: 0, lieLow: false, info: "none" },
+    office: { id: "office", name: "Office", coins: 2, quietCoins: 1, lieLow: false, info: "none" },
+    lobby: { id: "lobby", name: "Lobby", coins: 1, quietCoins: 1, lieLow: false, info: "none" },
+    security: { id: "security", name: "Security", coins: 0, quietCoins: 0, lieLow: false, info: "watchRoom" },
+    rooftop: { id: "rooftop", name: "Rooftop", coins: 0, quietCoins: 0, lieLow: true, info: "none" },
+    depositBoxes: { id: "depositBoxes", name: "Deposit boxes", coins: 2, quietCoins: 1, lieLow: false, info: "none" },
+    serverRoom: { id: "serverRoom", name: "Server room", coins: 2, quietCoins: 1, lieLow: false, info: "none" },
+    managersOffice: { id: "managersOffice", name: "Manager's office", coins: 2, quietCoins: 1, lieLow: false, info: "none" },
   },
   defaultRoom: "lobby",
   bank: { coinsPerPlayer: 16 },
-  heat: { max: 100, perRound: 4, missedCheckpoint: 15 },
+  // design §5.1, §5.3, §5.5
+  alarm: { bulbs: 4, tapedRounds: 2, bustStars: 3 },
   // R6's coin-measured numbers, scaled to R7's smaller grabs and 16-a-player bank (S3a.1, provisional) until
   // S3a.3 (endings) and S3a.5 (shakedowns) replace them: checkpoints were [7, 15, 23], the clean line 6 and payout 8.
   // With these the sim's success rate and shakedown accuracy stay near R6's.
