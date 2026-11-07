@@ -77,7 +77,7 @@ export const topSeq = (state: GameState, player: PlayerId): number => {
  * A per-key sliding-window limit (memory only): `allow(key)` is false once `limit.writes`
  * were allowed for that key within `limit.windowMs`. Keys with nothing in the window are swept.
  */
-function rateLimiter(clock: Clock, limit: { readonly writes: number; readonly windowMs: number }) {
+export function rateLimiter(clock: Clock, limit: { readonly writes: number; readonly windowMs: number }) {
   const recent = new Map<string, number[]>();
   let lastSweep = clock.now();
   return {

@@ -329,6 +329,7 @@ A **police briefing** follows every raid, after that round's resolution. It vote
 - **Bots** take a sensible spot and sometimes break it.
 - **The plan is evidence:** when the round resolves, its final plan, its pledges and a compact edit history ("B moved themselves to the Vault 2 minutes before the deadline") go into the log as one public **said** snapshot (§19 seam 5), read by bots, the case board and the reveal.
 - **Build:** the live board runs server-side like chat (fast updates, not in the game log); only the per-round snapshot enters the engine.
+- **The channel:** a seat posts and changes only its own entry (room claim, optional power claim, agree) over the game socket and every seat gets the whole board live. A room claim names a room in play; a power claim names a role with a targeted power and a room in play or another player (any role: it may be a bluff). The board takes edits only while the round is being planned; after that it stays as it was until the next round starts a fresh, empty one. Rate-limited per seat. Nothing on it is private.
 
 ---
 

@@ -147,3 +147,5 @@ export const BOARD_NOTE_MAX_CHARS = 280;
 /** Suspicion board writes per window per seat, and "last seen" marks (a page sends at most one a second or so). */
 export const BOARD_RATE = { writes: 20, windowMs: 10_000 } as const;
 export const SEEN_RATE = { writes: 60, windowMs: 10_000 } as const;
+/** Plan board edits per window per seat (design §10): a drag or a tap each. */
+export const PLAN_RATE = { writes: 20, windowMs: 10_000 } as const;

@@ -38,6 +38,18 @@ export type RolePower =
    */
   | { readonly kind: "ring"; readonly perAct: number };
 
+/**
+ * What a plan-board power claim points at (design §10: "Hacker → Vault", "Detective → Eli"):
+ * a room or a player. A power with no target (passive) can't be claimed.
+ */
+export const POWER_CLAIM_TARGET: Readonly<Partial<Record<RolePower["kind"], "room" | "player">>> = {
+  lookout: "room",
+  loopCameras: "room",
+  audit: "room",
+  checkStash: "player",
+  bless: "player",
+};
+
 /** Why a heist failed: a bust (Wanted 3, design §5.5), or the final target was missed. */
 export type FailureReason = "bust" | "target";
 
