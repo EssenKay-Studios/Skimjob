@@ -38,8 +38,8 @@ describe("QA #55 reveal ending vs outcomeFor on ties — extension.md \"Winning 
 
   it("a missed target on a tie: only the ★ Mole of the top group wins (failedTopWins)", () => {
     const state = game(roles, stashes);
-    const s = revealSummary(state.log, outcomeFor(state, "target"), TABLES);
-    expect(s.ending).toEqual({ result: "failed", reason: "target", topGroup: ["p1", "p2"], winners: ["p2"], why: "failedTopWins" });
+    const s = revealSummary(state.log, outcomeFor(state, "theft"), TABLES);
+    expect(s.ending).toEqual({ result: "failed", reason: "theft", topGroup: ["p1", "p2"], winners: ["p2"], why: "failedTopWins" });
   });
 
   // design §5.5: on a bust only the Rooftop gets away; the biggest stash up there wins, whatever its role.
@@ -59,7 +59,7 @@ describe("QA #55 reveal ending vs outcomeFor on ties — extension.md \"Winning 
 
   it("a ★ role just below the top wins nothing on a failure (failedNobody)", () => {
     const state = game(["rookie", "mole", "lookout", "auditor"], [9, 8, 2, 1]);
-    const outcome = outcomeFor(state, "target");
+    const outcome = outcomeFor(state, "theft");
     const s = revealSummary(state.log, outcome, TABLES);
     expect(s.ending).toMatchObject({ topGroup: ["p0"], winners: [], why: "failedNobody" });
     expect(s.seats.find((x) => x.player === "p1")).toMatchObject({ topGroup: false, winner: false, winsOn: ROLES.mole?.winsOn });

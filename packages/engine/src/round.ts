@@ -1,6 +1,6 @@
 // The round loop: checking a submitted move, and resolving a round when its
 // deadline passes. design §3 (rooms, coins and grabs), §4.2, §5 (bells, raids,
-// Wanted, the bust, cooling); R6 role powers until S3a.6
+// Wanted, the bust, cooling), §6.2 (the end check); R6 role powers until S3a.6
 //
 // Both are pure: they read state and return events (or a rejection reason).
 // `handleCommand` (handle.ts) folds the events.
@@ -11,7 +11,7 @@ import { ringsOf, roomDef } from "./job";
 import { eventsFor, jobFor, powerOf } from "./overrides";
 import { isObject, show } from "./check";
 import { actOfRound, isLastRoundOfAct } from "./acts";
-import { gameEnded } from "./end";
+import { endCheck, gameEnded } from "./end";
 import { applyEvent } from "./reduce";
 import type { Draw } from "./handle";
 import { cardEffects, closedRoom, isAudit, roundJob, startRound } from "./deck";
@@ -143,8 +143,10 @@ function grabbed(order: readonly PlayerId[], asked: (id: PlayerId) => number, ba
  *    public summary, and steps 5–6 don't run;
  * 5. the split (R6's Haul until S3a.4);
  * 6. cooling (§5.6, `bellsCooled`); a reopened room comes back at 0 (`roomReopened`);
- * 7. information: sightings, Security and power results, the round summary.
- * Without a bust, the fold of `roundResolved` opens the round's alibis and
+ * 7. information: sightings, Security and power results, the round summary;
+ * 8. the end check (§6.2): the game ends once the bank is empty or this is the
+ *    round cap (`endCheck`), and nothing below runs.
+ * Otherwise the fold of `roundResolved` opens the round's alibis and
  * `closeAlibis` goes on.
  */
 export function resolveRound(before: GameState, round: number, draw: Draw): GameEvent[] {
@@ -303,14 +305,17 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
   // extension.md "Roles": this round's tokens (Hacker).
   events.push(...grantRewards(state, "loopHidPocketer", (p) => hid.has(p.id)));
 
-  if (busted) events.push(gameEnded(before, events, "bust", lyingLow));
+  // §4.2 step 8: the end check (a bust has already ended the game).
+  const ended = busted ? gameEnded(before, events, "bust", lyingLow) : endCheck(before, events, round);
+  if (ended) events.push(ended);
   return events;
 }
 
 /**
  * design §5.4: the alibi deadline for `round` has passed. The next round
- * starts (flipping its card); after an act's last round the game awaits the
- * act's meeting (the fold of `alibisClosed`).
+ * starts (flipping its card); every 3rd round the game awaits a regular
+ * meeting first (the fold of `alibisClosed`), until S3a.5 holds them at the
+ * bank's thirds (§9.1).
  */
 export function closeAlibis(state: GameState, round: number, draw: Draw): GameEvent[] {
   const events: GameEvent[] = [{ type: "alibisClosed", visibility: PUBLIC, round }];

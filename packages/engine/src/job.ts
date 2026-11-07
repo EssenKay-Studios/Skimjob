@@ -1,11 +1,9 @@
-// Small pure helpers over job content: rooms by crew size, rings and
-// checkpoint targets. The numbers live in @skimjob/content; these only
+// Small pure helpers over job content: rooms by crew size and rings. The numbers live in @skimjob/content; these only
 // apply them. design §3.1
 //
 // Every helper takes the `JobDef` itself, so a simulator content override
 // (design §17.4, STATUS.md task 10) only has to change what `jobById` returns.
 import { JOBS, type JobDef, type JobId, type RoomDef, type RoomId } from "@skimjob/content";
-import type { ActNumber } from "./types";
 
 /** The job definition for `id`. Throws for unknown ids (own keys only). */
 export function jobById(id: JobId): JobDef {
@@ -28,10 +26,3 @@ export function roomDef(job: JobDef, room: RoomId): RoomDef {
 
 /** The rings a grab of `coins` makes in `room`: one per coin after its quiet ones. design §3.1, §5.2 */
 export const ringsOf = (room: RoomDef, coins: number): number => Math.max(0, coins - room.quietCoins);
-
-/** Cumulative Haul target at the end of `act` (Act 3 = final target). design §11.5 */
-export function checkpointTarget(job: JobDef, act: ActNumber, crewSize: number): number {
-  const perPlayer = job.checkpoints.perPlayer[act - 1];
-  if (perPlayer === undefined) throw new Error(`no checkpoint for act ${act}`);
-  return perPlayer * crewSize;
-}

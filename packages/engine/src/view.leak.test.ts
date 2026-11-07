@@ -13,7 +13,7 @@ import { isDeepStrictEqual } from "node:util";
 import { describe, expect, it } from "vitest";
 import type { GameConfig, GameEvent, GameState, LoggedEvent, Move, PlayerId, PlayerState, PlayerView, VoteChoice, VoteVisibility } from "./types";
 import { REVEAL, canSee, privateTo, secretTo } from "./types";
-import { EVENT_DECK } from "@skimjob/content";
+import { EVENT_DECK, BANK_JOB } from "@skimjob/content";
 import { createGame, setupEvents } from "./setup";
 import { replay } from "./reduce";
 import { handleCommand } from "./handle";
@@ -32,9 +32,8 @@ function config(players: number, voteVisibility: VoteVisibility): GameConfig {
     deck: "everything",
     eventsEnabled: true,
     voteVisibility,
-    // design §5: bells ring, raids tape rooms off and Wanted rises, but no bust, so the script reaches every meeting;
-    // the R6 targets are lowered for the seized coins, so the Rookie's checkpoint token still comes up.
-    contentOverrides: { alarm: { bustStars: 99 }, checkpoints: { perPlayer: [1, 2, 3] } },
+    // design §5: bells ring, raids tape rooms off and Wanted rises, but no bust, so the script reaches every meeting.
+    contentOverrides: { alarm: { bustStars: 99 } },
   };
 }
 
@@ -42,7 +41,6 @@ function config(players: number, voteVisibility: VoteVisibility): GameConfig {
 const EARNED_IN_PLAY: readonly string[] = [
   "auditedShakenDirty",
   "blessedShakenClean",
-  "checkpointMade",
   "loopHidPocketer",
   "watchedShakenDirty",
   "wonDirtyShakedown",
@@ -68,8 +66,7 @@ function darkGame(cfg: GameConfig): GameState {
  * (some changed, some missed), Security watches, the Server room, Lookout,
  * Hacker, Auditor, Detective, Mole (a ring) and Fixer (a reopen) powers, bells and raids, alibis,
  * proposals, an emergency meeting, sealed and changed ballots (Smooth talker
- * weight), shakedown windows, shakedowns and
- * checkpoints, and the event cards (Lockdown avoided), and perks (design §8.3: granted by the test hook,
+ * weight), shakedown windows, shakedowns, the end check (design §6.2), and the event cards (Lockdown avoided), and perks (design §8.3: granted by the test hook,
  * then Peek, Tail, Rig and its pick, +Vote, Ballot, a verified Alibi, Recharge and a Shield that cancels
  * the Act 1 shakedown). Returns the state after every command. (The script reads the
  * full state to pick moves, as a scheduler would; views are what's checked.)
@@ -114,7 +111,7 @@ function playGame(players: number, voteVisibility: VoteVisibility, dark = false)
     step({ type: "advance", deadline: { kind: "resolveShakedown", meetingId: s.phase.meetingId } });
   };
   let round = 0;
-  for (round = 1; round <= 9 && !over(); round++) {
+  for (round = 1; round <= BANK_JOB.roundCap && !over(); round++) {
     const act = Math.ceil(round / 3);
     // extension.md "Tokens and the perk shop": anyone with enough tokens buys the shop's first perk they can afford.
     for (const id of ids) {
@@ -141,10 +138,11 @@ function playGame(players: number, voteVisibility: VoteVisibility, dark = false)
     if (detective && round % 3 === 1 && (s.players[detective]?.roleState.usedThisAct ?? 1) === 0) {
       step({ type: "useAbility", player: detective, ability: { kind: "checkStash", target: ids[(ids.indexOf(detective) + 1) % ids.length] } });
     }
-    // v2 §2: the Priest blesses the round-2 emergency's target (p0) in Act 1, and each later act's meeting target.
+    // v2 §2: the Priest blesses the round-2 emergency's target (p0) in Act 1, and each later act's meeting target
+    // (rounds 10–12 have no meeting after them, design §6.2).
     const priest = holder("priest");
     const blessed = act === 1 ? "p0" : (ids[act % ids.length] as PlayerId);
-    if (priest && round % 3 === 1 && priest !== blessed && (s.players[priest]?.roleState.usedThisAct ?? 1) === 0) {
+    if (priest && act <= 3 && round % 3 === 1 && priest !== blessed && (s.players[priest]?.roleState.usedThisAct ?? 1) === 0) {
       step({ type: "useAbility", player: priest, ability: { kind: "bless", target: blessed } });
     }
     if (round === 2) {
@@ -353,7 +351,7 @@ describe("no leaks in real games — design §17.2, §13, §11.2", () => {
     expect(final.phase.kind).toBe("ended");
     // The script covers every starter-game event type.
     const types = new Set(final.log.map((e) => e.type));
-    for (const t of ["moveSubmitted", "defaultMoveAssigned", "roomWatched", "abilityResolved", "voteSealed", "voteCast", "shakedownResolved", "checkpointChecked", "meetingProposalAccepted"]) {
+    for (const t of ["moveSubmitted", "defaultMoveAssigned", "roomWatched", "abilityResolved", "voteSealed", "voteCast", "shakedownResolved", "gameEnded", "meetingProposalAccepted"]) {
       expect(types, t).toContain(t);
     }
     for (const t of types) seenTypes.add(t);

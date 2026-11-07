@@ -86,7 +86,8 @@ export interface ContentOverrides {
   readonly bank?: { readonly coinsPerPlayer?: number };
   /** Bells, tape and Wanted. design §5 */
   readonly alarm?: { readonly bulbs?: number; readonly tapedRounds?: number; readonly bustStars?: number };
-  readonly checkpoints?: { readonly perPlayer?: readonly [number, number, number] };
+  /** design §6.2 */
+  readonly roundCap?: number;
   readonly shakedown?: { readonly cleanBelow?: number; readonly payout?: number };
   /** Shop costs (extension.md "Tokens and the perk shop"). */
   readonly perks?: Readonly<Partial<Record<PerkId, { readonly cost?: number }>>>;

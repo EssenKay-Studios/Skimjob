@@ -1,6 +1,6 @@
-// Crew meetings and votes: scheduling the act's regular meeting, emergency
-// meetings, ballots, the tally, shakedowns, and the checkpoint after the act's
-// meeting. design §11 (and §4, §3 for the final meeting before the final check)
+// Crew meetings and votes: scheduling the regular meeting after every 3rd round
+// (bank thirds in S3a.5), emergency meetings, ballots, the tally and
+// shakedowns. design §9; no meeting is held after the last round (§6.2)
 //
 // Every function is pure: it reads state and returns events, or the reason the
 // command is refused. `handleCommand` (handle.ts) folds the events. Nothing
@@ -21,12 +21,10 @@ import type {
   VoteChoice,
 } from "./types";
 import { PUBLIC, privateTo, secretTo } from "./types";
-import { checkpointTarget } from "./job";
 import { jobFor, powerOf } from "./overrides";
 import { emergencySpent, isPerkSpend, perkCount, shieldFor, usePerk } from "./perks";
-import { blessingEvents, checkpointRewards, dirtyShakedownRewards, holdsDirty, useCrewPower } from "./crew";
+import { blessingEvents, dirtyShakedownRewards, holdsDirty, useCrewPower } from "./crew";
 import { actOfRound } from "./acts";
-import { gameEnded } from "./end";
 import { applyEvent } from "./reduce";
 import { isObject, playerFor, show } from "./check";
 import type { Draw } from "./handle";
@@ -272,10 +270,9 @@ function tally(state: GameState) {
 }
 
 /**
- * The window has ended. design §11.4: meeting → shakedown → checkpoint. After
- * an emergency meeting the game goes back to where it was. After the act's
- * regular meeting comes the checkpoint, then the next act —
- * or, after Act 3, the final check and the end of the game (end.ts).
+ * The window has ended: the tally, then the shakedown. After an emergency
+ * meeting the game goes back to where it was; after a regular meeting the
+ * next round starts (the end checks ran straight after the round, design §6.2).
  */
 export function closeMeeting(state: GameState, meetingId: unknown, draw: Draw): Result {
   const meeting = state.meeting;
@@ -322,9 +319,8 @@ export function useAbility(state: GameState, command: Raw, draw: Draw): Result {
 
 /**
  * After the vote (and any shakedown window): the shakedown or its cancel,
- * then for the act's regular meeting the checkpoint and what
- * follows (`checkpoint`). design §11.3, §11.4. `prior` are this command's
- * events so far.
+ * then after a regular meeting the next round. design §9.6. `prior` are this
+ * command's events so far.
  */
 function afterVote(
   state: GameState,
@@ -366,32 +362,6 @@ function afterVote(
     else events.push(...blessingEvents(state, meeting.meetingId, target, act, compensation));
   }
   if (meeting.kind === "emergency") return events;
-  return [...events, ...checkpoint(state, [...prior, ...events], act, draw)];
-}
-
-/**
- * design §11.4, §11.5: the act's checkpoint, after its meeting, then the
- * next act or the end of the game.
- * `prior` (this command's events so far) is folded into `state` first, so the
- * Haul is as it stands now.
- */
-function checkpoint(state: GameState, prior: readonly GameEvent[], act: ActNumber, draw: Draw): GameEvent[] {
-  const now = prior.reduce(applyEvent, state);
-  const job = jobFor(state.config);
-  const events: GameEvent[] = [];
-  const target = checkpointTarget(job, act, now.playerOrder.length);
-  const met = now.haul >= target;
-  const final = act === job.checkpoints.perPlayer.length;
-  events.push({ type: "checkpointChecked", visibility: PUBLIC, act, target, haul: now.haul, met });
-  // extension.md gap-fills: a target met at meeting 1 or 2 earns the Rookie a token.
-  if (met && !final) events.push(...checkpointRewards(now));
-
-  // The ranking is worked out after the shakedown (design §3, §11.4), in end.ts.
-  if (final) {
-    // design §3: the heist succeeds if the Haul meets the final target after the final meeting.
-    events.push(gameEnded(state, [...prior, ...events], met ? null : "target"));
-  } else {
-    events.push(...startRound(now, now.round + 1, draw));
-  }
-  return events;
+  const now = [...prior, ...events].reduce(applyEvent, state);
+  return [...events, ...startRound(now, now.round + 1, draw)];
 }

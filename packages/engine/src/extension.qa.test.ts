@@ -42,7 +42,7 @@ function game(cfg: GameConfig, setup: Setup = {}): GameState {
     if (e.type === "roleDealt") {
       const role = setup.roles ? (setup.roles[seat] ?? "rookie") : e.role;
       seat++;
-      const earned: GameEvent[] = Array.from({ length: setup.tokens?.[e.player] ?? 0 }, () => ({ type: "tokenEarned", visibility: privateTo(e.player), player: e.player, trigger: "checkpointMade" }));
+      const earned: GameEvent[] = Array.from({ length: setup.tokens?.[e.player] ?? 0 }, () => ({ type: "tokenEarned", visibility: privateTo(e.player), player: e.player, trigger: "watchedShakenDirty" }));
       return [{ ...e, role }, ...earned];
     }
     if (e.type === "roleListShown" && setup.roles && e.list === "exact") return [];
@@ -177,19 +177,19 @@ describe("the win rule (extension.md \"Winning and losing\", Build notes \"Win r
     expect([...outcomeFor(s, null).winners].sort()).toEqual(["p0", "p1"]);
   });
 
-  it("ties: fewer shakedowns first, then more handed in", () => {
+  it("ties: no tie-break, everyone level at the top wins (design §8.5)", () => {
     const s = withPlayers(base(), { p0: { ...flat, timesShakenDown: 1 }, p1: flat, p2: { ...flat, totalHandedIn: 9 }, p3: { ...flat, stash: 0 } });
-    expect(outcomeFor(s, null).winners).toEqual(["p2"]);
+    expect(outcomeFor(s, null).winners).toEqual(["p0", "p1", "p2"]);
   });
 
-  it("a missed target: only top-group members whose role wins on it; a ★ outside the top group never wins", () => {
+  it("sunk by theft: only top-group members whose role wins on it; a ★ outside the top group never wins", () => {
     const tied = withPlayers(base(), { p0: flat, p1: flat, p2: flat, p3: flat });
-    // Top group = all four; only the Mole (★) wins on a missed target.
-    expect([...outcomeFor(tied, "target").winners].sort()).toEqual(["p2"]);
+    // Top group = all four; only the Mole (★) wins a heist sunk by theft (design §8.4).
+    expect([...outcomeFor(tied, "theft").winners].sort()).toEqual(["p2"]);
     const rookieTop = withPlayers(base(), { p0: { ...flat, stash: 30 }, p1: flat, p2: flat, p3: flat });
-    const out = outcomeFor(rookieTop, "target");
+    const out = outcomeFor(rookieTop, "theft");
     expect(out.winners).toEqual([]);
-    expect(out).toMatchObject({ result: "failed", reason: "target" });
+    expect(out).toMatchObject({ result: "failed", reason: "theft" });
     // The full ranking is still shown on a failure.
     expect(out.ranking.map((r) => r.player)).toEqual(["p0", "p1", "p2", "p3"]);
   });

@@ -10,7 +10,8 @@ import type { AbilityUse, Move, VoteChoice } from "./commands";
 import type { PrivateVisibility, PublicVisibility, RevealVisibility, SecretVisibility } from "./visibility";
 import type { RoleState } from "./state";
 
-export type ActNumber = 1 | 2 | 3;
+/** A stretch of 3 rounds ending in a regular meeting (round 1–3 is 1), until S3a.5 holds meetings at the bank's thirds. design §9.1 */
+export type ActNumber = number;
 export type MeetingKind = "regular" | "emergency";
 
 // ---------------------------------------------------------------- setup (§8.1, §6.2)
@@ -469,16 +470,6 @@ export interface BlessingPaid {
   readonly amount: number;
 }
 
-/** design §11.4, §11.5 */
-export interface CheckpointChecked {
-  readonly type: "checkpointChecked";
-  readonly visibility: PublicVisibility;
-  readonly act: ActNumber;
-  readonly target: number;
-  readonly haul: number;
-  readonly met: boolean;
-}
-
 // ---------------------------------------------------------------- perks (§8.3)
 
 /** Your role earned you one token, for `trigger`. Only you are told. extension.md "Tokens and the perk shop" */
@@ -547,8 +538,8 @@ export interface AlibiVerified {
 // ---------------------------------------------------------------- end of game (§3, §13)
 
 /**
- * One player's line in the final ranking, which the reveal shows (design §13).
- * Ranked by score, then fewer shakedowns, then more handed in, then seat order.
+ * One player's line in the final ranking, which the reveal shows (design §8.6, §15.5).
+ * Ranked by score; equal scores keep seat order, with no tie-break (§8.5).
  */
 export interface RankEntry {
   readonly player: PlayerId;
@@ -558,18 +549,18 @@ export interface RankEntry {
   readonly score: number;
   /** Final stash. design §8 */
   readonly stash: number;
-  /** Tie-break 1: fewer is better. design §3 */
+  /** Shown in the reveal. design §15.5 */
   readonly timesShakenDown: number;
-  /** Tie-break 2: more is better. Only revealed at the end. design §3 */
+  /** Shown in the reveal. Only revealed at the end. design §15.5 */
   readonly totalHandedIn: number;
 }
 
 /**
- * extension.md "Winning and losing": one crew. The top group is everyone level
- * with the first place after the tie-breaks. A success is won by the top
- * group; a failure by the top-group members whose role (as it is at the end)
- * wins that ending (`RoleDef.winsOn`), and by nobody otherwise. The full
- * ranking is always kept, shown as a loss unless someone qualified.
+ * design §8: the top group is everyone tied for the biggest stash (§8.5). A
+ * success (bank or round cap, honesty at or above the line, §8.1) is won by the
+ * top group; a heist sunk by theft (§8.4) by the top-group members whose role
+ * wins it (`RoleDef.winsOn`), and by nobody otherwise. The full ranking is
+ * always kept, shown as a loss unless someone won (§8.6).
  */
 export type Outcome =
   | {
@@ -644,7 +635,6 @@ export type GameEvent =
   | ShakedownCancelled
   | ShakedownResolved
   | BlessingPaid
-  | CheckpointChecked
   | TokenEarned
   | PerkBought
   | PerkUsed

@@ -61,7 +61,6 @@ type ExpectedVisibility = {
   shakedownPending: "public";
   shakedownCancelled: "public"; // design §8: says it was cancelled, not who did it
   shakedownResolved: "public";
-  checkpointChecked: "public";
   tokenEarned: "private"; // extension.md "Tokens": tokens are private
   perkBought: "private"; // extension.md "Tokens and the perk shop": private until used
   perkUsed: "private";

@@ -13,7 +13,7 @@ export const MAX_PLAYERS = 12;
  */
 export const MAX_SLOT_LENGTH = 64;
 
-/** A game is 3 acts of this many rounds (9 rounds in all). design §2, §4 */
+/** A regular meeting follows every this many rounds, until S3a.5 holds them at the bank's thirds (design §9.1). */
 export const ROUNDS_PER_ACT = 3;
 
 /** The powerless role. Fills any seat the deck can't cover. design §8 */

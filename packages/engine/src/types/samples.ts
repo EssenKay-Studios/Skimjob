@@ -129,7 +129,6 @@ export const sampleEvents: { readonly [T in GameEventType]: EventOfType<T> } = {
     clean: true,
     compensation: 5,
   },
-  checkpointChecked: { type: "checkpointChecked", visibility: PUBLIC, act: 1, target: 12, haul: 10, met: false },
   gameEnded: {
     type: "gameEnded",
     visibility: PUBLIC,

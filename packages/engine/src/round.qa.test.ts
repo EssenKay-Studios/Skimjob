@@ -278,8 +278,8 @@ describe("QA private information — design §3.4, §18", () => {
         } else if (e.type === "moveLocked") {
           // Owner decision (2 Nov), design §5.1: who locked in is public, never the room or split.
           expect(Object.keys(e).sort(), e.type).toEqual(["player", "round", "type", "visibility"]);
-        } else if (e.visibility.kind === "public") {
-          // Public events carry no per-player data.
+        } else if (e.visibility.kind === "public" && e.type !== "gameEnded") {
+          // Public events carry no per-player data (but the final ranking, design §8.6).
           expect(JSON.stringify(e), e.type).not.toMatch(/"(player|pocket|duffel|stash|seen|others|move)"/);
         }
       }

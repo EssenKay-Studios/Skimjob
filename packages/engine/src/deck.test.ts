@@ -133,11 +133,13 @@ describe("the deck — design §10", () => {
     for (const n of [3, 4, 7]) {
       const end = playThrough(createGame(config(n, { seed: `flip-${n}` })));
       const flipped = flips(end);
-      expect(flipped.map((e) => e.round)).toEqual([2, 3, 4, 5, 6, 7, 8, 9]);
+      // Every round from 2 to the last, which the bank or the round cap decides (design §6.2).
+      expect(flipped.map((e) => e.round)).toEqual(Array.from({ length: end.round - 1 }, (_, i) => i + 2));
+      expect(end.round).toBeGreaterThan(5);
       expect(EVENTS_FROM_ROUND).toBe(2);
       expect(flipped.every((e) => e.visibility.kind === "public" && EVENT_DECK.includes(e.card))).toBe(true);
       // Repeats allowed: each flip draws from all four cards (the game's seeds give a repeat here).
-      expect(new Set(flipped.map((e) => e.card)).size).toBeLessThan(8);
+      expect(new Set(flipped.map((e) => e.card)).size).toBeLessThan(flipped.length);
       // Flipped straight after its round starts, so players can plan around it.
       for (const e of flipped) {
         const at = end.log.indexOf(e);

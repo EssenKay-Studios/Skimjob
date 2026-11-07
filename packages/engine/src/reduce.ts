@@ -330,8 +330,6 @@ function applyChange(state: GameState, event: GameEvent): GameState {
         timesShakenDown: p.timesShakenDown + 1,
       }));
     }
-    case "checkpointChecked":
-      return state;
     // ------------------------------------------------ perks. design §8.3
     case "tokenEarned":
       return updatePlayer(state, event.player, (p) => withRoleState(p, { tokens: p.roleState.tokens + 1 }));

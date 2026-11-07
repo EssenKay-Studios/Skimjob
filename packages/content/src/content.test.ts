@@ -46,10 +46,9 @@ describe("job data is consistent", () => {
       expect(Number.isInteger(job.bank.coinsPerPlayer) && job.bank.coinsPerPlayer >= 1).toBe(true);
     });
 
-    it(`${job.id}: checkpoint targets are cumulative`, () => {
-      const [a, b, c] = job.checkpoints.perPlayer;
-      expect(a).toBeLessThan(b);
-      expect(b).toBeLessThan(c);
+    it(`${job.id}: a whole round cap of 1 or more and an honesty line between 0 and 1 (design §6.2, §7.5)`, () => {
+      expect(Number.isInteger(job.roundCap) && job.roundCap >= 1).toBe(true);
+      expect(job.honestyLine > 0 && job.honestyLine < 1).toBe(true);
     });
   }
 });
@@ -100,9 +99,10 @@ describe("First National Bank alarm — design §3.1, §5", () => {
   });
 });
 
-describe("First National Bank checkpoint targets — design §11.5", () => {
-  it("2, 4 and 6 × crew size at the end of Acts 1, 2 and 3", () => {
-    expect(BANK_JOB.checkpoints.perPlayer).toEqual([2, 4, 6]); // scaled to R7 coins in S3a.1 and to raids in S3a.2 (was 7, 15, 23)
+describe("First National Bank endings — design §6.2, §7.5", () => {
+  it("12 rounds at most, and the two-thirds honesty line", () => {
+    expect(BANK_JOB.roundCap).toBe(12);
+    expect(BANK_JOB.honestyLine).toBe(2 / 3);
   });
 });
 
@@ -133,17 +133,18 @@ describe("starter roles — design §8, §8.1", () => {
     expect(tagged("loneWolf")).toEqual(["mole"]);
     expect(tagged("teamPlayer")).toHaveLength(7);
     const winners = Object.fromEntries(Object.values(ROLES).filter((r) => r.winsOn.length > 0).map((r) => [r.id, r.winsOn]));
-    // design §5.5: on a bust only the Rooftop wins, whatever the role, so no role wins on it.
-    expect(winners).toEqual({ mole: ["target"] });
+    // design §5.5: on a bust only the Rooftop wins, whatever the role, so no role wins on it; §8.4: the Mole wins a heist sunk by theft.
+    expect(winners).toEqual({ mole: ["theft"] });
     for (const id of STARTER_ROLES) expect(ROLES[id]?.tag).toBe("teamPlayer");
   });
 
   it("every role earns exactly one token per trigger (extension.md \"Roles\")", () => {
     for (const role of Object.values(ROLES)) {
-      if (role.id === "rookie" || role.rewards) expect(role.rewards?.map((r) => r.count), role.id).toEqual([1]);
+      if (role.rewards) expect(role.rewards?.map((r) => r.count), role.id).toEqual([1]);
     }
-    // The Fixer's and the Mole's R6 tokens went with the raid stop and the tip-off (S3a.2); tokens go in S3a.7.
-    expect(Object.values(ROLES).filter((r) => !r.rewards).map((r) => r.id)).toEqual(["fixer", "mole"]);
+    // The Fixer's and the Mole's R6 tokens went with the raid stop and the tip-off (S3a.2), the Rookie's with the
+    // checkpoints (S3a.3); tokens go in S3a.7.
+    expect(Object.values(ROLES).filter((r) => !r.rewards).map((r) => r.id)).toEqual(["rookie", "fixer", "mole"]);
   });
 
   it("perks: nine kinds in three shop columns; Peek and Shield cost 2, the rest 1 (extension.md \"Tokens and the perk shop\")", () => {

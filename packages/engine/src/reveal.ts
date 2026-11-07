@@ -21,7 +21,6 @@ const SHOWN: ReadonlySet<GameEvent["type"]> = new Set<GameEvent["type"]>([
   "shakedownResolved",
   "shakedownCancelled",
   "blessingPaid",
-  "checkpointChecked",
   "roomRaided",
   "roomReopened",
 ]);

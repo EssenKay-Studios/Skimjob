@@ -42,7 +42,7 @@ function game(cfg: GameConfig, setup: Setup = {}): GameState {
       const role = setup.roles ? (setup.roles[seat] ?? "rookie") : e.role;
       seat++;
       const tokens = setup.tokens?.[e.player] ?? 0;
-      const earned: GameEvent[] = Array.from({ length: tokens }, () => ({ type: "tokenEarned", visibility: privateTo(e.player), player: e.player, trigger: "checkpointMade" }));
+      const earned: GameEvent[] = Array.from({ length: tokens }, () => ({ type: "tokenEarned", visibility: privateTo(e.player), player: e.player, trigger: "watchedShakenDirty" }));
       return [{ ...e, role }, ...earned];
     }
     if (e.type === "roleListShown" && setup.roles && e.list === "exact") return [];

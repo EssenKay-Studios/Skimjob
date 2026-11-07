@@ -1,5 +1,5 @@
 // Job definitions: rooms by player count, the bank, the alarm (bells, tape and
-// Wanted), checkpoint targets and shakedown numbers. design §3.1, §5, §6.1
+// Wanted), the round cap and honesty line, and shakedown numbers. design §3.1, §5, §6, §8
 //
 // The numbers live on the job, and engine helpers take a `JobDef` rather than
 // reading these constants, so the simulator's content overrides (design §17.4)
@@ -21,15 +21,6 @@ export interface AlarmRules {
   readonly tapedRounds: number;
   /** Wanted stars that make a bust [tunable]. design §5.4, §5.5 */
   readonly bustStars: number;
-}
-
-/** design §11.5 */
-export interface CheckpointRules {
-  /**
-   * Cumulative Haul target per crew member at the end of Acts 1, 2 and 3.
-   * The Act 3 entry is the final target.
-   */
-  readonly perPlayer: readonly [number, number, number];
 }
 
 /** design §11.3 (extension.md "Shakedowns (fixed numbers)") */
@@ -60,7 +51,10 @@ export interface JobDef {
   readonly defaultRoom: RoomId;
   readonly bank: BankRules;
   readonly alarm: AlarmRules;
-  readonly checkpoints: CheckpointRules;
+  /** The game ends after this round, if the bank hasn't emptied first [tunable]. design §6.2 */
+  readonly roundCap: number;
+  /** A game ending by the bank or the round cap succeeds at or above this honesty; below it, it is sunk by theft. design §7.5, §8.1, §8.4 */
+  readonly honestyLine: number;
   /** Kept on the job so simulator content overrides can tune it with the rest (design §17.4, §19 Q4). */
   readonly shakedown: ShakedownRules;
 }
@@ -91,11 +85,10 @@ export const BANK_JOB: JobDef = {
   bank: { coinsPerPlayer: 16 },
   // design §5.1, §5.3, §5.5
   alarm: { bulbs: 4, tapedRounds: 2, bustStars: 3 },
-  // R6's coin-measured numbers, scaled to R7's smaller grabs and 16-a-player bank (S3a.1) and to the coins raids
-  // seize and quiet grabs leave behind (S3a.2), provisional until S3a.3 (endings) and S3a.5 (shakedowns) replace
-  // them: checkpoints were [7, 15, 23], then [3, 7, 11]; the clean line 6 and payout 8.
-  // With these the sim's success rate and shakedown accuracy stay near R6's.
-  checkpoints: { perPlayer: [2, 4, 6] },
+  // design §6.2, §7.5
+  roundCap: 12,
+  honestyLine: 2 / 3,
+  // R6's clean line 6 and payout 8, scaled to R7's smaller grabs and 16-a-player bank (S3a.1), until S3a.5 replaces them.
   shakedown: { cleanBelow: 3, payout: 4 },
 };
 

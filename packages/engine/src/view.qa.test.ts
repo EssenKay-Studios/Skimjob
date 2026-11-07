@@ -8,6 +8,7 @@
 // (a shakedown of an involved player, the ballots at close or as cast, the end).
 // Swapping two players' roles is checked the same way.
 // The first public difference must be one of those; anything else is a leak.
+import { BANK_JOB } from "@skimjob/content";
 import { describe, expect, it } from "vitest";
 import type { GameConfig, GameEvent, GameState, PlayerId, PlayerState, PlayerView, VoteVisibility } from "./types";
 import { createGame } from "./setup";
@@ -310,7 +311,7 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
     if (A.phase.kind === "shakedownPending") step([{ type: "advance", deadline: { kind: "resolveShakedown", meetingId: A.phase.meetingId } }]);
   }
 
-  for (let round = 1; round <= 9 && !over(); round++) {
+  for (let round = 1; round <= BANK_JOB.roundCap && !over(); round++) {
     const act = Math.ceil(round / 3);
     const caller = ids.find((id) => !A.players[id]?.emergencyMeetingUsed);
     if (caller && rand() < 0.2) {
@@ -437,13 +438,13 @@ describe("QA: viewFor edges — design §13, §11.2", () => {
       }
     };
     check();
-    for (let round = 1; round <= 9 && s.phase.kind !== "ended"; round++) {
+    for (let round = 1; round <= BANK_JOB.roundCap && s.phase.kind !== "ended"; round++) {
       for (const id of s.playerOrder) s = apply(s, { type: "submitMove", player: id, move: fullGrab(id === "p0" ? "rooftop" : "lobby") }, "A");
       check();
       s = apply(s, { type: "advance", deadline: { kind: "round", round } }, "A");
       check();
       if (s.phase.kind === "alibis") s = apply(s, { type: "advance", deadline: { kind: "alibis", round } }, "A");
-      if (round % 3 === 0) {
+      if (s.phase.kind === "awaitingMeeting") {
         s = apply(s, { type: "scheduleMeeting", act: round / 3, slot: "x" }, "A");
         s = apply(s, { type: "advance", deadline: { kind: "openMeeting", meetingId: s.scheduledMeeting?.meetingId } }, "A");
         s = apply(s, { type: "castVote", player: "p1", vote: { kind: "skip" } }, "A");

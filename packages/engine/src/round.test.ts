@@ -311,13 +311,9 @@ describe("a short bank — design §3.2", () => {
     expect(s.players.p2?.stash).toBe(1);
   });
 
-  it("an empty bank cuts every grab to 0; the moves stay legal", () => {
-    let s = run(tiny(3, 1), ROUND); // three missed moves empty the bank of 3
-    expect(s.bank).toBe(0);
-    const before = run(s, submit("p0", { room: "vault", pocket: 3 }));
-    s = run(before, ROUND);
-    expect(grabsOf(before, s)).toEqual({ p0: [0, 0], p1: [0, 0], p2: [0, 0] });
-    expect([s.bank, s.haul, s.players.p0?.stash]).toEqual([0, 3, 0]);
+  it("the round that empties the bank is the last: no grab is ever cut to nothing by an empty bank (design §6.2)", () => {
+    const s = run(tiny(3, 1), ROUND); // three missed moves empty the bank of 3
+    expect([s.bank, s.haul, s.phase.kind]).toEqual([0, 3, "ended"]);
   });
 
   it("is deterministic: the same seed and commands cut the same grabs", () => {
