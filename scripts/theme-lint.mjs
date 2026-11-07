@@ -45,7 +45,7 @@ export function check(counts, baseline) {
 }
 
 function main(mode) {
-  const files = execFileSync("git", ["ls-files", "apps/web/src"], { cwd: root, encoding: "utf8" }).split("\n").filter((f) => f && f !== THEME && (CSS.test(f) || (TS.test(f) && !TEST.test(f))));
+  const files = execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "apps/web/src"], { cwd: root, encoding: "utf8" }).split("\n").filter((f) => f && f !== THEME && (CSS.test(f) || (TS.test(f) && !TEST.test(f))));
   const counts = {};
   for (const f of files) {
     const n = violations(f, readFileSync(join(root, f), "utf8"));

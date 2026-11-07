@@ -1,5 +1,5 @@
 // `pnpm precheck`: everything CI would fail on, run before the push (docs/testing.md "Precheck").
-//   typecheck, knip and the theme-token lint (in parallel), then `pnpm test:scoped`, then Playwright
+//   typecheck, knip, the theme-token lint and the feature-tag check (in parallel), then `pnpm test:scoped`, then Playwright
 //   --repeat-each=3 on the e2e specs this branch adds or changes against origin/main (flaky new specs show up here).
 // Nothing changed against origin/main except .md files: nothing runs and it exits at once.
 import { spawn, spawnSync } from "node:child_process";
@@ -31,6 +31,7 @@ const static_ = await Promise.all([
   quiet("pnpm typecheck", "pnpm", ["typecheck"]),
   quiet("pnpm knip", "pnpm", ["knip"]),
   quiet("pnpm lint:theme", "pnpm", ["lint:theme"]),
+  quiet("scope.mjs --check", "node", ["scripts/scope.mjs", "--check"]),
 ]);
 if (!static_.every(Boolean)) fail("fix the static checks above");
 

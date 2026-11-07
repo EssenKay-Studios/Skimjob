@@ -51,13 +51,13 @@ A PR waits only for the tests of what it touched; `main` is tested in full after
 
 `pnpm precheck` is the one command to run before every push (builder and QA, `docs/pipeline/common.md`). It runs what CI would fail on, so a push is green the first time:
 
-1. In parallel: `pnpm typecheck`, `pnpm knip` and `pnpm lint:theme`.
+1. In parallel: `pnpm typecheck`, `pnpm knip`, `pnpm lint:theme` and `node scripts/scope.mjs --check` (feature tags and `features.json` entries).
 2. `pnpm test:scoped` (the tests the diff needs, as in "Scoped tests").
 3. Playwright `--repeat-each=3` on the e2e specs the branch adds or changes against `origin/main` (`changedPaths()` and `SPEC` from `scripts/scope.mjs`), so a flaky new spec fails here, not on the PM's merge.
 
 It stops at the first failing step, and does nothing at all when only `.md` files changed. Locally Playwright runs up to 4 workers per run, and reuses a server already listening on the agent's own ports (`playwright.config.ts`); CI always starts its own.
 
-**Theme-token lint.** `scripts/theme-lint.mjs` checks every `.css`, `.ts` and `.tsx` file under `apps/web/src` except `theme.css` and tests: no raw colour (`#hex`, `rgb()`, `hsl()`, ...), `font-family`/`font` only a `--font-*` token or `inherit`, and `border-radius`, `box-shadow` and `text-shadow` only `var(--...)`, `0`, `none` or `inherit`. `scripts/theme-lint.baseline.json` holds the number of violations per file that predate the lint; it can only go down (a file over its count, or any count for a file not listed, fails). When you clean a file up, run `node scripts/theme-lint.mjs --update` to lower it. New styles use or add a `theme.css` token.
+**Theme-token lint.** `scripts/theme-lint.mjs` checks every `.css`, `.ts` and `.tsx` file under `apps/web/src` except `theme.css` and tests: no raw colour (`#hex`, `rgb()`, `hsl()`, ...), `font-family`/`font` only a `--font-*` token or `inherit`, and `border-radius`, `box-shadow` and `text-shadow` only `var(--...)`, `0`, `none` or `inherit`. `scripts/theme-lint.baseline.json` holds the number of violations per file that predate the lint; it can only go down (a file over its count, or any count for a file not listed, fails). When you clean a file up, run `node scripts/theme-lint.mjs --update` to lower it. The baseline only shrinks: reviewers reject a PR whose baseline diff adds a file or raises a number (`--update` does not stop it). S4 removes entries as it replaces the R6 screens. New styles use or add a `theme.css` token.
 
 ## Running the suite
 
