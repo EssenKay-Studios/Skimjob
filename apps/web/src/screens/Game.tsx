@@ -21,9 +21,10 @@ import { BANK_ROOMS, type BankRoomId } from "../art/bankLayout";
 import { CrookAvatar } from "../art/Crook";
 import { Reveal } from "../components/Reveal";
 import { AwayRecap } from "../components/AwayRecap";
-import { CaseFile } from "../components/CaseFile";
+import { CaseBoard } from "../components/CaseBoard";
 import { SuspicionBoard, SuspicionMark } from "../components/SuspicionBoard";
-import { useAwayRecap, useSuspicionBoard, type Board as SuspicionMarks, type BoardChannel } from "../game/notes";
+import { useAwayRecap, usePins, useSuspicionBoard, type Board as SuspicionMarks, type BoardChannel } from "../game/notes";
+import { noLeads } from "../game/caseBoard";
 import type { DescribeContext } from "../game/describeEvent";
 import { RoomIcon } from "../art/RoomIcon";
 import { BustedSpot, JobDoneSpot, WaitingSpot } from "../art/Spots";
@@ -178,6 +179,8 @@ function Board({ view, timers, offset, send, autoMeetings, gameId, channel, dmNo
   const ctx = useMemo(() => ({ me: view.me.id, name: namesOf(view), slot: slotText }), [view]);
   // M2-10: the private suspicion board, kept per seat on the server (the recap lives in `Away`).
   const board = useSuspicionBoard(gameId);
+  const pins = usePins(gameId);
+  const people = otherSeats(view);
   return (
     <>
       <Away gameId={gameId} view={view} ctx={ctx} />
@@ -187,13 +190,13 @@ function Board({ view, timers, offset, send, autoMeetings, gameId, channel, dmNo
         <Seats view={view} presence={channel.presence} offset={offset} marks={board.board} />
         <div className="game-grid__action">
           {outcome ? <GameOver view={view} /> : <Actions view={view} timers={timers} offset={offset} send={send} autoMeetings={autoMeetings} pick={pick} />}
-          {!outcome && <CrewBoard view={view} board={board} />}
+          {!outcome && <CrewBoard people={people} board={board} />}
           {view.reveal && <Reveal summary={view.reveal.summary} ctx={ctx} looks={seatLooks(view)} />}
         </div>
         {/* From 1024 px the chat and the records share the right column; below that the chat is a sheet. */}
         <div className="game-grid__side">
           <GameChat gameId={gameId} view={view} channel={channel} dmNotices={dmNotices} />
-          <CaseFile view={view} ctx={ctx} />
+          <CaseBoard data={noLeads(view, pins.pins)} people={people} pins={pins} marks={board.board} />
         </div>
       </div>
     </>
@@ -207,12 +210,16 @@ function Away({ gameId, view, ctx }: { gameId: string; view: PlayerView; ctx: De
 }
 
 /** design §12.3: your private tags on everyone else. */
-function CrewBoard({ view, board }: { view: PlayerView; board: BoardChannel }) {
+function CrewBoard({ people, board }: { people: ReturnType<typeof otherSeats>; board: BoardChannel }) {
+  return <SuspicionBoard people={people} board={board.board} error={board.error} onSave={board.save} />;
+}
+
+/** Everyone but you, as the case board and the suspicion board draw them. */
+function otherSeats(view: PlayerView) {
   const looks = seatLooks(view);
-  const people = seatsOf(view)
+  return seatsOf(view)
     .filter((s) => !s.you)
     .map((s) => ({ id: s.id, name: s.name, isBot: s.isBot, look: looks.get(s.id)?.look ?? 0, tag: looks.get(s.id)?.tag }));
-  return <SuspicionBoard people={people} board={board.board} error={board.error} onSave={board.save} />;
 }
 
 function Hud({ view, timers, offset, hostPaused }: { view: PlayerView; timers: readonly Timer[]; offset: number; hostPaused: boolean }) {

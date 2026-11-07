@@ -61,7 +61,7 @@ for (const viewport of [
   { width: 360, height: 740 },
   { width: 1280, height: 800 },
 ]) {
-  test(`12 seats at ${viewport.width}px: the board, crew marks and filters fit, targets ≥44px @caseboard`, async ({ browser }, info) => {
+  test(`12 seats at ${viewport.width}px: the board, crew marks and the case board fit, targets ≥44px @caseboard`, async ({ browser }, info) => {
     test.skip(info.project.name !== "mobile", "viewports are set per test");
     test.setTimeout(60_000);
     const ctx = await browser.newContext({ viewport, hasTouch: viewport.width < 1024, isMobile: viewport.width < 1024 });
@@ -82,15 +82,13 @@ for (const viewport of [
     await board.getByRole("button", { name: "Save note" }).click();
     await expect(board.locator(".sus-row__note")).toHaveCount(1);
     await expect(page.locator(".crew .sus-mark")).toHaveCount(11);
-    const sheet = page.getByRole("region", { name: "Ledger and case file" });
-    await sheet.getByRole("button", { name: /^Case file/ }).click();
-    await sheet.getByRole("button", { name: /^Both/ }).click();
+    await expect(page.getByRole("region", { name: "Case board" })).toBeVisible();
     const o = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth }));
     expect(o.scroll).toBeLessThanOrEqual(o.client);
     const note = await board.locator(".sus-row__note").boundingBox();
     expect(note!.x + note!.width).toBeLessThanOrEqual(viewport.width);
     const small = await page.evaluate(() =>
-      [...document.querySelectorAll<HTMLElement>(".sus button, .records button")]
+      [...document.querySelectorAll<HTMLElement>(".sus button, .cb button")]
         .map((el) => el.getBoundingClientRect())
         .filter((r) => r.width > 0 && (r.width < 44 || r.height < 44)).length,
     );

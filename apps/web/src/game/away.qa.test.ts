@@ -1,11 +1,9 @@
-// QA (M2-10, PR #46): "While you were away" (design §13) and the ledger / case
-// file filters at 2, 3 and 12 seats; recaps after a meeting, a shakedown, the
+// QA (M2-10, PR #46): "While you were away" (design §13) at 2, 3 and 12 seats; recaps after a meeting, a shakedown, the
 // end and a reconnect-style catch-up; nothing from anyone else's case file.
 import { createGame, eventsSince, handleCommand, viewFor, type GameConfig, type GameState, type PlayerCommand, type PlayerId, type SystemCommand } from "@skimjob/engine";
 import { describe, expect, it } from "vitest";
 import { recap, recapItems, RECAP_MAX_LINES, topSeq } from "./away";
 import { namesOf } from "./hud";
-import { ALL_RECORDS, filterChoices, filterRows, groupByRound, recordRows } from "./records";
 import { BANK_JOB } from "@skimjob/content";
 
 const NAMES = ["Ana", "Ben", "Cy", "Dee", "Eve", "Fay", "Gus", "Hal", "Ivy", "Jo", "Kit", "Lu"];
@@ -193,47 +191,4 @@ describe("QA: recap after a meeting, a shakedown, the end and a reconnect (desig
       expect(recap(eventsSince(burst, topSeq(burst)), burst, ctxOf(burst, id))).toEqual([]);
     }
   });
-});
-
-describe("QA: ledger / case file filters at 3 and 12 seats (design §13)", () => {
-  for (const n of [3, 12]) {
-    it(`${n} seats: the filters partition the sheet; private rows are only the viewer's own`, () => {
-      const end = playAll(config(n)).at(-1)!;
-      for (const id of ids(end)) {
-        const view = viewFor(end, id);
-        const rows = recordRows(view);
-        expect(rows).toHaveLength(view.ledger.length + view.caseFile.length);
-        expect(rows.map((r) => r.seq)).toEqual(rows.map((_, i) => i)); // gap-free, oldest first
-        for (const r of rows.filter((r) => r.private)) expect(r.event.visibility).toMatchObject({ player: id });
-        const ledger = filterRows(rows, { ...ALL_RECORDS, source: "ledger" });
-        const caseFile = filterRows(rows, { ...ALL_RECORDS, source: "case" });
-        expect(ledger.length + caseFile.length).toBe(rows.length);
-        expect(ledger.every((r) => !r.private) && caseFile.every((r) => r.private)).toBe(true);
-
-        const { acts, rounds } = filterChoices(rows, null);
-        expect(rounds.length).toBe(end.round);
-        // Each act's rounds, and each round, together cover every row after setup exactly once.
-        let byAct = 0;
-        for (const act of acts) {
-          const actRows = filterRows(rows, { ...ALL_RECORDS, act });
-          byAct += actRows.length;
-          const sub = filterChoices(rows, act).rounds;
-          expect(sub.every((r) => rounds.includes(r))).toBe(true);
-          expect(sub.reduce((k, round) => k + filterRows(rows, { source: "all", act, round }).length, 0)).toBe(actRows.length);
-        }
-        const setup = filterRows(rows, ALL_RECORDS).filter((r) => r.round === 0).length;
-        expect(byAct + setup).toBe(rows.length);
-        // A round from another act gives nothing.
-        if (acts.length > 1) {
-          const lastRound = rounds.at(-1)!;
-          expect(filterRows(rows, { source: "all", act: acts[0]!, round: lastRound })).toEqual([]);
-        }
-        // Grouped: newest round first, each group's rows newest first, nothing lost.
-        const groups = groupByRound(rows);
-        expect(groups.map((g) => g.round)).toEqual([...groups.map((g) => g.round)].sort((a, b) => b - a));
-        expect(groups.flatMap((g) => g.rows).length).toBe(rows.length);
-        for (const g of groups) expect(g.rows.map((r) => r.seq)).toEqual([...g.rows.map((r) => r.seq)].sort((a, b) => b - a));
-      }
-    });
-  }
 });

@@ -119,3 +119,34 @@ export function Evidence() {
     </svg>
   );
 }
+
+/** The alarm bell: a lead where a room rang. */
+export function Bell() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true">
+      <path d="M5.6 14.4c1-1.2 1.2-2.4 1.2-4.6 0-2 1.3-3.4 3.2-3.4s3.2 1.4 3.2 3.4c0 2.2.2 3.4 1.2 4.6z" fill="var(--gold)" transform="translate(.7 .7)" />
+      <path d="M5 14.2c1-1.2 1.2-2.4 1.2-4.6 0-2 1.3-3.4 3.8-3.4s3.8 1.4 3.8 3.4c0 2.2.2 3.4 1.2 4.6zM8.6 16.6h2.8M10 3.8v2.4" {...S} />
+    </svg>
+  );
+}
+
+/** "Doesn't add up": a warning triangle. */
+export function Warn() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true">
+      <path d="M10 3.4 17.2 16H2.8z" fill="var(--gold)" transform="translate(.7 .7)" />
+      <path d="M10 3 17 16H3zM10 8v3.6M10 13.6v.2" {...S} />
+    </svg>
+  );
+}
+
+/** A pin on a lead or a fact. */
+export function Pin() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true">
+      <circle cx="10.7" cy="7.7" r="4.2" fill="var(--clay-l)" />
+      <circle cx="10" cy="7" r="4.2" {...S} />
+      <path d="M10 11.4v5.6" {...S} />
+    </svg>
+  );
+}

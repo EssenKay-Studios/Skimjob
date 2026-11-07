@@ -1,0 +1,215 @@
+// The case board (design §15.4): the suspect card, the Players strip, your pins
+// and one Leads list, newest first. It only draws what a `CaseAdapter` gave it
+// (game/caseBoard.ts); pins are private to the seat. Few words, "i" InfoTips.
+import { useMemo, useState } from "react";
+import type { PlayerId } from "@skimjob/engine";
+import { CrookAvatar } from "../art/Crook";
+import { leadsNaming, newestFirst, pinnedItems, playerStat, TRUST_LABELS, type CaseData, type Fact, type Lead } from "../game/caseBoard";
+import type { Board, PinsChannel } from "../game/notes";
+import { Button } from "./Button";
+import { InfoTip } from "./InfoTip";
+import { Bell, Lock, Pin, Warn } from "./icons";
+import { SketchFrame } from "./SketchFrame";
+import { SuspicionMark, type BoardPerson } from "./SuspicionBoard";
+import { Underline } from "./Underline";
+import "./caseboard.css";
+
+export interface CaseBoardProps {
+  readonly data: CaseData;
+  /** Everyone but you. */
+  readonly people: readonly BoardPerson[];
+  readonly pins: PinsChannel;
+  /** Your tags (the suspicion board); null while loading. */
+  readonly marks: Board | null;
+  readonly seed?: string;
+}
+
+export function CaseBoard({ data, people, pins, marks, seed = "case" }: CaseBoardProps) {
+  const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
+  const [who, setWho] = useState<PlayerId | null>(null);
+  const toggleOpen = (id: string) =>
+    setOpen((o) => {
+      const next = new Set(o);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
+  const selected = people.find((p) => p.id === who) ?? null;
+  const leads = useMemo(() => (selected ? leadsNaming(data.leads, selected.id) : newestFirst(data.leads)), [data.leads, selected]);
+  const pinned = useMemo(() => pinnedItems(data.leads, pins.pins), [data.leads, pins.pins]);
+  const suspect = data.suspect && people.find((p) => p.id === data.suspect!.player);
+  const row = { open, onOpen: toggleOpen, pins, seed };
+  return (
+    <SketchFrame as="section" seed={`${seed}-board`} radius={16} shadow={0.45} className="panel cb" aria-label="Case board">
+      <div className="cb__card" aria-label="Suspect">
+        <h3 className="cb__h">
+          <Underline seed={`${seed}-suspect`}>Suspect</Underline>
+          <InfoTip info={{ kind: "tip", id: "suspect" }} />
+        </h3>
+        {data.suspect ? (
+          <div className="cb__suspect">
+            {suspect && <CrookAvatar name={suspect.name} look={suspect.look} tag={suspect.tag} size={44} bot={suspect.isBot} expression="nervous" />}
+            <p>
+              <b>{suspect?.name ?? data.suspect.player}</b> {data.suspect.reason}
+            </p>
+          </div>
+        ) : (
+          <p className="meta">Nobody yet.</p>
+        )}
+      </div>
+
+      <div>
+        <h3 className="cb__h">Players</h3>
+        <ul className="cb__players">
+          {people.map((p) => {
+            const stat = playerStat(data.leads, pins.pins, p.id);
+            return (
+              <li key={p.id}>
+                <button type="button" className="cb__player" aria-pressed={who === p.id} aria-label={`${p.name}, ${stat.warnings} warnings, ${stat.pins} pins`} onClick={() => setWho(who === p.id ? null : p.id)}>
+                  <CrookAvatar name={p.name} look={p.look} tag={p.tag} size={36} bot={p.isBot} />
+                  <span className="cb__pname">{p.name}</span>
+                  <span className="cb__counts" aria-hidden="true">
+                    <span className="cb__warn">
+                      <Warn />
+                      {stat.warnings}
+                    </span>
+                    <span className="cb__pinct">
+                      <Pin />
+                      {stat.pins}
+                    </span>
+                  </span>
+                  <SuspicionMark tag={marks?.[p.id]?.tag} />
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+
+      {pins.error && (
+        <p className="sus__error" role="alert">
+          {pins.error}
+        </p>
+      )}
+
+      {pinned.length > 0 && (
+        <div className="cb__group" role="group" aria-label="Pinned">
+          <h3 className="cb__h">
+            Pinned
+            <InfoTip info={{ kind: "tip", id: "pins" }} />
+            <span className="meta cb__private">
+              <span className="cb__lock" aria-hidden="true">
+                <Lock />
+              </span>
+              Only you
+            </span>
+          </h3>
+          <ul className="cb__list">
+            {pinned.map(({ lead, fact }) => (
+              <li key={fact?.id ?? lead.id} className="cb__pinned">
+                <p>
+                  <span className="cb__round">R{lead.round}</span> {fact ? fact.text : lead.title}
+                  {fact && <span className="meta"> · {lead.title}</span>}
+                </p>
+                <PinButton pins={pins} id={fact?.id ?? lead.id} label={fact ? fact.text : lead.title} />
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div className="cb__group" role="group" aria-label="Leads">
+        <h3 className="cb__h">
+          Leads
+          <InfoTip info={{ kind: "tip", id: "leads" }} />
+        </h3>
+        {selected && (
+          <p className="cb__filter">
+            <span>
+              About <b>{selected.name}</b>
+            </span>
+            <Button variant="ghost" onClick={() => setWho(null)}>
+              All leads
+            </Button>
+          </p>
+        )}
+        {leads.length === 0 ? (
+          <p className="meta">{selected ? "Nothing about them yet." : "Nothing yet."}</p>
+        ) : (
+          <ul className="cb__list">
+            {leads.map((l) => (
+              <LeadRow key={l.id} lead={l} {...row} />
+            ))}
+          </ul>
+        )}
+      </div>
+    </SketchFrame>
+  );
+}
+
+function PinButton({ pins, id, label }: { pins: PinsChannel; id: string; label: string }) {
+  const on = pins.pins.has(id);
+  return (
+    <button type="button" className={on ? "cb__pin is-on" : "cb__pin"} aria-pressed={on} aria-label={`${on ? "Unpin" : "Pin"}: ${label}`} disabled={!pins.ready} onClick={() => pins.toggle(id)}>
+      <Pin />
+    </button>
+  );
+}
+
+interface RowProps {
+  readonly open: ReadonlySet<string>;
+  readonly onOpen: (id: string) => void;
+  readonly pins: PinsChannel;
+  readonly seed: string;
+}
+
+function LeadRow({ lead, open, onOpen, pins }: RowProps & { lead: Lead }) {
+  const isOpen = open.has(lead.id);
+  const panel = `${lead.id}-facts`;
+  return (
+    <li className={lead.warnings.length ? "cb__lead has-warning" : "cb__lead"}>
+      <div className="cb__lead-head">
+        <button type="button" className="cb__lead-btn" aria-expanded={isOpen} aria-controls={panel} onClick={() => onOpen(lead.id)}>
+          <span className="cb__round">R{lead.round}</span>
+          <span className="cb__title">{lead.title}</span>
+          {lead.bell && (
+            <span className="cb__icon" role="img" aria-label="Bell rang">
+              <Bell />
+            </span>
+          )}
+          {lead.warnings.length > 0 && (
+            <span className="cb__icon" role="img" aria-label="Doesn't add up">
+              <Warn />
+            </span>
+          )}
+        </button>
+        <PinButton pins={pins} id={lead.id} label={lead.title} />
+      </div>
+      {isOpen && (
+        <ul id={panel} className="cb__facts">
+          {lead.warnings.map((w) => (
+            <li key={w.kind} className="cb__fact is-warning">
+              <span className="cb__icon" aria-hidden="true">
+                <Warn />
+              </span>
+              <p>{w.text}</p>
+            </li>
+          ))}
+          {lead.facts.map((f) => (
+            <FactRow key={f.id} fact={f} pins={pins} />
+          ))}
+        </ul>
+      )}
+    </li>
+  );
+}
+
+function FactRow({ fact, pins }: { fact: Fact; pins: PinsChannel }) {
+  return (
+    <li className={`cb__fact cb__fact--${fact.trust}`}>
+      <p>
+        <span className="cb__trust">{TRUST_LABELS[fact.trust]}</span> {fact.text}
+      </p>
+      <PinButton pins={pins} id={fact.id} label={fact.text} />
+    </li>
+  );
+}

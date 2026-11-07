@@ -15,6 +15,7 @@
 //   GET   /games/:id/notes        → { lastSeen, board }
 //   PATCH /games/:id/notes/seen   { seq } → { lastSeen }
 //   PATCH /games/:id/notes/board  { subject, tag, note } → { board }
+//   PUT   /games/:id/notes/pins   { pins } → { pins }   (case board pins, design §15.4: lead and fact ids)
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { viewFor, type GameState, type PlayerId } from "@skimjob/engine";
 import type { Sessions } from "./auth";
@@ -22,7 +23,7 @@ import { checkChatText } from "./chat";
 import type { Db } from "./db";
 import { HttpError, playerIdOf } from "./lobby";
 import type { Clock } from "./clock";
-import { BOARD_NOTE_MAX_CHARS, BOARD_RATE, SEEN_RATE } from "./settings";
+import { BOARD_NOTE_MAX_CHARS, BOARD_RATE, PIN_ID_PATTERN, PINS_MAX, SEEN_RATE } from "./settings";
 import type { GameStore } from "./store";
 
 export const SUSPICION_TAGS = ["trusted", "unsure", "suspicious"] as const;
@@ -38,6 +39,8 @@ export interface SeatNotes {
   /** The highest view seq this seat has seen; -1 if it never opened the game. */
   readonly lastSeen: number;
   readonly board: Board;
+  /** Ids of the leads and facts this seat pinned (design §15.4). */
+  readonly pins: readonly string[];
 }
 
 type Result<T> = { ok: true; value: T } | { ok: false; reason: string };
@@ -55,6 +58,17 @@ function parseBoardEdit(body: unknown, state: GameState, owner: PlayerId): Resul
   const note = checkNote(raw.note ?? "");
   if (!note.ok) return note;
   return { ok: true, value: { subject, mark: { tag: tag as SuspicionTag | null, note: note.value } } };
+}
+
+/** A pin list from the client: at most PINS_MAX distinct ids, each PIN_ID_PATTERN. design §15.4 */
+function parsePins(body: unknown): Result<string[]> {
+  const raw = typeof body === "object" && body !== null && !Array.isArray(body) ? (body as Record<string, unknown>) : null;
+  if (!raw || Object.keys(raw).some((k) => k !== "pins") || !Array.isArray(raw.pins)) return { ok: false, reason: "expected { pins: [ids] }" };
+  const pins = raw.pins as unknown[];
+  if (pins.length > PINS_MAX) return { ok: false, reason: `at most ${PINS_MAX} pins` };
+  if (!pins.every((p): p is string => typeof p === "string" && PIN_ID_PATTERN.test(p))) return { ok: false, reason: "pins must be lead or fact ids" };
+  if (new Set(pins).size !== pins.length) return { ok: false, reason: "pins must be distinct" };
+  return { ok: true, value: pins };
 }
 
 /** A note: may be empty; otherwise the chat's text rules, at most BOARD_NOTE_MAX_CHARS. */
@@ -99,6 +113,7 @@ function rateLimiter(clock: Clock, limit: { readonly writes: number; readonly wi
 export function notesRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Sessions, clock: Clock): void {
   const boardRate = rateLimiter(clock, BOARD_RATE);
   const seenRate = rateLimiter(clock, SEEN_RATE);
+  const pinRate = rateLimiter(clock, BOARD_RATE);
   /** The caller's seat in a started game, and its state; 401 / 404 otherwise. */
   const seat = async (req: FastifyRequest<{ Params: { id: string } }>): Promise<{ gameId: string; player: PlayerId; state: GameState }> => {
     const user = await s.user(req);
@@ -122,9 +137,23 @@ export function notesRoutes(app: FastifyInstance, db: Db, store: GameStore, s: S
     return row?.last_seen_seq ?? -1;
   };
 
+  const pinsOf = async (gameId: string, player: PlayerId): Promise<string[]> => {
+    const [row] = await db.query<{ pins: string[] }>("select pins from seats where game_id = $1 and player_id = $2", [gameId, player]);
+    return row?.pins ?? [];
+  };
+
   app.get<{ Params: { id: string } }>("/games/:id/notes", async (req): Promise<SeatNotes> => {
     const { gameId, player } = await seat(req);
-    return { lastSeen: await lastSeenOf(gameId, player), board: await boardOf(gameId, player) };
+    return { lastSeen: await lastSeenOf(gameId, player), board: await boardOf(gameId, player), pins: await pinsOf(gameId, player) };
+  });
+
+  app.put<{ Params: { id: string } }>("/games/:id/notes/pins", async (req) => {
+    const { gameId, player } = await seat(req);
+    if (!pinRate.allow(`${gameId}\0${player}`)) throw new HttpError(429, "slow down: too many changes to your pins");
+    const parsed = parsePins(req.body);
+    if (!parsed.ok) throw new HttpError(400, parsed.reason);
+    await db.query("update seats set pins = $3::jsonb where game_id = $1 and player_id = $2", [gameId, player, JSON.stringify(parsed.value)]);
+    return { pins: parsed.value };
   });
 
   app.patch<{ Params: { id: string } }>("/games/:id/notes/seen", async (req) => {

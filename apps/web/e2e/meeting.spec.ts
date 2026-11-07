@@ -79,15 +79,6 @@ for (const mode of ["hiddenThenRevealed", "open", "secret"] as const) {
     await results.scrollIntoViewIfNeeded();
     await shot(page, `${mode}-results`);
 
-    const ledger = page.getByRole("list", { name: "Ledger" });
-    await expect(ledger).toContainText("You called an emergency meeting.");
-    await expect(ledger).toContainText(/The crew voted|No majority|Too few votes/);
-    if (mode === "open") await expect(ledger).toContainText("You voted to skip.");
-    else {
-      await expect(ledger).not.toContainText("You voted");
-      await page.getByRole("button", { name: /Case file/ }).click();
-      await expect(page.getByRole("list", { name: "Case file" })).toContainText("You voted to skip.");
-    }
     await expect(call).toBeDisabled();
     await expect(page.getByText("You've called your emergency meeting for this game.")).toBeVisible();
     await page.getByRole("button", { name: "Got it" }).click();
@@ -123,15 +114,12 @@ test("propose a meeting time, a second player backs it, and leave a sealed vote 
   await theirs.getByRole("button", { name: "Back this time" }).click();
   await expect(panel.getByText(/Set for .*9:30/)).toBeVisible();
   await expect(theirs.getByText(/Set for .*9:30/)).toBeVisible();
-  await expect(page.getByRole("list", { name: "Ledger" })).toContainText(/Meeting 1 is set for .*9:30/);
   await shot(page, "planner");
 
   await panel.getByText("Can't make the meeting?").click();
   await panel.getByRole("group", { name: "Sealed vote" }).getByRole("button", { name: "Skip" }).click();
   await panel.getByRole("button", { name: "Seal vote" }).click();
   await expect(panel.getByText("Sealed: skip")).toBeVisible();
-  await page.getByRole("button", { name: /Case file/ }).click();
-  await expect(page.getByRole("list", { name: "Case file" })).toContainText("You sealed a vote to skip.");
   await guestCtx.close();
   await away.close();
 });
