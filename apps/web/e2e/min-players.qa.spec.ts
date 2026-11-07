@@ -4,7 +4,7 @@ import { expect, test } from "@playwright/test";
 // start; the second bot (3 seats) enables Start and it lands on the game.
 // Run at 360 px (mobile project, narrowed) and 1280 px (desktop).
 
-test("the lobby can't start below 3 seats; bots fill to 3 and the game starts", async ({ page }, info) => {
+test("the lobby can't start below 3 seats; bots fill to 3 and the game starts @lobby", async ({ page }, info) => {
   if (info.project.name === "mobile") await page.setViewportSize({ width: 360, height: 780 });
   await page.goto("/");
   await page.getByRole("button", { name: "Plan a heist" }).click();

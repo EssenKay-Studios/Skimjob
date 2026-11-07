@@ -33,7 +33,7 @@ const crookBoxes = (page: Page) =>
   );
 
 for (const vp of VIEWPORTS) {
-  test(`gallery + landing at ${vp.width}px: no overflow, room targets ≥44 px`, async ({ page }) => {
+  test(`gallery + landing at ${vp.width}px: no overflow, room targets ≥44 px @board`, async ({ page }) => {
     await page.setViewportSize(vp);
     await page.goto("/");
     await page.locator(".bank__svg").first().waitFor();
@@ -61,7 +61,7 @@ for (const [label, query] of [
   ["12 small tier", "n=12&tier=small"],
 ] as const) {
   for (const width of [360, 1280]) {
-    test(`crooks ${label} at ${width}px stay inside their room and don't stack`, async ({ page }) => {
+    test(`crooks ${label} at ${width}px stay inside their room and don't stack @board`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });
       await page.goto(`/e2e/art-harness.qa.html?${query}`);
       await page.locator(".crook-fig").first().waitFor();
@@ -86,7 +86,7 @@ for (const [label, query] of [
 }
 
 for (const time of ["day", "dusk", "night"]) {
-  test(`time ${time} + lockdown renders tape on closed rooms`, async ({ page }) => {
+  test(`time ${time} + lockdown renders tape on closed rooms @board`, async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 900 });
     await page.goto(`/e2e/art-harness.qa.html?n=6&spread=all&lock=1&time=${time}`);
     await expect(page.locator(".bank-room.is-closed")).toHaveCount(2);
@@ -97,7 +97,7 @@ for (const time of ["day", "dusk", "night"]) {
   });
 }
 
-test("reduced motion stops every art animation", async ({ page }) => {
+test("reduced motion stops every art animation @board", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto("/dev/gallery");
@@ -111,7 +111,7 @@ test("reduced motion stops every art animation", async ({ page }) => {
   expect(running).toEqual([]);
 });
 
-test("touch: tapping a room selects it", async ({ browser }) => {
+test("touch: tapping a room selects it @board", async ({ browser }) => {
   const ctx = await browser.newContext({ viewport: { width: 360, height: 800 }, hasTouch: true, isMobile: true });
   const page = await ctx.newPage();
   await page.goto("/dev/gallery");
@@ -122,7 +122,7 @@ test("touch: tapping a room selects it", async ({ browser }) => {
   await ctx.close();
 });
 
-test("a closed room (Lockdown) can't be picked by tap, click or keyboard", async ({ browser }) => {
+test("a closed room (Lockdown) can't be picked by tap, click or keyboard @board", async ({ browser }) => {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
   const page = await ctx.newPage();
   await page.goto("/dev/gallery");
@@ -141,7 +141,7 @@ test("a closed room (Lockdown) can't be picked by tap, click or keyboard", async
   await ctx.close();
 });
 
-test("12 crooks in one room at 390 px: every crook has a visible name tag ≥ 10 px", async ({ page }) => {
+test("12 crooks in one room at 390 px: every crook has a visible name tag ≥ 10 px @board", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 900 });
   await page.goto("/e2e/art-harness.qa.html?n=12");
   await page.locator(".crook-fig").first().waitFor();

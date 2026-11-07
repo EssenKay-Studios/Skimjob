@@ -39,7 +39,7 @@ function find(value: unknown, types: readonly string[], out: Record<string, unkn
 test.describe("private tokens and no police tells, two real clients", () => {
   test.beforeEach(() => test.skip(test.info().project.name !== "desktop", "one run is enough"));
 
-  test("each player sees only their own tokens; no frame carries another's tokens or a police timer", async ({ browser }) => {
+  test("each player sees only their own tokens; no frame carries another's tokens or a police timer @shop", async ({ browser }) => {
     test.setTimeout(90_000);
     const hostCtx = await browser.newContext();
     const guestCtx = await browser.newContext();
@@ -84,7 +84,7 @@ test.describe("private tokens and no police tells, two real clients", () => {
     }
   });
 
-  test("a Hidden role list says so on the role card; Possible lists roles that could be in play", async ({ page }) => {
+  test("a Hidden role list says so on the role card; Possible lists roles that could be in play @shop", async ({ page }) => {
     test.setTimeout(60_000);
     const hidden = await start(page.request, { sessionLength: "1h", roleList: "hidden" }, [], 4);
     await page.goto(`/game/${hidden.id}`);
@@ -98,7 +98,7 @@ test.describe("private tokens and no police tells, two real clients", () => {
     await expect(card.getByRole("list", { name: "Roles that could be in play" }).getByRole("listitem").first()).toBeVisible();
   });
 
-  test("player-facing text never says act", async ({ page }) => {
+  test("player-facing text never says act @shop", async ({ page }) => {
     test.setTimeout(60_000);
     const game = await start(page.request, { sessionLength: "1h" }, [], 4);
     await page.goto(`/game/${game.id}`);
@@ -115,7 +115,7 @@ test.describe("gallery extension parts: touch, keyboard, viewports", () => {
   test.beforeEach(() => test.skip(test.info().project.name !== "mobile", "viewports are set per test"));
 
   for (const width of [360, 768, 1280]) {
-    test(`at ${width}px: shop and rulebook controls are ≥44px and fit; the shop works by keyboard`, async ({ page }) => {
+    test(`at ${width}px: shop and rulebook controls are ≥44px and fit; the shop works by keyboard @shop`, async ({ page }) => {
       test.setTimeout(60_000);
       await page.setViewportSize({ width, height: 900 });
       await page.goto("/dev/gallery");

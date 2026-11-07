@@ -35,7 +35,7 @@ async function layoutOk(p: Page, where: string) {
 const dialogOf = (p: Page) => p.getByRole("dialog", { name: "Who's skimming?" });
 
 for (const mode of ["hiddenThenRevealed", "open", "secret"] as const) {
-  test(`QA: 3 humans, emergency after round 1, sealed vote while absent, reload mid-meeting, clean shakedown (${mode})`, async ({ page: host, browser }) => {
+  test(`QA: 3 humans, emergency after round 1, sealed vote while absent, reload mid-meeting, clean shakedown (${mode}) @meeting`, async ({ page: host, browser }) => {
     test.setTimeout(150_000);
     const errors: string[] = [];
     const vp = host.viewportSize()!;

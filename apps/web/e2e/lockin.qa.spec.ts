@@ -7,7 +7,7 @@ import { startGame } from "./setupGame";
 const WIDTHS = [360, 390, 768, 1024, 1280];
 const seat = (page: Page, name: string) => page.locator(".crew-seat:not(.is-you)").filter({ hasText: name });
 
-test("a person's lock-in shows on others' seats, a change shows nothing; presence online → seen; no overflow at 360–1280", async ({ page, browser }, info) => {
+test("a person's lock-in shows on others' seats, a change shows nothing; presence online → seen; no overflow at 360–1280 @move", async ({ page, browser }, info) => {
   test.setTimeout(90_000);
   // Pipeline evidence folder locally; the test output folder on CI.
   const shots = existsSync("/home/claude/pipeline/shots") ? "/home/claude/pipeline/shots" : info.outputPath();

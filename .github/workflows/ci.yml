@@ -1,56 +1,63 @@
-# CI: typecheck, unit + property + integration tests, web e2e, simulator smoke.
-# Docs-only PRs (scripts/ci-docs-only.sh) skip e2e and sim smoke; tests always run.
-# Nothing deploys from CI: releases go to Lightsail by hand (docs/deploy.md).
-# Layers and how to run each locally: docs/testing.md
+# CI: typecheck, knip, scoped unit + property + integration tests, scoped web e2e, simulator smoke.
+# A PR runs what its diff touches (scripts/scope.mjs, docs/testing.md "Scoped tests"); a push to main
+# and the nightly run (02:17 UTC) are the full tier. "CI ok" is the one check branch protection
+# and the merge gate need. Nothing deploys from CI: releases go to Lightsail by hand (docs/deploy.md).
 name: CI
 
 on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    - cron: "17 2 * * *"
 
 # Read-only default token: nothing here writes to the repo, and no workflow that runs PR code may
 # post as github-actions[bot] (the merge gate trusts that login for review verdicts).
 permissions:
   contents: read
 
+# Only PR runs cancel each other: every push to main and every nightly run to the end.
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # docs_only=true only for a pull_request whose base...head diff is all *.md files.
-  # Pushes to main, manual runs and any diff error give false: everything runs.
+  # What the diff needs: unit (all, none or package dirs), tags (all, none or a Playwright --grep) and
+  # sim (games per size, 0 = skip). Pushes to main, the nightly run and any diff error get the full tier.
   changes:
     name: Changed files
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
-      docs_only: ${{ steps.diff.outputs.docs_only }}
+      unit: ${{ steps.scope.outputs.unit }}
+      tags: ${{ steps.scope.outputs.tags }}
+      sim: ${{ steps.scope.outputs.sim }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
-      - id: diff
+      - id: scope
         env:
           EVENT: ${{ github.event_name }}
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
-          docs_only=false
           if [ "$EVENT" = pull_request ] && files=$(git diff --name-only --no-renames "$BASE...$HEAD"); then
             echo "$files"
-            docs_only=$(bash scripts/ci-docs-only.sh <<<"$files") || docs_only=false
+            scope=$(node scripts/scope.mjs <<<"$files")
+          else
+            scope=$(node scripts/scope.mjs --full)
           fi
-          echo "docs_only=$docs_only"
-          echo "docs_only=$docs_only" >> "$GITHUB_OUTPUT"
+          echo "$scope"
+          for k in unit tags sim; do echo "$k=$(jq -r ".$k" <<<"$scope")" >> "$GITHUB_OUTPUT"; done
 
   test:
     name: Typecheck and tests
+    needs: changes
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       # macOS and Windows checkouts are case-insensitive: files, directories or TS/JS
       # modules (Crook.tsx + crook.ts, which `./Crook` can't tell apart) whose names
       # differ only in case break the build there. Same-case foo.ts + foo.js is fine.
@@ -62,32 +69,44 @@ jobs:
             echo "$dupes"
             exit 1
           fi
-      - uses: pnpm/action-setup@v4 # version from package.json "packageManager"
-      - uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0 (version from package.json "packageManager")
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
+      # Fails on unused files, exports and dependencies (knip.json).
+      - run: pnpm knip
+      # Every e2e test has exactly one feature tag and every feature module has an entry (apps/web/e2e/features.json).
+      - run: node scripts/scope.mjs --check
       # Unit, QA, engine property (*.prop.test.ts, seeded) and server scenario (*.int.test.ts, PGlite) tests.
-      - run: pnpm test
+      - name: Tests (the changed packages and what depends on them)
+        env:
+          UNIT: ${{ needs.changes.outputs.unit }}
+        run: |
+          case "$UNIT" in
+            "") ;;
+            all) pnpm test ;;
+            *) pnpm test $UNIT ;;
+          esac
 
   e2e:
     needs: changes
-    if: needs.changes.outputs.docs_only != 'true'
-    # Six shards in parallel (the heaviest of four took 11 min) (Playwright --shard), each with its own servers (playwright.config.ts).
+    if: needs.changes.outputs.tags != ''
+    # Six shards in parallel, each with its own servers (playwright.config.ts) and a balanced set of spec
+    # files (scripts/scope.mjs --shard, weights in apps/web/e2e/shard-weights.json).
     name: Web e2e (Playwright, shard ${{ matrix.shard }}/6)
     runs-on: ubuntu-latest
-    # Main push runs are slower and unbalanced: a shard reached 14.6 min and two hit 15 (cancelled while passing).
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         shard: [1, 2, 3, 4, 5, 6]
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0 (version from package.json "packageManager")
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: pnpm
@@ -97,9 +116,16 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Playwright (shard ${{ matrix.shard }}/6)
         working-directory: apps/web
-        run: npx playwright test --shard=${{ matrix.shard }}/6
+        env:
+          TAGS: ${{ needs.changes.outputs.tags }}
+        run: |
+          files=$(node ../../scripts/scope.mjs --shard ${{ matrix.shard }}/6)
+          [ -n "$files" ] || exit 0
+          args=(--pass-with-no-tests)
+          if [ "$TAGS" != all ]; then args+=(--grep "$TAGS"); fi
+          npx playwright test "${args[@]}" $files
       - if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: playwright-report-${{ matrix.shard }}
           path: apps/web/test-results
@@ -107,16 +133,26 @@ jobs:
 
   sim-smoke:
     needs: changes
-    if: needs.changes.outputs.docs_only != 'true'
-    name: Simulator smoke (200 games at 3/6/12 players)
+    if: needs.changes.outputs.sim != '0'
+    name: Simulator smoke (all-bot games at 3/6/12 players)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0 (version from package.json "packageManager")
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: bash scripts/sim-smoke.sh 200
+      - run: bash scripts/sim-smoke.sh ${{ needs.changes.outputs.sim }}
+
+  # Always runs: passes when every job above passed or was skipped on purpose.
+  ci-ok:
+    name: CI ok
+    needs: [changes, test, e2e, sim-smoke]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1

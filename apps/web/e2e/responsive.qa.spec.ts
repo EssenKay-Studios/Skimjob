@@ -53,7 +53,7 @@ for (const { width, height } of VIEWPORTS) {
       test.use({ viewport: { width, height }, hasTouch: touch, isMobile: touch });
 
       for (const route of ROUTES) {
-        test(`no horizontal overflow on ${route}`, async ({ page }) => {
+        test(`no horizontal overflow on ${route} @lobby`, async ({ page }) => {
           await page.goto(route);
           await page.waitForTimeout(800); // let the entrance animation finish
           const o = await overflow(page);
@@ -64,7 +64,7 @@ for (const { width, height } of VIEWPORTS) {
       }
 
       // QA PR #19: topbar "Sign in" was 40px tall, home link 34px (fixed).
-      test(`touch targets are at least 44px on /`, async ({ page }) => {
+      test(`touch targets are at least 44px on / @lobby`, async ({ page }) => {
         await page.goto("/");
         expect(await smallTargets(page)).toEqual([]);
       });
@@ -77,7 +77,7 @@ for (const { width, height } of VIEWPORTS) {
 // rotate in the entrance, and the body clips horizontal overflow.
 test.describe("tall sheet", () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
-  test("no horizontal overflow on /dev/gallery", async ({ page }) => {
+  test("no horizontal overflow on /dev/gallery @board", async ({ page }) => {
     await page.goto("/dev/gallery");
     await page.waitForTimeout(800);
     expect((await overflow(page)).viewport).toBe(390);
@@ -87,7 +87,7 @@ test.describe("tall sheet", () => {
 test.describe("landing behaviour", () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
-  test("fonts are self-hosted and load with every other host blocked", async ({ page }) => {
+  test("fonts are self-hosted and load with every other host blocked @lobby", async ({ page }) => {
     const external: string[] = [];
     await page.route(/^https?:\/\/(?!localhost[:/])/, (r) => {
       external.push(r.request().url());
@@ -103,7 +103,7 @@ test.describe("landing behaviour", () => {
     expect(external).toEqual([]);
   });
 
-  test("keyboard focus is visible on every landing button and link", async ({ page }) => {
+  test("keyboard focus is visible on every landing button and link @lobby", async ({ page }) => {
     // With Google sign-in on (M2-12), so its button is there to tab to.
     await page.route("**/api/auth/providers", (r) => r.fulfill({ json: { providers: ["google"] } }));
     await page.goto("/");
@@ -127,7 +127,7 @@ test.describe("landing behaviour", () => {
 
   test.describe("reduced motion", () => {
     test.use({ reducedMotion: "reduce" });
-    test("turns off the sheet entrance and toast animations", async ({ page }) => {
+    test("turns off the sheet entrance and toast animations @lobby", async ({ page }) => {
       await page.goto("/");
       expect(await page.locator(".enter-sheet").first().evaluate((e) => getComputedStyle(e).animationName)).toBe("none");
       await page.getByRole("button", { name: "Sign in", exact: true }).click();
@@ -135,7 +135,7 @@ test.describe("landing behaviour", () => {
     });
   });
 
-  test("invite field: links, spaces and dashes are tidied; junk is refused without a request", async ({ page }) => {
+  test("invite field: links, spaces and dashes are tidied; junk is refused without a request @lobby", async ({ page }) => {
     const api: string[] = [];
     page.on("request", (r) => {
       if (new URL(r.url()).pathname.startsWith("/api")) api.push(r.url());
@@ -173,7 +173,7 @@ test.describe("landing behaviour", () => {
 
   // QA PR #19: the error shake used to remount the field (`key={shake}`), so
   // focus dropped to <body> and a phone's keyboard closed. Fixed.
-  test("Enter on a bad code keeps focus in the invite field", async ({ page }) => {
+  test("Enter on a bad code keeps focus in the invite field @lobby", async ({ page }) => {
     await page.goto("/");
     const field = page.getByPlaceholder("Invite code or link");
     await field.fill("abc");
@@ -188,7 +188,7 @@ test.describe("phones", () => {
     test.describe(`${width}px`, () => {
       test.use({ viewport: { width, height: 800 }, hasTouch: true, isMobile: true });
 
-      test("every landing chip is fully on screen", async ({ page }) => {
+      test("every landing chip is fully on screen @lobby", async ({ page }) => {
         await page.goto("/");
         await page.waitForTimeout(700);
         const boxes = await page.locator(".landing__chips .chip").evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON()));
@@ -199,7 +199,7 @@ test.describe("phones", () => {
         }
       });
 
-      test("gallery, 404, new-game and invite targets are at least 44px", async ({ page }) => {
+      test("gallery, 404, new-game and invite targets are at least 44px @lobby", async ({ page }) => {
         await page.goto("/dev/gallery");
         await expect(page.getByRole("heading", { name: "Component gallery" })).toBeVisible();
         expect(await smallTargets(page)).toEqual([]);
@@ -220,7 +220,7 @@ test.describe("tablets", () => {
   ]) {
     test.describe(`${viewport.width}x${viewport.height}`, () => {
       test.use({ viewport, hasTouch: true, isMobile: true });
-      test("the sheet keeps a gutter so its frame and shadow are not clipped", async ({ page }) => {
+      test("the sheet keeps a gutter so its frame and shadow are not clipped @lobby", async ({ page }) => {
         await page.goto("/");
         await page.waitForTimeout(700);
         const r = await page.locator(".landing__sheet").evaluate((e) => e.getBoundingClientRect().toJSON());
@@ -228,7 +228,7 @@ test.describe("tablets", () => {
         expect(viewport.width - r.right).toBeGreaterThanOrEqual(12);
       });
 
-      test("no button label spills out of its frame", async ({ page }) => {
+      test("no button label spills out of its frame @lobby", async ({ page }) => {
         await page.goto("/");
         await page.waitForTimeout(700);
         const spilled = await page.locator("button").evaluateAll((els) =>
@@ -263,7 +263,7 @@ test.describe("primary button contrast", () => {
       return { text: cs.color, fill: cs.getPropertyValue("--fr-fill").trim() };
     });
 
-  test("label is at least 4.5:1 on the clay fill, at rest and on hover", async ({ page }) => {
+  test("label is at least 4.5:1 on the clay fill, at rest and on hover @lobby", async ({ page }) => {
     await page.goto("/");
     await page.waitForTimeout(700);
     const rest = await colours(page);

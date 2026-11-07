@@ -9,14 +9,14 @@ const width = (name: string) => (name.startsWith("mobile") ? 360 : 1280);
 
 const text = async (page: Page) => (await page.locator("body").innerText().catch(() => "")) ?? "";
 
-test("the dev gallery shows only kept event cards", async ({ page }, info) => {
+test("the dev gallery shows only kept event cards @board", async ({ page }, info) => {
   await page.setViewportSize({ width: width(info.project.name), height: 900 });
   await page.goto("/dev/gallery");
   await expect(page.locator("body")).toContainText(KEPT);
   expect(await text(page)).not.toMatch(DROPPED);
 });
 
-test("a 15-min game with events on, played to the end: kept cards flip, no dropped card ever shows", async ({ page }, info) => {
+test("a 15-min game with events on, played to the end: kept cards flip, no dropped card ever shows @board", async ({ page }, info) => {
   test.setTimeout(300_000);
   await page.setViewportSize({ width: width(info.project.name), height: 900 });
   const errors: string[] = [];

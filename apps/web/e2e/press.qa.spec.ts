@@ -29,7 +29,7 @@ async function guest(browser: Browser) {
 }
 const LONG = (tag: string) => `${tag} ` + "the vault, the vents, the van and the escape plan again ".repeat(8);
 
-test("QA: the chat's New messages pill stays inside the viewport with no sideways scroll at 1280 and 390 px", async ({ page, browser }, info) => {
+test("QA: the chat's New messages pill stays inside the viewport with no sideways scroll at 1280 and 390 px @chat", async ({ page, browser }, info) => {
   test.skip(info.project.name !== "mobile", "the viewport is set here");
   test.setTimeout(150_000);
   const errors: string[] = [];
@@ -104,7 +104,7 @@ test("QA: the chat's New messages pill stays inside the viewport with no sideway
 const VARIANTS = ["primary", "secondary", "small", "ghost", "back", "premium", "toggle", "danger"];
 
 for (const project of ["mobile", "desktop"]) {
-  test(`QA: a pressed .btn keeps its box (>= 44 px) for every variant in the gallery (${project})`, async ({ page }, info) => {
+  test(`QA: a pressed .btn keeps its box (>= 44 px) for every variant in the gallery (${project}) @board`, async ({ page }, info) => {
     test.skip(info.project.name !== project, "one run per project");
     test.setTimeout(60_000);
     await page.goto("/dev/gallery");

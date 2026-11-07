@@ -8,7 +8,7 @@ import { startGame } from "./setupGame";
 test.beforeEach(({}, info) => test.skip(info.project.name !== "mobile", "viewports are set per test"));
 
 for (const width of [360, 1280]) {
-  test(`host panel at ${width}px: host only, fits, pause and resume reach the crew`, async ({ page, browser }, info) => {
+  test(`host panel at ${width}px: host only, fits, pause and resume reach the crew @host`, async ({ page, browser }, info) => {
     test.setTimeout(90_000);
     await page.setViewportSize({ width, height: 800 });
     const errors: string[] = [];

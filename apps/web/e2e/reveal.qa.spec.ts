@@ -32,7 +32,7 @@ for (const viewport of VIEWPORTS) {
   test.describe(`QA reveal at ${viewport.width}`, () => {
     test.use({ viewport, hasTouch: viewport.width < 1024 });
 
-    test("envelopes, tokens, perks, locks, VOID and keyboard scrubbing", async ({ page }, info) => {
+    test("envelopes, tokens, perks, locks, VOID and keyboard scrubbing @reveal", async ({ page }, info) => {
       test.skip(!info.project.name.startsWith("desktop") || info.project.name.endsWith("fast"), "the viewport is set here");
       const errors: string[] = [];
       page.on("pageerror", (e) => errors.push(e.message));

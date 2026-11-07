@@ -16,7 +16,7 @@ async function shot(page: Page, name: string) {
   await page.screenshot({ path: `${SHOTS}/game-${name}-${page.viewportSize()!.width}.png`, fullPage: true });
 }
 
-test("a host and a guest play a 15-min game against bots to the end", async ({ page, browser }) => {
+test("a host and a guest play a 15-min game against bots to the end @move", async ({ page, browser }) => {
   test.setTimeout(300_000);
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
@@ -105,7 +105,7 @@ test("a host and a guest play a 15-min game against bots to the end", async ({ p
   await guestCtx.close();
 });
 
-test("the move panel: pick a room, split the loot, lock it in, change it; reconnects after a dropped socket", async ({ page, browser }) => {
+test("the move panel: pick a room, split the loot, lock it in, change it; reconnects after a dropped socket @move", async ({ page, browser }) => {
   test.setTimeout(60_000);
   // Keep a handle on the page's sockets so the test can drop the game's (not Vite's, which would reload the page).
   await page.addInitScript(() => {
@@ -162,7 +162,7 @@ test("the move panel: pick a room, split the loot, lock it in, change it; reconn
   await idle.close();
 });
 
-test("the bank board: tap a room to pick it, see who you saw and the alibi claims; claim a role (M2-9, R4b)", async ({ page, browser }) => {
+test("the bank board: tap a room to pick it, see who you saw and the alibi claims; claim a role (M2-9, R4b) @board", async ({ page, browser }) => {
   test.setTimeout(150_000);
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
@@ -207,7 +207,7 @@ test("the bank board: tap a room to pick it, see who you saw and the alibi claim
   await idle.close();
 });
 
-test("shows the default move after a missed round (design §5.1)", async ({ page }) => {
+test("shows the default move after a missed round (design §5.1) @move", async ({ page }) => {
   test.setTimeout(60_000);
   const game = await startGame(page.request, { bots: 2 });
   await page.goto(`/game/${game.id}`);
@@ -215,7 +215,7 @@ test("shows the default move after a missed round (design §5.1)", async ({ page
   await expect(page.getByRole("status").filter({ hasText: "You missed round 1: the default move sent you to the Lobby" })).toBeVisible();
 });
 
-test("a game you're not in says so", async ({ page }) => {
+test("a game you're not in says so @move", async ({ page }) => {
   await page.request.post("/api/auth/guest", { data: { nickname: "Nosy" } });
   await page.goto("/game/00000000-0000-0000-0000-000000000000");
   await expect(page.getByRole("heading", { name: "No job here" })).toBeVisible();

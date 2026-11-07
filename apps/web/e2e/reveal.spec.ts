@@ -23,7 +23,7 @@ async function noSidewaysScroll(page: Page) {
 for (const viewport of VIEWPORTS) {
   test.describe(`gallery reveal at ${viewport.width}`, () => {
     test.use({ viewport, hasTouch: viewport.width < 1024 });
-    test("every role, who won and why, and a timeline to scrub through", async ({ page }, info) => {
+    test("every role, who won and why, and a timeline to scrub through @reveal", async ({ page }, info) => {
       test.skip(!info.project.name.startsWith("desktop") || info.project.name.endsWith("fast"), "the viewport is set here");
       const errors: string[] = [];
       page.on("pageerror", (e) => errors.push(e.message));
@@ -95,7 +95,7 @@ const LAUNCH_WIDTHS = [360, 390, 768, 1024, 1280];
 for (const width of LAUNCH_WIDTHS) {
   test.describe(`gallery reveal with 24-character names at ${width}`, () => {
     test.use({ viewport: { width, height: 800 }, hasTouch: width < 1024 });
-    test("no line pushes the page sideways, in any ending or round", async ({ page }, info) => {
+    test("no line pushes the page sideways, in any ending or round @reveal", async ({ page }, info) => {
       test.skip(!info.project.name.startsWith("desktop") || info.project.name.endsWith("fast"), "the viewport is set here");
       // Twelve round sheets on the whole gallery page: slow on a busy runner.
       test.setTimeout(120_000);
@@ -135,7 +135,7 @@ for (const width of LAUNCH_WIDTHS) {
   });
 }
 
-test("a real game shows its reveal only once it has ended @fast-clock", async ({ page }, info) => {
+test("a real game shows its reveal only once it has ended @fast-clock @reveal", async ({ page }, info) => {
   test.skip(info.project.name !== "desktop-fast", "one viewport is enough for the flow");
   test.setTimeout(300_000);
   const errors: string[] = [];

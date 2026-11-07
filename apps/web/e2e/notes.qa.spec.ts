@@ -5,7 +5,7 @@ import { startGame } from "./setupGame";
 // stays private (design §12.3); 12 seats at the narrowest and widest widths.
 // (The hidden-tab recap is reported as a bug on the PR, not tested here.)
 
-test("hostile notes are plain text; nothing of the board reaches the other seat; another seat's notes are refused", async ({ browser }, info) => {
+test("hostile notes are plain text; nothing of the board reaches the other seat; another seat's notes are refused @caseboard", async ({ browser }, info) => {
   test.skip(info.project.name !== "desktop", "one viewport is enough for the flow");
   test.setTimeout(60_000);
   const hostCtx = await browser.newContext();
@@ -61,7 +61,7 @@ for (const viewport of [
   { width: 360, height: 740 },
   { width: 1280, height: 800 },
 ]) {
-  test(`12 seats at ${viewport.width}px: the board, crew marks and filters fit, targets ≥44px`, async ({ browser }, info) => {
+  test(`12 seats at ${viewport.width}px: the board, crew marks and filters fit, targets ≥44px @caseboard`, async ({ browser }, info) => {
     test.skip(info.project.name !== "mobile", "viewports are set per test");
     test.setTimeout(60_000);
     const ctx = await browser.newContext({ viewport, hasTouch: viewport.width < 1024, isMobile: viewport.width < 1024 });

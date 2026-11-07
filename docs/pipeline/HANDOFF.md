@@ -28,7 +28,7 @@ Run milestone **R7 Simplified** exactly as `docs/simplified.md` "How to run it" 
   - the newest verdict-like review/comment is exactly `VERDICT: APPROVE` + `Head: S_r`, and the newest QA-like one is exactly `QA: PASS` + `Head: <current head>` (malformed newest = no; never falls back to an older verdict);
   - every commit in S_r..head only touches QA test files (`*.qa.test.ts`, `*.qa.spec.ts`; old and new paths of renames); otherwise get a delta re-review;
   - any gh/API error on any page fails closed (`MERGEABLE: no`);
-  - every check-run on the head completed as success/skipped/neutral, and every commit status is success (docs-only PRs too);
+  - every check-run on the head completed as success/skipped/neutral and a `CI ok` check-run exists on the head and completed with success (skipped, neutral, pending or missing is a no), and every commit status is success (docs-only PRs too);
   - the PR is open, not a draft, REST `mergeable_state` `clean` (asked again once while GitHub is still computing it);
   - every commit is authored by `karthik24iyer <karthik24iyer@gmail.com>` and no message has a co-authored-by / claude-session / generated-by line.
 - Merge with `docs/pipeline/merge.sh <PR>`: it runs the gate, then `PUT …/pulls/N/merge` (squash, `sha=<gated head>`) and `DELETE …/git/refs/heads/<branch>`, and prints `merged #N -> main <sha> | next: #<lowest open R7 task issue>` (or `next: see the board` if the API call fails). Both scripts use only the REST API (`gh api`), so they work in all three setups; `bash docs/pipeline/gate.qa.test.sh` tests them offline.
@@ -46,7 +46,7 @@ Run milestone **R7 Simplified** exactly as `docs/simplified.md` "How to run it" 
 
 ## Agent quirks and testing
 - **Never `gh pr checks --watch`:** it gets backgrounded and stalls agents. Poll the check-runs in short calls instead (common.md). On the Mac directly, run long commands in the foreground; through the terminal tool, background them with nohup and poll.
-- **Testing policy:** run only the specs and unit tests the PR touches, `pnpm typecheck` before pushing (QA too), push once, and let CI's unit suite and 6 e2e shards run the rest. Never skip or disable a test.
+- **Testing policy:** `pnpm typecheck` and `pnpm test:scoped` before pushing (QA too), push once, and let CI run the scoped set; the full tier runs on `main` after each merge and nightly. Never skip or disable a test.
 - **Known flaky tests** (rerun once; if it fails again, treat it as real). E2E files are in `apps/web/e2e/`; `[project]` is the Playwright project:
   - `responsive.qa.spec.ts` "landing behaviour › reduced motion › turns off the sheet entrance and toast animations" [mobile]; not reproduced in 80 runs under load on 7 Nov;
   - `notes.spec.ts` "the recap shows what changed while you were away, once, and the board stays private" [desktop]; not reproduced in 40 runs under load on 7 Nov.

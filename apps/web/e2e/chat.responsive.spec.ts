@@ -58,7 +58,7 @@ async function shot(page: Page, name: string) {
 
 for (const viewport of VIEWPORTS) {
   for (const touch of [false, true]) {
-    test(`chat at ${viewport.width}x${viewport.height}${touch ? " touch" : ""}: no overflow, targets ≥44px`, async ({ browser }) => {
+    test(`chat at ${viewport.width}x${viewport.height}${touch ? " touch" : ""}: no overflow, targets ≥44px @chat`, async ({ browser }) => {
       test.setTimeout(90_000);
       const ctx = await browser.newContext({ viewport, hasTouch: touch, isMobile: touch });
       const page = await ctx.newPage();
