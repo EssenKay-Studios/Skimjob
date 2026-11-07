@@ -23,11 +23,11 @@ Roles that only work in secret (in R7: the **Mole, Fixer, Electrician, Priest an
 
 | Role | Sees privately | Publishes | Checked by |
 |---|---|---|---|
-| **Teller** (new) | Coins that left the bank | "Taken this round: N" | The crew take (everyone's share), the Auditor, the Detective |
+| **Teller** (new) | Coins that left the bank | "Taken this round: N" | The duffel split (everyone's share), the Auditor, the Detective |
 | **Bellkeeper** (new) | Every room's bulbs | Each room's bulbs | Raids (a room raided at "2 bulbs" exposes a lie), the Lookout |
 | **Lookout** (from R7) | Who was in a room | The sighting | Other sightings, claims |
-| **Detective** (from R7) | Coins one player grabbed | The finding | The Teller's count, the crew take |
-| **Auditor** (redesigned from R7) | Whether a player's hand-in adds up | The audit | The crew take |
+| **Detective** (from R7) | Coins one player grabbed | The finding | The Teller's count, the duffel split |
+| **Auditor** (redesigned from R7) | Whether a player's hand-in adds up | The audit | The duffel split |
 | **Camera keeper** (from the Hacker) | The camera feed for a room | Who the camera saw | The Lookout, claims |
 | **Getaway driver** (new) | Who reached the Rooftop | The roll call | Claims, the bells |
 | **Fence** (new) | Black-market purchases | The purchase log | The shop's public "a perk was bought" |
@@ -46,13 +46,13 @@ The Locksmith and Smooth Talker may carry over as public perks of a role rather 
 | Sightings, cameras, Rooftop roll call, purchases, ballots | Per R7 role or public | Private to the role that sees them, published as records |
 | Your own share, raids, Wanted | As R7 | As R7 |
 
-Each player still sees **their own share** each round, so the crew take is always known exactly (share × players + kitty). That makes the Teller's count checkable and turns "N missing" into a deduction instead of a display.
+Each player still sees **their own share** each round, so the duffel split is always known exactly (share × players + kitty). That makes the Teller's count checkable and turns "N missing" into a deduction instead of a display.
 
 ### Records
 
 - **Filing:** each role publishes during the next round's planning through one record form (its fields come from the role's content). A late or empty record leaves the crew blind for that round and is shown on the role's seat.
 - **No pay for roles** (R7's principle: nothing pays anyone to be nice). A holder files because they want the heist to work, and because a missing record makes them the suspect.
-- **The case board** shows each record at its own trust level, "Reported by the Teller", with the role's badge. The ⚠ checks compare records with each other and with your evidence: "the Teller says 12 taken, but the crew take is 9", "the Bellkeeper said the Office was at 2, then it was raided".
+- **The case board** shows each record at its own trust level, "Reported by the Teller", with the role's badge. The ⚠ checks compare records with each other and with your evidence: "the Teller says 12 taken, but the duffel split is 9", "the Bellkeeper said the Office was at 2, then it was raided".
 
 ### Events
 
