@@ -129,3 +129,26 @@ test("a slow failed save disables the buttons, then re-enables them with the old
   await expect(on).toHaveAttribute("aria-pressed", "true");
   expect(await serverTips(page)).toBe(true);
 });
+
+test("during a slow save both Tips buttons are announced unavailable, a forced tap is ignored and focus stays @auth", async ({ page }) => {
+  await guestIn(page);
+  let saves = 0;
+  await page.route("**/api/me", async (r) => {
+    if (r.request().method() === "PATCH") {
+      saves++;
+      await new Promise((done) => setTimeout(done, 800));
+    }
+    await r.fallback();
+  });
+  await page.goto("/");
+  const group = tipsGroup(page);
+  await group.getByRole("button", { name: "Off" }).click();
+  // What assistive tech reads: both buttons unavailable, Off still not pressed until the save lands.
+  await expect(group.getByRole("button", { name: "On", disabled: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(group.getByRole("button", { name: "Off", disabled: true })).toHaveAttribute("aria-pressed", "false");
+  expect(await page.evaluate(() => document.activeElement?.textContent)).toBe("Off");
+  await group.getByRole("button", { name: "On" }).click({ force: true }); // a tap mid-save
+  await expect(group.getByRole("button", { name: "Off", disabled: false })).toHaveAttribute("aria-pressed", "true");
+  expect(saves).toBe(1);
+  expect(await serverTips(page)).toBe(false);
+});
