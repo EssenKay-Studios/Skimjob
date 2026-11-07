@@ -186,7 +186,7 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
           const [x, z] = p;
           applied = true;
           (kind === "split" ? [x, z] : [x]).forEach((id) => involved.add(id));
-          // Same Haul, same pocket count, same room — only the two stashes differ (2-coin Office grabs, design §3.1).
+          // Same hand-ins, same pocket count, same room — only the two stashes differ (2-coin Office grabs, design §3.1).
           const keep = (id: PlayerId, pocket: number, room = "office"): Cmd => submit(id, { ...last(id), room, duffel: (COINS[room] ?? 0) - pocket, pocket, watch: undefined });
           plan.set(x, [keep(x, 1)]);
           plan.set(z, [keep(z, 2)]);
@@ -367,7 +367,7 @@ describe("QA: changing one player's hidden choices never changes another player'
     if (mode === "hiddenThenRevealed" && kind === "ballotSwap") expect([...firstPublic]).toEqual(["meetingClosed"]);
   }, 60_000);
 
-  it("control: the harness catches a real public difference (other room, Haul changes)", () => {
+  it("control: the harness catches a real public difference (other room, the share changes)", () => {
     expect(() => runPair("control", 5, "hiddenThenRevealed", 7)).toThrow(/leak \(control/);
   });
 });

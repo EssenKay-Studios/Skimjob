@@ -81,9 +81,10 @@ describe("planning — design §3.2", () => {
     for (const e of defaults) {
       expect(e).toMatchObject({ move: { room: "lobby", duffel: 1, pocket: 0 }, visibility: { kind: "private", player: e.player } });
     }
-    expect(s.haul).toBe(3);
+    expect(s.reached).toBe(3);
     expect(s.bank).toBe(48 - 3);
-    expect(s.players.p0).toMatchObject({ stash: 0, consecutiveMissedMoves: 1 });
+    // design §7.2: the 3 handed in split 1 each.
+    expect(s.players.p0).toMatchObject({ stash: 1, consecutiveMissedMoves: 1 });
   });
 
   it("missed rounds are counted in a row and reset by submitting (design §16)", () => {
@@ -169,12 +170,14 @@ describe("rejected commands leave state untouched", () => {
 });
 
 describe("resolution — design §3.2, §4.2 step 1", () => {
-  it("duffel coins go to the Haul and pocket coins to the stash; the round summary is public and the grabs private", () => {
+  it("duffel coins are split equally and pocket coins go to the stash; the round summary is public and the grabs private (design §7.2, §7.4)", () => {
     const before = run(game(3), submit("p0", { room: "vault", duffel: 1, pocket: 2 }), submit("p1", { room: "office", duffel: 2 }), submit("p2", { room: "lobby", pocket: 1 }));
     const s = run(before, ROUND);
-    expect(s.haul).toBe(1 + 2 + 0);
-    expect(s.players.p0).toMatchObject({ stash: 2 });
-    expect(s.players.p2).toMatchObject({ stash: 1 });
+    expect(s.reached).toBe(1 + 2 + 0);
+    // The 3 handed in split 1 each; the pockets are their own.
+    expect(s.players.p0).toMatchObject({ stash: 1 + 2 });
+    expect(s.players.p1).toMatchObject({ stash: 1 });
+    expect(s.players.p2).toMatchObject({ stash: 1 + 1 });
     const events = lastEvents(before, s);
     const grabs = events.filter((x) => x.type === "coinsGrabbed");
     expect(grabs.map((e) => e.type === "coinsGrabbed" && [e.player, e.room, e.duffel, e.pocket])).toEqual([
@@ -188,12 +191,13 @@ describe("resolution — design §3.2, §4.2 step 1", () => {
       visibility: { kind: "public" },
       round: 1,
       bank: 48 - 6, // design §6.1: every coin grabbed leaves the bank, handed in or pocketed
-      haulDelta: 3,
-      haul: 3,
+      taken: 6,
+      missing: 3,
+      honesty: { reached: 3, taken: 6 },
     });
   });
 
-  it("events follow the resolution order: bells, grabs, cooling, sightings and watches, the summary, then the next round (design §4.2)", () => {
+  it("events follow the resolution order: bells, grabs, the split, cooling, sightings and watches, the summary, then the next round (design §4.2)", () => {
     const before = run(game(3), submit("p0", { room: "security", watch: "vault" }));
     const types = lastEvents(before, run(before, ROUND)).map((e) => e.type);
     expect(types).toEqual([
@@ -203,6 +207,7 @@ describe("resolution — design §3.2, §4.2 step 1", () => {
       "coinsGrabbed",
       "coinsGrabbed",
       "coinsGrabbed",
+      "duffelSplit",
       "bellsCooled",
       "roomSighting",
       "roomSighting",
@@ -218,7 +223,7 @@ describe("resolution — design §3.2, §4.2 step 1", () => {
   it("visitors don't share a room's limit: everyone in the Vault grabs up to 3 (design §3.1)", () => {
     // Bells too big to raid: 15 rings would raid the Vault (bells.test.ts).
     const s = run(game(5, [], NO_RAIDS), ...["p0", "p1", "p2", "p3", "p4"].map((p) => submit(p, { room: "vault", duffel: 3 })), ROUND);
-    expect(s.haul).toBe(15);
+    expect(s.reached).toBe(15);
   });
 
   it("each player learns who else was in their room (design §3.4)", () => {
@@ -306,13 +311,13 @@ describe("a short bank — design §3.2", () => {
     const s = run(before, ROUND);
     // Bank 3, three grabs of 3: one coin each.
     expect(grabsOf(before, s)).toEqual({ p0: [1, 0], p1: [1, 0], p2: [0, 1] });
-    expect(s.haul).toBe(2);
+    expect(s.reached).toBe(2);
     expect(s.players.p2?.stash).toBe(1);
   });
 
   it("the round that empties the bank is the last: no grab is ever cut to nothing by an empty bank (design §6.2)", () => {
     const s = run(tiny(3, 1), ROUND); // three missed moves empty the bank of 3
-    expect([s.bank, s.haul, s.phase.kind]).toEqual([0, 3, "ended"]);
+    expect([s.bank, s.reached, s.phase.kind]).toEqual([0, 3, "ended"]);
   });
 
   it("is deterministic: the same seed and commands cut the same grabs", () => {

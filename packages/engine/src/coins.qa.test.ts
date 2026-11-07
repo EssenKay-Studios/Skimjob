@@ -222,7 +222,8 @@ describe("QA: the duffel/pocket split is checked — design §3.2", () => {
       ["p1", "vault", 3, 0],
       ["p2", "rooftop", 0, 0],
     ]);
-    expect([s2.players.p0?.stash, s2.players.p1?.stash, s2.players.p2?.stash, s2.haul, s2.bank]).toEqual([3, 0, 0, 3, 48 - 6]);
+    // design §7.2, §7.6: the 3 handed in split 1 each; the pocket is p0's alone.
+    expect([s2.players.p0?.stash, s2.players.p1?.stash, s2.players.p2?.stash, s2.reached, s2.bank]).toEqual([4, 1, 1, 3, 48 - 6]);
   });
 
   it("a Lockdown-closed room refuses every split, even 0 coins in a 0-coin room (design §3.2 step 1, §13)", () => {
@@ -261,7 +262,7 @@ describe("QA: the duffel/pocket split is checked — design §3.2", () => {
     expect(b.log.filter((e) => e.type === "moveSubmitted").length).toBe(3);
     const s2 = run(b, ROUND);
     expect(grabsIn(after(b, s2)).find((e) => e.player === "p0")).toMatchObject({ room: "office", duffel: 2, pocket: 0 });
-    expect(s2.players.p0?.stash).toBe(0);
+    expect(s2.players.p0?.stash).toBe(1); // only the round's cut (design §7.2): nothing pocketed
   });
 
   it("a refused resubmit keeps the earlier valid move", () => {
@@ -571,7 +572,7 @@ describe("QA: viewFor never leaks the new events", () => {
 });
 
 describe("QA: conservation — every coin grabbed leaves the bank and lands in one bag (design §6.1, §7.7)", () => {
-  it("over random games at 3, 8 and 12 players with events on: per round, bank drop = Σ grabbed, haul growth = Σ duffel; pockets reach stashes", () => {
+  it("over random games at 3, 8 and 12 players with events on: per round, bank drop = Σ grabbed, handed in = Σ duffel; pockets and the cut reach stashes", () => {
     for (const n of [3, 8, 12]) {
       for (let trial = 0; trial < 6; trial++) {
         const rand = prng(7 * n + trial);
@@ -588,11 +589,12 @@ describe("QA: conservation — every coin grabbed leaves the bank and lands in o
           const res = resolvedIn(ev);
           const sum = g.reduce((a, e) => a + e.duffel + e.pocket, 0);
           expect(before.bank - res.bank).toBe(sum);
-          expect(res.haulDelta).toBe(g.reduce((a, e) => a + e.duffel, 0));
+          expect(res.taken - res.missing).toBe(g.reduce((a, e) => a + e.duffel, 0));
+          const cut = ev.find((e) => e.type === "duffelSplit")?.cut ?? 0;
           for (const e of g) {
             expect(e.duffel).toBeGreaterThanOrEqual(0);
             expect(e.pocket).toBeGreaterThanOrEqual(0);
-            expect((s.players[e.player]?.stash ?? 0) - (stashBefore.get(e.player) ?? 0)).toBe(e.pocket);
+            expect((s.players[e.player]?.stash ?? 0) - (stashBefore.get(e.player) ?? 0)).toBe(e.pocket + cut);
           }
           total += sum;
           expect(s.bank).toBe(filled - total);

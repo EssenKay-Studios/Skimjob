@@ -78,20 +78,22 @@ const stashes = (s: GameState) => s.playerOrder.map((id) => s.players[id]?.stash
 const ofType = <T extends GameEvent["type"]>(s: GameState, type: T) =>
   s.log.filter((e): e is Extract<GameEvent, { type: T }> => e.type === type);
 
-/** Bookkeeping that must hold for any game: coins grabbed = bank taken = Haul + stashes, per round and in total. design §3.2, §6.1 */
+/** Bookkeeping that must hold for any game: coins grabbed = bank taken = kitty + stashes, per round and in total. design §3.2, §6.1, §7.7 */
 function checkLedger(s: GameState): void {
   let bank = 16 * s.playerOrder.length;
   for (const r of resolved(s)) {
     if (r.type !== "roundResolved") continue;
     const grabs = ofType(s, "coinsGrabbed").filter((e) => e.round === r.round);
     expect(grabs).toHaveLength(s.playerOrder.length);
-    expect(grabs.reduce((n, e) => n + e.duffel, 0), `round ${r.round}`).toBe(r.haulDelta);
+    expect(grabs.reduce((n, e) => n + e.duffel, 0), `round ${r.round}`).toBe(r.taken - r.missing);
+    expect(grabs.reduce((n, e) => n + e.pocket, 0), `round ${r.round}`).toBe(r.missing);
     bank -= grabs.reduce((n, e) => n + e.duffel + e.pocket, 0);
     expect(r.bank, `round ${r.round}`).toBe(bank);
   }
   const grabbed = ofType(s, "coinsGrabbed").reduce((n, e) => n + e.duffel + e.pocket, 0);
   const kept = Object.values(s.players).reduce((n, p) => n + p.stash, 0);
-  expect(s.haul + kept).toBe(grabbed);
+  expect(s.kitty + kept).toBe(grabbed);
+  expect(s.reached).toBe(ofType(s, "coinsGrabbed").reduce((n, e) => n + e.duffel, 0));
   expect(s.bank).toBe(16 * s.playerOrder.length - grabbed);
 }
 
@@ -101,29 +103,29 @@ function checkLedger(s: GameState): void {
 
 /** 3 players, all Rookies; p2 hands in the Lobby's 1 every round. */
 const ROOKIES: (Move | null)[][] = [
-  [m("vault", 1), m("office"), m("lobby")], //                          haul +5
-  [m("security", 0, { watch: "vault" }), m("vault", 3), m("lobby")], // haul +1
-  [m("rooftop"), m("rooftop"), m("lobby")], //                          haul +1
-  [m("lobby", 1), m("office", 2), m("lobby")], //                       haul +1
-  [null, m("office", 1), m("lobby")], //    p0 misses: Lobby, 1 in:     haul +3
-  [m("vault"), m("vault"), m("lobby")], //                              haul +7
-  [m("vault", 2), m("vault", 2), m("lobby")], //                        haul +3
-  [m("vault", 3), m("rooftop"), m("lobby")], //                         haul +1
-  [m("office", 1), m("vault"), m("lobby")], //                          haul +5
+  [m("vault", 1), m("office"), m("lobby")], //                          in +5
+  [m("security", 0, { watch: "vault" }), m("vault", 3), m("lobby")], // in +1
+  [m("rooftop"), m("rooftop"), m("lobby")], //                          in +1
+  [m("lobby", 1), m("office", 2), m("lobby")], //                       in +1
+  [null, m("office", 1), m("lobby")], //    p0 misses: Lobby, 1 in:     in +3
+  [m("vault"), m("vault"), m("lobby")], //                              in +7
+  [m("vault", 2), m("vault", 2), m("lobby")], //                        in +3
+  [m("vault", 3), m("rooftop"), m("lobby")], //                         in +1
+  [m("office", 1), m("vault"), m("lobby")], //                          in +5
 ];
 
 /** 3 players: Priest, Lookout, Hacker. The last round empties the bank exactly. */
 const L = (room: string) => ({ ability: { kind: "lookout" as const, rooms: [room] } });
 const THREE: (Move | null)[][] = [
-  [m("vault"), m("office", 1, L("vault")), m("lobby", 1)], //          haul +4
-  [m("vault"), m("vault", 3), m("vault", 3)], //                       haul +3
-  [m("rooftop"), m("rooftop"), m("security", 0, { watch: "rooftop" })], //  haul 0
-  [null, m("lobby", 1, L("lobby")), m("office", 2)], //                haul +1
-  [m("office"), m("office", 2), m("office", 2)], //                    haul +2
-  [m("vault"), m("vault"), m("vault")], //                             haul +9
-  [m("vault"), m("rooftop"), m("rooftop")], //                         haul +3
-  [m("vault"), m("vault", 3), m("office")], //                         haul +5
-  [m("lobby"), m("security", 0, { watch: "vault" }), m("office", 2)], // haul +1
+  [m("vault"), m("office", 1, L("vault")), m("lobby", 1)], //          in +4
+  [m("vault"), m("vault", 3), m("vault", 3)], //                       in +3
+  [m("rooftop"), m("rooftop"), m("security", 0, { watch: "rooftop" })], //  in 0
+  [null, m("lobby", 1, L("lobby")), m("office", 2)], //                in +1
+  [m("office"), m("office", 2), m("office", 2)], //                    in +2
+  [m("vault"), m("vault"), m("vault")], //                             in +9
+  [m("vault"), m("rooftop"), m("rooftop")], //                         in +3
+  [m("vault"), m("vault", 3), m("office")], //                         in +5
+  [m("lobby"), m("security", 0, { watch: "vault" }), m("office", 2)], // in +1
 ];
 
 /** 12 players, all Rookies; every room is in play. */
@@ -131,7 +133,7 @@ const row = (...groups: [number, Move | null][]): (Move | null)[] => groups.flat
 const TWELVE: (Move | null)[][] = [
   // 3 Vault; 3 Deposit boxes (two pocket 2, one pockets 1); 2 Manager's office pocket 1; Office pockets 1;
   // Server room; Security watching Deposit boxes; Rooftop.
-  // haul 9 + 1 + 2 + 1 + 2 = 15
+  // in 9 + 1 + 2 + 1 + 2 = 15
   [
     ...row([3, m("vault")], [2, m("depositBoxes", 2)], [1, m("depositBoxes", 1)], [2, m("managersOffice", 1)]),
     m("office", 1),
@@ -139,24 +141,27 @@ const TWELVE: (Move | null)[][] = [
     m("security", 0, { watch: "depositBoxes" }),
     m("rooftop"),
   ],
-  row([2, m("depositBoxes", 2)], [10, m("lobby")]), //               haul +10
-  row([12, m("rooftop")]), //                                        haul 0
-  row([6, m("vault")], [6, m("office")]), //                         haul +30
-  row([12, null]), //                                                all missed: haul +12
-  row([12, m("managersOffice", 2)]), //                              haul 0
-  [m("vault", 3), m("managersOffice"), ...row([10, m("office")])], // haul +22
-  row([3, m("depositBoxes")], [9, m("vault")]), //                   haul 6 + 27 = 33
-  [m("managersOffice"), ...row([5, m("rooftop")], [6, m("office")])], // haul +14
+  row([2, m("depositBoxes", 2)], [10, m("lobby")]), //               in +10
+  row([12, m("rooftop")]), //                                        in 0
+  row([6, m("vault")], [6, m("office")]), //                         in +30
+  row([12, null]), //                                                all missed: in +12
+  row([12, m("managersOffice", 2)]), //                              in 0
+  [m("vault", 3), m("managersOffice"), ...row([10, m("office")])], // in +22
+  row([3, m("depositBoxes")], [9, m("vault")]), //                   in 6 + 27 = 33
+  [m("managersOffice"), ...row([5, m("rooftop")], [6, m("office")])], // in +14
 ];
 
 describe("QA scripted full games — design §3, §6.1", () => {
-  it("3 Rookies: 9 rounds, Haul/Stash/bank by hand", () => {
+  it("3 Rookies: 9 rounds, hand-ins, shares, stashes and bank by hand (design §7.2, §7.3)", () => {
     let s = game(3);
     s = ok(s, submit("p0", m("office", 2))); // resubmitted below; the last one counts (§3.2)
     s = play(s, ROOKIES);
-    expect(resolved(s).map((e) => e.type === "roundResolved" && e.haul)).toEqual([5, 6, 7, 8, 11, 18, 21, 22, 27]);
-    expect([s.haul, s.bank]).toEqual([27, 5]);
-    expect(stashes(s)).toEqual([8, 8, 0]);
+    expect(resolved(s).map((e) => e.type === "roundResolved" && e.honesty.reached)).toEqual([5, 6, 7, 8, 11, 18, 21, 22, 27]);
+    expect([s.reached, s.bank]).toEqual([27, 5]);
+    // Each split shares the hand-ins and the kitty 3 ways: 5 → 1 (kitty 2), 1+2 → 1, 1 → 0 (1), 1+1 → 0 (2), 3+2 → 1 (2), 7+2 → 3, 3 → 1, 1 → 0 (1), 5+1 → 2.
+    expect(ofType(s, "duffelSplit").map((e) => [e.cut, e.kitty])).toEqual([[1, 2], [1, 0], [0, 1], [0, 2], [1, 2], [3, 0], [1, 0], [0, 1], [2, 0]]);
+    expect([s.share, s.kitty]).toEqual([9, 0]);
+    expect(stashes(s)).toEqual([8 + 9, 8 + 9, 0 + 9]);
     expect(s.phase).toEqual({ kind: "awaitingMeeting", act: 3 });
     expect(ofType(s, "defaultMoveAssigned").map((e) => [e.player, e.round])).toEqual([["p0", 5]]);
     expect(s.players.p0?.consecutiveMissedMoves).toBe(0); // reset by submitting in round 6
@@ -166,16 +171,22 @@ describe("QA scripted full games — design §3, §6.1", () => {
 
   it("3 with powers: the last round takes exactly what the bank has left", () => {
     const s = play(game(3, ["priest", "lookout", "hacker"]), THREE);
-    expect(resolved(s).map((e) => e.type === "roundResolved" && e.haul)).toEqual([4, 7, 7, 8, 10, 19, 22, 27, 28]);
-    expect([s.bank, stashes(s)]).toEqual([0, [0, 10, 10]]);
+    expect(resolved(s).map((e) => e.type === "roundResolved" && e.honesty.reached)).toEqual([4, 7, 7, 8, 10, 19, 22, 27, 28]);
+    // Shares 1, 2, 2, 2, 3, 6, 7, 9, 9; the last split's change (1) is the kitty, and it pays for the getaway car (design §6.3).
+    expect(ofType(s, "duffelSplit").map((e) => e.share)).toEqual([1, 2, 2, 2, 3, 6, 7, 9, 9]);
+    expect([s.bank, s.kitty, stashes(s)]).toEqual([0, 1, [0 + 9, 10 + 9, 10 + 9]]);
+    expect(s.phase.kind === "ended" && s.phase.outcome).toMatchObject({ result: "failed", reason: "theft", getaway: 1 });
     checkLedger(s);
   });
 
   it("12 players: 9 rounds over every room, visitors not sharing a room's limit", () => {
     const s = play(game(12), TWELVE);
-    expect(resolved(s).map((e) => e.type === "roundResolved" && e.haulDelta)).toEqual([15, 10, 0, 30, 12, 0, 22, 33, 14]);
-    expect([s.haul, s.bank]).toEqual([136, 192 - 175]);
-    expect(stashes(s)).toEqual([7, 4, 2, 4, 4, 3, 3, 3, 3, 2, 2, 2]);
+    expect(resolved(s).map((e) => e.type === "roundResolved" && e.taken - e.missing)).toEqual([15, 10, 0, 30, 12, 0, 22, 33, 14]);
+    expect([s.reached, s.bank]).toEqual([136, 192 - 175]);
+    // 12 ways: 15 → 1 (kitty 3), 10+3 → 1 (1), 0+1 → 0 (1), 30+1 → 2 (7), 12+7 → 1 (7), 0+7 → 0 (7), 22+7 → 2 (5), 33+5 → 3 (2), 14+2 → 1 (4).
+    expect(ofType(s, "duffelSplit").map((e) => e.share)).toEqual([1, 2, 2, 4, 5, 5, 7, 10, 11]);
+    expect([s.share, s.kitty]).toEqual([11, 4]);
+    expect(stashes(s)).toEqual([7, 4, 2, 4, 4, 3, 3, 3, 3, 2, 2, 2].map((pocket) => pocket + 11));
     // Deposit boxes: everyone there grabs the full 2, however many go. design §3.1
     const boxes = ofType(s, "coinsGrabbed").filter((e) => e.room === "depositBoxes").map((e) => [e.round, e.duffel, e.pocket]);
     expect(boxes).toEqual([[1, 0, 2], [1, 0, 2], [1, 1, 1], [2, 0, 2], [2, 0, 2], [8, 2, 0], [8, 2, 0], [8, 2, 0]]);
@@ -284,7 +295,7 @@ describe("QA private information — design §3.4, §18", () => {
         }
       }
       const summary = resolved(s)[0];
-      expect(Object.keys(summary ?? {}).sort()).toEqual(["bank", "haul", "haulDelta", "round", "type", "visibility"]);
+      expect(Object.keys(summary ?? {}).sort()).toEqual(["bank", "honesty", "missing", "round", "taken", "type", "visibility"]);
     });
   }
 });

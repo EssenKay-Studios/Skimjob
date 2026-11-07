@@ -145,7 +145,7 @@ describe("QA: a raid seizes only the raided room's visitors' grabs — design §
       ["p2", 0, 2, 0],
       ["p3", 2, 0, 0],
     ]);
-    expect([s.players.p0?.stash, s.players.p2?.stash, s.haul, s.seized]).toEqual([0, 2, 2, 4]);
+    expect([s.players.p0?.stash, s.players.p2?.stash, s.reached, s.kitty, s.seized]).toEqual([0, 2, 2, 2, 4]);
   });
 
   it("a short bank's cut is what is seized, not what was asked for (design §3.2)", () => {
@@ -153,7 +153,7 @@ describe("QA: a raid seizes only the raided room's visitors' grabs — design §
     const s = run({ ...g, bank: 4, bells: { ...g.bells, vault: 1 } }, mv("p0", "vault", 3), mv("p1", "vault", 3), mv("p2", "lobby", 1), ROUND);
     const seized = ofType(s.log, "coinsGrabbed").reduce((n, e) => n + e.seized, 0);
     expect(ofType(s.log, "roomRaided")[0]?.seized).toBe(seized);
-    expect(s.bank + seized + s.haul + Object.values(s.players).reduce((n, p) => n + p.stash, 0)).toBe(4);
+    expect(s.bank + seized + s.kitty + Object.values(s.players).reduce((n, p) => n + p.stash, 0)).toBe(4);
   });
 });
 
@@ -269,14 +269,14 @@ describe("QA: the bust and the Rooftop escape — design §5.5, §8.3, §8.5", (
     expect(handleCommand(s, { type: "advance", deadline: { kind: "alibis", round: 1 } }).ok).toBe(false);
   });
 
-  it("coins are conserved through a bust: bank + seized + Haul + stashes = the starting bank", () => {
+  it("coins are conserved through a bust: bank + seized + the kitty + stashes = the starting bank", () => {
     const g = game(4);
     const start = g.bank;
     let s = run(g, mv("p0", "vault", 3), mv("p1", "vault", 0, 1), mv("p2", "office", 1, 1), mv("p3", "lobby", 0, 1), ROUND);
     s = run({ ...s, wanted: 2 }, mv("p0", "office", 0, 2), mv("p1", "office", 2), mv("p2", "office", 0, 2), mv("p3", "office", 2), ROUND);
     expect(outcome(s)).toMatchObject({ reason: "bust" });
     const stashes = Object.values(s.players).reduce((n, p) => n + p.stash, 0);
-    expect(s.bank + s.seized + s.haul + stashes).toBe(start);
+    expect(s.bank + s.seized + s.kitty + stashes).toBe(start);
     expect(s.seized).toBe(ofType(s.log, "roomRaided").reduce((n, e) => n + e.seized, 0));
   });
 
@@ -330,7 +330,7 @@ describe("QA: crew sizes and invalid or out-of-phase commands — design §3.2, 
   it("12 players all in the Vault: one raid seizes all 36 coins", () => {
     const s = run(game(12), ...Array.from({ length: 12 }, (_, i) => mv(`p${i}`, "vault", 1, 2)), ROUND);
     expect(ofType(s.log, "roomRaided")).toMatchObject([{ room: "vault", seized: 36, wanted: 1 }]);
-    expect([s.seized, s.haul, s.wanted]).toEqual([36, 0, 1]);
+    expect([s.seized, s.reached, s.wanted]).toEqual([36, 0, 1]);
     expect(Object.values(s.players).every((p) => p.stash === 0)).toBe(true);
   });
 
@@ -458,7 +458,7 @@ describe("QA: a missed move into a taped-off Lobby sits the round out — design
       for (const t of ["coinsGrabbed", "roomSighting", "roomWatched", "roomRaided", "moveLocked"] as const) expect(ofType(tail, t)).toEqual([]);
       expect(ofType(tail, "bellsRung")[0]?.bells.vault).toBe(2);
       expect(ofType(tail, "bellsCooled")[0]?.bells.vault).toBe(1);
-      expect([s.bank, s.haul, s.round]).toEqual([before.bank, 0, 2]);
+      expect([s.bank, s.reached, s.round]).toEqual([before.bank, 0, 2]);
       for (const p of Object.values(s.players)) expect([p.stash, p.consecutiveMissedMoves]).toEqual([0, 1]);
       // Round 2: the Lobby is still taped, so they sit out again; round 3 it reopens and the default is the Lobby again.
       const r2 = run(s, ROUND);

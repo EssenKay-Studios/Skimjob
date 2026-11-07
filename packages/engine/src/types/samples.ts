@@ -80,7 +80,8 @@ export const sampleEvents: { readonly [T in GameEventType]: EventOfType<T> } = {
     seen: [ana],
     offline: false,
   },
-  roundResolved: { type: "roundResolved", visibility: PUBLIC, round: 1, bank: 58, haulDelta: 6, haul: 6 },
+  roundResolved: { type: "roundResolved", visibility: PUBLIC, round: 1, bank: 58, taken: 6, missing: 1, honesty: { reached: 5, taken: 6 } },
+  duffelSplit: { type: "duffelSplit", visibility: PUBLIC, round: 1, handedIn: 5, setAside: 0, kittyIn: 0, cut: 2, kitty: 1, share: 2 },
   bellsRung: { type: "bellsRung", visibility: PUBLIC, round: 1, bells: { vault: 4, office: 1, lobby: 0, security: 0, rooftop: 0 } },
   roomRaided: { type: "roomRaided", visibility: PUBLIC, round: 1, room: "vault", seized: 3, closedThrough: 3, wanted: 1 },
   bellsCooled: { type: "bellsCooled", visibility: PUBLIC, round: 1, bells: { office: 0, lobby: 0, security: 0, rooftop: 0 } },
@@ -135,10 +136,11 @@ export const sampleEvents: { readonly [T in GameEventType]: EventOfType<T> } = {
     outcome: {
       result: "success",
       ranking: [
-        { player: ana, role: "rookie", score: 9, stash: 9 },
-        { player: ben, role: "hacker", score: 4, stash: 4 },
+        { player: ana, role: "rookie", stash: 9 },
+        { player: ben, role: "hacker", stash: 4 },
       ],
       winners: [ana],
+      getaway: 1,
     },
   },
 };

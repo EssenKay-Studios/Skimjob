@@ -1,6 +1,7 @@
 // The round loop: checking a submitted move, and resolving a round when its
 // deadline passes. design §3 (rooms, coins and grabs), §4.2, §5 (bells, raids,
-// Wanted, the bust, cooling), §6.2 (the end check); R6 role powers until S3a.6
+// Wanted, the bust, cooling), §6.2 (the end check), §7 (the split, missing and
+// honesty); R6 role powers until S3a.6
 //
 // Both are pure: they read state and return events (or a rejection reason).
 // `handleCommand` (handle.ts) folds the events.
@@ -17,6 +18,7 @@ import type { Draw } from "./handle";
 import { cardEffects, closedRoom, isAudit, roundJob, startRound } from "./deck";
 import { grantRewards } from "./crew";
 import { coolBells, factVisibility, isTaped, raidedRooms, ringBells } from "./bells";
+import { honestyOf, splitDuffel } from "./shares";
 
 export { actOfRound };
 
@@ -141,9 +143,10 @@ function grabbed(order: readonly PlayerId[], asked: (id: PlayerId) => number, ba
  *    taped off, and raises Wanted (§5.3, §5.4, `roomRaided`);
  * 4. the bust check (§5.5): at the bust line the game ends after this round's
  *    public summary, and steps 5–6 don't run;
- * 5. the split (R6's Haul until S3a.4);
+ * 5. the split: the duffel shared equally, the change into the kitty (§7.2, `duffelSplit`);
  * 6. cooling (§5.6, `bellsCooled`); a reopened room comes back at 0 (`roomReopened`);
- * 7. information: sightings, Security and power results, the round summary;
+ * 7. information: sightings, Security and power results, the round summary
+ *    (taken, missing and honesty, §7.4, §7.5);
  * 8. the end check (§6.2): the game ends once the bank is empty or this is the
  *    round cap (`endCheck`), and nothing below runs.
  * Otherwise the fold of `roundResolved` opens the round's alibis and
@@ -218,13 +221,14 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
 
   // §4.2 step 3: a raided room's visitors lose their grab before the split (§5.3).
   const raided = raidedRooms(state.rooms, lit, bulbs);
-  let haulDelta = 0;
+  let handedIn = 0;
+  let grabbedCoins = 0;
   let taken = 0;
   const pocketed = new Map<PlayerId, number>();
   for (const id of playing) {
     const { room } = moveOf(id);
     const coins = got.get(id) ?? 0;
-    taken += coins;
+    grabbedCoins += coins;
     if (raided.includes(room)) {
       pocketed.set(id, 0);
       events.push({ type: "coinsGrabbed", visibility: privateTo(id), player: id, round, room, duffel: 0, pocket: 0, seized: coins });
@@ -233,7 +237,9 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
     // A cut grab loses its pocket-bound coins first, then its duffel-bound ones. design §3.2
     const duffel = Math.min(moveOf(id).duffel, coins);
     pocketed.set(id, coins - duffel);
-    haulDelta += duffel;
+    // design §7.4: seized coins count as neither taken nor missing.
+    taken += coins;
+    handedIn += duffel;
     events.push({ type: "coinsGrabbed", visibility: privateTo(id), player: id, round, room, duffel, pocket: coins - duffel, seized: 0 });
   }
   let wanted = state.wanted;
@@ -252,6 +258,8 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
   const lyingLow = playing.filter((id) => roomDef(job, moveOf(id).room).lieLow);
   const busted = wanted >= bustStars;
   if (!busted) {
+    // §4.2 step 5: the split.
+    events.push(splitDuffel(state, round, handedIn));
     // §4.2 step 6: cooling; a room the Fixer reopened comes back from the next round, its bell at 0.
     const afterRaids = raidEvents.reduce(applyEvent, { ...state, bells: lit }).bells;
     events.push({ type: "bellsCooled", visibility: factVisibility("bells"), round, bells: coolBells(state.rooms, afterRaids, lyingLow.length, draw) });
@@ -300,7 +308,10 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
     for (const r of state.rooms) shortfalls[r] = (visitors[r] ?? []).reduce((sum, id) => sum + (pocketed.get(id) ?? 0), 0);
     events.push({ type: "auditReport", visibility: PUBLIC, round, shortfalls });
   }
-  events.push({ type: "roundResolved", visibility: PUBLIC, round, bank: state.bank - taken, haulDelta, haul: state.haul + haulDelta });
+  // design §7.4, §7.5: the summary says how many went missing, never who; honesty after the split.
+  const bank = state.bank - grabbedCoins;
+  const after = events.reduce(applyEvent, before);
+  events.push({ type: "roundResolved", visibility: factVisibility("bank", "missing", "honesty"), round, bank, taken, missing: taken - handedIn, honesty: honestyOf({ ...after, bank }) });
 
   // extension.md "Roles": this round's tokens (Hacker).
   events.push(...grantRewards(state, "loopHidPocketer", (p) => hid.has(p.id)));

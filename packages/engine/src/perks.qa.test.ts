@@ -146,7 +146,7 @@ describe("QA: +Vote, Recharge, Rig at the meeting — design §8.3", () => {
   it("a Rig spent at the act's meeting picks Act 2's first card, flipped when the meeting ends", () => {
     let s = grantPerks(game(4, [], { eventsEnabled: true }), "p0", "rig");
     for (let r = 0; r < 3; r++) s = run(s, ROUND, ALIBIS);
-    s = run({ ...s, haul: 10_000 }, SCHED, OPEN, use("p0", { kind: "rig" }));
+    s = run(s, SCHED, OPEN, use("p0", { kind: "rig" }));
     const spent = [...s.log].reverse().find((e) => e.type === "perkUsed");
     if (spent?.type !== "perkUsed" || spent.perk.kind !== "rig") throw new Error("no Rig");
     expect(spent.perk.round).toBe(4);
@@ -169,7 +169,7 @@ describe("QA: perks never leak to other views — design §8.3, §17.2", () => {
       return after;
     };
     // One perk use per round (extension.md "Tokens and the perk shop"), so the spends spread over rounds.
-    const next = (st: GameState) => run({ ...st, haul: 10_000 }, ROUND, ALIBIS);
+    const next = (st: GameState) => run(st, ROUND, ALIBIS);
     s = check(s, use("p0", { kind: "peek", target: "p1" }));
     s = next(s);
     s = check(s, use("p0", { kind: "tail", room: "vault" }));
@@ -218,16 +218,16 @@ describe("QA: determinism with perks — design §17.2", () => {
 describe("QA: Shield vs a plain shakedown — design §8.3, §11.3", () => {
   const passOnP0 = (s: GameState, by = "p1") => run(s, ...emergency(by), vote("p1", "p0"), vote("p2", "p0"), vote("p3", "p0"), CLOSE);
 
-  it("plain: the stash goes to the Haul; Shield: stash kept, Haul unchanged, no compensation, one Shield per passed shakedown", () => {
+  it("plain: the stash is set aside for the next split; Shield: stash kept, nothing set aside, no compensation, one Shield per passed shakedown", () => {
     const base = withStash(game(4), "p0", 6);
     const plain = passOnP0(base);
     expect(plain.players.p0?.stash).toBe(0);
-    expect(plain.haul).toBe(base.haul + 6);
+    expect(plain.setAside).toBe(base.setAside + 6);
 
     const two = grantPerks(base, "p0", "shield", "shield");
     const first = passOnP0(two);
     expect(first.players.p0).toMatchObject({ stash: 6 });
-    expect(first.haul).toBe(base.haul);
+    expect(first.setAside).toBe(base.setAside);
     expect(Object.fromEntries(Object.entries(first.players).map(([id, p]) => [id, p.stash]))).toEqual(
       Object.fromEntries(Object.entries(two.players).map(([id, p]) => [id, p.stash])),
     );

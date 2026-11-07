@@ -160,7 +160,7 @@ export type ResolvedAbility =
   /** Auditor: `room` came up `shortfall` short in `round` (its visitors' pockets; 0 if none). design §8 (v2 §2) */
   | { readonly kind: "audit"; readonly round: number; readonly room: RoomId; readonly shortfall: number }
   /**
-   * Detective: whether `target`'s stash is at or above `threshold`, the current act's clean threshold. design §8 (v2 §2)
+   * Detective: whether what `target` holds above the share is at or above `threshold`, the clean threshold. design §8 (v2 §2), §9.6
    */
   | { readonly kind: "checkStash"; readonly target: PlayerId; readonly threshold: number; readonly dirty: boolean }
   /** Priest: `target` is blessed for `act` (a clean shakedown of them that act is paid by the bank). design §8 (v2 §2) */
@@ -201,15 +201,48 @@ export interface RoomWatched {
   readonly offline: boolean;
 }
 
-/** The public round summary on the ledger. design §5.2 step 5 */
+/** Honesty's two counts over the whole game: coins that reached the duffel and coins taken from the bank (seized ones left out). design §7.5 */
+export interface Honesty {
+  readonly reached: number;
+  readonly taken: number;
+}
+
+/**
+ * design §4.2 step 7, §7.4, §7.5: the public round summary on the ledger.
+ * Public through the fact catalogue (§19 seam 1); it never says who pocketed.
+ */
 export interface RoundResolved {
   readonly type: "roundResolved";
   readonly visibility: PublicVisibility;
   readonly round: number;
-  /** Coins left in the bank after this round's grabs: public. design §6.1 */
+  /** Coins left in the bank after this round's grabs. design §6.1 */
   readonly bank: number;
-  readonly haulDelta: number;
-  readonly haul: number;
+  /** Coins taken from the bank this round, seized ones left out. design §7.4 */
+  readonly taken: number;
+  /** "N coins went missing": `taken` less the coins handed in this round. design §7.4 */
+  readonly missing: number;
+  /** Honesty so far, after this round's split. design §7.5 */
+  readonly honesty: Honesty;
+}
+
+/**
+ * design §4.2 step 5, §7.1–§7.3: the duffel (this round's hand-ins, the coins
+ * set aside since the last split and the kitty) split equally among all
+ * players: each gets `cut` (this round's cut), the change that doesn't divide
+ * evenly is the new `kitty`, and `share` is the share after it. No split on a
+ * bust (§5.5). Public through the fact catalogue (§19 seam 1).
+ */
+export interface DuffelSplit {
+  readonly type: "duffelSplit";
+  readonly visibility: PublicVisibility;
+  readonly round: number;
+  readonly handedIn: number;
+  readonly setAside: number;
+  /** The kitty carried into this split. */
+  readonly kittyIn: number;
+  readonly cut: number;
+  readonly kitty: number;
+  readonly share: number;
 }
 
 /**
@@ -422,7 +455,9 @@ export interface MeetingClosed {
 }
 
 /**
- * Stash revealed and taken into the Haul. If the target was clean, the crew pays compensation. design §11.3
+ * The stash is revealed; what the target holds above the share is `taken` and set aside in the duffel
+ * for the next split (design §7.1). A clean target is compensated out of the coins set aside (R6
+ * numbers until S3a.5). design §9.6
  */
 export interface ShakedownResolved {
   readonly type: "shakedownResolved";
@@ -459,8 +494,8 @@ export interface ShakedownCancelled {
 
 /**
  * The shakedown of `target` was clean and they were blessed this act: the
- * bank pays their compensation, so `amount` goes back into the Haul. It
- * doesn't say who blessed them. design §8 (v2 §2: Priest)
+ * bank pays their compensation, so `amount` goes back into the coins set
+ * aside (R6 rule until S3a.5). It doesn't say who blessed them. design §8 (v2 §2: Priest)
  */
 export interface BlessingPaid {
   readonly type: "blessingPaid";
@@ -539,22 +574,20 @@ export interface AlibiVerified {
 
 /**
  * One player's line in the final ranking, which the reveal shows (design §8.6, §15.5).
- * Ranked by score; equal scores keep seat order, with no tie-break (§8.5).
+ * Ranked by stash; equal stashes keep seat order, with no tie-break (§8.5).
  */
 export interface RankEntry {
   readonly player: PlayerId;
   /** Revealed at the end. design §13 */
   readonly role: RoleId;
-  /** The final stash; a whole number. extension.md "Winning and losing" */
-  readonly score: number;
-  /** Final stash. design §8 */
+  /** Final stash. design §7.6, §8 */
   readonly stash: number;
 }
 
 /**
  * design §8: the top group is everyone tied for the biggest stash (§8.5). A
  * success (bank or round cap, honesty at or above the line, §8.1) is won by the
- * top group; a heist sunk by theft (§8.4) by the top-group members whose role
+ * top group, the whole crew when every stash is equal (§8.2); a heist sunk by theft (§8.4) by the top-group members whose role
  * wins it (`RoleDef.winsOn`), and by nobody otherwise. The full ranking is
  * always kept, shown as a loss unless someone won (§8.6).
  */
@@ -563,12 +596,16 @@ export type Outcome =
       readonly result: "success";
       readonly ranking: readonly RankEntry[];
       readonly winners: readonly PlayerId[];
+      /** The kitty and any unsplit duffel, paid for the getaway car: they leave the game. design §6.3 */
+      readonly getaway: number;
     }
   | {
       readonly result: "failed";
       readonly reason: Exclude<FailureReason, "bust">;
       readonly ranking: readonly RankEntry[];
       readonly winners: readonly PlayerId[];
+      /** As on a success. design §6.3 */
+      readonly getaway: number;
     }
   /**
    * design §5.5: Wanted reached the bust line. Only `escapees` (on the Rooftop
@@ -609,6 +646,7 @@ export type GameEvent =
   | RoomSighting
   | RoomWatched
   | RoundResolved
+  | DuffelSplit
   | BellsRung
   | RoomRaided
   | BellsCooled

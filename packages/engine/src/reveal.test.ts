@@ -12,17 +12,11 @@ const TABLES = { roles: ROLES };
 
 const dealt = (player: string, role: string): GameEvent => ({ type: "roleDealt", visibility: privateTo(player), player, role });
 const started = (round: number): GameEvent => ({ type: "roundStarted", visibility: PUBLIC, round, act: 1 });
-const rank = (player: string, role: string, score: number, extra: Partial<RankEntry> = {}): RankEntry => ({
-  player,
-  role,
-  score,
-  stash: score,
-  ...extra,
-});
+const rank = (player: string, role: string, stash: number): RankEntry => ({ player, role, stash });
 
 /** A three-seat game: p0 Mole, p1 Hacker, p2 Rookie with Security. */
 const SETUP: GameEvent[] = [dealt("p0", "mole"), dealt("p1", "hacker"), dealt("p2", "rookie")];
-const success = (ranking: RankEntry[]): Outcome => ({ result: "success", ranking, winners: [ranking[0]?.player ?? ""] });
+const success = (ranking: RankEntry[]): Outcome => ({ result: "success", ranking, winners: [ranking[0]?.player ?? ""], getaway: 0 });
 
 describe("reveal summary — design §13", () => {
 
@@ -48,7 +42,7 @@ describe("reveal summary — design §13", () => {
       started(2),
       { type: "roleClaimed", visibility: PUBLIC, player: "p0", role: "rookie", act: 1 },
     ];
-    const outcome: Outcome = { result: "failed", reason: "theft", ranking: [rank("p0", "mole", 9), rank("p1", "rookie", 3)], winners: ["p0"] };
+    const outcome: Outcome = { result: "failed", reason: "theft", ranking: [rank("p0", "mole", 9), rank("p1", "rookie", 3)], winners: ["p0"], getaway: 0 };
     const s = revealSummary(log, outcome, TABLES);
     expect(s.seats.map((x) => [x.player, x.dealtRole, x.role, x.winsOn, x.winner])).toEqual([
       ["p0", "mole", "mole", ROLES.mole?.winsOn, true],
@@ -61,8 +55,8 @@ describe("reveal summary — design §13", () => {
 
   it("says who won and why: the top group on a success, ★ roles or nobody on a failure (extension.md \"Winning and losing\")", () => {
     const tied = [rank("p0", "rookie", 5), rank("p1", "rookie", 5), rank("p2", "mole", 1)];
-    expect(revealSummary(SETUP, { result: "success", ranking: tied, winners: ["p0", "p1"] }, TABLES).ending).toMatchObject({ topGroup: ["p0", "p1"], why: "success" });
-    const nobody = revealSummary(SETUP, { result: "failed", reason: "theft", ranking: tied, winners: [] }, TABLES);
+    expect(revealSummary(SETUP, { result: "success", ranking: tied, winners: ["p0", "p1"], getaway: 0 }, TABLES).ending).toMatchObject({ topGroup: ["p0", "p1"], why: "success" });
+    const nobody = revealSummary(SETUP, { result: "failed", reason: "theft", ranking: tied, winners: [], getaway: 0 }, TABLES);
     expect(nobody.ending).toEqual({ result: "failed", reason: "theft", topGroup: ["p0", "p1"], winners: [], why: "failedNobody" });
     expect(nobody.seats.map((x) => [x.place, x.topGroup, x.winner])).toEqual([
       [1, true, false],

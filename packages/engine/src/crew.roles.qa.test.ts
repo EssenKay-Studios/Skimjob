@@ -178,6 +178,6 @@ describe("Shield vs Priest in one shakedown — design §8, §8.3, §11.3", () =
     const s = run(p, RESOLVE);
     expect(ofType(since(p, s), "perkUsed")[0]?.perk).toMatchObject({ kind: "shield" });
     expect(ofType(s.log, "blessingPaid")).toEqual([]);
-    expect([granted(s, "p1"), s.haul]).toEqual([[], p.haul]);
+    expect([granted(s, "p1"), s.setAside]).toEqual([[], p.setAside]);
   });
 });

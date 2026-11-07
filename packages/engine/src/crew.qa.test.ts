@@ -164,7 +164,8 @@ describe("QA: dirty vs clean at exactly the threshold — design §11.3, v2 §2"
     expect(lastAbility(s)).toMatchObject({ dirty: true });
     s = finishAct(s, [mv("p0", "office"), mv("p1", "office"), mv("p2", "office")]);
     expect(s.round).toBe(4);
-    expect(s.players.p1?.stash).toBe(cleanBelowPerAct);
+    // design §7.6, §9.6: the line reads what the stash holds above the share.
+    expect((s.players.p1?.stash ?? 0) - s.share).toBe(cleanBelowPerAct);
     s = shakeDown(s, "p2", "p1");
     expect(ofType(s.log, "shakedownResolved")[0]?.clean).toBe(false);
     expect(granted(s, "p0")).toEqual(["checkedShakenDirty"]);

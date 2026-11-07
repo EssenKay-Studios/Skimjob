@@ -15,11 +15,14 @@ import { isObject, show } from "./check";
 
 type Result = GameEvent[] | string;
 
-/** The clean line: a stash below it is clean; the Detective's "dirty" line too (owner ruling 3). extension.md "Shakedowns (fixed numbers)" */
+/** The clean line: holding less than it above the share is clean; the Detective's "dirty" line too (owner ruling 3). extension.md "Shakedowns (fixed numbers)" */
 const cleanThreshold = (state: GameState): number => jobFor(state.config).shakedown.cleanBelow;
 
-/** Whether `target`'s stash isn't clean at `threshold`. The shakedown and the Detective read this. design §11.3 */
-export const holdsDirty = (state: GameState, target: PlayerId, threshold: number): boolean => (state.players[target] as PlayerState).stash >= threshold;
+/** What `target` holds above the share: the pocketed coins still held. design §7.6, §9.6 */
+export const aboveShare = (state: GameState, target: PlayerId): number => (state.players[target] as PlayerState).stash - state.share;
+
+/** Whether `target` isn't clean at `threshold`: what they hold above the share reaches it. The shakedown and the Detective read this. design §9.6 */
+export const holdsDirty = (state: GameState, target: PlayerId, threshold: number): boolean => aboveShare(state, target) >= threshold;
 
 /**
  * Auditor (v2 §2): once per act, the latest resolved round's shortfall for
@@ -157,7 +160,7 @@ export function dirtyShakedownRewards(state: GameState, target: PlayerId, meetin
 /**
  * Priest (v2 §2): `target` was shaken down clean in a meeting of `act`. If a
  * Priest blessed them for that act, the bank pays the compensation
- * (`blessingPaid` puts it back into the Haul) and each such Priest earns a token.
+ * (`blessingPaid` puts it back into the coins set aside) and each such Priest earns a token.
  */
 export function blessingEvents(state: GameState, meetingId: string, target: PlayerId, act: ActNumber, compensation: number): GameEvent[] {
   const priests = blessersOf(state, target, act);

@@ -9,7 +9,7 @@ import { setupEvents } from "./setup";
 import { replay } from "./reduce";
 import { handleCommand } from "./handle";
 import { jobFor } from "./overrides";
-import { V01_NUMBERS } from "./v01-numbers.testkit";
+import { NO_RAIDS } from "./v01-numbers.testkit";
 import { outcomeFor, ranking } from "./end";
 import { fullGrab } from "./grab.testkit";
 
@@ -21,7 +21,7 @@ function config(players: number): GameConfig {
     rolePool: [...STARTER_ROLES], // the shop's Shield may open the window (run passes it)
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
-    contentOverrides: V01_NUMBERS, // scripted against content 0.1.0 numbers (balance pass 1)
+    contentOverrides: NO_RAIDS, // the scripts set the bells they need
   };
 }
 
@@ -46,7 +46,7 @@ function run(state: GameState, ...commands: Cmd[]): GameState {
   }, state);
 }
 
-const mv = (player: string, room: string, pocket = 0, extra: object = {}) => ({ type: "submitMove", player, move: { ...fullGrab(room, pocket, V01_NUMBERS), ...extra } });
+const mv = (player: string, room: string, pocket = 0, extra: object = {}) => ({ type: "submitMove", player, move: { ...fullGrab(room, pocket, NO_RAIDS), ...extra } });
 const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
 const OPEN = (s: GameState) => ({ type: "advance", deadline: { kind: "openMeeting", meetingId: s.scheduledMeeting?.meetingId } });
 const CLOSE = (s: GameState) => ({ type: "advance", deadline: { kind: "closeMeeting", meetingId: s.meeting?.id } });
@@ -57,33 +57,33 @@ const outcome = (s: GameState): Outcome => {
   if (s.phase.kind !== "ended") throw new Error(`game not over (${s.phase.kind})`);
   return s.phase.outcome;
 };
-const rows = (o: Outcome) => o.ranking.map((e) => [e.player, e.score]);
 const types = (s: GameState, n: number) => s.log.slice(-n).map((e) => e.type);
 
-function withPlayers(s: GameState, haul: number, change: Record<string, Partial<PlayerState>>): GameState {
+function withPlayers(s: GameState, change: Record<string, Partial<PlayerState>>): GameState {
   const players = Object.fromEntries(Object.entries(s.players).map(([id, p]) => [id, { ...p, ...change[id] }]));
-  return { ...s, haul, players };
+  return { ...s, players };
 }
 
 describe("12 players — design §3, §6.2, §8", () => {
-  // Rooms by seat. Coins 48 a round.
+  // Rooms by seat. Coins 22 a round, so the bank of 192 empties in round 9 (design §6.2).
   const ROOMS = ["vault", "vault", "rooftop", "office", "rooftop", "office", "office", "office", "depositBoxes", "depositBoxes", "managersOffice", "managersOffice"];
   const POCKET: Record<string, number> = { p0: 2, p1: 3, p3: 2 };
   function game12(): GameState {
     let s = game(12, ["rookie", "lookout", "priest", "hacker"]);
-    for (let round = 1; round <= 12; round++) {
+    for (let round = 1; s.phase.kind !== "ended"; round++) {
       for (const [i, room] of ROOMS.entries()) {
         const id = `p${i}`;
         s = run(s, mv(id, room, POCKET[id] ?? 0));
       }
       s = run(s, ROUND);
-      if (round % 3 === 0 && round < 12) s = run(s, sched(round / 3), OPEN, CLOSE);
+      if (round % 3 === 0 && s.phase.kind !== "ended") s = run(s, sched(round / 3), OPEN, CLOSE);
     }
     return s;
   }
 
   it("the ranking in gameEnded matches the final state (nothing left unfolded)", () => {
     const s = game12();
+    expect([s.resolvedRound, s.bank]).toEqual([9, 0]);
     expect(outcome(s).ranking).toEqual(ranking(s));
   });
 
@@ -130,17 +130,17 @@ describe("12 players — design §3, §6.2, §8", () => {
 
 describe("ties at every level — design §8.5", () => {
   it("the ranking is by stash only: equal stashes keep seat order", () => {
-    const s = withPlayers(game(3, ["lookout", "lookout", "lookout"]), 0, {
+    const s = withPlayers(game(3, ["lookout", "lookout", "lookout"]), {
       p0: { stash: 4 },
       p1: { stash: 5 },
       p2: { stash: 4 },
     });
     expect(ranking(s).map((e) => e.player)).toEqual(["p1", "p0", "p2"]);
-    expect(outcomeFor(withPlayers(s, 0, { p1: { stash: 4 } }), null).winners).toEqual(["p0", "p1", "p2"]);
+    expect(outcomeFor(withPlayers(s, { p1: { stash: 4 } }), null).winners).toEqual(["p0", "p1", "p2"]);
   });
 
   it("a tie at the top shares the win; a lower tie does not", () => {
-    const s = withPlayers(game(12), 0, {
+    const s = withPlayers(game(12), {
       p3: { stash: 5 },
       p7: { stash: 5 },
       p11: { stash: 5 },
@@ -152,7 +152,7 @@ describe("ties at every level — design §8.5", () => {
   });
 
   it("3 players fully tied: all win a success, none wins a failure", () => {
-    const s = withPlayers(game(3), 0, { p0: { stash: 3 }, p1: { stash: 3 }, p2: { stash: 3 } });
+    const s = withPlayers(game(3), { p0: { stash: 3 }, p1: { stash: 3 }, p2: { stash: 3 } });
     expect(outcomeFor(s, null).winners).toEqual(["p0", "p1", "p2"]);
     expect(outcomeFor(s, "theft").winners).toEqual([]);
     expect(outcomeFor(s, "bust").winners).toEqual([]);

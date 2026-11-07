@@ -104,7 +104,10 @@ export function initialState(config: GameConfig): GameState {
     bank: 0,
     playerOrder: [],
     players: {},
-    haul: 0,
+    share: 0,
+    kitty: 0,
+    setAside: 0,
+    reached: 0,
     bells: {},
     taped: {},
     wanted: 0,
@@ -222,17 +225,27 @@ function applyChange(state: GameState, event: GameEvent): GameState {
       // design §5.3, §11.1: the Fixer tore the tape off; open from the next round, its bell at 0.
       return reopen(state, (room) => room === event.room);
     case "blessingPaid":
-      // design §8 (v2 §2): the bank pays the blessed player's compensation, so it goes back into the Haul.
-      return { ...state, haul: state.haul + event.amount };
+      // design §8 (v2 §2): the bank pays the blessed player's compensation, so it goes back into the coins set aside.
+      return { ...state, setAside: state.setAside + event.amount };
+    case "duffelSplit":
+      // design §7.1–§7.3, §7.6: every stash gets this round's cut; the change is the kitty. Hand-ins reach the
+      // duffel here and count toward honesty once (§7.5); kitty coins never count again. Set-aside coins
+      // earn their credit with the meetings' rules (S3a.5).
+      return {
+        ...mapPlayers(state, (p) => ({ stash: p.stash + event.cut })),
+        share: event.share,
+        kitty: event.kitty,
+        setAside: 0,
+        reached: state.reached + event.handedIn,
+      };
     case "roundResolved":
-      // The bank and the Haul are public totals. The round's alibis open (design §5.4); the next
+      // The bank is a public total. The round's alibis open (design §5.4); the next
       // round, or after an act's last round its meeting (design §11), waits for their deadline.
       // Tails watched this round (design §8.3); Verified stamps are for the round just ended.
       return {
         ...mapPlayers(state, (p) => (p.roleState.tail === null ? {} : withRoleState(p, { tail: null }))),
         phase: { kind: "alibis", round: event.round },
         bank: event.bank,
-        haul: event.haul,
         moves: {},
         card: null,
         resolvedRound: event.round,
@@ -319,7 +332,8 @@ function applyChange(state: GameState, event: GameEvent): GameState {
     case "shakedownCancelled":
       return afterShakedown(state);
     case "shakedownResolved": {
-      const next = { ...afterShakedown(state), haul: state.haul + event.taken - event.compensation };
+      // design §7.1: what the shakedown took back is set aside for the next split.
+      const next = { ...afterShakedown(state), setAside: state.setAside + event.taken - event.compensation };
       return updatePlayer(next, event.target, (p) => ({ stash: p.stash - event.taken + event.compensation }));
     }
     // ------------------------------------------------ perks. design §8.3

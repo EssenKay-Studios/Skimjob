@@ -29,6 +29,7 @@ interface Draft {
   card: RevealRound["card"];
   items: RevealItem[];
   resolved: RevealRound["resolved"];
+  split: RevealRound["split"];
   stashes: Record<PlayerId, number>;
 }
 
@@ -50,7 +51,7 @@ export function revealSummary(log: readonly GameEvent[], outcome: Outcome, table
   const push = <T>(m: Map<PlayerId, T[]>, p: PlayerId, v: T) => m.set(p, [...(m.get(p) ?? []), v]);
 
   const drafts: Draft[] = [];
-  let current: Draft = { card: null, items: [], resolved: null, stashes: {} };
+  let current: Draft = { card: null, items: [], resolved: null, split: null, stashes: {} };
   drafts[0] = current;
   /** This round's Hackers by looped room. */
   let loops = new Map<RoomId, PlayerId[]>();
@@ -71,7 +72,7 @@ export function revealSummary(log: readonly GameEvent[], outcome: Outcome, table
         break;
       case "roundStarted":
         current.stashes = Object.fromEntries(stash);
-        current = { card: null, items: [], resolved: null, stashes: {} };
+        current = { card: null, items: [], resolved: null, split: null, stashes: {} };
         drafts[e.round] = current;
         loops = new Map();
         break;
@@ -92,7 +93,12 @@ export function revealSummary(log: readonly GameEvent[], outcome: Outcome, table
         break;
       }
       case "roundResolved":
-        current.resolved = { haulDelta: e.haulDelta, haul: e.haul };
+        current.resolved = { taken: e.taken, missing: e.missing };
+        break;
+      case "duffelSplit":
+        // design §7.6: every stash gets this round's cut.
+        current.split = { cut: e.cut, share: e.share };
+        for (const p of seatOrder) add(p, e.cut);
         break;
       case "abilityResolved": {
         const a = e.ability;
@@ -140,7 +146,7 @@ export function revealSummary(log: readonly GameEvent[], outcome: Outcome, table
         })
       : [];
     if (round === 0 && d.items.length === 0) return;
-    rounds.push({ round, card: d.card, moves, resolved: d.resolved, items: d.items, stashes: d.stashes });
+    rounds.push({ round, card: d.card, moves, resolved: d.resolved, split: d.split, items: d.items, stashes: d.stashes });
   });
 
   const top = leadersOf(ranking);
@@ -158,7 +164,6 @@ export function revealSummary(log: readonly GameEvent[], outcome: Outcome, table
     dealtRole: dealt.get(r.player) ?? r.role,
     role: r.role,
     winsOn: roleDefIn(tables.roles, r.role)?.winsOn ?? [],
-    score: r.score,
     stash: r.stash,
     topGroup: top.includes(r.player),
     winner: outcome.winners.includes(r.player),

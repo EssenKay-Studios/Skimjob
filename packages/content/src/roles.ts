@@ -23,7 +23,7 @@ export type RolePower =
   /**
    * Priest: `perAct` times per stretch (`useAbility`), bless another player until
    * the next regular meeting closes. Blessed and shaken down clean meanwhile → the bank pays the
-   * compensation, not the Haul. design §8 (v2 §2)
+   * compensation, not the coins set aside. design §8 (v2 §2)
    */
   | { readonly kind: "bless"; readonly perAct: number }
   /**

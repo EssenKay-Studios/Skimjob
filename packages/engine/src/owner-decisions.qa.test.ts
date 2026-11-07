@@ -11,7 +11,7 @@ import { handleCommand } from "./handle";
 import { meetingResult } from "./meeting";
 import { roundJob } from "./deck";
 import { viewFor } from "./view";
-import { V01_NUMBERS } from "./v01-numbers.testkit";
+import { R6_COINS } from "./v01-numbers.testkit";
 import { fullGrab } from "./grab.testkit";
 
 const seats = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true }));
@@ -23,7 +23,7 @@ function config(n: number, extra: Partial<GameConfig> = {}): GameConfig {
     rolePool: [...STARTER_ROLES],
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
-    contentOverrides: V01_NUMBERS,
+    contentOverrides: R6_COINS,
     ...extra,
   };
 }
@@ -49,7 +49,7 @@ function refused(state: GameState, c: Cmd): string {
 const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
 const ALIBIS = (s: GameState) => ({ type: "advance", deadline: { kind: "alibis", round: s.resolvedRound } });
 const alibiAt = (round: unknown) => ({ type: "advance", deadline: { kind: "alibis", round } });
-const mv = (player: string, room: string, pocket = 0, extra: object = {}) => ({ type: "submitMove", player, move: { ...fullGrab(room, pocket, V01_NUMBERS), ...extra } });
+const mv = (player: string, room: string, pocket = 0, extra: object = {}) => ({ type: "submitMove", player, move: { ...fullGrab(room, pocket, R6_COINS), ...extra } });
 const open = (meetingId: unknown) => ({ type: "advance", deadline: { kind: "openMeeting", meetingId } });
 const close = (meetingId: unknown) => ({ type: "advance", deadline: { kind: "closeMeeting", meetingId } });
 const vote = (player: string, target: string | null) => ({ type: "castVote", player, vote: target === null ? { kind: "skip" } : { kind: "shakedown", target } });

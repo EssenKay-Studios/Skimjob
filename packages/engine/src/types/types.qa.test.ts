@@ -39,6 +39,7 @@ type ExpectedVisibility = {
   roomSighting: "private";
   roomWatched: "private";
   roundResolved: "public";
+  duffelSplit: "public"; // design §7.3: the split and the share are public
   bellsRung: "public"; // design §5.1: every bell is public
   roomRaided: "public"; // design §5.3, §5.4: raids and Wanted are public, never who was inside
   bellsCooled: "public"; // design §5.6

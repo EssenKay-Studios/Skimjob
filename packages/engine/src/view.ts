@@ -23,6 +23,7 @@ import { roomDef } from "./job";
 import { eventsFor, jobFor, perkCost, rolesFor } from "./overrides";
 import { revealSummary } from "./reveal";
 import { roundJob } from "./deck";
+import { honestyOf } from "./shares";
 
 const isPublic = (event: GameEvent): event is PublicEvent => event.visibility.kind === "public";
 const isCaseFile = (event: GameEvent): event is CaseFileEvent => event.visibility.kind !== "public";
@@ -114,7 +115,10 @@ function buildView(state: GameState, playerId: PlayerId): PlayerView {
     rooms: state.rooms,
     // design §6.1: the bank count is public.
     bank: state.bank,
-    haul: state.haul,
+    // design §7.2, §7.3, §7.5: the share, the kitty and honesty are public.
+    share: state.share,
+    kitty: state.kitty,
+    honesty: honestyOf(state),
     // design §5.1, §5.3, §5.4: bells (a taped-off room's is off), the tape and Wanted are public.
     bells: state.bells,
     taped: state.taped,
@@ -155,17 +159,17 @@ function roleListOf(log: readonly GameEvent[]): PlayerView["roleList"] {
 export function gapBox(state: GameState): GapBox | null {
   const round = state.resolvedRound;
   if (round === 0) return null;
-  let haulGrowth = 0;
+  let handedIn = 0;
   let card: ActiveCard | null = null;
   const alibis: string[] = [];
   for (const e of state.log) {
-    if (e.type === "roundResolved" && e.round === round) haulGrowth = e.haulDelta;
+    if (e.type === "roundResolved" && e.round === round) handedIn = e.taken - e.missing;
     else if (e.type === "eventFlipped" && e.round === round) card = { round, id: e.card, room: e.room };
     else if (e.type === "alibiPosted" && e.round === round) alibis.push(e.room);
   }
   const job = roundJob(jobFor(state.config), card, eventsFor(state.config));
   const claimed = alibis.reduce((sum, room) => sum + roomDef(job, room).coins, 0);
-  return { round, posted: alibis.length, alibis: claimed, haulGrowth, unaccounted: claimed - haulGrowth };
+  return { round, posted: alibis.length, alibis: claimed, handedIn, unaccounted: claimed - handedIn };
 }
 
 /**
