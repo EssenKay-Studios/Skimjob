@@ -23,7 +23,7 @@ import { mostSuspicious, suspicion } from "./suspicion";
 import { claimCommands, meetingTime } from "./claims";
 import { alibiPerk, buyPerks, hasPerk, meetingPerks, perkSpender, planningPerks } from "./perks";
 import { bustDanger, jobThisRound, openRooms, quietGrab, raidRisk } from "./alarm";
-import { coinsTaken, leaning } from "./forecast";
+import { leaning } from "./forecast";
 
 /**
  * Anything that plays a seat: a bot, or (later) a human client. It sees only
@@ -245,10 +245,9 @@ function choosePocket(view: PlayerView, p: Personality, random: Random, coins: n
   // extension.md Build notes "Bots": a ★ role leaning toward its failure skims all it can.
   if (leaning(view) !== null) return coins;
   if (random() < p.teamSpirit) {
-    // After this grab, honesty (the Haul ÷ the coins taken) stays a margin above the line.
-    const job = jobOf(view);
-    const keep = job.honestyLine * HONESTY_MARGIN * (coinsTaken(view, job) + coins);
-    pocket = Math.min(pocket, Math.max(0, Math.floor(view.haul + coins - keep)));
+    // After this grab, honesty (coins that reached the duffel ÷ coins taken) stays a margin above the line.
+    const keep = jobOf(view).honestyLine * HONESTY_MARGIN * (view.honesty.taken + coins);
+    pocket = Math.min(pocket, Math.max(0, Math.floor(view.honesty.reached + coins - keep)));
   }
   return pocket;
 }

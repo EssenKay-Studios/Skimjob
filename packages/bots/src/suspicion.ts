@@ -73,7 +73,7 @@ export function suspicion(view: PlayerView, w: SuspicionWeights = SUSPICION_WEIG
   const coins = (room: RoomId): number => roomDef(job, room).coins;
   const maxCoins = Math.max(...view.rooms.map(coins));
 
-  function judgeRound({ round, haulDelta }: RoundResolved): void {
+  function judgeRound({ round, taken, missing }: RoundResolved): void {
     const split = ofType(view.caseFile, "coinsGrabbed").find((e) => e.round === round);
     if (!split) return;
     // Others' alibis only: my own contribution I know exactly.
@@ -114,8 +114,8 @@ export function suspicion(view: PlayerView, w: SuspicionWeights = SUSPICION_WEIG
     const raided = new Set(ofType(view.ledger, "roomRaided").filter((e) => e.round === round).map((e) => e.room));
     let expected = 0;
     for (const room of claims.values()) if (!raided.has(room)) expected += roomDef(job, room).coins;
-    // My own hand-in.
-    let unexplained = expected - (haulDelta - split.duffel);
+    // Handed in this round (design §7.4), less my own hand-in.
+    let unexplained = expected - (taken - missing - split.duffel);
     if (unexplained <= 0) return;
 
     // Shared by how much each could have taken: their claimed room's coins (+1, since a claim can be a lie).

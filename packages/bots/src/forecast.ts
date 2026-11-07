@@ -1,13 +1,13 @@
 // A bot's public ending forecast and its own stash rank (extension.md Build
 // notes "Bots"): the chance of success, a bust or a heist sunk by theft, from
-// honesty so far, Wanted (alarm.ts) and the role list; and whether it rates
-// itself top. The four ★ roles lean toward the
+// honesty so far (design §7.5), Wanted (alarm.ts) and the role list; and
+// whether it rates itself top. The four ★ roles lean toward the
 // failure they win on once its forecast passes `LEAN_AT` and they rate
 // themselves top; everyone else plays for success. Bot settings, not rules.
-import type { FailureReason, JobDef } from "@skimjob/content";
-import { honesty, roomDef, type PlayerView } from "@skimjob/engine";
+import type { FailureReason } from "@skimjob/content";
+import { honesty, type PlayerView } from "@skimjob/engine";
 import { bustDanger } from "./alarm";
-import { crewSize, jobOf, ofType, roleOf } from "./read";
+import { jobOf, ofType, roleOf } from "./read";
 
 export interface Forecast {
   readonly success: number;
@@ -18,16 +18,10 @@ export interface Forecast {
 /** A ★ role leans toward its failure once that ending's forecast passes this [0.8] (R6 balance pass: was 0.4, r6-balance.md). extension.md Build notes "Bots" */
 export const LEAN_AT = 0.8;
 
-/** It rates itself top when its score is at least this many times the average other player's estimated stash (bot setting). */
+/** It rates itself top when what it holds above the share is at least this many times the average other player's estimated pocket (bot setting). */
 const TOP_FACTOR = 2;
 
 const clamp = (x: number): number => Math.min(1, Math.max(0, x));
-
-/** Coins taken from the bank so far, seized ones left out (design §7.5), from the public bank count and raids. */
-export function coinsTaken(view: PlayerView, job: JobDef = jobOf(view)): number {
-  const seized = ofType(view.ledger, "roomRaided").reduce((sum, e) => sum + e.seized, 0);
-  return job.bank.coinsPerPlayer * crewSize(view) - view.bank - seized;
-}
 
 /**
  * The public ending forecast. Bust: half as likely one raid short of the
@@ -39,32 +33,21 @@ export function forecast(view: PlayerView): Forecast {
   const job = jobOf(view);
   const bust = clamp(bustDanger(view, job) - 0.5);
   const line = job.honestyLine;
-  const theft = clamp(((line - honesty(view.haul, coinsTaken(view, job))) / line) * 4 + 0.5);
+  const theft = clamp(((line - honesty(view.honesty)) / line) * 4 + 0.5);
   return { success: (1 - bust) * (1 - theft), bust, theft };
 }
 
 /**
- * Coins the alibis claim but the Haul never got, summed over the resolved
- * rounds: roughly what the crew has skimmed (cover-up alibis hide some).
+ * Whether the bot rates itself top: what it holds above the share (design §7.6) against the others'
+ * share of the coins that went missing (public, §7.4) that it didn't pocket itself.
  */
-function skimEstimate(view: PlayerView): number {
-  const job = jobOf(view);
-  let total = 0;
-  for (const r of ofType(view.ledger, "roundResolved")) {
-    const rooms = ofType(view.ledger, "alibiPosted").filter((a) => a.round === r.round).map((a) => a.room);
-    const claimed = rooms.reduce((sum, room) => sum + roomDef(job, room).coins, 0);
-    total += Math.max(0, claimed - r.haulDelta);
-  }
-  return total;
-}
-
-/** Whether the bot rates itself top: its stash against the others' estimated share of the skim. */
 function ratesSelfTop(view: PlayerView): boolean {
-  const mine = view.me.stash;
-  if (mine === 0) return false;
+  const mine = view.me.stash - view.share;
+  if (mine <= 0) return false;
+  const missing = ofType(view.ledger, "roundResolved").reduce((sum, e) => sum + e.missing, 0);
   const pocketed = ofType(view.caseFile, "coinsGrabbed").reduce((sum, e) => sum + e.pocket, 0);
   const others = Math.max(1, view.players.length);
-  return mine >= (TOP_FACTOR * Math.max(0, skimEstimate(view) - pocketed)) / others;
+  return mine >= (TOP_FACTOR * Math.max(0, missing - pocketed)) / others;
 }
 
 /** The failure this bot leans toward now (★ roles only), or null: it plays for success. extension.md Build notes "Bots" */
