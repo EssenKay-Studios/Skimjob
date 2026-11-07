@@ -348,6 +348,20 @@ describe("QA: past the deadline, before the scheduler's tick (design §10: until
     expect((await createPlan(db, clock).history(g.id, 1))[0]!.msBeforeDeadline).toBe(5_000);
     closeAll(a, b);
   });
+
+  it("a host pause after the deadline has passed (before the tick) doesn't reopen the board", async () => {
+    const { id, humans, rooms } = await startGame(2, 1);
+    const a = await Client.open(id, humans[0]!);
+    const dl = (await roundDeadline(id, 1))!;
+    clock.advance(dl.due + 3_000 - clock.now());
+    expect((await app.inject({ method: "POST", url: `/games/${id}/pause`, cookies: { [SESSION_COOKIE]: humans[0]!.who } })).statusCode).toBe(200);
+    expect((await roundDeadline(id, 1))!.paused).not.toBeNull();
+    for (const plan of [{ room: rooms[0] }, { agree: true }]) {
+      expect(await a.plan(plan)).toMatchObject({ rejected: true, reason: "the plan board is closed: the round's time is up" });
+    }
+    expect(await createPlan(db, clock).history(id, 1)).toEqual([]);
+    closeAll(a);
+  });
 });
 
 describe("QA: limits and hostile payloads", () => {
