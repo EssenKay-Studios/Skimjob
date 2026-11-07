@@ -23,7 +23,7 @@ export interface CellResult extends Cell {
 /**
  * The stop rule, after a fold: never before minGames; then stop once every
  * checked rate that applies has a 95% half-width ≤ ciHalfWidth (a rate with
- * nothing to count yet, e.g. Heat share with no failures, doesn't hold it
+ * nothing to count yet, e.g. comebacks with no successes, doesn't hold it
  * up), or at maxGames.
  */
 export function cellStatus(o: SuiteOptions, cell: Cell, t: Tally): { done: boolean; converged: boolean } {

@@ -22,7 +22,8 @@ export interface Tally {
   readonly games: number;
   readonly successes: number;
   readonly failures: number;
-  readonly heatFailures: number;
+  /** Failed on a bust. design §5.5 */
+  readonly busts: number;
   /** Failed on a missed final target. */
   readonly targetFailures: number;
   /** Games nobody won (a failure no top-group role wins on), and games two or more shared. extension.md "One crew, and how you win" */
@@ -46,7 +47,7 @@ export const emptyTally = (): Tally => ({
   games: 0,
   successes: 0,
   failures: 0,
-  heatFailures: 0,
+  busts: 0,
   targetFailures: 0,
   noWinner: 0,
   sharedWin: 0,
@@ -79,7 +80,7 @@ export function tallyGames(records: readonly GameRecord[], start: Tally = emptyT
     const success = g.result === "success";
     if (success) t.successes++;
     else t.failures++;
-    if (!success && g.reason === "heat") t.heatFailures++;
+    if (!success && g.reason === "bust") t.busts++;
     if (!success && g.reason === "target") t.targetFailures++;
     if (g.winners.length === 0) t.noWinner++;
     if (g.winners.length > 1) t.sharedWin++;
@@ -108,7 +109,7 @@ export function addTallies(a: Tally, b: Tally): Tally {
     games: a.games + b.games,
     successes: a.successes + b.successes,
     failures: a.failures + b.failures,
-    heatFailures: a.heatFailures + b.heatFailures,
+    busts: a.busts + b.busts,
     targetFailures: a.targetFailures + b.targetFailures,
     noWinner: a.noWinner + b.noWinner,
     sharedWin: a.sharedWin + b.sharedWin,

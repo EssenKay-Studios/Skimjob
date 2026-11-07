@@ -10,7 +10,7 @@ import { gameRec, seat } from "./testkit";
 
 const games = [
   gameRec({ seed: "a,b", players: 2, playerRecords: [seat({ id: "p1" }), seat({ id: "p2", role: "priest" })], winners: ["p1"] }),
-  gameRec({ seed: "c", players: 2, result: "failed", reason: "heat", playerRecords: [seat({ id: "p1", role: "mole" }), seat({ id: "p2" })] }),
+  gameRec({ seed: "c", players: 2, result: "failed", reason: "bust", playerRecords: [seat({ id: "p1", role: "mole" }), seat({ id: "p2" })] }),
 ];
 
 describe("CSV", () => {
@@ -72,7 +72,7 @@ describe("prepareOutDir — checked before any game runs (PR #10 QA)", () => {
 describe("formatReport", () => {
   it("shows every design §17.4 metric with its target, one column per player count", () => {
     const text = formatReport(summarize([...games, { ...games[0]!, players: 3 }]), "title");
-    for (const label of ["Heist success rate", "Heat-bust share", "Shakedown accuracy", "Win rate, honest", "Win rate, moderate", "Win rate, heavy", "Comeback", "Decided before Act 3", "Mole win rate"]) {
+    for (const label of ["Heist success rate", "Bust rate", "Raids per game", "Games with a raid", "Rooftop stalls", "Shakedown accuracy", "Win rate, honest", "Win rate, moderate", "Win rate, heavy", "Comeback", "Decided before Act 3", "Mole win rate"]) {
       expect(text).toContain(label);
     }
     expect(text).toMatch(/2p\s+3p\s+all/);

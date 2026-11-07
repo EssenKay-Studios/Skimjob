@@ -17,8 +17,11 @@ const share = (lo: number) => `${Math.round(lo * 100)}%`;
 const ROWS: readonly Row[] = [
   { label: "Games", target: "", cell: (m) => String(m.games) },
   { label: "Heist success rate", target: "55–70%", cell: (m) => pct(m.successRate) },
-  { label: "Heat-bust share of failures", target: "10–20%", cell: (m) => (m.failures === 0 ? "—" : pct(m.heatBustShare)) },
-  { label: "Raided before Act 3", target: "", cell: (m) => pct(m.endedBeforeAct3) },
+  { label: "Bust rate", target: "8–20%", cell: (m) => pct(m.bustRate) },
+  { label: "Raids per game", target: "1–3", cell: (m) => num(m.raids.perGame) },
+  { label: "Games with a raid", target: "50–90%", cell: (m) => pct(m.raids.games) },
+  { label: "Rooftop stalls (rounds)", target: "≤ 15%", cell: (m) => pct(m.raids.stalls) },
+  { label: "Busted before Act 3", target: "", cell: (m) => pct(m.endedBeforeAct3) },
   { label: "Checkpoints missed per game", target: "", cell: (m) => num(m.checkpointsMissedPerGame) },
   { label: "Bank emptied", target: "", cell: (m) => pct(m.bankEmptied) },
   { label: "Shakedowns per game", target: "", cell: (m) => num(m.shakedowns.perGame) },

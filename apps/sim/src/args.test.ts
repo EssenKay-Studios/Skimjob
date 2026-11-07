@@ -86,7 +86,7 @@ describe("parseSimArgs", () => {
   });
 
   it("reads overrides inline or from a file, and reports bad JSON", () => {
-    expect(run(["--overrides", '{"heat":{"perRound":5}}']).contentOverrides).toEqual({ heat: { perRound: 5 } });
+    expect(run(["--overrides", '{"alarm":{"bulbs":5}}']).contentOverrides).toEqual({ alarm: { bulbs: 5 } });
     expect(run(["--overrides", "o.json"], (p) => (p === "o.json" ? '{"shakedown":{}}' : "")).contentOverrides).toEqual({ shakedown: {} });
     expect(error(["--overrides", "{nope"])).toMatch(/--overrides/);
   });

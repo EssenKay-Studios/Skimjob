@@ -42,7 +42,7 @@ describe("checkOptions — the engine's validateConfig on the sim's settings", (
   it("reports bad role pools, jobs and overrides (untrusted JSON, design §17.4)", () => {
     expect(checkOptions(options(["--role-pool", "wizard"]))).toEqual(["unknown role wizard"]);
     expect(checkOptions(options(["--job", "casino"]))).toEqual(["unknown job casino"]);
-    expect(checkOptions(options(["--overrides", '{"heat":{"perRound":"lots"}}']))).toEqual(["contentOverrides.heat.perRound must be a finite number"]);
+    expect(checkOptions(options(["--overrides", '{"alarm":{"bulbs":"lots"}}']))).toEqual(["contentOverrides.alarm.bulbs must be a whole number, 1 or more"]);
   });
 });
 
@@ -55,10 +55,11 @@ describe("content overrides change the games (design §17.4)", () => {
     for (const r of records) for (const p of r.playerRecords) expect(p.grabbed).toBeLessThanOrEqual(9);
   });
 
-  it("raising the baseline Heat sends more heists to the cops", () => {
+  it("smaller bells mean more raids and busts (design §5)", () => {
     const base = summarize(runBatch(options(["-n", "20", "-p", "6"]))).overall;
-    const hot = summarize(runBatch(options(["-n", "20", "-p", "6", "--overrides", '{"heat":{"perRound":30}}']))).overall;
-    expect(hot.heatFailures).toBeGreaterThan(base.heatFailures);
+    const loud = summarize(runBatch(options(["-n", "20", "-p", "6", "--overrides", '{"alarm":{"bulbs":2}}']))).overall;
+    expect(loud.raids.perGame ?? 0).toBeGreaterThan(base.raids.perGame ?? 0);
+    expect(loud.busts).toBeGreaterThan(base.busts);
   });
 
   it("a game's record names its seed", () => {

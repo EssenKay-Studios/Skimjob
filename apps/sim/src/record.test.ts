@@ -22,6 +22,7 @@ const options = (argv: string[] = []): SimOptions => {
 const R6: ContentOverrides = {
   rooms: { vault: { coins: 6 }, lobby: { coins: 2 } },
   bank: { coinsPerPlayer: 100 },
+  alarm: { bulbs: 1000 },
   checkpoints: { perPlayer: [6, 14, 22] },
   shakedown: { cleanBelow: 6, payout: 8 },
 };
@@ -35,7 +36,7 @@ function config(players: number): GameConfig {
     eventsEnabled: false,
     voteVisibility: "open",
     // scripted against content 0.1.0 checkpoint targets (balance pass 1); whole-number scores, no Rookie multiplier (extension.md "Scoring");
-    // R6's room yields as coin limits, its clean line and a bank too big to run short, until S3a.3–S3a.5 replace those rules
+    // R6's room yields as coin limits, its clean line, a bank too big to run short and bells too big to raid, until S3a.3–S3a.5 replace those rules
     contentOverrides: R6,
   };
 }
@@ -168,5 +169,18 @@ describe("recordGame — bot games agree with the engine's ranking", () => {
         }
       }
     }
+  });
+});
+
+describe("recordGame — raids, Wanted, Rooftop stalls and the bust (design §5, §21 G2–G4)", () => {
+  it("counts the raids, the final Wanted and the rounds with more than half the crew on the Rooftop", () => {
+    // 2-bulb bells, a bust at 2 stars: round 1 raids the Vault (2 of 3 on the Rooftop: a stall), round 2 the Office (a bust).
+    const cfg = { ...config(3), contentOverrides: { ...R6, alarm: { bulbs: 2, bustStars: 2 } } };
+    let s = replay(cfg, setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: "rookie" } : e)));
+    s = run(s, move("p0", "vault"), move("p1", "rooftop"), move("p2", "rooftop"), roundDeadline(s));
+    const office = (player: string): Command => ({ type: "submitMove", player, move: { room: "office", duffel: 2, pocket: 0 } });
+    s = run(s, office("p0"), move("p1", "rooftop"), office("p2"), roundDeadline(s));
+    const g = recordGame(s, ["honest", "honest", "honest"]);
+    expect([g.result, g.reason, g.raids, g.wanted, g.stalls, g.endedRound]).toEqual(["failed", "bust", 2, 2, 1, 2]);
   });
 });

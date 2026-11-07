@@ -3,7 +3,11 @@
 //
 // Definitions (provisional, docs/decisions.md):
 // - success rate: games won by the crew ÷ games.
-// - Heat-bust share: failures caused by Heat ÷ failures (target 10–20%).
+// - bust rate: games ended by a bust ÷ games (design §21 G3: 8–20%).
+// - raids: raids per game (G2: 1–3 on average), and games with at least one
+//   raid (G2: 50–90%).
+// - Rooftop stalls: rounds with more than half the crew on the Rooftop ÷
+//   rounds played (G4: at most 15%).
 // - pocketing: each player who can pocket is put in a band by pocketed ÷ grabbed
 //   (honest ≤ 10%, moderate ≤ 40%, heavy above); win rate over all games, so a
 //   heist sunk by pocketing counts as a loss.
@@ -91,10 +95,26 @@ export function successRate(records: readonly GameRecord[]): number | null {
   return rate(records.filter((g) => g.result === "success").length, records.length);
 }
 
-/** Share of failures that came from Heat. design §17.4 target 10–20% */
-export function heatBustShare(records: readonly GameRecord[]): number | null {
-  const failed = records.filter((g) => g.result === "failed");
-  return rate(failed.filter((g) => g.reason === "heat").length, failed.length);
+/** Share of games that ended in a bust. design §21 G3: 8–20% */
+export function bustRate(records: readonly GameRecord[]): number | null {
+  return rate(records.filter((g) => g.reason === "bust").length, records.length);
+}
+
+export interface RaidMetrics {
+  /** Raids per game. design §21 G2: 1–3 */
+  readonly perGame: number | null;
+  /** Games with at least one raid. design §21 G2: 50–90% */
+  readonly games: number | null;
+  /** Rounds with more than half the crew on the Rooftop ÷ rounds played. design §21 G4: ≤ 15% */
+  readonly stalls: number | null;
+}
+
+export function raidMetrics(records: readonly GameRecord[]): RaidMetrics {
+  return {
+    perGame: rate(records.reduce((s, g) => s + g.raids, 0), records.length),
+    games: rate(records.filter((g) => g.raids > 0).length, records.length),
+    stalls: rate(records.reduce((s, g) => s + g.stalls, 0), records.reduce((s, g) => s + g.endedRound, 0)),
+  };
 }
 
 export interface ShakedownMetrics {
@@ -149,7 +169,7 @@ export function decidedEarlyMetric(records: readonly GameRecord[]): RateOf {
 
 /**
  * design §17.4 "Mole win rate (when present)": of games with a Mole dealt, the
- * share a Mole won (by score on a success, or on a heat or target failure; extension.md "Who wins"). Per game, not
+ * share a Mole won (by score on a success, as a Rooftop escapee on a bust, or on a missed target; extension.md "Who wins"). Per game, not
  * per seat, so two Moles (or a Mole and the Driver) winning together count once.
  */
 export function moleWinMetric(records: readonly GameRecord[]): RateOf {
@@ -161,9 +181,10 @@ export interface Metrics {
   readonly games: number;
   readonly successRate: number | null;
   readonly failures: number;
-  readonly heatFailures: number;
-  readonly heatBustShare: number | null;
-  /** Games that ended (raided) before Act 3. */
+  readonly busts: number;
+  readonly bustRate: number | null;
+  readonly raids: RaidMetrics;
+  /** Games that ended (busted) before Act 3. */
   readonly endedBeforeAct3: number | null;
   readonly checkpointsMissedPerGame: number | null;
   /** Share of games whose bank ran dry (every later grab is cut to 0, design §3.2). */
@@ -184,8 +205,9 @@ function metrics(records: readonly GameRecord[]): Metrics {
     games: records.length,
     successRate: successRate(records),
     failures: failed.length,
-    heatFailures: failed.filter((g) => g.reason === "heat").length,
-    heatBustShare: heatBustShare(records),
+    busts: failed.filter((g) => g.reason === "bust").length,
+    bustRate: bustRate(records),
+    raids: raidMetrics(records),
     endedBeforeAct3: rate(records.filter((g) => g.endedAct < 3).length, records.length),
     checkpointsMissedPerGame: rate(records.reduce((s, g) => s + g.checkpointsMissed, 0), records.length),
     bankEmptied: rate(records.filter((g) => g.bankLeft === 0).length, records.length),
