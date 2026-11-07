@@ -134,25 +134,26 @@
     opacity 0.16s ease;
 }
 @media (hover: hover) {
-  .btn:hover:not(:disabled) {
+  .btn:hover:not(:disabled, [aria-disabled="true"]) {
     transform: translateY(-1.5px) rotate(-1deg);
     --fr-fill: var(--paper-hi);
   }
 }
 /* The press squishes the frame and label, never the button's own box: a
    pressed (or touch-stuck :active) target stays 44x44 (ui-style §5). */
-.btn:active:not(:disabled) {
+.btn:active:not(:disabled, [aria-disabled="true"]) {
   transform: translateY(1px);
   transition-duration: 0.06s;
 }
 .btn > * {
   transition: transform 0.16s var(--spring);
 }
-.btn:active:not(:disabled) > * {
+.btn:active:not(:disabled, [aria-disabled="true"]) > * {
   transform: scale(0.97);
   transition-duration: 0.06s;
 }
-.btn:disabled {
+.btn:disabled,
+.btn[aria-disabled="true"] {
   opacity: 0.45;
   filter: grayscale(0.6);
   cursor: not-allowed;
@@ -183,11 +184,11 @@
   padding: 0 26px 3px;
 }
 @media (hover: hover) {
-  .btn--primary:hover:not(:disabled) {
+  .btn--primary:hover:not(:disabled, [aria-disabled="true"]) {
     --fr-fill: var(--clay-hover);
   }
 }
-.btn--primary:active:not(:disabled) {
+.btn--primary:active:not(:disabled, [aria-disabled="true"]) {
   --fr-fill: var(--clay-press);
 }
 
@@ -206,7 +207,7 @@
   border-radius: 10px;
 }
 @media (hover: hover) {
-  .btn--ghost:hover:not(:disabled) {
+  .btn--ghost:hover:not(:disabled, [aria-disabled="true"]) {
     color: var(--ink);
     background: #2a23200d;
   }
@@ -226,7 +227,7 @@
   color: var(--ink);
 }
 @media (hover: hover) {
-  .btn--toggle.is-on:hover:not(:disabled) {
+  .btn--toggle.is-on:hover:not(:disabled, [aria-disabled="true"]) {
     --fr-fill: var(--clay-hover);
   }
 }
@@ -241,7 +242,7 @@
   animation: btn-bang 6s ease-in-out 2s infinite;
 }
 @media (hover: hover) {
-  .btn--premium:hover:not(:disabled) {
+  .btn--premium:hover:not(:disabled, [aria-disabled="true"]) {
     --fr-fill: var(--pass-gold);
     animation: none;
   }
@@ -272,7 +273,7 @@
   animation: shake 0.35s ease;
 }
 @media (hover: hover) {
-  .btn--danger.is-armed:hover:not(:disabled) {
+  .btn--danger.is-armed:hover:not(:disabled, [aria-disabled="true"]) {
     --fr-fill: #c2524a;
   }
 }

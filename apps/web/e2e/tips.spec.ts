@@ -52,20 +52,43 @@ test("the Tips toggle fits every launch width with 44 px targets @auth", async (
   }
 });
 
-test("the Tips buttons are disabled while a save is in flight, then the answer shows @auth", async ({ page }) => {
+// Busy, not disabled: a disabled button drops keyboard focus to <body>.
+test("while a save is in flight the Tips buttons keep keyboard focus and ignore presses @auth", async ({ page }) => {
   await page.request.post("/api/auth/guest", { data: { nickname: "Tipster" } });
   let release: () => void = () => {};
   const held = new Promise<void>((r) => (release = r));
+  let saves = 0;
   await page.route("**/api/me", async (route) => {
-    if (route.request().method() === "PATCH") await held;
+    if (route.request().method() === "PATCH") {
+      saves++;
+      await held;
+    }
     await route.continue();
   });
   await page.goto("/");
   const tips = page.getByRole("group", { name: "Tips" });
-  await tips.getByRole("button", { name: "Off" }).click();
-  await expect(tips.getByRole("button", { name: "On" })).toBeDisabled();
-  await expect(tips.getByRole("button", { name: "Off" })).toBeDisabled();
+  const on = tips.getByRole("button", { name: "On" });
+  const off = tips.getByRole("button", { name: "Off" });
+  await page.getByRole("button", { name: "Join crew" }).focus();
+  await page.keyboard.press("Tab");
+  await expect(on).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(off).toBeFocused();
+  await page.keyboard.press("Space");
+  await expect(off).toHaveAttribute("aria-disabled", "true");
+  await expect(on).toBeDisabled();
+  await expect(off).toBeFocused();
+  await page.keyboard.press("Space"); // ignored: the first save is still out
+  await page.keyboard.press("Shift+Tab");
+  await expect(on).toBeFocused();
+  await page.keyboard.press("Enter"); // ignored too
+  await page.keyboard.press("Tab");
+  await expect(off).toBeFocused();
   release();
-  await expect(tips.getByRole("button", { name: "Off" })).toHaveAttribute("aria-pressed", "true");
-  await expect(tips.getByRole("button", { name: "On" })).toBeEnabled();
+  await expect(off).toHaveAttribute("aria-pressed", "true");
+  await expect(off).not.toHaveAttribute("aria-disabled");
+  await expect(on).toBeEnabled();
+  await expect(off).toBeFocused();
+  expect(saves).toBe(1);
+  expect((await (await page.request.get("/api/me")).json()).user.tips).toBe(false);
 });

@@ -1,5 +1,7 @@
 // A labelled row of toggle buttons for one choice (host settings, bot
-// personality). Read-only shows just the chosen value as an active chip.
+// personality). Read-only shows just the chosen value as an active chip. Busy
+// (a save in flight) keeps the buttons focusable but ignores presses
+// (`aria-disabled`), so a keyboard user keeps their place.
 import { useId, type ReactNode } from "react";
 import { Button } from "./Button";
 import { Chip } from "./Chip";
@@ -17,12 +19,13 @@ export interface SegmentedProps<T> {
   readonly onChange?: (value: T) => void;
   readonly readOnly?: boolean;
   readonly disabled?: boolean;
+  readonly busy?: boolean;
   readonly seed: string;
   /** Takes a whole row in a `.settings__list` grid (more than two options). */
   readonly wide?: boolean;
 }
 
-export function Segmented<T extends string | boolean>({ label, hint, options, value, onChange, readOnly, disabled, seed, wide }: SegmentedProps<T>) {
+export function Segmented<T extends string | boolean>({ label, hint, options, value, onChange, readOnly, disabled, busy, seed, wide }: SegmentedProps<T>) {
   const id = useId();
   const chosen = options.find((o) => o.value === value);
   return (
@@ -43,7 +46,8 @@ export function Segmented<T extends string | boolean>({ label, hint, options, va
                 seed={`${seed}-${String(o.value)}`}
                 pressed={o.value === value}
                 disabled={disabled}
-                onClick={() => o.value !== value && onChange?.(o.value)}
+                aria-disabled={busy || undefined}
+                onClick={() => !busy && o.value !== value && onChange?.(o.value)}
               >
                 {o.label}
               </Button>

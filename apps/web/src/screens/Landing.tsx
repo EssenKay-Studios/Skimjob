@@ -176,7 +176,7 @@ export function Landing() {
                       { value: false, label: "Off" },
                     ]}
                     value={me.tips}
-                    disabled={savingTips}
+                    busy={savingTips}
                     onChange={changeTips}
                   />
                 </>
