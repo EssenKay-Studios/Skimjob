@@ -15,10 +15,12 @@
   "apps/server/src/store.ts": "*",
   "apps/server/src/timing.ts": "*",
   "apps/server/src/web.ts": "*",
+  "apps/web/src/components/BottomSheet.tsx": "@shell",
   "apps/web/src/components/CaseFile.tsx": "@caseboard",
   "apps/web/src/components/Chat.tsx": "@chat",
   "apps/web/src/components/DeckSettings.tsx": "@lobby",
   "apps/web/src/components/Extension.tsx": "@shop",
+  "apps/web/src/components/GameShell.tsx": "@shell",
   "apps/web/src/components/HostPanel.tsx": "@host",
   "apps/web/src/components/MeetingKit.tsx": "@meeting",
   "apps/web/src/components/MyGames.tsx": "@auth",
@@ -38,6 +40,7 @@
   "apps/web/src/screens/GalleryHost.tsx": "@host",
   "apps/web/src/screens/GalleryNotes.tsx": "@caseboard",
   "apps/web/src/screens/GalleryReveal.tsx": "@reveal",
+  "apps/web/src/screens/GalleryShell.tsx": "@shell",
   "apps/web/src/screens/Game.tsx": [
     "@board",
     "@move"

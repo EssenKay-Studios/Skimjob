@@ -1,0 +1,258 @@
+/* The one-screen game layout and the bottom sheet (design §15.6; ui-style §4, §10).
+   Phones and tablets below 1024 px: status strip, board, then a sticky dock and
+   tab bar. From 1024 px: three columns that fill the window height. Tokens only. */
+
+.shell {
+  --shell-gap: 12px;
+}
+
+/* ---------- Phones and tablets ---------- */
+.shell--narrow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--shell-gap);
+  min-height: calc(100dvh - var(--topbar-h));
+  max-width: 640px;
+  margin: 0 auto;
+}
+.shell--narrow > .shell__status,
+.shell--narrow > .shell__board {
+  padding: 0 var(--gutter-r) 0 var(--gutter-l);
+}
+.shell__board {
+  min-width: 0;
+}
+.shell__bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  margin-top: auto;
+  display: grid;
+  gap: 8px;
+  padding: 8px var(--gutter-r) env(safe-area-inset-bottom) var(--gutter-l);
+  background: var(--paper);
+  border-top: 1.3px dashed var(--rule);
+}
+.shell__dock {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 56px;
+  padding: 6px 12px;
+}
+.shell__fill {
+  flex: 1;
+}
+.shell__tabs {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+}
+.shell__tabs button {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 44px;
+  min-height: 52px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: 700 12.5px/1 var(--font-hand);
+  color: var(--ink);
+  cursor: pointer;
+}
+.shell__tabs svg {
+  width: 22px;
+  height: 22px;
+}
+.shell__count {
+  position: absolute;
+  top: 4px;
+  right: 18%;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border: 1.3px solid var(--ink);
+  border-radius: var(--radius-blob);
+  background: var(--clay);
+  font: 700 11px/15px var(--font-ui);
+  text-align: center;
+  color: var(--ink);
+}
+
+/* ---------- Laptops ---------- */
+.shell--wide {
+  display: grid;
+  grid-template-columns: minmax(200px, 240px) minmax(0, 1fr) minmax(240px, 280px);
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: var(--shell-gap) 14px;
+  height: calc(100dvh - var(--topbar-h));
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 var(--gutter-r) 16px var(--gutter-l);
+}
+@media (min-width: 1280px) {
+  .shell--wide {
+    grid-template-columns: 280px minmax(0, 1fr) 326px;
+  }
+}
+.shell--wide > .shell__status {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 60px;
+  padding: 0 16px;
+}
+.shell__left,
+.shell__centre,
+.shell__right {
+  grid-row: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  min-height: 0;
+}
+.shell__left {
+  grid-column: 1;
+  padding: 12px;
+}
+/* Room on the right and bottom for the frames' hatched shadows. */
+.shell__centre,
+.shell__right {
+  padding: 0 6px 6px 0;
+  overflow: auto;
+}
+.shell__centre {
+  grid-column: 2;
+}
+.shell__right {
+  grid-column: 3;
+}
+.shell--wide .shell__board {
+  flex: none;
+  padding: 0;
+}
+.shell__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 120px;
+  padding: 12px 14px;
+}
+/* The columns scroll when the window is too short; a panel never shrinks below its heading and a few lines. */
+.shell__plan {
+  flex: 1 0 160px;
+  min-height: 160px;
+}
+.shell__right .shell__panel {
+  flex: 1 0 120px;
+}
+.shell__scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.shell__seg {
+  display: flex;
+  gap: 8px;
+}
+.shell__seg .btn {
+  flex: 1;
+}
+
+/* ---------- Bottom sheet ---------- */
+.bsheet {
+  /* The whole viewport is the dialog box and the sheet hangs from its bottom
+     edge, so a tap outside the sheet lands on the dialog (closes it). */
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+/* The page behind a sheet does not scroll. */
+html.sheet-open,
+html.sheet-open body {
+  overflow: hidden;
+}
+.bsheet[open] {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.bsheet::backdrop {
+  background: var(--scrim);
+}
+.bsheet__sheet {
+  --fr-fill: var(--paper);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(640px, 100%);
+  max-height: min(88dvh, 760px);
+  /* The bottom outline sits below the screen edge, so it reads as one sheet. */
+  margin-bottom: -14px;
+  padding: 10px max(16px, env(safe-area-inset-right)) calc(28px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  animation: bsheet-in 0.4s var(--slide) both;
+}
+.bsheet__grip {
+  align-self: center;
+  width: 46px;
+  height: 5px;
+  border-radius: var(--radius-grip);
+  background: var(--ink-faint);
+}
+.bsheet__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.bsheet__head h2 {
+  flex: 1;
+  min-width: 0;
+}
+.bsheet__close {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  cursor: pointer;
+}
+.bsheet__close svg {
+  width: 20px;
+  height: 20px;
+}
+.bsheet__body {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+@keyframes bsheet-in {
+  from {
+    transform: translateY(40px);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bsheet__sheet {
+    animation: none;
+  }
+}

@@ -14,6 +14,7 @@ import { navigate, usePath } from "./router";
 // The gallery is a dev tool: only dev builds load it, so it stays out of the
 // production bundle.
 const Gallery = import.meta.env.DEV ? lazy(() => import("./screens/Gallery").then((m) => ({ default: m.Gallery }))) : null;
+const ShellDemo = import.meta.env.DEV ? lazy(() => import("./screens/GalleryShell").then((m) => ({ default: m.ShellDemo }))) : null;
 
 function NotFound() {
   return (
@@ -35,7 +36,8 @@ export function App() {
     // Esc goes back to the start from any sheet (ui-style §5 "Back [Esc]").
     const onKey = (e: KeyboardEvent) => {
       // Not from a lobby or a game: those are places, not sheets over the start.
-      if (e.key === "Escape" && location.pathname !== "/" && !/^\/(lobby|game)\//.test(location.pathname)) navigate("/");
+      // An open dialog or sheet takes the Esc itself.
+      if (e.key === "Escape" && location.pathname !== "/" && !/^\/(lobby|game)\//.test(location.pathname) && !document.querySelector("dialog[open]")) navigate("/");
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -59,6 +61,10 @@ export function App() {
       ) : route === "/dev/gallery" && Gallery ? (
         <Suspense fallback={null}>
           <Gallery />
+        </Suspense>
+      ) : route === "/dev/gallery/shell" && ShellDemo ? (
+        <Suspense fallback={null}>
+          <ShellDemo />
         </Suspense>
       ) : (
         <NotFound />
