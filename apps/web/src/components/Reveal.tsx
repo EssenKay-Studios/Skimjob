@@ -150,14 +150,6 @@ function RoleEnvelope({
               {s.stash}
             </dd>
           </div>
-          <div>
-            <dt>Handed in</dt>
-            <dd className="num">{s.totalHandedIn}</dd>
-          </div>
-          <div>
-            <dt>Shaken down</dt>
-            <dd className="num">{s.timesShakenDown}</dd>
-          </div>
         </dl>
         <StashLine
           values={trend}

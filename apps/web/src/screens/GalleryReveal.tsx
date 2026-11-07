@@ -80,23 +80,16 @@ const LOG: GameEvent[] = [
   resolved(3, 19, 6, 25),
 ];
 
-const rank = (player: string, role: string, score: number, totalHandedIn: number): RankEntry => ({
-  player,
-  role,
-  score,
-  stash: score,
-  timesShakenDown: player === "p3" ? 1 : 0,
-  totalHandedIn,
-});
+const rank = (player: string, role: string, score: number): RankEntry => ({ player, role, score, stash: score });
 
 type Ending = "success" | "bust" | "theft";
-const BEN_TOP = [rank("p2", "mole", 12, 5), rank("p3", "hacker", 5, 10), rank("p4", "detective", 2, 10), rank("p1", "rookie", 1, 3)];
+const BEN_TOP = [rank("p2", "mole", 12), rank("p3", "hacker", 5), rank("p4", "detective", 2), rank("p1", "rookie", 1)];
 const OUTCOMES: Record<Ending, Outcome> = {
   success: { result: "success", ranking: BEN_TOP, winners: ["p2"] },
   // design §5.5: a bust in round 3; only Ana was on the Rooftop.
   bust: { result: "failed", reason: "bust", escapees: ["p1"], ranking: BEN_TOP, winners: ["p1"] },
   // Here Ben hands round 3 in and Cy pockets it all, so the Hacker (no ★) leads and nobody wins.
-  theft: { result: "failed", reason: "theft", ranking: [rank("p3", "hacker", 9, 6), rank("p2", "mole", 7, 10), rank("p4", "detective", 2, 10), rank("p1", "rookie", 1, 3)], winners: [] },
+  theft: { result: "failed", reason: "theft", ranking: [rank("p3", "hacker", 9), rank("p2", "mole", 7), rank("p4", "detective", 2), rank("p1", "rookie", 1)], winners: [] },
 };
 const logFor = (ending: Ending): GameEvent[] =>
   ending !== "theft"

@@ -160,8 +160,6 @@ export function revealSummary(log: readonly GameEvent[], outcome: Outcome, table
     winsOn: roleDefIn(tables.roles, r.role)?.winsOn ?? [],
     score: r.score,
     stash: r.stash,
-    timesShakenDown: r.timesShakenDown,
-    totalHandedIn: r.totalHandedIn,
     topGroup: top.includes(r.player),
     winner: outcome.winners.includes(r.player),
     tokens: tokens.get(r.player) ?? [],

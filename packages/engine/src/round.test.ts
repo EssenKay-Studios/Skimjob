@@ -83,7 +83,7 @@ describe("planning — design §3.2", () => {
     }
     expect(s.haul).toBe(3);
     expect(s.bank).toBe(48 - 3);
-    expect(s.players.p0).toMatchObject({ stash: 0, totalHandedIn: 1, consecutiveMissedMoves: 1 });
+    expect(s.players.p0).toMatchObject({ stash: 0, consecutiveMissedMoves: 1 });
   });
 
   it("missed rounds are counted in a row and reset by submitting (design §16)", () => {
@@ -173,8 +173,8 @@ describe("resolution — design §3.2, §4.2 step 1", () => {
     const before = run(game(3), submit("p0", { room: "vault", duffel: 1, pocket: 2 }), submit("p1", { room: "office", duffel: 2 }), submit("p2", { room: "lobby", pocket: 1 }));
     const s = run(before, ROUND);
     expect(s.haul).toBe(1 + 2 + 0);
-    expect(s.players.p0).toMatchObject({ stash: 2, totalHandedIn: 1 });
-    expect(s.players.p2).toMatchObject({ stash: 1, totalHandedIn: 0 });
+    expect(s.players.p0).toMatchObject({ stash: 2 });
+    expect(s.players.p2).toMatchObject({ stash: 1 });
     const events = lastEvents(before, s);
     const grabs = events.filter((x) => x.type === "coinsGrabbed");
     expect(grabs.map((e) => e.type === "coinsGrabbed" && [e.player, e.room, e.duffel, e.pocket])).toEqual([
@@ -219,7 +219,6 @@ describe("resolution — design §3.2, §4.2 step 1", () => {
     // Bells too big to raid: 15 rings would raid the Vault (bells.test.ts).
     const s = run(game(5, [], NO_RAIDS), ...["p0", "p1", "p2", "p3", "p4"].map((p) => submit(p, { room: "vault", duffel: 3 })), ROUND);
     expect(s.haul).toBe(15);
-    for (const id of s.playerOrder) expect(s.players[id]?.totalHandedIn).toBe(3);
   });
 
   it("each player learns who else was in their room (design §3.4)", () => {

@@ -208,7 +208,7 @@ describe("kill/restart at every step = an uninterrupted run (same seed)", () => 
     });
   }
   // With bots: restart before every step; play() checks no double, no skip, no refusals, every deadline drained.
-  it("bots, quick: restarting at every phase still ends cleanly", { timeout: 240_000 }, async () => {
+  it("bots, 15m: restarting at every phase still ends cleanly", { timeout: 240_000 }, async () => {
     forcedSeed = "qa-restart-bots";
     const phases = new Set<string>();
     for (const seed of ["s1", "s2", "s3"]) {

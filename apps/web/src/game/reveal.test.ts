@@ -52,8 +52,6 @@ describe("<Reveal>", () => {
     score: 10 - place,
     stash: 10 - place,
     safe: 0,
-    timesShakenDown: 0,
-    totalHandedIn: 4,
     topGroup: place === 1,
     winner,
     tokens: role === "hacker" ? (["loopHidPocketer", "loopHidPocketer"] as const) : [],

@@ -18,8 +18,6 @@ export function ranking(state: GameState): RankEntry[] {
       role: p.role,
       score: p.stash,
       stash: p.stash,
-      timesShakenDown: p.timesShakenDown,
-      totalHandedIn: p.totalHandedIn,
     };
   });
   return entries.sort((a, b) => b.score - a.score); // stable: seat order for equal stashes
@@ -34,8 +32,8 @@ export function leadersOf(ranked: readonly RankEntry[]): PlayerId[] {
 /**
  * design §8.5 "Who can win, by ending": a success is won by every player tied
  * for the biggest stash. A heist sunk by theft is won only by those of them
- * whose role wins it (`winsOn`: the Mole, until S3a.6 moves it into its
- * handler), else by nobody. A bust is won by the escapees tied for the biggest
+ * whose role wins it (`winsOn`: the Mole and the Fixer, each copy on its own, until S3a.6 moves
+ * it into their handlers), else by nobody. A bust is won by the escapees tied for the biggest
  * stash among them, any role (§5.5). The full ranking is always kept (§8.6).
  */
 export function outcomeFor(state: GameState, failure: FailureReason | null, roles: RoleTable = rolesFor(state.config), escapees: readonly PlayerId[] = []): Outcome {

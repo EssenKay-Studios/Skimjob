@@ -142,6 +142,21 @@ describe("success or sunk by theft: the honesty line — design §7.5, §8.1, §
     expect(outcome(s)).toMatchObject({ result: "failed", reason: "theft", winners: ["p0"] });
   });
 
+  it("sunk by theft: the Fixer holding the biggest stash wins it too (design §8.4; QA #166 repro)", () => {
+    const s = vaultRound(game(3, ["fixer"], once), [2, 1, 1]); // 5 of 9
+    expect(outcome(s)).toMatchObject({ result: "failed", reason: "theft", winners: ["p0"] });
+  });
+
+  it("sunk by theft: each Mole or Fixer copy wins under its own handler when it ties at the top (design §8.5, §11.3)", () => {
+    const tied = (roles: string[]) => withPlayers(game(4, roles), { p0: { stash: 6 }, p1: { stash: 6 }, p2: { stash: 6 }, p3: { stash: 2 } });
+    expect(outcomeFor(tied(["fixer", "fixer", "lookout"]), "theft").winners).toEqual(["p0", "p1"]);
+    expect(outcomeFor(tied(["mole", "lookout", "fixer"]), "theft").winners).toEqual(["p0", "p2"]);
+    // A Fixer below the top wins nothing, and nor does a Fixer on a success it doesn't top.
+    const behind = withPlayers(game(3, ["fixer", "lookout"]), { p0: { stash: 5 }, p1: { stash: 6 } });
+    expect(outcomeFor(behind, "theft").winners).toEqual([]);
+    expect(outcomeFor(behind, null).winners).toEqual(["p1"]);
+  });
+
   it("seized coins count neither as taken nor as reaching the duffel", () => {
     // Real bells: two full Vault grabs ring 6 and raid it (design §5.3); the Lobby coin is the only one taken.
     let s = game(3, [], { roundCap: 1 });
@@ -162,16 +177,16 @@ describe("success or sunk by theft: the honesty line — design §7.5, §8.1, §
 describe("who wins — design §8.2, §8.5", () => {
   it("the ranking is by stash; equal stashes keep seat order, with no tie-break", () => {
     const s = withPlayers(game(4), {
-      p0: { stash: 5, timesShakenDown: 1, totalHandedIn: 99 },
-      p1: { stash: 5, timesShakenDown: 0, totalHandedIn: 10 },
-      p2: { stash: 6, timesShakenDown: 2, totalHandedIn: 0 },
+      p0: { stash: 5 },
+      p1: { stash: 5 },
+      p2: { stash: 6 },
       p3: { stash: 1 },
     });
     expect(ranking(s).map((e) => [e.player, e.score])).toEqual([["p2", 6], ["p0", 5], ["p1", 5], ["p3", 1]]);
   });
 
-  it("everyone tied for the biggest stash wins, whatever their shakedowns or hand-ins", () => {
-    const s = withPlayers(game(3), { p0: { stash: 4, timesShakenDown: 1 }, p1: { stash: 4, totalHandedIn: 9 }, p2: { stash: 1 } });
+  it("everyone tied for the biggest stash wins", () => {
+    const s = withPlayers(game(3), { p0: { stash: 4 }, p1: { stash: 4 }, p2: { stash: 1 } });
     expect(outcomeFor(s, null).winners).toEqual(["p0", "p1"]);
   });
 
@@ -186,7 +201,7 @@ describe("who wins — design §8.2, §8.5", () => {
   });
 
   it("sunk by theft: a Mole tied at the top with a player who can't win still wins; a Mole below the top doesn't", () => {
-    const tied = withPlayers(game(3, ["mole", "lookout"]), { p0: { stash: 6, timesShakenDown: 1 }, p1: { stash: 6 } });
+    const tied = withPlayers(game(3, ["mole", "lookout"]), { p0: { stash: 6 }, p1: { stash: 6 } });
     expect(outcomeFor(tied, "theft").winners).toEqual(["p0"]);
     const behind = withPlayers(game(3, ["mole", "lookout"]), { p0: { stash: 5 }, p1: { stash: 6 } });
     expect(outcomeFor(behind, "theft").winners).toEqual([]);

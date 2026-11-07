@@ -170,7 +170,7 @@ describe("buyPerk (extension.md \"Tokens and the perk shop\")", () => {
 
 describe("the win rule (extension.md \"Winning and losing\", Build notes \"Win rule\")", () => {
   const base = () => game(config(4), { roles: ["rookie", "hacker", "mole"] });
-  const flat = { stash: 10, timesShakenDown: 0, totalHandedIn: 5 };
+  const flat = { stash: 10 };
 
   it("success: the top group wins, whatever the roles; full ties share", () => {
     const s = withPlayers(base(), { p0: flat, p1: flat, p2: { ...flat, stash: 9 }, p3: { ...flat, stash: 1 } });
@@ -178,7 +178,7 @@ describe("the win rule (extension.md \"Winning and losing\", Build notes \"Win r
   });
 
   it("ties: no tie-break, everyone level at the top wins (design §8.5)", () => {
-    const s = withPlayers(base(), { p0: { ...flat, timesShakenDown: 1 }, p1: flat, p2: { ...flat, totalHandedIn: 9 }, p3: { ...flat, stash: 0 } });
+    const s = withPlayers(base(), { p0: { ...flat }, p1: flat, p2: { ...flat }, p3: { ...flat, stash: 0 } });
     expect(outcomeFor(s, null).winners).toEqual(["p0", "p1", "p2"]);
   });
 

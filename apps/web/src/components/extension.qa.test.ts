@@ -1,6 +1,6 @@
 // QA (PR #52, R6b): adversarial checks of the Extension UI against docs/extension.md,
 // on real engine games (no fabricated events where the engine can make them):
-// the shop's edges and privacy, no tells for camera offline, the gap box and target bar,
+// the shop's edges and privacy, no tells for camera offline, the gap box,
 // "between meetings" wording, lobby deck settings, role facts vs the spec tables,
 // and the end screen on a failed heist.
 import { createElement, type ReactElement } from "react";
@@ -193,9 +193,9 @@ describe("no tells: camera offline (extension.md \"Situations\")", () => {
   });
 });
 
-// ---------------------------------------------------------------- gap box, target bar
+// ---------------------------------------------------------------- gap box
 
-describe("the gap box and the target bar (extension.md \"What the app works out for you\")", () => {
+describe("the gap box (extension.md \"What the app works out for you\")", () => {
   it("the gap box matches the view's arithmetic", () => {
     const cfg = config(5, { rolePool: ["rookie"], eventsEnabled: true, seed: "gap" });
     let s = run(createGame(cfg), ...ids(5).map((p) => mv(p, "office")), ROUND, ALIBIS);
@@ -232,7 +232,7 @@ describe("role cards and the rulebook match extension.md \"Roles\"", () => {
   const TEAM = ["rookie", "lookout", "auditor", "detective", "smoothTalker", "priest", "fixer"];
   const WILD = ["hacker"];
   const LONE = ["mole"];
-  const STARS = ["mole"];
+  const STARS = ["mole", "fixer"]; // design §8.4
   const MIN: Record<string, number> = { detective: 4, smoothTalker: 5, priest: 5 };
   // design §5.2, §5.3: the Mole's ring and the Fixer's reopen replace the R6 tip-off and raid stop, which had the token.
   const NO_TOKEN = ["rookie", "mole", "fixer"];

@@ -1,6 +1,6 @@
 // The Extension's player-facing pieces (docs/extension.md): role facts with a
-// "How you win" line, tappable role names, the rulebook sheet, the Haul target
-// bar, the gap box, and your tokens with the perk shop.
+// "How you win" line, tappable role names, the rulebook sheet, the gap box,
+// and your tokens with the perk shop.
 // Everything is read from the player's own view (or content, outside a game).
 import { useId, useState, type ReactNode } from "react";
 import { BANK_JOB, PERKS, POOL_ROLES, SHOP_COLUMNS, type FailureReason, type PerkColumn, type RoleDef, type RoleId } from "@skimjob/content";
@@ -8,7 +8,6 @@ import type { PlayerId, PlayerView, RoomId } from "@skimjob/engine";
 import { Button } from "./Button";
 import { Chip } from "./Chip";
 import { DialogSheet } from "./MeetingKit";
-import { Meter } from "./Meter";
 import { cardName, roomName } from "../game/describeEvent";
 import {
   COLUMN_LABEL,

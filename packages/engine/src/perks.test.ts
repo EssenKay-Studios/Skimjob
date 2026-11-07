@@ -118,7 +118,7 @@ describe("Shield — design §8.3, §11.3", () => {
     expect(events).toContainEqual({ type: "perkUsed", visibility: privateTo("p0"), player: "p0", round: 1, perk: { kind: "shield", meetingId: "emergency-p1" } });
     expect(events).toContainEqual({ type: "shakedownCancelled", visibility: PUBLIC, meetingId: "emergency-p1", target: "p0" });
     expect(events.some((e) => e.type === "shakedownResolved")).toBe(false);
-    expect(after.players.p0).toMatchObject({ stash: 6, timesShakenDown: 0 });
+    expect(after.players.p0).toMatchObject({ stash: 6 });
     expect(perks(after, "p0")).toEqual([]);
     // Spent: the next one goes through.
     const again = settle(run(after, ...emergency("p2"), vote("p1", "p0"), vote("p2", "p0"), vote("p3", "p0"), CLOSE));

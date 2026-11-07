@@ -131,7 +131,7 @@ describe("recordGame — bot games agree with the engine's ranking", () => {
         for (const p of rec.playerRecords) {
           expect(p.stash).toBe(engine.get(p.id)?.stash);
           expect(p.score).toBe(engine.get(p.id)?.score);
-          expect(p.timesShakenDown).toBe(engine.get(p.id)?.timesShakenDown);
+          expect(p.timesShakenDown).toBe(state.log.filter((e) => e.type === "shakedownResolved" && e.target === p.id).length);
         }
         expect(rec.playerRecords).toHaveLength(n);
         const credit = rec.playerRecords.reduce((t, p) => t + p.winCredit, 0);

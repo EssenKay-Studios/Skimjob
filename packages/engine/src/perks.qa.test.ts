@@ -226,7 +226,7 @@ describe("QA: Shield vs a plain shakedown — design §8.3, §11.3", () => {
 
     const two = grantPerks(base, "p0", "shield", "shield");
     const first = passOnP0(two);
-    expect(first.players.p0).toMatchObject({ stash: 6, timesShakenDown: 0 });
+    expect(first.players.p0).toMatchObject({ stash: 6 });
     expect(first.haul).toBe(base.haul);
     expect(Object.fromEntries(Object.entries(first.players).map(([id, p]) => [id, p.stash]))).toEqual(
       Object.fromEntries(Object.entries(two.players).map(([id, p]) => [id, p.stash])),

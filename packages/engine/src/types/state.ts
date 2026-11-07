@@ -59,8 +59,6 @@ export interface PlayerState {
   readonly stash: number;
   /** Uses of the role's power so far (all roles share the shape). design §8 */
   readonly roleState: RoleState;
-  readonly totalHandedIn: number;
-  readonly timesShakenDown: number;
   readonly emergencyMeetingUsed: boolean;
   /** For the host's "replace with a bot" prompt after 2 missed rounds. design §15 */
   readonly consecutiveMissedMoves: number;

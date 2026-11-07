@@ -89,7 +89,7 @@ const finishAct = (s: GameState, ...moves: Cmd[]): GameState => {
 };
 /** extension.md "Shakedowns": one clean line, 6, shared with the Detective's check. */
 const cleanBelowPerAct = jobFor(config(3)).shakedown.cleanBelow; // the R6 pin
-/** 10 a round: makes every checkpoint at 3 players. */
+/** 10 coins a round at 3 players, all handed in. */
 const STEADY = [mv("p0", "office"), mv("p1", "office"), mv("p2", "lobby")];
 
 describe("Lookout: someone it saw is caught → a token — extension.md \"Roles\"", () => {

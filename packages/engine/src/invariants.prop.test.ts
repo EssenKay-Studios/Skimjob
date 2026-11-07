@@ -379,7 +379,6 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
             role: p.role === "priest" ? "hacker" : "priest",
             stash: p.stash + 101,
             roleState: { usedThisAct: 4, usedThisGame: 1, tokens: p.roleState.tokens + 3, perks: ["peek", "shield"], tail: "vault" },
-            totalHandedIn: p.totalHandedIn + 33,
             consecutiveMissedMoves: 5,
             sealedVote: { kind: "shakedown", target: viewer },
           };

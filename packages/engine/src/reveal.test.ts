@@ -17,8 +17,6 @@ const rank = (player: string, role: string, score: number, extra: Partial<RankEn
   role,
   score,
   stash: score,
-  timesShakenDown: 0,
-  totalHandedIn: 0,
   ...extra,
 });
 

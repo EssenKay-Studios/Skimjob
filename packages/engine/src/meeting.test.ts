@@ -246,7 +246,7 @@ describe("emergency meetings — design §11.1, §4.1", () => {
   it("an emergency shakedown works like the regular one, with the current act's numbers", () => {
     const s = run(game(3), mv("p0", "vault", 6), ROUND, emergency("p1"), open("emergency-p1"), vote("p1", "p0"), vote("p2", "p0"), CLOSE);
     expect(LAST(s, "shakedownResolved")).toMatchObject({ meetingId: "emergency-p1", target: "p0", stashRevealed: 6, taken: 6, clean: false, compensation: 0 });
-    expect(s.players.p0).toMatchObject({ stash: 0, timesShakenDown: 1 });
+    expect(s.players.p0).toMatchObject({ stash: 0 });
     expect(s.haul).toBe(8); // p1 and p2 missed: 1 coin each (design §3.3), plus the 6 taken
     expect(s.phase).toEqual({ kind: "planning", round: 2 });
   });
@@ -415,14 +415,14 @@ describe("shakedowns — design §11.3, extension.md \"Shakedowns (fixed numbers
       clean: false,
       compensation: 0,
     });
-    expect(after.players.p0).toMatchObject({ stash: 0, timesShakenDown: 1 });
+    expect(after.players.p0).toMatchObject({ stash: 0 });
     expect(after.haul).toBe(22);
   });
 
   it("clean below 6: the crew pays the target 8 out of the Haul", () => {
     const s = run(act1Meeting(), vote("p0", "p1"), vote("p2", "p1"), CLOSE);
     expect(LAST(s, "shakedownResolved")).toMatchObject({ target: "p1", stashRevealed: 0, taken: 0, clean: true, compensation: 8 });
-    expect(s.players.p1).toMatchObject({ stash: 8, timesShakenDown: 1 });
+    expect(s.players.p1).toMatchObject({ stash: 8 });
     expect(s.haul).toBe(8);
   });
 
@@ -491,7 +491,7 @@ describe("determinism and the event log — design §17.2", () => {
     const closed = LAST(s, "meetingClosed")!;
     expect(Object.hasOwn(closed.tally.targets, "toString")).toBe(true);
     expect(Object.hasOwn(closed.ballots ?? {}, "p1")).toBe(true);
-    expect(s.players["toString"]).toMatchObject({ stash: 0, timesShakenDown: 1, sealedVote: { kind: "shakedown", target: "p1" } });
+    expect(s.players["toString"]).toMatchObject({ stash: 0, sealedVote: { kind: "shakedown", target: "p1" } });
     expect(replay(cfg, s.log)).toEqual(s);
   });
 });

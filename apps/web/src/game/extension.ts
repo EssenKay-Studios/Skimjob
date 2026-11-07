@@ -1,6 +1,5 @@
 // Pure helpers for the Extension's player-facing pieces (docs/extension.md):
-// role cards (tag, power, token trigger, "How you win"), the Haul target bar,
-// the gap box, and the token shop with its perk uses.
+// role cards (tag, power, token trigger, "How you win"), the gap box, and the token shop with its perk uses.
 // Every number comes from content (with the game's overrides) or the view.
 import {
   BANK_JOB,
@@ -141,8 +140,6 @@ export function roleListInfo(view: PlayerView): { readonly title: string; readon
   if (!l) return { title: "The role list is hidden in this game.", roles: [] };
   return { title: l.list === "exact" ? "Roles in play" : "Roles that could be in play", roles: l.roles };
 }
-
-// ---------------------------------------------------------------- target bar
 
 // ---------------------------------------------------------------- gap box
 

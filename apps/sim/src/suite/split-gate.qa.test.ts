@@ -14,7 +14,7 @@ const n = 5;
 /** `s` seats of a role at crew size 5 winning `share` of them: ratio = share × 5. */
 const seats = (s: number, share: number): SeatTally => ({ seats: s, credit: s * share, fair: s / n, successCredit: 0, earned: 0, spent: 0 });
 const BIG = 40000;
-const team = { auditor: seats(BIG, 0.15), fixer: seats(BIG, 0.15) }; // pooled ratio 0.75
+const team = { auditor: seats(BIG, 0.15), priest: seats(BIG, 0.15) }; // pooled ratio 0.75
 const starOf = (roles: Record<string, SeatTally>, role: string) => splitParityOf(roles).stars.find((x) => x.role === role);
 
 describe("QA #51: team-role spread gate — TEAM_PARITY_MAX_SPREAD", { timeout: 10_000 }, () => {
@@ -24,16 +24,16 @@ describe("QA #51: team-role spread gate — TEAM_PARITY_MAX_SPREAD", { timeout: 
   });
 
   it("FAILs a team spread of 0.25 (confirmed with many seats, inconclusive with few)", () => {
-    const sure = splitParityOf({ auditor: seats(BIG, 0.12), fixer: seats(BIG, 0.17) }).team;
+    const sure = splitParityOf({ auditor: seats(BIG, 0.12), priest: seats(BIG, 0.17) }).team;
     expect(sure.spread).toBe(0.25);
     expect(sure.check).toEqual({ verdict: "fail", sure: true });
-    const noisy = splitParityOf({ auditor: seats(150, 0.12), fixer: seats(150, 0.17) }).team;
+    const noisy = splitParityOf({ auditor: seats(150, 0.12), priest: seats(150, 0.17) }).team;
     expect(noisy.check).toEqual({ verdict: "fail", sure: false });
   });
 
   it("passes exactly 0.20 (inclusive) and a tight 0.10", () => {
-    expect(splitParityOf({ auditor: seats(BIG, 0.12), fixer: seats(BIG, 0.16) }).team.check).toEqual({ verdict: "pass", sure: false });
-    expect(splitParityOf({ auditor: seats(BIG, 0.14), fixer: seats(BIG, 0.16) }).team.check).toEqual({ verdict: "pass", sure: true });
+    expect(splitParityOf({ auditor: seats(BIG, 0.12), priest: seats(BIG, 0.16) }).team.check).toEqual({ verdict: "pass", sure: false });
+    expect(splitParityOf({ auditor: seats(BIG, 0.14), priest: seats(BIG, 0.16) }).team.check).toEqual({ verdict: "pass", sure: true });
   });
 
   it("★ roles never enter the team spread, however far off they are", () => {
@@ -61,7 +61,7 @@ describe("QA #51: ★ band — STAR_BAND 0.9–1.8 × the team average", { timeo
   });
 
   it("the ★ range divides by the team-average interval (★ lo ÷ team hi … ★ hi ÷ team lo)", () => {
-    const thinTeam = { auditor: seats(300, 0.15), fixer: seats(300, 0.15) };
+    const thinTeam = { auditor: seats(300, 0.15), priest: seats(300, 0.15) };
     const x = starOf({ ...thinTeam, mole: seats(BIG, 0.25) }, "mole");
     // The ★ role is measured tightly; the noisy team average alone widens its range past the band.
     expect(x?.relative).toBeCloseTo(1.667, 3);

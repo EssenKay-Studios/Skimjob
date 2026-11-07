@@ -1,6 +1,5 @@
 // /dev/gallery sections for the Extension UI (docs/extension.md): role facts
-// and tappable role names, the rulebook, the target bar,
-// the gap box, a live shop on a local engine game, the no-tells feed lines,
+// and tappable role names, the rulebook, the gap box, a live shop on a local engine game, the no-tells feed lines,
 // the lobby deck settings and the end screen. No server: a local engine game.
 import { useMemo, useState, type ReactNode } from "react";
 import { DECKS, type RoleId } from "@skimjob/content";
@@ -241,7 +240,7 @@ function DeckSection() {
 
 function EndSection() {
   const base = useMemo(() => viewFor(playedGame(), "p1"), []);
-  const ranking = base.players.map((p, i) => ({ player: p.id, role: (["hacker", "rookie", "lookout", "mole"] as const)[i]!, score: 30 - i * 6, stash: 30 - i * 6, timesShakenDown: 0, totalHandedIn: 10 }));
+  const ranking = base.players.map((p, i) => ({ player: p.id, role: (["hacker", "rookie", "lookout", "mole"] as const)[i]!, score: 30 - i * 6, stash: 30 - i * 6 }));
   const ended = (outcome: Extract<PlayerView["phase"], { kind: "ended" }>["outcome"]): PlayerView => ({ ...base, phase: { kind: "ended", outcome } });
   return (
     <>

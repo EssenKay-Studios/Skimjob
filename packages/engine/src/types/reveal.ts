@@ -19,9 +19,7 @@ export interface RevealSeat {
   readonly winsOn: readonly FailureReason[];
   readonly score: number;
   readonly stash: number;
-  readonly timesShakenDown: number;
-  readonly totalHandedIn: number;
-  /** Level with the first place after the tie-breaks. extension.md "Winning and losing" */
+  /** Tied for the biggest stash (no tie-break, design §8.5). */
   readonly topGroup: boolean;
   readonly winner: boolean;
   /** Every token earned, in order, with what earned it. extension.md "Tokens and the perk shop" */
@@ -63,7 +61,7 @@ export interface RevealMove {
  * A line of the timeline. Most hidden actions come as the event itself
  * (`event`: powers used, perks bought and used, Rigs, Inside tips, Raid
  * rumours) next to the
- * public ones that matter (meetings, shakedowns, checkpoints, raids). The rest
+ * public ones that matter (meetings, shakedowns, raids). The rest
  * are worked out, because one event alone can't say them.
  */
 export type RevealItem =

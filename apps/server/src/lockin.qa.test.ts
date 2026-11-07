@@ -273,7 +273,7 @@ describe("an emergency meeting / shakedown window opening during the grace pause
         expect(await app.scheduler.tick()).toBeGreaterThan(0);
       }
       s = await load(id);
-      if (s.phase.kind === "ended") continue; // a raid at the checkpoint penalty can't happen in act 1, but be safe
+      if (s.phase.kind === "ended") continue; // a raid can bust the game early (design §5.5)
       expect(s.phase).toEqual({ kind: "planning", round: 1 });
       expect(count(s, "roundResolved")).toBe(0);
       const paused = clock.now() - pausedAt;

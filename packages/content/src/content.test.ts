@@ -133,8 +133,9 @@ describe("starter roles — design §8, §8.1", () => {
     expect(tagged("loneWolf")).toEqual(["mole"]);
     expect(tagged("teamPlayer")).toHaveLength(7);
     const winners = Object.fromEntries(Object.values(ROLES).filter((r) => r.winsOn.length > 0).map((r) => [r.id, r.winsOn]));
-    // design §5.5: on a bust only the Rooftop wins, whatever the role, so no role wins on it; §8.4: the Mole wins a heist sunk by theft.
-    expect(winners).toEqual({ mole: ["theft"] });
+    // design §5.5: on a bust only the Rooftop wins, whatever the role, so no role wins on it; §8.4: the Mole and the Fixer win
+    // a heist sunk by theft.
+    expect(winners).toEqual({ fixer: ["theft"], mole: ["theft"] });
     for (const id of STARTER_ROLES) expect(ROLES[id]?.tag).toBe("teamPlayer");
   });
 
@@ -143,7 +144,7 @@ describe("starter roles — design §8, §8.1", () => {
       if (role.rewards) expect(role.rewards?.map((r) => r.count), role.id).toEqual([1]);
     }
     // The Fixer's and the Mole's R6 tokens went with the raid stop and the tip-off (S3a.2), the Rookie's with the
-    // checkpoints (S3a.3); tokens go in S3a.7.
+    // R6 checkpoints (S3a.3); tokens go in S3a.7.
     expect(Object.values(ROLES).filter((r) => !r.rewards).map((r) => r.id)).toEqual(["rookie", "fixer", "mole"]);
   });
 

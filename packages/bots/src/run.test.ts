@@ -225,7 +225,7 @@ describe("bots with the Wildcards and the Mole dealt — extension.md Build note
     expect(log.filter((e) => e.type === "abilityResolved" && e.ability.kind === "loopCameras").length).toBeGreaterThan(0);
   });
 
-  // design §5.2, §8.4: the Mole rings only while it leans toward a missed target, which is rare, so over 30 smaller games.
+  // design §5.2, §8.4: the Mole rings only while it leans toward a heist sunk by theft, which is rare, so over 30 smaller games.
   it("the Mole rings in real games, and its rings are never refused", () => {
     const small = Array.from({ length: 30 }, (_, g) => {
       const c = { ...config(5, `probe-5-${g}`), rolePool: ["hacker", "mole", "lookout", "rookie", "auditor"] };

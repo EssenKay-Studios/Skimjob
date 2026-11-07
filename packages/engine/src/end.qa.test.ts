@@ -129,22 +129,22 @@ describe("12 players — design §3, §6.2, §8", () => {
 });
 
 describe("ties at every level — design §8.5", () => {
-  it("the ranking is by stash only: equal stashes keep seat order, whatever the shakedowns or hand-ins", () => {
+  it("the ranking is by stash only: equal stashes keep seat order", () => {
     const s = withPlayers(game(3, ["lookout", "lookout", "lookout"]), 0, {
-      p0: { stash: 4, timesShakenDown: 0, totalHandedIn: 99 },
-      p1: { stash: 5, timesShakenDown: 3, totalHandedIn: 0 },
-      p2: { stash: 4, timesShakenDown: 1, totalHandedIn: 100 },
+      p0: { stash: 4 },
+      p1: { stash: 5 },
+      p2: { stash: 4 },
     });
     expect(ranking(s).map((e) => e.player)).toEqual(["p1", "p0", "p2"]);
     expect(outcomeFor(withPlayers(s, 0, { p1: { stash: 4 } }), null).winners).toEqual(["p0", "p1", "p2"]);
   });
 
-  it("a tie at the top shares the win, whatever the hand-ins; a lower tie does not", () => {
+  it("a tie at the top shares the win; a lower tie does not", () => {
     const s = withPlayers(game(12), 0, {
-      p3: { stash: 5, totalHandedIn: 4 },
-      p7: { stash: 5, totalHandedIn: 4 },
-      p11: { stash: 5, totalHandedIn: 4 },
-      p0: { stash: 5, totalHandedIn: 3 },
+      p3: { stash: 5 },
+      p7: { stash: 5 },
+      p11: { stash: 5 },
+      p0: { stash: 5 },
     });
     const o = outcomeFor(s, null);
     expect(o.winners).toEqual(["p0", "p3", "p7", "p11"]);
@@ -152,7 +152,7 @@ describe("ties at every level — design §8.5", () => {
   });
 
   it("3 players fully tied: all win a success, none wins a failure", () => {
-    const s = withPlayers(game(3), 0, { p0: { stash: 3, totalHandedIn: 2 }, p1: { stash: 3, totalHandedIn: 2 }, p2: { stash: 3, totalHandedIn: 2 } });
+    const s = withPlayers(game(3), 0, { p0: { stash: 3 }, p1: { stash: 3 }, p2: { stash: 3 } });
     expect(outcomeFor(s, null).winners).toEqual(["p0", "p1", "p2"]);
     expect(outcomeFor(s, "theft").winners).toEqual([]);
     expect(outcomeFor(s, "bust").winners).toEqual([]);

@@ -549,10 +549,6 @@ export interface RankEntry {
   readonly score: number;
   /** Final stash. design §8 */
   readonly stash: number;
-  /** Shown in the reveal. design §15.5 */
-  readonly timesShakenDown: number;
-  /** Shown in the reveal. Only revealed at the end. design §15.5 */
-  readonly totalHandedIn: number;
 }
 
 /**

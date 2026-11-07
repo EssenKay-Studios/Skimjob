@@ -1,5 +1,5 @@
 // Extension helpers (docs/extension.md), from real engine views: role facts,
-// the target bar, gap box, shop and perk uses, endings.
+// the gap box, shop and perk uses, endings.
 import { BANK_JOB, DECKS, PERKS, ROLES } from "@skimjob/content";
 import {
   PUBLIC,

@@ -145,7 +145,7 @@ describe("the shakedown window without the Muscle (Shield only)", () => {
     expect(events).toContainEqual({ type: "perkUsed", visibility: privateTo("p0"), player: "p0", round: 1, perk: { kind: "shield", meetingId: "emergency-p1" } });
     expect(events).toContainEqual({ type: "shakedownCancelled", visibility: PUBLIC, meetingId: "emergency-p1", target: "p0" });
     expect(events.some((e) => e.type === "shakedownResolved")).toBe(false);
-    expect(after.players.p0).toMatchObject({ stash: 6, timesShakenDown: 0 });
+    expect(after.players.p0).toMatchObject({ stash: 6 });
     expect(shakedownOfP0(build()).log).toEqual(shakedownOfP0(build()).log);
   });
 });

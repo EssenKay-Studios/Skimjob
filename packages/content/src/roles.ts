@@ -140,7 +140,8 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     rewards: token("blessedShakenClean"),
     minPlayers: 5,
   },
-  fixer: { id: "fixer", name: "Fixer", power: { kind: "reopen" }, ...TEAM },
-  // On a bust only the Rooftop wins, whatever the role (design §5.5), so the Mole's ★ ending is the missed target.
+  // design §8.4: the Mole and the Fixer win a heist sunk by theft from the top of the ranking (their handlers in S3a.6);
+  // on a bust only the Rooftop wins, whatever the role (§5.5).
+  fixer: { id: "fixer", name: "Fixer", power: { kind: "reopen" }, ...TEAM, winsOn: ["theft"] },
   mole: { id: "mole", name: "Mole", power: { kind: "ring", perAct: 1 }, tag: "loneWolf", winsOn: ["theft"] },
 };

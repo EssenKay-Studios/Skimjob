@@ -86,8 +86,8 @@ test("12 seats, 24-char names: a 15-min game to the end with moves changed, alib
   const errors: string[] = [];
   for (const p of [host, guest]) p.on("pageerror", (e) => errors.push(e.message));
   const game = await start(host.request, guest.request, 10, "15m");
-  // At the fast clock a round is 2.25 s and an alibi window 750 ms (× 0.05): under
-  // CI load a round of taps outlasts them, so the test could miss all nine. Until
+  // At the fast clock a round is 3.75 s and an alibi window 750 ms (× 0.05): under
+  // CI load a round of taps outlasts them, so the test could miss them all. Until
   // the host has changed a move, and then posted an alibi, it pauses the game from
   // the push that opens the phase it needs (a pause stops every deadline and players
   // can still plan and post, design §15) and resumes once that is done. Both steps

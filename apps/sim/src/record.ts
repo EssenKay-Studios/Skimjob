@@ -164,7 +164,7 @@ export function recordGame(state: GameState, crew: readonly PersonalityId[], rej
         stash: entry?.stash ?? 0,
         grabbed: grabbed.get(id) ?? 0,
         pocketed: pocketed.get(id) ?? 0,
-        timesShakenDown: entry?.timesShakenDown ?? 0,
+        timesShakenDown: shakedowns.filter((s) => s.target === id).length,
         winner,
         winCredit: winner ? 1 / winners.length : 0,
         tokensEarned: earned.get(id) ?? 0,
