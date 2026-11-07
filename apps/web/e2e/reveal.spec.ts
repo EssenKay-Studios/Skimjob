@@ -74,7 +74,7 @@ for (const viewport of VIEWPORTS) {
 
       // A bust only the Rooftop escapes (design §5.5); then a missed target nobody wins, every envelope VOID.
       await section.getByRole("button", { name: "Busted (Rooftop)" }).click();
-      await expect(reveal.locator(".reveal__why")).toContainText("Busted: on a bust, only the Rooftop gets away. The biggest stash up there wins: you.");
+      await expect(reveal.locator(".reveal__why")).toContainText("Busted. On a bust, only the Rooftop gets away. The biggest stash up there wins: you.");
       await expect(reveal.locator(".reveal__void")).toHaveCount(3);
       await section.getByRole("button", { name: "Missed (nobody)" }).click();
       await expect(reveal.locator(".reveal__why")).toContainText("nobody wins: the ranking is a loss");
@@ -153,7 +153,7 @@ test("a real game shows its reveal only once it has ended @fast-clock @reveal", 
   const ending = await reveal.getAttribute("data-ending");
   const WHY: Record<string, string> = {
     success: "Job done, so the top of the ranking wins",
-    bust: "Busted: on a bust, only the Rooftop gets away",
+    bust: "Busted. On a bust, only the Rooftop gets away.",
     target: "The heist failed (the crew missed the Haul target)",
   };
   expect(Object.keys(WHY), `ending ${ending}`).toContain(ending);

@@ -2,7 +2,7 @@
 // what each ★ role also wins on, who won and why, and the worked-out timeline
 // items. Pure; the switches are exhaustive. extension.md "Winning and losing",
 // "Tokens and the perk shop", "Police activity", "Situations"
-import type { FailureReason, TokenTrigger } from "@skimjob/content";
+import { BUST_ROLE_TEXT, type FailureReason, type TokenTrigger } from "@skimjob/content";
 import type { RevealEnding, RevealItem, RevealRound, RevealSummary } from "@skimjob/engine";
 import { describeEvent, roleName, roomName, type DescribeContext } from "./describeEvent";
 
@@ -42,8 +42,8 @@ export function whyText(ending: RevealEnding, ctx: DescribeContext): string {
   // design §5.5, §20.2: "On a bust, only the Rooftop gets away", whatever the role.
   if (ending.reason === "bust") {
     return ending.winners.length > 0
-      ? `Busted: on a bust, only the Rooftop gets away. The biggest stash up there wins: ${list(ending.winners.map(who))}.`
-      : "Busted: on a bust, only the Rooftop gets away, and nobody was on the Rooftop, so nobody wins: the ranking is a loss.";
+      ? `Busted. ${BUST_ROLE_TEXT} The biggest stash up there wins: ${list(ending.winners.map(who))}.`
+      : `Busted. ${BUST_ROLE_TEXT} Nobody was on the Rooftop, so nobody wins: the ranking is a loss.`;
   }
   const reason = "the crew missed the Haul target";
   switch (ending.why) {

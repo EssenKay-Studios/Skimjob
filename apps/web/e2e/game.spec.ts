@@ -92,7 +92,7 @@ test("a host and a guest play a 15-min game against bots to the end @move", asyn
   expect(Object.keys(LINES), `ending ${ending}`).toContain(ending);
   const expected = LINES[ending!]!;
   await expect(page.locator(".over__stamp")).toHaveText(expected.stamp);
-  if (ending === "bust") await expect(panel).toContainText("Busted: on a bust, only the Rooftop gets away");
+  if (ending === "bust") await expect(panel).toContainText("Busted. On a bust, only the Rooftop gets away.");
   await expect(over.locator(".ranking__row")).toHaveCount(4);
   const ledger = page.getByRole("list", { name: "Ledger" });
   await expect(ledger).toContainText("Round 1: Haul");

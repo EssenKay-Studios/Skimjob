@@ -4,6 +4,7 @@
 // Every number comes from content (with the game's overrides) or the view.
 import {
   BANK_JOB,
+  BUST_ROLE_TEXT,
   PERKS,
   ROUNDS_PER_ACT,
   ROLES,
@@ -319,6 +320,6 @@ export function endingText(outcome: Ending): { title: string; badge: string; los
   if (outcome.result === "success") return { title: "Final target met with no bust", badge: "Biggest stash", loss: false };
   const loss = outcome.winners.length === 0;
   return outcome.reason === "bust"
-    ? { title: "Busted: on a bust, only the Rooftop gets away", badge: "Wins over the Rooftop", loss } // design §20.2
+    ? { title: `Busted. ${BUST_ROLE_TEXT.replace(/\.$/, "")}`, badge: "Wins over the Rooftop", loss } // design §20.2
     : { title: "The final target was missed", badge: "Wins on a missed target", loss };
 }
