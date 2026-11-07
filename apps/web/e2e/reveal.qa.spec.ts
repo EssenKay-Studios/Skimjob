@@ -34,6 +34,8 @@ for (const viewport of VIEWPORTS) {
 
     test("envelopes, tokens, perks, locks, VOID and keyboard scrubbing @reveal", async ({ page }, info) => {
       test.skip(!info.project.name.startsWith("desktop") || info.project.name.endsWith("fast"), "the viewport is set here");
+      // 8–13 s alone, but 32 s with the full suite in parallel since #157 grew /dev/gallery (InfoTips, §20 text).
+      test.setTimeout(60_000);
       const errors: string[] = [];
       page.on("pageerror", (e) => errors.push(e.message));
       await page.goto("/dev/gallery");
