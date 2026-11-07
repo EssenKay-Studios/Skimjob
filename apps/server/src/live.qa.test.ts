@@ -236,7 +236,7 @@ describe("QA: flooding and many sockets", () => {
     // A private change made from tab 1 reaches tab 2 (same seat), with no reply on tab 2.
     expect(await t1.send({ type: "submitMove", move: { room: "lobby", duffel: 1, pocket: 0 } })).toMatchObject({ ok: true });
     await vi.waitFor(() => expect(t2.views().length).toBeGreaterThanOrEqual(2), quick);
-    expect(t2.messages.filter((m) => !("view" in m) && !("chatHistory" in m) && !("presence" in m))).toHaveLength(0);
+    expect(t2.messages.filter((m) => !("view" in m) && !("chatHistory" in m) && !("plan" in m) && !("presence" in m))).toHaveLength(0);
     // A deadline: both tabs move on together.
     await app.live.system(id, { type: "advance", deadline: { kind: "round", round: 1 } });
     await app.live.system(id, { type: "advance", deadline: { kind: "alibis", round: 1 } }); // design §5.4

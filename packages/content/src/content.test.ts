@@ -15,6 +15,7 @@ import {
   JOBS,
   MIN_PLAYERS,
   POOL_ROLES,
+  POWER_CLAIM_TARGET,
   ROLES,
   STARTER_ROLES,
 } from "./index";
@@ -182,5 +183,15 @@ describe("events deck content — design §10", () => {
       if (def?.effect.kind === "roomSurge") expect(Object.keys(BANK_JOB.rooms)).toContain(def.effect.room);
     }
     expect(EVENTS.shiftChange?.effect).toEqual({ kind: "roomSurge", room: "vault", extraCoins: 1 }); // design §13: Vault +1 coin
+  });
+});
+
+describe("plan-board power claims — design §10", () => {
+  it("every claimable power is a power some role has, and points at a room or a player", () => {
+    const kinds = new Set(Object.values(ROLES).map((r) => r.power.kind));
+    for (const [kind, aims] of Object.entries(POWER_CLAIM_TARGET)) {
+      expect(kinds.has(kind as never)).toBe(true);
+      expect(["room", "player"]).toContain(aims);
+    }
   });
 });
