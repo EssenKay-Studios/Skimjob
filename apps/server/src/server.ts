@@ -44,6 +44,8 @@ export interface ServerDeps {
   readonly secureCookies?: boolean;
   /** Believe X-Forwarded-* from the TLS-terminating proxy in front (nginx in production). */
   readonly trustProxy?: boolean;
+  /** Each started game's secret seed (the bots' seeds derive from it). Default: 16 random bytes; tests fix it to replay a game. */
+  readonly gameSeed?: () => string;
 }
 
 export function buildServer(deps: ServerDeps): FastifyInstance {
@@ -87,7 +89,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   app.addHook("onReady", async () => scheduler.start(deps.tickMs ?? 0));
   app.addHook("onClose", async () => scheduler.stop());
   authRoutes(app, db, s, deps.auth ?? [], (token) => live.closeSession(token));
-  lobbyRoutes(app, db, store, s, (gameId) => live.settle(gameId));
+  lobbyRoutes(app, db, store, s, (gameId) => live.settle(gameId), deps.gameSeed);
   notesRoutes(app, db, store, s, deps.clock);
   hostRoutes(app, db, s, live, scheduler, deps.clock);
   return app;

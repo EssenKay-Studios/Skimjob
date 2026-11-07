@@ -33,9 +33,14 @@ const clock = fakeClock(Date.UTC(2026, 10, 1));
 let db: Db;
 let store: GameStore;
 let app: FastifyInstance;
+/**
+ * Every game's seed, set by `startGame` from the test's name, so each story
+ * replays the same game (and the same bot decisions) on every run (#147).
+ */
+let nextSeed = "";
 const boot = async () => {
   store = createGameStore(db);
-  const a = buildServer({ db, clock, store });
+  const a = buildServer({ db, clock, store, gameSeed: () => nextSeed });
   await a.ready();
   return a;
 };
@@ -89,8 +94,13 @@ async function seated(id: string, sessions: readonly string[]): Promise<Game> {
   return { id, humans };
 }
 
+const startedPerTest = new Map<string, number>();
 async function startGame(people: number, bots: number, settings: Partial<LobbySettings> = {}): Promise<Game> {
   const { id, sessions } = await openLobby(people, bots, settings);
+  const name = expect.getState().currentTestName ?? "";
+  const n = (startedPerTest.get(name) ?? 0) + 1;
+  startedPerTest.set(name, n);
+  nextSeed = `scenario\0${name}\0${n}`;
   const started = await post(`/games/${id}/start`, sessions[0]!);
   expect(started.status).toBe(200);
   expect(started.body.status).toBe("running");
