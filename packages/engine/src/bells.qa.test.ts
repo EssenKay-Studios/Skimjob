@@ -287,10 +287,11 @@ describe("QA: the bust and the Rooftop escape — design §5.5, §8.3, §8.5", (
     expect(outcome(s)).toMatchObject({ reason: "bust" });
   });
 
-  it("a missed move into a taped Lobby lies low on the Rooftop, so it escapes a bust (provisional rule, PR #159)", () => {
+  // design §3.3 (owner, 7 Nov) replaces the provisional Rooftop fallback: the missed move sits the round out.
+  it("a missed move into a taped Lobby sits the round out, so it doesn't escape a bust", () => {
     const g = game(3);
     const s = run({ ...g, wanted: 2, taped: { lobby: 2 }, bells: { vault: 3, office: 0, security: 0, rooftop: 0 } }, mv("p0", "vault", 1), mv("p1", "office", 1), ROUND);
-    expect(outcome(s)).toMatchObject({ reason: "bust", escapees: ["p2"], winners: ["p2"] });
+    expect(outcome(s)).toMatchObject({ reason: "bust", escapees: [], winners: [] });
   });
 });
 
