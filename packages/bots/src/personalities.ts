@@ -14,7 +14,7 @@ export interface Personality {
   readonly lie: number;
   /** Only lie when nobody else was in the room ("when safe"). */
   readonly lieOnlyWhenAlone: boolean;
-  /** Chance of keeping the Haul on pace for the act's checkpoint (pocketing less when it's behind). design §11.5 */
+  /** Chance of keeping honesty above the line (pocketing less when it's close). design §7.5, §8.1 */
   readonly teamSpirit: number;
   /** Shake down the most suspicious player once their score reaches this. Lower is more suspicious. design §17.3 "Suspicion" */
   readonly voteAt: number;
@@ -86,7 +86,7 @@ export const PERSONALITIES: Readonly<Record<PersonalityId, Personality>> = {
     misread: 1,
     hunch: 7,
   },
-  // Pockets often and big, lies often, rarely votes: stress-tests the bells and checkpoints.
+  // Pockets often and big, lies often, rarely votes: stress-tests the bells and the honesty line.
   greedy: {
     name: "Greedy",
     pocketChance: 0.8,

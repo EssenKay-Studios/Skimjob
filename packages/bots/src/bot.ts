@@ -6,7 +6,6 @@
 // commands. Their seed is their own, not the game's (which is secret).
 import { ROUNDS_PER_ACT, type JobDef, type RoomId } from "@skimjob/content";
 import {
-  checkpointTarget,
   nextUint32,
   roomDef,
   seedRng,
@@ -19,12 +18,12 @@ import {
   type VoteChoice,
 } from "@skimjob/engine";
 import type { Personality } from "./personalities";
-import { crewSize, jobOf, lastResolvedRound, ofType, roleOf, roomsWhere, totalRounds } from "./read";
+import { jobOf, lastResolvedRound, ofType, roleOf, roomsWhere } from "./read";
 import { mostSuspicious, suspicion } from "./suspicion";
 import { claimCommands, meetingTime } from "./claims";
 import { alibiPerk, buyPerks, hasPerk, meetingPerks, perkSpender, planningPerks } from "./perks";
 import { bustDanger, jobThisRound, openRooms, quietGrab, raidRisk } from "./alarm";
-import { leaning } from "./forecast";
+import { coinsTaken, leaning } from "./forecast";
 
 /**
  * Anything that plays a seat: a bot, or (later) a human client. It sees only
@@ -77,6 +76,9 @@ export function createBot({ player, personality, seed, crewSeed }: BotOptions): 
 }
 
 const pick = <T>(items: readonly T[], random: Random): T => items[Math.floor(random() * items.length)] as T;
+
+/** Team-minded bots keep honesty at least this many times the line (bot setting). design §7.5 */
+const HONESTY_MARGIN = 1.1;
 
 function weighted<T>(items: readonly (readonly [T, number])[], random: Random): T | undefined {
   const total = items.reduce((sum, [, w]) => sum + w, 0);
@@ -203,12 +205,12 @@ export function chooseMove(view: PlayerView, p: Personality, random: Random): Mo
 
 /**
  * Whether the Mole's ring serves its own win (design §8.4, §19.3): it wins a heist sunk by theft, so it
- * rings (a raid seizes the crew's coins) only while it leans toward a missed target. One raid from the
+ * rings (a raid seizes the crew's coins) only while it leans toward theft. One raid from the
  * bust line, any ring could bust the crew, and off the Rooftop a bust loses (§5.5), so then it keeps quiet.
  */
 function ringServesWin(view: PlayerView, job: JobDef, room: RoomId): boolean {
   if (view.wanted >= job.alarm.bustStars - 1 && !roomDef(job, room).lieLow) return false;
-  return leaning(view) === "target";
+  return leaning(view) === "theft";
 }
 
 function chooseRoom(view: PlayerView, p: Personality, random: Random): RoomId {
@@ -218,8 +220,8 @@ function chooseRoom(view: PlayerView, p: Personality, random: Random): RoomId {
   const open = openRooms(view);
   const coinRooms = open.filter((r) => roomDef(job, r).coins > 0);
   const fallback = open.includes(job.defaultRoom) ? job.defaultRoom : (open.find((r) => roomDef(job, r).lieLow) ?? (open[0] as RoomId));
-  // extension.md Build notes "Bots": a ★ role leaning toward a missed target skims the richest room.
-  if (leaning(view) === "target") return [...coinRooms].sort((a, b) => roomDef(job, b).coins - roomDef(job, a).coins)[0] ?? fallback;
+  // extension.md Build notes "Bots": a ★ role leaning toward theft skims the richest room.
+  if (leaning(view) === "theft") return [...coinRooms].sort((a, b) => roomDef(job, b).coins - roomDef(job, a).coins)[0] ?? fallback;
   // design §5.5: near the bust line the Rooftop is the only way out, so the cautious go up and wait.
   const roof = open.find((r) => roomDef(job, r).lieLow);
   if (roof && random() < p.caution * bustDanger(view, base) ** 2) return roof;
@@ -234,7 +236,7 @@ function chooseRoom(view: PlayerView, p: Personality, random: Random): RoomId {
   return weighted(options, random) ?? fallback;
 }
 
-/** How many of the grabbed `coins` to pocket. design §3.2; R6 checkpoints (team-minded bots keep the Haul on pace) */
+/** How many of the grabbed `coins` to pocket. design §3.2; team-minded bots keep honesty above the line (§7.5, §8.1) */
 function choosePocket(view: PlayerView, p: Personality, random: Random, coins: number): number {
   if (coins === 0) return 0;
   if (random() < p.noise) return Math.floor(random() * (coins + 1));
@@ -243,11 +245,10 @@ function choosePocket(view: PlayerView, p: Personality, random: Random, coins: n
   // extension.md Build notes "Bots": a ★ role leaning toward its failure skims all it can.
   if (leaning(view) !== null) return coins;
   if (random() < p.teamSpirit) {
+    // After this grab, honesty (the Haul ÷ the coins taken) stays a margin above the line.
     const job = jobOf(view);
-    const crew = crewSize(view);
-    const roundsLeftInAct = view.act * ROUNDS_PER_ACT - view.round + 1;
-    const needEach = Math.max(0, checkpointTarget(job, view.act, crew) - view.haul) / (roundsLeftInAct * crew);
-    pocket = Math.min(pocket, Math.max(0, Math.floor(coins - needEach * 1.2)));
+    const keep = job.honestyLine * HONESTY_MARGIN * (coinsTaken(view, job) + coins);
+    pocket = Math.min(pocket, Math.max(0, Math.floor(view.haul + coins - keep)));
   }
   return pocket;
 }

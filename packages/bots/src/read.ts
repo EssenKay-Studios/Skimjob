@@ -1,6 +1,6 @@
 // Small readers over a PlayerView: everything a bot knows comes from here.
 // Bots never see the game state, only viewFor() output. design §17.3
-import { DECKS, FILLER_ROLE, ROLES, ROUNDS_PER_ACT, type JobDef, type RoleDef, type RoleId, type RoomDef, type RoomId } from "@skimjob/content";
+import { DECKS, FILLER_ROLE, ROLES, type JobDef, type RoleDef, type RoleId, type RoomDef, type RoomId } from "@skimjob/content";
 import { jobById, overrideJob, overrideRoles, roomDef, type GameEvent, type LoggedEvent, type PlayerId, type PlayerView } from "@skimjob/engine";
 
 type EventOf<T extends GameEvent["type"]> = Extract<GameEvent, { type: T }>;
@@ -53,8 +53,6 @@ export function couldBeDealt(view: PlayerView, role: RoleId): boolean {
   if (def.minPlayers !== undefined && crewSize(view) < def.minPlayers) return false;
   return true;
 }
-
-export const totalRounds = (job: JobDef): number => job.checkpoints.perPlayer.length * ROUNDS_PER_ACT;
 
 /** The latest round whose summary is on the ledger; 0 before any. */
 export function lastResolvedRound(view: PlayerView): number {

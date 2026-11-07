@@ -121,13 +121,21 @@ describe("moves — design §5.1, §6, §7, §8", () => {
     for (const m of moves) expect(m.duffel + m.pocket).toBe(1);
   });
 
-  it("keeps the Haul on pace for the checkpoint when it's behind — design §11.5", () => {
-    // Round 3, Haul 0, target 6 × 4 = 24: each needs to hand in 6 this round, so nothing is pocketed.
+  it("keeps honesty above the line when it's close, and pockets when there is room — design §7.5, §8.1", () => {
+    // Round 3 after everyone pocketed 1 of the Lobby's 2 twice: honesty ½, below the ⅔ line, so nothing is pocketed.
     let s = game(4);
-    for (let r = 1; r <= 2; r++) s = round(s, { ana: { room: "rooftop" }, ben: { room: "rooftop" }, carl: { room: "rooftop" }, dee: { room: "rooftop" } });
+    const half = { room: "lobby", pocket: 1 };
+    for (let r = 1; r <= 2; r++) s = round(s, { ana: half, ben: half, carl: half, dee: half });
     s = closeAlibis(s); // round 3 is being planned
     const greedyTeamPlayer = exact(PERSONALITIES.greedy, { pocketChance: 1, teamSpirit: 1, watch: 0, caution: 0 });
     for (let i = 0; i < 20; i++) expect(chooseMove(viewFor(s, "ana"), greedyTeamPlayer, seeded(`p${i}`)).pocket).toBe(0);
+    // Everything handed in so far (16 of 16): there is room for a pocketed coin.
+    let honest = game(4);
+    const all = { room: "lobby" };
+    for (let r = 1; r <= 2; r++) honest = round(honest, { ana: all, ben: all, carl: all, dee: all });
+    honest = closeAlibis(honest);
+    const pockets = Array.from({ length: 20 }, (_, i) => chooseMove(viewFor(honest, "ana"), greedyTeamPlayer, seeded(`p${i}`)).pocket);
+    expect(pockets.some((p) => p > 0)).toBe(true);
   });
 });
 

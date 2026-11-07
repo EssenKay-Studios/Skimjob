@@ -247,7 +247,7 @@ function audit(state: GameState, cov: Coverage): RevealSummary {
 
 // Seeds picked by a sweep so that together they hit every case below.
 const SEEDS: readonly (readonly [number, string])[] = [
-  [5, "qa55-5-10"], // target missed, a ★ wins from the top
+  [5, "qa55-5-10"],
   [5, "qa55-5-18"], // a Hacker loop hides a pocketer
   [5, "qa55-5-20"], // another Hacker loop
   [8, "qa55-8-6"],
@@ -256,7 +256,7 @@ const SEEDS: readonly (readonly [number, string])[] = [
 ];
 const MUST = [
   "success",
-  "failed:target",
+  "failed:theft",
   "failedTopWins",
   "starFailureWin",
   "raid",
@@ -272,6 +272,8 @@ describe("QA #55 reveal summary vs the engine's truth — design §13", () => {
     for (const [n, seed] of SEEDS) audit(play(config(n, seed)), cov);
     // Content bells (no R6 pins), so raids happen (design §5.3).
     audit(play(config(8, "qa55-8-raids", { contentOverrides: null })), cov);
+    // Content numbers: sunk by theft below the honesty line, and the Mole on top wins it (design §8.4).
+    audit(play(config(5, "qa55-5-t125", { contentOverrides: null })), cov);
     for (const k of MUST) expect(cov, k).toContain(k);
   }, 120_000);
 

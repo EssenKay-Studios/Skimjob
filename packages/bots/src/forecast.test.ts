@@ -16,28 +16,30 @@ const as = (s: GameState, role: string, me: Partial<Player> = {}, roleState: Par
   return { ...s, players: { ...s.players, ana: { ...ana, role, ...me, roleState: { ...ana.roleState, ...roleState } } } };
 };
 
-/** Two rounds with everyone lying low: no Haul, so the final target looks out of reach. */
+/** Two rounds with everyone pocketing their whole Lobby grab: honesty 0, so the heist looks sunk by theft. */
 const cold = (): GameState => {
   let s = game(5);
-  for (let r = 0; r < 2; r++) s = round(s, Object.fromEntries(s.playerOrder.map((id) => [id, { room: "rooftop" }])));
+  for (let r = 0; r < 2; r++) s = round(s, Object.fromEntries(s.playerOrder.map((id) => [id, { room: "lobby", pocket: 2 }])));
   return closeAlibis(s);
 };
 
 describe("ending forecast and leaning — extension.md Build notes \"Bots\", design §5.5", () => {
-  it("a fresh job forecasts no bust and an even chance on the target; one raid short of the bust line, an even chance of a bust", () => {
+  it("a fresh job forecasts no bust and no theft; honesty on the line, an even chance of theft; one raid short of the bust line, an even chance of a bust", () => {
     const s = game(5);
-    expect(forecast(viewFor(s, "ana"))).toMatchObject({ bust: 0, target: 0.5 });
+    expect(forecast(viewFor(s, "ana"))).toMatchObject({ bust: 0, theft: 0 });
+    // design §7.5: 6 of 9 coins taken reached the duffel, exactly the two-thirds line.
+    expect(forecast(viewFor({ ...s, haul: 6, bank: s.bank - 9 }, "ana")).theft).toBe(0.5);
     expect(forecast(viewFor({ ...s, wanted: 1 }, "ana")).bust).toBe(0);
     expect(forecast(viewFor({ ...s, wanted: 2 }, "ana")).bust).toBe(0.5);
   });
 
   it("only a ★ role that rates itself top leans toward its failure, once the forecast passes LEAN_AT", () => {
     const s = cold();
-    expect(forecast(viewFor(s, "ana")).target).toBeGreaterThanOrEqual(LEAN_AT);
-    expect(leaning(viewFor(as(s, "mole", { stash: 10 }), "ana"))).toBe("target");
+    expect(forecast(viewFor(s, "ana")).theft).toBeGreaterThanOrEqual(LEAN_AT);
+    expect(leaning(viewFor(as(s, "mole", { stash: 10 }), "ana"))).toBe("theft");
     expect(leaning(viewFor(as(s, "rookie", { stash: 10 }), "ana"))).toBeNull(); // team player: always success
     expect(leaning(viewFor(as(s, "mole", { stash: 0 }), "ana"))).toBeNull(); // not top
-    expect(leaning(viewFor(as(game(5), "mole", { stash: 10 }), "ana"))).toBeNull(); // on pace: nothing to lean on
+    expect(leaning(viewFor(as(game(5), "mole", { stash: 10 }), "ana"))).toBeNull(); // honest so far: nothing to lean on
     // design §5.5: no role wins a bust, so a near-bust is never leaned on.
     expect(leaning(viewFor(as({ ...game(5), wanted: 2 }, "mole", { stash: 10 }), "ana"))).toBeNull();
   });
@@ -48,10 +50,10 @@ describe("the Mole's ring — design §5.2, §11.1", () => {
     const move = decide(viewFor(s, "ana"), exact, () => 0.5, "test-crew").find((c) => c.type === "submitMove");
     return move?.type === "submitMove" ? move.move.ability : undefined;
   };
-  /** A Mole on top of a cold job (leaning toward a missed target), with the Office and Deposit boxes lit. */
+  /** A Mole on top of a thieving crew (leaning toward theft), with the Office and Deposit boxes lit. */
   const leaningMole = (): GameState => {
     const s = as(cold(), "mole", { stash: 10 });
-    return { ...s, bells: { ...s.bells, office: 2, depositBoxes: 1 } };
+    return { ...s, bells: { ...s.bells, lobby: 0, office: 2, depositBoxes: 1 } };
   };
   it("rings the loudest lit bell elsewhere, once between meetings; never the Rooftop; nothing when every bell is dark", () => {
     const lit = leaningMole();
@@ -62,7 +64,7 @@ describe("the Mole's ring — design §5.2, §11.1", () => {
   });
 
   // design §8.4, §19.3: the Mole plays to its own win, a heist sunk by theft.
-  it("rings only while it leans toward a missed target: not on a job on pace, not when it isn't top", () => {
+  it("rings only while it leans toward theft: not on an honest job, not when it isn't top", () => {
     const lit = leaningMole();
     expect(rings({ ...as(game(5), "mole", { stash: 10 }), bells: lit.bells })).toBeUndefined();
     expect(rings(as(lit, "mole", { stash: 0 }))).toBeUndefined();
@@ -103,7 +105,7 @@ describe("buying and spending perks — extension.md \"Tokens and the perk shop\
 
   it("spends every token in the last round: unspent tokens are worth nothing", () => {
     const s = shop(game(5));
-    const last: GameState = { ...s, round: 9, phase: { kind: "planning", round: 9 } };
+    const last: GameState = { ...s, round: 12, phase: { kind: "planning", round: 12 } }; // the round cap (design §6.2)
     expect(bought(buyPerks(viewFor(as(last, "rookie", {}, { tokens: 3, perks: ["shield", "peek", "extraVote"] }), "ana")))).toEqual(["extraVote", "extraVote", "extraVote"]);
   });
 
