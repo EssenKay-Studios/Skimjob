@@ -18,7 +18,7 @@ test("Google off: the real server 404s Google's start and callback, and a signed
 
 test("Google on: a guest still sees Sign in with Google, and the start link ignores the page's own query @auth", async ({ page }) => {
   await page.route("**/api/auth/providers", (r) => r.fulfill({ json: { providers: ["google"] } }));
-  await page.route("**/api/me", (r) => r.fulfill({ json: { user: { id: "g1", name: "Rookie", guest: true } } }));
+  await page.route("**/api/me", (r) => r.fulfill({ json: { user: { id: "g1", name: "Rookie", guest: true, tips: true } } }));
   let started: URL | null = null;
   await page.route("**/api/auth/google/start**", (r) => {
     started = new URL(r.request().url());

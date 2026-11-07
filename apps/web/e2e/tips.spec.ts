@@ -51,3 +51,21 @@ test("the Tips toggle fits every launch width with 44 px targets @auth", async (
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   }
 });
+
+test("the Tips buttons are disabled while a save is in flight, then the answer shows @auth", async ({ page }) => {
+  await page.request.post("/api/auth/guest", { data: { nickname: "Tipster" } });
+  let release: () => void = () => {};
+  const held = new Promise<void>((r) => (release = r));
+  await page.route("**/api/me", async (route) => {
+    if (route.request().method() === "PATCH") await held;
+    await route.continue();
+  });
+  await page.goto("/");
+  const tips = page.getByRole("group", { name: "Tips" });
+  await tips.getByRole("button", { name: "Off" }).click();
+  await expect(tips.getByRole("button", { name: "On" })).toBeDisabled();
+  await expect(tips.getByRole("button", { name: "Off" })).toBeDisabled();
+  release();
+  await expect(tips.getByRole("button", { name: "Off" })).toHaveAttribute("aria-pressed", "true");
+  await expect(tips.getByRole("button", { name: "On" })).toBeEnabled();
+});

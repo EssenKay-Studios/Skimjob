@@ -1,7 +1,9 @@
 // Landing (m2-plan M2-5): create a game (/new), join with an invite code
 // (/join/:code), sign in with Google (M2-12; shown only when the server has a
 // Google client id, else the top bar's "Sign in" just explains nicknames).
-// Signed in with Google, the pass card's place shows "My games".
+// Signed in with Google, the pass card's place shows "My games". Any signed-in
+// user, guest or account, also gets the Tips setting (S3b.3), so /me is asked
+// on every visit; signed out shows neither.
 import { useEffect, useState, type FormEvent } from "react";
 import { fetchMe, fetchMyGames, fetchProviders, googleSignInUrl, sentence, setTips, type Me, type MyGame } from "../api";
 import { Avatar } from "../components/Avatar";
@@ -29,6 +31,7 @@ export function Landing() {
   const [google, setGoogle] = useState(false);
   const [me, setMe] = useState<Me | null>(null);
   const [games, setGames] = useState<MyGame[] | null>(null);
+  const [savingTips, setSavingTips] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -49,7 +52,13 @@ export function Landing() {
   const account = me && !me.guest ? me : null;
   const signIn = () => location.assign(googleSignInUrl("/"));
 
-  const changeTips = (on: boolean) => setTips(on).then(setMe, (e: unknown) => toast(sentence(e instanceof Error ? e.message : String(e))));
+  // One save at a time, so replies can't arrive out of order.
+  const changeTips = (on: boolean) => {
+    setSavingTips(true);
+    return setTips(on)
+      .then(setMe, (e: unknown) => toast(sentence(e instanceof Error ? e.message : String(e))))
+      .finally(() => setSavingTips(false));
+  };
 
   const join = (e: FormEvent) => {
     e.preventDefault();
@@ -167,6 +176,7 @@ export function Landing() {
                       { value: false, label: "Off" },
                     ]}
                     value={me.tips}
+                    disabled={savingTips}
                     onChange={changeTips}
                   />
                 </>
