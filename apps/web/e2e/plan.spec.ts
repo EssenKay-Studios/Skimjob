@@ -6,7 +6,7 @@ const expect = baseExpect.configure({ timeout: 15_000 });
 // S3b.4 acceptance (design §10): the plan board's live channel. There is no board
 // UI yet (S4.3), so each player's page opens the game socket itself and speaks the
 // wire format: one player's room claim, power claim and "I agree" reach the other
-// live, and a forged author is refused.
+// live, either can put the other's avatar on the proposed plan, and a forged actor is refused.
 
 interface Probe {
   board: { round: number; entries: { player: string; room: string | null; power: { role: string; target: string } | null; agreed: boolean }[] } | null;
@@ -74,7 +74,11 @@ test("two players see each other's plan entry live @plan", async ({ page, browse
     ],
   });
 
-  // Nobody writes another seat's entry, and a claim must name something in the game.
+  // Anyone may put any avatar on the proposed plan, apart from the claims.
+  expect(await post(guest, "g4", { place: { player: hostId, room: "vault" } })).toMatchObject({ ok: true });
+  await expect.poll(async () => (await board(page))!.entries.find((e) => e.player === hostId)).toMatchObject({ placed: "vault", room: "office", agreed: true });
+
+  // Nobody writes another seat's claims, and a claim must name something in the game.
   expect(await post(guest, "g2", { room: "office", player: hostId })).toMatchObject({ rejected: true, reason: 'unknown plan field "player"' });
   expect(await post(guest, "g3", { room: "nowhere" })).toMatchObject({ rejected: true, reason: "no such room" });
   expect((await board(page))!.entries.find((e) => e.player === hostId)).toMatchObject({ room: "office" });

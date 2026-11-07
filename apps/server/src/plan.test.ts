@@ -1,5 +1,6 @@
-// The plan board over the game socket: own entry only, live to every seat,
-// checked against content, per round, rate-limited, nothing leaked.
+// The plan board over the game socket: anyone places any avatar on the proposed
+// plan, only you set your own claims, live to every seat, checked against
+// content, per round, with a compact edit history, rate-limited, nothing leaked.
 // design §10 (the plan board), §17.2 (the seat comes from the session), §18
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -12,6 +13,7 @@ import type { LobbyView } from "./lobby";
 import type { PlanBoard } from "./plan";
 import { buildServer } from "./server";
 import { PLAN_RATE, type LobbySettings } from "./settings";
+import { createPlan } from "./plan";
 import { createGameStore } from "./store";
 import { testDb } from "./testkit";
 
@@ -108,7 +110,7 @@ describe("the plan board is live for everyone (design §10)", () => {
     expect(a!.board()).toEqual({ round: 1, entries: [] });
     expect(await a!.plan({ room: rooms[0] })).toMatchObject({ ok: true });
     for (const cl of [a!, b!, c!]) {
-      await vi.waitFor(() => expect(cl.board().entries).toEqual([{ player: humans[0]!.player, room: rooms[0], power: null, agreed: false }]), quick);
+      await vi.waitFor(() => expect(cl.board().entries).toEqual([{ player: humans[0]!.player, placed: null, room: rooms[0], power: null, agreed: false }]), quick);
     }
     // A forged author (or any unknown field) is refused, not believed.
     expect(await b!.plan({ room: rooms[1], player: humans[0]!.player })).toMatchObject({ rejected: true, reason: 'unknown plan field "player"' });
@@ -127,15 +129,15 @@ describe("the plan board is live for everyone (design §10)", () => {
     await vi.waitFor(
       () =>
         expect(b!.board().entries).toEqual([
-          { player: humans[0]!.player, room: rooms[0], power: { role: "hacker", target: rooms[1] }, agreed: true },
-          { player: humans[1]!.player, room: null, power: null, agreed: true },
+          { player: humans[0]!.player, placed: null, room: rooms[0], power: { role: "hacker", target: rooms[1] }, agreed: true },
+          { player: humans[1]!.player, placed: null, room: null, power: null, agreed: true },
         ]),
       quick,
     );
     // A player power takes a player: bots are fine to name.
     expect(await a!.plan({ power: { role: "detective", target: humans[2]!.player } })).toMatchObject({ ok: true });
     expect(await a!.plan({ room: null, power: null, agree: false })).toMatchObject({ ok: true });
-    await vi.waitFor(() => expect(b!.board().entries).toEqual([{ player: humans[1]!.player, room: null, power: null, agreed: true }]), quick);
+    await vi.waitFor(() => expect(b!.board().entries).toEqual([{ player: humans[1]!.player, placed: null, room: null, power: null, agreed: true }]), quick);
     closeAll(a!, b!);
   });
 
@@ -157,7 +159,7 @@ describe("the plan board is live for everyone (design §10)", () => {
     expect(await a.plan({ room: rooms[2] ?? rooms[0], agree: true })).toMatchObject({ ok: true });
     a.ws.close();
     const b = await Client.open(id, humans[1]!);
-    expect(b.board().entries).toEqual([{ player: humans[0]!.player, room: rooms[2] ?? rooms[0], power: null, agreed: true }]);
+    expect(b.board().entries).toEqual([{ player: humans[0]!.player, placed: null, room: rooms[2] ?? rooms[0], power: null, agreed: true }]);
     const kinds = b.messages.map((m) => Object.keys(m)[0]);
     expect(kinds.indexOf("view")).toBeLessThan(kinds.indexOf("chatHistory"));
     expect(kinds.indexOf("chatHistory")).toBeLessThan(kinds.indexOf("plan"));
@@ -257,7 +259,7 @@ describe("one board per round (design §10)", () => {
     // The round resolved: no more edits, and the board stays on show as it was left.
     expect(await a!.plan({ room: rooms[1] })).toMatchObject({ rejected: true, reason: "the plan board is closed until the next round" });
     expect(await b!.plan({ agree: true })).toMatchObject({ rejected: true, reason: "the plan board is closed until the next round" });
-    expect(b!.board()).toEqual({ round: 1, entries: [{ player: humans[0]!.player, room: rooms[0], power: null, agreed: true }] });
+    expect(b!.board()).toEqual({ round: 1, entries: [{ player: humans[0]!.player, placed: null, room: rooms[0], power: null, agreed: true }] });
     const late = await Client.open(id, humans[1]!);
     expect(late.board().round).toBe(1);
     expect(late.board().entries).toHaveLength(1);
@@ -266,7 +268,7 @@ describe("one board per round (design §10)", () => {
     // Round 2: everyone connected is sent the empty board, and edits work again.
     for (const cl of [a!, b!, late]) await vi.waitFor(() => expect(cl.board()).toEqual({ round: 2, entries: [] }), quick);
     expect(await b!.plan({ room: rooms[1] })).toMatchObject({ ok: true });
-    await vi.waitFor(() => expect(a!.board()).toEqual({ round: 2, entries: [{ player: humans[1]!.player, room: rooms[1], power: null, agreed: false }] }), quick);
+    await vi.waitFor(() => expect(a!.board()).toEqual({ round: 2, entries: [{ player: humans[1]!.player, placed: null, room: rooms[1], power: null, agreed: false }] }), quick);
     // Round 1's entries are still stored, for the round's snapshot (S3a.9).
     expect(await db.query("select round from plan_entries order by round")).toEqual(expect.arrayContaining([{ round: 1 }, { round: 2 }]));
     closeAll(a!, b!, late);
@@ -315,12 +317,121 @@ describe("nothing private rides on the board (design §18)", () => {
       const frames = cl.messages.flatMap((m) => ("plan" in m ? [m.plan] : []));
       for (const f of frames) {
         expect(Object.keys(f).sort()).toEqual(["entries", "round"]);
-        for (const e of f.entries) expect(Object.keys(e).sort()).toEqual(["agreed", "player", "power", "room"]);
+        for (const e of f.entries) expect(Object.keys(e).sort()).toEqual(["agreed", "placed", "player", "power", "room"]);
       }
       const view = cl.messages.flatMap((m) => ("view" in m ? [m.view] : [])).at(-1)!;
       expect(JSON.stringify(view)).not.toContain("plan_entries");
       expect(Object.keys(view)).not.toContain("plan");
     }
     closeAll(a!, b!);
+  });
+});
+
+describe("the proposed plan and the claims are separate (design §10)", () => {
+  it("anyone places any avatar, bots included; claims stay each seat's own", async () => {
+    const { id, humans, botIds, rooms } = await startGame(2, 1);
+    const [a, b] = await Promise.all(humans.map((h) => Client.open(id, h)));
+    // A puts B and the bot on rooms; B moves A and takes the bot's spot back off.
+    expect(await a!.plan({ place: { player: humans[1]!.player, room: rooms[0] } })).toMatchObject({ ok: true });
+    expect(await a!.plan({ place: { player: botIds[0], room: rooms[1] } })).toMatchObject({ ok: true });
+    expect(await b!.plan({ place: { player: humans[0]!.player, room: rooms[1] } })).toMatchObject({ ok: true });
+    expect(await b!.plan({ place: { player: botIds[0], room: null } })).toMatchObject({ ok: true });
+    await vi.waitFor(
+      () =>
+        expect(a!.board().entries).toEqual([
+          { player: humans[0]!.player, placed: rooms[1], room: null, power: null, agreed: false },
+          { player: humans[1]!.player, placed: rooms[0], room: null, power: null, agreed: false },
+        ]),
+      quick,
+    );
+    // B's own claim is B's alone; placing does not touch claims, nor claiming the placement.
+    expect(await b!.plan({ room: rooms[1], agree: true })).toMatchObject({ ok: true });
+    await vi.waitFor(() => expect(a!.board().entries[1]).toEqual({ player: humans[1]!.player, placed: rooms[0], room: rooms[1], power: null, agreed: true }), quick);
+    expect(a!.board().entries[0]).toMatchObject({ placed: rooms[1], room: null, agreed: false });
+    closeAll(a!, b!);
+  });
+
+  it("refuses placing someone who isn't in the game, or on a room that isn't", async () => {
+    const { id, humans, rooms } = await startGame(2, 1);
+    const a = await Client.open(id, humans[0]!);
+    const bad = async (plan: unknown, reason: string) => expect(await a.plan(plan), JSON.stringify(plan)).toMatchObject({ rejected: true, reason });
+    await bad({ place: { player: "nobody", room: rooms[0] } }, "no such player");
+    await bad({ place: { player: "__proto__", room: rooms[0] } }, "no such player");
+    await bad({ place: { player: humans[1]!.player, room: "armory" } }, "no such room");
+    await bad({ place: { player: humans[1]!.player } }, "no such room");
+    await bad({ place: { player: humans[1]!.player, room: rooms[0], by: "x" } }, 'unknown place field "by"');
+    await bad({ place: humans[1]!.player }, "place must be { player, room }");
+    await bad({ place: null }, "place must be { player, room }");
+    expect(await a.barrier()).toBeGreaterThan(0);
+    expect(a.board().entries).toEqual([]);
+    closeAll(a);
+  });
+});
+
+describe("the compact edit history (design §10)", () => {
+  it("records who moved whom or what, when, and how long before the deadline; one row per actor, kind and subject", async () => {
+    const { id, humans, rooms } = await startGame(2, 1);
+    const plan = createPlan(db, clock);
+    const [a, b] = await Promise.all(humans.map((h) => Client.open(id, h)));
+    expect(await a!.plan({ place: { player: humans[1]!.player, room: rooms[0] }, room: rooms[1], power: { role: "hacker", target: rooms[0] }, agree: true })).toMatchObject({ ok: true });
+    clock.advance(5000);
+    expect(await b!.plan({ place: { player: humans[1]!.player, room: rooms[1] } })).toMatchObject({ ok: true });
+    clock.advance(5000);
+    // A moves B again and again: still one row, the latest. A change that changes nothing records nothing.
+    for (const r of [rooms[1], rooms[0], rooms[1]]) expect(await a!.plan({ place: { player: humans[1]!.player, room: r } })).toMatchObject({ ok: true });
+    expect(await a!.plan({ room: rooms[1] })).toMatchObject({ ok: true });
+    const history = await plan.history(id, 1);
+    const [first] = history;
+    expect(first!.msBeforeDeadline).toBeGreaterThan(10_000);
+    const left = (kind: string, actor: string) => history.find((h) => h.kind === kind && h.actor === actor)!;
+    const base = first!.msBeforeDeadline!; // the first edit's time left; the rest are measured from it
+    expect(history.map((h) => [h.actor, h.kind, h.subject, h.value, h.target])).toEqual(
+      expect.arrayContaining([
+        [humans[0]!.player, "place", humans[1]!.player, rooms[1], null],
+        [humans[1]!.player, "place", humans[1]!.player, rooms[1], null],
+        [humans[0]!.player, "room", humans[0]!.player, rooms[1], null],
+        [humans[0]!.player, "power", humans[0]!.player, "hacker", rooms[0]],
+        [humans[0]!.player, "agree", humans[0]!.player, "true", null],
+      ]),
+    );
+    expect(history).toHaveLength(5);
+    // Time left falls with the clock: B's move was 5 s after the first edit, A's last 10 s after.
+    expect(left("agree", humans[0]!.player).msBeforeDeadline).toBe(base);
+    expect(history.filter((h) => h.kind === "place" && h.actor === humans[0]!.player)[0]!.msBeforeDeadline).toBe(base - 10_000);
+    expect(history.find((h) => h.actor === humans[1]!.player)!.msBeforeDeadline).toBe(base - 5000);
+    expect(history.every((h) => /^\d{4}-/.test(h.at))).toBe(true);
+    // Nothing of it reaches a client.
+    expect(JSON.stringify([...a!.messages, ...b!.messages])).not.toContain("msBeforeDeadline");
+    closeAll(a!, b!);
+  });
+
+  it("clearing is an edit too; a no-op records nothing", async () => {
+    const { id, humans, rooms } = await startGame(2, 1);
+    const plan = createPlan(db, clock);
+    const a = await Client.open(id, humans[0]!);
+    expect(await a.plan({ room: null, agree: false })).toMatchObject({ ok: true });
+    expect(await plan.history(id, 1)).toEqual([]);
+    expect(await a.plan({ room: rooms[0] })).toMatchObject({ ok: true });
+    expect(await a.plan({ room: null })).toMatchObject({ ok: true });
+    expect(await plan.history(id, 1)).toMatchObject([{ kind: "room", value: null, target: null }]);
+    closeAll(a);
+  });
+});
+
+describe("open for the round's span, as the scheduler's deadline is (design §10)", () => {
+  it("edits work exactly while the round's `round:<n>` deadline row exists", async () => {
+    const { id, humans } = await startGame(2, 1);
+    const a = await Client.open(id, humans[0]!);
+    const hasDeadline = async (n: number) => (await db.query("select 1 from deadlines where game_id = $1 and key = $2", [id, `round:${n}`])).length > 0;
+    const open = async () => "ok" in (await a.plan({ agree: true }));
+    expect(await hasDeadline(1)).toBe(true);
+    expect(await open()).toBe(true);
+    await app.live.system(id, { type: "advance", deadline: { kind: "round", round: 1 } });
+    expect(await hasDeadline(1)).toBe(false);
+    expect(await open()).toBe(false);
+    await app.live.system(id, { type: "advance", deadline: { kind: "alibis", round: 1 } });
+    expect(await hasDeadline(2)).toBe(true);
+    expect(await open()).toBe(true);
+    closeAll(a);
   });
 });

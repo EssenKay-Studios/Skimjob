@@ -22,8 +22,8 @@
 //   replied to like a command; the message goes out as `{ chat }` (a DM only to
 //   its two players, others get `{ dmNotice }` if the host left notices on).
 //   On connect, after the first view: `{ chatHistory }`.
-// - The plan board (S3b.4, plan.ts): client `{ plan: { room?, power?, agree? }, id? }`
-//   edits the sender's own entry (replied to like a command); everyone then gets
+// - The plan board (S3b.4, plan.ts): client `{ plan: { place?, room?, power?, agree? }, id? }`
+//   places any avatar on the proposed plan or sets the sender's own claims (replied to like a command); everyone then gets
 //   the whole board as `{ plan }`, only if it changed for them. It is also sent
 //   after the first view and again when a new round starts it empty.
 // - Per socket the order is always: first view, `{ chatHistory }`, `{ plan }`,
@@ -641,7 +641,7 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
                 if (!state) return reply({ rejected: true, reason: "game not found", ...id });
                 const edit = parsePlanEdit(planMsg.body, state, conn.player);
                 if (!edit.ok) return reply({ rejected: true, reason: edit.reason, ...id });
-                // The author is the socket's seat, never the client's say. design §17.2
+                // The actor is the socket's seat, never the client's say. design §17.2
                 const r = await plan.edit(gameId, state, conn.player, edit.value);
                 if (!r.ok) return reply({ rejected: true, reason: r.reason, ...id });
                 reply({ ok: true, ...id });

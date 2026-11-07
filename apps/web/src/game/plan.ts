@@ -12,6 +12,9 @@ export interface PowerClaim {
 /** One seat's entry. Seats with nothing on the board are not listed. */
 export interface PlanEntry {
   readonly player: PlayerId;
+  /** Where the crew put this avatar on the proposed plan (anyone may move it). */
+  readonly placed: string | null;
+  /** The seat's own room claim (✋). */
   readonly room: string | null;
   readonly power: PowerClaim | null;
   readonly agreed: boolean;
@@ -22,8 +25,10 @@ export interface PlanBoard {
   /** In seat order. */
   readonly entries: readonly PlanEntry[];
 }
-/** What the client posts: `{ plan: { room?, power?, agree? } }`. A field left out stays as it is; null clears a claim. */
+/** What the client posts: `{ plan: { place?, room?, power?, agree? } }`. A field left out stays as it is; null clears. */
 export interface PlanEdit {
+  /** Put anyone's avatar on a room of the proposed plan, or take it off with null. */
+  readonly place?: { readonly player: PlayerId; readonly room: string | null };
   readonly room?: string | null;
   readonly power?: PowerClaim | null;
   readonly agree?: boolean;
@@ -33,10 +38,10 @@ const isStr = (x: unknown): x is string => typeof x === "string";
 const isObj = (x: unknown): x is Record<string, unknown> => typeof x === "object" && x !== null && !Array.isArray(x);
 
 function asEntry(x: unknown): PlanEntry | null {
-  if (!isObj(x) || !isStr(x.player) || !(x.room === null || isStr(x.room)) || typeof x.agreed !== "boolean") return null;
-  if (x.power === null) return { player: x.player, room: x.room, power: null, agreed: x.agreed };
+  if (!isObj(x) || !isStr(x.player) || !(x.placed === null || isStr(x.placed)) || !(x.room === null || isStr(x.room)) || typeof x.agreed !== "boolean") return null;
+  if (x.power === null) return { player: x.player, placed: x.placed, room: x.room, power: null, agreed: x.agreed };
   if (!isObj(x.power) || !isStr(x.power.role) || !isStr(x.power.target)) return null;
-  return { player: x.player, room: x.room, power: { role: x.power.role, target: x.power.target }, agreed: x.agreed };
+  return { player: x.player, placed: x.placed, room: x.room, power: { role: x.power.role, target: x.power.target }, agreed: x.agreed };
 }
 
 /** A server `plan` payload, or null if it isn't one (dropped, never half-rendered); bad entries are dropped. */
