@@ -5,7 +5,7 @@ import { expect, test, type Page } from "@playwright/test";
 // the OAuth round trip itself is covered by apps/server/src/auth.test.ts.
 const googleOn = (page: Page) => page.route("**/api/auth/providers", (r) => r.fulfill({ json: { providers: ["google"] } }));
 const signedIn = (page: Page, name: string) =>
-  page.route("**/api/me", (r) => r.fulfill({ json: { user: { id: "u1", name, guest: false } } }));
+  page.route("**/api/me", (r) => r.fulfill({ json: { user: { id: "u1", name, guest: false, tips: true } } }));
 const LONG = "Wolfgang Amadeus Mozartt"; // 24 characters, the most a name can have
 const GAMES = [
   { id: "g-run", status: "running", nickname: LONG, youAreHost: true, host: LONG, seats: 12, sessionLength: "1w" },

@@ -3,12 +3,13 @@
 // Google client id, else the top bar's "Sign in" just explains nicknames).
 // Signed in with Google, the pass card's place shows "My games".
 import { useEffect, useState, type FormEvent } from "react";
-import { fetchMe, fetchMyGames, fetchProviders, googleSignInUrl, type Me, type MyGame } from "../api";
+import { fetchMe, fetchMyGames, fetchProviders, googleSignInUrl, sentence, setTips, type Me, type MyGame } from "../api";
 import { Avatar } from "../components/Avatar";
 import { BankDoodle } from "../components/BankDoodle";
 import { Button } from "../components/Button";
 import { Chip } from "../components/Chip";
 import { MyGames } from "../components/MyGames";
+import { Segmented } from "../components/Segmented";
 import { SketchFrame } from "../components/SketchFrame";
 import { TextField } from "../components/TextField";
 import { useToast } from "../components/Toast";
@@ -31,19 +32,15 @@ export function Landing() {
 
   useEffect(() => {
     let live = true;
-    // Who's signed in only matters (and is only asked) when Google sign-in is on.
-    fetchProviders().then((p) => {
-      if (!live || !p.includes("google")) return;
-      setGoogle(true);
-      fetchMe().then(
-        (u) => {
-          if (!live) return;
-          setMe(u);
-          if (u && !u.guest) fetchMyGames().then((g) => live && setGames(g), () => {});
-        },
-        () => {}, // offline: the landing page works signed out
-      );
-    });
+    fetchProviders().then((p) => live && setGoogle(p.includes("google")));
+    fetchMe().then(
+      (u) => {
+        if (!live) return;
+        setMe(u);
+        if (u && !u.guest) fetchMyGames().then((g) => live && setGames(g), () => {});
+      },
+      () => {}, // offline: the landing page works signed out
+    );
     return () => {
       live = false;
     };
@@ -51,6 +48,8 @@ export function Landing() {
 
   const account = me && !me.guest ? me : null;
   const signIn = () => location.assign(googleSignInUrl("/"));
+
+  const changeTips = (on: boolean) => setTips(on).then(setMe, (e: unknown) => toast(sentence(e instanceof Error ? e.message : String(e))));
 
   const join = (e: FormEvent) => {
     e.preventDefault();
@@ -155,6 +154,23 @@ export function Landing() {
                   </Button>
                 </div>
               </form>
+
+              {me && (
+                <>
+                  <hr className="dashed" />
+                  <Segmented
+                    seed="tips"
+                    label="Tips"
+                    hint="Short how-to cards the first time something happens."
+                    options={[
+                      { value: true, label: "On" },
+                      { value: false, label: "Off" },
+                    ]}
+                    value={me.tips}
+                    onChange={changeTips}
+                  />
+                </>
+              )}
             </div>
 
             <div className="landing__art">

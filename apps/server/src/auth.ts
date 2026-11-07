@@ -22,6 +22,8 @@ export interface User {
   readonly name: string;
   /** No external account (invite link + nickname). */
   readonly guest: boolean;
+  /** Teaching pop-ups and tips (design §15.6); on by default, follows the user across games. */
+  readonly tips: boolean;
 }
 
 /** Who an AuthProvider says the browser is. */
@@ -73,7 +75,7 @@ const token = () => randomBytes(32).toString("base64url");
 export async function createGuestUser(db: Queryable, name: string): Promise<User> {
   const [row] = await db.query<{ id: string }>("insert into users (display_name) values ($1) returning id", [name]);
   if (!row) throw new Error("user not created");
-  return { id: row.id, name, guest: true };
+  return { id: row.id, name, guest: true, tips: true };
 }
 
 /**
@@ -86,26 +88,26 @@ async function userForIdentity(db: Db, provider: string, who: Identity, guest: U
   const externalId = `${provider}:${who.subject}`;
   if (guest?.guest) {
     try {
-      const [linked] = await db.query<{ id: string; display_name: string }>(
+      const [linked] = await db.query<{ id: string; display_name: string; tips: boolean }>(
         `update users set external_id = $1 where id = $2 and external_id is null
          and not exists (select 1 from users where external_id = $1)
-         returning id, display_name`,
+         returning id, display_name, tips`,
         [externalId, guest.id],
       );
-      if (linked) return { id: linked.id, name: linked.display_name, guest: false };
+      if (linked) return { id: linked.id, name: linked.display_name, guest: false, tips: linked.tips };
     } catch {
       // the same account signed in at the same moment elsewhere: use that user
     }
   }
-  const [row] = await db.query<{ id: string; display_name: string }>(
+  const [row] = await db.query<{ id: string; display_name: string; tips: boolean }>(
     `insert into users (display_name, external_id) values ($1, $2)
      on conflict (external_id) do update set external_id = excluded.external_id
-     returning id, display_name`,
+     returning id, display_name, tips`,
     [who.displayName, externalId],
   );
   if (!row) throw new Error("user not created");
   if (guest?.guest && guest.id !== row.id) await adoptGuest(db, guest.id, row.id);
-  return { id: row.id, name: row.display_name, guest: false };
+  return { id: row.id, name: row.display_name, guest: false, tips: row.tips };
 }
 
 /**
@@ -145,13 +147,13 @@ export function sessions(db: Db, clock: Clock): Sessions {
   const session: Sessions["session"] = async (req) => {
     const t = req.cookies[SESSION_COOKIE];
     if (!t) return null;
-    const [row] = await db.query<{ id: string; display_name: string; external_id: string | null; expires: number }>(
-      `select u.id, u.display_name, u.external_id, (extract(epoch from s.expires_at) * 1000)::float8 as expires
+    const [row] = await db.query<{ id: string; display_name: string; external_id: string | null; tips: boolean; expires: number }>(
+      `select u.id, u.display_name, u.external_id, u.tips, (extract(epoch from s.expires_at) * 1000)::float8 as expires
        from sessions s join users u on u.id = s.user_id
        where s.token_hash = $1 and s.expires_at > $2`,
       [sha256(t), new Date(clock.now())],
     );
-    return row ? { user: { id: row.id, name: row.display_name, guest: row.external_id === null }, expiresAt: Math.round(Number(row.expires)) } : null;
+    return row ? { user: { id: row.id, name: row.display_name, guest: row.external_id === null, tips: row.tips }, expiresAt: Math.round(Number(row.expires)) } : null;
   };
   return {
     async start(reply, user) {
@@ -199,6 +201,16 @@ export function authRoutes(
   app.get("/me", async (req, reply) => {
     const user = await s.user(req);
     return user ? { user } : reply.code(401).send({ error: "not signed in" });
+  });
+
+  // The per-user Tips setting (guest or account); the session decides whose.
+  app.patch("/me", async (req, reply) => {
+    const user = await s.user(req);
+    if (!user) return reply.code(401).send({ error: "not signed in" });
+    const tips = (req.body as { tips?: unknown } | null)?.tips;
+    if (typeof tips !== "boolean") return reply.code(400).send({ error: "tips must be true or false" });
+    await db.query("update users set tips = $2 where id = $1", [user.id, tips]);
+    return { user: { ...user, tips } };
   });
 
   // Guest sign-in to host a game (joining by invite signs a guest in by itself).

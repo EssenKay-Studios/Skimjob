@@ -56,6 +56,8 @@ export interface Me {
   readonly id: string;
   readonly name: string;
   readonly guest: boolean;
+  /** The Tips setting: teaching pop-ups and tips on (default) or off. */
+  readonly tips: boolean;
 }
 
 /** What every "server unreachable" case says (offline, proxy 502/503/504, a non-JSON body). */
@@ -107,6 +109,9 @@ export const fetchMe = () =>
       throw e;
     },
   );
+
+/** Saves the Tips setting; answers the updated user. */
+export const setTips = (tips: boolean) => api<{ user: Me }>("PATCH", "/me", { tips }).then((r) => r.user);
 
 /** The redirect sign-in providers the server has on ("google" with a client id, "dev" with DEV_LOGIN=1). */
 export const fetchProviders = () =>
