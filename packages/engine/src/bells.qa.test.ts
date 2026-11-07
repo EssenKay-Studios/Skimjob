@@ -1,0 +1,441 @@
+// QA (PR #159): adversarial tests for bells, raids, tape, cooling, Wanted and
+// the bust with the Rooftop escape; the Mole's ring and the Fixer's reopen.
+// design §3.3, §4.2, §5.1–§5.6, §8.3, §8.5, §11.1, §18
+import { describe, expect, it } from "vitest";
+import { createGame, setupEvents } from "./setup";
+import { replay } from "./reduce";
+import { handleCommand } from "./handle";
+import { handleThroughAlibis } from "./alibis.testkit";
+import { viewFor } from "./view";
+import { canSee } from "./types";
+import type { Command, GameConfig, GameEvent, GameState } from "./types";
+
+function config(players: number, seed = "bells-qa"): GameConfig {
+  return {
+    seed,
+    players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
+    job: "bank",
+    rolePool: ["rookie", "mole", "fixer"],
+    eventsEnabled: false,
+    voteVisibility: "hiddenThenRevealed",
+    contentOverrides: null,
+  };
+}
+
+/** A new game with seat i dealt roles[i] (Rookie if missing). */
+function game(players: number, roles: string[] = [], seed?: string): GameState {
+  const cfg = config(players, seed);
+  let seat = 0;
+  return replay(cfg, setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: roles[seat++] ?? "rookie" } : e)));
+}
+
+type Step = Command | ((s: GameState) => Command);
+function run(state: GameState, ...commands: Step[]): GameState {
+  return commands.reduce<GameState>((s, c) => {
+    const r = handleThroughAlibis(s, typeof c === "function" ? c(s) : c);
+    if (!r.ok) throw new Error(`rejected ${JSON.stringify(c)}: ${r.reason}`);
+    return r.state;
+  }, state);
+}
+function reason(state: GameState, command: unknown): string {
+  const r = handleCommand(state, command);
+  if (r.ok) throw new Error("expected a rejection");
+  return r.reason;
+}
+
+const mv = (player: string, room: string, duffel = 0, pocket = 0, extra: object = {}): Command =>
+  ({ type: "submitMove", player, move: { room, duffel, pocket, ...extra } }) as Command;
+const ROUND = (s: GameState): Command => ({ type: "advance", deadline: { kind: "round", round: s.round } });
+const ofType = <T extends GameEvent["type"]>(events: readonly GameEvent[], type: T) => events.filter((e): e is Extract<GameEvent, { type: T }> => e.type === type);
+const since = (before: GameState, after: GameState) => after.log.slice(before.log.length);
+const withStash = (g: GameState, stash: Record<string, number>): GameState => ({
+  ...g,
+  players: Object.fromEntries(Object.entries(g.players).map(([id, p]) => [id, { ...p, stash: stash[id] ?? p.stash }])),
+});
+const outcome = (s: GameState) => {
+  if (s.phase.kind !== "ended") throw new Error(`not ended: ${s.phase.kind}`);
+  return s.phase.outcome as typeof s.phase.outcome & { escapees?: readonly string[] };
+};
+/** Every seat but those listed lands in the Lobby with 1 coin handed in (silent). */
+const lobbyRest = (n: number, busy: string[]): Command[] =>
+  Array.from({ length: n }, (_, i) => `p${i}`)
+    .filter((p) => !busy.includes(p))
+    .map((p) => mv(p, "lobby", 1));
+/** Through a regular meeting after an act's last round. */
+const MEETING = (act: number): Step[] => [
+  { type: "scheduleMeeting", act, slot: "x" } as Command,
+  { type: "advance", deadline: { kind: "openMeeting", meetingId: `act-${act}` } } as Command,
+  { type: "advance", deadline: { kind: "closeMeeting", meetingId: `act-${act}` } } as Command,
+];
+
+describe("QA: the raid line is exactly the 4th bulb — design §5.1, §5.3", () => {
+  it("3 lit bulbs is no raid; the bell cools to 2", () => {
+    const s = run(game(3), mv("p0", "vault", 3), mv("p1", "lobby", 1), mv("p2", "lobby", 1), ROUND);
+    expect(ofType(s.log, "bellsRung")[0]?.bells.vault).toBe(3);
+    expect(ofType(s.log, "roomRaided")).toEqual([]);
+    expect([s.wanted, s.taped, s.bells.vault]).toEqual([0, {}, 2]);
+  });
+
+  it("a bell left at 3 stays unraided with no new ring; one more ring raids it", () => {
+    const g = game(3);
+    const hot = { ...g, bells: { ...g.bells, vault: 3 } };
+    const quiet = run(hot, mv("p0", "lobby", 1), mv("p1", "lobby", 1), mv("p2", "lobby", 1), ROUND);
+    expect([quiet.wanted, quiet.bells.vault]).toEqual([0, 2]);
+    const loud = run(hot, mv("p0", "vault", 1), mv("p1", "lobby", 1), mv("p2", "lobby", 1), ROUND);
+    expect(ofType(loud.log, "roomRaided")).toMatchObject([{ room: "vault", seized: 1, wanted: 1, closedThrough: 3 }]);
+  });
+
+  it("the Office rings once per coin past the 1st: 3 visitors grabbing 2 is 3 bulbs, a 4th visitor raids it", () => {
+    const three = run(game(4), mv("p0", "office", 2), mv("p1", "office", 2), mv("p2", "office", 2), mv("p3", "lobby", 1), ROUND);
+    expect([ofType(three.log, "bellsRung")[0]?.bells.office, three.wanted]).toEqual([3, 0]);
+    const four = run(game(4), mv("p0", "office", 2), mv("p1", "office", 2), mv("p2", "office", 2), mv("p3", "office", 2), ROUND);
+    expect(ofType(four.log, "roomRaided")).toMatchObject([{ room: "office", seized: 8, wanted: 1 }]);
+  });
+
+  it("the Mole's ring is the 4th bulb on a bell at 3, even in a room nobody visits", () => {
+    const g = game(3, ["mole"]);
+    const s = run({ ...g, bells: { ...g.bells, office: 3 } }, mv("p0", "lobby", 1, 0, { ability: { kind: "ring", room: "office" } }), mv("p1", "lobby", 1), mv("p2", "lobby", 1), ROUND);
+    expect(ofType(s.log, "roomRaided")).toMatchObject([{ room: "office", seized: 0, wanted: 1 }]);
+    // The Mole's own Lobby grab stands: a raid seizes only the raided room's visitors.
+    expect(ofType(s.log, "coinsGrabbed").find((e) => e.player === "p0")).toMatchObject({ room: "lobby", duffel: 1, seized: 0 });
+  });
+});
+
+describe("QA: two rooms raided in one round — design §4.2 steps 3–4, §5.4", () => {
+  /** 12 players: four Office grabs of 2 (4 rings) and two Vault grabs (3 + 1 rings); everyone else in the Lobby. */
+  const double = (wanted: number, rooftop: string[] = []) => {
+    const busy = ["p0", "p1", "p2", "p3", "p4", "p5", ...rooftop];
+    return run(
+      { ...game(12), wanted },
+      ...["p0", "p1", "p2", "p3"].map((p) => mv(p, "office", 1, 1)),
+      mv("p4", "vault", 0, 3),
+      mv("p5", "vault", 1),
+      ...rooftop.map((p) => mv(p, "rooftop")),
+      ...lobbyRest(12, busy),
+      ROUND,
+    );
+  };
+
+  it("from Wanted 0, Wanted jumps by 2 and the game goes on", () => {
+    const s = double(0);
+    expect(ofType(s.log, "roomRaided").map((e) => [e.room, e.seized, e.wanted])).toEqual([["vault", 4, 1], ["office", 8, 2]]);
+    expect([s.wanted, s.phase.kind]).toEqual([2, "planning"]);
+    expect(s.taped).toEqual({ vault: 3, office: 3 });
+  });
+
+  it("from Wanted 1, two raids reach the bust line at once", () => {
+    const s = double(1, ["p6"]);
+    expect(s.wanted).toBe(3);
+    expect(outcome(s)).toMatchObject({ reason: "bust", escapees: ["p6"], winners: ["p6"] });
+  });
+
+  it("from Wanted 2, two raids overshoot to 4: still a bust (Wanted 3 or more)", () => {
+    const s = double(2);
+    expect(s.wanted).toBe(4);
+    expect(outcome(s)).toMatchObject({ reason: "bust", escapees: [], winners: [] });
+  });
+});
+
+describe("QA: a raid seizes only the raided room's visitors' grabs — design §5.3, §7.6", () => {
+  it("pockets and hand-ins elsewhere stand; the raided visitors' pocket-bound coins never reach a stash", () => {
+    const s = run(game(4), mv("p0", "vault", 0, 3), mv("p1", "vault", 1), mv("p2", "office", 0, 2), mv("p3", "office", 2), ROUND);
+    expect(ofType(s.log, "coinsGrabbed").map((e) => [e.player, e.duffel, e.pocket, e.seized])).toEqual([
+      ["p0", 0, 0, 3],
+      ["p1", 0, 0, 1],
+      ["p2", 0, 2, 0],
+      ["p3", 2, 0, 0],
+    ]);
+    expect([s.players.p0?.stash, s.players.p2?.stash, s.haul, s.seized]).toEqual([0, 2, 2, 4]);
+  });
+
+  it("a short bank's cut is what is seized, not what was asked for (design §3.2)", () => {
+    const g = game(3);
+    const s = run({ ...g, bank: 4, bells: { ...g.bells, vault: 1 } }, mv("p0", "vault", 3), mv("p1", "vault", 3), mv("p2", "lobby", 1), ROUND);
+    const seized = ofType(s.log, "coinsGrabbed").reduce((n, e) => n + e.seized, 0);
+    expect(ofType(s.log, "roomRaided")[0]?.seized).toBe(seized);
+    expect(s.bank + seized + s.haul + Object.values(s.players).reduce((n, p) => n + p.stash, 0)).toBe(4);
+  });
+});
+
+describe("QA: the tape lasts exactly 2 rounds and the bell is off — design §5.3", () => {
+  /** Raid the Vault in round 2 (3 players): taped through round 4, across the Act 1 meeting. */
+  const raidedInRound2 = () =>
+    run(game(3, ["mole", "fixer"]), mv("p0", "lobby", 1), mv("p1", "lobby", 1), mv("p2", "lobby", 1), ROUND, mv("p0", "lobby", 1), mv("p1", "vault", 3), mv("p2", "vault", 1), ROUND);
+
+  it("closed in rounds 3 and 4 (across a meeting), open in round 5 with its bell at 0", () => {
+    let s = raidedInRound2();
+    expect(ofType(s.log, "roomRaided")).toMatchObject([{ round: 2, room: "vault", closedThrough: 4 }]);
+    expect([s.round, s.taped]).toEqual([3, { vault: 4 }]);
+    expect(reason(s, mv("p1", "vault", 1))).toMatch(/taped off/);
+    s = run(s, ROUND, ...MEETING(1));
+    expect([s.round, s.taped]).toEqual([4, { vault: 4 }]);
+    expect(reason(s, mv("p1", "vault", 1))).toMatch(/taped off/);
+    s = run(s, ROUND);
+    expect([s.round, s.taped, s.bells.vault]).toEqual([5, {}, 0]);
+    for (const id of s.playerOrder) expect(viewFor(s, id).bells.vault).toBe(0);
+    s = run(s, mv("p1", "vault", 1), ROUND);
+    expect(ofType(s.log, "bellsRung").at(-1)?.bells.vault).toBe(1);
+  });
+
+  it("while taped off the bell is off: absent from every bellsRung / bellsCooled and every view, and nothing rings it", () => {
+    let s = raidedInRound2();
+    // The Mole can't ring it.
+    expect(reason(s, mv("p0", "lobby", 1, 0, { ability: { kind: "ring", room: "vault" } }))).toMatch(/off/);
+    const before = s;
+    s = run(s, mv("p0", "lobby", 1), mv("p1", "office", 2), mv("p2", "rooftop"), ROUND);
+    for (const e of [...ofType(since(before, s), "bellsRung"), ...ofType(since(before, s), "bellsCooled")]) expect(Object.hasOwn(e.bells, "vault")).toBe(false);
+    for (const id of s.playerOrder) {
+      const v = viewFor(s, id);
+      expect(Object.hasOwn(v.bells, "vault")).toBe(false);
+      expect(v.taped).toEqual({ vault: 4 });
+    }
+  });
+
+  it("a Rooftop player's cooling never lands on the taped room (its bell is off)", () => {
+    const g = game(3);
+    // The Vault is raided this round; the Office is the only open hot bell, so both Rooftop players cool it.
+    const s = run({ ...g, bells: { ...g.bells, vault: 3, office: 3 } }, mv("p0", "vault", 1), mv("p1", "rooftop"), mv("p2", "rooftop"), ROUND);
+    expect(ofType(s.log, "bellsCooled")[0]?.bells).toEqual({ office: 0, lobby: 0, security: 0, rooftop: 0 });
+  });
+
+  it("the Fixer's reopen brings it back at 0 the next round, whatever it read when raided", () => {
+    let s = raidedInRound2();
+    expect(ofType(s.log, "bellsRung").at(-1)?.bells.vault).toBe(4);
+    s = run(s, mv("p0", "lobby", 1), mv("p1", "lobby", 1, 0, { ability: { kind: "reopen", room: "vault" } }), mv("p2", "lobby", 1), ROUND);
+    expect([s.taped, s.bells.vault]).toEqual([{}, 0]);
+    s = run(s, ...MEETING(1));
+    expect([s.round, s.bells.vault]).toEqual([4, 0]);
+    // Open and ringable again: the Mole's ring alone lights 1 bulb.
+    s = run(s, mv("p0", "lobby", 1, 0, { ability: { kind: "ring", room: "vault" } }), mv("p1", "lobby", 1), mv("p2", "lobby", 1), ROUND);
+    expect(ofType(s.log, "bellsRung").at(-1)?.bells.vault).toBe(1);
+  });
+
+  it("a room raided again after it reopens is taped again and raises Wanted again", () => {
+    let s = run(game(3), mv("p0", "vault", 3), mv("p1", "vault", 1), mv("p2", "lobby", 1), ROUND, ROUND, ROUND, ...MEETING(1));
+    expect([s.round, s.taped, s.wanted]).toEqual([4, {}, 1]);
+    s = run(s, mv("p0", "vault", 3), mv("p1", "vault", 1), mv("p2", "lobby", 1), ROUND);
+    expect([s.taped, s.wanted]).toEqual([{ vault: 6 }, 2]);
+  });
+});
+
+describe("QA: Rooftop auto-cooling — design §5.6", () => {
+  it("three Rooftop players on two tied bells spread the cooling to the hottest each time (6 bulbs → 3 off)", () => {
+    const g = game(4);
+    const s = run({ ...g, bells: { ...g.bells, vault: 3, office: 3 } }, mv("p0", "lobby", 1), mv("p1", "rooftop"), mv("p2", "rooftop"), mv("p3", "rooftop"), ROUND);
+    const b = ofType(s.log, "bellsCooled")[0]?.bells;
+    // −1 each: 2 and 2; then three coolings, each on the hottest at that moment: one goes to 0, the other to 1.
+    expect([b?.vault, b?.office].sort()).toEqual([0, 1]);
+  });
+
+  it("more Rooftop players than lit bulbs stop at 0, everywhere", () => {
+    const g = game(12);
+    const s = run({ ...g, bells: { ...g.bells, vault: 2 } }, ...Array.from({ length: 12 }, (_, i) => mv(`p${i}`, "rooftop")), ROUND);
+    expect(Object.values(ofType(s.log, "bellsCooled")[0]?.bells ?? {}).every((n) => n === 0)).toBe(true);
+  });
+});
+
+describe("QA: the bust and the Rooftop escape — design §5.5, §8.3, §8.5", () => {
+  /** Wanted 2 and the Vault at 3: p0's Vault grab raids it. */
+  const hot = (g: GameState): GameState => ({ ...g, wanted: 2, bells: { ...g.bells, vault: 3 } });
+
+  it("at 12 players: only the Rooftop players escape; the biggest stash among them wins, ties all win, the Fixer included", () => {
+    const g = withStash(game(12, ["rookie", "fixer", "mole"]), { p0: 20, p1: 6, p2: 6, p3: 5, p4: 30 });
+    const s = run(hot(g), mv("p0", "vault", 1), mv("p1", "rooftop"), mv("p2", "rooftop"), mv("p3", "rooftop"), mv("p4", "office", 0, 2), ...lobbyRest(12, ["p0", "p1", "p2", "p3", "p4"]), ROUND);
+    expect(outcome(s)).toMatchObject({ result: "failed", reason: "bust", escapees: ["p1", "p2", "p3"], winners: ["p1", "p2"] });
+    // The ranking still lists every stash, the arrested included.
+    expect(outcome(s).ranking).toHaveLength(12);
+  });
+
+  it("at 3 players: nobody on the Rooftop means nobody wins, however rich", () => {
+    const s = run(hot(withStash(game(3), { p1: 9 })), mv("p0", "vault", 1), mv("p1", "lobby", 1), mv("p2", "office", 2), ROUND);
+    expect(outcome(s)).toMatchObject({ reason: "bust", escapees: [], winners: [] });
+  });
+
+  it("an escapee with an empty stash still wins when every escapee is at 0", () => {
+    const s = run(hot(withStash(game(3), { p0: 9 })), mv("p0", "vault", 1), mv("p1", "rooftop"), mv("p2", "rooftop"), ROUND);
+    expect(outcome(s)).toMatchObject({ escapees: ["p1", "p2"], winners: ["p1", "p2"] });
+  });
+
+  it("skips cooling, the alibi window and every later round; the round's summary still goes out", () => {
+    const before = hot(game(3));
+    const s = run(before, mv("p0", "vault", 1), mv("p1", "rooftop"), mv("p2", "lobby", 1), ROUND);
+    const tail = since(before, s).map((e) => e.type);
+    expect(tail).not.toContain("bellsCooled");
+    expect(tail).not.toContain("alibisClosed");
+    expect(tail).not.toContain("roundStarted");
+    expect(tail).not.toContain("blessingPaid");
+    expect(tail).toContain("roundResolved");
+    expect(tail.at(-1)).toBe("gameEnded");
+    expect(handleCommand(s, { type: "advance", deadline: { kind: "alibis", round: 1 } }).ok).toBe(false);
+  });
+
+  it("coins are conserved through a bust: bank + seized + Haul + stashes = the starting bank", () => {
+    const g = game(4);
+    const start = g.bank;
+    let s = run(g, mv("p0", "vault", 3), mv("p1", "vault", 0, 1), mv("p2", "office", 1, 1), mv("p3", "lobby", 0, 1), ROUND);
+    s = run({ ...s, wanted: 2 }, mv("p0", "office", 0, 2), mv("p1", "office", 2), mv("p2", "office", 0, 2), mv("p3", "office", 2), ROUND);
+    expect(outcome(s)).toMatchObject({ reason: "bust" });
+    const stashes = Object.values(s.players).reduce((n, p) => n + p.stash, 0);
+    expect(s.bank + s.seized + s.haul + stashes).toBe(start);
+    expect(s.seized).toBe(ofType(s.log, "roomRaided").reduce((n, e) => n + e.seized, 0));
+  });
+
+  it("a bust takes precedence over a round that also empties the bank", () => {
+    const g = hot(game(3));
+    const s = run({ ...g, bank: 2 }, mv("p0", "vault", 2), mv("p1", "rooftop"), mv("p2", "rooftop"), ROUND);
+    expect(s.bank).toBe(0);
+    expect(outcome(s)).toMatchObject({ reason: "bust" });
+  });
+
+  it("a missed move into a taped Lobby lies low on the Rooftop, so it escapes a bust (provisional rule, PR #159)", () => {
+    const g = game(3);
+    const s = run({ ...g, wanted: 2, taped: { lobby: 2 }, bells: { vault: 3, office: 0, security: 0, rooftop: 0 } }, mv("p0", "vault", 1), mv("p1", "office", 1), ROUND);
+    expect(outcome(s)).toMatchObject({ reason: "bust", escapees: ["p2"], winners: ["p2"] });
+  });
+});
+
+describe("QA: end-of-round order — design §4.2", () => {
+  it("rings, then grabs and seizures, raids, cooling, a reopen, sightings, the summary", () => {
+    const g = game(4, ["mole", "fixer"]);
+    const s0 = { ...g, taped: { office: 2 }, bells: { vault: 2, lobby: 0, security: 0, rooftop: 0 } };
+    const s = run(
+      s0,
+      mv("p0", "lobby", 1, 0, { ability: { kind: "ring", room: "vault" } }),
+      mv("p1", "lobby", 1, 0, { ability: { kind: "reopen", room: "office" } }),
+      mv("p2", "vault", 1),
+      mv("p3", "rooftop"),
+      ROUND,
+    );
+    const types = since(s0, s).map((e) => e.type);
+    const at = (t: string) => types.indexOf(t as GameEvent["type"]);
+    expect(at("bellsRung")).toBeGreaterThan(at("abilityResolved"));
+    expect(at("coinsGrabbed")).toBeGreaterThan(at("bellsRung"));
+    expect(at("roomRaided")).toBeGreaterThan(at("coinsGrabbed"));
+    expect(at("bellsCooled")).toBeGreaterThan(at("roomRaided"));
+    expect(at("roomReopened")).toBeGreaterThan(at("bellsCooled"));
+    expect(at("roomSighting")).toBeGreaterThan(at("roomReopened"));
+    expect(at("roundResolved")).toBeGreaterThan(at("roomSighting"));
+    // Vault 2 + 1 grab ring + the Mole's ring = 4: raided before the Rooftop's cooling could save it.
+    expect(ofType(s.log, "roomRaided")).toMatchObject([{ room: "vault", wanted: 1 }]);
+    expect([s.taped, s.bells.office]).toEqual([{ vault: 3 }, 0]);
+  });
+});
+
+describe("QA: crew sizes and invalid or out-of-phase commands — design §3.2, §5.3, §11.1", () => {
+  it("2 players is not a game (3–12)", () => {
+    expect(() => createGame(config(2))).toThrow();
+  });
+
+  it("12 players all in the Vault: one raid seizes all 36 coins", () => {
+    const s = run(game(12), ...Array.from({ length: 12 }, (_, i) => mv(`p${i}`, "vault", 1, 2)), ROUND);
+    expect(ofType(s.log, "roomRaided")).toMatchObject([{ room: "vault", seized: 36, wanted: 1 }]);
+    expect([s.seized, s.haul, s.wanted]).toEqual([36, 0, 1]);
+    expect(Object.values(s.players).every((p) => p.stash === 0)).toBe(true);
+  });
+
+  it("refuses malformed ring and reopen targets", () => {
+    const mole = game(3, ["mole"]);
+    const ring = (room: unknown) => mv("p0", "lobby", 1, 0, { ability: { kind: "ring", room } });
+    for (const room of [undefined, 3, null, "constructor", "__proto__", "toString"]) expect(reason(mole, ring(room))).toMatch(/in play/);
+    const fixer = { ...game(3, ["fixer"]), taped: { vault: 3 } };
+    const reopen = (room: unknown) => mv("p0", "lobby", 1, 0, { ability: { kind: "reopen", room } });
+    for (const room of [undefined, 3, "office", "constructor", "__proto__", "hasOwnProperty"]) expect(reason(fixer, reopen(room))).toMatch(/taped-off room/);
+  });
+
+  it("refuses a move or a power out of phase: during the alibi window and after a bust", () => {
+    const g = game(3, ["mole"]);
+    const r = handleCommand(run(g, mv("p0", "lobby", 1), mv("p1", "lobby", 1), mv("p2", "lobby", 1)), { type: "advance", deadline: { kind: "round", round: 1 } });
+    if (!r.ok) throw new Error(r.reason);
+    expect(r.state.phase.kind).toBe("alibis");
+    expect(handleCommand(r.state, mv("p0", "lobby", 1, 0, { ability: { kind: "ring", room: "vault" } })).ok).toBe(false);
+    // A stale round deadline is refused too.
+    expect(handleCommand(r.state, { type: "advance", deadline: { kind: "round", round: 1 } }).ok).toBe(false);
+  });
+
+  it("a Mole's ring that was refused is not spent", () => {
+    const g = game(3, ["mole"]);
+    reason({ ...g, taped: { office: 2 } }, mv("p0", "lobby", 1, 0, { ability: { kind: "ring", room: "office" } }));
+    const s = run(g, mv("p0", "lobby", 1, 0, { ability: { kind: "ring", room: "vault" } }), mv("p1", "lobby", 1), mv("p2", "lobby", 1), ROUND);
+    expect(ofType(s.log, "bellsRung")[0]?.bells.vault).toBe(1);
+  });
+});
+
+describe("QA: determinism — design §19.1", () => {
+  const script = (seed: string) => {
+    const g = game(6, ["mole", "fixer"], seed);
+    return run(
+      { ...g, bells: { ...g.bells, vault: 2, office: 2, depositBoxes: 2 } },
+      mv("p0", "lobby", 1, 0, { ability: { kind: "ring", room: "office" } }),
+      mv("p1", "office", 1, 1),
+      mv("p2", "rooftop"),
+      mv("p3", "rooftop"),
+      mv("p4", "vault", 0, 2),
+      mv("p5", "depositBoxes", 2),
+      ROUND,
+    );
+  };
+  it("same seed + same commands = the same log (tie-broken cooling included); the log replays to the state", () => {
+    const a = script("det-1");
+    expect(script("det-1").log).toEqual(a.log);
+    expect(replay(a.config, a.log)).toEqual(a);
+    expect(ofType(a.log, "roomRaided").map((e) => [e.room, e.wanted])).toEqual([["vault", 1], ["office", 2]]);
+  });
+});
+
+describe("QA: viewFor leaks for every new event — design §18", () => {
+  /** Round 1 at 4 players: the Mole rings the Vault, p1 and p2 are raided there, p3 lies low; round 2 the Fixer reopens it and a bust follows. */
+  const script = (p1Split: [number, number]) => {
+    const g = game(4, ["mole", "fixer"]);
+    let s = run(
+      { ...g, bells: { ...g.bells, vault: 1 } },
+      mv("p0", "lobby", 1, 0, { ability: { kind: "ring", room: "vault" } }),
+      mv("p1", "vault", ...p1Split),
+      mv("p2", "vault", 0, 1),
+      mv("p3", "rooftop"),
+      ROUND,
+    );
+    s = run(
+      { ...s, wanted: 2, bells: { ...s.bells, office: 3 } },
+      mv("p0", "lobby", 1),
+      mv("p1", "lobby", 1, 0, { ability: { kind: "reopen", room: "vault" } }),
+      mv("p2", "office", 0, 2),
+      ROUND,
+    );
+    return s;
+  };
+
+  it("during and after the game every player sees only public events and their own", () => {
+    const s = script([1, 1]);
+    expect(outcome(s)).toMatchObject({ reason: "bust", escapees: [], winners: [] });
+    const types = new Set(s.log.map((e) => e.type));
+    for (const t of ["bellsRung", "roomRaided", "bellsCooled", "roomReopened", "coinsGrabbed", "abilityResolved", "defaultMoveAssigned", "gameEnded"]) expect(types).toContain(t);
+    // Mid-game (after round 1) the ledger is public only and the case file the player's own.
+    const mid = run(game(4, ["mole", "fixer"]), mv("p0", "lobby", 1, 0, { ability: { kind: "ring", room: "vault" } }), mv("p1", "vault", 1, 1), mv("p2", "vault", 0, 1), mv("p3", "rooftop"), ROUND);
+    for (const id of mid.playerOrder) {
+      const v = viewFor(mid, id);
+      for (const e of v.ledger) expect(e.event.visibility.kind).toBe("public");
+      for (const e of v.caseFile) expect(canSee(e.event.visibility, id, false)).toBe(true);
+      // The public raid never names who was inside.
+      for (const e of v.ledger.filter((x) => x.event.type === "roomRaided")) expect(Object.keys(e.event).sort()).toEqual(["closedThrough", "room", "round", "seized", "type", "visibility", "wanted"]);
+    }
+    expect(viewFor(mid, "p3").caseFile.some((e) => e.event.type === "abilityResolved")).toBe(false);
+  });
+
+  it("how a raided visitor meant to split their seized grab never shows to anyone else", () => {
+    const g = game(4, ["mole"]);
+    const at = (split: [number, number]) =>
+      run({ ...g, bells: { ...g.bells, vault: 1 } }, mv("p0", "lobby", 1), mv("p1", "vault", ...split), mv("p2", "vault", 0, 1), mv("p3", "rooftop"), ROUND);
+    const honest = at([2, 0]);
+    const thief = at([0, 2]);
+    for (const id of ["p0", "p2", "p3"]) expect(viewFor(thief, id)).toEqual(viewFor(honest, id));
+  });
+
+  it("the Fixer's reopen and the Mole's ring are public only as their effects, never by name", () => {
+    const s = script([1, 1]);
+    const v = viewFor(run(game(4, ["mole", "fixer"]), mv("p0", "lobby", 1, 0, { ability: { kind: "ring", room: "office" } }), mv("p1", "lobby", 1), mv("p2", "lobby", 1), mv("p3", "lobby", 1), ROUND), "p2");
+    expect(v.ledger.some((e) => (e.event.type as string) === "abilityResolved")).toBe(false);
+    expect(JSON.stringify(v.ledger)).not.toMatch(/"ring"/);
+    const reopened = ofType(s.log, "roomReopened")[0];
+    expect(reopened && Object.keys(reopened).sort()).toEqual(["room", "round", "type", "visibility"]);
+  });
+});
