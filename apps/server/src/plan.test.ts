@@ -447,7 +447,7 @@ describe("open for the round's span, as the scheduler's deadline is (design §10
     closeAll(a);
   });
 
-  it("a meeting opened mid-round keeps the board open; time left is what remained when the pause began (design §10)", async () => {
+  it("a meeting closes the board: the spec has none during planning (design §9.3, §10)", async () => {
     const { id, humans, rooms } = await startGame(2, 1);
     const a = await Client.open(id, humans[0]!);
     clock.advance(1000);
@@ -457,12 +457,8 @@ describe("open for the round's span, as the scheduler's deadline is (design §10
     const state = (await createGameStore(db).load(id))!;
     expect(state.phase.kind).toBe("meeting");
     expect(state.round).toBeGreaterThan(state.resolvedRound);
-    const [row] = await db.query<{ ms: number; paused: boolean }>("select (extract(epoch from due_at - paused_at) * 1000)::float8 as ms, paused_at is not null as paused from deadlines where game_id = $1 and key = 'round:1'", [id]);
-    expect(row!.paused).toBe(true);
-    clock.advance(60_000); // the pause holds the time still
-    expect(await a.plan({ room: rooms[0] })).toMatchObject({ ok: true });
-    const [edit] = await createPlan(db, clock).history(id, 1);
-    expect(edit!.msBeforeDeadline).toBe(Math.round(Number(row!.ms)));
+    expect(await a.plan({ room: rooms[0] })).toMatchObject({ rejected: true });
+    expect(await createPlan(db, clock).history(id, 1)).toEqual([]);
     closeAll(a);
   });
 });

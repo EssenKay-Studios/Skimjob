@@ -243,20 +243,15 @@ describe("QA: placements and power claims against content (design §10)", () => 
 });
 
 describe("QA: when the board takes edits (design §10: the round's span)", () => {
-  it("an emergency meeting interrupting planning pauses the round but not the board; the history's time left is the paused remainder", async () => {
+  it("an emergency meeting interrupting planning closes the board: the spec has no meeting during planning (design §9.3, §10)", async () => {
     const { id, humans, rooms } = await startGame(3);
     const [a, b] = await Promise.all(humans.slice(0, 2).map((h) => Client.open(id, h)));
     expect(await a!.sendRaw({ cmd: { type: "callEmergency" } })).toMatchObject({ ok: true });
     while ((await load(id)).phase.kind !== "meeting") await step(id);
     const s = await load(id);
     expect(s.round).toBeGreaterThan(s.resolvedRound);
-    const dl = (await roundDeadline(id, s.round))!;
-    expect(dl.paused).not.toBeNull();
-    clock.advance(60_000); // the meeting runs on; the round's clock does not
-    expect(await b!.plan({ room: rooms[0], agree: true })).toMatchObject({ ok: true });
-    await vi.waitFor(() => expect(a!.board().entries).toHaveLength(1), quick);
-    const [rec] = await createPlan(db, clock).history(id, s.round);
-    expect(rec!.msBeforeDeadline).toBe(dl.due - dl.paused!);
+    expect(await b!.plan({ room: rooms[0], agree: true })).toMatchObject({ rejected: true });
+    expect(await createPlan(db, clock).history(id, s.round)).toEqual([]);
     closeAll(a!, b!);
   });
 

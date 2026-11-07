@@ -6,9 +6,10 @@
 //   seat's own claims (`room`, `power`, `agreed`: only that seat sets them).
 //   The actor is always the socket's seat, never a field of the message.
 // - One board per round (the latest round started). It takes edits from the
-//   round's start until it resolves, which is exactly while the scheduler holds
-//   that round's deadline (`round:<n>`; a meeting pausing it doesn't close the
-//   board); after that it stays as it was, until the next round starts it empty.
+//   round's start until it resolves, in the planning phase (a host pause keeps
+//   it open) and no later than the round's deadline (`round:<n>`); after that it
+//   stays as it was, until the next round starts it empty. There is no meeting
+//   during planning (design §4, §9.3), so a meeting closes it.
 // - Every effective edit is also recorded in `plan_edits`, compactly: one row per
 //   actor, kind and subject (the latest), with the time and the time left to
 //   the round's deadline, so it is bounded (players × (players + 3) a round).
@@ -173,7 +174,7 @@ export function createPlan(db: Db, clock: Clock): Plan {
     board,
     async edit(gameId, state, actor, edit) {
       // design §10: open from the round's start until it resolves, the span of its `round:<n>` deadline.
-      if (state.phase.kind === "ended" || state.round <= state.resolvedRound) return { ok: false, reason: "the plan board is closed until the next round" };
+      if (state.phase.kind !== "planning" || state.round <= state.resolvedRound) return { ok: false, reason: "the plan board is closed until the next round" };
       // ...but not once its time is up, even in the scheduler's gap before the tick: time left is measured to `paused_at` while
       // paused, so a pause can't reopen an expired round.
       const now = clock.now();
