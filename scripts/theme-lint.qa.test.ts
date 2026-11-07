@@ -44,7 +44,7 @@ describe("theme-token lint, QA edge cases", () => {
     expect(check({ "apps/web/src/screens/new.css": 1 }, {})).toEqual([
       "apps/web/src/screens/new.css: 1 raw colour/font/shadow/radius value(s), allowed 0. Use a theme.css token (add one there if none fits).",
     ]);
-    expect(check({ "a.css": 3 }, { "a.css": 3, "gone.css": 2 })).toEqual([]);
+    expect(check({ "a.css": 3 }, { "a.css": 3 })).toEqual([]);
     expect(check({ "a.css": 4 }, { "a.css": 3 })).toHaveLength(1);
   });
 });

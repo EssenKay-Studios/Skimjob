@@ -26,7 +26,7 @@ Your prompt says which of the three setups you are in. The rules below are the s
 - Run anything longer (install, `pnpm precheck`, test suites, e2e) with `scripts/bg.sh`, one short call each, never `/tmp`, never `pkill`:
   ```
   bash scripts/bg.sh start <step> -- pnpm precheck   # detached; log, pid and exit code kept in `.skimjob-bg` in the worktree's parent folder (`BG_DIR`), so under `~/Documents/Misc` on the Mac
-  bash scripts/bg.sh wait <step> [secs]               # waits up to 50 s (the cap), prints running/exited N and the log's last 20 lines
+  bash scripts/bg.sh wait <step> [secs]               # waits up to 40 s (the cap; the terminal tool allows 60 s and a loaded Mac overran 50), prints running/exited N and the log's last 20 lines
   bash scripts/bg.sh stop <step>                      # kills the command and its children by pid
   ```
   Repeat `wait` until it says `exited`. Names are per machine, so prefix yours with `<name>-`. Pass an env prefix or a `cd` as `-- bash -c 'E2E_PORT=… pnpm precheck'`.

@@ -59,7 +59,7 @@ export function buildGraph(files, readFile) {
 }
 
 // Tags of the entry points a file leads to: walk up the importers, stopping at each entry point.
-export function reach(graph, file, tagsOf) {
+function reach(graph, file, tagsOf) {
   const seen = new Set([file]);
   const hit = new Set();
   for (const queue = [file]; queue.length; ) {
@@ -77,7 +77,7 @@ export function reach(graph, file, tagsOf) {
 // An entry is one tag, several, or "*" (shared: a change to it runs everything).
 const tagsFor = (features, f) => [features[f] ?? []].flat().filter((t) => t !== "*");
 const vocabOf = (features) => new Set(Object.keys(features).flatMap((f) => tagsFor(features, f)));
-export const specTags = (text, features) => [...new Set(text.match(TAG))].filter((t) => vocabOf(features).has(t));
+const specTags = (text, features) => [...new Set(text.match(TAG))].filter((t) => vocabOf(features).has(t));
 
 export function scope(changed, graph, features, readFile) {
   if (!changed.some(Boolean)) return { ...FULL, reason: "no changed paths" };

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Run a long command in the background across the terminal tool's ~60 s calls (docs/pipeline/common.md).
 #   bash scripts/bg.sh start <name> -- <cmd...>   run <cmd> detached; log and exit code are kept
-#   bash scripts/bg.sh wait <name> [secs]         wait up to secs (max 50, default 50) for it to end; print status and log tail
+#   bash scripts/bg.sh wait <name> [secs]         wait up to secs (max 40, default 40) for it to end; print status and log tail
 #   bash scripts/bg.sh stop <name>                kill the command and everything it started, by pid
 # Files live in $BG_DIR (default: .skimjob-bg next to the worktree, i.e. in its parent folder): <name>.log, .pid, .start, .exit.
 # Never /tmp, never pkill.
@@ -31,7 +31,7 @@ case $cmd in
     echo $! > "$pidf"; ps -o lstart= -p $! > "$startf"
     echo "$name: started (pid $!), log $log" ;;
   wait)
-    secs=${3:-50}; case $secs in *[!0-9]*|"") secs=50 ;; esac; [ "$secs" -gt 50 ] && secs=50
+    secs=${3:-40}; case $secs in *[!0-9]*|"") secs=40 ;; esac; [ "$secs" -gt 40 ] && secs=40
     while [ "$secs" -gt 0 ] && [ ! -f "$exitf" ] && alive; do sleep 1; secs=$((secs - 1)); done
     status; tail -n 20 "$log" 2>/dev/null ;;
   stop)
