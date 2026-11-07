@@ -179,10 +179,11 @@ fi
 
 # CI: latest check-run per name on the head.
 runs=$(pages "commits/$head/check-runs" .check_runs '[.name, .status, (.conclusion // "")] | @tsv') || fatal "cannot read check-runs on head"
-total=0; failing=(); pending=()
+total=0; ciok=0; failing=(); pending=()
 while IFS=$'\t' read -r name st concl; do
   [ -z "$name" ] && continue
   total=$((total + 1))
+  [ "$name" = "CI ok" ] && [ "$st" = completed ] && [ "$concl" = success ] && ciok=1
   if [ "$st" != completed ]; then pending+=("$name")
   else case "$concl" in success|skipped|neutral) ;; *) failing+=("$name ($concl)") ;; esac; fi
 done <<<"$runs"
@@ -199,6 +200,9 @@ else
   [ ${#failing[@]} -gt 0 ] && { printf '  failing: %s\n' "${failing[@]}"; no "CI failing: $(join ", " "${failing[@]}")"; }
   [ ${#pending[@]} -gt 0 ] && { printf '  pending: %s\n' "${pending[@]}"; no "CI pending: $(join ", " "${pending[@]}")"; }
 fi
+
+# The always-on "CI ok" job (ci.yml) must exist and have succeeded: skipped, neutral, pending or missing is a no.
+[ $ciok -eq 1 ] || { echo "ci:     no successful CI ok check-run"; no "CI ok check-run missing or not a success"; }
 
 # Authorship and attribution lines, every commit on the branch.
 commits=$(pages "pulls/$N/commits" . '

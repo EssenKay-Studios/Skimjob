@@ -12,7 +12,7 @@ All tests are seeded and deterministic. Nothing reads the wall clock (the server
 | QA tests | `*.qa.test.ts` | Adversarial and edge cases per feature (written by QA for each PR). | `pnpm test` |
 | Engine properties | `packages/engine/src/invariants.prop.test.ts` | Invariants under random configs and command streams (below). | `pnpm test` or `npx vitest run packages/engine/src/invariants.prop.test.ts` |
 | Server scenarios | `apps/server/src/scenarios.int.test.ts` | Named end-to-end stories over the real HTTP + WebSocket API on PGlite. | `pnpm test` (`pnpm test:pg` for real Postgres) |
-| Web e2e | `apps/web/e2e/*.spec.ts` | User journeys in Chromium at phone and desktop sizes, responsive rules; every test title carries one feature tag. Size checks wait for the entrance animations to finish first: a box measured mid-animation can come out at 43.99 px. | `pnpm test:e2e` (CI: 6 shards, `--shard=i/6`, see "Shards" below; ports and clock via `E2E_*` env, see `playwright.config.ts`) |
+| Web e2e | `apps/web/e2e/*.spec.ts` | User journeys in Chromium at phone and desktop sizes, responsive rules; every test title carries one feature tag. Size checks wait for the entrance animations to finish first: a box measured mid-animation can come out at 43.99 px. | `pnpm test:e2e` (CI: 6 shards by spec file, `node scripts/scope.mjs --shard i/6`, see "Shards" below; ports and clock via `E2E_*` env, see `playwright.config.ts`) |
 | Simulation suite | `apps/sim/src/suite/` | The balance targets and role parity over the whole settings matrix, with confidence intervals (below). Manual: long. | `pnpm sim:suite`, or the "Sim suite" workflow |
 | Simulator smoke | `scripts/sim-smoke.sh` | 200 all-bot games each at 3/6/12 players (events on, Everything deck) end with no refused bot command. | `bash scripts/sim-smoke.sh [games]` |
 | Typecheck | every workspace | Strict TS. New event or command types must fail exhaustive switches. | `pnpm typecheck` |
@@ -25,9 +25,9 @@ Tests that check the R6 rules (Heat, loot, tokens) are replaced in S3 by tests o
 
 A PR waits only for the tests of what it touched; `main` is tested in full after every merge. CI (`.github/workflows/ci.yml`) and `pnpm test:scoped` use the same decision, `scripts/scope.mjs`, so what you run locally is what CI runs. Nothing deploys from CI; releases go to Lightsail by hand (`docs/deploy.md`).
 
-**Feature tags and `features.json`.** Every e2e test title carries exactly one feature tag (`@board`, `@move`, `@meeting`, `@chat`, `@shop`, `@reveal`, `@lobby`, `@auth`, `@host`, `@caseboard`; new ones arrive with their feature). `apps/web/e2e/features.json` maps only **entry points** to tags: the web screens and top-level panels, and the engine and server modules that implement a feature (`packages/engine/src/meeting.ts` is `@meeting`, `apps/server/src/chat.ts` is `@chat`). An entry can list several tags, or `"*"` for a shared module (`live.ts`, `store.ts`, `db.ts`, ...) whose change runs everything.
+**Feature tags and `features.json`.** Every e2e test title carries exactly one feature tag (`@board`, `@move`, `@meeting`, `@chat`, `@shop`, `@reveal`, `@lobby`, `@auth`, `@host`, `@caseboard`; new ones arrive with their feature). `apps/web/e2e/features.json` maps only **entry points** to tags: the web screens and top-level panels, and the engine and server modules that implement a feature (`packages/engine/src/meeting.ts` is `@meeting`, `apps/server/src/chat.ts` is `@chat`). An entry can list several tags, or `"*"` for a shared module (`live.ts`, `store.ts`, `db.ts`, ...) whose change, or a change to anything it imports, runs everything.
 
-**From a diff to a run.** For each changed file the script follows the import graph (workspace packages included) up to the entry points that depend on it, stopping at each, and runs the union of their tags. A shared module (`api.ts`, `router.ts`, `useGame.ts`, the UI kit) reaches several entries, so it runs everything. A file that reaches no entry, or 3+ tags, runs everything too.
+**From a diff to a run.** For each changed file the script follows the import graph (workspace packages included) up to the entry points that depend on it, stopping at each, and runs the union of their tags. A shared module (`api.ts`, `router.ts`, `useGame.ts`, the UI kit) reaches several entries, so it runs everything. A file that reaches no entry, or 3+ tags, runs everything too, and so does a file that a `"*"` module imports (bots, which `live.ts` uses, included). A deleted or renamed spec runs nothing; a deleted source file runs everything (its importers changed too, but nothing is left to follow).
 
 | Changed | Runs |
 |---|---|
@@ -40,7 +40,7 @@ A PR waits only for the tests of what it touched; `main` is tested in full after
 
 **The full tier** (all unit tests, all e2e on 6 shards, the 200-game sim smoke) runs on every push to `main` and nightly, and for the PRs in the last row. If it fails after a merge, merging stops until a fix-forward PR is green; that PR adds the test, and the `features.json` mapping, that would have caught it in the scoped tier.
 
-**The gate.** The always-on **CI ok** job depends on every other job and passes when each passed or was skipped on purpose; branch protection and the merge gate (`docs/pipeline/verdicts.sh`, which needs every check-run on the head green) rely on it.
+**The gate.** The always-on **CI ok** job depends on every other job and passes when each passed or was skipped on purpose; branch protection and the merge gate (`docs/pipeline/verdicts.sh`, which needs every check-run on the head green and a `CI ok` check-run that completed with success: missing, pending, skipped or neutral is a no) rely on it.
 
 **Adding a feature.** Give each new screen, panel or feature module an entry in `features.json`, tag its specs, and run `node scripts/scope.mjs --check` (CI runs it). QA's adversarial specs go in `<feature>.qa.spec.ts` under the same tag.
 

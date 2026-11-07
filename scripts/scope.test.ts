@@ -4,9 +4,10 @@ import { buildGraph, scope, shard } from "./scope.mjs";
 // A tiny repo: web -> engine -> content, one shared web module, entry points for chat and meeting.
 const text: Record<string, string> = {
   "apps/server/package.json": '{"name":"@skimjob/server","dependencies":{"@skimjob/engine":"workspace:*"}}',
-  "apps/server/src/chat.ts": 'import { x } from "@skimjob/engine";',
+  "apps/server/src/chat.ts": 'import { x } from "@skimjob/engine"; import { h } from "./helper";',
+  "apps/server/src/helper.ts": "export const h = 1;",
   "apps/server/src/clock.ts": "export const clock = 1;",
-  "apps/server/src/live.ts": 'import { x } from "@skimjob/engine";',
+  "apps/server/src/live.ts": 'import { x } from "@skimjob/engine"; import { h } from "./helper";',
   "apps/web/package.json": '{"name":"@skimjob/web","dependencies":{"@skimjob/engine":"workspace:*"}}',
   "apps/web/src/api.ts": "export const api = 1;",
   "apps/web/src/lonely.ts": "export const lonely = 1;",
@@ -60,6 +61,21 @@ describe("scope", () => {
   });
   it("runs everything for a module marked shared", () => {
     expect(run("apps/server/src/live.ts")).toMatchObject({ full: true });
+  });
+  it("runs everything for a module that a shared module imports, even when an entry imports it too", () => {
+    expect(run("apps/server/src/helper.ts")).toMatchObject({ full: true, tags: "all" });
+  });
+  it("does not crash on a deleted or renamed spec, and runs nothing for it", () => {
+    expect(run("apps/web/e2e/gone.spec.ts")).toMatchObject({ ...none, tags: "", unit: "" });
+    expect(run("apps/web/e2e/gone.spec.ts", "apps/web/e2e/meeting.spec.ts")).toMatchObject({ tags: "@meeting" });
+  });
+  it("runs everything for a deleted source file nothing imports any more", () => {
+    expect(run("apps/web/src/Gone.tsx")).toMatchObject({ full: true });
+  });
+  it("runs everything for a new spec without a feature tag", () => {
+    const text2 = { ...text, "apps/web/e2e/new.spec.ts": 'test("no tag", () => {});' };
+    const r = (f: string) => text2[f];
+    expect(scope(["apps/web/e2e/new.spec.ts"], buildGraph(Object.keys(text2), r), features, r).full).toBe(true);
   });
   it("adds the lobby and host specs for server code", () => {
     expect(run("apps/server/src/chat.ts")).toMatchObject({ tags: "@chat|@host|@lobby", unit: "apps/server" });

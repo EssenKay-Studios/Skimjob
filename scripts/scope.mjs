@@ -6,7 +6,7 @@
 //   node scripts/scope.mjs --shard 3/6   the e2e spec files of CI shard 3 of 6, balanced by apps/web/e2e/shard-weights.json
 // unit: "all", "" (none) or package dirs; tags: "all", "" (none) or a Playwright --grep regex; sim: games.
 import { execFileSync, spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, posix } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -82,7 +82,14 @@ export const specTags = (text, features) => [...new Set(text.match(TAG))].filter
 export function scope(changed, graph, features, readFile) {
   if (!changed.some(Boolean)) return { ...FULL, reason: "no changed paths" };
   const full = (reason) => ({ ...FULL, reason });
-  const tagsOf = (f) => (features[f] ? tagsFor(features, f) : SPEC.test(f) ? specTags(readFile(f), features) : []);
+  const specOf = (f) => {
+    try {
+      return specTags(readFile(f), features);
+    } catch {
+      return null; // deleted or renamed away
+    }
+  };
+  const tagsOf = (f) => (features[f] ? [features[f]].flat() : SPEC.test(f) ? (specOf(f) ?? []) : []);
   const files = changed.filter((f) => f && !f.endsWith(".md"));
   const unit = new Set();
   const tags = new Set();
@@ -92,10 +99,17 @@ export function scope(changed, graph, features, readFile) {
     const pkg = f.split("/").slice(0, 2).join("/");
     if (!f.startsWith(`${pkg}/e2e/`)) for (const d of TEST.test(f) ? [pkg] : graph.dependents(pkg)) unit.add(d);
     if (TEST.test(f)) continue;
-    if (features[f] === "*") return full(`${f} is shared`);
+    if (SPEC.test(f)) {
+      const own = specOf(f);
+      if (own === null) continue; // a deleted spec has nothing left to run
+      if (!own.length) return full(`${f} has no feature tag`);
+      own.forEach((t) => tags.add(t));
+      continue;
+    }
     const hit = reach(graph, f, tagsOf);
+    if (hit.has("*")) return full(`${f} is, or is imported by, a shared module`);
     if (hit.size === 0) return full(`${f} reaches no feature entry`);
-    if (hit.size >= 3 && !SPEC.test(f)) return full(`${f} reaches ${[...hit].join(" ")}`);
+    if (hit.size >= 3) return full(`${f} reaches ${[...hit].join(" ")}`);
     hit.forEach((t) => tags.add(t));
     if (f.startsWith("apps/server/")) tags.add("@lobby").add("@host");
     if (RULES.includes(pkg)) unit.add("packages/engine"), (sim = 50);
@@ -145,7 +159,7 @@ function check(files, features) {
 }
 
 function main(mode) {
-  const files = lines(out("git", ["ls-files"]));
+  const files = lines(out("git", ["ls-files"])).filter((f) => existsSync(join(root, f))); // not deleted in the working tree
   const read = (f) => readFileSync(join(root, f), "utf8");
   const features = JSON.parse(read(FEATURES));
   if (mode === "--full") return console.log(JSON.stringify({ ...FULL, reason: "full tier" }));

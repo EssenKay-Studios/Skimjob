@@ -28,7 +28,7 @@ Run milestone **R7 Simplified** exactly as `docs/simplified.md` "How to run it" 
   - the newest verdict-like review/comment is exactly `VERDICT: APPROVE` + `Head: S_r`, and the newest QA-like one is exactly `QA: PASS` + `Head: <current head>` (malformed newest = no; never falls back to an older verdict);
   - every commit in S_r..head only touches QA test files (`*.qa.test.ts`, `*.qa.spec.ts`; old and new paths of renames); otherwise get a delta re-review;
   - any gh/API error on any page fails closed (`MERGEABLE: no`);
-  - every check-run on the head completed as success/skipped/neutral (the always-on `CI ok` job among them), and every commit status is success (docs-only PRs too);
+  - every check-run on the head completed as success/skipped/neutral and a `CI ok` check-run exists on the head and completed with success (skipped, neutral, pending or missing is a no), and every commit status is success (docs-only PRs too);
   - the PR is open, not a draft, REST `mergeable_state` `clean` (asked again once while GitHub is still computing it);
   - every commit is authored by `karthik24iyer <karthik24iyer@gmail.com>` and no message has a co-authored-by / claude-session / generated-by line.
 - Merge with `docs/pipeline/merge.sh <PR>`: it runs the gate, then `PUT …/pulls/N/merge` (squash, `sha=<gated head>`) and `DELETE …/git/refs/heads/<branch>`, and prints `merged #N -> main <sha> | next: #<lowest open R7 task issue>` (or `next: see the board` if the API call fails). Both scripts use only the REST API (`gh api`), so they work in all three setups; `bash docs/pipeline/gate.qa.test.sh` tests them offline.

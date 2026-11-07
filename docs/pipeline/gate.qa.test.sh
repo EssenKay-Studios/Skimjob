@@ -53,7 +53,7 @@ reset() {
   review="VERDICT: APPROVE\nHead: $H"; qa="QA: PASS\nHead: $H"; review_new=""; qa_new=""
   review_new_by=karthik24iyer; qa_new_by=karthik24iyer; review_new_state=COMMENTED
   qa_as_review=""; review_as_comment=""; statuses=""
-  checks='{"name":"Typecheck","status":"completed","conclusion":"success"}'
+  checks='{"name":"Typecheck","status":"completed","conclusion":"success"},{"name":"CI ok","status":"completed","conclusion":"success"}'
   pr_files='[{"filename":"apps/web/src/x.ts"},{"filename":"apps/web/src/x.qa.test.ts"}]'
   compare_status=ahead; since_files='["apps/web/src/x.qa.test.ts"]'; prev=""
 }
@@ -131,6 +131,16 @@ reset; checks='{"name":"e2e","status":"in_progress","conclusion":null}'; expect 
 reset; checks='{"name":"e2e","status":"completed","conclusion":"failure"}'; expect no "CI failing"
 reset; checks='{"name":"e2e","status":"completed","conclusion":"cancelled"}'; expect no "CI cancelled"
 reset; checks=''; expect no "no check-runs"
+# The always-on "CI ok" job must be on the head and a success (the other check-runs alone are not enough).
+reset; checks='{"name":"Typecheck","status":"completed","conclusion":"success"}'; expect no "CI ok missing"
+reset; checks='{"name":"CI ok","status":"in_progress","conclusion":null}'; expect no "CI ok pending"
+reset; checks='{"name":"CI ok","status":"queued","conclusion":null}'; expect no "CI ok queued"
+reset; checks='{"name":"CI ok","status":"completed","conclusion":"skipped"}'; expect no "CI ok skipped"
+reset; checks='{"name":"CI ok","status":"completed","conclusion":"neutral"}'; expect no "CI ok neutral"
+reset; checks='{"name":"CI ok","status":"completed","conclusion":"failure"}'; expect no "CI ok failed"
+reset; checks='{"name":"CI ok","status":"completed","conclusion":"success"}'; expect yes "CI ok alone, green"
+reset; checks='{"name":"CI ok (old)","status":"completed","conclusion":"success"}'; expect no "a look-alike name is not CI ok"
+reset; checks='{"name":"CI ok","status":"completed","conclusion":"success"},{"name":"e2e","status":"completed","conclusion":"failure"}'; expect no "CI ok green but another check failed"
 reset; authors='{"name":"someone","email":"someone@example.com"}'; expect no "commit by another author"
 reset; authors='{"name":"karthik24iyer","email":"noreply@anthropic.com"}'; expect no "right name, wrong email"
 reset; body='more\n\nCo-authored-by: Claude <noreply@anthropic.com>'; expect no "Co-authored-by line in message"
@@ -238,19 +248,19 @@ reset; qa_new="QA: FAIL\nHead: $H"; after='split comments.json'; expect no "comm
 reset; review="VERDICT: CHANGES REQUESTED\nHead: $H"; review_new="VERDICT: APPROVE\nHead: $H"; after='split reviews.json'; expect yes "reviews: APPROVE on page 2 is seen"
 bot_approve; pr_files='[{"filename":"apps/web/a.ts"},{"filename":".github/x.yml"}]'; after='split pr-files.json'; expect no "files: a .github/ file on page 2 is seen"
 reset; checks='{"name":"a","status":"completed","conclusion":"success"},{"name":"b","status":"completed","conclusion":"failure"}'; after='split checks.json check_runs'; expect no "check-runs: a failure on page 2 is seen"
-reset; checks='{"name":"a","status":"completed","conclusion":"success"},{"name":"b","status":"completed","conclusion":"success"}'; after='split checks.json check_runs'; expect yes "check-runs: green over two pages"
+reset; checks='{"name":"a","status":"completed","conclusion":"success"},{"name":"CI ok","status":"completed","conclusion":"success"}'; after='split checks.json check_runs'; expect yes "check-runs: green over two pages"
 reset; after='jq ".[1:] = [.[0] | .commit.author.name = \"x\"]" "$FIX/pr-commits.json" >"$FIX/pr-commits.json.p2"'; expect no "PR commits: a wrong author on page 2 is seen"
 reset; review="VERDICT: APPROVE\nHead: $R"; since_files='["x.qa.test.ts","src/rules.ts"]'; after='split commit-$C.json files'; expect no "commit files: a non-QA file on page 2 is seen"
 reset; statuses='{"context":"a","state":"success"},{"context":"b","state":"failure"}'; after='split status.json statuses'; expect no "statuses: a failure on page 2 is seen"
 reset; review_new="VERDICT: CHANGES REQUESTED\nHead: $H"; after='split reviews.json'; touch "$FIX/failp2-reviews.json"; expect no "reviews: error on page 2"
 reset; qa_new="QA: FAIL\nHead: $H"; after='split comments.json'; touch "$FIX/failp2-comments.json"; expect no "comments: error on page 2"
 bot_approve; pr_files='[{"filename":"a.ts"},{"filename":"b.ts"}]'; after='split pr-files.json'; touch "$FIX/failp2-pr-files.json"; expect no "files: error on page 2"
-reset; checks='{"name":"a","status":"completed","conclusion":"success"},{"name":"b","status":"completed","conclusion":"success"}'; after='split checks.json check_runs'; touch "$FIX/failp2-checks.json"; expect no "check-runs: error on page 2"
+reset; checks='{"name":"a","status":"completed","conclusion":"success"},{"name":"CI ok","status":"completed","conclusion":"success"}'; after='split checks.json check_runs'; touch "$FIX/failp2-checks.json"; expect no "check-runs: error on page 2"
 reset; after='jq ".[1:] = [.[0]]" "$FIX/pr-commits.json" >"$FIX/pr-commits.json.p2"'; touch "$FIX/failp2-pr-commits.json"; expect no "PR commits: error on page 2"
 reset; review="VERDICT: APPROVE\nHead: $R"; since_files='["x.qa.test.ts","y.qa.test.ts"]'; after='split commit-$C.json files'; touch "$FIX/failp2-commit-$C.json"; expect no "commit files: error on page 2"
 reset; statuses='{"context":"a","state":"success"},{"context":"b","state":"success"}'; after='split status.json statuses'; touch "$FIX/failp2-status.json"; expect no "statuses: error on page 2"
 # A later page without the expected key fails closed; an API that ignores `page` hits the 100-page cap.
-reset; checks='{"name":"a","status":"completed","conclusion":"success"},{"name":"b","status":"completed","conclusion":"success"}'; after='split checks.json check_runs; echo "{}" >"$FIX/checks.json.p2"'; expect no "check-runs: page 2 without check_runs"
+reset; checks='{"name":"a","status":"completed","conclusion":"success"},{"name":"CI ok","status":"completed","conclusion":"success"}'; after='split checks.json check_runs; echo "{}" >"$FIX/checks.json.p2"'; expect no "check-runs: page 2 without check_runs"
 reset; statuses='{"context":"a","state":"success"},{"context":"b","state":"success"}'; after='split status.json statuses; echo "{}" >"$FIX/status.json.p2"'; expect no "statuses: page 2 without statuses"
 reset; review="VERDICT: APPROVE\nHead: $R"; since_files='["x.qa.test.ts","y.qa.test.ts"]'; after='split commit-$C.json files; echo "{}" >"$FIX/commit-$C.json.p2"'; expect no "commit files: page 2 without files"
 reset; touch "$FIX/IGNORE_PAGE"; expect no "API ignores page: the 100-page cap fails closed"
