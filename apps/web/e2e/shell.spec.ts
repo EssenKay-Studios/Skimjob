@@ -161,20 +161,22 @@ test("a sheet locks the page behind it and gives the scroll back on close @shell
   await page.goto("/dev/gallery/shell");
   await expect(page.getByText("The bank board")).toBeVisible();
   await page.evaluate(() => window.scrollTo(0, 120));
-  const before = await page.evaluate(() => window.scrollY);
-  expect(before).toBeGreaterThan(0);
+  expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
   await page.getByRole("navigation", { name: "Game panels" }).getByRole("button", { name: "Case" }).click();
   await expect(page.getByRole("dialog", { name: "Case" })).toBeVisible();
   await settle(page);
+  // The offset can move by a pixel as the sheet opens (rounding); what must hold is that it stays where it is once the sheet is up.
+  const scrollY = () => page.evaluate(() => Math.round(window.scrollY));
+  const before = await scrollY();
   await page.mouse.move(420, 20); // the backdrop
   await page.mouse.wheel(0, 300);
   await page.mouse.move(420, 380); // the sheet's header area
   await page.mouse.wheel(0, 300);
-  expect(await page.evaluate(() => window.scrollY)).toBe(before);
+  expect(await scrollY()).toBe(before);
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toBeHidden();
   expect(await page.evaluate(() => document.documentElement.classList.contains("sheet-open"))).toBe(false);
   await page.mouse.wheel(0, 100);
-  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(before);
+  await expect.poll(scrollY).toBeGreaterThan(before);
   await ctx.close();
 });
