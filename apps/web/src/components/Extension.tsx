@@ -1,6 +1,6 @@
 // The Extension's player-facing pieces (docs/extension.md): role facts with a
 // "How you win" line, tappable role names, the rulebook sheet, the Haul target
-// bar, the Heat breakdown, the gap box, and your tokens with the perk shop.
+// bar, the gap box, and your tokens with the perk shop.
 // Everything is read from the player's own view (or content, outside a game).
 import { useId, useState, type ReactNode } from "react";
 import { BANK_JOB, PERKS, POOL_ROLES, ROUNDS_PER_ACT, SHOP_COLUMNS, type FailureReason, type PerkColumn, type RoleDef, type RoleId } from "@skimjob/content";
@@ -15,16 +15,13 @@ import {
   TAG_BLURB,
   endingText,
   gapInfo,
-  heatRounds,
   perkUses,
   roleInfo,
   roleListInfo,
   rolesByTag,
   rolesOf,
   shopState,
-  signedText,
   targetBar,
-  type HeatRound,
   type PerkUse,
   type RoleInfo,
 } from "../game/extension";
@@ -121,8 +118,6 @@ export function RoleList({ view }: { view: PlayerView }) {
 
 // ---------------------------------------------------------------- rulebook
 
-const REASON_TEXT: Record<FailureReason, string> = { heat: "Cops raid (Heat 100)", target: "Final target missed" };
-
 /** The rulebook sheet: the game in a minute, endings, roles by tag and the shop. extension.md */
 export function RulebookSheet({ open, onClose, view }: { open: boolean; onClose: () => void; view: PlayerView | null }) {
   const roles = rolesOf(view);
@@ -149,11 +144,12 @@ export function RulebookSheet({ open, onClose, view }: { open: boolean; onClose:
               Each round, pick a room in secret and split its loot between the crew's Haul and your own stash.
             </li>
             <li>
-              {rounds} rounds, with a crew meeting after rounds {ROUNDS_PER_ACT}, {2 * ROUNDS_PER_ACT} and {rounds}. Each meeting checks the Haul against its target; a
-              missed target adds +{job.heat.missedCheckpoint} Heat, and missing the final one fails the heist.
+              {rounds} rounds, with a crew meeting after rounds {ROUNDS_PER_ACT}, {2 * ROUNDS_PER_ACT} and {rounds}. Each meeting checks the Haul against its target;
+              missing the final one fails the heist.
             </li>
             <li>
-              Heat goes up +{job.heat.perRound} every round and with each room's own Heat. At {job.heat.max} the cops raid.
+              Noisy coins light the room's alarm bell. When all {job.alarm.bulbs} bulbs light, the police raid it: its grabs are seized, it is taped off for{" "}
+              {job.alarm.tapedRounds} rounds and Wanted goes up a star. At {job.alarm.bustStars} stars it's a bust.
             </li>
             <li>Nobody is knocked out. Getting caught costs loot, never your seat.</li>
           </ul>
@@ -169,15 +165,17 @@ export function RulebookSheet({ open, onClose, view }: { open: boolean; onClose:
             </thead>
             <tbody>
               <tr>
-                <td>Final target met and Heat below {job.heat.max}</td>
+                <td>Final target met, no bust</td>
                 <td>The biggest stash</td>
               </tr>
-              {(["heat", "target"] as const).map((reason) => (
-                <tr key={reason}>
-                  <td>{REASON_TEXT[reason]}</td>
-                  <td>Nobody, unless {orList(stars(reason))} has the biggest stash</td>
-                </tr>
-              ))}
+              <tr>
+                <td>Busted (Wanted {job.alarm.bustStars})</td>
+                <td>Only the Rooftop gets away: the biggest stash up there</td>
+              </tr>
+              <tr>
+                <td>Final target missed</td>
+                <td>Nobody, unless {orList(stars("target"))} has the biggest stash</td>
+              </tr>
             </tbody>
           </table>
           <p className="meta">On a failed heist the ranking is still shown, marked as a loss.</p>
@@ -263,7 +261,7 @@ export function RulebookButton({ view, seed = "rulebook-open" }: { view: PlayerV
   );
 }
 
-// ---------------------------------------------------------------- target bar, Heat breakdown, gap box
+// ---------------------------------------------------------------- target bar, gap box
 
 /** "Haul 40 / 63 needed by the next meeting". extension.md "What the app works out for you" */
 export function TargetBar({ view }: { view: PlayerView }) {
@@ -281,49 +279,6 @@ export function TargetBar({ view }: { view: PlayerView }) {
         <span className="target-bar__miss"> ({t.ifMissed})</span>
       </span>
     </div>
-  );
-}
-
-function HeatLines({ h }: { h: HeatRound }) {
-  return (
-    <ul className="heat-parts__lines" aria-label={`Round ${h.round} Heat`}>
-      {h.lines.length === 0 && <li className="meta">No change.</li>}
-      {h.lines.map((l, i) => (
-        <li key={i} className={`heat-parts__line is-${l.kind}`}>
-          <b className="num">{signedText(l.value)}</b> {l.label}
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-/** The Heat change of each round by part, newest first. extension.md "What the app works out for you" */
-export function HeatBreakdown({ view }: { view: Pick<PlayerView, "ledger" | "round"> }) {
-  const rounds = heatRounds(view);
-  const [latest, ...earlier] = rounds;
-  if (!latest) return null;
-  return (
-    <section className="heat-parts" aria-label="Heat breakdown">
-      <p className="heat-parts__head">
-        <span className="meta">
-          Heat, round {latest.round}: <b className="num">{signedText(latest.total)}</b>
-        </span>
-      </p>
-      <HeatLines h={latest} />
-      {earlier.length > 0 && (
-        <details className="heat-parts__more">
-          <summary className="meta">Earlier rounds</summary>
-          {earlier.map((h) => (
-            <div key={h.round} className="heat-parts__round">
-              <p className="meta">
-                Round {h.round}: <b className="num">{signedText(h.total)}</b>
-              </p>
-              <HeatLines h={h} />
-            </div>
-          ))}
-        </details>
-      )}
-    </section>
   );
 }
 

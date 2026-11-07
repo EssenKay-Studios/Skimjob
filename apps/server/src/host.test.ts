@@ -1,4 +1,4 @@
-// Host controls and resilience (M2-13). design §15, §4.1; extension.md "Police activity"
+// Host controls and resilience (M2-13). design §15, §4.1
 import { REPLACE_AFTER_MISSED_ROUNDS } from "@skimjob/content";
 import type { GameState } from "@skimjob/engine";
 import type { FastifyInstance } from "fastify";
@@ -9,7 +9,7 @@ import { fakeClock, type FakeClock } from "./clock";
 import type { Db } from "./db";
 import { CLOSE_SIGNED_OUT, type Control, type ServerMessage } from "./live";
 import type { LobbyView } from "./lobby";
-import { createScheduler, DEADLINE_SKIPPED, isHiddenDeadline } from "./scheduler";
+import { createScheduler, DEADLINE_SKIPPED } from "./scheduler";
 import { buildServer } from "./server";
 import { SESSION_TTL_MS, type LobbySettings } from "./settings";
 import { createGameStore, type GameStore } from "./store";
@@ -18,8 +18,8 @@ import { TIMINGS } from "./timing";
 
 const quick = { interval: 1, timeout: 5000 };
 const H1 = TIMINGS["1h"];
-/** A Mole is possible, so the game has hidden police moments (extension.md "Police activity"). */
-const POLICE: Partial<LobbySettings> = { sessionLength: "1h", deck: "everything", roleList: "possible" };
+/** Every role can be dealt. */
+const EVERYTHING: Partial<LobbySettings> = { sessionLength: "1h", deck: "everything", roleList: "possible" };
 
 let db: Db;
 let clock: FakeClock;
@@ -54,7 +54,7 @@ interface Seat {
   readonly seat: number;
 }
 /** The host and `guests` absent people (no bots: nobody calls an emergency at random), started. */
-async function startGame(guests: number, settings: Partial<LobbySettings> = POLICE) {
+async function startGame(guests: number, settings: Partial<LobbySettings> = EVERYTHING) {
   const host = (await req("POST", "/auth/guest", null, { nickname: "Host" })).session!;
   const game = (await req("POST", "/games", host, { settings })).body;
   const sessions = [host];
@@ -130,15 +130,14 @@ class Client {
 const lobbyMove = { type: "submitMove", move: { room: "lobby", duffel: 1, pocket: 0 } };
 
 describe("pause and resume (design §15, §4.1)", () => {
-  it("a pause stops every deadline, police moments and roundEarly included; nothing fires across it; resume moves each on by the pause", async () => {
+  it("a pause stops every deadline, roundEarly included; nothing fires across it; resume moves each on by the pause", async () => {
     const { id, seats } = await startGame(4);
-    expect((await load(id)).police).not.toBeNull();
     // Everyone locks in: `roundEarly:1` exists next to the round (owner decision, 2 Nov).
     const clients = await Promise.all(seats.map((s) => Client.open(id, s.who)));
     for (const c of clients) expect(await c.send({ cmd: lobbyMove })).toMatchObject({ ok: true });
     await clients[0]!.barrier();
     const before = byKey(await deadlines(id));
-    expect([...before.keys()].sort()).toEqual(["police:1", "round:1", "roundEarly:1"]);
+    expect([...before.keys()].sort()).toEqual(["round:1", "roundEarly:1"]);
     expect([...before.values()].every((r) => !r.paused)).toBe(true);
 
     clock.advance(1000);
@@ -223,7 +222,7 @@ describe("pause and resume (design §15, §4.1)", () => {
 });
 
 describe("extend (design §15)", () => {
-  it("adds extendMs to the round and its early end, never to a police moment; host only; refused when there's nothing to extend", async () => {
+  it("adds extendMs to the round and its early end; host only; refused when there's nothing to extend", async () => {
     const { id, seats } = await startGame(4);
     const clients = await Promise.all(seats.map((s) => Client.open(id, s.who)));
     for (const c of clients) await c.send({ cmd: lobbyMove });
@@ -236,7 +235,6 @@ describe("extend (design §15)", () => {
     const after = byKey(await deadlines(id));
     expect(after.get("round:1")!.due).toBe(before.get("round:1")!.due + H1.extendMs);
     expect(after.get("roundEarly:1")!.due).toBe(before.get("roundEarly:1")!.due + H1.extendMs);
-    expect(after.get("police:1")!.due).toBe(before.get("police:1")!.due);
     // Every socket hears the new round deadline.
     await clients[1]!.barrier();
     const timers = clients[1]!.messages.flatMap((m) => ("timers" in m ? [m.timers] : [])).at(-1)!;
@@ -244,36 +242,6 @@ describe("extend (design §15)", () => {
     // After the game: nothing to extend.
     await db.query("update games set status = 'ended' where id = $1", [id]);
     expect((await req("POST", `/games/${id}/extend`, seats[0]!.who)).status).toBe(409);
-  });
-});
-
-describe("police moments stay hidden through host controls (extension.md \"Police activity\": no leak)", () => {
-  const LEAK = /police:\d|policeMoment|policeScheduled|gapPermille|patrol/;
-  it("no message a client gets during pause, resume and extend names or times a police moment", async () => {
-    const { id, seats } = await startGame(4);
-    const host = await Client.open(id, seats[0]!.who);
-    const guest = await Client.open(id, seats[1]!.who);
-    const from = { host: host.raw.length, guest: guest.raw.length };
-    clock.advance(2000);
-    await req("POST", `/games/${id}/pause`, seats[0]!.who);
-    clock.advance(30_000);
-    await req("POST", `/games/${id}/extend`, seats[0]!.who);
-    await req("POST", `/games/${id}/resume`, seats[0]!.who);
-    await host.barrier();
-    await guest.barrier();
-    const got = [...host.raw.slice(from.host), ...guest.raw.slice(from.guest)];
-    expect(got.length).toBeGreaterThan(0);
-    for (const text of got) expect(text).not.toMatch(LEAK);
-    const rows = await deadlines(id);
-    expect(rows.some((r) => isHiddenDeadline(r.key))).toBe(true);
-    // The timers sent are exactly the visible rows; control has only the host's public state.
-    const last = guest.messages.flatMap((m) => ("view" in m ? [m] : [])).at(-1)!;
-    expect(last.timers.map((t) => t.key).sort()).toEqual(rows.filter((r) => !isHiddenDeadline(r.key)).map((r) => r.key).sort());
-    expect(Object.keys(last.control).sort()).toEqual(["idle", "pausedAt", "standIns"]);
-    // The pause showed as one public flag, and went again on resume.
-    const pausedAts = guest.messages.slice(from.guest).flatMap((m) => ("control" in m ? [m.control.pausedAt] : []));
-    expect(pausedAts.some((p) => p !== null)).toBe(true);
-    expect(pausedAts.at(-1)).toBeNull();
   });
 });
 

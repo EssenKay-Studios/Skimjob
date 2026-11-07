@@ -1,6 +1,6 @@
-// QA for host controls and resilience (M2-13). design §15, §4.1; extension.md "Police activity";
+// QA for host controls and resilience (M2-13). design §15, §4.1;
 // docs/m2-plan.md M2-13. Adversarial: who may use each control, out-of-order controls, exact
-// remaining times across a pause (fake clock), a restart while paused, no police-timing leak,
+// remaining times across a pause (fake clock), a restart while paused,
 // stand-in bots, lobby vs in-game kick, session expiry, independent game ticks.
 import { createHash } from "node:crypto";
 import { createBot, PERSONALITIES } from "@skimjob/bots";
@@ -14,7 +14,7 @@ import { fakeClock, type FakeClock } from "./clock";
 import type { Db } from "./db";
 import { botTrigger, CLOSE_SIGNED_OUT, SystemRefused, type Control, type ServerMessage } from "./live";
 import type { LobbyView } from "./lobby";
-import { createScheduler, isHiddenDeadline } from "./scheduler";
+import { createScheduler } from "./scheduler";
 import { buildServer } from "./server";
 import { SESSION_TTL_MS, type LobbySettings } from "./settings";
 import { createGameStore, type GameStore } from "./store";
@@ -23,10 +23,10 @@ import { TIMINGS } from "./timing";
 
 const quick = { interval: 1, timeout: 5000 };
 const H1 = TIMINGS["1h"];
-/** A Mole is possible, so the game has hidden police moments. extension.md "Police activity" */
-const POLICE: Partial<LobbySettings> = { sessionLength: "1h", deck: "everything", roleList: "possible" };
-/** No Mole can be dealt: never any police moment, so these games run the same every time. */
-const NO_POLICE: Partial<LobbySettings> = { sessionLength: "1h", deck: "starter", roleList: "possible" };
+/** Every role can be dealt. */
+const EVERYTHING: Partial<LobbySettings> = { sessionLength: "1h", deck: "everything", roleList: "possible" };
+/** The Starter deck. */
+const STARTER: Partial<LobbySettings> = { sessionLength: "1h", deck: "starter", roleList: "possible" };
 
 let db: Db;
 let clock: FakeClock;
@@ -61,7 +61,7 @@ interface Seat {
   readonly player: string;
   readonly seat: number;
 }
-async function startGame(guests: number, settings: Partial<LobbySettings> = POLICE) {
+async function startGame(guests: number, settings: Partial<LobbySettings> = EVERYTHING) {
   const host = await guestSession("Host");
   const game = (await req("POST", "/games", host, { settings })).body;
   const sessions = [host];
@@ -188,7 +188,7 @@ describe("every control refuses anyone but the host (design §15)", () => {
 
   it("a bot seat can't get a stand-in and can't be handed back (no person in it)", async () => {
     const host = await guestSession("Host");
-    const game = (await req("POST", "/games", host, { settings: NO_POLICE })).body;
+    const game = (await req("POST", "/games", host, { settings: STARTER })).body;
     await req("POST", `/games/${game.id}/bots`, host, { personality: "greedy" });
     await req("POST", `/games/${game.id}/bots`, host, { personality: "greedy" });
     await req("POST", `/games/${game.id}/start`, host);
@@ -200,7 +200,7 @@ describe("every control refuses anyone but the host (design §15)", () => {
 
 describe("out-of-order controls (design §15)", () => {
   it("pause twice and resume when not paused are 409 and change nothing; extend while paused adds exactly extendMs on top of the pause", async () => {
-    const { id, seats } = await startGame(2, NO_POLICE);
+    const { id, seats } = await startGame(2, STARTER);
     const host = seats[0]!.who;
     expect((await req("POST", `/games/${id}/resume`, host)).status).toBe(409);
     clock.advance(7_000);
@@ -240,27 +240,17 @@ async function pauseAcross(id: string, host: string, on: FastifyInstance = app) 
   return left;
 }
 
-describe("a pause keeps every clock's time left exactly (design §15, extension.md \"Police activity\")", () => {
-  it("across a police moment, roundEarly, the alibi window and an open meeting", async () => {
+describe("a pause keeps every clock's time left exactly (design §15)", () => {
+  it("across roundEarly, the alibi window and an open meeting", async () => {
     const { id, seats } = await startGame(3);
     const host = seats[0]!.who;
     const clients = await Promise.all(seats.map((s) => Client.open(id, s.who)));
     for (const c of clients) expect(await c.send({ cmd: lobbyMove })).toMatchObject({ ok: true });
     await clients[0]!.barrier();
     clock.advance(1234);
-    // Planning: round, roundEarly and the hidden police moment.
+    // Planning: round and roundEarly.
     const planning = await pauseAcross(id, host);
-    expect([...planning.keys()].sort()).toEqual(["police:1", "round:1", "roundEarly:1"]);
-    // The police moment fires exactly at its time left, never during the pause.
-    const policeBefore = (await load(id)).police!.moment;
-    const policeLeft = planning.get("police:1")!;
-    if (policeLeft < planning.get("roundEarly:1")!) {
-      clock.advance(policeLeft - 1);
-      expect(await app.scheduler.tick()).toBe(0);
-      clock.advance(1);
-      expect(await app.scheduler.tick()).toBe(1);
-      expect((await load(id)).police!.moment).not.toBe(policeBefore);
-    }
+    expect([...planning.keys()].sort()).toEqual(["round:1", "roundEarly:1"]);
     // To the alibi window.
     while ((await load(id)).phase.kind === "planning") await step(id);
     expect((await load(id)).phase.kind).toBe("alibis");
@@ -305,65 +295,9 @@ describe("a pause keeps every clock's time left exactly (design §15, extension.
   });
 });
 
-describe("no police timing leaks through host controls (extension.md \"Police activity\": no leak)", () => {
-  /** What a client can learn from a message, with game-specific content (seats, roles, seed) set aside. */
-  const shape = (m: ServerMessage, t0: number): unknown => {
-    if ("view" in m) {
-      return {
-        phase: m.view.phase,
-        timers: m.timers.map((x) => [x.key, x.dueAt - t0, x.pausedAt === null ? null : x.pausedAt - t0]),
-        control: { pausedAt: m.control.pausedAt === null ? null : m.control.pausedAt - t0, standIns: m.control.standIns.length, idle: m.control.idle.length },
-        now: m.now - t0,
-      };
-    }
-    return Object.keys(m).sort();
-  };
-  async function run(settings: Partial<LobbySettings>) {
-    const t0 = clock.now();
-    const { id, seats } = await startGame(3, settings);
-    const host = await Client.open(id, seats[0]!.who);
-    const guest = await Client.open(id, seats[1]!.who);
-    const from = { host: host.raw.length, guest: guest.raw.length };
-    clock.advance(2_000);
-    await req("POST", `/games/${id}/pause`, seats[0]!.who);
-    // Long enough that any police moment would have been due during the pause.
-    clock.advance(H1.roundMs * 3);
-    await app.scheduler.tick();
-    await req("POST", `/games/${id}/extend`, seats[0]!.who);
-    clock.advance(1_000);
-    await app.scheduler.tick();
-    await req("POST", `/games/${id}/resume`, seats[0]!.who);
-    await app.scheduler.tick();
-    await host.barrier();
-    await guest.barrier();
-    const state = await load(id);
-    const out = {
-      police: state.police !== null,
-      hidden: (await deadlines(id)).some((r) => isHiddenDeadline(r.key)),
-      host: host.messages.slice(from.host).map((m) => shape(m, t0)),
-      guest: guest.messages.slice(from.guest).map((m) => shape(m, t0)),
-      raw: [...host.raw.slice(from.host), ...guest.raw.slice(from.guest)],
-    };
-    host.ws.terminate();
-    guest.ws.terminate();
-    await db.query("update games set status = 'ended' where id = $1", [id]);
-    await db.query("delete from deadlines where game_id = $1", [id]);
-    return out;
-  }
-  it("the message streams with and without a hidden police moment are the same, and none names one", async () => {
-    const withPolice = await run(POLICE);
-    const without = await run(NO_POLICE);
-    expect(withPolice.police && withPolice.hidden).toBe(true);
-    expect(without.police || without.hidden).toBe(false);
-    expect(withPolice.host).toEqual(without.host);
-    expect(withPolice.guest).toEqual(without.guest);
-    for (const text of withPolice.raw) expect(text).not.toMatch(/police:\d|policeMoment|policeScheduled|gapPermille|patrol/);
-  });
-});
-
 describe("replace with a bot, then hand back (design §15)", () => {
   it("the bot plays the seat deterministically from its view, nobody else learns the seat's secrets, and the player's seat comes back", async () => {
-    const { id, seats } = await startGame(2, NO_POLICE);
+    const { id, seats } = await startGame(2, STARTER);
     const [host, guest, third] = seats as [Seat, Seat, Seat];
     const hc = await Client.open(id, host.who);
     const tc = await Client.open(id, third.who);
@@ -458,7 +392,7 @@ describe("kick in the lobby vs in the game (design §15)", () => {
 
 describe("session expiry (M2-13 resilience)", () => {
   it("a socket closes 4401 on its own at expiry, and a message after expiry is never delivered", async () => {
-    const { id, seats } = await startGame(2, NO_POLICE);
+    const { id, seats } = await startGame(2, STARTER);
     const host = await Client.open(id, seats[0]!.who);
     // The guest's session ends one second (of game clock) from now.
     const [row] = await db.query<{ e: number }>("select (extract(epoch from expires_at) * 1000)::float8 as e from sessions order by expires_at desc limit 1");

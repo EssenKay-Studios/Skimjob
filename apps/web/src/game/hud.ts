@@ -172,17 +172,16 @@ export function nextTarget(view: PlayerView): { readonly act: 1 | 2 | 3; readonl
   return { act: view.act, target: checkpointTarget(jobOf(view), view.act, crewSize(view)), final: view.act === 3 };
 }
 
-export type HeatTrend = "up" | "down" | "none";
-
-/** One room in the move panel: its coins this round and how it moves the Heat. design §3.1, §13 */
+/** One room in the move panel: its coins this round and its bell. design §3.1, §5.1, §13 */
 export interface RoomOption {
   readonly id: RoomId;
   readonly name: string;
   /** The most coins a visitor grabs here this round (Shift change included). design §3.1 */
   readonly loot: number;
-  readonly heat: HeatTrend;
-  /** Lockdown closed it this round. */
-  readonly closed: boolean;
+  /** "Bell 2 of 4", or "Bell off" while taped off. design §5.1, §5.3 */
+  readonly bell: string;
+  /** Why nobody can pick it this round (Lockdown, or taped off after a raid), or null. design §5.3, §13 */
+  readonly closed: string | null;
   /** Short notes: "+1 coin this round", "watch one room". */
   readonly notes: readonly string[];
   /** Security: the move must name a room to watch. design §6.1 */
@@ -197,15 +196,15 @@ export function roomOptions(view: PlayerView): RoomOption[] {
     const def = job.rooms[id];
     const notes: string[] = [];
     let loot = def?.coins ?? 0;
-    let pressure = def?.heatPressure ?? 0;
     if (effect?.kind === "roomSurge" && effect.room === id) {
       loot += effect.extraCoins;
-      pressure *= effect.heatMultiplier;
       if (effect.extraCoins !== 0) notes.push(`+${effect.extraCoins} coin this round`);
     }
     if (def?.info === "watchRoom") notes.push("watch one room");
-    const closed = effect?.kind === "lockdown" && card?.room === id;
-    return { id, name: def?.name ?? id, loot, heat: pressure > 0 ? "up" : pressure < 0 ? "down" : "none", closed, notes, watcher: def?.info === "watchRoom" };
+    const taped = Object.hasOwn(view.taped, id);
+    const closed = taped ? `Taped off through round ${view.taped[id]}` : effect?.kind === "lockdown" && card?.room === id ? "Closed by Lockdown" : null;
+    const bell = taped ? "Bell off" : `Bell ${view.bells[id] ?? 0} of ${job.alarm.bulbs}`;
+    return { id, name: def?.name ?? id, loot, bell, closed, notes, watcher: def?.info === "watchRoom" };
   });
 }
 

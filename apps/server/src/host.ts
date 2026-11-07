@@ -1,7 +1,7 @@
 // Host controls during the game (M2-13). design §15; docs/m2-plan.md M2-13
 //
-// - `POST /games/:id/pause` / `resume`: stops every deadline, police moments
-//   and `roundEarly` included (scheduler.ts), until the host resumes; each
+// - `POST /games/:id/pause` / `resume`: stops every deadline, `roundEarly`
+//   included (scheduler.ts), until the host resumes; each
 //   then moves on by its pause. Players can still plan, vote and chat.
 // - `POST /games/:id/extend`: adds the preset's `extendMs` to the current
 //   round's planning (and its early end), alibi window or vote window.

@@ -69,13 +69,13 @@ export interface BankCutawayProps {
   /** auto: stacked below 600 px of width, wide above. */
   readonly layout?: "auto" | BankLayoutMode;
   readonly time?: TimeOfDay;
-  /** 0–100: the sky reddens from 40 and sirens glow from 80. */
-  readonly heat?: number;
+  /** Wanted ÷ the bust line, 0–1 (design §5.4): the sky reddens past 0.4 and sirens glow from 0.6. */
+  readonly alarm?: number;
   /** The highlighted room: clay outline and a pin. */
   readonly selected?: string | null | undefined;
   /** Makes each room a button (Enter / Space too). */
   readonly onRoomSelect?: (room: BankRoomId) => void;
-  /** Rooms shut this round (Lockdown): taped off and washed out. */
+  /** Rooms shut this round (Lockdown, or taped off after a raid, design §5.3): taped and washed out. */
   readonly closed?: readonly string[];
   readonly occupants?: Partial<Record<string, readonly BankOccupant[]>>;
   /** Room name tags (off for small decorative uses). */
@@ -476,7 +476,7 @@ export function BankCutaway({
   names,
   layout = "auto",
   time = "day",
-  heat = 0,
+  alarm = 0,
   selected,
   onRoomSelect,
   closed = [],
@@ -492,7 +492,7 @@ export function BankCutaway({
   const [ref, width] = useWidth();
   const mode: BankLayoutMode = layout === "auto" ? (width !== null && width < 600 ? "stacked" : "wide") : layout;
   const lay = bankLayout(rooms, mode);
-  const tint = Math.max(0, Math.min(1, (heat - 40) / 60));
+  const tint = Math.max(0, Math.min(1, (alarm - 0.4) / 0.6));
   const shut = new Set(closed);
   const pickable = !!onRoomSelect;
   const nameOf = (id: BankRoomId) => names?.[id] ?? BANK_ROOM_NAMES[id];
@@ -582,7 +582,7 @@ export function BankCutaway({
             </g>
           ))}
         </g>
-        {heat >= 80 && (
+        {alarm >= 0.6 && (
           <g className="bank-sirens" pointerEvents="none">
             <circle cx={lay.width * 0.04} cy={lay.streetY - 10} r={lay.width * 0.12} fill={`url(#${uid}-siren-r)`} className="bank-siren bank-siren--r" />
             <circle cx={lay.width * 0.96} cy={lay.streetY - 10} r={lay.width * 0.12} fill={`url(#${uid}-siren-b)`} className="bank-siren bank-siren--b" />

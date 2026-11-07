@@ -1,5 +1,5 @@
-/* Game kit (M2-6): meters, Heat thermometer, split slider, room tiles.
-   ui-style "Heat meter", "Haul counter", "Round-move panel". Tokens only. */
+/* Game kit (M2-6): meters, split slider, room tiles.
+   ui-style "Haul counter", "Round-move panel". Tokens only. */
 
 /* ---------- Meter (Haul) ---------- */
 .meter {
@@ -29,48 +29,6 @@
   border: 1.3px solid var(--ink);
   border-radius: 2px;
   background: var(--gold);
-}
-
-/* ---------- Heat thermometer ---------- */
-.thermo {
-  position: relative;
-  display: inline-block;
-  flex: none;
-  width: 16px;
-  height: 80px;
-  border: 1.6px solid var(--ink);
-  border-radius: 3px 4px 2px 5px;
-  background: var(--paper-hi);
-  --t-tone: var(--olive);
-}
-.thermo--sm {
-  height: 56px;
-}
-.thermo__fill {
-  position: absolute;
-  inset: auto 0 0 0;
-  height: var(--m-fill);
-  border-radius: 1px 1px 2px 3px;
-  background: var(--hatch), var(--t-tone);
-  transition:
-    height 0.8s var(--spring),
-    background-color 0.8s ease;
-}
-.thermo--warm {
-  --t-tone: var(--gold);
-}
-.thermo--hot {
-  --t-tone: var(--clay);
-  animation: thermo-bob 0.9s ease-in-out infinite;
-}
-.thermo--crit {
-  --t-tone: var(--bad);
-  animation: thermo-bob 0.6s ease-in-out infinite;
-}
-@keyframes thermo-bob {
-  50% {
-    translate: 0 -2px;
-  }
 }
 
 /* ---------- Split slider ---------- */
@@ -244,17 +202,9 @@
   border-radius: 1px 2px 1px 2px;
   background: var(--hatch), var(--gold);
 }
-.room-tile__heat {
+.room-tile__bell {
   font-weight: 650;
   font-size: 12px;
-}
-.room-tile__heat--up {
-  color: var(--bad);
-}
-.room-tile__heat--down {
-  color: var(--good);
-}
-.room-tile__heat--none {
   color: var(--mute);
 }
 .room-tile__note {
@@ -280,14 +230,11 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .thermo--hot,
-  .thermo--crit,
   .room-tile__pin,
   .split__pocket.is-greedy {
     animation: none;
   }
   .meter__fill,
-  .thermo__fill,
   .room-tile {
     transition: none;
   }

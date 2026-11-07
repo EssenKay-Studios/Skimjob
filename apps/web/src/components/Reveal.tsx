@@ -314,8 +314,7 @@ function RoundSheet({
         )}
         {round.resolved && (
           <span className="meta num">
-            Haul {signed(round.resolved.haulDelta)} → {round.resolved.haul} ·
-            Heat {signed(round.resolved.heatDelta)} → {round.resolved.heat}
+            Haul {signed(round.resolved.haulDelta)} → {round.resolved.haul}
           </span>
         )}
       </header>

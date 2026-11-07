@@ -88,10 +88,10 @@ export function BankSection() {
         />
         <Segmented
           seed="g-heat"
-          label="Heat"
+          label="Wanted"
           options={[
-            { value: "calm", label: "12" },
-            { value: "hot", label: "88" },
+            { value: "calm", label: "0" },
+            { value: "hot", label: "2" },
           ]}
           value={hot}
           onChange={setHot}
@@ -112,7 +112,7 @@ export function BankSection() {
           rooms={rooms}
           layout={layout}
           time={time}
-          heat={hot === "hot" ? 88 : 12}
+          alarm={hot === "hot" ? 1 : 0}
           selected={room}
           onRoomSelect={(r) => setRoom((cur) => (cur === r ? null : r))}
           closed={lock === "lockdown" ? ["office"] : []}

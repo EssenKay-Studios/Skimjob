@@ -20,7 +20,6 @@ describe("QA: role and faction cards are refused (design §8, PR #38)", () => {
   it.each([
     ["the deal", sampleEvents.roleDealt],
     ["a token earned (its trigger names the role, extension.md \"Tokens and the perk shop\")", sampleEvents.tokenEarned],
-    ["a landed tip-off (says you're the Mole, extension.md \"Police activity\")", sampleEvents.tipOffLanded],
     ["an Inside tip naming a role", sampleEvents.insideTip],
     ["a Peek naming a role", sampleEvents.perkUsed],
   ] as [string, GameEvent][])("%s", (_label, event) => {

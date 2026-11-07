@@ -64,7 +64,8 @@ describe("QA: the 15-min preset is a normal game (shop and events), 3/8/12 playe
       const { state, rejections } = runBotGame(cfg, agents, { maxSteps: 2000 });
       expect(rejections).toEqual([]);
       const t = types(state.log);
-      expect(t.at(-1)).toBe("gameEnded");
+      // A bust ends the game mid-resolution, so the round's reveal-only `rngAdvanced` can follow it (design §5.5).
+      expect(t.filter((x) => x !== "rngAdvanced").at(-1)).toBe("gameEnded");
       expect(t).toContain("shopDealt");
       expect(t).toContain("eventFlipped");
       const shop = state.log.find((e) => e.type === "shopDealt")!;
