@@ -148,15 +148,17 @@ test("a scroll keeps an open tip until its i leaves the screen; a resize keeps i
   await p.evaluate(() => window.scrollTo(0, 0));
   await expect(popover(p)).toHaveCount(0);
   await tipButton(p, "Duffel").tap();
-  await p.setViewportSize({ width: 390, height: 500 });
+  // A window just taller than the i (where a tap leaves it depends on the gallery's length), so the tip must flip above it.
+  const height = Math.ceil((await tipButton(p, "Duffel").boundingBox())!.y) + 80;
+  await p.setViewportSize({ width: 390, height });
   await p.waitForTimeout(150);
   await expect(popover(p)).toHaveCount(1);
   attached(...(await boxes(p, tipButton(p, "Duffel"))));
-  await p.setViewportSize({ width: 430, height: 500 });
+  await p.setViewportSize({ width: 430, height });
   await p.waitForTimeout(150);
   await expect(popover(p)).toHaveCount(1);
   const [t, b] = await boxes(p, tipButton(p, "Duffel"));
-  inside(t, { width: 430, height: 500 });
+  inside(t, { width: 430, height });
   attached(t, b);
   await p.context().close();
 });

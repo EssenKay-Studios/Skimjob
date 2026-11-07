@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "r
 import { eventsSince, type PlayerId, type PlayerView } from "@skimjob/engine";
 import { api, ApiError, sentence } from "../api";
 import { recap, topSeq } from "./away";
+import { pinSync, type PinSync } from "./pinSync";
 import type { DescribeContext } from "./describeEvent";
 
 export const SUSPICION_TAGS = ["trusted", "unsure", "suspicious"] as const;
@@ -23,6 +24,7 @@ export type Board = Readonly<Record<PlayerId, BoardMark>>;
 interface SeatNotes {
   readonly lastSeen: number;
   readonly board: Board;
+  readonly pins: readonly string[];
 }
 
 /** The board and a way to change one mark; `error` if it couldn't be loaded. */
@@ -271,4 +273,45 @@ export function useSuspicionBoard(gameId: string): BoardChannel {
     [gameId],
   );
   return useMemo(() => ({ board, error, save }), [board, error, save]);
+}
+
+/** The case board's pins (design §15.4): loaded once, private to this seat, saved as one list. */
+export interface PinsChannel {
+  readonly pins: ReadonlySet<string>;
+  /** Null until loaded; pinning waits for the load, so it can't overwrite saved pins. */
+  readonly ready: boolean;
+  readonly error: string | null;
+  readonly toggle: (id: string) => void;
+}
+
+export function usePins(gameId: string): PinsChannel {
+  const [list, setList] = useState<readonly string[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const sync = useRef<PinSync | null>(null);
+  useEffect(() => {
+    let live = true;
+    const url = `/games/${encodeURIComponent(gameId)}/notes`;
+    api<SeatNotes>("GET", url).then(
+      (n) => {
+        if (!live) return;
+        sync.current = pinSync(
+          { put: (pins) => api<unknown>("PUT", `${url}/pins`, { pins }).then(() => undefined), load: () => api<SeatNotes>("GET", url).then((r) => r.pins) },
+          n.pins,
+          (l) => live && setList(l),
+          (e) => live && setError(why(e)),
+        );
+        setList(n.pins);
+      },
+      (e: unknown) => live && setError(why(e)),
+    );
+    return () => {
+      live = false;
+    };
+  }, [gameId]);
+  const toggle = useCallback((id: string) => {
+    setError(null);
+    sync.current?.toggle(id);
+  }, []);
+  const pins = useMemo(() => new Set(list ?? []), [list]);
+  return useMemo(() => ({ pins, ready: list !== null, error, toggle }), [pins, list, error, toggle]);
 }

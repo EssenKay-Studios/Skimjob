@@ -85,7 +85,7 @@ for (const mode of ["hiddenThenRevealed", "open", "secret"] as const) {
       await expect(gd.getByRole("list", { name: "Ballots so far" })).toHaveCount(0);
       await expect(gd.getByRole("list", { name: "Live tally" })).toHaveCount(0);
       await expect(gd.locator(".vote__status")).not.toContainText("Host");
-      await expect(g1.getByRole("list", { name: "Ledger" })).not.toContainText("Host voted");
+      await expect(g1.locator("body")).not.toContainText("Host voted");
     }
     await shot(g1, `${mode}-g1-dialog`);
     await layoutOk(g1, `${mode} vote dialog`);
@@ -126,10 +126,8 @@ for (const mode of ["hiddenThenRevealed", "open", "secret"] as const) {
     const back = await c2.newPage();
     back.on("pageerror", (e) => errors.push(e.message));
     await back.goto(`/game/${game.id}`);
-    // The results banner only lasts until the next round resolves; the ledger keeps it (design §11.2).
-    await expect(back.getByRole("list", { name: "Ledger" })).toContainText(/You were shaken down|Guest 2 was shaken down|shook you down|shake down you|shake you down/);
-    await back.getByRole("button", { name: /Case file/ }).click();
-    await expect(back.getByRole("list", { name: "Case file" })).toContainText(/sealed/i);
+    // The results banner lasts until the next round resolves: they were the one shaken down.
+    await expect(back.getByRole("region", { name: /The crew voted/ })).toContainText("The crew voted to shake you down");
     await shot(back, `${mode}-g2-back`);
 
     expect(errors).toEqual([]);

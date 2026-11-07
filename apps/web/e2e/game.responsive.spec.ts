@@ -52,7 +52,6 @@ for (const viewport of VIEWPORTS) {
       await expect(page.getByRole("heading", { name: "Round 1 · Pick your room", level: 2 })).toBeVisible();
       await page.locator('.room-tile[data-room="Security"]').click();
       await expect(page.getByRole("group", { name: "Room to watch" })).toBeVisible();
-      await page.getByRole("button", { name: /Case file/ }).click();
 
       const o = await overflow(page);
       expect(o.scroll).toBeLessThanOrEqual(o.client);

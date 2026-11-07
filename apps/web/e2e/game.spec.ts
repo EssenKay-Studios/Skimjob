@@ -3,7 +3,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import { startGame } from "./setupGame";
 
 // M2-6 acceptance (docs/m2-plan.md): a host and a guest play a 15-min game
-// against bots to the end in the browser and see the ledger and the ranking.
+// against bots to the end in the browser and see the ranking.
 // The server runs with TIME_SCALE=0.1 (playwright.config.ts): 4.5 s rounds and
 // 12 s meetings, enough for the host to vote (the fast clock's 6 s windows weren't).
 // SHOTS_DIR=… saves mid-round and game-over screenshots per viewport.
@@ -80,38 +80,19 @@ test("a host and a guest play a 15-min game against bots to the end @move", asyn
   expect(alibis).toBeGreaterThan(0);
   expect(votes).toBeGreaterThan(0);
 
-  // Game over: stamp, ranking of all four, winners marked; the ledger has the rounds.
+  // Game over: stamp, ranking of all four, winners marked.
   // The server seeds each game afresh, so read the ending this game reached and check its own lines (design §5.5, §11.5, §20.2).
   const panel = page.locator("section.over");
   const ending = await panel.getAttribute("data-ending");
-  const LINES: Record<string, { stamp: string; ledger: string }> = {
-    success: { stamp: "JOB DONE", ledger: "Job done! The crew got away with it" },
-    bust: { stamp: "BUSTED", ledger: "Busted: Wanted hit the bust line and the heist failed" },
-    target: { stamp: "BUSTED", ledger: "The heist failed: the target was missed" },
-  };
-  expect(Object.keys(LINES), `ending ${ending}`).toContain(ending);
-  const expected = LINES[ending!]!;
-  await expect(page.locator(".over__stamp")).toHaveText(expected.stamp);
+  const STAMPS: Record<string, string> = { success: "JOB DONE", bust: "BUSTED", target: "BUSTED" };
+  expect(Object.keys(STAMPS), `ending ${ending}`).toContain(ending);
+  await expect(page.locator(".over__stamp")).toHaveText(STAMPS[ending!]!);
   if (ending === "bust") await expect(panel).toContainText("Busted. On a bust, only the Rooftop gets away.");
   await expect(over.locator(".ranking__row")).toHaveCount(4);
-  const ledger = page.getByRole("list", { name: "Ledger" });
-  await expect(ledger).toContainText("Round 1: Haul");
-  await expect(ledger).toContainText("You say you were in the Lobby");
-  await expect(ledger).toContainText(expected.ledger);
-  await page.getByRole("button", { name: /Case file/ }).click();
-  await expect(page.getByRole("list", { name: "Case file" })).toContainText(/Round \d, Office: you grabbed 2 coins/);
-  // The act's meetings: the host's ballot (private in the default Hidden mode), and the results in the ledger.
-  await expect(page.getByRole("list", { name: "Case file" })).toContainText("You voted to skip.");
-  await page.getByRole("button", { name: /Ledger/ }).click();
-  await expect(ledger).toContainText("Meeting 1 is open: time to vote.");
-  await expect(ledger).toContainText(/Meeting 1 target: Haul \d+, target \d+/);
-  await page.getByRole("button", { name: /Ledger/ }).click();
   await shot(page, "over");
 
-  // The guest missed every deadline: the default move is in their case file (design §5.1), and they see the end too.
+  // The guest missed every deadline, and sees the end too.
   await expect(guest.getByRole("list", { name: "Final ranking" })).toBeVisible();
-  await guest.getByRole("button", { name: /Case file/ }).click();
-  await expect(guest.getByRole("list", { name: "Case file" })).toContainText("You missed round 1's deadline: the default move went to the Lobby");
   expect(errors).toEqual([]);
   await guestCtx.close();
 });
@@ -213,7 +194,6 @@ test("the bank board: tap a room to pick it, see who you saw and the alibi claim
   await expect(board.getByText(/as you saw it/)).toBeVisible();
   await expect(board.locator(".bank-room.is-selected[data-room=office]")).toBeVisible();
   await expect(alibi.getByText("You claimed to be the Lookout. One claim between meetings")).toBeVisible();
-  await expect(page.getByRole("list", { name: "Ledger" })).toContainText("You claim to be the Lookout.");
   expect(errors).toEqual([]);
   await idle.close();
 });

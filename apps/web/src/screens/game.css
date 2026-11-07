@@ -32,7 +32,7 @@
   align-content: start;
   min-width: 0;
 }
-.game-grid .records {
+.game-grid .cb {
   grid-area: records;
 }
 /* The right column from 1024 px (chat above records); below that its children join the grid. */
@@ -69,7 +69,7 @@
     align-content: start;
     min-width: 0;
   }
-  .game-grid__side > .records {
+  .game-grid__side > .cb {
     grid-area: auto;
   }
 }
@@ -338,15 +338,10 @@ html.chat-sheet-open body {
 .panel__spot {
   max-width: 200px;
 }
-.records__spot {
-  max-width: 180px;
-  margin-top: 4px;
-}
 .over__spot {
   max-width: 220px;
 }
 
-/* Records (ledger / case file): components/casefile.css (M2-10). */
 
 /* ---------- Game over ---------- */
 .over {

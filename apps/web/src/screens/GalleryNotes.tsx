@@ -2,45 +2,31 @@
 // you were away" recap with its raccoon narrator, and the suspicion board, on
 // a small hand-made view (no server).
 import { useState, type ReactNode } from "react";
-import { PUBLIC, privateTo, type CaseFileEvent, type LoggedEvent, type PlayerView, type PublicEvent } from "@skimjob/engine";
 import { RaccoonNarrator } from "../art/Raccoon";
 import { AwayRecap } from "../components/AwayRecap";
 import { Button } from "../components/Button";
-import { CaseFile } from "../components/CaseFile";
+import { BottomSheet } from "../components/BottomSheet";
+import { CaseBoard } from "../components/CaseBoard";
 import { SketchFrame } from "../components/SketchFrame";
 import { SuspicionBoard, SuspicionMark } from "../components/SuspicionBoard";
 import { Underline } from "../components/Underline";
-import type { Board, BoardMark } from "../game/notes";
-
-const NAMES: Record<string, string> = { p1: "Ana", p2: "Ben", p3: "Cy", p4: "Bot · Dot" };
-const ctx = { me: "p1", name: (p: string) => NAMES[p] ?? p };
-
-const events: (PublicEvent | CaseFileEvent)[] = [
-  { type: "roleDealt", visibility: privateTo("p1"), player: "p1", role: "rookie" },
-  { type: "roundStarted", visibility: PUBLIC, round: 1, act: 1 },
-  { type: "moveLocked", visibility: PUBLIC, player: "p2", round: 1 },
-  { type: "moveSubmitted", visibility: privateTo("p1"), player: "p1", round: 1, move: { room: "vault", duffel: 1, pocket: 2 } },
-  { type: "coinsGrabbed", visibility: privateTo("p1"), player: "p1", round: 1, room: "vault", duffel: 1, pocket: 2, seized: 0 },
-  { type: "roomSighting", visibility: privateTo("p1"), player: "p1", round: 1, room: "vault", others: ["p2"] },
-  { type: "roundResolved", visibility: PUBLIC, round: 1, bank: 58, haulDelta: 9, haul: 9 },
-  { type: "alibiPosted", visibility: PUBLIC, player: "p2", round: 1, room: "lobby" },
-  { type: "roundStarted", visibility: PUBLIC, round: 2, act: 1 },
-  { type: "roundResolved", visibility: PUBLIC, round: 2, bank: 51, haulDelta: 5, haul: 14 },
-  { type: "checkpointChecked", visibility: PUBLIC, act: 1, target: 12, haul: 14, met: true },
-];
-let ledger: LoggedEvent<PublicEvent>[] = [];
-let caseFile: LoggedEvent<CaseFileEvent>[] = [];
-events.forEach((event, seq) => {
-  if (event.visibility.kind === "public") ledger = [...ledger, { seq, event: event as PublicEvent }];
-  else caseFile = [...caseFile, { seq, event: event as CaseFileEvent }];
-});
-const sampleView: Pick<PlayerView, "ledger" | "caseFile"> = { ledger, caseFile };
+import { togglePin } from "../game/caseBoard";
+import { FIXTURE } from "../game/caseBoard.fixture";
+import { NO_LEADS } from "../game/caseBoard";
+import type { Board, BoardMark, PinsChannel } from "../game/notes";
 
 const people = [
   { id: "p2", name: "Ben", look: 1, isBot: false },
   { id: "p3", name: "Cy", look: 2, isBot: false },
   { id: "p4", name: "Bot · Dot", look: 3, isBot: true },
 ];
+
+/** The case board with pins kept in the page (no server): a fixture adapter's data. */
+export function CaseBoardDemo({ empty = false, seed = "g-case" }: { empty?: boolean; seed?: string }) {
+  const [list, setList] = useState<readonly string[]>(["fact:r4.vault.saw"]);
+  const pins: PinsChannel = { pins: new Set(list), ready: true, error: null, toggle: (id) => setList((l) => togglePin(l, id)) };
+  return <CaseBoard seed={seed} data={empty ? NO_LEADS : FIXTURE} people={people} pins={pins} marks={{ p2: { tag: "suspicious", note: "" } }} />;
+}
 
 function Section({ id, title, note, children }: { id: string; title: string; note?: string; children: ReactNode }) {
   return (
@@ -59,6 +45,7 @@ function Section({ id, title, note, children }: { id: string; title: string; not
 export function NotesSections() {
   const [board, setBoard] = useState<Board>({ p2: { tag: "suspicious", note: "Said Lobby, but I saw them in the Vault." }, p4: { tag: "trusted", note: "" } });
   const [away, setAway] = useState(true);
+  const [sheet, setSheet] = useState(false);
   const save = async (subject: string, mark: BoardMark) => {
     setBoard((b) => {
       const next = { ...b };
@@ -87,8 +74,15 @@ export function NotesSections() {
           <RaccoonNarrator size={72} />
         </div>
       </Section>
-      <Section id="casefile" title="Ledger and case file" note="M2-10 · manila sheet, round cards, private rows, act / round filters">
-        <CaseFile view={sampleView} ctx={ctx} seed="g-records" initial={{ source: "all", act: null, round: null }} />
+      <Section id="caseboard" title="Case board" note="S3b.5 · §15.4 suspect card, Players strip, Pinned, Leads; fixture adapter, pins kept in the page">
+        <CaseBoardDemo />
+        <Button variant="secondary" seed="g-case-sheet-open" onClick={() => setSheet(true)}>
+          Open as a phone sheet
+        </Button>
+        <BottomSheet open={sheet} onClose={() => setSheet(false)} title="Case board" seed="g-case-sheet">
+          <CaseBoardDemo seed="g-case-in-sheet" />
+        </BottomSheet>
+        <CaseBoardDemo empty seed="g-case-empty" />
       </Section>
       <Section id="suspicion" title="Suspicion board" note="M2-10 · §12.3 private tags and notes; seat marks">
         <SuspicionBoard seed="g-sus" people={people} board={board} onSave={save} />

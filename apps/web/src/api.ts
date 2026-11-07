@@ -77,7 +77,7 @@ export class ApiError extends Error {
   }
 }
 
-export async function api<T>(method: "GET" | "POST" | "PATCH" | "DELETE", path: string, body?: unknown): Promise<T> {
+export async function api<T>(method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE", path: string, body?: unknown): Promise<T> {
   // A request that hangs (server down behind a proxy) counts as unreachable after a while.
   const init: RequestInit = { method, credentials: "same-origin", signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) };
   if (body !== undefined) {

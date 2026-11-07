@@ -3,7 +3,7 @@
 // glyph), 24 emoji, and "W" + combining diaeresis ×12 (24 code points), all
 // within the nickname rules (1–24 code points, visible). Checked on the
 // gallery reveal and on a real fast-clock 15-min game's game-over screen
-// (ranking, reveal and its timeline, case file sheet) at 360, 390 and 768 px:
+// (ranking, reveal and its timeline, case board) at 360, 390 and 768 px:
 // nothing past the edge, and every name still whole in the DOM (wrapped, not cut).
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 
@@ -24,8 +24,8 @@ async function overflow(page: Page): Promise<string[]> {
     const s = document.scrollingElement!;
     if (s.scrollWidth > window.innerWidth) out.push(`scrollWidth ${s.scrollWidth} > innerWidth ${window.innerWidth}`);
     const w = document.documentElement.clientWidth;
-    for (const x of document.querySelectorAll<HTMLElement>(".over *, .reveal *, .records *")) {
-      if (x.closest(".reveal__rounds, .seg, [role=tablist]")) continue;
+    for (const x of document.querySelectorAll<HTMLElement>(".over *, .reveal *, .cb *")) {
+      if (x.closest(".reveal__rounds, .seg, [role=tablist], .cb__players")) continue;
       const r = x.getBoundingClientRect();
       if (r.width > 0 && (r.right > w + 0.5 || r.left < -0.5)) out.push(`${x.getAttribute("class") ?? x.tagName} ${r.left.toFixed(1)}..${r.right.toFixed(1)}`);
     }
@@ -109,16 +109,9 @@ test("real 15-min game over with W×24, emoji×24 and combining-mark names: no o
         const all = ((await reveal.textContent()) ?? "").normalize("NFD");
         for (const nm of [WIDE, EMOJI, COMBINING]) expect(all, `${who}: reveal has ${nm}`).toContain(nm.normalize("NFD"));
       } else problems.push(`${who}: no reveal on the game-over screen`);
-      // The case file sheet (a button below 1024 px).
-      const open = page.getByRole("button", { name: /Case file/ }).first();
-      if (await open.isVisible().catch(() => false)) {
-        await open.click();
-        await expect(page.getByRole("list", { name: "Case file" })).toBeVisible();
-        await page.waitForTimeout(400);
-        for (const x of await overflow(page)) problems.push(`${who} case file: ${x}`);
-        await page.keyboard.press("Escape");
-        await page.waitForTimeout(300);
-      } else problems.push(`${who}: no case file button`);
+      // The case board.
+      await expect(page.getByRole("region", { name: "Case board" })).toBeVisible();
+      for (const x of await overflow(page)) problems.push(`${who} case board: ${x}`);
     }
   }
   expect(problems).toEqual([]);
