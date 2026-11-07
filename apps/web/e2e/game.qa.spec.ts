@@ -86,6 +86,23 @@ test("12 seats, 24-char names: a 15-min game to the end with moves changed, alib
   const errors: string[] = [];
   for (const p of [host, guest]) p.on("pageerror", (e) => errors.push(e.message));
   const game = await start(host.request, guest.request, 10, "quick");
+  // At the fast clock a round is 2.25 s and an alibi window 750 ms (× 0.05): under
+  // CI load a round of taps outlasts them, so the test could miss all nine. Until
+  // the host has changed a move, and then posted an alibi, it pauses the game from
+  // the push that opens the phase it needs (a pause stops every deadline and players
+  // can still plan and post, design §15) and resumes once that is done.
+  let changed = 0;
+  let alibis = 0;
+  let phase = "";
+  const holding = () => (phase === "planning" && changed === 0) || (phase === "alibis" && alibis === 0);
+  let pausing: ReturnType<APIRequestContext["post"]> | null = null;
+  host.on("websocket", (ws) =>
+    ws.on("framereceived", ({ payload }) => {
+      if (typeof payload !== "string" || !payload.startsWith('{"view"')) return;
+      phase = (JSON.parse(payload) as { view: { phase: { kind: string } } }).view.phase.kind;
+      if (holding() && !pausing) pausing = host.request.post(`/api/games/${game.id}/pause`, { data: {} });
+    }),
+  );
   await host.goto(`/game/${game.id}`);
   await guest.goto(`/game/${game.id}`);
   await expect(host.locator(".crew-seat")).toHaveCount(12);
@@ -101,16 +118,15 @@ test("12 seats, 24-char names: a 15-min game to the end with moves changed, alib
     await shot(p, name);
   };
   const over = host.getByRole("list", { name: "Final ranking" });
-  let changed = 0;
-  let alibis = 0;
   let round = 0;
   const post = host.getByRole("button", { name: "Post alibi" });
   while (!(await over.isVisible())) {
     const heading = await host.locator("#move-h").textContent({ timeout: 200 }).catch(() => null);
     const lock = host.getByRole("button", { name: /Lock it in|Update move/ });
-    if (heading && (await lock.isVisible().catch(() => false))) {
+    if (heading && (await host.locator(".move__lock").isVisible().catch(() => false))) {
       const r = Number(/Round (\d+)/.exec(heading)?.[1] ?? 0);
-      if (r !== round) {
+      // Once a round; again while paused until the change is in (a tap can still miss).
+      if (r !== round || changed === 0) {
         round = r;
         if (r > 1) await once("missed-or-move", host);
         // Vault, pocket what the slider allows, lock; then change to the Office.
@@ -132,14 +148,17 @@ test("12 seats, 24-char names: a 15-min game to the end with moves changed, alib
         }
       }
     }
-    // At the fast clock an alibi window is under a second: act first, check the
-    // layout after. Until one alibi is in, tap straight away; the open panel is
-    // checked on a later window, once the count no longer depends on it.
     if (await post.isVisible().catch(() => false)) {
-      if (alibis > 0) await once("alibi-open", host);
+      await once("alibi-open", host);
       await tap(host, host.getByRole("group", { name: "Alibi room" }).getByRole("button", { name: "Vault" })).catch(() => {});
       await tap(host, post).then(() => alibis++, () => {});
       await once("alibi-posted", host);
+    }
+    // Resume once the step is done, or at once if the pause landed in another phase.
+    if (pausing && !holding()) {
+      await ok(await pausing);
+      pausing = null;
+      await ok(await host.request.post(`/api/games/${game.id}/resume`, { data: {} }));
     }
     if (await host.locator(".panel[aria-live=polite]").isVisible().catch(() => false)) await once("waiting", host);
     // Wake as soon as an alibi window opens rather than on a fixed 120 ms tick.
