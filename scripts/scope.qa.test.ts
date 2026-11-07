@@ -151,3 +151,47 @@ describe("shard on the real spec list", () => {
     expect(all.sort()).toEqual([...few].sort());
   });
 });
+
+describe("fix round: shared modules, deleted and renamed specs, deleted sources", () => {
+  const without = (gone: string[]) => (f: string) => {
+    if (gone.includes(f)) throw new Error(`ENOENT: ${f}`);
+    return readRepo(f);
+  };
+  const source = (f: string) => /^(apps|packages)\/[^/]+\/src\/.*\.tsx?$/.test(f) && !/\.(test|testkit)\.tsx?$/.test(f);
+
+  it("every bots source runs everything (the shared live.ts and scheduler.ts drive every bot game)", () => {
+    for (const f of files.filter((f) => f.startsWith("packages/bots/src/") && source(f))) expect(run([f]), f).toMatchObject(FULL);
+  });
+
+  it("every module a shared (*) module imports directly runs everything, even when an entry imports it too", () => {
+    const shared = Object.keys(features).filter((f) => features[f] === "*");
+    const fed = [...graph.importers].filter(([, by]) => by.some((x) => shared.includes(x))).map(([f]) => f).filter((f) => !features[f]); // an entry point stops the walk at its own tags
+    expect(fed).toContain("packages/bots/src/index.ts");
+    for (const f of fed) expect(run([f]), f).toMatchObject(FULL);
+  });
+
+  it("a deleted spec does not crash, runs nothing for itself and keeps the other changes' tags", () => {
+    const read = without(["apps/web/e2e/landing.spec.ts"]);
+    expect(run(["apps/web/e2e/landing.spec.ts"], read)).toMatchObject({ full: false, tags: "", sim: 0 });
+    expect(run(["apps/web/e2e/landing.spec.ts", "apps/web/src/screens/Meetings.tsx"], read)).toMatchObject({ full: false, tags: "@meeting" });
+  });
+
+  it("a renamed spec runs its tag at the new path and lands on exactly one shard", () => {
+    const from = "apps/web/e2e/landing.spec.ts";
+    const to = "apps/web/e2e/landing-renamed.spec.ts";
+    const read = (f: string) => (f === to ? readRepo(from) : without([from])(f));
+    expect(run([from, to], read)).toMatchObject({ full: false, tags: "@lobby" });
+    const specs = files.filter((f) => /^apps\/web\/e2e\/.*\.spec\.ts$/.test(f) && f !== from).concat(to).map((f) => f.replace("apps/web/", ""));
+    const all = [1, 2, 3, 4, 5, 6].flatMap((i) => shard(specs, {}, i, 6));
+    expect(all.filter((f) => f === "e2e/landing-renamed.spec.ts")).toHaveLength(1);
+    expect(all).not.toContain("e2e/landing.spec.ts");
+  });
+
+  it("a deleted source file runs everything, whatever still imported it", () => {
+    for (const gone of ["apps/web/src/components/Chip.tsx", "apps/web/src/screens/Meetings.tsx", "packages/engine/src/meeting.ts", "apps/server/src/chat.ts"]) {
+      const g = buildGraph(files.filter((f) => f !== gone), without([gone]));
+      const f2 = Object.fromEntries(Object.entries(features).filter(([f]) => f !== gone));
+      expect(scope([gone], g, f2, without([gone])), gone).toMatchObject(FULL);
+    }
+  });
+});
