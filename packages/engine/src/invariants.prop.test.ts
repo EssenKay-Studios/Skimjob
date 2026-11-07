@@ -134,7 +134,7 @@ function playerCommand(state: GameState, t: Tape, style: Style): { command: Reco
   const p = seated ? (state.players[player as string] as PlayerState) : undefined;
   const room = (): string => {
     if (style === "hot" && t.chance(60)) return t.pick(["vault", "depositBoxes", "managersOffice"].filter((r) => state.rooms.includes(r)));
-    if (style === "careful" && t.chance(60)) return t.pick(["office", "lobby", "tellerLine", "rooftop"].filter((r) => state.rooms.includes(r)));
+    if (style === "careful" && t.chance(60)) return t.pick(["office", "lobby", "rooftop"].filter((r) => state.rooms.includes(r)));
     return t.chance(95) ? t.pick(state.rooms) : t.pick(["nowhere", "__proto__", "vault"]);
   };
   // Votes lean on one suspect per round, so shakedowns sometimes pass.

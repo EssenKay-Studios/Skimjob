@@ -39,7 +39,7 @@ describe("QA: role and faction cards are refused (design §8, PR #38)", () => {
     ["a watched room", { type: "roomWatched", round: 1, source: "security", room: "vault", seen: ["ben"] }],
     ["an audit", { type: "abilityResolved", round: 2, ability: { kind: "audit", round: 1, room: "vault", shortfall: 4 } }],
     ["a stash check", { type: "abilityResolved", round: 2, ability: { kind: "checkStash", target: "ben", threshold: 12, dirty: true } }],
-    ["a loot split", { type: "coinsGrabbed", round: 1, room: "vault", loot: 6, toHaul: 4, toStash: 2 }],
+    ["a grab", { type: "coinsGrabbed", round: 1, room: "vault", duffel: 1, pocket: 2 }],
   ])("%s still goes through, verified, with its payload intact", (_label, event) => {
     const r = evidenceCard(holding(event), 3);
     const { type, ...payload } = event;

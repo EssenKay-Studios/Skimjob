@@ -19,7 +19,7 @@ type Cmd = Record<string, unknown>;
 type Kind = "role" | "split" | "swap" | "watch" | "miss" | "churn" | "voteChurn" | "ballotSwap" | "seal" | "control";
 const MODES: readonly VoteVisibility[] = ["hiddenThenRevealed", "open", "secret"];
 /** Coins per visitor (design §3.1). */
-const LOOT: Record<string, number> = { vault: 3, office: 2, lobby: 1, depositBoxes: 2, managersOffice: 2, serverRoom: 2 };
+const COINS: Record<string, number> = { vault: 3, office: 2, lobby: 1, depositBoxes: 2, managersOffice: 2, serverRoom: 2 };
 
 function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
@@ -144,9 +144,9 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
   const randomMove = (id: PlayerId, round: number): Cmd => {
     const role = A.players[id]?.role;
     const room = pick(A.rooms);
-    const loot = LOOT[room] ?? 0;
-    const pocket = loot > 0 && rand() < 0.5 ? int(loot + 1) : 0;
-    const move: Cmd = { room, duffel: loot - pocket, pocket };
+    const coins = COINS[room] ?? 0;
+    const pocket = coins > 0 && rand() < 0.5 ? int(coins + 1) : 0;
+    const move: Cmd = { room, duffel: coins - pocket, pocket };
     if (room === "security") move.watch = pick(A.rooms);
     if (restricted.has(id)) return move;
     if (role === "lookout" && rand() < 0.8) move.ability = { kind: "lookout", rooms: [pick(A.rooms)] };
@@ -183,7 +183,7 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
           applied = true;
           (kind === "split" ? [x, z] : [x]).forEach((id) => involved.add(id));
           // Same Haul, same pocket count, same room — only the two stashes differ (2-coin Office grabs, design §3.1).
-          const keep = (id: PlayerId, pocket: number, room = "office"): Cmd => submit(id, { ...last(id), room, duffel: (LOOT[room] ?? 0) - pocket, pocket, watch: undefined });
+          const keep = (id: PlayerId, pocket: number, room = "office"): Cmd => submit(id, { ...last(id), room, duffel: (COINS[room] ?? 0) - pocket, pocket, watch: undefined });
           plan.set(x, [keep(x, 1)]);
           plan.set(z, [keep(z, 2)]);
           planB.set(x, [kind === "split" ? keep(x, 2) : keep(x, 1, "lobby")]);

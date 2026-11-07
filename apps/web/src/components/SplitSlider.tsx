@@ -1,12 +1,12 @@
-// The split slider (ui-style "Round-move panel"): how much of a room's loot
-// goes to the crew's Haul and how much you pocket. A native range input, so
+// The split slider (ui-style "Round-move panel"): how many of a room's coins
+// go to the crew's Haul and how many you pocket. A native range input, so
 // keys, touch and screen readers work; drawn as a hatched paper track. Its
 // value is the Haul share: left of the handle is "To Haul", right is "Pocket".
 import type { CSSProperties } from "react";
 
 export interface SplitSliderProps {
   readonly id: string;
-  /** The room's listed loot (the real yield can be lower: the pocket is capped then). */
+  /** The coins grabbed: the room's limit this round (design §3.1). */
   readonly loot: number;
   readonly pocket: number;
   readonly onChange: (pocket: number) => void;

@@ -76,8 +76,8 @@ export interface OtherPlayerView extends PlayerSeat {
 /**
  * The gap box (data only; the app draws it): what the round's public alibis
  * say the Haul should have grown by, against what it really grew.
- * `alibis` counts each alibi's room loot (event effects and crowding by
- * alibis included), as if everything were handed in. extension.md "What the app works out for you"
+ * `alibis` counts each alibi's room coin limit (event effects included),
+ * as if everything were handed in. extension.md "What the app works out for you"
  */
 export interface GapBox {
   readonly round: number;

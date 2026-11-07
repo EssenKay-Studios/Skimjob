@@ -87,7 +87,7 @@ const NO_WINDOW = { rolePool: [...STARTER_ROLES, ...INFO_VOTE_ROLES.filter((r) =
 
 type Kind = "smoothDealt" | "hackerLoop";
 // Coin limits in these games: R6_COINS for the pinned rooms, content (design §3.1) for the rest.
-const LOOT: Record<string, number> = { vault: 6, office: 4, lobby: 2, depositBoxes: 5, managersOffice: 2, serverRoom: 2 };
+const COINS: Record<string, number> = { vault: 6, office: 4, lobby: 2, depositBoxes: 5, managersOffice: 2, serverRoom: 2 };
 
 function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
@@ -231,9 +231,9 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
   const move = (id: PlayerId, round: number): Record<string, unknown> => {
     const role = A.players[id]?.role;
     const room = pick(A.rooms);
-    const loot = LOOT[room] ?? 0;
-    const pocket = loot > 0 && rand() < 0.6 ? int(loot + 1) : 0;
-    const m: Record<string, unknown> = { room, duffel: loot - pocket, pocket };
+    const coins = COINS[room] ?? 0;
+    const pocket = coins > 0 && rand() < 0.6 ? int(coins + 1) : 0;
+    const m: Record<string, unknown> = { room, duffel: coins - pocket, pocket };
     if (room === "security") m.watch = pick(A.rooms);
     // Baseline power use, identical in both games (not for the kind that changes it).
     if (role === "hacker" && kind !== "hackerLoop" && round % 3 === 1 && rand() < 0.7) m.ability = { kind: "loopCameras", room: pick(A.rooms) };
