@@ -285,7 +285,7 @@ describe("Tips setting (S3b.3)", () => {
   it("refuses a signed-out caller and anything that is not a boolean", async () => {
     expect((await patch(null, { tips: false })).statusCode).toBe(401);
     const g = await guest("Strict");
-    for (const bad of [{}, { tips: "no" }, { tips: 0 }, { tips: null }, null]) expect((await patch(g, bad)).statusCode).toBe(400);
+    for (const bad of [{}, { tips: "no" }, { tips: 0 }, { tips: null }, { tips: false, name: "Hacked" }, { tips: false, guest: false }, null]) expect((await patch(g, bad)).statusCode).toBe(400);
     expect(await tipsOf(g)).toBe(true);
   });
 });

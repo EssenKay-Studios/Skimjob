@@ -207,8 +207,9 @@ export function authRoutes(
   app.patch("/me", async (req, reply) => {
     const user = await s.user(req);
     if (!user) return reply.code(401).send({ error: "not signed in" });
-    const tips = (req.body as { tips?: unknown } | null)?.tips;
-    if (typeof tips !== "boolean") return reply.code(400).send({ error: "tips must be true or false" });
+    const body = req.body as Record<string, unknown> | null;
+    const tips = body?.tips;
+    if (typeof tips !== "boolean" || Object.keys(body!).length !== 1) return reply.code(400).send({ error: "send only tips: true or false" });
     await db.query("update users set tips = $2 where id = $1", [user.id, tips]);
     return { user: { ...user, tips } };
   });

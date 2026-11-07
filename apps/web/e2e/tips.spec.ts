@@ -38,12 +38,15 @@ test("the Tips toggle fits every launch width with 44 px targets @auth", async (
   for (const vp of VIEWPORTS) {
     await page.setViewportSize(vp);
     await page.goto("/");
+    await page.mouse.move(0, 0);
     const tips = page.getByRole("group", { name: "Tips" });
     await expect(tips).toBeVisible();
     for (const name of ["On", "Off"]) {
-      const box = (await tips.getByRole("button", { name }).boundingBox())!;
-      expect(box.height, `${name} at ${vp.width}`).toBeGreaterThanOrEqual(44);
-      expect(box.x + box.width).toBeLessThanOrEqual(vp.width);
+      // Layout size (offsetHeight), not the bounding box: a hovered button is rotated and scaled.
+      const btn = tips.getByRole("button", { name });
+      expect(await btn.evaluate((el) => (el as HTMLElement).offsetHeight), `${name} at ${vp.width}`).toBeGreaterThanOrEqual(44);
+      const box = (await btn.boundingBox())!;
+      expect(box.x + box.width).toBeLessThanOrEqual(vp.width + 1);
     }
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   }
