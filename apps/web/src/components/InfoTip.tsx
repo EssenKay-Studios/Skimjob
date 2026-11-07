@@ -1,8 +1,9 @@
 // <InfoTip>: the small "i" that opens one line of content text (design §15.6
 // "Info on everything", §20.5). The line always comes from content, never from
 // the caller. A 44 px button; a tap pins the tip, a mouse hover or keyboard
-// focus previews it, Esc, the close button, a tap elsewhere or a scroll closes
-// it. The tip is a native popover, so it sits above sheets and is never clipped.
+// focus previews it, Esc, the close button, a tap elsewhere or the "i" leaving the
+// screen closes it; a scroll or resize only moves it along. The tip is a native
+// popover, so it sits above sheets and is never clipped.
 import { infoText, type InfoRef } from "@skimjob/content";
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type FocusEvent, type KeyboardEvent, type PointerEvent } from "react";
 import { Close } from "./icons";
@@ -25,8 +26,6 @@ export function InfoTip({ info }: { readonly info: InfoRef }) {
   const tip = useRef<HTMLDivElement>(null);
   const pinned = useRef(false);
   const leaving = useRef<number>(0);
-  /** True for the frames in which the scroll caused by focusing the "i" arrives; that scroll moves the tip, not closes it. */
-  const focusScroll = useRef(false);
   const [open, setOpen] = useState(false);
 
   const close = useCallback(() => {
@@ -71,10 +70,14 @@ export function InfoTip({ info }: { readonly info: InfoRef }) {
     const outside = (e: Event) => {
       if (!root.current?.contains(e.target as Node)) close();
     };
-    const scrolled = () => {
-      if (focusScroll.current) place();
-      else close();
+    // A scroll (any element, the focus scroll included) or a resize moves the tip with its "i", once a frame.
+    let frame = 0;
+    const follow = () => {
+      if (!frame) frame = requestAnimationFrame(() => ((frame = 0), place()));
     };
+    // The "i" scrolled or clipped fully out of view takes its tip with it.
+    const seen = new IntersectionObserver(([e]) => e && !e.isIntersecting && close());
+    if (button.current) seen.observe(button.current);
     // Esc closes the tip only, not the sheet it may sit in, wherever the focus is.
     const escape = (e: globalThis.KeyboardEvent) => {
       if (e.key !== "Escape") return;
@@ -85,18 +88,15 @@ export function InfoTip({ info }: { readonly info: InfoRef }) {
     };
     document.addEventListener("pointerdown", outside);
     document.addEventListener("keydown", escape, true);
-    window.addEventListener("scroll", scrolled, true);
-    // Only a new width closes it: a phone's keyboard or address bar changes the height alone.
-    let width = window.innerWidth;
-    const resized = () => {
-      if (window.innerWidth !== width) close();
-    };
-    window.addEventListener("resize", resized);
+    window.addEventListener("scroll", follow, true);
+    window.addEventListener("resize", follow);
     return () => {
       document.removeEventListener("pointerdown", outside);
       document.removeEventListener("keydown", escape, true);
-      window.removeEventListener("scroll", scrolled, true);
-      window.removeEventListener("resize", resized);
+      window.removeEventListener("scroll", follow, true);
+      window.removeEventListener("resize", follow);
+      cancelAnimationFrame(frame);
+      seen.disconnect();
       if (openTip === close) openTip = undefined;
     };
   }, [open, close, place]);
@@ -139,9 +139,6 @@ export function InfoTip({ info }: { readonly info: InfoRef }) {
           // Focus coming back from the tip's own close button must not reopen it.
           if (root.current?.contains(e.relatedTarget as Node | null) || !e.currentTarget.matches(":focus-visible")) return;
           window.clearTimeout(leaving.current);
-          // Focusing can scroll the "i" into view; that scroll arrives within a frame or two.
-          focusScroll.current = true;
-          requestAnimationFrame(() => requestAnimationFrame(() => (focusScroll.current = false)));
           setOpen(true);
         }}
         onClick={() => {

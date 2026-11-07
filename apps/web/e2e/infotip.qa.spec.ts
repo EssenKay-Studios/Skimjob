@@ -128,22 +128,27 @@ test("screen reader: a button named About <name> that controls a note named <nam
   await p.context().close();
 });
 
-test("a scroll closes an open tip; a height-only resize (a phone's keyboard) keeps it, a new width closes it @infotip", async ({ browser }) => {
+test("a scroll keeps an open tip until its i leaves the screen; a resize keeps it inside the screen @infotip", async ({ browser }) => {
   const p = await gallery(browser, { width: 390, height: 844 }, true);
   await tipButton(p, "Duffel").tap();
   await expect(popover(p)).toHaveCount(1);
   await p.evaluate(() => window.scrollBy(0, -120));
+  await p.waitForTimeout(150);
+  await expect(popover(p)).toHaveCount(1);
+  await p.evaluate(() => window.scrollTo(0, 0));
   await expect(popover(p)).toHaveCount(0);
   await tipButton(p, "Duffel").tap();
   await p.setViewportSize({ width: 390, height: 500 });
   await p.waitForTimeout(150);
   await expect(popover(p)).toHaveCount(1);
-  await p.setViewportSize({ width: 844, height: 390 });
-  await expect(popover(p)).toHaveCount(0);
+  await p.setViewportSize({ width: 430, height: 500 });
+  await p.waitForTimeout(150);
+  await expect(popover(p)).toHaveCount(1);
+  inside((await popover(p).boundingBox())!, { width: 430, height: 500 });
   await p.context().close();
 });
 
-test("in a scrolling GameShell column the tip is not clipped, and scrolling the column closes it @infotip", async ({ browser }) => {
+test("in a scrolling GameShell column the tip is not clipped, and scrolling its i out of the column closes it @infotip", async ({ browser }) => {
   const v = { width: 1280, height: 800 };
   const p = await gallery(browser, v);
   // A wide shell's right column (overflow: auto) holding the Suspect tip at its right edge.
@@ -163,7 +168,10 @@ test("in a scrolling GameShell column the tip is not clipped, and scrolling the 
   expect(t.width).toBeGreaterThan(120); // wider than the column: the top layer, not clipped
   const hit = await p.evaluate(([x, y]) => !!document.elementFromPoint(x!, y!)?.closest(".infotip__pop"), [t.x + 10, t.y + t.height - 10]);
   expect(hit).toBe(true);
-  await p.locator(".shell__right").evaluate((el) => el.scrollBy(0, 40));
+  await p.locator(".shell__right").evaluate((el) => el.scrollBy(0, 10));
+  await p.waitForTimeout(150);
+  await expect(popover(p)).toHaveCount(1);
+  await p.locator(".shell__right").evaluate((el) => el.scrollBy(0, 200));
   await expect(popover(p)).toHaveCount(0);
   await p.context().close();
 });
@@ -174,8 +182,13 @@ test("inside a bottom sheet a tap elsewhere in the sheet closes the tip and keep
   await p.getByRole("button", { name: "Open a sheet with a tip" }).tap();
   const sheet = p.getByRole("dialog", { name: "Pocket" });
   await sheet.getByRole("button", { name: "About Pocket" }).tap();
-  inside((await popover(p).boundingBox())!, v);
-  await sheet.locator("h2").tap();
+  const t = (await popover(p).boundingBox())!;
+  inside(t, v);
+  // A spot in the sheet that the tip does not cover.
+  const s = (await sheet.boundingBox())!;
+  const spot = { x: s.x + 12, y: s.y + s.height - 12 };
+  expect(spot.y > t.y + t.height || spot.x < t.x).toBe(true);
+  await p.touchscreen.tap(spot.x, spot.y);
   await expect(popover(p)).toHaveCount(0);
   await expect(sheet).toBeVisible();
   await p.context().close();

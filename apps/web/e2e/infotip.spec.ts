@@ -19,6 +19,9 @@ test.beforeEach(({}, info) => test.skip(info.project.name !== "mobile", "viewpor
 
 const tipButton = (page: Page, name: string) => page.getByRole("button", { name: `About ${name}` }).first();
 const popover = (page: Page) => page.locator(".infotip__pop:popover-open");
+type Box = { x: number; y: number; width: number; height: number };
+/** The tip sits GAP (4 px) under or over its i, not on it. */
+const nextTo = (t: Box, b: Box) => [t.y - (b.y + b.height), b.y - (t.y + t.height)].some((gap) => Math.abs(gap - 4) <= 1);
 
 async function open(browser: Browser, viewport: { width: number; height: number }, touch = true) {
   const ctx = await browser.newContext({ viewport, hasTouch: touch, isMobile: touch && viewport.width < 1024 });
@@ -146,9 +149,25 @@ test("tabbing onto an i below the screen scrolls to it and keeps its preview ope
   const t = (await popover(p).boundingBox())!;
   const b = (await duffel.boundingBox())!;
   expect(b.y + b.height).toBeLessThanOrEqual(800);
-  const under = t.y - (b.y + b.height);
-  const over = b.y - (t.y + t.height);
-  expect([under, over].some((gap) => Math.abs(gap - 4) <= 1)).toBe(true);
+  expect(nextTo(t, b)).toBe(true);
+  await p.context().close();
+});
+
+test("a scroll moves an open tip along with its i, and scrolling the i off the screen closes it @infotip", async ({ browser }) => {
+  const p = await open(browser, { width: 390, height: 844 });
+  await p.emulateMedia({ reducedMotion: "reduce" });
+  const duffel = tipButton(p, "Duffel");
+  await duffel.click();
+  const before = (await popover(p).boundingBox())!;
+  await p.evaluate(() => window.scrollBy(0, -120));
+  await p.waitForTimeout(100);
+  await expect(popover(p)).toHaveCount(1);
+  const t = (await popover(p).boundingBox())!;
+  expect(t.y).toBeGreaterThan(before.y + 100);
+  expect(nextTo(t, (await duffel.boundingBox())!)).toBe(true);
+  await p.evaluate(() => window.scrollTo(0, 0));
+  await expect(popover(p)).toHaveCount(0);
+  await expect(duffel).toHaveAttribute("aria-expanded", "false");
   await p.context().close();
 });
 
