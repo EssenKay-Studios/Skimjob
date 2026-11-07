@@ -135,10 +135,10 @@ Two fixes: **Part A** remakes the rules around a few visible things (coins, bell
 | **Detective** | Learn how many coins one player grabbed last round (not how many they kept). | Every round |
 | **Auditor** | Learn how many coins reached the duffel from one room last round. | Once between meetings |
 | **Smooth Talker** | Your vote counts twice. | Every meeting (passive) |
-| **Hacker** | One room's bell is hidden from everyone this round (it shows "?"). | Once between meetings |
+| **Hacker** | One open room's bell is hidden from everyone this round (it shows "?"); not a taped-off room. | Once between meetings |
 | **Electrician** | Black out one room next round: nobody there sees who else is there, and its cameras are offline. Its bell still rings. Announced at the start of the round as "Power cut in the Office", with no source. | Once between meetings |
 | **Priest** | Secretly absolve one player: whatever they hold above their share is set aside in the duffel for the next split (coins spent on perks are not taken). The Priest learns how much that was. Not the same player twice in a row; the absolved player is told "your sins were absolved". | Once between meetings |
-| **Mole** | Secretly ring any room once (a police tip-off). **Wins a heist sunk by theft** with the biggest stash; on a bust, the Rooftop rule applies like for anyone. | Once between meetings |
+| **Mole** | Secretly ring any room once, except the Rooftop or a taped-off room (a police tip-off). **Wins a heist sunk by theft** with the biggest stash; on a bust, the Rooftop rule applies like for anyone. | Once between meetings |
 | **Fixer** | Tear the tape off a raided room and reopen it. **Wins a heist sunk by theft** with the biggest stash; on a bust, the Rooftop rule applies like for anyone. | Once per game |
 
 **The frequency rule:**
