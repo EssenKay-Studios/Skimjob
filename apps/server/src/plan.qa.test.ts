@@ -250,8 +250,16 @@ describe("QA: when the board takes edits (design §10: the round's span)", () =>
     while ((await load(id)).phase.kind !== "meeting") await step(id);
     const s = await load(id);
     expect(s.round).toBeGreaterThan(s.resolvedRound);
-    expect(await b!.plan({ room: rooms[0], agree: true })).toMatchObject({ rejected: true });
+    for (const plan of [{ room: rooms[0], agree: true }, { place: { player: humans[2]!.player, room: rooms[0] } }, { power: { role: "hacker", target: rooms[0] } }]) {
+      expect(await b!.plan(plan)).toMatchObject(closed);
+    }
     expect(await createPlan(db, clock).history(id, s.round)).toEqual([]);
+    // The meeting closes, planning resumes in the same round: the board takes edits again.
+    while ((await load(id)).phase.kind !== "planning") await step(id);
+    expect((await load(id)).round).toBe(s.round);
+    expect(await b!.plan({ room: rooms[0], agree: true })).toMatchObject({ ok: true });
+    await vi.waitFor(() => expect(a!.board().entries).toHaveLength(1), quick);
+    expect((await createPlan(db, clock).history(id, s.round)).every((h) => h.msBeforeDeadline! > 0)).toBe(true);
     closeAll(a!, b!);
   });
 
