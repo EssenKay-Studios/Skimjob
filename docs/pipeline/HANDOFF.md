@@ -50,7 +50,7 @@ Run milestone **R7 Simplified** exactly as `docs/simplified.md` "How to run it" 
 - **Known flaky tests** (rerun once; if it fails again, treat it as real). E2E files are in `apps/web/e2e/`; `[project]` is the Playwright project:
   - `responsive.qa.spec.ts` "landing behaviour › reduced motion › turns off the sheet entrance and toast animations" [mobile]; not reproduced in 80 runs under load on 7 Nov;
   - `notes.spec.ts` "the recap shows what changed while you were away, once, and the board stays private" [desktop]; not reproduced in 40 runs under load on 7 Nov.
-- **Fixed, so a failure is real:** `game.qa.spec.ts` "12 seats, 24-char names … @fast-clock" ("alibis posted", "moves changed after locking"; main 6 Nov twice). The fast clock gives 2.25 s rounds and 750 ms alibi windows, which a round of taps outlasted under load; the host now pauses the game until it has changed a move and posted an alibi (#155).
+- **Fixed, so a failure is real:** `game.qa.spec.ts` "12 seats, 24-char names … @fast-clock" ("alibis posted", "moves changed after locking"; main 6 Nov twice). The fast clock gives 2.25 s rounds and 750 ms alibi windows, which a round of taps outlasted under load; the host now pauses the game until its view shows a changed move and a posted alibi. The change goes to any open room, since a Lockdown can close the Office (#155).
 - **QA pushes once,** at the end (each push restarts CI); its comment names the head after that push.
 - **Verdicts name a sha.** After any non-QA-test commit, get a delta re-review naming the new head.
 - **The PM can't self-QA a docs PR:** spawn a QA agent to check it before merging.

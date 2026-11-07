@@ -381,6 +381,7 @@
 .banner__title {
   font: 700 17px/1.25 var(--font-hand);
   color: var(--ink);
+  overflow-wrap: anywhere;
 }
 .banner--good .banner__title {
   color: var(--good);
