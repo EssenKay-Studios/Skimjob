@@ -276,6 +276,20 @@ hr.dashed {
 .g-row--center {
   gap: 14px;
 }
+.g-infotips {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.g-infotips__item {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin: 0;
+}
+.g-infotips__edge {
+  justify-content: space-between;
+}
 .g-col {
   display: grid;
   justify-items: start;
