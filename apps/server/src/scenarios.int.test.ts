@@ -298,7 +298,7 @@ function assertReveal(c: Client, final: GameState) {
     const p = final.players[r.player]!;
     expect([r.role, r.stash]).toEqual([p.role, p.stash]);
   }
-  for (let i = 1; i < ranking.length; i++) expect(ranking[i - 1]!.score).toBeGreaterThanOrEqual(ranking[i]!.score);
+  for (let i = 1; i < ranking.length; i++) expect(ranking[i - 1]!.stash).toBeGreaterThanOrEqual(ranking[i]!.stash);
   if (reveal.outcome.result === "success") expect(winners.length).toBeGreaterThan(0);
   // The reveal shows every role. design §13
   expect(reveal.log.filter((e) => e.event.type === "roleDealt")).toHaveLength(final.playerOrder.length);
@@ -518,7 +518,7 @@ describe("scenarios: end-to-end stories over HTTP + WebSocket", () => {
     const final = await finish(game, clients, refused, app.live.botRefusals.length);
     // Every stash is equal, but no team role wins a heist sunk by theft.
     expect(final.phase).toMatchObject({ kind: "ended", outcome: { result: "failed", reason: "theft", winners: [] } });
-    expect([final.round, final.haul, final.bank]).toEqual([BANK_JOB.roundCap, 0, 48 - 3 * BANK_JOB.roundCap]);
+    expect([final.round, final.reached, final.share, final.bank]).toEqual([BANK_JOB.roundCap, 0, 0, 48 - 3 * BANK_JOB.roundCap]);
     // design §6.2: no meeting after the last round.
     expect(final.log.filter((e) => e.type === "meetingOpened").every((e) => e.type === "meetingOpened" && e.act <= 3)).toBe(true);
   }, 60_000);

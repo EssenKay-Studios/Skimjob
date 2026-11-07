@@ -78,15 +78,15 @@ describe("role facts (extension.md Roles)", () => {
 });
 
 describe("the gap box (extension.md: What the app works out for you)", () => {
-  it("adds up the alibis against the Haul's growth", () => {
+  it("adds up the alibis against the coins handed in", () => {
     let s = run(createGame(config()), round(1));
     const v0 = viewFor(s, "p1");
-    expect(gapInfo(v0)!.text).toBe(`No alibis yet for round 1; the Haul grew ${v0.gap!.haulGrowth}.`);
+    expect(gapInfo(v0)!.text).toBe(`No alibis yet for round 1; ${v0.gap!.handedIn} handed in.`);
     s = run(s, { type: "postAlibi", player: "p1", room: "vault" });
     const g = gapInfo(viewFor(s, "p1"))!;
     const raw = viewFor(s, "p1").gap!;
     expect(g.posted).toBe(1);
-    expect(g.text.startsWith(`Alibis say +${raw.alibis}, the Haul grew ${raw.haulGrowth}`)).toBe(true);
+    expect(g.text.startsWith(`Alibis say +${raw.alibis}, ${raw.handedIn} handed in`)).toBe(true);
     expect(g.text).toMatch(raw.unaccounted > 0 ? /unaccounted for\.$/ : raw.unaccounted < 0 ? /more than the alibis claim\.$/ : /it adds up\.$/);
   });
 });

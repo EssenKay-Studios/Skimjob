@@ -240,7 +240,7 @@ export interface MeetingOutcome {
   readonly deciding: boolean;
   readonly shakedown: ShakedownResolved | null;
   readonly cancelled: boolean;
-  /** The bank paid a blessed player's compensation (Priest): the amount back in the Haul. */
+  /** The bank paid a blessed player's compensation (Priest): the amount back in the coins set aside. */
   readonly blessing: number | null;
   /** Still the latest news: no round has resolved and no meeting opened since. */
   readonly fresh: boolean;

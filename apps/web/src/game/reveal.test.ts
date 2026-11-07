@@ -49,7 +49,6 @@ describe("<Reveal>", () => {
     dealtRole: role,
     role,
     winsOn: role === "mole" ? (["theft"] as const) : [],
-    score: 10 - place,
     stash: 10 - place,
     safe: 0,
     topGroup: place === 1,
@@ -66,11 +65,12 @@ describe("<Reveal>", () => {
         round: 1,
         card: null,
         moves: [{ player: "p2", room: "vault", duffel: 2, pocket: 4, missed: false, alibi: "lobby" }],
-        resolved: { haulDelta: 2, haul: 2 },
+        resolved: { taken: 6, missing: 4 },
+        split: { cut: 0, share: 0 },
         items: [{ kind: "event", event: { ...sampleEvents.abilityResolved, player: "p2", ability: { kind: "ring", room: "office" } } }],
         stashes: { p1: 0, p2: 4, p3: 0 },
       },
-      { round: 2, card: { id: "audit", room: null }, moves: [], resolved: null, items: [], stashes: { p1: 0, p2: 9, p3: 0 } },
+      { round: 2, card: { id: "audit", room: null }, moves: [], resolved: null, split: null, items: [], stashes: { p1: 0, p2: 9, p3: 0 } },
     ],
   };
   const html = renderToStaticMarkup(createElement(Reveal, { summary, ctx, looks: new Map() }));

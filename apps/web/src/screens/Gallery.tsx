@@ -259,7 +259,7 @@ export function Gallery() {
                 <h3>
                   <Underline seed="t">Panel heading 17</Underline>
                 </h3>
-                <p>Body copy in Inter 14.5/1.45. Pick a room, loot it, then decide how much reaches the Haul.</p>
+                <p>Body copy in Inter 14.5/1.45. Pick a room, loot it, then decide how much reaches the duffel.</p>
                 <p className="meta">Caption · Inter 600 12 · muted</p>
                 <p>
                   <span className="num g-money">$ 48,200</span> <span className="meta">tabular numbers</span> <kbd>Esc</kbd> <kbd>Ctrl</kbd>{" "}
@@ -404,10 +404,10 @@ function MeetingKitSamples() {
         ]}
       />
       <Banner tone="good" seed="g-b1" title="Caught! Dez was holding 11.">
-        11 went into the Haul.
+        11 set aside for the next split.
       </Banner>
       <Banner tone="bad" seed="g-b2" title="Clean! Mo was holding 2.">
-        The crew paid 5 from the Haul in compensation.
+        The crew paid 5 from the coins set aside in compensation.
       </Banner>
       <Banner seed="g-b3" title="The shakedown was called off.">
         Nobody's stash was touched.
@@ -436,7 +436,7 @@ const G_PEOPLE = [
 const gAt = (min: number) => new Date(Date.UTC(2026, 10, 2, 18, min)).toISOString();
 const G_SIGHTING = { type: "roomSighting", payload: { player: "dez", round: 2, room: "vault", others: ["lou"] } };
 const G_HISTORY: ChatMessage[] = [
-  { id: "g1", from: "dez", to: null, at: gAt(1), verified: false, text: "Who went to the Vault in round 2? The Haul came up short." },
+  { id: "g1", from: "dez", to: null, at: gAt(1), verified: false, text: "Who went to the Vault in round 2? The duffel came up short." },
   { id: "g2", from: "lou", to: null, at: gAt(2), verified: false, text: "Not me. <b>Promise</b> **really**. Supercalifragilisticexpialidociousvaultdoorsquad" },
   { id: "g3", from: "dez", to: null, at: gAt(3), verified: true, card: G_SIGHTING },
   { id: "g4", from: "lou", to: "me", at: gAt(4), verified: false, text: "Back me up at the meeting?" },
@@ -465,7 +465,7 @@ function ChatSamples() {
         send={send}
         connection="open"
         evidence={[{ seq: 1, text: "Round 2, Vault: Dez saw Lucky Lou there too." }]}
-        events={[{ key: "g-ev", at: gAt(6), text: "Round 2: Haul +9 (now 14), 51 coins left in the bank." }]}
+        events={[{ key: "g-ev", at: gAt(6), text: "Round 2: 13 taken, 4 went missing, 51 coins left in the bank." }]}
         visible
         className="g-chat__panel"
       />

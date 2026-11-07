@@ -147,7 +147,7 @@ export interface GapInfo {
   readonly round: number;
   readonly posted: number;
   readonly crew: number;
-  /** "Alibis say +14, the Haul grew 9: 5 unaccounted for." */
+  /** "Alibis say +14, 9 handed in: 5 unaccounted for." */
   readonly text: string;
   readonly unaccounted: number;
 }
@@ -157,10 +157,10 @@ export function gapInfo(view: PlayerView): GapInfo | null {
   const g = view.gap;
   if (!g) return null;
   const crew = crewSize(view);
-  const say = `Alibis say ${signed(g.alibis)}, the Haul grew ${g.haulGrowth}`;
+  const say = `Alibis say ${signed(g.alibis)}, ${g.handedIn} handed in`;
   const text =
     g.posted === 0
-      ? `No alibis yet for round ${g.round}; the Haul grew ${g.haulGrowth}.`
+      ? `No alibis yet for round ${g.round}; ${g.handedIn} handed in.`
       : g.unaccounted > 0
         ? `${say}: ${g.unaccounted} unaccounted for.`
         : g.unaccounted < 0

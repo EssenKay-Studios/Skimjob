@@ -60,12 +60,12 @@ describe("while you were away (design §13)", () => {
     expect(recapBetween(s, locked)).toEqual([]);
   });
 
-  it("a quiet round: the round's Haul and the bank, then what's next", () => {
+  it("a quiet round: coins taken and missing and the bank, then what's next (design §7.4)", () => {
     const s = createGame(config());
     const lines = recapBetween(s, playRound(s));
     expect(lines.length).toBeGreaterThanOrEqual(2);
     expect(lines.length).toBeLessThanOrEqual(RECAP_MAX_LINES);
-    expect(lines.find((l) => l.startsWith("Round 1 done"))).toMatch(/^Round 1 done: Haul \+\d+ \(now \d+\), \d+ coins left in the bank\.$/);
+    expect(lines.find((l) => l.startsWith("Round 1 done"))).toMatch(/^Round 1 done: \d+ taken, \d+ went missing, \d+ coins left in the bank\.$/);
     expect(lines.at(-1)).toBe("Now: round 2. Pick your room before the deadline.");
   });
 
@@ -73,8 +73,9 @@ describe("while you were away (design §13)", () => {
     const s = createGame(config());
     const after = playRound(playRound(s));
     const lines = recapBetween(s, after);
-    const last = after.log.filter((e) => e.type === "roundResolved").at(-1) as { haul: number };
-    expect(lines.find((l) => l.startsWith("Rounds"))).toMatch(new RegExp(`^Rounds 1–2 done: Haul \\+\\d+ \\(now ${last.haul}\\)`));
+    const resolved = after.log.filter((e) => e.type === "roundResolved");
+    const taken = resolved.reduce((n, e) => n + e.taken, 0);
+    expect(lines.find((l) => l.startsWith("Rounds"))).toMatch(new RegExp(`^Rounds 1–2 done: ${taken} taken, \\d+ went missing, ${resolved.at(-1)?.bank} coins left`));
   });
 
   it("a meeting: the vote result", () => {

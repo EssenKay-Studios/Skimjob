@@ -64,8 +64,10 @@ describe("describeEvent", () => {
     );
   });
 
-  it("gives the round summary and card with signs", () => {
-    expect(describeEvent(sampleEvents.roundResolved, asAna)).toBe("Round 1: Haul +6 (now 6), 58 coins left in the bank.");
+  it("gives the round summary, the split and the card (design §7.2–§7.4)", () => {
+    expect(describeEvent(sampleEvents.roundResolved, asAna)).toBe("Round 1: 6 taken, 1 coin went missing, 58 coins left in the bank.");
+    expect(describeEvent({ ...sampleEvents.roundResolved, missing: 2 }, asAna)).toBe("Round 1: 6 taken, 2 coins went missing, 58 coins left in the bank.");
+    expect(describeEvent(sampleEvents.duffelSplit, asAna)).toBe("Round 1: the duffel split 2 each (share now 2, kitty 1).");
     expect(describeEvent(sampleEvents.eventFlipped, asAna)).toBe("Round 2 event: Lockdown (the Vault is closed).");
     expect(describeEvent(sampleEvents.auditReport, asAna)).toBe("Audit of round 6: Vault 4 short.");
   });
@@ -146,7 +148,7 @@ describe("describeEvent", () => {
     expect(describeEvent(sampleEvents.bellsCooled, asCyd)).toBe("After round 1 the bells cooled: all dark.");
     expect(describeEvent(sampleEvents.roomReopened, asCyd)).toBe("The tape is off the Vault: it opens again next round.");
     expect(describeEvent({ ...sampleEvents.coinsGrabbed, duffel: 0, pocket: 0, seized: 3 }, asAna)).toBe("Round 1, Vault: you grabbed 3 coins, and the police seized them all.");
-    expect(describeEvent(sampleEvents.blessingPaid, asCyd)).toBe("Ana was blessed: the bank paid the compensation, so 5 went back into the Haul.");
+    expect(describeEvent(sampleEvents.blessingPaid, asCyd)).toBe("Ana was blessed: the bank paid the compensation, so 5 went back into the duffel.");
   });
 
   // design §3: every ending.
@@ -161,7 +163,7 @@ describe("describeEvent", () => {
     expect(describeEvent({ ...sampleEvents.gameEnded, outcome: { result: "failed", reason: "bust", escapees: ["ana"], ranking, winners: ["ana"] } }, asCyd)).toBe(
       "Busted: Wanted hit the bust line and the heist failed; Ana got away over the Rooftop; Ana wins.",
     );
-    expect(describeEvent({ ...sampleEvents.gameEnded, outcome: { result: "failed", reason: "theft", ranking, winners: ["ben"] } }, asAna)).toBe(
+    expect(describeEvent({ ...sampleEvents.gameEnded, outcome: { result: "failed", reason: "theft", ranking, winners: ["ben"], getaway: 0 } }, asAna)).toBe(
       "The heist was sunk by theft: under two-thirds of the coins taken reached the crew; Ben wins.",
     );
   });

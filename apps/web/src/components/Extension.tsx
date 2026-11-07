@@ -138,7 +138,7 @@ export function RulebookSheet({ open, onClose, view }: { open: boolean; onClose:
           <ul className="rulebook__list">
             <li>One crew robs one bank. Only one player wins: whoever ends with the biggest stash.</li>
             <li>
-              Each round, pick a room in secret and split its loot between the crew's Haul and your own stash.
+              Each round, pick a room in secret and drag each coin into the crew duffel or your own pocket.
             </li>
             <li>
               The game ends when the bank is empty, or after round {job.roundCap}. If less than two-thirds of the coins taken reached the
@@ -260,7 +260,7 @@ export function RulebookButton({ view, seed = "rulebook-open" }: { view: PlayerV
 
 // ---------------------------------------------------------------- gap box
 
-/** "Alibis say +14, the Haul grew 9: 5 unaccounted for." extension.md "The gap box" */
+/** "Alibis say +14, 9 handed in: 5 unaccounted for." extension.md "The gap box" */
 export function GapBox({ view }: { view: PlayerView }) {
   const g = gapInfo(view);
   if (!g) return null;

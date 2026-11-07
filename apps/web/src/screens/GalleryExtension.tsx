@@ -177,12 +177,12 @@ function HudSections() {
   const gap = (g: PlayerView["gap"]): PlayerView => ({ ...played, gap: g });
   return (
     <>
-      <Section id="ext-gap" title="Gap box" note="alibis vs the Haul's growth, event effects included">
+      <Section id="ext-gap" title="Gap box" note="alibis vs the coins handed in, event effects included">
         <div className="g-stack">
-          <GapBox view={gap({ round: 4, posted: 0, alibis: 0, haulGrowth: 9, unaccounted: -9 })} />
-          <GapBox view={gap({ round: 4, posted: 3, alibis: 14, haulGrowth: 9, unaccounted: 5 })} />
-          <GapBox view={gap({ round: 4, posted: 4, alibis: 9, haulGrowth: 9, unaccounted: 0 })} />
-          <GapBox view={gap({ round: 4, posted: 2, alibis: 6, haulGrowth: 9, unaccounted: -3 })} />
+          <GapBox view={gap({ round: 4, posted: 0, alibis: 0, handedIn: 9, unaccounted: -9 })} />
+          <GapBox view={gap({ round: 4, posted: 3, alibis: 14, handedIn: 9, unaccounted: 5 })} />
+          <GapBox view={gap({ round: 4, posted: 4, alibis: 9, handedIn: 9, unaccounted: 0 })} />
+          <GapBox view={gap({ round: 4, posted: 2, alibis: 6, handedIn: 9, unaccounted: -3 })} />
         </div>
       </Section>
     </>
@@ -240,7 +240,7 @@ function DeckSection() {
 
 function EndSection() {
   const base = useMemo(() => viewFor(playedGame(), "p1"), []);
-  const ranking = base.players.map((p, i) => ({ player: p.id, role: (["hacker", "rookie", "lookout", "mole"] as const)[i]!, score: 30 - i * 6, stash: 30 - i * 6 }));
+  const ranking = base.players.map((p, i) => ({ player: p.id, role: (["hacker", "rookie", "lookout", "mole"] as const)[i]!, stash: 30 - i * 6 }));
   const ended = (outcome: Extract<PlayerView["phase"], { kind: "ended" }>["outcome"]): PlayerView => ({ ...base, phase: { kind: "ended", outcome } });
   return (
     <>
@@ -248,7 +248,7 @@ function EndSection() {
         <GameOver view={ended({ result: "failed", reason: "bust", escapees: [ranking[0]!.player], ranking, winners: [ranking[0]!.player] })} />
       </Section>
       <Section id="ext-end-win" title="End screen: success" note="biggest stash wins">
-        <GameOver view={ended({ result: "success", ranking, winners: [ranking[0]!.player] })} />
+        <GameOver view={ended({ result: "success", ranking, winners: [ranking[0]!.player], getaway: 0 })} />
       </Section>
     </>
   );
