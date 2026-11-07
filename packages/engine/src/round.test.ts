@@ -1,5 +1,5 @@
 // The round loop: moves (rooms, coins and grabs), missed moves, the bank and
-// the short bank, resolution, R6 Heat, information. design §3, §4.2, §6.1
+// the short bank, resolution, information. design §3, §4.2, §6.1 (bells: bells.test.ts)
 import { STARTER_ROLES } from "@skimjob/content";
 import { handleThroughAlibis } from "./alibis.testkit";
 import { describe, expect, it } from "vitest";
@@ -9,6 +9,7 @@ import { replay } from "./reduce";
 import { handleCommand, withRng } from "./handle";
 import { randomInt, seedRng } from "./rng";
 import { viewFor } from "./view";
+import { NO_RAIDS } from "./v01-numbers.testkit";
 
 function config(players: number, contentOverrides: GameConfig["contentOverrides"] = null): GameConfig {
   return {
@@ -189,21 +190,20 @@ describe("resolution — design §3.2, §4.2 step 1", () => {
       bank: 48 - 6, // design §6.1: every coin grabbed leaves the bank, handed in or pocketed
       haulDelta: 3,
       haul: 3,
-      heatDelta: 11, // 4 + 20 × 1/3 = 10.67 → 11 (R6 Heat until bells)
-      heat: 11,
-      heatParts: { base: 4, rooms: { vault: 7 } },
     });
   });
 
-  it("events follow the resolution order: grabs, sightings and watches, the summary, then the next round", () => {
+  it("events follow the resolution order: bells, grabs, cooling, sightings and watches, the summary, then the next round (design §4.2)", () => {
     const before = run(game(3), submit("p0", { room: "security", watch: "vault" }));
     const types = lastEvents(before, run(before, ROUND)).map((e) => e.type);
     expect(types).toEqual([
       "defaultMoveAssigned",
       "defaultMoveAssigned",
+      "bellsRung",
       "coinsGrabbed",
       "coinsGrabbed",
       "coinsGrabbed",
+      "bellsCooled",
       "roomSighting",
       "roomSighting",
       "roomSighting",
@@ -216,7 +216,8 @@ describe("resolution — design §3.2, §4.2 step 1", () => {
   });
 
   it("visitors don't share a room's limit: everyone in the Vault grabs up to 3 (design §3.1)", () => {
-    const s = run(game(5), ...["p0", "p1", "p2", "p3", "p4"].map((p) => submit(p, { room: "vault", duffel: 3 })), ROUND);
+    // Bells too big to raid: 15 rings would raid the Vault (bells.test.ts).
+    const s = run(game(5, [], NO_RAIDS), ...["p0", "p1", "p2", "p3", "p4"].map((p) => submit(p, { room: "vault", duffel: 3 })), ROUND);
     expect(s.haul).toBe(15);
     for (const id of s.playerOrder) expect(s.players[id]?.totalHandedIn).toBe(3);
   });
@@ -260,7 +261,8 @@ describe("the bank — design §6.1", () => {
 });
 
 describe("a short bank — design §3.2", () => {
-  const tiny = (players: number, coinsPerPlayer: number) => game(players, [], { bank: { coinsPerPlayer } });
+  // Bells too big to raid, so the grabs stay in their bags (rings from a short bank: bells.test.ts).
+  const tiny = (players: number, coinsPerPlayer: number) => game(players, [], { ...NO_RAIDS, bank: { coinsPerPlayer } });
   const grabsOf = (before: GameState, after: GameState) =>
     Object.fromEntries(lastEvents(before, after).flatMap((e) => (e.type === "coinsGrabbed" ? [[e.player, [e.duffel, e.pocket]]] : [])));
 
@@ -323,40 +325,6 @@ describe("a short bank — design §3.2", () => {
     expect(JSON.stringify(play().log)).toBe(JSON.stringify(play().log));
     const s = play();
     expect(replay(s.config, JSON.parse(JSON.stringify(s.log)) as GameEvent[])).toEqual(s);
-  });
-});
-
-describe("R6 Heat (until bells, S3a.2)", () => {
-  it("baseline +4 when nobody is in a Heat room", () => {
-    expect(run(game(3), ROUND).heat).toBe(4);
-  });
-
-  it("Rooftop removes Heat, but Heat never goes below 0", () => {
-    const s = run(game(3), submit("p0", { room: "rooftop" }), submit("p1", { room: "rooftop" }), ROUND);
-    expect(s.heat).toBe(0); // 4 − 20 × 2/3 ≈ −9, clamped once
-    const summary = s.log.find((e) => e.type === "roundResolved");
-    expect(summary).toMatchObject({ heatDelta: 0, heat: 0 });
-  });
-
-  it("is clamped once per round, after all sources: Vault and Rooftop cancel before clamping", () => {
-    // 4 + (20 − 20) / 3 = 4: if the Rooftop were clamped on its own first, this would differ at Heat 0.
-    const s = run(game(3), submit("p0", { room: "vault", duffel: 3 }), submit("p1", { room: "rooftop" }), ROUND);
-    expect(s.heat).toBe(4);
-  });
-
-  it("Heat at 100 means the cops raid and the game ends (§5.2 step 6, §3)", () => {
-    const hot: GameState = { ...game(3), heat: 90 };
-    const s = run(hot, submit("p0", { room: "vault", duffel: 3 }), submit("p1", { room: "vault", duffel: 3 }), ROUND);
-    expect(s.heat).toBe(100); // 90 + 4 + 20 × 2/3 ≈ 107, capped
-    expect(s.log.slice(-2).map((e) => e.type)).toEqual(["copsRaided", "gameEnded"]);
-    expect(s.phase).toMatchObject({ kind: "ended", outcome: { result: "failed", reason: "heat" } });
-    expect(reason(s, submit("p0", { room: "lobby", duffel: 1 }))).toMatch(/over/);
-  });
-
-  it("Heat just under 100 does not raid", () => {
-    const s = run({ ...game(3), heat: 95 }, ROUND);
-    expect(s.heat).toBe(99);
-    expect(s.phase).toEqual({ kind: "planning", round: 2 });
   });
 });
 

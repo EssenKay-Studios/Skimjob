@@ -111,7 +111,8 @@ describe("QA: wrong phase — design §8.3", () => {
 
   it("no perk can be spent once the game is over", () => {
     const s = grantPerks(game(4), "p0", "peek");
-    const over = run({ ...s, heat: 99 }, mv("p0", "vault"), mv("p1", "vault"), mv("p2", "vault"), mv("p3", "vault"), ROUND);
+    // Wanted 2, and a Vault raid makes it a bust (design §5.5).
+    const over = run({ ...s, wanted: 2 }, mv("p0", "vault"), mv("p1", "vault"), mv("p2", "vault"), mv("p3", "vault"), ROUND);
     expect(over.phase.kind).toBe("ended");
     expect(refused(over, use("p0", { kind: "peek", target: "p1" }))).toMatch(/over/);
   });
@@ -133,19 +134,19 @@ describe("QA: +Vote, Recharge, Rig at the meeting — design §8.3", () => {
     expect(closed(run(s, use("p0", { kind: "extraVote" }), ...votes.slice(0, 3), CLOSE))).toMatchObject({ result: { kind: "shakedown", target: "p5" } });
   });
 
-  it("Recharge gives the Mole a second tip-off between the same meetings (extension.md \"Police activity\")", () => {
-    const TIP = use("p0", { kind: "tipOff" });
+  it("Recharge gives the Mole a second ring between the same meetings (design §11.1)", () => {
+    const RING = mv("p0", "lobby", 0, { ability: { kind: "ring", room: "office" } });
     let s = grantPerks(game(4, ["mole"], { rolePool: ["rookie", "mole"], roleList: "possible" }), "p0", "recharge");
-    s = run(s, TIP, ROUND, ALIBIS);
-    expect(refused(s, TIP)).toMatch(/already tipped off/);
-    s = run(s, use("p0", { kind: "recharge" }), TIP);
-    expect(s.log.filter((e) => e.type === "abilityResolved" && e.ability.kind === "tipOff")).toHaveLength(2);
+    s = run(s, RING, ROUND, ALIBIS);
+    expect(refused(s, RING)).toMatch(/already rung/);
+    s = run(s, use("p0", { kind: "recharge" }), RING, ROUND);
+    expect(s.log.filter((e) => e.type === "abilityResolved" && e.ability.kind === "ring")).toHaveLength(2);
   });
 
   it("a Rig spent at the act's meeting picks Act 2's first card, flipped when the meeting ends", () => {
     let s = grantPerks(game(4, [], { eventsEnabled: true }), "p0", "rig");
-    for (let r = 0; r < 3; r++) s = run({ ...s, heat: 0 }, ROUND, ALIBIS);
-    s = run({ ...s, heat: 0, haul: 10_000 }, SCHED, OPEN, use("p0", { kind: "rig" }));
+    for (let r = 0; r < 3; r++) s = run(s, ROUND, ALIBIS);
+    s = run({ ...s, haul: 10_000 }, SCHED, OPEN, use("p0", { kind: "rig" }));
     const spent = [...s.log].reverse().find((e) => e.type === "perkUsed");
     if (spent?.type !== "perkUsed" || spent.perk.kind !== "rig") throw new Error("no Rig");
     expect(spent.perk.round).toBe(4);
@@ -168,7 +169,7 @@ describe("QA: perks never leak to other views — design §8.3, §17.2", () => {
       return after;
     };
     // One perk use per round (extension.md "Tokens and the perk shop"), so the spends spread over rounds.
-    const next = (st: GameState) => run({ ...st, heat: 0, haul: 10_000 }, ROUND, ALIBIS);
+    const next = (st: GameState) => run({ ...st, haul: 10_000 }, ROUND, ALIBIS);
     s = check(s, use("p0", { kind: "peek", target: "p1" }));
     s = next(s);
     s = check(s, use("p0", { kind: "tail", room: "vault" }));
@@ -179,12 +180,12 @@ describe("QA: perks never leak to other views — design §8.3, §17.2", () => {
     s = check(s, use("p0", { kind: "rigPick", card: rig.cards[1] }));
     s = next(s);
     s = run(s, SCHED, OPEN, CLOSE);
-    s = run({ ...s, heat: 0 }, mv("p0", "lobby", 0, { ability: { kind: "loopCameras", room: "vault" } }), ROUND);
+    s = run(s, mv("p0", "lobby", 0, { ability: { kind: "loopCameras", room: "vault" } }), ROUND);
     s = check(s, use("p0", { kind: "recharge" }));
     s = run(s, ALIBIS);
     s = run(s, ...emergency("p2"));
     s = check(s, use("p0", { kind: "extraVote" }));
-    s = run({ ...s, heat: 0 }, CLOSE, ROUND, ALIBIS);
+    s = run(s, CLOSE, ROUND, ALIBIS);
     s = run(s, ...emergency("p1"), vote("p1", "p2"));
     s = check(s, use("p0", { kind: "ballot", target: "p1" }));
     expect(viewFor(s, "p0").me.seenBallots).toEqual({ p1: { kind: "shakedown", target: "p2" } });

@@ -2,7 +2,7 @@
 // what each ★ role also wins on, who won and why, and the worked-out timeline
 // items. Pure; the switches are exhaustive. extension.md "Winning and losing",
 // "Tokens and the perk shop", "Police activity", "Situations"
-import type { FailureReason, TokenTrigger } from "@skimjob/content";
+import { BUST_ROLE_TEXT, type FailureReason, type TokenTrigger } from "@skimjob/content";
 import type { RevealEnding, RevealItem, RevealRound, RevealSummary } from "@skimjob/engine";
 import { describeEvent, roleName, roomName, type DescribeContext } from "./describeEvent";
 
@@ -21,18 +21,14 @@ export function triggerText(t: TokenTrigger): string {
       return "voting for a dirty shakedown";
     case "blessedShakenClean":
       return "a blessed player shaken down clean";
-    case "raidStopped":
-      return "stopping a raid";
     case "loopHidPocketer":
       return "a loop that hid a pocketer";
-    case "tipOffLanded":
-      return "a tip-off landing";
   }
 }
 
-const FAILURE: Record<FailureReason, string> = { heat: "the cops raid", target: "the target is missed" };
+const FAILURE: Record<FailureReason, string> = { bust: "the crew is busted", target: "the target is missed" };
 
-/** "★ Also wins if the cops raid or the target is missed", or "" for a role that wins only a success. */
+/** "★ Also wins if the target is missed", or "" for a role that wins only a success. */
 export function winsOnText(winsOn: readonly FailureReason[]): string {
   return winsOn.length === 0 ? "" : `★ Also wins if ${winsOn.map((r) => FAILURE[r]).join(" or ")}`;
 }
@@ -43,7 +39,13 @@ const list = (xs: readonly string[]) => (xs.length <= 1 ? (xs[0] ?? "") : `${xs.
 export function whyText(ending: RevealEnding, ctx: DescribeContext): string {
   const who = (p: string) => (p === ctx.me ? "you" : ctx.name(p));
   const top = list(ending.topGroup.map(who));
-  const reason = ending.reason === "heat" ? "the Heat hit the top and the cops raided" : "the crew missed the Haul target";
+  // design §5.5, §20.2: "On a bust, only the Rooftop gets away", whatever the role.
+  if (ending.reason === "bust") {
+    return ending.winners.length > 0
+      ? `Busted. ${BUST_ROLE_TEXT} The biggest stash up there wins: ${list(ending.winners.map(who))}.`
+      : `Busted. ${BUST_ROLE_TEXT} Nobody was on the Rooftop, so nobody wins: the ranking is a loss.`;
+  }
+  const reason = "the crew missed the Haul target";
   switch (ending.why) {
     case "success":
       return `Job done, so the top of the ranking wins: ${top}.`;
@@ -64,10 +66,6 @@ export function itemText(item: RevealItem, ctx: DescribeContext): string {
       return describeEvent(item.event, ctx);
     case "token":
       return cap(`${who(item.player)} earned a token for ${triggerText(item.trigger)}.`);
-    case "police":
-      return item.cause === "tipOff" && item.mole
-        ? cap(`police activity (Heat +${item.heatAdded}) was ${you(item.mole) ? "your" : `${ctx.name(item.mole)}'s`} tip-off.`)
-        : `Police activity (Heat +${item.heatAdded}) was a routine patrol.`;
     case "cameraOffline": {
       const feed = item.source === "security" ? "camera" : item.source === "lookout" ? "lookout" : "tail";
       const whose = you(item.watcher) ? "your" : `${ctx.name(item.watcher)}'s`;

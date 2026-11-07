@@ -425,7 +425,7 @@ export function ResultsBanner({ view }: { view: PlayerView }) {
           title={`${targetName(o.checkpoint.act)} ${o.checkpoint.met ? "made" : "missed"}`}
         >
           Haul <b className="num">{o.checkpoint.haul}</b> against a target of <b className="num">{o.checkpoint.target}</b>
-          {o.checkpoint.heatPenalty > 0 ? `: Heat +${o.checkpoint.heatPenalty}.` : "."}
+          .
         </Banner>
       )}
       <Button variant="secondary" seed="results-ok" onClick={() => setDismissed(o.meetingId)} className="results__ok">

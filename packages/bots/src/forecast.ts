@@ -1,17 +1,17 @@
 // A bot's public ending forecast and its own stash rank (extension.md Build
-// notes "Bots"): the chance of success, a raid or a missed final target, from
-// the Haul's pace, the Heat (heat.ts: card, baseline, police activity) and the
-// role list; and whether it rates itself top. The four ★ roles lean toward the
+// notes "Bots"): the chance of success, a bust or a missed final target, from
+// the Haul's pace, Wanted (alarm.ts) and the role list; and whether it rates
+// itself top. The four ★ roles lean toward the
 // failure they win on once its forecast passes `LEAN_AT` and they rate
 // themselves top; everyone else plays for success. Bot settings, not rules.
 import type { FailureReason } from "@skimjob/content";
 import { checkpointTarget, roomDef, type PlayerView } from "@skimjob/engine";
-import { heatDanger } from "./heat";
+import { bustDanger } from "./alarm";
 import { crewSize, jobOf, lastResolvedRound, ofType, roleOf, totalRounds } from "./read";
 
 export interface Forecast {
   readonly success: number;
-  readonly heat: number;
+  readonly bust: number;
   readonly target: number;
 }
 
@@ -24,22 +24,22 @@ const TOP_FACTOR = 2;
 const clamp = (x: number): number => Math.min(1, Math.max(0, x));
 
 /**
- * The public ending forecast. Raid: Heat danger (Heat now plus what is still
- * to come, ÷ the raid level; heat.ts) past 0.75, certain by 1.25. Missed
+ * The public ending forecast. Bust: half as likely one raid short of the
+ * bust line (alarm.ts `bustDanger` 1), nothing below half of that. Missed
  * target: the Haul at its average pace so far (on pace before any round)
  * against the final target, an even chance when exactly on it, certain an
  * eighth below. Success: neither.
  */
 export function forecast(view: PlayerView): Forecast {
   const job = jobOf(view);
-  const heat = clamp((heatDanger(view, job) - 0.75) * 2);
+  const bust = clamp(bustDanger(view, job) - 0.5);
   const total = totalRounds(job);
   const final = checkpointTarget(job, job.checkpoints.perPlayer.length as 1 | 2 | 3, crewSize(view));
   const done = lastResolvedRound(view);
   const pace = done > 0 ? view.haul / done : final / total;
   const projected = view.haul + pace * (total - done);
   const target = final > 0 ? clamp((final - projected) / final * 4 + 0.5) : 0;
-  return { success: (1 - heat) * (1 - target), heat, target };
+  return { success: (1 - bust) * (1 - target), bust, target };
 }
 
 /**

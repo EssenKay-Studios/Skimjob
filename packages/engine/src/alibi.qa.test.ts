@@ -1,5 +1,6 @@
 // QA (PR #5): alibis and the round-named deadline. design §5.4, §5
 import { STARTER_ROLES } from "@skimjob/content";
+import { NO_RAIDS } from "./v01-numbers.testkit";
 import { describe, expect, it } from "vitest";
 import type { GameConfig, GameState } from "./types";
 import { PUBLIC, canSee } from "./types";
@@ -17,6 +18,8 @@ function config(players: number, seed = "qa-alibi"): GameConfig {
     rolePool: [...STARTER_ROLES], // a shakedown window only if the shop holds a Shield
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
+    // Bells too big to raid: these scripts test the alibi window (bells and raids: bells.test.ts).
+    contentOverrides: NO_RAIDS,
   };
 }
 
@@ -116,8 +119,8 @@ describe("QA alibis — design §5.4", () => {
     const s = run(createGame(config(3)), ROUND);
     for (const p of [undefined, 0, "", "P0", "hasOwnProperty"]) refused(s, { type: "postAlibi", player: p, room: "lobby" });
 
-    // Raid: everyone in the Vault every round until Heat hits 100.
-    let g = createGame(config(3));
+    // A bust (design §5.5): a one-bulb bell and one star, everyone in the Vault.
+    let g = createGame({ ...config(3), contentOverrides: { alarm: { bulbs: 1, bustStars: 1 } } });
     for (let i = 0; i < 12 && g.phase.kind !== "ended"; i++) {
       if (g.phase.kind === "alibis") g = run(g, ALIBIS);
       if (g.phase.kind === "awaitingMeeting") g = nextAct(g);

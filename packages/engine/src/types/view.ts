@@ -36,8 +36,6 @@ export interface SelfView {
   /** Your power's uses this act / game. design §8 */
   readonly roleState: RoleState;
   readonly emergencyMeetingUsed: boolean;
-  /** Your own tip-offs this game (Mole; at most 3, extension.md owner ruling 4). 0 for everyone else. */
-  readonly tipOffs: number;
   /** Your current move for this round, if submitted. */
   readonly move: Move | null;
   readonly sealedVote: VoteChoice | null;
@@ -89,21 +87,6 @@ export interface GapBox {
   readonly unaccounted: number;
 }
 
-/** One round's Heat change by part, for the Heat breakdown. extension.md "What the app works out for you", "Police activity" */
-export interface HeatBreakdown {
-  readonly round: number;
-  readonly base: number;
-  readonly rooms: Readonly<Record<RoomId, number>>;
-  /** What the 0–max limit took back from the round's change and its police activity (e.g. laying low at Heat 0, police at Heat 99), else 0. */
-  readonly clamp: number;
-  /** Each police activity under this round (+4 each, scaled in small crews), in order. */
-  readonly police: readonly number[];
-  /** The missed-target penalty if the round closed a stretch whose target was missed, else 0. */
-  readonly missedTarget: number;
-  /** How far a stopped raid set Heat back under this round (negative), else 0. It never says who. */
-  readonly stopped: number;
-}
-
 export interface PlayerView {
   readonly me: SelfView;
   /** Every *other* player, in seat order. You are in `me`. */
@@ -119,7 +102,12 @@ export interface PlayerView {
   /** Coins left in the bank (public). design §6.1 */
   readonly bank: number;
   readonly haul: number;
-  readonly heat: number;
+  /** Lit bulbs on each open room's bell; a taped-off room's bell is off (no entry). Public. design §5.1, §5.3 */
+  readonly bells: Readonly<Record<RoomId, number>>;
+  /** Taped-off rooms, each closed through this round (public). design §5.3 */
+  readonly taped: Readonly<Record<RoomId, number>>;
+  /** Wanted stars (public). design §5.4 */
+  readonly wanted: number;
   /** This round's event card (public): its id and the room Lockdown closes. design §10 */
   readonly card: { readonly round: number; readonly id: string; readonly room: RoomId | null } | null;
   readonly voteVisibility: VoteVisibility;

@@ -57,6 +57,7 @@ export function Reveal({ summary, ctx, looks }: RevealProps) {
       holes
       className="panel reveal"
       aria-labelledby="reveal-h"
+      data-ending={summary.ending.result === "success" ? "success" : summary.ending.reason}
     >
       <header className="reveal__head">
         <h2 id="reveal-h">The reveal</h2>
@@ -314,8 +315,7 @@ function RoundSheet({
         )}
         {round.resolved && (
           <span className="meta num">
-            Haul {signed(round.resolved.haulDelta)} → {round.resolved.haul} ·
-            Heat {signed(round.resolved.heatDelta)} → {round.resolved.heat}
+            Haul {signed(round.resolved.haulDelta)} → {round.resolved.haul}
           </span>
         )}
       </header>

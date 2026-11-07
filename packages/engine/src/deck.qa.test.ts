@@ -1,8 +1,8 @@
 // QA (PR #14): adversarial tests for the events deck — boundaries, card
 // interactions, deck exhaustion, and determinism. design §10
 import { describe, expect, it } from "vitest";
+import { NO_RAIDS } from "./v01-numbers.testkit";
 import { handleThroughAlibis } from "./alibis.testkit";
-import { V06_NUMBERS } from "./v01-numbers.testkit";
 import type { RoomId } from "@skimjob/content";
 import type { GameConfig, GameEvent, GameState, PlayerId } from "./types";
 import { PUBLIC } from "./types";
@@ -21,14 +21,15 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
     rolePool: ["rookie", "lookout", "hacker", "priest"],
     eventsEnabled: true,
     voteVisibility: "open",
+    // Bells too big to raid: these scripts test other rules (bells and raids: bells.test.ts).
+    contentOverrides: NO_RAIDS,
     ...extra,
   };
 }
 
 /** A new game, seat i dealt roles[i] (Rookie if missing). */
 function game(players: number, roles: string[] = [], extra: Partial<GameConfig> = {}): GameState {
-  // Pin the 0.6.0 card numbers (balance pass 2 changed them); an extra override still wins.
-  const cfg = config(players, { ...extra, contentOverrides: { ...V06_NUMBERS, ...extra.contentOverrides } });
+  const cfg = config(players, extra);
   let seat = 0;
   const log = setupEvents(cfg)
     .map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: roles[seat++] ?? "rookie" } : e));
@@ -97,27 +98,22 @@ const find = <T extends GameEvent["type"]>(events: readonly GameEvent[], type: T
 const roundResolved = (s: GameState) => find(lastResolution(s), "roundResolved")[0] as Extract<GameEvent, { type: "roundResolved" }>;
 
 describe("QA: room surges — design §10", () => {
-  // design §10: at 3 players the surge's extra Heat is scaled by 3/5, so the Vault's ×2 pressure is ×1.6 (32 per visitor).
-  it("Shift change: two of three in the Vault → Heat round(4 + 2·32/3) = 25 (15 for one); 4 coins accepted, 5 refused; next round back to 3", () => {
+  // design §13, §5.2, §5.3: Shift change's extra Vault coin rings like the rest.
+  it("Shift change: two of three grab 4 in the Vault → 8 rings, a raid seizing all 8; one coin lights one bulb; 4 coins accepted, 5 refused; next round back to 3", () => {
     const grab = (n: number) => ({ room: "vault", duffel: 0, pocket: n });
-    const base = withCard(resolve(game(3)), "shiftChange");
+    const base = withCard(resolve(game(3, [], { contentOverrides: null })), "shiftChange");
     expect(refused(base, { type: "submitMove", player: "p0", move: grab(5) })).toBe(true);
-    const h0 = base.heat;
     const two = resolve(base, { p0: grab(4), p1: { room: "vault", duffel: 4, pocket: 0 } });
-    expect(two.heat - h0).toBe(25);
-    expect(find(lastResolution(two), "coinsGrabbed").filter((e) => e.room === "vault").map((e) => e.duffel + e.pocket)).toEqual([4, 4]);
+    expect(find(lastResolution(two), "coinsGrabbed").filter((e) => e.room === "vault").map((e) => e.seized)).toEqual([4, 4]);
+    expect(find(lastResolution(two), "roomRaided")).toMatchObject([{ room: "vault", seized: 8, wanted: 1 }]);
     const one = resolve(base, { p0: { room: "vault", duffel: 1, pocket: 0 } });
-    expect(one.heat - h0).toBe(15);
+    expect(find(lastResolution(one), "bellsRung")[0]?.bells.vault).toBe(1);
     // The card is gone next round: with another card the Vault is back to 3.
     expect(refused(withCard(two, "audit"), { type: "submitMove", player: "p0", move: grab(4) })).toBe(true);
   });
 
   it("Shift change leaves the Deposit boxes and Manager's office alone (12 players)", () => {
     const base = withCard(resolve(game(12)), "shiftChange");
-    const h0 = base.heat;
-    const s = resolve(base, { p0: fullGrab("depositBoxes", 2), p1: fullGrab("managersOffice", 2) });
-    // round(4 + (10 + 10)/12) = 6.
-    expect(s.heat - h0).toBe(6);
     expect(refused(base, move("p0", "depositBoxes", 3))).toBe(true);
     expect(refused(base, move("p0", "managersOffice", 3))).toBe(true);
   });

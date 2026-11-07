@@ -12,8 +12,8 @@ import type { PlayerView, RoomId } from "@skimjob/engine";
 import { Button } from "../components/Button";
 import { Chip } from "../components/Chip";
 import { Clock, Play } from "../components/icons";
-import { HeatMeter } from "../components/Meter";
-import { EndingNote, GapBox, HeatBreakdown, TargetBar } from "../components/Extension";
+import { Meter } from "../components/Meter";
+import { EndingNote, GapBox, TargetBar } from "../components/Extension";
 import { endingText } from "../game/extension";
 import { MeetingName, meetingAfter } from "../game/wording";
 import { BankCutaway } from "../art/BankCutaway";
@@ -220,7 +220,7 @@ function Hud({ view, timers, offset, hostPaused }: { view: PlayerView; timers: r
   const countdown = useCountdown(timers, phase.timerKey, offset);
   const emergency = view.pendingEmergency;
   const emergencyIn = useCountdown(timers, emergency ? `openMeeting:${emergency.meetingId}` : null, offset);
-  const max = jobOf(view).heat.max;
+  const bust = bustOf(view);
   return (
     <SketchFrame as="section" seed="game-hud" radius={18} shadow={0.5} className="hud" aria-label="Heist status">
       <div className="hud__phase">
@@ -248,25 +248,22 @@ function Hud({ view, timers, offset, hostPaused }: { view: PlayerView; timers: r
       <div className="hud__stat hud__haul">
         <TargetBar view={view} />
       </div>
-      <div className="hud__stat hud__heat">
-        <HeatMeter heat={view.heat} max={max} />
-        <span className="hud__heat-text">
-          <span className="meta">Heat</span>
-          <span className="num hud__big">
-            {view.heat}
-            <small>/{max}</small>
-          </span>
-          {view.card && view.card.round === view.round && <span className="meta">Card: {cardLabel(view)}</span>}
+      {/* design §5.4: Wanted stars, public; at the bust line the heist is busted (§5.5). */}
+      <div className="hud__stat hud__wanted">
+        <span className="meta">Wanted</span>
+        <span className="num hud__big">
+          {view.wanted}
+          <small>/{bust}</small>
         </span>
+        <Meter value={view.wanted} max={bust} tone="var(--bad)" label={`Wanted ${view.wanted} of ${bust}`} />
+        {view.card && view.card.round === view.round && <span className="meta">Card: {cardLabel(view)}</span>}
       </div>
-      {view.round > 0 && (
-        <div className="hud__extra">
-          <HeatBreakdown view={view} />
-        </div>
-      )}
     </SketchFrame>
   );
 }
+
+/** Wanted stars that make a bust. design §5.5 */
+const bustOf = (view: PlayerView) => jobOf(view).alarm.bustStars;
 
 const cardLabel = (view: PlayerView) => `${cardName(view.card!.id)}${view.card!.room ? ` (${roomName(view.card!.room)} closed)` : ""}`;
 
@@ -301,7 +298,7 @@ function BankBoard({ view, pick }: { view: PlayerView; pick: Pick | null }) {
         rooms={view.rooms}
         names={names}
         time={scene.time}
-        heat={view.heat}
+        alarm={view.wanted / bustOf(view)}
         selected={scene.selected}
         closed={scene.closed}
         occupants={scene.occupants}
@@ -405,7 +402,7 @@ function MovePanel({ view, round, timers, offset, send, pick }: BoardProps & { r
   const p = Math.min(pocket, loot);
   const missed = justMissed(view);
   const changed = !mine || mine.room !== room || mine.pocket !== p || (mine.watch ?? null) !== (picked?.watcher ? watch : null);
-  const ready = picked !== null && !picked.closed && (!picked.watcher || watch !== null);
+  const ready = picked !== null && picked.closed === null && (!picked.watcher || watch !== null);
 
   const lock = async () => {
     if (!picked || !ready) return;
@@ -425,7 +422,9 @@ function MovePanel({ view, round, timers, offset, send, pick }: BoardProps & { r
       </div>
       {missed && (
         <p className="move__missed" role="status">
-          You missed round {missed.round}: the default move sent you to the {roomName(missed.room)}, handing everything in.
+          {missed.room === null
+            ? `You missed round ${missed.round}: the default room is taped off, so you sat the round out.`
+            : `You missed round ${missed.round}: the default move sent you to the ${roomName(missed.room)}, handing everything in.`}
         </p>
       )}
       <div className="move__rooms" role="group" aria-label="Rooms">
@@ -436,11 +435,11 @@ function MovePanel({ view, round, timers, offset, send, pick }: BoardProps & { r
             name={o.name}
             {...(isBankRoom(o.id) ? { icon: <RoomIcon room={o.id} size={22} /> } : {})}
             loot={o.loot}
-            heat={o.heat}
+            bell={o.bell}
             notes={o.notes}
             selected={room === o.id}
-            disabled={o.closed}
-            disabledNote="Closed by Lockdown"
+            disabled={o.closed !== null}
+            {...(o.closed !== null ? { disabledNote: o.closed } : {})}
             onSelect={() => setRoom(o.id)}
           />
         ))}
@@ -527,7 +526,7 @@ export function GameOver({ view }: { view: PlayerView }) {
   const ending = endingText(outcome);
   const end = view.ledger.find((x) => x.event.type === "gameEnded");
   return (
-    <SketchFrame as="section" seed="game-over" radius={20} shadow={0.55} tape className={won ? "panel over" : "panel over is-busted"} aria-labelledby="over-h">
+    <SketchFrame as="section" seed="game-over" radius={20} shadow={0.55} tape className={won ? "panel over" : "panel over is-busted"} aria-labelledby="over-h" data-ending={won ? "success" : outcome.reason}>
       <p className={won ? "over__stamp" : "over__stamp is-busted"} aria-hidden="true">
         {won ? "JOB DONE" : "BUSTED"}
       </p>

@@ -25,7 +25,7 @@ import { Underline } from "../components/Underline";
 import { MaskMark, Wordmark } from "../components/Wordmark";
 import { CREW_COLOURS } from "../components/avatarLooks";
 import { Clock, Lock } from "../components/icons";
-import { HeatMeter, Meter } from "../components/Meter";
+import { Meter } from "../components/Meter";
 import { RoomTile } from "../components/RoomTile";
 import { RoomIcon } from "../art/RoomIcon";
 import { SplitSlider } from "../components/SplitSlider";
@@ -285,7 +285,7 @@ export function Gallery() {
               </div>
               <div className="g-col">
                 <Toast text="Dez locked in a move." tone="good" seed="g-toast1" />
-                <Toast text="Heat is climbing: 72 / 100." tone="bad" seed="g-toast2" />
+                <Toast text="Raid! The Vault is taped off. Wanted 2." tone="bad" seed="g-toast2" />
                 <Toast text="Meeting at 8 pm tonight." seed="g-toast3" />
               </div>
               <div className="g-row">
@@ -313,7 +313,7 @@ export function Gallery() {
               </SketchFrame>
             </Section>
 
-            <Section id="game" title="Game kit" note="M2-6 · room tiles, split slider, Haul meter, Heat thermometer">
+            <Section id="game" title="Game kit" note="M2-6 · room tiles, split slider, Haul and Wanted meters">
               <GameKitSamples />
             </Section>
 
@@ -349,10 +349,10 @@ function GameKitSamples() {
   return (
     <>
       <div className="g-tiles">
-        <RoomTile seed="g-rt1" name="Vault" icon={<RoomIcon room="vault" size={22} />} loot={6} heat="up" selected={room === "vault"} onSelect={() => setRoom("vault")} />
-        <RoomTile seed="g-rt2" name="Deposit boxes" icon={<RoomIcon room="depositBoxes" size={22} />} loot={5} heat="up" notes={["more than 2 here: 3 each"]} selected={room === "boxes"} onSelect={() => setRoom("boxes")} />
-        <RoomTile seed="g-rt3" name="Rooftop" icon={<RoomIcon room="rooftop" size={22} />} loot={0} heat="down" selected={room === "roof"} onSelect={() => setRoom("roof")} />
-        <RoomTile seed="g-rt4" name="Office" icon={<RoomIcon room="office" size={22} />} loot={4} heat="none" disabled disabledNote="Closed by Lockdown" />
+        <RoomTile seed="g-rt1" name="Vault" icon={<RoomIcon room="vault" size={22} />} loot={6} bell="Bell 3 of 4" selected={room === "vault"} onSelect={() => setRoom("vault")} />
+        <RoomTile seed="g-rt2" name="Deposit boxes" icon={<RoomIcon room="depositBoxes" size={22} />} loot={5} bell="Bell 0 of 4" notes={["+1 coin this round"]} selected={room === "boxes"} onSelect={() => setRoom("boxes")} />
+        <RoomTile seed="g-rt3" name="Rooftop" icon={<RoomIcon room="rooftop" size={22} />} loot={0} bell="Bell 0 of 4" selected={room === "roof"} onSelect={() => setRoom("roof")} />
+        <RoomTile seed="g-rt4" name="Office" icon={<RoomIcon room="office" size={22} />} loot={4} bell="Bell off" disabled disabledNote="Taped off through round 4" />
       </div>
       <SplitSlider id="g-split" loot={6} pocket={pocket} onChange={setPocket} />
       <div className="g-row g-row--center">
@@ -362,10 +362,10 @@ function GameKitSamples() {
         <span className="meta">Haul 18 · target 28</span>
       </div>
       <div className="g-row g-row--center">
-        {[12, 48, 76, 94].map((h) => (
-          <HeatMeter key={h} heat={h} size="sm" />
-        ))}
-        <span className="meta">Heat 12 / 48 / 76 / 94</span>
+        <span className="g-meter">
+          <Meter value={2} max={3} tone="var(--bad)" label="Wanted (sample)" />
+        </span>
+        <span className="meta">Wanted 2 / 3</span>
         <span className="g-icon">
           <Clock />
         </span>
@@ -465,7 +465,7 @@ function ChatSamples() {
         send={send}
         connection="open"
         evidence={[{ seq: 1, text: "Round 2, Vault: Dez saw Lucky Lou there too." }]}
-        events={[{ key: "g-ev", at: gAt(6), text: "Round 2: Haul +9, Heat +12." }]}
+        events={[{ key: "g-ev", at: gAt(6), text: "Round 2: Haul +9 (now 14), 51 coins left in the bank." }]}
         visible
         className="g-chat__panel"
       />

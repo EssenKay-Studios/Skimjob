@@ -16,7 +16,6 @@ import { checkMove, closeAlibis, resolveRound } from "./round";
 import { isObject, playerFor, show } from "./check";
 import { claimRole } from "./claims";
 import { buyPerk } from "./perks";
-import { policeMoment } from "./police";
 import {
   acceptMeeting,
   callEmergency,
@@ -123,8 +122,6 @@ const advance: Handler = (state, command, draw) => {
       return closeMeeting(state, deadline.meetingId, draw);
     case "resolveShakedown":
       return resolveShakedown(state, deadline.meetingId, draw);
-    case "policeMoment":
-      return policeMoment(state, deadline.moment, draw);
     default:
       return `unknown deadline ${deadline.kind}`;
   }

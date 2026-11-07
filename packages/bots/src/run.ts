@@ -54,9 +54,9 @@ export function createBots(
 /**
  * Run a game to the end. Each step, every agent (in seat order) sees its view
  * and sends its commands; then one deadline passes: an open meeting closes, a
- * pending shakedown's window ends, a called emergency opens, the round resolves
- * (after the round's police moment, when there are police), its alibis close, or the act's meeting opens (the
- * server picks a slot if nobody locked one in). Seats without an agent just
+ * pending shakedown's window ends, a called emergency opens, the round resolves,
+ * its alibis close, or the act's meeting opens (the server picks a slot if
+ * nobody locked one in). Seats without an agent just
  * get default moves, like an absent player.
  */
 export function runBotGame(config: GameConfig, agents: readonly Agent[], options: BotGameOptions = {}): BotGameResult {
@@ -91,10 +91,7 @@ export function runBotGame(config: GameConfig, agents: readonly Agent[], options
     } else if (state.pendingEmergency && (phase.kind === "planning" || phase.kind === "alibis" || phase.kind === "awaitingMeeting")) {
       system({ type: "advance", deadline: { kind: "openMeeting", meetingId: state.pendingEmergency.meetingId } });
     } else if (phase.kind === "planning") {
-      // extension.md "Police activity": the sim has no clock, so it takes one
-      // police moment per round, at the round's resolution (it may end the game).
-      if (state.police) system({ type: "advance", deadline: { kind: "policeMoment", moment: state.police.moment } });
-      if (state.phase.kind === "planning") system({ type: "advance", deadline: { kind: "round", round: phase.round } });
+      system({ type: "advance", deadline: { kind: "round", round: phase.round } });
     } else if (phase.kind === "alibis") {
       // design §5.4: the bots have posted their alibis this step, so the alibi deadline passes.
       system({ type: "advance", deadline: { kind: "alibis", round: phase.round } });

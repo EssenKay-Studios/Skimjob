@@ -3,6 +3,7 @@
 // them are refused without a crash; seeded games only ever flip the four kept cards, one
 // per round from round 2; the Server room is an ordinary room. design §10, §6.2, §17.2
 import { describe, expect, it } from "vitest";
+import { NO_RAIDS } from "./v01-numbers.testkit";
 import { EVENTS, EVENT_DECK, EVENTS_FROM_ROUND, type RoomId } from "@skimjob/content";
 import type { GameConfig, GameEvent, GameState, PlayerId } from "./types";
 import { createGame, setupEvents, validateConfig } from "./setup";
@@ -26,6 +27,8 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
     rolePool: [],
     eventsEnabled: true,
     voteVisibility: "hiddenThenRevealed",
+    // Bells too big to raid: these scripts test other rules (bells and raids: bells.test.ts).
+    contentOverrides: NO_RAIDS,
     ...extra,
   };
 }
@@ -99,7 +102,7 @@ describe("QA: configs naming a dropped card or the old Server-room power are ref
     expect(errors.join("\n")).toMatch(/contentOverrides\.rooms\.serverRoom\.\w+ is not an overridable field/);
   });
   it("the Server room's own numbers are still overridable", () => {
-    expect(validateConfig(config(6, { contentOverrides: { rooms: { serverRoom: { coins: 1, heatPressure: 0 } } } }))).toEqual([]);
+    expect(validateConfig(config(6, { contentOverrides: { rooms: { serverRoom: { coins: 1, quietCoins: 0 } } } }))).toEqual([]);
   });
   it("answerDoubleCross is refused at any phase: no throw, state untouched", () => {
     let s = resolve(createGame(config(6)));

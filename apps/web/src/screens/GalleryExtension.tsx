@@ -1,9 +1,9 @@
 // /dev/gallery sections for the Extension UI (docs/extension.md): role facts
-// and tappable role names, the rulebook, the target bar and Heat breakdown,
+// and tappable role names, the rulebook, the target bar,
 // the gap box, a live shop on a local engine game, the no-tells feed lines,
 // the lobby deck settings and the end screen. No server: a local engine game.
 import { useMemo, useState, type ReactNode } from "react";
-import { DECKS, POLICE_ACTIVITY, type RoleId } from "@skimjob/content";
+import { DECKS, type RoleId } from "@skimjob/content";
 import {
   PUBLIC,
   applyEvent,
@@ -19,7 +19,7 @@ import {
 import type { LobbySettings } from "../api";
 import { Button } from "../components/Button";
 import { DeckSettings } from "../components/DeckSettings";
-import { GapBox, HeatBreakdown, PerkUses, RoleFacts, RoleList, RoleTip, RulebookButton, TargetBar, Tokens } from "../components/Extension";
+import { GapBox, PerkUses, RoleFacts, RoleList, RoleTip, RulebookButton, TargetBar, Tokens } from "../components/Extension";
 import { SketchFrame } from "../components/SketchFrame";
 import { useToast } from "../components/Toast";
 import { Underline } from "../components/Underline";
@@ -47,13 +47,12 @@ const step = (s: GameState, c: Parameters<typeof handleCommand>[1]) => {
   return r.ok ? r.state : s;
 };
 
-/** Rounds 1–3 played with default moves, police activity in round 2, then meeting 1 closes (a missed target). */
+/** Rounds 1–3 played with default moves, then meeting 1 closes (a missed target). */
 function playedGame(): GameState {
   let s = createGame(config({ eventsEnabled: false }));
   for (let r = 1; r <= 3; r++) {
     s = step(s, round(r));
     if (r === 1) s = step(s, { type: "postAlibi", player: "p2", room: "vault" });
-    if (r === 2) s = applyEvent(s, { type: "policeActivity", visibility: PUBLIC, round: 2, heatAdded: POLICE_ACTIVITY.heat, heat: s.heat + POLICE_ACTIVITY.heat });
     s = step(s, alibis(r));
   }
   s = step(s, { type: "scheduleMeeting", player: "p1", act: 1, slot: "now" });
@@ -187,9 +186,6 @@ function HudSections() {
           <TargetBar view={{ ...fresh, haul: 40, act: 3 }} />
         </div>
       </Section>
-      <Section id="ext-heat" title="Heat breakdown" note="per round: every round, rooms, police activity, missed target · newest first">
-        <HeatBreakdown view={played} />
-      </Section>
       <Section id="ext-gap" title="Gap box" note="alibis vs the Haul's growth, event effects included">
         <div className="g-stack">
           <GapBox view={gap({ round: 4, posted: 0, alibis: 0, haulGrowth: 9, unaccounted: -9 })} />
@@ -202,20 +198,20 @@ function HudSections() {
   );
 }
 
-/** extension.md Situations: a Mole's tip-off reads like police activity. */
+/** extension.md Situations, design §5.2: a Mole's ring reads like any ring. */
 function NoTellsSection() {
   const ctx = { me: "p1", name: (p: string) => NAMES[Number(p.slice(1)) - 1] ?? p };
   const feed = { type: "roomWatched", visibility: privateTo("p1"), player: "p1", round: 4, source: "security", room: "vault", seen: [], offline: true } as const;
-  const police = { type: "policeActivity", visibility: PUBLIC, round: 5, heatAdded: POLICE_ACTIVITY.heat, heat: 41 } as const;
+  const bells = { type: "bellsRung", visibility: PUBLIC, round: 5, bells: { vault: 0, office: 2, lobby: 0, security: 0, rooftop: 0 } } as const;
   return (
-    <Section id="ext-notells" title="Camera offline and police activity" note="the same line whatever caused it: no tells">
+    <Section id="ext-notells" title="Camera offline and a bell's ring" note="the same line whatever caused it: no tells">
       <dl className="g-stack">
         <dt className="meta">Hacker's loop</dt>
         <dd>{describeEvent(feed, ctx)}</dd>
-        <dt className="meta">Mole's tip-off</dt>
-        <dd>{describeEvent(police, ctx)}</dd>
-        <dt className="meta">Random police activity</dt>
-        <dd>{describeEvent(police, ctx)}</dd>
+        <dt className="meta">Mole's ring and a grab</dt>
+        <dd>{describeEvent(bells, ctx)}</dd>
+        <dt className="meta">Two grabs</dt>
+        <dd>{describeEvent(bells, ctx)}</dd>
       </dl>
     </Section>
   );
@@ -257,8 +253,8 @@ function EndSection() {
   const ended = (outcome: Extract<PlayerView["phase"], { kind: "ended" }>["outcome"]): PlayerView => ({ ...base, phase: { kind: "ended", outcome } });
   return (
     <>
-      <Section id="ext-end-fail" title="End screen: a raid" note="how it ended · ranking marked as a loss · the winner's reason badge">
-        <GameOver view={ended({ result: "failed", reason: "heat", ranking, winners: [ranking[0]!.player] })} />
+      <Section id="ext-end-fail" title="End screen: a bust" note="how it ended · ranking marked as a loss · the Rooftop escapee's badge">
+        <GameOver view={ended({ result: "failed", reason: "bust", escapees: [ranking[0]!.player], ranking, winners: [ranking[0]!.player] })} />
       </Section>
       <Section id="ext-end-win" title="End screen: success" note="biggest stash wins">
         <GameOver view={ended({ result: "success", ranking, winners: [ranking[0]!.player] })} />

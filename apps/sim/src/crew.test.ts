@@ -36,13 +36,13 @@ describe("crewFor — the bot mix by weight", () => {
 
 describe("setupGame", () => {
   it("builds a valid config with one seed per game", () => {
-    const o = options(["--overrides", '{"heat":{"perRound":5}}']);
+    const o = options(["--overrides", '{"alarm":{"bulbs":5}}']);
     const { config, crew } = setupGame(o, 5, 3);
     expect(validateConfig(config)).toEqual([]);
     expect(config.seed).toBe(gameSeed("sim", 5, 3));
     expect(config.players.map((p) => p.id)).toEqual(["p1", "p2", "p3", "p4", "p5"]);
     expect(crew).toHaveLength(5);
-    expect(config.contentOverrides).toEqual({ heat: { perRound: 5 } });
+    expect(config.contentOverrides).toEqual({ alarm: { bulbs: 5 } });
     expect(setupGame(o, 5, 4).config.seed).not.toBe(config.seed);
   });
 });

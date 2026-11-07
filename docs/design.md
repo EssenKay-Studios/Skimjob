@@ -95,7 +95,7 @@ Rooms in play by crew size: 3–4 players 5 rooms; 5–8 players 7 rooms; 9–12
 
 ### 3.3 Missed move
 
-A player who hasn't locked in when the round's deadline passes plays the **Lobby, 1 coin, handed in**. A missed move never shows as locked in *(owner, 6 Nov)*.
+A player who hasn't locked in when the round's deadline passes plays the **Lobby, 1 coin, handed in**. A missed move never shows as locked in *(owner, 6 Nov)*. If the Lobby is taped off (§5.3), the player **sits the round out**: in no room, grabbing and ringing nothing, and not on the Rooftop, so not escaping a bust (§5.5) *(owner, 7 Nov)*.
 
 ### 3.4 Who you see
 

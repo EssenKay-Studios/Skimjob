@@ -70,7 +70,7 @@ export interface GameRecord {
   readonly seed: string;
   readonly players: number;
   readonly result: "success" | "failed";
-  readonly reason: "heat" | "target" | null;
+  readonly reason: "bust" | "target" | null;
   /** Round the game ended in (9 if it reached the final check). */
   readonly endedRound: number;
   readonly endedAct: number;
@@ -78,7 +78,11 @@ export interface GameRecord {
   /** Coins left in the bank at the end. design §6.1 */
   readonly bankLeft: number;
   readonly finalTarget: number;
-  readonly heat: number;
+  /** Wanted at the end, and the raids that raised it. design §5.3, §5.4 */
+  readonly wanted: number;
+  readonly raids: number;
+  /** Rounds with more than half the crew on the Rooftop (design §21 G4). */
+  readonly stalls: number;
   readonly checkpointsMissed: number;
   readonly meetings: number;
   readonly shakedowns: readonly ShakedownRecord[];
@@ -138,17 +142,23 @@ export function recordGame(state: GameState, crew: readonly PersonalityId[], rej
   let meetings = 0;
   let checkpointsMissed = 0;
   let endedRound = 0;
+  let raids = 0;
+  const lyingLow = new Map<number, number>();
 
   const add = (m: Map<PlayerId, number>, id: PlayerId, v: number) => m.set(id, (m.get(id) ?? 0) + v);
   for (const event of state.log as readonly GameEvent[]) {
     switch (event.type) {
       case "coinsGrabbed":
+        if (job.rooms[event.room]?.lieLow) lyingLow.set(event.round, (lyingLow.get(event.round) ?? 0) + 1);
         add(grabbed, event.player, event.duffel + event.pocket);
         add(pocketed, event.player, event.pocket);
         add(sinceShakedown, event.player, event.pocket);
         break;
       case "roundResolved":
         endedRound = event.round;
+        break;
+      case "roomRaided":
+        raids++;
         break;
       case "meetingOpened":
         meetings++;
@@ -199,7 +209,9 @@ export function recordGame(state: GameState, crew: readonly PersonalityId[], rej
     haul: state.haul,
     bankLeft: state.bank,
     finalTarget,
-    heat: state.heat,
+    wanted: state.wanted,
+    raids,
+    stalls: [...lyingLow.values()].filter((k) => k > n / 2).length,
     checkpointsMissed,
     meetings,
     shakedowns,

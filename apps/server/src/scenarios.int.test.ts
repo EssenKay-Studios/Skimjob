@@ -8,7 +8,7 @@
 // People are played by bot logic (or a script) over their own sockets.
 // design §17.2, §17.3, §13, §11, §16.1, §7
 import { createBot, PERSONALITIES, type Agent } from "@skimjob/bots";
-import { BANK_JOB, POOL_ROLES, MOLE_ROLE, DECKS, ROLES } from "@skimjob/content";
+import { BANK_JOB, POOL_ROLES, DECKS, ROLES } from "@skimjob/content";
 import { canSee, replay, viewFor, type GameConfig, type GameEvent, type GameState, type PlayerView, type SystemCommand } from "@skimjob/engine";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -24,7 +24,7 @@ import type { LobbySettings } from "./settings";
 import { createGameStore, type GameStore } from "./store";
 import { testDb } from "./testkit";
 
-/** The Standard deck with every Wildcard and Lone wolf toggled off: no Mole, so no police moments . */
+/** The Standard deck with every Wildcard and Lone wolf toggled off: Team players only. */
 const TEAM_ROLES = DECKS.standard.filter((r) => ROLES[r]?.tag === "teamPlayer");
 
 const quick = { interval: 1, timeout: 5000 };
@@ -312,8 +312,9 @@ const steadyBrain =
   (view) => {
     if (view.phase.kind === "meeting") return view.me.vote ? [] : [{ type: "castVote", vote: { kind: "skip" } }];
     if (view.phase.kind !== "planning" || view.me.move) return [];
-    const closed = view.card?.room;
-    const pick = room === closed ? (room === "lobby" ? "office" : "lobby") : room;
+    // design §13 Lockdown, §5.3: a closed or taped-off room is refused, so the Lobby (or the Office) instead.
+    const closed = (r: string) => r === view.card?.room || Object.hasOwn(view.taped, r);
+    const pick = closed(room) ? (closed("lobby") ? "office" : "lobby") : room;
     // A full grab of the room's coins, all handed in (design §3.2).
     return [{ type: "submitMove", move: pick === "security" ? { room: pick, duffel: 0, pocket: 0, watch: "vault" } : { room: pick, duffel: BANK_JOB.rooms[pick]?.coins ?? 0, pocket: 0 } }];
   };
@@ -339,7 +340,8 @@ describe("scenarios: end-to-end stories over HTTP + WebSocket", () => {
     expect(p2.raw.join()).not.toMatch(/side deal|"verified":true/);
     expect(p2.messages.filter((m) => "dmNotice" in m)).toHaveLength(1); // the refused role card sent no notice
     expect(final.playerOrder).toEqual(Array.from({ length: 8 }, (_, i) => playerIdFor(i)));
-    expect(typesIn(final)).toContain("meetingClosed");
+    // A bust (design §5.5) can end the game before the first meeting, after round 3.
+    if (final.resolvedRound > 3) expect(typesIn(final)).toContain("meetingClosed");
     // The lobby shows the game as ended.
     expect((await lobby(game.id, game.humans[0]!.who)).status).toBe("ended");
   }, 60_000);
@@ -422,7 +424,8 @@ describe("scenarios: end-to-end stories over HTTP + WebSocket", () => {
     const game = await startGame(2, 3);
     const clients = await Promise.all(game.humans.map((h) => Client.open(game.id, h)));
     const brains = brainsFor(game);
-    expect(await play(game, clients, brains, (s) => s.phase.kind === "planning" && s.round === 5)).toEqual([]);
+    // Round 2: one round of raids can't reach Wanted 3, so the game is still on (design §5.5).
+    expect(await play(game, clients, brains, (s) => s.phase.kind === "planning" && s.round === 2)).toEqual([]);
     await clients[0]!.send({ type: "submitMove", move: { room: "lobby", duffel: 1, pocket: 0 } });
     const mid = await load(game.id);
     await app.close();
@@ -484,14 +487,14 @@ describe("scenarios: end-to-end stories over HTTP + WebSocket", () => {
     expect(final.playerOrder).toHaveLength(12);
   }, 90_000);
 
-  it("the heist fails by Heat: everyone hits the Vault until the cops raid at 100 (design §7)", async () => {
+  it("the heist fails by a bust: everyone hits the Vault (or the Office while it is taped off) until Wanted 3 (design §5.3–§5.5)", async () => {
     const game = await startGame(3, 0, { roles: TEAM_ROLES, eventsEnabled: false });
     const clients = await Promise.all(game.humans.map((h) => Client.open(game.id, h)));
     const refused = await play(game, clients, clients.map(() => steadyBrain("vault")));
     const final = await finish(game, clients, refused, app.live.botRefusals.length);
-    expect(final.phase).toMatchObject({ kind: "ended", outcome: { result: "failed", reason: "heat" } });
-    expect(final.heat).toBe(100);
-    for (const c of clients) expect(c.lastView().ledger.some((e) => e.event.type === "copsRaided")).toBe(true);
+    expect(final.phase).toMatchObject({ kind: "ended", outcome: { result: "failed", reason: "bust", escapees: [], winners: [] } });
+    expect(final.wanted).toBe(3);
+    for (const c of clients) expect(c.lastView().ledger.filter((e) => e.event.type === "roomRaided")).toHaveLength(3);
   }, 60_000);
 
   it("the heist fails by target: a crew on the Rooftop misses every checkpoint and the final target (design §11.5)", async () => {
@@ -503,8 +506,6 @@ describe("scenarios: end-to-end stories over HTTP + WebSocket", () => {
     expect(final.haul).toBe(0);
     const checks = final.log.filter((e) => e.type === "checkpointChecked");
     expect(checks.map((e) => [e.act, e.met])).toEqual([[1, false], [2, false], [3, false]]);
-    // design §11.5: a missed Act 1/2 checkpoint adds Heat; the final check doesn't.
-    expect(checks.map((e) => e.heatPenalty > 0)).toEqual([true, true, false]);
   }, 60_000);
 
   it("hostile input over a socket is refused and the game carries on (bad shapes, forged ids, system commands)", async () => {

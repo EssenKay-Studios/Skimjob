@@ -1,6 +1,5 @@
 // Host controls (M2-13, design §15): the public control state the server sends
 // with each view (live.ts `Control`), checked, and what the host panel offers.
-// Police moments never appear here: the server only says whether the host paused.
 
 export interface Control {
   /** When the host paused the game (server ms), or null while it runs. */

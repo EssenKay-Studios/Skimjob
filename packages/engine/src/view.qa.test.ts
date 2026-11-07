@@ -14,6 +14,7 @@ import { createGame } from "./setup";
 import { handleCommand } from "./handle";
 import { eventsSince, viewFor } from "./view";
 import { fullGrab } from "./grab.testkit";
+import { NO_RAIDS } from "./v01-numbers.testkit";
 
 type Cmd = Record<string, unknown>;
 type Kind = "role" | "split" | "swap" | "watch" | "miss" | "churn" | "voteChurn" | "ballotSwap" | "seal" | "control";
@@ -36,10 +37,12 @@ const config = (n: number, voteVisibility: VoteVisibility, seed: string): GameCo
   seed,
   players: Array.from({ length: n }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: i % 2 === 0 })),
   job: "bank",
-  // Team players only (no Hacker loop, which changes others' feeds by design; no Mole tip-offs).
+  // Team players only (no Hacker loop, which changes others' feeds by design; no Mole rings).
   rolePool: ["rookie", "lookout", "priest", "auditor"],
   eventsEnabled: false,
   voteVisibility,
+  // Bells too big to raid, so a random room is never taped off (raids in leak tests: view.leak.test.ts).
+  contentOverrides: NO_RAIDS,
 });
 
 function apply(s: GameState, c: Cmd, game: string): GameState {

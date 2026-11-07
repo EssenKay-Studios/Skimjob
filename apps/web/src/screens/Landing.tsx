@@ -107,7 +107,7 @@ export function Landing() {
               </h1>
               <p className="landing__lede">
                 Everyone picks a room, grabs the loot, then decides how much to hand in and how much to pocket. Biggest stash
-                wins, but if the Heat hits 100 or you miss the target, nobody does.
+                wins, but if the police bust the crew only the Rooftop gets away, and if you miss the target nobody wins.
               </p>
 
               <div className="landing__cta">

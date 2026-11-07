@@ -163,7 +163,6 @@ describe("QA: full 9-round games with all three meetings — design §11, §4, �
     // One checkpoint per act, after the regular meeting; rounds 1–9 each resolved once.
     expect(ofType(a.log, "checkpointChecked").map((e) => e.act)).toEqual([1, 2, 3]);
     expect(ofType(a.log, "roundResolved").map((e) => e.round)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
-    expect(ofType(a.log, "checkpointChecked").at(-1)?.heatPenalty).toBe(0);
     // Same seed + same commands → same log; replay (via JSON too) rebuilds the state.
     expect(fullGame(n, mode).log).toEqual(a.log);
     expect(replay(a.config, JSON.parse(JSON.stringify(a.log)) as GameEvent[])).toEqual(a);
@@ -325,39 +324,6 @@ describe("QA: shakedowns — design §11.3, extension.md \"Shakedowns (fixed num
     expect(s.haul).toBe(0);
     expect(s.players.p1?.stash).toBe(haul + 1);
     expect(LAST(s, "checkpointChecked")).toMatchObject({ haul: 0, met: false });
-  });
-});
-
-describe("QA: missed checkpoint and the raid at 100 — design §11.5, §7", () => {
-  /** Two of the three in Security (no loot, no pressure; p2 defaults to the Lobby) for three rounds from a chosen Heat; the Act 1 checkpoint is missed. */
-  function missFrom(heat: number): GameState {
-    let s = { ...game(3), heat };
-    for (let r = 0; r < 3; r++) s = run(s, mv("p0", "security", 0, { watch: "vault" }), mv("p1", "security", 0, { watch: "vault" }), ROUND);
-    return run(s, sched(1), open("act-1"));
-  }
-
-  it("Heat landing exactly on 100 from the +15 is a raid; one below is not", () => {
-    const probe = missFrom(0);
-    const gain = probe.heat; // Heat gained over the three rounds
-    const at = run(missFrom(85 - gain), CLOSE);
-    expect(LAST(at, "checkpointChecked")).toMatchObject({ met: false, heatPenalty: 15 });
-    expect(LAST(at, "copsRaided")).toMatchObject({ heat: 100 });
-    expect(at.phase).toMatchObject({ kind: "ended", outcome: { result: "failed", reason: "heat" } });
-    const below = run(missFrom(84 - gain), CLOSE);
-    expect(below.heat).toBe(99);
-    expect(ofType(below.log, "copsRaided")).toEqual([]);
-    expect(below.phase).toEqual({ kind: "planning", round: 4 });
-  });
-
-  it("a missed Act 2 checkpoint adds +15 too, and the shortfall carries over", () => {
-    let s = run(toActMeeting(game(3)), CLOSE);
-    const heat = s.heat;
-    s = toActMeeting(s);
-    const before = s.heat;
-    s = run(s, CLOSE);
-    expect(LAST(s, "checkpointChecked")).toMatchObject({ act: 2, target: 42, met: false, heatPenalty: 15 });
-    expect(s.heat).toBe(before + 15);
-    expect(heat).toBeLessThan(before);
   });
 });
 

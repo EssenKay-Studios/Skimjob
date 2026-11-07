@@ -18,10 +18,10 @@ describe("jobOf / roleOf with content overrides (design §17.4)", () => {
   });
 
   it("uses the overridden numbers from the public gameCreated", () => {
-    const s = gameWith({ rooms: { vault: { coins: 9 } }, heat: { perRound: 7 }, roles: { lookout: { extraRooms: 2 } } }, (g) => g.players.ana?.role === "lookout");
+    const s = gameWith({ rooms: { vault: { coins: 9 } }, alarm: { bulbs: 7 }, roles: { lookout: { extraRooms: 2 } } }, (g) => g.players.ana?.role === "lookout");
     const view = viewFor(s, "ana");
     expect(jobOf(view).rooms.vault?.coins).toBe(9);
-    expect(jobOf(view).heat.perRound).toBe(7);
+    expect(jobOf(view).alarm.bulbs).toBe(7);
     expect(roleOf(view).power).toEqual({ kind: "lookout", extraRooms: 2 });
   });
 });

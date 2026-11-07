@@ -1,5 +1,6 @@
-// QA (PR #4): scripted full games, rejections, raids, determinism and private
-// information for the round loop. design §3 (rooms, coins, grabs), §6.1; R6 Heat
+// QA (PR #4): scripted full games, rejections, determinism and private
+// information for the round loop. design §3 (rooms, coins, grabs), §6.1. The
+// scripted games pin bells too big to raid; bells and raids: bells.test.ts.
 import { STARTER_ROLES } from "@skimjob/content";
 import { handleThroughAlibis } from "./alibis.testkit";
 import { describe, expect, it } from "vitest";
@@ -7,9 +8,10 @@ import type { GameConfig, GameEvent, GameState, Move } from "./types";
 import { PUBLIC, canSee } from "./types";
 import { setupEvents } from "./setup";
 import { applyEvent, replay } from "./reduce";
-import { actOfRound, isLastRoundOfAct } from "./round";
+import { actOfRound } from "./round";
 import { handleCommand } from "./handle";
 import { fullGrab } from "./grab.testkit";
+import { NO_RAIDS } from "./v01-numbers.testkit";
 
 function config(players: number): GameConfig {
   return {
@@ -19,6 +21,7 @@ function config(players: number): GameConfig {
     rolePool: [...STARTER_ROLES], // a shakedown window only if the shop holds a Shield
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
+    contentOverrides: NO_RAIDS,
   };
 }
 
@@ -95,33 +98,32 @@ function checkLedger(s: GameState): void {
 // ---------------------------------------------------------------- scripts
 // Hand-calculated with content numbers: coins Lobby 1, Office, Deposit boxes, Manager's office, Server room 2,
 // Vault 3 (design §3.1); a missed move hands in 1 (§3.3); the bank holds 16 a player (§6.1).
-// R6 Heat per round = round(4 + (20·Vault + 10·(Deposit boxes + Manager) − 20·Rooftop) ÷ crew), clamped 0–100.
 
-/** 3 players, all Rookies; p2 hands in the Lobby's 1 every round. Heat Δ = round(4 + 20·(V − R)/3). */
+/** 3 players, all Rookies; p2 hands in the Lobby's 1 every round. */
 const ROOKIES: (Move | null)[][] = [
-  [m("vault", 1), m("office"), m("lobby")], //                          haul +5, heat round(10.67) = 11 → 11
-  [m("security", 0, { watch: "vault" }), m("vault", 3), m("lobby")], // haul +1, +11 → 22
-  [m("rooftop"), m("rooftop"), m("lobby")], //                          haul +1, round(−9.33) = −9 → 13
-  [m("lobby", 1), m("office", 2), m("lobby")], //                       haul +1, +4 → 17
-  [null, m("office", 1), m("lobby")], //    p0 misses: Lobby, 1 in:     haul +3, +4 → 21
-  [m("vault"), m("vault"), m("lobby")], //                              haul +7, round(17.33) = 17 → 38
-  [m("vault", 2), m("vault", 2), m("lobby")], //                        haul +3, +17 → 55
-  [m("vault", 3), m("rooftop"), m("lobby")], //                         haul +1, +4 → 59
-  [m("office", 1), m("vault"), m("lobby")], //                          haul +5, +11 → 70; 43 of the bank's 48 taken
+  [m("vault", 1), m("office"), m("lobby")], //                          haul +5
+  [m("security", 0, { watch: "vault" }), m("vault", 3), m("lobby")], // haul +1
+  [m("rooftop"), m("rooftop"), m("lobby")], //                          haul +1
+  [m("lobby", 1), m("office", 2), m("lobby")], //                       haul +1
+  [null, m("office", 1), m("lobby")], //    p0 misses: Lobby, 1 in:     haul +3
+  [m("vault"), m("vault"), m("lobby")], //                              haul +7
+  [m("vault", 2), m("vault", 2), m("lobby")], //                        haul +3
+  [m("vault", 3), m("rooftop"), m("lobby")], //                         haul +1
+  [m("office", 1), m("vault"), m("lobby")], //                          haul +5
 ];
 
-/** 3 players: Priest, Lookout, Hacker. Heat Δ = round(4 + 20·(V − R)/3). The last round empties the bank exactly. */
+/** 3 players: Priest, Lookout, Hacker. The last round empties the bank exactly. */
 const L = (room: string) => ({ ability: { kind: "lookout" as const, rooms: [room] } });
 const THREE: (Move | null)[][] = [
-  [m("vault"), m("office", 1, L("vault")), m("lobby", 1)], //          haul +4, +11 → 11
-  [m("vault"), m("vault", 3), m("vault", 3)], //                       haul +3, +24 → 35
-  [m("rooftop"), m("rooftop"), m("security", 0, { watch: "rooftop" })], //  haul 0,  −9 → 26
-  [null, m("lobby", 1, L("lobby")), m("office", 2)], //                haul +1, +4 → 30
-  [m("office"), m("office", 2), m("office", 2)], //                    haul +2, +4 → 34
-  [m("vault"), m("vault"), m("vault")], //                             haul +9, +24 → 58
-  [m("vault"), m("rooftop"), m("rooftop")], //                         haul +3, −3 → 55
-  [m("vault"), m("vault", 3), m("office")], //                         haul +5, +17 → 72
-  [m("lobby"), m("security", 0, { watch: "vault" }), m("office", 2)], // haul +1, +4 → 76; bank 3 → 0
+  [m("vault"), m("office", 1, L("vault")), m("lobby", 1)], //          haul +4
+  [m("vault"), m("vault", 3), m("vault", 3)], //                       haul +3
+  [m("rooftop"), m("rooftop"), m("security", 0, { watch: "rooftop" })], //  haul 0
+  [null, m("lobby", 1, L("lobby")), m("office", 2)], //                haul +1
+  [m("office"), m("office", 2), m("office", 2)], //                    haul +2
+  [m("vault"), m("vault"), m("vault")], //                             haul +9
+  [m("vault"), m("rooftop"), m("rooftop")], //                         haul +3
+  [m("vault"), m("vault", 3), m("office")], //                         haul +5
+  [m("lobby"), m("security", 0, { watch: "vault" }), m("office", 2)], // haul +1
 ];
 
 /** 12 players, all Rookies; every room is in play. */
@@ -129,7 +131,7 @@ const row = (...groups: [number, Move | null][]): (Move | null)[] => groups.flat
 const TWELVE: (Move | null)[][] = [
   // 3 Vault; 3 Deposit boxes (two pocket 2, one pockets 1); 2 Manager's office pocket 1; Office pockets 1;
   // Server room; Security watching Deposit boxes; Rooftop.
-  // haul 9 + 1 + 2 + 1 + 2 = 15; heat round(4 + (60 + 30 + 20 − 20)/12) = round(11.5) = 12 → 12
+  // haul 9 + 1 + 2 + 1 + 2 = 15
   [
     ...row([3, m("vault")], [2, m("depositBoxes", 2)], [1, m("depositBoxes", 1)], [2, m("managersOffice", 1)]),
     m("office", 1),
@@ -137,24 +139,23 @@ const TWELVE: (Move | null)[][] = [
     m("security", 0, { watch: "depositBoxes" }),
     m("rooftop"),
   ],
-  row([2, m("depositBoxes", 2)], [10, m("lobby")]), //               haul +10, 4 + 20/12 → +6 → 18
-  row([12, m("rooftop")]), //                                        −16 → 2
-  row([6, m("vault")], [6, m("office")]), //                         haul +30, +14 → 16
-  row([12, null]), //                                                all missed: haul +12, +4 → 20
-  row([12, m("managersOffice", 2)]), //                              haul 0, +14 → 34
-  [m("vault", 3), m("managersOffice"), ...row([10, m("office")])], // haul +22, 4 + 30/12 = 6.5 → 7 → 41
-  row([3, m("depositBoxes")], [9, m("vault")]), //                   haul 6 + 27 = 33, 4 + 210/12 = 21.5 → 22 → 63
-  [m("managersOffice"), ...row([5, m("rooftop")], [6, m("office")])], // haul +14, 4 − 90/12 = −3.5 → −3 → 60
+  row([2, m("depositBoxes", 2)], [10, m("lobby")]), //               haul +10
+  row([12, m("rooftop")]), //                                        haul 0
+  row([6, m("vault")], [6, m("office")]), //                         haul +30
+  row([12, null]), //                                                all missed: haul +12
+  row([12, m("managersOffice", 2)]), //                              haul 0
+  [m("vault", 3), m("managersOffice"), ...row([10, m("office")])], // haul +22
+  row([3, m("depositBoxes")], [9, m("vault")]), //                   haul 6 + 27 = 33
+  [m("managersOffice"), ...row([5, m("rooftop")], [6, m("office")])], // haul +14
 ];
 
 describe("QA scripted full games — design §3, §6.1", () => {
-  it("3 Rookies: 9 rounds, Haul/Stash/bank/Heat by hand", () => {
+  it("3 Rookies: 9 rounds, Haul/Stash/bank by hand", () => {
     let s = game(3);
     s = ok(s, submit("p0", m("office", 2))); // resubmitted below; the last one counts (§3.2)
     s = play(s, ROOKIES);
     expect(resolved(s).map((e) => e.type === "roundResolved" && e.haul)).toEqual([5, 6, 7, 8, 11, 18, 21, 22, 27]);
-    expect(resolved(s).map((e) => e.type === "roundResolved" && e.heat)).toEqual([11, 22, 13, 17, 21, 38, 55, 59, 70]);
-    expect([s.haul, s.heat, s.bank]).toEqual([27, 70, 5]);
+    expect([s.haul, s.bank]).toEqual([27, 5]);
     expect(stashes(s)).toEqual([8, 8, 0]);
     expect(s.phase).toEqual({ kind: "awaitingMeeting", act: 3 });
     expect(ofType(s, "defaultMoveAssigned").map((e) => [e.player, e.round])).toEqual([["p0", 5]]);
@@ -165,19 +166,14 @@ describe("QA scripted full games — design §3, §6.1", () => {
 
   it("3 with powers: the last round takes exactly what the bank has left", () => {
     const s = play(game(3, ["priest", "lookout", "hacker"]), THREE);
-    expect(resolved(s).map((e) => e.type === "roundResolved" && [e.haul, e.heat])).toEqual([
-      [4, 11], [7, 35], [7, 26], [8, 30], [10, 34], [19, 58], [22, 55], [27, 72], [28, 76],
-    ]);
+    expect(resolved(s).map((e) => e.type === "roundResolved" && e.haul)).toEqual([4, 7, 7, 8, 10, 19, 22, 27, 28]);
     expect([s.bank, stashes(s)]).toEqual([0, [0, 10, 10]]);
     checkLedger(s);
   });
 
-  it("12 players: 9 rounds over every room, visitors not sharing a room's limit, Heat halves and the 0 floor", () => {
+  it("12 players: 9 rounds over every room, visitors not sharing a room's limit", () => {
     const s = play(game(12), TWELVE);
     expect(resolved(s).map((e) => e.type === "roundResolved" && e.haulDelta)).toEqual([15, 10, 0, 30, 12, 0, 22, 33, 14]);
-    expect(resolved(s).map((e) => e.type === "roundResolved" && [e.heatDelta, e.heat])).toEqual([
-      [12, 12], [6, 18], [-16, 2], [14, 16], [4, 20], [14, 34], [7, 41], [22, 63], [-3, 60],
-    ]);
     expect([s.haul, s.bank]).toEqual([136, 192 - 175]);
     expect(stashes(s)).toEqual([7, 4, 2, 4, 4, 3, 3, 3, 3, 2, 2, 2]);
     // Deposit boxes: everyone there grabs the full 2, however many go. design §3.1
@@ -249,38 +245,6 @@ describe("QA rejected commands leave state unchanged", () => {
   });
 });
 
-describe("QA Heat raid — design §5.2 step 6, §7", () => {
-  it("3 players reach exactly 100 in round 5 by play: raid, game over, Haul still kept", () => {
-    const vault = [m("vault"), m("vault"), m("vault")]; // all three in the Vault: 4 + 20 = +24
-    const s = play(game(3), [vault, vault, vault, vault, [m("lobby"), m("lobby"), m("lobby")]]);
-    expect(resolved(s).map((e) => e.type === "roundResolved" && e.heat)).toEqual([24, 48, 72, 96, 100]);
-    expect(s.log.slice(-3).map((e) => e.type)).toEqual(["roundResolved", "copsRaided", "gameEnded"]);
-    expect(s.log.at(-2)).toMatchObject({ type: "copsRaided", round: 5, heat: 100 });
-    expect(s.phase).toMatchObject({ kind: "ended", outcome: { result: "failed", reason: "heat" } });
-    expect(s.haul).toBe(39); // 4 × 9 from the Vault + 3 × 1 from the Lobby
-    expect(replay(s.config, s.log)).toEqual(s);
-    for (const c of [submit("p0", m("lobby")), ROUND(s)]) expect(handleThroughAlibis(s, c).ok).toBe(false);
-  });
-
-  it("a raid on an act's last round ends the game instead of waiting for the meeting", () => {
-    const vault = [m("vault"), m("vault"), m("vault")];
-    const s = play({ ...game(3), heat: 28 }, [vault, vault, vault]); // 52, 76, 100
-    expect(isLastRoundOfAct(3)).toBe(true);
-    expect(s.heat).toBe(100);
-    expect(s.phase.kind).toBe("ended");
-    expect(ofType(s, "roundStarted").map((e) => e.round)).toEqual([1, 2, 3]);
-  });
-
-  it("12 players at 99 with a Rooftop crowd don't raid; with Heat's baseline they do", () => {
-    const cool = play({ ...game(12), heat: 99 }, [row([3, m("rooftop")], [9, null])]); // 4 − 5 = −1 → 98
-    expect(cool.heat).toBe(98);
-    expect(cool.phase.kind).toBe("planning");
-    const hot = play({ ...game(12), heat: 99 }, [row([12, null])]); // +4 → clamped 100
-    expect(hot.heat).toBe(100);
-    expect(hot.phase.kind).toBe("ended");
-  });
-});
-
 describe("QA determinism — design §17.2", () => {
   for (const [n, script, roles] of [
     [3, ROOKIES, []],
@@ -320,7 +284,7 @@ describe("QA private information — design §3.4, §18", () => {
         }
       }
       const summary = resolved(s)[0];
-      expect(Object.keys(summary ?? {}).sort()).toEqual(["bank", "haul", "haulDelta", "heat", "heatDelta", "heatParts", "round", "type", "visibility"]);
+      expect(Object.keys(summary ?? {}).sort()).toEqual(["bank", "haul", "haulDelta", "round", "type", "visibility"]);
     });
   }
 });

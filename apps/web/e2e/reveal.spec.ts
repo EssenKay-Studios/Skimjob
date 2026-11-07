@@ -38,7 +38,7 @@ for (const viewport of VIEWPORTS) {
       await expect(crew.locator(".reveal__card")).toHaveCount(4);
       for (const role of ["Rookie", "Mole", "Hacker", "Detective"]) await expect(crew).toContainText(role);
       await expect(reveal.locator(".reveal__why")).toContainText("Job done, so the top of the ranking wins: Ben.");
-      await expect(crew).toContainText("★ Also wins if the cops raid or the target is missed");
+      await expect(crew).toContainText("★ Also wins if the target is missed");
       await expect(reveal.locator(".reveal__void")).toHaveCount(0);
 
       // The timeline: round 1's real moves, the lie, and the Hacker's loop behind "camera offline".
@@ -49,11 +49,10 @@ for (const viewport of VIEWPORTS) {
       await expect(sheet).toContainText("Your camera on the Vault went offline: Cy looped it.");
       await expect(sheet).toContainText("Cy earned a token for a loop that hid a pocketer.");
 
-      // Next: police activity told apart, the Detective's check, the perk and the false claim.
+      // Next: the Mole's hidden ring (design §5.2), the Detective's check, the perk and the false claim.
       await reveal.getByRole("button", { name: "Next round" }).click();
       await expect(sheet.getByRole("heading", { name: "Round 2" })).toBeVisible();
-      await expect(sheet).toContainText("Police activity (Heat +6) was a routine patrol.");
-      await expect(sheet).toContainText("Police activity (Heat +6) was Ben's tip-off.");
+      await expect(sheet).toContainText("Round 2: Ben tipped off the police: the Office's bell rang once more.");
       await expect(sheet).toContainText("Stash check: Ben holds 6 or more (not clean).");
       await expect(sheet).toContainText("You bought a Peek perk");
       await expect(sheet).toContainText("Ben claimed Lookout, but was really the Mole.");
@@ -73,9 +72,9 @@ for (const viewport of VIEWPORTS) {
         await section.screenshot({ path: `${SHOTS}/reveal-${viewport.width}.png` });
       }
 
-      // A raid a ★ role wins; then a missed target nobody wins, every envelope VOID.
-      await section.getByRole("button", { name: "Raided (★ wins)" }).click();
-      await expect(reveal.locator(".reveal__why")).toContainText("A ★ role wins this ending from the top of the ranking: Ben.");
+      // A bust only the Rooftop escapes (design §5.5); then a missed target nobody wins, every envelope VOID.
+      await section.getByRole("button", { name: "Busted (Rooftop)" }).click();
+      await expect(reveal.locator(".reveal__why")).toContainText("Busted. On a bust, only the Rooftop gets away. The biggest stash up there wins: you.");
       await expect(reveal.locator(".reveal__void")).toHaveCount(3);
       await section.getByRole("button", { name: "Missed (nobody)" }).click();
       await expect(reveal.locator(".reveal__why")).toContainText("nobody wins: the ranking is a loss");
@@ -107,7 +106,7 @@ for (const width of LAUNCH_WIDTHS) {
       await section.getByRole("button", { name: "24 characters" }).click();
       const reveal = section.getByRole("region", { name: "The reveal" });
       await expect(reveal.locator(".reveal__why")).toContainText("WWWWWWWWWWWWWWWWWWWWWWWW");
-      for (const ending of ["Job done", "Raided (★ wins)", "Missed (nobody)"]) {
+      for (const ending of ["Job done", "Busted (Rooftop)", "Missed (nobody)"]) {
         await section.getByRole("button", { name: ending }).click();
         const rounds = reveal.getByRole("group", { name: "Rounds" }).getByRole("button");
         const n = await rounds.count();
@@ -150,7 +149,15 @@ test("a real game shows its reveal only once it has ended @fast-clock @reveal", 
   const reveal = page.getByRole("region", { name: "The reveal" });
   await expect(reveal).toBeVisible();
   await expect(reveal.locator(".reveal__card")).toHaveCount(4);
-  await expect(reveal.locator(".reveal__why")).toContainText(/Job done|The heist failed/);
+  // The server seeds each game afresh, so read the ending this game reached and check its own line (design §5.5, §11.5, §20.2).
+  const ending = await reveal.getAttribute("data-ending");
+  const WHY: Record<string, string> = {
+    success: "Job done, so the top of the ranking wins",
+    bust: "Busted. On a bust, only the Rooftop gets away.",
+    target: "The heist failed (the crew missed the Haul target)",
+  };
+  expect(Object.keys(WHY), `ending ${ending}`).toContain(ending);
+  await expect(reveal.locator(".reveal__why")).toContainText(WHY[ending!]!);
   const sheet = reveal.locator(".reveal__round");
   const first = await sheet.getByRole("heading", { level: 4 }).textContent();
   if (first === "Setup") await reveal.getByRole("button", { name: "Next round" }).click();

@@ -1,9 +1,9 @@
 // QA (PR #50, R6a): whole bot games against docs/extension.md — determinism and
-// replay, the Heat breakdown adding up to the Heat, whole-number scores, no
-// automatic ally reveal, police only when a Mole could be in the game.
+// replay, bells, raids and Wanted adding up (design §5), whole-number scores,
+// no automatic ally reveal.
 import { describe, expect, it } from "vitest";
-import { ROLES } from "@skimjob/content";
-import { createGame, heatBreakdown, replay, viewFor, type GameConfig, type GameEvent, type RoleListSetting } from "@skimjob/engine";
+import { BANK_JOB, ROLES } from "@skimjob/content";
+import { createGame, replay, viewFor, type GameConfig, type GameEvent, type RoleListSetting } from "@skimjob/engine";
 import { PERSONALITIES, type PersonalityId } from "./personalities";
 import { createBots, runBotGame } from "./run";
 
@@ -47,34 +47,34 @@ describe("QA: full bot games under the Extension rules", () => {
     }
   }, SLOW);
 
-  it("every round's Heat parts add up to its Heat change; every police activity and missed target adds what it says", () => {
+  it("bells only rise with rings, a full bell is raided at once, Wanted counts the raids, and Wanted 3 is a bust (design §5)", () => {
+    const { bulbs, bustStars } = BANK_JOB.alarm;
     for (const { n, extra } of CASES) {
       for (let i = 0; i < GAMES_PER_CASE; i++) {
-        const c = config(n, `heat-${n}-${i}-${JSON.stringify(extra)}`, extra);
+        const c = config(n, `bells-${n}-${i}-${JSON.stringify(extra)}`, extra);
         const { state } = play(c);
-        let heat = createGame(c).heat;
+        let bells: Record<string, number> = createGame(c).bells;
+        let wanted = 0;
         for (const e of state.log as GameEvent[]) {
-          if (e.type === "roundResolved") {
-            const sum = e.heatParts.base + Object.values(e.heatParts.rooms).reduce((x, y) => x + y, 0);
-            const expected = Math.max(0, heat + sum);
-            if (expected < 100) expect(e.heat, `round ${e.round}`).toBe(expected);
-            for (const v of [e.heatParts.base, ...Object.values(e.heatParts.rooms)]) expect(Number.isInteger(v)).toBe(true);
-            heat = e.heat;
-          } else if (e.type === "policeActivity") {
-            if (heat + e.heatAdded < 100) expect(e.heat).toBe(heat + e.heatAdded);
-            heat = e.heat;
-          } else if (e.type === "checkpointChecked") {
-            heat += e.heatPenalty;
-          } else if (e.type === "raidStopped") heat = e.heat;
+          if (e.type === "bellsRung") {
+            for (const [room, lit] of Object.entries(e.bells)) expect(lit, room).toBeGreaterThanOrEqual(bells[room] ?? 0);
+            bells = { ...e.bells };
+          } else if (e.type === "roomRaided") {
+            expect(bells[e.room]).toBe(bulbs);
+            expect(e.wanted).toBe(++wanted);
+          } else if (e.type === "bellsCooled") {
+            for (const lit of Object.values(e.bells)) expect(lit).toBeLessThan(bulbs);
+            bells = { ...e.bells };
+          } else if (e.type === "gameEnded" && e.outcome.result === "failed" && e.outcome.reason === "bust") {
+            expect(wanted).toBeGreaterThanOrEqual(bustStars);
+          }
         }
-        // The breakdown the view shows has a row for every resolved round.
-        const resolved = state.log.filter((e) => e.type === "roundResolved").map((e) => (e as { round: number }).round);
-        for (const r of resolved) expect(heatBreakdown(state.log, r)).not.toBeNull();
+        expect(state.wanted).toBe(wanted);
       }
     }
   }, SLOW);
 
-  it("scores and tokens are whole numbers; nobody learns an ally automatically; police only when a Mole could be in", () => {
+  it("scores and tokens are whole numbers; nobody learns an ally automatically", () => {
     for (const { n, extra } of CASES) {
       for (let i = 0; i < GAMES_PER_CASE; i++) {
         const c = config(n, `prop-${n}-${i}-${JSON.stringify(extra)}`, extra);
@@ -88,13 +88,6 @@ describe("QA: full bot games under the Extension rules", () => {
         // Nobody's view names another player's role before the reveal.
         const live = createGame(c);
         for (const id of live.playerOrder) for (const o of viewFor(live, id).players) expect(JSON.stringify(o)).not.toMatch(/"role"/);
-        const police = state.log.filter((e) => e.type === "policeActivity" || e.type === "policeScheduled");
-        const start = createGame(c);
-        if (start.police === null) expect(police).toEqual([]);
-        // The Starter deck never runs police.
-        if (c.deck === "starter") expect(start.police).toBeNull();
-        // Under Exact, police run iff a Mole was dealt.
-        if (extra.roleList === "exact") expect(start.police !== null).toBe(Object.values(start.players).some((p) => p.role === "mole"));
       }
     }
   }, SLOW);

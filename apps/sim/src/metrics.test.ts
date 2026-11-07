@@ -6,7 +6,8 @@ import {
   decidedEarly,
   decidedEarlyMetric,
   groupWins,
-  heatBustShare,
+  bustRate,
+  raidMetrics,
   pocketBand,
   rate,
   shakedownMetrics,
@@ -15,16 +16,21 @@ import {
 } from "./metrics";
 import { gameRec, seat, shake } from "./testkit";
 
-const failed = (reason: "heat" | "target", over = {}) => gameRec({ result: "failed", reason, ...over });
+const failed = (reason: "bust" | "target", over = {}) => gameRec({ result: "failed", reason, ...over });
 
-describe("success and failure — design §17.4 (success 55–70%, Heat 10–20% of failures)", () => {
+describe("success, failure, busts and raids — design §21 (success 55–70%, G2 raids, G3 busts 8–20%, G4 stalls)", () => {
   it("success rate is successes ÷ games", () => {
-    expect(successRate([gameRec(), gameRec(), failed("target"), failed("heat")])).toBe(0.5);
+    expect(successRate([gameRec(), gameRec(), failed("target"), failed("bust")])).toBe(0.5);
     expect(successRate([])).toBeNull();
   });
-  it("Heat-bust share counts only failures", () => {
-    expect(heatBustShare([gameRec(), failed("heat"), failed("target"), failed("target"), failed("target")])).toBe(0.25);
-    expect(heatBustShare([gameRec()])).toBeNull();
+  it("bust rate is busts ÷ games", () => {
+    expect(bustRate([gameRec(), failed("bust"), failed("target"), gameRec()])).toBe(0.25);
+    expect(bustRate([])).toBeNull();
+  });
+  it("raids per game, games with a raid, and Rooftop stalls per round played", () => {
+    const m = raidMetrics([gameRec({ raids: 3, stalls: 1, endedRound: 9 }), gameRec({ raids: 0, stalls: 0, endedRound: 3 }), gameRec({ raids: 1, stalls: 2, endedRound: 6 })]);
+    expect(m).toEqual({ perGame: 4 / 3, games: 2 / 3, stalls: 3 / 18 });
+    expect(raidMetrics([])).toEqual({ perGame: null, games: null, stalls: null });
   });
   it("rate is null with nothing to divide", () => {
     expect(rate(1, 0)).toBeNull();
@@ -112,7 +118,7 @@ describe("decided early — design §17.4 (under 15% settled before Act 3)", () 
     const m = decidedEarlyMetric([
       gameRec({ afterAct2: act2(["a"], 15), winners: ["a"] }),
       gameRec(),
-      failed("heat", { endedRound: 5, endedAct: 2 }),
+      failed("bust", { endedRound: 5, endedAct: 2 }),
       failed("target", { afterAct2: act2(["a"], 15) }),
     ]);
     expect(m).toEqual({ games: 2, rate: 0.5 });
@@ -121,12 +127,12 @@ describe("decided early — design §17.4 (under 15% settled before Act 3)", () 
 
 describe("summarize — broken down by player count (design §17.4)", () => {
   it("has one entry per player count plus the overall numbers", () => {
-    const s = summarize([gameRec({ players: 6 }), gameRec({ players: 2 }), failed("heat", { players: 6 })]);
+    const s = summarize([gameRec({ players: 6 }), gameRec({ players: 2 }), failed("bust", { players: 6 })]);
     expect(Object.keys(s.byPlayers)).toEqual(["2", "6"]);
     expect(s.byPlayers[6]?.successRate).toBe(0.5);
     expect(s.byPlayers[2]?.successRate).toBe(1);
     expect(s.overall.games).toBe(3);
-    expect(s.overall.heatBustShare).toBe(1);
+    expect(s.overall.bustRate).toBe(1 / 3);
   });
 });
 
@@ -134,7 +140,7 @@ describe("Mole win rate — design §17.4, §3", () => {
   it("games with a Mole that a Mole won, per game (two winning Moles count once)", () => {
     const mole = (id: string) => seat({ id, role: "mole" });
     const records = [
-      gameRec({ result: "failed", reason: "heat", playerRecords: [mole("m0"), mole("m1"), seat({ id: "d", role: "fixer" })], winners: ["m0", "m1", "d"] }),
+      gameRec({ result: "failed", reason: "bust", playerRecords: [mole("m0"), mole("m1"), seat({ id: "d", role: "fixer" })], winners: ["m0", "m1", "d"] }),
       gameRec({ result: "failed", reason: "target", playerRecords: [mole("m0")], winners: ["m0"] }),
       gameRec({ playerRecords: [mole("m0"), seat({ id: "x" })], winners: ["x"] }),
       gameRec({ playerRecords: [seat({ id: "x" })], winners: ["x"] }), // no Mole: left out

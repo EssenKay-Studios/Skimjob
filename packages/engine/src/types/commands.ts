@@ -15,7 +15,11 @@ export type AbilityUse =
    */
   | { readonly kind: "lookout"; readonly rooms: readonly RoomId[] }
   /** Hacker: Security shows `room` as empty this round. Once per act (content). design §8 */
-  | { readonly kind: "loopCameras"; readonly room: RoomId };
+  | { readonly kind: "loopCameras"; readonly room: RoomId }
+  /** Mole: ring `room` once (not the Rooftop or a taped-off room). Once between meetings (content). design §5.2, §11.1 */
+  | { readonly kind: "ring"; readonly room: RoomId }
+  /** Fixer: tear the tape off taped-off `room`; it reopens next round. Once per game. design §5.3, §11.1 */
+  | { readonly kind: "reopen"; readonly room: RoomId };
 
 /**
  * Spending a perk token (design §8.3, docs/roles-v2.md §1), with `useAbility`.
@@ -47,11 +51,6 @@ export type InstantAbility =
   | { readonly kind: "checkStash"; readonly target: PlayerId }
   /** Priest: bless another player until the next regular meeting closes. Once per stretch (content). design §8 (v2 §2) */
   | { readonly kind: "bless"; readonly target: PlayerId }
-  /**
-   * Mole: tip off the cops, any time, once per stretch. Queued: it lands at the
-   * next free hidden police moment as "police activity". extension.md "Police activity"
-   */
-  | { readonly kind: "tipOff" }
   | PerkSpend;
 
 /**
@@ -99,7 +98,7 @@ export type PlayerCommand =
   | { readonly type: "castVote"; readonly player: PlayerId; readonly vote: VoteChoice }
   /** Leave a vote in advance for the next meeting you might miss. design §11.2 */
   | { readonly type: "sealVote"; readonly player: PlayerId; readonly vote: VoteChoice }
-  /** A role power used outside a move (Auditor, Detective, Priest, Mole), or a perk spent. design §17.2, §8.3 */
+  /** A role power used outside a move (Auditor, Detective, Priest), or a perk spent. design §17.2, §8.3 */
   | { readonly type: "useAbility"; readonly player: PlayerId; readonly ability: InstantAbility }
   /** Buy one of the shop's perks with tokens; any time. extension.md "Tokens and the perk shop" */
   | { readonly type: "buyPerk"; readonly player: PlayerId; readonly perk: PerkId };
@@ -132,13 +131,7 @@ export type Deadline =
    * apply the shakedown, unless a Shield cancelled it, then go on as after
    * the meeting (checkpoint, next act or final check). design §8, §11.3, §11.4
    */
-  | { readonly kind: "resolveShakedown"; readonly meetingId: string }
-  /**
-   * Hidden police moment `moment` has come (game time; the server never shows
-   * it to clients; the simulator sends one per round as it resolves). Rejected
-   * unless it is the next scheduled moment. extension.md "Police activity"
-   */
-  | { readonly kind: "policeMoment"; readonly moment: number };
+  | { readonly kind: "resolveShakedown"; readonly meetingId: string };
 
 export type SystemCommand =
   | { readonly type: "advance"; readonly deadline: Deadline }

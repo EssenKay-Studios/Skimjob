@@ -36,20 +36,20 @@ export function recapItems(events: readonly LoggedEvent[], view: PlayerView, ctx
   const of = <T extends GameEvent["type"]>(type: T) => events.filter((e): e is LoggedEvent<Extract<GameEvent, { type: T }>> => e.event.type === type);
 
   for (const e of of("gameEnded")) picks.push({ prio: 0, ...say(e) });
-  for (const e of [...of("copsRaided"), ...of("raidStopped")]) picks.push({ prio: 1, ...say(e) });
+  // design §5.3: raids (with Wanted) and a reopened room.
+  for (const e of [...of("roomRaided"), ...of("roomReopened")]) picks.push({ prio: 1, ...say(e) });
 
-  // design §13 round summaries: Haul and Heat over every round resolved while away.
+  // design §13 round summaries: the Haul and the bank over every round resolved while away.
   const rounds = of("roundResolved");
   if (rounds.length > 0) {
     const first = rounds[0]!.event;
     const last = rounds.at(-1)!.event;
     const haul = rounds.reduce((n, e) => n + e.event.haulDelta, 0);
-    const heat = rounds.reduce((n, e) => n + e.event.heatDelta, 0);
     const which = rounds.length === 1 ? `Round ${first.round}` : `Rounds ${first.round}–${last.round}`;
     picks.push({
       prio: 2,
       seq: rounds.at(-1)!.seq,
-      text: `${which} done: Haul ${signed(haul)} (now ${last.haul}), Heat ${signed(heat)} (now ${last.heat}).`,
+      text: `${which} done: Haul ${signed(haul)} (now ${last.haul}), ${last.bank} coins left in the bank.`,
       from: rounds.map((e) => e.seq),
     });
   }

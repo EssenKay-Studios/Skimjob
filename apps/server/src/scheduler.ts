@@ -10,15 +10,11 @@
 // - While a meeting (or the shakedown window after it) is open, pausable
 //   deadlines (the round, the alibi window, an emergency's notice) stop: `paused_at` is set,
 //   and when the meeting is over their due time moves on by the pause.
-// - Hidden police moments (`police:<n>`, extension.md "Police activity") run
-//   on game time: they also stop while the act's meeting waits to open, and
-//   they never appear in `timers`, so clients can't see or time them.
-// - A host pause (M2-13, `games.paused_at`) stops every row, police moments
-//   and `roundEarly` included; on resume each moves on by its own pause. A row
-//   a meeting had already paused keeps its earlier `paused_at`, so it still
-//   moves on by the whole stop. The host's extend moves the current phase's
-//   rows on (`extendKeys`), never a police moment: game time runs on through
-//   the extra planning time, as through any round.
+// - A host pause (M2-13, `games.paused_at`) stops every row, `roundEarly`
+//   included; on resume each moves on by its own pause. A row a meeting had
+//   already paused keeps its earlier `paused_at`, so it still moves on by the
+//   whole stop. The host's extend moves the current phase's rows on
+//   (`extendKeys`).
 // - `tick` (every TICK_MS in main.ts) sends due deadlines, oldest first,
 //   through `live.system`, so bots act and views go out as for any change.
 //   Games run side by side: a game whose send is slow (or still running from
@@ -42,29 +38,17 @@ export interface PlannedDeadline {
   readonly dueAt: number;
   /** Stops while a meeting is open (design §4.1: rounds are paused during a vote). */
   readonly pausable: boolean;
-  /**
-   * Runs on game time (police moments): stops too while the act's meeting
-   * waits to open, and is hidden from clients. extension.md "Police activity"
-   */
-  readonly gameTime?: true;
 }
 
 /** A vote window, or the shakedown window after one, is open. design §4.1 */
 export const meetingOpen = (s: GameState) => s.phase.kind === "meeting" || s.phase.kind === "shakedownPending";
-
-/** Game time is frozen: a meeting is open or the act's meeting waits to open. extension.md "Police activity" */
-export const gameTimeFrozen = (s: GameState) => meetingOpen(s) || s.phase.kind === "awaitingMeeting";
-
-/** Police moments' deadline keys. They are never sent to clients. extension.md "Police activity" (no leak) */
-export const POLICE_KEY_PREFIX = "police:";
-export const isHiddenDeadline = (key: string) => key.startsWith(POLICE_KEY_PREFIX);
 
 const advance = (deadline: Deadline): SystemCommand => ({ type: "advance", deadline });
 
 /**
  * The deadlines the host's extend moves on (M2-13, design §15): the round being
  * planned (with its early end, set once everyone locked in), the alibi window
- * or the open vote window. None in other phases. Never a police moment.
+ * or the open vote window. None in other phases.
  */
 export function extendKeys(s: GameState): readonly string[] {
   switch (s.phase.kind) {
@@ -150,14 +134,6 @@ export const DEADLINE_RULES: { readonly [K in Deadline["kind"] | "scheduleMeetin
     s.phase.kind === "shakedownPending"
       ? [{ key: `resolveShakedown:${s.phase.meetingId}`, command: advance({ kind: "resolveShakedown", meetingId: s.phase.meetingId }), dueAt: now + t.shakedownWindowMs, pausable: false }]
       : [],
-  // The next hidden police moment, `gapPermille` thousandths of a round length (planning plus alibi
-  // window) after the last one, in game time. Set once when the moment is drawn. extension.md "Police activity"
-  policeMoment: (s, t, now) => {
-    if (!s.police) return [];
-    const { moment, gapPermille } = s.police;
-    const dueAt = now + Math.round((gapPermille * (t.roundMs + t.alibiMs)) / 1000);
-    return [{ key: `${POLICE_KEY_PREFIX}${moment}`, command: advance({ kind: "policeMoment", moment }), dueAt, pausable: true, gameTime: true }];
-  },
 };
 
 /** Every deadline the state calls for. An ended game has none. */
@@ -306,12 +282,11 @@ export function createScheduler(deps: {
       const planned = new Map(planDeadlines(state, await timingOf(gameId), now).map((d) => [d.key, d]));
       if (state.phase.kind === "ended") timings.delete(gameId);
       const paused = meetingOpen(state);
-      const frozen = gameTimeFrozen(state);
       const timers = await db.transaction(async (tx) => {
         // The host's pause stops every row, whatever its kind. M2-13
         const [game] = await tx.query<{ paused: boolean }>("select paused_at is not null as paused from games where id = $1", [gameId]);
         const hostPaused = game?.paused === true;
-        const pausedFor = (d: PlannedDeadline | undefined) => hostPaused || (d !== undefined && d.pausable && (d.gameTime ? frozen : paused));
+        const pausedFor = (d: PlannedDeadline | undefined) => hostPaused || (d !== undefined && d.pausable && paused);
         const rows = await tx.query<Row>(
           `select key, paused_at is not null as paused, (extract(epoch from due_at) * 1000)::float8 as due,
              (extract(epoch from paused_at) * 1000)::float8 as paused_ms
@@ -352,7 +327,7 @@ export function createScheduler(deps: {
         return after;
       });
       if (state.phase.kind === "ended") known.delete(gameId);
-      else known.set(gameId, sortTimers(timers.filter((x) => !isHiddenDeadline(x.key))));
+      else known.set(gameId, sortTimers(timers));
     },
 
     async tick() {
@@ -397,7 +372,7 @@ export function createScheduler(deps: {
          from deadlines where game_id = $1 order by due_at, key`,
         [gameId],
       );
-      return sortTimers(rows.filter((r) => !isHiddenDeadline(r.key)).map((r) => ({ key: r.key, dueAt: Math.round(Number(r.due)), pausedAt: r.paused === null ? null : Math.round(Number(r.paused)) })));
+      return sortTimers(rows.map((r) => ({ key: r.key, dueAt: Math.round(Number(r.due)), pausedAt: r.paused === null ? null : Math.round(Number(r.paused)) })));
     },
 
     start(intervalMs) {

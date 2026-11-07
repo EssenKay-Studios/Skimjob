@@ -95,7 +95,6 @@ describe("viewFor — the viewer's own data and public state — design §13", (
       stash: 0,
       roleState: { usedThisAct: 0, usedThisGame: 0, perks: [], tail: null, tokens: 0 },
       emergencyMeetingUsed: false,
-      tipOffs: 0,
       move: fullGrab("office", 1),
       sealedVote: null,
       vote: null,
@@ -109,11 +108,12 @@ describe("viewFor — the viewer's own data and public state — design §13", (
     expect(viewFor(s, "ben").me.move).toBeNull();
   });
 
-  it("public state: phase, round, act, rooms, Haul, Heat, meetings — design §13, §11.1", () => {
+  it("public state: phase, round, act, rooms, Haul, bells, tape, Wanted, meetings — design §13, §11.1, §5.1, §5.3, §5.4", () => {
     let s = createGame(config());
     s = run(s, { type: "proposeMeeting", player: "ana", slot: "fri" }, { type: "callEmergency", player: "carl" });
     const v = viewFor(s, "ben");
-    expect([v.phase, v.round, v.act, v.haul, v.heat, v.voteVisibility]).toEqual([{ kind: "planning", round: 1 }, 1, 1, 0, 0, "hiddenThenRevealed"]);
+    expect([v.phase, v.round, v.act, v.haul, v.wanted, v.taped, v.voteVisibility]).toEqual([{ kind: "planning", round: 1 }, 1, 1, 0, 0, {}, "hiddenThenRevealed"]);
+    expect(v.bells).toEqual(Object.fromEntries(s.rooms.map((r) => [r, 0])));
     expect(v.rooms).toEqual(s.rooms);
     expect(v.proposals).toEqual([{ id: "proposal-1", by: "ana", act: 1, slot: "fri", acceptedBy: ["ana"] }]);
     expect(v.pendingEmergency).toEqual({ meetingId: "emergency-carl", by: "carl" });

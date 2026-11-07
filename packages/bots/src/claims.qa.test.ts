@@ -103,7 +103,8 @@ function person(id: string, proposeEarly: boolean): Agent {
 
 describe("meeting proposals with a human seat — QA PR #37, design §11.1", () => {
   const humanSeat = (n: number, seed: string, mode: VoteVisibility): GameConfig => {
-    const c = config(n, seed, { voteVisibility: mode });
+    // No bust (design §5.5), so every act's meeting comes.
+    const c = config(n, seed, { voteVisibility: mode, contentOverrides: { alarm: { bustStars: 99 } } });
     return { ...c, players: c.players.map((p, i) => (i === 0 ? { ...p, isBot: false } : p)) };
   };
   const bots = (c: GameConfig) => createBots(c.players.slice(1), (_, i) => PERSONALITIES[MIX[i % MIX.length] as PersonalityId], c.seed);

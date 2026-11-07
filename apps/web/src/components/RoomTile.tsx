@@ -1,19 +1,18 @@
 // A room in the move picker (ui-style "Round-move panel"): an item tile with
-// the room's name, a loot swatch and a Heat hint. Selected: clay outline that
+// the room's name, a loot swatch and its bell. Selected: clay outline that
 // boils, plus a pin.
 import type { ReactNode } from "react";
 import { FrameArt, useElementSize } from "./SketchFrame";
 
-export type HeatHint = "up" | "down" | "none";
-
 export interface RoomTileProps {
   readonly name: string;
   readonly loot: number;
-  readonly heat: HeatHint;
+  /** The room's bell, e.g. "Bell 2 of 4". design §5.1 */
+  readonly bell: string;
   readonly notes?: readonly string[];
   readonly selected?: boolean;
   readonly disabled?: boolean;
-  /** Shown instead of the notes when disabled (e.g. "Closed by Lockdown"). */
+  /** Shown instead of the notes when disabled (e.g. "Closed by Lockdown", "Taped off through round 4"). */
   readonly disabledNote?: string;
   readonly onSelect?: () => void;
   readonly seed: string;
@@ -21,9 +20,7 @@ export interface RoomTileProps {
   readonly icon?: ReactNode;
 }
 
-const HEAT_TEXT: Record<HeatHint, string> = { up: "Heat ↑", down: "Heat ↓", none: "No Heat" };
-
-export function RoomTile({ name, loot, heat, notes = [], selected, disabled, disabledNote, onSelect, seed, icon }: RoomTileProps) {
+export function RoomTile({ name, loot, bell, notes = [], selected, disabled, disabledNote, onSelect, seed, icon }: RoomTileProps) {
   const [ref, size] = useElementSize<HTMLButtonElement>();
   const cls = ["room-tile", selected && "is-selected", disabled && "is-closed"].filter(Boolean).join(" ");
   return (
@@ -48,7 +45,7 @@ export function RoomTile({ name, loot, heat, notes = [], selected, disabled, dis
         )}
         <span className="num">{loot === 0 ? "No loot" : `Loot ${loot}`}</span>
       </span>
-      <span className={`room-tile__heat room-tile__heat--${heat}`}>{HEAT_TEXT[heat]}</span>
+      <span className="room-tile__bell">{bell}</span>
       {(disabled && disabledNote ? [disabledNote] : notes).map((n) => (
         <span key={n} className="room-tile__note">
           {n}

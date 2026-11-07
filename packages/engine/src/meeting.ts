@@ -21,10 +21,10 @@ import type {
   VoteChoice,
 } from "./types";
 import { PUBLIC, privateTo, secretTo } from "./types";
-import { checkpointTarget, clampHeat } from "./job";
+import { checkpointTarget } from "./job";
 import { jobFor, powerOf } from "./overrides";
 import { emergencySpent, isPerkSpend, perkCount, shieldFor, usePerk } from "./perks";
-import { blessingEvents, checkpointRewards, dirtyShakedownRewards, holdsDirty, stopRaid, useCrewPower } from "./crew";
+import { blessingEvents, checkpointRewards, dirtyShakedownRewards, holdsDirty, useCrewPower } from "./crew";
 import { actOfRound } from "./acts";
 import { gameEnded } from "./end";
 import { applyEvent } from "./reduce";
@@ -274,7 +274,7 @@ function tally(state: GameState) {
 /**
  * The window has ended. design §11.4: meeting → shakedown → checkpoint. After
  * an emergency meeting the game goes back to where it was. After the act's
- * regular meeting comes the checkpoint (+Heat if missed), then the next act —
+ * regular meeting comes the checkpoint, then the next act —
  * or, after Act 3, the final check and the end of the game (end.ts).
  */
 export function closeMeeting(state: GameState, meetingId: unknown, draw: Draw): Result {
@@ -373,29 +373,21 @@ function afterVote(
  * design §11.4, §11.5: the act's checkpoint, after its meeting, then the
  * next act or the end of the game.
  * `prior` (this command's events so far) is folded into `state` first, so the
- * Haul and Heat are as they stand now.
+ * Haul is as it stands now.
  */
 function checkpoint(state: GameState, prior: readonly GameEvent[], act: ActNumber, draw: Draw): GameEvent[] {
   const now = prior.reduce(applyEvent, state);
   const job = jobFor(state.config);
   const events: GameEvent[] = [];
-  // Missing Act 1 or 2 adds Heat (clamped once).
   const target = checkpointTarget(job, act, now.playerOrder.length);
   const met = now.haul >= target;
   const final = act === job.checkpoints.perPlayer.length;
-  const heat = met || final ? now.heat : clampHeat(job, now.heat + job.heat.missedCheckpoint);
-  events.push({ type: "checkpointChecked", visibility: PUBLIC, act, target, haul: now.haul, met, heatPenalty: heat - now.heat });
+  events.push({ type: "checkpointChecked", visibility: PUBLIC, act, target, haul: now.haul, met });
   // extension.md gap-fills: a target met at meeting 1 or 2 earns the Rookie a token.
   if (met && !final) events.push(...checkpointRewards(now));
-  // v2 §2: a Fixer stops the penalty's raid.
-  const saved = heat >= job.heat.max ? stopRaid(events.reduce(applyEvent, now), now.round) : [];
-  events.push(...saved);
 
   // The ranking is worked out after the shakedown (design §3, §11.4), in end.ts.
-  if (heat >= job.heat.max && saved.length === 0) {
-    events.push({ type: "copsRaided", visibility: PUBLIC, round: now.round, heat });
-    events.push(gameEnded(state, [...prior, ...events], "heat"));
-  } else if (final) {
+  if (final) {
     // design §3: the heist succeeds if the Haul meets the final target after the final meeting.
     events.push(gameEnded(state, [...prior, ...events], met ? null : "target"));
   } else {

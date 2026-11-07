@@ -110,8 +110,10 @@ export function suspicion(view: PlayerView, w: SuspicionWeights = SUSPICION_WEIG
     }
 
     // What the claimed rooms could have paid (their coin limits) vs what the others really handed in.
+    // design §5.3: a raided room's grabs were seized (public), so a claim there explains nothing missing.
+    const raided = new Set(ofType(view.ledger, "roomRaided").filter((e) => e.round === round).map((e) => e.room));
     let expected = 0;
-    for (const room of claims.values()) expected += roomDef(job, room).coins;
+    for (const room of claims.values()) if (!raided.has(room)) expected += roomDef(job, room).coins;
     // My own hand-in.
     let unexplained = expected - (haulDelta - split.duffel);
     if (unexplained <= 0) return;

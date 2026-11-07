@@ -6,7 +6,7 @@
 // - +Vote: in a meeting, when it votes to shake someone down.
 // - Alibi: right after posting a true alibi, if the crew could suspect it.
 // - Recharge: once its power is used up.
-// - Rig: while planning, then pick the most Heat-calming of the two cards.
+// - Rig: while planning, then pick the calmer of the two cards.
 // - Ballot is kept: bots don't read others' ballots (they don't talk). The Shield spends itself.
 // - Buying (extension.md "Tokens and the perk shop"): `buyPerks`, by a fixed priority.
 import { EVENTS, ROUNDS_PER_ACT, type EventId, type PerkId, type RoomId } from "@skimjob/content";
@@ -14,7 +14,7 @@ import { overrideEvents, roomDef, type PlayerCommand, type PlayerView, type Vote
 import { createdOf, lastResolvedRound, ofType, roleOf, roomsWhere, totalRounds } from "./read";
 import { mostSuspicious, knownRoles, suspicion } from "./suspicion";
 import { publicSuspicion } from "./claims";
-import { jobThisRound } from "./heat";
+import { jobThisRound } from "./alarm";
 
 const has = (view: PlayerView, perk: PerkId): boolean => view.me.roleState.perks.includes(perk);
 export const hasPerk = has;
@@ -88,12 +88,12 @@ export function buyPerks(view: PlayerView): PlayerCommand[] {
 /** Public suspicion of me at or above this makes a true alibi worth stamping (bot setting). */
 const STAMP_ALIBI_AT = 0.5;
 
-/** How much a card would heat the job (lower is calmer; v2 §4 "Rigs Heat-calming cards"). */
-export function cardHeatScore(view: PlayerView, card: EventId): number {
+/** How much a card would ring the bells (lower is calmer; v2 §4 "Rigs calming cards"): a surge's extra coins ring. design §13 */
+export function cardRiskScore(view: PlayerView, card: EventId): number {
   const cards = overrideEvents(EVENTS, createdOf(view).contentOverrides);
   const effect = Object.hasOwn(cards, card) ? cards[card]?.effect : undefined;
   if (!effect) return 0;
-  if (effect.kind === "roomSurge") return effect.heatMultiplier > 1 ? 2 : 0;
+  if (effect.kind === "roomSurge") return effect.extraCoins > 0 ? 2 : 0;
   return 0;
 }
 
@@ -125,8 +125,8 @@ export function planningPerks(view: PlayerView, room: RoomId | undefined = view.
   // Pick the calmest of a Rig's cards for the next round (the first flips unless picked).
   const rigged = ofType(view.caseFile, "perkUsed").find((e) => e.perk.kind === "rig" && e.perk.round === view.round + 1)?.perk;
   if (rigged?.kind === "rig" && !ofType(view.caseFile, "rigPicked").some((e) => e.round === rigged.round)) {
-    const best = [...rigged.cards].sort((a, b) => cardHeatScore(view, a) - cardHeatScore(view, b))[0];
-    if (best !== undefined && best !== rigged.cards[0] && cardHeatScore(view, best) < cardHeatScore(view, rigged.cards[0] as EventId)) {
+    const best = [...rigged.cards].sort((a, b) => cardRiskScore(view, a) - cardRiskScore(view, b))[0];
+    if (best !== undefined && best !== rigged.cards[0] && cardRiskScore(view, best) < cardRiskScore(view, rigged.cards[0] as EventId)) {
       out.push({ type: "useAbility", player, ability: { kind: "rigPick", card: best } });
     }
   }

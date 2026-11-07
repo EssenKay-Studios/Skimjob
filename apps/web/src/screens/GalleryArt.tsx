@@ -33,7 +33,7 @@ function ArtSection({ id, title, note, wide, children }: { id: string; title: st
   );
 }
 
-/** The cutaway with its knobs: crew size, time, layout, Heat, Lockdown. */
+/** The cutaway with its knobs: crew size, time, layout, Wanted, Lockdown. */
 export function BankSection() {
   const [tier, setTier] = useState<keyof typeof TIERS>("big");
   const [time, setTime] = useState<TimeOfDay>("day");
@@ -87,11 +87,11 @@ export function BankSection() {
           onChange={setLayout}
         />
         <Segmented
-          seed="g-heat"
-          label="Heat"
+          seed="g-wanted"
+          label="Wanted"
           options={[
-            { value: "calm", label: "12" },
-            { value: "hot", label: "88" },
+            { value: "calm", label: "0" },
+            { value: "hot", label: "2" },
           ]}
           value={hot}
           onChange={setHot}
@@ -112,7 +112,7 @@ export function BankSection() {
           rooms={rooms}
           layout={layout}
           time={time}
-          heat={hot === "hot" ? 88 : 12}
+          alarm={hot === "hot" ? 1 : 0}
           selected={room}
           onRoomSelect={(r) => setRoom((cur) => (cur === r ? null : r))}
           closed={lock === "lockdown" ? ["office"] : []}

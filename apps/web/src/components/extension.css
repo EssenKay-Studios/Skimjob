@@ -1,5 +1,5 @@
 /* Extension pieces (docs/extension.md): role facts and tags, tappable role
-   names, the rulebook sheet, target bar, Heat breakdown, gap box, tokens and
+   names, the rulebook sheet, target bar, gap box, tokens and
    the shop. Cartoon notebook style; theme tokens only. */
 
 /* ---------- Tags and role facts ---------- */
@@ -206,55 +206,6 @@
 }
 .target-bar__miss {
   white-space: nowrap;
-}
-
-/* ---------- Heat breakdown ---------- */
-.heat-parts {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-}
-.heat-parts__head b {
-  color: var(--ink);
-}
-.heat-parts__lines {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 6px;
-}
-.heat-parts__line {
-  padding: 1px 8px;
-  border: 1.2px solid var(--ink-faint);
-  border-radius: var(--radius-chip);
-  background: var(--paper);
-  font: 600 13px/1.5 var(--font-ui);
-  color: var(--ink2);
-}
-.heat-parts__line b {
-  color: var(--ink);
-}
-.heat-parts__line.is-police,
-.heat-parts__line.is-missed {
-  border-color: var(--bad);
-  background: var(--bad-l);
-}
-.heat-parts__line.is-clamp {
-  border-style: dashed;
-  color: var(--mute);
-}
-.heat-parts__more summary {
-  cursor: pointer;
-  min-height: 44px;
-  display: inline-flex;
-  align-items: center;
-}
-.heat-parts__round {
-  display: grid;
-  gap: 3px;
-  margin-top: 6px;
 }
 
 /* ---------- Gap box ---------- */

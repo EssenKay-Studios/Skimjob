@@ -1,6 +1,6 @@
 // Extension helpers (docs/extension.md), from real engine views: role facts,
-// the target bar, Heat breakdown, gap box, shop and perk uses, endings.
-import { BANK_JOB, DECKS, PERKS, POLICE_ACTIVITY, ROLES } from "@skimjob/content";
+// the target bar, gap box, shop and perk uses, endings.
+import { BANK_JOB, DECKS, PERKS, ROLES } from "@skimjob/content";
 import {
   PUBLIC,
   applyEvent,
@@ -18,7 +18,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { EndingNote } from "../components/Extension";
 import { describeEvent } from "./describeEvent";
-import { endingText, gapInfo, heatRound, heatRounds, howYouWin, perkUses, roleInfo, roleListInfo, shopState, targetBar, usedPerkThisRound } from "./extension";
+import { endingText, gapInfo, howYouWin, perkUses, roleInfo, roleListInfo, shopState, targetBar, usedPerkThisRound } from "./extension";
 import { abilityOffers } from "./meeting";
 import { deckPatch, deckRoles, rolePatch } from "../components/DeckSettings";
 import type { LobbySettings } from "../api";
@@ -53,10 +53,9 @@ describe("role facts (extension.md Roles)", () => {
   it("gives every role a tag and a How you win line; ★ roles name the failures they win", () => {
     expect(roleInfo("rookie")).toMatchObject({ tagLabel: "Team player", star: false, howYouWin: "Have the biggest stash when the job succeeds." });
     expect(roleInfo("hacker")).toMatchObject({ tagLabel: "Wildcard", star: false, howYouWin: "Have the biggest stash when the job succeeds." });
-    expect(roleInfo("mole")).toMatchObject({ tagLabel: "Lone wolf", star: true, howYouWin: "Have the biggest stash when the job succeeds, or when it fails either way." });
-    expect(howYouWin(["heat"])).toMatch(/or when the cops raid\.$/);
+    expect(roleInfo("mole")).toMatchObject({ tagLabel: "Lone wolf", star: true, howYouWin: "Have the biggest stash when the job succeeds, or when the final target is missed." });
     expect(howYouWin(["target"])).toMatch(/or when the final target is missed\.$/);
-    expect(howYouWin(["heat", "target"])).toBe(howYouWin(ROLES.mole!.winsOn));
+    expect(howYouWin(["target"])).toBe(howYouWin(ROLES.mole!.winsOn));
   });
 
   it("reads powers and rewards between meetings, with numbers from content", () => {
@@ -64,7 +63,9 @@ describe("role facts (extension.md Roles)", () => {
     expect(priest.power).toContain("between meetings");
     expect(priest.power).toContain(`pays the ${BANK_JOB.shakedown.payout}`);
     expect(priest.earns).toMatch(/^A token when: /);
-    expect(roleInfo("mole").power).toContain(`+${POLICE_ACTIVITY.heat} Heat`);
+    // design §5.2, §11.1: the Mole rings a bell; the Fixer reopens a taped-off room.
+    expect(roleInfo("mole").power).toMatch(/^Once between meetings: rings one room's bell once \(not the Rooftop or a taped-off room\)/);
+    expect(roleInfo("fixer").power).toMatch(/^Once a game: tears the tape off a raided room/);
     expect(roleInfo("rookie").power).toBe("No power.");
   });
 
@@ -76,44 +77,12 @@ describe("role facts (extension.md Roles)", () => {
   });
 });
 
-describe("the target bar, Heat breakdown and gap box (extension.md: What the app works out for you)", () => {
+describe("the target bar and gap box (extension.md: What the app works out for you)", () => {
   it("shows the Haul against the next meeting's target", () => {
     const v = viewFor(createGame(config()), "p1");
     const t = targetBar(v);
     expect(t.text).toBe(`Haul 0 / ${BANK_JOB.checkpoints.perPlayer[0]! * 4} needed by the next meeting`);
-    expect(t.ifMissed).toBe(`+${BANK_JOB.heat.missedCheckpoint} Heat if missed`);
-  });
-
-  it("breaks one round's Heat into the baseline, rooms and police activity, never saying who caused it", () => {
-    let s = run(createGame(config()), round(1));
-    s = applyEvent(s, { type: "policeActivity", visibility: PUBLIC, round: 1, heatAdded: POLICE_ACTIVITY.heat, heat: s.heat + POLICE_ACTIVITY.heat });
-    const h = heatRound(viewFor(s, "p1"), 1)!;
-    expect(h.lines[0]).toEqual({ label: "every round", value: BANK_JOB.heat.perRound, kind: "base" });
-    expect(h.lines.at(-1)).toEqual({ label: "police activity", value: POLICE_ACTIVITY.heat, kind: "police" });
-    expect(h.text).toMatch(new RegExp(`^\\+${BANK_JOB.heat.perRound} every round, .*\\+${POLICE_ACTIVITY.heat} police activity$`));
-    expect(heatRounds(viewFor(s, "p1")).map((x) => x.round)).toEqual([1]);
-  });
-
-  it("shows what the 0 floor took back, so the lines add up to the real change (extension.md: Heat never drops below 0)", () => {
-    const move = (player: string): PlayerCommand => ({ type: "submitMove", player, move: { room: "rooftop", duffel: 0, pocket: 0 } });
-    const s = run(createGame(config()), move("p1"), move("p2"), move("p3"), move("p4"), round(1));
-    expect(s.heat).toBe(0);
-    const h = heatRound(viewFor(s, "p1"), 1)!;
-    expect(h.lines.find((l) => l.kind === "clamp")).toMatchObject({ label: "Heat can't go below 0" });
-    expect(h.total).toBe(0);
-  });
-
-  it("police activity at Heat 99 still reads +4, with a line for what the top took back (extension.md \"Police activity\")", () => {
-    let s = run(createGame(config()), round(1));
-    const top = BANK_JOB.heat.max;
-    s = applyEvent(s, { type: "policeActivity", visibility: PUBLIC, round: 1, heatAdded: top - 1 - s.heat, heat: top - 1 });
-    s = applyEvent(s, { type: "policeActivity", visibility: PUBLIC, round: 2, heatAdded: POLICE_ACTIVITY.heat, heat: top });
-    const h = heatRound(viewFor(s, "p1"), 2)!;
-    expect(h.lines).toEqual([
-      { label: "police activity", value: POLICE_ACTIVITY.heat, kind: "police" },
-      { label: "Heat is at the top", value: 1 - POLICE_ACTIVITY.heat, kind: "clamp" },
-    ]);
-    expect(h.total).toBe(1);
+    expect(t.ifMissed).toBe("nothing lost if missed");
   });
 
   it("adds up the alibis against the Haul's growth", () => {
@@ -191,18 +160,18 @@ describe("no tells (extension.md Situations)", () => {
 
 describe("endings (extension.md Winning and losing)", () => {
   it("says how it ended and marks a failure with no qualified winner as a loss", () => {
-    expect(endingText({ result: "success", winners: ["p1"] })).toEqual({ title: "Final target met with Heat below 100", badge: "Biggest stash", loss: false });
-    expect(endingText({ result: "failed", reason: "heat", winners: [] })).toMatchObject({ badge: "Wins on a raid", loss: true });
+    expect(endingText({ result: "success", winners: ["p1"] })).toEqual({ title: "Final target met with no bust", badge: "Biggest stash", loss: false });
+    expect(endingText({ result: "failed", reason: "bust", winners: [] })).toMatchObject({ badge: "Wins over the Rooftop", loss: true });
     expect(endingText({ result: "failed", reason: "target", winners: [] })).toMatchObject({ badge: "Wins on a missed target", loss: true });
   });
 
   it("doesn't call a failure with a ★ winner a loss", () => {
-    expect(endingText({ result: "failed", reason: "heat", winners: ["p2"] })).toMatchObject({ title: "The cops raided: Heat hit 100", badge: "Wins on a raid", loss: false });
+    expect(endingText({ result: "failed", reason: "bust", winners: ["p2"] })).toMatchObject({ title: "Busted. On a bust, only the Rooftop gets away", badge: "Wins over the Rooftop", loss: false });
     expect(endingText({ result: "failed", reason: "target", winners: ["p3"] }).loss).toBe(false);
-    const note = (winners: string[]) => renderToStaticMarkup(createElement(EndingNote, { outcome: { result: "failed", reason: "heat", winners }, name: (id: string) => (id === "p1" ? "You" : id === "p2" ? "Ben" : "Cy") }));
-    expect(note(["p2"])).toContain("Ben wins on a raid.");
+    const note = (winners: string[]) => renderToStaticMarkup(createElement(EndingNote, { outcome: { result: "failed", reason: "bust", winners }, name: (id: string) => (id === "p1" ? "You" : id === "p2" ? "Ben" : "Cy") }));
+    expect(note(["p2"])).toContain("Ben wins over the Rooftop.");
     expect(note(["p2"])).not.toContain("loss");
-    expect(note(["p1", "p3"])).toContain("You and Cy win on a raid.");
+    expect(note(["p1", "p3"])).toContain("You and Cy win over the Rooftop.");
     expect(note([])).toContain("The ranking is marked as a loss.");
   });
 });

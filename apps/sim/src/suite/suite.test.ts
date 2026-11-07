@@ -81,7 +81,7 @@ describe("the matrix — design §17.4 (3–12 players), extension.md Build note
     const so = cellSimOptions(o, cell);
     expect(gameSeed(so.seed, cell.players, 12)).toBe("S/6p/random/events-off/6p/12");
     // Batch size, sampling targets and overrides don't change the seeds (overrides: paired games for --compare).
-    expect(cellSimOptions({ ...o, batch: 50, ciHalfWidth: 0.05, contentOverrides: { heat: { perRound: 1 } } }, cell).seed).toBe(so.seed);
+    expect(cellSimOptions({ ...o, batch: 50, ciHalfWidth: 0.05, contentOverrides: { alarm: { bulbs: 1 } } }, cell).seed).toBe(so.seed);
   });
 
   it("shards split the cells: each cell in exactly one shard, the same split every time", () => {
@@ -102,13 +102,13 @@ describe("tallies", () => {
   const mole = (over = {}) => seat({ id: "m", role: "mole", tag: "loneWolf", star: true, ...over });
   const games = [
     gameRec({ players: 4, winners: ["a", "m"], playerRecords: [seat({ id: "a", winCredit: 0.5, tokensEarned: 2, tokensSpent: 1 }), seat({ id: "b", role: "lookout" }), mole({ winCredit: 0.5, tokensEarned: 1 })] }),
-    gameRec({ players: 4, result: "failed", reason: "heat", winners: ["m"], playerRecords: [seat({ id: "a" }), mole({ winCredit: 1, tokensEarned: 2, tokensSpent: 2 })] }),
+    gameRec({ players: 4, result: "failed", reason: "bust", winners: ["m"], playerRecords: [seat({ id: "a" }), mole({ winCredit: 1, tokensEarned: 2, tokensSpent: 2 })] }),
     gameRec({ players: 4, result: "failed", reason: "target", winners: [], playerRecords: [seat({ id: "a" }), seat({ id: "b", role: "lookout" })] }),
   ];
 
   it("count what the rates need: endings, no-winner and shared wins, credit by ending, tokens — extension.md Build notes \"Sim\"", () => {
     const t = tallyGames(games);
-    expect(t).toMatchObject({ games: 3, successes: 1, failures: 2, heatFailures: 1, targetFailures: 1, noWinner: 1, sharedWin: 1 });
+    expect(t).toMatchObject({ games: 3, successes: 1, failures: 2, busts: 1, targetFailures: 1, noWinner: 1, sharedWin: 1 });
     expect(t.roles.rookie).toEqual({ seats: 3, credit: 0.5, fair: 0.75, successCredit: 0.5, earned: 2, spent: 1 });
     expect(t.roles.mole).toEqual({ seats: 2, credit: 1.5, fair: 0.5, successCredit: 0.5, earned: 3, spent: 2 });
     expect(Object.keys(t.roles)).toEqual(["lookout", "mole", "rookie"]);
@@ -133,10 +133,10 @@ describe("adaptive stopping", () => {
 
   it("stops once every checked rate is within the target half-width", () => {
     const o = opts({ minGames: 400, maxGames: 100000, ciHalfWidth: 0.02 });
-    const narrow = { games: 10000, successes: 6500, failures: 3500, heatFailures: 600, comebackGames: 6000, act1LeaderWins: 2900, shakedowns: 10000, shakedownsCaught: 5000 };
+    const narrow = { games: 10000, successes: 6500, failures: 3500, busts: 1000, comebackGames: 6000, act1LeaderWins: 2900, shakedowns: 10000, shakedownsCaught: 5000 };
     expect(cellStatus(o, cell, t({ ...narrow, decidedEarly: 800 }))).toEqual({ done: true, converged: true });
-    // Heat share over only 350 failures is ±4 pp: keep going.
-    expect(cellStatus(o, cell, t({ ...narrow, decidedEarly: 800, failures: 350, heatFailures: 60 })).done).toBe(false);
+    // The bust rate over only 400 games is ±3 pp: keep going.
+    expect(cellStatus(o, cell, t({ ...narrow, decidedEarly: 800, games: 400, busts: 40 })).done).toBe(false);
   });
 
   it("an ungated cell (Truly random, or under 4 players) has no bands, so it stops at minGames", () => {

@@ -199,21 +199,6 @@ html.chat-sheet-open body {
   color: var(--mute);
   font-weight: 600;
 }
-.hud__heat {
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: end;
-  gap: 10px;
-}
-.hud__heat-text {
-  display: grid;
-  gap: 2px;
-}
-.hud__extra {
-  grid-column: 1 / -1;
-  padding-top: 10px;
-  border-top: 1.3px dashed var(--ink-faint);
-  min-width: 0;
-}
 .ranking__loss {
   color: var(--bad);
 }

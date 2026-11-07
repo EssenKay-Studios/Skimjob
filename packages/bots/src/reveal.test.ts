@@ -26,7 +26,7 @@ const play = (c: GameConfig) => runBotGame(c, createBots(c.players, (_, i) => PE
 const count = (log: readonly GameEvent[], f: (e: GameEvent) => boolean) => log.filter(f).length;
 
 describe("reveal summary in whole bot games — design §13", () => {
-  it("adds up to the ranking and explains every police activity and offline camera, for every viewer", () => {
+  it("adds up to the ranking and explains every raid, reopened room and offline camera, for every viewer", () => {
     const seen = new Set<string>();
     for (const [n, seed] of [
       [3, "rv-a"],
@@ -50,16 +50,14 @@ describe("reveal summary in whole bot games — design §13", () => {
         for (const seat of summary.seats) expect(last[seat.player], `${seed} ${viewer} ${seat.player}`).toBe(seat.stash);
         expect(summary.seats.map((s) => s.player)).toEqual(reveal.outcome.ranking.map((r) => r.player));
         const items: RevealItem[] = summary.rounds.flatMap((r) => [...r.items]);
-        const police = items.filter((i) => i.kind === "police");
-        expect(police.length).toBe(count(log, (e) => e.type === "policeActivity"));
-        expect(police.filter((i) => i.cause === "tipOff").length).toBe(count(log, (e) => e.type === "tipOffLanded"));
         const offline = items.filter((i) => i.kind === "cameraOffline");
         expect(offline.length).toBe(count(log, (e) => e.type === "roomWatched" && e.offline));
         for (const o of offline) expect(o.hackers.length).toBeGreaterThan(0);
         expect(items.filter((i) => i.kind === "token").length).toBe(count(log, (e) => e.type === "tokenEarned"));
-        for (const i of items) seen.add(i.kind === "police" ? `${i.kind}:${i.cause}` : i.kind === "event" ? i.event.type : i.kind);
+        for (const i of items) seen.add(i.kind === "event" ? i.event.type : i.kind);
       }
     }
-    expect([...seen].sort()).toEqual(expect.arrayContaining(["police:patrol", "police:tipOff", "cameraOffline", "token", "perkBought", "perkUsed"]));
+    // Tokens and perks: reveal.qa.test.ts (the Mole's and Fixer's R6 tokens are gone, so these games earn few).
+    expect([...seen].sort()).toEqual(expect.arrayContaining(["roomRaided", "roomReopened", "cameraOffline"]));
   }, 120_000);
 });

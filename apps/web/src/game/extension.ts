@@ -1,11 +1,11 @@
 // Pure helpers for the Extension's player-facing pieces (docs/extension.md):
 // role cards (tag, power, token trigger, "How you win"), the Haul target bar,
-// the Heat breakdown, the gap box, and the token shop with its perk uses.
+// the gap box, and the token shop with its perk uses.
 // Every number comes from content (with the game's overrides) or the view.
 import {
   BANK_JOB,
+  BUST_ROLE_TEXT,
   PERKS,
-  POLICE_ACTIVITY,
   ROUNDS_PER_ACT,
   ROLES,
   SHOP_COLUMNS,
@@ -19,7 +19,7 @@ import {
   type Temperament,
   type TokenTrigger,
 } from "@skimjob/content";
-import { heatBreakdown, rolesFor, type GameEvent, type PlayerId, type PlayerView, type RoomId } from "@skimjob/engine";
+import { rolesFor, type PlayerId, type PlayerView, type RoomId } from "@skimjob/engine";
 import { roleName, roomName } from "./describeEvent";
 import { crewSize, jobOf, nextTarget, setupOf } from "./hud";
 
@@ -43,11 +43,7 @@ export const rolesOf = (view: PlayerView | null): Readonly<Record<RoleId, RoleDe
 /** "How you win" (extension.md "Winning and losing"), from `winsOn`. */
 export function howYouWin(winsOn: readonly FailureReason[]): string {
   const base = "Have the biggest stash when the job succeeds";
-  const raid = winsOn.includes("heat");
-  const missed = winsOn.includes("target");
-  if (raid && missed) return `${base}, or when it fails either way.`;
-  if (raid) return `${base}, or when the cops raid.`;
-  if (missed) return `${base}, or when the final target is missed.`;
+  if (winsOn.includes("target")) return `${base}, or when the final target is missed.`;
   return `${base}.`;
 }
 
@@ -71,10 +67,10 @@ function powerText(power: RolePower, job: JobDef = BANK_JOB): string {
       return `${between(power.perAct)}: is one player's stash "dirty" (${job.shakedown.cleanBelow} or more)?`;
     case "bless":
       return `${between(power.perAct)}: bless a player; if they're shaken down clean, the bank pays the ${job.shakedown.payout}.`;
-    case "fixer":
-      return `Once, automatically: stops a raid at Heat ${power.stopAt}, losing ${power.lossShare === 0.25 ? "a quarter" : `${Math.round(power.lossShare * 100)}%`} of its stash.`;
-    case "tipOff":
-      return `${between(power.perAct)}, any time: tips off the cops for +${POLICE_ACTIVITY.heat} Heat, announced only as "police activity".`;
+    case "reopen":
+      return "Once a game: tears the tape off a raided room, which opens again next round.";
+    case "ring":
+      return `${between(power.perAct)}: rings one room's bell once (not the Rooftop or a taped-off room), like any noisy coin.`;
     default: {
       const never: never = power;
       return String((never as { kind: string }).kind);
@@ -97,12 +93,8 @@ function earnsText(trigger: TokenTrigger): string {
       return "It votes to catch a cheater who is then caught.";
     case "blessedShakenClean":
       return "A blessing pays out.";
-    case "raidStopped":
-      return "It stops a raid.";
     case "loopHidPocketer":
       return "A loop hid someone who pocketed.";
-    case "tipOffLanded":
-      return "Each tip-off.";
     default: {
       const never: never = trigger;
       return String(never);
@@ -163,74 +155,22 @@ export interface TargetBar {
   readonly final: boolean;
   /** "Haul 40 / 63 needed by the next meeting". */
   readonly text: string;
-  /** What missing it costs: "+15 Heat if missed" or "the heist fails if missed". */
+  /** What missing it costs: "nothing lost if missed" at meetings 1 and 2, "the heist fails if missed" at the final one. */
   readonly ifMissed: string;
 }
 
 /** The Haul target as a progress bar to the next meeting. extension.md "What the app works out for you" */
 export function targetBar(view: PlayerView): TargetBar {
   const t = nextTarget(view);
-  const job = jobOf(view);
   return {
     haul: view.haul,
     target: t.target,
     meeting: t.act,
     final: t.final,
     text: `Haul ${view.haul} / ${t.target} needed by ${t.final ? "the final meeting" : "the next meeting"}`,
-    ifMissed: t.final ? "the heist fails if missed" : `+${job.heat.missedCheckpoint} Heat if missed`,
+    ifMissed: t.final ? "the heist fails if missed" : "nothing lost if missed",
   };
 }
-
-// ---------------------------------------------------------------- Heat breakdown
-
-export interface HeatLine {
-  readonly label: string;
-  readonly value: number;
-  readonly kind: "base" | "room" | "police" | "missed" | "stopped" | "clamp";
-}
-
-export interface HeatRound {
-  readonly round: number;
-  readonly lines: readonly HeatLine[];
-  readonly total: number;
-  /** "+4 every round, +10 Vault, −5 Rooftop, +4 police activity". */
-  readonly text: string;
-}
-
-const ledgerEvents = (view: Pick<PlayerView, "ledger">): GameEvent[] => view.ledger.map((x) => x.event);
-
-/**
- * One round's Heat change by part: the baseline, each room,
- * police activity (never its source) and a missed target. extension.md
- * "What the app works out for you", Build notes "Police activity".
- */
-export function heatRound(view: Pick<PlayerView, "ledger">, round: number): HeatRound | null {
-  const log = ledgerEvents(view);
-  const b = heatBreakdown(log, round);
-  if (!b) return null;
-  const lines: HeatLine[] = [];
-  if (b.base !== 0) lines.push({ label: "every round", value: b.base, kind: "base" });
-  for (const [room, v] of Object.entries(b.rooms)) if (v !== 0) lines.push({ label: roomName(room), value: v, kind: "room" });
-  for (const v of b.police) lines.push({ label: "police activity", value: v, kind: "police" });
-  if (b.missedTarget !== 0) lines.push({ label: "missed target", value: b.missedTarget, kind: "missed" });
-  if (b.stopped !== 0) lines.push({ label: "raid stopped", value: b.stopped, kind: "stopped" });
-  // extension.md "Heat": it never drops below 0 (or past the top), so the lines add up to the real change.
-  if (b.clamp !== 0) lines.push({ label: b.clamp > 0 ? "Heat can't go below 0" : "Heat is at the top", value: b.clamp, kind: "clamp" });
-  const total = lines.reduce((s, l) => s + l.value, 0);
-  return { round, lines, total, text: lines.length === 0 ? "no change" : lines.map((l) => `${signed(l.value)} ${l.label}`).join(", ") };
-}
-
-/** Every round with a Heat breakdown, newest first. */
-export function heatRounds(view: Pick<PlayerView, "ledger" | "round">): HeatRound[] {
-  const out: HeatRound[] = [];
-  for (let r = view.round; r >= 1; r--) {
-    const h = heatRound(view, r);
-    if (h) out.push(h);
-  }
-  return out;
-}
-
-export const signedText = signed;
 
 // ---------------------------------------------------------------- gap box
 
@@ -377,9 +317,9 @@ type Ending = ({ readonly result: "success" } | { readonly result: "failed"; rea
  * ranking is a loss only when nobody qualified through winsOn. extension.md "Winning and losing"
  */
 export function endingText(outcome: Ending): { title: string; badge: string; loss: boolean } {
-  if (outcome.result === "success") return { title: "Final target met with Heat below 100", badge: "Biggest stash", loss: false };
+  if (outcome.result === "success") return { title: "Final target met with no bust", badge: "Biggest stash", loss: false };
   const loss = outcome.winners.length === 0;
-  return outcome.reason === "heat"
-    ? { title: "The cops raided: Heat hit 100", badge: "Wins on a raid", loss }
+  return outcome.reason === "bust"
+    ? { title: `Busted. ${BUST_ROLE_TEXT.replace(/\.$/, "")}`, badge: "Wins over the Rooftop", loss } // design §20.2
     : { title: "The final target was missed", badge: "Wins on a missed target", loss };
 }

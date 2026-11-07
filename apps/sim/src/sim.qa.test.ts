@@ -23,7 +23,7 @@ describe("design §17.4 inputs — bad arguments are clean errors, never throws"
   const bad: string[][] = [
     ["-n", "0"], ["-n", "1.5"], ["-n", "1e400"], ["-n", "-3"], ["-n"], ["-p", "1"], ["-p", "13"], ["-p", "12-2"], ["-p", "6,"],
     ["-b", "__proto__"], ["-b", "constructor:2"], ["-b", "honest:0"], ["-b", "honest:Infinity"], ["-b", "honest,honest"], ["-b", ""],
-    ["--deck", "__proto__"], ["--role-list", "toString"], ["--votes", "toString"], ["--bogus"], ["positional"], ["--overrides", '{"heat":'],
+    ["--deck", "__proto__"], ["--role-list", "toString"], ["--votes", "toString"], ["--bogus"], ["positional"], ["--overrides", '{"alarm":'],
     ["--overrides", "/nonexistent/qa.json"], ["--overrides", ""],
   ];
   it.each(bad.map((a) => [a.join(" "), a]))("%s → error", (_label, argv) => {
@@ -34,8 +34,8 @@ describe("design §17.4 inputs — bad arguments are clean errors, never throws"
   });
 
   it("an override file is read through the given reader and parsed", () => {
-    const r = parseSimArgs(["--overrides", "x.json"], () => '{"heat":{"perRound":5}}');
-    expect(r.kind === "run" && r.options.contentOverrides).toEqual({ heat: { perRound: 5 } });
+    const r = parseSimArgs(["--overrides", "x.json"], () => '{"alarm":{"bulbs":5}}');
+    expect(r.kind === "run" && r.options.contentOverrides).toEqual({ alarm: { bulbs: 5 } });
   });
 });
 
@@ -46,16 +46,16 @@ describe("design §17.4 config overrides — hostile JSON is refused, nothing po
     '{"rooms":{"vault":{"__proto__":{"coins":99}}}}',
     '{"rooms":{"depositBoxes":{"capacity":{"__proto__":{"max":0}}}}}',
     '{"rooms":{"constructor":{"coins":1}}}',
-    '{"heat":{"__proto__":{"max":1}}}',
-    '{"heat":{"constructor":1}}',
+    '{"alarm":{"__proto__":{"bulbs":1}}}',
+    '{"alarm":{"constructor":1}}',
     '{"checkpoints":{"__proto__":[1,2,3]}}',
     '{"shakedown":{"__proto__":{"cleanBelowPerAct":0}}}',
     '{"roles":{"__proto__":{"stashMultiplier":9}}}',
     '{"roles":{"rookie":{"__proto__":{"stashMultiplier":9}}}}',
     '{"roles":{"toString":{}}}',
-    '{"heat":{"max":0}}', '{"heat":{"perRound":"5"}}', '{"rooms":{"vault":{"coins":1.5}}}', '{"rooms":{"vault":{"coins":-1}}}',
+    '{"alarm":{"bulbs":0}}', '{"alarm":{"bulbs":"5"}}', '{"rooms":{"vault":{"coins":1.5}}}', '{"rooms":{"vault":{"coins":-1}}}',
     '{"checkpoints":{"perPlayer":[1,2]}}', '{"checkpoints":{"perPlayer":[1,2,-3]}}', '{"roles":{"lookout":{"perAct":1}}}',
-    '{"rooms":{"vault":{"capacity":{"max":2}}}}', '{"rooms":[]}', '{"heat":null}',
+    '{"rooms":{"vault":{"capacity":{"max":2}}}}', '{"rooms":[]}', '{"alarm":null}',
   ];
   it.each(hostile)("%s", (json) => {
     const o = opts(["-p", "3,12", "--overrides", json]);
@@ -89,7 +89,7 @@ describe("design §17.4 outputs — same seed, same files; files only in the out
   });
 
   it("two runs with the same options write byte-identical files, and only the four files", () => {
-    const o = opts(["-n", "3", "-p", "3,8,12", "-s", "qa-det", "--overrides", '{"heat":{"perRound":4}}']);
+    const o = opts(["-n", "3", "-p", "3,8,12", "-s", "qa-det", "--overrides", '{"alarm":{"bulbs":5}}']);
     const dirs = [mkdtempSync(join(tmpdir(), "sim-qa-")), mkdtempSync(join(tmpdir(), "sim-qa-"))];
     try {
       for (const d of dirs) {
@@ -173,7 +173,8 @@ describe("design §17.4 metrics — hand-checked against the engine on a fixed s
     const failed = ended.filter((e) => e.result === "failed");
     expect(s.games).toBe(12);
     expect(s.successRate).toBe((12 - failed.length) / 12);
-    expect(s.heatBustShare).toBe(failed.filter((e) => e.result === "failed" && e.reason === "heat").length / failed.length);
+    expect(s.bustRate).toBe(failed.filter((e) => e.result === "failed" && e.reason === "bust").length / 12);
+    expect(s.raids.perGame).toBe(games.reduce((n, g) => n + g.state.log.filter((e) => e.type === "roomRaided").length, 0) / 12);
     const sd = games.flatMap((g) => (g.state.log as readonly GameEvent[]).filter((e) => e.type === "shakedownResolved"));
     expect(s.shakedowns.count).toBe(sd.length);
     expect(s.shakedowns.accuracy).toBe(sd.filter((e) => e.type === "shakedownResolved" && !e.clean).length / sd.length);

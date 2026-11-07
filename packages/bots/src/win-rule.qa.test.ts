@@ -37,7 +37,14 @@ describe("QA: win rule in every ending, all-bot games — extension.md \"One cre
             if (state.phase.kind !== "ended") throw new Error("not ended");
             const o = state.phase.outcome;
             const top = leadersOf(o.ranking);
-            const expected = o.result === "success" ? top : top.filter((id) => winsOn(o.ranking.find((e) => e.player === id)?.role ?? "", o.reason));
+            // design §5.5: on a bust, the escapees with the biggest stash among them, whatever their role.
+            const escaped = o.result === "failed" && o.reason === "bust" ? o.ranking.filter((e) => o.escapees.includes(e.player)) : [];
+            const expected =
+              o.result === "success"
+                ? top
+                : o.reason === "bust"
+                  ? escaped.filter((e) => e.stash === Math.max(...escaped.map((x) => x.stash))).map((e) => e.player)
+                  : top.filter((id) => winsOn(o.ranking.find((e) => e.player === id)?.role ?? "", o.reason));
             expect([...o.winners].sort()).toEqual([...expected].sort());
             expect(o.ranking).toHaveLength(n);
             const key = o.result === "success" ? "success" : `${o.reason}/${o.winners.length > 0 ? "won" : "nobody"}`;
@@ -48,6 +55,6 @@ describe("QA: win rule in every ending, all-bot games — extension.md \"One cre
     }
     // The sample covers success and at least one failure.
     expect(endings.get("success")).toBeGreaterThan(0);
-    expect([...endings.keys()].some((k) => k.startsWith("heat/") || k.startsWith("target/"))).toBe(true);
+    expect([...endings.keys()].some((k) => k.startsWith("bust/") || k.startsWith("target/"))).toBe(true);
   }, 60_000); // many full bot games: over the 5 s default on a busy machine
 });

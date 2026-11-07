@@ -65,15 +65,17 @@ function ownRoom(view: PlayerView, round: number): RoomId | null {
   for (const { event: e } of view.caseFile) {
     if (!("round" in e) || e.round !== round || !("player" in e) || e.player !== view.me.id) continue;
     if (e.type === "roomSighting" || e.type === "coinsGrabbed") return e.room;
-    if (e.type === "moveSubmitted" || e.type === "defaultMoveAssigned") room = e.move.room;
+    if (e.type === "moveSubmitted" || e.type === "defaultMoveAssigned") room = e.move?.room ?? null;
   }
   return room;
 }
 
+/** Rooms closed in `round`: a Lockdown card's (design §13) and, this round, the taped-off ones (§5.3). */
 function closedIn(view: PlayerView, round: number): RoomId[] {
+  const taped = round === view.round ? Object.keys(view.taped) : [];
   const card = view.card;
-  if (!card || card.round !== round || !card.room) return [];
-  return EVENTS[card.id]?.effect.kind === "lockdown" ? [card.room] : [];
+  if (!card || card.round !== round || !card.room) return taped;
+  return EVENTS[card.id]?.effect.kind === "lockdown" ? [card.room, ...taped] : taped;
 }
 
 /**

@@ -20,13 +20,13 @@ const events: (PublicEvent | CaseFileEvent)[] = [
   { type: "roundStarted", visibility: PUBLIC, round: 1, act: 1 },
   { type: "moveLocked", visibility: PUBLIC, player: "p2", round: 1 },
   { type: "moveSubmitted", visibility: privateTo("p1"), player: "p1", round: 1, move: { room: "vault", duffel: 1, pocket: 2 } },
-  { type: "coinsGrabbed", visibility: privateTo("p1"), player: "p1", round: 1, room: "vault", duffel: 1, pocket: 2 },
+  { type: "coinsGrabbed", visibility: privateTo("p1"), player: "p1", round: 1, room: "vault", duffel: 1, pocket: 2, seized: 0 },
   { type: "roomSighting", visibility: privateTo("p1"), player: "p1", round: 1, room: "vault", others: ["p2"] },
-  { type: "roundResolved", visibility: PUBLIC, round: 1, bank: 58, haulDelta: 9, haul: 9, heatDelta: 12, heat: 12, heatParts: { base: 12, rooms: {} } },
+  { type: "roundResolved", visibility: PUBLIC, round: 1, bank: 58, haulDelta: 9, haul: 9 },
   { type: "alibiPosted", visibility: PUBLIC, player: "p2", round: 1, room: "lobby" },
   { type: "roundStarted", visibility: PUBLIC, round: 2, act: 1 },
-  { type: "roundResolved", visibility: PUBLIC, round: 2, bank: 51, haulDelta: 5, haul: 14, heatDelta: 8, heat: 20, heatParts: { base: 8, rooms: {} } },
-  { type: "checkpointChecked", visibility: PUBLIC, act: 1, target: 12, haul: 14, met: true, heatPenalty: 0 },
+  { type: "roundResolved", visibility: PUBLIC, round: 2, bank: 51, haulDelta: 5, haul: 14 },
+  { type: "checkpointChecked", visibility: PUBLIC, act: 1, target: 12, haul: 14, met: true },
 ];
 let ledger: LoggedEvent<PublicEvent>[] = [];
 let caseFile: LoggedEvent<CaseFileEvent>[] = [];
@@ -74,7 +74,7 @@ export function NotesSections() {
         {away ? (
           <AwayRecap
             seed="g-away"
-            lines={["Rounds 1–2 done: Haul +14 (now 14), Heat +20 (now 20).", "Meeting 1 target: Haul 14, target 12, made it.", "Only you: Round 1: in the Vault, you saw Ben.", "Now: round 3. Pick your room before the deadline."]}
+            lines={["Rounds 1–2 done: Haul +14 (now 14), 51 coins left in the bank.", "Meeting 1 target: Haul 14, target 12, made it.", "Only you: Round 1: in the Vault, you saw Ben.", "Now: round 3. Pick your room before the deadline."]}
             onDismiss={() => setAway(false)}
           />
         ) : (

@@ -23,10 +23,12 @@ export interface Personality {
   /** Chance of spending a round in Security. design §17.3 (Cautious "checks Security often") */
   readonly watch: number;
   /**
-   * Heads for the Rooftop once (Heat + the baseline still to come) ÷ the raid
-   * level passes this, more often the further past it. design §7
+   * How far it keeps clear of a raid and a bust (0–1): how much a bell close
+   * to its last bulb puts it off a room, its chance of grabbing only what keeps
+   * the bell below a raid, and (× bust danger²) of lying low on the Rooftop
+   * near the bust line. design §5.2, §5.3, §5.5
    */
-  readonly heatCaution: number;
+  readonly caution: number;
   /** Chance that any one decision is made uniformly at random instead. 1 = the Random bot. */
   readonly noise: number;
   /**
@@ -48,8 +50,7 @@ export type PersonalityId = "honest" | "opportunist" | "greedy" | "cautious" | "
 
 /**
  * The design §17.3 bots. A dealt Mole plays its personality with Mole habits on
- * top (an occasional tip-off, at most once per act; never votes to shake down a
- * fellow Mole; bot.ts).
+ * top (a ring on the loudest bell, at most once per act; bot.ts).
  * Placeholder numbers, to tune with the simulator.
  */
 export const PERSONALITIES: Readonly<Record<PersonalityId, Personality>> = {
@@ -64,7 +65,7 @@ export const PERSONALITIES: Readonly<Record<PersonalityId, Personality>> = {
     voteAt: 2,
     emergencyAt: null,
     watch: 0.15,
-    heatCaution: 0.85,
+    caution: 0.6,
     noise: 0.02,
     misread: 1,
     hunch: 7,
@@ -80,12 +81,12 @@ export const PERSONALITIES: Readonly<Record<PersonalityId, Personality>> = {
     voteAt: 2,
     emergencyAt: null,
     watch: 0.1,
-    heatCaution: 0.9,
+    caution: 0.5,
     noise: 0.02,
     misread: 1,
     hunch: 7,
   },
-  // Pockets often and big, lies often, rarely votes: stress-tests Heat and checkpoints.
+  // Pockets often and big, lies often, rarely votes: stress-tests the bells and checkpoints.
   greedy: {
     name: "Greedy",
     pocketChance: 0.8,
@@ -96,7 +97,7 @@ export const PERSONALITIES: Readonly<Record<PersonalityId, Personality>> = {
     voteAt: 4,
     emergencyAt: null,
     watch: 0.05,
-    heatCaution: 1,
+    caution: 0.2,
     noise: 0.02,
     misread: 1,
     hunch: 7,
@@ -112,7 +113,7 @@ export const PERSONALITIES: Readonly<Record<PersonalityId, Personality>> = {
     voteAt: 1.5,
     emergencyAt: 7,
     watch: 0.35,
-    heatCaution: 0.55,
+    caution: 0.9,
     noise: 0.02,
     misread: 1,
     hunch: 7,
@@ -128,7 +129,7 @@ export const PERSONALITIES: Readonly<Record<PersonalityId, Personality>> = {
     voteAt: 0,
     emergencyAt: null,
     watch: 0,
-    heatCaution: 1,
+    caution: 0,
     noise: 1,
     misread: 0,
     hunch: 0,

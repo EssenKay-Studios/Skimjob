@@ -21,13 +21,18 @@ const ALL_ROOMS = Object.fromEntries(Object.values(JOBS).flatMap((j) => Object.v
 export const roomName = (room: RoomId): string => ALL_ROOMS[room] ?? room;
 /** A role's display name, e.g. "Smooth Talker". */
 export const roleName = (role: string): string => ROLES[role]?.name ?? role;
-/** An event card's display name, e.g. "Police patrol". */
+/** An event card's display name, e.g. "Shift change". */
 export const cardName = (card: string): string => EVENTS[card]?.name ?? card;
 export const perkName = (perk: PerkId): string => PERKS[perk]?.name ?? perk;
 
 const list = (xs: readonly string[]) => (xs.length <= 1 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`);
 const signed = (n: number) => (n >= 0 ? `+${n}` : `−${Math.abs(n)}`);
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+/** "Vault 3 bulbs and Office 1 bulb": the lit bells, or "all dark". design §5.1 */
+const bells = (lit: Readonly<Record<RoomId, number>>) => {
+  const on = Object.entries(lit).filter(([, n]) => n > 0);
+  return on.length === 0 ? "all dark" : list(on.map(([room, n]) => `${roomName(room)} ${n} bulb${n === 1 ? "" : "s"}`));
+};
 /** "to shake down Dez" / "to shake you down". */
 const shakeDown = (target: PlayerId, who: (p: PlayerId) => string) => (who(target) === "you" ? "to shake you down" : `to shake down ${who(target)}`);
 
@@ -77,9 +82,15 @@ function line(e: GameEvent, ctx: DescribeContext): string {
     case "moveSubmitted":
       return `${verb(e.player, "picked", "picked")} the ${roomName(e.move.room)} for round ${e.round}${e.move.pocket > 0 ? `, pocketing ${e.move.pocket} of ${e.move.duffel + e.move.pocket}` : ", handing everything in"}${e.move.watch ? `, watching the ${roomName(e.move.watch)}` : ""}.`;
     case "defaultMoveAssigned":
-      return `${verb(e.player, "missed", "missed")} round ${e.round}'s deadline: the default move went to the ${roomName(e.move.room)}, handing everything in.`;
+      // design §3.3 (owner, 7 Nov): with the Lobby taped off, a missed move sits the round out.
+      return e.move
+        ? `${verb(e.player, "missed", "missed")} round ${e.round}'s deadline: the default move went to the ${roomName(e.move.room)}, handing everything in.`
+        : `${verb(e.player, "missed", "missed")} round ${e.round}'s deadline: the default room is taped off, so ${you(e.player) ? "you sat" : "they sat"} the round out.`;
     case "coinsGrabbed":
-      return `Round ${e.round}, ${roomName(e.room)}: ${verb(e.player, "grabbed", "grabbed")} ${e.duffel + e.pocket} coins, ${e.duffel} to the duffel and ${e.pocket} pocketed.`;
+      // design §5.3: in a raided room the police seized the whole grab.
+      return e.seized > 0
+        ? `Round ${e.round}, ${roomName(e.room)}: ${verb(e.player, "grabbed", "grabbed")} ${e.seized} coins, and the police seized them all.`
+        : `Round ${e.round}, ${roomName(e.room)}: ${verb(e.player, "grabbed", "grabbed")} ${e.duffel + e.pocket} coins, ${e.duffel} to the duffel and ${e.pocket} pocketed.`;
     case "abilityResolved":
       return ability(e.ability, e.player, e.round, { you, who, whose, verb });
     case "roomSighting":
@@ -93,11 +104,15 @@ function line(e: GameEvent, ctx: DescribeContext): string {
       return `Round ${e.round}, ${how.toLowerCase()}: ${e.seen.length === 0 ? "nobody" : names(e.seen)} in the ${roomName(e.room)}${you(e.player) ? "" : ` (seen by ${ctx.name(e.player)})`}.`;
     }
     case "roundResolved":
-      return `Round ${e.round}: Haul ${signed(e.haulDelta)} (now ${e.haul}), Heat ${signed(e.heatDelta)} (now ${e.heat}).`;
-    case "copsRaided":
-      return `The cops raided in round ${e.round} at Heat ${e.heat}. The job is blown.`;
-    case "raidStopped":
-      return `The cops were about to raid in round ${e.round}, but the raid was stopped: Heat is back to ${e.heat}.`;
+      return `Round ${e.round}: Haul ${signed(e.haulDelta)} (now ${e.haul}), ${e.bank} coins left in the bank.`;
+    case "bellsRung":
+      return `Round ${e.round} bells: ${bells(e.bells)}.`;
+    case "roomRaided":
+      return `Raid! The police hit the ${roomName(e.room)} in round ${e.round} and seized ${e.seized} coin${e.seized === 1 ? "" : "s"}. It is taped off through round ${e.closedThrough}. Wanted ${e.wanted}.`;
+    case "bellsCooled":
+      return `After round ${e.round} the bells cooled: ${bells(e.bells)}.`;
+    case "roomReopened":
+      return `The tape is off the ${roomName(e.room)}: it opens again next round.`;
     case "eventFlipped":
       return `Round ${e.round} event: ${cardName(e.card)}${e.room ? ` (the ${roomName(e.room)} is closed)` : ""}.`;
     case "insideTip":
@@ -139,20 +154,11 @@ function line(e: GameEvent, ctx: DescribeContext): string {
     case "blessingPaid":
       return `${who(e.target)} ${you(e.target) ? "were" : "was"} blessed: the bank paid the compensation, so ${e.amount} went back into the Haul.`;
     case "checkpointChecked":
-      return `${targetName(e.act)}: Haul ${e.haul}, target ${e.target}, ${e.met ? "made it" : `missed${e.heatPenalty > 0 ? ` (Heat +${e.heatPenalty})` : ""}`}.`;
+      return `${targetName(e.act)}: Haul ${e.haul}, target ${e.target}, ${e.met ? "made it" : "missed"}.`;
     case "tokenEarned":
       return `${verb(e.player, "earned", "earned")} a token.`;
     case "perkBought":
       return `${verb(e.player, "bought", "bought")} a ${perkName(e.perk)} perk for ${e.cost} token${e.cost === 1 ? "" : "s"}: ${PERKS[e.perk]?.effect ?? ""}`.trim();
-    case "policeActivity":
-      // extension.md "Police activity": a patrol and a tip-off read the same.
-      return `Police activity: Heat +${e.heatAdded}.`;
-    case "policeScheduled":
-      return `A police moment came${e.patrol ? " with a patrol" : ""}.`;
-    case "tipOffLanded":
-      return `${whose(e.player)} tip-off landed in round ${e.round}.`;
-    case "policeCause":
-      return `That police activity was ${e.mole === null ? "a patrol" : `${whose(e.mole)} tip-off`}.`;
     case "perkUsed":
       return perk(e.perk, e.player, { you, who, whose, verb });
     case "rigPicked":
@@ -164,7 +170,9 @@ function line(e: GameEvent, ctx: DescribeContext): string {
       const winners = o.winners.length === 0 ? "nobody wins" : `${names(o.winners)} ${o.winners.length === 1 && !you(o.winners[0]!) ? "wins" : "win"}`;
       return o.result === "success"
         ? `Job done! The crew got away with it: ${winners}.`
-        : `Busted: the heist failed (${o.reason === "heat" ? "the Heat hit the top" : "the target was missed"}); ${winners}.`;
+        : o.reason === "bust"
+          ? `Busted: Wanted hit the bust line and the heist failed; ${o.escapees.length === 0 ? "nobody was on the Rooftop" : `${names(o.escapees)} got away over the Rooftop`}; ${winners}.`
+          : `The heist failed: the target was missed; ${winners}.`;
     }
     default: {
       const never: never = e;
@@ -186,16 +194,16 @@ function ability(a: ResolvedAbility, player: PlayerId, round: number, { you, who
       return `Round ${round}: ${verb(player, "kept", "kept")} lookout on the ${list(a.rooms.map(roomName))}.`;
     case "loopCameras":
       return `Round ${round}: ${verb(player, "looped", "looped")} the cameras on the ${roomName(a.room)}.`;
-    case "tipOff":
-      return `Round ${round}: ${verb(player, "tipped", "tipped")} off the cops.`;
+    case "ring":
+      return `Round ${round}: ${verb(player, "tipped", "tipped")} off the police: the ${roomName(a.room)}'s bell rang once more.`;
+    case "reopen":
+      return `Round ${round}: ${verb(player, "tore", "tore")} the tape off the ${roomName(a.room)}.`;
     case "audit":
       return `Audit: the ${roomName(a.room)} came up ${a.shortfall} short in round ${a.round}.`;
     case "checkStash":
       return `Stash check: ${who(a.target)} ${a.dirty ? `holds ${a.threshold} or more (not clean)` : `holds less than ${a.threshold} (clean)`}.`;
     case "bless":
       return `${verb(player, "blessed", "blessed")} ${who(a.target)} until the next meeting.`;
-    case "fixer":
-      return `Round ${round}: ${verb(player, "stopped", "stopped")} the raid and lost ${a.lost} from ${whose(player)} stash.`;
     default: {
       const never: never = a;
       return String((never as { kind: string }).kind);

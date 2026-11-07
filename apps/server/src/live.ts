@@ -35,8 +35,8 @@
 //   same for every seat and all from public or server-only data: whether the
 //   host has paused the game, which human seats a bot is playing for now, and
 //   which seats missed `REPLACE_AFTER_MISSED_ROUNDS` rounds in a row (public:
-//   those rounds had no lock-in mark). Nothing in it says anything about a
-//   police moment. A seat a bot is playing for can chat but not send commands.
+//   those rounds had no lock-in mark). A seat a bot is playing for can chat
+//   but not send commands.
 // - A socket is closed (4401) once its session expires, at the latest on its
 //   next message (M2-13: it used to outlive the session).
 import { createHash } from "node:crypto";

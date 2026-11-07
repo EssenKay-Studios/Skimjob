@@ -1,5 +1,5 @@
 // Role deck v2 crew roles, step R2b (docs/roles-v2.md §2, §3): Smooth Talker,
-// Priest, Fixer and their token rewards
+// Priest and their token rewards
 // (extension.md "Roles", "Tokens and the perk shop"); eligibility; the PR #26
 // review notes (Auditor, Detective, a bought Peek); a view-diff with these
 // roles dealt. design §7, §8, §8.1, §10, §11.3, §16.1
@@ -10,7 +10,6 @@ import type { GameConfig, GameEvent, GameState, PlayerState } from "./types";
 import { PUBLIC, privateTo } from "./types";
 import { createGame, rolePoolFor, setupEvents, validateConfig } from "./setup";
 import { replay } from "./reduce";
-import { roundHeatDelta } from "./job";
 import { viewFor } from "./view";
 import { grantPerks } from "./perks.testkit";
 import { fullGrab } from "./grab.testkit";
@@ -175,43 +174,6 @@ describe("Priest: once per act, bless a player; a clean shakedown of them is pai
     expect(reason(s, use("p0", { kind: "bless", target: "p2" }))).toMatch(/caught dirty/);
     s = finishAct(s);
     expect(run(s, use("p0", { kind: "bless", target: "p2" })).log.at(-1)).toMatchObject({ ability: { kind: "bless", act: 3 } });
-  });
-});
-
-describe("Fixer: once per game a raid stops at 95 Heat; it loses ¼ of its stash and earns a token — extension.md \"Roles\"", () => {
-  const hot = (s: GameState, heat: number): GameState => ({ ...s, heat });
-  const ALL_VAULT = [mv("p1", "vault"), mv("p2", "vault")];
-
-  it("mid-round: public `raidStopped` (no name), Heat 95, the Fixer pays privately and gets a token; the next raid ends the game", () => {
-    const before = hot(withStashes(game(3, ["fixer"]), { p0: 8 }), 99);
-    const s = run(before, mv("p0", "lobby"), ...ALL_VAULT, ROUND);
-    const events = since(before, s);
-    expect(ofType(events, "roundResolved")[0]?.heat).toBe(100);
-    expect(ofType(events, "raidStopped")).toEqual([{ type: "raidStopped", visibility: PUBLIC, round: 1, heat: 95 }]);
-    expect(ofType(events, "abilityResolved")[0]).toEqual({ type: "abilityResolved", visibility: privateTo("p0"), player: "p0", round: 1, ability: { kind: "fixer", lost: 2 } });
-    expect(ofType(events, "copsRaided")).toEqual([]);
-    expect([s.heat, s.players.p0?.stash, s.phase.kind]).toEqual([95, 6, "planning"]);
-    expect(granted(s, "p0")).toEqual(["raidStopped"]);
-    expect(JSON.stringify(viewFor(s, "p1"))).not.toMatch(/"kind":"fixer"|tokenEarned/);
-    const again = run(hot(s, 99), mv("p0", "lobby"), ...ALL_VAULT, ROUND);
-    expect(ofType(since(s, again), "copsRaided")).toHaveLength(1);
-    expect(again.phase.kind).toBe("ended");
-  });
-
-  it("also stops a missed checkpoint's raid; the next round starts", () => {
-    const s = finishAct(game(3, ["fixer"]), [mv("p0", "rooftop"), mv("p1", "rooftop"), mv("p2", "rooftop")], (m) => hot(m, 90));
-    const check = ofType(s.log, "checkpointChecked")[0];
-    expect(check?.met).toBe(false);
-    expect(ofType(s.log, "raidStopped")).toHaveLength(1);
-    expect([s.heat, s.round, s.phase.kind]).toEqual([95, 4, "planning"]);
-  });
-
-  it("the threshold is its one number (`stopAt`); without a Fixer the raid ends the game", () => {
-    const tuned = { contentOverrides: { roles: { fixer: { stopAt: 80 } } } };
-    expect(validateConfig(config(3, tuned))).toEqual([]);
-    const s = run(hot(game(3, ["fixer"], tuned), 99), mv("p0", "lobby"), ...ALL_VAULT, ROUND);
-    expect(s.heat).toBe(80);
-    expect(run(hot(game(3, []), 99), mv("p0", "lobby"), ...ALL_VAULT, ROUND).phase.kind).toBe("ended");
   });
 });
 

@@ -43,7 +43,7 @@ for (const width of WIDTHS) {
     await section.scrollIntoViewIfNeeded();
     await section.getByRole("button", { name: "24 characters" }).click();
     const reveal = section.getByRole("region", { name: "The reveal" });
-    for (const ending of ["Job done", "Raided (★ wins)", "Missed (nobody)"]) {
+    for (const ending of ["Job done", "Busted (Rooftop)", "Missed (nobody)"]) {
       await section.getByRole("button", { name: ending }).click();
       await expect(reveal).toContainText(WIDE);
       await expect(reveal).toContainText("M".repeat(24));

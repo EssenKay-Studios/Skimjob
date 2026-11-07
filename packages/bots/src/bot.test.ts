@@ -96,10 +96,29 @@ describe("moves — design §5.1, §6, §7, §8", () => {
     expect(move.watch && roomDef(bank, move.watch).coins).toBeGreaterThan(0);
   });
 
-  it("heads for the Rooftop when Heat is close to a raid — design §7", () => {
-    const s = { ...game(4), heat: 90 } satisfies GameState;
-    const rooms = Array.from({ length: 20 }, (_, i) => chooseMove(viewFor(s, "ana"), exact(PERSONALITIES.honest), seeded(`h${i}`)).room);
-    expect(rooms.filter((r) => r === "rooftop").length).toBeGreaterThan(10);
+  it("one raid short of a bust, the cautious lie low on the Rooftop, the only escape — design §5.5", () => {
+    const s = { ...game(4), wanted: 2 } satisfies GameState;
+    const rooms = (st: GameState) => Array.from({ length: 20 }, (_, i) => chooseMove(viewFor(st, "ana"), exact(PERSONALITIES.cautious), seeded(`h${i}`)).room);
+    expect(rooms(s).filter((r) => r === "rooftop").length).toBeGreaterThan(10);
+    expect(rooms(game(4)).filter((r) => r === "rooftop")).toEqual([]);
+  });
+
+  it("never picks a taped-off room, and keeps clear of a bell close to a raid — design §5.3", () => {
+    const g = game(4, (st) => st.players.ana?.role === "rookie");
+    const { vault: _v, ...bells } = g.bells;
+    const taped = { ...g, bells, taped: { vault: 3 } } satisfies GameState;
+    for (let i = 0; i < 20; i++) expect(chooseMove(viewFor(taped, "ana"), PERSONALITIES.random, seeded(`t${i}`)).room).not.toBe("vault");
+    const loud = { ...g, bells: { ...g.bells, vault: 999 } } satisfies GameState; // R6 pins: 1000 bulbs
+    const inVault = (p: typeof PERSONALITIES.honest) => Array.from({ length: 40 }, (_, i) => chooseMove(viewFor(loud, "ana"), exact({ ...p, watch: 0 }), seeded(`v${i}`)).room).filter((r) => r === "vault").length;
+    expect(inVault(PERSONALITIES.cautious)).toBeLessThan(inVault(PERSONALITIES.greedy));
+  });
+
+  it("a cautious grab stops short of the last bulb — design §5.2, §5.3", () => {
+    const g = game(4, (st) => st.players.ana?.role === "rookie");
+    const loud = { ...g, bells: { ...g.bells, office: 999 } } satisfies GameState; // R6 pins: 1000 bulbs, so the Office's 2nd ring would raid
+    const office = { ...exact(PERSONALITIES.cautious), caution: 1, watch: 0, pocketChance: 0 };
+    const moves = Array.from({ length: 10 }, (_, i) => chooseMove(viewFor(loud, "ana"), office, seeded(`o${i}`))).filter((m) => m.room === "office");
+    for (const m of moves) expect(m.duffel + m.pocket).toBe(1);
   });
 
   it("keeps the Haul on pace for the checkpoint when it's behind — design §11.5", () => {
@@ -107,7 +126,7 @@ describe("moves — design §5.1, §6, §7, §8", () => {
     let s = game(4);
     for (let r = 1; r <= 2; r++) s = round(s, { ana: { room: "rooftop" }, ben: { room: "rooftop" }, carl: { room: "rooftop" }, dee: { room: "rooftop" } });
     s = closeAlibis(s); // round 3 is being planned
-    const greedyTeamPlayer = exact(PERSONALITIES.greedy, { pocketChance: 1, teamSpirit: 1, watch: 0, heatCaution: 2 });
+    const greedyTeamPlayer = exact(PERSONALITIES.greedy, { pocketChance: 1, teamSpirit: 1, watch: 0, caution: 0 });
     for (let i = 0; i < 20; i++) expect(chooseMove(viewFor(s, "ana"), greedyTeamPlayer, seeded(`p${i}`)).pocket).toBe(0);
   });
 });

@@ -123,19 +123,24 @@ export interface MoveLocked {
   readonly round: number;
 }
 
-/** Missed the deadline: Lobby, hand everything in. design §5.1 */
+/**
+ * Missed the deadline: Lobby, hand everything in; `null` when the Lobby is taped off and the
+ * player sits the round out (owner, 7 Nov). design §3.3
+ */
 export interface DefaultMoveAssigned {
   readonly type: "defaultMoveAssigned";
   readonly visibility: PrivateVisibility;
   readonly player: PlayerId;
   readonly round: number;
-  readonly move: Move;
+  readonly move: Move | null;
 }
 
 /**
  * The coins a player really grabbed this round and which bag each went into
- * (after any short-bank cut, design §3.2). Private to them; the full set
- * becomes the per-round breakdown in the reveal. design §3.2, §18
+ * (after any short-bank cut, design §3.2). In a raided room the police seize
+ * the whole grab before the split: `seized` holds it and both bags are 0
+ * (§5.3). Private to them; the full set becomes the per-round breakdown in
+ * the reveal. design §3.2, §5.3, §18
  */
 export interface CoinsGrabbed {
   readonly type: "coinsGrabbed";
@@ -145,13 +150,12 @@ export interface CoinsGrabbed {
   readonly room: RoomId;
   readonly duffel: number;
   readonly pocket: number;
+  readonly seized: number;
 }
 
 /** What a used power did. Move powers as submitted, plus what each instant power answered. design §8 */
 export type ResolvedAbility =
   | AbilityUse
-  /** Mole: a tip-off is queued; it lands at the next free hidden police moment (`tipOffLanded`). extension.md "Police activity" */
-  | { readonly kind: "tipOff" }
   /** Auditor: `room` came up `shortfall` short in `round` (its visitors' pockets; 0 if none). design §8 (v2 §2) */
   | { readonly kind: "audit"; readonly round: number; readonly room: RoomId; readonly shortfall: number }
   /**
@@ -159,9 +163,7 @@ export type ResolvedAbility =
    */
   | { readonly kind: "checkStash"; readonly target: PlayerId; readonly threshold: number; readonly dirty: boolean }
   /** Priest: `target` is blessed for `act` (a clean shakedown of them that act is paid by the bank). design §8 (v2 §2) */
-  | { readonly kind: "bless"; readonly target: PlayerId; readonly act: ActNumber }
-  /** Fixer: its once-per-game save stopped a raid; it lost `lost` from its stash. design §8 (v2 §2) */
-  | { readonly kind: "fixer"; readonly lost: number };
+  | { readonly kind: "bless"; readonly target: PlayerId; readonly act: ActNumber };
 
 /** An ability took effect. Private to its user; `round` is the latest round started. design §8 */
 export interface AbilityResolved {
@@ -207,84 +209,58 @@ export interface RoundResolved {
   readonly bank: number;
   readonly haulDelta: number;
   readonly haul: number;
-  readonly heatDelta: number;
-  readonly heat: number;
-  /**
-   * The round's Heat change by part (before the clamp at 0): the baseline,
-   * and each room that changed Heat (rounded). The rooms take up any rounding, so
-   * the baseline is its true value; `clamp` (only when non-zero) is what the
-   * 0–max limit took back, so the parts add up to `heatDelta`. Police activity and a missed
-   * target come as their own events under the round (`heatBreakdown`).
-   * extension.md "What the app works out for you" (the Heat breakdown)
-   */
-  readonly heatParts: { readonly base: number; readonly rooms: Readonly<Record<RoomId, number>>; readonly clamp?: number };
 }
 
 /**
- * Police activity (extension.md "Police activity"): a background patrol or a
- * Mole's queued tip-off landed at a hidden police moment. Both read exactly
- * the same; it never says which. `round` is the round in progress (the latest
- * whose planning has opened). A raid check follows at once.
+ * design §5.2 (§4.2 step 2): the round's rings have lit their bulbs. `bells`
+ * is every open room's lit bulbs now (at most the bell's size; a taped-off
+ * room's bell is off, so it isn't listed). Public through the fact catalogue
+ * (§19 seam 1).
  */
-export interface PoliceActivity {
-  readonly type: "policeActivity";
+export interface BellsRung {
+  readonly type: "bellsRung";
   readonly visibility: PublicVisibility;
   readonly round: number;
-  readonly heatAdded: number;
-  readonly heat: number;
+  readonly bells: Readonly<Record<RoomId, number>>;
 }
 
 /**
- * The hidden police schedule: police moment `moment` falls `gapPermille`
- * thousandths of a round length after the previous one (game time), and a
- * background patrol fires there if `patrol`. Reveal-only. extension.md "Police activity"
+ * design §5.3 (§4.2 step 3): `room`'s last bulb lit. Its visitors' grabs
+ * (`seized` coins in all) left the game, it is taped off through round
+ * `closedThrough` with its bell off, and Wanted is now `wanted`. Public; it
+ * never says who was inside.
  */
-export interface PoliceScheduled {
-  readonly type: "policeScheduled";
-  readonly visibility: RevealVisibility;
-  readonly moment: number;
-  readonly gapPermille: number;
-  readonly patrol: boolean;
-}
-
-/**
- * What the police activity just before it really was: a background patrol, or
- * `mole`'s queued tip-off. Reveal-only, so the crew can't tell them apart in
- * play; the end-of-game reveal reads it. extension.md "Police activity", design §13
- */
-export interface PoliceCause {
-  readonly type: "policeCause";
-  readonly visibility: RevealVisibility;
-  readonly round: number;
-  readonly cause: "patrol" | "tipOff";
-  readonly mole: PlayerId | null;
-}
-
-/** Your queued tip-off landed as this police activity (only the Mole is told). extension.md "Police activity" */
-export interface TipOffLanded {
-  readonly type: "tipOffLanded";
-  readonly visibility: PrivateVisibility;
-  readonly player: PlayerId;
-  readonly round: number;
-}
-
-/** Heat reached 100. The heist fails immediately. design §5.2 step 6, §7 */
-export interface CopsRaided {
-  readonly type: "copsRaided";
+export interface RoomRaided {
+  readonly type: "roomRaided";
   readonly visibility: PublicVisibility;
   readonly round: number;
-  readonly heat: number;
+  readonly room: RoomId;
+  readonly seized: number;
+  readonly closedThrough: number;
+  readonly wanted: number;
 }
 
 /**
- * Heat reached the max, but a Fixer's once-per-game save stopped the raid:
- * Heat is now `heat`. It doesn't say who. design §7, §8 (v2 §2)
+ * design §5.6 (§4.2 step 6): every room turned off a bulb, then each Rooftop
+ * player cooled the hottest. `bells` is every open room's lit bulbs after it.
+ * Public.
  */
-export interface RaidStopped {
-  readonly type: "raidStopped";
+export interface BellsCooled {
+  readonly type: "bellsCooled";
   readonly visibility: PublicVisibility;
   readonly round: number;
-  readonly heat: number;
+  readonly bells: Readonly<Record<RoomId, number>>;
+}
+
+/**
+ * design §5.3, §11.1: a Fixer tore the tape off `room` in `round`; it is open
+ * again from the next round, its bell at 0. Public, without a name.
+ */
+export interface RoomReopened {
+  readonly type: "roomReopened";
+  readonly visibility: PublicVisibility;
+  readonly round: number;
+  readonly room: RoomId;
 }
 
 // ---------------------------------------------------------------- events deck (§10)
@@ -501,8 +477,6 @@ export interface CheckpointChecked {
   readonly target: number;
   readonly haul: number;
   readonly met: boolean;
-  /** Heat added for a missed Act 1/2 checkpoint; 0 if met or final. */
-  readonly heatPenalty: number;
 }
 
 // ---------------------------------------------------------------- perks (§8.3)
@@ -605,7 +579,19 @@ export type Outcome =
     }
   | {
       readonly result: "failed";
-      readonly reason: FailureReason;
+      readonly reason: Exclude<FailureReason, "bust">;
+      readonly ranking: readonly RankEntry[];
+      readonly winners: readonly PlayerId[];
+    }
+  /**
+   * design §5.5: Wanted reached the bust line. Only `escapees` (on the Rooftop
+   * that round) get away; `winners` are the escapees tied for the biggest stash
+   * among them, any role, and nobody if nobody escaped.
+   */
+  | {
+      readonly result: "failed";
+      readonly reason: "bust";
+      readonly escapees: readonly PlayerId[];
       readonly ranking: readonly RankEntry[];
       readonly winners: readonly PlayerId[];
     };
@@ -636,12 +622,10 @@ export type GameEvent =
   | RoomSighting
   | RoomWatched
   | RoundResolved
-  | PoliceActivity
-  | PoliceScheduled
-  | PoliceCause
-  | TipOffLanded
-  | CopsRaided
-  | RaidStopped
+  | BellsRung
+  | RoomRaided
+  | BellsCooled
+  | RoomReopened
   | EventFlipped
   | InsideTip
   | AuditReport

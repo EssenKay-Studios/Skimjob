@@ -22,8 +22,8 @@ const SHOWN: ReadonlySet<GameEvent["type"]> = new Set<GameEvent["type"]>([
   "shakedownCancelled",
   "blessingPaid",
   "checkpointChecked",
-  "raidStopped",
-  "copsRaided",
+  "roomRaided",
+  "roomReopened",
 ]);
 
 interface Draft {
@@ -93,11 +93,10 @@ export function revealSummary(log: readonly GameEvent[], outcome: Outcome, table
         break;
       }
       case "roundResolved":
-        current.resolved = { haulDelta: e.haulDelta, haul: e.haul, heatDelta: e.heatDelta, heat: e.heat };
+        current.resolved = { haulDelta: e.haulDelta, haul: e.haul };
         break;
       case "abilityResolved": {
         const a = e.ability;
-        if (a.kind === "fixer") add(e.player, -a.lost);
         if (a.kind === "loopCameras") loops.set(a.room, [...(loops.get(a.room) ?? []), e.player]);
         items.push({ kind: "event", event: e });
         break;
@@ -107,13 +106,6 @@ export function revealSummary(log: readonly GameEvent[], outcome: Outcome, table
           items.push({ kind: "cameraOffline", watcher: e.player, room: e.room, source: e.source, hackers: loops.get(e.room) ?? [] });
         }
         break;
-      case "policeActivity": {
-        // extension.md "Police activity": the reveal-only `policeCause` right after says which it was.
-        const next = log[i + 1];
-        const cause = next?.type === "policeCause" ? next : null;
-        items.push({ kind: "police", heatAdded: e.heatAdded, heat: e.heat, cause: cause?.cause ?? "patrol", mole: cause?.mole ?? null });
-        break;
-      }
       case "tokenEarned": {
         push(tokens, e.player, e.trigger);
         items.push({ kind: "token", player: e.player, trigger: e.trigger });

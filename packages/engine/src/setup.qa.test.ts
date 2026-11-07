@@ -1,7 +1,7 @@
 // QA (PR #2): adversarial tests for seeded RNG, setup and replay.
 // design §6.2, §8.1, §16, §17.2
 import { describe, expect, it } from "vitest";
-import { BALANCED_MIX, MOLE_ROLE, ROLES, STANDARD_ROLES, STARTER_ROLES, type RoleId } from "@skimjob/content";
+import { BALANCED_MIX, ROLES, STANDARD_ROLES, STARTER_ROLES, type RoleId } from "@skimjob/content";
 import type { DealStyle, GameConfig, GameEvent } from "./types";
 import { canSee } from "./types";
 import { createGame, roomsFor, setupEvents, validateConfig } from "./setup";
@@ -109,7 +109,7 @@ describe("QA role dealing — design §8.1", () => {
 
   it("12 players, Standard, Balanced: the Mole, the Hacker, the 4 Team players, then 6 Rookies; a narrow deck fills with Rookies", () => {
     const dealt = roles(config(12));
-    expect(count(dealt, MOLE_ROLE)).toBe(1);
+    expect(count(dealt, "mole")).toBe(1);
     expect(new Set(dealt).size).toBe(7);
     expect(count(dealt, "rookie")).toBe(6);
     expect(tagCount(dealt, "wildcard")).toBe(1);
@@ -121,7 +121,7 @@ describe("QA role dealing — design §8.1", () => {
     for (const n of [3, 12]) {
       for (let s = 0; s < 20; s++) {
         const dealt = roles(config(n, { deck: "starter", seed: `st-${s}` }));
-        expect(dealt).not.toContain(MOLE_ROLE);
+        expect(dealt).not.toContain("mole");
         for (const r of dealt) expect(STARTER_ROLES).toContain(r);
       }
     }

@@ -5,7 +5,6 @@ import {
   BALANCED_MIX,
   BANK_JOB,
   DECKS,
-  POLICE_ACTIVITY,
   SHOP_COLUMNS,
   PERKS,
   PERK_IDS,
@@ -39,7 +38,7 @@ describe("job data is consistent", () => {
     it(`${job.id}: room numbers are sane`, () => {
       for (const def of Object.values(job.rooms)) {
         expect(Number.isInteger(def.coins) && def.coins >= 0).toBe(true);
-        expect(Number.isFinite(def.heatPressure)).toBe(true);
+        expect(Number.isInteger(def.quietCoins) && def.quietCoins >= 0).toBe(true);
       }
       // design §3.3: a missed move grabs 1 coin in the default room.
       expect(job.rooms[job.defaultRoom]?.coins).toBeGreaterThanOrEqual(1);
@@ -87,29 +86,22 @@ describe("First National Bank bank — design §6.1", () => {
   });
 });
 
-describe("First National Bank Heat numbers — design §7", () => {
-  it("baseline +4 a round, raid at 100, missed checkpoint +15", () => {
-    expect(BANK_JOB.heat).toEqual({ max: 100, perRound: 4, missedCheckpoint: 15 });
+describe("First National Bank alarm — design §3.1, §5", () => {
+  it("4-bulb bells, taped off for 2 rounds, a bust at 3 Wanted stars", () => {
+    expect(BANK_JOB.alarm).toEqual({ bulbs: 4, tapedRounds: 2, bustStars: 3 });
   });
 
-  it("Vault +20, Manager's office half of that, Deposit boxes +10, Rooftop −20 (per crew share); other rooms 0", () => {
-    const pressure = Object.fromEntries(Object.values(BANK_JOB.rooms).map((d) => [d.id, d.heatPressure]));
-    expect(pressure).toEqual({
-      vault: 20,
-      office: 0,
-      lobby: 0,
-      security: 0,
-      rooftop: -20,
-      depositBoxes: 10,
-      serverRoom: 0,
-      managersOffice: 10,
-    });
+  it("noise: the Lobby is silent, the Office-like rooms' 1st coin is silent, every Vault coin rings; the Rooftop lies low", () => {
+    const quiet = Object.fromEntries(Object.values(BANK_JOB.rooms).map((d) => [d.id, d.quietCoins]));
+    expect(quiet).toEqual({ vault: 0, office: 1, lobby: 1, security: 0, rooftop: 0, depositBoxes: 1, serverRoom: 1, managersOffice: 1 });
+    expect(BANK_JOB.rooms.lobby?.quietCoins).toBe(BANK_JOB.rooms.lobby?.coins);
+    expect(Object.values(BANK_JOB.rooms).filter((d) => d.lieLow).map((d) => d.id)).toEqual(["rooftop"]);
   });
 });
 
 describe("First National Bank checkpoint targets — design §11.5", () => {
-  it("3, 7 and 11 × crew size at the end of Acts 1, 2 and 3", () => {
-    expect(BANK_JOB.checkpoints.perPlayer).toEqual([3, 7, 11]); // scaled to R7 coins in S3a.1 (was 7, 15, 23)
+  it("2, 4 and 6 × crew size at the end of Acts 1, 2 and 3", () => {
+    expect(BANK_JOB.checkpoints.perPlayer).toEqual([2, 4, 6]); // scaled to R7 coins in S3a.1 and to raids in S3a.2 (was 7, 15, 23)
   });
 });
 
@@ -140,7 +132,8 @@ describe("starter roles — design §8, §8.1", () => {
     expect(tagged("loneWolf")).toEqual(["mole"]);
     expect(tagged("teamPlayer")).toHaveLength(7);
     const winners = Object.fromEntries(Object.values(ROLES).filter((r) => r.winsOn.length > 0).map((r) => [r.id, r.winsOn]));
-    expect(winners).toEqual({ mole: ["heat", "target"] });
+    // design §5.5: on a bust only the Rooftop wins, whatever the role, so no role wins on it.
+    expect(winners).toEqual({ mole: ["target"] });
     for (const id of STARTER_ROLES) expect(ROLES[id]?.tag).toBe("teamPlayer");
   });
 
@@ -148,7 +141,8 @@ describe("starter roles — design §8, §8.1", () => {
     for (const role of Object.values(ROLES)) {
       if (role.id === "rookie" || role.rewards) expect(role.rewards?.map((r) => r.count), role.id).toEqual([1]);
     }
-    expect(Object.values(ROLES).filter((r) => !r.rewards).map((r) => r.id)).toEqual([]);
+    // The Fixer's and the Mole's R6 tokens went with the raid stop and the tip-off (S3a.2); tokens go in S3a.7.
+    expect(Object.values(ROLES).filter((r) => !r.rewards).map((r) => r.id)).toEqual(["fixer", "mole"]);
   });
 
   it("perks: nine kinds in three shop columns; Peek and Shield cost 2, the rest 1 (extension.md \"Tokens and the perk shop\")", () => {
@@ -179,15 +173,14 @@ describe("starter roles — design §8, §8.1", () => {
 });
 
 describe("events deck content — design §10", () => {
-  it("has four cards with matching ids (Police patrol left, extension.md \"Police activity\"), and room cards name rooms of the bank", () => {
+  it("has four cards with matching ids, and room cards name rooms of the bank", () => {
     expect(EVENT_DECK).toHaveLength(4);
     expect(EVENT_DECK).not.toContain("policePatrol");
-    expect(POLICE_ACTIVITY).toMatchObject({ chancePercent: 30, heat: 4 });
     for (const id of EVENT_DECK) {
       const def = EVENTS[id];
       expect(def?.id).toBe(id);
       if (def?.effect.kind === "roomSurge") expect(Object.keys(BANK_JOB.rooms)).toContain(def.effect.room);
     }
-    expect(EVENTS.shiftChange?.effect).toEqual({ kind: "roomSurge", room: "vault", extraCoins: 1, heatMultiplier: 2 }); // design §13: Vault +1 coin
+    expect(EVENTS.shiftChange?.effect).toEqual({ kind: "roomSurge", room: "vault", extraCoins: 1 }); // design §13: Vault +1 coin
   });
 });

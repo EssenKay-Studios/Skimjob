@@ -47,16 +47,25 @@ export function leadersOf(ranked: readonly RankEntry[]): PlayerId[] {
  * members whose role wins that ending (`winsOn`), else by nobody.
  * The full ranking is always kept.
  */
-export function outcomeFor(state: GameState, failure: FailureReason | null, roles: RoleTable = rolesFor(state.config)): Outcome {
+export function outcomeFor(state: GameState, failure: FailureReason | null, roles: RoleTable = rolesFor(state.config), escapees: readonly PlayerId[] = []): Outcome {
   const ranked = ranking(state);
   const top = leadersOf(ranked);
   if (failure === null) return { result: "success", ranking: ranked, winners: top };
+  if (failure === "bust") {
+    // design §5.5, §8.3, §8.5: the escapees tied for the biggest stash among them win, whatever their role.
+    const best = Math.max(...escapees.map((id) => (state.players[id] as PlayerState).stash));
+    const winners = state.playerOrder.filter((id) => escapees.includes(id) && (state.players[id] as PlayerState).stash === best);
+    return { result: "failed", reason: "bust", escapees: [...escapees], ranking: ranked, winners };
+  }
   const role = new Map(ranked.map((e) => [e.player, e.role]));
   return { result: "failed", reason: failure, ranking: ranked, winners: top.filter((id) => winsOn(roles, role.get(id) ?? "", failure)) };
 }
 
-/** The `gameEnded` event after `events` (this command's events so far) are folded into `state`. */
-export function gameEnded(state: GameState, events: readonly GameEvent[], failure: FailureReason | null, roles: RoleTable = rolesFor(state.config)): GameEnded {
+/**
+ * The `gameEnded` event after `events` (this command's events so far) are
+ * folded into `state`. On a bust, `escapees` are the round's Rooftop players (design §5.5).
+ */
+export function gameEnded(state: GameState, events: readonly GameEvent[], failure: FailureReason | null, escapees: readonly PlayerId[] = []): GameEnded {
   const final = events.reduce(applyEvent, state);
-  return { type: "gameEnded", visibility: PUBLIC, outcome: outcomeFor(final, failure, roles) };
+  return { type: "gameEnded", visibility: PUBLIC, outcome: outcomeFor(final, failure, rolesFor(state.config), escapees) };
 }

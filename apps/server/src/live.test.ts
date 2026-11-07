@@ -443,6 +443,9 @@ describe("acceptance: a full game over sockets (docs/m2-plan.md M2-3)", () => {
       // People are played by bot logic in the test, over their sockets, always forging another seat's id.
       const agents = humans.map((h, i) => createBot({ player: h.player, personality: PERSONALITIES[(["greedy", "honest", "cautious"] as const)[i]!], seed: `human/${i}`, crewSeed: "test-crew" }));
       const refused: { player: string; command: PlayerCommand; reply: ServerMessage }[] = [];
+      // A bust (design §5.5) can end the game before the first regular meeting, so an emergency
+      // meeting in round 1 makes sure the ballots are in play.
+      expect(await clients[0]!.send({ type: "callEmergency" })).toMatchObject({ ok: true });
 
       let steps = 0;
       for (; (await load(id)).phase.kind !== "ended"; steps++) {

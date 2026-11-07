@@ -36,11 +36,10 @@ export const RATES: readonly RateDef[] = [
     applies: always,
     source: "extension.md Build notes \"Sim\": success 55–70% (gate: Balanced, 4–12 players; reported elsewhere)",
   },
-  { id: "raid", label: "raid", num: (t) => t.heatFailures, den: (t) => t.games, band: null, checked: gated, applies: always, source: "extension.md Build notes \"Sim\": ending split, failed on Heat (reported only)" },
+  { id: "bust", label: "bust", num: (t) => t.busts, den: (t) => t.games, band: { lo: 0.08, hi: 0.2 }, checked: gated, applies: always, source: "design §21 G3: 8–20% of games end in a bust" },
   { id: "miss", label: "miss", num: (t) => t.targetFailures, den: (t) => t.games, band: null, checked: gated, applies: always, source: "extension.md Build notes \"Sim\": ending split, missed final target (reported only)" },
   { id: "noWinner", label: "no winner", num: (t) => t.noWinner, den: (t) => t.games, band: null, checked: gated, applies: always, source: "extension.md Build notes \"Sim\": games nobody won (reported only)" },
   { id: "sharedWin", label: "shared win", num: (t) => t.sharedWin, den: (t) => t.games, band: null, checked: gated, applies: always, source: "extension.md Build notes \"Sim\": games two or more players won together (reported only)" },
-  { id: "heatShare", label: "Heat share", num: (t) => t.heatFailures, den: (t) => t.failures, band: { lo: 0.1, hi: 0.2 }, checked: gated, applies: always, source: "design §17.4: 10–20% of failures come from Heat" },
   {
     id: "comeback",
     label: "comeback",

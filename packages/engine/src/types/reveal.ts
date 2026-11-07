@@ -70,8 +70,6 @@ export type RevealItem =
   | { readonly kind: "event"; readonly event: GameEvent }
   /** A token earned, and why. extension.md "Tokens and the perk shop" */
   | { readonly kind: "token"; readonly player: PlayerId; readonly trigger: TokenTrigger }
-  /** Police activity, now told apart: a background patrol, or `mole`'s tip-off landing. extension.md "Police activity" */
-  | { readonly kind: "police"; readonly heatAdded: number; readonly heat: number; readonly cause: "patrol" | "tipOff"; readonly mole: PlayerId | null }
   /**
    * A watch feed that read "camera offline", now told apart: the Hacker loop of
    * `hackers`. extension.md "Situations"
@@ -97,8 +95,8 @@ export interface RevealRound {
   readonly card: { readonly id: string; readonly room: RoomId | null } | null;
   /** Everyone's real move, in seat order. */
   readonly moves: readonly RevealMove[];
-  /** The public round summary (Haul and Heat), if the round resolved. */
-  readonly resolved: Pick<RoundResolved, "haulDelta" | "haul" | "heatDelta" | "heat"> | null;
+  /** The public round summary (the Haul), if the round resolved. */
+  readonly resolved: Pick<RoundResolved, "haulDelta" | "haul"> | null;
   readonly items: readonly RevealItem[];
   readonly stashes: Readonly<Record<PlayerId, number>>;
 }

@@ -62,7 +62,7 @@ Usage: pnpm sim -- [options]
       --role-list <mode>  exact | possible | hidden (default exact)
       --votes <mode>      hiddenThenRevealed | open | secret (default hiddenThenRevealed)
       --overrides <json>  content overrides as inline JSON or a path to a JSON file, e.g.
-                          '{"heat":{"perRound":5},"rooms":{"vault":{"coins":4}}}'
+                          '{"alarm":{"bulbs":5},"rooms":{"vault":{"coins":4}}}'
       --out <dir>         where per-game CSV/JSON go (default sim-output)
       --no-files          don't write per-game files
       --json              print the summary as JSON
