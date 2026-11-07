@@ -3,7 +3,6 @@
 // records. Plain JSON data: shard files carry tallies and `merge` adds them.
 // design §17.4, extension.md Build notes "Sim"
 import type { GameRecord } from "../record";
-import { act1LeaderWon, comebackEligible, decidedEarly } from "../metrics";
 
 export interface SeatTally {
   readonly seats: number;
@@ -24,16 +23,13 @@ export interface Tally {
   readonly failures: number;
   /** Failed on a bust. design §5.5 */
   readonly busts: number;
-  /** Failed on a missed final target. */
-  readonly targetFailures: number;
+  /** Sunk by theft: honesty below the line at the end. design §8.4 */
+  readonly theftFailures: number;
+  /** Ended at the round cap with over a quarter of the bank left. design §21 G4 */
+  readonly capStalls: number;
   /** Games nobody won (a failure no top-group role wins on), and games two or more shared. extension.md "One crew, and how you win" */
   readonly noWinner: number;
   readonly sharedWin: number;
-  /** Successful games with a sole Act 1 leader, and those that leader won. */
-  readonly comebackGames: number;
-  readonly act1LeaderWins: number;
-  /** Successful games settled before Act 3. */
-  readonly decidedEarly: number;
   readonly shakedowns: number;
   /** Shakedowns that caught real loot (not clean). */
   readonly shakedownsCaught: number;
@@ -48,12 +44,10 @@ export const emptyTally = (): Tally => ({
   successes: 0,
   failures: 0,
   busts: 0,
-  targetFailures: 0,
+  theftFailures: 0,
+  capStalls: 0,
   noWinner: 0,
   sharedWin: 0,
-  comebackGames: 0,
-  act1LeaderWins: 0,
-  decidedEarly: 0,
   shakedowns: 0,
   shakedownsCaught: 0,
   rejections: 0,
@@ -81,12 +75,10 @@ export function tallyGames(records: readonly GameRecord[], start: Tally = emptyT
     if (success) t.successes++;
     else t.failures++;
     if (!success && g.reason === "bust") t.busts++;
-    if (!success && g.reason === "target") t.targetFailures++;
+    if (!success && g.reason === "theft") t.theftFailures++;
+    if (g.capWithBankLeft) t.capStalls++;
     if (g.winners.length === 0) t.noWinner++;
     if (g.winners.length > 1) t.sharedWin++;
-    if (comebackEligible(g)) t.comebackGames++;
-    if (act1LeaderWon(g)) t.act1LeaderWins++;
-    if (decidedEarly(g)) t.decidedEarly++;
     t.shakedowns += g.shakedowns.length;
     t.shakedownsCaught += g.shakedowns.filter((s) => !s.clean).length;
     t.rejections += g.rejections;
@@ -110,12 +102,10 @@ export function addTallies(a: Tally, b: Tally): Tally {
     successes: a.successes + b.successes,
     failures: a.failures + b.failures,
     busts: a.busts + b.busts,
-    targetFailures: a.targetFailures + b.targetFailures,
+    theftFailures: a.theftFailures + b.theftFailures,
+    capStalls: a.capStalls + b.capStalls,
     noWinner: a.noWinner + b.noWinner,
     sharedWin: a.sharedWin + b.sharedWin,
-    comebackGames: a.comebackGames + b.comebackGames,
-    act1LeaderWins: a.act1LeaderWins + b.act1LeaderWins,
-    decidedEarly: a.decidedEarly + b.decidedEarly,
     shakedowns: a.shakedowns + b.shakedowns,
     shakedownsCaught: a.shakedownsCaught + b.shakedownsCaught,
     rejections: a.rejections + b.rejections,

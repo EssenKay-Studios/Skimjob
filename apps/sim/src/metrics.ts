@@ -15,13 +15,10 @@
 //   threshold ÷ shakedowns (also: the target had pocketed anything at all).
 // - role / personality win share: wins (joint winners share one) ÷ seats, in
 //   successful games, against the fair share 1 ÷ crew size (±5 pp target).
-// - comeback: in successful games with a sole leader after Act 1 (the
-//   engine's ranking with its tie-breaks; top score above 0), how often that
-//   leader wins (target under 50%). Games still fully tied are left out.
-// - decided early: successful games whose sole Act 2 leader won with a lead of
-//   at least half the most one player could add in Act 3 (target under 15%).
-//   Successful games only, like comeback and role shares, so the stash race
-//   is measured apart from the success rate.
+// - sunk by theft: games that ended below the honesty line ÷ games (design §21
+//   G8, reported only).
+// - cap stalls: games that ended at the round cap with over a quarter of the
+//   bank left ÷ games (G4: at most 10%).
 import type { GameRecord, PlayerRecord } from "./record";
 
 export const POCKET_BANDS = ["honest", "moderate", "heavy"] as const;
@@ -29,8 +26,6 @@ export type PocketBand = (typeof POCKET_BANDS)[number];
 /** Upper bounds (inclusive) of pocketed ÷ grabbed for the honest and moderate bands. */
 export const HONEST_MAX_SHARE = 0.1;
 export const MODERATE_MAX_SHARE = 0.4;
-/** A sole Act 2 leader "has it settled" with a lead of at least this share of the most anyone can add in Act 3. */
-const DECIDED_EARLY_LEAD_SHARE = 0.5;
 
 /** num ÷ den, or null when there is nothing to divide. */
 export const rate = (num: number, den: number): number | null => (den === 0 ? null : num / den);
@@ -95,6 +90,11 @@ export function successRate(records: readonly GameRecord[]): number | null {
   return rate(records.filter((g) => g.result === "success").length, records.length);
 }
 
+/** Share of games sunk by theft (honesty below the line at the end). design §8.4, §21 G8 (reported) */
+export function theftRate(records: readonly GameRecord[]): number | null {
+  return rate(records.filter((g) => g.reason === "theft").length, records.length);
+}
+
 /** Share of games that ended in a bust. design §21 G3: 8–20% */
 export function bustRate(records: readonly GameRecord[]): number | null {
   return rate(records.filter((g) => g.reason === "bust").length, records.length);
@@ -141,35 +141,9 @@ export interface RateOf {
   readonly rate: number | null;
 }
 
-/** A successful game with a sole Act 1 leader (top score above 0): counted by the comeback metric. */
-export const comebackEligible = (g: GameRecord): boolean =>
-  g.result === "success" && g.afterAct1 !== null && g.afterAct1.topScore > 0 && g.afterAct1.leaders.length === 1;
-
-/** An eligible game whose Act 1 leader won. */
-export const act1LeaderWon = (g: GameRecord): boolean => comebackEligible(g) && g.winners.includes(g.afterAct1?.leaders[0] as string);
-
-/** How often the sole Act 1 leader goes on to win a successful heist. design §17.4 target < 50% */
-export function comebackMetric(records: readonly GameRecord[]): RateOf {
-  const eligible = records.filter(comebackEligible);
-  return { games: eligible.length, rate: rate(eligible.filter(act1LeaderWon).length, eligible.length) };
-}
-
-/** True if the game was effectively settled before Act 3 (see the definitions above). */
-export function decidedEarly(g: GameRecord): boolean {
-  const s = g.afterAct2;
-  if (g.result !== "success" || !s || s.leaders.length !== 1) return false;
-  return g.winners.includes(s.leaders[0] as string) && s.lead >= DECIDED_EARLY_LEAD_SHARE * g.act3MaxGain;
-}
-
-/** Share of successful games that were settled before Act 3. design §17.4 target < 15% */
-export function decidedEarlyMetric(records: readonly GameRecord[]): RateOf {
-  const succeeded = records.filter((g) => g.result === "success");
-  return { games: succeeded.length, rate: rate(succeeded.filter(decidedEarly).length, succeeded.length) };
-}
-
 /**
  * design §17.4 "Mole win rate (when present)": of games with a Mole dealt, the
- * share a Mole won (by score on a success, as a Rooftop escapee on a bust, or on a missed target; extension.md "Who wins"). Per game, not
+ * share a Mole won (by score on a success, as a Rooftop escapee on a bust, or on a heist sunk by theft; design §8). Per game, not
  * per seat, so two Moles (or a Mole and the Driver) winning together count once.
  */
 export function moleWinMetric(records: readonly GameRecord[]): RateOf {
@@ -184,17 +158,15 @@ export interface Metrics {
   readonly busts: number;
   readonly bustRate: number | null;
   readonly raids: RaidMetrics;
-  /** Games that ended (busted) before Act 3. */
-  readonly endedBeforeAct3: number | null;
-  readonly checkpointsMissedPerGame: number | null;
-  /** Share of games whose bank ran dry (every later grab is cut to 0, design §3.2). */
+  readonly theftRate: number | null;
+  /** Games ended at the round cap with over a quarter of the bank left. design §21 G4: ≤ 10% */
+  readonly capStalls: number | null;
+  /** Share of games the empty bank ended (design §6.2). */
   readonly bankEmptied: number | null;
   readonly shakedowns: ShakedownMetrics;
   readonly pocketing: Record<string, GroupWins>;
   readonly roles: Record<string, GroupWins>;
   readonly personalities: Record<string, GroupWins>;
-  readonly comeback: RateOf;
-  readonly decidedEarly: RateOf;
   readonly moleWins: RateOf;
   readonly rejections: number;
 }
@@ -208,15 +180,13 @@ function metrics(records: readonly GameRecord[]): Metrics {
     busts: failed.filter((g) => g.reason === "bust").length,
     bustRate: bustRate(records),
     raids: raidMetrics(records),
-    endedBeforeAct3: rate(records.filter((g) => g.endedAct < 3).length, records.length),
-    checkpointsMissedPerGame: rate(records.reduce((s, g) => s + g.checkpointsMissed, 0), records.length),
+    theftRate: theftRate(records),
+    capStalls: rate(records.filter((g) => g.capWithBankLeft).length, records.length),
     bankEmptied: rate(records.filter((g) => g.bankLeft === 0).length, records.length),
     shakedowns: shakedownMetrics(records),
     pocketing: groupWins(records, pocketBand),
     roles: groupWins(records, (p) => p.role),
     personalities: groupWins(records, (p) => p.personality),
-    comeback: comebackMetric(records),
-    decidedEarly: decidedEarlyMetric(records),
     moleWins: moleWinMetric(records),
     rejections: records.reduce((s, g) => s + g.rejections, 0),
   };

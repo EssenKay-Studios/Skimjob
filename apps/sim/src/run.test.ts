@@ -52,7 +52,7 @@ describe("content overrides change the games (design §17.4)", () => {
     expect(checkOptions(o)).toEqual([]);
     const records = runBatch(o);
     expect(records.every((r) => r.rejections === 0)).toBe(true);
-    for (const r of records) for (const p of r.playerRecords) expect(p.grabbed).toBeLessThanOrEqual(9);
+    for (const r of records) for (const p of r.playerRecords) expect(p.grabbed).toBeLessThanOrEqual(r.endedRound); // 12 rounds at most (design §6.2)
   });
 
   it("smaller bells mean more raids and busts (design §5)", () => {

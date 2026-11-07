@@ -12,8 +12,8 @@ const isInt = (v: unknown): v is number => Number.isInteger(v);
 const isStr = (v: unknown): v is string => typeof v === "string";
 
 const TALLY_COUNTS = [
-  "games", "successes", "failures", "busts", "targetFailures", "noWinner", "sharedWin",
-  "comebackGames", "act1LeaderWins", "decidedEarly", "shakedowns", "shakedownsCaught", "rejections",
+  "games", "successes", "failures", "busts", "theftFailures", "capStalls", "noWinner", "sharedWin",
+  "shakedowns", "shakedownsCaught", "rejections",
 ] as const satisfies readonly (keyof Tally)[];
 
 function seatsProblem(v: unknown, what: string): string | null {

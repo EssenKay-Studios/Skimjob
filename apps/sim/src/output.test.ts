@@ -72,7 +72,7 @@ describe("prepareOutDir — checked before any game runs (PR #10 QA)", () => {
 describe("formatReport", () => {
   it("shows every design §17.4 metric with its target, one column per player count", () => {
     const text = formatReport(summarize([...games, { ...games[0]!, players: 3 }]), "title");
-    for (const label of ["Heist success rate", "Bust rate", "Raids per game", "Games with a raid", "Rooftop stalls", "Shakedown accuracy", "Win rate, honest", "Win rate, moderate", "Win rate, heavy", "Comeback", "Decided before Act 3", "Mole win rate"]) {
+    for (const label of ["Heist success rate", "Bust rate", "Raids per game", "Games with a raid", "Rooftop stalls", "Shakedown accuracy", "Win rate, honest", "Win rate, moderate", "Win rate, heavy", "Ended at the cap", "Sunk by theft", "Mole win rate"]) {
       expect(text).toContain(label);
     }
     expect(text).toMatch(/2p\s+3p\s+all/);
