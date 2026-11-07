@@ -340,7 +340,8 @@ describe("scenarios: end-to-end stories over HTTP + WebSocket", () => {
     expect(p2.raw.join()).not.toMatch(/side deal|"verified":true/);
     expect(p2.messages.filter((m) => "dmNotice" in m)).toHaveLength(1); // the refused role card sent no notice
     expect(final.playerOrder).toEqual(Array.from({ length: 8 }, (_, i) => playerIdFor(i)));
-    expect(typesIn(final)).toContain("meetingClosed");
+    // A bust (design §5.5) can end the game before the first meeting, after round 3.
+    if (final.resolvedRound > 3) expect(typesIn(final)).toContain("meetingClosed");
     // The lobby shows the game as ended.
     expect((await lobby(game.id, game.humans[0]!.who)).status).toBe("ended");
   }, 60_000);
@@ -423,7 +424,8 @@ describe("scenarios: end-to-end stories over HTTP + WebSocket", () => {
     const game = await startGame(2, 3);
     const clients = await Promise.all(game.humans.map((h) => Client.open(game.id, h)));
     const brains = brainsFor(game);
-    expect(await play(game, clients, brains, (s) => s.phase.kind === "planning" && s.round === 5)).toEqual([]);
+    // Round 2: one round of raids can't reach Wanted 3, so the game is still on (design §5.5).
+    expect(await play(game, clients, brains, (s) => s.phase.kind === "planning" && s.round === 2)).toEqual([]);
     await clients[0]!.send({ type: "submitMove", move: { room: "lobby", duffel: 1, pocket: 0 } });
     const mid = await load(game.id);
     await app.close();
