@@ -23,7 +23,7 @@ Roles that only work in secret (in R7: the **Mole, Fixer, Electrician, Priest an
 
 | Role | Sees privately | Publishes | Checked by |
 |---|---|---|---|
-| **Teller** (new) | Coins that left the bank | "Taken this round: N" | The duffel split (everyone's share), the Auditor, the Detective |
+| **Teller** (new) | Coins that left the bank | "Taken this round: N" | The duffel split (everyone's cut this round), the Auditor, the Detective |
 | **Bellkeeper** (new) | Every room's bulbs | Each room's bulbs | Raids (a room raided at "2 bulbs" exposes a lie), the Lookout |
 | **Lookout** (from R7) | Who was in a room | The sighting | Other sightings, claims |
 | **Detective** (from R7) | Coins one player grabbed | The finding | The Teller's count, the duffel split |
@@ -46,7 +46,7 @@ The Locksmith and Smooth Talker may carry over as public perks of a role rather 
 | Sightings, cameras, Rooftop roll call, purchases, ballots | Per R7 role or public | Private to the role that sees them, published as records |
 | Your own share, raids, Wanted | As R7 | As R7 |
 
-Each player still sees **their own share** each round, so the duffel split is always known exactly (share × players + kitty). That makes the Teller's count checkable and turns "N missing" into a deduction instead of a display.
+Each player still sees **this round's cut** each round, so the duffel split is always known exactly (cut × players + kitty). That makes the Teller's count checkable and turns "N missing" into a deduction instead of a display.
 
 ### Records
 
