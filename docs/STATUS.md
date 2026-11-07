@@ -1,12 +1,13 @@
 # Status
 
-_Last updated: 6 Nov 2026._
+_Last updated: 7 Nov 2026._
 
 ## Where things stand
 - **Specs:** `docs/design.md` is the single rules spec (R7 Simplified); `docs/simplified.md` is the plan. Current decisions: `docs/decisions.md`. Later: Skimjob Advanced (`docs/advanced.md`). Out of scope: the recruited Mole.
 - **Content** 0.17.0 (the live R6 build; R7 replaces it).
 - **Live:** https://skimjob.duckdns.org on the owner's AWS Lightsail box (`docs/deploy.md`), commit 1a4e083, Google sign-in on. The live game has no real players, so R7 is built straight on `main`.
-- **Next step:** the lowest-numbered open `type:task` issue in the R7 Simplified milestone: C3 guardrails (#87) and S2 mockups (#81), in parallel.
+- **Mockups:** the [approved S2 mockups](https://claude.ai/artifact/QtmuUsTX9aFxiESdDQHzEp) (owner, 7 Nov) are the S4 reference for wording and behaviour; their artboard captions and the icon key are review notes, not product UI.
+- **Next step:** S3a (#88) and S3b, in parallel.
 
 ## Tasks, follow-ups and owner questions
 Tracked as GitHub issues, not in this file:

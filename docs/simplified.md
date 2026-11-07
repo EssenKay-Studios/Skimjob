@@ -34,7 +34,7 @@ Two fixes: **Part A** remakes the rules around a few visible things (coins, bell
 - **Show consequences before committing:**
   - Into the Breach shows every enemy's move in advance.
   - Slay the Spire puts each enemy's next move above its head.
-  - → Picking a room and coins previews the rings; every bell is always visible, except a room the Hacker hides.
+  - → Picking a room and coins previews the rings; every bell is always visible, except a room the Hacker hides and a taped-off room (its bell is off until it reopens).
 - **Explain every term in place:** Slay the Spire gives every keyword a one-line tooltip. → An info button on everything.
 - **A rule sheet for this game only:** Blood on the Clocktower's character sheet lists only that game's characters. → A "This game" rulebook.
 - **Tips and role tracking:** Town of Salem has a role card and an optional Tips mode; its players use add-ons to track roles. → Tips on by default, and the game does the tracking.
@@ -66,7 +66,7 @@ Two fixes: **Part A** remakes the rules around a few visible things (coins, bell
 
 ### A2. Bells, raids and Wanted (replaces Heat 0–100)
 
-- **Every room has an alarm bell with 4 bulbs** [tunable], public to everyone (except a room the Hacker hides this round).
+- **Every room has an alarm bell with 4 bulbs** [tunable], public to everyone (except a room the Hacker hides this round, and a taped-off room, whose bell is off until it reopens).
 - **Rings add bulbs:** each ring lights one bulb in that room. Rings from everyone in the room add up.
 - **Cooling, at the end of every round** (after the raid check, the bust check and the split; the full order is below):
   1. every room turns off 1 bulb;
@@ -87,19 +87,19 @@ Two fixes: **Part A** remakes the rules around a few visible things (coins, bell
 - Every coin grabbed comes out of the bank, whether it's handed in or pocketed (seized coins too).
 - **The game ends** when the bank is empty, at a **round cap of about 12** [tunable], or at a bust (Wanted 3). The host's session length is divided by the round cap, so long games keep a predictable end; a game that empties the bank early simply ends early.
 
-### A4. Equal shares, the kitty and the fair share
+### A4. Equal shares, the kitty and the share
 
-- **Each round, the crew take is split equally among all players:** everything handed in, plus coins returned by shakedowns and the Priest, plus last round's leftover.
-- **The kitty:** whatever doesn't divide evenly stays on the table for next round. At the end, what's left pays for the getaway car and leaves the game.
-- **Fair share:** the coins split to each player so far, the same for everyone, and public.
-- **Missing:** each round the game shows coins taken from the bank, the crew take, and **"N coins went missing"**, never who. *Confirmed (owner, 6 Nov):* N = coins taken (excluding seized) − coins handed in that round, never negative.
-- **Crew take and honesty counting** *(owner, 4 Nov)*: a coin counts toward honesty once, when it first reaches the table: handed in, or recovered by a shakedown or the Priest. Coins carried in the kitty or re-split are never counted again. Seized coins count neither as "taken" nor as "missing". A stash drops by any coins taken back by a shakedown or the Priest.
-- **Stashes stay private.** A stash = fair share received + coins pocketed − coins taken back by shakedowns and the Priest − coins spent on perks. Seized coins are never pocketed or handed in, so there is nothing to subtract for raids *(owner, 4 Nov)*. Conservation check: bank left + table (kitty) + stashes + seized + spent on perks + getaway car = starting bank.
+- **Each round, the duffel is split equally among all players:** everything handed in, plus the kitty, plus coins returned by shakedowns and the Priest since the last split (set aside for the next split, never one already under way).
+- **The kitty:** the leftover change that doesn't divide evenly, carried into the next split. At the end, the kitty and any unsplit duffel pay for the getaway car and leave the game.
+- **Share:** each player's equal cut of every split so far (the fair share), the same for everyone, and public.
+- **Missing:** each round the game shows coins taken from the bank, the duffel split, and **"N coins went missing"**, never who. *Confirmed (owner, 6 Nov):* N = coins taken (excluding seized) − coins handed in that round, never negative.
+- **Honesty counting** *(owner, 4 Nov)*: a coin counts toward honesty once, when it first reaches the duffel: handed in, or recovered by a shakedown or the Priest. Coins carried in the kitty or re-split are never counted again. Seized coins count neither as "taken" nor as "missing". A stash drops by any coins taken back by a shakedown or the Priest.
+- **Stashes stay private.** A stash = share received + coins pocketed − coins taken back by shakedowns and the Priest − coins spent on perks. Seized coins are never pocketed or handed in, so there is nothing to subtract for raids *(owner, 4 Nov)*. Conservation check: bank left + duffel (the kitty and set-aside coins included) + stashes + seized + spent on perks + getaway car = starting bank.
 
 ### A5. The honesty line and winning
 
-- **Crew honesty** = crew take ÷ coins taken from the bank (seized coins don't count as taken; the counting rules are in A4). It's shown as a meter against the line.
-- **The honesty line is two-thirds:** at the end, if less than two-thirds of everything taken reached the table, **the heist fails** (too much was stolen).
+- **Crew honesty** = coins that reached the duffel ÷ coins taken from the bank (seized coins don't count as taken; the counting rules are in A4). It's shown as a meter against the line.
+- **The honesty line is two-thirds:** at the end, if less than two-thirds of everything taken reached the duffel, **the heist fails** (too much was stolen).
 - **The heist succeeds** if the game ends by the bank or the round cap, with honesty at or above two-thirds and no bust. Then **the biggest stash wins**. If every stash is equal, **the whole crew wins together** (an honest player who bought a perk ends lower and doesn't win).
 - **Bust (Wanted 3):** only the players **on the Rooftop that round escape**; everyone else is arrested and loses everything. **The biggest stash among the escapees wins** (a bust ends the game before that round's split, so escapees keep only the stash they already had) (any role, the Mole and Fixer included). If nobody was on the Rooftop, nobody wins. This makes the endgame tense: at Wanted 2, every player weighs "keep grabbing, or go up and wait?".
 - **Sunk by theft (honesty below two-thirds at the end):** nobody wins, **except the Mole or the Fixer, if one of them holds (or ties for) the biggest stash**.
@@ -112,7 +112,7 @@ Two fixes: **Part A** remakes the rules around a few visible things (coins, bell
 - **Emergency meetings: a crew pool by crew size** *(owner, 6 Nov)*: 1 per game for 3–6 players, 2 for 7–12 [tunable]. Any player may spend one, only after a round's result is shown and before the next round's planning starts. Nothing recharges the pool.
 - **Shakedown protection** *(owner, 6 Nov)*: once a shakedown passes against a player (bailed or not), no other shakedown can target them until the next regular meeting; briefings and emergencies don't lift it. The UI and the ledger show them as protected.
 - **Voting** as today: shake down one player or skip; a shakedown passes with at least half the crew voting and more than half of the votes cast. Vote visibility stays a host setting.
-- **A shakedown opens the target's stash** and compares it with the fair share. Whatever is above the fair share (the pocketed coins still held) goes back on the table, to be split next round. **Coins already spent on perks are gone and are not taken.** A target at or below the fair share is clean, and nothing happens.
+- **A shakedown opens the target's stash** and compares it with their share. Whatever is above the share (the pocketed coins still held) is set aside in the duffel for the next split. **Coins already spent on perks are gone and are not taken.** A target at or below the share is clean, and nothing happens.
 
 ### A7. The plan board (planning without meetings)
 
@@ -126,7 +126,7 @@ Two fixes: **Part A** remakes the rules around a few visible things (coins, bell
 
 ### A8. Roles: tools, not sides
 
-**Every player gets a role** *(owner, 6 Nov)*: roles dealt = number of players (3–12), with up to 10 distinct roles; at 11–12 players the extra seats get a repeated role (any role, the Mole and Fixer included; at most two copies, eyes and shadows within one). Counts come from a content table. Each holder has their own uses and charges, each Mole or Fixer copy wins on its own, and the Exact role list shows counts ("Lookout ×2"). Every role has a one-sentence power, a "How you win" line and a "How to spot it" line.
+**Every player gets a role** *(owner, 6 Nov)*: roles dealt = number of players (3–12), with up to 10 distinct roles; at 11–12 players the extra seats get a repeated role (any role, the Mole and Fixer included; at most two copies, eyes and shadows within one). Counts come from content. Each holder has their own uses and charges, each Mole or Fixer copy wins on its own, and the Exact role list shows counts ("Lookout ×2"). Every role has a one-sentence power, a "How you win" line and a "How to spot it" line.
 
 | Role | Power | Frequency |
 |---|---|---|
@@ -135,10 +135,10 @@ Two fixes: **Part A** remakes the rules around a few visible things (coins, bell
 | **Detective** | Learn how many coins one player grabbed last round (not how many they kept). | Every round |
 | **Auditor** | Learn how many coins reached the duffel from one room last round. | Once between meetings |
 | **Smooth Talker** | Your vote counts twice. | Every meeting (passive) |
-| **Hacker** | One room's bell is hidden from everyone this round (it shows "?"). | Once between meetings |
+| **Hacker** | One open room's bell is hidden from everyone this round (it shows "?"); not a taped-off room. | Once between meetings |
 | **Electrician** | Black out one room next round: nobody there sees who else is there, and its cameras are offline. Its bell still rings. Announced at the start of the round as "Power cut in the Office", with no source. | Once between meetings |
-| **Priest** | Secretly absolve one player: whatever they hold above the fair share goes back on the table (coins spent on perks are not taken). The Priest learns how much that was. Not the same player twice in a row; the absolved player is told "your sins were absolved". | Once between meetings |
-| **Mole** | Secretly ring any room once (a police tip-off). **Wins a heist sunk by theft** with the biggest stash; on a bust, the Rooftop rule applies like for anyone. | Once between meetings |
+| **Priest** | Secretly absolve one player: whatever they hold above their share is set aside in the duffel for the next split (coins spent on perks are not taken). The Priest learns how much that was. Not the same player twice in a row; the absolved player is told "your sins were absolved". | Once between meetings |
+| **Mole** | Secretly ring any room once, except the Rooftop or a taped-off room (a police tip-off). **Wins a heist sunk by theft** with the biggest stash; on a bust, the Rooftop rule applies like for anyone. | Once between meetings |
 | **Fixer** | Tear the tape off a raided room and reopen it. **Wins a heist sunk by theft** with the biggest stash; on a bust, the Rooftop rule applies like for anyone. | Once per game |
 
 **The frequency rule:**
@@ -155,7 +155,7 @@ Two fixes: **Part A** remakes the rules around a few visible things (coins, bell
 ### A9. Perks: a black market paid in coins (replaces tokens)
 
 - **There are no tokens.** Perks are bought with coins **from your own stash**, which lowers your score.
-- **The coins leave the game** (paid to fixers and cops); buying doesn't change the crew take or honesty.
+- **The coins leave the game** (paid to fixers and cops); buying doesn't change the duffel or honesty.
 - **Each game's shop deals one perk per tier**, so 3 items, picked by the game's seed. The "This game" rulebook lists only those.
 - **One perk per player per round**, each single-use.
 - **Every purchase is logged at once, without a name:** "🛒 Someone bought Soft shoes (2 coins)".
@@ -232,31 +232,20 @@ Rule changes keep the engine's non-negotiables (`CLAUDE.md`): deterministic, eve
 4. **Info on everything:** one shared `InfoTip` component (tap on phones, hover and focus on desktop, ≥ 44 px target) on every icon, room, bell, perk, role name and meter, with one line plus "More". The text comes from content, so the UI, rulebook and tips never drift apart.
 5. **"This game" rulebook:** only the roles dealt (or possible, per the role-list setting), the rooms in play, the events that can come up, and this game's 3 shop items. Reachable from anywhere in one tap.
 6. **The ledger becomes a case board:**
-   - **Evidence only.** Lock-in marks, presence, meeting-time proposals and other housekeeping move to the seats and the meeting panel. The ledger keeps public facts (coins taken, crew take, missing, bells, raids, Wanted, purchases, events), what you saw or learned, what people said (plans, pledges, alibis, role claims), and what the crew did (votes, shakedowns).
+   - **Evidence only.** Lock-in marks, presence, meeting-time proposals and other housekeeping move to the seats and the meeting panel. The ledger keeps public facts (coins taken, the duffel split, missing, bells, raids, Wanted, purchases, events), what you saw or learned, what people said (plans, pledges, alibis, role claims), and what the crew did (votes, shakedowns).
    - **Every entry shows how far to trust it:**
      - **Fact:** a solid card in print, from the game.
      - **Seen by you:** a solid card with an eye icon, from you or your power.
      - **Shared evidence:** stamped "from X's case file".
      - **Said:** a dashed outline in handwriting (plans, alibis, claims, pledges).
    - **Colour by type** (theme tokens only): money gold, noise and police red/blue, sightings blue, said grey, votes purple, events their card art.
-   - **Three views of the same entries, one tap apart:**
-     - **Rounds:** the default, newest open. Each round's header reads "Taken · Crew take · Missing · Honesty"; older rounds collapse to one line.
-     - **Players:** a grid of players by rounds; each cell shows planned / claimed / seen.
-     - **Rooms:** a grid of rooms by rounds, with bells, raids and claimed vs. seen visitors.
-   - **⚠ "doesn't add up" flags, never verdicts:**
-     - a claim contradicts what you saw;
-     - a claim differs from the plan;
-     - more claims than a bell allows;
-     - a role claimed more often than it was dealt.
-
-     A **"Show only ⚠"** filter lists the open questions. The checks are pure functions over your own view, with tests.
-   - **Dossiers:** tap a player for their row, claims, votes, shakedowns, ⚠ count and your own tag and notes. Tap a room for its bell history, raids and visitors.
-   - **Filters:** player, room, round, type, "first-hand only", "⚠ only".
-   - **Pins: your own evidence board.** Pin any entry (or row) to your private board, alongside your trusted / unsure / suspicious tags and notes.
-   - **A "Full log" tab** keeps the raw chronological list.
-   - **On phones,** Rounds and dossiers are the default; the grids scroll sideways inside their own frame, so the page never overflows.
+   - **One Leads list, newest first:** each lead combines the facts about one thing in one round (a room, a meeting, the black market, missing coins, Wanted, the round, the crew); tap one to open its facts.
+   - **⚠ "doesn't add up" warnings, never verdicts,** each naming the players it points at (design §15.4). The checks are pure functions over your own view, with tests.
+   - **Pins: your own evidence board.** Pin a whole lead or one fact inside it, kept across rounds, alongside your trusted / unsure / suspicious tags and notes.
+   - **Players:** a strip of seats with each one's ⚠ count, pins and your tag.
+   - **Suspect card:** the most likely liar with a one-line reason, from your pins when you have 2 or more, otherwise from every lead.
    - **Built only from your own `viewFor`:** nothing new is revealed, it's only shown better.
-   - **The usability test for S2:** a new player can answer "who might have stolen in round 4?" within about 10 seconds, starting from the Rounds view and following one ⚠.
+   - **The usability test for S2:** a new player can answer "who might have stolen in round 4?" within about 10 seconds, starting from the Leads list and following one ⚠.
 7. **Teaching pop-ups and Tips:**
    - A short card ("What just happened / What it means / What you can do") the first time each thing happens: a bell rings, a raid, the crew one star from a bust, a power cut, a shakedown, coins go missing, your first chance to use your power, the shop affordable.
    - Controlled by a per-user **Tips** setting, **on by default**, kept on the user (guest or Google account) so it follows them across games.
@@ -329,7 +318,7 @@ The orchestrator picks the model per task and says which in the brief (Agent too
 **S0 — record decisions and clean the docs (PM docs PR, reviewed and QA'd).**
 - Write Part A into `docs/decisions.md` as the current decisions. Every R6-era entry that R7 overrides or makes moot is **removed** from it (git and `docs/archive/decisions-history.md` already hold the history), including the "listed in the archive" pointers to old provisional readings; `decisions.md` ends up short and R7-only.
 - Go through **every** live `.md` (CLAUDE.md, STATUS, HANDOFF, the pipeline briefs, testing, deploy, ui-style) and remove or rewrite anything that no longer applies: R6 rules and numbers, tokens, Heat, Duel, Quick, the cut roles, old follow-ups, finished-milestone detail beyond a one-line record. STATUS keeps only: where things stand, the R7 task list, open items.
-- Fold in the review notes from #69: crew take vs. the kitty and seized coins (A4/A5), the end-of-round order, the hidden-bell exception. Books mode is dropped (superseded by Skimjob Advanced).
+- Fold in the review notes from #69: the duffel vs. the kitty and seized coins (A4/A5), the end-of-round order, the hidden-bell exception. Books mode is dropped (superseded by Skimjob Advanced).
 - Ask the owner only about genuinely new questions.
 
 **S1 — spec freeze (docs only, one Opus developer).**
@@ -355,7 +344,7 @@ The orchestrator picks the model per task and says which in the brief (Agent too
 **S2 — mockups (no code).**
 - One agent (Opus) creates the mockups from the **Design** artifact type, with the notebook look from `docs/ui-style.md`:
   1. the game screen on a phone and a laptop: the board with coins, bells, tape and Wanted stars, the "This round" panel with the coins-into-two-bags move, and the plan board;
-  2. the case board's Rounds, Players and Rooms views, with ⚠ flags and pins;
+  2. the case board: Leads, ⚠ warnings, pins and the suspect card;
   3. a role card and the "This game" rulebook;
   4. a teaching pop-up and a tip;
   5. the black market and a shakedown result.
@@ -366,8 +355,8 @@ The orchestrator picks the model per task and says which in the brief (Agent too
   1. rooms, coins and grabs;
   2. bells, cooling (including the Rooftop's automatic cooling), raids, Wanted, and the bust with the Rooftop escape;
   3. the bank, round cap and endings;
-  4. equal shares, the kitty, fair share, missing and honesty;
-  5. meetings at bank thirds and briefings, and shakedowns against the fair share;
+  4. equal shares, the kitty, the share, missing and honesty;
+  5. meetings at bank thirds and briefings, and shakedowns against the share;
   6. roles (A8), with powers and frequencies, including the Mole and Fixer's win rule in their handlers (A12 seam 4; steps 3–4 build the ending without it);
   7. perks and the shop (A9);
   8. the 4-card event deck at a 4-in-10 chance;
@@ -379,7 +368,7 @@ The orchestrator picks the model per task and says which in the brief (Agent too
   2. the one-screen layout shell and bottom sheets at all five widths;
   3. the per-user Tips setting (one field on the user, default on);
   4. the plan board's live server channel (like chat);
-  5. the case board shell: views, filters, pins (data from a typed adapter, filled in S4).
+  5. the case board shell: Leads, pins, the Players strip and the suspect card (data from a typed adapter, filled in S4).
 
 **Seams for Skimjob Advanced:** every S3/S4 PR follows A12's ten seams; the reviewer checks them.
 
