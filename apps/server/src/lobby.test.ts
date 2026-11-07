@@ -182,7 +182,7 @@ describe("create a game (design §15 setup)", () => {
 
   it("takes the host's settings: session length, vote visibility, deck, toggles, deal, role list, events, DM notices", async () => {
     const settings = {
-      sessionLength: "quick",
+      sessionLength: "15m",
       voteVisibility: "secret",
       deck: "everything",
       roles: ["rookie", "lookout", "mole"],
@@ -378,11 +378,11 @@ describe("host hand-over", () => {
 
 describe("host settings in the lobby", () => {
   it("the host changes settings before the start; fields not sent are kept; others can't", async () => {
-    const { who, game } = await host({ sessionLength: "quick" });
+    const { who, game } = await host({ sessionLength: "15m" });
     const ana = (await join(game.inviteCode, "Ana")).session!;
     const res = await call("PATCH", `/games/${game.id}/settings`, who, { settings: { uniqueRoles: false, deck: "everything" } });
     expect(res.status).toBe(200);
-    expect(res.body.settings).toEqual({ ...DEFAULT_SETTINGS, sessionLength: "quick", uniqueRoles: false, deck: "everything" });
+    expect(res.body.settings).toEqual({ ...DEFAULT_SETTINGS, sessionLength: "15m", uniqueRoles: false, deck: "everything" });
     expect((await call("GET", `/games/${game.id}`, ana)).body.settings).toMatchObject({ uniqueRoles: false, deck: "everything" });
     expect((await call("PATCH", `/games/${game.id}/settings`, ana, { settings: { deck: "starter" } })).status).toBe(403);
   });
@@ -407,7 +407,7 @@ describe("host settings in the lobby", () => {
     const seats = [{ nickname: "A", bot_personality: null }, { nickname: "B", bot_personality: null }];
     const host = { ...DEFAULT_SETTINGS, deck: "everything", roles: ["lookout", "mole"], deal: "random", roleList: "hidden" } as const;
     expect(gameConfig({ ...host, sessionLength: "1h" }, seats, "s")).toMatchObject({ deck: "everything", rolePool: ["lookout", "mole"], deal: "random", roleList: "hidden", eventsEnabled: true });
-    expect(gameConfig({ ...host, sessionLength: "quick" }, seats, "s")).toMatchObject({ deck: "everything", rolePool: ["lookout", "mole"], deal: "random", roleList: "hidden", eventsEnabled: true });
+    expect(gameConfig({ ...host, sessionLength: "15m" }, seats, "s")).toMatchObject({ deck: "everything", rolePool: ["lookout", "mole"], deal: "random", roleList: "hidden", eventsEnabled: true });
   });
 
   it("lists bot personalities and the seat limits", async () => {
@@ -418,7 +418,7 @@ describe("host settings in the lobby", () => {
 
   // design §11.1, M2-7: the game screen offers slot proposals only when the group schedules meetings.
   it("says whether meetings open by themselves (short presets) or at a slot the crew picks", async () => {
-    expect((await host({ sessionLength: "quick" })).game.autoMeetings).toBe(true);
+    expect((await host({ sessionLength: "15m" })).game.autoMeetings).toBe(true);
     expect((await host({ sessionLength: "3h" })).game.autoMeetings).toBe(true);
     expect((await host({ sessionLength: "1d" })).game.autoMeetings).toBe(false);
     expect((await host({ sessionLength: "1w" })).game.autoMeetings).toBe(false);

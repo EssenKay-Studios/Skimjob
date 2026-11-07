@@ -33,7 +33,7 @@ async function setup(timeScale = 1) {
     return { body: res.json() as LobbyView, session: res.cookies.find((c) => c.name === SESSION_COOKIE)?.value ?? null };
   };
   const host = (await call("/auth/guest", null, { nickname: "Host" })).session!;
-  const game = (await call("/games", host, { settings: { sessionLength: "quick" } })).body;
+  const game = (await call("/games", host, { settings: { sessionLength: "15m" } })).body;
   const guest = (await call(`/invites/${game.inviteCode}/join`, null, { nickname: "Guest" })).session!;
   await call(`/invites/${game.inviteCode}/join`, null, { nickname: "Guest 2" });
   await call(`/games/${game.id}/start`, host);
@@ -63,7 +63,7 @@ describe("timers on the live channel", () => {
     const b = await open(app, id, guest);
     const first = b.views().at(-1)!;
     expect(first.now).toBe(T0);
-    expect(first.timers).toEqual([{ key: "round:1", dueAt: T0 + TIMINGS.quick.roundMs, pausedAt: null }]);
+    expect(first.timers).toEqual([{ key: "round:1", dueAt: T0 + TIMINGS["15m"].roundMs, pausedAt: null }]);
 
     // A's lock-in is public (owner decision, 2 Nov); a change after it is hidden: B gets nothing new,
     // not even a fresh `now`. design §5.1
@@ -77,11 +77,11 @@ describe("timers on the live channel", () => {
     expect(b.raw.slice(before).some((t) => "view" in JSON.parse(t))).toBe(false);
 
     // The round's deadline passes: the alibi window's timer replaces it. design §5.4
-    clock.advance(TIMINGS.quick.roundMs);
+    clock.advance(TIMINGS["15m"].roundMs);
     await app.scheduler.tick();
     await vi.waitFor(() => expect(b.view().phase.kind).toBe("alibis"), quick);
     const alibis = b.views().at(-1)!;
-    expect(alibis.timers).toEqual([{ key: "alibis:1", dueAt: clock.now() + TIMINGS.quick.alibiMs, pausedAt: null }]);
+    expect(alibis.timers).toEqual([{ key: "alibis:1", dueAt: clock.now() + TIMINGS["15m"].alibiMs, pausedAt: null }]);
     expect(alibis.now).toBe(clock.now());
     a.ws.close();
     b.ws.close();
@@ -97,19 +97,19 @@ describe("timers on the live channel", () => {
     const notice = a.views().at(-1)!.timers;
     const meetingId = a.view().pendingEmergency!.meetingId;
     expect(notice.map((t) => t.key).sort()).toEqual([`openMeeting:${meetingId}`, "round:1"]);
-    clock.advance(TIMINGS.quick.emergencyNoticeMs);
+    clock.advance(TIMINGS["15m"].emergencyNoticeMs);
     await app.scheduler.tick();
     await vi.waitFor(() => expect(a.view().phase.kind).toBe("meeting"), quick);
     const timers = a.views().at(-1)!.timers;
-    expect(timers.find((t) => t.key === "round:1")).toEqual({ key: "round:1", dueAt: T0 + TIMINGS.quick.roundMs, pausedAt: clock.now() });
-    expect(timers.find((t) => t.key === `closeMeeting:${meetingId}`)).toEqual({ key: `closeMeeting:${meetingId}`, dueAt: clock.now() + TIMINGS.quick.meetingMs, pausedAt: null });
+    expect(timers.find((t) => t.key === "round:1")).toEqual({ key: "round:1", dueAt: T0 + TIMINGS["15m"].roundMs, pausedAt: clock.now() });
+    expect(timers.find((t) => t.key === `closeMeeting:${meetingId}`)).toEqual({ key: `closeMeeting:${meetingId}`, dueAt: clock.now() + TIMINGS["15m"].meetingMs, pausedAt: null });
     await app.close();
   });
 
   it("TIME_SCALE shortens every preset's deadlines", async () => {
     const { app, id, host } = await setup(0.1);
     const a = await open(app, id, host);
-    expect(a.views().at(-1)!.timers).toEqual([{ key: "round:1", dueAt: T0 + TIMINGS.quick.roundMs / 10, pausedAt: null }]);
+    expect(a.views().at(-1)!.timers).toEqual([{ key: "round:1", dueAt: T0 + TIMINGS["15m"].roundMs / 10, pausedAt: null }]);
     await app.close();
   });
 });
@@ -132,9 +132,9 @@ describe("TIME_SCALE", () => {
   });
 
   it("scales every wall time but keeps a zero lead at zero", () => {
-    const t = scaleTiming(TIMINGS.quick, 0.1);
-    expect(t).toMatchObject({ roundMs: 4500, alibiMs: 1500, meetingMs: 12000, emergencyNoticeMs: 2000, shakedownWindowMs: 1500, meetingLeadMs: 0, autoMeetings: true });
+    const t = scaleTiming(TIMINGS["15m"], 0.1);
+    expect(t).toMatchObject({ roundMs: 7500, alibiMs: 1500, meetingMs: 12000, emergencyNoticeMs: 2000, shakedownWindowMs: 1500, meetingLeadMs: 0, autoMeetings: true });
     expect(scaleTiming(TIMINGS["1d"], 0.5).meetingLeadMs).toBe(TIMINGS["1d"].meetingLeadMs / 2);
-    expect(scaleTiming(TIMINGS.quick, 1)).toBe(TIMINGS.quick);
+    expect(scaleTiming(TIMINGS["15m"], 1)).toBe(TIMINGS["15m"]);
   });
 });

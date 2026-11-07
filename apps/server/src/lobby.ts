@@ -46,8 +46,8 @@ export interface LobbyView {
   readonly settings: LobbySettings;
   readonly youAreHost: boolean;
   /**
-   * Meetings open as soon as the act's last round resolves (the Quick, 1 h and
-   * 3 h presets), so the game screen offers no slot proposals. design §11.1, M2-7
+   * Meetings open as soon as they are due (the 15 min, 1 h and 3 h presets),
+   * so the game screen offers no slot proposals. design §9.4, M2-7
    */
   readonly autoMeetings: boolean;
   /** Seats needed to start, and the most a game can have (bots included). */

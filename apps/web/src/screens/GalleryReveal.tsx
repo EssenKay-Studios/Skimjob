@@ -1,6 +1,6 @@
 // /dev/gallery section for M2-11: the end-of-game reveal on a small hand-made
 // game (no server), summarised by the engine's own `revealSummary`, with each
-// ending: a success, a bust only the Rooftop escapee wins, and a missed target nobody wins.
+// ending: a success, a bust only the Rooftop escapee wins, and a heist sunk by theft nobody wins.
 // The names can switch to 24-character ones (the cap; "W" is the widest glyph
 // and has no break points) to check nothing pushes past a phone's edge.
 import { useMemo, useState, type ReactNode } from "react";
@@ -71,7 +71,6 @@ const LOG: GameEvent[] = [
   { type: "roleClaimed", visibility: PUBLIC, player: "p2", role: "lookout", act: 1 },
   { type: "meetingClosed", visibility: PUBLIC, meetingId: "m1", tally: { skip: 1, targets: { p3: 2 } }, ballots: null, result: { kind: "shakedown", target: "p3" } },
   { type: "shakedownResolved", visibility: PUBLIC, meetingId: "m1", target: "p3", stashRevealed: 0, taken: 0, clean: true, compensation: 3 },
-  { type: "checkpointChecked", visibility: PUBLIC, act: 1, target: 20, haul: 19, met: false },
   { type: "roundStarted", visibility: PUBLIC, round: 3, act: 2 },
   { type: "eventFlipped", visibility: PUBLIC, round: 3, card: "shiftChange", room: null },
   split("p1", 3, "rooftop", 0, 0),
@@ -90,17 +89,17 @@ const rank = (player: string, role: string, score: number, totalHandedIn: number
   totalHandedIn,
 });
 
-type Ending = "success" | "bust" | "target";
+type Ending = "success" | "bust" | "theft";
 const BEN_TOP = [rank("p2", "mole", 12, 5), rank("p3", "hacker", 5, 10), rank("p4", "detective", 2, 10), rank("p1", "rookie", 1, 3)];
 const OUTCOMES: Record<Ending, Outcome> = {
   success: { result: "success", ranking: BEN_TOP, winners: ["p2"] },
   // design §5.5: a bust in round 3; only Ana was on the Rooftop.
   bust: { result: "failed", reason: "bust", escapees: ["p1"], ranking: BEN_TOP, winners: ["p1"] },
   // Here Ben hands round 3 in and Cy pockets it all, so the Hacker (no ★) leads and nobody wins.
-  target: { result: "failed", reason: "target", ranking: [rank("p3", "hacker", 9, 6), rank("p2", "mole", 7, 10), rank("p4", "detective", 2, 10), rank("p1", "rookie", 1, 3)], winners: [] },
+  theft: { result: "failed", reason: "theft", ranking: [rank("p3", "hacker", 9, 6), rank("p2", "mole", 7, 10), rank("p4", "detective", 2, 10), rank("p1", "rookie", 1, 3)], winners: [] },
 };
 const logFor = (ending: Ending): GameEvent[] =>
-  ending !== "target"
+  ending !== "theft"
     ? LOG
     : LOG.map((e) => (e.type === "coinsGrabbed" && e.round === 3 && e.player === "p2" ? split("p2", 3, "depositBoxes", 5, 0) : e.type === "coinsGrabbed" && e.round === 3 && e.player === "p3" ? split("p3", 3, "vault", 6, 6) : e));
 
@@ -119,7 +118,7 @@ export function RevealSection() {
         options={[
           { value: "success", label: "Job done" },
           { value: "bust", label: "Busted (Rooftop)" },
-          { value: "target", label: "Missed (nobody)" },
+          { value: "theft", label: "Sunk by theft (nobody)" },
         ]}
         wide
       />

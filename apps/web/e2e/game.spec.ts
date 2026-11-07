@@ -38,7 +38,7 @@ test("a host and a guest play a 15-min game against bots to the end @move", asyn
   });
   await page.goto(`/game/${game.id}`);
   await guest.goto(`/game/${game.id}`);
-  await expect(page.locator(".hud__kicker")).toContainText(/Round \d of 9/);
+  await expect(page.locator(".hud__kicker")).toContainText(/Round \d+ of 12/);
   await expect(page.locator(".crew-seat")).toHaveCount(4);
 
   // Until the end: the host moves every round (Office, all in) and posts alibis; the guest never moves.

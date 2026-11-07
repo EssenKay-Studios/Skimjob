@@ -9,7 +9,6 @@ import {
   formatCountdown,
   justMissed,
   namesOf,
-  nextTarget,
   outcomeOf,
   phaseInfo,
   presenceInfo,
@@ -47,11 +46,6 @@ describe("HUD", () => {
     expect(phaseInfo(viewFor(s, "p1"))).toEqual({ title: "Planning: pick a room", timerKey: "round:1", timerLabel: "locks in" });
     s = run(s, round(1));
     expect(phaseInfo(viewFor(s, "p1"))).toEqual({ title: "Alibi window", timerKey: "alibis:1", timerLabel: "alibis close in" });
-  });
-
-  it("races the act's checkpoint: per-player target × crew (design §11.5)", () => {
-    const v = viewFor(createGame(config(4)), "p1");
-    expect(nextTarget(v)).toEqual({ act: 1, target: BANK_JOB.checkpoints.perPlayer[0] * 4, final: false });
   });
 
   it("counts down from the server clock, frozen while paused", () => {

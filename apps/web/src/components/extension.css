@@ -194,20 +194,6 @@
   gap: 6px 14px;
 }
 
-/* ---------- Target bar ---------- */
-.target-bar {
-  display: grid;
-  gap: 5px;
-  min-width: 0;
-}
-.target-bar__text b {
-  color: var(--ink);
-  font-size: 13px;
-}
-.target-bar__miss {
-  white-space: nowrap;
-}
-
 /* ---------- Gap box ---------- */
 .gap-box {
   display: grid;

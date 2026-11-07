@@ -3,7 +3,7 @@
 // exhaustive, so a new event, ability, perk or meeting-result kind fails
 // typecheck until it has a line here. docs/m2-plan.md M2-6; design §13
 import { EVENTS, JOBS, PERKS, ROLES, type PerkId } from "@skimjob/content";
-import { meetingName, targetName } from "./wording";
+import { meetingName } from "./wording";
 import type { GameEvent, MeetingResult, PlayerId, ResolvedAbility, ResolvedPerk, RoomId, VoteChoice } from "@skimjob/engine";
 
 export interface DescribeContext {
@@ -153,8 +153,6 @@ function line(e: GameEvent, ctx: DescribeContext): string {
       return `${who(e.target)} ${you(e.target) ? "were" : "was"} shaken down: a stash of ${e.stashRevealed}, ${e.taken} into the Haul.${e.clean ? ` Clean! The crew paid ${e.compensation} in compensation.` : ""}`;
     case "blessingPaid":
       return `${who(e.target)} ${you(e.target) ? "were" : "was"} blessed: the bank paid the compensation, so ${e.amount} went back into the Haul.`;
-    case "checkpointChecked":
-      return `${targetName(e.act)}: Haul ${e.haul}, target ${e.target}, ${e.met ? "made it" : "missed"}.`;
     case "tokenEarned":
       return `${verb(e.player, "earned", "earned")} a token.`;
     case "perkBought":
@@ -172,7 +170,7 @@ function line(e: GameEvent, ctx: DescribeContext): string {
         ? `Job done! The crew got away with it: ${winners}.`
         : o.reason === "bust"
           ? `Busted: Wanted hit the bust line and the heist failed; ${o.escapees.length === 0 ? "nobody was on the Rooftop" : `${names(o.escapees)} got away over the Rooftop`}; ${winners}.`
-          : `The heist failed: the target was missed; ${winners}.`;
+          : `The heist was sunk by theft: under two-thirds of the coins taken reached the crew; ${winners}.`;
     }
     default: {
       const never: never = e;

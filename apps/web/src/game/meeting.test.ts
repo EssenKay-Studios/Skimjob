@@ -207,19 +207,19 @@ describe("the shakedown window and results (design §11.3, §11.4)", () => {
     // Starter roles: no window, the shakedown lands as the meeting closes.
     const s = run(voting("hiddenThenRevealed"), close("emergency-p2"));
     const o = latestOutcome(viewFor(s, "p1"))!;
-    expect(o).toMatchObject({ kind: "emergency", deciding: false, fresh: true, cancelled: false, checkpoint: null });
+    expect(o).toMatchObject({ kind: "emergency", deciding: false, fresh: true, cancelled: false });
     expect(o.shakedown).toMatchObject({ target: "p2", stashRevealed: 0, clean: true });
     const later = run(s, { type: "advance", deadline: { kind: "round", round: 1 } });
     expect(latestOutcome(viewFor(later, "p1"))!.fresh).toBe(false);
   });
 
-  it("the act's meeting ends at its checkpoint (made or missed)", () => {
+  it("the act's meeting goes straight on: no checkpoint (design §6.2)", () => {
     let s = newGame(config("open"));
     for (let r = 1; r <= 3; r++) s = run(s, { type: "advance", deadline: { kind: "round", round: r } }, { type: "advance", deadline: { kind: "alibis", round: r } });
     s = run(s, { type: "scheduleMeeting", act: 1, slot: "act-1" }, open("act-1"), skip("p1"), skip("p2"), skip("p3"), close("act-1"));
     const o = latestOutcome(viewFor(s, "p4"))!;
     expect(o.result).toEqual({ kind: "skipped" });
-    expect(o.checkpoint).toMatchObject({ act: 1, target: BANK_JOB.checkpoints.perPlayer[0] * 5 });
+    expect(o).not.toHaveProperty("checkpoint");
     expect(o.fresh).toBe(true);
   });
 });

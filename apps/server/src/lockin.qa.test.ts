@@ -59,7 +59,7 @@ interface Human {
   readonly player: string;
 }
 /** `people` signed-in seats (host first), then `bots` bot seats. */
-async function startGame(people: number, bots: number, settings: Partial<LobbySettings> = { sessionLength: "quick", deck: "starter", eventsEnabled: false }) {
+async function startGame(people: number, bots: number, settings: Partial<LobbySettings> = { sessionLength: "15m", deck: "starter", eventsEnabled: false }) {
   const host = (await post("/auth/guest", null, { nickname: "Host" })).session!;
   const game = (await post("/games", host, { settings })).body;
   const sessions = [host];
@@ -106,7 +106,7 @@ const moveFor = (s: GameState, player: string, k = 0) => {
   return { type: "submitMove", move: { room, duffel: BANK_JOB.rooms[room]?.coins ?? 0, pocket: 0 } };
 };
 
-const t = TIMINGS.quick;
+const t = TIMINGS["15m"];
 
 describe("early end with 3 and 12 seats (design §4.1)", () => {
   for (const [people, bots] of [

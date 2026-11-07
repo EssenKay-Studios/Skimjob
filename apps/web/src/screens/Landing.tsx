@@ -132,7 +132,7 @@ export function Landing() {
 
               <div className="landing__chips" aria-label="At a glance">
                 <Chip colour="var(--sky)">1 hour to 7 days</Chip>
-                <Chip colour="var(--olive)">9 rounds, 3 acts</Chip>
+                <Chip colour="var(--olive)">Up to 12 rounds</Chip>
                 <Chip colour="var(--gold)">Play in the browser</Chip>
               </div>
 

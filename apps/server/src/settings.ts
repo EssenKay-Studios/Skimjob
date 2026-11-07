@@ -3,8 +3,8 @@
 import { POOL_ROLES, type DeckId, type RoleId } from "@skimjob/content";
 import type { DealStyle, RoleListSetting, VoteVisibility } from "@skimjob/engine";
 
-/** Session-length presets (design §4.1, plus "quick" for playtests). M2-4 gives them their timings. */
-export const SESSION_LENGTHS = ["quick", "1h", "3h", "1d", "3d", "1w"] as const;
+/** Session-length presets (design §17.1, plus "15m" for playtests); timing.ts gives them their timings. */
+export const SESSION_LENGTHS = ["15m", "1h", "3h", "1d", "3d", "1w"] as const;
 export type SessionLength = (typeof SESSION_LENGTHS)[number];
 
 const VOTE_VISIBILITIES: readonly VoteVisibility[] = ["hiddenThenRevealed", "open", "secret"];

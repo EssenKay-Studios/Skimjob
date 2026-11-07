@@ -85,7 +85,7 @@ test("12 seats, 24-char names: a 15-min game to the end with moves changed, alib
   const { hostCtx, guestCtx, host, guest } = await contexts(browser, mobile);
   const errors: string[] = [];
   for (const p of [host, guest]) p.on("pageerror", (e) => errors.push(e.message));
-  const game = await start(host.request, guest.request, 10, "quick");
+  const game = await start(host.request, guest.request, 10, "15m");
   // At the fast clock a round is 2.25 s and an alibi window 750 ms (× 0.05): under
   // CI load a round of taps outlasts them, so the test could miss all nine. Until
   // the host has changed a move, and then posted an alibi, it pauses the game from

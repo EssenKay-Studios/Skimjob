@@ -1,7 +1,7 @@
 // The lobby API (apps/server lobby.ts, M2-2) as the browser sees it: every call
 // goes to `/api/...` (the dev proxy strips the prefix). Refusals are `{ error }`.
 
-export type SessionLength = "quick" | "1h" | "3h" | "1d" | "3d" | "1w";
+export type SessionLength = "15m" | "1h" | "3h" | "1d" | "3d" | "1w";
 export type VoteVisibility = "hiddenThenRevealed" | "open" | "secret";
 /** extension.md "Host settings" (R6b adds their controls). */
 export type DeckId = "starter" | "standard" | "everything";

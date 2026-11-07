@@ -49,7 +49,7 @@ test("gallery extension sections fit every viewport @shop", async ({ page }, inf
     expect(await overflow(page)).toBeLessThanOrEqual(0);
     if (!SHOTS) continue;
     mkdirSync(SHOTS, { recursive: true });
-    for (const id of ["ext-role-card", "ext-rulebook", "ext-shop", "ext-target", "ext-gap", "ext-notells", "ext-deck", "ext-end-fail"]) {
+    for (const id of ["ext-role-card", "ext-rulebook", "ext-shop", "ext-gap", "ext-notells", "ext-deck", "ext-end-fail"]) {
       // Viewport shots: Chromium paints tall element shots of this long page blank.
       const box = await page.locator(`section[aria-labelledby="g-${id}"]`).evaluate((el) => {
         el.scrollIntoView({ block: "start" });
@@ -66,12 +66,12 @@ test("gallery extension sections fit every viewport @shop", async ({ page }, inf
   }
 });
 
-test("a real game shows the target bar, the Wanted meter and the gap box @shop", async ({ page }) => {
+test("a real game shows the round cap, the Wanted meter and the gap box @shop", async ({ page }) => {
   test.setTimeout(90_000);
   const game = await startGame(page.request, { bots: 4 });
   await page.goto(`/game/${game.id}`);
-  await expect(page.locator(".hud__kicker")).toContainText(/Round 1 of 9 · Meeting 1 after round 3/);
-  await expect(page.locator(".target-bar")).toContainText(/needed by the next meeting/);
+  // design §6.2: 12 rounds at most; the regular meeting after every 3rd round (until S3a.5).
+  await expect(page.locator(".hud__kicker")).toContainText(/Round 1 of 12 · Meeting 1 after round 3/);
 
   // design §5.4: Wanted is public from the start.
   await expect(page.getByRole("meter", { name: /^Wanted \d of 3$/ })).toBeVisible();

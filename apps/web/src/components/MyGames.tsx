@@ -9,7 +9,7 @@ const STATUS: Record<MyGame["status"], { label: string; colour: string }> = {
   running: { label: "Under way", colour: "var(--clay)" },
   ended: { label: "Finished", colour: "var(--mute)" },
 };
-const LENGTH: Record<SessionLength, string> = { quick: "15 min", "1h": "1 hour", "3h": "3 hours", "1d": "1 day", "3d": "3 days", "1w": "1 week" };
+const LENGTH: Record<SessionLength, string> = { "15m": "15 min", "1h": "1 hour", "3h": "3 hours", "1d": "1 day", "3d": "3 days", "1w": "1 week" };
 
 const myGameHref = (g: Pick<MyGame, "id" | "status">) => `/${g.status === "lobby" ? "lobby" : "game"}/${encodeURIComponent(g.id)}`;
 
