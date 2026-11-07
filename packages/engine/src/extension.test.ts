@@ -12,6 +12,7 @@ import { createGame, dealableRoles, setupEvents } from "./setup";
 import { replay } from "./reduce";
 import { gapBox, heatBreakdown, viewFor } from "./view";
 import { ranking } from "./end";
+import { fullGrab } from "./grab.testkit";
 
 function config(n: number, extra: Partial<GameConfig> = {}): GameConfig {
   return {
@@ -74,7 +75,7 @@ const ofType = <T extends GameEvent["type"]>(events: readonly GameEvent[], type:
   events.filter((e): e is Extract<GameEvent, { type: T }> => e.type === type);
 const shopOf = (cfg: GameConfig) => ofType(setupEvents(cfg), "shopDealt")[0]?.perks ?? [];
 
-const mv = (player: string, room: string, pocket = 0, extra: object = {}) => ({ type: "submitMove", player, move: { room, pocket, ...extra } });
+const mv = (player: string, room: string, pocket = 0, extra: object = {}) => ({ type: "submitMove", player, move: { ...fullGrab(room, pocket), ...extra } });
 const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
 const MOMENT = (s: GameState) => ({ type: "advance", deadline: { kind: "policeMoment", moment: s.police?.moment } });
 const buy = (player: string, perk: string) => ({ type: "buyPerk", player, perk });
@@ -335,7 +336,8 @@ describe("the Heat breakdown and the gap box — extension.md \"What the app wor
 
   it("a missed target's penalty shows under the stretch's last round", () => {
     let s = game(config(3), { roles: [] });
-    s = run(s, ROUND, ROUND, ROUND, { type: "scheduleMeeting", act: 1, slot: "x" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: "act-1" } });
+    // Missed moves hand in 1 each (design §3.3), and p0 grabs nothing in round 3: 8 of the 9 needed.
+    s = run(s, ROUND, ROUND, mv("p0", "rooftop"), ROUND, { type: "scheduleMeeting", act: 1, slot: "x" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: "act-1" } });
     s = run(s, { type: "advance", deadline: { kind: "closeMeeting", meetingId: "act-1" } });
     const missed = ofType(s.log, "checkpointChecked")[0];
     expect(missed?.met).toBe(false);

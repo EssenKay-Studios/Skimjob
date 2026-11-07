@@ -17,7 +17,7 @@ export interface RecapItem {
 export const RECAP_MAX_LINES = 4;
 
 /** Your own deliberate actions in the case file: you know them already, so they aren't news. */
-const OWN_ACTIONS: ReadonlySet<GameEvent["type"]> = new Set<GameEvent["type"]>(["moveSubmitted", "voteSealed", "voteCast", "lootSplit"]);
+const OWN_ACTIONS: ReadonlySet<GameEvent["type"]> = new Set<GameEvent["type"]>(["moveSubmitted", "voteSealed", "voteCast", "coinsGrabbed"]);
 
 const signed = (n: number) => (n >= 0 ? `+${n}` : `−${Math.abs(n)}`);
 

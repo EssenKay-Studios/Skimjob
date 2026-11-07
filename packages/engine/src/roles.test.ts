@@ -10,6 +10,8 @@ import { opensShakedownWindow } from "./meeting";
 import { replay } from "./reduce";
 import { handleCommand } from "./handle";
 import { viewFor } from "./view";
+import { fullGrab } from "./grab.testkit";
+import { R6_COINS } from "./v01-numbers.testkit";
 
 function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
   return {
@@ -20,6 +22,7 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     ...extra,
+    contentOverrides: { ...R6_COINS, ...extra.contentOverrides }, // R6 room yields as coins (R6 role rules)
   };
 }
 
@@ -51,7 +54,7 @@ const since = (before: GameState, after: GameState): GameEvent[] => after.log.sl
 const ofType = <T extends GameEvent["type"]>(events: readonly GameEvent[], type: T) =>
   events.filter((e): e is Extract<GameEvent, { type: T }> => e.type === type);
 
-const mv = (player: string, room: string, pocket = 0, extra: object = {}) => ({ type: "submitMove", player, move: { room, pocket, ...extra } });
+const mv = (player: string, room: string, pocket = 0, extra: object = {}) => ({ type: "submitMove", player, move: { ...fullGrab(room, pocket, R6_COINS), ...extra } });
 const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
 const vote = (player: string, target: string | null) => ({
   type: "castVote",
@@ -204,7 +207,9 @@ describe("the shakedown window (a Shield in the shop) — design §8.3, §11.3",
   });
 
   it("after the act's regular meeting the checkpoint comes once the window ends (design §11.4)", () => {
-    let s = run(shielded(game(3, [])), mv("p1", "vault", 6), ROUND, ROUND, ROUND);
+    // p1 pockets the Vault's 6; everyone else hands in the Lobby's 2: Haul 16, 22 after the shakedown (target 18).
+    const lobby = (...ids: string[]) => ids.map((id) => mv(id, "lobby"));
+    let s = run(shielded(game(3, [])), mv("p1", "vault", 6), ...lobby("p0", "p2"), ROUND, ...lobby("p0", "p1", "p2"), ROUND, ...lobby("p0", "p1", "p2"), ROUND);
     s = run(s, { type: "scheduleMeeting", act: 1, slot: "x" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: "act-1" } });
     s = run(s, vote("p0", "p1"), vote("p2", "p1"), CLOSE);
     expect(s.phase.kind).toBe("shakedownPending");

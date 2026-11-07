@@ -38,13 +38,12 @@ describe("job data is consistent", () => {
 
     it(`${job.id}: room numbers are sane`, () => {
       for (const def of Object.values(job.rooms)) {
-        expect(Number.isInteger(def.loot) && def.loot >= 0).toBe(true);
+        expect(Number.isInteger(def.coins) && def.coins >= 0).toBe(true);
         expect(Number.isFinite(def.heatPressure)).toBe(true);
-        if (def.capacity) {
-          expect(def.capacity.max).toBeGreaterThanOrEqual(1);
-          expect(def.capacity.crowdedLoot).toBeLessThanOrEqual(def.loot);
-        }
       }
+      // design §3.3: a missed move grabs 1 coin in the default room.
+      expect(job.rooms[job.defaultRoom]?.coins).toBeGreaterThanOrEqual(1);
+      expect(Number.isInteger(job.bank.coinsPerPlayer) && job.bank.coinsPerPlayer >= 1).toBe(true);
     });
 
     it(`${job.id}: checkpoint targets are cumulative`, () => {
@@ -55,31 +54,36 @@ describe("job data is consistent", () => {
   }
 });
 
-describe("First National Bank rooms — design §6.1, §6.2", () => {
+describe("First National Bank rooms — design §3.1", () => {
   const r = BANK_JOB.rooms;
 
-  it("core rooms: Vault 6, Office 4, Lobby 2, Security 0, Rooftop 0", () => {
-    expect(BANK_JOB.roomTiers[0]?.rooms).toEqual(["vault", "office", "lobby", "security", "rooftop"]);
-    expect([r.vault?.loot, r.office?.loot, r.lobby?.loot, r.security?.loot, r.rooftop?.loot]).toEqual([6, 4, 2, 0, 0]);
+  it("coins per visitor: Lobby 1, Office, Deposit boxes, Manager's office and Server room 2, Vault 3, Security and Rooftop 0", () => {
+    const coins = Object.fromEntries(Object.values(r).map((d) => [d.id, d.coins]));
+    expect(coins).toEqual({ lobby: 1, office: 2, depositBoxes: 2, managersOffice: 2, serverRoom: 2, vault: 3, security: 0, rooftop: 0 });
   });
 
-  it("Security watches one room; it is the only core room that tells you more", () => {
+  it("3–4 players 5 rooms, 5–8 players 7 rooms (Deposit boxes, Server room), 9–12 players 8 rooms (Manager's office)", () => {
+    expect(BANK_JOB.roomTiers).toEqual([
+      { minPlayers: 3, rooms: ["vault", "office", "lobby", "security", "rooftop"] },
+      { minPlayers: 5, rooms: ["depositBoxes", "serverRoom"] },
+      { minPlayers: 9, rooms: ["managersOffice"] },
+    ]);
+    expect(Object.keys(r)).not.toContain("tellerLine");
+  });
+
+  it("Security watches one room; it is the only room that tells you more", () => {
     expect(r.security?.info).toBe("watchRoom");
-    for (const id of ["vault", "office", "lobby", "rooftop"]) expect(r[id]?.info).toBe("none");
+    for (const d of Object.values(r)) if (d.id !== "security") expect(d.info).toBe("none");
   });
 
-  it("5–8: Deposit boxes 5 loot, holds 2, everyone gets 4 if more go (R5; was 3); the Server room is an ordinary room for now", () => {
-    expect(BANK_JOB.roomTiers[1]).toEqual({ minPlayers: 5, rooms: ["depositBoxes", "serverRoom"] });
-    expect(r.depositBoxes?.loot).toBe(5);
-    expect(r.depositBoxes?.capacity).toEqual({ max: 2, crowdedLoot: 4 }); // R5 (balance-3.md): 3 → 4
-    expect(r.serverRoom?.loot).toBe(0);
-    expect(r.serverRoom?.info).toBe("none");
+  it("the missed move's room is the Lobby (design §3.3)", () => {
+    expect(BANK_JOB.defaultRoom).toBe("lobby");
   });
+});
 
-  it("9–12: Teller line 6 loot (R6 split-gate pass, r6-balance.md); Manager's office 3 loot (R6 balance pass)", () => {
-    expect(BANK_JOB.roomTiers[2]).toEqual({ minPlayers: 9, rooms: ["tellerLine", "managersOffice"] });
-    expect(r.tellerLine?.loot).toBe(6);
-    expect(r.managersOffice?.loot).toBe(3);
+describe("First National Bank bank — design §6.1", () => {
+  it("16 coins per player", () => {
+    expect(BANK_JOB.bank).toEqual({ coinsPerPlayer: 16 });
   });
 });
 
@@ -88,7 +92,7 @@ describe("First National Bank Heat numbers — design §7", () => {
     expect(BANK_JOB.heat).toEqual({ max: 100, perRound: 4, missedCheckpoint: 15 });
   });
 
-  it("Vault +20, Manager's office and Teller line half of that (R6 split-gate pass), Deposit boxes +10, Rooftop −20 (per crew share); other rooms 0", () => {
+  it("Vault +20, Manager's office half of that, Deposit boxes +10, Rooftop −20 (per crew share); other rooms 0", () => {
     const pressure = Object.fromEntries(Object.values(BANK_JOB.rooms).map((d) => [d.id, d.heatPressure]));
     expect(pressure).toEqual({
       vault: 20,
@@ -98,21 +102,20 @@ describe("First National Bank Heat numbers — design §7", () => {
       rooftop: -20,
       depositBoxes: 10,
       serverRoom: 0,
-      tellerLine: 10,
       managersOffice: 10,
     });
   });
 });
 
 describe("First National Bank checkpoint targets — design §11.5", () => {
-  it("7, 15 and 24 × crew size at the end of Acts 1, 2 and 3", () => {
-    expect(BANK_JOB.checkpoints.perPlayer).toEqual([7, 15, 23]); // R5 (balance-3.md): final 24 → 23
+  it("3, 7 and 11 × crew size at the end of Acts 1, 2 and 3", () => {
+    expect(BANK_JOB.checkpoints.perPlayer).toEqual([3, 7, 11]); // scaled to R7 coins in S3a.1 (was 7, 15, 23)
   });
 });
 
 describe("First National Bank shakedowns — extension.md \"Shakedowns (fixed numbers)\"", () => {
-  it("clean below 6, payout 8; no plurality rule", () => {
-    expect(BANK_JOB.shakedown).toEqual({ cleanBelow: 6, payout: 8 });
+  it("clean below 3, payout 4 (scaled to R7 coins in S3a.1; were 6 and 8); no plurality rule", () => {
+    expect(BANK_JOB.shakedown).toEqual({ cleanBelow: 3, payout: 4 });
   });
 });
 
@@ -185,6 +188,6 @@ describe("events deck content — design §10", () => {
       expect(def?.id).toBe(id);
       if (def?.effect.kind === "roomSurge") expect(Object.keys(BANK_JOB.rooms)).toContain(def.effect.room);
     }
-    expect(EVENTS.shiftChange?.effect).toEqual({ kind: "roomSurge", room: "vault", lootMultiplier: 1.5, heatMultiplier: 2 });
+    expect(EVENTS.shiftChange?.effect).toEqual({ kind: "roomSurge", room: "vault", extraCoins: 1, heatMultiplier: 2 }); // design §13: Vault +1 coin
   });
 });

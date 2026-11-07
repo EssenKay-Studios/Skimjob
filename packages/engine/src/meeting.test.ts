@@ -1,7 +1,7 @@
 // Crew meetings and votes: scheduling, emergency meetings, ballots and their
 // visibility, sealed votes, quorum and majority, shakedowns, the checkpoint
 // order and the move to the next act. design §11, §4, §3
-import { BANK_JOB, MAX_SLOT_LENGTH, STARTER_ROLES, type PerkId } from "@skimjob/content";
+import { MAX_SLOT_LENGTH, STARTER_ROLES, type PerkId } from "@skimjob/content";
 import { handleThroughAlibis } from "./alibis.testkit";
 import { describe, expect, it } from "vitest";
 import type { GameConfig, GameEvent, GameState, VoteVisibility } from "./types";
@@ -11,6 +11,7 @@ import { replay } from "./reduce";
 import { handleCommand } from "./handle";
 import { V01_NUMBERS } from "./v01-numbers.testkit";
 import { meetingResult } from "./meeting";
+import { fullGrab } from "./grab.testkit";
 
 /** One perk per column and no Shield, whatever the seed: a Shield in the shop opens a shakedown window at every meeting. */
 const SHOP_NO_SHIELD: readonly PerkId[] = ["peek", "alibi", "extraVote"];
@@ -59,7 +60,7 @@ const since = (before: GameState, after: GameState): GameEvent[] => after.log.sl
 const ofType = <T extends GameEvent["type"]>(events: readonly GameEvent[], type: T) =>
   events.filter((e): e is Extract<GameEvent, { type: T }> => e.type === type);
 
-const mv = (player: string, room: string, pocket = 0, extra: object = {}) => ({ type: "submitMove", player, move: { room, pocket, ...extra } });
+const mv = (player: string, room: string, pocket = 0, extra: object = {}) => ({ type: "submitMove", player, move: { ...fullGrab(room, pocket, V01_NUMBERS), ...extra } });
 const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
 const open = (meetingId: unknown) => ({ type: "advance", deadline: { kind: "openMeeting", meetingId } });
 const close = (meetingId: unknown) => ({ type: "advance", deadline: { kind: "closeMeeting", meetingId } });
@@ -82,11 +83,12 @@ function toMeeting(s: GameState): GameState {
 }
 
 /**
- * 3 Rookies. Round 1: p0 pockets the Vault's 6; p1 and p2 default to the Lobby.
- * Rounds 2–3: everyone defaults. Haul 16, Heat 19, act-1 target 18.
+ * 3 Rookies. Round 1: p0 pockets the Vault's 6; p1 and p2 hand in the Lobby's 2.
+ * Rounds 2–3: everyone hands in the Lobby's 2. Haul 16, Heat 19, act-1 target 18.
  */
 function act1Meeting(roles: string[] = [], mode?: VoteVisibility): GameState {
-  return toMeeting(run(game(3, roles, mode), mv("p0", "vault", 6)));
+  const lobby = (s: GameState) => run(s, ...["p0", "p1", "p2"].filter((p) => !s.moves[p]).map((p) => mv(p, "lobby")), ROUND);
+  return toMeeting(lobby(lobby(lobby(run(game(3, roles, mode), mv("p0", "vault", 6))))));
 }
 
 describe("scheduling the act's meeting — design §11.1", () => {
@@ -236,7 +238,7 @@ describe("emergency meetings — design §11.1, §4.1", () => {
     expect(reason(s, emergency("p2"))).toMatch(/already open/);
     s = run(s, close("emergency-p1"));
     expect(s.phase).toEqual({ kind: "planning", round: 1 });
-    expect(s.moves).toEqual({ p0: { room: "office", pocket: 1 }, p2: { room: "lobby", pocket: 0 } });
+    expect(s.moves).toEqual({ p0: { room: "office", duffel: 3, pocket: 1 }, p2: { room: "lobby", duffel: 2, pocket: 0 } });
     // No checkpoint after an emergency meeting.
     expect(ofType(s.log, "checkpointChecked")).toEqual([]);
     expect(reason(s, emergency("p1"))).toMatch(/already called your emergency meeting/);
@@ -247,7 +249,7 @@ describe("emergency meetings — design §11.1, §4.1", () => {
     const s = run(game(3), mv("p0", "vault", 6), ROUND, emergency("p1"), open("emergency-p1"), vote("p1", "p0"), vote("p2", "p0"), CLOSE);
     expect(LAST(s, "shakedownResolved")).toMatchObject({ meetingId: "emergency-p1", target: "p0", stashRevealed: 6, taken: 6, clean: false, compensation: 0 });
     expect(s.players.p0).toMatchObject({ stash: 0, timesShakenDown: 1 });
-    expect(s.haul).toBe(10);
+    expect(s.haul).toBe(8); // p1 and p2 missed: 1 coin each (design §3.3), plus the 6 taken
     expect(s.phase).toEqual({ kind: "planning", round: 2 });
   });
 
@@ -430,7 +432,7 @@ describe("shakedowns — design §11.3, extension.md \"Shakedowns (fixed numbers
     const s = toMeeting(run(game(3), mv("p0", "vault", 5)));
     const after = run(s, vote("p1", "p0"), vote("p2", "p0"), CLOSE);
     expect(LAST(after, "shakedownResolved")).toMatchObject({ stashRevealed: 5, clean: true, compensation: 8 });
-    expect(BANK_JOB.shakedown).toMatchObject({ cleanBelow: 6, payout: 8 });
+    expect(V01_NUMBERS.shakedown).toEqual({ cleanBelow: 6, payout: 8 }); // the R6 pin
   });
 
   it("the line and payout don't scale with the act: Act 2 is still clean below 6 and pays 8", () => {
@@ -469,7 +471,7 @@ describe("order at a checkpoint — design §11.4, §11.5", () => {
 
   it("the missed-checkpoint penalty is clamped once and a raid at 100 ends the game", () => {
     let s = { ...game(3), heat: 80 };
-    for (let i = 0; i < 3; i++) s = run(s, mv("p0", "lobby", 2), ROUND); // p1 and p2 default to the Lobby: Haul 12 of 18, Heat 92
+    for (let i = 0; i < 3; i++) s = run(s, mv("p0", "lobby", 2), mv("p1", "lobby"), mv("p2", "lobby"), ROUND); // p1 and p2 hand in the Lobby's 2: Haul 12 of 18, Heat 92
     expect([s.haul, s.heat]).toEqual([12, 92]);
     const before = run(s, sched(1), open("act-1"));
     const after = run(before, CLOSE);

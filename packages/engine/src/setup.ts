@@ -4,7 +4,7 @@
 // "Tokens and the perk shop", Build notes "Tags, decks and dealing", "Police activity"
 //
 // Emits, in order: gameCreated (public, no seed), rngSeeded (reveal),
-// roomsSet (public), one roleDealt per seat in seat order (private),
+// roomsSet (public), bankFilled (public), one roleDealt per seat in seat order (private),
 // roleListShown (public, unless the list is hidden), shopDealt (public),
 // policeScheduled (reveal) when police activity runs, roundStarted for
 // round 1 (public), and rngAdvanced (reveal) with the RNG state after setup. Nobody is told anyone
@@ -38,7 +38,7 @@ import { replay } from "./reduce";
 import { eventsOn } from "./deck";
 import { show } from "./check";
 import { jobById, roomsInPlay } from "./job";
-import { policeFor, powerOf, roleDefIn, rolesFor, tagIn, validateOverrides, type RoleTable } from "./overrides";
+import { jobFor, policeFor, powerOf, roleDefIn, rolesFor, tagIn, validateOverrides, type RoleTable } from "./overrides";
 
 const VOTE_VISIBILITIES: readonly string[] = ["hiddenThenRevealed", "open", "secret"] satisfies readonly VoteVisibility[];
 const DECK_IDS: readonly string[] = Object.keys(DECKS);
@@ -316,6 +316,7 @@ export function setupEvents(config: GameConfig): GameEvent[] {
     },
     { type: "rngSeeded", visibility: REVEAL, seed: config.seed },
     { type: "roomsSet", visibility: PUBLIC, rooms: roomsFor(config.job, config.players.length) },
+    { type: "bankFilled", visibility: PUBLIC, coins: jobFor(config).bank.coinsPerPlayer * config.players.length },
     ...config.players.map(
       (seat, i): GameEvent => ({
         type: "roleDealt",

@@ -67,14 +67,6 @@ const GLYPHS: Record<BankRoomId, () => React.JSX.Element> = {
       <path d="M11.6 5.8h4M11.6 11.8h4M11.6 17.8h4" {...S} strokeWidth={1.4} />
     </>
   ),
-  tellerLine: () => (
-    <>
-      <path d="M5.4 12.2c0-4.4 2.8-7.4 6.6-7.4s6.6 3 6.6 7.4v2.4H5.4z" fill="var(--art-window)" opacity=".75" transform={off} />
-      <path d="M5 14.6v-3.2C5 7 8 4.2 12 4.2s7 2.8 7 7.2v3.2" {...S} />
-      <path d="M9.4 5.4v9.2M12 4.4v10.2M14.6 5.4v9.2" {...S} strokeWidth={1.4} />
-      <path d="M2.8 14.8h18.4v2.6H2.8zM4.2 17.6v3.4M19.8 17.6v3.4" {...S} />
-    </>
-  ),
   managersOffice: () => (
     <>
       <path d="M10.6 8.4 13.6 8.4 15.4 17.2 12.4 20.4 9.2 17.2z" fill="var(--clay)" opacity=".8" transform={off} />

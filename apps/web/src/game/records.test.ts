@@ -26,7 +26,7 @@ function playActOne(): GameState {
   while (s.phase.kind === "planning" || s.phase.kind === "alibis") {
     const p = s.phase;
     if (p.kind === "alibis") s = run(s, { type: "advance", deadline: { kind: "alibis", round: p.round } });
-    else s = run(s, ...["p1", "p2", "p3"].map((player) => ({ type: "submitMove", player, move: { room: "office", pocket: 0 } }) as PlayerCommand), { type: "advance", deadline: { kind: "round", round: p.round } });
+    else s = run(s, ...["p1", "p2", "p3"].map((player) => ({ type: "submitMove", player, move: { room: "office", duffel: 2, pocket: 0 } }) as PlayerCommand), { type: "advance", deadline: { kind: "round", round: p.round } });
   }
   return run(s, { type: "scheduleMeeting", act: 1, slot: "a1" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: "act-1" } }, { type: "advance", deadline: { kind: "closeMeeting", meetingId: "act-1" } });
 }

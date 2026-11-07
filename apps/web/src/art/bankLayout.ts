@@ -4,8 +4,8 @@
 //
 // The building is a side-view dollhouse: Rooftop on top, an upper floor
 // (Security, Office, then Manager's office and Server room for bigger crews),
-// the ground floor (Lobby, Teller line) and the basement (Vault, Deposit
-// boxes) below street level. design §6, §18; ui-style "Bank cutaway".
+// the ground floor (Lobby) and the basement (Vault, Deposit boxes) below
+// street level. design §3.1; ui-style "Bank cutaway".
 
 /** The bank's rooms (ids as in `BANK_JOB.rooms`, packages/content/src/jobs.ts). */
 export const BANK_ROOMS = [
@@ -15,7 +15,6 @@ export const BANK_ROOMS = [
   "managersOffice",
   "serverRoom",
   "lobby",
-  "tellerLine",
   "vault",
   "depositBoxes",
 ] as const;
@@ -29,7 +28,6 @@ export const BANK_ROOM_NAMES: Record<BankRoomId, string> = {
   managersOffice: "Manager's office",
   serverRoom: "Server room",
   lobby: "Lobby",
-  tellerLine: "Teller line",
   vault: "Vault",
   depositBoxes: "Deposit boxes",
 };
@@ -51,10 +49,7 @@ const FLOORS: readonly { kind: FloorKind; rooms: readonly [BankRoomId, number][]
   },
   {
     kind: "ground",
-    rooms: [
-      ["tellerLine", 1],
-      ["lobby", 1.5],
-    ],
+    rooms: [["lobby", 1.5]],
   },
   {
     kind: "basement",

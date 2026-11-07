@@ -55,7 +55,7 @@ function atFirstMeeting(seed: string): GameState {
     if (phase.kind === "planning") {
       for (const p of s.playerOrder) {
         const room = viewFor(s, p).rooms[0]!;
-        s = must(s, { type: "submitMove", player: p, move: { room, pocket: p === "p1" ? 2 : 0 } });
+        s = must(s, { type: "submitMove", player: p, move: { room, duffel: p === "p1" ? 1 : 3, pocket: p === "p1" ? 2 : 0 } });
       }
       s = must(s, { type: "advance", deadline: { kind: "round", round: phase.round } });
     } else if (phase.kind === "alibis") {

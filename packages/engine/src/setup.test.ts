@@ -39,9 +39,9 @@ describe("rooms by player count — design §6.2, §16", () => {
     for (const n of [5, 6, 7, 8]) expect(roomsFor("bank", n)).toEqual([...CORE, "depositBoxes", "serverRoom"]);
   });
 
-  it("9–12 players: adds Teller line and Manager's office too (9)", () => {
+  it("9–12 players: adds Manager's office too (8) (design §3.1)", () => {
     for (const n of [9, 10, 11, 12]) {
-      expect(roomsFor("bank", n)).toEqual([...CORE, "depositBoxes", "serverRoom", "tellerLine", "managersOffice"]);
+      expect(roomsFor("bank", n)).toEqual([...CORE, "depositBoxes", "serverRoom", "managersOffice"]);
     }
   });
 
@@ -205,13 +205,14 @@ describe("config validation — design §1, §15", () => {
 });
 
 describe("setup events and visibility — design §17.2", () => {
-  it("emits gameCreated, rngSeeded, roomsSet, one roleDealt per seat, the role list, the shop, roundStarted, then rngAdvanced", () => {
+  it("emits gameCreated, rngSeeded, roomsSet, bankFilled, one roleDealt per seat, the role list, the shop, roundStarted, then rngAdvanced", () => {
     // No Mole, so no police schedule.
     const events = setupEvents(config(3, { rolePool: ["rookie", "lookout", "hacker"] }));
     expect(events.map((e) => e.type)).toEqual([
       "gameCreated",
       "rngSeeded",
       "roomsSet",
+      "bankFilled",
       "roleDealt",
       "roleDealt",
       "roleDealt",

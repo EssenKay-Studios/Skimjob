@@ -13,7 +13,8 @@ import { applyEvent, replay } from "./reduce";
 import { heatBreakdown, viewFor } from "./view";
 import { outcomeFor, ranking } from "./end";
 import { meetingResult } from "./meeting";
-import { V015_NUMBERS } from "./v01-numbers.testkit";
+import { R6_COINS } from "./v01-numbers.testkit";
+import { fullGrab } from "./grab.testkit";
 
 function config(n: number, extra: Partial<GameConfig> = {}): GameConfig {
   return {
@@ -24,6 +25,7 @@ function config(n: number, extra: Partial<GameConfig> = {}): GameConfig {
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     ...extra,
+    contentOverrides: { ...R6_COINS, ...extra.contentOverrides }, // R6 room yields as coins (R6 role rules)
   };
 }
 
@@ -79,7 +81,7 @@ function reason(state: GameState, command: unknown): string {
 const ofType = <T extends GameEvent["type"]>(events: readonly GameEvent[], type: T) => events.filter((e): e is Extract<GameEvent, { type: T }> => e.type === type);
 const tokensOf = (s: GameState, p: PlayerId, trigger?: string) => ofType(s.log, "tokenEarned").filter((e) => e.player === p && (trigger === undefined || e.trigger === trigger)).length;
 
-const mv = (player: string, room: string, pocket = 0, extra: object = {}) => ({ type: "submitMove", player, move: { room, pocket, ...extra } });
+const mv = (player: string, room: string, pocket = 0, extra: object = {}) => ({ type: "submitMove", player, move: { ...fullGrab(room, pocket, R6_COINS), ...extra } });
 const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
 const MOMENT = (s: GameState) => ({ type: "advance", deadline: { kind: "policeMoment", moment: s.police?.moment } });
 const buy = (player: string, perk: string) => ({ type: "buyPerk", player, perk });

@@ -93,6 +93,7 @@ export function initialState(config: GameConfig): GameState {
     round: 0,
     resolvedRound: 0,
     rooms: [],
+    bank: 0,
     playerOrder: [],
     players: {},
     haul: 0,
@@ -125,6 +126,8 @@ function applyChange(state: GameState, event: GameEvent): GameState {
       return { ...state, rng: { words: event.words } };
     case "roomsSet":
       return { ...state, rooms: event.rooms };
+    case "bankFilled":
+      return { ...state, bank: event.coins };
     case "roleDealt": {
       const seat = state.config.players.find((p) => p.id === event.player);
       if (!seat) throw new Error(`roleDealt: unknown player ${event.player}`);
@@ -179,10 +182,10 @@ function applyChange(state: GameState, event: GameEvent): GameState {
       return updatePlayer({ ...state, moves: { ...state.moves, [event.player]: event.move } }, event.player, (p) => ({
         consecutiveMissedMoves: p.consecutiveMissedMoves + 1,
       }));
-    case "lootSplit":
+    case "coinsGrabbed":
       return updatePlayer(state, event.player, (p) => ({
-        stash: p.stash + event.toStash,
-        totalHandedIn: p.totalHandedIn + event.toHaul,
+        stash: p.stash + event.pocket,
+        totalHandedIn: p.totalHandedIn + event.duffel,
       }));
     case "abilityResolved": {
       const { ability } = event;
@@ -224,6 +227,7 @@ function applyChange(state: GameState, event: GameEvent): GameState {
       return {
         ...mapPlayers(state, (p) => (p.roleState.tail === null ? {} : withRoleState(p, { tail: null }))),
         phase: { kind: "alibis", round: event.round },
+        bank: event.bank,
         haul: event.haul,
         heat: event.heat,
         moves: {},

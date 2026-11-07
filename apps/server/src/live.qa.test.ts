@@ -12,6 +12,7 @@ import type { LobbyView } from "./lobby";
 import { buildServer } from "./server";
 import { createGameStore } from "./store";
 import { testDb } from "./testkit";
+import { BANK_JOB } from "@skimjob/content";
 
 const quick = { interval: 1, timeout: 5000 };
 const clock = fakeClock(Date.UTC(2026, 10, 1));
@@ -156,7 +157,7 @@ describe("QA: hostile messages", () => {
       { cmd: { type: 42 } },
       { cmd: { type: "submitMove" } }, // known type, missing fields: the engine refuses
       { cmd: { type: "submitMove", move: { room: "lobby", pocket: -5 } } },
-      { cmd: { type: "submitMove", move: { room: "lobby", pocket: 1e308 } } },
+      { cmd: { type: "submitMove", move: { room: "lobby", duffel: 0, pocket: 1e308 } } },
       { cmd: { type: "constructor" } },
       { cmd: { type: "hasOwnProperty" } },
       { cmd: [] },
@@ -171,7 +172,7 @@ describe("QA: hostile messages", () => {
     c.ws.send("null");
     await vi.waitFor(() => expect(c.messages.filter((m) => "rejected" in m && !("id" in m))).toHaveLength(4), quick);
     expect((await loadVia(id)).log.length).toBe(before.log.length);
-    expect(await c.send({ type: "submitMove", move: { room: "lobby", pocket: 0 } })).toMatchObject({ ok: true });
+    expect(await c.send({ type: "submitMove", move: { room: "lobby", duffel: 1, pocket: 0 } })).toMatchObject({ ok: true });
     c.ws.close();
   });
 
@@ -179,7 +180,7 @@ describe("QA: hostile messages", () => {
     const { id, humans } = await startGame(2, 1);
     const c = await Client.open(id, humans[0]!);
     const at = (n: number) => {
-      const base = JSON.stringify({ id: "big", pad: "", cmd: { type: "submitMove", move: { room: "lobby", pocket: 0 } } });
+      const base = JSON.stringify({ id: "big", pad: "", cmd: { type: "submitMove", move: { room: "lobby", duffel: 1, pocket: 0 } } });
       return base.replace('"pad":""', `"pad":"${"x".repeat(n - base.length)}"`);
     };
     expect(at(MAX_MESSAGE_BYTES).length).toBe(MAX_MESSAGE_BYTES);
@@ -207,10 +208,10 @@ describe("QA: flooding and many sockets", () => {
     // Pocket 0; alternate two rooms that need no watch target, so "last wins" shows.
     const rooms = (await loadVia(id)).rooms.filter((r) => r !== "security").slice(0, 2);
     // a's first lock-in is public (moveLocked, owner decision 2 Nov); only the changes after it are hidden.
-    expect(await a.send({ type: "submitMove", move: { room: rooms[1], pocket: 0 } })).toMatchObject({ ok: true });
+    expect(await a.send({ type: "submitMove", move: { room: rooms[1], duffel: BANK_JOB.rooms[rooms[1]!]?.coins ?? 0, pocket: 0 } })).toMatchObject({ ok: true });
     const seen = await b.barrier();
     for (let i = 0; i < N; i++) {
-      const cmd = i % 3 === 2 ? { type: "bogus" } : { type: "submitMove", player: humans[1]!.player, move: { room: rooms[i % 2], pocket: 0 } };
+      const cmd = i % 3 === 2 ? { type: "bogus" } : { type: "submitMove", player: humans[1]!.player, move: { room: rooms[i % 2], duffel: BANK_JOB.rooms[rooms[i % 2]!]?.coins ?? 0, pocket: 0 } };
       a.ws.send(JSON.stringify({ id: i, cmd }));
     }
     await vi.waitFor(() => expect(a.messages.filter((m) => "id" in m && typeof m.id === "number")).toHaveLength(N), { interval: 5, timeout: 20_000 });
@@ -219,7 +220,7 @@ describe("QA: flooding and many sockets", () => {
     replies.forEach((r, i) => expect("ok" in r).toBe(i % 3 !== 2));
     const state = await loadVia(id);
     const lastAccepted = [...Array(N).keys()].filter((i) => i % 3 !== 2).at(-1)!;
-    expect(state.moves[humans[0]!.player]).toEqual({ room: rooms[lastAccepted % 2], pocket: 0 }); // last accepted move wins
+    expect(state.moves[humans[0]!.player]).toEqual({ room: rooms[lastAccepted % 2], duffel: BANK_JOB.rooms[rooms[lastAccepted % 2]!]?.coins, pocket: 0 }); // last accepted move wins
     expect(state.moves[humans[1]!.player]).toBeUndefined();
     expect(await b.barrier()).toBe(seen + 1);
     expect(a.lastView()).toEqual(viewFor(state, humans[0]!.player));
@@ -233,7 +234,7 @@ describe("QA: flooding and many sockets", () => {
     const t2 = await Client.open(id, humans[0]!);
     expect(t1.lastView()).toEqual(t2.lastView());
     // A private change made from tab 1 reaches tab 2 (same seat), with no reply on tab 2.
-    expect(await t1.send({ type: "submitMove", move: { room: "lobby", pocket: 0 } })).toMatchObject({ ok: true });
+    expect(await t1.send({ type: "submitMove", move: { room: "lobby", duffel: 1, pocket: 0 } })).toMatchObject({ ok: true });
     await vi.waitFor(() => expect(t2.views().length).toBeGreaterThanOrEqual(2), quick);
     expect(t2.messages.filter((m) => !("view" in m) && !("chatHistory" in m) && !("presence" in m))).toHaveLength(0);
     // A deadline: both tabs move on together.
@@ -258,7 +259,7 @@ describe("QA: flooding and many sockets", () => {
     const c = await Client.open(id, humans[0]!);
     await app.live.system(id, { type: "advance", deadline: { kind: "round", round: 1 } });
     await app.live.system(id, { type: "advance", deadline: { kind: "alibis", round: 1 } }); // design §5.4
-    await c.send({ type: "submitMove", move: { room: "lobby", pocket: 1 } });
+    await c.send({ type: "submitMove", move: { room: "lobby", duffel: 0, pocket: 1 } });
     c.ws.close();
     await app.live.system(id, { type: "advance", deadline: { kind: "round", round: 2 } }); // changes while away
     await app.live.system(id, { type: "advance", deadline: { kind: "alibis", round: 2 } }); // design §5.4
@@ -295,7 +296,7 @@ describe("QA: mixed games", () => {
     }
     // After the end, commands are refused and bots do nothing.
     const late = await Client.open(id, humans[0]!);
-    expect(await late.send({ type: "submitMove", move: { room: "lobby", pocket: 0 } })).toMatchObject({ rejected: true });
+    expect(await late.send({ type: "submitMove", move: { room: "lobby", duffel: 1, pocket: 0 } })).toMatchObject({ rejected: true });
     await app.live.settle(id);
     expect((await loadVia(id)).log.length).toBe(final.log.length);
     late.ws.close();
@@ -309,7 +310,7 @@ describe("QA: mixed games", () => {
       await app.live.system(id, { type: "advance", deadline: { kind: "round", round: r } });
       await app.live.system(id, { type: "advance", deadline: { kind: "alibis", round: r } }); // design §5.4
     }
-    await c.send({ type: "submitMove", move: { room: "lobby", pocket: 0 } });
+    await c.send({ type: "submitMove", move: { room: "lobby", duffel: 1, pocket: 0 } });
     const mid = await loadVia(id);
     await app.close(); // restart
     await vi.waitFor(() => expect(c.closed).not.toBeNull(), quick);

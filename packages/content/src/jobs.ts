@@ -1,5 +1,5 @@
-// Job definitions: rooms by player count, Heat formula numbers and checkpoint
-// targets and shakedown numbers. design §6, §7, §9, §11.3, §11.5
+// Job definitions: rooms by player count, the bank, Heat formula numbers,
+// checkpoint targets and shakedown numbers. design §3.1, §6.1
 //
 // Heat and targets live on the job because jobs may change them (the Casino's
 // baseline Heat is +5, design §9). Engine helpers take a `JobDef` rather than
@@ -8,7 +8,7 @@
 import type { JobId, RoomId } from "./index";
 import type { RoomDef } from "./rooms";
 
-/** Rooms added once the crew reaches `minPlayers`. Tiers are cumulative. design §6.2 */
+/** Rooms added once the crew reaches `minPlayers`. Tiers are cumulative. design §3.1 */
 export interface RoomTier {
   readonly minPlayers: number;
   readonly rooms: readonly RoomId[];
@@ -44,68 +44,57 @@ export interface ShakedownRules {
   readonly payout: number;
 }
 
+/** The bank the crew robs: a fixed pile of coins. design §6.1 */
+export interface BankRules {
+  /** Coins in the bank per player at the start [tunable]. design §6.1 */
+  readonly coinsPerPlayer: number;
+}
+
 export interface JobDef {
   readonly id: JobId;
   readonly name: string;
-  /** Ordered by `minPlayers`; the first tier is the core rooms. design §6.2 */
+  /** Ordered by `minPlayers`; the first tier is the core rooms. design §3.1 */
   readonly roomTiers: readonly RoomTier[];
-  /** Every room that appears in `roomTiers`. design §6 */
+  /** Every room that appears in `roomTiers`. design §3.1 */
   readonly rooms: Readonly<Record<RoomId, RoomDef>>;
-  /** Where a player who misses the round deadline goes (handing everything in). Must be a core room. design §5.1 */
+  /** Where a player who misses the round deadline goes (1 coin, handed in). Must be a core coin room. design §3.3 */
   readonly defaultRoom: RoomId;
+  readonly bank: BankRules;
   readonly heat: HeatRules;
   readonly checkpoints: CheckpointRules;
   /** Kept on the job so simulator content overrides can tune it with the rest (design §17.4, §19 Q4). */
   readonly shakedown: ShakedownRules;
 }
 
-/** First National Bank, the starter job. design §6.1, §6.2, §7, §11.5 */
+/** First National Bank, the starter job. design §3.1, §6.1 */
 export const BANK_JOB: JobDef = {
   id: "bank",
   name: "First National Bank",
+  // 3–4 players 5 rooms, 5–8 players 7, 9–12 players 8. design §3.1
   roomTiers: [
     { minPlayers: 3, rooms: ["vault", "office", "lobby", "security", "rooftop"] },
     { minPlayers: 5, rooms: ["depositBoxes", "serverRoom"] },
-    { minPlayers: 9, rooms: ["tellerLine", "managersOffice"] },
+    { minPlayers: 9, rooms: ["managersOffice"] },
   ],
+  // Coins per visitor [tunable]. design §3.1. `heatPressure` is R6 Heat until bells replace it (S3a.2).
   rooms: {
-    // Core rooms. design §6.1
-    vault: { id: "vault", name: "Vault", loot: 6, heatPressure: 20, capacity: null, info: "none" },
-    office: { id: "office", name: "Office", loot: 4, heatPressure: 0, capacity: null, info: "none" },
-    lobby: { id: "lobby", name: "Lobby", loot: 2, heatPressure: 0, capacity: null, info: "none" },
-    security: { id: "security", name: "Security", loot: 0, heatPressure: 0, capacity: null, info: "watchRoom" },
-    rooftop: { id: "rooftop", name: "Rooftop", loot: 0, heatPressure: -20, capacity: null, info: "none" },
-    // 5–8 players. design §6.2; Deposit boxes add half the vault pressure (§7, balance pass 1).
-    // Crowded loot 3 → 4 in R5 (balance-3.md): with accomplices dealt, 5–8p crews succeeded well under the fair rate.
-    depositBoxes: {
-      id: "depositBoxes",
-      name: "Deposit boxes",
-      loot: 5,
-      heatPressure: 10,
-      capacity: { max: 2, crowdedLoot: 4 },
-      info: "none",
-    },
-    serverRoom: { id: "serverRoom", name: "Server room", loot: 0, heatPressure: 0, capacity: null, info: "none" },
-    // 9–12 players. design §6.2 (Teller line 3, Manager's office 4 since the owner-answers pass, 1 Nov: the
-    // ⅓-plurality shakedowns made big crews succeed ~85%); Manager's office adds half the vault pressure (§7).
-    // Teller line back to 4 in R5 (balance-3.md): two Lone wolves and up to two Wildcards sank 9–12p crews to 17–31%.
-    // R6 balance (r6-balance.md): Teller line 5, Manager's office 3 — 9–12p sat below the band with events off.
-    tellerLine: { id: "tellerLine", name: "Teller line", loot: 6, heatPressure: 10, capacity: null, info: "none" },
-    managersOffice: {
-      id: "managersOffice",
-      name: "Manager's office",
-      loot: 3,
-      heatPressure: 10,
-      capacity: null,
-      info: "none",
-    },
+    vault: { id: "vault", name: "Vault", coins: 3, heatPressure: 20, info: "none" },
+    office: { id: "office", name: "Office", coins: 2, heatPressure: 0, info: "none" },
+    lobby: { id: "lobby", name: "Lobby", coins: 1, heatPressure: 0, info: "none" },
+    security: { id: "security", name: "Security", coins: 0, heatPressure: 0, info: "watchRoom" },
+    rooftop: { id: "rooftop", name: "Rooftop", coins: 0, heatPressure: -20, info: "none" },
+    depositBoxes: { id: "depositBoxes", name: "Deposit boxes", coins: 2, heatPressure: 10, info: "none" },
+    serverRoom: { id: "serverRoom", name: "Server room", coins: 2, heatPressure: 0, info: "none" },
+    managersOffice: { id: "managersOffice", name: "Manager's office", coins: 2, heatPressure: 10, info: "none" },
   },
   defaultRoom: "lobby",
+  bank: { coinsPerPlayer: 16 },
   heat: { max: 100, perRound: 4, missedCheckpoint: 15 },
-  // Final 24 → 23 per player in R5 (balance-3.md): toward the fair success rate (crew seats ÷ n).
-  checkpoints: { perPlayer: [7, 15, 23] },
-  // extension.md: fixed clean line 6 and payout 8 (were 3 × and 5 × the act); starting values for the balance pass.
-  shakedown: { cleanBelow: 6, payout: 8 },
+  // R6's coin-measured numbers, scaled to R7's smaller grabs and 16-a-player bank (S3a.1, provisional) until
+  // S3a.3 (endings) and S3a.5 (shakedowns) replace them: checkpoints were [7, 15, 23], the clean line 6 and payout 8.
+  // With these the sim's success rate and shakedown accuracy stay near R6's.
+  checkpoints: { perPlayer: [3, 7, 11] },
+  shakedown: { cleanBelow: 3, payout: 4 },
 };
 
 export const JOBS: Readonly<Record<JobId, JobDef>> = { bank: BANK_JOB };

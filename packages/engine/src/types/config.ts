@@ -60,12 +60,10 @@ export interface GameConfig {
   readonly contentOverrides?: ContentOverrides | null;
 }
 
-/** New numbers for one room. design §6, §7 */
+/** New numbers for one room. `coins` only for coin rooms (1 or more). design §3.1 */
 export interface RoomOverride {
-  readonly loot?: number;
+  readonly coins?: number;
   readonly heatPressure?: number;
-  /** Only for rooms that have a capacity (Deposit boxes). design §6.2 */
-  readonly capacity?: { readonly max?: number; readonly crowdedLoot?: number };
 }
 
 /**
@@ -87,6 +85,8 @@ export interface RoleOverride {
 /** Every field is optional; whatever is left out keeps the content value. design §17.4 */
 export interface ContentOverrides {
   readonly rooms?: Readonly<Record<RoomId, RoomOverride>>;
+  /** design §6.1 */
+  readonly bank?: { readonly coinsPerPlayer?: number };
   readonly heat?: { readonly max?: number; readonly perRound?: number; readonly missedCheckpoint?: number };
   readonly checkpoints?: { readonly perPlayer?: readonly [number, number, number] };
   readonly shakedown?: { readonly cleanBelow?: number; readonly payout?: number };
@@ -101,9 +101,9 @@ export interface ContentOverrides {
 
 /**
  * New numbers for one event card. A card may only set its own effect's
- * numbers: `lootMultiplier` and `heatMultiplier` (Shift change). design §10
+ * numbers: `extraCoins` and `heatMultiplier` (Shift change). design §13
  */
 export interface EventOverride {
-  readonly lootMultiplier?: number;
+  readonly extraCoins?: number;
   readonly heatMultiplier?: number;
 }

@@ -19,6 +19,7 @@ import { powerOf } from "./overrides";
 import { actOfRound } from "./acts";
 import { grantPerks } from "./perks.testkit";
 import { show } from "./check";
+import { fullGrab } from "./grab.testkit";
 
 // ---------------------------------------------------------------- states
 
@@ -60,7 +61,7 @@ function run(state: GameState, ...commands: unknown[]): GameState {
   }, state);
 }
 
-const mv = (player: string, room: string) => ({ type: "submitMove", player, move: { room, pocket: 0 } });
+const mv = (player: string, room: string) => ({ type: "submitMove", player, move: fullGrab(room) });
 const round = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
 const alibis = (s: GameState) => ({ type: "advance", deadline: { kind: "alibis", round: s.resolvedRound } });
 
@@ -112,7 +113,7 @@ function baseCommands(s: GameState): Record<string, unknown>[] {
     const p = s.players[player] as PlayerState;
     // Moves: a plain one, one from a watcher room, and one using the role's power. design §5.1, §6.1, §8
     out.push(mv(player, room));
-    if (s.rooms.includes("security")) out.push({ type: "submitMove", player, move: { room: "security", pocket: 0, watch: room } });
+    if (s.rooms.includes("security")) out.push({ type: "submitMove", player, move: { ...fullGrab("security"), watch: room } });
     const power = powerOf(s.config, p.role);
     const ability =
       power.kind === "lookout"
@@ -120,7 +121,7 @@ function baseCommands(s: GameState): Record<string, unknown>[] {
         : power.kind === "loopCameras"
           ? { kind: "loopCameras", room }
           : null;
-    if (ability) out.push({ type: "submitMove", player, move: { room, pocket: 0, ability } });
+    if (ability) out.push({ type: "submitMove", player, move: { ...fullGrab(room), ability } });
     // Powers used outside a move. design §8
     if (power.kind === "audit") out.push({ type: "useAbility", player, ability: { kind: "audit", room } });
     if (power.kind === "checkStash") out.push({ type: "useAbility", player, ability: { kind: "checkStash", target: other(player) } });

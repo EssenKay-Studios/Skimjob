@@ -35,8 +35,8 @@ describe("describeEvent", () => {
   });
 
   it("speaks to the viewer as you", () => {
-    expect(describeEvent(sampleEvents.lootSplit, asAna)).toBe("Round 1, Vault: you found 6 loot, 4 to the Haul and 2 pocketed.");
-    expect(describeEvent(sampleEvents.lootSplit, asCyd)).toBe("Round 1, Vault: Ana found 6 loot, 4 to the Haul and 2 pocketed.");
+    expect(describeEvent(sampleEvents.coinsGrabbed, asAna)).toBe("Round 1, Vault: you grabbed 3 coins, 1 to the duffel and 2 pocketed.");
+    expect(describeEvent(sampleEvents.coinsGrabbed, asCyd)).toBe("Round 1, Vault: Ana grabbed 3 coins, 1 to the duffel and 2 pocketed.");
     expect(describeEvent(sampleEvents.alibiPosted, asAna)).toBe("You say you were in the Lobby in round 1.");
     expect(describeEvent(sampleEvents.alibiPosted, asCyd)).toBe("Ana says they were in the Lobby in round 1.");
     // design §8, §12.1: a role claim, true or not.

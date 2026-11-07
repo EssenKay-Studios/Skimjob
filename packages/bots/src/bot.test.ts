@@ -71,7 +71,7 @@ describe("Agent — design §17.3", () => {
   });
 
   it("does nothing more once its move is in and the meeting proposed", () => {
-    const s = run(game(3), { type: "submitMove", player: "ana", move: { room: "lobby", pocket: 0 } }, { type: "proposeMeeting", player: "ana", slot: "s" });
+    const s = run(game(3), { type: "submitMove", player: "ana", move: { room: "lobby", duffel: 1, pocket: 0 } }, { type: "proposeMeeting", player: "ana", slot: "s" });
     expect(decide(viewFor(s, "ana"), PERSONALITIES.greedy, seeded("a"), "test-crew")).toEqual([]);
   });
 });
@@ -89,11 +89,11 @@ describe("moves — design §5.1, §6, §7, §8", () => {
     }
   });
 
-  it("Security always names a room to watch — design §6.1", () => {
+  it("Security always names a room to watch — design §3.1", () => {
     const s = game(4);
     const move = chooseMove(viewFor(s, "ana"), exact(PERSONALITIES.cautious, { watch: 1 }), seeded("w"));
     expect(move.room).toBe("security");
-    expect(move.watch && roomDef(bank, move.watch).loot).toBeGreaterThan(0);
+    expect(move.watch && roomDef(bank, move.watch).coins).toBeGreaterThan(0);
   });
 
   it("heads for the Rooftop when Heat is close to a raid — design §7", () => {

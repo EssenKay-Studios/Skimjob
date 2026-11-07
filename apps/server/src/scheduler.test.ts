@@ -296,7 +296,7 @@ describe("early round end under a pause (review of #44; owner decision, 2 Nov; d
     const open = (await deadlines(id)).find((d) => d.key === `openMeeting:${meetingId}`)!;
     // The bots have locked in; the host locks in 2 s before the meeting opens, so the 5 s grace runs into it.
     clock.advance(open.due - clock.now() - 2000);
-    expect(await send({ type: "submitMove", move: { room: "lobby", pocket: 0 } })).toMatchObject({ ok: true });
+    expect(await send({ type: "submitMove", move: { room: "lobby", duffel: 1, pocket: 0 } })).toMatchObject({ ok: true });
     const row = async (key: string) => (await deadlines(id)).find((d) => d.key === key);
     const early = (await row("roundEarly:1"))!;
     const round = (await row("round:1"))!;

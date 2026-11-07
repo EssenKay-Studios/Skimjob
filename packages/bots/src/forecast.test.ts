@@ -62,7 +62,7 @@ describe("buying and spending perks — extension.md \"Tokens and the perk shop\
 
   it("uses at most one chosen perk a round; Shield and Emergency go off by themselves", () => {
     const use = (kind: string): PlayerCommand => ({ type: "useAbility", player: "ana", ability: { kind } } as unknown as PlayerCommand);
-    const move: PlayerCommand = { type: "submitMove", player: "ana", move: { room: "lobby", pocket: 0 } };
+    const move: PlayerCommand = { type: "submitMove", player: "ana", move: { room: "lobby", duffel: 1, pocket: 0 } };
     const spend = perkSpender(viewFor(game(5), "ana"));
     expect(spend([use("peek"), move, use("tail")])).toEqual([use("peek"), move]);
     expect(spend([use("alibi")])).toEqual([]); // already used one this round

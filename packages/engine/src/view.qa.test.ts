@@ -13,11 +13,13 @@ import type { GameConfig, GameEvent, GameState, PlayerId, PlayerState, PlayerVie
 import { createGame } from "./setup";
 import { handleCommand } from "./handle";
 import { eventsSince, viewFor } from "./view";
+import { fullGrab } from "./grab.testkit";
 
 type Cmd = Record<string, unknown>;
 type Kind = "role" | "split" | "swap" | "watch" | "miss" | "churn" | "voteChurn" | "ballotSwap" | "seal" | "control";
 const MODES: readonly VoteVisibility[] = ["hiddenThenRevealed", "open", "secret"];
-const LOOT: Record<string, number> = { vault: 6, office: 4, lobby: 2, depositBoxes: 5, tellerLine: 3, managersOffice: 3 };
+/** Coins per visitor (design §3.1). */
+const LOOT: Record<string, number> = { vault: 3, office: 2, lobby: 1, depositBoxes: 2, managersOffice: 2, serverRoom: 2 };
 
 function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
@@ -143,7 +145,8 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
     const role = A.players[id]?.role;
     const room = pick(A.rooms);
     const loot = LOOT[room] ?? 0;
-    const move: Cmd = { room, pocket: loot > 0 && rand() < 0.5 ? int(loot + 1) : 0 };
+    const pocket = loot > 0 && rand() < 0.5 ? int(loot + 1) : 0;
+    const move: Cmd = { room, duffel: loot - pocket, pocket };
     if (room === "security") move.watch = pick(A.rooms);
     if (restricted.has(id)) return move;
     if (role === "lookout" && rand() < 0.8) move.ability = { kind: "lookout", rooms: [pick(A.rooms)] };
@@ -164,7 +167,7 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
       else plan.set(id, [...(rand() < 0.15 ? [submit(id, randomMove(id, round))] : []), submit(id, randomMove(id, round))]);
     }
     const planB = new Map(plan);
-    const last = (id: PlayerId): Cmd => ((plan.get(id) ?? []).at(-1)?.move as Cmd | undefined) ?? { room: "lobby", pocket: 0 };
+    const last = (id: PlayerId): Cmd => ((plan.get(id) ?? []).at(-1)?.move as Cmd | undefined) ?? fullGrab("lobby");
     const pair = (): [PlayerId, PlayerId] | null => {
       const ok = [...ids];
       if (ok.length < 2) return null;
@@ -179,8 +182,8 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
           const [x, z] = p;
           applied = true;
           (kind === "split" ? [x, z] : [x]).forEach((id) => involved.add(id));
-          // design §5.3: same Haul, same pocket count, same room — only the two stashes differ.
-          const keep = (id: PlayerId, pocket: number, room = "office"): Cmd => submit(id, { ...last(id), room, pocket, watch: undefined });
+          // Same Haul, same pocket count, same room — only the two stashes differ (2-coin Office grabs, design §3.1).
+          const keep = (id: PlayerId, pocket: number, room = "office"): Cmd => submit(id, { ...last(id), room, duffel: (LOOT[room] ?? 0) - pocket, pocket, watch: undefined });
           plan.set(x, [keep(x, 1)]);
           plan.set(z, [keep(z, 2)]);
           planB.set(x, [kind === "split" ? keep(x, 2) : keep(x, 1, "lobby")]);
@@ -219,6 +222,7 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
           const isLookout = A.players[x]?.role === "lookout";
           const m = (watch: string, look: string): Cmd => ({
             room: "security",
+            duffel: 0,
             pocket: 0,
             watch,
             ...(isLookout ? { ability: { kind: "lookout", rooms: [look] } } : {}),
@@ -231,12 +235,12 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
         applied = true;
         involved.add(x);
         plan.set(x, []);
-        planB.set(x, [submit(x, { room: "lobby", pocket: 0 })]); // exactly the default move (§5.1)
+        planB.set(x, [submit(x, fullGrab("lobby"))]); // exactly the default move (design §3.3)
       } else if (kind === "churn") {
         const x = pick(ids);
         applied = true;
         involved.add(x);
-        const final = plan.get(x)?.at(-1) ?? submit(x, { room: "lobby", pocket: 0 });
+        const final = plan.get(x)?.at(-1) ?? submit(x, fullGrab("lobby"));
         plan.set(x, [final]);
         planB.set(x, [submit(x, randomMove(x, round)), submit(x, randomMove(x, round)), final]);
       }
@@ -395,7 +399,7 @@ describe("QA: viewFor edges — design §13, §11.2", () => {
         expect(end?.type === "gameEnded" && v.reveal?.outcome).toEqual(end?.type === "gameEnded" && end.outcome);
         const types = (t: string) => log.filter((e) => e.event.type === t).map((e) => e.event);
         expect(types("roleDealt")).toHaveLength(state.playerOrder.length);
-        expect(types("lootSplit")).toHaveLength(rounds * state.playerOrder.length);
+        expect(types("coinsGrabbed")).toHaveLength(rounds * state.playerOrder.length);
         expect(types("moveSubmitted")).toEqual(state.log.filter((e) => e.type === "moveSubmitted"));
         const ballots = state.log.filter((e) => e.type === "voteCast" || e.type === "voteSealed");
         expect(ballots.length).toBeGreaterThan(0);
@@ -431,7 +435,7 @@ describe("QA: viewFor edges — design §13, §11.2", () => {
     };
     check();
     for (let round = 1; round <= 9 && s.phase.kind !== "ended"; round++) {
-      for (const id of s.playerOrder) s = apply(s, { type: "submitMove", player: id, move: { room: id === "p0" ? "rooftop" : "lobby", pocket: 0 } }, "A");
+      for (const id of s.playerOrder) s = apply(s, { type: "submitMove", player: id, move: fullGrab(id === "p0" ? "rooftop" : "lobby") }, "A");
       check();
       s = apply(s, { type: "advance", deadline: { kind: "round", round } }, "A");
       check();

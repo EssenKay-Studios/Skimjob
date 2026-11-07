@@ -20,6 +20,7 @@ import { handleCommand } from "./handle";
 import { perkCost } from "./overrides";
 import { viewFor } from "./view";
 import { grantPerks } from "./perks.testkit";
+import { fullGrab } from "./grab.testkit";
 
 function config(players: number, voteVisibility: VoteVisibility): GameConfig {
   return {
@@ -44,7 +45,7 @@ const EARNED_IN_PLAY: readonly string[] = [
   "wonDirtyShakedown",
 ];
 
-const NO_LOOT = new Set(["security", "rooftop", "serverRoom"]);
+const NO_COINS = new Set(["security", "rooftop"]);
 
 /**
  * Every wildcard and lone wolf at once (two Moles and two Hackers), more than a
@@ -156,17 +157,17 @@ function playGame(players: number, voteVisibility: VoteVisibility, dark = false)
       // The Act 3 meeting's target is in the Vault in each act's first round (the one the Auditor audits).
       const drawn = id === ids[3 % ids.length] && round % 3 === 1 ? "vault" : (s.rooms[(i + round) % s.rooms.length] as string);
       const room = drawn === s.card?.room ? "lobby" : drawn; // design §10 Lockdown
-      const canKeep = !NO_LOOT.has(room);
+      const canKeep = !NO_COINS.has(room);
       // The Act 3 meeting's target pockets everything it can, so that shakedown is dirty.
       const greedy = id === ids[3 % ids.length];
-      const move: Record<string, unknown> = { room, pocket: canKeep && (greedy || (i + round) % 3 === 0) ? (greedy ? 2 : 1) : 0 };
+      const move: Record<string, unknown> = fullGrab(room, canKeep && (greedy || (i + round) % 3 === 0) ? Math.min(greedy ? 2 : 1, fullGrab(room).duffel) : 0);
       if (room === "security") move.watch = "vault";
       if (role === "lookout") move.ability = { kind: "lookout", rooms: [s.rooms[(i + round + 1) % s.rooms.length]] };
       // design §8: the Hacker loops the Vault once per act.
       if (role === "hacker" && round % 3 === 1) move.ability = { kind: "loopCameras", room: "vault" };
       // extension.md "Police activity": each Mole tips off the cops once, in round 8 (late, so the script still reaches every meeting).
       if (role === "mole" && round === 8) step({ type: "useAbility", player: id, ability: { kind: "tipOff" } });
-      if (i === 0) step({ type: "submitMove", player: id, move: { room: "lobby", pocket: 0 } }); // later changed
+      if (i === 0) step({ type: "submitMove", player: id, move: fullGrab("lobby") }); // later changed
       step({ type: "submitMove", player: id, move });
     });
     step({ type: "advance", deadline: { kind: "round", round } });
@@ -175,8 +176,8 @@ function playGame(players: number, voteVisibility: VoteVisibility, dark = false)
     ids.forEach((id, i) => {
       // design §8.3: in round 2 the last player posts a true alibi and has it stamped Verified.
       if (round === 2 && id === last) {
-        const split = s.log.find((e) => e.type === "lootSplit" && e.player === id && e.round === round);
-        if (split?.type !== "lootSplit") throw new Error("no split");
+        const split = s.log.find((e) => e.type === "coinsGrabbed" && e.player === id && e.round === round);
+        if (split?.type !== "coinsGrabbed") throw new Error("no split");
         step({ type: "postAlibi", player: id, room: split.room });
         step({ type: "useAbility", player: id, ability: { kind: "alibi" } });
       } else if (i % 4 !== 3) step({ type: "postAlibi", player: id, room: s.rooms[i % s.rooms.length] });
@@ -229,6 +230,7 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
           { type: "abilityResolved", visibility: privateTo(other), player: other, round: 1, ability: { kind: "audit", round: 1, room: "vault", shortfall: 4 } },
           { type: "abilityResolved", visibility: privateTo(other), player: other, round: 1, ability: { kind: "checkStash", target: viewer, threshold: 3, dirty: true } },
           { type: "insideTip", visibility: privateTo(other), player: other, round: 2, subject: viewer, role: "mole" },
+          { type: "coinsGrabbed", visibility: privateTo(other), player: other, round: 1, room: "vault", duffel: 0, pocket: 3 },
           { type: "perkUsed", visibility: privateTo(other), player: other, round: 1, perk: { kind: "ballot", meetingId: "act-1", target: viewer } },
           { type: "rigPicked", visibility: privateTo(other), player: other, round: 2, card: "audit" },
         ] satisfies GameEvent[])),
@@ -264,7 +266,7 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
   const moves: Record<PlayerId, Move> = {};
   for (const id of state.playerOrder) {
     if (!Object.hasOwn(state.moves, id)) continue;
-    moves[id] = id === viewer ? (state.moves[id] as Move) : { room: "vault", pocket: 6 };
+    moves[id] = id === viewer ? (state.moves[id] as Move) : { room: "vault", duffel: 0, pocket: 3 };
   }
   // design §8.3: others' +Votes and Ballot perks are hidden; the ballots the viewer paid to see stay as they are.
   const seen = state.meeting?.ballotGrants[viewer] ?? [];

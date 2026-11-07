@@ -32,13 +32,13 @@ export function gameRows(records: readonly GameRecord[]): Cell[][] {
 }
 
 export const PLAYER_COLUMNS = [
-  "seed", "players", "result", "player", "personality", "role", "score", "stash", "looted", "pocketed", "timesShakenDown", "winner",
+  "seed", "players", "result", "player", "personality", "role", "score", "stash", "grabbed", "pocketed", "timesShakenDown", "winner",
 ] as const;
 
 export function playerRows(records: readonly GameRecord[]): Cell[][] {
   return records.flatMap((g) =>
     g.playerRecords.map((p) => [
-      g.seed, g.players, g.result, p.id, p.personality, p.role, p.score, p.stash, p.looted, p.pocketed, p.timesShakenDown, p.winner,
+      g.seed, g.players, g.result, p.id, p.personality, p.role, p.score, p.stash, p.grabbed, p.pocketed, p.timesShakenDown, p.winner,
     ]),
   );
 }

@@ -66,16 +66,16 @@ export const eventHeatScale = (crewSize: number): number => Math.min(1, crewSize
 export const scaledCardHeat = (amount: number, crewSize: number): number => Math.round(amount * eventHeatScale(crewSize));
 
 /**
- * The job as this round's card changes it: Shift change multiplies
- * one room's loot and Heat pressure; the extra Heat pressure is scaled for
- * small crews (`eventHeatScale`). design §10
+ * The job as this round's card changes it: Shift change lets one room's
+ * visitors grab extra coins (design §13) and multiplies its R6 Heat pressure,
+ * the extra scaled for small crews (`eventHeatScale`).
  */
 export function roundJob(job: JobDef, card: ActiveCard | null, events: EventTable, crewSize: number): JobDef {
   const effect = card ? cardDef(card.id, events).effect : null;
   if (effect?.kind !== "roomSurge" || !Object.hasOwn(job.rooms, effect.room)) return job;
   const def = job.rooms[effect.room] as JobDef["rooms"][string];
   const heatMultiplier = 1 + (effect.heatMultiplier - 1) * eventHeatScale(crewSize);
-  const surged = { ...def, loot: Math.round(def.loot * effect.lootMultiplier), heatPressure: def.heatPressure * heatMultiplier };
+  const surged = { ...def, coins: def.coins + effect.extraCoins, heatPressure: def.heatPressure * heatMultiplier };
   return { ...job, rooms: { ...job.rooms, [effect.room]: surged } };
 }
 

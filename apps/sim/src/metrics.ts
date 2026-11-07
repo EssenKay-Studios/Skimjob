@@ -4,7 +4,7 @@
 // Definitions (provisional, docs/decisions.md):
 // - success rate: games won by the crew ÷ games.
 // - Heat-bust share: failures caused by Heat ÷ failures (target 10–20%).
-// - pocketing: each player who can pocket is put in a band by pocketed ÷ looted
+// - pocketing: each player who can pocket is put in a band by pocketed ÷ grabbed
 //   (honest ≤ 10%, moderate ≤ 40%, heavy above); win rate over all games, so a
 //   heist sunk by pocketing counts as a loss.
 // - shakedown accuracy: shakedowns whose target held more than the clean
@@ -22,7 +22,7 @@ import type { GameRecord, PlayerRecord } from "./record";
 
 export const POCKET_BANDS = ["honest", "moderate", "heavy"] as const;
 export type PocketBand = (typeof POCKET_BANDS)[number];
-/** Upper bounds (inclusive) of pocketed ÷ looted for the honest and moderate bands. */
+/** Upper bounds (inclusive) of pocketed ÷ grabbed for the honest and moderate bands. */
 export const HONEST_MAX_SHARE = 0.1;
 export const MODERATE_MAX_SHARE = 0.4;
 /** A sole Act 2 leader "has it settled" with a lead of at least this share of the most anyone can add in Act 3. */
@@ -31,8 +31,8 @@ const DECIDED_EARLY_LEAD_SHARE = 0.5;
 /** num ÷ den, or null when there is nothing to divide. */
 export const rate = (num: number, den: number): number | null => (den === 0 ? null : num / den);
 
-export function pocketBand(p: Pick<PlayerRecord, "looted" | "pocketed">): PocketBand {
-  const share = p.looted === 0 ? 0 : p.pocketed / p.looted;
+export function pocketBand(p: Pick<PlayerRecord, "grabbed" | "pocketed">): PocketBand {
+  const share = p.grabbed === 0 ? 0 : p.pocketed / p.grabbed;
   if (share <= HONEST_MAX_SHARE) return "honest";
   if (share <= MODERATE_MAX_SHARE) return "moderate";
   return "heavy";
@@ -166,6 +166,8 @@ export interface Metrics {
   /** Games that ended (raided) before Act 3. */
   readonly endedBeforeAct3: number | null;
   readonly checkpointsMissedPerGame: number | null;
+  /** Share of games whose bank ran dry (every later grab is cut to 0, design §3.2). */
+  readonly bankEmptied: number | null;
   readonly shakedowns: ShakedownMetrics;
   readonly pocketing: Record<string, GroupWins>;
   readonly roles: Record<string, GroupWins>;
@@ -186,6 +188,7 @@ function metrics(records: readonly GameRecord[]): Metrics {
     heatBustShare: heatBustShare(records),
     endedBeforeAct3: rate(records.filter((g) => g.endedAct < 3).length, records.length),
     checkpointsMissedPerGame: rate(records.reduce((s, g) => s + g.checkpointsMissed, 0), records.length),
+    bankEmptied: rate(records.filter((g) => g.bankLeft === 0).length, records.length),
     shakedowns: shakedownMetrics(records),
     pocketing: groupWins(records, pocketBand),
     roles: groupWins(records, (p) => p.role),

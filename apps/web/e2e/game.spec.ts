@@ -88,7 +88,7 @@ test("a host and a guest play a 15-min game against bots to the end @move", asyn
   await expect(ledger).toContainText("You say you were in the Lobby");
   await expect(ledger).toContainText(/Job done!|Busted:/);
   await page.getByRole("button", { name: /Case file/ }).click();
-  await expect(page.getByRole("list", { name: "Case file" })).toContainText(/Round \d, Office: you found 4 loot/);
+  await expect(page.getByRole("list", { name: "Case file" })).toContainText(/Round \d, Office: you grabbed 2 coins/);
   // The act's meetings: the host's ballot (private in the default Hidden mode), and the results in the ledger.
   await expect(page.getByRole("list", { name: "Case file" })).toContainText("You voted to skip.");
   await page.getByRole("button", { name: /Ledger/ }).click();
@@ -130,10 +130,10 @@ test("the move panel: pick a room, split the loot, lock it in, change it; reconn
   await expect(page.getByText("Miss the deadline and you go to the Lobby, handing everything in.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Lock it in" })).toBeDisabled();
 
-  // The Vault, pocketing 2 (the slider's value is the Haul share).
+  // The Vault's 3 coins, pocketing 2 (the slider's value is the Haul share).
   await page.locator('.room-tile[data-room="Vault"]').click();
   await expect(page.getByRole("button", { name: "Lock it in" })).toBeEnabled();
-  await page.locator("#split").fill("4");
+  await page.locator("#split").fill("1");
   await expect(page.locator(".split__pocket")).toContainText("2");
   await page.getByRole("button", { name: "Lock it in" }).click();
   await expect(page.getByRole("button", { name: "Locked in" })).toBeDisabled();

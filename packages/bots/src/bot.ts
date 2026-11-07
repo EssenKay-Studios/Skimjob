@@ -184,25 +184,26 @@ function moleTipOff(view: PlayerView): PlayerCommand[] {
 
 // ---------------------------------------------------------------- moves (§5.1)
 
-/** Room, split and role power for this round. design §5.1, §6, §7, §8 */
+/** Room, grab, split and role power for this round. design §3.2, §11 */
 export function chooseMove(view: PlayerView, p: Personality, random: Random): Move {
   const job = jobThisRound(view);
-  const lootRooms = roomsWhere(view, job, (d) => d.loot > 0);
-  const byLoot = (rooms: readonly RoomId[]) => rooms.map((r) => [r, roomDef(job, r).loot] as const);
+  const coinRooms = roomsWhere(view, job, (d) => d.coins > 0);
+  const byCoins = (rooms: readonly RoomId[]) => rooms.map((r) => [r, roomDef(job, r).coins] as const);
   const chosen = random() < p.noise ? pick(view.rooms, random) : chooseRoom(view, p, random);
   // design §10 Lockdown: the closed room is refused, so go to the default room (never closed) instead.
   const room = view.card?.room === chosen ? job.defaultRoom : chosen;
   const def = roomDef(job, room);
-  const pocket = choosePocket(view, p, random, def.loot);
-  let move: Move = { room, pocket };
-  // design §6.1: Security watches one room; a looting room, more often the richer ones.
-  if (def.info === "watchRoom") move = { ...move, watch: weighted(byLoot(lootRooms), random) ?? room };
+  // design §3.2: the bot grabs the room's limit and splits it between the two bags.
+  const pocket = choosePocket(view, p, random, def.coins);
+  let move: Move = { room, duffel: def.coins - pocket, pocket };
+  // design §3.1: Security watches one room; a coin room, more often the richer ones.
+  if (def.info === "watchRoom") move = { ...move, watch: weighted(byCoins(coinRooms), random) ?? room };
 
   const { power } = roleOf(view);
   let ability: AbilityUse | null = null;
   if (power.kind === "lookout") {
-    // design §8: one extra room's visitors; a looting room other than mine.
-    const target = weighted(byLoot(lootRooms.filter((r) => r !== room)), random);
+    // design §8: one extra room's visitors; a coin room other than mine.
+    const target = weighted(byCoins(coinRooms.filter((r) => r !== room)), random);
     if (target !== undefined) ability = { kind: "lookout", rooms: [target] };
   } else if (power.kind === "loopCameras" && view.me.roleState.usedThisAct < power.perAct) {
     // v2 §4: hide its own skim (no allies to cover since the Extension).
@@ -228,7 +229,7 @@ function chooseRoom(view: PlayerView, p: Personality, random: Random): RoomId {
     const hottest = roomsWhere(view, job, (d) => d.heatPressure > 0).sort((a, b) => roomDef(job, b).heatPressure - roomDef(job, a).heatPressure)[0];
     if (hottest !== undefined) return hottest;
   }
-  if (lean === "target") return roomsWhere(view, job, (d) => d.loot > 0).sort((a, b) => roomDef(job, b).loot - roomDef(job, a).loot)[0] ?? job.defaultRoom;
+  if (lean === "target") return roomsWhere(view, job, (d) => d.coins > 0).sort((a, b) => roomDef(job, b).coins - roomDef(job, a).coins)[0] ?? job.defaultRoom;
   if (cooler && danger > p.heatCaution && random() < Math.min(0.8, (danger - p.heatCaution) * 4)) return cooler;
   const watcher = roomsWhere(view, job, (d) => d.info === "watchRoom")[0];
   if (watcher && random() < p.watch) return watcher;
@@ -236,28 +237,28 @@ function chooseRoom(view: PlayerView, p: Personality, random: Random): RoomId {
   // less likely once danger passes the bot's Heat caution (the same point and
   // slope as the Rooftop above): a greedy player doesn't avoid the Vault at Heat 10.
   const avoid = Math.max(0, danger - p.heatCaution) * 4;
-  const options = roomsWhere(view, job, (d) => d.loot > 0).map((r) => {
+  const options = roomsWhere(view, job, (d) => d.coins > 0).map((r) => {
     const d = roomDef(job, r);
     const heatFactor = d.heatPressure > 0 ? Math.max(0.05, 1 - avoid * Math.max(1, d.heatPressure / usual)) : 1;
-    return [r, d.loot ** (0.5 + p.greed) * heatFactor] as const;
+    return [r, d.coins ** (0.5 + p.greed) * heatFactor] as const;
   });
   return weighted(options, random) ?? job.defaultRoom;
 }
 
-/** How much to keep. design §5.1; §11.5 (team-minded bots keep the Haul on pace for the checkpoint) */
-function choosePocket(view: PlayerView, p: Personality, random: Random, loot: number): number {
-  if (loot === 0) return 0;
-  if (random() < p.noise) return Math.floor(random() * (loot + 1));
+/** How many of the grabbed `coins` to pocket. design §3.2; R6 checkpoints (team-minded bots keep the Haul on pace) */
+function choosePocket(view: PlayerView, p: Personality, random: Random, coins: number): number {
+  if (coins === 0) return 0;
+  if (random() < p.noise) return Math.floor(random() * (coins + 1));
   if (random() >= p.pocketChance) return 0;
-  let pocket = Math.min(loot, Math.max(1, Math.round(loot * p.greed * (0.5 + random()))));
+  let pocket = Math.min(coins, Math.max(1, Math.round(coins * p.greed * (0.5 + random()))));
   // extension.md Build notes "Bots": a ★ role leaning toward its failure skims all it can.
-  if (leaning(view) !== null) return loot;
+  if (leaning(view) !== null) return coins;
   if (random() < p.teamSpirit) {
     const job = jobOf(view);
     const crew = crewSize(view);
     const roundsLeftInAct = view.act * ROUNDS_PER_ACT - view.round + 1;
     const needEach = Math.max(0, checkpointTarget(job, view.act, crew) - view.haul) / (roundsLeftInAct * crew);
-    pocket = Math.min(pocket, Math.max(0, Math.floor(loot - needEach * 1.2)));
+    pocket = Math.min(pocket, Math.max(0, Math.floor(coins - needEach * 1.2)));
   }
   return pocket;
 }
@@ -267,23 +268,23 @@ function choosePocket(view: PlayerView, p: Personality, random: Random, loot: nu
 /**
  * The room to claim for the latest resolved round, or null if already posted.
  * The truth, unless the bot pocketed and decides to cover it: then the richest
- * room whose loot is no more than what it really handed in (so the claim adds up).
+ * room whose coins are no more than what it really handed in (so the claim adds up).
  */
 export function chooseAlibi(view: PlayerView, p: Personality, random: Random): RoomId | null {
   const round = lastResolvedRound(view);
   if (round === 0) return null;
   if (ofType(view.ledger, "alibiPosted").some((a) => a.player === view.me.id && a.round === round)) return null;
-  const split = ofType(view.caseFile, "lootSplit").find((e) => e.round === round);
+  const split = ofType(view.caseFile, "coinsGrabbed").find((e) => e.round === round);
   if (!split) return null;
   // A bot that never lies (Honest) doesn't post a random alibi either.
   if (p.lie > 0 && random() < p.noise) return random() < 0.3 ? null : pick(view.rooms, random);
-  if (split.toStash === 0 || p.lie === 0) return split.room;
+  if (split.pocket === 0 || p.lie === 0) return split.room;
   const alone = ofType(view.caseFile, "roomSighting").find((e) => e.round === round)?.others.length === 0;
   if ((p.lieOnlyWhenAlone && !alone) || random() >= p.lie) return split.room;
   const job = jobOf(view);
   const covers = view.rooms
-    .filter((r) => r !== split.room && roomDef(job, r).loot <= split.toHaul)
-    .sort((a, b) => roomDef(job, b).loot - roomDef(job, a).loot);
+    .filter((r) => r !== split.room && roomDef(job, r).coins <= split.duffel)
+    .sort((a, b) => roomDef(job, b).coins - roomDef(job, a).coins);
   return covers[0] ?? split.room;
 }
 

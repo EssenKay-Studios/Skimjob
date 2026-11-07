@@ -47,12 +47,12 @@ describe("checkOptions — the engine's validateConfig on the sim's settings", (
 });
 
 describe("content overrides change the games (design §17.4)", () => {
-  it("bots use the overridden numbers: with 1-loot rooms no bot pockets more than 1 a round, and none is refused", () => {
-    const o = options(["-n", "6", "-p", "6", "--overrides", '{"rooms":{"vault":{"loot":1},"office":{"loot":1},"lobby":{"loot":1},"depositBoxes":{"loot":1,"capacity":{"crowdedLoot":1}}}}']);
+  it("bots use the overridden numbers: with 1-coin rooms no bot grabs more than 1 a round, and none is refused", () => {
+    const o = options(["-n", "6", "-p", "6", "--overrides", '{"rooms":{"vault":{"coins":1},"office":{"coins":1},"depositBoxes":{"coins":1},"serverRoom":{"coins":1}}}']);
     expect(checkOptions(o)).toEqual([]);
     const records = runBatch(o);
     expect(records.every((r) => r.rejections === 0)).toBe(true);
-    for (const r of records) for (const p of r.playerRecords) expect(p.looted).toBeLessThanOrEqual(9);
+    for (const r of records) for (const p of r.playerRecords) expect(p.grabbed).toBeLessThanOrEqual(9);
   });
 
   it("raising the baseline Heat sends more heists to the cops", () => {

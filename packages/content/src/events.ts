@@ -9,14 +9,14 @@ export type EventId = string;
 /** What a card does. The engine has one small effect function per kind. design §10 */
 export type EventEffect =
   /**
-   * Shift change (Vault: loot ×1.5, Heat ×2 since the R6 balance pass):
-   * the room's loot and Heat pressure are multiplied this round. Skipped if the
-   * room isn't in play.
+   * Shift change: the room's visitors can grab `extraCoins` more this round
+   * (design §13: the Vault, +1), and its R6 Heat pressure is multiplied until
+   * bells (S3a.2). Skipped if the room isn't in play.
    */
-  | { readonly kind: "roomSurge"; readonly room: RoomId; readonly lootMultiplier: number; readonly heatMultiplier: number }
+  | { readonly kind: "roomSurge"; readonly room: RoomId; readonly extraCoins: number; readonly heatMultiplier: number }
   /** Lockdown: one random room in play (never the default room) is closed this round, named on the flip. */
   | { readonly kind: "lockdown" }
-  /** Audit: the round's shortfall (loot pocketed) is posted per room. */
+  /** Audit: the round's shortfall (coins pocketed) is posted per room. */
   | { readonly kind: "audit" }
   /** Inside tip: one random player privately learns another random player's role. */
   | { readonly kind: "insideTip" };
@@ -29,7 +29,7 @@ export interface EventDef {
 
 /** The four cards of design §10. extension.md "Police activity": the Police patrol left the deck. */
 export const EVENTS: Readonly<Record<EventId, EventDef>> = {
-  shiftChange: { id: "shiftChange", name: "Shift change", effect: { kind: "roomSurge", room: "vault", lootMultiplier: 1.5, heatMultiplier: 2 } },
+  shiftChange: { id: "shiftChange", name: "Shift change", effect: { kind: "roomSurge", room: "vault", extraCoins: 1, heatMultiplier: 2 } },
   lockdown: { id: "lockdown", name: "Lockdown", effect: { kind: "lockdown" } },
   audit: { id: "audit", name: "Audit", effect: { kind: "audit" } },
   insideTip: { id: "insideTip", name: "Inside tip", effect: { kind: "insideTip" } },

@@ -5,7 +5,7 @@
 // failure they win on once its forecast passes `LEAN_AT` and they rate
 // themselves top; everyone else plays for success. Bot settings, not rules.
 import type { FailureReason } from "@skimjob/content";
-import { checkpointTarget, roomDef, roomLoot, type PlayerView } from "@skimjob/engine";
+import { checkpointTarget, roomDef, type PlayerView } from "@skimjob/engine";
 import { heatDanger } from "./heat";
 import { crewSize, jobOf, lastResolvedRound, ofType, roleOf, totalRounds } from "./read";
 
@@ -43,7 +43,7 @@ export function forecast(view: PlayerView): Forecast {
 }
 
 /**
- * Loot the alibis claim but the Haul never got, summed over the resolved
+ * Coins the alibis claim but the Haul never got, summed over the resolved
  * rounds: roughly what the crew has skimmed (cover-up alibis hide some).
  */
 function skimEstimate(view: PlayerView): number {
@@ -51,9 +51,7 @@ function skimEstimate(view: PlayerView): number {
   let total = 0;
   for (const r of ofType(view.ledger, "roundResolved")) {
     const rooms = ofType(view.ledger, "alibiPosted").filter((a) => a.round === r.round).map((a) => a.room);
-    const crowd = new Map<string, number>();
-    for (const room of rooms) crowd.set(room, (crowd.get(room) ?? 0) + 1);
-    const claimed = rooms.reduce((sum, room) => sum + roomLoot(roomDef(job, room), crowd.get(room) ?? 1), 0);
+    const claimed = rooms.reduce((sum, room) => sum + roomDef(job, room).coins, 0);
     total += Math.max(0, claimed - r.haulDelta);
   }
   return total;
@@ -63,7 +61,7 @@ function skimEstimate(view: PlayerView): number {
 function ratesSelfTop(view: PlayerView): boolean {
   const mine = view.me.stash;
   if (mine === 0) return false;
-  const pocketed = ofType(view.caseFile, "lootSplit").reduce((sum, e) => sum + e.toStash, 0);
+  const pocketed = ofType(view.caseFile, "coinsGrabbed").reduce((sum, e) => sum + e.pocket, 0);
   const others = Math.max(1, view.players.length);
   return mine >= (TOP_FACTOR * Math.max(0, skimEstimate(view) - pocketed)) / others;
 }

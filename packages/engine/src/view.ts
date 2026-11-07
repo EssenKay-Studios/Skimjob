@@ -21,7 +21,7 @@ import type {
 import { canSee } from "./types";
 import { actOfRound } from "./acts";
 import { ROUNDS_PER_ACT } from "@skimjob/content";
-import { roomDef, roomLoot } from "./job";
+import { roomDef } from "./job";
 import { eventsFor, jobFor, perkCost, rolesFor } from "./overrides";
 import { revealSummary } from "./reveal";
 import { roundJob } from "./deck";
@@ -115,6 +115,8 @@ function buildView(state: GameState, playerId: PlayerId): PlayerView {
     act: actOfRound(Math.max(1, state.round)),
     alibiRound: state.alibisOpen ? state.resolvedRound : null,
     rooms: state.rooms,
+    // design §6.1: the bank count is public.
+    bank: state.bank,
     haul: state.haul,
     heat: state.heat,
     // design §10: the card is public.
@@ -162,7 +164,7 @@ export function gapBox(state: GameState): GapBox | null {
     else if (e.type === "alibiPosted" && e.round === round) alibis.push(e.room);
   }
   const job = roundJob(jobFor(state.config), card, eventsFor(state.config), state.playerOrder.length);
-  const claimed = alibis.reduce((sum, room) => sum + roomLoot(roomDef(job, room), alibis.filter((r) => r === room).length), 0);
+  const claimed = alibis.reduce((sum, room) => sum + roomDef(job, room).coins, 0);
   return { round, posted: alibis.length, alibis: claimed, haulGrowth, unaccounted: claimed - haulGrowth };
 }
 

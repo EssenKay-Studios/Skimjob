@@ -12,6 +12,7 @@ import type { LobbySettings, SessionLength } from "./settings";
 import { createGameStore, type GameStore } from "./store";
 import { testDb } from "./testkit";
 import { scaleTiming, TIMINGS } from "./timing";
+import { BANK_JOB } from "@skimjob/content";
 
 const T0 = Date.UTC(2026, 10, 2, 9);
 let db: Db;
@@ -267,9 +268,9 @@ describe("humans before a deadline (design §5)", () => {
     await fresh();
     const { id, host } = await startGame(0, { sessionLength: "quick" }, 2);
     const [round1] = await deadlines(id);
-    const room = viewFor(await load(id), (await load(id)).playerOrder[0]!).rooms[0];
+    const room = viewFor(await load(id), (await load(id)).playerOrder[0]!).rooms[0]!;
     clock.advance(QUICK_MS - 1);
-    const r = await send(id, host, { type: "submitMove", move: { room, pocket: 0 } });
+    const r = await send(id, host, { type: "submitMove", move: { room, duffel: BANK_JOB.rooms[room]?.coins ?? 0, pocket: 0 } });
     expect(r).toMatchObject({ ok: true });
     expect(await deadlines(id)).toEqual([round1]);
     expect(await app.scheduler.tick()).toBe(0);
@@ -280,7 +281,7 @@ describe("humans before a deadline (design §5)", () => {
     expect(count(s, "moveSubmitted", (e) => e.player === hostId && e.round === 1)).toBe(1);
     expect(count(s, "defaultMoveAssigned", (e) => e.player === hostId)).toBe(0);
     expect(count(s, "defaultMoveAssigned")).toBe(2);
-    expect((await send(id, host, { type: "submitMove", move: { room, pocket: 0 } })).rejected).toBe(true);
+    expect((await send(id, host, { type: "submitMove", move: { room, duffel: BANK_JOB.rooms[room]?.coins ?? 0, pocket: 0 } })).rejected).toBe(true);
   });
 });
 const byDue = async (id: string) => (await deadlines(id)).sort((a, b) => a.due - b.due);
@@ -298,12 +299,12 @@ describe("early round end once the whole crew has locked in (owner decision, 2 N
     expect((await deadlines(id)).map((d) => d.key)).toEqual(["round:1"]);
     clock.advance(10_000);
     const room = viewFor(s, hostId).rooms.find((r) => r !== "security")!;
-    expect(await send(id, host, { type: "submitMove", move: { room, pocket: 0 } })).toMatchObject({ ok: true });
+    expect(await send(id, host, { type: "submitMove", move: { room, duffel: BANK_JOB.rooms[room]?.coins ?? 0, pocket: 0 } })).toMatchObject({ ok: true });
     const early = { key: "roundEarly:1", due: clock.now() + t.lockInGraceMs, paused: false };
     expect(await byDue(id)).toEqual([early, round1]);
     // A change during the grace: still the same due time.
     clock.advance(t.lockInGraceMs - 1000);
-    expect(await send(id, host, { type: "submitMove", move: { room: "lobby", pocket: 0 } })).toMatchObject({ ok: true });
+    expect(await send(id, host, { type: "submitMove", move: { room: "lobby", duffel: 1, pocket: 0 } })).toMatchObject({ ok: true });
     expect(await byDue(id)).toEqual([early, round1]);
     expect(await app.scheduler.tick()).toBe(0);
     clock.advance(1000);
@@ -312,7 +313,7 @@ describe("early round end once the whole crew has locked in (owner decision, 2 N
     expect(s.phase).toEqual({ kind: "alibis", round: 1 });
     // The change made in the grace counts: the host's last move, and no new lock-in for it.
     const mine = s.log.filter((e) => e.type === "moveSubmitted" && e.player === hostId);
-    expect(mine.at(-1)).toMatchObject({ move: { room: "lobby", pocket: 0 } });
+    expect(mine.at(-1)).toMatchObject({ move: { room: "lobby", duffel: 1, pocket: 0 } });
     expect(count(s, "moveLocked", (e) => e.player === hostId)).toBe(1);
     expect(count(s, "roundResolved")).toBe(1);
     expect(count(s, "defaultMoveAssigned")).toBe(0);

@@ -34,8 +34,8 @@ describe("R5 bot settings — v2 §4, docs/balance/balance-3.md", () => {
       const hacker = holder(s, "hacker");
       if (hacker === undefined) continue;
       for (const loop of of(s, "abilityResolved").filter((e) => e.player === hacker && e.ability.kind === "loopCameras")) {
-        const split = of(s, "lootSplit").find((e) => e.player === hacker && e.round === loop.round);
-        if (!split || split.toStash === 0) continue;
+        const split = of(s, "coinsGrabbed").find((e) => e.player === hacker && e.round === loop.round);
+        if (!split || split.pocket === 0) continue;
         skimmed++;
         expect(loop.ability).toMatchObject({ kind: "loopCameras", room: split.room });
       }

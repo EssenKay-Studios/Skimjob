@@ -12,6 +12,7 @@ import { viewFor } from "./view";
 import { closedRoom } from "./deck";
 import { jobFor } from "./overrides";
 import { handleThroughAlibis } from "./alibis.testkit";
+import { fullGrab } from "./grab.testkit";
 
 const DROPPED = ["quietNight", "payday", "powerCut", "raidRumour", "doubleCross"];
 const KEPT = ["shiftChange", "lockdown", "audit", "insideTip"];
@@ -40,7 +41,7 @@ function run(state: GameState, ...commands: unknown[]): GameState {
 function resolve(state: GameState, moves: Record<PlayerId, Record<string, unknown>> = {}): GameState {
   let s = state;
   for (const id of s.playerOrder) {
-    s = run(s, { type: "submitMove", player: id, move: moves[id] ?? { room: closedRoom(s) === "office" ? "lobby" : "office", pocket: 0 } });
+    s = run(s, { type: "submitMove", player: id, move: moves[id] ?? fullGrab(closedRoom(s) === "office" ? "lobby" : "office") });
   }
   return run(s, { type: "advance", deadline: { kind: "round", round: s.round } });
 }
@@ -98,7 +99,7 @@ describe("QA: configs naming a dropped card or the old Server-room power are ref
     expect(errors.join("\n")).toMatch(/contentOverrides\.rooms\.serverRoom\.\w+ is not an overridable field/);
   });
   it("the Server room's own numbers are still overridable", () => {
-    expect(validateConfig(config(6, { contentOverrides: { rooms: { serverRoom: { loot: 0, heatPressure: 0 } } } }))).toEqual([]);
+    expect(validateConfig(config(6, { contentOverrides: { rooms: { serverRoom: { coins: 1, heatPressure: 0 } } } }))).toEqual([]);
   });
   it("answerDoubleCross is refused at any phase: no throw, state untouched", () => {
     let s = resolve(createGame(config(6)));
@@ -149,14 +150,15 @@ describe("QA: seeded games flip only kept cards, once per round from round 2 (3 
 });
 
 describe("QA: the Server room is an ordinary room", () => {
-  it("in play from 5 players; a visit is accepted with pocket 0, refused with pocket 1, and tells the visitor nothing", () => {
+  it("in play from 5 players; a 2-coin room like the Office (design §3.1): 2 accepted, 3 refused, and it tells the visitor nothing", () => {
     for (const n of [5, 6, 12]) {
       let s = resolve(createGame(config(n, { eventsEnabled: false, seed: `srv-${n}` })));
       expect(s.rooms).toContain("serverRoom" as RoomId);
-      expect(handleThroughAlibis(s, { type: "submitMove", player: "p0", move: { room: "serverRoom", pocket: 1 } }).ok).toBe(false);
-      const base = resolve(s, { p0: { room: "office", pocket: 0 }, p1: { room: "vault", pocket: 3 } });
+      expect(handleThroughAlibis(s, { type: "submitMove", player: "p0", move: fullGrab("serverRoom", 1) }).ok).toBe(true);
+      expect(handleThroughAlibis(s, { type: "submitMove", player: "p0", move: { room: "serverRoom", duffel: 2, pocket: 1 } }).ok).toBe(false);
+      const base = resolve(s, { p0: fullGrab("office"), p1: fullGrab("vault", 3) });
       const before = s.log.length;
-      s = resolve(s, { p0: { room: "serverRoom", pocket: 0 }, p1: { room: "vault", pocket: 3 } });
+      s = resolve(s, { p0: fullGrab("serverRoom"), p1: fullGrab("vault", 3) });
       const added = s.log.slice(before);
       expect(added.map((e) => e.type)).not.toContain("pocketCount");
       // p0 learns no more in the Server room than in the Office: same event types reach them privately.

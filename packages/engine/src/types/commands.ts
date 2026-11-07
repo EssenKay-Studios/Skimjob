@@ -55,17 +55,21 @@ export type InstantAbility =
   | PerkSpend;
 
 /**
- * One player's secret move for a round. design §5.1
+ * One player's secret move for a round: a room, and the coins grabbed there
+ * split into two bags. design §3.2
  *
- * The split is expressed as how much to *pocket*; everything else goes to the
- * Haul. The room's actual yield can change after submission (shared Deposit
- * boxes, events), so pocket is clamped to the real yield at resolution, and
- * "hand everything in" is simply `pocket: 0`. See docs/decisions.md.
+ * The grab is `duffel + pocket`: 1 up to the room's limit in a coin room, 0 in
+ * Security and on the Rooftop. A short bank can cut the grab at resolution
+ * (pocket-bound coins first, design §3.2), so the coins a player really got
+ * are in their `coinsGrabbed` event.
  */
 export interface Move {
   readonly room: RoomId;
+  /** Coins handed in to the crew duffel. */
+  readonly duffel: number;
+  /** Coins kept in your own pocket. */
   readonly pocket: number;
-  /** Required when `room` is a watcher room (Security): which room to watch. design §6.1 */
+  /** Required when `room` is a watcher room (Security): which room to watch. design §3.1 */
   readonly watch?: RoomId;
   readonly ability?: AbilityUse;
 }

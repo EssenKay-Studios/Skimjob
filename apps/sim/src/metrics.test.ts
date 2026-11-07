@@ -33,12 +33,12 @@ describe("success and failure — design §17.4 (success 55–70%, Heat 10–20%
 });
 
 describe("pocketing bands — design §17.4 (moderate beats honest, heavy loses)", () => {
-  it("bands by pocketed ÷ looted: ≤10% honest, ≤40% moderate, more is heavy", () => {
-    expect(pocketBand({ looted: 0, pocketed: 0 })).toBe("honest");
-    expect(pocketBand({ looted: 30, pocketed: 3 })).toBe("honest");
-    expect(pocketBand({ looted: 30, pocketed: 4 })).toBe("moderate");
-    expect(pocketBand({ looted: 30, pocketed: 12 })).toBe("moderate");
-    expect(pocketBand({ looted: 30, pocketed: 13 })).toBe("heavy");
+  it("bands by pocketed ÷ grabbed: ≤10% honest, ≤40% moderate, more is heavy", () => {
+    expect(pocketBand({ grabbed: 0, pocketed: 0 })).toBe("honest");
+    expect(pocketBand({ grabbed: 30, pocketed: 3 })).toBe("honest");
+    expect(pocketBand({ grabbed: 30, pocketed: 4 })).toBe("moderate");
+    expect(pocketBand({ grabbed: 30, pocketed: 12 })).toBe("moderate");
+    expect(pocketBand({ grabbed: 30, pocketed: 13 })).toBe("heavy");
   });
 });
 

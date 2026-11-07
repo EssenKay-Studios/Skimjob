@@ -1,13 +1,13 @@
 // QA (PR #3): adversarial tests for the bank job helpers — Heat at 2/3/12,
 // rounding, the 0 floor, room tiers at the boundaries, checkpoint targets.
-// design §6.2, §7, §11.5, §16
+// design §3.1
 import { describe, expect, it } from "vitest";
 import { BANK_JOB as bank } from "@skimjob/content";
-import { checkpointTarget, clampHeat, roomDef, roomLoot, roomsInPlay, roundHeatDelta } from "./job";
+import { checkpointTarget, clampHeat, roomsInPlay, roundHeatDelta } from "./job";
 
 const CORE = ["vault", "office", "lobby", "security", "rooftop"];
 const MID = [...CORE, "depositBoxes", "serverRoom"];
-const BIG = [...MID, "tellerLine", "managersOffice"];
+const BIG = [...MID, "managersOffice"];
 
 /** Fold rounds the way task 4 will: add the round delta, then clamp. */
 function heatAfter(crew: number, start: number, rounds: Record<string, number>[]): number {
@@ -70,8 +70,8 @@ describe("Heat floor and ceiling — design §7", () => {
   });
 });
 
-describe("room tiers at the boundaries — design §6.2, §16", () => {
-  it("4 → core only; 5 → + Deposit boxes, Server room; 8 → same; 9 and 12 → + Teller line, Manager's office", () => {
+describe("room tiers at the boundaries — design §3.1", () => {
+  it("4 → core only; 5 → + Deposit boxes, Server room; 8 → same; 9 and 12 → + Manager's office", () => {
     expect(roomsInPlay(bank, 3)).toEqual(CORE);
     expect(roomsInPlay(bank, 4)).toEqual(CORE);
     expect(roomsInPlay(bank, 5)).toEqual(MID);
@@ -81,26 +81,11 @@ describe("room tiers at the boundaries — design §6.2, §16", () => {
   });
 });
 
-describe("Deposit-box capacity — design §6.2", () => {
-  it("full 5 at exactly 2 visitors, 4 each from the 3rd visitor on (R5; was 3)", () => {
-    const boxes = roomDef(bank, "depositBoxes");
-    expect(boxes.capacity).toEqual({ max: 2, crowdedLoot: 4 });
-    expect(roomLoot(boxes, 2)).toBe(5);
-    expect(roomLoot(boxes, 3)).toBe(4);
-    expect(roomLoot(boxes, 8)).toBe(4);
-  });
-
-  it("no other bank room has a capacity", () => {
-    const capped = Object.values(bank.rooms).filter((r) => r.capacity).map((r) => r.id);
-    expect(capped).toEqual(["depositBoxes"]);
-  });
-});
-
 describe("checkpoint targets per crew size — design §11.5", () => {
   it("2, 3 and 12 players", () => {
-    expect([1, 2, 3].map((a) => checkpointTarget(bank, a as 1 | 2 | 3, 2))).toEqual([14, 30, 46]);
-    expect([1, 2, 3].map((a) => checkpointTarget(bank, a as 1 | 2 | 3, 3))).toEqual([21, 45, 69]);
-    expect([1, 2, 3].map((a) => checkpointTarget(bank, a as 1 | 2 | 3, 12))).toEqual([84, 180, 276]);
+    expect([1, 2, 3].map((a) => checkpointTarget(bank, a as 1 | 2 | 3, 2))).toEqual([6, 14, 22]);
+    expect([1, 2, 3].map((a) => checkpointTarget(bank, a as 1 | 2 | 3, 3))).toEqual([9, 21, 33]);
+    expect([1, 2, 3].map((a) => checkpointTarget(bank, a as 1 | 2 | 3, 12))).toEqual([36, 84, 132]);
   });
 
   it("rejects act 0", () => {

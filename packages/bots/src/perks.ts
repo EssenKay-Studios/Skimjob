@@ -110,9 +110,9 @@ export function planningPerks(view: PlayerView, room: RoomId | undefined = view.
   }
   if (has(view, "tail") && view.me.roleState.tail === null) {
     const job = jobThisRound(view);
-    const target = roomsWhere(view, job, (d) => d.loot > 0)
+    const target = roomsWhere(view, job, (d) => d.coins > 0)
       .filter((r) => r !== room)
-      .sort((a, b) => roomDef(job, b).loot - roomDef(job, a).loot)[0];
+      .sort((a, b) => roomDef(job, b).coins - roomDef(job, a).coins)[0];
     if (target !== undefined) out.push({ type: "useAbility", player, ability: { kind: "tail", room: target } });
   }
   if (has(view, "recharge") && usedUp(view)) out.push({ type: "useAbility", player, ability: { kind: "recharge" } });
@@ -152,7 +152,7 @@ export function meetingPerks(view: PlayerView, vote: VoteChoice | null): PlayerC
 export function alibiPerk(view: PlayerView, posted: RoomId): PlayerCommand[] {
   if (!has(view, "alibi")) return [];
   const round = lastResolvedRound(view);
-  const real = ofType(view.caseFile, "lootSplit").find((e) => e.round === round)?.room;
+  const real = ofType(view.caseFile, "coinsGrabbed").find((e) => e.round === round)?.room;
   if (real !== posted) return [];
   // Worth it when the crew could suspect me, or just before the act's meeting.
   if ((publicSuspicion(view).get(view.me.id) ?? 0) < STAMP_ALIBI_AT && round % ROUNDS_PER_ACT !== 0) return [];

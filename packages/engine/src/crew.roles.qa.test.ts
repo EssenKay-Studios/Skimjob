@@ -11,6 +11,8 @@ import { roundHeatDelta } from "./job";
 import { viewFor } from "./view";
 import { privateTo } from "./types";
 import { grantPerks } from "./perks.testkit";
+import { fullGrab } from "./grab.testkit";
+import { R6_COINS } from "./v01-numbers.testkit";
 
 const SEVEN = ["smoothTalker", "priest", "auditor", "fixer", "lookout"];
 
@@ -23,6 +25,7 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     ...extra,
+    contentOverrides: { ...R6_COINS, ...extra.contentOverrides }, // R6 room yields as coins (R6 role rules)
   };
 }
 /** Seat i gets roles[i] (Rookie if missing). */
@@ -56,7 +59,7 @@ const ofType = <T extends GameEvent["type"]>(events: readonly GameEvent[], type:
   events.filter((e): e is Extract<GameEvent, { type: T }> => e.type === type);
 const granted = (s: GameState, player: string) => ofType(s.log, "tokenEarned").filter((e) => e.player === player).map((e) => e.trigger);
 const since = (before: GameState, after: GameState) => after.log.slice(before.log.length);
-const mv = (player: string, room: string, pocket = 0) => ({ type: "submitMove", player, move: { room, pocket } });
+const mv = (player: string, room: string, pocket = 0) => ({ type: "submitMove", player, move: fullGrab(room, pocket, R6_COINS) });
 const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
 const vote = (player: string, target: string | null) => ({ type: "castVote", player, vote: target === null ? { kind: "skip" } : { kind: "shakedown", target } });
 const CLOSE = (s: GameState) => ({ type: "advance", deadline: { kind: "closeMeeting", meetingId: s.meeting?.id } });
@@ -121,7 +124,7 @@ describe("Fixer: exactly at the raid threshold, once per game, ¼ stash, a token
     for (const [stash, lost] of [[0, 0], [1, 0], [2, 1], [6, 2], [7, 2], [10, 3]] as const) {
       const s = run(at(99, stash), ...VAULT, ROUND);
       expect(ofType(s.log, "abilityResolved").find((e) => e.ability.kind === "fixer")?.ability).toEqual({ kind: "fixer", lost });
-      expect(s.players.p0?.stash).toBe(stash - lost + (ofType(s.log, "lootSplit").find((e) => e.player === "p0")?.toStash ?? 0));
+      expect(s.players.p0?.stash).toBe(stash - lost + (ofType(s.log, "coinsGrabbed").find((e) => e.player === "p0")?.pocket ?? 0));
     }
   });
 

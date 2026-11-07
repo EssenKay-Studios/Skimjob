@@ -127,7 +127,7 @@ class Client {
     return this.send({});
   }
 }
-const lobbyMove = { type: "submitMove", move: { room: "lobby", pocket: 0 } };
+const lobbyMove = { type: "submitMove", move: { room: "lobby", duffel: 1, pocket: 0 } };
 
 describe("pause and resume (design §15, §4.1)", () => {
   it("a pause stops every deadline, police moments and roundEarly included; nothing fires across it; resume moves each on by the pause", async () => {

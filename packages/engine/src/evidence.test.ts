@@ -14,7 +14,7 @@ describe("revealsRole (design §8, §12.1)", () => {
   });
 
   it("leaves ability results and moves shareable (sightings, cameras, audits, splits)", () => {
-    for (const t of ["roomSighting", "roomWatched", "lootSplit", "moveSubmitted", "abilityResolved", "voteCast", "perkBought", "policeActivity", "shopDealt"] as const) {
+    for (const t of ["roomSighting", "roomWatched", "coinsGrabbed", "moveSubmitted", "abilityResolved", "voteCast", "perkBought", "policeActivity", "shopDealt"] as const) {
       expect(revealsRole(sampleEvents[t]), t).toBe(false);
     }
   });

@@ -19,6 +19,8 @@ import { handleCommand } from "./handle";
 import { meetingResult } from "./meeting";
 import { viewFor } from "./view";
 import { grantPerks } from "./perks.testkit";
+import { fullGrab } from "./grab.testkit";
+import { R6_COINS } from "./v01-numbers.testkit";
 
 const MODES: readonly VoteVisibility[] = ["hiddenThenRevealed", "open", "secret"];
 
@@ -31,6 +33,7 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     ...extra,
+    contentOverrides: { ...R6_COINS, ...extra.contentOverrides }, // R6 room yields as coins (R6 role rules)
   };
 }
 
@@ -63,7 +66,7 @@ const since = (before: GameState, after: GameState): GameEvent[] => after.log.sl
 const ofType = <T extends GameEvent["type"]>(events: readonly GameEvent[], type: T) =>
   events.filter((e): e is Extract<GameEvent, { type: T }> => e.type === type);
 
-const mv = (player: string, room: string, pocket = 0, extra: object = {}) => ({ type: "submitMove", player, move: { room, pocket, ...extra } });
+const mv = (player: string, room: string, pocket = 0, extra: object = {}) => ({ type: "submitMove", player, move: { ...fullGrab(room, pocket, R6_COINS), ...extra } });
 const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
 const vote = (player: string, target: string | null) => ({ type: "castVote", player, vote: target === null ? { kind: "skip" } : { kind: "shakedown", target } });
 const CLOSE = (s: GameState) => ({ type: "advance", deadline: { kind: "closeMeeting", meetingId: s.meeting?.id } });
@@ -83,7 +86,8 @@ const NO_WINDOW = { rolePool: [...STARTER_ROLES, ...INFO_VOTE_ROLES.filter((r) =
 // ------------------------------------------------------------------ 1. counterfactual leak pairs
 
 type Kind = "smoothDealt" | "hackerLoop";
-const LOOT: Record<string, number> = { vault: 6, office: 4, lobby: 2, depositBoxes: 5, tellerLine: 3, managersOffice: 3 };
+// Coin limits in these games: R6_COINS for the pinned rooms, content (design §3.1) for the rest.
+const LOOT: Record<string, number> = { vault: 6, office: 4, lobby: 2, depositBoxes: 5, managersOffice: 2, serverRoom: 2 };
 
 function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
@@ -228,7 +232,8 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
     const role = A.players[id]?.role;
     const room = pick(A.rooms);
     const loot = LOOT[room] ?? 0;
-    const m: Record<string, unknown> = { room, pocket: loot > 0 && rand() < 0.6 ? int(loot + 1) : 0 };
+    const pocket = loot > 0 && rand() < 0.6 ? int(loot + 1) : 0;
+    const m: Record<string, unknown> = { room, duffel: loot - pocket, pocket };
     if (room === "security") m.watch = pick(A.rooms);
     // Baseline power use, identical in both games (not for the kind that changes it).
     if (role === "hacker" && kind !== "hackerLoop" && round % 3 === 1 && rand() < 0.7) m.ability = { kind: "loopCameras", room: pick(A.rooms) };
@@ -239,7 +244,7 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
     const planA = new Map<PlayerId, unknown[]>();
     for (const id of ids) planA.set(id, rand() < 0.1 ? [] : [{ type: "submitMove", player: id, move: move(id, round) }]);
     const planB = new Map(planA);
-    const lastMove = (id: PlayerId) => ((planA.get(id)?.[0] as { move?: Record<string, unknown> } | undefined)?.move ?? { room: "lobby", pocket: 0 });
+    const lastMove = (id: PlayerId) => ((planA.get(id)?.[0] as { move?: Record<string, unknown> } | undefined)?.move ?? { ...fullGrab("lobby", 0, R6_COINS) });
     if (round === changeRound && kind === "hackerLoop") {
       const h = holder("hacker");
       if (h) {
@@ -428,7 +433,7 @@ describe("QA shakedown window (a Shield in the shop): deadline, wrong phase — 
     expect(s.phase.kind).toBe("shakedownPending");
     s = run(s, RESOLVE);
     expect(s.phase).toEqual({ kind: "planning", round: 2 });
-    expect(s.moves.p0).toEqual({ room: "office", pocket: 2 });
+    expect(s.moves.p0).toEqual({ room: "office", duffel: 2, pocket: 2 });
     s = run(s, ROUND);
     expect(s.players.p0?.stash).toBe(2);
   });

@@ -7,6 +7,7 @@ import { createGame } from "./setup";
 import { handleCommand } from "./handle";
 import { lockedIn, viewFor } from "./view";
 import { slotLocks } from "./meeting";
+import { fullGrab } from "./grab.testkit";
 
 function config(humans: readonly boolean[], seed = "lockin-qa"): GameConfig {
   return {
@@ -29,7 +30,7 @@ function run(state: GameState, ...commands: unknown[]): GameState {
   }
   return s;
 }
-const move = (player: string, room = "lobby", pocket = 0) => ({ type: "submitMove", player, move: { room, pocket } });
+const move = (player: string, room = "lobby", pocket = 0) => ({ type: "submitMove", player, move: fullGrab(room, pocket) });
 const since = (before: GameState, after: GameState): GameEvent[] => after.log.slice(before.log.length);
 const roundDeadline = (round: number) => ({ type: "advance", deadline: { kind: "round", round } });
 const alibiDeadline = (round: number) => ({ type: "advance", deadline: { kind: "alibis", round } });

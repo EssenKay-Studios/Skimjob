@@ -296,7 +296,7 @@ describe("QA: the evidence picker offers exactly what the server accepts (design
     const typeOf = (seq: number) => entries.find((e) => e.seq === seq)!.event.type;
     const offeredTypes = new Set([...offered].map(typeOf));
     for (const t of ["roleDealt", "moleAllies", "alliesLearned", "insideTip", "voteSealed"]) expect(offeredTypes.has(t as never), t).toBe(false);
-    for (const t of ["roomSighting", "roomWatched", "lootSplit", "moveSubmitted"]) expect(offeredTypes.has(t as never), t).toBe(true);
+    for (const t of ["roomSighting", "roomWatched", "coinsGrabbed", "moveSubmitted"]) expect(offeredTypes.has(t as never), t).toBe(true);
     expect(offered.has(999)).toBe(false);
   });
 });

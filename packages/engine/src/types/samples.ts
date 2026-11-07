@@ -29,6 +29,7 @@ export const sampleEvents: { readonly [T in GameEventType]: EventOfType<T> } = {
   },
   rngSeeded: { type: "rngSeeded", visibility: REVEAL, seed: "sample-seed" },
   roomsSet: { type: "roomsSet", visibility: PUBLIC, rooms: ["vault", "office", "lobby", "security", "rooftop"] },
+  bankFilled: { type: "bankFilled", visibility: PUBLIC, coins: 64 },
   roleDealt: { type: "roleDealt", visibility: privateTo(ana), player: ana, role: "hacker" },
   roleListShown: { type: "roleListShown", visibility: PUBLIC, list: "exact", roles: ["hacker", "rookie"] },
   shopDealt: { type: "shopDealt", visibility: PUBLIC, perks: ["peek", "alibi", "extraVote"] },
@@ -46,24 +47,23 @@ export const sampleEvents: { readonly [T in GameEventType]: EventOfType<T> } = {
     visibility: privateTo(ana),
     player: ana,
     round: 1,
-    move: { room: "vault", pocket: 2 },
+    move: { room: "vault", duffel: 1, pocket: 2 },
   },
   defaultMoveAssigned: {
     type: "defaultMoveAssigned",
     visibility: privateTo(ben),
     player: ben,
     round: 1,
-    move: { room: "lobby", pocket: 0 },
+    move: { room: "lobby", duffel: 1, pocket: 0 },
   },
-  lootSplit: {
-    type: "lootSplit",
+  coinsGrabbed: {
+    type: "coinsGrabbed",
     visibility: privateTo(ana),
     player: ana,
     round: 1,
     room: "vault",
-    loot: 6,
-    toHaul: 4,
-    toStash: 2,
+    duffel: 1,
+    pocket: 2,
   },
   abilityResolved: {
     type: "abilityResolved",
@@ -83,7 +83,7 @@ export const sampleEvents: { readonly [T in GameEventType]: EventOfType<T> } = {
     seen: [ana],
     offline: false,
   },
-  roundResolved: { type: "roundResolved", visibility: PUBLIC, round: 1, haulDelta: 6, haul: 6, heatDelta: 14, heat: 14, heatParts: { base: 4, rooms: { vault: 10 } } },
+  roundResolved: { type: "roundResolved", visibility: PUBLIC, round: 1, bank: 58, haulDelta: 6, haul: 6, heatDelta: 14, heat: 14, heatParts: { base: 4, rooms: { vault: 10 } } },
   copsRaided: { type: "copsRaided", visibility: PUBLIC, round: 7, heat: 104 },
   eventFlipped: { type: "eventFlipped", visibility: PUBLIC, round: 2, card: "lockdown", room: "vault" },
   insideTip: { type: "insideTip", visibility: privateTo(ana), player: ana, round: 5, subject: ben, role: "hacker" },
@@ -146,7 +146,7 @@ export const sampleEvents: { readonly [T in GameEventType]: EventOfType<T> } = {
 };
 
 export const sampleCommands: { readonly [T in CommandType]: Extract<Command, { type: T }> } = {
-  submitMove: { type: "submitMove", player: ana, move: { room: "security", pocket: 0, watch: "vault" } },
+  submitMove: { type: "submitMove", player: ana, move: { room: "security", duffel: 0, pocket: 0, watch: "vault" } },
   postAlibi: { type: "postAlibi", player: ana, room: "office" },
   claimRole: { type: "claimRole", player: ben, role: "auditor" },
   proposeMeeting: { type: "proposeMeeting", player: ana, slot: "2026-11-01T19:00Z" },

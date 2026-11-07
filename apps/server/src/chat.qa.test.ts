@@ -125,7 +125,7 @@ describe("QA: forged sender (design §12.1)", () => {
     const [a, b] = await Promise.all(humans.slice(0, 2).map((h) => Client.open(id, h)));
     const victim = humans[1]!.player;
     expect(await a!.sendRaw({ chat: { text: "top-level from" }, from: victim, player: victim })).toMatchObject({ ok: true });
-    expect(await a!.sendRaw({ chat: { text: "with cmd" }, cmd: { type: "submitMove", move: { room: "lobby", pocket: 0 } } })).toMatchObject({ ok: true });
+    expect(await a!.sendRaw({ chat: { text: "with cmd" }, cmd: { type: "submitMove", move: { room: "lobby", duffel: 1, pocket: 0 } } })).toMatchObject({ ok: true });
     a!.ws.send(`{"chat":{"text":"proto","__proto__":{"from":"${victim}"}},"id":"p"}`);
     await vi.waitFor(() => expect(a!.messages.find((m) => "id" in m && m.id === "p")).toMatchObject({ rejected: true }), quick);
     expect(await a!.chat({ text: "x", to: null, verified: true })).toMatchObject({ rejected: true });
@@ -226,7 +226,7 @@ describe("QA: evidence cards (design §12.1, §11.2)", () => {
     }
     expect(a!.chats()).toEqual([]);
     // Role cards are refused (design §8, PR #38): share a move instead.
-    expect(await a!.sendRaw({ cmd: { type: "submitMove", move: { room: "office", pocket: 0 } } })).toMatchObject({ ok: true });
+    expect(await a!.sendRaw({ cmd: { type: "submitMove", move: { room: "office", duffel: 2, pocket: 0 } } })).toMatchObject({ ok: true });
     await vi.waitFor(() => expect(a!.view().caseFile.some((e) => e.event.type === "moveSubmitted")).toBe(true), quick);
     const entry = a!.view().caseFile.find((e) => e.event.type === "moveSubmitted")!;
     expect(await a!.chat({ evidence: entry.seq, to: g1.humans[1]!.player })).toMatchObject({ ok: true });

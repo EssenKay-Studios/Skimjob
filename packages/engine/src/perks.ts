@@ -87,8 +87,8 @@ function alibi(state: GameState, player: PlayerState): Result {
   if (state.alibisVerified.includes(player.id)) return `your alibi for round ${round} is already verified`;
   const posted = state.log.find((e) => e.type === "alibiPosted" && e.player === player.id && e.round === round);
   if (posted?.type !== "alibiPosted") return `post your alibi for round ${round} first`;
-  const real = state.log.find((e) => e.type === "lootSplit" && e.player === player.id && e.round === round);
-  if (real?.type !== "lootSplit" || real.room !== posted.room) return `your alibi for round ${round} isn't where you were`;
+  const real = state.log.find((e) => e.type === "coinsGrabbed" && e.player === player.id && e.round === round);
+  if (real?.type !== "coinsGrabbed" || real.room !== posted.room) return `your alibi for round ${round} isn't where you were`;
   return [
     spent(state, player, { kind: "alibi", round, room: real.room }),
     { type: "alibiVerified", visibility: PUBLIC, player: player.id, round, room: real.room },

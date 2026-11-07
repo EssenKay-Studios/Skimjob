@@ -55,7 +55,7 @@ export function revealSummary(log: readonly GameEvent[], outcome: Outcome, table
   drafts[0] = current;
   /** This round's Hackers by looped room. */
   let loops = new Map<RoomId, PlayerId[]>();
-  const loot = new Map<number, Map<PlayerId, Omit<RevealMove, "missed" | "alibi">>>();
+  const grabs = new Map<number, Map<PlayerId, Omit<RevealMove, "missed" | "alibi">>>();
   const missed = new Set<string>();
   const alibi = new Map<string, RoomId>();
   const key = (p: PlayerId, round: number) => `${round}\u0000${p}`;
@@ -85,11 +85,11 @@ export function revealSummary(log: readonly GameEvent[], outcome: Outcome, table
       case "alibiPosted":
         alibi.set(key(e.player, e.round), e.room);
         break;
-      case "lootSplit": {
-        const byPlayer = loot.get(e.round) ?? new Map();
-        byPlayer.set(e.player, { player: e.player, room: e.room, loot: e.loot, toHaul: e.toHaul, toStash: e.toStash });
-        loot.set(e.round, byPlayer);
-        add(e.player, e.toStash);
+      case "coinsGrabbed": {
+        const byPlayer = grabs.get(e.round) ?? new Map();
+        byPlayer.set(e.player, { player: e.player, room: e.room, duffel: e.duffel, pocket: e.pocket });
+        grabs.set(e.round, byPlayer);
+        add(e.player, e.pocket);
         break;
       }
       case "roundResolved":
@@ -141,7 +141,7 @@ export function revealSummary(log: readonly GameEvent[], outcome: Outcome, table
   const rounds: RevealRound[] = [];
   drafts.forEach((d, round) => {
     if (!d) return;
-    const byPlayer = loot.get(round);
+    const byPlayer = grabs.get(round);
     const moves: RevealMove[] = byPlayer
       ? seatOrder.flatMap((p) => {
           const m = byPlayer.get(p);

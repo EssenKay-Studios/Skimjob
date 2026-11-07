@@ -116,6 +116,8 @@ export interface PlayerView {
   /** The round whose alibis may still be posted (also while a meeting interrupts them), or null. design §5.4 */
   readonly alibiRound: number | null;
   readonly rooms: readonly RoomId[];
+  /** Coins left in the bank (public). design §6.1 */
+  readonly bank: number;
   readonly haul: number;
   readonly heat: number;
   /** This round's event card (public): its id and the room Lockdown closes. design §10 */

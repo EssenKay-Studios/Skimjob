@@ -47,7 +47,7 @@ describe("event samples", () => {
 describe("event visibility is fixed by type — design §17.2", () => {
   it("secret events only accept their own visibility", () => {
     expectTypeOf<Extract<GameEvent, { type: "roleDealt" }>["visibility"]>().toEqualTypeOf<PrivateVisibility>();
-    expectTypeOf<Extract<GameEvent, { type: "lootSplit" }>["visibility"]>().toEqualTypeOf<PrivateVisibility>();
+    expectTypeOf<Extract<GameEvent, { type: "coinsGrabbed" }>["visibility"]>().toEqualTypeOf<PrivateVisibility>();
     expectTypeOf<Extract<GameEvent, { type: "moveSubmitted" }>["visibility"]>().toEqualTypeOf<PrivateVisibility>();
     expectTypeOf<Extract<GameEvent, { type: "rngSeeded" }>["visibility"]>().toEqualTypeOf<RevealVisibility>();
     expectTypeOf<Extract<GameEvent, { type: "roundResolved" }>["visibility"]>().toEqualTypeOf<PublicVisibility>();

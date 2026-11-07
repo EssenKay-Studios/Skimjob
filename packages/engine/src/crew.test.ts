@@ -5,15 +5,16 @@
 // design §8, §8.1, §16.1
 import { describe, expect, it } from "vitest";
 import { handleThroughAlibis } from "./alibis.testkit";
-import { BANK_JOB, POOL_ROLES, ROLES, STARTER_ROLES } from "@skimjob/content";
+import { POOL_ROLES, ROLES, STARTER_ROLES } from "@skimjob/content";
 import { grantPerks } from "./perks.testkit";
 import type { GameConfig, GameEvent, GameState } from "./types";
 import { privateTo } from "./types";
 import { rolePoolFor, setupEvents, validateConfig } from "./setup";
 import { replay } from "./reduce";
-import { rolesFor } from "./overrides";
+import { rolesFor, jobFor } from "./overrides";
 import { viewFor } from "./view";
-import { V015_NUMBERS } from "./v01-numbers.testkit";
+import { R6_COINS } from "./v01-numbers.testkit";
+import { fullGrab } from "./grab.testkit";
 
 function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
   return {
@@ -25,6 +26,7 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     ...extra,
+    contentOverrides: { ...R6_COINS, ...extra.contentOverrides }, // R6 room yields as coins (R6 role rules)
   };
 }
 
@@ -64,7 +66,7 @@ const ofType = <T extends GameEvent["type"]>(events: readonly GameEvent[], type:
 /** The triggers of the tokens `player` earned. extension.md "Tokens and the perk shop" */
 const granted = (s: GameState, player: string) => ofType(s.log, "tokenEarned").filter((e) => e.player === player).map((e) => e.trigger);
 
-const mv = (player: string, room: string, pocket = 0, extra: object = {}) => ({ type: "submitMove", player, move: { room, pocket, ...extra } });
+const mv = (player: string, room: string, pocket = 0, extra: object = {}) => ({ type: "submitMove", player, move: { ...fullGrab(room, pocket, R6_COINS), ...extra } });
 const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
 const vote = (player: string, target: string) => ({ type: "castVote", player, vote: { kind: "shakedown", target } });
 const CLOSE = (s: GameState) => ({ type: "advance", deadline: { kind: "closeMeeting", meetingId: s.meeting?.id } });
@@ -86,7 +88,7 @@ const finishAct = (s: GameState, ...moves: Cmd[]): GameState => {
   return run(s, { type: "scheduleMeeting", act, slot: "x" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: `act-${act}` } }, CLOSE);
 };
 /** extension.md "Shakedowns": one clean line, 6, shared with the Detective's check. */
-const cleanBelowPerAct = BANK_JOB.shakedown.cleanBelow;
+const cleanBelowPerAct = jobFor(config(3)).shakedown.cleanBelow; // the R6 pin
 /** 10 a round: makes every checkpoint at 3 players without much Heat. */
 const STEADY = [mv("p0", "office"), mv("p1", "office"), mv("p2", "lobby")];
 

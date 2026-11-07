@@ -5,17 +5,20 @@
 // extension.md "One crew, and how you win", "Shakedowns", "Tokens and the perk shop"; design §8, §13
 import { describe, expect, it } from "vitest";
 import { handleThroughAlibis } from "./alibis.testkit";
-import { BANK_JOB, ROLES } from "@skimjob/content";
+import { ROLES } from "@skimjob/content";
 import type { GameConfig, GameEvent, GameState } from "./types";
 import { rolePoolFor, setupEvents } from "./setup";
 import { replay } from "./reduce";
 import { outcomeFor } from "./end";
 import { viewFor } from "./view";
 import { grantPerks } from "./perks.testkit";
+import { fullGrab } from "./grab.testkit";
+import { R6_COINS } from "./v01-numbers.testkit";
+import { jobFor } from "./overrides";
 
 const SIX = ["rookie", "priest", "lookout", "auditor", "detective"];
 /** extension.md "Shakedowns": one fixed clean line (6) in every act, shared with the Detective. */
-const cleanBelowPerAct = BANK_JOB.shakedown.cleanBelow;
+const cleanBelowPerAct = jobFor(config(3)).shakedown.cleanBelow; // the R6 pin
 
 function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
   return {
@@ -26,6 +29,7 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     ...extra,
+    contentOverrides: { ...R6_COINS, ...extra.contentOverrides }, // R6 room yields as coins (R6 role rules)
   };
 }
 
@@ -62,7 +66,7 @@ const ofType = <T extends GameEvent["type"]>(events: readonly GameEvent[], type:
 const granted = (s: GameState, player: string) => ofType(s.log, "tokenEarned").filter((e) => e.player === player).map((e) => e.trigger);
 const lastAbility = (s: GameState) => ofType(s.log, "abilityResolved").at(-1)?.ability;
 
-const mv = (player: string, room: string, pocket = 0, extra: object = {}) => ({ type: "submitMove", player, move: { room, pocket, ...extra } });
+const mv = (player: string, room: string, pocket = 0, extra: object = {}) => ({ type: "submitMove", player, move: { ...fullGrab(room, pocket, R6_COINS), ...extra } });
 const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
 const vote = (player: string, target: string) => ({ type: "castVote", player, vote: { kind: "shakedown", target } });
 const CLOSE = (s: GameState) => ({ type: "advance", deadline: { kind: "closeMeeting", meetingId: s.meeting?.id } });

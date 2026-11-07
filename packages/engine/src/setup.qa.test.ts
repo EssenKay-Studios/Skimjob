@@ -78,9 +78,9 @@ describe("QA replay rebuilds identical state, RNG included — design §17.2", (
   });
 });
 
-describe("QA rooms by player count — design §6.2, §16", () => {
-  it("3/4 → 5 rooms, 5/8 → 7, 9/12 → 9; roomsSet is public and matches state", () => {
-    const expected: Record<number, number> = { 3: 5, 4: 5, 5: 7, 8: 7, 9: 9, 12: 9 };
+describe("QA rooms by player count — design §3.1", () => {
+  it("3/4 → 5 rooms, 5/8 → 7, 9/12 → 8; roomsSet is public and matches state", () => {
+    const expected: Record<number, number> = { 3: 5, 4: 5, 5: 7, 8: 7, 9: 8, 12: 8 };
     for (const [n, size] of Object.entries(expected).map(([k, v]) => [Number(k), v] as const)) {
       const state = createGame(config(n));
       expect(state.rooms).toHaveLength(size);

@@ -11,6 +11,7 @@ import { replay } from "./reduce";
 import { handleCommand } from "./handle";
 import { viewFor } from "./view";
 import { grantPerks } from "./perks.testkit";
+import { fullGrab } from "./grab.testkit";
 
 function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
   return {
@@ -51,7 +52,7 @@ function reason(state: GameState, command: unknown): string {
 }
 const since = (before: GameState, after: GameState): GameEvent[] => after.log.slice(before.log.length);
 const use = (player: string, ability: object) => ({ type: "useAbility", player, ability });
-const mv = (player: string, room: string, pocket = 0, extra: object = {}) => ({ type: "submitMove", player, move: { room, pocket, ...extra } });
+const mv = (player: string, room: string, pocket = 0, extra: object = {}) => ({ type: "submitMove", player, move: { ...fullGrab(room, pocket), ...extra } });
 const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
 const ALIBIS = (s: GameState) => ({ type: "advance", deadline: { kind: "alibis", round: s.resolvedRound } });
 const emergency = (by: string) => [{ type: "callEmergency", player: by }, { type: "advance", deadline: { kind: "openMeeting", meetingId: `emergency-${by}` } }];

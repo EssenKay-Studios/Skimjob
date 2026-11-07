@@ -143,7 +143,7 @@ class Client {
     return this.send({});
   }
 }
-const lobbyMove = { type: "submitMove", move: { room: "lobby", pocket: 0 } };
+const lobbyMove = { type: "submitMove", move: { room: "lobby", duffel: 1, pocket: 0 } };
 const pausedAt = async (id: string) => (await db.query<{ p: boolean }>("select paused_at is not null as p from games where id = $1", [id]))[0]!.p;
 
 describe("every control refuses anyone but the host (design §15)", () => {
@@ -419,7 +419,7 @@ describe("replace with a bot, then hand back (design §15)", () => {
     // The player is back: commands refused while the bot plays, then their view and seat are theirs again.
     const gc = await Client.open(id, guest.who);
     expect(gc.views().at(-1)!.view).toEqual(viewFor(after, guest.player));
-    const otherMove = { type: "submitMove", move: { room: "lobby", pocket: 0 } };
+    const otherMove = { type: "submitMove", move: { room: "lobby", duffel: 1, pocket: 0 } };
     expect(await gc.send({ cmd: otherMove })).toMatchObject({ rejected: true });
     expect((await req("DELETE", `/games/${id}/seats/${guest.seat}/stand-in`, host.who)).status).toBe(200);
     await gc.barrier();

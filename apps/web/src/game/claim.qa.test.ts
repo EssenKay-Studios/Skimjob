@@ -28,7 +28,7 @@ const claim = (player: string, role: string) => ({ type: "claimRole", player, ro
 function round(s: GameState): GameState {
   const p = s.phase;
   if (p.kind !== "planning") throw new Error(p.kind);
-  for (const id of Object.keys(s.players)) s = step(s, { type: "submitMove", player: id, move: { room: "lobby", pocket: 0 } } as PlayerCommand);
+  for (const id of Object.keys(s.players)) s = step(s, { type: "submitMove", player: id, move: { room: "lobby", duffel: 1, pocket: 0 } } as PlayerCommand);
   s = step(s, { type: "advance", deadline: { kind: "round", round: p.round } });
   if (s.phase.kind === "alibis") s = step(s, { type: "advance", deadline: { kind: "alibis", round: p.round } });
   if (s.phase.kind === "awaitingMeeting") {
@@ -81,7 +81,7 @@ describe("QA: Claim role (PR #41)", () => {
     let s = createGame(config(3));
     s = round(s);
     s = round(s);
-    for (const id of Object.keys(s.players)) s = step(s, { type: "submitMove", player: id, move: { room: "lobby", pocket: 0 } } as PlayerCommand);
+    for (const id of Object.keys(s.players)) s = step(s, { type: "submitMove", player: id, move: { room: "lobby", duffel: 1, pocket: 0 } } as PlayerCommand);
     s = step(s, { type: "advance", deadline: { kind: "round", round: 3 } });
     expect(s.phase.kind).toBe("alibis");
     const before = claimState(viewFor(s, "p1"))!;

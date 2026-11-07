@@ -4,6 +4,7 @@
 import { createGame, handleCommand, viewFor, type GameConfig, type GameState, type PlayerCommand, type PlayerView, type SystemCommand } from "@skimjob/engine";
 import { describe, expect, it } from "vitest";
 import { boardScene, seatLooks, timeOfRound } from "./board";
+import { BANK_JOB } from "@skimjob/content";
 
 const config = (n = 4): GameConfig => ({
   seed: "board-test",
@@ -24,7 +25,7 @@ function run(state: GameState, ...commands: (PlayerCommand | SystemCommand)[]): 
   return state;
 }
 const move = (player: string, room: string, watch?: string): PlayerCommand =>
-  ({ type: "submitMove", player, move: { room, pocket: 0, ...(watch ? { watch } : {}) } }) as PlayerCommand;
+  ({ type: "submitMove", player, move: { room, duffel: BANK_JOB.rooms[room]?.coins ?? 0, pocket: 0, ...(watch ? { watch } : {}) } }) as PlayerCommand;
 const alibi = (player: string, room: string): PlayerCommand => ({ type: "postAlibi", player, room }) as PlayerCommand;
 const round = (r: number): SystemCommand => ({ type: "advance", deadline: { kind: "round", round: r } });
 

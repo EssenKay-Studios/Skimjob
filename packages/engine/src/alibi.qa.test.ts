@@ -7,6 +7,7 @@ import { createGame } from "./setup";
 import { applyEvent, replay } from "./reduce";
 import { actOfRound } from "./round";
 import { handleCommand } from "./handle";
+import { fullGrab } from "./grab.testkit";
 
 function config(players: number, seed = "qa-alibi"): GameConfig {
   return {
@@ -73,10 +74,10 @@ describe("QA alibis — design §5.4", () => {
     let s = run(createGame(config(3)), ROUND); // round 1 resolved, its alibis open
     s = run(s, alibi("p0", "vault"));
     expect(s.log.at(-1)).toMatchObject({ type: "alibiPosted", round: 1 });
-    refused(s, { type: "submitMove", player: "p0", move: { room: "office", pocket: 0 } });
+    refused(s, { type: "submitMove", player: "p0", move: fullGrab("office") });
     s = run(s, ALIBIS); // planning 2
     expect(refused(s, alibi("p1", "lobby"))).toMatch(/round 1 are closed/);
-    s = run(s, { type: "submitMove", player: "p0", move: { room: "office", pocket: 0 } }, ROUND);
+    s = run(s, { type: "submitMove", player: "p0", move: fullGrab("office") }, ROUND);
     const r = handleCommand(s, alibi("p1", "lobby"));
     expect(r.ok && r.events).toEqual([{ type: "alibiPosted", visibility: PUBLIC, player: "p1", round: 2, room: "lobby" }]);
     expect(handleCommand(s, alibi("p0", "office")).ok).toBe(true);
@@ -94,18 +95,18 @@ describe("QA alibis — design §5.4", () => {
   });
 
   it("lies are allowed: an alibi naming a room nobody visited is accepted", () => {
-    const s = run(createGame(config(3)), { type: "submitMove", player: "p0", move: { room: "vault", pocket: 0 } }, ROUND);
+    const s = run(createGame(config(3)), { type: "submitMove", player: "p0", move: fullGrab("vault") }, ROUND);
     expect(handleCommand(s, alibi("p0", "security")).ok).toBe(true);
   });
 
   it("rooms: extra rooms only when in play (3 vs 12 players); bad room values refused", () => {
     const small = run(createGame(config(3)), ROUND);
     const big = run(createGame(config(12)), ROUND);
-    for (const room of ["tellerLine", "managersOffice", "depositBoxes", "serverRoom"]) {
+    for (const room of ["managersOffice", "depositBoxes", "serverRoom"]) {
       refused(small, alibi("p0", room));
       expect(handleCommand(big, alibi("p0", room)).ok).toBe(true);
     }
-    for (const room of [undefined, null, "", "Lobby", " lobby", "toString", "__proto__", ["lobby"], { id: "lobby" }, 0]) {
+    for (const room of [undefined, null, "", "Lobby", " lobby", "toString", "__proto__", "tellerLine", ["lobby"], { id: "lobby" }, 0]) {
       refused(small, alibi("p0", room));
     }
   });
@@ -120,7 +121,7 @@ describe("QA alibis — design §5.4", () => {
     for (let i = 0; i < 12 && g.phase.kind !== "ended"; i++) {
       if (g.phase.kind === "alibis") g = run(g, ALIBIS);
       if (g.phase.kind === "awaitingMeeting") g = nextAct(g);
-      g = run(g, ...g.playerOrder.map((p) => ({ type: "submitMove", player: p, move: { room: "vault", pocket: 0 } })), ROUND);
+      g = run(g, ...g.playerOrder.map((p) => ({ type: "submitMove", player: p, move: fullGrab("vault") })), ROUND);
     }
     expect(g.phase.kind).toBe("ended");
     expect(refused(g, alibi("p0", "lobby"))).toMatch(/over/);
@@ -158,7 +159,7 @@ describe("QA round-named deadline — design §5", () => {
   it("determinism: same seed + same commands give an identical log, and replay matches", () => {
     const play = () => {
       let s = run(createGame(config(5, "det")), ROUND, alibi("p3", "depositBoxes"), alibi("p0", "vault"));
-      s = run(s, ALIBIS, { type: "submitMove", player: "p1", move: { room: "office", pocket: s.players.p1?.role === "priest" ? 0 : 1 } }, ROUND, alibi("p1", "lobby"));
+      s = run(s, ALIBIS, { type: "submitMove", player: "p1", move: fullGrab("office", s.players.p1?.role === "priest" ? 0 : 1) }, ROUND, alibi("p1", "lobby"));
       return s;
     };
     const a = play();

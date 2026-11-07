@@ -40,11 +40,18 @@ export interface RngSeeded {
   readonly seed: string;
 }
 
-/** Rooms in play for this player count. design §6.2 */
+/** Rooms in play for this player count. design §3.1 */
 export interface RoomsSet {
   readonly type: "roomsSet";
   readonly visibility: PublicVisibility;
   readonly rooms: readonly RoomId[];
+}
+
+/** The bank's starting pile of coins: coins per player × crew size. Public. design §6.1 */
+export interface BankFilled {
+  readonly type: "bankFilled";
+  readonly visibility: PublicVisibility;
+  readonly coins: number;
 }
 
 export interface RoleDealt {
@@ -126,18 +133,18 @@ export interface DefaultMoveAssigned {
 }
 
 /**
- * What a player actually got this round and where it went. Private to them;
- * the full set becomes the per-round breakdown in the reveal. design §5.2 step 3, §13
+ * The coins a player really grabbed this round and which bag each went into
+ * (after any short-bank cut, design §3.2). Private to them; the full set
+ * becomes the per-round breakdown in the reveal. design §3.2, §18
  */
-export interface LootSplit {
-  readonly type: "lootSplit";
+export interface CoinsGrabbed {
+  readonly type: "coinsGrabbed";
   readonly visibility: PrivateVisibility;
   readonly player: PlayerId;
   readonly round: number;
   readonly room: RoomId;
-  readonly loot: number;
-  readonly toHaul: number;
-  readonly toStash: number;
+  readonly duffel: number;
+  readonly pocket: number;
 }
 
 /** What a used power did. Move powers as submitted, plus what each instant power answered. design §8 */
@@ -196,6 +203,8 @@ export interface RoundResolved {
   readonly type: "roundResolved";
   readonly visibility: PublicVisibility;
   readonly round: number;
+  /** Coins left in the bank after this round's grabs: public. design §6.1 */
+  readonly bank: number;
   readonly haulDelta: number;
   readonly haul: number;
   readonly heatDelta: number;
@@ -613,6 +622,7 @@ export type GameEvent =
   | GameCreated
   | RngSeeded
   | RoomsSet
+  | BankFilled
   | RoleDealt
   | RoleListShown
   | ShopDealt
@@ -621,7 +631,7 @@ export type GameEvent =
   | MoveLocked
   | MoveSubmitted
   | DefaultMoveAssigned
-  | LootSplit
+  | CoinsGrabbed
   | AbilityResolved
   | RoomSighting
   | RoomWatched

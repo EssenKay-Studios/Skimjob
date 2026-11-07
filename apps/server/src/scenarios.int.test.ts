@@ -8,7 +8,7 @@
 // People are played by bot logic (or a script) over their own sockets.
 // design §17.2, §17.3, §13, §11, §16.1, §7
 import { createBot, PERSONALITIES, type Agent } from "@skimjob/bots";
-import { POOL_ROLES, MOLE_ROLE, DECKS, ROLES } from "@skimjob/content";
+import { BANK_JOB, POOL_ROLES, MOLE_ROLE, DECKS, ROLES } from "@skimjob/content";
 import { canSee, replay, viewFor, type GameConfig, type GameEvent, type GameState, type PlayerView, type SystemCommand } from "@skimjob/engine";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -314,7 +314,8 @@ const steadyBrain =
     if (view.phase.kind !== "planning" || view.me.move) return [];
     const closed = view.card?.room;
     const pick = room === closed ? (room === "lobby" ? "office" : "lobby") : room;
-    return [{ type: "submitMove", move: pick === "security" ? { room: pick, pocket: 0, watch: "vault" } : { room: pick, pocket: 0 } }];
+    // A full grab of the room's coins, all handed in (design §3.2).
+    return [{ type: "submitMove", move: pick === "security" ? { room: pick, duffel: 0, pocket: 0, watch: "vault" } : { room: pick, duffel: BANK_JOB.rooms[pick]?.coins ?? 0, pocket: 0 } }];
   };
 
 const typesIn = (s: GameState) => new Set(s.log.map((e) => e.type));
@@ -422,7 +423,7 @@ describe("scenarios: end-to-end stories over HTTP + WebSocket", () => {
     const clients = await Promise.all(game.humans.map((h) => Client.open(game.id, h)));
     const brains = brainsFor(game);
     expect(await play(game, clients, brains, (s) => s.phase.kind === "planning" && s.round === 5)).toEqual([]);
-    await clients[0]!.send({ type: "submitMove", move: { room: "lobby", pocket: 0 } });
+    await clients[0]!.send({ type: "submitMove", move: { room: "lobby", duffel: 1, pocket: 0 } });
     const mid = await load(game.id);
     await app.close();
     for (const c of clients) await vi.waitFor(() => expect(c.closed).not.toBeNull(), quick);
@@ -431,7 +432,7 @@ describe("scenarios: end-to-end stories over HTTP + WebSocket", () => {
     expect(await load(game.id)).toEqual(mid);
     const again = await Promise.all(game.humans.map((h) => Client.open(game.id, h)));
     for (const [i, c] of again.entries()) expect(c.lastView()).toEqual(viewFor(mid, game.humans[i]!.player));
-    expect(again[0]!.lastView().me.move).toEqual({ room: "lobby", pocket: 0 });
+    expect(again[0]!.lastView().me.move).toEqual({ room: "lobby", duffel: 1, pocket: 0 });
     const refused = await play(game, again, brains);
     const final = await finish(game, [...clients, ...again], refused, botsBefore);
     expect(final.log.slice(0, mid.log.length)).toEqual(mid.log);
@@ -449,12 +450,12 @@ describe("scenarios: end-to-end stories over HTTP + WebSocket", () => {
       await x.barrier();
       expect(x.lastView().pendingEmergency).toEqual({ meetingId: `emergency-${a.player}`, by: a.player });
     }
-    expect(await b.send({ type: "submitMove", move: { room: "office", pocket: 0 } })).toMatchObject({ ok: true });
+    expect(await b.send({ type: "submitMove", move: { room: "office", duffel: 2, pocket: 0 } })).toMatchObject({ ok: true });
     expect(await c.send({ type: "callEmergency" })).toMatchObject({ rejected: true });
     await app.live.system(game.id, { type: "advance", deadline: { kind: "openMeeting", meetingId: `emergency-${a.player}` } });
     // design §4.1: rounds pause while the vote window is open.
     await expect(app.live.system(game.id, { type: "advance", deadline: { kind: "round", round: 1 } })).rejects.toThrow(/refused/);
-    expect(await d.send({ type: "submitMove", move: { room: "office", pocket: 0 } })).toMatchObject({ rejected: true });
+    expect(await d.send({ type: "submitMove", move: { room: "office", duffel: 2, pocket: 0 } })).toMatchObject({ rejected: true });
     for (const x of [b, c, d]) expect(await x.send({ type: "castVote", vote: { kind: "shakedown", target: a.player } })).toMatchObject({ ok: true });
     expect(await a.send({ type: "callEmergency" })).toMatchObject({ rejected: true });
     await passDeadline(game.id); // close
@@ -462,7 +463,7 @@ describe("scenarios: end-to-end stories over HTTP + WebSocket", () => {
     const after = await load(game.id);
     expect(after.phase).toEqual({ kind: "planning", round: 1 });
     await b.barrier();
-    expect(b.lastView().me.move).toEqual({ room: "office", pocket: 0 }); // kept through the meeting
+    expect(b.lastView().me.move).toEqual({ room: "office", duffel: 2, pocket: 0 }); // kept through the meeting
     expect(after.log.some((e) => e.type === "shakedownResolved" && e.target === a.player)).toBe(true);
     const refused = await play(game, clients, clients.map(() => steadyBrain("office")));
     const final = await finish(game, clients, refused, app.live.botRefusals.length);
@@ -513,7 +514,7 @@ describe("scenarios: end-to-end stories over HTTP + WebSocket", () => {
     const hostile: unknown[] = [
       { type: "advance", deadline: { kind: "round", round: 1 } },
       { type: "scheduleMeeting", act: 1, slot: "now" },
-      { type: "submitMove", move: { room: "vault", pocket: 999 } },
+      { type: "submitMove", move: { room: "vault", duffel: 0, pocket: 999 } },
       { type: "submitMove", move: { room: "lobby", pocket: -1 } },
       { type: "castVote", vote: { kind: "shakedown", target: "p99" } },
       // A value with no string form (JSON can make one). The engine throws on it (see the
@@ -523,7 +524,7 @@ describe("scenarios: end-to-end stories over HTTP + WebSocket", () => {
     ];
     for (const cmd of hostile) expect(await a!.send(cmd)).toMatchObject({ rejected: true });
     expect((await load(game.id)).log).toEqual(before.log);
-    expect(await a!.send({ type: "submitMove", move: { room: "lobby", pocket: 0 } })).toMatchObject({ ok: true });
+    expect(await a!.send({ type: "submitMove", move: { room: "lobby", duffel: 1, pocket: 0 } })).toMatchObject({ ok: true });
     a!.close();
   }, 30_000);
 });

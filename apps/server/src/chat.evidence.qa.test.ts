@@ -8,6 +8,7 @@ import { sampleEvents } from "../../../packages/engine/src/types/samples";
 import { createChat, evidenceCard } from "./chat";
 import { fakeClock } from "./clock";
 import type { Db } from "./db";
+import { BANK_JOB } from "@skimjob/content";
 
 const ROLE_REASON = "role cards can't be shared: role claims stay unverified";
 
@@ -38,7 +39,7 @@ describe("QA: role and faction cards are refused (design §8, PR #38)", () => {
     ["a watched room", { type: "roomWatched", round: 1, source: "security", room: "vault", seen: ["ben"] }],
     ["an audit", { type: "abilityResolved", round: 2, ability: { kind: "audit", round: 1, room: "vault", shortfall: 4 } }],
     ["a stash check", { type: "abilityResolved", round: 2, ability: { kind: "checkStash", target: "ben", threshold: 12, dirty: true } }],
-    ["a loot split", { type: "lootSplit", round: 1, room: "vault", loot: 6, toHaul: 4, toStash: 2 }],
+    ["a loot split", { type: "coinsGrabbed", round: 1, room: "vault", loot: 6, toHaul: 4, toStash: 2 }],
   ])("%s still goes through, verified, with its payload intact", (_label, event) => {
     const r = evidenceCard(holding(event), 3);
     const { type, ...payload } = event;
@@ -71,7 +72,7 @@ function run(s: GameState, ...commands: unknown[]): GameState {
   }
   return s;
 }
-const mv = (player: string, room: string) => ({ type: "submitMove", player, move: { room, pocket: 0 } });
+const mv = (player: string, room: string) => ({ type: "submitMove", player, move: { room, duffel: BANK_JOB.rooms[room]?.coins ?? 0, pocket: 0 } });
 const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
 
 /** The real chat with a Db that only answers the insert. */
