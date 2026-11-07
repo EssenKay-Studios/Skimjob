@@ -97,6 +97,39 @@ test("keyboard: Tab to the i opens it, Enter pins it, Esc closes it and keeps th
   await p.context().close();
 });
 
+for (const how of ["Enter", "Escape"]) {
+  test(`keyboard: Tab to the i, Enter, Tab to Close, ${how} leaves the tip closed with the focus on the i @infotip`, async ({ browser }) => {
+    const p = await open(browser, { width: 1280, height: 800 }, false);
+    const duffel = tipButton(p, "Duffel");
+    await duffel.focus();
+    await p.keyboard.press("Shift+Tab");
+    await p.keyboard.press("Tab");
+    await p.keyboard.press("Enter");
+    await p.keyboard.press("Tab");
+    await expect(popover(p).getByRole("button", { name: "Close" })).toBeFocused();
+    await p.keyboard.press(how);
+    await expect(popover(p)).toHaveCount(0);
+    await expect(duffel).toBeFocused();
+    await p.waitForTimeout(200);
+    await expect(popover(p)).toHaveCount(0);
+    await p.context().close();
+  });
+}
+
+test("a tip opened near the bottom of the screen stays on it and does not cover its i @infotip", async ({ browser }) => {
+  const viewport = { width: 360, height: 740 };
+  const p = await open(browser, viewport);
+  const btn = p.locator(".g-infotips__edge .infotip__btn");
+  await btn.evaluate((el) => el.scrollIntoView({ block: "end" }));
+  await btn.click();
+  const t = (await popover(p).boundingBox())!;
+  const b = (await btn.boundingBox())!;
+  expect(t.y).toBeGreaterThanOrEqual(0);
+  expect(t.y + t.height).toBeLessThanOrEqual(viewport.height);
+  expect(t.y + t.height <= b.y || t.y >= b.y + b.height).toBe(true);
+  await p.context().close();
+});
+
 test("a mouse hover previews the tip and leaving closes it, unless a click pinned it @infotip", async ({ browser }) => {
   const p = await open(browser, { width: 1280, height: 800 }, false);
   const vault = tipButton(p, "Vault");

@@ -39,10 +39,12 @@ export function InfoTip({ info }: { readonly info: InfoRef }) {
     el.showPopover();
     const r = b.getBoundingClientRect();
     const width = Math.min(WIDTH, window.innerWidth - 2 * MARGIN);
+    // The width first: the height depends on how the line wraps.
+    el.style.width = `${width}px`;
     const height = el.offsetHeight;
     const below = r.bottom + GAP;
-    const top = below + height > window.innerHeight - MARGIN && r.top - GAP - height >= MARGIN ? r.top - GAP - height : below;
-    el.style.width = `${width}px`;
+    const wanted = below + height > window.innerHeight - MARGIN && r.top - GAP - height >= MARGIN ? r.top - GAP - height : below;
+    const top = Math.max(MARGIN, Math.min(wanted, window.innerHeight - height - MARGIN));
     el.style.left = `${Math.min(Math.max(r.left + r.width / 2 - width / 2, MARGIN), window.innerWidth - width - MARGIN)}px`;
     el.style.top = `${top}px`;
   }, [open]);
@@ -54,11 +56,16 @@ export function InfoTip({ info }: { readonly info: InfoRef }) {
     };
     document.addEventListener("pointerdown", outside);
     window.addEventListener("scroll", close, true);
-    window.addEventListener("resize", close);
+    // Only a new width closes it: a phone's keyboard or address bar changes the height alone.
+    let width = window.innerWidth;
+    const resized = () => {
+      if (window.innerWidth !== width) close();
+    };
+    window.addEventListener("resize", resized);
     return () => {
       document.removeEventListener("pointerdown", outside);
       window.removeEventListener("scroll", close, true);
-      window.removeEventListener("resize", close);
+      window.removeEventListener("resize", resized);
     };
   }, [open, close]);
 
@@ -93,7 +100,10 @@ export function InfoTip({ info }: { readonly info: InfoRef }) {
         aria-label={`About ${entry.name}`}
         aria-expanded={open}
         aria-controls={id}
-        onFocus={(e) => e.currentTarget.matches(":focus-visible") && setOpen(true)}
+        onFocus={(e) => {
+          // Focus coming back from the tip's own close button must not reopen it.
+          if (!root.current?.contains(e.relatedTarget as Node | null) && e.currentTarget.matches(":focus-visible")) setOpen(true);
+        }}
         onClick={() => {
           if (open && pinned.current) return close();
           pinned.current = true;
