@@ -31,6 +31,8 @@ export interface Lead {
   readonly id: string;
   readonly round: number;
   readonly title: string;
+  /** The one line under the title, e.g. "rang 1 · 2 inside" or "raid · 3 seized". */
+  readonly summary?: string;
   /** A bell rang in it (a room, a raid): shows the small bell. */
   readonly bell: boolean;
   /** Empty: nothing contradicts. */

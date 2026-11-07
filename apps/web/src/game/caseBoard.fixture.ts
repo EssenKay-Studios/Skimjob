@@ -7,6 +7,7 @@ export const FIXTURE_LEADS: readonly Lead[] = [
     id: "lead:r4.vault",
     round: 4,
     title: "Vault",
+    summary: "rang 3 · Ben, Cy inside",
     bell: true,
     names: ["p2", "p3"],
     warnings: [{ kind: "seenElsewhere", names: ["p2"], text: "You saw Ben in the Vault; he said Security." }],
@@ -20,6 +21,7 @@ export const FIXTURE_LEADS: readonly Lead[] = [
     id: "lead:r4.market",
     round: 4,
     title: "Black market",
+    summary: "Somebody bought Soft shoes · 1",
     bell: false,
     names: [],
     warnings: [],
@@ -29,12 +31,13 @@ export const FIXTURE_LEADS: readonly Lead[] = [
     id: "lead:r3.crew",
     round: 3,
     title: "The crew",
+    summary: "Cy shared a claim",
     bell: false,
     names: ["p3"],
     warnings: [],
     facts: [{ id: "fact:r3.crew.claim", text: "Cy shared: “Dot claimed Lookout.”", trust: "shared" }],
   },
-  { id: "lead:r2.lobby", round: 2, title: "Lobby", bell: true, names: ["p4"], warnings: [], facts: [{ id: "fact:r2.lobby.bell", text: "The bell rang once.", trust: "fact" }] },
+  { id: "lead:r2.lobby", round: 2, title: "Lobby", summary: "rang once · claimed nobody", bell: true, names: ["p4"], warnings: [], facts: [{ id: "fact:r2.lobby.bell", text: "The bell rang once.", trust: "fact" }] },
 ];
 
 export const FIXTURE: CaseData = {

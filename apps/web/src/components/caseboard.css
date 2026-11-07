@@ -1,11 +1,17 @@
-/* The case board (design §15.4; ui-style "Ledger / case file"): suspect card,
-   Players strip, Pinned, Leads. Tokens only; targets 44 px; no hover-only. */
+/* The case board (design §15.4; ui-style "Ledger / case board"): a manila sheet
+   with punch holes and tape; the suspect card, the Players strip, Pinned and
+   Leads on paper cards. Tokens only; targets 44 px; no hover-only. */
 .cb {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
   align-content: start;
   min-width: 0;
-  padding: 16px 14px;
+  padding: 22px 14px 16px 36px;
+}
+.cb__heading {
+  font: 400 22px/1.2 var(--font-hand);
+  color: var(--ink);
 }
 .cb__h {
   display: flex;
@@ -37,15 +43,32 @@
   height: 100%;
 }
 
-/* The suspect card: a taped index card, tilted. */
+/* The suspect card: a paper index card. */
 .cb__card {
-  position: relative;
-  padding: 12px 14px;
+  display: grid;
+  gap: 6px;
+  padding: 10px 14px 12px;
   border: 1.6px solid var(--ink);
   border-radius: var(--radius-card);
   background: var(--paper-hi);
   box-shadow: var(--shadow-card);
-  rotate: -0.6deg;
+}
+.cb__kicker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font: 700 11px/1.3 var(--font-ui);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink2);
+}
+.cb__kicker .cb__icon {
+  width: 14px;
+  height: 14px;
+}
+.cb__kicker-text {
+  flex: 1;
+  min-width: 0;
 }
 .cb__suspect {
   display: flex;
@@ -55,36 +78,48 @@
   font: 400 14px/1.4 var(--font-ui);
   overflow-wrap: anywhere;
 }
+.cb__who {
+  font: 400 20px/1.2 var(--font-hand);
+  color: var(--ink);
+}
 
-/* Players: a wrapping strip of tap targets. */
+/* Players: one scrollable row of chips; names whole, an ellipsis only when very long. */
 .cb__players {
   list-style: none;
   margin: 0;
-  padding: 0;
+  padding: 2px 2px 6px;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+}
+.cb__players li {
+  flex: none;
+  scroll-snap-align: start;
 }
 .cb__player {
   display: flex;
   align-items: center;
   gap: 6px;
   min-height: 44px;
-  max-width: 100%;
   padding: 4px 10px 4px 6px;
   border: 1.6px solid var(--ink);
   border-radius: var(--radius-chip);
   background: var(--paper-hi);
   color: var(--ink);
   font: 400 15px/1.2 var(--font-hand);
+  white-space: nowrap;
   cursor: pointer;
 }
 .cb__player[aria-pressed="true"] {
   background: var(--clay-l);
 }
 .cb__pname {
-  min-width: 0;
-  overflow-wrap: anywhere;
+  max-width: 11ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .cb__counts {
   display: inline-flex;
@@ -103,7 +138,7 @@
   height: 14px;
 }
 
-/* Leads and pinned items. */
+/* Pinned and Leads: paper cards of dashed rows. */
 .cb__list,
 .cb__facts {
   list-style: none;
@@ -112,13 +147,28 @@
   display: grid;
   min-width: 0;
 }
+.cb__card-list {
+  padding: 0 8px;
+  border: 1.6px solid var(--ink);
+  border-radius: var(--radius-card);
+  background: var(--paper-hi);
+  box-shadow: var(--shadow-card);
+}
 .cb__lead,
 .cb__pinned {
   border-bottom: 1.3px dashed var(--ink-faint);
   min-width: 0;
 }
+.cb__lead:last-child,
+.cb__pinned:last-child {
+  border-bottom: 0;
+}
 .cb__lead.has-warning {
   background: linear-gradient(transparent 8%, var(--bad-l) 8% 92%, transparent 92%);
+}
+/* Your private pins: the case file's highlighter band (ui-style), with the lock above. */
+.cb__pinned {
+  background: linear-gradient(transparent 8%, var(--clay-l) 8% 92%, transparent 92%);
 }
 .cb__lead-head,
 .cb__pinned,
@@ -129,7 +179,7 @@
   min-width: 0;
 }
 .cb__pinned {
-  padding: 4px 0 4px 2px;
+  padding: 4px 0 4px 4px;
   font: 400 13.5px/1.4 var(--font-ui);
   overflow-wrap: anywhere;
 }
@@ -149,19 +199,39 @@
   border: 0;
   background: transparent;
   color: var(--ink);
-  font: 400 15px/1.3 var(--font-hand);
   text-align: left;
   cursor: pointer;
 }
-.cb__title {
+.cb__lead-text {
+  display: grid;
   flex: 1;
   min-width: 0;
+}
+.cb__line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.cb__title {
+  min-width: 0;
+  font: 400 16px/1.3 var(--font-hand);
   overflow-wrap: anywhere;
 }
+.cb__summary {
+  font: 400 13px/1.3 var(--font-ui);
+  color: var(--ink2);
+  overflow-wrap: anywhere;
+}
+/* The round, in an outlined chip. */
 .cb__round {
   flex: none;
-  font: 600 12px/1 var(--font-ui);
-  color: var(--ink2);
+  padding: 1px 6px;
+  border: 1.4px solid var(--ink);
+  border-radius: var(--radius-chip);
+  background: var(--paper-hi);
+  font: 600 12px/1.3 var(--font-ui);
+  color: var(--ink);
 }
 .cb__facts {
   padding: 0 0 8px 12px;
@@ -203,7 +273,7 @@
   font: 400 14px/1.3 var(--font-ui);
 }
 
-/* A 44 px pin toggle. */
+/* A 44 px pin toggle: hollow when off, filled with a tick when on. */
 .cb__pin {
   flex: none;
   display: inline-flex;
@@ -213,15 +283,14 @@
   height: 44px;
   border: 0;
   background: transparent;
-  color: var(--ink2);
+  color: var(--ink);
   cursor: pointer;
 }
 .cb__pin svg {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
 }
 .cb__pin.is-on {
-  color: var(--ink);
   rotate: -12deg;
 }
 .cb__pin:disabled {

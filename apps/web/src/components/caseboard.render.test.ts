@@ -60,4 +60,58 @@ describe("the case board shell (design §15.4)", () => {
       expect(readFileSync(new URL(f, import.meta.url), "utf8"), f).not.toMatch(/dangerouslySetInnerHTML|innerHTML/);
     }
   });
+
+  it("heads the suspect card 'Most likely liar' with its basis: all leads, or the pins once there are 2 or more (§15.4)", () => {
+    expect(html()).toContain("Most likely liar · from all leads");
+    expect(html(FIXTURE, pins(["lead:r4.vault"]))).toContain("Most likely liar · from all leads");
+    expect(html(FIXTURE, pins(["lead:r4.vault", "fact:r4.vault.saw", "lead:r3.crew"]))).toContain("Most likely liar · from 3 pins");
+    expect(html(NO_LEADS)).toContain("Nobody yet.");
+  });
+
+  it("gives each lead its one-line summary under the title, and the round in a chip", () => {
+    const out = html();
+    expect(out).toContain('<span class="cb__summary">rang 3 · Ben, Cy inside</span>');
+    expect(out).toContain('<span class="cb__round">R4</span>');
+  });
+
+  it("shows ⚠ and pin counts on a player chip only above zero, and the whole name", () => {
+    const out = html(FIXTURE, pins([]));
+    expect(out).toContain('aria-label="Cy, 0 warnings, 0 pins"');
+    expect(out.match(/class="cb__counts"/g)).toHaveLength(1); // Ben's ⚠ only
+    expect(out).toContain('<span class="cb__pname">Ben</span>');
+  });
+
+  it("draws a pinned pin differently from an unpinned one (shape, not colour alone), and tints the Pinned rows", () => {
+    const on = html(FIXTURE, pins(["lead:r4.market"]));
+    const marked = on.match(/aria-label="Unpin: Black market"[^>]*>(.*?)<\/button>/)![1]!;
+    const bare = on.match(/aria-label="Pin: Vault"[^>]*>(.*?)<\/button>/)![1]!;
+    expect(marked).toContain('fill="var(--clay)"');
+    expect(marked).toContain("M8.2 7.2");
+    expect(bare).not.toContain("var(--clay)");
+    expect(bare).not.toContain("M8.2 7.2");
+    expect(on).toContain('aria-pressed="true"');
+  });
+
+  it("keeps ids unique when two boards are drawn, and a lead's repeated warning kind doesn't repeat a key", () => {
+    const two = renderToStaticMarkup(createElement("div", null, createElement(CaseBoard, { data: FIXTURE, people, pins: pins([]), marks: null }), createElement(CaseBoard, { data: FIXTURE, people, pins: pins([]), marks: null })));
+    const ids = [...two.matchAll(/aria-controls="([^"]+)"/g)].map((m) => m[1]!);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+describe("the board's place and look (design §15.6, ui-style)", () => {
+  const css = (f: string) => readFileSync(new URL(f, import.meta.url), "utf8");
+  it("fills the game grid's `records` area from 960 px up, and joins the side column from 1024 px", () => {
+    const game = css("../screens/game.css");
+    expect(game).toMatch(/\.game-grid \.cb \{\s*grid-area: records;/);
+    expect(game).toMatch(/\.game-grid__side > \.cb \{\s*grid-area: auto;/);
+    expect(game).not.toContain(".records");
+  });
+  it("sits on manila with punch holes, and the players strip is one row that scrolls", () => {
+    expect(css("./CaseBoard.tsx")).toContain('fill="var(--manilla)"');
+    expect(css("./CaseBoard.tsx")).toMatch(/holes/);
+    const cb = css("./caseboard.css");
+    expect(cb).toMatch(/\.cb__players \{[^}]*flex-wrap: nowrap;[^}]*overflow-x: auto;/);
+    expect(cb).not.toMatch(/\.cb__pname \{[^}]*overflow-wrap/);
+  });
 });

@@ -25,7 +25,7 @@ async function overflow(page: Page): Promise<string[]> {
     if (s.scrollWidth > window.innerWidth) out.push(`scrollWidth ${s.scrollWidth} > innerWidth ${window.innerWidth}`);
     const w = document.documentElement.clientWidth;
     for (const x of document.querySelectorAll<HTMLElement>(".over *, .reveal *, .cb *")) {
-      if (x.closest(".reveal__rounds, .seg, [role=tablist]")) continue;
+      if (x.closest(".reveal__rounds, .seg, [role=tablist], .cb__players")) continue;
       const r = x.getBoundingClientRect();
       if (r.width > 0 && (r.right > w + 0.5 || r.left < -0.5)) out.push(`${x.getAttribute("class") ?? x.tagName} ${r.left.toFixed(1)}..${r.right.toFixed(1)}`);
     }

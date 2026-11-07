@@ -43,6 +43,8 @@ test("a 15-min game with events on, played to the end: kept cards flip, no dropp
     await page.waitForTimeout(250);
   }
   seen.push(await text(page));
+  // The kept cards flipped on the board (the HUD names each round's card) over the game.
+  expect(seen.join("\n")).toMatch(KEPT);
   for (const t of seen) expect(t).not.toMatch(DROPPED);
   expect(errors).toEqual([]);
 });

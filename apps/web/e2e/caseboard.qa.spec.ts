@@ -23,7 +23,7 @@ const overflowing = (page: Page) =>
     [...document.querySelectorAll<HTMLElement>('section[aria-labelledby="g-caseboard"] .cb')].flatMap((board) => {
       const edge = board.getBoundingClientRect().right + 0.5;
       return [...board.querySelectorAll<HTMLElement>("*")]
-        .filter((el) => !el.closest(".sk-art") && el.getBoundingClientRect().right > edge)
+        .filter((el) => !el.closest(".sk-art, .cb__players") && el.getBoundingClientRect().right > edge)
         .map((el) => el.getAttribute("class") ?? el.tagName);
     }),
   );
@@ -41,6 +41,8 @@ for (const width of WIDTHS) {
     // 4 leads + 6 facts pinned (the demo's one starting pin included).
     await expect(board.getByRole("group", { name: "Pinned" }).locator("li")).toHaveCount(10);
     expect(await overflowing(page)).toEqual([]);
+    // The Players strip scrolls inside the board: the strip itself stays within its edge.
+    expect(await board.locator(".cb__players").evaluate((el) => el.getBoundingClientRect().right <= el.closest(".cb")!.getBoundingClientRect().right)).toBe(true);
     const o = await page.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth]);
     expect(o[0]).toBeLessThanOrEqual(o[1]!);
     await section.screenshot({ path: info.outputPath(`caseboard-${width}.png`) });

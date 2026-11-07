@@ -107,7 +107,8 @@ test("a hidden tab coming back to the front shows the recap, and the missed even
   await guest.goto(`/game/${game.id}`);
   await guest.getByRole("button", { name: "Call an emergency meeting" }).click();
   await guest.getByRole("button", { name: "Sure? Tap again to call it" }).click();
-  // It reaches the hidden tab's view, but nobody is looking: the mark stays put.
+  // It reaches the hidden tab's view (the emergency shows on its screen), but nobody is looking: the mark stays put.
+  await expect(host.locator(".hud__alert")).toContainText("Emergency meeting in");
   await host.waitForTimeout(2500);
   expect(await lastSeen()).toBe(before);
   // Away long enough to count (AWAY_MIN_HIDDEN_MS, 10 s): a quick tab switch gets no recap.

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { startGame } from "./setupGame";
 
 // The case board shell (design §15.4, S3b.5) on /dev/gallery at the five launch widths:
 // tap a lead to open its facts, pin a lead or a single fact into the Pinned group,
@@ -102,3 +103,63 @@ test("reduced motion: the pin does not animate @caseboard", async ({ browser }) 
   expect(duration).toBe("0s");
   await ctx.close();
 });
+
+test("the Players strip is one scrolling row of whole names at 360 px @caseboard", async ({ browser }) => {
+  const { ctx, board } = await open(browser, VIEWPORTS[0]!);
+  const chips = board.locator(".cb__player");
+  await expect(chips).toHaveCount(3);
+  const tops = await chips.evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
+  expect(new Set(tops).size, "one row").toBe(1);
+  // Names are whole (no mid-word break, no ellipsis for short names), and zero counts are not drawn.
+  for (const [i, name] of ["Ben", "Cy", "Bot · Dot"].entries()) {
+    const n = chips.nth(i).locator(".cb__pname");
+    await expect(n).toHaveText(name);
+    expect(await n.evaluate((el) => el.scrollWidth <= el.clientWidth && el.getClientRects().length === 1)).toBe(true);
+  }
+  await expect(chips.nth(2).locator(".cb__counts")).toHaveCount(0);
+  await ctx.close();
+});
+
+test("a pinned pin looks different from an unpinned one, and the pinned row sits in the Pinned group @caseboard", async ({ browser }) => {
+  const { ctx, board } = await open(browser, VIEWPORTS[1]!);
+  const leads = board.getByRole("group", { name: "Leads" });
+  const pin = leads.getByRole("button", { name: "Pin: Black market" });
+  const off = await pin.innerHTML();
+  await pin.click();
+  const on = await leads.getByRole("button", { name: "Unpin: Black market" }).innerHTML();
+  expect(on).not.toBe(off);
+  expect(on).toContain("var(--clay)");
+  expect(off).not.toContain("var(--clay)");
+  await expect(board.getByRole("group", { name: "Pinned" })).toContainText("Black market");
+  await ctx.close();
+});
+
+test("the suspect card names its basis and each lead has its summary line @caseboard", async ({ browser }) => {
+  const { ctx, board } = await open(browser, VIEWPORTS[1]!);
+  await expect(board.locator(".cb__kicker").first()).toContainText("Most likely liar · from all leads");
+  await expect(board.locator(".cb__summary").first()).toHaveText("rang 3 · Ben, Cy inside");
+  // The demo starts with one pin; a second makes the card read the pins only.
+  await board.getByRole("button", { name: "Pin: Black market" }).click();
+  await expect(board.locator(".cb__kicker").first()).toContainText("from 2 pins");
+  await ctx.close();
+});
+
+// The live game keeps the board in its grid place at every width, 960 to 1023 px included.
+for (const width of [960, 980, 1023, 1024, 1280]) {
+  test(`in the live game the case board has its own place at ${width} px @caseboard`, async ({ browser }) => {
+    const ctx = await browser.newContext({ viewport: { width, height: 900 } });
+    const page = await ctx.newPage();
+    const game = await startGame(page.request, { bots: 3, sessionLength: "1w" });
+    await page.goto(`/game/${game.id}`);
+    const board = page.getByRole("region", { name: "Case board" });
+    const bank = page.getByRole("region", { name: "The bank" });
+    await expect(board).toBeVisible();
+    const [b, k] = [await board.boundingBox(), await bank.boundingBox()];
+    // Beside the bank, in the right column; from 960 to 1023 px it starts level with the bank, not dropped under the crew.
+    expect(b!.x).toBeGreaterThan(k!.x + k!.width - 1);
+    if (width < 1024) expect(Math.abs(b!.y - k!.y)).toBeLessThanOrEqual(2);
+    const o = await overflow(page);
+    expect(o.scroll).toBeLessThanOrEqual(o.client);
+    await ctx.close();
+  });
+}

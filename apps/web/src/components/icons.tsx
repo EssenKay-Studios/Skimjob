@@ -140,13 +140,13 @@ export function Warn() {
   );
 }
 
-/** A pin on a lead or a fact. */
-export function Pin() {
+/** A pin on a lead or a fact: filled clay head and a tick mark when pinned, a hollow outline when not (shape, not colour alone). */
+export function Pin({ on = false }: { on?: boolean }) {
   return (
     <svg viewBox="0 0 20 20" aria-hidden="true">
-      <circle cx="10.7" cy="7.7" r="4.2" fill="var(--clay-l)" />
-      <circle cx="10" cy="7" r="4.2" {...S} />
-      <path d="M10 11.4v5.6" {...S} />
+      <circle cx="10" cy="7" r="4.2" {...S} fill={on ? "var(--clay)" : "none"} strokeWidth={on ? 2.4 : 1.6} />
+      <path d="M10 11.4v5.6" {...S} strokeWidth={on ? 2.4 : 1.6} />
+      {on && <path d="M8.2 7.2l1.3 1.4 2.4-2.8" {...S} strokeWidth={1.6} />}
     </svg>
   );
 }

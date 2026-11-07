@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "r
 import { eventsSince, type PlayerId, type PlayerView } from "@skimjob/engine";
 import { api, ApiError, sentence } from "../api";
 import { recap, topSeq } from "./away";
-import { togglePin } from "./caseBoard";
+import { pinSync, type PinSync } from "./pinSync";
 import type { DescribeContext } from "./describeEvent";
 
 export const SUSPICION_TAGS = ["trusted", "unsure", "suspicious"] as const;
@@ -287,13 +287,19 @@ export interface PinsChannel {
 export function usePins(gameId: string): PinsChannel {
   const [list, setList] = useState<readonly string[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const latest = useRef<readonly string[] | null>(null);
+  const sync = useRef<PinSync | null>(null);
   useEffect(() => {
     let live = true;
-    api<SeatNotes>("GET", `/games/${encodeURIComponent(gameId)}/notes`).then(
+    const url = `/games/${encodeURIComponent(gameId)}/notes`;
+    api<SeatNotes>("GET", url).then(
       (n) => {
         if (!live) return;
-        latest.current = n.pins;
+        sync.current = pinSync(
+          { put: (pins) => api<unknown>("PUT", `${url}/pins`, { pins }).then(() => undefined), load: () => api<SeatNotes>("GET", url).then((r) => r.pins) },
+          n.pins,
+          (l) => live && setList(l),
+          (e) => live && setError(why(e)),
+        );
         setList(n.pins);
       },
       (e: unknown) => live && setError(why(e)),
@@ -302,23 +308,10 @@ export function usePins(gameId: string): PinsChannel {
       live = false;
     };
   }, [gameId]);
-  const toggle = useCallback(
-    (id: string) => {
-      const before = latest.current;
-      if (!before) return;
-      const next = togglePin(before, id);
-      latest.current = next;
-      setList(next);
-      setError(null);
-      api("PUT", `/games/${encodeURIComponent(gameId)}/notes/pins`, { pins: next }).catch((e: unknown) => {
-        // Undo only this change; a newer one made meanwhile stands.
-        latest.current = latest.current === next ? before : latest.current;
-        setList(latest.current);
-        setError(why(e));
-      });
-    },
-    [gameId],
-  );
+  const toggle = useCallback((id: string) => {
+    setError(null);
+    sync.current?.toggle(id);
+  }, []);
   const pins = useMemo(() => new Set(list ?? []), [list]);
   return useMemo(() => ({ pins, ready: list !== null, error, toggle }), [pins, list, error, toggle]);
 }

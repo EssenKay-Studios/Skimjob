@@ -217,11 +217,17 @@ test("reloads, a killed socket, a skewed clock and a late alibi (3h preset: 102 
   // The host's game socket goes through a route the test can freeze (drop views) or kill.
   let freeze = false;
   const routes: WebSocketRoute[] = [];
+  /** Every entry of each view the host's socket delivered (public and private), by seq. */
+  const views: number[][] = [];
   await host.routeWebSocket(/\/api\/games\//, (ws) => {
     routes.push(ws);
     const server = ws.connectToServer();
     server.onMessage((m) => {
       if (freeze && typeof m === "string" && m.startsWith('{"view"')) return;
+      if (typeof m === "string" && m.startsWith('{"view"')) {
+        const { view } = JSON.parse(m) as { view: { ledger: { seq: number }[]; caseFile: { seq: number }[] } };
+        views.push([...view.ledger, ...view.caseFile].map((e) => e.seq));
+      }
       ws.send(m);
     });
   });
@@ -251,11 +257,17 @@ test("reloads, a killed socket, a skewed clock and a late alibi (3h preset: 102 
   expect(Math.abs(hostT - guestT), `host ${hostT}s, skewed guest ${guestT}s`).toBeLessThanOrEqual(2);
   await shot(guest, "skewed-clock");
 
-  // Kill the socket: banner, then reconnect.
+  // Kill the socket: banner, reconnect, and the fresh view has every entry once, nothing lost (no duplicates, no gaps).
+  const delivered = views.length;
+  const entriesBefore = views.at(-1)!.length;
   routes.at(-1)!.close({ code: 4000, reason: "qa kill" });
   await expect(host.getByText("Reconnecting…")).toBeVisible();
   await shot(host, "reconnecting");
   await expect(host.getByText("Reconnecting…")).toBeHidden({ timeout: 15_000 });
+  await expect.poll(() => views.length).toBeGreaterThan(delivered);
+  const seqs = [...views.at(-1)!].sort((a, b) => a - b);
+  expect(seqs).toEqual(seqs.map((_, i) => i));
+  expect(seqs.length).toBeGreaterThanOrEqual(entriesBefore);
   await expect(status).toHaveText(before!);
 
   // Round 1 resolves (≈102 s). The guest reloads mid-alibi window and the panel comes back.
