@@ -33,7 +33,7 @@ export interface SelfView {
   readonly id: PlayerId;
   readonly role: RoleId;
   readonly stash: number;
-  /** Your power's uses this stretch / game. design §8 */
+  /** Your power's uses this stretch / game. design §11 */
   readonly roleState: RoleState;
   /** Your current move for this round, if submitted. */
   readonly move: Move | null;
@@ -54,7 +54,7 @@ export interface SelfView {
  * recaps and for evidence cards that point at one case-file entry. design §12.1, §13
  *
  * `seq` is *not* the index in the full log: gaps there would let a player count
- * hidden events (e.g. a Hacker looping a camera, or who sat in Security). It is
+ * hidden events (e.g. a Mole ringing a bell, or who sat in Security). It is
  * the index among the events this player can see during the game (public, plus
  * private or secret to them), so ledger and case file share one numbering and
  * new events always get higher numbers. The reveal log numbers its own,
@@ -88,10 +88,17 @@ export interface PlayerView {
   readonly kitty: number;
   /** Honesty so far, the meter against the two-thirds line (public). design §7.5 */
   readonly honesty: Honesty;
-  /** Lit bulbs on each open room's bell; a taped-off room's bell is off (no entry). Public. design §5.1, §5.3 */
+  /**
+   * Lit bulbs on each open room's bell; a taped-off room's bell is off and a
+   * hidden one shows "?" (no entry; the Hacker who hid it sees it). Public. design §5.1, §5.3, §11.1
+   */
   readonly bells: Readonly<Record<RoomId, number>>;
+  /** Rooms whose bell a Hacker hid this round: they show "?" until the next round starts (public). design §5.1, §11.1 */
+  readonly hiddenBells: readonly RoomId[];
   /** Taped-off rooms, each closed through this round (public). design §5.3 */
   readonly taped: Readonly<Record<RoomId, number>>;
+  /** Rooms blacked out this round (public: "Power cut in the Office"). design §11.1 */
+  readonly dark: readonly RoomId[];
   /** Wanted stars (public). design §5.4 */
   readonly wanted: number;
   /** This round's event card (public): its id and the room Lockdown closes. design §10 */
@@ -114,7 +121,7 @@ export interface PlayerView {
   readonly proposals: readonly MeetingProposal[];
   /** This game's perk shop (public), with each perk's cost in tokens. extension.md "Tokens and the perk shop" */
   readonly shop: readonly { readonly perk: PerkId; readonly cost: number }[];
-  /** The roles shown at setup (public): exactly those dealt, or every role that could be; null when Hidden. extension.md "Settings" */
+  /** The roles shown at setup (public): exactly those dealt (with counts), or every role that could be; null when Hidden. design §11.3 */
   readonly roleList: { readonly list: "exact" | "possible"; readonly roles: readonly RoleId[] } | null;
   /** Public events, oldest first. design §13 */
   readonly ledger: readonly LoggedEvent<PublicEvent>[];

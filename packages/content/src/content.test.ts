@@ -1,10 +1,8 @@
 // The content data is self-consistent and matches the design numbers.
-// design §6, §7, §8, §11.5
+// design §3, §5, §6, §7, §9.3, §11, §13
 import { describe, expect, it } from "vitest";
 import {
-  BALANCED_MIX,
   BANK_JOB,
-  DECKS,
   EMERGENCY_POOL,
   SHOP_COLUMNS,
   PERKS,
@@ -12,14 +10,13 @@ import {
   PERK_RULES,
   EVENTS,
   EVENT_DECK,
-  FILLER_ROLE,
   JOBS,
   MAX_PLAYERS,
+  MAX_ROLE_COPIES,
   MIN_PLAYERS,
-  POOL_ROLES,
   POWER_CLAIM_TARGET,
   ROLES,
-  STARTER_ROLES,
+  ROLE_DEAL,
 } from "./index";
 
 describe("job data is consistent", () => {
@@ -114,40 +111,39 @@ describe("the emergency pool — design §9.3", () => {
   });
 });
 
-describe("starter roles — design §8, §8.1", () => {
-  it("every role that can be dealt has a definition with a matching id", () => {
-    for (const id of new Set([...STARTER_ROLES, ...POOL_ROLES, FILLER_ROLE])) {
-      expect(ROLES[id]?.id).toBe(id);
-    }
+describe("roles — design §11.1, §11.2", () => {
+  it("the ten roles, each with a matching id", () => {
+    expect(Object.keys(ROLES)).toEqual(["lookout", "locksmith", "detective", "auditor", "smoothTalker", "hacker", "electrician", "priest", "mole", "fixer"]);
+    for (const [id, def] of Object.entries(ROLES)) expect(def.id).toBe(id);
   });
 
-  it("Rookie: no power, plain stash (extension.md: no multiplier)", () => {
-    expect(ROLES.rookie).toMatchObject({ power: { kind: "none" } });
+  it("eyes spot theft, shadows make it possible: five of each", () => {
+    const of = (kind: string) => Object.values(ROLES).filter((r) => r.kind === kind).map((r) => r.id);
+    expect(of("eyes")).toEqual(["lookout", "detective", "auditor", "smoothTalker", "priest"]);
+    expect(of("shadows")).toEqual(["locksmith", "hacker", "electrician", "mole", "fixer"]);
   });
 
-  it("Lookout: sees who was in one extra room each round", () => {
-    expect(ROLES.lookout).toMatchObject({ power: { kind: "lookout", extraRooms: 1 } });
+  it("powers and frequencies: every round, passive, once between meetings, once per game (§11.2)", () => {
+    const powers = Object.fromEntries(Object.values(ROLES).map((r) => [r.id, r.power]));
+    expect(powers).toEqual({
+      lookout: { kind: "lookout", extraRooms: 1 },
+      locksmith: { kind: "muffle", fewerRings: 1 },
+      detective: { kind: "detect" },
+      auditor: { kind: "audit", perStretch: 1 },
+      smoothTalker: { kind: "voteWeight", weight: 2 },
+      hacker: { kind: "hide", perStretch: 1 },
+      electrician: { kind: "blackout", perStretch: 1 },
+      priest: { kind: "absolve", perStretch: 1 },
+      mole: { kind: "ring", perStretch: 1 },
+      fixer: { kind: "reopen", perGame: 1 },
+    });
   });
 
-  it("tags and winsOn (extension.md Build notes \"Win rule\", \"Tags\")", () => {
-    const tagged = (tag: string) => Object.values(ROLES).filter((r) => r.tag === tag).map((r) => r.id).sort();
-    expect(tagged("wildcard")).toEqual(["hacker"]);
-    expect(tagged("loneWolf")).toEqual(["mole"]);
-    expect(tagged("teamPlayer")).toHaveLength(7);
-    const winners = Object.fromEntries(Object.values(ROLES).filter((r) => r.winsOn.length > 0).map((r) => [r.id, r.winsOn]));
-    // design §5.5: on a bust only the Rooftop wins, whatever the role, so no role wins on it; §8.4: the Mole and the Fixer win
-    // a heist sunk by theft.
-    expect(winners).toEqual({ fixer: ["theft"], mole: ["theft"] });
-    for (const id of STARTER_ROLES) expect(ROLES[id]?.tag).toBe("teamPlayer");
-  });
-
-  it("every role earns exactly one token per trigger (extension.md \"Roles\")", () => {
+  it("every role earns exactly one token per trigger (extension.md \"Roles\", until S3a.7)", () => {
     for (const role of Object.values(ROLES)) {
       if (role.rewards) expect(role.rewards?.map((r) => r.count), role.id).toEqual([1]);
     }
-    // The Fixer's and the Mole's R6 tokens went with the raid stop and the tip-off (S3a.2), the Rookie's with the
-    // R6 checkpoints (S3a.3); tokens go in S3a.7.
-    expect(Object.values(ROLES).filter((r) => !r.rewards).map((r) => r.id)).toEqual(["rookie", "fixer", "mole"]);
+    expect(Object.values(ROLES).filter((r) => r.rewards).map((r) => r.id)).toEqual(["lookout", "detective", "auditor", "smoothTalker"]);
   });
 
   it("perks: eight kinds in three shop columns; Peek and Shield cost 2, the rest 1 (extension.md \"Tokens and the perk shop\")", () => {
@@ -157,23 +153,32 @@ describe("starter roles — design §8, §8.1", () => {
     for (const [column, ids] of Object.entries(SHOP_COLUMNS)) for (const id of ids) expect(PERKS[id].column).toBe(column);
     expect(PERK_RULES).toEqual({ extraVoteWeight: 1, rigOptions: 2 });
   });
+});
 
-  it("decks: Starter 2, Standard 6, Everything 9 (extension.md \"Decks\", R7 cut)", () => {
-    expect(DECKS.starter).toHaveLength(2);
-    expect(DECKS.standard).toHaveLength(6);
-    expect(DECKS.everything).toHaveLength(9);
-    expect([...DECKS.everything].sort()).toEqual(Object.keys(ROLES).sort());
+describe("the deal by crew size — design §11.3, §19.2 seam 8", () => {
+  const kinds = { eyes: Object.values(ROLES).filter((r) => r.kind === "eyes").length, shadows: Object.values(ROLES).filter((r) => r.kind === "shadows").length };
+
+  it("every player gets a role, eyes and shadows within one of each other", () => {
+    for (let n = MIN_PLAYERS; n <= MAX_PLAYERS; n++) {
+      const deal = ROLE_DEAL[n];
+      expect(deal, `${n}`).toBeDefined();
+      if (!deal) continue;
+      expect(deal.eyes + deal.shadows + deal.either, `${n}`).toBe(n);
+      expect(Math.abs(deal.eyes - deal.shadows), `${n}`).toBe(0);
+      expect(deal.either, `${n}`).toBe(n % 2);
+    }
   });
 
-  // extension.md Build notes "Tags, decks and dealing": the balance pass decides the mix; r6-balance.md lifted 4p one over the cap.
-  it("Balanced mix: under the round(n ÷ 3) cap except the tuned 4p row", () => {
-    for (let n = MIN_PLAYERS; n <= 12; n++) {
-      const mix = BALANCED_MIX[n];
-      expect(mix, `${n}`).toBeDefined();
-      expect((mix?.loneWolves ?? 0) + (mix?.wildcards ?? 0)).toBeLessThanOrEqual(Math.round(n / 3) + (n === 4 ? 1 : 0));
+  it("up to 10 players every role is distinct; at 11–12 a role may repeat, at most twice", () => {
+    expect(MAX_ROLE_COPIES).toBe(2);
+    for (let n = MIN_PLAYERS; n <= MAX_PLAYERS; n++) {
+      const deal = ROLE_DEAL[n] as (typeof ROLE_DEAL)[number];
+      const most = { eyes: deal.eyes + deal.either, shadows: deal.shadows + deal.either };
+      for (const kind of ["eyes", "shadows"] as const) {
+        if (n <= 10) expect(most[kind], `${n} ${kind}`).toBeLessThanOrEqual(kinds[kind]);
+        expect(most[kind], `${n} ${kind}`).toBeLessThanOrEqual(kinds[kind] * MAX_ROLE_COPIES);
+      }
     }
-    expect(BALANCED_MIX[4]).toEqual({ loneWolves: 1, wildcards: 1 });
-    expect(BALANCED_MIX[12]).toEqual({ loneWolves: 2, wildcards: 2 });
   });
 });
 

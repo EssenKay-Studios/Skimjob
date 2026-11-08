@@ -18,18 +18,17 @@ function config(players: number, overrides?: ContentOverrides, seed = "qa166"): 
     seed,
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: ["lookout"],
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     ...(overrides && { contentOverrides: overrides }),
   };
 }
 
-/** Seat i is dealt roles[i] (Rookie if missing). */
+/** Seat i is dealt roles[i] (a Lookout if missing: its power acts only when used). */
 function game(players: number, roles: string[] = [], overrides?: ContentOverrides, seed?: string): GameState {
   const cfg = config(players, overrides, seed);
   let seat = 0;
-  const log = setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: roles[seat++] ?? "rookie" } : e));
+  const log = setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: roles[seat++] ?? "lookout" } : e));
   return replay(cfg, log);
 }
 
@@ -326,7 +325,7 @@ describe("viewFor before and after the end — design §15.5, §18", () => {
     expect(after.reveal).not.toBeNull();
     const o = after.reveal?.outcome as Outcome;
     // design §7.6: 6 pocketed plus the share of 4 (6 handed in a round, 3 ways).
-    expect(o.ranking.map((e) => [e.player, e.role, e.stash])).toEqual([["p0", "mole", 6 + 4], ["p1", "lookout", 4], ["p2", "rookie", 4]]);
+    expect(o.ranking.map((e) => [e.player, e.role, e.stash])).toEqual([["p0", "mole", 6 + 4], ["p1", "lookout", 4], ["p2", "lookout", 4]]);
     const revealed = after.reveal?.log.map((e) => e.event) ?? [];
     expect(revealed.some((e) => e.type === "coinsGrabbed" && e.player === "p0")).toBe(true);
     expect(revealed.some((e) => e.type === "roleDealt" && e.player === "p0")).toBe(true);

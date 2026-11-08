@@ -36,24 +36,23 @@ for (const viewport of VIEWPORTS) {
       // Job done: the top of the ranking wins; four envelopes with roles and the Mole's ★.
       const crew = reveal.getByRole("list", { name: "Every role, best first" });
       await expect(crew.locator(".reveal__card")).toHaveCount(4);
-      for (const role of ["Rookie", "Mole", "Hacker", "Detective"]) await expect(crew).toContainText(role);
+      for (const role of ["Locksmith", "Mole", "Hacker", "Detective"]) await expect(crew).toContainText(role);
       await expect(reveal.locator(".reveal__why")).toContainText("Job done, so the top of the ranking wins: Ben.");
       await expect(crew).toContainText("★ Also wins if the heist is sunk by theft");
       await expect(reveal.locator(".reveal__void")).toHaveCount(0);
 
-      // The timeline: round 1's real moves, the lie, and the Hacker's loop behind "camera offline".
+      // The timeline: round 1's real moves, the lie, and the Hacker's hidden bell (design §11.1).
       const sheet = reveal.locator(".reveal__round");
       await expect(sheet.getByRole("heading", { name: "Round 1" })).toBeVisible();
       await expect(sheet.getByRole("list", { name: "Where everyone really was" }).locator("li")).toHaveCount(4);
       await expect(sheet).toContainText("said Lobby: lie");
-      await expect(sheet).toContainText("Your camera on the Vault went offline: Cy looped it.");
-      await expect(sheet).toContainText("Cy earned a token for a loop that hid a pocketer.");
+      await expect(sheet).toContainText("Round 1: Cy hid the Vault's bell; it really shows 3 lit.");
 
-      // Next: the Mole's hidden ring (design §5.2), the Detective's check, the perk and the false claim.
+      // Next: the Mole's hidden ring (design §5.2), the Detective's grab count (§11.1), the perk and the false claim.
       await reveal.getByRole("button", { name: "Next round" }).click();
       await expect(sheet.getByRole("heading", { name: "Round 2" })).toBeVisible();
       await expect(sheet).toContainText("Round 2: Ben tipped off the police: the Office's bell rang once more.");
-      await expect(sheet).toContainText("Stash check: Ben holds something above the share (not clean).");
+      await expect(sheet).toContainText("Round 1: Ben grabbed 6 coins.");
       await expect(sheet).toContainText("You bought a Peek perk");
       await expect(sheet).toContainText("Ben claimed Lookout, but was really the Mole.");
 

@@ -14,7 +14,7 @@ All tests are seeded and deterministic. Nothing reads the wall clock (the server
 | Server scenarios | `apps/server/src/scenarios.int.test.ts` | Named end-to-end stories over the real HTTP + WebSocket API on PGlite. | `pnpm test` (`pnpm test:pg` for real Postgres) |
 | Web e2e | `apps/web/e2e/*.spec.ts` | User journeys in Chromium at phone and desktop sizes, responsive rules; every test title carries one feature tag. Size checks wait for the entrance animations to finish first: a box measured mid-animation can come out at 43.99 px. | `pnpm test:e2e` (CI: 6 shards by spec file, `node scripts/scope.mjs --shard i/6`, see "Shards" below; ports and clock via `E2E_*` env, see `playwright.config.ts`) |
 | Simulation suite | `apps/sim/src/suite/` | The balance targets and role parity over the whole settings matrix, with confidence intervals (below). Manual: long. | `pnpm sim:suite`, or the "Sim suite" workflow |
-| Simulator smoke | `scripts/sim-smoke.sh` | 200 all-bot games each at 3/6/12 players (events on, Everything deck) end with no refused bot command. | `bash scripts/sim-smoke.sh [games]` |
+| Simulator smoke | `scripts/sim-smoke.sh` | 200 all-bot games each at 3/6/12 players (events on, the standard deal) end with no refused bot command. | `bash scripts/sim-smoke.sh [games]` |
 | Typecheck | every workspace | Strict TS. New event or command types must fail exhaustive switches. | `pnpm typecheck` |
 | Dead code | every workspace | `knip` fails on unused files, exports and dependencies (`knip.json`; zero today, keep it so). | `pnpm knip` |
 | Theme tokens | `apps/web/src` (`.css`, `.ts`, `.tsx`), `scripts/theme-lint.mjs` | No raw colours, fonts, shadows or radii outside `theme.css` (CLAUDE.md UI rules). One lint for the whole app; it replaces the per-module token tests. | `pnpm lint:theme` |
@@ -71,7 +71,7 @@ pnpm sim:suite -- --compare docs/balance/baseline.json
 pnpm sim:suite -- --help
 ```
 
-- **Matrix:** player counts 3–12 × setup × events on/off, with setups (`--setups`) such as `balanced` (Balanced deal, Exact role list) and `random` (Truly random). The matrix is rebuilt for the R7 rules in S3 and tuned in S5.
+- **Matrix:** player counts 3–12 × setup × events on/off, with setups (`--setups`) `balanced` (the standard deal, Exact role list), `possible` and `hidden` (that role list). The matrix is rebuilt for the R7 rules in S3 and tuned in S5.
 - **Adaptive:** each cell plays batches of 200 games (`--batch`, at most `--min-games`), starting with at least 400. It stops once every checked rate's 95% interval (Wilson) is within `--ci` (±2 pp), or at `--max-games` (6000). `-n N` plays a fixed N per cell instead.
 - **Checks (gates):** the S5 balance gates (heist success, raid and bust rates, role win rates within a band, the share of whole-crew wins, perks not deciding games) are set in S1 and wired in S3. Cells outside the gated set are reported only and stop at `--min-games`.
 - **Reports:** the ending split, the no-winner and shared-win rates per cell, and a per-role table over all cells (win ÷ fair share).

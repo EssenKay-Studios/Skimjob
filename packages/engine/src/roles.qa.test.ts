@@ -1,8 +1,8 @@
-// QA (PR #12): info and vote roles — Hacker, Smooth talker. design §8, §9.5, §9.6
+// QA (PR #12): the Hacker and the Smooth Talker. design §5.1, §9.5, §9.6, §11.1
 //
-// 1. Counterfactual leak pairs (the view.qa.test.ts approach, with these roles
-//    dealt): games A and B run the same commands from the same seed, except for
-//    one hidden difference (a Smooth talker dealt or not, a camera loop).
+// 1. Counterfactual leak pairs (the view.qa.test.ts approach): games A and B
+//    run the same commands from the same seed, except for one hidden
+//    difference (a Smooth Talker dealt or not).
 //    After every step every other player's view must be identical
 //    until the rules make a difference public, and every other player's
 //    rejection reasons for role commands must be the same in both games.
@@ -10,7 +10,7 @@
 //    and quorum edges in every vote mode, threshold and stash edges.
 import { describe, expect, it } from "vitest";
 import { closeResultWindow } from "./alibis.testkit";
-import { STARTER_ROLES, BANK_JOB } from "@skimjob/content";
+import { BANK_JOB } from "@skimjob/content";
 import type { GameConfig, GameEvent, GameState, PlayerId, PlayerState, PlayerView, VoteVisibility } from "./types";
 import { privateTo } from "./types";
 import { createGame, setupEvents } from "./setup";
@@ -29,20 +29,19 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
     seed: "roles-qa",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: [],
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     ...extra,
-    // R6 room yields as coins (R6 role rules), and a bank of 20 a player, so regular meetings come every few rounds (design §9.1).
+    // R6 room yields as coins (the scripts' numbers), and a bank of 20 a player, so regular meetings come every few rounds (design §9.1).
     contentOverrides: { ...R6_COINS, bank: { coinsPerPlayer: 20 }, ...extra.contentOverrides },
   };
 }
 
-/** A new game with seat i dealt roles[i] (Rookie if missing). */
+/** A new game with seat i dealt roles[i] (a Lookout if missing: its power acts only when used). */
 function game(players: number, roles: string[], extra: Partial<GameConfig> = {}): GameState {
   const cfg = config(players, extra);
   let seat = 0;
-  const log = setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: roles[seat++] ?? "rookie" } : e));
+  const log = setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: roles[seat++] ?? "lookout" } : e));
   return replay(cfg, log);
 }
 
@@ -110,12 +109,12 @@ const closeAll = (s: GameState): GameState => {
   const closed = run(s, CLOSE);
   return closed.phase.kind === "shakedownPending" ? run(closed, RESOLVE) : closed;
 };
-const INFO_VOTE_ROLES = ["hacker", "smoothTalker"] as const;
-const NO_WINDOW = { rolePool: [...STARTER_ROLES, ...INFO_VOTE_ROLES.filter((r) => r !== "smoothTalker")] };
+/** A shop with no Shield, so a passed shakedown applies at once (no window). design §9.6 */
+const noShield = (s: GameState): GameState => ({ ...s, shop: ["peek", "alibi", "extraVote"] });
 
 // ------------------------------------------------------------------ 1. counterfactual leak pairs
 
-type Kind = "smoothDealt" | "hackerLoop";
+type Kind = "smoothDealt";
 // Coin limits in these games: R6_COINS for the pinned rooms, content (design §3.1) for the rest.
 const COINS: Record<string, number> = { vault: 6, office: 4, lobby: 2, depositBoxes: 5, managersOffice: 2, serverRoom: 2 };
 
@@ -156,6 +155,8 @@ interface PairResult {
   readonly diverged: string | null;
   readonly compared: number;
   readonly a: GameState;
+  /** A as it started, before any command. */
+  readonly start: GameState;
   readonly commands: readonly unknown[];
 }
 
@@ -168,13 +169,13 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
   const rand = mulberry32(seed);
   const int = (k: number): number => Math.floor(rand() * k);
   const pick = <T>(xs: readonly T[]): T => xs[int(xs.length)] as T;
-  const hacking = kind === "hackerLoop";
-  const pool = hacking || n <= 5 ? [...INFO_VOTE_ROLES] : [];
-  // extension.md "Host settings": the counterfactual holds where the role list doesn't name the dealt
-  // roles ("Possible"); with "Exact" the dealt roles are public by design.
-  const cfg = config(n, { seed: `rqa-${seed}`, voteVisibility: mode, rolePool: pool, deck: "everything", roleList: "possible" });
-  let A = createGame(cfg);
-  const ids = A.playerOrder;
+  // design §11.3: the counterfactual holds where the role list doesn't name the dealt roles
+  // ("Possible"); with "Exact" the dealt roles are public by design.
+  const cfg = config(n, { seed: `rqa-${seed}`, voteVisibility: mode, roleList: "possible" });
+  const ids = createGame(cfg).playerOrder;
+  // The Smooth Talker in A is a seat dealt otherwise in B.
+  let A = withRole(createGame(cfg), ids[int(ids.length)] as PlayerId, "smoothTalker");
+  const start = A;
   const holder = (role: string): PlayerId | undefined => ids.find((id) => A.players[id]?.role === role);
   const involved = new Set<PlayerId>();
   const tainted = new Set<PlayerId>();
@@ -189,7 +190,7 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
   if (kind === "smoothDealt") {
     const x = holder("smoothTalker");
     if (x) {
-      B = withRole(A, x, "rookie");
+      B = withRole(A, x, "lookout");
       involved.add(x);
       applied = true;
     }
@@ -207,7 +208,7 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
   // Rejections a player sees for role commands must depend only on what they may know.
   const probes = (s: GameState, y: PlayerId): string[] => {
     const room = s.rooms[0] as string;
-    return [{ type: "useAbility", player: y, ability: { kind: "loopCameras" } }, mv(y, room, 0, { ability: { kind: "loopCameras", room } })].map((c) => {
+    return [{ type: "useAbility", player: y, ability: { kind: "detect", target: y } }, mv(y, room, 0, { ability: { kind: "hide", room } })].map((c) => {
       const r = handleThroughAlibis(s, c);
       return r.ok ? "ok" : r.reason;
     });
@@ -266,7 +267,8 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
     const m: Record<string, unknown> = { room, duffel: coins - pocket, pocket };
     if (room === "security") m.watch = pick(A.rooms);
     // Baseline power use, identical in both games (not for the kind that changes it).
-    if (role === "hacker" && kind !== "hackerLoop" && round % 3 === 1 && rand() < 0.7) m.ability = { kind: "loopCameras", room: pick(A.rooms) };
+    const open = A.rooms.filter((r) => !Object.hasOwn(A.taped, r));
+    if (role === "hacker" && A.players[id]?.roleState.usedThisStretch === 0 && round % 3 === 1 && rand() < 0.7) m.ability = { kind: "hide", room: pick(open) };
     return m;
   };
 
@@ -274,20 +276,6 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
     const planA = new Map<PlayerId, unknown[]>();
     for (const id of ids) planA.set(id, rand() < 0.1 ? [] : [{ type: "submitMove", player: id, move: move(id, round) }]);
     const planB = new Map(planA);
-    const lastMove = (id: PlayerId) => ((planA.get(id)?.[0] as { move?: Record<string, unknown> } | undefined)?.move ?? { ...fullGrab("lobby", 0, R6_COINS) });
-    if (round === changeRound && kind === "hackerLoop") {
-      const h = holder("hacker");
-      if (h) {
-        const room = pick(A.rooms);
-        applied = true;
-        involved.add(h);
-        // Both games submit a move (a move is public as "locked in"); only B loops.
-        planA.set(h, [{ type: "submitMove", player: h, move: lastMove(h) }]);
-        planB.set(h, [{ type: "submitMove", player: h, move: { ...lastMove(h), ability: { kind: "loopCameras", room } } }]);
-        // Security watching that room sees a difference by the rules.
-        for (const y of ids) if (lastMove(y).room === "security" && lastMove(y).watch === room) tainted.add(y);
-      }
-    }
     for (const id of ids) step(planA.get(id) ?? [], planB.get(id) ?? []);
   }
 
@@ -321,16 +309,15 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
     }
   }
   if (!diverged) expect(A.phase.kind === "ended" || B.phase.kind === "ended").toBe(true);
-  return { applied, effective, diverged, compared, a: A, commands };
+  return { applied, effective, diverged, compared, a: A, start, commands };
 }
 
-const KINDS: readonly Kind[] = ["smoothDealt", "hackerLoop"];
-// From 5: the Smooth Talker is dealt only in crews of 5 or more (role deck v2 §3).
-const COUNTS = [5, 7, 9, 12];
+const KINDS: readonly Kind[] = ["smoothDealt"];
+const COUNTS = [3, 5, 7, 9, 12];
 /** Seeds per player count; raise locally (QA_SEEDS=10) for a wider sweep. */
 const SEEDS = Number(process.env.QA_SEEDS ?? 1);
 
-describe("QA: one hidden role difference never changes another player's view or rejections — design §8, §13", () => {
+describe("QA: one hidden role difference never changes another player's view or rejections — design §11.3, §18", () => {
   it.each(KINDS.flatMap((k) => MODES.map((m) => [k, m] as const)))("%s, %s votes", (kind, mode) => {
     let applied = 0;
     let compared = 0;
@@ -341,21 +328,19 @@ describe("QA: one hidden role difference never changes another player's view or 
         if (!r.applied) continue;
         applied++;
         compared += r.compared;
-        // The change reached the involved player (a Smooth talker who never acts may not see one until the end).
-        if (kind !== "smoothDealt") expect(r.effective, `${kind} ${n}p seed ${s}`).toBe(true);
+        // A Smooth Talker who never acts may not see a difference until the end.
         if (r.diverged) firstPublic.add(r.diverged);
       }
     });
     expect(applied).toBeGreaterThanOrEqual(2 * SEEDS);
     expect(compared).toBeGreaterThan(100 * SEEDS);
-    // A loop only ever shows at the end, or in a shakedown. No meeting result or window differs.
-    if (kind === "hackerLoop") for (const t of firstPublic) expect(["gameEnded", "shakedownResolved"]).toContain(t);
+    for (const t of firstPublic) expect(["gameEnded", "shakedownResolved", "shakedownCancelled", "meetingClosed"]).toContain(t);
   }, 60_000);
 
   it("determinism: same seed + same commands → identical event log, and replay rebuilds the state", () => {
     for (const n of [5, 12]) {
-      const r = runPair("hackerLoop", n, "hiddenThenRevealed", 4242 + n);
-      const again = r.commands.reduce<GameState>((s, c) => run(s, c), createGame(r.a.config));
+      const r = runPair("smoothDealt", n, "hiddenThenRevealed", 4242 + n);
+      const again = r.commands.reduce<GameState>((s, c) => run(s, c), r.start);
       expect(again.log).toEqual(r.a.log);
       expect(replay(r.a.config, r.a.log)).toEqual(r.a);
     }
@@ -364,11 +349,11 @@ describe("QA: one hidden role difference never changes another player's view or 
 
 // ------------------------------------------------------------------ 2. edges per role
 
-describe("QA Smooth talker: majority counts weight, quorum counts voters, in every mode — design §8, §9.5", () => {
+describe("QA Smooth Talker: majority counts weight, quorum counts voters, in every mode — design §9.5, §11.1", () => {
   // Meetings close straight to their result unless the shop holds a Shield.
   const result = (players: number, roles: string[], ballots: [string, string | null][], mode: VoteVisibility, extra: Partial<GameConfig> = {}) => {
     const caller = ballots[0]?.[0] ?? "p0";
-    let s = emergency(game(players, roles, { voteVisibility: mode, ...NO_WINDOW, ...extra }), caller);
+    let s = emergency(noShield(game(players, roles, { voteVisibility: mode, ...extra })), caller);
     s = run(s, ...ballots.map(([p, t]) => vote(p, t)), CLOSE);
     return ofType(s.log, "meetingClosed").at(-1);
   };
@@ -380,13 +365,13 @@ describe("QA Smooth talker: majority counts weight, quorum counts voters, in eve
     expect(result(4, [], [["p0", "p3"], ["p1", null]], mode)?.result).toEqual({ kind: "noMajority" });
     // One voter in a crew of 4 is short of quorum, double weight or not.
     expect(result(4, ST, [["p0", "p3"]], mode)?.result).toEqual({ kind: "noQuorum" });
-    // 3 players: the Smooth talker alone is short of quorum (voters count, not weight); with one skip
+    // 3 players: the Smooth Talker alone is short of quorum (voters count, not weight); with one skip
     // beside it, quorum is met and its weight 2 of 3 is a majority.
     expect(result(3, ST, [["p0", "p1"]], mode)?.result).toEqual({ kind: "noQuorum" });
     expect(result(3, ST, [["p0", "p2"], ["p1", null]], mode)?.result).toEqual({ kind: "shakedown", target: "p2" });
     // A weighted tie: p4 2 vs p3 2 of 4 → no majority.
     expect(result(5, ST, [["p0", "p4"], ["p1", "p3"], ["p2", "p3"]], mode)?.result).toEqual({ kind: "noMajority" });
-    // The Smooth talker's skip blocks a plain-count majority: p4 2 vs skip 2 of 4.
+    // The Smooth Talker's skip blocks a plain-count majority: p4 2 vs skip 2 of 4.
     expect(result(5, ST, [["p0", null], ["p1", "p4"], ["p2", "p4"]], mode)).toMatchObject({ result: { kind: "noMajority" }, tally: { skip: 1, targets: { p4: 2 } } });
     expect(result(5, [], [["p0", null], ["p1", "p4"], ["p2", "p4"]], mode)?.result).toEqual({ kind: "shakedown", target: "p4" });
     // A changed ballot still weighs double, once.
@@ -407,39 +392,37 @@ describe("QA Smooth talker: majority counts weight, quorum counts voters, in eve
   });
 });
 
-describe("QA Hacker: loop vs Security and the Lookout — design §8", () => {
-  const base = game(5, ["hacker", "rookie", "rookie", "lookout"]);
+describe("QA Hacker: a hidden bell blinds no feed — design §5.1, §11.1", () => {
+  const base = game(5, ["hacker", "lookout", "lookout", "lookout"]);
   const watched = (s: GameState) => ofType(s.log, "roomWatched").map((e) => [e.player, e.source, e.room, e.seen]);
+  const hide = (room: string) => mv("p0", "lobby", 0, { ability: { kind: "hide", room } });
 
-  it("every Security watcher of the looped room sees it empty; Security on another room and the Lookout see normally", () => {
+  it("Security and the Lookout still see who was in the room whose bell is hidden", () => {
     const s = run(
       base,
-      mv("p0", "vault", 6, { ability: { kind: "loopCameras", room: "vault" } }),
+      mv("p0", "vault", 6, { ability: { kind: "hide", room: "vault" } }),
       mv("p1", "security", 0, { watch: "vault" }),
-      mv("p2", "security", 0, { watch: "office" }),
-      mv("p3", "security", 0, { watch: "vault", ability: { kind: "lookout", rooms: ["vault"] } }),
+      mv("p3", "security", 0, { watch: "office", ability: { kind: "lookout", rooms: ["vault"] } }),
       mv("p4", "office", 2),
       ROUND,
     );
     expect(watched(s)).toEqual([
-      ["p1", "security", "vault", []],
-      ["p2", "security", "office", ["p4"]],
-      ["p3", "security", "vault", []],
+      ["p1", "security", "vault", ["p0"]],
+      ["p3", "security", "office", ["p4"]],
       ["p3", "lookout", "vault", ["p0"]],
     ]);
   });
 
-  it("a loop replaced before the deadline isn't used; one loop between meetings, back after the next regular one; refused outside planning", () => {
-    const loop = (room: string) => mv("p0", "lobby", 0, { ability: { kind: "loopCameras", room } });
-    let s = run(base, loop("vault"), mv("p0", "lobby"), ROUND);
+  it("a hide replaced before the deadline isn't used; one between meetings, back after the next regular one; refused outside planning", () => {
+    let s = run(base, hide("vault"), mv("p0", "lobby"), ROUND);
     expect(s.players.p0?.roleState.usedThisStretch).toBe(0);
-    s = run(s, loop("vault"), ROUND);
-    expect(reason(s, loop("office"))).toMatch(/already looped/);
+    s = run(s, hide("vault"), ROUND);
+    expect(reason(s, hide("office"))).toMatch(/already hidden/);
     while (s.phase.kind !== "awaitingMeeting") s = run(s, ROUND);
-    expect(reason(s, loop("office"))).toMatch(/round is being planned/);
+    expect(reason(s, hide("office"))).toMatch(/round is being planned/);
     s = closeAll(dueMeeting(s));
     expect(s.players.p0?.roleState.usedThisStretch).toBe(0);
-    expect(() => run(s, loop("office"))).not.toThrow();
+    expect(() => run(s, hide("office"))).not.toThrow();
   });
 });
 

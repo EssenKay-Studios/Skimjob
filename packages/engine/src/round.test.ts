@@ -1,6 +1,5 @@
 // The round loop: moves (rooms, coins and grabs), missed moves, the bank and
 // the short bank, resolution, information. design §3, §4.2, §6.1 (bells: bells.test.ts)
-import { STARTER_ROLES } from "@skimjob/content";
 import { handleThroughAlibis } from "./alibis.testkit";
 import { describe, expect, it } from "vitest";
 import type { Command, GameConfig, GameEvent, GameState } from "./types";
@@ -16,20 +15,19 @@ function config(players: number, contentOverrides: GameConfig["contentOverrides"
     seed: "round-seed",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: [...STARTER_ROLES], // a shakedown window only if the shop holds a Shield
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     contentOverrides,
   };
 }
 
-/** A new game with chosen roles (seat i gets roles[i], Rookie if missing). */
+/** A new game with chosen roles (seat i gets roles[i], a Lookout if missing). */
 function game(players: number, roles: string[] = [], contentOverrides: GameConfig["contentOverrides"] = null): GameState {
   const cfg = config(players, contentOverrides);
   const log = setupEvents(cfg).map((e, i, all): GameEvent => {
     if (e.type !== "roleDealt") return e;
     const seat = all.slice(0, i).filter((x) => x.type === "roleDealt").length;
-    return { ...e, role: roles[seat] ?? "rookie" };
+    return { ...e, role: roles[seat] ?? "lookout" };
   });
   return replay(cfg, log);
 }
@@ -147,7 +145,7 @@ describe("rejected commands leave state untouched", () => {
     ["Security without a watched room", submit("p0", { room: "security" })],
     ["Security watching a closed room", submit("p0", { room: "security", watch: "serverRoom" })],
     ["watching from outside Security", submit("p0", { room: "vault", duffel: 1, watch: "office" })],
-    ["a Rookie using an ability", submit("p0", { room: "vault", duffel: 1, ability: { kind: "lookout", rooms: ["office"] } })],
+    ["a Lookout using another role's ability", submit("p0", { room: "vault", duffel: 1, ability: { kind: "ring", room: "office" } })],
     ["advance without a deadline", { type: "advance" }],
     ["unknown deadline", { type: "advance", deadline: { kind: "lunch" } }],
     ["meeting deadline (none pending)", { type: "advance", deadline: { kind: "openMeeting", meetingId: "m1" } }],

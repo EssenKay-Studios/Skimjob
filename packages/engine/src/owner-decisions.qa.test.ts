@@ -1,11 +1,10 @@
 // QA (PR #21, owner answers 1 Nov; extension.md): the one vote rule at every
-// crew size, uniqueRoles (§8.1, §15),
-// the alibi phase (§5.4) with meetings,
+// crew size, the alibi phase (§5.4) with meetings,
 // shakedown windows and the last round, and repeating cards (§10).
-import { BANK_JOB, EVENTS, STARTER_ROLES, type RoleId } from "@skimjob/content";
+import { BANK_JOB, EVENTS } from "@skimjob/content";
 import { describe, expect, it } from "vitest";
 import type { GameConfig, GameEvent, GameState } from "./types";
-import { createGame, setupEvents, validateConfig } from "./setup";
+import { setupEvents, validateConfig } from "./setup";
 import { replay } from "./reduce";
 import { handleCommand } from "./handle";
 import { meetingResult } from "./meeting";
@@ -20,17 +19,16 @@ function config(n: number, extra: Partial<GameConfig> = {}): GameConfig {
     seed: "qa-owner",
     players: seats(n),
     job: "bank",
-    rolePool: [...STARTER_ROLES],
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     contentOverrides: R6_COINS,
     ...extra,
   };
 }
-/** Seat i gets roles[i] (Rookie if missing). */
+/** Seat i gets roles[i] (a Lookout if missing: its power acts only when used). */
 function game(cfg: GameConfig, roles: string[] = []): GameState {
   let seat = 0;
-  return replay(cfg, setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: roles[seat++] ?? "rookie" } : e)));
+  return replay(cfg, setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: roles[seat++] ?? "lookout" } : e)));
 }
 type Cmd = unknown | ((s: GameState) => unknown);
 const exec = (s: GameState, c: Cmd) => handleCommand(s, typeof c === "function" ? (c as (s: GameState) => unknown)(s) : c);
@@ -63,7 +61,6 @@ function pass(s: GameState): GameState {
 const vote = (player: string, target: string | null) => ({ type: "castVote", player, vote: target === null ? { kind: "skip" } : { kind: "shakedown", target } });
 const LAST = <T extends GameEvent["type"]>(s: GameState, type: T) => s.log.filter((e): e is Extract<GameEvent, { type: T }> => e.type === type).at(-1);
 const m = (entries: [string, number][]) => new Map(entries);
-const dealt = (cfg: GameConfig): RoleId[] => setupEvents(cfg).flatMap((e) => (e.type === "roleDealt" ? [e.role] : []));
 
 describe("QA one vote rule at 8 vs 9 players — extension.md \"One vote rule\", design §9.5", () => {
   it.each([
@@ -78,9 +75,9 @@ describe("QA one vote rule at 8 vs 9 players — extension.md \"One vote rule\",
     ["12p: 6 of 12 is not more than half", 12, 12, 0, m([["a", 6], ["b", 6]]), 12, "noMajority"],
     ["12p: 7 skip of 12", 12, 12, 7, m([["a", 5]]), 12, "skipped"],
     ["12p: 7 of 12", 12, 12, 1, m([["a", 7], ["b", 4]]), 12, "shakedown"],
-    ["9p Smooth talker: ST + 3 = 5 of 10 is not more than half", 9, 9, 3, m([["a", 5], ["b", 2]]), 10, "noMajority"],
-    ["9p Smooth talker: ST + 4 = 6 of 10", 9, 9, 2, m([["a", 6], ["b", 2]]), 10, "shakedown"],
-    ["9p Smooth talker skipping makes a skip majority", 9, 9, 6, m([["a", 4]]), 10, "skipped"],
+    ["9p Smooth Talker: ST + 3 = 5 of 10 is not more than half", 9, 9, 3, m([["a", 5], ["b", 2]]), 10, "noMajority"],
+    ["9p Smooth Talker: ST + 4 = 6 of 10", 9, 9, 2, m([["a", 6], ["b", 2]]), 10, "shakedown"],
+    ["9p Smooth Talker skipping makes a skip majority", 9, 9, 6, m([["a", 4]]), 10, "skipped"],
   ] as const)("%s", (_n, crew, voters, skip, targets, weight, expected) => {
     expect(meetingResult(crew, voters, skip, targets, weight).kind).toBe(expected);
   });
@@ -91,8 +88,11 @@ describe("QA one vote rule at 8 vs 9 players — extension.md \"One vote rule\",
 
   // An emergency meeting called in round 1's result window (design §9.3).
   function emergencyVote(n: number, votes: [string, string | null][]): GameState {
-    const roles = [...Array<string>(n - 1).fill("rookie"), "smoothTalker"];
-    let s = run(game(config(n, { rolePool: [...STARTER_ROLES, "smoothTalker"] }), roles), ROUND, ALIBIS);
+    const roles = [...Array<string>(n - 1).fill("lookout"), "smoothTalker"];
+    // A Shield in the shop, so a passed shakedown waits for its window (design §9.6).
+    const g = game(config(n), roles);
+    const shielded = replay(g.config, g.log.map((e): GameEvent => (e.type === "shopDealt" ? { ...e, perks: ["peek", "shield", "extraVote"] } : e)));
+    let s = run(shielded, ROUND, ALIBIS);
     expect(s.phase).toEqual({ kind: "result", round: 1 });
     s = run(s, { type: "callEmergency", player: "p8" }, open("emergency-1"));
     expect(viewFor(s, "p0").alibiRound).toBeNull();
@@ -118,27 +118,10 @@ describe("QA one vote rule at 8 vs 9 players — extension.md \"One vote rule\",
   });
 
   it("8p integrated: a 3-vote lead is no shakedown (nor at 9p)", () => {
-    let t = run(game(config(8, { rolePool: [...STARTER_ROLES, "smoothTalker"] })), ROUND, ALIBIS, { type: "callEmergency", player: "p7" }, open("emergency-1"));
+    let t = run(game(config(8)), ROUND, ALIBIS, { type: "callEmergency", player: "p7" }, open("emergency-1"));
     t = run(t, ...ballots.slice(0, 7).map(([p, v]) => vote(p, v)), close("emergency-1"));
     expect(LAST(t, "meetingClosed")?.result).toEqual({ kind: "noMajority" });
     expect(t.phase).toEqual({ kind: "planning", round: 2 });
-  });
-});
-
-describe("QA dealing — design §8.1", () => {
-  const SEEDS = Array.from({ length: 150 }, (_, i) => `deal-${i}`);
-
-  it("uniqueRoles false repeats roles; true never does; non-boolean rejected; deal is deterministic", () => {
-    const repeats = (cfg: GameConfig) => {
-      const roles = dealt(cfg).filter((r) => r !== "rookie" && r !== "mole" && r !== "mole");
-      return roles.length !== new Set(roles).size;
-    };
-    expect(SEEDS.slice(0, 40).some((seed) => repeats(config(12, { seed, rolePool: [], uniqueRoles: false })))).toBe(true);
-    expect(SEEDS.slice(0, 40).some((seed) => repeats(config(12, { seed, rolePool: [] })))).toBe(false);
-    expect(dealt(config(6, { rolePool: ["lookout"], uniqueRoles: false, deal: "random" }))).toEqual(Array(6).fill("lookout"));
-    expect(validateConfig({ ...config(6), uniqueRoles: "no" })).toContain("uniqueRoles must be a boolean");
-    const cfg = config(12, { seed: "det", rolePool: [], uniqueRoles: false });
-    expect(setupEvents(cfg)).toEqual(setupEvents(cfg));
   });
 });
 
@@ -216,7 +199,7 @@ describe("QA game end closes the alibi window — design §5.4 (PR #21 QA repro)
 
 describe("QA repeating cards — design §10", () => {
   function cards(seed: string): string[] {
-    let s = game(config(4, { seed, eventsEnabled: true, rolePool: ["rookie"] }));
+    let s = game(config(4, { seed, eventsEnabled: true }));
     for (let i = 0; i < 40 && s.phase.kind !== "ended"; i++) {
       if (s.phase.kind === "planning") s = run(s, ROUND);
       else if (s.phase.kind === "alibis") s = run(s, ALIBIS);

@@ -1,10 +1,9 @@
-// Extension helpers (docs/extension.md), from real engine views: role facts,
-// the shop and perk uses, endings.
-import { DECKS, PERKS, ROLES } from "@skimjob/content";
+// Role facts (design §11, §20.2), the shop and perk uses (extension.md, until
+// S3a.7) and endings, from real engine views.
+import { PERKS, ROLES, ROLE_TEXT, ROLE_WIN } from "@skimjob/content";
 import {
   PUBLIC,
   applyEvent,
-  createGame,
   handleCommand,
   privateTo,
   viewFor,
@@ -18,19 +17,16 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { EndingNote } from "../components/Extension";
 import { describeEvent } from "./describeEvent";
-import { endingText, howYouWin, perkUses, roleInfo, roleListInfo, shopState, usedPerkThisRound } from "./extension";
+import { KIND_LABEL, endingText, perkUses, roleInfo, roleListInfo, rolesByKind, shopState, usedPerkThisRound } from "./extension";
 import { abilityOffers } from "./meeting";
-import { deckPatch, deckRoles, rolePatch } from "../components/DeckSettings";
-import type { LobbySettings } from "../api";
+import { createGame } from "./deal.testkit";
 
 const config = (extra: Partial<GameConfig> = {}): GameConfig => ({
   seed: "ext-test",
   players: Array.from({ length: 4 }, (_, i) => ({ id: `p${i + 1}`, name: i === 0 ? "Ana" : `Bot · ${i}`, isBot: i > 0 })),
   job: "bank",
-  rolePool: ["rookie"],
   eventsEnabled: false,
   voteVisibility: "hiddenThenRevealed",
-  uniqueRoles: false,
   ...extra,
 });
 
@@ -49,24 +45,25 @@ const tokens = (s: GameState, n: number, player = "p1") => {
   return s;
 };
 
-describe("role facts (extension.md Roles)", () => {
-  it("gives every role a tag and a How you win line; ★ roles name the failures they win", () => {
-    expect(roleInfo("rookie")).toMatchObject({ tagLabel: "Team player", star: false, howYouWin: "Have the biggest stash when the job succeeds." });
-    expect(roleInfo("hacker")).toMatchObject({ tagLabel: "Wildcard", star: false, howYouWin: "Have the biggest stash when the job succeeds." });
-    expect(roleInfo("mole")).toMatchObject({ tagLabel: "Lone wolf", star: true, howYouWin: "Have the biggest stash when the job succeeds, or the biggest of all when the heist is sunk by theft." });
-    expect(howYouWin(["theft"])).toMatch(/when the heist is sunk by theft\.$/);
-    expect(howYouWin(["theft"])).toBe(howYouWin(ROLES.mole!.winsOn));
+describe("role facts — design §11.1, §20.2", () => {
+  it("gives every role its kind, its §20.2 power line and its How you win line; ★ marks the Mole and the Fixer", () => {
+    for (const id of Object.keys(ROLES)) {
+      const info = roleInfo(id);
+      expect(info.kindLabel, id).toBe(KIND_LABEL[ROLES[id]!.kind]);
+      expect(info.power, id).toBe(ROLE_TEXT[id]!.power);
+      expect(info.howYouWin, id).toBe(ROLE_WIN[ROLE_TEXT[id]!.win]);
+      expect(info.star, id).toBe(id === "mole" || id === "fixer");
+    }
+    expect(roleInfo("hacker")).toMatchObject({ kind: "shadows", kindLabel: "Shadows", star: false });
+    expect(roleInfo("priest")).toMatchObject({ kind: "eyes", kindLabel: "Eyes", earns: null });
+    expect(roleInfo("lookout").earns).toMatch(/^A token when: /);
   });
 
-  it("reads powers and rewards between meetings, with numbers from content", () => {
-    const priest = roleInfo("priest");
-    expect(priest.power).toContain("between meetings");
-    expect(priest.power).toContain("shaken down clean, you earn a token");
-    expect(priest.earns).toMatch(/^A token when: /);
-    // design §5.2, §11.1: the Mole rings a bell; the Fixer reopens a taped-off room.
-    expect(roleInfo("mole").power).toMatch(/^Once between meetings: rings one room's bell once \(not the Rooftop or a taped-off room\)/);
-    expect(roleInfo("fixer").power).toMatch(/^Once a game: tears the tape off a raided room/);
-    expect(roleInfo("rookie").power).toBe("No power.");
+  it("groups roles by kind, eyes first, in content order", () => {
+    expect(rolesByKind(Object.keys(ROLES)).map((g) => [g.kind, g.roles])).toEqual([
+      ["eyes", ["lookout", "detective", "auditor", "smoothTalker", "priest"]],
+      ["shadows", ["locksmith", "hacker", "electrician", "mole", "fixer"]],
+    ]);
   });
 
   it("shows the role list: exact by default, hidden when the host hides it", () => {
@@ -79,10 +76,6 @@ describe("role facts (extension.md Roles)", () => {
 
 describe("tokens and the perk shop (extension.md)", () => {
   const withShop = (shop: GameState["shop"]) => ({ ...createGame(config()), shop });
-
-  it("the Starter deck keeps the shop", () => {
-    expect(shopState(viewFor(createGame(config({ deck: "starter", rolePool: [...DECKS.starter] })), "p1")).open).toBe(true);
-  });
 
   it("prices perks from the view, buys with tokens and keeps them private", () => {
     let s = withShop(["peek", "shield", "rig"]);
@@ -132,22 +125,22 @@ describe("tokens and the perk shop (extension.md)", () => {
   });
 });
 
-describe("no tells (extension.md Situations)", () => {
-  it("reads a Hacker's loop as camera offline", () => {
+describe("no tells — design §11.1", () => {
+  it("reads a blacked-out room's feed as cameras offline, with no source", () => {
     const ctx = { me: "p1", name: (p: string) => p };
     const feed = { type: "roomWatched", visibility: privateTo("p1"), player: "p1", round: 3, source: "security", room: "vault", seen: [], offline: true } as const;
-    expect(describeEvent(feed, ctx)).toBe("Round 3, on the cameras: camera offline in the Vault.");
+    expect(describeEvent(feed, ctx)).toBe("Round 3, on the cameras: cameras offline in the Vault.");
   });
 });
 
-describe("endings (extension.md Winning and losing)", () => {
+describe("endings — design §8", () => {
   it("says how it ended and marks a failure with no qualified winner as a loss", () => {
     expect(endingText({ result: "success", winners: ["p1"] })).toEqual({ title: "Job done: honest enough, and no bust", badge: "Biggest stash", loss: false });
     expect(endingText({ result: "failed", reason: "bust", winners: [] })).toMatchObject({ badge: "Wins over the Rooftop", loss: true });
     expect(endingText({ result: "failed", reason: "theft", winners: [] })).toMatchObject({ badge: "Wins a heist sunk by theft", loss: true });
   });
 
-  it("doesn't call a failure with a ★ winner a loss", () => {
+  it("doesn't call a failure with a winner a loss", () => {
     expect(endingText({ result: "failed", reason: "bust", winners: ["p2"] })).toMatchObject({ title: "Busted. On a bust, only the Rooftop gets away", badge: "Wins over the Rooftop", loss: false });
     expect(endingText({ result: "failed", reason: "theft", winners: ["p3"] }).loss).toBe(false);
     const note = (winners: string[]) => renderToStaticMarkup(createElement(EndingNote, { outcome: { result: "failed", reason: "bust", winners }, name: (id: string) => (id === "p1" ? "You" : id === "p2" ? "Ben" : "Cy") }));
@@ -155,35 +148,5 @@ describe("endings (extension.md Winning and losing)", () => {
     expect(note(["p2"])).not.toContain("loss");
     expect(note(["p1", "p3"])).toContain("You and Cy win over the Rooftop.");
     expect(note([])).toContain("The ranking is marked as a loss.");
-  });
-});
-
-describe("lobby deck settings (extension.md Host settings)", () => {
-  const base: LobbySettings = {
-    sessionLength: "1h",
-    voteVisibility: "hiddenThenRevealed",
-    deck: "standard",
-    roles: [],
-    deal: "balanced",
-    roleList: "exact",
-    eventsEnabled: true,
-    dmNotices: true,
-    uniqueRoles: true,
-  };
-
-  it("plays the host's deck at every session length", () => {
-    expect(deckRoles({ ...base, sessionLength: "15m" })).toEqual(DECKS.standard);
-  });
-
-  it("makes Starter only the no-events deck", () => {
-    expect(deckPatch("starter")).toEqual({ deck: "starter", roles: [], eventsEnabled: false });
-    expect(deckPatch("everything")).toEqual({ deck: "everything", roles: [] });
-  });
-
-  it("toggles roles one by one, back to the preset when they match, never to none", () => {
-    const off = rolePatch(base, "hacker")!;
-    expect(off.roles).toEqual(DECKS.standard.filter((r) => r !== "hacker"));
-    expect(rolePatch({ ...base, roles: off.roles! }, "hacker")).toEqual({ roles: [] });
-    expect(rolePatch({ ...base, roles: ["rookie"] }, "rookie")).toBeNull();
   });
 });

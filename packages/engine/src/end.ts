@@ -3,12 +3,15 @@
 //
 // Pure: the round loop calls `gameEnded` with the events it has produced so
 // far, which are folded first, so the ranking sees the last round's coins.
-import type { FailureReason } from "@skimjob/content";
 import type { GameEnded, GameEvent, GameState, Outcome, PlayerId, PlayerState, RankEntry } from "./types";
 import { PUBLIC } from "./types";
 import { applyEvent } from "./reduce";
-import { jobFor, rolesFor, winsOn, type RoleTable } from "./overrides";
+import { jobFor } from "./overrides";
+import { roleHandler } from "./roles";
 import { honesty, honestyOf } from "./shares";
+
+/** Why a heist failed: a bust (Wanted 3, design §5.5), or sunk by theft (honesty below the line at the end, §8.4). */
+type Failure = "bust" | "theft";
 
 /** Everyone, biggest stash first; equal stashes keep seat order (no tie-break, design §8.5). design §8.6 */
 export function ranking(state: GameState): RankEntry[] {
@@ -27,13 +30,14 @@ export function leadersOf(ranked: readonly RankEntry[]): PlayerId[] {
 
 /**
  * design §8.5 "Who can win, by ending": a success is won by every player tied
- * for the biggest stash (the whole crew when every stash is equal, §8.2). A heist sunk by theft is won only by those of them
- * whose role wins it (`winsOn`: the Mole and the Fixer, each copy on its own, until S3a.6 moves
- * it into their handlers), else by nobody. A bust is won by the escapees tied for the biggest
- * stash among them, any role (§5.5). The full ranking is always kept (§8.6).
- * Unless the game busted, the kitty and any unsplit duffel pay for the getaway car (§6.3).
+ * for the biggest stash (the whole crew when every stash is equal, §8.2). A
+ * heist sunk by theft is won only by the players whose role handler's own rule
+ * wins it (the Mole and the Fixer, each copy on its own, §11.3), else by
+ * nobody. A bust is won by the escapees tied for the biggest stash among them,
+ * any role (§5.5). The full ranking is always kept (§8.6). Unless the game
+ * busted, the kitty and any unsplit duffel pay for the getaway car (§6.3).
  */
-export function outcomeFor(state: GameState, failure: FailureReason | null, roles: RoleTable = rolesFor(state.config), escapees: readonly PlayerId[] = []): Outcome {
+export function outcomeFor(state: GameState, failure: Failure | null, escapees: readonly PlayerId[] = []): Outcome {
   const ranked = ranking(state);
   const top = leadersOf(ranked);
   const getaway = state.kitty + state.setAside;
@@ -44,8 +48,8 @@ export function outcomeFor(state: GameState, failure: FailureReason | null, role
     const winners = state.playerOrder.filter((id) => escapees.includes(id) && (state.players[id] as PlayerState).stash === best);
     return { result: "failed", reason: "bust", escapees: [...escapees], ranking: ranked, winners };
   }
-  const role = new Map(ranked.map((e) => [e.player, e.role]));
-  return { result: "failed", reason: failure, ranking: ranked, winners: top.filter((id) => winsOn(roles, role.get(id) ?? "", failure)), getaway };
+  const winners = state.playerOrder.filter((id) => roleHandler((state.players[id] as PlayerState).role).winsSunk?.(state, id) ?? false);
+  return { result: "failed", reason: failure, ranking: ranked, winners, getaway };
 }
 
 /**
@@ -65,7 +69,7 @@ export function endCheck(state: GameState, events: readonly GameEvent[], round: 
  * The `gameEnded` event after `events` (this command's events so far) are
  * folded into `state`. On a bust, `escapees` are the round's Rooftop players (design §5.5).
  */
-export function gameEnded(state: GameState, events: readonly GameEvent[], failure: FailureReason | null, escapees: readonly PlayerId[] = []): GameEnded {
+export function gameEnded(state: GameState, events: readonly GameEvent[], failure: Failure | null, escapees: readonly PlayerId[] = []): GameEnded {
   const final = events.reduce(applyEvent, state);
-  return { type: "gameEnded", visibility: PUBLIC, outcome: outcomeFor(final, failure, rolesFor(state.config), escapees) };
+  return { type: "gameEnded", visibility: PUBLIC, outcome: outcomeFor(final, failure, escapees) };
 }

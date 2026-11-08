@@ -21,7 +21,6 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
     seed: "deck-seed",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: ["rookie", "lookout", "hacker", "priest"], // a window only if the shop holds a Shield
     eventsEnabled: true,
     voteVisibility: "open",
     // Bells too big to raid: these scripts test other rules (bells and raids: bells.test.ts).
@@ -30,14 +29,14 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
   };
 }
 
-/** A new game with chosen roles (seat i gets roles[i], Rookie if missing), plus any extra setup events. */
+/** A new game with chosen roles (seat i gets roles[i], a Lookout if missing), plus any extra setup events. */
 function game(players: number, roles: string[] = [], extra: Partial<GameConfig> = {}, more: GameEvent[] = []): GameState {
   const cfg = config(players, extra);
   const log = setupEvents(cfg)
     .map((e, i, all): GameEvent => {
       if (e.type !== "roleDealt") return e;
       const seat = all.slice(0, i).filter((x) => x.type === "roleDealt").length;
-      return { ...e, role: roles[seat] ?? "rookie" };
+      return { ...e, role: roles[seat] ?? "lookout" };
     });
   const at = log.findIndex((e) => e.type === "roundStarted");
   log.splice(at, 0, ...more);
@@ -177,7 +176,7 @@ describe("card effects — design §10, §5.2", () => {
   const atRound2 = (n: number, roles: string[] = [], extra: Partial<GameConfig> = {}) => resolve(game(n, roles, extra));
 
   it("Shift change: Vault visitors can grab 1 extra coin (design §13), and every one rings (§5.2)", () => {
-    const base = withCard(atRound2(4, ["rookie"]), "shiftChange");
+    const base = withCard(atRound2(4, ["lookout"]), "shiftChange");
     const s = resolve(base, { p0: { room: "vault", duffel: 1, pocket: 3 } });
     const split = lastResolution(s).find((e) => e.type === "coinsGrabbed" && e.player === "p0");
     expect(split).toMatchObject({ duffel: 1, pocket: 3, seized: 0 });
@@ -185,7 +184,7 @@ describe("card effects — design §10, §5.2", () => {
     expect(lastResolution(s).find((e) => e.type === "bellsRung")).toMatchObject({ bells: { vault: 4 } });
     // 5 is one too many with the card; without it, 4 is.
     expect(handleThroughAlibis(base, { type: "submitMove", player: "p0", move: { room: "vault", duffel: 1, pocket: 4 } }).ok).toBe(false);
-    const plain = withCard(atRound2(4, ["rookie"]), "audit");
+    const plain = withCard(atRound2(4, ["lookout"]), "audit");
     expect(handleThroughAlibis(plain, { type: "submitMove", player: "p0", move: { room: "vault", duffel: 1, pocket: 3 } }).ok).toBe(false);
   });
 
@@ -205,7 +204,7 @@ describe("card effects — design §10, §5.2", () => {
   });
 
   it("Audit: the round's shortfall is posted per room, publicly, every room in play listed", () => {
-    const base = withCard(atRound2(4, ["rookie", "rookie", "hacker", "lookout"]), "audit");
+    const base = withCard(atRound2(4, ["lookout", "lookout", "hacker", "lookout"]), "audit");
     const s = resolve(base, {
       p0: fullGrab("vault", 3),
       p1: fullGrab("vault", 1),
@@ -222,7 +221,7 @@ describe("card effects — design §10, §5.2", () => {
   });
 
   it("Inside tip: one player privately learns another player's real role", () => {
-    const s = resolve(withCard(atRound2(4, ["rookie", "lookout", "hacker", "priest"]), "insideTip"));
+    const s = resolve(withCard(atRound2(4, ["lookout", "lookout", "hacker", "priest"]), "insideTip"));
     const tips = lastResolution(s).filter((e): e is Extract<GameEvent, { type: "insideTip" }> => e.type === "insideTip");
     expect(tips).toHaveLength(1);
     const tip = tips[0] as Extract<GameEvent, { type: "insideTip" }>;
@@ -245,7 +244,7 @@ describe("event-card visibility (leak tests) — design §10, §13, §17.2", () 
   });
 
   it("Inside tip reaches only its player", () => {
-    const tipped = resolve(withCard(resolve(game(4, ["rookie", "lookout", "hacker", "priest"])), "insideTip"));
+    const tipped = resolve(withCard(resolve(game(4, ["lookout", "lookout", "hacker", "priest"])), "insideTip"));
     const tip = tipped.log.find((e) => e.type === "insideTip");
     for (const id of tipped.playerOrder) expect(sees(tipped, id, "insideTip")).toBe(tip?.type === "insideTip" && tip.player === id);
   });

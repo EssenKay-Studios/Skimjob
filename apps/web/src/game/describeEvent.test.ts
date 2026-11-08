@@ -46,6 +46,15 @@ describe("describeEvent", () => {
     expect(describeEvent(sampleEvents.roleDealt, asCyd)).toBe("Ana was the Hacker."); // the reveal
   });
 
+  // design §11.1, §11.4, §5.1: the power cut, the absolved player, a copy's use already done, a hidden bell.
+  it("describes the power cut, absolution, an already-done use and a hidden bell", () => {
+    expect(describeEvent(sampleEvents.powerCut, asCyd)).toBe("Power cut in the Office this round.");
+    expect(describeEvent(sampleEvents.sinsAbsolved, asAna)).toBe("Round 1: your sins were absolved.");
+    expect(describeEvent(sampleEvents.abilityAlreadyDone, { ...asAna, me: "ben" })).toBe(
+      "Round 1: already done this round by another copy of your role; your power is not spent.",
+    );
+  });
+
   // extension.md "Tokens and the shop": tokens never say why.
   it("describes tokens and the shop", () => {
     expect(describeEvent(sampleEvents.tokenEarned, asAna)).toBe("You earned a token.");
@@ -91,18 +100,22 @@ describe("describeEvent", () => {
     expect(describeEvent({ ...sampleEvents.meetingClosed, result }, asAna)).toBe(text);
   });
 
-  // design §8: every ability's result.
+  // design §11.1: every power's result.
   const abilities: SamplesOf<ResolvedAbility> = {
     lookout: [{ kind: "lookout", rooms: ["vault", "office"] }],
-    loopCameras: [{ kind: "loopCameras", room: "vault" }],
+    detect: [{ kind: "detect", round: 2, target: "ben", grabbed: 3 }],
+    audit: [{ kind: "audit", round: 2, room: "office", duffel: 1 }],
+    hide: [
+      { kind: "hide", room: "vault", bulbs: 3 },
+      { kind: "hide", room: "vault", bulbs: null },
+    ],
+    blackout: [{ kind: "blackout", room: "office" }],
+    absolve: [
+      { kind: "absolve", target: "ben", taken: 2 },
+      { kind: "absolve", target: "ben", taken: null },
+    ],
     ring: [{ kind: "ring", room: "office" }],
     reopen: [{ kind: "reopen", room: "vault" }],
-    audit: [{ kind: "audit", round: 2, room: "office", shortfall: 1 }],
-    checkStash: [
-      { kind: "checkStash", target: "ben", dirty: true },
-      { kind: "checkStash", target: "ben", dirty: false },
-    ],
-    bless: [{ kind: "bless", target: "ben", stretch: 2 }],
   };
   it.each(flat(abilities))("describes the $kind ability", (ability) => {
     expectSentence(describeEvent({ ...sampleEvents.abilityResolved, ability }, asAna));
@@ -111,11 +124,16 @@ describe("describeEvent", () => {
   it("describes abilities exactly", () => {
     const as = (ability: ResolvedAbility) => describeEvent({ ...sampleEvents.abilityResolved, ability }, asAna);
     expect(as(abilities.lookout[0])).toBe("Round 1: you kept lookout on the Vault and Office.");
-    // design §9.6: dirty is anything above the share.
-    expect(as(abilities.checkStash[0])).toBe("Stash check: Ben holds something above the share (not clean).");
-    expect(as(abilities.checkStash[1]!)).toBe("Stash check: Ben holds nothing above the share (clean).");
-    // design §8 (v2 §2): Priest; §5.2, §5.3, §11.1: the Mole's ring and the Fixer's reopen
-    expect(as(abilities.bless[0])).toBe("You blessed Ben until the next regular meeting.");
+    // design §11.1: the Detective, the Auditor, the Hacker (it sees the real bell), the Electrician and the Priest.
+    expect(as(abilities.detect[0])).toBe("Round 2: Ben grabbed 3 coins.");
+    expect(as(abilities.audit[0])).toBe("Audit: 1 coin reached the duffel from the Office in round 2.");
+    expect(as(abilities.hide[0])).toBe("Round 1: you hid the Vault's bell; it really shows 3 lit.");
+    expect(as(abilities.hide[1]!)).toBe("Round 1: you hid the Vault's bell.");
+    expect(as(abilities.blackout[0])).toBe("Round 1: you cut the power in the Office for next round.");
+    expect(as(abilities.absolve[0])).toBe("Round 1: you absolved Ben: 2 set aside for the next split.");
+    // design §11.1: on a bust the absolve never resolves.
+    expect(as(abilities.absolve[1]!)).toBe("Round 1: you absolved Ben, but the bust came first.");
+    // design §5.2, §5.3, §11.1: the Mole's ring and the Fixer's reopen
     expect(as(abilities.ring[0])).toBe("Round 1: you tipped off the police: the Office's bell rang once more.");
     expect(as(abilities.reopen[0])).toBe("Round 1: you tore the tape off the Vault.");
   });
@@ -140,9 +158,10 @@ describe("describeEvent", () => {
     expect(describeEvent({ ...sampleEvents.perkUsed, perk: perks.rig[0] }, asAna)).toBe("You rigged round 3's card: Audit and Lockdown to pick from.");
   });
 
-  // design §5, §8 (v2 §2): the public lines never name who acted unless the rule does.
+  // design §5, §11.1: the public lines never name who acted unless the rule does; a hidden bell shows "?".
   it("describes bells, raids and a reopened room without naming hidden actors", () => {
-    expect(describeEvent(sampleEvents.bellsRung, asCyd)).toBe("Round 1 bells: Vault 4 bulbs and Office 1 bulb.");
+    expect(describeEvent(sampleEvents.bellsRung, asCyd)).toBe("Round 1 bells: Vault 4 bulbs; Office ?.");
+    expect(describeEvent({ ...sampleEvents.bellsRung, bells: { vault: 4, office: 1 }, hidden: [] }, asCyd)).toBe("Round 1 bells: Vault 4 bulbs and Office 1 bulb.");
     expect(describeEvent(sampleEvents.roomRaided, asCyd)).toBe("Raid! The police hit the Vault in round 1 and seized 3 coins. It is taped off through round 3. Wanted 1.");
     expect(describeEvent(sampleEvents.bellsCooled, asCyd)).toBe("After round 1 the bells cooled: all dark.");
     expect(describeEvent(sampleEvents.roomReopened, asCyd)).toBe("The tape is off the Vault: it opens again next round.");

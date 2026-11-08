@@ -526,23 +526,6 @@ hr.dashed {
 .settings__list .seg--wide {
   grid-column: 1 / -1;
 }
-/* Deck: per-role toggles, grouped by tag (extension.md "Host settings"). */
-.deck-roles__toggle {
-  justify-self: start;
-}
-.deck-roles__groups {
-  display: grid;
-  gap: 10px;
-}
-.deck-roles__group {
-  display: grid;
-  gap: 6px;
-}
-.deck-roles__chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 10px;
-}
 .addbot {
   display: grid;
   gap: 12px;

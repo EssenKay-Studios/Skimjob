@@ -1,12 +1,12 @@
 // The bots' suspicion model: a score for every other player, worked out from
-// the view alone. design §17.3 (and §5.3 shortfalls, §5.4 alibis, §6 Security
-//, §8 Lookout, §11.3 shakedown results)
+// the view alone. design §19.3 (and §5.3 shortfalls, §5.4 alibis, §3.4 Security
+//, §11.1 powers, §9.6 shakedown results)
 //
 // Rebuilt from the ledger and case file each time it's needed, so a bot keeps
 // no hidden memory of its own: same view, same scores.
-import { ROLES, type RoleId, type RoomId } from "@skimjob/content";
+import type { RoleId, RoomId } from "@skimjob/content";
 import { roomDef, type AbilityResolved, type PlayerId, type PlayerView, type RoundResolved } from "@skimjob/engine";
-import { claimantsOf, claimsOf, jobOf, ofType, uniqueRole } from "./read";
+import { claimantsOf, claimsOf, copiesOf, jobOf, ofType, winsSunk } from "./read";
 
 /** How much each kind of evidence moves a score. Shared by every personality; they differ in when they act on it. */
 export interface SuspicionWeights {
@@ -22,9 +22,7 @@ export interface SuspicionWeights {
   readonly afterClean: number;
   /** Score after a shakedown found loot: a known skimmer, but just emptied. design §11.3 */
   readonly afterDirty: number;
-  /** My Detective check said their stash is at or above the clean threshold (v2 §2). */
-  readonly checkedDirty: number;
-  /** Per loot my Audit found missing from a room, shared among the others who claimed it (v2 §2). */
+  /** Per coin my Audit found short of a room's claimants' grabs, shared among the others who claimed it (design §11.1). */
   readonly audited: number;
   /**
    * A role claim I know is false (v2 §4): it names my own role, contradicts my
@@ -36,7 +34,7 @@ export interface SuspicionWeights {
   readonly doubleClaim: number;
   /** A claim I can't check, standing alone: a little trust. */
   readonly claimed: number;
-  /** My Peek or Inside tip says they hold a Wildcard or Lone wolf role. */
+  /** My Peek or Inside tip says they hold a role that also wins a heist sunk by theft (the Mole, the Fixer, §8.4). */
   readonly knownDark: number;
 }
 
@@ -47,7 +45,6 @@ export const SUSPICION_WEIGHTS: SuspicionWeights = {
   noAlibi: 1.5,
   afterClean: -3,
   afterDirty: 1,
-  checkedDirty: 3,
   audited: 1,
   falseClaim: 6,
   doubleClaim: 2,
@@ -83,7 +80,8 @@ export function suspicion(view: PlayerView, w: SuspicionWeights = SUSPICION_WEIG
     const notIn = new Map<PlayerId, Set<RoomId>>();
     for (const s of ofType(view.caseFile, "roomSighting")) if (s.round === round) for (const o of s.others) seenIn.set(o, s.room);
     for (const watch of ofType(view.caseFile, "roomWatched")) {
-      if (watch.round !== round) continue;
+      // design §11.1: a blacked-out room's feed shows nobody, which tells nothing.
+      if (watch.round !== round || watch.offline) continue;
       for (const o of others) {
         if (watch.seen.includes(o)) {
           seenIn.set(o, watch.room);
@@ -133,12 +131,20 @@ export function suspicion(view: PlayerView, w: SuspicionWeights = SUSPICION_WEIG
     for (const [id, weight] of weights) add(id, (w.shortfall * unexplained * weight) / total);
   }
 
-  /** v2 §2: what my own Auditor / Detective power found. */
+  /** design §11.1: what my own Detective or Auditor power found against the alibis. */
   function judgePower(ability: AbilityResolved["ability"]): void {
-    if (ability.kind === "checkStash" && ability.dirty) add(ability.target, w.checkedDirty);
-    if (ability.kind !== "audit" || ability.shortfall === 0) return;
+    if (ability.kind === "detect") {
+      // A grab bigger than the claimed room allows is a lie.
+      const said = alibis.get(ability.round)?.get(ability.target);
+      if (said !== undefined && ability.grabbed > coins(said)) add(ability.target, w.lie);
+      return;
+    }
+    if (ability.kind !== "audit") return;
     const claimants = [...(alibis.get(ability.round) ?? [])].filter(([id, room]) => id !== me && room === ability.room).map(([id]) => id);
-    for (const id of claimants) add(id, (w.audited * ability.shortfall) / claimants.length);
+    // What the claimants' full grabs would have handed in, less what reached the duffel (my own hand-in there included).
+    const mine = ofType(view.caseFile, "coinsGrabbed").find((e) => e.round === ability.round && e.room === ability.room)?.duffel ?? 0;
+    const short = claimants.length * coins(ability.room) - (ability.duffel - mine);
+    if (short > 0) for (const id of claimants) add(id, (w.audited * short) / claimants.length);
   }
 
   // In log order (seq), so a shakedown resets what came before it. design §11.3
@@ -167,15 +173,15 @@ export function knownRoles(view: PlayerView): Map<PlayerId, RoleId> {
 function judgeClaims(view: PlayerView, add: (id: PlayerId, n: number) => void, w: SuspicionWeights): void {
   const me = view.me.id;
   const known = knownRoles(view);
-  for (const [id, role] of known) if (id !== me && ROLES[role] && ROLES[role].tag !== "teamPlayer") add(id, w.knownDark);
+  for (const [id, role] of known) if (id !== me && winsSunk(role)) add(id, w.knownDark);
   for (const [id, roles] of claimsOf(view)) {
     if (id === me) continue;
     const role = roles.at(-1) as RoleId;
     if (new Set(roles).size > 1) add(id, w.falseClaim / 2);
     const knownRole = known.get(id);
     if (knownRole !== undefined) add(id, knownRole === role ? w.claimed : w.falseClaim);
-    else if (uniqueRole(role) && role === view.me.role) add(id, w.falseClaim);
-    else if (uniqueRole(role) && claimantsOf(view, role).length > 1) add(id, w.doubleClaim);
+    else if (role === view.me.role && copiesOf(view, role) === 1) add(id, w.falseClaim);
+    else if (claimantsOf(view, role).length > copiesOf(view, role)) add(id, w.doubleClaim);
     else add(id, w.claimed);
   }
 }

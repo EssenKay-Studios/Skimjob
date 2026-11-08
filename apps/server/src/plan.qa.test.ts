@@ -220,9 +220,9 @@ describe("QA: placements and power claims against content (design §10)", () => 
     closeAll(a);
   });
 
-  it("a power claim is a pledge, so a role you don't hold or that isn't in the deck is fine; its target must still fit the power", async () => {
-    // A deck without the Priest or the Auditor: claiming them is a (detectable) bluff, which §10 allows.
-    const { id, humans, rooms } = await startGame(3, 0, { roles: ["rookie", "hacker", "detective", "mole"] });
+  it("a power claim is a pledge, so a role you don't hold or that wasn't dealt is fine; its target must still fit the power", async () => {
+    // At 3 players most roles aren't dealt: claiming one is a (detectable) bluff, which §10 allows.
+    const { id, humans, rooms } = await startGame(3, 0);
     const state = await load(id);
     const mine = state.players[humans[0]!.player]!.role;
     const a = await Client.open(id, humans[0]!);
@@ -230,12 +230,13 @@ describe("QA: placements and power claims against content (design §10)", () => 
       if (role === mine) continue;
       expect(await a.plan({ power: { role, target: humans[1]!.player } })).toMatchObject({ ok: true });
     }
-    for (const role of ["auditor", "lookout", "hacker"]) expect(await a.plan({ power: { role, target: rooms[0] } })).toMatchObject({ ok: true });
+    // design §10, §11.1: every targeted power can be pledged, the Mole's ring and the Fixer's reopen included.
+    for (const role of ["auditor", "lookout", "electrician", "mole", "fixer", "hacker"]) expect(await a.plan({ power: { role, target: rooms[0] } }), role).toMatchObject({ ok: true });
     expect(await a.plan({ power: { role: "priest", target: humans[0]!.player } })).toMatchObject({ rejected: true, reason: "you can't claim a power on yourself" });
     expect(await a.plan({ power: { role: "auditor", target: humans[1]!.player } })).toMatchObject({ rejected: true, reason: "that power takes a room in play" });
     expect(await a.plan({ power: { role: "lookout", target: "__proto__" } })).toMatchObject({ rejected: true, reason: "that power takes a room in play" });
     expect(await a.plan({ power: { role: "priest", target: "hasOwnProperty" } })).toMatchObject({ rejected: true, reason: "that power takes a player in this game" });
-    for (const role of ["fixer", "mole", "smoothTalker", "rookie", "hasOwnProperty", "valueOf", ""]) {
+    for (const role of ["smoothTalker", "locksmith", "muscle", "hasOwnProperty", "valueOf", ""]) {
       expect(await a.plan({ power: { role, target: rooms[0] } }), role).toMatchObject({ rejected: true });
     }
     await a.barrier();

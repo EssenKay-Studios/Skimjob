@@ -1,7 +1,6 @@
 // Deterministic game setup: validate the config, pick rooms by player count,
-// deal one secret role per seat and deal the shop. design §6.2, §8.1, §15;
-// extension.md "Decks", "Host settings", "Tokens and the perk shop", Build
-// notes "Tags, decks and dealing"
+// deal one secret role per seat and deal the shop. design §3.1, §6.1, §11.3,
+// §16; extension.md "Tokens and the perk shop"
 //
 // Emits, in order: gameCreated (public, no seed), rngSeeded (reveal),
 // roomsSet (public), bankFilled (public), one roleDealt per seat in seat order (private),
@@ -10,37 +9,30 @@
 // else's role (no automatic reveals).
 import {
   CONTENT_VERSION,
-  BALANCED_MIX,
-  DECKS,
-  DEFAULT_DECK,
-  FILLER_ROLE,
   JOBS,
   MAX_PLAYERS,
+  MAX_ROLE_COPIES,
   MIN_PLAYERS,
-  POOL_ROLES,
-  RANDOM_DEAL_SINGLETONS,
   ROLES,
+  ROLE_DEAL,
   SHOP_COLUMNS,
   SHOP_RULES,
-  type DeckId,
   type JobId,
   type PerkId,
   type RoleId,
+  type RoleKind,
   type RoomId,
-  type Temperament,
 } from "@skimjob/content";
-import type { DealStyle, GameConfig, GameEvent, GameState, RngState, RoleListSetting, VoteVisibility } from "./types";
+import type { GameConfig, GameEvent, GameState, RngState, RoleListSetting, VoteVisibility } from "./types";
 import { PUBLIC, REVEAL, privateTo } from "./types";
 import { pick, seedRng, shuffle } from "./rng";
 import { replay } from "./reduce";
 import { eventsOn } from "./deck";
 import { show } from "./check";
 import { jobById, roomsInPlay } from "./job";
-import { jobFor, roleDefIn, rolesFor, tagIn, validateOverrides, type RoleTable } from "./overrides";
+import { jobFor, validateOverrides } from "./overrides";
 
 const VOTE_VISIBILITIES: readonly string[] = ["hiddenThenRevealed", "open", "secret"] satisfies readonly VoteVisibility[];
-const DECK_IDS: readonly string[] = Object.keys(DECKS);
-const DEAL_STYLES: readonly string[] = ["balanced", "random"] satisfies readonly DealStyle[];
 const ROLE_LISTS: readonly string[] = ["exact", "possible", "hidden"] satisfies readonly RoleListSetting[];
 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null;
@@ -56,7 +48,6 @@ const RESERVED_PLAYER_IDS: readonly string[] = ["__proto__", "constructor", "pro
 
 export const isSafePlayerId = (id: unknown): id is string =>
   typeof id === "string" && PLAYER_ID_PATTERN.test(id) && !RESERVED_PLAYER_IDS.includes(id);
-const isStringArray = (v: unknown): v is string[] => Array.isArray(v) && v.every((x) => typeof x === "string");
 
 /**
  * Everything wrong with a config, or `[]` if it can start a game. Configs reach
@@ -65,11 +56,9 @@ const isStringArray = (v: unknown): v is string[] => Array.isArray(v) && v.every
 export function validateConfig(config: unknown): string[] {
   if (!isObject(config)) return ["config must be an object"];
   const errors: string[] = [];
-  const { seed, players, job, rolePool, deck, deal, roleList, eventsEnabled, voteVisibility, contentOverrides, uniqueRoles } = config;
+  const { seed, players, job, roleList, eventsEnabled, voteVisibility, contentOverrides } = config;
   if (typeof seed !== "string") errors.push("seed must be a string");
   if (typeof eventsEnabled !== "boolean") errors.push("eventsEnabled must be a boolean");
-  if (deck !== undefined && (typeof deck !== "string" || !DECK_IDS.includes(deck))) errors.push(`deck must be one of ${DECK_IDS.join(", ")}`);
-  if (deal !== undefined && (typeof deal !== "string" || !DEAL_STYLES.includes(deal))) errors.push(`deal must be one of ${DEAL_STYLES.join(", ")}`);
   if (roleList !== undefined && (typeof roleList !== "string" || !ROLE_LISTS.includes(roleList))) errors.push(`roleList must be one of ${ROLE_LISTS.join(", ")}`);
   if (typeof voteVisibility !== "string" || !VOTE_VISIBILITIES.includes(voteVisibility)) {
     errors.push(`voteVisibility must be one of ${VOTE_VISIBILITIES.join(", ")}`);
@@ -92,15 +81,6 @@ export function validateConfig(config: unknown): string[] {
       errors.push(`player ids must match ${PLAYER_ID_PATTERN} and not be ${RESERVED_PLAYER_IDS.join(", ")}`);
     } else if (new Set(players.map((p) => p.id)).size !== players.length) errors.push("player ids must be unique");
   }
-
-  if (uniqueRoles !== undefined && typeof uniqueRoles !== "boolean") errors.push("uniqueRoles must be a boolean");
-
-  if (!isStringArray(rolePool)) {
-    errors.push("rolePool must be an array of role ids");
-  } else {
-    if (new Set(rolePool).size !== rolePool.length) errors.push("role pool has duplicates");
-    for (const role of rolePool) if (!POOL_ROLES.includes(role)) errors.push(`unknown role ${role}`);
-  }
   return errors;
 }
 
@@ -109,120 +89,41 @@ export function roomsFor(job: JobId, playerCount: number): RoomId[] {
   return roomsInPlay(jobById(job), playerCount);
 }
 
-/** Dealable for this crew: not below the role's `minPlayers`. design §8.1 (role deck v2 §3) */
-const dealable = (config: GameConfig, roles: RoleTable, role: RoleId): boolean => (roleDefIn(roles, role)?.minPlayers ?? 0) <= config.players.length;
-
-/** The deck preset this game uses: the host's (Standard by default). extension.md "Decks" */
-const deckIdOf = (config: GameConfig): DeckId => (config.deck ?? DEFAULT_DECK);
-
-export const dealStyleOf = (config: GameConfig): DealStyle => config.deal ?? "balanced";
-
 const roleListOf = (config: GameConfig): RoleListSetting => config.roleList ?? "exact";
 
-/** The deck: the preset, or the host's per-role picks (`rolePool`) when any. extension.md "Decks" */
-export const deckFor = (config: GameConfig): readonly RoleId[] => (config.rolePool.length > 0 ? config.rolePool : DECKS[deckIdOf(config)]);
-
-/** The roles of the deck this crew can be dealt (`dealable`). design §8.1 */
-export function rolePoolFor(config: GameConfig, roles: RoleTable = rolesFor(config)): readonly RoleId[] {
-  return deckFor(config).filter((r) => dealable(config, roles, r));
-}
+/** Every role, in content order: the "possible" role list, since any role can be dealt at any crew size. design §11.3 */
+const ALL_ROLES: readonly RoleId[] = Object.keys(ROLES);
 
 /**
- * How many roles `drawRoles` draws: it stops early only when the pool runs
- * out, which happens with `unique`, or when only singletons are left. Never
- * depends on the draws themselves.
+ * One role per seat, in seat order (design §11.3, owner 6 Nov): every player
+ * gets a role, the counts of eyes and shadows by crew size come from content
+ * (`ROLE_DEAL`, seam 8), an odd crew's extra seat goes to either kind at
+ * random. Each kind's roles are drawn distinct while they last, then any role
+ * of that kind may repeat, at most `MAX_ROLE_COPIES` times. Every role, the
+ * Mole and Fixer included, is dealt at random with the seeded RNG.
  */
-function drawnCount(pool: readonly RoleId[], count: number, unique: boolean): number {
-  if (!unique && pool.some((r) => !RANDOM_DEAL_SINGLETONS.includes(r))) return count;
-  return Math.min(count, pool.length);
-}
-
-/** The Balanced deal's three draws: each tag's pool and how many seats it gets. */
-function balancedDraws(config: GameConfig, roles: RoleTable) {
-  const n = config.players.length;
-  const unique = config.uniqueRoles !== false;
-  const pool = rolePoolFor(config, roles);
-  const mix = BALANCED_MIX[n] ?? { loneWolves: 0, wildcards: 0 };
-  const of = (tag: Temperament) => pool.filter((r) => tagIn(roles, r) === tag && r !== FILLER_ROLE);
-  const lone = { pool: of("loneWolf"), count: mix.loneWolves };
-  const wild = { pool: of("wildcard"), count: mix.wildcards };
-  const team = { pool: of("teamPlayer"), count: n - drawnCount(lone.pool, lone.count, unique) - drawnCount(wild.pool, wild.count, unique) };
-  return { n, unique, lone, wild, team };
-}
-
-/**
- * Every role this game could actually deal (QA on R6a): with Balanced, only
- * the tags the crew size's mix gives a seat (so no Mole at 2–3 players);
- * with Truly random, the eligible deck; plus Rookies when they fill a seat.
- * None of it depends on the draws. The "possible" role list and rules that
- * must not reveal who was dealt read this. extension.md "Host settings"
- */
-export function dealableRoles(config: GameConfig, roles: RoleTable = rolesFor(config)): readonly RoleId[] {
-  if (dealStyleOf(config) === "random") {
-    const pool = rolePoolFor(config, roles);
-    const n = config.players.length;
-    const drawn = drawnCount(pool, n, config.uniqueRoles !== false);
-    return drawn < n && !pool.includes(FILLER_ROLE) ? [...pool, FILLER_ROLE] : pool;
+export function dealRoles(config: GameConfig, rng: RngState): { readonly value: RoleId[]; readonly rng: RngState } {
+  const counts = ROLE_DEAL[config.players.length];
+  if (!counts) throw new Error(`no role deal for ${config.players.length} players`);
+  const draw = <T>(r: { readonly value: T; readonly rng: RngState }): T => {
+    rng = r.rng;
+    return r.value;
+  };
+  const extraEyes = counts.either > 0 ? draw(pick(rng, [true, false])) : false;
+  const seats: Record<RoleKind, number> = { eyes: counts.eyes + (extraEyes ? counts.either : 0), shadows: counts.shadows + (extraEyes ? 0 : counts.either) };
+  const dealt: RoleId[] = [];
+  for (const kind of ["eyes", "shadows"] as const) {
+    const pool = ALL_ROLES.filter((r) => (ROLES[r] as (typeof ROLES)[string]).kind === kind);
+    const distinct = draw(shuffle(rng, pool)).slice(0, seats[kind]);
+    const copies = new Map(distinct.map((r) => [r, 1]));
+    while (distinct.length < seats[kind]) {
+      const role = draw(pick(rng, pool.filter((r) => (copies.get(r) ?? 0) < MAX_ROLE_COPIES)));
+      copies.set(role, (copies.get(role) ?? 0) + 1);
+      distinct.push(role);
+    }
+    dealt.push(...distinct);
   }
-  const { n, unique, lone, wild, team } = balancedDraws(config, roles);
-  const out: RoleId[] = [];
-  let seated = 0;
-  for (const d of [lone, wild, team]) {
-    const k = drawnCount(d.pool, d.count, unique);
-    if (k > 0) out.push(...d.pool);
-    seated += k;
-  }
-  return seated < n ? [...out, FILLER_ROLE] : out;
-}
-
-/**
- * Draw up to `count` roles from `pool`, one at a time: each drawn role leaves
- * the pool with `unique`, and a role in `RANDOM_DEAL_SINGLETONS` (the Mole)
- * always does. Fewer when the pool runs out.
- */
-function drawRoles(rng: RngState, pool: readonly RoleId[], count: number, unique: boolean): { readonly value: RoleId[]; readonly rng: RngState } {
-  let left = [...pool];
-  const value: RoleId[] = [];
-  while (value.length < count && left.length > 0) {
-    const drawn = pick(rng, left);
-    rng = drawn.rng;
-    value.push(drawn.value);
-    if (unique || RANDOM_DEAL_SINGLETONS.includes(drawn.value)) left = left.filter((r) => r !== drawn.value);
-  }
-  return { value, rng };
-}
-
-/**
- * One role per seat, in seat order; `filled` says whether any seat went to a
- * Rookie as filler. extension.md "Host settings", Build notes "Tags, decks and dealing":
- * - Balanced (default): `BALANCED_MIX` Lone wolves and Wildcards for the crew
- *   size, drawn from the eligible deck's; the rest Team players (Rookies
- *   last); a seat the deck can't fill goes to the Team players, then to a
- *   Rookie. The deck is then shuffled and dealt.
- * - Truly random: each seat drawn uniformly from the eligible deck.
- * With `uniqueRoles` (the default) each role is dealt at most once; never
- * more than one Mole.
- */
-export function dealRoles(
-  config: GameConfig,
-  rng: RngState,
-  roles: RoleTable = rolesFor(config),
-): { readonly value: RoleId[]; readonly rng: RngState; readonly filled: boolean } {
-  const n = config.players.length;
-  const unique = config.uniqueRoles !== false;
-  const pool = rolePoolFor(config, roles);
-  const fill = (dealt: readonly RoleId[]) => [...dealt, ...Array<RoleId>(n - dealt.length).fill(FILLER_ROLE)];
-  if (dealStyleOf(config) === "random") {
-    const drawn = drawRoles(rng, pool, n, unique);
-    return { value: fill(drawn.value), rng: drawn.rng, filled: drawn.value.length < n };
-  }
-  const draws = balancedDraws(config, roles);
-  const lone = drawRoles(rng, draws.lone.pool, draws.lone.count, unique);
-  const wild = drawRoles(lone.rng, draws.wild.pool, draws.wild.count, unique);
-  const team = drawRoles(wild.rng, draws.team.pool, draws.team.count, unique);
-  const dealt = [...lone.value, ...wild.value, ...team.value];
-  const shuffled = shuffle(team.rng, fill(dealt));
-  return { value: shuffled.value, rng: shuffled.rng, filled: dealt.length < n };
+  return { value: draw(shuffle(rng, dealt)), rng };
 }
 
 /**
@@ -243,17 +144,14 @@ function dealShop(config: GameConfig, rng: RngState): { readonly value: PerkId[]
   return { value: perks, rng };
 }
 
-const CONTENT_ORDER: readonly RoleId[] = Object.keys(ROLES);
+/** Roles in content order, so a list never tells seats apart. */
+const inContentOrder = (list: readonly RoleId[]): RoleId[] => [...list].sort((a, b) => ALL_ROLES.indexOf(a) - ALL_ROLES.indexOf(b));
 
-/** Roles in content order (unknown ids last), so a list never tells seats apart. */
-const inContentOrder = (list: readonly RoleId[]): RoleId[] =>
-  [...list].sort((a, b) => (CONTENT_ORDER.indexOf(a) + 1 || Infinity) - (CONTENT_ORDER.indexOf(b) + 1 || Infinity) || (a < b ? -1 : a > b ? 1 : 0));
-
-/** The public role list (extension.md "Host settings"): every role dealt, or every role that could be; nothing when hidden. */
+/** The public role list (design §11.3): every role dealt, with its count, or every role that could be; nothing when hidden. */
 function roleListEvents(config: GameConfig, dealt: readonly RoleId[]): GameEvent[] {
   const list = roleListOf(config);
   if (list === "hidden") return [];
-  return [{ type: "roleListShown", visibility: PUBLIC, list, roles: inContentOrder(list === "exact" ? dealt : dealableRoles(config)) }];
+  return [{ type: "roleListShown", visibility: PUBLIC, list, roles: list === "exact" ? inContentOrder(dealt) : [...ALL_ROLES] }];
 }
 
 /** The setup events for a new game. Pure: same config, same events. */
@@ -268,8 +166,6 @@ export function setupEvents(config: GameConfig): GameEvent[] {
       visibility: PUBLIC,
       players: config.players,
       job: config.job,
-      deck: deckIdOf(config),
-      deal: dealStyleOf(config),
       roleList: roleListOf(config),
       eventsEnabled: config.eventsEnabled,
       voteVisibility: config.voteVisibility,

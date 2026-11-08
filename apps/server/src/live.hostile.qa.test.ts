@@ -108,7 +108,8 @@ type Fields = readonly (readonly [path: readonly string[], values: readonly stri
 const id = (p: string[]) => [p, ALL] as const;
 const commandFields = (room: string, proposalId: string, other: string): readonly [object, Fields][] => [
   [{ type: "submitMove", move: { room, duffel: BANK_JOB.rooms[room]?.coins ?? 0, pocket: 0 } }, [id(["move"]), id(["move", "room"]), [["move", "duffel"], NOT_NUMBER], [["move", "pocket"], NOT_NUMBER], id(["move", "watch"]), id(["move", "ability"])]],
-  [{ type: "submitMove", move: { room, duffel: BANK_JOB.rooms[room]?.coins ?? 0, pocket: 0, ability: { kind: "loopCameras", room } } }, [id(["move", "ability", "kind"]), id(["move", "ability", "room"])]],
+  [{ type: "submitMove", move: { room, duffel: BANK_JOB.rooms[room]?.coins ?? 0, pocket: 0, ability: { kind: "hide", room } } }, [id(["move", "ability", "kind"]), id(["move", "ability", "room"])]],
+  [{ type: "submitMove", move: { room, duffel: BANK_JOB.rooms[room]?.coins ?? 0, pocket: 0, ability: { kind: "absolve", target: other } } }, [id(["move", "ability", "target"])]],
   // '["lobby"]' is a valid rooms list, accepted when the (randomly dealt) attacker is a Lookout, so it isn't tried there.
   [{ type: "submitMove", move: { room, duffel: BANK_JOB.rooms[room]?.coins ?? 0, pocket: 0, ability: { kind: "lookout", rooms: [room] } } }, [[["move", "ability", "rooms"], ALL.filter((v) => v !== '["lobby"]')], id(["move", "ability", "rooms", "0"])]],
   [{ type: "postAlibi", room }, [id(["room"])]],
@@ -116,8 +117,7 @@ const commandFields = (room: string, proposalId: string, other: string): readonl
   [{ type: "acceptMeeting", proposalId }, [id(["proposalId"])]],
   [{ type: "castVote", vote: { kind: "shakedown", target: other } }, [id(["vote"]), id(["vote", "kind"]), id(["vote", "target"])]],
   [{ type: "sealVote", vote: { kind: "shakedown", target: other } }, [id(["vote"]), id(["vote", "kind"]), id(["vote", "target"])]],
-  [{ type: "useAbility", ability: { kind: "checkStash", target: other } }, [id(["ability"]), id(["ability", "kind"]), id(["ability", "target"])]],
-  [{ type: "useAbility", ability: { kind: "bless", target: other } }, [id(["ability", "target"])]],
+  [{ type: "useAbility", ability: { kind: "detect", target: other } }, [id(["ability"]), id(["ability", "kind"]), id(["ability", "target"])]],
   [{ type: "useAbility", ability: { kind: "audit", room } }, [id(["ability", "room"])]],
   [{ type: "useAbility", ability: { kind: "tail", room } }, [id(["ability", "room"])]],
   [{ type: "useAbility", ability: { kind: "peek", target: other } }, [id(["ability", "target"])]],

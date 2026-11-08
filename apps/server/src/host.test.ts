@@ -19,7 +19,7 @@ import { TIMINGS } from "./timing";
 const quick = { interval: 1, timeout: 5000 };
 const H1 = TIMINGS["1h"];
 /** Every role can be dealt. */
-const EVERYTHING: Partial<LobbySettings> = { sessionLength: "1h", deck: "everything", roleList: "possible" };
+const HOUR: Partial<LobbySettings> = { sessionLength: "1h", roleList: "possible" };
 
 let db: Db;
 let clock: FakeClock;
@@ -54,7 +54,7 @@ interface Seat {
   readonly seat: number;
 }
 /** The host and `guests` absent people (no bots: nobody calls an emergency at random), started. */
-async function startGame(guests: number, settings: Partial<LobbySettings> = EVERYTHING) {
+async function startGame(guests: number, settings: Partial<LobbySettings> = HOUR) {
   const host = (await req("POST", "/auth/guest", null, { nickname: "Host" })).session!;
   const game = (await req("POST", "/games", host, { settings })).body;
   const sessions = [host];

@@ -26,7 +26,7 @@ describe("bot perks — v2 §1, §4", () => {
     expect(planningPerks(viewFor(grant(game(5), "ana", "peek"), "ana"))).toEqual([]);
   });
 
-  it("Tail: the richest looting room other than its own (Rookie)", () => {
+  it("Tail: the richest coin room other than its own", () => {
     const s = grant(game(5), "ana", "tail");
     expect(spends(planningPerks(viewFor(s, "ana"), "lobby"))).toEqual([{ kind: "tail", room: "vault" }]);
     expect(spends(planningPerks(viewFor(s, "ana"), "vault"))[0]).toMatchObject({ kind: "tail" });

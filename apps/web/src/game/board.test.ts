@@ -1,7 +1,8 @@
 // The bank board on the game screen, from real engine views. M2-9 acceptance:
 // the figures come only from the player's case file and the public alibis.
 // design §5, §5.4, §6, §18
-import { createGame, handleCommand, viewFor, type GameConfig, type GameState, type PlayerCommand, type PlayerView, type SystemCommand } from "@skimjob/engine";
+import { handleCommand, viewFor, type GameConfig, type GameState, type PlayerCommand, type PlayerView, type SystemCommand } from "@skimjob/engine";
+import { createGame } from "./deal.testkit";
 import { describe, expect, it } from "vitest";
 import { boardScene, seatLooks, timeOfRound } from "./board";
 import { BANK_JOB } from "@skimjob/content";
@@ -10,10 +11,8 @@ const config = (n = 4): GameConfig => ({
   seed: "board-test",
   players: Array.from({ length: n }, (_, i) => ({ id: `p${i + 1}`, name: i === 0 ? "Ana" : `Bot · B${i}`, isBot: i > 0 })),
   job: "bank",
-  rolePool: ["rookie"],
   eventsEnabled: false,
   voteVisibility: "hiddenThenRevealed",
-  uniqueRoles: false,
 });
 
 function run(state: GameState, ...commands: (PlayerCommand | SystemCommand)[]): GameState {

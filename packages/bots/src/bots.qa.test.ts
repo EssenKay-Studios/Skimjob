@@ -27,7 +27,6 @@ function config(n: number, seed: string, extra: Partial<GameConfig> = {}): GameC
     seed,
     players: Array.from({ length: n }, (_, i) => ({ id: `q${i}`, name: `Q${i}`, isBot: true })),
     job: "bank",
-    rolePool: [],
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     ...extra,
@@ -56,7 +55,7 @@ const expectClean = (r: BotGameResult, label: string) => {
   expect(r.rejections, label).toEqual([]);
 };
 
-describe("QA: sweep — every personality at 2, 3, 8, 12 players over many seeds (design §17.3)", () => {
+describe("QA: sweep — every personality at 3, 8, 12 players over many seeds (design §19.3)", () => {
   const MODES = VOTE_MODES;
 
   it.each(IDS)("%s crews: zero refused commands, no exceptions, every game ends", (id) => {
@@ -77,13 +76,17 @@ describe("QA: sweep — every personality at 2, 3, 8, 12 players over many seeds
     }
   });
 
-  it("all-Mole-setting 'on' at 12 players (one Mole, design §8.1) still plays clean", () => {
-    for (let s = 0; s < 5; s++) {
+  it("at 12 players, with repeated roles (two Moles some games, design §11.3), plays clean", () => {
+    let twoMoles = 0;
+    for (let s = 0; s < 12; s++) {
       const c = config(12, `moles-${s}`, {});
       const r = runBotGame(c, createBots(c.players, rotate(s), `mo-${s}`));
       expectClean(r, `s=${s}`);
-      expect(Object.values(r.state.players).filter((p) => p.role === "mole").length).toBe(1);
+      const moles = Object.values(r.state.players).filter((p) => p.role === "mole").length;
+      expect(moles).toBeLessThanOrEqual(2);
+      if (moles === 2) twoMoles++;
     }
+    expect(twoMoles).toBeGreaterThan(0);
   });
 });
 
@@ -281,20 +284,20 @@ describe("QA: commands are well-formed — design §8, §11.2", () => {
   // One batch of recorded games shared by the checks below.
   const games = SIZES.flatMap((n) =>
     Array.from({ length: 5 }, (_, s) => {
-      const c = config(n, `cmd-${n}-${s}`, { voteVisibility: cyc(VOTE_MODES, s), deck: s % 2 ? "everything" : "standard" });
+      const c = config(n, `cmd-${n}-${s}`, { voteVisibility: cyc(VOTE_MODES, s) });
       const rec = recording(createBots(c.players, rotate(s), `cmd-${s}`));
       const r = runBotGame(c, rec.wrapped);
       return { n, r, sent: rec.sent };
     }),
   );
 
-  it("the batch is not vacuous: it has emergencies, shakedowns, Hacker and Lookout uses", () => {
+  it("the batch is not vacuous: it has emergencies, shakedowns, move powers and Lookout uses", () => {
     const log = games.flatMap(({ r }) => r.state.log);
     const has = (test: (e: (typeof log)[number]) => boolean) => expect(log.some(test)).toBe(true);
     has((e) => e.type === "emergencyMeetingCalled");
     has((e) => e.type === "shakedownResolved");
-    // Since R3b five accomplices share the dark seats, so any accomplice's move power counts here.
-    has((e) => e.type === "abilityResolved" && ["loopCameras"].includes(e.ability.kind));
+    // design §11.1: the shadows' move powers.
+    has((e) => e.type === "abilityResolved" && ["hide", "blackout", "absolve"].includes(e.ability.kind));
     has((e) => e.type === "abilityResolved" && e.ability.kind === "lookout");
   });
 

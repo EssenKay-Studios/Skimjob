@@ -92,14 +92,19 @@ function line(e: GameEvent, ctx: DescribeContext): string {
         : `Round ${e.round}, ${roomName(e.room)}: ${verb(e.player, "grabbed", "grabbed")} ${e.duffel + e.pocket} coins, ${e.duffel} to the duffel and ${e.pocket} pocketed.`;
     case "abilityResolved":
       return ability(e.ability, e.player, e.round, { you, who, whose, verb });
+    case "abilityAlreadyDone":
+      // design §11.4: another copy of the role did it first; the use isn't spent.
+      return `Round ${e.round}: already done this round by another copy of ${you(e.player) ? "your" : "their"} role; ${you(e.player) ? "your" : "their"} power is not spent.`;
+    case "sinsAbsolved":
+      return `Round ${e.round}: ${you(e.player) ? "your" : `${whose(e.player)}`} sins were absolved.`;
     case "roomSighting":
       return e.others.length === 0
         ? `Round ${e.round}: ${verb(e.player, "were", "was")} alone in the ${roomName(e.room)}.`
         : `Round ${e.round}: in the ${roomName(e.room)}, ${verb(e.player, "saw", "saw")} ${names(e.others)}.`;
     case "roomWatched": {
       const how = e.source === "security" ? "On the cameras" : e.source === "lookout" ? "On lookout" : "Tailing";
-      // extension.md "Situations": a Hacker's loop reads as a camera offline.
-      if (e.offline) return `Round ${e.round}, ${how.toLowerCase()}: camera offline in the ${roomName(e.room)}${you(e.player) ? "" : ` (seen by ${ctx.name(e.player)})`}.`;
+      // design §11.1: a blacked-out room's cameras are offline.
+      if (e.offline) return `Round ${e.round}, ${how.toLowerCase()}: cameras offline in the ${roomName(e.room)}${you(e.player) ? "" : ` (seen by ${ctx.name(e.player)})`}.`;
       return `Round ${e.round}, ${how.toLowerCase()}: ${e.seen.length === 0 ? "nobody" : names(e.seen)} in the ${roomName(e.room)}${you(e.player) ? "" : ` (seen by ${ctx.name(e.player)})`}.`;
     }
     case "roundResolved":
@@ -107,13 +112,16 @@ function line(e: GameEvent, ctx: DescribeContext): string {
     case "duffelSplit":
       return `Round ${e.round}: the duffel split ${e.cut} each (share now ${e.share}, kitty ${e.kitty}).`;
     case "bellsRung":
-      return `Round ${e.round} bells: ${bells(e.bells)}.`;
+      // design §5.1, §11.1: a hidden bell shows "?".
+      return `Round ${e.round} bells: ${bells(e.bells)}${e.hidden.length > 0 ? `; ${list(e.hidden.map(roomName))} ?` : ""}.`;
     case "roomRaided":
       return `Raid! The police hit the ${roomName(e.room)} in round ${e.round} and seized ${e.seized} coin${e.seized === 1 ? "" : "s"}. It is taped off through round ${e.closedThrough}. Wanted ${e.wanted}.`;
     case "bellsCooled":
       return `After round ${e.round} the bells cooled: ${bells(e.bells)}.`;
     case "roomReopened":
       return `The tape is off the ${roomName(e.room)}: it opens again next round.`;
+    case "powerCut":
+      return `Power cut in the ${roomName(e.room)} this round.`;
     case "eventFlipped":
       return `Round ${e.round} event: ${cardName(e.card)}${e.room ? ` (the ${roomName(e.room)} is closed)` : ""}.`;
     case "insideTip":
@@ -189,18 +197,22 @@ function ability(a: ResolvedAbility, player: PlayerId, round: number, { you, who
   switch (a.kind) {
     case "lookout":
       return `Round ${round}: ${verb(player, "kept", "kept")} lookout on the ${list(a.rooms.map(roomName))}.`;
-    case "loopCameras":
-      return `Round ${round}: ${verb(player, "looped", "looped")} the cameras on the ${roomName(a.room)}.`;
+    case "hide":
+      return `Round ${round}: ${verb(player, "hid", "hid")} the ${roomName(a.room)}'s bell${a.bulbs === null ? "" : `; it really shows ${a.bulbs} lit`}.`;
+    case "blackout":
+      return `Round ${round}: ${verb(player, "cut", "cut")} the power in the ${roomName(a.room)} for next round.`;
+    case "absolve":
+      return a.taken === null
+        ? `Round ${round}: ${verb(player, "absolved", "absolved")} ${who(a.target)}, but the bust came first.`
+        : `Round ${round}: ${verb(player, "absolved", "absolved")} ${who(a.target)}: ${a.taken} set aside for the next split.`;
     case "ring":
       return `Round ${round}: ${verb(player, "tipped", "tipped")} off the police: the ${roomName(a.room)}'s bell rang once more.`;
     case "reopen":
       return `Round ${round}: ${verb(player, "tore", "tore")} the tape off the ${roomName(a.room)}.`;
     case "audit":
-      return `Audit: the ${roomName(a.room)} came up ${a.shortfall} short in round ${a.round}.`;
-    case "checkStash":
-      return `Stash check: ${who(a.target)} ${a.dirty ? "holds something above the share (not clean)" : "holds nothing above the share (clean)"}.`;
-    case "bless":
-      return `${verb(player, "blessed", "blessed")} ${who(a.target)} until the next regular meeting.`;
+      return `Audit: ${a.duffel} ${a.duffel === 1 ? "coin" : "coins"} reached the duffel from the ${roomName(a.room)} in round ${a.round}.`;
+    case "detect":
+      return `Round ${a.round}: ${who(a.target)} grabbed ${a.grabbed} ${a.grabbed === 1 ? "coin" : "coins"}.`;
     default: {
       const never: never = a;
       return String((never as { kind: string }).kind);

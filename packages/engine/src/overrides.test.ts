@@ -3,7 +3,7 @@
 import { describe, expect, it } from "vitest";
 import { NO_RAIDS } from "./v01-numbers.testkit";
 import { handleThroughAlibis } from "./alibis.testkit";
-import { BANK_JOB, CONTENT_VERSION, EVENTS, ROLES, STARTER_ROLES } from "@skimjob/content";
+import { BANK_JOB, CONTENT_VERSION, EVENTS, ROLES } from "@skimjob/content";
 import type { Command, ContentOverrides, GameConfig, GameEvent, GameState } from "./types";
 import { setupEvents, validateConfig } from "./setup";
 import { replay } from "./reduce";
@@ -17,19 +17,18 @@ function config(players: number, contentOverrides?: unknown): GameConfig {
     seed: "override-seed",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: [...STARTER_ROLES], // a shakedown window only if the shop holds a Shield
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     ...(contentOverrides !== undefined && { contentOverrides: contentOverrides as ContentOverrides }),
   };
 }
 
-/** A new game with chosen roles (seat i gets roles[i], Rookie if missing). */
+/** A new game with chosen roles (seat i gets roles[i], a Lookout if missing). */
 function game(cfg: GameConfig, roles: string[] = []): GameState {
   const log = setupEvents(cfg).map((e, i, all): GameEvent => {
     if (e.type !== "roleDealt") return e;
     const seat = all.slice(0, i).filter((x) => x.type === "roleDealt").length;
-    return { ...e, role: roles[seat] ?? "rookie" };
+    return { ...e, role: roles[seat] ?? "lookout" };
   });
   return replay(cfg, log);
 }
@@ -172,7 +171,7 @@ describe("merging overrides (design §17.4)", () => {
     const roles = overrideRoles(ROLES, { roles: { lookout: { extraRooms: 2, rewardCount: 3 } } });
     expect(roles.lookout?.power).toEqual({ kind: "lookout", extraRooms: 2 });
     expect(roles.lookout?.rewards).toEqual([{ on: "watchedShakenDirty", count: 3 }]);
-    expect(roles.rookie).toBe(ROLES.rookie);
+    expect(roles.locksmith).toBe(ROLES.locksmith);
     expect(JSON.stringify([BANK_JOB, ROLES])).toBe(before);
   });
 
@@ -221,7 +220,7 @@ describe("overrides in play (design §17.4)", () => {
 
   it("role numbers change powers (design §8)", () => {
     const cfg = config(5, { roles: { lookout: { extraRooms: 2 } } });
-    const s0 = game(cfg, ["lookout", "rookie"]);
+    const s0 = game(cfg, ["lookout", "lookout"]);
     // The Lookout may now watch two rooms.
     const s1 = run(s0, submit("p0", { room: "lobby", ability: { kind: "lookout", rooms: ["vault", "office"] } }));
     expect(s1.moves.p0?.ability).toEqual({ kind: "lookout", rooms: ["vault", "office"] });

@@ -25,19 +25,20 @@
 //  - replay(config, log) rebuilds the state; same seed + commands = same log. [§17.2]
 //  - viewFor never leaks: the ledger/case file are exactly what canSee allows,
 //    and changing anything hidden from a player leaves their view identical. [§13, §17.2, §11.2]
-//  - the deal follows the deck and the Balanced mix (extension.md "Decks", "Host settings").
+//  - every player gets a role, at most two copies (two only at 11–12), eyes
+//    and shadows within one. [§11.3]
 //  - the end-of-game ranking matches the final stashes; the winners are the
-//    top group of everyone (success) or of those whose role wins on the
-//    failure's cause, and on a bust the escapees with the biggest stash among
-//    them. [extension.md "How you win", design §5.5]
+//    top group (success), the Mole and Fixer holders in it (sunk by theft,
+//    their handlers' rule), and on a bust the escapees with the biggest stash
+//    among them. [§5.5, §8]
 import { isDeepStrictEqual } from "node:util";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { BALANCED_MIX, BANK_JOB, FILLER_ROLE, RANDOM_DEAL_SINGLETONS, ROLES, type DeckId } from "@skimjob/content";
-import type { Command, DealStyle, GameConfig, GameEvent, GameState, Move, PlayerId, PlayerState, RoleListSetting, VoteVisibility } from "./types";
+import { BANK_JOB, MAX_ROLE_COPIES, ROLES } from "@skimjob/content";
+import type { Command, GameConfig, GameEvent, GameState, Move, PlayerId, PlayerState, RoleListSetting, VoteVisibility } from "./types";
 import { REVEAL, canSee, secretTo } from "./types";
-import { createGame, dealStyleOf, rolePoolFor } from "./setup";
-import { rolesFor, tagIn, winsOn } from "./overrides";
+import { createGame } from "./setup";
+import { roleHandler } from "./roles";
 import { handleCommand } from "./handle";
 import { replay } from "./reduce";
 import { viewFor } from "./view";
@@ -52,36 +53,26 @@ const TIMEOUT = 60_000 + RUNS * 1_000;
 // ---------------------------------------------------------------- configs
 
 const VOTES: readonly VoteVisibility[] = ["hiddenThenRevealed", "open", "secret"];
-const DECK_IDS: readonly DeckId[] = ["starter", "standard", "everything"];
-const DEALS: readonly DealStyle[] = ["balanced", "random"];
 const ROLE_LISTS: readonly RoleListSetting[] = ["exact", "possible", "hidden"];
 
 const configArb = fc
   .record({
     players: fc.integer({ min: 3, max: 12 }),
     vote: fc.constantFrom(...VOTES),
-    deck: fc.constantFrom(...DECK_IDS),
-    deal: fc.constantFrom(...DEALS),
     roleList: fc.constantFrom(...ROLE_LISTS),
     events: fc.boolean(),
-    // design §8.1, §15: absent = unique (the default); false lets roles repeat.
-    unique: fc.constantFrom(undefined, true, false),
     // Random streams ring a lot and seize coins, so some games move the bust line out of reach (design §5.5
     // [tunable]), and some of those also have a short round cap (§6.2), so games end by the cap as well as the bank.
     tuning: fc.constantFrom("shipped", "calm", "short"),
     seed: fc.string({ minLength: 1, maxLength: 12 }),
   })
-  .map(({ players, vote, deck, deal, roleList, events, unique, tuning, seed }): GameConfig => ({
+  .map(({ players, vote, roleList, events, tuning, seed }): GameConfig => ({
     seed,
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i + 1}`, name: `P${i + 1}`, isBot: i % 2 === 1 })),
     job: "bank",
-    rolePool: [],
-    deck,
-    deal,
     roleList,
     eventsEnabled: events,
     voteVisibility: vote,
-    ...(unique === undefined ? {} : { uniqueRoles: unique }),
     ...(tuning === "shipped" ? {} : { contentOverrides: { alarm: { bustStars: 9 }, ...(tuning === "short" && { roundCap: 4 }) } }),
   }));
 /** The command stream: each step reads a few numbers from this tape; when it runs out, only deadlines pass. */
@@ -179,16 +170,20 @@ function playerCommand(state: GameState, t: Tape, style: Style): { command: Reco
       if (r === "security" || t.chance(5)) move.watch = room();
       if (p && t.chance(50)) {
         const ability = (() => {
-          switch (ROLES[p.role]?.power.kind) {
+          const kind = ROLES[p.role]?.power.kind;
+          switch (kind) {
             case "lookout":
               return { kind: "lookout", rooms: [room()] };
-            case "loopCameras":
+            case "hide":
+            case "blackout":
             case "ring":
-              return { kind: ROLES[p.role]?.power.kind, room: room() };
+              return { kind, room: room() };
+            case "absolve":
+              return { kind, target: t.pick(state.playerOrder) };
             case "reopen":
               return { kind: "reopen", room: t.chance(80) && Object.keys(state.taped).length > 0 ? t.pick(Object.keys(state.taped)) : room() };
             default:
-              return t.chance(20) ? { kind: t.pick(["lookout", "ring", "reopen", "loopCameras"]) } : undefined;
+              return t.chance(20) ? { kind: t.pick(["lookout", "ring", "reopen", "hide", "absolve"]) } : undefined;
           }
         })();
         if (ability) move.ability = ability;
@@ -211,7 +206,7 @@ function playerCommand(state: GameState, t: Tape, style: Style): { command: Reco
     case 11:
       return { command: { ...base, type: "sealVote", vote: vote() }, seated };
     case 12:
-      return { command: { ...base, type: "useAbility", ability: { kind: t.pick(["audit", "checkStash", "bless"]) } }, seated };
+      return { command: { ...base, type: "useAbility", ability: { kind: t.pick(["audit", "detect"]), room: room(), target: t.pick(state.playerOrder) } }, seated };
     case 13: {
       // extension.md "Tokens and the perk shop": shop buys; the Mole's ring outside a move is refused (design §11.1).
       if (t.chance(20)) return { command: { ...base, type: "useAbility", ability: { kind: "ring", room: room() } }, seated };
@@ -368,25 +363,13 @@ function checkState(state: GameState, inflow: number): void {
   check(state.protected.every((id) => shaken.has(id)), "only shaken-down players are protected", state.protected);
 }
 
-/** extension.md "Decks", "Host settings": deck roles (Rookies fill), unique by default, one Mole at most, the Balanced mix. */
+/** design §11.3: every player gets a role; at most two copies, two only at 11–12 players; eyes and shadows within one. */
 function checkDeal(state: GameState): void {
   const roles = state.playerOrder.map((id) => (state.players[id] as PlayerState).role);
-  const table = rolesFor(state.config);
-  const pool = rolePoolFor(state.config);
-  const dealt = roles.filter((r) => r !== FILLER_ROLE);
-  for (const r of RANDOM_DEAL_SINGLETONS) check(roles.filter((x) => x === r).length <= 1, `at most one ${r}`, roles);
-  if (state.config.uniqueRoles !== false) check(new Set(dealt).size === dealt.length, "uniqueRoles: each non-Rookie role dealt at most once (design §8.1)", roles);
-  check(dealt.every((r) => pool.includes(r)), "roles come from the deck", roles);
-  if (dealStyleOf(state.config) === "balanced") {
-    const mix = BALANCED_MIX[roles.length] ?? { loneWolves: 0, wildcards: 0 };
-    for (const [tag, want] of [["loneWolf", mix.loneWolves], ["wildcard", mix.wildcards]] as const) {
-      const inDeck = pool.filter((r) => tagIn(table, r) === tag).length;
-      // drawRoles: with replacement only while a non-singleton of the tag is left (the Mole is dealt at most once).
-      const repeats = state.config.uniqueRoles === false && pool.some((r) => tagIn(table, r) === tag && !RANDOM_DEAL_SINGLETONS.includes(r));
-      const cap = repeats ? want : Math.min(want, inDeck);
-      check(roles.filter((r) => tagIn(table, r) === tag).length === (inDeck === 0 ? 0 : cap), `Balanced: ${tag} seats by the mix`, roles);
-    }
-  }
+  const n = roles.length;
+  for (const r of new Set(roles)) check(roles.filter((x) => x === r).length <= (n <= 10 ? 1 : MAX_ROLE_COPIES), `copies of ${r}`, roles);
+  const eyes = roles.filter((r) => ROLES[r]?.kind === "eyes").length;
+  check(Math.abs(eyes - (n - eyes)) <= 1 && roles.every((r) => Object.hasOwn(ROLES, r)), "eyes and shadows within one", roles);
 }
 
 /**
@@ -428,8 +411,14 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
   for (const id of state.playerOrder) {
     if (Object.hasOwn(state.moves, id)) fakeMoves[id] = id === viewer ? (state.moves[id] as Move) : { room: "vault", duffel: 0, pocket: 3 };
   }
+  // design §5.1, §11.1: a hidden bell's real bulbs are the Hacker's alone; a blackout for next round is unannounced.
+  const hid = (room: string) =>
+    state.log.some((e) => e.type === "abilityResolved" && e.player === viewer && e.round === state.round && e.ability.kind === "hide" && e.ability.room === room);
+  const bells = Object.fromEntries(Object.entries(state.bells).map(([room, n]) => [room, state.hidden.includes(room) && !hid(room) ? n + 7 : n]));
   return {
     ...state,
+    bells,
+    cutsPending: ["vault", "lobby"],
     config: { ...state.config, seed: "scrubbed" },
     rng: { words: [1, 2, 3, 4] },
     players,
@@ -486,8 +475,7 @@ function checkEnd(state: GameState): void {
   }
   check(outcome.winners.every((w) => state.playerOrder.includes(w)), "winners are players");
   // design §8.5: the top group (everyone tied for the biggest stash, no tie-break) wins a success;
-  // a heist sunk by theft only its members whose role wins it.
-  const roles = rolesFor(state.config);
+  // a heist sunk by theft only its Mole and Fixer holders (their handlers' rule, §8.4).
   const first = outcome.ranking[0];
   const level = (r: (typeof outcome.ranking)[number]) => first !== undefined && r.stash === first.stash;
   // design §5.5: on a bust, the escapees (the round's Rooftop players) with the biggest stash among them, any role.
@@ -496,7 +484,7 @@ function checkEnd(state: GameState): void {
   const eligible =
     outcome.result === "failed" && outcome.reason === "bust"
       ? escaped.filter((r) => r.stash === best)
-      : outcome.ranking.filter((r) => level(r) && (outcome.result === "success" || winsOn(roles, r.role, outcome.reason)));
+      : outcome.ranking.filter((r) => level(r) && (outcome.result === "success" || roleHandler(r.role).winsSunk !== undefined));
   check(isDeepStrictEqual([...outcome.winners].sort(), eligible.map((r) => r.player).sort()), "winners = the eligible top group", outcome);
 }
 
@@ -610,7 +598,6 @@ const threeSeats: GameConfig = {
     { id: "p3", name: "P3", isBot: false },
   ],
   job: "bank",
-  rolePool: [],
   eventsEnabled: false,
   voteVisibility: "open",
 };
@@ -653,7 +640,7 @@ describe("engine invariants under fuzzing — design §17.2", () => {
     expect(stats.rejected).toBeGreaterThan(stats.games * 5);
     expect(stats.players.size).toBeGreaterThanOrEqual(8);
     expect([...stats.outcomes].sort()).toEqual(["bust", "success", "theft"]);
-    for (const t of ["shakedownResolved", "roomRaided", "bellsCooled", "roomReopened", "ability:ring", "voteSealed"]) {
+    for (const t of ["shakedownResolved", "roomRaided", "bellsCooled", "roomReopened", "ability:ring", "ability:hide", "ability:absolve", "sinsAbsolved", "powerCut", "voteSealed"]) {
       expect(stats.types, t).toContain(t);
     }
   }, TIMEOUT);

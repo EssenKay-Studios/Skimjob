@@ -1,11 +1,8 @@
-// The end-of-game reveal summary (design §13): every role and what it wins
-// on, who won and why, each round's real moves and hidden actions, and the
-// stash over time. Pure, and read only from the log handed in, which in a view
+// The end-of-game reveal summary (design §15.5): every role, who won and why,
+// each round's real moves and hidden actions, and the stash over time. Pure, and read only from the log handed in, which in a view
 // is the viewer's own reveal log (`visibleLog(..., true)`), so it can't say
 // anything that log doesn't (others' Secret-mode ballots stay hidden).
 import type { RoleId, RoomId, TokenTrigger, PerkId } from "@skimjob/content";
-import type { RoleTable } from "./overrides";
-import { roleDefIn } from "./overrides";
 import { leadersOf } from "./end";
 import type { PlayerId } from "./types/config";
 import type { GameEvent, Outcome } from "./types/events";
@@ -22,6 +19,9 @@ const SHOWN: ReadonlySet<GameEvent["type"]> = new Set<GameEvent["type"]>([
   "shakedownCancelled",
   "roomRaided",
   "roomReopened",
+  "powerCut",
+  "abilityAlreadyDone",
+  "sinsAbsolved",
 ]);
 
 interface Draft {
@@ -32,12 +32,8 @@ interface Draft {
   stashes: Record<PlayerId, number>;
 }
 
-/**
- * The reveal summary of a finished game from `log` (a reveal log, in order)
- * and its `outcome`. `roles` is the game's table
- * (`rolesFor(config)`). design §13
- */
-export function revealSummary(log: readonly GameEvent[], outcome: Outcome, tables: { readonly roles: RoleTable }): RevealSummary {
+/** The reveal summary of a finished game from `log` (a reveal log, in order) and its `outcome`. design §15.5 */
+export function revealSummary(log: readonly GameEvent[], outcome: Outcome): RevealSummary {
   const ranking = outcome.ranking;
   const seatOrder: PlayerId[] = [];
   const dealt = new Map<PlayerId, RoleId>();
@@ -52,8 +48,6 @@ export function revealSummary(log: readonly GameEvent[], outcome: Outcome, table
   const drafts: Draft[] = [];
   let current: Draft = { card: null, items: [], resolved: null, split: null, stashes: {} };
   drafts[0] = current;
-  /** This round's Hackers by looped room. */
-  let loops = new Map<RoomId, PlayerId[]>();
   const grabs = new Map<number, Map<PlayerId, Omit<RevealMove, "missed" | "alibi">>>();
   const missed = new Set<string>();
   const alibi = new Map<string, RoomId>();
@@ -73,7 +67,6 @@ export function revealSummary(log: readonly GameEvent[], outcome: Outcome, table
         current.stashes = Object.fromEntries(stash);
         current = { card: null, items: [], resolved: null, split: null, stashes: {} };
         drafts[e.round] = current;
-        loops = new Map();
         break;
       case "eventFlipped":
         current.card = { id: e.card, room: e.room };
@@ -99,16 +92,12 @@ export function revealSummary(log: readonly GameEvent[], outcome: Outcome, table
         current.split = { cut: e.cut, share: e.share };
         for (const p of seatOrder) add(p, e.cut);
         break;
-      case "abilityResolved": {
-        const a = e.ability;
-        if (a.kind === "loopCameras") loops.set(a.room, [...(loops.get(a.room) ?? []), e.player]);
+      case "abilityResolved":
         items.push({ kind: "event", event: e });
         break;
-      }
-      case "roomWatched":
-        if (e.offline) {
-          items.push({ kind: "cameraOffline", watcher: e.player, room: e.room, source: e.source, hackers: loops.get(e.room) ?? [] });
-        }
+      case "sinsAbsolved":
+        // design §7.6, §11.1: the Priest took it back.
+        add(e.player, -e.taken);
         break;
       case "tokenEarned": {
         push(tokens, e.player, e.trigger);
@@ -162,7 +151,6 @@ export function revealSummary(log: readonly GameEvent[], outcome: Outcome, table
     place: i + 1,
     dealtRole: dealt.get(r.player) ?? r.role,
     role: r.role,
-    winsOn: roleDefIn(tables.roles, r.role)?.winsOn ?? [],
     stash: r.stash,
     topGroup: top.includes(r.player),
     winner: outcome.winners.includes(r.player),

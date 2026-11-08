@@ -1,5 +1,4 @@
 // Role claims (design §11.3 "Claims": any role, true or a bluff; R4b).
-import { STARTER_ROLES } from "@skimjob/content";
 import { describe, expect, it } from "vitest";
 import type { Command, GameConfig, GameEvent, GameState } from "./types";
 import { canSee } from "./types";
@@ -14,7 +13,6 @@ const cfg: GameConfig = {
   seed: "claim-seed",
   players: ["p0", "p1", "p2", "p3"].map((id) => ({ id, name: id.toUpperCase(), isBot: false })),
   job: "bank",
-  rolePool: [...STARTER_ROLES],
   eventsEnabled: false,
   voteVisibility: "hiddenThenRevealed",
   // A bank of 12: round 1's default moves (4 coins) take a third of it, so a regular meeting follows (design §9.1).
@@ -49,17 +47,17 @@ describe("role claims — design §11.3", () => {
     expect(replay(cfg, state.log)).toEqual(state);
   });
 
-  it("a claim can be a bluff: any role the content knows, even one this game's pool can't deal (so the pool stays hidden)", () => {
-    // The pool is the starter set; the Detective and the Mole aren't in it.
+  it("a claim can be a bluff: any role the content knows, whether or not anyone was dealt it (so the deal stays hidden)", () => {
+    // Four seats are dealt four of the ten roles; a claim is never checked against the deal.
     expect(ok(start, claim("p1", "detective")).events[0]).toMatchObject({ role: "detective" });
     expect(ok(start, claim("p1", "mole")).events[0]).toMatchObject({ role: "mole" });
   });
 
   it("once per player per stretch; the next regular meeting opens a new claim — design §11.3, §9.1", () => {
-    let s = ok(start, claim("p0", "rookie")).state;
+    let s = ok(start, claim("p0", "lookout")).state;
     expect(reason(s, claim("p0", "auditor"))).toMatch(/already claimed a role since the last meeting/);
-    expect(reason(s, claim("p0", "rookie"))).toMatch(/already claimed/);
-    s = ok(s, claim("p1", "rookie")).state; // a double claim is allowed: the crew judges it
+    expect(reason(s, claim("p0", "lookout"))).toMatch(/already claimed/);
+    s = ok(s, claim("p1", "lookout")).state; // a double claim is allowed: the crew judges it
     // Round 1 takes a third of the bank: the regular meeting is due after its alibis.
     const r = handleThroughAlibis(s, { type: "advance", deadline: { kind: "round", round: 1 } });
     if (!r.ok) throw new Error(r.reason);
@@ -74,8 +72,8 @@ describe("role claims — design §11.3", () => {
   });
 
   it("refuses unknown players and roles, prototype keys included, never throwing", () => {
-    expect(reason(start, claim("nobody", "rookie"))).toMatch(/unknown player/);
-    for (const role of ["", "constructor", "__proto__", "toString", "notARole", 3, null, {}, ["rookie"]]) {
+    expect(reason(start, claim("nobody", "lookout"))).toMatch(/unknown player/);
+    for (const role of ["", "constructor", "__proto__", "toString", "notARole", 3, null, {}, ["lookout"]]) {
       expect(reason(start, claim("p0", role))).toMatch(/unknown role/);
     }
   });
@@ -91,6 +89,6 @@ describe("role claims — design §11.3", () => {
 
   it("is refused after the game", () => {
     const ended: GameState = { ...start, phase: { kind: "ended", outcome: sampleEvents.gameEnded.outcome } };
-    expect(reason(ended, claim("p0", "rookie"))).toMatch(/over/);
+    expect(reason(ended, claim("p0", "lookout"))).toMatch(/over/);
   });
 });

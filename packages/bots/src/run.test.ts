@@ -12,7 +12,6 @@ function config(n: number, seed: string, voteVisibility: VoteVisibility = "hidde
     seed,
     players: Array.from({ length: n }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: [],
     eventsEnabled: false,
     voteVisibility,
   };
@@ -198,37 +197,25 @@ describe("personalities behave as design §17.3 describes", () => {
   });
 });
 
-describe("role powers in bot games — design §8", () => {
-  // 5 players: the Priest is dealt only from 5 (design §8.1); it is not in the Standard deck, so pick it.
-  const states = Array.from({ length: 10 }, (_, g) => {
-    const c = { ...config(5, `roles-${g}`), rolePool: ["priest", "lookout", "rookie", "auditor"] };
-    return runBotGame(c, createBots(c.players, mix(["opportunist", "greedy"]), `bots-${c.seed}`)).state;
-  });
-  const roleOf = (s: GameState, id: PlayerId) => s.players[id]?.role;
-
-  it("the Lookout watches an extra room", () => {
-    const used = states.flatMap((s) => s.log).filter((e) => e.type === "abilityResolved" && e.ability.kind === "lookout");
-    expect(used.length).toBeGreaterThan(0);
-  });
-});
-
-describe("bots with the Wildcards and the Mole dealt — extension.md Build notes \"Bots\"", () => {
+describe("role powers in bot games — design §11.1, §19.3", () => {
+  // 10 players: every role is dealt once (design §11.3).
   const games = Array.from({ length: 12 }, (_, g) => {
-    const c = { ...config(9, `dark-${g}`), rolePool: ["hacker", "mole", "lookout", "rookie", "auditor"] };
+    const c = config(10, `roles-${g}`);
     return runBotGame(c, createBots(c.players, mix(MIXED), `bots-${c.seed}`));
   });
   const log = games.flatMap((g) => g.state.log);
+  const used = (kind: string) => log.filter((e) => e.type === "abilityResolved" && e.ability.kind === kind).length;
 
-  it("finish with no refused command; the Hacker loops (design §11.1)", () => {
+  it("finish with no refused command; every role holder uses its power", () => {
     for (const g of games) expect([g.state.phase.kind, g.rejections]).toEqual(["ended", []]);
-    expect(log.filter((e) => e.type === "abilityResolved" && e.ability.kind === "loopCameras").length).toBeGreaterThan(0);
+    for (const kind of ["lookout", "detect", "audit", "hide", "blackout", "absolve"]) expect(used(kind), kind).toBeGreaterThan(0);
   });
 
-  // design §5.2, §8.4: the Mole rings only while it leans toward a heist sunk by theft, which is rare, so over 30 smaller games.
+  // design §5.2, §8.4, §19.3: the Mole rings only while it leans toward a heist sunk by theft, so in greedy crews, over 30 smaller games.
   it("the Mole rings in real games, and its rings are never refused", () => {
     const small = Array.from({ length: 30 }, (_, g) => {
-      const c = { ...config(5, `probe-5-${g}`), rolePool: ["hacker", "mole", "lookout", "rookie", "auditor"] };
-      return runBotGame(c, createBots(c.players, mix(MIXED), `bots-${c.seed}`));
+      const c = config(5, `probe-5-${g}`);
+      return runBotGame(c, createBots(c.players, mix(["random", "greedy"]), `bots-${c.seed}`));
     });
     for (const g of small) expect(g.rejections).toEqual([]);
     expect(small.flatMap((g) => g.state.log).filter((e) => e.type === "abilityResolved" && e.ability.kind === "ring").length).toBeGreaterThan(0);

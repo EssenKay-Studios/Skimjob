@@ -1,77 +1,37 @@
-// Pure helpers for the Extension's player-facing pieces (docs/extension.md):
-// role cards (tag, power, token trigger, "How you win") and the token shop with its perk uses.
+// Pure helpers for the role cards (kind, power, token trigger, "How you win",
+// design §11, §20.2) and the token shop with its perk uses (extension.md, until S3a.7).
 // Every number comes from content (with the game's overrides) or the view.
 import {
   BUST_ROLE_TEXT,
   PERKS,
   ROLES,
+  ROLE_TEXT,
+  ROLE_WIN,
   SHOP_COLUMNS,
-  type FailureReason,
   type PerkColumn,
   type PerkId,
   type RoleDef,
   type RoleId,
-  type RolePower,
-  type Temperament,
+  type RoleKind,
   type TokenTrigger,
 } from "@skimjob/content";
-import { rolesFor, type PlayerId, type PlayerView, type RoomId } from "@skimjob/engine";
-import { roleName, roomName } from "./describeEvent";
+import { roleHandler, rolesFor, type PlayerId, type PlayerView, type RoomId } from "@skimjob/engine";
 import { jobOf, setupOf } from "./hud";
 
 
 // ---------------------------------------------------------------- roles
 
-export const TAG_LABEL: Readonly<Record<Temperament, string>> = { teamPlayer: "Team player", wildcard: "Wildcard", loneWolf: "Lone wolf" };
-/** What a tag means (it changes no rule). extension.md "Roles" */
-export const TAG_BLURB: Readonly<Record<Temperament, string>> = {
-  teamPlayer: "Its power helps the crew.",
-  wildcard: "Its power can help or hurt the crew.",
-  loneWolf: "Its power works against the crew.",
+export const KIND_LABEL: Readonly<Record<RoleKind, string>> = { eyes: "Eyes", shadows: "Shadows" };
+/** What a kind means (design §11.1): no role is good or evil (§1.1). */
+export const KIND_BLURB: Readonly<Record<RoleKind, string>> = {
+  eyes: "Spots theft.",
+  shadows: "Makes theft possible.",
 };
-const TAG_ORDER: readonly Temperament[] = ["teamPlayer", "wildcard", "loneWolf"];
+const KIND_ORDER: readonly RoleKind[] = ["eyes", "shadows"];
 
 /** The role table of a game (content overrides included), or plain content outside a game. */
 export const rolesOf = (view: PlayerView | null): Readonly<Record<RoleId, RoleDef>> =>
   view ? rolesFor({ contentOverrides: setupOf(view)?.contentOverrides ?? null }) : ROLES;
-
-/** "How you win" (extension.md "Winning and losing"), from `winsOn`. */
-export function howYouWin(winsOn: readonly FailureReason[]): string {
-  const base = "Have the biggest stash when the job succeeds";
-  if (winsOn.includes("theft")) return `${base}, or the biggest of all when the heist is sunk by theft.`;
-  return `${base}.`;
-}
-
-const times = (n: number) => (n === 1 ? "Once" : `${n} times`);
-
-/** A role's power in one line, numbers from content (and the job's). extension.md "Roles" */
-function powerText(power: RolePower): string {
-  const between = (n: number) => `${times(n)} between meetings`;
-  switch (power.kind) {
-    case "none":
-      return "No power.";
-    case "lookout":
-      return `Sees who was in ${power.extraRooms === 1 ? "one extra room" : `${power.extraRooms} extra rooms`} every round.`;
-    case "loopCameras":
-      return `${between(power.perStretch)}: loops one room's cameras, which then read "camera offline".`;
-    case "voteWeight":
-      return `Its vote counts ${power.weight === 2 ? "double" : `${power.weight} times`}.`;
-    case "audit":
-      return `${between(power.perStretch)}: how much went missing in one room last round.`;
-    case "checkStash":
-      return `${between(power.perStretch)}: does one player hold anything above the share?`;
-    case "bless":
-      return `${between(power.perStretch)}: bless a player; if they're shaken down clean, you earn a token.`;
-    case "reopen":
-      return "Once a game: tears the tape off a raided room, which opens again next round.";
-    case "ring":
-      return `${between(power.perStretch)}: rings one room's bell once (not the Rooftop or a taped-off room), like any noisy coin.`;
-    default: {
-      const never: never = power;
-      return String((never as { kind: string }).kind);
-    }
-  }
-}
 
 /** When a role earns a token, in one line. extension.md "Roles" */
 function earnsText(trigger: TokenTrigger): string {
@@ -81,13 +41,9 @@ function earnsText(trigger: TokenTrigger): string {
     case "auditedShakenDirty":
       return "A visitor of a room it audited is caught.";
     case "checkedShakenDirty":
-      return "A player it checked is caught.";
+      return "A player it looked into is caught.";
     case "wonDirtyShakedown":
       return "It votes to catch a cheater who is then caught.";
-    case "blessedShakenClean":
-      return "A player it blessed is shaken down clean.";
-    case "loopHidPocketer":
-      return "A loop hid someone who pocketed.";
     default: {
       const never: never = trigger;
       return String(never);
@@ -98,40 +54,40 @@ function earnsText(trigger: TokenTrigger): string {
 export interface RoleInfo {
   readonly id: RoleId;
   readonly name: string;
-  readonly tag: Temperament;
-  readonly tagLabel: string;
-  /** Also wins a failed heist (★). */
+  readonly kind: RoleKind;
+  readonly kindLabel: string;
+  /** Also wins a heist sunk by theft (★): the Mole and the Fixer, by their handlers (design §8.4). */
   readonly star: boolean;
+  /** The power's line (design §20.2). */
   readonly power: string;
   /** "Earns a token when …", or null for a role with no reward. */
   readonly earns: string | null;
   readonly howYouWin: string;
-  readonly minPlayers: number | null;
 }
 
 export function roleInfo(id: RoleId, roles: Readonly<Record<RoleId, RoleDef>> = ROLES): RoleInfo {
   const def = roles[id];
-  if (!def) return { id, name: id, tag: "teamPlayer", tagLabel: TAG_LABEL.teamPlayer, star: false, power: "", earns: null, howYouWin: howYouWin([]), minPlayers: null };
+  const text = Object.hasOwn(ROLE_TEXT, id) ? ROLE_TEXT[id] : undefined;
+  if (!def || !text) return { id, name: id, kind: "eyes", kindLabel: KIND_LABEL.eyes, star: false, power: "", earns: null, howYouWin: ROLE_WIN.crew };
   const reward = def.rewards?.[0];
   return {
     id,
     name: def.name,
-    tag: def.tag,
-    tagLabel: TAG_LABEL[def.tag],
-    star: def.winsOn.length > 0,
-    power: powerText(def.power),
+    kind: def.kind,
+    kindLabel: KIND_LABEL[def.kind],
+    star: roleHandler(id).winsSunk !== undefined,
+    power: text.power,
     earns: reward ? `${reward.count === 1 ? "A token" : `${reward.count} tokens`} when: ${earnsText(reward.on).replace(/^./, (c) => c.toLowerCase())}` : null,
-    howYouWin: howYouWin(def.winsOn),
-    minPlayers: def.minPlayers ?? null,
+    howYouWin: ROLE_WIN[text.win],
   };
 }
 
-/** Roles grouped by tag, in content order. */
-export function rolesByTag(ids: readonly RoleId[], roles: Readonly<Record<RoleId, RoleDef>> = ROLES): { tag: Temperament; label: string; roles: RoleId[] }[] {
-  return TAG_ORDER.map((tag) => ({ tag, label: TAG_LABEL[tag], roles: ids.filter((r) => roles[r]?.tag === tag) })).filter((g) => g.roles.length > 0);
+/** Roles grouped by kind (eyes, then shadows), in content order. design §11.1 */
+export function rolesByKind(ids: readonly RoleId[], roles: Readonly<Record<RoleId, RoleDef>> = ROLES): { kind: RoleKind; label: string; roles: RoleId[] }[] {
+  return KIND_ORDER.map((kind) => ({ kind, label: KIND_LABEL[kind], roles: ids.filter((r) => roles[r]?.kind === kind) })).filter((g) => g.roles.length > 0);
 }
 
-/** The role list shown to players (extension.md "Host settings"): exact, possible or hidden. */
+/** The role list shown to players (design §11.3): exact (with counts), possible or hidden. */
 export function roleListInfo(view: PlayerView): { readonly title: string; readonly roles: readonly RoleId[] } {
   const l = view.roleList;
   if (!l) return { title: "The role list is hidden in this game.", roles: [] };
@@ -248,11 +204,11 @@ export function perkUses(view: PlayerView): PerkUse[] {
 
 // ---------------------------------------------------------------- end of game
 
-type Ending = ({ readonly result: "success" } | { readonly result: "failed"; readonly reason: FailureReason }) & { readonly winners: readonly string[] };
+type Ending = ({ readonly result: "success" } | { readonly result: "failed"; readonly reason: "bust" | "theft" }) & { readonly winners: readonly string[] };
 
 /**
  * How the game ended, in one line, and why each winner won. A failed heist's
- * ranking is a loss only when nobody qualified through winsOn. extension.md "Winning and losing"
+ * ranking is a loss only when nobody won it (design §8.3, §8.4, §8.6).
  */
 export function endingText(outcome: Ending): { title: string; badge: string; loss: boolean } {
   if (outcome.result === "success") return { title: "Job done: honest enough, and no bust", badge: "Biggest stash", loss: false };

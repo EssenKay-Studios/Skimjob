@@ -15,18 +15,17 @@ function config(players: number, seed = "bells-qa"): GameConfig {
     seed,
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: ["rookie", "mole", "fixer"],
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     contentOverrides: null,
   };
 }
 
-/** A new game with seat i dealt roles[i] (Rookie if missing). */
+/** A new game with seat i dealt roles[i] (a Lookout if missing: its power acts only when used). */
 function game(players: number, roles: string[] = [], seed?: string): GameState {
   const cfg = config(players, seed);
   let seat = 0;
-  return replay(cfg, setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: roles[seat++] ?? "rookie" } : e)));
+  return replay(cfg, setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: roles[seat++] ?? "lookout" } : e)));
 }
 
 type Step = Command | ((s: GameState) => Command);
@@ -239,7 +238,7 @@ describe("QA: the bust and the Rooftop escape — design §5.5, §8.3, §8.5", (
   const hot = (g: GameState): GameState => ({ ...g, wanted: 2, bells: { ...g.bells, vault: 3 } });
 
   it("at 12 players: only the Rooftop players escape; the biggest stash among them wins, ties all win, the Fixer included", () => {
-    const g = withStash(game(12, ["rookie", "fixer", "mole"]), { p0: 20, p1: 6, p2: 6, p3: 5, p4: 30 });
+    const g = withStash(game(12, ["lookout", "fixer", "mole"]), { p0: 20, p1: 6, p2: 6, p3: 5, p4: 30 });
     const s = run(hot(g), mv("p0", "vault", 1), mv("p1", "rooftop"), mv("p2", "rooftop"), mv("p3", "rooftop"), mv("p4", "office", 0, 2), ...lobbyRest(12, ["p0", "p1", "p2", "p3", "p4"]), ROUND);
     expect(outcome(s)).toMatchObject({ result: "failed", reason: "bust", escapees: ["p1", "p2", "p3"], winners: ["p1", "p2"] });
     // The ranking still lists every stash, the arrested included.

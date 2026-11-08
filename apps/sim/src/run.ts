@@ -7,8 +7,8 @@ import { setupGame } from "./crew";
 import { recordGame, type GameRecord } from "./record";
 
 /**
- * Everything wrong with the options as a game config (role pool, job, content
- * overrides: the engine's own checks, since overrides are untrusted JSON), or [].
+ * Everything wrong with the options as a game config (job, content overrides:
+ * the engine's own checks, since overrides are untrusted JSON), or [].
  */
 export function checkOptions(options: SimOptions): string[] {
   const errors = new Set<string>();

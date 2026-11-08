@@ -1,13 +1,12 @@
-// A bot's public ending forecast and its own stash rank (extension.md Build
-// notes "Bots"): the chance of success, a bust or a heist sunk by theft, from
-// honesty so far (design §7.5), Wanted (alarm.ts) and the role list; and
-// whether it rates itself top. The four ★ roles lean toward the
-// failure they win on once its forecast passes `LEAN_AT` and they rate
-// themselves top; everyone else plays for success. Bot settings, not rules.
-import type { FailureReason } from "@skimjob/content";
+// A bot's public ending forecast and its own stash rank (design §19.3): the
+// chance of success, a bust or a heist sunk by theft, from honesty so far
+// (design §7.5) and Wanted (alarm.ts); and whether it rates itself top. The
+// Mole and the Fixer, who also win a heist sunk by theft (§8.4), lean toward
+// it once its forecast passes `LEAN_AT` and they rate themselves top; everyone
+// else plays for success. Bot settings, not rules.
 import { honesty, type PlayerView } from "@skimjob/engine";
 import { bustDanger } from "./alarm";
-import { jobOf, ofType, roleOf } from "./read";
+import { jobOf, ofType, winsSunk } from "./read";
 
 export interface Forecast {
   readonly success: number;
@@ -15,7 +14,7 @@ export interface Forecast {
   readonly theft: number;
 }
 
-/** A ★ role leans toward its failure once that ending's forecast passes this [0.8] (R6 balance pass: was 0.4, r6-balance.md). extension.md Build notes "Bots" */
+/** The Mole or Fixer leans toward theft once that ending's forecast passes this [0.8] (bot setting). */
 export const LEAN_AT = 0.8;
 
 /** It rates itself top when what it holds above the share is at least this many times the average other player's estimated pocket (bot setting). */
@@ -50,11 +49,8 @@ function ratesSelfTop(view: PlayerView): boolean {
   return mine >= (TOP_FACTOR * Math.max(0, missing - pocketed)) / others;
 }
 
-/** The failure this bot leans toward now (★ roles only), or null: it plays for success. extension.md Build notes "Bots" */
-export function leaning(view: PlayerView): FailureReason | null {
-  const { winsOn } = roleOf(view);
-  if (winsOn.length === 0 || !ratesSelfTop(view)) return null;
-  const f = forecast(view);
-  const best = [...winsOn].sort((a, b) => f[b] - f[a])[0];
-  return best !== undefined && f[best] >= LEAN_AT ? best : null;
+/** The failure this bot leans toward now (the Mole and the Fixer: theft), or null: it plays for success. design §8.4, §19.3 */
+export function leaning(view: PlayerView): "theft" | null {
+  if (!winsSunk(view.me.role) || !ratesSelfTop(view)) return null;
+  return forecast(view).theft >= LEAN_AT ? "theft" : null;
 }

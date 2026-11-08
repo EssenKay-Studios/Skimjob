@@ -30,7 +30,7 @@ const opts = (argv: string[]) => {
 };
 
 describe("QA PR #43: sim crewSeed and determinism", () => {
-  const options = opts(["-n", "6", "-p", "3,5,8,12", "--deck", "everything", "--events", "-s", "qa43", "--no-files"]);
+  const options = opts(["-n", "6", "-p", "3,5,8,12", "--events", "-s", "qa43", "--no-files"]);
 
   it("runOne seeds the bots (and so their crewSeed) with the game's hidden seed, which no player's view contains", () => {
     for (const n of [3, 5, 12]) {
@@ -65,7 +65,7 @@ describe("QA PR #43: sim crewSeed and determinism", () => {
   });
 
   it("runBatch on one thread and runBatchOn with 2 workers give the same records", { timeout: 120_000 }, async () => {
-    const small = opts(["-n", "4", "-p", "3,5", "--deck", "everything", "-s", "qa43-w", "--no-files"]);
+    const small = opts(["-n", "4", "-p", "3,5", "-s", "qa43-w", "--no-files"]);
     const one = runBatch(small);
     const pool = createPool(2);
     try {

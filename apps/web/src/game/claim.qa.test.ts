@@ -2,7 +2,8 @@
 // Once between meetings (design §11.3), the offer list never hints at the hidden pool, and every
 // offer is a claim the engine accepts. design §8, §12.1
 import { ROLES } from "@skimjob/content";
-import { createGame, handleCommand, viewFor, type GameConfig, type GameState, type PlayerCommand, type SystemCommand } from "@skimjob/engine";
+import { handleCommand, viewFor, type GameConfig, type GameState, type PlayerCommand, type SystemCommand } from "@skimjob/engine";
+import { createGame } from "./deal.testkit";
 import { describe, expect, it } from "vitest";
 import { claimState } from "./meeting";
 
@@ -10,10 +11,8 @@ const config = (n: number, extra: Partial<GameConfig> = {}): GameConfig => ({
   seed: "claim-qa",
   players: Array.from({ length: n }, (_, i) => ({ id: `p${i + 1}`, name: `P${i + 1}`, isBot: false })),
   job: "bank",
-  rolePool: ["rookie"],
   eventsEnabled: false,
   voteVisibility: "hiddenThenRevealed",
-  uniqueRoles: false,
   ...extra,
 });
 
@@ -42,14 +41,14 @@ function round(s: GameState): GameState {
 }
 
 describe("QA: Claim role (PR #41)", () => {
-  it("offers exactly the content roles, whatever the hidden pool (no hint), at 3 and 12 seats", () => {
+  it("offers exactly the content roles, whatever was dealt (no hint), at 3 and 12 seats", () => {
     const all = Object.keys(ROLES).sort();
     const lists = [
-      config(3),
-      config(3, { rolePool: ["lookout", "auditor"] }),
-      config(12, { rolePool: ["auditor", "detective", "fixer"] }),
-    ].map((c) => {
-      const s = createGame(c);
+      [config(3), []],
+      [config(3), ["lookout", "auditor"]],
+      [config(12), ["auditor", "detective", "fixer"]],
+    ].map(([c, roles]) => {
+      const s = createGame(c as GameConfig, roles as string[]);
       return Object.keys(s.players).map((id) => claimState(viewFor(s, id))!.options);
     });
     const first = lists[0]![0]!;
@@ -87,10 +86,10 @@ describe("QA: Claim role (PR #41)", () => {
     s = step(s, { type: "advance", deadline: { kind: "round", round: 3 } });
     expect(s.phase.kind).toBe("alibis");
     const before = claimState(viewFor(s, "p1"))!;
-    const ok = handleCommand(s, claim("p1", "rookie"));
+    const ok = handleCommand(s, claim("p1", "locksmith"));
     expect(ok.ok).toBe(true);
     const after = claimState(viewFor((ok as { state: GameState }).state, "p1"))!;
-    expect(after).toMatchObject({ stretch: before.stretch, claimed: "rookie" });
+    expect(after).toMatchObject({ stretch: before.stretch, claimed: "locksmith" });
   });
 
   it("none once the game is over", () => {

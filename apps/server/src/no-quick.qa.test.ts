@@ -35,11 +35,10 @@ describe("QA: the old starter/Quick mode is refused or dropped, never half-appli
     const cfg = gameConfig(s, seats(5), "qa-stored");
     expect(cfg).not.toHaveProperty("starterMode");
     expect(validateConfig(cfg)).toEqual([]);
-    // The host's stored deck is used now (Quick no longer forces Starter).
-    expect(createGame(cfg).log.find((e) => e.type === "gameCreated")).toMatchObject({ deck: DEFAULT_SETTINGS.deck });
+    expect(() => createGame(cfg)).not.toThrow();
   });
 
-  it("the engine never reads a hand-built starterMode: the game is the same as without it (no starter deck, shop dealt)", () => {
+  it("the engine never reads a hand-built starterMode: the game is the same as without it (shop dealt)", () => {
     const base = gameConfig(quick(), seats(6), "qa-engine");
     const forged = { ...base, starterMode: true, eventsEnabled: true } as unknown as GameConfig;
     expect(() => createGame(forged)).not.toThrow();
@@ -58,7 +57,6 @@ describe("QA: the 15-min preset is a normal game (shop and events), 3/8/12 playe
     it(`${n} players: runs to gameEnded with a 3-perk shop and event cards flipped`, () => {
       const cfg = gameConfig(quick(), seats(n), `qa-quick-${n}`);
       expect(cfg.eventsEnabled).toBe(true);
-      expect(cfg.rolePool).toEqual([]);
       expect(validateConfig(cfg)).toEqual([]);
       const agents = createBots(cfg.players, (_s, i) => Object.values(PERSONALITIES)[i % Object.values(PERSONALITIES).length]!, cfg.seed);
       const { state, rejections } = runBotGame(cfg, agents, { maxSteps: 2000 });

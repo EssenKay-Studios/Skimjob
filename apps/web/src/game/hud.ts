@@ -35,7 +35,7 @@ export const jobOf = (view: PlayerView): JobDef => {
 
 export const crewSize = (view: PlayerView) => view.players.length + 1;
 
-/** A seat at the table, in seat order (you included). */
+/** A seat in the crew, in seat order (you included). */
 export interface SeatInfo {
   readonly id: PlayerId;
   readonly name: string;

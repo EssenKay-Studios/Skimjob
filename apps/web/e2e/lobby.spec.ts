@@ -46,10 +46,10 @@ test("host creates, copies the invite, guest joins, host adds bots, start lands 
   await host.getByRole("button", { name: "Remove Bot · Max" }).click();
   await expect(host.locator(".seat--bot")).toHaveCount(1);
 
-  // Host settings, incl. Unique roles and the vote setting; the guest sees them read-only.
-  await host.getByRole("group", { name: "Unique roles" }).getByRole("button", { name: "Off" }).click();
+  // Host settings, incl. DM notices and the vote setting; the guest sees them read-only.
+  await host.getByRole("group", { name: "DM notices" }).getByRole("button", { name: "Off" }).click();
   await host.getByRole("group", { name: "Votes" }).getByRole("button", { name: "Open" }).click();
-  await expect(host.getByRole("group", { name: "Unique roles" }).getByRole("button", { name: "Off" })).toHaveAttribute("aria-pressed", "true");
+  await expect(host.getByRole("group", { name: "DM notices" }).getByRole("button", { name: "Off" })).toHaveAttribute("aria-pressed", "true");
   await expect(guest.getByRole("group", { name: "Votes" })).toContainText("Open");
   await expect(guest.getByRole("group", { name: "Votes" }).getByRole("button")).toHaveCount(0);
 
@@ -217,7 +217,7 @@ test.describe("lobby while the server is unreachable", () => {
   test("settings can't be changed while offline, so nothing looks saved and reverts @lobby", async ({ browser }) => {
     const { ctx, page, id } = await lobbyPage(browser);
     await page.goto(`/lobby/${id}`);
-    const off = page.getByRole("group", { name: "Unique roles" }).getByRole("button", { name: "Off" });
+    const off = page.getByRole("group", { name: "DM notices" }).getByRole("button", { name: "Off" });
     await expect(off).toBeEnabled();
     await ctx.setOffline(true);
     await expect(page.getByText(/can't reach the hideout/i)).toBeVisible({ timeout: 5_000 });
@@ -231,7 +231,7 @@ test.describe("lobby while the server is unreachable", () => {
   test("a change that fails to reach the server says it wasn't saved @lobby", async ({ browser }) => {
     const { page, id } = await lobbyPage(browser);
     await page.goto(`/lobby/${id}`);
-    const group = page.getByRole("group", { name: "Unique roles" });
+    const group = page.getByRole("group", { name: "DM notices" });
     await page.route(`**/api/games/${id}/settings`, (r) => r.fulfill({ status: 502, body: "" }));
     await group.getByRole("button", { name: "Off" }).click();
     await expect(page.getByText("That change wasn't saved")).toBeVisible();

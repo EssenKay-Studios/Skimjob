@@ -3,22 +3,15 @@
 
 export type SessionLength = "15m" | "1h" | "3h" | "1d" | "3d" | "1w";
 export type VoteVisibility = "hiddenThenRevealed" | "open" | "secret";
-/** extension.md "Host settings" (R6b adds their controls). */
-export type DeckId = "starter" | "standard" | "everything";
-export type DealStyle = "balanced" | "random";
+/** design §11.3, §16 */
 export type RoleListSetting = "exact" | "possible" | "hidden";
 
 export interface LobbySettings {
   readonly sessionLength: SessionLength;
   readonly voteVisibility: VoteVisibility;
-  readonly deck: DeckId;
-  /** Per-role toggles; empty = the deck preset's roles. */
-  readonly roles: readonly string[];
-  readonly deal: DealStyle;
   readonly roleList: RoleListSetting;
   readonly eventsEnabled: boolean;
   readonly dmNotices: boolean;
-  readonly uniqueRoles: boolean;
 }
 
 export interface Seat {

@@ -16,18 +16,17 @@ function config(players: number, contentOverrides: GameConfig["contentOverrides"
     seed: "bells-seed",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: ["rookie", "mole", "fixer"],
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     contentOverrides,
   };
 }
 
-/** A new game with seat i dealt roles[i] (Rookie if missing). */
+/** A new game with seat i dealt roles[i] (a Lookout if missing: its power acts only when used). */
 function game(players: number, roles: string[] = [], contentOverrides: GameConfig["contentOverrides"] = null): GameState {
   const cfg = config(players, contentOverrides);
   let seat = 0;
-  return replay(cfg, setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: roles[seat++] ?? "rookie" } : e)));
+  return replay(cfg, setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: roles[seat++] ?? "lookout" } : e)));
 }
 
 function run(state: GameState, ...commands: unknown[]): GameState {
@@ -76,7 +75,7 @@ describe("rings light bulbs — design §5.1, §5.2, §4.2 step 2", () => {
     expect(factVisibility("bells")).toEqual(PUBLIC);
     const s = run(game(3), mv("p0", "vault", 2), ROUND);
     const [event] = ofType(lastRound(s), "bellsRung");
-    expect(event).toEqual({ type: "bellsRung", visibility: PUBLIC, round: 1, bells: { vault: 2, office: 0, lobby: 0, security: 0, rooftop: 0 } });
+    expect(event).toEqual({ type: "bellsRung", visibility: PUBLIC, round: 1, bells: { vault: 2, office: 0, lobby: 0, security: 0, rooftop: 0 }, hidden: [] });
     for (const id of s.playerOrder) expect(viewFor(s, id).ledger.map((e) => e.event)).toContainEqual(event);
   });
 

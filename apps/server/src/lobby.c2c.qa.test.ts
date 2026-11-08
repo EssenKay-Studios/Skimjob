@@ -1,4 +1,5 @@
-// QA (PR #130, R7 C2c): lobby requests and stored lobbies naming a cut R6 role or the dropped `mole` setting. extension.md "Host settings"
+// QA (PR #130, R7 C2c; S3a.6): lobby requests and stored lobbies naming the dropped R6 role settings (per-role toggles,
+// deck, deal style, unique roles, `mole`): every player gets a role by the standard deal. design §11.3, §16
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { devAuthProvider, SESSION_COOKIE } from "./auth";
@@ -41,48 +42,31 @@ const host = async (settings?: object) => {
 };
 const join = async (code: string, nickname: string, who: Who = null) => call("POST", `/invites/${code}/join`, who, { nickname });
 
-const CUT = ["insideMan", "getawayDriver", "fence", "blackmailer", "forger", "muscle", "snitch", "bagman", "cleaner", "mastermind", "embezzler"];
+const DROPPED = { roles: ["lookout", "muscle"], deck: "everything", deal: "random", uniqueRoles: false, mole: "off" } as const;
 const addBots = async (who: string, id: string, n: number) => {
   for (let i = 0; i < n; i++) expect((await call("POST", `/games/${id}/bots`, who, { personality: "greedy" })).status).toBeLessThan(300);
 };
 const setStored = (id: string, settings: object) => db.query("update games set settings = $2::jsonb where id = $1", [id, JSON.stringify(settings)]);
 
-describe("lobby requests naming a cut role or the dropped mole setting are refused cleanly", () => {
-  it.each(CUT)("creating a lobby with %s toggled on: 400, no lobby", async (cut) => {
+describe("lobby requests naming a dropped role setting are refused cleanly", () => {
+  it.each(Object.entries(DROPPED))("creating a lobby with %s: 400 unknown setting, no lobby", async (key, value) => {
     const who = await guest("Host");
-    const res = await call("POST", "/games", who, { settings: { roles: ["lookout", cut] } });
+    const res = await call("POST", "/games", who, { settings: { [key]: value } });
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/roles must be a list of distinct role ids/);
+    expect(res.body.error).toBe(`unknown setting "${key}"`);
   });
-  it.each(["off", "maybe", "on"])("creating a lobby with mole: %s: 400 unknown setting", async (mole) => {
-    const who = await guest("Host");
-    const res = await call("POST", "/games", who, { settings: { mole } });
-    expect(res.status).toBe(400);
-    expect(res.body.error).toBe('unknown setting "mole"');
-  });
-  it("a settings change naming a cut role or mole is refused and leaves the stored settings as they were", async () => {
+  it("a settings change naming one is refused and leaves the stored settings as they were", async () => {
     const { who, game } = await host();
-    for (const cut of CUT) expect((await call("PATCH", `/games/${game.id}/settings`, who, { settings: { roles: [cut] } })).status).toBe(400);
-    expect((await call("PATCH", `/games/${game.id}/settings`, who, { settings: { mole: "off" } })).status).toBe(400);
+    for (const [key, value] of Object.entries(DROPPED)) expect((await call("PATCH", `/games/${game.id}/settings`, who, { settings: { [key]: value } })).status).toBe(400);
     expect((await call("GET", `/games/${game.id}`, who)).body.settings).toEqual(DEFAULT_SETTINGS);
   });
-  it("a lobby stored before the deploy with mole: off is read without it and starts (status 200)", async () => {
+  it("a lobby stored before the deploy with them (a cut role toggled on too) is read without them and starts (status 200)", async () => {
     const { who, game } = await host();
     await addBots(who, game.id, 4);
-    await setStored(game.id, { ...DEFAULT_SETTINGS, mole: "off" });
+    await setStored(game.id, { ...DEFAULT_SETTINGS, ...DROPPED });
     expect((await call("GET", `/games/${game.id}`, who)).body.settings).toEqual(DEFAULT_SETTINGS);
     const started = await call("POST", `/games/${game.id}/start`, who);
     expect(started.status).toBe(200);
     expect(started.body.status).toBe("running");
-  });
-  it("a lobby stored before the deploy with a cut role toggled on: /start is a clean 409 naming it; re-picking the roles starts it", async () => {
-    const { who, game } = await host();
-    await addBots(who, game.id, 4);
-    await setStored(game.id, { ...DEFAULT_SETTINGS, roles: ["lookout", "muscle", "hacker"] });
-    const refused = await call("POST", `/games/${game.id}/start`, who);
-    expect(refused.status).toBe(409);
-    expect(refused.body.error).toBe("these roles are no longer in the game: muscle; pick the roles again");
-    expect((await call("PATCH", `/games/${game.id}/settings`, who, { settings: { roles: ["lookout", "hacker"] } })).status).toBe(200);
-    expect((await call("POST", `/games/${game.id}/start`, who)).status).toBe(200);
   });
 });

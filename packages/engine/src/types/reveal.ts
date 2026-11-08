@@ -1,8 +1,8 @@
-// The end-of-game reveal, worked out from the log (design §13; extension.md
-// "Winning and losing", "Tokens and the perk shop", "Situations"). Only in a
+// The end-of-game reveal, worked out from the log (design §8, §15.5; extension.md
+// "Tokens and the perk shop"). Only in a
 // view once the game has ended (`PlayerView.reveal.summary`), and built from
 // the same events as `reveal.log`, so it never holds anything that log doesn't.
-import type { FailureReason, PerkId, RoleId, RoomId, TokenTrigger } from "@skimjob/content";
+import type { PerkId, RoleId, RoomId, TokenTrigger } from "@skimjob/content";
 import type { PlayerId } from "./config";
 import type { DuffelSplit, GameEvent, Outcome, RoundResolved } from "./events";
 
@@ -15,8 +15,6 @@ export interface RevealSeat {
   readonly dealtRole: RoleId;
   /** The role at the end; the one scored and judged. design §10 */
   readonly role: RoleId;
-  /** The failure endings `role` also wins from the top group (★ roles). extension.md "Winning and losing" */
-  readonly winsOn: readonly FailureReason[];
   readonly stash: number;
   /** Tied for the biggest stash (no tie-break, design §8.5). */
   readonly topGroup: boolean;
@@ -29,17 +27,17 @@ export interface RevealSeat {
   readonly perksUsed: number;
 }
 
-/** Why the game ended the way it did, and who that makes the winners. extension.md "Winning and losing" */
+/** Why the game ended the way it did, and who that makes the winners. design §8 */
 export interface RevealEnding {
   readonly result: Outcome["result"];
   /** Null on a success. */
-  readonly reason: FailureReason | null;
+  readonly reason: "bust" | "theft" | null;
   readonly topGroup: readonly PlayerId[];
   readonly winners: readonly PlayerId[];
   /**
-   * `success`: the top group wins. `failedTopWins`: some of the top group hold
-   * a role that wins this failure. `failedNobody`: nobody in the top group
-   * does, so nobody wins and the ranking is a loss.
+   * `success`: the top group wins. `failedTopWins`: someone won the failure
+   * (a Rooftop escapee on a bust, a Mole or Fixer at the top on a heist sunk by
+   * theft). `failedNobody`: nobody did, so the ranking is a loss.
    */
   readonly why: "success" | "failedTopWins" | "failedNobody";
 }
@@ -58,26 +56,15 @@ export interface RevealMove {
 
 /**
  * A line of the timeline. Most hidden actions come as the event itself
- * (`event`: powers used, perks bought and used, Rigs, Inside tips, Raid
- * rumours) next to the
- * public ones that matter (meetings, shakedowns, raids). The rest
- * are worked out, because one event alone can't say them.
+ * (`event`: powers used or already done, absolves, perks bought and used,
+ * Rigs, Inside tips) next to the public ones that matter (meetings,
+ * shakedowns, raids, power cuts). The rest are worked out, because one event
+ * alone can't say them.
  */
 export type RevealItem =
   | { readonly kind: "event"; readonly event: GameEvent }
   /** A token earned, and why. extension.md "Tokens and the perk shop" */
   | { readonly kind: "token"; readonly player: PlayerId; readonly trigger: TokenTrigger }
-  /**
-   * A watch feed that read "camera offline", now told apart: the Hacker loop of
-   * `hackers`. extension.md "Situations"
-   */
-  | {
-      readonly kind: "cameraOffline";
-      readonly watcher: PlayerId;
-      readonly room: RoomId;
-      readonly source: "security" | "lookout" | "tail";
-      readonly hackers: readonly PlayerId[];
-    }
   /** A public role claim next to the truth (the claimer's role when they claimed). design §12.1 */
   | { readonly kind: "claim"; readonly player: PlayerId; readonly claimed: RoleId; readonly real: RoleId };
 

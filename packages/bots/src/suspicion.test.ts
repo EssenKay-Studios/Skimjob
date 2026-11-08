@@ -1,6 +1,6 @@
 // The suspicion model over real (scripted) engine games, read through viewFor
-// only. design §17.3; §5.3 shortfall, §5.4 alibis, §6.1 Security, §6.2 Server
-// room, §11.3 shakedown results
+// only. design §19.3; §5.3 shortfall, §5.4 alibis, §3.4 Security, §11.1
+// powers, §9.6 shakedown results
 import { describe, expect, it } from "vitest";
 import { viewFor, type GameState, type PlayerId } from "@skimjob/engine";
 import { SUSPICION_WEIGHTS as W, mostSuspicious, suspicion } from "./suspicion";
@@ -31,17 +31,31 @@ describe("suspicion — design §17.3", () => {
     expect(mostSuspicious(scores)?.player).toBe("ben");
   });
 
-  it("my own Detective and Auditor results count (v2 §2)", () => {
+  it("my own Detective and Auditor results count against the alibis — design §11.1", () => {
     // Everyone hands in, so only the powers' results move the scores.
     const s = closeAlibis(round(game(3), { ana: { room: "office" }, ben: { room: "vault" }, carl: { room: "vault" } }));
     const mine = (ability: object): GameState => ({
       ...s,
       log: [...s.log, { type: "abilityResolved", visibility: { kind: "private", player: "ana" }, player: "ana", round: 2, ability } as GameState["log"][number]],
     });
-    expect(scoresOf(mine({ kind: "checkStash", target: "carl", threshold: 3, dirty: true }), "ana").get("carl")).toBe(W.checkedDirty);
-    // A Vault shortfall of 4 (made up), shared by ben and carl who both claimed it.
-    const audited = scoresOf(mine({ kind: "audit", round: 1, room: "vault", shortfall: 4 }), "ana");
+    // Detective: carl claimed the Vault (6 coins); a grab of 6 fits, a grab of 7 can't.
+    expect(scoresOf(mine({ kind: "detect", round: 1, target: "carl", grabbed: 6 }), "ana").get("carl")).toBe(0);
+    expect(scoresOf(mine({ kind: "detect", round: 1, target: "carl", grabbed: 7 }), "ana").get("carl")).toBe(W.lie);
+    // Auditor: ben and carl both claimed the Vault (6 coins each), but only 8 reached the duffel from it: 4 short, shared.
+    const audited = scoresOf(mine({ kind: "audit", round: 1, room: "vault", duffel: 8 }), "ana");
     expect([audited.get("ben"), audited.get("carl")]).toEqual([2 * W.audited, 2 * W.audited]);
+    expect(scoresOf(mine({ kind: "audit", round: 1, room: "vault", duffel: 12 }), "ana").get("ben")).toBe(0);
+  });
+
+  it("a blacked-out room's feed shows nobody, which clears or blames nobody — design §11.1", () => {
+    // Ana watches the Vault from Security; carl claims the Vault but is in the Lobby.
+    const s = round(game(3), { ana: { room: "security", watch: "vault" }, ben: { room: "office" }, carl: { room: "lobby", alibi: "vault" } });
+    expect(scoresOf(s, "ana").get("carl")).toBeGreaterThanOrEqual(W.lie);
+    const dark: GameState = {
+      ...s,
+      log: s.log.map((e) => (e.type === "roomWatched" ? { ...e, seen: [], offline: true } : e)),
+    };
+    expect(scoresOf(dark, "ana").get("carl")).toBeLessThan(W.lie);
   });
 
   it("no shortfall, no blame", () => {

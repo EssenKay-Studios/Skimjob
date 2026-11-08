@@ -1,10 +1,9 @@
 // QA (PR #55, M2-11): the end-of-game reveal summary against the engine's own
-// truth in seeded whole bot games (design §13; extension.md "Winning and
-// losing", "Tokens and the perk shop", "Police activity", "Situations",
-// owner ruling 5). Truth comes from folding the full log with the reducer
-// (police queue, loops, stashes), not from the reveal's own heuristics.
+// truth in seeded whole bot games (design §8, §15.5; extension.md "Tokens and
+// the perk shop"). Truth comes from folding the full log with the reducer
+// (power cuts, stashes), not from the reveal's own heuristics.
 import { describe, expect, it } from "vitest";
-import { ROLES, type PerkId, type RoleId } from "@skimjob/content";
+import type { PerkId } from "@skimjob/content";
 import {
   applyEvent,
   createGame,
@@ -12,6 +11,7 @@ import {
   initialState,
   leadersOf,
   perkCost,
+  roleHandler,
   viewFor,
   type Command,
   type GameConfig,
@@ -32,8 +32,6 @@ function config(n: number, seed: string, extra: Partial<GameConfig> = {}): GameC
     seed,
     players: Array.from({ length: n }, (_, i) => ({ id: `q${i}`, name: `Q${i}`, isBot: true })),
     job: "bank",
-    rolePool: Object.keys(ROLES) as RoleId[],
-    deck: "everything",
     eventsEnabled: true,
     voteVisibility: "secret",
     contentOverrides: R6_COINS,
@@ -46,9 +44,9 @@ function config(n: number, seed: string, extra: Partial<GameConfig> = {}): GameC
  * no summary for any seat, including an absent seat (no agent). There are no
  * spectators: viewFor refuses a non-seat.
  */
-function play(c: GameConfig, absent: readonly PlayerId[] = []): GameState {
+function play(c: GameConfig, absent: readonly PlayerId[] = [], ids: readonly PersonalityId[] = IDS): GameState {
   const seats = c.players.filter((p) => !absent.includes(p.id));
-  const agents = createBots(seats, (_, i) => PERSONALITIES[IDS[i % IDS.length] as PersonalityId], c.seed);
+  const agents = createBots(seats, (_, i) => PERSONALITIES[ids[i % ids.length] as PersonalityId], c.seed);
   let state = createGame(c);
   const viewers = c.players.map((p) => p.id);
   const noLeak = () => {
@@ -93,6 +91,9 @@ function play(c: GameConfig, absent: readonly PlayerId[] = []): GameState {
 
 type Coverage = Set<string>;
 
+/** The Mole and the Fixer win a heist sunk by theft by their own rule. design §8.4 */
+const winsSunk = (role: string): boolean => roleHandler(role).winsSunk !== undefined;
+
 /** Checks the summary every viewer gets against the truth; adds what the game exercised to `cov`. */
 function audit(state: GameState, cov: Coverage): RevealSummary {
   const c = state.config;
@@ -133,7 +134,7 @@ function audit(state: GameState, cov: Coverage): RevealSummary {
     const shouldWin =
       outcome.reason === "bust"
         ? escaped.filter((r) => r.stash === Math.max(...escaped.map((e) => e.stash))).map((r) => r.player)
-        : top.filter((p) => (ROLES[state.players[p]?.role as RoleId]?.winsOn ?? []).includes(outcome.reason));
+        : top.filter((p) => winsSunk(state.players[p]?.role as string));
     expect([...outcome.winners].sort()).toEqual([...shouldWin].sort());
     expect(summary.ending.why).toBe(shouldWin.length > 0 ? "failedTopWins" : "failedNobody");
     cov.add(summary.ending.why);
@@ -148,8 +149,8 @@ function audit(state: GameState, cov: Coverage): RevealSummary {
     expect(seat.role).toBe(p.role);
     expect(seat.winner).toBe(outcome.winners.includes(seat.player));
     expect(seat.topGroup).toBe(top.includes(seat.player));
-    expect(seat.winsOn).toEqual(ROLES[p.role]?.winsOn ?? []);
-    if (seat.winner && seat.winsOn.length > 0 && outcome.result === "failed") cov.add("starFailureWin");
+    // design §8.4: the Mole's and the Fixer's own win on a heist sunk by theft.
+    if (seat.winner && outcome.result === "failed" && outcome.reason === "theft") cov.add("sunkWin");
   });
 
   // --- fold the full log for the truth
@@ -159,8 +160,7 @@ function audit(state: GameState, cov: Coverage): RevealSummary {
   const tokenRounds: string[] = [];
   const bought = new Map<PlayerId, PerkId[]>();
   const used = new Map<PlayerId, number>();
-  const offlineTruth: { round: number; watcher: PlayerId; room: string; hackers: PlayerId[] }[] = [];
-  let loops = new Map<string, PlayerId[]>();
+  const cuts = new Set<string>();
   const stashAt = new Map<number, Record<PlayerId, number>>();
   const snap = () => Object.fromEntries(state.playerOrder.map((p) => [p, s.players[p]!.stash]));
   for (const e of state.log) {
@@ -168,7 +168,6 @@ function audit(state: GameState, cov: Coverage): RevealSummary {
       case "roundStarted":
         if (round > 0) stashAt.set(round, snap());
         round = e.round;
-        loops = new Map();
         break;
       case "tokenEarned":
         tokensTruth.set(e.player, [...(tokensTruth.get(e.player) ?? []), e.trigger]);
@@ -181,14 +180,16 @@ function audit(state: GameState, cov: Coverage): RevealSummary {
       case "perkUsed":
         used.set(e.player, (used.get(e.player) ?? 0) + 1);
         break;
-      case "abilityResolved":
-        if (e.ability.kind === "loopCameras") loops.set(e.ability.room, [...(loops.get(e.ability.room) ?? []), e.player]);
+      case "powerCut":
+        cuts.add(`${e.round}:${e.room}`);
         break;
       case "roomWatched":
-        if (e.offline) {
-          offlineTruth.push({ round, watcher: e.player, room: e.room, hackers: loops.get(e.room) ?? [] });
-          expect(e.source).toBe("security");
-        }
+        // design §11.1: a feed is offline exactly when its room was announced blacked out that round.
+        expect(e.offline).toBe(cuts.has(`${e.round}:${e.room}`));
+        if (e.offline) cov.add("offline:powerCut");
+        break;
+      case "sinsAbsolved":
+        cov.add("absolved");
         break;
       default:
         break;
@@ -223,13 +224,9 @@ function audit(state: GameState, cov: Coverage): RevealSummary {
   expect(eventItems("roomRaided")).toEqual(state.log.filter((e) => e.type === "roomRaided"));
   if (eventItems("roomRaided").length > 0) cov.add("raid");
 
-  // Camera offline: the Hacker loop.
-  const offline = has((i) => i.kind === "cameraOffline").map((x) => {
-    const o = x.item as Extract<RevealItem, { kind: "cameraOffline" }>;
-    return { round: x.round, watcher: o.watcher, room: o.room, hackers: [...o.hackers] };
-  });
-  expect(offline).toEqual(offlineTruth);
-  if (offlineTruth.length > 0) cov.add("offline:hackerLoop");
+  // design §11.1: every power cut and every power used is in the timeline, in its round.
+  expect(eventItems("powerCut")).toEqual(state.log.filter((e) => e.type === "powerCut"));
+  expect(eventItems("abilityResolved")).toEqual(state.log.filter((e) => e.type === "abilityResolved"));
 
   // Real moves: every split, with its alibi and missed flag.
   const splits = state.log.filter((e) => e.type === "coinsGrabbed");
@@ -247,33 +244,20 @@ function audit(state: GameState, cov: Coverage): RevealSummary {
 
 // Seeds picked by a sweep so that together they hit every case below.
 const SEEDS: readonly (readonly [number, string])[] = [
-  [5, "qa55-5-10"],
-  [5, "qa55-5-18"], // a Hacker loop hides a pocketer
-  [5, "qa55-5-20"], // another Hacker loop
-  [8, "qa55-8-6"],
-  [12, "qa55-12-6"],
-  [12, "qa55-12-23"],
+  [5, "qa55-5-r6-0"],
+  [8, "qa55-8-r6-1"],
+  [12, "qa55-12-r6-0"],
 ];
-const MUST = [
-  "success",
-  "failed:theft",
-  "failedTopWins",
-  "starFailureWin",
-  "raid",
-  "offline:hackerLoop",
-  "perkBought",
-  "perkUsed",
-  "token:loopHidPocketer",
-];
+const MUST = ["success", "failed:theft", "failedTopWins", "sunkWin", "raid", "offline:powerCut", "absolved", "perkBought", "perkUsed"];
 
-describe("QA #55 reveal summary vs the engine's truth — design §13", () => {
+describe("QA #55 reveal summary vs the engine's truth — design §8, §15.5", () => {
   it("full games at 5/8/12 players: hidden before the end, identical for every viewer after, and true", () => {
     const cov: Coverage = new Set();
     for (const [n, seed] of SEEDS) audit(play(config(n, seed)), cov);
-    // Content bells (no R6 pins), so raids happen (design §5.3).
-    audit(play(config(8, "qa55-8-raids", { contentOverrides: null })), cov);
-    // Content numbers: sunk by theft below the honesty line, and the Mole on top wins it (design §8.4).
-    audit(play(config(5, "qa55-5-t282", { contentOverrides: null })), cov);
+    // Content bells (no R6 pins), so raids happen (design §5.3), and the Rooftop escapees win a bust (§5.5).
+    audit(play(config(8, "qa55-8-c-10", { contentOverrides: null })), cov);
+    // Content numbers and a greedy crew: sunk by theft below the honesty line, and a Mole or Fixer on top wins it (design §8.4).
+    audit(play(config(5, "qa55-greedy-5-32", { contentOverrides: null }), [], ["greedy", "random"]), cov);
     for (const k of MUST) expect(cov, k).toContain(k);
   }, 120_000);
 

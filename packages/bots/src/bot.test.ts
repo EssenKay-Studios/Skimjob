@@ -1,7 +1,7 @@
 // Bot decisions from a view: moves, alibis, meeting scheduling, votes, role
-// powers, and determinism. design §17.3 (and §5.1, §5.4, §8, §11.1, §11.2)
+// powers, and determinism. design §19.3 (and §5.1, §5.4, §9, §11.1, §11.2)
 import { describe, expect, it } from "vitest";
-import { roomDef, viewFor, jobById, type GameEvent, type GameState, type Move, type PlayerCommand } from "@skimjob/engine";
+import { jobFor, ringsOf, roomDef, viewFor, jobById, type GameEvent, type GameState, type Move, type PlayerCommand } from "@skimjob/engine";
 import { PERSONALITIES, type Personality } from "./personalities";
 import { botRandom, chooseAlibi, chooseMove, chooseVote, createBot, crewHunch, decide, misjudged, type Random } from "./bot";
 import { suspicion } from "./suspicion";
@@ -104,7 +104,7 @@ describe("moves — design §5.1, §6, §7, §8", () => {
   });
 
   it("never picks a taped-off room, and keeps clear of a bell close to a raid — design §5.3", () => {
-    const g = game(4, (st) => st.players.ana?.role === "rookie");
+    const g = game(4);
     const { vault: _v, ...bells } = g.bells;
     const taped = { ...g, bells, taped: { vault: 3 } } satisfies GameState;
     for (let i = 0; i < 20; i++) expect(chooseMove(viewFor(taped, "ana"), PERSONALITIES.random, seeded(`t${i}`)).room).not.toBe("vault");
@@ -114,7 +114,7 @@ describe("moves — design §5.1, §6, §7, §8", () => {
   });
 
   it("a cautious grab stops short of the last bulb — design §5.2, §5.3", () => {
-    const g = game(4, (st) => st.players.ana?.role === "rookie");
+    const g = game(4);
     const loud = { ...g, bells: { ...g.bells, office: 999 } } satisfies GameState; // R6 pins: 1000 bulbs, so the Office's 2nd ring would raid
     const office = { ...exact(PERSONALITIES.cautious), caution: 1, watch: 0, pocketChance: 0 };
     const moves = Array.from({ length: 10 }, (_, i) => chooseMove(viewFor(loud, "ana"), office, seeded(`o${i}`))).filter((m) => m.room === "office");
@@ -127,14 +127,14 @@ describe("moves — design §5.1, §6, §7, §8", () => {
     const half = { room: "lobby", pocket: 1 };
     for (let r = 1; r <= 2; r++) s = round(s, { ana: half, ben: half, carl: half, dee: half });
     s = closeAlibis(s); // round 3 is being planned
-    const greedyTeamPlayer = exact(PERSONALITIES.greedy, { pocketChance: 1, teamSpirit: 1, watch: 0, caution: 0 });
-    for (let i = 0; i < 20; i++) expect(chooseMove(viewFor(s, "ana"), greedyTeamPlayer, seeded(`p${i}`)).pocket).toBe(0);
+    const greedyCrewMinded = exact(PERSONALITIES.greedy, { pocketChance: 1, teamSpirit: 1, watch: 0, caution: 0 });
+    for (let i = 0; i < 20; i++) expect(chooseMove(viewFor(s, "ana"), greedyCrewMinded, seeded(`p${i}`)).pocket).toBe(0);
     // Everything handed in so far (16 of 16): there is room for a pocketed coin.
     let honest = game(4);
     const all = { room: "lobby" };
     for (let r = 1; r <= 2; r++) honest = round(honest, { ana: all, ben: all, carl: all, dee: all });
     honest = closeAlibis(honest);
-    const pockets = Array.from({ length: 20 }, (_, i) => chooseMove(viewFor(honest, "ana"), greedyTeamPlayer, seeded(`p${i}`)).pocket);
+    const pockets = Array.from({ length: 20 }, (_, i) => chooseMove(viewFor(honest, "ana"), greedyCrewMinded, seeded(`p${i}`)).pocket);
     expect(pockets.some((p) => p > 0)).toBe(true);
   });
 });
@@ -221,23 +221,79 @@ describe("votes — design §11.2, §17.3", () => {
 
 // ---------------------------------------------------------------- role habits (balance pass 2, task 16)
 
-describe("role habits — design §8", () => {
-  /** A 5-player game where `player` holds `role` (roles are swapped in by hand; the engine isn't asked). */
+describe("role habits — design §11.1, §19.3", () => {
+  /** `player` holds `role` (swapped in by hand), with these role-state uses. */
   const withRole = (s: GameState, player: string, role: string, roleState: Partial<GameState["players"][string]["roleState"]> = {}): GameState => {
     const me = s.players[player] as GameState["players"][string];
     return { ...s, players: { ...s.players, [player]: { ...me, role, roleState: { ...me.roleState, ...roleState } } } };
   };
+  const lobby = { room: "lobby" };
+  // Round 1: ben pockets 4 in the Vault and claims the Office: the top suspect.
+  const suspectBen = () => closeAlibis(round(game(5), { ana: lobby, ben: { room: "vault", pocket: 4, alibi: "office" }, carl: lobby, dee: lobby, eve: lobby }));
+  const uses = (st: GameState, role: string, used = 0) =>
+    decide(viewFor(withRole(st, "ana", role, { usedThisStretch: used }), "ana"), exact(PERSONALITIES.honest), seeded("c"), "test-crew").filter((c) => c.type === "useAbility");
+  const skimmer = exact(PERSONALITIES.greedy, { pocketChance: 1, teamSpirit: 0, watch: 0, caution: 0 });
+  const moves = (st: GameState, p: Personality = skimmer) => Array.from({ length: 30 }, (_, i) => chooseMove(viewFor(st, "ana"), p, seeded(`m${i}`)));
 
-  it("Auditor audits the room its top suspect claimed; Detective checks its top suspect; once between meetings (v2 §2, §4)", () => {
-    const lobby = { room: "lobby" };
-    // Round 1: ben pockets 4 in the Vault and claims the Office: the top suspect.
-    const dealt = game(5);
-    let s = closeAlibis(round(dealt, { ana: lobby, ben: { room: "vault", pocket: 4, alibi: "office" }, carl: lobby, dee: lobby, eve: lobby }));
-    const uses = (st: GameState, role: string, used = 0) =>
-      decide(viewFor(withRole(st, "ana", role, { usedThisStretch: used }), "ana"), exact(PERSONALITIES.honest), seeded("c"), "test-crew").filter((c) => c.type === "useAbility");
+  it("the Auditor audits the room its top suspect claimed, once between meetings", () => {
+    const s = suspectBen();
     expect(uses(s, "auditor")).toEqual([{ type: "useAbility", player: "ana", ability: { kind: "audit", room: "office" } }]);
     expect(uses(s, "auditor", 1)).toEqual([]);
-    expect(uses(s, "detective")).toEqual([{ type: "useAbility", player: "ana", ability: { kind: "checkStash", target: "ben" } }]);
-    expect(uses(s, "detective", 1)).toEqual([]);
+  });
+
+  it("the Detective looks into its top suspect's grab, once per resolved round (every round)", () => {
+    const s = withRole(suspectBen(), "ana", "detective");
+    const detect = { type: "useAbility", player: "ana", ability: { kind: "detect", target: "ben" } };
+    expect(uses(s, "detective")).toEqual([detect]);
+    expect(uses(run(s, detect), "detective")).toEqual([]);
+  });
+
+  it("the Hacker hides its own room's bell when it skims there and its coins ring", () => {
+    const s = game(4, { ana: "hacker" });
+    for (const m of moves(s)) {
+      const rings = m.pocket > 0 && ringsOf(roomDef(jobFor(s.config), m.room), m.duffel + m.pocket) > 0;
+      expect(m.ability, JSON.stringify(m)).toEqual(rings ? { kind: "hide", room: m.room } : undefined);
+    }
+    expect(moves(game(4, { ana: "hacker" })).some((m) => m.ability)).toBe(true);
+    const spent = withRole(s, "ana", "hacker", { usedThisStretch: 1 });
+    expect(moves(spent).every((m) => m.ability === undefined)).toBe(true);
+  });
+
+  it("the Electrician cuts the power in the richest room next round when it skims", () => {
+    const s = game(4, { ana: "electrician" });
+    expect(moves(s).some((m) => m.pocket > 0)).toBe(true);
+    for (const m of moves(s)) expect(m.ability).toEqual(m.pocket > 0 ? { kind: "blackout", room: "vault" } : undefined);
+    const honest = exact(PERSONALITIES.honest, { pocketChance: 0 });
+    expect(moves(s, honest).every((m) => m.ability === undefined)).toBe(true);
+  });
+
+  it("the Priest absolves its top suspect, never the same player twice in a row", () => {
+    const s = withRole(suspectBen(), "ana", "priest");
+    const first = chooseMove(viewFor(s, "ana"), exact(PERSONALITIES.honest), seeded("p"));
+    expect(first.ability).toEqual({ kind: "absolve", target: "ben" });
+    // The absolve resolves; ben stays the top suspect, but the Priest turns elsewhere (or nowhere).
+    const after = closeAlibis(round(run(s, { type: "submitMove", player: "ana", move: first }), { ben: lobby, carl: lobby, dee: lobby, eve: lobby }));
+    const next = chooseMove(viewFor(after, "ana"), exact(PERSONALITIES.honest), seeded("p"));
+    expect(next.ability === undefined || (next.ability.kind === "absolve" && next.ability.target !== "ben")).toBe(true);
+  });
+
+  it("the Mole rings the loudest other bell only while it leans toward theft, and not one raid from a bust", () => {
+    const s = game(4, { ana: "mole" });
+    const base = viewFor({ ...s, bells: { ...s.bells, office: 3 } }, "ana");
+    // Leaning toward theft: honesty far below the line, and a stash above the share.
+    const leaning = { ...base, honesty: { reached: 0, taken: 20 }, me: { ...base.me, stash: 10 } };
+    const rang = (v: typeof base) => Array.from({ length: 20 }, (_, i) => chooseMove(v, skimmer, seeded(`r${i}`))).filter((m) => m.room !== "office" && !roomDef(bank, m.room).lieLow);
+    expect(rang(leaning).length).toBeGreaterThan(0);
+    for (const m of rang(leaning)) expect(m.ability).toEqual({ kind: "ring", room: "office" });
+    expect(rang(base).every((m) => m.ability === undefined)).toBe(true);
+    expect(rang({ ...leaning, wanted: 2 }).every((m) => m.ability === undefined)).toBe(true);
+  });
+
+  it("the Fixer reopens the richest taped-off room, once per game", () => {
+    const s = game(4, { ana: "fixer" });
+    const { vault: _v, ...bells } = s.bells;
+    const taped = { ...s, bells, taped: { vault: 3 } } satisfies GameState;
+    for (const m of moves(taped)) expect(m.ability).toEqual({ kind: "reopen", room: "vault" });
+    expect(moves(withRole(taped, "ana", "fixer", { usedThisGame: 1 })).every((m) => m.ability === undefined)).toBe(true);
   });
 });

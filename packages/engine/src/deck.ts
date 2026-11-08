@@ -7,7 +7,7 @@ import { EVENTS, EVENT_DECK, EVENTS_FROM_ROUND, type EventDef, type EventEffect,
 import type { ActiveCard, GameConfig, GameEvent, GameState, PlayerId, PlayerState } from "./types";
 import { PUBLIC, privateTo } from "./types";
 import type { Draw } from "./handle";
-import { eventsFor, jobFor, powerOf, type EventTable } from "./overrides";
+import { eventsFor, jobFor, type EventTable } from "./overrides";
 
 /** Events are on unless the host turns them off. design §8.1, §15 */
 export const eventsOn = (config: GameConfig): boolean => config.eventsEnabled;
@@ -38,19 +38,22 @@ const effectIs = <K extends EventEffect["kind"]>(state: GameState, kind: K): Ext
  * closed room (any room in play but the default room) as the card is flipped,
  * so players can plan around it. A Rig for this round flips its holder's pick
  * instead of a drawn card (the oldest, if several; design §8.3). design §10
+ * Then each Electrician's blackout for this round is announced, with no source (§11.1).
  */
 export function startRound(state: GameState, round: number, draw: Draw): GameEvent[] {
   const events: GameEvent[] = [{ type: "roundStarted", visibility: PUBLIC, round }];
-  if (!eventsOn(state.config) || round < EVENTS_FROM_ROUND) return events;
-  // The oldest Rig of this round wins; later ones were spent without effect (they never learn more than the flip shows).
-  const card = state.rigs.find((r) => r.round === round)?.pick ?? draw.pick(EVENT_DECK);
-  const effect = cardDef(card, eventsFor(state.config)).effect;
-  let room: RoomId | null = null;
-  if (effect.kind === "lockdown") {
-    const job = jobFor(state.config);
-    room = draw.pick(state.rooms.filter((r) => r !== job.defaultRoom));
+  if (eventsOn(state.config) && round >= EVENTS_FROM_ROUND) {
+    // The oldest Rig of this round wins; later ones were spent without effect (they never learn more than the flip shows).
+    const card = state.rigs.find((r) => r.round === round)?.pick ?? draw.pick(EVENT_DECK);
+    const effect = cardDef(card, eventsFor(state.config)).effect;
+    let room: RoomId | null = null;
+    if (effect.kind === "lockdown") {
+      const job = jobFor(state.config);
+      room = draw.pick(state.rooms.filter((r) => r !== job.defaultRoom));
+    }
+    events.push({ type: "eventFlipped", visibility: PUBLIC, round, card, room });
   }
-  events.push({ type: "eventFlipped", visibility: PUBLIC, round, card, room });
+  for (const room of state.cutsPending) events.push({ type: "powerCut", visibility: PUBLIC, round, room });
   return events;
 }
 

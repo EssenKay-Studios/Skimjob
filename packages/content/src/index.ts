@@ -1,6 +1,6 @@
 // Game content as data: rooms, roles, jobs, events, scaling numbers.
 // See docs/design.md §6–§11.
-export const CONTENT_VERSION = "0.22.0";
+export const CONTENT_VERSION = "0.23.0";
 
 // Content identifiers. Plain strings so new rooms/roles/jobs are pure data;
 // their definitions are in rooms.ts, roles.ts and jobs.ts.
@@ -8,7 +8,7 @@ export const CONTENT_VERSION = "0.22.0";
 /** A room in a job, e.g. "vault", "office", "lobby", "security", "rooftop". design §6 */
 export type RoomId = string;
 
-/** A secret role, e.g. "rookie", "lookout", "hacker", "mole". design §8 */
+/** A secret role, e.g. "lookout", "hacker", "mole". design §11 */
 export type RoleId = string;
 
 /** A job (location), e.g. "bank". design §9 */

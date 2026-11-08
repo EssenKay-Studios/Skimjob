@@ -2,7 +2,7 @@
 // taped-off rooms and stars in its view. design §5, §13
 import { EVENTS, type JobDef, type RoomId } from "@skimjob/content";
 import { overrideEvents, ringsOf, roomDef, roundJob, type EventTable, type PlayerView } from "@skimjob/engine";
-import { createdOf, jobOf } from "./read";
+import { createdOf, jobOf, myPower } from "./read";
 
 /** The event cards with the game's public content overrides. design §13 */
 const cardsOf = (view: PlayerView): EventTable => overrideEvents(EVENTS, createdOf(view).contentOverrides);
@@ -21,7 +21,9 @@ export const openRooms = (view: PlayerView): RoomId[] => view.rooms.filter((r) =
  * Others' rings are unknown until the round resolves (design §5.2).
  */
 export function raidRisk(view: PlayerView, job: JobDef, room: RoomId, coins: number): number {
-  return ((view.bells[room] ?? 0) + ringsOf(roomDef(job, room), coins)) / job.alarm.bulbs;
+  const power = myPower(view);
+  // design §5.2: the Locksmith's coins each ring one time fewer.
+  return ((view.bells[room] ?? 0) + ringsOf(roomDef(job, room), coins, power?.kind === "muffle" ? power.fewerRings : 0)) / job.alarm.bulbs;
 }
 
 /** The most coins (1 up to `coins`) whose rings keep `room`'s bell below a raid; `coins` if even 1 would raid. design §5.2, §5.3 */

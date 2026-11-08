@@ -97,6 +97,10 @@ function reopen(state: GameState, open: (room: string) => boolean): GameState {
   return { ...state, taped, bells: { ...state.bells, ...Object.fromEntries(rooms.map((r) => [r, 0])) } };
 }
 
+/** The lit bulbs of those `rooms` that still have a bell (a raided room's is off). */
+const bellsOf = (state: GameState, rooms: readonly string[]): Record<string, number> =>
+  Object.fromEntries(rooms.filter((room) => Object.hasOwn(state.bells, room)).map((room) => [room, state.bells[room] as number]));
+
 /** State before any event: only the host's config is known. */
 export function initialState(config: GameConfig): GameState {
   return {
@@ -121,6 +125,9 @@ export function initialState(config: GameConfig): GameState {
     reached: 0,
     bells: {},
     taped: {},
+    hidden: [],
+    dark: [],
+    cutsPending: [],
     wanted: 0,
     seized: 0,
     card: null,
@@ -185,6 +192,9 @@ function applyChange(state: GameState, event: GameEvent): GameState {
         moves: {},
         card: null,
         rigs,
+        // design §11.1: a hidden bell reappears and last round's power cuts end.
+        hidden: [],
+        dark: [],
       };
     }
     case "moveLocked":
@@ -202,18 +212,35 @@ function applyChange(state: GameState, event: GameEvent): GameState {
       return updatePlayer(state, event.player, (p) => ({ stash: p.stash + event.pocket }));
     case "abilityResolved": {
       const { ability } = event;
+      const used = (p: PlayerState) => withRoleState(p, { usedThisStretch: p.roleState.usedThisStretch + 1 });
       switch (ability.kind) {
-        case "loopCameras":
         case "ring":
         case "audit":
-        case "checkStash":
-        case "bless":
-          return updatePlayer(state, event.player, (p) => withRoleState(p, { usedThisStretch: p.roleState.usedThisStretch + 1 }));
+        case "absolve":
+          return updatePlayer(state, event.player, used);
+        case "hide": {
+          // design §11.1: the hidden bell's real bulbs, from the Hacker's own result (the public events leave it out).
+          const next = updatePlayer(state, event.player, used);
+          return ability.bulbs === null ? next : { ...next, bells: { ...next.bells, [ability.room]: ability.bulbs } };
+        }
+        case "blackout": {
+          const next = updatePlayer(state, event.player, used);
+          return next.cutsPending.includes(ability.room) ? next : { ...next, cutsPending: [...next.cutsPending, ability.room] };
+        }
         case "reopen":
           return updatePlayer(state, event.player, (p) => withRoleState(p, { usedThisGame: p.roleState.usedThisGame + 1 }));
         case "lookout":
+        case "detect":
           return state;
       }
+    }
+    case "abilityAlreadyDone":
+      // design §11.4: no effect, and not spent.
+      return state;
+    case "sinsAbsolved": {
+      // design §7.1, §11.1: what the Priest took back is set aside in the duffel for the next split.
+      const next = { ...state, setAside: state.setAside + event.taken };
+      return updatePlayer(next, event.player, (p) => ({ stash: p.stash - event.taken }));
     }
     case "roomSighting":
     case "roomWatched":
@@ -221,15 +248,19 @@ function applyChange(state: GameState, event: GameEvent): GameState {
       return state;
     // ------------------------------------------------ bells, raids and Wanted. design §5
     case "bellsRung":
+      // design §5.1, §11.1: a hidden bell keeps its bulbs here until its Hacker's result folds in.
+      return { ...state, bells: { ...event.bells, ...bellsOf(state, event.hidden) }, hidden: event.hidden };
     case "bellsCooled":
-      return { ...state, bells: event.bells };
+      return { ...state, bells: { ...event.bells, ...bellsOf(state, state.hidden) } };
     case "roomRaided": {
       // design §5.3: the grabs are seized, the room is taped off and its bell goes off; Wanted +1 (§5.4).
       const bells = Object.fromEntries(Object.entries(state.bells).filter(([room]) => room !== event.room));
+      const hidden = state.hidden.filter((room) => room !== event.room);
       // design §9.2: a raid calls a police briefing (a regular meeting due after the same round wins, §9.2).
       return {
         ...state,
         bells,
+        hidden,
         taped: { ...state.taped, [event.room]: event.closedThrough },
         wanted: event.wanted,
         seized: state.seized + event.seized,
@@ -239,6 +270,9 @@ function applyChange(state: GameState, event: GameEvent): GameState {
     case "roomReopened":
       // design §5.3, §11.1: the Fixer tore the tape off; open from the next round, its bell at 0.
       return reopen(state, (room) => room === event.room);
+    case "powerCut":
+      // design §11.1: announced as the round starts; dark for this round.
+      return { ...state, dark: [...state.dark, event.room], cutsPending: state.cutsPending.filter((room) => room !== event.room) };
     case "duffelSplit":
       // design §7.1–§7.3, §7.6: every stash gets this round's cut; the change is the kitty. Hand-ins and the
       // coins set aside (shakedown returns, §9.6) reach the duffel here and count toward honesty once (§7.5);
@@ -247,7 +281,8 @@ function applyChange(state: GameState, event: GameEvent): GameState {
         ...mapPlayers(state, (p) => ({ stash: p.stash + event.cut })),
         share: event.share,
         kitty: event.kitty,
-        setAside: 0,
+        // A Priest's absolve this round is set aside after the split's own (§7.1, §11.1).
+        setAside: state.setAside - event.setAside,
         reached: state.reached + event.handedIn + event.setAside,
       };
     case "roundResolved": {

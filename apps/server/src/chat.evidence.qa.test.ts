@@ -36,8 +36,8 @@ describe("QA: role and faction cards are refused (design §8, PR #38)", () => {
   it.each([
     ["a sighting", { type: "roomSighting", round: 1, room: "vault", others: ["ben"] }],
     ["a watched room", { type: "roomWatched", round: 1, source: "security", room: "vault", seen: ["ben"] }],
-    ["an audit", { type: "abilityResolved", round: 2, ability: { kind: "audit", round: 1, room: "vault", shortfall: 4 } }],
-    ["a stash check", { type: "abilityResolved", round: 2, ability: { kind: "checkStash", target: "ben", threshold: 12, dirty: true } }],
+    ["an audit", { type: "abilityResolved", round: 2, ability: { kind: "audit", round: 1, room: "vault", duffel: 4 } }],
+    ["a grab count", { type: "abilityResolved", round: 2, ability: { kind: "detect", round: 1, target: "ben", grabbed: 3 } }],
     ["a grab", { type: "coinsGrabbed", round: 1, room: "vault", duffel: 1, pocket: 2 }],
   ])("%s still goes through, verified, with its payload intact", (_label, event) => {
     const r = evidenceCard(holding(event), 3);
@@ -52,14 +52,13 @@ const config: GameConfig = {
   seed: "qa-38-evidence",
   players: Array.from({ length: 4 }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: false })),
   job: "bank",
-  rolePool: [],
   eventsEnabled: false,
   voteVisibility: "open",
 } as GameConfig;
 
-/** Seat i dealt roles[i] (Rookie if missing). */
+/** Seat i dealt roles[i] (a Lookout if missing). */
 function game(roles: readonly string[]): GameState {
-  const log = setupEvents(config).map((e, i, all): GameEvent => (e.type !== "roleDealt" ? e : { ...e, role: roles[all.slice(0, i).filter((x) => x.type === "roleDealt").length] ?? "rookie" }));
+  const log = setupEvents(config).map((e, i, all): GameEvent => (e.type !== "roleDealt" ? e : { ...e, role: roles[all.slice(0, i).filter((x) => x.type === "roleDealt").length] ?? "lookout" }));
   return replay(config, log);
 }
 function run(s: GameState, ...commands: unknown[]): GameState {
@@ -86,7 +85,7 @@ function chatOn() {
   return createChat(db, fakeClock(1_000_000));
 }
 
-describe("QA: in a real game, the Auditor's deal is refused but its sighting and audit go through (design §8, §12.1)", () => {
+describe("QA: in a real game, the Auditor's deal is refused but its sighting and audit go through (design §11.1, §15.2)", () => {
   // p0 Auditor and p1 in the Vault, p2 in the Office; then p0 audits the Vault.
   const s = run(game(["auditor"]), mv("p0", "vault"), mv("p1", "vault"), mv("p2", "office"), ROUND, { type: "useAbility", player: "p0", ability: { kind: "audit", room: "vault" } });
   const view = viewFor(s, "p0");

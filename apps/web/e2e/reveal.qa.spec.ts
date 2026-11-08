@@ -56,7 +56,7 @@ for (const viewport of VIEWPORTS) {
 
       // Tokens with what earned them, and perks bought and used.
       await expect(cards.nth(0)).not.toContainText("token");
-      await expect(cards.nth(1)).toContainText("1 token for a loop that hid a pocketer");
+      await expect(cards.nth(1)).not.toContainText("token");
       await expect(cards.nth(2)).toContainText("Detective");
       await expect(cards.nth(3).locator(".reveal__perks")).toContainText("Bought (1 used):");
       await expect(cards.nth(3).locator(".reveal__perks")).toContainText("Peek");
@@ -77,9 +77,9 @@ for (const viewport of VIEWPORTS) {
       await expect(sheet.getByRole("heading", { name: "Round 2" })).toBeVisible();
       await expect(prev).toBeEnabled();
 
-      // Locks: on the hidden causes (the Mole's ring, the Detective's check), not on the public claim or checkpoint.
+      // Locks: on the hidden causes (the Mole's ring, the Detective's grab count), not on the public claim.
       const item = (text: string) => sheet.locator(".reveal__item").filter({ hasText: text });
-      for (const hidden of ["Ben tipped off the police", "Stash check: Ben holds"]) {
+      for (const hidden of ["Ben tipped off the police", "Ben grabbed 6 coins"]) {
         await expect(item(hidden).locator(".reveal__lock"), hidden).toHaveCount(1);
       }
       await expect(item("claimed Lookout").locator(".reveal__lock")).toHaveCount(0);

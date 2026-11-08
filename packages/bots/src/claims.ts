@@ -1,19 +1,19 @@
-// Role claims and bluffs for bots (docs/roles-v2.md §4 "Claim"; design §8, §12.1).
+// Role claims and bluffs for bots (docs/roles-v2.md §4 "Claim"; design §11.3).
 //
 // A claim is the public `claimRole` command (a `roleClaimed` on the ledger),
 // once between meetings (design §11.3). Bots don't read chat, so claims are structured engine data
 // and the same in the simulator and on the server.
 //
-// Default policy (extension.md Build notes "Bots"): ★ holders and the roles
-// that leave evidence (the Hacker) bluff a low-risk role (the Rookie) nobody
+// Default policy (design §19.3): the Mole and the Fixer and the roles that
+// leave evidence (the Hacker, the Electrician) bluff a passive role nobody
 // else has claimed when accused; the rest claim truthfully
-// with chance 1 − their "lie". Each role's own line in the v2 §4 table adjusts
+// with chance 1 − their "lie". Each role's own line in the v2 §4 list adjusts
 // when it claims (`CLAIM_STYLE`). These are bot settings, not game rules.
 import type { RoleId } from "@skimjob/content";
 import { roomDef, type PlayerCommand, type PlayerId, type PlayerView } from "@skimjob/engine";
 import type { Personality } from "./personalities";
 import type { Random } from "./bot";
-import { claimantsOf, claimsOf, couldBeDealt, isStar, jobOf, ofType, roleOf, uniqueRole } from "./read";
+import { claimantsOf, claimsOf, copiesOf, couldBeDealt, jobOf, myPower, ofType, winsSunk } from "./read";
 import { suspicion } from "./suspicion";
 
 /**
@@ -28,7 +28,6 @@ import { suspicion } from "./suspicion";
 export type ClaimStyle = "accused" | "free" | "evidence" | "rarely" | "afterSave" | "afterVote";
 
 const CLAIM_STYLE: Readonly<Record<RoleId, ClaimStyle>> = {
-  rookie: "free",
   lookout: "evidence",
   auditor: "evidence",
   detective: "evidence",
@@ -40,14 +39,14 @@ const CLAIM_STYLE: Readonly<Record<RoleId, ClaimStyle>> = {
 /** Share of the usual claim chance for the "rarely" roles (bot setting). */
 const RARELY = 0.25;
 
-/** The low-risk roles a bluffing bot claims, in order. extension.md Build notes "Bots" */
-export const SAFE_BLUFFS: readonly RoleId[] = ["rookie"];
+/** The low-risk roles a bluffing bot claims, in order: passive powers leave nothing to check. */
+export const SAFE_BLUFFS: readonly RoleId[] = ["smoothTalker", "locksmith"];
 
-/** Roles whose power leaves evidence, so they bluff too. extension.md Build notes "Bots" */
-const EVIDENCE_ROLES: readonly RoleId[] = ["hacker"];
+/** Roles whose power leaves evidence, so they bluff too. */
+const EVIDENCE_ROLES: readonly RoleId[] = ["hacker", "electrician"];
 
-/** Whether this role bluffs when accused: a ★ role or one that leaves evidence. */
-export const bluffs = (role: RoleId): boolean => isStar(role) || EVIDENCE_ROLES.includes(role);
+/** Whether this role bluffs when accused: the Mole, the Fixer, or one that leaves evidence. */
+export const bluffs = (role: RoleId): boolean => winsSunk(role) || EVIDENCE_ROLES.includes(role);
 
 /** Chance a bluffing bot bluffs once accused (bot setting). */
 const BLUFF_WHEN_ACCUSED = 0.8;
@@ -94,12 +93,12 @@ export function publicSuspicion(view: PlayerView): Map<PlayerId, number> {
   return score;
 }
 
-/** Unique roles claimed by more than one player, and who claimed them. */
+/** Roles claimed by more players than can hold them (design §15.4 "Over-claimed role"), and who claimed them. */
 function doubleClaims(view: PlayerView): Map<RoleId, PlayerId[]> {
   const out = new Map<RoleId, PlayerId[]>();
   for (const role of new Set(ofType(view.ledger, "roleClaimed").map((c) => c.role))) {
     const who = claimantsOf(view, role);
-    if (uniqueRole(role) && who.length > 1) out.set(role, who);
+    if (who.length > copiesOf(view, role)) out.set(role, who);
   }
   return out;
 }
@@ -117,7 +116,7 @@ export function accused(view: PlayerView): "shakedown" | "suspected" | null {
     const ballots = ofType(view.ledger, "voteCast").filter((v) => v.meetingId === phase.meetingId && v.vote.kind === "shakedown" && v.vote.target === me);
     if (ballots.length > 0) return "shakedown";
   }
-  if (claimantsOf(view, view.me.role).some((id) => id !== me) && uniqueRole(view.me.role)) return "suspected";
+  if (claimantsOf(view, view.me.role).filter((id) => id !== me).length >= copiesOf(view, view.me.role)) return "suspected";
   const pub = publicSuspicion(view);
   const mine = pub.get(me) ?? 0;
   return mine >= ACCUSED_AT && [...pub.values()].every((s) => s <= mine) ? "suspected" : null;
@@ -137,16 +136,25 @@ function holdsEvidence(view: PlayerView): boolean {
   const top = [...scores].sort((a, b) => b[1] - a[1])[0];
   if (!top || top[1] <= 0) return false;
   const [target] = top;
-  const { power } = roleOf(view);
+  const power = myPower(view);
   const abilities = ofType(view.caseFile, "abilityResolved").map((e) => e.ability);
-  if (power.kind === "checkStash") return abilities.some((a) => a.kind === "checkStash" && a.dirty && a.target === target);
-  if (power.kind === "audit") return abilities.some((a) => a.kind === "audit" && a.shortfall > 0);
-  if (power.kind === "lookout") {
+  const job = jobOf(view);
+  const alibi = (round: number) => ofType(view.ledger, "alibiPosted").find((a) => a.player === target && a.round === round)?.room;
+  // A grab bigger than the room they claimed allows.
+  if (power?.kind === "detect") {
+    return abilities.some((a) => {
+      const said = a.kind === "detect" && a.target === target ? alibi(a.round) : undefined;
+      return a.kind === "detect" && said !== undefined && a.grabbed > roomDef(job, said).coins;
+    });
+  }
+  // Fewer coins reached the duffel from their claimed room than its claimants' grabs.
+  if (power?.kind === "audit") return abilities.some((a) => a.kind === "audit" && alibi(a.round) === a.room && a.duffel < roomDef(job, a.room).coins);
+  if (power?.kind === "lookout") {
     // A sighting that contradicts the target's alibi.
     const alibis = ofType(view.ledger, "alibiPosted").filter((a) => a.player === target);
     return ofType(view.caseFile, "roomWatched").some((w) => {
       const said = alibis.find((a) => a.round === w.round)?.room;
-      return said !== undefined && (w.seen.includes(target) ? said !== w.room : said === w.room);
+      return !w.offline && said !== undefined && (w.seen.includes(target) ? said !== w.room : said === w.room);
     });
   }
   return false;
@@ -154,13 +162,13 @@ function holdsEvidence(view: PlayerView): boolean {
 
 /** v2 §4 "afterSave": the Fixer reopened a taped-off room (design §11.1). */
 function saved(view: PlayerView): boolean {
-  return roleOf(view).power.kind === "reopen" && ofType(view.caseFile, "abilityResolved").some((e) => e.ability.kind === "reopen");
+  return myPower(view)?.kind === "reopen" && ofType(view.caseFile, "abilityResolved").some((e) => e.ability.kind === "reopen");
 }
 
 /**
  * The role to claim now, or null. Only around meetings (v2 §4: "when accused
- * at a meeting"), once between meetings. Most bots tell the truth;
- * ★ and evidence-leaving roles bluff (`bluffFor`).
+ * at a meeting"), once between meetings. Most bots tell the truth; the Mole,
+ * the Fixer and evidence-leaving roles bluff (`bluffFor`).
  */
 export function chooseClaim(view: PlayerView, p: Personality, random: Random, voted = view.me.vote !== null): RoleId | null {
   if (!meetingTime(view)) return null;

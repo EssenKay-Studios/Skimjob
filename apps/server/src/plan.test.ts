@@ -215,9 +215,9 @@ describe("what an entry may say (checked against content)", () => {
     await bad({ power: { role: "constructor", target: rooms[0] } }, "no such role");
     await bad({ power: { role: "toString", target: rooms[0] } }, "no such role");
     await bad({ power: { role: 7, target: rooms[0] } }, "no such role");
-    // Powers with nothing to point at can't be claimed: passive, no power, hidden tip-off.
-    await bad({ power: { role: "rookie", target: rooms[0] } }, "that role's power can't be claimed");
-    await bad({ power: { role: "mole", target: rooms[0] } }, "that role's power can't be claimed");
+    // design §10: passive powers have nothing to point at, so they can't be claimed.
+    await bad({ power: { role: "muscle", target: rooms[0] } }, "no such role");
+    await bad({ power: { role: "locksmith", target: rooms[0] } }, "that role's power can't be claimed");
     await bad({ power: { role: "smoothTalker", target: rooms[0] } }, "that role's power can't be claimed");
     // A room power takes a room in play; a player power a player of this game, not yourself.
     await bad({ power: { role: "hacker", target: humans[1]!.player } }, "that power takes a room in play");

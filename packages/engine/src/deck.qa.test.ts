@@ -18,7 +18,6 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
     seed: "deck-qa",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: ["rookie", "lookout", "hacker", "priest"],
     eventsEnabled: true,
     voteVisibility: "open",
     // Bells too big to raid: these scripts test other rules (bells and raids: bells.test.ts).
@@ -27,12 +26,12 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
   };
 }
 
-/** A new game, seat i dealt roles[i] (Rookie if missing). */
+/** A new game, seat i dealt roles[i] (a Lookout if missing: its power acts only when used). */
 function game(players: number, roles: string[] = [], extra: Partial<GameConfig> = {}): GameState {
   const cfg = config(players, extra);
   let seat = 0;
   const log = setupEvents(cfg)
-    .map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: roles[seat++] ?? "rookie" } : e));
+    .map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: roles[seat++] ?? "lookout" } : e));
   return replay(cfg, log);
 }
 
@@ -177,7 +176,7 @@ describe("QA: Audit numbers — design §10", () => {
 
 describe("QA: Inside tip — design §10", () => {
   it("the tip is about another player and shows that player's real role", () => {
-    const s = resolve(withCard(resolve(game(3, ["lookout", "hacker", "rookie"])), "insideTip"));
+    const s = resolve(withCard(resolve(game(3, ["lookout", "hacker", "lookout"])), "insideTip"));
     const tip = find(lastResolution(s), "insideTip")[0];
     expect(tip?.subject).not.toBe(tip?.player);
     expect(tip?.role).toBe(s.players[tip?.subject as PlayerId]?.role);

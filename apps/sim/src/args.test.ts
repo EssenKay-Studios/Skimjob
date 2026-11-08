@@ -54,10 +54,7 @@ describe("parseSimArgs", () => {
       mix: DEFAULT_MIX,
       seed: "sim",
       job: "bank",
-      rolePool: [],
       eventsEnabled: false,
-      deck: "standard",
-      deal: "balanced",
       roleList: "exact",
       voteVisibility: "hiddenThenRevealed",
       contentOverrides: null,
@@ -73,15 +70,15 @@ describe("parseSimArgs", () => {
 
   it("reads every option", () => {
     const o = run([
-      "-n", "7", "-p", "3-4", "-b", "random", "-s", "x", "--job", "bank", "--role-pool", "lookout, hacker",
-      "--deck", "everything", "--deal", "random", "--role-list", "hidden", "--votes", "secret", "--out", "here", "--json",
+      "-n", "7", "-p", "3-4", "-b", "random", "-s", "x", "--job", "bank",
+      "--role-list", "hidden", "--votes", "secret", "--out", "here", "--json",
     ]);
     expect(o).toMatchObject({
-      games: 7, playerCounts: [3, 4], mix: [{ personality: "random", weight: 1 }], seed: "x", rolePool: ["lookout", "hacker"],
-      deck: "everything", deal: "random", roleList: "hidden", voteVisibility: "secret", outDir: "here", json: true,
+      games: 7, playerCounts: [3, 4], mix: [{ personality: "random", weight: 1 }], seed: "x",
+      roleList: "hidden", voteVisibility: "secret", outDir: "here", json: true,
     });
     expect(run(["--no-files"]).outDir).toBeNull();
-    // design §10: the events deck.
+    // design §13: the events deck.
     expect(run(["--events"]).eventsEnabled).toBe(true);
   });
 
@@ -94,8 +91,8 @@ describe("parseSimArgs", () => {
   it("refuses bad values and unknown options", () => {
     expect(error(["-n", "0"])).toMatch(/--games/);
     expect(error(["-n", "2.5"])).toMatch(/--games/);
-    expect(error(["--deck", "sometimes"])).toMatch(/--deck/);
-    expect(error(["--deal", "fair"])).toMatch(/--deal/);
+    // design §11.3: every player gets a role from the one deal; the R6 deck, deal and pool options are gone.
+    for (const gone of ["--deck", "--deal", "--role-pool"]) expect(error([gone, "x"])).toMatch(gone.slice(2));
     expect(error(["--role-list", "some"])).toMatch(/--role-list/);
     expect(error(["--votes", "loud"])).toMatch(/--votes/);
     expect(error(["--frob"])).toMatch(/frob/);

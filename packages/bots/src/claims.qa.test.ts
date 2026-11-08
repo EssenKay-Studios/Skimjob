@@ -1,5 +1,5 @@
 // QA (PR #37): bot role claims, bluffs and meeting-proposal timing in whole games.
-// design §8, §11.1, §12.1, §16.1, §17.2, §17.3; docs/roles-v2.md §4
+// design §9.4, §11.3, §15.4, §19.3; docs/roles-v2.md §4
 import { ROLES } from "@skimjob/content";
 import { replay, viewFor, type GameConfig, type GameEvent, type PlayerCommand, type PlayerView, type VoteVisibility } from "@skimjob/engine";
 import { describe, expect, it } from "vitest";
@@ -17,7 +17,6 @@ const config = (n: number, seed: string, extra: Partial<GameConfig> = {}): GameC
   seed,
   players: Array.from({ length: n }, (_, i) => ({ id: `q${i}`, name: `Q${i}`, isBot: true })),
   job: "bank",
-  rolePool: [],
   eventsEnabled: true,
   voteVisibility: "hiddenThenRevealed",
   ...extra,
@@ -34,8 +33,7 @@ function claimsWithTruth(c: GameConfig, log: readonly GameEvent[]) {
 }
 
 describe("bot claims in whole games — QA PR #37", () => {
-  // Three seeds per cell: with the Rookie the one safe bluff left (R7 cut), bluffs are rarer;
-  // plus one 12-seat game where a bluff is known to come up (S3a.1's coins and S3a.5's fewer meetings made them rarer still).
+  // Three seeds per cell, plus one more 12-seat game (S3a.1's coins and S3a.5's fewer meetings made bluffs rarer).
   const games = [
     ...[3, 6, 12].flatMap((n) => MODES.flatMap((mode, k) => [0, 1, 2].map((x) => ({ n, mode, c: config(n, `qa37-${n}-${k}${x ? `-${x}` : ""}`, { voteVisibility: mode }) })))),
     { n: 12, mode: "hiddenThenRevealed" as const, c: config(12, "qa37-12-11") },
@@ -64,7 +62,7 @@ describe("bot claims in whole games — QA PR #37", () => {
     }
   });
 
-  it("★ and evidence-leaving bots bluff only low-risk roles nobody else had claimed (or repeat their own story); the rest tell the truth — extension.md Build notes \"Bots\"", () => {
+  it("the Mole, the Fixer and evidence-leaving bots bluff only safe roles nobody else had claimed (or repeat their own story); the rest tell the truth — design §19.3", () => {
     let bluffed = 0;
     for (const { c, r } of results) {
       for (const { i, claim, real } of claimsWithTruth(c, r.state.log)) {
@@ -139,8 +137,8 @@ describe("meeting proposals with a human seat — QA PR #37, design §11.1", () 
 });
 
 describe("double claims in the suspicion model — QA PR #37, v2 §4", () => {
-  it("a second claimant of a unique role raises suspicion of the first one too, privately and publicly", () => {
-    const base = game(5, (s) => !["ana", "ben", "carl"].some((id) => s.players[id]?.role === "lookout"));
+  it("a second claimant of a role dealt once raises suspicion of the first one too, privately and publicly — design §15.4", () => {
+    const base = game(5, { ana: "auditor", ben: "hacker", carl: "priest", dee: "lookout", eve: "mole" });
     const one = run(base, { type: "claimRole", player: "ben", role: "lookout" });
     const two = run(one, { type: "claimRole", player: "carl", role: "lookout" });
     for (const id of ["ben", "carl"]) {

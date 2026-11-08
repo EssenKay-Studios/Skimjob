@@ -1,5 +1,4 @@
 // QA (PR #37): adversarial checks on the claimRole command. design §11.3, §19.1
-import { STARTER_ROLES } from "@skimjob/content";
 import { describe, expect, it } from "vitest";
 import type { GameConfig, GameEvent, GameState } from "./types";
 import { createGame } from "./setup";
@@ -12,7 +11,6 @@ const cfg = (n: number, extra: Partial<GameConfig> = {}): GameConfig => ({
   seed: `qa-claim-${n}`,
   players: Array.from({ length: n }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: false })),
   job: "bank",
-  rolePool: [...STARTER_ROLES],
   eventsEnabled: false,
   voteVisibility: "hiddenThenRevealed",
   ...extra,
@@ -45,9 +43,9 @@ describe("claimRole — QA PR #37, design §11.3", () => {
   it("refuses hostile player ids (prototype keys, non-strings) without throwing", () => {
     const s = createGame(cfg(4));
     for (const player of ["__proto__", "constructor", "hasOwnProperty", "", 0, null, undefined, {}, ["p0"]]) {
-      expect(refused(s, { type: "claimRole", player, role: "rookie" })).toMatch(/unknown player/);
+      expect(refused(s, { type: "claimRole", player, role: "lookout" })).toMatch(/unknown player/);
     }
-    expect(refused(s, { type: "claimRole", role: "rookie" })).toMatch(/unknown player/);
+    expect(refused(s, { type: "claimRole", role: "lookout" })).toMatch(/unknown player/);
   });
 
   it("a repeated or changed claim in the same stretch is refused, and the refusal leaves the log as it was", () => {
@@ -66,7 +64,7 @@ describe("claimRole — QA PR #37, design §11.3", () => {
       phases.push(s.phase.kind);
       s = step(s, { type: "claimRole", player, role }).state;
     };
-    tryClaim("p0", "rookie"); // planning, stretch 1
+    tryClaim("p0", "lookout"); // planning, stretch 1
     s = step(s, { type: "advance", deadline: { kind: "round", round: 1 } }).state;
     expect(s.phase.kind).toBe("alibis");
     tryClaim("p1", "auditor");
@@ -86,7 +84,7 @@ describe("claimRole — QA PR #37, design §11.3", () => {
     let s = createGame(cfg(3));
     const stretches: number[] = [];
     for (let guard = 0; s.phase.kind !== "ended" && guard < 200; guard++) {
-      const r = handleCommand(s, { type: "claimRole", player: "p0", role: "rookie" });
+      const r = handleCommand(s, { type: "claimRole", player: "p0", role: "lookout" });
       if (r.ok) {
         stretches.push((r.events[0] as Extract<GameEvent, { type: "roleClaimed" }>).stretch);
         s = r.state;
@@ -108,14 +106,14 @@ describe("claimRole — QA PR #37, design §11.3", () => {
     expect(s.phase.kind).toBe("ended");
     // Default moves take 3 of the 48 coins a round: regular meetings after rounds 6 and 11 (design §9.1).
     expect(stretches).toEqual([1, 2, 3]);
-    expect(refused(s, { type: "claimRole", player: "p1", role: "rookie" })).toMatch(/over/);
+    expect(refused(s, { type: "claimRole", player: "p1", role: "lookout" })).toMatch(/over/);
   });
 
   it("works at 3 and 12 players; every viewer (claimant included) sees the same claim; replay is identical — design §13, §17.2", () => {
     for (const n of [3, 12]) {
-      const c = cfg(n, { rolePool: [] });
+      const c = cfg(n);
       let s = createGame(c);
-      for (let i = 0; i < n; i++) s = step(s, { type: "claimRole", player: `p${i}`, role: i % 2 ? "detective" : "rookie" }).state;
+      for (let i = 0; i < n; i++) s = step(s, { type: "claimRole", player: `p${i}`, role: i % 2 ? "detective" : "lookout" }).state;
       const claims = s.log.filter((e) => e.type === "roleClaimed");
       expect(claims).toHaveLength(n);
       for (let v = 0; v < n; v++) {
@@ -125,14 +123,14 @@ describe("claimRole — QA PR #37, design §11.3", () => {
       expect(replay(c, s.log)).toEqual(s);
       // Same seed + same commands = same log.
       let t = createGame(c);
-      for (let i = 0; i < n; i++) t = step(t, { type: "claimRole", player: `p${i}`, role: i % 2 ? "detective" : "rookie" }).state;
+      for (let i = 0; i < n; i++) t = step(t, { type: "claimRole", player: `p${i}`, role: i % 2 ? "detective" : "lookout" }).state;
       expect(t.log).toEqual(s.log);
     }
   });
 
-  it("accepts known roles outside the game's pool (the pool stays hidden) — design §11.3", () => {
-    const s = createGame(cfg(4, { rolePool: ["rookie"] }));
-    // Not in this game's pool, but known content: accepted.
+  it("accepts any known role, dealt in this game or not (the deal stays hidden) — design §11.3", () => {
+    const s = createGame(cfg(4));
+    // Whatever was dealt, known content is accepted.
     expect(step(s, { type: "claimRole", player: "p0", role: "fixer" }).events[0]).toMatchObject({ role: "fixer" });
     expect(step(s, { type: "claimRole", player: "p1", role: "hacker" }).events[0]).toMatchObject({ role: "hacker" });
   });

@@ -1,7 +1,7 @@
 // The round loop: checking a submitted move, and resolving a round when its
 // deadline passes. design §3 (rooms, coins and grabs), §4.2, §5 (bells, raids,
 // Wanted, the bust, cooling), §6.2 (the end check), §7 (the split, missing and
-// honesty); R6 role powers until S3a.6
+// honesty), §11 (role powers as the round resolves)
 //
 // Both are pure: they read state and return events (or a rejection reason).
 // `handleCommand` (handle.ts) folds the events.
@@ -14,58 +14,21 @@ import { isObject, show } from "./check";
 import { endCheck, gameEnded } from "./end";
 import { applyEvent } from "./reduce";
 import type { Draw } from "./handle";
-import { cardEffects, closedRoom, isAudit, roundJob, startRound } from "./deck";
-import { grantRewards } from "./crew";
+import { cardEffects, closedRoom, isAudit, roundJob } from "./deck";
+import { aboveShare } from "./crew";
+import { roleHandler } from "./roles";
 import { coolBells, factVisibility, isTaped, raidedRooms, ringBells } from "./bells";
 import { honestyOf, splitDuffel } from "./shares";
 import { afterResult } from "./meeting";
 
 const isCount = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v >= 0;
 
-/** A role power used as part of a move, checked against the player's role. design §8 */
+/** A role power used as part of a move, checked by the player's role handler. design §11.1 */
 function checkAbility(state: GameState, player: PlayerState, raw: unknown): AbilityUse | string {
   if (!isObject(raw) || typeof raw.kind !== "string") return "ability must be an object with a kind";
-  const power = powerOf(state.config, player.role);
-  if (power.kind !== raw.kind) return `your role has no ${raw.kind} ability`;
-  switch (power.kind) {
-    case "lookout": {
-      const rooms = raw.rooms;
-      if (!Array.isArray(rooms) || rooms.length < 1 || rooms.length > power.extraRooms) {
-        return `the Lookout watches 1 to ${power.extraRooms} room(s)`;
-      }
-      if (!rooms.every((r): r is RoomId => typeof r === "string" && state.rooms.includes(r))) {
-        return "the Lookout can only watch rooms in play";
-      }
-      if (new Set(rooms).size !== rooms.length) return "the Lookout can't watch the same room twice";
-      return { kind: "lookout", rooms: [...rooms] };
-    }
-    case "loopCameras": {
-      if (player.roleState.usedThisStretch >= power.perStretch) return "you have already looped the cameras since the last meeting";
-      if (typeof raw.room !== "string" || !state.rooms.includes(raw.room)) return "loop the cameras of a room in play";
-      return { kind: "loopCameras", room: raw.room };
-    }
-    case "ring": {
-      // design §5.2, §5.3, §11.1: any open room but the Rooftop; a taped-off room's bell is off.
-      if (player.roleState.usedThisStretch >= power.perStretch) return "you have already rung a bell since the last meeting";
-      if (typeof raw.room !== "string" || !state.rooms.includes(raw.room)) return "ring a room in play";
-      if (isTaped(state, raw.room)) return "a taped-off room's bell is off";
-      if (roomDef(jobFor(state.config), raw.room).lieLow) return "nothing can ring the Rooftop";
-      return { kind: "ring", room: raw.room };
-    }
-    case "reopen": {
-      // design §5.3, §11.1: once per game, a taped-off room.
-      if (player.roleState.usedThisGame >= 1) return "you have already reopened a room this game";
-      if (typeof raw.room !== "string" || !isTaped(state, raw.room)) return "reopen a taped-off room";
-      return { kind: "reopen", room: raw.room };
-    }
-    case "voteWeight":
-    case "audit":
-    case "checkStash":
-    case "bless":
-      return "your role's power isn't used in a move";
-    case "none":
-      return "your role has no ability";
-  }
+  const handler = roleHandler(player.role);
+  if (powerOf(state.config, player.role)?.kind !== raw.kind) return `your role has no ${raw.kind} ability`;
+  return handler.move ? handler.move(state, player, raw) : "your role's power isn't used in a move";
 }
 
 /**
@@ -134,19 +97,24 @@ function grabbed(order: readonly PlayerId[], asked: (id: PlayerId) => number, ba
 /**
  * Every event for resolving the current round, in the end-of-round order of
  * design §4.2: default moves (§3.3) and the event card's player effects (§13);
- * 1. grabs out of the bank (§3.2) and the powers that act this round (the
- *    Fixer's reopen, the Mole's ring);
- * 2. rings light bulbs (§5.2, `bellsRung`);
+ * 1. grabs out of the bank (§3.2) and the powers that act this round: the
+ *    Locksmith's quieter coins, the Mole's ring, the Fixer's reopen, the
+ *    Electrician's blackout for next round (§11.1);
+ * 2. rings light bulbs (§5.2, `bellsRung`), with any bell a Hacker hid left out (§5.1);
  * 3. raids: every room whose last bulb lit has its visitors' grabs seized, is
  *    taped off, and raises Wanted (§5.3, §5.4, `roomRaided`);
  * 4. the bust check (§5.5): at the bust line the game ends after this round's
- *    public summary, and steps 5–6 don't run;
- * 5. the split: the duffel shared equally, the change into the kitty (§7.2, `duffelSplit`);
+ *    public summary, and steps 5–6 don't run (a Priest's absolve is spent, never resolved);
+ * 5. the split: first the Priests' absolves (set aside for the next split), then
+ *    the duffel shared equally, the change into the kitty (§7.2, `duffelSplit`);
  * 6. cooling (§5.6, `bellsCooled`); a reopened room comes back at 0 (`roomReopened`);
- * 7. information: sightings, Security and power results, the round summary
- *    (taken, missing and honesty, §7.4, §7.5);
+ *    each Hacker learns its hidden bell;
+ * 7. information: sightings, Security and power results (none from a blacked-out
+ *    room, §11.1), the round summary (taken, missing and honesty, §7.4, §7.5);
  * 8. the end check (§6.2): the game ends once the bank is empty or this is the
  *    round cap (`endCheck`), and nothing below runs.
+ * Two copies of a role on one target resolve in seat order from a seeded seat;
+ * a use the other already did is "already done" and not spent (§11.4).
  * Otherwise the fold of `roundResolved` opens the round's alibis and notes the
  * meeting the round called (§4.2 step 9: a raid calls a briefing, a third of
  * the bank a regular meeting), and `closeAlibis` goes on.
@@ -188,7 +156,45 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
   // A move's power only works if it still matches the player's role.
   const abilityOf = (id: PlayerId): AbilityUse | undefined => {
     const ability = moveOf(id).ability;
-    return ability && ability.kind === powerFor(id).kind ? ability : undefined;
+    return ability && ability.kind === powerFor(id)?.kind ? ability : undefined;
+  };
+  /** The players using move power `kind` this round, with their uses. */
+  const usesOf = <K extends AbilityUse["kind"]>(kind: K): [PlayerId, Extract<AbilityUse, { kind: K }>][] =>
+    playing.flatMap((id) => {
+      const ability = abilityOf(id);
+      return ability?.kind === kind ? [[id, ability as Extract<AbilityUse, { kind: K }>]] : [];
+    });
+  // design §11.4: copies on the same target resolve in seat order from a seeded random seat, drawn once and only then.
+  let seated: readonly PlayerId[] | null = null;
+  const inTurn = <A>(uses: [PlayerId, A][], target: (use: A) => string): [PlayerId, A][] => {
+    if (new Set(uses.map(([, a]) => target(a))).size === uses.length) return uses;
+    if (!seated) {
+      const start = draw.int(order.length);
+      seated = [...order.slice(start), ...order.slice(0, start)];
+    }
+    const turn = seated;
+    return [...uses].sort(([a], [b]) => turn.indexOf(a) - turn.indexOf(b));
+  };
+  const resolved = (id: PlayerId, ability: Extract<GameEvent, { type: "abilityResolved" }>["ability"]): GameEvent => ({
+    type: "abilityResolved",
+    visibility: privateTo(id),
+    player: id,
+    round,
+    ability,
+  });
+  const alreadyDone = (id: PlayerId, ability: AbilityUse): GameEvent => ({ type: "abilityAlreadyDone", visibility: privateTo(id), player: id, round, ability });
+  /** The first use on each target acts; a later copy's use on it is already done (§11.4). */
+  const firstOnTarget = <A extends AbilityUse>(uses: [PlayerId, A][], target: (use: A) => string): [PlayerId, A][] => {
+    const done = new Set<string>();
+    const first: [PlayerId, A][] = [];
+    for (const [id, use] of inTurn(uses, target)) {
+      if (done.has(target(use))) events.push(alreadyDone(id, use));
+      else {
+        done.add(target(use));
+        first.push([id, use]);
+      }
+    }
+    return first;
   };
 
   // Who is where. design §3.4
@@ -196,46 +202,49 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
   for (const id of playing) (visitors[moveOf(id).room] ??= []).push(id);
   const others = (room: RoomId, self: PlayerId): PlayerId[] => (visitors[room] ?? []).filter((p) => p !== self);
 
-  // §4.2 step 1: grabs come out of the bank, cut by a short bank (§3.2); the Fixer's and the Mole's powers act.
+  // §4.2 step 1: grabs come out of the bank, cut by a short bank (§3.2); the powers that act this round.
   const got = grabbed(playing, (id) => moveOf(id).duffel + moveOf(id).pocket, state.bank, draw);
   const rings = new Map<RoomId, number>();
   const ring = (room: RoomId, n: number) => rings.set(room, (rings.get(room) ?? 0) + n);
-  const reopened: RoomId[] = [];
   for (const id of playing) {
     const { room } = moveOf(id);
-    // design §5.2: rings count the coins actually grabbed.
-    ring(room, ringsOf(roomDef(job, room), got.get(id) ?? 0));
-    const ability = abilityOf(id);
-    if (ability?.kind === "ring") ring(ability.room, 1);
-    if (ability?.kind === "reopen" && !reopened.includes(ability.room)) reopened.push(ability.room);
-    if (ability?.kind === "ring" || ability?.kind === "reopen") {
-      events.push({ type: "abilityResolved", visibility: privateTo(id), player: id, round, ability });
-    }
+    const power = powerFor(id);
+    // design §5.2: rings count the coins actually grabbed; the Locksmith's each ring one time fewer.
+    ring(room, ringsOf(roomDef(job, room), got.get(id) ?? 0, power?.kind === "muffle" ? power.fewerRings : 0));
   }
+  // design §11.4: Mole rings stack.
+  for (const [id, use] of usesOf("ring")) {
+    ring(use.room, 1);
+    events.push(resolved(id, use));
+  }
+  const reopened = firstOnTarget(usesOf("reopen"), (u) => u.room);
+  for (const [id, use] of reopened) events.push(resolved(id, use));
+  for (const [id, use] of firstOnTarget(usesOf("blackout"), (u) => u.room)) events.push(resolved(id, use));
 
-  // §4.2 step 2: rings light bulbs.
+  // §4.2 step 2: rings light bulbs; a bell a Hacker hid shows "?" to everyone else (§5.1).
   const { bulbs, tapedRounds, bustStars } = job.alarm;
   const lit = ringBells(state.rooms, state.bells, rings, bulbs);
-  events.push({ type: "bellsRung", visibility: factVisibility("bells"), round, bells: lit });
+  const hiders = firstOnTarget(usesOf("hide"), (u) => u.room);
+  const shown = (bells: Readonly<Record<RoomId, number>>, hidden: readonly RoomId[]) =>
+    Object.fromEntries(Object.entries(bells).filter(([room]) => !hidden.includes(room)));
+  const hidden = hiders.map(([, use]) => use.room);
+  events.push({ type: "bellsRung", visibility: factVisibility("bells"), round, bells: shown(lit, hidden), hidden });
 
   // §4.2 step 3: a raided room's visitors lose their grab before the split (§5.3).
   const raided = raidedRooms(state.rooms, lit, bulbs);
   let handedIn = 0;
   let grabbedCoins = 0;
   let taken = 0;
-  const pocketed = new Map<PlayerId, number>();
   for (const id of playing) {
     const { room } = moveOf(id);
     const coins = got.get(id) ?? 0;
     grabbedCoins += coins;
     if (raided.includes(room)) {
-      pocketed.set(id, 0);
       events.push({ type: "coinsGrabbed", visibility: privateTo(id), player: id, round, room, duffel: 0, pocket: 0, seized: coins });
       continue;
     }
     // A cut grab loses its pocket-bound coins first, then its duffel-bound ones. design §3.2
     const duffel = Math.min(moveOf(id).duffel, coins);
-    pocketed.set(id, coins - duffel);
     // design §7.4: seized coins count as neither taken nor missing.
     taken += coins;
     handedIn += duffel;
@@ -256,64 +265,79 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
   // §4.2 step 4: Wanted at the bust line ends the game at once (§5.5); only the Rooftop escapes.
   const lyingLow = playing.filter((id) => roomDef(job, moveOf(id).room).lieLow);
   const busted = wanted >= bustStars;
-  if (!busted) {
-    // §4.2 step 5: the split.
+  const absolves = usesOf("absolve");
+  let realBells: Readonly<Record<RoomId, number>> = lit;
+  if (busted) {
+    // design §11.1: on a bust the absolve never resolves, and the Priest's use is still spent.
+    for (const [id, use] of absolves) events.push(resolved(id, { ...use, taken: null }));
+  } else {
+    // §4.2 step 5: the Priests' absolves, against the share before this split, after this round's pocketing; then the split.
+    let now = events.reduce(applyEvent, before);
+    const absolvedBy = new Map<PlayerId, number>();
+    for (const [id, use] of inTurn(absolves, (u) => u.target)) {
+      const took = aboveShare(now, use.target);
+      const earlier = absolvedBy.get(use.target);
+      // design §11.4: a second absolve finding nothing left because the first took it is already done (it learns 0).
+      if (earlier !== undefined && earlier > 0) {
+        events.push(alreadyDone(id, use));
+        continue;
+      }
+      const absolved: GameEvent[] = [resolved(id, { ...use, taken: took })];
+      if (earlier === undefined) absolved.push({ type: "sinsAbsolved", visibility: privateTo(use.target), player: use.target, round, taken: took });
+      absolvedBy.set(use.target, took);
+      events.push(...absolved);
+      now = absolved.reduce(applyEvent, now);
+    }
     events.push(splitDuffel(state, round, handedIn));
     // §4.2 step 6: cooling; a room the Fixer reopened comes back from the next round, its bell at 0.
     const afterRaids = raidEvents.reduce(applyEvent, { ...state, bells: lit }).bells;
-    events.push({ type: "bellsCooled", visibility: factVisibility("bells"), round, bells: coolBells(state.rooms, afterRaids, lyingLow.length, draw) });
+    realBells = coolBells(state.rooms, afterRaids, lyingLow.length, draw);
+    events.push({ type: "bellsCooled", visibility: factVisibility("bells"), round, bells: shown(realBells, hidden) });
   }
-  for (const room of reopened) events.push({ type: "roomReopened", visibility: PUBLIC, round, room });
+  for (const [, use] of reopened) events.push({ type: "roomReopened", visibility: PUBLIC, round, room: use.room });
+  // design §11.1: the Hacker sees the real bell (none once the room is raided: its bell is off).
+  for (const [id, use] of hiders) events.push(resolved(id, { ...use, bulbs: raided.includes(use.room) ? null : (realBells[use.room] ?? null) }));
 
-  // §4.2 step 7: room-mates, then Hacker loops, Security / Lookout results.
+  // §4.2 step 7: room-mates, then Security, Lookout and Tail feeds; nobody is seen in a blacked-out room, and a
+  // blacked-out Security's own cameras are offline too (§11.1, owner 8 Nov).
+  const dark = (room: RoomId) => state.dark.includes(room);
   for (const id of playing) {
     const room = moveOf(id).room;
-    events.push({ type: "roomSighting", visibility: privateTo(id), player: id, round, room, others: others(room, id) });
+    events.push({ type: "roomSighting", visibility: privateTo(id), player: id, round, room, others: dark(room) ? [] : others(room, id) });
   }
-  // Hacker (§8): a looped room's Security feed reads "camera offline" this round (not the Lookout's or room-mates').
-  const looped = new Map<RoomId, PlayerId[]>();
-  for (const id of playing) {
-    const ability = abilityOf(id);
-    if (ability?.kind !== "loopCameras" || powerFor(id).kind !== "loopCameras") continue;
-    looped.set(ability.room, [...(looped.get(ability.room) ?? []), id]);
-    events.push({ type: "abilityResolved", visibility: privateTo(id), player: id, round, ability });
-  }
-  // extension.md "Roles": Hackers whose loop hid, from a Security watcher of that room, a visitor who pocketed (their token).
-  const hid = new Set<PlayerId>();
+  const watched = (id: PlayerId, source: "security" | "lookout" | "tail", room: RoomId, offline = dark(room)): GameEvent => ({
+    type: "roomWatched",
+    visibility: privateTo(id),
+    player: id,
+    round,
+    source,
+    room,
+    seen: offline ? [] : others(room, id),
+    offline,
+  });
   for (const id of playing) {
     const { room, watch } = moveOf(id);
     const ability = abilityOf(id);
-    if (roomDef(job, room).info === "watchRoom" && watch !== undefined) {
-      const loopers = looped.get(watch);
-      if (loopers && others(watch, id).some((x) => (pocketed.get(x) ?? 0) > 0)) for (const h of loopers) hid.add(h);
-      const seen = loopers ? [] : others(watch, id);
-      events.push({ type: "roomWatched", visibility: privateTo(id), player: id, round, source: "security", room: watch, seen, offline: loopers !== undefined });
-    }
+    if (roomDef(job, room).info === "watchRoom" && watch !== undefined) events.push(watched(id, "security", watch, dark(room) || dark(watch)));
     if (ability?.kind === "lookout") {
-      events.push({ type: "abilityResolved", visibility: privateTo(id), player: id, round, ability });
-      for (const r of ability.rooms) {
-        events.push({ type: "roomWatched", visibility: privateTo(id), player: id, round, source: "lookout", room: r, seen: others(r, id), offline: false });
-      }
+      events.push(resolved(id, ability));
+      for (const r of ability.rooms) events.push(watched(id, "lookout", r));
     }
-    // design §8.3 Tail: one more watched room, like the Lookout's (not blinded by a camera loop).
+    // design §8.3 Tail: one more watched room, like the Lookout's.
     const tailed = player(id).roleState.tail;
-    if (tailed !== null) {
-      events.push({ type: "roomWatched", visibility: privateTo(id), player: id, round, source: "tail", room: tailed, seen: others(tailed, id), offline: false });
-    }
+    if (tailed !== null) events.push(watched(id, "tail", tailed));
   }
   // design §13 Audit: what each room came up short (its visitors' pockets), every room in play listed.
   if (isAudit(state)) {
+    const pocketOf = new Map(events.flatMap((e) => (e.type === "coinsGrabbed" ? [[e.player, e.pocket] as const] : [])));
     const shortfalls: Record<RoomId, number> = {};
-    for (const r of state.rooms) shortfalls[r] = (visitors[r] ?? []).reduce((sum, id) => sum + (pocketed.get(id) ?? 0), 0);
+    for (const r of state.rooms) shortfalls[r] = (visitors[r] ?? []).reduce((sum, id) => sum + (pocketOf.get(id) ?? 0), 0);
     events.push({ type: "auditReport", visibility: PUBLIC, round, shortfalls });
   }
   // design §7.4, §7.5: the summary says how many went missing, never who; honesty after the split.
   const bank = state.bank - grabbedCoins;
   const after = events.reduce(applyEvent, before);
   events.push({ type: "roundResolved", visibility: factVisibility("bank", "missing", "honesty"), round, bank, taken, missing: taken - handedIn, honesty: honestyOf({ ...after, bank }) });
-
-  // extension.md "Roles": this round's tokens (Hacker).
-  events.push(...grantRewards(state, "loopHidPocketer", (p) => hid.has(p.id)));
 
   // §4.2 step 8: the end check (a bust has already ended the game).
   const ended = busted ? gameEnded(before, events, "bust", lyingLow) : endCheck(before, events, round);

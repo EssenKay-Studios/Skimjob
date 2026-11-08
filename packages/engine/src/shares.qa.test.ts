@@ -23,17 +23,16 @@ function config(players: number, contentOverrides: ContentOverrides | null = NO_
     seed,
     players: ids(players).map((id, i) => ({ id, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: ["rookie"],
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     contentOverrides,
   };
 }
 
-/** Every seat a Rookie, so no role power moves coins. */
+/** Every seat a Lookout, so no role power moves coins. */
 function game(players: number, contentOverrides: ContentOverrides | null = NO_RAIDS, seed?: string): GameState {
   const cfg = config(players, contentOverrides, seed);
-  return replay(cfg, setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: "rookie" } : e)));
+  return replay(cfg, setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: "lookout" } : e)));
 }
 
 /** The deadline(s) that pass next outside planning (as the scheduler would send them); nobody votes. */
@@ -340,13 +339,12 @@ interface RandomGame {
   readonly states: GameState[];
 }
 
-/** A random game: random moves within room limits, random votes, every deadline in time. Roles from the default deck. */
+/** A random game: random moves within room limits, random votes, every deadline in time. Roles from the deal (§11.3). */
 function randomGame(players: number, seed: string, tape: readonly number[], style: Style, overrides: ContentOverrides | null, vote: VoteVisibility): RandomGame {
   const cfg: GameConfig = {
     seed,
     players: ids(players).map((id, i) => ({ id, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: [],
     eventsEnabled: true,
     voteVisibility: vote,
     contentOverrides: overrides,

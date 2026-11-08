@@ -1,10 +1,10 @@
-// Plain lines for the end-of-game reveal (design §13): what earned each token,
-// what each ★ role also wins on, who won and why, and the worked-out timeline
-// items. Pure; the switches are exhaustive. extension.md "Winning and losing",
-// "Tokens and the perk shop", "Police activity", "Situations"
-import { BUST_ROLE_TEXT, type FailureReason, type TokenTrigger } from "@skimjob/content";
-import type { RevealEnding, RevealItem, RevealRound, RevealSummary } from "@skimjob/engine";
-import { describeEvent, roleName, roomName, type DescribeContext } from "./describeEvent";
+// Plain lines for the end-of-game reveal (design §15.5): what earned each token,
+// which roles also win a heist sunk by theft (★), who won and why, and the
+// worked-out timeline items. Pure; the switches are exhaustive. design §8;
+// extension.md "Tokens and the perk shop" (until S3a.7)
+import { BUST_ROLE_TEXT, type RoleId, type TokenTrigger } from "@skimjob/content";
+import { roleHandler, type RevealEnding, type RevealItem, type RevealRound, type RevealSummary } from "@skimjob/engine";
+import { describeEvent, roleName, type DescribeContext } from "./describeEvent";
 
 /** What earned a token, after "for". */
 export function triggerText(t: TokenTrigger): string {
@@ -14,21 +14,15 @@ export function triggerText(t: TokenTrigger): string {
     case "auditedShakenDirty":
       return "catching someone in a room they audited";
     case "checkedShakenDirty":
-      return "catching someone they checked";
+      return "catching someone they looked into";
     case "wonDirtyShakedown":
       return "voting for a dirty shakedown";
-    case "blessedShakenClean":
-      return "a blessed player shaken down clean";
-    case "loopHidPocketer":
-      return "a loop that hid a pocketer";
   }
 }
 
-const FAILURE: Record<FailureReason, string> = { bust: "the crew is busted", theft: "the heist is sunk by theft" };
-
-/** "★ Also wins if the heist is sunk by theft", or "" for a role that wins only a success. */
-export function winsOnText(winsOn: readonly FailureReason[]): string {
-  return winsOn.length === 0 ? "" : `★ Also wins if ${winsOn.map((r) => FAILURE[r]).join(" or ")}`;
+/** "★ Also wins if the heist is sunk by theft" for the Mole and the Fixer (their handlers, design §8.4), else "". */
+export function starText(role: RoleId): string {
+  return roleHandler(role).winsSunk ? "★ Also wins if the heist is sunk by theft" : "";
 }
 
 const list = (xs: readonly string[]) => (xs.length <= 1 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`);
@@ -48,9 +42,9 @@ export function whyText(ending: RevealEnding, ctx: DescribeContext): string {
     case "success":
       return `Job done, so the top of the ranking wins: ${top}.`;
     case "failedTopWins":
-      return `The heist failed (${reason}). A ★ role wins this ending from the top of the ranking: ${list(ending.winners.map(who))}.`;
+      return `The heist failed (${reason}). A Mole or Fixer with the biggest stash of all wins it: ${list(ending.winners.map(who))}.`;
     case "failedNobody":
-      return `The heist failed (${reason}). Nobody at the top (${top}) holds a role that wins this ending, so nobody wins: the ranking is a loss.`;
+      return `The heist failed (${reason}). No Mole or Fixer has the biggest stash (${top}), so nobody wins: the ranking is a loss.`;
   }
 }
 
@@ -64,11 +58,6 @@ export function itemText(item: RevealItem, ctx: DescribeContext): string {
       return describeEvent(item.event, ctx);
     case "token":
       return cap(`${who(item.player)} earned a token for ${triggerText(item.trigger)}.`);
-    case "cameraOffline": {
-      const feed = item.source === "security" ? "camera" : item.source === "lookout" ? "lookout" : "tail";
-      const whose = you(item.watcher) ? "your" : `${ctx.name(item.watcher)}'s`;
-      return cap(`${whose} ${feed} on the ${roomName(item.room)} went offline: ${list(item.hackers.map(who))} looped it.`);
-    }
     case "claim":
       return item.claimed === item.real
         ? cap(`${who(item.player)} claimed ${roleName(item.claimed)}, and it was true.`)

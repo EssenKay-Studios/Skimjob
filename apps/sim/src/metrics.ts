@@ -16,9 +16,11 @@
 // - shakedown accuracy: shakedowns whose target held anything above the share
 //   ÷ shakedowns (also: the target had pocketed anything at all).
 // - role / personality win share: wins (joint winners share one) ÷ seats, in
-//   successful games, against the fair share 1 ÷ crew size (±5 pp target).
-// - sunk by theft: games that ended below the honesty line ÷ games (design §21
-//   G8, reported only).
+//   successful games, against the fair share 1 ÷ crew size; and each role's win
+//   rate ÷ the average seat's, all endings pooled, each copy its own seat
+//   (design §21 G5: 0.75–1.33).
+// - sunk by theft: games that ended below the honesty line ÷ games, and of
+//   those, the games a Mole or Fixer won (design §8.4, §21 G8, reported only).
 // - whole-crew wins: successful games every player won, every stash equal ÷
 //   successful games (design §8.2, §21 G6: 5–20%).
 // - cap stalls: games that ended at the round cap with over a quarter of the
@@ -160,14 +162,21 @@ export interface RateOf {
   readonly rate: number | null;
 }
 
+/** design §8.4, §21 G8: of the games sunk by theft, the share a Mole or Fixer won (per game, however many copies won). */
+export function sunkWinMetric(records: readonly GameRecord[]): RateOf {
+  const sunk = records.filter((g) => g.reason === "theft");
+  return { games: sunk.length, rate: rate(sunk.filter((g) => g.winners.length > 0).length, sunk.length) };
+}
+
 /**
- * design §17.4 "Mole win rate (when present)": of games with a Mole dealt, the
- * share a Mole won (by score on a success, as a Rooftop escapee on a bust, or on a heist sunk by theft; design §8). Per game, not
- * per seat, so two Moles (or a Mole and the Driver) winning together count once.
+ * design §21 G5: each role's win rate per seat holding it (all endings, joint
+ * winners sharing one win) ÷ the average seat's win rate; null without wins.
  */
-export function moleWinMetric(records: readonly GameRecord[]): RateOf {
-  const withMole = records.filter((g) => g.playerRecords.some((p) => p.role === "mole"));
-  return { games: withMole.length, rate: rate(withMole.filter((g) => g.playerRecords.some((p) => p.role === "mole" && p.winner)).length, withMole.length) };
+export function roleParity(roles: Readonly<Record<string, GroupWins>>): Record<string, number | null> {
+  const groups = Object.values(roles);
+  const seats = groups.reduce((s, g) => s + g.seats, 0);
+  const average = rate(groups.reduce((s, g) => s + (g.winRate ?? 0) * g.seats, 0), seats);
+  return Object.fromEntries(Object.entries(roles).map(([role, g]) => [role, average ? (g.winRate ?? 0) / average : null]));
 }
 
 export interface Metrics {
@@ -189,7 +198,8 @@ export interface Metrics {
   readonly pocketing: Record<string, GroupWins>;
   readonly roles: Record<string, GroupWins>;
   readonly personalities: Record<string, GroupWins>;
-  readonly moleWins: RateOf;
+  /** Games sunk by theft that a Mole or Fixer won. design §21 G8 */
+  readonly sunkWins: RateOf;
   readonly rejections: number;
 }
 
@@ -211,7 +221,7 @@ function metrics(records: readonly GameRecord[]): Metrics {
     pocketing: groupWins(records, pocketBand),
     roles: groupWins(records, (p) => p.role),
     personalities: groupWins(records, (p) => p.personality),
-    moleWins: moleWinMetric(records),
+    sunkWins: sunkWinMetric(records),
     rejections: records.reduce((s, g) => s + g.rejections, 0),
   };
 }

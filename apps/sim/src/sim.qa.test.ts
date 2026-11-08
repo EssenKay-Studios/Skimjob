@@ -24,7 +24,7 @@ describe("design §17.4 inputs — bad arguments are clean errors, never throws"
   const bad: string[][] = [
     ["-n", "0"], ["-n", "1.5"], ["-n", "1e400"], ["-n", "-3"], ["-n"], ["-p", "1"], ["-p", "13"], ["-p", "12-2"], ["-p", "6,"],
     ["-b", "__proto__"], ["-b", "constructor:2"], ["-b", "honest:0"], ["-b", "honest:Infinity"], ["-b", "honest,honest"], ["-b", ""],
-    ["--deck", "__proto__"], ["--role-list", "toString"], ["--votes", "toString"], ["--bogus"], ["positional"], ["--overrides", '{"alarm":'],
+    ["--deck", "standard"], ["--role-list", "toString"], ["--votes", "toString"], ["--bogus"], ["positional"], ["--overrides", '{"alarm":'],
     ["--overrides", "/nonexistent/qa.json"], ["--overrides", ""],
   ];
   it.each(bad.map((a) => [a.join(" "), a]))("%s → error", (_label, argv) => {
@@ -52,7 +52,7 @@ describe("design §17.4 config overrides — hostile JSON is refused, nothing po
     '{"roundCap":{"__proto__":12}}',
     '{"shakedown":{"__proto__":{"x":0}}}',
     '{"roles":{"__proto__":{"stashMultiplier":9}}}',
-    '{"roles":{"rookie":{"__proto__":{"stashMultiplier":9}}}}',
+    '{"roles":{"mole":{"__proto__":{"stashMultiplier":9}}}}',
     '{"roles":{"toString":{}}}',
     '{"alarm":{"bulbs":0}}', '{"alarm":{"bulbs":"5"}}', '{"rooms":{"vault":{"coins":1.5}}}', '{"rooms":{"vault":{"coins":-1}}}',
     '{"roundCap":0}', '{"roundCap":"12"}', '{"roundCap":2.5}', '{"checkpoints":{"perPlayer":[1,2,3]}}', '{"roles":{"lookout":{"perStretch":1}}}',
@@ -164,9 +164,12 @@ describe("design §17.4 metrics — hand-checked against the engine on a fixed s
     expect(s.shakedowns.count).toBe(sd.length);
     expect(s.shakedowns.accuracy).toBe(sd.filter((e) => e.type === "shakedownResolved" && !e.clean).length / sd.length);
     // Role win share in successful games: each joint winner gets 1 ÷ winners.
-    const lookoutSeats = records.filter((r) => r.result === "success").flatMap((r) => r.playerRecords.filter((p) => p.role === "lookout").map((p) => ({ r, p })));
-    const credit = lookoutSeats.reduce((t, { r, p }) => t + (r.winners.includes(p.id) ? 1 / r.winners.length : 0), 0);
-    expect(s.roles.lookout?.successWinShare).toBeCloseTo(credit / lookoutSeats.length, 12);
+    for (const role of Object.keys(s.roles)) {
+      const seats = records.filter((r) => r.result === "success").flatMap((r) => r.playerRecords.filter((p) => p.role === role).map((p) => ({ r, p })));
+      const credit = seats.reduce((t, { r, p }) => t + (r.winners.includes(p.id) ? 1 / r.winners.length : 0), 0);
+      if (seats.length === 0) expect(s.roles[role]?.successWinShare).toBeNull();
+      else expect(s.roles[role]?.successWinShare).toBeCloseTo(credit / seats.length, 12);
+    }
     // Per-count summaries partition the games.
     expect(Object.values(summarize(records).byPlayers).reduce((t, m) => t + m.games, 0)).toBe(12);
   });

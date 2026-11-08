@@ -16,7 +16,7 @@ const opts = (argv: string[]): SuiteOptions => {
   return r.options;
 };
 // Adaptive (not fixed -n), so the stop point itself must be worker-independent.
-const options = opts(["-p", "3,5", "--setups", "balanced,random", "--events", "off", "--min-games", "4", "--max-games", "12", "--batch", "4", "--ci", "30", "-s", "qa"]);
+const options = opts(["-p", "3,5", "--setups", "balanced,possible", "--events", "off", "--min-games", "4", "--max-games", "12", "--batch", "4", "--ci", "30", "-s", "qa"]);
 
 async function run(workers: number, cells = buildMatrix(options)) {
   const pool = createPool(workers);

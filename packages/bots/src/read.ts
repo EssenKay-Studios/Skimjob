@@ -1,7 +1,7 @@
 // Small readers over a PlayerView: everything a bot knows comes from here.
 // Bots never see the game state, only viewFor() output. design §17.3
-import { DECKS, FILLER_ROLE, ROLES, type JobDef, type RoleDef, type RoleId, type RoomDef, type RoomId } from "@skimjob/content";
-import { jobById, overrideJob, overrideRoles, roomDef, type GameEvent, type LoggedEvent, type PlayerId, type PlayerView } from "@skimjob/engine";
+import { MAX_ROLE_COPIES, ROLES, type JobDef, type RoleId, type RolePower, type RoomDef, type RoomId } from "@skimjob/content";
+import { jobById, overrideJob, overrideRoles, roleHandler, roomDef, type GameEvent, type LoggedEvent, type PlayerId, type PlayerView } from "@skimjob/engine";
 
 type EventOf<T extends GameEvent["type"]> = Extract<GameEvent, { type: T }>;
 
@@ -26,32 +26,18 @@ export function jobOf(view: PlayerView): JobDef {
   return overrideJob(jobById(created.job), created.contentOverrides);
 }
 
-const crewSize = (view: PlayerView): number => view.players.length + 1;
-
-/** The bot's role definition (content plus the game's overrides); an id with none plays with no power, as in the engine. */
-export function roleOf(view: PlayerView): Pick<RoleDef, "power" | "winsOn" | "tag"> {
+/** The bot's power (content plus the game's overrides); none for an id with no definition, as in the engine. */
+export function myPower(view: PlayerView): RolePower | undefined {
   const roles = overrideRoles(ROLES, createdOf(view).contentOverrides);
-  const def = Object.hasOwn(roles, view.me.role) ? roles[view.me.role] : undefined;
-  return def ?? { power: { kind: "none" }, winsOn: [], tag: "teamPlayer" };
+  return Object.hasOwn(roles, view.me.role) ? roles[view.me.role]?.power : undefined;
 }
 
-/** A ★ role: one that can also win when the job fails (`winsOn`). extension.md "How you win" */
-export const isStar = (role: RoleId): boolean => (Object.hasOwn(ROLES, role) ? (ROLES[role]?.winsOn.length ?? 0) > 0 : false);
+/** A role with its own win rule for a heist sunk by theft (the Mole, the Fixer). design §8.4, §19.2 seam 4 */
+export const winsSunk = (role: RoleId): boolean => roleHandler(role).winsSunk !== undefined;
 
-/**
- * Could `role` be in this game, as far as the public setup says: the shown
- * role list (Exact or Possible), else the deck and crew size.
- * extension.md "Host settings"
- */
+/** Could `role` be in this game, as far as the public setup says: the shown role list (Exact or Possible), else any role. design §11.3 */
 export function couldBeDealt(view: PlayerView, role: RoleId): boolean {
-  if (view.roleList) return view.roleList.roles.includes(role);
-  const created = createdOf(view);
-  const def = Object.hasOwn(ROLES, role) ? ROLES[role] : undefined;
-  if (!def) return false;
-  if (role === FILLER_ROLE) return true;
-  if (!DECKS[created.deck].includes(role)) return false;
-  if (def.minPlayers !== undefined && crewSize(view) < def.minPlayers) return false;
-  return true;
+  return view.roleList ? view.roleList.roles.includes(role) : Object.hasOwn(ROLES, role);
 }
 
 /** The latest round whose summary is on the ledger; 0 before any. */
@@ -62,7 +48,7 @@ export function lastResolvedRound(view: PlayerView): number {
 export const roomsWhere = (view: PlayerView, job: JobDef, test: (def: RoomDef) => boolean): RoomId[] =>
   view.rooms.filter((r) => test(roomDef(job, r)));
 
-// ---------------------------------------------------------------- role claims (design §8, §12.1; v2 §4)
+// ---------------------------------------------------------------- role claims (design §11.3; v2 §4)
 
 /** Every player's claims, oldest first (me included). */
 export function claimsOf(view: PlayerView): Map<PlayerId, RoleId[]> {
@@ -79,8 +65,11 @@ export function claimantsOf(view: PlayerView, role: RoleId): PlayerId[] {
 }
 
 /**
- * Roles dealt at most once, so two claimants means at least one liar. The
- * filler role (Rookie) fills the empty seats and can repeat (design §8.1);
- * so can every role in a game dealt with repeats, which the view can't tell.
+ * How many players can hold `role` (design §11.3): its count on the Exact role
+ * list; else one up to 10 players, where every role is distinct, and
+ * `MAX_ROLE_COPIES` at 11–12. More claimants than that means at least one liar.
  */
-export const uniqueRole = (role: RoleId): boolean => role !== FILLER_ROLE;
+export function copiesOf(view: PlayerView, role: RoleId): number {
+  if (view.roleList?.list === "exact") return view.roleList.roles.filter((r) => r === role).length;
+  return view.players.length + 1 <= Object.keys(ROLES).length ? 1 : MAX_ROLE_COPIES;
+}

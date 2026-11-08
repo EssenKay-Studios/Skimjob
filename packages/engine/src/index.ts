@@ -14,6 +14,7 @@ export * from "./end";
 export { honesty } from "./shares";
 export * from "./deck";
 export * from "./claims";
+export * from "./roles";
 export * from "./evidence";
 export * from "./perks";
 export * from "./handle";

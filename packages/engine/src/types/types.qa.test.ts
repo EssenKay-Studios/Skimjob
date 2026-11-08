@@ -35,6 +35,9 @@ type ExpectedVisibility = {
   moveSubmitted: "private";
   defaultMoveAssigned: "private";
   coinsGrabbed: "private";
+  abilityAlreadyDone: "private"; // design §11.4: "already done this round", to the holder only
+  sinsAbsolved: "private"; // design §11.1: told to the absolved player only
+  powerCut: "public"; // design §11.1: announced with no source
   abilityResolved: "private";
   roomSighting: "private";
   roomWatched: "private";

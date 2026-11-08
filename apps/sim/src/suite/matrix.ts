@@ -1,25 +1,23 @@
 // The suite's fixed matrix of game settings, one cell per combination, and the
-// options every cell's games are built from. design §17.4 ("measured at every
-// player count from 3 to 12"), §10 (events); extension.md "Decks and dealing",
-// "Role list" and Build notes "Sim".
-import type { DealStyle, RoleListSetting } from "@skimjob/engine";
+// options every cell's games are built from. design §21 (crew sizes), §13
+// (events), §11.3 (the deal and the role list).
+import type { RoleListSetting } from "@skimjob/engine";
 import type { MixEntry, SimOptions } from "../args";
 
 /**
- * A dealing setup: Balanced with the Exact role list (the default, and the one
- * the gates apply to), Truly random, or Balanced with the Possible or Hidden
- * role list. The Standard deck throughout. extension.md Build notes "Sim"
+ * A setup: the standard deal (design §11.3) with the Exact role list (the
+ * default, and the one the gates apply to), or with the Possible or Hidden
+ * role list.
  */
-export type Setup = "balanced" | "random" | "possible" | "hidden";
-const SETUPS: Readonly<Record<Setup, { readonly deal: DealStyle; readonly roleList: RoleListSetting }>> = {
-  balanced: { deal: "balanced", roleList: "exact" },
-  random: { deal: "random", roleList: "exact" },
-  possible: { deal: "balanced", roleList: "possible" },
-  hidden: { deal: "balanced", roleList: "hidden" },
+export type Setup = "balanced" | "possible" | "hidden";
+const SETUPS: Readonly<Record<Setup, { readonly roleList: RoleListSetting }>> = {
+  balanced: { roleList: "exact" },
+  possible: { roleList: "possible" },
+  hidden: { roleList: "hidden" },
 };
 export const isSetup = (v: unknown): v is Setup => typeof v === "string" && Object.hasOwn(SETUPS, v);
 
-/** The gates (success band, role parity) cover Balanced games at 4–12 players. extension.md Build notes "Sim" */
+/** The gates (success band, role parity) cover games with the Exact role list (the balanced setup) at 4–12 players. */
 const GATED_FROM_PLAYERS = 4;
 
 /** What a whole suite run is: the same SuiteOptions give the same report, whatever the workers or shards. */
@@ -79,10 +77,7 @@ export function cellSimOptions(o: SuiteOptions, cell: Cell): SimOptions {
     mix: o.mix,
     seed: `${o.seed}/${cell.key}`,
     job: "bank",
-    rolePool: [],
     eventsEnabled: cell.events,
-    deck: "standard",
-    deal: SETUPS[cell.setup].deal,
     roleList: SETUPS[cell.setup].roleList,
     voteVisibility: "hiddenThenRevealed",
     contentOverrides: o.contentOverrides,

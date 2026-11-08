@@ -1,6 +1,6 @@
-// The bot rules: the ending forecast, ★ roles leaning toward the failure they
-// win on, the Mole's ring, the Fixer's reopen, and buying/spending tokens.
-// extension.md Build notes "Bots", "Tokens and the perk shop"; design §5, §11.1
+// The bot rules: the ending forecast, the Mole and the Fixer leaning toward a
+// heist sunk by theft, the Mole's ring, the Fixer's reopen, and buying/spending
+// tokens. design §5, §8.4, §11.1, §19.3; extension.md "Tokens and the perk shop"
 import { describe, expect, it } from "vitest";
 import { viewFor, type GameState, type PlayerCommand } from "@skimjob/engine";
 import { decide } from "./bot";
@@ -23,7 +23,7 @@ const cold = (): GameState => {
   return closeAlibis(s);
 };
 
-describe("ending forecast and leaning — extension.md Build notes \"Bots\", design §5.5", () => {
+describe("ending forecast and leaning — design §5.5, §8.4, §19.3", () => {
   it("a fresh job forecasts no bust and no theft; honesty on the line, an even chance of theft; one raid short of the bust line, an even chance of a bust", () => {
     const s = game(5);
     expect(forecast(viewFor(s, "ana"))).toMatchObject({ bust: 0, theft: 0 });
@@ -33,11 +33,12 @@ describe("ending forecast and leaning — extension.md Build notes \"Bots\", des
     expect(forecast(viewFor({ ...s, wanted: 2 }, "ana")).bust).toBe(0.5);
   });
 
-  it("only a ★ role that rates itself top leans toward its failure, once the forecast passes LEAN_AT", () => {
+  it("only a Mole or Fixer that rates itself top leans toward theft, once the forecast passes LEAN_AT", () => {
     const s = cold();
     expect(forecast(viewFor(s, "ana")).theft).toBeGreaterThanOrEqual(LEAN_AT);
     expect(leaning(viewFor(as(s, "mole", { stash: 10 }), "ana"))).toBe("theft");
-    expect(leaning(viewFor(as(s, "rookie", { stash: 10 }), "ana"))).toBeNull(); // team player: always success
+    expect(leaning(viewFor(as(s, "fixer", { stash: 10 }), "ana"))).toBe("theft");
+    expect(leaning(viewFor(as(s, "lookout", { stash: 10 }), "ana"))).toBeNull(); // wins like everyone: always success
     expect(leaning(viewFor(as(s, "mole", { stash: 0 }), "ana"))).toBeNull(); // not top
     expect(leaning(viewFor(as(game(5), "mole", { stash: 10 }), "ana"))).toBeNull(); // honest so far: nothing to lean on
     // design §5.5: no role wins a bust, so a near-bust is never leaned on.
@@ -91,22 +92,22 @@ describe("the Fixer's reopen — design §5.3, §11.1", () => {
   });
 });
 
-describe("buying and spending perks — extension.md \"Tokens and the perk shop\", Build notes \"Bots\"", () => {
+describe("buying and spending perks — extension.md \"Tokens and the perk shop\"", () => {
   const shop = (s: GameState): GameState => ({ ...s, shop: ["peek", "shield", "extraVote"] });
   const bought = (cmds: PlayerCommand[]) => cmds.flatMap((c) => (c.type === "buyPerk" ? [c.perk] : []));
 
   it("buys by priority as tokens allow, one of each, and never what it holds", () => {
     const s = shop(game(5));
-    expect(bought(buyPerks(viewFor(as(s, "rookie", {}, { tokens: 1 }), "ana")))).toEqual(["extraVote"]); // Shield and Peek cost 2
-    expect(bought(buyPerks(viewFor(as(s, "rookie", {}, { tokens: 4 }), "ana")))).toEqual(["shield", "peek"]);
-    expect(bought(buyPerks(viewFor(as(s, "rookie", {}, { tokens: 2, perks: ["shield"] }), "ana")))).toEqual(["peek"]);
-    expect(bought(buyPerks(viewFor(as(s, "rookie", {}, { tokens: 0 }), "ana")))).toEqual([]);
+    expect(bought(buyPerks(viewFor(as(s, "lookout", {}, { tokens: 1 }), "ana")))).toEqual(["extraVote"]); // Shield and Peek cost 2
+    expect(bought(buyPerks(viewFor(as(s, "lookout", {}, { tokens: 4 }), "ana")))).toEqual(["shield", "peek"]);
+    expect(bought(buyPerks(viewFor(as(s, "lookout", {}, { tokens: 2, perks: ["shield"] }), "ana")))).toEqual(["peek"]);
+    expect(bought(buyPerks(viewFor(as(s, "lookout", {}, { tokens: 0 }), "ana")))).toEqual([]);
   });
 
   it("spends every token in the last round: unspent tokens are worth nothing", () => {
     const s = shop(game(5));
     const last: GameState = { ...s, round: 12, phase: { kind: "planning", round: 12 } }; // the round cap (design §6.2)
-    expect(bought(buyPerks(viewFor(as(last, "rookie", {}, { tokens: 3, perks: ["shield", "peek", "extraVote"] }), "ana")))).toEqual(["extraVote", "extraVote", "extraVote"]);
+    expect(bought(buyPerks(viewFor(as(last, "lookout", {}, { tokens: 3, perks: ["shield", "peek", "extraVote"] }), "ana")))).toEqual(["extraVote", "extraVote", "extraVote"]);
   });
 
   it("uses at most one chosen perk a round; the Shield goes off by itself", () => {

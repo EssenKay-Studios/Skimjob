@@ -23,10 +23,8 @@ import { TIMINGS } from "./timing";
 
 const quick = { interval: 1, timeout: 5000 };
 const H1 = TIMINGS["1h"];
-/** Every role can be dealt. */
-const EVERYTHING: Partial<LobbySettings> = { sessionLength: "1h", deck: "everything", roleList: "possible" };
-/** The Starter deck. */
-const STARTER: Partial<LobbySettings> = { sessionLength: "1h", deck: "starter", roleList: "possible" };
+/** A one-hour game with the Possible role list (design §11.3). */
+const HOUR: Partial<LobbySettings> = { sessionLength: "1h", roleList: "possible" };
 
 let db: Db;
 let clock: FakeClock;
@@ -61,7 +59,7 @@ interface Seat {
   readonly player: string;
   readonly seat: number;
 }
-async function startGame(guests: number, settings: Partial<LobbySettings> = EVERYTHING) {
+async function startGame(guests: number, settings: Partial<LobbySettings> = HOUR) {
   const host = await guestSession("Host");
   const game = (await req("POST", "/games", host, { settings })).body;
   const sessions = [host];
@@ -188,7 +186,7 @@ describe("every control refuses anyone but the host (design §15)", () => {
 
   it("a bot seat can't get a stand-in and can't be handed back (no person in it)", async () => {
     const host = await guestSession("Host");
-    const game = (await req("POST", "/games", host, { settings: STARTER })).body;
+    const game = (await req("POST", "/games", host, { settings: HOUR })).body;
     await req("POST", `/games/${game.id}/bots`, host, { personality: "greedy" });
     await req("POST", `/games/${game.id}/bots`, host, { personality: "greedy" });
     await req("POST", `/games/${game.id}/start`, host);
@@ -200,7 +198,7 @@ describe("every control refuses anyone but the host (design §15)", () => {
 
 describe("out-of-order controls (design §15)", () => {
   it("pause twice and resume when not paused are 409 and change nothing; extend while paused adds exactly extendMs on top of the pause", async () => {
-    const { id, seats } = await startGame(2, STARTER);
+    const { id, seats } = await startGame(2, HOUR);
     const host = seats[0]!.who;
     expect((await req("POST", `/games/${id}/resume`, host)).status).toBe(409);
     clock.advance(7_000);
@@ -301,7 +299,7 @@ describe("a pause keeps every clock's time left exactly (design §15)", () => {
 
 describe("replace with a bot, then hand back (design §15)", () => {
   it("the bot plays the seat deterministically from its view, nobody else learns the seat's secrets, and the player's seat comes back", async () => {
-    const { id, seats } = await startGame(2, STARTER);
+    const { id, seats } = await startGame(2, HOUR);
     const [host, guest, third] = seats as [Seat, Seat, Seat];
     const hc = await Client.open(id, host.who);
     const tc = await Client.open(id, third.who);
@@ -396,7 +394,7 @@ describe("kick in the lobby vs in the game (design §15)", () => {
 
 describe("session expiry (M2-13 resilience)", () => {
   it("a socket closes 4401 on its own at expiry, and a message after expiry is never delivered", async () => {
-    const { id, seats } = await startGame(2, STARTER);
+    const { id, seats } = await startGame(2, HOUR);
     const host = await Client.open(id, seats[0]!.who);
     // The guest's session ends one second (of game clock) from now.
     const [row] = await db.query<{ e: number }>("select (extract(epoch from expires_at) * 1000)::float8 as e from sessions order by expires_at desc limit 1");

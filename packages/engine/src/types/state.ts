@@ -71,7 +71,7 @@ export interface PlayerState {
   readonly role: RoleId;
   /** Private: share received + coins pocketed − coins taken back by shakedowns. design §7.6 */
   readonly stash: number;
-  /** Uses of the role's power so far (all roles share the shape). design §8 */
+  /** Uses of the role's power so far (all roles share the shape). design §11 */
   readonly roleState: RoleState;
   /** For the host's "replace with a bot" prompt after 2 missed rounds. design §15 */
   readonly consecutiveMissedMoves: number;
@@ -84,14 +84,15 @@ export interface PlayerState {
 
 /**
  * Generic per-player role state: once-between-meetings and once-per-game uses,
- * tokens and perks. Private to the player. design §8
+ * tokens and perks. Private to the player; each holder of a role has their
+ * own (design §11.3, §19.2 seam 9).
  */
 export interface RoleState {
   /**
    * Uses this stretch ("once between meetings"): reset as a regular meeting
    * opens; briefings and emergencies never reset it (design §9.1, §11.2).
-   * Camera loops (Hacker), audits (Auditor), stash checks (Detective),
-   * blessings (Priest), rings (Mole).
+   * Audits (Auditor), hidden bells (Hacker), blackouts (Electrician),
+   * absolves (Priest), rings (Mole).
    */
   readonly usedThisStretch: number;
   /** Uses this game: reopened rooms (Fixer). */
@@ -207,6 +208,15 @@ export interface GameState {
   readonly bells: Readonly<Record<RoomId, number>>;
   /** Taped-off rooms (public): each stays closed through this round. design §5.3 */
   readonly taped: Readonly<Record<RoomId, number>>;
+  /**
+   * Rooms whose bell a Hacker hid as this round resolved (public: they show "?"); their real bulbs
+   * stay in `bells`. Cleared as the next round starts. design §5.1, §11.1
+   */
+  readonly hidden: readonly RoomId[];
+  /** Rooms blacked out this round (public, announced as it started). design §11.1 */
+  readonly dark: readonly RoomId[];
+  /** Rooms an Electrician blacked out for the next round, not yet announced (hidden). design §11.1 */
+  readonly cutsPending: readonly RoomId[];
   /** Wanted stars (public); never goes down. design §5.4 */
   readonly wanted: number;
   /** Coins the police have seized this game (public): they left the game. design §5.3, §7.7 */

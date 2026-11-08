@@ -17,12 +17,11 @@ function game(players: number, contentOverrides: ContentOverrides | null = NO_RA
     seed: "shares-seed",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: ["rookie"],
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     contentOverrides,
   };
-  return replay(cfg, setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: "rookie" } : e)));
+  return replay(cfg, setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: "lookout" } : e)));
 }
 
 function run(state: GameState, ...commands: unknown[]): GameState {

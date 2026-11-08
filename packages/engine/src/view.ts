@@ -16,7 +16,7 @@ import type {
   VoteChoice,
 } from "./types";
 import { canSee } from "./types";
-import { perkCost, rolesFor } from "./overrides";
+import { perkCost } from "./overrides";
 import { revealSummary } from "./reveal";
 import { honestyOf } from "./shares";
 
@@ -106,9 +106,12 @@ function buildView(state: GameState, playerId: PlayerId): PlayerView {
     share: state.share,
     kitty: state.kitty,
     honesty: honestyOf(state),
-    // design §5.1, §5.3, §5.4: bells (a taped-off room's is off), the tape and Wanted are public.
-    bells: state.bells,
+    // design §5.1, §5.3, §5.4: bells (a taped-off room's is off; one a Hacker hid shows "?", except to that Hacker), the tape and Wanted are public.
+    bells: bellsSeenBy(state, playerId),
+    hiddenBells: state.hidden,
     taped: state.taped,
+    // design §11.1: this round's power cuts are announced to everyone.
+    dark: state.dark,
     wanted: state.wanted,
     // design §10: the card is public.
     card: state.card,
@@ -134,9 +137,16 @@ function revealOf(state: GameState, outcome: Outcome, log: readonly LoggedEvent[
   const summary = revealSummary(
     log.map((e) => e.event),
     outcome,
-    { roles: rolesFor(state.config) },
   );
   return { outcome, log, summary };
+}
+
+/** design §5.1, §11.1: every bell but the hidden ones, which only the Hacker who hid one sees. */
+function bellsSeenBy(state: GameState, viewer: PlayerId): GameState["bells"] {
+  if (state.hidden.length === 0) return state.bells;
+  const mine = (room: string) =>
+    state.log.some((e) => e.type === "abilityResolved" && e.player === viewer && e.round === state.round && e.ability.kind === "hide" && e.ability.room === room);
+  return Object.fromEntries(Object.entries(state.bells).filter(([room]) => !state.hidden.includes(room) || mine(room)));
 }
 
 function roleListOf(log: readonly GameEvent[]): PlayerView["roleList"] {

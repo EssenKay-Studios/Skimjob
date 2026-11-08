@@ -23,7 +23,8 @@ import type {
 import { PUBLIC, privateTo, secretTo } from "./types";
 import { powerOf } from "./overrides";
 import { isPerkSpend, shieldFor, usePerk } from "./perks";
-import { aboveShare, blessingEvents, dirtyShakedownRewards, useCrewPower } from "./crew";
+import { aboveShare, dirtyShakedownRewards } from "./crew";
+import { roleHandler } from "./roles";
 import { applyEvent, nextMeetingId } from "./reduce";
 import { isObject, playerFor, show } from "./check";
 import type { Draw } from "./handle";
@@ -218,8 +219,8 @@ export function openMeeting(state: GameState, meetingId: unknown): Result {
  * design §9.5 (one rule for every crew size): quorum
  * is at least half the crew voting (sealed votes count), counting voters; a
  * shakedown needs more than half of the votes cast, counting weight (the
- * Smooth talker's ballot counts double, §8). `weight` is the total weight
- * cast, and `skip` / `targets` are weights too. Without a Smooth talker,
+ * Smooth Talker's ballot counts double, §11.1). `weight` is the total weight
+ * cast, and `skip` / `targets` are weights too. Without a Smooth Talker,
  * weight = voters.
  */
 export function meetingResult(crewSize: number, voters: number, skip: number, targets: ReadonlyMap<PlayerId, number>, weight: number = voters): MeetingResult {
@@ -230,14 +231,14 @@ export function meetingResult(crewSize: number, voters: number, skip: number, ta
 }
 
 /**
- * How much a player's ballot counts: the Smooth talker's `weight`, else 1,
- * plus a +Vote spent in this meeting. design §8, §8.3
+ * How much a player's ballot counts: the Smooth Talker's `weight`, else 1
+ * (each copy's own, §11.4), plus a +Vote spent in this meeting. design §9.5, §11.1
  */
 function baseWeight(state: GameState, player: PlayerId): number {
   const p = state.players[player] as PlayerState;
   const power = powerOf(state.config, p.role);
   const extra = state.meeting?.extraVotes.includes(player) ? PERK_RULES.extraVoteWeight : 0;
-  return (power.kind === "voteWeight" ? power.weight : 1) + extra;
+  return (power?.kind === "voteWeight" ? power.weight : 1) + extra;
 }
 
 /**
@@ -250,7 +251,7 @@ export const opensShakedownWindow = (shop: readonly PerkId[]): boolean => shop.i
 function tally(state: GameState) {
   const meeting = state.meeting as NonNullable<GameState["meeting"]>;
   // Tally in seat order, so the event is the same however the votes arrived.
-  // The public tally counts ballots; the result counts weight (Smooth talker, design §8).
+  // The public tally counts ballots; the result counts weight (Smooth Talker, design §11.1).
   const ballots: [PlayerId, VoteChoice][] = [];
   for (const id of state.playerOrder) if (Object.hasOwn(meeting.votes, id)) ballots.push([id, meeting.votes[id] as VoteChoice]);
   let skip = 0;
@@ -312,15 +313,16 @@ export function resolveShakedown(state: GameState, meetingId: unknown, draw: Dra
   return afterVote(state, [], pending, pending, draw);
 }
 
-/** `useAbility`: a perk spent (perks.ts, design §8.3), or a power used outside a move (crew.ts). design §8 */
+/** `useAbility`: a perk spent (perks.ts, design §8.3), or a power used outside a move (its role handler, roles.ts). design §11.1 */
 export function useAbility(state: GameState, command: Raw, draw: Draw): Result {
   const player = playerFor(state, command);
   if (typeof player === "string") return player;
   const ability = command.ability;
   if (!isObject(ability) || typeof ability.kind !== "string") return "ability must be an object with a kind";
   if (isPerkSpend(ability.kind)) return usePerk(state, player, ability, draw);
-  const power = powerOf(state.config, player.role);
-  return useCrewPower(state, player, power, ability) ?? `your role has no ${ability.kind} ability to use now`;
+  const use = roleHandler(player.role).use;
+  if (!use || powerOf(state.config, player.role)?.kind !== ability.kind) return `your role has no ${ability.kind} ability to use now`;
+  return use(state, player, ability);
 }
 
 /**
@@ -349,8 +351,6 @@ function afterVote(
     events.push({ type: "shakedownResolved", visibility: PUBLIC, meetingId: meeting.meetingId, target, stashRevealed: (state.players[target] as PlayerState).stash, taken, clean });
     // The roles whose token a caught cheater earns (Lookout, Auditor, Detective, Smooth Talker). extension.md "Roles"
     if (!clean) events.push(...dirtyShakedownRewards(state, target, meeting.meetingId));
-    // Priest (v2 §2): a blessed target shaken down clean earns the Priest a token.
-    else events.push(...blessingEvents(state, target));
   }
   const now = [...prior, ...events].reduce(applyEvent, state);
   return [...events, ...(meeting.kind === "emergency" ? startRound(now, now.round + 1, draw) : afterResult(now, draw))];

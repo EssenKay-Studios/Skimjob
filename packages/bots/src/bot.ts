@@ -7,6 +7,7 @@
 import type { JobDef, RoomId } from "@skimjob/content";
 import {
   nextUint32,
+  ringsOf,
   roomDef,
   seedRng,
   type AbilityUse,
@@ -18,7 +19,7 @@ import {
   type VoteChoice,
 } from "@skimjob/engine";
 import type { Personality } from "./personalities";
-import { jobOf, lastResolvedRound, ofType, roleOf, roomsWhere } from "./read";
+import { jobOf, lastResolvedRound, myPower, ofType, roomsWhere } from "./read";
 import { mostSuspicious, suspicion } from "./suspicion";
 import { claimCommands, meetingTime } from "./claims";
 import { alibiPerk, buyPerks, meetingPerks, perkSpender, planningPerks } from "./perks";
@@ -124,41 +125,24 @@ export function decide(view: PlayerView, p: Personality, random: Random, crewSee
   return out;
 }
 
-// ---------------------------------------------------------------- crew powers (v2 §2)
+// ---------------------------------------------------------------- powers used now (§11.1)
 
 /**
- * The Auditor's, Detective's and Priest's powers (role deck v2 §4 "Play",
- * minimal; R4 adds claims and perk use). Once between meetings, while planning:
- * the Auditor audits the room its top suspect claimed for the latest round; the
- * Detective checks its top suspect; the Priest blesses its most-trusted player
- * (lowest suspicion).
+ * The Auditor's and the Detective's powers, while planning: the Detective
+ * (every round) looks into its top suspect's grab in the latest round; the
+ * Auditor (once between meetings) audits the room its top suspect claimed for it.
  */
 function crewPowers(view: PlayerView): PlayerCommand[] {
-  const { power } = roleOf(view);
-  if (view.phase.kind !== "planning" || (power.kind !== "audit" && power.kind !== "checkStash" && power.kind !== "bless")) return [];
-  if (view.me.roleState.usedThisStretch >= power.perStretch) return [];
-  const scores = suspicion(view);
-  if (power.kind === "bless") {
-    // v2 §2: no blessing in a stretch after a blessed player was caught dirty in the one before (its own blessings, public shakedowns).
-    const last = view.stretch - 1;
-    const dirty = dirtyIn(view, last);
-    const barred = ofType(view.caseFile, "abilityResolved").some((e) => {
-      const a = e.ability;
-      return a.kind === "bless" && a.stretch === last && dirty.includes(a.target);
-    });
-    if (barred) return [];
-    const trusted = [...view.players].map((o) => o.id).sort((a, b) => (scores.get(a) ?? 0) - (scores.get(b) ?? 0))[0];
-    return trusted === undefined ? [] : [{ type: "useAbility", player: view.me.id, ability: { kind: "bless", target: trusted } }];
-  }
-  const top = mostSuspicious(scores);
+  const power = myPower(view);
+  if (view.phase.kind !== "planning" || (power?.kind !== "audit" && power?.kind !== "detect")) return [];
+  if (power.kind === "audit" && view.me.roleState.usedThisStretch >= power.perStretch) return [];
+  const top = mostSuspicious(suspicion(view));
   if (top === null || top.score <= 0) return [];
   const player = view.me.id;
-  if (power.kind === "checkStash") {
-    return [{ type: "useAbility", player, ability: { kind: "checkStash", target: top.player } }];
-  }
   const round = lastResolvedRound(view);
-  // A Recharge perk can free the power again before a new round resolves; the engine allows one audit per round.
-  if (ofType(view.caseFile, "abilityResolved").some((e) => e.ability.kind === "audit" && e.ability.round === round)) return [];
+  // The engine allows one use per resolved round (a Recharge can free the Auditor's again before a new round resolves).
+  if (round === 0 || ofType(view.caseFile, "abilityResolved").some((e) => e.ability.kind === power.kind && "round" in e.ability && e.ability.round === round)) return [];
+  if (power.kind === "detect") return [{ type: "useAbility", player, ability: { kind: "detect", target: top.player } }];
   const claim = ofType(view.ledger, "alibiPosted").find((a) => a.player === top.player && a.round === round);
   return claim ? [{ type: "useAbility", player, ability: { kind: "audit", room: claim.room } }] : [];
 }
@@ -181,22 +165,35 @@ export function chooseMove(view: PlayerView, p: Personality, random: Random): Mo
   // design §3.1: Security watches one room; a coin room, more often the richer ones.
   if (def.info === "watchRoom") move = { ...move, watch: weighted(byCoins(coinRooms), random) ?? room };
 
-  const { power } = roleOf(view);
+  const power = myPower(view);
+  const charged = power !== undefined && "perStretch" in power && view.me.roleState.usedThisStretch < power.perStretch;
   let ability: AbilityUse | null = null;
-  if (power.kind === "lookout") {
-    // design §8: one extra room's visitors; a coin room other than mine.
+  if (power?.kind === "lookout") {
+    // design §11.1: one extra room's visitors; a coin room other than mine.
     const target = weighted(byCoins(coinRooms.filter((r) => r !== room)), random);
     if (target !== undefined) ability = { kind: "lookout", rooms: [target] };
-  } else if (power.kind === "loopCameras" && view.me.roleState.usedThisStretch < power.perStretch) {
-    // v2 §4: hide its own skim (no allies to cover since the Extension).
-    if (pocket > 0) ability = { kind: "loopCameras", room };
-  } else if (power.kind === "ring" && view.me.roleState.usedThisStretch < power.perStretch && ringServesWin(view, job, room)) {
+  } else if (power?.kind === "hide" && charged) {
+    // design §11.1: the Hacker hides its own room's bell when it skims there and its coins ring.
+    if (pocket > 0 && ringsOf(def, coins) > 0) ability = { kind: "hide", room };
+  } else if (power?.kind === "blackout" && charged) {
+    // design §11.1: the Electrician cuts the power in the richest room next round, when it skims.
+    const richest = byCoins(coinRooms).sort((a, b) => b[1] - a[1])[0];
+    if (pocket > 0 && richest !== undefined) ability = { kind: "blackout", room: richest[0] };
+  } else if (power?.kind === "absolve" && charged) {
+    // design §11.1: the Priest absolves its top suspect, never the same player twice in a row.
+    const last = ofType(view.caseFile, "abilityResolved")
+      .map((e) => e.ability)
+      .filter((a) => a.kind === "absolve")
+      .at(-1);
+    const top = mostSuspicious(new Map([...suspicion(view)].filter(([id]) => last?.kind !== "absolve" || id !== last.target)));
+    if (top !== null && top.score > 0) ability = { kind: "absolve", target: top.player };
+  } else if (power?.kind === "ring" && charged && ringServesWin(view, job, room)) {
     // design §5.2, §11.1: the Mole tips the police off on the loudest open bell elsewhere, if any is lit.
     const loudest = openRooms(view)
       .filter((r) => r !== room && !roomDef(job, r).lieLow && (view.bells[r] ?? 0) > 0)
       .sort((a, b) => (view.bells[b] ?? 0) - (view.bells[a] ?? 0))[0];
     if (loudest !== undefined) ability = { kind: "ring", room: loudest };
-  } else if (power.kind === "reopen" && view.me.roleState.usedThisGame < 1) {
+  } else if (power?.kind === "reopen" && view.me.roleState.usedThisGame < power.perGame) {
     // design §5.3, §11.1: the Fixer reopens the richest taped-off room.
     const richest = Object.keys(view.taped).sort((a, b) => roomDef(job, b).coins - roomDef(job, a).coins)[0];
     if (richest !== undefined) ability = { kind: "reopen", room: richest };
@@ -221,7 +218,7 @@ function chooseRoom(view: PlayerView, p: Personality, random: Random): RoomId {
   const open = openRooms(view);
   const coinRooms = open.filter((r) => roomDef(job, r).coins > 0);
   const fallback = open.includes(job.defaultRoom) ? job.defaultRoom : (open.find((r) => roomDef(job, r).lieLow) ?? (open[0] as RoomId));
-  // extension.md Build notes "Bots": a ★ role leaning toward theft skims the richest room.
+  // design §19.3: the Mole or Fixer leaning toward theft skims the richest room.
   if (leaning(view) === "theft") return [...coinRooms].sort((a, b) => roomDef(job, b).coins - roomDef(job, a).coins)[0] ?? fallback;
   // design §5.5: near the bust line the Rooftop is the only way out, so the cautious go up and wait.
   const roof = open.find((r) => roomDef(job, r).lieLow);
@@ -243,7 +240,7 @@ function choosePocket(view: PlayerView, p: Personality, random: Random, coins: n
   if (random() < p.noise) return Math.floor(random() * (coins + 1));
   if (random() >= p.pocketChance) return 0;
   let pocket = Math.min(coins, Math.max(1, Math.round(coins * p.greed * (0.5 + random()))));
-  // extension.md Build notes "Bots": a ★ role leaning toward its failure skims all it can.
+  // design §19.3: the Mole or Fixer leaning toward theft skims all it can.
   if (leaning(view) !== null) return coins;
   if (random() < p.teamSpirit) {
     // After this grab, honesty (coins that reached the duffel ÷ coins taken) stays a margin above the line.
@@ -297,17 +294,6 @@ function scheduleMeeting(view: PlayerView): PlayerCommand[] {
   return open ? [{ type: "acceptMeeting", player, proposalId: open.id }] : [];
 }
 
-/** Players shaken down dirty in `stretch` (it ends as a regular meeting opens, design §9.1), from the public ledger. */
-function dirtyIn(view: PlayerView, stretch: number): PlayerId[] {
-  let current = 1;
-  const out: PlayerId[] = [];
-  for (const { event: e } of view.ledger) {
-    if (e.type === "meetingOpened" && e.kind === "regular") current++;
-    else if (e.type === "shakedownResolved" && !e.clean && current === stretch) out.push(e.target);
-  }
-  return out;
-}
-
 function wantsEmergency(view: PlayerView, p: Personality, random: Random): boolean {
   if (view.emergencies === 0 || view.pendingEmergency) return false;
   if (random() < p.noise * 0.05) return true;
@@ -322,7 +308,7 @@ function wantsEmergency(view: PlayerView, p: Personality, random: Random): boole
  * talking itself into a theory does. Scaled by each bot's `hunch` (personalities.ts).
  *
  * Seeded by the meeting, the player and the harness's hidden `crewSeed`
- * (BotOptions), so every bot at the table shares it but it changes from game
+ * (BotOptions), so every bot in the crew shares it but it changes from game
  * to game: seat and meeting ids are the same in every game, and alone they
  * gave each seat a fixed bias (PR #37 review). Nothing in it comes from
  * public view data beyond the meeting id, so nobody can compute it.
@@ -341,7 +327,7 @@ export function misjudged(view: PlayerView, scores: ReadonlyMap<PlayerId, number
 
 /**
  * Shake down the most suspicious player once they pass the bot's threshold; otherwise skip. Never a
- * protected player (design §9.7). Suspicion only, no ally logic (extension.md Build notes "Bots"). design §9.5
+ * protected player (design §9.7). Suspicion only, no ally logic. design §9.5, §19.3
  */
 export function chooseVote(view: PlayerView, p: Personality, random: Random, crewSeed: string): VoteChoice {
   if (random() < p.noise) {

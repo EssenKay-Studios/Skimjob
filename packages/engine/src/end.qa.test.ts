@@ -1,7 +1,6 @@
 // QA (PR #7): complete scripted games to the round cap and a bust, the
 // ranking, ties at every level, 3/12 players, commands after the end, and
 // determinism / replay of a finished game. design §5.5, §6.2, §8
-import { STARTER_ROLES } from "@skimjob/content";
 import { handleThroughAlibis } from "./alibis.testkit";
 import { describe, expect, it } from "vitest";
 import type { GameConfig, GameEvent, GameState, Outcome, PlayerState } from "./types";
@@ -18,18 +17,17 @@ function config(players: number): GameConfig {
     seed: "qa-end",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: [...STARTER_ROLES], // the shop's Shield may open the window (run passes it)
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     contentOverrides: NO_RAIDS, // the scripts set the bells they need
   };
 }
 
-/** Seat i is dealt roles[i] (Rookie if missing). */
+/** Seat i is dealt roles[i] (a Lookout if missing: its power acts only when used). */
 function game(players: number, roles: string[] = []): GameState {
   const cfg = config(players);
   let seat = 0;
-  const log = setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: roles[seat++] ?? "rookie" } : e));
+  const log = setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: roles[seat++] ?? "lookout" } : e));
   return replay(cfg, log);
 }
 
@@ -74,7 +72,7 @@ describe("12 players — design §3, §6.2, §8", () => {
   const ROOMS = ["vault", "vault", "rooftop", "office", "rooftop", "office", "office", "office", "depositBoxes", "depositBoxes", "managersOffice", "managersOffice"];
   const POCKET: Record<string, number> = { p0: 2, p1: 3, p3: 2 };
   function game12(): GameState {
-    let s = game(12, ["rookie", "lookout", "priest", "hacker"]);
+    let s = game(12, ["lookout", "lookout", "priest", "hacker"]);
     while (s.phase.kind !== "ended") {
       for (const [i, room] of ROOMS.entries()) {
         const id = `p${i}`;
@@ -100,7 +98,7 @@ describe("12 players — design §3, §6.2, §8", () => {
 
   /** Wanted 2 and the Vault's bell one bulb short; all 12 grab there in round 4: a raid and a bust (design §5.5). p0 pockets 1; p1 is the Priest. */
   function raid12(): GameState {
-    let s = game(12, ["rookie", "priest"]);
+    let s = game(12, ["lookout", "priest"]);
     for (let round = 1; round <= 3; round++) s = run(s, ...Array.from({ length: 12 }, (_, i) => mv(`p${i}`, "lobby")), ROUND);
     const bulbs = jobFor(s.config).alarm.bulbs;
     s = { ...s, wanted: 2, bells: { ...s.bells, vault: bulbs - 1 } };

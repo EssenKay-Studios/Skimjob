@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Simulator smoke test (CI): all-bot games at 3, 6 and 12 players with events
-# on the Everything deck; fails if any game errors or any bot command is refused.
+# Simulator smoke test (CI): all-bot games at 3, 6 and 12 players with events,
+# every role dealt by the standard deal; fails if any game errors or any bot command is refused.
 # Usage: bash scripts/sim-smoke.sh [games-per-size]   (default 200). docs/testing.md
 set -euo pipefail
 games="${1:-200}"
 out="$(mktemp)"
 trap 'rm -f "$out"' EXIT
-pnpm -s sim -- -n "$games" -p 3,6,12 --events --deck everything --seed ci-smoke --no-files --json > "$out"
+pnpm -s sim -- -n "$games" -p 3,6,12 --events --seed ci-smoke --no-files --json > "$out"
 node -e '
   const s = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).overall;
   const want = 3 * Number(process.argv[2]);

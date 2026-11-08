@@ -4,8 +4,8 @@
 // must stay secret (a dealt role, a real split) cannot be constructed as public.
 // When you add an event type: add it to GameEvent, add a sample to
 // `samples.ts`, and make sure viewFor() tests cover it (CLAUDE.md).
-import type { DeckId, EventId, FailureReason, JobId, PerkId, RoleId, RoomId, TokenTrigger } from "@skimjob/content";
-import type { ContentOverrides, DealStyle, PlayerId, PlayerSeat, RoleListSetting, VoteVisibility } from "./config";
+import type { EventId, JobId, PerkId, RoleId, RoomId, TokenTrigger } from "@skimjob/content";
+import type { ContentOverrides, PlayerId, PlayerSeat, RoleListSetting, VoteVisibility } from "./config";
 import type { AbilityUse, Move, VoteChoice } from "./commands";
 import type { PrivateVisibility, PublicVisibility, RevealVisibility, SecretVisibility } from "./visibility";
 import type { RoleState } from "./state";
@@ -24,9 +24,6 @@ export interface GameCreated {
   readonly visibility: PublicVisibility;
   readonly players: readonly PlayerSeat[];
   readonly job: JobId;
-  /** The deck preset. extension.md "Decks" */
-  readonly deck: DeckId;
-  readonly deal: DealStyle;
   readonly roleList: RoleListSetting;
   readonly eventsEnabled: boolean;
   readonly voteVisibility: VoteVisibility;
@@ -65,10 +62,10 @@ export interface RoleDealt {
 }
 
 /**
- * The role list shown to players (extension.md "Host settings"): with "exact",
- * every role dealt (one entry per seat); with "possible", every role this game
- * could deal. Sorted in content order, so it never tells seats apart. Not
- * emitted when the list is hidden.
+ * The role list shown to players (design §11.3): with "exact", every role
+ * dealt (one entry per seat, so a repeated role shows its count); with
+ * "possible", every role this game could deal. Sorted in content order, so it
+ * never tells seats apart. Not emitted when the list is hidden.
  */
 export interface RoleListShown {
   readonly type: "roleListShown";
@@ -155,23 +152,51 @@ export interface CoinsGrabbed {
   readonly seized: number;
 }
 
-/** What a used power did. Move powers as submitted, plus what each instant power answered. design §8 */
+/** What a used power did: move powers as submitted, plus what a power learned. design §11.1 */
 export type ResolvedAbility =
-  | AbilityUse
-  /** Auditor: `room` came up `shortfall` short in `round` (its visitors' pockets; 0 if none). design §8 (v2 §2) */
-  | { readonly kind: "audit"; readonly round: number; readonly room: RoomId; readonly shortfall: number }
-  /** Detective: whether `target` holds anything above the share (a shakedown would take it, §9.6). design §8 (v2 §2) */
-  | { readonly kind: "checkStash"; readonly target: PlayerId; readonly dirty: boolean }
-  /** Priest: `target` is blessed for `stretch` (the stretch between regular meetings, §9.1). design §8 (v2 §2) */
-  | { readonly kind: "bless"; readonly target: PlayerId; readonly stretch: number };
+  | Exclude<AbilityUse, { readonly kind: "hide" | "absolve" }>
+  /** Hacker: `room`'s bell, hidden from everyone else, really shows `bulbs` (null: raided, its bell is off). */
+  | { readonly kind: "hide"; readonly room: RoomId; readonly bulbs: number | null }
+  /** Priest: `taken` coins set aside from `target`'s stash (null: a bust ended the game first, §11.1). */
+  | { readonly kind: "absolve"; readonly target: PlayerId; readonly taken: number | null }
+  /** Auditor: `duffel` coins reached the duffel from `room` in `round`. */
+  | { readonly kind: "audit"; readonly round: number; readonly room: RoomId; readonly duffel: number }
+  /** Detective: `target` grabbed `grabbed` coins in `round` (seized ones included; not how many they kept). */
+  | { readonly kind: "detect"; readonly round: number; readonly target: PlayerId; readonly grabbed: number };
 
-/** An ability took effect. Private to its user; `round` is the latest round started. design §8 */
+/** An ability took effect. Private to its user; `round` is the latest round started. design §11 */
 export interface AbilityResolved {
   readonly type: "abilityResolved";
   readonly visibility: PrivateVisibility;
   readonly player: PlayerId;
   readonly round: number;
   readonly ability: ResolvedAbility;
+}
+
+/**
+ * design §11.4: another copy of your role already did this to the same target
+ * this round ("already done this round"), so your use had no effect and is not
+ * spent. Private to you.
+ */
+export interface AbilityAlreadyDone {
+  readonly type: "abilityAlreadyDone";
+  readonly visibility: PrivateVisibility;
+  readonly player: PlayerId;
+  readonly round: number;
+  readonly ability: AbilityUse;
+}
+
+/**
+ * design §11.1 Priest: "your sins were absolved". `taken` coins (what you held
+ * above the share, maybe 0) left your stash and are set aside in the duffel for
+ * the next split (§7.1). Private to the absolved player.
+ */
+export interface SinsAbsolved {
+  readonly type: "sinsAbsolved";
+  readonly visibility: PrivateVisibility;
+  readonly player: PlayerId;
+  readonly round: number;
+  readonly taken: number;
 }
 
 /** Who else was in your room. design §5.2 step 5 */
@@ -184,7 +209,7 @@ export interface RoomSighting {
   readonly others: readonly PlayerId[];
 }
 
-/** Everyone seen in a watched room, via Security, the Lookout power or a Tail perk. design §6.1, §8, §8.3 */
+/** Everyone seen in a watched room, via Security, the Lookout power or a Tail perk. design §3.4, §11.1 */
 export interface RoomWatched {
   readonly type: "roomWatched";
   readonly visibility: PrivateVisibility;
@@ -193,10 +218,7 @@ export interface RoomWatched {
   readonly source: "security" | "lookout" | "tail";
   readonly room: RoomId;
   readonly seen: readonly PlayerId[];
-  /**
-   * "Camera offline": a Hacker's loop blinded this feed (`seen`
-   * is empty). extension.md "Situations"
-   */
+  /** "Cameras offline": the room is blacked out this round, so `seen` is empty. design §11.1 */
   readonly offline: boolean;
 }
 
@@ -247,14 +269,16 @@ export interface DuffelSplit {
 /**
  * design §5.2 (§4.2 step 2): the round's rings have lit their bulbs. `bells`
  * is every open room's lit bulbs now (at most the bell's size; a taped-off
- * room's bell is off, so it isn't listed). Public through the fact catalogue
- * (§19 seam 1).
+ * room's bell is off, so it isn't listed), except the `hidden` rooms, whose
+ * bells a Hacker hid this round (§5.1, §11.1): they show "?". Public through
+ * the fact catalogue (§19 seam 1).
  */
 export interface BellsRung {
   readonly type: "bellsRung";
   readonly visibility: PublicVisibility;
   readonly round: number;
   readonly bells: Readonly<Record<RoomId, number>>;
+  readonly hidden: readonly RoomId[];
 }
 
 /**
@@ -275,8 +299,8 @@ export interface RoomRaided {
 
 /**
  * design §5.6 (§4.2 step 6): every room turned off a bulb, then each Rooftop
- * player cooled the hottest. `bells` is every open room's lit bulbs after it.
- * Public.
+ * player cooled the hottest. `bells` is every open room's lit bulbs after it,
+ * except this round's hidden bells (§11.1). Public.
  */
 export interface BellsCooled {
   readonly type: "bellsCooled";
@@ -291,6 +315,18 @@ export interface BellsCooled {
  */
 export interface RoomReopened {
   readonly type: "roomReopened";
+  readonly visibility: PublicVisibility;
+  readonly round: number;
+  readonly room: RoomId;
+}
+
+/**
+ * design §11.1 Electrician: "Power cut in the `room`", announced as `round`
+ * starts, with no source. Nobody there sees who else is there this round, and
+ * its cameras are offline; its bell still rings. Public.
+ */
+export interface PowerCut {
+  readonly type: "powerCut";
   readonly visibility: PublicVisibility;
   readonly round: number;
   readonly room: RoomId;
@@ -445,7 +481,7 @@ export interface MeetingClosed {
   readonly visibility: PublicVisibility;
   readonly meetingId: string;
   /**
-   * One per ballot. The Smooth talker's extra weight decides `result` but is
+   * One per ballot. The Smooth Talker's extra weight decides `result` but is
    * not shown here, so the tally never singles them out next to public
    * ballots (provisional). Skips are kept apart so no player id can collide with them.
    */
@@ -570,9 +606,10 @@ export interface RankEntry {
 /**
  * design §8: the top group is everyone tied for the biggest stash (§8.5). A
  * success (bank or round cap, honesty at or above the line, §8.1) is won by the
- * top group, the whole crew when every stash is equal (§8.2); a heist sunk by theft (§8.4) by the top-group members whose role
- * wins it (`RoleDef.winsOn`), and by nobody otherwise. The full ranking is
- * always kept, shown as a loss unless someone won (§8.6).
+ * top group, the whole crew when every stash is equal (§8.2); a heist sunk by
+ * theft (§8.4) by the players whose role handler wins it (the Mole and the
+ * Fixer, §11.1), and by nobody otherwise. The full ranking is always kept,
+ * shown as a loss unless someone won (§8.6).
  */
 export type Outcome =
   | {
@@ -584,7 +621,7 @@ export type Outcome =
     }
   | {
       readonly result: "failed";
-      readonly reason: Exclude<FailureReason, "bust">;
+      readonly reason: "theft";
       readonly ranking: readonly RankEntry[];
       readonly winners: readonly PlayerId[];
       /** As on a success. design §6.3 */
@@ -626,6 +663,8 @@ export type GameEvent =
   | DefaultMoveAssigned
   | CoinsGrabbed
   | AbilityResolved
+  | AbilityAlreadyDone
+  | SinsAbsolved
   | RoomSighting
   | RoomWatched
   | RoundResolved
@@ -634,6 +673,7 @@ export type GameEvent =
   | RoomRaided
   | BellsCooled
   | RoomReopened
+  | PowerCut
   | EventFlipped
   | InsideTip
   | AuditReport

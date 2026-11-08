@@ -3,7 +3,7 @@
 // shakedowns against the share, protection until the next regular meeting,
 // determinism and what viewFor shows of the new state.
 // design §9.1–§9.7, §4.2 steps 9–10, §7.5
-import { STARTER_ROLES, type PerkId } from "@skimjob/content";
+import type { PerkId } from "@skimjob/content";
 import { describe, expect, it } from "vitest";
 import type { ContentOverrides, GameConfig, GameEvent, GameState } from "./types";
 import { canSee } from "./types";
@@ -27,13 +27,12 @@ function game(n: number, opts: { coins?: number; shop?: readonly PerkId[]; seed?
     seed: opts.seed ?? "qa-172",
     players: Array.from({ length: n }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: [...STARTER_ROLES],
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     contentOverrides: pins(opts.coins),
   };
   const shop = opts.shop ?? NO_SHIELD;
-  const log = setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: "rookie" } : e.type === "shopDealt" ? { ...e, perks: shop } : e));
+  const log = setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: "lookout" } : e.type === "shopDealt" ? { ...e, perks: shop } : e));
   return replay(cfg, log);
 }
 

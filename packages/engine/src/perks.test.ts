@@ -19,7 +19,6 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
     seed: "perk-seed",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: ["rookie", "lookout", "hacker"], // a window only if the shop holds a Shield
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     // Bells too big to raid: these scripts test the perks (bells and raids: bells.test.ts).
@@ -28,13 +27,13 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
   };
 }
 
-/** A new game with chosen roles (seat i gets roles[i], Rookie if missing). */
+/** A new game with chosen roles (seat i gets roles[i], a Lookout if missing). */
 function game(players: number, roles: string[] = [], extra: Partial<GameConfig> = {}): GameState {
   const cfg = config(players, extra);
   const log = setupEvents(cfg).map((e, i, all): GameEvent => {
     if (e.type !== "roleDealt") return e;
     const seat = all.slice(0, i).filter((x) => x.type === "roleDealt").length;
-    return { ...e, role: roles[seat] ?? "rookie" };
+    return { ...e, role: roles[seat] ?? "lookout" };
   });
   return replay(cfg, log);
 }
@@ -93,7 +92,7 @@ describe("perk tokens — design §8.3", () => {
   });
 
   it("spending needs a token; a refusal keeps it and writes nothing; one token goes per spend", () => {
-    let s = game(4, ["rookie", "lookout", "hacker"]);
+    let s = game(4, ["lookout", "lookout", "hacker"]);
     expect(reason(s, use("p0", { kind: "peek", target: "p1" }))).toMatch(/no Peek perk/);
     s = grantPerks(s, "p0", "peek", "peek");
     expect(reason(s, use("p0", { kind: "peek", target: "p0" }))).toMatch(/another player/);
@@ -114,7 +113,7 @@ describe("perk tokens — design §8.3", () => {
 
 describe("Peek — design §8.3", () => {
   it("learn one player's role, privately", () => {
-    const s = grantPerks(game(4, ["rookie", "lookout", "hacker"]), "p0", "peek");
+    const s = grantPerks(game(4, ["lookout", "lookout", "hacker"]), "p0", "peek");
     const after = run(s, use("p0", { kind: "peek", target: "p2" }));
     expect(since(s, after)).toEqual([{ type: "perkUsed", visibility: privateTo("p0"), player: "p0", round: 1, perk: { kind: "peek", target: "p2", role: "hacker" } }]);
   });
@@ -260,12 +259,12 @@ describe("Recharge — design §8.3", () => {
   it("gives a once-between-meetings power back (Hacker), and refuses when nothing is used", () => {
     let s = grantPerks(game(4, ["hacker"]), "p0", "recharge");
     expect(reason(s, use("p0", { kind: "recharge" }))).toMatch(/nothing to recharge/);
-    s = run(s, mv("p0", "lobby", 0, { ability: { kind: "loopCameras", room: "vault" } }), ROUND, ALIBIS);
+    s = run(s, mv("p0", "lobby", 0, { ability: { kind: "hide", room: "vault" } }), ROUND, ALIBIS);
     expect(s.players.p0?.roleState.usedThisStretch).toBe(1);
     s = run(s, use("p0", { kind: "recharge" }));
     expect(s.players.p0?.roleState.usedThisStretch).toBe(0);
-    s = run(s, mv("p0", "lobby", 0, { ability: { kind: "loopCameras", room: "office" } }));
-    expect(s.moves.p0?.ability).toEqual({ kind: "loopCameras", room: "office" });
+    s = run(s, mv("p0", "lobby", 0, { ability: { kind: "hide", room: "office" } }));
+    expect(s.moves.p0?.ability).toEqual({ kind: "hide", room: "office" });
   });
 });
 

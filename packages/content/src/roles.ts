@@ -1,82 +1,67 @@
-// Role definitions: powers, tags, win endings and tokens, as data. design §8
+// Role definitions as data: each role's kind (eyes or shadows), its power and
+// the power's numbers, and its tokens. design §11
 //
 // `perStretch` counts uses per stretch, the time between two regular meetings
-// ("once between meetings", design §9.1, §11.2).
-import type { RoleId, RoomId } from "./index";
+// ("once between meetings", design §9.1, §11.2); `perGame` uses per game. The
+// engine's role handlers (one per role id, design §19.2 seam 4) use these.
+import type { RoleId } from "./index";
 
-/** A role's power. `kind` matches the engine's `AbilityUse` kind where the power is used in a move. design §8 */
+/** Eyes spot theft; shadows make it possible. A deal balances the two (design §11.1, §11.3). */
+export type RoleKind = "eyes" | "shadows";
+
+/** A role's power. design §11.1 */
 export type RolePower =
-  | { readonly kind: "none" }
-  /**
-   * Lookout: each round, also sees who was in up to `extraRooms` extra room(s)
-   * of their choice, named in the move's `{ kind: "lookout", rooms }` ability.
-   */
+  /** Lookout: each round, a move may also watch up to `extraRooms` extra room(s). */
   | { readonly kind: "lookout"; readonly extraRooms: number }
-  /** Hacker: `perStretch` times per stretch, a move may loop the cameras so one room reads "camera offline" that round. */
-  | { readonly kind: "loopCameras"; readonly perStretch: number }
-  /** Smooth talker: their ballot counts `weight` times toward a meeting's result (passive). design §11.2 */
-  | { readonly kind: "voteWeight"; readonly weight: number }
-  /** Auditor: `perStretch` times per stretch (`useAbility`), learn the latest resolved round's shortfall for one room. design §8 (v2 §2) */
+  /** Locksmith (passive): each of your coins rings `fewerRings` time(s) fewer, never below 0. design §5.2 */
+  | { readonly kind: "muffle"; readonly fewerRings: number }
+  /** Detective: each round (`useAbility`), learn how many coins one player grabbed in the latest resolved round. */
+  | { readonly kind: "detect" }
+  /** Auditor: `perStretch` times per stretch (`useAbility`), learn how many coins reached the duffel from one room in the latest resolved round. */
   | { readonly kind: "audit"; readonly perStretch: number }
-  /** Detective: `perStretch` times per stretch (`useAbility`), learn whether a player holds anything above the share. design §8 (v2 §2), §9.6 */
-  | { readonly kind: "checkStash"; readonly perStretch: number }
-  /**
-   * Priest: `perStretch` times per stretch (`useAbility`), bless another player for
-   * the stretch; blessed and shaken down clean in it earns the Priest a token. design §8 (v2 §2)
-   */
-  | { readonly kind: "bless"; readonly perStretch: number }
-  /**
-   * Fixer: once per game, a move may tear the tape off a taped-off room, which
-   * reopens from the next round with its bell at 0. design §5.3, §11.1
-   */
-  | { readonly kind: "reopen" }
-  /**
-   * Mole: `perStretch` times per stretch, a move may ring any open room once
-   * except the Rooftop (a police tip-off); it lights a bulb like any ring.
-   * design §5.2, §11.1
-   */
-  | { readonly kind: "ring"; readonly perStretch: number };
+  /** Smooth Talker (passive): their ballot counts `weight` times. design §9.5 */
+  | { readonly kind: "voteWeight"; readonly weight: number }
+  /** Hacker: `perStretch` times per stretch, a move may hide one open room's bell from everyone else this round. */
+  | { readonly kind: "hide"; readonly perStretch: number }
+  /** Electrician: `perStretch` times per stretch, a move may black out one room next round. */
+  | { readonly kind: "blackout"; readonly perStretch: number }
+  /** Priest: `perStretch` times per stretch, a move may absolve one player at this round's split. */
+  | { readonly kind: "absolve"; readonly perStretch: number }
+  /** Mole: `perStretch` times per stretch, a move may ring any room once (not the Rooftop or a taped-off room). design §5.2 */
+  | { readonly kind: "ring"; readonly perStretch: number }
+  /** Fixer: `perGame` times per game, a move may tear the tape off a taped-off room; it reopens next round. design §5.3 */
+  | { readonly kind: "reopen"; readonly perGame: number };
 
 /**
  * What a plan-board power claim points at (design §10: "Hacker → Vault", "Detective → Eli"):
- * a room or a player. A power with no target (passive) can't be claimed.
+ * a room or a player. A passive power can't be claimed.
  */
 export const POWER_CLAIM_TARGET: Readonly<Partial<Record<RolePower["kind"], "room" | "player">>> = {
   lookout: "room",
-  loopCameras: "room",
+  detect: "player",
   audit: "room",
-  checkStash: "player",
-  bless: "player",
+  hide: "room",
+  blackout: "room",
+  absolve: "player",
+  ring: "room",
+  reopen: "room",
 };
-
-/** Why a heist failed: a bust (Wanted 3, design §5.5), or sunk by theft (honesty below the line at the end, §8.4). */
-export type FailureReason = "bust" | "theft";
-
-/**
- * How selfish a power is: it describes, never changes a rule (no teams).
- * extension.md "Roles", Build notes "Tags, decks and dealing"
- */
-export type Temperament = "teamPlayer" | "wildcard" | "loneWolf";
 
 /**
  * What earns a role a token (extension.md "Roles"). "Caught" means a
- * shakedown that found the target dirty (`shakedownResolved` with `clean: false`). design §8.3
+ * shakedown that found the target dirty (`shakedownResolved` with `clean: false`).
  */
 export type TokenTrigger =
   /** A player this role's Lookout power saw, earlier this game, is caught. */
   | "watchedShakenDirty"
   /** A visitor of a room this role audited, in the audited round, is caught. */
   | "auditedShakenDirty"
-  /** A player this role checked, earlier this game, is caught. */
+  /** A player this role's Detective power looked at, earlier this game, is caught. */
   | "checkedShakenDirty"
   /** Its ballot was for a player who was then caught (Smooth Talker). */
-  | "wonDirtyShakedown"
-  /** A player it blessed is shaken down clean (Priest). */
-  | "blessedShakenClean"
-  /** Its camera loop hid, from a watcher of that room, a visitor who pocketed (Hacker). */
-  | "loopHidPocketer";
+  | "wonDirtyShakedown";
 
-/** A role's reward: `count` tokens each time `on` happens (1, extension.md). design §8.3 */
+/** A role's reward: `count` tokens each time `on` happens (1, extension.md). */
 export interface TokenReward {
   readonly on: TokenTrigger;
   readonly count: number;
@@ -85,62 +70,24 @@ export interface TokenReward {
 export interface RoleDef {
   readonly id: RoleId;
   readonly name: string;
+  readonly kind: RoleKind;
   readonly power: RolePower;
-  /** Temperament tag (changes no rule). extension.md */
-  readonly tag: Temperament;
-  /**
-   * Failure endings this role also wins, from the top group (★ roles).
-   * Empty: wins only a success. extension.md "Winning and losing"
-   */
-  readonly winsOn: readonly FailureReason[];
-  /** The tokens this role earns, and how. Absent: none. design §8.3 */
+  /** The tokens this role earns, and how. Absent: none. */
   readonly rewards?: readonly TokenReward[];
-  /** Dealt only in crews of at least this size (Smooth Talker: 5). Absent: any size. design §8.1 */
-  readonly minPlayers?: number;
 }
 
-const TEAM = { tag: "teamPlayer", winsOn: [] } as const;
-const WILD = { tag: "wildcard", winsOn: [] } as const;
 const token = (on: TokenTrigger): readonly TokenReward[] => [{ on, count: 1 }];
 
-/** Every role (R7 C2c: the 9 kept of R6's 20). design §8 */
+/** Every role, in the order the rulebook lists them. design §11.1 */
 export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
-  rookie: { id: "rookie", name: "Rookie", power: { kind: "none" }, ...TEAM },
-  lookout: {
-    id: "lookout",
-    name: "Lookout",
-    power: { kind: "lookout", extraRooms: 1 },
-    ...TEAM,
-    rewards: token("watchedShakenDirty"),
-  },
-  hacker: { id: "hacker", name: "Hacker", power: { kind: "loopCameras", perStretch: 1 }, ...WILD, rewards: token("loopHidPocketer") },
-  smoothTalker: {
-    id: "smoothTalker",
-    name: "Smooth Talker",
-    power: { kind: "voteWeight", weight: 2 },
-    ...TEAM,
-    rewards: token("wonDirtyShakedown"),
-    minPlayers: 5,
-  },
-  auditor: { id: "auditor", name: "Auditor", power: { kind: "audit", perStretch: 1 }, ...TEAM, rewards: token("auditedShakenDirty") },
-  detective: {
-    id: "detective",
-    name: "Detective",
-    power: { kind: "checkStash", perStretch: 1 },
-    ...TEAM,
-    rewards: token("checkedShakenDirty"),
-    minPlayers: 4,
-  },
-  priest: {
-    id: "priest",
-    name: "Priest",
-    power: { kind: "bless", perStretch: 1 },
-    ...TEAM,
-    rewards: token("blessedShakenClean"),
-    minPlayers: 5,
-  },
-  // design §8.4: the Mole and the Fixer win a heist sunk by theft from the top of the ranking (their handlers in S3a.6);
-  // on a bust only the Rooftop wins, whatever the role (§5.5).
-  fixer: { id: "fixer", name: "Fixer", power: { kind: "reopen" }, ...TEAM, winsOn: ["theft"] },
-  mole: { id: "mole", name: "Mole", power: { kind: "ring", perStretch: 1 }, tag: "loneWolf", winsOn: ["theft"] },
+  lookout: { id: "lookout", name: "Lookout", kind: "eyes", power: { kind: "lookout", extraRooms: 1 }, rewards: token("watchedShakenDirty") },
+  locksmith: { id: "locksmith", name: "Locksmith", kind: "shadows", power: { kind: "muffle", fewerRings: 1 } },
+  detective: { id: "detective", name: "Detective", kind: "eyes", power: { kind: "detect" }, rewards: token("checkedShakenDirty") },
+  auditor: { id: "auditor", name: "Auditor", kind: "eyes", power: { kind: "audit", perStretch: 1 }, rewards: token("auditedShakenDirty") },
+  smoothTalker: { id: "smoothTalker", name: "Smooth Talker", kind: "eyes", power: { kind: "voteWeight", weight: 2 }, rewards: token("wonDirtyShakedown") },
+  hacker: { id: "hacker", name: "Hacker", kind: "shadows", power: { kind: "hide", perStretch: 1 } },
+  electrician: { id: "electrician", name: "Electrician", kind: "shadows", power: { kind: "blackout", perStretch: 1 } },
+  priest: { id: "priest", name: "Priest", kind: "eyes", power: { kind: "absolve", perStretch: 1 } },
+  mole: { id: "mole", name: "Mole", kind: "shadows", power: { kind: "ring", perStretch: 1 } },
+  fixer: { id: "fixer", name: "Fixer", kind: "shadows", power: { kind: "reopen", perGame: 1 } },
 };
