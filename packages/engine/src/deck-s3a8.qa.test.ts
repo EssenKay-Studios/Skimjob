@@ -506,3 +506,106 @@ describe("QA §18: viewFor leaks around the deck", () => {
     }
   });
 });
+
+describe("QA §13: a card that can't apply is redrawn (owner, 8 Nov)", () => {
+  const three = () => resolve(game(3));
+  /** No closable room and the Vault taped: only Audit and Inside tip can apply. */
+  const onlyTwo = (s: GameState): GameState => ({ ...s, taped: { office: 4, vault: 4, security: 4 } });
+  const vaultTaped = (s: GameState): GameState => ({ ...s, taped: { vault: 4 } });
+  const cardOf = (events: readonly GameEvent[]) => find(events, "eventFlipped")[0]?.card ?? null;
+
+  it("the roll is unchanged: over 3000 seeds a round flips exactly when it would with every card able to apply, about 4 in 10", () => {
+    const open = three();
+    let flips = 0;
+    const n = 3000;
+    for (let i = 0; i < n; i++) {
+      const hit = cardOf(seeded(open, 3, `redraw-${i}`)) !== null;
+      for (const s of [onlyTwo(open), vaultTaped(open)]) {
+        const flipped = find(seeded(s, 3, `redraw-${i}`), "eventFlipped");
+        expect(flipped).toHaveLength(hit ? 1 : 0);
+      }
+      if (hit) flips++;
+    }
+    expect(flips / n).toBeGreaterThan(0.37);
+    expect(flips / n).toBeLessThan(0.43);
+  });
+
+  it("every flip lands a card that applies, spread over the cards that can (Vault taped: a third each; nothing closable: a half each)", () => {
+    const tally = (s: GameState) => {
+      const counts: Record<string, number> = {};
+      let flips = 0;
+      for (let i = 0; i < 4000; i++) {
+        const events = seeded(s, 3, `spread-${i}`);
+        const card = cardOf(events);
+        if (card === null) continue;
+        flips++;
+        counts[card] = (counts[card] ?? 0) + 1;
+        const lock = find(events, "eventFlipped")[0]?.room;
+        if (card === "lockdown") expect(["office", "security"]).toContain(lock);
+        if (card === "insideTip") expect(find(events, "insideTip")).toHaveLength(1);
+      }
+      return Object.fromEntries(Object.entries(counts).map(([k, v]) => [k, v / flips]));
+    };
+    const taped = tally(vaultTaped(three()));
+    expect(Object.keys(taped).sort()).toEqual(["audit", "insideTip", "lockdown"]);
+    for (const share of Object.values(taped)) expect(Math.abs(share - 1 / 3)).toBeLessThan(0.05);
+    const two = tally(onlyTwo(three()));
+    expect(Object.keys(two).sort()).toEqual(["audit", "insideTip"]);
+    for (const share of Object.values(two)) expect(Math.abs(share - 1 / 2)).toBeLessThan(0.05);
+  });
+
+  it("the redraw is seeded: the same seed gives the same redrawn card, room and tip; different seeds reach each card", () => {
+    const eight = resolve(game(8));
+    const s = { ...eight, taped: Object.fromEntries(eight.rooms.filter((r) => r !== "lobby" && r !== "rooftop").map((r) => [r, 4])) };
+    const seen = new Set<string>();
+    for (let i = 0; i < 200; i++) {
+      const a = seeded(s, 4, `redet-${i}`);
+      expect(seeded(s, 4, `redet-${i}`)).toEqual(a);
+      const c = cardOf(a);
+      if (c) seen.add(c);
+    }
+    expect([...seen].sort()).toEqual(["audit", "insideTip"]);
+  });
+
+  it("a card that applies is never redrawn: one pick for the card, nothing more for Audit or Shift change", () => {
+    for (const card of ["audit", "shiftChange"]) {
+      const { draw, calls } = forcing(card);
+      expect(cardOf(startRound(three(), 3, draw))).toBe(card);
+      expect(calls).toEqual({ int: 1, pick: 1 });
+    }
+  });
+
+  it("tape that runs out as the round starts makes Lockdown apply again: no redraw", () => {
+    const s = { ...three(), taped: { office: 2, vault: 2, security: 2 } };
+    const { draw, calls } = forcing("lockdown");
+    expect(cardOf(startRound(s, 3, draw))).toBe("lockdown");
+    expect(calls).toEqual({ int: 1, pick: 2 }); // the card, then its room
+  });
+
+  it("a Rig's pick that can't apply is redrawn with no chance roll", () => {
+    const s: GameState = { ...vaultTaped(three()), rigs: [{ player: "p0", round: 3, cards: ["shiftChange", "audit"], pick: "shiftChange" }] };
+    const offered: string[][] = [];
+    const draw: Draw = {
+      int: () => {
+        throw new Error("rolled the chance for a Rig");
+      },
+      pick: <T,>(items: readonly T[]) => (offered.push([...(items as readonly string[])]), items[items.length - 1] as T),
+      shuffle: <T,>(items: readonly T[]) => [...items],
+    };
+    const events = startRound(s, 3, draw);
+    expect(offered[0]).toEqual(EVENT_DECK.filter((c) => c !== "shiftChange"));
+    expect(cardOf(events)).toBe(offered[0]?.at(-1));
+    expect(find(events, "eventFlipped")).toHaveLength(1);
+  });
+
+  it("whole games with raids on (tape, so redraws happen) are deterministic: same seed, same log, and the log replays", () => {
+    for (const n of [3, 12]) {
+      for (let i = 0; i < 4; i++) {
+        const cfg = config(n, { seed: `bells-redraw-${n}-${i}`, contentOverrides: null });
+        const end = playThrough(createGame(cfg));
+        expect(playThrough(createGame(cfg)).log).toEqual(end.log);
+        expect(replay(end.config, end.log)).toEqual(end);
+      }
+    }
+  });
+});
