@@ -2,8 +2,8 @@ import { mkdirSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 import { startGame } from "./setupGame";
 
-// R6b, the extension UI (docs/extension.md): the perk shop, the Wanted
-// meter (design §5.4) and the gap box in a real game, and the lobby's deck, deal and
+// R6b, the extension UI (docs/extension.md): the perk shop, the round cap and
+// the Wanted meter (design §5.4) in a real game, and the lobby's deck, deal and
 // role-list settings. Numbers are never asserted: the balance pass tunes them
 // in packages/content. SHOTS_DIR=… saves the gallery sections per viewport.
 const SHOTS = process.env.SHOTS_DIR;

@@ -1,5 +1,5 @@
 // The Extension rules not covered by a role's own tests: the perk shop, buying
-// perks, "camera offline", the gap box and the role list.
+// perks, "camera offline" and the role list.
 // docs/extension.md (THE spec for R6a)
 import { describe, expect, it } from "vitest";
 import { PERKS, ROLES, SHOP_COLUMNS, SHOP_RULES, type PerkId } from "@skimjob/content";
@@ -95,8 +95,9 @@ describe("the perk shop — extension.md \"Tokens and the perk shop\", gap-fills
     for (const id of s.playerOrder) expect(viewFor(s, id).shop.map((o) => o.perk)).toEqual(s.shop);
   });
 
-  it("with events off the Sway perk is +Vote or Emergency", () => {
-    for (const seed of SEEDS) expect(SHOP_RULES.swayEventsOff).toContain(shopOf(config(5, { seed }))[2]);
+  it("with events off the Sway perk is +Vote", () => {
+    expect(SHOP_RULES.swayEventsOff).toEqual(["extraVote"]);
+    for (const seed of SEEDS) expect(shopOf(config(5, { seed }))[2]).toBe("extraVote");
   });
 
   it("costs come from content: Peek and Shield 2, the rest 1; overridable", () => {

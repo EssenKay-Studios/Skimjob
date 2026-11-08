@@ -228,7 +228,7 @@ export function dealRoles(
 /**
  * The shop's three perks, one per column, drawn with the seeded RNG
  * (extension.md "Tokens and the perk shop", gap-fills "Shop dealing"):
- * with events off the Sway perk is +Vote or Emergency.
+ * with events off the Sway perk is +Vote.
  */
 function dealShop(config: GameConfig, rng: RngState): { readonly value: PerkId[]; readonly rng: RngState } {
   const perks: PerkId[] = [];

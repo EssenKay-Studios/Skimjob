@@ -1,5 +1,5 @@
 // /dev/gallery sections for the Extension UI (docs/extension.md): role facts
-// and tappable role names, the rulebook, the gap box, a live shop on a local engine game, the no-tells feed lines,
+// and tappable role names, the rulebook, a live shop on a local engine game, the no-tells feed lines,
 // the lobby deck settings and the end screen. No server: a local engine game.
 import { useMemo, useState, type ReactNode } from "react";
 import { DECKS, type RoleId } from "@skimjob/content";

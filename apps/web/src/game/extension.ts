@@ -160,7 +160,7 @@ export interface ShopState {
   readonly items: readonly ShopItem[];
   /** Perks you own that aren't in the shop (e.g. after an override); rare. */
   readonly extra: readonly { readonly perk: PerkId; readonly count: number }[];
-  /** You used a perk by choice this round (one per round; Shield and Emergency don't count). */
+  /** You used a perk by choice this round (one per round; the Shield doesn't count). */
   readonly usedThisRound: boolean;
 }
 

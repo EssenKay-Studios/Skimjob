@@ -115,7 +115,7 @@ describe("describeEvent", () => {
     expect(as(abilities.checkStash[0])).toBe("Stash check: Ben holds something above the share (not clean).");
     expect(as(abilities.checkStash[1]!)).toBe("Stash check: Ben holds nothing above the share (clean).");
     // design §8 (v2 §2): Priest; §5.2, §5.3, §11.1: the Mole's ring and the Fixer's reopen
-    expect(as(abilities.bless[0])).toBe("You blessed Ben until the next meeting.");
+    expect(as(abilities.bless[0])).toBe("You blessed Ben until the next regular meeting.");
     expect(as(abilities.ring[0])).toBe("Round 1: you tipped off the police: the Office's bell rang once more.");
     expect(as(abilities.reopen[0])).toBe("Round 1: you tore the tape off the Vault.");
   });

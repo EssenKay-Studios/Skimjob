@@ -275,7 +275,7 @@ export function decidingOf(view: PlayerView): { readonly meetingId: string; read
 // ---------------------------------------------------------------- abilities during meetings
 
 export type AbilityOffer =
-  /** Priest: bless another player until the next meeting (once between meetings). design §8 (v2 §2) */
+  /** Priest: bless another player until the next regular meeting (once between meetings). design §8 (v2 §2), §9.1 */
   | { readonly kind: "bless"; readonly targets: readonly PlayerId[] }
   /** +Vote perk: your ballot weighs one more in this meeting. design §8.3 */
   | { readonly kind: "extraVote" }

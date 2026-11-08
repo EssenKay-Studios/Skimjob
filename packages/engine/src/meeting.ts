@@ -275,9 +275,10 @@ function tally(state: GameState) {
 }
 
 /**
- * The window has ended: the tally, then the shakedown. After an emergency
- * meeting the game goes back to where it was; after a regular meeting the
- * next round starts (the end checks ran straight after the round, design §6.2).
+ * The window has ended: the tally, then the shakedown (or, with a Shield in
+ * the shop, its window first). Then `afterVote`: after an emergency the next
+ * round starts; after a regular meeting or a briefing the result window opens,
+ * or the next round starts when the crew's pool is empty. design §9.3, §9.5
  */
 export function closeMeeting(state: GameState, meetingId: unknown, draw: Draw): Result {
   const meeting = state.meeting;

@@ -200,7 +200,7 @@ function ability(a: ResolvedAbility, player: PlayerId, round: number, { you, who
     case "checkStash":
       return `Stash check: ${who(a.target)} ${a.dirty ? "holds something above the share (not clean)" : "holds nothing above the share (clean)"}.`;
     case "bless":
-      return `${verb(player, "blessed", "blessed")} ${who(a.target)} until the next meeting.`;
+      return `${verb(player, "blessed", "blessed")} ${who(a.target)} until the next regular meeting.`;
     default: {
       const never: never = a;
       return String((never as { kind: string }).kind);

@@ -89,7 +89,7 @@ function bless(state: GameState, player: PlayerState, perStretch: number, raw: R
   if (target === player.id) return "bless another player";
   if (state.pendingShakedown?.target === target) return "that player's shakedown is already pending";
   const { stretch } = state;
-  if (blessedWentDirty(state, player.id, stretch - 1)) return "your last blessing was caught dirty: no blessing until the next meeting";
+  if (blessedWentDirty(state, player.id, stretch - 1)) return "your last blessing was caught dirty: no blessing until the next regular meeting";
   return [{ type: "abilityResolved", visibility: privateTo(player.id), player: player.id, round: state.round, ability: { kind: "bless", target, stretch } }];
 }
 
