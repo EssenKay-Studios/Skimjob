@@ -132,7 +132,7 @@ describe("validateOverrides — configs are untrusted JSON (design §17.4)", () 
     expect(errs({ roles: { fixer: { stopAt: 90 } } })).toEqual(["contentOverrides.roles.fixer.stopAt is not an overridable field"]);
   });
 
-  it("event cards: each card tunes only its own effect's numbers (design §10, balance pass 2)", () => {
+  it("event cards: each card tunes only its own effect's numbers (design §13, balance pass 2)", () => {
     expect(errs({ events: { shiftChange: { extraCoins: 2 } } })).toEqual([]);
     expect(errs({ events: { shiftChange: { lootMultiplier: 2 } } })).toEqual(["contentOverrides.events.shiftChange.lootMultiplier is not an overridable field"]);
     expect(errs({ events: { shiftChange: { extraCoins: 0.5 } } })).toHaveLength(1);

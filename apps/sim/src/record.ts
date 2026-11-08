@@ -54,6 +54,8 @@ export interface GameRecord {
   readonly raids: number;
   /** Rounds with more than half the crew on the Rooftop (design §21 G4). */
   readonly stalls: number;
+  /** Event cards flipped (design §13: a 4-in-10 chance each round from round 2). */
+  readonly cards: number;
   /** Meetings held, by kind. design §9.1–§9.3 */
   readonly meetings: Readonly<Record<MeetingKind, number>>;
   readonly shakedowns: readonly ShakedownRecord[];
@@ -83,6 +85,7 @@ export function recordGame(state: GameState, crew: readonly PersonalityId[], rej
   const meetings: Record<MeetingKind, number> = { regular: 0, briefing: 0, emergency: 0 };
   let endedRound = 0;
   let raids = 0;
+  let cards = 0;
   const lyingLow = new Map<number, number>();
 
   const add = (m: Map<PlayerId, number>, id: PlayerId, v: number) => m.set(id, (m.get(id) ?? 0) + v);
@@ -99,6 +102,9 @@ export function recordGame(state: GameState, crew: readonly PersonalityId[], rej
         break;
       case "roomRaided":
         raids++;
+        break;
+      case "eventFlipped":
+        cards++;
         break;
       case "meetingOpened":
         meetings[event.kind]++;
@@ -141,6 +147,7 @@ export function recordGame(state: GameState, crew: readonly PersonalityId[], rej
     wanted: state.wanted,
     raids,
     stalls: [...lyingLow.values()].filter((k) => k > n / 2).length,
+    cards,
     meetings,
     shakedowns,
     winners,

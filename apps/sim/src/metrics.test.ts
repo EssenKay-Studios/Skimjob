@@ -101,6 +101,13 @@ describe("sunk by theft and cap stalls — design §21 G4, G8", () => {
   });
 });
 
+describe("event cards — design §13", () => {
+  it("is cards flipped ÷ rounds from round 2; null with no such rounds", () => {
+    expect(summarize([gameRec({ cards: 3, endedRound: 6 }), gameRec({ cards: 1, endedRound: 6 })]).overall.cardRate).toBe(0.4);
+    expect(summarize([gameRec({ endedRound: 1 })]).overall.cardRate).toBeNull();
+  });
+});
+
 describe("whole-crew wins — design §8.2, §21 G6", () => {
   it("a success every player won is a whole-crew win; the rate is over successful games only", () => {
     const all = gameRec({ players: 3, winners: ["a", "b", "c"] });

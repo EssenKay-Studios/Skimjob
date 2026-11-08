@@ -26,6 +26,7 @@ const ROWS: readonly Row[] = [
   { label: "  of those, won by a Mole or Fixer", target: "report", cell: (m) => pct(m.sunkWins.rate) },
   { label: "Whole-crew wins (of successes)", target: "5–20%", cell: (m) => pct(m.wholeCrewRate) },
   { label: "Bank emptied", target: "", cell: (m) => pct(m.bankEmptied) },
+  { label: "Event cards (rounds from round 2)", target: "≈ 40%", cell: (m) => pct(m.cardRate) },
   { label: "Regular meetings per game", target: "", cell: (m) => num(m.meetings.regular) },
   { label: "Police briefings per game", target: "", cell: (m) => num(m.meetings.briefing) },
   { label: "Emergencies per game", target: "", cell: (m) => num(m.meetings.emergency) },

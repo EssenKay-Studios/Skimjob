@@ -1,5 +1,5 @@
 // QA (PR #132, R7 C2d): sim options naming a dropped event card or the old Server-room
-// pocket count are refused with a message before any game runs; --events games only flip kept cards. design §10, §17.4
+// pocket count are refused with a message before any game runs; --events games only flip kept cards. design §13, §17.4
 import { describe, expect, it } from "vitest";
 import { parseSimArgs, type SimOptions } from "./args";
 import { checkOptions, runBatch } from "./run";

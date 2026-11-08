@@ -409,7 +409,7 @@ Every role has a one-sentence power, a "How you win" line and a "How to spot it"
 
 ## 13. Events
 
-From **round 2**, each round has a **4-in-10 chance** [tunable] that one card flips at the start of the round (6 in 10: nothing happens), drawn with the game's seed. *(Owner, 6 Nov.)* The host can turn events off. Every flip draws **at random from the whole deck**, so a card can repeat and the deck never runs out; a card that can't apply means no event that round.
+From **round 2**, each round has a **4-in-10 chance** [tunable] that one card flips at the start of the round (6 in 10: nothing happens), drawn with the game's seed. *(Owner, 6 Nov.)* The host can turn events off. Every flip draws **at random from the whole deck**, so a card can repeat and the deck never runs out; a card that can't apply (Lockdown with no room to close, Shift change with the Vault taped off) is redrawn, seeded, from the cards that can, so a flip always lands a card *(owner, 8 Nov)*.
 
 | Card | Effect |
 |---|---|

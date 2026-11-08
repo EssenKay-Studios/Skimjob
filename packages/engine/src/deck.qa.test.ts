@@ -1,5 +1,5 @@
 // QA (PR #14): adversarial tests for the events deck — boundaries, card
-// interactions, deck exhaustion, and determinism. design §10
+// interactions, repeats, and determinism. design §13
 import { describe, expect, it } from "vitest";
 import { NO_RAIDS } from "./v01-numbers.testkit";
 import { handleThroughAlibis } from "./alibis.testkit";
@@ -65,14 +65,12 @@ function lastResolution(s: GameState): GameEvent[] {
   return s.log.slice(start, end + 1);
 }
 
-/** Replace the current round's card by rewriting the log and replaying it. */
+/** This round's card set to `card` (any card the round flipped removed), by rewriting the log and replaying it. */
 function withCard(state: GameState, card: string, room: RoomId | null = null): GameState {
-  const log = [...state.log];
-  let i = log.length - 1;
-  while (i >= 0 && log[i]?.type !== "eventFlipped") i--;
-  if (i < 0) throw new Error("no card flipped");
-  log.splice(i, 1, { type: "eventFlipped", visibility: PUBLIC, round: state.round, card, room });
-  return replay(state.config, log);
+  const at = state.log.map((e) => e.type).lastIndexOf("roundStarted");
+  const rest = state.log.slice(at + 1).filter((e) => e.type !== "eventFlipped" && e.type !== "insideTip");
+  const flipped: GameEvent = { type: "eventFlipped", visibility: PUBLIC, round: state.round, card, room };
+  return replay(state.config, [...state.log.slice(0, at + 1), flipped, ...rest]);
 }
 
 function step(s: GameState): GameState {
@@ -98,7 +96,7 @@ const find = <T extends GameEvent["type"]>(events: readonly GameEvent[], type: T
   events.filter((e): e is Extract<GameEvent, { type: T }> => e.type === type);
 const roundResolved = (s: GameState) => find(lastResolution(s), "roundResolved")[0] as Extract<GameEvent, { type: "roundResolved" }>;
 
-describe("QA: room surges — design §10", () => {
+describe("QA: room surges — design §13", () => {
   // design §13, §5.2, §5.3: Shift change's extra Vault coin rings like the rest.
   it("Shift change: two of three grab 4 in the Vault → 8 rings, a raid seizing all 8; one coin lights one bulb; 4 coins accepted, 5 refused; next round back to 3", () => {
     const grab = (n: number) => ({ room: "vault", duffel: 0, pocket: n });
@@ -120,10 +118,10 @@ describe("QA: room surges — design §10", () => {
   });
 });
 
-describe("QA: Lockdown vs moves — design §10", () => {
-  it("at 12 players every non-Lobby room can be closed: the move is refused, watching/looking at it is allowed, it reopens next round", () => {
+describe("QA: Lockdown vs moves — design §13", () => {
+  it("at 12 players every room but the Lobby and the Rooftop can be closed: the move is refused, watching/looking at it is allowed, it reopens next round", () => {
     const at2 = resolve(game(12, ["lookout"]));
-    for (const room of at2.rooms.filter((r) => r !== "lobby")) {
+    for (const room of at2.rooms.filter((r) => r !== "lobby" && r !== "rooftop")) {
       const s = withCard(at2, "lockdown", room);
       expect(refused(s, move("p1", room)), room).toBe(true);
       if (room !== "security") expect(refused(s, move("p1", "security", 0, { watch: room })), room).toBe(false);
@@ -140,19 +138,24 @@ describe("QA: Lockdown vs moves — design §10", () => {
     expect(find(lastResolution(done), "coinsGrabbed").find((e) => e.player === "p0")).toMatchObject({ room: "office", duffel: 0, pocket: 2 });
   });
 
-  it("the drawn closed room is never the Lobby at 3, 5 and 12 players", () => {
+  it("the drawn closed room is never the Lobby or the Rooftop at 3, 5 and 12 players", () => {
+    let seen = 0;
     for (const n of [3, 5, 12]) {
       for (let i = 0; i < 25; i++) {
         let g = createGame(config(n, { seed: `lock-qa-${n}-${i}` }));
         while (g.phase.kind !== "ended" && g.card?.id !== "lockdown") g = step(g);
-        if (g.card?.id === "lockdown") expect(g.card.room).not.toBe("lobby");
+        if (g.card?.id !== "lockdown") continue;
+        seen++;
+        expect(["lobby", "rooftop"]).not.toContain(g.card.room);
+        expect(g.rooms).toContain(g.card.room);
       }
     }
+    expect(seen).toBeGreaterThan(10);
   });
 });
 
-describe("QA: Audit numbers — design §10", () => {
-  it("shortfalls are what was actually pocketed; they sum to the pockets, and pockets + coins handed in = coins grabbed", () => {
+describe("QA: Audit numbers — design §13", () => {
+  it("each room's count is what its visitors handed in; they sum to the coins handed in, and with the pockets to the coins taken", () => {
     const base = withCard(resolve(game(6, ["priest"])), "audit");
     const s = resolve(base, {
       p0: fullGrab("vault"), // hands in all 3
@@ -164,42 +167,49 @@ describe("QA: Audit numbers — design §10", () => {
     const events = lastResolution(s);
     const audit = find(events, "auditReport")[0];
     const splits = find(events, "coinsGrabbed");
-    expect(Object.keys(audit?.shortfalls ?? {}).sort()).toEqual([...s.rooms].sort());
-    // Three in the Deposit boxes each grab 2 (no room is shared, design §3.1): kept 2 + 2 + 1.
-    expect(audit?.shortfalls).toMatchObject({ vault: 0, depositBoxes: 5, office: 0, serverRoom: 0 });
-    const kept = splits.reduce((n, e) => n + e.pocket, 0);
-    expect(Object.values(audit?.shortfalls ?? {}).reduce((a, b) => a + b, 0)).toBe(kept);
-    expect(roundResolved(s).missing).toBe(kept);
-    expect(roundResolved(s).taken).toBe(splits.reduce((n, e) => n + e.duffel + e.pocket, 0));
+    expect(Object.keys(audit?.duffel ?? {}).sort()).toEqual([...s.rooms].sort());
+    // Three in the Deposit boxes each grab 2 (no room is shared, design §3.1): handed in 0 + 0 + 1.
+    expect(audit?.duffel).toMatchObject({ vault: 3, depositBoxes: 1, office: 2, serverRoom: 2, lobby: 0, security: 0, rooftop: 0 });
+    const handedIn = splits.reduce((n, e) => n + e.duffel, 0);
+    expect(Object.values(audit?.duffel ?? {}).reduce((a, b) => a + b, 0)).toBe(handedIn);
+    expect(roundResolved(s).missing).toBe(roundResolved(s).taken - handedIn);
   });
 });
 
-describe("QA: Inside tip — design §10", () => {
-  it("the tip is about another player and shows that player's real role", () => {
-    const s = resolve(withCard(resolve(game(3, ["lookout", "hacker", "lookout"])), "insideTip"));
-    const tip = find(lastResolution(s), "insideTip")[0];
-    expect(tip?.subject).not.toBe(tip?.player);
-    expect(tip?.role).toBe(s.players[tip?.subject as PlayerId]?.role);
+describe("QA: Inside tip — design §13", () => {
+  it("every tip over whole 3-player games is about another player and shows that player's real role", () => {
+    let tips = 0;
+    for (let i = 0; i < 20; i++) {
+      const end = playThrough(createGame(config(3, { seed: `tip-qa-${i}` })));
+      for (const tip of find(end.log, "insideTip")) {
+        tips++;
+        expect(tip.subject).not.toBe(tip.player);
+        expect(tip.role).toBe(end.players[tip.subject]?.role);
+      }
+    }
+    expect(tips).toBeGreaterThan(0);
   });
 });
 
-describe("QA: when the deck is on — design §10, §8.1", () => {
+describe("QA: when the deck is on — design §13", () => {
   it("round 1 never has a card; events off flips nothing over a whole game", () => {
     const g = createGame(config(4));
     expect(g.card).toBeNull();
     expect(viewFor(g, "p0").card).toBeNull();
     const off = playThrough(createGame(config(4, { eventsEnabled: false })));
     expect(find(off.log, "eventFlipped")).toEqual([]);
-    expect(off.cardsFlipped).toEqual([]);
   });
 
-  it("over a whole game: one card per round from 2 to the last from the full deck (repeats allowed, owner answers 1 Nov), right after each roundStarted (3 and 12 players)", () => {
+  it("over whole games: rounds with a card and rounds without, never two in a round, each right after its roundStarted (3 and 12 players)", () => {
     let repeats = 0;
+    let quiet = 0;
     for (const n of [3, 12]) {
       for (let i = 0; i < 8; i++) {
         const end = playThrough(createGame(config(n, { seed: `exhaust-${n}-${i}` })));
         const flips = find(end.log, "eventFlipped");
-        expect(flips.map((f) => f.round)).toEqual(Array.from({ length: end.round - 1 }, (_, i) => i + 2));
+        const rounds = flips.map((f) => f.round);
+        expect(new Set(rounds).size).toBe(rounds.length);
+        quiet += end.round - 1 - flips.length;
         if (new Set(flips.map((f) => f.card)).size < flips.length) repeats++;
         for (const f of flips) {
           const at = end.log.indexOf(f);
@@ -208,6 +218,7 @@ describe("QA: when the deck is on — design §10, §8.1", () => {
       }
     }
     expect(repeats).toBeGreaterThan(0);
+    expect(quiet).toBeGreaterThan(0);
   });
 });
 

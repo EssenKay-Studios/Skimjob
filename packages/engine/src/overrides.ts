@@ -54,7 +54,7 @@ const POWER_FIELDS: { readonly [K in RolePower["kind"]]: Readonly<Record<string,
   reopen: { perGame: positiveCount },
 };
 
-/** The numbers each event effect may have overridden: its own only. design §10 */
+/** The numbers each event effect may have overridden: its own only. design §13 */
 const EFFECT_FIELDS: { readonly [K in EventEffect["kind"]]: Readonly<Record<string, Rule>> } = {
   roomSurge: { extraCoins: count },
   lockdown: {},
@@ -132,7 +132,7 @@ export function validateOverrides(raw: unknown, job: JobDef, roles: RoleTable = 
   return errors;
 }
 
-/** `events` with the override's numbers. Assumes `validateOverrides` passed. design §10 */
+/** `events` with the override's numbers. Assumes `validateOverrides` passed. design §13 */
 export function overrideEvents(events: EventTable, overrides: ContentOverrides | null | undefined): EventTable {
   if (!overrides?.events) return events;
   const out: Record<string, EventDef> = { ...events };
@@ -145,7 +145,7 @@ export function overrideEvents(events: EventTable, overrides: ContentOverrides |
 
 const eventCache = new WeakMap<GameConfig, EventTable>();
 
-/** The event cards this game plays: the content cards with the config's overrides. design §10, §17.4 */
+/** The event cards this game plays: the content cards with the config's overrides. design §13, §17.4 */
 export function eventsFor(config: Pick<GameConfig, "contentOverrides">): EventTable {
   if (!config.contentOverrides?.events) return EVENTS;
   const cached = eventCache.get(config as GameConfig);

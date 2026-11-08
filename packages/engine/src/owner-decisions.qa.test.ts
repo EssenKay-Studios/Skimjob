@@ -1,6 +1,6 @@
 // QA (PR #21, owner answers 1 Nov; extension.md): the one vote rule at every
 // crew size, the alibi phase (§5.4) with meetings,
-// shakedown windows and the last round, and repeating cards (§10).
+// shakedown windows and the last round, and repeating cards (§13).
 import { BANK_JOB, EVENTS } from "@skimjob/content";
 import { describe, expect, it } from "vitest";
 import type { GameConfig, GameEvent, GameState } from "./types";
@@ -197,7 +197,7 @@ describe("QA game end closes the alibi window — design §5.4 (PR #21 QA repro)
   });
 });
 
-describe("QA repeating cards — design §10", () => {
+describe("QA repeating cards — design §13", () => {
   function cards(seed: string): string[] {
     let s = game(config(4, { seed, eventsEnabled: true }));
     for (let i = 0; i < 40 && s.phase.kind !== "ended"; i++) {
@@ -206,7 +206,7 @@ describe("QA repeating cards — design §10", () => {
       else if (s.phase.kind === "awaitingMeeting" || s.phase.kind === "result") s = pass(s);
       else break;
     }
-    return [...s.cardsFlipped];
+    return s.log.flatMap((e) => (e.type === "eventFlipped" ? [e.card] : []));
   }
   it("same seed → same cards; across seeds cards do repeat within a game", () => {
     expect(cards("deck-a")).toEqual(cards("deck-a"));

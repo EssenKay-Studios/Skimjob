@@ -332,11 +332,11 @@ export interface PowerCut {
   readonly room: RoomId;
 }
 
-// ---------------------------------------------------------------- events deck (§10)
+// ---------------------------------------------------------------- events deck (§13)
 
 /**
  * The round's event card, flipped for everyone at the start of the round
- * (from round 2, when events are on). `room` is the room Lockdown closes, else null. design §10
+ * (from round 2, a 4-in-10 chance, when events are on). `room` is the room Lockdown closes, else null. design §13
  */
 export interface EventFlipped {
   readonly type: "eventFlipped";
@@ -346,7 +346,7 @@ export interface EventFlipped {
   readonly room: RoomId | null;
 }
 
-/** Inside tip: you learn `subject`'s role. design §10 */
+/** Inside tip: you learn `subject`'s role as the card flips. design §13 */
 export interface InsideTip {
   readonly type: "insideTip";
   readonly visibility: PrivateVisibility;
@@ -356,12 +356,12 @@ export interface InsideTip {
   readonly role: RoleId;
 }
 
-/** Audit: the round's shortfall (loot pocketed) per room in play, 0 where none. design §10 */
+/** Audit: the coins that reached the duffel from each room in play this round, 0 where none. design §13 */
 export interface AuditReport {
   readonly type: "auditReport";
   readonly visibility: PublicVisibility;
   readonly round: number;
-  readonly shortfalls: Readonly<Record<RoomId, number>>;
+  readonly duffel: Readonly<Record<RoomId, number>>;
 }
 
 // ---------------------------------------------------------------- alibis (§5.4)

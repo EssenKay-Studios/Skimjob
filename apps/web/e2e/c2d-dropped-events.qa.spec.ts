@@ -1,5 +1,5 @@
 // QA (PR #132, R7 C2d): no dropped event card (Quiet night, Payday, Power cut, Raid rumour,
-// Double-cross) and no Server-room pocket count shows in the UI, at 360 and 1280 wide. design §10
+// Double-cross) and no Server-room pocket count shows in the UI, at 360 and 1280 wide. design §13
 // The Electrician's power cut is live again (design §11.1, §18: "Power cut in the Office", no
 // source; the gallery's "A power cut" label), so only a bare "Power cut", the old card's name, is banned.
 import { expect, test, type Page } from "@playwright/test";

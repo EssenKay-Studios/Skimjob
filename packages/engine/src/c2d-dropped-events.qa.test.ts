@@ -1,7 +1,7 @@
 // QA (PR #132, R7 C2d): the five dropped event cards (Quiet night, Payday, Power cut,
 // Raid rumour, Double-cross) and the Server room's pocket count are gone. Configs naming
-// them are refused without a crash; seeded games only ever flip the four kept cards, one
-// per round from round 2; the Server room is an ordinary room. design §10, §6.2, §17.2
+// them are refused without a crash; seeded games only ever flip the four kept cards, at
+// most one per round from round 2; the Server room is an ordinary room. design §13, §6.2, §19.1
 import { describe, expect, it } from "vitest";
 import { NO_RAIDS } from "./v01-numbers.testkit";
 import { EVENTS, EVENT_DECK, EVENTS_FROM_ROUND, type RoomId } from "@skimjob/content";
@@ -119,7 +119,7 @@ describe("QA: configs naming a dropped card or the old Server-room power are ref
   });
 });
 
-describe("QA: seeded games flip only kept cards, once per round from round 2 (3 / 6 / 12 players)", () => {
+describe("QA: seeded games flip only kept cards, at most once per round from round 2 (3 / 6 / 12 players)", () => {
   for (const n of [3, 6, 12]) {
     it(`${n} players: 70 seeds`, { timeout: 120_000 }, () => {
       const counts = new Map<string, number>();
@@ -130,8 +130,10 @@ describe("QA: seeded games flip only kept cards, once per round from round 2 (3 
         const end = playThrough(createGame(cfg));
         const rounds = end.log.filter((e): e is Extract<GameEvent, { type: "roundStarted" }> => e.type === "roundStarted").map((e) => e.round);
         const f = flips(end);
-        // One card each round from round 2, none in round 1.
-        expect(f.map((e) => e.round)).toEqual(rounds.filter((r) => r >= EVENTS_FROM_ROUND));
+        // At most one card a round, from round 2, none in round 1 (design §13: a 4-in-10 chance).
+        const flipped = f.map((e) => e.round);
+        expect(new Set(flipped).size).toBe(flipped.length);
+        for (const r of flipped) expect(rounds.filter((x) => x >= EVENTS_FROM_ROUND)).toContain(r);
         for (const e of f) {
           expect(KEPT).toContain(e.card);
           counts.set(e.card, (counts.get(e.card) ?? 0) + 1);
@@ -140,7 +142,7 @@ describe("QA: seeded games flip only kept cards, once per round from round 2 (3 
         for (const e of end.log) expect(DROPPED_EVENT_TYPES).not.toContain(e.type);
       }
       // Uniform draw over 4 cards: each about a quarter (generous bounds).
-      expect(total).toBeGreaterThan(300);
+      expect(total).toBeGreaterThan(150);
       for (const card of KEPT) {
         const share = (counts.get(card) ?? 0) / total;
         expect(share, card).toBeGreaterThan(0.17);

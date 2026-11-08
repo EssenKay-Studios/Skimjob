@@ -113,7 +113,7 @@ function buildView(state: GameState, playerId: PlayerId): PlayerView {
     // design §11.1: this round's power cuts are announced to everyone.
     dark: state.dark,
     wanted: state.wanted,
-    // design §10: the card is public.
+    // design §13: the card is public.
     card: state.card,
     voteVisibility: state.config.voteVisibility,
     // design §9.3, §9.4, §9.7: the meeting slot, a called emergency, the pool left and who is protected are public.

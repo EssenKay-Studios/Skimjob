@@ -182,7 +182,7 @@ describe("the deal by crew size — design §11.3, §19.2 seam 8", () => {
   });
 });
 
-describe("events deck content — design §10", () => {
+describe("events deck content — design §13", () => {
   it("has four cards with matching ids, and room cards name rooms of the bank", () => {
     expect(EVENT_DECK).toHaveLength(4);
     expect(EVENT_DECK).not.toContain("policePatrol");

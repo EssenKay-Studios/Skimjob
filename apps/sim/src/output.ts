@@ -17,13 +17,13 @@ export function toCsv(header: readonly string[], rows: readonly (readonly Cell[]
 }
 
 export const GAME_COLUMNS = [
-  "seed", "players", "result", "reason", "endedRound", "honesty", "bankLeft", "capWithBankLeft", "wanted", "raids", "stalls",
+  "seed", "players", "result", "reason", "endedRound", "honesty", "bankLeft", "capWithBankLeft", "wanted", "raids", "stalls", "cards",
   "regularMeetings", "briefings", "emergencies", "shakedowns", "cleanShakedowns", "winners", "rejections",
 ] as const;
 
 export function gameRows(records: readonly GameRecord[]): Cell[][] {
   return records.map((g) => [
-    g.seed, g.players, g.result, g.reason, g.endedRound, g.honesty, g.bankLeft, g.capWithBankLeft, g.wanted, g.raids, g.stalls,
+    g.seed, g.players, g.result, g.reason, g.endedRound, g.honesty, g.bankLeft, g.capWithBankLeft, g.wanted, g.raids, g.stalls, g.cards,
     g.meetings.regular, g.meetings.briefing, g.meetings.emergency, g.shakedowns.length, g.shakedowns.filter((s) => s.clean).length, g.winners.join(" "), g.rejections,
   ]);
 }

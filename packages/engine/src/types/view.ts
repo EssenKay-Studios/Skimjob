@@ -101,7 +101,7 @@ export interface PlayerView {
   readonly dark: readonly RoomId[];
   /** Wanted stars (public). design §5.4 */
   readonly wanted: number;
-  /** This round's event card (public): its id and the room Lockdown closes. design §10 */
+  /** This round's event card (public): its id and the room Lockdown closes. design §13 */
   readonly card: { readonly round: number; readonly id: string; readonly room: RoomId | null } | null;
   readonly voteVisibility: VoteVisibility;
   /** Both are public (design §9.3, §9.4); null when nothing is pending. */

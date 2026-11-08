@@ -1,6 +1,6 @@
 // QA (PR #41): the bank board must be a function of the viewer's own view only.
 // Hidden-information leaks, every phase of a whole game, 2 / 3 / 12 seats,
-// Lockdown from a real card flip, and determinism. design §5, §5.4, §6, §10, §18
+// Lockdown from a real card flip, and determinism. design §5, §5.4, §6, §13, §18
 import {
   handleCommand,
   viewFor,
@@ -176,7 +176,7 @@ describe("QA: board figures come only from the viewer's view (PR #41)", () => {
   });
 });
 
-describe("QA: Lockdown on the board from a real card flip (design §10)", () => {
+describe("QA: Lockdown on the board from a real card flip (design §13)", () => {
   // design §5.4: a raided room is taped off too, while its tape lasts.
   it("tapes off the shut room while planning that round, and only that round, besides raided rooms", () => {
     let found = false;

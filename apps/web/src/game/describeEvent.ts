@@ -127,10 +127,11 @@ function line(e: GameEvent, ctx: DescribeContext): string {
     case "insideTip":
       return `Inside tip${you(e.player) ? "" : ` for ${ctx.name(e.player)}`}: ${who(e.subject)} ${you(e.subject) ? "are" : "is"} the ${roleName(e.role)}.`;
     case "auditReport": {
-      const short = Object.entries(e.shortfalls).filter(([, n]) => n > 0);
-      return short.length === 0
-        ? `Audit of round ${e.round}: nothing missing anywhere.`
-        : `Audit of round ${e.round}: ${list(short.map(([room, n]) => `${roomName(room)} ${n} short`))}.`;
+      // design §13: how many coins reached the duffel from each room.
+      const handedIn = Object.entries(e.duffel).filter(([, n]) => n > 0);
+      return handedIn.length === 0
+        ? `Audit of round ${e.round}: no coins reached the duffel.`
+        : `Audit of round ${e.round}: ${list(handedIn.map(([room, n]) => `${roomName(room)} ${n}`))} reached the duffel.`;
     }
     case "alibiPosted":
       return `${verb(e.player, "say", "says")} ${you(e.player) ? "you were" : "they were"} in the ${roomName(e.room)} in round ${e.round}.`;

@@ -126,7 +126,7 @@ describe("board scene (M2-9 wiring)", () => {
     expect(boardScene(JSON.parse(JSON.stringify(v)) as PlayerView)).toEqual(boardScene(v));
   });
 
-  it("tapes off the room Lockdown shut for that round (design §10)", () => {
+  it("tapes off the room Lockdown shut for that round (design §13)", () => {
     const v = viewFor(createGame(config()), "p1");
     const locked: PlayerView = { ...v, card: { round: 1, id: "lockdown", room: "office" } };
     expect(boardScene(locked).closed).toEqual(["office"]);

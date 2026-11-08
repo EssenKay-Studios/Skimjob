@@ -23,7 +23,7 @@ export interface BoardScene {
   /** Your room on the board. */
   readonly selected: RoomId | null;
   readonly occupants: Readonly<Record<string, readonly BankOccupant[]>>;
-  /** Rooms Lockdown shut for that round. design §10 */
+  /** Rooms Lockdown shut for that round. design §13 */
   readonly closed: readonly RoomId[];
   readonly time: TimeOfDay;
 }

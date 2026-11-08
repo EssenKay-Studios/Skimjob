@@ -1,5 +1,5 @@
 // Leak tests over real scripted games: 3, 5, 9 and 12 players, every vote mode,
-// with the events deck on (design §10).
+// with the events deck on (design §13).
 // After every command, for every player:
 //  - the ledger holds only public events, the case file only their own, and
 //    together they are exactly what canSee() allows during the game;
@@ -9,7 +9,7 @@
 //    leaves their view identical, so nothing hidden — not even a count — leaks;
 //  - after the game the reveal opens everything except others' secret-mode
 //    ballots, which never leak (design §9.5).
-// design §5.1, §9.5, §10, §11, §18
+// design §5.1, §9.5, §11, §13, §18
 import { isDeepStrictEqual } from "node:util";
 import { describe, expect, it } from "vitest";
 import type { GameConfig, GameEvent, GameState, LoggedEvent, Move, PlayerId, PlayerState, PlayerView, VoteChoice, VoteVisibility } from "./types";
@@ -25,7 +25,7 @@ import { fullGrab } from "./grab.testkit";
 
 function config(players: number, voteVisibility: VoteVisibility): GameConfig {
   return {
-    seed: `leak-${players}-${voteVisibility}`,
+    seed: `scrub-${players}-${voteVisibility}`,
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: i % 2 === 1 })),
     job: "bank",
     // design §11.3: every role can be dealt, so Moles and Fixers come up.
@@ -145,7 +145,7 @@ function playGame(players: number, voteVisibility: VoteVisibility, dark = false)
       const role = (s.players[id] as PlayerState).role;
       // One seat is in the Vault every third round (the one the Auditor audits).
       const drawn = id === ids[3 % ids.length] && round % 3 === 1 ? "vault" : (s.rooms[(i + round) % s.rooms.length] as string);
-      const room = drawn === s.card?.room || Object.hasOwn(s.taped, drawn) ? "lobby" : drawn; // design §10 Lockdown, §5.3 taped off
+      const room = drawn === s.card?.room || Object.hasOwn(s.taped, drawn) ? "lobby" : drawn; // design §13 Lockdown, §5.3 taped off
       const canKeep = !NO_COINS.has(room);
       // That seat pockets everything it can, so its shakedown is dirty.
       const greedy = id === ids[3 % ids.length];
@@ -420,7 +420,7 @@ describe("no leaks in real games — design §17.2, §13, §9.5", () => {
     for (const k of ["ring", "reopen", "hide", "blackout", "absolve", "detect"]) expect(seenAbilities, k).toContain(k);
   });
 
-  it("the games above reach every info, vote, role and event-card event (design §10, §11)", () => {
+  it("the games above reach every info, vote, role and event-card event (design §11, §13)", () => {
     for (const t of ["shakedownPending", "shakedownCancelled", "alibisClosed", "roleListShown", "shopDealt"]) expect(seenTypes, t).toContain(t);
     // design §5: bells, raids and cooling.
     for (const t of ["bellsRung", "roomRaided", "bellsCooled"]) expect(seenTypes, t).toContain(t);

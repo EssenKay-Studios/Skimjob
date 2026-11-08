@@ -118,8 +118,12 @@ for (const viewport of VIEWPORTS) {
       // A fresh game in the 1-hour preset: call an emergency, vote in the dialog, see the results.
       const hour = await startGame(page.request, { bots: 5, sessionLength: "1h", voteVisibility: "open" });
       await page.goto(`/game/${hour.id}`);
-      await callEmergency(page);
+      // design §9.3: the crew shares one emergency, and a bot may spend it in round 1's result window (about 1 game in 20);
+      // its meeting opens the same dialog, so only call it while it's still ours to call.
       const dialog = page.getByRole("dialog", { name: "Who's skimming?" });
+      const call = page.getByRole("button", { name: "Call an emergency meeting", disabled: false });
+      await expect(call.or(dialog)).toBeVisible({ timeout: 60_000 });
+      if (await call.isVisible()) await callEmergency(page);
       await expect(dialog).toBeVisible({ timeout: 20_000 });
       await dialog.getByRole("group", { name: "Your vote" }).getByRole("button", { name: "Skip" }).click();
       await dialog.getByRole("button", { name: "Cast vote" }).click();

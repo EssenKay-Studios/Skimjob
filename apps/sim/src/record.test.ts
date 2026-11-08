@@ -122,6 +122,12 @@ describe("recordGame — a scripted game", () => {
     expect(p2).toMatchObject({ personality: "honest", grabbed: 18, pocketed: 0, stash: 21 });
   });
 
+  it("counts the event cards flipped (design §13)", () => {
+    expect(rec.cards).toBe(0); // events off
+    const flipped: GameEvent = { type: "eventFlipped", visibility: { kind: "public" }, round: 2, card: "audit", room: null };
+    expect(recordGame({ ...s, log: [...s.log, flipped, { ...flipped, round: 5 }] }, ["greedy", "opportunist", "honest"]).cards).toBe(2);
+  });
+
   it("refuses a game that isn't over", () => {
     expect(() => recordGame(lookouts(3), ["honest", "honest", "honest"])).toThrow(/isn't over/);
   });
