@@ -235,7 +235,7 @@ describe("QA #55 reveal summary vs the engine's truth — design §8, §15.5", (
     // Content bells (no R6 pins), so raids happen (design §5.3), and the Rooftop escapees win a bust (§5.5).
     audit(play(config(8, "qa55-8-c-10", { contentOverrides: null })), cov);
     // Content numbers and a greedy crew: sunk by theft below the honesty line, and a Mole or Fixer on top wins it (design §8.4).
-    audit(play(config(5, "qa55-greedy-5-14", { contentOverrides: null }), [], ["greedy", "random"]), cov);
+    audit(play(config(5, "qa55-greedy-5-0", { contentOverrides: null }), [], ["greedy", "random"]), cov);
     for (const k of MUST) expect(cov, k).toContain(k);
   }, 120_000);
 
