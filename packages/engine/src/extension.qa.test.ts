@@ -1,9 +1,9 @@
 // QA (PR #50, R6a): adversarial tests against docs/extension.md, the R6 rules spec.
 // Written against the spec, not the implementation: tokens and the shop, the
 // win rule, "between meetings" windows, shakedowns against the share, the one
-// vote rule, whole-number scoring, camera offline.
+// vote rule, whole-number scoring.
 import { describe, expect, it } from "vitest";
-import { PERKS, ROLES, SHOP_COLUMNS, type PerkId } from "@skimjob/content";
+import { PERKS, SHOP_COLUMNS, type PerkId } from "@skimjob/content";
 import { handleThroughAlibis } from "./alibis.testkit";
 import { handleCommand } from "./handle";
 import type { GameConfig, GameEvent, GameState, PlayerId, PlayerState } from "./types";
@@ -21,11 +21,10 @@ function config(n: number, extra: Partial<GameConfig> = {}): GameConfig {
     seed: "ext-qa",
     players: Array.from({ length: n }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: [],
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     ...extra,
-    contentOverrides: { ...R6_COINS, ...extra.contentOverrides }, // R6 room yields as coins (R6 role rules)
+    contentOverrides: { ...R6_COINS, ...extra.contentOverrides }, // R6 room yields as coins (the scripts' numbers)
   };
 }
 
@@ -35,12 +34,12 @@ interface Setup {
   readonly tokens?: Readonly<Record<PlayerId, number>>;
 }
 
-/** A new game with the setup events rewritten as `setup` asks (seat i gets roles[i], Rookie if missing). */
+/** A new game with the setup events rewritten as `setup` asks (seat i gets roles[i], a Lookout if missing). */
 function game(cfg: GameConfig, setup: Setup = {}): GameState {
   let seat = 0;
   const log = setupEvents(cfg).flatMap((e): GameEvent[] => {
     if (e.type === "roleDealt") {
-      const role = setup.roles ? (setup.roles[seat] ?? "rookie") : e.role;
+      const role = setup.roles ? (setup.roles[seat] ?? "lookout") : e.role;
       seat++;
       const earned: GameEvent[] = Array.from({ length: setup.tokens?.[e.player] ?? 0 }, () => ({ type: "tokenEarned", visibility: privateTo(e.player), player: e.player, trigger: "watchedShakenDirty" }));
       return [{ ...e, role }, ...earned];
@@ -104,7 +103,7 @@ const withPlayers = (s: GameState, patch: Record<PlayerId, Partial<PlayerState>>
 describe("tokens: every trigger (extension.md \"Roles\", owner rulings 1, 4, 5, 6, gap-fills \"Token triggers\")", () => {
   it("tokens are private: earning one changes no other player's view", () => {
     const s = game(config(5), { roles: ["hacker"] });
-    const after = applyEvent(s, { type: "tokenEarned", visibility: privateTo("p0"), player: "p0", trigger: "loopHidPocketer" });
+    const after = applyEvent(s, { type: "tokenEarned", visibility: privateTo("p0"), player: "p0", trigger: "watchedShakenDirty" });
     expect(views(after, ["p1", "p2", "p3", "p4"])).toEqual(views(s, ["p1", "p2", "p3", "p4"]));
     expect(viewFor(after, "p0").me.roleState.tokens).toBe(1);
     // Nor is any other player's token count anywhere in a view.
@@ -180,8 +179,8 @@ describe("buyPerk (extension.md \"Tokens and the perk shop\")", () => {
   });
 });
 
-describe("the win rule (extension.md \"Winning and losing\", Build notes \"Win rule\")", () => {
-  const base = () => game(config(4), { roles: ["rookie", "hacker", "mole"] });
+describe("the win rule (design §8)", () => {
+  const base = () => game(config(4), { roles: ["lookout", "hacker", "mole"] });
   const flat = { stash: 10 };
 
   it("success: the top group wins, whatever the roles; full ties share", () => {
@@ -194,22 +193,22 @@ describe("the win rule (extension.md \"Winning and losing\", Build notes \"Win r
     expect(outcomeFor(s, null).winners).toEqual(["p0", "p1", "p2"]);
   });
 
-  it("sunk by theft: only top-group members whose role wins on it; a ★ outside the top group never wins", () => {
+  it("sunk by theft: only the Mole or Fixer at the top wins; one outside the top group never does (design §8.4)", () => {
     const tied = withPlayers(base(), { p0: flat, p1: flat, p2: flat, p3: flat });
-    // Top group = all four; only the Mole (★) wins a heist sunk by theft (design §8.4).
+    // Top group = all four; only the Mole wins a heist sunk by theft (design §8.4).
     expect([...outcomeFor(tied, "theft").winners].sort()).toEqual(["p2"]);
-    const rookieTop = withPlayers(base(), { p0: { ...flat, stash: 30 }, p1: flat, p2: flat, p3: flat });
-    const out = outcomeFor(rookieTop, "theft");
+    const lookoutTop = withPlayers(base(), { p0: { ...flat, stash: 30 }, p1: flat, p2: flat, p3: flat });
+    const out = outcomeFor(lookoutTop, "theft");
     expect(out.winners).toEqual([]);
     expect(out).toMatchObject({ result: "failed", reason: "theft" });
     // The full ranking is still shown on a failure.
     expect(out.ranking.map((r) => r.player)).toEqual(["p0", "p1", "p2", "p3"]);
   });
 
-  it("a bust: the Mole's ★ doesn't help; only the escapees with the biggest stash among them win (design §5.5, §8.3)", () => {
+  it("a bust: the Mole's own rule doesn't help; only the escapees with the biggest stash among them win (design §5.5, §8.3)", () => {
     const tied = withPlayers(base(), { p0: flat, p1: flat, p2: flat, p3: { ...flat, stash: 30 } });
-    expect(outcomeFor(tied, "bust", undefined, ["p0", "p2"]).winners).toEqual(["p0", "p2"]);
-    expect(outcomeFor(tied, "bust", undefined, []).winners).toEqual([]);
+    expect(outcomeFor(tied, "bust", ["p0", "p2"]).winners).toEqual(["p0", "p2"]);
+    expect(outcomeFor(tied, "bust", []).winners).toEqual([]);
   });
 });
 
@@ -244,90 +243,19 @@ describe("shakedowns against the share (design §9.6)", () => {
 });
 
 describe("between-meetings windows (extension.md Build notes \"Between meetings\", gap-fills 2 and 7)", () => {
-  const loop = (p: string, room = "vault") => mv(p, "lobby", 0, { ability: { kind: "loopCameras", room } });
+  const hide = (p: string, room = "vault") => mv(p, "lobby", 0, { ability: { kind: "hide", room } });
 
   it("a once-between-meetings power stays spent through an emergency meeting and recharges only at the regular meeting (design §9.1, §11.2)", () => {
     // A bank of 40: two-thirds is gone in round 3, after the emergency (design §9.1).
     let s = game(config(5, { contentOverrides: { bank: { coinsPerPlayer: 8 } } }), { roles: ["hacker"] });
-    s = run(s, loop("p0"), ROUND);
-    expect(handleCommand(s, loop("p0")).ok).toBe(false);
+    s = run(s, hide("p0"), ROUND);
+    expect(handleCommand(s, hide("p0")).ok).toBe(false);
     s = closeMeeting(withEmergency(s, "p1"));
     expect(s.phase.kind).toBe("planning");
-    expect(handleCommand(s, loop("p0")).ok).toBe(false);
+    expect(handleCommand(s, hide("p0")).ok).toBe(false);
     s = closeMeeting(toRegularMeeting(s));
     expect(s.phase.kind).toBe("planning");
-    expect(handleCommand(s, loop("p0")).ok).toBe(true);
+    expect(handleCommand(s, hide("p0")).ok).toBe(true);
   });
 
-});
-
-describe("\"camera offline\" (extension.md \"Situations\": the Hacker's loop)", () => {
-  it("a looped feed reads the same whether the room was empty, visited, or pocketed in", () => {
-    const watched = (visitor: object | null) => {
-      let s = game(config(4), { roles: ["hacker", "rookie"] });
-      s = run(s, mv("p0", "lobby", 0, { ability: { kind: "loopCameras", room: "vault" } }), mv("p1", "security", 0, { watch: "vault" }));
-      if (visitor) s = run(s, visitor);
-      s = run(s, ROUND);
-      return viewFor(s, "p1").caseFile.map((l) => l.event).filter((e) => e.type === "roomWatched");
-    };
-    const empty = watched(null);
-    expect(empty).toEqual([expect.objectContaining({ offline: true, seen: [] })]);
-    expect(watched(mv("p2", "vault"))).toEqual(empty);
-    expect(watched(mv("p2", "vault", 6))).toEqual(empty);
-  });
-});
-
-describe("the Detective's line is the shakedown's: anything above the share (design §9.6)", () => {
-  it("at the share reads clean, one coin above reads dirty", () => {
-    for (const [stash, dirty] of [[0, false], [1, true]] as const) {
-      const s = run(withPlayers(game(config(5), { roles: ["detective"] }), { p2: { stash } }), use("p0", { kind: "checkStash", target: "p2" }));
-      expect(ofType(s.log, "abilityResolved").at(-1)?.ability).toEqual({ kind: "checkStash", target: "p2", dirty });
-    }
-  });
-});
-
-describe("QA re-check (PR #50 fixes): locked in", () => {
-
-  const ALL = Object.keys(ROLES) as GameConfig["rolePool"][number][];
-  const cfgFor = (n: number, seed: string, extra: Partial<GameConfig>) => config(n, { seed, rolePool: ALL, ...extra });
-
-  it("Balanced at 3 players: the Possible list names only roles that can be dealt", () => {
-    for (const n of [3]) {
-      for (const pool of [ALL, []]) {
-        for (const roleList of ["possible", "hidden"] as const) {
-          const dealt = new Set<string>();
-          let listed: readonly string[] | null = null;
-          for (let i = 0; i < 150; i++) {
-            const g = createGame(cfgFor(n, `bal-${n}-${i}`, { rolePool: pool, roleList }));
-            for (const p of Object.values(g.players)) dealt.add(p.role);
-            const shown = viewFor(g, "p0").roleList;
-            if (roleList === "possible") {
-              expect(shown?.roles).toBeDefined();
-              if (listed) expect(shown?.roles).toEqual(listed);
-              listed = shown!.roles;
-            }
-          }
-          expect(dealt.has("mole")).toBe(false);
-          if (listed) {
-            expect(listed).not.toContain("mole");
-            // Everything dealt is listed; nothing listed is undealable (no Lone wolf or Wildcard at 3p Balanced).
-            for (const r of dealt) expect(listed, r).toContain(r);
-            for (const r of listed) expect(ROLES[r as keyof typeof ROLES]?.tag, r).toBe("teamPlayer");
-          }
-        }
-      }
-    }
-  });
-
-  it("the fix doesn't over-reach: Truly random at 3p and Balanced at 4p+ can deal a Mole and list it", () => {
-    for (const [n, deal] of [[3, "random"], [4, "balanced"], [12, "balanced"]] as const) {
-      let moles = 0;
-      for (let i = 0; i < 150; i++) {
-        const g = createGame(cfgFor(n, `over-${n}-${i}`, { deal, roleList: "possible" }));
-        expect(viewFor(g, "p0").roleList?.roles).toContain("mole");
-        if (Object.values(g.players).some((p) => p.role === "mole")) moles++;
-      }
-      expect(moles, `${n}p ${deal}`).toBeGreaterThan(0);
-    }
-  });
 });

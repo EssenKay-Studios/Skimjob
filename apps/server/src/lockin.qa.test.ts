@@ -58,7 +58,7 @@ interface Human {
   readonly player: string;
 }
 /** `people` signed-in seats (host first), then `bots` bot seats. */
-async function startGame(people: number, bots: number, settings: Partial<LobbySettings> = { sessionLength: "15m", deck: "starter", eventsEnabled: false }) {
+async function startGame(people: number, bots: number, settings: Partial<LobbySettings> = { sessionLength: "15m", eventsEnabled: false }) {
   const host = (await post("/auth/guest", null, { nickname: "Host" })).session!;
   const game = (await post("/games", host, { settings })).body;
   const sessions = [host];

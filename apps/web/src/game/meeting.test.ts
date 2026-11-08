@@ -2,7 +2,6 @@
 // only what the view allows. docs/m2-plan.md M2-7; design §11.1–§11.5
 import {
   applyEvent,
-  createGame,
   handleCommand,
   privateTo,
   viewFor,
@@ -13,6 +12,7 @@ import {
   type SystemCommand,
   type VoteVisibility,
 } from "@skimjob/engine";
+import { createGame } from "./deal.testkit";
 import { describe, expect, it } from "vitest";
 import {
   abilityOffers,
@@ -28,16 +28,14 @@ import {
 } from "./meeting";
 
 /** A new game with a pinned shop of no Shield, whatever the seed: a Shield opens a shakedown window at every meeting. */
-const newGame = (cfg: GameConfig): GameState => ({ ...createGame(cfg), shop: ["peek", "alibi", "extraVote"] });
+const newGame = (cfg: GameConfig, roles: readonly string[] = []): GameState => ({ ...createGame(cfg, roles), shop: ["peek", "alibi", "extraVote"] });
 
 const config = (mode: VoteVisibility, extra: Partial<GameConfig> = {}): GameConfig => ({
   seed: "meeting-ui",
   players: ["Ana", "Ben", "Cy", "Dee", "Eve"].map((name, i) => ({ id: `p${i + 1}`, name, isBot: false })),
   job: "bank",
-  rolePool: ["rookie"],
   eventsEnabled: false,
   voteVisibility: mode,
-  uniqueRoles: false,
   ...extra,
 });
 
@@ -57,8 +55,8 @@ const close = (id: string): SystemCommand => ({ type: "advance", deadline: { kin
 const RESULT_WINDOW: SystemCommand[] = [{ type: "advance", deadline: { kind: "round", round: 1 } }, { type: "advance", deadline: { kind: "alibis", round: 1 } }];
 
 /** p2 calls an emergency meeting; p1 (the viewer) votes Ben, p3 and p4 vote Ben, p5 skips. */
-function voting(mode: VoteVisibility, extra: Partial<GameConfig> = {}): GameState {
-  let s = newGame(config(mode, extra));
+function voting(mode: VoteVisibility, extra: Partial<GameConfig> = {}, roles: readonly string[] = []): GameState {
+  let s = newGame(config(mode, extra), roles);
   s = run(s, ...RESULT_WINDOW, { type: "callEmergency", player: "p2" }, open("emergency-1"));
   return run(s, shake("p1", "p2"), shake("p3", "p2"), shake("p4", "p2"), skip("p5"));
 }
@@ -141,8 +139,8 @@ describe("the vote window per vote mode (design §11.2)", () => {
     expect(openMeetingOf(viewFor(s, "p1"))).toMatchObject({ mine: { kind: "shakedown", target: "p3" }, fromSealed: false });
   });
 
-  it("the Smooth Talker's double weight never shows in the live tally (design §8, §11.2)", () => {
-    const s = voting("open", { rolePool: ["smoothTalker"] });
+  it("the Smooth Talker's double weight never shows in the live tally (design §9.5, §11.1)", () => {
+    const s = voting("open", {}, ["smoothTalker", "smoothTalker", "smoothTalker", "smoothTalker", "smoothTalker"]);
     expect(openMeetingOf(viewFor(s, "p1"))!.live).toEqual({ skip: 1, targets: { p2: 3 } });
     expect(abilityOffers(viewFor(s, "p1"))).toEqual([]);
   });
@@ -199,10 +197,10 @@ describe("scheduling and emergencies (design §9.3, §9.4)", () => {
 });
 
 describe("the shakedown window and results (design §9.6)", () => {
-  const smoothTalkerMeeting = (mode: VoteVisibility = "hiddenThenRevealed") => run(voting(mode, { rolePool: ["smoothTalker"] }), close("emergency-1"));
+  const smoothTalkerMeeting = (mode: VoteVisibility = "hiddenThenRevealed") => run(voting(mode, {}, ["smoothTalker", "smoothTalker", "smoothTalker", "smoothTalker", "smoothTalker"]), close("emergency-1"));
 
   it("results: a clean shakedown takes nothing; the banner stays until the next round resolves (design §9.6)", () => {
-    // Starter roles: no window, the shakedown lands as the meeting closes.
+    // No Shield in the shop: no window, the shakedown lands as the meeting closes.
     const s = run(voting("hiddenThenRevealed"), close("emergency-1"));
     const o = latestOutcome(viewFor(s, "p1"))!;
     expect(o).toMatchObject({ kind: "emergency", deciding: false, fresh: true, cancelled: false });
@@ -230,7 +228,7 @@ describe("role claims (R4b, design §11.3)", () => {
     const before = claimState(viewFor(s, "p1"))!;
     expect(before.stretch).toBe(1);
     expect(before.claimed).toBeNull();
-    expect(before.options.map((o) => o.id)).toEqual(expect.arrayContaining(["lookout", "rookie", "mole"]));
+    expect(before.options.map((o) => o.id)).toEqual(expect.arrayContaining(["lookout", "locksmith", "mole"]));
     s = run(s, { type: "claimRole", player: "p1", role: "lookout" });
     expect(claimState(viewFor(s, "p1"))!.claimed).toBe("lookout");
     expect(claimState(viewFor(s, "p2"))!.claimed).toBeNull();

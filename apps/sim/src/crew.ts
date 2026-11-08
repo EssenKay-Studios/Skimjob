@@ -1,5 +1,5 @@
 // Building each simulated game: seats, the bot mix, and the game config.
-// design §17.4 (inputs: player count, bot mix, job, role pool, overrides, seed)
+// design §19.3 (inputs: crew size, bot mix, job, overrides, seed)
 import { PERSONALITIES, type PersonalityId } from "@skimjob/bots";
 import { seedRng, shuffle, type ContentOverrides, type GameConfig, type PlayerSeat } from "@skimjob/engine";
 import type { MixEntry, SimOptions } from "./args";
@@ -44,9 +44,6 @@ export function setupGame(options: SimOptions, players: number, index: number): 
     seed,
     players: seats,
     job: options.job,
-    rolePool: options.rolePool,
-    deck: options.deck,
-    deal: options.deal,
     roleList: options.roleList,
     eventsEnabled: options.eventsEnabled,
     voteVisibility: options.voteVisibility,

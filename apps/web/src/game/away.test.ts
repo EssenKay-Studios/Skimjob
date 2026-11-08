@@ -1,7 +1,8 @@
 // "While you were away" (design §13), from real engine views. M2-10 acceptance:
 // recaps for a quiet round, a meeting and a shakedown; nothing
 // in a recap comes from outside the viewer's own view.
-import { createGame, eventsSince, handleCommand, viewFor, type GameConfig, type GameState, type PlayerCommand, type PlayerId, type SystemCommand } from "@skimjob/engine";
+import { eventsSince, handleCommand, viewFor, type GameConfig, type GameState, type PlayerCommand, type PlayerId, type SystemCommand } from "@skimjob/engine";
+import { createGame } from "./deal.testkit";
 import { describe, expect, it } from "vitest";
 import { nextUp, recap, recapItems, RECAP_MAX_LINES, topSeq } from "./away";
 import { namesOf } from "./hud";
@@ -11,10 +12,8 @@ const config = (n = 5, extra: Partial<GameConfig> = {}): GameConfig => ({
   seed: "away-test",
   players: ["Ana", "Ben", "Cy", "Dee", "Eve", "Fay", "Gus", "Hal", "Ivy", "Jo", "Kit", "Lu"].slice(0, n).map((name, i) => ({ id: `p${i + 1}`, name, isBot: false })),
   job: "bank",
-  rolePool: ["rookie"],
   eventsEnabled: false,
   voteVisibility: "hiddenThenRevealed",
-  uniqueRoles: false,
   // Everyone visits the Office each round; a quiet alarm keeps raids (design §5) out of these recaps.
   contentOverrides: { alarm: { bulbs: 1000 } },
   ...extra,
@@ -181,8 +180,8 @@ function step(s: GameState): GameState {
 describe("leaks: a recap holds only the viewer's own view (design §13, §17.2)", () => {
   for (const n of [3, 5, 9]) {
     it(`whole game at ${n} seats: every line comes from the viewer's ledger or own case file`, () => {
-      const roles = n >= 5 ? ["rookie", "lookout", "priest", "hacker", "auditor", "detective"] : ["rookie"];
-      let s = createGame(config(n, { rolePool: roles, eventsEnabled: true }));
+      const roles = n >= 5 ? ["locksmith", "lookout", "priest", "hacker", "auditor", "detective"] : [];
+      let s = createGame(config(n, { eventsEnabled: true }), roles);
       const states = [s];
       for (let guard = 0; guard < 300 && s.phase.kind !== "ended"; guard++) states.push((s = step(s)));
       expect(s.phase.kind).toBe("ended");

@@ -4,7 +4,7 @@
 // time — session length, round deadlines, meeting window length, quiet hours,
 // pause/extend — belongs to the server's scheduler, because the engine has no
 // clock (CLAUDE.md "Engine rules"; design §4.1).
-import type { DeckId, EventId, JobId, PerkId, RoleId, RoomId } from "@skimjob/content";
+import type { EventId, JobId, PerkId, RoleId, RoomId } from "@skimjob/content";
 
 /** Stable id for a seat. Unique within a game. */
 export type PlayerId = string;
@@ -16,10 +16,7 @@ export interface PlayerSeat {
   readonly isBot: boolean;
 }
 
-/** How seats are dealt: a fixed mix per crew size, or uniformly from the deck. extension.md "Host settings" */
-export type DealStyle = "balanced" | "random";
-
-/** The role list shown to players: every role dealt, every role that could be, or nothing. extension.md "Host settings" */
+/** The role list shown to players: every role dealt (with counts), every role that could be, or nothing. design §11.3 */
 export type RoleListSetting = "exact" | "possible" | "hidden";
 
 /** design §11.2 */
@@ -28,29 +25,13 @@ export type VoteVisibility = "hiddenThenRevealed" | "open" | "secret";
 export interface GameConfig {
   /** Seeds the engine RNG. Never sent to players before the reveal. design §17.2 */
   readonly seed: string;
-  /** Seat order is significant only for determinism, never for rules. 2–12 seats. */
+  /** Seat order is significant only for determinism, never for rules. 3–12 seats. */
   readonly players: readonly PlayerSeat[];
   readonly job: JobId;
-  /**
-   * The host's per-role picks: when not empty, exactly these roles make the
-   * deck (any of the 20; the preset is ignored). Empty means the `deck`
-   * preset. extension.md "Decks"
-   */
-  readonly rolePool: readonly RoleId[];
-  /** Deck preset; absent means Standard. extension.md "Decks" */
-  readonly deck?: DeckId;
-  /** Absent means Balanced. extension.md "Host settings" */
-  readonly deal?: DealStyle;
-  /** Absent means Exact (owner ruling 8). extension.md "Host settings" */
+  /** Absent means Exact. design §11.3, §16 */
   readonly roleList?: RoleListSetting;
   readonly eventsEnabled: boolean;
   readonly voteVisibility: VoteVisibility;
-  /**
-   * Each deck role is dealt at most once, Rookies filling the rest (true, the
-   * default when absent); false draws with replacement, so roles may repeat
-   * (never more than one Mole). design §8.1, §15
-   */
-  readonly uniqueRoles?: boolean;
   /**
    * Simulator / playtest tuning: replaces some of the job's and roles' numbers
    * for this game only. Absent or null plays the content as shipped. Numbers
@@ -69,11 +50,13 @@ export interface RoomOverride {
 /**
  * New numbers for one role. A role may only set its own power's numbers
  * (`extraRooms`, `perStretch`, `weight`, …) and, for a role with a
- * reward, `rewardCount` (tokens per trigger). design §8, §8.3
+ * reward, `rewardCount` (tokens per trigger). design §11
  */
 export interface RoleOverride {
   readonly extraRooms?: number;
+  readonly fewerRings?: number;
   readonly perStretch?: number;
+  readonly perGame?: number;
   readonly weight?: number;
   /** Tokens each reward trigger grants. design §8.3 */
   readonly rewardCount?: number;

@@ -4,7 +4,6 @@
 // The names can switch to 24-character ones (the cap; "W" is the widest glyph
 // and has no break points) to check nothing pushes past a phone's edge.
 import { useMemo, useState, type ReactNode } from "react";
-import { ROLES } from "@skimjob/content";
 import { PUBLIC, privateTo, revealSummary, type GameEvent, type Outcome, type RankEntry } from "@skimjob/engine";
 import { Reveal } from "../components/Reveal";
 import { Segmented } from "../components/Segmented";
@@ -47,27 +46,26 @@ const resolved = (round: number, bank: number, taken: number, missing: number, r
   honesty: { reached, taken: 64 - bank },
 });
 
-/** Ana (Rookie, you), Ben (Mole), Cy (Hacker), Dot (Detective): three rounds and a meeting. */
+/** Ana (Locksmith, you), Ben (Mole), Cy (Hacker), Dot (Detective): three rounds and a meeting. */
 const LOG: GameEvent[] = [
-  { type: "roleDealt", visibility: privateTo("p1"), player: "p1", role: "rookie" },
+  { type: "roleDealt", visibility: privateTo("p1"), player: "p1", role: "locksmith" },
   { type: "roleDealt", visibility: privateTo("p2"), player: "p2", role: "mole" },
   { type: "roleDealt", visibility: privateTo("p3"), player: "p3", role: "hacker" },
   { type: "roleDealt", visibility: privateTo("p4"), player: "p4", role: "detective" },
   { type: "shopDealt", visibility: PUBLIC, perks: ["peek", "shield", "tail"] },
   { type: "roundStarted", visibility: PUBLIC, round: 1 },
-  { type: "abilityResolved", visibility: privateTo("p3"), player: "p3", round: 1, ability: { kind: "loopCameras", room: "vault" } },
   split("p1", 1, "security", 0, 0),
   split("p2", 1, "vault", 6, 3),
   split("p3", 1, "office", 4, 0),
   split("p4", 1, "vault", 6, 2),
-  { type: "roomWatched", visibility: privateTo("p1"), player: "p1", round: 1, source: "security", room: "vault", seen: [], offline: true },
+  { type: "abilityResolved", visibility: privateTo("p3"), player: "p3", round: 1, ability: { kind: "hide", room: "vault", bulbs: 3 } },
+  { type: "roomWatched", visibility: privateTo("p1"), player: "p1", round: 1, source: "security", room: "vault", seen: ["p2", "p4"], offline: false },
   resolved(1, 48, 16, 5, 11),
-  { type: "tokenEarned", visibility: privateTo("p3"), player: "p3", trigger: "loopHidPocketer" },
   { type: "alibiPosted", visibility: PUBLIC, player: "p2", round: 1, room: "lobby" },
   { type: "alibiPosted", visibility: PUBLIC, player: "p3", round: 1, room: "office" },
   { type: "roundStarted", visibility: PUBLIC, round: 2 },
   { type: "abilityResolved", visibility: privateTo("p2"), player: "p2", round: 2, ability: { kind: "ring", room: "office" } },
-  { type: "abilityResolved", visibility: privateTo("p4"), player: "p4", round: 2, ability: { kind: "checkStash", target: "p2", dirty: true } },
+  { type: "abilityResolved", visibility: privateTo("p4"), player: "p4", round: 2, ability: { kind: "detect", round: 1, target: "p2", grabbed: 6 } },
   split("p1", 2, "office", 4, 1),
   split("p2", 2, "vault", 6, 4),
   split("p3", 2, "lobby", 2, 0),
@@ -91,13 +89,13 @@ const LOG: GameEvent[] = [
 const rank = (player: string, role: string, stash: number): RankEntry => ({ player, role, stash });
 
 type Ending = "success" | "bust" | "theft";
-const BEN_TOP = [rank("p2", "mole", 12), rank("p3", "hacker", 5), rank("p4", "detective", 2), rank("p1", "rookie", 1)];
+const BEN_TOP = [rank("p2", "mole", 12), rank("p3", "hacker", 5), rank("p4", "detective", 2), rank("p1", "locksmith", 1)];
 const OUTCOMES: Record<Ending, Outcome> = {
   success: { result: "success", ranking: BEN_TOP, winners: ["p2"], getaway: 1 },
   // design §5.5: a bust in round 3; only Ana was on the Rooftop.
   bust: { result: "failed", reason: "bust", escapees: ["p1"], ranking: BEN_TOP, winners: ["p1"] },
   // Here Ben hands rounds 2 and 3 in and Cy pockets round 3's grab, so the Hacker (no ★) leads and nobody wins.
-  theft: { result: "failed", reason: "theft", ranking: [rank("p3", "hacker", 6), rank("p2", "mole", 3), rank("p4", "detective", 2), rank("p1", "rookie", 1)], winners: [], getaway: 1 },
+  theft: { result: "failed", reason: "theft", ranking: [rank("p3", "hacker", 6), rank("p2", "mole", 3), rank("p4", "detective", 2), rank("p1", "locksmith", 1)], winners: [], getaway: 1 },
 };
 const logFor = (ending: Ending): GameEvent[] =>
   ending !== "theft"
@@ -116,7 +114,7 @@ export function RevealSection() {
   const [ending, setEnding] = useState<Ending>("success");
   const [long, setLong] = useState(false);
   const ctx = useMemo(() => ctxFor(long ? LONG_NAMES : NAMES), [long]);
-  const summary = useMemo(() => revealSummary(logFor(ending), OUTCOMES[ending], { roles: ROLES }), [ending]);
+  const summary = useMemo(() => revealSummary(logFor(ending), OUTCOMES[ending]), [ending]);
   return (
     <Section id="reveal" title="End-of-game reveal" note="M2-11 · role envelopes, who won and why, round timeline with every hidden action">
       <Segmented

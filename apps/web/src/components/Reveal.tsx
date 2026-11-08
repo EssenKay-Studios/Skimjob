@@ -26,7 +26,7 @@ import {
   stashTrend,
   triggerText,
   whyText,
-  winsOnText,
+  starText,
 } from "../game/reveal";
 import { Button } from "./Button";
 import { Chip } from "./Chip";
@@ -98,7 +98,7 @@ function RoleEnvelope({
 }) {
   const you = s.player === ctx.me;
   const name = ctx.name(s.player).replace(/^Bot · /, "");
-  const star = winsOnText(s.winsOn);
+  const star = starText(s.role);
   const tokens = countBy(s.tokens.map(triggerText));
   const cls = [
     "reveal__card",

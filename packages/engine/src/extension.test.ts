@@ -1,5 +1,5 @@
 // The Extension rules not covered by a role's own tests: the perk shop, buying
-// perks, "camera offline" and the role list.
+// perks, and the role list (design §11.3).
 // docs/extension.md (THE spec for R6a)
 import { describe, expect, it } from "vitest";
 import { PERKS, ROLES, SHOP_COLUMNS, SHOP_RULES, type PerkId } from "@skimjob/content";
@@ -7,7 +7,7 @@ import { handleThroughAlibis } from "./alibis.testkit";
 import { handleCommand } from "./handle";
 import type { GameConfig, GameEvent, GameState, PlayerId } from "./types";
 import { PUBLIC, privateTo } from "./types";
-import { createGame, dealableRoles, setupEvents } from "./setup";
+import { createGame, setupEvents } from "./setup";
 import { replay } from "./reduce";
 import { viewFor } from "./view";
 import { ranking } from "./end";
@@ -18,7 +18,6 @@ function config(n: number, extra: Partial<GameConfig> = {}): GameConfig {
     seed: "extension",
     players: Array.from({ length: n }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: [],
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     ...extra,
@@ -26,7 +25,7 @@ function config(n: number, extra: Partial<GameConfig> = {}): GameConfig {
 }
 
 interface Setup {
-  /** Seat i is dealt roles[i] (Rookie if missing). */
+  /** Seat i is dealt roles[i] (a Lookout if missing: its power acts only when used). */
   readonly roles?: readonly string[];
   /** The shop, replacing the dealt one. */
   readonly shop?: readonly PerkId[];
@@ -39,7 +38,7 @@ function game(cfg: GameConfig, setup: Setup = {}): GameState {
   let seat = 0;
   const log = setupEvents(cfg).flatMap((e): GameEvent[] => {
     if (e.type === "roleDealt") {
-      const role = setup.roles ? (setup.roles[seat] ?? "rookie") : e.role;
+      const role = setup.roles ? (setup.roles[seat] ?? "lookout") : e.role;
       seat++;
       const tokens = setup.tokens?.[e.player] ?? 0;
       const earned: GameEvent[] = Array.from({ length: tokens }, () => ({ type: "tokenEarned", visibility: privateTo(e.player), player: e.player, trigger: "watchedShakenDirty" }));
@@ -135,55 +134,27 @@ describe("buying perks — extension.md \"Tokens and the perk shop\"", () => {
     // A bust after round 1 (a one-bulb bell, one star): the Vault rings.
     const quick = { contentOverrides: { alarm: { bulbs: 1, bustStars: 1 } } };
     const plain = game(config(3, quick));
-    const rich = game(config(3, quick), { roles: [plain.players.p0?.role ?? "rookie", plain.players.p1?.role ?? "rookie", plain.players.p2?.role ?? "rookie"], tokens: { p0: 5 } });
+    const rich = game(config(3, quick), { roles: [plain.players.p0?.role ?? "lookout", plain.players.p1?.role ?? "lookout", plain.players.p2?.role ?? "lookout"], tokens: { p0: 5 } });
     const end = (s: GameState) => run(s, mv("p0", "vault"), ROUND);
     expect(end(plain).phase.kind).toBe("ended");
     expect(ranking(end(rich)).map((r) => r.stash)).toEqual(ranking(end(plain)).map((r) => r.stash));
   });
 });
 
-describe("what the deal can give — extension.md \"Host settings\" (QA on R6a)", () => {
-  it("Balanced at 3 players deals no Lone wolf or Wildcard: the Possible list names only Team players", () => {
-    for (const n of [3]) {
-      for (const roleList of ["possible", "hidden"] as const) {
-        const cfg = config(n, { deck: "everything", roleList, eventsEnabled: true });
-        expect(dealableRoles(cfg)).not.toContain("mole");
-        const s = createGame(cfg);
-        if (roleList === "possible") {
-          const listed = viewFor(s, "p0").roleList?.roles ?? [];
-          expect(listed.length).toBeGreaterThan(0);
-          for (const r of listed) expect(ROLES[r]?.tag, r).toBe("teamPlayer");
-        }
-      }
-    }
-  });
-
-});
-
-describe("camera offline — extension.md \"Camera offline\"", () => {
-  it("a Hacker loop on a watched room reads as camera offline to Security", () => {
-    // Round 1: p0 Hacker loops the Vault; p1 in Security watches it; p2 pockets there.
-    const looped = run(game(config(3), { roles: ["hacker"] }), mv("p0", "office", 0, { ability: { kind: "loopCameras", room: "vault" } }), mv("p1", "security", 0, { watch: "vault" }), mv("p2", "vault", 2), ROUND);
-    const fromLoop = ofType(looped.log, "roomWatched").find((e) => e.player === "p1");
-    expect(fromLoop).toEqual({ type: "roomWatched", visibility: privateTo("p1"), player: "p1", round: 1, source: "security", room: "vault", seen: [], offline: true });
-  });
-});
-
-describe("the role list — extension.md \"Host settings\"", () => {
+describe("the role list — design §11.3", () => {
   const roles = (cfg: GameConfig) => ofType(setupEvents(cfg), "roleDealt").map((e) => e.role);
 
   it("Exact (default) shows every dealt role, in content order, never by seat", () => {
-    const cfg = config(6, { deck: "everything" });
+    const cfg = config(6);
     const s = createGame(cfg);
     const shown = viewFor(s, "p0").roleList;
     expect(shown?.list).toBe("exact");
     expect([...(shown?.roles ?? [])].sort()).toEqual([...roles(cfg)].sort());
   });
 
-  it("Possible shows every role that could be dealt; Hidden shows nothing", () => {
+  it("Possible shows every role that could be dealt (any role at any crew size); Hidden shows nothing", () => {
     const cfg = config(6, { roleList: "possible" });
-    expect(viewFor(createGame(cfg), "p0").roleList).toEqual({ list: "possible", roles: expect.arrayContaining([...dealableRoles(cfg)]) });
-    expect(viewFor(createGame(cfg), "p0").roleList?.roles).toHaveLength(dealableRoles(cfg).length);
+    expect(viewFor(createGame(cfg), "p0").roleList).toEqual({ list: "possible", roles: Object.keys(ROLES) });
     const hidden = createGame(config(6, { roleList: "hidden" }));
     expect(viewFor(hidden, "p0").roleList).toBeNull();
     expect(ofType(hidden.log, "roleListShown")).toEqual([]);

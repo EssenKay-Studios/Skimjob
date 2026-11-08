@@ -1,12 +1,14 @@
 // The bots' reading of the bells, the tape and Wanted. design §5
 import { describe, expect, it } from "vitest";
-import { BANK_JOB, STARTER_ROLES } from "@skimjob/content";
-import { createGame, viewFor, type GameConfig, type PlayerView } from "@skimjob/engine";
+import { BANK_JOB } from "@skimjob/content";
+import { replay, setupEvents, viewFor, type GameConfig, type PlayerView } from "@skimjob/engine";
 import { bustDanger, jobThisRound, openRooms, quietGrab, raidRisk } from "./alarm";
 import { seats } from "./testkit";
 
-const config: GameConfig = { seed: "alarm", players: seats(3), job: "bank", rolePool: [...STARTER_ROLES], eventsEnabled: false, voteVisibility: "hiddenThenRevealed" };
-const view = (patch: Partial<PlayerView> = {}): PlayerView => ({ ...viewFor(createGame(config), "ana"), ...patch });
+const config: GameConfig = { seed: "alarm", players: seats(3), job: "bank", eventsEnabled: false, voteVisibility: "hiddenThenRevealed" };
+/** Ana's view of a new game where she holds `role` (a Lookout by default: no passive power). */
+const game = (role = "lookout") => replay(config, setupEvents(config).map((e) => (e.type === "roleDealt" && e.player === "ana" ? { ...e, role } : e)));
+const view = (patch: Partial<PlayerView> = {}, role?: string): PlayerView => ({ ...viewFor(game(role), "ana"), ...patch });
 
 describe("bot bell reading — design §5", () => {
   it("open rooms leave out taped-off rooms (their bell is off) and a Lockdown room (design §5.3, §13)", () => {
@@ -27,6 +29,13 @@ describe("bot bell reading — design §5", () => {
     expect(quietGrab(v, BANK_JOB, "vault", 3)).toBe(2);
     expect(quietGrab(v, BANK_JOB, "office", 2)).toBe(1);
     expect(quietGrab({ ...v, bells: { ...v.bells, vault: 3 } }, BANK_JOB, "vault", 3)).toBe(3);
+  });
+
+  it("the Locksmith's coins ring one time fewer, so its grab adds no rings and needs no holding back (design §5.2, §11.1)", () => {
+    const v = view({ bells: { ...view().bells, vault: 3, office: 3 } }, "locksmith");
+    expect(raidRisk(v, BANK_JOB, "vault", 3)).toBe(0.75);
+    expect(raidRisk(v, BANK_JOB, "office", 2)).toBe(0.75);
+    expect(quietGrab(v, BANK_JOB, "vault", 3)).toBe(3);
   });
 
   it("bust danger reaches 1 one raid short of the bust line (design §5.5)", () => {

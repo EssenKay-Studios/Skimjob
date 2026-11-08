@@ -13,7 +13,7 @@ import type { GameEvent, GameState, PlayerId, PlayerState, ResolvedPerk } from "
 import { PUBLIC, privateTo } from "./types";
 import type { Draw } from "./handle";
 import { cardRound } from "./deck";
-import { perkCost, powerOf } from "./overrides";
+import { perkCost } from "./overrides";
 import { isObject, playerFor, show } from "./check";
 
 type Result = GameEvent[] | string;

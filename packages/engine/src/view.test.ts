@@ -1,6 +1,5 @@
 // viewFor(): one sample of every event type, every viewer, during and after the
 // game; the viewer's own fields; per-viewer numbering; eventsSince. design §13, §17.2
-import { STARTER_ROLES } from "@skimjob/content";
 import { isDeepStrictEqual } from "node:util";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import type { GameConfig, GameEvent, GameState, PlayerView, PrivateVisibility, PublicVisibility, SecretVisibility } from "./types";
@@ -19,7 +18,6 @@ const config = (voteVisibility: GameConfig["voteVisibility"] = "hiddenThenReveal
     { id: "carl", name: "Carl", isBot: false },
   ],
   job: "bank",
-  rolePool: [...STARTER_ROLES], // a shakedown window only if the shop holds a Shield
   eventsEnabled: false,
   voteVisibility,
 });
@@ -163,7 +161,7 @@ describe("seq numbers count only what you can see — design §13, docs/decision
     }
   });
 
-  it("hidden events (e.g. a Hacker's camera loop) don't shift your numbers", () => {
+  it("hidden events (e.g. a Hacker's real bell) don't shift your numbers", () => {
     const s = createGame(config());
     const hidden: GameEvent[] = [
       { ...sampleEvents.abilityResolved, visibility: privateTo("ben"), player: "ben" },

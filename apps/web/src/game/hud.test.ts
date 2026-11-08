@@ -1,6 +1,7 @@
 // Game screen helpers, from real engine views. docs/m2-plan.md M2-6
 import { BANK_JOB } from "@skimjob/content";
-import { createGame, handleCommand, viewFor, type GameConfig, type GameState, type PlayerCommand, type SystemCommand } from "@skimjob/engine";
+import { handleCommand, viewFor, type GameConfig, type GameState, type PlayerCommand, type SystemCommand } from "@skimjob/engine";
+import { createGame } from "./deal.testkit";
 import { describe, expect, it } from "vitest";
 import { presenceOf } from "./useGame";
 import {
@@ -22,10 +23,8 @@ const config = (n = 4, extra: Partial<GameConfig> = {}): GameConfig => ({
   seed: "hud-test",
   players: Array.from({ length: n }, (_, i) => ({ id: `p${i + 1}`, name: i === 0 ? "Ana" : `Bot · ${i}`, isBot: i > 0 })),
   job: "bank",
-  rolePool: ["rookie"],
   eventsEnabled: false,
   voteVisibility: "hiddenThenRevealed",
-  uniqueRoles: false,
   ...extra,
 });
 

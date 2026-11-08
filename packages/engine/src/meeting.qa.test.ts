@@ -4,7 +4,7 @@
 // boundaries; emergency timing; stale and wrong-id deadlines; shakedowns at the
 // share; ballot visibility per mode; determinism.
 // design §9, §4.2, §6.2
-import { STARTER_ROLES, type PerkId } from "@skimjob/content";
+import type { PerkId } from "@skimjob/content";
 import { describe, expect, it } from "vitest";
 import type { ContentOverrides, GameConfig, GameEvent, GameState, VoteVisibility } from "./types";
 import { canSee } from "./types";
@@ -28,19 +28,18 @@ function config(players: number, voteVisibility: VoteVisibility = "hiddenThenRev
     seed: "qa-meeting",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: [...STARTER_ROLES],
     eventsEnabled: false,
     voteVisibility,
     contentOverrides: PINS,
   };
 }
 
-/** Seat i is dealt roles[i] (Rookie if missing). */
+/** Seat i is dealt roles[i] (a Lookout if missing: its power acts only when used). */
 function game(players: number, roles: string[] = [], mode?: VoteVisibility): GameState {
   const cfg = config(players, mode);
   let seat = 0;
   const log = setupEvents(cfg).map(
-    (e): GameEvent => (e.type === "roleDealt" ? { ...e, role: roles[seat++] ?? "rookie" } : e.type === "shopDealt" ? { ...e, perks: SHOP_NO_SHIELD } : e),
+    (e): GameEvent => (e.type === "roleDealt" ? { ...e, role: roles[seat++] ?? "lookout" } : e.type === "shopDealt" ? { ...e, perks: SHOP_NO_SHIELD } : e),
   );
   return replay(cfg, log);
 }

@@ -27,8 +27,8 @@ describe("QA #125: sim player counts", () => {
     expect(parseSuiteArgs(["--duel"]).kind).toBe("error");
   });
 
-  it("a 3-player batch (events on, Everything) plays with no refused bot command, and is deterministic", { timeout: 60_000 }, () => {
-    const r = parseSimArgs(["-n", "10", "-p", "3", "--events", "--deck", "everything", "-s", "qa125", "--no-files"]);
+  it("a 3-player batch (events on) plays with no refused bot command, and is deterministic", { timeout: 60_000 }, () => {
+    const r = parseSimArgs(["-n", "10", "-p", "3", "--events", "-s", "qa125", "--no-files"]);
     if (r.kind !== "run") throw new Error(JSON.stringify(r));
     const a = runBatch(r.options);
     expect(a).toHaveLength(10);

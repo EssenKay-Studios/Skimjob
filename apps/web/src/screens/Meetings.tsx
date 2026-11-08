@@ -495,18 +495,6 @@ function AbilityRow({ view, offer, send, done }: { view: PlayerView; offer: Abil
     </div>
   );
   switch (offer.kind) {
-    case "bless":
-      return (
-        <div className="ability">
-          <p>
-            <b>Bless a player until the next regular meeting.</b> If they're shaken down and turn out clean, you earn a token.
-          </p>
-          {targets(offer.targets, "Player to bless")}
-          <Button variant="secondary" seed="ab-bless" disabled={!target} onClick={() => target && void use({ type: "useAbility", ability: { kind: "bless", target } }, "Blessed.")}>
-            Bless
-          </Button>
-        </div>
-      );
     case "extraVote":
       return (
         <div className="ability">

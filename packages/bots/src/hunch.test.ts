@@ -15,7 +15,6 @@ const config = (n: number, seed: string): GameConfig => ({
   seed,
   players: Array.from({ length: n }, (_, i) => ({ id: `p${i + 1}`, name: `${personality(i).name} ${i + 1}`, isBot: true })),
   job: "bank",
-  rolePool: [],
   eventsEnabled: false,
   voteVisibility: "hiddenThenRevealed",
 });
@@ -62,10 +61,13 @@ describe("crew hunch — design §17.3 (v2 §5)", () => {
     const g = meetingViews("g-a");
     const seeds = ["s1", "s2", "s3", "s4", "s5"].map((seed) => crewHunch(g.p2, "p3", seed));
     expect(new Set(seeds).size).toBe(seeds.length);
-    // Still shared by the table and steady for the meeting, for one crewSeed.
+    // Still shared by the crew and steady for the meeting, for one crewSeed.
     expect(crewHunch(g.p5, "p3", "s1")).toBe(seeds[0]);
     expect(crewHunch(g.later, "p3", "s1")).toBe(seeds[0]);
-    // And it comes from the crewSeed, not the view: another game's view gives the same hunch for the same crewSeed.
-    expect(crewHunch(meetingViews("g-b").p2, "p3", "s1")).toBe(seeds[0]);
+    // And it comes from the crewSeed, not the view: another game's view of the same meeting gives the same hunch for the same crewSeed.
+    const meetingOf = (v: typeof g.p2) => (v.phase.kind === "meeting" ? v.phase.meetingId : null);
+    const other = ["g-b", "g-c", "g-d", "g-e", "g-f", "g-g"].map((seed) => meetingViews(seed).p2).find((v) => meetingOf(v) === meetingOf(g.p2));
+    expect(other).toBeDefined();
+    expect(crewHunch(other as typeof g.p2, "p3", "s1")).toBe(seeds[0]);
   });
 });

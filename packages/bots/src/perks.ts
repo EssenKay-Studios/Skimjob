@@ -2,7 +2,7 @@
 // "Play"; design §8.3). Bot settings, not game rules.
 //
 // - Peek: while planning, its top suspect whose role it doesn't know yet (Lookout, Hacker).
-// - Tail: while planning, the richest looting room other than its own (Rookie: "the biggest-shortfall room").
+// - Tail: while planning, the richest coin room other than its own.
 // - +Vote: in a meeting, when it votes to shake someone down.
 // - Alibi: right after posting a true alibi, if the crew could suspect it.
 // - Recharge: once its power is used up.
@@ -11,7 +11,7 @@
 // - Buying (extension.md "Tokens and the perk shop"): `buyPerks`, by a fixed priority.
 import { EVENTS, type EventId, type PerkId, type RoomId } from "@skimjob/content";
 import { overrideEvents, roomDef, type PlayerCommand, type PlayerView, type VoteChoice } from "@skimjob/engine";
-import { createdOf, lastResolvedRound, ofType, roleOf, roomsWhere } from "./read";
+import { createdOf, lastResolvedRound, myPower, ofType, roomsWhere } from "./read";
 import { mostSuspicious, knownRoles, suspicion } from "./suspicion";
 import { publicSuspicion } from "./claims";
 import { jobThisRound } from "./alarm";
@@ -47,8 +47,8 @@ const BUY_ORDER: readonly PerkId[] = ["shield", "peek", "extraVote", "alibi", "t
 function worthBuying(view: PlayerView, perk: PerkId): boolean {
   switch (perk) {
     case "recharge": {
-      const { power } = roleOf(view);
-      return "perStretch" in power;
+      const power = myPower(view);
+      return power !== undefined && "perStretch" in power;
     }
     case "rig":
       return createdOf(view).eventsEnabled;
@@ -134,9 +134,9 @@ export function planningPerks(view: PlayerView, room: RoomId | undefined = view.
 
 /** v2 §1 Recharge: the power's uses this stretch are spent. */
 function usedUp(view: PlayerView): boolean {
-  const { power } = roleOf(view);
+  const power = myPower(view);
   const { usedThisStretch } = view.me.roleState;
-  return "perStretch" in power && usedThisStretch >= power.perStretch;
+  return power !== undefined && "perStretch" in power && usedThisStretch >= power.perStretch;
 }
 
 /** +Vote with a shakedown ballot, once per meeting. design §8.3 */

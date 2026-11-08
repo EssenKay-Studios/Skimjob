@@ -1,44 +1,30 @@
 // Host lobby settings and the server's own limits (not game rules, so not in
-// @skimjob/content). design §15 setup, docs/m2-plan.md M2-2
-import { POOL_ROLES, type DeckId, type RoleId } from "@skimjob/content";
-import type { DealStyle, RoleListSetting, VoteVisibility } from "@skimjob/engine";
+// @skimjob/content). design §16 setup
+import type { RoleListSetting, VoteVisibility } from "@skimjob/engine";
 
 /** Session-length presets (design §17.1, plus "15m" for playtests); timing.ts gives them their timings. */
 export const SESSION_LENGTHS = ["15m", "1h", "3h", "1d", "3d", "1w"] as const;
 export type SessionLength = (typeof SESSION_LENGTHS)[number];
 
 const VOTE_VISIBILITIES: readonly VoteVisibility[] = ["hiddenThenRevealed", "open", "secret"];
-const DECK_IDS: readonly DeckId[] = ["starter", "standard", "everything"];
-const DEAL_STYLES: readonly DealStyle[] = ["balanced", "random"];
 const ROLE_LISTS: readonly RoleListSetting[] = ["exact", "possible", "hidden"];
 
 export interface LobbySettings {
   readonly sessionLength: SessionLength;
   readonly voteVisibility: VoteVisibility;
-  /** Deck preset (extension.md "Decks"). */
-  readonly deck: DeckId;
-  /** Per-role toggles: the roles in the deck; empty = the preset's. */
-  readonly roles: readonly RoleId[];
-  /** Balanced or Truly random deal; Exact, Possible or Hidden role list. extension.md "Host settings" */
-  readonly deal: DealStyle;
+  /** Exact, Possible or Hidden role list. design §11.3, §16 */
   readonly roleList: RoleListSetting;
   readonly eventsEnabled: boolean;
-  /** Others see that a DM happened (design §12.1). Server-only; M2-8. */
+  /** Others see that a DM happened (design §15.2). Server-only; M2-8. */
   readonly dmNotices: boolean;
-  /** Each pool role at most once (design §8.1, `GameConfig.uniqueRoles`). */
-  readonly uniqueRoles: boolean;
 }
 
 export const DEFAULT_SETTINGS: LobbySettings = {
   sessionLength: "1h",
   voteVisibility: "hiddenThenRevealed",
-  deck: "standard",
-  roles: [],
-  deal: "balanced",
   roleList: "exact",
   eventsEnabled: true,
   dmNotices: true,
-  uniqueRoles: true,
 };
 
 /** Session cookie lifetime. */
@@ -75,14 +61,8 @@ export function parseSettings(input: unknown): { ok: true; settings: LobbySettin
   const s = { ...DEFAULT_SETTINGS, ...raw } as Record<keyof LobbySettings, unknown>;
   if (!(SESSION_LENGTHS as readonly unknown[]).includes(s.sessionLength)) return { ok: false, error: `sessionLength must be one of ${SESSION_LENGTHS.join(", ")}` };
   if (!(VOTE_VISIBILITIES as readonly unknown[]).includes(s.voteVisibility)) return { ok: false, error: `voteVisibility must be one of ${VOTE_VISIBILITIES.join(", ")}` };
-  if (!(DECK_IDS as readonly unknown[]).includes(s.deck)) return { ok: false, error: `deck must be one of ${DECK_IDS.join(", ")}` };
-  if (!(DEAL_STYLES as readonly unknown[]).includes(s.deal)) return { ok: false, error: `deal must be one of ${DEAL_STYLES.join(", ")}` };
   if (!(ROLE_LISTS as readonly unknown[]).includes(s.roleList)) return { ok: false, error: `roleList must be one of ${ROLE_LISTS.join(", ")}` };
-  const roles = s.roles;
-  if (!Array.isArray(roles) || !roles.every((r) => (POOL_ROLES as readonly unknown[]).includes(r)) || new Set(roles).size !== roles.length) {
-    return { ok: false, error: "roles must be a list of distinct role ids" };
-  }
-  for (const k of ["eventsEnabled", "dmNotices", "uniqueRoles"] as const) {
+  for (const k of ["eventsEnabled", "dmNotices"] as const) {
     if (typeof s[k] !== "boolean") return { ok: false, error: `${k} must be true or false` };
   }
   return { ok: true, settings: s as unknown as LobbySettings };

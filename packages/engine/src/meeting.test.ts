@@ -2,7 +2,7 @@
 // briefings after raids, the crew's emergency pool in the result window,
 // scheduling, ballots and their visibility, sealed votes, quorum and majority,
 // shakedowns against the share and their protection. design §9, §4.2, §6.2
-import { MAX_SLOT_LENGTH, STARTER_ROLES, type PerkId } from "@skimjob/content";
+import { MAX_SLOT_LENGTH, type PerkId } from "@skimjob/content";
 import { describe, expect, it } from "vitest";
 import type { ContentOverrides, GameConfig, GameEvent, GameState, VoteVisibility } from "./types";
 import { canSee } from "./types";
@@ -31,21 +31,20 @@ function config(players: number, voteVisibility: VoteVisibility = "hiddenThenRev
     seed: "meeting-seed",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: [...STARTER_ROLES],
     eventsEnabled: false,
     voteVisibility,
     contentOverrides,
   };
 }
 
-/** A new game with chosen roles (seat i gets roles[i], Rookie if missing) and a pinned shop. */
+/** A new game with chosen roles (seat i gets roles[i], a Lookout if missing) and a pinned shop. */
 function game(players: number, roles: string[] = [], mode?: VoteVisibility, overrides?: ContentOverrides, shop: readonly PerkId[] = SHOP_NO_SHIELD): GameState {
   const cfg = config(players, mode, overrides);
   const log = setupEvents(cfg).map((e, i, all): GameEvent => {
     if (e.type === "shopDealt") return { ...e, perks: shop };
     if (e.type !== "roleDealt") return e;
     const seat = all.slice(0, i).filter((x) => x.type === "roleDealt").length;
-    return { ...e, role: roles[seat] ?? "rookie" };
+    return { ...e, role: roles[seat] ?? "lookout" };
   });
   return replay(cfg, log);
 }
@@ -92,7 +91,7 @@ const CLOSE = (s: GameState) => close(s.meeting?.id);
 const RESOLVE = [ROUND, ALIBIS];
 
 /**
- * 3 Rookies. Round 1: p0 pockets the Vault's 6; p1 and p2 miss (the Lobby, 1
+ * 3 Lookouts. Round 1: p0 pockets the Vault's 6; p1 and p2 miss (the Lobby, 1
  * coin handed in each, design §3.3). The bank drops from 18 to 10, past
  * two-thirds, so the regular meeting opens. The split: 2 coins 3 ways, share 0, kitty 2.
  */
@@ -137,7 +136,7 @@ describe("regular meetings at the bank's thirds — design §9.1, §4.2 step 9",
   });
 
   it("only a regular meeting recharges \"once between meetings\" powers; an emergency doesn't — design §11.2", () => {
-    let s = run(game(3, ["rookie", "auditor"]), ...RESOLVE, { type: "useAbility", player: "p1", ability: { kind: "audit", room: "lobby" } });
+    let s = run(game(3, ["lookout", "auditor"]), ...RESOLVE, { type: "useAbility", player: "p1", ability: { kind: "audit", room: "lobby" } });
     expect(s.players.p1?.roleState.usedThisStretch).toBe(1);
     s = run(s, emergency("p0"), OPEN, CLOSE);
     expect([s.players.p1?.roleState.usedThisStretch, s.stretch, s.phase.kind]).toEqual([1, 1, "planning"]);
@@ -527,7 +526,7 @@ describe("determinism and the event log — design §19.1", () => {
 
   it("a player called toString can be voted for and shaken down (__proto__ is refused at setup)", () => {
     const cfg: GameConfig = { ...config(3), players: [{ id: "toString", name: "T", isBot: false }, { id: "p1", name: "P1", isBot: true }, { id: "p2", name: "P2", isBot: true }] };
-    const log = setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: "rookie" } : e.type === "shopDealt" ? { ...e, perks: SHOP_NO_SHIELD } : e));
+    const log = setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: "lookout" } : e.type === "shopDealt" ? { ...e, perks: SHOP_NO_SHIELD } : e));
     let s = run(replay(cfg, log), mv("toString", "vault", 6), ...RESOLVE, SCHED, OPEN, vote("p1", "toString"), vote("p2", "toString"), seal("toString", "p1"));
     s = run(s, CLOSE);
     expect(Object.hasOwn(LAST(s, "meetingClosed")!.tally.targets, "toString")).toBe(true);

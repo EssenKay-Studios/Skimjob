@@ -382,7 +382,7 @@ describe("transient database errors on a deadline (30c9f9e retry/backoff)", () =
   async function playWithFault(fault: RegExp | null, at: number) {
     await fresh();
     forcedSeed = "qa-fault";
-    const { id } = await startGame(5, { sessionLength: "15m", roles: ["lookout", "auditor", "detective", "smoothTalker", "hacker"] });
+    const { id } = await startGame(5, { sessionLength: "15m" });
     let idle = 0;
     for (let i = 0; i < 2000; i++) {
       if ((await load(id)).phase.kind === "ended") break;

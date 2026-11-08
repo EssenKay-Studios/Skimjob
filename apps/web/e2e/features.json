@@ -19,7 +19,6 @@
   "apps/web/src/components/BottomSheet.tsx": "@shell",
   "apps/web/src/components/CaseBoard.tsx": "@caseboard",
   "apps/web/src/components/Chat.tsx": "@chat",
-  "apps/web/src/components/DeckSettings.tsx": "@lobby",
   "apps/web/src/components/Extension.tsx": "@shop",
   "apps/web/src/components/GameShell.tsx": "@shell",
   "apps/web/src/components/HostPanel.tsx": "@host",

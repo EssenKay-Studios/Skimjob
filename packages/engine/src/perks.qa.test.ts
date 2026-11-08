@@ -17,7 +17,6 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
     seed: "perk-qa",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: ["rookie", "lookout", "hacker"], // a window only if the shop holds a Shield
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     ...extra,
@@ -26,8 +25,11 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
 function game(players: number, roles: string[] = [], extra: Partial<GameConfig> = {}): GameState {
   const cfg = config(players, extra);
   let seat = 0;
-  return replay(cfg, setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: roles[seat++] ?? "rookie" } : e)));
+  return replay(cfg, setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: roles[seat++] ?? "lookout" } : e)));
 }
+/** The game with a shop that holds no Shield, so a passed shakedown applies at once (no window, design §9.6). */
+const noShieldShop = (s: GameState): GameState =>
+  replay(s.config, s.log.map((e): GameEvent => (e.type === "shopDealt" ? { ...e, perks: ["peek", "alibi", "extraVote"] } : e)));
 type Cmd = unknown | ((s: GameState) => unknown);
 function run(state: GameState, ...commands: Cmd[]): GameState {
   return commands.reduce<GameState>((s, c) => {
@@ -85,7 +87,7 @@ const SPENDS: readonly [PerkId, () => GameState, object][] = [
   ["extraVote", () => run(game(4), ...emergency("p1")), { kind: "extraVote" }],
   ["ballot", () => run(game(4), ...emergency("p1")), { kind: "ballot", target: "p1" }],
   ["alibi", () => run(game(4), mv("p0", "office"), ROUND, { type: "postAlibi", player: "p0", room: "office" }), { kind: "alibi" }],
-  ["recharge", () => run(game(4, ["hacker"]), mv("p0", "lobby", 0, { ability: { kind: "loopCameras", room: "vault" } }), ROUND, ALIBIS), { kind: "recharge" }],
+  ["recharge", () => run(game(4, ["hacker"]), mv("p0", "lobby", 0, { ability: { kind: "hide", room: "vault" } }), ROUND, ALIBIS), { kind: "recharge" }],
   ["rig", () => game(4, [], { eventsEnabled: true }), { kind: "rig" }],
 ];
 
@@ -144,8 +146,8 @@ describe("QA: wrong phase — design §8.3", () => {
 });
 
 describe("QA: +Vote, Recharge, Rig at the meeting — design §8.3", () => {
-  it("+Vote stacks with the Smooth talker's double vote (weight 3)", () => {
-    const s = run(grantPerks(game(6, ["smoothTalker"], { rolePool: ["rookie", "smoothTalker"] }), "p0", "extraVote"), ...emergency("p0"));
+  it("+Vote stacks with the Smooth Talker's double vote (weight 3)", () => {
+    const s = run(grantPerks(game(6, ["smoothTalker"]), "p0", "extraVote"), ...emergency("p0"));
     const votes = [vote("p0", "p5"), vote("p1", null), vote("p2", null), vote("p3", null)];
     // 2 vs 3: skipped; 3 vs 3: no majority either way.
     expect(closed(run(s, ...votes, CLOSE))).toMatchObject({ result: { kind: "skipped" } });
@@ -155,7 +157,7 @@ describe("QA: +Vote, Recharge, Rig at the meeting — design §8.3", () => {
 
   it("Recharge gives the Mole a second ring between the same meetings (design §11.1)", () => {
     const RING = mv("p0", "lobby", 0, { ability: { kind: "ring", room: "office" } });
-    let s = grantPerks(game(4, ["mole"], { rolePool: ["rookie", "mole"], roleList: "possible" }), "p0", "recharge");
+    let s = grantPerks(game(4, ["mole"], { roleList: "possible" }), "p0", "recharge");
     s = run(s, RING, ROUND, ALIBIS);
     expect(refused(s, RING)).toMatch(/already rung/);
     s = run(s, use("p0", { kind: "recharge" }), RING, ROUND);
@@ -199,7 +201,7 @@ describe("QA: perks never leak to other views — design §8.3, §17.2", () => {
     if (!rig) throw new Error("no rig");
     s = check(s, use("p0", { kind: "rigPick", card: rig.cards[1] }));
     s = run(toRegular(next(s)), SCHED, OPEN, CLOSE, RESULT);
-    s = run(s, mv("p0", "lobby", 0, { ability: { kind: "loopCameras", room: "vault" } }), ROUND);
+    s = run(s, mv("p0", "lobby", 0, { ability: { kind: "hide", room: "vault" } }), ROUND);
     s = check(s, use("p0", { kind: "recharge" }));
     s = run(s, ALIBIS);
     s = run(s, ...emergency("p2"));
@@ -219,7 +221,7 @@ describe("QA: perks never leak to other views — design §8.3, §17.2", () => {
 describe("QA: determinism with perks — design §17.2", () => {
   it("same seed + same commands give the same log; the log replays to the same state", () => {
     const script = (): GameState => {
-      let s = grantPerks(game(5, ["lookout"], { eventsEnabled: true }), "p0", "rig", "shield");
+      let s = grantPerks(noShieldShop(game(5, ["lookout"], { eventsEnabled: true })), "p0", "rig", "shield");
       s = grantPerks(grantPerks(grantPerks(s, "p2", "tail"), "p3", "peek"), "p4", "ballot");
       s = run(s, use("p0", { kind: "rig" }), use("p2", { kind: "tail", room: "vault" }), use("p3", { kind: "peek", target: "p4" }));
       // The Vault's 6 rings raid it: a police briefing follows (design §9.2).
@@ -244,7 +246,7 @@ describe("QA: Shield vs a plain shakedown — design §8.3, §9.6, §9.7", () =>
 
   it("plain: what is above the share is set aside for the next split; Shield: stash kept, nothing set aside, one Shield per passed shakedown", () => {
     // 7 players: the crew's pool holds 2 emergencies (design §9.3).
-    const base = withStash(game(7), "p0", 6);
+    const base = withStash(noShieldShop(game(7)), "p0", 6);
     const open = opened(base);
     const plain = passOnP0(open);
     expect(plain.players.p0?.stash).toBe(open.share);

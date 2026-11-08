@@ -70,20 +70,20 @@ describe("prepareOutDir — checked before any game runs (PR #10 QA)", () => {
 });
 
 describe("formatReport", () => {
-  it("shows every design §17.4 metric with its target, one column per player count", () => {
+  it("shows every design §21 metric with its target, one column per player count", () => {
     const text = formatReport(summarize([...games, { ...games[0]!, players: 3 }]), "title");
-    for (const label of ["Heist success rate", "Bust rate", "Raids per game", "Games with a raid", "Rooftop stalls", "Shakedown accuracy", "Win rate, honest", "Win rate, moderate", "Win rate, heavy", "Ended at the cap", "Sunk by theft", "Mole win rate"]) {
+    for (const label of ["Heist success rate", "Bust rate", "Raids per game", "Games with a raid", "Rooftop stalls", "Shakedown accuracy", "Win rate, honest", "Win rate, moderate", "Win rate, heavy", "Ended at the cap", "Sunk by theft", "of those, won by a Mole or Fixer"]) {
       expect(text).toContain(label);
     }
     expect(text).toMatch(/2p\s+3p\s+all/);
     expect(text).toContain("55–70%");
     // design §17.4: heavy pocketing "should lose more often than it wins".
     expect(text).toMatch(/Win rate, heavy[^\n]*< 50%/);
-    expect(text).toMatch(/Mole win rate \(games with a Mole\)/);
+    // design §21 G5: each role's win rate ÷ the average seat's, with its band.
+    expect(text).toContain("Role win rate ÷ the average seat's, all endings (design §21 G5: 0.75–1.33)");
   });
-  it("says when no Mole was dealt, and warns about refused commands", () => {
+  it("warns about refused commands", () => {
     const text = formatReport(summarize([gameRec({ playerRecords: [seat()], rejections: 2 })]), "t");
-    expect(text).toContain("no Moles dealt");
     expect(text).toContain("WARNING: bots sent 2 refused commands");
   });
 });

@@ -14,7 +14,6 @@ function config(n: number, seed: string, extra: Partial<GameConfig> = {}): GameC
     seed,
     players: Array.from({ length: n }, (_, i) => ({ id: `p${i}`, name: `Player ${i}`, isBot: true })),
     job: "bank",
-    rolePool: [],
     eventsEnabled: true,
     voteVisibility: "hiddenThenRevealed",
     ...extra,

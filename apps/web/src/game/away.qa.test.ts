@@ -1,6 +1,7 @@
 // QA (M2-10, PR #46): "While you were away" (design §13) at 2, 3 and 12 seats; recaps after a meeting, a shakedown, the
 // end and a reconnect-style catch-up; nothing from anyone else's case file.
-import { createGame, eventsSince, handleCommand, viewFor, type GameConfig, type GameState, type PlayerCommand, type PlayerId, type SystemCommand } from "@skimjob/engine";
+import { eventsSince, handleCommand, viewFor, type GameConfig, type GameState, type PlayerCommand, type PlayerId, type SystemCommand } from "@skimjob/engine";
+import { createGame } from "./deal.testkit";
 import { describe, expect, it } from "vitest";
 import { recap, recapItems, RECAP_MAX_LINES, topSeq } from "./away";
 import { namesOf } from "./hud";
@@ -11,10 +12,8 @@ const config = (n: number, extra: Partial<GameConfig> = {}): GameConfig => ({
   seed: `away-qa-${n}`,
   players: NAMES.slice(0, n).map((name, i) => ({ id: `p${i + 1}`, name, isBot: false })),
   job: "bank",
-  rolePool: n >= 5 ? ["rookie", "lookout", "priest", "hacker", "auditor", "detective"] : ["rookie"],
   eventsEnabled: n >= 5,
   voteVisibility: "hiddenThenRevealed",
-  uniqueRoles: false,
   ...extra,
 });
 const ids = (s: GameState) => s.config.players.map((p) => p.id);

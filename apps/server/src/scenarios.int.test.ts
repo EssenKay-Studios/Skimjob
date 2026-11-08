@@ -8,7 +8,7 @@
 // People are played by bot logic (or a script) over their own sockets.
 // design §17.2, §17.3, §13, §11, §16.1, §7
 import { createBot, PERSONALITIES, type Agent } from "@skimjob/bots";
-import { BANK_JOB, POOL_ROLES, DECKS, ROLES } from "@skimjob/content";
+import { BANK_JOB, MAX_ROLE_COPIES, ROLES } from "@skimjob/content";
 import { canSee, replay, viewFor, type GameConfig, type GameEvent, type GameState, type PlayerView, type SystemCommand } from "@skimjob/engine";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -24,8 +24,6 @@ import type { LobbySettings } from "./settings";
 import { createGameStore, type GameStore } from "./store";
 import { testDb } from "./testkit";
 
-/** The Standard deck with every Wildcard and Lone wolf toggled off: Team players only. */
-const TEAM_ROLES = DECKS.standard.filter((r) => ROLES[r]?.tag === "teamPlayer");
 
 const quick = { interval: 1, timeout: 5000 };
 const clock = fakeClock(Date.UTC(2026, 10, 1));
@@ -422,7 +420,7 @@ describe("scenarios: end-to-end stories over HTTP + WebSocket", () => {
 
   it("idle people get the default move every round, and still get the reveal", async () => {
     const before = app.live.botRefusals.length;
-    const game = await startGame(2, 4, { roles: TEAM_ROLES });
+    const game = await startGame(2, 4);
     const clients = await Promise.all(game.humans.map((h) => Client.open(game.id, h)));
     const refused = await play(game, clients, clients.map(() => null));
     const final = await finish(game, clients, refused, before);
@@ -460,7 +458,7 @@ describe("scenarios: end-to-end stories over HTTP + WebSocket", () => {
   }, 60_000);
 
   it("an emergency meeting in the result window: refused while planning, a second call is refused, the next round waits for the vote", async () => {
-    const game = await startGame(4, 0, { roles: TEAM_ROLES, eventsEnabled: false });
+    const game = await startGame(4, 0, { eventsEnabled: false });
     const clients = await Promise.all(game.humans.map((h) => Client.open(game.id, h)));
     const [a, b, c, d] = clients as [Client, Client, Client, Client];
     // design §9.3: only between a round's result and the next planning.
@@ -494,22 +492,21 @@ describe("scenarios: end-to-end stories over HTTP + WebSocket", () => {
     expect(final.log.filter((e) => e.type === "meetingOpened" && e.kind === "emergency")).toHaveLength(1);
   }, 60_000);
 
-  it("a 12-player Everything game deals different roles, and plays to the reveal (extension.md \"Decks and dealing\")", async () => {
+  it("a 12-player game deals every role, two of them twice, and plays to the reveal (design §11.3)", async () => {
     const before = app.live.botRefusals.length;
-    const game = await startGame(2, 10, { deck: "everything", eventsEnabled: true, voteVisibility: "secret" });
+    const game = await startGame(2, 10, { eventsEnabled: true, voteVisibility: "secret" });
     const clients = await Promise.all(game.humans.map((h) => Client.open(game.id, h)));
     const state = await load(game.id);
-    const roles = state.playerOrder.map((p) => state.players[p]!.role).sort();
-    // Unique roles (the default) from the 9-role Everything deck: every role, Rookies filling the rest.
-    expect(new Set(roles).size).toBe(9);
-    for (const r of roles) expect(POOL_ROLES).toContain(r);
+    const roles = state.playerOrder.map((p) => state.players[p]!.role);
+    expect([...new Set(roles)].sort()).toEqual(Object.keys(ROLES).sort());
+    for (const r of new Set(roles)) expect(roles.filter((x) => x === r).length).toBeLessThanOrEqual(MAX_ROLE_COPIES);
     const refused = await play(game, clients, brainsFor(game));
     const final = await finish(game, clients, refused, before);
     expect(final.playerOrder).toHaveLength(12);
   }, 90_000);
 
   it("the heist fails by a bust: everyone hits the Vault (or the Office while it is taped off) until Wanted 3 (design §5.3–§5.5)", async () => {
-    const game = await startGame(3, 0, { roles: TEAM_ROLES, eventsEnabled: false });
+    const game = await startGame(3, 0, { eventsEnabled: false });
     const clients = await Promise.all(game.humans.map((h) => Client.open(game.id, h)));
     const refused = await play(game, clients, clients.map(() => steadyBrain("vault")));
     const final = await finish(game, clients, refused, app.live.botRefusals.length);
@@ -519,19 +516,20 @@ describe("scenarios: end-to-end stories over HTTP + WebSocket", () => {
   }, 60_000);
 
   it("the heist is sunk by theft: a crew pocketing every Lobby coin plays to the round cap below the honesty line (design §6.2, §8.4)", async () => {
-    const game = await startGame(3, 0, { roles: TEAM_ROLES, eventsEnabled: false });
+    const game = await startGame(3, 0, { eventsEnabled: false });
     const clients = await Promise.all(game.humans.map((h) => Client.open(game.id, h)));
     const refused = await play(game, clients, clients.map(() => steadyBrain("lobby", true)));
     const final = await finish(game, clients, refused, app.live.botRefusals.length);
-    // Every stash is equal, but no team role wins a heist sunk by theft.
-    expect(final.phase).toMatchObject({ kind: "ended", outcome: { result: "failed", reason: "theft", winners: [] } });
+    // Every stash is equal: only a Mole or Fixer dealt here wins a heist sunk by theft (design §8.4, their handlers).
+    const sunkWinners = final.playerOrder.filter((p) => ["mole", "fixer"].includes(final.players[p]!.role));
+    expect(final.phase).toMatchObject({ kind: "ended", outcome: { result: "failed", reason: "theft", winners: sunkWinners } });
     expect([final.round, final.reached, final.share, final.bank]).toEqual([BANK_JOB.roundCap, 0, 0, 48 - 3 * BANK_JOB.roundCap]);
     // design §6.2, §9.1: a regular meeting at each third of the bank (48 → 30 in round 6, → 15 in round 11); none after the last round.
     expect(final.log.filter((e) => e.type === "meetingOpened").map((e) => e.type === "meetingOpened" && e.kind)).toEqual(["regular", "regular"]);
   }, 60_000);
 
   it("hostile input over a socket is refused and the game carries on (bad shapes, forged ids, system commands)", async () => {
-    const game = await startGame(2, 1, { roles: TEAM_ROLES });
+    const game = await startGame(2, 1);
     const [a] = await Promise.all(game.humans.map((h) => Client.open(game.id, h)));
     const before = await load(game.id);
     const hostile: unknown[] = [

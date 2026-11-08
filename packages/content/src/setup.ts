@@ -1,8 +1,5 @@
-// Content needed to set up a game: player-count limits, the decks and the
-// Balanced deal's mix by crew size. Rooms by player count live on the job
-// (jobs.ts). design §8.1, §16, extension.md "Decks", "Tags, decks and dealing"
-import type { RoleId } from "./index";
-import { ROLES } from "./roles";
+// Content needed to set up a game: player-count limits and the role deal by
+// crew size. Rooms by player count live on the job (jobs.ts). design §11.3, §16
 
 export const MIN_PLAYERS = 3;
 export const MAX_PLAYERS = 12;
@@ -16,57 +13,34 @@ export const MAX_SLOT_LENGTH = 64;
 /** The crew's emergency pool by crew size [tunable]: 1 meeting for 3–6 players, 2 for 7–12. design §9.3 */
 export const EMERGENCY_POOL: Readonly<Record<number, number>> = { 3: 1, 4: 1, 5: 1, 6: 1, 7: 2, 8: 2, 9: 2, 10: 2, 11: 2, 12: 2 };
 
-/** The powerless role. Fills any seat the deck can't cover. design §8 */
-export const FILLER_ROLE: RoleId = "rookie";
-
-/** A deck preset. extension.md "Decks" */
-export type DeckId = "starter" | "standard" | "everything";
-
-/** Starter (first game, no events): role deck v2 §3 minus the roles cut in R7. */
-export const STARTER_ROLES: readonly RoleId[] = ["rookie", "lookout"];
-
-/** Standard, the default: 6 roles; Rookies fill any spare seats. */
-export const STANDARD_ROLES: readonly RoleId[] = ["lookout", "auditor", "detective", "smoothTalker", "hacker", "mole"];
-
-/** Every role id the host may toggle on (any role, on top of any preset outside Quick); also the Everything deck. */
-export const POOL_ROLES: readonly RoleId[] = Object.keys(ROLES);
-
-export const DECKS: Readonly<Record<DeckId, readonly RoleId[]>> = {
-  starter: STARTER_ROLES,
-  standard: STANDARD_ROLES,
-  everything: POOL_ROLES,
-};
-
-export const DEFAULT_DECK: DeckId = "standard";
-
-/** How many Lone wolf and Wildcard seats the Balanced deal fills; the rest are Team players. */
-export interface BalancedMix {
-  readonly loneWolves: number;
-  readonly wildcards: number;
+/** Seats of each role kind in a deal: `either` seats go to eyes or shadows, drawn at random. */
+export interface RoleDealCounts {
+  readonly eyes: number;
+  readonly shadows: number;
+  readonly either: number;
 }
 
 /**
- * The Balanced deal's fixed mix by crew size (index = players). Start values
- * from roles-v2 §3's most-weighted row under the round(n ÷ 3) cap (its spoilers →
- * Lone wolves, accomplices → Wildcards; at 5–6 the 50/50 tie takes the row
- * with a Wildcard, provisional). Tuned by the R6 balance pass (r6-balance.md:
- * 4p and 8p gained a seat over the cap); the host can't change it. extension.md Build notes "Tags, decks and dealing"
+ * The deal by crew size (design §11.3, §19.2 seam 8): every player gets a
+ * role, eyes and shadows differ by at most one (an odd crew's extra seat is
+ * `either`). Up to 10 players every role is distinct; at 11–12 a role may
+ * repeat, at most `MAX_ROLE_COPIES` times.
  */
-export const BALANCED_MIX: Readonly<Record<number, BalancedMix>> = {
-  3: { loneWolves: 0, wildcards: 0 },
-  4: { loneWolves: 1, wildcards: 1 },
-  5: { loneWolves: 1, wildcards: 1 },
-  6: { loneWolves: 1, wildcards: 1 },
-  7: { loneWolves: 1, wildcards: 1 },
-  8: { loneWolves: 2, wildcards: 1 },
-  9: { loneWolves: 2, wildcards: 1 },
-  10: { loneWolves: 2, wildcards: 1 },
-  11: { loneWolves: 2, wildcards: 2 },
-  12: { loneWolves: 2, wildcards: 2 },
+export const ROLE_DEAL: Readonly<Record<number, RoleDealCounts>> = {
+  3: { eyes: 1, shadows: 1, either: 1 },
+  4: { eyes: 2, shadows: 2, either: 0 },
+  5: { eyes: 2, shadows: 2, either: 1 },
+  6: { eyes: 3, shadows: 3, either: 0 },
+  7: { eyes: 3, shadows: 3, either: 1 },
+  8: { eyes: 4, shadows: 4, either: 0 },
+  9: { eyes: 4, shadows: 4, either: 1 },
+  10: { eyes: 5, shadows: 5, either: 0 },
+  11: { eyes: 5, shadows: 5, either: 1 },
+  12: { eyes: 6, shadows: 6, either: 0 },
 };
 
-/** Truly random deals: at most this many of each of these roles. extension.md "Truly random" */
-export const RANDOM_DEAL_SINGLETONS: readonly RoleId[] = ["mole"];
+/** The most copies of one role a deal may hold (11–12 players). design §11.3 */
+export const MAX_ROLE_COPIES = 2;
 
 /** The host is offered "replace with a bot" for a player who missed this many rounds in a row. design §15 */
 export const REPLACE_AFTER_MISSED_ROUNDS = 2;

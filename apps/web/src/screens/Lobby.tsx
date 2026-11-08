@@ -2,13 +2,12 @@
 // settings, bots, hand-over, removing a seat (M2-13) and start. Polls GET
 // /games/:id every 2 s; when the game starts every seated browser moves to
 // /game/:id. design §15, §16
-import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError, inviteLink, sentence, type LobbySettings, type LobbyView, type Seat } from "../api";
 import { Avatar } from "../components/Avatar";
 import { Button, DangerButton } from "../components/Button";
 import { Chip } from "../components/Chip";
 import { Copy, Play, Plus } from "../components/icons";
-import { DeckSettings } from "../components/DeckSettings";
 import { Segmented, type SegmentedOption } from "../components/Segmented";
 import { SketchFrame } from "../components/SketchFrame";
 import { TextField } from "../components/TextField";
@@ -49,13 +48,20 @@ const SETTINGS = [
       { value: "secret", label: "Secret" },
     ],
   },
-  { key: "uniqueRoles", label: "Unique roles", hint: "Each role at most once", options: onOff },
+  {
+    // design §11.3: what the crew is told about the roles dealt (every player gets one).
+    key: "roleList",
+    label: "Role list",
+    hint: "What everyone is told about the roles dealt",
+    options: [
+      { value: "exact", label: "Exact" },
+      { value: "possible", label: "Possible" },
+      { value: "hidden", label: "Hidden" },
+    ],
+  },
   { key: "eventsEnabled", label: "Bank events", options: onOff },
   { key: "dmNotices", label: "DM notices", hint: "Everyone sees that a DM was sent", options: onOff },
 ] as const satisfies readonly { key: keyof LobbySettings; label: string; hint?: string; options: readonly SegmentedOption<string | boolean>[] }[];
-
-/** Event cards are off with the Starter deck: shown, not changeable. */
-const eventsLocked = (s: LobbySettings) => s.deck === "starter";
 
 const BLURBS: Record<string, string> = {
   honest: "hands in nearly everything",
@@ -215,8 +221,8 @@ export function Lobby({ id }: { id: string }) {
     }
   };
 
-  const changeSetting = (key: keyof LobbySettings, value: string | boolean) => changeSettings({ [key]: value });
-  const changeSettings = (patch: Partial<LobbySettings>) => {
+  const changeSetting = (key: keyof LobbySettings, value: string | boolean) => {
+    const patch = { [key]: value };
     void act("PATCH", `/games/${id}/settings`, { settings: patch }, { ...game, settings: { ...game.settings, ...patch } });
   };
 
@@ -315,25 +321,20 @@ export function Lobby({ id }: { id: string }) {
                 </h2>
                 {!game.youAreHost && <p className="meta">Only the host can change these.</p>}
                 <div className="settings__list">
-                {SETTINGS.map((def) => {
-                  const locked = def.key === "eventsEnabled" && eventsLocked(game.settings);
-                  return (
-                    <Fragment key={def.key}>
-                      <Segmented<string | boolean>
-                        seed={`set-${def.key}`}
-                        label={def.label}
-                        hint={locked ? "Off with the Starter deck" : "hint" in def ? def.hint : undefined}
-                        options={def.options}
-                        value={locked ? false : game.settings[def.key]}
-                        readOnly={!game.youAreHost || locked}
-                        disabled={busy}
-                        onChange={(v) => changeSetting(def.key, v)}
-                        wide={def.options.length > 2}
-                      />
-                      {def.key === "voteVisibility" && <DeckSettings settings={game.settings} readOnly={!game.youAreHost} disabled={busy} onChange={changeSettings} />}
-                    </Fragment>
-                  );
-                })}
+                {SETTINGS.map((def) => (
+                  <Segmented<string | boolean>
+                    key={def.key}
+                    seed={`set-${def.key}`}
+                    label={def.label}
+                    hint={"hint" in def ? def.hint : undefined}
+                    options={def.options}
+                    value={game.settings[def.key]}
+                    readOnly={!game.youAreHost}
+                    disabled={busy}
+                    onChange={(v) => changeSetting(def.key, v)}
+                    wide={def.options.length > 2}
+                  />
+                ))}
                 </div>
               </section>
             </aside>

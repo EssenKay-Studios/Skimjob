@@ -51,24 +51,21 @@ describe("Wilson 95% intervals", () => {
 describe("the matrix — design §17.4 (3–12 players), extension.md Build notes \"Sim\" (setups, gates), §10 (events)", () => {
   it("has every player count × setup × events on and off; only Balanced at 4–12 is gated", () => {
     const cells = buildMatrix(opts());
-    expect(cells).toHaveLength(10 * 3 * 2);
+    expect(cells).toHaveLength(10 * 2 * 2);
     expect(cells.filter((c) => c.players === 6).map((c) => `${c.setup}/${c.events}`)).toEqual([
-      "balanced/true", "balanced/false", "random/true", "random/false", "possible/true", "possible/false",
+      "balanced/true", "balanced/false", "possible/true", "possible/false",
     ]);
     expect(cells.filter((c) => c.gated).map((c) => c.key)).toEqual(
       cells.filter((c) => c.setup === "balanced" && c.players >= 4).map((c) => c.key),
     );
     expect(cells.find((c) => c.key === "3p/balanced/events-on")?.gated).toBe(false);
     expect(cells.find((c) => c.key === "4p/balanced/events-on")?.gated).toBe(true);
-    expect(cells.find((c) => c.key === "4p/random/events-on")?.gated).toBe(false);
+    expect(cells.find((c) => c.key === "4p/possible/events-on")?.gated).toBe(false);
   });
 
-  it("every cell's games are valid Standard-deck configs with its deal and role list", () => {
-    for (const c of buildMatrix(opts({ setups: ["balanced", "random", "possible", "hidden"] }))) {
+  it("every cell's games are valid configs with its role list (design §11.3)", () => {
+    for (const c of buildMatrix(opts({ setups: ["balanced", "possible", "hidden"] }))) {
       const { config } = setupGame(cellSimOptions(opts(), c), c.players, 0);
-      expect(config.uniqueRoles).toBeUndefined();
-      expect(config.deck).toBe("standard");
-      expect(config.deal).toBe(c.setup === "random" ? "random" : "balanced");
       expect(config.roleList).toBe(c.setup === "possible" || c.setup === "hidden" ? c.setup : "exact");
       expect(config.eventsEnabled).toBe(c.events);
     }
@@ -76,10 +73,10 @@ describe("the matrix — design §17.4 (3–12 players), extension.md Build note
 
   it("a game's seed comes from the suite seed, the cell and the game index only", () => {
     const o = opts({ seed: "S", batch: 7 });
-    const cell = buildMatrix(o).find((c) => c.key === "6p/random/events-off");
+    const cell = buildMatrix(o).find((c) => c.key === "6p/possible/events-off");
     if (!cell) throw new Error("cell missing");
     const so = cellSimOptions(o, cell);
-    expect(gameSeed(so.seed, cell.players, 12)).toBe("S/6p/random/events-off/6p/12");
+    expect(gameSeed(so.seed, cell.players, 12)).toBe("S/6p/possible/events-off/6p/12");
     // Batch size, sampling targets and overrides don't change the seeds (overrides: paired games for --compare).
     expect(cellSimOptions({ ...o, batch: 50, ciHalfWidth: 0.05, contentOverrides: { alarm: { bulbs: 1 } } }, cell).seed).toBe(so.seed);
   });
@@ -99,7 +96,7 @@ describe("the matrix — design §17.4 (3–12 players), extension.md Build note
 });
 
 describe("tallies", () => {
-  const mole = (over = {}) => seat({ id: "m", role: "mole", tag: "loneWolf", star: true, ...over });
+  const mole = (over = {}) => seat({ id: "m", role: "mole", ...over });
   const games = [
     gameRec({ players: 4, winners: ["a", "m"], playerRecords: [seat({ id: "a", winCredit: 0.5, tokensEarned: 2, tokensSpent: 1 }), seat({ id: "b", role: "lookout" }), mole({ winCredit: 0.5, tokensEarned: 1 })] }),
     gameRec({ players: 4, result: "failed", reason: "bust", winners: ["m"], playerRecords: [seat({ id: "a" }), mole({ winCredit: 1, tokensEarned: 2, tokensSpent: 2 })] }),
@@ -111,9 +108,9 @@ describe("tallies", () => {
     expect(t).toMatchObject({ games: 3, successes: 1, failures: 2, busts: 1, theftFailures: 1, wholeCrewWins: 0, capStalls: 1, noWinner: 1, sharedWin: 1 });
     // design §8.2, §21 G6: a success every seat won is a whole-crew win.
     expect(tallyGames([gameRec({ players: 2, winners: ["a", "b"] })]).wholeCrewWins).toBe(1);
-    expect(t.roles.rookie).toEqual({ seats: 3, credit: 0.5, fair: 0.75, successCredit: 0.5, earned: 2, spent: 1 });
+    expect(t.roles.locksmith).toEqual({ seats: 3, credit: 0.5, fair: 0.75, successCredit: 0.5, earned: 2, spent: 1 });
     expect(t.roles.mole).toEqual({ seats: 2, credit: 1.5, fair: 0.5, successCredit: 0.5, earned: 3, spent: 2 });
-    expect(Object.keys(t.roles)).toEqual(["lookout", "mole", "rookie"]);
+    expect(Object.keys(t.roles)).toEqual(["locksmith", "lookout", "mole"]);
   });
 
   it("adding tallies is folding the games together", () => {
@@ -141,11 +138,11 @@ describe("adaptive stopping", () => {
     expect(cellStatus(o, cell, t({ ...narrow, games: 400, busts: 40 })).done).toBe(false);
   });
 
-  it("an ungated cell (Truly random, or under 4 players) has no bands, so it stops at minGames", () => {
+  it("an ungated cell (the Possible role list, or under 4 players) has no bands, so it stops at minGames", () => {
     const o = opts({ minGames: 400, maxGames: 100000, ciHalfWidth: 0.02 });
-    const random = buildMatrix(o).find((c) => c.key === "6p/random/events-on");
-    if (!random) throw new Error("cell missing");
-    expect(cellStatus(o, random, t({ games: 400, successes: 100 }))).toEqual({ done: true, converged: true });
+    const possible = buildMatrix(o).find((c) => c.key === "6p/possible/events-on");
+    if (!possible) throw new Error("cell missing");
+    expect(cellStatus(o, possible, t({ games: 400, successes: 100 }))).toEqual({ done: true, converged: true });
     expect(cellStatus(o, cell, t({ games: 400, successes: 100 })).done).toBe(false);
   });
 });
@@ -168,7 +165,7 @@ describe("role parity — extension.md Build notes \"Sim\"", () => {
     expect(parityOf({ a: seats(400, 0.2) }).check.verdict).toBe("n/a");
   });
   it("split gate (PM 3 Nov): the spread over team roles only, ★ roles in STAR_BAND of the team roles' pooled ratio — docs/balance/r6-balance.md", () => {
-    // auditor and priest win only a success; the mole is ★ (winsOn).
+    // auditor and priest win only a success; the mole is ★ (its handler's own win rule, design §8.4).
     const split = splitParityOf({
       auditor: seats(40000, 0.12),
       priest: seats(40000, 0.13),
@@ -284,7 +281,7 @@ describe("suite arguments", () => {
   it("defaults: the whole matrix, ±2 pp, 400–6000 games in batches of 200", () => {
     const r = parseSuiteArgs([]);
     if (r.kind !== "run") throw new Error("should parse");
-    expect(r.options).toMatchObject({ seed: "suite", setups: ["balanced", "random", "possible"], events: [true, false], ciHalfWidth: 0.02, minGames: 400, maxGames: 6000, batch: 200 });
+    expect(r.options).toMatchObject({ seed: "suite", setups: ["balanced", "possible"], events: [true, false], ciHalfWidth: 0.02, minGames: 400, maxGames: 6000, batch: 200 });
     expect(r.options.playerCounts).toEqual([3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
     expect(r.settings).toMatchObject({ shard: null, out: "sim-output/suite.json", strict: false });
   });

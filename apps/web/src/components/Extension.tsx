@@ -1,9 +1,8 @@
-// The Extension's player-facing pieces (docs/extension.md): role facts with a
-// "How you win" line, tappable role names, the rulebook sheet,
-// and your tokens with the perk shop.
+// Role facts with a "How you win" line (design §11, §20.2), tappable role
+// names, the rulebook sheet, and your tokens with the perk shop (extension.md, until S3a.7).
 // Everything is read from the player's own view (or content, outside a game).
 import { useId, useState, type ReactNode } from "react";
-import { BANK_JOB, PERKS, POOL_ROLES, SHOP_COLUMNS, type FailureReason, type PerkColumn, type RoleDef, type RoleId } from "@skimjob/content";
+import { BANK_JOB, PERKS, ROLES, SHOP_COLUMNS, type PerkColumn, type RoleDef, type RoleId } from "@skimjob/content";
 import type { PlayerId, PlayerView, RoomId } from "@skimjob/engine";
 import { Button } from "./Button";
 import { Chip } from "./Chip";
@@ -11,12 +10,12 @@ import { DialogSheet } from "./MeetingKit";
 import { cardName, roomName } from "../game/describeEvent";
 import {
   COLUMN_LABEL,
-  TAG_BLURB,
+  KIND_BLURB,
   endingText,
   perkUses,
   roleInfo,
   roleListInfo,
-  rolesByTag,
+  rolesByKind,
   rolesOf,
   shopState,
   type PerkUse,
@@ -33,7 +32,7 @@ const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 // ---------------------------------------------------------------- roles
 
-/** A role name you can tap to see its tag and win line. extension.md Build notes (2 Nov answers) */
+/** A role name you can tap to see its kind and win line. design §11.1, §20.2 */
 export function RoleTip({ id, roles, label }: { id: RoleId; roles?: Roles; label?: ReactNode }) {
   const [open, setOpen] = useState(false);
   const tip = useId();
@@ -42,28 +41,28 @@ export function RoleTip({ id, roles, label }: { id: RoleId; roles?: Roles; label
     <span className="role-tip">
       <button type="button" className="role-tip__name" aria-expanded={open} aria-controls={tip} onClick={() => setOpen(!open)}>
         {label ?? info.name}
-        {info.star && <span aria-label=" (can win a failed heist)"> ★</span>}
+        {info.star && <span aria-label=" (can win a heist sunk by theft)"> ★</span>}
       </button>
       {open && (
         <span id={tip} className="role-tip__pop" role="note">
-          <b>{info.tagLabel}.</b> {info.howYouWin}
+          <b>{info.kindLabel}.</b> {info.howYouWin}
         </span>
       )}
     </span>
   );
 }
 
-/** A role's tag, power, token trigger and "How you win" line. */
+/** A role's kind, power, token trigger and "How you win" line. */
 export function RoleFacts({ info, compact = false }: { info: RoleInfo; compact?: boolean }) {
   return (
     <dl className={compact ? "role-facts is-compact" : "role-facts"}>
       <div className="role-facts__row role-facts__tag">
-        <dt className="visually-hidden">Tag</dt>
+        <dt className="visually-hidden">Kind</dt>
         <dd>
-          <span className={`tag tag--${info.tag}`}>{info.tagLabel}</span>
+          <span className={`tag tag--${info.kind}`}>{info.kindLabel}</span>
           {info.star && (
-            <span className="tag tag--star" title="Can also win when the heist fails">
-              ★ also wins a failed heist
+            <span className="tag tag--star" title="Can also win a heist sunk by theft">
+              ★ also wins a heist sunk by theft
             </span>
           )}
         </dd>
@@ -91,7 +90,7 @@ export function MyRoleFacts({ view }: { view: PlayerView }) {
   return <RoleFacts info={roleInfo(view.me.role, rolesOf(view))} />;
 }
 
-/** The roles the crew is told about: exact, possible or hidden (host setting). */
+/** The roles the crew is told about: exact (with counts), possible or hidden (host setting, design §11.3). */
 export function RoleList({ view }: { view: PlayerView }) {
   const roles = rolesOf(view);
   const list = roleListInfo(view);
@@ -115,13 +114,13 @@ export function RoleList({ view }: { view: PlayerView }) {
 
 // ---------------------------------------------------------------- rulebook
 
-/** The rulebook sheet: the game in a minute, endings, roles by tag and the shop. extension.md */
+/** The rulebook sheet: the game in a minute, endings, roles by kind and the shop. */
 export function RulebookSheet({ open, onClose, view }: { open: boolean; onClose: () => void; view: PlayerView | null }) {
   const roles = rolesOf(view);
   const job = view ? jobOf(view) : BANK_JOB;
-  const ids = POOL_ROLES.filter((r) => roles[r]);
+  const ids = Object.keys(ROLES).filter((r) => roles[r]);
   const inGame = new Set(view?.roleList?.roles ?? []);
-  const stars = (reason: FailureReason) => ids.filter((r) => roles[r]!.winsOn.includes(reason)).map((r) => roles[r]!.name);
+  const stars = ids.filter((r) => roleInfo(r, roles).star).map((r) => roles[r]!.name);
   const shop: { perk: keyof typeof PERKS; cost: number }[] = view && view.shop.length > 0 ? [...view.shop] : [];
   return (
     <DialogSheet open={open} onClose={onClose} seed="rulebook" labelledBy="rulebook-h">
@@ -135,7 +134,7 @@ export function RulebookSheet({ open, onClose, view }: { open: boolean; onClose:
         <section aria-labelledby="rb-minute">
           <h3 id="rb-minute">The game in one minute</h3>
           <ul className="rulebook__list">
-            <li>One crew robs one bank. Only one player wins: whoever ends with the biggest stash.</li>
+            <li>One crew robs one bank. Whoever ends with the biggest stash wins, every tie for it too.</li>
             <li>
               Each round, pick a room in secret and drag each coin into the crew duffel or your own pocket.
             </li>
@@ -170,7 +169,7 @@ export function RulebookSheet({ open, onClose, view }: { open: boolean; onClose:
               </tr>
               <tr>
                 <td>Sunk by theft</td>
-                <td>Nobody, unless {orList(stars("theft"))} has the biggest stash</td>
+                <td>Nobody, unless {orList(stars)} has the biggest stash of all</td>
               </tr>
             </tbody>
           </table>
@@ -178,11 +177,11 @@ export function RulebookSheet({ open, onClose, view }: { open: boolean; onClose:
         </section>
         <section aria-labelledby="rb-roles">
           <h3 id="rb-roles">Roles</h3>
-          <p className="meta">The tag only says how selfish a power is; it isn't a team. ★ marks the roles that can also win when the heist fails.</p>
-          {rolesByTag(ids, roles).map((g) => (
-            <div key={g.tag} className="rulebook__tag">
+          <p className="meta">Every player gets a role. No role is good or evil; it isn't a team. ★ marks the roles that can also win a heist sunk by theft.</p>
+          {rolesByKind(ids, roles).map((g) => (
+            <div key={g.kind} className="rulebook__tag">
               <h4>
-                <span className={`tag tag--${g.tag}`}>{g.label}</span> <span className="meta">{TAG_BLURB[g.tag]}</span>
+                <span className={`tag tag--${g.kind}`}>{g.label}</span> <span className="meta">{KIND_BLURB[g.kind]}</span>
               </h4>
               <ul className="rulebook__roles">
                 {g.roles.map((r) => {
@@ -195,7 +194,6 @@ export function RulebookSheet({ open, onClose, view }: { open: boolean; onClose:
                           {info.star ? " ★" : ""}
                         </b>
                         {inGame.has(r) && <Chip on>in this game</Chip>}
-                        {info.minPlayers && <span className="meta">{info.minPlayers}+ players</span>}
                       </p>
                       <RoleFacts info={info} compact />
                     </li>

@@ -1,6 +1,6 @@
 // Test helpers: scripted engine games for the bot tests. Not exported from the package.
-import { STARTER_ROLES } from "@skimjob/content";
-import { createGame, handleCommand, jobFor, type ContentOverrides, type GameConfig, type GameState, type PlayerId, type VoteVisibility } from "@skimjob/engine";
+import { ROLES } from "@skimjob/content";
+import { handleCommand, jobFor, replay, setupEvents, type ContentOverrides, type GameConfig, type GameState, type PlayerId, type VoteVisibility } from "@skimjob/engine";
 
 const IDS = ["ana", "ben", "carl", "dee", "eve"];
 
@@ -20,16 +20,26 @@ export const R6_COINS: ContentOverrides = {
 };
 
 export function config(n: number, seed: string, voteVisibility: VoteVisibility = "hiddenThenRevealed"): GameConfig {
-  // Starter pool (the shop may still hold a Shield).
-  return { seed, players: seats(n), job: "bank", rolePool: [...STARTER_ROLES], eventsEnabled: false, voteVisibility, contentOverrides: R6_COINS };
+  // The shop may still hold a Shield.
+  return { seed, players: seats(n), job: "bank", eventsEnabled: false, voteVisibility, contentOverrides: R6_COINS };
 }
 
-/** A game where `want` holds for the dealt roles trying seeds in order. */
-export function game(n: number, want: (s: GameState) => boolean = () => true): GameState {
-  for (let i = 0; ; i++) {
-    const s = createGame(config(n, `script-${i}`));
-    if (want(s)) return s;
-  }
+/**
+ * A new game whose seats hold `roles` (by player id); every other seat is a
+ * Lookout, whose power is inert unless a move uses it, so other roles' powers
+ * don't touch tests that aren't about them. The deal itself is the engine's
+ * (design §11.3); this rewrites the dealt roles in the setup log.
+ */
+export function game(n: number, roles: Readonly<Record<PlayerId, string>> = {}, seed = "script-0"): GameState {
+  const cfg = config(n, seed);
+  const roleFor = (id: PlayerId) => (Object.hasOwn(roles, id) ? (roles[id] as string) : "lookout");
+  const order = Object.keys(ROLES);
+  // The Exact role list follows the roles set here, in content order.
+  const list = cfg.players.map((p) => roleFor(p.id)).sort((a, b) => order.indexOf(a) - order.indexOf(b));
+  return replay(
+    cfg,
+    setupEvents(cfg).map((e) => (e.type === "roleDealt" ? { ...e, role: roleFor(e.player) } : e.type === "roleListShown" ? { ...e, roles: list } : e)),
+  );
 }
 
 export function run(state: GameState, ...commands: unknown[]): GameState {

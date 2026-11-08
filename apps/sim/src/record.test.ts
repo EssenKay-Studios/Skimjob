@@ -1,5 +1,4 @@
 // Flattening a finished game for the metrics. design §17.4
-import { STARTER_ROLES } from "@skimjob/content";
 import { describe, expect, it } from "vitest";
 import { handleCommand, replay, setupEvents, type Command, type ContentOverrides, type GameConfig, type GameEvent, type GameState } from "@skimjob/engine";
 import { recordGame } from "./record";
@@ -31,7 +30,6 @@ function config(players: number): GameConfig {
     seed: "record-seed",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: [...STARTER_ROLES], // a shakedown window only if the shop holds a Shield
     eventsEnabled: false,
     voteVisibility: "open",
     // Big grabs, a bank too big to run short or lose a third (no regular meeting) and bells too big to raid;
@@ -40,10 +38,10 @@ function config(players: number): GameConfig {
   };
 }
 
-/** A new game where every seat is a Rookie. */
-function rookies(players: number): GameState {
+/** A new game where every seat is a Lookout (its power acts only when a move uses it). */
+function lookouts(players: number): GameState {
   const cfg = config(players);
-  return replay(cfg, setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: "rookie" } : e)));
+  return replay(cfg, setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: "lookout" } : e)));
 }
 
 function apply(state: GameState, c: Command): GameState {
@@ -82,7 +80,7 @@ describe("recordGame — a scripted game", () => {
   // in the Lobby's 2 (6 a round) to the 9-round cap, round 4's split sharing the 18 too: share 21. 63 of the 66
   // coins taken reached the duffel (design §7.5), so the heist succeeds and p1's 3 above the share is the biggest stash.
   const lobby = (st: GameState) => run(pass(st), move("p0", "lobby"), move("p1", "lobby"), move("p2", "lobby"), roundDeadline(pass(st)));
-  let s = rookies(3);
+  let s = lookouts(3);
   for (let r = 0; r < 3; r++) s = run(pass(s), move("p0", "vault", 6), move("p1", "lobby", 1), move("p2", "lobby"), roundDeadline(pass(s)));
   // Round 3's result window: p1 spends the crew's emergency (design §9.3).
   s = run(
@@ -108,7 +106,7 @@ describe("recordGame — a scripted game", () => {
 
   it("records a heist sunk by theft (design §8.4)", () => {
     const cfg = { ...config(3), contentOverrides: { ...R6, roundCap: 1 } };
-    let t = replay(cfg, setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: "rookie" } : e)));
+    let t = replay(cfg, setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: "lookout" } : e)));
     t = run(t, move("p0", "lobby", 2), move("p1", "lobby", 2), move("p2", "lobby"), roundDeadline(t));
     expect(recordGame(t, ["greedy", "greedy", "honest"])).toMatchObject({ result: "failed", reason: "theft", endedRound: 1, capWithBankLeft: true });
   });
@@ -119,13 +117,13 @@ describe("recordGame — a scripted game", () => {
 
   it("records each seat's looting and pocketing", () => {
     const [p0, p1, p2] = rec.playerRecords;
-    expect(p0).toMatchObject({ id: "p0", personality: "greedy", role: "rookie", grabbed: 18 + 12, pocketed: 18, stash: 21, timesShakenDown: 1 });
+    expect(p0).toMatchObject({ id: "p0", personality: "greedy", role: "lookout", grabbed: 18 + 12, pocketed: 18, stash: 21, timesShakenDown: 1 });
     expect(p1).toMatchObject({ personality: "opportunist", grabbed: 18, pocketed: 3, stash: 3 + 21, winner: true, winCredit: 1 });
     expect(p2).toMatchObject({ personality: "honest", grabbed: 18, pocketed: 0, stash: 21 });
   });
 
   it("refuses a game that isn't over", () => {
-    expect(() => recordGame(rookies(3), ["honest", "honest", "honest"])).toThrow(/isn't over/);
+    expect(() => recordGame(lookouts(3), ["honest", "honest", "honest"])).toThrow(/isn't over/);
   });
 });
 
@@ -158,7 +156,7 @@ describe("recordGame — raids, Wanted, Rooftop stalls and the bust (design §5,
   it("counts the raids, the final Wanted and the rounds with more than half the crew on the Rooftop", () => {
     // 2-bulb bells, a bust at 2 stars: round 1 raids the Vault (2 of 3 on the Rooftop: a stall), round 2 the Office (a bust).
     const cfg = { ...config(3), contentOverrides: { ...R6, alarm: { bulbs: 2, bustStars: 2 } } };
-    let s = replay(cfg, setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: "rookie" } : e)));
+    let s = replay(cfg, setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: "lookout" } : e)));
     s = run(s, move("p0", "vault"), move("p1", "rooftop"), move("p2", "rooftop"), roundDeadline(s));
     const office = (player: string): Command => ({ type: "submitMove", player, move: { room: "office", duffel: 2, pocket: 0 } });
     // The raid's briefing passes (design §9.2).

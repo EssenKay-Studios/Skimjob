@@ -11,7 +11,8 @@
 import { BANK_JOB } from "@skimjob/content";
 import { describe, expect, it } from "vitest";
 import type { GameConfig, GameEvent, GameState, PlayerId, PlayerState, PlayerView, VoteVisibility } from "./types";
-import { createGame } from "./setup";
+import { createGame, setupEvents } from "./setup";
+import { replay } from "./reduce";
 import { handleCommand } from "./handle";
 import { eventsSince, viewFor } from "./view";
 import { fullGrab } from "./grab.testkit";
@@ -38,13 +39,21 @@ const config = (n: number, voteVisibility: VoteVisibility, seed: string): GameCo
   seed,
   players: Array.from({ length: n }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: i % 2 === 0 })),
   job: "bank",
-  // Team players only (no Hacker loop, which changes others' feeds by design; no Mole rings).
-  rolePool: ["rookie", "lookout", "priest", "auditor"],
   eventsEnabled: false,
   voteVisibility,
   // Bells too big to raid, so a random room is never taped off (raids in leak tests: view.leak.test.ts).
   contentOverrides: NO_RAIDS,
 });
+
+/**
+ * A real deal with the passive powers swapped out: the Locksmith's quieter coins and the Smooth
+ * Talker's double vote show in public bells and results by design (§5.2, §9.5), so a hidden role
+ * swap or ballot swap would show through them. Only the Lookout's power is used here.
+ */
+const PASSIVE: Readonly<Record<string, string>> = { locksmith: "auditor", smoothTalker: "detective" };
+function newGame(cfg: GameConfig): GameState {
+  return replay(cfg, setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: PASSIVE[e.role] ?? e.role } : e)));
+}
 
 function apply(s: GameState, c: Cmd, game: string): GameState {
   const r = handleCommand(s, c);
@@ -70,7 +79,7 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
   const rand = mulberry32(seed);
   const int = (k: number): number => Math.floor(rand() * k);
   const pick = <T>(xs: readonly T[]): T => xs[int(xs.length)] as T;
-  let A = createGame(config(n, mode, `qa-${seed}`));
+  let A = newGame(config(n, mode, `qa-${seed}`));
   let B = A;
   const ids = A.playerOrder;
   const involved = new Set<PlayerId>();
@@ -94,7 +103,7 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
   };
   const over = (): boolean => A.phase.kind === "ended";
 
-  // "role": two players' secret roles are swapped in B (design §8). Their moves stay valid under both.
+  // "role": two players' secret roles are swapped in B (design §11.3). Their moves stay valid under both.
   const restricted = new Set<PlayerId>();
   const pairs = ids.flatMap((x) => ids.filter((z) => A.players[z]?.role !== A.players[x]?.role).map((z) => [x, z] as const));
   if (kind === "role" && pairs.length > 0) {

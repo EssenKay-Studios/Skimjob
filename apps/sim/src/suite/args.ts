@@ -21,7 +21,7 @@ export type ParsedSuiteArgs =
   | { readonly kind: "run"; readonly options: SuiteOptions; readonly settings: RunSettings }
   | { readonly kind: "merge"; readonly files: readonly string[]; readonly settings: RunSettings };
 
-export const DEFAULTS = { seed: "suite", players: "3-12", setups: "balanced,random,possible", events: "on,off", ci: 2, minGames: 400, maxGames: 6000, batch: 200 } as const;
+export const DEFAULTS = { seed: "suite", players: "3-12", setups: "balanced,possible", events: "on,off", ci: 2, minGames: 400, maxGames: 6000, batch: 200 } as const;
 
 export const SUITE_USAGE = `Skimjob simulation suite: a fixed matrix of all-bot game settings, each played until its
 rates are known to within a target, checked against the design §17.4 targets and role
@@ -32,9 +32,8 @@ Usage: pnpm sim:suite -- [options]
 
 Matrix (one cell per combination):
   -p, --players <spec>    player counts, e.g. 3-12 or 4,6,8 (default ${DEFAULTS.players})
-      --setups <list>     dealing setups (default ${DEFAULTS.setups}): balanced (Exact role
-                          list; the gates), random (Truly random), possible / hidden (Balanced
-                          with that role list); the Standard deck throughout
+      --setups <list>     setups (default ${DEFAULTS.setups}): balanced (the standard deal,
+                          Exact role list; the gates), possible / hidden (that role list)
       --events <list>     on, off or both (default ${DEFAULTS.events})
   -b, --bots <mix>        bot mix as in pnpm sim (default honest,opportunist,greedy,cautious)
       --overrides <json>  content overrides, inline JSON or a file (as in pnpm sim); seeds don't
@@ -148,7 +147,7 @@ export function parseSuiteArgs(argv: readonly string[], readFile?: (path: string
   if (shard && (values.compare !== undefined || values.strict)) return error("--compare and --strict need the whole matrix: give them to merge");
   const playerCounts = parsePlayerCounts(values.players ?? DEFAULTS.players);
   if (typeof playerCounts === "string") return error(playerCounts);
-  const setups = list<Setup>(values.setups ?? DEFAULTS.setups, ["balanced", "random", "possible", "hidden"], "setups");
+  const setups = list<Setup>(values.setups ?? DEFAULTS.setups, ["balanced", "possible", "hidden"], "setups");
   if (typeof setups === "string") return error(setups);
   const eventList = list(values.events ?? DEFAULTS.events, ["on", "off"], "events");
   if (typeof eventList === "string") return error(eventList);

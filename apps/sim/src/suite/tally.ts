@@ -30,7 +30,7 @@ export interface Tally {
   readonly wholeCrewWins: number;
   /** Ended at the round cap with over a quarter of the bank left. design §21 G4 */
   readonly capStalls: number;
-  /** Games nobody won (a failure no top-group role wins on), and games two or more shared. extension.md "One crew, and how you win" */
+  /** Games nobody won (a failure nobody wins: no Rooftop escapee, or no Mole or Fixer at the top), and games two or more shared. design §8.5 */
   readonly noWinner: number;
   readonly sharedWin: number;
   readonly shakedowns: number;

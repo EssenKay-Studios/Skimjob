@@ -1,7 +1,6 @@
 // QA (PR #4): scripted full games, rejections, determinism and private
 // information for the round loop. design §3 (rooms, coins, grabs), §6.1. The
 // scripted games pin bells too big to raid; bells and raids: bells.test.ts.
-import { STARTER_ROLES } from "@skimjob/content";
 import { handleThroughAlibis } from "./alibis.testkit";
 import { describe, expect, it } from "vitest";
 import type { GameConfig, GameEvent, GameState, Move } from "./types";
@@ -17,18 +16,17 @@ function config(players: number): GameConfig {
     seed: "qa-round",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: [...STARTER_ROLES], // a shakedown window only if the shop holds a Shield
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     contentOverrides: NO_RAIDS,
   };
 }
 
-/** A new game with seat i dealt roles[i] (Rookie if missing). */
+/** A new game with seat i dealt roles[i] (a Lookout if missing: its power acts only when used). */
 function game(players: number, roles: string[] = []): GameState {
   const cfg = config(players);
   let seat = 0;
-  const log = setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: roles[seat++] ?? "rookie" } : e));
+  const log = setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: roles[seat++] ?? "lookout" } : e));
   return replay(cfg, log);
 }
 
@@ -103,8 +101,8 @@ function checkLedger(s: GameState): void {
 // Hand-calculated with content numbers: coins Lobby 1, Office, Deposit boxes, Manager's office, Server room 2,
 // Vault 3 (design §3.1); a missed move hands in 1 (§3.3); the bank holds 16 a player (§6.1).
 
-/** 3 players, all Rookies; p2 hands in the Lobby's 1 every round. */
-const ROOKIES: (Move | null)[][] = [
+/** 3 players, all Lookouts (no power used); p2 hands in the Lobby's 1 every round. */
+const STEADY: (Move | null)[][] = [
   [m("vault", 1), m("office"), m("lobby")], //                          in +5
   [m("security", 0, { watch: "vault" }), m("vault", 3), m("lobby")], // in +1
   [m("rooftop"), m("rooftop"), m("lobby")], //                          in +1
@@ -130,7 +128,7 @@ const THREE: (Move | null)[][] = [
   [m("lobby"), m("security", 0, { watch: "vault" }), m("office", 2)], // in +1
 ];
 
-/** 12 players, all Rookies; every room is in play. */
+/** 12 players, all Lookouts (no power used); every room is in play. */
 const row = (...groups: [number, Move | null][]): (Move | null)[] => groups.flatMap(([n, mv]) => Array<Move | null>(n).fill(mv));
 const TWELVE: (Move | null)[][] = [
   // 3 Vault; 3 Deposit boxes (two pocket 2, one pockets 1); 2 Manager's office pocket 1; Office pockets 1;
@@ -154,10 +152,10 @@ const TWELVE: (Move | null)[][] = [
 ];
 
 describe("QA scripted full games — design §3, §6.1", () => {
-  it("3 Rookies: 9 rounds, hand-ins, shares, stashes and bank by hand (design §7.2, §7.3)", () => {
+  it("3 players: 9 rounds, hand-ins, shares, stashes and bank by hand (design §7.2, §7.3)", () => {
     let s = game(3);
     s = ok(s, submit("p0", m("office", 2))); // resubmitted below; the last one counts (§3.2)
-    s = play(s, ROOKIES);
+    s = play(s, STEADY);
     expect(resolved(s).map((e) => e.type === "roundResolved" && e.honesty.reached)).toEqual([5, 6, 7, 8, 11, 18, 21, 22, 27]);
     expect([s.reached, s.bank]).toEqual([27, 5]);
     // Each split shares the hand-ins and the kitty 3 ways: 5 → 1 (kitty 2), 1+2 → 1, 1 → 0 (1), 1+1 → 0 (2), 3+2 → 1 (2), 7+2 → 3, 3 → 1, 1 → 0 (1), 5+1 → 2.
@@ -264,7 +262,7 @@ describe("QA rejected commands leave state unchanged", () => {
 
 describe("QA determinism — design §17.2", () => {
   for (const [n, script, roles] of [
-    [3, ROOKIES, []],
+    [3, STEADY, []],
     [3, THREE, ["priest", "lookout", "hacker"]],
     [12, TWELVE, []],
   ] as const) {
@@ -281,7 +279,7 @@ describe("QA determinism — design §17.2", () => {
 describe("QA private information — design §3.4, §18", () => {
   const PRIVATE = new Set(["moveSubmitted", "defaultMoveAssigned", "coinsGrabbed", "abilityResolved", "roomSighting", "roomWatched", "roleDealt"]);
   const games = [
-    play(game(3), ROOKIES),
+    play(game(3), STEADY),
     play(game(3, ["priest", "lookout", "hacker"]), THREE),
     play(game(12), TWELVE),
   ];

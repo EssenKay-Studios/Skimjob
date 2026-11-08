@@ -5,11 +5,9 @@ export function seat(over: Partial<PlayerRecord> = {}): PlayerRecord {
   return {
     id: "p1",
     personality: "honest",
-    role: "rookie",
-    tag: "teamPlayer",
+    role: "locksmith",
     tokensEarned: 0,
     tokensSpent: 0,
-    star: false,
     stash: 0,
     grabbed: 20,
     pocketed: 0,

@@ -139,7 +139,7 @@ function usePageVisible(): boolean {
 
 export interface ChatPanelProps {
   readonly me: PlayerId;
-  /** Everyone at the table, you included. */
+  /** Everyone in the crew, you included. */
   readonly people: readonly ChatPerson[];
   readonly chat: ChatState;
   readonly read: ReadState;

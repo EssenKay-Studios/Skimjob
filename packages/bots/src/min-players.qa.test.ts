@@ -12,7 +12,6 @@ function config(players: number, extra: Record<string, unknown> = {}): GameConfi
     seed: "qa125",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: [],
     eventsEnabled: true,
     voteVisibility: "hiddenThenRevealed",
     ...extra,

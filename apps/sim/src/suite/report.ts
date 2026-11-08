@@ -4,6 +4,7 @@
 // it. Pure: cell results in, report out, so a single run and merged shards
 // give the same bytes. design §17.4, extension.md Build notes "Sim"
 import { ROLES } from "@skimjob/content";
+import { roleHandler } from "@skimjob/engine";
 import { checkBand, wilson, type Band, type CheckResult, type Verdict } from "../stats";
 import type { Setup, SuiteOptions } from "./matrix";
 import type { CellResult } from "./run";
@@ -186,8 +187,8 @@ export function parityOf(roles: Readonly<Record<string, SeatTally>>, max: number
   return { roles: counted, fewSeats, spread, spreadLo, spreadHi, check: { verdict, sure } };
 }
 
-/** A ★ role: one that also wins some failures (`winsOn`). extension.md "Winning and losing" */
-const isStar = (role: string): boolean => (Object.hasOwn(ROLES, role) ? ROLES[role as keyof typeof ROLES]?.winsOn.length ?? 0 : 0) > 0;
+/** A ★ role: one with its own win rule for a heist sunk by theft, in its handler (the Mole, the Fixer; design §8.4, §19.2 seam 4). */
+const isStar = (role: string): boolean => roleHandler(role).winsSunk !== undefined;
 
 /**
  * The split parity gate for one pool (PM 3 Nov, provisional): the spread over
@@ -393,7 +394,7 @@ export function formatSuiteReport(r: SuiteReport): string {
     `(${TEAM_PARITY_MAX_SPREAD.toFixed(2)} until the M2-14 playtests; the target is ${PARITY_MAX_SPREAD.toFixed(2)}, as the all-role column), and each ★ role's`,
     `ratio ÷ the team roles' pooled ratio must sit in ${STAR_BAND.lo}–${STAR_BAND.hi}. The all-role spread is reported, not counted.`,
     "The point spread is biased upward by noise, so the verdict uses the 95% range: FAIL only if even the closest the intervals allow is over the limit.",
-    "Gated: Balanced at 4–12 players (extension.md Build notes \"Sim\"); Truly random and the role-list setups are reported only.",
+    "Gated: the Exact role list (balanced) at 4–12 players; the other role-list setups are reported only.",
     parity,
     "",
     stars,

@@ -24,7 +24,6 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
     seed: "qa-c2d",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: [],
     eventsEnabled: true,
     voteVisibility: "hiddenThenRevealed",
     // Bells too big to raid: these scripts test other rules (bells and raids: bells.test.ts).

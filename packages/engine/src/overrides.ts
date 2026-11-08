@@ -5,7 +5,7 @@
 // rules code never meets a shape it doesn't know. Configs are untrusted JSON,
 // so `validateOverrides` checks every field (own keys only, known keys only,
 // whole numbers: the engine counts coins, rounds, bulbs and stars).
-import { EVENTS, PERKS, ROLES, type EventDef, type EventEffect, type FailureReason, type JobDef, type JobId, type PerkId, type RoleDef, type RoleId, type RolePower, type RoomDef, type Temperament } from "@skimjob/content";
+import { EVENTS, PERKS, ROLES, type EventDef, type EventEffect, type JobDef, type JobId, type PerkId, type RoleDef, type RoleId, type RolePower, type RoomDef } from "@skimjob/content";
 import type { ContentOverrides, EventOverride, GameConfig, RoleOverride, RoomOverride } from "./types";
 import { isObject } from "./check";
 import { jobById } from "./job";
@@ -40,17 +40,18 @@ function checkFields(raw: unknown, path: string, fields: Readonly<Record<string,
 const COIN_ROOM_FIELDS = { coins: positiveCount, quietCoins: count } as const;
 const NO_COIN_ROOM_FIELDS = {} as const;
 
-/** The numbers each power may have overridden: all of its own, never another role's. design §8 */
+/** The numbers each power may have overridden: all of its own, never another role's. design §11.1 */
 const POWER_FIELDS: { readonly [K in RolePower["kind"]]: Readonly<Record<string, Rule>> } = {
-  none: {},
   lookout: { extraRooms: positiveCount },
-  loopCameras: { perStretch: positiveCount },
-  voteWeight: { weight: positiveCount },
+  muffle: { fewerRings: count },
+  detect: {},
   audit: { perStretch: positiveCount },
-  checkStash: { perStretch: positiveCount },
+  voteWeight: { weight: positiveCount },
+  hide: { perStretch: positiveCount },
+  blackout: { perStretch: positiveCount },
+  absolve: { perStretch: positiveCount },
   ring: { perStretch: positiveCount },
-  bless: { perStretch: positiveCount },
-  reopen: {},
+  reopen: { perGame: positiveCount },
 };
 
 /** The numbers each event effect may have overridden: its own only. design §10 */
@@ -113,7 +114,7 @@ export function validateOverrides(raw: unknown, job: JobDef, roles: RoleTable = 
           errors.push(`${path}: no such role`);
           continue;
         }
-        // Each role may tune only its own power's numbers, and its reward's count if it has one. design §8, §8.3
+        // Each role may tune only its own power's numbers, and its reward's count if it has one. design §11.1
         const reward = def.rewards && def.rewards.length > 0 ? { rewardCount: count } : {};
         checkFields(o, path, { ...POWER_FIELDS[def.power.kind], ...reward }, errors);
       }
@@ -219,20 +220,10 @@ export function roleDefIn(roles: RoleTable, role: RoleId): RoleDef | undefined {
   return Object.hasOwn(roles, role) ? roles[role] : undefined;
 }
 
-const NO_POWER: RolePower = { kind: "none" };
-
-/** `role`'s power in this game (content plus overrides); no power for an id with no definition. design §8 */
-export function powerOf(config: Pick<GameConfig, "contentOverrides">, role: RoleId): RolePower {
-  return roleDefIn(rolesFor(config), role)?.power ?? NO_POWER;
+/** `role`'s power in this game (content plus overrides); undefined for an id with no definition. design §11.1 */
+export function powerOf(config: Pick<GameConfig, "contentOverrides">, role: RoleId): RolePower | undefined {
+  return roleDefIn(rolesFor(config), role)?.power;
 }
-
-/** `role`'s temperament tag; a role id with no definition is a Team player. extension.md "Roles" */
-export function tagIn(roles: RoleTable, role: RoleId): Temperament {
-  return roleDefIn(roles, role)?.tag ?? "teamPlayer";
-}
-
-/** Whether `role` also wins the failure `reason` (from the top group). extension.md "Winning and losing" */
-export const winsOn = (roles: RoleTable, role: RoleId, reason: FailureReason): boolean => roleDefIn(roles, role)?.winsOn.includes(reason) ?? false;
 
 /** What `perk` costs in the shop in this game. extension.md "Tokens and the perk shop" */
 export function perkCost(config: Pick<GameConfig, "contentOverrides">, perk: PerkId): number {

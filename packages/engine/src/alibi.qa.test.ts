@@ -1,5 +1,4 @@
 // QA (PR #5): alibis and the round-named deadline. design §5.4, §5
-import { STARTER_ROLES } from "@skimjob/content";
 import { NO_RAIDS } from "./v01-numbers.testkit";
 import { describe, expect, it } from "vitest";
 import type { GameConfig, GameState } from "./types";
@@ -14,7 +13,6 @@ function config(players: number, seed = "qa-alibi"): GameConfig {
     seed,
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: [...STARTER_ROLES], // a shakedown window only if the shop holds a Shield
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     // Bells too big to raid: these scripts test the alibi window (bells and raids: bells.test.ts).

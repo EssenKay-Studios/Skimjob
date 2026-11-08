@@ -3,8 +3,8 @@ import { expect, test, type Page } from "@playwright/test";
 import { startGame } from "./setupGame";
 
 // R6b, the extension UI (docs/extension.md): the perk shop, the round cap and
-// the Wanted meter (design §5.4) in a real game, and the lobby's deck, deal and
-// role-list settings. Numbers are never asserted: the balance pass tunes them
+// the Wanted meter (design §5.4) in a real game, and the lobby's role-list
+// setting (design §11.3). Numbers are never asserted: the balance pass tunes them
 // in packages/content. SHOTS_DIR=… saves the gallery sections per viewport.
 const SHOTS = process.env.SHOTS_DIR;
 
@@ -49,7 +49,7 @@ test("gallery extension sections fit every viewport @shop", async ({ page }, inf
     expect(await overflow(page)).toBeLessThanOrEqual(0);
     if (!SHOTS) continue;
     mkdirSync(SHOTS, { recursive: true });
-    for (const id of ["ext-role-card", "ext-rulebook", "ext-shop", "ext-notells", "ext-deck", "ext-end-fail"]) {
+    for (const id of ["ext-role-card", "ext-rulebook", "ext-shop", "ext-notells", "ext-end-fail"]) {
       // Viewport shots: Chromium paints tall element shots of this long page blank.
       const box = await page.locator(`section[aria-labelledby="g-${id}"]`).evaluate((el) => {
         el.scrollIntoView({ block: "start" });
@@ -76,7 +76,7 @@ test("a real game shows the round cap and the Wanted meter @shop", async ({ page
   await expect(page.getByRole("meter", { name: /^Wanted \d of 3$/ })).toBeVisible();
 });
 
-test("lobby: deck, per-role picks, deal and role list persist @lobby", async ({ page }, info) => {
+test("lobby: the role list persists, and there is no deck, deal or role picker (design §11.3, §16) @lobby", async ({ page }, info) => {
   test.skip(info.project.name !== "desktop", "one run is enough");
   await page.goto("/");
   await page.getByRole("button", { name: "Plan a heist" }).click();
@@ -86,33 +86,17 @@ test("lobby: deck, per-role picks, deal and role list persist @lobby", async ({ 
   const group = (name: string) => page.getByRole("group", { name, exact: true });
   await group("Session length").getByRole("button", { name: "1 hour" }).click();
 
-  await group("Deck").getByRole("button", { name: "Everything" }).click();
-  await page.getByRole("button", { name: "Pick roles one by one" }).click();
-  const first = page.locator(".deck-roles__chips").getByRole("button", { pressed: true }).first();
-  const firstName = (await first.textContent())!;
-  await first.click();
-  await expect(page.locator(".deck-roles .seg__head")).toContainText("(your pick)");
-  await group("Deal").getByRole("button", { name: "Truly random" }).click();
+  // design §11.3: every player gets a role by the standard deal; the host only picks what the crew is told.
+  await expect(group("Deck")).toHaveCount(0);
+  await expect(group("Deal")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Pick roles one by one" })).toHaveCount(0);
   await group("Role list").getByRole("button", { name: "Possible" }).click();
   await expect(group("Role list").getByRole("button", { name: "Possible" })).toHaveAttribute("aria-pressed", "true");
 
   await page.reload();
-  await expect(group("Deck").getByRole("button", { name: "Everything" })).toHaveAttribute("aria-pressed", "true");
-  await expect(group("Deal").getByRole("button", { name: "Truly random" })).toHaveAttribute("aria-pressed", "true");
   await expect(group("Role list").getByRole("button", { name: "Possible" })).toHaveAttribute("aria-pressed", "true");
-  await page.getByRole("button", { name: "Pick roles one by one" }).click();
-  await expect(page.locator(".deck-roles__chips").getByRole("button", { name: firstName, exact: true })).toHaveAttribute("aria-pressed", "false");
-
-  // Starter only turns event cards off: the per-role picks stay (tokens and the shop too).
-  await group("Deck").getByRole("button", { name: "Starter" }).click();
-  await expect(group("Deck").getByRole("button", { name: "Starter" })).toHaveAttribute("aria-pressed", "true");
-  await expect(page.locator(".deck-roles__chips").getByRole("button").first()).toBeVisible(); // the open picker stays
-  await expect(page.getByText("Off with the Starter deck")).toBeVisible();
-
-  // The 15-minute length keeps the host's deck and the role picker.
-  await group("Deck").getByRole("button", { name: "Standard" }).click();
+  // The 15-minute length keeps the host's role list.
   await group("Session length").getByRole("button", { name: "15 min" }).click();
   await expect(group("Session length").getByRole("button", { name: "15 min" })).toHaveAttribute("aria-pressed", "true");
-  await expect(group("Deck").getByRole("button", { name: "Standard" })).toHaveAttribute("aria-pressed", "true");
-  await expect(page.locator(".deck-roles__toggle")).toBeVisible();
+  await expect(group("Role list").getByRole("button", { name: "Possible" })).toHaveAttribute("aria-pressed", "true");
 });

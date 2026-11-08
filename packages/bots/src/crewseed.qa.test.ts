@@ -9,7 +9,7 @@
 // same crewSeed => same commands and log), the hunch follows the crewSeed, and
 // the public data gameDigest used to read (seat names, round totals) no
 // longer moves it.
-import { createGame, handleCommand, viewFor, type Command, type GameConfig, type GameState, type PlayerCommand, type PlayerView } from "@skimjob/engine";
+import { handleCommand, replay, setupEvents, viewFor, type Command, type GameConfig, type GameState, type PlayerCommand, type PlayerView } from "@skimjob/engine";
 import { describe, expect, it, vi } from "vitest";
 import type { Agent, BotOptions } from "./bot";
 
@@ -29,13 +29,12 @@ const { botRandom, chooseVote, createBot, crewHunch } = await import("./bot");
 const { PERSONALITIES } = await import("./personalities");
 const { createBots, runBotGame } = await import("./run");
 
-/** All Rookies, Mole off, events off: nothing in any view but the public shop depends on the seed. */
+/** A hidden role list and events off: with every seat set to a Lookout below, nothing in any view but the public shop depends on the seed. */
 const config = (seed: string, n = 6): GameConfig => ({
   seed,
   players: Array.from({ length: n }, (_, i) => ({ id: `p${i + 1}`, name: `Bot ${i + 1}`, isBot: true })),
   job: "bank",
-  rolePool: ["rookie"],
-  uniqueRoles: false,
+  roleList: "hidden",
   eventsEnabled: false,
   voteVisibility: "hiddenThenRevealed",
   // The script sends everyone to one room each round; a quiet alarm keeps raids (design §5) out.
@@ -50,7 +49,9 @@ const must = (state: GameState, c: Command): GameState => {
 
 /** The same scripted commands (p1 pockets 2 a round, everyone else all-in in room 1) up to the game's first meeting. */
 function atFirstMeeting(seed: string): GameState {
-  let s = createGame(config(seed));
+  const c = config(seed);
+  // Every seat a Lookout, whatever the deal drew (design §11.3), so the views can match across seeds.
+  let s = replay(c, setupEvents(c).map((e) => (e.type === "roleDealt" ? { ...e, role: "lookout" } : e)));
   for (let guard = 0; guard < 50; guard++) {
     const phase = s.phase;
     if (phase.kind === "meeting") return s;
@@ -104,7 +105,7 @@ describe("QA PR #43: crewSeed — the hunch is not computable from public data",
       createBots(g.state.config.players, () => PERSONALITIES.honest, g.seed);
       const made = captured.slice(before);
       expect(made).toHaveLength(6);
-      // One crewSeed for the whole table, from the hidden seed; not the bot's own seed.
+      // One crewSeed for the whole crew, from the hidden seed; not the bot's own seed.
       expect(new Set(made.map((o) => o.crewSeed)).size).toBe(1);
       for (const o of made) expect(o.crewSeed).not.toBe(o.seed);
       return made[0]!.crewSeed!;
@@ -113,7 +114,7 @@ describe("QA PR #43: crewSeed — the hunch is not computable from public data",
     for (const p of ["p1", "p2", "p3", "p4"]) {
       const hunches = views("p2").map((v, i) => crewHunch(v, p, crewSeeds[i]!));
       expect(new Set(hunches).size, p).toBe(hunches.length);
-      // Still shared: every bot at a table reads the same hunch for p.
+      // Still shared: every bot in a crew reads the same hunch for p.
       for (const [i, g] of games.entries()) expect(crewHunch(viewFor(g.state, "p5"), p, crewSeeds[i]!)).toBe(hunches[i]);
     }
   });
@@ -218,7 +219,7 @@ describe("QA PR #64: crewSeed required", () => {
     }
   });
 
-  it("the hunch is the same for every bot at the table (shared crewSeed)", () => {
+  it("the hunch is the same for every bot in the crew (shared crewSeed)", () => {
     const { result } = play("qa64-shared", 6, "crew-A");
     const ids = result.state.playerOrder;
     for (const target of ids) {

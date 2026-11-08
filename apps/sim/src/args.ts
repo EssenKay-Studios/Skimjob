@@ -1,12 +1,11 @@
 // Command-line options for the simulator. Node built-ins only (util.parseArgs).
-// design §17.4 "Inputs: player count (3–12), mix of bot personalities, job,
-// role pool, config overrides, number of games, seed."
+// design §19.3 "Inputs: crew size (3–12), bot mix, overrides and seed."
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { MAX_PLAYERS, MIN_PLAYERS, type DeckId } from "@skimjob/content";
+import { MAX_PLAYERS, MIN_PLAYERS } from "@skimjob/content";
 import { PERSONALITIES, type PersonalityId } from "@skimjob/bots";
-import type { DealStyle, RoleListSetting, VoteVisibility } from "@skimjob/engine";
+import type { RoleListSetting, VoteVisibility } from "@skimjob/engine";
 import { defaultWorkers } from "./pool";
 
 export interface MixEntry {
@@ -21,12 +20,9 @@ export interface SimOptions {
   readonly mix: readonly MixEntry[];
   readonly seed: string;
   readonly job: string;
-  readonly rolePool: readonly string[];
-  /** The events deck (design §10). Off by default. */
+  /** The events deck (design §13). Off by default. */
   readonly eventsEnabled: boolean;
-  /** Deck preset, deal style and role list (extension.md "Decks and dealing", "Role list"). */
-  readonly deck: DeckId;
-  readonly deal: DealStyle;
+  /** The role list (design §11.3). */
   readonly roleList: RoleListSetting;
   readonly voteVisibility: VoteVisibility;
   /** Parsed but not yet checked: the engine's validateConfig checks it (untrusted JSON). */
@@ -55,10 +51,7 @@ Usage: pnpm sim -- [options]
                           personalities: ${Object.keys(PERSONALITIES).join(", ")}
   -s, --seed <seed>       base seed; same options + seed = same results (default "sim")
       --job <id>          job (default bank)
-      --role-pool <ids>   comma-separated roles to deal from (default: the content default)
-      --events            flip an event card each round from round 2 (design §10)
-      --deck <preset>     starter | standard | everything (default standard; --role-pool overrides)
-      --deal <style>      balanced | random (default balanced)
+      --events            flip an event card each round from round 2 (design §13)
       --role-list <mode>  exact | possible | hidden (default exact)
       --votes <mode>      hiddenThenRevealed | open | secret (default hiddenThenRevealed)
       --overrides <json>  content overrides as inline JSON or a path to a JSON file, e.g.
@@ -118,8 +111,6 @@ export function parseOverrides(value: string, readFile: (path: string) => string
   return JSON.parse(text) as unknown;
 }
 
-const DECKS: readonly string[] = ["starter", "standard", "everything"];
-const DEALS: readonly string[] = ["balanced", "random"];
 const ROLE_LISTS: readonly string[] = ["exact", "possible", "hidden"];
 const VOTES: readonly string[] = ["hiddenThenRevealed", "open", "secret"];
 
@@ -139,10 +130,7 @@ export function parseSimArgs(argv: readonly string[], readFile?: (path: string) 
         bots: { type: "string", short: "b" },
         seed: { type: "string", short: "s" },
         job: { type: "string" },
-        "role-pool": { type: "string" },
         events: { type: "boolean" },
-        deck: { type: "string" },
-        deal: { type: "string" },
         "role-list": { type: "string" },
         votes: { type: "string" },
         overrides: { type: "string" },
@@ -165,10 +153,6 @@ export function parseSimArgs(argv: readonly string[], readFile?: (path: string) 
   if (typeof playerCounts === "string") return error(playerCounts);
   const mix = values.bots === undefined ? DEFAULT_MIX : parseMix(values.bots);
   if (typeof mix === "string") return error(mix);
-  const deck = values.deck ?? "standard";
-  if (!DECKS.includes(deck)) return error(`--deck must be one of ${DECKS.join(", ")}`);
-  const deal = values.deal ?? "balanced";
-  if (!DEALS.includes(deal)) return error(`--deal must be one of ${DEALS.join(", ")}`);
   const roleList = values["role-list"] ?? "exact";
   if (!ROLE_LISTS.includes(roleList)) return error(`--role-list must be one of ${ROLE_LISTS.join(", ")}`);
   const votes = values.votes ?? "hiddenThenRevealed";
@@ -185,7 +169,6 @@ export function parseSimArgs(argv: readonly string[], readFile?: (path: string) 
   if (values.out !== undefined && values.out.includes("\0")) return error("--out is not a valid path");
   const workers = values.workers === undefined ? defaultWorkers() : /^\d+$/.test(values.workers.trim()) ? Number(values.workers) : NaN;
   if (!Number.isInteger(workers) || workers < 1) return error("--workers must be a whole number, 1 or more");
-  const rolePool = values["role-pool"] === undefined ? [] : values["role-pool"].split(",").map((r) => r.trim()).filter((r) => r !== "");
 
   return {
     kind: "run",
@@ -196,10 +179,7 @@ export function parseSimArgs(argv: readonly string[], readFile?: (path: string) 
       mix,
       seed: values.seed ?? "sim",
       job: values.job ?? "bank",
-      rolePool,
       eventsEnabled: values.events ?? false,
-      deck: deck as DeckId,
-      deal: deal as DealStyle,
       roleList: roleList as RoleListSetting,
       voteVisibility: votes as VoteVisibility,
       contentOverrides,

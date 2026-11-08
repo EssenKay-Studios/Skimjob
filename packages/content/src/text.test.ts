@@ -44,9 +44,9 @@ describe("event text — design §20.4", () => {
 });
 
 describe("role text — design §20.2", () => {
-  it("covers every role in play, names them as the data does, and the two new roles", () => {
-    for (const [id, role] of Object.entries(ROLES)) if (id !== "rookie") expect(ROLE_TEXT[id]?.name, id).toBe(role.name);
-    expect(Object.keys(ROLE_TEXT)).toEqual(expect.arrayContaining(["locksmith", "electrician"]));
+  it("covers exactly the roles in play, named as the data does", () => {
+    expect(Object.keys(ROLE_TEXT)).toEqual(Object.keys(ROLES));
+    for (const [id, role] of Object.entries(ROLES)) expect(ROLE_TEXT[id]?.name, id).toBe(role.name);
   });
 
   it("the Mole and the Fixer also win on a heist sunk by theft; the rest win like everyone", () => {
@@ -85,7 +85,7 @@ describe("infoText — design §20.5", () => {
 
   it("returns nothing for an id content does not have", () => {
     expect(infoText({ kind: "room", id: "attic" })).toBeUndefined();
-    expect(infoText({ kind: "role", id: "rookie" })).toBeUndefined();
+    expect(infoText({ kind: "role", id: "muscle" })).toBeUndefined();
     expect(infoText({ kind: "perk", id: "nope" })).toBeUndefined();
     expect(infoText({ kind: "event", id: "nope" })).toBeUndefined();
   });

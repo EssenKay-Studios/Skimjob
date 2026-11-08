@@ -1,7 +1,7 @@
-// The summary report printed after a batch: the design §17.4 balance metrics,
+// The summary report printed after a batch: the design §21 balance metrics,
 // one column per player count. Pure: a Summary in, text out.
 import type { GroupWins, Metrics, Summary } from "./metrics";
-import { HONEST_MAX_SHARE, MODERATE_MAX_SHARE, POCKET_BANDS } from "./metrics";
+import { HONEST_MAX_SHARE, MODERATE_MAX_SHARE, POCKET_BANDS, roleParity } from "./metrics";
 
 const pct = (v: number | null): string => (v === null ? "—" : `${Math.round(v * 100)}%`);
 const num = (v: number | null): string => (v === null ? "—" : v.toFixed(2));
@@ -23,6 +23,7 @@ const ROWS: readonly Row[] = [
   { label: "Rooftop stalls (rounds)", target: "≤ 15%", cell: (m) => pct(m.raids.stalls) },
   { label: "Ended at the cap, over ¼ of the bank left", target: "≤ 10%", cell: (m) => pct(m.capStalls) },
   { label: "Sunk by theft", target: "report", cell: (m) => pct(m.theftRate) },
+  { label: "  of those, won by a Mole or Fixer", target: "report", cell: (m) => pct(m.sunkWins.rate) },
   { label: "Whole-crew wins (of successes)", target: "5–20%", cell: (m) => pct(m.wholeCrewRate) },
   { label: "Bank emptied", target: "", cell: (m) => pct(m.bankEmptied) },
   { label: "Regular meetings per game", target: "", cell: (m) => num(m.meetings.regular) },
@@ -60,23 +61,21 @@ function groupTable(cols: readonly [string, Metrics][], pickGroup: (m: Metrics) 
 
 export function formatReport(summary: Summary, title: string): string {
   const cols = columns(summary);
-  const hasMole = cols.some(([, m]) => m.moleWins.games > 0);
-  // design §17.4: Mole win rate when present: games a Mole won ÷ games with a Mole (moleWinMetric).
-  // Reported only: under one crew the Mole is held to role parity (extension.md Build notes "Sim").
-  const moleRow: Row = { label: "Mole win rate (games with a Mole)", target: "report", cell: (m) => pct(m.moleWins.rate) };
-  const rows = hasMole ? [...ROWS, moleRow] : ROWS;
   const main = table(
-    ["Balance metric (design §17.4)", "target", ...cols.map(([c]) => c)],
-    rows.map((r) => [r.label, r.target, ...cols.map(([, m]) => r.cell(m))]),
+    ["Balance metric (design §21)", "target", ...cols.map(([c]) => c)],
+    ROWS.map((r) => [r.label, r.target, ...cols.map(([, m]) => r.cell(m))]),
   );
   const roles = groupTable(cols, (m) => m.roles, (g) => `${pct(g.successWinShare)} ${signed(g.deltaPp)}`.trim());
+  // design §21 G5: each role's win rate per seat ÷ the average seat's, all endings pooled.
+  const ratios = cols.map(([, m]) => roleParity(m.roles));
+  const roleIds = [...new Set(cols.flatMap(([, m]) => Object.keys(m.roles)))].sort();
+  const parity = table(["", ...cols.map(([c]) => c)], roleIds.map((role) => [role, ...ratios.map((r) => num(r[role] ?? null))]));
   const people = groupTable(cols, (m) => m.personalities, (g) => `${pct(g.winRate)}`);
   const pockets = groupTable(
     cols,
     (m) => Object.fromEntries(POCKET_BANDS.flatMap((b) => (m.pocketing[b] ? [[b, m.pocketing[b]]] : []))),
     (g) => String(g.seats),
   );
-  const mole = hasMole ? "" : "\nMole win rate: — (no Moles dealt)";
   const rejections = summary.overall.rejections > 0 ? `\nWARNING: bots sent ${summary.overall.rejections} refused commands (should be 0).` : "";
   return [
     title,
@@ -86,10 +85,13 @@ export function formatReport(summary: Summary, title: string): string {
     "Role win share in successful heists, with pp vs fair share 1 ÷ crew (target ±5 pp)",
     roles,
     "",
+    "Role win rate ÷ the average seat's, all endings (design §21 G5: 0.75–1.33)",
+    parity,
+    "",
     "Personality win rate (all games; a failed heist is a loss)",
     people,
     "",
-    "Seats per pocketing band (Inside Men left out: they can't pocket)",
+    "Seats per pocketing band",
     pockets,
-  ].join("\n") + mole + rejections + "\n";
+  ].join("\n") + rejections + "\n";
 }

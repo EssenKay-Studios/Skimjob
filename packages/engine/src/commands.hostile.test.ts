@@ -25,14 +25,13 @@ import { fullGrab } from "./grab.testkit";
 /** Every perk spent with `useAbility` (the Shield spends itself). design §8.3 */
 const ALL_PERKS: readonly PerkId[] = ["peek", "extraVote", "ballot", "tail", "alibi", "recharge", "rig"];
 
-const ROLES_BY_SEAT = ["lookout", "fixer", "hacker", "rookie", "smoothTalker", "auditor", "detective", "mole", "priest", "rookie", "rookie", "rookie"];
+const ROLES_BY_SEAT = ["lookout", "fixer", "hacker", "locksmith", "smoothTalker", "auditor", "detective", "mole", "priest", "electrician", "lookout", "lookout"];
 
 function config(extra: Partial<GameConfig> = {}): GameConfig {
   return {
     seed: "hostile-seed",
     players: ROLES_BY_SEAT.map((_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: false })),
     job: "bank",
-    rolePool: [...new Set(ROLES_BY_SEAT)],
     // The role list may name roles nobody holds.
     roleList: "possible",
     eventsEnabled: true,
@@ -47,7 +46,7 @@ function game(cfg: GameConfig, roles: readonly string[]): GameState {
   const log = setupEvents(cfg).map((e, i, all): GameEvent => {
     if (e.type !== "roleDealt") return e;
     const seat = all.slice(0, i).filter((x) => x.type === "roleDealt").length;
-    return { ...e, role: roles[seat] ?? "rookie" };
+    return { ...e, role: roles[seat] ?? "lookout" };
   });
   return replay(cfg, log);
 }
@@ -116,20 +115,21 @@ function baseCommands(s: GameState): Record<string, unknown>[] {
     // Moves: a plain one, one from a watcher room, and one using the role's power. design §5.1, §6.1, §8
     out.push(mv(player, room));
     if (s.rooms.includes("security")) out.push({ type: "submitMove", player, move: { ...fullGrab("security"), watch: room } });
-    const power = powerOf(s.config, p.role);
+    const kind = powerOf(s.config, p.role)?.kind;
     const ability =
-      power.kind === "lookout"
+      kind === "lookout"
         ? { kind: "lookout", rooms: [room] }
-        : power.kind === "loopCameras" || power.kind === "ring"
-          ? { kind: power.kind, room }
-          : power.kind === "reopen"
-            ? { kind: "reopen", room: Object.keys(s.taped)[0] ?? room }
-            : null;
+        : kind === "hide" || kind === "blackout" || kind === "ring"
+          ? { kind, room }
+          : kind === "absolve"
+            ? { kind, target: other(player) }
+            : kind === "reopen"
+              ? { kind: "reopen", room: Object.keys(s.taped)[0] ?? room }
+              : null;
     if (ability) out.push({ type: "submitMove", player, move: { ...fullGrab(room), ability } });
-    // Powers used outside a move. design §8
-    if (power.kind === "audit") out.push({ type: "useAbility", player, ability: { kind: "audit", room } });
-    if (power.kind === "checkStash") out.push({ type: "useAbility", player, ability: { kind: "checkStash", target: other(player) } });
-    if (power.kind === "bless") out.push({ type: "useAbility", player, ability: { kind: "bless", target: other(player) } });
+    // Powers used outside a move. design §11.1
+    if (kind === "audit") out.push({ type: "useAbility", player, ability: { kind: "audit", room } });
+    if (kind === "detect") out.push({ type: "useAbility", player, ability: { kind: "detect", target: other(player) } });
     // Perks. extension.md "Tokens and the perk shop"
     for (const perk of s.shop) out.push({ type: "buyPerk", player, perk });
     for (const ability of [

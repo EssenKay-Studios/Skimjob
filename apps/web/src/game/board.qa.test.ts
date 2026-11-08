@@ -2,7 +2,6 @@
 // Hidden-information leaks, every phase of a whole game, 2 / 3 / 12 seats,
 // Lockdown from a real card flip, and determinism. design §5, §5.4, §6, §10, §18
 import {
-  createGame,
   handleCommand,
   viewFor,
   type GameConfig,
@@ -13,6 +12,7 @@ import {
   type RoomId,
   type SystemCommand,
 } from "@skimjob/engine";
+import { createGame } from "./deal.testkit";
 import { describe, expect, it } from "vitest";
 import { boardScene, seatLooks } from "./board";
 import { BANK_JOB } from "@skimjob/content";
@@ -21,10 +21,8 @@ const config = (n: number, extra: Partial<GameConfig> = {}): GameConfig => ({
   seed: "board-qa",
   players: Array.from({ length: n }, (_, i) => ({ id: `p${i + 1}`, name: i === 0 ? "Ana" : `Bot · B${i}`, isBot: i > 0 })),
   job: "bank",
-  rolePool: ["rookie"],
   eventsEnabled: false,
   voteVisibility: "hiddenThenRevealed",
-  uniqueRoles: false,
   ...extra,
 });
 
@@ -60,8 +58,8 @@ function backed(v: PlayerView): void {
 }
 
 /** Play a whole game: everyone moves (a spread over the rooms), some alibis, meetings that skip. Returns every state. */
-function playAll(cfg: GameConfig, max = 400): GameState[] {
-  let s = createGame(cfg);
+function playAll(cfg: GameConfig, max = 400, roles: readonly string[] = []): GameState[] {
+  let s = createGame(cfg, roles);
   const states: GameState[] = [s];
   const push = (c: PlayerCommand | SystemCommand) => {
     s = step(s, c);
@@ -109,8 +107,7 @@ function playAll(cfg: GameConfig, max = 400): GameState[] {
 describe("QA: board figures come only from the viewer's view (PR #41)", () => {
   for (const n of [3, 12]) {
     it(`whole game at ${n} seats: every figure on every board, every phase, is backed by your own view`, () => {
-      const cfg = config(n, n === 12 ? { rolePool: ["rookie", "auditor", "lookout"] } : {});
-      const states = playAll(cfg);
+      const states = playAll(config(n), 400, n === 12 ? ["locksmith", "auditor", "lookout"] : []);
       const phases = new Set<string>();
       const kinds = new Set<string>();
       for (const s of states)

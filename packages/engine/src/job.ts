@@ -24,5 +24,8 @@ export function roomDef(job: JobDef, room: RoomId): RoomDef {
   return def;
 }
 
-/** The rings a grab of `coins` makes in `room`: one per coin after its quiet ones. design §3.1, §5.2 */
-export const ringsOf = (room: RoomDef, coins: number): number => Math.max(0, coins - room.quietCoins);
+/**
+ * The rings a grab of `coins` makes in `room`: one per coin after its quiet
+ * ones, less `fewerRings` per coin, never below 0 (the Locksmith's). design §3.1, §5.2
+ */
+export const ringsOf = (room: RoomDef, coins: number, fewerRings = 0): number => Math.max(0, coins - room.quietCoins) * Math.max(0, 1 - fewerRings);

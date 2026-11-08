@@ -1,6 +1,5 @@
-// QA (PR #51): the R6 bot settings — ★ lean point 0.8
-// below suspicion 2 — and the bot rules they must keep: votes on suspicion
-// only, same seed → same game. extension.md Build notes "Bots", design §8, §11.3
+// QA (PR #51): the bot lean point 0.8 for the Mole and the Fixer, and the bot
+// rules it must keep: votes on suspicion only, same seed → same game. design §8.4, §19.3
 import { describe, expect, it } from "vitest";
 import { viewFor, type GameEvent, type GameState } from "@skimjob/engine";
 import { botRandom, chooseVote, decide } from "./bot";
@@ -19,12 +18,12 @@ const withRole = (s: GameState, id: string, role: string, me: Partial<Player> = 
 const addLog = (s: GameState, ...events: GameEvent[]): GameState => ({ ...s, log: [...s.log, ...events] });
 const PUBLIC = { kind: "public" } as const;
 
-describe("QA #51: ★ lean point 0.8 — extension.md Build notes \"Bots\" [0.8]", { timeout: 10_000 }, () => {
+describe("QA #51: the Mole and Fixer lean point 0.8 — design §19.3 [0.8]", { timeout: 10_000 }, () => {
   it("LEAN_AT is 0.8", () => expect(LEAN_AT).toBe(0.8));
 });
 
-describe("QA #51: votes are on suspicion only — extension.md Build notes \"Bots\"", { timeout: 10_000 }, () => {
-  it("a leaning ★ bot votes exactly as a team player with the same view would", () => {
+describe("QA #51: votes are on suspicion only — design §19.3", { timeout: 10_000 }, () => {
+  it("a leaning Mole votes exactly as any other role with the same view would", () => {
     // Two rounds with every coin pocketed: a top-rated Mole leans toward theft (design §8.4).
     let cold = game(5);
     for (let r = 0; r < 2; r++) cold = round(cold, Object.fromEntries(cold.playerOrder.map((id) => [id, { room: "lobby", pocket: 2 }])));
@@ -33,7 +32,7 @@ describe("QA #51: votes are on suspicion only — extension.md Build notes \"Bot
     });
     const star = withRole(base, "ana", "mole", { stash: 10 });
     expect(leaning(viewFor(star, "ana"))).toBe("theft");
-    for (const role of ["rookie", "fixer", "mole", "hacker"]) {
+    for (const role of ["lookout", "fixer", "mole", "hacker"]) {
       for (const seed of ["v1", "v2", "v3"]) {
         expect(chooseVote(viewFor(withRole(base, "ana", role, { stash: 10 }), "ana"), PERSONALITIES.honest, botRandom(seed), "test-crew")).toEqual(
           chooseVote(viewFor(star, "ana"), PERSONALITIES.honest, botRandom(seed), "test-crew"),

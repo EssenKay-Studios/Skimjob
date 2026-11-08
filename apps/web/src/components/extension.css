@@ -1,8 +1,7 @@
-/* Extension pieces (docs/extension.md): role facts and tags, tappable role
-   names, the rulebook sheet, tokens and
-   the shop. Cartoon notebook style; theme tokens only. */
+/* Role facts and kinds (design §11), tappable role names, the rulebook sheet,
+   tokens and the shop. Cartoon notebook style; theme tokens only. */
 
-/* ---------- Tags and role facts ---------- */
+/* ---------- Kinds and role facts ---------- */
 .tag {
   display: inline-flex;
   align-items: center;
@@ -14,14 +13,11 @@
   background: var(--paper);
   white-space: nowrap;
 }
-.tag--teamPlayer {
-  background: var(--good-l);
-}
-.tag--wildcard {
+.tag--eyes {
   background: var(--gold);
 }
-.tag--loneWolf {
-  background: var(--bad-l);
+.tag--shadows {
+  background: var(--cream);
 }
 .tag--star {
   border-style: dashed;

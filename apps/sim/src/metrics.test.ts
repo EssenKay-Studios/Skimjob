@@ -1,7 +1,8 @@
 // Balance metric definitions. design §17.4 "Balance metrics and rough targets"
 import { describe, expect, it } from "vitest";
 import {
-  moleWinMetric,
+  roleParity,
+  sunkWinMetric,
   groupWins,
   bustRate,
   raidMetrics,
@@ -48,7 +49,7 @@ describe("pocketing bands — design §17.4 (moderate beats honest, heavy loses)
 });
 
 describe("group win rates — design §17.4 (each role within ±5 pp of 1 ÷ crew)", () => {
-  const players = [seat({ id: "a", role: "rookie" }), seat({ id: "b", role: "hacker" }), seat({ id: "c", role: "rookie" }), seat({ id: "d", role: "priest" })];
+  const players = [seat({ id: "a", role: "locksmith" }), seat({ id: "b", role: "hacker" }), seat({ id: "c", role: "locksmith" }), seat({ id: "d", role: "priest" })];
   const games = [
     gameRec({ players: 4, playerRecords: players, winners: ["a"] }),
     gameRec({ players: 4, playerRecords: players, winners: ["b", "c"] }),
@@ -57,8 +58,8 @@ describe("group win rates — design §17.4 (each role within ±5 pp of 1 ÷ cre
   const byRole = groupWins(games, (p) => p.role);
 
   it("counts seats, shares joint wins, and compares successful games with the fair share", () => {
-    // rookie: 6 seats (2 per game), credit 1 + 0.5; in successes 4 seats.
-    expect(byRole.rookie).toEqual({ seats: 6, winRate: 1.5 / 6, successSeats: 4, successWinShare: 1.5 / 4, fairShare: 0.25, deltaPp: 12.5 });
+    // locksmith: 6 seats (2 per game), credit 1 + 0.5; in successes 4 seats.
+    expect(byRole.locksmith).toEqual({ seats: 6, winRate: 1.5 / 6, successSeats: 4, successWinShare: 1.5 / 4, fairShare: 0.25, deltaPp: 12.5 });
     expect(byRole.hacker?.successWinShare).toBe(0.25);
     expect(byRole.hacker?.deltaPp).toBe(0);
     expect(byRole.priest).toMatchObject({ seats: 3, winRate: 0, successWinShare: 0, deltaPp: -25 });
@@ -69,9 +70,9 @@ describe("group win rates — design §17.4 (each role within ±5 pp of 1 ÷ cre
     expect(total).toBeCloseTo(2);
   });
 
-  it("a key of null leaves the seat out (Inside Men in the pocketing bands)", () => {
+  it("a key of null leaves the seat out", () => {
     const out = groupWins(games, (p) => (p.role === "priest" ? null : p.role));
-    expect(Object.keys(out)).toEqual(["hacker", "rookie"]);
+    expect(Object.keys(out)).toEqual(["hacker", "locksmith"]);
   });
 
   it("fair share follows the crew size of each seat's game", () => {
@@ -120,16 +121,33 @@ describe("summarize — broken down by player count (design §17.4)", () => {
   });
 });
 
-describe("Mole win rate — design §17.4, §3", () => {
-  it("games with a Mole that a Mole won, per game (two winning Moles count once)", () => {
+describe("Mole and Fixer wins on a heist sunk by theft — design §8.4, §21 G8", () => {
+  it("of the games sunk by theft, the share a Mole or Fixer won (per game, two winning copies count once)", () => {
     const mole = (id: string) => seat({ id, role: "mole" });
     const records = [
-      gameRec({ result: "failed", reason: "bust", playerRecords: [mole("m0"), mole("m1"), seat({ id: "d", role: "fixer" })], winners: ["m0", "m1", "d"] }),
-      gameRec({ result: "failed", reason: "theft", playerRecords: [mole("m0")], winners: ["m0"] }),
-      gameRec({ playerRecords: [mole("m0"), seat({ id: "x" })], winners: ["x"] }),
-      gameRec({ playerRecords: [seat({ id: "x" })], winners: ["x"] }), // no Mole: left out
+      gameRec({ result: "failed", reason: "theft", playerRecords: [mole("m0"), mole("m1")], winners: ["m0", "m1"] }),
+      gameRec({ result: "failed", reason: "theft", playerRecords: [seat({ id: "f", role: "fixer" })], winners: ["f"] }),
+      gameRec({ result: "failed", reason: "theft", playerRecords: [mole("m0"), seat({ id: "x" })], winners: [] }),
+      gameRec({ result: "failed", reason: "bust", playerRecords: [mole("m0")], winners: ["m0"] }), // not sunk by theft: left out
+      gameRec({ playerRecords: [seat({ id: "x" })], winners: ["x"] }),
     ];
-    expect(moleWinMetric(records)).toEqual({ games: 3, rate: 2 / 3 });
-    expect(moleWinMetric([gameRec()])).toEqual({ games: 0, rate: null });
+    expect(sunkWinMetric(records)).toEqual({ games: 3, rate: 2 / 3 });
+    expect(sunkWinMetric([gameRec()])).toEqual({ games: 0, rate: null });
+  });
+});
+
+describe("role parity — design §21 G5", () => {
+  it("each role's win rate per seat ÷ the average seat's, all endings pooled, each copy its own seat", () => {
+    // Two Moles in one game: two seats. Wins: m0 alone (1), then the locksmith (1); a theft loss for all.
+    const records = [
+      gameRec({ players: 3, playerRecords: [seat({ id: "m0", role: "mole", winCredit: 1, winner: true }), seat({ id: "m1", role: "mole" }), seat({ id: "l" })], winners: ["m0"] }),
+      gameRec({ players: 3, playerRecords: [seat({ id: "m0", role: "mole" }), seat({ id: "m1", role: "mole" }), seat({ id: "l", winCredit: 1, winner: true })], winners: ["l"] }),
+      failed("theft", { players: 3, playerRecords: [seat({ id: "m0", role: "mole" }), seat({ id: "m1", role: "mole" }), seat({ id: "l" })] }),
+    ];
+    const ratios = roleParity(groupWins(records, (p) => p.role));
+    // Average seat: 2 wins ÷ 9 seats. Mole: 1 ÷ 6 seats; locksmith: 1 ÷ 3 seats.
+    expect(ratios.mole).toBeCloseTo((1 / 6) / (2 / 9));
+    expect(ratios.locksmith).toBeCloseTo((1 / 3) / (2 / 9));
+    expect(roleParity(groupWins([failed("theft", { playerRecords: [seat()] })], (p) => p.role))).toEqual({ locksmith: null });
   });
 });

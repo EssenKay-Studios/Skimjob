@@ -6,7 +6,7 @@
 import { randomBytes } from "node:crypto";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { PERSONALITIES, type PersonalityId } from "@skimjob/bots";
-import { MAX_PLAYERS, MIN_PLAYERS, POOL_ROLES } from "@skimjob/content";
+import { MAX_PLAYERS, MIN_PLAYERS } from "@skimjob/content";
 import { validateConfig, type GameConfig } from "@skimjob/engine";
 import { createGuestUser, type Sessions, type User } from "./auth";
 import type { Db, Queryable } from "./db";
@@ -107,7 +107,7 @@ function view(game: GameRow, seats: readonly SeatRow[], user: User): LobbyView {
     id: game.id,
     status: game.status,
     inviteCode: game.invite_code,
-    // Games made before a setting existed get its default (e.g. uniqueRoles).
+    // Games made before a setting existed get its default; settings no longer read are dropped.
     settings: storedSettings(game.settings),
     youAreHost: game.host_user_id === user.id,
     autoMeetings: (TIMINGS[game.settings.sessionLength] ?? TIMINGS[DEFAULT_SETTINGS.sessionLength]).autoMeetings,
@@ -335,11 +335,7 @@ export function lobbyRoutes(
   app.post<{ Params: { id: string } }>("/games/:id/start", async (req) => {
     const started = await asHost(req, async (game, seats, user) => {
       if (seats.length < MIN_PLAYERS) refuse(409, `a game needs at least ${MIN_PLAYERS} seats`);
-      const settings = storedSettings(game.settings);
-      // A lobby saved before R7 C2c may still toggle on a role that no longer exists.
-      const gone = settings.roles.filter((r) => !POOL_ROLES.includes(r));
-      if (gone.length > 0) refuse(409, `these roles are no longer in the game: ${gone.join(", ")}; pick the roles again`);
-      const config = gameConfig(settings, seats, gameSeed());
+      const config = gameConfig(storedSettings(game.settings), seats, gameSeed());
       const errors = validateConfig(config);
       if (errors.length > 0) throw new Error(`lobby made a bad config: ${errors.join("; ")}`);
       await store.start(game.id, config, async (tx) => {
@@ -355,21 +351,14 @@ export function lobbyRoutes(
   });
 }
 
-/**
- * The engine config for a lobby: seats in seat order, bank job, the host's
- * deck, toggles, deal and role list. extension.md "Host settings"
- */
+/** The engine config for a lobby: seats in seat order, bank job, the host's role list, events and vote setting. design §16 */
 export function gameConfig(settings: LobbySettings, seats: readonly Pick<SeatRow, "nickname" | "bot_personality">[], seed: string): GameConfig {
   return {
     seed,
     players: seats.map((x, i) => ({ id: playerIdFor(i), name: x.nickname, isBot: x.bot_personality !== null })),
     job: "bank",
-    rolePool: [...settings.roles],
-    deck: settings.deck,
-    deal: settings.deal,
     roleList: settings.roleList,
     eventsEnabled: settings.eventsEnabled,
     voteVisibility: settings.voteVisibility,
-    uniqueRoles: settings.uniqueRoles !== false,
   };
 }

@@ -6,18 +6,22 @@
 import type { EventId, PerkId, RoleId, RoomId } from "@skimjob/content";
 import type { PlayerId } from "./config";
 
-/** Role powers used as part of a move. Grows as roles are added. design §8 */
+/** Role powers used as part of a move. design §11.1 */
 export type AbilityUse =
   /**
    * Lookout: also see who was in these rooms this round. 1 to the role's
    * `extraRooms` (content) distinct rooms in play.
    */
   | { readonly kind: "lookout"; readonly rooms: readonly RoomId[] }
-  /** Hacker: Security shows `room` as empty this round. Once between meetings (content). design §8 */
-  | { readonly kind: "loopCameras"; readonly room: RoomId }
-  /** Mole: ring `room` once (not the Rooftop or a taped-off room). Once between meetings (content). design §5.2, §11.1 */
+  /** Hacker: hide `room`'s bell (an open room) from everyone else this round. Once between meetings. */
+  | { readonly kind: "hide"; readonly room: RoomId }
+  /** Electrician: black out `room` next round: no sightings, cameras offline. Once between meetings. */
+  | { readonly kind: "blackout"; readonly room: RoomId }
+  /** Priest: at this round's split, set aside whatever `target` holds above the share. Once between meetings. */
+  | { readonly kind: "absolve"; readonly target: PlayerId }
+  /** Mole: ring `room` once (not the Rooftop or a taped-off room). Once between meetings. design §5.2 */
   | { readonly kind: "ring"; readonly room: RoomId }
-  /** Fixer: tear the tape off taped-off `room`; it reopens next round. Once per game. design §5.3, §11.1 */
+  /** Fixer: tear the tape off taped-off `room`; it reopens next round. Once per game. design §5.3 */
   | { readonly kind: "reopen"; readonly room: RoomId };
 
 /**
@@ -42,14 +46,12 @@ export type PerkSpend =
   /** Not a spend: choose which of your Rig's cards flips next; changeable until that round starts. */
   | { readonly kind: "rigPick"; readonly card: EventId };
 
-/** Role powers and perks used outside a move, with `useAbility`. design §17.2 */
+/** Role powers and perks used outside a move, with `useAbility`. design §11.1, §17.2 */
 export type InstantAbility =
-  /** Auditor: the latest resolved round's shortfall for `room`. Once between meetings (content). design §8 (v2 §2) */
+  /** Auditor: how many coins reached the duffel from `room` in the latest resolved round. Once between meetings. */
   | { readonly kind: "audit"; readonly room: RoomId }
-  /** Detective: does `target` hold anything above the share? Once between meetings (content). design §8 (v2 §2) */
-  | { readonly kind: "checkStash"; readonly target: PlayerId }
-  /** Priest: bless another player for this stretch. Once between meetings (content). design §8 (v2 §2) */
-  | { readonly kind: "bless"; readonly target: PlayerId }
+  /** Detective: how many coins `target` grabbed in the latest resolved round. Every round. */
+  | { readonly kind: "detect"; readonly target: PlayerId }
   | PerkSpend;
 
 /**
@@ -98,7 +100,7 @@ export type PlayerCommand =
   | { readonly type: "castVote"; readonly player: PlayerId; readonly vote: VoteChoice }
   /** Leave a vote in advance for the next meeting you might miss. design §11.2 */
   | { readonly type: "sealVote"; readonly player: PlayerId; readonly vote: VoteChoice }
-  /** A role power used outside a move (Auditor, Detective, Priest), or a perk spent. design §17.2, §8.3 */
+  /** A role power used outside a move (Auditor, Detective), or a perk spent. design §11.1, §17.2 */
   | { readonly type: "useAbility"; readonly player: PlayerId; readonly ability: InstantAbility }
   /** Buy one of the shop's perks with tokens; any time. extension.md "Tokens and the perk shop" */
   | { readonly type: "buyPerk"; readonly player: PlayerId; readonly perk: PerkId };

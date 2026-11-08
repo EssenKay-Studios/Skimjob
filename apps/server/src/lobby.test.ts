@@ -1,5 +1,4 @@
 // Identity, invites and lobby API. docs/m2-plan.md M2-2; design §15 setup, §16
-import { DECKS, ROLES } from "@skimjob/content";
 import { isSafePlayerId } from "@skimjob/engine";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -180,17 +179,13 @@ describe("create a game (design §15 setup)", () => {
     expect(game.seats).toEqual([{ seat: 0, nickname: "Karthik", bot: null, host: true, you: true, playerId: null, standIn: null }]);
   });
 
-  it("takes the host's settings: session length, vote visibility, deck, toggles, deal, role list, events, DM notices", async () => {
+  it("takes the host's settings: session length, vote visibility, role list, events, DM notices (design §16)", async () => {
     const settings = {
       sessionLength: "15m",
       voteVisibility: "secret",
-      deck: "everything",
-      roles: ["rookie", "lookout", "mole"],
-      deal: "random",
       roleList: "hidden",
       eventsEnabled: false,
       dmNotices: false,
-      uniqueRoles: false,
     };
     expect((await host(settings)).game.settings).toEqual(settings);
   });
@@ -198,11 +193,12 @@ describe("create a game (design §15 setup)", () => {
   it.each([
     [{ sessionLength: "2h" }],
     [{ voteVisibility: "loud" }],
-    [{ deck: "huge" }],
-    [{ deal: "fair" }],
     [{ roleList: "some" }],
-    [{ roles: ["rookie", "rookie"] }],
-    [{ roles: ["nobody"] }],
+    // design §11.3: every player gets a role by the standard deal; the host picks no deck, roles or deal style.
+    [{ deck: "everything" }],
+    [{ roles: ["lookout"] }],
+    [{ deal: "random" }],
+    [{ uniqueRoles: false }],
     [{ dmNotices: "no" }],
     [{ seed: "mine" }],
     ["settings"],
@@ -380,34 +376,37 @@ describe("host settings in the lobby", () => {
   it("the host changes settings before the start; fields not sent are kept; others can't", async () => {
     const { who, game } = await host({ sessionLength: "15m" });
     const ana = (await join(game.inviteCode, "Ana")).session!;
-    const res = await call("PATCH", `/games/${game.id}/settings`, who, { settings: { uniqueRoles: false, deck: "everything" } });
+    const res = await call("PATCH", `/games/${game.id}/settings`, who, { settings: { roleList: "possible", eventsEnabled: false } });
     expect(res.status).toBe(200);
-    expect(res.body.settings).toEqual({ ...DEFAULT_SETTINGS, sessionLength: "15m", uniqueRoles: false, deck: "everything" });
-    expect((await call("GET", `/games/${game.id}`, ana)).body.settings).toMatchObject({ uniqueRoles: false, deck: "everything" });
-    expect((await call("PATCH", `/games/${game.id}/settings`, ana, { settings: { deck: "starter" } })).status).toBe(403);
+    expect(res.body.settings).toEqual({ ...DEFAULT_SETTINGS, sessionLength: "15m", roleList: "possible", eventsEnabled: false });
+    expect((await call("GET", `/games/${game.id}`, ana)).body.settings).toMatchObject({ roleList: "possible", eventsEnabled: false });
+    expect((await call("PATCH", `/games/${game.id}/settings`, ana, { settings: { roleList: "hidden" } })).status).toBe(403);
   });
 
-  it.each([[{ deck: "yes" }], [{ seed: "x" }], ["x"], [[]], [null]])("refuses %j", async (settings) => {
+  it.each([[{ roleList: "yes" }], [{ seed: "x" }], ["x"], [[]], [null]])("refuses %j", async (settings) => {
     const { who, game } = await host();
     expect((await call("PATCH", `/games/${game.id}/settings`, who, { settings })).status).toBe(400);
     expect((await call("GET", `/games/${game.id}`, who)).body.settings).toEqual(DEFAULT_SETTINGS);
   });
 
-  // design §8.1: uniqueRoles reaches the engine config (absent = true).
-  it("uniqueRoles goes into the game config", async () => {
+  // design §16: every session length plays the host's role list, events and vote setting.
+  it("every length takes the role list, events and votes", async () => {
     const { gameConfig } = await import("./lobby");
     const seats = [{ nickname: "A", bot_personality: null }, { nickname: "B", bot_personality: null }];
-    expect(gameConfig(DEFAULT_SETTINGS, seats, "s").uniqueRoles).toBe(true);
-    expect(gameConfig({ ...DEFAULT_SETTINGS, uniqueRoles: false }, seats, "s").uniqueRoles).toBe(false);
-  });
-
-  // extension.md "Host settings": every session length plays the host's deck, toggles, deal, role list and events.
-  it("every length takes the deck, toggles, deal and role list", async () => {
-    const { gameConfig } = await import("./lobby");
-    const seats = [{ nickname: "A", bot_personality: null }, { nickname: "B", bot_personality: null }];
-    const host = { ...DEFAULT_SETTINGS, deck: "everything", roles: ["lookout", "mole"], deal: "random", roleList: "hidden" } as const;
-    expect(gameConfig({ ...host, sessionLength: "1h" }, seats, "s")).toMatchObject({ deck: "everything", rolePool: ["lookout", "mole"], deal: "random", roleList: "hidden", eventsEnabled: true });
-    expect(gameConfig({ ...host, sessionLength: "15m" }, seats, "s")).toMatchObject({ deck: "everything", rolePool: ["lookout", "mole"], deal: "random", roleList: "hidden", eventsEnabled: true });
+    const host = { ...DEFAULT_SETTINGS, roleList: "hidden", voteVisibility: "open" } as const;
+    for (const sessionLength of ["1h", "15m"] as const) {
+      expect(gameConfig({ ...host, sessionLength }, seats, "s")).toEqual({
+        seed: "s",
+        players: [
+          { id: "p1", name: "A", isBot: false },
+          { id: "p2", name: "B", isBot: false },
+        ],
+        job: "bank",
+        roleList: "hidden",
+        eventsEnabled: true,
+        voteVisibility: "open",
+      });
+    }
   });
 
   it("lists bot personalities and the seat limits", async () => {
@@ -469,7 +468,7 @@ describe("start", () => {
   });
 
   it("makes safe player ids, a fresh seed and the config; stores the setup; never sends the config", async () => {
-    const { who, game } = await host({ voteVisibility: "open", deck: "everything", deal: "random", roleList: "possible" });
+    const { who, game } = await host({ voteVisibility: "open", roleList: "possible" });
     await join(game.inviteCode, "__proto__"); // a nickname, never an id
     await call("POST", `/games/${game.id}/bots`, who, { personality: "cautious" });
     const started = await call("POST", `/games/${game.id}/start`, who);
@@ -486,7 +485,7 @@ describe("start", () => {
       { id: "p2", name: "__proto__", isBot: false },
       { id: "p3", name: "Bot · Riya", isBot: true },
     ]);
-    expect(state.config).toMatchObject({ job: "bank", voteVisibility: "open", deck: "everything", deal: "random", roleList: "possible", eventsEnabled: true });
+    expect(state.config).toMatchObject({ job: "bank", voteVisibility: "open", roleList: "possible", eventsEnabled: true });
     expect(state.config.seed).toMatch(/^[0-9a-f]{32}$/);
 
     expect((await call("POST", `/games/${game.id}/start`, who)).status).toBe(409);

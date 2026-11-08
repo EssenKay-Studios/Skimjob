@@ -16,20 +16,19 @@ function config(players: number, overrides?: ContentOverrides): GameConfig {
     seed: "end-seed",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: ["lookout"],
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     ...(overrides && { contentOverrides: overrides }),
   };
 }
 
-/** A new game with chosen roles (seat i gets roles[i], Rookie if missing). */
+/** A new game with chosen roles (seat i gets roles[i], a Lookout if missing). */
 function game(players: number, roles: string[] = [], overrides?: ContentOverrides): GameState {
   const cfg = config(players, overrides);
   const log = setupEvents(cfg).map((e, i, all): GameEvent => {
     if (e.type !== "roleDealt") return e;
     const seat = all.slice(0, i).filter((x) => x.type === "roleDealt").length;
-    return { ...e, role: roles[seat] ?? "rookie" };
+    return { ...e, role: roles[seat] ?? "lookout" };
   });
   return replay(cfg, log);
 }

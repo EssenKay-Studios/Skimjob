@@ -27,7 +27,6 @@ function config(players: number, contentOverrides: Overrides = null, extra: Part
     seed: "coins-qa",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    rolePool: ["rookie"],
     eventsEnabled: false,
     voteVisibility: "open",
     // Bells too big to raid: these scripts test coins and the bank (rings and raids: bells.test.ts).
@@ -36,10 +35,10 @@ function config(players: number, contentOverrides: Overrides = null, extra: Part
   };
 }
 
-/** A new game with every seat a Rookie (no role powers in the way). */
+/** A new game with every seat a Lookout (its power acts only when used). */
 function game(players: number, contentOverrides: Overrides = null, extra: Partial<GameConfig> = {}): GameState {
   const cfg = config(players, contentOverrides, extra);
-  return replay(cfg, setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: "rookie" } : e)));
+  return replay(cfg, setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: "lookout" } : e)));
 }
 
 function ok(s: GameState, c: unknown): GameState {
@@ -487,7 +486,7 @@ describe("QA: the bank may run short — the preview's inputs are public (design
 describe("QA: determinism — same seed + same commands → identical log", () => {
   function play(seed: string, n: number): GameState {
     const rand = prng(42);
-    let s = game(n, { bank: { coinsPerPlayer: 2 } }, { seed, eventsEnabled: true, rolePool: ["rookie", "lookout", "hacker"] });
+    let s = game(n, { bank: { coinsPerPlayer: 2 } }, { seed, eventsEnabled: true });
     for (let k = 0; k < 3 && s.phase.kind === "planning"; k++) {
       for (const id of s.playerOrder) if (rand(5) > 0) s = run(s, submit(id, randomMove(s, rand)));
       s = run(s, ROUND);

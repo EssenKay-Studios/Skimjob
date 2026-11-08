@@ -4,11 +4,12 @@
 //  - the ledger holds only public events, the case file only their own, and
 //    together they are exactly what canSee() allows during the game;
 //  - changing, removing or adding anything hidden from them (other players'
-//    roles, stashes, safes, moves, ballots, the seed and RNG, hidden events)
+//    roles, stashes, moves, ballots, a hidden bell's bulbs, an unannounced
+//    power cut, the seed and RNG, hidden events)
 //    leaves their view identical, so nothing hidden — not even a count — leaks;
 //  - after the game the reveal opens everything except others' secret-mode
 //    ballots, which never leak (design §9.5).
-// design §13, §17.2, §9.5, §10
+// design §5.1, §9.5, §10, §11, §18
 import { isDeepStrictEqual } from "node:util";
 import { describe, expect, it } from "vitest";
 import type { GameConfig, GameEvent, GameState, LoggedEvent, Move, PlayerId, PlayerState, PlayerView, VoteChoice, VoteVisibility } from "./types";
@@ -27,9 +28,7 @@ function config(players: number, voteVisibility: VoteVisibility): GameConfig {
     seed: `leak-${players}-${voteVisibility}`,
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: i % 2 === 1 })),
     job: "bank",
-    rolePool: [],
-    // extension.md "Host settings": every role can be dealt, so Moles and Fixers come up.
-    deck: "everything",
+    // design §11.3: every role can be dealt, so Moles and Fixers come up.
     eventsEnabled: true,
     voteVisibility,
     // design §5: bells ring, raids tape rooms off (briefings) and Wanted rises, but no bust, so the script reaches every meeting.
@@ -38,36 +37,30 @@ function config(players: number, voteVisibility: VoteVisibility): GameConfig {
 }
 
 /** Token triggers these scripts reach (the Detective's and Fixer's: crew and extension tests). extension.md "Roles" */
-const EARNED_IN_PLAY: readonly string[] = [
-  "auditedShakenDirty",
-  "blessedShakenClean",
-  "loopHidPocketer",
-  "watchedShakenDirty",
-  "wonDirtyShakedown",
-];
+const EARNED_IN_PLAY: readonly string[] = ["auditedShakenDirty", "watchedShakenDirty", "wonDirtyShakedown"];
 
 const NO_COINS = new Set(["security", "rooftop"]);
 const ofType = <T extends GameEvent["type"]>(s: GameState, type: T) => s.log.filter((e): e is Extract<GameEvent, { type: T }> => e.type === type);
 
 /**
- * Every wildcard and lone wolf at once (two Moles and two Hackers), more than a
- * real deal allows, so the deal is forced: seat i gets DARK_ROLES[i]. The
+ * Every role at once, with two Moles and two Hackers (copies at 12 players,
+ * design §11.3, §11.4), so the deal is forced: seat i gets DARK_ROLES[i]. The
  * role list is "possible", so the forced deal shows nothing a real one
- * wouldn't. extension.md "Roles", "Tokens and the perk shop"
+ * wouldn't.
  */
-const DARK_ROLES = ["mole", "hacker", "lookout", "auditor", "mole", "smoothTalker", "detective", "priest", "fixer", "hacker", "lookout", "rookie"];
+const DARK_ROLES = ["mole", "hacker", "lookout", "auditor", "mole", "smoothTalker", "detective", "priest", "fixer", "hacker", "electrician", "locksmith"];
 function darkGame(cfg: GameConfig): GameState {
   const real = setupEvents(cfg);
-  const log = real.map((e, i): GameEvent => (e.type === "roleDealt" ? { ...e, role: DARK_ROLES[real.slice(0, i).filter((x) => x.type === "roleDealt").length] ?? "rookie" } : e));
+  const log = real.map((e, i): GameEvent => (e.type === "roleDealt" ? { ...e, role: DARK_ROLES[real.slice(0, i).filter((x) => x.type === "roleDealt").length] ?? "lookout" } : e));
   return replay(cfg, log);
 }
 
 /**
  * A full game exercising every event type the default pool can produce: moves
- * (some changed, some missed), Security watches, the Server room, Lookout,
- * Hacker, Auditor, Detective, Mole (a ring) and Fixer (a reopen) powers, bells and raids, alibis,
+ * (some changed, some missed), Security watches, the Server room, every
+ * role's power (design §11.1), bells and raids, alibis,
  * proposals, briefings and regular meetings, an emergency in round 2's result
- * window, sealed and changed ballots (Smooth talker weight), shakedown windows,
+ * window, sealed and changed ballots (Smooth Talker weight), shakedown windows,
  * shakedowns and their protection, the end check (design §6.2), and the event cards (Lockdown avoided), and perks (design §8.3: granted by the test hook,
  * then Peek, Tail, Rig and its pick, +Vote, Ballot, a verified Alibi, Recharge and a Shield that cancels
  * the first meeting's shakedown). Returns the state after every command. (The script reads the
@@ -132,25 +125,21 @@ function playGame(players: number, voteVisibility: VoteVisibility, dark = false)
       step({ type: "useAbility", player: last, ability: { kind: "rig" } });
       step({ type: "useAbility", player: last, ability: { kind: "rigPick", card: s.rigs.find((r) => r.player === last)?.cards[1] } });
     }
-    // design §8.3: the Hacker gets a spent loop back (if it made one).
+    // design §8.3: the Hacker gets a spent hide back (if it made one).
     if (round === 5 && hacker && s.players[hacker]?.role === "hacker" && (s.players[hacker]?.roleState.usedThisStretch ?? 0) > 0) {
       step({ type: "useAbility", player: hacker, ability: { kind: "recharge" } });
     }
-    // v2 §2: the Auditor audits the Vault (latest round) and the Detective checks its neighbour, once between meetings.
+    // design §11.1: the Auditor audits the Vault (latest round) once between meetings; the Detective looks into its neighbour.
     const auditor = holder("auditor");
     if (auditor && round % 3 === 2 && (s.players[auditor]?.roleState.usedThisStretch ?? 1) === 0) {
       step({ type: "useAbility", player: auditor, ability: { kind: "audit", room: "vault" } });
     }
     const detective = holder("detective");
-    if (detective && round % 3 === 1 && (s.players[detective]?.roleState.usedThisStretch ?? 1) === 0) {
-      step({ type: "useAbility", player: detective, ability: { kind: "checkStash", target: ids[(ids.indexOf(detective) + 1) % ids.length] } });
+    if (detective && round % 3 === 1 && round > 1) {
+      step({ type: "useAbility", player: detective, ability: { kind: "detect", target: ids[(ids.indexOf(detective) + 1) % ids.length] } });
     }
-    // v2 §2: the Priest blesses the round-2 emergency's target (p0) in the first stretch, and a later meeting's target after.
-    const priest = holder("priest");
-    const blessed = stretch === 1 ? "p0" : (ids[stretch % ids.length] as PlayerId);
-    if (priest && stretch <= 3 && round % 3 === 1 && priest !== blessed && (s.players[priest]?.roleState.usedThisStretch ?? 1) === 0) {
-      step({ type: "useAbility", player: priest, ability: { kind: "bless", target: blessed } });
-    }
+    // design §11.1: the Priest absolves the greedy seat, then the next seat round (never the same twice in a row).
+    const absolveTarget = ids[(3 + stretch) % ids.length] as PlayerId;
     ids.forEach((id, i) => {
       if (round % 2 === 1 && i === ids.length - 1 && players > 2) return; // misses the deadline
       const role = (s.players[id] as PlayerState).role;
@@ -163,9 +152,12 @@ function playGame(players: number, voteVisibility: VoteVisibility, dark = false)
       const move: Record<string, unknown> = fullGrab(room, canKeep && (greedy || (i + round) % 3 === 0) ? Math.min(greedy ? 2 : 1, fullGrab(room).duffel) : 0);
       if (room === "security") move.watch = "vault";
       if (role === "lookout") move.ability = { kind: "lookout", rooms: [s.rooms[(i + round + 1) % s.rooms.length]] };
-      // design §8: the Hacker loops the Vault every third round, when its loop is charged (once between meetings).
+      // design §11.1: the Hacker hides the Vault's bell (or the Office's) every third round, when charged; two Hackers collide (§11.4).
       const fresh = s.players[id]?.roleState.usedThisStretch === 0;
-      if (role === "hacker" && round % 3 === 1 && fresh) move.ability = { kind: "loopCameras", room: "vault" };
+      if (role === "hacker" && round % 3 === 1 && fresh) move.ability = { kind: "hide", room: Object.hasOwn(s.taped, "vault") ? "office" : "vault" };
+      // design §11.1: the Electrician cuts the Office's power for the next round every third round, when charged.
+      if (role === "electrician" && round % 3 === 2 && fresh) move.ability = { kind: "blackout", room: "office" };
+      if (role === "priest" && round % 3 === 1 && fresh && absolveTarget !== id) move.ability = { kind: "absolve", target: absolveTarget };
       // design §5.2, §11.1: each Mole rings the Office once, in round 8, unless it is taped off or its ring is spent.
       if (role === "mole" && round === 8 && fresh && !Object.hasOwn(s.taped, "office")) move.ability = { kind: "ring", room: "office" };
       // design §5.3, §11.1: a Fixer reopens the first taped-off room once.
@@ -235,13 +227,17 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
       : ([
           { type: "rngAdvanced", visibility: REVEAL, words: [9, 9, 9, 9] },
           { type: "roleDealt", visibility: privateTo(other), player: other, role: "hacker" },
-          { type: "abilityResolved", visibility: privateTo(other), player: other, round: 1, ability: { kind: "loopCameras", room: "vault" } },
+          { type: "abilityResolved", visibility: privateTo(other), player: other, round: 1, ability: { kind: "hide", room: "vault", bulbs: 2 } },
+          { type: "abilityResolved", visibility: privateTo(other), player: other, round: 1, ability: { kind: "blackout", room: "office" } },
+          { type: "abilityResolved", visibility: privateTo(other), player: other, round: 1, ability: { kind: "absolve", target: viewer, taken: 3 } },
+          { type: "abilityAlreadyDone", visibility: privateTo(other), player: other, round: 1, ability: { kind: "hide", room: "vault" } },
+          { type: "sinsAbsolved", visibility: privateTo(other), player: other, round: 1, taken: 2 },
           { type: "abilityResolved", visibility: privateTo(other), player: other, round: 1, ability: { kind: "ring", room: "office" } },
           { type: "abilityResolved", visibility: privateTo(other), player: other, round: 1, ability: { kind: "reopen", room: "vault" } },
-          { type: "tokenEarned", visibility: privateTo(other), player: other, trigger: "loopHidPocketer" },
+          { type: "tokenEarned", visibility: privateTo(other), player: other, trigger: "watchedShakenDirty" },
           { type: "perkBought", visibility: privateTo(other), player: other, perk: "shield", cost: 2 },
-          { type: "abilityResolved", visibility: privateTo(other), player: other, round: 1, ability: { kind: "audit", round: 1, room: "vault", shortfall: 4 } },
-          { type: "abilityResolved", visibility: privateTo(other), player: other, round: 1, ability: { kind: "checkStash", target: viewer, dirty: true } },
+          { type: "abilityResolved", visibility: privateTo(other), player: other, round: 1, ability: { kind: "audit", round: 1, room: "vault", duffel: 4 } },
+          { type: "abilityResolved", visibility: privateTo(other), player: other, round: 1, ability: { kind: "detect", round: 1, target: viewer, grabbed: 3 } },
           { type: "insideTip", visibility: privateTo(other), player: other, round: 2, subject: viewer, role: "mole" },
           { type: "coinsGrabbed", visibility: privateTo(other), player: other, round: 1, room: "vault", duffel: 0, pocket: 3, seized: 0 },
           { type: "coinsGrabbed", visibility: privateTo(other), player: other, round: 1, room: "vault", duffel: 0, pocket: 0, seized: 3 },
@@ -299,9 +295,15 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
   };
   // A Rig is its holder's secret. design §8.3
   const rigs = [...state.rigs.filter((r) => r.player === viewer), { player: other, round: 9, cards: ["audit", "lockdown"], pick: "lockdown" }];
+  // design §5.1, §11.1: a hidden bell's real bulbs are only its Hacker's; a blackout for next round is unannounced.
+  const hid = (room: string) =>
+    state.log.some((e) => e.type === "abilityResolved" && e.player === viewer && e.round === state.round && e.ability.kind === "hide" && e.ability.room === room);
+  const bells = Object.fromEntries(Object.entries(state.bells).map(([room, n]) => [room, state.hidden.includes(room) && !hid(room) ? n + 7 : n]));
   return {
     ...state,
     rigs,
+    bells,
+    cutsPending: ["vault", "lobby"],
     config: { ...state.config, seed: "scrubbed" },
     rng: { words: [1, 2, 3, 4] },
     players,
@@ -387,9 +389,9 @@ describe("no leaks in real games — design §17.2, §13, §9.5", () => {
     }
   }, 30_000);
 
-  // extension.md "Roles": every wildcard and lone wolf dealt, checked by the same view-diff.
+  // design §11.3, §11.4: every role dealt, with copies, checked by the same view-diff.
   const darkTypes = new Set<string>();
-  it.each(["hiddenThenRevealed", "open", "secret"] as const)("12 players, every dark role dealt, %s votes", (mode) => {
+  it.each(["hiddenThenRevealed", "open", "secret"] as const)("12 players, every role dealt, %s votes", (mode) => {
     const states = playGame(12, mode, true);
     const final = states[states.length - 1] as GameState;
     expect(final.phase.kind).toBe("ended");
@@ -413,13 +415,12 @@ describe("no leaks in real games — design §17.2, §13, §9.5", () => {
     }
   }, 30_000);
 
-  it("the all-wildcard games reach the Hacker's token, the Mole's ring and the Fixer's reopen (extension.md \"Roles\", design §5.2, §5.3)", () => {
-    expect(earned).toContain("loopHidPocketer");
-    expect(darkTypes).toContain("roomReopened");
-    for (const k of ["ring", "reopen"]) expect(seenAbilities, k).toContain(k);
+  it("the every-role games reach the Mole's ring, the Fixer's reopen, a power cut, an absolve and two Hackers on one bell (design §11.1, §11.4)", () => {
+    for (const t of ["roomReopened", "powerCut", "sinsAbsolved", "abilityAlreadyDone"]) expect(darkTypes, t).toContain(t);
+    for (const k of ["ring", "reopen", "hide", "blackout", "absolve", "detect"]) expect(seenAbilities, k).toContain(k);
   });
 
-  it("the games above reach every info, vote, Mole and event-card event (design §8, §8.1, §10)", () => {
+  it("the games above reach every info, vote, role and event-card event (design §10, §11)", () => {
     for (const t of ["shakedownPending", "shakedownCancelled", "alibisClosed", "roleListShown", "shopDealt"]) expect(seenTypes, t).toContain(t);
     // design §5: bells, raids and cooling.
     for (const t of ["bellsRung", "roomRaided", "bellsCooled"]) expect(seenTypes, t).toContain(t);
@@ -429,14 +430,13 @@ describe("no leaks in real games — design §17.2, §13, §9.5", () => {
       expect(seenTypes, t).toContain(t);
     }
     for (const c of EVENT_DECK) expect(seenCards, c).toContain(c);
-    for (const k of ["lookout", "loopCameras", "audit", "checkStash"]) expect(seenAbilities, k).toContain(k);
+    for (const k of ["lookout", "hide", "audit", "detect", "absolve"]) expect(seenAbilities, k).toContain(k);
     // design §8.3: every perk event and every perk's effect.
     for (const t of ["tokenEarned", "perkBought", "perkUsed", "rigPicked", "alibiVerified"]) expect(seenTypes, t).toContain(t);
     for (const k of ["peek", "shield", "extraVote", "ballot", "tail", "alibi", "recharge", "rig"]) expect(seenPerks, k).toContain(k);
     expect(seenWatch, "a Tail watch").toContain("tail");
     // extension.md "Roles": tokens are earned in these games (others: crew tests).
     for (const k of EARNED_IN_PLAY) expect(earned, k).toContain(k);
-    expect(seenAbilities, "bless").toContain("bless");
     // design §9: every kind of meeting, the pool spent and protection given.
     expect(meetingKinds).toEqual(new Set(["regular", "briefing", "emergency"]));
     for (const t of ["emergencyMeetingCalled", "meetingScheduled"]) expect(seenTypes, t).toContain(t);

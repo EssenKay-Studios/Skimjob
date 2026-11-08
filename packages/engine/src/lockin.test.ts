@@ -1,6 +1,5 @@
 // Owner decisions (2 Nov): lock-ins are public (design §5.1) and a meeting
 // slot locks on a majority of the crew's people, not its bots (design §9.4).
-import { STARTER_ROLES } from "@skimjob/content";
 import { describe, expect, it } from "vitest";
 import type { GameConfig, GameEvent, GameState } from "./types";
 import { canSee } from "./types";
@@ -14,7 +13,6 @@ function config(humans: readonly boolean[]): GameConfig {
     seed: "lockin-seed",
     players: humans.map((human, i) => ({ id: `p${i}`, name: `P${i}`, isBot: !human })),
     job: "bank",
-    rolePool: [...STARTER_ROLES],
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
   };

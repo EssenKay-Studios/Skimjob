@@ -1,11 +1,11 @@
-// QA (PR #52, R6b): adversarial checks of the Extension UI against docs/extension.md,
-// on real engine games (no fabricated events where the engine can make them):
-// the shop's edges and privacy, no tells for camera offline,
-// "between meetings" wording, lobby deck settings, role facts vs the spec tables,
-// and the end screen on a failed heist.
+// QA (PR #52, R6b; S3a.6): adversarial checks of the role cards, the rulebook
+// and the shop, on real engine games (no fabricated events where the engine can
+// make them): the shop's edges and privacy (extension.md, until S3a.7), no tells
+// for cameras offline, role facts vs design §11 and §20.2, and the end screen on
+// a failed heist (§8).
 import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { BANK_JOB, DECKS, PERKS, ROLES, SHOP_COLUMNS, type PerkId, type RoleId } from "@skimjob/content";
+import { BANK_JOB, PERKS, ROLES, ROLE_TEXT, ROLE_WIN, SHOP_COLUMNS, type PerkId, type RoleId } from "@skimjob/content";
 import {
   createGame,
   handleCommand,
@@ -23,9 +23,7 @@ import { describeEvent } from "../game/describeEvent";
 import { namesOf } from "../game/hud";
 import { perkUses, roleInfo, roleListInfo, shopState } from "../game/extension";
 import { RoleList, RulebookSheet, Tokens } from "./Extension";
-import { DeckSettings, deckPatch, deckRoles, rolePatch } from "./DeckSettings";
 import { GameOver } from "../screens/Game";
-import type { LobbySettings } from "../api";
 
 const html = (el: ReactElement) => renderToStaticMarkup(el);
 const noop = async () => ({ ok: true as const });
@@ -35,7 +33,6 @@ function config(n: number, extra: Partial<GameConfig> = {}): GameConfig {
     seed: "ext-ui-qa",
     players: Array.from({ length: n }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: false })),
     job: "bank",
-    rolePool: [],
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     // These scripts revisit one room; a quiet alarm keeps raids (design §5) out of the rules under test.
@@ -49,12 +46,12 @@ interface Setup {
   readonly shop?: readonly PerkId[];
   readonly tokens?: Readonly<Record<string, number>>;
 }
-/** A new game with its setup events rewritten (seat i gets roles[i], Rookie if missing). */
+/** A new game with its setup events rewritten (seat i gets roles[i], a Lookout if missing; every seat a Lookout without roles). */
 function game(cfg: GameConfig, setup: Setup = {}): GameState {
   let seat = 0;
   const log = setupEvents(cfg).flatMap((e): GameEvent[] => {
     if (e.type === "roleDealt") {
-      const role = setup.roles ? (setup.roles[seat] ?? "rookie") : e.role;
+      const role = setup.roles?.[seat] ?? "lookout";
       seat++;
       const earned: GameEvent[] = Array.from({ length: setup.tokens?.[e.player] ?? 0 }, () => ({ type: "tokenEarned", visibility: privateTo(e.player), player: e.player, trigger: "watchedShakenDirty" }));
       return [{ ...e, role }, ...earned];
@@ -102,7 +99,7 @@ function playOut(s: GameState, room: (s: GameState, p: string) => string, pocket
 
 describe("the shop's edges (extension.md \"Tokens and the perk shop\")", () => {
   const SHOP: PerkId[] = ["peek", "alibi", "extraVote"];
-  const base = (tokens: number) => game(config(5, { rolePool: ["rookie"] }), { shop: SHOP, tokens: { p0: tokens } });
+  const base = (tokens: number) => game(config(5), { shop: SHOP, tokens: { p0: tokens } });
 
   it("one token short: Buy is disabled in the sheet's data and the engine refuses", () => {
     const s = base(PERKS.peek.cost - 1);
@@ -142,7 +139,7 @@ describe("the shop's edges (extension.md \"Tokens and the perk shop\")", () => {
   });
 
   it("you can't buy for someone else: a buy names its own seat and the other seat's tokens stay put", () => {
-    const s = game(config(5, { rolePool: ["rookie"] }), { shop: SHOP, tokens: { p0: 3, p1: 0 } });
+    const s = game(config(5), { shop: SHOP, tokens: { p0: 3, p1: 0 } });
     expect(refused(s, buy("p1", "peek"))).toBe(true);
     expect(shopState(viewFor(s, "p0")).tokens).toBe(3);
   });
@@ -175,24 +172,23 @@ describe("the shop's edges (extension.md \"Tokens and the perk shop\")", () => {
 
 // ---------------------------------------------------------------- no tells
 
-describe("no tells: camera offline (extension.md \"Situations\")", () => {
-  /** p1 watches the Vault from Security; p2 is in the Vault; the Hacker loops the Vault. */
+describe("no tells: cameras offline (design §11.1)", () => {
+  /** The Electrician (p0) blacks out the Vault for round 2; p1 watches it from Security; p2 is in it. */
   function cameraWorld() {
-    const cfg = config(5, { rolePool: ["rookie", "hacker"], eventsEnabled: false, seed: "cam" });
-    let s = game(cfg, { roles: ["hacker"] });
-    s = run(s, ...ids(5).map((p) => mv(p, "office")), ROUND, ALIBIS, RESULT);
-    const hacker = { ability: { kind: "loopCameras", room: "vault" } };
-    const moves = [mv("p0", "office", 0, hacker), mv("p1", "security", 0, { watch: "vault" }), mv("p2", "vault", 2), mv("p3", "office"), mv("p4", "office")];
+    let s = game(config(5, { seed: "cam" }), { roles: ["electrician"] });
+    const cut = { ability: { kind: "blackout", room: "vault" } };
+    s = run(s, mv("p0", "office", 0, cut), ...ids(5).slice(1).map((p) => mv(p, "office")), ROUND, ALIBIS, RESULT);
+    const moves = [mv("p0", "office"), mv("p1", "security", 0, { watch: "vault" }), mv("p2", "vault", 2), mv("p3", "office"), mv("p4", "office")];
     return run(s, ...moves, ROUND);
   }
 
-  it("a Hacker's loop reads as plain \"camera offline\" on the watcher's feed (text, case file markup)", () => {
+  it("a blacked-out room reads as plain \"cameras offline\" on the watcher's feed, never naming the source", () => {
     const v = viewFor(cameraWorld(), "p1");
     const e = v.caseFile.map((x) => x.event).filter((x) => x.type === "roomWatched" && x.round === 2);
     expect(e).toHaveLength(1);
     const text = describeEvent(e[0]!, { me: "p1", name: namesOf(v) });
-    expect(text).toMatch(/camera offline in the Vault/);
-    expect(text).not.toMatch(/hack|loop|power cut/i);
+    expect(text).toMatch(/cameras offline in the Vault/);
+    expect(text).not.toMatch(/electric|P0/i);
   });
 });
 
@@ -208,63 +204,52 @@ function playOut1(s: GameState): GameState {
 
 // ---------------------------------------------------------------- roles and rulebook vs the spec
 
-describe("role cards and the rulebook match extension.md \"Roles\"", () => {
-  const TEAM = ["rookie", "lookout", "auditor", "detective", "smoothTalker", "priest", "fixer"];
-  const WILD = ["hacker"];
-  const LONE = ["mole"];
+describe("role cards and the rulebook match design §11.1 and §20.2", () => {
+  const EYES = ["lookout", "detective", "auditor", "smoothTalker", "priest"];
+  const SHADOWS = ["locksmith", "hacker", "electrician", "mole", "fixer"];
   const STARS = ["mole", "fixer"]; // design §8.4
-  const MIN: Record<string, number> = { detective: 4, smoothTalker: 5, priest: 5 };
-  // design §5.2, §5.3: the Mole's ring and the Fixer's reopen replace the R6 tip-off and raid stop, which had the token.
-  const NO_TOKEN = ["rookie", "mole", "fixer"];
+  // Tokens go in S3a.7; until then only these four roles earn one.
+  const TOKENS = ["lookout", "detective", "auditor", "smoothTalker"];
 
-  it("every one of the 9 roles has the spec's tag, ★, minimum crew and a token line where it earns one", () => {
-    expect(Object.keys(ROLES).sort()).toEqual([...TEAM, ...WILD, ...LONE].sort());
+  it("every one of the 10 roles has its kind, ★, §20.2 power and win lines, and a token line where it earns one", () => {
+    expect(Object.keys(ROLES).sort()).toEqual([...EYES, ...SHADOWS].sort());
     for (const id of Object.keys(ROLES) as RoleId[]) {
       const info = roleInfo(id);
-      const tag = TEAM.includes(id) ? "Team player" : WILD.includes(id) ? "Wildcard" : "Lone wolf";
-      expect(info.tagLabel, id).toBe(tag);
+      expect(info.kindLabel, id).toBe(EYES.includes(id) ? "Eyes" : "Shadows");
       expect(info.star, id).toBe(STARS.includes(id));
-      expect(info.minPlayers ?? 0, id).toBe(MIN[id] ?? 0);
-      if (NO_TOKEN.includes(id)) expect(info.earns, id).toBeNull();
-      else expect(info.earns, `${id} earns a token`).toMatch(/^A token when: /);
-      expect(info.power.length, id).toBeGreaterThan(0);
-      expect(`${info.power} ${info.earns}`, id).not.toMatch(/\bact\b|per act/i);
-      expect(info.howYouWin).toMatch(/^Have the biggest stash when the job succeeds/);
+      if (TOKENS.includes(id)) expect(info.earns, `${id} earns a token`).toMatch(/^A token when: /);
+      else expect(info.earns, id).toBeNull();
+      expect(info.power, id).toBe(ROLE_TEXT[id]!.power);
+      expect(info.howYouWin, id).toBe(STARS.includes(id) ? ROLE_WIN.sunk : ROLE_WIN.crew);
     }
   });
 
-  it("★ win lines follow the endings table", () => {
-    expect(roleInfo("mole").howYouWin).toMatch(/when the heist is sunk by theft/);
-    expect(roleInfo("hacker").howYouWin).not.toMatch(/bust|theft/);
+  it("powers follow the frequency rule (design §11.2)", () => {
+    for (const r of ["auditor", "hacker", "electrician", "priest", "mole"] as const) expect(roleInfo(r).power, r).toMatch(/^Once between meetings/);
+    for (const r of ["lookout", "detective"] as const) expect(roleInfo(r).power, r).toMatch(/^Each round/);
+    expect(roleInfo("fixer").power).toMatch(/^Once a game/);
+    expect(roleInfo("smoothTalker").power).toBe("Your vote counts twice.");
   });
 
-  it("powers say \"between meetings\" where the spec does, and spec numbers", () => {
-    for (const r of ["auditor", "detective", "priest", "hacker", "mole"] as const) {
-      expect(roleInfo(r).power, r).toMatch(/^Once between meetings/);
-    }
-    expect(roleInfo("detective").power).toMatch(/anything above the share/);
-    expect(roleInfo("smoothTalker").power).toBe("Its vote counts double.");
-    expect(roleInfo("mole").power).toMatch(/rings one room's bell once/);
-    expect(roleInfo("fixer").power).toMatch(/tape/i);
-  });
-
-  it("the rulebook lists all 9 roles, the endings with the right ★ roles, and marks the roles in this game", () => {
-    const s = createGame(config(5, { rolePool: ["rookie", "hacker"], seed: "rb" }));
+  it("the rulebook lists all 10 roles, the endings with the Mole and Fixer, and marks the roles in this game", () => {
+    const s = createGame(config(5, { seed: "rb" }));
     const ui = html(createElement(RulebookSheet, { open: true, onClose: () => {}, view: viewFor(s, "p0") }));
     for (const def of Object.values(ROLES)) expect(ui, def.name).toContain(def.name);
     expect(ui).toMatch(/Busted \(Wanted 3\)<\/td><td>Only the Rooftop gets away/);
-    expect(ui).toMatch(/Sunk by theft<\/td><td>Nobody, unless [^<]*Mole[^<]* has the biggest stash/);
+    expect(ui).toMatch(/Sunk by theft<\/td><td>Nobody, unless [^<]*Mole[^<]*Fixer[^<]* has the biggest stash of all/);
     expect(ui).toContain("in this game");
+    expect(ui).toContain("Eyes");
+    expect(ui).toContain("Shadows");
     expect(ui).toContain("Unspent tokens are worth nothing at the end.");
-    expect(ui).not.toMatch(/\bact\b|this act|per act/i);
+    expect(ui).not.toMatch(/\bact\b|this act|per act|Team player|Wildcard|Lone wolf/i);
   });
 });
 
 // ---------------------------------------------------------------- role list
 
-describe("role list views (extension.md \"Host settings\": exact, possible, nothing)", () => {
+describe("role list views (design §11.3: exact, possible, nothing)", () => {
   it("Exact lists the dealt roles; Possible lists what could be in play; Hidden shows nothing", () => {
-    const cfg = (roleList: "exact" | "possible" | "hidden") => config(5, { rolePool: ["rookie", "hacker", "lookout"], roleList, seed: "rl" });
+    const cfg = (roleList: "exact" | "possible" | "hidden") => config(5, { roleList, seed: "rl" });
     const exact = viewFor(createGame(cfg("exact")), "p0");
     const dealt = Object.values(createGame(cfg("exact")).players).map((p) => p.role).sort();
     expect([...roleListInfo(exact).roles].sort()).toEqual(dealt);
@@ -278,65 +263,15 @@ describe("role list views (extension.md \"Host settings\": exact, possible, noth
     const ui = html(createElement(RoleList, { view: hidden }));
     expect(ui).toContain("hidden");
     expect(ui).not.toContain("<li");
-    for (const def of Object.values(ROLES)) if (def.name !== "Rookie") expect(ui).not.toContain(def.name);
-  });
-});
-
-// ---------------------------------------------------------------- lobby
-
-describe("lobby deck settings (extension.md \"Host settings\")", () => {
-  const base: LobbySettings = {
-    sessionLength: "1h",
-    voteVisibility: "hiddenThenRevealed",
-    deck: "standard",
-    roles: [],
-    deal: "balanced",
-    roleList: "exact",
-    eventsEnabled: true,
-    dmNotices: true,
-    uniqueRoles: true,
-  };
-  const render = (s: LobbySettings, readOnly = false) => html(createElement(DeckSettings, { settings: s, readOnly, disabled: false, onChange: () => {} }));
-
-  it("Standard is the default deck with its 6 roles; Starter has its 2", () => {
-    expect([...DECKS.standard].sort()).toEqual(["auditor", "detective", "hacker", "lookout", "mole", "smoothTalker"]);
-    expect([...DECKS.starter].sort()).toEqual(["lookout", "rookie"]);
-    expect(deckRoles(base)).toEqual(DECKS.standard);
-  });
-
-  it("every session length shows the host's deck and role picker", () => {
-    const custom = { ...base, deck: "everything" as const, roles: ["hacker", "mole"], sessionLength: "15m" as const };
-    expect(deckRoles(custom)).toEqual(["hacker", "mole"]);
-    expect(render(custom)).toContain("Pick roles one by one");
-    expect(render({ ...custom, roles: [] })).toContain(">Everything<");
-  });
-
-  it("per-role toggles add any role to a preset and keep the pick in content order", () => {
-    const p = rolePatch(base, "priest")!;
-    expect(p.roles).toContain("priest");
-    expect(p.roles).toHaveLength(DECKS.standard.length + 1);
-    expect(rolePatch({ ...base, ...p }, "priest")).toEqual({ roles: [] });
-  });
-
-  it("switching decks clears the per-role pick", () => {
-    const picked = { ...base, roles: ["hacker"] };
-    expect(deckPatch("everything").roles).toEqual([]);
-  });
-
-  it("all three role-list options and both deal styles are offered; a guest sees them read-only", () => {
-    const ui = render(base);
-    for (const t of ["Exact", "Possible", "Hidden", "Balanced", "Truly random", "Starter", "Standard", "Everything"]) expect(ui, t).toContain(`>${t}<`);
-    const guest = render(base, true);
-    expect(guest).not.toContain("Pick roles one by one");
-    expect(guest).not.toMatch(/aria-pressed/);
+    for (const def of Object.values(ROLES)) expect(ui).not.toContain(def.name);
   });
 });
 
 // ---------------------------------------------------------------- end screen
 
-describe("the end screen on a failed heist (extension.md \"Winning and losing\")", () => {
+describe("the end screen on a failed heist (design §8)", () => {
   it("a bust with nobody on the Rooftop shows the full ranking marked as a loss, with no Winner (design §5.5)", () => {
-    let s = createGame(config(4, { rolePool: ["rookie"], seed: "raid", contentOverrides: null }));
+    let s = game(config(4, { seed: "raid", contentOverrides: null }));
     // Everyone in the richest open room, never the Rooftop: raids until Wanted hits 3.
     const loud = ["vault", "office", "depositBoxes", "serverRoom", "managersOffice", "lobby"];
     s = playOut(s, (st) => loud.find((r) => st.rooms.includes(r) && !Object.hasOwn(st.taped, r)) ?? "security", 1);
@@ -355,7 +290,7 @@ describe("the end screen on a failed heist (extension.md \"Winning and losing\")
   });
 
   it("a success names the winner and its reason, and never says Loss", () => {
-    let s = createGame(config(4, { rolePool: ["rookie"], seed: "win", contentOverrides: null }));
+    let s = game(config(4, { seed: "win", contentOverrides: null }));
     // The Vault until its first raid, then the silent Lobby: no bust.
     s = playOut(s, (st) => (st.wanted > 0 || Object.hasOwn(st.taped, "vault") ? "lobby" : "vault"), 0);
     expect(s.phase.kind === "ended" && s.phase.outcome.result).toBe("success");

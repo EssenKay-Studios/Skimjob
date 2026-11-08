@@ -22,7 +22,7 @@ export interface RateDef {
 }
 
 const always = (): boolean => true;
-/** Balanced games at 4–12 players. extension.md Build notes "Sim" */
+/** The balanced setup (Exact role list) at 4–12 players. */
 const gated = (c: Cell): boolean => c.gated;
 
 export const RATES: readonly RateDef[] = [
@@ -34,7 +34,7 @@ export const RATES: readonly RateDef[] = [
     band: { lo: 0.55, hi: 0.7 },
     checked: gated,
     applies: always,
-    source: "extension.md Build notes \"Sim\": success 55–70% (gate: Balanced, 4–12 players; reported elsewhere)",
+    source: "extension.md Build notes \"Sim\": success 55–70% (gate: Exact role list, 4–12 players; reported elsewhere)",
   },
   { id: "bust", label: "bust", num: (t) => t.busts, den: (t) => t.games, band: { lo: 0.08, hi: 0.2 }, checked: gated, applies: always, source: "design §21 G3: 8–20% of games end in a bust" },
   { id: "theft", label: "sunk by theft", num: (t) => t.theftFailures, den: (t) => t.games, band: null, checked: gated, applies: always, source: "design §21 G8: heists sunk by theft (reported only)" },

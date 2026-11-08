@@ -275,25 +275,17 @@ export function decidingOf(view: PlayerView): { readonly meetingId: string; read
 // ---------------------------------------------------------------- abilities during meetings
 
 export type AbilityOffer =
-  /** Priest: bless another player until the next regular meeting (once between meetings). design §8 (v2 §2), §9.1 */
-  | { readonly kind: "bless"; readonly targets: readonly PlayerId[] }
   /** +Vote perk: your ballot weighs one more in this meeting. design §8.3 */
   | { readonly kind: "extraVote" }
   /** Ballot perk: watch one player's ballot in this meeting (not in Open mode). design §8.3 */
   | { readonly kind: "ballot"; readonly targets: readonly PlayerId[] };
 
-/** The meeting-time powers and perks you can use right now. The Smooth Talker's weight is automatic and never shown. */
+/** The meeting-time perks you can use right now. The Smooth Talker's weight is automatic and never shown. */
 export function abilityOffers(view: PlayerView): AbilityOffer[] {
   if (view.phase.kind === "ended" || view.phase.kind === "setup") return [];
-  const setup = setupOf(view);
-  const power = rolesFor({ contentOverrides: setup?.contentOverrides ?? null })[view.me.role]?.power;
   const others = voteTargets(view).map((t) => t.id);
   const out: AbilityOffer[] = [];
   const p = view.phase;
-  if (power?.kind === "bless" && view.me.roleState.usedThisStretch < power.perStretch) {
-    const pending = p.kind === "shakedownPending" ? p.target : null;
-    out.push({ kind: "bless", targets: others.filter((o) => o !== pending) });
-  }
   // One perk use per round (the Shield spends itself and doesn't count). extension.md
   const usedPerk = view.caseFile.some(
     ({ event: e }) => e.type === "perkUsed" && e.player === view.me.id && e.round === view.round && e.perk.kind !== "shield",

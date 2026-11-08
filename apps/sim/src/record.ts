@@ -2,18 +2,14 @@
 // the event log (the full record of the game). design §17.4
 //
 // Pure: a finished GameState (plus the bot crew) in, plain data out.
-import type { RoleId, Temperament } from "@skimjob/content";
+import type { RoleId } from "@skimjob/content";
 import type { PersonalityId } from "@skimjob/bots";
-import { honesty, jobFor, rolesFor, type GameConfig, type GameEvent, type GameState, type MeetingKind, type PlayerId } from "@skimjob/engine";
+import { honesty, jobFor, type GameConfig, type GameEvent, type GameState, type MeetingKind, type PlayerId } from "@skimjob/engine";
 
 export interface PlayerRecord {
   readonly id: PlayerId;
   readonly personality: PersonalityId;
   readonly role: RoleId;
-  /** The role's temperament tag. extension.md "Temperament tags" */
-  readonly tag: Temperament;
-  /** A ★ role: it also wins some failures (`winsOn` non-empty). extension.md "One crew, and how you win" */
-  readonly star: boolean;
   /** Final stash: share received + pocketed − taken back. design §7.6 */
   readonly stash: number;
   /** Coins grabbed over the game, after any short-bank cut. design §3.2 */
@@ -73,7 +69,6 @@ export function recordGame(state: GameState, crew: readonly PersonalityId[], rej
   if (phase.kind !== "ended") throw new Error("recordGame: the game isn't over");
   const config: GameConfig = state.config;
   const job = jobFor(config);
-  const roles = rolesFor(config);
   const order = state.playerOrder;
   const n = order.length;
   const roleOf = new Map<PlayerId, RoleId>(order.map((id) => [id, state.players[id]?.role ?? "?"]));
@@ -153,13 +148,10 @@ export function recordGame(state: GameState, crew: readonly PersonalityId[], rej
       const entry = ranked.get(id);
       const role = roleOf.get(id) as RoleId;
       const winner = winners.includes(id);
-      const def = Object.hasOwn(roles, role) ? roles[role] : undefined;
       return {
         id,
         personality: crew[i] as PersonalityId,
         role,
-        tag: def?.tag ?? "teamPlayer",
-        star: (def?.winsOn.length ?? 0) > 0,
         stash: entry?.stash ?? 0,
         grabbed: grabbed.get(id) ?? 0,
         pocketed: pocketed.get(id) ?? 0,

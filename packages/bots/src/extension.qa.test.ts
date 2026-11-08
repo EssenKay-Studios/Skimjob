@@ -1,21 +1,18 @@
-// QA (PR #50, R6a): whole bot games against docs/extension.md — determinism and
-// replay, bells, raids and Wanted adding up (design §5), whole-number scores,
-// no automatic ally reveal.
+// QA (PR #50, R6a): whole bot games — determinism and replay, bells, raids and
+// Wanted adding up (design §5), whole-number scores, no automatic role reveal.
 import { describe, expect, it } from "vitest";
-import { BANK_JOB, ROLES } from "@skimjob/content";
+import { BANK_JOB } from "@skimjob/content";
 import { createGame, replay, viewFor, type GameConfig, type GameEvent, type RoleListSetting } from "@skimjob/engine";
 import { PERSONALITIES, type PersonalityId } from "./personalities";
 import { createBots, runBotGame } from "./run";
 
 const IDS: PersonalityId[] = ["honest", "opportunist", "greedy", "cautious", "random"];
-const ALL_ROLES = Object.keys(ROLES) as GameConfig["rolePool"][number][];
 
 function config(n: number, seed: string, extra: Partial<GameConfig> = {}): GameConfig {
   return {
     seed,
     players: Array.from({ length: n }, (_, i) => ({ id: `q${i}`, name: `Q${i}`, isBot: true })),
     job: "bank",
-    rolePool: ALL_ROLES,
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     ...extra,
@@ -32,9 +29,8 @@ const CASES: { n: number; extra: Partial<GameConfig> }[] = [];
 for (const n of [3, 5, 8, 12])
   for (const events of [false, true])
     for (const roleList of ["exact", "possible", "hidden"] as RoleListSetting[]) CASES.push({ n, extra: { eventsEnabled: events, roleList } });
-CASES.push({ n: 5, extra: { deck: "starter", rolePool: [] } }, { n: 12, extra: { deck: "starter", rolePool: [] } });
 
-describe("QA: full bot games under the Extension rules", () => {
+describe("QA: full bot games under the R7 rules", () => {
   it("the same seed plays the same game; the log replays to the same state (design §17.2)", () => {
     for (const { n, extra } of CASES) {
       const c = config(n, `det-${n}-${JSON.stringify(extra)}`, extra);
@@ -55,16 +51,25 @@ describe("QA: full bot games under the Extension rules", () => {
         const { state } = play(c);
         let bells: Record<string, number> = createGame(c).bells;
         let wanted = 0;
+        // design §5.1, §11.1: a bell a Hacker hid is left out of the public events; its Hacker's own result has it.
+        let hidden: readonly string[] = [];
+        const kept = () => Object.fromEntries(hidden.filter((r) => r in bells).map((r) => [r, bells[r] as number]));
         for (const e of state.log as GameEvent[]) {
           if (e.type === "bellsRung") {
             for (const [room, lit] of Object.entries(e.bells)) expect(lit, room).toBeGreaterThanOrEqual(bells[room] ?? 0);
-            bells = { ...e.bells };
+            hidden = e.hidden;
+            bells = { ...e.bells, ...kept() };
           } else if (e.type === "roomRaided") {
-            expect(bells[e.room]).toBe(bulbs);
+            if (!hidden.includes(e.room)) expect(bells[e.room]).toBe(bulbs);
             expect(e.wanted).toBe(++wanted);
+            // Its bell is off until it reopens at 0 (design §5.3).
+            hidden = hidden.filter((r) => r !== e.room);
+            bells = Object.fromEntries(Object.entries(bells).filter(([r]) => r !== e.room));
           } else if (e.type === "bellsCooled") {
             for (const lit of Object.values(e.bells)) expect(lit).toBeLessThan(bulbs);
-            bells = { ...e.bells };
+            bells = { ...e.bells, ...kept() };
+          } else if (e.type === "abilityResolved" && e.ability.kind === "hide" && e.ability.bulbs !== null) {
+            bells = { ...bells, [e.ability.room]: e.ability.bulbs };
           } else if (e.type === "gameEnded" && e.outcome.result === "failed" && e.outcome.reason === "bust") {
             expect(wanted).toBeGreaterThanOrEqual(bustStars);
           }
