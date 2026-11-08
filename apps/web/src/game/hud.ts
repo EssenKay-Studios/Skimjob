@@ -17,7 +17,7 @@ export interface Timer {
   readonly key: string;
   /** Epoch ms on the server's clock. */
   readonly dueAt: number;
-  /** Set while a meeting pauses it. */
+  /** Set while the host has paused the game. */
   readonly pausedAt: number | null;
 }
 

@@ -289,20 +289,20 @@ describe("evidence cards (design §12.1)", () => {
 
   it("a secret-mode ballot can't be shared (design §11.2)", () => {
     const view = {
-      caseFile: [{ seq: 7, event: { type: "voteCast", visibility: { kind: "secret", player: "p1" }, player: "p1", meetingId: "act-1", choice: "skip" } }],
+      caseFile: [{ seq: 7, event: { type: "voteCast", visibility: { kind: "secret", player: "p1" }, player: "p1", meetingId: "meeting-1", choice: "skip" } }],
     } as unknown as PlayerView;
     expect(evidenceCard(view, 7)).toEqual({ ok: false, reason: "secret ballots can't be shared" });
   });
 
   it("hidden mode: a ballot is shareable only once its meeting has closed; a sealed vote never (design §11.2, PR #24 review)", () => {
     const vote = { kind: "skip" };
-    const cast = { seq: 9, event: { type: "voteCast", visibility: { kind: "private", player: "p1" }, meetingId: "act-1", player: "p1", vote, sealed: false } };
+    const cast = { seq: 9, event: { type: "voteCast", visibility: { kind: "private", player: "p1" }, meetingId: "meeting-1", player: "p1", vote, sealed: false } };
     const sealed = { seq: 8, event: { type: "voteSealed", visibility: { kind: "private", player: "p1" }, player: "p1", vote } };
-    const closed = { seq: 10, event: { type: "meetingClosed", visibility: { kind: "public" }, meetingId: "act-1", tally: { skip: 1, targets: {} }, ballots: { p1: vote }, result: { kind: "skipped" } } };
+    const closed = { seq: 10, event: { type: "meetingClosed", visibility: { kind: "public" }, meetingId: "meeting-1", tally: { skip: 1, targets: {} }, ballots: { p1: vote }, result: { kind: "skipped" } } };
     const open = { caseFile: [sealed, cast], ledger: [] } as unknown as PlayerView;
     const after = { caseFile: [sealed, cast], ledger: [closed] } as unknown as PlayerView;
     expect(evidenceCard(open, 9)).toEqual({ ok: false, reason: "ballots can be shared once the meeting has closed" });
-    expect(evidenceCard(after, 9)).toEqual({ ok: true, value: { type: "voteCast", payload: { meetingId: "act-1", player: "p1", vote, sealed: false } } });
+    expect(evidenceCard(after, 9)).toEqual({ ok: true, value: { type: "voteCast", payload: { meetingId: "meeting-1", player: "p1", vote, sealed: false } } });
     for (const v of [open, after]) expect(evidenceCard(v, 8)).toEqual({ ok: false, reason: "sealed votes can't be shared" });
   });
 });

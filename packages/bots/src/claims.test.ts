@@ -32,7 +32,7 @@ describe("bot claims — docs/roles-v2.md §4", () => {
     expect(chooseClaim(viewFor(awaiting(withRole(game(5), "ana", "lookout")), "ana"), exact(PERSONALITIES.honest), rolls(0))).toBeNull();
   });
 
-  it("claims only around meetings, once per act, and the engine accepts the claim", () => {
+  it("claims only around meetings, once between meetings, and the engine accepts the claim", () => {
     const s = pending(withRole(game(5), "ana", "rookie"));
     const cmds = claims(decide(viewFor(s, "ana"), exact(PERSONALITIES.honest), rolls(0), "test-crew"));
     expect(cmds).toEqual([{ type: "claimRole", player: "ana", role: "rookie" }]);
@@ -52,7 +52,7 @@ describe("bot claims — docs/roles-v2.md §4", () => {
 
   it("the Priest claims only after its own vote", () => {
     const s = withRole(game(5), "ana", "priest");
-    const meeting: GameState = { ...pending(s), phase: { kind: "meeting", meetingId: "act-1" } } as GameState;
+    const meeting: GameState = { ...pending(s), phase: { kind: "meeting", meetingId: "meeting-1" } } as GameState;
     // Accused through an open-mode ballot isn't needed here: a pending shakedown has no vote to wait for.
     expect(chooseClaim(viewFor(pending(s), "ana"), exact(PERSONALITIES.honest), rolls(0), true)).toBeNull();
     expect(chooseClaim(viewFor(meeting, "ana"), exact(PERSONALITIES.honest), rolls(0), false)).toBeNull();
@@ -68,7 +68,7 @@ describe("bot claims — docs/roles-v2.md §4", () => {
     expect(bluffFor(viewFor(pending(withRole(game(5), "ana", "hacker")), "ana"))).toBe("rookie");
     // Not accused: it keeps quiet.
     expect(chooseClaim(viewFor(awaiting(withRole(game(5), "ana", "mole")), "ana"), exact(PERSONALITIES.greedy), rolls(0))).toBeNull();
-    // It sticks to its story in later acts.
+    // It sticks to its story in later stretches.
     const told = run(mole, { type: "claimRole", player: "ana", role: "fixer" });
     expect(bluffFor(viewFor(told, "ana"))).toBe("fixer");
   });

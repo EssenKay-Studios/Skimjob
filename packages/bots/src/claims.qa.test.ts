@@ -87,7 +87,7 @@ describe("bot claims in whole games — QA PR #37", () => {
   });
 });
 
-/** A person who proposes the meeting time early in each act and otherwise only backs proposals (no move: default moves). */
+/** A person who proposes the next meeting's time while none is set and otherwise only backs proposals (no move: default moves). */
 function person(id: string, proposeEarly: boolean): Agent {
   return {
     player: id,
@@ -103,7 +103,7 @@ function person(id: string, proposeEarly: boolean): Agent {
 
 describe("meeting proposals with a human seat — QA PR #37, design §11.1", () => {
   const humanSeat = (n: number, seed: string, mode: VoteVisibility): GameConfig => {
-    // No bust (design §5.5), so every act's meeting comes.
+    // No bust (design §5.5), so the game reaches its meetings.
     const c = config(n, seed, { voteVisibility: mode, contentOverrides: { alarm: { bustStars: 99 } } });
     return { ...c, players: c.players.map((p, i) => (i === 0 ? { ...p, isBot: false } : p)) };
   };

@@ -324,7 +324,7 @@ describe("scheduling — design §9.4", () => {
     let s = game(3);
     expect(reason(s, sched("meeting-1"))).toMatch(/no meeting is due/);
     s = run(s, mv("p0", "vault"), ...RESOLVE);
-    for (const id of ["meeting-2", "act-1", 1, null]) expect(reason(s, sched(id))).toMatch(/is not due/);
+    for (const id of ["meeting-2", "stale-1", 1, null]) expect(reason(s, sched(id))).toMatch(/is not due/);
     expect(reason(s, sched("meeting-1", ""))).toMatch(/slot/);
     s = run(s, sched("meeting-1", "auto-1"));
     expect(LAST(s, "meetingScheduled")).toMatchObject({ meetingId: "meeting-1", slot: "auto-1", proposalId: null });

@@ -77,7 +77,7 @@ describe("validateOverrides — configs are untrusted JSON (design §17.4)", () 
     // R6 Heat and police activity are gone (design §5).
     expect(errs({ heat: {} })).toEqual(["contentOverrides.heat is not an overridable section"]);
     expect(errs({ police: {} })).toEqual(["contentOverrides.police is not an overridable section"]);
-    // R6's clean line and payout are gone: a shakedown takes what is above the share (design §9.6).
+    // A shakedown takes what is above the share (design §9.6): no shakedown numbers to override.
     expect(errs({ shakedown: { cleanBelow: 5 } })).toEqual(["contentOverrides.shakedown is not an overridable section"]);
   });
 

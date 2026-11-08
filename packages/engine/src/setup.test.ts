@@ -290,7 +290,7 @@ describe("determinism and replay — design §17.2", () => {
     expect(advanced.log).toHaveLength(2);
   });
 
-  it("after setup, round 1 of act 1 is open for planning — design §4, §5.1", () => {
+  it("after setup, round 1 is open for planning — design §4.1, §3.2", () => {
     const state = createGame(config(3));
     expect(state.phase).toEqual({ kind: "planning", round: 1 });
     expect(state.round).toBe(1);

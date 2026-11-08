@@ -6,7 +6,6 @@ import { SESSION_COOKIE } from "./auth";
 import { fakeClock, type FakeClock } from "./clock";
 import type { Db } from "./db";
 import type { LobbyView } from "./lobby";
-import { meetingOpen } from "./scheduler";
 import { buildServer } from "./server";
 import type { LobbySettings, SessionLength } from "./settings";
 import { createGameStore, type GameStore } from "./store";
@@ -113,7 +112,7 @@ const count = (s: GameState, type: string, pick: (e: Record<string, unknown>) =>
 
 /** The phase a kill can land in (the brief's list). */
 const label = (s: GameState) =>
-  s.pendingEmergency && !meetingOpen(s) ? "notice" : s.phase.kind;
+  s.pendingEmergency ? "notice" : s.phase.kind;
 
 interface Run {
   log: GameState["log"];

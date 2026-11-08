@@ -25,7 +25,7 @@ function audit(state: GameState, player: PlayerState, perStretch: number, raw: R
   if (player.roleState.usedThisStretch >= perStretch) return "you have already audited a room since the last meeting";
   const round = state.resolvedRound;
   if (round === 0) return "no round has resolved yet";
-  // PR #26 review: the act's last round is still the latest one as the next act starts; one audit of it is enough.
+  // PR #26 review: a round stays the latest resolved one across a regular meeting (a new stretch); one audit of it is enough.
   if (state.log.some((e) => e.type === "abilityResolved" && e.player === player.id && e.ability.kind === "audit" && e.ability.round === round)) {
     return `you have already audited round ${round}`;
   }

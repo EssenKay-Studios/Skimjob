@@ -85,7 +85,7 @@ function earnsText(trigger: TokenTrigger): string {
     case "wonDirtyShakedown":
       return "It votes to catch a cheater who is then caught.";
     case "blessedShakenClean":
-      return "A blessing pays out.";
+      return "A player it blessed is shaken down clean.";
     case "loopHidPocketer":
       return "A loop hid someone who pocketed.";
     default: {

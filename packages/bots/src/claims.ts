@@ -1,7 +1,7 @@
 // Role claims and bluffs for bots (docs/roles-v2.md §4 "Claim"; design §8, §12.1).
 //
 // A claim is the public `claimRole` command (a `roleClaimed` on the ledger),
-// once per act. Bots don't read chat, so claims are structured engine data
+// once between meetings (design §11.3). Bots don't read chat, so claims are structured engine data
 // and the same in the simulator and on the server.
 //
 // Default policy (extension.md Build notes "Bots"): ★ holders and the roles

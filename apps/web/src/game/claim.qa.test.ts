@@ -1,5 +1,5 @@
 // QA (PR #41): Claim role offers and limits, against the real engine.
-// Once per act, the offer list never hints at the hidden pool, and every
+// Once between meetings (design §11.3), the offer list never hints at the hidden pool, and every
 // offer is a claim the engine accepts. design §8, §12.1
 import { ROLES } from "@skimjob/content";
 import { createGame, handleCommand, viewFor, type GameConfig, type GameState, type PlayerCommand, type SystemCommand } from "@skimjob/engine";

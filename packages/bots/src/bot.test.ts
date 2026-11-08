@@ -41,7 +41,7 @@ describe("Agent — design §17.3", () => {
     expect(run(s, ...cmds).moves.ana).toBeDefined();
   });
 
-  it("never proposes a meeting slot, even late in the act; only backs existing ones (STATUS bot scheduling, #35 review) — design §11.1", () => {
+  it("never proposes a meeting slot, round after round; only backs existing ones (STATUS bot scheduling, #35 review) — design §9.4", () => {
     const lobby = { room: "lobby" };
     const all = (s: GameState) => Object.fromEntries(s.playerOrder.map((id) => [id, lobby]));
     let s = game(4);
@@ -49,13 +49,13 @@ describe("Agent — design §17.3", () => {
     expect(proposes(s)).toBe(false);
     s = closeAlibis(round(s, all(s)));
     expect(proposes(s)).toBe(false);
-    s = closeAlibis(round(s, all(s))); // round 3: the act's last round
+    s = closeAlibis(round(s, all(s))); // round 3
     expect(proposes(s)).toBe(false);
   });
 
   it("backs a person's proposal before a bot's — design §11.1", () => {
     const people = (st: GameState): GameState => ({ ...st, config: { ...st.config, players: st.config.players.map((x) => (x.id === "dee" || x.id === "carl" ? { ...x, isBot: false } : x)) } });
-    let s = run(people(game(5)), { type: "proposeMeeting", player: "ben", slot: "act-1" }, { type: "proposeMeeting", player: "dee", slot: "2026-11-02T19:00Z" });
+    let s = run(people(game(5)), { type: "proposeMeeting", player: "ben", slot: "tue-19:00" }, { type: "proposeMeeting", player: "dee", slot: "2026-11-02T19:00Z" });
     const view = viewFor(s, "ana");
     (view.players as unknown as { id: string; isBot: boolean }[]).forEach((o) => (o.isBot = o.id !== "dee"));
     expect(decide(view, PERSONALITIES.honest, seeded("a"), "test-crew")[0]).toEqual({ type: "acceptMeeting", player: "ana", proposalId: "proposal-2" });
@@ -64,7 +64,7 @@ describe("Agent — design §17.3", () => {
   });
 
   it("accepts an open proposal instead of proposing another, and does nothing once the slot is locked — design §11.1", () => {
-    let s = run(game(4), { type: "proposeMeeting", player: "ben", slot: "act-1" });
+    let s = run(game(4), { type: "proposeMeeting", player: "ben", slot: "tue-19:00" });
     expect(decide(viewFor(s, "ana"), PERSONALITIES.honest, seeded("a"), "test-crew")[0]).toEqual({ type: "acceptMeeting", player: "ana", proposalId: "proposal-1" });
     s = run(s, { type: "acceptMeeting", player: "carl", proposalId: "proposal-1" }, { type: "acceptMeeting", player: "dee", proposalId: "proposal-1" });
     expect(decide(viewFor(s, "ana"), PERSONALITIES.honest, seeded("a"), "test-crew").map((c) => c.type)).toEqual(["submitMove"]);

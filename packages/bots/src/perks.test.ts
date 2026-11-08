@@ -56,14 +56,14 @@ describe("bot perks — v2 §1, §4", () => {
     run(hacker(1), ...planningPerks(viewFor(hacker(1), "ana")));
   });
 
-  it("Alibi: stamps a true alibi when the crew could suspect it, or before the act's meeting; never a false one", () => {
+  it("Alibi: stamps a true alibi once the crew could suspect it; never a false one", () => {
     const plan = { ana: { room: "vault", alibi: null }, ben: lobby, carl: lobby, dee: lobby, eve: lobby };
     const r1 = grant(round(game(5), plan), "ana", "alibi");
     // The alibi window for round 1 is open; ana was in the Vault and nobody suspects her yet.
     expect(alibiPerk(viewFor(r1, "ana"), "vault")).toEqual([]);
     const r3 = grant(round(closeAlibis(round(closeAlibis(round(game(5), plan)), plan)), plan), "ana", "alibi");
     expect(alibiPerk(viewFor(r3, "ana"), "lobby")).toEqual([]); // a lie can't be stamped
-    expect(spends(alibiPerk(viewFor(r3, "ana"), "vault"))).toEqual([{ kind: "alibi" }]); // the act's meeting is next
+    expect(spends(alibiPerk(viewFor(r3, "ana"), "vault"))).toEqual([{ kind: "alibi" }]); // by round 3 her missing alibis make her suspect
     const after = run(r3, { type: "postAlibi", player: "ana", room: "vault" }, ...alibiPerk(viewFor(r3, "ana"), "vault"));
     expect(after.log.some((e) => e.type === "alibiVerified")).toBe(true);
   });

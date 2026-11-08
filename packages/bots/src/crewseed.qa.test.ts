@@ -48,7 +48,7 @@ const must = (state: GameState, c: Command): GameState => {
   return r.state;
 };
 
-/** The same scripted commands (p1 pockets 2 a round, everyone else all-in in room 1) up to act 1's meeting. */
+/** The same scripted commands (p1 pockets 2 a round, everyone else all-in in room 1) up to the game's first meeting. */
 function atFirstMeeting(seed: string): GameState {
   let s = createGame(config(seed));
   for (let guard = 0; guard < 50; guard++) {

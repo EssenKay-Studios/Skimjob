@@ -147,7 +147,7 @@ describe("commands — design §17.2", () => {
 });
 
 describe("PlayerView shape does not expose hidden fields — design §13, §17.2", () => {
-  it("other players show only seat info and emergency-meeting use", () => {
+  it("other players show only seat info (id, name, isBot)", () => {
     expectTypeOf<keyof OtherPlayerView>().toEqualTypeOf<"id" | "name" | "isBot">();
   });
 

@@ -292,7 +292,7 @@ describe("presence (server only; owner decision, 2 Nov)", () => {
     const a = await Client.open(id, humans[0]!);
     expect(Object.keys(a.last()).sort()).toEqual(humans.map((h) => h.player).sort());
     // Bots act on a public change (a lock-in, a proposal); presence still lists people only.
-    await a.sendRaw({ cmd: { type: "proposeMeeting", slot: "act-1" } });
+    await a.sendRaw({ cmd: { type: "proposeMeeting", slot: "tue-19:00" } });
     await a.sendRaw({});
     for (const p of a.presences()) expect(Object.keys(p).sort()).toEqual(humans.map((h) => h.player).sort());
     const s = await load(id);

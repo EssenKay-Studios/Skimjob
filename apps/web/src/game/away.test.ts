@@ -67,6 +67,12 @@ describe("while you were away (design §13)", () => {
     expect(recapBetween(s, locked)).toEqual([]);
   });
 
+  it("a role claim is news: what people said (design §11.3, §15.4)", () => {
+    const s = createGame(config());
+    const claimed = run(s, { type: "claimRole", player: "p2", role: "lookout" });
+    expect(recapBetween(s, claimed)).toContain("Ben claims to be the Lookout.");
+  });
+
   it("a quiet round: coins taken and missing and the bank, then what's next (design §7.4)", () => {
     const s = createGame(config());
     const lines = recapBetween(s, playRound(s));

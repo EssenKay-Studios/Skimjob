@@ -189,7 +189,7 @@ describe("commands from a socket", () => {
     const before = await load(id);
     for (const cmd of [
       { type: "advance", deadline: { kind: "round", round: 1 } },
-      { type: "scheduleMeeting", act: 1, slot: "now" },
+      { type: "scheduleMeeting", meetingId: "meeting-1", slot: "now" },
       { type: "toString" },
       { type: "__proto__" },
       "submitMove",

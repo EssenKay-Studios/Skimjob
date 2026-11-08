@@ -536,7 +536,7 @@ describe("scenarios: end-to-end stories over HTTP + WebSocket", () => {
     const before = await load(game.id);
     const hostile: unknown[] = [
       { type: "advance", deadline: { kind: "round", round: 1 } },
-      { type: "scheduleMeeting", act: 1, slot: "now" },
+      { type: "scheduleMeeting", meetingId: "meeting-1", slot: "now" },
       { type: "submitMove", move: { room: "vault", duffel: 0, pocket: 999 } },
       { type: "submitMove", move: { room: "lobby", pocket: -1 } },
       { type: "castVote", vote: { kind: "shakedown", target: "p99" } },

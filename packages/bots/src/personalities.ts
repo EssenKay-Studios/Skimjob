@@ -50,7 +50,7 @@ export type PersonalityId = "honest" | "opportunist" | "greedy" | "cautious" | "
 
 /**
  * The design §17.3 bots. A dealt Mole plays its personality with Mole habits on
- * top (a ring on the loudest bell, at most once per act; bot.ts).
+ * top (a ring on the loudest bell, at most once between meetings; bot.ts).
  * Placeholder numbers, to tune with the simulator.
  */
 export const PERSONALITIES: Readonly<Record<PersonalityId, Personality>> = {

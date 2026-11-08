@@ -4,9 +4,9 @@
 import type { ContentOverrides } from "./types";
 
 /**
- * R6's room yields as coin limits, a bank too big to run short (design §3.2),
- * bells too big to raid (design §5.3) and R6's clean line and payout, for the
- * R6 rule tests (shakedowns, role tokens) until S3a.5–S3a.6 replace those rules. Moves there grab with `fullGrab(room, pocket, pins)`.
+ * R6's room yields as coin limits, a bank too big to run short (design §3.2)
+ * and bells too big to raid (design §5.3), for the R6 role rule tests (powers,
+ * tokens) until S3a.6 replaces those rules. Moves there grab with `fullGrab(room, pocket, pins)`.
  */
 const R6_ROOMS = { vault: { coins: 6 }, office: { coins: 4 }, lobby: { coins: 2 }, depositBoxes: { coins: 5 } } as const;
 const R6_BANK = { coinsPerPlayer: 100 } as const;
