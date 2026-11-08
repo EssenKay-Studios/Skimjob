@@ -89,10 +89,10 @@ describe("QA one vote rule at 8 vs 9 players — extension.md \"One vote rule\",
   // An emergency meeting called in round 1's result window (design §9.3).
   function emergencyVote(n: number, votes: [string, string | null][]): GameState {
     const roles = [...Array<string>(n - 1).fill("lookout"), "smoothTalker"];
-    // A Shield in the shop, so a passed shakedown waits for its window (design §9.6).
+    // Bail in the shop, so a passed shakedown waits for its Bail choice window (design §9.6).
     const g = game(config(n), roles);
-    const shielded = replay(g.config, g.log.map((e): GameEvent => (e.type === "shopDealt" ? { ...e, perks: ["peek", "shield", "extraVote"] } : e)));
-    let s = run(shielded, ROUND, ALIBIS);
+    const withBail = replay(g.config, g.log.map((e): GameEvent => (e.type === "shopDealt" ? { ...e, perks: ["tail", "softShoes", "bail"] } : e)));
+    let s = run(withBail, ROUND, ALIBIS);
     expect(s.phase).toEqual({ kind: "result", round: 1 });
     s = run(s, { type: "callEmergency", player: "p8" }, open("emergency-1"));
     expect(viewFor(s, "p0").alibiRound).toBeNull();

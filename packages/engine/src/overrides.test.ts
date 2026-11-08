@@ -61,8 +61,8 @@ describe("validateOverrides — configs are untrusted JSON (design §17.4)", () 
         bank: { coinsPerPlayer: 20 },
         alarm: { bulbs: 5, tapedRounds: 3, bustStars: 4 },
         roundCap: 9,
-        perks: { peek: { cost: 3 } },
-        roles: { auditor: { rewardCount: 2 }, lookout: { extraRooms: 2 }, hacker: { perStretch: 6 }, mole: { perStretch: 2 } },
+        perks: { bail: { cost: 4 } },
+        roles: { auditor: { perStretch: 2 }, lookout: { extraRooms: 2 }, hacker: { perStretch: 6 }, mole: { perStretch: 2 } },
       }),
     ).toEqual([]);
   });
@@ -99,7 +99,7 @@ describe("validateOverrides — configs are untrusted JSON (design §17.4)", () 
     expect(errs({ alarm: { bulbs: 0 } })).toEqual(["contentOverrides.alarm.bulbs must be a whole number, 1 or more"]);
     expect(errs({ alarm: { tapedRounds: 0 } })).toHaveLength(1);
     expect(errs({ alarm: { bustStars: 1.5 } })).toHaveLength(1);
-    expect(errs({ perks: { peek: { cost: -1 } } })).toHaveLength(1);
+    expect(errs({ perks: { tail: { cost: -1 } } })).toHaveLength(1);
     expect(errs({ perks: { jetpack: { cost: 1 } } })).toEqual(["contentOverrides.perks.jetpack: no such perk"]);
     expect(errs({ roles: { mole: { perStretch: 0 } } })).toHaveLength(1);
   });
@@ -126,7 +126,9 @@ describe("validateOverrides — configs are untrusted JSON (design §17.4)", () 
     expect(errs({ rooms: { depositBoxes: { capacity: { max: 2 } } } })).toEqual(["contentOverrides.rooms.depositBoxes.capacity is not an overridable field"]);
     expect(errs({ roles: { hacker: { extraRooms: 2 } } })).toEqual(["contentOverrides.roles.hacker.extraRooms is not an overridable field"]);
     expect(errs({ roles: { lookout: { perStretch: 2 } } })).toHaveLength(1);
-    expect(errs({ roles: { wizard: { rewardCount: 2 } } })).toEqual(["contentOverrides.roles.wizard: no such role"]);
+    expect(errs({ roles: { wizard: { perStretch: 2 } } })).toEqual(["contentOverrides.roles.wizard: no such role"]);
+    // design §12: roles earn nothing; there are no tokens to tune.
+    expect(errs({ roles: { lookout: { rewardCount: 2 } } })).toEqual(["contentOverrides.roles.lookout.rewardCount is not an overridable field"]);
     expect(errs({ roles: { mole: { perStretch: 2 } } })).toEqual([]);
     expect(errs({ roles: { mole: { perGame: 3 } } })).toEqual(["contentOverrides.roles.mole.perGame is not an overridable field"]);
     expect(errs({ roles: { fixer: { stopAt: 90 } } })).toEqual(["contentOverrides.roles.fixer.stopAt is not an overridable field"]);
@@ -168,9 +170,8 @@ describe("merging overrides (design §17.4)", () => {
     expect(job.alarm).toEqual({ ...BANK_JOB.alarm, bustStars: 2 });
     expect(job.roundCap).toBe(BANK_JOB.roundCap);
     expect(overrideJob(BANK_JOB, { roundCap: 6 }).roundCap).toBe(6);
-    const roles = overrideRoles(ROLES, { roles: { lookout: { extraRooms: 2, rewardCount: 3 } } });
-    expect(roles.lookout?.power).toEqual({ kind: "lookout", extraRooms: 2 });
-    expect(roles.lookout?.rewards).toEqual([{ on: "watchedShakenDirty", count: 3 }]);
+    const roles = overrideRoles(ROLES, { roles: { lookout: { extraRooms: 2 } } });
+    expect(roles.lookout).toEqual({ ...ROLES.lookout, power: { kind: "lookout", extraRooms: 2 } });
     expect(roles.locksmith).toBe(ROLES.locksmith);
     expect(JSON.stringify([BANK_JOB, ROLES])).toBe(before);
   });

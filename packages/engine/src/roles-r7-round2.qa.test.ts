@@ -10,7 +10,7 @@ import { handleCommand, type CommandResult } from "./handle";
 import { viewFor } from "./view";
 import { closeResultWindow } from "./alibis.testkit";
 import { fullGrab } from "./grab.testkit";
-import { grantPerks } from "./perks.testkit";
+import { giveTail } from "./perks.testkit";
 
 function game(players: number, roles: string[], voteVisibility: VoteVisibility = "hiddenThenRevealed"): GameState {
   const cfg = {
@@ -94,8 +94,7 @@ describe("QA an Electrician cut on Security takes Security's own cameras offline
 
   it("only Security's cameras go dark: a Lookout's and a Tail's feeds into lit rooms still work, and into dark Security read offline", () => {
     let s = darkRound2(5, ["electrician", "lookout"], [["p0", "security"]]);
-    s = grantPerks(s, "p2", "tail");
-    s = run(s, { type: "useAbility", player: "p2", ability: { kind: "tail", room: "security" } });
+    s = giveTail(s, "p2", "security");
     const r2 = run(s, mv("p0", "lobby"), mv("p1", "lobby", { ability: { kind: "lookout", rooms: ["office"] } }), mv("p2", "lobby"), mv("p3", "office"), watch("p4", "office"), ROUND);
     const feeds = ofType(since(s, r2), "roomWatched").map((e) => [e.player, e.source, e.room, e.seen, e.offline]);
     expect(feeds).toContainEqual(["p1", "lookout", "office", ["p3"], false]);
@@ -160,7 +159,9 @@ describe("QA the meeting.qa spec's Smooth Talker branch at the engine level — 
     s = run(s, { type: "sealVote", player: "p2", vote: { kind: "skip" } }, ROUND, ALIBIS);
     expect(s.phase.kind).toBe("result");
     s = run(s, { type: "callEmergency", player: "p1" }, (x: GameState) => ({ type: "advance", deadline: { kind: "openMeeting", meetingId: x.pendingEmergency?.meetingId } }));
-    return run(s, vote("p0", "p2"), vote("p1", null), vote("p1", "p2"), CLOSE);
+    s = run(s, vote("p0", "p2"), vote("p1", null), vote("p1", "p2"), CLOSE);
+    // With Bail on the black market, a passed shakedown waits for its Bail choice window (design §9.6); nobody holds one.
+    return s.phase.kind === "shakedownPending" ? run(s, { type: "advance", deadline: { kind: "resolveShakedown", meetingId: s.phase.meetingId } }) : s;
   }
   const closed = (s: GameState) => ofType(s.log, "meetingClosed").at(-1);
   const MODES = ["hiddenThenRevealed", "open", "secret"] as const;

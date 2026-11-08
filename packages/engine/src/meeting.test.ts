@@ -12,10 +12,10 @@ import { handleCommand } from "./handle";
 import { meetingResult } from "./meeting";
 import { viewFor } from "./view";
 import { fullGrab } from "./grab.testkit";
-import { grantPerks } from "./perks.testkit";
+import { giveBail } from "./perks.testkit";
 
-/** One perk per column and no Shield, whatever the seed: a Shield in the shop opens a shakedown window at every meeting. */
-const SHOP_NO_SHIELD: readonly PerkId[] = ["peek", "alibi", "extraVote"];
+/** One perk per tier and no Bail, whatever the seed: Bail in the shop opens a Bail choice window after every passed shakedown (design §9.6). */
+const SHOP_NO_BAIL: readonly PerkId[] = ["tail", "softShoes", "plantEvidence"];
 
 /**
  * Pinned numbers: big grabs, a bank of 6 coins a player (18 for 3 players: a
@@ -38,7 +38,7 @@ function config(players: number, voteVisibility: VoteVisibility = "hiddenThenRev
 }
 
 /** A new game with chosen roles (seat i gets roles[i], a Lookout if missing) and a pinned shop. */
-function game(players: number, roles: string[] = [], mode?: VoteVisibility, overrides?: ContentOverrides, shop: readonly PerkId[] = SHOP_NO_SHIELD): GameState {
+function game(players: number, roles: string[] = [], mode?: VoteVisibility, overrides?: ContentOverrides, shop: readonly PerkId[] = SHOP_NO_BAIL): GameState {
   const cfg = config(players, mode, overrides);
   const log = setupEvents(cfg).map((e, i, all): GameEvent => {
     if (e.type === "shopDealt") return { ...e, perks: shop };
@@ -113,7 +113,7 @@ describe("regular meetings at the bank's thirds — design §9.1, §4.2 step 9",
     const before = run(s, SCHED);
     s = run(before, OPEN);
     expect(since(before, s)).toEqual([{ type: "meetingOpened", visibility: { kind: "public" }, meetingId: "meeting-1", kind: "regular" }]);
-    expect(s.meeting).toEqual({ id: "meeting-1", kind: "regular", calledBy: null, votes: {}, extraVotes: [], ballotGrants: {} });
+    expect(s.meeting).toEqual({ id: "meeting-1", kind: "regular", calledBy: null, votes: {}, ballotGrants: {} });
     expect([s.meetingDue, s.scheduledMeeting, s.stretch]).toEqual([null, null, 2]);
   });
 
@@ -457,8 +457,7 @@ describe("shakedowns against the share — design §9.6, §7.1, §7.5", () => {
   it("then the result window, and the next round", () => {
     const s = regularMeeting();
     const after = run(s, vote("p1", "p0"), vote("p2", "p0"), CLOSE, RESULT);
-    // Token grants are not what this checks (extension.md "Tokens and the perk shop").
-    expect(since(s, after).map((e) => e.type).filter((t) => t !== "tokenEarned")).toEqual(["voteCast", "voteCast", "meetingClosed", "shakedownResolved", "roundStarted"]);
+    expect(since(s, after).map((e) => e.type)).toEqual(["voteCast", "voteCast", "meetingClosed", "shakedownResolved", "roundStarted"]);
     expect(LAST(after, "roundStarted")).toEqual({ type: "roundStarted", visibility: { kind: "public" }, round: 2 });
   });
 });
@@ -492,12 +491,12 @@ describe("shakedown protection — design §9.7", () => {
     expect(reason(s, vote("p2", "p0"))).toMatch(/protected/);
   });
 
-  it("a shakedown that falls through (the Shield until Bail, design §12) protects its target too", () => {
-    let s = game(3, [], undefined, PINS, ["peek", "shield", "extraVote"]);
-    s = grantPerks(run(s, mv("p0", "vault", 6), ...RESOLVE, SCHED, OPEN), "p0", "shield");
+  it("a shakedown that falls through (Bail used, design §9.6, §12) protects its target too", () => {
+    let s = game(3, [], undefined, PINS, ["tail", "softShoes", "bail"]);
+    s = giveBail(run(s, mv("p0", "vault", 6), ...RESOLVE, SCHED, OPEN), "p0");
     s = run(s, vote("p1", "p0"), vote("p2", "p0"), CLOSE);
     expect(s.phase).toEqual({ kind: "shakedownPending", meetingId: "meeting-1", target: "p0" });
-    s = run(s, { type: "advance", deadline: { kind: "resolveShakedown", meetingId: "meeting-1" } });
+    s = run(s, { type: "chooseBail", player: "p0", use: true }, { type: "advance", deadline: { kind: "resolveShakedown", meetingId: "meeting-1" } });
     expect(LAST(s, "shakedownCancelled")).toEqual({ type: "shakedownCancelled", visibility: { kind: "public" }, meetingId: "meeting-1", target: "p0" });
     expect([s.protected, s.players.p0?.stash, s.phase]).toEqual([["p0"], 6, { kind: "result", round: 1 }]);
   });
@@ -526,7 +525,7 @@ describe("determinism and the event log — design §19.1", () => {
 
   it("a player called toString can be voted for and shaken down (__proto__ is refused at setup)", () => {
     const cfg: GameConfig = { ...config(3), players: [{ id: "toString", name: "T", isBot: false }, { id: "p1", name: "P1", isBot: true }, { id: "p2", name: "P2", isBot: true }] };
-    const log = setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: "lookout" } : e.type === "shopDealt" ? { ...e, perks: SHOP_NO_SHIELD } : e));
+    const log = setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: "lookout" } : e.type === "shopDealt" ? { ...e, perks: SHOP_NO_BAIL } : e));
     let s = run(replay(cfg, log), mv("toString", "vault", 6), ...RESOLVE, SCHED, OPEN, vote("p1", "toString"), vote("p2", "toString"), seal("toString", "p1"));
     s = run(s, CLOSE);
     expect(Object.hasOwn(LAST(s, "meetingClosed")!.tally.targets, "toString")).toBe(true);

@@ -2,7 +2,7 @@
 // each round's real moves and hidden actions, and the stash over time. Pure, and read only from the log handed in, which in a view
 // is the viewer's own reveal log (`visibleLog(..., true)`), so it can't say
 // anything that log doesn't (others' Secret-mode ballots stay hidden).
-import type { RoleId, RoomId, TokenTrigger, PerkId } from "@skimjob/content";
+import type { RoleId, RoomId, PerkId } from "@skimjob/content";
 import { leadersOf } from "./end";
 import type { PlayerId } from "./types/config";
 import type { GameEvent, Outcome } from "./types/events";
@@ -11,8 +11,7 @@ import type { RevealEnding, RevealItem, RevealMove, RevealRound, RevealSeat, Rev
 /** Hidden or deciding events the timeline shows as they are. */
 const SHOWN: ReadonlySet<GameEvent["type"]> = new Set<GameEvent["type"]>([
   "perkBought",
-  "perkUsed",
-  "rigPicked",
+  "bailChosen",
   "insideTip",
   "meetingClosed",
   "shakedownResolved",
@@ -38,9 +37,7 @@ export function revealSummary(log: readonly GameEvent[], outcome: Outcome): Reve
   const seatOrder: PlayerId[] = [];
   const dealt = new Map<PlayerId, RoleId>();
   const role = new Map<PlayerId, RoleId>();
-  const tokens = new Map<PlayerId, TokenTrigger[]>();
   const bought = new Map<PlayerId, PerkId[]>();
-  const used = new Map<PlayerId, number>();
   const stash = new Map<PlayerId, number>();
   const add = (p: PlayerId, n: number) => stash.set(p, (stash.get(p) ?? 0) + n);
   const push = <T>(m: Map<PlayerId, T[]>, p: PlayerId, v: T) => m.set(p, [...(m.get(p) ?? []), v]);
@@ -99,16 +96,10 @@ export function revealSummary(log: readonly GameEvent[], outcome: Outcome): Reve
         // design §7.6, §11.1: the Priest took it back.
         add(e.player, -e.taken);
         break;
-      case "tokenEarned": {
-        push(tokens, e.player, e.trigger);
-        items.push({ kind: "token", player: e.player, trigger: e.trigger });
-        break;
-      }
       case "perkBought":
-        push(bought, e.player, e.perk);
-        break;
-      case "perkUsed":
-        used.set(e.player, (used.get(e.player) ?? 0) + 1);
+        // design §7.6, §12: paid from the stash.
+        push(bought, e.player, e.perk.kind);
+        add(e.player, -e.cost);
         break;
       case "roleClaimed":
         items.push({ kind: "claim", player: e.player, claimed: e.role, real: role.get(e.player) ?? e.role });
@@ -154,9 +145,7 @@ export function revealSummary(log: readonly GameEvent[], outcome: Outcome): Reve
     stash: r.stash,
     topGroup: top.includes(r.player),
     winner: outcome.winners.includes(r.player),
-    tokens: tokens.get(r.player) ?? [],
     perksBought: bought.get(r.player) ?? [],
-    perksUsed: used.get(r.player) ?? 0,
   }));
   return { ending, seats, rounds };
 }

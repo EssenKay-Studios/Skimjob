@@ -12,12 +12,7 @@ import { applyEvent } from "./reduce";
 import { isTaped } from "./bells";
 
 /** Events are on unless the host turns them off. design §13, §16 */
-export const eventsOn = (config: GameConfig): boolean => config.eventsEnabled;
-
-/** Whether a card may flip at the start of `round`: events on, from `EVENTS_FROM_ROUND`, not past the round cap. design §6.2, §13 */
-export function cardRound(config: GameConfig, round: number): boolean {
-  return eventsOn(config) && round >= EVENTS_FROM_ROUND && round <= jobFor(config).roundCap;
-}
+const eventsOn = (config: GameConfig): boolean => config.eventsEnabled;
 
 /** The card's definition. Throws for ids the content doesn't have (the log only holds drawn ones). */
 function cardDef(id: string, events: EventTable = EVENTS): EventDef {
@@ -63,18 +58,14 @@ function flip(started: GameState, round: number, card: string, draw: Draw): Game
  * `roundStarted`, then from round 2 (events on) a 4-in-10 chance of a card,
  * drawn at random from the whole deck, so cards can repeat (owner, 6 Nov). A
  * card that can't apply is redrawn from the cards that can, so a flip always
- * lands a card (owner, 8 Nov; Audit and Inside tip always apply). A Rig for
- * this round flips its holder's pick instead, with no chance roll (the oldest,
- * if several). design §13
- * Then each Electrician's blackout for this round is announced, with no source (§11.1).
+ * lands a card (owner, 8 Nov; Audit and Inside tip always apply). design §13
+ * Then each blackout for this round (an Electrician's, or a Blackout perk) is announced, with no source (§11.1, §12).
  */
 export function startRound(state: GameState, round: number, draw: Draw): GameEvent[] {
   const started: GameEvent = { type: "roundStarted", visibility: PUBLIC, round };
   const events: GameEvent[] = [started];
   if (eventsOn(state.config) && round >= EVENTS_FROM_ROUND) {
-    // The oldest Rig of this round wins; later ones were spent without effect (they never learn more than the flip shows).
-    const rigged = state.rigs.find((r) => r.round === round)?.pick;
-    const drawn = rigged ?? (draw.int(EVENT_CHANCE.of) < EVENT_CHANCE.in ? draw.pick(EVENT_DECK) : null);
+    const drawn = draw.int(EVENT_CHANCE.of) < EVENT_CHANCE.in ? draw.pick(EVENT_DECK) : null;
     if (drawn !== null) {
       const now = applyEvent(state, started);
       const card = applies(now, drawn) ? drawn : draw.pick(EVENT_DECK.filter((c) => applies(now, c)));

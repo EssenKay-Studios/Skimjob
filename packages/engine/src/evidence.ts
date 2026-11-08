@@ -5,13 +5,10 @@
 // (PM decision on PR #38). Ability results (sightings, audits, …) stay shareable.
 import type { GameEvent, GameEventType } from "./types";
 
-/**
- * Entries that are role cards by type, even where the payload names no role:
- * a token's trigger names the role that earned it.
- */
-const ROLE_CARD_TYPES: ReadonlySet<GameEventType> = new Set<GameEventType>(["roleDealt", "tokenEarned"]);
+/** Entries that are role cards by type. */
+const ROLE_CARD_TYPES: ReadonlySet<GameEventType> = new Set<GameEventType>(["roleDealt"]);
 
-/** Payload keys that state a role or a faction (anyone's): a Peek, an Inside tip, allies. */
+/** Payload keys that state a role or a faction (anyone's): an Inside tip, allies. */
 const ROLE_KEYS: ReadonlySet<string> = new Set(["role", "roles", "faction", "allies"]);
 
 function namesRole(value: unknown, depth = 0): boolean {

@@ -1,7 +1,7 @@
 // The round loop: checking a submitted move, and resolving a round when its
 // deadline passes. design §3 (rooms, coins and grabs), §4.2, §5 (bells, raids,
 // Wanted, the bust, cooling), §6.2 (the end check), §7 (the split, missing and
-// honesty), §11 (role powers as the round resolves)
+// honesty), §11 (role powers as the round resolves), §12 (perks that act then)
 //
 // Both are pure: they read state and return events (or a rejection reason).
 // `handleCommand` (handle.ts) folds the events.
@@ -17,6 +17,7 @@ import type { Draw } from "./handle";
 import { closedRoom, isAudit, roundJob } from "./deck";
 import { aboveShare } from "./crew";
 import { roleHandler } from "./roles";
+import { boughtIn } from "./perks";
 import { coolBells, factVisibility, isTaped, raidedRooms, ringBells } from "./bells";
 import { honestyOf, splitDuffel } from "./shares";
 import { afterResult } from "./meeting";
@@ -97,9 +98,9 @@ function grabbed(order: readonly PlayerId[], asked: (id: PlayerId) => number, ba
 /**
  * Every event for resolving the current round, in the end-of-round order of
  * design §4.2: default moves (§3.3);
- * 1. grabs out of the bank (§3.2) and the powers that act this round: the
- *    Locksmith's quieter coins, the Mole's ring, the Fixer's reopen, the
- *    Electrician's blackout for next round (§11.1);
+ * 1. grabs out of the bank (§3.2) and the powers and perks that act this round: the
+ *    Locksmith's quieter coins, Soft shoes bought last round (§12), the Mole's ring,
+ *    the Fixer's reopen, the Electrician's blackout for next round (§11.1);
  * 2. rings light bulbs (§5.2, `bellsRung`), with any bell a Hacker hid left out (§5.1);
  * 3. raids: every room whose last bulb lit has its visitors' grabs seized, is
  *    taped off, and raises Wanted (§5.3, §5.4, `roomRaided`);
@@ -110,7 +111,8 @@ function grabbed(order: readonly PlayerId[], asked: (id: PlayerId) => number, ba
  * 6. cooling (§5.6, `bellsCooled`); a reopened room comes back at 0 (`roomReopened`);
  *    each Hacker learns its hidden bell;
  * 7. information: sightings, Security and power results (none from a blacked-out
- *    room, §11.1), the round summary (taken, missing and honesty, §7.4, §7.5);
+ *    room, §11.1), Tails bought last round and this round's planted evidence (§12),
+ *    the round summary (taken, missing and honesty, §7.4, §7.5);
  * 8. the end check (§6.2): the game ends once the bank is empty or this is the
  *    round cap (`endCheck`), and nothing below runs.
  * Two copies of a role on one target resolve in seat order from a seeded seat;
@@ -202,11 +204,13 @@ export function resolveRound(state: GameState, round: number, draw: Draw): GameE
   const got = grabbed(playing, (id) => moveOf(id).duffel + moveOf(id).pocket, state.bank, draw);
   const rings = new Map<RoomId, number>();
   const ring = (room: RoomId, n: number) => rings.set(room, (rings.get(room) ?? 0) + n);
+  // design §12 Soft shoes: bought last round, this round your coins don't ring at all.
+  const softShoes = new Set(boughtIn(state, round - 1, "softShoes").map(([id]) => id));
   for (const id of playing) {
     const { room } = moveOf(id);
     const power = powerFor(id);
     // design §5.2: rings count the coins actually grabbed; the Locksmith's each ring one time fewer.
-    ring(room, ringsOf(roomDef(job, room), got.get(id) ?? 0, power?.kind === "muffle" ? power.fewerRings : 0));
+    if (!softShoes.has(id)) ring(room, ringsOf(roomDef(job, room), got.get(id) ?? 0, power?.kind === "muffle" ? power.fewerRings : 0));
   }
   // design §11.4: Mole rings stack.
   for (const [id, use] of usesOf("ring")) {
@@ -295,8 +299,12 @@ export function resolveRound(state: GameState, round: number, draw: Draw): GameE
   for (const [id, use] of hiders) events.push(resolved(id, { ...use, bulbs: raided.includes(use.room) ? null : (realBells[use.room] ?? null) }));
 
   // §4.2 step 7: room-mates, then Security, Lookout and Tail feeds; nobody is seen in a blacked-out room, and a
-  // blacked-out Security's own cameras are offline too (§11.1, owner 8 Nov).
+  // blacked-out Security's own cameras are offline too (§11.1, owner 8 Nov). A player put on a room's feeds by
+  // Plant evidence this round shows in them (in seat order, so nothing marks the plant), and in their real room too (§12).
   const dark = (room: RoomId) => state.dark.includes(room);
+  const planted = boughtIn(state, round, "plantEvidence");
+  const onFeed = (room: RoomId, self: PlayerId): PlayerId[] =>
+    order.filter((p) => p !== self && ((visitors[room] ?? []).includes(p) || planted.some(([, use]) => use.room === room && use.target === p)));
   for (const id of playing) {
     const room = moveOf(id).room;
     events.push({ type: "roomSighting", visibility: privateTo(id), player: id, round, room, others: dark(room) ? [] : others(room, id) });
@@ -308,7 +316,7 @@ export function resolveRound(state: GameState, round: number, draw: Draw): GameE
     round,
     source,
     room,
-    seen: offline ? [] : others(room, id),
+    seen: offline ? [] : onFeed(room, id),
     offline,
   });
   for (const id of playing) {
@@ -319,10 +327,9 @@ export function resolveRound(state: GameState, round: number, draw: Draw): GameE
       events.push(resolved(id, ability));
       for (const r of ability.rooms) events.push(watched(id, "lookout", r));
     }
-    // design §8.3 Tail: one more watched room, like the Lookout's.
-    const tailed = player(id).roleState.tail;
-    if (tailed !== null) events.push(watched(id, "tail", tailed));
   }
+  // design §12 Tail: bought last round, one more watched room this round, like the Lookout's.
+  for (const [id, use] of boughtIn(state, round - 1, "tail")) events.push(watched(id, "tail", use.room));
   // design §13 Audit: how many coins reached the duffel from each room in play (0 from a raided room).
   if (isAudit(state)) {
     const duffel: Record<RoomId, number> = Object.fromEntries(state.rooms.map((r) => [r, 0]));

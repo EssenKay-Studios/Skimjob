@@ -5,8 +5,8 @@ import type { ContentOverrides } from "./types";
 
 /**
  * R6's room yields as coin limits, a bank too big to run short (design §3.2)
- * and bells too big to raid (design §5.3), for scripted rule tests (tokens,
- * meetings, shakedowns) whose numbers were written for them. Moves there grab
+ * and bells too big to raid (design §5.3), for scripted rule tests
+ * (meetings, shakedowns) whose numbers were written for them. Moves there grab
  * with `fullGrab(room, pocket, pins)`.
  */
 const R6_ROOMS = { vault: { coins: 6 }, office: { coins: 4 }, lobby: { coins: 2 }, depositBoxes: { coins: 5 } } as const;

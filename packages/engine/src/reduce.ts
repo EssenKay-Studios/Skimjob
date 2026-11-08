@@ -3,8 +3,8 @@
 // `applyEvent` is the only way state changes. Command handlers decide which
 // events happen (drawing from `state.rng` where needed); folding those events
 // rebuilds the same state, including the RNG, on replay.
-import { EMERGENCY_POOL, type PerkId } from "@skimjob/content";
-import type { GameConfig, GameEvent, GameState, MeetingState, Phase, PlayerId, PlayerState, ResolvedPerk, RoleState } from "./types";
+import { EMERGENCY_POOL } from "@skimjob/content";
+import type { GameConfig, GameEvent, GameState, MeetingState, Phase, PlayerId, PlayerState, RoleState } from "./types";
 import { NO_ROLE_STATE } from "./types";
 import { seedRng } from "./rng";
 
@@ -22,43 +22,14 @@ function mapPlayers(state: GameState, change: (p: PlayerState) => Partial<Player
 
 const withRoleState = (p: PlayerState, change: Partial<RoleState>): Partial<PlayerState> => ({ roleState: { ...p.roleState, ...change } });
 
-/** One `perk` token fewer (the first one held). */
-const spendToken = (p: PlayerState, perk: PerkId): Partial<PlayerState> => {
-  const i = p.roleState.perks.indexOf(perk);
-  if (i < 0) throw new Error(`perkUsed: ${p.id} holds no ${perk}`);
-  return withRoleState(p, { perks: [...p.roleState.perks.slice(0, i), ...p.roleState.perks.slice(i + 1)] });
-};
-
-/** A spent perk's lasting effect, after its token is gone. design §8.3 */
-function perkEffect(state: GameState, player: PlayerId, perk: ResolvedPerk): GameState {
-  switch (perk.kind) {
-    case "extraVote": {
-      const meeting = openMeeting(state);
-      return { ...state, meeting: { ...meeting, extraVotes: [...meeting.extraVotes, player] } };
-    }
-    case "ballot": {
-      const meeting = openMeeting(state);
-      const seen = Object.hasOwn(meeting.ballotGrants, player) ? (meeting.ballotGrants[player] as readonly PlayerId[]) : [];
-      return { ...state, meeting: { ...meeting, ballotGrants: { ...meeting.ballotGrants, [player]: [...seen, perk.target] } } };
-    }
-    case "tail":
-      return updatePlayer(state, player, (p) => withRoleState(p, { tail: perk.room }));
-    case "recharge":
-      // extension.md gap-fills: one used-up use of the current stretch, else a once-per-game use.
-      return updatePlayer(state, player, (p) =>
-        withRoleState(
-          p,
-          p.roleState.usedThisStretch > 0 ? { usedThisStretch: p.roleState.usedThisStretch - 1 } : { usedThisGame: Math.max(0, p.roleState.usedThisGame - 1) },
-        ),
-      );
-    case "rig":
-      return { ...state, rigs: [...state.rigs, { player, round: perk.round, cards: perk.cards, pick: perk.cards[0] as string }] };
-    case "peek":
-    case "shield":
-    case "alibi":
-      // Information, or a cancel (or call) announced by its own public event.
-      return state;
+/** design §12: the Check ballots bought since the last meeting opened: buyer → the players whose ballots they see in this one. */
+function ballotGrants(checks: GameState["ballotChecks"]): Record<PlayerId, PlayerId[]> {
+  const out: Record<PlayerId, PlayerId[]> = {};
+  for (const { player, target } of checks) {
+    const seen = Object.hasOwn(out, player) ? (out[player] as PlayerId[]) : [];
+    if (!seen.includes(target)) out[player] = [...seen, target];
   }
+  return out;
 }
 
 function openMeeting(state: GameState): MeetingState {
@@ -73,7 +44,7 @@ function openMeeting(state: GameState): MeetingState {
  */
 const resultWindow = (state: GameState): Phase => ({ kind: "result", round: state.resolvedRound });
 
-/** A passed shakedown's window (if one was open) ends, and its target is protected until the next regular meeting. design §9.7 */
+/** A passed shakedown's Bail choice window (if one was open) ends, and its target is protected until the next regular meeting. design §9.7 */
 function afterShakedown(state: GameState, target: PlayerId): GameState {
   const shaken = state.protected.includes(target) ? state : { ...state, protected: [...state.protected, target] };
   return shaken.pendingShakedown ? { ...shaken, pendingShakedown: null, phase: resultWindow(shaken) } : shaken;
@@ -130,12 +101,12 @@ export function initialState(config: GameConfig): GameState {
     cutsPending: [],
     wanted: 0,
     seized: 0,
+    spent: 0,
     card: null,
     moves: {},
     alibisOpen: false,
     alibisPosted: [],
-    alibisVerified: [],
-    rigs: [],
+    ballotChecks: [],
     proposals: [],
     scheduledMeeting: null,
     pendingEmergency: null,
@@ -181,8 +152,6 @@ function applyChange(state: GameState, event: GameEvent): GameState {
       return { ...state, shop: event.perks };
     // ------------------------------------------------ round loop. design §5
     case "roundStarted": {
-      // A Rig for this round has been used by its flip (deck.ts). design §8.3
-      const rigs = state.rigs.filter((r) => r.round > event.round);
       // design §5.3: a room whose tape has run out reopens with its bell at 0.
       return {
         ...reopen(state, (room) => (state.taped[room] as number) < event.round),
@@ -190,7 +159,6 @@ function applyChange(state: GameState, event: GameEvent): GameState {
         round: event.round,
         moves: {},
         card: null,
-        rigs,
         // design §11.1: a hidden bell reappears and last round's power cuts end.
         hidden: [],
         dark: [],
@@ -288,10 +256,9 @@ function applyChange(state: GameState, event: GameEvent): GameState {
       // The bank is a public total. The round's alibis open (design §5.4); the meeting it called, the
       // result window or the next round waits for their deadline. Crossing a third of the bank calls a
       // regular meeting (§9.1; crossing both in one round, one meeting).
-      // Tails watched this round (design §8.3); Verified stamps are for the round just ended.
       const thirds = thirdsGone(state.bankStart, event.bank);
       return {
-        ...mapPlayers(state, (p) => (p.roleState.tail === null ? {} : withRoleState(p, { tail: null }))),
+        ...state,
         phase: { kind: "alibis", round: event.round },
         bank: event.bank,
         thirds,
@@ -301,7 +268,6 @@ function applyChange(state: GameState, event: GameEvent): GameState {
         resolvedRound: event.round,
         alibisOpen: true,
         alibisPosted: [],
-        alibisVerified: [],
       };
     }
     case "alibisClosed":
@@ -350,9 +316,9 @@ function applyChange(state: GameState, event: GameEvent): GameState {
           kind: event.kind,
           calledBy: emergency ? (state.pendingEmergency?.by ?? null) : null,
           votes: {},
-          extraVotes: [],
-          ballotGrants: {},
+          ballotGrants: ballotGrants(state.ballotChecks),
         },
+        ballotChecks: [],
         scheduledMeeting: emergency ? state.scheduledMeeting : null,
         pendingEmergency: emergency ? null : state.pendingEmergency,
         meetingDue: emergency ? state.meetingDue : null,
@@ -377,28 +343,37 @@ function applyChange(state: GameState, event: GameEvent): GameState {
       return {
         ...state,
         phase: { kind: "shakedownPending", meetingId: event.meetingId, target: event.target },
-        pendingShakedown: { meetingId: event.meetingId, kind: event.kind, target: event.target },
+        pendingShakedown: { meetingId: event.meetingId, kind: event.kind, target: event.target, useBail: false },
       };
     case "shakedownCancelled":
-      return afterShakedown(state, event.target);
+      // design §9.6: the target used Bail, which is spent.
+      return updatePlayer(afterShakedown(state, event.target), event.target, (p) => withRoleState(p, { bail: false }));
     case "shakedownResolved": {
       // design §7.1, §9.6: what the shakedown took back is set aside for the next split.
       const next = { ...afterShakedown(state, event.target), setAside: state.setAside + event.taken };
       return updatePlayer(next, event.target, (p) => ({ stash: p.stash - event.taken }));
     }
-    // ------------------------------------------------ perks. design §8.3
-    case "tokenEarned":
-      return updatePlayer(state, event.player, (p) => withRoleState(p, { tokens: p.roleState.tokens + 1 }));
-    case "perkBought":
-      return updatePlayer(state, event.player, (p) => withRoleState(p, { tokens: p.roleState.tokens - event.cost, perks: [...p.roleState.perks, event.perk] }));
-    case "perkUsed":
-      return perkEffect(updatePlayer(state, event.player, (p) => spendToken(p, event.perk.kind)), event.player, event.perk);
-    case "rigPicked": {
-      if (!state.rigs.some((r) => r.player === event.player && r.round === event.round)) throw new Error("rigPicked: no rigged card");
-      return { ...state, rigs: state.rigs.map((r) => (r.player === event.player && r.round === event.round ? { ...r, pick: event.card } : r)) };
+    // ------------------------------------------------ perks. design §12
+    case "perkSold":
+      // design §7.7: coins spent on perks leave the game.
+      return { ...state, spent: state.spent + event.cost };
+    case "perkBought": {
+      // design §7.6, §12: paid from the buyer's stash; Bail is held, a Blackout is announced next round like a
+      // power cut, a Check ballot waits for the next meeting. The others act where their rule does (perks.ts).
+      const { perk } = event;
+      const paid = updatePlayer(state, event.player, (p) => ({ stash: p.stash - event.cost, ...(perk.kind === "bail" && withRoleState(p, { bail: true })) }));
+      if (perk.kind === "blackout") return paid.cutsPending.includes(perk.room) ? paid : { ...paid, cutsPending: [...paid.cutsPending, perk.room] };
+      if (perk.kind === "ballot") return { ...paid, ballotChecks: [...paid.ballotChecks, { player: event.player, target: perk.target }] };
+      return paid;
+    }
+    case "bailChosen": {
+      // design §9.6: the latest choice counts when the window closes.
+      const pending = state.pendingShakedown;
+      if (!pending) throw new Error("bailChosen: no shakedown is pending");
+      return { ...state, pendingShakedown: { ...pending, useBail: event.use } };
     }
     case "alibiVerified":
-      return { ...state, alibisVerified: [...state.alibisVerified, event.player] };
+      return state;
     default: {
       const unknown: never = event;
       throw new Error(`applyEvent: unknown event ${JSON.stringify(unknown)}`);

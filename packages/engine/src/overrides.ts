@@ -114,9 +114,8 @@ export function validateOverrides(raw: unknown, job: JobDef, roles: RoleTable = 
           errors.push(`${path}: no such role`);
           continue;
         }
-        // Each role may tune only its own power's numbers, and its reward's count if it has one. design §11.1
-        const reward = def.rewards && def.rewards.length > 0 ? { rewardCount: count } : {};
-        checkFields(o, path, { ...POWER_FIELDS[def.power.kind], ...reward }, errors);
+        // Each role may tune only its own power's numbers. design §11.1
+        checkFields(o, path, POWER_FIELDS[def.power.kind], errors);
       }
   }
   if (raw.events !== undefined) {
@@ -184,9 +183,7 @@ export function overrideRoles(roles: RoleTable, overrides: ContentOverrides | nu
     const def = roles[id] as RoleDef;
     // Validated: only this power's own fields are present.
     const powerNumbers = Object.fromEntries(Object.entries(o).filter(([key]) => Object.hasOwn(POWER_FIELDS[def.power.kind], key)));
-    const power = { ...def.power, ...powerNumbers } as RolePower;
-    const rewards = o.rewardCount !== undefined && def.rewards ? def.rewards.map((r) => ({ ...r, count: o.rewardCount as number })) : def.rewards;
-    out[id] = { ...def, power, ...(rewards && { rewards }) };
+    out[id] = { ...def, power: { ...def.power, ...powerNumbers } as RolePower };
   }
   return out;
 }
@@ -225,7 +222,7 @@ export function powerOf(config: Pick<GameConfig, "contentOverrides">, role: Role
   return roleDefIn(rolesFor(config), role)?.power;
 }
 
-/** What `perk` costs in the shop in this game. extension.md "Tokens and the perk shop" */
+/** What `perk` costs in coins in this game. design §12 */
 export function perkCost(config: Pick<GameConfig, "contentOverrides">, perk: PerkId): number {
   return config.contentOverrides?.perks?.[perk]?.cost ?? PERKS[perk].cost;
 }

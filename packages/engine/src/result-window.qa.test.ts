@@ -12,8 +12,8 @@ import { replay } from "./reduce";
 import { handleCommand } from "./handle";
 import { viewFor } from "./view";
 
-const NO_SHIELD: readonly PerkId[] = ["peek", "alibi", "extraVote"];
-const WITH_SHIELD: readonly PerkId[] = ["peek", "shield", "extraVote"];
+const NO_BAIL: readonly PerkId[] = ["tail", "softShoes", "plantEvidence"];
+const WITH_BAIL: readonly PerkId[] = ["tail", "softShoes", "bail"];
 
 /** A 6-coin Vault that one full grab raids, a quiet 2-coin Lobby; 12 coins a player unless pinned. */
 const pins = (coinsPerPlayer = 12): ContentOverrides => ({
@@ -31,7 +31,7 @@ function game(n: number, opts: { coins?: number; shop?: readonly PerkId[]; seed?
     voteVisibility: "hiddenThenRevealed",
     contentOverrides: pins(opts.coins),
   };
-  const shop = opts.shop ?? NO_SHIELD;
+  const shop = opts.shop ?? NO_BAIL;
   const log = setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: "lookout" } : e.type === "shopDealt" ? { ...e, perks: shop } : e));
   return replay(cfg, log);
 }
@@ -114,7 +114,7 @@ describe("QA: callEmergency outside the result window is refused (#167) — desi
   const WINDOW = /between a round's result and the next planning/;
 
   it("in planning (round 1 and later), in alibis, while a meeting is due, while it is open, during a shakedown window", () => {
-    let s = game(7, { shop: WITH_SHIELD });
+    let s = game(7, { shop: WITH_BAIL });
     expect(reason(s, emergency("p0"))).toMatch(WINDOW); // round 1 planning
     s = run(s, mv("p0", "vault", 6), lobby);
     expect(reason(s, emergency("p0"))).toMatch(WINDOW); // planning, moves locked in
@@ -295,9 +295,9 @@ describe("QA: protection until the next regular meeting opens — design §9.5, 
     expect(s.meeting?.votes.p1).toEqual({ kind: "shakedown", target: "p6" });
   });
 
-  it("a Shield's cancel protects too; a briefing does not lift it; protection after the last regular meeting lasts to the end", () => {
+  it("a shakedown passed through the Bail window protects too; a briefing does not lift it; protection after the last regular meeting lasts to the end", () => {
     // 3 players, 9 coins: round 1 crosses both thirds; its regular meeting is the last.
-    let s = run(game(3, { coins: 3, shop: WITH_SHIELD }), lobby, ROUND, ALIBIS, SCHED, OPEN, vote("p1", "p0"), vote("p2", "p0"), CLOSE);
+    let s = run(game(3, { coins: 3, shop: WITH_BAIL }), lobby, ROUND, ALIBIS, SCHED, OPEN, vote("p1", "p0"), vote("p2", "p0"), CLOSE);
     expect(s.phase.kind).toBe("shakedownPending");
     s = run(s, RESOLVE);
     expect(s.protected).toEqual(["p0"]);
@@ -315,7 +315,7 @@ describe("QA: determinism and viewFor of the new state — CLAUDE.md, design §1
   /** A scripted game: a briefing, an emergency, a regular meeting, shakedowns and sealed votes. */
   function script(seed: string): GameState[] {
     const out: GameState[] = [];
-    let s = game(7, { seed, shop: WITH_SHIELD });
+    let s = game(7, { seed, shop: WITH_BAIL });
     const push = (...c: Cmd[]) => {
       for (const x of c) {
         s = run(s, x);

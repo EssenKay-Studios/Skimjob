@@ -1,6 +1,6 @@
 // Deterministic game setup: validate the config, pick rooms by player count,
-// deal one secret role per seat and deal the shop. design §3.1, §6.1, §11.3,
-// §16; extension.md "Tokens and the perk shop"
+// deal one secret role per seat and deal the black market. design §3.1, §6.1,
+// §11.3, §12, §16
 //
 // Emits, in order: gameCreated (public, no seed), rngSeeded (reveal),
 // roomsSet (public), bankFilled (public), one roleDealt per seat in seat order (private),
@@ -14,9 +14,10 @@ import {
   MAX_ROLE_COPIES,
   MIN_PLAYERS,
   ROLES,
+  PERKS,
+  PERK_IDS,
+  PERK_TIERS,
   ROLE_DEAL,
-  SHOP_COLUMNS,
-  SHOP_RULES,
   type JobId,
   type PerkId,
   type RoleId,
@@ -27,7 +28,6 @@ import type { GameConfig, GameEvent, GameState, RngState, RoleListSetting, VoteV
 import { PUBLIC, REVEAL, privateTo } from "./types";
 import { pick, seedRng, shuffle } from "./rng";
 import { replay } from "./reduce";
-import { eventsOn } from "./deck";
 import { show } from "./check";
 import { jobById, roomsInPlay } from "./job";
 import { jobFor, validateOverrides } from "./overrides";
@@ -126,21 +126,14 @@ export function dealRoles(config: GameConfig, rng: RngState): { readonly value: 
   return { value: draw(shuffle(rng, dealt)), rng };
 }
 
-/**
- * The shop's three perks, one per column, drawn with the seeded RNG
- * (extension.md "Tokens and the perk shop", gap-fills "Shop dealing"):
- * with events off the Sway perk is +Vote.
- */
-function dealShop(config: GameConfig, rng: RngState): { readonly value: PerkId[]; readonly rng: RngState } {
+/** The black market's three perks, one per tier, drawn with the game's seed. design §12 */
+function dealShop(rng: RngState): { readonly value: PerkId[]; readonly rng: RngState } {
   const perks: PerkId[] = [];
-  const take = (from: readonly PerkId[]) => {
-    const drawn = pick(rng, from);
+  for (const tier of PERK_TIERS) {
+    const drawn = pick(rng, PERK_IDS.filter((id) => PERKS[id].tier === tier));
     rng = drawn.rng;
     perks.push(drawn.value);
-  };
-  take(SHOP_COLUMNS.learn);
-  take(SHOP_COLUMNS.protect);
-  take(eventsOn(config) ? SHOP_COLUMNS.sway : SHOP_RULES.swayEventsOff);
+  }
   return { value: perks, rng };
 }
 
@@ -159,7 +152,7 @@ export function setupEvents(config: GameConfig): GameEvent[] {
   const errors = validateConfig(config);
   if (errors.length > 0) throw new Error(`invalid game config: ${errors.join("; ")}`);
   const dealt = dealRoles(config, seedRng(config.seed));
-  const shop = dealShop(config, dealt.rng);
+  const shop = dealShop(dealt.rng);
   return [
     {
       type: "gameCreated",

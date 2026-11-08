@@ -55,10 +55,9 @@ export type Phase =
   /** A vote window is open. Rounds are paused. design §4.1 */
   | { readonly kind: "meeting"; readonly meetingId: string }
   /**
-   * The vote passed a shakedown on `target`; it is applied when this window's
-   * deadline passes, unless a Shield cancels it. Opens after every passed
-   * shakedown when the shop holds the Shield, so it never tells anyone who
-   * holds one. design §8.3, §11.3
+   * The vote passed a shakedown on `target`; its Bail choice window is open
+   * until this deadline passes. Opens after every passed shakedown when Bail
+   * is in the shop, so it never tells anyone who holds one. design §9.6, §12
    */
   | { readonly kind: "shakedownPending"; readonly meetingId: string; readonly target: PlayerId }
   /** Game over; everything is revealed. design §13 */
@@ -69,7 +68,7 @@ export interface PlayerState {
   readonly name: string;
   readonly isBot: boolean;
   readonly role: RoleId;
-  /** Private: share received + coins pocketed − coins taken back by shakedowns. design §7.6 */
+  /** Private: share received + coins pocketed − coins taken back − coins spent on perks. design §7.6 */
   readonly stash: number;
   /** Uses of the role's power so far (all roles share the shape). design §11 */
   readonly roleState: RoleState;
@@ -84,7 +83,7 @@ export interface PlayerState {
 
 /**
  * Generic per-player role state: once-between-meetings and once-per-game uses,
- * tokens and perks. Private to the player; each holder of a role has their
+ * and a held Bail. Private to the player; each holder of a role has their
  * own (design §11.3, §19.2 seam 9).
  */
 export interface RoleState {
@@ -97,29 +96,19 @@ export interface RoleState {
   readonly usedThisStretch: number;
   /** Uses this game: reopened rooms (Fixer). */
   readonly usedThisGame: number;
-  /** Unspent tokens (extension.md "Tokens and the perk shop"). */
-  readonly tokens: number;
-  /** Perks bought and not yet used, in the order bought. design §8.3 */
-  readonly perks: readonly PerkId[];
-  /** The room a spent Tail watches when the round being planned resolves; null otherwise. design §8.3 */
-  readonly tail: RoomId | null;
+  /** Holding a Bail (at most one at a time). design §12 */
+  readonly bail: boolean;
 }
 
-export const NO_ROLE_STATE: RoleState = { usedThisStretch: 0, usedThisGame: 0, tokens: 0, perks: [], tail: null };
+export const NO_ROLE_STATE: RoleState = { usedThisStretch: 0, usedThisGame: 0, bail: false };
 
-/** A spent Rig: `player` picks which of `cards` flips at the start of `round`. Hidden from everyone else. design §8.3 */
-export interface RiggedCard {
-  readonly player: PlayerId;
-  readonly round: number;
-  readonly cards: readonly EventId[];
-  readonly pick: EventId;
-}
-
-/** A shakedown the vote passed, waiting for its window to end. design §11.3 */
+/** A shakedown the vote passed, waiting for its Bail choice window to end. design §9.6 */
 export interface PendingShakedown {
   readonly meetingId: string;
   readonly kind: MeetingKind;
   readonly target: PlayerId;
+  /** The target's latest Bail choice (hidden); no answer means don't use. */
+  readonly useBail: boolean;
 }
 
 /** The event card flipped for `round`; cleared when the round resolves. design §13 */
@@ -159,9 +148,7 @@ export interface MeetingState {
    * (No resume point is stored: the game goes on to the result window, design §4.2.)
    */
   readonly votes: Readonly<Record<PlayerId, VoteChoice>>;
-  /** Players who spent a +Vote in this meeting (hidden). design §8.3 */
-  readonly extraVotes: readonly PlayerId[];
-  /** Ballot perks spent in this meeting: viewer → the players whose ballots they see (hidden). design §8.3 */
+  /** Check ballots for this meeting: viewer → the players whose ballots they see (hidden). design §12 */
   readonly ballotGrants: Readonly<Record<PlayerId, readonly PlayerId[]>>;
 }
 
@@ -221,6 +208,8 @@ export interface GameState {
   readonly wanted: number;
   /** Coins the police have seized this game (public): they left the game. design §5.3, §7.7 */
   readonly seized: number;
+  /** Coins spent on perks this game (public: every purchase is logged with its cost): they left the game. design §7.7, §12 */
+  readonly spent: number;
   /** This round's event card, if one was flipped (cleared when the round resolves). design §13 */
   readonly card: ActiveCard | null;
   /** Moves submitted so far for the current round (cleared when it resolves). */
@@ -231,13 +220,8 @@ export interface GameState {
   readonly alibisOpen: boolean;
   /** Players who already posted an alibi for `resolvedRound` (one each). design §5.4 */
   readonly alibisPosted: readonly PlayerId[];
-  /** Players whose alibi for `resolvedRound` is stamped Verified (public, Alibi perk). design §8.3 */
-  readonly alibisVerified: readonly PlayerId[];
-  /**
-   * Rigs spent for coming rounds, oldest first, at most one per player per
-   * round (hidden). The oldest for a round flips its pick. design §8.3
-   */
-  readonly rigs: readonly RiggedCard[];
+  /** Check ballots bought for the next meeting that opens, in order (hidden). design §12 */
+  readonly ballotChecks: readonly { readonly player: PlayerId; readonly target: PlayerId }[];
   /** Open slot proposals for the next regular meeting or briefing; cleared once a slot is locked. design §9.4 */
   readonly proposals: readonly MeetingProposal[];
   /** The next regular meeting or briefing's locked slot, not yet open. design §9.4 */
@@ -248,7 +232,7 @@ export interface GameState {
   readonly meeting: MeetingState | null;
   /** Set exactly when `phase.kind === "shakedownPending"`. */
   readonly pendingShakedown: PendingShakedown | null;
-  /** The shop's perks (public), dealt at setup. extension.md "Tokens and the perk shop" */
+  /** The black market's three perks (public), dealt at setup. design §12 */
   readonly shop: readonly PerkId[];
   readonly log: readonly GameEvent[];
 }

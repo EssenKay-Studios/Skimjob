@@ -14,13 +14,11 @@ import { isDeepStrictEqual } from "node:util";
 import { describe, expect, it } from "vitest";
 import type { GameConfig, GameEvent, GameState, LoggedEvent, Move, PlayerId, PlayerState, PlayerView, VoteChoice, VoteVisibility } from "./types";
 import { REVEAL, canSee, privateTo, secretTo } from "./types";
-import { EVENT_DECK, BANK_JOB } from "@skimjob/content";
+import { EVENT_DECK, BANK_JOB, PERK_IDS } from "@skimjob/content";
 import { createGame, setupEvents } from "./setup";
 import { replay } from "./reduce";
 import { handleCommand } from "./handle";
-import { perkCost } from "./overrides";
 import { viewFor } from "./view";
-import { grantPerks } from "./perks.testkit";
 import { fullGrab } from "./grab.testkit";
 
 function config(players: number, voteVisibility: VoteVisibility): GameConfig {
@@ -35,9 +33,6 @@ function config(players: number, voteVisibility: VoteVisibility): GameConfig {
     contentOverrides: { alarm: { bustStars: 99 } },
   };
 }
-
-/** Token triggers these scripts reach (the Detective's and Fixer's: crew and extension tests). extension.md "Roles" */
-const EARNED_IN_PLAY: readonly string[] = ["auditedShakenDirty", "watchedShakenDirty", "wonDirtyShakedown"];
 
 const NO_COINS = new Set(["security", "rooftop"]);
 const ofType = <T extends GameEvent["type"]>(s: GameState, type: T) => s.log.filter((e): e is Extract<GameEvent, { type: T }> => e.type === type);
@@ -56,26 +51,22 @@ function darkGame(cfg: GameConfig): GameState {
 }
 
 /**
- * A full game exercising every event type the default pool can produce: moves
+ * A full game exercising every event type a dealt game can produce: moves
  * (some changed, some missed), Security watches, the Server room, every
  * role's power (design §11.1), bells and raids, alibis,
  * proposals, briefings and regular meetings, an emergency in round 2's result
- * window, sealed and changed ballots (Smooth Talker weight), shakedown windows,
- * shakedowns and their protection, the end check (design §6.2), and the event cards (Lockdown avoided), and perks (design §8.3: granted by the test hook,
- * then Peek, Tail, Rig and its pick, +Vote, Ballot, a verified Alibi, Recharge and a Shield that cancels
- * the first meeting's shakedown). Returns the state after every command. (The script reads the
- * full state to pick moves, as a scheduler would; views are what's checked.)
+ * window, sealed and changed ballots (Smooth Talker weight), Bail choice windows,
+ * shakedowns and their protection, the end check (design §6.2), and the event cards (Lockdown avoided), and every perk
+ * (design §12: all seven on the black market and coins to buy them, a Tail, a Check ballot, a stamped alibi, Soft shoes,
+ * a Blackout, Plant evidence, and a Bail used on the first meeting's shakedown). Returns the state after every command.
+ * (The script reads the full state to pick moves, as a scheduler would; views are what's checked.)
  */
 function playGame(players: number, voteVisibility: VoteVisibility, dark = false): GameState[] {
   let s = dark ? darkGame({ ...config(players, voteVisibility), roleList: "possible" }) : createGame(config(players, voteVisibility));
   const ids = s.playerOrder;
   const last = ids[ids.length - 1] as PlayerId;
-  // extension.md "Tokens and the perk shop": roles earn tokens and buy from the shop in play; the test hook hands out the rest so every perk is used.
-  s = grantPerks(s, "p0", "peek", "tail", "ballot", "extraVote");
-  s = grantPerks(s, ids[1] as PlayerId, "shield"); // the first meeting's target
-  s = grantPerks(s, last, "rig", "alibi");
-  const hacker = ids.find((id) => s.players[id]?.role === "hacker");
-  if (hacker) s = grantPerks(s, hacker, "recharge");
+  // design §12: every perk on the black market, and coins in every stash to buy them with.
+  s = { ...s, shop: PERK_IDS, players: Object.fromEntries(Object.entries(s.players).map(([id, p]) => [id, { ...p, stash: 20 }])) };
   const states = [s];
   const over = (): boolean => s.phase.kind === "ended"; // a function, since `step` reassigns `s`
   const step = (command: unknown): void => {
@@ -91,16 +82,10 @@ function playGame(players: number, voteVisibility: VoteVisibility, dark = false)
     vote: target === null || target === player ? { kind: "skip" } : { kind: "shakedown", target },
   });
   const holder = (role: string): PlayerId | undefined => ids.find((id) => s.players[id]?.role === role);
-  // One perk per round (extension.md "Tokens and the perk shop"); the Shield spends itself.
-  const usedPerk = (): boolean => s.log.some((e) => e.type === "perkUsed" && e.player === "p0" && e.round === s.round && e.perk.kind !== "shield");
   const meeting = (wanted: PlayerId): void => {
     // design §9.7: a protected player can't be voted for, so the target is the first unprotected one from `wanted`.
     const from = ids.indexOf(wanted);
     const target = [...ids.slice(from), ...ids.slice(0, from)].find((id) => !s.protected.includes(id)) as PlayerId;
-    // design §8.3: in the round-2 emergency p0 spends a Ballot on p1 (a +Vote in Open mode), and a +Vote in the first other meeting.
-    const held = s.players.p0?.roleState.perks ?? [];
-    if (s.meeting?.kind === "emergency" && !usedPerk()) step({ type: "useAbility", player: "p0", ability: voteVisibility !== "open" ? { kind: "ballot", target: ids[1] } : { kind: "extraVote" } });
-    else if (voteVisibility !== "open" && held.includes("extraVote") && !usedPerk()) step({ type: "useAbility", player: "p0", ability: { kind: "extraVote" } });
     ids.forEach((id, i) => {
       if (id === target || i % 3 === 2) return; // a few stay away (sealed votes still count)
       step(vote(id, i % 2 === 0 ? target : null));
@@ -108,27 +93,27 @@ function playGame(players: number, voteVisibility: VoteVisibility, dark = false)
     });
     step({ type: "advance", deadline: { kind: "closeMeeting", meetingId: s.meeting?.id } });
     if (s.phase.kind !== "shakedownPending") return;
+    // design §9.6: a target holding Bail uses it (changing their mind once).
+    if (s.players[s.phase.target]?.roleState.bail) {
+      step({ type: "chooseBail", player: s.phase.target, use: false });
+      step({ type: "chooseBail", player: s.phase.target, use: true });
+    }
     step({ type: "advance", deadline: { kind: "resolveShakedown", meetingId: s.phase.meetingId } });
   };
   let meetings = 0;
   for (let round = 1; round <= BANK_JOB.roundCap && !over(); round++) {
     const stretch = s.stretch;
-    // extension.md "Tokens and the perk shop": anyone with enough tokens buys the shop's first perk they can afford.
-    for (const id of ids) {
-      const perk = s.shop.find((p) => perkCost(s.config, p) <= (s.players[id]?.roleState.tokens ?? 0));
-      if (perk) step({ type: "buyPerk", player: id, perk });
-    }
-    if (round === 4) step({ type: "useAbility", player: "p0", ability: { kind: "peek", target: ids[1] } });
-    if (round === 1) {
-      // design §8.3: Tail, and a Rig of round 2's card (its second card picked).
-      step({ type: "useAbility", player: "p0", ability: { kind: "tail", room: s.rooms[0] } });
-      step({ type: "useAbility", player: last, ability: { kind: "rig" } });
-      step({ type: "useAbility", player: last, ability: { kind: "rigPick", card: s.rigs.find((r) => r.player === last)?.cards[1] } });
-    }
-    // design §8.3: the Hacker gets a spent hide back (if it made one).
-    if (round === 5 && hacker && s.players[hacker]?.role === "hacker" && (s.players[hacker]?.roleState.usedThisStretch ?? 0) > 0) {
-      step({ type: "useAbility", player: hacker, ability: { kind: "recharge" } });
-    }
+    // design §12: one perk per player per round, while planning.
+    const buys: Record<number, [PlayerId, object][]> = {
+      // A Tail, and a Bail for the first meeting's target.
+      1: [["p0", { kind: "tail", room: s.rooms[0] }], [ids[1] as PlayerId, { kind: "bail" }]],
+      // A Check ballot on p1 for the next meeting (Soft shoes in Open mode, where ballots are public), and a Stamped alibi.
+      2: [["p0", voteVisibility === "open" ? { kind: "softShoes" } : { kind: "ballot", target: ids[1] }], [last, { kind: "alibi" }]],
+      3: [["p0", { kind: "softShoes" }], [ids[2] as PlayerId, { kind: "blackout", room: "office" }]],
+      4: [[ids[2] as PlayerId, { kind: "plantEvidence", target: "p0", room: "vault" }]],
+    };
+    // A shakedown may have emptied a buyer's stash; every perk is still bought in some game (checked below).
+    for (const [id, perk] of buys[round] ?? []) if (handleCommand(s, { type: "buyPerk", player: id, perk }).ok) step({ type: "buyPerk", player: id, perk });
     // design §11.1: the Auditor audits the Vault (latest round) once between meetings; the Detective looks into its neighbour.
     const auditor = holder("auditor");
     if (auditor && round % 3 === 2 && (s.players[auditor]?.roleState.usedThisStretch ?? 1) === 0) {
@@ -168,12 +153,11 @@ function playGame(players: number, voteVisibility: VoteVisibility, dark = false)
     });
     step({ type: "advance", deadline: { kind: "round", round } });
     ids.forEach((id, i) => {
-      // design §8.3: in round 2 the last player posts a true alibi and has it stamped Verified.
+      // design §12: in round 2 the last player posts a true alibi, stamped "verified" by its Stamped alibi.
       if (round === 2 && id === last) {
         const split = s.log.find((e) => e.type === "coinsGrabbed" && e.player === id && e.round === round);
         if (split?.type !== "coinsGrabbed") throw new Error("no split");
         step({ type: "postAlibi", player: id, room: split.room });
-        step({ type: "useAbility", player: id, ability: { kind: "alibi" } });
       } else if (i % 4 !== 3) step({ type: "postAlibi", player: id, room: s.rooms[i % s.rooms.length] });
     });
     // design §5.4: the alibi deadline closes the round's alibis before the next round's planning.
@@ -234,15 +218,13 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
           { type: "sinsAbsolved", visibility: privateTo(other), player: other, round: 1, taken: 2 },
           { type: "abilityResolved", visibility: privateTo(other), player: other, round: 1, ability: { kind: "ring", room: "office" } },
           { type: "abilityResolved", visibility: privateTo(other), player: other, round: 1, ability: { kind: "reopen", room: "vault" } },
-          { type: "tokenEarned", visibility: privateTo(other), player: other, trigger: "watchedShakenDirty" },
-          { type: "perkBought", visibility: privateTo(other), player: other, perk: "shield", cost: 2 },
+          { type: "perkBought", visibility: privateTo(other), player: other, round: 1, perk: { kind: "plantEvidence", target: viewer, room: "vault" }, cost: 3 },
+          { type: "bailChosen", visibility: privateTo(other), player: other, meetingId: "meeting-1", use: true },
           { type: "abilityResolved", visibility: privateTo(other), player: other, round: 1, ability: { kind: "audit", round: 1, room: "vault", duffel: 4 } },
           { type: "abilityResolved", visibility: privateTo(other), player: other, round: 1, ability: { kind: "detect", round: 1, target: viewer, grabbed: 3 } },
           { type: "insideTip", visibility: privateTo(other), player: other, round: 2, subject: viewer, role: "mole" },
           { type: "coinsGrabbed", visibility: privateTo(other), player: other, round: 1, room: "vault", duffel: 0, pocket: 3, seized: 0 },
           { type: "coinsGrabbed", visibility: privateTo(other), player: other, round: 1, room: "vault", duffel: 0, pocket: 0, seized: 3 },
-          { type: "perkUsed", visibility: privateTo(other), player: other, round: 1, perk: { kind: "ballot", meetingId: "meeting-1", target: viewer } },
-          { type: "rigPicked", visibility: privateTo(other), player: other, round: 2, card: "audit" },
         ] satisfies GameEvent[])),
   ];
   const log = state.log.filter((e) => canSee(e.visibility, viewer, gameOver)).flatMap((e) => [e, ...junk]);
@@ -256,7 +238,7 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
             ...p,
             role: p.role === "hacker" ? "lookout" : "hacker",
             stash: p.stash + 101,
-            roleState: { usedThisStretch: 4, usedThisGame: 1, tokens: p.roleState.tokens + 5, perks: ["peek", "shield", "ballot"], tail: "vault" },
+            roleState: { usedThisStretch: 4, usedThisGame: 1, bail: !p.roleState.bail },
             consecutiveMissedMoves: 5,
             sealedVote: { kind: "shakedown", target: viewer },
           },
@@ -277,7 +259,7 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
     if (!Object.hasOwn(state.moves, id)) continue;
     moves[id] = id === viewer ? (state.moves[id] as Move) : { room: "vault", duffel: 0, pocket: 3 };
   }
-  // design §8.3: others' +Votes and Ballot perks are hidden; the ballots the viewer paid to see stay as they are.
+  // design §12: others' Check ballots are hidden; the ballots the viewer paid to see stay as they are.
   const seen = state.meeting?.ballotGrants[viewer] ?? [];
   const votesSeen = (votes: Readonly<Record<PlayerId, VoteChoice>>): Record<PlayerId, VoteChoice> => {
     const out = keepOwn(votes, { kind: "shakedown", target: viewer });
@@ -290,18 +272,20 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
   const meeting = state.meeting && {
     ...state.meeting,
     votes: votesSeen(state.meeting.votes),
-    extraVotes: [...state.playerOrder.filter((id) => id !== viewer), ...state.meeting.extraVotes.filter((id) => id === viewer)],
     ballotGrants: { ...Object.fromEntries(state.playerOrder.map((id) => [id, [viewer]])), [viewer]: seen },
   };
-  // A Rig is its holder's secret. design §8.3
-  const rigs = [...state.rigs.filter((r) => r.player === viewer), { player: other, round: 9, cards: ["audit", "lockdown"], pick: "lockdown" }];
   // design §5.1, §11.1: a hidden bell's real bulbs are only its Hacker's; a blackout for next round is unannounced.
   const hid = (room: string) =>
     state.log.some((e) => e.type === "abilityResolved" && e.player === viewer && e.round === state.round && e.ability.kind === "hide" && e.ability.room === room);
   const bells = Object.fromEntries(Object.entries(state.bells).map(([room, n]) => [room, state.hidden.includes(room) && !hid(room) ? n + 7 : n]));
+  // design §9.6, §12: Check ballots waiting for the next meeting, and another target's Bail choice, are hidden.
+  const ballotChecks = [{ player: other, target: viewer }, ...state.ballotChecks.filter((c) => c.player === viewer)];
+  const pending = state.pendingShakedown;
+  const pendingShakedown = pending && (pending.target === viewer ? pending : { ...pending, useBail: !pending.useBail });
   return {
     ...state,
-    rigs,
+    ballotChecks,
+    pendingShakedown,
     bells,
     cutsPending: ["vault", "lobby"],
     config: { ...state.config, seed: "scrubbed" },
@@ -354,7 +338,6 @@ describe("no leaks in real games — design §17.2, §13, §9.5", () => {
   const seenTypes = new Set<string>();
   const seenAbilities = new Set<string>();
   const seenPerks = new Set<string>();
-  const earned = new Set<string>();
   const seenWatch = new Set<string>();
   const seenCards = new Set<string>();
   const meetingKinds = new Set<string>();
@@ -372,8 +355,7 @@ describe("no leaks in real games — design §17.2, §13, §9.5", () => {
     }
     for (const t of types) seenTypes.add(t);
     for (const e of final.log) if (e.type === "abilityResolved") seenAbilities.add(e.ability.kind);
-    for (const e of final.log) if (e.type === "perkUsed") seenPerks.add(e.perk.kind);
-    for (const e of final.log) if (e.type === "tokenEarned") earned.add(e.trigger);
+    for (const e of final.log) if (e.type === "perkBought") seenPerks.add(e.perk.kind);
     for (const e of final.log) if (e.type === "roomWatched") seenWatch.add(e.source);
     for (const e of final.log) if (e.type === "eventFlipped") seenCards.add(e.card);
     for (const e of final.log) if (e.type === "meetingOpened") meetingKinds.add(e.kind);
@@ -397,20 +379,12 @@ describe("no leaks in real games — design §17.2, §13, §9.5", () => {
     expect(final.phase.kind).toBe("ended");
     for (const e of final.log) darkTypes.add(e.type), seenTypes.add(e.type);
     for (const e of final.log) if (e.type === "abilityResolved") seenAbilities.add(e.ability.kind);
-    for (const e of final.log) if (e.type === "tokenEarned") earned.add(e.trigger);
-    for (const e of final.log) if (e.type === "perkUsed") seenPerks.add(e.perk.kind);
+    for (const e of final.log) if (e.type === "perkBought") seenPerks.add(e.perk.kind);
     for (const state of states) {
       for (const viewer of state.playerOrder) {
         const view = viewFor(state, viewer);
         checkView(state, viewer, view);
         expect(JSON.stringify(viewFor(scrub(state, viewer), viewer)), `scrubbed view for ${viewer}`).toBe(JSON.stringify(view));
-        // extension.md "Tokens and the perk shop": your tokens are exactly what your case file says you earned less what you spent.
-        let tokens = 0;
-        for (const { event: e } of view.caseFile) {
-          if (e.type === "tokenEarned") tokens++;
-          if (e.type === "perkBought") tokens -= e.cost;
-        }
-        expect(view.me.roleState.tokens).toBe(tokens);
       }
     }
   }, 30_000);
@@ -431,12 +405,10 @@ describe("no leaks in real games — design §17.2, §13, §9.5", () => {
     }
     for (const c of EVENT_DECK) expect(seenCards, c).toContain(c);
     for (const k of ["lookout", "hide", "audit", "detect", "absolve"]) expect(seenAbilities, k).toContain(k);
-    // design §8.3: every perk event and every perk's effect.
-    for (const t of ["tokenEarned", "perkBought", "perkUsed", "rigPicked", "alibiVerified"]) expect(seenTypes, t).toContain(t);
-    for (const k of ["peek", "shield", "extraVote", "ballot", "tail", "alibi", "recharge", "rig"]) expect(seenPerks, k).toContain(k);
+    // design §9.6, §12: every perk event and every perk bought.
+    for (const t of ["perkSold", "perkBought", "bailChosen", "alibiVerified"]) expect(seenTypes, t).toContain(t);
+    for (const k of PERK_IDS) expect(seenPerks, k).toContain(k);
     expect(seenWatch, "a Tail watch").toContain("tail");
-    // extension.md "Roles": tokens are earned in these games (others: crew tests).
-    for (const k of EARNED_IN_PLAY) expect(earned, k).toContain(k);
     // design §9: every kind of meeting, the pool spent and protection given.
     expect(meetingKinds).toEqual(new Set(["regular", "briefing", "emergency"]));
     for (const t of ["emergencyMeetingCalled", "meetingScheduled"]) expect(seenTypes, t).toContain(t);

@@ -1,7 +1,6 @@
-// QA for the Lookout, Auditor and Detective with their tokens: power limits,
-// generic refusals, exact token triggers at the share, a view-diff leak check
-// with them dealt, determinism.
-// extension.md "Shakedowns", "Tokens and the perk shop"; design §9.6, §11.1, §11.2, §18
+// QA for the Lookout, Auditor and Detective: power limits, generic refusals,
+// dirty and clean at exactly the share, a view-diff leak check with them
+// dealt, determinism. design §9.6, §11.1, §11.2, §18
 import { describe, expect, it } from "vitest";
 import { closeResultWindow } from "./alibis.testkit";
 import { handleCommand, type CommandResult } from "./handle";
@@ -11,7 +10,6 @@ import { setupEvents } from "./setup";
 import { replay } from "./reduce";
 import { outcomeFor } from "./end";
 import { viewFor } from "./view";
-import { grantPerks } from "./perks.testkit";
 import { fullGrab } from "./grab.testkit";
 import { R6_COINS } from "./v01-numbers.testkit";
 
@@ -64,7 +62,7 @@ function run(state: GameState, ...commands: Cmd[]): GameState {
     return passWindow(r.state);
   }, state);
 }
-/** The shop may hold a Shield, so a passed shakedown waits for its window; nobody here cancels. */
+/** The shop may hold Bail, so a passed shakedown waits for its Bail choice window; nobody here uses one. */
 function passWindow(s: GameState): GameState {
   if (s.phase.kind !== "shakedownPending") return s;
   const r = handleThroughAlibis(s, { type: "advance", deadline: { kind: "resolveShakedown", meetingId: s.phase.meetingId } });
@@ -78,7 +76,6 @@ function reason(state: GameState, command: unknown): string {
 }
 const ofType = <T extends GameEvent["type"]>(events: readonly GameEvent[], type: T) =>
   events.filter((e): e is Extract<GameEvent, { type: T }> => e.type === type);
-const granted = (s: GameState, player: string) => ofType(s.log, "tokenEarned").filter((e) => e.player === player).map((e) => e.trigger);
 const lastAbility = (s: GameState) => ofType(s.log, "abilityResolved").at(-1)?.ability;
 
 const mv = (player: string, room: string, pocket = 0, extra: object = {}) => ({ type: "submitMove", player, move: { ...fullGrab(room, pocket, R6_COINS), ...extra } });
@@ -162,24 +159,20 @@ describe("QA: dirty vs clean at exactly the share — design §9.6", () => {
     return s;
   };
 
-  it("one coin above the share: the shakedown is dirty, and all three readers are rewarded", () => {
+  it("one coin above the share: the shakedown is dirty", () => {
     const s = caught(1);
     // The Detective learns the grab, not what was kept (design §11.1).
     const check = ofType(s.log, "abilityResolved").find((e) => e.ability.kind === "detect")?.ability;
     expect(check).toEqual({ kind: "detect", round: 1, target: "p1", grabbed: 6 });
     expect(ofType(s.log, "shakedownResolved")[0]?.clean).toBe(false);
-    expect(granted(s, "p0")).toEqual(["checkedShakenDirty"]);
-    expect(granted(s, "p2")).toEqual(["watchedShakenDirty"]);
-    expect(granted(s, "p3")).toEqual(["auditedShakenDirty"]);
   });
 
-  it("at the share: the shakedown is clean, and nobody is rewarded", () => {
+  it("at the share: the shakedown is clean", () => {
     const s = caught(0);
     expect(ofType(s.log, "shakedownResolved")[0]?.clean).toBe(true);
-    expect(ofType(s.log, "tokenEarned")).toEqual([]);
   });
 
-  it("dirty before a regular meeting stays dirty after it at the same stash above the share → a token (extension.md \"Shakedowns\")", () => {
+  it("dirty before a regular meeting stays dirty after it at the same stash above the share", () => {
     let s = run(game(3, ["detective"]), mv("p1", "vault", 3), mv("p0", "office"), mv("p2", "office"), ROUND);
     s = run(s, use("p0", { kind: "detect", target: "p1" }));
     expect(lastAbility(s)).toMatchObject({ grabbed: 6 });
@@ -189,39 +182,6 @@ describe("QA: dirty vs clean at exactly the share — design §9.6", () => {
     expect((s.players.p1?.stash ?? 0) - s.share).toBe(3);
     s = shakeDown(s, "p2", "p1");
     expect(ofType(s.log, "shakedownResolved")[0]?.clean).toBe(false);
-    expect(granted(s, "p0")).toEqual(["checkedShakenDirty"]);
-  });
-});
-
-describe("QA: Lookout sightings and reward counts — design §11.1; extension.md \"Roles\"", () => {
-  it("a sighting in one stretch pays in the next; one token per dirty shakedown however often it saw them; Security sightings don't count", () => {
-    let s = game(3, ["lookout"]);
-    const watchVault = mv("p0", "lobby", 0, { ability: { kind: "lookout", rooms: ["vault"] } });
-    s = run(s, watchVault, mv("p1", "vault", 2), mv("p2", "office"), ROUND, watchVault, mv("p1", "vault", 2), mv("p2", "office"), ROUND);
-    s = finishStretch(s, [mv("p0", "lobby"), mv("p1", "office", 4), mv("p2", "office")]);
-    expect(s.stretch).toBe(2);
-    expect(s.players.p1!.stash).toBeGreaterThan(s.share);
-    s = shakeDown(s, "p2", "p1");
-    expect(ofType(s.log, "shakedownResolved")[0]?.clean).toBe(false);
-    expect(granted(s, "p0")).toEqual(["watchedShakenDirty"]);
-
-    // Security (the room, not the power) saw p1: no token.
-    let t = run(game(3, ["lookout"]), mv("p0", "security", 0, { watch: "vault" }), mv("p1", "vault", 3), mv("p2", "office"), ROUND);
-    expect(ofType(t.log, "roomWatched").map((e) => e.source)).toEqual(["security"]);
-    t = shakeDown(t, "p2", "p1");
-    expect(granted(t, "p0")).toEqual([]);
-  });
-
-  it("nobody is rewarded for their own dirty shakedown (Lookout, Auditor, Detective)", () => {
-    let s = run(game(4, ["lookout", "auditor", "detective"]), mv("p0", "vault", 3, { ability: { kind: "lookout", rooms: ["vault"] } }), mv("p1", "vault"), mv("p2", "vault"), ROUND);
-    s = run(s, use("p1", { kind: "audit", room: "vault" }), use("p2", { kind: "detect", target: "p1" }));
-    // p1 (Auditor) audited its own room and is checked by the Detective; p0 (Lookout) saw p1 and p2.
-    s = run(s, mv("p1", "vault", 3), ROUND);
-    s = shakeDown(s, "p3", "p1");
-    expect(ofType(s.log, "shakedownResolved")[0]?.clean).toBe(false);
-    expect(granted(s, "p1")).toEqual([]); // not for its own shakedown
-    expect(granted(s, "p0")).toEqual(["watchedShakenDirty"]);
-    expect(granted(s, "p2")).toEqual(["checkedShakenDirty"]);
   });
 });
 
@@ -244,11 +204,9 @@ describe("QA: view-diff with all six dealt, and determinism — design §13, §1
     return run(s, ROUND);
   };
 
-  it("the uninvolved players' views and rejections are identical whether or not three rewards fired", () => {
+  it("the uninvolved players' views and rejections are identical whether or not the readers pointed at the target", () => {
     const [a, b] = [play(true), play(false)];
     expect(ofType(a.log, "shakedownResolved")[0]?.clean).toBe(false);
-    expect(ofType(a.log, "tokenEarned").map((e) => e.trigger).sort()).toEqual(["auditedShakenDirty", "checkedShakenDirty", "watchedShakenDirty"]);
-    expect(ofType(b.log, "tokenEarned")).toEqual([]);
     for (const viewer of ["p0", "p1"]) {
       expect(viewFor(a, viewer)).toEqual(viewFor(b, viewer));
       expect(reason(a, use(viewer, { kind: "audit", room: "vault" }))).toBe(reason(b, use(viewer, { kind: "audit", room: "vault" })));

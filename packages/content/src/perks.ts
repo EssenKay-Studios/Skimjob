@@ -1,57 +1,34 @@
-// Perks and the shop (extension.md "Tokens and the perk shop"). Roles earn
-// tokens; each game deals one perk per column into a shop of three, and
-// tokens buy them. A bought perk is private until used. design §8.3
+// Perks and the black market. design §12
+//
+// Each game deals one perk per tier into a shop of three. A perk is bought
+// with coins from your own stash (they leave the game) and is single-use; the
+// text players read is `PERK_TEXT` (text.ts, §20.3).
 
-/** One perk token kind. */
-export type PerkId = "peek" | "shield" | "extraVote" | "ballot" | "tail" | "alibi" | "recharge" | "rig";
+/** A perk on the black market. Ids match `PERK_TEXT`. design §12, §20.3 */
+export type PerkId = "tail" | "alibi" | "ballot" | "softShoes" | "blackout" | "bail" | "plantEvidence";
+
+/** The black market's three tiers: one perk of each is dealt per game. design §12 */
+export type PerkTier = 1 | 2 | 3;
 
 export interface PerkDef {
   readonly id: PerkId;
-  readonly name: string;
-  readonly effect: string;
-  /** "use": spent with `useAbility`; "auto": spent by the engine when it applies (Shield). */
-  readonly spent: "use" | "auto";
-  /** Shop column: one perk of each is dealt per game. */
-  readonly column: PerkColumn;
-  /** Tokens it costs in the shop. */
+  readonly tier: PerkTier;
+  /** Coins it costs, paid from the buyer's stash [tunable]. */
   readonly cost: number;
 }
 
-/** The shop's three columns. extension.md "Tokens and the perk shop" */
-export type PerkColumn = "learn" | "protect" | "sway";
-
+/** Every perk, in the order the rulebook lists them. design §12 */
 export const PERKS: Readonly<Record<PerkId, PerkDef>> = {
-  peek: { id: "peek", name: "Peek", effect: "Learn one player's role.", spent: "use", column: "learn", cost: 2 },
-  shield: { id: "shield", name: "Shield", effect: "Your next passed shakedown is cancelled.", spent: "auto", column: "protect", cost: 2 },
-  extraVote: { id: "extraVote", name: "+Vote", effect: "+1 ballot weight in this meeting.", spent: "use", column: "sway", cost: 1 },
-  ballot: { id: "ballot", name: "Ballot", effect: "See one player's ballot in this meeting, also in Secret mode.", spent: "use", column: "learn", cost: 1 },
-  tail: { id: "tail", name: "Tail", effect: "This round, also see who was in one more room.", spent: "use", column: "learn", cost: 1 },
-  alibi: { id: "alibi", name: "Alibi", effect: "Your alibi for the last round is stamped Verified.", spent: "use", column: "protect", cost: 1 },
-  recharge: { id: "recharge", name: "Recharge", effect: "A used-up use of your power comes back (this stretch's, or a once-per-game one).", spent: "use", column: "protect", cost: 1 },
-  rig: { id: "rig", name: "Rig", effect: "Pick the next event card from two.", spent: "use", column: "sway", cost: 1 },
+  tail: { id: "tail", tier: 1, cost: 1 },
+  alibi: { id: "alibi", tier: 1, cost: 1 },
+  ballot: { id: "ballot", tier: 1, cost: 1 },
+  softShoes: { id: "softShoes", tier: 2, cost: 2 },
+  blackout: { id: "blackout", tier: 2, cost: 2 },
+  bail: { id: "bail", tier: 3, cost: 3 },
+  plantEvidence: { id: "plantEvidence", tier: 3, cost: 3 },
 };
 
 export const PERK_IDS: readonly PerkId[] = Object.keys(PERKS) as PerkId[];
 
-/** Perk numbers (placeholders for the sim). design §8.3 */
-export const PERK_RULES = {
-  /** Ballot weight a +Vote adds in the meeting it's spent in. */
-  extraVoteWeight: 1,
-  /** Cards a Rig draws for its holder to pick from. */
-  rigOptions: 2,
-} as const;
-
-/** The shop's columns, in display order, and the perks each may deal. extension.md "Tokens and the perk shop" */
-export const SHOP_COLUMNS: Readonly<Record<PerkColumn, readonly PerkId[]>> = {
-  learn: ["peek", "ballot", "tail"],
-  protect: ["shield", "alibi", "recharge"],
-  sway: ["extraVote", "rig"],
-};
-
-/**
- * Shop dealing variants (extension.md gap-fills "Shop dealing"): with events
- * off the Sway perk is dealt from these.
- */
-export const SHOP_RULES = {
-  swayEventsOff: ["extraVote"] as readonly PerkId[],
-} as const;
+/** The tiers in shop order. design §12 */
+export const PERK_TIERS: readonly PerkTier[] = [1, 2, 3];

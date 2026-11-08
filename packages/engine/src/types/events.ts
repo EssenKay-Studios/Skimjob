@@ -4,9 +4,9 @@
 // must stay secret (a dealt role, a real split) cannot be constructed as public.
 // When you add an event type: add it to GameEvent, add a sample to
 // `samples.ts`, and make sure viewFor() tests cover it (CLAUDE.md).
-import type { EventId, JobId, PerkId, RoleId, RoomId, TokenTrigger } from "@skimjob/content";
+import type { EventId, JobId, PerkId, RoleId, RoomId } from "@skimjob/content";
 import type { ContentOverrides, PlayerId, PlayerSeat, RoleListSetting, VoteVisibility } from "./config";
-import type { AbilityUse, Move, VoteChoice } from "./commands";
+import type { AbilityUse, Move, PerkUse, VoteChoice } from "./commands";
 import type { PrivateVisibility, PublicVisibility, RevealVisibility, SecretVisibility } from "./visibility";
 import type { RoleState } from "./state";
 
@@ -74,7 +74,7 @@ export interface RoleListShown {
   readonly roles: readonly RoleId[];
 }
 
-/** The shop's three perks, one per column, dealt at setup. extension.md "Tokens and the perk shop" */
+/** The black market's three perks, one per tier, dealt at setup with the game's seed. design §12 */
 export interface ShopDealt {
   readonly type: "shopDealt";
   readonly visibility: PublicVisibility;
@@ -209,7 +209,10 @@ export interface RoomSighting {
   readonly others: readonly PlayerId[];
 }
 
-/** Everyone seen in a watched room, via Security, the Lookout power or a Tail perk. design §3.4, §11.1 */
+/**
+ * Everyone seen in a watched room, via Security, the Lookout power or a Tail
+ * perk; a player put there by Plant evidence shows too. design §3.4, §11.1, §12
+ */
 export interface RoomWatched {
   readonly type: "roomWatched";
   readonly visibility: PrivateVisibility;
@@ -506,9 +509,9 @@ export interface ShakedownResolved {
 }
 
 /**
- * The vote passed a shakedown on `target`; it is applied when the window ends
- * (`advance { resolveShakedown }`), unless a Shield cancels it. Only opened
- * when the shop holds the Shield. design §8.3, §11.3
+ * The vote passed a shakedown on `target`; the Bail choice window is open
+ * until `advance { resolveShakedown }`. Opened after every passed shakedown
+ * when Bail is in this game's shop, so it never tells who holds one. design §9.6, §12
  */
 export interface ShakedownPending {
   readonly type: "shakedownPending";
@@ -518,7 +521,10 @@ export interface ShakedownPending {
   readonly target: PlayerId;
 }
 
-/** A Shield blocked the shakedown; the target is still protected (§9.7). design §8.3 */
+/**
+ * "A shakedown fell through": its target used Bail, the stash stays closed and
+ * the Bail is spent; the target is still protected (§9.7). design §9.6, §12
+ */
 export interface ShakedownCancelled {
   readonly type: "shakedownCancelled";
   readonly visibility: PublicVisibility;
@@ -526,61 +532,40 @@ export interface ShakedownCancelled {
   readonly target: PlayerId;
 }
 
-// ---------------------------------------------------------------- perks (§8.3)
+// ---------------------------------------------------------------- perks (§12)
 
-/** Your role earned you one token, for `trigger`. Only you are told. extension.md "Tokens and the perk shop" */
-export interface TokenEarned {
-  readonly type: "tokenEarned";
-  readonly visibility: PrivateVisibility;
-  readonly player: PlayerId;
-  readonly trigger: TokenTrigger;
-}
-
-/** You bought `perk` from the shop for `cost` tokens. Private until used. extension.md "Tokens and the perk shop" */
-export interface PerkBought {
-  readonly type: "perkBought";
-  readonly visibility: PrivateVisibility;
-  readonly player: PlayerId;
+/** "Someone bought `perk` (`cost` coins)": logged at once, without a name. design §12 */
+export interface PerkSold {
+  readonly type: "perkSold";
+  readonly visibility: PublicVisibility;
+  readonly round: number;
   readonly perk: PerkId;
   readonly cost: number;
 }
 
-/** What a spent perk did. `kind` is the perk spent. design §8.3 */
-export type ResolvedPerk =
-  /** `role` is `target`'s role when it was spent. */
-  | { readonly kind: "peek"; readonly target: PlayerId; readonly role: RoleId }
-  /** Spent by itself: the shakedown of you in `meetingId` was cancelled (the ledger says only that it was). */
-  | { readonly kind: "shield"; readonly meetingId: string }
-  | { readonly kind: "extraVote"; readonly meetingId: string }
-  /** You see `target`'s ballot in `meetingId` while it's open (in your view, not in an event). */
-  | { readonly kind: "ballot"; readonly meetingId: string; readonly target: PlayerId }
-  /** `room`'s visitors this round come as a `roomWatched` (source "tail") when it resolves. */
-  | { readonly kind: "tail"; readonly room: RoomId }
-  /** Your true alibi for `round` was stamped (`alibiVerified`). */
-  | { readonly kind: "alibi"; readonly round: number; readonly room: RoomId }
-  | { readonly kind: "recharge" }
-  /** The cards you may pick from for `round`'s flip; the first flips unless you pick (`rigPicked`). */
-  | { readonly kind: "rig"; readonly round: number; readonly cards: readonly EventId[] };
-
-/** You spent a perk token. Private to you; `round` is the latest round started. design §8.3 */
-export interface PerkUsed {
-  readonly type: "perkUsed";
+/**
+ * You bought and used `perk` for `cost` coins from your stash (they leave the
+ * game) in `round`; Bail is held instead. Private until the reveal. design §12
+ */
+export interface PerkBought {
+  readonly type: "perkBought";
   readonly visibility: PrivateVisibility;
   readonly player: PlayerId;
   readonly round: number;
-  readonly perk: ResolvedPerk;
+  readonly perk: PerkUse;
+  readonly cost: number;
 }
 
-/** Your Rig's choice for `round`'s card (changeable until that round starts). design §8.3 */
-export interface RigPicked {
-  readonly type: "rigPicked";
+/** Your Bail choice for the shakedown of you in `meetingId`; the latest counts when the window closes. Private. design §9.6 */
+export interface BailChosen {
+  readonly type: "bailChosen";
   readonly visibility: PrivateVisibility;
   readonly player: PlayerId;
-  readonly round: number;
-  readonly card: EventId;
+  readonly meetingId: string;
+  readonly use: boolean;
 }
 
-/** Alibi perk: the app stamps `player`'s alibi for `round` (their real room) as Verified. design §8.3, §5.4 */
+/** Stamped alibi: `player`'s true alibi for `round` (their real room) is stamped "verified". design §12 */
 export interface AlibiVerified {
   readonly type: "alibiVerified";
   readonly visibility: PublicVisibility;
@@ -691,10 +676,9 @@ export type GameEvent =
   | ShakedownPending
   | ShakedownCancelled
   | ShakedownResolved
-  | TokenEarned
+  | PerkSold
   | PerkBought
-  | PerkUsed
-  | RigPicked
+  | BailChosen
   | AlibiVerified
   | GameEnded;
 

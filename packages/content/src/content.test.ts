@@ -4,10 +4,10 @@ import { describe, expect, it } from "vitest";
 import {
   BANK_JOB,
   EMERGENCY_POOL,
-  SHOP_COLUMNS,
   PERKS,
   PERK_IDS,
-  PERK_RULES,
+  PERK_TEXT,
+  PERK_TIERS,
   EVENTS,
   EVENT_DECK,
   JOBS,
@@ -139,19 +139,15 @@ describe("roles — design §11.1, §11.2", () => {
     });
   });
 
-  it("every role earns exactly one token per trigger (extension.md \"Roles\", until S3a.7)", () => {
-    for (const role of Object.values(ROLES)) {
-      if (role.rewards) expect(role.rewards?.map((r) => r.count), role.id).toEqual([1]);
-    }
-    expect(Object.values(ROLES).filter((r) => r.rewards).map((r) => r.id)).toEqual(["lookout", "detective", "auditor", "smoothTalker"]);
-  });
-
-  it("perks: eight kinds in three shop columns; Peek and Shield cost 2, the rest 1 (extension.md \"Tokens and the perk shop\")", () => {
-    expect([...PERK_IDS].sort()).toEqual(["alibi", "ballot", "extraVote", "peek", "recharge", "rig", "shield", "tail"]);
-    for (const id of PERK_IDS) expect(PERKS[id].spent, id).toBe(id === "shield" ? "auto" : "use");
-    for (const id of PERK_IDS) expect(PERKS[id].cost, id).toBe(id === "peek" || id === "shield" ? 2 : 1);
-    for (const [column, ids] of Object.entries(SHOP_COLUMNS)) for (const id of ids) expect(PERKS[id].column).toBe(column);
-    expect(PERK_RULES).toEqual({ extraVoteWeight: 1, rigOptions: 2 });
+  it("perks: seven in three tiers, each costing its tier in coins — design §12", () => {
+    expect(PERK_IDS).toEqual(["tail", "alibi", "ballot", "softShoes", "blackout", "bail", "plantEvidence"]);
+    for (const tier of PERK_TIERS) expect(PERK_IDS.some((id) => PERKS[id].tier === tier), `tier ${tier}`).toBe(true);
+    for (const id of PERK_IDS) expect(PERKS[id].cost, id).toBe(PERKS[id].tier);
+    expect(PERK_IDS.filter((id) => PERKS[id].tier === 1)).toEqual(["tail", "alibi", "ballot"]);
+    expect(PERK_IDS.filter((id) => PERKS[id].tier === 2)).toEqual(["softShoes", "blackout"]);
+    expect(PERK_IDS.filter((id) => PERKS[id].tier === 3)).toEqual(["bail", "plantEvidence"]);
+    // §20.3: every perk has its line.
+    expect(Object.keys(PERK_TEXT)).toEqual([...PERK_IDS]);
   });
 });
 

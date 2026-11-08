@@ -1,8 +1,7 @@
-// The end-of-game reveal, worked out from the log (design §8, §15.5; extension.md
-// "Tokens and the perk shop"). Only in a
+// The end-of-game reveal, worked out from the log (design §8, §15.5). Only in a
 // view once the game has ended (`PlayerView.reveal.summary`), and built from
 // the same events as `reveal.log`, so it never holds anything that log doesn't.
-import type { PerkId, RoleId, RoomId, TokenTrigger } from "@skimjob/content";
+import type { PerkId, RoleId, RoomId } from "@skimjob/content";
 import type { PlayerId } from "./config";
 import type { DuffelSplit, GameEvent, Outcome, RoundResolved } from "./events";
 
@@ -19,12 +18,8 @@ export interface RevealSeat {
   /** Tied for the biggest stash (no tie-break, design §8.5). */
   readonly topGroup: boolean;
   readonly winner: boolean;
-  /** Every token earned, in order, with what earned it. extension.md "Tokens and the perk shop" */
-  readonly tokens: readonly TokenTrigger[];
-  /** Every perk bought, in order. */
+  /** Every perk bought, in order. design §12, §15.5 */
   readonly perksBought: readonly PerkId[];
-  /** How many perks were used. */
-  readonly perksUsed: number;
 }
 
 /** Why the game ended the way it did, and who that makes the winners. design §8 */
@@ -56,15 +51,13 @@ export interface RevealMove {
 
 /**
  * A line of the timeline. Most hidden actions come as the event itself
- * (`event`: powers used or already done, absolves, perks bought and used,
- * Rigs, Inside tips) next to the public ones that matter (meetings,
+ * (`event`: powers used or already done, absolves, perks bought, Bail
+ * choices, Inside tips) next to the public ones that matter (meetings,
  * shakedowns, raids, power cuts). The rest are worked out, because one event
  * alone can't say them.
  */
 export type RevealItem =
   | { readonly kind: "event"; readonly event: GameEvent }
-  /** A token earned, and why. extension.md "Tokens and the perk shop" */
-  | { readonly kind: "token"; readonly player: PlayerId; readonly trigger: TokenTrigger }
   /** A public role claim next to the truth (the claimer's role when they claimed). design §12.1 */
   | { readonly kind: "claim"; readonly player: PlayerId; readonly claimed: RoleId; readonly real: RoleId };
 

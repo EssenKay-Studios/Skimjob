@@ -1,187 +1,94 @@
-// Perks: buying them from the game's shop with tokens, spending them with
-// `useAbility` (one small function per perk), and the Shield, which is spent
-// by itself. design §8.3; extension.md "Tokens and the perk shop"
+// Perks and the black market: one handler per perk id (design §19.2 seam 4),
+// buying a perk with coins from your stash, and Bail's choice. design §12
 //
-// Roles earn tokens (the private `tokenEarned`, crew.ts). `buyPerk` spends
-// tokens on one of the three perks dealt at setup (private `perkBought`); the
-// bought perk lives in `roleState.perks`. Every use is a private `perkUsed`
-// (folded in reduce.ts), plus `alibiVerified` (public) for the Alibi and
-// `rigPicked` for the Rig's choice. At most one perk use per round; refusals
-// keep the perk. Unspent tokens are worth nothing at the end.
-import { EVENT_DECK, PERKS, PERK_RULES, type PerkId } from "@skimjob/content";
-import type { GameEvent, GameState, PlayerId, PlayerState, ResolvedPerk } from "./types";
+// `buyPerk` buys and uses a perk at once while planning, one per player per
+// round: a public, nameless `perkSold` and the buyer's private `perkBought`
+// (folded in reduce.ts: the coins leave the stash and the game). What a perk
+// does then happens where its rule does: Tail, Soft shoes and Plant evidence
+// as a round resolves (round.ts), Blackout as the next round starts (deck.ts),
+// Check ballot as the next meeting opens, Stamped alibi when the alibi is
+// posted (`stampedAlibi`), and Bail when a shakedown passes (meeting.ts).
+import { PERK_TEXT, type PerkId, type RoomId } from "@skimjob/content";
+import type { GameEvent, GameState, PerkUse, PlayerId, PlayerState } from "./types";
 import { PUBLIC, privateTo } from "./types";
-import type { Draw } from "./handle";
-import { cardRound } from "./deck";
 import { perkCost } from "./overrides";
 import { isObject, playerFor, show } from "./check";
 
-type Result = GameEvent[] | string;
 type Raw = Record<string, unknown>;
 
-/** How many `perk` tokens `player` holds. */
-const perkCount = (player: PlayerState, perk: PerkId): number => player.roleState.perks.filter((p) => p === perk).length;
+const roomInPlay = (state: GameState, room: unknown): room is RoomId => typeof room === "string" && state.rooms.includes(room);
 
-const spent = (state: GameState, player: PlayerState, perk: ResolvedPerk): GameEvent => ({
-  type: "perkUsed",
-  visibility: privateTo(player.id),
-  player: player.id,
-  round: state.round,
-  perk,
-});
-
-/** Why `target` isn't another player in the game, or null if it is. */
+/** Why `target` isn't another player in the game, or null. design §11.1: no perk targets yourself. */
 function notOther(state: GameState, player: PlayerState, target: unknown): string | null {
   if (typeof target !== "string" || !Object.hasOwn(state.players, target)) return `unknown player ${show(target)}`;
   return target === player.id ? "pick another player" : null;
 }
 
-/** Peek: learn one player's role (as it is now). */
-function peek(state: GameState, player: PlayerState, raw: Raw): Result {
-  const bad = notOther(state, player, raw.target);
-  if (bad) return bad;
-  const target = raw.target as PlayerId;
-  return [spent(state, player, { kind: "peek", target, role: (state.players[target] as PlayerState).role })];
-}
+/** Each perk's check: the use as bought, or why it is refused. design §12 */
+const PERK_HANDLERS: Readonly<Record<PerkId, (state: GameState, player: PlayerState, raw: Raw) => PerkUse | string>> = {
+  tail: (state, _player, raw) => (roomInPlay(state, raw.room) ? { kind: "tail", room: raw.room } : "tail a room in play"),
+  alibi: () => ({ kind: "alibi" }),
+  // design §9.5: ballots are public as they're cast in Open mode, so there is nothing to check.
+  ballot: (state, player, raw) =>
+    state.config.voteVisibility === "open" ? "ballots are already public in this game" : (notOther(state, player, raw.target) ?? { kind: "ballot", target: raw.target as PlayerId }),
+  softShoes: () => ({ kind: "softShoes" }),
+  blackout: (state, _player, raw) => (roomInPlay(state, raw.room) ? { kind: "blackout", room: raw.room } : "black out a room in play"),
+  bail: (_state, player) => (player.roleState.bail ? "you already hold a Bail" : { kind: "bail" }),
+  plantEvidence: (state, player, raw) => {
+    const bad = notOther(state, player, raw.target);
+    if (bad) return bad;
+    return roomInPlay(state, raw.room) ? { kind: "plantEvidence", target: raw.target as PlayerId, room: raw.room } : "plant evidence in a room in play";
+  },
+};
 
-/** +Vote: your ballot in the open meeting weighs `PERK_RULES.extraVoteWeight` more (once per meeting). */
-function extraVote(state: GameState, player: PlayerState): Result {
-  const meeting = state.meeting;
-  if (!meeting) return "a +Vote is spent while a meeting is open";
-  if (meeting.extraVotes.includes(player.id)) return "you already spent a +Vote in this meeting";
-  return [spent(state, player, { kind: "extraVote", meetingId: meeting.id })];
-}
-
-/**
- * Ballot: see one player's ballot in the open meeting, live, in your view
- * (`seenBallots`). Also in Secret mode: the one owner-approved exception to
- * secret ballots, seen by the holder only and never in an event. Pointless in
- * Open mode, where every ballot is public, so it is refused there.
- */
-function ballot(state: GameState, player: PlayerState, raw: Raw): Result {
-  const meeting = state.meeting;
-  if (!meeting) return "a Ballot is spent while a meeting is open";
-  if (state.config.voteVisibility === "open") return "ballots are already public in this game";
-  const bad = notOther(state, player, raw.target);
-  if (bad) return bad;
-  const target = raw.target as PlayerId;
-  if (Object.hasOwn(meeting.ballotGrants, player.id) && meeting.ballotGrants[player.id]?.includes(target)) return "you already see that player's ballot";
-  return [spent(state, player, { kind: "ballot", meetingId: meeting.id, target })];
-}
-
-/** Tail: while planning, also see who is in one room when this round resolves (like the Lookout). */
-function tail(state: GameState, player: PlayerState, raw: Raw): Result {
-  if (state.phase.kind !== "planning") return "a Tail is spent while a round is being planned";
-  if (player.roleState.tail !== null) return "you are already tailing a room this round";
-  if (typeof raw.room !== "string" || !state.rooms.includes(raw.room)) return "tail a room in play";
-  return [spent(state, player, { kind: "tail", room: raw.room })];
+/** The perks of `kind` bought in `round`, with their buyers, in the order bought. */
+export function boughtIn<K extends PerkUse["kind"]>(state: GameState, round: number, kind: K): [PlayerId, Extract<PerkUse, { kind: K }>][] {
+  return state.log.flatMap((e) => (e.type === "perkBought" && e.round === round && e.perk.kind === kind ? [[e.player, e.perk as Extract<PerkUse, { kind: K }>]] : []));
 }
 
 /**
- * Alibi: your alibi for the latest resolved round is stamped Verified, in
- * public. Only a true alibi can be stamped (the stamp shows your real room).
+ * `buyPerk`: one of this game's three perks, while planning, at most one per
+ * player per round, paid from the stash as it stood at the start of the round
+ * (this round's pocket is only added as it resolves). design §12
  */
-function alibi(state: GameState, player: PlayerState): Result {
-  const round = state.resolvedRound;
-  if (round === 0) return "no round has resolved yet";
-  if (state.alibisVerified.includes(player.id)) return `your alibi for round ${round} is already verified`;
-  const posted = state.log.find((e) => e.type === "alibiPosted" && e.player === player.id && e.round === round);
-  if (posted?.type !== "alibiPosted") return `post your alibi for round ${round} first`;
-  const real = state.log.find((e) => e.type === "coinsGrabbed" && e.player === player.id && e.round === round);
-  if (real?.type !== "coinsGrabbed" || real.room !== posted.room) return `your alibi for round ${round} isn't where you were`;
+export function buyPerk(state: GameState, command: Raw): GameEvent[] | string {
+  if (state.phase.kind !== "planning") return "perks are bought while a round is being planned";
+  const player = playerFor(state, command);
+  if (typeof player === "string") return player;
+  const raw = command.perk;
+  if (!isObject(raw) || typeof raw.kind !== "string") return "perk must be an object with a kind";
+  const id = raw.kind as PerkId;
+  if (!state.shop.includes(id)) return `perk ${show(raw.kind)} is not on this game's black market`;
+  const round = state.round;
+  if (state.log.some((e) => e.type === "perkBought" && e.player === player.id && e.round === round)) return "you have already bought a perk this round";
+  const cost = perkCost(state.config, id);
+  if (player.stash < cost) return `${PERK_TEXT[id]?.name ?? id} costs ${cost} coin${cost === 1 ? "" : "s"}; your stash holds ${player.stash}`;
+  const perk = PERK_HANDLERS[id](state, player, raw);
+  if (typeof perk === "string") return perk;
   return [
-    spent(state, player, { kind: "alibi", round, room: real.room }),
-    { type: "alibiVerified", visibility: PUBLIC, player: player.id, round, room: real.room },
+    { type: "perkSold", visibility: PUBLIC, round, perk: id, cost },
+    { type: "perkBought", visibility: privateTo(player.id), player: player.id, round, perk, cost },
   ];
 }
 
-/** Recharge: a use of your power since the last meeting, or a once-per-game use, comes back. */
-function recharge(state: GameState, player: PlayerState): Result {
-  const { usedThisStretch, usedThisGame } = player.roleState;
-  if (usedThisStretch === 0 && usedThisGame === 0) return "your power has nothing to recharge";
-  return [spent(state, player, { kind: "recharge" })];
-}
-
-/** The round whose card flips next, if it has one (events on, round 2 onwards, not past the last round). */
-function nextCardRound(state: GameState): number | null {
-  const next = state.round + 1;
-  return cardRound(state.config, next) ? next : null;
+/** Stamped alibi: `player`'s alibi for `round` is stamped "verified" if they bought one that round and it is true. design §12 */
+export function stampedAlibi(state: GameState, player: PlayerId, round: number, room: RoomId): GameEvent[] {
+  if (!boughtIn(state, round, "alibi").some(([buyer]) => buyer === player)) return [];
+  const real = state.log.find((e) => e.type === "coinsGrabbed" && e.player === player && e.round === round);
+  return real?.type === "coinsGrabbed" && real.room === room ? [{ type: "alibiVerified", visibility: PUBLIC, player, round, room }] : [];
 }
 
 /**
- * Rig: draw `PERK_RULES.rigOptions` different cards for the next round; the
- * first flips unless you pick another (`rigPick`). Someone else's Rig of the
- * same round never refuses yours (a refusal would tell you who holds what;
- * PR #25 review): if several players rig a round,
- * the oldest Rig's pick flips. One Rig of a round per player.
+ * `chooseBail`: the target of the shakedown waiting for its Bail choice, holding
+ * Bail, chooses to use it or not; the latest choice counts. design §9.6
  */
-function rig(state: GameState, player: PlayerState, draw: Draw): Result {
-  const round = nextCardRound(state);
-  if (round === null) return "there is no next event card to rig";
-  if (state.rigs.some((r) => r.player === player.id && r.round === round)) return "you already rigged the next event card";
-  const cards = draw.shuffle(EVENT_DECK).slice(0, PERK_RULES.rigOptions);
-  return [spent(state, player, { kind: "rig", round, cards })];
-}
-
-/** Choose which of your Rig's cards flips next; changeable until that round starts. */
-function rigPick(state: GameState, player: PlayerState, raw: Raw): Result {
-  const rigged = state.rigs.find((r) => r.player === player.id && r.round === nextCardRound(state));
-  if (!rigged) return "you have no rigged card to pick";
-  if (typeof raw.card !== "string" || !rigged.cards.includes(raw.card)) return `pick one of ${rigged.cards.join(", ")}`;
-  return [{ type: "rigPicked", visibility: privateTo(player.id), player: player.id, round: rigged.round, card: raw.card }];
-}
-
-type Spend = (state: GameState, player: PlayerState, raw: Raw, draw: Draw) => Result;
-
-/** The perk the engine spends by itself (design §8.3): the Shield. */
-type AutoPerk = "shield";
-
-const SPENDS: { readonly [K in Exclude<PerkId, AutoPerk>]: Spend } = {
-  peek,
-  extraVote: (state, player) => extraVote(state, player),
-  ballot,
-  tail,
-  alibi: (state, player) => alibi(state, player),
-  recharge: (state, player) => recharge(state, player),
-  rig: (state, player, _raw, draw) => rig(state, player, draw),
-};
-
-/** Whether `kind` names a perk spend (or the Rig's pick) for `useAbility`. */
-export const isPerkSpend = (kind: string): boolean => kind === "rigPick" || kind === "shield" || Object.hasOwn(SPENDS, kind);
-
-/**
- * `buyPerk`: spend tokens on one of this game's shop perks, any time
- * (several of a kind allowed). Private until the perk is used.
- * extension.md "Tokens and the perk shop"
- */
-export function buyPerk(state: GameState, command: Raw): Result {
+export function chooseBail(state: GameState, command: Raw): GameEvent[] | string {
   const player = playerFor(state, command);
   if (typeof player === "string") return player;
-  const perk = command.perk;
-  if (typeof perk !== "string" || !state.shop.includes(perk as PerkId)) return `perk ${show(perk)} is not in this game's shop`;
-  const cost = perkCost(state.config, perk as PerkId);
-  if (player.roleState.tokens < cost) return `${PERKS[perk as PerkId].name} costs ${cost} tokens; you have ${player.roleState.tokens}`;
-  return [{ type: "perkBought", visibility: privateTo(player.id), player: player.id, perk: perk as PerkId, cost }];
-}
-
-/** Whether `player` already used a perk by choice this round (the Shield, spent by itself, doesn't count). extension.md "Tokens and the perk shop" */
-const usedPerkThisRound = (state: GameState, player: PlayerId): boolean =>
-  state.log.some((e) => e.type === "perkUsed" && e.player === player && e.round === state.round && e.perk.kind !== "shield");
-
-/** `useAbility` with a perk: needs one of that kind (except the Rig's pick), and at most one use per round. design §8.3 */
-export function usePerk(state: GameState, player: PlayerState, raw: unknown, draw: Draw): Result {
-  if (!isObject(raw) || typeof raw.kind !== "string") return "ability must be an object with a kind";
-  if (raw.kind === "rigPick") return rigPick(state, player, raw);
-  if (raw.kind === "shield") return "a Shield is spent by itself when a shakedown of you passes";
-  const spend = Object.hasOwn(SPENDS, raw.kind) ? SPENDS[raw.kind as Exclude<PerkId, AutoPerk>] : undefined;
-  if (!spend) return `unknown perk ${raw.kind}`;
-  if (perkCount(player, raw.kind as PerkId) === 0) return `you have no ${PERKS[raw.kind as PerkId].name} perk`;
-  if (usedPerkThisRound(state, player.id)) return "you have already used a perk this round";
-  return spend(state, player, raw, draw);
-}
-
-/** Shield: whether a passed shakedown of `target` is cancelled by their Shield (spent by itself). */
-export function shieldFor(state: GameState, target: PlayerId, meetingId: string): GameEvent[] {
-  const player = state.players[target] as PlayerState;
-  return perkCount(player, "shield") > 0 ? [spent(state, player, { kind: "shield", meetingId })] : [];
+  const pending = state.pendingShakedown;
+  if (!pending) return "no shakedown is waiting for a Bail choice";
+  if (pending.target !== player.id) return "only the shakedown's target can use Bail";
+  if (!player.roleState.bail) return "you hold no Bail";
+  if (typeof command.use !== "boolean") return "use must be true or false";
+  return [{ type: "bailChosen", visibility: privateTo(player.id), player: player.id, meetingId: pending.meetingId, use: command.use }];
 }
