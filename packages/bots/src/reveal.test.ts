@@ -50,11 +50,10 @@ describe("reveal summary in whole bot games — design §15.5", () => {
         for (const type of ["powerCut", "abilityResolved"] as const) {
           expect(items.filter((i) => i.kind === "event" && i.event.type === type).length, type).toBe(count(log, (e) => e.type === type));
         }
-        expect(items.filter((i) => i.kind === "token").length).toBe(count(log, (e) => e.type === "tokenEarned"));
         for (const i of items) seen.add(i.kind === "event" ? i.event.type : i.kind);
       }
     }
-    // Tokens and perks: reveal.qa.test.ts (the Mole's and Fixer's R6 tokens are gone, so these games earn few).
+    // Perks: reveal.qa.test.ts.
     expect([...seen].sort()).toEqual(expect.arrayContaining(["roomRaided", "roomReopened", "powerCut", "sinsAbsolved"]));
   }, 120_000);
 });

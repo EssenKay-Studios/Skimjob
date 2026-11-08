@@ -13,8 +13,7 @@ export interface SeatTally {
   readonly fair: number;
   /** Of the credit, what came from successful heists (the rest is from failures: ★ roles). */
   readonly successCredit: number;
-  /** Shop tokens earned and spent over the seats. extension.md "Tokens and the perk shop" */
-  readonly earned: number;
+  /** Coins spent on perks over the seats. design §12 */
   readonly spent: number;
 }
 
@@ -62,7 +61,7 @@ export const emptyTally = (): Tally => ({
 const addSeat = (to: Record<string, SeatTally>, key: string, s: SeatTally): void => {
   const a = Object.hasOwn(to, key) ? to[key] : undefined;
   to[key] = a
-    ? { seats: a.seats + s.seats, credit: a.credit + s.credit, fair: a.fair + s.fair, successCredit: a.successCredit + s.successCredit, earned: a.earned + s.earned, spent: a.spent + s.spent }
+    ? { seats: a.seats + s.seats, credit: a.credit + s.credit, fair: a.fair + s.fair, successCredit: a.successCredit + s.successCredit, spent: a.spent + s.spent }
     : { ...s };
 };
 
@@ -88,7 +87,7 @@ export function tallyGames(records: readonly GameRecord[], start: Tally = emptyT
     t.shakedownsCaught += g.shakedowns.filter((s) => !s.clean).length;
     t.rejections += g.rejections;
     for (const p of g.playerRecords) {
-      const seat = { seats: 1, credit: p.winCredit, fair: 1 / g.players, successCredit: success ? p.winCredit : 0, earned: p.tokensEarned, spent: p.tokensSpent };
+      const seat = { seats: 1, credit: p.winCredit, fair: 1 / g.players, successCredit: success ? p.winCredit : 0, spent: p.spent };
       addSeat(t.roles, p.role, seat);
       addSeat(t.personalities, p.personality, seat);
     }

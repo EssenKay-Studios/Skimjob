@@ -1,159 +1,78 @@
-// Perk spending for bots: minimal and sensible (docs/roles-v2.md §1 perks, §4
-// "Play"; design §8.3). Bot settings, not game rules.
+// Perks for bots: what a bot buys on the black market, and its Bail choice.
+// Bot settings, not game rules. design §9.6, §12, §19.3
 //
-// - Peek: while planning, its top suspect whose role it doesn't know yet (Lookout, Hacker).
-// - Tail: while planning, the richest coin room other than its own.
-// - +Vote: in a meeting, when it votes to shake someone down.
-// - Alibi: right after posting a true alibi, if the crew could suspect it.
-// - Recharge: once its power is used up.
-// - Rig: while planning, then pick the calmer of the two cards.
-// - Ballot is kept: bots don't read others' ballots (they don't talk). The Shield spends itself.
-// - Buying (extension.md "Tokens and the perk shop"): `buyPerks`, by a fixed priority.
-import { EVENTS, type EventId, type PerkId, type RoomId } from "@skimjob/content";
-import { overrideEvents, roomDef, type PlayerCommand, type PlayerView, type VoteChoice } from "@skimjob/engine";
-import { createdOf, lastResolvedRound, myPower, ofType, roomsWhere } from "./read";
-import { mostSuspicious, knownRoles, suspicion } from "./suspicion";
+// A bot buys at most one perk a round, as it submits its move, with its
+// personality's `shop` chance, when its stash covers the cost and the perk
+// fits what it is doing:
+// - Tail: the richest coin room other than its own.
+// - Stamped alibi: when it hands everything in and the crew suspects it.
+// - Check ballot: never (bots don't read others' ballots).
+// - Soft shoes: once Wanted is up.
+// - Blackout: when it skims, its own room next round.
+// - Bail: when its stash is above the share and it holds none.
+// - Plant evidence: when it skims, the crew's top public suspect into its own room's feeds.
+import type { PerkId } from "@skimjob/content";
+import { roomDef, type Move, type PerkUse, type PlayerCommand, type PlayerView } from "@skimjob/engine";
+import type { Personality } from "./personalities";
+import type { Random } from "./bot";
+import { ofType, roomsWhere } from "./read";
 import { publicSuspicion } from "./claims";
 import { jobThisRound } from "./alarm";
-
-const has = (view: PlayerView, perk: PerkId): boolean => view.me.roleState.perks.includes(perk);
-
-/** Perks spent by themselves (the Shield) and the Rig's pick don't count as the round's one use. */
-const isChosenUse = (c: PlayerCommand): boolean => c.type === "useAbility" && c.ability.kind !== "rigPick";
-
-/**
- * A filter for the perk spends of one `decide` call: at most one chosen perk
- * use per round, counting one already made this round (the case file's
- * `perkUsed`). extension.md "Tokens and the perk shop"
- */
-export function perkSpender(view: PlayerView): (commands: readonly PlayerCommand[]) => PlayerCommand[] {
-  let used = ofType(view.caseFile, "perkUsed").some((e) => e.round === view.round && e.perk.kind !== "shield");
-  return (commands) => {
-    const out: PlayerCommand[] = [];
-    for (const c of commands) {
-      if (!isChosenUse(c)) out.push(c);
-      else if (!used) {
-        used = true;
-        out.push(c);
-      }
-    }
-    return out;
-  };
-}
-
-/** Shop perks in the order a bot buys them, and when each is worth having (bot settings). */
-const BUY_ORDER: readonly PerkId[] = ["shield", "peek", "extraVote", "alibi", "tail", "recharge", "rig", "ballot"];
-
-function worthBuying(view: PlayerView, perk: PerkId): boolean {
-  switch (perk) {
-    case "recharge": {
-      const power = myPower(view);
-      return power !== undefined && "perStretch" in power;
-    }
-    case "rig":
-      return createdOf(view).eventsEnabled;
-    case "ballot":
-      return false; // bots don't read others' ballots
-    default:
-      return true;
-  }
-}
-
-/**
- * Buy shop perks by a fixed priority while planning: one of each useful perk
- * it doesn't hold, as tokens allow. In the last round it spends what is left
- * (unspent tokens are worth nothing). extension.md Build notes "Bots"
- */
-export function buyPerks(view: PlayerView): PlayerCommand[] {
-  if (view.phase.kind !== "planning" || view.shop.length === 0) return [];
-  let tokens = view.me.roleState.tokens;
-  const last = view.round >= jobThisRound(view).roundCap;
-  const out: PlayerCommand[] = [];
-  const buy = (perk: PerkId, cost: number) => {
-    out.push({ type: "buyPerk", player: view.me.id, perk });
-    tokens -= cost;
-  };
-  for (const perk of BUY_ORDER) {
-    const offer = view.shop.find((o) => o.perk === perk);
-    if (offer && tokens >= offer.cost && !has(view, perk) && worthBuying(view, perk)) buy(perk, offer.cost);
-  }
-  if (last) {
-    const cheapest = [...view.shop].sort((a, b) => a.cost - b.cost)[0];
-    while (cheapest && cheapest.cost > 0 && tokens >= cheapest.cost) buy(cheapest.perk, cheapest.cost);
-  }
-  return out;
-}
 
 /** Public suspicion of me at or above this makes a true alibi worth stamping (bot setting). */
 const STAMP_ALIBI_AT = 0.5;
 
-/** How much a card would ring the bells (lower is calmer; v2 §4 "Rigs calming cards"): a surge's extra coins ring. design §13 */
-export function cardRiskScore(view: PlayerView, card: EventId): number {
-  const cards = overrideEvents(EVENTS, createdOf(view).contentOverrides);
-  const effect = Object.hasOwn(cards, card) ? cards[card]?.effect : undefined;
-  if (!effect) return 0;
-  if (effect.kind === "roomSurge") return effect.extraCoins > 0 ? 2 : 0;
-  return 0;
-}
-
-/** Perks to spend while a round is being planned. */
-export function planningPerks(view: PlayerView, room: RoomId | undefined = view.me.move?.room): PlayerCommand[] {
-  if (view.phase.kind !== "planning") return [];
-  const player = view.me.id;
-  const out: PlayerCommand[] = [];
-  if (has(view, "peek")) {
-    const known = knownRoles(view);
-    const scores = new Map([...suspicion(view)].filter(([id]) => !known.has(id)));
-    const top = mostSuspicious(scores);
-    if (top !== null && top.score > 0) out.push({ type: "useAbility", player, ability: { kind: "peek", target: top.player } });
-  }
-  if (has(view, "tail") && view.me.roleState.tail === null) {
-    const job = jobThisRound(view);
-    const target = roomsWhere(view, job, (d) => d.coins > 0)
-      .filter((r) => r !== room)
-      .sort((a, b) => roomDef(job, b).coins - roomDef(job, a).coins)[0];
-    if (target !== undefined) out.push({ type: "useAbility", player, ability: { kind: "tail", room: target } });
-  }
-  if (has(view, "recharge") && usedUp(view)) out.push({ type: "useAbility", player, ability: { kind: "recharge" } });
-  if (has(view, "rig") && createdOf(view).eventsEnabled && view.round < jobThisRound(view).roundCap) {
-    const next = view.round + 1;
-    if (!ofType(view.caseFile, "perkUsed").some((e) => e.perk.kind === "rig" && e.perk.round === next)) {
-      out.push({ type: "useAbility", player, ability: { kind: "rig" } });
+/** The use of `perk` that fits `move`, or null when the bot doesn't want it. */
+function wanted(view: PlayerView, perk: PerkId, move: Move): PerkUse | null {
+  const me = view.me.id;
+  switch (perk) {
+    case "tail": {
+      const job = jobThisRound(view);
+      const room = roomsWhere(view, job, (d) => d.coins > 0)
+        .filter((r) => r !== move.room)
+        .sort((a, b) => roomDef(job, b).coins - roomDef(job, a).coins)[0];
+      return room === undefined ? null : { kind: "tail", room };
+    }
+    case "alibi":
+      return move.pocket === 0 && (publicSuspicion(view).get(me) ?? 0) >= STAMP_ALIBI_AT ? { kind: "alibi" } : null;
+    case "ballot":
+      return null;
+    case "softShoes":
+      return view.wanted > 0 ? { kind: "softShoes" } : null;
+    case "blackout":
+      return move.pocket > 0 ? { kind: "blackout", room: move.room } : null;
+    case "bail":
+      return !view.me.roleState.bail && view.me.stash > view.share ? { kind: "bail" } : null;
+    case "plantEvidence": {
+      if (move.pocket === 0) return null;
+      const top = [...publicSuspicion(view)].filter(([id]) => id !== me).sort((a, b) => b[1] - a[1])[0];
+      return top === undefined ? null : { kind: "plantEvidence", target: top[0], room: move.room };
     }
   }
-  // Pick the calmest of a Rig's cards for the next round (the first flips unless picked).
-  const rigged = ofType(view.caseFile, "perkUsed").find((e) => e.perk.kind === "rig" && e.perk.round === view.round + 1)?.perk;
-  if (rigged?.kind === "rig" && !ofType(view.caseFile, "rigPicked").some((e) => e.round === rigged.round)) {
-    const best = [...rigged.cards].sort((a, b) => cardRiskScore(view, a) - cardRiskScore(view, b))[0];
-    if (best !== undefined && best !== rigged.cards[0] && cardRiskScore(view, best) < cardRiskScore(view, rigged.cards[0] as EventId)) {
-      out.push({ type: "useAbility", player, ability: { kind: "rigPick", card: best } });
-    }
+}
+
+/** The perk to buy with this round's `move`: the first of this game's three it wants and can pay for. design §12 */
+export function buyPerk(view: PlayerView, p: Personality, random: Random, move: Move): PlayerCommand[] {
+  if (view.phase.kind !== "planning" || ofType(view.caseFile, "perkBought").some((e) => e.round === view.round)) return [];
+  if (random() >= p.shop) return [];
+  for (const { perk, cost } of view.shop) {
+    if (cost > view.me.stash) continue;
+    const use = wanted(view, perk, move);
+    if (use) return [{ type: "buyPerk", player: view.me.id, perk: use }];
   }
-  return out;
+  return [];
 }
 
-/** v2 §1 Recharge: the power's uses this stretch are spent. */
-function usedUp(view: PlayerView): boolean {
-  const power = myPower(view);
-  const { usedThisStretch } = view.me.roleState;
-  return power !== undefined && "perStretch" in power && usedThisStretch >= power.perStretch;
-}
-
-/** +Vote with a shakedown ballot, once per meeting. design §8.3 */
-export function meetingPerks(view: PlayerView, vote: VoteChoice | null): PlayerCommand[] {
-  if (view.phase.kind !== "meeting" || vote?.kind !== "shakedown" || !has(view, "extraVote")) return [];
-  const meetingId = view.phase.meetingId;
-  if (ofType(view.caseFile, "perkUsed").some((e) => e.perk.kind === "extraVote" && e.perk.meetingId === meetingId)) return [];
-  return [{ type: "useAbility", player: view.me.id, ability: { kind: "extraVote" } }];
-}
-
-/** Alibi perk: stamp the alibi just posted, if it is true and the crew could suspect me. design §8.3, §5.4 */
-export function alibiPerk(view: PlayerView, posted: RoomId): PlayerCommand[] {
-  if (!has(view, "alibi")) return [];
-  const round = lastResolvedRound(view);
-  const real = ofType(view.caseFile, "coinsGrabbed").find((e) => e.round === round)?.room;
-  if (real !== posted) return [];
-  // Worth it when the crew could suspect me.
-  if ((publicSuspicion(view).get(view.me.id) ?? 0) < STAMP_ALIBI_AT) return [];
-  return [{ type: "useAbility", player: view.me.id, ability: { kind: "alibi" } }];
+/**
+ * design §9.6: the target of the shakedown waiting for its Bail choice, holding
+ * Bail, uses it when the shakedown would take at least the personality's
+ * `bailAt` coins; it answers once.
+ */
+export function bailChoice(view: PlayerView, p: Personality, random: Random): PlayerCommand[] {
+  const phase = view.phase;
+  if (phase.kind !== "shakedownPending" || phase.target !== view.me.id || !view.me.roleState.bail) return [];
+  if (ofType(view.caseFile, "bailChosen").some((e) => e.meetingId === phase.meetingId)) return [];
+  const loss = Math.max(0, view.me.stash - view.share);
+  const use = random() < p.noise ? random() < 0.5 : p.bailAt !== null && loss >= p.bailAt;
+  return [{ type: "chooseBail", player: view.me.id, use }];
 }

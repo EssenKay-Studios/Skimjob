@@ -166,12 +166,11 @@ export function suspicion(view: PlayerView, w: SuspicionWeights = SUSPICION_WEIG
   return score;
 }
 
-/** What I know of other players' roles: my latest Peek or Inside tip on each. */
+/** What I know of other players' roles: my latest Inside tip on each. */
 export function knownRoles(view: PlayerView): Map<PlayerId, RoleId> {
   const known = new Map<PlayerId, RoleId>();
   for (const { event: e } of view.caseFile) {
     if (e.type === "insideTip") known.set(e.subject, e.role);
-    if (e.type === "perkUsed" && e.perk.kind === "peek") known.set(e.perk.target, e.perk.role);
   }
   return known;
 }

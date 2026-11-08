@@ -1,6 +1,6 @@
 // QA (PR #55, M2-11): the end-of-game reveal summary against the engine's own
-// truth in seeded whole bot games (design §8, §15.5; extension.md "Tokens and
-// the perk shop"). Truth comes from folding the full log with the reducer
+// truth in seeded whole bot games (design §8, §12, §15.5). Truth comes from
+// folding the full log with the reducer
 // (power cuts, stashes), not from the reveal's own heuristics.
 import { describe, expect, it } from "vitest";
 import type { PerkId } from "@skimjob/content";
@@ -10,7 +10,6 @@ import {
   handleCommand,
   initialState,
   leadersOf,
-  perkCost,
   roleHandler,
   viewFor,
   type Command,
@@ -156,10 +155,7 @@ function audit(state: GameState, cov: Coverage): RevealSummary {
   // --- fold the full log for the truth
   let s = initialState(c);
   let round = 0;
-  const tokensTruth = new Map<PlayerId, string[]>();
-  const tokenRounds: string[] = [];
   const bought = new Map<PlayerId, PerkId[]>();
-  const used = new Map<PlayerId, number>();
   const cuts = new Set<string>();
   const stashAt = new Map<number, Record<PlayerId, number>>();
   const snap = () => Object.fromEntries(state.playerOrder.map((p) => [p, s.players[p]!.stash]));
@@ -169,16 +165,8 @@ function audit(state: GameState, cov: Coverage): RevealSummary {
         if (round > 0) stashAt.set(round, snap());
         round = e.round;
         break;
-      case "tokenEarned":
-        tokensTruth.set(e.player, [...(tokensTruth.get(e.player) ?? []), e.trigger]);
-        tokenRounds.push(`${round}:${e.player}:${e.trigger}`);
-        cov.add(`token:${e.trigger}`);
-        break;
       case "perkBought":
-        bought.set(e.player, [...(bought.get(e.player) ?? []), e.perk]);
-        break;
-      case "perkUsed":
-        used.set(e.player, (used.get(e.player) ?? 0) + 1);
+        bought.set(e.player, [...(bought.get(e.player) ?? []), e.perk.kind]);
         break;
       case "powerCut":
         cuts.add(`${e.round}:${e.room}`);
@@ -202,23 +190,13 @@ function audit(state: GameState, cov: Coverage): RevealSummary {
   for (const r of summary.rounds) if (r.round > 0) expect(r.stashes, `stash after round ${r.round}`).toEqual(stashAt.get(r.round));
   expect(summary.rounds.filter((r) => r.round > 0).map((r) => r.round)).toEqual([...stashAt.keys()]);
 
-  // Tokens: every one, with its trigger, in the right player and round.
-  for (const seat of summary.seats) expect(seat.tokens, `tokens ${seat.player}`).toEqual(tokensTruth.get(seat.player) ?? []);
-  expect(has((i) => i.kind === "token").map((x) => {
-    const t = x.item as Extract<RevealItem, { kind: "token" }>;
-    return `${x.round}:${t.player}:${t.trigger}`;
-  })).toEqual(tokenRounds);
-  // Perks: every purchase and use; tokens earned = spent + left.
+  // design §12: every purchase, with its buyer (the stash over time above includes what it cost), and every Bail choice.
   for (const seat of summary.seats) {
     expect(seat.perksBought).toEqual(bought.get(seat.player) ?? []);
-    expect(seat.perksUsed).toBe(used.get(seat.player) ?? 0);
-    const spent = seat.perksBought.reduce((n, perk) => n + perkCost(c, perk), 0);
-    expect(seat.tokens.length - spent).toBe(state.players[seat.player]!.roleState.tokens);
     if (seat.perksBought.length > 0) cov.add("perkBought");
-    if (seat.perksUsed > 0) cov.add("perkUsed");
   }
   expect(eventItems("perkBought")).toEqual(state.log.filter((e) => e.type === "perkBought"));
-  expect(eventItems("perkUsed")).toEqual(state.log.filter((e) => e.type === "perkUsed"));
+  expect(eventItems("bailChosen")).toEqual(state.log.filter((e) => e.type === "bailChosen"));
 
   // design §5.3: every raid is in the timeline, in its round.
   expect(eventItems("roomRaided")).toEqual(state.log.filter((e) => e.type === "roomRaided"));
@@ -248,7 +226,7 @@ const SEEDS: readonly (readonly [number, string])[] = [
   [8, "qa55-8-r6-1"],
   [12, "qa55-12-r6-0"],
 ];
-const MUST = ["success", "failed:theft", "failedTopWins", "sunkWin", "raid", "offline:powerCut", "absolved", "perkBought", "perkUsed"];
+const MUST = ["success", "failed:theft", "failedTopWins", "sunkWin", "raid", "offline:powerCut", "absolved", "perkBought"];
 
 describe("QA #55 reveal summary vs the engine's truth — design §8, §15.5", () => {
   it("full games at 5/8/12 players: hidden before the end, identical for every viewer after, and true", () => {

@@ -19,8 +19,8 @@ const TALLY_COUNTS = [
 function seatsProblem(v: unknown, what: string): string | null {
   if (!isObj(v)) return `${what} isn't an object`;
   for (const [k, s] of Object.entries(v)) {
-    const ok = isObj(s) && isInt(s.seats) && isNum(s.credit) && isNum(s.fair) && isNum(s.successCredit) && isNum(s.earned) && isNum(s.spent);
-    if (!ok) return `${what}.${k} isn't { seats, credit, fair, successCredit, earned, spent }`;
+    const ok = isObj(s) && isInt(s.seats) && isNum(s.credit) && isNum(s.fair) && isNum(s.successCredit) && isNum(s.spent);
+    if (!ok) return `${what}.${k} isn't { seats, credit, fair, successCredit, spent }`;
   }
   return null;
 }

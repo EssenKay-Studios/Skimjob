@@ -23,6 +23,9 @@
 //   those, the games a Mole or Fixer won (design §8.4, §21 G8, reported only).
 // - whole-crew wins: successful games every player won, every stash equal ÷
 //   successful games (design §8.2, §21 G6: 5–20%).
+// - perks: perks bought per game; the win rate of seats that bought any ÷
+//   that of seats that bought none (design §21 G7: 0.8–1.25), and each perk's
+//   buyers' win rate ÷ the average seat's (G7: none above 1.3), all endings pooled.
 // - cap stalls: games that ended at the round cap with over a quarter of the
 //   bank left ÷ games (G4: at most 10%).
 // - event cards: cards flipped ÷ rounds from round 2 (design §13: 4 in 10; a
@@ -181,6 +184,33 @@ export function roleParity(roles: Readonly<Record<string, GroupWins>>): Record<s
   return Object.fromEntries(Object.entries(roles).map(([role, g]) => [role, average ? (g.winRate ?? 0) / average : null]));
 }
 
+/** design §21 G7: perks don't decide games. */
+export interface PerkMetrics {
+  /** Perks bought per game. */
+  readonly perGame: number | null;
+  /** Buyers' win rate ÷ non-buyers' (0.8–1.25). */
+  readonly buyerRatio: number | null;
+  /** Each perk's buyers' win rate ÷ the average seat's (none above 1.3). */
+  readonly byPerk: Record<string, number | null>;
+}
+
+/** num ÷ den over two win rates, or null when either is missing or the divisor is 0. */
+const ratio = (num: number | null | undefined, den: number | null | undefined): number | null => (num == null || !den ? null : num / den);
+
+export function perkMetrics(records: readonly GameRecord[]): PerkMetrics {
+  const buyers = groupWins(records, (p) => (p.perks.length > 0 ? "buyer" : "nonBuyer"));
+  const average = groupWins(records, () => "all").all?.winRate;
+  const byPerk: Record<string, number | null> = {};
+  for (const perk of [...new Set(records.flatMap((g) => g.playerRecords.flatMap((p) => p.perks)))].sort()) {
+    byPerk[perk] = ratio(groupWins(records, (p) => (p.perks.includes(perk) ? perk : null))[perk]?.winRate, average);
+  }
+  return {
+    perGame: rate(records.reduce((s, g) => s + g.playerRecords.reduce((n, p) => n + p.perks.length, 0), 0), records.length),
+    buyerRatio: ratio(buyers.buyer?.winRate, buyers.nonBuyer?.winRate),
+    byPerk,
+  };
+}
+
 export interface Metrics {
   readonly games: number;
   readonly successRate: number | null;
@@ -204,6 +234,8 @@ export interface Metrics {
   readonly personalities: Record<string, GroupWins>;
   /** Games sunk by theft that a Mole or Fixer won. design §21 G8 */
   readonly sunkWins: RateOf;
+  /** design §21 G7 */
+  readonly perks: PerkMetrics;
   readonly rejections: number;
 }
 
@@ -227,6 +259,7 @@ function metrics(records: readonly GameRecord[]): Metrics {
     roles: groupWins(records, (p) => p.role),
     personalities: groupWins(records, (p) => p.personality),
     sunkWins: sunkWinMetric(records),
+    perks: perkMetrics(records),
     rejections: records.reduce((s, g) => s + g.rejections, 0),
   };
 }

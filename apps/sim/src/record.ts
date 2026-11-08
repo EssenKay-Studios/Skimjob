@@ -2,7 +2,7 @@
 // the event log (the full record of the game). design §17.4
 //
 // Pure: a finished GameState (plus the bot crew) in, plain data out.
-import type { RoleId } from "@skimjob/content";
+import type { PerkId, RoleId } from "@skimjob/content";
 import type { PersonalityId } from "@skimjob/bots";
 import { honesty, jobFor, type GameConfig, type GameEvent, type GameState, type MeetingKind, type PlayerId } from "@skimjob/engine";
 
@@ -20,9 +20,9 @@ export interface PlayerRecord {
   readonly winner: boolean;
   /** 1 ÷ number of winners if a winner (joint winners share one win), else 0. */
   readonly winCredit: number;
-  /** Shop tokens earned and spent. extension.md "Tokens and the perk shop" */
-  readonly tokensEarned: number;
-  readonly tokensSpent: number;
+  /** Perks bought, in order, and the coins they cost. design §12 */
+  readonly perks: readonly PerkId[];
+  readonly spent: number;
 }
 
 export interface ShakedownRecord {
@@ -78,7 +78,7 @@ export function recordGame(state: GameState, crew: readonly PersonalityId[], rej
   const grabbed = new Map<PlayerId, number>(order.map((id) => [id, 0]));
   const pocketed = new Map<PlayerId, number>(order.map((id) => [id, 0]));
   const sinceShakedown = new Map<PlayerId, number>(order.map((id) => [id, 0]));
-  const earned = new Map<PlayerId, number>();
+  const perks = new Map<PlayerId, PerkId[]>();
   const spent = new Map<PlayerId, number>();
   const shakedowns: ShakedownRecord[] = [];
   let meetingKind: MeetingKind = "regular";
@@ -120,10 +120,8 @@ export function recordGame(state: GameState, crew: readonly PersonalityId[], rej
         });
         sinceShakedown.set(event.target, 0);
         break;
-      case "tokenEarned":
-        add(earned, event.player, 1);
-        break;
       case "perkBought":
+        perks.set(event.player, [...(perks.get(event.player) ?? []), event.perk.kind]);
         add(spent, event.player, event.cost);
         break;
       default:
@@ -165,8 +163,8 @@ export function recordGame(state: GameState, crew: readonly PersonalityId[], rej
         timesShakenDown: shakedowns.filter((s) => s.target === id).length,
         winner,
         winCredit: winner ? 1 / winners.length : 0,
-        tokensEarned: earned.get(id) ?? 0,
-        tokensSpent: spent.get(id) ?? 0,
+        perks: perks.get(id) ?? [],
+        spent: spent.get(id) ?? 0,
       };
     }),
     rejections,

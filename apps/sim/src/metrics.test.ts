@@ -1,6 +1,7 @@
 // Balance metric definitions. design §17.4 "Balance metrics and rough targets"
 import { describe, expect, it } from "vitest";
 import {
+  perkMetrics,
   roleParity,
   sunkWinMetric,
   groupWins,
@@ -140,6 +141,22 @@ describe("Mole and Fixer wins on a heist sunk by theft — design §8.4, §21 G8
     ];
     expect(sunkWinMetric(records)).toEqual({ games: 3, rate: 2 / 3 });
     expect(sunkWinMetric([gameRec()])).toEqual({ games: 0, rate: null });
+  });
+});
+
+describe("perks don't decide games — design §21 G7", () => {
+  it("perks per game; buyers' win rate ÷ non-buyers'; each perk's buyers' win rate ÷ the average seat's, all endings pooled", () => {
+    const records = [
+      gameRec({ playerRecords: [seat({ id: "a", perks: ["tail", "bail"] }), seat({ id: "b" })], winners: ["a"] }),
+      gameRec({ playerRecords: [seat({ id: "a", perks: ["tail"] }), seat({ id: "b" })], winners: ["b"] }),
+      failed("theft", { playerRecords: [seat({ id: "a" }), seat({ id: "b", perks: ["bail"] })] }),
+    ];
+    const m = perkMetrics(records);
+    expect(m.perGame).toBe(4 / 3);
+    // Buyers: 1 win in 3 seats; non-buyers: 1 in 3. The average seat: 2 in 6.
+    expect(m.buyerRatio).toBe(1);
+    expect(m.byPerk).toEqual({ bail: (1 / 2) / (2 / 6), tail: (1 / 2) / (2 / 6) });
+    expect(perkMetrics([gameRec({ playerRecords: [seat()] })])).toEqual({ perGame: 0, buyerRatio: null, byPerk: {} });
   });
 });
 

@@ -221,9 +221,9 @@ describe("role powers in bot games — design §11.1, §19.3", () => {
     expect(small.flatMap((g) => g.state.log).filter((e) => e.type === "abilityResolved" && e.ability.kind === "ring").length).toBeGreaterThan(0);
   });
 
-  it("bots earn tokens and buy perks from the shop", () => {
-    expect(log.filter((e) => e.type === "tokenEarned").length).toBeGreaterThan(0);
+  it("bots buy perks on the black market, each sold in public too (design §12)", () => {
     expect(log.filter((e) => e.type === "perkBought").length).toBeGreaterThan(0);
+    expect(log.filter((e) => e.type === "perkSold").length).toBe(log.filter((e) => e.type === "perkBought").length);
   });
 });
 

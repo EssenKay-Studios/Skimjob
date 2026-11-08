@@ -61,11 +61,12 @@ function run(state: GameState, ...commands: Command[]): GameState {
     return r.state.phase.kind === "alibis" ? apply(r.state, alibiDeadline(r.state)) : r.state;
   }, state);
 }
-/** Back to planning: a due meeting (server slot, nobody votes) and the result window pass (design §9.3, §9.4). */
+/** Back to planning: a Bail choice window, a due meeting (server slot, nobody votes) and the result window pass (design §9.3, §9.4, §9.6). */
 function pass(s: GameState): GameState {
   for (;;) {
     const p = s.phase;
     if (p.kind === "result") s = apply(s, { type: "advance", deadline: { kind: "result", round: p.round } });
+    else if (p.kind === "shakedownPending") s = apply(s, { type: "advance", deadline: { kind: "resolveShakedown", meetingId: p.meetingId } });
     else if (p.kind === "awaitingMeeting") {
       s = apply(s, { type: "scheduleMeeting", meetingId: p.meetingId, slot: "now" });
       s = apply(s, { type: "advance", deadline: { kind: "openMeeting", meetingId: p.meetingId } });
@@ -109,6 +110,15 @@ describe("recordGame — a scripted game", () => {
     let t = replay(cfg, setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: "lookout" } : e)));
     t = run(t, move("p0", "lobby", 2), move("p1", "lobby", 2), move("p2", "lobby"), roundDeadline(t));
     expect(recordGame(t, ["greedy", "greedy", "honest"])).toMatchObject({ result: "failed", reason: "theft", endedRound: 1, capWithBankLeft: true });
+  });
+
+  it("records each seat's perks and the coins they cost (design §12)", () => {
+    const cfg = { ...config(3), contentOverrides: { ...R6, roundCap: 2 } };
+    let t = replay(cfg, setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: "lookout" } : e.type === "shopDealt" ? { ...e, perks: ["tail", "softShoes", "plantEvidence"] } : e)));
+    t = run(t, move("p0", "lobby", 2), move("p1", "lobby"), move("p2", "lobby"), roundDeadline(t));
+    t = pass(t);
+    t = run(t, { type: "buyPerk", player: "p0", perk: { kind: "softShoes" } }, move("p0", "lobby"), move("p1", "lobby"), move("p2", "lobby"), roundDeadline(t));
+    expect(recordGame(t, ["greedy", "honest", "honest"]).playerRecords.map((p) => [p.perks, p.spent])).toEqual([[["softShoes"], 2], [[], 0], [[], 0]]);
   });
 
   it("records the shakedown and its meeting's kind (design §9.6)", () => {
