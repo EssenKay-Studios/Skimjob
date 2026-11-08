@@ -47,7 +47,7 @@ for (const mode of ["hiddenThenRevealed", "open", "secret"] as const) {
     const game = await startGame(host.request, { bots: 0, guests: [g1.request, g2.request], voteVisibility: mode, sessionLength: "1h" });
     await Promise.all([host, g1, g2].map((p) => p.goto(`/game/${game.id}`)));
 
-    // Round 1: the host loots the Office (Haul > 0 so compensation can be paid).
+    // Round 1: the host loots the Office.
     await host.locator('.room-tile[data-room="Office"]').click();
     await expect(host.getByRole("button", { name: "Lock it in" })).toBeEnabled();
     await host.getByRole("button", { name: "Lock it in" }).click();
@@ -108,12 +108,12 @@ for (const mode of ["hiddenThenRevealed", "open", "secret"] as const) {
     await expect(hd.locator(".vote__status")).toContainText("Your vote: shake down Guest 2");
     await hd.getByRole("button", { name: "Back to the board" }).click();
 
-    // Result: 2 for Guest 2, 1 sealed skip → passes; Guest 2 is clean (stash 0) and gets compensation.
+    // Result: 2 for Guest 2, 1 sealed skip → passes; Guest 2 is clean (only the share) and is compensated from the coins set aside.
     const results = host.getByRole("region", { name: /The crew voted|No majority|Too few votes/ });
     await expect(results).toBeVisible({ timeout: 25_000 });
     await expect(results).toContainText("The crew voted to shake down Guest 2");
-    await expect(results).toContainText(/Clean! Guest 2 was holding 0/);
-    await expect(results).toContainText(/The crew paid \d+ from the Haul in compensation/);
+    await expect(results).toContainText(/Clean! Guest 2 was holding \d+/);
+    await expect(results).toContainText(/The crew paid \d+ from the coins set aside in compensation/);
     const tally = results.getByRole("list", { name: "Final tally" });
     await expect(tally).toContainText("Skip");
     if (mode === "secret") await expect(results.getByRole("list", { name: "How everyone voted" })).toHaveCount(0);

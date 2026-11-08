@@ -12,6 +12,7 @@ export * from "./acts";
 export * from "./round";
 export * from "./meeting";
 export * from "./end";
+export { honesty } from "./shares";
 export * from "./deck";
 export * from "./claims";
 export * from "./evidence";

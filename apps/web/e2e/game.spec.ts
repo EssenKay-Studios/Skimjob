@@ -122,7 +122,7 @@ test("the move panel: pick a room, split the loot, lock it in, change it; reconn
   await expect(page.getByText("Miss the deadline and you go to the Lobby, handing everything in.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Lock it in" })).toBeDisabled();
 
-  // The Vault's 3 coins, pocketing 2 (the slider's value is the Haul share).
+  // The Vault's 3 coins, pocketing 2 (the slider's value is the duffel's coins).
   await page.locator('.room-tile[data-room="Vault"]').click();
   await expect(page.getByRole("button", { name: "Lock it in" })).toBeEnabled();
   await page.locator("#split").fill("1");
@@ -142,7 +142,7 @@ test("the move panel: pick a room, split the loot, lock it in, change it; reconn
   await expect(page.getByRole("button", { name: "Update move" })).toBeDisabled();
   await page.getByRole("group", { name: "Room to watch" }).getByRole("button", { name: "Vault" }).click();
   await page.getByRole("button", { name: "Update move" }).click();
-  await expect(page.getByText("Locked in: Security, all to the Haul.")).toBeVisible();
+  await expect(page.getByText("Locked in: Security, all to the duffel.")).toBeVisible();
 
   // Drop the socket: the screen says it is reconnecting, opens a new one, and the move is still there.
   expect(await gameSockets()).toBe(1);
@@ -150,7 +150,7 @@ test("the move panel: pick a room, split the loot, lock it in, change it; reconn
   await expect(page.getByText("Reconnecting…")).toBeVisible();
   await expect(page.getByText("Reconnecting…")).toBeHidden({ timeout: 10_000 });
   expect(await gameSockets()).toBe(2);
-  await expect(page.getByText("Locked in: Security, all to the Haul.")).toBeVisible();
+  await expect(page.getByText("Locked in: Security, all to the duffel.")).toBeVisible();
   await idle.close();
 });
 

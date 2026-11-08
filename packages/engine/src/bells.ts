@@ -9,9 +9,9 @@ import type { GameState, PublicVisibility } from "./types";
 import { PUBLIC } from "./types";
 import type { Draw } from "./handle";
 
-/** The one helper every public fact is emitted through: its visibility comes from content. design §19 seam 1 */
-export const factVisibility = (fact: FactId): PublicVisibility => {
-  if (FACTS[fact] !== "public") throw new Error(`fact ${fact} has no R7 visibility`);
+/** The one helper every public fact is emitted through: its visibility comes from content, for every fact the event carries. design §19 seam 1 */
+export const factVisibility = (...facts: readonly FactId[]): PublicVisibility => {
+  for (const fact of facts) if (FACTS[fact] !== "public") throw new Error(`fact ${fact} has no R7 visibility`);
   return PUBLIC;
 };
 

@@ -137,19 +137,20 @@ describe("Smooth Talker: on the winning side of a dirty shakedown → a token �
 });
 
 describe("Priest: once per act, bless a player; a clean shakedown of them is paid by the bank — v2 §2, design §8", () => {
-  it("blessed and shaken down clean: the compensation goes back into the Haul (`blessingPaid`), and the Priest earns a token", () => {
+  it("blessed and shaken down clean: the compensation goes back into the coins set aside (`blessingPaid`), and the Priest earns a token", () => {
     const blessed = run(game(5, ["priest"]), mv("p0", "office"), mv("p1", "office"), ROUND, use("p0", { kind: "bless", target: "p1" }));
     expect(blessed.log.at(-1)).toEqual({ type: "abilityResolved", visibility: privateTo("p0"), player: "p0", round: 2, ability: { kind: "bless", target: "p1", act: 1 } });
     expect(JSON.stringify(viewFor(blessed, "p1"))).not.toMatch(/"bless"/);
-    const s = shakeDown(blessed, "p2", "p1");
+    // Coins set aside to pay a clean target from (R6 numbers until S3a.5).
+    const s = shakeDown({ ...blessed, setAside: 20 }, "p2", "p1");
     expect(ofType(s.log, "shakedownResolved")[0]).toMatchObject({ clean: true, compensation: compensationPerAct });
     expect(ofType(s.log, "blessingPaid")).toEqual([{ type: "blessingPaid", visibility: PUBLIC, meetingId: "emergency-p2", target: "p1", amount: compensationPerAct }]);
-    expect(s.haul).toBe(blessed.haul);
-    expect(s.players.p1?.stash).toBe(compensationPerAct);
+    expect(s.setAside).toBe(20);
+    expect(s.players.p1?.stash).toBe(s.share + compensationPerAct);
     expect(granted(s, "p0")).toEqual(["blessedShakenClean"]);
-    // Unblessed, the Haul pays.
-    const plain = shakeDown(run(game(5, ["priest"]), mv("p0", "office"), mv("p1", "office"), ROUND), "p2", "p1");
-    expect(plain.haul).toBe(blessed.haul - compensationPerAct);
+    // Unblessed, the coins set aside pay.
+    const plain = shakeDown({ ...run(game(5, ["priest"]), mv("p0", "office"), mv("p1", "office"), ROUND), setAside: 20 }, "p2", "p1");
+    expect(plain.setAside).toBe(20 - compensationPerAct);
   });
 
   it("a blessing covers its act only; once per act; refused on yourself, an unknown player and for other roles", () => {

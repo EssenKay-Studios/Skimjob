@@ -108,11 +108,11 @@ describe("viewFor — the viewer's own data and public state — design §13", (
     expect(viewFor(s, "ben").me.move).toBeNull();
   });
 
-  it("public state: phase, round, act, rooms, Haul, bells, tape, Wanted, meetings — design §13, §11.1, §5.1, §5.3, §5.4", () => {
+  it("public state: phase, round, act, rooms, the share, bells, tape, Wanted, meetings — design §13, §11.1, §5.1, §5.3, §5.4", () => {
     let s = createGame(config());
     s = run(s, { type: "proposeMeeting", player: "ana", slot: "fri" }, { type: "callEmergency", player: "carl" });
     const v = viewFor(s, "ben");
-    expect([v.phase, v.round, v.act, v.haul, v.wanted, v.taped, v.voteVisibility]).toEqual([{ kind: "planning", round: 1 }, 1, 1, 0, 0, {}, "hiddenThenRevealed"]);
+    expect([v.phase, v.round, v.act, v.share, v.wanted, v.taped, v.voteVisibility]).toEqual([{ kind: "planning", round: 1 }, 1, 1, 0, 0, {}, "hiddenThenRevealed"]);
     expect(v.bells).toEqual(Object.fromEntries(s.rooms.map((r) => [r, 0])));
     expect(v.rooms).toEqual(s.rooms);
     expect(v.proposals).toEqual([{ id: "proposal-1", by: "ana", act: 1, slot: "fri", acceptedBy: ["ana"] }]);
@@ -222,7 +222,7 @@ describe("views are copies — design §17.3 (bots only get viewFor), task 8 rev
     expect(JSON.stringify(viewFor(s, "ana"))).toBe(fresh);
     // And the game still plays the same afterwards.
     s = run(s, { type: "advance", deadline: { kind: "round", round: 2 } });
-    expect(s.players.ana?.stash).toBe(1);
+    expect(s.players.ana?.stash).toBe(1 + 1); // the pocket and round 2's cut (design §7.6)
   });
 
   it("two views of the same state share nothing", () => {

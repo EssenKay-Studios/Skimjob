@@ -132,7 +132,7 @@ describe("feedFor", () => {
       type: "history",
       history: { messages: [msg("a", "p1", null, 1), msg("b", "p1", "p2", 6)], dmNotices: [notice("p2", "p3", 2), notice("p3", "p2", 3), notice("p2", "p3", 4)] },
     });
-    const crew = feedFor(s, "crew", "p1", [{ key: "9", at: t(5), text: "Round 1: Haul 12." }]);
+    const crew = feedFor(s, "crew", "p1", [{ key: "9", at: t(5), text: "Round 1: 12 taken." }]);
     expect(crew.map((i) => i.kind)).toEqual(["message", "notice", "event"]);
     const n = crew[1]!;
     expect(n.kind === "notice" && [n.count, n.mutual]).toEqual([3, true]);

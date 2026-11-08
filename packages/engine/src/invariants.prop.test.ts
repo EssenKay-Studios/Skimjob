@@ -10,8 +10,10 @@
 //  - handleCommand never throws, and a rejection leaves the state untouched
 //    (states are deep-frozen, so any mutation throws). [§17.2]
 //  - a command for a seat that isn't in the game is always refused. [§17.2]
-//  - loot is conserved: Haul + stashes = loot split from rooms; nothing goes
-//    negative. [§5.3, §8, §10, §11.3]
+//  - loot is conserved: kitty + set-aside + stashes = loot split from rooms
+//    (less a bust round's unsplit hand-ins); nothing goes negative; the kitty
+//    is change smaller than the crew; at the end the kitty and set-aside coins
+//    pay the getaway car. [§5.5, §6.3, §7.2, §7.7, §10, §11.3]
 //  - coins are conserved: bank + seized + coins in the bags = the bank's
 //    start. [§6.1, §7.7]
 //  - every open room's bell is a whole number below its size (a full bell is
@@ -131,7 +133,7 @@ const BOGUS_PLAYERS: readonly unknown[] = ["p99", "__proto__", "constructor", ""
 
 /** A command a client could plausibly send: mostly valid, sometimes refused by the rules. */
 /** Per game: how the crew plays. Hot crews court raids and busts; careful ones hand in and stay quiet. */
-type Style = "mixed" | "hot" | "careful";
+type Style = "mixed" | "hot" | "careful" | "greedy";
 
 function playerCommand(state: GameState, t: Tape, style: Style): { command: Record<string, unknown>; seated: boolean } {
   const seated = t.chance(92);
@@ -159,9 +161,10 @@ function playerCommand(state: GameState, t: Tape, style: Style): { command: Reco
     case 3:
     case 4: {
       const r = room();
-      const pocket = t.chance(style === "careful" ? 90 : 60) ? 0 : t.int(t.chance(80) ? 3 : 8);
       // design §3.2: mostly a grab that fills the room's limit, sometimes any number.
       const coins = BANK_JOB.rooms[r]?.coins ?? 0;
+      // design §8.4: greedy crews pocket most whole grabs, so some heists are sunk by theft.
+      const pocket = style === "greedy" ? (t.chance(80) ? coins : 0) : t.chance(style === "careful" ? 90 : 60) ? 0 : t.int(t.chance(80) ? 3 : 8);
       const move: Record<string, unknown> = { room: r, duffel: t.chance(80) ? Math.max(0, coins - pocket) : t.int(5), pocket };
       if (r === "security" || t.chance(5)) move.watch = room();
       if (p && t.chance(50)) {
@@ -288,8 +291,14 @@ function lootFlow(events: readonly GameEvent[]): number {
   return n;
 }
 
+/** design §5.5: a bust round's hand-ins are never split; they are lost in the bust. */
+function lostInBust(state: GameState): number {
+  if (state.phase.kind !== "ended" || state.phase.outcome.result !== "failed" || state.phase.outcome.reason !== "bust") return 0;
+  return state.log.reduce((n, e) => n + (e.type === "coinsGrabbed" && e.round === state.resolvedRound ? e.duffel : 0), 0);
+}
+
 function holdings(state: GameState): number {
-  return state.haul + Object.values(state.players).reduce((sum, p) => sum + p.stash, 0);
+  return state.kitty + state.setAside + lostInBust(state) + Object.values(state.players).reduce((sum, p) => sum + p.stash, 0);
 }
 
 const isCount = (n: number): boolean => Number.isInteger(n) && n >= 0;
@@ -314,9 +323,14 @@ function checkState(state: GameState, inflow: number): void {
   const raids = state.log.filter((e) => e.type === "roomRaided").length;
   check(state.wanted === raids, "Wanted = raids so far", { wanted: state.wanted, raids });
   if (state.wanted >= bustStars) check(state.phase.kind === "ended", "the game is over at the bust line (design §5.5)", state.phase);
-  check(isCount(state.haul), "Haul is a whole number ≥ 0", state.haul);
+  // design §7.2, §7.3, §7.5: the share and set-aside coins are whole numbers, the kitty is change smaller than the crew,
+  // and honesty's numerator never passes the coins taken.
+  check(isCount(state.share) && isCount(state.setAside) && isCount(state.reached), "share, set-aside and reached are whole numbers ≥ 0", [state.share, state.setAside, state.reached]);
+  check(isCount(state.kitty) && state.kitty < state.playerOrder.length, "the kitty is change smaller than the crew", state.kitty);
+  const taken = jobFor(state.config).bank.coinsPerPlayer * state.playerOrder.length - state.bank - state.seized;
+  check(state.reached <= taken, "coins reached ≤ coins taken (design §7.5)", [state.reached, taken]);
   for (const p of Object.values(state.players)) check(isCount(p.stash), "stashes are whole numbers ≥ 0", p);
-  check(holdings(state) === inflow, "loot conservation (Haul + stashes = loot in − loot out)", { holdings: holdings(state), inflow });
+  check(holdings(state) === inflow, "loot conservation (kitty + set-aside + stashes = loot in − loot out, design §7.7)", { holdings: holdings(state), inflow });
   // design §6.1, §7.7: every coin grabbed came out of the bank (into a bag, or seized), and the bank never goes below 0.
   const filled = state.log.find((e) => e.type === "bankFilled");
   const grabbed = state.log.reduce((n, e) => n + (e.type === "coinsGrabbed" ? e.duffel + e.pocket + e.seized : 0), 0);
@@ -435,12 +449,14 @@ function checkEnd(state: GameState): void {
   const job = jobFor(state.config);
   if (outcome.result === "failed" && outcome.reason === "bust") check(state.wanted >= job.alarm.bustStars, "a bust is at the bust line");
   else {
-    // design §6.2, §8.1, §8.4: otherwise the bank or the cap ended it, and honesty (the Haul ÷ the coins taken, seized
+    // design §6.2, §8.1, §8.4: otherwise the bank or the cap ended it, and honesty (coins that reached the duffel ÷ the coins taken, seized
     // ones left out, §7.5) at or above the line is a success, below it sunk by theft.
     check(state.bank === 0 || state.resolvedRound === job.roundCap, "the bank or the round cap ended the game", [state.bank, state.resolvedRound]);
     const taken = (state.log.find((e) => e.type === "bankFilled") as { coins: number }).coins - state.bank - state.seized;
-    const honest = taken === 0 || state.haul / taken >= job.honestyLine;
-    check(outcome.result === (honest ? "success" : "failed"), "success at or above the honesty line, sunk by theft below it", { haul: state.haul, taken, outcome: outcome.result });
+    const honest = taken === 0 || state.reached / taken >= job.honestyLine;
+    check(outcome.result === (honest ? "success" : "failed"), "success at or above the honesty line, sunk by theft below it", { reached: state.reached, taken, outcome: outcome.result });
+    // design §6.3: the kitty and any unsplit duffel pay for the getaway car.
+    check("getaway" in outcome && outcome.getaway === state.kitty + state.setAside, "the getaway car takes the kitty and set-aside coins", outcome);
   }
   check(outcome.ranking.length === state.playerOrder.length, "everyone is ranked (design §13)");
   for (const r of outcome.ranking) {
@@ -448,14 +464,14 @@ function checkEnd(state: GameState): void {
     check(r.role === p.role && r.stash === p.stash, "ranking matches the final stashes", { r, p });
   }
   for (let i = 1; i < outcome.ranking.length; i++) {
-    check((outcome.ranking[i - 1]?.score ?? 0) >= (outcome.ranking[i]?.score ?? 0), "ranking is by score", outcome.ranking);
+    check((outcome.ranking[i - 1]?.stash ?? 0) >= (outcome.ranking[i]?.stash ?? 0), "ranking is by stash", outcome.ranking);
   }
   check(outcome.winners.every((w) => state.playerOrder.includes(w)), "winners are players");
   // design §8.5: the top group (everyone tied for the biggest stash, no tie-break) wins a success;
   // a heist sunk by theft only its members whose role wins it.
   const roles = rolesFor(state.config);
   const first = outcome.ranking[0];
-  const level = (r: (typeof outcome.ranking)[number]) => first !== undefined && r.score === first.score;
+  const level = (r: (typeof outcome.ranking)[number]) => first !== undefined && r.stash === first.stash;
   // design §5.5: on a bust, the escapees (the round's Rooftop players) with the biggest stash among them, any role.
   const escaped = outcome.result === "failed" && outcome.reason === "bust" ? outcome.ranking.filter((r) => outcome.escapees.includes(r.player)) : [];
   const best = Math.max(...escaped.map((r) => r.stash));
@@ -478,7 +494,7 @@ interface Played {
 /** Plays one fuzzed game, checking every invariant after every step. */
 function play(config: GameConfig, tapeNumbers: readonly number[], checks = true): Played {
   const t = new Tape(tapeNumbers);
-  const style = t.pick<Style>(["mixed", "hot", "careful"]);
+  const style = t.pick<Style>(["mixed", "hot", "careful", "greedy"]);
   let state = deepFreeze(createGame(config));
   let inflow = 0;
   let accepted = 0;

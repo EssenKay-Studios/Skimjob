@@ -82,7 +82,7 @@ export function publicSuspicion(view: PlayerView): Map<PlayerId, number> {
     const claims = new Map(ofType(view.ledger, "alibiPosted").filter((a) => a.round === e.round).map((a) => [a.player, a.room]));
     let expected = 0;
     for (const room of claims.values()) expected += roomDef(job, room).coins;
-    const short = expected - e.haulDelta;
+    const short = expected - (e.taken - e.missing);
     const weights = ids.map((id) => [id, claims.has(id) ? roomDef(job, claims.get(id) as string).coins + 1 : maxCoins + 1] as const);
     const total = weights.reduce((s, [, w]) => s + w, 0);
     for (const [id, w] of weights) {

@@ -37,7 +37,15 @@ const split = (player: string, round: number, room: string, coins: number, pocke
   pocket,
   seized: 0,
 });
-const resolved = (round: number, bank: number, haulDelta: number, haul: number): GameEvent => ({ type: "roundResolved", visibility: PUBLIC, round, bank, haulDelta, haul });
+const resolved = (round: number, bank: number, taken: number, missing: number, reached: number): GameEvent => ({
+  type: "roundResolved",
+  visibility: PUBLIC,
+  round,
+  bank,
+  taken,
+  missing,
+  honesty: { reached, taken: 64 - bank },
+});
 
 /** Ana (Rookie, you), Ben (Mole), Cy (Hacker), Dot (Detective): three rounds and a meeting. */
 const LOG: GameEvent[] = [
@@ -53,7 +61,7 @@ const LOG: GameEvent[] = [
   split("p3", 1, "office", 4, 0),
   split("p4", 1, "vault", 6, 2),
   { type: "roomWatched", visibility: privateTo("p1"), player: "p1", round: 1, source: "security", room: "vault", seen: [], offline: true },
-  resolved(1, 48, 11, 11),
+  resolved(1, 48, 16, 5, 11),
   { type: "tokenEarned", visibility: privateTo("p3"), player: "p3", trigger: "loopHidPocketer" },
   { type: "alibiPosted", visibility: PUBLIC, player: "p2", round: 1, room: "lobby" },
   { type: "alibiPosted", visibility: PUBLIC, player: "p3", round: 1, room: "office" },
@@ -64,7 +72,7 @@ const LOG: GameEvent[] = [
   split("p2", 2, "vault", 6, 4),
   split("p3", 2, "lobby", 2, 0),
   split("p4", 2, "office", 4, 0),
-  resolved(2, 32, 11, 22),
+  resolved(2, 32, 16, 5, 22),
   { type: "perkBought", visibility: privateTo("p1"), player: "p1", perk: "peek", cost: 1 },
   { type: "perkUsed", visibility: privateTo("p1"), player: "p1", round: 2, perk: { kind: "peek", target: "p2", role: "mole" } },
   { type: "meetingOpened", visibility: PUBLIC, meetingId: "m1", kind: "regular", act: 1 },
@@ -77,19 +85,19 @@ const LOG: GameEvent[] = [
   split("p2", 3, "depositBoxes", 5, 5),
   split("p3", 3, "vault", 6, 2),
   split("p4", 3, "lobby", 2, 0),
-  resolved(3, 19, 6, 25),
+  resolved(3, 19, 13, 7, 28),
 ];
 
-const rank = (player: string, role: string, score: number): RankEntry => ({ player, role, score, stash: score });
+const rank = (player: string, role: string, stash: number): RankEntry => ({ player, role, stash });
 
 type Ending = "success" | "bust" | "theft";
 const BEN_TOP = [rank("p2", "mole", 12), rank("p3", "hacker", 5), rank("p4", "detective", 2), rank("p1", "rookie", 1)];
 const OUTCOMES: Record<Ending, Outcome> = {
-  success: { result: "success", ranking: BEN_TOP, winners: ["p2"] },
+  success: { result: "success", ranking: BEN_TOP, winners: ["p2"], getaway: 1 },
   // design §5.5: a bust in round 3; only Ana was on the Rooftop.
   bust: { result: "failed", reason: "bust", escapees: ["p1"], ranking: BEN_TOP, winners: ["p1"] },
   // Here Ben hands round 3 in and Cy pockets it all, so the Hacker (no ★) leads and nobody wins.
-  theft: { result: "failed", reason: "theft", ranking: [rank("p3", "hacker", 9), rank("p2", "mole", 7), rank("p4", "detective", 2), rank("p1", "rookie", 1)], winners: [] },
+  theft: { result: "failed", reason: "theft", ranking: [rank("p3", "hacker", 9), rank("p2", "mole", 7), rank("p4", "detective", 2), rank("p1", "rookie", 1)], winners: [], getaway: 1 },
 };
 const logFor = (ending: Ending): GameEvent[] =>
   ending !== "theft"

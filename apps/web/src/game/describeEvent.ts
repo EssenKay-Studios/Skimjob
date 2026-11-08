@@ -26,7 +26,6 @@ export const cardName = (card: string): string => EVENTS[card]?.name ?? card;
 export const perkName = (perk: PerkId): string => PERKS[perk]?.name ?? perk;
 
 const list = (xs: readonly string[]) => (xs.length <= 1 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`);
-const signed = (n: number) => (n >= 0 ? `+${n}` : `−${Math.abs(n)}`);
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 /** "Vault 3 bulbs and Office 1 bulb": the lit bells, or "all dark". design §5.1 */
 const bells = (lit: Readonly<Record<RoomId, number>>) => {
@@ -104,7 +103,9 @@ function line(e: GameEvent, ctx: DescribeContext): string {
       return `Round ${e.round}, ${how.toLowerCase()}: ${e.seen.length === 0 ? "nobody" : names(e.seen)} in the ${roomName(e.room)}${you(e.player) ? "" : ` (seen by ${ctx.name(e.player)})`}.`;
     }
     case "roundResolved":
-      return `Round ${e.round}: Haul ${signed(e.haulDelta)} (now ${e.haul}), ${e.bank} coins left in the bank.`;
+      return `Round ${e.round}: ${e.taken} taken, ${e.missing} ${e.missing === 1 ? "coin" : "coins"} went missing, ${e.bank} coins left in the bank.`;
+    case "duffelSplit":
+      return `Round ${e.round}: the duffel split ${e.cut} each (share now ${e.share}, kitty ${e.kitty}).`;
     case "bellsRung":
       return `Round ${e.round} bells: ${bells(e.bells)}.`;
     case "roomRaided":
@@ -150,9 +151,9 @@ function line(e: GameEvent, ctx: DescribeContext): string {
     case "shakedownCancelled":
       return `The shakedown of ${who(e.target)} was called off.`;
     case "shakedownResolved":
-      return `${who(e.target)} ${you(e.target) ? "were" : "was"} shaken down: a stash of ${e.stashRevealed}, ${e.taken} into the Haul.${e.clean ? ` Clean! The crew paid ${e.compensation} in compensation.` : ""}`;
+      return `${who(e.target)} ${you(e.target) ? "were" : "was"} shaken down: a stash of ${e.stashRevealed}, ${e.taken} set aside for the next split.${e.clean ? ` Clean! The crew paid ${e.compensation} in compensation.` : ""}`;
     case "blessingPaid":
-      return `${who(e.target)} ${you(e.target) ? "were" : "was"} blessed: the bank paid the compensation, so ${e.amount} went back into the Haul.`;
+      return `${who(e.target)} ${you(e.target) ? "were" : "was"} blessed: the bank paid the compensation, so ${e.amount} went back into the duffel.`;
     case "tokenEarned":
       return `${verb(e.player, "earned", "earned")} a token.`;
     case "perkBought":

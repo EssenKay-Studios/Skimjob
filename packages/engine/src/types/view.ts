@@ -3,7 +3,7 @@
 import type { PerkId, RoleId, RoomId } from "@skimjob/content";
 import type { PlayerId, PlayerSeat, VoteVisibility } from "./config";
 import type { Move, VoteChoice } from "./commands";
-import type { ActNumber, GameEvent, Outcome } from "./events";
+import type { ActNumber, GameEvent, Honesty, Outcome } from "./events";
 import type { RevealSummary } from "./reveal";
 import type { MeetingProposal, PendingEmergency, Phase, RoleState, ScheduledMeeting } from "./state";
 import type { PrivateVisibility, PublicVisibility, SecretVisibility, Visibility } from "./visibility";
@@ -73,7 +73,7 @@ export interface OtherPlayerView extends PlayerSeat {
 
 /**
  * The gap box (data only; the app draws it): what the round's public alibis
- * say the Haul should have grown by, against what it really grew.
+ * say the crew should have handed in, against what it really handed in.
  * `alibis` counts each alibi's room coin limit (event effects included),
  * as if everything were handed in. extension.md "What the app works out for you"
  */
@@ -82,8 +82,9 @@ export interface GapBox {
   /** How many alibis are posted for the round so far. */
   readonly posted: number;
   readonly alibis: number;
-  readonly haulGrowth: number;
-  /** `alibis` − `haulGrowth`: what the alibis claim that didn't reach the Haul. */
+  /** Coins handed in that round. design §7.4 */
+  readonly handedIn: number;
+  /** `alibis` − `handedIn`: what the alibis claim that didn't reach the duffel. */
   readonly unaccounted: number;
 }
 
@@ -101,7 +102,12 @@ export interface PlayerView {
   readonly rooms: readonly RoomId[];
   /** Coins left in the bank (public). design §6.1 */
   readonly bank: number;
-  readonly haul: number;
+  /** The share: each player's equal cut of every split so far (public). design §7.3 */
+  readonly share: number;
+  /** The kitty: leftover change carried into the next split (public). design §7.2 */
+  readonly kitty: number;
+  /** Honesty so far, the meter against the two-thirds line (public). design §7.5 */
+  readonly honesty: Honesty;
   /** Lit bulbs on each open room's bell; a taped-off room's bell is off (no entry). Public. design §5.1, §5.3 */
   readonly bells: Readonly<Record<RoomId, number>>;
   /** Taped-off rooms, each closed through this round (public). design §5.3 */

@@ -9,7 +9,7 @@ import { canSee } from "./types";
 import { setupEvents } from "./setup";
 import { replay } from "./reduce";
 import { handleCommand } from "./handle";
-import { V01_NUMBERS } from "./v01-numbers.testkit";
+import { R6_COINS } from "./v01-numbers.testkit";
 import { meetingResult } from "./meeting";
 import { fullGrab } from "./grab.testkit";
 
@@ -25,7 +25,7 @@ function config(players: number, voteVisibility: VoteVisibility = "hiddenThenRev
     rolePool: [...STARTER_ROLES],
     eventsEnabled: false,
     voteVisibility,
-    contentOverrides: V01_NUMBERS, // scripted against content 0.1.0 numbers (balance pass 1)
+    contentOverrides: R6_COINS, // R6 numbers for the R6 meeting rules until S3a.5
   };
 }
 
@@ -60,7 +60,7 @@ const since = (before: GameState, after: GameState): GameEvent[] => after.log.sl
 const ofType = <T extends GameEvent["type"]>(events: readonly GameEvent[], type: T) =>
   events.filter((e): e is Extract<GameEvent, { type: T }> => e.type === type);
 
-const mv = (player: string, room: string, pocket = 0, extra: object = {}) => ({ type: "submitMove", player, move: { ...fullGrab(room, pocket, V01_NUMBERS), ...extra } });
+const mv = (player: string, room: string, pocket = 0, extra: object = {}) => ({ type: "submitMove", player, move: { ...fullGrab(room, pocket, R6_COINS), ...extra } });
 const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
 const open = (meetingId: unknown) => ({ type: "advance", deadline: { kind: "openMeeting", meetingId } });
 const close = (meetingId: unknown) => ({ type: "advance", deadline: { kind: "closeMeeting", meetingId } });
@@ -84,7 +84,7 @@ function toMeeting(s: GameState): GameState {
 
 /**
  * 3 Rookies. Round 1: p0 pockets the Vault's 6; p1 and p2 hand in the Lobby's 2.
- * Rounds 2–3: everyone hands in the Lobby's 2. Haul 16, act-1 target 18.
+ * Rounds 2–3: everyone hands in the Lobby's 2. 16 handed in: splits of 1, 2 and 2 (share 5, kitty 1).
  */
 function act1Meeting(roles: string[] = [], mode?: VoteVisibility): GameState {
   const lobby = (s: GameState) => run(s, ...["p0", "p1", "p2"].filter((p) => !s.moves[p]).map((p) => mv(p, "lobby")), ROUND);
@@ -247,7 +247,8 @@ describe("emergency meetings — design §11.1, §4.1", () => {
     const s = run(game(3), mv("p0", "vault", 6), ROUND, emergency("p1"), open("emergency-p1"), vote("p1", "p0"), vote("p2", "p0"), CLOSE);
     expect(LAST(s, "shakedownResolved")).toMatchObject({ meetingId: "emergency-p1", target: "p0", stashRevealed: 6, taken: 6, clean: false, compensation: 0 });
     expect(s.players.p0).toMatchObject({ stash: 0 });
-    expect(s.haul).toBe(8); // p1 and p2 missed: 1 coin each (design §3.3), plus the 6 taken
+    // p1 and p2 missed: 1 coin each (design §3.3), the kitty of round 1's split; the 6 taken are set aside (design §7.1).
+    expect([s.reached, s.kitty, s.setAside]).toEqual([2, 2, 6]);
     expect(s.phase).toEqual({ kind: "planning", round: 2 });
   });
 
@@ -401,52 +402,66 @@ describe("quorum and majority — design §11.2", () => {
 });
 
 describe("shakedowns — design §11.3, extension.md \"Shakedowns (fixed numbers)\"", () => {
-  it("the stash is revealed and taken into the Haul", () => {
+  it("the stash is revealed; what it holds above the share is taken and set aside for the next split (design §7.1, §9.6)", () => {
     const s = act1Meeting();
-    expect([s.haul, s.players.p0?.stash]).toEqual([16, 6]);
+    expect([s.reached, s.share, s.players.p0?.stash]).toEqual([16, 5, 6 + 5]);
     const after = run(s, vote("p1", "p0"), vote("p2", "p0"), CLOSE);
     expect(LAST(after, "shakedownResolved")).toEqual({
       type: "shakedownResolved",
       visibility: { kind: "public" },
       meetingId: "act-1",
       target: "p0",
-      stashRevealed: 6,
+      stashRevealed: 11,
       taken: 6,
       clean: false,
       compensation: 0,
     });
-    expect(after.players.p0).toMatchObject({ stash: 0 });
-    expect(after.haul).toBe(22);
+    expect(after.players.p0).toMatchObject({ stash: 5 });
+    expect(after.setAside).toBe(6);
   });
 
-  it("clean below 6: the crew pays the target 8 out of the Haul", () => {
-    const s = run(act1Meeting(), vote("p0", "p1"), vote("p2", "p1"), CLOSE);
-    expect(LAST(s, "shakedownResolved")).toMatchObject({ target: "p1", stashRevealed: 0, taken: 0, clean: true, compensation: 8 });
-    expect(s.players.p1).toMatchObject({ stash: 8 });
-    expect(s.haul).toBe(8);
+  it("clean below 6: the target is paid 8 out of the coins set aside (provisional, until S3a.5)", () => {
+    const s = run({ ...act1Meeting(), setAside: 20 }, vote("p0", "p1"), vote("p2", "p1"), CLOSE);
+    expect(LAST(s, "shakedownResolved")).toMatchObject({ target: "p1", stashRevealed: 5, taken: 0, clean: true, compensation: 8 });
+    expect(s.players.p1).toMatchObject({ stash: 5 + 8 });
+    expect(s.setAside).toBe(12);
   });
 
-  it("a stash of 5 is clean; 6 (the line) is not", () => {
+  it("a stash of 5 above the share is clean; 6 (the line) is not", () => {
     const s = toMeeting(run(game(3), mv("p0", "vault", 5)));
-    const after = run(s, vote("p1", "p0"), vote("p2", "p0"), CLOSE);
-    expect(LAST(after, "shakedownResolved")).toMatchObject({ stashRevealed: 5, clean: true, compensation: 8 });
-    expect(V01_NUMBERS.shakedown).toEqual({ cleanBelow: 6, payout: 8 }); // the R6 pin
+    const after = run({ ...s, setAside: 20 }, vote("p1", "p0"), vote("p2", "p0"), CLOSE);
+    expect(LAST(after, "shakedownResolved")).toMatchObject({ stashRevealed: 5 + s.share, taken: 5, clean: true, compensation: 8 });
+    expect(R6_COINS.shakedown).toEqual({ cleanBelow: 6, payout: 8 }); // the R6 pin
   });
 
   it("the line and payout don't scale with the act: Act 2 is still clean below 6 and pays 8", () => {
     let s = run(game(3), mv("p0", "office", 4)); // p0 stash 4
     s = run(toMeeting(s), CLOSE);
-    s = run(s, emergency("p1"), open("emergency-p1"), vote("p1", "p0"), vote("p2", "p0"), CLOSE);
-    expect(LAST(s, "shakedownResolved")).toMatchObject({ stashRevealed: 4, clean: true, compensation: 8 });
+    s = run({ ...s, setAside: 20 }, emergency("p1"), open("emergency-p1"), vote("p1", "p0"), vote("p2", "p0"), CLOSE);
+    expect(LAST(s, "shakedownResolved")).toMatchObject({ taken: 4, clean: true, compensation: 8 });
   });
 
-  it("compensation never takes the Haul below zero (provisional)", () => {
+  it("a clean target is paid from coins an earlier shakedown set aside, through real commands (provisional, until S3a.5)", () => {
+    // Rounds 1–3 as in act1Meeting; p1's emergency in the awaited phase shakes p0's 6 above the share back.
+    const lobby = (st: GameState) => run(st, ...["p0", "p1", "p2"].filter((p) => !st.moves[p]).map((p) => mv(p, "lobby")), ROUND);
+    let s = lobby(lobby(lobby(run(game(3), mv("p0", "vault", 6)))));
+    expect(s.phase).toEqual({ kind: "awaitingMeeting", act: 1 });
+    s = run(s, emergency("p1"), open("emergency-p1"), vote("p1", "p0"), vote("p2", "p0"), CLOSE);
+    expect(LAST(s, "shakedownResolved")).toMatchObject({ target: "p0", taken: 6, clean: false, compensation: 0 });
+    expect(s.setAside).toBe(6);
+    // design §7.1: no split has run since, so the regular meeting's clean shakedown of p1 is paid those 6 (under the payout of 8).
+    s = run(s, sched(1), OPEN_ACT, vote("p0", "p1"), vote("p2", "p1"), CLOSE);
+    expect(LAST(s, "shakedownResolved")).toMatchObject({ target: "p1", stashRevealed: s.share, taken: 0, clean: true, compensation: 6 });
+    expect([s.players.p1?.stash, s.setAside, s.round]).toEqual([s.share + 6, 0, 4]);
+  });
+
+  it("compensation never takes the coins set aside below zero (provisional)", () => {
     let s = game(3);
     for (let i = 0; i < 3; i++) s = run(s, mv("p0", "rooftop"), mv("p1", "rooftop"), mv("p2", "rooftop"), ROUND);
-    expect(s.haul).toBe(0);
+    expect(s.setAside).toBe(0);
     s = run(s, sched(1), open("act-1"), vote("p0", "p1"), vote("p2", "p1"), CLOSE);
     expect(LAST(s, "shakedownResolved")).toMatchObject({ clean: true, compensation: 0 });
-    expect(s.haul).toBe(0);
+    expect(s.setAside).toBe(0);
   });
 });
 
@@ -491,7 +506,7 @@ describe("determinism and the event log — design §17.2", () => {
     const closed = LAST(s, "meetingClosed")!;
     expect(Object.hasOwn(closed.tally.targets, "toString")).toBe(true);
     expect(Object.hasOwn(closed.ballots ?? {}, "p1")).toBe(true);
-    expect(s.players["toString"]).toMatchObject({ stash: 0, sealedVote: { kind: "shakedown", target: "p1" } });
+    expect(s.players["toString"]).toMatchObject({ stash: s.share, sealedVote: { kind: "shakedown", target: "p1" } });
     expect(replay(cfg, s.log)).toEqual(s);
   });
 });

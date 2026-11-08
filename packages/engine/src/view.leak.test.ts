@@ -406,6 +406,8 @@ describe("no leaks in real games — design §17.2, §13, §11.2", () => {
     for (const t of ["shakedownPending", "shakedownCancelled", "alibisClosed", "roleListShown", "shopDealt"]) expect(seenTypes, t).toContain(t);
     // design §5: bells, raids and cooling.
     for (const t of ["bellsRung", "roomRaided", "bellsCooled"]) expect(seenTypes, t).toContain(t);
+    // design §7.2, §7.4: the split and the round summary.
+    for (const t of ["duffelSplit", "roundResolved"]) expect(seenTypes, t).toContain(t);
     for (const t of ["eventFlipped", "insideTip", "auditReport"]) {
       expect(seenTypes, t).toContain(t);
     }

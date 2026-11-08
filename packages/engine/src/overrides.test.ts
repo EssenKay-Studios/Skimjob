@@ -199,8 +199,8 @@ describe("overrides in play (design §17.4)", () => {
     const s0 = game(config(3, { rooms: { vault: { coins: 9, quietCoins: 9 } }, bank: { coinsPerPlayer: 20 }, alarm: { bulbs: 2 } }));
     expect(s0.bank).toBe(60);
     const s1 = after(s0, () => submit("p0", { room: "vault", duffel: 0, pocket: 9 }), () => submit("p1", { room: "vault", duffel: 9 }), () => submit("p2", { room: "vault", duffel: 9 }), ROUND);
-    expect(s1.players.p0?.stash).toBe(9);
-    expect(s1.haul).toBe(18);
+    expect(s1.players.p0?.stash).toBe(9 + 6); // the pocket and a third of the 18 handed in (design §7.2)
+    expect(s1.reached).toBe(18);
     expect(s1.bank).toBe(60 - 27);
     // A silent Vault: no ring, so no raid.
     expect(s1.bells.vault).toBe(0);
@@ -234,8 +234,8 @@ describe("overrides in play (design §17.4)", () => {
       { type: "castVote", player: "p2", vote: { kind: "shakedown", target: "p0" } },
       { type: "advance", deadline: { kind: "closeMeeting", meetingId: "act-1" } },
     );
-    // A stash of 6 would be caught with the shipped numbers (clean below 6); here it's clean.
-    expect(s.log.find((e) => e.type === "shakedownResolved")).toMatchObject({ target: "p0", stashRevealed: 6, clean: true, compensation: 2 });
+    // 6 above the share would be caught with the shipped numbers (clean below 6); here it's clean.
+    expect(s.log.find((e) => e.type === "shakedownResolved")).toMatchObject({ target: "p0", stashRevealed: 6 + s.share, taken: 6, clean: true, compensation: 2 });
   });
 
   it("role numbers change powers (design §8)", () => {

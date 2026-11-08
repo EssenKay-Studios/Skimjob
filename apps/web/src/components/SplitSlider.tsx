@@ -1,7 +1,7 @@
 // The split slider (ui-style "Round-move panel"): how many of a room's coins
-// go to the crew's Haul and how many you pocket. A native range input, so
+// go to the crew duffel and how many you pocket. A native range input, so
 // keys, touch and screen readers work; drawn as a hatched paper track. Its
-// value is the Haul share: left of the handle is "To Haul", right is "Pocket".
+// value is the duffel's coins: left of the handle is "To duffel", right is "Pocket".
 import type { CSSProperties } from "react";
 
 export interface SplitSliderProps {
@@ -20,8 +20,8 @@ export function SplitSlider({ id, loot, pocket, onChange, disabled }: SplitSlide
   return (
     <div className={["split", disabled && "is-disabled"].filter(Boolean).join(" ")} style={style}>
       <div className="split__nums" aria-hidden="true">
-        <span className="split__haul">
-          To Haul <b className="num">{loot - p}</b>
+        <span className="split__duffel">
+          To duffel <b className="num">{loot - p}</b>
         </span>
         <span className={greedy ? "split__pocket is-greedy" : "split__pocket"} key={greedy ? "g" : "n"}>
           Pocket → Stash <b className="num">{p}</b>
@@ -36,8 +36,8 @@ export function SplitSlider({ id, loot, pocket, onChange, disabled }: SplitSlide
         step={1}
         value={loot - p}
         disabled={disabled}
-        aria-label="Hand in to the Haul"
-        aria-valuetext={`${loot - p} to the Haul, pocket ${p}`}
+        aria-label="Hand in to the duffel"
+        aria-valuetext={`${loot - p} to the duffel, pocket ${p}`}
         onChange={(e) => onChange(loot - Number(e.target.value))}
       />
     </div>

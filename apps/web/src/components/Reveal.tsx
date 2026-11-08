@@ -138,8 +138,8 @@ function RoleEnvelope({
             </span>
           </span>
           <span className="reveal__score">
-            <b className="num">{s.score}</b>
-            <span className="meta">score</span>
+            <b className="num">{s.stash}</b>
+            <span className="meta">stash</span>
           </span>
         </div>
         {star && <p className="reveal__star">{star}</p>}
@@ -307,7 +307,7 @@ function RoundSheet({
         )}
         {round.resolved && (
           <span className="meta num">
-            Haul {signed(round.resolved.haulDelta)} → {round.resolved.haul}
+            {round.resolved.taken} taken, {round.resolved.missing} missing{round.split ? `, share ${round.split.share}` : ""}
           </span>
         )}
       </header>
@@ -376,8 +376,6 @@ function RoundSheet({
     </article>
   );
 }
-
-const signed = (n: number) => (n >= 0 ? `+${n}` : `−${Math.abs(n)}`);
 
 function countBy(xs: readonly string[]): [string, number][] {
   const m = new Map<string, number>();

@@ -252,9 +252,10 @@ function Hud({ view, timers, offset, hostPaused }: { view: PlayerView; timers: r
           </p>
         )}
       </div>
-      <div className="hud__stat hud__haul">
-        <span className="meta">Haul</span>
-        <span className="num hud__big">{view.haul}</span>
+      {/* design §7.3: the share is public. */}
+      <div className="hud__stat hud__share">
+        <span className="meta">Share</span>
+        <span className="num hud__big">{view.share}</span>
       </div>
       {/* design §5.4: Wanted stars, public; at the bust line the heist is busted (§5.5). */}
       <div className="hud__stat hud__wanted">
@@ -473,7 +474,7 @@ function MovePanel({ view, round, timers, offset, send, pick }: BoardProps & { r
         </Button>
         <p className="meta move__status" aria-live="polite">
           {mine
-            ? `Locked in: ${roomName(mine.room)}${mine.pocket > 0 ? `, pocket ${mine.pocket}` : ", all to the Haul"}. You can change it until the deadline.`
+            ? `Locked in: ${roomName(mine.room)}${mine.pocket > 0 ? `, pocket ${mine.pocket}` : ", all to the duffel"}. You can change it until the deadline.`
             : `Miss the deadline and you go to the ${roomName(defaultRoom(view))}, handing everything in.`}
         </p>
       </div>
@@ -558,10 +559,8 @@ export function GameOver({ view }: { view: PlayerView }) {
                 {winner && <span className="meta ranking__badge">{ending.badge}</span>}
               </span>
               <span className="ranking__score">
-                <b className="num">{r.score}</b>
-                <span className="meta">
-                  stash {r.stash}
-                </span>
+                <b className="num">{r.stash}</b>
+                <span className="meta">stash</span>
               </span>
               {winner && <Chip on>Winner</Chip>}
               {!winner && ending.loss && <span className="meta ranking__loss">Loss</span>}

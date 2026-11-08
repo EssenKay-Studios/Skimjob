@@ -410,12 +410,12 @@ export function ResultsBanner({ view }: { view: PlayerView }) {
         (s.clean ? (
           <Banner tone="bad" seed="res-clean" title={`Clean! ${target} ${are} holding ${s.stashRevealed}.`}>
             {o.blessing !== null
-              ? `${target} ${are} blessed: the bank paid the ${s.compensation} compensation, so the Haul is whole.`
-              : `The crew paid ${s.compensation} from the Haul in compensation.`}
+              ? `${target} ${are} blessed: the bank paid the ${s.compensation} compensation, so the coins set aside are whole.`
+              : `The crew paid ${s.compensation} from the coins set aside in compensation.`}
           </Banner>
         ) : (
           <Banner tone="good" seed="res-dirty" title={`Caught! ${target} ${are} holding ${s.stashRevealed}.`}>
-            {s.taken} went into the Haul.
+            {s.taken} set aside for the next split.
           </Banner>
         ))}
       <Button variant="secondary" seed="results-ok" onClick={() => setDismissed(o.meetingId)} className="results__ok">

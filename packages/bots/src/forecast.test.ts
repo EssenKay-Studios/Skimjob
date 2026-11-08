@@ -28,7 +28,7 @@ describe("ending forecast and leaning — extension.md Build notes \"Bots\", des
     const s = game(5);
     expect(forecast(viewFor(s, "ana"))).toMatchObject({ bust: 0, theft: 0 });
     // design §7.5: 6 of 9 coins taken reached the duffel, exactly the two-thirds line.
-    expect(forecast(viewFor({ ...s, haul: 6, bank: s.bank - 9 }, "ana")).theft).toBe(0.5);
+    expect(forecast(viewFor({ ...s, reached: 6, bank: s.bank - 9 }, "ana")).theft).toBe(0.5);
     expect(forecast(viewFor({ ...s, wanted: 1 }, "ana")).bust).toBe(0);
     expect(forecast(viewFor({ ...s, wanted: 2 }, "ana")).bust).toBe(0.5);
   });

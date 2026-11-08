@@ -122,7 +122,7 @@ export function EmptyFileSpot({ className }: { className?: string }) {
   );
 }
 
-/** Game over, job done: the winner on top of the haul. */
+/** Game over, job done: the winner on top of the loot. */
 export function JobDoneSpot({ className, look = 0 }: { className?: string; look?: number }) {
   return (
     <Spot title="A masked crook cheering on top of a pile of gold and loot sacks" className={className}>

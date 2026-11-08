@@ -4,7 +4,7 @@
 // the same events as `reveal.log`, so it never holds anything that log doesn't.
 import type { FailureReason, PerkId, RoleId, RoomId, TokenTrigger } from "@skimjob/content";
 import type { PlayerId } from "./config";
-import type { GameEvent, Outcome, RoundResolved } from "./events";
+import type { DuffelSplit, GameEvent, Outcome, RoundResolved } from "./events";
 
 /** One player's line in the reveal, best first (the final ranking's order). */
 export interface RevealSeat {
@@ -17,7 +17,6 @@ export interface RevealSeat {
   readonly role: RoleId;
   /** The failure endings `role` also wins from the top group (★ roles). extension.md "Winning and losing" */
   readonly winsOn: readonly FailureReason[];
-  readonly score: number;
   readonly stash: number;
   /** Tied for the biggest stash (no tie-break, design §8.5). */
   readonly topGroup: boolean;
@@ -93,8 +92,10 @@ export interface RevealRound {
   readonly card: { readonly id: string; readonly room: RoomId | null } | null;
   /** Everyone's real move, in seat order. */
   readonly moves: readonly RevealMove[];
-  /** The public round summary (the Haul), if the round resolved. */
-  readonly resolved: Pick<RoundResolved, "haulDelta" | "haul"> | null;
+  /** The public round summary (taken and missing), if the round resolved. design §7.4 */
+  readonly resolved: Pick<RoundResolved, "taken" | "missing"> | null;
+  /** This round's cut and the share after it, if the duffel was split (not on a bust). design §7.2, §7.3 */
+  readonly split: Pick<DuffelSplit, "cut" | "share"> | null;
   readonly items: readonly RevealItem[];
   readonly stashes: Readonly<Record<PlayerId, number>>;
 }

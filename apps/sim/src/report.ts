@@ -23,6 +23,7 @@ const ROWS: readonly Row[] = [
   { label: "Rooftop stalls (rounds)", target: "≤ 15%", cell: (m) => pct(m.raids.stalls) },
   { label: "Ended at the cap, over ¼ of the bank left", target: "≤ 10%", cell: (m) => pct(m.capStalls) },
   { label: "Sunk by theft", target: "report", cell: (m) => pct(m.theftRate) },
+  { label: "Whole-crew wins (of successes)", target: "5–20%", cell: (m) => pct(m.wholeCrewRate) },
   { label: "Bank emptied", target: "", cell: (m) => pct(m.bankEmptied) },
   { label: "Shakedowns per game", target: "", cell: (m) => num(m.shakedowns.perGame) },
   { label: "Shakedown accuracy (caught loot)", target: "50–70%", cell: (m) => pct(m.shakedowns.accuracy) },

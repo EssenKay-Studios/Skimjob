@@ -19,8 +19,6 @@ export const RECAP_MAX_LINES = 4;
 /** Your own deliberate actions in the case file: you know them already, so they aren't news. */
 const OWN_ACTIONS: ReadonlySet<GameEvent["type"]> = new Set<GameEvent["type"]>(["moveSubmitted", "voteSealed", "voteCast", "coinsGrabbed"]);
 
-const signed = (n: number) => (n >= 0 ? `+${n}` : `−${Math.abs(n)}`);
-
 /** The highest seq in a view (-1 when empty): what "seen everything" means. */
 export const topSeq = (view: Pick<PlayerView, "ledger" | "caseFile">): number => view.ledger.length + view.caseFile.length - 1;
 
@@ -39,17 +37,18 @@ export function recapItems(events: readonly LoggedEvent[], view: PlayerView, ctx
   // design §5.3: raids (with Wanted) and a reopened room.
   for (const e of [...of("roomRaided"), ...of("roomReopened")]) picks.push({ prio: 1, ...say(e) });
 
-  // design §13 round summaries: the Haul and the bank over every round resolved while away.
+  // design §7.4, §13 round summaries: coins taken and missing, and the bank, over every round resolved while away.
   const rounds = of("roundResolved");
   if (rounds.length > 0) {
     const first = rounds[0]!.event;
     const last = rounds.at(-1)!.event;
-    const haul = rounds.reduce((n, e) => n + e.event.haulDelta, 0);
+    const taken = rounds.reduce((n, e) => n + e.event.taken, 0);
+    const missing = rounds.reduce((n, e) => n + e.event.missing, 0);
     const which = rounds.length === 1 ? `Round ${first.round}` : `Rounds ${first.round}–${last.round}`;
     picks.push({
       prio: 2,
       seq: rounds.at(-1)!.seq,
-      text: `${which} done: Haul ${signed(haul)} (now ${last.haul}), ${last.bank} coins left in the bank.`,
+      text: `${which} done: ${taken} taken, ${missing} went missing, ${last.bank} coins left in the bank.`,
       from: rounds.map((e) => e.seq),
     });
   }

@@ -151,7 +151,7 @@ describe("QA: Lockdown vs moves — design §10", () => {
 });
 
 describe("QA: Audit numbers — design §10", () => {
-  it("shortfalls are what was actually pocketed; they sum to the pockets, and pockets + Haul = coins grabbed", () => {
+  it("shortfalls are what was actually pocketed; they sum to the pockets, and pockets + coins handed in = coins grabbed", () => {
     const base = withCard(resolve(game(6, ["priest"])), "audit");
     const s = resolve(base, {
       p0: fullGrab("vault"), // hands in all 3
@@ -168,7 +168,8 @@ describe("QA: Audit numbers — design §10", () => {
     expect(audit?.shortfalls).toMatchObject({ vault: 0, depositBoxes: 5, office: 0, serverRoom: 0 });
     const kept = splits.reduce((n, e) => n + e.pocket, 0);
     expect(Object.values(audit?.shortfalls ?? {}).reduce((a, b) => a + b, 0)).toBe(kept);
-    expect(kept + roundResolved(s).haulDelta).toBe(splits.reduce((n, e) => n + e.duffel + e.pocket, 0));
+    expect(roundResolved(s).missing).toBe(kept);
+    expect(roundResolved(s).taken).toBe(splits.reduce((n, e) => n + e.duffel + e.pocket, 0));
   });
 });
 

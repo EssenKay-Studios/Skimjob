@@ -137,7 +137,7 @@ describe("buying perks — extension.md \"Tokens and the perk shop\"", () => {
     const rich = game(config(3, quick), { roles: [plain.players.p0?.role ?? "rookie", plain.players.p1?.role ?? "rookie", plain.players.p2?.role ?? "rookie"], tokens: { p0: 5 } });
     const end = (s: GameState) => run(s, mv("p0", "vault"), ROUND);
     expect(end(plain).phase.kind).toBe("ended");
-    expect(ranking(end(rich)).map((r) => r.score)).toEqual(ranking(end(plain)).map((r) => r.score));
+    expect(ranking(end(rich)).map((r) => r.stash)).toEqual(ranking(end(plain)).map((r) => r.stash));
   });
 });
 
@@ -173,7 +173,7 @@ describe("the gap box — extension.md \"What the app works out for you\"", () =
   const partsSum = (p: { base: number; rooms: Readonly<Record<string, number>>; clamp?: number }) =>
     p.base + Object.values(p.rooms).reduce((x, y) => x + y, 0) + (p.clamp ?? 0);
 
-  it("the gap box sets the alibis' room loot against the Haul's growth, event effects included", () => {
+  it("the gap box sets the alibis' room loot against the coins handed in, event effects included", () => {
     // Round 1: p0 Vault (pockets 2), p1 Lobby, p2 Office. Then all three post true alibis.
     let s = game(config(3), { roles: [] });
     s = run(s, mv("p0", "vault", 2), mv("p1", "lobby"), mv("p2", "office"));
@@ -185,7 +185,7 @@ describe("the gap box — extension.md \"What the app works out for you\"", () =
     for (const [p, room] of [["p0", "vault"], ["p1", "lobby"], ["p2", "office"]] as const) s = run(s, { type: "postAlibi", player: p, room });
     const box = gapBox(s);
     expect(box).toMatchObject({ round: 1, posted: 3, unaccounted: 2 });
-    expect(box?.alibis).toBe((box?.haulGrowth ?? 0) + 2);
+    expect(box?.alibis).toBe((box?.handedIn ?? 0) + 2);
     for (const id of s.playerOrder) expect(viewFor(s, id).gap).toEqual(box);
   });
 });

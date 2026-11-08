@@ -435,7 +435,7 @@ describe("QA shakedown window (a Shield in the shop): deadline, wrong phase — 
     expect(s.phase).toEqual({ kind: "planning", round: 2 });
     expect(s.moves.p0).toEqual({ room: "office", duffel: 2, pocket: 2 });
     s = run(s, ROUND);
-    expect(s.players.p0?.stash).toBe(2);
+    expect((s.players.p0?.stash ?? 0) - s.share).toBe(2);
   });
 
   it("an emergency window after an act's last round returns to awaiting the act meeting", () => {
@@ -462,6 +462,6 @@ describe("QA shakedown window (a Shield in the shop): deadline, wrong phase — 
     expect(s.phase.kind).toBe("shakedownPending");
     const end = run(s, RESOLVE);
     expect(since(s, end).map((e) => e.type)).toEqual(["perkUsed", "shakedownCancelled", "roundStarted"]);
-    expect(end.players.p1?.stash).toBe(18);
+    expect(end.players.p1?.stash).toBe(18 + end.share);
   });
 });

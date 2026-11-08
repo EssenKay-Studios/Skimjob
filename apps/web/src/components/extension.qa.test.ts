@@ -206,14 +206,14 @@ describe("the gap box (extension.md \"What the app works out for you\")", () => 
     const g = gapInfo(v)!;
     expect(g.round).toBe(2);
     expect(g.posted).toBe(5);
-    expect(v.gap!.haulGrowth).toBe(v.gap!.alibis);
+    expect(v.gap!.handedIn).toBe(v.gap!.alibis);
     expect(g.text).toMatch(/it adds up\.$/);
     expect(html(createElement(GapBox, { view: v }))).toContain("5 of 5 alibis in");
     // A pocketer lying about it shows as unaccounted.
     let t = run(createGame(cfg), mv("p0", "office", 2), ...ids(5).slice(1).map((p) => mv(p, "office")), ROUND, ...ids(5).map((p) => ({ type: "postAlibi", player: p, room: "office" })));
     const g2 = gapInfo(viewFor(t, "p1"))!;
     expect(g2.unaccounted).toBe(2);
-    expect(g2.text).toBe(`Alibis say +${viewFor(t, "p1").gap!.alibis}, the Haul grew ${viewFor(t, "p1").gap!.haulGrowth}: 2 unaccounted for.`);
+    expect(g2.text).toBe(`Alibis say +${viewFor(t, "p1").gap!.alibis}, ${viewFor(t, "p1").gap!.handedIn} handed in: 2 unaccounted for.`);
   });
 });
 

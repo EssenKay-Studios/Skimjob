@@ -137,8 +137,9 @@ describe("raids — design §5.3, §4.2 step 3", () => {
       ["p2", 2, 0, 0],
     ]);
     // Seized coins are never handed in or pocketed, and they left the bank. design §5.3, §6.1, §7.6
-    expect([s.players.p0?.stash, s.haul, s.bank, s.seized]).toEqual([0, 2, 48 - 7, 5]);
-    expect(ofType(lastRound(s), "roundResolved")[0]).toMatchObject({ haulDelta: 2, bank: 41 });
+    expect([s.players.p0?.stash, s.reached, s.kitty, s.bank, s.seized]).toEqual([0, 2, 2, 48 - 7, 5]);
+    // design §7.4, §7.5: seized coins count neither as taken nor as missing.
+    expect(ofType(lastRound(s), "roundResolved")[0]).toMatchObject({ taken: 2, missing: 0, honesty: { reached: 2, taken: 2 }, bank: 41 });
   });
 
   it("is public, without who was inside: the room, the coins seized, CLOSED through round 3, Wanted 1", () => {
@@ -320,7 +321,8 @@ describe("a missed move into a taped-off default room sits the round out — des
     expect(ofType(round, "roomSighting").map((e) => e.player)).toEqual(["p0", "p1"]);
     expect(ofType(round, "roomSighting")[0]?.others).toEqual(["p1"]);
     expect(rung(after)).toMatchObject({ office: 2 }); // only p0's and p1's 2nd coins
-    expect(after.players.p2?.stash).toBe(0);
+    // design §7.2: the duffel is split among all players, so the 4 handed in still give p2 its cut of 1.
+    expect(after.players.p2?.stash).toBe(1);
     expect(after.players.p2?.consecutiveMissedMoves).toBe(1);
   });
 

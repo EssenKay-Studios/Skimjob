@@ -11,7 +11,7 @@ import { canSee } from "./types";
 import { setupEvents } from "./setup";
 import { replay } from "./reduce";
 import { handleCommand } from "./handle";
-import { V01_NUMBERS } from "./v01-numbers.testkit";
+import { R6_COINS } from "./v01-numbers.testkit";
 import { fullGrab } from "./grab.testkit";
 
 /** One perk per column and no Shield, whatever the seed: a Shield in the shop opens a shakedown window at every meeting. */
@@ -26,7 +26,7 @@ function config(players: number, voteVisibility: VoteVisibility = "hiddenThenRev
     rolePool: [...STARTER_ROLES],
     eventsEnabled: false,
     voteVisibility,
-    contentOverrides: V01_NUMBERS, // scripted against content 0.1.0 numbers (balance pass 1)
+    contentOverrides: R6_COINS, // R6 numbers for the R6 meeting rules until S3a.5
   };
 }
 
@@ -60,7 +60,7 @@ const ofType = <T extends GameEvent["type"]>(events: readonly GameEvent[], type:
 const LAST = <T extends GameEvent["type"]>(s: GameState, type: T) => ofType(s.log, type).at(-1);
 
 const ids = (n: number) => Array.from({ length: n }, (_, i) => `p${i}`);
-const mv = (player: string, room: string, pocket = 0, extra: object = {}) => ({ type: "submitMove", player, move: { ...fullGrab(room, pocket, V01_NUMBERS), ...extra } });
+const mv = (player: string, room: string, pocket = 0, extra: object = {}) => ({ type: "submitMove", player, move: { ...fullGrab(room, pocket, R6_COINS), ...extra } });
 const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
 const open = (meetingId: unknown) => ({ type: "advance", deadline: { kind: "openMeeting", meetingId } });
 const close = (meetingId: unknown) => ({ type: "advance", deadline: { kind: "closeMeeting", meetingId } });
@@ -120,7 +120,7 @@ function fullGame(n: number, mode: VoteVisibility): GameState {
   s = run(s, open("act-1"));
   expect(s.meeting?.votes).toEqual({ p2: { kind: "shakedown", target: "p0" } });
   s = run(s, ...crew.slice(1).filter((p) => p !== "p2").map((p) => vote(p, "p0")), CLOSE);
-  expect(LAST(s, "shakedownResolved")).toMatchObject({ meetingId: "act-1", target: "p0", stashRevealed: 6, clean: false });
+  expect(LAST(s, "shakedownResolved")).toMatchObject({ meetingId: "act-1", target: "p0", stashRevealed: 6 + s.share, taken: 6, clean: false });
   expect(s.phase).toEqual({ kind: "planning", round: 4 });
   // Act 2
   s = run(s, ROUND, ROUND, ROUND, sched(2, "server-pick"), emergency("p0"), open("emergency-p0"));
@@ -303,25 +303,36 @@ describe("QA: shakedowns — design §11.3, extension.md \"Shakedowns (fixed num
       s = run(s, mv("p0", "vault", take), ROUND);
       left -= take;
     }
-    expect(s.players.p0?.stash).toBe(stash);
-    s = run(s, sched(act), open(`act-${act}`), vote("p1", "p0"), vote("p2", "p0"), CLOSE);
-    expect(LAST(s, "shakedownResolved")).toMatchObject({ stashRevealed: stash, clean, compensation: clean ? 8 : 0 });
+    // design §7.6: the stash also holds the share; the line reads what is above it (§9.6).
+    expect(s.players.p0?.stash).toBe(stash + s.share);
+    // Enough set aside to pay 8 (R6 numbers until S3a.5).
+    s = run({ ...s, setAside: 20 }, sched(act), open(`act-${act}`), vote("p1", "p0"), vote("p2", "p0"), CLOSE);
+    expect(LAST(s, "shakedownResolved")).toMatchObject({ taken: stash, clean, compensation: clean ? 8 : 0 });
   });
 
-  it("compensation larger than a non-empty Haul empties the Haul and never goes negative (provisional)", () => {
-    // Round 1: all in the Lobby; p1 pockets 1 (Haul 5). Then nobody loots.
+  it("compensation larger than the coins set aside empties them and never goes negative (provisional)", () => {
+    // Round 1: all in the Lobby; p1 pockets 1. 5 handed in: a cut of 1 each, kitty 2. Then nobody loots.
     let s = run(game(3), mv("p0", "lobby", 0), mv("p1", "lobby", 1), mv("p2", "lobby", 0), ROUND);
-    expect(s.players.p1?.stash).toBe(1);
-    const haul = s.haul;
-    expect(haul).toBeGreaterThan(0);
-    expect(haul + 1).toBeLessThan(8);
+    expect([s.players.p1?.stash, s.share, s.kitty]).toEqual([2, 1, 2]);
     const roof = [mv("p0", "rooftop"), mv("p1", "rooftop"), mv("p2", "rooftop")];
     s = run(s, ...roof, ROUND, ...roof, ROUND);
-    expect(s.haul).toBe(haul);
+    const setAside = 3; // as if an earlier shakedown had set 3 aside
+    s = run({ ...s, setAside }, sched(1), open("act-1"), vote("p0", "p1"), vote("p2", "p1"), CLOSE);
+    expect(LAST(s, "shakedownResolved")).toMatchObject({ stashRevealed: 2, taken: 1, clean: true, compensation: setAside + 1 });
+    expect(s.setAside).toBe(0);
+    expect(s.players.p1?.stash).toBe(1 + setAside + 1);
+  });
+
+  it("a clean shakedown with nothing set aside, through commands only: it takes and pays back what is above the share (provisional)", () => {
+    // The common interim path: no earlier shakedown, so the coins set aside are 0 and compensation is capped at what was taken.
+    let s = run(game(3), mv("p0", "lobby", 0), mv("p1", "lobby", 1), mv("p2", "lobby", 0), ROUND);
+    const roof = [mv("p0", "rooftop"), mv("p1", "rooftop"), mv("p2", "rooftop")];
+    s = run(s, ...roof, ROUND, ...roof, ROUND);
+    expect([s.players.p1?.stash, s.setAside]).toEqual([2, 0]);
     s = run(s, sched(1), open("act-1"), vote("p0", "p1"), vote("p2", "p1"), CLOSE);
-    expect(LAST(s, "shakedownResolved")).toMatchObject({ stashRevealed: 1, clean: true, compensation: haul + 1 });
-    expect(s.haul).toBe(0);
-    expect(s.players.p1?.stash).toBe(haul + 1);
+    expect(LAST(s, "shakedownResolved")).toMatchObject({ target: "p1", stashRevealed: 2, taken: 1, clean: true, compensation: 1 });
+    expect([s.players.p1?.stash, s.setAside]).toEqual([2, 0]);
+    expect(replay(s.config, s.log)).toEqual(s);
   });
 });
 

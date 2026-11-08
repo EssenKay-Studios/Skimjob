@@ -26,7 +26,7 @@ export function jobOf(view: PlayerView): JobDef {
   return overrideJob(jobById(created.job), created.contentOverrides);
 }
 
-export const crewSize = (view: PlayerView): number => view.players.length + 1;
+const crewSize = (view: PlayerView): number => view.players.length + 1;
 
 /** The bot's role definition (content plus the game's overrides); an id with none plays with no power, as in the engine. */
 export function roleOf(view: PlayerView): Pick<RoleDef, "power" | "winsOn" | "tag"> {

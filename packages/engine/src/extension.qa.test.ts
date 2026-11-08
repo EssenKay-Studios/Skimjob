@@ -222,16 +222,17 @@ describe("fixed shakedown numbers (extension.md \"Shakedowns (fixed numbers)\")"
   const shaken = (roles: string[], move: object) => {
     let s = game(config(5), { roles });
     s = run(s, move, ROUND);
-    return run(s, ...emergency("p1"), vote("p1", "p2"), vote("p3", "p2"), vote("p4", "p2"), closeEm("p1"));
+    // Enough set aside to pay a clean target (R6 numbers until S3a.5).
+    return run({ ...s, setAside: 20 }, ...emergency("p1"), vote("p1", "p2"), vote("p3", "p2"), vote("p4", "p2"), closeEm("p1"));
   };
 
-  it("stash 5 is clean and paid 8 out of the Haul; stash 6 is dirty and taken", () => {
+  it("5 above the share is clean and paid 8 out of the coins set aside; 6 is dirty and taken (design §9.6)", () => {
     const clean = shaken([], mv("p2", "vault", 5));
     const r5 = ofType(clean.log, "shakedownResolved")[0];
-    expect(r5).toMatchObject({ clean: true, compensation: 8, stashRevealed: 5 });
+    expect(r5).toMatchObject({ clean: true, compensation: 8, stashRevealed: 5 + clean.share, taken: 5 });
     const dirty = shaken([], mv("p2", "vault", 6));
-    expect(ofType(dirty.log, "shakedownResolved")[0]).toMatchObject({ clean: false, compensation: 0, stashRevealed: 6, taken: 6 });
-    expect(dirty.players.p2?.stash).toBe(0);
+    expect(ofType(dirty.log, "shakedownResolved")[0]).toMatchObject({ clean: false, compensation: 0, stashRevealed: 6 + dirty.share, taken: 6 });
+    expect(dirty.players.p2?.stash).toBe(dirty.share);
   });
 });
 
@@ -269,7 +270,7 @@ describe("\"camera offline\" (extension.md \"Situations\": the Hacker's loop)", 
   });
 });
 
-describe("shared numbers: Detective line, Haul-paid compensation (extension.md gap-fills 3)", () => {
+describe("shared numbers: Detective line, compensation from the coins set aside (extension.md gap-fills 3)", () => {
   it("the Detective's dirty line is the same 6 as the clean line: 5 reads clean, 6 dirty", () => {
     for (const [stash, dirty] of [[5, false], [6, true]] as const) {
       const s = run(withPlayers(game(config(5), { roles: ["detective"] }), { p2: { stash } }), use("p0", { kind: "checkStash", target: "p2" }));

@@ -38,6 +38,7 @@ export const RATES: readonly RateDef[] = [
   },
   { id: "bust", label: "bust", num: (t) => t.busts, den: (t) => t.games, band: { lo: 0.08, hi: 0.2 }, checked: gated, applies: always, source: "design §21 G3: 8–20% of games end in a bust" },
   { id: "theft", label: "sunk by theft", num: (t) => t.theftFailures, den: (t) => t.games, band: null, checked: gated, applies: always, source: "design §21 G8: heists sunk by theft (reported only)" },
+  { id: "wholeCrew", label: "whole-crew win", num: (t) => t.wholeCrewWins, den: (t) => t.successes, band: { lo: 0.05, hi: 0.2 }, checked: gated, applies: always, source: "design §21 G6: 5–20% of successful games are won by the whole crew, every stash equal (§8.2)" },
   { id: "capStall", label: "cap, ¼ bank left", num: (t) => t.capStalls, den: (t) => t.games, band: { lo: 0, hi: 0.1 }, checked: gated, applies: always, source: "design §21 G4: ≤ 10% of games end at the round cap with over a quarter of the bank left" },
   { id: "noWinner", label: "no winner", num: (t) => t.noWinner, den: (t) => t.games, band: null, checked: gated, applies: always, source: "extension.md Build notes \"Sim\": games nobody won (reported only)" },
   { id: "sharedWin", label: "shared win", num: (t) => t.sharedWin, den: (t) => t.games, band: null, checked: gated, applies: always, source: "extension.md Build notes \"Sim\": games two or more players won together (reported only)" },

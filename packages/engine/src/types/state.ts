@@ -56,6 +56,7 @@ export interface PlayerState {
   readonly name: string;
   readonly isBot: boolean;
   readonly role: RoleId;
+  /** Private: share received + coins pocketed − coins taken back by shakedowns. design §7.6 */
   readonly stash: number;
   /** Uses of the role's power so far (all roles share the shape). design §8 */
   readonly roleState: RoleState;
@@ -170,7 +171,14 @@ export interface GameState {
   /** Seat order, matching config.players. */
   readonly playerOrder: readonly PlayerId[];
   readonly players: Readonly<Record<PlayerId, PlayerState>>;
-  readonly haul: number;
+  /** The share: each player's equal cut of every split so far (public). design §7.3 */
+  readonly share: number;
+  /** Leftover change from the last split, carried into the next (public). design §7.2 */
+  readonly kitty: number;
+  /** Coins set aside in the duffel for the next split: shakedown returns (public). design §7.1 */
+  readonly setAside: number;
+  /** Coins that reached the duffel this game, each counted once (public): honesty's numerator. design §7.5 */
+  readonly reached: number;
   /**
    * Lit bulbs on each open room's bell (public). A taped-off room's bell is
    * off, so it has no entry; it comes back at 0 when the room reopens. design §5.1, §5.3

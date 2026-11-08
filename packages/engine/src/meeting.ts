@@ -23,7 +23,7 @@ import type {
 import { PUBLIC, privateTo, secretTo } from "./types";
 import { jobFor, powerOf } from "./overrides";
 import { emergencySpent, isPerkSpend, perkCount, shieldFor, usePerk } from "./perks";
-import { blessingEvents, dirtyShakedownRewards, holdsDirty, useCrewPower } from "./crew";
+import { aboveShare, blessingEvents, dirtyShakedownRewards, holdsDirty, useCrewPower } from "./crew";
 import { actOfRound } from "./acts";
 import { applyEvent } from "./reduce";
 import { isObject, playerFor, show } from "./check";
@@ -333,8 +333,9 @@ function afterVote(
   const { act } = meeting;
   const events: GameEvent[] = [];
 
-  // design §11.3: the stash goes into the Haul; a clean target is compensated.
-  const haul = state.haul;
+  // design §9.6: what the target holds above the share is set aside for the next split (§7.1); a clean target is
+  // compensated (R6 numbers until S3a.5).
+  const { setAside } = state;
   // design §8.3: a Shield cancels it by itself.
   const shield = shakedown ? shieldFor(state, shakedown.target, meeting.meetingId) : [];
   if (shakedown && shield.length > 0) {
@@ -342,17 +343,18 @@ function afterVote(
   } else if (shakedown) {
     const { target } = shakedown;
     const { stash } = state.players[target] as PlayerState;
+    const taken = aboveShare(state, target);
     // extension.md "Shakedowns (fixed numbers)": clean under 6, paid 8.
     const clean = !holdsDirty(state, target, job.shakedown.cleanBelow);
-    // Paid out of the Haul, so never more than it holds (provisional).
-    const compensation = clean ? Math.min(job.shakedown.payout, haul + stash) : 0;
+    // Paid out of the coins set aside, so never more than they hold (provisional).
+    const compensation = clean ? Math.min(job.shakedown.payout, setAside + taken) : 0;
     events.push({
       type: "shakedownResolved",
       visibility: PUBLIC,
       meetingId: meeting.meetingId,
       target,
       stashRevealed: stash,
-      taken: stash,
+      taken,
       clean,
       compensation,
     });

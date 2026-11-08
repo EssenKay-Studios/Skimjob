@@ -11,6 +11,7 @@ import {
   successRate,
   summarize,
   theftRate,
+  wholeCrewWin,
 } from "./metrics";
 import { gameRec, seat, shake } from "./testkit";
 
@@ -96,6 +97,15 @@ describe("sunk by theft and cap stalls — design §21 G4, G8", () => {
     const s = summarize([gameRec({ capWithBankLeft: true }), gameRec(), gameRec(), gameRec()]);
     expect(s.overall.capStalls).toBe(0.25);
     expect(s.overall.theftRate).toBe(0);
+  });
+});
+
+describe("whole-crew wins — design §8.2, §21 G6", () => {
+  it("a success every player won is a whole-crew win; the rate is over successful games only", () => {
+    const all = gameRec({ players: 3, winners: ["a", "b", "c"] });
+    expect([wholeCrewWin(all), wholeCrewWin(gameRec({ players: 3, winners: ["a"] })), wholeCrewWin(failed("bust", { players: 3, winners: ["a", "b", "c"] }))]).toEqual([true, false, false]);
+    expect(summarize([all, gameRec({ players: 3, winners: ["a"] }), failed("theft", { players: 3 })]).overall.wholeCrewRate).toBe(0.5);
+    expect(summarize([failed("theft")]).overall.wholeCrewRate).toBeNull();
   });
 });
 

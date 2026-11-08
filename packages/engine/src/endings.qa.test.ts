@@ -36,9 +36,9 @@ function game(players: number, roles: string[] = [], overrides?: ContentOverride
 const start = (s: GameState): number => (s.log.find((e) => e.type === "bankFilled") as { coins: number }).coins;
 const stashes = (s: GameState): number => Object.values(s.players).reduce((n, p) => n + p.stash, 0);
 
-/** design §7.7 as it stands before S3a.4 (no perks or shakedowns here): bank + Haul + stashes + seized = the start. */
+/** design §7.7 (no perks, shakedowns or busts here): bank + the kitty and set-aside coins + stashes + seized = the start. */
 function conserved(s: GameState): void {
-  expect(s.bank + s.haul + stashes(s) + s.seized, `round ${s.round}`).toBe(start(s));
+  expect(s.bank + s.kitty + s.setAside + stashes(s) + s.seized, `round ${s.round}`).toBe(start(s));
   expect(s.bank).toBeGreaterThanOrEqual(0);
 }
 
@@ -101,10 +101,10 @@ describe("the bank empties — design §6.1, §6.2, §3.2", () => {
     let s = vault(game(3, [], { ...NO_RAIDS, bank: { coinsPerPlayer: 4 } }), [0, 0, 0]);
     s = vault(s, [2, 2, 2]);
     expect(s.bank).toBe(0);
-    // Read the result from the log: honesty = Haul ÷ 12 (nothing seized), success at or above 2/3.
+    // Read the result from the log: honesty = coins that reached the duffel ÷ 12 (nothing seized), success at or above 2/3.
     const grabs = s.log.filter((e) => e.type === "coinsGrabbed" && e.round === 2) as Extract<GameEvent, { type: "coinsGrabbed" }>[];
     expect(grabs.reduce((n, e) => n + e.duffel + e.pocket, 0)).toBe(3);
-    expect(s.haul / 12 >= 2 / 3 ? "success" : "failed").toBe(outcome(s).result);
+    expect(s.reached / 12 >= 2 / 3 ? "success" : "failed").toBe(outcome(s).result);
   });
 
   it("the round the bank empties is also the cap: one ending, not two", () => {
@@ -195,13 +195,13 @@ describe("the honesty line at 12 players — design §7.5, §8.1, §8.4", () => 
   // 36 coins taken; the line is 24.
   it("exactly 24 of 36 reached the duffel: a success", () => {
     const s = vault(game(12, [], once), [3, 3, 3, 3, 0, 0, 0, 0, 0, 0, 0, 0]);
-    expect(s.haul).toBe(24);
+    expect(s.reached).toBe(24);
     expect(outcome(s)).toMatchObject({ result: "success", winners: ["p0", "p1", "p2", "p3"] });
   });
 
   it("one coin under (23 of 36): sunk by theft", () => {
     const s = vault(game(12, [], once), [3, 3, 3, 3, 1, 0, 0, 0, 0, 0, 0, 0]);
-    expect(s.haul).toBe(23);
+    expect(s.reached).toBe(23);
     expect(outcome(s)).toMatchObject({ result: "failed", reason: "theft", winners: [] });
   });
 
@@ -217,10 +217,10 @@ describe("the honesty line at 12 players — design §7.5, §8.1, §8.4", () => 
       return s;
     };
     const at = play([3, 3, 1]); // 16 pocketed
-    expect([at.bank, at.round, at.haul]).toEqual([0, 6, 32]);
+    expect([at.bank, at.round, at.reached]).toEqual([0, 6, 32]);
     expect(outcome(at)).toMatchObject({ result: "success" });
     const under = play([3, 3, 2]); // 17 pocketed
-    expect(under.haul).toBe(31);
+    expect(under.reached).toBe(31);
     expect(outcome(under)).toMatchObject({ result: "failed", reason: "theft", winners: [] });
   });
 });
@@ -248,7 +248,9 @@ describe("sunk by theft — design §8.4, §8.5", () => {
   it("no Mole in the game: nobody wins, the ranking still lists all 12", () => {
     const s = vault(game(12, [], once), theft);
     expect(outcome(s)).toMatchObject({ result: "failed", reason: "theft", winners: [] });
-    expect(outcome(s).ranking.map((e) => e.stash)).toEqual([3, 3, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0]);
+    // design §7.6: the pockets plus the cut of 1 each (the 22 handed in, 12 ways, kitty 10).
+    expect(outcome(s).ranking.map((e) => e.stash)).toEqual([3, 3, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0].map((pocket) => pocket + 1));
+    expect(outcome(s)).toMatchObject({ getaway: 10 });
   });
 
   it("a Mole at the top of a heist that succeeded wins like anyone (§8.1)", () => {
@@ -323,7 +325,8 @@ describe("viewFor before and after the end — design §15.5, §18", () => {
     const after = viewFor(s, "p1");
     expect(after.reveal).not.toBeNull();
     const o = after.reveal?.outcome as Outcome;
-    expect(o.ranking.map((e) => [e.player, e.role, e.stash])).toEqual([["p0", "mole", 6], ["p1", "lookout", 0], ["p2", "rookie", 0]]);
+    // design §7.6: 6 pocketed plus the share of 4 (6 handed in a round, 3 ways).
+    expect(o.ranking.map((e) => [e.player, e.role, e.stash])).toEqual([["p0", "mole", 6 + 4], ["p1", "lookout", 4], ["p2", "rookie", 4]]);
     const revealed = after.reveal?.log.map((e) => e.event) ?? [];
     expect(revealed.some((e) => e.type === "coinsGrabbed" && e.player === "p0")).toBe(true);
     expect(revealed.some((e) => e.type === "roleDealt" && e.player === "p0")).toBe(true);

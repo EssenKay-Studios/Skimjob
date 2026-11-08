@@ -8,7 +8,8 @@ import { setupEvents } from "./setup";
 import { replay } from "./reduce";
 import { handleCommand } from "./handle";
 import { NO_RAIDS } from "./v01-numbers.testkit";
-import { honesty, outcomeFor, ranking } from "./end";
+import { outcomeFor, ranking } from "./end";
+import { honesty } from "./shares";
 
 function config(players: number, overrides?: ContentOverrides): GameConfig {
   return {
@@ -120,9 +121,9 @@ describe("success or sunk by theft: the honesty line — design §7.5, §8.1, §
   const once: ContentOverrides = { ...NO_RAIDS, roundCap: 1 };
 
   it("honesty is the coins that reached the duffel ÷ the coins taken, full before any coin is taken", () => {
-    expect(honesty(0, 0)).toBe(1);
-    expect(honesty(6, 9)).toBe(2 / 3);
-    expect(honesty(5, 9)).toBeLessThan(BANK_JOB.honestyLine);
+    expect(honesty({ reached: 0, taken: 0 })).toBe(1);
+    expect(honesty({ reached: 6, taken: 9 })).toBe(2 / 3);
+    expect(honesty({ reached: 5, taken: 9 })).toBeLessThan(BANK_JOB.honestyLine);
   });
 
   it("exactly two-thirds handed in is a success", () => {
@@ -134,7 +135,9 @@ describe("success or sunk by theft: the honesty line — design §7.5, §8.1, §
     const s = vaultRound(game(3, ["lookout"], once), [2, 1, 1]); // 5 of 9
     expect(outcome(s)).toMatchObject({ result: "failed", reason: "theft", winners: [] });
     // design §8.6: the full ranking is still shown.
-    expect(outcome(s).ranking.map((e) => [e.player, e.stash])).toEqual([["p0", 2], ["p1", 1], ["p2", 1]]);
+    // The pockets plus the cut of 1 (5 handed in, 3 ways; the kitty of 2 pays the getaway car, design §6.3).
+    expect(outcome(s).ranking.map((e) => [e.player, e.stash])).toEqual([["p0", 3], ["p1", 2], ["p2", 2]]);
+    expect(outcome(s)).toMatchObject({ getaway: 2 });
   });
 
   it("sunk by theft: the Mole holding the biggest stash wins it (design §8.4; its handler in S3a.6)", () => {
@@ -182,7 +185,7 @@ describe("who wins — design §8.2, §8.5", () => {
       p2: { stash: 6 },
       p3: { stash: 1 },
     });
-    expect(ranking(s).map((e) => [e.player, e.score])).toEqual([["p2", 6], ["p0", 5], ["p1", 5], ["p3", 1]]);
+    expect(ranking(s).map((e) => [e.player, e.stash])).toEqual([["p2", 6], ["p0", 5], ["p1", 5], ["p3", 1]]);
   });
 
   it("everyone tied for the biggest stash wins", () => {

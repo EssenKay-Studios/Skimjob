@@ -30,7 +30,7 @@ export interface ShakedownRules {
    * number shared with the Detective's "dirty" line (owner ruling 3, 3 Nov).
    */
   readonly cleanBelow: number;
-  /** A clean target is paid this out of the Haul (or by the bank, if blessed). */
+  /** A clean target is paid this out of the coins set aside (or by the bank, if blessed). */
   readonly payout: number;
 }
 
