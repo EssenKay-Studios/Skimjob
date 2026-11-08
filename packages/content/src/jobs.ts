@@ -1,5 +1,5 @@
 // Job definitions: rooms by player count, the bank, the alarm (bells, tape and
-// Wanted), the round cap and honesty line, and shakedown numbers. design §3.1, §5, §6, §8
+// Wanted), the round cap and honesty line. design §3.1, §5, §6, §8
 //
 // The numbers live on the job, and engine helpers take a `JobDef` rather than
 // reading these constants, so the simulator's content overrides (design §17.4)
@@ -23,17 +23,6 @@ export interface AlarmRules {
   readonly bustStars: number;
 }
 
-/** design §11.3 (extension.md "Shakedowns (fixed numbers)") */
-export interface ShakedownRules {
-  /**
-   * A shaken-down stash below this is declared clean. One
-   * number shared with the Detective's "dirty" line (owner ruling 3, 3 Nov).
-   */
-  readonly cleanBelow: number;
-  /** A clean target is paid this out of the coins set aside (or by the bank, if blessed). */
-  readonly payout: number;
-}
-
 /** The bank the crew robs: a fixed pile of coins. design §6.1 */
 export interface BankRules {
   /** Coins in the bank per player at the start [tunable]. design §6.1 */
@@ -55,8 +44,6 @@ export interface JobDef {
   readonly roundCap: number;
   /** A game ending by the bank or the round cap succeeds at or above this honesty; below it, it is sunk by theft. design §7.5, §8.1, §8.4 */
   readonly honestyLine: number;
-  /** Kept on the job so simulator content overrides can tune it with the rest (design §17.4, §19 Q4). */
-  readonly shakedown: ShakedownRules;
 }
 
 /** First National Bank, the starter job. design §3.1, §6.1 */
@@ -88,8 +75,6 @@ export const BANK_JOB: JobDef = {
   // design §6.2, §7.5
   roundCap: 12,
   honestyLine: 2 / 3,
-  // R6's clean line 6 and payout 8, scaled to R7's smaller grabs and 16-a-player bank (S3a.1), until S3a.5 replaces them.
-  shakedown: { cleanBelow: 3, payout: 4 },
 };
 
 export const JOBS: Readonly<Record<JobId, JobDef>> = { bank: BANK_JOB };

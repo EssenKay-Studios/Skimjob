@@ -20,7 +20,7 @@ type Result = GameEvent[] | string;
 type Raw = Record<string, unknown>;
 
 /** How many `perk` tokens `player` holds. */
-export const perkCount = (player: PlayerState, perk: PerkId): number => player.roleState.perks.filter((p) => p === perk).length;
+const perkCount = (player: PlayerState, perk: PerkId): number => player.roleState.perks.filter((p) => p === perk).length;
 
 const spent = (state: GameState, player: PlayerState, perk: ResolvedPerk): GameEvent => ({
   type: "perkUsed",
@@ -97,8 +97,8 @@ function alibi(state: GameState, player: PlayerState): Result {
 
 /** Recharge: a use of your power since the last meeting, or a once-per-game use, comes back. */
 function recharge(state: GameState, player: PlayerState): Result {
-  const { usedThisAct, usedThisGame } = player.roleState;
-  if (usedThisAct === 0 && usedThisGame === 0) return "your power has nothing to recharge";
+  const { usedThisStretch, usedThisGame } = player.roleState;
+  if (usedThisStretch === 0 && usedThisGame === 0) return "your power has nothing to recharge";
   return [spent(state, player, { kind: "recharge" })];
 }
 
@@ -133,8 +133,8 @@ function rigPick(state: GameState, player: PlayerState, raw: Raw): Result {
 
 type Spend = (state: GameState, player: PlayerState, raw: Raw, draw: Draw) => Result;
 
-/** Perks the engine spends by itself (design §8.3): the Shield, and the Emergency when you call one more meeting. */
-type AutoPerk = "shield" | "emergency";
+/** The perk the engine spends by itself (design §8.3): the Shield. */
+type AutoPerk = "shield";
 
 const SPENDS: { readonly [K in Exclude<PerkId, AutoPerk>]: Spend } = {
   peek,
@@ -147,7 +147,7 @@ const SPENDS: { readonly [K in Exclude<PerkId, AutoPerk>]: Spend } = {
 };
 
 /** Whether `kind` names a perk spend (or the Rig's pick) for `useAbility`. */
-export const isPerkSpend = (kind: string): boolean => kind === "rigPick" || kind === "shield" || kind === "emergency" || Object.hasOwn(SPENDS, kind);
+export const isPerkSpend = (kind: string): boolean => kind === "rigPick" || kind === "shield" || Object.hasOwn(SPENDS, kind);
 
 /**
  * `buyPerk`: spend tokens on one of this game's shop perks, any time
@@ -164,25 +164,21 @@ export function buyPerk(state: GameState, command: Raw): Result {
   return [{ type: "perkBought", visibility: privateTo(player.id), player: player.id, perk: perk as PerkId, cost }];
 }
 
-/** Whether `player` already used a perk by choice this round (the Shield and Emergency, spent by themselves, don't count). extension.md "Tokens and the perk shop" */
+/** Whether `player` already used a perk by choice this round (the Shield, spent by itself, doesn't count). extension.md "Tokens and the perk shop" */
 const usedPerkThisRound = (state: GameState, player: PlayerId): boolean =>
-  state.log.some((e) => e.type === "perkUsed" && e.player === player && e.round === state.round && e.perk.kind !== "shield" && e.perk.kind !== "emergency");
+  state.log.some((e) => e.type === "perkUsed" && e.player === player && e.round === state.round && e.perk.kind !== "shield");
 
 /** `useAbility` with a perk: needs one of that kind (except the Rig's pick), and at most one use per round. design §8.3 */
 export function usePerk(state: GameState, player: PlayerState, raw: unknown, draw: Draw): Result {
   if (!isObject(raw) || typeof raw.kind !== "string") return "ability must be an object with a kind";
   if (raw.kind === "rigPick") return rigPick(state, player, raw);
   if (raw.kind === "shield") return "a Shield is spent by itself when a shakedown of you passes";
-  if (raw.kind === "emergency") return "an Emergency is spent by calling an emergency meeting";
   const spend = Object.hasOwn(SPENDS, raw.kind) ? SPENDS[raw.kind as Exclude<PerkId, AutoPerk>] : undefined;
   if (!spend) return `unknown perk ${raw.kind}`;
   if (perkCount(player, raw.kind as PerkId) === 0) return `you have no ${PERKS[raw.kind as PerkId].name} perk`;
   if (usedPerkThisRound(state, player.id)) return "you have already used a perk this round";
   return spend(state, player, raw, draw);
 }
-
-/** Emergency (Smooth Talker's reward): spent as `player` calls `meetingId` beyond their one per game. */
-export const emergencySpent = (state: GameState, player: PlayerState, meetingId: string): GameEvent => spent(state, player, { kind: "emergency", meetingId });
 
 /** Shield: whether a passed shakedown of `target` is cancelled by their Shield (spent by itself). */
 export function shieldFor(state: GameState, target: PlayerId, meetingId: string): GameEvent[] {

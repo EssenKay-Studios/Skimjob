@@ -18,7 +18,7 @@ export interface Personality {
   readonly teamSpirit: number;
   /** Shake down the most suspicious player once their score reaches this. Lower is more suspicious. design §17.3 "Suspicion" */
   readonly voteAt: number;
-  /** Call the one emergency meeting once someone's score reaches this; null never does. design §11.1 */
+  /** Spend one of the crew's emergency meetings once someone's score reaches this; null never does. design §9.3 */
   readonly emergencyAt: number | null;
   /** Chance of spending a round in Security. design §17.3 (Cautious "checks Security often") */
   readonly watch: number;

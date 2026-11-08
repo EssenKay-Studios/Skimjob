@@ -1,4 +1,4 @@
-// QA (PR #8): counterfactual leak tests for viewFor. design §13, §17.2, §11.2
+// QA (PR #8): counterfactual leak tests for viewFor. design §13, §17.2, §9.5
 //
 // Two games run side by side from the same seed and the same commands, except
 // that one or two players make different hidden choices in game B (split, room,
@@ -159,7 +159,8 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
   const submit = (player: PlayerId, move: Cmd): Cmd => ({ type: "submitMove", player, move });
   const randomVote = (id: PlayerId, target: PlayerId): Cmd => {
     const t = rand() < 0.65 ? target : pick(ids);
-    return t === id || rand() < 0.15 ? { kind: "skip" } : { kind: "shakedown", target: t };
+    // design §9.7: nobody can vote for a protected player.
+    return t === id || A.protected.includes(t) || rand() < 0.15 ? { kind: "skip" } : { kind: "shakedown", target: t };
   };
   const roleHolder = (role: string): PlayerId | undefined => ids.find((id) => A.players[id]?.role === role);
   const due = (round: number): boolean => !applied && round >= start;
@@ -296,7 +297,7 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
           const x = pick(free);
           applied = true;
           involved.add(x);
-          // A votes live; B leaves the same ballot sealed and stays away (§11.2).
+          // A votes live; B leaves the same ballot sealed and stays away (§9.5).
           sealsB.set(x, [{ type: "sealVote", player: x, vote: lastVote(x) }]);
           ballots.set(x, ballots.get(x)?.slice(-1) ?? []);
           ballotsB.set(x, []);
@@ -312,25 +313,27 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
   }
 
   for (let round = 1; round <= BANK_JOB.roundCap && !over(); round++) {
-    const act = Math.ceil(round / 3);
-    const caller = ids.find((id) => !A.players[id]?.emergencyMeetingUsed);
-    if (caller && rand() < 0.2) {
-      step([{ type: "callEmergency", player: caller }]);
-      meeting({ type: "advance", deadline: { kind: "openMeeting", meetingId: `emergency-${caller}` } });
-      if (over()) break;
-    }
     planRound(round);
     step([{ type: "advance", deadline: { kind: "round", round } }]);
     for (const id of ids) if (!over() && rand() < 0.7) step([{ type: "postAlibi", player: id, room: pick(A.rooms) }]);
     if (!over()) step([{ type: "advance", deadline: { kind: "alibis", round } }]); // design §5.4
-    if (round % 3 === 0 && !over()) {
-      if (rand() < 0.5) {
-        step([{ type: "proposeMeeting", player: pick(ids), slot: `slot-${act}` }]);
-        const proposal = A.proposals[0];
-        for (const id of ids) if (proposal && !A.scheduledMeeting && !proposal.acceptedBy.includes(id)) step([{ type: "acceptMeeting", player: id, proposalId: proposal.id }]);
+    // design §4.2 steps 9–10: the meeting the round called, then the result window, where an emergency may be called.
+    while (!over() && (A.phase.kind === "awaitingMeeting" || A.phase.kind === "result")) {
+      const p = A.phase;
+      if (p.kind === "awaitingMeeting") {
+        if (rand() < 0.5) {
+          step([{ type: "proposeMeeting", player: pick(ids), slot: `slot-${p.meetingId}` }]);
+          const proposal = A.proposals[0];
+          for (const id of ids) if (proposal && !A.scheduledMeeting && !proposal.acceptedBy.includes(id)) step([{ type: "acceptMeeting", player: id, proposalId: proposal.id }]);
+        }
+        if (!A.scheduledMeeting) step([{ type: "scheduleMeeting", meetingId: p.meetingId, slot: `server-${p.meetingId}` }]);
+        meeting({ type: "advance", deadline: { kind: "openMeeting", meetingId: p.meetingId } });
+      } else if (A.emergencies > 0 && rand() < 0.6) {
+        step([{ type: "callEmergency", player: pick(ids) }]);
+        meeting({ type: "advance", deadline: { kind: "openMeeting", meetingId: A.pendingEmergency?.meetingId } });
+      } else {
+        step([{ type: "advance", deadline: { kind: "result", round: p.round } }]);
       }
-      if (!A.scheduledMeeting) step([{ type: "scheduleMeeting", act, slot: `server-${act}` }]);
-      meeting({ type: "advance", deadline: { kind: "openMeeting", meetingId: A.scheduledMeeting?.meetingId } });
     }
   }
   expect(over(), "the random game finishes").toBe(true);
@@ -343,7 +346,7 @@ const COUNTS = [3, 4, 6, 9, 12];
 /** Seeds per player count; raise locally (QA_SEEDS=20) for a wider sweep. */
 const SEEDS = Number(process.env.QA_SEEDS ?? 1);
 
-describe("QA: changing one player's hidden choices never changes another player's view — design §13, §17.2, §11.2", () => {
+describe("QA: changing one player's hidden choices never changes another player's view — design §13, §17.2, §9.5", () => {
   it.each(KINDS.flatMap((k) => MODES.map((m) => [k, m] as const)))("%s, %s votes", (kind, mode) => {
     let applied = 0;
     let compared = 0;
@@ -360,7 +363,7 @@ describe("QA: changing one player's hidden choices never changes another player'
     });
     expect(applied, "the change was made in most games").toBeGreaterThanOrEqual(4 * SEEDS);
     expect(compared).toBeGreaterThan(200 * SEEDS);
-    // design §11.2: in Secret mode ballots never surface, not even in the reveal.
+    // design §9.5: in Secret mode ballots never surface, not even in the reveal.
     if (mode === "secret" && ["voteChurn", "ballotSwap", "seal"].includes(kind)) expect([...firstPublic]).toEqual([]);
     // Open mode: a changed ballot is public as cast, and the harness sees it.
     if (mode === "open" && ["voteChurn", "ballotSwap", "seal"].includes(kind)) expect(firstPublic).toContain("voteCast");
@@ -372,7 +375,7 @@ describe("QA: changing one player's hidden choices never changes another player'
   });
 });
 
-describe("QA: viewFor edges — design §13, §11.2", () => {
+describe("QA: viewFor edges — design §13, §9.5", () => {
   const ended = (mode: VoteVisibility, seed: number): GameState => runPair("churn", 6, mode, seed).a;
 
   it("throws for anyone not seated, including prototype keys", () => {
@@ -445,13 +448,14 @@ describe("QA: viewFor edges — design §13, §11.2", () => {
       check();
       if (s.phase.kind === "alibis") s = apply(s, { type: "advance", deadline: { kind: "alibis", round } }, "A");
       if (s.phase.kind === "awaitingMeeting") {
-        s = apply(s, { type: "scheduleMeeting", act: round / 3, slot: "x" }, "A");
+        s = apply(s, { type: "scheduleMeeting", meetingId: s.phase.meetingId, slot: "x" }, "A");
         s = apply(s, { type: "advance", deadline: { kind: "openMeeting", meetingId: s.scheduledMeeting?.meetingId } }, "A");
         s = apply(s, { type: "castVote", player: "p1", vote: { kind: "skip" } }, "A");
         check();
         s = apply(s, { type: "advance", deadline: { kind: "closeMeeting", meetingId: s.meeting?.id } }, "A");
         check();
       }
+      if (s.phase.kind === "result") s = apply(s, { type: "advance", deadline: { kind: "result", round } }, "A");
     }
     expect(s.phase.kind).toBe("ended");
   });

@@ -50,7 +50,12 @@ const mv = (player: string, room: string, pocket = 0, extra: object = {}) => ({ 
 const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
 const OPEN = (s: GameState) => ({ type: "advance", deadline: { kind: "openMeeting", meetingId: s.scheduledMeeting?.meetingId } });
 const CLOSE = (s: GameState) => ({ type: "advance", deadline: { kind: "closeMeeting", meetingId: s.meeting?.id } });
-const sched = (act: number) => ({ type: "scheduleMeeting", act, slot: "slot" });
+const sched = (meetingId: string) => ({ type: "scheduleMeeting", meetingId, slot: "slot" });
+/** Through the meeting a round called (design §9.1, §9.2), nobody voting, and its result window (§9.3). */
+function meeting(s: GameState): GameState {
+  if (s.phase.kind !== "awaitingMeeting") return s;
+  return run(s, sched(s.phase.meetingId), OPEN, CLOSE, { type: "advance", deadline: { kind: "result", round: s.resolvedRound } });
+}
 const vote = (player: string, target: string) => ({ type: "castVote", player, vote: { kind: "shakedown", target } });
 
 const outcome = (s: GameState): Outcome => {
@@ -70,13 +75,13 @@ describe("12 players — design §3, §6.2, §8", () => {
   const POCKET: Record<string, number> = { p0: 2, p1: 3, p3: 2 };
   function game12(): GameState {
     let s = game(12, ["rookie", "lookout", "priest", "hacker"]);
-    for (let round = 1; s.phase.kind !== "ended"; round++) {
+    while (s.phase.kind !== "ended") {
       for (const [i, room] of ROOMS.entries()) {
         const id = `p${i}`;
         s = run(s, mv(id, room, POCKET[id] ?? 0));
       }
       s = run(s, ROUND);
-      if (round % 3 === 0 && s.phase.kind !== "ended") s = run(s, sched(round / 3), OPEN, CLOSE);
+      s = meeting(s);
     }
     return s;
   }
@@ -97,7 +102,6 @@ describe("12 players — design §3, §6.2, §8", () => {
   function raid12(): GameState {
     let s = game(12, ["rookie", "priest"]);
     for (let round = 1; round <= 3; round++) s = run(s, ...Array.from({ length: 12 }, (_, i) => mv(`p${i}`, "lobby")), ROUND);
-    s = run(s, sched(1), OPEN, CLOSE);
     const bulbs = jobFor(s.config).alarm.bulbs;
     s = { ...s, wanted: 2, bells: { ...s.bells, vault: bulbs - 1 } };
     for (let i = 0; i < 12; i++) s = run(s, mv(`p${i}`, "vault", i === 0 ? 1 : 0));
@@ -115,11 +119,12 @@ describe("12 players — design §3, §6.2, §8", () => {
       { type: "callEmergency", player: "p0" },
       vote("p0", "p1"),
       { type: "sealVote", player: "p0", vote: { kind: "skip" } },
-      sched(2),
+      sched("meeting-1"),
       { type: "advance", deadline: { kind: "round", round: 5 } },
       { type: "advance", deadline: { kind: "round", round: 6 } },
-      { type: "advance", deadline: { kind: "openMeeting", meetingId: "act-2" } },
-      { type: "advance", deadline: { kind: "closeMeeting", meetingId: "act-2" } },
+      { type: "advance", deadline: { kind: "result", round: 4 } },
+      { type: "advance", deadline: { kind: "openMeeting", meetingId: "meeting-1" } },
+      { type: "advance", deadline: { kind: "closeMeeting", meetingId: "meeting-1" } },
     ];
     for (const c of commands) expect(handleThroughAlibis(s, c)).toEqual({ ok: false, reason: "the game is over" });
     // Also after a replay of the finished log.

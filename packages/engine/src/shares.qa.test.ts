@@ -39,7 +39,7 @@ function game(players: number, contentOverrides: ContentOverrides | null = NO_RA
 /** The deadline(s) that pass next outside planning (as the scheduler would send them); nobody votes. */
 function deadlineFor(state: GameState): Command {
   const phase = state.phase;
-  if (state.pendingEmergency && (phase.kind === "alibis" || phase.kind === "awaitingMeeting")) {
+  if (state.pendingEmergency) {
     return { type: "advance", deadline: { kind: "openMeeting", meetingId: state.pendingEmergency.meetingId } };
   }
   switch (phase.kind) {
@@ -47,6 +47,8 @@ function deadlineFor(state: GameState): Command {
       return { type: "advance", deadline: { kind: "round", round: phase.round } };
     case "alibis":
       return { type: "advance", deadline: { kind: "alibis", round: phase.round } };
+    case "result":
+      return { type: "advance", deadline: { kind: "result", round: phase.round } };
     case "meeting":
       return { type: "advance", deadline: { kind: "closeMeeting", meetingId: phase.meetingId } };
     case "shakedownPending":
@@ -54,7 +56,7 @@ function deadlineFor(state: GameState): Command {
     case "awaitingMeeting":
       return state.scheduledMeeting
         ? { type: "advance", deadline: { kind: "openMeeting", meetingId: state.scheduledMeeting.meetingId } }
-        : { type: "scheduleMeeting", act: phase.act, slot: `qa-act-${phase.act}` };
+        : { type: "scheduleMeeting", meetingId: phase.meetingId, slot: `qa-${phase.meetingId}` };
     default:
       throw new Error(`no deadline in ${phase.kind}`);
   }
@@ -173,11 +175,13 @@ describe("QA: honesty counts each coin once — design §7.4, §7.5", () => {
     expect(stashes(s)).toEqual([0, 0, 0]);
   });
 
-  it("set-aside coins re-split don't count toward honesty (the S3a.5 seam), and neither do kitty coins", () => {
-    const s = round({ ...game(3), setAside: 5, kitty: 2 }, { p0: ["lobby", 1] });
-    expect(ofType(s, "duffelSplit")[0]).toMatchObject({ handedIn: 1, setAside: 5, kittyIn: 2, cut: 2, kitty: 2 });
-    expect(s.reached).toBe(1);
-    expect(ofType(s, "roundResolved")[0]).toMatchObject({ taken: 1, missing: 0, honesty: { reached: 1, taken: 1 } });
+  it("set-aside coins (shakedown returns) count toward honesty once, as they reach the split; kitty coins never do (design §7.5, §9.6)", () => {
+    const pocketed = round(game(3), { p0: ["vault", 0, 3], p1: ["office", 0, 2] });
+    // As a shakedown would leave them: 5 of the pocketed coins set aside, and a kitty of 2.
+    const s = round({ ...pocketed, setAside: 5, kitty: 2 }, { p0: ["lobby", 1] });
+    expect(ofType(s, "duffelSplit").at(-1)).toMatchObject({ handedIn: 1, setAside: 5, kittyIn: 2, cut: 2, kitty: 2 });
+    expect(s.reached).toBe(1 + 5);
+    expect(ofType(s, "roundResolved").at(-1)).toMatchObject({ taken: 1, missing: 0, honesty: { reached: 6, taken: 6 } });
   });
 
   it("honesty over many rounds is Σ hand-ins ÷ Σ taken, whatever the kitty does", () => {
@@ -299,7 +303,7 @@ describe("QA: missing is a count, never who; stashes and pockets stay private �
     for (const viewer of s.playerOrder) {
       const view = viewFor(s, viewer);
       expect(view.reveal).toBeNull();
-      for (const other of view.players) expect(Object.keys(other).sort()).toEqual(["emergencyMeetingUsed", "id", "isBot", "name"]);
+      for (const other of view.players) expect(Object.keys(other).sort()).toEqual(["id", "isBot", "name"]);
       const seen = [...view.ledger, ...view.caseFile].map((e) => e.event);
       // Another player's grab (and so their pocket) is never in your view.
       for (const e of seen) if (e.type === "coinsGrabbed") expect(e.player).toBe(viewer);
@@ -387,15 +391,14 @@ function randomGame(players: number, seed: string, tape: readonly number[], styl
   return { cfg, commands, final: s, states };
 }
 
-/** design §7.7, with R6's bank-paid Priest blessings (provisional until S3a.5) added to the start. */
+/** design §7.7 */
 function conservation(s: GameState): { lhs: number; rhs: number } {
   const start = jobFor(s.config).bank.coinsPerPlayer * s.playerOrder.length;
-  const blessings = ofType(s, "blessingPaid").reduce((n, e) => n + e.amount, 0);
   const o = s.phase.kind === "ended" ? s.phase.outcome : null;
   // design §5.5: a bust round's unsplit hand-ins are lost in the bust (its pockets sit in the stashes, still ranked).
   const lost = o?.result === "failed" && o.reason === "bust" ? ofType(s, "coinsGrabbed").filter((e) => e.round === s.resolvedRound).reduce((n, e) => n + e.duffel, 0) : 0;
   const stash = Object.values(s.players).reduce((n, p) => n + p.stash, 0);
-  return { lhs: s.bank + s.kitty + s.setAside + stash + s.seized + lost, rhs: start + blessings };
+  return { lhs: s.bank + s.kitty + s.setAside + stash + s.seized + lost, rhs: start };
 }
 
 const gameArb = fc.record({
@@ -421,8 +424,8 @@ describe("QA: properties over random games — design §7.2, §7.3, §7.5, §7.6
         const s = g.final;
         // design §7.2: every split is exact, cut × crew + kitty = the duffel.
         for (const e of ofType(s, "duffelSplit")) expect(e.cut * players + e.kitty).toBe(e.handedIn + e.setAside + e.kittyIn);
-        // design §7.5: a coin counts once, when handed in.
-        expect(s.reached).toBe(ofType(s, "duffelSplit").reduce((n, e) => n + e.handedIn, 0));
+        // design §7.5: a coin counts once, when it reaches a split: handed in, or set aside by a shakedown (§9.6).
+        expect(s.reached).toBe(ofType(s, "duffelSplit").reduce((n, e) => n + e.handedIn + e.setAside, 0));
         // design §7.4: each round's taken and missing match its grabs (seized left out), never negative.
         for (const r of ofType(s, "roundResolved")) {
           const grabs = ofType(s, "coinsGrabbed").filter((e) => e.round === r.round);
@@ -432,10 +435,10 @@ describe("QA: properties over random games — design §7.2, §7.3, §7.5, §7.6
         }
         // design §7.3: the share is the sum of the cuts.
         expect(s.share).toBe(ofType(s, "duffelSplit").reduce((n, e) => n + e.cut, 0));
-        // design §7.6: stash = share + pocketed − taken back + compensation.
+        // design §7.6: stash = share + pocketed − taken back.
         for (const id of s.playerOrder) {
           const pocketed = ofType(s, "coinsGrabbed").filter((e) => e.player === id).reduce((n, e) => n + e.pocket, 0);
-          const back = ofType(s, "shakedownResolved").filter((e) => e.target === id).reduce((n, e) => n + e.taken - e.compensation, 0);
+          const back = ofType(s, "shakedownResolved").filter((e) => e.target === id).reduce((n, e) => n + e.taken, 0);
           expect(s.players[id]?.stash).toBe(s.share + pocketed - back);
         }
         // design §6.3: the getaway car takes the kitty and any unsplit duffel, except on a bust.

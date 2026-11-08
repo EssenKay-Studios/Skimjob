@@ -108,14 +108,16 @@ function nextDeadline(state: GameState): Command[] {
   const phase = state.phase;
   if (phase.kind === "meeting") return [{ type: "advance", deadline: { kind: "closeMeeting", meetingId: phase.meetingId } }];
   if (phase.kind === "shakedownPending") return [{ type: "advance", deadline: { kind: "resolveShakedown", meetingId: phase.meetingId } }];
-  if (state.pendingEmergency && (phase.kind === "planning" || phase.kind === "alibis" || phase.kind === "awaitingMeeting")) {
+  if (state.pendingEmergency) {
     return [{ type: "advance", deadline: { kind: "openMeeting", meetingId: state.pendingEmergency.meetingId } }];
   }
   if (phase.kind === "planning") return [{ type: "advance", deadline: { kind: "round", round: phase.round } }];
   if (phase.kind === "alibis") return [{ type: "advance", deadline: { kind: "alibis", round: phase.round } }];
+  // design §9.3: the result window closes when nobody called an emergency.
+  if (phase.kind === "result") return [{ type: "advance", deadline: { kind: "result", round: phase.round } }];
   if (phase.kind === "awaitingMeeting") {
-    const schedule: Command[] = state.scheduledMeeting ? [] : [{ type: "scheduleMeeting", act: phase.act, slot: `server-act-${phase.act}` }];
-    return [...schedule, { type: "advance", deadline: { kind: "openMeeting", meetingId: state.scheduledMeeting?.meetingId ?? `act-${phase.act}` } }];
+    const schedule: Command[] = state.scheduledMeeting ? [] : [{ type: "scheduleMeeting", meetingId: phase.meetingId, slot: `server-${phase.meetingId}` }];
+    return [...schedule, { type: "advance", deadline: { kind: "openMeeting", meetingId: phase.meetingId } }];
   }
   return [];
 }
@@ -243,23 +245,13 @@ describe("QA: placements and power claims against content (design §10)", () => 
 });
 
 describe("QA: when the board takes edits (design §10: the round's span)", () => {
-  it("an emergency meeting interrupting planning closes the board: the spec has no meeting during planning (design §9.3, §10)", async () => {
+  it("no meeting can interrupt planning: an emergency call is refused and the board keeps taking edits (design §9.3, §10)", async () => {
     const { id, humans, rooms } = await startGame(3);
     const [a, b] = await Promise.all(humans.slice(0, 2).map((h) => Client.open(id, h)));
-    expect(await a!.sendRaw({ cmd: { type: "callEmergency" } })).toMatchObject({ ok: true });
-    while ((await load(id)).phase.kind !== "meeting") await step(id);
-    const s = await load(id);
-    expect(s.round).toBeGreaterThan(s.resolvedRound);
-    for (const plan of [{ room: rooms[0], agree: true }, { place: { player: humans[2]!.player, room: rooms[0] } }, { power: { role: "hacker", target: rooms[0] } }]) {
-      expect(await b!.plan(plan)).toMatchObject(closed);
-    }
-    expect(await createPlan(db, clock).history(id, s.round)).toEqual([]);
-    // The meeting closes, planning resumes in the same round: the board takes edits again.
-    while ((await load(id)).phase.kind !== "planning") await step(id);
-    expect((await load(id)).round).toBe(s.round);
+    expect(await a!.sendRaw({ cmd: { type: "callEmergency" } })).toMatchObject({ rejected: true });
+    expect((await load(id)).phase.kind).toBe("planning");
     expect(await b!.plan({ room: rooms[0], agree: true })).toMatchObject({ ok: true });
     await vi.waitFor(() => expect(a!.board().entries).toHaveLength(1), quick);
-    expect((await createPlan(db, clock).history(id, s.round)).every((h) => h.msBeforeDeadline! > 0)).toBe(true);
     closeAll(a!, b!);
   });
 
@@ -268,6 +260,10 @@ describe("QA: when the board takes edits (design §10: the round's span)", () =>
     const a = await Client.open(id, humans[0]!);
     await app.live.system(id, { type: "advance", deadline: { kind: "round", round: 1 } });
     expect((await load(id)).phase.kind).toBe("alibis");
+    // design §9.3: not during the alibis; in the result window (after any meeting the round called).
+    expect(await a.sendRaw({ cmd: { type: "callEmergency" } })).toMatchObject({ rejected: true });
+    await app.live.system(id, { type: "advance", deadline: { kind: "alibis", round: 1 } });
+    while ((await load(id)).phase.kind !== "result") await step(id);
     expect(await a.sendRaw({ cmd: { type: "callEmergency" } })).toMatchObject({ ok: true });
     while ((await load(id)).phase.kind !== "meeting") await step(id);
     const s = await load(id);
@@ -493,6 +489,7 @@ describe("QA: reconnects, per-round reset and leaks", () => {
     b2.ws.close();
     await app.live.system(id, { type: "advance", deadline: { kind: "round", round: 1 } });
     await app.live.system(id, { type: "advance", deadline: { kind: "alibis", round: 1 } });
+    while ((await load(id)).phase.kind !== "planning") await step(id); // design §9.3: the result window (and any meeting)
     const b3 = await Client.open(id, humans[1]!);
     expect(b3.board()).toEqual({ round: 2, entries: [] });
     // The new round's history starts empty too; round 1's is kept.

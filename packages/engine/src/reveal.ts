@@ -20,7 +20,6 @@ const SHOWN: ReadonlySet<GameEvent["type"]> = new Set<GameEvent["type"]>([
   "meetingClosed",
   "shakedownResolved",
   "shakedownCancelled",
-  "blessingPaid",
   "roomRaided",
   "roomReopened",
 ]);
@@ -126,7 +125,7 @@ export function revealSummary(log: readonly GameEvent[], outcome: Outcome, table
         items.push({ kind: "claim", player: e.player, claimed: e.role, real: role.get(e.player) ?? e.role });
         break;
       case "shakedownResolved":
-        add(e.target, e.compensation - e.taken);
+        add(e.target, -e.taken);
         break;
       default:
         break;

@@ -62,9 +62,11 @@ function atFirstMeeting(seed: string): GameState {
       s = must(s, { type: "advance", deadline: { kind: "round", round: phase.round } });
     } else if (phase.kind === "alibis") {
       s = must(s, { type: "advance", deadline: { kind: "alibis", round: phase.round } });
+    } else if (phase.kind === "result") {
+      s = must(s, { type: "advance", deadline: { kind: "result", round: phase.round } });
     } else if (phase.kind === "awaitingMeeting") {
-      if (!s.scheduledMeeting) s = must(s, { type: "scheduleMeeting", act: phase.act, slot: `server-act-${phase.act}` });
-      s = must(s, { type: "advance", deadline: { kind: "openMeeting", meetingId: s.scheduledMeeting!.meetingId } });
+      if (!s.scheduledMeeting) s = must(s, { type: "scheduleMeeting", meetingId: phase.meetingId, slot: `server-${phase.meetingId}` });
+      s = must(s, { type: "advance", deadline: { kind: "openMeeting", meetingId: phase.meetingId } });
     } else throw new Error(`unexpected phase ${phase.kind}`);
   }
   throw new Error("no meeting");

@@ -1,6 +1,6 @@
 // Extension helpers (docs/extension.md), from real engine views: role facts,
-// the gap box, shop and perk uses, endings.
-import { BANK_JOB, DECKS, PERKS, ROLES } from "@skimjob/content";
+// the shop and perk uses, endings.
+import { DECKS, PERKS, ROLES } from "@skimjob/content";
 import {
   PUBLIC,
   applyEvent,
@@ -18,7 +18,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { EndingNote } from "../components/Extension";
 import { describeEvent } from "./describeEvent";
-import { endingText, gapInfo, howYouWin, perkUses, roleInfo, roleListInfo, shopState, usedPerkThisRound } from "./extension";
+import { endingText, howYouWin, perkUses, roleInfo, roleListInfo, shopState, usedPerkThisRound } from "./extension";
 import { abilityOffers } from "./meeting";
 import { deckPatch, deckRoles, rolePatch } from "../components/DeckSettings";
 import type { LobbySettings } from "../api";
@@ -61,7 +61,7 @@ describe("role facts (extension.md Roles)", () => {
   it("reads powers and rewards between meetings, with numbers from content", () => {
     const priest = roleInfo("priest");
     expect(priest.power).toContain("between meetings");
-    expect(priest.power).toContain(`pays the ${BANK_JOB.shakedown.payout}`);
+    expect(priest.power).toContain("shaken down clean, you earn a token");
     expect(priest.earns).toMatch(/^A token when: /);
     // design §5.2, §11.1: the Mole rings a bell; the Fixer reopens a taped-off room.
     expect(roleInfo("mole").power).toMatch(/^Once between meetings: rings one room's bell once \(not the Rooftop or a taped-off room\)/);
@@ -74,20 +74,6 @@ describe("role facts (extension.md Roles)", () => {
     expect(roleListInfo(exact)).toEqual({ title: "Roles in play", roles: exact.roleList!.roles });
     const hidden = viewFor(createGame(config({ roleList: "hidden" })), "p1");
     expect(roleListInfo(hidden)).toEqual({ title: "The role list is hidden in this game.", roles: [] });
-  });
-});
-
-describe("the gap box (extension.md: What the app works out for you)", () => {
-  it("adds up the alibis against the coins handed in", () => {
-    let s = run(createGame(config()), round(1));
-    const v0 = viewFor(s, "p1");
-    expect(gapInfo(v0)!.text).toBe(`No alibis yet for round 1; ${v0.gap!.handedIn} handed in.`);
-    s = run(s, { type: "postAlibi", player: "p1", room: "vault" });
-    const g = gapInfo(viewFor(s, "p1"))!;
-    const raw = viewFor(s, "p1").gap!;
-    expect(g.posted).toBe(1);
-    expect(g.text.startsWith(`Alibis say +${raw.alibis}, ${raw.handedIn} handed in`)).toBe(true);
-    expect(g.text).toMatch(raw.unaccounted > 0 ? /unaccounted for\.$/ : raw.unaccounted < 0 ? /more than the alibis claim\.$/ : /it adds up\.$/);
   });
 });
 
@@ -134,8 +120,11 @@ describe("tokens and the perk shop (extension.md)", () => {
       s,
       { type: "buyPerk", player: "p1", perk: "peek" },
       { type: "buyPerk", player: "p1", perk: "extraVote" },
+      // design §9.3: the emergency in round 1's result window.
+      { type: "advance", deadline: { kind: "round", round: 1 } },
+      { type: "advance", deadline: { kind: "alibis", round: 1 } },
       { type: "callEmergency", player: "p2" },
-      { type: "advance", deadline: { kind: "openMeeting", meetingId: "emergency-p2" } },
+      { type: "advance", deadline: { kind: "openMeeting", meetingId: "emergency-1" } },
     );
     const offered = (st: GameState) => abilityOffers(viewFor(st, "p1")).some((o) => o.kind === "extraVote");
     expect(offered(s)).toBe(true);

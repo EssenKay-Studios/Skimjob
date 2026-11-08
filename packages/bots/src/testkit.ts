@@ -9,7 +9,7 @@ export function seats(n: number): GameConfig["players"] {
 }
 
 /**
- * R6's room yields as coin limits, its clean line and payout,
+ * R6's room yields as coin limits,
  * a bank too big to run short (design §3.2) and bells too big to raid (§5.3), so the R6 bot heuristics (alibis, suspicion, perks,
  * claims, endings) keep their numbers until the S3a steps that replace them.
  */
@@ -17,7 +17,6 @@ export const R6_COINS: ContentOverrides = {
   rooms: { vault: { coins: 6 }, office: { coins: 4 }, lobby: { coins: 2 }, depositBoxes: { coins: 5 } },
   bank: { coinsPerPlayer: 100 },
   alarm: { bulbs: 1000 },
-  shakedown: { cleanBelow: 6, payout: 8 },
 };
 
 export function config(n: number, seed: string, voteVisibility: VoteVisibility = "hiddenThenRevealed"): GameConfig {
@@ -43,9 +42,24 @@ export function run(state: GameState, ...commands: unknown[]): GameState {
 
 export type Plan = Record<PlayerId, { room: string; pocket?: number; watch?: string; alibi?: string | null }>;
 
-/** Pass the alibi deadline if the last round's alibi window is still open (design §5.4). */
+/**
+ * Pass the alibi deadline if the last round's alibi window is still open
+ * (design §5.4), then the result window's if nobody called an emergency (§9.3).
+ */
 export function closeAlibis(state: GameState): GameState {
+  const s = state.phase.kind === "alibis" ? run(state, { type: "advance", deadline: { kind: "alibis", round: state.phase.round } }) : state;
+  return s.phase.kind === "result" && !s.pendingEmergency ? run(s, { type: "advance", deadline: { kind: "result", round: s.phase.round } }) : s;
+}
+
+/** Pass only the alibi deadline: the game rests in the round's result window (design §9.3). */
+export function toResult(state: GameState): GameState {
   return state.phase.kind === "alibis" ? run(state, { type: "advance", deadline: { kind: "alibis", round: state.phase.round } }) : state;
+}
+
+/** `caller` spends the crew's emergency in the result window, and its meeting opens (design §9.3). */
+export function emergencyMeeting(state: GameState, caller: PlayerId): GameState {
+  const s = run(toResult(state), { type: "callEmergency", player: caller });
+  return run(s, { type: "advance", deadline: { kind: "openMeeting", meetingId: s.pendingEmergency?.meetingId } });
 }
 
 /**

@@ -1,6 +1,6 @@
 // QA (PR #25, role deck v2 R1): perks — double spends, wrong phases, +Vote stacking, Recharge on the Mole, a Rig spent
-// at the act's meeting, view diffs while perks are held and spent, determinism.
-// design §8.3 (docs/roles-v2.md §1), §11.2, §11.3; extension.md "Tokens and the
+// at a regular meeting, view diffs while perks are held and spent, determinism.
+// design §8.3 (docs/roles-v2.md §1), §9.5, §9.6; extension.md "Tokens and the
 // perk shop" (one perk use per round)
 import { describe, expect, it } from "vitest";
 import type { PerkId } from "@skimjob/content";
@@ -32,6 +32,8 @@ type Cmd = unknown | ((s: GameState) => unknown);
 function run(state: GameState, ...commands: Cmd[]): GameState {
   return commands.reduce<GameState>((s, c) => {
     const command = typeof c === "function" ? c(s) : c;
+    // A step may be several commands, worked out from the state as it reaches them.
+    if (Array.isArray(command)) return run(s, ...(command as Cmd[]));
     const r = handleCommand(s, command);
     if (!r.ok) throw new Error(`rejected ${JSON.stringify(command)}: ${r.reason}`);
     return r.state;
@@ -46,10 +48,27 @@ const since = (before: GameState, after: GameState): GameEvent[] => after.log.sl
 const use = (player: string, ability: object) => ({ type: "useAbility", player, ability });
 const mv = (player: string, room: string, pocket = 0, extra: object = {}) => ({ type: "submitMove", player, move: { ...fullGrab(room, pocket), ...extra } });
 const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
-const ALIBIS = (s: GameState) => ({ type: "advance", deadline: { kind: "alibis", round: s.resolvedRound } });
-const SCHED = (s: GameState) => ({ type: "scheduleMeeting", act: Math.ceil(s.round / 3), slot: "x" });
+const CLOSE_ALIBIS = (s: GameState) => ({ type: "advance", deadline: { kind: "alibis", round: s.resolvedRound } });
+/** The alibis close, then the result window (design §9.3), nobody calling an emergency. */
+const ALIBIS = (s: GameState): Cmd[] => [
+  CLOSE_ALIBIS(s),
+  (x: GameState) => (x.phase.kind === "result" ? { type: "advance", deadline: { kind: "result", round: x.phase.round } } : []),
+];
+/** The server picks the slot of the meeting the round called (design §9.4). */
+const SCHED = (s: GameState) => ({ type: "scheduleMeeting", meetingId: s.phase.kind === "awaitingMeeting" ? s.phase.meetingId : null, slot: "x" });
 const OPEN = (s: GameState) => ({ type: "advance", deadline: { kind: "openMeeting", meetingId: s.scheduledMeeting?.meetingId } });
-const emergency = (by: string) => [{ type: "callEmergency", player: by }, { type: "advance", deadline: { kind: "openMeeting", meetingId: `emergency-${by}` } }];
+const RESULT = (s: GameState) => ({ type: "advance", deadline: { kind: "result", round: s.resolvedRound } });
+/** Default rounds until a third of the bank is gone and a regular meeting is due (design §9.1). */
+const toRegular = (s: GameState): GameState => {
+  while (s.phase.kind !== "awaitingMeeting") s = run(s, ROUND, ALIBIS);
+  return s;
+};
+/** The round being planned resolves (if one is) and, in its result window, `by` calls the crew's emergency, which opens at once. design §9.3 */
+const emergency = (by: string): Cmd[] => [
+  (s: GameState) => (s.phase.kind === "planning" ? [ROUND, CLOSE_ALIBIS] : s.phase.kind === "alibis" ? [CLOSE_ALIBIS] : []),
+  { type: "callEmergency", player: by },
+  (s: GameState) => ({ type: "advance", deadline: { kind: "openMeeting", meetingId: s.pendingEmergency?.meetingId } }),
+];
 const CLOSE = (s: GameState) => ({ type: "advance", deadline: { kind: "closeMeeting", meetingId: s.meeting?.id } });
 const RESOLVE = (s: GameState) => ({ type: "advance", deadline: { kind: "resolveShakedown", meetingId: s.pendingShakedown?.meetingId } });
 const vote = (player: string, target: string | null) => ({ type: "castVote", player, vote: target ? { kind: "shakedown", target } : { kind: "skip" } });
@@ -143,16 +162,16 @@ describe("QA: +Vote, Recharge, Rig at the meeting — design §8.3", () => {
     expect(s.log.filter((e) => e.type === "abilityResolved" && e.ability.kind === "ring")).toHaveLength(2);
   });
 
-  it("a Rig spent at the act's meeting picks Act 2's first card, flipped when the meeting ends", () => {
-    let s = grantPerks(game(4, [], { eventsEnabled: true }), "p0", "rig");
-    for (let r = 0; r < 3; r++) s = run(s, ROUND, ALIBIS);
+  it("a Rig spent at a regular meeting picks the next round's card, flipped when that round starts (design §9.1, §13)", () => {
+    let s = toRegular(grantPerks(game(4, [], { eventsEnabled: true }), "p0", "rig"));
     s = run(s, SCHED, OPEN, use("p0", { kind: "rig" }));
     const spent = [...s.log].reverse().find((e) => e.type === "perkUsed");
     if (spent?.type !== "perkUsed" || spent.perk.kind !== "rig") throw new Error("no Rig");
-    expect(spent.perk.round).toBe(4);
+    const round = s.round + 1;
+    expect(spent.perk.round).toBe(round);
     const pick = spent.perk.cards[1] as string;
-    const next = run(s, use("p0", { kind: "rigPick", card: pick }), CLOSE);
-    expect(next.round).toBe(4);
+    const next = run(s, use("p0", { kind: "rigPick", card: pick }), CLOSE, RESULT);
+    expect(next.round).toBe(round);
     expect(next.card?.id).toBe(pick);
     expect(next.rigs).toEqual([]);
   });
@@ -160,7 +179,8 @@ describe("QA: +Vote, Recharge, Rig at the meeting — design §8.3", () => {
 
 describe("QA: perks never leak to other views — design §8.3, §17.2", () => {
   it("holding and spending Peek, Tail, Rig, rigPick, Recharge, +Vote and Ballot change no other player's view", () => {
-    let s = grantPerks(game(4, ["hacker"], { eventsEnabled: true, voteVisibility: "secret" }), "p0", "peek", "tail", "rig", "recharge", "extraVote", "ballot");
+    // 7 players: the crew's pool holds 2 emergencies (design §9.3).
+    let s = grantPerks(game(7, ["hacker"], { eventsEnabled: true, voteVisibility: "secret" }), "p0", "peek", "tail", "rig", "recharge", "extraVote", "ballot");
     const others = ["p1", "p2", "p3"];
     const views = (st: GameState) => others.map((id) => JSON.stringify(viewFor(st, id)));
     const check = (before: GameState, ...cmds: Cmd[]): GameState => {
@@ -178,8 +198,7 @@ describe("QA: perks never leak to other views — design §8.3, §17.2", () => {
     const rig = s.rigs[0];
     if (!rig) throw new Error("no rig");
     s = check(s, use("p0", { kind: "rigPick", card: rig.cards[1] }));
-    s = next(s);
-    s = run(s, SCHED, OPEN, CLOSE);
+    s = run(toRegular(next(s)), SCHED, OPEN, CLOSE, RESULT);
     s = run(s, mv("p0", "lobby", 0, { ability: { kind: "loopCameras", room: "vault" } }), ROUND);
     s = check(s, use("p0", { kind: "recharge" }));
     s = run(s, ALIBIS);
@@ -200,11 +219,12 @@ describe("QA: perks never leak to other views — design §8.3, §17.2", () => {
 describe("QA: determinism with perks — design §17.2", () => {
   it("same seed + same commands give the same log; the log replays to the same state", () => {
     const script = (): GameState => {
-      let s = grantPerks(game(5, ["lookout"], { eventsEnabled: true }), "p0", "rig", "ballot", "shield");
-      s = grantPerks(grantPerks(s, "p2", "tail"), "p3", "peek");
+      let s = grantPerks(game(5, ["lookout"], { eventsEnabled: true }), "p0", "rig", "shield");
+      s = grantPerks(grantPerks(grantPerks(s, "p2", "tail"), "p3", "peek"), "p4", "ballot");
       s = run(s, use("p0", { kind: "rig" }), use("p2", { kind: "tail", room: "vault" }), use("p3", { kind: "peek", target: "p4" }));
-      s = run(s, mv("p0", "lobby"), mv("p1", "vault", 2), mv("p2", "vault"), ROUND, ALIBIS);
-      s = run(s, ...emergency("p1"), use("p0", { kind: "ballot", target: "p1" }), vote("p1", "p0"), vote("p2", "p0"), vote("p3", "p0"), vote("p4", "p0"), CLOSE);
+      // The Vault's 6 rings raid it: a police briefing follows (design §9.2).
+      s = run(s, mv("p0", "lobby"), mv("p1", "vault", 2), mv("p2", "vault"), ROUND, CLOSE_ALIBIS);
+      s = run(s, SCHED, OPEN, use("p4", { kind: "ballot", target: "p1" }), vote("p1", "p0"), vote("p2", "p0"), vote("p3", "p0"), vote("p4", "p0"), CLOSE);
       return s;
     };
     const a = script();
@@ -215,40 +235,45 @@ describe("QA: determinism with perks — design §17.2", () => {
   });
 });
 
-describe("QA: Shield vs a plain shakedown — design §8.3, §11.3", () => {
-  const passOnP0 = (s: GameState, by = "p1") => run(s, ...emergency(by), vote("p1", "p0"), vote("p2", "p0"), vote("p3", "p0"), CLOSE);
+describe("QA: Shield vs a plain shakedown — design §8.3, §9.6, §9.7", () => {
+  /** Round 1 resolves and `by` calls the crew's emergency; the meeting opens. */
+  const opened = (s: GameState, by = "p1") => run(s, ...emergency(by));
+  /** Everyone else votes p0 down. */
+  const passOnP0 = (open: GameState) => run(open, ...open.playerOrder.filter((p) => p !== "p0").map((p) => vote(p, "p0")), CLOSE);
+  const stashes = (s: GameState) => Object.fromEntries(Object.entries(s.players).map(([id, p]) => [id, p.stash]));
 
-  it("plain: the stash is set aside for the next split; Shield: stash kept, nothing set aside, no compensation, one Shield per passed shakedown", () => {
-    const base = withStash(game(4), "p0", 6);
-    const plain = passOnP0(base);
-    expect(plain.players.p0?.stash).toBe(0);
-    expect(plain.setAside).toBe(base.setAside + 6);
+  it("plain: what is above the share is set aside for the next split; Shield: stash kept, nothing set aside, one Shield per passed shakedown", () => {
+    // 7 players: the crew's pool holds 2 emergencies (design §9.3).
+    const base = withStash(game(7), "p0", 6);
+    const open = opened(base);
+    const plain = passOnP0(open);
+    expect(plain.players.p0?.stash).toBe(open.share);
+    expect(plain.setAside).toBe(open.setAside + 6);
 
-    const two = grantPerks(base, "p0", "shield", "shield");
+    const two = opened(grantPerks(base, "p0", "shield", "shield"));
     const first = passOnP0(two);
-    expect(first.players.p0).toMatchObject({ stash: 6 });
-    expect(first.setAside).toBe(base.setAside);
-    expect(Object.fromEntries(Object.entries(first.players).map(([id, p]) => [id, p.stash]))).toEqual(
-      Object.fromEntries(Object.entries(two.players).map(([id, p]) => [id, p.stash])),
-    );
+    expect(first.players.p0).toMatchObject({ stash: 6 + two.share });
+    expect(first.setAside).toBe(two.setAside);
+    expect(stashes(first)).toEqual(stashes(two));
     expect(perks(first, "p0")).toEqual(["shield"]);
-    const second = passOnP0(first, "p2");
+    // A cancelled shakedown still protects p0 (design §9.7); as the next regular meeting would, lift it.
+    expect(first.protected).toEqual(["p0"]);
+    const second = passOnP0(opened({ ...first, protected: [] }, "p2"));
     expect(perks(second, "p0")).toEqual([]);
-    expect(second.players.p0?.stash).toBe(6);
+    expect(second.players.p0?.stash).toBe(6 + second.share);
   });
 
-  it("a clean Shield holder gets no compensation either (nobody pays out for a cancel)", () => {
-    const s = grantPerks(game(4), "p0", "shield");
-    const after = passOnP0(s);
-    expect(Object.values(after.players).map((p) => p.stash)).toEqual(Object.values(s.players).map((p) => p.stash));
+  it("a clean Shield holder isn't paid either (a cancel pays nobody)", () => {
+    const open = opened(grantPerks(game(4), "p0", "shield"));
+    expect(stashes(passOnP0(open))).toEqual(stashes(open));
   });
 
   it("not spent when the shakedown doesn't pass, or targets someone else", () => {
-    const s = grantPerks(withStash(game(4), "p0", 6), "p0", "shield");
-    const skipped = run(s, ...emergency("p1"), vote("p1", null), vote("p2", null), vote("p3", "p0"), CLOSE);
+    const open = opened(grantPerks(withStash(game(4), "p0", 6), "p0", "shield"));
+    const skipped = run(open, vote("p1", null), vote("p2", null), vote("p3", "p0"), CLOSE);
     expect(perks(skipped, "p0")).toEqual(["shield"]);
-    const other = run(s, ...emergency("p1"), vote("p1", "p2"), vote("p0", "p2"), vote("p3", "p2"), CLOSE);
+    const other = run(open, vote("p1", "p2"), vote("p0", "p2"), vote("p3", "p2"), CLOSE);
     expect(perks(other, "p0")).toEqual(["shield"]);
-    expect(other.players.p0?.stash).toBe(6);
+    expect(other.players.p0?.stash).toBe(open.players.p0?.stash);
   });
 });

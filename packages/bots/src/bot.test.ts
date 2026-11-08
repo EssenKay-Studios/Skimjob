@@ -5,7 +5,7 @@ import { roomDef, viewFor, jobById, type GameEvent, type GameState, type Move, t
 import { PERSONALITIES, type Personality } from "./personalities";
 import { botRandom, chooseAlibi, chooseMove, chooseVote, createBot, crewHunch, decide, misjudged, type Random } from "./bot";
 import { suspicion } from "./suspicion";
-import { closeAlibis, game, round, run } from "./testkit";
+import { closeAlibis, emergencyMeeting, game, round, run, toResult } from "./testkit";
 
 /** A personality with no noise or misreading at votes, so a test can pin its behaviour. */
 const exact = (base: Personality, change: Partial<Personality> = {}): Personality => ({ ...base, noise: 0, misread: 0, hunch: 0, ...change });
@@ -188,7 +188,7 @@ describe("votes — design §11.2, §17.3", () => {
   });
 
   it("votes in an open meeting, once", () => {
-    let s = run(liar(), { type: "callEmergency", player: "carl" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: "emergency-carl" } });
+    let s = emergencyMeeting(liar(), "carl");
     const cmds = decide(viewFor(s, "ana"), exact(PERSONALITIES.honest), rolls(0.5), "test-crew");
     expect(cmds[0]).toEqual({ type: "castVote", player: "ana", vote: { kind: "shakedown", target: "ben" } });
     s = run(s, ...cmds);
@@ -196,12 +196,12 @@ describe("votes — design §11.2, §17.3", () => {
   });
 
   it("misjudges at votes: a crew-wide hunch (the same for every bot at a meeting) plus its own misreading (v2 §5)", () => {
-    const s = run(liar(), { type: "callEmergency", player: "carl" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: "emergency-carl" } });
+    const s = emergencyMeeting(liar(), "carl");
     const [a, c] = [viewFor(s, "ana"), viewFor(s, "carl")];
     expect(crewHunch(a, "ben", "test-crew")).toBe(crewHunch(c, "ben", "test-crew"));
     expect(Math.abs(crewHunch(a, "ben", "test-crew"))).toBeLessThanOrEqual(1);
     // Another meeting, another hunch.
-    expect(crewHunch({ ...a, phase: { kind: "meeting", meetingId: "act-1" } }, "ben", "test-crew")).not.toBe(crewHunch(a, "ben", "test-crew"));
+    expect(crewHunch({ ...a, phase: { kind: "meeting", meetingId: "meeting-1" } }, "ben", "test-crew")).not.toBe(crewHunch(a, "ben", "test-crew"));
     const evidence = suspicion(a);
     const p = exact(PERSONALITIES.honest, { hunch: 7, misread: 1 });
     const read = misjudged(a, evidence, p, rolls(0.5), "test-crew"); // own misreading 0 at a roll of 0.5
@@ -210,9 +210,12 @@ describe("votes — design §11.2, §17.3", () => {
     expect(misjudged(a, evidence, exact(PERSONALITIES.honest), rolls(0.9), "test-crew")).toEqual(evidence);
   });
 
-  it("calls its emergency meeting when suspicion is high enough — design §11.1", () => {
-    const cmds = decide(viewFor(closeAlibis(liar()), "ana"), exact(PERSONALITIES.cautious, { emergencyAt: 8 }), rolls(0.5), "test-crew");
+  it("spends the crew's emergency in the result window when suspicion is high enough, never while planning — design §9.3", () => {
+    const cautious = exact(PERSONALITIES.cautious, { emergencyAt: 8 });
+    const cmds = decide(viewFor(toResult(liar()), "ana"), cautious, rolls(0.5), "test-crew");
     expect(cmds.map((c) => c.type)).toContain("callEmergency");
+    run(toResult(liar()), ...cmds);
+    expect(decide(viewFor(closeAlibis(liar()), "ana"), cautious, rolls(0.5), "test-crew").map((c) => c.type)).not.toContain("callEmergency");
   });
 });
 
@@ -225,17 +228,15 @@ describe("role habits — design §8", () => {
     return { ...s, players: { ...s.players, [player]: { ...me, role, roleState: { ...me.roleState, ...roleState } } } };
   };
 
-  it("Auditor audits the room its top suspect claimed; Detective checks its top suspect in the act's last round (v2 §2, §4)", () => {
+  it("Auditor audits the room its top suspect claimed; Detective checks its top suspect; once between meetings (v2 §2, §4)", () => {
     const lobby = { room: "lobby" };
     // Round 1: ben pockets 4 in the Vault and claims the Office: the top suspect.
     const dealt = game(5);
     let s = closeAlibis(round(dealt, { ana: lobby, ben: { room: "vault", pocket: 4, alibi: "office" }, carl: lobby, dee: lobby, eve: lobby }));
     const uses = (st: GameState, role: string, used = 0) =>
-      decide(viewFor(withRole(st, "ana", role, { usedThisAct: used }), "ana"), exact(PERSONALITIES.honest), seeded("c"), "test-crew").filter((c) => c.type === "useAbility");
+      decide(viewFor(withRole(st, "ana", role, { usedThisStretch: used }), "ana"), exact(PERSONALITIES.honest), seeded("c"), "test-crew").filter((c) => c.type === "useAbility");
     expect(uses(s, "auditor")).toEqual([{ type: "useAbility", player: "ana", ability: { kind: "audit", room: "office" } }]);
     expect(uses(s, "auditor", 1)).toEqual([]);
-    expect(uses(s, "detective")).toEqual([]); // round 2 isn't the act's last
-    s = closeAlibis(round(s, { ana: lobby, ben: lobby, carl: lobby, dee: lobby, eve: lobby }));
     expect(uses(s, "detective")).toEqual([{ type: "useAbility", player: "ana", ability: { kind: "checkStash", target: "ben" } }]);
     expect(uses(s, "detective", 1)).toEqual([]);
   });

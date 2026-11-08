@@ -35,10 +35,10 @@ function claimsWithTruth(c: GameConfig, log: readonly GameEvent[]) {
 
 describe("bot claims in whole games — QA PR #37", () => {
   // Three seeds per cell: with the Rookie the one safe bluff left (R7 cut), bluffs are rarer;
-  // plus one 12-seat game where a bluff is known to come up (S3a.1's coins made them rarer still).
+  // plus one 12-seat game where a bluff is known to come up (S3a.1's coins and S3a.5's fewer meetings made them rarer still).
   const games = [
     ...[3, 6, 12].flatMap((n) => MODES.flatMap((mode, k) => [0, 1, 2].map((x) => ({ n, mode, c: config(n, `qa37-${n}-${k}${x ? `-${x}` : ""}`, { voteVisibility: mode }) })))),
-    { n: 12, mode: "hiddenThenRevealed" as const, c: config(12, "qa37-12-8") },
+    { n: 12, mode: "hiddenThenRevealed" as const, c: config(12, "qa37-12-11") },
   ];
   const results = games.map((g) => ({ ...g, r: play(g.c) }));
 
@@ -51,15 +51,15 @@ describe("bot claims in whole games — QA PR #37", () => {
     expect(results.flatMap(({ r }) => r.state.log.filter((e) => e.type === "roleClaimed")).length).toBeGreaterThan(0);
   });
 
-  it("every claim is public and carries only player, role and act; one per player per act — design §8, §12.1", () => {
+  it("every claim is public and carries only player, role and stretch; one per player per stretch — design §11.3", () => {
     for (const { r } of results) {
       const claims = r.state.log.filter((e): e is Claim => e.type === "roleClaimed");
       for (const c of claims) {
-        expect(Object.keys(c).sort()).toEqual(["act", "player", "role", "type", "visibility"]);
+        expect(Object.keys(c).sort()).toEqual(["player", "role", "stretch", "type", "visibility"]);
         expect(c.visibility).toEqual({ kind: "public" });
         expect(Object.hasOwn(ROLES, c.role)).toBe(true);
       }
-      const keys = claims.map((c) => `${c.player}/${c.act}`);
+      const keys = claims.map((c) => `${c.player}/${c.stretch}`);
       expect(new Set(keys).size).toBe(keys.length);
     }
   });
@@ -94,7 +94,7 @@ function person(id: string, proposeEarly: boolean): Agent {
     act(view: PlayerView): PlayerCommand[] {
       if (view.scheduledMeeting || view.phase.kind !== "planning") return [];
       if (proposeEarly && view.proposals.length === 0 && !view.proposals.some((p) => p.by === id)) {
-        return [{ type: "proposeMeeting", player: id, slot: `human-act-${view.act}` }];
+        return [{ type: "proposeMeeting", player: id, slot: `human-${view.stretch}` }];
       }
       return [];
     },
@@ -109,7 +109,7 @@ describe("meeting proposals with a human seat — QA PR #37, design §11.1", () 
   };
   const bots = (c: GameConfig) => createBots(c.players.slice(1), (_, i) => PERSONALITIES[MIX[i % MIX.length] as PersonalityId], c.seed);
 
-  it("bots never propose a slot: with no person proposing, the server picks every act's (STATUS bot scheduling)", () => {
+  it("bots never propose a slot: with no person proposing, the server picks every meeting's slot (STATUS bot scheduling)", () => {
     for (const [n, k] of [[3, 0], [6, 1], [12, 2]] as const) {
       const c = humanSeat(n, `qa37-h-${n}`, MODES[k] as VoteVisibility);
       const r = play(c, [person("q0", false), ...bots(c)]);
@@ -131,9 +131,9 @@ describe("meeting proposals with a human seat — QA PR #37, design §11.1", () 
       expect(proposed.every((e) => e.by === "q0"), `${n}p: only the person proposes`).toBe(true);
       const scheduled = r.state.log.filter((e): e is Extract<GameEvent, { type: "meetingScheduled" }> => e.type === "meetingScheduled");
       const human = new Set(proposed.map((p) => p.proposalId));
-      for (const s of scheduled.filter((x) => proposed.some((p) => p.act === x.act))) {
-        expect(s.proposalId !== null && human.has(s.proposalId), `${n}p act ${s.act} locked on the person's slot`).toBe(true);
-      }
+      const locked = scheduled.filter((x) => x.proposalId !== null);
+      expect(locked.length, `${n}p: a person's slot is locked in`).toBeGreaterThan(0);
+      for (const s of locked) expect(human.has(s.proposalId as string), `${n}p ${s.meetingId} locked on the person's slot`).toBe(true);
     }
   });
 });

@@ -162,29 +162,6 @@ describe("pause and resume (design §15, §4.1)", () => {
     expect((await load(id)).resolvedRound).toBe(1);
   });
 
-  it("a row a meeting already paused keeps its earlier pause: it moves on by the whole stop", async () => {
-    const { id, seats } = await startGame(2, { sessionLength: "1h" });
-    const host = await Client.open(id, seats[0]!.who);
-    const [round] = await deadlines(id);
-    clock.advance(1000);
-    // An emergency: its notice runs, then the round pauses under the open meeting. design §4.1
-    expect(await host.send({ cmd: { type: "callEmergency" } })).toMatchObject({ ok: true });
-    await host.barrier();
-    await step(id); // the notice ends: the meeting opens
-    expect((await load(id)).phase.kind).toBe("meeting");
-    const meetingAt = clock.now();
-    const left = round!.due - meetingAt;
-    clock.advance(5000);
-    await req("POST", `/games/${id}/pause`, seats[0]!.who);
-    clock.advance(60_000);
-    await req("POST", `/games/${id}/resume`, seats[0]!.who);
-    // Still in the meeting: the round stays paused from the meeting's start.
-    expect(byKey(await deadlines(id)).get(round!.key)!.paused).toBe(true);
-    await step(id); // the vote window closes
-    const after = byKey(await deadlines(id)).get(round!.key)!;
-    expect(after.paused).toBe(false);
-    expect(after.due - clock.now()).toBe(left);
-  });
   it("a deadline already due when the host pauses never fires after the pause is acknowledged (the tick re-checks under the lock)", async () => {
     const { id, seats } = await startGame(2, { sessionLength: "1h" });
     clock.advance(H1.roundMs + 1000); // round:1 is due

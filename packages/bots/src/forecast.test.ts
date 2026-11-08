@@ -58,7 +58,7 @@ describe("the Mole's ring — design §5.2, §11.1", () => {
   it("rings the loudest lit bell elsewhere, once between meetings; never the Rooftop; nothing when every bell is dark", () => {
     const lit = leaningMole();
     expect(rings(lit)).toEqual({ kind: "ring", room: "office" });
-    expect(rings(as(lit, "mole", {}, { usedThisAct: 1 }))).toBeUndefined();
+    expect(rings(as(lit, "mole", {}, { usedThisStretch: 1 }))).toBeUndefined();
     const dark = Object.fromEntries(Object.keys(lit.bells).map((r) => [r, 0]));
     expect(rings({ ...lit, bells: dark })).toBeUndefined();
   });

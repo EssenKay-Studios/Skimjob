@@ -88,21 +88,25 @@ describe("timers on the live channel", () => {
     await app.close();
   });
 
-  it("a meeting pauses the round's timer (pausedAt set), and its own close timer runs. design §4.1, §11.1", async () => {
+  it("the result window's timer, then the emergency's notice in its place, then the meeting's close timer. design §9.3", async () => {
     const { app, clock, id, host, guest } = await setup();
     const a = await open(app, id, host);
     await open(app, id, guest);
+    const t = TIMINGS["15m"];
+    clock.advance(t.roundMs);
+    await app.scheduler.tick();
+    clock.advance(t.alibiMs);
+    await app.scheduler.tick();
+    await vi.waitFor(() => expect(a.view().phase.kind).toBe("result"), quick);
+    expect(a.views().at(-1)!.timers).toEqual([{ key: "result:1", dueAt: clock.now() + t.resultMs, pausedAt: null }]);
     await a.send({ type: "callEmergency" });
     await a.send({}); // a barrier through the game's lock: the reply goes out before the view
-    const notice = a.views().at(-1)!.timers;
     const meetingId = a.view().pendingEmergency!.meetingId;
-    expect(notice.map((t) => t.key).sort()).toEqual([`openMeeting:${meetingId}`, "round:1"]);
-    clock.advance(TIMINGS["15m"].emergencyNoticeMs);
+    expect(a.views().at(-1)!.timers).toEqual([{ key: `openMeeting:${meetingId}`, dueAt: clock.now() + t.emergencyNoticeMs, pausedAt: null }]);
+    clock.advance(t.emergencyNoticeMs);
     await app.scheduler.tick();
     await vi.waitFor(() => expect(a.view().phase.kind).toBe("meeting"), quick);
-    const timers = a.views().at(-1)!.timers;
-    expect(timers.find((t) => t.key === "round:1")).toEqual({ key: "round:1", dueAt: T0 + TIMINGS["15m"].roundMs, pausedAt: clock.now() });
-    expect(timers.find((t) => t.key === `closeMeeting:${meetingId}`)).toEqual({ key: `closeMeeting:${meetingId}`, dueAt: clock.now() + TIMINGS["15m"].meetingMs, pausedAt: null });
+    expect(a.views().at(-1)!.timers).toEqual([{ key: `closeMeeting:${meetingId}`, dueAt: clock.now() + t.meetingMs, pausedAt: null }]);
     await app.close();
   });
 

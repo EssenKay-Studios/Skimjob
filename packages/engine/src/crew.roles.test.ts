@@ -4,7 +4,8 @@
 // review notes (Auditor, Detective, a bought Peek); a view-diff with these
 // roles dealt. design §7, §8, §8.1, §10, §11.3, §16.1
 import { describe, expect, it } from "vitest";
-import { handleThroughAlibis } from "./alibis.testkit";
+import { closeResultWindow } from "./alibis.testkit";
+import { handleCommand, type CommandResult } from "./handle";
 import { ROLES, STARTER_ROLES } from "@skimjob/content";
 import type { GameConfig, GameEvent, GameState, PlayerState } from "./types";
 import { PUBLIC, privateTo } from "./types";
@@ -14,7 +15,6 @@ import { viewFor } from "./view";
 import { grantPerks } from "./perks.testkit";
 import { fullGrab } from "./grab.testkit";
 import { R6_COINS } from "./v01-numbers.testkit";
-import { jobFor } from "./overrides";
 
 function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
   return {
@@ -26,7 +26,8 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     ...extra,
-    contentOverrides: { ...R6_COINS, ...extra.contentOverrides }, // R6 room yields as coins (R6 role rules)
+    // R6 room yields as coins (R6 role rules), and a bank of 20 a player, so regular meetings come every few rounds (design §9.1).
+    contentOverrides: { ...R6_COINS, bank: { coinsPerPlayer: 20 }, ...extra.contentOverrides },
   };
 }
 
@@ -44,6 +45,24 @@ const withStashes = (s: GameState, stashes: Record<string, number>): GameState =
   ...s,
   players: Object.fromEntries(Object.entries(s.players).map(([id, p]) => [id, { ...p, stash: stashes[id] ?? p.stash }])) as Record<string, PlayerState>,
 });
+
+/**
+ * A command, with a round deadline followed by its alibi deadline (nobody
+ * posts). The result window (design §9.3) stays open, so an emergency can be
+ * called in it, until a move or a round deadline closes it.
+ */
+function handleThroughAlibis(state: GameState, command: unknown): CommandResult {
+  const c = command as { type?: unknown; deadline?: { kind?: unknown } } | null;
+  const planning = c?.type === "submitMove" || c?.deadline?.kind === "round";
+  const s = state.phase.kind === "result" && !state.pendingEmergency && planning ? must(closeResultWindow(state)) : state;
+  const r = handleCommand(s, command);
+  if (!r.ok || r.state.phase.kind !== "alibis" || c?.deadline?.kind !== "round") return r;
+  return handleCommand(r.state, { type: "advance", deadline: { kind: "alibis", round: r.state.phase.round } });
+}
+const must = (r: CommandResult): GameState => {
+  if (!r.ok) throw new Error(r.reason);
+  return r.state;
+};
 
 type Cmd = unknown | ((s: GameState) => unknown);
 function run(state: GameState, ...commands: Cmd[]): GameState {
@@ -68,32 +87,35 @@ const granted = (s: GameState, player: string) => ofType(s.log, "tokenEarned").f
 const since = (before: GameState, after: GameState) => after.log.slice(before.log.length);
 
 const mv = (player: string, room: string, pocket = 0, extra: object = {}) => ({ type: "submitMove", player, move: { ...fullGrab(room, pocket, R6_COINS), ...extra } });
-const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
+/** The round being planned; from the result window, the next one (closing the window first). */
+const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.phase.kind === "result" ? s.round + 1 : s.round } });
 const vote = (player: string, target: string | null) => ({ type: "castVote", player, vote: target === null ? { kind: "skip" } : { kind: "shakedown", target } });
 const CLOSE = (s: GameState) => ({ type: "advance", deadline: { kind: "closeMeeting", meetingId: s.meeting?.id } });
 const RESOLVE = (s: GameState) => ({ type: "advance", deadline: { kind: "resolveShakedown", meetingId: s.pendingShakedown?.meetingId } });
 const use = (player: string, ability: object) => ({ type: "useAbility", player, ability });
-const emergency = (s: GameState, caller: string, meetingId = `emergency-${caller}`) =>
-  run(s, { type: "callEmergency", player: caller }, { type: "advance", deadline: { kind: "openMeeting", meetingId } });
-/** `caller` calls an emergency meeting; everyone else but `target` votes to shake `target` down. */
+/** `caller` spends the crew's emergency in the result window (design §9.3). */
+const emergency = (s: GameState, caller: string) =>
+  run(s, { type: "callEmergency", player: caller }, (x: GameState) => ({ type: "advance", deadline: { kind: "openMeeting", meetingId: x.pendingEmergency?.meetingId } }));
+/** A meeting the round called (design §9.1, §9.2), else `caller`'s emergency; everyone else but `target` votes to shake `target` down. */
 const shakeDown = (s: GameState, caller: string, target: string): GameState => {
-  s = emergency(s, caller);
+  const p = s.phase;
+  s =
+    p.kind === "awaitingMeeting"
+      ? run(s, { type: "scheduleMeeting", meetingId: p.meetingId, slot: "x" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: p.meetingId } })
+      : emergency(s, caller);
   for (const id of s.playerOrder) if (id !== target) s = run(s, vote(id, target));
   return settle(run(s, CLOSE));
 };
-/** Play the act's remaining rounds with `moves` each round, then its regular meeting (`inMeeting`, then closed). */
-const finishAct = (s: GameState, moves: Cmd[] = [], inMeeting: (s: GameState) => GameState = (x) => x): GameState => {
-  const act = Math.ceil(s.round / 3);
-  while (s.phase.kind === "planning" && Math.ceil(s.round / 3) === act) {
-    const before = s.round;
+/** Play rounds with `moves` until a third of the bank is gone; the regular meeting runs `inMeeting` then closes (design §9.1). */
+const finishStretch = (s: GameState, moves: Cmd[] = [], inMeeting: (s: GameState) => GameState = (x) => x): GameState => {
+  while (s.phase.kind !== "awaitingMeeting") {
+    if (s.phase.kind === "ended") throw new Error("the game ended before a regular meeting");
     s = run(s, ...moves, ROUND);
-    if (s.round === before) break;
   }
-  s = run(s, { type: "scheduleMeeting", act, slot: "x" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: `act-${act}` } });
+  const { meetingId } = s.phase;
+  s = run(s, { type: "scheduleMeeting", meetingId, slot: "x" }, { type: "advance", deadline: { kind: "openMeeting", meetingId } });
   return settle(run(inMeeting(s), CLOSE));
 };
-/** extension.md "Shakedowns": a fixed clean line and payout. */
-const { cleanBelow: cleanBelowPerAct, payout: compensationPerAct } = jobFor(config(3)).shakedown; // the R6 pin
 
 describe("Smooth Talker: on the winning side of a dirty shakedown → a token — extension.md \"Roles\"", () => {
   const caught = (stVote: string | null) => {
@@ -110,25 +132,9 @@ describe("Smooth Talker: on the winning side of a dirty shakedown → a token �
     expect(viewFor(s, "p1").caseFile.some(({ event }) => event.type === "tokenEarned")).toBe(false);
   });
 
-  it("a bought Emergency is spent by calling a second emergency meeting (its own id)", () => {
-    let s = grantPerks(run(game(5, ["smoothTalker"]), ROUND), "p0", "emergency");
-    s = run(emergency(s, "p0"), CLOSE); // its own one per game: no perk spent
-    expect(s.players.p0?.roleState.perks).toEqual(["emergency"]);
-    const before = s;
-    s = emergency(s, "p0", "emergency2-p0");
-    expect(since(before, s).slice(0, 2)).toEqual([
-      { type: "perkUsed", visibility: privateTo("p0"), player: "p0", round: 2, perk: { kind: "emergency", meetingId: "emergency2-p0" } },
-      { type: "emergencyMeetingCalled", visibility: PUBLIC, by: "p0", meetingId: "emergency2-p0" },
-    ]);
-    s = run(s, CLOSE);
-    expect(s.players.p0?.roleState.perks).toEqual([]);
-    expect(reason(s, { type: "callEmergency", player: "p0" })).toMatch(/already called/);
-    expect(reason(s, use("p0", { kind: "emergency" }))).toMatch(/spent by calling/);
-  });
-
   it("not when it voted otherwise, nor for a clean target; its ballot still counts ×2 (its one number)", () => {
     expect(granted(caught(null), "p0")).toEqual([]);
-    let s = emergency(game(5, ["smoothTalker"]), "p2");
+    let s = emergency(run(game(5, ["smoothTalker"]), ROUND), "p2");
     s = settle(run(s, vote("p0", "p1"), vote("p2", "p1"), vote("p3", "p1"), CLOSE));
     expect(ofType(s.log, "shakedownResolved")[0]?.clean).toBe(true);
     expect(granted(s, "p0")).toEqual([]);
@@ -136,24 +142,18 @@ describe("Smooth Talker: on the winning side of a dirty shakedown → a token �
   });
 });
 
-describe("Priest: once per act, bless a player; a clean shakedown of them is paid by the bank — v2 §2, design §8", () => {
-  it("blessed and shaken down clean: the compensation goes back into the coins set aside (`blessingPaid`), and the Priest earns a token", () => {
+describe("Priest: once between meetings, bless a player; a clean shakedown of them earns a token — v2 §2, design §8, §9.6", () => {
+  it("blessed and shaken down clean: nothing is taken or paid (design §9.6), and the Priest earns a token", () => {
     const blessed = run(game(5, ["priest"]), mv("p0", "office"), mv("p1", "office"), ROUND, use("p0", { kind: "bless", target: "p1" }));
-    expect(blessed.log.at(-1)).toEqual({ type: "abilityResolved", visibility: privateTo("p0"), player: "p0", round: 2, ability: { kind: "bless", target: "p1", act: 1 } });
+    expect(blessed.log.at(-1)).toEqual({ type: "abilityResolved", visibility: privateTo("p0"), player: "p0", round: 1, ability: { kind: "bless", target: "p1", stretch: 1 } });
     expect(JSON.stringify(viewFor(blessed, "p1"))).not.toMatch(/"bless"/);
-    // Coins set aside to pay a clean target from (R6 numbers until S3a.5).
-    const s = shakeDown({ ...blessed, setAside: 20 }, "p2", "p1");
-    expect(ofType(s.log, "shakedownResolved")[0]).toMatchObject({ clean: true, compensation: compensationPerAct });
-    expect(ofType(s.log, "blessingPaid")).toEqual([{ type: "blessingPaid", visibility: PUBLIC, meetingId: "emergency-p2", target: "p1", amount: compensationPerAct }]);
-    expect(s.setAside).toBe(20);
-    expect(s.players.p1?.stash).toBe(s.share + compensationPerAct);
+    const s = shakeDown(blessed, "p2", "p1");
+    expect(ofType(s.log, "shakedownResolved")[0]).toMatchObject({ clean: true, taken: 0 });
+    expect([s.setAside, s.players.p1?.stash]).toEqual([blessed.setAside, blessed.players.p1?.stash]);
     expect(granted(s, "p0")).toEqual(["blessedShakenClean"]);
-    // Unblessed, the coins set aside pay.
-    const plain = shakeDown({ ...run(game(5, ["priest"]), mv("p0", "office"), mv("p1", "office"), ROUND), setAside: 20 }, "p2", "p1");
-    expect(plain.setAside).toBe(20 - compensationPerAct);
   });
 
-  it("a blessing covers its act only; once per act; refused on yourself, an unknown player and for other roles", () => {
+  it("a blessing covers its stretch only; once between meetings; refused on yourself, an unknown player and for other roles", () => {
     const fresh = game(5, ["priest"]);
     expect(reason(fresh, use("p0", { kind: "bless", target: "p0" }))).toMatch(/another player/);
     expect(reason(fresh, use("p0", { kind: "bless", target: "zz" }))).toMatch(/unknown player/);
@@ -161,32 +161,35 @@ describe("Priest: once per act, bless a player; a clean shakedown of them is pai
     expect(reason(fresh, mv("p0", "lobby", 0, { ability: { kind: "bless", target: "p1" } }))).toMatch(/isn't used in a move/);
     let s = run(fresh, mv("p1", "office"), ROUND, use("p0", { kind: "bless", target: "p1" }));
     expect(reason(s, use("p0", { kind: "bless", target: "p2" }))).toMatch(/already blessed/);
-    s = shakeDown(finishAct(s), "p2", "p1");
+    s = shakeDown(finishStretch(s), "p2", "p1");
     expect(ofType(s.log, "shakedownResolved")[0]?.clean).toBe(true);
-    expect(ofType(s.log, "blessingPaid")).toEqual([]);
+    expect(granted(s, "p0")).toEqual([]);
   });
 
-  it("blessed but caught dirty → no blessing next act (back the act after)", () => {
+  it("blessed but caught dirty → no blessing next stretch (back the stretch after)", () => {
     let s = run(game(5, ["priest"]), mv("p1", "vault", 6), ROUND, use("p0", { kind: "bless", target: "p1" }));
     s = shakeDown(s, "p2", "p1");
     expect(ofType(s.log, "shakedownResolved")[0]?.clean).toBe(false);
     expect(granted(s, "p0")).toEqual([]);
-    s = finishAct(s);
+    // Everyone hands in the Office's 4 a round, so the bank's thirds go quickly.
+    const steady = ["p0", "p1", "p2", "p3", "p4"].map((p) => mv(p, "office"));
+    s = finishStretch(s, steady);
     expect(reason(s, use("p0", { kind: "bless", target: "p2" }))).toMatch(/caught dirty/);
-    s = finishAct(s);
-    expect(run(s, use("p0", { kind: "bless", target: "p2" })).log.at(-1)).toMatchObject({ ability: { kind: "bless", act: 3 } });
+    s = finishStretch(s, steady);
+    expect(run(s, use("p0", { kind: "bless", target: "p2" })).log.at(-1)).toMatchObject({ ability: { kind: "bless", stretch: 3 } });
   });
 });
 
 describe("PR #26 review notes — v2 §2, design §8, §8.3", () => {
-  it("the Auditor can't audit the same round twice across acts", () => {
-    let s = run(game(3, ["auditor"]), mv("p1", "vault", 4), ROUND, ROUND, ROUND);
-    expect(s.phase.kind).toBe("awaitingMeeting");
+  it("the Auditor can't audit the same round twice across a regular meeting", () => {
+    let s = run(game(3, ["auditor"]), mv("p1", "vault", 4), ROUND);
+    while (s.phase.kind !== "awaitingMeeting") s = run(s, ROUND);
+    const round = s.resolvedRound;
     s = run(s, use("p0", { kind: "audit", room: "vault" }));
-    s = run(s, { type: "scheduleMeeting", act: 1, slot: "x" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: "act-1" } }, CLOSE);
-    expect(s.round).toBe(4);
-    expect(reason(s, use("p0", { kind: "audit", room: "office" }))).toMatch(/already audited round 3/);
-    expect(run(s, ROUND, use("p0", { kind: "audit", room: "office" })).log.at(-1)).toMatchObject({ ability: { kind: "audit", round: 4 } });
+    s = run(s, { type: "scheduleMeeting", meetingId: "meeting-1", slot: "x" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: "meeting-1" } }, CLOSE);
+    expect(s.stretch).toBe(2);
+    expect(reason(s, use("p0", { kind: "audit", room: "office" }))).toMatch(new RegExp(`already audited round ${round}`));
+    expect(run(s, ROUND, use("p0", { kind: "audit", room: "office" })).log.at(-1)).toMatchObject({ ability: { kind: "audit", round: round + 1 } });
   });
 
   it("a held Peek is spent: the role, privately", () => {
@@ -203,12 +206,12 @@ describe("PR #26 review notes — v2 §2, design §8, §8.3", () => {
 describe("view-diff with the seven dealt, and determinism — design §13, §17.2", () => {
   const SEVEN = ["smoothTalker", "priest", "auditor", "fixer", "lookout"];
   const SEATS = ["smoothTalker", "rookie", "priest", "auditor", "fixer", "rookie", "lookout"];
-  // A: the Priest blesses p7, who is then caught dirty (so it is barred next act); B: it blesses p6. Same public play.
+  // A: the Priest blesses p7, who is then caught dirty (so it is barred next stretch); B: it blesses p6. Same public play.
   const play = (a: boolean): GameState => {
     let s = game(8, SEATS, { rolePool: SEVEN, voteVisibility: "secret" });
     s = run(s, mv("p7", "vault", 6), mv("p3", "office"), mv("p4", "rooftop"), ROUND, use("p2", { kind: "bless", target: a ? "p7" : "p6" }));
     s = shakeDown(s, "p1", "p7");
-    return finishAct(s);
+    return finishStretch(s);
   };
 
   it("uninvolved players' views and rejections are the same whether or not the blessing went bad", () => {

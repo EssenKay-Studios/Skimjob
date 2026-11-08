@@ -3,11 +3,10 @@
 // `applyEvent` is the only way state changes. Command handlers decide which
 // events happen (drawing from `state.rng` where needed); folding those events
 // rebuilds the same state, including the RNG, on replay.
-import type { PerkId } from "@skimjob/content";
+import { EMERGENCY_POOL, type PerkId } from "@skimjob/content";
 import type { GameConfig, GameEvent, GameState, MeetingState, Phase, PlayerId, PlayerState, ResolvedPerk, RoleState } from "./types";
 import { NO_ROLE_STATE } from "./types";
 import { seedRng } from "./rng";
-import { actOfRound, isLastRoundOfAct } from "./acts";
 
 /** Replace one player's state. Throws for players that weren't dealt in. */
 function updatePlayer(state: GameState, id: PlayerId, change: (p: PlayerState) => Partial<PlayerState>): GameState {
@@ -49,7 +48,7 @@ function perkEffect(state: GameState, player: PlayerId, perk: ResolvedPerk): Gam
       return updatePlayer(state, player, (p) =>
         withRoleState(
           p,
-          p.roleState.usedThisAct > 0 ? { usedThisAct: p.roleState.usedThisAct - 1 } : { usedThisGame: Math.max(0, p.roleState.usedThisGame - 1) },
+          p.roleState.usedThisStretch > 0 ? { usedThisStretch: p.roleState.usedThisStretch - 1 } : { usedThisGame: Math.max(0, p.roleState.usedThisGame - 1) },
         ),
       );
     case "rig":
@@ -57,7 +56,6 @@ function perkEffect(state: GameState, player: PlayerId, perk: ResolvedPerk): Gam
     case "peek":
     case "shield":
     case "alibi":
-    case "emergency":
       // Information, or a cancel (or call) announced by its own public event.
       return state;
   }
@@ -69,20 +67,27 @@ function openMeeting(state: GameState): MeetingState {
 }
 
 /**
- * Where the game goes when a meeting closes: back to planning the current
- * round; if that round has resolved, back to its alibis while they're open,
- * else (the act's last round) awaiting the act's meeting. The regular
- * meeting's close then moves on with `roundStarted` or `gameEnded`. design §4.1, §5.4
+ * After a round's result and any meeting: the result window (design §4.2 step
+ * 10, §9.3). When the pool is empty, or after an emergency, the handler adds
+ * the next `roundStarted` at once.
  */
-function phaseAfterMeeting(state: GameState): Phase {
-  if (state.resolvedRound !== state.round) return { kind: "planning", round: state.round };
-  return state.alibisOpen ? { kind: "alibis", round: state.round } : { kind: "awaitingMeeting", act: actOfRound(state.round) };
+const resultWindow = (state: GameState): Phase => ({ kind: "result", round: state.resolvedRound });
+
+/** A passed shakedown's window (if one was open) ends, and its target is protected until the next regular meeting. design §9.7 */
+function afterShakedown(state: GameState, target: PlayerId): GameState {
+  const shaken = state.protected.includes(target) ? state : { ...state, protected: [...state.protected, target] };
+  return shaken.pendingShakedown ? { ...shaken, pendingShakedown: null, phase: resultWindow(shaken) } : shaken;
 }
 
-/** A shakedown window (if one was open) ends: back to where the meeting left the game. design §11.3 */
-function afterShakedown(state: GameState): GameState {
-  return state.pendingShakedown ? { ...state, pendingShakedown: null, phase: phaseAfterMeeting(state) } : state;
-}
+/** The next regular meeting or briefing's id, numbered from the public `meetingOpened`s (never an RNG draw, STATUS.md). */
+export const nextMeetingId = (state: GameState): string =>
+  `meeting-${state.log.filter((e) => e.type === "meetingOpened" && e.kind !== "emergency").length + 1}`;
+
+/**
+ * design §9.1: thirds of the bank gone at `bank` coins left, out of `start`:
+ * 1 at two-thirds or below, 2 at one-third or below.
+ */
+const thirdsGone = (start: number, bank: number): number => (bank * 3 <= start ? 2 : bank * 3 <= start * 2 ? 1 : 0);
 
 /** The taped-off rooms for which `open` holds reopen, each with its bell back at 0. design §5.3 */
 function reopen(state: GameState, open: (room: string) => boolean): GameState {
@@ -102,6 +107,12 @@ export function initialState(config: GameConfig): GameState {
     resolvedRound: 0,
     rooms: [],
     bank: 0,
+    bankStart: 0,
+    thirds: 0,
+    stretch: 1,
+    meetingDue: null,
+    emergencies: 0,
+    protected: [],
     playerOrder: [],
     players: {},
     share: 0,
@@ -132,7 +143,8 @@ export function initialState(config: GameConfig): GameState {
 function applyChange(state: GameState, event: GameEvent): GameState {
   switch (event.type) {
     case "gameCreated":
-      return { ...state, playerOrder: event.players.map((p) => p.id) };
+      // design §9.3: the crew's emergency pool by crew size.
+      return { ...state, playerOrder: event.players.map((p) => p.id), emergencies: EMERGENCY_POOL[event.players.length] ?? 0 };
     case "rngSeeded":
       return { ...state, rng: seedRng(event.seed) };
     case "rngAdvanced":
@@ -141,7 +153,7 @@ function applyChange(state: GameState, event: GameEvent): GameState {
       // design §5.1: every bell starts dark.
       return { ...state, rooms: event.rooms, bells: Object.fromEntries(event.rooms.map((r) => [r, 0])) };
     case "bankFilled":
-      return { ...state, bank: event.coins };
+      return { ...state, bank: event.coins, bankStart: event.coins };
     case "roleDealt": {
       const seat = state.config.players.find((p) => p.id === event.player);
       if (!seat) throw new Error(`roleDealt: unknown player ${event.player}`);
@@ -152,7 +164,6 @@ function applyChange(state: GameState, event: GameEvent): GameState {
         role: event.role,
         stash: 0,
         roleState: NO_ROLE_STATE,
-        emergencyMeetingUsed: false,
         consecutiveMissedMoves: 0,
         sealedVote: null,
       };
@@ -167,7 +178,7 @@ function applyChange(state: GameState, event: GameEvent): GameState {
       // A Rig for this round has been used by its flip (deck.ts). design §8.3
       const rigs = state.rigs.filter((r) => r.round > event.round);
       // design §5.3: a room whose tape has run out reopens with its bell at 0.
-      const next: GameState = {
+      return {
         ...reopen(state, (room) => (state.taped[room] as number) < event.round),
         phase: { kind: "planning", round: event.round },
         round: event.round,
@@ -175,10 +186,6 @@ function applyChange(state: GameState, event: GameEvent): GameState {
         card: null,
         rigs,
       };
-      // "Once between meetings" powers start again with each stretch: the next act's first round starts right
-      // after the regular meeting closes with its target check; emergency meetings never
-      // reach here. extension.md gap-fills "Between meetings"
-      return actOfRound(event.round) !== actOfRound(state.round) ? mapPlayers(next, (p) => withRoleState(p, { usedThisAct: 0 })) : next;
     }
     case "moveLocked":
       // Public mark only: the move itself is folded by the `moveSubmitted` that follows. design §5.1
@@ -201,7 +208,7 @@ function applyChange(state: GameState, event: GameEvent): GameState {
         case "audit":
         case "checkStash":
         case "bless":
-          return updatePlayer(state, event.player, (p) => withRoleState(p, { usedThisAct: p.roleState.usedThisAct + 1 }));
+          return updatePlayer(state, event.player, (p) => withRoleState(p, { usedThisStretch: p.roleState.usedThisStretch + 1 }));
         case "reopen":
           return updatePlayer(state, event.player, (p) => withRoleState(p, { usedThisGame: p.roleState.usedThisGame + 1 }));
         case "lookout":
@@ -219,33 +226,42 @@ function applyChange(state: GameState, event: GameEvent): GameState {
     case "roomRaided": {
       // design §5.3: the grabs are seized, the room is taped off and its bell goes off; Wanted +1 (§5.4).
       const bells = Object.fromEntries(Object.entries(state.bells).filter(([room]) => room !== event.room));
-      return { ...state, bells, taped: { ...state.taped, [event.room]: event.closedThrough }, wanted: event.wanted, seized: state.seized + event.seized };
+      // design §9.2: a raid calls a police briefing (a regular meeting due after the same round wins, §9.2).
+      return {
+        ...state,
+        bells,
+        taped: { ...state.taped, [event.room]: event.closedThrough },
+        wanted: event.wanted,
+        seized: state.seized + event.seized,
+        meetingDue: state.meetingDue ?? "briefing",
+      };
     }
     case "roomReopened":
       // design §5.3, §11.1: the Fixer tore the tape off; open from the next round, its bell at 0.
       return reopen(state, (room) => room === event.room);
-    case "blessingPaid":
-      // design §8 (v2 §2): the bank pays the blessed player's compensation, so it goes back into the coins set aside.
-      return { ...state, setAside: state.setAside + event.amount };
     case "duffelSplit":
-      // design §7.1–§7.3, §7.6: every stash gets this round's cut; the change is the kitty. Hand-ins reach the
-      // duffel here and count toward honesty once (§7.5); kitty coins never count again. Set-aside coins
-      // earn their credit with the meetings' rules (S3a.5).
+      // design §7.1–§7.3, §7.6: every stash gets this round's cut; the change is the kitty. Hand-ins and the
+      // coins set aside (shakedown returns, §9.6) reach the duffel here and count toward honesty once (§7.5);
+      // kitty coins never count again.
       return {
         ...mapPlayers(state, (p) => ({ stash: p.stash + event.cut })),
         share: event.share,
         kitty: event.kitty,
         setAside: 0,
-        reached: state.reached + event.handedIn,
+        reached: state.reached + event.handedIn + event.setAside,
       };
-    case "roundResolved":
-      // The bank is a public total. The round's alibis open (design §5.4); the next
-      // round, or after an act's last round its meeting (design §11), waits for their deadline.
+    case "roundResolved": {
+      // The bank is a public total. The round's alibis open (design §5.4); the meeting it called, the
+      // result window or the next round waits for their deadline. Crossing a third of the bank calls a
+      // regular meeting (§9.1; crossing both in one round, one meeting).
       // Tails watched this round (design §8.3); Verified stamps are for the round just ended.
+      const thirds = thirdsGone(state.bankStart, event.bank);
       return {
         ...mapPlayers(state, (p) => (p.roleState.tail === null ? {} : withRoleState(p, { tail: null }))),
         phase: { kind: "alibis", round: event.round },
         bank: event.bank,
+        thirds,
+        meetingDue: thirds > state.thirds ? "regular" : state.meetingDue,
         moves: {},
         card: null,
         resolvedRound: event.round,
@@ -253,13 +269,14 @@ function applyChange(state: GameState, event: GameEvent): GameState {
         alibisPosted: [],
         alibisVerified: [],
       };
-    case "alibisClosed": {
-      // Within an act `roundStarted` follows at once; after its last round the act's meeting is awaited.
-      const closed: GameState = { ...state, alibisOpen: false };
-      return isLastRoundOfAct(event.round)
-        ? { ...closed, phase: { kind: "awaitingMeeting", act: actOfRound(event.round) } }
-        : closed;
     }
+    case "alibisClosed":
+      // design §4.2 steps 9–10: the meeting the round called is awaited, else the result window.
+      return {
+        ...state,
+        alibisOpen: false,
+        phase: state.meetingDue ? { kind: "awaitingMeeting", meeting: state.meetingDue, meetingId: nextMeetingId(state) } : resultWindow(state),
+      };
     case "gameEnded":
       // A round that ends the game has no alibi window (design §5.4, PR #21 QA).
       return { ...state, phase: { kind: "ended", outcome: event.outcome }, alibisOpen: false };
@@ -280,8 +297,8 @@ function applyChange(state: GameState, event: GameEvent): GameState {
       return state;
     // ------------------------------------------------ meetings and votes. design §11
     case "meetingProposed": {
-      const { proposalId: id, by, act, slot } = event;
-      return { ...state, proposals: [...state.proposals, { id, by, act, slot, acceptedBy: [by] }] };
+      const { proposalId: id, by, slot } = event;
+      return { ...state, proposals: [...state.proposals, { id, by, slot, acceptedBy: [by] }] };
     }
     case "meetingProposalAccepted":
       return {
@@ -289,20 +306,18 @@ function applyChange(state: GameState, event: GameEvent): GameState {
         proposals: state.proposals.map((p) => (p.id === event.proposalId ? { ...p, acceptedBy: [...p.acceptedBy, event.by] } : p)),
       };
     case "meetingScheduled":
-      return { ...state, proposals: [], scheduledMeeting: { meetingId: event.meetingId, act: event.act, slot: event.slot } };
+      return { ...state, proposals: [], scheduledMeeting: { meetingId: event.meetingId, slot: event.slot } };
     case "emergencyMeetingCalled":
-      return updatePlayer({ ...state, pendingEmergency: { meetingId: event.meetingId, by: event.by } }, event.by, () => ({
-        emergencyMeetingUsed: true,
-      }));
+      // design §9.3: spent from the crew's pool, for good.
+      return { ...state, pendingEmergency: { meetingId: event.meetingId, by: event.by }, emergencies: state.emergencies - 1 };
     case "meetingOpened": {
       const emergency = event.kind === "emergency";
-      return {
+      const opened: GameState = {
         ...state,
         phase: { kind: "meeting", meetingId: event.meetingId },
         meeting: {
           id: event.meetingId,
           kind: event.kind,
-          act: event.act,
           calledBy: emergency ? (state.pendingEmergency?.by ?? null) : null,
           votes: {},
           extraVotes: [],
@@ -310,7 +325,12 @@ function applyChange(state: GameState, event: GameEvent): GameState {
         },
         scheduledMeeting: emergency ? state.scheduledMeeting : null,
         pendingEmergency: emergency ? null : state.pendingEmergency,
+        meetingDue: emergency ? state.meetingDue : null,
       };
+      if (event.kind !== "regular") return opened;
+      // design §9.1, §9.7, §11.2: a regular meeting starts the next stretch: "once between meetings" powers
+      // recharge, and shakedown protection lifts. Briefings and emergencies do neither.
+      return { ...mapPlayers(opened, (p) => withRoleState(p, { usedThisStretch: 0 })), stretch: state.stretch + 1, protected: [] };
     }
     case "voteSealed":
       return updatePlayer(state, event.player, () => ({ sealedVote: event.vote }));
@@ -322,19 +342,19 @@ function applyChange(state: GameState, event: GameEvent): GameState {
     }
     case "meetingClosed":
       openMeeting(state);
-      return { ...state, meeting: null, phase: phaseAfterMeeting(state) };
+      return { ...state, meeting: null, phase: resultWindow(state) };
     case "shakedownPending":
       return {
         ...state,
         phase: { kind: "shakedownPending", meetingId: event.meetingId, target: event.target },
-        pendingShakedown: { meetingId: event.meetingId, kind: event.kind, act: event.act, target: event.target },
+        pendingShakedown: { meetingId: event.meetingId, kind: event.kind, target: event.target },
       };
     case "shakedownCancelled":
-      return afterShakedown(state);
+      return afterShakedown(state, event.target);
     case "shakedownResolved": {
-      // design §7.1: what the shakedown took back is set aside for the next split.
-      const next = { ...afterShakedown(state), setAside: state.setAside + event.taken - event.compensation };
-      return updatePlayer(next, event.target, (p) => ({ stash: p.stash - event.taken + event.compensation }));
+      // design §7.1, §9.6: what the shakedown took back is set aside for the next split.
+      const next = { ...afterShakedown(state, event.target), setAside: state.setAside + event.taken };
+      return updatePlayer(next, event.target, (p) => ({ stash: p.stash - event.taken }));
     }
     // ------------------------------------------------ perks. design §8.3
     case "tokenEarned":

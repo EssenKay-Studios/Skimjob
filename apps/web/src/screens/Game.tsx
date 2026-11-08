@@ -12,9 +12,9 @@ import { Button } from "../components/Button";
 import { Chip } from "../components/Chip";
 import { Clock, Play } from "../components/icons";
 import { Meter } from "../components/Meter";
-import { EndingNote, GapBox } from "../components/Extension";
+import { EndingNote } from "../components/Extension";
 import { endingText } from "../game/extension";
-import { MeetingName, meetingAfter } from "../game/wording";
+import { MEETING_TITLE } from "../game/meeting";
 import { BankCutaway } from "../art/BankCutaway";
 import { BANK_ROOMS, type BankRoomId } from "../art/bankLayout";
 import { CrookAvatar } from "../art/Crook";
@@ -155,7 +155,7 @@ interface BoardProps {
   readonly timers: readonly Timer[];
   readonly offset: number;
   readonly send: (cmd: ClientCommand, done?: string) => Promise<Reply>;
-  /** Meetings open by themselves after each act (no slot proposals). design §11.1 */
+  /** Meetings open by themselves when due (no slot proposals). design §9.4 */
   readonly autoMeetings: boolean;
 }
 
@@ -232,7 +232,7 @@ function Hud({ view, timers, offset, hostPaused }: { view: PlayerView; timers: r
     <SketchFrame as="section" seed="game-hud" radius={18} shadow={0.5} className="hud" aria-label="Heist status">
       <div className="hud__phase">
         <p className="kicker hud__kicker">
-          {view.round > 0 ? `Round ${view.round} of ${roundCap}${meetingAfter(view.act) < roundCap ? ` · ${MeetingName(view.act)} after round ${meetingAfter(view.act)}` : ""}` : "Setting up"}
+          {view.round > 0 ? `Round ${view.round} of ${roundCap}` : "Setting up"}
         </p>
         <h1 className="hud__title">{phase.title}</h1>
         {countdown && (
@@ -371,7 +371,6 @@ function Actions({ view, timers, offset, send, autoMeetings, pick }: BoardProps 
       {p.kind === "meeting" && <MeetingNow view={view} timers={timers} offset={offset} send={send} />}
       {p.kind === "shakedownPending" && <DecidingPanel view={view} timers={timers} offset={offset} />}
       {alibi && <AlibiPanel view={view} round={alibi.round} posted={alibi.posted} send={send} />}
-      <GapBox view={view} />
       {p.kind === "planning" ? (
         <MovePanel key={p.round} view={view} round={p.round} timers={timers} offset={offset} send={send} autoMeetings={autoMeetings} pick={pick} />
       ) : p.kind === "alibis" || voting ? null : (
@@ -386,7 +385,13 @@ function Actions({ view, timers, offset, send, autoMeetings, pick }: BoardProps 
 
 function WaitPanel({ view }: { view: PlayerView }) {
   const p = view.phase;
-  const text = p.kind === "awaitingMeeting" ? `Round ${meetingAfter(p.act)} is done. ${MeetingName(p.act)} opens next.` : "Hang tight.";
+  // design §9.1–§9.3: a regular meeting or briefing is due, or the result window (an emergency can be called).
+  const text =
+    p.kind === "awaitingMeeting"
+      ? `${MEETING_TITLE[p.meeting]} opens next.`
+      : p.kind === "result" && view.emergencies > 0
+        ? `Round ${p.round}'s result is in. Anyone can call an emergency meeting before the next round.`
+        : "Hang tight.";
   return (
     <SketchFrame as="section" seed="game-wait" radius={16} shadow={0.4} className="panel wait" aria-live="polite">
       <h2 className="panel__title">

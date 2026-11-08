@@ -9,7 +9,7 @@
 // - Rig: while planning, then pick the calmer of the two cards.
 // - Ballot is kept: bots don't read others' ballots (they don't talk). The Shield spends itself.
 // - Buying (extension.md "Tokens and the perk shop"): `buyPerks`, by a fixed priority.
-import { EVENTS, ROUNDS_PER_ACT, type EventId, type PerkId, type RoomId } from "@skimjob/content";
+import { EVENTS, type EventId, type PerkId, type RoomId } from "@skimjob/content";
 import { overrideEvents, roomDef, type PlayerCommand, type PlayerView, type VoteChoice } from "@skimjob/engine";
 import { createdOf, lastResolvedRound, ofType, roleOf, roomsWhere } from "./read";
 import { mostSuspicious, knownRoles, suspicion } from "./suspicion";
@@ -17,9 +17,8 @@ import { publicSuspicion } from "./claims";
 import { jobThisRound } from "./alarm";
 
 const has = (view: PlayerView, perk: PerkId): boolean => view.me.roleState.perks.includes(perk);
-export const hasPerk = has;
 
-/** Perks spent by themselves (Shield, Emergency) and the Rig's pick don't count as the round's one use. */
+/** Perks spent by themselves (the Shield) and the Rig's pick don't count as the round's one use. */
 const isChosenUse = (c: PlayerCommand): boolean => c.type === "useAbility" && c.ability.kind !== "rigPick";
 
 /**
@@ -28,7 +27,7 @@ const isChosenUse = (c: PlayerCommand): boolean => c.type === "useAbility" && c.
  * `perkUsed`). extension.md "Tokens and the perk shop"
  */
 export function perkSpender(view: PlayerView): (commands: readonly PlayerCommand[]) => PlayerCommand[] {
-  let used = ofType(view.caseFile, "perkUsed").some((e) => e.round === view.round && e.perk.kind !== "shield" && e.perk.kind !== "emergency");
+  let used = ofType(view.caseFile, "perkUsed").some((e) => e.round === view.round && e.perk.kind !== "shield");
   return (commands) => {
     const out: PlayerCommand[] = [];
     for (const c of commands) {
@@ -43,13 +42,13 @@ export function perkSpender(view: PlayerView): (commands: readonly PlayerCommand
 }
 
 /** Shop perks in the order a bot buys them, and when each is worth having (bot settings). */
-const BUY_ORDER: readonly PerkId[] = ["shield", "peek", "extraVote", "alibi", "tail", "recharge", "rig", "emergency", "ballot"];
+const BUY_ORDER: readonly PerkId[] = ["shield", "peek", "extraVote", "alibi", "tail", "recharge", "rig", "ballot"];
 
 function worthBuying(view: PlayerView, perk: PerkId): boolean {
   switch (perk) {
     case "recharge": {
       const { power } = roleOf(view);
-      return "perAct" in power;
+      return "perStretch" in power;
     }
     case "rig":
       return createdOf(view).eventsEnabled;
@@ -133,11 +132,11 @@ export function planningPerks(view: PlayerView, room: RoomId | undefined = view.
   return out;
 }
 
-/** v2 §1 Recharge: the power's uses this act are spent. */
+/** v2 §1 Recharge: the power's uses this stretch are spent. */
 function usedUp(view: PlayerView): boolean {
   const { power } = roleOf(view);
-  const { usedThisAct } = view.me.roleState;
-  return "perAct" in power && usedThisAct >= power.perAct;
+  const { usedThisStretch } = view.me.roleState;
+  return "perStretch" in power && usedThisStretch >= power.perStretch;
 }
 
 /** +Vote with a shakedown ballot, once per meeting. design §8.3 */
@@ -154,7 +153,7 @@ export function alibiPerk(view: PlayerView, posted: RoomId): PlayerCommand[] {
   const round = lastResolvedRound(view);
   const real = ofType(view.caseFile, "coinsGrabbed").find((e) => e.round === round)?.room;
   if (real !== posted) return [];
-  // Worth it when the crew could suspect me, or just before the act's meeting.
-  if ((publicSuspicion(view).get(view.me.id) ?? 0) < STAMP_ALIBI_AT && round % ROUNDS_PER_ACT !== 0) return [];
+  // Worth it when the crew could suspect me.
+  if ((publicSuspicion(view).get(view.me.id) ?? 0) < STAMP_ALIBI_AT) return [];
   return [{ type: "useAbility", player: view.me.id, ability: { kind: "alibi" } }];
 }

@@ -11,7 +11,7 @@ import { viewFor } from "./view";
 const TABLES = { roles: ROLES };
 
 const dealt = (player: string, role: string): GameEvent => ({ type: "roleDealt", visibility: privateTo(player), player, role });
-const started = (round: number): GameEvent => ({ type: "roundStarted", visibility: PUBLIC, round, act: 1 });
+const started = (round: number): GameEvent => ({ type: "roundStarted", visibility: PUBLIC, round });
 const rank = (player: string, role: string, stash: number): RankEntry => ({ player, role, stash });
 
 /** A three-seat game: p0 Mole, p1 Hacker, p2 Rookie with Security. */
@@ -40,7 +40,7 @@ describe("reveal summary — design §13", () => {
       dealt("p0", "mole"),
       dealt("p1", "rookie"),
       started(2),
-      { type: "roleClaimed", visibility: PUBLIC, player: "p0", role: "rookie", act: 1 },
+      { type: "roleClaimed", visibility: PUBLIC, player: "p0", role: "rookie", stretch: 1 },
     ];
     const outcome: Outcome = { result: "failed", reason: "theft", ranking: [rank("p0", "mole", 9), rank("p1", "rookie", 3)], winners: ["p0"], getaway: 0 };
     const s = revealSummary(log, outcome, TABLES);

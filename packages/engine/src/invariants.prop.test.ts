@@ -95,15 +95,15 @@ function nextDeadlines(state: GameState): Command[] {
   if (phase.kind === "meeting") return [{ type: "advance", deadline: { kind: "closeMeeting", meetingId: phase.meetingId } }];
   if (phase.kind === "shakedownPending") return [{ type: "advance", deadline: { kind: "resolveShakedown", meetingId: phase.meetingId } }];
   const out: Command[] = [];
-  if (state.pendingEmergency && (phase.kind === "planning" || phase.kind === "alibis" || phase.kind === "awaitingMeeting")) {
-    out.push({ type: "advance", deadline: { kind: "openMeeting", meetingId: state.pendingEmergency.meetingId } });
-  }
+  if (state.pendingEmergency) out.push({ type: "advance", deadline: { kind: "openMeeting", meetingId: state.pendingEmergency.meetingId } });
   if (phase.kind === "planning") out.push({ type: "advance", deadline: { kind: "round", round: phase.round } });
   // design §5.4: the alibi deadline after each round.
   if (phase.kind === "alibis") out.push({ type: "advance", deadline: { kind: "alibis", round: phase.round } });
+  // design §9.3: the result window closes unless an emergency was called in it.
+  if (phase.kind === "result" && !state.pendingEmergency) out.push({ type: "advance", deadline: { kind: "result", round: phase.round } });
   if (phase.kind === "awaitingMeeting") {
     if (state.scheduledMeeting) out.push({ type: "advance", deadline: { kind: "openMeeting", meetingId: state.scheduledMeeting.meetingId } });
-    else out.push({ type: "scheduleMeeting", act: phase.act, slot: `server-act-${phase.act}` });
+    else out.push({ type: "scheduleMeeting", meetingId: phase.meetingId, slot: `server-${phase.meetingId}` });
   }
   return out;
 }
@@ -153,7 +153,17 @@ function playerCommand(state: GameState, t: Tape, style: Style): { command: Reco
   const phase = state.phase.kind;
   const fit = t.chance(70);
   const choice =
-    fit && phase === "planning" ? 0 : fit && phase === "alibis" ? 5 : fit && phase === "meeting" ? 9 : fit && phase === "shakedownPending" ? 12 : t.int(15);
+    fit && phase === "planning"
+      ? 0
+      : fit && phase === "alibis"
+        ? 5
+        : fit && phase === "meeting"
+          ? 9
+          : fit && phase === "shakedownPending"
+            ? 12
+            : fit && phase === "result" && t.chance(50)
+              ? 14
+              : t.int(15);
   switch (choice) {
     case 0:
     case 1:
@@ -263,11 +273,12 @@ function garbageCommand(state: GameState, t: Tape): unknown {
     { type: "advance", deadline: { kind: "alibis", round: state.round + 1 } },
     { type: "advance", deadline: { kind: "alibis", round: state.resolvedRound - 1 } },
     { type: "advance", deadline: { kind: "alibis" } },
-    { type: "advance", deadline: { kind: "openMeeting", meetingId: "act-9" } },
+    { type: "advance", deadline: { kind: "openMeeting", meetingId: "meeting-9" } },
+    { type: "advance", deadline: { kind: "result", round: 99 } },
     { type: "advance", deadline: { kind: "closeMeeting", meetingId: "emergency-nobody" } },
-    { type: "advance", deadline: { kind: "resolveShakedown", meetingId: "act-1" } },
-    { type: "scheduleMeeting", act: 4, slot: "x" },
-    { type: "scheduleMeeting", act: 1, slot: null },
+    { type: "advance", deadline: { kind: "resolveShakedown", meetingId: "meeting-1" } },
+    { type: "scheduleMeeting", meetingId: "meeting-4", slot: "x" },
+    { type: "scheduleMeeting", meetingId: "meeting-1", slot: null },
   ];
   return t.pick(bad);
 }
@@ -285,8 +296,6 @@ function lootFlow(events: readonly GameEvent[]): number {
   let n = 0;
   for (const e of events) {
     if (e.type === "coinsGrabbed") n += e.duffel + e.pocket;
-    // Role deck v2 R2b: the Priest blessing pays in.
-    else if (e.type === "blessingPaid") n += e.amount;
   }
   return n;
 }
@@ -348,6 +357,15 @@ function checkState(state: GameState, inflow: number): void {
   // design §5.4: alibis are open exactly in the alibi phase (or in a meeting called during it), for the round just resolved.
   if (state.phase.kind === "alibis") check(state.alibisOpen && state.phase.round === state.resolvedRound && state.phase.round === state.round, "alibi phase for the round just resolved", state.phase);
   if (state.phase.kind === "planning" || state.phase.kind === "awaitingMeeting") check(!state.alibisOpen, "alibis closed outside their phase", state.phase);
+  // design §9.3: the pool only shrinks, by one per call, and an emergency is only ever pending in the result window.
+  const calls = state.log.filter((e) => e.type === "emergencyMeetingCalled").length;
+  check(state.emergencies === (state.playerOrder.length <= 6 ? 1 : 2) - calls && state.emergencies >= 0, "the emergency pool = its size − calls ≥ 0", [state.emergencies, calls]);
+  if (state.pendingEmergency) check(state.phase.kind === "result", "an emergency is pending only in the result window", state.phase);
+  // design §9.1, §9.7: one regular meeting per third of the bank; protection only for players a shakedown passed against.
+  const regulars = state.log.filter((e) => e.type === "meetingOpened" && e.kind === "regular").length;
+  check(regulars <= state.thirds && state.stretch === regulars + 1, "a regular meeting per third of the bank, each starting a stretch", [regulars, state.thirds, state.stretch]);
+  const shaken = new Set(state.log.flatMap((e) => (e.type === "shakedownResolved" || e.type === "shakedownCancelled" ? [e.target] : [])));
+  check(state.protected.every((id) => shaken.has(id)), "only shaken-down players are protected", state.protected);
 }
 
 /** extension.md "Decks", "Host settings": deck roles (Rookies fill), unique by default, one Mole at most, the Balanced mix. */
@@ -392,7 +410,7 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
             ...p,
             role: p.role === "priest" ? "hacker" : "priest",
             stash: p.stash + 101,
-            roleState: { usedThisAct: 4, usedThisGame: 1, tokens: p.roleState.tokens + 3, perks: ["peek", "shield"], tail: "vault" },
+            roleState: { usedThisStretch: 4, usedThisGame: 1, tokens: p.roleState.tokens + 3, perks: ["peek", "shield"], tail: "vault" },
             consecutiveMissedMoves: 5,
             sealedVote: { kind: "shakedown", target: viewer },
           };
@@ -433,7 +451,7 @@ function checkView(state: GameState, viewer: PlayerId, deep: boolean): void {
   const seen = state.log.filter((e) => canSee(e.visibility, viewer, false));
   const merged = [...view.ledger, ...view.caseFile].sort((a, b) => a.seq - b.seq);
   check(merged.length === seen.length && merged.every((e, i) => e.seq === i), "ledger + case file = canSee, numbered without gaps");
-  check(view.players.every((o) => Object.keys(o).sort().join() === "emergencyMeetingUsed,id,isBot,name"), "others show public fields only");
+  check(view.players.every((o) => Object.keys(o).sort().join() === "id,isBot,name"), "others show public fields only");
   if (!over) check(view.reveal === null, "no reveal before the end");
   else check(view.reveal !== null && view.reveal.log.every(({ event }) => canSee(event.visibility, viewer, true)), "reveal = canSee after the game");
   if (!deep) return;

@@ -4,14 +4,15 @@
 // Detective.
 // design §8, §8.1, §16.1
 import { describe, expect, it } from "vitest";
-import { handleThroughAlibis } from "./alibis.testkit";
+import { closeResultWindow } from "./alibis.testkit";
+import { handleCommand, type CommandResult } from "./handle";
 import { POOL_ROLES, ROLES, STARTER_ROLES } from "@skimjob/content";
 import { grantPerks } from "./perks.testkit";
 import type { GameConfig, GameEvent, GameState } from "./types";
 import { privateTo } from "./types";
 import { rolePoolFor, setupEvents, validateConfig } from "./setup";
 import { replay } from "./reduce";
-import { rolesFor, jobFor } from "./overrides";
+import { rolesFor } from "./overrides";
 import { viewFor } from "./view";
 import { R6_COINS } from "./v01-numbers.testkit";
 import { fullGrab } from "./grab.testkit";
@@ -40,6 +41,24 @@ function game(players: number, roles: string[], extra: Partial<GameConfig> = {})
   return replay(cfg, log);
 }
 
+/**
+ * A command, with a round deadline followed by its alibi deadline (nobody
+ * posts). The result window (design §9.3) stays open, so an emergency can be
+ * called in it, until a move or a round deadline closes it.
+ */
+function handleThroughAlibis(state: GameState, command: unknown): CommandResult {
+  const c = command as { type?: unknown; deadline?: { kind?: unknown } } | null;
+  const planning = c?.type === "submitMove" || c?.deadline?.kind === "round";
+  const s = state.phase.kind === "result" && !state.pendingEmergency && planning ? must(closeResultWindow(state)) : state;
+  const r = handleCommand(s, command);
+  if (!r.ok || r.state.phase.kind !== "alibis" || (command as { deadline?: { kind?: unknown } }).deadline?.kind !== "round") return r;
+  return handleCommand(r.state, { type: "advance", deadline: { kind: "alibis", round: r.state.phase.round } });
+}
+const must = (r: CommandResult): GameState => {
+  if (!r.ok) throw new Error(r.reason);
+  return r.state;
+};
+
 type Cmd = unknown | ((s: GameState) => unknown);
 function run(state: GameState, ...commands: Cmd[]): GameState {
   return commands.reduce<GameState>((s, c) => {
@@ -67,30 +86,17 @@ const ofType = <T extends GameEvent["type"]>(events: readonly GameEvent[], type:
 const granted = (s: GameState, player: string) => ofType(s.log, "tokenEarned").filter((e) => e.player === player).map((e) => e.trigger);
 
 const mv = (player: string, room: string, pocket = 0, extra: object = {}) => ({ type: "submitMove", player, move: { ...fullGrab(room, pocket, R6_COINS), ...extra } });
-const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
+/** The round being planned; from the result window, the next one (closing the window first). */
+const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.phase.kind === "result" ? s.round + 1 : s.round } });
 const vote = (player: string, target: string) => ({ type: "castVote", player, vote: { kind: "shakedown", target } });
 const CLOSE = (s: GameState) => ({ type: "advance", deadline: { kind: "closeMeeting", meetingId: s.meeting?.id } });
 const use = (player: string, ability: object) => ({ type: "useAbility", player, ability });
-/** `caller` calls an emergency meeting; everyone else but `target` votes to shake `target` down. */
+/** `caller` calls an emergency meeting in the result window; everyone else but `target` votes to shake `target` down. */
 const shakeDown = (s: GameState, caller: string, target: string): GameState => {
-  s = run(s, { type: "callEmergency", player: caller }, { type: "advance", deadline: { kind: "openMeeting", meetingId: `emergency-${caller}` } });
+  s = run(s, { type: "callEmergency", player: caller }, (x: GameState) => ({ type: "advance", deadline: { kind: "openMeeting", meetingId: x.pendingEmergency?.meetingId } }));
   for (const id of s.playerOrder) if (id !== target) s = run(s, vote(id, target));
   return run(s, CLOSE);
 };
-/** Play the act's remaining rounds with `moves` each round, then its regular meeting with no votes. */
-const finishAct = (s: GameState, ...moves: Cmd[]): GameState => {
-  const act = Math.ceil(s.round / 3);
-  while (s.round <= act * 3 && s.phase.kind === "planning" && Math.ceil(s.round / 3) === act) {
-    const before = s.round;
-    s = run(s, ...moves, ROUND);
-    if (s.round === before) break; // the act's last round: awaiting its meeting
-  }
-  return run(s, { type: "scheduleMeeting", act, slot: "x" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: `act-${act}` } }, CLOSE);
-};
-/** extension.md "Shakedowns": one clean line, 6, shared with the Detective's check. */
-const cleanBelowPerAct = jobFor(config(3)).shakedown.cleanBelow; // the R6 pin
-/** 10 coins a round at 3 players, all handed in. */
-const STEADY = [mv("p0", "office"), mv("p1", "office"), mv("p2", "lobby")];
 
 describe("Lookout: someone it saw is caught → a token — extension.md \"Roles\"", () => {
   const watched = (pocket: number) => {
@@ -99,20 +105,20 @@ describe("Lookout: someone it saw is caught → a token — extension.md \"Roles
   };
 
   it("granted when a player its power saw is shaken down dirty", () => {
-    const s = watched(cleanBelowPerAct);
+    const s = watched(1);
     expect(ofType(s.log, "shakedownResolved")[0]?.clean).toBe(false);
     expect(granted(s, "p0")).toEqual(["watchedShakenDirty"]);
   });
 
   it("not when the target is clean, nor for a player it didn't see", () => {
-    expect(granted(watched(cleanBelowPerAct - 1), "p0")).toEqual([]);
+    expect(granted(watched(0), "p0")).toEqual([]);
     let s = run(game(3, ["lookout"]), mv("p0", "lobby", 0, { ability: { kind: "lookout", rooms: ["office"] } }), mv("p1", "vault", 6), ROUND);
     s = shakeDown(s, "p2", "p1");
     expect(granted(s, "p0")).toEqual([]);
   });
 });
 
-describe("Auditor: once per act, a room's shortfall in the latest round — v2 §2, design §8", () => {
+describe("Auditor: once between meetings, a room's shortfall in the latest round — v2 §2, design §8, §11.2", () => {
   // Round 1: p1 pockets 4 in the Vault, p2 hands in everything in the Vault.
   const played = () => run(game(3, ["auditor"]), mv("p1", "vault", 4), mv("p2", "vault"), ROUND);
 
@@ -122,13 +128,13 @@ describe("Auditor: once per act, a room's shortfall in the latest round — v2 �
       type: "abilityResolved",
       visibility: privateTo("p0"),
       player: "p0",
-      round: 2,
+      round: 1,
       ability: { kind: "audit", round: 1, room: "vault", shortfall: 4 },
     });
     expect(JSON.stringify(viewFor(s, "p1"))).not.toMatch(/"audit"/);
   });
 
-  it("once per act (back next act); refused before any round, for a room not in play, and for other roles", () => {
+  it("once between meetings (back after the next regular meeting); refused before any round, for a room not in play, and for other roles", () => {
     const s = run(played(), use("p0", { kind: "audit", room: "office" }));
     expect(s.log.at(-1)).toMatchObject({ ability: { kind: "audit", room: "office", shortfall: 0 } });
     expect(reason(s, use("p0", { kind: "audit", room: "vault" }))).toMatch(/already audited/);
@@ -136,8 +142,13 @@ describe("Auditor: once per act, a room's shortfall in the latest round — v2 �
     expect(reason(played(), use("p0", { kind: "audit", room: "moon" }))).toMatch(/room in play/);
     expect(reason(played(), use("p1", { kind: "audit", room: "vault" }))).toMatch(/no audit ability/);
     expect(reason(played(), mv("p0", "vault", 0, { ability: { kind: "audit", room: "vault" } }))).toMatch(/isn't used in a move/);
-    const next = run(finishAct(s), use("p0", { kind: "audit", room: "vault" }));
-    expect(ofType(next.log, "abilityResolved").filter((e) => e.ability.kind === "audit")).toHaveLength(2);
+    // design §9.1: with a bank of 18 the same round takes two-thirds of it, so a regular meeting recharges the audit.
+    let t = run(game(3, ["auditor"], { contentOverrides: { bank: { coinsPerPlayer: 6 } } }), mv("p1", "vault", 4), mv("p2", "vault"), ROUND, use("p0", { kind: "audit", room: "office" }));
+    expect(t.phase).toMatchObject({ kind: "awaitingMeeting", meeting: "regular", meetingId: "meeting-1" });
+    expect(reason(t, use("p0", { kind: "audit", room: "vault" }))).toMatch(/already audited/);
+    t = run(t, { type: "scheduleMeeting", meetingId: "meeting-1", slot: "x" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: "meeting-1" } });
+    t = run(t, (x: GameState) => ({ type: "advance", deadline: { kind: "closeMeeting", meetingId: x.meeting?.id } }), ROUND, use("p0", { kind: "audit", room: "vault" }));
+    expect(ofType(t.log, "abilityResolved").filter((e) => e.ability.kind === "audit")).toHaveLength(2);
   });
 
   it("a visitor of the audited room in that round caught → a token; anyone else → nothing (extension.md \"Roles\")", () => {
@@ -152,7 +163,7 @@ describe("Auditor: once per act, a room's shortfall in the latest round — v2 �
   });
 });
 
-describe("Detective: once per act, is a stash at or above the clean threshold? — v2 §2, design §8", () => {
+describe("Detective: once between meetings, does a player hold anything above the share? — v2 §2, design §8, §9.6", () => {
   it("refused on yourself, an unknown player, or for other roles", () => {
     const s = game(3, ["detective"]);
     expect(reason(s, use("p0", { kind: "checkStash", target: "p0" }))).toMatch(/another player/);

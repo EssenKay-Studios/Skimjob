@@ -32,7 +32,7 @@ function run(s: GameState, ...cs: (PlayerCommand | SystemCommand)[]): GameState 
 }
 const shake = (player: PlayerId, target: PlayerId): PlayerCommand => ({ type: "castVote", player, vote: { kind: "shakedown", target } });
 
-/** A scheduler-ish step: varied rooms and pockets, alibis, meetings (Act 2 shakes down p2), shakedowns resolve. */
+/** A scheduler-ish step: varied rooms and pockets, alibis, meetings (the second shakes down p2), result windows, shakedowns resolve. */
 function step(s: GameState): GameState {
   const p = s.phase;
   if (p.kind === "planning") {
@@ -44,12 +44,13 @@ function step(s: GameState): GameState {
     return run(s, { type: "advance", deadline: { kind: "round", round: p.round } });
   }
   if (p.kind === "alibis") return run(tryRun(s, { type: "postAlibi", player: "p2", room: s.rooms[0] } as PlayerCommand), { type: "advance", deadline: { kind: "alibis", round: p.round } });
+  if (p.kind === "result") return run(s, { type: "advance", deadline: { kind: "result", round: p.round } });
   if (p.kind === "awaitingMeeting") {
-    if (!s.scheduledMeeting) s = run(s, { type: "scheduleMeeting", act: p.act, slot: `s-${p.act}` } as SystemCommand);
-    return run(s, { type: "advance", deadline: { kind: "openMeeting", meetingId: s.scheduledMeeting!.meetingId } });
+    if (!s.scheduledMeeting) s = run(s, { type: "scheduleMeeting", meetingId: p.meetingId, slot: `s-${p.meetingId}` } as SystemCommand);
+    return run(s, { type: "advance", deadline: { kind: "openMeeting", meetingId: p.meetingId } });
   }
   if (p.kind === "meeting") {
-    if (p.meetingId === "act-2") for (const x of ids(s).filter((x) => x !== "p2")) s = tryRun(s, shake(x, "p2"));
+    if (p.meetingId === "meeting-2") for (const x of ids(s).filter((x) => x !== "p2")) s = tryRun(s, shake(x, "p2"));
     return run(s, { type: "advance", deadline: { kind: "closeMeeting", meetingId: p.meetingId } });
   }
   if (p.kind === "shakedownPending") return run(s, { type: "advance", deadline: { kind: "resolveShakedown", meetingId: p.meetingId } });
@@ -149,7 +150,7 @@ describe("QA: recap after a meeting, a shakedown, the end and a reconnect (desig
   });
 
   it("a shakedown: the target and the others each get its result, not the vote", () => {
-    const i = at((s) => s.phase.kind === "meeting" && s.phase.meetingId === "act-2");
+    const i = at((s) => s.phase.kind === "meeting" && s.phase.meetingId === "meeting-2");
     expect(i).toBeGreaterThan(0);
     const j = at((s) => s.log.some((e) => e.type === "shakedownResolved"));
     expect(j).toBeGreaterThan(i);

@@ -16,7 +16,6 @@ import { setupEvents } from "./setup";
 import { applyEvent, replay } from "./reduce";
 import { COMMAND_TYPES, handleCommand } from "./handle";
 import { powerOf } from "./overrides";
-import { actOfRound } from "./acts";
 import { grantPerks } from "./perks.testkit";
 import { show } from "./check";
 import { fullGrab } from "./grab.testkit";
@@ -82,19 +81,19 @@ function scenarioStates(): GameState[] {
   s = keep(run(s, round(s))); // alibis for round 1
   s = keep(run(s, { type: "postAlibi", player: "p8", room: "lobby" })); // a true alibi, for the Alibi perk
   s = keep(run(s, { type: "useAbility", player: "p5", ability: { kind: "audit", room: "lobby" } })); // a power used, for the Recharge perk
+  s = keep(run(s, alibis(s))); // the result window after round 1 (design §9.3)
+  expect(s.phase.kind).toBe("result");
   s = keep(run(s, { type: "callEmergency", player: "p1" })); // waiting to open
-  s = keep(run(s, { type: "advance", deadline: { kind: "openMeeting", meetingId: "emergency-p1" } })); // voting
+  s = keep(run(s, { type: "advance", deadline: { kind: "openMeeting", meetingId: "emergency-1" } })); // voting
   s = run(s, ...["p0", "p1", "p2", "p3", "p4", "p5", "p6"].map((id) => ({ type: "castVote", player: id, vote: { kind: "shakedown", target: "p8" } })));
-  s = keep(run(s, { type: "advance", deadline: { kind: "closeMeeting", meetingId: "emergency-p1" } })); // the shakedown window
+  s = keep(run(s, { type: "advance", deadline: { kind: "closeMeeting", meetingId: "emergency-1" } })); // the shakedown window
   expect(s.phase.kind).toBe("shakedownPending");
-  s = keep(run(s, { type: "advance", deadline: { kind: "resolveShakedown", meetingId: "emergency-p1" } }));
-  s = keep(run(s, alibis(s))); // planning round 2
-  s = run(s, round(s));
-  s = run(s, alibis(s));
-  s = run(s, round(s));
-  s = keep(run(s, alibis(s))); // awaiting the act 1 meeting
+  s = keep(run(s, { type: "advance", deadline: { kind: "resolveShakedown", meetingId: "emergency-1" } })); // planning round 2
+  // Round 2: everyone in the Vault rings it past its last bulb: the raid calls a police briefing (design §9.2).
+  s = run(s, ...s.playerOrder.map((id) => mv(id, "vault")), round(s));
+  s = keep(run(s, alibis(s)));
   expect(s.phase.kind).toBe("awaitingMeeting");
-  s = keep(run(s, { type: "scheduleMeeting", act: 1, slot: "server" }));
+  s = keep(run(s, (s.phase.kind === "awaitingMeeting" ? { type: "scheduleMeeting", meetingId: s.phase.meetingId, slot: "server" } : null)));
   // A Lockdown card forged onto planning (design §10).
   const planning = out[2] as GameState;
   keep({ ...planning, card: { round: planning.round, id: "lockdown", room: "vault" } });
@@ -158,16 +157,17 @@ function baseCommands(s: GameState): Record<string, unknown>[] {
   const meetingIds = [s.scheduledMeeting?.meetingId, s.pendingEmergency?.meetingId, s.meeting?.id, s.pendingShakedown?.meetingId];
   out.push({ type: "advance", deadline: { kind: "round", round: s.round } });
   out.push({ type: "advance", deadline: { kind: "alibis", round: s.resolvedRound } });
+  out.push({ type: "advance", deadline: { kind: "result", round: s.resolvedRound } });
   for (const kind of ["openMeeting", "closeMeeting", "resolveShakedown"]) {
     for (const meetingId of meetingIds) if (meetingId) out.push({ type: "advance", deadline: { kind, meetingId } });
   }
-  out.push({ type: "scheduleMeeting", act: actOfRound(s.round), slot: "server-slot" });
+  if (s.phase.kind === "awaitingMeeting") out.push({ type: "scheduleMeeting", meetingId: s.phase.meetingId, slot: "server-slot" });
   return out;
 }
 
 // ---------------------------------------------------------------- hostile values
 
-/** Fields whose strings are free text the engine only stores and compares (`slot`, design §11.1): any short string is fine there. */
+/** Fields whose strings are free text the engine only stores and compares (`slot`, design §9.4): any short string is fine there. */
 const FREE_TEXT = new Set(["slot"]);
 /** Fields a command may leave out (a move without a power). */
 const OPTIONAL = new Set(["move.ability"]);

@@ -78,13 +78,14 @@ function play(c: GameConfig, absent: readonly PlayerId[] = []): GameState {
     const phase = state.phase;
     if (phase.kind === "meeting") system({ type: "advance", deadline: { kind: "closeMeeting", meetingId: phase.meetingId } });
     else if (phase.kind === "shakedownPending") system({ type: "advance", deadline: { kind: "resolveShakedown", meetingId: phase.meetingId } });
-    else if (state.pendingEmergency && (phase.kind === "planning" || phase.kind === "alibis" || phase.kind === "awaitingMeeting"))
+    else if (state.pendingEmergency)
       system({ type: "advance", deadline: { kind: "openMeeting", meetingId: state.pendingEmergency.meetingId } });
     else if (phase.kind === "planning") system({ type: "advance", deadline: { kind: "round", round: phase.round } });
     else if (phase.kind === "alibis") system({ type: "advance", deadline: { kind: "alibis", round: phase.round } });
+    else if (phase.kind === "result") system({ type: "advance", deadline: { kind: "result", round: phase.round } });
     else if (phase.kind === "awaitingMeeting") {
-      if (!state.scheduledMeeting) system({ type: "scheduleMeeting", act: phase.act, slot: `server-act-${phase.act}` });
-      system({ type: "advance", deadline: { kind: "openMeeting", meetingId: state.scheduledMeeting?.meetingId as string } });
+      if (!state.scheduledMeeting) system({ type: "scheduleMeeting", meetingId: phase.meetingId, slot: `server-${phase.meetingId}` });
+      system({ type: "advance", deadline: { kind: "openMeeting", meetingId: phase.meetingId } });
     }
   }
   return state;
@@ -272,7 +273,7 @@ describe("QA #55 reveal summary vs the engine's truth — design §13", () => {
     // Content bells (no R6 pins), so raids happen (design §5.3).
     audit(play(config(8, "qa55-8-raids", { contentOverrides: null })), cov);
     // Content numbers: sunk by theft below the honesty line, and the Mole on top wins it (design §8.4).
-    audit(play(config(5, "qa55-5-t59", { contentOverrides: null })), cov);
+    audit(play(config(5, "qa55-5-t282", { contentOverrides: null })), cov);
     for (const k of MUST) expect(cov, k).toContain(k);
   }, 120_000);
 

@@ -28,8 +28,8 @@ describe("QA #51: votes are on suspicion only — extension.md Build notes \"Bot
     // Two rounds with every coin pocketed: a top-rated Mole leans toward theft (design §8.4).
     let cold = game(5);
     for (let r = 0; r < 2; r++) cold = round(cold, Object.fromEntries(cold.playerOrder.map((id) => [id, { room: "lobby", pocket: 2 }])));
-    const base = addLog({ ...closeAlibis(cold), phase: { kind: "meeting", meetingId: "act-1" } }, {
-      type: "shakedownResolved", visibility: PUBLIC, meetingId: "emergency-x", target: "ben", stashRevealed: 7, taken: 7, clean: false, compensation: 0,
+    const base = addLog({ ...closeAlibis(cold), phase: { kind: "meeting", meetingId: "meeting-1" } }, {
+      type: "shakedownResolved", visibility: PUBLIC, meetingId: "emergency-x", target: "ben", stashRevealed: 7, taken: 7, clean: false,
     });
     const star = withRole(base, "ana", "mole", { stash: 10 });
     expect(leaning(viewFor(star, "ana"))).toBe("theft");

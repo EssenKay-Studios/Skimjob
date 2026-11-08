@@ -161,8 +161,12 @@ describe("restarts (M2-4 acceptance)", () => {
     expect(count(s, "roundResolved")).toBe(1);
     expect(s.phase).toEqual({ kind: "alibis", round: 1 });
     expect(await deadlines(id)).toEqual([{ key: "alibis:1", due: clock.now() + QUICK.alibiMs, paused: false }]);
-    // design §5.4: the alibi deadline then starts round 2.
+    // design §5.4, §9.3: the alibi deadline opens the result window, whose deadline then starts round 2.
     clock.advance(QUICK.alibiMs);
+    expect(await app.scheduler.tick()).toBe(1);
+    expect((await load(id)).phase).toEqual({ kind: "result", round: 1 });
+    expect(await deadlines(id)).toEqual([{ key: "result:1", due: clock.now() + QUICK.resultMs, paused: false }]);
+    clock.advance(QUICK.resultMs);
     expect(await app.scheduler.tick()).toBe(1);
     expect((await load(id)).phase).toEqual({ kind: "planning", round: 2 });
     expect(await deadlines(id)).toEqual([{ key: "round:2", due: clock.now() + QUICK.roundMs, paused: false }]);
@@ -233,103 +237,40 @@ describe("failures (PR #22 review)", () => {
   });
 });
 
-describe("pausing (design §4.1, §11.1)", () => {
-  it("an emergency opens after its notice; the round is paused while it is open and resumes with the time it had left", { timeout: 60_000 }, async () => {
+describe("the emergency's notice and the result window (design §9.3)", () => {
+  it("refused while the round runs; called in the result window, it opens after its notice and the next round starts as it closes", { timeout: 60_000 }, async () => {
     const { id, host } = await startGame(0, { sessionLength: "15m" }, 2);
-    const [round1] = await deadlines(id);
-    clock.advance(10_000);
-    const ws = await app.injectWS(`/games/${id}/ws`, { headers: { cookie: `${SESSION_COOKIE}=${host}` } });
-    const replies: string[] = [];
-    ws.on("message", (d) => replies.push(String(d)));
-    ws.send(JSON.stringify({ cmd: { type: "callEmergency" }, id: "e" }));
-    await vi.waitFor(() => expect(replies.some((r) => r.includes('"id":"e"'))).toBe(true), { interval: 1, timeout: 5000 });
-    // The reply goes out before the change's deadlines are stored; a no-op queues behind them on the game lock.
-    ws.send(JSON.stringify({ id: "b" }));
-    await vi.waitFor(() => expect(replies.some((r) => r.includes('"id":"b"'))).toBe(true), { interval: 1, timeout: 5000 });
-    ws.close();
-    const meetingId = (await load(id)).pendingEmergency!.meetingId;
-    expect(await deadlines(id)).toEqual([{ key: `openMeeting:${meetingId}`, due: clock.now() + QUICK.emergencyNoticeMs, paused: false }, round1]);
-
-    clock.advance(QUICK.emergencyNoticeMs);
-    await app.scheduler.tick();
-    expect((await load(id)).phase).toEqual({ kind: "meeting", meetingId });
-    const left = round1!.due - clock.now();
-    expect(await deadlines(id)).toEqual([
-      { key: `closeMeeting:${meetingId}`, due: clock.now() + QUICK.meetingMs, paused: false },
-      { ...round1, paused: true },
-    ]);
-    // The round deadline passes while the meeting is open: nothing resolves mid-vote.
-    clock.advance(QUICK.meetingMs - 1);
-    expect(await app.scheduler.tick()).toBe(0);
-    clock.advance(1);
-    await app.scheduler.tick();
-    expect((await load(id)).phase).toEqual({ kind: "planning", round: 1 });
-    expect(await deadlines(id)).toEqual([{ key: "round:1", due: clock.now() + left, paused: false }]);
-  });
-});
-
-describe("early round end under a pause (review of #44; owner decision, 2 Nov; design §4.1, §11.1)", () => {
-  it("everyone locks in just before an emergency opens: roundEarly and round both pause, resume with the time they had left, and the round resolves once", { timeout: 60_000 }, async () => {
-    const { id, host } = await startGame(2, { sessionLength: "15m" });
     const ws = await app.injectWS(`/games/${id}/ws`, { headers: { cookie: `${SESSION_COOKIE}=${host}` } });
     const replies: string[] = [];
     ws.on("message", (d) => replies.push(String(d)));
     let n = 0;
-    const roundTrip = async (msg: Record<string, unknown>) => {
-      const msgId = `c${++n}`;
-      ws.send(JSON.stringify({ ...msg, id: msgId }));
-      let reply: string | undefined;
-      await vi.waitFor(() => expect((reply = replies.find((r) => r.includes(`"id":"${msgId}"`)))).toBeDefined(), { interval: 1, timeout: 5000 });
-      return JSON.parse(reply!) as Record<string, unknown>;
-    };
     // The reply goes out before the change's deadlines are stored; a no-op queues behind them on the game lock.
     const send = async (cmd: Record<string, unknown>) => {
-      const reply = await roundTrip({ cmd });
-      await roundTrip({});
-      return reply;
+      const msgId = `c${++n}`;
+      ws.send(JSON.stringify({ cmd, id: msgId }));
+      ws.send(JSON.stringify({ id: `${msgId}-b` }));
+      await vi.waitFor(() => expect(replies.some((r) => r.includes(`"id":"${msgId}-b"`))).toBe(true), { interval: 1, timeout: 5000 });
+      return JSON.parse(replies.find((r) => r.includes(`"id":"${msgId}"`))!) as Record<string, unknown>;
     };
-    if (!(await load(id)).pendingEmergency) expect(await send({ type: "callEmergency" })).toMatchObject({ ok: true });
+    expect(await send({ type: "callEmergency" })).toMatchObject({ rejected: true });
+    clock.advance(QUICK.roundMs);
+    expect(await app.scheduler.tick()).toBe(1);
+    clock.advance(QUICK.alibiMs);
+    expect(await app.scheduler.tick()).toBe(1);
+    expect((await load(id)).phase).toEqual({ kind: "result", round: 1 });
+    expect(await send({ type: "callEmergency" })).toMatchObject({ ok: true });
     const meetingId = (await load(id)).pendingEmergency!.meetingId;
-    const open = (await deadlines(id)).find((d) => d.key === `openMeeting:${meetingId}`)!;
-    // The bots have locked in; the host locks in 2 s before the meeting opens, so the 5 s grace runs into it.
-    clock.advance(open.due - clock.now() - 2000);
-    expect(await send({ type: "submitMove", move: { room: "lobby", duffel: 1, pocket: 0 } })).toMatchObject({ ok: true });
-    const row = async (key: string) => (await deadlines(id)).find((d) => d.key === key);
-    const early = (await row("roundEarly:1"))!;
-    const round = (await row("round:1"))!;
-    expect(early).toEqual({ key: "roundEarly:1", due: clock.now() + QUICK.lockInGraceMs, paused: false });
-    clock.advance(2000);
+    expect(await deadlines(id)).toEqual([{ key: `openMeeting:${meetingId}`, due: clock.now() + QUICK.emergencyNoticeMs, paused: false }]);
+    clock.advance(QUICK.emergencyNoticeMs);
     expect(await app.scheduler.tick()).toBe(1);
     expect((await load(id)).phase).toEqual({ kind: "meeting", meetingId });
-    const pausedAt = clock.now();
-    // Through the meeting (and any shakedown window): both rows stay paused, the round never resolves.
-    for (let i = 0; i < 20; i++) {
-      const s = await load(id);
-      if (s.phase.kind !== "meeting" && s.phase.kind !== "shakedownPending") break;
-      expect([(await row("roundEarly:1"))?.paused, (await row("round:1"))?.paused], s.phase.kind).toEqual([true, true]);
-      expect(count(s, "roundResolved")).toBe(0);
-      expect(await step(id)).toBeGreaterThan(0);
-    }
-    const resumed = await load(id);
-    expect(resumed.phase).toEqual({ kind: "planning", round: 1 });
-    const paused = clock.now() - pausedAt;
-    expect(await row("roundEarly:1")).toEqual({ ...early, due: early.due + paused });
-    expect(await row("round:1")).toEqual({ ...round, due: round.due + paused });
-    // It fires with the 3 s it had left: no sooner (no skip), once (no double), and round:1 goes with it.
-    clock.advance(QUICK.lockInGraceMs - 2000 - 1);
+    expect(await deadlines(id)).toEqual([{ key: `closeMeeting:${meetingId}`, due: clock.now() + QUICK.meetingMs, paused: false }]);
+    clock.advance(QUICK.meetingMs - 1);
     expect(await app.scheduler.tick()).toBe(0);
     clock.advance(1);
     expect(await app.scheduler.tick()).toBe(1);
-    const after = await load(id);
-    expect(count(after, "roundResolved", (e) => e.round === 1)).toBe(1);
-    expect(count(after, "defaultMoveAssigned")).toBe(0);
-    const left = await deadlines(id);
-    expect(left.map((d) => d.key)).not.toContain("round:1");
-    expect(left.map((d) => d.key)).not.toContain("roundEarly:1");
-    // The old round:1 due time passing later resolves nothing more.
-    clock.advance(round.due + paused - clock.now());
-    await app.scheduler.tick();
-    expect(count(await load(id), "roundResolved", (e) => e.round === 1)).toBe(1);
+    expect((await load(id)).phase).toEqual({ kind: "planning", round: 2 });
+    expect(await deadlines(id)).toEqual([{ key: "round:2", due: clock.now() + QUICK.roundMs, paused: false }]);
     ws.close();
   });
 });
@@ -341,20 +282,20 @@ describe("planDeadlines", () => {
     expect(planDeadlines({ ...s, phase: { kind: "ended", outcome: { kind: "success" } as never } }, QUICK, 0)).toEqual([]);
   });
 
-  it("group-scheduled games open the act's meeting at the locked ISO slot (never before the act's end); auto ones at once", async () => {
+  it("group-scheduled games open a due meeting at the locked ISO slot (never before it is due); auto ones at once", async () => {
     const { id } = await startGame(1, { sessionLength: "1d" });
     const s = await load(id);
     const at = Date.UTC(2026, 10, 3, 18);
-    const waiting: GameState = { ...s, phase: { kind: "awaitingMeeting", act: 1 }, pendingEmergency: null, scheduledMeeting: { meetingId: "act-1", act: 1, slot: new Date(at).toISOString() } };
-    const open = (t: typeof QUICK, now: number) => planDeadlines(waiting, t, now).find((d) => d.key === "openMeeting:act-1")!.dueAt;
+    const waiting: GameState = { ...s, phase: { kind: "awaitingMeeting", meeting: "regular", meetingId: "meeting-1" }, pendingEmergency: null, scheduledMeeting: { meetingId: "meeting-1", slot: new Date(at).toISOString() } };
+    const open = (t: typeof QUICK, now: number) => planDeadlines(waiting, t, now).find((d) => d.key === "openMeeting:meeting-1")!.dueAt;
     expect(open(TIMINGS["1d"], at - 5000)).toBe(at);
     expect(open(TIMINGS["1d"], at + 5000)).toBe(at + 5000);
     expect(open(TIMINGS["15m"], at - 5000)).toBe(at - 5000);
-    // A slot that isn't a time ("act-1", as bots propose) opens as soon as the act's last round has resolved.
-    expect(planDeadlines({ ...waiting, scheduledMeeting: { meetingId: "act-1", act: 1, slot: "act-1" } }, TIMINGS["1d"], 7)[0]!.dueAt).toBe(7);
-    // Nobody locked a slot: the server picks one meetingLeadMs ahead, at once. design §11.1
+    // A slot that isn't a time ("meeting-1", as auto presets name it) opens as soon as the meeting is due.
+    expect(planDeadlines({ ...waiting, scheduledMeeting: { meetingId: "meeting-1", slot: "meeting-1" } }, TIMINGS["1d"], 7)[0]!.dueAt).toBe(7);
+    // Nobody locked a slot: the server picks one meetingLeadMs ahead, at once. design §9.4
     expect(planDeadlines({ ...waiting, scheduledMeeting: null }, TIMINGS["1d"], 0)).toEqual([
-      { key: "scheduleMeeting:act-1", command: { type: "scheduleMeeting", act: 1, slot: new Date(TIMINGS["1d"].meetingLeadMs).toISOString() }, dueAt: 0, pausable: false },
+      { key: "scheduleMeeting:meeting-1", command: { type: "scheduleMeeting", meetingId: "meeting-1", slot: new Date(TIMINGS["1d"].meetingLeadMs).toISOString() }, dueAt: 0, pausable: false },
     ]);
   });
 });

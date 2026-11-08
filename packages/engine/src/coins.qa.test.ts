@@ -42,12 +42,24 @@ function game(players: number, contentOverrides: Overrides = null, extra: Partia
   return replay(cfg, setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: "rookie" } : e)));
 }
 
+function ok(s: GameState, c: unknown): GameState {
+  const r = handleThroughAlibis(s, c);
+  if (!r.ok) throw new Error(`rejected ${JSON.stringify(c)}: ${r.reason}`);
+  return r.state;
+}
+
+/** Through the meeting a round called (design §9.1, §9.2), nobody voting, and its result window (§9.3): these scripts test coins. */
+function passMeeting(s: GameState): GameState {
+  if (s.phase.kind !== "awaitingMeeting") return s;
+  const { meetingId } = s.phase;
+  s = ok(s, { type: "scheduleMeeting", meetingId, slot: "slot" });
+  s = ok(s, { type: "advance", deadline: { kind: "openMeeting", meetingId } });
+  s = ok(s, { type: "advance", deadline: { kind: "closeMeeting", meetingId } });
+  return ok(s, { type: "advance", deadline: { kind: "result", round: s.resolvedRound } });
+}
+
 function run(state: GameState, ...commands: unknown[]): GameState {
-  return commands.reduce<GameState>((s, c) => {
-    const r = handleThroughAlibis(s, typeof c === "function" ? (c as (s: GameState) => unknown)(s) : c);
-    if (!r.ok) throw new Error(`rejected ${JSON.stringify(c)}: ${r.reason}`);
-    return r.state;
-  }, state);
+  return commands.reduce<GameState>((s, c) => passMeeting(ok(s, typeof c === "function" ? (c as (s: GameState) => unknown)(s) : c)), state);
 }
 
 const submit = (player: PlayerId, move: Record<string, unknown>): Command => ({ type: "submitMove", player, move }) as unknown as Command;
@@ -236,14 +248,19 @@ describe("QA: the duffel/pocket split is checked — design §3.2", () => {
     }
   });
 
-  it("out of phase: refused in the alibi window, while awaiting a meeting and after the game ends", () => {
+  it("out of phase: refused in the alibi window, while awaiting a meeting, in the result window and after the game ends", () => {
     const resolved = handleCommand(run(s, submit("p0", { room: "lobby", duffel: 1, pocket: 0 })), ROUND(s));
     if (!resolved.ok) throw new Error(resolved.reason);
     expect(resolved.state.phase.kind).toBe("alibis");
     expect(refusal(resolved.state, submit("p0", { room: "lobby", duffel: 1, pocket: 0 }))).toMatch(/only be submitted while a round is being planned/);
-    const r3 = run(s, ROUND, ROUND, ROUND);
+    // A bank of 9: round 1's three missed moves leave 6, a third gone, so a regular meeting is due (design §9.1).
+    const r3 = ok(game(3, { bank: { coinsPerPlayer: 3 } }), ROUND(s));
     expect(r3.phase.kind).toBe("awaitingMeeting");
     expect(refusal(r3, submit("p0", { room: "lobby", duffel: 1, pocket: 0 }))).toMatch(/planned/);
+    const result = handleCommand(resolved.state, { type: "advance", deadline: { kind: "alibis", round: 1 } });
+    if (!result.ok) throw new Error(result.reason);
+    expect(result.state.phase.kind).toBe("result");
+    expect(refusal(result.state, submit("p0", { room: "lobby", duffel: 1, pocket: 0 }))).toMatch(/planned/);
     const ended = { ...r3, phase: { kind: "ended" } } as unknown as GameState;
     expect(refusal(ended, submit("p0", { room: "lobby", duffel: 1, pocket: 0 }))).toMatch(/over/);
   });
@@ -506,10 +523,7 @@ describe("QA: viewFor never leaks the new events", () => {
       if (s.phase.kind === "planning") {
         const now = s;
         s = run(s, ...s.playerOrder.map((id) => submit(id, moves(now, id))), ROUND);
-      } else if (s.phase.kind === "awaitingMeeting") {
-        const { act } = s.phase;
-        s = run(s, { type: "scheduleMeeting", act, slot: `slot-${act}` }, { type: "advance", deadline: { kind: "openMeeting", meetingId: `act-${act}` } }, { type: "advance", deadline: { kind: "closeMeeting", meetingId: `act-${act}` } });
-      } else throw new Error(`unexpected phase ${s.phase.kind}`);
+      } else throw new Error(`unexpected phase ${s.phase.kind}`); // `run` passes the meetings
     }
     return s;
   }

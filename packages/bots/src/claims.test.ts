@@ -16,9 +16,9 @@ const withRole = (s: GameState, player: string, role: string): GameState => {
   return { ...s, players: { ...s.players, [player]: { ...me, role } } };
 };
 /** Ana is the target of a shakedown that has just passed (the shakedown window). */
-const pending = (s: GameState, target = "ana"): GameState => ({ ...s, phase: { kind: "shakedownPending", meetingId: "act-1", target } });
-/** The act's meeting is next: claims are made now (v2 §4), but nobody accuses ana. */
-const awaiting = (s: GameState): GameState => ({ ...s, phase: { kind: "awaitingMeeting", act: 1 } });
+const pending = (s: GameState, target = "ana"): GameState => ({ ...s, phase: { kind: "shakedownPending", meetingId: "meeting-1", target } });
+/** A regular meeting is due: claims are made now (v2 §4), but nobody accuses ana. */
+const awaiting = (s: GameState): GameState => ({ ...s, phase: { kind: "awaitingMeeting", meeting: "regular", meetingId: "meeting-1" } });
 const claims = (cmds: PlayerCommand[]) => cmds.filter((c) => c.type === "claimRole");
 
 describe("bot claims — docs/roles-v2.md §4", () => {
@@ -106,7 +106,7 @@ describe("claims in the suspicion model — v2 §4", () => {
 
   it("changing one's claimed role is suspicious", () => {
     let s = run(game(5), { type: "claimRole", player: "ben", role: "rookie" });
-    s = { ...s, round: 4 }; // act 2
+    s = { ...s, stretch: 2 }; // after a regular meeting
     const r = handleCommand(s, { type: "claimRole", player: "ben", role: "fixer" });
     expect(r.ok).toBe(true);
     if (r.ok) expect(suspicion(viewFor(r.state, "ana")).get("ben")).toBe(SUSPICION_WEIGHTS.falseClaim / 2 + SUSPICION_WEIGHTS.claimed);

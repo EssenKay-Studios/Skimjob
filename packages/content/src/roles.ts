@@ -1,7 +1,7 @@
 // Role definitions: powers, tags, win endings and tokens, as data. design §8
 //
-// extension.md: "per act" in field names (`perAct`) means per stretch, the time
-// between two regular meetings ("once between meetings"). The engine keeps acts internally.
+// `perStretch` counts uses per stretch, the time between two regular meetings
+// ("once between meetings", design §9.1, §11.2).
 import type { RoleId, RoomId } from "./index";
 
 /** A role's power. `kind` matches the engine's `AbilityUse` kind where the power is used in a move. design §8 */
@@ -12,31 +12,30 @@ export type RolePower =
    * of their choice, named in the move's `{ kind: "lookout", rooms }` ability.
    */
   | { readonly kind: "lookout"; readonly extraRooms: number }
-  /** Hacker: `perAct` times per stretch, a move may loop the cameras so one room reads "camera offline" that round. */
-  | { readonly kind: "loopCameras"; readonly perAct: number }
+  /** Hacker: `perStretch` times per stretch, a move may loop the cameras so one room reads "camera offline" that round. */
+  | { readonly kind: "loopCameras"; readonly perStretch: number }
   /** Smooth talker: their ballot counts `weight` times toward a meeting's result (passive). design §11.2 */
   | { readonly kind: "voteWeight"; readonly weight: number }
-  /** Auditor: `perAct` times per stretch (`useAbility`), learn the latest resolved round's shortfall for one room. design §8 (v2 §2) */
-  | { readonly kind: "audit"; readonly perAct: number }
-  /** Detective: `perAct` times per stretch (`useAbility`), learn whether a player's stash is at or above the clean threshold. design §8 (v2 §2) */
-  | { readonly kind: "checkStash"; readonly perAct: number }
+  /** Auditor: `perStretch` times per stretch (`useAbility`), learn the latest resolved round's shortfall for one room. design §8 (v2 §2) */
+  | { readonly kind: "audit"; readonly perStretch: number }
+  /** Detective: `perStretch` times per stretch (`useAbility`), learn whether a player holds anything above the share. design §8 (v2 §2), §9.6 */
+  | { readonly kind: "checkStash"; readonly perStretch: number }
   /**
-   * Priest: `perAct` times per stretch (`useAbility`), bless another player until
-   * the next regular meeting closes. Blessed and shaken down clean meanwhile → the bank pays the
-   * compensation, not the coins set aside. design §8 (v2 §2)
+   * Priest: `perStretch` times per stretch (`useAbility`), bless another player for
+   * the stretch; blessed and shaken down clean in it earns the Priest a token. design §8 (v2 §2)
    */
-  | { readonly kind: "bless"; readonly perAct: number }
+  | { readonly kind: "bless"; readonly perStretch: number }
   /**
    * Fixer: once per game, a move may tear the tape off a taped-off room, which
    * reopens from the next round with its bell at 0. design §5.3, §11.1
    */
   | { readonly kind: "reopen" }
   /**
-   * Mole: `perAct` times per stretch, a move may ring any open room once
+   * Mole: `perStretch` times per stretch, a move may ring any open room once
    * except the Rooftop (a police tip-off); it lights a bulb like any ring.
    * design §5.2, §11.1
    */
-  | { readonly kind: "ring"; readonly perAct: number };
+  | { readonly kind: "ring"; readonly perStretch: number };
 
 /**
  * What a plan-board power claim points at (design §10: "Hacker → Vault", "Detective → Eli"):
@@ -114,7 +113,7 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     ...TEAM,
     rewards: token("watchedShakenDirty"),
   },
-  hacker: { id: "hacker", name: "Hacker", power: { kind: "loopCameras", perAct: 1 }, ...WILD, rewards: token("loopHidPocketer") },
+  hacker: { id: "hacker", name: "Hacker", power: { kind: "loopCameras", perStretch: 1 }, ...WILD, rewards: token("loopHidPocketer") },
   smoothTalker: {
     id: "smoothTalker",
     name: "Smooth Talker",
@@ -123,11 +122,11 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
     rewards: token("wonDirtyShakedown"),
     minPlayers: 5,
   },
-  auditor: { id: "auditor", name: "Auditor", power: { kind: "audit", perAct: 1 }, ...TEAM, rewards: token("auditedShakenDirty") },
+  auditor: { id: "auditor", name: "Auditor", power: { kind: "audit", perStretch: 1 }, ...TEAM, rewards: token("auditedShakenDirty") },
   detective: {
     id: "detective",
     name: "Detective",
-    power: { kind: "checkStash", perAct: 1 },
+    power: { kind: "checkStash", perStretch: 1 },
     ...TEAM,
     rewards: token("checkedShakenDirty"),
     minPlayers: 4,
@@ -135,7 +134,7 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
   priest: {
     id: "priest",
     name: "Priest",
-    power: { kind: "bless", perAct: 1 },
+    power: { kind: "bless", perStretch: 1 },
     ...TEAM,
     rewards: token("blessedShakenClean"),
     minPlayers: 5,
@@ -143,5 +142,5 @@ export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
   // design §8.4: the Mole and the Fixer win a heist sunk by theft from the top of the ranking (their handlers in S3a.6);
   // on a bust only the Rooftop wins, whatever the role (§5.5).
   fixer: { id: "fixer", name: "Fixer", power: { kind: "reopen" }, ...TEAM, winsOn: ["theft"] },
-  mole: { id: "mole", name: "Mole", power: { kind: "ring", perAct: 1 }, tag: "loneWolf", winsOn: ["theft"] },
+  mole: { id: "mole", name: "Mole", power: { kind: "ring", perStretch: 1 }, tag: "loneWolf", winsOn: ["theft"] },
 };

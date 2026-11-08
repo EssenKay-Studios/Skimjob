@@ -136,6 +136,8 @@ describe("move panel", () => {
     expect(justMissed(viewFor(s, "p2"))).toBeNull();
     s = run(s, alibis(1));
     expect(justMissed(viewFor(s, "p1"))).toEqual({ round: 1, room: "lobby" });
+    // design §9.3: the result window closes with no emergency called.
+    s = run(s, { type: "advance", deadline: { kind: "result", round: 1 } });
     s = run(s, { type: "submitMove", player: "p1", move: { room: "office", duffel: 2, pocket: 0 } }, round(2));
     expect(justMissed(viewFor(s, "p1"))).toBeNull();
   });

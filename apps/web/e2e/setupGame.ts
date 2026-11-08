@@ -1,7 +1,7 @@
 // Starts a game through the lobby API (M2-2) from inside a browser context, so
 // the context's cookie is the host's session. The lobby screens (M2-5b) do the
 // same with clicks; the game screen tests only need a started game.
-import { expect, type APIRequestContext } from "@playwright/test";
+import { expect, type APIRequestContext, type Page } from "@playwright/test";
 
 export interface StartedGame {
   readonly id: string;
@@ -34,4 +34,16 @@ export async function startGame(
   for (let i = 0; i < bots; i++) await ok(await host.post(`/api/games/${game.id}/bots`, { data: {} }));
   await ok(await host.post(`/api/games/${game.id}/start`, { data: {} }));
   return game;
+}
+
+/**
+ * Waits for a round's result window and spends the crew's emergency (design
+ * §9.3): the button only works between a round's result and the next planning;
+ * it arms, then calls.
+ */
+export async function callEmergency(page: Page): Promise<void> {
+  const call = page.getByRole("button", { name: "Call an emergency meeting" });
+  await expect(call).toBeEnabled({ timeout: 60_000 });
+  await call.click();
+  await page.getByRole("button", { name: "Sure? Tap again to call it" }).click();
 }

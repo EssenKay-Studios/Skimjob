@@ -290,7 +290,7 @@ export function setupEvents(config: GameConfig): GameEvent[] {
     ...roleListEvents(config, dealt.value),
     { type: "shopDealt", visibility: PUBLIC, perks: shop.value },
     // Round 1 opens for planning as soon as the game is set up. design §4, §5.1
-    { type: "roundStarted", visibility: PUBLIC, round: 1, act: 1 },
+    { type: "roundStarted", visibility: PUBLIC, round: 1 },
     { type: "rngAdvanced", visibility: REVEAL, words: shop.rng.words },
   ];
 }

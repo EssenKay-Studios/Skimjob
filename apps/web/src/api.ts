@@ -38,7 +38,7 @@ export interface LobbyView {
   readonly inviteCode: string;
   readonly settings: LobbySettings;
   readonly youAreHost: boolean;
-  /** Meetings open by themselves after each act (short presets): no slot proposals. design §11.1 */
+  /** Meetings open by themselves when due (short presets): no slot proposals. design §9.4 */
   readonly autoMeetings: boolean;
   readonly minSeats: number;
   readonly maxSeats: number;

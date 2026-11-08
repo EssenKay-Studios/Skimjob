@@ -1,6 +1,6 @@
 // QA (PR #52, R6b): adversarial checks of the Extension UI against docs/extension.md,
 // on real engine games (no fabricated events where the engine can make them):
-// the shop's edges and privacy, no tells for camera offline, the gap box,
+// the shop's edges and privacy, no tells for camera offline,
 // "between meetings" wording, lobby deck settings, role facts vs the spec tables,
 // and the end screen on a failed heist.
 import { createElement, type ReactElement } from "react";
@@ -21,8 +21,8 @@ import {
 import { describe, expect, it } from "vitest";
 import { describeEvent } from "../game/describeEvent";
 import { namesOf } from "../game/hud";
-import { gapInfo, perkUses, roleInfo, roleListInfo, shopState } from "../game/extension";
-import { GapBox, RoleList, RulebookSheet, Tokens } from "./Extension";
+import { perkUses, roleInfo, roleListInfo, shopState } from "../game/extension";
+import { RoleList, RulebookSheet, Tokens } from "./Extension";
 import { DeckSettings, deckPatch, deckRoles, rolePatch } from "./DeckSettings";
 import { GameOver } from "../screens/Game";
 import type { LobbySettings } from "../api";
@@ -78,6 +78,8 @@ const refused = (s: GameState, cmd: object) => !handleCommand(s, cmd).ok;
 const mv = (player: string, room: string, pocket = 0, extra: object = {}) => ({ type: "submitMove", player, move: { room, duffel: Math.max(0, (BANK_JOB.rooms[room]?.coins ?? 0) - pocket), pocket, ...extra } });
 const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
 const ALIBIS = (s: GameState) => ({ type: "advance", deadline: { kind: "alibis", round: s.phase.kind === "alibis" ? s.phase.round : s.round } });
+/** The result window closes with no emergency called (design §9.3). */
+const RESULT = (s: GameState) => ({ type: "advance", deadline: { kind: "result", round: s.resolvedRound } });
 const buy = (player: string, perk: string) => ({ type: "buyPerk", player, perk });
 const use = (player: string, ability: object) => ({ type: "useAbility", player, ability });
 const ids = (n: number) => Array.from({ length: n }, (_, i) => `p${i}`);
@@ -88,7 +90,8 @@ function playOut(s: GameState, room: (s: GameState, p: string) => string, pocket
     const p = s.phase;
     if (p.kind === "planning") s = run(s, ...s.playerOrder.map((id) => mv(id, room(s, id), pocket)), ROUND);
     else if (p.kind === "alibis") s = run(s, ALIBIS);
-    else if (p.kind === "awaitingMeeting") s = run(s, { type: "scheduleMeeting", player: "p0", act: p.act, slot: "x" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: `act-${p.act}` } });
+    else if (p.kind === "result") s = run(s, { type: "advance", deadline: { kind: "result", round: p.round } });
+    else if (p.kind === "awaitingMeeting") s = run(s, { type: "scheduleMeeting", meetingId: p.meetingId, slot: "x" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: p.meetingId } });
     else if (p.kind === "meeting" || p.kind === "shakedownPending") s = run(s, { type: "advance", deadline: { kind: "closeMeeting", meetingId: s.meeting?.id } });
     else throw new Error(`stuck in ${p.kind}`);
   }
@@ -177,7 +180,7 @@ describe("no tells: camera offline (extension.md \"Situations\")", () => {
   function cameraWorld() {
     const cfg = config(5, { rolePool: ["rookie", "hacker"], eventsEnabled: false, seed: "cam" });
     let s = game(cfg, { roles: ["hacker"] });
-    s = run(s, ...ids(5).map((p) => mv(p, "office")), ROUND, ALIBIS);
+    s = run(s, ...ids(5).map((p) => mv(p, "office")), ROUND, ALIBIS, RESULT);
     const hacker = { ability: { kind: "loopCameras", room: "vault" } };
     const moves = [mv("p0", "office", 0, hacker), mv("p1", "security", 0, { watch: "vault" }), mv("p2", "vault", 2), mv("p3", "office"), mv("p4", "office")];
     return run(s, ...moves, ROUND);
@@ -193,36 +196,13 @@ describe("no tells: camera offline (extension.md \"Situations\")", () => {
   });
 });
 
-// ---------------------------------------------------------------- gap box
-
-describe("the gap box (extension.md \"What the app works out for you\")", () => {
-  it("the gap box matches the view's arithmetic", () => {
-    const cfg = config(5, { rolePool: ["rookie"], eventsEnabled: true, seed: "gap" });
-    let s = run(createGame(cfg), ...ids(5).map((p) => mv(p, "office")), ROUND, ALIBIS);
-    s = replay(s.config, s.log.map((e) => (e.type === "eventFlipped" && e.round === 2 ? { ...e, card: "audit", room: null } : e)));
-    // Everyone honest in the Lobby, everyone posts the truth: the gap must add up.
-    s = run(s, ...ids(5).map((p) => mv(p, "lobby")), ROUND, ...ids(5).map((p) => ({ type: "postAlibi", player: p, room: "lobby" })));
-    const v = viewFor(s, "p0");
-    const g = gapInfo(v)!;
-    expect(g.round).toBe(2);
-    expect(g.posted).toBe(5);
-    expect(v.gap!.handedIn).toBe(v.gap!.alibis);
-    expect(g.text).toMatch(/it adds up\.$/);
-    expect(html(createElement(GapBox, { view: v }))).toContain("5 of 5 alibis in");
-    // A pocketer lying about it shows as unaccounted.
-    let t = run(createGame(cfg), mv("p0", "office", 2), ...ids(5).slice(1).map((p) => mv(p, "office")), ROUND, ...ids(5).map((p) => ({ type: "postAlibi", player: p, room: "office" })));
-    const g2 = gapInfo(viewFor(t, "p1"))!;
-    expect(g2.unaccounted).toBe(2);
-    expect(g2.text).toBe(`Alibis say +${viewFor(t, "p1").gap!.alibis}, ${viewFor(t, "p1").gap!.handedIn} handed in: 2 unaccounted for.`);
-  });
-});
-
 /** One step of play (as in playOut). */
 function playOut1(s: GameState): GameState {
   const p = s.phase;
   if (p.kind === "planning") return run(s, ...s.playerOrder.map((id) => mv(id, "office")), ROUND);
   if (p.kind === "alibis") return run(s, ALIBIS);
-  if (p.kind === "awaitingMeeting") return run(s, { type: "scheduleMeeting", player: "p0", act: p.act, slot: "x" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: `act-${p.act}` } });
+  if (p.kind === "result") return run(s, { type: "advance", deadline: { kind: "result", round: p.round } });
+  if (p.kind === "awaitingMeeting") return run(s, { type: "scheduleMeeting", meetingId: p.meetingId, slot: "x" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: p.meetingId } });
   return run(s, { type: "advance", deadline: { kind: "closeMeeting", meetingId: s.meeting?.id } });
 }
 
@@ -262,7 +242,7 @@ describe("role cards and the rulebook match extension.md \"Roles\"", () => {
     for (const r of ["auditor", "detective", "priest", "hacker", "mole"] as const) {
       expect(roleInfo(r).power, r).toMatch(/^Once between meetings/);
     }
-    expect(roleInfo("detective").power).toContain(`(${BANK_JOB.shakedown.cleanBelow} or more)`);
+    expect(roleInfo("detective").power).toMatch(/anything above the share/);
     expect(roleInfo("smoothTalker").power).toBe("Its vote counts double.");
     expect(roleInfo("mole").power).toMatch(/rings one room's bell once/);
     expect(roleInfo("fixer").power).toMatch(/tape/i);

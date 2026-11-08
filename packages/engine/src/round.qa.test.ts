@@ -5,10 +5,9 @@ import { STARTER_ROLES } from "@skimjob/content";
 import { handleThroughAlibis } from "./alibis.testkit";
 import { describe, expect, it } from "vitest";
 import type { GameConfig, GameEvent, GameState, Move } from "./types";
-import { PUBLIC, canSee } from "./types";
+import { canSee } from "./types";
 import { setupEvents } from "./setup";
-import { applyEvent, replay } from "./reduce";
-import { actOfRound } from "./round";
+import { replay } from "./reduce";
 import { handleCommand } from "./handle";
 import { fullGrab } from "./grab.testkit";
 import { NO_RAIDS } from "./v01-numbers.testkit";
@@ -53,11 +52,14 @@ const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", r
 /** A full grab in `room`, `pocket` of it pocketed (design §3.2). */
 const m = (room: string, pocket = 0, extra: Partial<Move> = {}): Move => ({ ...fullGrab(room, pocket), ...extra });
 
-/** Stand-in for task 6: open the next act's first round after the meeting. */
+/** The meeting a round called (design §9.1, §9.2) is held with nobody voting; then its result window closes. */
 function nextAct(s: GameState): GameState {
   if (s.phase.kind !== "awaitingMeeting") throw new Error(`expected awaitingMeeting, got ${s.phase.kind}`);
-  const round = s.round + 1;
-  return applyEvent(s, { type: "roundStarted", visibility: PUBLIC, round, act: actOfRound(round) });
+  const { meetingId } = s.phase;
+  s = ok(s, { type: "scheduleMeeting", meetingId, slot: "now" });
+  s = ok(s, { type: "advance", deadline: { kind: "openMeeting", meetingId } });
+  s = ok(s, { type: "advance", deadline: { kind: "closeMeeting", meetingId } });
+  return s.phase.kind === "result" ? ok(s, { type: "advance", deadline: { kind: "result", round: s.phase.round } }) : s;
 }
 
 /** Play scripted rounds: rounds[r][seat] is that seat's move, or null to miss the deadline. */
@@ -162,7 +164,9 @@ describe("QA scripted full games — design §3, §6.1", () => {
     expect(ofType(s, "duffelSplit").map((e) => [e.cut, e.kitty])).toEqual([[1, 2], [1, 0], [0, 1], [0, 2], [1, 2], [3, 0], [1, 0], [0, 1], [2, 0]]);
     expect([s.share, s.kitty]).toEqual([9, 0]);
     expect(stashes(s)).toEqual([8 + 9, 8 + 9, 0 + 9]);
-    expect(s.phase).toEqual({ kind: "awaitingMeeting", act: 3 });
+    expect(s.phase).toEqual({ kind: "planning", round: 10 });
+    // design §9.1: the bank (48) passed two-thirds and one-third: two regular meetings.
+    expect(ofType(s, "meetingOpened").map((e) => e.kind)).toEqual(["regular", "regular"]);
     expect(ofType(s, "defaultMoveAssigned").map((e) => [e.player, e.round])).toEqual([["p0", 5]]);
     expect(s.players.p0?.consecutiveMissedMoves).toBe(0); // reset by submitting in round 6
     expect(ofType(s, "roomWatched")).toMatchObject([{ player: "p0", round: 2, source: "security", room: "vault", seen: ["p1"] }]);
@@ -250,7 +254,9 @@ describe("QA rejected commands leave state unchanged", () => {
   }
 
   it("every command is refused after the game ends, and in awaitingMeeting moves/rounds are refused", () => {
-    const waiting = play(game(3), [[null, null, null], [null, null, null], [null, null, null]]);
+    // Everyone in the Vault twice: 48 − 18 = 30, past two-thirds, so the regular meeting is due (design §9.1).
+    const vault = [m("vault"), m("vault"), m("vault")];
+    const waiting = play(game(3), [vault, vault]);
     expect(waiting.phase.kind).toBe("awaitingMeeting");
     for (const c of [submit("p0", m("lobby")), ROUND(waiting)]) expect(handleThroughAlibis(waiting, c).ok).toBe(false);
   });

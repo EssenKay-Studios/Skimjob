@@ -18,7 +18,7 @@ import {
 import type { LobbySettings } from "../api";
 import { Button } from "../components/Button";
 import { DeckSettings } from "../components/DeckSettings";
-import { GapBox, PerkUses, RoleFacts, RoleList, RoleTip, RulebookButton, Tokens } from "../components/Extension";
+import { PerkUses, RoleFacts, RoleList, RoleTip, RulebookButton, Tokens } from "../components/Extension";
 import { SketchFrame } from "../components/SketchFrame";
 import { useToast } from "../components/Toast";
 import { Underline } from "../components/Underline";
@@ -46,17 +46,15 @@ const step = (s: GameState, c: Parameters<typeof handleCommand>[1]) => {
   return r.ok ? r.state : s;
 };
 
-/** Rounds 1–3 played with default moves, then meeting 1 closes. */
+/** Rounds 1–3 played with default moves; nobody calls an emergency (design §9.3). */
 function playedGame(): GameState {
   let s = createGame(config({ eventsEnabled: false }));
   for (let r = 1; r <= 3; r++) {
     s = step(s, round(r));
     if (r === 1) s = step(s, { type: "postAlibi", player: "p2", room: "vault" });
     s = step(s, alibis(r));
+    s = step(s, { type: "advance", deadline: { kind: "result", round: r } });
   }
-  s = step(s, { type: "scheduleMeeting", player: "p1", act: 1, slot: "now" });
-  s = step(s, { type: "advance", deadline: { kind: "openMeeting", meetingId: "act-1" } });
-  s = step(s, { type: "advance", deadline: { kind: "closeMeeting", meetingId: "act-1" } });
   return s;
 }
 
@@ -97,7 +95,6 @@ export function ExtensionSections() {
     <>
       <RoleSections />
       <ShopSection />
-      <HudSections />
       <NoTellsSection />
       <DeckSection />
       <EndSection />
@@ -169,23 +166,6 @@ function ShopSection() {
         </SketchFrame>
       </div>
     </Section>
-  );
-}
-
-function HudSections() {
-  const played = useMemo(() => viewFor(playedGame(), "p1"), []);
-  const gap = (g: PlayerView["gap"]): PlayerView => ({ ...played, gap: g });
-  return (
-    <>
-      <Section id="ext-gap" title="Gap box" note="alibis vs the coins handed in, event effects included">
-        <div className="g-stack">
-          <GapBox view={gap({ round: 4, posted: 0, alibis: 0, handedIn: 9, unaccounted: -9 })} />
-          <GapBox view={gap({ round: 4, posted: 3, alibis: 14, handedIn: 9, unaccounted: 5 })} />
-          <GapBox view={gap({ round: 4, posted: 4, alibis: 9, handedIn: 9, unaccounted: 0 })} />
-          <GapBox view={gap({ round: 4, posted: 2, alibis: 6, handedIn: 9, unaccounted: -3 })} />
-        </div>
-      </Section>
-    </>
   );
 }
 

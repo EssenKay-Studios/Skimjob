@@ -11,8 +11,10 @@
 // - pocketing: each player who can pocket is put in a band by pocketed ÷ grabbed
 //   (honest ≤ 10%, moderate ≤ 40%, heavy above); win rate over all games, so a
 //   heist sunk by pocketing counts as a loss.
-// - shakedown accuracy: shakedowns whose target held more than the clean
-//   threshold ÷ shakedowns (also: the target had pocketed anything at all).
+// - meetings: regular meetings, police briefings and emergencies per game
+//   (design §9.1–§9.3).
+// - shakedown accuracy: shakedowns whose target held anything above the share
+//   ÷ shakedowns (also: the target had pocketed anything at all).
 // - role / personality win share: wins (joint winners share one) ÷ seats, in
 //   successful games, against the fair share 1 ÷ crew size (±5 pp target).
 // - sunk by theft: games that ended below the honesty line ÷ games (design §21
@@ -122,10 +124,22 @@ export function raidMetrics(records: readonly GameRecord[]): RaidMetrics {
   };
 }
 
+/** Meetings held per game, by kind. design §9.1–§9.3 */
+export interface MeetingMetrics {
+  readonly regular: number | null;
+  readonly briefing: number | null;
+  readonly emergency: number | null;
+}
+
+function meetingMetrics(records: readonly GameRecord[]): MeetingMetrics {
+  const per = (kind: keyof GameRecord["meetings"]) => rate(records.reduce((s, g) => s + g.meetings[kind], 0), records.length);
+  return { regular: per("regular"), briefing: per("briefing"), emergency: per("emergency") };
+}
+
 export interface ShakedownMetrics {
   readonly count: number;
   readonly perGame: number | null;
-  /** Not clean ÷ shakedowns: caught real loot. design §17.4 target 50–70% */
+  /** Not clean ÷ shakedowns: found something above the share. design §17.4 target 50–70% */
   readonly accuracy: number | null;
   /** The target had pocketed anything before. */
   readonly hitPocketer: number | null;
@@ -170,6 +184,7 @@ export interface Metrics {
   readonly capStalls: number | null;
   /** Share of games the empty bank ended (design §6.2). */
   readonly bankEmptied: number | null;
+  readonly meetings: MeetingMetrics;
   readonly shakedowns: ShakedownMetrics;
   readonly pocketing: Record<string, GroupWins>;
   readonly roles: Record<string, GroupWins>;
@@ -191,6 +206,7 @@ function metrics(records: readonly GameRecord[]): Metrics {
     wholeCrewRate: rate(records.filter(wholeCrewWin).length, records.filter((g) => g.result === "success").length),
     capStalls: rate(records.filter((g) => g.capWithBankLeft).length, records.length),
     bankEmptied: rate(records.filter((g) => g.bankLeft === 0).length, records.length),
+    meetings: meetingMetrics(records),
     shakedowns: shakedownMetrics(records),
     pocketing: groupWins(records, pocketBand),
     roles: groupWins(records, (p) => p.role),

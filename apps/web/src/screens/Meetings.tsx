@@ -23,6 +23,7 @@ import {
   emergencyOf,
   latestOutcome,
   localInputValue,
+  MEETING_TITLE,
   MODE_NAME,
   MODE_NOTE,
   openMeetingOf,
@@ -37,7 +38,6 @@ import {
   type MeetingOutcome,
   type Tally,
 } from "../game/meeting";
-import { MeetingName } from "../game/wording";
 import { useCountdown, type ClientCommand, type Reply } from "../game/useGame";
 import "./meetings.css";
 
@@ -96,22 +96,21 @@ export function MeetingsPanel({ view, timers, offset, send, autoMeetings }: Prop
   const emergency = emergencyOf(view);
   const who = useWho(view);
   const opensIn = useCountdown(timers, planner.locked ? `openMeeting:${planner.locked.meetingId}` : null, offset);
-  const lastRound = planner.act * 3;
   return (
     <SketchFrame as="section" seed="game-meetings" radius={16} shadow={0.45} className="panel meetings" aria-labelledby="meetings-h">
       <div className="panel__head">
         <h2 id="meetings-h" className="panel__title">
-          <Underline seed={`meet-${planner.act}`}>Crew meetings</Underline>
+          <Underline seed="meet">Crew meetings</Underline>
         </h2>
         <span className="meta">votes: {MODE_NAME[view.voteVisibility]}</span>
       </div>
 
       <div className="meetings__block">
-        <h3 className="meetings__sub">{MeetingName(planner.act)}</h3>
+        <h3 className="meetings__sub">Next meeting</h3>
         {planner.locked ? (
           <p>
             Set for <b>{slotText(planner.locked.slot)}</b>
-            {autoMeetings ? "." : `. It opens then, or once round ${lastRound} is done if that's later.`}
+            {autoMeetings ? "." : ". It opens then, or once it's due if that's later."}
             {opensIn && (
               <>
                 {" "}
@@ -120,7 +119,7 @@ export function MeetingsPanel({ view, timers, offset, send, autoMeetings }: Prop
             )}
           </p>
         ) : autoMeetings ? (
-          <p>It opens by itself as soon as round {lastRound} is done.</p>
+          <p>It opens by itself when it's due: each time a third of the bank is gone, or after a raid.</p>
         ) : (
           <SlotPlanner view={view} send={send} offset={offset} who={who} />
         )}
@@ -177,7 +176,7 @@ function SlotPlanner({ view, send, offset, who }: { view: PlayerView; send: Send
           ))}
         </ul>
       ) : (
-        <p className="meta">Nobody has proposed a time yet. If nobody locks one in, the app picks one after round {planner.act * 3}.</p>
+        <p className="meta">Nobody has proposed a time yet. If nobody locks one in, the app picks one when it's due.</p>
       )}
       <div className="slot-form">
         <TextField
@@ -235,7 +234,7 @@ export function MeetingNow({ view, timers, offset, send }: Props) {
       <SketchFrame as="section" seed="game-meeting-now" radius={16} shadow={0.45} fill="var(--card-sand)" className="panel" aria-labelledby="meeting-now-h">
         <div className="panel__head">
           <h2 id="meeting-now-h" className="panel__title">
-            <Underline seed="meeting-now">{m.kind === "emergency" ? "Emergency meeting" : MeetingName(m.act)}</Underline>
+            <Underline seed="meeting-now">{MEETING_TITLE[m.kind]}</Underline>
           </h2>
           {left && <span className="meta">votes close in {left.text}</span>}
         </div>
@@ -277,7 +276,7 @@ function VoteSheet({ view, timers, offset, send, onDone }: Props & { onDone: () 
       <div className="vote__head">
         <div>
           <p className="kicker vote__kicker">
-            {m.kind === "emergency" ? `Emergency meeting${m.calledBy ? ` · called by ${who(m.calledBy)}` : ""}` : MeetingName(m.act)}
+            {`${MEETING_TITLE[m.kind]}${m.calledBy ? ` · called by ${who(m.calledBy)}` : ""}`}
           </p>
           <h2 id="vote-h" className="vote__title">
             Who's skimming?
@@ -384,7 +383,7 @@ const RESULT_TITLE = (o: MeetingOutcome, who: (p: PlayerId) => string, me: Playe
   }
 };
 
-/** The latest meeting's result: tally, ballots (per vote mode), shakedown, compensation and blessing. */
+/** The latest meeting's result: tally, ballots (per vote mode), and the shakedown. */
 export function ResultsBanner({ view }: { view: PlayerView }) {
   const o = latestOutcome(view);
   const [dismissed, setDismissed] = useState<string | null>(null);
@@ -395,7 +394,7 @@ export function ResultsBanner({ view }: { view: PlayerView }) {
   const are = s?.target === view.me.id ? "were" : "was";
   return (
     <SketchFrame as="section" seed={`results-${o.meetingId}`} radius={18} shadow={0.5} tape fill="var(--manilla)" className="panel results enter-sheet" aria-labelledby="results-h">
-      <p className="kicker results__kicker">{o.kind === "emergency" ? "Emergency meeting" : MeetingName(o.act)} · result</p>
+      <p className="kicker results__kicker">{MEETING_TITLE[o.kind]} · result</p>
       <h2 id="results-h" className="results__title">
         {RESULT_TITLE(o, who, view.me.id)}
       </h2>
@@ -409,9 +408,7 @@ export function ResultsBanner({ view }: { view: PlayerView }) {
       {s &&
         (s.clean ? (
           <Banner tone="bad" seed="res-clean" title={`Clean! ${target} ${are} holding ${s.stashRevealed}.`}>
-            {o.blessing !== null
-              ? `${target} ${are} blessed: the bank paid the ${s.compensation} compensation, so the coins set aside are whole.`
-              : `The crew paid ${s.compensation} from the coins set aside in compensation.`}
+            Nothing above the share: nothing taken.
           </Banner>
         ) : (
           <Banner tone="good" seed="res-dirty" title={`Caught! ${target} ${are} holding ${s.stashRevealed}.`}>

@@ -55,7 +55,7 @@ describe("design §17.4 config overrides — hostile JSON is refused, nothing po
     '{"roles":{"rookie":{"__proto__":{"stashMultiplier":9}}}}',
     '{"roles":{"toString":{}}}',
     '{"alarm":{"bulbs":0}}', '{"alarm":{"bulbs":"5"}}', '{"rooms":{"vault":{"coins":1.5}}}', '{"rooms":{"vault":{"coins":-1}}}',
-    '{"roundCap":0}', '{"roundCap":"12"}', '{"roundCap":2.5}', '{"checkpoints":{"perPlayer":[1,2,3]}}', '{"roles":{"lookout":{"perAct":1}}}',
+    '{"roundCap":0}', '{"roundCap":"12"}', '{"roundCap":2.5}', '{"checkpoints":{"perPlayer":[1,2,3]}}', '{"roles":{"lookout":{"perStretch":1}}}',
     '{"rooms":{"vault":{"capacity":{"max":2}}}}', '{"rooms":[]}', '{"alarm":null}',
   ];
   it.each(hostile)("%s", (json) => {

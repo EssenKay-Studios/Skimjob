@@ -4,7 +4,7 @@
 // Pure: a finished GameState (plus the bot crew) in, plain data out.
 import type { RoleId, Temperament } from "@skimjob/content";
 import type { PersonalityId } from "@skimjob/bots";
-import { honesty, jobFor, rolesFor, type GameConfig, type GameEvent, type GameState, type PlayerId } from "@skimjob/engine";
+import { honesty, jobFor, rolesFor, type GameConfig, type GameEvent, type GameState, type MeetingKind, type PlayerId } from "@skimjob/engine";
 
 export interface PlayerRecord {
   readonly id: PlayerId;
@@ -30,11 +30,11 @@ export interface PlayerRecord {
 }
 
 export interface ShakedownRecord {
-  readonly act: number;
-  readonly emergency: boolean;
+  /** The meeting that passed it: regular, briefing or emergency. design §9.1–§9.3 */
+  readonly kind: MeetingKind;
   readonly target: PlayerId;
   readonly stashRevealed: number;
-  /** Below the clean threshold: nothing worth taking. design §11.3 */
+  /** At or below the share: nothing taken. design §9.6 */
   readonly clean: boolean;
   /** The target had pocketed something since their last shakedown (or the start). */
   readonly targetHadPocketed: boolean;
@@ -58,7 +58,8 @@ export interface GameRecord {
   readonly raids: number;
   /** Rounds with more than half the crew on the Rooftop (design §21 G4). */
   readonly stalls: number;
-  readonly meetings: number;
+  /** Meetings held, by kind. design §9.1–§9.3 */
+  readonly meetings: Readonly<Record<MeetingKind, number>>;
   readonly shakedowns: readonly ShakedownRecord[];
   readonly winners: readonly PlayerId[];
   readonly playerRecords: readonly PlayerRecord[];
@@ -83,8 +84,8 @@ export function recordGame(state: GameState, crew: readonly PersonalityId[], rej
   const earned = new Map<PlayerId, number>();
   const spent = new Map<PlayerId, number>();
   const shakedowns: ShakedownRecord[] = [];
-  let meetingKind: { emergency: boolean; act: number } = { emergency: false, act: 1 };
-  let meetings = 0;
+  let meetingKind: MeetingKind = "regular";
+  const meetings: Record<MeetingKind, number> = { regular: 0, briefing: 0, emergency: 0 };
   let endedRound = 0;
   let raids = 0;
   const lyingLow = new Map<number, number>();
@@ -105,13 +106,12 @@ export function recordGame(state: GameState, crew: readonly PersonalityId[], rej
         raids++;
         break;
       case "meetingOpened":
-        meetings++;
-        meetingKind = { emergency: event.kind === "emergency", act: event.act };
+        meetings[event.kind]++;
+        meetingKind = event.kind;
         break;
       case "shakedownResolved":
         shakedowns.push({
-          act: meetingKind.act,
-          emergency: meetingKind.emergency,
+          kind: meetingKind,
           target: event.target,
           stashRevealed: event.stashRevealed,
           clean: event.clean,

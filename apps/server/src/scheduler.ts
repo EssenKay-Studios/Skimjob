@@ -31,7 +31,7 @@ import type { SessionLength } from "./settings";
 import { scaleTiming, TIMINGS, type Timing } from "./timing";
 
 export interface PlannedDeadline {
-  /** Unique per game and never reused once fired, e.g. `round:3`, `openMeeting:act-1`. */
+  /** Unique per game and never reused once fired, e.g. `round:3`, `openMeeting:meeting-1`. */
   readonly key: string;
   readonly command: SystemCommand;
   /** When it falls due, if it is new now (an existing row keeps its own). */
@@ -47,8 +47,8 @@ const advance = (deadline: Deadline): SystemCommand => ({ type: "advance", deadl
 
 /**
  * The deadlines the host's extend moves on (M2-13, design §15): the round being
- * planned (with its early end, set once everyone locked in), the alibi window
- * or the open vote window. None in other phases.
+ * planned (with its early end, set once everyone locked in), the alibi window,
+ * the result window or the open vote window. None in other phases.
  */
 export function extendKeys(s: GameState): readonly string[] {
   switch (s.phase.kind) {
@@ -56,6 +56,8 @@ export function extendKeys(s: GameState): readonly string[] {
       return [`round:${s.phase.round}`, `roundEarly:${s.phase.round}`];
     case "alibis":
       return [`alibis:${s.phase.round}`];
+    case "result":
+      return [`result:${s.phase.round}`];
     case "meeting":
       return [`closeMeeting:${s.phase.meetingId}`];
     default:
@@ -66,7 +68,7 @@ export function extendKeys(s: GameState): readonly string[] {
 /** Every seat has locked in a move for the round being planned (public: `moveLocked`, design §5.1). */
 export const allLockedIn = (s: GameState): boolean => s.playerOrder.length > 0 && lockedIn(s).length === s.playerOrder.length;
 
-/** Strict ISO 8601 with a zone (Date.parse alone reads "act-1" as a date in 2001). */
+/** Strict ISO 8601 with a zone (Date.parse alone reads labels like "meeting-1" loosely). */
 const ISO_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})$/;
 /** A slot's time in ms, or NaN if it isn't an ISO time (the engine's slots are opaque labels). */
 export const slotTime = (slot: string) => (ISO_TIME.test(slot) ? Date.parse(slot) : NaN);
@@ -78,39 +80,41 @@ type Rule = (s: GameState, t: Timing, now: number) => readonly PlannedDeadline[]
  * kind fail typecheck until it has a rule here.
  */
 export const DEADLINE_RULES: { readonly [K in Deadline["kind"] | "scheduleMeeting"]: Rule } = {
-  // The round being planned; also while an emergency meeting interrupts it (paused). design §5, §4.1
+  // The round being planned. design §4.1
   // Once every seat has locked in, `roundEarly:<n>` resolves it `lockInGraceMs` later (owner decision,
   // 2 Nov): set once, so a change during the grace doesn't restart it; whichever row falls due first
   // resolves the round, and the other one is dropped with it. design §4.1, §5.1
   round: (s, t, now) => {
-    const round = s.phase.kind === "planning" ? s.phase.round : meetingOpen(s) && s.round > s.resolvedRound ? s.round : 0;
-    if (round === 0) return [];
+    if (s.phase.kind !== "planning") return [];
+    const { round } = s.phase;
     const command = advance({ kind: "round", round });
     const out: PlannedDeadline[] = [{ key: `round:${round}`, command, dueAt: now + t.roundMs, pausable: true }];
     if (allLockedIn(s)) out.push({ key: `roundEarly:${round}`, command, dueAt: now + t.lockInGraceMs, pausable: true });
     return out;
   },
-  // The alibi window after a round resolves; paused if an emergency interrupts it. design §5.4
-  alibis: (s, t, now) => {
-    const round = s.phase.kind === "alibis" ? s.phase.round : meetingOpen(s) && s.alibisOpen ? s.resolvedRound : 0;
-    return round > 0 ? [{ key: `alibis:${round}`, command: advance({ kind: "alibis", round }), dueAt: now + t.alibiMs, pausable: true }] : [];
-  },
-  // Nobody locked a slot by the act deadline (its last round resolving): the server picks one. design §11.1
-  // Auto-scheduled presets open it at once whatever the slot, so they name it `act-<n>` (the end of the
-  // act; no wall time in the log, so a retried deadline can't change the game); others pick a time.
+  // The alibi window after a round resolves. design §5.4
+  alibis: (s, t, now) =>
+    s.phase.kind === "alibis" ? [{ key: `alibis:${s.phase.round}`, command: advance({ kind: "alibis", round: s.phase.round }), dueAt: now + t.alibiMs, pausable: false }] : [],
+  // The result window, when an emergency can be called; once one is, the next round waits for its meeting. design §9.3
+  result: (s, t, now) =>
+    s.phase.kind === "result" && !s.pendingEmergency
+      ? [{ key: `result:${s.phase.round}`, command: advance({ kind: "result", round: s.phase.round }), dueAt: now + t.resultMs, pausable: false }]
+      : [],
+  // A meeting is due and nobody locked a slot: the server picks one. design §9.4
+  // Auto-scheduled presets open it at once whatever the slot, so they name it after the meeting (no wall
+  // time in the log, so a retried deadline can't change the game); others pick a time.
   scheduleMeeting: (s, t, now) =>
     s.phase.kind === "awaitingMeeting" && !s.scheduledMeeting
       ? [
           {
-            key: `scheduleMeeting:act-${s.phase.act}`,
-            command: { type: "scheduleMeeting", act: s.phase.act, slot: t.autoMeetings ? `act-${s.phase.act}` : new Date(now + t.meetingLeadMs).toISOString() },
+            key: `scheduleMeeting:${s.phase.meetingId}`,
+            command: { type: "scheduleMeeting", meetingId: s.phase.meetingId, slot: t.autoMeetings ? s.phase.meetingId : new Date(now + t.meetingLeadMs).toISOString() },
             dueAt: now,
             pausable: false,
           },
         ]
       : [],
-  // An emergency after its notice; the act's meeting at its slot, once its last round has resolved and
-  // no other meeting is open (so it is sent again after one closes). design §11.1
+  // An emergency after its notice; a due regular meeting or briefing at its slot. design §9.3, §9.4
   openMeeting: (s, t, now) => {
     const out: PlannedDeadline[] = [];
     if (s.pendingEmergency) {
@@ -171,7 +175,7 @@ export interface Timer {
   readonly pausedAt: number | null;
 }
 
-/** Deadlines sent per game per tick at most (a few fall due together at an act's end). */
+/** Deadlines sent per game per tick at most (a few can fall due together after a round). */
 const MAX_PER_TICK = 100;
 /** Longest wait before retrying a deadline whose send failed (1 s, 2 s, 4 s … up to this). */
 export const MAX_BACKOFF_MS = 60_000;

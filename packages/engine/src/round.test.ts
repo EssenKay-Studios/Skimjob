@@ -161,9 +161,11 @@ describe("rejected commands leave state untouched", () => {
     });
   }
 
-  it("moves and round deadlines are refused outside planning (after an act's last round)", () => {
-    const after = run(game(3), ROUND, ROUND, ROUND);
-    expect(after.phase).toEqual({ kind: "awaitingMeeting", act: 1 });
+  it("moves and round deadlines are refused outside planning (while a meeting is due)", () => {
+    // Everyone in the Vault: 9 rings raid it, which calls a police briefing (design §9.2).
+    const vault = (p: string) => submit(p, { room: "vault", duffel: 3 });
+    const after = run(game(3), vault("p0"), vault("p1"), vault("p2"), ROUND);
+    expect(after.phase).toEqual({ kind: "awaitingMeeting", meeting: "briefing", meetingId: "meeting-1" });
     expect(reason(after, submit("p0", { room: "lobby", duffel: 1 }))).toMatch(/planned/);
     expect(reason(after, ROUND(after))).toMatch(/no round deadline/);
   });
@@ -328,19 +330,16 @@ describe("a short bank — design §3.2", () => {
   });
 });
 
-describe("rounds and acts — design §4", () => {
-  it("rounds 1–3 run in planning, then the game waits for the act's meeting", () => {
+describe("rounds and meetings — design §4.1, §9.1", () => {
+  it("rounds run in planning until one takes the bank past two-thirds; then the game waits for the regular meeting", () => {
+    // Everyone misses: 3 coins a round out of 48, so round 6 leaves 30, past 32.
     let s = game(3);
-    for (const round of [1, 2, 3]) {
+    for (const round of [1, 2, 3, 4, 5, 6]) {
       expect(s.phase).toEqual({ kind: "planning", round });
       s = run(s, ROUND);
     }
-    expect(s.phase).toEqual({ kind: "awaitingMeeting", act: 1 });
-    expect(s.log.filter((e) => e.type === "roundStarted").map((e) => e.type === "roundStarted" && [e.round, e.act])).toEqual([
-      [1, 1],
-      [2, 1],
-      [3, 1],
-    ]);
+    expect(s.phase).toEqual({ kind: "awaitingMeeting", meeting: "regular", meetingId: "meeting-1" });
+    expect(s.log.filter((e) => e.type === "roundStarted").map((e) => e.type === "roundStarted" && e.round)).toEqual([1, 2, 3, 4, 5, 6]);
   });
 
   it("moves are cleared between rounds", () => {

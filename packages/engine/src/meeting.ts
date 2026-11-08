@@ -1,14 +1,14 @@
-// Crew meetings and votes: scheduling the regular meeting after every 3rd round
-// (bank thirds in S3a.5), emergency meetings, ballots, the tally and
-// shakedowns. design §9; no meeting is held after the last round (§6.2)
+// Crew meetings and votes: a regular meeting each time a third of the bank is
+// gone, a police briefing after a raid, emergencies from the crew's pool in
+// the result window, ballots, the tally, shakedowns and their protection.
+// design §9; no meeting is held after the last round (§6.2)
 //
 // Every function is pure: it reads state and returns events, or the reason the
 // command is refused. `handleCommand` (handle.ts) folds the events. Nothing
-// here draws randomness except the next act's event card (deck.ts, design §10):
-// meeting and proposal ids are names and log positions.
-import { MAX_SLOT_LENGTH, PERK_RULES, ROUNDS_PER_ACT, type PerkId } from "@skimjob/content";
+// here draws randomness except the next round's event card (deck.ts, design §13):
+// meeting and proposal ids are names and counts of public events.
+import { MAX_SLOT_LENGTH, PERK_RULES, type PerkId } from "@skimjob/content";
 import type {
-  ActNumber,
   GameEvent,
   GameState,
   MeetingKind,
@@ -21,11 +21,10 @@ import type {
   VoteChoice,
 } from "./types";
 import { PUBLIC, privateTo, secretTo } from "./types";
-import { jobFor, powerOf } from "./overrides";
-import { emergencySpent, isPerkSpend, perkCount, shieldFor, usePerk } from "./perks";
-import { aboveShare, blessingEvents, dirtyShakedownRewards, holdsDirty, useCrewPower } from "./crew";
-import { actOfRound } from "./acts";
-import { applyEvent } from "./reduce";
+import { powerOf } from "./overrides";
+import { isPerkSpend, shieldFor, usePerk } from "./perks";
+import { aboveShare, blessingEvents, dirtyShakedownRewards, useCrewPower } from "./crew";
+import { applyEvent, nextMeetingId } from "./reduce";
 import { isObject, playerFor, show } from "./check";
 import type { Draw } from "./handle";
 import { startRound } from "./deck";
@@ -33,34 +32,22 @@ import { startRound } from "./deck";
 type Result = GameEvent[] | string;
 type Raw = Record<string, unknown>;
 
-/** The act's regular meeting. Ids are names, never RNG draws (STATUS.md). */
-const regularMeetingId = (act: ActNumber): string => `act-${act}`;
-/**
- * The `n`th emergency meeting `player` calls (a Smooth Talker may earn more
- * than one, v2 §2). Unique: the prefix tells them apart for any player id. design §11.1
- */
-const emergencyMeetingId = (player: PlayerId, n = 1): string => (n === 1 ? `emergency-${player}` : `emergency${n}-${player}`);
+const count = (state: GameState, match: (e: GameEvent) => boolean): number => state.log.filter(match).length;
 
-/** The act being played: the act of the latest round started. */
-const currentAct = (state: GameState): ActNumber => actOfRound(state.round);
+/** The next meeting's slot is locked in, not yet open. */
+const lockedReason = "the next meeting is already scheduled";
 
-/** The current act's regular meeting slot is locked in (scheduled, already open, or its shakedown pending). */
-const slotLocked = (state: GameState): boolean =>
-  state.scheduledMeeting !== null || state.meeting?.kind === "regular" || state.pendingShakedown?.kind === "regular";
-
-const lockedReason = (state: GameState): string => `the act ${currentAct(state)} meeting is already scheduled`;
-
-/** A slot is free text the engine only stores and compares, so its length is capped (content). design §11.1, §17.2 */
+/** A slot is free text the engine only stores and compares, so its length is capped (content). design §9.4 */
 function checkSlot(slot: unknown): string | null {
   if (typeof slot !== "string" || slot === "") return "slot must be a non-empty string";
   return slot.length > MAX_SLOT_LENGTH ? `slot must be at most ${MAX_SLOT_LENGTH} characters` : null;
 }
 
-function scheduled(act: ActNumber, slot: string, proposalId: string | null): GameEvent {
-  return { type: "meetingScheduled", visibility: PUBLIC, meetingId: regularMeetingId(act), act, slot, proposalId };
+function scheduled(meetingId: string, slot: string, proposalId: string | null): GameEvent {
+  return { type: "meetingScheduled", visibility: PUBLIC, meetingId, slot, proposalId };
 }
 
-/** design §11.2: votes are public in "open" mode, private to the voter while hidden, secret for good in "secret" mode. */
+/** design §9.5: votes are public in "open" mode, private to the voter while hidden, secret for good in "secret" mode. */
 function ballotVisibility(state: GameState, player: PlayerId): PublicVisibility | PrivateVisibility | SecretVisibility {
   switch (state.config.voteVisibility) {
     case "open":
@@ -72,7 +59,7 @@ function ballotVisibility(state: GameState, player: PlayerId): PublicVisibility 
   }
 }
 
-/** A ballot: skip, or shake down another player in the crew (not yourself, provisional). design §11.2 */
+/** A ballot: skip, or shake down another player in the crew (not yourself). design §9.5 */
 function checkVote(state: GameState, voter: PlayerState, raw: unknown): VoteChoice | string {
   if (!isObject(raw)) return "vote must be an object";
   if (raw.kind === "skip") return { kind: "skip" };
@@ -83,10 +70,20 @@ function checkVote(state: GameState, voter: PlayerState, raw: unknown): VoteChoi
   return { kind: "shakedown", target };
 }
 
-// ---------------------------------------------------------------- scheduling (§11.1)
+const protectedReason = "that player is protected until the next regular meeting";
 
 /**
- * design §11.1 (owner decision, 2 Nov): a slot locks once more than half of
+ * After a round's result and any meeting it called: the result window while
+ * the crew's pool has an emergency left, else the next round at once. design §4.2 step 10, §9.3
+ */
+export function afterResult(state: GameState, draw: Draw): GameEvent[] {
+  return state.phase.kind === "result" && state.emergencies > 0 ? [] : startRound(state, state.round + 1, draw);
+}
+
+// ---------------------------------------------------------------- scheduling (§9.4)
+
+/**
+ * design §9.4 (owner decision, 2 Nov): a slot locks once more than half of
  * the crew's people (human seats) back it; bots' backing doesn't count. With
  * no people at all (simulator, all-bot tests) more than half the crew does.
  */
@@ -96,11 +93,11 @@ export function slotLocks(state: GameState, backers: readonly PlayerId[]): boole
   return backers.filter((id) => humans.has(id)).length * 2 > humans.size;
 }
 
-/** Any player proposes a slot for the current act's meeting; the proposer counts as accepting (and may lock it alone). */
+/** Any player proposes a slot for the next regular meeting or briefing; the proposer counts as accepting (and may lock it alone). */
 export function proposeMeeting(state: GameState, command: Raw): Result {
   const player = playerFor(state, command);
   if (typeof player === "string") return player;
-  if (slotLocked(state)) return lockedReason(state);
+  if (state.scheduledMeeting) return lockedReason;
   const bad = checkSlot(command.slot);
   if (bad) return bad;
   const slot = command.slot as string;
@@ -108,10 +105,9 @@ export function proposeMeeting(state: GameState, command: Raw): Result {
   if (same) return `that slot is already proposed (${same.id})`;
   // Numbered from public data only (earlier proposals this game), never the log length,
   // which would let players count hidden events. Unique and deterministic.
-  const proposalId = `proposal-${state.log.filter((e) => e.type === "meetingProposed").length + 1}`;
-  const act = currentAct(state);
-  const events: GameEvent[] = [{ type: "meetingProposed", visibility: PUBLIC, proposalId, by: player.id, act, slot }];
-  if (slotLocks(state, [player.id])) events.push(scheduled(act, slot, proposalId));
+  const proposalId = `proposal-${count(state, (e) => e.type === "meetingProposed") + 1}`;
+  const events: GameEvent[] = [{ type: "meetingProposed", visibility: PUBLIC, proposalId, by: player.id, slot }];
+  if (slotLocks(state, [player.id])) events.push(scheduled(nextMeetingId(state), slot, proposalId));
   return events;
 }
 
@@ -119,46 +115,49 @@ export function proposeMeeting(state: GameState, command: Raw): Result {
 export function acceptMeeting(state: GameState, command: Raw): Result {
   const player = playerFor(state, command);
   if (typeof player === "string") return player;
-  if (slotLocked(state)) return lockedReason(state);
+  if (state.scheduledMeeting) return lockedReason;
   const proposal = state.proposals.find((p) => p.id === command.proposalId);
   if (!proposal) return `no open proposal ${show(command.proposalId)}`;
   if (proposal.acceptedBy.includes(player.id)) return "you already accepted this proposal";
   const events: GameEvent[] = [{ type: "meetingProposalAccepted", visibility: PUBLIC, proposalId: proposal.id, by: player.id }];
-  if (slotLocks(state, [...proposal.acceptedBy, player.id])) events.push(scheduled(proposal.act, proposal.slot, proposal.id));
+  if (slotLocks(state, [...proposal.acceptedBy, player.id])) events.push(scheduled(nextMeetingId(state), proposal.slot, proposal.id));
   return events;
 }
 
-/** System: nobody locked a slot in by the act deadline, so the server picks one. */
+/** System: a meeting is due and nobody locked a slot for it, so the server picks one. design §9.4 */
 export function scheduleMeeting(state: GameState, command: Raw): Result {
-  const act = currentAct(state);
-  if (command.act !== act) return `act ${show(command.act)} is not being played (act ${act} is)`;
-  if (slotLocked(state)) return lockedReason(state);
+  if (state.phase.kind !== "awaitingMeeting") return "no meeting is due";
+  const { meetingId } = state.phase;
+  if (command.meetingId !== meetingId) return `meeting ${show(command.meetingId)} is not due (${meetingId} is)`;
+  if (state.scheduledMeeting) return lockedReason;
   const bad = checkSlot(command.slot);
   if (bad) return bad;
-  return [scheduled(act, command.slot as string, null)];
+  return [scheduled(meetingId, command.slot as string, null)];
 }
 
 /**
- * One per player per game, at any point outside a meeting, plus one per
- * Emergency perk held (the Smooth Talker's reward, v2 §2). The notice period is the server's.
+ * design §9.3 (owner, 6 Nov): any player spends one of the crew's emergency
+ * meetings, only in the result window (after a round's result and any meeting
+ * it called, before the next planning), one per window. It can't be withdrawn;
+ * the caller is named. The notice period is the server's.
  */
 export function callEmergency(state: GameState, command: Raw): Result {
   const player = playerFor(state, command);
   if (typeof player === "string") return player;
-  const extra = player.emergencyMeetingUsed;
-  if (extra && perkCount(player, "emergency") === 0) return "you have already called your emergency meeting";
-  if (state.meeting) return "a meeting is already open";
-  if (state.pendingShakedown) return "a shakedown is pending";
+  if (state.phase.kind !== "result") return "an emergency meeting can only be called between a round's result and the next planning";
   if (state.pendingEmergency) return "an emergency meeting has already been called";
-  const n = state.log.filter((e) => e.type === "emergencyMeetingCalled" && e.by === player.id).length + 1;
-  const meetingId = emergencyMeetingId(player.id, n);
-  const called: GameEvent = { type: "emergencyMeetingCalled", visibility: PUBLIC, by: player.id, meetingId };
-  return extra ? [emergencySpent(state, player, meetingId), called] : [called];
+  if (state.emergencies === 0) return "the crew's emergency meetings are all spent";
+  const meetingId = `emergency-${count(state, (e) => e.type === "emergencyMeetingCalled") + 1}`;
+  return [{ type: "emergencyMeetingCalled", visibility: PUBLIC, by: player.id, meetingId }];
 }
 
-// ---------------------------------------------------------------- voting (§11.2)
+// ---------------------------------------------------------------- voting (§9.5)
 
-/** Left in advance for the next meeting that opens; replaces any earlier sealed vote. */
+/**
+ * Left in advance for the next meeting that opens; replaces any earlier sealed
+ * vote. It may name a protected player: it counts as a skip if they are still
+ * protected when the meeting opens. design §9.5
+ */
 export function sealVote(state: GameState, command: Raw): Result {
   const player = playerFor(state, command);
   if (typeof player === "string") return player;
@@ -176,41 +175,47 @@ export function castVote(state: GameState, command: Raw): Result {
   if (typeof player === "string") return player;
   const vote = checkVote(state, player, command.vote);
   if (typeof vote === "string") return vote;
+  // design §9.5, §9.7: nobody can vote for a protected player.
+  if (vote.kind === "shakedown" && state.protected.includes(vote.target)) return protectedReason;
   return [{ type: "voteCast", visibility: ballotVisibility(state, player.id), meetingId: meeting.id, player: player.id, vote, sealed: false }];
 }
 
-// ---------------------------------------------------------------- deadlines (§4.1, §11)
+// ---------------------------------------------------------------- deadlines (§4.1, §9)
 
 /**
- * The slot (or the emergency's notice period) has arrived. The act's regular
- * meeting opens only once the act's last round has resolved (provisional);
- * an emergency opens whenever it's due. Sealed votes are cast as it opens.
+ * The slot (or the emergency's notice period) has arrived. A regular meeting
+ * or briefing opens only once the round that called it is through its alibis
+ * (`awaitingMeeting`); an emergency opens when its notice ends. Sealed votes
+ * are cast as it opens; one naming a player still protected then counts as a
+ * skip (a regular meeting lifts protection as it opens). design §9.4, §9.5, §9.7
  */
 export function openMeeting(state: GameState, meetingId: unknown): Result {
   if (state.meeting) return `meeting ${state.meeting.id} is already open`;
   if (state.pendingShakedown) return `the shakedown of meeting ${state.pendingShakedown.meetingId} is pending`;
   // Checked first: an absent id must not match an absent pending meeting.
   if (typeof meetingId !== "string") return `meeting ${show(meetingId)} is not waiting to open`;
-  const act = currentAct(state);
   let kind: MeetingKind;
   if (state.scheduledMeeting?.meetingId === meetingId) {
-    if (state.phase.kind !== "awaitingMeeting") return `the act ${act} meeting opens after round ${act * ROUNDS_PER_ACT} and its alibi deadline`;
-    kind = "regular";
+    if (state.phase.kind !== "awaitingMeeting") return `meeting ${meetingId} opens once a round calls it and its alibis close`;
+    kind = state.phase.meeting;
   } else if (state.pendingEmergency?.meetingId === meetingId) {
     kind = "emergency";
   } else {
     return `meeting ${show(meetingId)} is not waiting to open`;
   }
-  const events: GameEvent[] = [{ type: "meetingOpened", visibility: PUBLIC, meetingId, kind, act }];
+  const events: GameEvent[] = [{ type: "meetingOpened", visibility: PUBLIC, meetingId, kind }];
+  const shielded = kind === "regular" ? [] : state.protected;
   for (const player of state.playerOrder) {
-    const vote = state.players[player]?.sealedVote;
-    if (vote) events.push({ type: "voteCast", visibility: ballotVisibility(state, player), meetingId, player, vote, sealed: true });
+    const sealed = state.players[player]?.sealedVote;
+    if (!sealed) continue;
+    const vote: VoteChoice = sealed.kind === "shakedown" && shielded.includes(sealed.target) ? { kind: "skip" } : sealed;
+    events.push({ type: "voteCast", visibility: ballotVisibility(state, player), meetingId, player, vote, sealed: true });
   }
   return events;
 }
 
 /**
- * design §11.2 (extension.md "Voting", one rule for every crew size): quorum
+ * design §9.5 (one rule for every crew size): quorum
  * is at least half the crew voting (sealed votes count), counting voters; a
  * shakedown needs more than half of the votes cast, counting weight (the
  * Smooth talker's ballot counts double, §8). `weight` is the total weight
@@ -284,22 +289,22 @@ export function closeMeeting(state: GameState, meetingId: unknown, draw: Draw): 
       visibility: PUBLIC,
       meetingId: meeting.id,
       tally: { skip, targets: Object.fromEntries(counts) },
-      // design §11.2: in "secret" mode only the tally is ever shown.
+      // design §9.5: in "secret" mode only the tally is ever shown.
       ballots: state.config.voteVisibility === "secret" ? null : Object.fromEntries(ballots),
       result,
     },
   ];
-  const { kind, act } = meeting;
+  const { kind } = meeting;
   if (result.kind === "shakedown" && opensShakedownWindow(state.shop)) {
     // design §8.3: a Shield may cancel it before it's applied (`advance { resolveShakedown }`).
-    events.push({ type: "shakedownPending", visibility: PUBLIC, meetingId: meeting.id, kind, act, target: result.target });
+    events.push({ type: "shakedownPending", visibility: PUBLIC, meetingId: meeting.id, kind, target: result.target });
     return events;
   }
   const shakedown = result.kind === "shakedown" ? { target: result.target } : null;
-  return [...events, ...afterVote(state, events, { meetingId: meeting.id, kind, act }, shakedown, draw)];
+  return [...events, ...afterVote(state, events, { meetingId: meeting.id, kind }, shakedown, draw)];
 }
 
-/** The shakedown window has ended: apply the shakedown (or the Shield's cancel), then go on. design §8.3, §11.3 */
+/** The shakedown window has ended: apply the shakedown (or the Shield's cancel), then go on. design §8.3, §9.6 */
 export function resolveShakedown(state: GameState, meetingId: unknown, draw: Draw): Result {
   const pending = state.pendingShakedown;
   if (!pending || pending.meetingId !== meetingId) return `no shakedown is pending for meeting ${show(meetingId)}`;
@@ -318,52 +323,42 @@ export function useAbility(state: GameState, command: Raw, draw: Draw): Result {
 }
 
 /**
- * After the vote (and any shakedown window): the shakedown or its cancel,
- * then after a regular meeting the next round. design §9.6. `prior` are this
- * command's events so far.
+ * After the vote (and any shakedown window): the shakedown or its cancel, then
+ * the result window, or after an emergency (or with the pool empty) the next
+ * round. design §9.3, §9.6. `prior` are this command's events so far.
  */
 function afterVote(
   state: GameState,
   prior: readonly GameEvent[],
-  meeting: { readonly meetingId: string; readonly kind: MeetingKind; readonly act: ActNumber },
+  meeting: { readonly meetingId: string; readonly kind: MeetingKind },
   shakedown: { readonly target: PlayerId } | null,
   draw: Draw,
 ): GameEvent[] {
-  const job = jobFor(state.config);
-  const { act } = meeting;
   const events: GameEvent[] = [];
-
-  // design §9.6: what the target holds above the share is set aside for the next split (§7.1); a clean target is
-  // compensated (R6 numbers until S3a.5).
-  const { setAside } = state;
   // design §8.3: a Shield cancels it by itself.
   const shield = shakedown ? shieldFor(state, shakedown.target, meeting.meetingId) : [];
   if (shakedown && shield.length > 0) {
     events.push(...shield, { type: "shakedownCancelled", visibility: PUBLIC, meetingId: meeting.meetingId, target: shakedown.target });
   } else if (shakedown) {
+    // design §9.6: what the target holds above the share is set aside for the next split (§7.1); at or below it
+    // they are clean and nothing happens. Coins spent on perks are gone and not taken.
     const { target } = shakedown;
-    const { stash } = state.players[target] as PlayerState;
     const taken = aboveShare(state, target);
-    // extension.md "Shakedowns (fixed numbers)": clean under 6, paid 8.
-    const clean = !holdsDirty(state, target, job.shakedown.cleanBelow);
-    // Paid out of the coins set aside, so never more than they hold (provisional).
-    const compensation = clean ? Math.min(job.shakedown.payout, setAside + taken) : 0;
-    events.push({
-      type: "shakedownResolved",
-      visibility: PUBLIC,
-      meetingId: meeting.meetingId,
-      target,
-      stashRevealed: stash,
-      taken,
-      clean,
-      compensation,
-    });
+    const clean = taken === 0;
+    events.push({ type: "shakedownResolved", visibility: PUBLIC, meetingId: meeting.meetingId, target, stashRevealed: (state.players[target] as PlayerState).stash, taken, clean });
     // The roles whose token a caught cheater earns (Lookout, Auditor, Detective, Smooth Talker). extension.md "Roles"
     if (!clean) events.push(...dirtyShakedownRewards(state, target, meeting.meetingId));
-    // Priest (v2 §2): a blessed target shaken down clean is compensated by the bank.
-    else events.push(...blessingEvents(state, meeting.meetingId, target, act, compensation));
+    // Priest (v2 §2): a blessed target shaken down clean earns the Priest a token.
+    else events.push(...blessingEvents(state, target));
   }
-  if (meeting.kind === "emergency") return events;
   const now = [...prior, ...events].reduce(applyEvent, state);
-  return [...events, ...startRound(now, now.round + 1, draw)];
+  return [...events, ...(meeting.kind === "emergency" ? startRound(now, now.round + 1, draw) : afterResult(now, draw))];
+}
+
+/** The result window closed with no emergency called: the next round starts. design §9.3 */
+export function closeResult(state: GameState, round: unknown, draw: Draw): Result {
+  if (state.phase.kind !== "result") return "no result window is open";
+  if (round !== state.phase.round) return `the round ${show(round)} result window is not open (round ${state.phase.round}'s is)`;
+  if (state.pendingEmergency) return "an emergency meeting has been called; the next round starts when it closes";
+  return startRound(state, state.round + 1, draw);
 }

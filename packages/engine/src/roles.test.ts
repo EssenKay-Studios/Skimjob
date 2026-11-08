@@ -1,14 +1,14 @@
 // Info and vote roles: Hacker, Smooth talker.
 // design §8 (and §11.2 / §11.3 where they change votes and shakedowns)
 import { describe, expect, it } from "vitest";
-import { handleThroughAlibis } from "./alibis.testkit";
-import { BANK_JOB, POOL_ROLES, ROLES, STARTER_ROLES } from "@skimjob/content";
+import { closeResultWindow } from "./alibis.testkit";
+import { POOL_ROLES, ROLES, STARTER_ROLES } from "@skimjob/content";
 import type { GameConfig, GameEvent, GameState, PlayerId, VoteVisibility } from "./types";
 import { privateTo } from "./types";
 import { createGame, setupEvents, validateConfig } from "./setup";
 import { opensShakedownWindow } from "./meeting";
 import { replay } from "./reduce";
-import { handleCommand } from "./handle";
+import { handleCommand, type CommandResult } from "./handle";
 import { viewFor } from "./view";
 import { fullGrab } from "./grab.testkit";
 import { R6_COINS } from "./v01-numbers.testkit";
@@ -22,7 +22,8 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     ...extra,
-    contentOverrides: { ...R6_COINS, ...extra.contentOverrides }, // R6 room yields as coins (R6 role rules)
+    // R6 room yields as coins (R6 role rules), and a bank of 20 a player, so regular meetings come every few rounds (design §9.1).
+    contentOverrides: { ...R6_COINS, bank: { coinsPerPlayer: 20 }, ...extra.contentOverrides },
   };
 }
 
@@ -34,6 +35,24 @@ function game(players: number, roles: string[], extra: Partial<GameConfig> = {})
   let seat = 0;
   return replay(cfg, setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: roles[seat++] ?? "rookie" } : e)));
 }
+
+/**
+ * A command, with a round deadline followed by its alibi deadline (nobody
+ * posts). The result window (design §9.3) stays open, so an emergency can be
+ * called in it, until a move or a round deadline closes it.
+ */
+function handleThroughAlibis(state: GameState, command: unknown): CommandResult {
+  const c = command as { type?: unknown; deadline?: { kind?: unknown } } | null;
+  const planning = c?.type === "submitMove" || c?.deadline?.kind === "round";
+  const s = state.phase.kind === "result" && !state.pendingEmergency && planning ? must(closeResultWindow(state)) : state;
+  const r = handleCommand(s, command);
+  if (!r.ok || r.state.phase.kind !== "alibis" || c?.deadline?.kind !== "round") return r;
+  return handleCommand(r.state, { type: "advance", deadline: { kind: "alibis", round: r.state.phase.round } });
+}
+const must = (r: CommandResult): GameState => {
+  if (!r.ok) throw new Error(r.reason);
+  return r.state;
+};
 
 type Cmd = unknown | ((s: GameState) => unknown);
 function run(state: GameState, ...commands: Cmd[]): GameState {
@@ -55,7 +74,8 @@ const ofType = <T extends GameEvent["type"]>(events: readonly GameEvent[], type:
   events.filter((e): e is Extract<GameEvent, { type: T }> => e.type === type);
 
 const mv = (player: string, room: string, pocket = 0, extra: object = {}) => ({ type: "submitMove", player, move: { ...fullGrab(room, pocket, R6_COINS), ...extra } });
-const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
+/** The round being planned; from the result window, the next one (closing the window first). */
+const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.phase.kind === "result" ? s.round + 1 : s.round } });
 const vote = (player: string, target: string | null) => ({
   type: "castVote",
   player,
@@ -63,11 +83,14 @@ const vote = (player: string, target: string | null) => ({
 });
 const CLOSE = (s: GameState) => ({ type: "advance", deadline: { kind: "closeMeeting", meetingId: s.meeting?.id } });
 const RESOLVE = (s: GameState) => ({ type: "advance", deadline: { kind: "resolveShakedown", meetingId: s.pendingShakedown?.meetingId } });
-/** `caller` calls an emergency meeting and it opens at once. design §11.1 */
+/** `caller` calls an emergency meeting in the result window (resolving the round being planned first) and it opens at once. design §9.3 */
 const emergency = (s: GameState, caller: string): GameState =>
-  run(s, { type: "callEmergency", player: caller }, { type: "advance", deadline: { kind: "openMeeting", meetingId: `emergency-${caller}` } });
-
-const { cleanBelow } = BANK_JOB.shakedown;
+  run(
+    s,
+    ...(s.phase.kind === "planning" ? [ROUND] : []),
+    { type: "callEmergency", player: caller },
+    (x: GameState) => ({ type: "advance", deadline: { kind: "openMeeting", meetingId: x.pendingEmergency?.meetingId } }),
+  );
 const power = <K extends string>(role: string, kind: K) => {
   const p = ROLES[role]?.power;
   if (p?.kind !== kind) throw new Error(`${role} has no ${kind} power`);
@@ -76,10 +99,10 @@ const power = <K extends string>(role: string, kind: K) => {
 
 describe("content — design §8", () => {
   it("content overrides can tune each power's own numbers, never another role's (design §17.4)", () => {
-    const roles = { hacker: { perAct: 2 }, smoothTalker: { weight: 3 }, mole: { perAct: 2 } };
+    const roles = { hacker: { perStretch: 2 }, smoothTalker: { weight: 3 }, mole: { perStretch: 2 } };
     expect(validateConfig(config(5, { contentOverrides: { roles } }))).toEqual([]);
     expect(validateConfig(config(5, { contentOverrides: { roles: { hacker: { steal: 5 } as never } } }))).toEqual([expect.stringMatching(/hacker\.steal/)]);
-    expect(validateConfig(config(5, { contentOverrides: { roles: { mole: { perAct: 0 } } } }))).toEqual([expect.stringMatching(/mole\.perAct/)]);
+    expect(validateConfig(config(5, { contentOverrides: { roles: { mole: { perStretch: 0 } } } }))).toEqual([expect.stringMatching(/mole\.perStretch/)]);
   });
 });
 
@@ -101,7 +124,7 @@ describe("Hacker: loop the cameras — design §8", () => {
       visibility: { kind: "private", player: "p0" },
       ability: { kind: "loopCameras", room: "vault" },
     });
-    expect(after.players.p0?.roleState.usedThisAct).toBe(1);
+    expect(after.players.p0?.roleState.usedThisStretch).toBe(1);
   });
 
   it("without the loop, Security sees everyone in the room", () => {
@@ -109,12 +132,13 @@ describe("Hacker: loop the cameras — design §8", () => {
     expect(ofType(since(base, after), "roomWatched")[0]?.seen).toEqual(["p0"]);
   });
 
-  it("once per act: refused again in the same act, allowed when the next act starts", () => {
+  it("once between meetings: refused again before the next regular meeting, allowed after it — design §11.2", () => {
     let s = played(base);
     expect(reason(s, loop())).toMatch(/already looped/);
-    s = run(s, ROUND, ROUND, { type: "scheduleMeeting", act: 1, slot: "x" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: "act-1" } }, CLOSE);
-    expect(s.round).toBe(4);
-    expect(s.players.p0?.roleState.usedThisAct).toBe(0);
+    while (s.phase.kind !== "awaitingMeeting") s = run(s, ROUND);
+    s = run(s, { type: "scheduleMeeting", meetingId: "meeting-1", slot: "x" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: "meeting-1" } }, CLOSE);
+    expect(s.stretch).toBe(2);
+    expect(s.players.p0?.roleState.usedThisStretch).toBe(0);
     expect(() => run(s, loop("office"))).not.toThrow();
   });
 
@@ -125,7 +149,7 @@ describe("Hacker: loop the cameras — design §8", () => {
   });
 });
 
-describe("Smooth talker: their vote counts double — design §8, §11.2", () => {
+describe("Smooth talker: their vote counts double — design §8, §9.5", () => {
   // 5 players: p0 Smooth talker. p0 → p4, p1 → p4, p2 + p3 skip (p4 stays away). Weight 3 of 5: passes.
   const play = (roles: string[], mode: VoteVisibility = "hiddenThenRevealed") => {
     const s = emergency(game(5, roles, { voteVisibility: mode, rolePool: [...STARTER_ROLES, "smoothTalker"] }), "p3");
@@ -163,7 +187,7 @@ describe("Smooth talker: their vote counts double — design §8, §11.2", () =>
 });
 
 
-describe("the shakedown window (a Shield in the shop) — design §8.3, §11.3", () => {
+describe("the shakedown window (a Shield in the shop) — design §8.3, §9.6", () => {
   // The shop pinned with a Shield, so a passed shakedown waits for its window (extension.md "Shakedowns").
   const shielded = (s: GameState): GameState => ({ ...s, shop: ["peek", "shield", "extraVote"] });
   // 3 players; p1 pockets the Vault's 6 in round 1, then p0 and p2 vote p1 down.
@@ -184,38 +208,38 @@ describe("the shakedown window (a Shield in the shop) — design §8.3, §11.3",
 
   it("a passed shakedown waits in a public window; nothing is taken yet", () => {
     const s = setup();
-    expect(s.phase).toEqual({ kind: "shakedownPending", meetingId: "emergency-p2", target: "p1" });
-    expect(s.log.at(-1)).toMatchObject({ type: "shakedownPending", visibility: { kind: "public" }, kind: "emergency", act: 1, target: "p1" });
+    expect(s.phase).toEqual({ kind: "shakedownPending", meetingId: "emergency-1", target: "p1" });
+    expect(s.log.at(-1)).toEqual({ type: "shakedownPending", visibility: { kind: "public" }, meetingId: "emergency-1", kind: "emergency", target: "p1" });
     expect(s.players.p1?.stash).toBe(6);
   });
 
   it("without a Shield, the shakedown is applied when the window ends", () => {
     const s = setup();
     const after = run(s, RESOLVE);
-    expect(since(s, after).map((e) => e.type)).toEqual(["shakedownResolved"]);
+    expect(since(s, after).map((e) => e.type)).toEqual(["shakedownResolved", "roundStarted"]);
     expect(after.players.p1?.stash).toBe(0);
     expect(after.phase).toEqual({ kind: "planning", round: 2 });
   });
 
   it("while the window is open: no rounds, no new meetings or proposals, and only the pending meeting's deadline", () => {
     const s = setup();
-    expect(reason(s, ROUND(s))).toMatch(/paused/);
+    expect(reason(s, ROUND(s))).toMatch(/no round deadline/);
     expect(reason(s, mv("p0", "lobby"))).toMatch(/round is being planned/);
-    expect(reason(s, { type: "callEmergency", player: "p0" })).toMatch(/shakedown is pending/);
-    expect(reason(s, { type: "advance", deadline: { kind: "resolveShakedown", meetingId: "act-1" } })).toMatch(/no shakedown is pending/);
+    expect(reason(s, { type: "callEmergency", player: "p0" })).toMatch(/between a round's result and the next planning/);
+    expect(reason(s, { type: "advance", deadline: { kind: "resolveShakedown", meetingId: "meeting-1" } })).toMatch(/no shakedown is pending/);
     expect(reason(s, CLOSE(s))).toMatch(/not open/);
   });
 
-  it("after the act's regular meeting the next round starts once the window ends (design §6.2: no checkpoint)", () => {
-    // p1 pockets the Vault's 6; everyone else hands in the Lobby's 2.
+  it("after a regular meeting the result window follows once the window ends (design §9.3: no checkpoint)", () => {
+    // p1 pockets the Vault's 6; everyone else hands in the Lobby's 2. Round 3 takes a third of the bank (60).
     const lobby = (...ids: string[]) => ids.map((id) => mv(id, "lobby"));
     let s = run(shielded(game(3, [])), mv("p1", "vault", 6), ...lobby("p0", "p2"), ROUND, ...lobby("p0", "p1", "p2"), ROUND, ...lobby("p0", "p1", "p2"), ROUND);
-    s = run(s, { type: "scheduleMeeting", act: 1, slot: "x" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: "act-1" } });
+    expect(s.phase).toMatchObject({ kind: "awaitingMeeting", meeting: "regular", meetingId: "meeting-1" });
+    s = run(s, { type: "scheduleMeeting", meetingId: "meeting-1", slot: "x" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: "meeting-1" } });
     s = run(s, vote("p0", "p1"), vote("p2", "p1"), CLOSE);
     expect(s.phase.kind).toBe("shakedownPending");
-    expect(reason(s, { type: "proposeMeeting", player: "p0", slot: "y" })).toMatch(/already scheduled/);
     const after = run(s, RESOLVE);
-    expect(since(s, after).map((e) => e.type)).toEqual(["shakedownResolved", "roundStarted"]);
-    expect(after.round).toBe(4);
+    expect(since(s, after).map((e) => e.type)).toEqual(["shakedownResolved"]);
+    expect(after.phase).toEqual({ kind: "result", round: 3 });
   });
 });

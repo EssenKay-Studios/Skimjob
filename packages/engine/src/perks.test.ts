@@ -43,6 +43,8 @@ type Cmd = unknown | ((s: GameState) => unknown);
 function run(state: GameState, ...commands: Cmd[]): GameState {
   return commands.reduce<GameState>((s, c) => {
     const command = typeof c === "function" ? c(s) : c;
+    // A step may be several commands, worked out from the state as it reaches them.
+    if (Array.isArray(command)) return run(s, ...(command as Cmd[]));
     const r = handleCommand(s, command);
     if (!r.ok) throw new Error(`rejected ${JSON.stringify(command)}: ${r.reason}`);
     return r.state;
@@ -57,8 +59,18 @@ const since = (before: GameState, after: GameState): GameEvent[] => after.log.sl
 const use = (player: string, ability: object) => ({ type: "useAbility", player, ability });
 const mv = (player: string, room: string, pocket = 0, extra: object = {}) => ({ type: "submitMove", player, move: { ...fullGrab(room, pocket), ...extra } });
 const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
-const ALIBIS = (s: GameState) => ({ type: "advance", deadline: { kind: "alibis", round: s.resolvedRound } });
-const emergency = (by: string) => [{ type: "callEmergency", player: by }, { type: "advance", deadline: { kind: "openMeeting", meetingId: `emergency-${by}` } }];
+const CLOSE_ALIBIS = (s: GameState) => ({ type: "advance", deadline: { kind: "alibis", round: s.resolvedRound } });
+/** The alibis close, then the result window (design §9.3), nobody calling an emergency. */
+const ALIBIS = (s: GameState): Cmd[] => [
+  CLOSE_ALIBIS(s),
+  (x: GameState) => (x.phase.kind === "result" ? { type: "advance", deadline: { kind: "result", round: x.phase.round } } : []),
+];
+/** The round being planned resolves (if one is) and, in its result window, `by` calls the crew's emergency, which opens at once. design §9.3 */
+const emergency = (by: string): Cmd[] => [
+  (s: GameState) => (s.phase.kind === "planning" ? [ROUND, CLOSE_ALIBIS] : s.phase.kind === "alibis" ? [CLOSE_ALIBIS] : []),
+  { type: "callEmergency", player: by },
+  (s: GameState) => ({ type: "advance", deadline: { kind: "openMeeting", meetingId: s.pendingEmergency?.meetingId } }),
+];
 const CLOSE = (s: GameState) => ({ type: "advance", deadline: { kind: "closeMeeting", meetingId: s.meeting?.id } });
 const RESOLVE = (s: GameState) => ({ type: "advance", deadline: { kind: "resolveShakedown", meetingId: s.pendingShakedown?.meetingId } });
 const vote = (player: string, target: string | null) => ({ type: "castVote", player, vote: target ? { kind: "shakedown", target } : { kind: "skip" } });
@@ -108,37 +120,41 @@ describe("Peek — design §8.3", () => {
   });
 });
 
-describe("Shield — design §8.3, §11.3", () => {
-  const shakedownOfP0 = (s: GameState): GameState => settle(run(s, ...emergency("p1"), vote("p1", "p0"), vote("p2", "p0"), vote("p3", "p0"), CLOSE));
+describe("Shield — design §8.3, §9.6", () => {
+  // 7 players, so the crew's pool holds 2 emergencies (design §9.3); everyone else votes p0 down.
+  const shakedownOfP0 = (s: GameState, caller: string): GameState =>
+    settle(run(s, ...emergency(caller), ...["p1", "p2", "p3", "p4", "p5", "p6"].map((p) => vote(p, "p0")), CLOSE));
 
   it("cancels the next passed shakedown of its holder by itself: private perkUsed, public cancel, stash kept", () => {
-    const s = grantPerks(withStash(game(4), "p0", 6), "p0", "shield");
-    const after = shakedownOfP0(s);
+    const s = grantPerks(withStash(game(7), "p0", 6), "p0", "shield");
+    const after = shakedownOfP0(s, "p1");
     const events = since(s, after);
-    expect(events).toContainEqual({ type: "perkUsed", visibility: privateTo("p0"), player: "p0", round: 1, perk: { kind: "shield", meetingId: "emergency-p1" } });
-    expect(events).toContainEqual({ type: "shakedownCancelled", visibility: PUBLIC, meetingId: "emergency-p1", target: "p0" });
+    expect(events).toContainEqual({ type: "perkUsed", visibility: privateTo("p0"), player: "p0", round: 1, perk: { kind: "shield", meetingId: "emergency-1" } });
+    expect(events).toContainEqual({ type: "shakedownCancelled", visibility: PUBLIC, meetingId: "emergency-1", target: "p0" });
     expect(events.some((e) => e.type === "shakedownResolved")).toBe(false);
-    expect(after.players.p0).toMatchObject({ stash: 6 });
+    // Kept: the 6, plus round 1's cut.
+    expect(after.players.p0).toMatchObject({ stash: 6 + after.share });
     expect(perks(after, "p0")).toEqual([]);
-    // Spent: the next one goes through.
-    const again = settle(run(after, ...emergency("p2"), vote("p1", "p0"), vote("p2", "p0"), vote("p3", "p0"), CLOSE));
-    expect(since(after, again).some((e) => e.type === "shakedownResolved")).toBe(true);
+    // Spent: the next one goes through, once the next regular meeting lifts p0's protection (design §9.7).
+    const unprotected = { ...after, protected: [] };
+    const again = shakedownOfP0(unprotected, "p2");
+    expect(since(unprotected, again).some((e) => e.type === "shakedownResolved")).toBe(true);
   });
 });
 
-describe("Shield with a shakedown window — design §8.3, §11.3", () => {
+describe("Shield with a shakedown window — design §8.3, §9.6", () => {
   it("with a shakedown window (a Shield in the shop), it applies when the window ends", () => {
     const s = grantPerks(withStash({ ...game(5), shop: ["peek", "shield", "extraVote"] }, "p0", 6), "p0", "shield");
     const pending = run(s, ...emergency("p2"), vote("p1", "p0"), vote("p2", "p0"), vote("p3", "p0"), CLOSE);
     expect(pending.phase.kind).toBe("shakedownPending");
     expect(perks(pending, "p0")).toEqual(["shield"]); // nothing shown before the window ends
     const shielded = run(pending, RESOLVE);
-    expect(since(pending, shielded).map((e) => e.type)).toEqual(["perkUsed", "shakedownCancelled"]);
-    expect(shielded.players.p0?.stash).toBe(6);
+    expect(since(pending, shielded).map((e) => e.type)).toEqual(["perkUsed", "shakedownCancelled", "roundStarted"]);
+    expect(shielded.players.p0?.stash).toBe(pending.players.p0?.stash);
   });
 });
 
-describe("+Vote — design §8.3, §11.2", () => {
+describe("+Vote — design §8.3, §9.5", () => {
   it("adds 1 to your ballot's weight in the open meeting; the public tally still counts ballots", () => {
     const base = run(grantPerks(game(5), "p0", "extraVote"), ...emergency("p0"));
     const votes = [vote("p0", "p4"), vote("p1", "p4"), vote("p2", null), vote("p3", null)];
@@ -160,13 +176,13 @@ describe("+Vote — design §8.3, §11.2", () => {
   });
 });
 
-describe("Ballot — design §8.3, §11.2", () => {
+describe("Ballot — design §8.3, §9.5", () => {
   it.each(["hiddenThenRevealed", "secret"] as const)("%s votes: the holder sees one ballot live, nobody else does", (mode) => {
     const s = run(grantPerks(game(4, [], { voteVisibility: mode }), "p0", "ballot", "ballot"), ...emergency("p0"), vote("p1", "p2"));
     const seen = run(s, use("p0", { kind: "ballot", target: "p1" }));
     const spent = since(s, seen);
     // The spend names the target only: the ballot itself is never in an event.
-    expect(spent).toEqual([{ type: "perkUsed", visibility: privateTo("p0"), player: "p0", round: 1, perk: { kind: "ballot", meetingId: "emergency-p0", target: "p1" } }]);
+    expect(spent).toEqual([{ type: "perkUsed", visibility: privateTo("p0"), player: "p0", round: 1, perk: { kind: "ballot", meetingId: "emergency-1", target: "p1" } }]);
     expect(viewFor(seen, "p0").me.seenBallots).toEqual({ p1: { kind: "shakedown", target: "p2" } });
     for (const other of ["p1", "p2", "p3"]) expect(viewFor(seen, other).me.seenBallots).toEqual({});
     // Live: a changed ballot shows; a second Ballot waits for another round (one perk per round).
@@ -241,13 +257,13 @@ describe("Alibi — design §8.3, §5.4", () => {
 });
 
 describe("Recharge — design §8.3", () => {
-  it("gives a once-per-act power back (Hacker), and refuses when nothing is used", () => {
+  it("gives a once-between-meetings power back (Hacker), and refuses when nothing is used", () => {
     let s = grantPerks(game(4, ["hacker"]), "p0", "recharge");
     expect(reason(s, use("p0", { kind: "recharge" }))).toMatch(/nothing to recharge/);
     s = run(s, mv("p0", "lobby", 0, { ability: { kind: "loopCameras", room: "vault" } }), ROUND, ALIBIS);
-    expect(s.players.p0?.roleState.usedThisAct).toBe(1);
+    expect(s.players.p0?.roleState.usedThisStretch).toBe(1);
     s = run(s, use("p0", { kind: "recharge" }));
-    expect(s.players.p0?.roleState.usedThisAct).toBe(0);
+    expect(s.players.p0?.roleState.usedThisStretch).toBe(0);
     s = run(s, mv("p0", "lobby", 0, { ability: { kind: "loopCameras", room: "office" } }));
     expect(s.moves.p0?.ability).toEqual({ kind: "loopCameras", room: "office" });
   });

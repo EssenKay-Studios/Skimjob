@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { startGame } from "./setupGame";
+import { callEmergency, startGame } from "./setupGame";
 
 // The live game screen (M2-6) at every launch viewport (decisions.md
 // 2026-11-01 "Web-first launch; responsive everywhere"): no horizontal
@@ -102,7 +102,7 @@ for (const viewport of VIEWPORTS) {
         expect(await smallTargets(page), `${where}: small targets`).toEqual([]);
       };
 
-      // Three people, no bots: bots lock "the end of the act" at once, which hides the planner.
+      // Three people, no bots: the slot planner is for people.
       const other = await browser.newContext();
       const third = await browser.newContext();
       const week = await startGame(page.request, { bots: 0, guests: [other.request, third.request], sessionLength: "1w" });
@@ -118,8 +118,7 @@ for (const viewport of VIEWPORTS) {
       // A fresh game in the 1-hour preset: call an emergency, vote in the dialog, see the results.
       const hour = await startGame(page.request, { bots: 5, sessionLength: "1h", voteVisibility: "open" });
       await page.goto(`/game/${hour.id}`);
-      await page.getByRole("button", { name: "Call an emergency meeting" }).click();
-      await page.getByRole("button", { name: "Sure? Tap again to call it" }).click();
+      await callEmergency(page);
       const dialog = page.getByRole("dialog", { name: "Who's skimming?" });
       await expect(dialog).toBeVisible({ timeout: 20_000 });
       await dialog.getByRole("group", { name: "Your vote" }).getByRole("button", { name: "Skip" }).click();

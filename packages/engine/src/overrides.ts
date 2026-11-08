@@ -44,12 +44,12 @@ const NO_COIN_ROOM_FIELDS = {} as const;
 const POWER_FIELDS: { readonly [K in RolePower["kind"]]: Readonly<Record<string, Rule>> } = {
   none: {},
   lookout: { extraRooms: positiveCount },
-  loopCameras: { perAct: positiveCount },
+  loopCameras: { perStretch: positiveCount },
   voteWeight: { weight: positiveCount },
-  audit: { perAct: positiveCount },
-  checkStash: { perAct: positiveCount },
-  ring: { perAct: positiveCount },
-  bless: { perAct: positiveCount },
+  audit: { perStretch: positiveCount },
+  checkStash: { perStretch: positiveCount },
+  ring: { perStretch: positiveCount },
+  bless: { perStretch: positiveCount },
   reopen: {},
 };
 
@@ -71,7 +71,7 @@ export function validateOverrides(raw: unknown, job: JobDef, roles: RoleTable = 
   if (raw === undefined || raw === null) return [];
   const errors: string[] = [];
   if (!isObject(raw)) return ["contentOverrides must be an object"];
-  const known = ["rooms", "bank", "alarm", "roundCap", "shakedown", "perks", "roles", "events"];
+  const known = ["rooms", "bank", "alarm", "roundCap", "perks", "roles", "events"];
   for (const key of Object.keys(raw)) if (!known.includes(key)) errors.push(`contentOverrides.${key} is not an overridable section`);
 
   if (raw.rooms !== undefined) {
@@ -92,9 +92,6 @@ export function validateOverrides(raw: unknown, job: JobDef, roles: RoleTable = 
   }
   if (raw.alarm !== undefined) {
     checkFields(raw.alarm, "contentOverrides.alarm", { bulbs: positiveCount, tapedRounds: positiveCount, bustStars: positiveCount }, errors);
-  }
-  if (raw.shakedown !== undefined) {
-    checkFields(raw.shakedown, "contentOverrides.shakedown", { cleanBelow: count, payout: count }, errors);
   }
   if (raw.perks !== undefined) {
     if (!isObject(raw.perks)) errors.push("contentOverrides.perks must be an object");
@@ -175,7 +172,6 @@ export function overrideJob(job: JobDef, overrides: ContentOverrides | null | un
     bank: { ...job.bank, ...overrides.bank },
     alarm: { ...job.alarm, ...overrides.alarm },
     roundCap: overrides.roundCap ?? job.roundCap,
-    shakedown: { ...job.shakedown, ...overrides.shakedown },
   };
 }
 

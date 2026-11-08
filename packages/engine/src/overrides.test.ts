@@ -62,9 +62,8 @@ describe("validateOverrides — configs are untrusted JSON (design §17.4)", () 
         bank: { coinsPerPlayer: 20 },
         alarm: { bulbs: 5, tapedRounds: 3, bustStars: 4 },
         roundCap: 9,
-        shakedown: { cleanBelow: 5, payout: 4 },
         perks: { peek: { cost: 3 } },
-        roles: { auditor: { rewardCount: 2 }, lookout: { extraRooms: 2 }, hacker: { perAct: 6 }, mole: { perAct: 2 } },
+        roles: { auditor: { rewardCount: 2 }, lookout: { extraRooms: 2 }, hacker: { perStretch: 6 }, mole: { perStretch: 2 } },
       }),
     ).toEqual([]);
   });
@@ -78,6 +77,8 @@ describe("validateOverrides — configs are untrusted JSON (design §17.4)", () 
     // R6 Heat and police activity are gone (design §5).
     expect(errs({ heat: {} })).toEqual(["contentOverrides.heat is not an overridable section"]);
     expect(errs({ police: {} })).toEqual(["contentOverrides.police is not an overridable section"]);
+    // R6's clean line and payout are gone: a shakedown takes what is above the share (design §9.6).
+    expect(errs({ shakedown: { cleanBelow: 5 } })).toEqual(["contentOverrides.shakedown is not an overridable section"]);
   });
 
   it("rejects rooms the job doesn't have, including prototype keys from JSON.parse", () => {
@@ -99,12 +100,9 @@ describe("validateOverrides — configs are untrusted JSON (design §17.4)", () 
     expect(errs({ alarm: { bulbs: 0 } })).toEqual(["contentOverrides.alarm.bulbs must be a whole number, 1 or more"]);
     expect(errs({ alarm: { tapedRounds: 0 } })).toHaveLength(1);
     expect(errs({ alarm: { bustStars: 1.5 } })).toHaveLength(1);
-    expect(errs({ shakedown: { payout: 1.5 } })).toHaveLength(1);
-    // extension.md "One vote rule": no plurality numbers any more.
-    expect(errs({ shakedown: { pluralityFromPlayers: 10 } })).toHaveLength(1);
     expect(errs({ perks: { peek: { cost: -1 } } })).toHaveLength(1);
     expect(errs({ perks: { jetpack: { cost: 1 } } })).toEqual(["contentOverrides.perks.jetpack: no such perk"]);
-    expect(errs({ roles: { mole: { perAct: 0 } } })).toHaveLength(1);
+    expect(errs({ roles: { mole: { perStretch: 0 } } })).toHaveLength(1);
   });
 
   it("rejects unknown fields, so a typo isn't silently ignored", () => {
@@ -128,9 +126,9 @@ describe("validateOverrides — configs are untrusted JSON (design §17.4)", () 
     expect(errs({ rooms: { rooftop: { quietCoins: 1 } } })).toEqual(["contentOverrides.rooms.rooftop.quietCoins is not an overridable field"]);
     expect(errs({ rooms: { depositBoxes: { capacity: { max: 2 } } } })).toEqual(["contentOverrides.rooms.depositBoxes.capacity is not an overridable field"]);
     expect(errs({ roles: { hacker: { extraRooms: 2 } } })).toEqual(["contentOverrides.roles.hacker.extraRooms is not an overridable field"]);
-    expect(errs({ roles: { lookout: { perAct: 2 } } })).toHaveLength(1);
+    expect(errs({ roles: { lookout: { perStretch: 2 } } })).toHaveLength(1);
     expect(errs({ roles: { wizard: { rewardCount: 2 } } })).toEqual(["contentOverrides.roles.wizard: no such role"]);
-    expect(errs({ roles: { mole: { perAct: 2 } } })).toEqual([]);
+    expect(errs({ roles: { mole: { perStretch: 2 } } })).toEqual([]);
     expect(errs({ roles: { mole: { perGame: 3 } } })).toEqual(["contentOverrides.roles.mole.perGame is not an overridable field"]);
     expect(errs({ roles: { fixer: { stopAt: 90 } } })).toEqual(["contentOverrides.roles.fixer.stopAt is not an overridable field"]);
   });
@@ -196,12 +194,13 @@ describe("overrides in play (design §17.4)", () => {
   });
 
   it("room coins and noise, the bank and the alarm numbers change resolution (design §3.1, §5, §6.1)", () => {
-    const s0 = game(config(3, { rooms: { vault: { coins: 9, quietCoins: 9 } }, bank: { coinsPerPlayer: 20 }, alarm: { bulbs: 2 } }));
-    expect(s0.bank).toBe(60);
+    // A bank of 120: no third goes, so no regular meeting interrupts the script (design §9.1).
+    const s0 = game(config(3, { rooms: { vault: { coins: 9, quietCoins: 9 } }, bank: { coinsPerPlayer: 40 }, alarm: { bulbs: 2 } }));
+    expect(s0.bank).toBe(120);
     const s1 = after(s0, () => submit("p0", { room: "vault", duffel: 0, pocket: 9 }), () => submit("p1", { room: "vault", duffel: 9 }), () => submit("p2", { room: "vault", duffel: 9 }), ROUND);
     expect(s1.players.p0?.stash).toBe(9 + 6); // the pocket and a third of the 18 handed in (design §7.2)
     expect(s1.reached).toBe(18);
-    expect(s1.bank).toBe(60 - 27);
+    expect(s1.bank).toBe(120 - 27);
     // A silent Vault: no ring, so no raid.
     expect(s1.bells.vault).toBe(0);
     expect(s1.wanted).toBe(0);
@@ -218,24 +217,6 @@ describe("overrides in play (design §17.4)", () => {
     for (let i = 0; i < 2; i++) s = after(s, () => submit("p0", { room: "lobby" }), () => submit("p1", { room: "lobby" }), () => submit("p2", { room: "lobby" }), ROUND);
     expect(s.phase).toMatchObject({ kind: "ended", outcome: { result: "success" } });
     expect(s.round).toBe(2);
-  });
-
-  it("shakedown numbers change the clean line and payout (extension.md \"Shakedowns\")", () => {
-    // Clean below 10; a clean target is paid 2.
-    const s0 = game(config(3, { ...NO_RAIDS, shakedown: { cleanBelow: 10, payout: 2 } }));
-    let s = s0;
-    for (let i = 0; i < 3; i++) {
-      s = after(s, () => submit("p0", { room: "vault", duffel: i < 2 ? 0 : 3, pocket: i < 2 ? 3 : 0 }), () => submit("p1", { room: "lobby" }), () => submit("p2", { room: "lobby" }), ROUND);
-    }
-    s = run(s, { type: "scheduleMeeting", act: 1, slot: "x" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: "act-1" } });
-    s = run(
-      s,
-      { type: "castVote", player: "p1", vote: { kind: "shakedown", target: "p0" } },
-      { type: "castVote", player: "p2", vote: { kind: "shakedown", target: "p0" } },
-      { type: "advance", deadline: { kind: "closeMeeting", meetingId: "act-1" } },
-    );
-    // 6 above the share would be caught with the shipped numbers (clean below 6); here it's clean.
-    expect(s.log.find((e) => e.type === "shakedownResolved")).toMatchObject({ target: "p0", stashRevealed: 6 + s.share, taken: 6, clean: true, compensation: 2 });
   });
 
   it("role numbers change powers (design §8)", () => {

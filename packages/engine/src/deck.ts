@@ -8,7 +8,6 @@ import type { ActiveCard, GameConfig, GameEvent, GameState, PlayerId, PlayerStat
 import { PUBLIC, privateTo } from "./types";
 import type { Draw } from "./handle";
 import { eventsFor, jobFor, powerOf, type EventTable } from "./overrides";
-import { actOfRound } from "./acts";
 
 /** Events are on unless the host turns them off. design §8.1, §15 */
 export const eventsOn = (config: GameConfig): boolean => config.eventsEnabled;
@@ -41,7 +40,7 @@ const effectIs = <K extends EventEffect["kind"]>(state: GameState, kind: K): Ext
  * instead of a drawn card (the oldest, if several; design §8.3). design §10
  */
 export function startRound(state: GameState, round: number, draw: Draw): GameEvent[] {
-  const events: GameEvent[] = [{ type: "roundStarted", visibility: PUBLIC, round, act: actOfRound(round) }];
+  const events: GameEvent[] = [{ type: "roundStarted", visibility: PUBLIC, round }];
   if (!eventsOn(state.config) || round < EVENTS_FROM_ROUND) return events;
   // The oldest Rig of this round wins; later ones were spent without effect (they never learn more than the flip shows).
   const card = state.rigs.find((r) => r.round === round)?.pick ?? draw.pick(EVENT_DECK);

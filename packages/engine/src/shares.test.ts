@@ -62,8 +62,8 @@ describe("the split and the kitty — design §7.1, §7.2, §4.2 step 5", () => 
     const s = run(before, mv("p0", "lobby", 1), mv("p1", "rooftop"), mv("p2", "rooftop"), ROUND);
     expect(ofType(s, "duffelSplit")[0]).toMatchObject({ handedIn: 1, setAside: 4, kittyIn: 0, cut: 1, kitty: 2 });
     expect(stashes(s)).toEqual([1, 1, 1]);
-    // Set-aside coins earn their honesty credit with the meetings' rules (S3a.5); hand-ins count here.
-    expect([s.setAside, s.reached]).toEqual([0, 1]);
+    // design §7.5, §9.6: set-aside coins count toward honesty as they reach the split, like hand-ins.
+    expect([s.setAside, s.reached]).toEqual([0, 1 + 4]);
   });
 
   it("a bust skips the split: the round's hand-ins and the kitty reach no stash (design §4.2 step 4, §5.5)", () => {

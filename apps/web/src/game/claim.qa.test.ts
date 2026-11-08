@@ -24,7 +24,7 @@ function step(s: GameState, c: PlayerCommand | SystemCommand): GameState {
 }
 const claim = (player: string, role: string) => ({ type: "claimRole", player, role }) as PlayerCommand;
 
-/** Finish one round: all move to the lobby, resolve, close alibis, and run the act's meeting if one is due. */
+/** Finish one round: all move to the lobby, resolve, close alibis, run a due meeting (design §9.1, §9.2) and close the result window. */
 function round(s: GameState): GameState {
   const p = s.phase;
   if (p.kind !== "planning") throw new Error(p.kind);
@@ -32,10 +32,12 @@ function round(s: GameState): GameState {
   s = step(s, { type: "advance", deadline: { kind: "round", round: p.round } });
   if (s.phase.kind === "alibis") s = step(s, { type: "advance", deadline: { kind: "alibis", round: p.round } });
   if (s.phase.kind === "awaitingMeeting") {
-    s = step(s, { type: "scheduleMeeting", act: s.phase.act, slot: "qa" });
-    s = step(s, { type: "advance", deadline: { kind: "openMeeting", meetingId: s.scheduledMeeting!.meetingId } });
+    const meetingId = s.phase.meetingId;
+    s = step(s, { type: "scheduleMeeting", meetingId, slot: "qa" });
+    s = step(s, { type: "advance", deadline: { kind: "openMeeting", meetingId } });
   }
   if (s.phase.kind === "meeting") s = step(s, { type: "advance", deadline: { kind: "closeMeeting", meetingId: s.phase.meetingId } });
+  if (s.phase.kind === "result") s = step(s, { type: "advance", deadline: { kind: "result", round: s.phase.round } });
   return s;
 }
 
@@ -60,24 +62,24 @@ describe("QA: Claim role (PR #41)", () => {
     for (const o of claimState(viewFor(s, "p1"))!.options) expect(handleCommand(s, claim("p1", o.id)).ok, o.id).toBe(true);
   });
 
-  it("once per act: claimed shows in every phase of the act, resets in the next act, matches the engine", () => {
+  it("once per stretch: claimed shows until the regular meeting at a third of the bank, then resets, matching the engine (design §9.1, §11.3)", () => {
     let s = createGame(config(3));
     s = step(s, claim("p1", "lookout"));
     expect(handleCommand(s, claim("p1", "auditor")).ok).toBe(false);
-    // Rounds 1-3 (act 1), through the alibi windows and the act's meeting.
-    for (let r = 0; r < 3; r++) {
-      expect(claimState(viewFor(s, "p1"))).toMatchObject({ act: 1, claimed: "lookout" });
+    // Rounds through the alibi windows until a third of the bank is gone and its regular meeting is held.
+    for (let guard = 0; guard < 12 && viewFor(s, "p1").stretch === 1; guard++) {
+      expect(claimState(viewFor(s, "p1"))).toMatchObject({ stretch: 1, claimed: "lookout" });
       s = round(s);
     }
-    expect(s.phase).toEqual({ kind: "planning", round: 4 });
+    expect(s.phase.kind).toBe("planning");
     const v = claimState(viewFor(s, "p1"))!;
-    expect(v).toMatchObject({ act: 2, claimed: null });
+    expect(v).toMatchObject({ stretch: 2, claimed: null });
     expect(handleCommand(s, claim("p1", "auditor")).ok).toBe(true);
     // Another player's claim never marks yours.
     expect(claimState(viewFor(step(s, claim("p2", "auditor")), "p1"))!.claimed).toBeNull();
   });
 
-  it("the claimed act agrees with the engine in the alibi window of an act's last round", () => {
+  it("the claimed stretch agrees with the engine in a round's alibi window", () => {
     let s = createGame(config(3));
     s = round(s);
     s = round(s);
@@ -88,7 +90,7 @@ describe("QA: Claim role (PR #41)", () => {
     const ok = handleCommand(s, claim("p1", "rookie"));
     expect(ok.ok).toBe(true);
     const after = claimState(viewFor((ok as { state: GameState }).state, "p1"))!;
-    expect(after).toMatchObject({ act: before.act, claimed: "rookie" });
+    expect(after).toMatchObject({ stretch: before.stretch, claimed: "rookie" });
   });
 
   it("none once the game is over", () => {

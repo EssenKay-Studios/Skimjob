@@ -61,11 +61,12 @@ const lobbyRest = (n: number, busy: string[]): Command[] =>
   Array.from({ length: n }, (_, i) => `p${i}`)
     .filter((p) => !busy.includes(p))
     .map((p) => mv(p, "lobby", 1));
-/** Through a regular meeting after an act's last round. */
-const MEETING = (act: number): Step[] => [
-  { type: "scheduleMeeting", act, slot: "x" } as Command,
-  { type: "advance", deadline: { kind: "openMeeting", meetingId: `act-${act}` } } as Command,
-  { type: "advance", deadline: { kind: "closeMeeting", meetingId: `act-${act}` } } as Command,
+/** Through the meeting the last round called (a raid's police briefing, design §9.2), nobody voting, then the result window (§9.3). */
+const MEETING: Step[] = [
+  (s) => ({ type: "scheduleMeeting", meetingId: s.phase.kind === "awaitingMeeting" ? s.phase.meetingId : "", slot: "x" }),
+  (s) => ({ type: "advance", deadline: { kind: "openMeeting", meetingId: s.scheduledMeeting?.meetingId ?? "" } }),
+  (s) => ({ type: "advance", deadline: { kind: "closeMeeting", meetingId: s.meeting?.id ?? "" } }),
+  (s) => ({ type: "advance", deadline: { kind: "result", round: s.resolvedRound } }),
 ];
 
 describe("QA: the raid line is exactly the 4th bulb — design §5.1, §5.3", () => {
@@ -116,10 +117,10 @@ describe("QA: two rooms raided in one round — design §4.2 steps 3–4, §5.4"
     );
   };
 
-  it("from Wanted 0, Wanted jumps by 2 and the game goes on", () => {
+  it("from Wanted 0, Wanted jumps by 2 and the game goes on (to one police briefing, design §9.2)", () => {
     const s = double(0);
     expect(ofType(s.log, "roomRaided").map((e) => [e.room, e.seized, e.wanted])).toEqual([["vault", 4, 1], ["office", 8, 2]]);
-    expect([s.wanted, s.phase.kind]).toEqual([2, "planning"]);
+    expect([s.wanted, s.phase]).toEqual([2, { kind: "awaitingMeeting", meeting: "briefing", meetingId: "meeting-1" }]);
     expect(s.taped).toEqual({ vault: 3, office: 3 });
   });
 
@@ -158,16 +159,16 @@ describe("QA: a raid seizes only the raided room's visitors' grabs — design §
 });
 
 describe("QA: the tape lasts exactly 2 rounds and the bell is off — design §5.3", () => {
-  /** Raid the Vault in round 2 (3 players): taped through round 4, across the Act 1 meeting. */
+  /** Raid the Vault in round 2 (3 players): taped through round 4; then its police briefing (design §9.2). */
   const raidedInRound2 = () =>
-    run(game(3, ["mole", "fixer"]), mv("p0", "lobby", 1), mv("p1", "lobby", 1), mv("p2", "lobby", 1), ROUND, mv("p0", "lobby", 1), mv("p1", "vault", 3), mv("p2", "vault", 1), ROUND);
+    run(game(3, ["mole", "fixer"]), mv("p0", "lobby", 1), mv("p1", "lobby", 1), mv("p2", "lobby", 1), ROUND, mv("p0", "lobby", 1), mv("p1", "vault", 3), mv("p2", "vault", 1), ROUND, ...MEETING);
 
-  it("closed in rounds 3 and 4 (across a meeting), open in round 5 with its bell at 0", () => {
+  it("closed in rounds 3 and 4 (after the briefing), open in round 5 with its bell at 0", () => {
     let s = raidedInRound2();
     expect(ofType(s.log, "roomRaided")).toMatchObject([{ round: 2, room: "vault", closedThrough: 4 }]);
     expect([s.round, s.taped]).toEqual([3, { vault: 4 }]);
     expect(reason(s, mv("p1", "vault", 1))).toMatch(/taped off/);
-    s = run(s, ROUND, ...MEETING(1));
+    s = run(s, ROUND);
     expect([s.round, s.taped]).toEqual([4, { vault: 4 }]);
     expect(reason(s, mv("p1", "vault", 1))).toMatch(/taped off/);
     s = run(s, ROUND);
@@ -203,7 +204,6 @@ describe("QA: the tape lasts exactly 2 rounds and the bell is off — design §5
     expect(ofType(s.log, "bellsRung").at(-1)?.bells.vault).toBe(4);
     s = run(s, mv("p0", "lobby", 1), mv("p1", "lobby", 1, 0, { ability: { kind: "reopen", room: "vault" } }), mv("p2", "lobby", 1), ROUND);
     expect([s.taped, s.bells.vault]).toEqual([{}, 0]);
-    s = run(s, ...MEETING(1));
     expect([s.round, s.bells.vault]).toEqual([4, 0]);
     // Open and ringable again: the Mole's ring alone lights 1 bulb.
     s = run(s, mv("p0", "lobby", 1, 0, { ability: { kind: "ring", room: "vault" } }), mv("p1", "lobby", 1), mv("p2", "lobby", 1), ROUND);
@@ -211,7 +211,7 @@ describe("QA: the tape lasts exactly 2 rounds and the bell is off — design §5
   });
 
   it("a room raided again after it reopens is taped again and raises Wanted again", () => {
-    let s = run(game(3), mv("p0", "vault", 3), mv("p1", "vault", 1), mv("p2", "lobby", 1), ROUND, ROUND, ROUND, ...MEETING(1));
+    let s = run(game(3), mv("p0", "vault", 3), mv("p1", "vault", 1), mv("p2", "lobby", 1), ROUND, ...MEETING, ROUND, ROUND);
     expect([s.round, s.taped, s.wanted]).toEqual([4, {}, 1]);
     s = run(s, mv("p0", "vault", 3), mv("p1", "vault", 1), mv("p2", "lobby", 1), ROUND);
     expect([s.taped, s.wanted]).toEqual([{ vault: 6 }, 2]);
@@ -263,7 +263,6 @@ describe("QA: the bust and the Rooftop escape — design §5.5, §8.3, §8.5", (
     expect(tail).not.toContain("bellsCooled");
     expect(tail).not.toContain("alibisClosed");
     expect(tail).not.toContain("roundStarted");
-    expect(tail).not.toContain("blessingPaid");
     expect(tail).toContain("roundResolved");
     expect(tail.at(-1)).toBe("gameEnded");
     expect(handleCommand(s, { type: "advance", deadline: { kind: "alibis", round: 1 } }).ok).toBe(false);
@@ -272,7 +271,7 @@ describe("QA: the bust and the Rooftop escape — design §5.5, §8.3, §8.5", (
   it("coins are conserved through a bust: bank + seized + the kitty + stashes = the starting bank", () => {
     const g = game(4);
     const start = g.bank;
-    let s = run(g, mv("p0", "vault", 3), mv("p1", "vault", 0, 1), mv("p2", "office", 1, 1), mv("p3", "lobby", 0, 1), ROUND);
+    let s = run(g, mv("p0", "vault", 3), mv("p1", "vault", 0, 1), mv("p2", "office", 1, 1), mv("p3", "lobby", 0, 1), ROUND, ...MEETING);
     s = run({ ...s, wanted: 2 }, mv("p0", "office", 0, 2), mv("p1", "office", 2), mv("p2", "office", 0, 2), mv("p3", "office", 2), ROUND);
     expect(outcome(s)).toMatchObject({ reason: "bust" });
     const stashes = Object.values(s.players).reduce((n, p) => n + p.stash, 0);
@@ -384,7 +383,7 @@ describe("QA: determinism — design §19.1", () => {
 });
 
 describe("QA: viewFor leaks for every new event — design §18", () => {
-  /** Round 1 at 4 players: the Mole rings the Vault, p1 and p2 are raided there, p3 lies low; round 2 the Fixer reopens it and a bust follows. */
+  /** Round 1 at 4 players: the Mole rings the Vault, p1 and p2 are raided there, p3 lies low (a briefing follows); round 2 the Fixer reopens it and a bust follows. */
   const script = (p1Split: [number, number]) => {
     const g = game(4, ["mole", "fixer"]);
     let s = run(
@@ -394,6 +393,7 @@ describe("QA: viewFor leaks for every new event — design §18", () => {
       mv("p2", "vault", 0, 1),
       mv("p3", "rooftop"),
       ROUND,
+      ...MEETING,
     );
     s = run(
       { ...s, wanted: 2, bells: { ...s.bells, office: 3 } },

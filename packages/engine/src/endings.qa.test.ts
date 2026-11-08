@@ -54,13 +54,15 @@ function run(state: GameState, ...commands: Cmd[]): GameState {
 
 const mv = (player: string, room: string, duffel: number, pocket = 0) => ({ type: "submitMove", player, move: { room, duffel, pocket } });
 const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
-const sched = (act: number) => ({ type: "scheduleMeeting", act, slot: "slot" });
+const sched = (meetingId: string) => ({ type: "scheduleMeeting", meetingId, slot: "slot" });
 const OPEN = (s: GameState) => ({ type: "advance", deadline: { kind: "openMeeting", meetingId: s.scheduledMeeting?.meetingId } });
 const CLOSE = (s: GameState) => ({ type: "advance", deadline: { kind: "closeMeeting", meetingId: s.meeting?.id } });
-const meeting = (s: GameState): GameState => run(s, sched(s.round / 3), OPEN, CLOSE);
+const RESULT = (s: GameState) => ({ type: "advance", deadline: { kind: "result", round: s.resolvedRound } });
+/** Through the meeting a round called (design §9.1, §9.2), nobody voting, and its result window (§9.3). */
+const meeting = (s: GameState): GameState => (s.phase.kind === "awaitingMeeting" ? run(s, sched(s.phase.meetingId), OPEN, CLOSE, RESULT) : s);
 
-/** One round: `moves[i]` is seat i's [room, duffel, pocket]. */
-const round = (s: GameState, moves: [string, number, number?][]): GameState => run(s, ...moves.map(([room, d, p], i) => mv(`p${i}`, room, d, p ?? 0)), ROUND);
+/** One round: `moves[i]` is seat i's [room, duffel, pocket]; then any meeting it called. */
+const round = (s: GameState, moves: [string, number, number?][]): GameState => meeting(run(s, ...moves.map(([room, d, p], i) => mv(`p${i}`, room, d, p ?? 0)), ROUND));
 /** Every seat in the Vault, a full grab (3), `pockets[i]` of it pocketed. */
 const vault = (s: GameState, pockets: number[]): GameState => round(s, pockets.map((p): [string, number, number] => ["vault", 3 - p, p]));
 const all = <T>(n: number, x: T): T[] => Array.from({ length: n }, () => x);
@@ -76,12 +78,11 @@ const withPlayers = (s: GameState, change: Record<string, Partial<PlayerState>>)
 });
 
 describe("the bank empties — design §6.1, §6.2, §3.2", () => {
-  it("12 players: a short last round (12 of 36 asked) empties the bank and ends the game at once, mid-act", () => {
+  it("12 players: a short last round (12 of 36 asked) empties the bank and ends the game at once", () => {
     let s = game(12, [], NO_RAIDS); // 192 coins, 36 a round
     for (let r = 1; r <= 5; r++) {
       s = vault(s, all(12, 0));
       expect(s.phase.kind, `round ${r}`).not.toBe("ended");
-      if (r === 3) s = meeting(s);
     }
     expect(s.bank).toBe(12);
     s = vault(s, all(12, 0));
@@ -89,7 +90,7 @@ describe("the bank empties — design §6.1, §6.2, §3.2", () => {
     expect(s.round).toBe(6);
     const r6 = s.log.filter((e) => e.type === "coinsGrabbed" && e.round === 6) as Extract<GameEvent, { type: "coinsGrabbed" }>[];
     expect(r6.reduce((n, e) => n + e.duffel + e.pocket + e.seized, 0)).toBe(12);
-    // Round 6 ends an act, but no meeting follows the last round (§6.2) and nothing after the end check runs (§4.2 step 8).
+    // Round 6 takes the last third, but no meeting follows the last round (§6.2) and nothing after the end check runs (§4.2 step 8).
     const tail = s.log.slice(s.log.findIndex((e) => e.type === "roundResolved" && e.round === 6)).map((e) => e.type).filter((t) => t !== "rngAdvanced");
     expect(tail).toEqual(["roundResolved", "gameEnded"]);
     expect(outcome(s)).toMatchObject({ result: "success" });
@@ -130,23 +131,22 @@ describe("the round cap — design §6.2", () => {
     for (let r = 1; r <= 12; r++) {
       s = round(s, all(12, ["lobby", 1] as [string, number]));
       if (r < 12) expect(s.phase.kind, `round ${r}`).not.toBe("ended");
-      if (r % 3 === 0 && r < 12) s = meeting(s);
     }
     expect(s.round).toBe(12);
     expect(s.bank).toBe(192 - 144);
-    expect(s.log.filter((e) => e.type === "meetingOpened")).toHaveLength(3);
+    // The bank's thirds call regular meetings after rounds 6 (120 left) and 11 (60 left). design §9.1
+    expect(s.log.filter((e) => e.type === "meetingOpened")).toHaveLength(2);
     expect(s.log.at(-1)?.type).toBe("gameEnded");
     expect(outcome(s)).toMatchObject({ result: "success" });
   });
 
-  it("a cap that lands on a meeting round (3) ends the game with no meeting", () => {
-    let s = game(3, [], { ...NO_RAIDS, roundCap: 3 });
+  it("a cap that lands on a round taking a third of the bank ends the game with no meeting", () => {
+    let s = game(3, [], { ...NO_RAIDS, roundCap: 2 });
     s = vault(s, [0, 0, 0]);
+    s = run(s, { type: "proposeMeeting", player: "p0", slot: "x" }, { type: "acceptMeeting", player: "p1", proposalId: "proposal-1" }); // a slot locked in never opens
     s = vault(s, [0, 0, 0]);
-    s = run(s, sched(1)); // a meeting scheduled for after round 3 never opens
-    s = vault(s, [0, 0, 0]);
-    expect(s.round).toBe(3);
-    expect(s.bank).toBe(48 - 27);
+    expect(s.round).toBe(2);
+    expect(s.bank).toBe(48 - 18); // two-thirds or below: a third gone (design §9.1)
     expect(s.log.some((e) => e.type === "meetingOpened")).toBe(false);
     expect(endings(s)).toHaveLength(1);
   });
@@ -212,8 +212,7 @@ describe("the honesty line at 12 players — design §7.5, §8.1, §8.4", () => 
       s = vault(s, second);
       for (let r = 3; r <= 6; r++) {
         s = vault(s, [0, 0, 0]); // round 6 asks 9 of the last 3
-        if (r === 3) s = meeting(s);
-      }
+        }
       return s;
     };
     const at = play([3, 3, 1]); // 16 pocketed
@@ -282,8 +281,9 @@ describe("after the end — design §6.2, §17.2", () => {
       { type: "advance", deadline: { kind: "round", round: 1 } },
       { type: "advance", deadline: { kind: "round", round: 2 } },
       { type: "advance", deadline: { kind: "alibis", round: 1 } },
-      sched(1),
-      { type: "advance", deadline: { kind: "openMeeting", meetingId: "m1" } },
+      sched("meeting-1"),
+      { type: "advance", deadline: { kind: "openMeeting", meetingId: "meeting-1" } },
+      { type: "advance", deadline: { kind: "result", round: 1 } },
       { type: "castVote", player: "p1", vote: { kind: "shakedown", target: "p0" } },
       { type: "callEmergency", player: "p1" },
     ];

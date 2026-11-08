@@ -3,7 +3,7 @@
 import type { PerkId, RoleId, RoomId } from "@skimjob/content";
 import type { PlayerId, PlayerSeat, VoteVisibility } from "./config";
 import type { Move, VoteChoice } from "./commands";
-import type { ActNumber, GameEvent, Honesty, Outcome } from "./events";
+import type { GameEvent, Honesty, Outcome } from "./events";
 import type { RevealSummary } from "./reveal";
 import type { MeetingProposal, PendingEmergency, Phase, RoleState, ScheduledMeeting } from "./state";
 import type { PrivateVisibility, PublicVisibility, SecretVisibility, Visibility } from "./visibility";
@@ -33,9 +33,8 @@ export interface SelfView {
   readonly id: PlayerId;
   readonly role: RoleId;
   readonly stash: number;
-  /** Your power's uses this act / game. design §8 */
+  /** Your power's uses this stretch / game. design §8 */
   readonly roleState: RoleState;
-  readonly emergencyMeetingUsed: boolean;
   /** Your current move for this round, if submitted. */
   readonly move: Move | null;
   readonly sealedVote: VoteChoice | null;
@@ -67,36 +66,17 @@ export interface LoggedEvent<E extends GameEvent = GameEvent> {
 }
 
 /** What everyone can see about another player. No stash, role or moves. */
-export interface OtherPlayerView extends PlayerSeat {
-  readonly emergencyMeetingUsed: boolean;
-}
-
-/**
- * The gap box (data only; the app draws it): what the round's public alibis
- * say the crew should have handed in, against what it really handed in.
- * `alibis` counts each alibi's room coin limit (event effects included),
- * as if everything were handed in. extension.md "What the app works out for you"
- */
-export interface GapBox {
-  readonly round: number;
-  /** How many alibis are posted for the round so far. */
-  readonly posted: number;
-  readonly alibis: number;
-  /** Coins handed in that round. design §7.4 */
-  readonly handedIn: number;
-  /** `alibis` − `handedIn`: what the alibis claim that didn't reach the duffel. */
-  readonly unaccounted: number;
-}
+export type OtherPlayerView = PlayerSeat;
 
 export interface PlayerView {
   readonly me: SelfView;
   /** Every *other* player, in seat order. You are in `me`. */
   readonly players: readonly OtherPlayerView[];
   readonly phase: PhaseView;
-  /** The latest round started (1–9); 0 during setup. Kept because not every phase carries it. */
+  /** The latest round started; 0 during setup. Kept because not every phase carries it. */
   readonly round: number;
-  /** The act of `round`; 1 during setup. */
-  readonly act: ActNumber;
+  /** The stretch between regular meetings: 1 until the first regular meeting opens (public). design §9.1 */
+  readonly stretch: number;
   /** The round whose alibis may still be posted (also while a meeting interrupts them), or null. design §5.4 */
   readonly alibiRound: number | null;
   readonly rooms: readonly RoomId[];
@@ -117,23 +97,25 @@ export interface PlayerView {
   /** This round's event card (public): its id and the room Lockdown closes. design §10 */
   readonly card: { readonly round: number; readonly id: string; readonly room: RoomId | null } | null;
   readonly voteVisibility: VoteVisibility;
-  /** Both are public (design §11.1); null when nothing is pending. */
+  /** Both are public (design §9.3, §9.4); null when nothing is pending. */
   readonly scheduledMeeting: ScheduledMeeting | null;
   readonly pendingEmergency: PendingEmergency | null;
+  /** Emergency meetings left in the crew's pool (public). design §9.3 */
+  readonly emergencies: number;
+  /** Players protected from shakedowns until the next regular meeting (public). design §9.7 */
+  readonly protected: readonly PlayerId[];
   /**
-   * Players who have locked in a move for the round being planned (also while
-   * a meeting interrupts it), in seat order, you included; empty otherwise.
+   * Players who have locked in a move for the round being planned, in seat
+   * order, you included; empty otherwise.
    * Public: the same as this round's `moveLocked` events (owner decision, 2 Nov). design §5.1
    */
   readonly lockedIn: readonly PlayerId[];
-  /** Open proposals for the act's regular meeting (public, design §11.1). */
+  /** Open slot proposals for the next regular meeting or briefing (public, design §9.4). */
   readonly proposals: readonly MeetingProposal[];
   /** This game's perk shop (public), with each perk's cost in tokens. extension.md "Tokens and the perk shop" */
   readonly shop: readonly { readonly perk: PerkId; readonly cost: number }[];
   /** The roles shown at setup (public): exactly those dealt, or every role that could be; null when Hidden. extension.md "Settings" */
   readonly roleList: { readonly list: "exact" | "possible"; readonly roles: readonly RoleId[] } | null;
-  /** The gap box for the latest resolved round; null before round 1 resolves. extension.md "What the app works out for you" */
-  readonly gap: GapBox | null;
   /** Public events, oldest first. design §13 */
   readonly ledger: readonly LoggedEvent<PublicEvent>[];
   /** Events private (or secret) to this player, oldest first. design §13 */

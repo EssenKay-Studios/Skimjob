@@ -1,4 +1,4 @@
-// QA (PR #12): info and vote roles — Hacker, Smooth talker. design §8, §11.2, §11.3
+// QA (PR #12): info and vote roles — Hacker, Smooth talker. design §8, §9.5, §9.6
 //
 // 1. Counterfactual leak pairs (the view.qa.test.ts approach, with these roles
 //    dealt): games A and B run the same commands from the same seed, except for
@@ -9,13 +9,13 @@
 // 2. Edge cases per role: limits, wrong phase / wrong role, vote maths at ties
 //    and quorum edges in every vote mode, threshold and stash edges.
 import { describe, expect, it } from "vitest";
-import { handleThroughAlibis } from "./alibis.testkit";
+import { closeResultWindow } from "./alibis.testkit";
 import { STARTER_ROLES, BANK_JOB } from "@skimjob/content";
 import type { GameConfig, GameEvent, GameState, PlayerId, PlayerState, PlayerView, VoteVisibility } from "./types";
 import { privateTo } from "./types";
 import { createGame, setupEvents } from "./setup";
 import { replay } from "./reduce";
-import { handleCommand } from "./handle";
+import { handleCommand, type CommandResult } from "./handle";
 import { meetingResult } from "./meeting";
 import { viewFor } from "./view";
 import { grantPerks } from "./perks.testkit";
@@ -33,7 +33,8 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     ...extra,
-    contentOverrides: { ...R6_COINS, ...extra.contentOverrides }, // R6 room yields as coins (R6 role rules)
+    // R6 room yields as coins (R6 role rules), and a bank of 20 a player, so regular meetings come every few rounds (design §9.1).
+    contentOverrides: { ...R6_COINS, bank: { coinsPerPlayer: 20 }, ...extra.contentOverrides },
   };
 }
 
@@ -44,6 +45,24 @@ function game(players: number, roles: string[], extra: Partial<GameConfig> = {})
   const log = setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: roles[seat++] ?? "rookie" } : e));
   return replay(cfg, log);
 }
+
+/**
+ * A command, with a round deadline followed by its alibi deadline (nobody
+ * posts). The result window (design §9.3) stays open, so an emergency can be
+ * called in it, until a move or a round deadline closes it.
+ */
+function handleThroughAlibis(state: GameState, command: unknown): CommandResult {
+  const c = command as { type?: unknown; deadline?: { kind?: unknown } } | null;
+  const planning = c?.type === "submitMove" || c?.deadline?.kind === "round";
+  const s = state.phase.kind === "result" && !state.pendingEmergency && planning ? must(closeResultWindow(state)) : state;
+  const r = handleCommand(s, command);
+  if (!r.ok || r.state.phase.kind !== "alibis" || c?.deadline?.kind !== "round") return r;
+  return handleCommand(r.state, { type: "advance", deadline: { kind: "alibis", round: r.state.phase.round } });
+}
+const must = (r: CommandResult): GameState => {
+  if (!r.ok) throw new Error(r.reason);
+  return r.state;
+};
 
 type Cmd = unknown | ((s: GameState) => unknown);
 function run(state: GameState, ...commands: Cmd[]): GameState {
@@ -67,14 +86,25 @@ const ofType = <T extends GameEvent["type"]>(events: readonly GameEvent[], type:
   events.filter((e): e is Extract<GameEvent, { type: T }> => e.type === type);
 
 const mv = (player: string, room: string, pocket = 0, extra: object = {}) => ({ type: "submitMove", player, move: { ...fullGrab(room, pocket, R6_COINS), ...extra } });
-const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
+/** The round being planned; from the result window, the next one (closing the window first). */
+const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.phase.kind === "result" ? s.round + 1 : s.round } });
 const vote = (player: string, target: string | null) => ({ type: "castVote", player, vote: target === null ? { kind: "skip" } : { kind: "shakedown", target } });
 const CLOSE = (s: GameState) => ({ type: "advance", deadline: { kind: "closeMeeting", meetingId: s.meeting?.id } });
 const RESOLVE = (s: GameState) => ({ type: "advance", deadline: { kind: "resolveShakedown", meetingId: s.pendingShakedown?.meetingId } });
+/** `caller` calls an emergency meeting in the result window (resolving the round being planned first) and it opens at once. design §9.3 */
 const emergency = (s: GameState, caller: string): GameState =>
-  run(s, { type: "callEmergency", player: caller }, { type: "advance", deadline: { kind: "openMeeting", meetingId: `emergency-${caller}` } });
-const actMeeting = (s: GameState, act: number): GameState =>
-  run(s, { type: "scheduleMeeting", act, slot: "x" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: `act-${act}` } });
+  run(
+    s,
+    ...(s.phase.kind === "planning" ? [ROUND] : []),
+    { type: "callEmergency", player: caller },
+    (x: GameState) => ({ type: "advance", deadline: { kind: "openMeeting", meetingId: x.pendingEmergency?.meetingId } }),
+  );
+/** The meeting the last round called opens (the server picks its slot). design §9.1, §9.4 */
+const dueMeeting = (s: GameState): GameState => {
+  if (s.phase.kind !== "awaitingMeeting") throw new Error(`no meeting is due in ${s.phase.kind}`);
+  const { meetingId } = s.phase;
+  return run(s, { type: "scheduleMeeting", meetingId, slot: "x" }, { type: "advance", deadline: { kind: "openMeeting", meetingId } });
+};
 /** Close the open meeting and, if a shakedown window opened, end it. */
 const closeAll = (s: GameState): GameState => {
   const closed = run(s, CLOSE);
@@ -267,7 +297,9 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
     for (const id of ids) {
       if (rand() < 0.2) continue;
       const t = rand() < 0.7 ? target : pick(ids);
-      step([{ type: "castVote", player: id, vote: t === id ? { kind: "skip" } : { kind: "shakedown", target: t } }]);
+      // design §9.7: a protected player can't be voted for; a skip instead.
+      const skip = t === id || A.protected.includes(t);
+      step([{ type: "castVote", player: id, vote: skip ? { kind: "skip" } : { kind: "shakedown", target: t } }]);
     }
     step([{ type: "advance", deadline: { kind: "closeMeeting", meetingId: A.meeting?.id } }]);
     if (over() || A.phase.kind !== "shakedownPending") return;
@@ -275,17 +307,17 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
   }
 
   for (let round = 1; round <= BANK_JOB.roundCap && !over(); round++) {
-    const caller = ids.find((id) => !A.players[id]?.emergencyMeetingUsed);
-    if (caller && rand() < 0.3) {
-      step([{ type: "callEmergency", player: caller }]);
-      meeting({ type: "advance", deadline: { kind: "openMeeting", meetingId: `emergency-${caller}` } });
-    }
-    if (over()) break;
     planRound(round);
     step([{ type: "advance", deadline: { kind: "round", round } }]);
-    if (round % 3 === 0 && !over()) {
-      step([{ type: "scheduleMeeting", act: round / 3, slot: `s${round}` }]);
-      meeting({ type: "advance", deadline: { kind: "openMeeting", meetingId: A.scheduledMeeting?.meetingId } });
+    // design §9.1, §9.2: the meeting the round called, then (§9.3) sometimes an emergency in its result window.
+    if (!over() && A.phase.kind === "awaitingMeeting") {
+      const { meetingId } = A.phase;
+      step([{ type: "scheduleMeeting", meetingId, slot: `s${round}` }]);
+      meeting({ type: "advance", deadline: { kind: "openMeeting", meetingId } });
+    }
+    if (!over() && A.phase.kind === "result" && rand() < 0.3) {
+      step([{ type: "callEmergency", player: pick(ids) }]);
+      meeting({ type: "advance", deadline: { kind: "openMeeting", meetingId: A.pendingEmergency?.meetingId } });
     }
   }
   if (!diverged) expect(A.phase.kind === "ended" || B.phase.kind === "ended").toBe(true);
@@ -332,7 +364,7 @@ describe("QA: one hidden role difference never changes another player's view or 
 
 // ------------------------------------------------------------------ 2. edges per role
 
-describe("QA Smooth talker: majority counts weight, quorum counts voters, in every mode — design §8, §11.2", () => {
+describe("QA Smooth talker: majority counts weight, quorum counts voters, in every mode — design §8, §9.5", () => {
   // Meetings close straight to their result unless the shop holds a Shield.
   const result = (players: number, roles: string[], ballots: [string, string | null][], mode: VoteVisibility, extra: Partial<GameConfig> = {}) => {
     const caller = ballots[0]?.[0] ?? "p0";
@@ -397,21 +429,21 @@ describe("QA Hacker: loop vs Security and the Lookout — design §8", () => {
     ]);
   });
 
-  it("a loop replaced before the deadline isn't used; one loop per act, back next act; refused outside planning", () => {
+  it("a loop replaced before the deadline isn't used; one loop between meetings, back after the next regular one; refused outside planning", () => {
     const loop = (room: string) => mv("p0", "lobby", 0, { ability: { kind: "loopCameras", room } });
     let s = run(base, loop("vault"), mv("p0", "lobby"), ROUND);
-    expect(s.players.p0?.roleState.usedThisAct).toBe(0);
+    expect(s.players.p0?.roleState.usedThisStretch).toBe(0);
     s = run(s, loop("vault"), ROUND);
     expect(reason(s, loop("office"))).toMatch(/already looped/);
-    s = run(s, ROUND);
+    while (s.phase.kind !== "awaitingMeeting") s = run(s, ROUND);
     expect(reason(s, loop("office"))).toMatch(/round is being planned/);
-    s = closeAll(actMeeting(s, 1));
-    expect(s.players.p0?.roleState.usedThisAct).toBe(0);
+    s = closeAll(dueMeeting(s));
+    expect(s.players.p0?.roleState.usedThisStretch).toBe(0);
     expect(() => run(s, loop("office"))).not.toThrow();
   });
 });
 
-describe("QA shakedown window (a Shield in the shop): deadline, wrong phase — design §8.3, §11.3", () => {
+describe("QA shakedown window (a Shield in the shop): deadline, wrong phase — design §8.3, §9.6", () => {
   const shielded = (s: GameState): GameState => ({ ...s, shop: ["peek", "shield", "extraVote"] });
   const passed = () => {
     const s = run(shielded(game(3, [])), mv("p1", "vault", 6), ROUND);
@@ -424,44 +456,32 @@ describe("QA shakedown window (a Shield in the shop): deadline, wrong phase — 
     const after = run(s, RESOLVE);
     expect(reason(after, RESOLVE(s))).toMatch(/no shakedown is pending/);
     expect(reason(s, { type: "advance", deadline: { kind: "resolveShakedown" } })).toMatch(/no shakedown is pending/);
-    expect(reason(s, { type: "advance", deadline: { kind: "openMeeting", meetingId: "act-1" } })).toMatch(/pending/);
+    expect(reason(s, { type: "advance", deadline: { kind: "openMeeting", meetingId: "meeting-1" } })).toMatch(/pending/);
   });
 
-  it("an emergency window mid-round returns to planning with submitted moves intact", () => {
-    let s = run(shielded(game(3, [])), mv("p1", "vault", 6), ROUND, mv("p0", "office", 2));
-    s = run(emergency(s, "p2"), vote("p0", "p1"), vote("p2", "p1"), CLOSE);
+  it("a regular meeting's window ends in the result window, where an emergency can still be called — design §9.3", () => {
+    let s = run(shielded(game(3, [])), mv("p1", "vault", 6), ROUND);
+    while (s.phase.kind !== "awaitingMeeting") s = run(s, ROUND);
+    s = run(dueMeeting(s), vote("p0", "p1"), vote("p2", "p1"), CLOSE);
     expect(s.phase.kind).toBe("shakedownPending");
     s = run(s, RESOLVE);
-    expect(s.phase).toEqual({ kind: "planning", round: 2 });
-    expect(s.moves.p0).toEqual({ room: "office", duffel: 2, pocket: 2 });
-    s = run(s, ROUND);
-    expect((s.players.p0?.stash ?? 0) - s.share).toBe(2);
+    expect(s.phase).toEqual({ kind: "result", round: s.resolvedRound });
+    s = emergency(s, "p2");
+    expect(s.meeting).toMatchObject({ kind: "emergency", calledBy: "p2" });
   });
 
-  it("an emergency window after an act's last round returns to awaiting the act meeting", () => {
-    let s = run(shielded(game(3, [])), mv("p1", "vault", 6), ROUND, ROUND, ROUND);
-    expect(s.phase.kind).toBe("awaitingMeeting");
-    s = run(emergency(s, "p2"), vote("p0", "p1"), vote("p2", "p1"), CLOSE);
-    expect(s.phase.kind).toBe("shakedownPending");
-    s = run(s, RESOLVE);
-    expect(s.phase).toEqual({ kind: "awaitingMeeting", act: 1 });
-    s = closeAll(actMeeting(s, 1));
-    expect(s.round).toBe(4);
-  });
-
-  it("a Shield cancel in the act 3 meeting's window: the target keeps the stash and the next round starts", () => {
+  it("a Shield cancel in the last regular meeting's window: the target keeps the stash, protected, and the result window follows", () => {
+    // 14 coins a round out of 60: regular meetings after rounds 2 and 3 (design §9.1); p1 pockets the Vault's 6 in round 3.
     let s = shielded(game(3, []));
-    for (let act = 1; act <= 3; act++) {
-      for (let r = 0; r < 3; r++) s = run(s, mv("p1", "vault", act === 3 ? 6 : 0), mv("p2", "office"), mv("p0", "office"), ROUND);
-      s = actMeeting(s, act);
-      if (act === 3) {
-        s = grantPerks(s, "p1", "shield");
-        s = run(s, vote("p0", "p1"), vote("p2", "p1"), CLOSE);
-      } else s = closeAll(s);
+    for (let round = 1; round <= 3; round++) {
+      s = run(s, mv("p1", "vault", round === 3 ? 6 : 0), mv("p2", "office"), mv("p0", "office"), ROUND);
+      if (round === 2) s = closeAll(dueMeeting(s));
     }
+    s = grantPerks(dueMeeting(s), "p1", "shield");
+    s = run(s, vote("p0", "p1"), vote("p2", "p1"), CLOSE);
     expect(s.phase.kind).toBe("shakedownPending");
     const end = run(s, RESOLVE);
-    expect(since(s, end).map((e) => e.type)).toEqual(["perkUsed", "shakedownCancelled", "roundStarted"]);
-    expect(end.players.p1?.stash).toBe(18 + end.share);
+    expect(since(s, end).map((e) => e.type)).toEqual(["perkUsed", "shakedownCancelled"]);
+    expect([end.players.p1?.stash, end.protected, end.phase.kind]).toEqual([6 + end.share, ["p1"], "result"]);
   });
 });

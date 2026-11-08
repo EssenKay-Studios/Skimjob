@@ -1,5 +1,5 @@
 // The Extension's player-facing pieces (docs/extension.md): role facts with a
-// "How you win" line, tappable role names, the rulebook sheet, the gap box,
+// "How you win" line, tappable role names, the rulebook sheet,
 // and your tokens with the perk shop.
 // Everything is read from the player's own view (or content, outside a game).
 import { useId, useState, type ReactNode } from "react";
@@ -13,7 +13,6 @@ import {
   COLUMN_LABEL,
   TAG_BLURB,
   endingText,
-  gapInfo,
   perkUses,
   roleInfo,
   roleListInfo,
@@ -89,7 +88,7 @@ export function RoleFacts({ info, compact = false }: { info: RoleInfo; compact?:
 
 /** Your role's facts on the role card. */
 export function MyRoleFacts({ view }: { view: PlayerView }) {
-  return <RoleFacts info={roleInfo(view.me.role, rolesOf(view), jobOf(view))} />;
+  return <RoleFacts info={roleInfo(view.me.role, rolesOf(view))} />;
 }
 
 /** The roles the crew is told about: exact, possible or hidden (host setting). */
@@ -187,7 +186,7 @@ export function RulebookSheet({ open, onClose, view }: { open: boolean; onClose:
               </h4>
               <ul className="rulebook__roles">
                 {g.roles.map((r) => {
-                  const info = roleInfo(r, roles, job);
+                  const info = roleInfo(r, roles);
                   return (
                     <li key={r} className={inGame.has(r) ? "rulebook__role is-in" : "rulebook__role"}>
                       <p className="rulebook__role-name">
@@ -255,24 +254,6 @@ export function RulebookButton({ view, seed = "rulebook-open" }: { view: PlayerV
       </Button>
       <RulebookSheet open={open} onClose={() => setOpen(false)} view={view} />
     </>
-  );
-}
-
-// ---------------------------------------------------------------- gap box
-
-/** "Alibis say +14, 9 handed in: 5 unaccounted for." extension.md "The gap box" */
-export function GapBox({ view }: { view: PlayerView }) {
-  const g = gapInfo(view);
-  if (!g) return null;
-  const tone = g.posted === 0 ? "" : g.unaccounted > 0 ? " is-short" : g.unaccounted < 0 ? " is-over" : " is-even";
-  return (
-    <section className={`gap-box${tone}`} aria-label={`Round ${g.round} gap`} aria-live="polite">
-      <p className="gap-box__kicker meta">
-        Round {g.round} · {g.posted} of {g.crew} alibis in
-      </p>
-      <p className="gap-box__text">{g.text}</p>
-      {g.posted > 0 && g.unaccounted !== 0 && <p className="meta">Event effects are already counted.</p>}
-    </section>
   );
 }
 

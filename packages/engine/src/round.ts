@@ -11,7 +11,6 @@ import { PUBLIC, privateTo } from "./types";
 import { ringsOf, roomDef } from "./job";
 import { eventsFor, jobFor, powerOf } from "./overrides";
 import { isObject, show } from "./check";
-import { actOfRound, isLastRoundOfAct } from "./acts";
 import { endCheck, gameEnded } from "./end";
 import { applyEvent } from "./reduce";
 import type { Draw } from "./handle";
@@ -19,8 +18,7 @@ import { cardEffects, closedRoom, isAudit, roundJob, startRound } from "./deck";
 import { grantRewards } from "./crew";
 import { coolBells, factVisibility, isTaped, raidedRooms, ringBells } from "./bells";
 import { honestyOf, splitDuffel } from "./shares";
-
-export { actOfRound };
+import { afterResult } from "./meeting";
 
 const isCount = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v >= 0;
 
@@ -42,13 +40,13 @@ function checkAbility(state: GameState, player: PlayerState, raw: unknown): Abil
       return { kind: "lookout", rooms: [...rooms] };
     }
     case "loopCameras": {
-      if (player.roleState.usedThisAct >= power.perAct) return "you have already looped the cameras since the last meeting";
+      if (player.roleState.usedThisStretch >= power.perStretch) return "you have already looped the cameras since the last meeting";
       if (typeof raw.room !== "string" || !state.rooms.includes(raw.room)) return "loop the cameras of a room in play";
       return { kind: "loopCameras", room: raw.room };
     }
     case "ring": {
       // design §5.2, §5.3, §11.1: any open room but the Rooftop; a taped-off room's bell is off.
-      if (player.roleState.usedThisAct >= power.perAct) return "you have already rung a bell since the last meeting";
+      if (player.roleState.usedThisStretch >= power.perStretch) return "you have already rung a bell since the last meeting";
       if (typeof raw.room !== "string" || !state.rooms.includes(raw.room)) return "ring a room in play";
       if (isTaped(state, raw.room)) return "a taped-off room's bell is off";
       if (roomDef(jobFor(state.config), raw.room).lieLow) return "nothing can ring the Rooftop";
@@ -149,8 +147,9 @@ function grabbed(order: readonly PlayerId[], asked: (id: PlayerId) => number, ba
  *    (taken, missing and honesty, §7.4, §7.5);
  * 8. the end check (§6.2): the game ends once the bank is empty or this is the
  *    round cap (`endCheck`), and nothing below runs.
- * Otherwise the fold of `roundResolved` opens the round's alibis and
- * `closeAlibis` goes on.
+ * Otherwise the fold of `roundResolved` opens the round's alibis and notes the
+ * meeting the round called (§4.2 step 9: a raid calls a briefing, a third of
+ * the bank a regular meeting), and `closeAlibis` goes on.
  */
 export function resolveRound(before: GameState, round: number, draw: Draw): GameEvent[] {
   const job = roundJob(jobFor(before.config), before.card, eventsFor(before.config));
@@ -323,13 +322,11 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
 }
 
 /**
- * design §5.4: the alibi deadline for `round` has passed. The next round
- * starts (flipping its card); every 3rd round the game awaits a regular
- * meeting first (the fold of `alibisClosed`), until S3a.5 holds them at the
- * bank's thirds (§9.1).
+ * design §5.4: the alibi deadline for `round` has passed. The meeting the
+ * round called is awaited (the fold of `alibisClosed`, §4.2 step 9); else the
+ * result window opens, or with the pool empty the next round starts (§9.3).
  */
 export function closeAlibis(state: GameState, round: number, draw: Draw): GameEvent[] {
-  const events: GameEvent[] = [{ type: "alibisClosed", visibility: PUBLIC, round }];
-  if (!isLastRoundOfAct(round)) return [...events, ...startRound(state, round + 1, draw)];
-  return events;
+  const closed: GameEvent = { type: "alibisClosed", visibility: PUBLIC, round };
+  return [closed, ...(state.meetingDue ? [] : afterResult(applyEvent(state, closed), draw))];
 }

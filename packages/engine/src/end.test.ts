@@ -46,9 +46,20 @@ function run(state: GameState, ...commands: Cmd[]): GameState {
 
 const mv = (player: string, room: string, duffel: number, pocket = 0) => ({ type: "submitMove", player, move: { room, duffel, pocket } });
 const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
-const sched = (act: number) => ({ type: "scheduleMeeting", act, slot: "slot" });
 const OPEN = (s: GameState) => ({ type: "advance", deadline: { kind: "openMeeting", meetingId: s.scheduledMeeting?.meetingId } });
-const CLOSE = (s: GameState) => ({ type: "advance", deadline: { kind: "closeMeeting", meetingId: s.meeting?.id } });
+
+/** Through the regular meeting a third of the bank calls (design §9.1), nobody voting, and its result window (§9.3). */
+function meeting(s: GameState): GameState {
+  if (s.phase.kind !== "awaitingMeeting") return s;
+  const { meetingId } = s.phase;
+  return run(
+    s,
+    { type: "scheduleMeeting", meetingId, slot: "slot" },
+    OPEN,
+    { type: "advance", deadline: { kind: "closeMeeting", meetingId } },
+    { type: "advance", deadline: { kind: "result", round: s.resolvedRound } },
+  );
+}
 
 const outcome = (s: GameState): Outcome => {
   if (s.phase.kind !== "ended") throw new Error(`game not over (${s.phase.kind})`);
@@ -68,9 +79,10 @@ describe("the bank empties — design §6.2, §4.2 step 8", () => {
   it("the game ends after the round that empties the bank, early, with no meeting after it", () => {
     // 3 players × 9 coins: three rounds of three full Vault grabs (bells too big to raid).
     let s = game(3, [], { ...NO_RAIDS, bank: { coinsPerPlayer: 9 } });
-    s = vaultRound(s, [0, 0, 0]);
-    s = vaultRound(s, [0, 0, 0]);
-    s = run(s, sched(1)); // round 3 ends an act, so a regular meeting is due, but the game is over first
+    // Rounds 1 and 2 each take a third of the bank, so each calls a regular meeting (design §9.1).
+    s = meeting(vaultRound(s, [0, 0, 0]));
+    s = meeting(vaultRound(s, [0, 0, 0]));
+    expect(s.log.filter((e) => e.type === "meetingOpened")).toHaveLength(2);
     s = vaultRound(s, [0, 0, 0]);
     expect(s.bank).toBe(0);
     expect(s.round).toBe(3);
@@ -90,7 +102,8 @@ describe("the bank empties — design §6.2, §4.2 step 8", () => {
   it("a round that leaves a coin in the bank plays on", () => {
     const s = vaultRound(game(3, [], { ...NO_RAIDS, bank: { coinsPerPlayer: 4 } }), [0, 0, 0]); // 12 coins
     expect(s.bank).toBe(3);
-    expect(s.phase).toEqual({ kind: "planning", round: 2 });
+    // It took two thirds of the bank, so the game goes on to one regular meeting (design §9.1).
+    expect(s.phase).toEqual({ kind: "awaitingMeeting", meeting: "regular", meetingId: "meeting-1" });
   });
 });
 
@@ -102,10 +115,11 @@ describe("the round cap — design §6.2", () => {
       // The shipped numbers: 48 coins, 3 Lobby coins a round (silent), all handed in.
       s = run(s, mv("p0", "lobby", 1), mv("p1", "lobby", 1), mv("p2", "lobby", 1), ROUND);
       if (round < 12) expect(s.phase.kind, `round ${round}`).not.toBe("ended");
-      if (round % 3 === 0 && round < 12) s = run(s, sched(round / 3), OPEN, CLOSE);
+      if (round < 12) s = meeting(s);
     }
     expect(s.bank).toBe(48 - 36);
-    expect(s.log.filter((e) => e.type === "meetingOpened")).toHaveLength(3);
+    // The bank's thirds call regular meetings after rounds 6 (30 left) and 11 (15 left). design §9.1
+    expect(s.log.filter((e) => e.type === "meetingOpened").map((e) => e.type === "meetingOpened" && e.meetingId)).toEqual(["meeting-1", "meeting-2"]);
     expect(s.log.at(-2)).toMatchObject({ type: "roundResolved", round: 12 });
     expect(outcome(s)).toMatchObject({ result: "success" });
   });

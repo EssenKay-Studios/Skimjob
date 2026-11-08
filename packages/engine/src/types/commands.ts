@@ -5,7 +5,6 @@
 // never decides by itself that time is up or picks a meeting time.
 import type { EventId, PerkId, RoleId, RoomId } from "@skimjob/content";
 import type { PlayerId } from "./config";
-import type { ActNumber } from "./events";
 
 /** Role powers used as part of a move. Grows as roles are added. design §8 */
 export type AbilityUse =
@@ -14,7 +13,7 @@ export type AbilityUse =
    * `extraRooms` (content) distinct rooms in play.
    */
   | { readonly kind: "lookout"; readonly rooms: readonly RoomId[] }
-  /** Hacker: Security shows `room` as empty this round. Once per act (content). design §8 */
+  /** Hacker: Security shows `room` as empty this round. Once between meetings (content). design §8 */
   | { readonly kind: "loopCameras"; readonly room: RoomId }
   /** Mole: ring `room` once (not the Rooftop or a taped-off room). Once between meetings (content). design §5.2, §11.1 */
   | { readonly kind: "ring"; readonly room: RoomId }
@@ -45,11 +44,11 @@ export type PerkSpend =
 
 /** Role powers and perks used outside a move, with `useAbility`. design §17.2 */
 export type InstantAbility =
-  /** Auditor: the latest resolved round's shortfall for `room`. Once per act (content). design §8 (v2 §2) */
+  /** Auditor: the latest resolved round's shortfall for `room`. Once between meetings (content). design §8 (v2 §2) */
   | { readonly kind: "audit"; readonly room: RoomId }
-  /** Detective: is `target`'s stash at or above the clean threshold? Once per act (content). design §8 (v2 §2) */
+  /** Detective: does `target` hold anything above the share? Once between meetings (content). design §8 (v2 §2) */
   | { readonly kind: "checkStash"; readonly target: PlayerId }
-  /** Priest: bless another player until the next regular meeting closes. Once per stretch (content). design §8 (v2 §2) */
+  /** Priest: bless another player for this stretch. Once between meetings (content). design §8 (v2 §2) */
   | { readonly kind: "bless"; readonly target: PlayerId }
   | PerkSpend;
 
@@ -84,7 +83,7 @@ export type PlayerCommand =
   | { readonly type: "postAlibi"; readonly player: PlayerId; readonly room: RoomId }
   /**
    * Claim (truthfully or not) to be `role`: public, changes no rule. Once per
-   * act; any role the content knows. design §8, §12.1
+   * stretch; any role the content knows. design §11.3
    */
   | { readonly type: "claimRole"; readonly player: PlayerId; readonly role: RoleId }
   /**
@@ -94,6 +93,7 @@ export type PlayerCommand =
    */
   | { readonly type: "proposeMeeting"; readonly player: PlayerId; readonly slot: string }
   | { readonly type: "acceptMeeting"; readonly player: PlayerId; readonly proposalId: string }
+  /** Spend one of the crew's emergency meetings, only in the result window. design §9.3 */
   | { readonly type: "callEmergency"; readonly player: PlayerId }
   | { readonly type: "castVote"; readonly player: PlayerId; readonly vote: VoteChoice }
   /** Leave a vote in advance for the next meeting you might miss. design §11.2 */
@@ -118,28 +118,32 @@ export type Deadline =
   | { readonly kind: "round"; readonly round: number }
   /**
    * The alibi deadline for `round` (design §5.4): no more alibis for it; the
-   * next round's planning starts (or the act's meeting is awaited). Rejected
-   * unless `round` is the one whose alibis are open, so a retry is refused.
+   * meeting the round called is awaited, else the result window opens or the
+   * next round starts. Rejected unless `round` is the one whose alibis are
+   * open, so a retry is refused.
    */
   | { readonly kind: "alibis"; readonly round: number }
-  /** A scheduled regular meeting's slot, or an emergency's notice period, has arrived: open the vote window. design §11.1 */
+  /** The result window after `round` has closed with no emergency called: the next round starts. design §9.3 */
+  | { readonly kind: "result"; readonly round: number }
+  /** A scheduled meeting's slot, or an emergency's notice period, has arrived: open the vote window. design §9.3, §9.4 */
   | { readonly kind: "openMeeting"; readonly meetingId: string }
-  /** The open vote window has ended: tally and shakedown; after a regular meeting the next round starts. design §9.5, §9.6 */
+  /** The open vote window has ended: tally and shakedown, then the result window or the next round. design §9.5, §9.6 */
   | { readonly kind: "closeMeeting"; readonly meetingId: string }
   /**
    * The window after a shakedown vote passed (`shakedownPending`) has ended:
    * apply the shakedown, unless a Shield cancelled it, then go on as after
-   * the meeting (the next round, after a regular one). design §9.6, §12
+   * the meeting. design §9.6, §12
    */
   | { readonly kind: "resolveShakedown"; readonly meetingId: string };
 
 export type SystemCommand =
   | { readonly type: "advance"; readonly deadline: Deadline }
   /**
-   * Nobody locked in a regular meeting by the act deadline, so the server picks
-   * the slot. Emits `meetingScheduled` with `proposalId: null`. design §11.1
+   * Nobody locked in a slot for the meeting the round called (`meetingId`, the
+   * next one), so the server picks it. Emits `meetingScheduled` with
+   * `proposalId: null`. design §9.4
    */
-  | { readonly type: "scheduleMeeting"; readonly act: ActNumber; readonly slot: string };
+  | { readonly type: "scheduleMeeting"; readonly meetingId: string; readonly slot: string };
 
 export type Command = PlayerCommand | SystemCommand;
 export type CommandType = Command["type"];

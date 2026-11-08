@@ -21,7 +21,7 @@ export function seat(over: Partial<PlayerRecord> = {}): PlayerRecord {
 }
 
 export function shake(over: Partial<ShakedownRecord> = {}): ShakedownRecord {
-  return { act: 1, emergency: false, target: "p1", stashRevealed: 10, clean: false, targetHadPocketed: true, ...over };
+  return { kind: "regular", target: "p1", stashRevealed: 10, clean: false, targetHadPocketed: true, ...over };
 }
 
 /** A game record; `winners` also sets the seats' winner flags and credit. */
@@ -38,7 +38,7 @@ export function gameRec(over: Partial<GameRecord> = {}): GameRecord {
     wanted: 1,
     raids: 1,
     stalls: 0,
-    meetings: 3,
+    meetings: { regular: 2, briefing: 1, emergency: 0 },
     shakedowns: [],
     winners: [],
     playerRecords: [],

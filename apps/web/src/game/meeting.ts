@@ -6,7 +6,6 @@
 import { PERKS, type PerkId } from "@skimjob/content";
 import {
   rolesFor,
-  type ActNumber,
   type MeetingKind,
   type MeetingResult,
   type PlayerId,
@@ -16,7 +15,9 @@ import {
   type VoteVisibility,
 } from "@skimjob/engine";
 import { crewSize, jobOf, setupOf } from "./hud";
-import { meetingAfter } from "./wording";
+
+/** Each kind of meeting, as the screens name it. design §9.1–§9.3 */
+export const MEETING_TITLE: Readonly<Record<MeetingKind, string>> = { regular: "Regular meeting", briefing: "Police briefing", emergency: "Emergency meeting" };
 
 /** Every other player, in seat order: who you may vote for (never yourself, design §11.2). */
 export function voteTargets(view: PlayerView): { readonly id: PlayerId; readonly name: string; readonly isBot: boolean }[] {
@@ -49,8 +50,7 @@ export interface ProposalRow {
 }
 
 export interface Planner {
-  readonly act: ActNumber;
-  /** The act's meeting is locked in (and not yet open). */
+  /** The next meeting's slot is locked in (and not yet open). */
   readonly locked: { readonly meetingId: string; readonly slot: string } | null;
   readonly proposals: readonly ProposalRow[];
   /** Backers that lock a slot in: more than half the crew's people (owner decision, 2 Nov; the crew if none). */
@@ -61,7 +61,7 @@ export interface Planner {
 
 const meetingOn = (view: PlayerView) => view.phase.kind === "meeting" || view.phase.kind === "shakedownPending";
 
-/** The act's meeting: proposals, backers and the locked slot. design §11.1 */
+/** The next regular meeting's or briefing's slot: proposals, backers and the locked slot. design §9.4 */
 export function plannerOf(view: PlayerView): Planner {
   // design §11.1 (owner decision, 2 Nov): a majority of the people locks it; bots' backing doesn't count.
   const bots = new Set(view.players.filter((o) => o.isBot).map((o) => o.id));
@@ -70,20 +70,16 @@ export function plannerOf(view: PlayerView): Planner {
   const crew = people > 0 ? people : view.players.length + 1;
   const locked = view.scheduledMeeting ? { meetingId: view.scheduledMeeting.meetingId, slot: view.scheduledMeeting.slot } : null;
   return {
-    act: view.act,
     locked,
-    proposals: view.proposals
-      .filter((p) => p.act === view.act)
-      .map((p) => ({ id: p.id, slot: p.slot, by: p.by, backers: counted(p.acceptedBy), backed: p.acceptedBy.includes(view.me.id) })),
+    proposals: view.proposals.map((p) => ({ id: p.id, slot: p.slot, by: p.by, backers: counted(p.acceptedBy), backed: p.acceptedBy.includes(view.me.id) })),
     needed: Math.floor(crew / 2) + 1,
     open: !locked && !meetingOn(view) && view.phase.kind !== "ended",
   };
 }
 
-/** A meeting slot for people: ISO times as a local time, "act-2" as "after round 6", other labels as they are. */
+/** A meeting slot for people: ISO times as a local time, "meeting-2" (the app's pick) as "as soon as it's due", other labels as they are. */
 export function slotText(slot: string): string {
-  const act = /^act-(\d)$/.exec(slot);
-  if (act) return `after round ${meetingAfter(Number(act[1]))}`;
+  if (/^meeting-\d+$/.test(slot)) return "as soon as it's due";
   const t = /^\d{4}-\d{2}-\d{2}T/.test(slot) ? new Date(slot) : null;
   return t && !Number.isNaN(t.getTime()) ? t.toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" }) : slot;
 }
@@ -110,18 +106,14 @@ export interface EmergencyState {
 
 const perkCount = (view: PlayerView, perk: PerkId) => view.me.roleState.perks.filter((p) => p === perk).length;
 
-/** One emergency meeting per player per game, plus one per Emergency perk; one waiting at a time. design §11.1, §8.3 */
+/** The crew's emergency pool: anyone may spend one, only between a round's result and the next planning. design §9.3 */
 export function emergencyOf(view: PlayerView): EmergencyState {
-  const extra = perkCount(view, "emergency");
-  const used = view.me.emergencyMeetingUsed;
+  const left = `${view.emergencies} left for the crew`;
   if (view.phase.kind === "ended") return { canCall: false, note: "The game is over." };
-  if (used && extra === 0) return { canCall: false, note: "You've called your emergency meeting for this game." };
-  if (meetingOn(view)) return { canCall: false, note: "A meeting is on right now." };
+  if (view.emergencies === 0) return { canCall: false, note: "The crew's emergency meetings are all spent." };
   if (view.pendingEmergency) return { canCall: false, note: "An emergency meeting has already been called." };
-  return {
-    canCall: true,
-    note: used ? `Your ${PERKS.emergency.name} perk pays for this one (${extra} left).` : "One per player per game. Everyone is told, and rounds pause while it runs.",
-  };
+  if (view.phase.kind !== "result") return { canCall: false, note: `Only after a round's result, before the next planning (${left}).` };
+  return { canCall: true, note: `${left}. Everyone is told who called it.` };
 }
 
 // ---------------------------------------------------------------- the vote window (§11.2)
@@ -134,7 +126,6 @@ export interface BallotRow {
 export interface OpenMeeting {
   readonly meetingId: string;
   readonly kind: MeetingKind;
-  readonly act: ActNumber;
   readonly calledBy: PlayerId | null;
   readonly mode: VoteVisibility;
   /** Your ballot so far, and whether it came from your sealed vote. */
@@ -157,12 +148,11 @@ export function openMeetingOf(view: PlayerView): OpenMeeting | null {
   if (p.kind !== "meeting") return null;
   const id = p.meetingId;
   let kind: MeetingKind = "regular";
-  let act = view.act;
   let calledBy: PlayerId | null = null;
   const latest = new Map<PlayerId, VoteChoice>();
   let fromSealed = false;
   for (const { event: e } of view.ledger) {
-    if (e.type === "meetingOpened" && e.meetingId === id) ({ kind, act } = e);
+    if (e.type === "meetingOpened" && e.meetingId === id) kind = e.kind;
     else if (e.type === "emergencyMeetingCalled" && e.meetingId === id) calledBy = e.by;
     else if (e.type === "voteCast" && e.meetingId === id && e.player !== view.me.id) latest.set(e.player, e.vote);
   }
@@ -172,7 +162,7 @@ export function openMeetingOf(view: PlayerView): OpenMeeting | null {
   const ballots = mode === "open" ? voteTargets(view).filter((t) => latest.has(t.id)).map((t) => ({ player: t.id, vote: latest.get(t.id)! })) : [];
   const seen = Object.entries(view.me.seenBallots).map(([player, vote]) => ({ player, vote }));
   const live = mode === "open" ? tallyOf([...ballots.map((b) => b.vote!), ...(view.me.vote ? [view.me.vote] : [])]) : null;
-  return { meetingId: id, kind, act, calledBy, mode, mine: view.me.vote, fromSealed: fromSealed && view.me.vote !== null, ballots, seen, live };
+  return { meetingId: id, kind, calledBy, mode, mine: view.me.vote, fromSealed: fromSealed && view.me.vote !== null, ballots, seen, live };
 }
 
 // ---------------------------------------------------------------- tallies
@@ -231,7 +221,6 @@ export function tallyRows(tally: Tally, result: MeetingResult | null = null): Ta
 export interface MeetingOutcome {
   readonly meetingId: string;
   readonly kind: MeetingKind;
-  readonly act: ActNumber;
   readonly result: MeetingResult;
   readonly tally: Tally;
   /** Everyone's ballot once the window closed (Hidden and Open modes); null in Secret mode. design §11.2 */
@@ -240,13 +229,11 @@ export interface MeetingOutcome {
   readonly deciding: boolean;
   readonly shakedown: ShakedownResolved | null;
   readonly cancelled: boolean;
-  /** The bank paid a blessed player's compensation (Priest): the amount back in the coins set aside. */
-  readonly blessing: number | null;
   /** Still the latest news: no round has resolved and no meeting opened since. */
   readonly fresh: boolean;
 }
 
-/** The latest closed meeting and what followed it: shakedown, compensation, blessing. */
+/** The latest closed meeting and what followed it: the shakedown, or its cancel. */
 export function latestOutcome(view: PlayerView): MeetingOutcome | null {
   let start = -1;
   for (let i = view.ledger.length - 1; i >= 0; i--) {
@@ -260,11 +247,9 @@ export function latestOutcome(view: PlayerView): MeetingOutcome | null {
   if (closed.type !== "meetingClosed") return null;
   const id = closed.meetingId;
   let kind: MeetingKind = "regular";
-  let act = view.act;
-  for (const { event: e } of view.ledger) if (e.type === "meetingOpened" && e.meetingId === id) ({ kind, act } = e);
+  for (const { event: e } of view.ledger) if (e.type === "meetingOpened" && e.meetingId === id) kind = e.kind;
   let shakedown: ShakedownResolved | null = null;
   let cancelled = false;
-  let blessing: number | null = null;
   let fresh = true;
   for (const { event: e } of view.ledger.slice(start + 1)) {
     if (e.type === "roundResolved" || e.type === "meetingOpened") {
@@ -273,11 +258,10 @@ export function latestOutcome(view: PlayerView): MeetingOutcome | null {
     }
     if (e.type === "shakedownResolved" && e.meetingId === id) shakedown = e;
     else if (e.type === "shakedownCancelled" && e.meetingId === id) cancelled = true;
-    else if (e.type === "blessingPaid" && e.meetingId === id) blessing = e.amount;
   }
   const ballots = closed.ballots ? voteTargetsAll(view).filter((p) => Object.hasOwn(closed.ballots!, p)).map((p) => ({ player: p, vote: closed.ballots![p]! })) : null;
   const deciding = view.phase.kind === "shakedownPending" && view.phase.meetingId === id;
-  return { meetingId: id, kind, act, result: closed.result, tally: closed.tally, ballots, deciding, shakedown, cancelled, blessing, fresh };
+  return { meetingId: id, kind, result: closed.result, tally: closed.tally, ballots, deciding, shakedown, cancelled, fresh };
 }
 
 /** Everyone in seat order, you included. */
@@ -306,13 +290,13 @@ export function abilityOffers(view: PlayerView): AbilityOffer[] {
   const others = voteTargets(view).map((t) => t.id);
   const out: AbilityOffer[] = [];
   const p = view.phase;
-  if (power?.kind === "bless" && view.me.roleState.usedThisAct < power.perAct) {
+  if (power?.kind === "bless" && view.me.roleState.usedThisStretch < power.perStretch) {
     const pending = p.kind === "shakedownPending" ? p.target : null;
     out.push({ kind: "bless", targets: others.filter((o) => o !== pending) });
   }
-  // One perk use per round (Shield and Emergency spend themselves and don't count). extension.md
+  // One perk use per round (the Shield spends itself and doesn't count). extension.md
   const usedPerk = view.caseFile.some(
-    ({ event: e }) => e.type === "perkUsed" && e.player === view.me.id && e.round === view.round && e.perk.kind !== "shield" && e.perk.kind !== "emergency",
+    ({ event: e }) => e.type === "perkUsed" && e.player === view.me.id && e.round === view.round && e.perk.kind !== "shield",
   );
   if (p.kind === "meeting" && !usedPerk) {
     const spent = (kind: "extraVote") =>
@@ -343,17 +327,17 @@ export interface ClaimOption {
 }
 
 /**
- * Your role claim for the current act: the roles on offer and the one you
+ * Your role claim for the current stretch: the roles on offer and the one you
  * already claimed (once between meetings); null before or after the game.
  */
-export function claimState(view: PlayerView): { readonly act: ActNumber; readonly claimed: string | null; readonly options: readonly ClaimOption[] } | null {
+export function claimState(view: PlayerView): { readonly stretch: number; readonly claimed: string | null; readonly options: readonly ClaimOption[] } | null {
   if (view.phase.kind === "ended" || view.phase.kind === "setup") return null;
-  const act = view.act;
+  const { stretch } = view;
   let claimed: string | null = null;
-  for (const { event } of view.ledger) if (event.type === "roleClaimed" && event.player === view.me.id && event.act === act) claimed = event.role;
+  for (const { event } of view.ledger) if (event.type === "roleClaimed" && event.player === view.me.id && event.stretch === stretch) claimed = event.role;
   const roles = rolesFor({ contentOverrides: setupOf(view)?.contentOverrides ?? null });
   const options = Object.entries(roles)
     .map(([id, def]) => ({ id, name: def.name }))
     .sort((a, b) => a.name.localeCompare(b.name));
-  return { act, claimed, options };
+  return { stretch, claimed, options };
 }

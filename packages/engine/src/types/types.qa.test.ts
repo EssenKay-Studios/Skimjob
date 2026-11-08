@@ -44,7 +44,6 @@ type ExpectedVisibility = {
   roomRaided: "public"; // design §5.3, §5.4: raids and Wanted are public, never who was inside
   bellsCooled: "public"; // design §5.6
   roomReopened: "public"; // design §11.1: "a taped-off room is suddenly open again", no name
-  blessingPaid: "public";
   eventFlipped: "public"; // design §10: the card is shown to everyone
   insideTip: "private"; // design §10: private to the recipient
   auditReport: "public"; // design §10: per-room shortfall on the ledger
@@ -56,7 +55,7 @@ type ExpectedVisibility = {
   meetingScheduled: "public";
   emergencyMeetingCalled: "public";
   meetingOpened: "public";
-  voteSealed: "private" | "secret"; // secret in "secret" vote mode, design §11.2
+  voteSealed: "private" | "secret"; // secret in "secret" vote mode, design §9.5
   voteCast: "public" | "private" | "secret";
   meetingClosed: "public";
   shakedownPending: "public";
@@ -108,7 +107,7 @@ describe("event visibility per type — design §13, §17.2", () => {
 });
 
 describe("commands — design §17.2", () => {
-  it("advance must name its deadline; a bare advance does not compile — design §4.1, §11.1", () => {
+  it("advance must name its deadline; a bare advance does not compile — design §4.1, §9.4", () => {
     // @ts-expect-error a bare advance is ambiguous when several deadlines are pending
     const bare: Command = { type: "advance" };
     // @ts-expect-error meeting deadlines must say which meeting
@@ -129,7 +128,7 @@ describe("commands — design §17.2", () => {
     // @ts-expect-error advance can't be attributed to a player
     const attributed: Command = { type: "advance", player: "ana", deadline: { kind: "round", round: 1 } };
     // @ts-expect-error a player can't pick the server's meeting slot
-    const pick: PlayerCommand = { type: "scheduleMeeting", player: "ana", act: 1, slot: "x" };
+    const pick: PlayerCommand = { type: "scheduleMeeting", player: "ana", meetingId: "meeting-1", slot: "x" };
     expect([asPlayer, attributed, pick]).toHaveLength(3);
   });
 
@@ -149,7 +148,7 @@ describe("commands — design §17.2", () => {
 
 describe("PlayerView shape does not expose hidden fields — design §13, §17.2", () => {
   it("other players show only seat info and emergency-meeting use", () => {
-    expectTypeOf<keyof OtherPlayerView>().toEqualTypeOf<"id" | "name" | "isBot" | "emergencyMeetingUsed">();
+    expectTypeOf<keyof OtherPlayerView>().toEqualTypeOf<"id" | "name" | "isBot">();
   });
 
   it("the view has no seed, rng, config, raw moves or raw log", () => {
@@ -190,7 +189,7 @@ describe("canSee — design §17.2, §13", () => {
     }
   });
 
-  // design §11.2: in Secret mode only the tally is ever shown, even at the reveal (QA bug 1, PR #1).
+  // design §9.5: in Secret mode only the tally is ever shown, even at the reveal (QA bug 1, PR #1).
   it("secret-mode ballots stay hidden from everyone but the voter, during and after the game", () => {
     const cast: GameEvent = {
       type: "voteCast",
@@ -216,7 +215,7 @@ describe("canSee — design §17.2, §13", () => {
     expect(canSee(bogus, "ana", true)).toBe(false);
   });
 
-  it("only ballots can be secret — design §11.2", () => {
+  it("only ballots can be secret — design §9.5", () => {
     // @ts-expect-error a dealt role is revealed at the end, it can't be secret
     const role: GameEvent = { type: "roleDealt", visibility: secretTo("ana"), player: "ana", role: "hacker" };
     expect(role).toBeDefined();

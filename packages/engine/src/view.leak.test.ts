@@ -7,8 +7,8 @@
 //    roles, stashes, safes, moves, ballots, the seed and RNG, hidden events)
 //    leaves their view identical, so nothing hidden — not even a count — leaks;
 //  - after the game the reveal opens everything except others' secret-mode
-//    ballots, which never leak (design §11.2).
-// design §13, §17.2, §11.2, §10
+//    ballots, which never leak (design §9.5).
+// design §13, §17.2, §9.5, §10
 import { isDeepStrictEqual } from "node:util";
 import { describe, expect, it } from "vitest";
 import type { GameConfig, GameEvent, GameState, LoggedEvent, Move, PlayerId, PlayerState, PlayerView, VoteChoice, VoteVisibility } from "./types";
@@ -32,7 +32,7 @@ function config(players: number, voteVisibility: VoteVisibility): GameConfig {
     deck: "everything",
     eventsEnabled: true,
     voteVisibility,
-    // design §5: bells ring, raids tape rooms off and Wanted rises, but no bust, so the script reaches every meeting.
+    // design §5: bells ring, raids tape rooms off (briefings) and Wanted rises, but no bust, so the script reaches every meeting.
     contentOverrides: { alarm: { bustStars: 99 } },
   };
 }
@@ -47,6 +47,7 @@ const EARNED_IN_PLAY: readonly string[] = [
 ];
 
 const NO_COINS = new Set(["security", "rooftop"]);
+const ofType = <T extends GameEvent["type"]>(s: GameState, type: T) => s.log.filter((e): e is Extract<GameEvent, { type: T }> => e.type === type);
 
 /**
  * Every wildcard and lone wolf at once (two Moles and two Hackers), more than a
@@ -65,10 +66,11 @@ function darkGame(cfg: GameConfig): GameState {
  * A full game exercising every event type the default pool can produce: moves
  * (some changed, some missed), Security watches, the Server room, Lookout,
  * Hacker, Auditor, Detective, Mole (a ring) and Fixer (a reopen) powers, bells and raids, alibis,
- * proposals, an emergency meeting, sealed and changed ballots (Smooth talker
- * weight), shakedown windows, shakedowns, the end check (design §6.2), and the event cards (Lockdown avoided), and perks (design §8.3: granted by the test hook,
+ * proposals, briefings and regular meetings, an emergency in round 2's result
+ * window, sealed and changed ballots (Smooth talker weight), shakedown windows,
+ * shakedowns and their protection, the end check (design §6.2), and the event cards (Lockdown avoided), and perks (design §8.3: granted by the test hook,
  * then Peek, Tail, Rig and its pick, +Vote, Ballot, a verified Alibi, Recharge and a Shield that cancels
- * the Act 1 shakedown). Returns the state after every command. (The script reads the
+ * the first meeting's shakedown). Returns the state after every command. (The script reads the
  * full state to pick moves, as a scheduler would; views are what's checked.)
  */
 function playGame(players: number, voteVisibility: VoteVisibility, dark = false): GameState[] {
@@ -77,7 +79,7 @@ function playGame(players: number, voteVisibility: VoteVisibility, dark = false)
   const last = ids[ids.length - 1] as PlayerId;
   // extension.md "Tokens and the perk shop": roles earn tokens and buy from the shop in play; the test hook hands out the rest so every perk is used.
   s = grantPerks(s, "p0", "peek", "tail", "ballot", "extraVote");
-  s = grantPerks(s, ids[1] as PlayerId, "shield"); // the Act 1 meeting's target
+  s = grantPerks(s, ids[1] as PlayerId, "shield"); // the first meeting's target
   s = grantPerks(s, last, "rig", "alibi");
   const hacker = ids.find((id) => s.players[id]?.role === "hacker");
   if (hacker) s = grantPerks(s, hacker, "recharge");
@@ -96,11 +98,16 @@ function playGame(players: number, voteVisibility: VoteVisibility, dark = false)
     vote: target === null || target === player ? { kind: "skip" } : { kind: "shakedown", target },
   });
   const holder = (role: string): PlayerId | undefined => ids.find((id) => s.players[id]?.role === role);
-  const meeting = (target: PlayerId, act: number): void => {
-    // design §8.3: in the round-2 emergency p0 spends a Ballot on p1 (a +Vote in Open mode), and a +Vote in Act 1's meeting
-    // (one perk per round, extension.md "Tokens and the perk shop").
-    if (round === 2) step({ type: "useAbility", player: "p0", ability: voteVisibility !== "open" ? { kind: "ballot", target: ids[1] } : { kind: "extraVote" } });
-    if (round === 3 && voteVisibility !== "open") step({ type: "useAbility", player: "p0", ability: { kind: "extraVote" } });
+  // One perk per round (extension.md "Tokens and the perk shop"); the Shield spends itself.
+  const usedPerk = (): boolean => s.log.some((e) => e.type === "perkUsed" && e.player === "p0" && e.round === s.round && e.perk.kind !== "shield");
+  const meeting = (wanted: PlayerId): void => {
+    // design §9.7: a protected player can't be voted for, so the target is the first unprotected one from `wanted`.
+    const from = ids.indexOf(wanted);
+    const target = [...ids.slice(from), ...ids.slice(0, from)].find((id) => !s.protected.includes(id)) as PlayerId;
+    // design §8.3: in the round-2 emergency p0 spends a Ballot on p1 (a +Vote in Open mode), and a +Vote in the first other meeting.
+    const held = s.players.p0?.roleState.perks ?? [];
+    if (s.meeting?.kind === "emergency" && !usedPerk()) step({ type: "useAbility", player: "p0", ability: voteVisibility !== "open" ? { kind: "ballot", target: ids[1] } : { kind: "extraVote" } });
+    else if (voteVisibility !== "open" && held.includes("extraVote") && !usedPerk()) step({ type: "useAbility", player: "p0", ability: { kind: "extraVote" } });
     ids.forEach((id, i) => {
       if (id === target || i % 3 === 2) return; // a few stay away (sealed votes still count)
       step(vote(id, i % 2 === 0 ? target : null));
@@ -110,9 +117,9 @@ function playGame(players: number, voteVisibility: VoteVisibility, dark = false)
     if (s.phase.kind !== "shakedownPending") return;
     step({ type: "advance", deadline: { kind: "resolveShakedown", meetingId: s.phase.meetingId } });
   };
-  let round = 0;
-  for (round = 1; round <= BANK_JOB.roundCap && !over(); round++) {
-    const act = Math.ceil(round / 3);
+  let meetings = 0;
+  for (let round = 1; round <= BANK_JOB.roundCap && !over(); round++) {
+    const stretch = s.stretch;
     // extension.md "Tokens and the perk shop": anyone with enough tokens buys the shop's first perk they can afford.
     for (const id of ids) {
       const perk = s.shop.find((p) => perkCost(s.config, p) <= (s.players[id]?.roleState.tokens ?? 0));
@@ -125,49 +132,42 @@ function playGame(players: number, voteVisibility: VoteVisibility, dark = false)
       step({ type: "useAbility", player: last, ability: { kind: "rig" } });
       step({ type: "useAbility", player: last, ability: { kind: "rigPick", card: s.rigs.find((r) => r.player === last)?.cards[1] } });
     }
-    // design §8.3: the Hacker gets its Act 2 loop back (if it made one).
-    if (round === 5 && hacker && s.players[hacker]?.role === "hacker" && (s.players[hacker]?.roleState.usedThisAct ?? 0) > 0) {
+    // design §8.3: the Hacker gets a spent loop back (if it made one).
+    if (round === 5 && hacker && s.players[hacker]?.role === "hacker" && (s.players[hacker]?.roleState.usedThisStretch ?? 0) > 0) {
       step({ type: "useAbility", player: hacker, ability: { kind: "recharge" } });
     }
-    // v2 §2: the Auditor audits the Vault (latest round) and the Detective checks its neighbour, once per act.
+    // v2 §2: the Auditor audits the Vault (latest round) and the Detective checks its neighbour, once between meetings.
     const auditor = holder("auditor");
-    if (auditor && round % 3 === 2 && (s.players[auditor]?.roleState.usedThisAct ?? 1) === 0) {
+    if (auditor && round % 3 === 2 && (s.players[auditor]?.roleState.usedThisStretch ?? 1) === 0) {
       step({ type: "useAbility", player: auditor, ability: { kind: "audit", room: "vault" } });
     }
     const detective = holder("detective");
-    if (detective && round % 3 === 1 && (s.players[detective]?.roleState.usedThisAct ?? 1) === 0) {
+    if (detective && round % 3 === 1 && (s.players[detective]?.roleState.usedThisStretch ?? 1) === 0) {
       step({ type: "useAbility", player: detective, ability: { kind: "checkStash", target: ids[(ids.indexOf(detective) + 1) % ids.length] } });
     }
-    // v2 §2: the Priest blesses the round-2 emergency's target (p0) in Act 1, and each later act's meeting target
-    // (rounds 10–12 have no meeting after them, design §6.2).
+    // v2 §2: the Priest blesses the round-2 emergency's target (p0) in the first stretch, and a later meeting's target after.
     const priest = holder("priest");
-    const blessed = act === 1 ? "p0" : (ids[act % ids.length] as PlayerId);
-    if (priest && act <= 3 && round % 3 === 1 && priest !== blessed && (s.players[priest]?.roleState.usedThisAct ?? 1) === 0) {
+    const blessed = stretch === 1 ? "p0" : (ids[stretch % ids.length] as PlayerId);
+    if (priest && stretch <= 3 && round % 3 === 1 && priest !== blessed && (s.players[priest]?.roleState.usedThisStretch ?? 1) === 0) {
       step({ type: "useAbility", player: priest, ability: { kind: "bless", target: blessed } });
-    }
-    if (round === 2) {
-      // An emergency mid-act, with a sealed vote waiting for it. design §11.1, §11.2
-      step({ type: "sealVote", player: last, vote: { kind: "shakedown", target: "p0" } });
-      step({ type: "callEmergency", player: "p1" });
-      step({ type: "advance", deadline: { kind: "openMeeting", meetingId: "emergency-p1" } });
-      meeting("p0", act);
     }
     ids.forEach((id, i) => {
       if (round % 2 === 1 && i === ids.length - 1 && players > 2) return; // misses the deadline
       const role = (s.players[id] as PlayerState).role;
-      // The Act 3 meeting's target is in the Vault in each act's first round (the one the Auditor audits).
+      // One seat is in the Vault every third round (the one the Auditor audits).
       const drawn = id === ids[3 % ids.length] && round % 3 === 1 ? "vault" : (s.rooms[(i + round) % s.rooms.length] as string);
       const room = drawn === s.card?.room || Object.hasOwn(s.taped, drawn) ? "lobby" : drawn; // design §10 Lockdown, §5.3 taped off
       const canKeep = !NO_COINS.has(room);
-      // The Act 3 meeting's target pockets everything it can, so that shakedown is dirty.
+      // That seat pockets everything it can, so its shakedown is dirty.
       const greedy = id === ids[3 % ids.length];
       const move: Record<string, unknown> = fullGrab(room, canKeep && (greedy || (i + round) % 3 === 0) ? Math.min(greedy ? 2 : 1, fullGrab(room).duffel) : 0);
       if (room === "security") move.watch = "vault";
       if (role === "lookout") move.ability = { kind: "lookout", rooms: [s.rooms[(i + round + 1) % s.rooms.length]] };
-      // design §8: the Hacker loops the Vault once per act.
-      if (role === "hacker" && round % 3 === 1) move.ability = { kind: "loopCameras", room: "vault" };
-      // design §5.2, §11.1: each Mole rings the Office once, in round 8, unless it is taped off.
-      if (role === "mole" && round === 8 && !Object.hasOwn(s.taped, "office")) move.ability = { kind: "ring", room: "office" };
+      // design §8: the Hacker loops the Vault every third round, when its loop is charged (once between meetings).
+      const fresh = s.players[id]?.roleState.usedThisStretch === 0;
+      if (role === "hacker" && round % 3 === 1 && fresh) move.ability = { kind: "loopCameras", room: "vault" };
+      // design §5.2, §11.1: each Mole rings the Office once, in round 8, unless it is taped off or its ring is spent.
+      if (role === "mole" && round === 8 && fresh && !Object.hasOwn(s.taped, "office")) move.ability = { kind: "ring", room: "office" };
       // design §5.3, §11.1: a Fixer reopens the first taped-off room once.
       const taped = Object.keys(s.taped)[0];
       if (role === "fixer" && taped !== undefined && s.players[id]?.roleState.usedThisGame === 0) move.ability = { kind: "reopen", room: taped };
@@ -186,17 +186,30 @@ function playGame(players: number, voteVisibility: VoteVisibility, dark = false)
     });
     // design §5.4: the alibi deadline closes the round's alibis before the next round's planning.
     if (!over()) step({ type: "advance", deadline: { kind: "alibis", round } });
-    if (round % 3 === 0 && !over()) {
-      if (act === 1) {
-        // A bot (p1) proposes, so the people's backing locks it (design §11.1, owner decision 2 Nov: bots don't count).
-        step({ type: "proposeMeeting", player: "p1", slot: "sat-8pm" });
-        for (const id of ids.filter((x) => x !== "p1")) if (!s.scheduledMeeting) step({ type: "acceptMeeting", player: id, proposalId: "proposal-1" });
+    // design §4.2 steps 9–10: the meeting the round called, then the result window (an emergency in round 2's).
+    while (!over() && (s.phase.kind === "awaitingMeeting" || s.phase.kind === "result")) {
+      const p = s.phase;
+      if (p.kind === "awaitingMeeting") {
+        meetings++;
+        if (meetings === 1 && !s.scheduledMeeting) {
+          // A bot (p1) proposes, so the people's backing locks it (design §9.4, owner decision 2 Nov: bots don't count).
+          step({ type: "proposeMeeting", player: "p1", slot: "sat-8pm" });
+          for (const id of ids.filter((x) => x !== "p1")) if (!s.scheduledMeeting) step({ type: "acceptMeeting", player: id, proposalId: "proposal-1" });
+        } else if (!s.scheduledMeeting) {
+          step({ type: "scheduleMeeting", meetingId: p.meetingId, slot: `${p.meetingId}-slot` });
+        }
+        if (meetings === 2) step({ type: "sealVote", player: last, vote: { kind: "skip" } });
+        step({ type: "advance", deadline: { kind: "openMeeting", meetingId: p.meetingId } });
+        meeting(ids[meetings % ids.length] as PlayerId);
+      } else if (round === 2 && !s.pendingEmergency && s.emergencies > 0 && ofType(s, "emergencyMeetingCalled").length === 0) {
+        // An emergency in the result window, with a sealed vote waiting for it. design §9.3, §9.5
+        step({ type: "sealVote", player: last, vote: { kind: "shakedown", target: "p0" } });
+        step({ type: "callEmergency", player: "p1" });
+        step({ type: "advance", deadline: { kind: "openMeeting", meetingId: "emergency-1" } });
+        meeting("p0");
       } else {
-        step({ type: "scheduleMeeting", act, slot: `act-${act}-slot` });
+        step({ type: "advance", deadline: { kind: "result", round: p.round } });
       }
-      if (act === 2) step({ type: "sealVote", player: last, vote: { kind: "skip" } });
-      step({ type: "advance", deadline: { kind: "openMeeting", meetingId: s.scheduledMeeting?.meetingId } });
-      meeting(ids[act % ids.length] as PlayerId, act);
     }
   }
   return states;
@@ -215,7 +228,7 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
   const gameOver = state.phase.kind === "ended";
   const other = state.playerOrder.find((id) => id !== viewer) as PlayerId;
   const junk: GameEvent[] = [
-    { type: "voteCast", visibility: secretTo(other), meetingId: "act-1", player: other, vote: { kind: "shakedown", target: viewer }, sealed: false },
+    { type: "voteCast", visibility: secretTo(other), meetingId: "meeting-1", player: other, vote: { kind: "shakedown", target: viewer }, sealed: false },
     { type: "voteSealed", visibility: secretTo(other), player: other, vote: { kind: "shakedown", target: viewer } },
     ...(gameOver
       ? []
@@ -228,11 +241,11 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
           { type: "tokenEarned", visibility: privateTo(other), player: other, trigger: "loopHidPocketer" },
           { type: "perkBought", visibility: privateTo(other), player: other, perk: "shield", cost: 2 },
           { type: "abilityResolved", visibility: privateTo(other), player: other, round: 1, ability: { kind: "audit", round: 1, room: "vault", shortfall: 4 } },
-          { type: "abilityResolved", visibility: privateTo(other), player: other, round: 1, ability: { kind: "checkStash", target: viewer, threshold: 3, dirty: true } },
+          { type: "abilityResolved", visibility: privateTo(other), player: other, round: 1, ability: { kind: "checkStash", target: viewer, dirty: true } },
           { type: "insideTip", visibility: privateTo(other), player: other, round: 2, subject: viewer, role: "mole" },
           { type: "coinsGrabbed", visibility: privateTo(other), player: other, round: 1, room: "vault", duffel: 0, pocket: 3, seized: 0 },
           { type: "coinsGrabbed", visibility: privateTo(other), player: other, round: 1, room: "vault", duffel: 0, pocket: 0, seized: 3 },
-          { type: "perkUsed", visibility: privateTo(other), player: other, round: 1, perk: { kind: "ballot", meetingId: "act-1", target: viewer } },
+          { type: "perkUsed", visibility: privateTo(other), player: other, round: 1, perk: { kind: "ballot", meetingId: "meeting-1", target: viewer } },
           { type: "rigPicked", visibility: privateTo(other), player: other, round: 2, card: "audit" },
         ] satisfies GameEvent[])),
   ];
@@ -247,7 +260,7 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
             ...p,
             role: p.role === "hacker" ? "lookout" : "hacker",
             stash: p.stash + 101,
-            roleState: { usedThisAct: 4, usedThisGame: 1, tokens: p.roleState.tokens + 5, perks: ["peek", "shield", "ballot"], tail: "vault" },
+            roleState: { usedThisStretch: 4, usedThisGame: 1, tokens: p.roleState.tokens + 5, perks: ["peek", "shield", "ballot"], tail: "vault" },
             consecutiveMissedMoves: 5,
             sealedVote: { kind: "shakedown", target: viewer },
           },
@@ -319,13 +332,13 @@ function checkView(state: GameState, viewer: PlayerId, view: PlayerView): void {
   if (!gameOver) {
     expect(view.reveal).toBeNull();
   } else {
-    // design §13: every role, room, split and ability; §11.2: never others' secret ballots.
+    // design §13: every role, room, split and ability; §9.5: never others' secret ballots.
     const reveal = view.reveal?.log ?? [];
     expect(sameEvents(reveal, state.log.filter((e) => e.visibility.kind !== "secret" || owned(e, viewer)))).toBe(true);
     expect(reveal.filter((e) => e.event.type === "roleDealt").length).toBe(state.playerOrder.length);
   }
 
-  // design §11.2: in Secret mode no other player's ballot ever reaches you, during or after.
+  // design §9.5: in Secret mode no other player's ballot ever reaches you, during or after.
   if (state.config.voteVisibility === "secret") {
     const all = [...view.ledger, ...view.caseFile, ...(view.reveal?.log ?? [])].map((e) => e.event);
     const othersBallots = all.filter((e) => (e.type === "voteCast" || e.type === "voteSealed") && e.player !== viewer);
@@ -334,7 +347,7 @@ function checkView(state: GameState, viewer: PlayerId, view: PlayerView): void {
   }
 }
 
-describe("no leaks in real games — design §17.2, §13, §11.2", () => {
+describe("no leaks in real games — design §17.2, §13, §9.5", () => {
   // Filled by the games below, then checked: the scripts reach every role power (task 12, design §8).
   const seenTypes = new Set<string>();
   const seenAbilities = new Set<string>();
@@ -342,6 +355,8 @@ describe("no leaks in real games — design §17.2, §13, §11.2", () => {
   const earned = new Set<string>();
   const seenWatch = new Set<string>();
   const seenCards = new Set<string>();
+  const meetingKinds = new Set<string>();
+  let protectedSeen = false;
   const cases = [3, 5, 9, 12].flatMap((n) => (["hiddenThenRevealed", "open", "secret"] as const).map((mode) => [n, mode] as const));
 
   it.each(cases)("%i players, %s votes", (players, mode) => {
@@ -359,6 +374,8 @@ describe("no leaks in real games — design §17.2, §13, §11.2", () => {
     for (const e of final.log) if (e.type === "tokenEarned") earned.add(e.trigger);
     for (const e of final.log) if (e.type === "roomWatched") seenWatch.add(e.source);
     for (const e of final.log) if (e.type === "eventFlipped") seenCards.add(e.card);
+    for (const e of final.log) if (e.type === "meetingOpened") meetingKinds.add(e.kind);
+    if (states.some((st) => st.protected.length > 0)) protectedSeen = true;
 
     for (const state of states) {
       for (const viewer of state.playerOrder) {
@@ -419,7 +436,10 @@ describe("no leaks in real games — design §17.2, §13, §11.2", () => {
     expect(seenWatch, "a Tail watch").toContain("tail");
     // extension.md "Roles": tokens are earned in these games (others: crew tests).
     for (const k of EARNED_IN_PLAY) expect(earned, k).toContain(k);
-    expect(seenTypes, "blessingPaid").toContain("blessingPaid");
     expect(seenAbilities, "bless").toContain("bless");
+    // design §9: every kind of meeting, the pool spent and protection given.
+    expect(meetingKinds).toEqual(new Set(["regular", "briefing", "emergency"]));
+    for (const t of ["emergencyMeetingCalled", "meetingScheduled"]) expect(seenTypes, t).toContain(t);
+    expect(protectedSeen).toBe(true);
   });
 });

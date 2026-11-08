@@ -51,6 +51,13 @@ const lastRound = (s: GameState): GameEvent[] => s.log.slice(s.log.map((e) => e.
 const ofType = <T extends GameEvent["type"]>(events: readonly GameEvent[], type: T) => events.filter((e): e is Extract<GameEvent, { type: T }> => e.type === type);
 const rung = (s: GameState) => ofType(lastRound(s), "bellsRung")[0]?.bells;
 const PUBLIC = { kind: "public" };
+/** Through the police briefing a raid calls (design §9.2), nobody voting, then the result window (§9.3). */
+const BRIEFING = [
+  (s: GameState) => ({ type: "scheduleMeeting", meetingId: s.phase.kind === "awaitingMeeting" ? s.phase.meetingId : "", slot: "x" }),
+  (s: GameState) => ({ type: "advance", deadline: { kind: "openMeeting", meetingId: s.scheduledMeeting?.meetingId ?? "" } }),
+  (s: GameState) => ({ type: "advance", deadline: { kind: "closeMeeting", meetingId: s.meeting?.id ?? "" } }),
+  (s: GameState) => ({ type: "advance", deadline: { kind: "result", round: s.resolvedRound } }),
+];
 
 describe("rings light bulbs — design §5.1, §5.2, §4.2 step 2", () => {
   it("every bell starts dark, one per room in play, public in every view", () => {
@@ -126,8 +133,8 @@ describe("cooling — design §5.6, §4.2 step 6", () => {
 });
 
 describe("raids — design §5.3, §4.2 step 3", () => {
-  /** Round 1: p0 and p1 grab 3 and 2 in the Vault (5 rings ≥ 4 bulbs); p2 hands 2 in from the Office. */
-  const raided = () => run(game(3), mv("p0", "vault", 1, 2), mv("p1", "vault", 2), mv("p2", "office", 2), ROUND);
+  /** Round 1: p0 and p1 grab 3 and 2 in the Vault (5 rings ≥ 4 bulbs); p2 hands 2 in from the Office. Then its briefing. */
+  const raided = () => run(game(3), mv("p0", "vault", 1, 2), mv("p1", "vault", 2), mv("p2", "office", 2), ROUND, ...BRIEFING);
 
   it("the 4th bulb raids the room: its visitors' grabs are seized before the split, everyone else's stands", () => {
     const s = raided();
@@ -158,8 +165,7 @@ describe("raids — design §5.3, §4.2 step 3", () => {
     s = run(s, ROUND); // round 2
     expect(s.round).toBe(3);
     expect(reason(s, mv("p0", "vault", 1))).toMatch(/taped off/);
-    s = run(s, ROUND); // round 3: the Act 1 meeting is due; open round 4
-    s = run(s, { type: "scheduleMeeting", act: 1, slot: "x" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: "act-1" } }, { type: "advance", deadline: { kind: "closeMeeting", meetingId: "act-1" } });
+    s = run(s, ROUND); // round 3
     expect(s.round).toBe(4);
     expect([s.taped, s.bells.vault]).toEqual([{}, 0]);
     expect(ofType(lastRound(run(s, mv("p0", "vault", 1), ROUND)), "coinsGrabbed")[0]).toMatchObject({ player: "p0", room: "vault", duffel: 1, seized: 0 });
@@ -287,7 +293,7 @@ describe("the Mole's ring — design §5.2, §5.3, §11.1", () => {
 
 describe("the Fixer's reopen — design §5.3, §11.1", () => {
   /** Round 1: the Vault is raided (p1 grabs 3, p2 grabs 1); p0 is the Fixer. */
-  const taped = () => run(game(3, ["fixer"]), mv("p0", "lobby", 1), mv("p1", "vault", 3), mv("p2", "vault", 1), ROUND);
+  const taped = () => run(game(3, ["fixer"]), mv("p0", "lobby", 1), mv("p1", "vault", 3), mv("p2", "vault", 1), ROUND, ...BRIEFING);
   const REOPEN = (room: string) => mv("p0", "lobby", 1, 0, { ability: { kind: "reopen", room } });
 
   it("tears the tape off a taped-off room: public, without a name; the room is open next round, its bell at 0", () => {
