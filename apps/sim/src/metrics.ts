@@ -25,6 +25,8 @@
 //   successful games (design §8.2, §21 G6: 5–20%).
 // - cap stalls: games that ended at the round cap with over a quarter of the
 //   bank left ÷ games (G4: at most 10%).
+// - event cards: cards flipped ÷ rounds from round 2 (design §13: 4 in 10, a
+//   little under since a card that can't apply flips nothing; 0 with events off).
 import type { GameRecord, PlayerRecord } from "./record";
 
 export const POCKET_BANDS = ["honest", "moderate", "heavy"] as const;
@@ -193,6 +195,8 @@ export interface Metrics {
   readonly capStalls: number | null;
   /** Share of games the empty bank ended (design §6.2). */
   readonly bankEmptied: number | null;
+  /** Event cards flipped ÷ rounds from round 2. design §13: 4 in 10 */
+  readonly cardRate: number | null;
   readonly meetings: MeetingMetrics;
   readonly shakedowns: ShakedownMetrics;
   readonly pocketing: Record<string, GroupWins>;
@@ -216,6 +220,7 @@ function metrics(records: readonly GameRecord[]): Metrics {
     wholeCrewRate: rate(records.filter(wholeCrewWin).length, records.filter((g) => g.result === "success").length),
     capStalls: rate(records.filter((g) => g.capWithBankLeft).length, records.length),
     bankEmptied: rate(records.filter((g) => g.bankLeft === 0).length, records.length),
+    cardRate: rate(records.reduce((s, g) => s + g.cards, 0), records.reduce((s, g) => s + Math.max(0, g.endedRound - 1), 0)),
     meetings: meetingMetrics(records),
     shakedowns: shakedownMetrics(records),
     pocketing: groupWins(records, pocketBand),

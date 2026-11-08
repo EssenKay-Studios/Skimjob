@@ -48,7 +48,7 @@ describe("Wilson 95% intervals", () => {
   });
 });
 
-describe("the matrix — design §17.4 (3–12 players), extension.md Build notes \"Sim\" (setups, gates), §10 (events)", () => {
+describe("the matrix — design §17.4 (3–12 players), extension.md Build notes \"Sim\" (setups, gates), §13 (events)", () => {
   it("has every player count × setup × events on and off; only Balanced at 4–12 is gated", () => {
     const cells = buildMatrix(opts());
     expect(cells).toHaveLength(10 * 2 * 2);

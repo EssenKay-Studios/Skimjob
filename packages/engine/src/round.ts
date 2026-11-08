@@ -14,7 +14,7 @@ import { isObject, show } from "./check";
 import { endCheck, gameEnded } from "./end";
 import { applyEvent } from "./reduce";
 import type { Draw } from "./handle";
-import { cardEffects, closedRoom, isAudit, roundJob } from "./deck";
+import { closedRoom, isAudit, roundJob } from "./deck";
 import { aboveShare } from "./crew";
 import { roleHandler } from "./roles";
 import { coolBells, factVisibility, isTaped, raidedRooms, ringBells } from "./bells";
@@ -96,7 +96,7 @@ function grabbed(order: readonly PlayerId[], asked: (id: PlayerId) => number, ba
 
 /**
  * Every event for resolving the current round, in the end-of-round order of
- * design §4.2: default moves (§3.3) and the event card's player effects (§13);
+ * design §4.2: default moves (§3.3);
  * 1. grabs out of the bank (§3.2) and the powers that act this round: the
  *    Locksmith's quieter coins, the Mole's ring, the Fixer's reopen, the
  *    Electrician's blackout for next round (§11.1);
@@ -119,10 +119,10 @@ function grabbed(order: readonly PlayerId[], asked: (id: PlayerId) => number, ba
  * meeting the round called (§4.2 step 9: a raid calls a briefing, a third of
  * the bank a regular meeting), and `closeAlibis` goes on.
  */
-export function resolveRound(before: GameState, round: number, draw: Draw): GameEvent[] {
-  const job = roundJob(jobFor(before.config), before.card, eventsFor(before.config));
+export function resolveRound(state: GameState, round: number, draw: Draw): GameEvent[] {
+  const job = roundJob(jobFor(state.config), state.card, eventsFor(state.config));
   const powerFor = (id: PlayerId) => powerOf(state.config, player(id).role);
-  const order = before.playerOrder;
+  const order = state.playerOrder;
   const events: GameEvent[] = [];
   const player = (id: PlayerId): PlayerState => {
     const p = state.players[id];
@@ -134,9 +134,9 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
   // Maps, not objects, because player ids are host-chosen strings (e.g. "__proto__").
   const moves = new Map<PlayerId, Move>();
   // design §3.3 (owner, 7 Nov): with the default room taped off (§5.3), a missed move sits the round out.
-  const fallback: Move | null = isTaped(before, job.defaultRoom) ? null : { room: job.defaultRoom, duffel: 1, pocket: 0 };
+  const fallback: Move | null = isTaped(state, job.defaultRoom) ? null : { room: job.defaultRoom, duffel: 1, pocket: 0 };
   for (const id of order) {
-    const submitted = Object.hasOwn(before.moves, id) ? before.moves[id] : undefined;
+    const submitted = Object.hasOwn(state.moves, id) ? state.moves[id] : undefined;
     if (submitted) {
       moves.set(id, submitted);
     } else {
@@ -149,10 +149,6 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
   // Who plays the round: someone sitting it out is in no room, grabs and rings nothing, and doesn't escape a bust.
   const playing = order.filter((id) => moves.has(id));
 
-  // The event card's player effects (design §13), folded so the rest of the round sees them.
-  const cardEvents = cardEffects(before, round, draw);
-  events.push(...cardEvents);
-  const state = cardEvents.reduce(applyEvent, before);
   // A move's power only works if it still matches the player's role.
   const abilityOf = (id: PlayerId): AbilityUse | undefined => {
     const ability = moveOf(id).ability;
@@ -272,7 +268,7 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
     for (const [id, use] of absolves) events.push(resolved(id, { ...use, taken: null }));
   } else {
     // §4.2 step 5: the Priests' absolves, against the share before this split, after this round's pocketing; then the split.
-    let now = events.reduce(applyEvent, before);
+    let now = events.reduce(applyEvent, state);
     const absolvedBy = new Map<PlayerId, number>();
     for (const [id, use] of inTurn(absolves, (u) => u.target)) {
       const took = aboveShare(now, use.target);
@@ -327,20 +323,19 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
     const tailed = player(id).roleState.tail;
     if (tailed !== null) events.push(watched(id, "tail", tailed));
   }
-  // design §13 Audit: what each room came up short (its visitors' pockets), every room in play listed.
+  // design §13 Audit: how many coins reached the duffel from each room in play (0 from a raided room).
   if (isAudit(state)) {
-    const pocketOf = new Map(events.flatMap((e) => (e.type === "coinsGrabbed" ? [[e.player, e.pocket] as const] : [])));
-    const shortfalls: Record<RoomId, number> = {};
-    for (const r of state.rooms) shortfalls[r] = (visitors[r] ?? []).reduce((sum, id) => sum + (pocketOf.get(id) ?? 0), 0);
-    events.push({ type: "auditReport", visibility: PUBLIC, round, shortfalls });
+    const duffel: Record<RoomId, number> = Object.fromEntries(state.rooms.map((r) => [r, 0]));
+    for (const e of events) if (e.type === "coinsGrabbed") duffel[e.room] = (duffel[e.room] ?? 0) + e.duffel;
+    events.push({ type: "auditReport", visibility: PUBLIC, round, duffel });
   }
   // design §7.4, §7.5: the summary says how many went missing, never who; honesty after the split.
   const bank = state.bank - grabbedCoins;
-  const after = events.reduce(applyEvent, before);
+  const after = events.reduce(applyEvent, state);
   events.push({ type: "roundResolved", visibility: factVisibility("bank", "missing", "honesty"), round, bank, taken, missing: taken - handedIn, honesty: honestyOf({ ...after, bank }) });
 
   // §4.2 step 8: the end check (a bust has already ended the game).
-  const ended = busted ? gameEnded(before, events, "bust", lyingLow) : endCheck(before, events, round);
+  const ended = busted ? gameEnded(state, events, "bust", lyingLow) : endCheck(state, events, round);
   if (ended) events.push(ended);
   return events;
 }

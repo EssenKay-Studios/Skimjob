@@ -51,7 +51,7 @@ Usage: pnpm sim -- [options]
                           personalities: ${Object.keys(PERSONALITIES).join(", ")}
   -s, --seed <seed>       base seed; same options + seed = same results (default "sim")
       --job <id>          job (default bank)
-      --events            flip an event card each round from round 2 (design §13)
+      --events            event cards: a 4-in-10 chance each round from round 2 (design §13)
       --role-list <mode>  exact | possible | hidden (default exact)
       --votes <mode>      hiddenThenRevealed | open | secret (default hiddenThenRevealed)
       --overrides <json>  content overrides as inline JSON or a path to a JSON file, e.g.

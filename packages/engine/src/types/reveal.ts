@@ -75,7 +75,7 @@ export type RevealItem =
  */
 export interface RevealRound {
   readonly round: number;
-  /** The event card flipped this round, if any. design §10 */
+  /** The event card flipped this round, if any. design §13 */
   readonly card: { readonly id: string; readonly room: RoomId | null } | null;
   /** Everyone's real move, in seat order. */
   readonly moves: readonly RevealMove[];

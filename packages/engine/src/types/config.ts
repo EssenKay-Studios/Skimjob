@@ -74,7 +74,7 @@ export interface ContentOverrides {
   /** Shop costs (extension.md "Tokens and the perk shop"). */
   readonly perks?: Readonly<Partial<Record<PerkId, { readonly cost?: number }>>>;
   readonly roles?: Readonly<Record<RoleId, RoleOverride>>;
-  /** Event card numbers (balance pass 2). design §10 */
+  /** Event card numbers (balance pass 2). design §13 */
   readonly events?: Readonly<Record<EventId, EventOverride>>;
 }
 

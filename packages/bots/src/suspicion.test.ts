@@ -1,6 +1,6 @@
 // The suspicion model over real (scripted) engine games, read through viewFor
 // only. design §19.3; §5.3 shortfall, §5.4 alibis, §3.4 Security, §11.1
-// powers, §9.6 shakedown results
+// powers, §13 the Audit card, §9.6 shakedown results
 import { describe, expect, it } from "vitest";
 import { viewFor, type GameState, type PlayerId } from "@skimjob/engine";
 import { SUSPICION_WEIGHTS as W, mostSuspicious, suspicion } from "./suspicion";
@@ -45,6 +45,18 @@ describe("suspicion — design §17.3", () => {
     const audited = scoresOf(mine({ kind: "audit", round: 1, room: "vault", duffel: 8 }), "ana");
     expect([audited.get("ben"), audited.get("carl")]).toEqual([2 * W.audited, 2 * W.audited]);
     expect(scoresOf(mine({ kind: "audit", round: 1, room: "vault", duffel: 12 }), "ana").get("ben")).toBe(0);
+  });
+
+  it("the Audit card counts like my Auditor's result, for every room — design §13", () => {
+    const s = closeAlibis(round(game(3), { ana: { room: "office" }, ben: { room: "vault" }, carl: { room: "vault" } }));
+    const audit = (duffel: Record<string, number>): GameState => ({
+      ...s,
+      log: [...s.log, { type: "auditReport", visibility: { kind: "public" }, round: 1, duffel } as GameState["log"][number]],
+    });
+    // ben and carl claimed the Vault (6 coins each), but only 8 reached the duffel from it: 4 short, shared.
+    const audited = scoresOf(audit({ vault: 8, office: 2, lobby: 0 }), "ana");
+    expect([audited.get("ben"), audited.get("carl")]).toEqual([2 * W.audited, 2 * W.audited]);
+    expect(scoresOf(audit({ vault: 12, office: 2, lobby: 0 }), "ana").get("ben")).toBe(0);
   });
 
   it("a blacked-out room's feed shows nobody, which clears or blames nobody — design §11.1", () => {

@@ -131,7 +131,6 @@ export function initialState(config: GameConfig): GameState {
     wanted: 0,
     seized: 0,
     card: null,
-    cardsFlipped: [],
     moves: {},
     alibisOpen: false,
     alibisPosted: [],
@@ -315,13 +314,9 @@ function applyChange(state: GameState, event: GameEvent): GameState {
     case "gameEnded":
       // A round that ends the game has no alibi window (design §5.4, PR #21 QA).
       return { ...state, phase: { kind: "ended", outcome: event.outcome }, alibisOpen: false };
-    // ------------------------------------------------ events deck. design §10
+    // ------------------------------------------------ events deck. design §13
     case "eventFlipped":
-      return {
-        ...state,
-        card: { round: event.round, id: event.card, room: event.room },
-        cardsFlipped: [...state.cardsFlipped, event.card],
-      };
+      return { ...state, card: { round: event.round, id: event.card, room: event.room } };
     case "insideTip":
     case "auditReport":
       return state;

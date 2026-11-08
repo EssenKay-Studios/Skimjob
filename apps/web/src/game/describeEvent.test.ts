@@ -78,7 +78,8 @@ describe("describeEvent", () => {
     expect(describeEvent({ ...sampleEvents.roundResolved, missing: 2 }, asAna)).toBe("Round 1: 6 taken, 2 coins went missing, 58 coins left in the bank.");
     expect(describeEvent(sampleEvents.duffelSplit, asAna)).toBe("Round 1: the duffel split 2 each (share now 2, kitty 1).");
     expect(describeEvent(sampleEvents.eventFlipped, asAna)).toBe("Round 2 event: Lockdown (the Vault is closed).");
-    expect(describeEvent(sampleEvents.auditReport, asAna)).toBe("Audit of round 6: Vault 4 short.");
+    expect(describeEvent(sampleEvents.auditReport, asAna)).toBe("Audit of round 6: Vault 4 reached the duffel.");
+    expect(describeEvent({ ...sampleEvents.auditReport, duffel: { vault: 0, office: 0 } }, asAna)).toBe("Audit of round 6: no coins reached the duffel."); // design §13
   });
 
   // design §11.2: every meeting result.

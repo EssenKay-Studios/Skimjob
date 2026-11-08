@@ -95,7 +95,7 @@ describe("all-bot games — design §17.3", () => {
     expect(state.log.filter((e) => e.type === "defaultMoveAssigned" && e.player === "p3").length).toBeGreaterThan(0);
   });
 
-  it("with the events deck on (and Moles), bots finish at every size with no refused command — design §10", () => {
+  it("with the events deck on (and Moles), bots finish at every size with no refused command — design §13", () => {
     const seen = new Set<string>();
     let lockdowns = 0;
     for (const n of sizes) {

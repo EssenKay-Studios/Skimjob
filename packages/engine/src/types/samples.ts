@@ -95,7 +95,7 @@ export const sampleEvents: { readonly [T in GameEventType]: EventOfType<T> } = {
   powerCut: { type: "powerCut", visibility: PUBLIC, round: 2, room: "office" },
   eventFlipped: { type: "eventFlipped", visibility: PUBLIC, round: 2, card: "lockdown", room: "vault" },
   insideTip: { type: "insideTip", visibility: privateTo(ana), player: ana, round: 5, subject: ben, role: "hacker" },
-  auditReport: { type: "auditReport", visibility: PUBLIC, round: 6, shortfalls: { vault: 4, office: 0, lobby: 0, security: 0, rooftop: 0 } },
+  auditReport: { type: "auditReport", visibility: PUBLIC, round: 6, duffel: { vault: 4, office: 0, lobby: 0, security: 0, rooftop: 0 } },
   alibiPosted: { type: "alibiPosted", visibility: PUBLIC, player: ana, round: 1, room: "lobby" },
   alibisClosed: { type: "alibisClosed", visibility: PUBLIC, round: 1 },
   roleClaimed: { type: "roleClaimed", visibility: PUBLIC, player: ana, role: "lookout", stretch: 1 },

@@ -93,7 +93,7 @@ function scenarioStates(): GameState[] {
   s = keep(run(s, alibis(s)));
   expect(s.phase.kind).toBe("awaitingMeeting");
   s = keep(run(s, (s.phase.kind === "awaitingMeeting" ? { type: "scheduleMeeting", meetingId: s.phase.meetingId, slot: "server" } : null)));
-  // A Lockdown card forged onto planning (design §10).
+  // A Lockdown card forged onto planning (design §13).
   const planning = out[2] as GameState;
   keep({ ...planning, card: { round: planning.round, id: "lockdown", room: "vault" } });
   // A raided Office, taped off, forged onto planning: the Fixer's reopen (design §5.3).

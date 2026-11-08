@@ -122,7 +122,7 @@ export interface PendingShakedown {
   readonly target: PlayerId;
 }
 
-/** The event card flipped for `round`; cleared when the round resolves. design §10 */
+/** The event card flipped for `round`; cleared when the round resolves. design §13 */
 export interface ActiveCard {
   readonly round: number;
   readonly id: EventId;
@@ -221,10 +221,8 @@ export interface GameState {
   readonly wanted: number;
   /** Coins the police have seized this game (public): they left the game. design §5.3, §7.7 */
   readonly seized: number;
-  /** This round's event card, if one was flipped (cleared when the round resolves). design §10 */
+  /** This round's event card, if one was flipped (cleared when the round resolves). design §13 */
   readonly card: ActiveCard | null;
-  /** Every card flipped so far this game, in order (public); every flip draws from the full deck. design §10 */
-  readonly cardsFlipped: readonly EventId[];
   /** Moves submitted so far for the current round (cleared when it resolves). */
   readonly moves: Readonly<Record<PlayerId, Move>>;
   /** The latest round resolved; 0 before any. Alibis are posted for this round. design §5.4 */

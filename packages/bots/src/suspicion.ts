@@ -1,6 +1,6 @@
 // The bots' suspicion model: a score for every other player, worked out from
 // the view alone. design §19.3 (and §5.3 shortfalls, §5.4 alibis, §3.4 Security
-//, §11.1 powers, §9.6 shakedown results)
+//, §11.1 powers, §13 the Audit card, §9.6 shakedown results)
 //
 // Rebuilt from the ledger and case file each time it's needed, so a bot keeps
 // no hidden memory of its own: same view, same scores.
@@ -22,7 +22,7 @@ export interface SuspicionWeights {
   readonly afterClean: number;
   /** Score after a shakedown found loot: a known skimmer, but just emptied. design §11.3 */
   readonly afterDirty: number;
-  /** Per coin my Audit found short of a room's claimants' grabs, shared among the others who claimed it (design §11.1). */
+  /** Per coin an audit (my Auditor's power, §11.1, or the Audit card, §13) found short of a room's claimants' grabs, shared among the others who claimed it. */
   readonly audited: number;
   /**
    * A role claim I know is false (v2 §4): it names my own role, contradicts my
@@ -139,11 +139,15 @@ export function suspicion(view: PlayerView, w: SuspicionWeights = SUSPICION_WEIG
       if (said !== undefined && ability.grabbed > coins(said)) add(ability.target, w.lie);
       return;
     }
-    if (ability.kind !== "audit") return;
-    const claimants = [...(alibis.get(ability.round) ?? [])].filter(([id, room]) => id !== me && room === ability.room).map(([id]) => id);
+    if (ability.kind === "audit") judgeAudit(ability.round, ability.room, ability.duffel);
+  }
+
+  /** What reached the duffel from `room` in `round` (my Auditor's power, or the Audit card, §13) against its claimants. */
+  function judgeAudit(round: number, room: RoomId, duffel: number): void {
+    const claimants = [...(alibis.get(round) ?? [])].filter(([id, r]) => id !== me && r === room).map(([id]) => id);
     // What the claimants' full grabs would have handed in, less what reached the duffel (my own hand-in there included).
-    const mine = ofType(view.caseFile, "coinsGrabbed").find((e) => e.round === ability.round && e.room === ability.room)?.duffel ?? 0;
-    const short = claimants.length * coins(ability.room) - (ability.duffel - mine);
+    const mine = ofType(view.caseFile, "coinsGrabbed").find((e) => e.round === round && e.room === room)?.duffel ?? 0;
+    const short = claimants.length * coins(room) - (duffel - mine);
     if (short > 0) for (const id of claimants) add(id, (w.audited * short) / claimants.length);
   }
 
@@ -153,6 +157,7 @@ export function suspicion(view: PlayerView, w: SuspicionWeights = SUSPICION_WEIG
   for (const { event } of events) {
     if (event.type === "roundResolved") judgeRound(event);
     else if (event.type === "abilityResolved") judgePower(event.ability);
+    else if (event.type === "auditReport") for (const [room, duffel] of Object.entries(event.duffel)) judgeAudit(event.round, room, duffel);
     else if (event.type === "shakedownResolved" && event.target !== me) score.set(event.target, event.clean ? w.afterClean : w.afterDirty);
   }
   judgeClaims(view, add, w);
