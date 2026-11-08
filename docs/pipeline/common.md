@@ -18,7 +18,7 @@ Your prompt says which of the three setups you are in. The rules below are the s
   ```
   Plain `git fetch origin` updates every ref. When done, leave nothing uncommitted and run `git worktree remove ../skimjob-wt/<name>` from the main clone. A branch can be checked out in one worktree at a time; don't touch other agents' worktrees.
 - **Node 22:** before every command that runs node or pnpm, `export PATH=/opt/homebrew/opt/node@22/bin:$PATH` (the system node is newer and unsupported; `.nvmrc` pins 22).
-- **Ports:** 3–5 agents share the Mac, so give each e2e run its own: `E2E_PORT=5<NN>79 E2E_SERVER_PORT=3<NN>79 E2E_FAST_PORT=5<NN>80 E2E_FAST_SERVER_PORT=3<NN>80` (pick an unused `<NN>`; defaults 5179/3179/5180/3180). Playwright reuses a server already listening on your ports (`reuseExistingServer`, not in CI): it serves the code it started with, so after switching branch or commit, or killing a run, `lsof -iTCP:<port> -sTCP:LISTEN` and kill leftovers by PID. The PM lets at most 2 e2e runs go on the Mac at once (HANDOFF); an agent the PM gave no slot works in setup (c), where e2e runs in the cloud and CI.
+- **Ports:** 3–5 agents share the Mac, so give each e2e run its own: `E2E_PORT=5<NN>79 E2E_SERVER_PORT=3<NN>79 E2E_FAST_PORT=5<NN>80 E2E_FAST_SERVER_PORT=3<NN>80` (pick an unused `<NN>`; defaults 5179/3179/5180/3180). Playwright always starts its own servers (no `reuseExistingServer`): if a port is taken, by another agent or a leftover from a killed run, the run fails loudly. Pick another `<NN>`, or `lsof -iTCP:<port> -sTCP:LISTEN` and kill your own leftovers by PID. The PM lets at most 2 e2e runs go on the Mac at once (HANDOFF); an agent the PM gave no slot works in setup (c), where e2e runs in the cloud and CI.
 - Never write to `/tmp`; use a scratch folder under `~/Documents/Misc`. macOS is case-insensitive: never add two paths that differ only in case (CI checks).
 
 **(b) A cloud session that runs commands on the Mac** through the local terminal tool. Everything in (a) applies, plus:
@@ -26,7 +26,7 @@ Your prompt says which of the three setups you are in. The rules below are the s
 - Run anything longer (install, `pnpm precheck`, test suites, e2e) with `scripts/bg.sh`, one short call each, never `/tmp`, never `pkill`:
   ```
   bash scripts/bg.sh start <step> -- pnpm precheck   # detached; log, pid and exit code kept in `.skimjob-bg` in the worktree's parent folder (`BG_DIR`), so under `~/Documents/Misc` on the Mac
-  bash scripts/bg.sh wait <step> [secs]               # waits up to 50 s (the cap), prints running/exited N and the log's last 20 lines
+  bash scripts/bg.sh wait <step> [secs]               # waits up to 35 s (the cap, kept by a deadline; the whole call stays under 40 s though the terminal tool allows 60 s), prints running/exited N and the log's last 20 lines
   bash scripts/bg.sh stop <step>                      # kills the command and its children by pid
   ```
   Repeat `wait` until it says `exited`. Names are per machine, so prefix yours with `<name>-`. Pass an env prefix or a `cd` as `-- bash -c 'E2E_PORT=… pnpm precheck'`.

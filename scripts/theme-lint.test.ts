@@ -27,6 +27,11 @@ describe("theme-token lint", () => {
 
   it("fails only a file above its baseline count", () => {
     expect(check({ "a.css": 2, "b.css": 1 }, { "a.css": 2 })).toHaveLength(1);
-    expect(check({ "a.css": 1 }, { "a.css": 2 })).toEqual([]);
+    expect(check({ "a.css": 2 }, { "a.css": 2 })).toEqual([]);
+  });
+
+  it("fails a stale baseline: a count that dropped, or a file with no violations left", () => {
+    expect(check({ "a.css": 1 }, { "a.css": 2 })).toEqual(["a.css: baseline allows 2 but it now has 1. Lower the baseline: run `node scripts/theme-lint.mjs --update` and commit it."]);
+    expect(check({}, { "gone.css": 2 })).toHaveLength(1);
   });
 });

@@ -4,7 +4,8 @@
 //   - font-family / font name a --font-* token (or inherit);
 //   - border-radius, box-shadow and text-shadow are var(--...), 0, none or inherit.
 // scripts/theme-lint.baseline.json counts the violations that predate the lint, per file. It can only go
-// down: a file may not exceed its count (a file not listed gets none). Clean a file up, then lower its count.
+// down: a file may not exceed its count (a file not listed gets none), and a count above the file's real
+// number fails too: clean a file up, then lower its count (`--update`).
 //   node scripts/theme-lint.mjs            check
 //   node scripts/theme-lint.mjs --update   rewrite the baseline to today's counts (only after cleaning up)
 import { execFileSync } from "node:child_process";
@@ -39,9 +40,13 @@ export function violations(file, text) {
 }
 
 export function check(counts, baseline) {
-  return Object.entries(counts)
+  const over = Object.entries(counts)
     .filter(([f, n]) => n > (baseline[f] ?? 0))
     .map(([f, n]) => `${f}: ${n} raw colour/font/shadow/radius value(s), allowed ${baseline[f] ?? 0}. Use a theme.css token (add one there if none fits).`);
+  const stale = Object.entries(baseline)
+    .filter(([f, n]) => (counts[f] ?? 0) < n)
+    .map(([f, n]) => `${f}: baseline allows ${n} but it now has ${counts[f] ?? 0}. Lower the baseline: run \`node scripts/theme-lint.mjs --update\` and commit it.`);
+  return [...over, ...stale];
 }
 
 function main(mode) {

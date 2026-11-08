@@ -13,9 +13,9 @@ import { defineConfig, devices } from "@playwright/test";
 //   games tagged @fast-clock (the slowest tests), run by the *-fast projects.
 // Ports come from the environment so two clones can run E2E side by side:
 // E2E_PORT (web, default 5179), E2E_SERVER_PORT (3179), E2E_FAST_PORT (5180), E2E_FAST_SERVER_PORT (3180).
-// Locally a server that is already listening on a port is reused (a repeat run skips the ~10 s start; the
-// agent's own ports only, so stop it when you switch branches: it serves the code it started with). CI always
-// starts its own. Locally up to 4 workers per run (CI keeps Playwright's default, 50% of the cores); the PM
+// A run always starts its own servers (reuseExistingServer is off): if a port is already taken, by another
+// agent's run or a stale server, Playwright fails loudly instead of testing against code it didn't start.
+// Pick free E2E_* ports or stop the owner of the port (by pid). Locally up to 4 workers per run (CI keeps Playwright's default, 50% of the cores); the PM
 // allows at most 2 runs at once (docs/pipeline/HANDOFF.md).
 // CI shards the suite by spec file: `node scripts/scope.mjs --shard i/6` (.github/workflows/ci.yml).
 const num = (name: string, fallback: number) => Number(process.env[name] ?? fallback);
@@ -35,14 +35,14 @@ const servers = (web: number, api: number, timeScale: string) => [
     // The page's origin is the Vite port, which may be any port here.
     env: { PORT: String(api), PGLITE_DIR: "memory", TIME_SCALE: timeScale, ALLOWED_ORIGINS: `http://localhost:${web},http://127.0.0.1:${web}` },
     url: `http://127.0.0.1:${api}/health`,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     timeout: 60_000,
   },
   {
     command: `pnpm exec vite --port ${web} --strictPort`,
     env: { SKIMJOB_SERVER: `http://127.0.0.1:${api}` },
     url: `http://localhost:${web}`,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     timeout: 60_000,
   },
 ];
