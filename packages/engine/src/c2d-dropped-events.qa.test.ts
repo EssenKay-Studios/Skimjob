@@ -52,13 +52,15 @@ function resolve(state: GameState, moves: Record<PlayerId, Record<string, unknow
 function step(s: GameState): GameState {
   if (s.phase.kind === "planning") return resolve(s);
   if (s.phase.kind !== "awaitingMeeting") throw new Error(`unexpected phase ${s.phase.kind}`);
-  const { act } = s.phase;
-  return run(
+  // design §9.1, §9.2: the meeting the round called, nobody voting; then its result window closes (§9.3).
+  const { meetingId } = s.phase;
+  s = run(
     s,
-    { type: "scheduleMeeting", act, slot: `slot-${act}` },
-    { type: "advance", deadline: { kind: "openMeeting", meetingId: `act-${act}` } },
-    { type: "advance", deadline: { kind: "closeMeeting", meetingId: `act-${act}` } },
+    { type: "scheduleMeeting", meetingId, slot: `slot-${meetingId}` },
+    { type: "advance", deadline: { kind: "openMeeting", meetingId } },
+    { type: "advance", deadline: { kind: "closeMeeting", meetingId } },
   );
+  return s.phase.kind === "result" ? run(s, { type: "advance", deadline: { kind: "result", round: s.resolvedRound } }) : s;
 }
 
 function playThrough(s: GameState): GameState {

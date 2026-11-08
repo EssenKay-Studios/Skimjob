@@ -16,9 +16,9 @@ const withRole = (s: GameState, player: string, role: string): GameState => {
   return { ...s, players: { ...s.players, [player]: { ...me, role } } };
 };
 /** Ana is the target of a shakedown that has just passed (the shakedown window). */
-const pending = (s: GameState, target = "ana"): GameState => ({ ...s, phase: { kind: "shakedownPending", meetingId: "act-1", target } });
-/** The act's meeting is next: claims are made now (v2 §4), but nobody accuses ana. */
-const awaiting = (s: GameState): GameState => ({ ...s, phase: { kind: "awaitingMeeting", act: 1 } });
+const pending = (s: GameState, target = "ana"): GameState => ({ ...s, phase: { kind: "shakedownPending", meetingId: "meeting-1", target } });
+/** A regular meeting is due: claims are made now (v2 §4), but nobody accuses ana. */
+const awaiting = (s: GameState): GameState => ({ ...s, phase: { kind: "awaitingMeeting", meeting: "regular", meetingId: "meeting-1" } });
 const claims = (cmds: PlayerCommand[]) => cmds.filter((c) => c.type === "claimRole");
 
 describe("bot claims — docs/roles-v2.md §4", () => {
@@ -32,7 +32,7 @@ describe("bot claims — docs/roles-v2.md §4", () => {
     expect(chooseClaim(viewFor(awaiting(withRole(game(5), "ana", "lookout")), "ana"), exact(PERSONALITIES.honest), rolls(0))).toBeNull();
   });
 
-  it("claims only around meetings, once per act, and the engine accepts the claim", () => {
+  it("claims only around meetings, once between meetings, and the engine accepts the claim", () => {
     const s = pending(withRole(game(5), "ana", "rookie"));
     const cmds = claims(decide(viewFor(s, "ana"), exact(PERSONALITIES.honest), rolls(0), "test-crew"));
     expect(cmds).toEqual([{ type: "claimRole", player: "ana", role: "rookie" }]);
@@ -52,7 +52,7 @@ describe("bot claims — docs/roles-v2.md §4", () => {
 
   it("the Priest claims only after its own vote", () => {
     const s = withRole(game(5), "ana", "priest");
-    const meeting: GameState = { ...pending(s), phase: { kind: "meeting", meetingId: "act-1" } } as GameState;
+    const meeting: GameState = { ...pending(s), phase: { kind: "meeting", meetingId: "meeting-1" } } as GameState;
     // Accused through an open-mode ballot isn't needed here: a pending shakedown has no vote to wait for.
     expect(chooseClaim(viewFor(pending(s), "ana"), exact(PERSONALITIES.honest), rolls(0), true)).toBeNull();
     expect(chooseClaim(viewFor(meeting, "ana"), exact(PERSONALITIES.honest), rolls(0), false)).toBeNull();
@@ -68,7 +68,7 @@ describe("bot claims — docs/roles-v2.md §4", () => {
     expect(bluffFor(viewFor(pending(withRole(game(5), "ana", "hacker")), "ana"))).toBe("rookie");
     // Not accused: it keeps quiet.
     expect(chooseClaim(viewFor(awaiting(withRole(game(5), "ana", "mole")), "ana"), exact(PERSONALITIES.greedy), rolls(0))).toBeNull();
-    // It sticks to its story in later acts.
+    // It sticks to its story in later stretches.
     const told = run(mole, { type: "claimRole", player: "ana", role: "fixer" });
     expect(bluffFor(viewFor(told, "ana"))).toBe("fixer");
   });
@@ -106,7 +106,7 @@ describe("claims in the suspicion model — v2 §4", () => {
 
   it("changing one's claimed role is suspicious", () => {
     let s = run(game(5), { type: "claimRole", player: "ben", role: "rookie" });
-    s = { ...s, round: 4 }; // act 2
+    s = { ...s, stretch: 2 }; // after a regular meeting
     const r = handleCommand(s, { type: "claimRole", player: "ben", role: "fixer" });
     expect(r.ok).toBe(true);
     if (r.ok) expect(suspicion(viewFor(r.state, "ana")).get("ben")).toBe(SUSPICION_WEIGHTS.falseClaim / 2 + SUSPICION_WEIGHTS.claimed);

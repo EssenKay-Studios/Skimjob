@@ -3,7 +3,7 @@
 // exhaustive, so a new event, ability, perk or meeting-result kind fails
 // typecheck until it has a line here. docs/m2-plan.md M2-6; design §13
 import { EVENTS, JOBS, PERKS, ROLES, type PerkId } from "@skimjob/content";
-import { meetingName } from "./wording";
+import { MEETING_TITLE } from "./meeting";
 import type { GameEvent, MeetingResult, PlayerId, ResolvedAbility, ResolvedPerk, RoomId, VoteChoice } from "@skimjob/engine";
 
 export interface DescribeContext {
@@ -131,15 +131,15 @@ function line(e: GameEvent, ctx: DescribeContext): string {
     case "roleClaimed":
       return `${verb(e.player, "claim", "claims")} to be the ${roleName(e.role)}.`;
     case "meetingProposed":
-      return `${verb(e.by, "proposed", "proposed")} ${meetingName(e.act)} for ${slot(e.slot)}.`;
+      return `${verb(e.by, "proposed", "proposed")} the next meeting for ${slot(e.slot)}.`;
     case "meetingProposalAccepted":
       return `${verb(e.by, "backed", "backed")} a meeting time.`;
     case "meetingScheduled":
-      return `${cap(meetingName(e.act))} is set for ${slot(e.slot)}${e.proposalId === null ? " (picked by the app)" : ""}.`;
+      return `The next meeting is set for ${slot(e.slot)}${e.proposalId === null ? " (picked by the app)" : ""}.`;
     case "emergencyMeetingCalled":
       return `${verb(e.by, "called", "called")} an emergency meeting.`;
     case "meetingOpened":
-      return `${e.kind === "emergency" ? "The emergency meeting" : cap(meetingName(e.act))} is open: time to vote.`;
+      return `The ${MEETING_TITLE[e.kind].toLowerCase()} is open: time to vote.`;
     case "voteSealed":
       return `${verb(e.player, "sealed", "sealed")} a vote ${choice(e.vote)}.`;
     case "voteCast":
@@ -151,9 +151,7 @@ function line(e: GameEvent, ctx: DescribeContext): string {
     case "shakedownCancelled":
       return `The shakedown of ${who(e.target)} was called off.`;
     case "shakedownResolved":
-      return `${who(e.target)} ${you(e.target) ? "were" : "was"} shaken down: a stash of ${e.stashRevealed}, ${e.taken} set aside for the next split.${e.clean ? ` Clean! The crew paid ${e.compensation} in compensation.` : ""}`;
-    case "blessingPaid":
-      return `${who(e.target)} ${you(e.target) ? "were" : "was"} blessed: the bank paid the compensation, so ${e.amount} went back into the duffel.`;
+      return `${who(e.target)} ${you(e.target) ? "were" : "was"} shaken down: a stash of ${e.stashRevealed}, ${e.taken} set aside for the next split.${e.clean ? " Clean: nothing above the share." : ""}`;
     case "tokenEarned":
       return `${verb(e.player, "earned", "earned")} a token.`;
     case "perkBought":
@@ -200,9 +198,9 @@ function ability(a: ResolvedAbility, player: PlayerId, round: number, { you, who
     case "audit":
       return `Audit: the ${roomName(a.room)} came up ${a.shortfall} short in round ${a.round}.`;
     case "checkStash":
-      return `Stash check: ${who(a.target)} ${a.dirty ? `holds ${a.threshold} or more (not clean)` : `holds less than ${a.threshold} (clean)`}.`;
+      return `Stash check: ${who(a.target)} ${a.dirty ? "holds something above the share (not clean)" : "holds nothing above the share (clean)"}.`;
     case "bless":
-      return `${verb(player, "blessed", "blessed")} ${who(a.target)} until the next meeting.`;
+      return `${verb(player, "blessed", "blessed")} ${who(a.target)} until the next regular meeting.`;
     default: {
       const never: never = a;
       return String((never as { kind: string }).kind);
@@ -228,8 +226,6 @@ function perk(p: ResolvedPerk, player: PlayerId, { you, who, whose, verb }: Gram
       return `${verb(player, "recharged", "recharged")} ${whose(player)} role's power.`;
     case "rig":
       return `${verb(player, "rigged", "rigged")} round ${p.round}'s card: ${list(p.cards.map(cardName))} to pick from.`;
-    case "emergency":
-      return `${verb(player, "spent", "spent")} an ${perkName("emergency")} perk to call an extra emergency meeting.`;
     default: {
       const never: never = p;
       return String((never as { kind: string }).kind);

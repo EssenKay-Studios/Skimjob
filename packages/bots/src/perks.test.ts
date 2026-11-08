@@ -5,7 +5,7 @@ import type { PerkId } from "@skimjob/content";
 import { PERSONALITIES, type Personality } from "./personalities";
 import { botRandom, decide } from "./bot";
 import { alibiPerk, cardRiskScore, meetingPerks, planningPerks } from "./perks";
-import { closeAlibis, config, game, round, run } from "./testkit";
+import { closeAlibis, config, emergencyMeeting, game, round, run } from "./testkit";
 
 const exact = (base: Personality): Personality => ({ ...base, noise: 0, misread: 0, hunch: 0 });
 const grant = (s: GameState, player: string, ...perks: PerkId[]): GameState =>
@@ -13,7 +13,8 @@ const grant = (s: GameState, player: string, ...perks: PerkId[]): GameState =>
 const spends = (cmds: PlayerCommand[]) => cmds.flatMap((c) => (c.type === "useAbility" ? [c.ability] : []));
 const lobby = { room: "lobby" };
 /** Round 1: ben pockets in the Vault and claims the Lobby: ana's top suspect. */
-const suspect = () => closeAlibis(round(game(5), { ana: { room: "vault" }, ben: { room: "vault", pocket: 4, alibi: "lobby" }, carl: lobby, dee: lobby, eve: lobby }));
+const played = () => round(game(5), { ana: { room: "vault" }, ben: { room: "vault", pocket: 4, alibi: "lobby" }, carl: lobby, dee: lobby, eve: lobby });
+const suspect = () => closeAlibis(played());
 
 describe("bot perks — v2 §1, §4", () => {
   it("Peek: its top suspect, once per suspect (Lookout: 'Peeks its top suspect')", () => {
@@ -37,7 +38,7 @@ describe("bot perks — v2 §1, §4", () => {
   });
 
   it("+Vote: only with a shakedown ballot in an open meeting", () => {
-    const s = grant(run(suspect(), { type: "callEmergency", player: "carl" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: "emergency-carl" } }), "ana", "extraVote");
+    const s = grant(emergencyMeeting(played(), "carl"), "ana", "extraVote");
     const view = viewFor(s, "ana");
     expect(spends(meetingPerks(view, { kind: "shakedown", target: "ben" }))).toEqual([{ kind: "extraVote" }]);
     expect(meetingPerks(view, { kind: "skip" })).toEqual([]);
@@ -48,21 +49,21 @@ describe("bot perks — v2 §1, §4", () => {
     const hacker = (used: number): GameState => {
       const s = grant(game(5), "ana", "recharge");
       const me = s.players.ana as GameState["players"][string];
-      return { ...s, players: { ...s.players, ana: { ...me, role: "hacker", roleState: { ...me.roleState, usedThisAct: used } } } };
+      return { ...s, players: { ...s.players, ana: { ...me, role: "hacker", roleState: { ...me.roleState, usedThisStretch: used } } } };
     };
     expect(spends(planningPerks(viewFor(hacker(0), "ana")))).toEqual([]);
     expect(spends(planningPerks(viewFor(hacker(1), "ana")))).toEqual([{ kind: "recharge" }]);
     run(hacker(1), ...planningPerks(viewFor(hacker(1), "ana")));
   });
 
-  it("Alibi: stamps a true alibi when the crew could suspect it, or before the act's meeting; never a false one", () => {
+  it("Alibi: stamps a true alibi once the crew could suspect it; never a false one", () => {
     const plan = { ana: { room: "vault", alibi: null }, ben: lobby, carl: lobby, dee: lobby, eve: lobby };
     const r1 = grant(round(game(5), plan), "ana", "alibi");
     // The alibi window for round 1 is open; ana was in the Vault and nobody suspects her yet.
     expect(alibiPerk(viewFor(r1, "ana"), "vault")).toEqual([]);
     const r3 = grant(round(closeAlibis(round(closeAlibis(round(game(5), plan)), plan)), plan), "ana", "alibi");
     expect(alibiPerk(viewFor(r3, "ana"), "lobby")).toEqual([]); // a lie can't be stamped
-    expect(spends(alibiPerk(viewFor(r3, "ana"), "vault"))).toEqual([{ kind: "alibi" }]); // the act's meeting is next
+    expect(spends(alibiPerk(viewFor(r3, "ana"), "vault"))).toEqual([{ kind: "alibi" }]); // by round 3 her missing alibis make her suspect
     const after = run(r3, { type: "postAlibi", player: "ana", room: "vault" }, ...alibiPerk(viewFor(r3, "ana"), "vault"));
     expect(after.log.some((e) => e.type === "alibiVerified")).toBe(true);
   });

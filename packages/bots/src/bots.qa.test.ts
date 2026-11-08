@@ -194,6 +194,19 @@ function midGame(c: GameConfig): GameState {
   for (const b of bots) for (const cmd of b.act(viewFor(state, b.player))) apply(cmd);
   apply({ type: "advance", deadline: { kind: "alibis", round: 1 } }); // design §5.4
   for (const b of bots) for (const cmd of b.act(viewFor(state, b.player))) apply(cmd);
+  // design §9.3: an emergency a bot called in the result window, then the window's close.
+  while (state.phase.kind !== "planning") {
+    const p = state.phase;
+    if (p.kind === "meeting") apply({ type: "advance", deadline: { kind: "closeMeeting", meetingId: p.meetingId } });
+    else if (p.kind === "shakedownPending") apply({ type: "advance", deadline: { kind: "resolveShakedown", meetingId: p.meetingId } });
+    else if (state.pendingEmergency) apply({ type: "advance", deadline: { kind: "openMeeting", meetingId: state.pendingEmergency.meetingId } });
+    else if (p.kind === "result") apply({ type: "advance", deadline: { kind: "result", round: p.round } });
+    else if (p.kind === "awaitingMeeting") {
+      apply({ type: "scheduleMeeting", meetingId: p.meetingId, slot: "now" });
+      apply({ type: "advance", deadline: { kind: "openMeeting", meetingId: p.meetingId } });
+    }
+    else throw new Error(`unexpected phase ${p.kind}`);
+  }
   return state;
 }
 

@@ -1,5 +1,5 @@
 // The Extension rules not covered by a role's own tests: the perk shop, buying
-// perks, "camera offline", the gap box and the role list.
+// perks, "camera offline" and the role list.
 // docs/extension.md (THE spec for R6a)
 import { describe, expect, it } from "vitest";
 import { PERKS, ROLES, SHOP_COLUMNS, SHOP_RULES, type PerkId } from "@skimjob/content";
@@ -9,7 +9,7 @@ import type { GameConfig, GameEvent, GameState, PlayerId } from "./types";
 import { PUBLIC, privateTo } from "./types";
 import { createGame, dealableRoles, setupEvents } from "./setup";
 import { replay } from "./reduce";
-import { gapBox, viewFor } from "./view";
+import { viewFor } from "./view";
 import { ranking } from "./end";
 import { fullGrab } from "./grab.testkit";
 
@@ -95,8 +95,9 @@ describe("the perk shop — extension.md \"Tokens and the perk shop\", gap-fills
     for (const id of s.playerOrder) expect(viewFor(s, id).shop.map((o) => o.perk)).toEqual(s.shop);
   });
 
-  it("with events off the Sway perk is +Vote or Emergency", () => {
-    for (const seed of SEEDS) expect(SHOP_RULES.swayEventsOff).toContain(shopOf(config(5, { seed }))[2]);
+  it("with events off the Sway perk is +Vote", () => {
+    expect(SHOP_RULES.swayEventsOff).toEqual(["extraVote"]);
+    for (const seed of SEEDS) expect(shopOf(config(5, { seed }))[2]).toBe("extraVote");
   });
 
   it("costs come from content: Peek and Shield 2, the rest 1; overridable", () => {
@@ -165,28 +166,6 @@ describe("camera offline — extension.md \"Camera offline\"", () => {
     const looped = run(game(config(3), { roles: ["hacker"] }), mv("p0", "office", 0, { ability: { kind: "loopCameras", room: "vault" } }), mv("p1", "security", 0, { watch: "vault" }), mv("p2", "vault", 2), ROUND);
     const fromLoop = ofType(looped.log, "roomWatched").find((e) => e.player === "p1");
     expect(fromLoop).toEqual({ type: "roomWatched", visibility: privateTo("p1"), player: "p1", round: 1, source: "security", room: "vault", seen: [], offline: true });
-  });
-});
-
-describe("the gap box — extension.md \"What the app works out for you\"", () => {
-
-  const partsSum = (p: { base: number; rooms: Readonly<Record<string, number>>; clamp?: number }) =>
-    p.base + Object.values(p.rooms).reduce((x, y) => x + y, 0) + (p.clamp ?? 0);
-
-  it("the gap box sets the alibis' room loot against the coins handed in, event effects included", () => {
-    // Round 1: p0 Vault (pockets 2), p1 Lobby, p2 Office. Then all three post true alibis.
-    let s = game(config(3), { roles: [] });
-    s = run(s, mv("p0", "vault", 2), mv("p1", "lobby"), mv("p2", "office"));
-    const r = handleCommand(s, ROUND(s));
-    if (!r.ok) throw new Error(r.reason);
-    s = r.state;
-    expect(s.phase.kind).toBe("alibis");
-    expect(gapBox(s)).toMatchObject({ round: 1, posted: 0, alibis: 0 });
-    for (const [p, room] of [["p0", "vault"], ["p1", "lobby"], ["p2", "office"]] as const) s = run(s, { type: "postAlibi", player: p, room });
-    const box = gapBox(s);
-    expect(box).toMatchObject({ round: 1, posted: 3, unaccounted: 2 });
-    expect(box?.alibis).toBe((box?.handedIn ?? 0) + 2);
-    for (const id of s.playerOrder) expect(viewFor(s, id).gap).toEqual(box);
   });
 });
 

@@ -172,15 +172,17 @@ function nextDeadline(state: GameState): SystemCommand[] {
   const phase = state.phase;
   if (phase.kind === "meeting") return [{ type: "advance", deadline: { kind: "closeMeeting", meetingId: phase.meetingId } }];
   if (phase.kind === "shakedownPending") return [{ type: "advance", deadline: { kind: "resolveShakedown", meetingId: phase.meetingId } }];
-  if (state.pendingEmergency && (phase.kind === "planning" || phase.kind === "alibis" || phase.kind === "awaitingMeeting")) {
+  if (state.pendingEmergency) {
     return [{ type: "advance", deadline: { kind: "openMeeting", meetingId: state.pendingEmergency.meetingId } }];
   }
   if (phase.kind === "planning") return [{ type: "advance", deadline: { kind: "round", round: phase.round } }];
   // design §5.4: the alibi deadline after each round.
   if (phase.kind === "alibis") return [{ type: "advance", deadline: { kind: "alibis", round: phase.round } }];
+  // design §9.3: the result window closes when nobody called an emergency.
+  if (phase.kind === "result") return [{ type: "advance", deadline: { kind: "result", round: phase.round } }];
   if (phase.kind === "awaitingMeeting") {
-    const schedule: SystemCommand[] = state.scheduledMeeting ? [] : [{ type: "scheduleMeeting", act: phase.act, slot: `server-act-${phase.act}` }];
-    return [...schedule, { type: "advance", deadline: { kind: "openMeeting", meetingId: state.scheduledMeeting?.meetingId ?? `act-${phase.act}` } }];
+    const schedule: SystemCommand[] = state.scheduledMeeting ? [] : [{ type: "scheduleMeeting", meetingId: phase.meetingId, slot: `server-${phase.meetingId}` }];
+    return [...schedule, { type: "advance", deadline: { kind: "openMeeting", meetingId: phase.meetingId } }];
   }
   return [];
 }
@@ -256,7 +258,7 @@ async function assertCleanSocket(c: Client, final: GameState) {
       expect(v.me.id).toBe(c.player);
       expect(v.ledger.every(({ event }) => event.visibility.kind === "public" && isReal(event))).toBe(true);
       expect(v.caseFile.every(({ event }) => canSee(event.visibility, c.player, false) && isReal(event))).toBe(true);
-      expect(v.players.every((o) => Object.keys(o).sort().join() === "emergencyMeetingUsed,id,isBot,name")).toBe(true);
+      expect(v.players.every((o) => Object.keys(o).sort().join() === "id,isBot,name")).toBe(true);
       // The seed and RNG state are reveal-only (rngSeeded / rngAdvanced). design §17.2
       if (v.reveal === null) expect(text).not.toMatch(new RegExp(`${seed.replace(/[^a-z0-9]/gi, ".")}|"words"|"seed"|"rngSeeded"`));
       else expect(v.reveal.log.every(({ event }) => canSee(event.visibility, c.player, true) && isReal(event))).toBe(true);
@@ -457,30 +459,35 @@ describe("scenarios: end-to-end stories over HTTP + WebSocket", () => {
     void before;
   }, 60_000);
 
-  it("an emergency meeting during its notice period: planning goes on, a second call is refused, the round waits for the vote", async () => {
+  it("an emergency meeting in the result window: refused while planning, a second call is refused, the next round waits for the vote", async () => {
     const game = await startGame(4, 0, { roles: TEAM_ROLES, eventsEnabled: false });
     const clients = await Promise.all(game.humans.map((h) => Client.open(game.id, h)));
     const [a, b, c, d] = clients as [Client, Client, Client, Client];
-    // design §11.1: one emergency per player; the notice period is the server's.
+    // design §9.3: only between a round's result and the next planning.
+    expect(await a.send({ type: "callEmergency" })).toMatchObject({ rejected: true });
+    expect(await b.send({ type: "submitMove", move: { room: "office", duffel: 2, pocket: 0 } })).toMatchObject({ ok: true });
+    await app.live.system(game.id, { type: "advance", deadline: { kind: "round", round: 1 } });
+    await app.live.system(game.id, { type: "advance", deadline: { kind: "alibis", round: 1 } });
+    expect((await load(game.id)).phase).toEqual({ kind: "result", round: 1 });
+    // The crew's pool (1 for 4 players): the caller is named; the notice period is the server's.
     expect(await a.send({ type: "callEmergency" })).toMatchObject({ ok: true });
     for (const x of clients) {
       await x.barrier();
-      expect(x.lastView().pendingEmergency).toEqual({ meetingId: `emergency-${a.player}`, by: a.player });
+      expect(x.lastView().pendingEmergency).toEqual({ meetingId: "emergency-1", by: a.player });
+      expect(x.lastView().emergencies).toBe(0);
     }
-    expect(await b.send({ type: "submitMove", move: { room: "office", duffel: 2, pocket: 0 } })).toMatchObject({ ok: true });
     expect(await c.send({ type: "callEmergency" })).toMatchObject({ rejected: true });
-    await app.live.system(game.id, { type: "advance", deadline: { kind: "openMeeting", meetingId: `emergency-${a.player}` } });
-    // design §4.1: rounds pause while the vote window is open.
-    await expect(app.live.system(game.id, { type: "advance", deadline: { kind: "round", round: 1 } })).rejects.toThrow(/refused/);
+    // No round clock runs: the result window's deadline is refused until the meeting closes.
+    await expect(app.live.system(game.id, { type: "advance", deadline: { kind: "result", round: 1 } })).rejects.toThrow(/refused/);
+    await app.live.system(game.id, { type: "advance", deadline: { kind: "openMeeting", meetingId: "emergency-1" } });
+    await expect(app.live.system(game.id, { type: "advance", deadline: { kind: "round", round: 2 } })).rejects.toThrow(/refused/);
     expect(await d.send({ type: "submitMove", move: { room: "office", duffel: 2, pocket: 0 } })).toMatchObject({ rejected: true });
     for (const x of [b, c, d]) expect(await x.send({ type: "castVote", vote: { kind: "shakedown", target: a.player } })).toMatchObject({ ok: true });
     expect(await a.send({ type: "callEmergency" })).toMatchObject({ rejected: true });
     await passDeadline(game.id); // close
     while ((await load(game.id)).phase.kind === "shakedownPending") await passDeadline(game.id);
     const after = await load(game.id);
-    expect(after.phase).toEqual({ kind: "planning", round: 1 });
-    await b.barrier();
-    expect(b.lastView().me.move).toEqual({ room: "office", duffel: 2, pocket: 0 }); // kept through the meeting
+    expect(after.phase).toEqual({ kind: "planning", round: 2 });
     expect(after.log.some((e) => e.type === "shakedownResolved" && e.target === a.player)).toBe(true);
     const refused = await play(game, clients, clients.map(() => steadyBrain("office")));
     const final = await finish(game, clients, refused, app.live.botRefusals.length);
@@ -519,8 +526,8 @@ describe("scenarios: end-to-end stories over HTTP + WebSocket", () => {
     // Every stash is equal, but no team role wins a heist sunk by theft.
     expect(final.phase).toMatchObject({ kind: "ended", outcome: { result: "failed", reason: "theft", winners: [] } });
     expect([final.round, final.reached, final.share, final.bank]).toEqual([BANK_JOB.roundCap, 0, 0, 48 - 3 * BANK_JOB.roundCap]);
-    // design §6.2: no meeting after the last round.
-    expect(final.log.filter((e) => e.type === "meetingOpened").every((e) => e.type === "meetingOpened" && e.act <= 3)).toBe(true);
+    // design §6.2, §9.1: a regular meeting at each third of the bank (48 → 30 in round 6, → 15 in round 11); none after the last round.
+    expect(final.log.filter((e) => e.type === "meetingOpened").map((e) => e.type === "meetingOpened" && e.kind)).toEqual(["regular", "regular"]);
   }, 60_000);
 
   it("hostile input over a socket is refused and the game carries on (bad shapes, forged ids, system commands)", async () => {
@@ -529,7 +536,7 @@ describe("scenarios: end-to-end stories over HTTP + WebSocket", () => {
     const before = await load(game.id);
     const hostile: unknown[] = [
       { type: "advance", deadline: { kind: "round", round: 1 } },
-      { type: "scheduleMeeting", act: 1, slot: "now" },
+      { type: "scheduleMeeting", meetingId: "meeting-1", slot: "now" },
       { type: "submitMove", move: { room: "vault", duffel: 0, pocket: 999 } },
       { type: "submitMove", move: { room: "lobby", pocket: -1 } },
       { type: "castVote", vote: { kind: "shakedown", target: "p99" } },

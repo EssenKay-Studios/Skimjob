@@ -24,7 +24,6 @@ const R6: ContentOverrides = {
   bank: { coinsPerPlayer: 100 },
   alarm: { bulbs: 1000 },
   roundCap: 9,
-  shakedown: { cleanBelow: 6, payout: 8 },
 };
 
 function config(players: number): GameConfig {
@@ -35,8 +34,8 @@ function config(players: number): GameConfig {
     rolePool: [...STARTER_ROLES], // a shakedown window only if the shop holds a Shield
     eventsEnabled: false,
     voteVisibility: "open",
-    // R6's room yields as coin limits, its clean line, a bank too big to run short and bells too big to raid, until S3a.4–S3a.5
-    // replace those rules; a 9-round cap keeps the script short (design §6.2)
+    // Big grabs, a bank too big to run short or lose a third (no regular meeting) and bells too big to raid;
+    // a 9-round cap keeps the script short (design §6.2)
     contentOverrides: R6,
   };
 }
@@ -64,36 +63,46 @@ function run(state: GameState, ...commands: Command[]): GameState {
     return r.state.phase.kind === "alibis" ? apply(r.state, alibiDeadline(r.state)) : r.state;
   }, state);
 }
-function meeting(s: GameState, act: 1 | 2 | 3, votes: Command[] = []): GameState {
-  const id = `act-${act}`;
-  s = run(s, { type: "scheduleMeeting", act, slot: `slot-${act}` }, { type: "advance", deadline: { kind: "openMeeting", meetingId: id } });
-  return run(s, ...votes, { type: "advance", deadline: { kind: "closeMeeting", meetingId: id } });
+/** Back to planning: a due meeting (server slot, nobody votes) and the result window pass (design §9.3, §9.4). */
+function pass(s: GameState): GameState {
+  for (;;) {
+    const p = s.phase;
+    if (p.kind === "result") s = apply(s, { type: "advance", deadline: { kind: "result", round: p.round } });
+    else if (p.kind === "awaitingMeeting") {
+      s = apply(s, { type: "scheduleMeeting", meetingId: p.meetingId, slot: "now" });
+      s = apply(s, { type: "advance", deadline: { kind: "openMeeting", meetingId: p.meetingId } });
+      s = apply(s, { type: "advance", deadline: { kind: "closeMeeting", meetingId: p.meetingId } });
+    } else return s;
+  }
 }
 
 describe("recordGame — a scripted game", () => {
   // Rounds 1–3: p0 skims 6 in the Vault every round, p1 skims 1 in the Lobby, p2 hands the Lobby's 2 in (a cut
-  // of 1 each); p1 and p2 shake p0's 18 above the share back into the duffel. Then everyone hands in the Lobby's 2
-  // (6 a round) to the 9-round cap, round 4's split sharing the 18 too: share 21. 45 of the 66 coins taken were
-  // handed in, above the honesty line (design §7.5), so the heist succeeds and p1's 3 above the share is the biggest stash.
-  const lobby = (st: GameState) => run(st, move("p0", "lobby"), move("p1", "lobby"), move("p2", "lobby"), roundDeadline(st));
+  // of 1 each); in an emergency p1 and p2 shake p0's 18 above the share back into the duffel. Then everyone hands
+  // in the Lobby's 2 (6 a round) to the 9-round cap, round 4's split sharing the 18 too: share 21. 63 of the 66
+  // coins taken reached the duffel (design §7.5), so the heist succeeds and p1's 3 above the share is the biggest stash.
+  const lobby = (st: GameState) => run(pass(st), move("p0", "lobby"), move("p1", "lobby"), move("p2", "lobby"), roundDeadline(pass(st)));
   let s = rookies(3);
-  for (let r = 0; r < 3; r++) s = run(s, move("p0", "vault", 6), move("p1", "lobby", 1), move("p2", "lobby"), roundDeadline(s));
-  s = meeting(s, 1, [
+  for (let r = 0; r < 3; r++) s = run(pass(s), move("p0", "vault", 6), move("p1", "lobby", 1), move("p2", "lobby"), roundDeadline(pass(s)));
+  // Round 3's result window: p1 spends the crew's emergency (design §9.3).
+  s = run(
+    s,
+    { type: "callEmergency", player: "p1" },
+    { type: "advance", deadline: { kind: "openMeeting", meetingId: "emergency-1" } },
     { type: "castVote", player: "p1", vote: { kind: "shakedown", target: "p0" } },
     { type: "castVote", player: "p2", vote: { kind: "shakedown", target: "p0" } },
-  ]);
-  for (let r = 0; r < 3; r++) s = lobby(s);
-  s = meeting(s, 2);
-  for (let r = 0; r < 3; r++) s = lobby(s);
+    { type: "advance", deadline: { kind: "closeMeeting", meetingId: "emergency-1" } },
+  );
+  for (let r = 0; r < 6; r++) s = lobby(s);
   const rec = recordGame(s, ["greedy", "opportunist", "honest"]);
 
   it("records the ending (design §6.2, §8.1, §21 G4)", () => {
     expect(rec).toMatchObject({ seed: "record-seed", players: 3, result: "success", reason: null, endedRound: 9 });
-    // design §7.5: 45 of the 66 taken were handed in; the 18 shaken back earn their credit with S3a.5's meeting rules.
-    expect(rec.honesty).toBe(45 / 66);
+    // design §7.5, §9.6: 45 of the 66 taken were handed in, and the 18 shaken back count as they reach round 4's split.
+    expect(rec.honesty).toBe((45 + 18) / 66);
     expect(rec.bankLeft).toBe(300 - 66);
     expect(rec.capWithBankLeft).toBe(true); // at the cap, with over a quarter of the bank left
-    expect(rec.meetings).toBe(2); // none after the last round
+    expect(rec.meetings).toEqual({ regular: 0, briefing: 0, emergency: 1 }); // the bank never lost a third
     expect(rec.winners).toEqual(["p1"]);
   });
 
@@ -104,8 +113,8 @@ describe("recordGame — a scripted game", () => {
     expect(recordGame(t, ["greedy", "greedy", "honest"])).toMatchObject({ result: "failed", reason: "theft", endedRound: 1, capWithBankLeft: true });
   });
 
-  it("records the shakedown (design §11.3)", () => {
-    expect(rec.shakedowns).toEqual([{ act: 1, emergency: false, target: "p0", stashRevealed: 18 + 3, clean: false, targetHadPocketed: true }]);
+  it("records the shakedown and its meeting's kind (design §9.6)", () => {
+    expect(rec.shakedowns).toEqual([{ kind: "emergency", target: "p0", stashRevealed: 18 + 3, clean: false, targetHadPocketed: true }]);
   });
 
   it("records each seat's looting and pocketing", () => {
@@ -152,7 +161,9 @@ describe("recordGame — raids, Wanted, Rooftop stalls and the bust (design §5,
     let s = replay(cfg, setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: "rookie" } : e)));
     s = run(s, move("p0", "vault"), move("p1", "rooftop"), move("p2", "rooftop"), roundDeadline(s));
     const office = (player: string): Command => ({ type: "submitMove", player, move: { room: "office", duffel: 2, pocket: 0 } });
-    s = run(s, office("p0"), move("p1", "rooftop"), office("p2"), roundDeadline(s));
+    // The raid's briefing passes (design §9.2).
+    s = run(pass(s), office("p0"), move("p1", "rooftop"), office("p2"), roundDeadline(pass(s)));
+    expect(recordGame(s, ["honest", "honest", "honest"]).meetings).toEqual({ regular: 0, briefing: 1, emergency: 0 });
     const g = recordGame(s, ["honest", "honest", "honest"]);
     expect([g.result, g.reason, g.raids, g.wanted, g.stalls, g.endedRound]).toEqual(["failed", "bust", 2, 2, 1, 2]);
   });

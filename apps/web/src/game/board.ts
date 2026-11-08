@@ -9,8 +9,8 @@
 // "seen on camera"), and every
 // public alibi claim for the round as a dashed ghost. Nothing else: never another player's
 // move or room unless the view itself says so.
-import { EVENTS, type RoomId } from "@skimjob/content";
-import { actOfRound, type PlayerId, type PlayerView } from "@skimjob/engine";
+import { BANK_JOB, EVENTS, type RoomId } from "@skimjob/content";
+import type { PlayerId, PlayerView } from "@skimjob/engine";
 import type { BankOccupant, TimeOfDay } from "../art/BankCutaway";
 import { crewTags } from "../art/crookLooks";
 import { seatsOf } from "./hud";
@@ -45,17 +45,17 @@ export function seatLooks(view: PlayerView): ReadonlyMap<PlayerId, SeatLook> {
 /** Seat names carry a "Bot · " prefix for bots; the art draws its own bot badge. */
 const plainName = (name: string) => name.replace(/^Bot · /, "");
 
-/** Act 1 daylight, Act 2 dusk, Act 3 night (ui-style "time-of-day lighting tracks session progress"). */
+/** The first third of the round cap is daylight, the second dusk, the last night (ui-style "time-of-day lighting tracks session progress"). */
 export const timeOfRound = (round: number): TimeOfDay => {
-  const act = actOfRound(Math.max(1, round));
-  return act === 1 ? "day" : act === 2 ? "dusk" : "night";
+  const third = Math.ceil((Math.max(1, round) * 3) / BANK_JOB.roundCap);
+  return third <= 1 ? "day" : third === 2 ? "dusk" : "night";
 };
 
 /** The latest resolved round (the one an alibi window, a meeting or the end follows). */
 function resolvedRound(view: PlayerView): number {
   const p = view.phase;
   if (p.kind === "planning") return p.round - 1;
-  if (p.kind === "alibis") return p.round;
+  if (p.kind === "alibis" || p.kind === "result") return p.round;
   return view.round;
 }
 

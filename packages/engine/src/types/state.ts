@@ -7,7 +7,7 @@
 import type { EventId, PerkId, RoleId, RoomId } from "@skimjob/content";
 import type { GameConfig, PlayerId } from "./config";
 import type { Move, VoteChoice } from "./commands";
-import type { ActNumber, GameEvent, MeetingKind, Outcome } from "./events";
+import type { GameEvent, MeetingKind, Outcome } from "./events";
 
 /**
  * Seeded RNG state: the four unsigned 32-bit words of sfc32 (see `rng.ts`).
@@ -20,7 +20,8 @@ export interface RngState {
 
 /**
  * Resting phases of the state machine: Setup → Planning → Resolving (with the
- * end check, design §4.2) → (MeetingScheduled → MeetingOpen) → … → Reveal.
+ * end check, design §4.2) → Alibis → (a regular meeting or a briefing) →
+ * the result window (an emergency) → Planning … → Reveal. design §4.1
  * Resolving and the end check happen inside a single `advance()` and leave
  * only events behind, so they are not resting phases here.
  * A scheduled-but-not-open meeting is not a phase either: it can coexist with
@@ -32,13 +33,25 @@ export type Phase =
   | { readonly kind: "planning"; readonly round: number }
   /**
    * `round` has resolved; players post their alibis for it until the alibi
-   * deadline (`advance { kind: "alibis", round }`). Then the next round's
-   * planning starts, or after an act's last round its meeting is awaited.
+   * deadline (`advance { kind: "alibis", round }`). Then the meeting the round
+   * called for is awaited, else the result window or the next round follows.
    * design §5.4
    */
   | { readonly kind: "alibis"; readonly round: number }
-  /** Every 3rd round has resolved and the game goes on; waiting for its regular meeting to open. */
-  | { readonly kind: "awaitingMeeting"; readonly act: ActNumber }
+  /**
+   * The round crossed a third of the bank (a regular meeting, §9.1) or had a
+   * raid (a police briefing, §9.2); waiting for meeting `meetingId` to open.
+   * Both due after one round: one regular meeting.
+   */
+  | { readonly kind: "awaitingMeeting"; readonly meeting: "regular" | "briefing"; readonly meetingId: string }
+  /**
+   * The result window after `round`'s result (and any meeting it called): any
+   * player may spend an emergency from the crew's pool until it closes
+   * (`advance { kind: "result", round }`). Skipped when the pool is empty;
+   * once an emergency is called, the next round starts when its meeting
+   * closes. design §4.2 step 10, §9.3
+   */
+  | { readonly kind: "result"; readonly round: number }
   /** A vote window is open. Rounds are paused. design §4.1 */
   | { readonly kind: "meeting"; readonly meetingId: string }
   /**
@@ -60,7 +73,6 @@ export interface PlayerState {
   readonly stash: number;
   /** Uses of the role's power so far (all roles share the shape). design §8 */
   readonly roleState: RoleState;
-  readonly emergencyMeetingUsed: boolean;
   /** For the host's "replace with a bot" prompt after 2 missed rounds. design §15 */
   readonly consecutiveMissedMoves: number;
   /**
@@ -76,13 +88,12 @@ export interface PlayerState {
  */
 export interface RoleState {
   /**
-   * Uses this stretch (extension.md "between meetings"; acts internally):
-   * reset as the next stretch's first round starts, which is right after a
-   * regular meeting closes;
-   * emergency meetings never reset it. Camera loops (Hacker),
-   * audits (Auditor), stash checks (Detective), blessings (Priest), rings (Mole).
+   * Uses this stretch ("once between meetings"): reset as a regular meeting
+   * opens; briefings and emergencies never reset it (design §9.1, §11.2).
+   * Camera loops (Hacker), audits (Auditor), stash checks (Detective),
+   * blessings (Priest), rings (Mole).
    */
-  readonly usedThisAct: number;
+  readonly usedThisStretch: number;
   /** Uses this game: reopened rooms (Fixer). */
   readonly usedThisGame: number;
   /** Unspent tokens (extension.md "Tokens and the perk shop"). */
@@ -93,7 +104,7 @@ export interface RoleState {
   readonly tail: RoomId | null;
 }
 
-export const NO_ROLE_STATE: RoleState = { usedThisAct: 0, usedThisGame: 0, tokens: 0, perks: [], tail: null };
+export const NO_ROLE_STATE: RoleState = { usedThisStretch: 0, usedThisGame: 0, tokens: 0, perks: [], tail: null };
 
 /** A spent Rig: `player` picks which of `cards` flips at the start of `round`. Hidden from everyone else. design §8.3 */
 export interface RiggedCard {
@@ -107,7 +118,6 @@ export interface RiggedCard {
 export interface PendingShakedown {
   readonly meetingId: string;
   readonly kind: MeetingKind;
-  readonly act: ActNumber;
   readonly target: PlayerId;
 }
 
@@ -122,15 +132,13 @@ export interface ActiveCard {
 export interface MeetingProposal {
   readonly id: string;
   readonly by: PlayerId;
-  readonly act: ActNumber;
   readonly slot: string;
-  /** The proposer counts as accepting. Locked in once more than half the crew is here. design §11.1 */
+  /** The proposer counts as accepting. Locked in once more than half the people back it. design §9.4 */
   readonly acceptedBy: readonly PlayerId[];
 }
 
 export interface ScheduledMeeting {
   readonly meetingId: string;
-  readonly act: ActNumber;
   readonly slot: string;
 }
 
@@ -142,14 +150,12 @@ export interface PendingEmergency {
 export interface MeetingState {
   readonly id: string;
   readonly kind: MeetingKind;
-  readonly act: ActNumber;
-  /** Who called it (emergency meetings); null for the act's regular meeting. */
+  /** Who called it (emergency meetings); null for a regular meeting or a briefing. */
   readonly calledBy: PlayerId | null;
   /**
    * Ballots so far; a later ballot from the same player replaces the earlier one.
    * Sealed votes are cast into it as the window opens. design §11.2
-   * (No resume point is stored: the game goes back to planning `round`, or to
-   * awaiting the act's meeting if `round` has already resolved.)
+   * (No resume point is stored: the game goes on to the result window, design §4.2.)
    */
   readonly votes: Readonly<Record<PlayerId, VoteChoice>>;
   /** Players who spent a +Vote in this meeting (hidden). design §8.3 */
@@ -168,6 +174,21 @@ export interface GameState {
   readonly rooms: readonly RoomId[];
   /** Coins left in the bank (public). design §6.1 */
   readonly bank: number;
+  /** The bank's starting pile (public): its thirds call the regular meetings. design §6.1, §9.1 */
+  readonly bankStart: number;
+  /** Thirds of the bank gone so far (0–2) that have called their regular meeting. design §9.1 */
+  readonly thirds: number;
+  /** The stretch between regular meetings: 1 until the first regular meeting opens (public). design §9.1, §11.2 */
+  readonly stretch: number;
+  /**
+   * The meeting the latest round called (a raid calls a briefing, a third of
+   * the bank a regular meeting), until it opens. design §4.2 step 9
+   */
+  readonly meetingDue: "regular" | "briefing" | null;
+  /** Emergency meetings left in the crew's pool (public). design §9.3 */
+  readonly emergencies: number;
+  /** Players a shakedown passed against since the last regular meeting opened (public), in that order. design §9.7 */
+  readonly protected: readonly PlayerId[];
   /** Seat order, matching config.players. */
   readonly playerOrder: readonly PlayerId[];
   readonly players: Readonly<Record<PlayerId, PlayerState>>;
@@ -175,7 +196,7 @@ export interface GameState {
   readonly share: number;
   /** Leftover change from the last split, carried into the next (public). design §7.2 */
   readonly kitty: number;
-  /** Coins set aside in the duffel for the next split: shakedown returns (public). design §7.1 */
+  /** Coins set aside in the duffel for the next split: shakedown returns (public). design §7.1, §9.6 */
   readonly setAside: number;
   /** Coins that reached the duffel this game, each counted once (public): honesty's numerator. design §7.5 */
   readonly reached: number;
@@ -209,11 +230,11 @@ export interface GameState {
    * round (hidden). The oldest for a round flips its pick. design §8.3
    */
   readonly rigs: readonly RiggedCard[];
-  /** Open proposals for the current act's regular meeting; cleared once a slot is locked. design §11.1 */
+  /** Open slot proposals for the next regular meeting or briefing; cleared once a slot is locked. design §9.4 */
   readonly proposals: readonly MeetingProposal[];
-  /** The regular meeting locked in for the current act, not yet open. design §11.1 */
+  /** The next regular meeting or briefing's locked slot, not yet open. design §9.4 */
   readonly scheduledMeeting: ScheduledMeeting | null;
-  /** An emergency meeting that has been called and is in its notice period. design §11.1 */
+  /** An emergency meeting that has been called and is in its notice period. design §9.3 */
   readonly pendingEmergency: PendingEmergency | null;
   /** The open vote window, if any; set exactly when `phase.kind === "meeting"`. */
   readonly meeting: MeetingState | null;

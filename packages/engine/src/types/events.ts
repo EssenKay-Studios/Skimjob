@@ -10,9 +10,11 @@ import type { AbilityUse, Move, VoteChoice } from "./commands";
 import type { PrivateVisibility, PublicVisibility, RevealVisibility, SecretVisibility } from "./visibility";
 import type { RoleState } from "./state";
 
-/** A stretch of 3 rounds ending in a regular meeting (round 1–3 is 1), until S3a.5 holds meetings at the bank's thirds. design §9.1 */
-export type ActNumber = number;
-export type MeetingKind = "regular" | "emergency";
+/**
+ * A regular meeting each time a third of the bank is gone (§9.1), a police
+ * briefing after a raid (§9.2), or an emergency from the crew's pool (§9.3).
+ */
+export type MeetingKind = "regular" | "briefing" | "emergency";
 
 // ---------------------------------------------------------------- setup (§8.1, §6.2)
 
@@ -100,7 +102,6 @@ export interface RoundStarted {
   readonly type: "roundStarted";
   readonly visibility: PublicVisibility;
   readonly round: number;
-  readonly act: ActNumber;
 }
 
 /** A player's (re)submitted move. Only they see it. design §5.1 */
@@ -159,12 +160,10 @@ export type ResolvedAbility =
   | AbilityUse
   /** Auditor: `room` came up `shortfall` short in `round` (its visitors' pockets; 0 if none). design §8 (v2 §2) */
   | { readonly kind: "audit"; readonly round: number; readonly room: RoomId; readonly shortfall: number }
-  /**
-   * Detective: whether what `target` holds above the share is at or above `threshold`, the clean threshold. design §8 (v2 §2), §9.6
-   */
-  | { readonly kind: "checkStash"; readonly target: PlayerId; readonly threshold: number; readonly dirty: boolean }
-  /** Priest: `target` is blessed for `act` (a clean shakedown of them that act is paid by the bank). design §8 (v2 §2) */
-  | { readonly kind: "bless"; readonly target: PlayerId; readonly act: ActNumber };
+  /** Detective: whether `target` holds anything above the share (a shakedown would take it, §9.6). design §8 (v2 §2) */
+  | { readonly kind: "checkStash"; readonly target: PlayerId; readonly dirty: boolean }
+  /** Priest: `target` is blessed for `stretch` (the stretch between regular meetings, §9.1). design §8 (v2 §2) */
+  | { readonly kind: "bless"; readonly target: PlayerId; readonly stretch: number };
 
 /** An ability took effect. Private to its user; `round` is the latest round started. design §8 */
 export interface AbilityResolved {
@@ -341,15 +340,15 @@ export interface AlibiPosted {
 }
 
 /**
- * A formal, possibly false, claim of your role (design §8, §12.1): public talk
- * that changes no rule. Once per player per act (`act`, the act it was made in).
+ * A formal, possibly false, claim of your role (design §11.3): public talk
+ * that changes no rule. Once per player per stretch (`stretch`, the one it was made in, §9.1).
  */
 export interface RoleClaimed {
   readonly type: "roleClaimed";
   readonly visibility: PublicVisibility;
   readonly player: PlayerId;
   readonly role: RoleId;
-  readonly act: ActNumber;
+  readonly stretch: number;
 }
 
 /** The alibi deadline for `round` passed: no more alibis for it. design §5.4 */
@@ -366,7 +365,6 @@ export interface MeetingProposed {
   readonly visibility: PublicVisibility;
   readonly proposalId: string;
   readonly by: PlayerId;
-  readonly act: ActNumber;
   readonly slot: string;
 }
 
@@ -377,17 +375,20 @@ export interface MeetingProposalAccepted {
   readonly by: PlayerId;
 }
 
-/** Locked in by majority, or chosen by the server if nobody did (`proposalId: null`). design §11.1 */
+/**
+ * The next regular meeting or briefing's slot, locked in by majority or chosen
+ * by the server if nobody did (`proposalId: null`). design §9.4
+ */
 export interface MeetingScheduled {
   readonly type: "meetingScheduled";
   readonly visibility: PublicVisibility;
   /** Named later by `advance { deadline: { kind: "openMeeting", meetingId } }`. */
   readonly meetingId: string;
-  readonly act: ActNumber;
   readonly slot: string;
   readonly proposalId: string | null;
 }
 
+/** `by` spent one of the crew's emergency meetings (§9.3): public, with the caller named. */
 export interface EmergencyMeetingCalled {
   readonly type: "emergencyMeetingCalled";
   readonly visibility: PublicVisibility;
@@ -400,7 +401,6 @@ export interface MeetingOpened {
   readonly visibility: PublicVisibility;
   readonly meetingId: string;
   readonly kind: MeetingKind;
-  readonly act: ActNumber;
 }
 
 /**
@@ -456,8 +456,8 @@ export interface MeetingClosed {
 
 /**
  * The stash is revealed; what the target holds above the share is `taken` and set aside in the duffel
- * for the next split (design §7.1). A clean target is compensated out of the coins set aside (R6
- * numbers until S3a.5). design §9.6
+ * for the next split (§7.1). A target at or below the share is `clean`: nothing is taken. The target
+ * is protected until the next regular meeting (§9.7). design §9.6
  */
 export interface ShakedownResolved {
   readonly type: "shakedownResolved";
@@ -467,7 +467,6 @@ export interface ShakedownResolved {
   readonly stashRevealed: number;
   readonly taken: number;
   readonly clean: boolean;
-  readonly compensation: number;
 }
 
 /**
@@ -480,29 +479,15 @@ export interface ShakedownPending {
   readonly visibility: PublicVisibility;
   readonly meetingId: string;
   readonly kind: MeetingKind;
-  readonly act: ActNumber;
   readonly target: PlayerId;
 }
 
-/** A Shield blocked the shakedown. design §8.3 */
+/** A Shield blocked the shakedown; the target is still protected (§9.7). design §8.3 */
 export interface ShakedownCancelled {
   readonly type: "shakedownCancelled";
   readonly visibility: PublicVisibility;
   readonly meetingId: string;
   readonly target: PlayerId;
-}
-
-/**
- * The shakedown of `target` was clean and they were blessed this act: the
- * bank pays their compensation, so `amount` goes back into the coins set
- * aside (R6 rule until S3a.5). It doesn't say who blessed them. design §8 (v2 §2: Priest)
- */
-export interface BlessingPaid {
-  readonly type: "blessingPaid";
-  readonly visibility: PublicVisibility;
-  readonly meetingId: string;
-  readonly target: PlayerId;
-  readonly amount: number;
 }
 
 // ---------------------------------------------------------------- perks (§8.3)
@@ -539,9 +524,7 @@ export type ResolvedPerk =
   | { readonly kind: "alibi"; readonly round: number; readonly room: RoomId }
   | { readonly kind: "recharge" }
   /** The cards you may pick from for `round`'s flip; the first flips unless you pick (`rigPicked`). */
-  | { readonly kind: "rig"; readonly round: number; readonly cards: readonly EventId[] }
-  /** Spent by calling `meetingId`, an emergency meeting beyond your one per game (Smooth Talker's reward). */
-  | { readonly kind: "emergency"; readonly meetingId: string };
+  | { readonly kind: "rig"; readonly round: number; readonly cards: readonly EventId[] };
 
 /** You spent a perk token. Private to you; `round` is the latest round started. design §8.3 */
 export interface PerkUsed {
@@ -668,7 +651,6 @@ export type GameEvent =
   | ShakedownPending
   | ShakedownCancelled
   | ShakedownResolved
-  | BlessingPaid
   | TokenEarned
   | PerkBought
   | PerkUsed

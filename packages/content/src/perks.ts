@@ -3,13 +3,13 @@
 // tokens buy them. A bought perk is private until used. design §8.3
 
 /** One perk token kind. */
-export type PerkId = "peek" | "shield" | "extraVote" | "ballot" | "tail" | "alibi" | "recharge" | "rig" | "emergency";
+export type PerkId = "peek" | "shield" | "extraVote" | "ballot" | "tail" | "alibi" | "recharge" | "rig";
 
 export interface PerkDef {
   readonly id: PerkId;
   readonly name: string;
   readonly effect: string;
-  /** "use": spent with `useAbility`; "auto": spent by the engine when it applies (Shield; Emergency, by calling one). */
+  /** "use": spent with `useAbility`; "auto": spent by the engine when it applies (Shield). */
   readonly spent: "use" | "auto";
   /** Shop column: one perk of each is dealt per game. */
   readonly column: PerkColumn;
@@ -29,7 +29,6 @@ export const PERKS: Readonly<Record<PerkId, PerkDef>> = {
   alibi: { id: "alibi", name: "Alibi", effect: "Your alibi for the last round is stamped Verified.", spent: "use", column: "protect", cost: 1 },
   recharge: { id: "recharge", name: "Recharge", effect: "A used-up use of your power comes back (this stretch's, or a once-per-game one).", spent: "use", column: "protect", cost: 1 },
   rig: { id: "rig", name: "Rig", effect: "Pick the next event card from two.", spent: "use", column: "sway", cost: 1 },
-  emergency: { id: "emergency", name: "Emergency", effect: "Call one more emergency meeting this game.", spent: "auto", column: "sway", cost: 1 },
 };
 
 export const PERK_IDS: readonly PerkId[] = Object.keys(PERKS) as PerkId[];
@@ -46,7 +45,7 @@ export const PERK_RULES = {
 export const SHOP_COLUMNS: Readonly<Record<PerkColumn, readonly PerkId[]>> = {
   learn: ["peek", "ballot", "tail"],
   protect: ["shield", "alibi", "recharge"],
-  sway: ["extraVote", "emergency", "rig"],
+  sway: ["extraVote", "rig"],
 };
 
 /**
@@ -54,5 +53,5 @@ export const SHOP_COLUMNS: Readonly<Record<PerkColumn, readonly PerkId[]>> = {
  * off the Sway perk is dealt from these.
  */
 export const SHOP_RULES = {
-  swayEventsOff: ["extraVote", "emergency"] as readonly PerkId[],
+  swayEventsOff: ["extraVote"] as readonly PerkId[],
 } as const;

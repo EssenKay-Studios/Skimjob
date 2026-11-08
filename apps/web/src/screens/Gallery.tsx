@@ -407,7 +407,7 @@ function MeetingKitSamples() {
         11 set aside for the next split.
       </Banner>
       <Banner tone="bad" seed="g-b2" title="Clean! Mo was holding 2.">
-        The crew paid 5 from the coins set aside in compensation.
+        Nothing above the share: nothing taken.
       </Banner>
       <Banner seed="g-b3" title="The shakedown was called off.">
         Nobody's stash was touched.

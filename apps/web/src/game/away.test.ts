@@ -32,16 +32,23 @@ const ids = (s: GameState) => s.config.players.map((p) => p.id);
 const allMove = (s: GameState, room = "office") => run(s, ...ids(s).map((p) => ({ type: "submitMove", player: p, move: { room, duffel: BANK_JOB.rooms[room]?.coins ?? 0, pocket: 0 } }) as PlayerCommand));
 const round = (r: number): SystemCommand => ({ type: "advance", deadline: { kind: "round", round: r } });
 const alibisClose = (r: number): SystemCommand => ({ type: "advance", deadline: { kind: "alibis", round: r } });
+const resultClose = (r: number): SystemCommand => ({ type: "advance", deadline: { kind: "result", round: r } });
 const open = (id: string): SystemCommand => ({ type: "advance", deadline: { kind: "openMeeting", meetingId: id } });
 const close = (id: string): SystemCommand => ({ type: "advance", deadline: { kind: "closeMeeting", meetingId: id } });
 const shake = (player: PlayerId, target: PlayerId): PlayerCommand => ({ type: "castVote", player, vote: { kind: "shakedown", target } });
 const skip = (player: PlayerId): PlayerCommand => ({ type: "castVote", player, vote: { kind: "skip" } });
 
-/** Plays a round (everyone to `room`, all in) through its alibi window, if one opens. */
-function playRound(s: GameState, room = "office"): GameState {
+/** Plays a round (everyone to `room`, all in) through its alibi window into its result window (design §9.3). */
+function toResult(s: GameState, room = "office"): GameState {
   const r = s.phase.kind === "planning" ? s.phase.round : -1;
   s = run(allMove(s, room), round(r));
   return s.phase.kind === "alibis" ? run(s, alibisClose(r)) : s;
+}
+
+/** Plays a round through its alibi and result windows (nobody calls an emergency). */
+function playRound(s: GameState, room = "office"): GameState {
+  s = toResult(s, room);
+  return s.phase.kind === "result" ? run(s, resultClose(s.phase.round)) : s;
 }
 
 /** The recap `player` would get on returning to `after`, having last looked at `before`. */
@@ -58,6 +65,12 @@ describe("while you were away (design §13)", () => {
     expect(recapBetween(s, s)).toEqual([]);
     const locked = run(s, { type: "submitMove", player: "p2", move: { room: "vault", duffel: 3, pocket: 0 } });
     expect(recapBetween(s, locked)).toEqual([]);
+  });
+
+  it("a role claim is news: what people said (design §11.3, §15.4)", () => {
+    const s = createGame(config());
+    const claimed = run(s, { type: "claimRole", player: "p2", role: "lookout" });
+    expect(recapBetween(s, claimed)).toContain("Ben claims to be the Lookout.");
   });
 
   it("a quiet round: coins taken and missing and the bank, then what's next (design §7.4)", () => {
@@ -80,7 +93,7 @@ describe("while you were away (design §13)", () => {
 
   it("a meeting: the vote result", () => {
     const s = createGame(config());
-    const met = run(s, { type: "callEmergency", player: "p2" }, open("emergency-p2"), skip("p1"), skip("p3"), skip("p4"), skip("p5"), close("emergency-p2"));
+    const met = run(toResult(s), { type: "callEmergency", player: "p2" }, open("emergency-1"), skip("p1"), skip("p3"), skip("p4"), skip("p5"), close("emergency-1"));
     const lines = recapBetween(s, met);
     expect(lines).toContain("Ben called an emergency meeting.");
     expect(lines.some((l) => /^The crew voted to skip/.test(l))).toBe(true);
@@ -88,24 +101,25 @@ describe("while you were away (design §13)", () => {
   });
 
   it("a shakedown: the result, not the vote that called it", () => {
-    let s = playRound(createGame(config()));
+    let s = toResult(createGame(config()));
     const before = s;
-    s = run(s, { type: "callEmergency", player: "p2" }, open("emergency-p2"), shake("p1", "p2"), shake("p3", "p2"), shake("p4", "p2"), close("emergency-p2"));
+    s = run(s, { type: "callEmergency", player: "p2" }, open("emergency-1"), shake("p1", "p2"), shake("p3", "p2"), shake("p4", "p2"), close("emergency-1"));
     if (s.phase.kind === "shakedownPending") s = run(s, { type: "advance", deadline: { kind: "resolveShakedown", meetingId: s.phase.meetingId } });
     const lines = recapBetween(before, s);
     expect(lines.some((l) => /^Ben was shaken down: a stash of \d+/.test(l))).toBe(true);
     expect(lines.some((l) => /voted to shake down/.test(l))).toBe(false);
   });
 
-  it("after a regular meeting: no checkpoint line, the next round is news (design §6.2)", () => {
+  it("after a regular meeting (a third of the bank gone, design §9.1): no checkpoint line, the next round is news (design §6.2)", () => {
     let s = createGame(config());
     while (s.phase.kind === "planning") s = playRound(s);
     expect(s.phase.kind).toBe("awaitingMeeting");
     const before = s;
-    s = run(s, { type: "scheduleMeeting", act: 1, slot: "act-1" }, open("act-1"), ...ids(s).map(skip), close("act-1"));
+    const r = s.resolvedRound;
+    s = run(s, { type: "scheduleMeeting", meetingId: "meeting-1", slot: "meeting-1" }, open("meeting-1"), ...ids(s).map(skip), close("meeting-1"), resultClose(r));
     const lines = recapBetween(before, s);
     expect(lines.some((l) => /target/.test(l))).toBe(false);
-    expect(lines.at(-1)).toBe("Now: round 4. Pick your room before the deadline.");
+    expect(lines.at(-1)).toBe(`Now: round ${r + 1}. Pick your room before the deadline.`);
   });
 
   it("your case file: one entry in full, several as a count; your own moves aren't news", () => {
@@ -146,13 +160,14 @@ function step(s: GameState): GameState {
     const r = handleCommand(s, { type: "postAlibi", player: "p2", room: s.rooms[0] } as PlayerCommand);
     return run(r.ok ? r.state : s, alibisClose(p.round));
   }
+  if (p.kind === "result") return run(s, resultClose(p.round));
   if (p.kind === "awaitingMeeting") {
-    if (!s.scheduledMeeting) s = run(s, { type: "scheduleMeeting", act: p.act, slot: `s-${p.act}` });
-    return run(s, open(s.scheduledMeeting!.meetingId));
+    if (!s.scheduledMeeting) s = run(s, { type: "scheduleMeeting", meetingId: p.meetingId, slot: `s-${p.meetingId}` });
+    return run(s, open(p.meetingId));
   }
   if (p.kind === "meeting") {
-    // Act 2: shake down p2 to cover shakedowns in the sweep.
-    const votes = p.meetingId === "act-2" ? ids(s).filter((x) => x !== "p2").map((x) => shake(x, "p2")) : [];
+    // The second meeting: shake down p2 to cover shakedowns in the sweep.
+    const votes = p.meetingId === "meeting-2" ? ids(s).filter((x) => x !== "p2").map((x) => shake(x, "p2")) : [];
     for (const v of votes) {
       const r = handleCommand(s, v);
       if (r.ok) s = r.state;

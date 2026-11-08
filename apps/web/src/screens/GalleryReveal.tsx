@@ -54,7 +54,7 @@ const LOG: GameEvent[] = [
   { type: "roleDealt", visibility: privateTo("p3"), player: "p3", role: "hacker" },
   { type: "roleDealt", visibility: privateTo("p4"), player: "p4", role: "detective" },
   { type: "shopDealt", visibility: PUBLIC, perks: ["peek", "shield", "tail"] },
-  { type: "roundStarted", visibility: PUBLIC, round: 1, act: 1 },
+  { type: "roundStarted", visibility: PUBLIC, round: 1 },
   { type: "abilityResolved", visibility: privateTo("p3"), player: "p3", round: 1, ability: { kind: "loopCameras", room: "vault" } },
   split("p1", 1, "security", 0, 0),
   split("p2", 1, "vault", 6, 3),
@@ -65,9 +65,9 @@ const LOG: GameEvent[] = [
   { type: "tokenEarned", visibility: privateTo("p3"), player: "p3", trigger: "loopHidPocketer" },
   { type: "alibiPosted", visibility: PUBLIC, player: "p2", round: 1, room: "lobby" },
   { type: "alibiPosted", visibility: PUBLIC, player: "p3", round: 1, room: "office" },
-  { type: "roundStarted", visibility: PUBLIC, round: 2, act: 1 },
+  { type: "roundStarted", visibility: PUBLIC, round: 2 },
   { type: "abilityResolved", visibility: privateTo("p2"), player: "p2", round: 2, ability: { kind: "ring", room: "office" } },
-  { type: "abilityResolved", visibility: privateTo("p4"), player: "p4", round: 2, ability: { kind: "checkStash", target: "p2", threshold: 6, dirty: true } },
+  { type: "abilityResolved", visibility: privateTo("p4"), player: "p4", round: 2, ability: { kind: "checkStash", target: "p2", dirty: true } },
   split("p1", 2, "office", 4, 1),
   split("p2", 2, "vault", 6, 4),
   split("p3", 2, "lobby", 2, 0),
@@ -75,17 +75,17 @@ const LOG: GameEvent[] = [
   resolved(2, 32, 16, 5, 22),
   { type: "perkBought", visibility: privateTo("p1"), player: "p1", perk: "peek", cost: 1 },
   { type: "perkUsed", visibility: privateTo("p1"), player: "p1", round: 2, perk: { kind: "peek", target: "p2", role: "mole" } },
-  { type: "meetingOpened", visibility: PUBLIC, meetingId: "m1", kind: "regular", act: 1 },
-  { type: "roleClaimed", visibility: PUBLIC, player: "p2", role: "lookout", act: 1 },
+  { type: "meetingOpened", visibility: PUBLIC, meetingId: "m1", kind: "regular" },
+  { type: "roleClaimed", visibility: PUBLIC, player: "p2", role: "lookout", stretch: 1 },
   { type: "meetingClosed", visibility: PUBLIC, meetingId: "m1", tally: { skip: 1, targets: { p3: 2 } }, ballots: null, result: { kind: "shakedown", target: "p3" } },
-  { type: "shakedownResolved", visibility: PUBLIC, meetingId: "m1", target: "p3", stashRevealed: 0, taken: 0, clean: true, compensation: 3 },
-  { type: "roundStarted", visibility: PUBLIC, round: 3, act: 2 },
+  { type: "shakedownResolved", visibility: PUBLIC, meetingId: "m1", target: "p3", stashRevealed: 0, taken: 0, clean: true },
+  { type: "roundStarted", visibility: PUBLIC, round: 3 },
   { type: "eventFlipped", visibility: PUBLIC, round: 3, card: "shiftChange", room: null },
   split("p1", 3, "rooftop", 0, 0),
   split("p2", 3, "depositBoxes", 5, 5),
-  split("p3", 3, "vault", 6, 2),
+  split("p3", 3, "vault", 6, 5),
   split("p4", 3, "lobby", 2, 0),
-  resolved(3, 19, 13, 7, 28),
+  resolved(3, 19, 13, 10, 25),
 ];
 
 const rank = (player: string, role: string, stash: number): RankEntry => ({ player, role, stash });
@@ -96,13 +96,21 @@ const OUTCOMES: Record<Ending, Outcome> = {
   success: { result: "success", ranking: BEN_TOP, winners: ["p2"], getaway: 1 },
   // design §5.5: a bust in round 3; only Ana was on the Rooftop.
   bust: { result: "failed", reason: "bust", escapees: ["p1"], ranking: BEN_TOP, winners: ["p1"] },
-  // Here Ben hands round 3 in and Cy pockets it all, so the Hacker (no ★) leads and nobody wins.
-  theft: { result: "failed", reason: "theft", ranking: [rank("p3", "hacker", 9), rank("p2", "mole", 7), rank("p4", "detective", 2), rank("p1", "rookie", 1)], winners: [], getaway: 1 },
+  // Here Ben hands rounds 2 and 3 in and Cy pockets round 3's grab, so the Hacker (no ★) leads and nobody wins.
+  theft: { result: "failed", reason: "theft", ranking: [rank("p3", "hacker", 6), rank("p2", "mole", 3), rank("p4", "detective", 2), rank("p1", "rookie", 1)], winners: [], getaway: 1 },
 };
 const logFor = (ending: Ending): GameEvent[] =>
   ending !== "theft"
     ? LOG
-    : LOG.map((e) => (e.type === "coinsGrabbed" && e.round === 3 && e.player === "p2" ? split("p2", 3, "depositBoxes", 5, 0) : e.type === "coinsGrabbed" && e.round === 3 && e.player === "p3" ? split("p3", 3, "vault", 6, 6) : e));
+    : LOG.map((e) =>
+        e.type !== "coinsGrabbed" || e.round === 1
+          ? e
+          : e.player === "p2"
+            ? split("p2", e.round, e.room, e.duffel + e.pocket, 0)
+            : e.player === "p3" && e.round === 3
+              ? split("p3", 3, "vault", 6, 6)
+              : e,
+      );
 
 export function RevealSection() {
   const [ending, setEnding] = useState<Ending>("success");

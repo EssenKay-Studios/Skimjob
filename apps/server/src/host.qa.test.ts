@@ -241,7 +241,7 @@ async function pauseAcross(id: string, host: string, on: FastifyInstance = app) 
 }
 
 describe("a pause keeps every clock's time left exactly (design §15)", () => {
-  it("across roundEarly, the alibi window and an open meeting", async () => {
+  it("across roundEarly, the alibi window, the result window and an open meeting", async () => {
     const { id, seats } = await startGame(3);
     const host = seats[0]!.who;
     const clients = await Promise.all(seats.map((s) => Client.open(id, s.who)));
@@ -257,8 +257,12 @@ describe("a pause keeps every clock's time left exactly (design §15)", () => {
     clock.advance(500);
     const alibis = await pauseAcross(id, host);
     expect(alibis.has("alibis:1")).toBe(true);
-    // To an open meeting (an emergency), with the round paused under it.
-    while ((await load(id)).phase.kind !== "planning") await step(id);
+    // To the result window (design §9.3), then an open meeting (an emergency called in it).
+    while ((await load(id)).phase.kind === "alibis") await step(id);
+    expect((await load(id)).phase.kind).toBe("result");
+    clock.advance(250);
+    const result = await pauseAcross(id, host);
+    expect(result.has("result:1")).toBe(true);
     expect(await clients[0]!.send({ cmd: { type: "callEmergency" } })).toMatchObject({ ok: true });
     await clients[0]!.barrier();
     while ((await load(id)).phase.kind !== "meeting") await step(id);

@@ -1,4 +1,4 @@
-// QA (PR #44): bots never propose a meeting slot (owner decision, 2 Nov; design §11.1, §17.3).
+// QA (PR #44): bots never propose a meeting slot (owner decision, 2 Nov; design §9.4, §19.3).
 import { describe, expect, it } from "vitest";
 import type { GameConfig } from "@skimjob/engine";
 import { PERSONALITIES, type PersonalityId } from "./personalities";

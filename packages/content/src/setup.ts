@@ -13,8 +13,8 @@ export const MAX_PLAYERS = 12;
  */
 export const MAX_SLOT_LENGTH = 64;
 
-/** A regular meeting follows every this many rounds, until S3a.5 holds them at the bank's thirds (design §9.1). */
-export const ROUNDS_PER_ACT = 3;
+/** The crew's emergency pool by crew size [tunable]: 1 meeting for 3–6 players, 2 for 7–12. design §9.3 */
+export const EMERGENCY_POOL: Readonly<Record<number, number>> = { 3: 1, 4: 1, 5: 1, 6: 1, 7: 2, 8: 2, 9: 2, 10: 2, 11: 2, 12: 2 };
 
 /** The powerless role. Fills any seat the deck can't cover. design §8 */
 export const FILLER_ROLE: RoleId = "rookie";

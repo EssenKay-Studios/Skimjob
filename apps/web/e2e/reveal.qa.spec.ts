@@ -51,7 +51,7 @@ for (const viewport of VIEWPORTS) {
       await expect(cards.locator(".reveal__who b")).toHaveText(["Ben", "Cy", "Bot · Dot", "You"]);
       await expect(cards.locator(".reveal__score b")).toHaveText(["12", "5", "2", "1"]);
       await expect(cards.nth(0).getByRole("img", { name: "Ben's stash over time: 3, 7, 12" })).toBeVisible();
-      await expect(cards.nth(1).getByRole("img", { name: "Cy's stash over time: 0, 3, 5" })).toBeVisible();
+      await expect(cards.nth(1).getByRole("img", { name: "Cy's stash over time: 0, 0, 5" })).toBeVisible();
       await expect(cards.nth(3).getByRole("img", { name: "Your stash over time: 0, 1, 1" })).toBeVisible();
 
       // Tokens with what earned them, and perks bought and used.
@@ -107,7 +107,7 @@ for (const viewport of VIEWPORTS) {
       await expect(reveal.getByText("Winner", { exact: true })).toHaveCount(0);
       await expect(cards.nth(0)).toContainText("Top of the ranking");
       await expect(reveal.locator(".reveal__void")).toHaveCount(4);
-      await expect(cards.nth(0).getByRole("img", { name: "Cy's stash over time: 0, 3, 9" })).toBeVisible();
+      await expect(cards.nth(0).getByRole("img", { name: "Cy's stash over time: 0, 0, 6" })).toBeVisible();
       await insideViewport(page, reveal);
       await page.screenshot({ path: info.outputPath(`qa-reveal-${viewport.width}.png`), fullPage: false });
       expect(errors).toEqual([]);

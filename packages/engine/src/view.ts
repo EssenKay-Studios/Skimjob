@@ -5,9 +5,7 @@
 // players' roles, stashes, moves and ballots never reach it except through
 // events the viewer may see.
 import type {
-  ActiveCard,
   CaseFileEvent,
-  GapBox,
   GameEvent,
   GameState,
   LoggedEvent,
@@ -18,11 +16,8 @@ import type {
   VoteChoice,
 } from "./types";
 import { canSee } from "./types";
-import { actOfRound } from "./acts";
-import { roomDef } from "./job";
-import { eventsFor, jobFor, perkCost, rolesFor } from "./overrides";
+import { perkCost, rolesFor } from "./overrides";
 import { revealSummary } from "./reveal";
-import { roundJob } from "./deck";
 import { honestyOf } from "./shares";
 
 const isPublic = (event: GameEvent): event is PublicEvent => event.visibility.kind === "public";
@@ -94,23 +89,15 @@ function buildView(state: GameState, playerId: PlayerId): PlayerView {
       role: me.role,
       stash: me.stash,
       roleState: me.roleState,
-      emergencyMeetingUsed: me.emergencyMeetingUsed,
       move: ownMove ?? null,
       sealedVote: me.sealedVote,
       vote: ownVote ?? null,
       seenBallots,
     },
-    players: state.config.players
-      .filter((seat) => seat.id !== playerId)
-      .map((seat) => ({
-        id: seat.id,
-        name: seat.name,
-        isBot: seat.isBot,
-        emergencyMeetingUsed: state.players[seat.id]?.emergencyMeetingUsed ?? false,
-      })),
+    players: state.config.players.filter((seat) => seat.id !== playerId).map((seat) => ({ id: seat.id, name: seat.name, isBot: seat.isBot })),
     phase: state.phase,
     round: state.round,
-    act: actOfRound(Math.max(1, state.round)),
+    stretch: state.stretch,
     alibiRound: state.alibisOpen ? state.resolvedRound : null,
     rooms: state.rooms,
     // design §6.1: the bank count is public.
@@ -126,13 +113,15 @@ function buildView(state: GameState, playerId: PlayerId): PlayerView {
     // design §10: the card is public.
     card: state.card,
     voteVisibility: state.config.voteVisibility,
+    // design §9.3, §9.4, §9.7: the meeting slot, a called emergency, the pool left and who is protected are public.
     scheduledMeeting: state.scheduledMeeting,
     pendingEmergency: state.pendingEmergency,
+    emergencies: state.emergencies,
+    protected: state.protected,
     lockedIn: lockedIn(state),
     proposals: state.proposals,
     shop: state.shop.map((perk) => ({ perk, cost: perkCost(state.config, perk) })),
     roleList: roleListOf(state.log),
-    gap: gapBox(state),
     ledger,
     caseFile,
     // design §13: everything opens up at the end, except others' secret-mode ballots (§11.2).
@@ -155,31 +144,13 @@ function roleListOf(log: readonly GameEvent[]): PlayerView["roleList"] {
   return shown?.type === "roleListShown" ? { list: shown.list, roles: shown.roles } : null;
 }
 
-/** The gap box for the latest resolved round, from public events only. extension.md "What the app works out for you" */
-export function gapBox(state: GameState): GapBox | null {
-  const round = state.resolvedRound;
-  if (round === 0) return null;
-  let handedIn = 0;
-  let card: ActiveCard | null = null;
-  const alibis: string[] = [];
-  for (const e of state.log) {
-    if (e.type === "roundResolved" && e.round === round) handedIn = e.taken - e.missing;
-    else if (e.type === "eventFlipped" && e.round === round) card = { round, id: e.card, room: e.room };
-    else if (e.type === "alibiPosted" && e.round === round) alibis.push(e.room);
-  }
-  const job = roundJob(jobFor(state.config), card, eventsFor(state.config));
-  const claimed = alibis.reduce((sum, room) => sum + roomDef(job, room).coins, 0);
-  return { round, posted: alibis.length, alibis: claimed, handedIn, unaccounted: claimed - handedIn };
-}
-
 /**
  * Who has locked in a move this round (design §5.1, public by owner decision):
  * the seats with a submitted move while the round is unresolved. Default moves
  * are only assigned as the round resolves, so they never show here.
  */
 export function lockedIn(state: GameState): PlayerId[] {
-  const unresolved = state.phase.kind === "planning" || ((state.phase.kind === "meeting" || state.phase.kind === "shakedownPending") && state.round > state.resolvedRound);
-  return unresolved ? state.playerOrder.filter((id) => Object.hasOwn(state.moves, id)) : [];
+  return state.phase.kind === "planning" ? state.playerOrder.filter((id) => Object.hasOwn(state.moves, id)) : [];
 }
 
 /**

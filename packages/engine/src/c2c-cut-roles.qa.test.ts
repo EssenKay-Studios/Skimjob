@@ -40,7 +40,7 @@ describe("cut roles and the old mole setting at engine setup", () => {
   });
   it.each(CUT)("content overrides for %s are refused, never a throw", (cut) => {
     let errors: string[] = [];
-    expect(() => (errors = validateConfig(config(5, { contentOverrides: { roles: { [cut]: { perAct: 2 } } } as never })))).not.toThrow();
+    expect(() => (errors = validateConfig(config(5, { contentOverrides: { roles: { [cut]: { perStretch: 2 } } } as never })))).not.toThrow();
     expect(errors.length).toBeGreaterThan(0);
   });
   it.each(["off", "maybe", "on", 7, null])("a stored config still carrying mole: %s neither crashes nor changes the deal", (mole) => {
@@ -90,6 +90,8 @@ type Cmd = unknown | ((s: GameState) => unknown);
 function run(state: GameState, ...commands: Cmd[]): GameState {
   return commands.reduce<GameState>((s, c) => {
     const command = typeof c === "function" ? c(s) : c;
+    // A step may be several commands, worked out from the state as it reaches them.
+    if (Array.isArray(command)) return run(s, ...(command as Cmd[]));
     const r = handleCommand(s, command);
     if (!r.ok) throw new Error(`rejected ${JSON.stringify(command)}: ${r.reason}`);
     return r.state;
@@ -105,7 +107,13 @@ function game(players: number, roles: string[], extra: Partial<GameConfig> = {})
   return replay(cfg, log);
 }
 const since = (before: GameState, after: GameState): GameEvent[] => after.log.slice(before.log.length);
-const emergency = (by: string) => [{ type: "callEmergency", player: by }, { type: "advance", deadline: { kind: "openMeeting", meetingId: `emergency-${by}` } }];
+/** Round 1 resolves and, in its result window, `by` calls the crew's emergency, which opens at once. design §9.3 */
+const emergency = (by: string): Cmd[] => [
+  { type: "advance", deadline: { kind: "round", round: 1 } },
+  { type: "advance", deadline: { kind: "alibis", round: 1 } },
+  { type: "callEmergency", player: by },
+  (s: GameState) => ({ type: "advance", deadline: { kind: "openMeeting", meetingId: s.pendingEmergency?.meetingId } }),
+];
 const CLOSE = (s: GameState) => ({ type: "advance", deadline: { kind: "closeMeeting", meetingId: s.meeting?.id } });
 const RESOLVE = (s: GameState) => ({ type: "advance", deadline: { kind: "resolveShakedown", meetingId: s.pendingShakedown?.meetingId } });
 const vote = (player: string, target: string) => ({ type: "castVote", player, vote: { kind: "shakedown", target } });
@@ -142,10 +150,11 @@ describe("the shakedown window without the Muscle (Shield only)", () => {
       return x.phase.kind === "shakedownPending" ? run(x, RESOLVE) : x;
     })();
     const events = since(s, after);
-    expect(events).toContainEqual({ type: "perkUsed", visibility: privateTo("p0"), player: "p0", round: 1, perk: { kind: "shield", meetingId: "emergency-p1" } });
-    expect(events).toContainEqual({ type: "shakedownCancelled", visibility: PUBLIC, meetingId: "emergency-p1", target: "p0" });
+    expect(events).toContainEqual({ type: "perkUsed", visibility: privateTo("p0"), player: "p0", round: 1, perk: { kind: "shield", meetingId: "emergency-1" } });
+    expect(events).toContainEqual({ type: "shakedownCancelled", visibility: PUBLIC, meetingId: "emergency-1", target: "p0" });
     expect(events.some((e) => e.type === "shakedownResolved")).toBe(false);
-    expect(after.players.p0).toMatchObject({ stash: 6 });
+    // Kept: the 6, plus round 1's cut.
+    expect(after.players.p0).toMatchObject({ stash: 6 + after.share });
     expect(shakedownOfP0(build()).log).toEqual(shakedownOfP0(build()).log);
   });
 });

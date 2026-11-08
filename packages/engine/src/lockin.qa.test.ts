@@ -1,5 +1,5 @@
 // QA (PR #44): public lock-in marks and the people-majority meeting lock.
-// Owner decisions, 2 Nov. design §5.1, §11.1, §13
+// Owner decisions, 2 Nov. design §5.1, §9.4, §13
 import { POOL_ROLES } from "@skimjob/content";
 import { describe, expect, it } from "vitest";
 import type { GameConfig, GameEvent, GameState } from "./types";
@@ -84,7 +84,7 @@ describe("the default move never shows as locked in — design §5.1", () => {
       expect(evts.filter((e) => e.type === "moveLocked")).toHaveLength(0);
       for (const p of s.playerOrder) expect(viewFor(s, p).lockedIn).toEqual([]);
       // Next round: nobody is marked until they move again.
-      s = run(s, alibiDeadline(1));
+      s = run(s, alibiDeadline(1), { type: "advance", deadline: { kind: "result", round: 1 } });
       expect(lockedIn(s)).toEqual([]);
       s = run(s, move(`p${n - 1}`));
       expect(lockedIn(s)).toEqual([`p${n - 1}`]);
@@ -104,13 +104,15 @@ describe("the default move never shows as locked in — design §5.1", () => {
   });
 });
 
-describe("lock-ins and an emergency meeting — design §5.1, §11", () => {
-  it("marks survive an emergency meeting called mid-round and stay listed while it is open", () => {
-    let s = run(crew(3), move("p0"), move("p1"), { type: "callEmergency", player: "p2" });
+describe("lock-ins and an emergency meeting — design §5.1, §9.3", () => {
+  it("no emergency mid-round; in the result window and its meeting nobody is marked and nobody can move", () => {
+    let s = run(crew(3), move("p0"), move("p1"));
+    expect(handleCommand(s, { type: "callEmergency", player: "p2" }).ok).toBe(false);
+    s = run(s, roundDeadline(1), alibiDeadline(1), { type: "callEmergency", player: "p2" });
     const meetingId = s.pendingEmergency!.meetingId;
     s = run(s, { type: "advance", deadline: { kind: "openMeeting", meetingId } });
     expect(s.phase.kind).toBe("meeting");
-    expect(lockedIn(s)).toEqual(["p0", "p1"]);
+    expect(lockedIn(s)).toEqual([]);
     expect(handleCommand(s, move("p2")).ok).toBe(false); // no moves in a meeting
   });
 });
@@ -125,15 +127,15 @@ describe("determinism — same seed + same commands = same log", () => {
         move("p1"),
         move("p2"),
         move("p3"),
-        { type: "proposeMeeting", player: "p0", slot: "act-1" },
+        { type: "proposeMeeting", player: "p0", slot: "slot-1" },
         roundDeadline(1),
       );
     expect(JSON.stringify(play().log)).toBe(JSON.stringify(play().log));
   });
 });
 
-describe("slot lock by people — design §11.1 (owner decision, 2 Nov)", () => {
-  const propose = (player: string, slot = "act-1") => ({ type: "proposeMeeting", player, slot });
+describe("slot lock by people — design §9.4 (owner decision, 2 Nov)", () => {
+  const propose = (player: string, slot = "slot-1") => ({ type: "proposeMeeting", player, slot });
   const accept = (player: string, proposalId = "proposal-1") => ({ type: "acceptMeeting", player, proposalId });
 
   it("0 humans: more than half the crew (exactly half is not enough)", () => {
@@ -156,7 +158,7 @@ describe("slot lock by people — design §11.1 (owner decision, 2 Nov)", () => 
     let g = run(s, propose("p5"), ...s.playerOrder.slice(1).filter((p) => p !== "p5").map((p) => accept(p)));
     expect(g.scheduledMeeting).toBeNull();
     g = run(g, accept("p0"));
-    expect(g.scheduledMeeting).toMatchObject({ act: 1, slot: "act-1" });
+    expect(g.scheduledMeeting).toEqual({ meetingId: "meeting-1", slot: "slot-1" });
   });
 
   it("several humans: exactly half the people is not enough; bots' backing never tips it", () => {
@@ -180,7 +182,7 @@ describe("slot lock by people — design §11.1 (owner decision, 2 Nov)", () => 
     const s0 = crew(3, 1);
     const s = run(s0, propose("p0"));
     expect(s.log.filter((e) => e.type === "meetingScheduled")).toHaveLength(1);
-    expect(handleCommand(s, propose("p1", "act-1")).ok).toBe(false);
+    expect(handleCommand(s, propose("p1", "slot-1")).ok).toBe(false);
     const late = handleCommand(s, accept("p1"));
     if (late.ok) expect(late.events.some((e) => e.type === "meetingScheduled")).toBe(false);
   });

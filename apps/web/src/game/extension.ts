@@ -1,14 +1,12 @@
 // Pure helpers for the Extension's player-facing pieces (docs/extension.md):
-// role cards (tag, power, token trigger, "How you win"), the gap box, and the token shop with its perk uses.
+// role cards (tag, power, token trigger, "How you win") and the token shop with its perk uses.
 // Every number comes from content (with the game's overrides) or the view.
 import {
-  BANK_JOB,
   BUST_ROLE_TEXT,
   PERKS,
   ROLES,
   SHOP_COLUMNS,
   type FailureReason,
-  type JobDef,
   type PerkColumn,
   type PerkId,
   type RoleDef,
@@ -19,9 +17,8 @@ import {
 } from "@skimjob/content";
 import { rolesFor, type PlayerId, type PlayerView, type RoomId } from "@skimjob/engine";
 import { roleName, roomName } from "./describeEvent";
-import { crewSize, jobOf, setupOf } from "./hud";
+import { jobOf, setupOf } from "./hud";
 
-const signed = (n: number) => (n >= 0 ? `+${n}` : `−${Math.abs(n)}`);
 
 // ---------------------------------------------------------------- roles
 
@@ -48,7 +45,7 @@ export function howYouWin(winsOn: readonly FailureReason[]): string {
 const times = (n: number) => (n === 1 ? "Once" : `${n} times`);
 
 /** A role's power in one line, numbers from content (and the job's). extension.md "Roles" */
-function powerText(power: RolePower, job: JobDef = BANK_JOB): string {
+function powerText(power: RolePower): string {
   const between = (n: number) => `${times(n)} between meetings`;
   switch (power.kind) {
     case "none":
@@ -56,19 +53,19 @@ function powerText(power: RolePower, job: JobDef = BANK_JOB): string {
     case "lookout":
       return `Sees who was in ${power.extraRooms === 1 ? "one extra room" : `${power.extraRooms} extra rooms`} every round.`;
     case "loopCameras":
-      return `${between(power.perAct)}: loops one room's cameras, which then read "camera offline".`;
+      return `${between(power.perStretch)}: loops one room's cameras, which then read "camera offline".`;
     case "voteWeight":
       return `Its vote counts ${power.weight === 2 ? "double" : `${power.weight} times`}.`;
     case "audit":
-      return `${between(power.perAct)}: how much went missing in one room last round.`;
+      return `${between(power.perStretch)}: how much went missing in one room last round.`;
     case "checkStash":
-      return `${between(power.perAct)}: is one player's stash "dirty" (${job.shakedown.cleanBelow} or more)?`;
+      return `${between(power.perStretch)}: does one player hold anything above the share?`;
     case "bless":
-      return `${between(power.perAct)}: bless a player; if they're shaken down clean, the bank pays the ${job.shakedown.payout}.`;
+      return `${between(power.perStretch)}: bless a player; if they're shaken down clean, you earn a token.`;
     case "reopen":
       return "Once a game: tears the tape off a raided room, which opens again next round.";
     case "ring":
-      return `${between(power.perAct)}: rings one room's bell once (not the Rooftop or a taped-off room), like any noisy coin.`;
+      return `${between(power.perStretch)}: rings one room's bell once (not the Rooftop or a taped-off room), like any noisy coin.`;
     default: {
       const never: never = power;
       return String((never as { kind: string }).kind);
@@ -88,7 +85,7 @@ function earnsText(trigger: TokenTrigger): string {
     case "wonDirtyShakedown":
       return "It votes to catch a cheater who is then caught.";
     case "blessedShakenClean":
-      return "A blessing pays out.";
+      return "A player it blessed is shaken down clean.";
     case "loopHidPocketer":
       return "A loop hid someone who pocketed.";
     default: {
@@ -112,7 +109,7 @@ export interface RoleInfo {
   readonly minPlayers: number | null;
 }
 
-export function roleInfo(id: RoleId, roles: Readonly<Record<RoleId, RoleDef>> = ROLES, job: JobDef = BANK_JOB): RoleInfo {
+export function roleInfo(id: RoleId, roles: Readonly<Record<RoleId, RoleDef>> = ROLES): RoleInfo {
   const def = roles[id];
   if (!def) return { id, name: id, tag: "teamPlayer", tagLabel: TAG_LABEL.teamPlayer, star: false, power: "", earns: null, howYouWin: howYouWin([]), minPlayers: null };
   const reward = def.rewards?.[0];
@@ -122,7 +119,7 @@ export function roleInfo(id: RoleId, roles: Readonly<Record<RoleId, RoleDef>> = 
     tag: def.tag,
     tagLabel: TAG_LABEL[def.tag],
     star: def.winsOn.length > 0,
-    power: powerText(def.power, job),
+    power: powerText(def.power),
     earns: reward ? `${reward.count === 1 ? "A token" : `${reward.count} tokens`} when: ${earnsText(reward.on).replace(/^./, (c) => c.toLowerCase())}` : null,
     howYouWin: howYouWin(def.winsOn),
     minPlayers: def.minPlayers ?? null,
@@ -139,34 +136,6 @@ export function roleListInfo(view: PlayerView): { readonly title: string; readon
   const l = view.roleList;
   if (!l) return { title: "The role list is hidden in this game.", roles: [] };
   return { title: l.list === "exact" ? "Roles in play" : "Roles that could be in play", roles: l.roles };
-}
-
-// ---------------------------------------------------------------- gap box
-
-export interface GapInfo {
-  readonly round: number;
-  readonly posted: number;
-  readonly crew: number;
-  /** "Alibis say +14, 9 handed in: 5 unaccounted for." */
-  readonly text: string;
-  readonly unaccounted: number;
-}
-
-/** The alibi arithmetic for the latest resolved round (event effects included by the engine). extension.md */
-export function gapInfo(view: PlayerView): GapInfo | null {
-  const g = view.gap;
-  if (!g) return null;
-  const crew = crewSize(view);
-  const say = `Alibis say ${signed(g.alibis)}, ${g.handedIn} handed in`;
-  const text =
-    g.posted === 0
-      ? `No alibis yet for round ${g.round}; ${g.handedIn} handed in.`
-      : g.unaccounted > 0
-        ? `${say}: ${g.unaccounted} unaccounted for.`
-        : g.unaccounted < 0
-          ? `${say}: ${-g.unaccounted} more than the alibis claim.`
-          : `${say}: it adds up.`;
-  return { round: g.round, posted: g.posted, crew, text, unaccounted: g.unaccounted };
 }
 
 // ---------------------------------------------------------------- tokens and the shop
@@ -191,7 +160,7 @@ export interface ShopState {
   readonly items: readonly ShopItem[];
   /** Perks you own that aren't in the shop (e.g. after an override); rare. */
   readonly extra: readonly { readonly perk: PerkId; readonly count: number }[];
-  /** You used a perk by choice this round (one per round; Shield and Emergency don't count). */
+  /** You used a perk by choice this round (one per round; the Shield doesn't count). */
   readonly usedThisRound: boolean;
 }
 
@@ -203,7 +172,7 @@ const columnOf = (perk: PerkId): PerkColumn =>
 /** Whether you used a perk by choice in the current round (from your case file). extension.md "Tokens and the perk shop" */
 export function usedPerkThisRound(view: Pick<PlayerView, "caseFile" | "round" | "me">): boolean {
   return view.caseFile.some(
-    ({ event: e }) => e.type === "perkUsed" && e.player === view.me.id && e.round === view.round && e.perk.kind !== "shield" && e.perk.kind !== "emergency",
+    ({ event: e }) => e.type === "perkUsed" && e.player === view.me.id && e.round === view.round && e.perk.kind !== "shield",
   );
 }
 
@@ -270,7 +239,7 @@ export function perkUses(view: PlayerView): PerkUse[] {
     const verified = view.ledger.some((x) => x.event.type === "alibiVerified" && x.event.player === view.me.id && x.event.round === round);
     if (round > 0 && posted?.type === "alibiPosted" && !verified) out.push({ kind: "alibi", round, room: posted.room });
   }
-  if (own.has("recharge") && (view.me.roleState.usedThisAct > 0 || view.me.roleState.usedThisGame > 0)) {
+  if (own.has("recharge") && (view.me.roleState.usedThisStretch > 0 || view.me.roleState.usedThisGame > 0)) {
     out.push({ kind: "recharge" });
   }
   if (own.has("rig") && view.round < jobOf(view).roundCap && setupOf(view)?.eventsEnabled !== false && !out.some((u) => u.kind === "rigPick")) out.push({ kind: "rig" });

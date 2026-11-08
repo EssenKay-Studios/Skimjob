@@ -4,7 +4,7 @@
 // Bots are deterministic: all their randomness comes from their own seeded RNG
 // (the engine's sfc32), never Math.random, so same seed + same views = same
 // commands. Their seed is their own, not the game's (which is secret).
-import { ROUNDS_PER_ACT, type JobDef, type RoomId } from "@skimjob/content";
+import type { JobDef, RoomId } from "@skimjob/content";
 import {
   nextUint32,
   roomDef,
@@ -21,7 +21,7 @@ import type { Personality } from "./personalities";
 import { jobOf, lastResolvedRound, ofType, roleOf, roomsWhere } from "./read";
 import { mostSuspicious, suspicion } from "./suspicion";
 import { claimCommands, meetingTime } from "./claims";
-import { alibiPerk, buyPerks, hasPerk, meetingPerks, perkSpender, planningPerks } from "./perks";
+import { alibiPerk, buyPerks, meetingPerks, perkSpender, planningPerks } from "./perks";
 import { bustDanger, jobThisRound, openRooms, quietGrab, raidRisk } from "./alarm";
 import { leaning } from "./forecast";
 
@@ -111,11 +111,12 @@ export function decide(view: PlayerView, p: Personality, random: Random, crewSee
     return out;
   }
   out.push(...scheduleMeeting(view));
-  // v2 §4: claims are made around meetings (the act's meeting is next, or an emergency is called).
+  // v2 §4: claims are made around meetings (a meeting is due, or an emergency is called).
   if (meetingTime(view)) out.push(...claimCommands(view, p, random, false));
   out.push(...crewPowers(view), ...buyPerks(view));
+  // design §9.3: an emergency only in the result window, while the crew's pool lasts.
+  if (phase.kind === "result" && wantsEmergency(view, p, random)) out.push({ type: "callEmergency", player });
   if (phase.kind === "planning") {
-    if (wantsEmergency(view, p, random)) out.push({ type: "callEmergency", player });
     const move = view.me.move ?? chooseMove(view, p, random);
     if (view.me.move === null) out.push({ type: "submitMove", player, move });
     out.push(...spend(planningPerks(view, move.room)));
@@ -127,23 +128,23 @@ export function decide(view: PlayerView, p: Personality, random: Random, crewSee
 
 /**
  * The Auditor's, Detective's and Priest's powers (role deck v2 §4 "Play",
- * minimal; R4 adds claims and perk use). Once per act, while planning: the
- * Auditor audits the room its top suspect claimed for the latest round; the
- * Detective checks its top suspect in the act's last round, closest to the
- * meeting; the Priest blesses its most-trusted player (lowest suspicion).
+ * minimal; R4 adds claims and perk use). Once between meetings, while planning:
+ * the Auditor audits the room its top suspect claimed for the latest round; the
+ * Detective checks its top suspect; the Priest blesses its most-trusted player
+ * (lowest suspicion).
  */
 function crewPowers(view: PlayerView): PlayerCommand[] {
   const { power } = roleOf(view);
   if (view.phase.kind !== "planning" || (power.kind !== "audit" && power.kind !== "checkStash" && power.kind !== "bless")) return [];
-  if (view.me.roleState.usedThisAct >= power.perAct) return [];
+  if (view.me.roleState.usedThisStretch >= power.perStretch) return [];
   const scores = suspicion(view);
   if (power.kind === "bless") {
-    // v2 §2: no blessing in an act after a blessed player was caught dirty (its own blessings, public shakedowns).
-    const acts = new Map(ofType(view.ledger, "meetingOpened").map((e) => [e.meetingId, e.act]));
-    const dirty = ofType(view.ledger, "shakedownResolved").filter((x) => !x.clean && acts.get(x.meetingId) === view.act - 1);
+    // v2 §2: no blessing in a stretch after a blessed player was caught dirty in the one before (its own blessings, public shakedowns).
+    const last = view.stretch - 1;
+    const dirty = dirtyIn(view, last);
     const barred = ofType(view.caseFile, "abilityResolved").some((e) => {
       const a = e.ability;
-      return a.kind === "bless" && a.act === view.act - 1 && dirty.some((x) => x.target === a.target);
+      return a.kind === "bless" && a.stretch === last && dirty.includes(a.target);
     });
     if (barred) return [];
     const trusted = [...view.players].map((o) => o.id).sort((a, b) => (scores.get(a) ?? 0) - (scores.get(b) ?? 0))[0];
@@ -153,7 +154,7 @@ function crewPowers(view: PlayerView): PlayerCommand[] {
   if (top === null || top.score <= 0) return [];
   const player = view.me.id;
   if (power.kind === "checkStash") {
-    return view.round % ROUNDS_PER_ACT === 0 ? [{ type: "useAbility", player, ability: { kind: "checkStash", target: top.player } }] : [];
+    return [{ type: "useAbility", player, ability: { kind: "checkStash", target: top.player } }];
   }
   const round = lastResolvedRound(view);
   // A Recharge perk can free the power again before a new round resolves; the engine allows one audit per round.
@@ -186,10 +187,10 @@ export function chooseMove(view: PlayerView, p: Personality, random: Random): Mo
     // design §8: one extra room's visitors; a coin room other than mine.
     const target = weighted(byCoins(coinRooms.filter((r) => r !== room)), random);
     if (target !== undefined) ability = { kind: "lookout", rooms: [target] };
-  } else if (power.kind === "loopCameras" && view.me.roleState.usedThisAct < power.perAct) {
+  } else if (power.kind === "loopCameras" && view.me.roleState.usedThisStretch < power.perStretch) {
     // v2 §4: hide its own skim (no allies to cover since the Extension).
     if (pocket > 0) ability = { kind: "loopCameras", room };
-  } else if (power.kind === "ring" && view.me.roleState.usedThisAct < power.perAct && ringServesWin(view, job, room)) {
+  } else if (power.kind === "ring" && view.me.roleState.usedThisStretch < power.perStretch && ringServesWin(view, job, room)) {
     // design §5.2, §11.1: the Mole tips the police off on the loudest open bell elsewhere, if any is lit.
     const loudest = openRooms(view)
       .filter((r) => r !== room && !roomDef(job, r).lieLow && (view.bells[r] ?? 0) > 0)
@@ -296,8 +297,19 @@ function scheduleMeeting(view: PlayerView): PlayerCommand[] {
   return open ? [{ type: "acceptMeeting", player, proposalId: open.id }] : [];
 }
 
+/** Players shaken down dirty in `stretch` (it ends as a regular meeting opens, design §9.1), from the public ledger. */
+function dirtyIn(view: PlayerView, stretch: number): PlayerId[] {
+  let current = 1;
+  const out: PlayerId[] = [];
+  for (const { event: e } of view.ledger) {
+    if (e.type === "meetingOpened" && e.kind === "regular") current++;
+    else if (e.type === "shakedownResolved" && !e.clean && current === stretch) out.push(e.target);
+  }
+  return out;
+}
+
 function wantsEmergency(view: PlayerView, p: Personality, random: Random): boolean {
-  if ((view.me.emergencyMeetingUsed && !hasPerk(view, "emergency")) || view.pendingEmergency) return false;
+  if (view.emergencies === 0 || view.pendingEmergency) return false;
   if (random() < p.noise * 0.05) return true;
   if (p.emergencyAt === null) return false;
   const top = mostSuspicious(suspicion(view));
@@ -316,7 +328,7 @@ function wantsEmergency(view: PlayerView, p: Personality, random: Random): boole
  * public view data beyond the meeting id, so nobody can compute it.
  */
 export function crewHunch(view: PlayerView, player: PlayerId, crewSeed: string): number {
-  const meeting = view.phase.kind === "meeting" || view.phase.kind === "shakedownPending" ? view.phase.meetingId : `act-${view.act}`;
+  const meeting = view.phase.kind === "meeting" || view.phase.kind === "shakedownPending" ? view.phase.meetingId : `stretch-${view.stretch}`;
   return botRandom(`hunch/${meeting}/${player}/crew:${crewSeed}`)() * 2 - 1;
 }
 
@@ -327,13 +339,17 @@ export function misjudged(view: PlayerView, scores: ReadonlyMap<PlayerId, number
   return out;
 }
 
-/** Shake down the most suspicious player once they pass the bot's threshold; otherwise skip. Suspicion only, no ally logic (extension.md Build notes "Bots"). design §11.2 */
+/**
+ * Shake down the most suspicious player once they pass the bot's threshold; otherwise skip. Never a
+ * protected player (design §9.7). Suspicion only, no ally logic (extension.md Build notes "Bots"). design §9.5
+ */
 export function chooseVote(view: PlayerView, p: Personality, random: Random, crewSeed: string): VoteChoice {
   if (random() < p.noise) {
-    const target = pick([null, ...view.players.map((o) => o.id)], random);
+    const target = pick([null, ...view.players.map((o) => o.id).filter((id) => !view.protected.includes(id))], random);
     return target === null ? { kind: "skip" } : { kind: "shakedown", target };
   }
   const scores = misjudged(view, suspicion(view), p, random, crewSeed);
+  for (const id of view.protected) scores.delete(id);
   const top = mostSuspicious(scores);
   return top !== null && top.score >= p.voteAt ? { kind: "shakedown", target: top.player } : { kind: "skip" };
 }

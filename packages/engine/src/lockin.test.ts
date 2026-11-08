@@ -1,5 +1,5 @@
 // Owner decisions (2 Nov): lock-ins are public (design §5.1) and a meeting
-// slot locks on a majority of the crew's people, not its bots (design §11.1).
+// slot locks on a majority of the crew's people, not its bots (design §9.4).
 import { STARTER_ROLES } from "@skimjob/content";
 import { describe, expect, it } from "vitest";
 import type { GameConfig, GameEvent, GameState } from "./types";
@@ -53,6 +53,8 @@ describe("public lock-in marks — design §5.1 (owner decision, 2 Nov)", () => 
     s = run(s, move("p1"), { type: "advance", deadline: { kind: "round", round: 1 } });
     expect(viewFor(s, "p1").lockedIn).toEqual([]); // resolved: alibis
     s = run(s, { type: "advance", deadline: { kind: "alibis", round: 1 } });
+    expect(viewFor(s, "p1").lockedIn).toEqual([]); // the result window (design §9.3)
+    s = run(s, { type: "advance", deadline: { kind: "result", round: 1 } });
     expect(s.phase).toEqual({ kind: "planning", round: 2 });
     expect(viewFor(s, "p0").lockedIn).toEqual([]);
     s = run(s, move("p1"));
@@ -65,15 +67,15 @@ describe("public lock-in marks — design §5.1 (owner decision, 2 Nov)", () => 
   });
 });
 
-describe("meeting slot lock: a majority of the people — design §11.1 (owner decision, 2 Nov)", () => {
-  const propose = (player: string, slot = "act-1") => ({ type: "proposeMeeting", player, slot });
+describe("meeting slot lock: a majority of the people — design §9.4 (owner decision, 2 Nov)", () => {
+  const propose = (player: string, slot = "slot-1") => ({ type: "proposeMeeting", player, slot });
   const accept = (player: string, proposalId = "proposal-1") => ({ type: "acceptMeeting", player, proposalId });
 
   it("bots' backing doesn't count: 2 people + 3 bots need both people", () => {
     let s = run(createGame(config([true, true, false, false, false])), propose("p0"), accept("p2"), accept("p3"), accept("p4"));
     expect(s.scheduledMeeting).toBeNull(); // 4 of 5 seats, but only 1 of 2 people
     s = run(s, accept("p1"));
-    expect(s.scheduledMeeting).toEqual({ meetingId: "act-1", act: 1, slot: "act-1" });
+    expect(s.scheduledMeeting).toEqual({ meetingId: "meeting-1", slot: "slot-1" });
   });
 
   it("one person among bots locks a slot by proposing it", () => {
@@ -87,13 +89,13 @@ describe("meeting slot lock: a majority of the people — design §11.1 (owner d
     let s = run(createGame(config([true, true, true, false])), propose("p3"), accept("p0"));
     expect(s.scheduledMeeting).toBeNull();
     s = run(s, accept("p1")); // 2 of 3 people
-    expect(s.scheduledMeeting?.slot).toBe("act-1");
+    expect(s.scheduledMeeting?.slot).toBe("slot-1");
   });
 
   it("with no people at all (simulator), more than half the crew still locks it", () => {
     let s = run(createGame(config([false, false, false, false])), propose("p0"), accept("p1"));
     expect(s.scheduledMeeting).toBeNull();
     s = run(s, accept("p2"));
-    expect(s.scheduledMeeting?.slot).toBe("act-1");
+    expect(s.scheduledMeeting?.slot).toBe("slot-1");
   });
 });

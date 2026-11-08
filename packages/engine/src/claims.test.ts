@@ -1,4 +1,4 @@
-// Role claims (design §8 "players can claim any role", §12.1 claim button; R4b).
+// Role claims (design §11.3 "Claims": any role, true or a bluff; R4b).
 import { STARTER_ROLES } from "@skimjob/content";
 import { describe, expect, it } from "vitest";
 import type { Command, GameConfig, GameEvent, GameState } from "./types";
@@ -17,6 +17,8 @@ const cfg: GameConfig = {
   rolePool: [...STARTER_ROLES],
   eventsEnabled: false,
   voteVisibility: "hiddenThenRevealed",
+  // A bank of 12: round 1's default moves (4 coins) take a third of it, so a regular meeting follows (design §9.1).
+  contentOverrides: { bank: { coinsPerPlayer: 3 } },
 };
 
 const claim = (player: unknown, role: unknown): Command => ({ type: "claimRole", player, role }) as Command;
@@ -33,12 +35,12 @@ function reason(state: GameState, command: Command): string {
   return r.reason;
 }
 
-describe("role claims — design §8, §12.1", () => {
+describe("role claims — design §11.3", () => {
   const start = createGame(cfg);
 
   it("puts a public roleClaimed on everyone's ledger and changes nothing else", () => {
     const { state, events } = ok(start, claim("p0", "lookout"));
-    expect(events).toEqual([{ type: "roleClaimed", visibility: { kind: "public" }, player: "p0", role: "lookout", act: 1 }]);
+    expect(events).toEqual([{ type: "roleClaimed", visibility: { kind: "public" }, player: "p0", role: "lookout", stretch: 1 }]);
     for (const viewer of cfg.players) expect(canSee(events[0]!.visibility, viewer.id, false)).toBe(true);
     for (const viewer of ["p1", "p2", "p3"]) {
       expect(viewFor(state, viewer).ledger.at(-1)?.event).toEqual(events[0]);
@@ -53,25 +55,22 @@ describe("role claims — design §8, §12.1", () => {
     expect(ok(start, claim("p1", "mole")).events[0]).toMatchObject({ role: "mole" });
   });
 
-  it("once per player per act; the next act opens a new claim", () => {
+  it("once per player per stretch; the next regular meeting opens a new claim — design §11.3, §9.1", () => {
     let s = ok(start, claim("p0", "rookie")).state;
     expect(reason(s, claim("p0", "auditor"))).toMatch(/already claimed a role since the last meeting/);
     expect(reason(s, claim("p0", "rookie"))).toMatch(/already claimed/);
     s = ok(s, claim("p1", "rookie")).state; // a double claim is allowed: the crew judges it
-    // Play out act 1 to its meeting, then into act 2.
-    for (let round = 1; round <= 3; round++) {
-      const r = handleThroughAlibis(s, { type: "advance", deadline: { kind: "round", round } });
-      if (!r.ok) throw new Error(r.reason);
-      s = r.state;
-    }
-    expect(s.phase.kind).toBe("awaitingMeeting");
-    expect(reason(s, claim("p0", "auditor"))).toMatch(/already claimed/); // the stretch runs until its meeting closes
-    s = ok(s, { type: "scheduleMeeting", act: 1, slot: "now" }).state;
-    s = ok(s, { type: "advance", deadline: { kind: "openMeeting", meetingId: "act-1" } }).state;
-    expect(ok(s, claim("p2", "fixer")).events[0]).toMatchObject({ act: 1 }); // during the vote window too
-    s = ok(s, { type: "advance", deadline: { kind: "closeMeeting", meetingId: "act-1" } }).state;
-    expect(s.round).toBe(4);
-    expect(ok(s, claim("p0", "auditor")).events[0]).toMatchObject({ role: "auditor", act: 2 });
+    // Round 1 takes a third of the bank: the regular meeting is due after its alibis.
+    const r = handleThroughAlibis(s, { type: "advance", deadline: { kind: "round", round: 1 } });
+    if (!r.ok) throw new Error(r.reason);
+    s = r.state;
+    expect(s.phase).toMatchObject({ kind: "awaitingMeeting", meeting: "regular", meetingId: "meeting-1" });
+    expect(reason(s, claim("p0", "auditor"))).toMatch(/already claimed/); // the stretch runs until the regular meeting opens
+    s = ok(s, { type: "scheduleMeeting", meetingId: "meeting-1", slot: "now" }).state;
+    s = ok(s, { type: "advance", deadline: { kind: "openMeeting", meetingId: "meeting-1" } }).state;
+    expect(s.stretch).toBe(2);
+    expect(ok(s, claim("p2", "fixer")).events[0]).toMatchObject({ stretch: 2 }); // during the vote window too
+    expect(ok(s, claim("p0", "auditor")).events[0]).toMatchObject({ role: "auditor", stretch: 2 });
   });
 
   it("refuses unknown players and roles, prototype keys included, never throwing", () => {

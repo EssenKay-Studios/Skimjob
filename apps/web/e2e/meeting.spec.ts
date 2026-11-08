@@ -1,10 +1,11 @@
 import { mkdirSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
-import { startGame } from "./setupGame";
+import { callEmergency, startGame } from "./setupGame";
 
 // M2-7 acceptance (docs/m2-plan.md): one full meeting and vote in the browser,
-// in each vote mode. The 1-hour preset at TIME_SCALE 0.1: a 6 s emergency
-// notice and an 18 s vote window. MEET_SHOTS=… saves the vote dialog and the
+// in each vote mode. The 1-hour preset at TIME_SCALE 0.1: round 1 resolves
+// (30 s), its alibis close (3 s), the result window (6 s) takes the emergency,
+// then a 6 s notice and an 18 s vote window. MEET_SHOTS=… saves the vote dialog and the
 // results as meet-<mode>-<what>-<width>.png.
 const SHOTS = process.env.MEET_SHOTS ?? process.env.SHOTS_DIR;
 
@@ -26,10 +27,10 @@ for (const mode of ["hiddenThenRevealed", "open", "secret"] as const) {
     await page.goto(`/game/${game.id}`);
     await expect(page.getByRole("heading", { name: "Round 1 · Pick your room", level: 2 })).toBeVisible();
 
-    // design §11.1: the emergency button arms, then calls; then it's spent for the game.
+    // design §9.3: not while planning; in round 1's result window the button arms, then calls; then the crew's pool is spent.
     const call = page.getByRole("button", { name: "Call an emergency meeting" });
-    await call.click();
-    await page.getByRole("button", { name: "Sure? Tap again to call it" }).click();
+    await expect(call).toBeDisabled();
+    await callEmergency(page);
     await expect(page.locator(".hud__alert")).toContainText("Emergency meeting in");
 
     // The vote window opens by itself as a dialog.
@@ -80,7 +81,7 @@ for (const mode of ["hiddenThenRevealed", "open", "secret"] as const) {
     await shot(page, `${mode}-results`);
 
     await expect(call).toBeDisabled();
-    await expect(page.getByText("You've called your emergency meeting for this game.")).toBeVisible();
+    await expect(page.getByText("The crew's emergency meetings are all spent.")).toBeVisible();
     await page.getByRole("button", { name: "Got it" }).click();
     await expect(results).toBeHidden();
     expect(errors).toEqual([]);
@@ -90,7 +91,7 @@ for (const mode of ["hiddenThenRevealed", "open", "secret"] as const) {
 test("propose a meeting time, a second player backs it, and leave a sealed vote (design §11.1, §11.2) @meeting", async ({ page, browser }, info) => {
   test.skip(info.project.name !== "desktop", "one viewport is enough");
   test.setTimeout(60_000);
-  // One-week preset: the crew picks the slot. Three people (one stays away) and no bots (bots lock "the end of the act" at once).
+  // One-week preset: the crew picks the slot. Three people (one stays away) and no bots: the slot planner is for people.
   // A majority of 3 people is 2, so the guest's backing still locks it.
   const guestCtx = await browser.newContext({ viewport: page.viewportSize()! });
   const guest = await guestCtx.newPage();

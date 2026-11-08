@@ -7,14 +7,11 @@
 //   their due time, ones the game has moved past are deleted, and the rest
 //   keep the due time they were given. So a restart changes nothing, and a
 //   fired deadline is gone once its change is stored.
-// - While a meeting (or the shakedown window after it) is open, pausable
-//   deadlines (the round, the alibi window, an emergency's notice) stop: `paused_at` is set,
-//   and when the meeting is over their due time moves on by the pause.
+// - No round, alibi window or result window runs while a meeting is open: each
+//   phase has its own deadlines (design §4.1, §9.3), so nothing needs pausing.
 // - A host pause (M2-13, `games.paused_at`) stops every row, `roundEarly`
-//   included; on resume each moves on by its own pause. A row a meeting had
-//   already paused keeps its earlier `paused_at`, so it still moves on by the
-//   whole stop. The host's extend moves the current phase's rows on
-//   (`extendKeys`).
+//   included (`paused_at` is set); on resume each moves on by the pause. The
+//   host's extend moves the current phase's rows on (`extendKeys`).
 // - `tick` (every TICK_MS in main.ts) sends due deadlines, oldest first,
 //   through `live.system`, so bots act and views go out as for any change.
 //   Games run side by side: a game whose send is slow (or still running from
@@ -31,24 +28,19 @@ import type { SessionLength } from "./settings";
 import { scaleTiming, TIMINGS, type Timing } from "./timing";
 
 export interface PlannedDeadline {
-  /** Unique per game and never reused once fired, e.g. `round:3`, `openMeeting:act-1`. */
+  /** Unique per game and never reused once fired, e.g. `round:3`, `openMeeting:meeting-1`. */
   readonly key: string;
   readonly command: SystemCommand;
   /** When it falls due, if it is new now (an existing row keeps its own). */
   readonly dueAt: number;
-  /** Stops while a meeting is open (design §4.1: rounds are paused during a vote). */
-  readonly pausable: boolean;
 }
-
-/** A vote window, or the shakedown window after one, is open. design §4.1 */
-export const meetingOpen = (s: GameState) => s.phase.kind === "meeting" || s.phase.kind === "shakedownPending";
 
 const advance = (deadline: Deadline): SystemCommand => ({ type: "advance", deadline });
 
 /**
  * The deadlines the host's extend moves on (M2-13, design §15): the round being
- * planned (with its early end, set once everyone locked in), the alibi window
- * or the open vote window. None in other phases.
+ * planned (with its early end, set once everyone locked in), the alibi window,
+ * the result window or the open vote window. None in other phases.
  */
 export function extendKeys(s: GameState): readonly string[] {
   switch (s.phase.kind) {
@@ -56,6 +48,8 @@ export function extendKeys(s: GameState): readonly string[] {
       return [`round:${s.phase.round}`, `roundEarly:${s.phase.round}`];
     case "alibis":
       return [`alibis:${s.phase.round}`];
+    case "result":
+      return [`result:${s.phase.round}`];
     case "meeting":
       return [`closeMeeting:${s.phase.meetingId}`];
     default:
@@ -66,7 +60,7 @@ export function extendKeys(s: GameState): readonly string[] {
 /** Every seat has locked in a move for the round being planned (public: `moveLocked`, design §5.1). */
 export const allLockedIn = (s: GameState): boolean => s.playerOrder.length > 0 && lockedIn(s).length === s.playerOrder.length;
 
-/** Strict ISO 8601 with a zone (Date.parse alone reads "act-1" as a date in 2001). */
+/** Strict ISO 8601 with a zone (Date.parse alone reads labels like "meeting-1" loosely). */
 const ISO_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})$/;
 /** A slot's time in ms, or NaN if it isn't an ISO time (the engine's slots are opaque labels). */
 export const slotTime = (slot: string) => (ISO_TIME.test(slot) ? Date.parse(slot) : NaN);
@@ -78,61 +72,62 @@ type Rule = (s: GameState, t: Timing, now: number) => readonly PlannedDeadline[]
  * kind fail typecheck until it has a rule here.
  */
 export const DEADLINE_RULES: { readonly [K in Deadline["kind"] | "scheduleMeeting"]: Rule } = {
-  // The round being planned; also while an emergency meeting interrupts it (paused). design §5, §4.1
+  // The round being planned. design §4.1
   // Once every seat has locked in, `roundEarly:<n>` resolves it `lockInGraceMs` later (owner decision,
   // 2 Nov): set once, so a change during the grace doesn't restart it; whichever row falls due first
   // resolves the round, and the other one is dropped with it. design §4.1, §5.1
   round: (s, t, now) => {
-    const round = s.phase.kind === "planning" ? s.phase.round : meetingOpen(s) && s.round > s.resolvedRound ? s.round : 0;
-    if (round === 0) return [];
+    if (s.phase.kind !== "planning") return [];
+    const { round } = s.phase;
     const command = advance({ kind: "round", round });
-    const out: PlannedDeadline[] = [{ key: `round:${round}`, command, dueAt: now + t.roundMs, pausable: true }];
-    if (allLockedIn(s)) out.push({ key: `roundEarly:${round}`, command, dueAt: now + t.lockInGraceMs, pausable: true });
+    const out: PlannedDeadline[] = [{ key: `round:${round}`, command, dueAt: now + t.roundMs }];
+    if (allLockedIn(s)) out.push({ key: `roundEarly:${round}`, command, dueAt: now + t.lockInGraceMs });
     return out;
   },
-  // The alibi window after a round resolves; paused if an emergency interrupts it. design §5.4
-  alibis: (s, t, now) => {
-    const round = s.phase.kind === "alibis" ? s.phase.round : meetingOpen(s) && s.alibisOpen ? s.resolvedRound : 0;
-    return round > 0 ? [{ key: `alibis:${round}`, command: advance({ kind: "alibis", round }), dueAt: now + t.alibiMs, pausable: true }] : [];
-  },
-  // Nobody locked a slot by the act deadline (its last round resolving): the server picks one. design §11.1
-  // Auto-scheduled presets open it at once whatever the slot, so they name it `act-<n>` (the end of the
-  // act; no wall time in the log, so a retried deadline can't change the game); others pick a time.
+  // The alibi window after a round resolves. design §5.4
+  alibis: (s, t, now) =>
+    s.phase.kind === "alibis" ? [{ key: `alibis:${s.phase.round}`, command: advance({ kind: "alibis", round: s.phase.round }), dueAt: now + t.alibiMs }] : [],
+  // The result window, when an emergency can be called; once one is, the next round waits for its meeting. design §9.3
+  result: (s, t, now) =>
+    s.phase.kind === "result" && !s.pendingEmergency
+      ? [{ key: `result:${s.phase.round}`, command: advance({ kind: "result", round: s.phase.round }), dueAt: now + t.resultMs }]
+      : [],
+  // A meeting is due and nobody locked a slot: the server picks one. design §9.4
+  // Auto-scheduled presets open it at once whatever the slot, so they name it after the meeting (no wall
+  // time in the log, so a retried deadline can't change the game); others pick a time.
   scheduleMeeting: (s, t, now) =>
     s.phase.kind === "awaitingMeeting" && !s.scheduledMeeting
       ? [
           {
-            key: `scheduleMeeting:act-${s.phase.act}`,
-            command: { type: "scheduleMeeting", act: s.phase.act, slot: t.autoMeetings ? `act-${s.phase.act}` : new Date(now + t.meetingLeadMs).toISOString() },
+            key: `scheduleMeeting:${s.phase.meetingId}`,
+            command: { type: "scheduleMeeting", meetingId: s.phase.meetingId, slot: t.autoMeetings ? s.phase.meetingId : new Date(now + t.meetingLeadMs).toISOString() },
             dueAt: now,
-            pausable: false,
           },
         ]
       : [],
-  // An emergency after its notice; the act's meeting at its slot, once its last round has resolved and
-  // no other meeting is open (so it is sent again after one closes). design §11.1
+  // An emergency after its notice; a due regular meeting or briefing at its slot. design §9.3, §9.4
   openMeeting: (s, t, now) => {
     const out: PlannedDeadline[] = [];
     if (s.pendingEmergency) {
       const meetingId = s.pendingEmergency.meetingId;
-      out.push({ key: `openMeeting:${meetingId}`, command: advance({ kind: "openMeeting", meetingId }), dueAt: now + t.emergencyNoticeMs, pausable: true });
+      out.push({ key: `openMeeting:${meetingId}`, command: advance({ kind: "openMeeting", meetingId }), dueAt: now + t.emergencyNoticeMs });
     }
     if (s.phase.kind === "awaitingMeeting" && s.scheduledMeeting) {
       const { meetingId, slot } = s.scheduledMeeting;
       const at = slotTime(slot);
       const dueAt = t.autoMeetings || !Number.isFinite(at) ? now : Math.max(now, at);
-      out.push({ key: `openMeeting:${meetingId}`, command: advance({ kind: "openMeeting", meetingId }), dueAt, pausable: false });
+      out.push({ key: `openMeeting:${meetingId}`, command: advance({ kind: "openMeeting", meetingId }), dueAt });
     }
     return out;
   },
   closeMeeting: (s, t, now) =>
     s.phase.kind === "meeting"
-      ? [{ key: `closeMeeting:${s.phase.meetingId}`, command: advance({ kind: "closeMeeting", meetingId: s.phase.meetingId }), dueAt: now + t.meetingMs, pausable: false }]
+      ? [{ key: `closeMeeting:${s.phase.meetingId}`, command: advance({ kind: "closeMeeting", meetingId: s.phase.meetingId }), dueAt: now + t.meetingMs }]
       : [],
   // Always the full window: it is set once, here, and a cancel doesn't touch it. design §8, §11.3
   resolveShakedown: (s, t, now) =>
     s.phase.kind === "shakedownPending"
-      ? [{ key: `resolveShakedown:${s.phase.meetingId}`, command: advance({ kind: "resolveShakedown", meetingId: s.phase.meetingId }), dueAt: now + t.shakedownWindowMs, pausable: false }]
+      ? [{ key: `resolveShakedown:${s.phase.meetingId}`, command: advance({ kind: "resolveShakedown", meetingId: s.phase.meetingId }), dueAt: now + t.shakedownWindowMs }]
       : [],
 };
 
@@ -164,14 +159,14 @@ export interface Scheduler {
   timers(gameId: string): Promise<readonly Timer[]>;
 }
 
-/** A deadline for the client: due time in epoch ms; `pausedAt` is set while a meeting pauses it. */
+/** A deadline for the client: due time in epoch ms; `pausedAt` is set while the host has paused the game. */
 export interface Timer {
   readonly key: string;
   readonly dueAt: number;
   readonly pausedAt: number | null;
 }
 
-/** Deadlines sent per game per tick at most (a few fall due together at an act's end). */
+/** Deadlines sent per game per tick at most (a few can fall due together after a round). */
 const MAX_PER_TICK = 100;
 /** Longest wait before retrying a deadline whose send failed (1 s, 2 s, 4 s … up to this). */
 export const MAX_BACKOFF_MS = 60_000;
@@ -187,7 +182,7 @@ const sortTimers = (ts: Timer[]) => ts.sort((a, b) => a.dueAt - b.dueAt || (a.ke
 
 /**
  * What `system` answers when, under the game's lock, the deadline turned out not
- * to be due any more: the host paused the game (or a meeting paused the row), it
+ * to be due any more: the host paused the game, it
  * was extended, or it's gone. Nothing was applied; the row stays as it is. M2-13
  */
 export const DEADLINE_SKIPPED = "deadline-skipped" as const;
@@ -281,12 +276,10 @@ export function createScheduler(deps: {
       const now = clock.now();
       const planned = new Map(planDeadlines(state, await timingOf(gameId), now).map((d) => [d.key, d]));
       if (state.phase.kind === "ended") timings.delete(gameId);
-      const paused = meetingOpen(state);
       const timers = await db.transaction(async (tx) => {
         // The host's pause stops every row, whatever its kind. M2-13
         const [game] = await tx.query<{ paused: boolean }>("select paused_at is not null as paused from games where id = $1", [gameId]);
         const hostPaused = game?.paused === true;
-        const pausedFor = (d: PlannedDeadline | undefined) => hostPaused || (d !== undefined && d.pausable && paused);
         const rows = await tx.query<Row>(
           `select key, paused_at is not null as paused, (extract(epoch from due_at) * 1000)::float8 as due,
              (extract(epoch from paused_at) * 1000)::float8 as paused_ms
@@ -302,10 +295,10 @@ export function createScheduler(deps: {
           const pausedAt = row.paused_ms === null ? null : Math.round(Number(row.paused_ms));
           if (!want) {
             await tx.query("delete from deadlines where game_id = $1 and key = $2", [gameId, row.key]);
-          } else if (pausedFor(want) && !row.paused) {
+          } else if (hostPaused && !row.paused) {
             await tx.query("update deadlines set paused_at = to_timestamp($3::float8 / 1000) where game_id = $1 and key = $2", [gameId, row.key, now]);
             after.push({ key: row.key, dueAt, pausedAt: now });
-          } else if (!pausedFor(want) && row.paused) {
+          } else if (!hostPaused && row.paused) {
             await tx.query(
               "update deadlines set due_at = due_at + (to_timestamp($3::float8 / 1000) - paused_at), paused_at = null where game_id = $1 and key = $2",
               [gameId, row.key, now],
@@ -317,7 +310,7 @@ export function createScheduler(deps: {
         }
         for (const d of planned.values()) {
           if (have.has(d.key)) continue;
-          const pausedAt = pausedFor(d) ? now : null;
+          const pausedAt = hostPaused ? now : null;
           await tx.query(
             "insert into deadlines (game_id, key, due_at, command, paused_at) values ($1, $2, to_timestamp($3::float8 / 1000), $4::json, $5)",
             [gameId, d.key, d.dueAt, JSON.stringify(d.command), pausedAt === null ? null : new Date(now).toISOString()],

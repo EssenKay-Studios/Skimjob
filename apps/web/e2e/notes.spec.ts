@@ -1,6 +1,15 @@
 import { expect, test, type Page } from "@playwright/test";
 import { startGame } from "./setupGame";
 
+/** A public event any time (design §11.3): the player claims the Lookout from the role card. */
+async function claimLookout(page: Page): Promise<void> {
+  const card = page.locator(".role-card");
+  await card.getByRole("button", { name: "Claim role" }).click();
+  await card.getByRole("group", { name: "Role to claim" }).getByRole("button", { name: "Lookout" }).click();
+  await card.getByRole("button", { name: "Claim the Lookout" }).click();
+  await expect(card.getByText("You claimed to be the Lookout.")).toBeVisible();
+}
+
 // M2-10: "While you were away" (design §13), the suspicion board (§12.3) and
 // the case board, at every launch width.
 
@@ -22,7 +31,7 @@ test("the recap shows what changed while you were away, once, and the board stay
   const guestCtx = await browser.newContext();
   const host = await hostCtx.newPage();
   const guest = await guestCtx.newPage();
-  // One-week preset: rounds and the emergency's lead time are long, so nothing else happens meanwhile.
+  // One-week preset: rounds are long, so nothing else happens meanwhile.
   const game = await startGame(host.request, { bots: 3, guests: [guest.request], sessionLength: "1w" });
 
   // First visit: nothing to catch up on; the mark is set.
@@ -33,18 +42,16 @@ test("the recap shows what changed while you were away, once, and the board stay
   await expect(host.getByRole("region", { name: "While you were away" })).toHaveCount(0);
   await host.close();
 
-  // While the host is away, the guest calls an emergency meeting.
+  // While the host is away, the guest claims a role.
   await guest.goto(`/game/${game.id}`);
-  await guest.getByRole("button", { name: "Call an emergency meeting" }).click();
-  await guest.getByRole("button", { name: "Sure? Tap again to call it" }).click();
-  await expect(guest.locator(".hud__alert")).toContainText("Emergency meeting in");
+  await claimLookout(guest);
 
   // Back: the recap is at the top of the screen.
   const back = await hostCtx.newPage();
   await back.goto(`/game/${game.id}`);
   const recap = back.getByRole("region", { name: "While you were away" });
   await expect(recap).toBeVisible();
-  await expect(recap).toContainText("Guest 1 called an emergency meeting.");
+  await expect(recap).toContainText("Guest 1 claims to be the Lookout.");
   expect(await recap.locator(".away__line").count()).toBeGreaterThanOrEqual(2);
   const dismissed = seenSaved(back);
   await recap.getByRole("button", { name: "Caught up" }).click();
@@ -105,10 +112,8 @@ test("a hidden tab coming back to the front shows the recap, and the missed even
   await host.evaluate(() => (window as unknown as { setHidden: (h: boolean) => void }).setHidden(true));
   const hiddenAt = Date.now();
   await guest.goto(`/game/${game.id}`);
-  await guest.getByRole("button", { name: "Call an emergency meeting" }).click();
-  await guest.getByRole("button", { name: "Sure? Tap again to call it" }).click();
-  // It reaches the hidden tab's view (the emergency shows on its screen), but nobody is looking: the mark stays put.
-  await expect(host.locator(".hud__alert")).toContainText("Emergency meeting in");
+  await claimLookout(guest);
+  // It reaches the hidden tab's view, but nobody is looking: the mark stays put.
   await host.waitForTimeout(2500);
   expect(await lastSeen()).toBe(before);
   // Away long enough to count (AWAY_MIN_HIDDEN_MS, 10 s): a quick tab switch gets no recap.
@@ -117,7 +122,7 @@ test("a hidden tab coming back to the front shows the recap, and the missed even
   await host.evaluate(() => (window as unknown as { setHidden: (h: boolean) => void }).setHidden(false));
   const recap = host.getByRole("region", { name: "While you were away" });
   await expect(recap).toBeVisible();
-  await expect(recap).toContainText("Guest 1 called an emergency meeting.");
+  await expect(recap).toContainText("Guest 1 claims to be the Lookout.");
   await host.waitForTimeout(2500);
   expect(await lastSeen()).toBe(before);
   const dismissed = seenSaved(host);

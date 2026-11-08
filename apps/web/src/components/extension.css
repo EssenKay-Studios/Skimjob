@@ -1,5 +1,5 @@
 /* Extension pieces (docs/extension.md): role facts and tags, tappable role
-   names, the rulebook sheet, gap box, tokens and
+   names, the rulebook sheet, tokens and
    the shop. Cartoon notebook style; theme tokens only. */
 
 /* ---------- Tags and role facts ---------- */
@@ -192,27 +192,6 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 6px 14px;
-}
-
-/* ---------- Gap box ---------- */
-.gap-box {
-  display: grid;
-  gap: 2px;
-  padding: 10px 14px;
-  border: 1.5px dashed var(--ink);
-  border-radius: var(--radius-bubble);
-  background: var(--paper-hi);
-}
-.gap-box__text {
-  font-weight: 650;
-  color: var(--ink);
-}
-.gap-box.is-short {
-  border-color: var(--bad);
-  background: var(--bad-l);
-}
-.gap-box.is-even {
-  border-color: var(--good);
 }
 
 /* ---------- Tokens and the shop ---------- */

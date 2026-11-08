@@ -7,32 +7,25 @@
 // private `tokenEarned`, emitted where its trigger happens: after a round
 // resolves (round.ts), after a shakedown (`dirtyShakedownRewards`, `blessingEvents`).
 import type { RolePower, TokenTrigger } from "@skimjob/content";
-import type { ActNumber, GameEvent, GameState, PlayerId, PlayerState } from "./types";
-import { PUBLIC, privateTo } from "./types";
-import { jobFor, roleDefIn, rolesFor } from "./overrides";
-import { actOfRound } from "./acts";
+import type { GameEvent, GameState, PlayerId, PlayerState } from "./types";
+import { privateTo } from "./types";
+import { roleDefIn, rolesFor } from "./overrides";
 import { isObject, show } from "./check";
 
 type Result = GameEvent[] | string;
 
-/** The clean line: holding less than it above the share is clean; the Detective's "dirty" line too (owner ruling 3). extension.md "Shakedowns (fixed numbers)" */
-const cleanThreshold = (state: GameState): number => jobFor(state.config).shakedown.cleanBelow;
-
-/** What `target` holds above the share: the pocketed coins still held. design §7.6, §9.6 */
-export const aboveShare = (state: GameState, target: PlayerId): number => (state.players[target] as PlayerState).stash - state.share;
-
-/** Whether `target` isn't clean at `threshold`: what they hold above the share reaches it. The shakedown and the Detective read this. design §9.6 */
-export const holdsDirty = (state: GameState, target: PlayerId, threshold: number): boolean => aboveShare(state, target) >= threshold;
+/** What `target` holds above the share (the pocketed coins still held; 0 at or below it): what a shakedown takes. design §7.6, §9.6 */
+export const aboveShare = (state: GameState, target: PlayerId): number => Math.max(0, (state.players[target] as PlayerState).stash - state.share);
 
 /**
- * Auditor (v2 §2): once per act, the latest resolved round's shortfall for
+ * Auditor (v2 §2): once between meetings, the latest resolved round's shortfall for
  * one room in play: what its visitors pocketed (0 if none, or if nobody was there).
  */
-function audit(state: GameState, player: PlayerState, perAct: number, raw: Record<string, unknown>): Result {
-  if (player.roleState.usedThisAct >= perAct) return "you have already audited a room since the last meeting";
+function audit(state: GameState, player: PlayerState, perStretch: number, raw: Record<string, unknown>): Result {
+  if (player.roleState.usedThisStretch >= perStretch) return "you have already audited a room since the last meeting";
   const round = state.resolvedRound;
   if (round === 0) return "no round has resolved yet";
-  // PR #26 review: the act's last round is still the latest one as the next act starts; one audit of it is enough.
+  // PR #26 review: a round stays the latest resolved one across a regular meeting (a new stretch); one audit of it is enough.
   if (state.log.some((e) => e.type === "abilityResolved" && e.player === player.id && e.ability.kind === "audit" && e.ability.round === round)) {
     return `you have already audited round ${round}`;
   }
@@ -43,74 +36,69 @@ function audit(state: GameState, player: PlayerState, perAct: number, raw: Recor
   return [{ type: "abilityResolved", visibility: privateTo(player.id), player: player.id, round: state.round, ability: { kind: "audit", round, room, shortfall } }];
 }
 
-/** Detective (v2 §2): once per act, whether another player's stash is at or above the clean threshold right now. */
-function checkStash(state: GameState, player: PlayerState, perAct: number, raw: Record<string, unknown>): Result {
-  if (player.roleState.usedThisAct >= perAct) return "you have already checked a stash since the last meeting";
+/** Detective (v2 §2): once between meetings, whether another player holds anything above the share right now (§9.6). */
+function checkStash(state: GameState, player: PlayerState, perStretch: number, raw: Record<string, unknown>): Result {
+  if (player.roleState.usedThisStretch >= perStretch) return "you have already checked a stash since the last meeting";
   const target = raw.target;
   if (typeof target !== "string" || !Object.hasOwn(state.players, target)) return `unknown player ${show(target)}`;
   if (target === player.id) return "check another player's stash";
   // PR #26 review: a check during the window would be a sure Shield (the shakedown is public, so this refusal tells nothing).
   if (state.pendingShakedown?.target === target) return "that player's shakedown is already pending";
-  const threshold = cleanThreshold(state);
   return [
     {
       type: "abilityResolved",
       visibility: privateTo(player.id),
       player: player.id,
       round: state.round,
-      ability: { kind: "checkStash", target, threshold, dirty: holdsDirty(state, target, threshold) },
+      ability: { kind: "checkStash", target, dirty: aboveShare(state, target) > 0 },
     },
   ];
 }
 
-/** The act of each meeting, from the public `meetingOpened`s. */
-const meetingActs = (state: GameState): Map<string, ActNumber> =>
-  new Map(state.log.flatMap((e) => (e.type === "meetingOpened" ? [[e.meetingId, e.act] as const] : [])));
-
-/** Priests (by player id) whose blessing for `act` covers `target`, given before now. */
-function blessersOf(state: GameState, target: PlayerId, act: ActNumber): PlayerId[] {
+/** Priests (by player id) whose blessing for `stretch` covers `target`. */
+function blessersOf(state: GameState, target: PlayerId, stretch: number): PlayerId[] {
   const out: PlayerId[] = [];
   for (const e of state.log) {
-    if (e.type === "abilityResolved" && e.ability.kind === "bless" && e.ability.target === target && e.ability.act === act) out.push(e.player);
+    if (e.type === "abilityResolved" && e.ability.kind === "bless" && e.ability.target === target && e.ability.stretch === stretch) out.push(e.player);
   }
   return out;
 }
 
-/** Whether a player `priest` blessed in `act` was later shaken down dirty in a meeting of that act. */
-function blessedWentDirty(state: GameState, priest: PlayerId, act: number): boolean {
-  const acts = meetingActs(state);
-  return state.log.some(
-    (e, i) =>
-      e.type === "abilityResolved" &&
-      e.player === priest &&
-      e.ability.kind === "bless" &&
-      e.ability.act === act &&
-      state.log.slice(i).some((x) => x.type === "shakedownResolved" && !x.clean && x.target === (e.ability as { target: PlayerId }).target && acts.get(x.meetingId) === act),
-  );
+/** Whether a player `priest` blessed in `stretch` was later shaken down dirty in that stretch (it ends as a regular meeting opens, §9.1). */
+function blessedWentDirty(state: GameState, priest: PlayerId, stretch: number): boolean {
+  let current = 1;
+  const blessed = new Set<PlayerId>();
+  for (const e of state.log) {
+    if (e.type === "meetingOpened" && e.kind === "regular") current++;
+    else if (current !== stretch) continue;
+    else if (e.type === "abilityResolved" && e.player === priest && e.ability.kind === "bless") blessed.add(e.ability.target);
+    else if (e.type === "shakedownResolved" && !e.clean && blessed.has(e.target)) return true;
+  }
+  return false;
 }
 
 /**
- * Priest (v2 §2): once per act, bless another player for the current act.
- * Refused for a player whose shakedown is already pending, and for the whole
- * act after a blessed player was shaken down dirty in the act before.
+ * Priest (v2 §2): once between meetings, bless another player for the current
+ * stretch. Refused for a player whose shakedown is already pending, and for the
+ * whole stretch after a blessed player was shaken down dirty in the one before.
  */
-function bless(state: GameState, player: PlayerState, perAct: number, raw: Record<string, unknown>): Result {
-  if (player.roleState.usedThisAct >= perAct) return "you have already blessed someone since the last meeting";
+function bless(state: GameState, player: PlayerState, perStretch: number, raw: Record<string, unknown>): Result {
+  if (player.roleState.usedThisStretch >= perStretch) return "you have already blessed someone since the last meeting";
   const target = raw.target;
   if (typeof target !== "string" || !Object.hasOwn(state.players, target)) return `unknown player ${show(target)}`;
   if (target === player.id) return "bless another player";
   if (state.pendingShakedown?.target === target) return "that player's shakedown is already pending";
-  const act = actOfRound(Math.max(1, state.round));
-  if (blessedWentDirty(state, player.id, act - 1)) return "your last blessing was caught dirty: no blessing until the next meeting";
-  return [{ type: "abilityResolved", visibility: privateTo(player.id), player: player.id, round: state.round, ability: { kind: "bless", target, act } }];
+  const { stretch } = state;
+  if (blessedWentDirty(state, player.id, stretch - 1)) return "your last blessing was caught dirty: no blessing until the next regular meeting";
+  return [{ type: "abilityResolved", visibility: privateTo(player.id), player: player.id, round: state.round, ability: { kind: "bless", target, stretch } }];
 }
 
 /** `useAbility` with the Auditor's, Detective's or Priest's power, or null if `power` is none of them. */
 export function useCrewPower(state: GameState, player: PlayerState, power: RolePower, raw: unknown): Result | null {
   if (!isObject(raw) || raw.kind !== power.kind) return null;
-  if (power.kind === "audit") return audit(state, player, power.perAct, raw);
-  if (power.kind === "checkStash") return checkStash(state, player, power.perAct, raw);
-  if (power.kind === "bless") return bless(state, player, power.perAct, raw);
+  if (power.kind === "audit") return audit(state, player, power.perStretch, raw);
+  if (power.kind === "checkStash") return checkStash(state, player, power.perStretch, raw);
+  if (power.kind === "bless") return bless(state, player, power.perStretch, raw);
   return null;
 }
 
@@ -157,14 +145,8 @@ export function dirtyShakedownRewards(state: GameState, target: PlayerId, meetin
   ];
 }
 
-/**
- * Priest (v2 §2): `target` was shaken down clean in a meeting of `act`. If a
- * Priest blessed them for that act, the bank pays the compensation
- * (`blessingPaid` puts it back into the coins set aside) and each such Priest earns a token.
- */
-export function blessingEvents(state: GameState, meetingId: string, target: PlayerId, act: ActNumber, compensation: number): GameEvent[] {
-  const priests = blessersOf(state, target, act);
-  if (priests.length === 0) return [];
-  const paid: GameEvent[] = compensation > 0 ? [{ type: "blessingPaid", visibility: PUBLIC, meetingId, target, amount: compensation }] : [];
-  return [...paid, ...grantRewards(state, "blessedShakenClean", (p) => priests.includes(p.id))];
+/** Priest (v2 §2): `target` was just shaken down clean. Each Priest who blessed them this stretch earns a token. */
+export function blessingEvents(state: GameState, target: PlayerId): GameEvent[] {
+  const priests = blessersOf(state, target, state.stretch);
+  return grantRewards(state, "blessedShakenClean", (p) => priests.includes(p.id));
 }

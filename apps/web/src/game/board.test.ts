@@ -135,8 +135,8 @@ describe("board scene (M2-9 wiring)", () => {
     expect(boardScene({ ...locked, card: { round: 0, id: "lockdown", room: "office" } }).closed).toEqual([]);
   });
 
-  it("lights the bank by act: day, dusk, night (ui-style, design §4)", () => {
-    expect([1, 3, 4, 6, 7, 9].map(timeOfRound)).toEqual(["day", "day", "dusk", "dusk", "night", "night"]);
+  it("lights the bank by thirds of the round cap: day, dusk, night (ui-style, design §6.2)", () => {
+    expect([1, 4, 5, 8, 9, 12].map(timeOfRound)).toEqual(["day", "day", "dusk", "dusk", "night", "night"]);
   });
 
   it("gives each seat its index as the look and a crew-unique tag, bot prefix dropped", () => {

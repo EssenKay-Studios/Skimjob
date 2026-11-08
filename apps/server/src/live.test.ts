@@ -189,7 +189,7 @@ describe("commands from a socket", () => {
     const before = await load(id);
     for (const cmd of [
       { type: "advance", deadline: { kind: "round", round: 1 } },
-      { type: "scheduleMeeting", act: 1, slot: "now" },
+      { type: "scheduleMeeting", meetingId: "meeting-1", slot: "now" },
       { type: "toString" },
       { type: "__proto__" },
       "submitMove",
@@ -406,7 +406,10 @@ describe("pushing views", () => {
     await expect(app.live.system(id, { type: "advance", deadline: { kind: "round", round: 2 } })).rejects.toThrow(/refused/);
     const resolved = await app.live.system(id, { type: "advance", deadline: { kind: "round", round: 1 } });
     expect(resolved.phase).toMatchObject({ kind: "alibis", round: 1 }); // design §5.4
-    const after = await app.live.system(id, { type: "advance", deadline: { kind: "alibis", round: 1 } });
+    let after = await app.live.system(id, { type: "advance", deadline: { kind: "alibis", round: 1 } });
+    // design §9.2, §9.3: a raid's briefing, if the bots raided a room, then the result window.
+    expect(["result", "awaitingMeeting"]).toContain(after.phase.kind);
+    while (after.phase.kind !== "planning") for (const cmd of nextDeadline(after)) after = await app.live.system(id, cmd as Parameters<typeof app.live.system>[1]);
     expect(after.phase).toMatchObject({ kind: "planning", round: 2 });
     for (const p of after.playerOrder.filter((x) => x !== humans[0]!.player)) expect(after.moves[p]).toBeDefined();
     await c.barrier();
@@ -420,15 +423,17 @@ function nextDeadline(state: GameState): Command[] {
   const phase = state.phase;
   if (phase.kind === "meeting") return [{ type: "advance", deadline: { kind: "closeMeeting", meetingId: phase.meetingId } }];
   if (phase.kind === "shakedownPending") return [{ type: "advance", deadline: { kind: "resolveShakedown", meetingId: phase.meetingId } }];
-  if (state.pendingEmergency && (phase.kind === "planning" || phase.kind === "alibis" || phase.kind === "awaitingMeeting")) {
+  if (state.pendingEmergency) {
     return [{ type: "advance", deadline: { kind: "openMeeting", meetingId: state.pendingEmergency.meetingId } }];
   }
   if (phase.kind === "planning") return [{ type: "advance", deadline: { kind: "round", round: phase.round } }];
   // design §5.4: the round's alibi window closes before the next round's planning.
   if (phase.kind === "alibis") return [{ type: "advance", deadline: { kind: "alibis", round: phase.round } }];
+  // design §9.3: the result window closes when nobody called an emergency.
+  if (phase.kind === "result") return [{ type: "advance", deadline: { kind: "result", round: phase.round } }];
   if (phase.kind === "awaitingMeeting") {
-    const schedule: Command[] = state.scheduledMeeting ? [] : [{ type: "scheduleMeeting", act: phase.act, slot: `server-act-${phase.act}` }];
-    return [...schedule, { type: "advance", deadline: { kind: "openMeeting", meetingId: state.scheduledMeeting?.meetingId ?? `act-${phase.act}` } }];
+    const schedule: Command[] = state.scheduledMeeting ? [] : [{ type: "scheduleMeeting", meetingId: phase.meetingId, slot: `server-${phase.meetingId}` }];
+    return [...schedule, { type: "advance", deadline: { kind: "openMeeting", meetingId: phase.meetingId } }];
   }
   return [];
 }
@@ -444,12 +449,16 @@ describe("acceptance: a full game over sockets (docs/m2-plan.md M2-3)", () => {
       const agents = humans.map((h, i) => createBot({ player: h.player, personality: PERSONALITIES[(["greedy", "honest", "cautious"] as const)[i]!], seed: `human/${i}`, crewSeed: "test-crew" }));
       const refused: { player: string; command: PlayerCommand; reply: ServerMessage }[] = [];
       // A bust (design §5.5) can end the game before the first regular meeting, so an emergency
-      // meeting in round 1 makes sure the ballots are in play.
-      expect(await clients[0]!.send({ type: "callEmergency" })).toMatchObject({ ok: true });
-
+      // meeting in the first result window makes sure the ballots are in play (design §9.3).
+      let called = false;
       let steps = 0;
       for (; (await load(id)).phase.kind !== "ended"; steps++) {
         expect(steps).toBeLessThan(200);
+        const now = await load(id);
+        if (!called && now.phase.kind === "result" && now.emergencies > 0 && !now.pendingEmergency) {
+          expect(await clients[0]!.send({ type: "callEmergency" })).toMatchObject({ ok: true });
+          called = true;
+        }
         for (const [i, c] of clients.entries()) {
           await c.barrier();
           const view = c.lastView();

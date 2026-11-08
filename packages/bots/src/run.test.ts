@@ -115,13 +115,13 @@ describe("all-bot games — design §17.3", () => {
     expect(lockdowns).toBeGreaterThan(0);
   }, 30_000); // many full games: over the 5 s default on a busy machine
 
-  it("bots never propose a slot, so the server picks every act's meeting — design §11.1 (STATUS bot scheduling)", () => {
+  it("bots never propose a slot, so the server picks every regular meeting's and briefing's — design §9.4 (STATUS bot scheduling)", () => {
     const { state } = play(5, "schedule", ["honest"]);
     const scheduled = state.log.filter((e) => e.type === "meetingScheduled");
-    // One per act's meeting the game reached (a raid can end it early).
-    const acts = state.log.filter((e) => e.type === "meetingOpened" && e.kind === "regular").length;
-    expect(acts).toBeGreaterThan(0);
-    expect(scheduled.length).toBe(acts);
+    // One per regular meeting and briefing the game reached (a raid can end it early).
+    const meetings = state.log.filter((e) => e.type === "meetingOpened" && e.kind !== "emergency").length;
+    expect(meetings).toBeGreaterThan(0);
+    expect(scheduled.length).toBe(meetings);
     expect(state.log.some((e) => e.type === "meetingProposed")).toBe(false);
     expect(scheduled.every((e) => e.type === "meetingScheduled" && e.proposalId === null)).toBe(true);
   });
@@ -193,8 +193,7 @@ describe("personalities behave as design §17.3 describes", () => {
     // 0.6 (was 0.8): R7's raids and busts (S3a.2) end some honest games too, until the S5 balance pass tunes them.
     expect(stats(["honest"], 5, 20).success).toBeGreaterThanOrEqual(0.6);
     expect(all.shakedowns).toBeGreaterThan(0);
-    // 0.15 (was 0.5): raids seize whole grabs, pockets included, so stashes are smaller against R6's clean line
-    // (S3a.2), until S3a.5's shakedowns against the share replace it.
+    // 0.15 (was 0.5): raids seize whole grabs, pockets included (S3a.2); a shakedown catches anything above the share (design §9.6).
     expect(all.dirty / all.shakedowns).toBeGreaterThan(0.15);
   });
 });

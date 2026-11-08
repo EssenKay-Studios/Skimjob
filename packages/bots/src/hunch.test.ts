@@ -22,12 +22,16 @@ const config = (n: number, seed: string): GameConfig => ({
 
 const play = (c: GameConfig) => runBotGame(c, createBots(c.players, (_, i) => personality(i), c.seed));
 
-/** Views at act 1's meeting: p2's and p5's when it opens, and p2's just before it closes (after the votes). */
+/** The game's first meeting's id (a briefing, a regular meeting or an emergency). */
+const firstMeeting = (log: readonly GameEvent[]) => log.find((e) => e.type === "meetingOpened")?.type === "meetingOpened" ? (log.find((e) => e.type === "meetingOpened") as Extract<GameEvent, { type: "meetingOpened" }>).meetingId : null;
+
+/** Views at the game's first meeting: p2's and p5's when it opens, and p2's just before it closes (after the votes). */
 function meetingViews(seed: string) {
   const c = config(6, seed);
   const log = play(c).state.log;
-  const start = log.findIndex((e) => e.type === "meetingOpened" && e.meetingId === "act-1");
-  const end = log.findIndex((e) => e.type === "meetingClosed" && e.meetingId === "act-1");
+  const id = firstMeeting(log);
+  const start = log.findIndex((e) => e.type === "meetingOpened" && e.meetingId === id);
+  const end = log.findIndex((e) => e.type === "meetingClosed" && e.meetingId === id);
   expect(start).toBeGreaterThan(0);
   expect(end).toBeGreaterThan(start + 1);
   const opened = replay(c, log.slice(0, start + 1));
@@ -44,11 +48,11 @@ describe("crew hunch — design §17.3 (v2 §5)", () => {
     }
   });
 
-  it("no seat is always shielded: over 60 seeds at 6 players, every seat is shaken down at act 1's meeting sometimes", () => {
+  it("no seat is always shielded: over 60 seeds at 6 players, every seat is shaken down at the first meeting sometimes", () => {
     const targets = new Map<string, number>();
     for (let i = 0; i < 60; i++) {
       const log = play(config(6, `hunch-${i}`)).state.log;
-      const closed = log.find((e): e is Extract<GameEvent, { type: "meetingClosed" }> => e.type === "meetingClosed" && e.meetingId === "act-1");
+      const closed = log.find((e): e is Extract<GameEvent, { type: "meetingClosed" }> => e.type === "meetingClosed" && e.meetingId === firstMeeting(log));
       if (closed?.result.kind === "shakedown") targets.set(closed.result.target, (targets.get(closed.result.target) ?? 0) + 1);
     }
     for (let i = 1; i <= 6; i++) expect(targets.get(`p${i}`) ?? 0, `p${i} in ${JSON.stringify([...targets])}`).toBeGreaterThan(0);

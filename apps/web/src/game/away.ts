@@ -5,7 +5,7 @@
 // from public round results). docs/m2-plan.md M2-10
 import type { GameEvent, LoggedEvent, PlayerView } from "@skimjob/engine";
 import { describeEvent, type DescribeContext } from "./describeEvent";
-import { meetingAfter, meetingName } from "./wording";
+import { MEETING_TITLE } from "./meeting";
 
 /** One recap line and the entries it was built from (for tests: they must all be in the viewer's view). */
 export interface RecapItem {
@@ -61,7 +61,8 @@ export function recapItems(events: readonly LoggedEvent[], view: PlayerView, ctx
     if (e.event.result.kind === "shakedown" && settled.has(e.event.result.target)) continue;
     picks.push({ prio: 4, ...say(e) });
   }
-  for (const e of [...of("emergencyMeetingCalled"), ...of("meetingScheduled")]) picks.push({ prio: 5, ...say(e) });
+  // What people said (design §15.4): role claims, with emergencies called and meetings set.
+  for (const e of [...of("emergencyMeetingCalled"), ...of("meetingScheduled"), ...of("roleClaimed")]) picks.push({ prio: 5, ...say(e) });
 
   // Your case file: only your own entries are in it (viewFor), minus what you did yourself.
   const news = events.filter((e) => e.event.visibility.kind !== "public" && !OWN_ACTIONS.has(e.event.type));
@@ -96,7 +97,9 @@ export function nextUp(view: PlayerView): string | null {
     case "shakedownPending":
       return "Now: a shakedown is about to land.";
     case "awaitingMeeting":
-      return `Now: round ${meetingAfter(p.act)} is done; ${meetingName(p.act)} is next.`;
+      return `Now: the ${MEETING_TITLE[p.meeting].toLowerCase()} is next.`;
+    case "result":
+      return `Now: round ${p.round}'s result is in.`;
     default:
       return null;
   }

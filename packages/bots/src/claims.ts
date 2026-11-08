@@ -1,7 +1,7 @@
 // Role claims and bluffs for bots (docs/roles-v2.md §4 "Claim"; design §8, §12.1).
 //
 // A claim is the public `claimRole` command (a `roleClaimed` on the ledger),
-// once per act. Bots don't read chat, so claims are structured engine data
+// once between meetings (design §11.3). Bots don't read chat, so claims are structured engine data
 // and the same in the simulator and on the server.
 //
 // Default policy (extension.md Build notes "Bots"): ★ holders and the roles
@@ -159,12 +159,12 @@ function saved(view: PlayerView): boolean {
 
 /**
  * The role to claim now, or null. Only around meetings (v2 §4: "when accused
- * at a meeting"), once per act. Most bots tell the truth;
+ * at a meeting"), once between meetings. Most bots tell the truth;
  * ★ and evidence-leaving roles bluff (`bluffFor`).
  */
 export function chooseClaim(view: PlayerView, p: Personality, random: Random, voted = view.me.vote !== null): RoleId | null {
   if (!meetingTime(view)) return null;
-  if (ofType(view.ledger, "roleClaimed").some((c) => c.player === view.me.id && c.act === view.act)) return null;
+  if (ofType(view.ledger, "roleClaimed").some((c) => c.player === view.me.id && c.stretch === view.stretch)) return null;
   const blame = accused(view);
   if (bluffs(view.me.role)) {
     if (blame === null || random() >= BLUFF_WHEN_ACCUSED) return null;

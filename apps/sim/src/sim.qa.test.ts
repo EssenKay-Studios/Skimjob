@@ -50,12 +50,12 @@ describe("design §17.4 config overrides — hostile JSON is refused, nothing po
     '{"alarm":{"__proto__":{"bulbs":1}}}',
     '{"alarm":{"constructor":1}}',
     '{"roundCap":{"__proto__":12}}',
-    '{"shakedown":{"__proto__":{"cleanBelowPerAct":0}}}',
+    '{"shakedown":{"__proto__":{"x":0}}}',
     '{"roles":{"__proto__":{"stashMultiplier":9}}}',
     '{"roles":{"rookie":{"__proto__":{"stashMultiplier":9}}}}',
     '{"roles":{"toString":{}}}',
     '{"alarm":{"bulbs":0}}', '{"alarm":{"bulbs":"5"}}', '{"rooms":{"vault":{"coins":1.5}}}', '{"rooms":{"vault":{"coins":-1}}}',
-    '{"roundCap":0}', '{"roundCap":"12"}', '{"roundCap":2.5}', '{"checkpoints":{"perPlayer":[1,2,3]}}', '{"roles":{"lookout":{"perAct":1}}}',
+    '{"roundCap":0}', '{"roundCap":"12"}', '{"roundCap":2.5}', '{"checkpoints":{"perPlayer":[1,2,3]}}', '{"roles":{"lookout":{"perStretch":1}}}',
     '{"rooms":{"vault":{"capacity":{"max":2}}}}', '{"rooms":[]}', '{"alarm":null}',
   ];
   it.each(hostile)("%s", (json) => {

@@ -68,12 +68,12 @@ export interface RoomOverride {
 
 /**
  * New numbers for one role. A role may only set its own power's numbers
- * (`extraRooms`, `perAct`, `weight`, …) and, for a role with a
+ * (`extraRooms`, `perStretch`, `weight`, …) and, for a role with a
  * reward, `rewardCount` (tokens per trigger). design §8, §8.3
  */
 export interface RoleOverride {
   readonly extraRooms?: number;
-  readonly perAct?: number;
+  readonly perStretch?: number;
   readonly weight?: number;
   /** Tokens each reward trigger grants. design §8.3 */
   readonly rewardCount?: number;
@@ -88,7 +88,6 @@ export interface ContentOverrides {
   readonly alarm?: { readonly bulbs?: number; readonly tapedRounds?: number; readonly bustStars?: number };
   /** design §6.2 */
   readonly roundCap?: number;
-  readonly shakedown?: { readonly cleanBelow?: number; readonly payout?: number };
   /** Shop costs (extension.md "Tokens and the perk shop"). */
   readonly perks?: Readonly<Partial<Record<PerkId, { readonly cost?: number }>>>;
   readonly roles?: Readonly<Record<RoleId, RoleOverride>>;

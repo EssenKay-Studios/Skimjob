@@ -1,7 +1,7 @@
 // QA (PR #50, R6a): adversarial tests against docs/extension.md, the R6 rules spec.
 // Written against the spec, not the implementation: tokens and the shop, the
-// win rule, "between meetings" windows, fixed shakedown numbers, the one vote
-// rule, whole-number scoring, camera offline.
+// win rule, "between meetings" windows, shakedowns against the share, the one
+// vote rule, whole-number scoring, camera offline.
 import { describe, expect, it } from "vitest";
 import { PERKS, ROLES, SHOP_COLUMNS, type PerkId } from "@skimjob/content";
 import { handleThroughAlibis } from "./alibis.testkit";
@@ -74,15 +74,27 @@ const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", r
 const buy = (player: string, perk: string) => ({ type: "buyPerk", player, perk });
 const use = (player: string, ability: object) => ({ type: "useAbility", player, ability });
 const vote = (player: string, target: string | null) => ({ type: "castVote", player, vote: target === null ? { kind: "skip" } : { kind: "shakedown", target } });
-const emergency = (p: string) => [{ type: "callEmergency", player: p }, { type: "advance", deadline: { kind: "openMeeting", meetingId: `emergency-${p}` } }];
-const closeEm = (p: string) => ({ type: "advance", deadline: { kind: "closeMeeting", meetingId: `emergency-${p}` } });
-/** Rounds until the act's regular meeting is open (scheduling it). */
-const toActMeeting = (s: GameState): GameState => {
+/** Steps with the bare engine (no result window skipped), refusing on any rejection. */
+function step(s: GameState, ...commands: unknown[]): GameState {
+  for (const c of commands) {
+    const r = handleCommand(s, c);
+    if (!r.ok) throw new Error(`rejected ${JSON.stringify(c)}: ${r.reason}`);
+    s = r.state;
+  }
+  return s;
+}
+/** Resolves the round being planned, and `p` spends the crew's emergency in its result window; the meeting opens (design §9.3). */
+function withEmergency(s: GameState, p: string): GameState {
+  s = step(s, ROUND(s), { type: "advance", deadline: { kind: "alibis", round: s.round } }, { type: "callEmergency", player: p });
+  return step(s, { type: "advance", deadline: { kind: "openMeeting", meetingId: s.pendingEmergency?.meetingId } });
+}
+const closeMeeting = (s: GameState) => run(s, { type: "advance", deadline: { kind: "closeMeeting", meetingId: s.meeting?.id } });
+/** Rounds until a regular meeting is due (a third of the bank gone, design §9.1); the server schedules and opens it. */
+const toRegularMeeting = (s: GameState): GameState => {
   while (s.phase.kind === "planning") s = run(s, ROUND);
-  const act = s.phase.kind === "awaitingMeeting" ? s.phase.act : 0;
-  return run(s, { type: "scheduleMeeting", act, slot: "x" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: `act-${act}` } });
+  const meetingId = s.phase.kind === "awaitingMeeting" ? s.phase.meetingId : null;
+  return run(s, { type: "scheduleMeeting", meetingId, slot: "x" }, { type: "advance", deadline: { kind: "openMeeting", meetingId } });
 };
-const closeAct = (s: GameState) => run(s, { type: "advance", deadline: { kind: "closeMeeting", meetingId: s.meeting?.id } });
 const views = (s: GameState, ids: readonly PlayerId[]) => ids.map((id) => JSON.stringify(viewFor(s, id)));
 const withPlayers = (s: GameState, patch: Record<PlayerId, Partial<PlayerState>>): GameState => ({
   ...s,
@@ -138,7 +150,7 @@ describe("buyPerk (extension.md \"Tokens and the perk shop\")", () => {
     if (!r.ok) throw new Error(r.reason);
     expect(r.state.phase.kind).toBe("alibis");
     expect(handleCommand(r.state, buy("p0", "tail")).ok).toBe(true);
-    const meeting = run(s, ...emergency("p2"));
+    const meeting = withEmergency(s, "p2");
     expect(handleCommand(meeting, buy("p1", "extraVote")).ok).toBe(true);
     // A bust in round 1: a one-bulb bell, one star, and a Vault grab.
     const ended = run(game(config(3, { contentOverrides: { alarm: { bulbs: 1, bustStars: 1 } } }), { shop: SHOP, tokens: { p0: 2 } }), mv("p1", "vault"), ROUND);
@@ -218,36 +230,31 @@ describe("one vote rule for every crew size, 3..12 (extension.md \"Voting\")", (
   });
 });
 
-describe("fixed shakedown numbers (extension.md \"Shakedowns (fixed numbers)\")", () => {
-  const shaken = (roles: string[], move: object) => {
-    let s = game(config(5), { roles });
-    s = run(s, move, ROUND);
-    // Enough set aside to pay a clean target (R6 numbers until S3a.5).
-    return run({ ...s, setAside: 20 }, ...emergency("p1"), vote("p1", "p2"), vote("p3", "p2"), vote("p4", "p2"), closeEm("p1"));
-  };
+describe("shakedowns against the share (design §9.6)", () => {
+  const shaken = (move: object) => closeMeeting(run(withEmergency(run(game(config(5)), move), "p1"), vote("p1", "p2"), vote("p3", "p2"), vote("p4", "p2")));
 
-  it("5 above the share is clean and paid 8 out of the coins set aside; 6 is dirty and taken (design §9.6)", () => {
-    const clean = shaken([], mv("p2", "vault", 5));
-    const r5 = ofType(clean.log, "shakedownResolved")[0];
-    expect(r5).toMatchObject({ clean: true, compensation: 8, stashRevealed: 5 + clean.share, taken: 5 });
-    const dirty = shaken([], mv("p2", "vault", 6));
-    expect(ofType(dirty.log, "shakedownResolved")[0]).toMatchObject({ clean: false, compensation: 0, stashRevealed: 6 + dirty.share, taken: 6 });
+  it("whatever is above the share is taken, every coin of it; a target at the share is clean and paid nothing", () => {
+    const dirty = shaken(mv("p2", "vault", 5));
+    expect(ofType(dirty.log, "shakedownResolved")[0]).toMatchObject({ clean: false, stashRevealed: 5 + dirty.share, taken: 5 });
     expect(dirty.players.p2?.stash).toBe(dirty.share);
+    const clean = shaken(mv("p2", "lobby"));
+    expect(ofType(clean.log, "shakedownResolved")[0]).toMatchObject({ clean: true, stashRevealed: clean.share, taken: 0 });
+    expect([clean.players.p2?.stash, clean.setAside]).toEqual([clean.share, 0]);
   });
 });
 
 describe("between-meetings windows (extension.md Build notes \"Between meetings\", gap-fills 2 and 7)", () => {
   const loop = (p: string, room = "vault") => mv(p, "lobby", 0, { ability: { kind: "loopCameras", room } });
 
-  it("a once-between-meetings power stays spent through an emergency meeting and recharges only when the regular meeting closes", () => {
-    let s = game(config(5), { roles: ["hacker"] });
+  it("a once-between-meetings power stays spent through an emergency meeting and recharges only at the regular meeting (design §9.1, §11.2)", () => {
+    // A bank of 40: two-thirds is gone in round 3, after the emergency (design §9.1).
+    let s = game(config(5, { contentOverrides: { bank: { coinsPerPlayer: 8 } } }), { roles: ["hacker"] });
     s = run(s, loop("p0"), ROUND);
     expect(handleCommand(s, loop("p0")).ok).toBe(false);
-    s = run(s, ...emergency("p1"), closeEm("p1"));
+    s = closeMeeting(withEmergency(s, "p1"));
+    expect(s.phase.kind).toBe("planning");
     expect(handleCommand(s, loop("p0")).ok).toBe(false);
-    s = run(s, ROUND, ROUND);
-    s = toActMeeting(s);
-    s = closeAct(s);
+    s = closeMeeting(toRegularMeeting(s));
     expect(s.phase.kind).toBe("planning");
     expect(handleCommand(s, loop("p0")).ok).toBe(true);
   });
@@ -270,12 +277,11 @@ describe("\"camera offline\" (extension.md \"Situations\": the Hacker's loop)", 
   });
 });
 
-describe("shared numbers: Detective line, compensation from the coins set aside (extension.md gap-fills 3)", () => {
-  it("the Detective's dirty line is the same 6 as the clean line: 5 reads clean, 6 dirty", () => {
-    for (const [stash, dirty] of [[5, false], [6, true]] as const) {
+describe("the Detective's line is the shakedown's: anything above the share (design §9.6)", () => {
+  it("at the share reads clean, one coin above reads dirty", () => {
+    for (const [stash, dirty] of [[0, false], [1, true]] as const) {
       const s = run(withPlayers(game(config(5), { roles: ["detective"] }), { p2: { stash } }), use("p0", { kind: "checkStash", target: "p2" }));
-      const r = ofType(s.log, "abilityResolved").at(-1);
-      expect(r?.ability).toMatchObject({ kind: "checkStash", threshold: 6, dirty });
+      expect(ofType(s.log, "abilityResolved").at(-1)?.ability).toEqual({ kind: "checkStash", target: "p2", dirty });
     }
   });
 });

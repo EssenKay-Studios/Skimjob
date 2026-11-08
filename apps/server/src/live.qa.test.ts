@@ -108,20 +108,26 @@ function nextDeadline(state: GameState): Command[] {
   const phase = state.phase;
   if (phase.kind === "meeting") return [{ type: "advance", deadline: { kind: "closeMeeting", meetingId: phase.meetingId } }];
   if (phase.kind === "shakedownPending") return [{ type: "advance", deadline: { kind: "resolveShakedown", meetingId: phase.meetingId } }];
-  if (state.pendingEmergency && (phase.kind === "planning" || phase.kind === "alibis" || phase.kind === "awaitingMeeting")) {
+  if (state.pendingEmergency) {
     return [{ type: "advance", deadline: { kind: "openMeeting", meetingId: state.pendingEmergency.meetingId } }];
   }
   if (phase.kind === "planning") return [{ type: "advance", deadline: { kind: "round", round: phase.round } }];
   // design §5.4: the round's alibi window closes before the next round's planning.
   if (phase.kind === "alibis") return [{ type: "advance", deadline: { kind: "alibis", round: phase.round } }];
+  // design §9.3: the result window closes when nobody called an emergency.
+  if (phase.kind === "result") return [{ type: "advance", deadline: { kind: "result", round: phase.round } }];
   if (phase.kind === "awaitingMeeting") {
-    const schedule: Command[] = state.scheduledMeeting ? [] : [{ type: "scheduleMeeting", act: phase.act, slot: `server-act-${phase.act}` }];
-    return [...schedule, { type: "advance", deadline: { kind: "openMeeting", meetingId: state.scheduledMeeting?.meetingId ?? `act-${phase.act}` } }];
+    const schedule: Command[] = state.scheduledMeeting ? [] : [{ type: "scheduleMeeting", meetingId: phase.meetingId, slot: `server-${phase.meetingId}` }];
+    return [...schedule, { type: "advance", deadline: { kind: "openMeeting", meetingId: phase.meetingId } }];
   }
   return [];
 }
 const runDeadlines = async (id: string, state: GameState) => {
   for (const command of nextDeadline(state)) await app.live.system(id, command as Parameters<typeof app.live.system>[1]);
+};
+/** On to the next round's planning: the result window (and any meeting) passes. design §9.3 */
+const toPlanning = async (id: string) => {
+  for (let s = await loadVia(id); s.phase.kind !== "planning" && s.phase.kind !== "ended"; s = await loadVia(id)) await runDeadlines(id, s);
 };
 
 describe("QA: who may connect", () => {
@@ -240,6 +246,7 @@ describe("QA: flooding and many sockets", () => {
     // A deadline: both tabs move on together.
     await app.live.system(id, { type: "advance", deadline: { kind: "round", round: 1 } });
     await app.live.system(id, { type: "advance", deadline: { kind: "alibis", round: 1 } }); // design §5.4
+    await toPlanning(id);
     await t1.barrier();
     await t2.barrier();
     const want = viewFor(await loadVia(id), humans[0]!.player);
@@ -249,6 +256,7 @@ describe("QA: flooding and many sockets", () => {
     await vi.waitFor(() => expect(t1.closed).not.toBeNull(), quick);
     await app.live.system(id, { type: "advance", deadline: { kind: "round", round: 2 } });
     await app.live.system(id, { type: "advance", deadline: { kind: "alibis", round: 2 } }); // design §5.4
+    await toPlanning(id);
     await t2.barrier();
     expect(t2.lastView()).toEqual(viewFor(await loadVia(id), humans[0]!.player));
     t2.ws.close();
@@ -259,10 +267,12 @@ describe("QA: flooding and many sockets", () => {
     const c = await Client.open(id, humans[0]!);
     await app.live.system(id, { type: "advance", deadline: { kind: "round", round: 1 } });
     await app.live.system(id, { type: "advance", deadline: { kind: "alibis", round: 1 } }); // design §5.4
+    await toPlanning(id);
     await c.send({ type: "submitMove", move: { room: "lobby", duffel: 0, pocket: 1 } });
     c.ws.close();
     await app.live.system(id, { type: "advance", deadline: { kind: "round", round: 2 } }); // changes while away
     await app.live.system(id, { type: "advance", deadline: { kind: "alibis", round: 2 } }); // design §5.4
+    await toPlanning(id);
     const again = await Client.open(id, humans[0]!);
     const state = await loadVia(id);
     expect(state.phase).toMatchObject({ kind: "planning", round: 3 });
@@ -309,6 +319,7 @@ describe("QA: mixed games", () => {
     for (let r = 1; r <= 2; r++) {
       await app.live.system(id, { type: "advance", deadline: { kind: "round", round: r } });
       await app.live.system(id, { type: "advance", deadline: { kind: "alibis", round: r } }); // design §5.4
+      await toPlanning(id);
     }
     await c.send({ type: "submitMove", move: { room: "lobby", duffel: 1, pocket: 0 } });
     const mid = await loadVia(id);

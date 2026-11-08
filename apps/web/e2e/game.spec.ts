@@ -55,7 +55,7 @@ test("a host and a guest play a 15-min game against bots to the end @move", asyn
     const landed = (l: Locator) => l.waitFor({ state: "visible", timeout: 5000 }).then(() => true, () => false);
     const click = (l: Locator) => l.click({ timeout: 5000 }).catch(() => {});
 
-    // Each act's meeting (M2-7): the vote dialog opens by itself; the host skips.
+    // Each meeting (M2-7, design §9): the vote dialog opens by itself; the host skips.
     const vote = async () => {
       const dialog = page.getByRole("dialog", { name: "Who's skimming?" });
       if (!(await dialog.isVisible().catch(() => false))) return;
@@ -180,7 +180,7 @@ test("the bank board: tap a room to pick it, see who you saw and the alibi claim
   await page.getByRole("button", { name: "Lock it in" }).click();
   await expect(page.getByText("Locked in: Office")).toBeVisible();
 
-  // Claim a role from the role card, any time (owner, 2 Nov): once per act.
+  // Claim a role from the role card, any time (owner, 2 Nov): once between meetings.
   const card = page.locator(".role-card");
   await card.getByRole("button", { name: "Claim role" }).click();
   await card.getByRole("group", { name: "Role to claim" }).getByRole("button", { name: "Lookout" }).click();

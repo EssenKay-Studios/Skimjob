@@ -103,6 +103,24 @@ class Client {
 }
 const closeAll = (...cs: Client[]) => cs.forEach((c) => c.ws.close());
 
+/**
+ * After a round's alibis: a meeting the round called (a raid's briefing or a third of the bank, design §9.1,
+ * §9.2) passes with nobody voting, then the result window closes with no emergency (§9.3): the next round.
+ */
+async function toNextRound(app: FastifyInstance, id: string): Promise<void> {
+  for (;;) {
+    const s = (await createGameStore(db).load(id))!;
+    const p = s.phase;
+    if (p.kind === "result") await app.live.system(id, { type: "advance", deadline: { kind: "result", round: p.round } });
+    else if (p.kind === "awaitingMeeting") {
+      if (!s.scheduledMeeting) await app.live.system(id, { type: "scheduleMeeting", meetingId: p.meetingId, slot: p.meetingId });
+      await app.live.system(id, { type: "advance", deadline: { kind: "openMeeting", meetingId: p.meetingId } });
+    } else if (p.kind === "meeting") await app.live.system(id, { type: "advance", deadline: { kind: "closeMeeting", meetingId: p.meetingId } });
+    else if (p.kind === "shakedownPending") await app.live.system(id, { type: "advance", deadline: { kind: "resolveShakedown", meetingId: p.meetingId } });
+    else return;
+  }
+}
+
 describe("the plan board is live for everyone (design §10)", () => {
   it("an entry reaches every seat; the author is the session's seat, never a field", async () => {
     const { id, humans, rooms } = await startGame(3);
@@ -265,6 +283,7 @@ describe("one board per round (design §10)", () => {
     expect(late.board().entries).toHaveLength(1);
 
     await app.live.system(id, { type: "advance", deadline: { kind: "alibis", round: 1 } });
+    await toNextRound(app, id);
     // Round 2: everyone connected is sent the empty board, and edits work again.
     for (const cl of [a!, b!, late]) await vi.waitFor(() => expect(cl.board()).toEqual({ round: 2, entries: [] }), quick);
     expect(await b!.plan({ room: rooms[1] })).toMatchObject({ ok: true });
@@ -430,6 +449,8 @@ describe("open for the round's span, as the scheduler's deadline is (design §10
     expect(await hasDeadline(1)).toBe(false);
     expect(await open()).toBe(false);
     await app.live.system(id, { type: "advance", deadline: { kind: "alibis", round: 1 } });
+    expect(await open()).toBe(false); // the result window, or a meeting the round called (design §9.3)
+    await toNextRound(app, id);
     expect(await hasDeadline(2)).toBe(true);
     expect(await open()).toBe(true);
     closeAll(a);
@@ -447,18 +468,21 @@ describe("open for the round's span, as the scheduler's deadline is (design §10
     closeAll(a);
   });
 
-  it("a meeting closes the board: the spec has none during planning (design §9.3, §10)", async () => {
+  it("no meeting can open during planning, so none closes the board mid-round; an emergency in the result window keeps it closed (design §9.3, §10)", async () => {
     const { id, humans, rooms } = await startGame(2, 1);
     const a = await Client.open(id, humans[0]!);
     clock.advance(1000);
+    expect(await a.sendRaw({ cmd: { type: "callEmergency" } })).toMatchObject({ rejected: true });
+    expect(await a.plan({ room: rooms[0] })).toMatchObject({ ok: true });
+    await app.live.system(id, { type: "advance", deadline: { kind: "round", round: 1 } });
+    await app.live.system(id, { type: "advance", deadline: { kind: "alibis", round: 1 } });
+    if ((await createGameStore(db).load(id))!.phase.kind !== "result") return; // a raid's briefing came first
     expect(await a.sendRaw({ cmd: { type: "callEmergency" } })).toMatchObject({ ok: true });
     const pending = (await createGameStore(db).load(id))!.pendingEmergency!;
     await app.live.system(id, { type: "advance", deadline: { kind: "openMeeting", meetingId: pending.meetingId } });
-    const state = (await createGameStore(db).load(id))!;
-    expect(state.phase.kind).toBe("meeting");
-    expect(state.round).toBeGreaterThan(state.resolvedRound);
-    expect(await a.plan({ room: rooms[0] })).toMatchObject({ rejected: true });
-    expect(await createPlan(db, clock).history(id, 1)).toEqual([]);
+    expect((await createGameStore(db).load(id))!.phase.kind).toBe("meeting");
+    expect(await a.plan({ room: rooms[1] })).toMatchObject({ rejected: true });
+    expect((await createPlan(db, clock).history(id, 1)).map((h) => h.value)).toEqual([rooms[0]]);
     closeAll(a);
   });
 });

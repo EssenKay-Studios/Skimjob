@@ -24,6 +24,11 @@ const config = (voteVisibility: GameConfig["voteVisibility"] = "hiddenThenReveal
   voteVisibility,
 });
 
+/** Round 1 resolves (everyone misses) and its alibis close: the result window (design §9.3). */
+const ROUND_TO_RESULT = [
+  { type: "advance", deadline: { kind: "round", round: 1 } },
+  { type: "advance", deadline: { kind: "alibis", round: 1 } },
+];
 const VIEWERS = ["ana", "ben", "carl"]; // carl owns no sample event
 const ended = (s: GameState): GameState => ({ ...s, phase: { kind: "ended", outcome: sampleEvents.gameEnded.outcome } });
 const withEvent = (s: GameState, event: GameEvent): GameState => ({ ...s, log: [...s.log, event] });
@@ -38,7 +43,7 @@ function run(state: GameState, ...commands: unknown[]): GameState {
   }, state);
 }
 
-/** Every sample, plus the other visibilities a ballot can have (design §11.2). */
+/** Every sample, plus the other visibilities a ballot can have (design §9.5). */
 const samples: GameEvent[] = [
   ...(Object.values(sampleEvents) as GameEvent[]),
   { ...sampleEvents.voteCast, visibility: PUBLIC },
@@ -60,7 +65,7 @@ describe("viewFor over every event type — design §17.2, §13", () => {
       expect(has(during.caseFile, event), `${viewer} case file`).toBe(owns);
       expect(during.reveal).toBeNull();
 
-      // After: ledger and case file unchanged; the reveal opens all but others' secrets (§11.2).
+      // After: ledger and case file unchanged; the reveal opens all but others' secrets (§9.5).
       const after = viewFor(ended(withEvent(base, event)), viewer);
       expect(has(after.ledger, event)).toBe(v.kind === "public");
       expect(has(after.caseFile, event)).toBe(owns);
@@ -93,37 +98,47 @@ describe("viewFor — the viewer's own data and public state — design §13", (
       id: "ana",
       role: s.players.ana?.role,
       stash: 0,
-      roleState: { usedThisAct: 0, usedThisGame: 0, perks: [], tail: null, tokens: 0 },
-      emergencyMeetingUsed: false,
+      roleState: { usedThisStretch: 0, usedThisGame: 0, perks: [], tail: null, tokens: 0 },
       move: fullGrab("office", 1),
       sealedVote: null,
       vote: null,
       seenBallots: {},
     });
     expect(ana.players).toEqual([
-      { id: "ben", name: "Ben", isBot: true, emergencyMeetingUsed: false },
-      { id: "carl", name: "Carl", isBot: false, emergencyMeetingUsed: false },
+      { id: "ben", name: "Ben", isBot: true },
+      { id: "carl", name: "Carl", isBot: false },
     ]);
     expect(viewFor(s, "ben").me.sealedVote).toEqual({ kind: "skip" });
     expect(viewFor(s, "ben").me.move).toBeNull();
   });
 
-  it("public state: phase, round, act, rooms, the share, bells, tape, Wanted, meetings — design §13, §11.1, §5.1, §5.3, §5.4", () => {
+  it("public state: phase, round, stretch, rooms, the share, bells, tape, Wanted, meetings, the emergency pool, protection — design §13, §9.3, §9.4, §9.7, §5.1, §5.3, §5.4", () => {
     let s = createGame(config());
-    s = run(s, { type: "proposeMeeting", player: "ana", slot: "fri" }, { type: "callEmergency", player: "carl" });
+    const fresh = viewFor(s, "ben");
+    expect([fresh.phase, fresh.round, fresh.stretch, fresh.share, fresh.wanted, fresh.taped, fresh.voteVisibility, fresh.emergencies, fresh.protected]).toEqual([
+      { kind: "planning", round: 1 },
+      1,
+      1,
+      0,
+      0,
+      {},
+      "hiddenThenRevealed",
+      1,
+      [],
+    ]);
+    expect(fresh.bells).toEqual(Object.fromEntries(s.rooms.map((r) => [r, 0])));
+    expect(fresh.rooms).toEqual(s.rooms);
+    s = run(s, { type: "proposeMeeting", player: "ana", slot: "fri" }, ...ROUND_TO_RESULT, { type: "callEmergency", player: "carl" });
     const v = viewFor(s, "ben");
-    expect([v.phase, v.round, v.act, v.share, v.wanted, v.taped, v.voteVisibility]).toEqual([{ kind: "planning", round: 1 }, 1, 1, 0, 0, {}, "hiddenThenRevealed"]);
-    expect(v.bells).toEqual(Object.fromEntries(s.rooms.map((r) => [r, 0])));
-    expect(v.rooms).toEqual(s.rooms);
-    expect(v.proposals).toEqual([{ id: "proposal-1", by: "ana", act: 1, slot: "fri", acceptedBy: ["ana"] }]);
-    expect(v.pendingEmergency).toEqual({ meetingId: "emergency-carl", by: "carl" });
-    expect(v.players.find((p) => p.id === "carl")?.emergencyMeetingUsed).toBe(true);
+    expect(v.phase).toEqual({ kind: "result", round: 1 });
+    expect(v.proposals).toEqual([{ id: "proposal-1", by: "ana", slot: "fri", acceptedBy: ["ana"] }]);
+    expect([v.pendingEmergency, v.emergencies]).toEqual([{ meetingId: "emergency-1", by: "carl" }, 0]);
   });
 
   // STATUS note for task 8: meeting.votes holds every ballot; only your own reaches your view.
-  it("me.vote is your own ballot; hidden ballots of others stay out — design §11.2", () => {
+  it("me.vote is your own ballot; hidden ballots of others stay out — design §9.5", () => {
     let s = createGame(config());
-    s = run(s, { type: "callEmergency", player: "ana" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: "emergency-ana" } });
+    s = run(s, ...ROUND_TO_RESULT, { type: "callEmergency", player: "ana" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: "emergency-1" } });
     s = run(s, { type: "castVote", player: "ben", vote: { kind: "shakedown", target: "ana" } }, { type: "castVote", player: "ana", vote: { kind: "skip" } });
     expect(viewFor(s, "ana").me.vote).toEqual({ kind: "skip" });
     expect(viewFor(s, "ben").me.vote).toEqual({ kind: "shakedown", target: "ana" });
@@ -193,6 +208,7 @@ describe("views are copies — design §17.3 (bots only get viewFor), task 8 rev
       { type: "advance", deadline: { kind: "round", round: 1 } },
       { type: "postAlibi", player: "ana", room: "office" },
       { type: "advance", deadline: { kind: "alibis", round: 1 } },
+      { type: "advance", deadline: { kind: "result", round: 1 } },
       { type: "proposeMeeting", player: "ana", slot: "fri" },
       { type: "sealVote", player: "ana", vote: { kind: "shakedown", target: "ben" } },
       { type: "submitMove", player: "ana", move: fullGrab("office", 1) },

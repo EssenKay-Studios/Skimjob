@@ -1,10 +1,11 @@
 // QA for role deck v2 R2a (docs/roles-v2.md §2, §3): power limits, generic
-// refusals, exact token triggers at the threshold, Rookie scoring under the
+// refusals, exact token triggers at the share, Rookie scoring under the
 // one-crew win rule, eligibility at 3–12, a view-diff leak check with all
 // dealt, determinism.
 // extension.md "One crew, and how you win", "Shakedowns", "Tokens and the perk shop"; design §8, §13
 import { describe, expect, it } from "vitest";
-import { handleThroughAlibis } from "./alibis.testkit";
+import { closeResultWindow } from "./alibis.testkit";
+import { handleCommand, type CommandResult } from "./handle";
 import { ROLES } from "@skimjob/content";
 import type { GameConfig, GameEvent, GameState } from "./types";
 import { rolePoolFor, setupEvents } from "./setup";
@@ -14,11 +15,8 @@ import { viewFor } from "./view";
 import { grantPerks } from "./perks.testkit";
 import { fullGrab } from "./grab.testkit";
 import { R6_COINS } from "./v01-numbers.testkit";
-import { jobFor } from "./overrides";
 
 const SIX = ["rookie", "priest", "lookout", "auditor", "detective"];
-/** extension.md "Shakedowns": one fixed clean line (6) in every act, shared with the Detective. */
-const cleanBelowPerAct = jobFor(config(3)).shakedown.cleanBelow; // the R6 pin
 
 function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
   return {
@@ -29,7 +27,8 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",
     ...extra,
-    contentOverrides: { ...R6_COINS, ...extra.contentOverrides }, // R6 room yields as coins (R6 role rules)
+    // R6 room yields as coins (R6 role rules), and a bank of 20 a player, so regular meetings come every few rounds (design §9.1).
+    contentOverrides: { ...R6_COINS, bank: { coinsPerPlayer: 20 }, ...extra.contentOverrides },
   };
 }
 
@@ -39,6 +38,24 @@ function game(players: number, roles: string[], extra: Partial<GameConfig> = {})
   let seat = 0;
   return replay(cfg, setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: roles[seat++] ?? "rookie" } : e)));
 }
+
+/**
+ * A command, with a round deadline followed by its alibi deadline (nobody
+ * posts). The result window (design §9.3) stays open, so an emergency can be
+ * called in it, until a move or a round deadline closes it.
+ */
+function handleThroughAlibis(state: GameState, command: unknown): CommandResult {
+  const c = command as { type?: unknown; deadline?: { kind?: unknown } } | null;
+  const planning = c?.type === "submitMove" || c?.deadline?.kind === "round";
+  const s = state.phase.kind === "result" && !state.pendingEmergency && planning ? must(closeResultWindow(state)) : state;
+  const r = handleCommand(s, command);
+  if (!r.ok || r.state.phase.kind !== "alibis" || c?.deadline?.kind !== "round") return r;
+  return handleCommand(r.state, { type: "advance", deadline: { kind: "alibis", round: r.state.phase.round } });
+}
+const must = (r: CommandResult): GameState => {
+  if (!r.ok) throw new Error(r.reason);
+  return r.state;
+};
 
 type Cmd = unknown | ((s: GameState) => unknown);
 function run(state: GameState, ...commands: Cmd[]): GameState {
@@ -67,26 +84,32 @@ const granted = (s: GameState, player: string) => ofType(s.log, "tokenEarned").f
 const lastAbility = (s: GameState) => ofType(s.log, "abilityResolved").at(-1)?.ability;
 
 const mv = (player: string, room: string, pocket = 0, extra: object = {}) => ({ type: "submitMove", player, move: { ...fullGrab(room, pocket, R6_COINS), ...extra } });
-const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
+/** The round being planned; from the result window, the next one (closing the window first). */
+const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.phase.kind === "result" ? s.round + 1 : s.round } });
 const vote = (player: string, target: string) => ({ type: "castVote", player, vote: { kind: "shakedown", target } });
 const CLOSE = (s: GameState) => ({ type: "advance", deadline: { kind: "closeMeeting", meetingId: s.meeting?.id } });
 const use = (player: string, ability: object) => ({ type: "useAbility", player, ability });
+/** `caller` spends the crew's emergency in the result window (design §9.3). */
 const emergency = (s: GameState, caller: string) =>
-  run(s, { type: "callEmergency", player: caller }, { type: "advance", deadline: { kind: "openMeeting", meetingId: `emergency-${caller}` } });
+  run(s, { type: "callEmergency", player: caller }, (x: GameState) => ({ type: "advance", deadline: { kind: "openMeeting", meetingId: x.pendingEmergency?.meetingId } }));
+/** A meeting the round called (design §9.1, §9.2), else `caller`'s emergency; everyone else but `target` votes to shake `target` down. */
 const shakeDown = (s: GameState, caller: string, target: string): GameState => {
-  s = emergency(s, caller);
+  const p = s.phase;
+  s =
+    p.kind === "awaitingMeeting"
+      ? run(s, { type: "scheduleMeeting", meetingId: p.meetingId, slot: "x" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: p.meetingId } })
+      : emergency(s, caller);
   for (const id of s.playerOrder) if (id !== target) s = run(s, vote(id, target));
   return run(s, CLOSE);
 };
-/** Play to the end of the current act with `moves` each round; the regular meeting runs `inMeeting` then closes. */
-const finishAct = (s: GameState, moves: Cmd[], inMeeting: (s: GameState) => GameState = (x) => x): GameState => {
-  const act = Math.ceil(s.round / 3);
-  while (s.phase.kind === "planning" && Math.ceil(s.round / 3) === act) {
-    const before = s.round;
+/** Play rounds with `moves` until a third of the bank is gone; the regular meeting runs `inMeeting` then closes (design §9.1). */
+const finishStretch = (s: GameState, moves: Cmd[], inMeeting: (s: GameState) => GameState = (x) => x): GameState => {
+  while (s.phase.kind !== "awaitingMeeting") {
+    if (s.phase.kind === "ended") throw new Error("the game ended before a regular meeting");
     s = run(s, ...moves, ROUND);
-    if (s.round === before) break;
   }
-  s = run(s, { type: "scheduleMeeting", act, slot: "x" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: `act-${act}` } });
+  const { meetingId } = s.phase;
+  s = run(s, { type: "scheduleMeeting", meetingId, slot: "x" }, { type: "advance", deadline: { kind: "openMeeting", meetingId } });
   return run(inMeeting(s), CLOSE);
 };
 const STEADY = [mv("p0", "office"), mv("p1", "office"), mv("p2", "lobby")];
@@ -100,33 +123,33 @@ describe("QA: refusals are generic and power limits hold — v2 §2, design §8"
       expect([...reasons]).toEqual([`your role has no ${kind.kind} ability to use now`]);
     }
     let end = game(3, ["auditor", "detective"]);
-    for (let act = 1; act <= 3; act++) end = finishAct(end, STEADY);
-    while (end.phase.kind === "planning") end = run(end, ...STEADY, ROUND); // to the round cap (design §6.2)
+    for (let stretch = 1; stretch <= 2; stretch++) end = finishStretch(end, STEADY);
+    while (end.phase.kind !== "ended") end = run(end, ...STEADY, ROUND); // until the bank runs out (design §6.2)
     expect(end.phase.kind).toBe("ended");
     expect(reason(end, use("p0", { kind: "audit", room: "office" }))).toBe("the game is over");
     expect(reason(end, use("p1", { kind: "checkStash", target: "p0" }))).toBe("the game is over");
   });
 
-  it("once per act, counted across meeting and planning; a refused use doesn't spend it; resets each act", () => {
+  it("once between meetings, counted across meeting and planning; a refused use doesn't spend it; a regular meeting recharges it — design §11.2", () => {
     let s = run(game(3, ["auditor", "detective"]), mv("p2", "vault", 3), ROUND);
     expect(reason(s, use("p1", { kind: "checkStash", target: "p1" }))).toMatch(/another player/);
     expect(reason(s, use("p0", { kind: "audit", room: "moon" }))).toMatch(/room in play/);
     s = emergency(s, "p2");
     // Usable during a meeting ("any time"), and the refused tries above spent nothing.
     s = run(s, use("p0", { kind: "audit", room: "vault" }), use("p1", { kind: "checkStash", target: "p2" }), CLOSE);
-    expect(s.players.p0?.roleState.usedThisAct).toBe(1);
+    expect(s.players.p0?.roleState.usedThisStretch).toBe(1);
     expect(reason(s, use("p0", { kind: "audit", room: "office" }))).toMatch(/already audited/);
     expect(reason(s, use("p1", { kind: "checkStash", target: "p0" }))).toMatch(/already checked/);
-    s = finishAct(s, STEADY);
-    expect(s.round).toBe(4);
+    s = finishStretch(s, STEADY);
+    expect(s.stretch).toBe(2);
     s = run(s, use("p0", { kind: "audit", room: "office" }), use("p1", { kind: "checkStash", target: "p0" }));
-    // The Auditor reads the latest resolved round (3), not the round being planned.
-    expect(ofType(s.log, "abilityResolved").at(-2)?.ability).toMatchObject({ kind: "audit", round: 3, room: "office", shortfall: 0 });
-    expect(lastAbility(s)).toMatchObject({ kind: "checkStash", threshold: cleanBelowPerAct });
+    // The Auditor reads the latest resolved round, the one that called the meeting.
+    expect(ofType(s.log, "abilityResolved").at(-2)?.ability).toMatchObject({ kind: "audit", round: s.resolvedRound, room: "office", shortfall: 0 });
+    expect(lastAbility(s)).toMatchObject({ kind: "checkStash", target: "p0" });
   });
 });
 
-describe("QA: dirty vs clean at exactly the threshold — design §11.3, v2 §2", () => {
+describe("QA: dirty vs clean at exactly the share — design §9.6, v2 §2", () => {
   /** Round 1: p1 pockets `pocket` in the Vault; the Detective p0 checks p1, the Lookout p2 watched the Vault. */
   const caught = (pocket: number) => {
     let s = run(
@@ -141,31 +164,31 @@ describe("QA: dirty vs clean at exactly the threshold — design §11.3, v2 §2"
     return s;
   };
 
-  it("at the threshold: the Detective reads dirty, the shakedown is dirty, and all three readers are rewarded", () => {
-    const s = caught(cleanBelowPerAct);
+  it("one coin above the share: the Detective reads dirty, the shakedown is dirty, and all three readers are rewarded", () => {
+    const s = caught(1);
     const check = ofType(s.log, "abilityResolved").find((e) => e.ability.kind === "checkStash")?.ability;
-    expect(check).toMatchObject({ dirty: true, threshold: cleanBelowPerAct });
+    expect(check).toEqual({ kind: "checkStash", target: "p1", dirty: true });
     expect(ofType(s.log, "shakedownResolved")[0]?.clean).toBe(false);
     expect(granted(s, "p0")).toEqual(["checkedShakenDirty"]);
     expect(granted(s, "p2")).toEqual(["watchedShakenDirty"]);
     expect(granted(s, "p3")).toEqual(["auditedShakenDirty"]);
   });
 
-  it("one below: the Detective reads clean, the shakedown is clean, and nobody is rewarded", () => {
-    const s = caught(cleanBelowPerAct - 1);
+  it("at the share: the Detective reads clean, the shakedown is clean, and nobody is rewarded", () => {
+    const s = caught(0);
     expect(ofType(s.log, "abilityResolved").find((e) => e.ability.kind === "checkStash")?.ability).toMatchObject({ dirty: false });
     expect(ofType(s.log, "shakedownResolved")[0]?.clean).toBe(true);
     expect(ofType(s.log, "tokenEarned")).toEqual([]);
   });
 
-  it("the line doesn't grow: dirty in Act 1 stays dirty in Act 2 at the same stash → a token (extension.md \"Shakedowns\")", () => {
-    let s = run(game(3, ["detective"]), mv("p1", "vault", cleanBelowPerAct), mv("p0", "office"), mv("p2", "office"), ROUND);
+  it("dirty before a regular meeting stays dirty after it at the same stash above the share → a token (extension.md \"Shakedowns\")", () => {
+    let s = run(game(3, ["detective"]), mv("p1", "vault", 3), mv("p0", "office"), mv("p2", "office"), ROUND);
     s = run(s, use("p0", { kind: "checkStash", target: "p1" }));
     expect(lastAbility(s)).toMatchObject({ dirty: true });
-    s = finishAct(s, [mv("p0", "office"), mv("p1", "office"), mv("p2", "office")]);
-    expect(s.round).toBe(4);
-    // design §7.6, §9.6: the line reads what the stash holds above the share.
-    expect((s.players.p1?.stash ?? 0) - s.share).toBe(cleanBelowPerAct);
+    s = finishStretch(s, [mv("p0", "office"), mv("p1", "office"), mv("p2", "office")]);
+    expect(s.stretch).toBe(2);
+    // design §7.6, §9.6: what the stash holds above the share.
+    expect((s.players.p1?.stash ?? 0) - s.share).toBe(3);
     s = shakeDown(s, "p2", "p1");
     expect(ofType(s.log, "shakedownResolved")[0]?.clean).toBe(false);
     expect(granted(s, "p0")).toEqual(["checkedShakenDirty"]);
@@ -173,29 +196,29 @@ describe("QA: dirty vs clean at exactly the threshold — design §11.3, v2 §2"
 });
 
 describe("QA: Lookout sightings and reward counts — v2 §2, design §8.3", () => {
-  it("a sighting in Act 1 pays in Act 2; one token per dirty shakedown however often it saw them; Security sightings don't count", () => {
+  it("a sighting in one stretch pays in the next; one token per dirty shakedown however often it saw them; Security sightings don't count", () => {
     let s = game(3, ["lookout"]);
     const watchVault = mv("p0", "lobby", 0, { ability: { kind: "lookout", rooms: ["vault"] } });
     s = run(s, watchVault, mv("p1", "vault", 2), mv("p2", "office"), ROUND, watchVault, mv("p1", "vault", 2), mv("p2", "office"), ROUND);
-    s = finishAct(s, [mv("p0", "lobby"), mv("p1", "office", 4), mv("p2", "office")]);
-    expect(s.round).toBe(4);
-    expect(s.players.p1!.stash).toBeGreaterThanOrEqual(cleanBelowPerAct);
+    s = finishStretch(s, [mv("p0", "lobby"), mv("p1", "office", 4), mv("p2", "office")]);
+    expect(s.stretch).toBe(2);
+    expect(s.players.p1!.stash).toBeGreaterThan(s.share);
     s = shakeDown(s, "p2", "p1");
     expect(ofType(s.log, "shakedownResolved")[0]?.clean).toBe(false);
     expect(granted(s, "p0")).toEqual(["watchedShakenDirty"]);
 
     // Security (the room, not the power) saw p1: no token.
-    let t = run(game(3, ["lookout"]), mv("p0", "security", 0, { watch: "vault" }), mv("p1", "vault", cleanBelowPerAct), mv("p2", "office"), ROUND);
+    let t = run(game(3, ["lookout"]), mv("p0", "security", 0, { watch: "vault" }), mv("p1", "vault", 3), mv("p2", "office"), ROUND);
     expect(ofType(t.log, "roomWatched").map((e) => e.source)).toEqual(["security"]);
     t = shakeDown(t, "p2", "p1");
     expect(granted(t, "p0")).toEqual([]);
   });
 
   it("nobody is rewarded for their own dirty shakedown (Lookout, Auditor, Detective)", () => {
-    let s = run(game(4, ["lookout", "auditor", "detective"]), mv("p0", "vault", cleanBelowPerAct, { ability: { kind: "lookout", rooms: ["vault"] } }), mv("p1", "vault"), mv("p2", "vault"), ROUND);
+    let s = run(game(4, ["lookout", "auditor", "detective"]), mv("p0", "vault", 3, { ability: { kind: "lookout", rooms: ["vault"] } }), mv("p1", "vault"), mv("p2", "vault"), ROUND);
     s = run(s, use("p1", { kind: "audit", room: "vault" }), use("p2", { kind: "checkStash", target: "p1" }));
     // p1 (Auditor) audited its own room and is checked by the Detective; p0 (Lookout) saw p1 and p2.
-    s = run(s, mv("p1", "vault", cleanBelowPerAct), ROUND);
+    s = run(s, mv("p1", "vault", 3), ROUND);
     s = shakeDown(s, "p3", "p1");
     expect(ofType(s.log, "shakedownResolved")[0]?.clean).toBe(false);
     expect(granted(s, "p1")).toEqual([]); // not for its own shakedown

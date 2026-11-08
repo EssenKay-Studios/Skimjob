@@ -1,6 +1,6 @@
 import { mkdirSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
-import { startGame } from "./setupGame";
+import { callEmergency, startGame } from "./setupGame";
 
 // QA for M2-7 (PR #35): three human contexts in one game, 1-hour preset at
 // TIME_SCALE 0.1 (30 s rounds, 3 s alibis, 6 s notice, 18 s vote window).
@@ -60,11 +60,8 @@ for (const mode of ["hiddenThenRevealed", "open", "secret"] as const) {
     await expect(panel2.getByText("Sealed: skip")).toBeVisible();
     await g2.close();
 
-    await expect(g1.getByRole("heading", { name: /Round [23] · Pick your room/, level: 2 })).toBeVisible({ timeout: 45_000 });
-
-    // Guest 1 calls the emergency meeting during planning.
-    await g1.getByRole("button", { name: "Call an emergency meeting" }).click();
-    await g1.getByRole("button", { name: "Sure? Tap again to call it" }).click();
+    // Guest 1 calls the emergency meeting in a round's result window (design §9.3).
+    await callEmergency(g1);
     await expect(host.locator(".hud__alert")).toContainText("Emergency meeting in");
 
     const hd = dialogOf(host);
@@ -108,12 +105,12 @@ for (const mode of ["hiddenThenRevealed", "open", "secret"] as const) {
     await expect(hd.locator(".vote__status")).toContainText("Your vote: shake down Guest 2");
     await hd.getByRole("button", { name: "Back to the board" }).click();
 
-    // Result: 2 for Guest 2, 1 sealed skip → passes; Guest 2 is clean (only the share) and is compensated from the coins set aside.
+    // Result: 2 for Guest 2, 1 sealed skip → passes; Guest 2 is clean (only the share): nothing is taken (design §9.6).
     const results = host.getByRole("region", { name: /The crew voted|No majority|Too few votes/ });
     await expect(results).toBeVisible({ timeout: 25_000 });
     await expect(results).toContainText("The crew voted to shake down Guest 2");
     await expect(results).toContainText(/Clean! Guest 2 was holding \d+/);
-    await expect(results).toContainText(/The crew paid \d+ from the coins set aside in compensation/);
+    await expect(results).toContainText("Nothing above the share: nothing taken.");
     const tally = results.getByRole("list", { name: "Final tally" });
     await expect(tally).toContainText("Skip");
     if (mode === "secret") await expect(results.getByRole("list", { name: "How everyone voted" })).toHaveCount(0);

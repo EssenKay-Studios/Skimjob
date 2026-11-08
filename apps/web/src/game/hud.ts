@@ -10,14 +10,14 @@ import {
   type PlayerId,
   type PlayerView,
 } from "@skimjob/engine";
-import { meetingAfter, meetingName } from "./wording";
+import { MEETING_TITLE } from "./meeting";
 
 /** A deadline as the live channel sends it (apps/server scheduler.ts `Timer`). */
 export interface Timer {
   readonly key: string;
   /** Epoch ms on the server's clock. */
   readonly dueAt: number;
-  /** Set while a meeting pauses it. */
+  /** Set while the host has paused the game. */
   readonly pausedAt: number | null;
 }
 
@@ -122,10 +122,13 @@ export function phaseInfo(view: PlayerView): PhaseInfo {
       return { title: "Alibi window", timerKey: `alibis:${p.round}`, timerLabel: "alibis close in" };
     case "awaitingMeeting":
       return {
-        title: `Round ${meetingAfter(p.act)} done: ${meetingName(p.act)} next`,
+        title: `${MEETING_TITLE[p.meeting]} next`,
         timerKey: view.scheduledMeeting ? `openMeeting:${view.scheduledMeeting.meetingId}` : null,
         timerLabel: "opens in",
       };
+    case "result":
+      // design §9.3: the result window, when an emergency can be called.
+      return { title: `Round ${p.round} result`, timerKey: view.pendingEmergency ? null : `result:${p.round}`, timerLabel: "next round in" };
     case "meeting":
       return { title: "Crew meeting", timerKey: `closeMeeting:${p.meetingId}`, timerLabel: "votes close in" };
     case "shakedownPending":
@@ -209,7 +212,7 @@ export const defaultRoom = (view: PlayerView): RoomId => jobOf(view).defaultRoom
 export function justMissed(view: PlayerView): { readonly round: number; readonly room: RoomId | null } | null {
   const latest = view.caseFile.filter((x) => x.event.type === "defaultMoveAssigned").at(-1)?.event;
   if (!latest || latest.type !== "defaultMoveAssigned") return null;
-  const lastResolved = view.phase.kind === "planning" ? view.phase.round - 1 : view.phase.kind === "alibis" ? view.phase.round : view.round;
+  const lastResolved = view.phase.kind === "planning" ? view.phase.round - 1 : view.phase.kind === "alibis" || view.phase.kind === "result" ? view.phase.round : view.round;
   return latest.round === lastResolved ? { round: latest.round, room: latest.move?.room ?? null } : null;
 }
 

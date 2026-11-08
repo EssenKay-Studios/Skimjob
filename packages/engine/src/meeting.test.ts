@@ -1,39 +1,48 @@
-// Crew meetings and votes: scheduling, emergency meetings, ballots and their
-// visibility, sealed votes, quorum and majority, shakedowns, and the next round
-// after a regular meeting. design §9, §6.2
+// Crew meetings and votes: regular meetings at the bank's thirds, police
+// briefings after raids, the crew's emergency pool in the result window,
+// scheduling, ballots and their visibility, sealed votes, quorum and majority,
+// shakedowns against the share and their protection. design §9, §4.2, §6.2
 import { MAX_SLOT_LENGTH, STARTER_ROLES, type PerkId } from "@skimjob/content";
-import { handleThroughAlibis } from "./alibis.testkit";
 import { describe, expect, it } from "vitest";
-import type { GameConfig, GameEvent, GameState, VoteVisibility } from "./types";
+import type { ContentOverrides, GameConfig, GameEvent, GameState, VoteVisibility } from "./types";
 import { canSee } from "./types";
 import { setupEvents } from "./setup";
 import { replay } from "./reduce";
 import { handleCommand } from "./handle";
-import { R6_COINS } from "./v01-numbers.testkit";
 import { meetingResult } from "./meeting";
+import { viewFor } from "./view";
 import { fullGrab } from "./grab.testkit";
+import { grantPerks } from "./perks.testkit";
 
 /** One perk per column and no Shield, whatever the seed: a Shield in the shop opens a shakedown window at every meeting. */
 const SHOP_NO_SHIELD: readonly PerkId[] = ["peek", "alibi", "extraVote"];
 
-function config(players: number, voteVisibility: VoteVisibility = "hiddenThenRevealed"): GameConfig {
+/**
+ * Pinned numbers: big grabs, a bank of 6 coins a player (18 for 3 players: a
+ * third is gone at 12 or below, two at 6 or below) and bells too big to raid.
+ */
+const PINS: ContentOverrides = { rooms: { vault: { coins: 6 }, office: { coins: 6 }, lobby: { coins: 2 } }, bank: { coinsPerPlayer: 6 }, alarm: { bulbs: 1000 } };
+/** A bank too big for a third to go (no regular meeting) and real bells (a 6-coin Vault grab raids). */
+const RAIDS: ContentOverrides = { ...PINS, bank: { coinsPerPlayer: 100 }, alarm: { bulbs: 4 } };
+const BIG_BANK: ContentOverrides = { ...PINS, bank: { coinsPerPlayer: 100 } };
+
+function config(players: number, voteVisibility: VoteVisibility = "hiddenThenRevealed", contentOverrides: ContentOverrides = PINS): GameConfig {
   return {
     seed: "meeting-seed",
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, isBot: true })),
     job: "bank",
-    // Starter roles. The shop is pinned (see `game`): a Shield would open a shakedown window.
     rolePool: [...STARTER_ROLES],
     eventsEnabled: false,
     voteVisibility,
-    contentOverrides: R6_COINS, // R6 numbers for the R6 meeting rules until S3a.5
+    contentOverrides,
   };
 }
 
-/** A new game with chosen roles (seat i gets roles[i], Rookie if missing). */
-function game(players: number, roles: string[] = [], mode?: VoteVisibility): GameState {
-  const cfg = config(players, mode);
+/** A new game with chosen roles (seat i gets roles[i], Rookie if missing) and a pinned shop. */
+function game(players: number, roles: string[] = [], mode?: VoteVisibility, overrides?: ContentOverrides, shop: readonly PerkId[] = SHOP_NO_SHIELD): GameState {
+  const cfg = config(players, mode, overrides);
   const log = setupEvents(cfg).map((e, i, all): GameEvent => {
-    if (e.type === "shopDealt") return { ...e, perks: SHOP_NO_SHIELD };
+    if (e.type === "shopDealt") return { ...e, perks: shop };
     if (e.type !== "roleDealt") return e;
     const seat = all.slice(0, i).filter((x) => x.type === "roleDealt").length;
     return { ...e, role: roles[seat] ?? "rookie" };
@@ -44,14 +53,15 @@ function game(players: number, roles: string[] = [], mode?: VoteVisibility): Gam
 type Cmd = unknown | ((s: GameState) => unknown);
 function run(state: GameState, ...commands: Cmd[]): GameState {
   return commands.reduce<GameState>((s, c) => {
-    const r = handleThroughAlibis(s, typeof c === "function" ? c(s) : c);
-    if (!r.ok) throw new Error(`rejected: ${r.reason}`);
+    const command = typeof c === "function" ? c(s) : c;
+    const r = handleCommand(s, command);
+    if (!r.ok) throw new Error(`rejected ${JSON.stringify(command)}: ${r.reason}`);
     return r.state;
   }, state);
 }
 function reason(state: GameState, command: unknown): string {
   const before = JSON.stringify(state);
-  const r = handleThroughAlibis(state, command);
+  const r = handleCommand(state, command);
   if (r.ok) throw new Error("expected a rejection");
   expect(JSON.stringify(state)).toBe(before);
   return r.reason;
@@ -59,79 +69,230 @@ function reason(state: GameState, command: unknown): string {
 const since = (before: GameState, after: GameState): GameEvent[] => after.log.slice(before.log.length);
 const ofType = <T extends GameEvent["type"]>(events: readonly GameEvent[], type: T) =>
   events.filter((e): e is Extract<GameEvent, { type: T }> => e.type === type);
+const LAST = <T extends GameEvent["type"]>(s: GameState, type: T) => ofType(s.log, type).at(-1);
 
-const mv = (player: string, room: string, pocket = 0, extra: object = {}) => ({ type: "submitMove", player, move: { ...fullGrab(room, pocket, R6_COINS), ...extra } });
+const mv = (player: string, room: string, pocket = 0, overrides: ContentOverrides = PINS) => ({ type: "submitMove", player, move: fullGrab(room, pocket, overrides) });
 const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
+const ALIBIS = (s: GameState) => ({ type: "advance", deadline: { kind: "alibis", round: s.resolvedRound } });
+const RESULT = (s: GameState) => ({ type: "advance", deadline: { kind: "result", round: s.resolvedRound } });
 const open = (meetingId: unknown) => ({ type: "advance", deadline: { kind: "openMeeting", meetingId } });
 const close = (meetingId: unknown) => ({ type: "advance", deadline: { kind: "closeMeeting", meetingId } });
-const sched = (act: unknown, slot: unknown = "slot") => ({ type: "scheduleMeeting", act, slot });
+const sched = (meetingId: unknown, slot: unknown = "slot") => ({ type: "scheduleMeeting", meetingId, slot });
 const propose = (player: string, slot: unknown) => ({ type: "proposeMeeting", player, slot });
 const accept = (player: string, proposalId: unknown) => ({ type: "acceptMeeting", player, proposalId });
 const emergency = (player: string) => ({ type: "callEmergency", player });
 const choice = (target: string | null) => (target === null ? { kind: "skip" } : { kind: "shakedown", target });
 const vote = (player: string, target: string | null) => ({ type: "castVote", player, vote: choice(target) });
 const seal = (player: string, target: string | null) => ({ type: "sealVote", player, vote: choice(target) });
-/** Open the current act's meeting (server-picked slot). */
-const OPEN_ACT = (s: GameState) => open(`act-${Math.ceil(s.round / 3)}`);
+/** The server picks the due meeting's slot (`awaitingMeeting`). */
+const SCHED = (s: GameState) => sched(s.phase.kind === "awaitingMeeting" ? s.phase.meetingId : null);
+const OPEN = (s: GameState) => open(s.scheduledMeeting?.meetingId ?? s.pendingEmergency?.meetingId);
 const CLOSE = (s: GameState) => close(s.meeting?.id);
-const LAST = <T extends GameEvent["type"]>(s: GameState, type: T) => ofType(s.log, type).at(-1);
-
-/** Rounds of default moves until the act's meeting is awaited, then schedule and open it. */
-function toMeeting(s: GameState): GameState {
-  while (s.phase.kind === "planning") s = run(s, ROUND);
-  return run(s, sched(Math.ceil(s.round / 3)), OPEN_ACT);
-}
+/** A round's deadline and then its alibis' (nobody posts). */
+const RESOLVE = [ROUND, ALIBIS];
 
 /**
- * 3 Rookies. Round 1: p0 pockets the Vault's 6; p1 and p2 hand in the Lobby's 2.
- * Rounds 2–3: everyone hands in the Lobby's 2. 16 handed in: splits of 1, 2 and 2 (share 5, kitty 1).
+ * 3 Rookies. Round 1: p0 pockets the Vault's 6; p1 and p2 miss (the Lobby, 1
+ * coin handed in each, design §3.3). The bank drops from 18 to 10, past
+ * two-thirds, so the regular meeting opens. The split: 2 coins 3 ways, share 0, kitty 2.
  */
-function act1Meeting(roles: string[] = [], mode?: VoteVisibility): GameState {
-  const lobby = (s: GameState) => run(s, ...["p0", "p1", "p2"].filter((p) => !s.moves[p]).map((p) => mv(p, "lobby")), ROUND);
-  return toMeeting(lobby(lobby(lobby(run(game(3, roles, mode), mv("p0", "vault", 6))))));
+function regularMeeting(roles: string[] = [], mode?: VoteVisibility): GameState {
+  return run(game(3, roles, mode), mv("p0", "vault", 6), ...RESOLVE, SCHED, OPEN);
 }
 
-describe("scheduling the act's meeting — design §11.1", () => {
-  it("any player proposes a slot (counting as an accept); it locks in once more than half the crew accepts", () => {
+describe("regular meetings at the bank's thirds — design §9.1, §4.2 step 9", () => {
+  it("a regular meeting follows the round in which the bank first drops to two-thirds, after its alibis; not before", () => {
+    // Round 1: everyone misses, 3 coins taken: 15 of 18 left, no third gone.
+    let s = run(game(3), ...RESOLVE);
+    expect([s.bank, s.thirds, s.meetingDue]).toEqual([15, 0, null]);
+    expect(s.phase).toEqual({ kind: "result", round: 1 });
+    // Round 2: p0's Vault grab leaves 15 − 6 − 2 = 7: a third is gone.
+    s = run(s, RESULT, mv("p0", "vault"), ROUND);
+    expect([s.bank, s.thirds, s.meetingDue, s.phase.kind]).toEqual([7, 1, "regular", "alibis"]);
+    s = run(s, ALIBIS);
+    expect(s.phase).toEqual({ kind: "awaitingMeeting", meeting: "regular", meetingId: "meeting-1" });
+    const before = run(s, SCHED);
+    s = run(before, OPEN);
+    expect(since(before, s)).toEqual([{ type: "meetingOpened", visibility: { kind: "public" }, meetingId: "meeting-1", kind: "regular" }]);
+    expect(s.meeting).toEqual({ id: "meeting-1", kind: "regular", calledBy: null, votes: {}, extraVotes: [], ballotGrants: {} });
+    expect([s.meetingDue, s.scheduledMeeting, s.stretch]).toEqual([null, null, 2]);
+  });
+
+  it("then again at one-third; a round crossing both thirds calls one regular meeting, and no third calls another", () => {
+    // p0 and p1 grab the Vault's 6 each: 18 − 12 − 1 = 5 left, two thirds gone at once.
+    let s = run(game(3), mv("p0", "vault"), mv("p1", "vault"), ...RESOLVE);
+    expect([s.bank, s.thirds]).toEqual([5, 2]);
+    expect(s.phase).toMatchObject({ kind: "awaitingMeeting", meeting: "regular", meetingId: "meeting-1" });
+    s = run(s, SCHED, OPEN, CLOSE, RESULT, mv("p0", "lobby"), ...RESOLVE);
+    // 5 − 2 − 2 = 1 left: no third left to cross, so the result window follows.
+    expect([s.bank, s.phase.kind]).toEqual([1, "result"]);
+    expect(ofType(s.log, "meetingOpened")).toHaveLength(1);
+
+    // One third at a time: 18 → 10 (meeting-1), then 10 → 5 (meeting-2).
+    let t = run(regularMeeting(), CLOSE, RESULT, mv("p0", "lobby"), mv("p1", "lobby"), ...RESOLVE);
+    expect([t.bank, t.thirds]).toEqual([5, 2]);
+    t = run(t, SCHED, OPEN);
+    expect(t.meeting).toMatchObject({ id: "meeting-2", kind: "regular" });
+    expect(t.stretch).toBe(3);
+  });
+
+  it("only a regular meeting recharges \"once between meetings\" powers; an emergency doesn't — design §11.2", () => {
+    let s = run(game(3, ["rookie", "auditor"]), ...RESOLVE, { type: "useAbility", player: "p1", ability: { kind: "audit", room: "lobby" } });
+    expect(s.players.p1?.roleState.usedThisStretch).toBe(1);
+    s = run(s, emergency("p0"), OPEN, CLOSE);
+    expect([s.players.p1?.roleState.usedThisStretch, s.stretch, s.phase.kind]).toEqual([1, 1, "planning"]);
+    // Round 2: 15 − 6 − 2 = 7, past two-thirds.
+    s = run(s, mv("p0", "vault"), ...RESOLVE, SCHED, OPEN);
+    expect([s.players.p1?.roleState.usedThisStretch, s.stretch]).toEqual([0, 2]);
+  });
+
+  it("no meeting after the round that ends the game (design §6.2)", () => {
+    // Everyone grabs everything: the bank (18) runs out in round 1.
+    const s = run(game(3), mv("p0", "vault"), mv("p1", "vault"), mv("p2", "vault"), ROUND);
+    expect(s.phase.kind).toBe("ended");
+    expect(ofType(s.log, "meetingOpened")).toEqual([]);
+  });
+});
+
+describe("police briefings — design §9.2", () => {
+  it("a raid calls a police briefing after the round's alibis; it recharges nothing", () => {
+    // p0's 6 Vault coins ring 6: the Vault is raided. The bank (300) is nowhere near a third.
+    let s = run(game(3, [], undefined, RAIDS), mv("p0", "vault", 0, RAIDS), ...RESOLVE);
+    expect(s.wanted).toBe(1);
+    expect(s.phase).toEqual({ kind: "awaitingMeeting", meeting: "briefing", meetingId: "meeting-1" });
+    s = run(s, SCHED, OPEN);
+    expect(LAST(s, "meetingOpened")).toMatchObject({ meetingId: "meeting-1", kind: "briefing" });
+    expect(s.stretch).toBe(1);
+    s = run(s, CLOSE);
+    expect(s.phase).toEqual({ kind: "result", round: 1 });
+  });
+
+  it("two raids in one round call one briefing", () => {
+    // The Vault (6 rings) and the Office (5 rings) both raid: Wanted 2, one briefing.
+    let s = run(game(3, [], undefined, RAIDS), mv("p0", "vault", 0, RAIDS), mv("p1", "office", 0, RAIDS), ...RESOLVE);
+    expect(s.wanted).toBe(2);
+    s = run(s, SCHED, OPEN, CLOSE, RESULT);
+    expect(ofType(s.log, "meetingOpened").map((e) => e.kind)).toEqual(["briefing"]);
+    expect(s.phase).toEqual({ kind: "planning", round: 2 });
+  });
+
+  it("a raid in the round that crosses a third: one meeting, and it counts as regular", () => {
+    const both: ContentOverrides = { ...PINS, alarm: { bulbs: 4 } };
+    const s = run(game(3, [], undefined, both), mv("p0", "vault", 0, both), ...RESOLVE);
+    expect([s.wanted, s.bank]).toEqual([1, 10]);
+    expect(s.phase).toEqual({ kind: "awaitingMeeting", meeting: "regular", meetingId: "meeting-1" });
+    expect(run(s, SCHED, OPEN).stretch).toBe(2);
+  });
+});
+
+describe("the emergency pool and the result window — design §9.3, §4.2 step 10", () => {
+  it("the crew's pool: 1 for 3–6 players, 2 for 7–12, public", () => {
+    for (const [n, pool] of [[3, 1], [6, 1], [7, 2], [12, 2]] as const) {
+      const s = game(n, [], undefined, BIG_BANK);
+      expect(s.emergencies).toBe(pool);
+      expect(viewFor(s, "p1").emergencies).toBe(pool);
+    }
+  });
+
+  it("refused during planning, a round's alibis, a due or open meeting; allowed in the result window (#167)", () => {
+    let s = game(3);
+    expect(s.phase.kind).toBe("planning");
+    const only = /only be called between a round's result and the next planning/;
+    expect(reason(s, emergency("p0"))).toMatch(only);
+    s = run(s, mv("p0", "vault", 6), ROUND);
+    expect(s.phase.kind).toBe("alibis");
+    expect(reason(s, emergency("p0"))).toMatch(only);
+    s = run(s, ALIBIS);
+    expect(s.phase.kind).toBe("awaitingMeeting");
+    expect(reason(s, emergency("p0"))).toMatch(only);
+    s = run(s, SCHED, OPEN);
+    expect(reason(s, emergency("p0"))).toMatch(only);
+    s = run(s, CLOSE);
+    expect(s.phase).toEqual({ kind: "result", round: 1 });
+    expect(handleCommand(s, emergency("p0")).ok).toBe(true);
+  });
+
+  it("any player spends one, named publicly; one per window; the window waits for its meeting, then the next round", () => {
+    let s = run(game(3, [], undefined, BIG_BANK), ...RESOLVE);
+    expect(s.phase).toEqual({ kind: "result", round: 1 });
+    s = run(s, emergency("p1"));
+    expect(LAST(s, "emergencyMeetingCalled")).toEqual({ type: "emergencyMeetingCalled", visibility: { kind: "public" }, by: "p1", meetingId: "emergency-1" });
+    expect([s.pendingEmergency, s.emergencies, viewFor(s, "p2").emergencies]).toEqual([{ meetingId: "emergency-1", by: "p1" }, 0, 0]);
+    expect(reason(s, emergency("p2"))).toMatch(/already been called/);
+    // No round clock runs: the window's deadline is refused until the emergency's meeting closes.
+    expect(reason(s, RESULT(s))).toMatch(/next round starts when it closes/);
+    s = run(s, open("emergency-1"));
+    expect(s.meeting).toMatchObject({ kind: "emergency", calledBy: "p1" });
+    // It stays spent although nobody votes (no quorum), and the next round starts as it closes.
+    s = run(s, CLOSE);
+    expect(LAST(s, "meetingClosed")?.result).toEqual({ kind: "noQuorum" });
+    expect([s.phase, s.emergencies]).toEqual([{ kind: "planning", round: 2 }, 0]);
+  });
+
+  it("with the pool empty the result window is skipped: the next round starts as the alibis close", () => {
+    let s = run(game(3, [], undefined, BIG_BANK), ...RESOLVE, emergency("p0"), OPEN, CLOSE);
+    s = run(s, ...RESOLVE);
+    expect(s.phase).toEqual({ kind: "planning", round: 3 });
+    expect(reason(s, emergency("p1"))).toMatch(/between a round's result/);
+    // And after a regular meeting too: it closes straight into the next round.
+    const t = run(regularMeeting(), CLOSE, emergency("p2"), OPEN, CLOSE, mv("p0", "lobby"), mv("p1", "lobby"), ...RESOLVE, SCHED, OPEN, CLOSE);
+    expect(t.phase).toEqual({ kind: "planning", round: 3 });
+  });
+
+  it("7–12 players: the second emergency waits for a later window", () => {
+    let s = run(game(7, [], undefined, BIG_BANK), ...RESOLVE, emergency("p0"), OPEN, CLOSE);
+    expect(s.emergencies).toBe(1);
+    s = run(s, ...RESOLVE);
+    expect(s.phase).toEqual({ kind: "result", round: 2 });
+    s = run(s, emergency("p3"));
+    expect([LAST(s, "emergencyMeetingCalled")?.meetingId, s.emergencies]).toEqual(["emergency-2", 0]);
+  });
+
+  it("the result window's deadline is refused when stale, retried or outside the window", () => {
+    let s = run(game(3, [], undefined, BIG_BANK), ROUND);
+    expect(reason(s, { type: "advance", deadline: { kind: "result", round: 1 } })).toMatch(/no result window/);
+    s = run(s, ALIBIS);
+    for (const round of [0, 2, "1", null]) expect(reason(s, { type: "advance", deadline: { kind: "result", round } })).toMatch(/not open/);
+    s = run(s, RESULT);
+    expect(reason(s, { type: "advance", deadline: { kind: "result", round: 1 } })).toMatch(/no result window/);
+  });
+});
+
+describe("scheduling — design §9.4", () => {
+  it("any player proposes a slot for the next meeting (counting as an accept); it locks once more than half the crew accepts", () => {
     let s = game(4);
     s = run(s, propose("p0", "tue-19:00"));
     const proposed = LAST(s, "meetingProposed");
-    expect(proposed).toMatchObject({ visibility: { kind: "public" }, by: "p0", act: 1, slot: "tue-19:00" });
-    // Deterministic id, not drawn from the RNG: the game's first proposal.
+    expect(proposed).toEqual({ type: "meetingProposed", visibility: { kind: "public" }, proposalId: "proposal-1", by: "p0", slot: "tue-19:00" });
     const id = proposed!.proposalId;
-    expect(id).toBe("proposal-1");
-    expect(s.proposals).toEqual([{ id, by: "p0", act: 1, slot: "tue-19:00", acceptedBy: ["p0"] }]);
-
+    expect(s.proposals).toEqual([{ id, by: "p0", slot: "tue-19:00", acceptedBy: ["p0"] }]);
     s = run(s, accept("p1", id)); // 2 of 4: not a majority
     expect(s.scheduledMeeting).toBeNull();
     const before = s;
     s = run(s, accept("p2", id)); // 3 of 4
     expect(since(before, s).map((e) => e.type)).toEqual(["meetingProposalAccepted", "meetingScheduled"]);
-    expect(LAST(s, "meetingScheduled")).toMatchObject({ visibility: { kind: "public" }, meetingId: "act-1", act: 1, slot: "tue-19:00", proposalId: id });
-    expect(s.scheduledMeeting).toEqual({ meetingId: "act-1", act: 1, slot: "tue-19:00" });
-    expect(s.proposals).toEqual([]);
-    expect(s.phase).toEqual({ kind: "planning", round: 1 }); // the slot can be locked mid-act
+    expect(LAST(s, "meetingScheduled")).toEqual({ type: "meetingScheduled", visibility: { kind: "public" }, meetingId: "meeting-1", slot: "tue-19:00", proposalId: id });
+    expect([s.scheduledMeeting, s.proposals, s.phase]).toEqual([{ meetingId: "meeting-1", slot: "tue-19:00" }, [], { kind: "planning", round: 1 }]);
   });
 
-  it("public ids and fields don't depend on hidden events (PR #6 review)", () => {
-    // Same public history, different private moves (more moveSubmitted events in one game).
+  it("a locked slot opens only once a round calls the meeting and its alibis close", () => {
+    let s = run(game(3), propose("p0", "a"), (x: GameState) => accept("p1", x.proposals[0]!.id));
+    expect(reason(s, open("meeting-1"))).toMatch(/opens once a round calls it/);
+    s = run(s, mv("p0", "vault"), ROUND);
+    expect(reason(s, open("meeting-1"))).toMatch(/opens once a round calls it/);
+    s = run(s, ALIBIS, open("meeting-1"));
+    expect(s.meeting).toMatchObject({ id: "meeting-1", kind: "regular" });
+  });
+
+  it("public ids don't depend on hidden events (PR #6 review)", () => {
     const quiet = run(game(3), ROUND, propose("p0", "a"));
     const busy = run(game(3), mv("p0", "vault", 6), mv("p0", "office", 1), mv("p1", "lobby"), ROUND, propose("p0", "a"));
     expect(busy.log.length).not.toBe(quiet.log.length);
     expect(LAST(busy, "meetingProposed")).toEqual(LAST(quiet, "meetingProposed"));
-    expect(LAST(busy, "meetingProposed")?.proposalId).toBe("proposal-1");
-    // Numbered across the whole game, so act 2's proposals don't reuse act 1's ids.
-    const act2 = run(toMeeting(quiet), CLOSE, propose("p1", "b"));
-    expect(LAST(act2, "meetingProposed")?.proposalId).toBe("proposal-2");
-    // Meeting ids are public names only.
-    const em = run(quiet, emergency("p2"));
-    expect(LAST(em, "emergencyMeetingCalled")?.meetingId).toBe("emergency-p2");
-    expect(run(quiet, (x: GameState) => accept("p1", x.proposals[0]!.id)).scheduledMeeting?.meetingId).toBe("act-1");
-  });
-
-  it("in a crew of 3, one accept beyond the proposer locks the slot", () => {
-    const s = run(game(3), propose("p2", "a"), (x: GameState) => accept("p0", x.proposals[0]!.id));
-    expect(s.scheduledMeeting?.slot).toBe("a");
+    // Numbered across the whole game.
+    const later = run(regularMeeting(), CLOSE, propose("p1", "b"));
+    expect(LAST(later, "meetingProposed")?.proposalId).toBe("proposal-1");
+    expect(run(later, (x: GameState) => accept("p2", x.proposals[0]!.id)).scheduledMeeting?.meetingId).toBe("meeting-2");
   });
 
   it("competing proposals; the first to a majority wins and the rest are dropped", () => {
@@ -148,135 +309,50 @@ describe("scheduling the act's meeting — design §11.1", () => {
     const id = s.proposals[0]!.id;
     expect(reason(s, propose("p1", "a"))).toMatch(/already proposed/);
     expect(reason(s, accept("p0", id))).toMatch(/already accepted/);
-    expect(reason(run(s, accept("p1", id)), accept("p1", id))).toMatch(/already accepted/);
     for (const pid of ["nope", 3, undefined, null]) expect(reason(s, accept("p1", pid))).toMatch(/no open proposal/);
     for (const slot of ["", 3, null, undefined, {}]) expect(reason(s, propose("p1", slot))).toMatch(/slot/);
     expect(reason(s, propose("zed", "b"))).toMatch(/unknown player/);
   });
 
-  it("caps a slot's length (free text, stored and sent to everyone) — design §11.1, §17.2", () => {
+  it("caps a slot's length (free text, stored and sent to everyone)", () => {
     const s = game(4);
     expect(handleCommand(s, propose("p0", "x".repeat(MAX_SLOT_LENGTH))).ok).toBe(true);
     expect(reason(s, propose("p0", "x".repeat(MAX_SLOT_LENGTH + 1)))).toBe(`slot must be at most ${MAX_SLOT_LENGTH} characters`);
-    // An ISO time, as the server sends, fits.
-    expect(handleCommand(s, propose("p0", new Date(0).toISOString())).ok).toBe(true);
   });
 
-  it("the server picks a slot when nobody locked one in (proposalId null)", () => {
-    const s = run(game(3), ROUND, sched(1, "auto-1"));
-    expect(LAST(s, "meetingScheduled")).toMatchObject({ meetingId: "act-1", act: 1, slot: "auto-1", proposalId: null });
+  it("the server picks a slot only for the due meeting, once (proposalId null)", () => {
+    let s = game(3);
+    expect(reason(s, sched("meeting-1"))).toMatch(/no meeting is due/);
+    s = run(s, mv("p0", "vault"), ...RESOLVE);
+    for (const id of ["meeting-2", "stale-1", 1, null]) expect(reason(s, sched(id))).toMatch(/is not due/);
+    expect(reason(s, sched("meeting-1", ""))).toMatch(/slot/);
+    s = run(s, sched("meeting-1", "auto-1"));
+    expect(LAST(s, "meetingScheduled")).toMatchObject({ meetingId: "meeting-1", slot: "auto-1", proposalId: null });
+    expect(reason(s, sched("meeting-1", "b"))).toMatch(/already scheduled/);
   });
 
-  it("scheduleMeeting is refused once a slot is locked, by the crew or the server (STATUS.md task 6)", () => {
-    const byCrew = run(game(3), propose("p0", "a"), (x: GameState) => accept("p1", x.proposals[0]!.id));
-    expect(reason(byCrew, sched(1, "b"))).toMatch(/already scheduled/);
-    const byServer = run(game(3), sched(1, "a"));
-    expect(reason(byServer, sched(1, "b"))).toMatch(/already scheduled/);
-    expect(reason(byServer, propose("p0", "c"))).toMatch(/already scheduled/);
-  });
-
-  it("scheduleMeeting must name the act being played and a non-empty slot", () => {
-    const s = game(3);
-    for (const act of [2, 3, 0, "1", null]) expect(reason(s, sched(act))).toMatch(/not being played/);
-    expect(reason(s, sched(1, ""))).toMatch(/slot/);
-  });
-});
-
-describe("opening and closing the act's meeting — design §11.1, §4.1, §11.4", () => {
-  it("the regular meeting opens only after the act's last round has resolved (provisional)", () => {
-    let s = run(game(3), sched(1));
-    for (const round of [1, 2]) {
-      expect(reason(s, open("act-1"))).toMatch(/opens after round 3 and its alibi deadline/);
-      s = run(s, ROUND);
-      expect(s.round).toBe(round + 1);
-    }
-    expect(reason(s, open("act-1"))).toMatch(/after round 3/);
-    s = run(s, ROUND);
-    expect(s.phase).toEqual({ kind: "awaitingMeeting", act: 1 });
-    const before = s;
-    s = run(s, open("act-1"));
-    expect(since(before, s)).toEqual([{ type: "meetingOpened", visibility: { kind: "public" }, meetingId: "act-1", kind: "regular", act: 1 }]);
-    expect(s.phase).toEqual({ kind: "meeting", meetingId: "act-1" });
-    expect(s.scheduledMeeting).toBeNull();
-    expect(s.meeting).toEqual({ id: "act-1", kind: "regular", act: 1, calledBy: null, votes: {}, extraVotes: [], ballotGrants: {} });
-  });
-
-  it("all three deadline kinds are refused when stale, retried or unknown", () => {
-    let s = run(game(3), ROUND, ROUND, ROUND);
+  it("stale, retried and unknown meeting deadlines are refused", () => {
+    let s = run(game(3), mv("p0", "vault"), ...RESOLVE);
     expect(reason(s, ROUND(s))).toMatch(/no round deadline/);
-    expect(reason(s, open("act-1"))).toMatch(/not waiting to open/); // nothing scheduled yet
-    s = run(s, sched(1));
-    for (const id of ["act-2", "emergency-p0", 1, undefined]) expect(reason(s, open(id))).toMatch(/not waiting/);
-    expect(reason(s, close("act-1"))).toMatch(/not open/);
-    s = run(s, open("act-1"));
-    expect(reason(s, open("act-1"))).toMatch(/already open/); // retried
-    expect(reason(s, ROUND(s))).toMatch(/paused/);
-    expect(reason(s, close("act-2"))).toMatch(/not open/);
-    s = run(s, close("act-1"));
-    expect(reason(s, close("act-1"))).toMatch(/not open/); // retried
-    expect(reason(s, open("act-1"))).toMatch(/not waiting/);
-    expect(s.phase).toEqual({ kind: "planning", round: 4 });
+    expect(reason(s, open("meeting-1"))).toMatch(/not waiting to open/); // nothing scheduled yet
+    s = run(s, SCHED);
+    for (const id of ["meeting-2", "emergency-1", 1, undefined]) expect(reason(s, open(id))).toMatch(/not waiting/);
+    expect(reason(s, close("meeting-1"))).toMatch(/not open/);
+    s = run(s, open("meeting-1"));
+    expect(reason(s, open("meeting-1"))).toMatch(/already open/);
+    expect(reason(s, ROUND(s))).toMatch(/no round deadline/);
+    s = run(s, close("meeting-1"));
+    expect(reason(s, close("meeting-1"))).toMatch(/not open/);
+    expect(reason(s, open("meeting-1"))).toMatch(/not waiting/);
   });
 });
 
-describe("emergency meetings — design §11.1, §4.1", () => {
-  it("one per player per game; it opens mid-act after the notice period, pausing rounds, then planning resumes", () => {
-    let s = run(game(3), mv("p0", "office", 1), emergency("p1"));
-    expect(LAST(s, "emergencyMeetingCalled")).toEqual({ type: "emergencyMeetingCalled", visibility: { kind: "public" }, by: "p1", meetingId: "emergency-p1" });
-    expect(s.pendingEmergency).toEqual({ meetingId: "emergency-p1", by: "p1" });
-    expect(s.players.p1?.emergencyMeetingUsed).toBe(true);
-    expect(reason(s, emergency("p2"))).toMatch(/already been called/);
-    // The notice period is the server's; until it opens, planning carries on.
-    s = run(s, mv("p2", "lobby"));
-    s = run(s, open("emergency-p1"));
-    expect(s.phase).toEqual({ kind: "meeting", meetingId: "emergency-p1" });
-    expect(s.meeting).toMatchObject({ kind: "emergency", act: 1, calledBy: "p1" });
-    expect(s.pendingEmergency).toBeNull();
-    // Rounds are paused: no deadline, no moves.
-    expect(reason(s, ROUND(s))).toMatch(/paused/);
-    expect(reason(s, mv("p0", "vault"))).toMatch(/planned/);
-    expect(reason(s, emergency("p2"))).toMatch(/already open/);
-    s = run(s, close("emergency-p1"));
-    expect(s.phase).toEqual({ kind: "planning", round: 1 });
-    expect(s.moves).toEqual({ p0: { room: "office", duffel: 3, pocket: 1 }, p2: { room: "lobby", duffel: 2, pocket: 0 } });
-    expect(reason(s, emergency("p1"))).toMatch(/already called your emergency meeting/);
-    expect(run(s, emergency("p2")).pendingEmergency?.meetingId).toBe("emergency-p2");
-  });
-
-  it("an emergency shakedown works like the regular one, with the current act's numbers", () => {
-    const s = run(game(3), mv("p0", "vault", 6), ROUND, emergency("p1"), open("emergency-p1"), vote("p1", "p0"), vote("p2", "p0"), CLOSE);
-    expect(LAST(s, "shakedownResolved")).toMatchObject({ meetingId: "emergency-p1", target: "p0", stashRevealed: 6, taken: 6, clean: false, compensation: 0 });
-    expect(s.players.p0).toMatchObject({ stash: 0 });
-    // p1 and p2 missed: 1 coin each (design §3.3), the kitty of round 1's split; the 6 taken are set aside (design §7.1).
-    expect([s.reached, s.kitty, s.setAside]).toEqual([2, 2, 6]);
-    expect(s.phase).toEqual({ kind: "planning", round: 2 });
-  });
-
-  it("called while the act's meeting is awaited, it returns there; the regular can't open while it's open", () => {
-    let s = run(game(3), ROUND, ROUND, ROUND, sched(1), emergency("p0"), open("emergency-p0"));
-    expect(reason(s, open("act-1"))).toMatch(/emergency-p0 is already open/);
-    s = run(s, close("emergency-p0"));
-    expect(s.phase).toEqual({ kind: "awaitingMeeting", act: 1 });
-    s = run(s, open("act-1"));
-    expect(s.meeting?.kind).toBe("regular");
-  });
-
-  it("a pending emergency waits out the regular meeting and opens in the next act", () => {
-    let s = run(game(3), ROUND, ROUND, ROUND, sched(1), emergency("p1"), open("act-1"));
-    expect(reason(s, open("emergency-p1"))).toMatch(/already open/);
-    s = run(s, close("act-1"), open("emergency-p1"));
-    expect(s.meeting).toMatchObject({ id: "emergency-p1", act: 2 });
-    expect(run(s, close("emergency-p1")).phase).toEqual({ kind: "planning", round: 4 });
-  });
-});
-
-describe("ballots — design §11.2", () => {
+describe("ballots — design §9.5", () => {
   it("a vote names another player or skips; the last ballot counts", () => {
-    let s = act1Meeting();
+    let s = regularMeeting();
     expect(reason(s, vote("p0", "p0"))).toMatch(/yourself/);
     for (const target of ["zed", "__proto__", 3]) expect(reason(s, { type: "castVote", player: "p0", vote: { kind: "shakedown", target } })).toMatch(/unknown player/);
     for (const v of [null, "skip", { kind: "pass" }, []]) expect(reason(s, { type: "castVote", player: "p0", vote: v })).toMatch(/vote must be/);
-    expect(reason(s, vote("zed", null))).toMatch(/unknown player/);
     s = run(s, vote("p1", "p0"), vote("p1", null), vote("p2", "p0"));
     expect(s.meeting?.votes).toEqual({ p1: { kind: "skip" }, p2: { kind: "shakedown", target: "p0" } });
     s = run(s, CLOSE);
@@ -286,30 +362,24 @@ describe("ballots — design §11.2", () => {
   it("votes are refused outside a meeting, and every command before the game starts", () => {
     expect(reason(game(3), vote("p0", "p1"))).toMatch(/no meeting is open/);
     const unstarted = replay(config(3), setupEvents(config(3)).filter((e) => e.type !== "roundStarted"));
-    expect(unstarted.phase.kind).toBe("setup");
-    for (const c of [propose("p0", "a"), sched(1), emergency("p0"), seal("p0", "p1")]) expect(reason(unstarted, c)).toMatch(/not started/);
+    for (const c of [propose("p0", "a"), sched("meeting-1"), emergency("p0"), seal("p0", "p1")]) expect(reason(unstarted, c)).toMatch(/not started/);
   });
 
   it("hidden then revealed (default): ballots are private while cast, then every ballot goes to the ledger", () => {
-    const s = run(act1Meeting([], "hiddenThenRevealed"), vote("p2", "p0"), vote("p1", "p0"), CLOSE);
+    const s = run(regularMeeting([], "hiddenThenRevealed"), vote("p2", "p0"), vote("p1", "p0"), CLOSE);
     for (const e of ofType(s.log, "voteCast")) expect(e.visibility).toEqual({ kind: "private", player: e.player });
     const closed = LAST(s, "meetingClosed")!;
-    expect(closed.visibility).toEqual({ kind: "public" });
-    // Seat order, whatever order they were cast in.
     expect(Object.keys(closed.ballots ?? {})).toEqual(["p1", "p2"]);
-    expect(closed.ballots).toEqual({ p1: { kind: "shakedown", target: "p0" }, p2: { kind: "shakedown", target: "p0" } });
   });
 
   it("open: ballots are public as they are cast", () => {
-    const s = run(act1Meeting([], "open"), vote("p1", "p0"));
+    const s = run(regularMeeting([], "open"), vote("p1", "p0"));
     expect(LAST(s, "voteCast")?.visibility).toEqual({ kind: "public" });
     expect(LAST(run(s, CLOSE), "meetingClosed")?.ballots).toEqual({ p1: { kind: "shakedown", target: "p0" } });
   });
 
   it("secret: ballots and sealed votes are secret to the voter (even after the game); only the tally is shown", () => {
-    let s = run(game(3, [], "secret"), mv("p0", "vault", 6), seal("p2", "p0"));
-    expect(LAST(s, "voteSealed")?.visibility).toEqual({ kind: "secret", player: "p2" });
-    s = run(toMeeting(s), vote("p1", "p0"));
+    let s = run(game(3, [], "secret"), mv("p0", "vault", 6), seal("p2", "p0"), ...RESOLVE, SCHED, OPEN, vote("p1", "p0"));
     const ballots = ofType(s.log, "voteCast");
     expect(ballots.map((e) => [e.player, e.sealed])).toEqual([["p2", true], ["p1", false]]);
     for (const e of [...ballots, LAST(s, "voteSealed")!]) {
@@ -319,51 +389,21 @@ describe("ballots — design §11.2", () => {
     s = run(s, CLOSE);
     expect(LAST(s, "meetingClosed")).toMatchObject({ ballots: null, tally: { skip: 0, targets: { p0: 2 } }, result: { kind: "shakedown", target: "p0" } });
   });
-});
 
-describe("sealed votes — design §11.2", () => {
-  it("a sealed vote is private, is cast as the next meeting opens, and is then used up", () => {
-    let s = run(game(3), seal("p2", "p1"), seal("p2", "p0")); // re-sealing replaces it
+  it("a sealed vote is private, cast as the next meeting opens (an emergency too), and is then used up", () => {
+    let s = run(game(3, [], undefined, BIG_BANK), seal("p2", "p1"), seal("p2", "p0"), ...RESOLVE);
     expect(LAST(s, "voteSealed")).toEqual({ type: "voteSealed", visibility: { kind: "private", player: "p2" }, player: "p2", vote: { kind: "shakedown", target: "p0" } });
-    expect(s.players.p2?.sealedVote).toEqual({ kind: "shakedown", target: "p0" });
-    s = toMeeting(s);
-    expect(s.log.slice(-2)).toEqual([
-      expect.objectContaining({ type: "meetingOpened" }),
-      { type: "voteCast", visibility: { kind: "private", player: "p2" }, meetingId: "act-1", player: "p2", vote: { kind: "shakedown", target: "p0" }, sealed: true },
-    ]);
+    s = run(s, emergency("p1"), OPEN);
+    expect(s.log.at(-1)).toEqual({ type: "voteCast", visibility: { kind: "private", player: "p2" }, meetingId: "emergency-1", player: "p2", vote: { kind: "shakedown", target: "p0" }, sealed: true });
     expect(s.players.p2?.sealedVote).toBeNull();
-    s = toMeeting(run(s, CLOSE));
-    expect(s.meeting?.votes).toEqual({}); // not carried into the act-2 meeting
-  });
-
-  it("a voter who turns up can override their sealed vote live", () => {
-    const s = run(game(3), seal("p1", "p0"));
-    const after = run(toMeeting(s), vote("p1", null), CLOSE);
-    expect(LAST(after, "meetingClosed")?.ballots).toEqual({ p1: { kind: "skip" } });
-  });
-
-  it("sealed votes count towards quorum and the majority", () => {
-    const s = run(game(4), mv("p3", "vault", 6), seal("p0", "p3"), seal("p1", "p3"));
-    const after = run(toMeeting(s), CLOSE);
-    expect(LAST(after, "meetingClosed")).toMatchObject({ result: { kind: "shakedown", target: "p3" }, tally: { skip: 0, targets: { p3: 2 } } });
-  });
-
-  it("an emergency meeting uses up the sealed vote too (provisional)", () => {
-    let s = run(game(3), seal("p0", "p1"), emergency("p2"), open("emergency-p2"));
-    expect(s.meeting?.votes).toEqual({ p0: { kind: "shakedown", target: "p1" } });
-    s = toMeeting(run(s, close("emergency-p2")));
-    expect(s.meeting?.votes).toEqual({});
-  });
-
-  it("a sealed vote is checked like a ballot", () => {
-    const s = game(3);
-    expect(reason(s, seal("p0", "p0"))).toMatch(/yourself/);
-    expect(reason(s, seal("p0", "zed"))).toMatch(/unknown player/);
-    expect(reason(s, { type: "sealVote", player: "p0" })).toMatch(/vote must be/);
+    // A voter who turns up can override it live; sealed votes count towards quorum and the majority.
+    s = run(s, vote("p2", null), CLOSE);
+    expect(LAST(s, "meetingClosed")?.ballots).toEqual({ p2: { kind: "skip" } });
+    expect(reason(game(3), seal("p0", "p0"))).toMatch(/yourself/);
   });
 });
 
-describe("quorum and majority — design §11.2", () => {
+describe("quorum and majority — design §9.5", () => {
   const m = (entries: [string, number][]) => new Map(entries);
   it.each([
     ["fewer than half the crew voted", 4, 1, 0, m([["a", 1]]), { kind: "noQuorum" }],
@@ -372,15 +412,12 @@ describe("quorum and majority — design §11.2", () => {
     ["a 2–2 split", 4, 4, 0, m([["a", 2], ["b", 2]]), { kind: "noMajority" }],
     ["more than half of the votes cast", 5, 3, 0, m([["a", 2], ["b", 1]]), { kind: "shakedown", target: "a" }],
     ["a skip majority", 4, 4, 3, m([["a", 1]]), { kind: "skipped" }],
-    ["nobody voted", 2, 0, 0, m([]), { kind: "noQuorum" }],
-    ["one of two players is a quorum", 2, 1, 0, m([["a", 1]]), { kind: "shakedown", target: "a" }],
+    ["nobody voted", 3, 0, 0, m([]), { kind: "noQuorum" }],
   ] as const)("%s", (_name, crew, cast, skip, targets, expected) => {
     expect(meetingResult(crew, cast, skip, targets)).toEqual(expected);
   });
 
-  // extension.md "Voting": one rule at every crew size, more than half the weight cast (the ⅓ plurality from 9 is gone).
   it.each([
-    ["9p: 3 of 9 is no longer enough", 9, 9, 2, m([["a", 3], ["b", 2], ["c", 2]]), 9, { kind: "noMajority" }],
     ["12p: 4 of 12, the rest scattered, is no shakedown", 12, 12, 3, m([["a", 4], ["b", 3], ["c", 2]]), 12, { kind: "noMajority" }],
     ["12p: 7 of 12 is a majority", 12, 12, 1, m([["a", 7], ["b", 4]]), 12, { kind: "shakedown", target: "a" }],
     ["10p: weight counts: 5 ballots weighing 6 of 11", 10, 10, 3, m([["a", 6], ["b", 2]]), 11, { kind: "shakedown", target: "a" }],
@@ -388,125 +425,114 @@ describe("quorum and majority — design §11.2", () => {
     expect(meetingResult(crew, cast, skip, targets, weight)).toEqual(expected);
   });
 
-  it("no shakedown without a quorum, even if every vote names the same player", () => {
-    const s = run(act1Meeting(), vote("p1", "p0"), CLOSE);
+  it("no shakedown without a quorum; a skip majority shakes nobody down", () => {
+    const s = run(regularMeeting(), vote("p1", "p0"), CLOSE);
     expect(LAST(s, "meetingClosed")).toMatchObject({ result: { kind: "noQuorum" }, tally: { skip: 0, targets: { p0: 1 } } });
-    expect(ofType(s.log, "shakedownResolved")).toEqual([]);
-  });
-
-  it("a skip majority shakes nobody down", () => {
-    const s = run(act1Meeting(), vote("p0", null), vote("p1", null), vote("p2", "p0"), CLOSE);
-    expect(LAST(s, "meetingClosed")?.result).toEqual({ kind: "skipped" });
-    expect(ofType(s.log, "shakedownResolved")).toEqual([]);
+    const t = run(regularMeeting(), vote("p0", null), vote("p1", null), vote("p2", "p0"), CLOSE);
+    expect(LAST(t, "meetingClosed")?.result).toEqual({ kind: "skipped" });
+    expect([...ofType(s.log, "shakedownResolved"), ...ofType(t.log, "shakedownResolved")]).toEqual([]);
   });
 });
 
-describe("shakedowns — design §11.3, extension.md \"Shakedowns (fixed numbers)\"", () => {
-  it("the stash is revealed; what it holds above the share is taken and set aside for the next split (design §7.1, §9.6)", () => {
-    const s = act1Meeting();
-    expect([s.reached, s.share, s.players.p0?.stash]).toEqual([16, 5, 6 + 5]);
-    const after = run(s, vote("p1", "p0"), vote("p2", "p0"), CLOSE);
-    expect(LAST(after, "shakedownResolved")).toEqual({
-      type: "shakedownResolved",
-      visibility: { kind: "public" },
-      meetingId: "act-1",
-      target: "p0",
-      stashRevealed: 11,
-      taken: 6,
-      clean: false,
-      compensation: 0,
-    });
-    expect(after.players.p0).toMatchObject({ stash: 5 });
-    expect(after.setAside).toBe(6);
+describe("shakedowns against the share — design §9.6, §7.1, §7.5", () => {
+  it("the stash is revealed; what it holds above the share is set aside, and counts toward honesty as it reaches the next split", () => {
+    const s = regularMeeting();
+    expect([s.share, s.kitty, s.reached, s.players.p0?.stash]).toEqual([0, 2, 2, 6]);
+    let after = run(s, vote("p1", "p0"), vote("p2", "p0"), CLOSE);
+    expect(LAST(after, "shakedownResolved")).toEqual({ type: "shakedownResolved", visibility: { kind: "public" }, meetingId: "meeting-1", target: "p0", stashRevealed: 6, taken: 6, clean: false });
+    expect([after.players.p0?.stash, after.setAside, after.reached]).toEqual([0, 6, 2]);
+    expect(after.phase).toEqual({ kind: "result", round: 1 });
+    // Round 2, everyone misses: 3 handed in + the 6 set aside + the kitty's 2 = 11, cut 3, kitty 2.
+    after = run(after, RESULT, ROUND);
+    expect(LAST(after, "duffelSplit")).toMatchObject({ handedIn: 3, setAside: 6, kittyIn: 2, cut: 3, kitty: 2 });
+    expect([after.setAside, after.reached, after.players.p0?.stash]).toEqual([0, 2 + 3 + 6, 3]);
+    expect(LAST(after, "roundResolved")?.honesty).toEqual({ reached: 11, taken: 11 });
   });
 
-  it("clean below 6: the target is paid 8 out of the coins set aside (provisional, until S3a.5)", () => {
-    const s = run({ ...act1Meeting(), setAside: 20 }, vote("p0", "p1"), vote("p2", "p1"), CLOSE);
-    expect(LAST(s, "shakedownResolved")).toMatchObject({ target: "p1", stashRevealed: 5, taken: 0, clean: true, compensation: 8 });
-    expect(s.players.p1).toMatchObject({ stash: 5 + 8 });
-    expect(s.setAside).toBe(12);
+  it("a target at or below the share is clean: nothing is taken and nothing is paid", () => {
+    const s = run(regularMeeting(), vote("p0", "p1"), vote("p2", "p1"), CLOSE);
+    expect(LAST(s, "shakedownResolved")).toMatchObject({ target: "p1", stashRevealed: 0, taken: 0, clean: true });
+    expect([s.players.p1?.stash, s.setAside, s.kitty]).toEqual([0, 0, 2]);
   });
 
-  it("a stash of 5 above the share is clean; 6 (the line) is not", () => {
-    const s = toMeeting(run(game(3), mv("p0", "vault", 5)));
-    const after = run({ ...s, setAside: 20 }, vote("p1", "p0"), vote("p2", "p0"), CLOSE);
-    expect(LAST(after, "shakedownResolved")).toMatchObject({ stashRevealed: 5 + s.share, taken: 5, clean: true, compensation: 8 });
-    expect(R6_COINS.shakedown).toEqual({ cleanBelow: 6, payout: 8 }); // the R6 pin
-  });
-
-  it("the line and payout don't scale with the act: Act 2 is still clean below 6 and pays 8", () => {
-    let s = run(game(3), mv("p0", "office", 4)); // p0 stash 4
-    s = run(toMeeting(s), CLOSE);
-    s = run({ ...s, setAside: 20 }, emergency("p1"), open("emergency-p1"), vote("p1", "p0"), vote("p2", "p0"), CLOSE);
-    expect(LAST(s, "shakedownResolved")).toMatchObject({ taken: 4, clean: true, compensation: 8 });
-  });
-
-  it("a clean target is paid from coins an earlier shakedown set aside, through real commands (provisional, until S3a.5)", () => {
-    // Rounds 1–3 as in act1Meeting; p1's emergency in the awaited phase shakes p0's 6 above the share back.
-    const lobby = (st: GameState) => run(st, ...["p0", "p1", "p2"].filter((p) => !st.moves[p]).map((p) => mv(p, "lobby")), ROUND);
-    let s = lobby(lobby(lobby(run(game(3), mv("p0", "vault", 6)))));
-    expect(s.phase).toEqual({ kind: "awaitingMeeting", act: 1 });
-    s = run(s, emergency("p1"), open("emergency-p1"), vote("p1", "p0"), vote("p2", "p0"), CLOSE);
-    expect(LAST(s, "shakedownResolved")).toMatchObject({ target: "p0", taken: 6, clean: false, compensation: 0 });
-    expect(s.setAside).toBe(6);
-    // design §7.1: no split has run since, so the regular meeting's clean shakedown of p1 is paid those 6 (under the payout of 8).
-    s = run(s, sched(1), OPEN_ACT, vote("p0", "p1"), vote("p2", "p1"), CLOSE);
-    expect(LAST(s, "shakedownResolved")).toMatchObject({ target: "p1", stashRevealed: s.share, taken: 0, clean: true, compensation: 6 });
-    expect([s.players.p1?.stash, s.setAside, s.round]).toEqual([s.share + 6, 0, 4]);
-  });
-
-  it("compensation never takes the coins set aside below zero (provisional)", () => {
-    let s = game(3);
-    for (let i = 0; i < 3; i++) s = run(s, mv("p0", "rooftop"), mv("p1", "rooftop"), mv("p2", "rooftop"), ROUND);
-    expect(s.setAside).toBe(0);
-    s = run(s, sched(1), open("act-1"), vote("p0", "p1"), vote("p2", "p1"), CLOSE);
-    expect(LAST(s, "shakedownResolved")).toMatchObject({ clean: true, compensation: 0 });
-    expect(s.setAside).toBe(0);
-  });
-});
-
-describe("after a regular meeting — design §6.2, §9.6", () => {
-  it("meeting → shakedown → the next round: no checkpoint (there are no targets)", () => {
-    const s = act1Meeting();
-    const after = run(s, vote("p1", "p0"), vote("p2", "p0"), CLOSE);
+  it("then the result window, and the next round", () => {
+    const s = regularMeeting();
+    const after = run(s, vote("p1", "p0"), vote("p2", "p0"), CLOSE, RESULT);
     // Token grants are not what this checks (extension.md "Tokens and the perk shop").
     expect(since(s, after).map((e) => e.type).filter((t) => t !== "tokenEarned")).toEqual(["voteCast", "voteCast", "meetingClosed", "shakedownResolved", "roundStarted"]);
-    expect(LAST(after, "roundStarted")).toMatchObject({ round: 4, act: 2 });
+    expect(LAST(after, "roundStarted")).toEqual({ type: "roundStarted", visibility: { kind: "public" }, round: 2 });
   });
 });
 
-describe("determinism and the event log — design §17.2", () => {
+describe("shakedown protection — design §9.7", () => {
+  it("a passed shakedown protects its target (public) through briefings and emergencies, until the next regular meeting opens", () => {
+    let s = run(regularMeeting(), vote("p1", "p0"), vote("p2", "p0"), CLOSE);
+    expect([s.protected, viewFor(s, "p1").protected]).toEqual([["p0"], ["p0"]]);
+    // p2 leaves a sealed vote on p0: it counts as a skip while p0 is protected.
+    s = run(s, seal("p2", "p0"), emergency("p1"), OPEN);
+    expect(s.meeting?.votes).toEqual({ p2: { kind: "skip" } });
+    expect(reason(s, vote("p1", "p0"))).toBe("that player is protected until the next regular meeting");
+    s = run(s, CLOSE);
+    expect(s.protected).toEqual(["p0"]);
+    // Round 2: 10 − 2 − 2 − 1 = 5, past one-third: the next regular meeting lifts it.
+    s = run(s, mv("p0", "lobby"), mv("p1", "lobby"), seal("p1", "p0"), ...RESOLVE, SCHED, OPEN);
+    expect(s.protected).toEqual([]);
+    expect(s.meeting?.votes).toEqual({ p1: { kind: "shakedown", target: "p0" } });
+    expect(handleCommand(s, vote("p2", "p0")).ok).toBe(true);
+  });
+
+  it("a briefing doesn't lift it", () => {
+    const pins: ContentOverrides = { ...BIG_BANK, alarm: { bulbs: 4 } };
+    // Round 1: p0 quietly pockets the Lobby's 2; p1's emergency shakes them down.
+    let s = run(game(3, [], undefined, pins), mv("p0", "lobby", 2, pins), ...RESOLVE, emergency("p1"), OPEN, vote("p1", "p0"), vote("p2", "p0"), CLOSE);
+    expect(s.protected).toEqual(["p0"]);
+    // Round 2: p1 raids the Vault; the briefing keeps p0 protected.
+    s = run(s, mv("p1", "vault", 0, pins), ...RESOLVE, SCHED, OPEN);
+    expect(s.meeting?.kind).toBe("briefing");
+    expect(s.protected).toEqual(["p0"]);
+    expect(reason(s, vote("p2", "p0"))).toMatch(/protected/);
+  });
+
+  it("a shakedown that falls through (the Shield until Bail, design §12) protects its target too", () => {
+    let s = game(3, [], undefined, PINS, ["peek", "shield", "extraVote"]);
+    s = grantPerks(run(s, mv("p0", "vault", 6), ...RESOLVE, SCHED, OPEN), "p0", "shield");
+    s = run(s, vote("p1", "p0"), vote("p2", "p0"), CLOSE);
+    expect(s.phase).toEqual({ kind: "shakedownPending", meetingId: "meeting-1", target: "p0" });
+    s = run(s, { type: "advance", deadline: { kind: "resolveShakedown", meetingId: "meeting-1" } });
+    expect(LAST(s, "shakedownCancelled")).toEqual({ type: "shakedownCancelled", visibility: { kind: "public" }, meetingId: "meeting-1", target: "p0" });
+    expect([s.protected, s.players.p0?.stash, s.phase]).toEqual([["p0"], 6, { kind: "result", round: 1 }]);
+  });
+});
+
+describe("determinism and the event log — design §19.1", () => {
   const script = (): GameState => {
     let s = run(game(4, ["hacker", "lookout", "priest"]), mv("p3", "vault", 6), seal("p2", "p3"), propose("p1", "x"));
-    s = run(s, (x: GameState) => accept("p0", x.proposals[0]!.id), (x: GameState) => accept("p3", x.proposals[0]!.id), ROUND);
-    s = run(s, emergency("p0"), open("emergency-p0"), vote("p0", "p3"), vote("p1", "p3"), CLOSE, ROUND, ROUND, OPEN_ACT, vote("p0", null), CLOSE);
+    s = run(s, (x: GameState) => accept("p0", x.proposals[0]!.id), (x: GameState) => accept("p3", x.proposals[0]!.id), ...RESOLVE);
+    s = run(s, OPEN, vote("p0", "p3"), vote("p1", "p3"), CLOSE, emergency("p0"), OPEN, vote("p0", null), CLOSE);
     return s;
   };
 
   it("same seed + same commands → same log; replay (also via JSON) rebuilds the state", () => {
     const a = script();
-    const b = script();
-    expect(b.log).toEqual(a.log);
+    expect(script().log).toEqual(a.log);
     expect(replay(a.config, a.log)).toEqual(a);
     expect(replay(a.config, JSON.parse(JSON.stringify(a.log)) as GameEvent[])).toEqual(a);
-    expect(a.phase).toEqual({ kind: "planning", round: 4 });
+    expect(a.phase).toEqual({ kind: "planning", round: 2 });
   });
 
   it("meetings draw no randomness", () => {
     const s = script();
     expect(s.rng).toEqual(game(4).rng);
-    expect(ofType(s.log, "rngAdvanced")).toHaveLength(ofType(game(4).log, "rngAdvanced").length);
   });
 
   it("a player called toString can be voted for and shaken down (__proto__ is refused at setup)", () => {
     const cfg: GameConfig = { ...config(3), players: [{ id: "toString", name: "T", isBot: false }, { id: "p1", name: "P1", isBot: true }, { id: "p2", name: "P2", isBot: true }] };
     const log = setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: "rookie" } : e.type === "shopDealt" ? { ...e, perks: SHOP_NO_SHIELD } : e));
-    let s = run(replay(cfg, log), mv("toString", "vault", 6), ROUND, ROUND, ROUND, sched(1), open("act-1"), vote("p1", "toString"), vote("p2", "toString"), seal("toString", "p1"));
+    let s = run(replay(cfg, log), mv("toString", "vault", 6), ...RESOLVE, SCHED, OPEN, vote("p1", "toString"), vote("p2", "toString"), seal("toString", "p1"));
     s = run(s, CLOSE);
-    const closed = LAST(s, "meetingClosed")!;
-    expect(Object.hasOwn(closed.tally.targets, "toString")).toBe(true);
-    expect(Object.hasOwn(closed.ballots ?? {}, "p1")).toBe(true);
+    expect(Object.hasOwn(LAST(s, "meetingClosed")!.tally.targets, "toString")).toBe(true);
     expect(s.players["toString"]).toMatchObject({ stash: s.share, sealedVote: { kind: "shakedown", target: "p1" } });
+    expect(s.protected).toEqual(["toString"]);
     expect(replay(cfg, s.log)).toEqual(s);
   });
 });

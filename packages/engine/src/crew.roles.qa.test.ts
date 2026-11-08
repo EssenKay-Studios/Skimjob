@@ -2,7 +2,8 @@
 // crew roles, with tokens for rewards (extension.md "Roles", "Tokens and the
 // perk shop"). design §7, §8, §8.1, §10, §11.1, §11.3, §16.1
 import { describe, expect, it } from "vitest";
-import { handleThroughAlibis } from "./alibis.testkit";
+import { closeResultWindow } from "./alibis.testkit";
+import { handleCommand, type CommandResult } from "./handle";
 import { BANK_JOB, STARTER_ROLES } from "@skimjob/content";
 import type { GameConfig, GameEvent, GameState, PlayerState } from "./types";
 import { createGame, rolePoolFor, setupEvents, validateConfig } from "./setup";
@@ -40,6 +41,23 @@ const withStash = (s: GameState, id: string, stash: number): GameState => ({
   ...s,
   players: { ...s.players, [id]: { ...(s.players[id] as PlayerState), stash } },
 });
+/**
+ * A command, with a round deadline followed by its alibi deadline (nobody
+ * posts). The result window (design §9.3) stays open, so an emergency can be
+ * called in it, until a move or a round deadline closes it.
+ */
+function handleThroughAlibis(state: GameState, command: unknown): CommandResult {
+  const c = command as { type?: unknown; deadline?: { kind?: unknown } } | null;
+  const planning = c?.type === "submitMove" || c?.deadline?.kind === "round";
+  const s = state.phase.kind === "result" && !state.pendingEmergency && planning ? must(closeResultWindow(state)) : state;
+  const r = handleCommand(s, command);
+  if (!r.ok || r.state.phase.kind !== "alibis" || c?.deadline?.kind !== "round") return r;
+  return handleCommand(r.state, { type: "advance", deadline: { kind: "alibis", round: r.state.phase.round } });
+}
+const must = (r: CommandResult): GameState => {
+  if (!r.ok) throw new Error(r.reason);
+  return r.state;
+};
 type Cmd = unknown | ((s: GameState) => unknown);
 function run(state: GameState, ...commands: Cmd[]): GameState {
   return commands.reduce<GameState>((s, c) => {
@@ -59,43 +77,19 @@ const ofType = <T extends GameEvent["type"]>(events: readonly GameEvent[], type:
 const granted = (s: GameState, player: string) => ofType(s.log, "tokenEarned").filter((e) => e.player === player).map((e) => e.trigger);
 const since = (before: GameState, after: GameState) => after.log.slice(before.log.length);
 const mv = (player: string, room: string, pocket = 0) => ({ type: "submitMove", player, move: fullGrab(room, pocket, R6_COINS) });
-const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
+/** The round being planned; from the result window, the next one (closing the window first). */
+const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.phase.kind === "result" ? s.round + 1 : s.round } });
 const vote = (player: string, target: string | null) => ({ type: "castVote", player, vote: target === null ? { kind: "skip" } : { kind: "shakedown", target } });
 const CLOSE = (s: GameState) => ({ type: "advance", deadline: { kind: "closeMeeting", meetingId: s.meeting?.id } });
 const RESOLVE = (s: GameState) => ({ type: "advance", deadline: { kind: "resolveShakedown", meetingId: s.pendingShakedown?.meetingId } });
 /** Resolve a waiting shakedown nobody cancels (the shop may hold a Shield). */
 const settle = (s: GameState): GameState => (s.phase.kind === "shakedownPending" ? run(s, RESOLVE) : s);
 const use = (player: string, ability: object) => ({ type: "useAbility", player, ability });
-const emergency = (s: GameState, caller: string, meetingId = `emergency-${caller}`) =>
-  run(s, { type: "callEmergency", player: caller }, { type: "advance", deadline: { kind: "openMeeting", meetingId } });
-const meeting = (s: GameState) => {
-  const act = Math.ceil(s.round / 3);
-  return run(s, { type: "scheduleMeeting", act, slot: "x" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: `act-${act}` } });
-};
+/** `caller` spends the crew's emergency in the result window (design §9.3). */
+const emergency = (s: GameState, caller: string) =>
+  run(s, { type: "callEmergency", player: caller }, (x: GameState) => ({ type: "advance", deadline: { kind: "openMeeting", meetingId: x.pendingEmergency?.meetingId } }));
 
-describe("Smooth Talker's Emergency perk vs the one-per-player emergency — design §8.3, §11.1", () => {
-  const used = () => run(emergency(game(5, ["smoothTalker"]), "p0"), CLOSE);
-
-  it("refused while a meeting is open or a shakedown is pending: the token is kept", () => {
-    let s = grantPerks(used(), "p0", "emergency");
-    s = emergency(s, "p1");
-    expect(reason(s, { type: "callEmergency", player: "p0" })).toMatch(/meeting is already open/);
-    expect(s.players.p0?.roleState.perks).toEqual(["emergency"]);
-  });
-
-  it("two tokens → emergency2- and emergency3- ids; a third call is refused", () => {
-    let s = grantPerks(used(), "p0", "emergency", "emergency");
-    s = run(emergency(s, "p0", "emergency2-p0"), CLOSE);
-    s = run(emergency(s, "p0", "emergency3-p0"), CLOSE);
-    expect(ofType(s.log, "emergencyMeetingCalled").map((e) => e.meetingId)).toEqual(["emergency-p0", "emergency2-p0", "emergency3-p0"]);
-    expect(reason(s, { type: "callEmergency", player: "p0" })).toMatch(/already called/);
-  });
-
-  it("a Rookie with its emergency used and no token is refused (the normal rule stands)", () => {
-    const s = run(emergency(game(5, ["smoothTalker"]), "p1"), CLOSE);
-    expect(reason(s, { type: "callEmergency", player: "p1" })).toMatch(/already called/);
-  });
-
+describe("Smooth Talker's ballot — design §9.5, extension.md \"Roles\"", () => {
   it("switching its ballot away before the close → no reward (last ballot counts)", () => {
     let s = run(game(5, ["smoothTalker"]), mv("p1", "vault", 6), ROUND);
     s = emergency(s, "p2");
@@ -173,11 +167,10 @@ describe("Shield vs Priest in one shakedown — design §8, §8.3, §11.3", () =
     return s;
   };
 
-  it("no cancel: the Shield is spent, no compensation and no blessing/token", () => {
+  it("no cancel: the Shield is spent, and the blessed target shaken down clean earns the Priest nothing", () => {
     const p = pending(0);
     const s = run(p, RESOLVE);
     expect(ofType(since(p, s), "perkUsed")[0]?.perk).toMatchObject({ kind: "shield" });
-    expect(ofType(s.log, "blessingPaid")).toEqual([]);
     expect([granted(s, "p1"), s.setAside]).toEqual([[], p.setAside]);
   });
 });

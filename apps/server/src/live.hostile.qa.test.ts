@@ -179,6 +179,9 @@ describe("QA: hostile command values over the socket (PR #28)", () => {
     tried += await attack(id, a!, [b!, c!], state, players);
     expect(await a!.send({ type: "postAlibi", room: state.moves[players[0]!]?.room ?? room })).toMatchObject({ ok: true });
 
+    // The alibis close: round 1's result window (design §9.3).
+    await app.live.system(id, { type: "advance", deadline: { kind: "alibis", round: 1 } });
+    expect((await loadVia(id)).phase.kind).toBe("result");
     // An emergency, opened: voting. A hostile `player` and a `__proto__` key don't change whose call it is.
     expect(await a!.send(JSON.parse(`{"type":"callEmergency","player":{"toString":null},"__proto__":{"player":"${players[1]}"}}`))).toMatchObject({ ok: true });
     state = await loadVia(id);

@@ -91,9 +91,11 @@ function playAll(cfg: GameConfig, max = 400): GameState[] {
         }
       });
       push({ type: "advance", deadline: { kind: "alibis", round: p.round } });
+    } else if (p.kind === "result") {
+      push({ type: "advance", deadline: { kind: "result", round: p.round } });
     } else if (p.kind === "awaitingMeeting") {
-      if (!s.scheduledMeeting) push({ type: "scheduleMeeting", act: p.act, slot: `qa-${p.act}` });
-      push({ type: "advance", deadline: { kind: "openMeeting", meetingId: s.scheduledMeeting!.meetingId } });
+      if (!s.scheduledMeeting) push({ type: "scheduleMeeting", meetingId: p.meetingId, slot: `qa-${p.meetingId}` });
+      push({ type: "advance", deadline: { kind: "openMeeting", meetingId: p.meetingId } });
     } else if (p.kind === "meeting") {
       push({ type: "advance", deadline: { kind: "closeMeeting", meetingId: p.meetingId } });
     } else if (p.kind === "shakedownPending") {
@@ -155,6 +157,12 @@ describe("QA: board figures come only from the viewer's view (PR #41)", () => {
     s = step(s, { type: "postAlibi", player: "p2", room: "office" } as PlayerCommand);
     expect(figures(boardScene(viewFor(s, "p1")))).toEqual(["p1@vault", "p2@office?", "p2@vault", "p3@vault"]);
     s = step(s, { type: "advance", deadline: { kind: "alibis", round: 1 } });
+    // Three Vault grabs raid it: the police briefing (design §9.2), then the result window (§9.3).
+    expect(s.phase).toMatchObject({ kind: "awaitingMeeting", meeting: "briefing", meetingId: "meeting-1" });
+    s = step(s, { type: "scheduleMeeting", meetingId: "meeting-1", slot: "now" });
+    s = step(s, { type: "advance", deadline: { kind: "openMeeting", meetingId: "meeting-1" } });
+    s = step(s, { type: "advance", deadline: { kind: "closeMeeting", meetingId: "meeting-1" } });
+    s = step(s, { type: "advance", deadline: { kind: "result", round: 1 } });
     const v = viewFor(s, "p1");
     expect(v.phase).toEqual({ kind: "planning", round: 2 });
     expect(boardScene(v)).toMatchObject({ round: 2, mode: "pick", selected: null });

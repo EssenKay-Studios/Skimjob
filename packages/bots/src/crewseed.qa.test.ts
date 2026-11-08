@@ -48,7 +48,7 @@ const must = (state: GameState, c: Command): GameState => {
   return r.state;
 };
 
-/** The same scripted commands (p1 pockets 2 a round, everyone else all-in in room 1) up to act 1's meeting. */
+/** The same scripted commands (p1 pockets 2 a round, everyone else all-in in room 1) up to the game's first meeting. */
 function atFirstMeeting(seed: string): GameState {
   let s = createGame(config(seed));
   for (let guard = 0; guard < 50; guard++) {
@@ -62,9 +62,11 @@ function atFirstMeeting(seed: string): GameState {
       s = must(s, { type: "advance", deadline: { kind: "round", round: phase.round } });
     } else if (phase.kind === "alibis") {
       s = must(s, { type: "advance", deadline: { kind: "alibis", round: phase.round } });
+    } else if (phase.kind === "result") {
+      s = must(s, { type: "advance", deadline: { kind: "result", round: phase.round } });
     } else if (phase.kind === "awaitingMeeting") {
-      if (!s.scheduledMeeting) s = must(s, { type: "scheduleMeeting", act: phase.act, slot: `server-act-${phase.act}` });
-      s = must(s, { type: "advance", deadline: { kind: "openMeeting", meetingId: s.scheduledMeeting!.meetingId } });
+      if (!s.scheduledMeeting) s = must(s, { type: "scheduleMeeting", meetingId: phase.meetingId, slot: `server-${phase.meetingId}` });
+      s = must(s, { type: "advance", deadline: { kind: "openMeeting", meetingId: phase.meetingId } });
     } else throw new Error(`unexpected phase ${phase.kind}`);
   }
   throw new Error("no meeting");

@@ -2,7 +2,6 @@
 // own room when it skims. Bots are
 // players, so these are play choices, not rules. design §8, §17.3 (v2 §4)
 import { describe, expect, it } from "vitest";
-import { ROUNDS_PER_ACT } from "@skimjob/content";
 import type { GameConfig, GameEvent, GameState } from "@skimjob/engine";
 import { PERSONALITIES, type PersonalityId } from "./personalities";
 import { createBots, runBotGame } from "./run";

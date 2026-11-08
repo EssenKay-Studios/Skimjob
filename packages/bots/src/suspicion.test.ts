@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 import { viewFor, type GameState, type PlayerId } from "@skimjob/engine";
 import { SUSPICION_WEIGHTS as W, mostSuspicious, suspicion } from "./suspicion";
-import { closeAlibis, game, round, run, type Plan } from "./testkit";
+import { closeAlibis, emergencyMeeting, game, round, run, toResult, type Plan } from "./testkit";
 
 const scoresOf = (s: GameState, viewer: PlayerId) => suspicion(viewFor(s, viewer));
 
@@ -92,26 +92,26 @@ describe("suspicion — design §17.3", () => {
     let s = game(3);
     for (let r = 1; r <= 3; r++) s = round(s, { ana: { room: "vault" }, ben: { room: "vault", pocket: 3, alibi: "lobby" }, carl: { room: "lobby" } });
     expect(scoresOf(s, "ana").get("ben")).toBe(3 * W.lie);
-    // Act 1 meeting: Ana and Carl shake Ben down (9 in stash: not clean), then Carl, who is clean.
+    // An emergency: Ana and Carl shake Ben down (9 above the share: not clean); then a regular meeting shakes Carl down, who is clean.
     s = run(
-      closeAlibis(s),
-      { type: "scheduleMeeting", act: 1, slot: "x" },
-      { type: "advance", deadline: { kind: "openMeeting", meetingId: "act-1" } },
+      emergencyMeeting(s, "carl"),
       { type: "castVote", player: "ana", vote: { kind: "shakedown", target: "ben" } },
       { type: "castVote", player: "carl", vote: { kind: "shakedown", target: "ben" } },
-      { type: "advance", deadline: { kind: "closeMeeting", meetingId: "act-1" } },
+      { type: "advance", deadline: { kind: "closeMeeting", meetingId: "emergency-1" } },
     );
     // A Shield in the shop opens the shakedown window first (design §8.3).
     const resolve = (x: GameState) => (x.pendingShakedown ? run(x, { type: "advance", deadline: { kind: "resolveShakedown", meetingId: x.pendingShakedown.meetingId } }) : x);
     s = resolve(s);
     expect(scoresOf(s, "ana").get("ben")).toBe(W.afterDirty);
+    // The bank (300) is far from a third, so a regular meeting is forced as a third would call it.
+    s = toResult(round(s, { ana: { room: "lobby" }, ben: { room: "lobby" }, carl: { room: "lobby" } }));
     s = run(
-      s,
-      { type: "callEmergency", player: "ana" },
-      { type: "advance", deadline: { kind: "openMeeting", meetingId: "emergency-ana" } },
+      { ...s, phase: { kind: "awaitingMeeting", meeting: "regular", meetingId: "meeting-1" }, meetingDue: "regular" },
+      { type: "scheduleMeeting", meetingId: "meeting-1", slot: "x" },
+      { type: "advance", deadline: { kind: "openMeeting", meetingId: "meeting-1" } },
       { type: "castVote", player: "ana", vote: { kind: "shakedown", target: "carl" } },
       { type: "castVote", player: "ben", vote: { kind: "shakedown", target: "carl" } },
-      { type: "advance", deadline: { kind: "closeMeeting", meetingId: "emergency-ana" } },
+      { type: "advance", deadline: { kind: "closeMeeting", meetingId: "meeting-1" } },
     );
     s = resolve(s);
     expect(scoresOf(s, "ana").get("carl")).toBe(W.afterClean);

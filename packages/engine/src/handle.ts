@@ -21,6 +21,7 @@ import {
   callEmergency,
   castVote,
   closeMeeting,
+  closeResult,
   openMeeting,
   proposeMeeting,
   resolveShakedown,
@@ -99,23 +100,22 @@ const postAlibi: Handler = (state, command) => {
   return [{ type: "alibiPosted", visibility: PUBLIC, player: player.id, round, room }];
 };
 
-/** The scheduler says a deadline has passed. design §4.1, §5.2, §11 */
+/** The scheduler says a deadline has passed. design §4.1, §5.4, §9 */
 const advance: Handler = (state, command, draw) => {
   const deadline = command.deadline;
   if (!isObject(deadline) || typeof deadline.kind !== "string") return "advance needs a deadline";
   switch (deadline.kind) {
     case "round":
-      // design §4.1: rounds are paused while a vote window is open.
-      if (state.phase.kind === "meeting" || state.phase.kind === "shakedownPending") return "rounds are paused while a meeting is open";
       if (state.phase.kind !== "planning") return "no round deadline is pending";
       // Named round, so a retried or late deadline is refused instead of resolving the next round.
       if (deadline.round !== state.phase.round) return `the round ${show(deadline.round)} deadline is not pending (round ${state.phase.round} is)`;
       return resolveRound(state, state.phase.round, draw);
     case "alibis":
-      if (state.phase.kind === "meeting" || state.phase.kind === "shakedownPending") return "the alibi deadline is paused while a meeting is open";
       if (state.phase.kind !== "alibis") return "no alibi deadline is pending";
       if (deadline.round !== state.phase.round) return `the round ${show(deadline.round)} alibi deadline is not pending (round ${state.phase.round}'s is)`;
       return closeAlibis(state, state.phase.round, draw);
+    case "result":
+      return closeResult(state, deadline.round, draw);
     case "openMeeting":
       return openMeeting(state, deadline.meetingId);
     case "closeMeeting":

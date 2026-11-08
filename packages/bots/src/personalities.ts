@@ -18,7 +18,7 @@ export interface Personality {
   readonly teamSpirit: number;
   /** Shake down the most suspicious player once their score reaches this. Lower is more suspicious. design §17.3 "Suspicion" */
   readonly voteAt: number;
-  /** Call the one emergency meeting once someone's score reaches this; null never does. design §11.1 */
+  /** Spend one of the crew's emergency meetings once someone's score reaches this; null never does. design §9.3 */
   readonly emergencyAt: number | null;
   /** Chance of spending a round in Security. design §17.3 (Cautious "checks Security often") */
   readonly watch: number;
@@ -50,7 +50,7 @@ export type PersonalityId = "honest" | "opportunist" | "greedy" | "cautious" | "
 
 /**
  * The design §17.3 bots. A dealt Mole plays its personality with Mole habits on
- * top (a ring on the loudest bell, at most once per act; bot.ts).
+ * top (a ring on the loudest bell, at most once between meetings; bot.ts).
  * Placeholder numbers, to tune with the simulator.
  */
 export const PERSONALITIES: Readonly<Record<PersonalityId, Personality>> = {

@@ -1,4 +1,4 @@
-// QA (PR #22, M2-4): scheduler attacks on a fake clock. design §4.1, §5.4, §11.1, §11.3
+// QA (PR #22, M2-4): scheduler attacks on a fake clock. design §4.1, §5.4, §9.3, §9.4
 import { viewFor, type GameState, type VoteVisibility } from "@skimjob/engine";
 import type { FastifyInstance } from "fastify";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -6,7 +6,6 @@ import { SESSION_COOKIE } from "./auth";
 import { fakeClock, type FakeClock } from "./clock";
 import type { Db } from "./db";
 import type { LobbyView } from "./lobby";
-import { meetingOpen } from "./scheduler";
 import { buildServer } from "./server";
 import type { LobbySettings, SessionLength } from "./settings";
 import { createGameStore, type GameStore } from "./store";
@@ -113,7 +112,7 @@ const count = (s: GameState, type: string, pick: (e: Record<string, unknown>) =>
 
 /** The phase a kill can land in (the brief's list). */
 const label = (s: GameState) =>
-  s.pendingEmergency && !meetingOpen(s) ? "notice" : s.phase.kind;
+  s.pendingEmergency ? "notice" : s.phase.kind;
 
 interface Run {
   log: GameState["log"];
@@ -189,9 +188,10 @@ describe("every preset finishes all-bot games (design §4.1)", () => {
 });
 
 describe("kill/restart at every step = an uninterrupted run (same seed)", () => {
-  // The host calls an emergency in round 2's planning, so a notice, a meeting and (with luck) a shakedown window are hit.
+  // The host spends the crew's emergency in the first result window it can (design §9.3), so a notice, a meeting and
+  // (with luck) a shakedown window are hit.
   const emergencyAt = async (s: GameState, _i: number, id: string, host: string) => {
-    if (s.phase.kind === "planning" && s.phase.round === 2 && !s.pendingEmergency && count(s, "emergencyMeetingCalled") === 0) {
+    if (s.phase.kind === "result" && s.emergencies > 0 && !s.pendingEmergency && count(s, "emergencyMeetingCalled") === 0) {
       expect(await send(id, host, { type: "callEmergency" })).toMatchObject({ ok: true });
     }
   };
@@ -203,7 +203,7 @@ describe("kill/restart at every step = an uninterrupted run (same seed)", () => 
       const b = await play(0, { sessionLength }, { guests: 2, act: emergencyAt, restart: () => true });
       expect(b.fired).toEqual(a.fired);
       expect(b.log).toEqual(a.log);
-      for (const p of ["planning", "alibis", "notice", "meeting"]) expect(b.phases.has(p), p).toBe(true);
+      for (const p of ["planning", "alibis", "result", "notice", "meeting"]) expect(b.phases.has(p), p).toBe(true);
       if (sessionLength === "1d") expect(b.phases.has("awaitingMeeting")).toBe(true);
     });
   }
@@ -221,35 +221,35 @@ describe("kill/restart at every step = an uninterrupted run (same seed)", () => 
 });
 
 describe("clock jumps (laptop sleep)", () => {
-  it("jumping hours fires each due deadline once, in order; a paused round doesn't fire under an emergency it overtook", { timeout: 60_000 }, async () => {
+  it("jumping hours fires each due deadline once, in order; the result window waits for the emergency called in it", { timeout: 60_000 }, async () => {
     await fresh();
     forcedSeed = "qa-jump";
     const t = TIMINGS["1h"];
     const { id, host } = await startGame(0, { sessionLength: "1h" }, 2);
-    clock.advance(60_000);
+    // Long overdue: round 1 fires once; its alibi window is planned from the wake-up.
+    clock.advance(5 * 3600_000);
+    expect(await app.scheduler.tick()).toBe(1);
+    expect(await deadlines(id)).toEqual([{ key: "alibis:1", due: clock.now() + t.alibiMs, paused: false }]);
+    clock.advance(t.alibiMs);
+    expect(await app.scheduler.tick()).toBe(1);
+    expect((await load(id)).phase).toEqual({ kind: "result", round: 1 });
     expect((await send(id, host, { type: "callEmergency" })).ok).toBe(true);
     const meetingId = (await load(id)).pendingEmergency!.meetingId;
-    // Both the notice and round 1 are long overdue after the jump.
+    // design §9.3: the window's own deadline is gone; only the notice is left.
+    expect((await deadlines(id)).map((d) => d.key)).toEqual([`openMeeting:${meetingId}`]);
     clock.advance(5 * 3600_000);
     expect(await app.scheduler.tick()).toBe(1);
     let s = await load(id);
     expect(s.phase).toEqual({ kind: "meeting", meetingId });
-    expect(count(s, "roundResolved")).toBe(0);
-    const rows = await deadlines(id);
-    expect(rows).toEqual([
-      expect.objectContaining({ key: "round:1", paused: true }),
-      { key: `closeMeeting:${meetingId}`, due: clock.now() + t.meetingMs, paused: false },
-    ]);
-    // Another long sleep: the meeting closes once, then round 1 (already overdue when the meeting opened) fires once, after it.
+    expect(await deadlines(id)).toEqual([{ key: `closeMeeting:${meetingId}`, due: clock.now() + t.meetingMs, paused: false }]);
+    // Another long sleep: the meeting closes once and round 2 starts, planned from the wake-up.
     clock.advance(10 * 3600_000);
-    expect(await app.scheduler.tick()).toBe(2);
+    expect(await app.scheduler.tick()).toBe(1);
     s = await load(id);
     expect(count(s, "meetingClosed", (e) => e.meetingId === meetingId)).toBe(1);
-    expect(count(s, "meetingOpened", (e) => e.meetingId === meetingId)).toBe(1);
     expect(count(s, "roundResolved")).toBe(1);
-    const order = s.log.map((e) => e.type).filter((x) => ["meetingOpened", "meetingClosed", "roundResolved"].includes(x));
-    expect(order).toEqual(["meetingOpened", "meetingClosed", "roundResolved"]);
-    expect(await deadlines(id)).toEqual([{ key: "alibis:1", due: clock.now() + t.alibiMs, paused: false }]);
+    expect(s.phase).toEqual({ kind: "planning", round: 2 });
+    expect(await deadlines(id)).toEqual([{ key: "round:2", due: clock.now() + t.roundMs, paused: false }]);
   });
 
   it("a week-long sleep in a 1-week game sends only round 1; the next deadline is planned from the wake-up", { timeout: 60_000 }, async () => {
@@ -332,36 +332,34 @@ describe("early round end once the whole crew has locked in (owner decision, 2 N
 
 const QUICK_MS = TIMINGS["15m"].roundMs;
 
-describe("emergency during an open alibi window (design §5.4)", () => {
-  it("the alibi deadline keeps running through the notice, pauses while the meeting is open, then keeps its time left", { timeout: 60_000 }, async () => {
+describe("an emergency in the result window (design §9.3)", () => {
+  it("the window's deadline goes when it is called; the next round starts, with its full time, when the meeting closes", { timeout: 60_000 }, async () => {
     await fresh();
     const t = TIMINGS["1h"];
     const { id, host } = await startGame(0, { sessionLength: "1h" }, 2);
     clock.advance(t.roundMs);
-    await app.scheduler.tick();
-    expect((await load(id)).phase).toEqual({ kind: "alibis", round: 1 });
-    const [alibis] = await deadlines(id);
+    expect(await app.scheduler.tick()).toBe(1);
+    clock.advance(t.alibiMs);
+    expect(await app.scheduler.tick()).toBe(1);
+    expect((await load(id)).phase).toEqual({ kind: "result", round: 1 });
+    expect(await deadlines(id)).toEqual([{ key: "result:1", due: clock.now() + t.resultMs, paused: false }]);
     clock.advance(5_000);
     expect((await send(id, host, { type: "callEmergency" })).ok).toBe(true);
     const meetingId = (await load(id)).pendingEmergency!.meetingId;
-    // 1h: notice (60 s) is longer than the alibi window left (25 s): the window closes first, round 2 starts under the notice.
-    clock.advance(alibis!.due - clock.now());
-    expect(await app.scheduler.tick()).toBe(1);
-    expect((await load(id)).phase).toEqual({ kind: "planning", round: 2 });
-    const round2Due = clock.now() + t.roundMs;
-    clock.advance(t.emergencyNoticeMs - 25_000);
+    expect(await deadlines(id)).toEqual([{ key: `openMeeting:${meetingId}`, due: clock.now() + t.emergencyNoticeMs, paused: false }]);
+    clock.advance(t.emergencyNoticeMs);
     expect(await app.scheduler.tick()).toBe(1);
     expect((await load(id)).phase).toEqual({ kind: "meeting", meetingId });
-    const left = round2Due - clock.now();
     clock.advance(t.meetingMs);
     expect(await app.scheduler.tick()).toBe(1);
-    expect(await deadlines(id)).toEqual([{ key: "round:2", due: clock.now() + left, paused: false }]);
+    expect((await load(id)).phase).toEqual({ kind: "planning", round: 2 });
+    expect(await deadlines(id)).toEqual([{ key: "round:2", due: clock.now() + t.roundMs, paused: false }]);
   });
 });
 
 describe("restart matrix after the fix (30c9f9e): bots, 10+ seeds", () => {
   const emergencyAt = async (s: GameState, _i: number, id: string, host: string) => {
-    if (s.phase.kind === "planning" && s.phase.round === 2 && !s.pendingEmergency && count(s, "emergencyMeetingCalled") === 0) {
+    if (s.phase.kind === "result" && s.emergencies > 0 && !s.pendingEmergency && count(s, "emergencyMeetingCalled") === 0) {
       expect(await send(id, host, { type: "callEmergency" })).toMatchObject({ ok: true });
     }
   };

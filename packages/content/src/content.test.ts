@@ -5,6 +5,7 @@ import {
   BALANCED_MIX,
   BANK_JOB,
   DECKS,
+  EMERGENCY_POOL,
   SHOP_COLUMNS,
   PERKS,
   PERK_IDS,
@@ -13,6 +14,7 @@ import {
   EVENT_DECK,
   FILLER_ROLE,
   JOBS,
+  MAX_PLAYERS,
   MIN_PLAYERS,
   POOL_ROLES,
   POWER_CLAIM_TARGET,
@@ -106,9 +108,9 @@ describe("First National Bank endings — design §6.2, §7.5", () => {
   });
 });
 
-describe("First National Bank shakedowns — extension.md \"Shakedowns (fixed numbers)\"", () => {
-  it("clean below 3, payout 4 (scaled to R7 coins in S3a.1; were 6 and 8); no plurality rule", () => {
-    expect(BANK_JOB.shakedown).toEqual({ cleanBelow: 3, payout: 4 });
+describe("the emergency pool — design §9.3", () => {
+  it("1 emergency meeting for 3–6 players, 2 for 7–12", () => {
+    for (let n = MIN_PLAYERS; n <= MAX_PLAYERS; n++) expect(EMERGENCY_POOL[n], `${n} players`).toBe(n <= 6 ? 1 : 2);
   });
 });
 
@@ -148,9 +150,9 @@ describe("starter roles — design §8, §8.1", () => {
     expect(Object.values(ROLES).filter((r) => !r.rewards).map((r) => r.id)).toEqual(["rookie", "fixer", "mole"]);
   });
 
-  it("perks: nine kinds in three shop columns; Peek and Shield cost 2, the rest 1 (extension.md \"Tokens and the perk shop\")", () => {
-    expect([...PERK_IDS].sort()).toEqual(["alibi", "ballot", "emergency", "extraVote", "peek", "recharge", "rig", "shield", "tail"]);
-    for (const id of PERK_IDS) expect(PERKS[id].spent, id).toBe(id === "shield" || id === "emergency" ? "auto" : "use");
+  it("perks: eight kinds in three shop columns; Peek and Shield cost 2, the rest 1 (extension.md \"Tokens and the perk shop\")", () => {
+    expect([...PERK_IDS].sort()).toEqual(["alibi", "ballot", "extraVote", "peek", "recharge", "rig", "shield", "tail"]);
+    for (const id of PERK_IDS) expect(PERKS[id].spent, id).toBe(id === "shield" ? "auto" : "use");
     for (const id of PERK_IDS) expect(PERKS[id].cost, id).toBe(id === "peek" || id === "shield" ? 2 : 1);
     for (const [column, ids] of Object.entries(SHOP_COLUMNS)) for (const id of ids) expect(PERKS[id].column).toBe(column);
     expect(PERK_RULES).toEqual({ extraVoteWeight: 1, rigOptions: 2 });

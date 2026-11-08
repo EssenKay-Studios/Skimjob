@@ -71,7 +71,7 @@ export function claimsOf(view: PlayerView): Map<PlayerId, RoleId[]> {
   return out;
 }
 
-/** Who has claimed `role` (any act), in claim order. */
+/** Who has claimed `role` (any stretch), in claim order. */
 export function claimantsOf(view: PlayerView, role: RoleId): PlayerId[] {
   const out: PlayerId[] = [];
   for (const c of ofType(view.ledger, "roleClaimed")) if (c.role === role && !out.includes(c.player)) out.push(c.player);

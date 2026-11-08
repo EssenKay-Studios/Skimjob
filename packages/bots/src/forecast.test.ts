@@ -58,7 +58,7 @@ describe("the Mole's ring — design §5.2, §11.1", () => {
   it("rings the loudest lit bell elsewhere, once between meetings; never the Rooftop; nothing when every bell is dark", () => {
     const lit = leaningMole();
     expect(rings(lit)).toEqual({ kind: "ring", room: "office" });
-    expect(rings(as(lit, "mole", {}, { usedThisAct: 1 }))).toBeUndefined();
+    expect(rings(as(lit, "mole", {}, { usedThisStretch: 1 }))).toBeUndefined();
     const dark = Object.fromEntries(Object.keys(lit.bells).map((r) => [r, 0]));
     expect(rings({ ...lit, bells: dark })).toBeUndefined();
   });
@@ -109,7 +109,7 @@ describe("buying and spending perks — extension.md \"Tokens and the perk shop\
     expect(bought(buyPerks(viewFor(as(last, "rookie", {}, { tokens: 3, perks: ["shield", "peek", "extraVote"] }), "ana")))).toEqual(["extraVote", "extraVote", "extraVote"]);
   });
 
-  it("uses at most one chosen perk a round; Shield and Emergency go off by themselves", () => {
+  it("uses at most one chosen perk a round; the Shield goes off by itself", () => {
     const use = (kind: string): PlayerCommand => ({ type: "useAbility", player: "ana", ability: { kind } } as unknown as PlayerCommand);
     const move: PlayerCommand = { type: "submitMove", player: "ana", move: { room: "lobby", duffel: 1, pocket: 0 } };
     const spend = perkSpender(viewFor(game(5), "ana"));

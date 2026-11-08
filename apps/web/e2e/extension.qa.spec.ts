@@ -100,7 +100,7 @@ test.describe("private tokens, two real clients", () => {
     test.setTimeout(60_000);
     const game = await start(page.request, { sessionLength: "1h" }, [], 4);
     await page.goto(`/game/${game.id}`);
-    await expect(page.locator(".hud__kicker")).toContainText(/Meeting 1 after round 3/, { timeout: 20_000 });
+    await expect(page.locator(".hud__kicker")).toContainText(/Round 1 of 12/, { timeout: 20_000 });
     await page.getByRole("button", { name: "Rulebook", exact: true }).first().click();
     await expect(page.getByRole("dialog", { name: "Rulebook" })).toBeVisible();
     const text = await page.locator("body").innerText();

@@ -99,10 +99,10 @@ describe("describeEvent", () => {
     reopen: [{ kind: "reopen", room: "vault" }],
     audit: [{ kind: "audit", round: 2, room: "office", shortfall: 1 }],
     checkStash: [
-      { kind: "checkStash", target: "ben", threshold: 3, dirty: true },
-      { kind: "checkStash", target: "ben", threshold: 3, dirty: false },
+      { kind: "checkStash", target: "ben", dirty: true },
+      { kind: "checkStash", target: "ben", dirty: false },
     ],
-    bless: [{ kind: "bless", target: "ben", act: 2 }],
+    bless: [{ kind: "bless", target: "ben", stretch: 2 }],
   };
   it.each(flat(abilities))("describes the $kind ability", (ability) => {
     expectSentence(describeEvent({ ...sampleEvents.abilityResolved, ability }, asAna));
@@ -111,9 +111,11 @@ describe("describeEvent", () => {
   it("describes abilities exactly", () => {
     const as = (ability: ResolvedAbility) => describeEvent({ ...sampleEvents.abilityResolved, ability }, asAna);
     expect(as(abilities.lookout[0])).toBe("Round 1: you kept lookout on the Vault and Office.");
-    expect(as(abilities.checkStash[0])).toBe("Stash check: Ben holds 3 or more (not clean).");
+    // design §9.6: dirty is anything above the share.
+    expect(as(abilities.checkStash[0])).toBe("Stash check: Ben holds something above the share (not clean).");
+    expect(as(abilities.checkStash[1]!)).toBe("Stash check: Ben holds nothing above the share (clean).");
     // design §8 (v2 §2): Priest; §5.2, §5.3, §11.1: the Mole's ring and the Fixer's reopen
-    expect(as(abilities.bless[0])).toBe("You blessed Ben until the next meeting.");
+    expect(as(abilities.bless[0])).toBe("You blessed Ben until the next regular meeting.");
     expect(as(abilities.ring[0])).toBe("Round 1: you tipped off the police: the Office's bell rang once more.");
     expect(as(abilities.reopen[0])).toBe("Round 1: you tore the tape off the Vault.");
   });
@@ -128,7 +130,6 @@ describe("describeEvent", () => {
     alibi: [{ kind: "alibi", round: 2, room: "lobby" }],
     recharge: [{ kind: "recharge" }],
     rig: [{ kind: "rig", round: 3, cards: ["audit", "lockdown"] }],
-    emergency: [{ kind: "emergency", meetingId: "m2" }],
   };
   it.each(flat(perks))("describes the $kind perk", (perk) => {
     expectSentence(describeEvent({ ...sampleEvents.perkUsed, perk }, asAna));
@@ -137,18 +138,15 @@ describe("describeEvent", () => {
   it("names perks and cards", () => {
     expect(describeEvent(sampleEvents.perkUsed, asAna)).toBe("Peek: Ben is the Mole.");
     expect(describeEvent({ ...sampleEvents.perkUsed, perk: perks.rig[0] }, asAna)).toBe("You rigged round 3's card: Audit and Lockdown to pick from.");
-    // design §8.3: the Smooth Talker's Emergency
-    expect(describeEvent({ ...sampleEvents.perkUsed, perk: perks.emergency[0] }, asAna)).toBe("You spent an Emergency perk to call an extra emergency meeting.");
   });
 
   // design §5, §8 (v2 §2): the public lines never name who acted unless the rule does.
-  it("describes bells, raids, a reopened room and a blessing without naming hidden actors", () => {
+  it("describes bells, raids and a reopened room without naming hidden actors", () => {
     expect(describeEvent(sampleEvents.bellsRung, asCyd)).toBe("Round 1 bells: Vault 4 bulbs and Office 1 bulb.");
     expect(describeEvent(sampleEvents.roomRaided, asCyd)).toBe("Raid! The police hit the Vault in round 1 and seized 3 coins. It is taped off through round 3. Wanted 1.");
     expect(describeEvent(sampleEvents.bellsCooled, asCyd)).toBe("After round 1 the bells cooled: all dark.");
     expect(describeEvent(sampleEvents.roomReopened, asCyd)).toBe("The tape is off the Vault: it opens again next round.");
     expect(describeEvent({ ...sampleEvents.coinsGrabbed, duffel: 0, pocket: 0, seized: 3 }, asAna)).toBe("Round 1, Vault: you grabbed 3 coins, and the police seized them all.");
-    expect(describeEvent(sampleEvents.blessingPaid, asCyd)).toBe("Ana was blessed: the bank paid the compensation, so 5 went back into the duffel.");
   });
 
   // design §3: every ending.
@@ -169,6 +167,6 @@ describe("describeEvent", () => {
   });
 
   it("formats meeting slots through the context", () => {
-    expect(describeEvent(sampleEvents.meetingScheduled, { ...asAna, slot: () => "7 pm" })).toBe("Meeting 1 is set for 7 pm.");
+    expect(describeEvent(sampleEvents.meetingScheduled, { ...asAna, slot: () => "7 pm" })).toBe("The next meeting is set for 7 pm.");
   });
 });
