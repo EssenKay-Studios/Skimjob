@@ -98,6 +98,7 @@ const PLAYER_COMMANDS: { readonly [T in PlayerCommand["type"]]: true } = {
   sealVote: true,
   useAbility: true,
   buyPerk: true,
+  chooseBail: true,
 };
 
 /** One human seat's presence. `lastSeen`: when it last had the game open (null: never). */

@@ -27,8 +27,8 @@ export interface Timing {
   /** An emergency meeting's notice period, from the call to the window opening. */
   readonly emergencyNoticeMs: number;
   /**
-   * The shakedown window (the Shield's). Always runs its full length, cancel or not:
-   * ending early would show that someone cancelled (STATUS, PR #12 review).
+   * The Bail choice window after a passed shakedown (design §9.6) [tunable]. Always runs
+   * its full length, chosen or not: ending early would show that the target holds a Bail.
    */
   readonly shakedownWindowMs: number;
   /**

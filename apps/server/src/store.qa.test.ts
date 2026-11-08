@@ -169,14 +169,16 @@ describe("QA: concurrent appends to one game", () => {
     fail = false;
     const started = await s.start(id, c);
     const at = started.log.length;
-    await s.append(id, game.log.slice(at, game.log.length - 1));
+    // The game-ending command's events: gameEnded, and an rngAdvanced after it if its round drew.
+    const end = game.log.findIndex((e) => e.type === "gameEnded");
+    await s.append(id, game.log.slice(at, end));
     fail = true;
-    await expect(s.append(id, game.log.slice(-1))).rejects.toThrow("boom");
-    expect(await idxs(id)).toHaveLength(game.log.length - 1);
+    await expect(s.append(id, game.log.slice(end))).rejects.toThrow("boom");
+    expect(await idxs(id)).toHaveLength(end);
     expect(await status(id)).toBe("running");
     expect((await s.load(id))!.phase.kind).not.toBe("ended");
     fail = false;
-    await s.append(id, game.log.slice(-1));
+    await s.append(id, game.log.slice(end));
     expect(await status(id)).toBe("ended");
     expect(JSON.stringify(await createGameStore(db).load(id))).toBe(JSON.stringify(game));
   });

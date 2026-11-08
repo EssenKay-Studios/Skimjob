@@ -124,7 +124,7 @@ export const DEADLINE_RULES: { readonly [K in Deadline["kind"] | "scheduleMeetin
     s.phase.kind === "meeting"
       ? [{ key: `closeMeeting:${s.phase.meetingId}`, command: advance({ kind: "closeMeeting", meetingId: s.phase.meetingId }), dueAt: now + t.meetingMs }]
       : [],
-  // Always the full window: it is set once, here, and a cancel doesn't touch it. design §8, §11.3
+  // Always the full window: it is set once, here, and a Bail choice doesn't touch it. design §9.6
   resolveShakedown: (s, t, now) =>
     s.phase.kind === "shakedownPending"
       ? [{ key: `resolveShakedown:${s.phase.meetingId}`, command: advance({ kind: "resolveShakedown", meetingId: s.phase.meetingId }), dueAt: now + t.shakedownWindowMs }]
