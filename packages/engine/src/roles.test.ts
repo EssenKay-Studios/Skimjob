@@ -378,6 +378,16 @@ describe("Electrician: once between meetings, black out one room next round — 
     expect(ofType(s.log, "powerCut")).toHaveLength(1);
   });
 
+  it("a cut on Security takes its own cameras offline: a watcher in a dark Security sees nobody anywhere (owner, 8 Nov)", () => {
+    // p0 Electrician cuts Security; in round 2 p1 watches the Office from Security, where p2 and p3 are.
+    const s = must(closeResultWindow(run(game(4, ["electrician"]), mv("p0", "lobby", 0, cut("security")), ROUND)));
+    const r2 = resolve(run(s, mv("p0", "lobby"), watch("p1", "office"), mv("p2", "office"), mv("p3", "office")));
+    const events = since(s, r2);
+    expect(ofType(events, "roomWatched").map((e) => [e.player, e.room, e.seen, e.offline])).toEqual([["p1", "office", [], true]]);
+    // The Office itself isn't dark: its room-mates still see each other.
+    expect(ofType(events, "roomSighting").filter((e) => e.room === "office").map((e) => e.others)).toEqual([["p3"], ["p2"]]);
+  });
+
   it("a use in the last round is spent and harmless; once between meetings", () => {
     const last = run(game(3, ["electrician"], { roundCap: 1 }), mv("p0", "lobby", 0, cut("vault")), ROUND);
     expect(last.phase.kind).toBe("ended");

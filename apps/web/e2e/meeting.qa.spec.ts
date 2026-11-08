@@ -52,6 +52,9 @@ for (const mode of ["hiddenThenRevealed", "open", "secret"] as const) {
     await expect(host.getByRole("button", { name: "Lock it in" })).toBeEnabled();
     await host.getByRole("button", { name: "Lock it in" }).click();
 
+    // design §9.5, §11.3: every seat is dealt a role, and a Smooth Talker's skip counts twice, so with Guest 2
+    // as the Smooth Talker the 2 ballots for Guest 2 tie the skip's 2 and nothing passes.
+    const talker = (await g2.locator("#role-h").textContent())?.trim() === "Smooth Talker";
     // Guest 2 can't make it: seals a skip , then leaves.
     const panel2 = g2.getByRole("region", { name: "Crew meetings" });
     await panel2.getByText("Can't make the meeting?").click();
@@ -108,9 +111,13 @@ for (const mode of ["hiddenThenRevealed", "open", "secret"] as const) {
     // Result: 2 for Guest 2, 1 sealed skip → passes; Guest 2 is clean (only the share): nothing is taken (design §9.6).
     const results = host.getByRole("region", { name: /The crew voted|No majority|Too few votes/ });
     await expect(results).toBeVisible({ timeout: 25_000 });
-    await expect(results).toContainText("The crew voted to shake down Guest 2");
-    await expect(results).toContainText(/Clean! Guest 2 was holding \d+/);
-    await expect(results).toContainText("Nothing above the share: nothing taken.");
+    if (talker) {
+      await expect(results).toContainText("No majority: nobody is shaken down");
+    } else {
+      await expect(results).toContainText("The crew voted to shake down Guest 2");
+      await expect(results).toContainText(/Clean! Guest 2 was holding \d+/);
+      await expect(results).toContainText("Nothing above the share: nothing taken.");
+    }
     const tally = results.getByRole("list", { name: "Final tally" });
     await expect(tally).toContainText("Skip");
     if (mode === "secret") await expect(results.getByRole("list", { name: "How everyone voted" })).toHaveCount(0);
@@ -124,7 +131,8 @@ for (const mode of ["hiddenThenRevealed", "open", "secret"] as const) {
     back.on("pageerror", (e) => errors.push(e.message));
     await back.goto(`/game/${game.id}`);
     // The results banner lasts until the next round resolves: they were the one shaken down.
-    await expect(back.getByRole("region", { name: /The crew voted/ })).toContainText("The crew voted to shake you down");
+    if (talker) await expect(back.getByRole("region", { name: /No majority/ })).toBeVisible();
+    else await expect(back.getByRole("region", { name: /The crew voted/ })).toContainText("The crew voted to shake you down");
     await shot(back, `${mode}-g2-back`);
 
     expect(errors).toEqual([]);

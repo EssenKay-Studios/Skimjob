@@ -47,8 +47,8 @@ describe("role claims — design §11.3", () => {
     expect(replay(cfg, state.log)).toEqual(state);
   });
 
-  it("a claim can be a bluff: any role the content knows, even one this game's pool can't deal (so the pool stays hidden)", () => {
-    // The pool is the starter set; the Detective and the Mole aren't in it.
+  it("a claim can be a bluff: any role the content knows, whether or not anyone was dealt it (so the deal stays hidden)", () => {
+    // Four seats are dealt four of the ten roles; a claim is never checked against the deal.
     expect(ok(start, claim("p1", "detective")).events[0]).toMatchObject({ role: "detective" });
     expect(ok(start, claim("p1", "mole")).events[0]).toMatchObject({ role: "mole" });
   });

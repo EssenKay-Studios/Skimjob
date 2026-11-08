@@ -339,7 +339,7 @@ interface RandomGame {
   readonly states: GameState[];
 }
 
-/** A random game: random moves within room limits, random votes, every deadline in time. Roles from the default deck. */
+/** A random game: random moves within room limits, random votes, every deadline in time. Roles from the deal (§11.3). */
 function randomGame(players: number, seed: string, tape: readonly number[], style: Style, overrides: ContentOverrides | null, vote: VoteVisibility): RandomGame {
   const cfg: GameConfig = {
     seed,

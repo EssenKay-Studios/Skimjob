@@ -298,26 +298,27 @@ export function resolveRound(before: GameState, round: number, draw: Draw): Game
   // design §11.1: the Hacker sees the real bell (none once the room is raided: its bell is off).
   for (const [id, use] of hiders) events.push(resolved(id, { ...use, bulbs: raided.includes(use.room) ? null : (realBells[use.room] ?? null) }));
 
-  // §4.2 step 7: room-mates, then Security, Lookout and Tail feeds; nobody is seen in a blacked-out room (§11.1).
+  // §4.2 step 7: room-mates, then Security, Lookout and Tail feeds; nobody is seen in a blacked-out room, and a
+  // blacked-out Security's own cameras are offline too (§11.1, owner 8 Nov).
   const dark = (room: RoomId) => state.dark.includes(room);
   for (const id of playing) {
     const room = moveOf(id).room;
     events.push({ type: "roomSighting", visibility: privateTo(id), player: id, round, room, others: dark(room) ? [] : others(room, id) });
   }
-  const watched = (id: PlayerId, source: "security" | "lookout" | "tail", room: RoomId): GameEvent => ({
+  const watched = (id: PlayerId, source: "security" | "lookout" | "tail", room: RoomId, offline = dark(room)): GameEvent => ({
     type: "roomWatched",
     visibility: privateTo(id),
     player: id,
     round,
     source,
     room,
-    seen: dark(room) ? [] : others(room, id),
-    offline: dark(room),
+    seen: offline ? [] : others(room, id),
+    offline,
   });
   for (const id of playing) {
     const { room, watch } = moveOf(id);
     const ability = abilityOf(id);
-    if (roomDef(job, room).info === "watchRoom" && watch !== undefined) events.push(watched(id, "security", watch));
+    if (roomDef(job, room).info === "watchRoom" && watch !== undefined) events.push(watched(id, "security", watch, dark(room) || dark(watch)));
     if (ability?.kind === "lookout") {
       events.push(resolved(id, ability));
       for (const r of ability.rooms) events.push(watched(id, "lookout", r));

@@ -1,9 +1,11 @@
 // QA (PR #132, R7 C2d): no dropped event card (Quiet night, Payday, Power cut, Raid rumour,
 // Double-cross) and no Server-room pocket count shows in the UI, at 360 and 1280 wide. design §10
+// The Electrician's power cut is live again (design §11.1, §18: "Power cut in the Office", no
+// source; the gallery's "A power cut" label), so only a bare "Power cut", the old card's name, is banned.
 import { expect, test, type Page } from "@playwright/test";
 import { startGame } from "./setupGame";
 
-const DROPPED = /Quiet night|Payday|Power cut|Raid rumou?r|Double[- ]cross|pocket count|how many (players )?pocketed/i;
+const DROPPED = /Quiet night|Payday|(?<!a )Power cut(?! in the )|Raid rumou?r|Double[- ]cross|pocket count|how many (players )?pocketed/i;
 const KEPT = /Shift change|Lockdown|Audit|Inside tip/;
 const width = (name: string) => (name.startsWith("mobile") ? 360 : 1280);
 

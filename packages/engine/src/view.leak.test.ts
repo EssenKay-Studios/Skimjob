@@ -365,7 +365,7 @@ describe("no leaks in real games — design §17.2, §13, §9.5", () => {
     const states = playGame(players, mode);
     const final = states[states.length - 1] as GameState;
     expect(final.phase.kind).toBe("ended");
-    // The script covers every starter-game event type.
+    // The script covers these event types.
     const types = new Set(final.log.map((e) => e.type));
     for (const t of ["moveSubmitted", "defaultMoveAssigned", "roomWatched", "abilityResolved", "voteSealed", "voteCast", "shakedownResolved", "gameEnded", "meetingProposalAccepted"]) {
       expect(types, t).toContain(t);
