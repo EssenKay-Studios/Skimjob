@@ -47,4 +47,14 @@ describe("theme-token lint, QA edge cases", () => {
     expect(check({ "a.css": 3 }, { "a.css": 3 })).toEqual([]);
     expect(check({ "a.css": 4 }, { "a.css": 3 })).toHaveLength(1);
   });
+
+  // QA #168: the stale-baseline check names the file, its allowance and its real count (0 when it is clean).
+  it("reports an over-count and a stale entry together, and a cleaned-up file as now 0", () => {
+    expect(check({ "a.css": 4 }, { "a.css": 3, "b.css": 2, "gone.css": 1 })).toEqual([
+      "a.css: 4 raw colour/font/shadow/radius value(s), allowed 3. Use a theme.css token (add one there if none fits).",
+      "b.css: baseline allows 2 but it now has 0. Lower the baseline: run `node scripts/theme-lint.mjs --update` and commit it.",
+      "gone.css: baseline allows 1 but it now has 0. Lower the baseline: run `node scripts/theme-lint.mjs --update` and commit it.",
+    ]);
+    expect(check({ "a.css": 1 }, { "a.css": 0 })).toHaveLength(1);
+  });
 });
