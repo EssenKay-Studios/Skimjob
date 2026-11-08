@@ -145,7 +145,8 @@ function ShopSection() {
   const game = useLocalGame(() => ({ ...createGame(config()), shop: ["peek", "shield", "rig"] }));
   const { state, setState, view, send } = game;
   const earn = () => setState(applyEvent(state, { type: "tokenEarned", visibility: privateTo("p1"), player: "p1", trigger: "watchedShakenDirty" }));
-  const next = () => setState(step(step(state, round(state.round)), alibis(state.round)));
+  // design §9.3: the round, its alibis, then its result window, nobody calling an emergency.
+  const next = () => setState(step(step(step(state, round(state.round)), alibis(state.round)), { type: "advance", deadline: { kind: "result", round: state.round } }));
   return (
     <Section id="ext-shop" title="Tokens and the shop" note="extension.md Tokens and the perk shop · live local game: buy, own privately, one use per round">
       <div className="g-stack" data-testid="shop-demo">

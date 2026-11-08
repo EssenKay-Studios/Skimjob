@@ -61,7 +61,8 @@ export function recapItems(events: readonly LoggedEvent[], view: PlayerView, ctx
     if (e.event.result.kind === "shakedown" && settled.has(e.event.result.target)) continue;
     picks.push({ prio: 4, ...say(e) });
   }
-  for (const e of [...of("emergencyMeetingCalled"), ...of("meetingScheduled")]) picks.push({ prio: 5, ...say(e) });
+  // What people said (design §15.4): role claims, with emergencies called and meetings set.
+  for (const e of [...of("emergencyMeetingCalled"), ...of("meetingScheduled"), ...of("roleClaimed")]) picks.push({ prio: 5, ...say(e) });
 
   // Your case file: only your own entries are in it (viewFor), minus what you did yourself.
   const news = events.filter((e) => e.event.visibility.kind !== "public" && !OWN_ACTIONS.has(e.event.type));

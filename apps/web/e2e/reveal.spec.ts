@@ -53,7 +53,7 @@ for (const viewport of VIEWPORTS) {
       await reveal.getByRole("button", { name: "Next round" }).click();
       await expect(sheet.getByRole("heading", { name: "Round 2" })).toBeVisible();
       await expect(sheet).toContainText("Round 2: Ben tipped off the police: the Office's bell rang once more.");
-      await expect(sheet).toContainText("Stash check: Ben holds 6 or more (not clean).");
+      await expect(sheet).toContainText("Stash check: Ben holds something above the share (not clean).");
       await expect(sheet).toContainText("You bought a Peek perk");
       await expect(sheet).toContainText("Ben claimed Lookout, but was really the Mole.");
 

@@ -281,7 +281,8 @@ test("reloads, a killed socket, a skewed clock and a late alibi (3h preset: 102 
   await shot(guest, "alibi-posted-after-reload");
 
   // The host posts after the window closed (their screen is stale): refused, with a readable reason.
-  await expect(guest.getByRole("heading", { name: "Round 2 · Pick your room", level: 2 })).toBeVisible({ timeout: 15_000 });
+  // The alibi window closes; a briefing (after a raid) or the result window may come before round 2 (design §9.2, §9.3).
+  await expect(guest.getByRole("heading", { name: "Alibi window", level: 1 })).toHaveCount(0, { timeout: 15_000 });
   await host.getByRole("group", { name: "Alibi room" }).getByRole("button", { name: "Office" }).click();
   await host.getByRole("button", { name: "Post alibi" }).click();
   const toast = host.locator(".toast").filter({ hasText: /closed/i });
@@ -291,7 +292,7 @@ test("reloads, a killed socket, a skewed clock and a late alibi (3h preset: 102 
   await shot(host, "alibi-refused");
   freeze = false;
   await host.reload();
-  await expect(host.getByRole("heading", { name: "Round 2 · Pick your room", level: 2 })).toBeVisible();
+  await expect(host.locator(".hud__kicker")).toBeVisible();
   await expect(host.getByText("You say you were in the Office")).toHaveCount(0);
   await hostCtx.close();
   await guestCtx.close();
