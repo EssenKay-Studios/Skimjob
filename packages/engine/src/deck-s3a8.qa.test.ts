@@ -468,7 +468,7 @@ describe("QA §13, §4.1, §18: the Inside tip at the flip", () => {
     const s = withCard(resolve(game(4, ["lookout", "mole", "hacker", "priest"])), "audit");
     const tip: GameEvent = { type: "insideTip", visibility: privateTo("p0"), player: "p0", round: s.round, subject: "p1", role: "mole" };
     const t = replay(s.config, [...s.log, tip]);
-    expect(viewFor(t, "p0").caseFile.concat(viewFor(t, "p0").ledger).some((e) => e.event.type === "insideTip")).toBe(true);
+    expect([...viewFor(t, "p0").caseFile, ...viewFor(t, "p0").ledger].some((e) => e.event.type === "insideTip")).toBe(true);
     for (const id of ["p1", "p2", "p3"]) expect(seesTip(t, id)).toBe(false);
   });
 });
