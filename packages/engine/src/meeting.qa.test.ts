@@ -322,6 +322,18 @@ describe("QA: shakedowns — design §11.3, extension.md \"Shakedowns (fixed num
     expect(s.setAside).toBe(0);
     expect(s.players.p1?.stash).toBe(1 + setAside + 1);
   });
+
+  it("a clean shakedown with nothing set aside, through commands only: it takes and pays back what is above the share (provisional)", () => {
+    // The common interim path: no earlier shakedown, so the coins set aside are 0 and compensation is capped at what was taken.
+    let s = run(game(3), mv("p0", "lobby", 0), mv("p1", "lobby", 1), mv("p2", "lobby", 0), ROUND);
+    const roof = [mv("p0", "rooftop"), mv("p1", "rooftop"), mv("p2", "rooftop")];
+    s = run(s, ...roof, ROUND, ...roof, ROUND);
+    expect([s.players.p1?.stash, s.setAside]).toEqual([2, 0]);
+    s = run(s, sched(1), open("act-1"), vote("p0", "p1"), vote("p2", "p1"), CLOSE);
+    expect(LAST(s, "shakedownResolved")).toMatchObject({ target: "p1", stashRevealed: 2, taken: 1, clean: true, compensation: 1 });
+    expect([s.players.p1?.stash, s.setAside]).toEqual([2, 0]);
+    expect(replay(s.config, s.log)).toEqual(s);
+  });
 });
 
 describe("QA: ballot visibility per mode, during and after the game — design §11.2, §17.2", () => {
