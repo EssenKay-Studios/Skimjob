@@ -1,24 +1,9 @@
-// Plain lines for the end-of-game reveal (design §15.5): what earned each token,
-// which roles also win a heist sunk by theft (★), who won and why, and the
-// worked-out timeline items. Pure; the switches are exhaustive. design §8;
-// extension.md "Tokens and the perk shop" (until S3a.7)
-import { BUST_ROLE_TEXT, type RoleId, type TokenTrigger } from "@skimjob/content";
+// Plain lines for the end-of-game reveal (design §15.5): which roles also win a
+// heist sunk by theft (★), who won and why, and the worked-out timeline items.
+// Pure; the switches are exhaustive. design §8
+import { BUST_ROLE_TEXT, type RoleId } from "@skimjob/content";
 import { roleHandler, type RevealEnding, type RevealItem, type RevealRound, type RevealSummary } from "@skimjob/engine";
 import { describeEvent, roleName, type DescribeContext } from "./describeEvent";
-
-/** What earned a token, after "for". */
-export function triggerText(t: TokenTrigger): string {
-  switch (t) {
-    case "watchedShakenDirty":
-      return "catching someone they watched";
-    case "auditedShakenDirty":
-      return "catching someone in a room they audited";
-    case "checkedShakenDirty":
-      return "catching someone they looked into";
-    case "wonDirtyShakedown":
-      return "voting for a dirty shakedown";
-  }
-}
 
 /** "★ Also wins if the heist is sunk by theft" for the Mole and the Fixer (their handlers, design §8.4), else "". */
 export function starText(role: RoleId): string {
@@ -56,8 +41,6 @@ export function itemText(item: RevealItem, ctx: DescribeContext): string {
   switch (item.kind) {
     case "event":
       return describeEvent(item.event, ctx);
-    case "token":
-      return cap(`${who(item.player)} earned a token for ${triggerText(item.trigger)}.`);
     case "claim":
       return item.claimed === item.real
         ? cap(`${who(item.player)} claimed ${roleName(item.claimed)}, and it was true.`)
@@ -67,7 +50,7 @@ export function itemText(item: RevealItem, ctx: DescribeContext): string {
 
 /** Whether an item is one the game hid until now (to mark it in the timeline). */
 export function isHidden(item: RevealItem): boolean {
-  if (item.kind !== "event") return item.kind !== "claim";
+  if (item.kind !== "event") return false;
   return item.event.visibility.kind !== "public";
 }
 

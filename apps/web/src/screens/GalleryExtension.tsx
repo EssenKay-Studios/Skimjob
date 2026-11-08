@@ -1,11 +1,10 @@
 // /dev/gallery sections for role facts and tappable role names (design §11,
-// §20.2), the rulebook, a live shop on a local engine game, the no-tells feed
-// lines and the end screen. No server: a local engine game.
+// §20.2), the rulebook with the black market (§12), the no-tells feed lines and
+// the end screen. No server: a local engine game.
 import { useMemo, useState, type ReactNode } from "react";
 import type { RoleId } from "@skimjob/content";
 import {
   PUBLIC,
-  applyEvent,
   handleCommand,
   replay,
   setupEvents,
@@ -16,8 +15,7 @@ import {
   type PlayerView,
   type SystemCommand,
 } from "@skimjob/engine";
-import { Button } from "../components/Button";
-import { PerkUses, RoleFacts, RoleList, RoleTip, RulebookButton, Tokens } from "../components/Extension";
+import { RoleFacts, RoleList, RoleTip, RulebookButton } from "../components/Extension";
 import { SketchFrame } from "../components/SketchFrame";
 import { useToast } from "../components/Toast";
 import { Underline } from "../components/Underline";
@@ -97,7 +95,6 @@ export function ExtensionSections() {
   return (
     <>
       <RoleSections />
-      <ShopSection />
       <NoTellsSection />
       <EndSection />
     </>
@@ -109,7 +106,7 @@ function RoleSections() {
   const sample: RoleId[] = ["lookout", "locksmith", "hacker", "mole", "fixer"];
   return (
     <>
-      <Section id="ext-role-card" title="Role card" note="design §11, §20.2 · kind, power, token trigger, How you win, tokens, role list, rulebook">
+      <Section id="ext-role-card" title="Role card" note="design §11, §20.2 · kind, power, How you win, role list, rulebook">
         <RoleCard view={game.view} send={game.send} />
       </Section>
       <Section id="ext-roles" title="Role facts and role names" note="every role card carries its kind and a How you win line · tap a name for its kind and win line">
@@ -124,12 +121,12 @@ function RoleSections() {
           ))}
         </div>
       </Section>
-      <Section id="ext-rulebook" title="Rulebook sheet" note="game in a minute, Endings table, roles by kind with ★, the shop · numbers from content">
+      <Section id="ext-rulebook" title="Rulebook sheet" note="game in a minute, Endings table, roles by kind with ★, the black market · numbers from content">
         <div className="g-row">
           <RulebookButton view={null} seed="g-rulebook-content" />
           <RulebookButton view={game.view} seed="g-rulebook-game" />
         </div>
-        <p className="meta">Left: outside a game (all perks by column). Right: this game's role list and three-perk shop.</p>
+        <p className="meta">Left: outside a game (every perk). Right: this game's role list and three-perk black market.</p>
       </Section>
       <Section id="ext-rolelist" title="Role list" note="host setting: Exact, Possible or Hidden">
         <div className="g-stack">
@@ -139,36 +136,6 @@ function RoleSections() {
         </div>
       </Section>
     </>
-  );
-}
-
-/** The live shop: earn tokens (gallery only), buy, use one perk per round, next round. */
-function ShopSection() {
-  const game = useLocalGame(() => ({ ...createGame(config()), shop: ["peek", "shield", "rig"] }));
-  const { state, setState, view, send } = game;
-  const earn = () => setState(applyEvent(state, { type: "tokenEarned", visibility: privateTo("p1"), player: "p1", trigger: "watchedShakenDirty" }));
-  // design §9.3: the round, its alibis, then its result window, nobody calling an emergency.
-  const next = () => setState(step(step(step(state, round(state.round)), alibis(state.round)), { type: "advance", deadline: { kind: "result", round: state.round } }));
-  return (
-    <Section id="ext-shop" title="Tokens and the shop" note="extension.md Tokens and the perk shop · live local game: buy, own privately, one use per round">
-      <div className="g-stack" data-testid="shop-demo">
-        <p className="meta">
-          Round <b className="num">{view.round}</b> · {view.phase.kind}
-        </p>
-        <div className="g-row">
-          <Button variant="small" seed="g-earn" onClick={earn}>
-            Earn a token
-          </Button>
-          <Button variant="small" seed="g-next" onClick={next}>
-            Next round
-          </Button>
-        </div>
-        <SketchFrame seed="g-tokens" radius={14} fill="var(--card-sand)" className="panel">
-          <Tokens view={view} send={send} />
-          <PerkUses view={view} send={send} />
-        </SketchFrame>
-      </div>
-    </Section>
   );
 }
 

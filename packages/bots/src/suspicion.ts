@@ -26,7 +26,7 @@ export interface SuspicionWeights {
   readonly audited: number;
   /**
    * A role claim I know is false (v2 §4): it names my own role, contradicts my
-   * Peek or Inside tip, or claims a role that can't pocket after loot was found
+   * Inside tip, or claims a role that can't pocket after loot was found
    * on them. Half as much for changing one's claimed role.
    */
   readonly falseClaim: number;
@@ -34,7 +34,7 @@ export interface SuspicionWeights {
   readonly doubleClaim: number;
   /** A claim I can't check, standing alone: a little trust. */
   readonly claimed: number;
-  /** My Peek or Inside tip says they hold a role that also wins a heist sunk by theft (the Mole, the Fixer, §8.4). */
+  /** My Inside tip says they hold a role that also wins a heist sunk by theft (the Mole, the Fixer, §8.4). */
   readonly knownDark: number;
 }
 
@@ -167,7 +167,7 @@ export function suspicion(view: PlayerView, w: SuspicionWeights = SUSPICION_WEIG
 }
 
 /** What I know of other players' roles: my latest Inside tip on each. */
-export function knownRoles(view: PlayerView): Map<PlayerId, RoleId> {
+function knownRoles(view: PlayerView): Map<PlayerId, RoleId> {
   const known = new Map<PlayerId, RoleId>();
   for (const { event: e } of view.caseFile) {
     if (e.type === "insideTip") known.set(e.subject, e.role);

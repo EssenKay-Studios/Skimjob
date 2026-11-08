@@ -409,8 +409,8 @@ function MeetingKitSamples() {
       <Banner tone="bad" seed="g-b2" title="Clean! Mo was holding 2.">
         Nothing above the share: nothing taken.
       </Banner>
-      <Banner seed="g-b3" title="The shakedown was called off.">
-        Nobody's stash was touched.
+      <Banner seed="g-b3" title="A shakedown fell through.">
+        Nobody's stash was opened.
       </Banner>
       <Button variant="secondary" seed="g-dialog" onClick={() => setOpen(true)}>
         Open the dialog sheet

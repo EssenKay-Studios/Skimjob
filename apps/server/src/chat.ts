@@ -108,7 +108,7 @@ export function evidenceCard(view: PlayerView, seq: number): Result<EvidenceCard
   if (!entry) return { ok: false, reason: "that isn't an entry of your case file" };
   const event = entry.event;
   // design §8: roles are claimed "truthfully or as a bluff"; a verified role
-  // card (your deal, a Peek, an Inside tip, allies) would end bluffing.
+  // card (your deal, an Inside tip, allies) would end bluffing.
   if (revealsRole(event)) return { ok: false, reason: "role cards can't be shared: role claims stay unverified" };
   // design §11.2: a secret ballot stays secret, so it can't be made provable either.
   if (event.visibility.kind === "secret") return { ok: false, reason: "secret ballots can't be shared" };

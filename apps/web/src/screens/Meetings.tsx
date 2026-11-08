@@ -1,10 +1,10 @@
 // Meetings and voting on the game screen (docs/m2-plan.md M2-7): the slot
 // planner, the emergency button and the sealed vote; the vote dialog; the
-// shakedown window ("the crew is deciding…"); the results banner; and your
-// role card with its meeting-time abilities. Everything reads the player's own
+// Bail choice window ("the crew is deciding…"); the results banner; and your
+// role card. Everything reads the player's own
 // view through game/meeting.ts. design §11.1–§11.5, ui-style "Vote window"
 import { useEffect, useId, useState } from "react";
-import { PERKS } from "@skimjob/content";
+import { PERK_TEXT } from "@skimjob/content";
 import type { PlayerId, PlayerView, VoteChoice } from "@skimjob/engine";
 import { Avatar } from "../components/Avatar";
 import { Button, DangerButton } from "../components/Button";
@@ -12,12 +12,11 @@ import { Chip } from "../components/Chip";
 import { Banner, ClockFace, DialogSheet, TallyBars, type TallyBar } from "../components/MeetingKit";
 import { SketchFrame } from "../components/SketchFrame";
 import { TextField } from "../components/TextField";
-import { MyRoleFacts, RoleList, RulebookButton, Tokens } from "../components/Extension";
+import { MyRoleFacts, RoleList, RulebookButton } from "../components/Extension";
 import { Underline } from "../components/Underline";
 import { roleName } from "../game/describeEvent";
 import { namesOf, type Timer } from "../game/hud";
 import {
-  abilityOffers,
   claimState,
   decidingOf,
   emergencyOf,
@@ -27,14 +26,12 @@ import {
   MODE_NAME,
   MODE_NOTE,
   openMeetingOf,
-  perksHeld,
   plannerOf,
   sameVote,
   slotFromLocal,
   slotText,
   tallyRows,
   voteTargets,
-  type AbilityOffer,
   type MeetingOutcome,
   type Tally,
 } from "../game/meeting";
@@ -312,7 +309,7 @@ function VoteSheet({ view, timers, offset, send, onDone }: Props & { onDone: () 
       {m.ballots.length > 0 && <BallotList rows={m.ballots} who={who} label="Ballots so far" />}
       {m.seen.length > 0 && (
         <div className="vote__seen">
-          <h3 className="meetings__sub">Your Ballot perk</h3>
+          <h3 className="meetings__sub">Your Check ballot</h3>
           <ul className="ballots" aria-label="Ballots you can see">
             {m.seen.map((b) => (
               <li key={b.player}>
@@ -401,8 +398,8 @@ export function ResultsBanner({ view }: { view: PlayerView }) {
       <TallyBars rows={bars(o.tally, who, o.result)} label="Final tally" />
       {o.ballots ? <BallotList rows={o.ballots} who={who} label="How everyone voted" /> : <p className="meta">{MODE_NOTE.secret}</p>}
       {o.cancelled && (
-        <Banner seed="res-cancel" title="The shakedown was called off.">
-          Nobody's stash was touched.
+        <Banner seed="res-cancel" title="A shakedown fell through.">
+          Nobody's stash was opened.
         </Banner>
       )}
       {s &&
@@ -422,14 +419,9 @@ export function ResultsBanner({ view }: { view: PlayerView }) {
   );
 }
 
-// ---------------------------------------------------------------- your role card and its abilities
+// ---------------------------------------------------------------- your role card
 
 export function RoleCard({ view, send, claim = true }: { view: PlayerView; send: Send; claim?: boolean }) {
-  const offers = abilityOffers(view);
-  const perks = perksHeld(view);
-  const [open, setOpen] = useState(false);
-  const panel = useId();
-  const show = open && offers.length > 0;
   return (
     <SketchFrame as="section" seed="role-card" radius={16} shadow={0.45} fill="var(--card-sand)" className="panel role-card" aria-labelledby="role-h">
       <div className="role-card__head">
@@ -444,81 +436,20 @@ export function RoleCard({ view, send, claim = true }: { view: PlayerView; send:
         </span>
       </div>
       <MyRoleFacts view={view} />
-      <Tokens view={view} send={send} />
-      {perks.length > 0 && (
+      {view.me.roleState.bail && (
         <ul className="role-card__perks" aria-label="Your perks">
-          {perks.map((p) => (
-            <li key={p.id} title={PERKS[p.id]?.effect}>
-              <Chip colour="var(--gold)">
-                {p.name}
-                {p.count > 1 ? ` ×${p.count}` : ""}
-              </Chip>
-            </li>
-          ))}
+          <li title={PERK_TEXT.bail?.text}>
+            <Chip colour="var(--gold)">{PERK_TEXT.bail?.name}</Chip>
+          </li>
         </ul>
       )}
       {claim && <ClaimRole view={view} send={send} where="card" />}
-      {offers.length > 0 && (
-        <Button variant="small" seed="use-ability" aria-expanded={show} aria-controls={panel} onClick={() => setOpen(!open)} className="role-card__use">
-          {show ? "Hide abilities" : "Use ability"}
-        </Button>
-      )}
-      {show && (
-        <div id={panel} className="abilities">
-          {offers.map((o) => (
-            <AbilityRow key={o.kind} view={view} offer={o} send={send} done={() => setOpen(false)} />
-          ))}
-        </div>
-      )}
       <div className="role-card__foot">
         <RoleList view={view} />
         <RulebookButton view={view} />
       </div>
     </SketchFrame>
   );
-}
-
-function AbilityRow({ view, offer, send, done }: { view: PlayerView; offer: AbilityOffer; send: Send; done: () => void }) {
-  const who = useWho(view);
-  const [target, setTarget] = useState<PlayerId | null>(null);
-  const use = async (ability: Parameters<Send>[0] & { type: "useAbility" }, msg: string) => {
-    const r = await send(ability, msg);
-    if (r.ok) done();
-  };
-  const targets = (ids: readonly PlayerId[], label: string) => (
-    <div className="move__chips" role="group" aria-label={label}>
-      {ids.map((id) => (
-        <Button key={id} variant="toggle" seed={`ab-${offer.kind}-${id}`} pressed={target === id} onClick={() => setTarget(id)}>
-          {cap(who(id))}
-        </Button>
-      ))}
-    </div>
-  );
-  switch (offer.kind) {
-    case "extraVote":
-      return (
-        <div className="ability">
-          <p>
-            <b>{PERKS.extraVote.name}:</b> {PERKS.extraVote.effect}
-          </p>
-          <Button variant="secondary" seed="ab-extra" onClick={() => void use({ type: "useAbility", ability: { kind: "extraVote" } }, "+Vote spent.")}>
-            Spend +Vote
-          </Button>
-        </div>
-      );
-    case "ballot":
-      return (
-        <div className="ability">
-          <p>
-            <b>{PERKS.ballot.name}:</b> {PERKS.ballot.effect}
-          </p>
-          {targets(offer.targets, "Ballot to watch")}
-          <Button variant="secondary" seed="ab-ballot" disabled={!target} onClick={() => target && void use({ type: "useAbility", ability: { kind: "ballot", target } }, "You're watching that ballot.")}>
-            Watch ballot
-          </Button>
-        </div>
-      );
-  }
 }
 
 /** A formal, public, possibly false role claim, once between meetings (R4b; design §8, §12.1). */

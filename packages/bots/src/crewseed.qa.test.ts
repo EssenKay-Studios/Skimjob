@@ -81,7 +81,7 @@ describe("QA PR #43: crewSeed — the hunch is not computable from public data",
 
   it("the games are indistinguishable to every player: identical views (public and private) despite different secret seeds", () => {
     for (const p of games[0]!.state.playerOrder) {
-      // The perk shop is dealt from the game seed, in the open (extension.md "Tokens and the perk shop"): not the crew seed.
+      // The black market is dealt from the game seed, in the open (design §12): not the crew seed.
       const all = views(p).map((v) => JSON.stringify(v, (k, x: unknown) => (k === "shop" || (x as { type?: string } | null)?.type === "shopDealt" ? undefined : x)));
       expect(new Set(all).size, p).toBe(1);
       // And the secret seed is nowhere in a view.

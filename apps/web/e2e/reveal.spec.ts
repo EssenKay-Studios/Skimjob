@@ -48,12 +48,11 @@ for (const viewport of VIEWPORTS) {
       await expect(sheet).toContainText("said Lobby: lie");
       await expect(sheet).toContainText("Round 1: Cy hid the Vault's bell; it really shows 3 lit.");
 
-      // Next: the Mole's hidden ring (design §5.2), the Detective's grab count (§11.1), the perk and the false claim.
+      // Next: the Mole's hidden ring (design §5.2), the Detective's grab count (§11.1) and the false claim.
       await reveal.getByRole("button", { name: "Next round" }).click();
       await expect(sheet.getByRole("heading", { name: "Round 2" })).toBeVisible();
       await expect(sheet).toContainText("Round 2: Ben tipped off the police: the Office's bell rang once more.");
       await expect(sheet).toContainText("Round 1: Ben grabbed 6 coins.");
-      await expect(sheet).toContainText("You bought a Peek perk");
       await expect(sheet).toContainText("Ben claimed Lookout, but was really the Mole.");
 
       // A round chip jumps straight there: Shift change.
@@ -61,6 +60,7 @@ for (const viewport of VIEWPORTS) {
       await r3.click();
       await expect(r3).toHaveAttribute("aria-pressed", "true");
       await expect(sheet).toContainText("Shift change");
+      await expect(sheet).toContainText("Round 3: you bought Tail for 1 coin: tailing the Vault next round.");
       await expect(reveal.getByRole("button", { name: "Next round" })).toBeDisabled();
       const box = await r3.boundingBox();
       expect(box!.height).toBeGreaterThanOrEqual(44);
@@ -86,7 +86,7 @@ for (const viewport of VIEWPORTS) {
 
 // The 12-seat 15-min game QA (game.qa.spec.ts) sometimes ended 1 px or more
 // wider than a 390 px phone: a 24-character name with no break points ("W"×24)
-// in a timeline line, the "why" note or a token line would not wrap. Here the
+// in a timeline line or the "why" note would not wrap. Here the
 // gallery's game with 24-character names, every ending and every round, at
 // every launch width: nothing past the edge, not even 1 px.
 const LAUNCH_WIDTHS = [360, 390, 768, 1024, 1280];

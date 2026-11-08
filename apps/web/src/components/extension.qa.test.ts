@@ -1,15 +1,14 @@
 // QA (PR #52, R6b; S3a.6): adversarial checks of the role cards, the rulebook
-// and the shop, on real engine games (no fabricated events where the engine can
-// make them): the shop's edges and privacy (extension.md, until S3a.7), no tells
+// and the black market, on real engine games (no fabricated events where the engine can
+// make them): purchases' privacy (design §12), no tells
 // for cameras offline, role facts vs design §11 and §20.2, and the end screen on
 // a failed heist (§8).
 import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { BANK_JOB, PERKS, ROLES, ROLE_TEXT, ROLE_WIN, SHOP_COLUMNS, type PerkId, type RoleId } from "@skimjob/content";
+import { BANK_JOB, PERK_TEXT, ROLES, ROLE_TEXT, ROLE_WIN, type PerkId, type RoleId } from "@skimjob/content";
 import {
   createGame,
   handleCommand,
-  privateTo,
   replay,
   setupEvents,
   viewFor,
@@ -21,12 +20,11 @@ import {
 import { describe, expect, it } from "vitest";
 import { describeEvent } from "../game/describeEvent";
 import { namesOf } from "../game/hud";
-import { perkUses, roleInfo, roleListInfo, shopState } from "../game/extension";
-import { RoleList, RulebookSheet, Tokens } from "./Extension";
+import { roleInfo, roleListInfo } from "../game/extension";
+import { RoleList, RulebookSheet } from "./Extension";
 import { GameOver } from "../screens/Game";
 
 const html = (el: ReactElement) => renderToStaticMarkup(el);
-const noop = async () => ({ ok: true as const });
 
 function config(n: number, extra: Partial<GameConfig> = {}): GameConfig {
   return {
@@ -44,7 +42,6 @@ function config(n: number, extra: Partial<GameConfig> = {}): GameConfig {
 interface Setup {
   readonly roles?: readonly RoleId[];
   readonly shop?: readonly PerkId[];
-  readonly tokens?: Readonly<Record<string, number>>;
 }
 /** A new game with its setup events rewritten (seat i gets roles[i], a Lookout if missing; every seat a Lookout without roles). */
 function game(cfg: GameConfig, setup: Setup = {}): GameState {
@@ -53,8 +50,7 @@ function game(cfg: GameConfig, setup: Setup = {}): GameState {
     if (e.type === "roleDealt") {
       const role = setup.roles?.[seat] ?? "lookout";
       seat++;
-      const earned: GameEvent[] = Array.from({ length: setup.tokens?.[e.player] ?? 0 }, () => ({ type: "tokenEarned", visibility: privateTo(e.player), player: e.player, trigger: "watchedShakenDirty" }));
-      return [{ ...e, role }, ...earned];
+      return [{ ...e, role }];
     }
     if (e.type === "shopDealt" && setup.shop) return [{ ...e, perks: setup.shop }];
     return [e];
@@ -77,8 +73,7 @@ const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", r
 const ALIBIS = (s: GameState) => ({ type: "advance", deadline: { kind: "alibis", round: s.phase.kind === "alibis" ? s.phase.round : s.round } });
 /** The result window closes with no emergency called (design §9.3). */
 const RESULT = (s: GameState) => ({ type: "advance", deadline: { kind: "result", round: s.resolvedRound } });
-const buy = (player: string, perk: string) => ({ type: "buyPerk", player, perk });
-const use = (player: string, ability: object) => ({ type: "useAbility", player, ability });
+const buy = (player: string, perk: object) => ({ type: "buyPerk", player, perk });
 const ids = (n: number) => Array.from({ length: n }, (_, i) => `p${i}`);
 
 /** Plays the game to its end: everyone in `room`, meetings scheduled, opened and closed. */
@@ -89,84 +84,40 @@ function playOut(s: GameState, room: (s: GameState, p: string) => string, pocket
     else if (p.kind === "alibis") s = run(s, ALIBIS);
     else if (p.kind === "result") s = run(s, { type: "advance", deadline: { kind: "result", round: p.round } });
     else if (p.kind === "awaitingMeeting") s = run(s, { type: "scheduleMeeting", meetingId: p.meetingId, slot: "x" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: p.meetingId } });
-    else if (p.kind === "meeting" || p.kind === "shakedownPending") s = run(s, { type: "advance", deadline: { kind: "closeMeeting", meetingId: s.meeting?.id } });
+    else if (p.kind === "meeting") s = run(s, { type: "advance", deadline: { kind: "closeMeeting", meetingId: s.meeting?.id } });
+    else if (p.kind === "shakedownPending") s = run(s, { type: "advance", deadline: { kind: "resolveShakedown", meetingId: p.meetingId } });
     else throw new Error(`stuck in ${p.kind}`);
   }
   return s;
 }
 
-// ---------------------------------------------------------------- shop
+// ---------------------------------------------------------------- black market
 
-describe("the shop's edges (extension.md \"Tokens and the perk shop\")", () => {
-  const SHOP: PerkId[] = ["peek", "alibi", "extraVote"];
-  const base = (tokens: number) => game(config(5), { shop: SHOP, tokens: { p0: tokens } });
+describe("purchases stay private (design §12, §18)", () => {
+  const SHOP: PerkId[] = ["tail", "softShoes", "bail"];
+  const rich = () => {
+    const s = game(config(5), { shop: SHOP });
+    return { ...s, players: { ...s.players, p0: { ...s.players.p0!, stash: 9 } } };
+  };
 
-  it("one token short: Buy is disabled in the sheet's data and the engine refuses", () => {
-    const s = base(PERKS.peek.cost - 1);
-    const item = shopState(viewFor(s, "p0")).items.find((i) => i.perk === "peek")!;
-    expect(item.affordable).toBe(false);
-    expect(refused(s, buy("p0", "peek"))).toBe(true);
-    // Exactly enough is affordable (boundary).
-    expect(shopState(viewFor(base(PERKS.peek.cost), "p0")).items.find((i) => i.perk === "peek")!.affordable).toBe(true);
-  });
-
-  it("buying twice: the second buy needs the tokens again; the sheet counts both", () => {
-    let s = base(PERKS.peek.cost * 2);
-    s = run(s, buy("p0", "peek"));
-    expect(shopState(viewFor(s, "p0")).tokens).toBe(PERKS.peek.cost);
-    s = run(s, buy("p0", "peek"));
-    const st = shopState(viewFor(s, "p0"));
-    expect(st.tokens).toBe(0);
-    expect(st.items.find((i) => i.perk === "peek")!.owned).toBe(2);
-    expect(refused(s, buy("p0", "peek"))).toBe(true);
-  });
-
-  it("a perk from a column this game didn't deal can't be bought and isn't listed", () => {
-    const s = base(5);
-    const notDealt = Object.values(SHOP_COLUMNS).flat().filter((p) => !SHOP.includes(p));
-    expect(notDealt.length).toBeGreaterThan(0);
-    for (const perk of notDealt) expect(refused(s, buy("p0", perk)), perk).toBe(true);
-    expect(shopState(viewFor(s, "p0")).items.map((i) => i.perk)).toEqual(SHOP);
-    expect(shopState(viewFor(s, "p0")).items.map((i) => i.column)).toEqual(["learn", "protect", "sway"]);
-  });
-
-  it("buying is allowed after using a perk this round, but the new perk waits for the next round", () => {
-    let s = base(PERKS.peek.cost + PERKS.alibi.cost);
-    s = run(s, buy("p0", "peek"), use("p0", { kind: "peek", target: "p1" }), buy("p0", "alibi"));
-    const v = viewFor(s, "p0");
-    expect(shopState(v).usedThisRound).toBe(true);
-    expect(perkUses(v)).toEqual([]);
-  });
-
-  it("you can't buy for someone else: a buy names its own seat and the other seat's tokens stay put", () => {
-    const s = game(config(5), { shop: SHOP, tokens: { p0: 3, p1: 0 } });
-    expect(refused(s, buy("p1", "peek"))).toBe(true);
-    expect(shopState(viewFor(s, "p0")).tokens).toBe(3);
-  });
-
-  it("tokens and purchases never reach another player's view or rendered UI", () => {
-    let s = base(PERKS.peek.cost + PERKS.alibi.cost + 1);
-    s = run(s, buy("p0", "peek"), buy("p0", "alibi"));
+  it("others see only the nameless sale; nobody's view shows who bought it or that they hold a Bail", () => {
+    const s = run(rich(), buy("p0", { kind: "bail" }));
     for (const other of ["p1", "p2", "p3", "p4"]) {
       const v = viewFor(s, other);
       const json = JSON.stringify(v);
-      expect(json).not.toMatch(/"tokenEarned"|"perkBought"|"perkPurchased"/);
-      expect(v.players.find((x) => x.id === "p0")).not.toHaveProperty("roleState");
-      expect(shopState(v).tokens).toBe(0);
-      expect(shopState(v).items.every((i) => i.owned === 0)).toBe(true);
-      const ui = html(createElement(Tokens, { view: v, send: noop }));
-      expect(ui).toContain(">0<");
-      expect(ui).toContain("only you see this");
+      expect(json).not.toContain('"perkBought"');
+      expect(v.ledger.at(-1)?.event).toMatchObject({ type: "perkSold", perk: "bail", cost: 3 });
+      expect(json).not.toMatch(/"player":"p0"[^}]*"perkSold"|"perkSold"[^}]*"player"/);
+      expect(v.me.roleState.bail).toBe(false);
     }
-    // My own view counts what I bought.
-    expect(html(createElement(Tokens, { view: viewFor(s, "p0"), send: noop }))).toContain(">1<");
+    expect(viewFor(s, "p0").me.roleState.bail).toBe(true);
   });
 
-  it("Peek never offers yourself as a target", () => {
-    const s = run(base(PERKS.peek.cost), buy("p0", "peek"));
-    const peek = perkUses(viewFor(s, "p0")).find((u) => u.kind === "peek");
-    expect(peek).toBeDefined();
-    expect(peek!.kind === "peek" && peek!.targets).not.toContain("p0");
+  it("you can't buy what this game's black market doesn't sell, or for someone else", () => {
+    const s = rich();
+    expect(refused(s, buy("p0", { kind: "plantEvidence", target: "p1", room: "vault" }))).toBe(true);
+    expect(refused(s, buy("p1", { kind: "bail" }))).toBe(true); // p1's stash is empty
+    expect(refused(s, { type: "buyPerk", player: "p0", perk: "bail" })).toBe(true);
   });
 });
 
@@ -187,7 +138,7 @@ describe("no tells: cameras offline (design §11.1)", () => {
     const e = v.caseFile.map((x) => x.event).filter((x) => x.type === "roomWatched" && x.round === 2);
     expect(e).toHaveLength(1);
     const text = describeEvent(e[0]!, { me: "p1", name: namesOf(v) });
-    expect(text).toMatch(/cameras offline in the Vault/);
+    expect(text).toMatch(/the cameras were offline, nobody seen in the Vault/);
     expect(text).not.toMatch(/electric|P0/i);
   });
 });
@@ -208,17 +159,12 @@ describe("role cards and the rulebook match design §11.1 and §20.2", () => {
   const EYES = ["lookout", "detective", "auditor", "smoothTalker", "priest"];
   const SHADOWS = ["locksmith", "hacker", "electrician", "mole", "fixer"];
   const STARS = ["mole", "fixer"]; // design §8.4
-  // Tokens go in S3a.7; until then only these four roles earn one.
-  const TOKENS = ["lookout", "detective", "auditor", "smoothTalker"];
-
-  it("every one of the 10 roles has its kind, ★, §20.2 power and win lines, and a token line where it earns one", () => {
+  it("every one of the 10 roles has its kind, ★, §20.2 power and win lines", () => {
     expect(Object.keys(ROLES).sort()).toEqual([...EYES, ...SHADOWS].sort());
     for (const id of Object.keys(ROLES) as RoleId[]) {
       const info = roleInfo(id);
       expect(info.kindLabel, id).toBe(EYES.includes(id) ? "Eyes" : "Shadows");
       expect(info.star, id).toBe(STARS.includes(id));
-      if (TOKENS.includes(id)) expect(info.earns, `${id} earns a token`).toMatch(/^A token when: /);
-      else expect(info.earns, id).toBeNull();
       expect(info.power, id).toBe(ROLE_TEXT[id]!.power);
       expect(info.howYouWin, id).toBe(STARS.includes(id) ? ROLE_WIN.sunk : ROLE_WIN.crew);
     }
@@ -240,7 +186,9 @@ describe("role cards and the rulebook match design §11.1 and §20.2", () => {
     expect(ui).toContain("in this game");
     expect(ui).toContain("Eyes");
     expect(ui).toContain("Shadows");
-    expect(ui).toContain("Unspent tokens are worth nothing at the end.");
+    // design §12, §20.3: this game's three perks on the black market, and no tokens.
+    for (const p of viewFor(s, "p0").shop) expect(ui).toContain(`<b>${PERK_TEXT[p.perk]!.name}</b>`);
+    expect(ui).not.toMatch(/token/i);
     expect(ui).not.toMatch(/\bact\b|this act|per act|Team player|Wildcard|Lone wolf/i);
   });
 });

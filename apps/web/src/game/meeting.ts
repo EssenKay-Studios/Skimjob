@@ -3,7 +3,6 @@
 // shakedown window and the results banner, plus the meeting-time abilities on
 // your role card. Everything is read from the player's own view, so a vote
 // mode shows exactly what the view allows and nothing more. design §11.1–§11.5
-import { PERKS, type PerkId } from "@skimjob/content";
 import {
   rolesFor,
   type MeetingKind,
@@ -104,8 +103,6 @@ export interface EmergencyState {
   readonly note: string;
 }
 
-const perkCount = (view: PlayerView, perk: PerkId) => view.me.roleState.perks.filter((p) => p === perk).length;
-
 /** The crew's emergency pool: anyone may spend one, only between a round's result and the next planning. design §9.3 */
 export function emergencyOf(view: PlayerView): EmergencyState {
   const left = `${view.emergencies} left for the crew`;
@@ -136,7 +133,7 @@ export interface OpenMeeting {
    * cast), none in the other modes. Never yours (that's `mine`).
    */
   readonly ballots: readonly BallotRow[];
-  /** Ballots you see through a Ballot perk (also in Secret mode). design §8.3 */
+  /** Ballots you see through a Check ballot (also in Secret mode). design §12 */
   readonly seen: readonly BallotRow[];
   /** The live tally: Open mode only (one per ballot, so a Smooth Talker's weight never shows). */
   readonly live: Tally | null;
@@ -267,47 +264,9 @@ export function latestOutcome(view: PlayerView): MeetingOutcome | null {
 /** Everyone in seat order, you included. */
 const voteTargetsAll = (view: PlayerView): PlayerId[] => (setupOf(view)?.players ?? [...view.players, { id: view.me.id }]).map((p) => p.id);
 
-/** The shakedown window: who the vote went against. Identical for every player, Shield or not, cancelled or not. design §11.3 */
+/** The Bail choice window: who the vote went against. Identical for every player, Bail or not, used or not. design §9.6 */
 export function decidingOf(view: PlayerView): { readonly meetingId: string; readonly target: PlayerId } | null {
   return view.phase.kind === "shakedownPending" ? { meetingId: view.phase.meetingId, target: view.phase.target } : null;
-}
-
-// ---------------------------------------------------------------- abilities during meetings
-
-export type AbilityOffer =
-  /** +Vote perk: your ballot weighs one more in this meeting. design §8.3 */
-  | { readonly kind: "extraVote" }
-  /** Ballot perk: watch one player's ballot in this meeting (not in Open mode). design §8.3 */
-  | { readonly kind: "ballot"; readonly targets: readonly PlayerId[] };
-
-/** The meeting-time perks you can use right now. The Smooth Talker's weight is automatic and never shown. */
-export function abilityOffers(view: PlayerView): AbilityOffer[] {
-  if (view.phase.kind === "ended" || view.phase.kind === "setup") return [];
-  const others = voteTargets(view).map((t) => t.id);
-  const out: AbilityOffer[] = [];
-  const p = view.phase;
-  // One perk use per round (the Shield spends itself and doesn't count). extension.md
-  const usedPerk = view.caseFile.some(
-    ({ event: e }) => e.type === "perkUsed" && e.player === view.me.id && e.round === view.round && e.perk.kind !== "shield",
-  );
-  if (p.kind === "meeting" && !usedPerk) {
-    const spent = (kind: "extraVote") =>
-      view.caseFile.some(({ event: e }) => e.type === "perkUsed" && e.perk.kind === kind && "meetingId" in e.perk && e.perk.meetingId === p.meetingId);
-    if (perkCount(view, "extraVote") > 0 && !spent("extraVote")) out.push({ kind: "extraVote" });
-    if (perkCount(view, "ballot") > 0 && view.voteVisibility !== "open") {
-      const watching = new Set(Object.keys(view.me.seenBallots));
-      const targets = others.filter((o) => !watching.has(o));
-      if (targets.length > 0) out.push({ kind: "ballot", targets });
-    }
-  }
-  return out;
-}
-
-/** Perk tokens you hold, as "Ballot ×2". */
-export function perksHeld(view: PlayerView): { readonly id: PerkId; readonly name: string; readonly count: number }[] {
-  const counts = new Map<PerkId, number>();
-  for (const p of view.me.roleState.perks) counts.set(p, (counts.get(p) ?? 0) + 1);
-  return [...counts].map(([id, count]) => ({ id, name: PERKS[id]?.name ?? id, count }));
 }
 
 // ---------------------------------------------------------------- role claims (§8, §12.1)

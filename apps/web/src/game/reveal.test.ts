@@ -22,7 +22,6 @@ describe("reveal lines", () => {
     expect(itemText({ kind: "event", event: hide }, ctx)).toBe("Round 1: Cy hid the Vault's bell; it really shows 3 lit.");
     const cut = { ...sampleEvents.abilityResolved, player: "p3", ability: { kind: "blackout", room: "vault" } } as const;
     expect(itemText({ kind: "event", event: cut }, ctx)).toBe("Round 1: Cy cut the power in the Vault for next round.");
-    expect(itemText({ kind: "token", player: "p2", trigger: "watchedShakenDirty" }, ctx)).toBe("Ben earned a token for catching someone they watched.");
     expect(itemText({ kind: "claim", player: "p2", claimed: "lookout", real: "mole" }, ctx)).toBe("Ben claimed Lookout, but was really the Mole.");
   });
 
@@ -50,9 +49,7 @@ describe("<Reveal>", () => {
     safe: 0,
     topGroup: place === 1,
     winner,
-    tokens: role === "hacker" ? (["watchedShakenDirty", "watchedShakenDirty"] as const) : [],
-    perksBought: [],
-    perksUsed: 0,
+    perksBought: role === "hacker" ? (["bail"] as const) : [],
   });
   const summary: RevealSummary = {
     ending: { result: "failed", reason: "theft", topGroup: ["p2"], winners: ["p2"], why: "failedTopWins" },
@@ -75,7 +72,7 @@ describe("<Reveal>", () => {
   it("opens every role, marks the ★ winner and voids the rest on a failure", () => {
     for (const role of ["Mole", "Locksmith", "Hacker"]) expect(html).toContain(role);
     expect(html).toContain("★ Also wins if the heist is sunk by theft");
-    expect(html).toContain("2 tokens");
+    expect(html).toContain("Bought:"); // design §12, §15.5: who bought what opens at the reveal
     expect(html.match(/reveal__void/g)).toHaveLength(2);
     expect(html).toContain("stash over time: 4, 9");
   });

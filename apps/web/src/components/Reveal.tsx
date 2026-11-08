@@ -1,10 +1,10 @@
 // The end-of-game reveal (design §13, ui-style "End-of-game reveal"): every
 // player's role card opened like a manila envelope (role, ★ ending, score,
-// tokens, perks, stash over time), who won and why, and a round-by-round
+// perks, stash over time), who won and why, and a round-by-round
 // timeline of the real moves and every hidden action, now in the open.
 // Reads only `PlayerView.reveal.summary` (engine `revealSummary`).
 import { useState } from "react";
-import { PERKS } from "@skimjob/content";
+import { PERK_TEXT } from "@skimjob/content";
 import type {
   PlayerId,
   RevealRound,
@@ -24,7 +24,6 @@ import {
   itemText,
   roundLabel,
   stashTrend,
-  triggerText,
   whyText,
   starText,
 } from "../game/reveal";
@@ -99,7 +98,6 @@ function RoleEnvelope({
   const you = s.player === ctx.me;
   const name = ctx.name(s.player).replace(/^Bot · /, "");
   const star = starText(s.role);
-  const tokens = countBy(s.tokens.map(triggerText));
   const cls = [
     "reveal__card",
     s.winner && "is-winner",
@@ -155,31 +153,16 @@ function RoleEnvelope({
           values={trend}
           label={`${you ? "Your" : `${name}'s`} stash over time: ${trend.join(", ")}`}
         />
-        {(s.tokens.length > 0 || s.perksBought.length > 0) && (
+        {s.perksBought.length > 0 && (
           <div className="reveal__shop">
-            {s.tokens.length > 0 && (
-              <p>
-                <b>
-                  {s.tokens.length} token{s.tokens.length === 1 ? "" : "s"}
-                </b>{" "}
-                <span className="meta">
-                  for{" "}
-                  {tokens
-                    .map(([t, n]) => (n > 1 ? `${t} ×${n}` : t))
-                    .join("; ")}
+            <p className="reveal__perks">
+              <span className="meta">Bought:</span>
+              {s.perksBought.map((p, k) => (
+                <span key={`${p}-${k}`} title={PERK_TEXT[p]?.text}>
+                  <Chip>{perkName(p)}</Chip>
                 </span>
-              </p>
-            )}
-            {s.perksBought.length > 0 && (
-              <p className="reveal__perks">
-                <span className="meta">Bought ({s.perksUsed} used):</span>
-                {s.perksBought.map((p, k) => (
-                  <span key={`${p}-${k}`} title={PERKS[p]?.effect}>
-                    <Chip>{perkName(p)}</Chip>
-                  </span>
-                ))}
-              </p>
-            )}
+              ))}
+            </p>
           </div>
         )}
         <div className="reveal__badges">
@@ -377,8 +360,4 @@ function RoundSheet({
   );
 }
 
-function countBy(xs: readonly string[]): [string, number][] {
-  const m = new Map<string, number>();
-  for (const x of xs) m.set(x, (m.get(x) ?? 0) + 1);
-  return [...m];
-}
+

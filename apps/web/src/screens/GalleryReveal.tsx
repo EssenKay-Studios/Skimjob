@@ -52,7 +52,7 @@ const LOG: GameEvent[] = [
   { type: "roleDealt", visibility: privateTo("p2"), player: "p2", role: "mole" },
   { type: "roleDealt", visibility: privateTo("p3"), player: "p3", role: "hacker" },
   { type: "roleDealt", visibility: privateTo("p4"), player: "p4", role: "detective" },
-  { type: "shopDealt", visibility: PUBLIC, perks: ["peek", "shield", "tail"] },
+  { type: "shopDealt", visibility: PUBLIC, perks: ["tail", "softShoes", "bail"] },
   { type: "roundStarted", visibility: PUBLIC, round: 1 },
   split("p1", 1, "security", 0, 0),
   split("p2", 1, "vault", 6, 3),
@@ -71,14 +71,15 @@ const LOG: GameEvent[] = [
   split("p3", 2, "lobby", 2, 0),
   split("p4", 2, "office", 4, 0),
   resolved(2, 32, 16, 5, 22),
-  { type: "perkBought", visibility: privateTo("p1"), player: "p1", perk: "peek", cost: 1 },
-  { type: "perkUsed", visibility: privateTo("p1"), player: "p1", round: 2, perk: { kind: "peek", target: "p2", role: "mole" } },
   { type: "meetingOpened", visibility: PUBLIC, meetingId: "m1", kind: "regular" },
   { type: "roleClaimed", visibility: PUBLIC, player: "p2", role: "lookout", stretch: 1 },
   { type: "meetingClosed", visibility: PUBLIC, meetingId: "m1", tally: { skip: 1, targets: { p3: 2 } }, ballots: null, result: { kind: "shakedown", target: "p3" } },
   { type: "shakedownResolved", visibility: PUBLIC, meetingId: "m1", target: "p3", stashRevealed: 0, taken: 0, clean: true },
   { type: "roundStarted", visibility: PUBLIC, round: 3 },
   { type: "eventFlipped", visibility: PUBLIC, round: 3, card: "shiftChange", room: null },
+  // design §12: Ana spends round 2's pocketed coin on a Tail.
+  { type: "perkSold", visibility: PUBLIC, round: 3, perk: "tail", cost: 1 },
+  { type: "perkBought", visibility: privateTo("p1"), player: "p1", round: 3, perk: { kind: "tail", room: "vault" }, cost: 1 },
   split("p1", 3, "rooftop", 0, 0),
   split("p2", 3, "depositBoxes", 5, 5),
   split("p3", 3, "vault", 6, 5),
@@ -89,13 +90,13 @@ const LOG: GameEvent[] = [
 const rank = (player: string, role: string, stash: number): RankEntry => ({ player, role, stash });
 
 type Ending = "success" | "bust" | "theft";
-const BEN_TOP = [rank("p2", "mole", 12), rank("p3", "hacker", 5), rank("p4", "detective", 2), rank("p1", "locksmith", 1)];
+const BEN_TOP = [rank("p2", "mole", 12), rank("p3", "hacker", 5), rank("p4", "detective", 2), rank("p1", "locksmith", 0)];
 const OUTCOMES: Record<Ending, Outcome> = {
   success: { result: "success", ranking: BEN_TOP, winners: ["p2"], getaway: 1 },
   // design §5.5: a bust in round 3; only Ana was on the Rooftop.
   bust: { result: "failed", reason: "bust", escapees: ["p1"], ranking: BEN_TOP, winners: ["p1"] },
   // Here Ben hands rounds 2 and 3 in and Cy pockets round 3's grab, so the Hacker (no ★) leads and nobody wins.
-  theft: { result: "failed", reason: "theft", ranking: [rank("p3", "hacker", 6), rank("p2", "mole", 3), rank("p4", "detective", 2), rank("p1", "locksmith", 1)], winners: [], getaway: 1 },
+  theft: { result: "failed", reason: "theft", ranking: [rank("p3", "hacker", 6), rank("p2", "mole", 3), rank("p4", "detective", 2), rank("p1", "locksmith", 0)], winners: [], getaway: 1 },
 };
 const logFor = (ending: Ending): GameEvent[] =>
   ending !== "theft"

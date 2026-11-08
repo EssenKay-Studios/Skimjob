@@ -3,7 +3,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 // QA (PR #55, M2-11): the reveal UI at 360 and 1280 on the gallery's hand-made
 // game (design §13; ui-style "End-of-game reveal"; CLAUDE.md UI rules):
 // envelopes in ranking order with the stash over time that ends at the stash,
-// tokens with their triggers and perks bought/used, locks only on what was
+// perks bought, locks only on what was
 // hidden, VOID only on failed non-winners, keyboard-only scrubbing, 44 px
 // targets and nothing past the viewport edge.
 
@@ -32,7 +32,7 @@ for (const viewport of VIEWPORTS) {
   test.describe(`QA reveal at ${viewport.width}`, () => {
     test.use({ viewport, hasTouch: viewport.width < 1024 });
 
-    test("envelopes, tokens, perks, locks, VOID and keyboard scrubbing @reveal", async ({ page }, info) => {
+    test("envelopes, perks, locks, VOID and keyboard scrubbing @reveal", async ({ page }, info) => {
       test.skip(!info.project.name.startsWith("desktop") || info.project.name.endsWith("fast"), "the viewport is set here");
       // 8–13 s alone, but 32 s with the full suite in parallel since #157 grew /dev/gallery (InfoTips, §20 text).
       test.setTimeout(60_000);
@@ -49,17 +49,16 @@ for (const viewport of VIEWPORTS) {
       await expect(cards).toHaveCount(4);
       await expect(cards.locator(".reveal__place")).toHaveText(["1", "2", "3", "4"]);
       await expect(cards.locator(".reveal__who b")).toHaveText(["Ben", "Cy", "Bot · Dot", "You"]);
-      await expect(cards.locator(".reveal__score b")).toHaveText(["12", "5", "2", "1"]);
+      await expect(cards.locator(".reveal__score b")).toHaveText(["12", "5", "2", "0"]);
       await expect(cards.nth(0).getByRole("img", { name: "Ben's stash over time: 3, 7, 12" })).toBeVisible();
       await expect(cards.nth(1).getByRole("img", { name: "Cy's stash over time: 0, 0, 5" })).toBeVisible();
-      await expect(cards.nth(3).getByRole("img", { name: "Your stash over time: 0, 1, 1" })).toBeVisible();
+      await expect(cards.nth(3).getByRole("img", { name: "Your stash over time: 0, 1, 0" })).toBeVisible();
 
-      // Tokens with what earned them, and perks bought and used.
-      await expect(cards.nth(0)).not.toContainText("token");
-      await expect(cards.nth(1)).not.toContainText("token");
+      // Perks bought (design §12, §15.5); no tokens anywhere.
+      await expect(reveal).not.toContainText(/token/i);
       await expect(cards.nth(2)).toContainText("Detective");
-      await expect(cards.nth(3).locator(".reveal__perks")).toContainText("Bought (1 used):");
-      await expect(cards.nth(3).locator(".reveal__perks")).toContainText("Peek");
+      await expect(cards.nth(3).locator(".reveal__perks")).toContainText("Bought:");
+      await expect(cards.nth(3).locator(".reveal__perks")).toContainText("Tail");
       await expect(cards.nth(0).locator(".reveal__perks")).toHaveCount(0);
 
       // Success: only Ben wins, nobody is VOID.

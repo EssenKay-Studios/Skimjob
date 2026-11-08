@@ -108,13 +108,13 @@ describe("claims in the suspicion model — v2 §4", () => {
 
   it("an Inside tip catches a lie, and an Inside tip on a Mole is damning — design §8.4, §13", () => {
     const s = run(crew(), { type: "claimRole", player: "ben", role: "auditor" });
-    const peek = (role: string): GameState => ({
+    const tipped = (role: string): GameState => ({
       ...s,
       log: [...s.log, { type: "insideTip", visibility: { kind: "private", player: "ana" }, player: "ana", round: 1, subject: "ben", role }],
     });
-    expect(suspicion(viewFor(peek("auditor"), "ana")).get("ben")).toBe(SUSPICION_WEIGHTS.claimed);
-    expect(suspicion(viewFor(peek("hacker"), "ana")).get("ben")).toBe(SUSPICION_WEIGHTS.falseClaim);
-    expect(suspicion(viewFor(peek("mole"), "ana")).get("ben")).toBe(SUSPICION_WEIGHTS.falseClaim + SUSPICION_WEIGHTS.knownDark);
+    expect(suspicion(viewFor(tipped("auditor"), "ana")).get("ben")).toBe(SUSPICION_WEIGHTS.claimed);
+    expect(suspicion(viewFor(tipped("hacker"), "ana")).get("ben")).toBe(SUSPICION_WEIGHTS.falseClaim);
+    expect(suspicion(viewFor(tipped("mole"), "ana")).get("ben")).toBe(SUSPICION_WEIGHTS.falseClaim + SUSPICION_WEIGHTS.knownDark);
   });
 
   it("changing one's claimed role is suspicious", () => {

@@ -1,5 +1,5 @@
-/* Role facts and kinds (design §11), tappable role names, the rulebook sheet,
-   tokens and the shop. Cartoon notebook style; theme tokens only. */
+/* Role facts and kinds (design §11), tappable role names and the rulebook
+   sheet with the black market. Cartoon notebook style; theme tokens only. */
 
 /* ---------- Kinds and role facts ---------- */
 .tag {
@@ -118,8 +118,7 @@
 }
 
 /* ---------- Rulebook ---------- */
-.rulebook,
-.shop {
+.rulebook {
   display: grid;
   gap: 14px;
   min-width: 0;
@@ -184,103 +183,6 @@
   padding: 0 8px;
   font-size: 12px;
 }
-.rulebook__columns {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 6px 14px;
-}
-
-/* ---------- Tokens and the shop ---------- */
-.tokens {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px 12px;
-}
-.tokens__count {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-.tokens__count b {
-  font-size: 18px;
-  color: var(--ink);
-}
-.tokens__coin {
-  display: inline-block;
-  width: 18px;
-  height: 18px;
-  border: 1.4px solid var(--ink);
-  border-radius: var(--radius-blob);
-  background: var(--hatch), var(--gold);
-  flex: none;
-}
-.shop__tokens {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 600;
-}
-.shop__items {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 10px;
-}
-.shop__item {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 4px 12px;
-  align-items: center;
-  padding: 10px 0;
-  border-top: 1.3px dashed var(--ink-faint);
-}
-.shop__col {
-  grid-column: 1 / -1;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-.shop__what {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-.shop__buy {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-.shop__cost {
-  display: inline-grid;
-  place-items: center;
-  min-width: 30px;
-  height: 30px;
-  border: 1.4px solid var(--ink);
-  border-radius: var(--radius-blob);
-  background: var(--hatch), var(--gold);
-  color: var(--ink);
-}
-.shop__owned {
-  grid-column: 1 / -1;
-  color: var(--good);
-}
-.perk-uses {
-  display: grid;
-  gap: 10px;
-  padding-top: 10px;
-  border-top: 1.3px dashed var(--ink-faint);
-}
-.perk-uses__title {
-  font-size: 17px;
-}
-.perk-use {
-  display: grid;
-  gap: 8px;
-  justify-items: start;
-}
-
 /* ---------- Ending ---------- */
 .ending.is-loss b {
   color: var(--bad);

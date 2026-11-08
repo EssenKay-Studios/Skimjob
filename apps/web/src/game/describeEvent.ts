@@ -2,9 +2,9 @@
 // the reveal timeline and chat toasts read through this. Pure; the switches are
 // exhaustive, so a new event, ability, perk or meeting-result kind fails
 // typecheck until it has a line here. docs/m2-plan.md M2-6; design §13
-import { EVENTS, JOBS, PERKS, ROLES, type PerkId } from "@skimjob/content";
+import { EVENTS, JOBS, PERK_TEXT, ROLES } from "@skimjob/content";
 import { MEETING_TITLE } from "./meeting";
-import type { GameEvent, MeetingResult, PlayerId, ResolvedAbility, ResolvedPerk, RoomId, VoteChoice } from "@skimjob/engine";
+import type { GameEvent, MeetingResult, PerkUse, PlayerId, ResolvedAbility, RoomId, VoteChoice } from "@skimjob/engine";
 
 export interface DescribeContext {
   /** The viewer: their own events read "you". */
@@ -23,7 +23,7 @@ export const roomName = (room: RoomId): string => ALL_ROOMS[room] ?? room;
 export const roleName = (role: string): string => ROLES[role]?.name ?? role;
 /** An event card's display name, e.g. "Shift change". */
 export const cardName = (card: string): string => EVENTS[card]?.name ?? card;
-export const perkName = (perk: PerkId): string => PERKS[perk]?.name ?? perk;
+export const perkName = (perk: string): string => PERK_TEXT[perk]?.name ?? perk;
 
 const list = (xs: readonly string[]) => (xs.length <= 1 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`);
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -71,7 +71,7 @@ function line(e: GameEvent, ctx: DescribeContext): string {
     case "roleListShown":
       return `${e.list === "exact" ? "Roles in play" : "Roles that could be in play"}: ${list(e.roles.map(roleName))}.`;
     case "shopDealt":
-      return e.perks.length === 0 ? "No shop in this game." : `The shop has ${list(e.perks.map(perkName))} on sale.`;
+      return e.perks.length === 0 ? "No black market in this game." : `The black market sells ${list(e.perks.map(perkName))}.`;
     case "rngAdvanced":
       return "The dice rolled.";
     case "roundStarted":
@@ -103,8 +103,8 @@ function line(e: GameEvent, ctx: DescribeContext): string {
         : `Round ${e.round}: in the ${roomName(e.room)}, ${verb(e.player, "saw", "saw")} ${names(e.others)}.`;
     case "roomWatched": {
       const how = e.source === "security" ? "On the cameras" : e.source === "lookout" ? "On lookout" : "Tailing";
-      // design §11.1: a blacked-out room's cameras are offline.
-      if (e.offline) return `Round ${e.round}, ${how.toLowerCase()}: cameras offline in the ${roomName(e.room)}${you(e.player) ? "" : ` (seen by ${ctx.name(e.player)})`}.`;
+      // design §11.1: the cameras are offline when the watched room or the watcher's own Security is blacked out.
+      if (e.offline) return `Round ${e.round}, ${how.toLowerCase()}: the cameras were offline, nobody seen in the ${roomName(e.room)}${you(e.player) ? "" : ` (seen by ${ctx.name(e.player)})`}.`;
       return `Round ${e.round}, ${how.toLowerCase()}: ${e.seen.length === 0 ? "nobody" : names(e.seen)} in the ${roomName(e.room)}${you(e.player) ? "" : ` (seen by ${ctx.name(e.player)})`}.`;
     }
     case "roundResolved":
@@ -158,17 +158,17 @@ function line(e: GameEvent, ctx: DescribeContext): string {
     case "shakedownPending":
       return `The shakedown of ${who(e.target)} passed; it lands when the window closes.`;
     case "shakedownCancelled":
-      return `The shakedown of ${who(e.target)} was called off.`;
+      // design §9.6: the ledger says only that it fell through.
+      return "A shakedown fell through.";
     case "shakedownResolved":
       return `${who(e.target)} ${you(e.target) ? "were" : "was"} shaken down: a stash of ${e.stashRevealed}, ${e.taken} set aside for the next split.${e.clean ? " Clean: nothing above the share." : ""}`;
-    case "tokenEarned":
-      return `${verb(e.player, "earned", "earned")} a token.`;
+    case "perkSold":
+      // design §12: logged at once, without a name.
+      return `🛒 Someone bought ${perkName(e.perk)} (${e.cost} coin${e.cost === 1 ? "" : "s"}).`;
     case "perkBought":
-      return `${verb(e.player, "bought", "bought")} a ${perkName(e.perk)} perk for ${e.cost} token${e.cost === 1 ? "" : "s"}: ${PERKS[e.perk]?.effect ?? ""}`.trim();
-    case "perkUsed":
-      return perk(e.perk, e.player, { you, who, whose, verb });
-    case "rigPicked":
-      return `${verb(e.player, "rigged", "rigged")} round ${e.round}'s card: ${cardName(e.card)}.`;
+      return `Round ${e.round}: ${verb(e.player, "bought", "bought")} ${perkName(e.perk.kind)} for ${e.cost} coin${e.cost === 1 ? "" : "s"}${perk(e.perk, who)}.`;
+    case "bailChosen":
+      return `${verb(e.player, "chose", "chose")} ${e.use ? "to use Bail" : "not to use Bail"}.`;
     case "alibiVerified":
       return `Verified: ${who(e.player)} really ${you(e.player) ? "were" : "was"} in the ${roomName(e.room)} in round ${e.round}.`;
     case "gameEnded": {
@@ -221,24 +221,21 @@ function ability(a: ResolvedAbility, player: PlayerId, round: number, { you, who
   }
 }
 
-function perk(p: ResolvedPerk, player: PlayerId, { you, who, whose, verb }: Grammar): string {
+/** What a bought perk was aimed at, as ": …" (nothing for one with no aim). design §12 */
+function perk(p: PerkUse, who: (p: PlayerId) => string): string {
   switch (p.kind) {
-    case "peek":
-      return `Peek: ${who(p.target)} ${you(p.target) ? "are" : "is"} the ${roleName(p.role)}.`;
-    case "shield":
-      return `A Shield saved ${who(player)}: the shakedown was cancelled.`;
-    case "extraVote":
-      return `${verb(player, "spent", "spent")} +Vote: the ballot weighs one more this meeting.`;
-    case "ballot":
-      return `${verb(player, "are", "is")} watching ${whose(p.target)} ballot this meeting.`;
     case "tail":
-      return `${verb(player, "tailed", "tailed")} the ${roomName(p.room)} this round.`;
+      return `: tailing the ${roomName(p.room)} next round`;
+    case "ballot":
+      return `: watching ${who(p.target)} at the next meeting`;
+    case "blackout":
+      return `: the ${roomName(p.room)} goes dark next round`;
+    case "plantEvidence":
+      return `: ${who(p.target)} on the ${roomName(p.room)}'s cameras this round`;
     case "alibi":
-      return `${verb(player, "had", "had")} the round ${p.round} alibi (${roomName(p.room)}) stamped Verified.`;
-    case "recharge":
-      return `${verb(player, "recharged", "recharged")} ${whose(player)} role's power.`;
-    case "rig":
-      return `${verb(player, "rigged", "rigged")} round ${p.round}'s card: ${list(p.cards.map(cardName))} to pick from.`;
+    case "softShoes":
+    case "bail":
+      return "";
     default: {
       const never: never = p;
       return String((never as { kind: string }).kind);

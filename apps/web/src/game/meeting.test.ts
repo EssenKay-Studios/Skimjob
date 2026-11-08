@@ -15,7 +15,6 @@ import {
 import { createGame } from "./deal.testkit";
 import { describe, expect, it } from "vitest";
 import {
-  abilityOffers,
   claimState,
   decidingOf,
   emergencyOf,
@@ -27,8 +26,8 @@ import {
   tallyRows,
 } from "./meeting";
 
-/** A new game with a pinned shop of no Shield, whatever the seed: a Shield opens a shakedown window at every meeting. */
-const newGame = (cfg: GameConfig, roles: readonly string[] = []): GameState => ({ ...createGame(cfg, roles), shop: ["peek", "alibi", "extraVote"] });
+/** A new game with a pinned black market without Bail, whatever the seed: Bail opens a choice window after every passed shakedown (design §9.6). */
+const newGame = (cfg: GameConfig, roles: readonly string[] = []): GameState => ({ ...createGame(cfg, roles), shop: ["tail", "softShoes", "plantEvidence"] });
 
 const config = (mode: VoteVisibility, extra: Partial<GameConfig> = {}): GameConfig => ({
   seed: "meeting-ui",
@@ -109,26 +108,16 @@ describe("the vote window per vote mode (design §11.2)", () => {
     expect(after.tally).toEqual({ skip: 1, targets: { p2: 3 } });
   });
 
-  it("Ballot perk: its holder sees the one ballot they unlocked, also in Secret mode (design §8.3)", () => {
+  it("Check ballot: its buyer sees the one ballot they bought at the next meeting, also in Secret mode (design §12)", () => {
     let s = newGame(config("secret"));
-    s = applyEvent(s, { type: "perkBought", visibility: privateTo("p1"), player: "p1", perk: "ballot", cost: 0 });
+    s = applyEvent(s, { type: "perkBought", visibility: privateTo("p1"), player: "p1", round: 1, perk: { kind: "ballot", target: "p3" }, cost: 0 });
     s = run(s, ...RESULT_WINDOW, { type: "callEmergency", player: "p2" }, open("emergency-1"), shake("p3", "p2"), skip("p4"));
-    expect(abilityOffers(viewFor(s, "p1"))).toContainEqual({ kind: "ballot", targets: ["p2", "p3", "p4", "p5"] });
-    s = run(s, { type: "useAbility", player: "p1", ability: { kind: "ballot", target: "p3" } });
     const m = openMeetingOf(viewFor(s, "p1"))!;
     expect(m.seen).toEqual([{ player: "p3", vote: { kind: "shakedown", target: "p2" } }]);
     expect(m.ballots).toEqual([]);
     expect(othersBallots(m)).not.toMatch(/"p4"/);
     // Nobody else sees it.
     expect(openMeetingOf(viewFor(s, "p2"))!.seen).toEqual([]);
-    expect(abilityOffers(viewFor(s, "p1")).some((o) => o.kind === "ballot")).toBe(false);
-  });
-
-  it("Ballot is never offered in Open mode, where ballots are public anyway", () => {
-    let s = newGame(config("open"));
-    s = applyEvent(s, { type: "perkBought", visibility: privateTo("p1"), player: "p1", perk: "ballot", cost: 0 });
-    s = run(s, ...RESULT_WINDOW, { type: "callEmergency", player: "p2" }, open("emergency-1"));
-    expect(abilityOffers(viewFor(s, "p1"))).toEqual([]);
   });
 
   it("a sealed vote is marked as yours when the window opens (design §11.2)", () => {
@@ -142,7 +131,6 @@ describe("the vote window per vote mode (design §11.2)", () => {
   it("the Smooth Talker's double weight never shows in the live tally (design §9.5, §11.1)", () => {
     const s = voting("open", {}, ["smoothTalker", "smoothTalker", "smoothTalker", "smoothTalker", "smoothTalker"]);
     expect(openMeetingOf(viewFor(s, "p1"))!.live).toEqual({ skip: 1, targets: { p2: 3 } });
-    expect(abilityOffers(viewFor(s, "p1"))).toEqual([]);
   });
 });
 
@@ -200,7 +188,7 @@ describe("the shakedown window and results (design §9.6)", () => {
   const smoothTalkerMeeting = (mode: VoteVisibility = "hiddenThenRevealed") => run(voting(mode, {}, ["smoothTalker", "smoothTalker", "smoothTalker", "smoothTalker", "smoothTalker"]), close("emergency-1"));
 
   it("results: a clean shakedown takes nothing; the banner stays until the next round resolves (design §9.6)", () => {
-    // No Shield in the shop: no window, the shakedown lands as the meeting closes.
+    // No Bail on the black market: no window, the shakedown lands as the meeting closes.
     const s = run(voting("hiddenThenRevealed"), close("emergency-1"));
     const o = latestOutcome(viewFor(s, "p1"))!;
     expect(o).toMatchObject({ kind: "emergency", deciding: false, fresh: true, cancelled: false });

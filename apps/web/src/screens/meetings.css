@@ -27,7 +27,6 @@
 .meetings__emergency,
 .meetings__open,
 .results__ok,
-.role-card__use,
 .role-card .claim__toggle {
   justify-self: start;
 }
@@ -246,22 +245,6 @@
 .role-card__foot .role-list {
   flex: 1 1 220px;
   min-width: 0;
-}
-.abilities {
-  display: grid;
-  gap: 12px;
-}
-.ability {
-  display: grid;
-  gap: 10px;
-  padding-top: 10px;
-  border-top: 1.3px dashed var(--ink-faint);
-}
-.ability > .btn {
-  justify-self: start;
-}
-.ability p b {
-  color: var(--ink);
 }
 
 @media (max-width: 560px) {

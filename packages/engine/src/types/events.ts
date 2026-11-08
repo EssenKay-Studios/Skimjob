@@ -221,7 +221,10 @@ export interface RoomWatched {
   readonly source: "security" | "lookout" | "tail";
   readonly room: RoomId;
   readonly seen: readonly PlayerId[];
-  /** "Cameras offline": the room is blacked out this round, so `seen` is empty. design §11.1 */
+  /**
+   * "Cameras offline": the room is blacked out this round, or the watcher sits in a blacked-out
+   * Security (owner, 8 Nov), so `seen` is empty. design §11.1
+   */
   readonly offline: boolean;
 }
 

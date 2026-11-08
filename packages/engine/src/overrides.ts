@@ -213,7 +213,7 @@ export function rolesFor(config: Pick<GameConfig, "contentOverrides">): RoleTabl
 }
 
 /** `role`'s definition in `roles`, or undefined for an id with none (own keys only: ids are untrusted). */
-export function roleDefIn(roles: RoleTable, role: RoleId): RoleDef | undefined {
+function roleDefIn(roles: RoleTable, role: RoleId): RoleDef | undefined {
   return Object.hasOwn(roles, role) ? roles[role] : undefined;
 }
 

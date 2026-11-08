@@ -138,7 +138,7 @@ function crewPowers(view: PlayerView): PlayerCommand[] {
   if (top === null || top.score <= 0) return [];
   const player = view.me.id;
   const round = lastResolvedRound(view);
-  // The engine allows one use per resolved round (a Recharge can free the Auditor's again before a new round resolves).
+  // The engine allows one use per resolved round (a regular meeting can free the Auditor's again before a new round resolves).
   if (round === 0 || ofType(view.caseFile, "abilityResolved").some((e) => e.ability.kind === power.kind && "round" in e.ability && e.ability.round === round)) return [];
   if (power.kind === "detect") return [{ type: "useAbility", player, ability: { kind: "detect", target: top.player } }];
   const claim = ofType(view.ledger, "alibiPosted").find((a) => a.player === top.player && a.round === round);

@@ -36,7 +36,7 @@ function run(state: GameState, ...commands: Cmd[]): GameState {
   return commands.reduce<GameState>((s, c) => {
     const r = handleThroughAlibis(s, typeof c === "function" ? c(s) : c);
     if (!r.ok) throw new Error(`rejected: ${r.reason}`);
-    // extension.md "Shakedowns": nobody holds a Shield here, so the window just passes.
+    // design §9.6: nobody holds a Bail here, so the window just passes.
     if (r.state.phase.kind !== "shakedownPending") return r.state;
     const passed = handleCommand(r.state, { type: "advance", deadline: { kind: "resolveShakedown", meetingId: r.state.phase.meetingId } });
     if (!passed.ok) throw new Error(`rejected: ${passed.reason}`);
