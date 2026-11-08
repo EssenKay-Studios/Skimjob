@@ -441,6 +441,20 @@ describe("shakedowns — design §11.3, extension.md \"Shakedowns (fixed numbers
     expect(LAST(s, "shakedownResolved")).toMatchObject({ taken: 4, clean: true, compensation: 8 });
   });
 
+  it("a clean target is paid from coins an earlier shakedown set aside, through real commands (provisional, until S3a.5)", () => {
+    // Rounds 1–3 as in act1Meeting; p1's emergency in the awaited phase shakes p0's 6 above the share back.
+    const lobby = (st: GameState) => run(st, ...["p0", "p1", "p2"].filter((p) => !st.moves[p]).map((p) => mv(p, "lobby")), ROUND);
+    let s = lobby(lobby(lobby(run(game(3), mv("p0", "vault", 6)))));
+    expect(s.phase).toEqual({ kind: "awaitingMeeting", act: 1 });
+    s = run(s, emergency("p1"), open("emergency-p1"), vote("p1", "p0"), vote("p2", "p0"), CLOSE);
+    expect(LAST(s, "shakedownResolved")).toMatchObject({ target: "p0", taken: 6, clean: false, compensation: 0 });
+    expect(s.setAside).toBe(6);
+    // design §7.1: no split has run since, so the regular meeting's clean shakedown of p1 is paid those 6 (under the payout of 8).
+    s = run(s, sched(1), OPEN_ACT, vote("p0", "p1"), vote("p2", "p1"), CLOSE);
+    expect(LAST(s, "shakedownResolved")).toMatchObject({ target: "p1", stashRevealed: s.share, taken: 0, clean: true, compensation: 6 });
+    expect([s.players.p1?.stash, s.setAside, s.round]).toEqual([s.share + 6, 0, 4]);
+  });
+
   it("compensation never takes the coins set aside below zero (provisional)", () => {
     let s = game(3);
     for (let i = 0; i < 3; i++) s = run(s, mv("p0", "rooftop"), mv("p1", "rooftop"), mv("p2", "rooftop"), ROUND);
