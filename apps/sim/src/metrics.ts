@@ -25,8 +25,8 @@
 //   successful games (design §8.2, §21 G6: 5–20%).
 // - cap stalls: games that ended at the round cap with over a quarter of the
 //   bank left ÷ games (G4: at most 10%).
-// - event cards: cards flipped ÷ rounds from round 2 (design §13: 4 in 10, a
-//   little under since a card that can't apply flips nothing; 0 with events off).
+// - event cards: cards flipped ÷ rounds from round 2 (design §13: 4 in 10; a
+//   card that can't apply is redrawn, so every hit flips one; 0 with events off).
 import type { GameRecord, PlayerRecord } from "./record";
 
 export const POCKET_BANDS = ["honest", "moderate", "heavy"] as const;

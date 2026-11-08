@@ -144,6 +144,8 @@ export function suspicion(view: PlayerView, w: SuspicionWeights = SUSPICION_WEIG
 
   /** What reached the duffel from `room` in `round` (my Auditor's power, or the Audit card, §13) against its claimants. */
   function judgeAudit(round: number, room: RoomId, duffel: number): void {
+    // design §5.3: a raided room's grabs were seized, so its 0 explains nothing.
+    if (ofType(view.ledger, "roomRaided").some((e) => e.round === round && e.room === room)) return;
     const claimants = [...(alibis.get(round) ?? [])].filter(([id, r]) => id !== me && r === room).map(([id]) => id);
     // What the claimants' full grabs would have handed in, less what reached the duffel (my own hand-in there included).
     const mine = ofType(view.caseFile, "coinsGrabbed").find((e) => e.round === round && e.room === room)?.duffel ?? 0;

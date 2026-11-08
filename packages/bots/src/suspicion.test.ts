@@ -57,6 +57,10 @@ describe("suspicion — design §17.3", () => {
     const audited = scoresOf(audit({ vault: 8, office: 2, lobby: 0 }), "ana");
     expect([audited.get("ben"), audited.get("carl")]).toEqual([2 * W.audited, 2 * W.audited]);
     expect(scoresOf(audit({ vault: 12, office: 2, lobby: 0 }), "ana").get("ben")).toBe(0);
+    // A raided Vault's 0 is the police's seizure, not theft (design §5.3).
+    const raid = { type: "roomRaided", visibility: { kind: "public" }, round: 1, room: "vault", seized: 12, closedThrough: 3, wanted: 1 } as GameState["log"][number];
+    const raided = scoresOf({ ...audit({ vault: 0, office: 2, lobby: 0 }), log: [...s.log, raid, ...audit({ vault: 0, office: 2, lobby: 0 }).log.slice(-1)] }, "ana");
+    expect([raided.get("ben"), raided.get("carl")]).toEqual([0, 0]);
   });
 
   it("a blacked-out room's feed shows nobody, which clears or blames nobody — design §11.1", () => {

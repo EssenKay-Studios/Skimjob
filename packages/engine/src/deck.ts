@@ -1,10 +1,10 @@
 // The events deck: from round 2, a 4-in-10 chance that a card flips as the
-// round starts, and the card's effects. design §13
+// round starts (a card that can't apply is redrawn), and the card's effects. design §13
 //
 // Cards are data in @skimjob/content; each kind of effect is one small
 // function here. All draws go through the command's `Draw`.
 import { EVENTS, EVENT_CHANCE, EVENT_DECK, EVENTS_FROM_ROUND, type EventDef, type EventEffect, type JobDef, type RoomId } from "@skimjob/content";
-import type { ActiveCard, GameConfig, GameEvent, GameState } from "./types";
+import type { ActiveCard, GameConfig, GameEvent, GameState, PlayerState } from "./types";
 import { PUBLIC, privateTo } from "./types";
 import type { Draw } from "./handle";
 import { eventsFor, jobFor, type EventTable } from "./overrides";
@@ -29,40 +29,43 @@ function cardDef(id: string, events: EventTable = EVENTS): EventDef {
 /** This round's card effect, or null if no card was flipped. */
 const cardEffect = (state: GameState): EventEffect | null => (state.card ? cardDef(state.card.id, eventsFor(state.config)).effect : null);
 
+/** The rooms Lockdown may close in a round that has just started: open ones, never the Lobby or the Rooftop. design §13 */
+function closable(started: GameState): RoomId[] {
+  const job = jobFor(started.config);
+  return started.rooms.filter((r) => !isTaped(started, r) && r !== job.defaultRoom && !job.rooms[r]?.lieLow);
+}
+
+/** Whether `card` can apply in a round that has just started: Lockdown needs a closable room, Shift change its room open. design §13 */
+function applies(started: GameState, card: string): boolean {
+  const effect = cardDef(card, eventsFor(started.config)).effect;
+  if (effect.kind === "lockdown") return closable(started).length > 0;
+  if (effect.kind === "roomSurge") return started.rooms.includes(effect.room) && !isTaped(started, effect.room);
+  return true;
+}
+
 /**
- * The flip for a round that has just started (`started`), or `[]` when the card
- * can't apply (design §13: no event that round). Lockdown names one open room,
- * never the Lobby or the Rooftop; Shift change needs its room open; Inside tip
- * tells a random player another player's role, privately, as the card flips.
+ * The flip of `card` in a round that has just started (`started`). Lockdown
+ * names one closable room; Inside tip tells a random player another player's
+ * role, privately, as the card flips. design §13
  */
 function flip(started: GameState, round: number, card: string, draw: Draw): GameEvent[] {
   const effect = cardDef(card, eventsFor(started.config)).effect;
-  const job = jobFor(started.config);
-  const open = started.rooms.filter((r) => !isTaped(started, r));
   const flipped = (room: RoomId | null): GameEvent => ({ type: "eventFlipped", visibility: PUBLIC, round, card, room });
-  switch (effect.kind) {
-    case "lockdown": {
-      const closable = open.filter((r) => r !== job.defaultRoom && !job.rooms[r]?.lieLow);
-      return closable.length === 0 ? [] : [flipped(draw.pick(closable))];
-    }
-    case "roomSurge":
-      return open.includes(effect.room) ? [flipped(null)] : [];
-    case "insideTip": {
-      const player = draw.pick(started.playerOrder);
-      const subject = draw.pick(started.playerOrder.filter((id) => id !== player));
-      const role = started.players[subject]?.role as string;
-      return [flipped(null), { type: "insideTip", visibility: privateTo(player), player, round, subject, role }];
-    }
-    case "audit":
-      return [flipped(null)];
-  }
+  if (effect.kind === "lockdown") return [flipped(draw.pick(closable(started)))];
+  if (effect.kind !== "insideTip") return [flipped(null)];
+  const player = draw.pick(started.playerOrder);
+  const subject = draw.pick(started.playerOrder.filter((id) => id !== player));
+  const { role } = started.players[subject] as PlayerState;
+  return [flipped(null), { type: "insideTip", visibility: privateTo(player), player, round, subject, role }];
 }
 
 /**
  * `roundStarted`, then from round 2 (events on) a 4-in-10 chance of a card,
- * drawn at random from the whole deck, so cards can repeat (owner, 6 Nov).
- * A Rig for this round flips its holder's pick instead, with no chance roll
- * (the oldest, if several). design §13
+ * drawn at random from the whole deck, so cards can repeat (owner, 6 Nov). A
+ * card that can't apply is redrawn from the cards that can, so a flip always
+ * lands a card (owner, 8 Nov; Audit and Inside tip always apply). A Rig for
+ * this round flips its holder's pick instead, with no chance roll (the oldest,
+ * if several). design §13
  * Then each Electrician's blackout for this round is announced, with no source (§11.1).
  */
 export function startRound(state: GameState, round: number, draw: Draw): GameEvent[] {
@@ -71,8 +74,12 @@ export function startRound(state: GameState, round: number, draw: Draw): GameEve
   if (eventsOn(state.config) && round >= EVENTS_FROM_ROUND) {
     // The oldest Rig of this round wins; later ones were spent without effect (they never learn more than the flip shows).
     const rigged = state.rigs.find((r) => r.round === round)?.pick;
-    const card = rigged ?? (draw.int(EVENT_CHANCE.of) < EVENT_CHANCE.in ? draw.pick(EVENT_DECK) : null);
-    if (card !== null) events.push(...flip(applyEvent(state, started), round, card, draw));
+    const drawn = rigged ?? (draw.int(EVENT_CHANCE.of) < EVENT_CHANCE.in ? draw.pick(EVENT_DECK) : null);
+    if (drawn !== null) {
+      const now = applyEvent(state, started);
+      const card = applies(now, drawn) ? drawn : draw.pick(EVENT_DECK.filter((c) => applies(now, c)));
+      events.push(...flip(now, round, card, draw));
+    }
   }
   for (const room of state.cutsPending) events.push({ type: "powerCut", visibility: PUBLIC, round, room });
   return events;

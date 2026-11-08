@@ -9,7 +9,7 @@
 //    leaves their view identical, so nothing hidden — not even a count — leaks;
 //  - after the game the reveal opens everything except others' secret-mode
 //    ballots, which never leak (design §9.5).
-// design §5.1, §9.5, §10, §11, §18
+// design §5.1, §9.5, §11, §13, §18
 import { isDeepStrictEqual } from "node:util";
 import { describe, expect, it } from "vitest";
 import type { GameConfig, GameEvent, GameState, LoggedEvent, Move, PlayerId, PlayerState, PlayerView, VoteChoice, VoteVisibility } from "./types";

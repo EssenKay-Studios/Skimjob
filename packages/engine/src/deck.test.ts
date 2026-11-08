@@ -127,9 +127,9 @@ describe("the deck — design §13", () => {
         }
       }
     }
-    // 4 in 10 of the rounds from 2 on (a card that can't apply flips nothing, so slightly fewer).
-    expect(flipped / rounds).toBeGreaterThan(0.3);
-    expect(flipped / rounds).toBeLessThan(0.5);
+    // 4 in 10 of the rounds from 2 on (a card that can't apply is redrawn, so every hit flips one).
+    expect(flipped / rounds).toBeGreaterThan(0.33);
+    expect(flipped / rounds).toBeLessThan(0.47);
     expect(repeats).toBeGreaterThan(0);
   });
 
@@ -169,11 +169,11 @@ describe("card effects — design §13", () => {
     expect(handleThroughAlibis(plain, { type: "submitMove", player: "p0", move: { room: "vault", duffel: 1, pocket: 3 } }).ok).toBe(false);
   });
 
-  it("Shift change can't apply with the Vault taped off: no event that round", () => {
+  it("Shift change can't apply with the Vault taped off: another card is redrawn (owner, 8 Nov)", () => {
     const s = resolve(game(3));
-    expect(find(startRound({ ...s, taped: { vault: 3 } }, 3, forcing("shiftChange")), "eventFlipped")).toEqual([]);
+    expect(find(startRound({ ...s, taped: { vault: 3 } }, 3, forcing("shiftChange")), "eventFlipped").map((e) => e.card)).toEqual(["lockdown"]);
     // Tape that runs out as the round starts doesn't stop it (§5.3: the room reopens).
-    expect(find(startRound({ ...s, taped: { vault: 2 } }, 3, forcing("shiftChange")), "eventFlipped")).toHaveLength(1);
+    expect(find(startRound({ ...s, taped: { vault: 2 } }, 3, forcing("shiftChange")), "eventFlipped").map((e) => e.card)).toEqual(["shiftChange"]);
   });
 
   it("Lockdown: the named room is refused for the round and reopens the next", () => {
@@ -183,14 +183,14 @@ describe("card effects — design §13", () => {
     expect(handleThroughAlibis(withCard(resolve(s), "audit"), move("p0", "vault")).ok).toBe(true);
   });
 
-  it("Lockdown closes an open room, never the Lobby or the Rooftop; with none left, no event that round", () => {
+  it("Lockdown closes an open room, never the Lobby or the Rooftop; with none left, another card is redrawn (owner, 8 Nov)", () => {
     const s = { ...resolve(game(12)), taped: { office: 3 } };
     // Every room it may pick, each tried in turn.
     const pool = (n: number) => find(startRound(s, 3, forcing("lockdown", (items) => items[n % items.length] as never)), "eventFlipped")[0]?.room;
     const closable = new Set(Array.from({ length: 20 }, (_, n) => pool(n)));
     expect([...closable].sort()).toEqual(s.rooms.filter((r) => !["lobby", "rooftop", "office"].includes(r)).sort());
     const three = resolve(game(3));
-    expect(find(startRound({ ...three, taped: { vault: 3, office: 3, security: 3 } }, 3, forcing("lockdown")), "eventFlipped")).toEqual([]);
+    expect(find(startRound({ ...three, taped: { vault: 3, office: 3, security: 3 } }, 3, forcing("lockdown")), "eventFlipped").map((e) => e.card)).toEqual(["audit"]);
   });
 
   it("Audit: every room in play shows the coins that reached the duffel from it; a raided room shows 0 (§5.3)", () => {

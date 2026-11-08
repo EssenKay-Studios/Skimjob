@@ -1,6 +1,6 @@
 // QA (PR #174, S3a.8): adversarial tests for the 4-card event deck at a
 // 4-in-10 chance: the roll, events off, determinism, each card's effect and
-// its "can't apply" case, the Audit's counts, the Inside tip at the flip and
+// its "can't apply" redraw (owner, 8 Nov), the Audit's counts, the Inside tip at the flip and
 // viewFor leaks. design §13, §4.1, §5.3, §16, §18
 import { describe, expect, it } from "vitest";
 import { NO_RAIDS } from "./v01-numbers.testkit";
@@ -253,18 +253,27 @@ describe("QA §19.1: seeded determinism", () => {
 });
 
 describe("QA §13: Lockdown", () => {
-  it("can't apply with only the Lobby and the Rooftop open: no event, no redraw, nothing else drawn", () => {
+  it("can't apply with only the Lobby and the Rooftop open: redrawn once from the cards that can (owner, 8 Nov)", () => {
     const s = resolve(game(3));
-    const { draw, calls } = forcing("lockdown");
+    const { draw, calls } = forcing("lockdown", (items) => {
+      // The redraw offers only cards that can apply: not Lockdown, not Shift change (the Vault is taped).
+      expect(items).toEqual(["audit", "insideTip"]);
+      return items[0] as never;
+    });
     const events = startRound({ ...s, taped: { office: 4, vault: 4, security: 4 } }, 3, draw);
-    expect(events).toEqual([{ type: "roundStarted", visibility: PUBLIC, round: 3 }]);
-    expect(calls).toEqual({ int: 1, pick: 1 });
+    expect(events).toEqual([
+      { type: "roundStarted", visibility: PUBLIC, round: 3 },
+      { type: "eventFlipped", visibility: PUBLIC, round: 3, card: "audit", room: null },
+    ]);
+    expect(calls).toEqual({ int: 1, pick: 2 });
   });
 
-  it("with only the Lobby open (the Rooftop is never closable) it can't apply either, at 12 players", () => {
+  it("with only the Lobby open (the Rooftop is never closable) it can't apply either, at 12 players: another card flips", () => {
     const s = resolve(game(12));
     const taped = Object.fromEntries(s.rooms.filter((r) => r !== "lobby" && r !== "rooftop").map((r) => [r, 5]));
-    expect(find(startRound({ ...s, taped }, 3, forcing("lockdown").draw), "eventFlipped")).toEqual([]);
+    const flips = find(startRound({ ...s, taped }, 3, forcing("lockdown").draw), "eventFlipped");
+    expect(flips).toHaveLength(1);
+    expect(["audit", "insideTip"]).toContain(flips[0]?.card);
   });
 
   it("with Security the only closable room left, it closes Security", () => {
@@ -294,11 +303,15 @@ describe("QA §13: Lockdown", () => {
 });
 
 describe("QA §13: Shift change", () => {
-  it("can't apply with the Vault taped off: no event, no redraw", () => {
+  it("can't apply with the Vault taped off: redrawn from the cards that can (owner, 8 Nov)", () => {
     const s = resolve(game(3));
     const { draw, calls } = forcing("shiftChange");
-    expect(startRound({ ...s, taped: { vault: 4 } }, 3, draw)).toEqual([{ type: "roundStarted", visibility: PUBLIC, round: 3 }]);
-    expect(calls).toEqual({ int: 1, pick: 1 });
+    // The redraw takes the first card that can apply (Lockdown), which then closes the first closable room.
+    expect(startRound({ ...s, taped: { vault: 4 } }, 3, draw)).toEqual([
+      { type: "roundStarted", visibility: PUBLIC, round: 3 },
+      { type: "eventFlipped", visibility: PUBLIC, round: 3, card: "lockdown", room: "office" },
+    ]);
+    expect(calls).toEqual({ int: 1, pick: 3 });
   });
 
   it("applies when another room is taped and the Vault is open", () => {
