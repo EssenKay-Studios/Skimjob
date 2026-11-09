@@ -82,6 +82,15 @@ describe("the black market — design §12", () => {
     expect(ofType(setupEvents(config(3, { seed: "shop-7" })), "shopDealt")).toEqual([{ type: "shopDealt", visibility: PUBLIC, perks: shops[7] }]);
   });
 
+  it("in Open vote mode the deal leaves out the Check ballot; tier 1 is Tail or Stamped alibi (owner, 9 Nov, #187)", () => {
+    const deal = (voteVisibility: GameConfig["voteVisibility"]) =>
+      Array.from({ length: 60 }, (_, i) => ofType(setupEvents(config(3, { seed: `shop-${i}`, voteVisibility })), "shopDealt")[0]?.perks ?? []);
+    const open = deal("open");
+    for (const shop of open) expect(shop.map((p) => PERKS[p].tier)).toEqual([1, 2, 3]);
+    expect(new Set(open.map((s) => s[0]))).toEqual(new Set(["tail", "alibi"]));
+    expect(new Set(deal("secret").map((s) => s[0]))).toEqual(new Set(["tail", "alibi", "ballot"]));
+  });
+
   it("costs come from content (1, 2 or 3 coins by tier) and can be overridden; every view shows them", () => {
     expect(viewFor(game(), "p1").shop).toEqual(PERK_IDS.map((perk) => ({ perk, cost: PERKS[perk].tier })));
     const cheap = withStash(game(3, { contentOverrides: { perks: { bail: { cost: 1 } } } }), "p0", 1);
