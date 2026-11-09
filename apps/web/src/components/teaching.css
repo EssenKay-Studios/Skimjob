@@ -1,0 +1,30 @@
+/* The teaching pop-up (design §15.6): three labelled lines on a taped sheet. Theme tokens only. */
+.teaching {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.teaching h2 {
+  margin: 0;
+}
+.teaching__rows {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+.teaching__rows dt {
+  margin-top: 8px;
+  color: var(--clay-d);
+  font-weight: 700;
+}
+.teaching__rows dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.teaching__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}

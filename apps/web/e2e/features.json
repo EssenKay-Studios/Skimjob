@@ -74,5 +74,9 @@
   "packages/engine/src/round.ts": "@move",
   "apps/web/src/components/BlackMarket.tsx": "@shop",
   "apps/web/src/game/market.ts": "@shop",
-  "apps/web/src/screens/GalleryMarket.tsx": "@shop"
+  "apps/web/src/screens/GalleryMarket.tsx": "@shop",
+  "apps/web/src/components/TeachingPopup.tsx": "@teaching",
+  "apps/web/src/components/GameMenu.tsx": "@teaching",
+  "apps/web/src/game/teaching.ts": "@teaching",
+  "apps/web/src/screens/GalleryTeaching.tsx": "@teaching"
 }

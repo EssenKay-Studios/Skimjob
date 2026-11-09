@@ -59,6 +59,9 @@ import { navigate } from "../router";
 import { useGameChat } from "./GameChat";
 import { MovePanel } from "./MovePanel";
 import { GameHost } from "./GameHost";
+import { GameMenu } from "../components/GameMenu";
+import { TeachingPopups } from "../components/TeachingPopup";
+import { useTips, type TipsState } from "../game/useTips";
 import { TopBar } from "./TopBar";
 import "./game.css";
 
@@ -91,6 +94,7 @@ export function Game({ id }: { id: string }) {
   const access = useAccess(id);
   const channel = useGame(id, access.kind === "ok");
   const toast = useToast();
+  const tips = useTips();
   const send = async (cmd: ClientCommand, done?: string): Promise<Reply> => {
     const r = await channel.send(cmd);
     if (!r.ok) toast(sentence(r.reason), "bad");
@@ -118,7 +122,7 @@ export function Game({ id }: { id: string }) {
   const view = channel.view;
   return (
     <div className="page">
-      <GameTop connection={access.kind === "ok" ? channel.connection : null} />
+      <GameTop connection={access.kind === "ok" ? channel.connection : null} tips={tips} />
       {!view ? (
         <main className="game" aria-busy="true">
           <SketchFrame seed="game-load" radius={20} className="sheet game-msg" aria-live="polite">
@@ -127,6 +131,8 @@ export function Game({ id }: { id: string }) {
           </SketchFrame>
         </main>
       ) : (
+        <>
+        {tips.me && <TeachingPopups view={view} player={tips.me.id} tips={tips.me.tips} onTipsOff={() => tips.change(false)} />}
         <Board
           view={view}
           timers={channel.timers}
@@ -138,16 +144,18 @@ export function Game({ id }: { id: string }) {
           dmNotices={access.kind === "ok" && access.dmNotices}
           host={access.kind === "ok" ? access.game : null}
         />
+        </>
       )}
     </div>
   );
 }
 
-function GameTop({ connection }: { connection: Connection | null }) {
+function GameTop({ connection, tips }: { connection: Connection | null; tips?: TipsState }) {
   const label = connection === "reconnecting" ? "Reconnecting…" : connection === "connecting" ? "Connecting…" : connection === "signedOut" ? "Signed out" : null;
   return (
     <TopBar>
       <span aria-live="polite">{label && <Chip colour={connection === "signedOut" ? "var(--bad)" : "var(--gold)"}>{label}</Chip>}</span>
+      {tips?.me && <GameMenu tips={tips.me.tips} busy={tips.saving} onChange={tips.change} />}
     </TopBar>
   );
 }

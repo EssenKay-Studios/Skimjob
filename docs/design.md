@@ -478,7 +478,7 @@ When the game ends, every reveal event opens (§18): every role, every move and 
 - **Board motion:** a raided, taped-off room shows a constant siren, and its bell is off until it reopens (§5.3); the Vault door swings slowly shut and open; the Office screen cycles and its desk lamp flicks off and on; a security camera pans across the Lobby. All of it stops under `prefers-reduced-motion` (doors open, lamp on, camera still).
 - **Crowded rooms:** avatars shrink to fit their room, so a room holds every visitor (6 of 12 in the Vault).
 - **Grab:** the control for choosing your coins is labelled "Grab".
-- **Teaching pop-ups** ("What just happened / What it means / What you can do") the first time each thing happens, controlled by a per-user **Tips** setting, on by default.
+- **Teaching pop-ups** ("What just happened / What it means / What you can do") the first time each thing happens to a player, once per player, controlled by a per-user **Tips** setting, on by default. The setting sits on the landing page and in the game menu; with Tips off no pop-up shows (§20.6).
 - **Opponents' roles:** the roles-in-play strip opens each role's card, "How to spot it" included; explanations name the candidates ("a room rang with nobody claiming it: the Mole, or someone lying").
 
 ---
@@ -665,6 +665,19 @@ Bust (every role): "On a bust, only the Rooftop gets away."
 | Suspect | Who your facts point at: your pins if you have 2 or more, otherwise every lead. A hunch, not proof. |
 | Black market | Perks cost coins from your stash; they leave the game. Every purchase is logged without a name. |
 | Paying from your stash | You pay from your stash as it stood when the round began. This round's pocket can't pay. |
+
+### 20.6 Teaching pop-ups
+
+Each is "What just happened / What it means / What you can do", shown once per player, one at a time, when it happened in the last two rounds and Tips is on. Several at once queue in this order.
+
+| Pop-up | What just happened | What it means | What you can do |
+|---|---|---|---|
+| Raid! | A room's 4th bulb lit and the police raided it. | Every grab there was seized, the room is taped off for a couple of rounds, and Wanted went up by one star. | Go somewhere else while the tape is up. Three stars is a bust. |
+| One star from a bust | Wanted is at 2 of 3. | One more raid is a bust, and on a bust only the Rooftop gets away. | Keep the bells low, or hide on the Rooftop. |
+| A shakedown | The crew voted to open one stash. | The Shakedown line of §20.5. | Keep your pocket modest, or bring a Bail. A shaken-down player is protected until the next regular meeting. |
+| Power cut | The lights went out in one room. | Nobody there sees who else is there this round, and its cameras are offline. Its bell still rings. | Ask the crew who wanted no witnesses. An Electrician can do this. |
+| Coins went missing | Some coins were taken this round that never reached the duffel. | The Missing line of §20.5. | Watch the honesty meter: under two-thirds and the heist fails for everyone. Talk it over at the meeting. |
+| A bell rang | Someone's noisy coin lit a bulb on a room's bell. | The Bell line of §20.5. | Pick quiet rooms, or share the noise. The Rooftop cools the hottest bell. |
 
 ---
 

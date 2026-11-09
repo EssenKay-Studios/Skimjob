@@ -13,6 +13,7 @@ import { PlanDemo } from "./GalleryPlan";
 import { RevealSection } from "./GalleryReveal";
 import { InfoTipSection } from "./GalleryInfoTip";
 import { MarketSection } from "./GalleryMarket";
+import { TeachingSection } from "./GalleryTeaching";
 import { ShellSection } from "./GalleryShell";
 import { Button, DangerButton } from "../components/Button";
 import { Chip } from "../components/Chip";
@@ -336,6 +337,7 @@ export function Gallery() {
 
             <ShellSection />
             <InfoTipSection />
+            <TeachingSection />
 
             <Section id="game" title="Game kit" note="M2-6, S4.1, S4.2 · coins and the two bags, alarm bells, Wanted stars">
               <GameKitSamples />
