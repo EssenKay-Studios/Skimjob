@@ -180,8 +180,11 @@ test("a real game: bells on every room, the bank count and the Wanted stars @boa
   await expect(page.locator("[data-bell] .bell").first()).toHaveAccessibleName(/^Bell: 0 of \d+ lit$/);
   await expect(page.getByRole("img", { name: /^Wanted 0 of \d+$/ })).toBeVisible();
   await expect(page.locator(".hud__bank .hud__big")).toHaveText(/^(\d+)\/\1$/);
-  // Picking a room previews its rings on that room's bell only.
+  // Picking a room previews its rings on that room's bell only. A Locksmith's coins ring nothing (design §11.1),
+  // so with that random role the vault stays silent: the preview may only be missing, never on another room.
   await page.locator('.bank-room[data-room="vault"]').click();
-  await expect(page.locator('[data-bell="vault"] .bell')).toHaveAccessibleName(/your grab adds \d+/);
-  await expect(page.locator('[data-bell="office"] .bell')).not.toHaveAccessibleName(/your grab adds/);
+  await expect(page.locator('.bank-room[data-room="vault"]')).toHaveAttribute("aria-label", /selected/);
+  const previewed = await page.locator("[data-bell]").filter({ has: page.locator(".bulb--pv") }).evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.bell));
+  expect(previewed.filter((r) => r !== "vault")).toEqual([]);
+  if (previewed.length) await expect(page.locator('[data-bell="vault"] .bell')).toHaveAccessibleName(/your grab adds \d+/);
 });
