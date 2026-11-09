@@ -304,7 +304,8 @@ export function chooseAlibi(view: PlayerView, p: Personality, random: Random): R
   const split = ofType(view.caseFile, "coinsGrabbed").find((e) => e.round === round);
   if (!split) return null;
   const spot = saidOf(view, "plan").find((x) => x.round === round)?.plan.entries.find((e) => e.player === view.me.id)?.room;
-  if (spot !== undefined && spot !== split.room) return spot;
+  // A line with no room claim (only a placement, or "I agree") is no spot.
+  if (spot != null && spot !== split.room) return spot;
   // A bot that never lies (Honest) doesn't post a random alibi either.
   if (p.lie > 0 && random() < p.noise) return random() < 0.3 ? null : pick(view.rooms, random);
   if (split.pocket === 0 || p.lie === 0) return split.room;

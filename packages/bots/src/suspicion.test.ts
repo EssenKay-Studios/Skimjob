@@ -79,7 +79,7 @@ describe("suspicion — design §17.3", () => {
     expect([...scoresOf(s, "ana").values()]).toEqual([0, 0]);
   });
 
-  it("an alibi that contradicts my own sighting is a lie — design §5.4, §5.2", () => {
+  it("an alibi that contradicts my own sighting is a lie — design §11.3, §5.2", () => {
     // Ana and Ben were both in the Vault; Ben pockets 4 and claims the Lobby (which covers the gap).
     const s = round(game(3), {
       ana: { room: "vault" },

@@ -1,5 +1,5 @@
 // Bot decisions from a view: moves, alibis, meeting scheduling, votes, role
-// powers, and determinism. design §19.3 (and §5.1, §5.4, §9, §11.1, §11.2)
+// powers, and determinism. design §19.3 (and §5.1, §9, §10, §11.1, §11.2, §11.3)
 import { describe, expect, it } from "vitest";
 import { jobFor, ringsOf, roomDef, viewFor, jobById, type GameEvent, type GameState, type Move, type PlayerCommand } from "@skimjob/engine";
 import { PERSONALITIES, type Personality } from "./personalities";
@@ -141,6 +141,14 @@ describe("moves — design §5.1, §6, §7, §8", () => {
 });
 
 describe("alibis — design §11.3", () => {
+  it("a board line with no room claim (only a placement, or \"I agree\") is no spot: Honest still posts the truth — design §10 (QA #179)", () => {
+    const s0 = game(3);
+    const mv = (p: string, room: string): PlayerCommand => ({ type: "submitMove", player: p, move: { room, duffel: jobFor(s0.config).rooms[room]?.coins ?? 0, pocket: 0 } });
+    const plan = { entries: [{ player: "ana", placed: "office", room: null, power: null, agreed: true }], history: [] };
+    const s = run(s0, mv("ana", "vault"), mv("ben", "office"), mv("carl", "lobby"), { type: "advance", deadline: { kind: "round", round: 1, plan } });
+    expect(chooseAlibi(viewFor(s, "ana"), PERSONALITIES.honest, () => 0)).toBe("vault");
+  });
+
   // Ana pockets 4 of the Vault's 6, handing in 2; whether anyone saw her decides the cover-up.
   const pocketed = (withWitness: boolean): GameState =>
     round(game(3), {
