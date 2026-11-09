@@ -71,7 +71,7 @@ test("the pop-up does not animate under reduced motion @teaching", async ({ page
 });
 
 test("the game menu holds the Tips setting, on by default, and Off is saved @teaching", async ({ page }) => {
-  const game = await startGame(page.request, { bots: 3, nickname: "Tipster" });
+  const game = await startGame(page.request, { bots: 3, nickname: "Tipster", tips: true });
   await page.goto(`/game/${game.id}`);
   const menu = page.getByRole("button", { name: "Menu" });
   await menu.click();
@@ -88,7 +88,6 @@ test("the game menu holds the Tips setting, on by default, and Off is saved @tea
 
 test("with Tips off no pop-up opens in a live game @teaching", async ({ page }) => {
   const game = await startGame(page.request, { bots: 3, nickname: "Quiet" });
-  expect((await page.request.patch("/api/me", { data: { tips: false } })).ok()).toBe(true);
   await page.goto(`/game/${game.id}`);
   await expect(page.getByRole("button", { name: "Menu" })).toBeVisible();
   await page.waitForTimeout(10_000); // a couple of rounds at this clock

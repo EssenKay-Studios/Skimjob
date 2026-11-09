@@ -34,6 +34,8 @@ async function start(host: APIRequestContext, guests: APIRequestContext[], seats
   for (const [i, g] of guests.entries()) await ok(await g.post(`/api/invites/${game.inviteCode}/join`, { data: { nickname: GUESTS[i] } }));
   for (let i = 0; i < seats - 1 - guests.length; i++) await ok(await host.post(`/api/games/${game.id}/bots`, { data: {} }));
   await ok(await host.post(`/api/games/${game.id}/start`, { data: {} }));
+  // No teaching pop-up (design §15.6) over the plan board.
+  for (const who of [host, ...guests]) await ok(await who.patch("/api/me", { data: { tips: false } }));
   return game.id;
 }
 
