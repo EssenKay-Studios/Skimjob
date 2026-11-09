@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import type { RevealEnding, RevealSummary } from "@skimjob/engine";
 import { Reveal } from "../components/Reveal";
 import { sampleEvents } from "../../../../packages/engine/src/types/samples";
-import { itemText, starText, whyText } from "./reveal";
+import { changedStory, itemText, planOf, satOutText, starText, whyText } from "./reveal";
 
 const NAMES: Record<string, string> = { p1: "Ana", p2: "Ben", p3: "Cy" };
 const ctx = { me: "p1", name: (p: string) => NAMES[p] ?? p };
@@ -39,6 +39,25 @@ describe("reveal lines", () => {
   });
 });
 
+describe("plan against move — design §10, §15.4, §15.5", () => {
+  const move = { player: "p2", room: "vault", duffel: 1, pocket: 1, missed: false, alibi: null, planned: null };
+  it("tells a kept plan, a broken one and no plan spot apart", () => {
+    expect(planOf({ ...move, planned: "vault" })).toEqual({ spot: "Vault", broken: false });
+    expect(planOf({ ...move, planned: "office" })).toEqual({ spot: "Office", broken: true });
+    expect(planOf(move)).toEqual({ spot: "no plan spot", broken: false });
+  });
+  it("calls a changed story only when the plan spot and the alibi both exist and differ", () => {
+    expect(changedStory({ ...move, planned: "vault", alibi: "lobby" })).toBe("Changed story: planned Vault, later said Lobby.");
+    expect(changedStory({ ...move, planned: "vault", alibi: "vault" })).toBeNull();
+    expect(changedStory({ ...move, planned: null, alibi: "lobby" })).toBeNull();
+    expect(changedStory({ ...move, planned: "vault", alibi: null })).toBeNull();
+  });
+  it("says a player sat the round out, you or another", () => {
+    expect(satOutText("p1", ctx)).toBe("You sat the round out: the Lobby was taped off.");
+    expect(satOutText("p3", ctx)).toBe("Cy sat the round out: the Lobby was taped off.");
+  });
+});
+
 describe("<Reveal>", () => {
   const seat = (player: string, role: string, place: number, winner: boolean) => ({
     player,
@@ -59,12 +78,13 @@ describe("<Reveal>", () => {
         round: 1,
         card: null,
         moves: [{ player: "p2", room: "vault", duffel: 2, pocket: 4, missed: false, alibi: "lobby", planned: "office" }],
+        satOut: ["p3"],
         resolved: { taken: 6, missing: 4 },
         split: { cut: 0, share: 0 },
         items: [{ kind: "event", event: { ...sampleEvents.abilityResolved, player: "p2", ability: { kind: "ring", room: "office" } } }],
         stashes: { p1: 0, p2: 4, p3: 0 },
       },
-      { round: 2, card: { id: "audit", room: null }, moves: [], resolved: null, split: null, items: [], stashes: { p1: 0, p2: 9, p3: 0 } },
+      { round: 2, card: { id: "audit", room: null }, moves: [], satOut: [], resolved: null, split: null, items: [], stashes: { p1: 0, p2: 9, p3: 0 } },
     ],
   };
   const html = renderToStaticMarkup(createElement(Reveal, { summary, ctx, looks: new Map() }));
@@ -82,6 +102,15 @@ describe("<Reveal>", () => {
     expect(html).toContain("said Lobby: lie");
     expect(html).toContain(RING.replace(/'/g, "&#x27;"));
     expect(html).toContain("reveal__item is-hidden");
+  });
+
+  // design §10, §15.5: the plan spot beside the real room, the changed story and the hidden-bell result.
+  it("replays the plan against the move, with the changed story, and says who sat the round out (design §3.3, §10, §15.4)", () => {
+    expect(html).toContain("Plan: Office");
+    expect(html).toContain("(broken)");
+    expect(html).toContain("Went: Vault");
+    expect(html).toContain("Changed story: planned Office, later said Lobby.");
+    expect(html).toContain("Cy sat the round out: the Lobby was taped off.");
   });
 
   it("never injects HTML (UI rules)", () => {

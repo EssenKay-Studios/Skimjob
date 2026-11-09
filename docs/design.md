@@ -465,7 +465,7 @@ Each player has a private board: tags (trusted / unsure / suspicious), notes and
 
 ### 15.5 The reveal
 
-When the game ends, every reveal event opens (§18): every role, every move and split, every stash over time, every power and perk used. The reveal is a timeline scrubbed round by round, replaying each round's plan against what everyone really did.
+When the game ends, every reveal event opens (§18): every role, every move and split, every stash over time, every power and perk used. The reveal is a timeline scrubbed round by round, replaying each round's plan against what everyone really did (a plan spot kept or broken, a "Changed story" when the alibi differs from it), naming anyone who sat a round out (§3.3) and showing a Hacker's real bell result even in the last round (§11.1).
 
 ### 15.6 UI principles
 

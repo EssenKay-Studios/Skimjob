@@ -2,8 +2,8 @@
 // heist sunk by theft (★), who won and why, and the worked-out timeline items.
 // Pure; the switches are exhaustive. design §8
 import { BANK_JOB, BUST_ROLE_TEXT, lineWords, type RoleId } from "@skimjob/content";
-import { roleHandler, type RevealEnding, type RevealItem, type RevealRound, type RevealSummary } from "@skimjob/engine";
-import { describeEvent, roleName, type DescribeContext } from "./describeEvent";
+import { roleHandler, type RevealEnding, type RevealItem, type RevealMove, type RevealRound, type RevealSummary } from "@skimjob/engine";
+import { describeEvent, roleName, roomName, type DescribeContext } from "./describeEvent";
 
 /** "★ Also wins if the heist is sunk by theft" for the Mole and the Fixer (their handlers, design §8.4), else "". */
 export function starText(role: RoleId): string {
@@ -73,3 +73,15 @@ export function endingText(outcome: Ending): { title: string; badge: string; los
     ? { title: `Busted. ${BUST_ROLE_TEXT.replace(/\.$/, "")}`, badge: "Wins over the Rooftop", loss } // design §20.2
     : { title: "Sunk by theft: too many coins went missing", badge: "Wins a heist sunk by theft", loss };
 }
+
+/** Plan against move (design §10, §15.5): the plan spot the player held as the round resolved, and whether they went elsewhere. */
+export const planOf = (m: RevealMove): { spot: string; broken: boolean } =>
+  m.planned === null ? { spot: "no plan spot", broken: false } : { spot: roomName(m.planned), broken: m.planned !== m.room };
+
+/** design §15.4 "Changed story", told in the reveal: the plan spot and the alibi posted later differ. Null when either is missing or they agree. */
+export const changedStory = (m: RevealMove): string | null =>
+  m.planned !== null && m.alibi !== null && m.planned !== m.alibi ? `Changed story: planned ${roomName(m.planned)}, later said ${roomName(m.alibi)}.` : null;
+
+/** design §3.3: a missed move into a taped-off Lobby has no move at all, so the reveal says so. */
+export const satOutText = (player: string, ctx: DescribeContext): string =>
+  `${player === ctx.me ? "You" : ctx.name(player)} sat the round out: the Lobby was taped off.`;

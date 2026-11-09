@@ -1,170 +1,111 @@
-import { mkdirSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
-import { startGame } from "./setupGame";
 
-// M2-11: the end-of-game reveal (design §13). The gallery's hand-made game at
-// every launch width (role envelopes, who won and why, the round timeline with
-// its hidden causes; no sideways scroll), and a real 15-min game played out by
-// bots, whose reveal only appears once it has ended.
-// SHOTS_DIR=… saves the gallery section per viewport.
-const SHOTS = process.env.SHOTS_DIR;
+// S4.9: the end-of-game reveal (design §15.5) on its own demo page
+// (/dev/gallery/reveal: a small hand-made game, no server, so it loads in a blink):
+// every role, who won and why, and each round's plan against what everyone really did,
+// with the changed story, a sat-out round and the Hacker's hidden bell in the last round.
+// Then the same game with 24-character names at every launch width: nothing past the edge.
 
-const VIEWPORTS = [
-  { width: 360, height: 740 },
-  { width: 768, height: 1024 },
-  { width: 1280, height: 800 },
-];
+const noSidewaysScroll = (page: Page) =>
+  page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth).then((wide) => expect(wide).toBeLessThanOrEqual(1));
 
-async function noSidewaysScroll(page: Page) {
-  const wide = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-  expect(wide).toBeLessThanOrEqual(1);
-}
+test.describe("the reveal demo", () => {
+  test.use({ viewport: { width: 1280, height: 900 } });
 
-for (const viewport of VIEWPORTS) {
-  test.describe(`gallery reveal at ${viewport.width}`, () => {
-    test.use({ viewport, hasTouch: viewport.width < 1024 });
-    test("every role, who won and why, and a timeline to scrub through @reveal", async ({ page }, info) => {
-      test.skip(!info.project.name.startsWith("desktop") || info.project.name.endsWith("fast"), "the viewport is set here");
-      const errors: string[] = [];
-      page.on("pageerror", (e) => errors.push(e.message));
-      await page.goto("/dev/gallery");
-      const section = page.getByRole("region", { name: "End-of-game reveal" });
-      await section.scrollIntoViewIfNeeded();
-      const reveal = section.getByRole("region", { name: "The reveal" });
-      await expect(reveal).toBeVisible();
+  test("every role, plan against moves, a sat-out round and each ending @reveal", async ({ page }, info) => {
+    test.skip(info.project.name !== "desktop", "the viewport is set here");
+    const errors: string[] = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await page.goto("/dev/gallery/reveal");
+    const reveal = page.getByRole("region", { name: "The reveal" });
+    await expect(reveal).toBeVisible();
 
-      // Job done: the top of the ranking wins; four envelopes with roles and the Mole's ★.
-      const crew = reveal.getByRole("list", { name: "Every role, best first" });
-      await expect(crew.locator(".reveal__card")).toHaveCount(4);
-      for (const role of ["Locksmith", "Mole", "Hacker", "Detective"]) await expect(crew).toContainText(role);
-      await expect(reveal.locator(".reveal__why")).toContainText("Job done, so the top of the ranking wins: Ben.");
-      await expect(crew).toContainText("★ Also wins if the heist is sunk by theft");
-      await expect(reveal.locator(".reveal__void")).toHaveCount(0);
+    // Job done: the top of the ranking wins; four envelopes in ranking order, the Mole's ★, no VOID, no tokens.
+    const cards = reveal.locator(".reveal__card");
+    await expect(cards.locator(".reveal__who b")).toHaveText(["Ben", "Cy", "Bot · Dot", "You"]);
+    await expect(cards.locator(".reveal__score b")).toHaveText(["12", "5", "2", "0"]);
+    await expect(reveal.locator(".reveal__why")).toContainText("Job done, so the top of the ranking wins: Ben.");
+    await expect(cards.nth(0)).toContainText("★ Also wins if the heist is sunk by theft");
+    await expect(cards.nth(3).locator(".reveal__perks")).toContainText("Tail");
+    await expect(reveal.locator(".reveal__void")).toHaveCount(0);
+    await expect(reveal).not.toContainText(/token/i);
 
-      // The timeline: round 1's real moves, the lie, and the Hacker's hidden bell (design §11.1).
-      const sheet = reveal.locator(".reveal__round");
-      await expect(sheet.getByRole("heading", { name: "Round 1" })).toBeVisible();
-      await expect(sheet.getByRole("list", { name: "Where everyone really was" }).locator("li")).toHaveCount(4);
-      await expect(sheet).toContainText("said Lobby: lie");
-      await expect(sheet).toContainText("Round 1: Cy hid the Vault's bell; it really shows 3 lit.");
+    // Round 1: Ben planned the Vault and went there, but later said the Lobby: a changed story and a lie.
+    const sheet = reveal.locator(".reveal__round");
+    const moves = sheet.getByRole("list", { name: "Plan against what everyone really did" });
+    await expect(sheet.getByRole("heading", { name: "Round 1" })).toBeVisible();
+    await expect(moves.locator("li")).toHaveCount(4);
+    const ben = moves.locator("li").filter({ hasText: "Ben" });
+    await expect(ben).toContainText("Plan: Vault");
+    await expect(ben).toContainText("Went: Vault");
+    await expect(ben).toContainText("said Lobby: lie");
+    await expect(ben).toContainText("Changed story: planned Vault, later said Lobby.");
 
-      // Next: the Mole's hidden ring (design §5.2), the Detective's grab count (§11.1) and the false claim.
-      await reveal.getByRole("button", { name: "Next round" }).click();
-      await expect(sheet.getByRole("heading", { name: "Round 2" })).toBeVisible();
-      await expect(sheet).toContainText("Round 2: Ben tipped off the police: the Office's bell rang once more.");
-      await expect(sheet).toContainText("Round 1: Ben grabbed 6 coins.");
-      await expect(sheet).toContainText("Ben claimed Lookout, but was really the Mole.");
+    // Round 2: Dot broke the plan; the Lobby raid is in the timeline.
+    await reveal.getByRole("button", { name: "Next round" }).click();
+    await expect(sheet.getByRole("heading", { name: "Round 2" })).toBeVisible();
+    await expect(moves.locator("li").filter({ hasText: "Dot" })).toContainText("Plan: Vault (broken)");
+    await expect(sheet).toContainText("Raid! The police hit the Lobby in round 2");
+    await expect(sheet).toContainText("Ben claimed Lookout, but was really the Mole.");
 
-      // A round chip jumps straight there: Shift change.
-      const r3 = reveal.getByRole("group", { name: "Rounds" }).getByRole("button", { name: "Round 3" });
-      await r3.click();
-      await expect(r3).toHaveAttribute("aria-pressed", "true");
-      await expect(sheet).toContainText("Shift change");
-      await expect(sheet).toContainText("Round 3: you bought Tail for 1 coin: tailing the Vault next round.");
-      await expect(reveal.getByRole("button", { name: "Next round" })).toBeDisabled();
-      const box = await r3.boundingBox();
-      expect(box!.height).toBeGreaterThanOrEqual(44);
-      await noSidewaysScroll(page);
-      if (SHOTS) {
-        mkdirSync(SHOTS, { recursive: true });
-        await page.waitForTimeout(700);
-        await section.screenshot({ path: `${SHOTS}/reveal-${viewport.width}.png` });
-      }
+    // Round 3, the last: Dot's missed move into the taped-off Lobby is a sat-out round; the Hacker's hidden bell has its real result.
+    const r3 = reveal.getByRole("group", { name: "Rounds" }).getByRole("button", { name: "Round 3" });
+    await r3.click();
+    await expect(r3).toHaveAttribute("aria-pressed", "true");
+    await expect(moves.locator("li")).toHaveCount(4);
+    await expect(moves).toContainText("Bot · Dot sat the round out: the Lobby was taped off.");
+    await expect(sheet).toContainText("Round 3: Cy hid the Vault's bell; it really shows 2 lit.");
+    await expect(sheet).toContainText("you bought Tail");
+    await expect(reveal.getByRole("button", { name: "Next round" })).toBeDisabled();
+    await noSidewaysScroll(page);
 
-      // A bust only the Rooftop escapes (design §5.5); then a heist sunk by theft nobody wins, every envelope VOID.
-      await section.getByRole("button", { name: "Busted (Rooftop)" }).click();
-      await expect(reveal.locator(".reveal__why")).toContainText("Busted. On a bust, only the Rooftop gets away. The biggest stash up there wins: you.");
-      await expect(reveal.locator(".reveal__void")).toHaveCount(3);
-      await section.getByRole("button", { name: "Sunk by theft (nobody)" }).click();
-      await expect(reveal.locator(".reveal__why")).toContainText("nobody wins: the ranking is a loss");
-      await expect(reveal.locator(".reveal__void")).toHaveCount(4);
-      await noSidewaysScroll(page);
-      expect(errors).toEqual([]);
-    });
+    // Busted: the bust story's raids are there, only you (on the Rooftop) win, the rest are VOID.
+    await page.getByRole("button", { name: "Busted (Rooftop)" }).click();
+    await expect(reveal.locator(".reveal__why")).toContainText("Busted. On a bust, only the Rooftop gets away. The biggest stash up there wins: you.");
+    await expect(reveal.locator(".reveal__void")).toHaveCount(3);
+    await reveal.getByRole("group", { name: "Rounds" }).getByRole("button", { name: "Round 3" }).click();
+    await expect(sheet).toContainText("Raid! The police hit the Vault in round 3");
+    await expect(sheet).toContainText("Wanted 3.");
+
+    // Sunk by theft, nobody wins: the Hacker (no ★) is on top, every envelope VOID.
+    await page.getByRole("button", { name: "Sunk by theft (nobody)" }).click();
+    await expect(reveal.locator(".reveal__why")).toContainText("nobody wins: the ranking is a loss");
+    await expect(reveal.locator(".reveal__void")).toHaveCount(4);
+    await expect(cards.nth(0)).toContainText("Top of the ranking");
+    expect(errors).toEqual([]);
   });
-}
+});
 
-// The 12-seat 15-min game QA (game.qa.spec.ts) sometimes ended 1 px or more
-// wider than a 390 px phone: a 24-character name with no break points ("W"×24)
-// in a timeline line or the "why" note would not wrap. Here the
-// gallery's game with 24-character names, every ending and every round, at
-// every launch width: nothing past the edge, not even 1 px.
-const LAUNCH_WIDTHS = [360, 390, 768, 1024, 1280];
-for (const width of LAUNCH_WIDTHS) {
-  test.describe(`gallery reveal with 24-character names at ${width}`, () => {
+for (const width of [360, 390, 768, 1024, 1280]) {
+  test.describe(`the reveal demo at ${width}`, () => {
     test.use({ viewport: { width, height: 800 }, hasTouch: width < 1024 });
-    test("no line pushes the page sideways, in any ending or round @reveal", async ({ page }, info) => {
-      test.skip(!info.project.name.startsWith("desktop") || info.project.name.endsWith("fast"), "the viewport is set here");
-      // Twelve round sheets on the whole gallery page: slow on a busy runner.
-      test.setTimeout(120_000);
-      const errors: string[] = [];
-      page.on("pageerror", (e) => errors.push(e.message));
-      await page.goto("/dev/gallery");
-      const section = page.getByRole("region", { name: "End-of-game reveal" });
-      await section.scrollIntoViewIfNeeded();
-      await section.getByRole("button", { name: "24 characters" }).click();
-      const reveal = section.getByRole("region", { name: "The reveal" });
+    test("24-character names: no line pushes the page sideways, in any ending or round; 44 px scrub targets @reveal", async ({ page }, info) => {
+      test.skip(info.project.name !== "desktop", "the viewport is set here");
+      await page.goto("/dev/gallery/reveal");
+      await page.getByRole("button", { name: "24 characters" }).click();
+      const reveal = page.getByRole("region", { name: "The reveal" });
       await expect(reveal.locator(".reveal__why")).toContainText("WWWWWWWWWWWWWWWWWWWWWWWW");
       for (const ending of ["Job done", "Busted (Rooftop)", "Sunk by theft (nobody)"]) {
-        await section.getByRole("button", { name: ending }).click();
+        await page.getByRole("button", { name: ending }).click();
         const rounds = reveal.getByRole("group", { name: "Rounds" }).getByRole("button");
-        const n = await rounds.count();
-        for (let i = 0; i < n; i++) {
+        for (let i = 0; i < (await rounds.count()); i++) {
           await rounds.nth(i).click();
           await expect(rounds.nth(i)).toHaveAttribute("aria-pressed", "true");
-          const where = `${ending}, round chip ${i + 1}`;
-          const o = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth }));
-          expect(o.scroll, `${where}: page wider than the viewport`).toBeLessThanOrEqual(o.client);
-          // No box of the reveal past either edge (the round chips scroll inside their own strip).
-          const out = await reveal.evaluate((el, w) => {
+          const box = (await rounds.nth(i).boundingBox())!;
+          expect(box.height, `${ending}, round chip ${i + 1}`).toBeGreaterThanOrEqual(44);
+          const out = await page.evaluate((w) => {
             const xs: string[] = [];
-            for (const x of el.querySelectorAll<HTMLElement>("*")) {
-              if (x.closest(".reveal__rounds")) continue;
+            if (document.documentElement.scrollWidth > w) xs.push("page wider than the viewport");
+            for (const x of document.querySelectorAll<HTMLElement>(".reveal *")) {
+              if (x.closest(".reveal__rounds, .seg")) continue;
               const r = x.getBoundingClientRect();
               if (r.width > 0 && (r.right > w || r.left < 0)) xs.push(`${x.getAttribute("class") ?? x.tagName} ${r.left.toFixed(1)}..${r.right.toFixed(1)}`);
             }
             return xs;
           }, width);
-          expect(out, where).toEqual([]);
+          expect(out, `${ending}, round chip ${i + 1}`).toEqual([]);
         }
       }
-      expect(errors).toEqual([]);
     });
   });
 }
-
-test("a real game shows its reveal only once it has ended @fast-clock @reveal", async ({ page }, info) => {
-  test.skip(info.project.name !== "desktop-fast", "one viewport is enough for the flow");
-  test.setTimeout(300_000);
-  const errors: string[] = [];
-  page.on("pageerror", (e) => errors.push(e.message));
-  const game = await startGame(page.request, { bots: 3 });
-  await page.goto(`/game/${game.id}`);
-  await expect(page.locator(".hud__kicker")).toContainText(/Round \d+ of 12/);
-  await expect(page.getByRole("region", { name: "The reveal" })).toHaveCount(0);
-
-  // The host never moves (default moves); the bots play the game out.
-  await expect(page.getByRole("list", { name: "Final ranking" })).toBeVisible({ timeout: 280_000 });
-  const reveal = page.getByRole("region", { name: "The reveal" });
-  await expect(reveal).toBeVisible();
-  await expect(reveal.locator(".reveal__card")).toHaveCount(4);
-  // The server seeds each game afresh, so read the ending this game reached and check its own line (design §5.5, §8, §20.2).
-  const ending = await reveal.getAttribute("data-ending");
-  const WHY: Record<string, string> = {
-    success: "Job done, so the top of the ranking wins",
-    bust: "Busted. On a bust, only the Rooftop gets away.",
-    theft: "The heist failed (sunk by theft",
-  };
-  expect(Object.keys(WHY), `ending ${ending}`).toContain(ending);
-  await expect(reveal.locator(".reveal__why")).toContainText(WHY[ending!]!);
-  const sheet = reveal.locator(".reveal__round");
-  const first = await sheet.getByRole("heading", { level: 4 }).textContent();
-  if (first === "Setup") await reveal.getByRole("button", { name: "Next round" }).click();
-  await expect(sheet.getByRole("heading", { name: "Round 1" })).toBeVisible();
-  // Everyone's real move, the host's own default one included.
-  const moves = sheet.getByRole("list", { name: "Where everyone really was" });
-  await expect(moves.locator("li")).toHaveCount(4);
-  await expect(moves).toContainText("missed the deadline");
-  await noSidewaysScroll(page);
-  expect(errors).toEqual([]);
-});

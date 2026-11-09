@@ -74,6 +74,8 @@ export interface RevealRound {
   readonly card: { readonly id: string; readonly room: RoomId | null } | null;
   /** Everyone's real move, in seat order. */
   readonly moves: readonly RevealMove[];
+  /** Who sat the round out (a missed move into a taped-off default room): no entry in `moves`. design §3.3 */
+  readonly satOut: readonly PlayerId[];
   /** The public round summary (taken and missing), if the round resolved. design §7.4 */
   readonly resolved: Pick<RoundResolved, "taken" | "missing"> | null;
   /** This round's cut and the share after it, if the duffel was split (not on a bust). design §7.2, §7.3 */
