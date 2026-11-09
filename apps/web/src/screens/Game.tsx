@@ -11,7 +11,8 @@ import type { PlayerView, RoomId } from "@skimjob/engine";
 import { Button } from "../components/Button";
 import { Chip } from "../components/Chip";
 import { WantedStars } from "../components/Bell";
-import { GameShell, type ShellPanel } from "../components/GameShell";
+import { GameShell, SHELL_WIDE_QUERY, type ShellPanel } from "../components/GameShell";
+import { useMedia } from "../game/useMedia";
 import { Bubble, Clock, Evidence, Pin, Play, Star } from "../components/icons";
 import { InfoTip } from "../components/InfoTip";
 import { EndingNote } from "../components/Extension";
@@ -193,11 +194,14 @@ function Board({ view, timers, offset, send, autoMeetings, gameId, channel, dmNo
   useEffect(() => {
     if (meetingId) setOpen("round");
   }, [meetingId]);
+  // From 1024 px the plan board sits in the shell's centre column, under the bank (design §15.6); below it, it is the first block of "This round".
+  const wide = useMedia(SHELL_WIDE_QUERY);
   const panels: readonly ShellPanel[] = [
     { id: "crew", title: "Crew", place: "left", tab: { icon: <Star /> }, node: <Seats view={view} presence={channel.presence} offset={offset} marks={board.board} /> },
     { id: "case", title: "Case", place: "left", tab: { icon: <Evidence /> }, node: <CaseBoard data={caseBoard} people={people} pins={pins} marks={board.board} /> },
     ...(outcome ? [] : [{ id: "notes", title: "Notes", place: "left", tab: { icon: <Pin /> }, node: <CrewBoard people={people} board={board} /> } satisfies ShellPanel]),
     { id: "chat", title: "Chat", place: "left", tab: { icon: <Bubble />, badge: chat.unread }, node: chat.node },
+    ...(wide ? [{ id: "plan", title: "Plan board", place: "centre", node: <PlanPanel view={view} send={send} channel={channel} bare /> } satisfies ShellPanel] : []),
     {
       id: "round",
       title: outcome ? "The result" : "This round",
@@ -206,7 +210,7 @@ function Board({ view, timers, offset, send, autoMeetings, gameId, channel, dmNo
       node: (
         <div className="round">
           {host && <GameHost gameId={gameId} game={host} view={view} control={channel.control} />}
-          {outcome ? <GameOver view={view} /> : <Actions view={view} timers={timers} offset={offset} send={send} autoMeetings={autoMeetings} pick={pick} channel={channel} />}
+          {outcome ? <GameOver view={view} /> : <Actions view={view} timers={timers} offset={offset} send={send} autoMeetings={autoMeetings} pick={pick} channel={channel} plan={!wide} />}
           {view.reveal && <Reveal summary={view.reveal.summary} ctx={ctx} looks={seatLooks(view)} />}
         </div>
       ),
@@ -410,7 +414,7 @@ function Seats({ view, presence, offset, marks }: { view: PlayerView; presence: 
   );
 }
 
-function Actions({ view, timers, offset, send, autoMeetings, pick, channel }: BoardProps & { pick: Pick; channel: GameChannel }) {
+function Actions({ view, timers, offset, send, autoMeetings, pick, channel, plan }: BoardProps & { pick: Pick; channel: GameChannel; plan: boolean }) {
   const p = view.phase;
   const voting = p.kind === "meeting" || p.kind === "shakedownPending";
   return (
@@ -418,7 +422,7 @@ function Actions({ view, timers, offset, send, autoMeetings, pick, channel }: Bo
       <ResultsBanner view={view} />
       {p.kind === "meeting" && <MeetingNow view={view} timers={timers} offset={offset} send={send} />}
       {p.kind === "shakedownPending" && <DecidingPanel view={view} timers={timers} offset={offset} />}
-      <PlanPanel view={view} send={send} channel={channel} />
+      {plan && <PlanPanel view={view} send={send} channel={channel} />}
       {p.kind === "planning" ? (
         <MovePanel key={p.round} view={view} round={p.round} timers={timers} offset={offset} send={send} autoMeetings={autoMeetings} pick={pick} />
       ) : voting ? null : (
@@ -431,18 +435,12 @@ function Actions({ view, timers, offset, send, autoMeetings, pick, channel }: Bo
 }
 
 /** design §10: the live board while a round is planned, its snapshot after, and where you post an alibi for the round that just resolved (§11.3). */
-function PlanPanel({ view, send, channel }: { view: PlayerView; send: BoardProps["send"]; channel: GameChannel }) {
+function PlanPanel({ view, send, channel, bare }: { view: PlayerView; send: BoardProps["send"]; channel: GameChannel; bare?: boolean }) {
   const toast = useToast();
   const looks = seatLooks(view);
   const round = view.phase.kind === "planning" ? view.phase.round : null;
   const live = channel.plan;
-  return (
-    <SketchFrame as="section" seed="game-plan" radius={16} shadow={0.45} className="panel" aria-labelledby="plan-h">
-      <div className="panel__head">
-        <h2 id="plan-h" className="panel__title">
-          <Underline seed="plan-u">Plan board</Underline>
-        </h2>
-      </div>
+  const board = (
       <PlanBoard
         seats={seatsOf(view).map((s) => ({ ...s, look: looks.get(s.id)?.look ?? 0, tag: looks.get(s.id)?.tag }))}
         rooms={roomOptions(view).map((r) => ({ id: r.id, name: r.name, closed: r.closed }))}
@@ -455,6 +453,17 @@ function PlanPanel({ view, send, channel }: { view: PlayerView; send: BoardProps
         alibi={alibiState(view)}
         onAlibi={async (round, room) => void (await send({ type: "postAlibi", round, room: room as RoomId }, "Alibi posted."))}
       />
+  );
+  return bare ? (
+    board
+  ) : (
+    <SketchFrame as="section" seed="game-plan" radius={16} shadow={0.45} className="panel" aria-labelledby="plan-h">
+      <div className="panel__head">
+        <h2 id="plan-h" className="panel__title">
+          <Underline seed="plan-u">Plan board</Underline>
+        </h2>
+      </div>
+      {board}
     </SketchFrame>
   );
 }

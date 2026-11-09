@@ -89,14 +89,16 @@ test("a 12-seat game with a 24-character name: bells fit at every width, the pre
     await expect(
       page.getByRole("img", { name: /^Wanted 0 of \d+$/ }),
     ).toBeVisible();
-    await expect(page.locator('.bank-room[data-room="vault"]')).toBeVisible(); // the shell swaps layouts at 1024 px
-    const vault = await page
-      .locator('.bank-room[data-room="vault"]')
-      .boundingBox();
-    expect(
-      Math.min(vault!.width, vault!.height),
-      `${width}px vault target`,
-    ).toBeGreaterThanOrEqual(44);
+    // The shell swaps layouts at 1024 px and remounts the board: measure inside the retry.
+    await expect(async () => {
+      const vault = await page
+        .locator('.bank-room[data-room="vault"]')
+        .boundingBox();
+      expect(
+        Math.min(vault!.width, vault!.height),
+        `${width}px vault target`,
+      ).toBeGreaterThanOrEqual(44);
+    }).toPass({ timeout: 5_000 });
   }
 });
 

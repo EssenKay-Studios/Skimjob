@@ -36,7 +36,7 @@ export interface GameShellProps {
 }
 
 /** From here the laptop layout takes over. */
-const SHELL_WIDE_QUERY = "(min-width: 1024px)";
+export const SHELL_WIDE_QUERY = "(min-width: 1024px)";
 
 export function GameShell(props: GameShellProps) {
   const wide = useMedia(SHELL_WIDE_QUERY);

@@ -1,5 +1,5 @@
 import { expect as baseExpect, test, type Page } from "@playwright/test";
-import { startGame } from "./setupGame";
+import { openPanel, startGame } from "./setupGame";
 
 const expect = baseExpect.configure({ timeout: 15_000 });
 
@@ -16,6 +16,7 @@ test("two players plan together on the board, live, with the ledger linked to th
   const game = await startGame(page.request, { bots: 1, guests: [guest.request], sessionLength: "1w" });
   for (const p of [page, guest]) {
     await p.goto(`/game/${game.id}`);
+    await openPanel(p, "This round");
     await expect(board(p)).toBeVisible();
   }
   // The bot took its spot and agreed as the round started.
