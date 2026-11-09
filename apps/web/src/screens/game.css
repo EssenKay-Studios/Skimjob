@@ -76,6 +76,11 @@
 .hud__stat > .meta .infotip {
   margin-block: -14px;
 }
+/* Share and the bank stand on the same line whatever else is in the row; their values are the same size, so the bottoms meet. */
+.hud__share,
+.hud__bank {
+  align-self: end;
+}
 /* Wanted: the stars, and this round's event card under them. */
 .hud__wanted {
   justify-items: start;

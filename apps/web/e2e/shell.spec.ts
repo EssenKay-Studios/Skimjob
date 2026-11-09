@@ -258,13 +258,46 @@ test("a chat draft survives closing the sheet by every route and reopening it @s
     await openChat(page);
     await expect(input).toHaveValue("half-typed, keep me");
   }
-  // The DM thread keeps its own draft.
+  // The DM thread keeps its own draft, apart from the crew's.
   await page.getByRole("button", { name: "DM", exact: true }).click();
   await page.getByRole("group", { name: "Message a player privately" }).getByRole("button").first().click();
   await input.fill("a private draft");
   await page.locator(".bsheet__close").click();
   await openChat(page);
   await expect(input).toHaveValue("half-typed, keep me");
+  // (A DM with nothing sent has no tab yet: pick the person again and the thread opens with its draft.)
+  await page.getByRole("button", { name: "DM", exact: true }).click();
+  await page.getByRole("group", { name: "Message a player privately" }).getByRole("button").first().click();
+  await expect(input).toHaveValue("a private draft");
   await ctx.close();
   await guestCtx.close();
 });
+
+// S4: a toast (shown after every command) rises above the phone bar, so the tabs and the dock stay tappable while it shows.
+for (const viewport of [{ width: 360, height: 740 }, { width: 390, height: 844 }]) {
+  test(`a toast after locking a move covers neither the tab bar nor the dock at ${viewport.width} px @shell`, async ({ browser }) => {
+    test.setTimeout(60_000);
+    const ctx = await browser.newContext({ viewport, hasTouch: true, isMobile: true });
+    const page = await ctx.newPage();
+    const game = await startGame(page.request, { bots: 3, sessionLength: "1w" });
+    await page.goto(`/game/${game.id}`);
+    await page.locator('.bank-room[data-room=office]').click(); // the board picks the room
+    await openPanel(page, "This round");
+    await page.getByRole("button", { name: "Lock it in" }).click();
+    const toast = page.locator(".toast").filter({ hasText: "Locked in" });
+    await expect(toast).toBeVisible();
+    await page.locator(".bsheet__close").click(); // the bar is under the sheet while it is open
+    await expect(toast).toBeVisible();
+    await settle(page);
+    const t = (await toast.boundingBox())!;
+    for (const part of [".shell__tabs", ".shell__dock"]) {
+      const b = (await page.locator(part).boundingBox())!;
+      const apart = t.y + t.height <= b.y || t.y >= b.y + b.height;
+      expect(apart, `the toast (${Math.round(t.y)}–${Math.round(t.y + t.height)}) overlaps ${part} (${Math.round(b.y)}–${Math.round(b.y + b.height)})`).toBe(true);
+    }
+    // And the middle tab takes a tap while the toast shows.
+    await page.getByRole("navigation", { name: "Game panels" }).getByRole("button", { name: /^Case/ }).click();
+    await expect(page.locator("dialog.bsheet[open]")).toHaveCount(1);
+    await ctx.close();
+  });
+}

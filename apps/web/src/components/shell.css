@@ -5,6 +5,17 @@
 .shell {
   --shell-gap: 12px;
 }
+/* The phone bar's parts: the tab bar and the dock, plus the bar's padding and gap. Their sum lifts the toasts clear of the bar. */
+:root {
+  --shell-tab-h: 52px;
+  --shell-dock-h: 56px;
+  --shell-bar-pad: 8px;
+  --shell-bar-h: calc(var(--shell-bar-pad) * 2 + var(--shell-dock-h) + var(--shell-tab-h));
+}
+/* While the phone layout is on screen, game toasts rise above its sticky bar (the tabs and the dock stay tappable). */
+:root:has(.shell--narrow) .toasts {
+  bottom: calc(var(--shell-bar-h) + 8px + env(safe-area-inset-bottom));
+}
 
 /* ---------- Phones and tablets ---------- */
 .shell--narrow {
@@ -32,8 +43,8 @@
   z-index: 2;
   margin-top: auto;
   display: grid;
-  gap: 8px;
-  padding: 8px var(--gutter-r) env(safe-area-inset-bottom) var(--gutter-l);
+  gap: var(--shell-bar-pad);
+  padding: var(--shell-bar-pad) var(--gutter-r) env(safe-area-inset-bottom) var(--gutter-l);
   background: var(--paper);
   border-top: 1.3px dashed var(--rule);
 }
@@ -41,7 +52,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 56px;
+  min-height: var(--shell-dock-h);
   padding: 6px 12px;
 }
 .shell__fill {
@@ -60,7 +71,7 @@
   justify-content: center;
   gap: 2px;
   min-width: 44px;
-  min-height: 52px;
+  min-height: var(--shell-tab-h);
   padding: 0;
   border: 0;
   background: none;
