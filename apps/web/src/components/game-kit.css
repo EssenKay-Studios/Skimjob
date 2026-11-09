@@ -1,35 +1,5 @@
-/* Game kit (M2-6): meters, split slider, room tiles.
-   ui-style "Haul counter", "Round-move panel". Tokens only. */
-
-/* ---------- Meter (Haul) ---------- */
-.meter {
-  position: relative;
-  display: block;
-  height: 12px;
-  border: 1.4px solid var(--ink);
-  border-radius: 4px 6px 3px 5px;
-  background: var(--paper-hi);
-  overflow: visible;
-}
-.meter__fill {
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: var(--m-fill);
-  border-radius: 3px 2px 2px 4px;
-  background: var(--hatch), var(--m-tone);
-  transition: width 0.8s var(--spring);
-}
-.meter__notch {
-  position: absolute;
-  top: -5px;
-  bottom: -5px;
-  left: var(--m-notch);
-  width: 5px;
-  translate: -50% 0;
-  border: 1.3px solid var(--ink);
-  border-radius: 2px;
-  background: var(--gold);
-}
+/* Game kit (M2-6): split slider, room tiles.
+   ui-style "Round-move panel". Tokens only. */
 
 /* ---------- Split slider ---------- */
 .split {
@@ -234,7 +204,6 @@
   .split__pocket.is-greedy {
     animation: none;
   }
-  .meter__fill,
   .room-tile {
     transition: none;
   }
@@ -246,9 +215,6 @@
   grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
   gap: 14px 12px;
   padding-top: 8px;
-}
-.g-meter {
-  flex: 1 1 160px;
 }
 .g-icon {
   display: inline-flex;

@@ -9,11 +9,11 @@
 // "seen on camera"), and every
 // public alibi claim for the round as a dashed ghost. Nothing else: never another player's
 // move or room unless the view itself says so.
-import { BANK_JOB, EVENTS, type RoomId } from "@skimjob/content";
-import type { PlayerId, PlayerView } from "@skimjob/engine";
-import type { BankOccupant, TimeOfDay } from "../art/BankCutaway";
+import { BANK_JOB, EVENTS, ROLES, type RoomId } from "@skimjob/content";
+import { ringsOf, type PlayerId, type PlayerView } from "@skimjob/engine";
+import type { BankOccupant, RoomBell, TimeOfDay } from "../art/BankCutaway";
 import { crewTags } from "../art/crookLooks";
-import { seatsOf } from "./hud";
+import { jobOf, roomOptions, seatsOf } from "./hud";
 
 export interface BoardScene {
   /** The round on the board (0 before the first round). */
@@ -23,8 +23,12 @@ export interface BoardScene {
   /** Your room on the board. */
   readonly selected: RoomId | null;
   readonly occupants: Readonly<Record<string, readonly BankOccupant[]>>;
-  /** Rooms Lockdown shut for that round. design §13 */
+  /** Rooms shut for that round: Lockdown's (design §13) and the taped-off ones (§5.3). */
   readonly closed: readonly RoomId[];
+  /** Rounds each taped-off room stays closed, "CLOSED 2" counting down. design §5.3 */
+  readonly taped: Readonly<Record<RoomId, number>>;
+  /** Each open room's bell: lit bulbs, your preview, or hidden. A taped-off room's bell is off (no entry). design §5.1, §5.2 */
+  readonly bells: Readonly<Record<RoomId, RoomBell>>;
   readonly time: TimeOfDay;
 }
 
@@ -79,6 +83,43 @@ function closedIn(view: PlayerView, round: number): RoomId[] {
 }
 
 /**
+ * Rounds each taped-off room is still closed, counting the round being planned
+ * (or, between rounds, the next one): raided in round 4 with 2 taped rounds, it
+ * reads 2 through round 4's result and the planning of round 5, 1 in round 6. design §5.3
+ */
+function tapedLeft(view: PlayerView): Record<RoomId, number> {
+  const next = view.phase.kind === "planning" ? view.round : view.round + 1;
+  return Object.fromEntries(Object.entries(view.taped).map(([room, through]) => [room, Math.max(1, through - next + 1)]));
+}
+
+/**
+ * The bells as the public sees them: a taped-off room has none, a hidden one
+ * shows "?" (unless the view carries the real count: the Hacker who hid it).
+ * While planning, the room you picked previews the rings your grab would add
+ * (the Locksmith's coins ring one fewer). design §5.1, §5.2, §11.1
+ */
+function bellsOf(view: PlayerView, selected: RoomId | null, taped: Readonly<Record<RoomId, number>>): Record<RoomId, RoomBell> {
+  const hidden = new Set(view.hiddenBells);
+  const power = ROLES[view.me.role]?.power;
+  const job = jobOf(view);
+  const loot = new Map(roomOptions(view).map((o) => [o.id, o.loot]));
+  const bells: Record<RoomId, RoomBell> = {};
+  for (const room of view.rooms) {
+    if (Object.hasOwn(taped, room)) continue;
+    const lit = view.bells[room];
+    if (lit === undefined) {
+      bells[room] = { lit: 0, hidden: hidden.has(room) };
+      continue;
+    }
+    const coins = view.me.move?.room === room ? view.me.move.duffel + view.me.move.pocket : (loot.get(room) ?? 0);
+    const def = job.rooms[room];
+    const rings = view.phase.kind === "planning" && room === selected && def ? ringsOf(def, coins, power?.kind === "muffle" ? power.fewerRings : 0) : 0;
+    bells[room] = { lit, ...(rings > 0 && { preview: rings }) };
+  }
+  return bells;
+}
+
+/**
  * The board for this view. `pick` is the room picked in the move panel or on
  * the board but not yet locked in (planning only).
  */
@@ -102,11 +143,12 @@ export function boardScene(view: PlayerView, pick: RoomId | null = null): BoardS
     const round = view.phase.round;
     const selected = pick ?? view.me.move?.room ?? null;
     if (selected) put(selected, view.me.id);
-    return { round, mode: "pick", selected, occupants, closed: closedIn(view, round), time: timeOfRound(round) };
+    const taped = tapedLeft(view);
+    return { round, mode: "pick", selected, occupants, closed: closedIn(view, round), taped, bells: bellsOf(view, selected, taped), time: timeOfRound(round) };
   }
 
   const round = resolvedRound(view);
-  if (round < 1) return { round: 0, mode: "seen", selected: null, occupants, closed: [], time: "day" };
+  if (round < 1) return { round: 0, mode: "seen", selected: null, occupants, closed: [], taped: {}, bells: bellsOf(view, null, {}), time: "day" };
   const mine = ownRoom(view, round);
   const seen = new Set<PlayerId>();
   if (mine) put(mine, view.me.id);
@@ -137,5 +179,6 @@ export function boardScene(view: PlayerView, pick: RoomId | null = null): BoardS
     const there = occupants[room]?.some((o) => o.id === player && !o.ghost);
     if (!there) put(room, player, "ghost");
   }
-  return { round, mode: "seen", selected: mine, occupants, closed: closedIn(view, round), time: timeOfRound(round) };
+  const taped = tapedLeft(view);
+  return { round, mode: "seen", selected: mine, occupants, closed: closedIn(view, round), taped, bells: bellsOf(view, mine, taped), time: timeOfRound(round) };
 }

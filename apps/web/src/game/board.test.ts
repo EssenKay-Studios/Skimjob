@@ -134,6 +134,54 @@ describe("board scene (M2-9 wiring)", () => {
     expect(boardScene({ ...locked, card: { round: 0, id: "lockdown", room: "office" } }).closed).toEqual([]);
   });
 
+  describe("bells (design §5.1, §5.2, §5.3, §11.1)", () => {
+    const bulbs = BANK_JOB.alarm.bulbs;
+    const planning = () => viewFor(createGame(config(6)), "p1");
+
+    it("shows every open room's lit bulbs, no preview before you pick", () => {
+      const v: PlayerView = { ...planning(), bells: { vault: 2, office: 0 } };
+      const { bells } = boardScene(v);
+      expect(bells.vault).toEqual({ lit: 2 });
+      expect(bells.office).toEqual({ lit: 0 });
+    });
+
+    it("previews the rings of the room you picked: the coins past the quiet ones (Office: 2 coins, 1 quiet)", () => {
+      const v = planning();
+      const office = BANK_JOB.rooms.office!;
+      expect(boardScene(v, "office").bells.office).toEqual({ lit: v.bells.office ?? 0, preview: office.coins - office.quietCoins });
+      expect(boardScene(v, "vault").bells.vault?.preview).toBe(BANK_JOB.rooms.vault!.coins - BANK_JOB.rooms.vault!.quietCoins);
+      // A room with no noisy coin (the Lobby: 1 quiet coin) previews nothing, and so does the room you didn't pick.
+      expect(boardScene(v, "lobby").bells.lobby).not.toHaveProperty("preview");
+      expect(boardScene(v, "vault").bells.office).not.toHaveProperty("preview");
+    });
+
+    it("a Locksmith's Office or Vault grab is silent: nothing to preview (design §5.2)", () => {
+      const v = planning();
+      const locksmith: PlayerView = { ...v, me: { ...v.me, role: "locksmith" } };
+      for (const room of ["office", "vault"]) expect(boardScene(locksmith, room).bells[room]).not.toHaveProperty("preview");
+    });
+
+    it("a hidden bell shows '?' unless the view carries the real count (the Hacker who hid it)", () => {
+      const v = planning();
+      const rest = Object.fromEntries(Object.entries(v.bells).filter(([room]) => room !== "office"));
+      const seen = boardScene({ ...v, bells: rest, hiddenBells: ["office"] });
+      expect(seen.bells.office).toEqual({ lit: 0, hidden: true });
+      expect(seen.bells.vault).toEqual({ lit: 0 });
+      expect(boardScene({ ...v, bells: { ...rest, office: 2 }, hiddenBells: ["office"] }).bells.office).toEqual({ lit: 2 });
+    });
+
+    it("a taped-off room has no bell and counts its rounds down: CLOSED 2, then CLOSED 1", () => {
+      // Raided in round 1: closed through round 1 + tapedRounds.
+      const raided = (phase: PlayerView["phase"], round: number): PlayerView => ({ ...planning(), round, phase, taped: { vault: 1 + BANK_JOB.alarm.tapedRounds } });
+      const result = boardScene(raided({ kind: "result", round: 1 } as PlayerView["phase"], 1));
+      expect(result.bells).not.toHaveProperty("vault");
+      expect(result.closed).toContain("vault");
+      expect(result.taped).toEqual({ vault: BANK_JOB.alarm.tapedRounds });
+      expect(boardScene(raided({ kind: "planning", round: 2 } as PlayerView["phase"], 2)).taped).toEqual({ vault: BANK_JOB.alarm.tapedRounds });
+      expect(boardScene(raided({ kind: "planning", round: 3 } as PlayerView["phase"], 3)).taped).toEqual({ vault: 1 });
+    });
+  });
+
   it("lights the bank by thirds of the round cap: day, dusk, night (ui-style, design §6.2)", () => {
     expect([1, 4, 5, 8, 9, 12].map(timeOfRound)).toEqual(["day", "day", "dusk", "dusk", "night", "night"]);
   });

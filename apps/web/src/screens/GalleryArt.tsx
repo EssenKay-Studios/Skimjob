@@ -3,7 +3,8 @@ import { useState, type ReactNode } from "react";
 import { Segmented } from "../components/Segmented";
 import { SketchFrame } from "../components/SketchFrame";
 import { Underline } from "../components/Underline";
-import { BankCutaway, CORE_ROOMS, type BankOccupant, type TimeOfDay } from "../art/BankCutaway";
+import { BANK_JOB } from "@skimjob/content";
+import { BankCutaway, CORE_ROOMS, type BankOccupant, type RoomBell, type TimeOfDay } from "../art/BankCutaway";
 import { BANK_ROOMS, BANK_ROOM_NAMES, type BankRoomId } from "../art/bankLayout";
 import { CrookAvatar, CrookSvg } from "../art/Crook";
 import { EXPRESSIONS } from "../art/crookLooks";
@@ -40,6 +41,9 @@ export function BankSection() {
   const [layout, setLayout] = useState<"auto" | "wide" | "stacked">("auto");
   const [hot, setHot] = useState<"calm" | "hot">("calm");
   const [lock, setLock] = useState<"open" | "lockdown">("open");
+  const [raid, setRaid] = useState<"none" | "raided">("none");
+  const [bells, setBells] = useState<"lit" | "preview" | "hidden">("lit");
+  const [bank, setBank] = useState<"full" | "half" | "empty">("full");
   const [room, setRoom] = useState<BankRoomId | null>("vault");
   const rooms: readonly string[] = TIERS[tier];
   const crew = (seat: number, extra: Partial<BankOccupant> = {}): BankOccupant => ({ id: `p${seat}`, name: CREW_NAMES[seat]!, look: seat, ...extra });
@@ -50,8 +54,10 @@ export function BankSection() {
     ...(rooms.includes("serverRoom") && { serverRoom: [crew(6, { bot: true, expression: "smug" })] }),
     ...(rooms.includes("managersOffice") && { managersOffice: [crew(9), crew(10, { expression: "smug" }), crew(11, { bot: true })] }),
   };
+  const bell = (lit: number): RoomBell => (bells === "hidden" ? { lit, hidden: true } : bells === "preview" ? { lit, preview: 2 } : { lit });
+  const bellRooms = Object.fromEntries(rooms.filter((r) => raid === "none" || r !== "depositBoxes").map((r, i) => [r, bell(i % BANK_JOB.alarm.bulbs)]));
   return (
-    <ArtSection id="bank" title="Bank cutaway" note="M2-9 · tap a room to select it · dashed crook = an alibi claim · blue, faded crook with a camera = seen on camera · Lockdown rooms can't be picked" wide>
+    <ArtSection id="bank" title="Bank cutaway" note="M2-9, S4.1 · tap a room to select it · dashed crook = an alibi claim · blue, faded crook with a camera = seen on camera · Lockdown rooms can't be picked · a raided room is taped with a siren and no bell · the Vault's pile shrinks" wide>
       <div className="g-knobs">
         <Segmented
           seed="g-tier"
@@ -106,6 +112,38 @@ export function BankSection() {
           value={lock}
           onChange={setLock}
         />
+        <Segmented
+          seed="g-raid"
+          label="Raid"
+          options={[
+            { value: "none", label: "None" },
+            { value: "raided", label: "Taped" },
+          ]}
+          value={raid}
+          onChange={setRaid}
+        />
+        <Segmented
+          seed="g-bells"
+          label="Bells"
+          options={[
+            { value: "lit", label: "Lit" },
+            { value: "preview", label: "Preview" },
+            { value: "hidden", label: "Hidden" },
+          ]}
+          value={bells}
+          onChange={setBells}
+        />
+        <Segmented
+          seed="g-pile"
+          label="Bank"
+          options={[
+            { value: "full", label: "Full" },
+            { value: "half", label: "Half" },
+            { value: "empty", label: "Empty" },
+          ]}
+          value={bank}
+          onChange={setBank}
+        />
       </div>
       <div className="g-bank">
         <BankCutaway
@@ -116,6 +154,9 @@ export function BankSection() {
           selected={room}
           onRoomSelect={(r) => setRoom((cur) => (cur === r ? null : r))}
           closed={lock === "lockdown" ? ["office"] : []}
+          taped={raid === "raided" && rooms.includes("depositBoxes") ? { depositBoxes: BANK_JOB.alarm.tapedRounds } : {}}
+          bells={bellRooms}
+          pile={bank === "full" ? 1 : bank === "half" ? 0.5 : 0}
           occupants={occupants}
         />
       </div>

@@ -1,0 +1,94 @@
+/* The alarm bell and the Wanted stars (S4.1; design §5.1, §5.4, ui-style "Alarm bells and Wanted stars"). Tokens only. */
+
+/* ---------- Alarm bell (design §5.1) ---------- */
+.bell {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px 3px 4px;
+  background: var(--paper-hi);
+  border: 1.4px solid var(--ink);
+  border-radius: var(--radius-chip);
+  line-height: 0;
+}
+.bell__icon {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  color: var(--ink);
+}
+.bell__icon svg {
+  width: 100%;
+  height: 100%;
+}
+.bell__q {
+  font: 700 13px/1 var(--font-hand);
+  color: var(--ink);
+}
+.bell--xs {
+  gap: 2px;
+  padding: 2px 4px 2px 3px;
+  border-width: 1.2px;
+}
+.bell--xs .bell__icon {
+  width: 12px;
+  height: 12px;
+}
+.bulb {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 1.4px solid var(--ink);
+  border-radius: var(--radius-blob);
+  background: var(--paper2);
+  transition: background-color 0.8s var(--spring);
+}
+.bell--xs .bulb {
+  width: 7px;
+  height: 7px;
+  border-width: 1.1px;
+}
+.bulb--l1 {
+  background: var(--hatch), var(--olive);
+}
+.bulb--l2 {
+  background: var(--hatch), var(--gold);
+}
+.bulb--l3 {
+  background: var(--hatch), var(--clay);
+}
+.bulb--l4 {
+  background: var(--hatch), var(--bad);
+}
+/* A bulb your own grab would light: dashed, hatched in clay. */
+.bulb--pv {
+  border: 1.6px dashed var(--clay-d);
+  background: var(--hatch), var(--paper-hi);
+}
+.bulb--q {
+  border-style: dotted;
+  background: var(--oat);
+}
+
+/* ---------- Wanted stars (design §5.4) ---------- */
+.wanted {
+  display: inline-flex;
+  gap: 4px;
+}
+.wanted__star {
+  width: 26px;
+  height: 26px;
+  fill: var(--paper2);
+  stroke: var(--ink);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+.wanted__star.is-on {
+  fill: var(--gold);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bulb {
+    transition: none;
+  }
+}

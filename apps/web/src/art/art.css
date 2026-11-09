@@ -6,8 +6,33 @@
   --bank-sky-top: var(--art-sky-day);
   --bank-sky-bottom: var(--paper-hi);
   --bank-glass: var(--art-glass);
+  position: relative;
   width: 100%;
   min-width: 0;
+}
+/* A room's bell sits over the drawing, in the room's top-right corner (design §5.1). When the
+   room's name leaves no space beside it, the bell goes under the name (--bell-top), or, when a crowd
+   fills the room, on its top edge (its bottom on the edge: xs is 18px tall, md 24px). */
+.bank__ov {
+  position: absolute;
+  pointer-events: none;
+}
+.bank__ov .bell {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+}
+.bank__ov--under .bell {
+  top: var(--bell-top);
+  right: auto;
+  left: 6px;
+}
+.bank__ov--over .bell {
+  top: -24px;
+  right: 2px;
+}
+.bank__ov--over .bell--xs {
+  top: -18px;
 }
 .bank--dusk {
   --bank-sky-top: color-mix(in srgb, var(--art-sky-night) 45%, var(--art-sky-dusk));
@@ -185,6 +210,110 @@
   }
 }
 
+/* ---------------------------------------------------------------- Board motion (design §15.6)
+   A taped room's siren, the Vault door, the Office screen and lamp, the Lobby camera.
+   Each rests in its still pose under reduced motion: door open, lamp on, camera still. */
+.bank-beams {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+  animation: bank-spin 1.8s linear infinite;
+}
+/* The Vault door is a thick disc on a hinge, drawn as a far face, an edge band and a near face.
+   --vd-a is how far it is swung (0 shut, 115deg open); --vd-t is half its thickness. */
+@property --vd-a {
+  syntax: "<angle>";
+  inherits: true;
+  initial-value: 115deg;
+}
+.bank-vd {
+  --vd-a: 115deg;
+  animation: bank-vd 10s ease-in-out infinite;
+}
+.bank-vd__far {
+  transform: translate(calc(sin(var(--vd-a)) * var(--vd-t) * 1px), 0) scale(cos(var(--vd-a)), 1);
+}
+.bank-vd__near {
+  transform: translate(calc(sin(var(--vd-a)) * var(--vd-t) * -1px), 0) scale(cos(var(--vd-a)), 1);
+}
+.bank-vd__band {
+  transform: translate(calc((cos(var(--vd-a)) * var(--vd-r) + sin(var(--vd-a)) * var(--vd-t)) * -1px), 0) scale(calc(2 * var(--vd-t) * sin(var(--vd-a))), 1);
+}
+@keyframes bank-vd {
+  0%,
+  28% {
+    --vd-a: 115deg;
+  }
+  45% {
+    --vd-a: 0deg;
+  }
+  48% {
+    --vd-a: 7deg;
+  }
+  51%,
+  74% {
+    --vd-a: 0deg;
+  }
+  90%,
+  100% {
+    --vd-a: 115deg;
+  }
+}
+.bank-scr > * {
+  opacity: 0;
+  animation: bank-scr 4.8s step-end infinite;
+}
+.bank-scr > :nth-child(1) {
+  opacity: 1;
+}
+.bank-scr > :nth-child(2) {
+  animation-delay: -3.2s;
+}
+.bank-scr > :nth-child(3) {
+  animation-delay: -1.6s;
+}
+@keyframes bank-scr {
+  0% {
+    opacity: 1;
+  }
+  33.3% {
+    opacity: 0;
+  }
+}
+.bank-lamp {
+  animation: bank-lamp 6s step-end infinite;
+}
+@keyframes bank-lamp {
+  0%,
+  78%,
+  100% {
+    opacity: 1;
+  }
+  52%,
+  58% {
+    opacity: 0;
+  }
+  55% {
+    opacity: 1;
+  }
+}
+.bank-cam {
+  transform-box: fill-box;
+  transform-origin: 50% 0;
+  animation: bank-pan 7s var(--spring) infinite;
+}
+@keyframes bank-pan {
+  0%,
+  10%,
+  95%,
+  100% {
+    transform: rotate(28deg);
+  }
+  45%,
+  60% {
+    transform: rotate(-28deg);
+  }
+}
+
 /* ---------------------------------------------------------------- Crooks */
 .crook-avatar {
   display: inline-block;
@@ -238,6 +367,11 @@
   .bank-flicker,
   .bank-laser,
   .bank-siren,
+  .bank-beams,
+  .bank-vd,
+  .bank-scr > *,
+  .bank-lamp,
+  .bank-cam,
   .spot-anim {
     animation: none;
   }

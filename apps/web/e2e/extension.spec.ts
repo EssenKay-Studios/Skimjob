@@ -3,7 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { startGame } from "./setupGame";
 
 // The role cards and rulebook (design §11, §12, §20), the round cap and
-// the Wanted meter (design §5.4) in a real game, and the lobby's role-list
+// the Wanted stars and the bank count (design §5.4, §6.1) in a real game, and the lobby's role-list
 // setting (design §11.3). Numbers are never asserted: the balance pass tunes them
 // in packages/content. SHOTS_DIR=… saves the gallery sections per viewport.
 const SHOTS = process.env.SHOTS_DIR;
@@ -37,14 +37,16 @@ test("gallery extension sections fit every viewport @shop", async ({ page }, inf
   }
 });
 
-test("a real game shows the round cap and the Wanted meter @shop", async ({ page }) => {
+test("a real game shows the round cap, the Wanted stars and the bank count @shop", async ({ page }) => {
   test.setTimeout(90_000);
   const game = await startGame(page.request, { bots: 4 });
   await page.goto(`/game/${game.id}`);
   // design §6.2: 12 rounds at most.
   await expect(page.locator(".hud__kicker")).toContainText(/^Round 1 of 12$/);
   // design §5.4: Wanted is public from the start.
-  await expect(page.getByRole("meter", { name: /^Wanted \d of 3$/ })).toBeVisible();
+  await expect(page.getByRole("img", { name: /^Wanted \d of 3$/ })).toBeVisible();
+  // design §6.1: the bank starts full, "N/total".
+  await expect(page.locator(".hud__bank .hud__big")).toHaveText(/^(\d+)\/\1$/);
 });
 
 test("lobby: the role list persists, and there is no deck, deal or role picker (design §11.3, §16) @lobby", async ({ page }, info) => {

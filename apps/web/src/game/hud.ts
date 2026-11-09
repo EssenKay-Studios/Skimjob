@@ -35,6 +35,9 @@ export const jobOf = (view: PlayerView): JobDef => {
 
 export const crewSize = (view: PlayerView) => view.players.length + 1;
 
+/** Coins the bank started with: its pile per player times the crew. design §6.1 */
+export const bankTotal = (view: PlayerView): number => jobOf(view).bank.coinsPerPlayer * crewSize(view);
+
 /** A seat in the crew, in seat order (you included). */
 export interface SeatInfo {
   readonly id: PlayerId;
