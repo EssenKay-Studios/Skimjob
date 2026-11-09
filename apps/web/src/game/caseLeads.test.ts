@@ -113,6 +113,22 @@ describe("the case board adapter — design §15.4", () => {
   });
 });
 
+describe("your own Plant evidence — design §12, §15.4", () => {
+  it("isn't evidence: the feed sighting you planted gives no Seen elsewhere, and doesn't count in Too quiet", () => {
+    const v = view(game(ROLES, { room: "lobby", duffel: 1, pocket: 0 }));
+    // You put Dev on the Vault's cameras; the feed you watched shows him there.
+    const planted: PlayerView = {
+      ...v,
+      ledger: [...v.ledger, { seq: 9001, event: { type: "perkSold", visibility: { kind: "public" }, round: 1, perk: "plantEvidence", cost: 3 } }],
+      caseFile: [...v.caseFile, { seq: 9000, event: { type: "perkBought", visibility: { kind: "private", player: "p1" }, player: "p1", round: 1, perk: { kind: "plantEvidence", target: "p5", room: "vault" }, cost: 3 } }],
+    } as PlayerView;
+    const vault = caseData(planted, new Set()).leads.find((l) => l.id === "r1.room.vault")!;
+    expect(vault.warnings.filter((w) => w.names.includes("p5"))).toEqual([]);
+    // Without Dev, Ava and Ben ring at least 2 and the Vault rang 2: only Ben's Not seen is left.
+    expect(vault.warnings.map((w) => [w.kind, w.names.join()])).toEqual([["notSeen", "p3"]]);
+  });
+});
+
 describe("leaks — design §18: the board uses only viewFor", () => {
   it("doesn't change when only hidden facts change (other players' roles and private feeds)", () => {
     // Ben and Cleo swap roles (the Exact list stays the same), and Cleo watches a different room from Security.

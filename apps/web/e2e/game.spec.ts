@@ -1,6 +1,6 @@
 import { mkdirSync } from "node:fs";
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { startGame } from "./setupGame";
+import { openLeads, startGame } from "./setupGame";
 
 // M2-6 acceptance (docs/m2-plan.md): a host and a guest play a 15-min game
 // against bots to the end in the browser and see the ranking.
@@ -8,14 +8,6 @@ import { startGame } from "./setupGame";
 // 12 s meetings, enough for the host to vote (the fast clock's 6 s windows weren't).
 // SHOTS_DIR=… saves mid-round and game-over screenshots per viewport.
 const SHOTS = process.env.SHOTS_DIR;
-
-/** design §15.4: the live case board with every lead opened, so each fact shows ("<trust> <line>"). */
-async function openLeads(page: Page): Promise<Locator> {
-  const leads = page.getByRole("region", { name: "Case board" }).getByRole("group", { name: "Leads" });
-  const closed = leads.locator('.cb__lead-btn[aria-expanded="false"]');
-  while ((await closed.count()) > 0) await closed.first().click();
-  return leads;
-}
 
 async function shot(page: Page, name: string) {
   if (!SHOTS) return;

@@ -128,6 +128,20 @@ describe("Too quiet — design §15.4", () => {
     expect(kinds(bellChecks({ ...r, rooms: vault({ rings: 1, watched: true, seen: new Map([["p4", "room"], ["p5", "room"]]) }) }, ctx(), name))).toEqual(["tooQuiet"]);
   });
 
+  it("counts a player you saw elsewhere only there, not in the room their story claims (Opus review repro)", () => {
+    // Ava's alibi (the Vault) is true and it rang once; Dev also says the Vault, but you saw him in your own room, the Office.
+    const r = round({
+      rooms: new Map([
+        ["vault", room({ rings: 1 })],
+        ["office", room({ rings: 1, watched: true, myCoins: 2, seen: new Map([["p5", "room"]]) })],
+      ]),
+      alibis: new Map([["p2", "vault"], ["p5", "vault"]]),
+    });
+    expect(bellChecks(r, ctx(), name).filter((f) => f.room === "vault")).toEqual([]);
+    // Dev's lie is still caught, by Seen elsewhere.
+    expect(kinds(storyChecks(r, "p1", name))).toContain("seenElsewhere");
+  });
+
   it("never runs on a hidden or unknown bell, nor on a raid (the capped bell only says at least)", () => {
     const seen = new Map<string, "room" | "feed">([["p4", "room"], ["p5", "room"]]);
     expect(bellChecks(round({ rooms: vault({ rings: null, watched: true, seen }) }), ctx(), name)).toEqual([]);
@@ -180,6 +194,8 @@ describe("Over-claimed role — design §15.4, §11.3", () => {
 
   it("reads a Possible list (absent: 0) and a Hidden one (1 each, 2 from 11 players)", () => {
     expect(overClaimed(claims([["p2", "priest", 1]]), ctx({ roleList: { list: "possible", roles: ["lookout"] } }), name)[0]?.warning.text).toBe("Ava claims the Priest; it isn't in play.");
+    // An Exact list without the role says the same, not "0 were dealt".
+    expect(overClaimed(claims([["p2", "priest", 1]]), ctx(), name)[0]?.warning.text).toBe("Ava claims the Priest; it isn't in play.");
     const two = claims([["p2", "priest", 1], ["p3", "priest", 1]]);
     expect(kinds(overClaimed(two, ctx({ roleList: null }), name))).toEqual(["overClaimed"]);
     expect(overClaimed(two, ctx({ roleList: null, crewSize: 11 }), name)).toEqual([]);

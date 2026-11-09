@@ -87,6 +87,8 @@ export function caseData(view: PlayerView, pins: ReadonlySet<string>): CaseData 
   const bought = new Map<string, number>();
   const count = (m: Map<string, number>, round: number, perk: string) => m.set(`${round}:${perk}`, (m.get(`${round}:${perk}`) ?? 0) + 1);
   const claims = new Map<PlayerId, { role: RoleId; round: number }>();
+  /** Your own Plant evidence: "round:room" → the player you put on its feeds. You know that sighting is fake. */
+  const myPlants = new Map<string, PlayerId>();
   let round = 0;
 
   const all: LoggedEvent<PublicEvent | CaseFileEvent>[] = [...view.ledger, ...view.caseFile].sort((a, b) => a.seq - b.seq);
@@ -138,7 +140,7 @@ export function caseData(view: PlayerView, pins: ReadonlySet<string>): CaseData 
         for (const room of e.hidden) {
           const rr = roomOf(e.round, room);
           rr.hidden = true;
-          fact(roomLead(e.round, room), `${seq}.bell`, "The bell is hidden: it shows ?.", trust);
+          fact(roomLead(e.round, room), `${seq}.hidden`, "The bell is hidden: it shows ?.", trust);
         }
         for (const [room, lit] of Object.entries(e.bells)) {
           const rr = roomOf(e.round, room);
@@ -230,6 +232,7 @@ export function caseData(view: PlayerView, pins: ReadonlySet<string>): CaseData 
       case "perkSold":
       case "perkBought": {
         const perk = e.type === "perkSold" ? e.perk : e.perk.kind;
+        if (e.type === "perkBought" && e.perk.kind === "plantEvidence") myPlants.set(`${e.round}:${e.perk.room}`, e.perk.target);
         count(e.type === "perkSold" ? sold : bought, e.round, perk);
         const d = lead(`r${e.round}.market`, e.round, "Black market");
         if (e.type === "perkSold") d.summary.push(`Someone bought ${perkName(perk)} · ${e.cost}`);
@@ -288,6 +291,13 @@ export function caseData(view: PlayerView, pins: ReadonlySet<string>): CaseData 
         void unknown;
       }
     }
+  }
+
+  // design §12: a feed sighting you planted yourself isn't evidence (a real one from your own room stays).
+  for (const [key, target] of myPlants) {
+    const [r, room] = [Number(key.slice(0, key.indexOf(":"))), key.slice(key.indexOf(":") + 1)];
+    const rr = rounds.get(r)?.rooms.get(room);
+    if (rr?.seen.get(target) === "feed") rr.seen.delete(target);
   }
 
   // design §15.4: the ⚠ checks, each round as your view shows it.

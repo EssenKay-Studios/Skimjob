@@ -78,6 +78,9 @@ const storyOf = (r: RoundFacts, p: PlayerId): { room: RoomId; said: "Said" | "Pl
   return spot === undefined ? null : { room: spot, said: "Planned" };
 };
 
+/** Whether you or your feeds saw `p` in any room this round. */
+const seenAnywhere = (r: RoundFacts, p: PlayerId): boolean => [...r.rooms.values()].some((rr) => rr.seen.has(p));
+
 /** design §15.4 Seen elsewhere, Not seen and Changed story, for one round. */
 export function storyChecks(r: RoundFacts, me: PlayerId, name: (p: PlayerId) => string): Found[] {
   const found: Found[] = [];
@@ -153,7 +156,8 @@ export function bellChecks(r: RoundFacts, ctx: CheckContext, name: (p: PlayerId)
     if (rr.rings === null || !Object.hasOwn(job.rooms, room)) continue;
     const def = job.rooms[room]!;
     const counted = new Set<PlayerId>(rr.seen.keys());
-    for (const p of new Set([...r.plan.keys(), ...r.alibis.keys()])) if (!rr.seen.has(p) && storyOf(r, p)?.room === room) counted.add(p);
+    // A player seen anywhere this round counts only where they were seen; otherwise where their latest story puts them.
+    for (const p of new Set([...r.plan.keys(), ...r.alibis.keys()])) if (!seenAnywhere(r, p) && storyOf(r, p)?.room === room) counted.add(p);
     counted.delete(ctx.me);
     const others = [...counted];
     const mine = rr.myCoins === null ? 0 : r.mySoftShoes ? 0 : ringsOf(def, rr.myCoins, muffleOf(ctx.myRole));
@@ -199,7 +203,7 @@ export function overClaimed(claims: ReadonlyMap<PlayerId, { readonly role: RoleI
     if (who.length <= dealt - yours) continue;
     const round = Math.max(...who.map((p) => claims.get(p)!.round));
     const limit =
-      ctx.roleList?.list === "exact" ? `${dealt} ${dealt === 1 ? "was" : "were"} dealt` : dealt === 0 ? "it isn't in play" : `at most ${dealt} can be`;
+      dealt === 0 ? "it isn't in play" : ctx.roleList?.list === "exact" ? `${dealt} ${dealt === 1 ? "was" : "were"} dealt` : `at most ${dealt} can be`;
     found.push({
       round,
       room: null,
