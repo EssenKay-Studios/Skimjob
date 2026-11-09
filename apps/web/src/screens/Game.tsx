@@ -14,7 +14,6 @@ import { WantedStars } from "../components/Bell";
 import { GameShell, type ShellPanel } from "../components/GameShell";
 import { Bubble, Clock, Evidence, Pin, Play, Star } from "../components/icons";
 import { InfoTip } from "../components/InfoTip";
-import { Meter } from "../components/Meter";
 import { EndingNote } from "../components/Extension";
 import { endingText } from "../game/extension";
 import { MEETING_TITLE } from "../game/meeting";
