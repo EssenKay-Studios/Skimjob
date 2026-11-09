@@ -125,6 +125,13 @@
   padding: 0;
   list-style: none;
 }
+.plan__ledger > li {
+  min-width: 0;
+}
+.plan__line,
+.plan__history {
+  overflow-wrap: anywhere;
+}
 .plan__line {
   display: flex;
   flex-wrap: wrap;
