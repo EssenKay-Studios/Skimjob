@@ -407,18 +407,25 @@ function PlanPanel({ view, send, channel }: { view: PlayerView; send: BoardProps
   const round = view.phase.kind === "planning" ? view.phase.round : null;
   const live = channel.plan;
   return (
-    <PlanBoard
-      seats={seatsOf(view).map((s) => ({ ...s, look: looks.get(s.id)?.look ?? 0 }))}
-      rooms={roomOptions(view).map((r) => ({ id: r.id, name: r.name, closed: r.closed }))}
-      board={round === null ? null : live?.round === round ? live : { round, entries: [] }}
-      onEdit={async (edit) => {
-        const r = await channel.sendPlan(edit);
-        if (!r.ok) toast(sentence(r.reason), "bad");
-      }}
-      last={lastPlan(view)}
-      alibi={alibiState(view)}
-      onAlibi={async (round, room) => void (await send({ type: "postAlibi", round, room: room as RoomId }, "Alibi posted."))}
-    />
+    <SketchFrame as="section" seed="game-plan" radius={16} shadow={0.45} className="panel" aria-labelledby="plan-h">
+      <div className="panel__head">
+        <h2 id="plan-h" className="panel__title">
+          <Underline seed="plan-u">Plan board</Underline>
+        </h2>
+      </div>
+      <PlanBoard
+        seats={seatsOf(view).map((s) => ({ ...s, look: looks.get(s.id)?.look ?? 0 }))}
+        rooms={roomOptions(view).map((r) => ({ id: r.id, name: r.name, closed: r.closed }))}
+        board={round === null ? null : live?.round === round ? live : { round, entries: [] }}
+        onEdit={async (edit) => {
+          const r = await channel.sendPlan(edit);
+          if (!r.ok) toast(sentence(r.reason), "bad");
+        }}
+        last={lastPlan(view)}
+        alibi={alibiState(view)}
+        onAlibi={async (round, room) => void (await send({ type: "postAlibi", round, room: room as RoomId }, "Alibi posted."))}
+      />
+    </SketchFrame>
   );
 }
 

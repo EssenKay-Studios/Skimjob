@@ -1,4 +1,4 @@
-// The plan board (design §10): a miniature bank where anyone puts crew avatars on
+// The plan board's body (design §10; the panel around it gives the heading): a miniature bank where anyone puts crew avatars on
 // rooms, your own room claim and pledge, "I agree", and the plan ledger linked both
 // ways with the heads. After a round the same panel shows its snapshot (the final
 // plan and how it changed, by time left, never wall time) and offers an alibi for it
@@ -10,8 +10,6 @@ import { agreedText, beforeDeadline, editText, historyOrder, pledgeAims, pledgeR
 import { Button } from "./Button";
 import { InfoTip } from "./InfoTip";
 import { Bolt, Door } from "./icons";
-import { SketchFrame } from "./SketchFrame";
-import { Underline } from "./Underline";
 import "./planboard.css";
 
 export interface PlanSeat {
@@ -48,26 +46,21 @@ export function PlanBoard({ seats, rooms, board, onEdit, last, alibi, onAlibi, s
   const roomName = (id: string) => rooms.find((r) => r.id === id)?.name ?? id;
   const name = (id: PlayerId) => seats.find((s) => s.id === id)?.name ?? id;
   return (
-    <SketchFrame as="section" seed={`${seed}-board`} radius={16} shadow={0.45} className="plan" aria-labelledby={`${seed}-h`}>
+    <div className="plan">
       <div className="plan__head">
-        <span className="plan__titlebox">
-          <h2 id={`${seed}-h`} className="plan__title">
-            <Underline seed={`${seed}-u`}>Plan board</Underline>
-          </h2>
-          <InfoTip info={{ kind: "tip", id: "planBoard" }} />
-        </span>
+        <InfoTip info={{ kind: "tip", id: "planBoard" }} />
         {board && <Agreed board={board} seats={seats.length} />}
       </div>
       {board ? <Live seats={seats} rooms={rooms} board={board} onEdit={onEdit} roomName={roomName} name={name} seed={seed} /> : <p className="meta plan__none">The board opens with the next round.</p>}
       {last && <Snapshot last={last} seats={seats} name={name} roomName={roomName} />}
       {alibi && <Alibi alibi={alibi} rooms={rooms} roomName={roomName} onAlibi={onAlibi} seed={seed} />}
-    </SketchFrame>
+    </div>
   );
 }
 
 function Agreed({ board, seats }: { board: Board; seats: number }) {
   return (
-    <span className="plan__titlebox">
+    <span className="plan__agreedbox">
       <span className="num plan__agreed" aria-live="polite">
         {agreedText(board.entries, seats)}
       </span>
