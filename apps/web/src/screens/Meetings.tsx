@@ -422,7 +422,7 @@ export function ResultsBanner({ view }: { view: PlayerView }) {
 
 // ---------------------------------------------------------------- your role card
 
-export function RoleCard({ view, send, claim = true }: { view: PlayerView; send: Send; claim?: boolean }) {
+export function RoleCard({ view, send }: { view: PlayerView; send: Send }) {
   return (
     <SketchFrame as="section" seed="role-card" radius={16} shadow={0.45} fill="var(--card-sand)" className="panel role-card" aria-labelledby="role-h">
       <div className="role-card__head">
@@ -444,7 +444,7 @@ export function RoleCard({ view, send, claim = true }: { view: PlayerView; send:
           </li>
         </ul>
       )}
-      {claim && <ClaimRole view={view} send={send} where="card" />}
+      <ClaimRole view={view} send={send} />
       <div className="role-card__foot">
         <RoleList view={view} />
         <RulebookButton view={view} />
@@ -454,7 +454,7 @@ export function RoleCard({ view, send, claim = true }: { view: PlayerView; send:
 }
 
 /** A formal, public, possibly false role claim, once between meetings (R4b; design §8, §12.1). */
-export function ClaimRole({ view, send, where }: { view: PlayerView; send: Send; where: "alibi" | "card" }) {
+function ClaimRole({ view, send }: { view: PlayerView; send: Send }) {
   const claim = claimState(view);
   const [open, setOpen] = useState(false);
   const [role, setRole] = useState<string | null>(null);
@@ -476,7 +476,7 @@ export function ClaimRole({ view, send, where }: { view: PlayerView; send: Send;
   };
   return (
     <>
-      <Button variant={where === "card" ? "small" : "secondary"} seed={`claim-role-${where}`} className="claim__toggle" aria-expanded={open} aria-controls={panel} onClick={() => setOpen(!open)}>
+      <Button variant="small" seed="claim-role" className="claim__toggle" aria-expanded={open} aria-controls={panel} onClick={() => setOpen(!open)}>
         {open ? "Never mind" : "Claim role"}
       </Button>
       {open && (
@@ -486,12 +486,12 @@ export function ClaimRole({ view, send, where }: { view: PlayerView; send: Send;
           </p>
           <div className="move__chips" role="group" aria-label="Role to claim">
             {claim.options.map((o) => (
-              <Button key={o.id} variant="toggle" seed={`claim-${where}-${o.id}`} pressed={role === o.id} onClick={() => setRole(o.id)}>
+              <Button key={o.id} variant="toggle" seed={`claim-${o.id}`} pressed={role === o.id} onClick={() => setRole(o.id)}>
                 {o.name}
               </Button>
             ))}
           </div>
-          <Button variant="primary" seed={`claim-go-${where}`} disabled={!role || busy} onClick={go}>
+          <Button variant="primary" seed="claim-go" disabled={!role || busy} onClick={go}>
             {role ? `Claim the ${roleName(role)}` : "Pick a role"}
           </Button>
         </div>

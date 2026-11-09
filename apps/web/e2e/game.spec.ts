@@ -199,12 +199,12 @@ test("the bank board: tap a room to pick it, see who you saw and the alibi claim
   await expect(card.getByText("You claimed to be the Lookout. One claim between meetings")).toBeVisible();
   await expect(card.getByRole("button", { name: "Claim role" })).toHaveCount(0);
 
-  // The result window (6 s): the board shows the resolved round, with you in the Office; the claim moves next to the alibi button.
-  const alibi = page.locator(".alibi");
+  // The result window (6 s): the board shows the resolved round, with you in the Office; the plan board offers the alibi for it.
+  const alibi = page.locator(".plan__alibi");
   await expect(alibi).toBeVisible({ timeout: 45_000 });
   await expect(board.getByText(/as you saw it/)).toBeVisible();
   await expect(board.locator(".bank-room.is-selected[data-room=office]")).toBeVisible();
-  await expect(alibi.getByText("You claimed to be the Lookout. One claim between meetings")).toBeVisible();
+  await expect(card.getByText("You claimed to be the Lookout. One claim between meetings")).toBeVisible();
   expect(errors).toEqual([]);
   await idle.close();
 });
