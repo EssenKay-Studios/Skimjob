@@ -1,4 +1,4 @@
-/* Game screen (M2-6): HUD, seats, move / alibi panels, records, game over.
+/* Game screen (M2-6): HUD, seats, move panel, records, game over.
    ui-style §8 (in-game HUD), §10 (mobile), "Applying this to Skimjob". Tokens only. */
 
 .game-page {
@@ -324,12 +324,6 @@ html.chat-sheet-open body {
 }
 .move__status {
   flex: 1 1 220px;
-}
-.alibi__actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px 12px;
 }
 
 /* ---------- Bank board (M2-9 art) ---------- */

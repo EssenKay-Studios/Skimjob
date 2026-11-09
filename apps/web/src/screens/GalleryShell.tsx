@@ -9,6 +9,7 @@ import { ArrowBack, Bubble, Clock, Door, Evidence, Star } from "../components/ic
 import { SketchFrame } from "../components/SketchFrame";
 import { Underline } from "../components/Underline";
 import { CaseBoardDemo } from "./GalleryNotes";
+import { PlanDemo } from "./GalleryPlan";
 import { navigate } from "../router";
 import { TopBar } from "./TopBar";
 
@@ -18,7 +19,7 @@ const PANELS: readonly ShellPanel[] = [
   { id: "crew", title: "Crew", place: "left", tab: { icon: <Star /> }, node: <Placeholder>Seats and who has locked in.</Placeholder> },
   { id: "case", title: "Case", place: "left", tab: { icon: <Evidence /> }, node: <CaseBoardDemo seed="shell-case" /> },
   { id: "chat", title: "Chat", place: "left", tab: { icon: <Bubble />, badge: 3 }, node: <Placeholder>The crew chat.</Placeholder> },
-  { id: "plan", title: "Plan board", place: "centre", tab: { icon: <Door /> }, node: <Placeholder>Who says they are going where.</Placeholder> },
+  { id: "plan", title: "Plan board", place: "centre", tab: { icon: <Door /> }, node: <PlanDemo seed="shell-plan" /> },
   { id: "round", title: "This round", place: "right", tab: { icon: <Clock /> }, node: <Placeholder>Your move and its preview.</Placeholder> },
   { id: "pick", title: "Pick a room", place: "sheet", node: <Placeholder>The rooms to choose from.</Placeholder> },
   { id: "grab", title: "Grab and split", place: "sheet", node: <Placeholder>Coins, the duffel and your pocket.</Placeholder> },

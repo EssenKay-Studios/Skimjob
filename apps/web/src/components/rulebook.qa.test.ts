@@ -97,7 +97,7 @@ describe("QA: the Bail chip's InfoTip — design §12, §15.6", () => {
   it("is a native button with an accessible name, reachable by Tab (no tabindex=-1)", () => {
     const v = view(config(), ["lookout", "mole", "hacker", "detective", "priest"]);
     const withBail = { ...v, me: { ...v.me, roleState: { ...v.me.roleState, bail: true } } } as PlayerView;
-    const h = html(createElement(RoleCard, { view: withBail, send: async () => ({ ok: true }) as never, claim: false }));
+    const h = html(createElement(RoleCard, { view: withBail, send: async () => ({ ok: true }) as never }));
     const perks = h.slice(h.indexOf('aria-label="Your perks"'));
     expect(perks).toMatch(/<button[^>]*aria-label="About Bail"/);
     expect(perks.match(/<button[^>]*aria-label="About Bail"[^>]*>/)![0]).not.toContain('tabindex="-1"');
