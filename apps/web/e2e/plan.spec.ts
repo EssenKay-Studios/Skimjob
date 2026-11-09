@@ -1,92 +1,59 @@
-import { expect as baseExpect, test, type Browser, type Page } from "@playwright/test";
+import { expect as baseExpect, test, type Page } from "@playwright/test";
 import { startGame } from "./setupGame";
 
 const expect = baseExpect.configure({ timeout: 15_000 });
 
-// S3b.4 acceptance (design §10): the plan board's live channel. There is no board
-// UI yet (S4.3), so each player's page opens the game socket itself and speaks the
-// wire format: one player's room claim, power claim and "I agree" reach the other
-// live, either can put the other's avatar on the proposed plan, and a forged actor is refused.
+// S4.3 acceptance (design §10): the plan board on the game screen. Two players and a bot: one
+// claims a room, the other puts that player's head on another room, both agree and one pledges
+// a power; each sees the other's edits live, in the ledger and on the board, with 44 px targets.
 
-interface Probe {
-  board: { round: number; entries: { player: string; room: string | null; power: { role: string; target: string } | null; agreed: boolean }[] } | null;
-  replies: Record<string, { ok?: true; rejected?: true; reason?: string }>;
-  ws: WebSocket;
-}
-declare global {
-  interface Window {
-    __plan?: Probe;
-  }
-}
+const board = (p: Page) => p.getByRole("region", { name: "Plan board" });
 
-async function player(browser: Browser, page: Page) {
-  const ctx = await browser.newContext({ viewport: page.viewportSize()! });
-  return ctx.newPage();
-}
-
-/** Opens the game socket in `page` and waits for its first frames (the board comes before presence). */
-async function openChannel(page: Page, gameId: string) {
-  await page.goto("/");
-  await page.evaluate(
-    (id) =>
-      new Promise<void>((resolve) => {
-        const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/games/${id}/ws`);
-        const probe: Probe = { board: null, replies: {}, ws };
-        window.__plan = probe;
-        ws.onmessage = (e) => {
-          const m = JSON.parse(String(e.data));
-          if (m.plan) probe.board = m.plan;
-          if (m.id) probe.replies[m.id] = m;
-          if (m.presence) resolve();
-        };
-      }),
-    gameId,
-  );
-}
-
-/** Sends `{ plan, id }` and returns the server's reply to it. */
-async function post(page: Page, id: string, plan: unknown) {
-  await page.evaluate(([i, p]) => window.__plan!.ws.send(JSON.stringify({ id: i, plan: p })), [id, plan] as const);
-  await expect.poll(() => page.evaluate((i) => window.__plan!.replies[i] ?? null, id)).not.toBeNull();
-  return page.evaluate((i) => window.__plan!.replies[i]!, id);
-}
-
-const board = (page: Page) => page.evaluate(() => window.__plan!.board);
-
-test("two players see each other's plan entry live @plan", async ({ page, browser }) => {
+test("two players plan together on the board, live, with the ledger linked to the heads @plan", async ({ page, browser }) => {
   test.setTimeout(90_000);
-  const guest = await player(browser, page);
+  const guest = await (await browser.newContext({ viewport: page.viewportSize()! })).newPage();
   // One-week preset: nothing moves on while we plan.
   const game = await startGame(page.request, { bots: 1, guests: [guest.request], sessionLength: "1w" });
-  await openChannel(page, game.id);
-  await openChannel(guest, game.id);
-  // design §10: the bot took its spot as the round started (its own room, agreed); the rest is the people's.
-  const bots = (await board(page))!.entries.map((e) => e.player);
-  expect(await board(page)).toMatchObject({ round: 1, entries: [{ player: bots[0], agreed: true }] });
-  expect(bots).toHaveLength(1);
-  const people = async (p: Page) => {
-    const b = await board(p);
-    return b && { ...b, entries: b.entries.filter((e) => !bots.includes(e.player)) };
-  };
+  for (const p of [page, guest]) {
+    await p.goto(`/game/${game.id}`);
+    await expect(board(p)).toBeVisible();
+  }
+  // The bot took its spot and agreed as the round started.
+  await expect(board(page).getByText("1 of 3 agreed")).toBeVisible();
 
-  expect(await post(page, "a1", { room: "office", agree: true })).toMatchObject({ ok: true });
-  await expect.poll(() => people(guest)).toMatchObject({ round: 1, entries: [{ room: "office", power: null, agreed: true }] });
-  const hostId = (await people(guest))!.entries[0]!.player;
+  // The host claims the Office as their spot; the guest sees the line.
+  await board(page).getByRole("button", { name: /^Office: claim as your spot/ }).click();
+  await expect(board(guest).getByRole("button", { name: /^Host: Office\./ })).toBeVisible();
 
-  expect(await post(guest, "g1", { room: "vault", power: { role: "hacker", target: "vault" } })).toMatchObject({ ok: true });
-  await expect.poll(() => people(page)).toMatchObject({
-    entries: [
-      { player: hostId, room: "office", agreed: true },
-      { room: "vault", power: { role: "hacker", target: "vault" }, agreed: false },
-    ],
-  });
+  // The guest taps the host's head, then the Vault: the host's head is on the proposed plan, their claim untouched.
+  await board(guest).getByRole("group", { name: "Crew not on the plan" }).getByRole("button", { name: /^Host\. Show claims/ }).click();
+  await board(guest).getByRole("button", { name: /^Vault: put Host here/ }).click();
+  await expect(board(page).locator('.plan__room[data-room="vault"]').getByRole("button", { name: /^Host \(you\)/ })).toBeVisible();
+  await expect(board(page).getByRole("button", { name: /^Host: Office\./ })).toBeVisible();
 
-  // Anyone may put any avatar on the proposed plan, apart from the claims.
-  expect(await post(guest, "g4", { place: { player: hostId, room: "vault" } })).toMatchObject({ ok: true });
-  await expect.poll(async () => (await board(page))!.entries.find((e) => e.player === hostId)).toMatchObject({ placed: "vault", room: "office", agreed: true });
+  // Agreeing counts up for everyone; the host pledges a power on the guest.
+  await board(guest).getByRole("button", { name: "I agree", exact: true }).click();
+  await expect(board(page).getByText("2 of 3 agreed")).toBeVisible();
+  await board(page).getByRole("button", { name: "Claim a power" }).click();
+  await board(page).getByRole("group", { name: "Role to pledge" }).getByRole("button", { name: "Detective" }).click();
+  // design §10: a power claim names a room or another player, never yourself.
+  const targets = board(page).getByRole("group", { name: "Player to pledge on" });
+  await expect(targets.getByRole("button", { name: "Host" })).toHaveCount(0);
+  await targets.getByRole("button", { name: "Guest 1" }).click();
+  await board(page).getByRole("button", { name: "Pledge", exact: true }).click();
+  await expect(board(guest).getByRole("button", { name: /^Host: Office, Detective on Guest 1\./ })).toBeVisible();
 
-  // Nobody writes another seat's claims, and a claim must name something in the game.
-  expect(await post(guest, "g2", { room: "office", player: hostId })).toMatchObject({ rejected: true, reason: 'unknown plan field "player"' });
-  expect(await post(guest, "g3", { room: "nowhere" })).toMatchObject({ rejected: true, reason: "no such room" });
-  expect((await board(page))!.entries.find((e) => e.player === hostId)).toMatchObject({ room: "office" });
+  // Tapping a ledger line shows that player's claims and marks their head.
+  await board(guest).getByRole("button", { name: /^Host: Office, Detective/ }).click();
+  await expect(board(guest).getByRole("group", { name: "Host's claims" })).toContainText("Detective → Guest 1");
+  await expect(board(guest).getByRole("button", { name: /^Host\. Show claims/ })).toHaveAttribute("aria-pressed", "true");
+
+  // Every target is at least 44 px.
+  const small = await board(page).evaluate((el) =>
+    [...el.querySelectorAll<HTMLElement>("button, summary")]
+      .map((b) => ({ b, r: b.getBoundingClientRect() }))
+      .filter(({ r }) => r.width > 0 && (r.width < 44 || r.height < 44))
+      .map(({ b, r }) => `${b.getAttribute("aria-label") ?? b.textContent} ${Math.round(r.width)}x${Math.round(r.height)}`),
+  );
+  expect(small).toEqual([]);
 });

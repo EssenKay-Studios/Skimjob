@@ -153,7 +153,7 @@ describe("move panel", () => {
 });
 
 describe("alibis", () => {
-  it("offers the round that just resolved between rounds and remembers your claim (design §11.3)", () => {
+  it("offers the latest resolved round in every phase and remembers your claim (design §11.3)", () => {
     let s = createGame(config(3));
     expect(alibiState(viewFor(s, "p1"))).toBeNull();
     s = run(s, round(1));
@@ -165,9 +165,11 @@ describe("alibis", () => {
     const meeting = run(s, { type: "callEmergency", player: "p2" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: "emergency-1" } });
     expect(meeting.phase.kind).toBe("meeting");
     expect(alibiState(viewFor(meeting, "p2"))).toEqual({ round: 1, posted: null });
-    // Not while the next round is planned (the engine still takes one; the panel sits between rounds).
+    // Also while the next round is planned: the engine takes an alibi for any resolved round, in any phase.
     s = run(s, { type: "advance", deadline: { kind: "result", round: 1 } });
-    expect(alibiState(viewFor(s, "p1"))).toBeNull();
+    expect(s.phase.kind).toBe("planning");
+    expect(alibiState(viewFor(s, "p1"))).toEqual({ round: 1, posted: "vault" });
+    expect(alibiState(viewFor(s, "p2"))).toEqual({ round: 1, posted: null });
   });
 });
 

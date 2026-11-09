@@ -19,6 +19,7 @@ import { MEETING_TITLE } from "../game/meeting";
 import { BankCutaway } from "../art/BankCutaway";
 import { BANK_ROOMS, type BankRoomId } from "../art/bankLayout";
 import { CrookAvatar } from "../art/Crook";
+import { PlanBoard } from "../components/PlanBoard";
 import { Reveal } from "../components/Reveal";
 import { AwayRecap } from "../components/AwayRecap";
 import { CaseBoard } from "../components/CaseBoard";
@@ -50,8 +51,9 @@ import {
   type Presence,
   type Timer,
 } from "../game/hud";
+import { lastPlan } from "../game/plan";
 import { slotText } from "../game/meeting";
-import { ClaimRole, DecidingPanel, MeetingNow, MeetingsPanel, ResultsBanner, RoleCard } from "./Meetings";
+import { DecidingPanel, MeetingNow, MeetingsPanel, ResultsBanner, RoleCard } from "./Meetings";
 import { useCountdown, useGame, useNow, type ClientCommand, type Connection, type GameChannel, type Reply } from "../game/useGame";
 import { api, ApiError, sentence, UNREACHABLE, type LobbyView } from "../api";
 import { navigate } from "../router";
@@ -193,7 +195,7 @@ function Board({ view, timers, offset, send, autoMeetings, gameId, channel, dmNo
         <BankBoard view={view} pick={planning !== null ? pick : null} />
         <Seats view={view} presence={channel.presence} offset={offset} marks={board.board} />
         <div className="game-grid__action">
-          {outcome ? <GameOver view={view} /> : <Actions view={view} timers={timers} offset={offset} send={send} autoMeetings={autoMeetings} pick={pick} />}
+          {outcome ? <GameOver view={view} /> : <Actions view={view} timers={timers} offset={offset} send={send} autoMeetings={autoMeetings} pick={pick} channel={channel} />}
           {!outcome && <CrewBoard people={people} board={board} />}
           {view.reveal && <Reveal summary={view.reveal.summary} ctx={ctx} looks={seatLooks(view)} />}
         </div>
@@ -378,8 +380,7 @@ function Seats({ view, presence, offset, marks }: { view: PlayerView; presence: 
   );
 }
 
-function Actions({ view, timers, offset, send, autoMeetings, pick }: BoardProps & { pick: Pick }) {
-  const alibi = alibiState(view);
+function Actions({ view, timers, offset, send, autoMeetings, pick, channel }: BoardProps & { pick: Pick; channel: GameChannel }) {
   const p = view.phase;
   const voting = p.kind === "meeting" || p.kind === "shakedownPending";
   return (
@@ -387,16 +388,44 @@ function Actions({ view, timers, offset, send, autoMeetings, pick }: BoardProps 
       <ResultsBanner view={view} />
       {p.kind === "meeting" && <MeetingNow view={view} timers={timers} offset={offset} send={send} />}
       {p.kind === "shakedownPending" && <DecidingPanel view={view} timers={timers} offset={offset} />}
-      {alibi && <AlibiPanel view={view} round={alibi.round} posted={alibi.posted} send={send} />}
+      <PlanPanel view={view} send={send} channel={channel} />
       {p.kind === "planning" ? (
         <MovePanel key={p.round} view={view} round={p.round} timers={timers} offset={offset} send={send} autoMeetings={autoMeetings} pick={pick} />
       ) : voting ? null : (
         <WaitPanel view={view} />
       )}
-      {/* Between rounds the claim sits next to the alibi button instead of on the card. */}
-      <RoleCard view={view} send={send} claim={!alibi} />
+      <RoleCard view={view} send={send} />
       {!voting && <MeetingsPanel view={view} timers={timers} offset={offset} send={send} autoMeetings={autoMeetings} />}
     </>
+  );
+}
+
+/** design §10: the live board while a round is planned, its snapshot after, and where you post an alibi for the round that just resolved (§11.3). */
+function PlanPanel({ view, send, channel }: { view: PlayerView; send: BoardProps["send"]; channel: GameChannel }) {
+  const toast = useToast();
+  const looks = seatLooks(view);
+  const round = view.phase.kind === "planning" ? view.phase.round : null;
+  const live = channel.plan;
+  return (
+    <SketchFrame as="section" seed="game-plan" radius={16} shadow={0.45} className="panel" aria-labelledby="plan-h">
+      <div className="panel__head">
+        <h2 id="plan-h" className="panel__title">
+          <Underline seed="plan-u">Plan board</Underline>
+        </h2>
+      </div>
+      <PlanBoard
+        seats={seatsOf(view).map((s) => ({ ...s, look: looks.get(s.id)?.look ?? 0, tag: looks.get(s.id)?.tag }))}
+        rooms={roomOptions(view).map((r) => ({ id: r.id, name: r.name, closed: r.closed }))}
+        board={round === null ? null : live?.round === round ? live : { round, entries: [] }}
+        onEdit={async (edit) => {
+          const r = await channel.sendPlan(edit);
+          if (!r.ok) toast(sentence(r.reason), "bad");
+        }}
+        last={lastPlan(view)}
+        alibi={alibiState(view)}
+        onAlibi={async (round, room) => void (await send({ type: "postAlibi", round, room: room as RoomId }, "Alibi posted."))}
+      />
+    </SketchFrame>
   );
 }
 
@@ -499,50 +528,6 @@ function MovePanel({ view, round, timers, offset, send, pick }: BoardProps & { r
             ? `Locked in: ${roomName(mine.room)}${mine.pocket > 0 ? `, pocket ${mine.pocket}` : ", all to the duffel"}. You can change it until the deadline.`
             : `Miss the deadline and you go to the ${roomName(defaultRoom(view))}, handing everything in.`}
         </p>
-      </div>
-    </SketchFrame>
-  );
-}
-
-function AlibiPanel({ view, round, posted, send }: { view: PlayerView; round: number; posted: RoomId | null; send: BoardProps["send"] }) {
-  const [room, setRoom] = useState<RoomId | null>(null);
-  const [busy, setBusy] = useState(false);
-  const post = async () => {
-    if (!room) return;
-    setBusy(true);
-    await send({ type: "postAlibi", round, room }, "Alibi posted.");
-    setBusy(false);
-  };
-  return (
-    <SketchFrame as="section" seed="game-alibi" radius={16} shadow={0.45} fill="var(--card-sand)" className="panel alibi" aria-labelledby="alibi-h">
-      <div className="panel__head">
-        <h2 id="alibi-h" className="panel__title">
-          <Underline seed={`alibi-${round}`}>Round {round} alibi</Underline>
-        </h2>
-      </div>
-      {posted ? (
-        <p>
-          You told the crew you were in the <b>{roomName(posted)}</b>. Everyone can see it.
-        </p>
-      ) : (
-        <>
-          <p>Where do you say you were? Everyone sees it; it doesn't have to be true.</p>
-          <div className="move__chips" role="group" aria-label="Alibi room">
-            {view.rooms.map((r) => (
-              <Button key={r} variant="toggle" seed={`alibi-${r}`} pressed={room === r} onClick={() => setRoom(r)}>
-                {roomName(r)}
-              </Button>
-            ))}
-          </div>
-        </>
-      )}
-      <div className="alibi__actions">
-        {!posted && (
-          <Button variant="secondary" seed="alibi-post" disabled={!room || busy} onClick={post}>
-            Post alibi
-          </Button>
-        )}
-        <ClaimRole view={view} send={send} where="alibi" />
       </div>
     </SketchFrame>
   );

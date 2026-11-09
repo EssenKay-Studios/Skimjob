@@ -209,23 +209,24 @@ export function roomOptions(view: PlayerView): RoomOption[] {
 /** The room a missed deadline sends you to. design §5.1 */
 export const defaultRoom = (view: PlayerView): RoomId => jobOf(view).defaultRoom;
 
+/** The latest round that has resolved (0 before the first). */
+const lastResolved = (view: PlayerView): number => (view.phase.kind === "planning" ? view.phase.round - 1 : view.phase.kind === "result" ? view.phase.round : view.round);
+
 /** The latest round you missed, if it is the round that just resolved (shown on the move panel); room null when you sat it out. design §3.3 */
 export function justMissed(view: PlayerView): { readonly round: number; readonly room: RoomId | null } | null {
   const latest = view.caseFile.filter((x) => x.event.type === "defaultMoveAssigned").at(-1)?.event;
   if (!latest || latest.type !== "defaultMoveAssigned") return null;
-  const lastResolved = view.phase.kind === "planning" ? view.phase.round - 1 : view.phase.kind === "result" ? view.phase.round : view.round;
-  return latest.round === lastResolved ? { round: latest.round, room: latest.move?.room ?? null } : null;
+  return latest.round === lastResolved(view) ? { round: latest.round, room: latest.move?.room ?? null } : null;
 }
 
 /**
- * Between rounds (the result window, or a meeting, awaited or open), the round
- * that just resolved and the room you already claimed for it (if any). Alibis
- * have no window (design §11.3); this is where the panel offers one.
+ * The latest resolved round and the room you already claimed for it (if any),
+ * in every phase until the game ends: alibis have no window (design §11.3), so
+ * the plan panel offers one for as long as the game runs.
  */
 export function alibiState(view: PlayerView): { readonly round: number; readonly posted: RoomId | null } | null {
-  const k = view.phase.kind;
-  if (k === "setup" || k === "planning" || k === "ended") return null;
-  const round = view.round;
+  const round = lastResolved(view);
+  if (view.phase.kind === "setup" || view.phase.kind === "ended" || round < 1) return null;
   let posted: RoomId | null = null;
   for (const { event: e } of view.ledger) if (e.type === "said" && e.statement.kind === "alibi" && e.statement.player === view.me.id && e.statement.round === round) posted = e.statement.room;
   return { round, posted };
