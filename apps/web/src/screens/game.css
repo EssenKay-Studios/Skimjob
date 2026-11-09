@@ -390,7 +390,7 @@
 .shell__left .shell-chat {
   height: 100%;
   min-height: 0;
-  padding: 8px 0 6px;
+  padding: 12px 12px 12px; /* inside the frame, like the sheet: the outline never touches the text */
 }
 .shell__left .chat__compose-row {
   flex-wrap: wrap;
