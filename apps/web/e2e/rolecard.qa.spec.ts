@@ -135,11 +135,15 @@ for (const list of ["exact", "possible", "hidden"] as const) {
       await expect(book).toHaveCount(0);
 
       // A role tip and a meter tip (Wanted), each ending with "More in This game".
+      // Re-check (QA round 1): the role tip is body text, not the h2's Pangolin, and the h2 is just the name.
+      await expect(panel.getByRole("heading", { level: 2, name: myRole, exact: true })).toBeVisible();
+      await panel.getByRole("button", { name: `About ${myRole}` }).click();
+      await expect(pop(page).getByRole("button", { name: "More in This game" })).toBeVisible();
+      const fonts = await pop(page).evaluate((el) => [el, ...el.querySelectorAll("p")].map((n) => `${getComputedStyle(n).fontFamily} ${getComputedStyle(n).fontWeight}`));
+      for (const f of fonts.slice(1)) expect(f, `${width} role tip body`).not.toMatch(/Pangolin|700/);
+      await shot(page, `${list}-${width}-roletip`);
+      await page.keyboard.press("Escape");
       if (list === "exact") {
-        await panel.getByRole("button", { name: `About ${myRole}` }).click();
-        await expect(pop(page).getByRole("button", { name: "More in This game" })).toBeVisible();
-        await shot(page, `${list}-${width}-roletip`);
-        await page.keyboard.press("Escape");
         const wanted = page.getByRole("button", { name: "About Wanted" });
         await wanted.scrollIntoViewIfNeeded();
         await wanted.click();
@@ -230,6 +234,24 @@ test("keyboard: Tab reaches every tip in the rulebook, and Esc on a pinned tip l
   await page.keyboard.press("Escape");
   await expect(book).toHaveCount(0);
   await expect(rules).toBeFocused();
+});
+
+test("a tip opened inside the rulebook looks like any other tip: 16 px title, no section squiggle (board 4b) @roles", async ({ page }) => {
+  test.setTimeout(90_000);
+  const panel = await botGame(page, "exact");
+  const title = () => pop(page).locator("h3").evaluate((el) => { const s = getComputedStyle(el); return `${s.fontSize} ${s.textDecorationLine}`; });
+  await page.getByRole("button", { name: "About Wanted" }).click();
+  const hud = await title();
+  expect(hud).toBe("16px none");
+  await page.keyboard.press("Escape");
+  await panel.getByRole("button", { name: "Rules", exact: true }).click();
+  const book = page.getByRole("dialog", { name: "This game" });
+  const perk = book.getByRole("list", { name: "This game's black market" }).getByRole("button", { name: /^About / }).first();
+  for (const [what, tip] of [["perk", perk], ["room", book.getByRole("button", { name: "About Vault" })]] as const) {
+    await tip.click();
+    expect(await title(), `${what} tip title`).toBe(hud);
+    await page.keyboard.press("Escape");
+  }
 });
 
 test("the bell tip in the gallery at every launch width (board 4b) @infotip", async ({ page }) => {
