@@ -24,6 +24,7 @@ import { roleInfo, roleListInfo } from "../game/roles";
 import { RoleCardDialog, RolesInPlay } from "./RoleCard";
 import { Rulebook } from "./Rulebook";
 import { GameOver } from "../screens/Game";
+import { RoleCard } from "../screens/Meetings";
 
 const html = (el: ReactElement) => renderToStaticMarkup(el);
 
@@ -203,6 +204,25 @@ describe("the role card's Use power button — design §11.1, §17.2", () => {
   it("shows your own card with no opponent explanation, and the role list chips beneath elsewhere", () => {
     expect(card("mole")).toContain("Your role · secret");
     expect(card("mole")).not.toContain("someone lying");
+  });
+});
+
+// ---------------------------------------------------------------- role panel
+
+describe("the role panel (design §11, §15.6)", () => {
+  const view = viewFor(game(config(4), { roles: ["locksmith"] }), "p0");
+
+  it("keeps the tip out of the heading: the tip popover must not inherit the h2's font, and the name stays plain", () => {
+    const ui = html(createElement(RoleCard, { view, send: async () => ({ ok: true as const }) }));
+    const heading = /<h2 id="role-h"[^>]*>(.*?)<\/h2>/.exec(ui)![1]!;
+    expect(heading).not.toContain("infotip");
+    expect(heading).not.toContain("About ");
+    expect(ui).toContain('aria-label="About Locksmith"');
+  });
+
+  it("the rulebook heading matches the panel's for a Possible list", () => {
+    const v = viewFor(game(config(4, { roleList: "possible" })), "p0");
+    expect(html(createElement(Rulebook, { view: v }))).toContain(">Roles that could be in play</h3>");
   });
 });
 

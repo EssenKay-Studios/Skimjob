@@ -33,7 +33,7 @@ export function Rulebook({ view }: { view: PlayerView }) {
     // The tips in here are already in This game: no "More in This game" link.
     <MoreInGame.Provider value={null}>
       <div className="rulebook">
-        <Section id="roles" title="Roles in play" note={list.note}>
+        <Section id="roles" title={list.title} note={list.note}>
           {list.roles.length === 0 ? (
             <p className="meta">The role list is hidden in this game.</p>
           ) : (

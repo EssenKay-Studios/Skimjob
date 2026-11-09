@@ -434,9 +434,12 @@ export function RoleCard({ view, send, claim = true }: { view: PlayerView; send:
       <div className="role-card__head">
         <div>
           <p className="meta">Your role · only you see this</p>
-          <h2 id="role-h" className="role-card__name">
-            <RoleIcon role={view.me.role} size={28} /> {roleName(view.me.role)} <InfoTip info={{ kind: "role", id: view.me.role }} />
-          </h2>
+          <div className="role-card__title">
+            <h2 id="role-h" className="role-card__name">
+              <RoleIcon role={view.me.role} size={28} /> {roleName(view.me.role)}
+            </h2>
+            <InfoTip info={{ kind: "role", id: view.me.role }} />
+          </div>
         </div>
         <span className="role-card__stash">
           <span className="meta">stash</span> <b className="num">{view.me.stash}</b>

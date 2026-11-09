@@ -85,6 +85,12 @@ test("a real game: the role card, roles in play, Rules, and More in This game fr
   await expect(panel).toContainText("only you see this", { timeout: 20_000 });
   await expect(panel).not.toContainText(/token/i);
 
+  // The tip beside your role name is body text (Inter), not the heading's hand lettering.
+  await panel.locator(".role-card__title").getByRole("button", { name: /^About / }).click();
+  const tipFont = await page.locator(".infotip__pop:popover-open p").evaluate((el) => getComputedStyle(el).fontFamily);
+  expect(tipFont).not.toMatch(/Pangolin/);
+  await page.keyboard.press("Escape");
+
   // The card: Escape closes it and stays in the game.
   await panel.getByRole("button", { name: "Role card", exact: true }).click();
   const card = page.getByRole("dialog").filter({ hasText: "Your role · secret" });

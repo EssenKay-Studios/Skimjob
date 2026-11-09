@@ -217,6 +217,11 @@
   justify-content: space-between;
   gap: 4px 14px;
 }
+.role-card__title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
 .role-card__name {
   font-size: 22px;
   color: var(--clay-d);
