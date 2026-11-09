@@ -1,7 +1,7 @@
 // QA (PR #201, S4.2): the move panel's tap alternative by keyboard alone, the
 // coins conserved through taps and drags, and no R6 words. design §3.2, §20.1
 import { expect, test, type Page } from "@playwright/test";
-import { startGame } from "./setupGame";
+import { openPanel, startGame } from "./setupGame";
 import { bagCoins, dragTo, pickRoom } from "./move";
 
 /** Tabs forward until `match` holds for the focused element (at most `max` presses). */
@@ -39,6 +39,7 @@ test("the grab and the split work by keyboard alone, and taps and drags keep eve
 }) => {
   const game = await startGame(page.request, { bots: 5, sessionLength: "1w" });
   await page.goto(`/game/${game.id}`);
+  await openPanel(page, "This round"); // below 1024 px the move panel is in this sheet
   await expect(
     page.getByRole("heading", { name: "Round 1 · Pick your room", level: 2 }),
   ).toBeVisible();
