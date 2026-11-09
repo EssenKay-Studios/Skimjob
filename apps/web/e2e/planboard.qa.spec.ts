@@ -2,6 +2,7 @@ import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { expect as baseExpect, test, type APIRequestContext, type Page } from "@playwright/test";
+import { openPanel } from "./setupGame";
 
 const expect = baseExpect.configure({ timeout: 20_000 });
 
@@ -36,11 +37,13 @@ async function start(host: APIRequestContext, guests: APIRequestContext[], seats
 }
 
 /** Each width: no sideways scroll, every plan-panel target at least 44 px, a panel and a page shot. */
-async function sweep(page: Page, label: string) {
+/** `widths` stays below 1024 px for steps with open pop-ups: crossing into the laptop layout remounts the panel and closes them. */
+async function sweep(page: Page, label: string, widths: readonly number[] = WIDTHS) {
   mkdirSync(SHOTS, { recursive: true });
-  for (const w of WIDTHS) {
+  for (const w of widths) {
     await page.setViewportSize({ width: w, height: w < 700 ? 800 : 900 });
     await page.waitForTimeout(250);
+    await openPanel(page, "This round");
     const over = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     expect(over, `${label} @${w}: horizontal overflow`).toBeLessThanOrEqual(0);
     const small = await panel(page).evaluate((el) =>
@@ -59,6 +62,7 @@ async function sweep(page: Page, label: string) {
     await page.screenshot({ path: join(SHOTS, `${label}-${w}-page.png`), fullPage: w >= 1024 });
   }
   await page.setViewportSize({ width: 390, height: 844 });
+  await openPanel(page, "This round");
 }
 
 /** The ledger as one string per line, from the accessible names (seat order). */
@@ -77,6 +81,7 @@ for (const seats of [6, 12]) {
     const id = await start(page.request, guests.map((g) => g.request), seats);
     const guest = guests[0]!;
     for (const p of [page, ...guests]) await p.goto(`/game/${id}`);
+    for (const p of [page, ...guests]) await openPanel(p, "This round");
     for (const p of [page, ...guests]) await expect(panel(p)).toBeVisible();
     // Bots took their spot and agreed as the round started.
     await expect(panel(page).getByText(`${seats - 1 - guestCount} of ${seats} agreed`)).toBeVisible();
@@ -118,14 +123,14 @@ for (const seats of [6, 12]) {
     await panel(page).getByRole("group", { name: "Role to pledge" }).getByRole("button", { name: "Detective" }).click();
     // §11.1: no power can target yourself, so your own seat is no pledge target (the server refuses it).
     await expect(panel(page).getByRole("group", { name: "Player to pledge on" }).getByRole("button", { name: HOST })).toHaveCount(0);
-    await sweep(page, `s${seats}-pledge-picker`);
+    await sweep(page, `s${seats}-pledge-picker`, WIDTHS.filter((w) => w < 1024));
     await panel(page).getByRole("group", { name: "Player to pledge on" }).getByRole("button", { name: GUESTS[0] }).click();
     await panel(page).getByRole("button", { name: "Pledge", exact: true }).click();
     await expect(panel(guest).getByRole("button", { name: new RegExp(`^${HOST}: Security, Detective on ${GUESTS[0]}\\.`) })).toBeVisible();
     await sweep(page, `s${seats}-live`);
     await panel(page).getByRole("button", { name: new RegExp(`^${GUESTS[0]}: Lobby\\.`) }).click();
     await expect(panel(page).getByRole("group", { name: `${GUESTS[0]}'s claims` })).toBeVisible();
-    await sweep(page, `s${seats}-live-popup`);
+    await sweep(page, `s${seats}-live-popup`, WIDTHS.filter((w) => w < 1024));
 
     // Everyone human locks in; the round resolves and the snapshot shows.
     await page.locator('.room-tile[data-room="Vault"]').click();
