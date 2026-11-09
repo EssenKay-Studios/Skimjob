@@ -26,6 +26,7 @@ import {
   stashTrend,
   whyText,
   starText,
+  endingText,
 } from "../game/reveal";
 import { Button } from "./Button";
 import { Chip } from "./Chip";
@@ -357,5 +358,18 @@ function RoundSheet({
         <p className="meta">Nothing hidden happened.</p>
       )}
     </article>
+  );
+}
+
+/** How the game ended, and on a failure that the ranking is a loss. */
+export function EndingNote({ outcome, name }: { outcome: Parameters<typeof endingText>[0]; name: (id: string) => string }) {
+  const e = endingText(outcome);
+  const who = outcome.winners.map(name);
+  const winners = who.length > 1 ? `${who.slice(0, -1).join(", ")} and ${who[who.length - 1]}` : (who[0] ?? "");
+  const verb = who.length > 1 || who[0] === "You" ? e.badge.replace(/^Wins/, "win") : e.badge.replace(/^Wins/, "wins");
+  return (
+    <p className={e.loss ? "ending is-loss" : "ending"}>
+      <b>{e.title}.</b> {outcome.result === "success" ? "The biggest stash wins." : e.loss ? "The ranking is marked as a loss." : `${winners} ${verb}.`}
+    </p>
   );
 }

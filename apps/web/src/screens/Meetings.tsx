@@ -3,7 +3,7 @@
 // Bail choice window ("the crew is deciding…"); the results banner; and your
 // role card. Everything reads the player's own
 // view through game/meeting.ts. design §11.1–§11.5, ui-style "Vote window"
-import { useEffect, useId, useState } from "react";
+import { useContext, useEffect, useId, useState } from "react";
 import { PERK_TEXT } from "@skimjob/content";
 import type { PlayerId, PlayerView, VoteChoice } from "@skimjob/engine";
 import { Avatar } from "../components/Avatar";
@@ -12,9 +12,10 @@ import { Chip } from "../components/Chip";
 import { Banner, ClockFace, DialogSheet, TallyBars, type TallyBar } from "../components/MeetingKit";
 import { SketchFrame } from "../components/SketchFrame";
 import { TextField } from "../components/TextField";
-import { MyRoleFacts, RoleList, RulebookButton } from "../components/Extension";
-import { InfoTip } from "../components/InfoTip";
+import { InfoTip, MoreInGame } from "../components/InfoTip";
+import { RoleCardDialog, RolesInPlay } from "../components/RoleCard";
 import { Underline } from "../components/Underline";
+import { RoleIcon } from "../art/RoleIcon";
 import { roleName } from "../game/describeEvent";
 import { namesOf, type Timer } from "../game/hud";
 import {
@@ -36,6 +37,7 @@ import {
   type MeetingOutcome,
   type Tally,
 } from "../game/meeting";
+import { roleInfo, rolesOf } from "../game/roles";
 import { useCountdown, type ClientCommand, type Reply } from "../game/useGame";
 import "./meetings.css";
 
@@ -422,21 +424,25 @@ export function ResultsBanner({ view }: { view: PlayerView }) {
 
 // ---------------------------------------------------------------- your role card
 
+/** Your role at a glance, the Bail chip, and the role card, the rulebook and the roles in play one tap away. */
 export function RoleCard({ view, send, claim = true }: { view: PlayerView; send: Send; claim?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const openRules = useContext(MoreInGame);
+  const info = roleInfo(view.me.role, rolesOf(view));
   return (
     <SketchFrame as="section" seed="role-card" radius={16} shadow={0.45} fill="var(--card-sand)" className="panel role-card" aria-labelledby="role-h">
       <div className="role-card__head">
         <div>
           <p className="meta">Your role · only you see this</p>
           <h2 id="role-h" className="role-card__name">
-            {roleName(view.me.role)}
+            <RoleIcon role={view.me.role} size={28} /> {roleName(view.me.role)} <InfoTip info={{ kind: "role", id: view.me.role }} />
           </h2>
         </div>
         <span className="role-card__stash">
           <span className="meta">stash</span> <b className="num">{view.me.stash}</b>
         </span>
       </div>
-      <MyRoleFacts view={view} />
+      {info && <p>{info.power}</p>}
       {view.me.roleState.bail && (
         <ul className="role-card__perks" aria-label="Your perks">
           <li>
@@ -446,15 +452,23 @@ export function RoleCard({ view, send, claim = true }: { view: PlayerView; send:
       )}
       {claim && <ClaimRole view={view} send={send} where="card" />}
       <div className="role-card__foot">
-        <RoleList view={view} />
-        <RulebookButton view={view} />
+        <Button variant="small" seed="role-card-open" aria-haspopup="dialog" onClick={() => setOpen(true)}>
+          Role card
+        </Button>
+        {openRules && (
+          <Button variant="small" seed="rules-open" aria-haspopup="dialog" onClick={openRules}>
+            Rules
+          </Button>
+        )}
       </div>
+      <RolesInPlay view={view} />
+      <RoleCardDialog view={view} open={open} onClose={() => setOpen(false)} send={send} claim={<ClaimRole view={view} send={send} where="dialog" />} />
     </SketchFrame>
   );
 }
 
 /** A formal, public, possibly false role claim, once between meetings (R4b; design §8, §12.1). */
-export function ClaimRole({ view, send, where }: { view: PlayerView; send: Send; where: "alibi" | "card" }) {
+export function ClaimRole({ view, send, where }: { view: PlayerView; send: Send; where: "alibi" | "card" | "dialog" }) {
   const claim = claimState(view);
   const [open, setOpen] = useState(false);
   const [role, setRole] = useState<string | null>(null);

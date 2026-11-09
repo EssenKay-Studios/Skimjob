@@ -267,3 +267,7 @@
     animation: none;
   }
 }
+
+.ending.is-loss b {
+  color: var(--bad);
+}

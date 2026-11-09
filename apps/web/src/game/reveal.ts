@@ -59,3 +59,17 @@ export const roundLabel = (r: Pick<RevealRound, "round">): string => (r.round ==
 
 /** One player's stash after each round of the timeline (safe included). */
 export const stashTrend = (summary: RevealSummary, player: string): number[] => summary.rounds.map((r) => r.stashes[player] ?? 0);
+
+type Ending = ({ readonly result: "success" } | { readonly result: "failed"; readonly reason: "bust" | "theft" }) & { readonly winners: readonly string[] };
+
+/**
+ * How the game ended, in one line, and why each winner won. A failed heist's
+ * ranking is a loss only when nobody won it (design §8.3, §8.4, §8.6).
+ */
+export function endingText(outcome: Ending): { title: string; badge: string; loss: boolean } {
+  if (outcome.result === "success") return { title: "Job done: honest enough, and no bust", badge: "Biggest stash", loss: false };
+  const loss = outcome.winners.length === 0;
+  return outcome.reason === "bust"
+    ? { title: `Busted. ${BUST_ROLE_TEXT.replace(/\.$/, "")}`, badge: "Wins over the Rooftop", loss } // design §20.2
+    : { title: "Sunk by theft: too many coins went missing", badge: "Wins a heist sunk by theft", loss };
+}

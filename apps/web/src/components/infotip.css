@@ -56,6 +56,18 @@
   color: var(--ink);
   font-size: 13.5px;
 }
+.infotip__more {
+  align-self: flex-start;
+  min-height: 44px;
+  padding: 0 8px 0 0;
+  border: 0;
+  background: none;
+  color: var(--clay-d);
+  font: 650 13.5px/1.2 var(--font-ui);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
 .infotip__head {
   display: flex;
   align-items: center;

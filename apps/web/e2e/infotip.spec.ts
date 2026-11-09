@@ -1,4 +1,4 @@
-import { TERMS, TIPS } from "@skimjob/content";
+import { ROOM_TEXT, TERMS, TIPS } from "@skimjob/content";
 import { expect, test, type Browser, type Page } from "@playwright/test";
 
 // The InfoTip (design §15.6, §20.5, S3b.1) on the gallery page at the five launch
@@ -197,6 +197,25 @@ test("moving the mouse from one i to the next shows only the next tip @infotip",
   // At once, inside the first tip's 200 ms grace.
   expect(await popover(p).count()).toBe(1);
   await expect(tipButton(p, "Vault")).toHaveAttribute("aria-expanded", "false");
+  await p.context().close();
+});
+
+test("a pinned tip stays open when the mouse hovers another i, and no preview opens until it closes @infotip", async ({ browser }) => {
+  const p = await open(browser, { width: 1280, height: 800 }, false);
+  const vault = tipButton(p, "Vault");
+  await vault.click();
+  await expect(popover(p)).toContainText(ROOM_TEXT.vault!);
+  await tipButton(p, "Mole").hover();
+  await p.waitForTimeout(400);
+  await expect(popover(p)).toHaveCount(1);
+  await expect(popover(p)).toContainText(ROOM_TEXT.vault!);
+  await expect(tipButton(p, "Mole")).toHaveAttribute("aria-expanded", "false");
+  // The pinned tip closes on Esc; then a hover previews again.
+  await p.keyboard.press("Escape");
+  await expect(popover(p)).toHaveCount(0);
+  await p.mouse.move(0, 0);
+  await tipButton(p, "Mole").hover();
+  await expect(tipButton(p, "Mole")).toHaveAttribute("aria-expanded", "true");
   await p.context().close();
 });
 

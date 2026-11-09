@@ -12,14 +12,13 @@ import { Button } from "../components/Button";
 import { Chip } from "../components/Chip";
 import { Clock, Play } from "../components/icons";
 import { WantedStars } from "../components/Bell";
-import { InfoTip } from "../components/InfoTip";
-import { EndingNote } from "../components/Extension";
-import { endingText } from "../game/extension";
+import { InfoTip, MoreInGame } from "../components/InfoTip";
 import { MEETING_TITLE } from "../game/meeting";
 import { BankCutaway } from "../art/BankCutaway";
 import { BANK_ROOMS, type BankRoomId } from "../art/bankLayout";
 import { CrookAvatar } from "../art/Crook";
-import { Reveal } from "../components/Reveal";
+import { EndingNote, Reveal } from "../components/Reveal";
+import { RulebookSheet } from "../components/Rulebook";
 import { AwayRecap } from "../components/AwayRecap";
 import { CaseBoard } from "../components/CaseBoard";
 import { SuspicionBoard, SuspicionMark } from "../components/SuspicionBoard";
@@ -50,6 +49,7 @@ import {
   type Presence,
   type Timer,
 } from "../game/hud";
+import { endingText } from "../game/reveal";
 import { slotText } from "../game/meeting";
 import { ClaimRole, DecidingPanel, MeetingNow, MeetingsPanel, ResultsBanner, RoleCard } from "./Meetings";
 import { useCountdown, useGame, useNow, type ClientCommand, type Connection, type GameChannel, type Reply } from "../game/useGame";
@@ -185,8 +185,10 @@ function Board({ view, timers, offset, send, autoMeetings, gameId, channel, dmNo
   const pins = usePins(gameId, notes);
   const caseBoard = useMemo(() => caseData(view, pins.pins), [view, pins.pins]);
   const people = otherSeats(view);
+  // Every tip ends with "More in This game", which opens the rulebook; so does the Rules button.
+  const [rules, setRules] = useState(false);
   return (
-    <>
+    <MoreInGame.Provider value={() => setRules(true)}>
       <Away gameId={gameId} view={view} ctx={ctx} notes={notes} />
       <div className={outcome ? "game-grid is-over" : "game-grid"}>
         <Hud view={view} timers={timers} offset={offset} hostPaused={channel.control.pausedAt !== null} />
@@ -203,7 +205,8 @@ function Board({ view, timers, offset, send, autoMeetings, gameId, channel, dmNo
           <CaseBoard data={caseBoard} people={people} pins={pins} marks={board.board} />
         </div>
       </div>
-    </>
+      <RulebookSheet open={rules} onClose={() => setRules(false)} view={view} />
+    </MoreInGame.Provider>
   );
 }
 
@@ -259,7 +262,9 @@ function Hud({ view, timers, offset, hostPaused }: { view: PlayerView; timers: r
       </div>
       {/* design §7.3: the share is public. */}
       <div className="hud__stat hud__share">
-        <span className="meta">Share</span>
+        <span className="meta">
+          Share <InfoTip info={{ kind: "term", id: "share" }} />
+        </span>
         <span className="num hud__big">{view.share}</span>
       </div>
       {/* design §6.1: the bank's coins left, public. */}

@@ -20,8 +20,9 @@ import {
 import { describe, expect, it } from "vitest";
 import { describeEvent } from "../game/describeEvent";
 import { namesOf } from "../game/hud";
-import { roleInfo, roleListInfo } from "../game/extension";
-import { RoleList, RulebookSheet } from "./Extension";
+import { roleInfo, roleListInfo } from "../game/roles";
+import { RolesInPlay } from "./RoleCard";
+import { Rulebook } from "./Rulebook";
 import { GameOver } from "../screens/Game";
 
 const html = (el: ReactElement) => renderToStaticMarkup(el);
@@ -157,36 +158,33 @@ function playOut1(s: GameState): GameState {
 describe("role cards and the rulebook match design §11.1 and §20.2", () => {
   const EYES = ["lookout", "detective", "auditor", "smoothTalker", "priest"];
   const SHADOWS = ["locksmith", "hacker", "electrician", "mole", "fixer"];
-  const STARS = ["mole", "fixer"]; // design §8.4
-  it("every one of the 10 roles has its kind, ★, §20.2 power and win lines", () => {
+  it("every one of the 10 roles has its kind, §20.2 power, win and spot lines", () => {
     expect(Object.keys(ROLES).sort()).toEqual([...EYES, ...SHADOWS].sort());
     for (const id of Object.keys(ROLES) as RoleId[]) {
-      const info = roleInfo(id);
+      const info = roleInfo(id)!;
       expect(info.kindLabel, id).toBe(EYES.includes(id) ? "Eyes" : "Shadows");
-      expect(info.star, id).toBe(STARS.includes(id));
       expect(info.power, id).toBe(ROLE_TEXT[id]!.power);
-      expect(info.howYouWin, id).toBe(STARS.includes(id) ? ROLE_WIN.sunk : ROLE_WIN.crew);
+      expect(info.howYouWin, id).toBe(id === "mole" || id === "fixer" ? ROLE_WIN.sunk : ROLE_WIN.crew); // design §8.4
+      expect(info.spot, id).toBe(ROLE_TEXT[id]!.spot);
     }
   });
 
   it("powers follow the frequency rule (design §11.2)", () => {
-    for (const r of ["auditor", "hacker", "electrician", "priest", "mole"] as const) expect(roleInfo(r).power, r).toMatch(/^Once between meetings/);
-    for (const r of ["lookout", "detective"] as const) expect(roleInfo(r).power, r).toMatch(/^Each round/);
-    expect(roleInfo("fixer").power).toMatch(/^Once a game/);
-    expect(roleInfo("smoothTalker").power).toBe("Your vote counts twice.");
+    for (const r of ["auditor", "hacker", "electrician", "priest", "mole"] as const) expect(roleInfo(r)!.power, r).toMatch(/^Once between meetings/);
+    for (const r of ["lookout", "detective"] as const) expect(roleInfo(r)!.power, r).toMatch(/^Each round/);
+    expect(roleInfo("fixer")!.power).toMatch(/^Once a game/);
+    expect(roleInfo("smoothTalker")!.power).toBe("Your vote counts twice.");
   });
 
-  it("the rulebook lists all 10 roles, the endings with the Mole and Fixer, and marks the roles in this game", () => {
+  it("the rulebook lists this game's roles and its three perks, and no tokens or 'act' wording", () => {
     const s = createGame(config(5, { seed: "rb" }));
-    const ui = html(createElement(RulebookSheet, { open: true, onClose: () => {}, view: viewFor(s, "p0") }));
-    for (const def of Object.values(ROLES)) expect(ui, def.name).toContain(def.name);
-    expect(ui).toMatch(/Busted \(Wanted 3\)<\/td><td>Only the Rooftop gets away/);
-    expect(ui).toMatch(/Sunk by theft<\/td><td>Nobody, unless [^<]*Mole[^<]*Fixer[^<]* has the biggest stash of all/);
-    expect(ui).toContain("in this game");
+    const v = viewFor(s, "p0");
+    const ui = html(createElement(Rulebook, { view: v }));
+    for (const id of v.roleList!.roles) expect(ui, id).toContain(`${ROLES[id]!.name}</b>`);
     expect(ui).toContain("Eyes");
-    expect(ui).toContain("Shadows");
     // design §12, §20.3: this game's three perks on the black market, and no tokens.
-    for (const p of viewFor(s, "p0").shop) expect(ui).toContain(`<b>${PERK_TEXT[p.perk]!.name}</b>`);
+    expect(v.shop).toHaveLength(3);
+    for (const p of v.shop) expect(ui).toContain(`${PERK_TEXT[p.perk]!.name}</b>`);
     expect(ui).not.toMatch(/token/i);
     expect(ui).not.toMatch(/\bact\b|this act|per act|Team player|Wildcard|Lone wolf/i);
   });
@@ -199,15 +197,15 @@ describe("role list views (design §11.3: exact, possible, nothing)", () => {
     const cfg = (roleList: "exact" | "possible" | "hidden") => config(5, { roleList, seed: "rl" });
     const exact = viewFor(createGame(cfg("exact")), "p0");
     const dealt = Object.values(createGame(cfg("exact")).players).map((p) => p.role).sort();
-    expect([...roleListInfo(exact).roles].sort()).toEqual(dealt);
+    expect(roleListInfo(exact).roles.map((r) => r.id).sort()).toEqual([...new Set(dealt)].sort());
     expect(roleListInfo(exact).title).toBe("Roles in play");
 
     const possible = viewFor(createGame(cfg("possible")), "p0");
     expect(roleListInfo(possible).title).toBe("Roles that could be in play");
-    expect(html(createElement(RoleList, { view: possible }))).toContain("Roles that could be in play");
+    expect(html(createElement(RolesInPlay, { view: possible }))).toContain("Roles that could be in play");
 
     const hidden = viewFor(createGame(cfg("hidden")), "p0");
-    const ui = html(createElement(RoleList, { view: hidden }));
+    const ui = html(createElement(RolesInPlay, { view: hidden }));
     expect(ui).toContain("hidden");
     expect(ui).not.toContain("<li");
     for (const def of Object.values(ROLES)) expect(ui).not.toContain(def.name);

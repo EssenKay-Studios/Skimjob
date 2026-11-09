@@ -5,6 +5,23 @@ import { EVENTS } from "./events";
 import type { RoleId, RoomId } from "./index";
 import { BANK_JOB } from "./jobs";
 
+const { bulbs, bustStars } = BANK_JOB.alarm;
+
+/** 0 to 10 in words, for the lines that start a sentence with a count. */
+const WORDS = ["Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten"] as const;
+const word = (n: number): string => WORDS[n] ?? String(n);
+
+/** "4th": the count as an ordinal. */
+export function ordinal(n: number): string {
+  const teen = n % 100 >= 11 && n % 100 <= 13;
+  return `${n}${teen ? "th" : (["th", "st", "nd", "rd"][n % 10] ?? "th")}`;
+}
+
+/** The honesty line as the rulebook writes it: ⅔ for two-thirds, else a percentage. */
+export function lineText(line: number): string {
+  return Math.abs(line - 2 / 3) < 1e-9 ? "⅔" : `${Math.round(line * 100)}%`;
+}
+
 /** What an InfoTip shows: a short name and one line. */
 export interface InfoText {
   readonly name: string;
@@ -128,15 +145,15 @@ export const TERMS = {
   kitty: { name: "Kitty", text: "Leftover change, carried into the next split." },
   shakedown: { name: "Shakedown", text: "A vote that opens one stash; what's above the share goes into the next split." },
   protected: { name: "Protected", text: "Shaken down already: safe until the next regular meeting." },
-  wanted: { name: "Wanted", text: "One star per raid. Three is a bust." },
-  raid: { name: "Raid", text: "The 4th bulb lights: grabs there are seized." },
-  bust: { name: "Bust", text: "Wanted 3. Only the Rooftop gets away." },
-  honesty: { name: "Honesty", text: "Coins that reached the duffel ÷ coins taken. Line: ⅔." },
+  wanted: { name: "Wanted", text: `One star per raid. ${word(bustStars)} is a bust.` },
+  raid: { name: "Raid", text: `The ${ordinal(bulbs)} bulb lights: grabs there are seized.` },
+  bust: { name: "Bust", text: `Wanted ${bustStars}. Only the Rooftop gets away.` },
+  honesty: { name: "Honesty", text: `Coins that reached the duffel ÷ coins taken. Line: ${lineText(BANK_JOB.honestyLine)}.` },
 } as const satisfies Record<string, InfoText>;
 
 /** The InfoTips that are not glossary words. design §20.5 */
 export const TIPS = {
-  bell: { name: "Bell", text: "Every noisy coin lights a bulb. Light the 4th and the police raid the room." },
+  bell: { name: "Bell", text: `Every noisy coin lights a bulb. Light the ${ordinal(bulbs)} and the police raid the room.` },
   bank: { name: "Bank", text: "Coins left to steal. The game ends when it's empty, or after the last round." },
   moveDuffel: { name: "Duffel", text: "Coins here are shared equally by the whole crew." },
   movePocket: { name: "Pocket", text: "Coins here are yours alone. Nobody sees them, unless you're shaken down or absolved." },

@@ -5,7 +5,7 @@
 // screen closes it; a scroll or resize only moves it along. The tip is a native
 // popover, so it sits above sheets and is never clipped.
 import { infoText, type InfoRef } from "@skimjob/content";
-import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type FocusEvent, type KeyboardEvent, type PointerEvent } from "react";
+import { createContext, useCallback, useContext, useEffect, useId, useLayoutEffect, useRef, useState, type FocusEvent, type PointerEvent } from "react";
 import { Close } from "./icons";
 import { SketchFrame } from "./SketchFrame";
 import "./infotip.css";
@@ -17,9 +17,15 @@ const GAP = 4;
 const WIDTH = 260;
 /** Closes the tip that is open now, if any. */
 let openTip: (() => void) | undefined;
+/** The tip a tap pinned, if any: no other tip previews while it is open. */
+let pinnedTip: string | undefined;
+
+/** Opens the "This game" rulebook; the tips under it end with a "More in This game" link. None: no link (outside a game, or inside the rulebook itself). */
+export const MoreInGame = createContext<(() => void) | null>(null);
 
 export function InfoTip({ info }: { readonly info: InfoRef }) {
   const entry = infoText(info);
+  const more = useContext(MoreInGame);
   const id = useId();
   const root = useRef<HTMLSpanElement>(null);
   const button = useRef<HTMLButtonElement>(null);
@@ -31,8 +37,9 @@ export function InfoTip({ info }: { readonly info: InfoRef }) {
   const close = useCallback(() => {
     window.clearTimeout(leaving.current);
     pinned.current = false;
+    if (pinnedTip === id) pinnedTip = undefined;
     setOpen(false);
-  }, []);
+  }, [id]);
 
   // Put the tip under the button (or above, when there is no room), inside the viewport.
   const place = useCallback(() => {
@@ -98,8 +105,10 @@ export function InfoTip({ info }: { readonly info: InfoRef }) {
       cancelAnimationFrame(frame);
       seen.disconnect();
       if (openTip === close) openTip = undefined;
+      // Unmounted while pinned (its sheet closed): no stale pin may block the other tips.
+      if (pinnedTip === id) pinnedTip = undefined;
     };
-  }, [open, close, place]);
+  }, [open, close, place, id]);
 
   useEffect(() => () => window.clearTimeout(leaving.current), []);
 
@@ -111,6 +120,8 @@ export function InfoTip({ info }: { readonly info: InfoRef }) {
     if (to && !root.current?.contains(to)) close();
   };
   const mouse = (e: PointerEvent) => e.pointerType === "mouse";
+  /** Another tip is pinned: this one stays shut until the pinned one closes. */
+  const blocked = () => pinnedTip !== undefined && pinnedTip !== id;
 
   return (
     <span
@@ -118,7 +129,7 @@ export function InfoTip({ info }: { readonly info: InfoRef }) {
       className="infotip"
       onBlur={onBlur}
       onPointerEnter={(e) => {
-        if (!mouse(e)) return;
+        if (!mouse(e) || blocked()) return;
         window.clearTimeout(leaving.current);
         setOpen(true);
       }}
@@ -137,7 +148,7 @@ export function InfoTip({ info }: { readonly info: InfoRef }) {
         aria-describedby={`${id}-text`}
         onFocus={(e) => {
           // Focus coming back from the tip's own close button must not reopen it.
-          if (root.current?.contains(e.relatedTarget as Node | null) || !e.currentTarget.matches(":focus-visible")) return;
+          if (root.current?.contains(e.relatedTarget as Node | null) || !e.currentTarget.matches(":focus-visible") || blocked()) return;
           window.clearTimeout(leaving.current);
           setOpen(true);
         }}
@@ -145,6 +156,7 @@ export function InfoTip({ info }: { readonly info: InfoRef }) {
           if (open && pinned.current) return close();
           window.clearTimeout(leaving.current);
           pinned.current = true;
+          pinnedTip = id;
           setOpen(true);
         }}
       >
@@ -156,14 +168,31 @@ export function InfoTip({ info }: { readonly info: InfoRef }) {
         <SketchFrame seed={`infotip-${entry.name}`} radius={10} shadow={0.38} className="infotip__tip">
           <header className="infotip__head">
             <h3>{entry.name}</h3>
-            <button type="button" className="infotip__close" aria-label="Close" onClick={() => {
+            <button
+              type="button"
+              className="infotip__close"
+              aria-label="Close"
+              onClick={() => {
                 close();
                 button.current?.focus();
-              }}>
+              }}
+            >
               <Close />
             </button>
           </header>
           <p id={`${id}-text`}>{entry.text}</p>
+          {more && (
+            <button
+              type="button"
+              className="infotip__more"
+              onClick={() => {
+                close();
+                more();
+              }}
+            >
+              More in This game
+            </button>
+          )}
         </SketchFrame>
       </div>
     </span>
