@@ -12,7 +12,7 @@ const SHOTS = process.env.SHOTS_DIR;
 async function shot(page: Page, name: string) {
   if (!SHOTS) return;
   mkdirSync(SHOTS, { recursive: true });
-  await page.waitForTimeout(700); // entrances and the meter springs settle
+  await page.waitForTimeout(700); // entrances and the bulb springs settle
   await page.screenshot({ path: `${SHOTS}/game-${name}-${page.viewportSize()!.width}.png`, fullPage: true });
 }
 

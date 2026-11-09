@@ -1,8 +1,8 @@
 // Room interiors for the bank cutaway (M2-9). Each draws in its own local
 // box (0,0 top-left, w×h, floor at the bottom) and adapts to its width: props
-// anchor to the left/right edges and repeated details (columns, racks, teller
+// anchor to the left/right edges and repeated details (columns, racks,
 // windows, box grids) fill whatever width the layout gives. Our own designs.
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import type { BankRoomId } from "./bankLayout";
 
 export interface RoomCtx {
@@ -10,6 +10,8 @@ export interface RoomCtx {
   readonly h: number;
   /** Unique prefix for pattern ids. */
   readonly uid: string;
+  /** The Vault only: the share of the bank pile still to steal, 0–1 (design §6.1). */
+  readonly pile?: number;
 }
 
 const INK = "var(--art-ink)";
@@ -95,15 +97,21 @@ function Sack({ x, y, s = 1, flip = false }: { x: number; y: number; s?: number;
   );
 }
 
-function GoldStack({ x, y, rows = 3 }: { x: number; y: number; rows?: number }) {
+/** Bars in a pyramid of `rows` rows. */
+const barsIn = (rows: number) => (rows * (rows + 1)) / 2;
+
+/** A pyramid of gold bars; `show` bars are left, the top ones going first (the pile shrinking). */
+function GoldStack({ x, y, rows = 3, show = barsIn(rows) }: { x: number; y: number; rows?: number; show?: number }) {
   const bars: ReactNode[] = [];
+  let left = show;
   for (let r = 0; r < rows; r++) {
     const n = rows - r;
-    for (let i = 0; i < n; i++) {
+    for (let i = 0; i < n && left > 0; i++) {
+      left--;
       const bx = x + i * 26 + r * 13;
       const by = y - (r + 1) * 11;
       bars.push(
-        <g key={`${r}-${i}`}>
+        <g key={`${r}-${i}`} className="gold-bar">
           <path d={`M${bx} ${by + 11}l4-11h18l4 11z`} fill="var(--gold)" {...T} strokeWidth={1.6} />
           <path d={`M${bx + 4} ${by + 2.5}h12`} stroke="var(--art-hi)" strokeWidth="1.8" strokeLinecap="round" />
           <path d={`M${bx + 22} ${by}l4 11h-4z`} fill="var(--art-gold-d)" />
@@ -370,10 +378,27 @@ function Office({ w, h, uid }: RoomCtx) {
         <path d={`M${deskW - 40} -20h36`} {...T} />
         <path d={`M${deskW - 26} -28h8M${deskW - 26} -12h8`} {...L} strokeWidth={2.4} />
         <rect x="-4" y="-42" width={deskW + 8} height="7" rx="2" fill="var(--art-wood-l)" {...L} />
-        {/* Computer */}
+        {/* The desk lamp's light flicks off and on (design §15.6) */}
+        <g className="bank-lamp" aria-hidden="true">
+          <path d={`M${deskW - 34} -66L${deskW - 14} -72L${deskW - 22} -42L${deskW - 56} -42Z`} fill="var(--art-window)" opacity=".55" />
+          <circle cx={deskW - 24} cy="-69" r="2.8" fill="var(--art-window-hi)" />
+        </g>
+        {/* Computer: the screen cycles notes, a chart and a coin */}
         <rect x="18" y="-80" width="44" height="34" rx="4" fill="var(--art-stone)" {...L} />
         <rect x="23" y="-75" width="34" height="23" rx="2" fill="var(--art-screen)" />
-        <path d="M27-68h16M27-63h22M27-58h10" stroke="var(--art-screen-d)" strokeWidth="1.6" strokeLinecap="round" />
+        <g className="bank-scr" aria-hidden="true">
+          <path d="M27-68h16M27-63h22M27-58h10" stroke="var(--art-screen-d)" strokeWidth="1.6" strokeLinecap="round" />
+          <g fill="var(--art-screen-d)">
+            <rect x="28" y="-60" width="4" height="6" />
+            <rect x="34" y="-65" width="4" height="11" />
+            <rect x="40" y="-62" width="4" height="8" />
+            <rect x="46" y="-69" width="4" height="15" />
+          </g>
+          <g>
+            <circle cx="40" cy="-63.5" r="6.2" fill="var(--gold)" {...T} strokeWidth={1.3} />
+            <path d="M40-66.6v6.2" fill="none" {...T} />
+          </g>
+        </g>
         <path d="M34-46l-2 4h16l-2-4z" fill="var(--art-stone-d)" {...T} />
         {/* Lamp */}
         <path d={`M${deskW - 18} -42v-22l-8-8`} fill="none" {...L} />
@@ -538,6 +563,18 @@ function Lobby({ w, h, uid }: RoomCtx) {
         <path d="M0 0V-9M0 0l6 3" {...L} strokeWidth={2} />
       </g>
 
+      {/* A security camera pans across the room (design §15.6) */}
+      <g transform={`translate(${bays > 1 ? w - 38 : 28} 10)`} aria-hidden="true">
+        <rect x="-6" y="-2" width="12" height="4" rx="1" fill="var(--art-slate)" {...T} />
+        <g className="bank-cam">
+          <path d="M0 0L-17 62L17 62Z" fill="var(--sky)" opacity=".18" />
+          <path d="M0 0v5" fill="none" {...L} strokeWidth={1.8} />
+          <rect x="-5" y="4" width="10" height="15" rx="2.6" fill="var(--art-steel-l)" {...L} strokeWidth={1.6} />
+          <rect x="-3.6" y="17" width="7.2" height="5" rx="1.2" fill="var(--art-slate-d)" {...T} strokeWidth={1.3} />
+          <circle className="bank-led bank-led--1" cx="0" cy="8.4" r="1.4" fill="var(--art-led)" />
+        </g>
+      </g>
+
       {/* Pendant lamps */}
       {Array.from({ length: bays > 1 ? bays - 1 : w > 260 ? 1 : 0 }, (_, i) => {
         const x = bays > 1 ? (i + 0.5) * bw + bw / 2 : w * 0.72;
@@ -567,12 +604,57 @@ function Lobby({ w, h, uid }: RoomCtx) {
 
 // ---------------------------------------------------------------- Vault
 
-function Vault({ w, h, uid }: RoomCtx) {
+/** Props that keep an outline one line wide while the door is squeezed edge-on. */
+const NS = { vectorEffect: "non-scaling-stroke" } as const;
+
+/**
+ * The Vault door: a thick round door on a hinge at (hx, cy), swinging shut and
+ * open (design §15.6). Far face, edge band and near face; art.css turns them
+ * with the one angle --vd-a, so the door keeps its thickness at every angle.
+ */
+function VaultDoor({ R, hx, cy }: { R: number; hx: number; cy: number }) {
+  const spokes = [0, 60, 120];
+  const bolts = Array.from({ length: 8 }, (_, i) => (i * Math.PI) / 4);
+  return (
+    <g transform={`translate(${hx} ${cy})`} className="bank-vd" style={{ "--vd-t": R * 0.1, "--vd-r": R } as CSSProperties}>
+      <circle className="bank-vd__far" cx={-R} r={R} fill="var(--art-steel-d)" {...L} {...NS} />
+      <g className="bank-vd__band">
+        <rect y={-R} width="1" height={R * 2} fill="var(--art-steel-d)" />
+        <path d={`M0 ${-R}H1M0 ${R}H1`} {...L} {...NS} />
+      </g>
+      <g className="bank-vd__near">
+        <circle cx={-R} r={R} fill="var(--art-steel)" {...L} {...NS} />
+        <circle cx={-R} r={R * 0.65} fill="none" {...T} {...NS} strokeOpacity=".6" />
+        {bolts.map((a) => (
+          <circle key={a} cx={-R + R * 0.82 * Math.cos(a)} cy={R * 0.82 * Math.sin(a)} r={Math.max(1.6, R * 0.05)} fill="var(--art-steel-l)" {...T} {...NS} strokeWidth={1.1} />
+        ))}
+        {spokes.map((a) => (
+          <path key={a} d={`M${-R} ${-R * 0.37}V${R * 0.37}`} {...L} {...NS} strokeWidth={2.6} transform={`rotate(${a} ${-R} 0)`} />
+        ))}
+        <circle cx={-R} r={R * 0.14} fill="var(--art-steel-l)" {...L} {...NS} strokeWidth={1.8} />
+      </g>
+    </g>
+  );
+}
+
+function Vault({ w, h, uid, pile = 1 }: RoomCtx) {
   const F = h - 8;
   const R = Math.round(clamp(Math.min((h - 34) / 2 - 6, w * 0.22), 30, 54));
   const cx = 18 + R + 4;
   const cy = F - R - 6;
   const roomy = w >= 300;
+  // The pile: the floor stack first, then the extras, the stack in the doorway last (design §6.1).
+  const stacks = [
+    { id: "floor", rows: roomy ? 3 : 2 },
+    ...(w > 520 ? [{ id: "extra", rows: 2 }] : []),
+    { id: "door", rows: 2 },
+  ];
+  let left = Math.ceil(clamp(pile, 0, 1) * stacks.reduce((n, k) => n + barsIn(k.rows), 0));
+  const shown: Record<string, number> = {};
+  for (const k of stacks) {
+    shown[k.id] = Math.min(left, barsIn(k.rows));
+    left -= shown[k.id]!;
+  }
   return (
     <g>
       <defs>
@@ -588,7 +670,7 @@ function Vault({ w, h, uid }: RoomCtx) {
       <Floor w={w} h={h} fill="var(--art-steel-d)" />
 
 
-      {/* The vault door: frame, dark doorway with gold inside, door swung open */}
+      {/* The vault doorway: a frame, a dark opening with the pile's last bars inside */}
       <circle cx={cx} cy={cy} r={R + 7} fill="var(--art-steel-l)" {...L} strokeWidth={2.4} />
       <clipPath id={`${uid}-door`}>
         <circle cx={cx} cy={cy} r={R} />
@@ -597,36 +679,31 @@ function Vault({ w, h, uid }: RoomCtx) {
       <g clipPath={`url(#${uid}-door)`}>
         <rect x={cx - R} y={cy + R * 0.62} width={R * 2} height={R} fill="var(--art-slate)" />
         <path d={`M${cx - R * 0.5} ${cy - R * 0.5}h${R}M${cx - R * 0.5} ${cy - R * 0.1}h${R}`} stroke="var(--art-slate)" strokeWidth="3" />
-        <GoldStack x={cx - 26} y={cy + R * 0.7} rows={2} />
+        <GoldStack x={cx - 26} y={cy + R * 0.7} rows={2} show={shown.door!} />
       </g>
       <circle cx={cx} cy={cy} r={R} fill="none" {...L} />
-      <g transform={`translate(${cx + R + 10} ${cy})`}>
-        <ellipse cx={R * 0.18} cy="0" rx={R * 0.42} ry={R + 4} fill="var(--art-steel-d)" {...L} />
-        <ellipse cx="0" cy="0" rx={R * 0.42} ry={R + 4} fill="var(--art-steel)" {...L} />
-        <ellipse cx="0" cy="0" rx={R * 0.3} ry={R * 0.78} fill="none" {...T} strokeOpacity=".6" />
-        {[-0.62, 0, 0.62].map((f) => (
-          <rect key={f} x={-R * 0.42 - 9} y={f * R - 4} width="10" height="8" rx="2" fill="var(--art-steel-l)" {...T} />
-        ))}
-        <circle cx="0" cy="0" r={R * 0.16} fill="var(--art-steel-l)" {...L} strokeWidth={1.8} />
-        {[0, 60, 120].map((a) => (
-          <path key={a} d={`M0 ${-R * 0.42}V${R * 0.42}`} {...L} strokeWidth={2.6} transform={`scale(.42 1) rotate(${a})`} />
-        ))}
-      </g>
       <Shadow cx={cx + R * 0.6} y={F} rx={R * 1.3} />
+      <VaultDoor R={R} hx={cx + R + 2} cy={cy} />
+      {[-0.62, 0, 0.62].map((f) => (
+        <rect key={f} x={cx + R - 3} y={cy + f * R - 4} width="10" height="8" rx="2" fill="var(--art-steel-l)" {...T} />
+      ))}
 
       {roomy ? (
         <>
-          <GoldStack x={w - 112} y={F} rows={3} />
+          <GoldStack x={w - 112} y={F} rows={3} show={shown.floor!} />
           <Sack x={w - 136} y={F} s={0.95} flip />
           {w > 520 && (
             <>
               <CashCart x={w * 0.3} y={F} />
-              <GoldStack x={w * 0.62} y={F} rows={2} />
+              <GoldStack x={w * 0.62} y={F} rows={2} show={shown.extra!} />
             </>
           )}
         </>
       ) : (
-        <Sack x={w - 24} y={F} s={0.8} flip />
+        <>
+          <GoldStack x={w - 60} y={F} rows={2} show={shown.floor!} />
+          <Sack x={w - 24} y={F} s={0.8} flip />
+        </>
       )}
     </g>
   );

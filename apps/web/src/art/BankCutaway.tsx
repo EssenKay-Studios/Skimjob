@@ -28,13 +28,21 @@
 // they saw there, who they watched on camera as `camera`, and alibi claims as `ghost`.
 //
 // Rooms in `closed` (Lockdown) are taped off and can't be picked: no click
-// or key handling, `aria-disabled="true"`, no hover lift.
+// or key handling, `aria-disabled="true"`, no hover lift. Rooms in `taped`
+// (raided, design §5.3) are closed too, and also show "CLOSED 2" counting down
+// and a spinning siren light; their bell is off.
+//
+// Bells: `bells` is each open room's lit bulbs, your preview, or hidden ("?");
+// they sit over the drawing as HTML so they stay a readable size. `pile` is the
+// share of the bank still to steal (0–1): the Vault's gold shrinks with it.
 //
 // For HTML overlays instead (badges, counters), use `bankLayout(rooms, mode)`
 // with `roomBoxPercent(layout, id)` inside a wrapper with the drawing's aspect.
-import { useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
+import { BANK_JOB } from "@skimjob/content";
+import { useId, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
+import { AlarmBell, bellWidth } from "../components/Bell";
 import type { Seed } from "../components/sketch";
-import { BANK_ROOM_NAMES, bankLayout, roomSlots, type BankLayout, type BankLayoutMode, type BankRoomId, type RoomBox, type Slot } from "./bankLayout";
+import { BANK_ROOM_NAMES, bankLayout, roomBoxPercent, roomSlots, type BankLayout, type BankLayoutMode, type BankRoomId, type RoomBox, type Slot } from "./bankLayout";
 import { CrookFigure, nameTagWidth } from "./Crook";
 import { crewTags, type CrookLook, type Expression } from "./crookLooks";
 import { RoomGlyph } from "./RoomIcon";
@@ -61,6 +69,13 @@ export interface BankOccupant {
 
 export type TimeOfDay = "day" | "dusk" | "night";
 
+/** One room's bell: lit bulbs, the bulbs your own grab would add, or hidden (shows "?"). design §5.1, §5.2 */
+export interface RoomBell {
+  readonly lit: number;
+  readonly preview?: number;
+  readonly hidden?: boolean;
+}
+
 export interface BankCutawayProps {
   /** Room ids in play (`view.rooms`); unknown ids are ignored. Default: the five core rooms. */
   readonly rooms?: readonly string[];
@@ -77,6 +92,14 @@ export interface BankCutawayProps {
   readonly onRoomSelect?: (room: BankRoomId) => void;
   /** Rooms shut this round (Lockdown, or taped off after a raid, design §5.3): taped and washed out. */
   readonly closed?: readonly string[];
+  /** Raided rooms and the rounds each stays taped off: "CLOSED 2", a siren, no bell. design §5.3 */
+  readonly taped?: Readonly<Record<string, number>>;
+  /** Each open room's bell. design §5.1 */
+  readonly bells?: Readonly<Partial<Record<string, RoomBell>>>;
+  /** Bulbs on every bell, from content. */
+  readonly bulbs?: number;
+  /** The bank pile still to steal, 0–1: the Vault's gold shrinks. design §6.1 */
+  readonly pile?: number;
   readonly occupants?: Partial<Record<string, readonly BankOccupant[]>>;
   /** Room name tags (off for small decorative uses). */
   readonly labels?: boolean;
@@ -196,14 +219,39 @@ export function tagFont(slots: readonly Slot[], tags: readonly string[], pxPerUn
   return Math.min(want, fit);
 }
 
+const clampN = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
+
+/** A taped room's siren: a ceiling light and its red and blue beams spinning across the room (design §5.3). */
+function Siren({ x, y, reach, clip }: { x: number; y: number; reach: number; clip: string }) {
+  return (
+    <g aria-hidden="true">
+      <g clipPath={clip}>
+        <g transform={`translate(${x} ${y})`}>
+          <g className="bank-beams">
+            <path d={`M0 0L${-reach} -17L${-reach} 17Z`} fill="var(--art-siren-r)" opacity=".4" />
+            <path d={`M0 0L${reach} -17L${reach} 17Z`} fill="var(--art-siren-b)" opacity=".4" />
+          </g>
+        </g>
+      </g>
+      <g transform={`translate(${x} ${y})`}>
+        <rect x="-10" y="3" width="20" height="5.5" rx="1.6" fill="var(--art-slate)" {...L} strokeWidth={1.5} />
+        <path className="bank-siren" d="M-7 3.5A7 7 0 0 1 0 -3.5V3.5Z" fill="var(--art-siren-r)" />
+        <path className="bank-siren bank-siren--b" d="M0 -3.5A7 7 0 0 1 7 3.5H0Z" fill="var(--art-siren-b)" />
+        <path d="M-7 3.5A7 7 0 0 1 7 3.5Z" fill="none" {...L} strokeWidth={1.5} />
+      </g>
+    </g>
+  );
+}
+
 function Room({
   box,
   name,
   uid,
-  mode,
   labels,
   selected,
   closed,
+  tapedLeft,
+  pile,
   occupants,
   pick,
   figureScale,
@@ -218,10 +266,12 @@ function Room({
   box: RoomBox;
   name: string;
   uid: string;
-  mode: BankLayoutMode;
   labels: boolean;
   selected: boolean;
   closed: boolean;
+  /** Rounds left taped off (raided), or undefined. */
+  tapedLeft: number | undefined;
+  pile: number;
   occupants: readonly BankOccupant[];
   pick: ((room: BankRoomId) => void) | undefined;
 }) {
@@ -235,7 +285,7 @@ function Room({
   const label = [
     name,
     selected ? "selected" : "",
-    closed ? "closed" : "",
+    tapedLeft !== undefined ? `closed ${tapedLeft}` : closed ? "closed" : "",
     who.length ? `here: ${who.join(", ")}` : "",
     filmed.length ? `on camera: ${filmed.join(", ")}` : "",
     claims.length ? `claimed: ${claims.join(", ")}` : "",
@@ -243,6 +293,7 @@ function Room({
     .filter(Boolean)
     .join(", ");
   const tagSize = 15;
+  const signW = tapedLeft === undefined ? 76 : 96;
   const twoRows = slots.some((s) => s.back);
   const tagOf = (o: BankOccupant) => o.tag ?? tags.get(o.id) ?? "?";
   const font = tagFont(slots, occupants.map(tagOf), pxPerUnit);
@@ -258,7 +309,7 @@ function Room({
         <g filter={`url(#${uid}-wob)`}>
           {wall && <rect width={w} height={h} fill={wall} />}
           {wall && <rect width={w} height={9} fill="var(--art-shade)" />}
-          <RoomInterior id={id} w={w} h={h} uid={`${uid}-${id}`} />
+          <RoomInterior id={id} w={w} h={h} uid={`${uid}-${id}`} pile={pile} />
         </g>
         {closed && (
           <g className="bank-room__closed">
@@ -270,13 +321,7 @@ function Room({
               <rect x={-w} y={h / 2 - 9} width={w * 3} height="18" fill={`url(#${uid}-tape)`} stroke={INK} strokeWidth="1.6" transform={`rotate(-9 ${w / 2} ${h / 2})`} />
               <rect x={-w} y={h / 2 - 9} width={w * 3} height="18" fill={`url(#${uid}-tape)`} stroke={INK} strokeWidth="1.6" transform={`rotate(7 ${w / 2} ${h / 2 + 22})`} />
             </g>
-            <g transform={`translate(${w / 2} ${h / 2 + 10}) rotate(-4)`} className="bank-room__closed-sign">
-              <rect x="-38" y="-13" width="76" height="26" rx="4" fill="url(#sk-hatch)" opacity=".5" transform="translate(2.5 3)" />
-              <rect x="-38" y="-13" width="76" height="26" rx="4" fill="var(--paper-hi)" stroke={INK} strokeWidth="1.8" />
-              <text x="0" y="6" textAnchor="middle" className="bank-closed__text">
-                CLOSED
-              </text>
-            </g>
+            {tapedLeft !== undefined && <Siren x={w - 20} y={20} reach={clampN(w * 0.44, 60, 140)} clip={`url(#${uid}-${id}-clip)`} />}
           </g>
         )}
         {order.map(({ s, o, i }) => (
@@ -298,6 +343,18 @@ function Room({
             tagAt={twoRows && s.back ? "head" : "body"}
           />
         ))}
+        {/* The CLOSED card goes over the crooks, so a hat never hides it. */}
+        {closed && (
+          <g className="bank-room__card">
+            <g transform={`translate(${w / 2} ${h / 2 + 10}) rotate(-4)`} className="bank-room__closed-sign">
+              <rect x={-signW / 2} y="-13" width={signW} height="26" rx="4" fill="url(#sk-hatch)" opacity=".5" transform="translate(2.5 3)" />
+              <rect x={-signW / 2} y="-13" width={signW} height="26" rx="4" fill="var(--paper-hi)" stroke={INK} strokeWidth="1.8" />
+              <text x="0" y="6" textAnchor="middle" className="bank-closed__text">
+                {tapedLeft === undefined ? "CLOSED" : `CLOSED ${tapedLeft}`}
+              </text>
+            </g>
+          </g>
+        )}
         {labels && <RoomTag name={name} room={id} size={tagSize} on={selected} />}
         <rect className="bank-room__focus" x="3" y="3" width={w - 6} height={h - 6} rx="8" />
         {selected && (
@@ -307,7 +364,8 @@ function Room({
               <rect x="3.5" y="2" width={w - 6} height={h - 4.5} rx="8" fill="none" stroke="var(--clay-d)" strokeWidth="4.5" />
               <rect x="2" y="3.2" width={w - 4.5} height={h - 6} rx="6" fill="none" stroke="var(--clay-d)" strokeWidth="4.5" />
             </g>
-            <Pin x={w - 26} y={42} />
+            {/* With a back row of crooks the pin's corner is their name tags: the outline and the room's tag mark the pick. */}
+            {!twoRows && <Pin x={w - 26} y={80} />}
           </>
         )}
       </g>
@@ -480,6 +538,10 @@ export function BankCutaway({
   selected,
   onRoomSelect,
   closed = [],
+  taped = {},
+  bells = {},
+  bulbs = BANK_JOB.alarm.bulbs,
+  pile = 1,
   occupants = {},
   labels = true,
   nameTags = true,
@@ -493,7 +555,7 @@ export function BankCutaway({
   const mode: BankLayoutMode = layout === "auto" ? (width !== null && width < 600 ? "stacked" : "wide") : layout;
   const lay = bankLayout(rooms, mode);
   const tint = Math.max(0, Math.min(1, (alarm - 0.4) / 0.6));
-  const shut = new Set(closed);
+  const shut = new Set([...closed, ...Object.keys(taped)]);
   const pickable = !!onRoomSelect;
   const nameOf = (id: BankRoomId) => names?.[id] ?? BANK_ROOM_NAMES[id];
   const people = new Map<string, string>();
@@ -561,10 +623,11 @@ export function BankCutaway({
             box={box}
             name={nameOf(box.id)}
             uid={uid}
-            mode={mode}
             labels={labels}
             selected={selected === box.id}
             closed={shut.has(box.id)}
+            tapedLeft={taped[box.id]}
+            pile={pile}
             occupants={occupants[box.id] ?? []}
             pick={onRoomSelect}
             figureScale={figureScale}
@@ -589,6 +652,22 @@ export function BankCutaway({
           </g>
         )}
       </svg>
+      {lay.rooms.map((box) => {
+        const bell = bells[box.id];
+        const at = roomBoxPercent(lay, box.id);
+        if (!bell || !at || taped[box.id] !== undefined) return null;
+        const wPx = box.w * pxPerUnit;
+        const size = wPx < 200 ? "xs" : "md";
+        // Beside the room's name when there is space for both, else under it, or on the room's top edge when a crowd fills the room.
+        const crowded = roomSlots(box.w, box.h, occupants[box.id]?.length ?? 0, figureScale).some((s) => s.back);
+        const nameEnd = labels ? (8 + tagWidth(nameOf(box.id), 15)) * pxPerUnit + 4 : 0;
+        const beside = nameEnd + 6 + bellWidth({ bulbs, size, hidden: !!bell.hidden }) + 6 <= wPx;
+        return (
+          <div key={box.id} className={crowded ? "bank__ov bank__ov--over" : beside ? "bank__ov" : "bank__ov bank__ov--under"} data-bell={box.id} style={{ ...at, "--bell-top": `${Math.round(37 * pxPerUnit)}px` } as CSSProperties}>
+            <AlarmBell bulbs={bulbs} lit={bell.lit} {...(bell.preview !== undefined && { preview: bell.preview })} {...(bell.hidden && { hidden: true })} size={size} />
+          </div>
+        );
+      })}
     </div>
   );
 }

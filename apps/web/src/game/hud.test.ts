@@ -7,7 +7,9 @@ import { presenceOf } from "./useGame";
 import {
   agoText,
   alibiState,
+  bankTotal,
   formatCountdown,
+  jobOf,
   justMissed,
   namesOf,
   outcomeOf,
@@ -65,6 +67,17 @@ describe("HUD", () => {
     [51 * 3600_000, "2d 3h"],
   ])("formats %d ms as %s", (ms, text) => {
     expect(formatCountdown(ms)).toBe(text);
+  });
+});
+
+describe("bank count", () => {
+  it("is the pile per player times the crew, with any content overrides (design §6.1)", () => {
+    expect(bankTotal(viewFor(createGame(config(4)), "p1"))).toBe(BANK_JOB.bank.coinsPerPlayer * 4);
+    expect(bankTotal(viewFor(createGame(config(3)), "p1"))).toBe(viewFor(createGame(config(3)), "p1").bank);
+    const custom = config(3, { contentOverrides: { bank: { coinsPerPlayer: 5 }, roundCap: 7 } });
+    const v = viewFor(createGame(custom), "p1");
+    expect(bankTotal(v)).toBe(15);
+    expect(jobOf(v).roundCap).toBe(7);
   });
 });
 

@@ -4,7 +4,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { BankCutaway, MIN_TAG_PX, roomButtonProps, tagFont } from "./BankCutaway";
+import { BankCutaway, CORE_ROOMS, MIN_TAG_PX, roomButtonProps, tagFont } from "./BankCutaway";
 import { BANK_ROOMS, roomSlots } from "./bankLayout";
 import { CrookAvatar, CrookSvg, nameTagWidth } from "./Crook";
 import { RoomIcon } from "./RoomIcon";
@@ -111,5 +111,75 @@ describe("M2-9 art", () => {
       const src = readFileSync(new URL(f, dir), "utf8");
       expect(src, f).not.toMatch(/<image\b|data:image/);
     }
+  });
+
+  // design §5.1, §5.3, §6.1, §15.6: the board art for bells, tape, the bank pile and the motion notes.
+  describe("S4.1 board art", () => {
+    const wide = { rooms: BANK_ROOMS, layout: "wide" as const };
+
+    it("puts a bell over each open room, with its bulbs, a preview and a hidden '?'", () => {
+      const out = html(
+        createElement(BankCutaway, {
+          ...wide,
+          bulbs: 4,
+          bells: { vault: { lit: 3 }, office: { lit: 1, preview: 2 }, lobby: { lit: 0, hidden: true }, security: { lit: 0 } },
+        }),
+      );
+      expect(out.match(/data-bell="/g)).toHaveLength(4);
+      expect(out).toContain('aria-label="Bell: 3 of 4 lit"');
+      expect(out).toContain("your grab adds 2");
+      expect(out).toContain('aria-label="Bell: hidden"');
+      expect(html(createElement(BankCutaway, wide))).not.toContain("data-bell");
+    });
+
+    it("tapes a raided room: CLOSED with its rounds, a siren, no bell, and it can't be picked", () => {
+      const out = html(createElement(BankCutaway, { ...wide, bells: { depositBoxes: { lit: 0 }, vault: { lit: 1 } }, taped: { depositBoxes: 2 }, onRoomSelect: () => {} }));
+      expect(out).toContain("CLOSED 2");
+      expect(out).toContain('aria-label="Deposit boxes, closed 2"');
+      expect(out).toContain('aria-disabled="true"');
+      expect(out.match(/bank-beams/g)).toHaveLength(1);
+      expect(out.match(/data-bell="/g)).toHaveLength(1);
+      expect(out).toContain('data-bell="vault"');
+    });
+
+    it("a Lockdown room is closed but has no siren, and keeps its bell", () => {
+      const out = html(createElement(BankCutaway, { ...wide, closed: ["office"], bells: { office: { lit: 0 } } }));
+      expect(out).toContain(">CLOSED<");
+      expect(out).not.toContain("bank-beams");
+      expect(out).toContain('data-bell="office"');
+    });
+
+    it("shrinks the Vault's pile: more bars full than half, one left at the last coin, none empty", () => {
+      const bars = (pile: number) => html(createElement(BankCutaway, { ...wide, pile })).match(/gold-bar/g)?.length ?? 0;
+      const [full, half, last, empty] = [1, 0.5, 0.01, 0].map(bars);
+      expect(full).toBeGreaterThan(half!);
+      expect(half).toBeGreaterThan(last!);
+      expect(last).toBe(1);
+      expect(empty).toBe(0);
+      // Narrow rooms (a phone) show the pile too.
+      expect(html(createElement(BankCutaway, { rooms: CORE_ROOMS, layout: "stacked", pile: 1 })).match(/gold-bar/g)!.length).toBeGreaterThan(3);
+    });
+
+    it("draws the Vault door thick: a far face, an edge band and a near face with a wheel and bolts", () => {
+      const out = html(createElement(BankCutaway, wide));
+      for (const part of ["bank-vd__far", "bank-vd__band", "bank-vd__near"]) expect(out.match(new RegExp(part, "g"))).toHaveLength(1);
+      expect(out.match(/vector-effect="non-scaling-stroke"/g)!.length).toBeGreaterThan(14);
+    });
+
+    it("has the Office screen and lamp and the Lobby camera", () => {
+      const out = html(createElement(BankCutaway, wide));
+      expect(out.match(/bank-scr/g)).toHaveLength(1);
+      expect(out.match(/bank-lamp/g)).toHaveLength(1);
+      expect(out.match(/bank-cam"/g)).toHaveLength(1);
+    });
+
+    it("stops all the board motion under reduced motion", () => {
+      const css = readFileSync(new URL("./art.css", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+      const reduced = css.slice(css.lastIndexOf("prefers-reduced-motion"));
+      for (const c of [".bank-beams", ".bank-vd", ".bank-scr > *", ".bank-lamp", ".bank-cam", ".bank-siren"]) expect(reduced, c).toContain(c);
+      expect(reduced).toMatch(/animation: none/);
+      // At rest the door is open.
+      expect(css).toMatch(/\.bank-vd \{\s*--vd-a: 115deg;/);
+    });
   });
 });

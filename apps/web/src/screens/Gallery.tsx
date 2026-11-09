@@ -25,7 +25,8 @@ import { Underline } from "../components/Underline";
 import { MaskMark, Wordmark } from "../components/Wordmark";
 import { CREW_COLOURS } from "../components/avatarLooks";
 import { Clock, Lock } from "../components/icons";
-import { Meter } from "../components/Meter";
+import { BANK_JOB } from "@skimjob/content";
+import { AlarmBell, WantedStars } from "../components/Bell";
 import { RoomTile } from "../components/RoomTile";
 import { RoomIcon } from "../art/RoomIcon";
 import { SplitSlider } from "../components/SplitSlider";
@@ -313,7 +314,7 @@ export function Gallery() {
               </SketchFrame>
             </Section>
 
-            <Section id="game" title="Game kit" note="M2-6 · room tiles, split slider, Haul and Wanted meters">
+            <Section id="game" title="Game kit" note="M2-6, S4.1 · room tiles, split slider, alarm bells, Wanted stars">
               <GameKitSamples />
             </Section>
 
@@ -344,6 +345,7 @@ export function Gallery() {
 
 /** The game screen's building blocks (M2-6), live. */
 function GameKitSamples() {
+  const { bulbs, bustStars } = BANK_JOB.alarm;
   const [room, setRoom] = useState("vault");
   const [pocket, setPocket] = useState(2);
   return (
@@ -356,16 +358,19 @@ function GameKitSamples() {
       </div>
       <SplitSlider id="g-split" loot={6} pocket={pocket} onChange={setPocket} />
       <div className="g-row g-row--center">
-        <span className="g-meter">
-          <Meter value={18} max={32} notch={28} label="Haul (sample)" />
-        </span>
-        <span className="meta">Haul 18 · target 28</span>
+        <AlarmBell bulbs={bulbs} lit={0} />
+        <AlarmBell bulbs={bulbs} lit={2} />
+        <AlarmBell bulbs={bulbs} lit={bulbs - 1} />
+        <AlarmBell bulbs={bulbs} lit={1} preview={2} />
+        <AlarmBell bulbs={bulbs} lit={0} hidden />
+        <AlarmBell bulbs={bulbs} lit={2} size="xs" />
+        <span className="meta">empty · 2 lit · one from a raid · your grab would add 2 (dashed) · hidden by the Hacker · narrow rooms</span>
       </div>
       <div className="g-row g-row--center">
-        <span className="g-meter">
-          <Meter value={2} max={3} tone="var(--bad)" label="Wanted (sample)" />
-        </span>
-        <span className="meta">Wanted 2 / 3</span>
+        {Array.from({ length: bustStars + 1 }, (_, n) => (
+          <WantedStars key={n} stars={n} max={bustStars} />
+        ))}
+        <span className="meta">Wanted 0 to the bust line</span>
         <span className="g-icon">
           <Clock />
         </span>

@@ -11,7 +11,8 @@ import type { PlayerView, RoomId } from "@skimjob/engine";
 import { Button } from "../components/Button";
 import { Chip } from "../components/Chip";
 import { Clock, Play } from "../components/icons";
-import { Meter } from "../components/Meter";
+import { WantedStars } from "../components/Bell";
+import { InfoTip } from "../components/InfoTip";
 import { EndingNote } from "../components/Extension";
 import { endingText } from "../game/extension";
 import { MEETING_TITLE } from "../game/meeting";
@@ -36,6 +37,7 @@ import { boardScene, seatLooks } from "../game/board";
 import { cardName, describeEvent, roleName, roomName } from "../game/describeEvent";
 import {
   alibiState,
+  bankTotal,
   defaultRoom,
   jobOf,
   justMissed,
@@ -260,14 +262,22 @@ function Hud({ view, timers, offset, hostPaused }: { view: PlayerView; timers: r
         <span className="meta">Share</span>
         <span className="num hud__big">{view.share}</span>
       </div>
+      {/* design §6.1: the bank's coins left, public. */}
+      <div className="hud__stat hud__bank">
+        <span className="meta">
+          Bank <InfoTip info={{ kind: "tip", id: "bank" }} />
+        </span>
+        <span className="num hud__big">
+          {view.bank}
+          <small>/{bankTotal(view)}</small>
+        </span>
+      </div>
       {/* design §5.4: Wanted stars, public; at the bust line the heist is busted (§5.5). */}
       <div className="hud__stat hud__wanted">
-        <span className="meta">Wanted</span>
-        <span className="num hud__big">
-          {view.wanted}
-          <small>/{bust}</small>
+        <span className="meta">
+          Wanted <InfoTip info={{ kind: "term", id: "wanted" }} />
         </span>
-        <Meter value={view.wanted} max={bust} tone="var(--bad)" label={`Wanted ${view.wanted} of ${bust}`} />
+        <WantedStars stars={view.wanted} max={bust} />
         {view.card && view.card.round === view.round && <span className="meta">Card: {cardLabel(view)}</span>}
       </div>
     </SketchFrame>
@@ -313,6 +323,10 @@ function BankBoard({ view, pick }: { view: PlayerView; pick: Pick | null }) {
         alarm={view.wanted / bustOf(view)}
         selected={scene.selected}
         closed={scene.closed}
+        taped={scene.taped}
+        bells={scene.bells}
+        bulbs={jobOf(view).alarm.bulbs}
+        pile={view.bank / bankTotal(view)}
         occupants={scene.occupants}
         title={scene.mode === "pick" ? "The bank: pick a room" : `The bank in round ${scene.round}`}
         {...(pick ? { onRoomSelect: (r: BankRoomId) => pick.setRoom(r) } : {})}
