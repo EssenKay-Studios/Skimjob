@@ -255,6 +255,54 @@ test("a tip opened inside the rulebook looks like any other tip: 16 px title, no
   }
 });
 
+test("QA round 4: a tip inside the rulebook has the same header, title, body and close layout as one outside it, at 360 and 1280 (board 4b) @roles", async ({ page }) => {
+  test.setTimeout(120_000);
+  const panel = await botGame(page, "exact");
+  // Layout and the tip's own type only: the body's weight is inherited from where the "i" sits (the HUD's
+  // 600 predates #207), so it is left out.
+  const look = () =>
+    pop(page).evaluate((el) => {
+      const pick = (q: string, keys: string[]) => { const s = getComputedStyle(el.querySelector(q)!) as unknown as Record<string, string>; return Object.fromEntries(keys.map((k) => [k, s[k]])); };
+      const head = el.querySelector(".infotip__head")!.getBoundingClientRect();
+      const x = el.querySelector(".infotip__close")!.getBoundingClientRect();
+      return {
+        head: pick(".infotip__head", ["display", "flexWrap", "alignItems", "justifyContent", "columnGap", "rowGap", "margin"]),
+        title: pick(".infotip__head h3", ["fontFamily", "fontSize", "textDecorationLine", "margin", "flexGrow"]),
+        body: pick(":scope p", ["fontFamily", "fontSize", "margin", "overflowWrap"]),
+        closeBox: `${Math.round(x.width)}x${Math.round(x.height)}`,
+        closeRight: Math.round(head.right - x.right),
+        oneRow: Math.abs(x.top + x.height / 2 - (head.top + head.height / 2)) < 2,
+      };
+    });
+  for (const width of [360, 1280]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.getByRole("button", { name: "About Bank" }).click();
+    const outside = await look();
+    await shot(page, `r4-${width}-tip-outside`, pop(page));
+    await page.keyboard.press("Escape");
+    await panel.getByRole("button", { name: "Rules", exact: true }).click();
+    const book = page.getByRole("dialog", { name: "This game" });
+    for (const [what, tip] of [
+      ["perk", book.getByRole("list", { name: "This game's black market" }).getByRole("button", { name: /^About / }).first()],
+      ["room", book.getByRole("button", { name: "About Vault" })],
+    ] as const) {
+      await tip.scrollIntoViewIfNeeded();
+      await tip.click();
+      const inside = await look();
+      await shot(page, `r4-${width}-tip-inside-${what}`, pop(page));
+      await shot(page, `r4-${width}-tip-inside-${what}-page`);
+      expect(inside, `${what} tip at ${width}`).toEqual(outside);
+      expect(inside.oneRow).toBe(true);
+      await page.keyboard.press("Escape");
+    }
+    // The section headers keep their own layout.
+    const sec = await book.locator(".rulebook__sec > header").first().evaluate((h) => { const s = getComputedStyle(h); const t = getComputedStyle(h.querySelector("h3")!); return `${s.justifyContent} ${s.alignItems} ${t.fontSize} ${t.textDecorationLine}`; });
+    expect(sec).toBe("space-between baseline 22px underline");
+    await book.locator(".btn", { hasText: "Close" }).click();
+    await expect(book).toHaveCount(0);
+  }
+});
+
 test("the bell tip in the gallery at every launch width (board 4b) @infotip", async ({ page }) => {
   test.setTimeout(90_000);
   for (const width of WIDTHS) {
