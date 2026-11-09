@@ -5,7 +5,7 @@
 import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { BANK_JOB, PERKS, TERMS, TIPS, type RoleId } from "@skimjob/content";
+import { BANK_JOB, PERKS, TERMS, TIPS, ordinal, type RoleId } from "@skimjob/content";
 import { replay, setupEvents, viewFor, type GameConfig, type PlayerView } from "@skimjob/engine";
 import { describe, expect, it } from "vitest";
 import { RoleCard } from "../screens/Meetings";
@@ -117,5 +117,28 @@ describe("QA: no plain-string numbers in the §20.5 lines — design §20.5", ()
     const lines = src.split("\n").filter((l) => /(wanted|raid|bust|honesty|bell):\s*\{/.test(l));
     expect(lines.length).toBeGreaterThanOrEqual(5);
     for (const l of lines) expect(l, l).not.toMatch(/\b\d+(st|nd|rd|th)\b|Wanted \d|\b(Three|Four)\b|⅔|2\/3/);
+  });
+});
+
+describe("QA round 3: the Terms read the game's own alarm numbers — design §20.5", () => {
+  it("raid, Wanted and Bust follow an alarm override, with no default left in the Terms", () => {
+    for (const [bulbs, bustStars, ord, word] of [[5, 4, "5th", "Four"], [1, 1, "1st", "One"], [12, 2, "12th", "Two"]] as const) {
+      const t = text(view(config({ contentOverrides: { alarm: { bulbs, bustStars } } })));
+      const terms = t.slice(t.indexOf("Terms"));
+      expect(terms).toContain(`The ${ord} bulb lights`);
+      expect(terms).toContain(`One star per raid. ${word} is a bust.`);
+      expect(terms).toContain(`Wanted ${bustStars}. Only the Rooftop`);
+      expect(terms).not.toContain(`The ${ordinal(BANK_JOB.alarm.bulbs)} bulb`);
+      expect(terms).not.toContain(`Wanted ${BANK_JOB.alarm.bustStars}.`);
+    }
+  });
+
+  it("with no override the Terms are content's TERMS, word for word", () => {
+    const t = text(view(config())).replace(/&#x27;/g, "'").replace(/&amp;/g, "&");
+    for (const term of Object.values(TERMS)) expect(t).toContain(term.text);
+  });
+
+  it("the sunk-by-theft lines say two-thirds through lineWords, and no literal is left in describeEvent or reveal", () => {
+    for (const f of ["../game/describeEvent.ts", "../game/reveal.ts"]) expect(readFileSync(new URL(f, import.meta.url), "utf8")).not.toMatch(/two-thirds|⅔/);
   });
 });
