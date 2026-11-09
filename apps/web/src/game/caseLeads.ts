@@ -340,7 +340,8 @@ export function caseData(view: PlayerView, pins: ReadonlySet<string>): CaseData 
       const claimed = [...new Set([...x.plan, ...x.alibis].filter(([, at]) => at === room).map(([p]) => p))].map(who);
       d.summary = [
         rr.raided ? `raid · ${rr.seized} seized` : rr.hidden ? "bell ?" : rr.rings ? `rang ${rr.rings === 1 ? "once" : rr.rings}` : null,
-        rr.dark ? "power cut" : null,
+        // design §11.1, §18: the announcement's own form, never a bare "power cut" (the dropped R6 card's name).
+        rr.dark ? `Power cut in the ${roomName(room)}` : null,
         seen.length ? `seen ${seen.join(", ")}` : null,
         claimed.length ? `claimed ${claimed.join(", ")}` : rr.rings ? "claimed nobody" : null,
       ].filter((s): s is string => s !== null);

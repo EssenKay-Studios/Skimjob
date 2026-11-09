@@ -113,6 +113,16 @@ describe("the case board adapter — design §15.4", () => {
   });
 });
 
+describe("power cuts — design §11.1, §18", () => {
+  it("a lead's summary says \"Power cut in the Vault\", never a bare \"power cut\"", () => {
+    const v = view(game(ROLES, { room: "lobby", duffel: 1, pocket: 0 }));
+    const cut = { ...v, ledger: [...v.ledger, { seq: 9000, event: { type: "powerCut", visibility: { kind: "public" }, round: 1, room: "vault" } }] } as PlayerView;
+    const leads = caseData(cut, new Set()).leads;
+    expect(leads.find((l) => l.id === "r1.room.vault")?.summary).toContain("Power cut in the Vault");
+    for (const l of leads) expect(`${l.title} ${l.summary ?? ""}`).not.toMatch(/(?<!a )power cut(?! in the )/i);
+  });
+});
+
 describe("your own Plant evidence — design §12, §15.4", () => {
   it("isn't evidence: the feed sighting you planted gives no Seen elsewhere, and doesn't count in Too quiet", () => {
     const v = view(game(ROLES, { room: "lobby", duffel: 1, pocket: 0 }));
