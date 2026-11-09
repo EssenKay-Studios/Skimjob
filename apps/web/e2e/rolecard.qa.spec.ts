@@ -1,6 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { ROLES, TERMS, TIPS } from "@skimjob/content";
 import { expect, test, type APIRequestContext, type Locator, type Page } from "@playwright/test";
+import { closePanel, openPanel } from "./setupGame";
 
 // QA for PR #207 (S4.5; design §11.3, §15.6, §18, §20): the role card, Roles in
 // play and the "This game" rulebook in real bot games with Exact, Possible and
@@ -25,6 +26,7 @@ async function botGame(page: Page, roleList: List) {
   for (let i = 0; i < 4; i++) await ok(await r.post(`/api/games/${game.id}/bots`, { data: {} }));
   await ok(await r.post(`/api/games/${game.id}/start`, { data: {} }));
   await page.goto(`/game/${game.id}`);
+  await openPanel(page, "This round"); // below 1024 px the role card is in this sheet
   const panel = page.locator(".role-card");
   await expect(panel).toContainText("only you see this", { timeout: 20_000 });
   return panel;
@@ -83,6 +85,8 @@ for (const list of ["exact", "possible", "hidden"] as const) {
 
     for (const width of list === "exact" ? WIDTHS : [360, 1280]) {
       await page.setViewportSize({ width, height: width < 768 ? 844 : 900 });
+      await expect(page.locator(".shell--wide")).toHaveCount(width >= 1024 ? 1 : 0); // the layout swap at 1024 px remounts the panel and closes the sheet
+      await openPanel(page, "This round");
       await panel.scrollIntoViewIfNeeded();
       expect(await overflow(page), `${width} page`).toBeLessThanOrEqual(0);
       expect(await small(panel), `${width} panel`).toEqual([]);
@@ -94,7 +98,7 @@ for (const list of ["exact", "possible", "hidden"] as const) {
       const open = panel.getByRole("button", { name: "Role card", exact: true });
       await open.focus();
       await page.keyboard.press("Enter");
-      const card = page.getByRole("dialog").filter({ hasText: "Your role · secret" });
+      const card = page.getByRole("dialog", { name: myRole });
       await expect(card).toBeVisible();
       await expect(card.locator("#role-card-h")).toHaveText(myRole);
       expect(await card.evaluate((el) => el.contains(document.activeElement))).toBe(true);
@@ -145,6 +149,7 @@ for (const list of ["exact", "possible", "hidden"] as const) {
       await shot(page, `${list}-${width}-roletip`);
       await page.keyboard.press("Escape");
       if (list === "exact") {
+        await closePanel(page); // the HUD is behind the sheet on phones
         const wanted = page.getByRole("button", { name: "About Wanted" });
         await wanted.scrollIntoViewIfNeeded();
         await wanted.click();
@@ -276,10 +281,13 @@ test("QA round 4: a tip inside the rulebook has the same header, title, body and
     });
   for (const width of [360, 1280]) {
     await page.setViewportSize({ width, height: 844 });
+    await expect(page.locator(".shell--wide")).toHaveCount(width >= 1024 ? 1 : 0);
+    await closePanel(page); // the HUD is behind the sheet on phones
     await page.getByRole("button", { name: "About Bank" }).click();
     const outside = await look();
     await shot(page, `r4-${width}-tip-outside`, pop(page));
     await page.keyboard.press("Escape");
+    await openPanel(page, "This round");
     await panel.getByRole("button", { name: "Rules", exact: true }).click();
     const book = page.getByRole("dialog", { name: "This game" });
     for (const [what, tip] of [
