@@ -17,7 +17,8 @@ import {
   type RolePower,
 } from "@skimjob/content";
 import { rolesFor, type PlayerView } from "@skimjob/engine";
-import { crewSize, jobOf, setupOf } from "./hud";
+import type { InstantAbility } from "@skimjob/engine";
+import { crewSize, jobOf, namesOf, roomOptions, setupOf } from "./hud";
 
 export const KIND_LABEL: Readonly<Record<RoleKind, string>> = {
   eyes: "Eyes",
@@ -164,3 +165,35 @@ export function numberRows(view: PlayerView): NumberRow[] {
 
 /** "from round 2 · 4 in 10": when the events deck may flip a card (design §13). */
 export const eventsNote = `from round ${EVENTS_FROM_ROUND} · ${EVENT_CHANCE.in} in ${EVENT_CHANCE.of}`;
+
+/** What "Use power" can point at from the card: other players (Detective) or the rooms in play (Auditor). design §11.1, §17.2 */
+export function abilityTargets(view: PlayerView, id: RoleId): { readonly id: string; readonly name: string }[] {
+  if (id === "detective") {
+    const name = namesOf(view);
+    // design §11.1 Readings: no power can target yourself (`view.players` has only the others).
+    return view.players.map((p) => ({ id: p.id, name: name(p.id) }));
+  }
+  return roomOptions(view).map((r) => ({ id: r.id, name: r.name }));
+}
+
+/** The `useAbility` command's ability for a card power aimed at `target`. design §11.1, §17.2 */
+export const abilityFor = (id: RoleId, target: string): InstantAbility => (id === "detective" ? { kind: "detect", target } : { kind: "audit", room: target });
+
+/**
+ * Opponents' explanation (design §15.6): a tell, and the candidates that could
+ * explain it, from the role list. "A bell rang more than the people in the room
+ * can explain: the Mole, or someone lying." Roles share a tell when they share a power.
+ */
+export function explainSpot(view: PlayerView, id: RoleId): string | undefined {
+  const roles = rolesOf(view);
+  const info = roleInfo(id, roles);
+  if (!info) return undefined;
+  const tell = info.spot.replace(/\.$/, "");
+  const kind = roles[id]!.power.kind;
+  const list = roleListInfo(view);
+  const names = (list.mode === "hidden" ? Object.keys(roles) : list.roles.map((r) => r.id))
+    .filter((r) => roles[r]!.power.kind === kind)
+    .map((r) => roles[r]!.name);
+  if (names.length === 0) return `${tell}: nobody in this game has that power, so someone is lying.`;
+  return `${tell}: ${list.mode === "hidden" ? "could be " : ""}the ${names.join(" or the ")}, or someone lying.`;
+}

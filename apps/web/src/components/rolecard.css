@@ -144,3 +144,7 @@ h3.rolecard__name {
   padding: 0;
   list-style: none;
 }
+.rolesinplay__why {
+  margin: 0;
+  overflow-wrap: anywhere;
+}

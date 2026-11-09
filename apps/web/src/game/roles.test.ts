@@ -1,6 +1,6 @@
 // Role cards (design §11, §15.6, §20.2), the "This game" rulebook (§12, §13, §20)
 // and endings, from real engine views.
-import { BANK_JOB, EMERGENCY_POOL, EVENTS, EVENT_CHANCE, PERKS, PERK_TEXT, ROLES, ROLE_TEXT, ROLE_WIN, TERMS } from "@skimjob/content";
+import { BANK_JOB, ROOM_TEXT, EMERGENCY_POOL, EVENTS, EVENT_CHANCE, PERKS, PERK_TEXT, ROLES, ROLE_TEXT, ROLE_WIN, TERMS } from "@skimjob/content";
 import { createGame, privateTo, viewFor, type GameConfig } from "@skimjob/engine";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -10,7 +10,7 @@ import { RoleCardBody, RolesInPlay } from "../components/RoleCard";
 import { Rulebook } from "../components/Rulebook";
 import { describeEvent } from "./describeEvent";
 import { endingText } from "./reveal";
-import { KIND_LABEL, cadenceOf, eventsNote, numberRows, powerUse, roleInfo, roleListInfo } from "./roles";
+import { KIND_LABEL, abilityFor, abilityTargets, cadenceOf, explainSpot, eventsNote, numberRows, powerUse, roleInfo, roleListInfo } from "./roles";
 
 const config = (extra: Partial<GameConfig> = {}): GameConfig => ({
   seed: "ext-test",
@@ -144,6 +144,17 @@ describe("the This game rulebook — design §12, §13, §15.6, §20", () => {
     expect(odd.find((r) => r.label === "Wanted")!.value).toBe("3 stars is a bust");
   });
 
+  it("lists only the rooms in play, with their §20.1 lines (design §15.6)", () => {
+    const v = game();
+    const ui = html(createElement(Rulebook, { view: v }));
+    expect(v.rooms.length).toBeGreaterThan(0);
+    for (const id of v.rooms) {
+      expect(ui, id).toContain(`${BANK_JOB.rooms[id]!.name}</b>`);
+      expect(ui, id).toContain(esc(ROOM_TEXT[id]!));
+    }
+    for (const [id, room] of Object.entries(BANK_JOB.rooms)) if (!v.rooms.includes(id)) expect(ui, id).not.toContain(`${room.name}</b>`);
+  });
+
   it("has the Terms glossary", () => {
     const ui = html(createElement(Rulebook, { view: game() }));
     for (const t of Object.values(TERMS)) expect(ui).toContain(esc(t.text));
@@ -179,5 +190,44 @@ describe("endings — design §8", () => {
     expect(note(["p2"])).not.toContain("loss");
     expect(note(["p1", "p3"])).toContain("You and Cy win over the Rooftop.");
     expect(note([])).toContain("The ranking is marked as a loss.");
+  });
+});
+
+describe("opponents' explanations — design §15.6", () => {
+  const view = (roleList: "exact" | "possible" | "hidden", seed = "rl") => viewFor(createGame(config({ roleList, seed })), "p1");
+
+  it("names the role that could explain a tell, or says someone is lying", () => {
+    const v = view("exact");
+    const dealt = new Set(v.roleList!.roles);
+    for (const id of Object.keys(ROLES)) {
+      const text = explainSpot(v, id)!;
+      expect(text.startsWith(ROLE_TEXT[id]!.spot.replace(/\.$/, ":")), id).toBe(true);
+      if (dealt.has(id)) expect(text, id).toContain(`the ${ROLES[id]!.name}, or someone lying.`);
+      else expect(text, id).toContain("nobody in this game has that power, so someone is lying.");
+    }
+  });
+
+  it("says 'could be' when the role list is hidden, and knows no role it doesn't have", () => {
+    expect(explainSpot(view("hidden"), "mole")).toBe("A bell rang more than the people in the room can explain: could be the Mole, or someone lying.");
+    expect(explainSpot(view("exact"), "nobody")).toBeUndefined();
+  });
+});
+
+describe("Use power from the card — design §11.1, §17.2", () => {
+  const v = viewFor(createGame(config({ seed: "ability" })), "p1");
+
+  it("the Detective's targets are the other players, never yourself (§11.1 Readings)", () => {
+    const ids = abilityTargets(v, "detective").map((t) => t.id);
+    expect(ids).toEqual(v.players.map((p) => p.id));
+    expect(ids).not.toContain(v.me.id);
+  });
+
+  it("the Auditor's targets are the rooms in play", () => {
+    expect(abilityTargets(v, "auditor").map((t) => t.id)).toEqual(v.rooms);
+  });
+
+  it("sends {detect, target} and {audit, room}", () => {
+    expect(abilityFor("detective", "p2")).toEqual({ kind: "detect", target: "p2" });
+    expect(abilityFor("auditor", "vault")).toEqual({ kind: "audit", room: "vault" });
   });
 });

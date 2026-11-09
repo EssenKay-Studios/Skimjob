@@ -21,7 +21,7 @@ import { describe, expect, it } from "vitest";
 import { describeEvent } from "../game/describeEvent";
 import { namesOf } from "../game/hud";
 import { roleInfo, roleListInfo } from "../game/roles";
-import { RolesInPlay } from "./RoleCard";
+import { RoleCardDialog, RolesInPlay } from "./RoleCard";
 import { Rulebook } from "./Rulebook";
 import { GameOver } from "../screens/Game";
 
@@ -187,6 +187,22 @@ describe("role cards and the rulebook match design §11.1 and §20.2", () => {
     for (const p of v.shop) expect(ui).toContain(`${PERK_TEXT[p.perk]!.name}</b>`);
     expect(ui).not.toMatch(/token/i);
     expect(ui).not.toMatch(/\bact\b|this act|per act|Team player|Wildcard|Lone wolf/i);
+  });
+});
+
+// ---------------------------------------------------------------- use power
+
+describe("the role card's Use power button — design §11.1, §17.2", () => {
+  const card = (role: RoleId) => html(createElement(RoleCardDialog, { view: viewFor(game(config(4), { roles: [role] }), "p0"), open: true, onClose: () => {}, send: async () => ({ ok: true as const }), claim: null }));
+
+  it("move powers and Detective/Auditor have it; passive powers (Locksmith, Smooth Talker) have none", () => {
+    for (const r of ["lookout", "hacker", "electrician", "priest", "mole", "fixer", "detective", "auditor"]) expect(card(r), r).toContain("Use power");
+    for (const r of ["locksmith", "smoothTalker"]) expect(card(r), r).not.toContain("Use power");
+  });
+
+  it("shows your own card with no opponent explanation, and the role list chips beneath elsewhere", () => {
+    expect(card("mole")).toContain("Your role · secret");
+    expect(card("mole")).not.toContain("someone lying");
   });
 });
 

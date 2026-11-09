@@ -6,8 +6,8 @@ import type { PlayerView } from "@skimjob/engine";
 import { CrookAvatar } from "../art/Crook";
 import { RoleIcon } from "../art/RoleIcon";
 import { seatLooks } from "../game/board";
-import { namesOf, roomOptions } from "../game/hud";
-import { roleInfo, roleListInfo, rolesOf, type RoleInfo } from "../game/roles";
+import { namesOf } from "../game/hud";
+import { abilityFor, abilityTargets, explainSpot, roleInfo, roleListInfo, rolesOf, type RoleInfo } from "../game/roles";
 import type { ClientCommand, Reply } from "../game/useGame";
 import { Button } from "./Button";
 import { InfoTip } from "./InfoTip";
@@ -73,18 +73,10 @@ function UsePower({ view, info, send, onClose }: { view: PlayerView; info: RoleI
         Use power
       </Button>
     );
-  const detect = info.id === "detective";
-  const names = namesOf(view);
-  const targets = detect ? view.players.map((p) => ({ id: p.id, name: names(p.id) })) : roomOptions(view).map((r) => ({ id: r.id, name: r.name }));
+  const targets = abilityTargets(view, info.id);
   const use = async (target: string) => {
     setBusy(true);
-    const r = await send(
-      {
-        type: "useAbility",
-        ability: detect ? { kind: "detect", target } : { kind: "audit", room: target },
-      },
-      "Power used: see your case file.",
-    );
+    const r = await send({ type: "useAbility", ability: abilityFor(info.id, target) }, "Power used: see your case file.");
     setBusy(false);
     if (r.ok) onClose();
   };
@@ -94,7 +86,7 @@ function UsePower({ view, info, send, onClose }: { view: PlayerView; info: RoleI
         {open ? "Never mind" : "Use power"}
       </Button>
       {open && (
-        <div id={panel} className="rolecard__targets" role="group" aria-label={detect ? "Player to check" : "Room to audit"}>
+        <div id={panel} className="rolecard__targets" role="group" aria-label={info.id === "detective" ? "Player to check" : "Room to audit"}>
           {targets.map((t) => (
             <Button key={t.id} variant="small" seed={`power-${t.id}`} disabled={busy} onClick={() => use(t.id)}>
               {t.name}
@@ -149,11 +141,12 @@ export function RolesInPlay({ view }: { view: PlayerView }) {
   const list = roleListInfo(view);
   const roles = rolesOf(view);
   const [shown, setShown] = useState<string | null>(null);
+  const head = useId();
   const info = shown ? roleInfo(shown, roles) : undefined;
   return (
-    <section className="rolesinplay" aria-labelledby="rip-h">
+    <section className="rolesinplay" aria-labelledby={head}>
       <header className="rolesinplay__head">
-        <h3 id="rip-h">{list.title}</h3>
+        <h3 id={head}>{list.title}</h3>
         <p className="meta">{list.note}</p>
       </header>
       {list.roles.length > 0 && (
@@ -176,6 +169,7 @@ export function RolesInPlay({ view }: { view: PlayerView }) {
         </ul>
       )}
       {info && <RoleCardBody info={info} />}
+      {info && shown !== view.me.role && <p className="meta rolesinplay__why">{explainSpot(view, info.id)}</p>}
     </section>
   );
 }

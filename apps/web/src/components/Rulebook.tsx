@@ -2,10 +2,10 @@
 // role list), this game's three black-market perks, the events deck and the
 // numbers, plus the Terms glossary. Every line and number comes from content
 // or the player's own view.
-import { EVENTS, TERMS, infoText } from "@skimjob/content";
+import { EVENTS, ROOM_TEXT, TERMS, infoText } from "@skimjob/content";
 import type { PlayerView } from "@skimjob/engine";
 import { RoleIcon } from "../art/RoleIcon";
-import { setupOf } from "../game/hud";
+import { jobOf, setupOf } from "../game/hud";
 import { eventsNote, numberRows, roleInfo, roleListInfo, rolesOf } from "../game/roles";
 import { Button } from "./Button";
 import { InfoTip, MoreInGame } from "./InfoTip";
@@ -71,6 +71,19 @@ export function Rulebook({ view }: { view: PlayerView }) {
                   <InfoTip info={{ kind: "perk", id: perk }} />
                 </div>
                 <p>{infoText({ kind: "perk", id: perk })?.text}</p>
+              </li>
+            ))}
+          </ul>
+        </Section>
+        <Section id="rooms" title="Rooms" note={`${view.rooms.length} in play`}>
+          <ul className="rulebook__rows">
+            {view.rooms.map((id) => (
+              <li key={id}>
+                <div className="rulebook__name">
+                  <b className="hand">{jobOf(view).rooms[id]?.name ?? id}</b>
+                  <InfoTip info={{ kind: "room", id }} />
+                </div>
+                <p>{ROOM_TEXT[id]}</p>
               </li>
             ))}
           </ul>

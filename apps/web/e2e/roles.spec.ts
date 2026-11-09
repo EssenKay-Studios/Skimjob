@@ -46,7 +46,8 @@ test("gallery role card, roles in play and rulebook fit every launch width @role
       await page.waitForTimeout(600);
       await page.screenshot({ path: `${SHOTS}/s45-role-card-${width}.png` });
     }
-    await card.locator(".btn", { hasText: "Close" }).click();
+    // design §11.1: a move power (the Lookout's) closes the card and points back at the move.
+    await card.getByRole("button", { name: "Use power" }).click();
     await expect(card).toHaveCount(0);
 
     // Roles in play: a tap on a chip opens that role's card beneath, pressed chip.
@@ -60,7 +61,7 @@ test("gallery role card, roles in play and rulebook fit every launch width @role
     await page.locator('section[aria-labelledby="g-rulebook"]').getByRole("button", { name: "Open the rulebook" }).click();
     const book = page.getByRole("dialog", { name: "This game" });
     await expect(book).toBeVisible();
-    for (const h of ["Roles in play", "Black market", "Events", "Numbers", "Terms"]) await expect(book.getByRole("heading", { name: h, level: 3 })).toBeVisible();
+    for (const h of ["Roles in play", "Black market", "Rooms", "Events", "Numbers", "Terms"]) await expect(book.getByRole("heading", { name: h, level: 3 })).toBeVisible();
     await expect(book.getByRole("list", { name: "This game's black market" }).getByRole("listitem")).toHaveCount(3);
     await expect(book.getByText("More in This game")).toHaveCount(0);
     expect((await book.boundingBox())!.width).toBeLessThanOrEqual(width);
