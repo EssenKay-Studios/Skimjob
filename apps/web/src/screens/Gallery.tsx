@@ -1,7 +1,7 @@
 // /dev/gallery: every component and token on one page, for eyeballing the
 // style against docs/ui-style.md and for screenshots.
 import { useCallback, useReducer, useState, type ReactNode } from "react";
-import { ChatPanel, EvidenceCardView } from "../components/Chat";
+import { ChatPanel, EvidenceCardView, type ChatDrafts } from "../components/Chat";
 import { chatReducer, EMPTY_CHAT, markRead, type ChatMessage, type ChatRequest, type ReadState, type ThreadId } from "../game/chat";
 import { Avatar } from "../components/Avatar";
 import { BankDoodle } from "../components/BankDoodle";
@@ -458,6 +458,7 @@ function ChatSamples() {
   );
   const [read, setRead] = useState<ReadState>({});
   const onRead = useCallback((t: ThreadId, at: string) => setRead((r) => markRead(r, t, at)), []);
+  const [drafts, setDrafts] = useState<ChatDrafts>({});
   const send = async (req: ChatRequest) => {
     const base = { id: `local-${Date.now()}`, from: "me", to: req.to, at: new Date().toISOString() };
     dispatch({ type: "message", message: "text" in req ? { ...base, verified: false, text: req.text } : { ...base, verified: true, card: G_SIGHTING } });
@@ -475,7 +476,8 @@ function ChatSamples() {
         connection="open"
         evidence={[{ seq: 1, text: "Round 2, Vault: Dez saw Lucky Lou there too." }]}
         events={[{ key: "g-ev", at: gAt(6), text: "Round 2: 13 taken, 4 went missing, 51 coins left in the bank." }]}
-        visible
+        drafts={drafts}
+        onDraft={(t, text) => setDrafts((d) => ({ ...d, [t]: text }))}
         className="g-chat__panel"
       />
       <div className="g-col">

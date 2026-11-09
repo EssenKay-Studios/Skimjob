@@ -3,7 +3,7 @@
 // localStorage. design §12.1, ui-style §10, docs/m2-plan.md M2-8
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PlayerView } from "@skimjob/engine";
-import { ChatPanel, type ChatPerson } from "../components/Chat";
+import { ChatPanel, type ChatDrafts, type ChatPerson } from "../components/Chat";
 import { feedWorthy, markRead, mergeRead, shareableEntries, totalUnread, type FeedEvent, type ReadState, type ThreadId } from "../game/chat";
 import { describeEvent } from "../game/describeEvent";
 import { namesOf, seatsOf } from "../game/hud";
@@ -82,6 +82,9 @@ function useLiveEvents(view: PlayerView, offset: number): readonly FeedEvent[] {
 /** The chat panel for the game shell, and the unread count for its tab (the read marks and the feed live here, so they follow the game while the panel is closed). */
 export function useGameChat({ gameId, view, channel, dmNotices }: { gameId: string; view: PlayerView; channel: GameChannel; dmNotices: boolean }) {
   const [read, onRead] = useChatRead(gameId, view.me.id);
+  // Held here, not in the panel: the shell unmounts the panel when its sheet closes or a meeting takes the sheet.
+  const [drafts, setDrafts] = useState<ChatDrafts>({});
+  const onDraft = useCallback((thread: ThreadId, text: string) => setDrafts((d) => ({ ...d, [thread]: text })), []);
   const events = useLiveEvents(view, channel.offset);
   const me = view.me.id;
   const people = useMemo<ChatPerson[]>(() => seatsOf(view).map((s) => ({ id: s.id, name: s.name, isBot: s.isBot })), [view]);
@@ -104,7 +107,8 @@ export function useGameChat({ gameId, view, channel, dmNotices }: { gameId: stri
       evidence={evidence}
       events={events}
       dmNotices={dmNotices}
-      visible
+      drafts={drafts}
+      onDraft={onDraft}
       className="shell-chat"
     />
   );

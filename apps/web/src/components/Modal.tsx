@@ -5,7 +5,7 @@
 // order of nested modals (the vote window opens over a bottom sheet).
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 
-/** How many modals are open: the page scroll stays locked until the last one closes. */
+/** How many modals are open: the page scroll stays locked until the last one closes. Every increment has its cleanup in the same effect, so React's StrictMode double run (mount, clean up, mount) still balances. */
 let openCount = 0;
 
 /** False inside a modal that is not up yet: a dialog opened before the one it sits in would land beneath it in the top layer. */

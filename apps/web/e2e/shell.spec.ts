@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { chatTab, openPanel, startGame } from "./setupGame";
+import { chatTab, openChat, openPanel, startGame } from "./setupGame";
 
 // The one-screen layout shell and the bottom sheet (design §15.6, S3b.2) at the
 // five launch widths, on the gallery's demo page: no horizontal overflow, targets
@@ -186,7 +186,7 @@ test("a sheet locks the page behind it and gives the scroll back on close @shell
 // DevTools protocol, and a mouse drag: both reach the sheet as pointer events); a short drag springs back.
 test("swiping the grip of a game sheet down dismisses it, by touch and by mouse; a short swipe springs back @shell", async ({ browser }) => {
   test.setTimeout(60_000);
-  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+  const ctx = await browser.newContext({ viewport: { width: 360, height: 740 }, hasTouch: true, isMobile: true });
   const page = await ctx.newPage();
   const game = await startGame(page.request, { bots: 3, sessionLength: "1w" });
   await page.goto(`/game/${game.id}`);
@@ -215,6 +215,9 @@ test("swiping the grip of a game sheet down dismisses it, by touch and by mouse;
   await openPanel(page, "Chat");
   await expect(sheet).toHaveCount(1);
   await settle(page);
+  // The drag zone overlaps the header by 14 px: the close button must still be what a tap at its centre hits.
+  const closeAt = (await page.locator(".bsheet__close").boundingBox())!;
+  expect(await page.evaluate(([x, y]) => document.elementFromPoint(x!, y!)?.closest("button")?.className, [closeAt.x + closeAt.width / 2, closeAt.y + 2])).toBe("bsheet__close");
   // Short: the sheet follows the finger, then goes back; it stays open.
   await touchDrag(30);
   await expect(sheet).toHaveCount(1);
@@ -235,4 +238,33 @@ test("swiping the grip of a game sheet down dismisses it, by touch and by mouse;
   await touchDrag(-160);
   await expect(sheet).toHaveCount(1);
   await ctx.close();
+});
+
+// S4: the chat's drafts live above the panel, so closing the sheet (any way) or a meeting taking it over keeps what was typed.
+test("a chat draft survives closing the sheet by every route and reopening it @shell", async ({ browser }) => {
+  test.setTimeout(60_000);
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+  const page = await ctx.newPage();
+  const guestCtx = await browser.newContext(); // a person to DM (the DM list never offers bots)
+  const game = await startGame(page.request, { bots: 2, guests: [guestCtx.request], sessionLength: "1w" });
+  await page.goto(`/game/${game.id}`);
+  const sheet = page.locator("dialog.bsheet[open]");
+  const input = page.locator(".chat__input");
+  await openChat(page);
+  await input.fill("half-typed, keep me");
+  for (const close of [() => page.locator(".bsheet__close").click(), () => page.keyboard.press("Escape"), () => page.mouse.click(195, 30)]) {
+    await close();
+    await expect(sheet).toHaveCount(0);
+    await openChat(page);
+    await expect(input).toHaveValue("half-typed, keep me");
+  }
+  // The DM thread keeps its own draft.
+  await page.getByRole("button", { name: "DM", exact: true }).click();
+  await page.getByRole("group", { name: "Message a player privately" }).getByRole("button").first().click();
+  await input.fill("a private draft");
+  await page.locator(".bsheet__close").click();
+  await openChat(page);
+  await expect(input).toHaveValue("half-typed, keep me");
+  await ctx.close();
+  await guestCtx.close();
 });

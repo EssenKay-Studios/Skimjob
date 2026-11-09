@@ -30,7 +30,8 @@ const panel = (over: Partial<ChatPanelProps> = {}) =>
       send: async () => ({ ok: true }) as const,
       connection: "open",
       evidence: [],
-      visible: true,
+      drafts: {},
+      onDraft: () => {},
       ...over,
     }),
   );

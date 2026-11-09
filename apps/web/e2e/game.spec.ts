@@ -203,7 +203,6 @@ test("the bank board: tap a room to pick it, see who you saw and the alibi claim
   await expect(board.locator(".bank-room[data-room=vault]")).toHaveAttribute("aria-pressed", "false");
   // Only you stand in the bank while planning: nobody else's pick is drawn.
   await expect(board.locator(".bank-room .crook-fig")).toHaveCount(1);
-  await openPanel(page, "This round");
   await page.getByRole("button", { name: "Lock it in" }).click();
   await expect(page.getByText("Locked in: Office")).toBeVisible();
 

@@ -237,6 +237,7 @@ html.modal-open body {
   background: var(--ink-faint);
 }
 .bsheet__head {
+  position: relative; /* paints over the grip's drag zone, which overlaps it by 14 px */
   display: flex;
   align-items: center;
   gap: 8px;
