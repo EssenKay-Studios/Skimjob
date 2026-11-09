@@ -59,7 +59,8 @@ function flip(started: GameState, round: number, card: string, draw: Draw): Game
  * drawn at random from the whole deck, so cards can repeat (owner, 6 Nov). A
  * card that can't apply is redrawn from the cards that can, so a flip always
  * lands a card (owner, 8 Nov; Audit and Inside tip always apply). design §13
- * Then each blackout for this round (an Electrician's, or a Blackout perk) is announced, with no source (§11.1, §12).
+ * Then each blackout for this round (an Electrician's, or a Blackout perk) is announced, with no source,
+ * in the game's room order, so neither the order nor the source shows who cut it or when (§11.1, §12, §18).
  */
 export function startRound(state: GameState, round: number, draw: Draw): GameEvent[] {
   const started: GameEvent = { type: "roundStarted", visibility: PUBLIC, round };
@@ -72,7 +73,7 @@ export function startRound(state: GameState, round: number, draw: Draw): GameEve
       events.push(...flip(now, round, card, draw));
     }
   }
-  for (const room of state.cutsPending) events.push({ type: "powerCut", visibility: PUBLIC, round, room });
+  for (const room of state.rooms.filter((r) => state.cutsPending.includes(r))) events.push({ type: "powerCut", visibility: PUBLIC, round, room });
   return events;
 }
 

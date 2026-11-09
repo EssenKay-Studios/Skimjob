@@ -241,6 +241,25 @@ describe("Blackout: next round, one room goes dark, announced like a power cut �
     expect(ofType(events, "roomWatched").map((e) => [e.seen, e.offline])).toEqual([[[], true]]);
     expect(ofType(events, "bellsRung")[0]?.bells.office).toBe(2);
   });
+
+  it("leak: a round's cuts are announced in the game's room order, whatever their source (perk or Electrician) or the order bought — design §11.1, §12, §18", () => {
+    // p3 is the Electrician; p0 and p1 can afford a Blackout.
+    const cfg = config(4);
+    const dealt = replay(cfg, setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: e.player === "p3" ? "electrician" : "lookout" } : e.type === "shopDealt" ? { ...e, perks: PERK_IDS } : e)));
+    const start = withStash(withStash(dealt, "p0", 9), "p1", 9);
+    const cut = (room: string) => mv("p3", "lobby", 0, { ability: { kind: "blackout", room } });
+    // The bystander p2's ledger once round 2 has started.
+    const ledger = (...commands: Cmd[]) => viewFor(run(start, ...commands, mv("p2", "lobby"), ...NEXT), "p2").ledger.map(({ event }) => event);
+    const ordered = start.rooms.filter((r) => r === "office" || r === "vault");
+    const bought = ledger(buy("p0", { kind: "blackout", room: "office" }), mv("p0", "lobby"), buy("p1", { kind: "blackout", room: "vault" }), mv("p1", "lobby"), mv("p3", "lobby"));
+    expect(ofType(bought, "powerCut").map((e) => e.room)).toEqual(ordered);
+    // The same lock-ins; the purchases the other way round (rooms swapped between buyers, bought in the opposite order).
+    expect(ledger(buy("p1", { kind: "blackout", room: "office" }), mv("p0", "lobby"), buy("p0", { kind: "blackout", room: "vault" }), mv("p1", "lobby"), mv("p3", "lobby"))).toEqual(bought);
+    // A perk's cut and the Electrician's: the same announcements whichever room each one cut.
+    const mixed = ledger(buy("p0", { kind: "blackout", room: "office" }), mv("p0", "lobby"), mv("p1", "lobby"), cut("vault"));
+    expect(ofType(mixed, "powerCut").map((e) => e.room)).toEqual(ordered);
+    expect(ledger(buy("p0", { kind: "blackout", room: "vault" }), mv("p0", "lobby"), mv("p1", "lobby"), cut("office"))).toEqual(mixed);
+  });
 });
 
 describe("Plant evidence: one player appears in one room's feeds this round — design §3.4, §12", () => {

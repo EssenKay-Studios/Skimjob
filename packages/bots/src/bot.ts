@@ -116,7 +116,7 @@ export function decide(view: PlayerView, p: Personality, random: Random, crewSee
   // design §9.3: an emergency only in the result window, while the crew's pool lasts.
   if (phase.kind === "result" && wantsEmergency(view, p, random)) out.push({ type: "callEmergency", player });
   if (phase.kind === "planning" && view.me.move === null) {
-    // design §12: a perk, if any, is bought with the round's move.
+    // design §12: a perk, if any, is bought with the round's move. Safe only because the engine holds its notices until planning closes.
     const move = chooseMove(view, p, random);
     out.push({ type: "submitMove", player, move }, ...buyPerk(view, p, random, move));
   }

@@ -207,8 +207,9 @@ describe("QA charges are per holder — design §11.3, §19.2 seam 9", () => {
     expect(ofType(since(s, after), "rngAdvanced")).toEqual([]);
     expect([roleState(after, "p0").usedThisStretch, roleState(after, "p1").usedThisStretch]).toEqual([1, 1]);
     const next = nextRound(after);
-    expect(ofType(next.log, "powerCut").map((e) => e.room)).toEqual(["office", "vault"]);
-    expect(next.dark).toEqual(["office", "vault"]);
+    // design §11.1, §18: announced in the game's room order, not seat order.
+    expect(ofType(next.log, "powerCut").map((e) => e.room)).toEqual(["vault", "office"]);
+    expect(next.dark).toEqual(["vault", "office"]);
   });
 });
 

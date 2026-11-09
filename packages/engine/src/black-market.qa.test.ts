@@ -370,9 +370,10 @@ describe("QA: each perk at its boundaries — design §12", () => {
       mv("p3", "lobby", 0, { ability: { kind: "blackout", room: "office" } }),
       ...NEXT,
     );
+    // design §12, §18: announced in the game's room order, not the order bought.
     expect(ofType(s.log, "powerCut").map((e) => [e.round, e.room])).toEqual([
-      [2, "office"],
       [2, "vault"],
+      [2, "office"],
     ]);
     expect([...s.dark].sort()).toEqual(["office", "vault"]);
     s = run(s, ...lobby(4), ...NEXT);
