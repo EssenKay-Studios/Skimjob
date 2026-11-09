@@ -57,6 +57,7 @@ test("the recap shows what changed while you were away, once, and the board stay
   await back.goto(`/game/${game.id}`);
   const recap = back.getByRole("region", { name: "While you were away" });
   await expect(recap).toBeVisible();
+  await openPanel(back, "Case");
   await expect(back.getByRole("region", { name: "Case board" }).getByRole("button", { name: /^Pin:/ }).first()).toBeEnabled();
   expect(notesLoads).toBeGreaterThan(0);
   expect(notesLoads).toBeLessThanOrEqual(2);

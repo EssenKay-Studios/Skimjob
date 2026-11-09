@@ -197,6 +197,8 @@ test("12 seats, 24-char names: a 15-min game to the end with moves changed, alib
   await expect(host.locator(".over__stamp")).toHaveText(/JOB DONE|BUSTED/);
   await once("over", host);
   await once("over-guest", guest);
+  await showResult(guest);
+  await openPanel(guest, "Case");
   await expect(await openLeads(guest)).toContainText("You missed round 1's deadline");
 
   expect(changed, "moves changed after locking").toBeGreaterThan(0);

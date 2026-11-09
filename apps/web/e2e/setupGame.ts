@@ -132,3 +132,25 @@ export async function keepRoundOpen(page: Page): Promise<void> {
     .click({ timeout: 1000 })
     .catch(() => {});
 }
+
+/** The final ranking in the "The result" panel keeps each row readable: a name and a role stay on one line (no letter-per-line wrapping) and nothing leaves the panel. */
+export async function expectRankingReadable(page: Page): Promise<void> {
+  const bad = await page.evaluate(() => {
+    const out: string[] = [];
+    const panel = document.querySelector(".ranking")?.closest("section, dialog, aside, div.shell__right")?.getBoundingClientRect();
+    for (const row of document.querySelectorAll<HTMLElement>(".ranking__row")) {
+      const r = row.getBoundingClientRect();
+      if (panel && (r.left < panel.left - 1 || r.right > panel.right + 1)) out.push(`row leaves its panel: ${row.textContent}`);
+      for (const el of row.querySelectorAll<HTMLElement>(".ranking__who *, .ranking__score *")) {
+        const text = el.textContent?.trim() ?? "";
+        if (el.children.length || text.length === 0 || text.length > 16) continue; // short words only: a 24-character name may wrap
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        const lines = new Set([...range.getClientRects()].map((q) => Math.round(q.top)));
+        if (lines.size > 1) out.push(`"${text}" wraps onto ${lines.size} lines`);
+      }
+    }
+    return out;
+  });
+  expect(bad).toEqual([]);
+}

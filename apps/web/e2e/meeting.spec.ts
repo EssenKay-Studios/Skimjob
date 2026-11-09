@@ -11,6 +11,7 @@ const SHOTS = process.env.MEET_SHOTS ?? process.env.SHOTS_DIR;
 
 /** design §15.4: opens the newest case board lead titled `title` and returns it. */
 async function openLead(page: Page, title: string): Promise<Locator> {
+  await openPanel(page, "Case");
   const lead = page.getByRole("group", { name: "Leads" }).locator(".cb__lead", { has: page.locator(".cb__title", { hasText: title }) }).first();
   const btn = lead.locator(".cb__lead-btn");
   if ((await btn.getAttribute("aria-expanded")) === "false") await btn.click();

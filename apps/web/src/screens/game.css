@@ -379,3 +379,36 @@
 .page:has(.shell--wide) .game-away {
   max-width: 1400px;
 }
+
+/* ---------- Laptop columns (the shell's side tabs and right column are narrow) ---------- */
+/* The chat fills its tab, and the composer takes the full width with the attach and send buttons under it. */
+.shell__left .shell-chat {
+  height: 100%;
+  min-height: 0;
+  padding: 8px 0 6px;
+}
+.shell__left .chat__compose-row {
+  flex-wrap: wrap;
+}
+.shell__left .chat__box {
+  order: -1;
+  flex: 1 1 100%;
+}
+.shell__left .chat__send {
+  margin-left: auto;
+}
+/* "The result" ranking: position and avatar beside the name; the score and the chips under the name. */
+.shell__right .ranking__row {
+  grid-template-columns: 18px auto minmax(0, 1fr);
+  gap: 4px 8px;
+}
+.shell__right .ranking__score {
+  grid-column: 3;
+  text-align: left;
+  overflow-wrap: normal;
+}
+.shell__right .ranking__row .chip,
+.shell__right .ranking__row .ranking__loss {
+  grid-column: 3;
+  justify-self: start;
+}

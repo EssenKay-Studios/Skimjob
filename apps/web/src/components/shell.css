@@ -90,7 +90,7 @@
 /* ---------- Laptops ---------- */
 .shell--wide {
   display: grid;
-  grid-template-columns: minmax(200px, 240px) minmax(0, 1fr) minmax(240px, 280px);
+  grid-template-columns: minmax(200px, 264px) minmax(0, 1fr) minmax(240px, 280px);
   grid-template-rows: auto minmax(0, 1fr);
   gap: var(--shell-gap) 14px;
   height: calc(100dvh - var(--topbar-h));

@@ -1,6 +1,6 @@
 import { mkdirSync } from "node:fs";
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { closePanel, gameOver, keepRoundOpen, openLeads, openPanel, showResult, startGame } from "./setupGame";
+import { closePanel, expectRankingReadable, gameOver, isWide, keepRoundOpen, openLeads, openPanel, showResult, startGame } from "./setupGame";
 
 // M2-6 acceptance (docs/m2-plan.md): a host and a guest play a 15-min game
 // against bots to the end in the browser and see the ranking.
@@ -94,6 +94,13 @@ test("a host and a guest play a 15-min game against bots to the end @move", asyn
   await expect(page.locator(".over__stamp")).toHaveText(STAMPS[ending!]!);
   if (ending === "bust") await expect(panel).toContainText("Busted. On a bust, only the Rooftop gets away.");
   await expect(over.locator(".ranking__row")).toHaveCount(4);
+  // The laptop columns are narrow: the rows stay readable at 1280 and at 1024 (this test runs on both projects' widths; the sheet is the same code below 1024).
+  await expectRankingReadable(page);
+  if (isWide(page)) {
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await expectRankingReadable(page);
+    await page.setViewportSize({ width: 1280, height: 800 });
+  }
   await shot(page, "over");
 
   // The case board keeps the game's facts (design §15.4): the round haul, the host's alibi and grab, the host's

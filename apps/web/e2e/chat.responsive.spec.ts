@@ -91,6 +91,24 @@ for (const viewport of VIEWPORTS) {
         await expect(page.locator(".chat__input")).toBeInViewport();
       }
 
+      if (wide) {
+        // The side tab: the composer is a usable width, and the textarea, Share and Send sit fully inside the panel's frame (not under its bottom edge).
+        const frame = (await chat.boundingBox())!;
+        const input = (await page.locator(".chat__input").boundingBox())!;
+        expect(input.width, "composer width").toBeGreaterThanOrEqual(240);
+        for (const [name, box] of [
+          ["composer", input],
+          ["Share evidence", (await page.getByRole("button", { name: "Share evidence" }).boundingBox())!],
+          ["Send", (await page.getByRole("button", { name: "Send", exact: true }).boundingBox())!],
+        ] as const) {
+          expect(box.x, `${name} left`).toBeGreaterThanOrEqual(frame.x);
+          expect(box.x + box.width, `${name} right`).toBeLessThanOrEqual(frame.x + frame.width);
+          expect(box.y + box.height, `${name} bottom`).toBeLessThanOrEqual(frame.y + frame.height);
+        }
+        const side = (await page.locator(".shell__left").boundingBox())!;
+        expect(frame.y + frame.height, "chat panel inside the side tab").toBeLessThanOrEqual(side.y + side.height);
+      }
+
       // Long words, long lines and a DM thread.
       const long = `${"Supercalifragilistic".repeat(8)} and a normal sentence that has to wrap onto a few lines in a narrow panel.`;
       await page.locator(".chat__input").fill(long);
