@@ -663,6 +663,8 @@ Bust (every role): "On a bust, only the Rooftop gets away."
 | Leads | What happened, newest first. ⚠ means two facts don't add up. |
 | Pins | Pin a lead or one fact. Only you see your pins. |
 | Suspect | Who your facts point at: your pins if you have 2 or more, otherwise every lead. A hunch, not proof. |
+| Black market | Perks cost coins from your stash; they leave the game. Every purchase is logged without a name. |
+| Paying from your stash | You pay from your stash as it stood when the round began. This round's pocket can't pay. |
 
 ---
 
