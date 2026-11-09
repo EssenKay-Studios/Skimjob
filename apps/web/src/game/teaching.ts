@@ -25,12 +25,18 @@ export function happened(view: PlayerView): ReadonlySet<LessonId> {
   return out;
 }
 
-/** The lesson to show now, or null: Tips off, the game over (the reveal has the floor), nothing new, or everything already seen. */
+/** The vote window owns the screen while a meeting runs: one sheet at a time (§20.6). */
+export const heldByMeeting = (view: PlayerView): boolean => view.phase.kind === "meeting" || view.phase.kind === "shakedownPending";
+
+/** The lesson to show now, or null: Tips off, the game over (the reveal has the floor), a meeting open, nothing new, or everything already seen. */
 export function dueLesson(view: PlayerView, seen: ReadonlySet<string>, tips: boolean): LessonId | null {
-  if (!tips || view.phase.kind === "ended") return null;
+  if (!tips || view.phase.kind === "ended" || heldByMeeting(view)) return null;
   const now = happened(view);
   return ORDER.find((id) => now.has(id) && !seen.has(id)) ?? null;
 }
+
+/** The lesson on screen: the one already open stays until dismissed, a newer one queues behind it (§20.6); Tips off closes it. */
+export const latch = (current: LessonId | null, due: LessonId | null, tips: boolean): LessonId | null => (tips ? (current ?? due) : null);
 
 const key = (player: string) => `skimjob.lessons.${player}`;
 

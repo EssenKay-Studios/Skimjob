@@ -2,7 +2,7 @@
 import { LESSONS } from "@skimjob/content";
 import type { PlayerView } from "@skimjob/engine";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { dueLesson, happened, loadSeen, saveSeen } from "./teaching";
+import { dueLesson, happened, heldByMeeting, latch, loadSeen, saveSeen } from "./teaching";
 
 type Ev = Record<string, unknown> & { type: string };
 const view = (events: Ev[], extra: { round?: number; wanted?: number } = {}): PlayerView =>
@@ -47,6 +47,14 @@ describe("the due lesson — design §15.6", () => {
   it("never shows one when Tips is off", () => {
     expect(dueLesson(busy, new Set(), false)).toBeNull();
   });
+  it("holds back while a meeting's vote window is open (§20.6: one sheet at a time)", () => {
+    for (const kind of ["meeting", "shakedownPending"]) {
+      const v = { ...busy, phase: { kind } } as unknown as PlayerView;
+      expect(heldByMeeting(v)).toBe(true);
+      expect(dueLesson(v, new Set(), true)).toBeNull();
+    }
+    expect(dueLesson({ ...busy, phase: { kind: "result" } } as unknown as PlayerView, new Set(), true)).toBe("raid");
+  });
   it("shows nothing once the game has ended", () => {
     expect(dueLesson({ ...busy, phase: { kind: "ended" } } as unknown as PlayerView, new Set(), true)).toBeNull();
   });
@@ -78,5 +86,17 @@ describe("lesson text — design §20.6", () => {
     for (const l of Object.values(LESSONS)) for (const part of [l.title, l.happened, l.means, l.canDo]) expect(part.trim()).not.toBe("");
     expect(LESSONS.raid.happened).toContain("4th");
     expect(LESSONS.oneStar.happened).toContain("2 of 3");
+  });
+});
+
+describe("the open lesson — design §20.6", () => {
+  it("stays until dismissed; a higher-priority one queues behind it", () => {
+    expect(latch(null, "bell", true)).toBe("bell");
+    expect(latch("bell", "shakedown", true)).toBe("bell");
+    expect(latch(null, "shakedown", true)).toBe("shakedown");
+  });
+  it("closes with Tips off and opens nothing when nothing is due", () => {
+    expect(latch("bell", "bell", false)).toBeNull();
+    expect(latch(null, null, true)).toBeNull();
   });
 });

@@ -219,7 +219,7 @@ export const LESSONS = {
   },
   missing: {
     title: "Coins went missing",
-    happened: "Some coins were taken this round that never reached the duffel.",
+    happened: "The round's result shows coins that were taken but never handed in.",
     means: TIPS.missing.text,
     canDo: `Watch the honesty meter: under ${lineWords(BANK_JOB.honestyLine)} and the heist fails for everyone. Talk it over at the meeting.`,
   },

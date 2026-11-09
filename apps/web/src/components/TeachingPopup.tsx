@@ -3,8 +3,8 @@
 // focus moves into it and goes back to where it was; the text is from content.
 import { LESSONS, type LessonId } from "@skimjob/content";
 import type { PlayerView } from "@skimjob/engine";
-import { useState } from "react";
-import { dueLesson, loadSeen, saveSeen } from "../game/teaching";
+import { useEffect, useState } from "react";
+import { dueLesson, heldByMeeting, latch, loadSeen, saveSeen } from "../game/teaching";
 import { Button } from "./Button";
 import { DialogSheet } from "./MeetingKit";
 import "./teaching.css";
@@ -40,16 +40,25 @@ export function TeachingPopup({ lesson, busy, onGotIt, onTipsOff }: { lesson: Le
   );
 }
 
-/** Shows the due pop-up for this player, if any; "Got it" (or Esc) marks it seen for good. */
+/**
+ * Shows the due pop-up for this player, if any; "Got it" (or Esc) marks it seen for good.
+ * One at a time: the lesson on screen stays until dismissed and a newer one queues behind it,
+ * and the sheet steps aside while a meeting's vote window is open (§20.6).
+ */
 export function TeachingPopups({ view, player, tips, saving, onTipsOff }: { view: PlayerView; player: string; tips: boolean; saving: boolean; onTipsOff: () => void }) {
   const [seen, setSeen] = useState(() => loadSeen(player));
-  const lesson = dueLesson(view, seen, tips);
+  const [current, setCurrent] = useState<LessonId | null>(null);
+  const due = dueLesson(view, seen, tips);
+  const latched = latch(current, due, tips);
+  useEffect(() => setCurrent(latched), [latched]);
+  const lesson = tips && !heldByMeeting(view) && view.phase.kind !== "ended" ? latched : null;
   const gotIt = () => {
-    // The dialog's own close event lands here once more after it hides: nothing is due then.
+    // The dialog's own close event lands here once more after it hides: nothing is showing then.
     if (!lesson) return;
     const next = new Set(seen).add(lesson);
     saveSeen(player, next);
     setSeen(next);
+    setCurrent(null);
   };
   return <TeachingPopup lesson={lesson} busy={saving} onGotIt={gotIt} onTipsOff={onTipsOff} />;
 }

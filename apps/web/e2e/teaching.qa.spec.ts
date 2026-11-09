@@ -78,14 +78,17 @@ for (const vp of VIEWPORTS) {
       shown.push(title);
       const lesson = Object.values(LESSONS).find((l) => l.title === title)!;
       const dialog = lessonDialog(page);
-      for (const line of [lesson.happened, lesson.means, lesson.canDo]) await expect(dialog.getByText(line, { exact: true })).toBeVisible();
       const gotIt = dialog.getByRole("button", { name: "Got it" });
-      // A pop-up due as a meeting opens lands under its vote window (QA #217 finding): wait it out.
+      // One sheet at a time (§20.6): while a meeting's vote window is open the pop-up steps aside, and it comes back
+      // with focus on Got it when the window closes. So wait for the moment it is the only open sheet.
       const vote = page.locator("dialog[open][aria-labelledby=vote-h]");
-      if (await vote.count()) {
-        await shot(page, `under-vote-${slug(title)}`);
-        await expect(vote).toHaveCount(0, { timeout: 60_000 });
-      } else await expect(gotIt).toBeFocused();
+      if (await vote.count()) await shot(page, `under-vote-${slug(title)}`);
+      await expect(async () => {
+        await expect(page.locator("dialog[open]")).toHaveCount(1, { timeout: 1000 });
+        await expect(dialog.locator("#teaching-h")).toHaveText(title, { timeout: 1000 });
+        for (const line of [lesson.happened, lesson.means, lesson.canDo]) await expect(dialog.getByText(line, { exact: true })).toBeVisible({ timeout: 1000 });
+        await expect(gotIt).toBeFocused({ timeout: 1000 });
+      }).toPass({ timeout: 90_000 });
       await page.waitForTimeout(700); // the entrance spring settles
       await fits(page, vp.width);
       await shot(page, `lesson-${slug(title)}`);
