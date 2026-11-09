@@ -109,7 +109,7 @@ test("a host and a guest play a 15-min game against bots to the end @move", asyn
   await guestCtx.close();
 });
 
-test("the move panel: pick a room, split the loot, lock it in, change it; reconnects after a dropped socket @move", async ({ page, browser }) => {
+test("the move panel: pick a room, coins into the bags, lock it in, change it; reconnects after a dropped socket @move", async ({ page, browser }) => {
   test.setTimeout(60_000);
   // Keep a handle on the page's sockets so the test can drop the game's (not Vite's, which would reload the page).
   await page.addInitScript(() => {

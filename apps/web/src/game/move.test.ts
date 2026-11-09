@@ -1,6 +1,6 @@
 // The move panel's helpers, from real engine views. design §3.2, §5.2, §11.1
 import { type RoleId } from "@skimjob/content";
-import { viewFor, type GameConfig, type PlayerView } from "@skimjob/engine";
+import { handleCommand, viewFor, type GameConfig, type PlayerView } from "@skimjob/engine";
 import { describe, expect, it } from "vitest";
 import { createGame } from "./deal.testkit";
 import { roomOptions } from "./hud";
@@ -69,6 +69,17 @@ describe("the bell preview (design §5.2, §5.3)", () => {
     expect(bellPreview(three, option(three, "vault"), 3)).toMatchObject({ bulbs: 3, adds: 3, raid: true });
   });
 
+  it("warns of a raid when the bulbs already lit plus your rings reach the last one (design §5.3: lit + rings >= bulbs)", () => {
+    const v = viewAs("detective");
+    const at = (lit: number) => ({ ...v, bells: { ...v.bells, vault: lit } });
+    expect(bellPreview(at(2), option(v, "vault"), 3)).toMatchObject({ lit: 2, adds: 2, raid: true }); // 2 + 3 >= 4
+    expect(bellPreview(at(1), option(v, "vault"), 2)).toMatchObject({ raid: false }); // 1 + 2 < 4
+    expect(bellPreview(at(1), option(v, "vault"), 3)).toMatchObject({ raid: true });
+    // A hidden bell's count is unknown: only the grab counts.
+    const { vault: _hidden, ...bells } = v.bells;
+    expect(bellPreview({ ...v, bells, hiddenBells: ["vault"] }, option(v, "vault"), 3).raid).toBe(false);
+  });
+
   it("is silent for the Locksmith (design §5.2) and with Soft shoes (design §12)", () => {
     const smith = viewAs("locksmith");
     expect(bellPreview(smith, option(smith, "vault"), 3).adds).toBe(0);
@@ -124,8 +135,29 @@ describe("the move powers (design §11.1)", () => {
     const all = viewAs("lookout").rooms;
     expect(powerControl(viewAs("lookout"))).toEqual({ kind: "lookout", target: "room", pick: 1, rooms: all });
     expect(powerControl(viewAs("electrician"))).toEqual({ kind: "blackout", target: "room", pick: 1, rooms: all });
-    expect(powerControl(viewAs("priest"))).toEqual({ kind: "absolve", target: "player" });
+    expect(powerControl(viewAs("priest"))).toEqual({ kind: "absolve", target: "player", players: ["p2", "p3", "p4", "p5"] });
     expect(powerControl(viewAs("hacker"))).toMatchObject({ kind: "hide", rooms: all });
+  });
+
+  it("does not offer the Priest the player absolved last time, and the engine would refuse it (design §11.1)", () => {
+    let s = createGame(config(5), ["priest"]);
+    const go = (c: Parameters<typeof handleCommand>[1]) => {
+      const r = handleCommand(s, c);
+      if (!r.ok) throw new Error(r.reason);
+      s = r.state;
+    };
+    go({ type: "submitMove", player: "p1", move: { room: "lobby", duffel: 1, pocket: 0, ability: { kind: "absolve", target: "p2" } } });
+    go({ type: "advance", deadline: { kind: "round", round: 1 } });
+    go({ type: "advance", deadline: { kind: "result", round: 1 } });
+    const v = viewFor(s, "p1");
+    expect(powerControl(v)).toBeNull(); // spent until a regular meeting; this view is that next stretch
+    const control = powerControl({ ...v, me: { ...v.me, roleState: { ...v.me.roleState, usedThisStretch: 0 } } });
+    expect(control).toMatchObject({ kind: "absolve", players: ["p3", "p4", "p5"] }); // not p2
+    const fresh = { ...s, players: { ...s.players, p1: { ...s.players.p1!, roleState: { ...s.players.p1!.roleState, usedThisStretch: 0 } } } };
+    const again = handleCommand(fresh, { type: "submitMove", player: "p1", move: { room: "lobby", duffel: 1, pocket: 0, ability: { kind: "absolve", target: "p2" } } });
+    expect(again).toMatchObject({ ok: false, reason: expect.stringContaining("twice in a row") });
+    expect(abilityOf(control, [], "p2")).toBeUndefined();
+    expect(abilityOf(control, [], "p3")).toEqual({ kind: "absolve", target: "p3" });
   });
 
   it("gives no control to a passive power or one used outside a move", () => {

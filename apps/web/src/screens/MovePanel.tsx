@@ -53,9 +53,9 @@ function PowerPick({ view, control, names, rooms, player, onRooms, onPlayer }: {
                 {names.get(r) ?? roomName(r)}
               </Button>
             ))
-          : view.players.map((p) => (
-              <Button key={p.id} variant="toggle" seed={`power-${p.id}`} pressed={player === p.id} onClick={() => onPlayer(player === p.id ? null : p.id)}>
-                {namesOf(view)(p.id)}
+          : control.players.map((id) => (
+              <Button key={id} variant="toggle" seed={`power-${id}`} pressed={player === id} onClick={() => onPlayer(player === id ? null : id)}>
+                {namesOf(view)(id)}
               </Button>
             ))}
       </div>
