@@ -1,7 +1,7 @@
 // QA (S4.4, #105): adversarial games against the case board adapter, over real
 // engine views (design §15.4, §18): leaks, false ⚠ on innocent players, the
 // suspect, and pin ids.
-import { handleCommand, viewFor, type GameConfig, type GameState, type Move, type PlanSnapshot, type PlayerCommand, type SystemCommand } from "@skimjob/engine";
+import { handleCommand, viewFor, type GameConfig, type GameState, type Move, type PlanSnapshot, type PlayerCommand, type PlayerView, type SystemCommand } from "@skimjob/engine";
 import { BANK_JOB, EVENTS } from "@skimjob/content";
 import { describe, expect, it } from "vitest";
 import { suspectOf, type Lead } from "./caseBoard";
@@ -170,5 +170,46 @@ describe("QA: Too quiet best cases combined — design §15.4", () => {
   it("a blacked-out Vault you stood in, with nobody counted, gets no Too quiet", () => {
     const r = { ...base, rooms: new Map([["vault", { rings: 1, raided: false, dark: true, watched: false, seen: new Map(), myCoins: 1 }]]) };
     expect(bellChecks(r, ctx, (p) => p).filter((f) => f.warning.kind === "tooQuiet")).toEqual([]);
+  });
+});
+
+describe("QA re-run: count a player only where seen, and your own plant — design §12, §15.4", () => {
+  it("a Lookout feed sighting elsewhere also keeps a liar out of the Vault's count, so Ava alone there isn't named", () => {
+    // You (Lookout) grab in the Office and watch the Lobby: Ben is on its feed. Ben says the Vault; Ava really grabbed 1 there.
+    const s = round1(
+      ROLES,
+      [{ ...grab("office"), ability: { kind: "lookout", rooms: ["lobby"] } }, grab("vault"), grab("lobby"), grab("office"), grab("lobby")],
+      [],
+      { type: "postAlibi", player: "p2", round: 1, room: "vault" },
+      { type: "postAlibi", player: "p3", round: 1, room: "vault" },
+    );
+    const w = warned(s);
+    expect(w.filter((x) => x.names.includes("p2"))).toEqual([]);
+    // Ben's lie is still flagged where the feed showed him.
+    expect(w.some((x) => x.kind === "seenElsewhere" && x.names.includes("p3"))).toBe(true);
+  });
+
+  it("drops only the exact sighting you planted: another round, another room or another player keeps its ⚠", () => {
+    // You sit in Security watching the Vault; Ava and Dev grab there. Dev says the Lobby, so the feed catches him.
+    const s = round1(
+      ROLES,
+      [{ room: "security", duffel: 0, pocket: 0, watch: "vault" }, grab("vault"), grab("office"), grab("office"), grab("vault")],
+      [],
+      { type: "postAlibi", player: "p5", round: 1, room: "lobby" },
+    );
+    const v = viewFor(s, "p1");
+    const withPlant = (round: number, target: string, room: string): PlayerView =>
+      ({
+        ...v,
+        caseFile: [...v.caseFile, { seq: 9000, event: { type: "perkBought", visibility: { kind: "private", player: "p1" }, player: "p1", round, perk: { kind: "plantEvidence", target, room }, cost: 3 } }],
+      }) as PlayerView;
+    const devFlagged = (view: PlayerView) =>
+      caseData(view, new Set()).leads.some((l) => l.warnings.some((w) => w.kind === "seenElsewhere" && w.names.includes("p5")));
+    expect(devFlagged(v)).toBe(true);
+    expect(devFlagged(withPlant(2, "p5", "vault"))).toBe(true);
+    expect(devFlagged(withPlant(1, "p5", "office"))).toBe(true);
+    expect(devFlagged(withPlant(1, "p2", "vault"))).toBe(true);
+    // Control: the plant you really made (Dev on the Vault, round 1) is dropped.
+    expect(devFlagged(withPlant(1, "p5", "vault"))).toBe(false);
   });
 });
