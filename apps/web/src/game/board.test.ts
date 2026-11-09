@@ -161,6 +161,26 @@ describe("board scene (M2-9 wiring)", () => {
       for (const room of ["office", "vault"]) expect(boardScene(locksmith, room).bells[room]).not.toHaveProperty("preview");
     });
 
+    it("a Locksmith's muffle follows this game's content overrides: fewerRings 0 rings like anyone's (design §5.2, §11.1)", () => {
+      const v = viewFor(createGame({ ...config(6), contentOverrides: { roles: { locksmith: { fewerRings: 0 } } } }), "p1");
+      const locksmith: PlayerView = { ...v, me: { ...v.me, role: "locksmith" } };
+      expect(boardScene(locksmith, "vault").bells.vault?.preview).toBe(BANK_JOB.rooms.vault!.coins - BANK_JOB.rooms.vault!.quietCoins);
+    });
+
+    it("after Soft shoes your coins ring nothing, so nothing is previewed that round (design §5.2, §12)", () => {
+      const v = planning();
+      const bought = (round: number, perk: object = { kind: "softShoes" }) =>
+        ({ seq: 99, event: { type: "perkBought", visibility: { kind: "private", to: v.me.id }, player: v.me.id, round, perk, cost: 2 } }) as unknown as PlayerView["caseFile"][number];
+      expect(boardScene(v, "vault").bells.vault?.preview).toBeGreaterThan(0);
+      // Bought the round before this one: silent.
+      const shod: PlayerView = { ...v, round: 2, caseFile: [...v.caseFile, bought(1)] };
+      expect(boardScene(shod, "vault").bells.vault).not.toHaveProperty("preview");
+      // Bought this round for the next one, or another perk, or someone else's: no effect yet.
+      const other = (e: PlayerView["caseFile"][number]) => ({ ...v, round: 2, caseFile: [...v.caseFile, e] });
+      expect(boardScene(other(bought(2)), "vault").bells.vault?.preview).toBeGreaterThan(0);
+      expect(boardScene(other(bought(1, { kind: "tail", target: "p2" })), "vault").bells.vault?.preview).toBeGreaterThan(0);
+    });
+
     it("a hidden bell shows '?' unless the view carries the real count (the Hacker who hid it)", () => {
       const v = planning();
       const rest = Object.fromEntries(Object.entries(v.bells).filter(([room]) => room !== "office"));

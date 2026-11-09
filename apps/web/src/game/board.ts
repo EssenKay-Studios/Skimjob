@@ -9,11 +9,11 @@
 // "seen on camera"), and every
 // public alibi claim for the round as a dashed ghost. Nothing else: never another player's
 // move or room unless the view itself says so.
-import { BANK_JOB, EVENTS, ROLES, type RoomId } from "@skimjob/content";
-import { ringsOf, type PlayerId, type PlayerView } from "@skimjob/engine";
+import { BANK_JOB, EVENTS, type RoomId } from "@skimjob/content";
+import { powerOf, ringsOf, type PlayerId, type PlayerView } from "@skimjob/engine";
 import type { BankOccupant, RoomBell, TimeOfDay } from "../art/BankCutaway";
 import { crewTags } from "../art/crookLooks";
-import { jobOf, roomOptions, seatsOf } from "./hud";
+import { jobOf, roomOptions, seatsOf, setupOf } from "./hud";
 
 export interface BoardScene {
   /** The round on the board (0 before the first round). */
@@ -96,11 +96,14 @@ function tapedLeft(view: PlayerView): Record<RoomId, number> {
  * The bells as the public sees them: a taped-off room has none, a hidden one
  * shows "?" (unless the view carries the real count: the Hacker who hid it).
  * While planning, the room you picked previews the rings your grab would add
- * (the Locksmith's coins ring one fewer). design §5.1, §5.2, §11.1
+ * (the Locksmith's coins ring one fewer, as this game's content has it) unless
+ * you bought Soft shoes last round: then your coins ring nothing and nothing is
+ * previewed. A hidden bell shows no preview, since every bulb reads "?". design §5.1, §5.2, §11.1, §12
  */
 function bellsOf(view: PlayerView, selected: RoomId | null, taped: Readonly<Record<RoomId, number>>): Record<RoomId, RoomBell> {
   const hidden = new Set(view.hiddenBells);
-  const power = ROLES[view.me.role]?.power;
+  const power = powerOf({ contentOverrides: setupOf(view)?.contentOverrides ?? null }, view.me.role);
+  const softShoes = view.caseFile.some(({ event: e }) => e.type === "perkBought" && e.player === view.me.id && e.round === view.round - 1 && e.perk.kind === "softShoes");
   const job = jobOf(view);
   const loot = new Map(roomOptions(view).map((o) => [o.id, o.loot]));
   const bells: Record<RoomId, RoomBell> = {};
@@ -113,7 +116,7 @@ function bellsOf(view: PlayerView, selected: RoomId | null, taped: Readonly<Reco
     }
     const coins = view.me.move?.room === room ? view.me.move.duffel + view.me.move.pocket : (loot.get(room) ?? 0);
     const def = job.rooms[room];
-    const rings = view.phase.kind === "planning" && room === selected && def ? ringsOf(def, coins, power?.kind === "muffle" ? power.fewerRings : 0) : 0;
+    const rings = view.phase.kind === "planning" && room === selected && def && !softShoes ? ringsOf(def, coins, power?.kind === "muffle" ? power.fewerRings : 0) : 0;
     bells[room] = { lit, ...(rings > 0 && { preview: rings }) };
   }
   return bells;
