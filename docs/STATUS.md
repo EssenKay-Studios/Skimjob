@@ -7,7 +7,7 @@ _Last updated: 9 Nov 2026._
 - **Content** 0.24.0 (`main`; the live build is the older R6, which R7 replaces).
 - **Live:** https://skimjob.duckdns.org on the owner's AWS Lightsail box (`docs/deploy.md`), commit 1a4e083, Google sign-in on. The live game has no real players, so R7 is built straight on `main`.
 - **Mockups:** the [approved S2 mockups](https://claude.ai/artifact/QtmuUsTX9aFxiESdDQHzEp) (owner, 7 Nov) are the S4 reference for wording and behaviour; their artboard captions and the icon key are review notes, not product UI.
-- **Next step:** S3b is done (S3b.1–S3b.5). S3a (#88): S3a.1–S3a.6 and S3a.8 are merged; S3a.7 (#94, PR #175) is in review; S3a.9 (#96) is next, then S4.
+- **Next step:** S3b is done (S3b.1–S3b.5). S3a: S3a.1–S3a.6 and S3a.8 are merged; S3a.7 (#94, PR #175) is in review; S3a.9 (#96) is next, then S4.
 
 ## Tasks, follow-ups and owner questions
 Tracked as GitHub issues, not in this file:
