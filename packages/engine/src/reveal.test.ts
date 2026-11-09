@@ -31,6 +31,38 @@ describe("reveal summary — design §13", () => {
     expect(s.rounds[0]?.stashes.p2).toBe(0);
   });
 
+  // design §3.3, §15.5: a missed move into a taped-off Lobby has no `coinsGrabbed`; the reveal still says who sat out.
+  it("names who sat a round out, apart from a default move that was played, and plan against move (design §3.3, §10, §15.5)", () => {
+    const grab = (p: string, room: string): GameEvent => ({ type: "coinsGrabbed", visibility: privateTo(p), player: p, round: 2, room, duffel: 1, pocket: 0, seized: 0 });
+    const log: GameEvent[] = [
+      ...SETUP,
+      started(2),
+      { type: "said", visibility: PUBLIC, statement: { kind: "plan", round: 2, plan: { entries: [{ player: "p0", placed: null, room: "vault", power: null, agreed: false }, { player: "p1", placed: null, room: null, power: null, agreed: false }], history: [] } } },
+      { type: "defaultMoveAssigned", visibility: privateTo("p1"), player: "p1", round: 2, move: null },
+      { type: "defaultMoveAssigned", visibility: privateTo("p2"), player: "p2", round: 2, move: { room: "lobby", duffel: 1, pocket: 0 } },
+      grab("p0", "office"),
+      grab("p2", "lobby"),
+    ];
+    const round = revealSummary(log, success([rank("p0", "mole", 0)])).rounds.find((r) => r.round === 2);
+    expect(round?.satOut).toEqual(["p1"]);
+    expect(round?.moves.map((m) => [m.player, m.room, m.planned, m.missed])).toEqual([
+      ["p0", "office", "vault", false],
+      ["p2", "lobby", null, true],
+    ]);
+  });
+
+  // design §5.1, §11.1: the final board still shows "?" for a bell the Hacker hid in the last round; the reveal has their result.
+  it("shows the Hacker's real result in the round the game ended (design §11.1, §15.5)", () => {
+    const log: GameEvent[] = [
+      ...SETUP,
+      started(1),
+      { type: "abilityResolved", visibility: privateTo("p1"), player: "p1", round: 1, ability: { kind: "hide", room: "vault", bulbs: 2 } },
+    ];
+    const last = revealSummary(log, success([rank("p0", "mole", 0)])).rounds.at(-1);
+    expect(last?.round).toBe(1);
+    expect(last?.items).toEqual([{ kind: "event", event: log.at(-1) }]);
+  });
+
   it("shows each seat's role and a claim next to the truth (design §11.3, §15.5)", () => {
     const log: GameEvent[] = [
       dealt("p0", "mole"),
@@ -63,6 +95,19 @@ describe("reveal summary — design §13", () => {
 });
 
 describe("reveal summary leaks nothing — design §13, §11.2, §17.2", () => {
+  // design §18: a secret ballot never opens, not even at the reveal; the timeline shows the meeting's result and nothing of who voted for whom.
+  it("never shows a Secret-mode ballot (design §18)", () => {
+    const log: GameEvent[] = [
+      ...SETUP,
+      started(1),
+      { type: "voteCast", visibility: secretTo("p0"), meetingId: "m1", player: "p0", vote: { kind: "shakedown", target: "p2" }, sealed: false },
+      { type: "meetingClosed", visibility: PUBLIC, meetingId: "m1", tally: { skip: 0, targets: { p2: 1 } }, ballots: null, result: { kind: "shakedown", target: "p2" } },
+    ];
+    const items = revealSummary(log, success([rank("p0", "mole", 0)])).rounds[0]?.items ?? [];
+    expect(items.map((i) => (i.kind === "event" ? i.event.type : i.kind))).toEqual(["meetingClosed"]);
+    expect(JSON.stringify(items)).not.toContain("voteCast");
+  });
+
   it("is not in any view before the game ends", () => {
     const cfg: GameConfig = {
       seed: "reveal-null",

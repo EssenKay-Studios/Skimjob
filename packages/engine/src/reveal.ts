@@ -47,6 +47,7 @@ export function revealSummary(log: readonly GameEvent[], outcome: Outcome): Reve
   drafts[0] = current;
   const grabs = new Map<number, Map<PlayerId, Omit<RevealMove, "missed" | "alibi" | "planned">>>();
   const missed = new Set<string>();
+  const satOut = new Set<string>();
   const alibi = new Map<string, RoomId>();
   const planned = new Map<string, RoomId>();
   const key = (p: PlayerId, round: number) => `${round}\u0000${p}`;
@@ -71,6 +72,8 @@ export function revealSummary(log: readonly GameEvent[], outcome: Outcome): Reve
         break;
       case "defaultMoveAssigned":
         missed.add(key(e.player, e.round));
+        // design §3.3: with the default room taped off, a missed move sits the round out (no move, no grab).
+        if (e.move === null) satOut.add(key(e.player, e.round));
         break;
       case "said": {
         const said = e.statement;
@@ -127,7 +130,7 @@ export function revealSummary(log: readonly GameEvent[], outcome: Outcome): Reve
         })
       : [];
     if (round === 0 && d.items.length === 0) return;
-    rounds.push({ round, card: d.card, moves, resolved: d.resolved, split: d.split, items: d.items, stashes: d.stashes });
+    rounds.push({ round, card: d.card, moves, satOut: seatOrder.filter((p) => satOut.has(key(p, round))), resolved: d.resolved, split: d.split, items: d.items, stashes: d.stashes });
   });
 
   const top = leadersOf(ranking);

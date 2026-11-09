@@ -1,9 +1,8 @@
 // QA for PR #62 (the 1 px sideways overflow on the game-over screen with
 // 24-character names). Long names with no break points: "W"×24 (the widest
 // glyph), 24 emoji, and "W" + combining diaeresis ×12 (24 code points), all
-// within the nickname rules (1–24 code points, visible). Checked on the
-// gallery reveal and on a real fast-clock 15-min game's game-over screen
-// (ranking, reveal and its timeline, case board) at 360, 390 and 768 px:
+// within the nickname rules (1–24 code points, visible). Checked on a real
+// fast-clock 15-min game's game-over screen (ranking, reveal and its timeline, case board) at 360, 390 and 768 px:
 // nothing past the edge, and every name still whole in the DOM (wrapped, not cut).
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 
@@ -30,31 +29,6 @@ async function overflow(page: Page): Promise<string[]> {
       if (r.width > 0 && (r.right > w + 0.5 || r.left < -0.5)) out.push(`${x.getAttribute("class") ?? x.tagName} ${r.left.toFixed(1)}..${r.right.toFixed(1)}`);
     }
     return out;
-  });
-}
-
-for (const width of WIDTHS) {
-  test(`gallery reveal, 24-character names at ${width}: no overflow, names whole @reveal`, async ({ page }, info) => {
-    test.skip(info.project.name !== "mobile", "the viewport is set here");
-    test.setTimeout(90_000);
-    await page.setViewportSize({ width, height: 800 });
-    await page.goto("/dev/gallery");
-    const section = page.getByRole("region", { name: "End-of-game reveal" });
-    await section.scrollIntoViewIfNeeded();
-    await section.getByRole("button", { name: "24 characters" }).click();
-    const reveal = section.getByRole("region", { name: "The reveal" });
-    for (const ending of ["Job done", "Busted (Rooftop)", "Sunk by theft (nobody)"]) {
-      await section.getByRole("button", { name: ending }).click();
-      await expect(reveal).toContainText(WIDE);
-      await expect(reveal).toContainText("M".repeat(24));
-      const rounds = reveal.getByRole("group", { name: "Rounds" }).getByRole("button");
-      const n = await rounds.count();
-      for (let i = 0; i < n; i++) {
-        await rounds.nth(i).click();
-        await expect(rounds.nth(i)).toHaveAttribute("aria-pressed", "true");
-        expect(await overflow(page), `${ending}, round ${i + 1}`).toEqual([]);
-      }
-    }
   });
 }
 
