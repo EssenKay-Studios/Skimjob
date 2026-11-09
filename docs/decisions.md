@@ -16,6 +16,10 @@ Update in place: change or delete an entry when a decision changes; never add "w
 - **Commands are untrusted JSON:** refusal reasons print values with `show()` (never throws, cuts long strings); a meeting slot is at most 64 characters. *Confirmed.*
 - **Content overrides** replace numbers only, validated as untrusted JSON; they can't add rooms or roles. `gameCreated` carries the content version and overrides. *Confirmed.*
 - **No new runtime dependencies in the engine** without an entry here; `fast-check` is a test-only devDependency. *Confirmed.*
+- **A move carries both bags** (`submitMove`: `duffel` and `pocket`, one atomic, changeable move; the grab is their sum, design §3.2). The bank's start count is a public `bankFilled` event, carried on `roundResolved.bank`. Coin-room overrides keep coins ≥ 1; Security and Rooftop coins can't be overridden. *Provisional (#156, accepted in review).*
+- **Randomness is drawn only when a rule needs it:** the short-bank seat, a cooling tie (§5.6), the §11.4 order on a shared target. A game that never needs them draws nothing extra. *Provisional (#156, #159, #173, accepted in review).*
+- **The getaway car is an outcome field** (`getaway` on the success and theft outcomes), not an event. A bust loses the kitty and that round's hand-ins (§5.5, §6.3). *Provisional (#169, accepted in review).*
+- **Bot judgement is settings, not rules:** Rooftop chance = caution × bustDanger², room weight falls with raid risk², the Mole bot rings only while it leans toward a missed target (never one raid from the bust line unless on the Rooftop), team-minded bots keep honesty ≥ 1.1 × the line. Tuned in S5. *Provisional (#159, #166, accepted in review).*
 
 ## R7 rules (agreed with the owner, 4 Nov 2026)
 
@@ -65,11 +69,24 @@ The approved S2 mockups (linked from `docs/STATUS.md`) are the S4 reference.
 - **The plan board** (design §10): distinct icons for a room claim and a power claim; a per-player ledger line under the avatars, linked both ways with the head pop-up; few words, "i" InfoTips instead of explanations. *Confirmed (owner, 7 Nov).*
 - **UI** (design §15.6): board motion (siren on a taped room with its bell hidden, Vault door, Office screen and lamp, Lobby camera), all off under reduced motion; avatars shrink to fit their room; a drawn icon per role, used everywhere; a Terms glossary in the "This game" rulebook; "Grab" is the coin control's label. Captions on the mockup artboards and the icon key under the rulebook artboard are review notes, not product UI. *Confirmed (owner, 7 Nov).*
 
-### Readings (PM, 4 and 6 Nov)
+### Owner decisions, 7 and 8 Nov (S3a)
+
+- **A missed move into a taped-off Lobby sits the round out** (design §3.3): in no room, grabbing and ringing nothing, not on the Rooftop. *Owner, 7 Nov (as recorded in #159).*
+- **An Electrician cut on Security** takes Security's own cameras offline too: a watcher in a dark Security sees nobody, whichever room they watch (§11.1, #173). *Confirmed (owner, 8 Nov).*
+- **A drawn event card that can't apply is redrawn,** seeded, from the cards that can apply (Lockdown with no room to close, Shift change with the Vault taped off), so a flip always lands a card and the 4-in-10 chance holds (§13, #174). *Confirmed (owner, 8 Nov).*
+
+### Readings (PM and reviewers, 4 to 8 Nov)
 
 - **Missing:** "N coins went missing" = coins taken (excluding seized) − coins handed in that round, never negative. *Confirmed (owner, 6 Nov).*
-- **Copies of a role on the same target in one round** (design §11.4, PM, 6 Nov): the uses resolve one after another from a seeded seat; effects that add up stack (two Mole rings are two rings); a use that finds nothing left to act on because the other copy already did it has no effect and is not spent (the second Priest learns 0). *Confirmed (owner, 6 Nov).*
+- **Copies of a role on the same target in one round** (design §11.4, PM, 6 Nov): the uses resolve one after another from a seeded seat; effects that add up stack (two Mole rings are two rings); a use that finds nothing left to act on because the other copy already did it has no effect and is not spent (the second Priest learns 0). Cases per role are in design §11.4; the second-Hacker question needed no ruling, §11.4 answers it (reviewer, #173). *Confirmed (owner, 6 Nov).*
 - **Advanced drops the Inside tip card** (roles are public there), leaving three event cards (`docs/advanced.md`). *Confirmed (owner, 6 Nov).*
+- **A regular meeting starts the next stretch as it opens:** powers recharge and shakedown protection lifts then (§9.7). *Provisional (#172, accepted in review).*
+- **The result window** (§9.3, §4.2): length per preset [tunable] 15 min 20 s, 1 h 1 min, 3 h 2 min, 1 d 30 min, 3 d 1 h, 1 w 2 h. Meeting ids are public counts: `meeting-N` (regular meetings and briefings) and `emergency-N`. Proposals lock a slot for the next regular meeting or briefing at any time; the server picks a slot only once one is due. *Provisional (#172, accepted in review).*
+- **Sitting-out players get the cut:** a player with no move still gets the round's share, because the duffel is split among all players (§7.2). *Provisional (#169, accepted in review).*
+- **Role powers** (§11.1): the Detective's `grabbed` counts seized coins and is 0 for a player who sat the round out; the Hacker and the Electrician may target any room in play (the Hacker not a taped-off one); the Electrician's cut is announced as the next round starts, after the event card, and a use in the last round is spent and does nothing. *Provisional (#173, accepted in review).*
+- **Events** (§13): Lockdown picks only open rooms; the Inside tip's learner and subject are drawn as the card flips, since §4.1 puts the card at round start; the 4-in-10 chance is a content constant, not a `ContentOverrides` key, until the S5 suite needs to sweep it. *Provisional (#174, accepted in review).*
+- **The plan board** (§10): agreement stays when a claim or a placement changes; the history is one row per actor, kind and subject (the latest); each frame carries the whole board. *Provisional (#164, accepted in review).*
+- **The 15-minute session** (§17.1, §17.3) is a host choice: round = 15 min ÷ cap = 75 s, automatic 2-minute meetings, 5 s grace. *Provisional (#166, accepted in review; owner to confirm).*
 
 ## Balance
 
@@ -94,6 +111,7 @@ The approved S2 mockups (linked from `docs/STATUS.md`) are the S4 reference.
 - **Preset timings** (1 hour to 1 week) and the auto-meeting presets are server data; tune after playtests. *Confirmed.*
 - **Host controls** (#54), *confirmed (owner, 6 Nov)*: players can still act while paused (only the clocks stop); Extend per preset (1h 2 min, 3h 5 min, 1d 30 min, 3d 1 h, 1w 2 h), no cap; replace a seat with a bot only after 2 missed rounds in a row, never the host's seat, default Opportunist, handed back by the host or the seat's player; lobby kick of any non-host seat.
 - **Notes** (case-board seen marks, suspicion board) live outside the engine log, over REST (`apps/server/src/notes.ts`), and R7's case-board pins, tags and notes stay there too: private, editable any time, never part of the game record or the reveal. *Confirmed (owner, 6 Nov).*
+- **Pins** (design §15.4) are one list of lead and fact ids per seat (`seats.pins`, at most 100, ids `[A-Za-z0-9_.:-]{1,80}`), replaced whole by `PUT`; the case-board adapter's ids must be stable across views. *Provisional (#165, accepted in review).*
 - **Chat** is server-only, plain text, random UUID ids, 500 characters, 8 per 10 s; DM notices on by default; bots don't chat. *Confirmed.*
 - **One origin:** the server serves the built web app, the API (a leading `/api` is stripped) and the sockets, so a client route must not equal an API `GET` route. `NODE_ENV=production` means secure cookies, trusted proxy and no dev stub. *Confirmed.*
 
@@ -105,6 +123,9 @@ The approved S2 mockups (linked from `docs/STATUS.md`) are the S4 reference.
 - **Art:** our own SVG bank cutaway in side view, stacked layout on phones, gumdrop crooks. *Confirmed.*
 - **The web app imports engine and content for types, names and numbers only;** no game logic runs in the browser beyond reading the view. *Confirmed.*
 - **Part B presentation** (one screen, info on everything, "This game" rulebook, the case board with trust levels and ⚠ flags, Tips on by default per user) is agreed in `docs/simplified.md` Part B; the S2 mockups are approved (see "Owner decisions, 7 Nov" above). *Confirmed.*
+- **Layout shell** (design §15.6): phones and tablets (below 1024 px) share one layout, and 1024 px is the laptop breakpoint. The live `/game/:id` screen is not rewired until S4. *Provisional (#153, accepted in review).*
+- **Tips** are a per-user setting (default on) toggled on the landing page, which now always calls `/me`; `PATCH /me` updates the user's one field. An open InfoTip follows its "i" on scroll and resize, and closes when the "i" is fully out of view. *Provisional (#157, #158, accepted in review).*
+- **Day, dusk and night** follow thirds of the round cap, not acts. *Provisional (#172, accepted in review).*
 
 ## Ops and deploy
 
@@ -122,4 +143,6 @@ The approved S2 mockups (linked from `docs/STATUS.md`) are the S4 reference.
 - **The gate scripts use only the GitHub REST API** (`gh api`), so the pipeline runs from the Mac and from cloud sessions where GraphQL is blocked. *Confirmed.*
 - **Commits are authored as karthik24iyer <karthik24iyer@gmail.com>, with no AI attribution lines;** the gate refuses them. *Confirmed.*
 - **Tasks, follow-ups and owner questions are GitHub issues** (milestone "R7 Simplified", the private R7 board); rules and decisions stay in the repo. Builders and QA don't edit STATUS or this file: they put "Closes #N", `## Decisions` and `## Follow-ups` in the PR body, the PM folds decisions in and creates the follow-up issues. *Confirmed (owner, 4 Nov).*
-- **Testing speed:** run `pnpm typecheck` and `pnpm test:scoped` (the same scope as CI), push once; never skip or disable a test. *Confirmed.*
+- **Testing speed:** run `pnpm precheck` (static checks, `test:scoped` and new specs ×3, the same scope as CI), push once; never skip or disable a test. *Confirmed.*
+- **Theme lint is a frozen baseline** (`pnpm lint:theme`): a file's raw colours, fonts, shadows and radii may only fall, and S4 removes entries as it replaces R6 screens. Playwright always starts its own servers, so a port clash fails loudly. *Provisional (#161, #168, accepted in review).*
+- **Vitest yields after every test** (`vitest.setup.ts`), so a long file of CPU-bound tests can't hit the 60 s "onTaskUpdate" timeout; fewer workers or ignoring the error were rejected. *Provisional (#171, accepted in review).*

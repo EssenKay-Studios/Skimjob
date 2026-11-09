@@ -1,13 +1,13 @@
 # Status
 
-_Last updated: 7 Nov 2026._
+_Last updated: 9 Nov 2026._
 
 ## Where things stand
 - **Specs:** `docs/design.md` is the single rules spec (R7 Simplified); `docs/simplified.md` is the plan. Current decisions: `docs/decisions.md`. Later: Skimjob Advanced (`docs/advanced.md`). Out of scope: the recruited Mole.
-- **Content** 0.17.0 (the live R6 build; R7 replaces it).
+- **Content** 0.24.0 (`main`; the live build is the older R6, which R7 replaces).
 - **Live:** https://skimjob.duckdns.org on the owner's AWS Lightsail box (`docs/deploy.md`), commit 1a4e083, Google sign-in on. The live game has no real players, so R7 is built straight on `main`.
 - **Mockups:** the [approved S2 mockups](https://claude.ai/artifact/QtmuUsTX9aFxiESdDQHzEp) (owner, 7 Nov) are the S4 reference for wording and behaviour; their artboard captions and the icon key are review notes, not product UI.
-- **Next step:** S3a (#88) and S3b, in parallel.
+- **Next step:** S3b is done (S3b.1–S3b.5). S3a (#88): S3a.1–S3a.6 and S3a.8 are merged; S3a.7 (#94, PR #175) is in review; S3a.9 (#96) is next, then S4.
 
 ## Tasks, follow-ups and owner questions
 Tracked as GitHub issues, not in this file:
@@ -19,9 +19,10 @@ Tracked as GitHub issues, not in this file:
 Record: M1 (engine, simulator, bots), M2-1 to M2-13 (server, web, chat, Google sign-in, host controls) and R6 are built and live; M2-14 and M2-15 are parked. History: git, the PRs and `docs/archive/`.
 
 ## Engineering notes (standing rules)
-- **Engine:** handlers draw randomness only through the `Draw` that `handleCommand` passes them (`withRng` appends `rngAdvanced`); never read `state.rng`. New commands go in `HANDLERS` (`handle.ts`) and return a reason string to refuse; `applyEvent` throws on unfolded event types, so add cases in `reduce.ts`. Every ending goes through `gameEnded` (`end.ts`); every shakedown path goes through `afterVote` (`meeting.ts`); any new place that starts a round uses `startRound`.
+- **Engine:** handlers draw randomness only through the `Draw` that `handleCommand` passes them (`withRng` appends `rngAdvanced`); never read `state.rng`. New commands go in `HANDLERS` (`handle.ts`) and return a reason string to refuse; `applyEvent` throws on unfolded event types, so add cases in `reduce.ts`. Every ending goes through `gameEnded` (`end.ts`); every shakedown path goes through `afterVote` (`meeting.ts`); any new place that starts a round uses `startRound`. Draw only when a rule needs it, so games that skip the rule keep their stream. Roles go through `roleHandler(role)`, with charges per holder in `roleState`; no role ids in `end.ts`. An emergency is accepted only in the result window (§9.3: `phase.kind === "result"`, one per window); never assume a regular meeting or the emergency pool in a full bot game (a bust can end it first, a bot may spend the pool). `deck.ts` has one `applies()` seam for "this card can apply now"; a new event card adds its case there, and the redraw rule (§13) uses it.
 - **Views and leaks:** clients and bots get only `viewFor()` (a deep copy). A view's `seq` counts only what that player can see; never send a full-log index, `games.config` (has the seed) or `game_events.idx`. A new state field a view shows is added to `viewFor` by hand, and `view.leak.test.ts`'s scrub must hide it if private. `samples.ts` needs one sample per event and command type (the compiler enforces it). `secret` visibility never opens, even after the game.
 - **Server:** `command.player` always comes from the session. Run commands as `store.withGameLock(id, …load → handleCommand → append…)`. Deadlines go through `app.live.system` and the scheduler's `reconcile`; never write `deadlines` by hand. A new deadline kind gets one entry in `DEADLINE_RULES`. A view is pushed only when it changed and bots act only when their own view changed (no timing leaks). A command's `{ ok }` reply goes out before its pushes, so tests reading views right after need a barrier. The server must stay one process (per-game lock, scheduler). Migrations are add-only.
+- **Tests:** seed-swept tests (`view.leak`'s `scrub-…` seeds, `bots/reveal.qa`) must be re-picked whenever a change adds or removes an RNG draw, and must still reach every event, perk and power. `vitest.setup.ts` yields a macrotask after every test, so long files of CPU-bound tests don't hit vitest's 60 s `onTaskUpdate` timeout (#171); keep it, and keep each test well under 60 s.
 - **Chat:** stored and sent exactly as typed; render as text only (never `dangerouslySetInnerHTML` or markdown). Message ids are random UUIDs. The rate limit is in memory per process. Bots don't chat.
 - **Database:** no `DATABASE_URL` = PGlite in `.pglite/` (`PGLITE_DIR=memory` for in-memory); tests share one PGlite per file; `pnpm test:pg` runs them on real Postgres.
 - **Content:** numbers live in `packages/content`; tunables that should be overridable go in `ContentOverrides` and `validateOverrides`. After any rule, number or bot change, run the sim suite (or the "Sim suite" workflow) with `--compare docs/balance/baseline.json` (`docs/testing.md`).
