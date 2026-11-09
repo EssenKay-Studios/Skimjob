@@ -132,7 +132,7 @@ export function Game({ id }: { id: string }) {
         </main>
       ) : (
         <>
-        {tips.me && <TeachingPopups view={view} player={tips.me.id} tips={tips.me.tips} onTipsOff={() => tips.change(false)} />}
+        {tips.me && <TeachingPopups view={view} player={tips.me.id} tips={tips.me.tips} saving={tips.saving} onTipsOff={() => tips.change(false)} />}
         <Board
           view={view}
           timers={channel.timers}

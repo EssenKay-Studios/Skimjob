@@ -27,7 +27,7 @@ export function TeachingSection() {
         ))}
         <GameMenu tips={tips} busy={false} onChange={setTips} />
       </div>
-      <TeachingPopup lesson={lesson} onGotIt={() => setLesson(null)} onTipsOff={() => setLesson(null)} />
+      <TeachingPopup lesson={lesson} busy={false} onGotIt={() => setLesson(null)} onTipsOff={() => setLesson(null)} />
     </SketchFrame>
   );
 }

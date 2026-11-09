@@ -53,7 +53,8 @@
   "apps/web/src/screens/GalleryShell.tsx": "@shell",
   "apps/web/src/screens/Game.tsx": [
     "@board",
-    "@move"
+    "@move",
+    "@teaching"
   ],
   "apps/web/src/screens/GameChat.tsx": "@chat",
   "apps/web/src/screens/GameHost.tsx": "@host",
@@ -78,5 +79,10 @@
   "apps/web/src/components/TeachingPopup.tsx": "@teaching",
   "apps/web/src/components/GameMenu.tsx": "@teaching",
   "apps/web/src/game/teaching.ts": "@teaching",
-  "apps/web/src/screens/GalleryTeaching.tsx": "@teaching"
+  "apps/web/src/screens/GalleryTeaching.tsx": "@teaching",
+  "apps/web/src/game/useTips.ts": "@teaching",
+  "apps/web/src/components/TipsToggle.tsx": [
+    "@teaching",
+    "@auth"
+  ]
 }

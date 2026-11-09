@@ -1,5 +1,6 @@
 import { LESSONS } from "@skimjob/content";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+import { pickRoom } from "./move";
 import { startGame } from "./setupGame";
 
 // S4.6, design §15.6, §20.6: the teaching pop-ups and the game menu's Tips
@@ -86,10 +87,51 @@ test("the game menu holds the Tips setting, on by default, and Off is saved @tea
   await expect(menu).toBeFocused();
 });
 
-test("with Tips off no pop-up opens in a live game @teaching", async ({ page }) => {
-  const game = await startGame(page.request, { bots: 3, nickname: "Quiet" });
+// A live game, no fixed waits: the human locks in a Vault grab (three noisy coins), the bots lock in
+// themselves, and round 1 resolves after the lock-in grace; whichever lesson that lights is due then.
+const LESSON_TITLE = new RegExp(`^(${Object.values(LESSONS).map((l) => l.title).join("|")})$`);
+const lessonDialog = (page: Page) => page.getByRole("dialog", { name: LESSON_TITLE });
+
+async function playRound1(page: Page, opts: { tips: boolean }) {
+  // The 3-hour preset: rounds stay open long enough that the lock-in, not the clock, resolves round 1.
+  const game = await startGame(page.request, { bots: 3, nickname: "Tipster", sessionLength: "3h", tips: opts.tips });
   await page.goto(`/game/${game.id}`);
+  await pickRoom(page, "Vault");
+  await page.getByRole("button", { name: "Lock it in" }).click();
+  return game;
+}
+const resolved = (page: Page) => expect(page.locator(".hud__kicker")).toContainText(/Round ([2-9]|1[0-2]) of 12/, { timeout: 120_000 });
+
+test("with Tips on a lesson opens in a live game, Got it keeps it away after a reload @teaching", async ({ page }) => {
+  test.setTimeout(240_000);
+  await playRound1(page, { tips: true });
+  const dialog = lessonDialog(page);
+  await expect(dialog).toBeVisible({ timeout: 120_000 });
+  const title = (await dialog.getByRole("heading").textContent())!;
+  const id = Object.entries(LESSONS).find(([, l]) => l.title === title)![0];
+  await dialog.getByRole("button", { name: "Got it" }).click();
+  await page.reload();
+  await resolved(page);
+  await expect(page.getByRole("button", { name: "Menu" })).toBeVisible(); // /api/me has answered
+  await expect(page.getByRole("dialog", { name: title, exact: true })).toHaveCount(0);
+  const me = (await (await page.request.get("/api/me")).json()).user as { id: string };
+  expect(await page.evaluate((k) => localStorage.getItem(k), `skimjob.lessons.${me.id}`)).toContain(id);
+});
+
+test("with Tips off no lesson opens once round 1 has resolved @teaching", async ({ page }) => {
+  test.setTimeout(240_000);
+  await playRound1(page, { tips: false });
+  await resolved(page); // the events a lesson needs are in the ledger now
   await expect(page.getByRole("button", { name: "Menu" })).toBeVisible();
-  await page.waitForTimeout(10_000); // a couple of rounds at this clock
-  await expect(page.getByRole("dialog", { name: /Raid!|One star|shakedown|Power cut|missing|bell rang/i })).toHaveCount(0);
+  await expect(lessonDialog(page)).toHaveCount(0);
+});
+
+test("Turn tips off closes the live pop-up and saves Tips off @teaching", async ({ page }) => {
+  test.setTimeout(240_000);
+  await playRound1(page, { tips: true });
+  const dialog = lessonDialog(page);
+  await expect(dialog).toBeVisible({ timeout: 120_000 });
+  await dialog.getByRole("button", { name: "Turn tips off" }).click();
+  await expect(dialog).toBeHidden();
+  await expect.poll(async () => (await (await page.request.get("/api/me")).json()).user.tips).toBe(false);
 });
