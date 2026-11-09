@@ -312,3 +312,38 @@ describe("QA: a move power is offered only where the engine accepts it (design �
     }
   });
 });
+
+describe("QA re-check: the two FAIL findings of the first round", () => {
+  it("the raid warning is on exactly when the engine raids, for every lit count and grab (design §5.3)", () => {
+    const s0 = game("detective");
+    const bulbs = bellPreview(view(s0), option(view(s0), "vault"), 0).bulbs;
+    const most = option(view(s0), "vault").coins;
+    for (let lit = 0; lit < bulbs; lit++) {
+      for (let n = 1; n <= most; n++) {
+        const s = { ...s0, bells: { ...s0.bells, vault: lit } };
+        // Everyone else lies low in the Lobby so only p1's rings count.
+        let t: GameState = s;
+        for (const p of s.playerOrder.filter((x) => x !== "p1"))
+          t = run(t, { type: "submitMove", player: p, move: { room: "lobby", duffel: 1, pocket: 0 } });
+        const { preview, raided } = previewThenRun(t, "vault", n);
+        expect(preview.raid, `lit=${lit} grab=${n}`).toBe(raided);
+      }
+    }
+  });
+
+  it("after absolving P2, the Priest is offered everyone but P2, and the engine accepts each one (design §11.1)", () => {
+    let s = game("priest");
+    s = submit(s, { room: "lobby", duffel: 1, pocket: 0, ability: { kind: "absolve", target: "p2" } });
+    s = resolve(s).state;
+    s = run(s, { type: "advance", deadline: { kind: "result", round: 1 } });
+    const p1 = s.players.p1!;
+    s = { ...s, players: { ...s.players, p1: { ...p1, roleState: { ...p1.roleState, usedThisStretch: 0 } } } };
+    const control = powerControl(view(s));
+    expect(control?.kind === "absolve" && control.players).toEqual(["p3", "p4", "p5"]);
+    for (const target of ["p3", "p4", "p5"]) {
+      const r = handleCommand(s, { type: "submitMove", player: "p1", move: { room: "lobby", duffel: 1, pocket: 0, ability: abilityOf(control, [], target) } });
+      expect(r.ok, target).toBe(true);
+    }
+    expect(abilityOf(control, [], "p2")).toBeUndefined();
+  });
+});
