@@ -41,6 +41,27 @@ export interface AwayChannel {
   readonly dismiss: () => void;
 }
 
+/** The seat's notes, loaded once per game page and shared by the recap, the board and the pins. */
+export interface NotesLoad {
+  readonly notes: SeatNotes | null;
+  readonly error: string | null;
+}
+
+export function useSeatNotes(gameId: string): NotesLoad {
+  const [load, setLoad] = useState<NotesLoad>({ notes: null, error: null });
+  useEffect(() => {
+    let live = true;
+    api<SeatNotes>("GET", `/games/${encodeURIComponent(gameId)}/notes`).then(
+      (notes) => live && setLoad({ notes, error: null }),
+      (e: unknown) => live && setLoad({ notes: null, error: why(e) }),
+    );
+    return () => {
+      live = false;
+    };
+  }, [gameId]);
+  return load;
+}
+
 const why = (e: unknown) => (e instanceof ApiError ? sentence(e.message) : "Something went wrong.");
 
 /** Whether the page is in front. A hidden tab isn't "looking". */
@@ -183,7 +204,7 @@ function useSeenMark(gameId: string): (seq: number, now?: boolean) => void {
  * (Game.tsx `Away`): in the board's component it re-rendered the whole game
  * screen a second time per view, which made the page sluggish under load.
  */
-export function useAwayRecap(gameId: string, view: PlayerView, ctx: DescribeContext): AwayChannel {
+export function useAwayRecap(gameId: string, view: PlayerView, ctx: DescribeContext, notes: NotesLoad): AwayChannel {
   const top = topSeq(view);
   const visible = usePageVisible();
   const [state, dispatch] = useReducer(awayStep, AWAY_START);
@@ -191,19 +212,11 @@ export function useAwayRecap(gameId: string, view: PlayerView, ctx: DescribeCont
   const viewRef = useRef(view);
   viewRef.current = view;
 
+  const lastSeen = notes.notes?.lastSeen ?? null;
   useEffect(() => {
-    let live = true;
-    api<SeatNotes>("GET", `/games/${encodeURIComponent(gameId)}/notes`).then(
-      (n) => {
-        // Never opened before: nothing to catch up on.
-        if (live) dispatch({ type: "loaded", since: n.lastSeen < 0 ? topSeq(viewRef.current) : n.lastSeen, first: n.lastSeen < 0 });
-      },
-      () => {}, // no mark, no recap
-    );
-    return () => {
-      live = false;
-    };
-  }, [gameId]);
+    // Never opened before: nothing to catch up on. No mark, no recap.
+    if (lastSeen !== null) dispatch({ type: "loaded", since: lastSeen < 0 ? topSeq(viewRef.current) : lastSeen, first: lastSeen < 0 });
+  }, [lastSeen]);
 
   // Back in front after a real absence: catch up again. Catching up ends a moment after the mark has loaded with the page in front.
   const hiddenAt = useRef<number | null>(visible ? null : Date.now());
@@ -246,25 +259,15 @@ export function useAwayRecap(gameId: string, view: PlayerView, ctx: DescribeCont
 }
 
 /** This seat's suspicion board (design §12.3): loaded once, changed only by `save`. */
-export function useSuspicionBoard(gameId: string): BoardChannel {
-  const [board, setBoard] = useState<Board | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
-    let live = true;
-    api<SeatNotes>("GET", `/games/${encodeURIComponent(gameId)}/notes`).then(
-      (n) => live && setBoard(n.board),
-      (e: unknown) => live && setError(why(e)),
-    );
-    return () => {
-      live = false;
-    };
-  }, [gameId]);
+export function useSuspicionBoard(gameId: string, notes: NotesLoad): BoardChannel {
+  const [saved, setBoard] = useState<Board | null>(null);
+  const board = saved ?? notes.notes?.board ?? null;
+  const error = board === null ? notes.error : null;
   const save = useCallback(
     async (subject: PlayerId, mark: BoardMark) => {
       try {
         const r = await api<{ board: Board }>("PATCH", `/games/${encodeURIComponent(gameId)}/notes/board`, { subject, tag: mark.tag, note: mark.note });
         setBoard(r.board);
-        setError(null);
         return null;
       } catch (e) {
         return why(e);
@@ -284,34 +287,31 @@ export interface PinsChannel {
   readonly toggle: (id: string) => void;
 }
 
-export function usePins(gameId: string): PinsChannel {
+export function usePins(gameId: string, notes: NotesLoad): PinsChannel {
   const [list, setList] = useState<readonly string[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const sync = useRef<PinSync | null>(null);
+  const loaded = notes.notes?.pins ?? null;
   useEffect(() => {
+    if (loaded === null) return;
     let live = true;
     const url = `/games/${encodeURIComponent(gameId)}/notes`;
-    api<SeatNotes>("GET", url).then(
-      (n) => {
-        if (!live) return;
-        sync.current = pinSync(
-          { put: (pins) => api<unknown>("PUT", `${url}/pins`, { pins }).then(() => undefined), load: () => api<SeatNotes>("GET", url).then((r) => r.pins) },
-          n.pins,
-          (l) => live && setList(l),
-          (e) => live && setError(why(e)),
-        );
-        setList(n.pins);
-      },
-      (e: unknown) => live && setError(why(e)),
+    sync.current = pinSync(
+      { put: (pins) => api<unknown>("PUT", `${url}/pins`, { pins }).then(() => undefined), load: () => api<SeatNotes>("GET", url).then((r) => r.pins) },
+      loaded,
+      (l) => live && setList(l),
+      (e) => live && setError(why(e)),
     );
+    setList(loaded);
     return () => {
       live = false;
     };
-  }, [gameId]);
+  }, [gameId, loaded]);
   const toggle = useCallback((id: string) => {
     setError(null);
     sync.current?.toggle(id);
   }, []);
   const pins = useMemo(() => new Set(list ?? []), [list]);
-  return useMemo(() => ({ pins, ready: list !== null, error, toggle }), [pins, list, error, toggle]);
+  const shown = error ?? (list === null ? notes.error : null);
+  return useMemo(() => ({ pins, ready: list !== null, error: shown, toggle }), [pins, list, shown, toggle]);
 }

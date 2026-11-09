@@ -1,8 +1,6 @@
 // The case board's data shape and the pure helpers over it (design §15.4). The
-// board shows what a `CaseAdapter` returns; the adapter reads only the player's
-// own view. S3b.5 builds the shell around this seam; S4.4 writes the real adapter
-// (the leads, the ⚠ checks and the suspect ranking).
-import type { PlayerId, PlayerView } from "@skimjob/engine";
+// board shows what the adapter (caseLeads.ts) returns from the player's own view.
+import type { PlayerId } from "@skimjob/engine";
 
 /** Where a fact comes from (§15.4 trust levels). */
 export type Trust = "fact" | "seen" | "shared" | "said";
@@ -54,14 +52,8 @@ export interface CaseData {
   readonly suspect: Suspect | null;
 }
 
-/** No leads and no suspect: what the live game shows until S4.4 writes the adapter. */
+/** No leads and no suspect: a game with nothing on the board yet. */
 export const NO_LEADS: CaseData = { leads: [], suspect: null };
-
-/** Your own view and your pins in, the board's data out. With 2+ pins the suspect reads only the pinned facts (§15.4). */
-export type CaseAdapter = (view: PlayerView, pins: ReadonlySet<string>) => CaseData;
-
-/** The live game's adapter until S4.4: no leads, no suspect. */
-export const noLeads: CaseAdapter = () => NO_LEADS;
 
 /** Newest first: the later round first, and within a round the adapter's order. */
 export const newestFirst = (leads: readonly Lead[]): Lead[] => leads.map((l, i) => ({ l, i })).sort((a, b) => b.l.round - a.l.round || a.i - b.i).map((x) => x.l);
@@ -101,3 +93,33 @@ export function playerStat(leads: readonly Lead[], pins: ReadonlySet<string>, id
 /** The leads that mention or warn about a player, newest first. */
 export const leadsNaming = (leads: readonly Lead[], id: PlayerId): Lead[] =>
   newestFirst(leads).filter((l) => l.names.includes(id) || l.warnings.some((w) => w.names.includes(id)));
+
+/**
+ * design §15.4 Suspect card: the most likely liar. With 2+ pins it reads only the
+ * pinned leads (a lead pinned whole, or holding a pinned fact); otherwise every
+ * lead. One point per contradiction that names a player; ties go to the most
+ * recent contradiction (the later round, then the later lead), then seat order.
+ * The reason quotes their most recent one. Never you; nobody without a contradiction.
+ */
+export function suspectOf(leads: readonly Lead[], pins: ReadonlySet<string>, me: PlayerId, seats: readonly PlayerId[]): Suspect | null {
+  const pinned = pinnedItems(leads, pins);
+  const basis = pinned.length >= 2 ? new Set(pinned.map((i) => i.lead.id)) : null;
+  /** How recent a contradiction is: its round, then the lead's place, then the warning's. */
+  const later = (a: readonly number[], b: readonly number[]) => a[0]! - b[0]! || a[1]! - b[1]! || a[2]! - b[2]!;
+  const score = new Map<PlayerId, { points: number; latest: number[]; reason: string }>();
+  leads.forEach((lead, i) => {
+    if (basis && !basis.has(lead.id)) return;
+    lead.warnings.forEach((w, j) => {
+      for (const p of w.names) {
+        if (p === me) continue;
+        const at = [lead.round, i, j];
+        const s = score.get(p);
+        if (!s) score.set(p, { points: 1, latest: at, reason: w.text });
+        else score.set(p, later(at, s.latest) > 0 ? { points: s.points + 1, latest: at, reason: w.text } : { ...s, points: s.points + 1 });
+      }
+    });
+  });
+  const ranked = [...score].sort(([a, x], [b, y]) => y.points - x.points || later(y.latest, x.latest) || seats.indexOf(a) - seats.indexOf(b));
+  const top = ranked[0];
+  return top ? { player: top[0], reason: top[1].reason } : null;
+}

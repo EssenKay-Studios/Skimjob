@@ -48,9 +48,17 @@ test("the recap shows what changed while you were away, once, and the board stay
 
   // Back: the recap is at the top of the screen.
   const back = await hostCtx.newPage();
+  // One GET /notes per game page, shared by the recap, the tags and the pins (#165); dev StrictMode mounts effects twice.
+  let notesLoads = 0;
+  back.on("request", (r) => {
+    if (r.method() === "GET" && new URL(r.url()).pathname.endsWith(`/games/${game.id}/notes`)) notesLoads++;
+  });
   await back.goto(`/game/${game.id}`);
   const recap = back.getByRole("region", { name: "While you were away" });
   await expect(recap).toBeVisible();
+  await expect(back.getByRole("region", { name: "Case board" }).getByRole("button", { name: /^Pin:/ }).first()).toBeEnabled();
+  expect(notesLoads).toBeGreaterThan(0);
+  expect(notesLoads).toBeLessThanOrEqual(2);
   await expect(recap).toContainText("Guest 1 claims to be the Lookout.");
   expect(await recap.locator(".away__line").count()).toBeGreaterThanOrEqual(2);
   const dismissed = seenSaved(back);

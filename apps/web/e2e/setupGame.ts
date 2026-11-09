@@ -1,7 +1,7 @@
 // Starts a game through the lobby API (M2-2) from inside a browser context, so
 // the context's cookie is the host's session. The lobby screens (M2-5b) do the
 // same with clicks; the game screen tests only need a started game.
-import { expect, type APIRequestContext, type Page } from "@playwright/test";
+import { expect, type APIRequestContext, type Locator, type Page } from "@playwright/test";
 
 export interface StartedGame {
   readonly id: string;
@@ -46,4 +46,12 @@ export async function callEmergency(page: Page): Promise<void> {
   await expect(call).toBeEnabled({ timeout: 60_000 });
   await call.click();
   await page.getByRole("button", { name: "Sure? Tap again to call it" }).click();
+}
+
+/** design §15.4: the live case board with every lead opened, so each fact shows ("<trust> <line>"). */
+export async function openLeads(page: Page): Promise<Locator> {
+  const leads = page.getByRole("region", { name: "Case board" }).getByRole("group", { name: "Leads" });
+  const closed = leads.locator('.cb__lead-btn[aria-expanded="false"]');
+  while ((await closed.count()) > 0) await closed.first().click();
+  return leads;
 }

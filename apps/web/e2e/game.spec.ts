@@ -1,6 +1,6 @@
 import { mkdirSync } from "node:fs";
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { startGame } from "./setupGame";
+import { openLeads, startGame } from "./setupGame";
 
 // M2-6 acceptance (docs/m2-plan.md): a host and a guest play a 15-min game
 // against bots to the end in the browser and see the ranking.
@@ -91,8 +91,19 @@ test("a host and a guest play a 15-min game against bots to the end @move", asyn
   await expect(over.locator(".ranking__row")).toHaveCount(4);
   await shot(page, "over");
 
-  // The guest missed every deadline, and sees the end too.
+  // The case board keeps the game's facts (design §15.4): the round haul, the host's alibi and grab, the host's
+  // ballot (private in the default Hidden mode: seen by you, not a public fact) and the ending.
+  const ENDS: Record<string, string> = { success: "Job done! The crew got away with it", bust: "Busted: Wanted hit the bust line and the heist failed", theft: "The heist was sunk by theft" };
+  const leads = await openLeads(page);
+  await expect(leads).toContainText(/Fact Round 1: \d+ taken/);
+  await expect(leads).toContainText("Said You say you were in the Lobby");
+  await expect(leads).toContainText(/Seen by you Round \d+, Office: you grabbed \d+ coins/);
+  await expect(leads).toContainText("Seen by you You voted to skip.");
+  await expect(leads).toContainText(ENDS[ending!]!);
+
+  // The guest missed every deadline: the default move is on their board (design §3.3), and they see the end too.
   await expect(guest.getByRole("list", { name: "Final ranking" })).toBeVisible();
+  await expect(await openLeads(guest)).toContainText("Seen by you You missed round 1's deadline: the default move went to the Lobby");
   expect(errors).toEqual([]);
   await guestCtx.close();
 });

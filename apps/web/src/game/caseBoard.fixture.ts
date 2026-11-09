@@ -1,4 +1,4 @@
-// A hand-made case board for /dev/gallery and tests: the shape S4.4's adapter
+// A hand-made case board for /dev/gallery and tests: the shape the adapter (caseLeads.ts)
 // must fill, with every trust level, a ⚠, a bell and a suspect (design §15.4).
 import type { CaseData, Lead } from "./caseBoard";
 

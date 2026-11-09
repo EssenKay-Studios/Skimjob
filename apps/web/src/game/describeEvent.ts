@@ -109,7 +109,9 @@ function line(e: GameEvent, ctx: DescribeContext): string {
     case "roomWatched": {
       const how = e.source === "security" ? "On the cameras" : e.source === "lookout" ? "On lookout" : "Tailing";
       // design §11.1: the cameras are offline when the watched room or the watcher's own Security is blacked out.
-      if (e.offline) return `Round ${e.round}, ${how.toLowerCase()}: the cameras were offline, nobody seen in the ${roomName(e.room)}${you(e.player) ? "" : ` (seen by ${ctx.name(e.player)})`}.`;
+      // A camera watch is offline when either Security or the watched room is dark; a feed from elsewhere only when its room is.
+      const dark = e.source === "security" ? `Security or the ${roomName(e.room)} is dark` : `the ${roomName(e.room)} is dark`;
+      if (e.offline) return `Round ${e.round}, ${how.toLowerCase()}: cameras offline (${dark}), nobody seen${you(e.player) ? "" : ` (seen by ${ctx.name(e.player)})`}.`;
       return `Round ${e.round}, ${how.toLowerCase()}: ${e.seen.length === 0 ? "nobody" : names(e.seen)} in the ${roomName(e.room)}${you(e.player) ? "" : ` (seen by ${ctx.name(e.player)})`}.`;
     }
     case "roundResolved":

@@ -5,6 +5,7 @@
 // player's hidden move, split, role or "submitted" status.
 import { mkdirSync } from "node:fs";
 import { expect, test, type APIRequestContext, type Browser, type Page, type WebSocketRoute } from "@playwright/test";
+import { openLeads } from "./setupGame";
 
 const SHOTS = process.env.SHOTS_DIR;
 const LONG_HOST = "WWWWWWWWWWWWWWWWWWWWWWWW"; // 24, the cap; the widest glyph, no break points
@@ -190,6 +191,7 @@ test("12 seats, 24-char names: a 15-min game to the end with moves changed, alib
   await expect(host.locator(".over__stamp")).toHaveText(/JOB DONE|BUSTED/);
   await once("over", host);
   await once("over-guest", guest);
+  await expect(await openLeads(guest)).toContainText("You missed round 1's deadline");
 
   expect(changed, "moves changed after locking").toBeGreaterThan(0);
   expect(alibis, "alibis posted").toBeGreaterThan(0);

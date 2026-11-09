@@ -29,6 +29,8 @@
   "apps/web/src/components/SuspicionBoard.tsx": "@caseboard",
   "apps/web/src/game/board.ts": "@board",
   "apps/web/src/game/caseBoard.ts": "@caseboard",
+  "apps/web/src/game/caseChecks.ts": "@caseboard",
+  "apps/web/src/game/caseLeads.ts": "@caseboard",
   "apps/web/src/game/chat.ts": "@chat",
   "apps/web/src/game/extension.ts": "@shop",
   "apps/web/src/game/host.ts": "@host",
