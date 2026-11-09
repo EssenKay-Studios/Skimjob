@@ -28,9 +28,8 @@ import { CREW_COLOURS } from "../components/avatarLooks";
 import { Clock, Lock } from "../components/icons";
 import { BANK_JOB } from "@skimjob/content";
 import { AlarmBell, WantedStars } from "../components/Bell";
-import { RoomTile } from "../components/RoomTile";
-import { RoomIcon } from "../art/RoomIcon";
-import { SplitSlider } from "../components/SplitSlider";
+import { CoinBags } from "../components/CoinBags";
+import { bagsOf, moveCoin } from "../game/move";
 import { Banner, ClockFace, DialogSheet, TallyBars } from "../components/MeetingKit";
 import { navigate } from "../router";
 
@@ -315,10 +314,6 @@ export function Gallery() {
               </SketchFrame>
             </Section>
 
-            <Section id="game" title="Game kit" note="M2-6, S4.1 · room tiles, split slider, alarm bells, Wanted stars">
-              <GameKitSamples />
-            </Section>
-
             <Section id="chat" title="Chat" note="M2-8b · crew + DMs, DM notices, evidence cards, limits">
               <ChatSamples />
             </Section>
@@ -341,6 +336,10 @@ export function Gallery() {
 
             <ShellSection />
             <InfoTipSection />
+
+            <Section id="game" title="Game kit" note="M2-6, S4.1, S4.2 · coins and the two bags, alarm bells, Wanted stars">
+              <GameKitSamples />
+            </Section>
           </div>
         </SketchFrame>
       </main>
@@ -348,20 +347,22 @@ export function Gallery() {
   );
 }
 
-/** The game screen's building blocks (M2-6), live. */
+/** The game screen's building blocks (M2-6, S4.2), live. */
 function GameKitSamples() {
   const { bulbs, bustStars } = BANK_JOB.alarm;
-  const [room, setRoom] = useState("vault");
-  const [pocket, setPocket] = useState(2);
+  const [grab, setGrab] = useState(3);
+  const [pocket, setPocket] = useState(1);
+  const bags = bagsOf(grab, pocket);
   return (
     <>
-      <div className="g-tiles">
-        <RoomTile seed="g-rt1" name="Vault" icon={<RoomIcon room="vault" size={22} />} loot={6} bell="Bell 3 of 4" selected={room === "vault"} onSelect={() => setRoom("vault")} />
-        <RoomTile seed="g-rt2" name="Deposit boxes" icon={<RoomIcon room="depositBoxes" size={22} />} loot={5} bell="Bell 0 of 4" notes={["+1 coin this round"]} selected={room === "boxes"} onSelect={() => setRoom("boxes")} />
-        <RoomTile seed="g-rt3" name="Rooftop" icon={<RoomIcon room="rooftop" size={22} />} loot={0} bell="Bell 0 of 4" selected={room === "roof"} onSelect={() => setRoom("roof")} />
-        <RoomTile seed="g-rt4" name="Office" icon={<RoomIcon room="office" size={22} />} loot={4} bell="Bell off" disabled disabledNote="Taped off through round 4" />
-      </div>
-      <SplitSlider id="g-split" loot={6} pocket={pocket} onChange={setPocket} />
+      <CoinBags
+        limit={3}
+        grab={grab}
+        bags={bags}
+        onGrab={setGrab}
+        onMove={(bag) => setPocket(moveCoin(bags, bag).pocket)}
+        bell={<AlarmBell bulbs={bulbs} lit={2} preview={1} />}
+      />
       <div className="g-row g-row--center">
         <AlarmBell bulbs={bulbs} lit={0} />
         <AlarmBell bulbs={bulbs} lit={2} />

@@ -105,7 +105,7 @@ function bellsOf(view: PlayerView, selected: RoomId | null, taped: Readonly<Reco
   const power = powerOf({ contentOverrides: setupOf(view)?.contentOverrides ?? null }, view.me.role);
   const softShoes = view.caseFile.some(({ event: e }) => e.type === "perkBought" && e.player === view.me.id && e.round === view.round - 1 && e.perk.kind === "softShoes");
   const job = jobOf(view);
-  const loot = new Map(roomOptions(view).map((o) => [o.id, o.loot]));
+  const coinsAt = new Map(roomOptions(view).map((o) => [o.id, o.coins]));
   const bells: Record<RoomId, RoomBell> = {};
   for (const room of view.rooms) {
     if (Object.hasOwn(taped, room)) continue;
@@ -114,7 +114,7 @@ function bellsOf(view: PlayerView, selected: RoomId | null, taped: Readonly<Reco
       bells[room] = { lit: 0, hidden: hidden.has(room) };
       continue;
     }
-    const coins = view.me.move?.room === room ? view.me.move.duffel + view.me.move.pocket : (loot.get(room) ?? 0);
+    const coins = view.me.move?.room === room ? view.me.move.duffel + view.me.move.pocket : (coinsAt.get(room) ?? 0);
     const def = job.rooms[room];
     const rings = view.phase.kind === "planning" && room === selected && def && !softShoes ? ringsOf(def, coins, power?.kind === "muffle" ? power.fewerRings : 0) : 0;
     bells[room] = { lit, ...(rings > 0 && { preview: rings }) };

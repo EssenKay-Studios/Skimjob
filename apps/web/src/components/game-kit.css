@@ -1,221 +1,102 @@
-/* Game kit (M2-6): split slider, room tiles.
+/* Game kit (M2-6, S4.2): coins and the two bags.
    ui-style "Round-move panel". Tokens only. */
 
-/* ---------- Split slider ---------- */
-.split {
-  display: grid;
-  gap: 6px;
-}
-.split__nums {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  font: 600 13px/1.2 var(--font-ui);
-  color: var(--ink2);
-}
-.split__nums b {
-  font-size: 17px;
-  color: var(--ink);
-  margin-left: 4px;
-}
-.split__pocket {
+/* ---------- Coins and the two bags (S4.2, mockup 1b) ---------- */
+.coin {
   display: inline-block;
-  transform-origin: right center;
-}
-.split__pocket.is-greedy {
-  color: var(--bad);
-  animation: sk-pulse-b 0.45s var(--spring);
-}
-.split__pocket.is-greedy b {
-  color: var(--bad);
-}
-@keyframes sk-pulse-b {
-  50% {
-    transform: scale(1.08);
-  }
-}
-.split__input {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 100%;
-  height: 44px;
-  margin: 0;
-  background: none;
-  cursor: pointer;
-  touch-action: pan-y;
-}
-.split__input::-webkit-slider-runnable-track {
-  height: 11px;
-  border: 1.4px solid var(--ink);
-  border-radius: 4px 6px 3px 5px;
-  background: var(--hatch), linear-gradient(90deg, var(--olive) var(--split), var(--clay) var(--split));
-}
-.split__input::-moz-range-track {
-  height: 9px;
-  border: 1.4px solid var(--ink);
-  border-radius: 4px 6px 3px 5px;
-  background: var(--hatch), linear-gradient(90deg, var(--olive) var(--split), var(--clay) var(--split));
-}
-.split__input::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 26px;
-  height: 26px;
-  margin-top: -9px;
+  width: 28px;
+  height: 28px;
   border: 1.8px solid var(--ink);
-  border-radius: 50% 46% 52% 48% / 48% 52% 46% 50%;
-  background: var(--paper-hi);
-  box-shadow: 2px 3px 0 var(--shade);
-  transition: transform 0.16s var(--spring);
+  border-radius: var(--radius-blob);
+  background: var(--hatch), var(--gold);
+  box-shadow: var(--shadow-card);
 }
-.split__input::-moz-range-thumb {
-  width: 24px;
-  height: 24px;
-  border: 1.8px solid var(--ink);
-  border-radius: 50% 46% 52% 48% / 48% 52% 46% 50%;
-  background: var(--paper-hi);
-  box-shadow: 2px 3px 0 var(--shade);
-}
-.split__input:active::-webkit-slider-thumb {
-  transform: scale(1.12) rotate(-6deg);
-}
-.split__input:focus-visible {
-  outline: none;
-}
-.split__input:focus-visible::-webkit-slider-thumb {
-  outline: 2.5px solid var(--clay-d);
-  outline-offset: 2px;
-}
-.split.is-disabled {
-  opacity: 0.5;
-}
-
-/* ---------- Room tile ---------- */
-.room-tile {
-  position: relative;
-  isolation: isolate;
-  display: grid;
-  align-content: start;
-  justify-items: start;
-  gap: 4px;
-  min-width: 44px;
-  min-height: 92px;
-  padding: 10px 11px 11px;
-  border: 0;
-  margin: 0;
-  background: none;
-  text-align: left;
-  cursor: pointer;
-  color: var(--ink);
-  font: 500 12px/1.25 var(--font-ui);
-  --fr-fill: var(--paper);
-  --fr-ink: var(--ink);
-  -webkit-tap-highlight-color: transparent;
-  transition: transform 0.18s var(--spring);
-}
-@media (hover: hover) {
-  .room-tile:hover:not(:disabled) {
-    transform: translateY(-3px);
-    --fr-ink: var(--clay-d);
-  }
-}
-.room-tile:active:not(:disabled) {
-  transform: translateY(1px) scale(0.98);
-}
-.room-tile.is-selected {
-  --fr-fill: var(--clay-l);
-  --fr-ink: var(--clay-d);
-}
-.room-tile:disabled {
-  cursor: not-allowed;
+.coin.is-left {
+  background: var(--paper2);
+  box-shadow: none;
   opacity: 0.55;
-  filter: grayscale(0.7);
 }
-.room-tile__head {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-width: 0;
-}
-/* The room icon on a soft colour blob (ui-style §6). */
-.room-tile__icon {
+/* A coin you can press: a 44 px target. */
+.coin-btn {
   display: inline-grid;
   place-items: center;
-  flex: none;
-  width: 30px;
-  height: 28px;
-  border-radius: 52% 48% 55% 45% / 50% 58% 42% 50%;
-  background: color-mix(in srgb, var(--kraft) 55%, transparent);
-  color: var(--ink);
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: grab;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
 }
-.room-tile.is-selected .room-tile__icon {
-  background: color-mix(in srgb, var(--clay) 45%, transparent);
+.coin-btn:focus-visible {
+  outline: 2.5px solid var(--clay-d);
+  outline-offset: 1px;
+  border-radius: var(--radius-blob);
 }
-.room-tile__name {
-  font: 700 15.5px/1.15 var(--font-hand);
-  color: var(--ink);
+.coin-btn.is-dragging {
+  position: relative;
+  z-index: 3;
+  cursor: grabbing;
+  rotate: -8deg;
 }
-.room-tile__loot {
+.coin-bags {
+  display: grid;
+  gap: 8px;
+}
+.coin-bags__grab {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.coin-bags__label {
+  width: 44px;
+  font-size: 15px;
+}
+.coin-bags__fill {
+  flex: 1;
+}
+.coin-bags__bags {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+.bag {
+  display: grid;
+  align-content: start;
+  gap: 2px;
+  min-width: 0;
+  min-height: 96px;
+  padding: 6px 4px 6px 8px;
+}
+.bag__head {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
+}
+.bag__name {
+  flex: 1;
+  font-size: 15px;
+}
+.bag__count {
+  font-size: 18px;
+}
+.bag__coins {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  min-height: 44px;
+}
+.bag__coins .meta {
+  padding-left: 2px;
   font-size: 12px;
-}
-.room-tile__bar {
-  display: inline-flex;
-  gap: 2px;
-}
-.room-tile__bar i {
-  width: 6px;
-  height: 10px;
-  border: 1.1px solid var(--ink);
-  border-radius: 1px 2px 1px 2px;
-  background: var(--hatch), var(--gold);
-}
-.room-tile__bell {
-  font-weight: 650;
-  font-size: 12px;
-  color: var(--mute);
-}
-.room-tile__note {
-  font-size: 11.5px;
-  color: var(--mute);
-}
-.room-tile__pin {
-  position: absolute;
-  top: -9px;
-  right: 10px;
-  width: 16px;
-  height: 16px;
-  border: 1.6px solid var(--ink);
-  border-radius: 50% 50% 50% 0;
-  rotate: -45deg;
-  background: var(--clay);
-  animation: pin-bob 1.4s ease-in-out infinite;
-}
-@keyframes pin-bob {
-  50% {
-    translate: 0 -3px;
-  }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .room-tile__pin,
-  .split__pocket.is-greedy {
-    animation: none;
-  }
-  .room-tile {
-    transition: none;
-  }
-}
+
 
 /* Gallery samples (/dev/gallery "Game kit"). */
-.g-tiles {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
-  gap: 14px 12px;
-  padding-top: 8px;
-}
 .g-icon {
   display: inline-flex;
   width: 22px;

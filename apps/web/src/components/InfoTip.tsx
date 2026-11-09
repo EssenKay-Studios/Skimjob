@@ -90,11 +90,14 @@ export function InfoTip({ info }: { readonly info: InfoRef }) {
     document.addEventListener("keydown", escape, true);
     window.addEventListener("scroll", follow, true);
     window.addEventListener("resize", follow);
+    // The visual viewport can settle after the window's resize (a zoomed-out page springing back): follow that too.
+    window.visualViewport?.addEventListener("resize", follow);
     return () => {
       document.removeEventListener("pointerdown", outside);
       document.removeEventListener("keydown", escape, true);
       window.removeEventListener("scroll", follow, true);
       window.removeEventListener("resize", follow);
+      window.visualViewport?.removeEventListener("resize", follow);
       cancelAnimationFrame(frame);
       seen.disconnect();
       if (openTip === close) openTip = undefined;

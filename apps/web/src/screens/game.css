@@ -294,11 +294,37 @@ html.chat-sheet-open body {
   font-size: 19px;
 }
 
-.move__rooms {
+.move__room {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+.move__room-name {
+  font-size: 18px;
+}
+.move__fill {
+  flex: 1;
+}
+.move__short,
+.move__warn {
+  padding: 8px 12px;
+  border-radius: var(--radius-chip);
+  background: var(--card-sand);
+  font-weight: 600;
+}
+.move__warn {
+  background: var(--bad-l);
+}
+.move__power {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
-  gap: 14px 12px;
-  padding-top: 6px;
+  gap: 6px;
+}
+.move__power-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 15px;
 }
 .move__missed {
   padding: 8px 12px;
@@ -315,6 +341,12 @@ html.chat-sheet-open body {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+}
+/* A 24-character name stays inside the panel (a power can point at a player). */
+.move__chips .btn {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .move__foot {
   display: flex;
@@ -457,10 +489,6 @@ html.chat-sheet-open body {
   .game-grid {
     gap: 14px;
     margin-top: 8px;
-  }
-  .move__rooms {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px 10px;
   }
   .move__lock {
     width: 100%;

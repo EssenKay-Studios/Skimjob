@@ -1,6 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { openLeads, startGame } from "./setupGame";
+import { bagCoins, dragTo, pickRoom } from "./move";
 
 // M2-6 acceptance (docs/m2-plan.md): a host and a guest play a 15-min game
 // against bots to the end in the browser and see the ranking.
@@ -68,7 +69,7 @@ test("a host and a guest play a 15-min game against bots to the end @move", asyn
     };
     const move = async () => {
       if (!(await page.getByRole("button", { name: "Lock it in" }).isVisible().catch(() => false))) return;
-      await click(page.locator('.room-tile[data-room="Office"]'));
+      await pickRoom(page, "Office", 5000).catch(() => {});
       await click(page.getByRole("button", { name: "Lock it in" }));
       if (await landed(page.getByText(/Locked in: Office/))) moves++;
     };
@@ -133,11 +134,24 @@ test("the move panel: pick a room, split the loot, lock it in, change it; reconn
   await expect(page.getByText("Miss the deadline and you go to the Lobby, handing everything in.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Lock it in" })).toBeDisabled();
 
-  // The Vault's 3 coins, pocketing 2 (the slider's value is the duffel's coins).
-  await page.locator('.room-tile[data-room="Vault"]').click();
+  // The Vault's 3 coins, all in the duffel at first: a tap sends one to the pocket, a drag another (design §3.2).
+  await pickRoom(page, "Vault");
   await expect(page.getByRole("button", { name: "Lock it in" })).toBeEnabled();
-  await page.locator("#split").fill("1");
-  await expect(page.locator(".split__pocket")).toContainText("2");
+  await expect(bagCoins(page, "duffel")).toHaveCount(3);
+  await bagCoins(page, "duffel").first().click();
+  await expect(bagCoins(page, "pocket")).toHaveCount(1);
+  await dragTo(page, bagCoins(page, "duffel").first(), page.locator("[data-bag=pocket]"));
+  await expect(bagCoins(page, "pocket")).toHaveCount(2);
+  await expect(bagCoins(page, "duffel")).toHaveCount(1);
+  // The previews follow the grab: the Vault's bell (a Locksmith's coins are silent) and what the duffel adds to the share (5 in the crew).
+  await expect(page.locator(".coin-bags").getByRole("img", { name: /^Bell: 0 of 4 lit(, your grab adds 3)?$/ })).toBeVisible();
+  await expect(page.getByText("Your 1 duffel coin adds about 0.2 to each share.")).toBeVisible();
+  // A tap alternative to dragging: a coin is a button, Enter sends it to the other bag.
+  await bagCoins(page, "pocket").first().focus();
+  await page.keyboard.press("Enter");
+  await expect(bagCoins(page, "duffel")).toHaveCount(2);
+  await bagCoins(page, "duffel").first().click();
+  await expect(bagCoins(page, "pocket")).toHaveCount(2);
   await page.getByRole("button", { name: "Lock it in" }).click();
   await expect(page.getByRole("button", { name: "Locked in" })).toBeDisabled();
   await expect(page.getByText("Locked in: Vault, pocket 2.")).toBeVisible();
@@ -149,7 +163,7 @@ test("the move panel: pick a room, split the loot, lock it in, change it; reconn
   await shot(page, "mid-round");
 
   // Security needs a room to watch before it can lock in. design §6.1
-  await page.locator('.room-tile[data-room="Security"]').click();
+  await pickRoom(page, "Security");
   await expect(page.getByRole("button", { name: "Update move" })).toBeDisabled();
   await page.getByRole("group", { name: "Room to watch" }).getByRole("button", { name: "Vault" }).click();
   await page.getByRole("button", { name: "Update move" }).click();
@@ -180,10 +194,10 @@ test("the bank board: tap a room to pick it, see who you saw and the alibi claim
 
   // The board drives the move panel, and the panel drives the board.
   await board.locator(".bank-room[data-room=vault]").click();
-  await expect(page.locator('.room-tile[data-room="Vault"]')).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator(".move__room-name")).toHaveText("Vault");
   await expect(board.locator(".bank-room[data-room=vault]")).toHaveAttribute("aria-pressed", "true");
   await expect(board.getByText(/heading for the Vault/)).toBeVisible();
-  await page.locator('.room-tile[data-room="Office"]').click();
+  await pickRoom(page, "Office");
   await expect(board.locator(".bank-room[data-room=office]")).toHaveAttribute("aria-pressed", "true");
   await expect(board.locator(".bank-room[data-room=vault]")).toHaveAttribute("aria-pressed", "false");
   // Only you stand in the bank while planning: nobody else's pick is drawn.
