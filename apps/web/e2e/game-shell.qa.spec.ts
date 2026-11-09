@@ -366,8 +366,11 @@ test("finished game: The result panel at every width @fast-clock @reveal", async
     await showResult(page);
     await fits(page, `result at ${width}`);
     // Round-1 bug: at 1024/1280 the ranking names wrapped one letter per line. Every name gets at least 40 px.
-    const narrow = await page.locator(".ranking__who").evaluateAll((els) => els.filter((e) => e.getBoundingClientRect().width < 40).map((e) => e.textContent));
-    expect(narrow, `ranking names at ${width}`).toEqual([]);
+    // The layout swap at 1024 px and the frames' redraw take a moment: a squeezed name that stays squeezed fails.
+    await expect(async () => {
+      const narrow = await page.locator(".ranking__who").evaluateAll((els) => els.filter((e) => e.getBoundingClientRect().width < 40).map((e) => e.textContent));
+      expect(narrow, `ranking names at ${width}`).toEqual([]);
+    }).toPass({ timeout: 5_000 });
     await expectRankingReadable(page);
     await shot(page, "result");
   }
