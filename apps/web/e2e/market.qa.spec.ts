@@ -108,6 +108,15 @@ test.describe("QA black market, real games", () => {
       }
     }
     await shoot(page, "open-notices", sheet.locator(".market__sales"));
+    const perkNames = await sheet.locator(".perk__name").allTextContents();
+    await page.keyboard.press("Escape");
+    // After the rebase onto the move (#201) and the rulebook (#207): the market button sits in the
+    // move panel, and the rulebook's black market lists the sheet's perks.
+    await shoot(page, "open-movepanel", page.getByRole("button", { name: "Black market", exact: true }));
+    await page.getByRole("button", { name: "Rules", exact: true }).click();
+    const book = page.getByRole("list", { name: "This game's black market" });
+    await expect(book.locator(".rulebook__name b")).toHaveText(perkNames);
+    await shoot(page, "open-rulebook", book);
     expect(leaks(frames)).toEqual([]);
   });
 
