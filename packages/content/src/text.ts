@@ -3,7 +3,7 @@
 // Plain, short and friendly. Data only. design §20
 import { EVENTS } from "./events";
 import type { RoleId, RoomId } from "./index";
-import { BANK_JOB } from "./jobs";
+import { BANK_JOB, type JobDef } from "./jobs";
 
 const { bulbs, bustStars } = BANK_JOB.alarm;
 
@@ -20,6 +20,11 @@ export function ordinal(n: number): string {
 /** The honesty line as the rulebook writes it: ⅔ for two-thirds, else a percentage. */
 export function lineText(line: number): string {
   return Math.abs(line - 2 / 3) < 1e-9 ? "⅔" : `${Math.round(line * 100)}%`;
+}
+
+/** The honesty line in a sentence: "two-thirds", else a percentage. */
+export function lineWords(line: number): string {
+  return Math.abs(line - 2 / 3) < 1e-9 ? "two-thirds" : `${Math.round(line * 100)}%`;
 }
 
 /** What an InfoTip shows: a short name and one line. */
@@ -137,7 +142,8 @@ export const EVENT_TEXT: Readonly<Record<string, string>> = {
 };
 
 /** The glossary; each line is also the InfoTip wherever its word appears. design §20.5 */
-export const TERMS = {
+/** The glossary for a job's numbers (a game may override them); each line is also the InfoTip wherever its word appears. design §20.5 */
+export const termsFor = ({ alarm, honestyLine }: Pick<JobDef, "alarm" | "honestyLine">) => ({
   duffel: { name: "Duffel", text: "The crew bag. Split equally every round." },
   share: { name: "Share", text: "Your equal cut of every split so far." },
   pocket: { name: "Pocket", text: "Coins you skimmed. Yours alone." },
@@ -145,11 +151,14 @@ export const TERMS = {
   kitty: { name: "Kitty", text: "Leftover change, carried into the next split." },
   shakedown: { name: "Shakedown", text: "A vote that opens one stash; what's above the share goes into the next split." },
   protected: { name: "Protected", text: "Shaken down already: safe until the next regular meeting." },
-  wanted: { name: "Wanted", text: `One star per raid. ${word(bustStars)} is a bust.` },
-  raid: { name: "Raid", text: `The ${ordinal(bulbs)} bulb lights: grabs there are seized.` },
-  bust: { name: "Bust", text: `Wanted ${bustStars}. Only the Rooftop gets away.` },
-  honesty: { name: "Honesty", text: `Coins that reached the duffel ÷ coins taken. Line: ${lineText(BANK_JOB.honestyLine)}.` },
-} as const satisfies Record<string, InfoText>;
+  wanted: { name: "Wanted", text: `One star per raid. ${word(alarm.bustStars)} is a bust.` },
+  raid: { name: "Raid", text: `The ${ordinal(alarm.bulbs)} bulb lights: grabs there are seized.` },
+  bust: { name: "Bust", text: `Wanted ${alarm.bustStars}. Only the Rooftop gets away.` },
+  honesty: { name: "Honesty", text: `Coins that reached the duffel ÷ coins taken. Line: ${lineText(honestyLine)}.` },
+}) as const satisfies Record<string, InfoText>;
+
+/** The glossary at content's own numbers. */
+export const TERMS = termsFor(BANK_JOB);
 
 /** The InfoTips that are not glossary words. design §20.5 */
 export const TIPS = {

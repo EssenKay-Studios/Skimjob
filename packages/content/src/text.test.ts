@@ -15,6 +15,8 @@ import {
   TIPS,
   infoText,
   lineText,
+  lineWords,
+  termsFor,
   ordinal,
 } from "./index";
 
@@ -72,6 +74,22 @@ describe("the numbers in the §20.5 lines come from the data", () => {
     expect(TERMS.bust.text).toContain(`Wanted ${bustStars}.`);
     expect(TERMS.wanted.text).toBe(`One star per raid. Three is a bust.`);
     expect(TERMS.honesty.text).toContain(`Line: ${lineText(BANK_JOB.honestyLine)}.`);
+  });
+});
+
+describe("a game's own numbers in the glossary — design §20.5", () => {
+  it("termsFor reads the job it is given; TERMS is content's own", () => {
+    const odd = termsFor({ alarm: { bulbs: 5, tapedRounds: 2, bustStars: 4 }, honestyLine: 0.7 });
+    expect(odd.raid.text).toBe("The 5th bulb lights: grabs there are seized.");
+    expect(odd.wanted.text).toBe("One star per raid. Four is a bust.");
+    expect(odd.bust.text).toBe("Wanted 4. Only the Rooftop gets away.");
+    expect(odd.honesty.text).toContain("Line: 70%.");
+    expect(TERMS).toEqual(termsFor(BANK_JOB));
+  });
+
+  it("writes the honesty line in words", () => {
+    expect(lineWords(2 / 3)).toBe("two-thirds");
+    expect(lineWords(0.75)).toBe("75%");
   });
 });
 

@@ -114,8 +114,17 @@ test("a real game: the role card, roles in play, Rules, and More in This game fr
   await expect(book.getByRole("list", { name: "This game's black market" }).getByRole("listitem")).toHaveCount(3);
   await expect(book.getByText(/^\d bulbs; the \d(st|nd|rd|th) is a raid$/)).toBeVisible();
   await expect(book.getByText(/\bact(s|ed)?\b/i)).toHaveCount(0);
+  // A tip title inside the rulebook is as big, and as plain, as one outside it.
+  const titleStyle = () => page.locator(".infotip__pop:popover-open h3").evaluate((el) => [getComputedStyle(el).fontSize, getComputedStyle(el).textDecorationLine]);
+  await book.getByRole("button", { name: /^About / }).first().click();
+  const inside = await titleStyle();
+  await page.keyboard.press("Escape");
   await book.locator(".btn", { hasText: "Close" }).click();
   await expect(book).toHaveCount(0);
+  await page.getByRole("button", { name: "About Bank" }).click();
+  expect(await titleStyle()).toEqual(inside);
+  expect(inside[1]).toBe("none");
+  await page.keyboard.press("Escape");
 
   // Every tip ends with "More in This game", which opens the rulebook.
   await page.getByRole("button", { name: "About Bank" }).click();

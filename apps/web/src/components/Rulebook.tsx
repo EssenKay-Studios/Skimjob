@@ -2,7 +2,7 @@
 // role list), this game's three black-market perks, the events deck and the
 // numbers, plus the Terms glossary. Every line and number comes from content
 // or the player's own view.
-import { EVENTS, ROOM_TEXT, TERMS, infoText } from "@skimjob/content";
+import { EVENTS, ROOM_TEXT, infoText, termsFor } from "@skimjob/content";
 import type { PlayerView } from "@skimjob/engine";
 import { RoleIcon } from "../art/RoleIcon";
 import { jobOf, setupOf } from "../game/hud";
@@ -115,7 +115,7 @@ export function Rulebook({ view }: { view: PlayerView }) {
         </Section>
         <Section id="terms" title="Terms">
           <dl className="rulebook__numbers">
-            {Object.values(TERMS).map((t) => (
+            {Object.values(termsFor(jobOf(view))).map((t) => (
               <div key={t.name}>
                 <dt>{t.name}</dt>
                 <dd>{t.text}</dd>

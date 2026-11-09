@@ -1,7 +1,7 @@
 // Plain lines for the end-of-game reveal (design §15.5): which roles also win a
 // heist sunk by theft (★), who won and why, and the worked-out timeline items.
 // Pure; the switches are exhaustive. design §8
-import { BUST_ROLE_TEXT, type RoleId } from "@skimjob/content";
+import { BANK_JOB, BUST_ROLE_TEXT, lineWords, type RoleId } from "@skimjob/content";
 import { roleHandler, type RevealEnding, type RevealItem, type RevealRound, type RevealSummary } from "@skimjob/engine";
 import { describeEvent, roleName, type DescribeContext } from "./describeEvent";
 
@@ -22,7 +22,7 @@ export function whyText(ending: RevealEnding, ctx: DescribeContext): string {
       ? `Busted. ${BUST_ROLE_TEXT} The biggest stash up there wins: ${list(ending.winners.map(who))}.`
       : `Busted. ${BUST_ROLE_TEXT} Nobody was on the Rooftop, so nobody wins: the ranking is a loss.`;
   }
-  const reason = "sunk by theft: under two-thirds of the coins taken reached the crew";
+  const reason = `sunk by theft: under ${lineWords(BANK_JOB.honestyLine)} of the coins taken reached the crew`;
   switch (ending.why) {
     case "success":
       return `Job done, so the top of the ranking wins: ${top}.`;

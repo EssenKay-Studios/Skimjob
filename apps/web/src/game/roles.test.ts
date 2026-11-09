@@ -155,6 +155,14 @@ describe("the This game rulebook — design §12, §13, §15.6, §20", () => {
     for (const [id, room] of Object.entries(BANK_JOB.rooms)) if (!v.rooms.includes(id)) expect(ui, id).not.toContain(`${room.name}</b>`);
   });
 
+  it("reads the Terms from the game's own numbers, not content's defaults", () => {
+    const ui = html(createElement(Rulebook, { view: game({ contentOverrides: { alarm: { bulbs: 5, bustStars: 4 } } }) }));
+    expect(ui).toContain("The 5th bulb lights");
+    expect(ui).toContain("Four is a bust.");
+    expect(ui).not.toContain("Three is a bust");
+    expect(ui).not.toContain("The 4th bulb");
+  });
+
   it("has the Terms glossary", () => {
     const ui = html(createElement(Rulebook, { view: game() }));
     for (const t of Object.values(TERMS)) expect(ui).toContain(esc(t.text));

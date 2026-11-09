@@ -2,7 +2,7 @@
 // the reveal timeline and chat toasts read through this. Pure; the switches are
 // exhaustive, so a new event, ability, perk or meeting-result kind fails
 // typecheck until it has a line here. docs/m2-plan.md M2-6; design §13
-import { EVENTS, JOBS, PERK_TEXT, POWER_CLAIM_TARGET, ROLES } from "@skimjob/content";
+import { BANK_JOB, EVENTS, JOBS, PERK_TEXT, POWER_CLAIM_TARGET, ROLES, lineWords } from "@skimjob/content";
 import { MEETING_TITLE } from "./meeting";
 import type { GameEvent, MeetingResult, PerkUse, PlayerId, ResolvedAbility, RoomId, VoteChoice } from "@skimjob/engine";
 
@@ -190,7 +190,7 @@ function line(e: GameEvent, ctx: DescribeContext): string {
         ? `Job done! The crew got away with it: ${winners}.`
         : o.reason === "bust"
           ? `Busted: Wanted hit the bust line and the heist failed; ${o.escapees.length === 0 ? "nobody was on the Rooftop" : `${names(o.escapees)} got away over the Rooftop`}; ${winners}.`
-          : `The heist was sunk by theft: under two-thirds of the coins taken reached the crew; ${winners}.`;
+          : `The heist was sunk by theft: under ${lineWords(BANK_JOB.honestyLine)} of the coins taken reached the crew; ${winners}.`;
     }
     default: {
       const never: never = e;

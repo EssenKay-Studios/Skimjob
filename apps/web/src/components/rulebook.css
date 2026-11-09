@@ -36,7 +36,7 @@
   justify-content: space-between;
   gap: 2px 10px;
 }
-.rulebook__sec h3 {
+.rulebook__sec > header h3 {
   margin: 0;
   font-size: 22px;
   text-decoration: underline wavy var(--clay);
