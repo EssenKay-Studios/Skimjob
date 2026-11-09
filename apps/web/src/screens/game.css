@@ -194,6 +194,10 @@ html.chat-sheet-open body {
   align-items: center;
   gap: 2px;
 }
+/* The i keeps its 44 px target but doesn't make its label taller than Share's, so the values line up. */
+.hud__stat > .meta .infotip {
+  margin-block: -14px;
+}
 /* Wanted: the stars, and this round's event card under them. */
 .hud__wanted {
   justify-items: start;

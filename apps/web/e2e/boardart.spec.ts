@@ -86,6 +86,69 @@ for (const width of WIDTHS) {
   }
 }
 
+for (const width of WIDTHS) {
+  test(`the selected room's pin covers no name tag: 12 in the Vault at ${width}px @board`, async ({ page }, info) => {
+    test.skip(info.project.name !== "mobile", "viewports are set per test");
+    await page.setViewportSize({ width, height: 900 });
+    await harness(page, "tier=big&n=12&spread=one&bells=lit");
+    await page.locator('.bank-room[data-room="vault"]').click();
+    await expect(page.locator('.bank-room[data-room="vault"]')).toHaveAttribute("aria-label", /selected/);
+    const hits = await page.evaluate(() => {
+      const el = document.querySelector(".bank-pin");
+      if (!el) return []; // a crowded room shows no pin
+      const pin = el.getBoundingClientRect();
+      return [...document.querySelectorAll(".crook-tag")]
+        .map((t) => ({ r: t.getBoundingClientRect(), name: t.textContent }))
+        .filter(({ r }) => r.width > 0 && r.left < pin.right - 0.5 && pin.left < r.right - 0.5 && r.top < pin.bottom - 0.5 && pin.top < r.bottom - 0.5)
+        .map(({ name }) => name);
+    });
+    expect(hits, "name tags under the pin").toEqual([]);
+  });
+}
+
+test("the selected room's pin shows on an uncrowded room and stays clear of its name and the bell @board", async ({ page }, info) => {
+  test.skip(info.project.name !== "mobile", "viewports are set per test");
+  for (const width of WIDTHS) {
+    await page.setViewportSize({ width, height: 900 });
+    await harness(page, "tier=small&n=2&spread=one&bells=lit");
+    await page.locator('.bank-room[data-room="vault"]').click();
+    await expect(page.locator('.bank-room[data-room="vault"] .bank-pin')).toHaveCount(1);
+    const [pin, tag, bell] = await page.evaluate(() => {
+      const box = (s: string) => document.querySelector(s)!.getBoundingClientRect();
+      const f = (r: DOMRect) => ({ l: r.left, t: r.top, r: r.right, b: r.bottom });
+      return [f(box(".bank-pin")), f(box('.bank-room[data-room="vault"] .bank-tag')), f(box('[data-bell="vault"] .bell'))];
+    });
+    expect(meets(pin!, tag!), `${width}px: pin over the room name`).toBe(false);
+    expect(meets(pin!, bell!), `${width}px: pin over the bell`).toBe(false);
+  }
+});
+
+test("a crook never hides the CLOSED card of a taped room @board", async ({ page }, info) => {
+  test.skip(info.project.name !== "mobile", "viewports are set per test");
+  await page.setViewportSize({ width: 390, height: 900 });
+  await harness(page, "tier=big&n=12&spread=all&taped=1&bells=lit");
+  // The card is drawn after the crooks, so it is the last thing painted in its room.
+  const order = await page.evaluate(() => {
+    const room = document.querySelector('.bank-room[data-room="depositBoxes"]')!;
+    const kids = [...room.querySelectorAll(".bank-room__closed-sign, .crook-fig")];
+    return kids.map((k) => k.classList.contains("bank-room__closed-sign"));
+  });
+  expect(order.lastIndexOf(true)).toBe(order.length - 1);
+});
+
+test("the HUD's Bank value lines up with Share's @board", async ({ page }, info) => {
+  test.skip(info.project.name !== "mobile", "one run is enough");
+  test.setTimeout(90_000);
+  const game = await startGame(page.request, { bots: 4 });
+  for (const width of [390, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`/game/${game.id}`);
+    const bank = await page.locator(".hud__bank .hud__big").boundingBox();
+    const share = await page.locator(".hud__share .hud__big").boundingBox();
+    expect(Math.abs(bank!.y - share!.y), `${width}px: Bank and Share values`).toBeLessThanOrEqual(2);
+  }
+});
+
 test("the taped room reads CLOSED with its rounds, a siren spins and its bell is off @board", async ({ page }, info) => {
   test.skip(info.project.name !== "mobile", "viewports are set per test");
   await page.setViewportSize({ width: 390, height: 900 });

@@ -1,4 +1,5 @@
 /* The alarm bell and the Wanted stars (S4.1; design §5.1, §5.4, ui-style "Alarm bells and Wanted stars"). Tokens only. */
+/* bellWidth() in Bell.tsx mirrors the sizes here (icon, bulbs, gaps, padding): change both together. */
 
 /* ---------- Alarm bell (design §5.1) ---------- */
 .bell {

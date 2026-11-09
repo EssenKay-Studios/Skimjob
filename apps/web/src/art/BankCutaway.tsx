@@ -321,13 +321,6 @@ function Room({
               <rect x={-w} y={h / 2 - 9} width={w * 3} height="18" fill={`url(#${uid}-tape)`} stroke={INK} strokeWidth="1.6" transform={`rotate(-9 ${w / 2} ${h / 2})`} />
               <rect x={-w} y={h / 2 - 9} width={w * 3} height="18" fill={`url(#${uid}-tape)`} stroke={INK} strokeWidth="1.6" transform={`rotate(7 ${w / 2} ${h / 2 + 22})`} />
             </g>
-            <g transform={`translate(${w / 2} ${h / 2 + 10}) rotate(-4)`} className="bank-room__closed-sign">
-              <rect x={-signW / 2} y="-13" width={signW} height="26" rx="4" fill="url(#sk-hatch)" opacity=".5" transform="translate(2.5 3)" />
-              <rect x={-signW / 2} y="-13" width={signW} height="26" rx="4" fill="var(--paper-hi)" stroke={INK} strokeWidth="1.8" />
-              <text x="0" y="6" textAnchor="middle" className="bank-closed__text">
-                {tapedLeft === undefined ? "CLOSED" : `CLOSED ${tapedLeft}`}
-              </text>
-            </g>
             {tapedLeft !== undefined && <Siren x={w - 20} y={20} reach={clampN(w * 0.44, 60, 140)} clip={`url(#${uid}-${id}-clip)`} />}
           </g>
         )}
@@ -350,6 +343,18 @@ function Room({
             tagAt={twoRows && s.back ? "head" : "body"}
           />
         ))}
+        {/* The CLOSED card goes over the crooks, so a hat never hides it. */}
+        {closed && (
+          <g className="bank-room__card">
+            <g transform={`translate(${w / 2} ${h / 2 + 10}) rotate(-4)`} className="bank-room__closed-sign">
+              <rect x={-signW / 2} y="-13" width={signW} height="26" rx="4" fill="url(#sk-hatch)" opacity=".5" transform="translate(2.5 3)" />
+              <rect x={-signW / 2} y="-13" width={signW} height="26" rx="4" fill="var(--paper-hi)" stroke={INK} strokeWidth="1.8" />
+              <text x="0" y="6" textAnchor="middle" className="bank-closed__text">
+                {tapedLeft === undefined ? "CLOSED" : `CLOSED ${tapedLeft}`}
+              </text>
+            </g>
+          </g>
+        )}
         {labels && <RoomTag name={name} room={id} size={tagSize} on={selected} />}
         <rect className="bank-room__focus" x="3" y="3" width={w - 6} height={h - 6} rx="8" />
         {selected && (
@@ -359,7 +364,8 @@ function Room({
               <rect x="3.5" y="2" width={w - 6} height={h - 4.5} rx="8" fill="none" stroke="var(--clay-d)" strokeWidth="4.5" />
               <rect x="2" y="3.2" width={w - 4.5} height={h - 6} rx="6" fill="none" stroke="var(--clay-d)" strokeWidth="4.5" />
             </g>
-            <Pin x={w - 26} y={66} />
+            {/* With a back row of crooks the pin's corner is their name tags: the outline and the room's tag mark the pick. */}
+            {!twoRows && <Pin x={w - 26} y={80} />}
           </>
         )}
       </g>
@@ -657,7 +663,7 @@ export function BankCutaway({
         const nameEnd = labels ? (8 + tagWidth(nameOf(box.id), 15)) * pxPerUnit + 4 : 0;
         const beside = nameEnd + 6 + bellWidth({ bulbs, size, hidden: !!bell.hidden }) + 6 <= wPx;
         return (
-          <div key={box.id} className={beside ? "bank__ov" : crowded ? "bank__ov bank__ov--over" : "bank__ov bank__ov--under"} data-bell={box.id} style={{ ...at, "--bell-top": `${Math.round(37 * pxPerUnit)}px` } as CSSProperties}>
+          <div key={box.id} className={crowded ? "bank__ov bank__ov--over" : beside ? "bank__ov" : "bank__ov bank__ov--under"} data-bell={box.id} style={{ ...at, "--bell-top": `${Math.round(37 * pxPerUnit)}px` } as CSSProperties}>
             <AlarmBell bulbs={bulbs} lit={bell.lit} {...(bell.preview !== undefined && { preview: bell.preview })} {...(bell.hidden && { hidden: true })} size={size} />
           </div>
         );
