@@ -141,7 +141,6 @@ export const EVENT_TEXT: Readonly<Record<string, string>> = {
   insideTip: "Someone just learned another player's role.",
 };
 
-/** The glossary; each line is also the InfoTip wherever its word appears. design §20.5 */
 /** The glossary for a job's numbers (a game may override them); each line is also the InfoTip wherever its word appears. design §20.5 */
 export const termsFor = ({ alarm, honestyLine }: Pick<JobDef, "alarm" | "honestyLine">) => ({
   duffel: { name: "Duffel", text: "The crew bag. Split equally every round." },
