@@ -173,6 +173,8 @@ export const TIPS = {
   leads: { name: "Leads", text: "What happened, newest first. ⚠ means two facts don't add up." },
   pins: { name: "Pins", text: "Pin a lead or one fact. Only you see your pins." },
   suspect: { name: "Suspect", text: "Who your facts point at: your pins if you have 2 or more, otherwise every lead. A hunch, not proof." },
+  market: { name: "Black market", text: "Perks cost coins from your stash; they leave the game. Every purchase is logged without a name." },
+  marketStash: { name: "Paying from your stash", text: "You pay from your stash as it stood when the round began. This round's pocket can't pay." },
 } as const satisfies Record<string, InfoText>;
 
 export type TermId = keyof typeof TERMS;

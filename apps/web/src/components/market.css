@@ -1,0 +1,106 @@
+/* The black market sheet (design §12, mockup 5a). Tokens only. */
+.market {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.market__stash {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  font-weight: 600;
+}
+.market__coin svg,
+.perk__coins svg {
+  width: 22px;
+  height: 22px;
+}
+.market__limit {
+  margin-left: auto;
+}
+.market__bought {
+  margin: 0;
+  font-size: 14px;
+}
+.market__perks,
+.market__sales ul {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.perk {
+  padding: 10px;
+}
+.perk__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.perk__price {
+  display: grid;
+  flex: none;
+  justify-items: center;
+  align-content: center;
+  width: 58px;
+  min-height: 58px;
+  border: 1px solid var(--ink);
+  border-radius: var(--radius-card);
+  background: var(--card-sand);
+}
+.perk__coins {
+  display: flex;
+}
+.perk__coins svg + svg {
+  margin-left: -10px;
+}
+.perk__body {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+.perk__name {
+  margin: 0;
+  font-size: 18px;
+}
+.perk__text {
+  font-size: 14px;
+}
+.perk__aim {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1.3px dashed var(--mute);
+}
+.perk__pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.perk__warn {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.perk__warn svg {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+.market__sales h3 {
+  margin: 0 0 6px;
+}
+.market__sale {
+  padding: 8px 10px;
+  border-left: 5px solid var(--gold);
+  border-radius: var(--radius-card);
+  background: var(--paper-hi);
+  font-size: 14px;
+}
