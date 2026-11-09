@@ -675,7 +675,7 @@ Each is "What just happened / What it means / What you can do", shown once per p
 | Raid! | A room's 4th bulb lit and the police raided it. | Every grab there was seized, the room is taped off for a couple of rounds, and Wanted went up by one star. | Go somewhere else while the tape is up. Three stars is a bust. |
 | One star from a bust | Wanted is at 2 of 3. | One more raid is a bust, and on a bust only the Rooftop gets away. | Keep the bells low, or hide on the Rooftop. |
 | A shakedown | The crew voted to open one stash. | The Shakedown line of §20.5. | Keep your pocket modest, or bring a Bail. A shaken-down player is protected until the next regular meeting. |
-| Power cut | The lights went out in one room. | Nobody there sees who else is there this round, and its cameras are offline. Its bell still rings. | Ask the crew who wanted no witnesses. An Electrician can do this. |
+| A power cut | The lights went out in one room. | Nobody there sees who else is there this round, and its cameras are offline. Its bell still rings. | Ask the crew who wanted no witnesses. An Electrician can do this. |
 | Coins went missing | Some coins were taken this round that never reached the duffel. | The Missing line of §20.5. | Watch the honesty meter: under two-thirds and the heist fails for everyone. Talk it over at the meeting. |
 | A bell rang | Someone's noisy coin lit a bulb on a room's bell. | The Bell line of §20.5. | Pick quiet rooms, or share the noise. The Rooftop cools the hottest bell. |
 

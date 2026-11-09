@@ -206,7 +206,7 @@ export const LESSONS = {
     canDo: "Keep the bells low, or hide on the Rooftop.",
   },
   powerCut: {
-    title: "Power cut",
+    title: "A power cut",
     happened: "The lights went out in one room.",
     means: "Nobody there sees who else is there this round, and its cameras are offline. Its bell still rings.",
     canDo: "Ask the crew who wanted no witnesses. An Electrician can do this.",
