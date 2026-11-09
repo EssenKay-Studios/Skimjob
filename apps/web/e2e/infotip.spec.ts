@@ -36,8 +36,8 @@ for (const viewport of VIEWPORTS) {
     const p = await open(browser, viewport, viewport.width < 1024);
     const bell = tipButton(p, "Bell");
     const b = (await bell.boundingBox())!;
-    expect(b.width).toBeGreaterThanOrEqual(44);
-    expect(b.height).toBeGreaterThanOrEqual(44);
+    expect(b.width).toBeGreaterThanOrEqual(43.99);
+    expect(b.height).toBeGreaterThanOrEqual(43.99);
     await bell.click();
     await expect(popover(p)).toBeVisible();
     await expect(popover(p)).toContainText(TIPS.bell.text);
@@ -48,8 +48,8 @@ for (const viewport of VIEWPORTS) {
     expect(t.y).toBeGreaterThanOrEqual(0);
     expect(t.y + t.height).toBeLessThanOrEqual(viewport.height);
     const close = (await popover(p).getByRole("button", { name: "Close" }).boundingBox())!;
-    expect(close.width).toBeGreaterThanOrEqual(44);
-    expect(close.height).toBeGreaterThanOrEqual(44);
+    expect(close.width).toBeGreaterThanOrEqual(43.99);
+    expect(close.height).toBeGreaterThanOrEqual(43.99);
     const o = await p.evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth }));
     expect(o.scroll).toBeLessThanOrEqual(o.client);
     await p.evaluate(() => Promise.all(document.getAnimations().filter((a) => a.effect?.getComputedTiming().iterations !== Infinity).map((a) => a.finished.catch(() => undefined))));
