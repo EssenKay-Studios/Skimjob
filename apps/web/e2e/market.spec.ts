@@ -32,6 +32,8 @@ test.describe("gallery black market", () => {
     await expect(mid.getByText("1 perk a round")).toBeVisible();
     await expect(mid.locator(".market__stash .num")).toHaveText("6"); // 5, plus round 1's share
 
+    // Each price is announced, not only drawn.
+    await expect(mid.getByRole("img", { name: /^\d coins?$/ })).toHaveText(["1", "2", "3"]);
     await mid.getByRole("button", { name: "Buy Plant evidence" }).click();
     const players = mid.getByRole("group", { name: "Player" });
     await expect(players.getByRole("button")).toHaveText(["Ava", "Ben", "Cleo"]); // never Sam (you), design §11.1

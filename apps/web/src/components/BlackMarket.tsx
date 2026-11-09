@@ -12,7 +12,7 @@ import { InfoTip } from "./InfoTip";
 import { SketchFrame } from "./SketchFrame";
 import { describeEvent } from "../game/describeEvent";
 import { namesOf } from "../game/hud";
-import { latestSales, marketOf, perkUse, type Offer } from "../game/market";
+import { latestSales, marketOf, perkUse, type Market, type Offer } from "../game/market";
 import type { ClientCommand, Reply } from "../game/useGame";
 import "./market.css";
 
@@ -89,7 +89,7 @@ export function MarketBody({ view, send }: { view: PlayerView; send: Send }) {
   );
 }
 
-function PerkCard({ offer, market, open, onOpen, onDone, send }: { offer: Offer; market: ReturnType<typeof marketOf>; open: boolean; onOpen: () => void; onDone: () => void; send: Send }) {
+function PerkCard({ offer, market, open, onOpen, onDone, send }: { offer: Offer; market: Market; open: boolean; onOpen: () => void; onDone: () => void; send: Send }) {
   const [player, setPlayer] = useState<string | null>(null);
   const [room, setRoom] = useState<RoomId | null>(null);
   const [busy, setBusy] = useState(false);
@@ -105,7 +105,7 @@ function PerkCard({ offer, market, open, onOpen, onDone, send }: { offer: Offer;
   return (
     <SketchFrame seed={id} radius={14} shadow={0.35} fill="var(--paper-hi)" className={open ? "perk is-open" : "perk"} aria-labelledby={`${id}-h`}>
       <div className="perk__row">
-        <span className="perk__price" aria-label={`${offer.cost} coin${offer.cost === 1 ? "" : "s"}`}>
+        <span className="perk__price" role="img" aria-label={`${offer.cost} coin${offer.cost === 1 ? "" : "s"}`}>
           <span className="perk__coins" aria-hidden="true">
             {Array.from({ length: offer.cost }, (_, i) => (
               <Coin key={i} />
@@ -148,7 +148,7 @@ function PerkCard({ offer, market, open, onOpen, onDone, send }: { offer: Offer;
           )}
           {offer.wasted && (
             <p className="perk__warn" role="note">
-              <Warn /> This is the last round: {offer.name} works next round, so it would do nothing.
+              <Warn /> {offer.wasted}
             </p>
           )}
           <Button variant="primary" seed={`${id}-pay`} disabled={!use || busy} onClick={pay}>

@@ -29,7 +29,8 @@ function marketGame(roundCap?: number): GameState {
     { type: "advance", deadline: { kind: "result", round: 1 } },
   ]) {
     const r = handleCommand(s, c as Parameters<typeof handleCommand>[1]);
-    if (r.ok) s = r.state;
+    if (!r.ok) throw new Error(`gallery market setup: ${r.reason}`);
+    s = r.state;
   }
   return s;
 }

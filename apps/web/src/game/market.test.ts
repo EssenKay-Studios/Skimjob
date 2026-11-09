@@ -75,17 +75,32 @@ describe("the black market's offers — design §12, §20.3", () => {
     expect(marketOf(v).offers.find((o) => o.perk === "tail")?.blocked).toBeNull();
   });
 
-  it("the Check ballot is refused in Open mode, matching the engine (owner, 9 Nov, #187)", () => {
-    const m = marketOf(viewFor(game(["ballot", "softShoes", "bail"], 9, { voteVisibility: "open" }), "p1"));
-    expect(m.offers[0]?.blocked).toBe("Ballots are already public in this game.");
+  it("in the last round, a perk that would do nothing says why before paying (design §12)", () => {
+    const LAST = { contentOverrides: { roundCap: 1 } };
+    const wasted = (shop: readonly PerkId[], extra = LAST) => marketOf(viewFor(game(shop, 9, extra), "p1")).offers.map((o) => o.wasted);
+    // Not the last round: nothing flagged.
+    expect(wasted(["tail", "softShoes", "plantEvidence"], {} as typeof LAST)).toEqual([null, null, null]);
+    expect(wasted(["ballot", "blackout", "bail"], {} as typeof LAST)).toEqual([null, null, null]);
+    // "Next round" perks have no next round.
+    expect(wasted(["tail", "softShoes", "plantEvidence"])).toEqual([
+      "This is the last round: Tail works next round, so it would do nothing.",
+      "This is the last round: Soft shoes works next round, so it would do nothing.",
+      null,
+    ]);
+    // Check ballot and Bail need a meeting, and none follows the last round.
+    expect(wasted(["ballot", "blackout", "bail"])).toEqual([
+      "This is the last round: Check ballot needs a meeting, and none follows, so it would do nothing.",
+      "This is the last round: Blackout works next round, so it would do nothing.",
+      "This is the last round: Bail needs a meeting, and none follows, so it would do nothing.",
+    ]);
+    // Stamped alibi and Plant evidence act this round.
+    expect(wasted(["alibi", "softShoes", "plantEvidence"])).toEqual([null, expect.any(String), null]);
   });
 
-  it("a 'next round' perk (Tail, Soft shoes, Blackout) in the last round is flagged before paying", () => {
-    const shop = ["tail", "softShoes", "plantEvidence"] as const;
-    expect(marketOf(viewFor(game(shop), "p1")).offers.map((o) => o.wasted)).toEqual([false, false, false]);
-    const last = marketOf(viewFor(game(shop, 9, { contentOverrides: { roundCap: 1 } }), "p1"));
-    expect(last.offers.map((o) => o.wasted)).toEqual([true, true, false]);
-    expect(marketOf(viewFor(game(["alibi", "blackout", "bail"], 9, { contentOverrides: { roundCap: 1 } }), "p1")).offers.map((o) => o.wasted)).toEqual([false, true, false]);
+  it("no meeting can follow the last round: the game ends as it resolves (design §6.2, §9.3)", () => {
+    const s = run(game(["ballot", "softShoes", "bail"], 9, { contentOverrides: { roundCap: 1 } }), resolve);
+    expect(handleCommand(s, { type: "callEmergency", player: "p1" } as never).ok).toBe(false);
+    expect(viewFor(s, "p1").phase.kind).not.toBe("result");
   });
 
   it("outside planning nothing can be bought", () => {

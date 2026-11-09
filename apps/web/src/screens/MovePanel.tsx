@@ -195,7 +195,7 @@ export function MovePanel({ view, round, timers, offset, send, pick }: MovePanel
       )}
       {control && <PowerPick view={view} control={control} names={names} rooms={powerRooms} player={powerPlayer} onRooms={setPowerRooms} onPlayer={setPowerPlayer} />}
       <div className="move__foot">
-        {view.shop.length > 0 && <MarketButton view={view} send={send} />}
+        <MarketButton view={view} send={send} />
         <Button variant="primary" seed="lock" icon={<Play />} disabled={!move || busy || !changed} onClick={lock} className="move__lock">
           {mine && !changed ? "Locked in" : mine ? "Update move" : "Lock it in"}
         </Button>

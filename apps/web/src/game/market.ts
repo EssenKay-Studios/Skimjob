@@ -6,8 +6,18 @@ import type { GameEvent, PerkUse, PlayerView, RoomId } from "@skimjob/engine";
 import { perkName } from "./describeEvent";
 import { jobOf, roomOptions, seatsOf } from "./hud";
 
-/** The perks that act next round: bought in the last round they do nothing. design §12 */
-const NEXT_ROUND: ReadonlySet<PerkId> = new Set(["tail", "softShoes", "blackout"]);
+/**
+ * Why a perk bought in the last round does nothing (design §12): the "next
+ * round" perks have no next round, and Check ballot and Bail need a meeting,
+ * but the game ends as the last round resolves, with no result window (§6.2, §9.3).
+ */
+const LAST_ROUND: Partial<Record<PerkId, string>> = {
+  tail: "works next round",
+  softShoes: "works next round",
+  blackout: "works next round",
+  ballot: "needs a meeting, and none follows",
+  bail: "needs a meeting, and none follows",
+};
 /** What a perk is aimed at; `buyPerk` carries it, so a purchase is its use. design §12 */
 const AIM: Readonly<Record<PerkId, { readonly player: boolean; readonly room: boolean }>> = {
   tail: { player: false, room: true },
@@ -28,8 +38,8 @@ export interface Offer {
   readonly room: boolean;
   /** Why it can't be bought now, or null. */
   readonly blocked: string | null;
-  /** A "next round" perk in the last round: it would do nothing. */
-  readonly wasted: boolean;
+  /** In the last round, why this perk would do nothing; else null. */
+  readonly wasted: string | null;
 }
 
 export interface Market {
@@ -56,14 +66,14 @@ export function marketOf(view: PlayerView): Market {
         ? "Perks are bought while a round is planned."
         : bought
           ? `You bought ${perkName(bought)} this round. One perk a round.`
-          : perk === "ballot" && view.voteVisibility === "open"
-            ? "Ballots are already public in this game."
-            : perk === "bail" && view.me.roleState.bail
-              ? "You already hold a Bail."
-              : stash < cost
-                ? `It costs ${coins(cost)}; your stash holds ${stash}.`
-                : null;
-    return { perk, name: perkName(perk), text: PERK_TEXT[perk]?.text ?? "", cost, ...AIM[perk], blocked, wasted: last && NEXT_ROUND.has(perk) };
+          : perk === "bail" && view.me.roleState.bail
+            ? "You already hold a Bail."
+            : stash < cost
+              ? `It costs ${coins(cost)}; your stash holds ${stash}.`
+              : null;
+    const why = last ? LAST_ROUND[perk] : undefined;
+    const name = perkName(perk);
+    return { perk, name, text: PERK_TEXT[perk]?.text ?? "", cost, ...AIM[perk], blocked, wasted: why ? `This is the last round: ${name} ${why}, so it would do nothing.` : null };
   });
   return {
     stash,
