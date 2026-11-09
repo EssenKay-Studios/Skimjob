@@ -25,10 +25,10 @@ async function ok(res: Awaited<ReturnType<APIRequestContext["post"]>>): Promise<
   return (await res.json()) as { id: string; inviteCode: string };
 }
 
-/** Host + guests with 24-character names, bots to fill `seats`, the 1-hour preset (30 s rounds at TIME_SCALE 0.1). */
+/** Host + guests with 24-character names, bots to fill `seats`, the 3-hour preset (102 s rounds at TIME_SCALE 0.1: a loaded runner needs the room). */
 async function start(host: APIRequestContext, guests: APIRequestContext[], seats: number): Promise<string> {
   await ok(await host.post("/api/auth/guest", { data: { nickname: HOST } }));
-  const game = await ok(await host.post("/api/games", { data: { settings: { sessionLength: "1h" } } }));
+  const game = await ok(await host.post("/api/games", { data: { settings: { sessionLength: "3h" } } }));
   for (const [i, g] of guests.entries()) await ok(await g.post(`/api/invites/${game.inviteCode}/join`, { data: { nickname: GUESTS[i] } }));
   for (let i = 0; i < seats - 1 - guests.length; i++) await ok(await host.post(`/api/games/${game.id}/bots`, { data: {} }));
   await ok(await host.post(`/api/games/${game.id}/start`, { data: {} }));
