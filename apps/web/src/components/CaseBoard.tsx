@@ -1,6 +1,6 @@
 // The case board (design §15.4): the suspect card, the Players strip, your pins
-// and one Leads list, newest first. It only draws what a `CaseAdapter` gave it
-// (game/caseBoard.ts); pins are private to the seat. Few words, "i" InfoTips.
+// and one Leads list, newest first. It only draws what the adapter
+// (game/caseLeads.ts) gave it; pins are private to the seat. Few words, "i" InfoTips.
 import { useId, useMemo, useState } from "react";
 import type { PlayerId } from "@skimjob/engine";
 import { CrookAvatar } from "../art/Crook";

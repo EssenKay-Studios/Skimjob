@@ -138,7 +138,7 @@ describe("no tells: cameras offline (design §11.1)", () => {
     const e = v.caseFile.map((x) => x.event).filter((x) => x.type === "roomWatched" && x.round === 2);
     expect(e).toHaveLength(1);
     const text = describeEvent(e[0]!, { me: "p1", name: namesOf(v) });
-    expect(text).toMatch(/the cameras were offline, nobody seen in the Vault/);
+    expect(text).toMatch(/cameras offline \(Security or the Vault is dark\), nobody seen/);
     expect(text).not.toMatch(/electric|P0/i);
   });
 });

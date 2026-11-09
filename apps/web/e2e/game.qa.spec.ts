@@ -4,11 +4,19 @@
 // posted from a stale screen (alibis have no window); and nothing on screen giving away another
 // player's hidden move, split, role or "submitted" status.
 import { mkdirSync } from "node:fs";
-import { expect, test, type APIRequestContext, type Browser, type Page, type WebSocketRoute } from "@playwright/test";
+import { expect, test, type APIRequestContext, type Browser, type Locator, type Page, type WebSocketRoute } from "@playwright/test";
 
 const SHOTS = process.env.SHOTS_DIR;
 const LONG_HOST = "WWWWWWWWWWWWWWWWWWWWWWWW"; // 24, the cap; the widest glyph, no break points
 const LONG_GUEST = "Maximiliana Wolfensteins"; // 24
+
+/** design §15.4: the live case board with every lead opened, so each fact shows ("<trust> <line>"). */
+async function openLeads(page: Page): Promise<Locator> {
+  const leads = page.getByRole("region", { name: "Case board" }).getByRole("group", { name: "Leads" });
+  const closed = leads.locator('.cb__lead-btn[aria-expanded="false"]');
+  while ((await closed.count()) > 0) await closed.first().click();
+  return leads;
+}
 
 async function ok<T>(res: Awaited<ReturnType<APIRequestContext["post"]>>): Promise<T> {
   expect(res.ok(), `${res.url()} → ${res.status()} ${await res.text()}`).toBe(true);
@@ -190,6 +198,7 @@ test("12 seats, 24-char names: a 15-min game to the end with moves changed, alib
   await expect(host.locator(".over__stamp")).toHaveText(/JOB DONE|BUSTED/);
   await once("over", host);
   await once("over-guest", guest);
+  await expect(await openLeads(guest)).toContainText("You missed round 1's deadline");
 
   expect(changed, "moves changed after locking").toBeGreaterThan(0);
   expect(alibis, "alibis posted").toBeGreaterThan(0);

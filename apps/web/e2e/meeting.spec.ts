@@ -1,5 +1,5 @@
 import { mkdirSync } from "node:fs";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import { callEmergency, startGame } from "./setupGame";
 
 // M2-7 acceptance (docs/m2-plan.md): one full meeting and vote in the browser,
@@ -8,6 +8,14 @@ import { callEmergency, startGame } from "./setupGame";
 // then a 6 s notice and an 18 s vote window. MEET_SHOTS=… saves the vote dialog and the
 // results as meet-<mode>-<what>-<width>.png.
 const SHOTS = process.env.MEET_SHOTS ?? process.env.SHOTS_DIR;
+
+/** design §15.4: opens the newest case board lead titled `title` and returns it. */
+async function openLead(page: Page, title: string): Promise<Locator> {
+  const lead = page.getByRole("group", { name: "Leads" }).locator(".cb__lead", { has: page.locator(".cb__title", { hasText: title }) }).first();
+  const btn = lead.locator(".cb__lead-btn");
+  if ((await btn.getAttribute("aria-expanded")) === "false") await btn.click();
+  return lead;
+}
 
 async function shot(page: Page, name: string) {
   if (!SHOTS) return;
@@ -84,6 +92,12 @@ for (const mode of ["hiddenThenRevealed", "open", "secret"] as const) {
     await expect(page.getByText("The crew's emergency meetings are all spent.")).toBeVisible();
     await page.getByRole("button", { name: "Got it" }).click();
     await expect(results).toBeHidden();
+
+    // The case board's lead for the meeting (design §15.4): the call, the result, and your ballot, a public fact only in Open mode.
+    const lead = await openLead(page, "Emergency meeting");
+    await expect(lead).toContainText("Fact You called an emergency meeting.");
+    await expect(lead).toContainText(/The crew voted|No majority|Too few votes/);
+    await expect(lead).toContainText(mode === "open" ? "Fact You voted to skip." : "Seen by you You voted to skip.");
     expect(errors).toEqual([]);
   });
 }
@@ -115,12 +129,14 @@ test("propose a meeting time, a second player backs it, and leave a sealed vote 
   await theirs.getByRole("button", { name: "Back this time" }).click();
   await expect(panel.getByText(/Set for .*9:30/)).toBeVisible();
   await expect(theirs.getByText(/Set for .*9:30/)).toBeVisible();
+  await expect(await openLead(page, "Meeting")).toContainText(/Fact The next meeting is set for .*9:30/);
   await shot(page, "planner");
 
   await panel.getByText("Can't make the meeting?").click();
   await panel.getByRole("group", { name: "Sealed vote" }).getByRole("button", { name: "Skip" }).click();
   await panel.getByRole("button", { name: "Seal vote" }).click();
   await expect(panel.getByText("Sealed: skip")).toBeVisible();
+  await expect(await openLead(page, "Crew")).toContainText("Seen by you You sealed a vote to skip.");
   await guestCtx.close();
   await away.close();
 });

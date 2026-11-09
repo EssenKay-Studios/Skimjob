@@ -65,7 +65,9 @@ describe("no tells — design §11.1", () => {
   it("reads a blacked-out room's feed as cameras offline, with no source", () => {
     const ctx = { me: "p1", name: (p: string) => p };
     const feed = { type: "roomWatched", visibility: privateTo("p1"), player: "p1", round: 3, source: "security", room: "vault", seen: [], offline: true } as const;
-    expect(describeEvent(feed, ctx)).toBe("Round 3, on the cameras: the cameras were offline, nobody seen in the Vault.");
+    // A dark Security takes its own cameras offline too: never claim the watched room is dark (#173 review).
+    expect(describeEvent(feed, ctx)).toBe("Round 3, on the cameras: cameras offline (Security or the Vault is dark), nobody seen.");
+    expect(describeEvent({ ...feed, source: "lookout" }, ctx)).toBe("Round 3, on lookout: cameras offline (the Vault is dark), nobody seen.");
   });
 });
 

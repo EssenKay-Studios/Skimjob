@@ -22,8 +22,8 @@ import { Reveal } from "../components/Reveal";
 import { AwayRecap } from "../components/AwayRecap";
 import { CaseBoard } from "../components/CaseBoard";
 import { SuspicionBoard, SuspicionMark } from "../components/SuspicionBoard";
-import { useAwayRecap, usePins, useSuspicionBoard, type Board as SuspicionMarks, type BoardChannel } from "../game/notes";
-import { noLeads } from "../game/caseBoard";
+import { useAwayRecap, usePins, useSeatNotes, useSuspicionBoard, type Board as SuspicionMarks, type BoardChannel, type NotesLoad } from "../game/notes";
+import { caseData } from "../game/caseLeads";
 import type { DescribeContext } from "../game/describeEvent";
 import { RoomIcon } from "../art/RoomIcon";
 import { BustedSpot, JobDoneSpot, WaitingSpot } from "../art/Spots";
@@ -177,12 +177,15 @@ function Board({ view, timers, offset, send, autoMeetings, gameId, channel, dmNo
   };
   const ctx = useMemo(() => ({ me: view.me.id, name: namesOf(view), slot: slotText }), [view]);
   // M2-10: the private suspicion board, kept per seat on the server (the recap lives in `Away`).
-  const board = useSuspicionBoard(gameId);
-  const pins = usePins(gameId);
+  // One GET /notes per game page, shared by the recap, the suspicion board and the pins.
+  const notes = useSeatNotes(gameId);
+  const board = useSuspicionBoard(gameId, notes);
+  const pins = usePins(gameId, notes);
+  const caseBoard = useMemo(() => caseData(view, pins.pins), [view, pins.pins]);
   const people = otherSeats(view);
   return (
     <>
-      <Away gameId={gameId} view={view} ctx={ctx} />
+      <Away gameId={gameId} view={view} ctx={ctx} notes={notes} />
       <div className={outcome ? "game-grid is-over" : "game-grid"}>
         <Hud view={view} timers={timers} offset={offset} hostPaused={channel.control.pausedAt !== null} />
         <BankBoard view={view} pick={planning !== null ? pick : null} />
@@ -195,7 +198,7 @@ function Board({ view, timers, offset, send, autoMeetings, gameId, channel, dmNo
         {/* From 1024 px the chat and the records share the right column; below that the chat is a sheet. */}
         <div className="game-grid__side">
           <GameChat gameId={gameId} view={view} channel={channel} dmNotices={dmNotices} />
-          <CaseBoard data={noLeads(view, pins.pins)} people={people} pins={pins} marks={board.board} />
+          <CaseBoard data={caseBoard} people={people} pins={pins} marks={board.board} />
         </div>
       </div>
     </>
@@ -203,8 +206,8 @@ function Board({ view, timers, offset, send, autoMeetings, gameId, channel, dmNo
 }
 
 /** design §13: the recap on return. Its own component, so following the view never re-renders the whole screen. */
-function Away({ gameId, view, ctx }: { gameId: string; view: PlayerView; ctx: DescribeContext }) {
-  const away = useAwayRecap(gameId, view, ctx);
+function Away({ gameId, view, ctx, notes }: { gameId: string; view: PlayerView; ctx: DescribeContext; notes: NotesLoad }) {
+  const away = useAwayRecap(gameId, view, ctx, notes);
   return <AwayRecap lines={away.lines} onDismiss={away.dismiss} />;
 }
 
