@@ -88,7 +88,7 @@ describe("the black market — design §12", () => {
     expect(viewFor(game(), "p1").shop).toEqual(PERK_IDS.map((perk) => ({ perk, cost: PERKS[perk].tier })));
     const cheap = withStash(game(3, { contentOverrides: { perks: { bail: { cost: 1 } } } }), "p0", 1);
     expect(viewFor(cheap, "p0").shop.find((o) => o.perk === "bail")?.cost).toBe(1);
-    expect(ofType(since(cheap, run(cheap, buy("p0", { kind: "bail" }))), "perkSold")[0]?.cost).toBe(1);
+    expect(ofType(since(cheap, run(cheap, buy("p0", { kind: "bail" }), ROUND)), "perkSold")[0]?.cost).toBe(1);
   });
 });
 
@@ -96,26 +96,42 @@ describe("buying a perk — design §7.6, §7.7, §12", () => {
   // Round 1: p0 pockets the Vault's 3 (no raid: 3 of the bell's 4 bulbs), p1 and p2 hand in a Lobby coin each.
   const rich = () => run(game(3, { contentOverrides: { roundCap: 2 } }), mv("p0", "vault", 3), mv("p1", "lobby"), mv("p2", "lobby"), ...NEXT);
 
-  it("the coins leave the buyer's stash and the game; logged at once without a name; who bought it opens at the reveal", () => {
+  it("the coins leave the buyer's stash and the game; logged without a name as planning closes; who bought it opens at the reveal", () => {
     const s = rich();
     expect(player(s, "p0").stash).toBe(3);
     const after = run(s, buy("p0", { kind: "softShoes" }));
-    expect(since(s, after)).toEqual([
-      { type: "perkSold", visibility: PUBLIC, round: 2, perk: "softShoes", cost: 2 },
-      { type: "perkBought", visibility: privateTo("p0"), player: "p0", round: 2, perk: { kind: "softShoes" }, cost: 2 },
-    ]);
+    expect(since(s, after)).toEqual([{ type: "perkBought", visibility: privateTo("p0"), player: "p0", round: 2, perk: { kind: "softShoes" }, cost: 2 }]);
     expect([player(after, "p0").stash, after.spent]).toEqual([1, 2]);
-    // Buying doesn't change the duffel or honesty.
+    // Buying doesn't change the duffel or honesty, or anyone else's view.
     expect([after.kitty, after.setAside, after.reached, after.share]).toEqual([s.kitty, s.setAside, s.reached, s.share]);
-    expect(JSON.stringify(viewFor(after, "p1"))).not.toContain("perkBought");
-    expect(viewFor(after, "p1").ledger.at(-1)?.event).toEqual({ type: "perkSold", visibility: PUBLIC, round: 2, perk: "softShoes", cost: 2 });
-    // The reveal: the buyer, and the stash over time less the coins spent.
+    expect(viewFor(after, "p1")).toEqual(viewFor(s, "p1"));
+    // Planning closes: the notice is the round's first event.
     const ended = run(after, mv("p0", "lobby"), mv("p1", "lobby"), mv("p2", "lobby"), ROUND);
+    expect(since(run(after, mv("p0", "lobby"), mv("p1", "lobby"), mv("p2", "lobby")), ended)[0]).toEqual({ type: "perkSold", visibility: PUBLIC, round: 2, perk: "softShoes", cost: 2 });
+    // The reveal: the buyer, and the stash over time less the coins spent.
     expect(ended.phase.kind).toBe("ended");
     const reveal = viewFor(ended, "p1").reveal;
     expect(reveal?.log.some(({ event }) => event.type === "perkBought" && event.player === "p0")).toBe(true);
     expect(reveal?.summary.seats.find((x) => x.player === "p0")?.perksBought).toEqual(["softShoes"]);
     expect(reveal?.summary.rounds.find((r) => r.round === 2)?.stashes.p0).toBe(player(ended, "p0").stash);
+  });
+
+  it("leak: the order of public events can't tell who bought, or when; the notices come out together in the black market's order", () => {
+    const seats = ["p0", "p1", "p2", "p3"];
+    const start = seats.reduce((s, id) => withStash(s, id, 9), game(4));
+    const ledger = (s: GameState) => viewFor(s, "p3").ledger.map(({ event }) => event);
+    // Every seat locks in, in seat order; a buyer buys straight after its own lock-in (as a bot does).
+    const play = (purchases: [string, unknown][]) => {
+      const planned = run(start, ...seats.flatMap((id) => [mv(id, "lobby"), ...purchases.filter(([b]) => b === id).map(([b, perk]) => buy(b, perk))]));
+      expect(ledger(planned)).toEqual(ledger(run(start, ...seats.map((id) => mv(id, "lobby")))));
+      return ledger(run(planned, ROUND));
+    };
+    const tail = { kind: "tail", room: "vault" };
+    const alibi = { kind: "alibi" };
+    const seen = play([["p0", alibi], ["p1", tail]]);
+    expect(play([["p1", alibi], ["p0", tail]])).toEqual(seen);
+    expect(play([["p2", tail], ["p0", alibi]])).toEqual(seen);
+    expect(ofType(seen, "perkSold").map((e) => e.perk)).toEqual(["tail", "alibi"]);
   });
 
   it("one perk per player per round, bought while planning; refused outside planning", () => {

@@ -12,7 +12,8 @@
 //  - a command for a seat that isn't in the game is always refused. [§17.2]
 //  - loot is conserved: kitty + set-aside + stashes + coins spent on perks =
 //    loot split from rooms (less a bust round's unsplit hand-ins); the coins
-//    spent are every purchase's public cost; nothing goes negative; the kitty
+//    spent are every purchase's private cost, and its public one once planning
+//    closes; nothing goes negative; the kitty
 //    is change smaller than the crew; at the end the kitty and set-aside coins
 //    pay the getaway car. [§5.5, §6.3, §7.2, §7.7, §10, §11.3, §12]
 //  - coins are conserved: bank + seized + coins in the bags = the bank's
@@ -337,10 +338,12 @@ function checkState(state: GameState, inflow: number): void {
   check(state.reached <= taken, "coins reached ≤ coins taken (design §7.5)", [state.reached, taken]);
   for (const p of Object.values(state.players)) check(isCount(p.stash), "stashes are whole numbers ≥ 0", p);
   check(holdings(state) === inflow, "loot conservation (kitty + set-aside + stashes + spent = loot in − loot out, design §7.7)", { holdings: holdings(state), inflow });
-  // design §12: the coins spent on perks are every purchase's public cost, and each buyer's private one.
+  // design §12: the coins spent on perks are each buyer's private cost, and once planning closes every purchase's public one.
+  const planning = state.phase.kind === "planning" ? state.round : null;
   const sold = state.log.reduce((n, e) => n + (e.type === "perkSold" ? e.cost : 0), 0);
   const paid = state.log.reduce((n, e) => n + (e.type === "perkBought" ? e.cost : 0), 0);
-  check(state.spent === sold && sold === paid, "coins spent on perks = public costs = private costs", [state.spent, sold, paid]);
+  const announced = state.log.reduce((n, e) => n + (e.type === "perkBought" && e.round !== planning ? e.cost : 0), 0);
+  check(state.spent === paid && sold === announced, "coins spent on perks = private costs; public costs = purchases of closed rounds", [state.spent, paid, sold, announced]);
   // design §6.1, §7.7: every coin grabbed came out of the bank (into a bag, or seized), and the bank never goes below 0.
   const filled = state.log.find((e) => e.type === "bankFilled");
   const grabbed = state.log.reduce((n, e) => n + (e.type === "coinsGrabbed" ? e.duffel + e.pocket + e.seized : 0), 0);

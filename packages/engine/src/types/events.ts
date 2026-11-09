@@ -537,7 +537,10 @@ export interface ShakedownCancelled {
 
 // ---------------------------------------------------------------- perks (§12)
 
-/** "Someone bought `perk` (`cost` coins)": logged at once, without a name. design §12 */
+/**
+ * "Someone bought `perk` (`cost` coins)", without a name: each of the round's
+ * purchases, all together as planning closes, in the black market's order. design §12, §18
+ */
 export interface PerkSold {
   readonly type: "perkSold";
   readonly visibility: PublicVisibility;

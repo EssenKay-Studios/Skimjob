@@ -13,6 +13,7 @@ import { Banner, ClockFace, DialogSheet, TallyBars, type TallyBar } from "../com
 import { SketchFrame } from "../components/SketchFrame";
 import { TextField } from "../components/TextField";
 import { MyRoleFacts, RoleList, RulebookButton } from "../components/Extension";
+import { InfoTip } from "../components/InfoTip";
 import { Underline } from "../components/Underline";
 import { roleName } from "../game/describeEvent";
 import { namesOf, type Timer } from "../game/hud";
@@ -438,8 +439,8 @@ export function RoleCard({ view, send, claim = true }: { view: PlayerView; send:
       <MyRoleFacts view={view} />
       {view.me.roleState.bail && (
         <ul className="role-card__perks" aria-label="Your perks">
-          <li title={PERK_TEXT.bail?.text}>
-            <Chip colour="var(--gold)">{PERK_TEXT.bail?.name}</Chip>
+          <li>
+            <Chip colour="var(--gold)">{PERK_TEXT.bail?.name}</Chip> <InfoTip info={{ kind: "perk", id: "bail" }} />
           </li>
         </ul>
       )}

@@ -749,10 +749,10 @@ describe("QA: viewFor leaks around purchases — design §12, §18", () => {
     }
   });
 
-  it("the purchase is logged at once and public: the perk and cost only, no player field", () => {
+  it("the purchase is logged as planning closes and public: the perk and cost only, no player field", () => {
     const s = withStash(game(3), { p0: 3 });
     const sold = ofType(
-      viewFor(run(s, buy("p0", { kind: "bail" })), "p1").ledger.map(
+      viewFor(run(s, buy("p0", { kind: "bail" }), ROUND), "p1").ledger.map(
         (e) => e.event,
       ),
       "perkSold",

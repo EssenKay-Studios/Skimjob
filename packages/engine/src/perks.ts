@@ -2,13 +2,15 @@
 // buying a perk with coins from your stash, and Bail's choice. design §12
 //
 // `buyPerk` buys and uses a perk at once while planning, one per player per
-// round: a public, nameless `perkSold` and the buyer's private `perkBought`
-// (folded in reduce.ts: the coins leave the stash and the game). What a perk
+// round: the buyer's private `perkBought` (folded in reduce.ts: the coins leave
+// the stash and the game). The public, nameless `perkSold` notices wait for
+// planning to close and come out together (`roundSales`), so neither their
+// order nor their timing points at a buyer (§18). What a perk
 // does then happens where its rule does: Tail, Soft shoes and Plant evidence
 // as a round resolves (round.ts), Blackout as the next round starts (deck.ts),
 // Check ballot as the next meeting opens, Stamped alibi when the alibi is
 // posted (`stampedAlibi`), and Bail when a shakedown passes (meeting.ts).
-import { PERK_TEXT, type PerkId, type RoomId } from "@skimjob/content";
+import { PERK_IDS, PERK_TEXT, type PerkId, type RoomId } from "@skimjob/content";
 import type { GameEvent, GameState, PerkUse, PlayerId, PlayerState } from "./types";
 import { PUBLIC, privateTo } from "./types";
 import { perkCost } from "./overrides";
@@ -65,10 +67,17 @@ export function buyPerk(state: GameState, command: Raw): GameEvent[] | string {
   if (player.stash < cost) return `${PERK_TEXT[id]?.name ?? id} costs ${cost} coin${cost === 1 ? "" : "s"}; your stash holds ${player.stash}`;
   const perk = PERK_HANDLERS[id](state, player, raw);
   if (typeof perk === "string") return perk;
-  return [
-    { type: "perkSold", visibility: PUBLIC, round, perk: id, cost },
-    { type: "perkBought", visibility: privateTo(player.id), player: player.id, round, perk, cost },
-  ];
+  return [{ type: "perkBought", visibility: privateTo(player.id), player: player.id, round, perk, cost }];
+}
+
+/**
+ * "Someone bought …" for every perk bought in `round`, as planning closes, all
+ * together in the black market's order (not the order bought), so the public
+ * log can't tie one to its buyer. design §12, §18
+ */
+export function roundSales(state: GameState, round: number): GameEvent[] {
+  const bought = state.log.flatMap((e) => (e.type === "perkBought" && e.round === round ? [e] : []));
+  return PERK_IDS.flatMap((id) => bought.filter((e) => e.perk.kind === id).map((e): GameEvent => ({ type: "perkSold", visibility: PUBLIC, round, perk: id, cost: e.cost })));
 }
 
 /** Stamped alibi: `player`'s alibi for `round` is stamped "verified" if they bought one that round and it is true. design §12 */

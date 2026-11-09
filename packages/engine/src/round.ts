@@ -17,7 +17,7 @@ import type { Draw } from "./handle";
 import { closedRoom, isAudit, roundJob } from "./deck";
 import { aboveShare } from "./crew";
 import { roleHandler } from "./roles";
-import { boughtIn } from "./perks";
+import { boughtIn, roundSales } from "./perks";
 import { coolBells, factVisibility, isTaped, raidedRooms, ringBells } from "./bells";
 import { honestyOf, splitDuffel } from "./shares";
 import { afterResult } from "./meeting";
@@ -97,7 +97,7 @@ function grabbed(order: readonly PlayerId[], asked: (id: PlayerId) => number, ba
 
 /**
  * Every event for resolving the current round, in the end-of-round order of
- * design §4.2: default moves (§3.3);
+ * design §4.2: the round's purchases announced, without names (§12); default moves (§3.3);
  * 1. grabs out of the bank (§3.2) and the powers and perks that act this round: the
  *    Locksmith's quieter coins, Soft shoes bought last round (§12), the Mole's ring,
  *    the Fixer's reopen, the Electrician's blackout for next round (§11.1);
@@ -125,7 +125,8 @@ export function resolveRound(state: GameState, round: number, draw: Draw): GameE
   const job = roundJob(jobFor(state.config), state.card, eventsFor(state.config));
   const powerFor = (id: PlayerId) => powerOf(state.config, player(id).role);
   const order = state.playerOrder;
-  const events: GameEvent[] = [];
+  // design §12, §18: planning has closed, so the round's "someone bought" notices come out together.
+  const events: GameEvent[] = roundSales(state, round);
   const player = (id: PlayerId): PlayerState => {
     const p = state.players[id];
     if (!p) throw new Error(`resolveRound: unknown player ${id}`);

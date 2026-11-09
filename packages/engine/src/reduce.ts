@@ -355,13 +355,14 @@ function applyChange(state: GameState, event: GameEvent): GameState {
     }
     // ------------------------------------------------ perks. design §12
     case "perkSold":
-      // design §7.7: coins spent on perks leave the game.
-      return { ...state, spent: state.spent + event.cost };
+      // design §12: the round's nameless notice; the coins already left with `perkBought`.
+      return state;
     case "perkBought": {
       // design §7.6, §12: paid from the buyer's stash; Bail is held, a Blackout is announced next round like a
       // power cut, a Check ballot waits for the next meeting. The others act where their rule does (perks.ts).
       const { perk } = event;
-      const paid = updatePlayer(state, event.player, (p) => ({ stash: p.stash - event.cost, ...(perk.kind === "bail" && withRoleState(p, { bail: true })) }));
+      // design §7.7: the coins leave the game.
+      const paid = updatePlayer({ ...state, spent: state.spent + event.cost }, event.player, (p) => ({ stash: p.stash - event.cost, ...(perk.kind === "bail" && withRoleState(p, { bail: true })) }));
       if (perk.kind === "blackout") return paid.cutsPending.includes(perk.room) ? paid : { ...paid, cutsPending: [...paid.cutsPending, perk.room] };
       if (perk.kind === "ballot") return { ...paid, ballotChecks: [...paid.ballotChecks, { player: event.player, target: perk.target }] };
       return paid;

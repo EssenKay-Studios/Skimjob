@@ -233,6 +233,11 @@
   flex-wrap: wrap;
   gap: 8px;
 }
+.role-card__perks li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
 .role-card__foot {
   display: flex;
   flex-wrap: wrap;

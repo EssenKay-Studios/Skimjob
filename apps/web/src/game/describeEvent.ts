@@ -163,7 +163,7 @@ function line(e: GameEvent, ctx: DescribeContext): string {
     case "shakedownResolved":
       return `${who(e.target)} ${you(e.target) ? "were" : "was"} shaken down: a stash of ${e.stashRevealed}, ${e.taken} set aside for the next split.${e.clean ? " Clean: nothing above the share." : ""}`;
     case "perkSold":
-      // design §12: logged at once, without a name.
+      // design §12: logged without a name as planning closes.
       return `🛒 Someone bought ${perkName(e.perk)} (${e.cost} coin${e.cost === 1 ? "" : "s"}).`;
     case "perkBought":
       return `Round ${e.round}: ${verb(e.player, "bought", "bought")} ${perkName(e.perk.kind)} for ${e.cost} coin${e.cost === 1 ? "" : "s"}${perk(e.perk, who)}.`;

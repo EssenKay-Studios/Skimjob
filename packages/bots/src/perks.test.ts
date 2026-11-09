@@ -74,7 +74,6 @@ describe("Bail's choice — design §9.6, §19.3", () => {
     expect(s.phase.kind).toBe("shakedownPending");
     expect(choice(s, { ...keen, bailAt: 1 })).toEqual([{ type: "chooseBail", player: "ben", use: true }]);
     expect(choice(s, { ...keen, bailAt: 5 })).toEqual([{ type: "chooseBail", player: "ben", use: false }]);
-    expect(choice(s, { ...keen, bailAt: null })).toEqual([{ type: "chooseBail", player: "ben", use: false }]);
     const chosen = run(s, ...choice(s, { ...keen, bailAt: 1 }));
     expect(choice(chosen, keen)).toEqual([]);
     expect(bailChoice(viewFor(s, "ana"), keen, always)).toEqual([]);
@@ -88,7 +87,7 @@ describe("Bail's choice — design §9.6, §19.3", () => {
     for (const p of Object.values(PERSONALITIES)) {
       expect(p.shop, p.name).toBeGreaterThanOrEqual(0);
       expect(p.shop, p.name).toBeLessThanOrEqual(1);
-      expect(p.bailAt === null || p.bailAt >= 1, p.name).toBe(true);
+      expect(p.bailAt, p.name).toBeGreaterThanOrEqual(1);
     }
   });
 });

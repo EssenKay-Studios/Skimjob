@@ -188,7 +188,7 @@ export function RulebookSheet({ open, onClose, view }: { open: boolean; onClose:
           <ul className="rulebook__list">
             <li>Perks cost coins from your own stash: they leave the game and lower your score.</li>
             <li>One perk a round, bought and used while planning. Bail is the one you keep until a shakedown passes against you.</li>
-            <li>Every purchase is logged at once, without a name.</li>
+            <li>Every purchase is logged without a name, all of a round's together as planning closes.</li>
           </ul>
           <ul className="rulebook__perks" aria-label={view && view.shop.length > 0 ? "This game's black market" : "The black market"}>
             {shop.map((s) => (

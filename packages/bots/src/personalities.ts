@@ -22,8 +22,8 @@ export interface Personality {
   readonly emergencyAt: number | null;
   /** Chance, each round, of buying a perk that fits its move, when its stash covers it. design §12 */
   readonly shop: number;
-  /** Use Bail when a shakedown would take at least this many coins; null never does. design §9.6 */
-  readonly bailAt: number | null;
+  /** Use Bail when a shakedown would take at least this many coins. design §9.6 */
+  readonly bailAt: number;
   /** Chance of spending a round in Security. design §17.3 (Cautious "checks Security often") */
   readonly watch: number;
   /**

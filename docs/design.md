@@ -392,7 +392,7 @@ Every role has a one-sentence power, a "How you win" line and a "How to spot it"
 - **The shop:** each game deals **one perk per tier** (3 items), picked with the game's seed. The "This game" rulebook lists only those.
 - **Stock** *(owner, 6 Nov)*: each of the 3 items has unlimited stock, and any player may buy any item, again in later rounds.
 - **One perk per player per round**, each single-use, bought and used while planning, except **Bail**, the one held item: you keep it until a shakedown passes against you and you choose to use it (§9.6). You can hold only one Bail at a time *(owner, 6 Nov)*. *(Owner, 6 Nov.)* You pay from your stash as it stood at the start of the round; this round's pocket can't pay.
-- **Every purchase is logged at once, without a name:** "🛒 Someone bought Soft shoes (2 coins)". Who bought it opens at the reveal.
+- **Every purchase is logged without a name:** "🛒 Someone bought Soft shoes (2 coins)". A round's purchases are logged together as planning closes, in the black market's order, so neither their order nor their timing shows who bought. Who bought it opens at the reveal.
 - **Laundering is allowed:** coins spent on perks can't be taken by a shakedown or the Priest, but they no longer count toward winning.
 
 | Tier | Cost [tunable] | Perk | Effect |

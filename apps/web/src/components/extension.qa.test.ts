@@ -100,13 +100,15 @@ describe("purchases stay private (design §12, §18)", () => {
     return { ...s, players: { ...s.players, p0: { ...s.players.p0!, stash: 9 } } };
   };
 
-  it("others see only the nameless sale; nobody's view shows who bought it or that they hold a Bail", () => {
-    const s = run(rich(), buy("p0", { kind: "bail" }));
+  it("others see only the nameless sale, once planning closes; nobody's view shows who bought it or that they hold a Bail", () => {
+    const bought = run(rich(), buy("p0", { kind: "bail" }));
+    for (const other of ["p1", "p2", "p3", "p4"]) expect(viewFor(bought, other)).toEqual(viewFor(rich(), other));
+    const s = run(bought, { type: "advance", deadline: { kind: "round", round: bought.round } });
     for (const other of ["p1", "p2", "p3", "p4"]) {
       const v = viewFor(s, other);
       const json = JSON.stringify(v);
       expect(json).not.toContain('"perkBought"');
-      expect(v.ledger.at(-1)?.event).toMatchObject({ type: "perkSold", perk: "bail", cost: 3 });
+      expect(v.ledger.find(({ event }) => event.type === "perkSold")?.event).toMatchObject({ type: "perkSold", perk: "bail", cost: 3 });
       expect(json).not.toMatch(/"player":"p0"[^}]*"perkSold"|"perkSold"[^}]*"player"/);
       expect(v.me.roleState.bail).toBe(false);
     }

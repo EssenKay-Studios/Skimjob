@@ -73,6 +73,6 @@ export function bailChoice(view: PlayerView, p: Personality, random: Random): Pl
   if (phase.kind !== "shakedownPending" || phase.target !== view.me.id || !view.me.roleState.bail) return [];
   if (ofType(view.caseFile, "bailChosen").some((e) => e.meetingId === phase.meetingId)) return [];
   const loss = Math.max(0, view.me.stash - view.share);
-  const use = random() < p.noise ? random() < 0.5 : p.bailAt !== null && loss >= p.bailAt;
+  const use = random() < p.noise ? random() < 0.5 : loss >= p.bailAt;
   return [{ type: "chooseBail", player: view.me.id, use }];
 }
