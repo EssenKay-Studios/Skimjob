@@ -80,6 +80,10 @@ for (const seats of [6, 12]) {
     for (const p of [page, ...guests]) await expect(panel(p)).toBeVisible();
     // Bots took their spot and agreed as the round started.
     await expect(panel(page).getByText(`${seats - 1 - guestCount} of ${seats} agreed`)).toBeVisible();
+    // Re-check bug 1: every head on the mini bank shows its own tag (no shared "B·" for bots).
+    const tags = await panel(page).locator(".plan__heads button, .plan__tray button").evaluateAll((bs) => bs.map((b) => b.textContent!.replace("✓", "").trim()));
+    expect(tags.length).toBe(seats);
+    expect(new Set(tags).size, `head tags: ${tags.join(" ")}`).toBe(seats);
 
     // design §10 / visibility: the guest locks in a private move (Vault); the host's board never shows it.
     await guest.locator('.room-tile[data-room="Vault"]').click();
@@ -166,6 +170,8 @@ for (const seats of [6, 12]) {
     await panel(page).getByRole("group", { name: "Alibi room" }).getByRole("button", { name: "Lobby" }).click();
     await panel(page).getByRole("button", { name: "Post alibi" }).click();
     await expect(panel(page).getByText(/You told the crew you were in the\s*Lobby\s*in round 1/)).toBeVisible();
+    // Re-check bug 2: the posted alibi is one inline sentence, not a grid of rows.
+    expect(await panel(page).locator("p.plan__alibi").evaluate((el) => getComputedStyle(el).display)).toBe("block");
     await sweep(page, `s${seats}-alibi-posted`);
   });
 }
