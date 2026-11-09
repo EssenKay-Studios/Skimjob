@@ -8,10 +8,10 @@
 
 **Pitch:** *Steal from your crew — just don't sink the job.*
 
-Skimjob is a social deduction heist game for groups of friends, in a browser (and later an Android/iOS app). A crew robs one bank together over a session the host sets, from an hour to a week. Each round every player secretly picks a room, grabs coins there (more coins ring more of the room's alarm bell) and drags each coin into the **crew duffel** or **their own pocket**. The duffel is split equally among everyone; the pocket is yours alone. If too much goes missing the heist fails and nobody wins; otherwise the biggest stash wins (every tie for it too), or the whole crew together if every stash is equal.
+Skimjob is a social deduction heist game for groups of friends, in a browser (and later an Android/iOS app). A crew robs one bank together over a session the host sets, from 15 minutes to a week. Each round every player secretly picks a room, grabs coins there (more coins ring more of the room's alarm bell) and drags each coin into the **crew duffel** or **their own pocket**. The duffel is split equally among everyone; the pocket is yours alone. If too much goes missing the heist fails and nobody wins; otherwise the biggest stash wins (every tie for it too), or the whole crew together if every stash is equal.
 
 - **Players:** 3–12; bots fill empty seats. Best at 4–8.
-- **Session length:** set by the host, 1 hour to 1 week (§17). The rules are the same at every length; only the pace changes.
+- **Session length:** set by the host, 15 minutes to 1 week (§17). The rules are the same at every length; only the pace changes.
 - **Platforms:** the responsive web app is the launch product; native apps come later as thin clients of the same server. A player can switch devices mid-game.
 
 ### 1.1 Design principle
