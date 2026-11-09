@@ -98,18 +98,18 @@ describe("the matrix — design §17.4 (3–12 players), extension.md Build note
 describe("tallies", () => {
   const mole = (over = {}) => seat({ id: "m", role: "mole", ...over });
   const games = [
-    gameRec({ players: 4, winners: ["a", "m"], playerRecords: [seat({ id: "a", winCredit: 0.5, tokensEarned: 2, tokensSpent: 1 }), seat({ id: "b", role: "lookout" }), mole({ winCredit: 0.5, tokensEarned: 1 })] }),
-    gameRec({ players: 4, result: "failed", reason: "bust", winners: ["m"], playerRecords: [seat({ id: "a" }), mole({ winCredit: 1, tokensEarned: 2, tokensSpent: 2 })] }),
+    gameRec({ players: 4, winners: ["a", "m"], playerRecords: [seat({ id: "a", winCredit: 0.5, spent: 1 }), seat({ id: "b", role: "lookout" }), mole({ winCredit: 0.5 })] }),
+    gameRec({ players: 4, result: "failed", reason: "bust", winners: ["m"], playerRecords: [seat({ id: "a" }), mole({ winCredit: 1, spent: 2 })] }),
     gameRec({ players: 4, result: "failed", reason: "theft", capWithBankLeft: true, winners: [], playerRecords: [seat({ id: "a" }), seat({ id: "b", role: "lookout" })] }),
   ];
 
-  it("count what the rates need: endings, no-winner and shared wins, credit by ending, tokens — extension.md Build notes \"Sim\"", () => {
+  it("count what the rates need: endings, no-winner and shared wins, credit by ending, coins spent on perks (design §12)", () => {
     const t = tallyGames(games);
     expect(t).toMatchObject({ games: 3, successes: 1, failures: 2, busts: 1, theftFailures: 1, wholeCrewWins: 0, capStalls: 1, noWinner: 1, sharedWin: 1 });
     // design §8.2, §21 G6: a success every seat won is a whole-crew win.
     expect(tallyGames([gameRec({ players: 2, winners: ["a", "b"] })]).wholeCrewWins).toBe(1);
-    expect(t.roles.locksmith).toEqual({ seats: 3, credit: 0.5, fair: 0.75, successCredit: 0.5, earned: 2, spent: 1 });
-    expect(t.roles.mole).toEqual({ seats: 2, credit: 1.5, fair: 0.5, successCredit: 0.5, earned: 3, spent: 2 });
+    expect(t.roles.locksmith).toEqual({ seats: 3, credit: 0.5, fair: 0.75, successCredit: 0.5, spent: 1 });
+    expect(t.roles.mole).toEqual({ seats: 2, credit: 1.5, fair: 0.5, successCredit: 0.5, spent: 2 });
     expect(Object.keys(t.roles)).toEqual(["locksmith", "lookout", "mole"]);
   });
 
@@ -149,7 +149,7 @@ describe("adaptive stopping", () => {
 
 describe("role parity — extension.md Build notes \"Sim\"", () => {
   const n = 5;
-  const seats = (s: number, winShare: number) => ({ seats: s, credit: s * winShare, fair: s / n, successCredit: 0, earned: 0, spent: 0 });
+  const seats = (s: number, winShare: number) => ({ seats: s, credit: s * winShare, fair: s / n, successCredit: 0, spent: 0 });
 
   it("is each role's win credit ÷ fair share; spread max − min must be ≤ 0.10", () => {
     const p = parityOf({ a: seats(40000, 0.2), b: seats(40000, 0.21), c: seats(10, 0.9) });

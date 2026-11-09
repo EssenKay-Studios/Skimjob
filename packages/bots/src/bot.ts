@@ -22,7 +22,7 @@ import type { Personality } from "./personalities";
 import { jobOf, lastResolvedRound, myPower, ofType, roomsWhere } from "./read";
 import { mostSuspicious, suspicion } from "./suspicion";
 import { claimCommands, meetingTime } from "./claims";
-import { alibiPerk, buyPerks, meetingPerks, perkSpender, planningPerks } from "./perks";
+import { bailChoice, buyPerk } from "./perks";
 import { bustDanger, jobThisRound, openRooms, quietGrab, raidRisk } from "./alarm";
 import { leaning } from "./forecast";
 
@@ -94,33 +94,31 @@ export function decide(view: PlayerView, p: Personality, random: Random, crewSee
   if (phase.kind === "ended" || phase.kind === "setup") return [];
   const player = view.me.id;
   const out: PlayerCommand[] = [];
-  // extension.md "Tokens and the perk shop": one perk use per round.
-  const spend = perkSpender(view);
   // design §5.4: alibis only while the round's alibi window is open.
   const room = view.alibiRound !== null ? chooseAlibi(view, p, random) : null;
-  if (room !== null) out.push({ type: "postAlibi", player, room }, ...spend(alibiPerk(view, room)));
+  if (room !== null) out.push({ type: "postAlibi", player, room });
   if (phase.kind === "meeting") {
-    // v2 §4: vote (with a +Vote on a shakedown), then maybe claim a role (the Priest only after its vote).
+    // v2 §4: vote, then maybe claim a role (the Priest only after its vote).
     const vote = view.me.vote === null ? chooseVote(view, p, random, crewSeed) : null;
-    if (vote !== null) out.push({ type: "castVote", player, vote }, ...spend(meetingPerks(view, vote)));
+    if (vote !== null) out.push({ type: "castVote", player, vote });
     out.push(...claimCommands(view, p, random, true));
     return out;
   }
   if (phase.kind === "shakedownPending") {
-    // v2 §4: a target can still claim.
-    out.push(...claimCommands(view, p, random, true));
+    // design §9.6: a target holding Bail chooses; v2 §4: a target can still claim.
+    out.push(...bailChoice(view, p, random), ...claimCommands(view, p, random, true));
     return out;
   }
   out.push(...scheduleMeeting(view));
   // v2 §4: claims are made around meetings (a meeting is due, or an emergency is called).
   if (meetingTime(view)) out.push(...claimCommands(view, p, random, false));
-  out.push(...crewPowers(view), ...buyPerks(view));
+  out.push(...crewPowers(view));
   // design §9.3: an emergency only in the result window, while the crew's pool lasts.
   if (phase.kind === "result" && wantsEmergency(view, p, random)) out.push({ type: "callEmergency", player });
-  if (phase.kind === "planning") {
-    const move = view.me.move ?? chooseMove(view, p, random);
-    if (view.me.move === null) out.push({ type: "submitMove", player, move });
-    out.push(...spend(planningPerks(view, move.room)));
+  if (phase.kind === "planning" && view.me.move === null) {
+    // design §12: a perk, if any, is bought with the round's move. Safe only because the engine holds its notices until planning closes.
+    const move = chooseMove(view, p, random);
+    out.push({ type: "submitMove", player, move }, ...buyPerk(view, p, random, move));
   }
   return out;
 }
@@ -140,7 +138,7 @@ function crewPowers(view: PlayerView): PlayerCommand[] {
   if (top === null || top.score <= 0) return [];
   const player = view.me.id;
   const round = lastResolvedRound(view);
-  // The engine allows one use per resolved round (a Recharge can free the Auditor's again before a new round resolves).
+  // The engine allows one use per resolved round (a regular meeting can free the Auditor's again before a new round resolves).
   if (round === 0 || ofType(view.caseFile, "abilityResolved").some((e) => e.ability.kind === power.kind && "round" in e.ability && e.ability.round === round)) return [];
   if (power.kind === "detect") return [{ type: "useAbility", player, ability: { kind: "detect", target: top.player } }];
   const claim = ofType(view.ledger, "alibiPosted").find((a) => a.player === top.player && a.round === round);

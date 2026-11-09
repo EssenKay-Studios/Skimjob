@@ -20,6 +20,10 @@ export interface Personality {
   readonly voteAt: number;
   /** Spend one of the crew's emergency meetings once someone's score reaches this; null never does. design §9.3 */
   readonly emergencyAt: number | null;
+  /** Chance, each round, of buying a perk that fits its move, when its stash covers it. design §12 */
+  readonly shop: number;
+  /** Use Bail when a shakedown would take at least this many coins. design §9.6 */
+  readonly bailAt: number;
   /** Chance of spending a round in Security. design §17.3 (Cautious "checks Security often") */
   readonly watch: number;
   /**
@@ -64,6 +68,8 @@ export const PERSONALITIES: Readonly<Record<PersonalityId, Personality>> = {
     teamSpirit: 1,
     voteAt: 2,
     emergencyAt: null,
+    shop: 0.1,
+    bailAt: 1,
     watch: 0.15,
     caution: 0.6,
     noise: 0.02,
@@ -80,6 +86,8 @@ export const PERSONALITIES: Readonly<Record<PersonalityId, Personality>> = {
     teamSpirit: 0.7,
     voteAt: 2,
     emergencyAt: null,
+    shop: 0.25,
+    bailAt: 2,
     watch: 0.1,
     caution: 0.5,
     noise: 0.02,
@@ -96,6 +104,8 @@ export const PERSONALITIES: Readonly<Record<PersonalityId, Personality>> = {
     teamSpirit: 0.2,
     voteAt: 4,
     emergencyAt: null,
+    shop: 0.35,
+    bailAt: 1,
     watch: 0.05,
     caution: 0.2,
     noise: 0.02,
@@ -112,6 +122,8 @@ export const PERSONALITIES: Readonly<Record<PersonalityId, Personality>> = {
     teamSpirit: 1,
     voteAt: 1.5,
     emergencyAt: 7,
+    shop: 0.2,
+    bailAt: 1,
     watch: 0.35,
     caution: 0.9,
     noise: 0.02,
@@ -128,6 +140,8 @@ export const PERSONALITIES: Readonly<Record<PersonalityId, Personality>> = {
     teamSpirit: 0,
     voteAt: 0,
     emergencyAt: null,
+    shop: 0.5,
+    bailAt: 1,
     watch: 0,
     caution: 0,
     noise: 1,

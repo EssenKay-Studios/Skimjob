@@ -1,5 +1,4 @@
-// The end-of-game reveal summary (design §8, §15.5; extension.md "Tokens and
-// the perk shop").
+// The end-of-game reveal summary (design §8, §12, §15.5).
 import { describe, expect, it } from "vitest";
 import type { GameConfig, GameEvent, Outcome, RankEntry } from "./types";
 import { PUBLIC, REVEAL, privateTo, secretTo } from "./types";

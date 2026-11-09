@@ -13,8 +13,8 @@ import { replay } from "./reduce";
 import { handleCommand } from "./handle";
 import { fullGrab } from "./grab.testkit";
 
-/** One perk per column and no Shield, whatever the seed: a Shield in the shop opens a shakedown window at every meeting. */
-const SHOP_NO_SHIELD: readonly PerkId[] = ["peek", "alibi", "extraVote"];
+/** One perk per tier and no Bail, whatever the seed: Bail in the shop opens a Bail choice window after every passed shakedown (design §9.6). */
+const SHOP_NO_BAIL: readonly PerkId[] = ["tail", "softShoes", "plantEvidence"];
 
 /**
  * 12 coins a player, a 6-coin Vault whose grab raids it (6 rings on a 4-bulb
@@ -39,7 +39,7 @@ function game(players: number, roles: string[] = [], mode?: VoteVisibility): Gam
   const cfg = config(players, mode);
   let seat = 0;
   const log = setupEvents(cfg).map(
-    (e): GameEvent => (e.type === "roleDealt" ? { ...e, role: roles[seat++] ?? "lookout" } : e.type === "shopDealt" ? { ...e, perks: SHOP_NO_SHIELD } : e),
+    (e): GameEvent => (e.type === "roleDealt" ? { ...e, role: roles[seat++] ?? "lookout" } : e.type === "shopDealt" ? { ...e, perks: SHOP_NO_BAIL } : e),
   );
   return replay(cfg, log);
 }

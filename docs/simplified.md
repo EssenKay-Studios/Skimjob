@@ -158,7 +158,7 @@ Two fixes: **Part A** remakes the rules around a few visible things (coins, bell
 - **The coins leave the game** (paid to fixers and cops); buying doesn't change the duffel or honesty.
 - **Each game's shop deals one perk per tier**, so 3 items, picked by the game's seed. The "This game" rulebook lists only those.
 - **One perk per player per round**, each single-use.
-- **Every purchase is logged at once, without a name:** "🛒 Someone bought Soft shoes (2 coins)".
+- **Every purchase is logged without a name,** all of a round's together as planning closes: "🛒 Someone bought Soft shoes (2 coins)".
 - **Laundering is allowed:** stolen coins spent on perks are gone, so shakedowns and the Priest can't take them, but they no longer count toward winning.
 
 | Cost | Perk | Effect |

@@ -18,7 +18,7 @@ import { replay } from "./reduce";
 import { handleCommand, type CommandResult } from "./handle";
 import { meetingResult } from "./meeting";
 import { viewFor } from "./view";
-import { grantPerks } from "./perks.testkit";
+import { giveBail } from "./perks.testkit";
 import { fullGrab } from "./grab.testkit";
 import { R6_COINS } from "./v01-numbers.testkit";
 
@@ -104,13 +104,13 @@ const dueMeeting = (s: GameState): GameState => {
   const { meetingId } = s.phase;
   return run(s, { type: "scheduleMeeting", meetingId, slot: "x" }, { type: "advance", deadline: { kind: "openMeeting", meetingId } });
 };
-/** Close the open meeting and, if a shakedown window opened, end it. */
+/** Close the open meeting and, if a Bail choice window opened, end it. */
 const closeAll = (s: GameState): GameState => {
   const closed = run(s, CLOSE);
   return closed.phase.kind === "shakedownPending" ? run(closed, RESOLVE) : closed;
 };
-/** A shop with no Shield, so a passed shakedown applies at once (no window). design §9.6 */
-const noShield = (s: GameState): GameState => ({ ...s, shop: ["peek", "alibi", "extraVote"] });
+/** A shop with no Bail, so a passed shakedown applies at once (no window). design §9.6 */
+const noBail = (s: GameState): GameState => ({ ...s, shop: ["tail", "softShoes", "plantEvidence"] });
 
 // ------------------------------------------------------------------ 1. counterfactual leak pairs
 
@@ -350,10 +350,10 @@ describe("QA: one hidden role difference never changes another player's view or 
 // ------------------------------------------------------------------ 2. edges per role
 
 describe("QA Smooth Talker: majority counts weight, quorum counts voters, in every mode — design §9.5, §11.1", () => {
-  // Meetings close straight to their result unless the shop holds a Shield.
+  // Meetings close straight to their result unless the shop holds Bail.
   const result = (players: number, roles: string[], ballots: [string, string | null][], mode: VoteVisibility, extra: Partial<GameConfig> = {}) => {
     const caller = ballots[0]?.[0] ?? "p0";
-    let s = emergency(noShield(game(players, roles, { voteVisibility: mode, ...extra })), caller);
+    let s = emergency(noBail(game(players, roles, { voteVisibility: mode, ...extra })), caller);
     s = run(s, ...ballots.map(([p, t]) => vote(p, t)), CLOSE);
     return ofType(s.log, "meetingClosed").at(-1);
   };
@@ -426,10 +426,10 @@ describe("QA Hacker: a hidden bell blinds no feed — design §5.1, §11.1", () 
   });
 });
 
-describe("QA shakedown window (a Shield in the shop): deadline, wrong phase — design §8.3, §9.6", () => {
-  const shielded = (s: GameState): GameState => ({ ...s, shop: ["peek", "shield", "extraVote"] });
+describe("QA Bail choice window (Bail in the shop): deadline, wrong phase — design §9.6, §12", () => {
+  const withBail = (s: GameState): GameState => ({ ...s, shop: ["tail", "softShoes", "bail"] });
   const passed = () => {
-    const s = run(shielded(game(3, [])), mv("p1", "vault", 6), ROUND);
+    const s = run(withBail(game(3, [])), mv("p1", "vault", 6), ROUND);
     return run(emergency(s, "p2"), vote("p0", "p1"), vote("p2", "p1"), CLOSE);
   };
 
@@ -443,7 +443,7 @@ describe("QA shakedown window (a Shield in the shop): deadline, wrong phase — 
   });
 
   it("a regular meeting's window ends in the result window, where an emergency can still be called — design §9.3", () => {
-    let s = run(shielded(game(3, [])), mv("p1", "vault", 6), ROUND);
+    let s = run(withBail(game(3, [])), mv("p1", "vault", 6), ROUND);
     while (s.phase.kind !== "awaitingMeeting") s = run(s, ROUND);
     s = run(dueMeeting(s), vote("p0", "p1"), vote("p2", "p1"), CLOSE);
     expect(s.phase.kind).toBe("shakedownPending");
@@ -453,18 +453,18 @@ describe("QA shakedown window (a Shield in the shop): deadline, wrong phase — 
     expect(s.meeting).toMatchObject({ kind: "emergency", calledBy: "p2" });
   });
 
-  it("a Shield cancel in the last regular meeting's window: the target keeps the stash, protected, and the result window follows", () => {
+  it("Bail used in the last regular meeting's window: the target keeps the stash, protected, and the result window follows", () => {
     // 14 coins a round out of 60: regular meetings after rounds 2 and 3 (design §9.1); p1 pockets the Vault's 6 in round 3.
-    let s = shielded(game(3, []));
+    let s = withBail(game(3, []));
     for (let round = 1; round <= 3; round++) {
       s = run(s, mv("p1", "vault", round === 3 ? 6 : 0), mv("p2", "office"), mv("p0", "office"), ROUND);
       if (round === 2) s = closeAll(dueMeeting(s));
     }
-    s = grantPerks(dueMeeting(s), "p1", "shield");
-    s = run(s, vote("p0", "p1"), vote("p2", "p1"), CLOSE);
+    s = giveBail(dueMeeting(s), "p1");
+    s = run(s, vote("p0", "p1"), vote("p2", "p1"), CLOSE, { type: "chooseBail", player: "p1", use: true });
     expect(s.phase.kind).toBe("shakedownPending");
     const end = run(s, RESOLVE);
-    expect(since(s, end).map((e) => e.type)).toEqual(["perkUsed", "shakedownCancelled"]);
+    expect(since(s, end).map((e) => e.type)).toEqual(["shakedownCancelled"]);
     expect([end.players.p1?.stash, end.protected, end.phase.kind]).toEqual([6 + end.share, ["p1"], "result"]);
   });
 });

@@ -1,5 +1,5 @@
 // describeEvent: one line for every event type. docs/m2-plan.md M2-6; design §13
-import type { GameEvent, MeetingResult, ResolvedAbility, ResolvedPerk } from "@skimjob/engine";
+import type { GameEvent, MeetingResult, PerkUse, ResolvedAbility } from "@skimjob/engine";
 import { describe, expect, it } from "vitest";
 import { sampleEvents } from "../../../../packages/engine/src/types/samples";
 import { EVIDENCE_CARD_NOTE, describeEvent } from "./describeEvent";
@@ -21,7 +21,7 @@ const flat = <U extends { readonly kind: string }>(samples: SamplesOf<U>): U[] =
  */
 function expectSentence(text: string) {
   expect(text.length).toBeGreaterThan(8);
-  expect(text).toMatch(/^[A-Z0-9]/);
+  expect(text).toMatch(/^(🛒 )?[A-Z0-9]/); // design §12: a purchase reads "🛒 Someone bought …"
   expect(text).toMatch(/ /);
   expect(text).toMatch(/[.!]$/);
   expect(text).not.toMatch(/undefined|null|NaN|\[object|\bana\b|\bben\b/);
@@ -55,11 +55,13 @@ describe("describeEvent", () => {
     );
   });
 
-  // extension.md "Tokens and the shop": tokens never say why.
-  it("describes tokens and the shop", () => {
-    expect(describeEvent(sampleEvents.tokenEarned, asAna)).toBe("You earned a token.");
-    expect(describeEvent(sampleEvents.perkBought, asAna)).toBe("You bought a Peek perk for 2 tokens: Learn one player's role.");
-    expect(describeEvent(sampleEvents.shopDealt, asCyd)).toBe("The shop has Peek, Alibi and +Vote on sale.");
+  // design §9.6, §12: a purchase is public without a name; the buyer's own line and the Bail choice are private.
+  it("describes the black market, purchases and Bail", () => {
+    expect(describeEvent(sampleEvents.shopDealt, asCyd)).toBe("The black market sells Tail, Soft shoes and Plant evidence.");
+    expect(describeEvent(sampleEvents.perkSold, asCyd)).toBe("🛒 Someone bought Plant evidence (3 coins).");
+    expect(describeEvent(sampleEvents.perkBought, asAna)).toBe("Round 2: you bought Plant evidence for 3 coins: Ben on the Vault's cameras this round.");
+    expect(describeEvent(sampleEvents.bailChosen, asAna)).toBe("You chose to use Bail.");
+    expect(describeEvent(sampleEvents.shakedownCancelled, asCyd)).toBe("A shakedown fell through.");
   });
 
   // design §5.1: a missed deadline shows the default move.
@@ -139,24 +141,19 @@ describe("describeEvent", () => {
     expect(as(abilities.reopen[0])).toBe("Round 1: you tore the tape off the Vault.");
   });
 
-  // design §8.3: every perk spent.
-  const perks: SamplesOf<ResolvedPerk> = {
-    peek: [{ kind: "peek", target: "ben", role: "mole" }],
-    shield: [{ kind: "shield", meetingId: "m1" }],
-    extraVote: [{ kind: "extraVote", meetingId: "m1" }],
-    ballot: [{ kind: "ballot", meetingId: "m1", target: "ben" }],
+  // design §12: every perk bought.
+  const perks: SamplesOf<PerkUse> = {
     tail: [{ kind: "tail", room: "vault" }],
-    alibi: [{ kind: "alibi", round: 2, room: "lobby" }],
-    recharge: [{ kind: "recharge" }],
-    rig: [{ kind: "rig", round: 3, cards: ["audit", "lockdown"] }],
+    alibi: [{ kind: "alibi" }],
+    ballot: [{ kind: "ballot", target: "ben" }],
+    softShoes: [{ kind: "softShoes" }],
+    blackout: [{ kind: "blackout", room: "office" }],
+    bail: [{ kind: "bail" }],
+    plantEvidence: [{ kind: "plantEvidence", target: "ben", room: "vault" }],
   };
-  it.each(flat(perks))("describes the $kind perk", (perk) => {
-    expectSentence(describeEvent({ ...sampleEvents.perkUsed, perk }, asAna));
-    expectSentence(describeEvent({ ...sampleEvents.perkUsed, perk }, asCyd));
-  });
-  it("names perks and cards", () => {
-    expect(describeEvent(sampleEvents.perkUsed, asAna)).toBe("Peek: Ben is the Mole.");
-    expect(describeEvent({ ...sampleEvents.perkUsed, perk: perks.rig[0] }, asAna)).toBe("You rigged round 3's card: Audit and Lockdown to pick from.");
+  it.each(flat(perks))("describes buying the $kind perk", (perk) => {
+    expectSentence(describeEvent({ ...sampleEvents.perkBought, perk }, asAna));
+    expectSentence(describeEvent({ ...sampleEvents.perkBought, perk }, asCyd));
   });
 
   // design §5, §11.1: the public lines never name who acted unless the rule does; a hidden bell shows "?".

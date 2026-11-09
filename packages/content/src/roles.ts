@@ -1,5 +1,5 @@
 // Role definitions as data: each role's kind (eyes or shadows), its power and
-// the power's numbers, and its tokens. design §11
+// the power's numbers. design §11
 //
 // `perStretch` counts uses per stretch, the time between two regular meetings
 // ("once between meetings", design §9.1, §11.2); `perGame` uses per game. The
@@ -47,44 +47,20 @@ export const POWER_CLAIM_TARGET: Readonly<Partial<Record<RolePower["kind"], "roo
   reopen: "room",
 };
 
-/**
- * What earns a role a token (extension.md "Roles"). "Caught" means a
- * shakedown that found the target dirty (`shakedownResolved` with `clean: false`).
- */
-export type TokenTrigger =
-  /** A player this role's Lookout power saw, earlier this game, is caught. */
-  | "watchedShakenDirty"
-  /** A visitor of a room this role audited, in the audited round, is caught. */
-  | "auditedShakenDirty"
-  /** A player this role's Detective power looked at, earlier this game, is caught. */
-  | "checkedShakenDirty"
-  /** Its ballot was for a player who was then caught (Smooth Talker). */
-  | "wonDirtyShakedown";
-
-/** A role's reward: `count` tokens each time `on` happens (1, extension.md). */
-export interface TokenReward {
-  readonly on: TokenTrigger;
-  readonly count: number;
-}
-
 export interface RoleDef {
   readonly id: RoleId;
   readonly name: string;
   readonly kind: RoleKind;
   readonly power: RolePower;
-  /** The tokens this role earns, and how. Absent: none. */
-  readonly rewards?: readonly TokenReward[];
 }
-
-const token = (on: TokenTrigger): readonly TokenReward[] => [{ on, count: 1 }];
 
 /** Every role, in the order the rulebook lists them. design §11.1 */
 export const ROLES: Readonly<Record<RoleId, RoleDef>> = {
-  lookout: { id: "lookout", name: "Lookout", kind: "eyes", power: { kind: "lookout", extraRooms: 1 }, rewards: token("watchedShakenDirty") },
+  lookout: { id: "lookout", name: "Lookout", kind: "eyes", power: { kind: "lookout", extraRooms: 1 } },
   locksmith: { id: "locksmith", name: "Locksmith", kind: "shadows", power: { kind: "muffle", fewerRings: 1 } },
-  detective: { id: "detective", name: "Detective", kind: "eyes", power: { kind: "detect" }, rewards: token("checkedShakenDirty") },
-  auditor: { id: "auditor", name: "Auditor", kind: "eyes", power: { kind: "audit", perStretch: 1 }, rewards: token("auditedShakenDirty") },
-  smoothTalker: { id: "smoothTalker", name: "Smooth Talker", kind: "eyes", power: { kind: "voteWeight", weight: 2 }, rewards: token("wonDirtyShakedown") },
+  detective: { id: "detective", name: "Detective", kind: "eyes", power: { kind: "detect" } },
+  auditor: { id: "auditor", name: "Auditor", kind: "eyes", power: { kind: "audit", perStretch: 1 } },
+  smoothTalker: { id: "smoothTalker", name: "Smooth Talker", kind: "eyes", power: { kind: "voteWeight", weight: 2 } },
   hacker: { id: "hacker", name: "Hacker", kind: "shadows", power: { kind: "hide", perStretch: 1 } },
   electrician: { id: "electrician", name: "Electrician", kind: "shadows", power: { kind: "blackout", perStretch: 1 } },
   priest: { id: "priest", name: "Priest", kind: "eyes", power: { kind: "absolve", perStretch: 1 } },

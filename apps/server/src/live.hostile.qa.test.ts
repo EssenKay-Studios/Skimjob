@@ -119,9 +119,9 @@ const commandFields = (room: string, proposalId: string, other: string): readonl
   [{ type: "sealVote", vote: { kind: "shakedown", target: other } }, [id(["vote"]), id(["vote", "kind"]), id(["vote", "target"])]],
   [{ type: "useAbility", ability: { kind: "detect", target: other } }, [id(["ability"]), id(["ability", "kind"]), id(["ability", "target"])]],
   [{ type: "useAbility", ability: { kind: "audit", room } }, [id(["ability", "room"])]],
-  [{ type: "useAbility", ability: { kind: "tail", room } }, [id(["ability", "room"])]],
-  [{ type: "useAbility", ability: { kind: "peek", target: other } }, [id(["ability", "target"])]],
-  [{ type: "useAbility", ability: { kind: "rigPick", card: "blackout" } }, [id(["ability", "card"])]],
+  [{ type: "buyPerk", perk: { kind: "tail", room } }, [id(["perk"]), id(["perk", "kind"]), id(["perk", "room"])]],
+  [{ type: "buyPerk", perk: { kind: "plantEvidence", target: other, room } }, [id(["perk", "target"])]],
+  [{ type: "chooseBail", use: true }, [[["use"], ALL]]],
   // No fields but the seat: a hostile `player` is overwritten, so only `type` is left to attack.
   [{ type: "callEmergency" }, []],
 ];

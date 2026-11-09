@@ -33,7 +33,7 @@ export interface SelfView {
   readonly id: PlayerId;
   readonly role: RoleId;
   readonly stash: number;
-  /** Your power's uses this stretch / game. design §11 */
+  /** Your power's uses this stretch / game, and whether you hold a Bail. design §11, §12 */
   readonly roleState: RoleState;
   /** Your current move for this round, if submitted. */
   readonly move: Move | null;
@@ -41,10 +41,9 @@ export interface SelfView {
   /** Your ballot in the open meeting, if cast. */
   readonly vote: VoteChoice | null;
   /**
-   * Ballot perk: the current ballot (null: none yet) of each player whose
+   * Check ballot: the current ballot (null: none yet) of each player whose
    * ballot you paid to see in the open meeting, also in Secret mode (the one
-   * exception to secret ballots, owner decision on role deck v2). Empty
-   * outside a meeting. design §8.3, §11.2
+   * exception to secret ballots). Empty outside a meeting. design §9.5, §12
    */
   readonly seenBallots: Readonly<Record<PlayerId, VoteChoice | null>>;
 }
@@ -119,7 +118,7 @@ export interface PlayerView {
   readonly lockedIn: readonly PlayerId[];
   /** Open slot proposals for the next regular meeting or briefing (public, design §9.4). */
   readonly proposals: readonly MeetingProposal[];
-  /** This game's perk shop (public), with each perk's cost in tokens. extension.md "Tokens and the perk shop" */
+  /** This game's black market (public): its three perks, each with its cost in coins. design §12 */
   readonly shop: readonly { readonly perk: PerkId; readonly cost: number }[];
   /** The roles shown at setup (public): exactly those dealt (with counts), or every role that could be; null when Hidden. design §11.3 */
   readonly roleList: { readonly list: "exact" | "possible"; readonly roles: readonly RoleId[] } | null;

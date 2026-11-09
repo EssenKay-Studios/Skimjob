@@ -10,7 +10,7 @@ export function seats(n: number): GameConfig["players"] {
 
 /**
  * R6's room yields as coin limits,
- * a bank too big to run short (design §3.2) and bells too big to raid (§5.3), so the R6 bot heuristics (alibis, suspicion, perks,
+ * a bank too big to run short (design §3.2) and bells too big to raid (§5.3), so the R6 bot heuristics (alibis, suspicion,
  * claims, endings) keep their numbers until the S3a steps that replace them.
  */
 export const R6_COINS: ContentOverrides = {
@@ -20,7 +20,7 @@ export const R6_COINS: ContentOverrides = {
 };
 
 export function config(n: number, seed: string, voteVisibility: VoteVisibility = "hiddenThenRevealed"): GameConfig {
-  // The shop may still hold a Shield.
+  // The black market may hold Bail, so a passed shakedown may wait for its Bail choice (design §9.6).
   return { seed, players: seats(n), job: "bank", eventsEnabled: false, voteVisibility, contentOverrides: R6_COINS };
 }
 

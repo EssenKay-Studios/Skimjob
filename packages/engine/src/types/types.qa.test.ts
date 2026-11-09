@@ -28,7 +28,7 @@ type ExpectedVisibility = {
   bankFilled: "public"; // design §6.1, §18: the bank count is public
   roleDealt: "private";
   roleListShown: "public"; // extension.md "Host settings": the Exact / Possible list
-  shopDealt: "public"; // extension.md "Tokens and the perk shop": the three perks on offer
+  shopDealt: "public"; // design §12: the three perks on the black market
   rngAdvanced: "reveal";
   roundStarted: "public";
   moveLocked: "public";
@@ -62,13 +62,12 @@ type ExpectedVisibility = {
   voteCast: "public" | "private" | "secret";
   meetingClosed: "public";
   shakedownPending: "public";
-  shakedownCancelled: "public"; // design §8: says it was cancelled, not who did it
+  shakedownCancelled: "public"; // design §9.6: only "a shakedown fell through"
   shakedownResolved: "public";
-  tokenEarned: "private"; // extension.md "Tokens": tokens are private
-  perkBought: "private"; // extension.md "Tokens and the perk shop": private until used
-  perkUsed: "private";
-  rigPicked: "private";
-  alibiVerified: "public"; // design §8.3: the Verified stamp is for everyone
+  perkSold: "public"; // design §12: every purchase is logged without a name as planning closes
+  perkBought: "private"; // design §12: who bought it opens at the reveal
+  bailChosen: "private"; // design §9.6: the Bail choice is private until the reveal
+  alibiVerified: "public"; // design §12: the "verified" stamp is in the ledger
   gameEnded: "public";
 };
 

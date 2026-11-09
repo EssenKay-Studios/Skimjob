@@ -582,22 +582,6 @@ describe("QA §13: a card that can't apply is redrawn (owner, 8 Nov)", () => {
     expect(calls).toEqual({ int: 1, pick: 2 }); // the card, then its room
   });
 
-  it("a Rig's pick that can't apply is redrawn with no chance roll", () => {
-    const s: GameState = { ...vaultTaped(three()), rigs: [{ player: "p0", round: 3, cards: ["shiftChange", "audit"], pick: "shiftChange" }] };
-    const offered: string[][] = [];
-    const draw: Draw = {
-      int: () => {
-        throw new Error("rolled the chance for a Rig");
-      },
-      pick: <T,>(items: readonly T[]) => (offered.push([...(items as readonly string[])]), items[items.length - 1] as T),
-      shuffle: <T,>(items: readonly T[]) => [...items],
-    };
-    const events = startRound(s, 3, draw);
-    expect(offered[0]).toEqual(EVENT_DECK.filter((c) => c !== "shiftChange"));
-    expect(cardOf(events)).toBe(offered[0]?.at(-1));
-    expect(find(events, "eventFlipped")).toHaveLength(1);
-  });
-
   it("whole games with raids on (tape, so redraws happen) are deterministic: same seed, same log, and the log replays", () => {
     for (const n of [3, 12]) {
       for (let i = 0; i < 4; i++) {

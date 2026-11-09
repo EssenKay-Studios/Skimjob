@@ -74,7 +74,7 @@ function buildView(state: GameState, playerId: PlayerId): PlayerView {
 
   const ownVote = state.meeting && Object.hasOwn(state.meeting.votes, playerId) ? state.meeting.votes[playerId] : undefined;
   const ownMove = Object.hasOwn(state.moves, playerId) ? state.moves[playerId] : undefined;
-  // design §8.3 Ballot perk: the ballots you paid to see in the open meeting (also in Secret mode).
+  // design §12 Check ballot: the ballots you paid to see in the open meeting (also in Secret mode).
   const seenBallots: Record<PlayerId, VoteChoice | null> = {};
   const meeting = state.meeting;
   if (meeting && Object.hasOwn(meeting.ballotGrants, playerId)) {

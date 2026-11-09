@@ -7,7 +7,7 @@
 // command is refused. `handleCommand` (handle.ts) folds the events. Nothing
 // here draws randomness except the next round's event card (deck.ts, design §13):
 // meeting and proposal ids are names and counts of public events.
-import { MAX_SLOT_LENGTH, PERK_RULES, type PerkId } from "@skimjob/content";
+import { MAX_SLOT_LENGTH, type PerkId } from "@skimjob/content";
 import type {
   GameEvent,
   GameState,
@@ -22,8 +22,7 @@ import type {
 } from "./types";
 import { PUBLIC, privateTo, secretTo } from "./types";
 import { powerOf } from "./overrides";
-import { isPerkSpend, shieldFor, usePerk } from "./perks";
-import { aboveShare, dirtyShakedownRewards } from "./crew";
+import { aboveShare } from "./crew";
 import { roleHandler } from "./roles";
 import { applyEvent, nextMeetingId } from "./reduce";
 import { isObject, playerFor, show } from "./check";
@@ -205,11 +204,11 @@ export function openMeeting(state: GameState, meetingId: unknown): Result {
     return `meeting ${show(meetingId)} is not waiting to open`;
   }
   const events: GameEvent[] = [{ type: "meetingOpened", visibility: PUBLIC, meetingId, kind }];
-  const shielded = kind === "regular" ? [] : state.protected;
+  const guarded = kind === "regular" ? [] : state.protected;
   for (const player of state.playerOrder) {
     const sealed = state.players[player]?.sealedVote;
     if (!sealed) continue;
-    const vote: VoteChoice = sealed.kind === "shakedown" && shielded.includes(sealed.target) ? { kind: "skip" } : sealed;
+    const vote: VoteChoice = sealed.kind === "shakedown" && guarded.includes(sealed.target) ? { kind: "skip" } : sealed;
     events.push({ type: "voteCast", visibility: ballotVisibility(state, player), meetingId, player, vote, sealed: true });
   }
   return events;
@@ -230,22 +229,18 @@ export function meetingResult(crewSize: number, voters: number, skip: number, ta
   return { kind: "noMajority" };
 }
 
-/**
- * How much a player's ballot counts: the Smooth Talker's `weight`, else 1
- * (each copy's own, §11.4), plus a +Vote spent in this meeting. design §9.5, §11.1
- */
+/** How much a player's ballot counts: the Smooth Talker's `weight`, else 1 (each copy's own, §11.4). design §9.5, §11.1 */
 function baseWeight(state: GameState, player: PlayerId): number {
-  const p = state.players[player] as PlayerState;
-  const power = powerOf(state.config, p.role);
-  const extra = state.meeting?.extraVotes.includes(player) ? PERK_RULES.extraVoteWeight : 0;
-  return (power?.kind === "voteWeight" ? power.weight : 1) + extra;
+  const power = powerOf(state.config, (state.players[player] as PlayerState).role);
+  return power?.kind === "voteWeight" ? power.weight : 1;
 }
 
 /**
- * Whether a passed shakedown waits for a cancel window (extension.md Build
- * notes "Tokens and the shop"): when a Shield is in the shop. design §8.3
+ * design §9.6, §12: a passed shakedown waits for the Bail choice window when
+ * Bail is in this game's shop, whoever the target is, so the window never
+ * tells who holds one.
  */
-export const opensShakedownWindow = (shop: readonly PerkId[]): boolean => shop.includes("shield");
+export const opensShakedownWindow = (shop: readonly PerkId[]): boolean => shop.includes("bail");
 
 /** The tally of the open meeting's ballots: the public counts, the result by weight, in seat order. */
 function tally(state: GameState) {
@@ -276,10 +271,10 @@ function tally(state: GameState) {
 }
 
 /**
- * The window has ended: the tally, then the shakedown (or, with a Shield in
- * the shop, its window first). Then `afterVote`: after an emergency the next
+ * The window has ended: the tally, then the shakedown (or, with Bail in the
+ * shop, its Bail choice window first). Then `afterVote`: after an emergency the next
  * round starts; after a regular meeting or a briefing the result window opens,
- * or the next round starts when the crew's pool is empty. design §9.3, §9.5
+ * or the next round starts when the crew's pool is empty. design §9.3, §9.5, §9.6
  */
 export function closeMeeting(state: GameState, meetingId: unknown, draw: Draw): Result {
   const meeting = state.meeting;
@@ -298,50 +293,49 @@ export function closeMeeting(state: GameState, meetingId: unknown, draw: Draw): 
   ];
   const { kind } = meeting;
   if (result.kind === "shakedown" && opensShakedownWindow(state.shop)) {
-    // design §8.3: a Shield may cancel it before it's applied (`advance { resolveShakedown }`).
+    // design §9.6: the target may use Bail before the stash opens (`advance { resolveShakedown }`).
     events.push({ type: "shakedownPending", visibility: PUBLIC, meetingId: meeting.id, kind, target: result.target });
     return events;
   }
-  const shakedown = result.kind === "shakedown" ? { target: result.target } : null;
+  const shakedown = result.kind === "shakedown" ? { target: result.target, useBail: false } : null;
   return [...events, ...afterVote(state, events, { meetingId: meeting.id, kind }, shakedown, draw)];
 }
 
-/** The shakedown window has ended: apply the shakedown (or the Shield's cancel), then go on. design §8.3, §9.6 */
+/** The Bail choice window has ended: the shakedown falls through (Bail used) or the stash opens, then go on. design §9.6 */
 export function resolveShakedown(state: GameState, meetingId: unknown, draw: Draw): Result {
   const pending = state.pendingShakedown;
   if (!pending || pending.meetingId !== meetingId) return `no shakedown is pending for meeting ${show(meetingId)}`;
   return afterVote(state, [], pending, pending, draw);
 }
 
-/** `useAbility`: a perk spent (perks.ts, design §8.3), or a power used outside a move (its role handler, roles.ts). design §11.1 */
-export function useAbility(state: GameState, command: Raw, draw: Draw): Result {
+/** `useAbility`: a power used outside a move (its role handler, roles.ts). design §11.1 */
+export function useAbility(state: GameState, command: Raw): Result {
   const player = playerFor(state, command);
   if (typeof player === "string") return player;
   const ability = command.ability;
   if (!isObject(ability) || typeof ability.kind !== "string") return "ability must be an object with a kind";
-  if (isPerkSpend(ability.kind)) return usePerk(state, player, ability, draw);
   const use = roleHandler(player.role).use;
   if (!use || powerOf(state.config, player.role)?.kind !== ability.kind) return `your role has no ${ability.kind} ability to use now`;
   return use(state, player, ability);
 }
 
 /**
- * After the vote (and any shakedown window): the shakedown or its cancel, then
- * the result window, or after an emergency (or with the pool empty) the next
- * round. design §9.3, §9.6. `prior` are this command's events so far.
+ * After the vote (and any Bail choice window): the shakedown, or "a shakedown
+ * fell through" when its target used Bail, then the result window, or after an
+ * emergency (or with the pool empty) the next round. design §9.3, §9.6. `prior`
+ * are this command's events so far.
  */
 function afterVote(
   state: GameState,
   prior: readonly GameEvent[],
   meeting: { readonly meetingId: string; readonly kind: MeetingKind },
-  shakedown: { readonly target: PlayerId } | null,
+  shakedown: { readonly target: PlayerId; readonly useBail: boolean } | null,
   draw: Draw,
 ): GameEvent[] {
   const events: GameEvent[] = [];
-  // design §8.3: a Shield cancels it by itself.
-  const shield = shakedown ? shieldFor(state, shakedown.target, meeting.meetingId) : [];
-  if (shakedown && shield.length > 0) {
-    events.push(...shield, { type: "shakedownCancelled", visibility: PUBLIC, meetingId: meeting.meetingId, target: shakedown.target });
+  // design §9.6: Bail used, the stash stays closed and the Bail is spent (the fold of `shakedownCancelled`).
+  if (shakedown?.useBail && (state.players[shakedown.target] as PlayerState).roleState.bail) {
+    events.push({ type: "shakedownCancelled", visibility: PUBLIC, meetingId: meeting.meetingId, target: shakedown.target });
   } else if (shakedown) {
     // design §9.6: what the target holds above the share is set aside for the next split (§7.1); at or below it
     // they are clean and nothing happens. Coins spent on perks are gone and not taken.
@@ -349,8 +343,6 @@ function afterVote(
     const taken = aboveShare(state, target);
     const clean = taken === 0;
     events.push({ type: "shakedownResolved", visibility: PUBLIC, meetingId: meeting.meetingId, target, stashRevealed: (state.players[target] as PlayerState).stash, taken, clean });
-    // The roles whose token a caught cheater earns (Lookout, Auditor, Detective, Smooth Talker). extension.md "Roles"
-    if (!clean) events.push(...dirtyShakedownRewards(state, target, meeting.meetingId));
   }
   const now = [...prior, ...events].reduce(applyEvent, state);
   return [...events, ...(meeting.kind === "emergency" ? startRound(now, now.round + 1, draw) : afterResult(now, draw))];

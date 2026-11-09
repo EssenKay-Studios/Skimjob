@@ -19,9 +19,7 @@ const holding = (event: Record<string, unknown>): PlayerView =>
 describe("QA: role and faction cards are refused (design §8, PR #38)", () => {
   it.each([
     ["the deal", sampleEvents.roleDealt],
-    ["a token earned (its trigger names the role, extension.md \"Tokens and the perk shop\")", sampleEvents.tokenEarned],
     ["an Inside tip naming a role", sampleEvents.insideTip],
-    ["a Peek naming a role", sampleEvents.perkUsed],
   ] as [string, GameEvent][])("%s", (_label, event) => {
     const { visibility: _v, ...rest } = event as GameEvent & Record<string, unknown>;
     expect(evidenceCard(holding(rest), 3)).toEqual({ ok: false, reason: ROLE_REASON });

@@ -96,7 +96,7 @@ describe("viewFor — the viewer's own data and public state — design §13", (
       id: "ana",
       role: s.players.ana?.role,
       stash: 0,
-      roleState: { usedThisStretch: 0, usedThisGame: 0, perks: [], tail: null, tokens: 0 },
+      roleState: { usedThisStretch: 0, usedThisGame: 0, bail: false },
       move: fullGrab("office", 1),
       sealedVote: null,
       vote: null,

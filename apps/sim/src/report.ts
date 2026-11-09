@@ -25,6 +25,8 @@ const ROWS: readonly Row[] = [
   { label: "Sunk by theft", target: "report", cell: (m) => pct(m.theftRate) },
   { label: "  of those, won by a Mole or Fixer", target: "report", cell: (m) => pct(m.sunkWins.rate) },
   { label: "Whole-crew wins (of successes)", target: "5–20%", cell: (m) => pct(m.wholeCrewRate) },
+  { label: "Perks bought per game", target: "", cell: (m) => num(m.perks.perGame) },
+  { label: "Perk buyers' win rate ÷ non-buyers'", target: "0.8–1.25", cell: (m) => num(m.perks.buyerRatio) },
   { label: "Bank emptied", target: "", cell: (m) => pct(m.bankEmptied) },
   { label: "Event cards (rounds from round 2)", target: "≈ 40%", cell: (m) => pct(m.cardRate) },
   { label: "Regular meetings per game", target: "", cell: (m) => num(m.meetings.regular) },
@@ -71,6 +73,9 @@ export function formatReport(summary: Summary, title: string): string {
   const ratios = cols.map(([, m]) => roleParity(m.roles));
   const roleIds = [...new Set(cols.flatMap(([, m]) => Object.keys(m.roles)))].sort();
   const parity = table(["", ...cols.map(([c]) => c)], roleIds.map((role) => [role, ...ratios.map((r) => num(r[role] ?? null))]));
+  // design §21 G7: each perk's buyers' win rate ÷ the average seat's, all endings pooled.
+  const perkIds = [...new Set(cols.flatMap(([, m]) => Object.keys(m.perks.byPerk)))].sort();
+  const perks = table(["", ...cols.map(([c]) => c)], perkIds.map((perk) => [perk, ...cols.map(([, m]) => num(m.perks.byPerk[perk] ?? null))]));
   const people = groupTable(cols, (m) => m.personalities, (g) => `${pct(g.winRate)}`);
   const pockets = groupTable(
     cols,
@@ -88,6 +93,9 @@ export function formatReport(summary: Summary, title: string): string {
     "",
     "Role win rate ÷ the average seat's, all endings (design §21 G5: 0.75–1.33)",
     parity,
+    "",
+    "Perk buyers' win rate ÷ the average seat's, all endings (design §21 G7: none above 1.3)",
+    perks,
     "",
     "Personality win rate (all games; a failed heist is a loss)",
     people,

@@ -1,8 +1,8 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 
-// Adversarial QA for R6b, the extension UI (docs/extension.md): private tokens
-// across clients, the role list host setting in a
-// real game, and the gallery's extension parts at 360/768/1280 by touch and keyboard.
+// Adversarial QA for the role cards and rulebook: private purchases across
+// clients (design §12), the role list host setting in a real game, and the
+// gallery's rulebook at 360/768/1280 by touch and keyboard.
 
 async function ok<T>(res: Awaited<ReturnType<APIRequestContext["post"]>>): Promise<T> {
   expect(res.ok(), `${res.url()} → ${res.status()} ${await res.text()}`).toBe(true);
@@ -36,10 +36,10 @@ function find(value: unknown, types: readonly string[], out: Record<string, unkn
   return out;
 }
 
-test.describe("private tokens, two real clients", () => {
+test.describe("private purchases, two real clients", () => {
   test.beforeEach(() => test.skip(test.info().project.name !== "desktop", "one run is enough"));
 
-  test("each player sees only their own tokens; no frame carries another's tokens @shop", async ({ browser }) => {
+  test("no tokens anywhere; the rulebook shows the black market; no frame carries another's purchase or Bail choice @shop", async ({ browser }) => {
     test.setTimeout(90_000);
     const hostCtx = await browser.newContext();
     const guestCtx = await browser.newContext();
@@ -52,17 +52,17 @@ test.describe("private tokens, two real clients", () => {
       await guest.goto(`/game/${game.id}`);
       for (const p of [host, guest]) {
         const card = p.locator(".role-card");
-        await expect(card.locator(".tokens")).toContainText(/\d+ tokens? · only you see this/, { timeout: 20_000 });
-        await expect(card.getByRole("button", { name: "Shop", exact: true })).toBeVisible();
-        // By keyboard: Enter opens the shop, Escape closes it and stays in the game.
-        await card.getByRole("button", { name: "Shop", exact: true }).focus();
+        await expect(card).toContainText("only you see this", { timeout: 20_000 });
+        await expect(card).not.toContainText(/token/i);
+        // By keyboard: Enter opens the rulebook, Escape closes it and stays in the game.
+        await card.getByRole("button", { name: "Rulebook", exact: true }).focus();
         await p.keyboard.press("Enter");
-        await expect(p.getByRole("dialog", { name: "The shop" })).toBeVisible();
+        const sheet = p.getByRole("dialog", { name: "Rulebook" });
+        await expect(sheet).toBeVisible();
+        await expect(sheet.getByRole("list", { name: "This game's black market" }).getByRole("listitem")).toHaveCount(3);
         await p.keyboard.press("Escape");
-        await expect(p.getByRole("dialog", { name: "The shop" })).toHaveCount(0);
+        await expect(sheet).toHaveCount(0);
         await expect(p).toHaveURL(new RegExp(`/game/${game.id}$`));
-        // Other players' rows never show a token count.
-        await expect(p.locator(".tokens")).toHaveCount(1);
       }
       await expect.poll(() => seen.length, { timeout: 15_000 }).toBeGreaterThan(0);
       const msgs = seen.map((t) => {
@@ -75,7 +75,7 @@ test.describe("private tokens, two real clients", () => {
       const wire = seen.join("\n");
       const meIds = new Set([...wire.matchAll(/"me":\{"id":"([^"]+)"/g)].map((m) => m[1]));
       expect(meIds.size).toBe(1);
-      for (const e of find(msgs, ["tokenEarned", "perkBought", "perkUsed"])) expect(meIds.has(e.player as string), JSON.stringify(e)).toBe(true);
+      for (const e of find(msgs, ["perkBought", "bailChosen"])) expect(meIds.has(e.player as string), JSON.stringify(e)).toBe(true);
     } finally {
       await hostCtx.close();
       await guestCtx.close();
@@ -109,15 +109,15 @@ test.describe("private tokens, two real clients", () => {
   });
 });
 
-test.describe("gallery extension parts: touch, keyboard, viewports", () => {
+test.describe("gallery rulebook: touch, keyboard, viewports", () => {
   test.beforeEach(() => test.skip(test.info().project.name !== "mobile", "viewports are set per test"));
 
   for (const width of [360, 768, 1280]) {
-    test(`at ${width}px: shop and rulebook controls are ≥44px and fit; the shop works by keyboard @shop`, async ({ page }) => {
+    test(`at ${width}px: rulebook controls are ≥44px and fit; the rulebook works by keyboard @shop`, async ({ page }) => {
       test.setTimeout(60_000);
       await page.setViewportSize({ width, height: 900 });
       await page.goto("/dev/gallery");
-      const demo = page.getByTestId("shop-demo");
+      const demo = page.locator('section[aria-labelledby="g-ext-rulebook"]');
       await demo.scrollIntoViewIfNeeded();
       const small: string[] = [];
       for (const b of await demo.getByRole("button").all()) {
@@ -127,20 +127,20 @@ test.describe("gallery extension parts: touch, keyboard, viewports", () => {
       expect(small).toEqual([]);
       expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
 
-      // Keyboard: focus the Shop button, open with Enter, Buy is disabled at 0 tokens, Close by keyboard.
+      // Keyboard: focus the Rulebook button, open with Enter, every perk listed, Close by keyboard.
       // (Escape on /dev pages goes home, App.tsx; the game page's Escape is covered above.)
-      const shopBtn = demo.getByRole("button", { name: "Shop", exact: true });
-      await shopBtn.focus();
+      const open = demo.getByRole("button", { name: "Rulebook", exact: true }).first();
+      await open.focus();
       await page.keyboard.press("Enter");
-      const shop = page.getByRole("dialog", { name: "The shop" });
-      await expect(shop).toBeVisible();
-      for (const buy of await shop.getByRole("button", { name: /^Buy / }).all()) await expect(buy).toBeDisabled();
-      const dialogBox = await shop.boundingBox();
+      const sheet = page.getByRole("dialog", { name: "Rulebook" });
+      await expect(sheet).toBeVisible();
+      await expect(sheet.getByRole("list", { name: "The black market" }).getByRole("listitem")).toHaveCount(7);
+      const dialogBox = await sheet.boundingBox();
       expect(dialogBox!.width).toBeLessThanOrEqual(width);
-      await shop.getByRole("button", { name: "Close" }).focus();
+      await sheet.getByRole("button", { name: "Close" }).focus();
       await page.keyboard.press("Enter");
-      await expect(shop).toHaveCount(0);
-      await expect(shopBtn).toBeFocused();
+      await expect(sheet).toHaveCount(0);
+      await expect(open).toBeFocused();
     });
   }
 });

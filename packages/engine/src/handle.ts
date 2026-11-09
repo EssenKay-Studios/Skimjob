@@ -15,7 +15,7 @@ import { applyEvent } from "./reduce";
 import { checkMove, closeAlibis, resolveRound } from "./round";
 import { isObject, playerFor, show } from "./check";
 import { claimRole } from "./claims";
-import { buyPerk } from "./perks";
+import { buyPerk, chooseBail, stampedAlibi } from "./perks";
 import {
   acceptMeeting,
   callEmergency,
@@ -87,6 +87,7 @@ const submitMove: Handler = (state, command) => {
 /**
  * design §5.4: after a round resolves, each player may post one alibi for it,
  * true or not, until the round's alibi deadline (before the next round's planning).
+ * A true one is stamped "verified" if they bought a Stamped alibi that round (§12).
  */
 const postAlibi: Handler = (state, command) => {
   const player = playerFor(state, command);
@@ -97,7 +98,7 @@ const postAlibi: Handler = (state, command) => {
   if (state.alibisPosted.includes(player.id)) return `you already posted an alibi for round ${round}`;
   const room = command.room;
   if (typeof room !== "string" || !state.rooms.includes(room)) return `room ${show(room)} is not open in this game`;
-  return [{ type: "alibiPosted", visibility: PUBLIC, player: player.id, round, room }];
+  return [{ type: "alibiPosted", visibility: PUBLIC, player: player.id, round, room }, ...stampedAlibi(state, player.id, round, room)];
 };
 
 /** The scheduler says a deadline has passed. design §4.1, §5.4, §9 */
@@ -138,6 +139,7 @@ const HANDLERS: Readonly<Record<string, Handler>> = {
   sealVote,
   useAbility,
   buyPerk: (state, command) => buyPerk(state, command),
+  chooseBail: (state, command) => chooseBail(state, command),
   advance,
   scheduleMeeting,
 };

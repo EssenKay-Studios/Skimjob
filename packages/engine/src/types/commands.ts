@@ -3,7 +3,7 @@
 // Player commands are what a client (human or bot) sends. System commands are
 // sent by the server scheduler or the simulator: the engine has no clock, so it
 // never decides by itself that time is up or picks a meeting time.
-import type { EventId, PerkId, RoleId, RoomId } from "@skimjob/content";
+import type { RoleId, RoomId } from "@skimjob/content";
 import type { PlayerId } from "./config";
 
 /** Role powers used as part of a move. design §11.1 */
@@ -25,34 +25,31 @@ export type AbilityUse =
   | { readonly kind: "reopen"; readonly room: RoomId };
 
 /**
- * Spending a perk token (design §8.3, docs/roles-v2.md §1), with `useAbility`.
- * The Shield isn't here: it is spent by itself when a shakedown on you passes.
- * - peek: learn `target`'s role now.
- * - extraVote: your ballot in the open meeting weighs +1 (once per meeting).
- * - ballot: see `target`'s ballot in the open meeting, as it changes (also in Secret mode).
- * - tail: while planning, also see who is in `room` when this round resolves.
- * - alibi: your alibi for the latest resolved round, if true, is stamped Verified (public).
- * - recharge: one used-up use of your power (this stretch's, or a once-per-game one) comes back.
- * - rig: draw two cards for the next round; `rigPick` chooses one (the first if you don't).
+ * A perk bought on the black market and used at once, while planning (design
+ * §12); Bail is the one held item.
+ * - tail: next round, also see who was in `room`.
+ * - alibi: if your alibi for this round is true, it is stamped "verified" in the ledger.
+ * - ballot: see `target`'s vote at the next meeting (also in Secret mode).
+ * - softShoes: next round, your coins don't ring at all.
+ * - blackout: next round, `room` goes dark (announced like a power cut).
+ * - bail: held until a shakedown passes against you; then you choose whether to use it (§9.6).
+ * - plantEvidence: this round, `target` appears in `room`'s camera, Lookout and Tail feeds.
  */
-export type PerkSpend =
-  | { readonly kind: "peek"; readonly target: PlayerId }
-  | { readonly kind: "extraVote" }
-  | { readonly kind: "ballot"; readonly target: PlayerId }
+export type PerkUse =
   | { readonly kind: "tail"; readonly room: RoomId }
   | { readonly kind: "alibi" }
-  | { readonly kind: "recharge" }
-  | { readonly kind: "rig" }
-  /** Not a spend: choose which of your Rig's cards flips next; changeable until that round starts. */
-  | { readonly kind: "rigPick"; readonly card: EventId };
+  | { readonly kind: "ballot"; readonly target: PlayerId }
+  | { readonly kind: "softShoes" }
+  | { readonly kind: "blackout"; readonly room: RoomId }
+  | { readonly kind: "bail" }
+  | { readonly kind: "plantEvidence"; readonly target: PlayerId; readonly room: RoomId };
 
-/** Role powers and perks used outside a move, with `useAbility`. design §11.1, §17.2 */
+/** Role powers used outside a move, with `useAbility`. design §11.1, §17.2 */
 export type InstantAbility =
   /** Auditor: how many coins reached the duffel from `room` in the latest resolved round. Once between meetings. */
   | { readonly kind: "audit"; readonly room: RoomId }
   /** Detective: how many coins `target` grabbed in the latest resolved round. Every round. */
-  | { readonly kind: "detect"; readonly target: PlayerId }
-  | PerkSpend;
+  | { readonly kind: "detect"; readonly target: PlayerId };
 
 /**
  * One player's secret move for a round: a room, and the coins grabbed there
@@ -100,10 +97,12 @@ export type PlayerCommand =
   | { readonly type: "castVote"; readonly player: PlayerId; readonly vote: VoteChoice }
   /** Leave a vote in advance for the next meeting you might miss. design §11.2 */
   | { readonly type: "sealVote"; readonly player: PlayerId; readonly vote: VoteChoice }
-  /** A role power used outside a move (Auditor, Detective), or a perk spent. design §11.1, §17.2 */
+  /** A role power used outside a move (Auditor, Detective). design §11.1, §17.2 */
   | { readonly type: "useAbility"; readonly player: PlayerId; readonly ability: InstantAbility }
-  /** Buy one of the shop's perks with tokens; any time. extension.md "Tokens and the perk shop" */
-  | { readonly type: "buyPerk"; readonly player: PlayerId; readonly perk: PerkId };
+  /** Buy one of this game's perks with coins from your stash and use it, while planning; one per round. design §12 */
+  | { readonly type: "buyPerk"; readonly player: PlayerId; readonly perk: PerkUse }
+  /** The target of a passed shakedown, holding Bail: use it (the shakedown falls through) or not. Changeable until the window closes. design §9.6 */
+  | { readonly type: "chooseBail"; readonly player: PlayerId; readonly use: boolean };
 
 /**
  * Which deadline has passed. The engine has no clock, and several deadlines can
@@ -132,9 +131,9 @@ export type Deadline =
   /** The open vote window has ended: tally and shakedown, then the result window or the next round. design §9.5, §9.6 */
   | { readonly kind: "closeMeeting"; readonly meetingId: string }
   /**
-   * The window after a shakedown vote passed (`shakedownPending`) has ended:
-   * apply the shakedown, unless a Shield cancelled it, then go on as after
-   * the meeting. design §9.6, §12
+   * The Bail choice window after a shakedown vote passed (`shakedownPending`)
+   * has ended: the shakedown falls through if its target chose to use Bail,
+   * else the stash opens; then go on as after the meeting. design §9.6, §12
    */
   | { readonly kind: "resolveShakedown"; readonly meetingId: string };
 

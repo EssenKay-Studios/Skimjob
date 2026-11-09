@@ -6,12 +6,11 @@ import { closeResultWindow } from "./alibis.testkit";
 import { BANK_JOB, MAX_PLAYERS, MIN_PLAYERS, ROLES } from "@skimjob/content";
 import type { ContentOverrides, GameConfig, GameEvent, GameState, PlayerState, RoleListSetting, VoteVisibility } from "./types";
 import { createGame, setupEvents, validateConfig } from "./setup";
-import { opensShakedownWindow } from "./meeting";
 import { replay } from "./reduce";
 import { handleCommand, type CommandResult } from "./handle";
 import { viewFor } from "./view";
 import { fullGrab } from "./grab.testkit";
-import { grantPerks } from "./perks.testkit";
+import { giveTail } from "./perks.testkit";
 import { ringsOf, roomDef } from "./job";
 import { outcomeFor } from "./end";
 import { ROLE_HANDLERS } from "./roles";
@@ -360,16 +359,15 @@ describe("Electrician: once between meetings, black out one room next round — 
     expect(used(s, "p0").usedThisStretch).toBe(1);
     expect(ofType(s.log, "powerCut")).toEqual([{ type: "powerCut", visibility: { kind: "public" }, round: 2, room: "office" }]);
     expect(viewFor(s, "p3").dark).toEqual(["office"]);
-    s = grantPerks(s, "p0", "tail");
-    s = run(s, use("p0", { kind: "tail", room: "office" }));
+    s = giveTail(s, "p0", "office");
     const before = s;
     s = resolve(run(s, watch("p0", "office"), mv("p1", "lobby", 0, { ability: { kind: "lookout", rooms: ["office"] } }), mv("p2", "office"), mv("p3", "office")));
     const events = since(before, s);
     expect(ofType(events, "roomSighting").filter((e) => e.room === "office").map((e) => e.others)).toEqual([[], []]);
     expect(ofType(events, "roomWatched").map((e) => [e.source, e.seen, e.offline])).toEqual([
       ["security", [], true],
-      ["tail", [], true],
       ["lookout", [], true],
+      ["tail", [], true],
     ]);
     expect(ofType(events, "bellsRung")[0]?.bells.office).toBe(2);
     // The power cut ends with the round.
@@ -591,62 +589,5 @@ describe("the Mole's and Fixer's win on a heist sunk by theft, in their handlers
     expect(outcomeFor(ended(["mole", "lookout", "fixer"], [4, 5, 4]), "theft").winners).toEqual([]);
     // On a success they win like everyone.
     expect(outcomeFor(ended(["mole", "lookout", "fixer"], [4, 5, 4]), null).winners).toEqual(["p1"]);
-  });
-});
-
-describe("the shakedown window (a Shield in the shop) — design §8.3, §9.6", () => {
-  // The shop pinned with a Shield, so a passed shakedown waits for its window (extension.md "Shakedowns").
-  const shielded = (s: GameState): GameState => ({ ...s, shop: ["peek", "shield", "extraVote"] });
-  // 3 players; p1 pockets the Vault's 3 in round 1, then p0 and p2 vote p1 down.
-  const setup = () => {
-    const s = run(shielded(game(3, [])), mv("p1", "vault", 3), ROUND);
-    return run(emergency(s, "p2"), vote("p0", "p1"), vote("p2", "p1"), CLOSE);
-  };
-
-  it("the window opens only when the shop holds a Shield", () => {
-    expect(opensShakedownWindow(["peek", "alibi", "extraVote"])).toBe(false);
-    expect(opensShakedownWindow(["peek", "shield", "extraVote"])).toBe(true);
-    // No Shield in the shop: a passed shakedown is applied at once, no shakedownPending.
-    const s = run({ ...game(3, []), shop: ["peek", "alibi", "extraVote"] }, mv("p1", "vault", 3), ROUND);
-    const closed = run(emergency(s, "p2"), vote("p0", "p1"), vote("p2", "p1"), CLOSE);
-    expect(closed.log.some((e) => e.type === "shakedownPending")).toBe(false);
-    expect(closed.players.p1?.stash).toBe(closed.share);
-  });
-
-  it("a passed shakedown waits in a public window; nothing is taken yet", () => {
-    const s = setup();
-    expect(s.phase).toEqual({ kind: "shakedownPending", meetingId: "emergency-1", target: "p1" });
-    expect(s.log.at(-1)).toEqual({ type: "shakedownPending", visibility: { kind: "public" }, meetingId: "emergency-1", kind: "emergency", target: "p1" });
-    expect(s.players.p1?.stash).toBe(3 + s.share);
-  });
-
-  it("without a Shield, the shakedown is applied when the window ends", () => {
-    const s = setup();
-    const after = run(s, RESOLVE);
-    expect(since(s, after).map((e) => e.type)).toEqual(["shakedownResolved", "roundStarted"]);
-    expect(after.players.p1?.stash).toBe(after.share);
-    expect(after.phase).toEqual({ kind: "planning", round: 2 });
-  });
-
-  it("after a regular meeting the result window follows once the window ends (design §9.3)", () => {
-    let s = shielded(game(3, []));
-    s = run(s, mv("p1", "vault", 3), ROUND);
-    while (s.phase.kind !== "awaitingMeeting") s = run(s, mv("p0", "lobby"), mv("p1", "lobby"), mv("p2", "lobby"), ROUND);
-    const round = s.resolvedRound;
-    s = run(s, { type: "scheduleMeeting", meetingId: s.phase.meetingId, slot: "x" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: s.phase.meetingId } });
-    s = run(s, vote("p0", "p1"), vote("p2", "p1"), CLOSE);
-    expect(s.phase.kind).toBe("shakedownPending");
-    const after = run(s, RESOLVE);
-    expect(since(s, after).map((e) => e.type)).toEqual(["shakedownResolved"]);
-    expect(after.phase).toEqual({ kind: "result", round });
-  });
-
-  it("while the window is open: no rounds, no new meetings or proposals, and only the pending meeting's deadline", () => {
-    const s = setup();
-    expect(reason(s, ROUND(s))).toMatch(/no round deadline/);
-    expect(reason(s, mv("p0", "lobby"))).toMatch(/round is being planned/);
-    expect(reason(s, { type: "callEmergency", player: "p0" })).toMatch(/between a round's result and the next planning/);
-    expect(reason(s, { type: "advance", deadline: { kind: "resolveShakedown", meetingId: "meeting-1" } })).toMatch(/no shakedown is pending/);
-    expect(reason(s, CLOSE(s))).toMatch(/not open/);
   });
 });

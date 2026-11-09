@@ -12,7 +12,7 @@ import { checkReport } from "./validate";
 
 const n = 5;
 /** `s` seats of a role at crew size 5 winning `share` of them: ratio = share × 5. */
-const seats = (s: number, share: number): SeatTally => ({ seats: s, credit: s * share, fair: s / n, successCredit: 0, earned: 0, spent: 0 });
+const seats = (s: number, share: number): SeatTally => ({ seats: s, credit: s * share, fair: s / n, successCredit: 0, spent: 0 });
 const BIG = 40000;
 const team = { auditor: seats(BIG, 0.15), priest: seats(BIG, 0.15) }; // pooled ratio 0.75
 const starOf = (roles: Record<string, SeatTally>, role: string) => splitParityOf(roles).stars.find((x) => x.role === role);

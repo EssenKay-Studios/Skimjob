@@ -129,7 +129,7 @@ describe("suspicion — design §17.3", () => {
       { type: "castVote", player: "carl", vote: { kind: "shakedown", target: "ben" } },
       { type: "advance", deadline: { kind: "closeMeeting", meetingId: "emergency-1" } },
     );
-    // A Shield in the shop opens the shakedown window first (design §8.3).
+    // Bail on the black market opens the Bail choice window first (design §9.6).
     const resolve = (x: GameState) => (x.pendingShakedown ? run(x, { type: "advance", deadline: { kind: "resolveShakedown", meetingId: x.pendingShakedown.meetingId } }) : x);
     s = resolve(s);
     expect(scoresOf(s, "ana").get("ben")).toBe(W.afterDirty);

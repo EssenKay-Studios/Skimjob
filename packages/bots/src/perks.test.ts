@@ -1,88 +1,93 @@
-// Bots spend perks minimally and sensibly. docs/roles-v2.md §1, §4 "Play"; design §8.3
+// Bots buy perks sensibly and choose Bail by their personality. Bot settings,
+// not game rules. design §9.6, §12, §19.3
 import { describe, expect, it } from "vitest";
-import { applyEvent, createGame, viewFor, type GameState, type PlayerCommand } from "@skimjob/engine";
+import { applyEvent, handleCommand, viewFor, type GameState, type Move, type PlayerCommand } from "@skimjob/engine";
 import type { PerkId } from "@skimjob/content";
 import { PERSONALITIES, type Personality } from "./personalities";
-import { botRandom, decide } from "./bot";
-import { alibiPerk, cardRiskScore, meetingPerks, planningPerks } from "./perks";
-import { closeAlibis, config, emergencyMeeting, game, round, run } from "./testkit";
+import { decide } from "./bot";
+import { bailChoice, buyPerk } from "./perks";
+import { emergencyMeeting, game, round, run } from "./testkit";
 
-const exact = (base: Personality): Personality => ({ ...base, noise: 0, misread: 0, hunch: 0 });
-const grant = (s: GameState, player: string, ...perks: PerkId[]): GameState =>
-  perks.reduce((st, perk) => applyEvent(st, { type: "perkBought", visibility: { kind: "private", player }, player, perk, cost: 0 }), s);
-const spends = (cmds: PlayerCommand[]) => cmds.flatMap((c) => (c.type === "useAbility" ? [c.ability] : []));
-const lobby = { room: "lobby" };
-/** Round 1: ben pockets in the Vault and claims the Lobby: ana's top suspect. */
-const played = () => round(game(5), { ana: { room: "vault" }, ben: { room: "vault", pocket: 4, alibi: "lobby" }, carl: lobby, dee: lobby, eve: lobby });
-const suspect = () => closeAlibis(played());
+/** Always shops (when a perk fits), never at random. */
+const keen: Personality = { ...PERSONALITIES.greedy, noise: 0, misread: 0, hunch: 0, shop: 1 };
+const always = () => 0;
+const withShop = (s: GameState, shop: PerkId[]): GameState => ({ ...s, shop });
+const withStash = (s: GameState, id: string, stash: number): GameState => ({ ...s, players: { ...s.players, [id]: { ...s.players[id]!, stash } } });
+const bought = (cmds: PlayerCommand[]) => cmds.flatMap((c) => (c.type === "buyPerk" ? [c.perk] : []));
+const vault = (pocket: number): Move => ({ room: "vault", duffel: 6 - pocket, pocket });
 
-describe("bot perks — v2 §1, §4", () => {
-  it("Peek: its top suspect, once per suspect (Lookout: 'Peeks its top suspect')", () => {
-    const s = grant(suspect(), "ana", "peek");
-    expect(spends(planningPerks(viewFor(s, "ana")))).toEqual([{ kind: "peek", target: "ben" }]);
-    const after = run(s, ...planningPerks(viewFor(s, "ana")));
-    expect(after.log.at(-1)).toMatchObject({ type: "perkUsed", perk: { kind: "peek", target: "ben" } });
-    // Nobody suspected: keeps it.
-    expect(planningPerks(viewFor(grant(game(5), "ana", "peek"), "ana"))).toEqual([]);
+describe("buying a perk — design §12", () => {
+  it("the first of the game's perks that fits the move and the stash; at most one a round", () => {
+    const s = withStash(withShop(game(5), ["tail", "blackout", "plantEvidence"]), "ana", 9);
+    // The richest coin room other than its own (the testkit's Deposit boxes hold 5).
+    expect(bought(buyPerk(viewFor(s, "ana"), keen, always, vault(0)))).toEqual([{ kind: "tail", room: "depositBoxes" }]);
+    // An empty stash buys nothing, not even the 1-coin Tail.
+    expect(bought(buyPerk(viewFor(withStash(s, "ana", 0), "ana"), keen, always, vault(2)))).toEqual([]);
+    const after = run(s, { type: "buyPerk", player: "ana", perk: { kind: "tail", room: "depositBoxes" } });
+    expect(buyPerk(viewFor(after, "ana"), keen, always, vault(0))).toEqual([]);
+    // The personality's chance: no draw under it, no purchase.
+    expect(buyPerk(viewFor(s, "ana"), { ...keen, shop: 0 }, always, vault(0))).toEqual([]);
   });
 
-  it("Tail: the richest coin room other than its own", () => {
-    const s = grant(game(5), "ana", "tail");
-    expect(spends(planningPerks(viewFor(s, "ana"), "lobby"))).toEqual([{ kind: "tail", room: "vault" }]);
-    expect(spends(planningPerks(viewFor(s, "ana"), "vault"))[0]).toMatchObject({ kind: "tail" });
-    expect(spends(planningPerks(viewFor(s, "ana"), "vault"))[0]).not.toEqual({ kind: "tail", room: "vault" });
-    // decide() spends it along with the move, and the engine accepts both.
-    const cmds = decide(viewFor(s, "ana"), exact(PERSONALITIES.honest), botRandom("t"), "test-crew");
-    expect(spends(cmds).map((a) => a.kind)).toContain("tail");
-    run(s, ...cmds);
+  it("each perk when it fits: Blackout and Plant evidence on a skim, Bail with something above the share, Soft shoes once Wanted is up; never a Check ballot", () => {
+    const at = (shop: PerkId[], extra: Partial<GameState> = {}) => viewFor({ ...withStash(withShop(game(5), shop), "ana", 9), ...extra }, "ana");
+    const one = (shop: PerkId[], move: Move, extra: Partial<GameState> = {}) => bought(buyPerk(at(shop, extra), keen, always, move));
+    expect(one(["blackout"], vault(0))).toEqual([]);
+    expect(one(["blackout"], vault(3))).toEqual([{ kind: "blackout", room: "vault" }]);
+    expect(one(["plantEvidence"], vault(0))).toEqual([]);
+    expect(one(["plantEvidence"], vault(3))[0]).toMatchObject({ kind: "plantEvidence", room: "vault" });
+    expect(one(["bail"], vault(0))).toEqual([{ kind: "bail" }]); // a stash of 9 against a share of 0
+    expect(one(["bail"], vault(0), { share: 9 })).toEqual([]);
+    expect(one(["softShoes"], vault(0))).toEqual([]);
+    expect(one(["softShoes"], vault(0), { wanted: 1 })).toEqual([{ kind: "softShoes" }]);
+    expect(one(["ballot"], vault(0))).toEqual([]);
   });
 
-  it("+Vote: only with a shakedown ballot in an open meeting", () => {
-    const s = grant(emergencyMeeting(played(), "carl"), "ana", "extraVote");
-    const view = viewFor(s, "ana");
-    expect(spends(meetingPerks(view, { kind: "shakedown", target: "ben" }))).toEqual([{ kind: "extraVote" }]);
-    expect(meetingPerks(view, { kind: "skip" })).toEqual([]);
-    run(s, ...decide(view, exact(PERSONALITIES.honest), botRandom("v"), "test-crew"));
+  it("decide buys with the round's move, and the engine accepts it", () => {
+    const s = withStash(withShop(game(5), ["tail", "softShoes", "plantEvidence"]), "ana", 9);
+    const cmds = decide(viewFor(s, "ana"), keen, always, "crew");
+    expect(cmds.map((c) => c.type)).toEqual(["submitMove", "buyPerk"]);
+    let t = s;
+    for (const c of cmds) {
+      const r = handleCommand(t, c);
+      expect(r.ok).toBe(true);
+      if (r.ok) t = r.state;
+    }
+    // Once the move is in, it buys nothing more this round.
+    expect(decide(viewFor(t, "ana"), keen, always, "crew").some((c) => c.type === "buyPerk")).toBe(false);
+  });
+});
+
+describe("Bail's choice — design §9.6, §19.3", () => {
+  /** ben pockets 4 in the Vault in round 1, holding Bail; the others vote him down in an emergency. */
+  const pending = (bail = true): GameState => {
+    let s = withShop(game(5), ["tail", "softShoes", "bail"]);
+    if (bail) s = applyEvent(s, { type: "perkBought", visibility: { kind: "private", player: "ben" }, player: "ben", round: 1, perk: { kind: "bail" }, cost: 0 });
+    s = emergencyMeeting(round(s, { ben: { room: "vault", pocket: 4 } }), "ana");
+    for (const id of ["ana", "carl", "dee", "eve"]) s = run(s, { type: "castVote", player: id, vote: { kind: "shakedown", target: "ben" } });
+    return run(s, { type: "advance", deadline: { kind: "closeMeeting", meetingId: s.meeting?.id } });
+  };
+  const choice = (s: GameState, p: Personality) => bailChoice(viewFor(s, "ben"), { ...p, noise: 0 }, always);
+
+  it("uses Bail when the shakedown would take at least its `bailAt`; answers once; only the target holding one", () => {
+    const s = pending();
+    expect(s.phase.kind).toBe("shakedownPending");
+    expect(choice(s, { ...keen, bailAt: 1 })).toEqual([{ type: "chooseBail", player: "ben", use: true }]);
+    expect(choice(s, { ...keen, bailAt: 5 })).toEqual([{ type: "chooseBail", player: "ben", use: false }]);
+    const chosen = run(s, ...choice(s, { ...keen, bailAt: 1 }));
+    expect(choice(chosen, keen)).toEqual([]);
+    expect(bailChoice(viewFor(s, "ana"), keen, always)).toEqual([]);
+    expect(choice(pending(false), keen)).toEqual([]);
+    // Used: the shakedown falls through.
+    const end = run(chosen, { type: "advance", deadline: { kind: "resolveShakedown", meetingId: "emergency-1" } });
+    expect(end.log.some((e) => e.type === "shakedownCancelled")).toBe(true);
   });
 
-  it("Recharge: once its power is used up (Hacker), never before", () => {
-    const hacker = (used: number): GameState => {
-      const s = grant(game(5), "ana", "recharge");
-      const me = s.players.ana as GameState["players"][string];
-      return { ...s, players: { ...s.players, ana: { ...me, role: "hacker", roleState: { ...me.roleState, usedThisStretch: used } } } };
-    };
-    expect(spends(planningPerks(viewFor(hacker(0), "ana")))).toEqual([]);
-    expect(spends(planningPerks(viewFor(hacker(1), "ana")))).toEqual([{ kind: "recharge" }]);
-    run(hacker(1), ...planningPerks(viewFor(hacker(1), "ana")));
-  });
-
-  it("Alibi: stamps a true alibi once the crew could suspect it; never a false one", () => {
-    const plan = { ana: { room: "vault", alibi: null }, ben: lobby, carl: lobby, dee: lobby, eve: lobby };
-    const r1 = grant(round(game(5), plan), "ana", "alibi");
-    // The alibi window for round 1 is open; ana was in the Vault and nobody suspects her yet.
-    expect(alibiPerk(viewFor(r1, "ana"), "vault")).toEqual([]);
-    const r3 = grant(round(closeAlibis(round(closeAlibis(round(game(5), plan)), plan)), plan), "ana", "alibi");
-    expect(alibiPerk(viewFor(r3, "ana"), "lobby")).toEqual([]); // a lie can't be stamped
-    expect(spends(alibiPerk(viewFor(r3, "ana"), "vault"))).toEqual([{ kind: "alibi" }]); // by round 3 her missing alibis make her suspect
-    const after = run(r3, { type: "postAlibi", player: "ana", room: "vault" }, ...alibiPerk(viewFor(r3, "ana"), "vault"));
-    expect(after.log.some((e) => e.type === "alibiVerified")).toBe(true);
-  });
-
-  it("Rig: the bot rigs, then picks the least risky card", () => {
-    const view = viewFor(game(5), "ana");
-        expect(cardRiskScore(view, "shiftChange")).toBeGreaterThan(cardRiskScore(view, "audit"));
-    for (let i = 0; i < 20; i++) {
-      const base = createGame({ ...config(5, `rig-${i}`), eventsEnabled: true });
-      let s = grant({ ...base, players: { ...base.players, ana: { ...(base.players.ana as GameState["players"][string]), role: "lookout" } } }, "ana", "rig");
-      expect(spends(planningPerks(viewFor(s, "ana"), "lobby"))).toEqual([{ kind: "rig" }]);
-      s = run(s, ...planningPerks(viewFor(s, "ana"), "lobby"));
-      const rig = s.rigs.find((r) => r.player === "ana");
-      const picks = planningPerks(viewFor(s, "ana"), "lobby");
-      s = run(s, ...picks);
-      const chosen = s.rigs.find((r) => r.player === "ana")?.pick;
-      const calmest = Math.min(...(rig?.cards ?? []).map((c) => cardRiskScore(view, c)));
-      expect(cardRiskScore(view, chosen as string)).toBe(calmest);
-      expect(planningPerks(viewFor(s, "ana"), "lobby")).toEqual([]); // done for this round
+  it("every personality has a shop chance and a Bail policy (design §19.3)", () => {
+    for (const p of Object.values(PERSONALITIES)) {
+      expect(p.shop, p.name).toBeGreaterThanOrEqual(0);
+      expect(p.shop, p.name).toBeLessThanOrEqual(1);
+      expect(p.bailAt, p.name).toBeGreaterThanOrEqual(1);
     }
   });
 });

@@ -1,6 +1,6 @@
 // The suite report: every cell's rates with Wilson 95% intervals and
 // PASS/FAIL against the targets, role parity per player count and setup, a
-// per-role summary (★ wins by ending, tokens), and the text and JSON forms of
+// per-role summary (★ wins by ending, coins spent on perks), and the text and JSON forms of
 // it. Pure: cell results in, report out, so a single run and merged shards
 // give the same bytes. design §17.4, extension.md Build notes "Sim"
 import { ROLES } from "@skimjob/content";
@@ -109,7 +109,7 @@ export interface CheckCounts {
 
 /**
  * One role over the whole run (every cell pooled): how its wins split by
- * ending (★ roles also win failures) and its shop tokens per seat.
+ * ending (★ roles also win failures) and its coins spent on perks per seat (design §12).
  * extension.md Build notes "Sim"
  */
 export interface RoleSummary {
@@ -121,7 +121,6 @@ export interface RoleSummary {
   readonly ratio: number;
   /** Share of its win credit from successful heists. */
   readonly fromSuccess: number | null;
-  readonly earnedPerSeat: number;
   readonly spentPerSeat: number;
 }
 
@@ -252,7 +251,6 @@ function roleSummaries(cells: readonly CellResult[]): RoleSummary[] {
       seats: s.seats,
       ratio: s.fair > 0 ? r3(s.credit / s.fair) : 0,
       fromSuccess: s.credit > 0 ? r3(s.successCredit / s.credit) : null,
-      earnedPerSeat: s.seats > 0 ? r3(s.earned / s.seats) : 0,
       spentPerSeat: s.seats > 0 ? r3(s.spent / s.seats) : 0,
     }));
 }
@@ -340,14 +338,13 @@ export function formatSuiteReport(r: SuiteReport): string {
     r.cells.map((c) => [c.key, `${c.games}${c.converged || fixedGames(o) ? "" : "+"}`, ...rateCols.map((d) => rateCell(c.rates[d.id]))]),
   );
   const roles = table(
-    ["role", "seats", "win ÷ fair", "wins on success", "on failure", "tokens earned/seat", "spent/seat"],
+    ["role", "seats", "win ÷ fair", "wins on success", "on failure", "perk coins/seat"],
     r.roles.map((x) => [
       `${x.role}${x.star ? " ★" : ""}`,
       String(x.seats),
       x.ratio.toFixed(2),
       x.fromSuccess === null ? "—" : `${(x.fromSuccess * 100).toFixed(0)}%`,
       x.fromSuccess === null ? "—" : `${((1 - x.fromSuccess) * 100).toFixed(0)}%`,
-      x.earnedPerSeat.toFixed(2),
       x.spentPerSeat.toFixed(2),
     ]),
   );
@@ -399,7 +396,7 @@ export function formatSuiteReport(r: SuiteReport): string {
     "",
     stars,
     "",
-    "Roles, every cell pooled: win credit ÷ fair share, where the wins came from (★ roles also win failures), shop tokens per seat.",
+    "Roles, every cell pooled: win credit ÷ fair share, where the wins came from (★ roles also win failures), coins spent on perks per seat.",
     roles,
     "",
     `Checks: ${r.checks.pass} PASS, ${r.checks.fail} FAIL, ${r.checks.inconclusive} inconclusive (PASS/FAIL confirmed by the 95% interval; --strict fails on FAIL).`,

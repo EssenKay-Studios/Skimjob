@@ -79,7 +79,7 @@ describe("QA: full bot games under the R7 rules", () => {
     }
   }, SLOW);
 
-  it("stashes and tokens are whole numbers; nobody learns an ally automatically", () => {
+  it("stashes are whole numbers; nobody learns an ally automatically", () => {
     for (const { n, extra } of CASES) {
       for (let i = 0; i < GAMES_PER_CASE; i++) {
         const c = config(n, `prop-${n}-${i}-${JSON.stringify(extra)}`, extra);
@@ -88,7 +88,7 @@ describe("QA: full bot games under the R7 rules", () => {
         expect(end).toBeDefined();
         const outcome = (end as unknown as { outcome: { ranking: { stash: number }[] } }).outcome;
         for (const r of outcome.ranking) expect(Number.isInteger(r.stash)).toBe(true);
-        for (const p of Object.values(state.players)) expect(Number.isInteger(p.roleState.tokens) && p.roleState.tokens >= 0).toBe(true);
+        for (const p of Object.values(state.players)) expect(Number.isInteger(p.stash) && p.stash >= 0).toBe(true);
         expect(state.log.some((e) => e.type === ("alliesLearned" as string))).toBe(false);
         // Nobody's view names another player's role before the reveal.
         const live = createGame(c);

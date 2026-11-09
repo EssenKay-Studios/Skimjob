@@ -10,20 +10,17 @@
 // the hostile value is what gets it refused; the coverage check at the end
 // makes sure every field was tried that way at least once.
 import { describe, expect, it } from "vitest";
-import { MAX_SLOT_LENGTH, type PerkId } from "@skimjob/content";
-import { privateTo, type GameConfig, type GameEvent, type GameState, type PlayerState } from "./types";
+import { MAX_SLOT_LENGTH, PERK_IDS } from "@skimjob/content";
+import type { GameConfig, GameEvent, GameState, PlayerState } from "./types";
 import { setupEvents } from "./setup";
-import { applyEvent, replay } from "./reduce";
+import { replay } from "./reduce";
 import { COMMAND_TYPES, handleCommand } from "./handle";
 import { powerOf } from "./overrides";
-import { grantPerks } from "./perks.testkit";
+import { giveBail } from "./perks.testkit";
 import { show } from "./check";
 import { fullGrab } from "./grab.testkit";
 
 // ---------------------------------------------------------------- states
-
-/** Every perk spent with `useAbility` (the Shield spends itself). design §8.3 */
-const ALL_PERKS: readonly PerkId[] = ["peek", "extraVote", "ballot", "tail", "alibi", "recharge", "rig"];
 
 const ROLES_BY_SEAT = ["lookout", "fixer", "hacker", "locksmith", "smoothTalker", "auditor", "detective", "mole", "priest", "electrician", "lookout", "lookout"];
 
@@ -35,7 +32,7 @@ function config(extra: Partial<GameConfig> = {}): GameConfig {
     // The role list may name roles nobody holds.
     roleList: "possible",
     eventsEnabled: true,
-    // Secret mode, so the Ballot perk can be spent (it's refused in Open mode).
+    // Secret mode, so a Check ballot can be bought (it's refused in Open mode).
     voteVisibility: "secret",
     ...extra,
   };
@@ -68,24 +65,20 @@ function scenarioStates(): GameState[] {
   const out: GameState[] = [];
   const keep = (s: GameState): GameState => (out.push(s), s);
   let s = game(config(), ROLES_BY_SEAT);
-  for (const id of s.playerOrder) {
-    s = grantPerks(s, id, ...ALL_PERKS, ...ALL_PERKS);
-    // Tokens to buy from the shop. extension.md "Tokens and the perk shop"
-    for (let i = 0; i < 4; i++) s = applyEvent(s, { type: "tokenEarned", visibility: privateTo(id), player: id, trigger: "watchedShakenDirty" });
-  }
+  // Every perk on the black market, and coins in every stash to buy them with (design §12).
+  s = { ...s, shop: PERK_IDS, players: Object.fromEntries(Object.entries(s.players).map(([id, p]) => [id, { ...p, stash: 10 }])) };
   keep(s); // planning round 1
-  s = keep(run(s, { type: "useAbility", player: "p8", ability: { kind: "rig" } })); // the Rig's pick is open
   s = keep(run(s, ...s.playerOrder.map((id) => mv(id, "lobby"))));
   s = keep(run(s, { type: "proposeMeeting", player: "p0", slot: "slot-a" }));
   s = keep(run(s, round(s))); // alibis for round 1
-  s = keep(run(s, { type: "postAlibi", player: "p8", room: "lobby" })); // a true alibi, for the Alibi perk
-  s = keep(run(s, { type: "useAbility", player: "p5", ability: { kind: "audit", room: "lobby" } })); // a power used, for the Recharge perk
+  s = keep(run(s, { type: "postAlibi", player: "p8", room: "lobby" }));
+  s = keep(run(s, { type: "useAbility", player: "p5", ability: { kind: "audit", room: "lobby" } }));
   s = keep(run(s, alibis(s))); // the result window after round 1 (design §9.3)
   expect(s.phase.kind).toBe("result");
   s = keep(run(s, { type: "callEmergency", player: "p1" })); // waiting to open
   s = keep(run(s, { type: "advance", deadline: { kind: "openMeeting", meetingId: "emergency-1" } })); // voting
   s = run(s, ...["p0", "p1", "p2", "p3", "p4", "p5", "p6"].map((id) => ({ type: "castVote", player: id, vote: { kind: "shakedown", target: "p8" } })));
-  s = keep(run(s, { type: "advance", deadline: { kind: "closeMeeting", meetingId: "emergency-1" } })); // the shakedown window
+  s = keep(run(giveBail(s, "p8"), { type: "advance", deadline: { kind: "closeMeeting", meetingId: "emergency-1" } })); // p8's Bail choice (design §9.6)
   expect(s.phase.kind).toBe("shakedownPending");
   s = keep(run(s, { type: "advance", deadline: { kind: "resolveShakedown", meetingId: "emergency-1" } })); // planning round 2
   // Round 2: everyone in the Vault rings it past its last bulb: the raid calls a police briefing (design §9.2).
@@ -130,20 +123,19 @@ function baseCommands(s: GameState): Record<string, unknown>[] {
     // Powers used outside a move. design §11.1
     if (kind === "audit") out.push({ type: "useAbility", player, ability: { kind: "audit", room } });
     if (kind === "detect") out.push({ type: "useAbility", player, ability: { kind: "detect", target: other(player) } });
-    // Perks. extension.md "Tokens and the perk shop"
-    for (const perk of s.shop) out.push({ type: "buyPerk", player, perk });
-    for (const ability of [
-      { kind: "peek", target: other(player) },
-      { kind: "extraVote" },
-      { kind: "ballot", target: other(player) },
+    // Perks, bought while planning, and Bail's choice. design §9.6, §12
+    for (const perk of [
       { kind: "tail", room },
       { kind: "alibi" },
-      { kind: "recharge" },
-      { kind: "rig" },
-      ...s.rigs.filter((r) => r.player === player).flatMap((r) => r.cards.map((card) => ({ kind: "rigPick", card }))),
+      { kind: "ballot", target: other(player) },
+      { kind: "softShoes" },
+      { kind: "blackout", room },
+      { kind: "bail" },
+      { kind: "plantEvidence", target: other(player), room },
     ]) {
-      out.push({ type: "useAbility", player, ability });
+      out.push({ type: "buyPerk", player, perk });
     }
+    out.push({ type: "chooseBail", player, use: true });
     out.push({ type: "postAlibi", player, room });
     out.push({ type: "claimRole", player, role: "lookout" }); // design §8, §12.1
     out.push({ type: "proposeMeeting", player, slot: `slot-${s.log.length}` });

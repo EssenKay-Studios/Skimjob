@@ -1,11 +1,9 @@
 // The bot rules: the ending forecast, the Mole and the Fixer leaning toward a
-// heist sunk by theft, the Mole's ring, the Fixer's reopen, and buying/spending
-// tokens. design §5, §8.4, §11.1, §19.3; extension.md "Tokens and the perk shop"
+// heist sunk by theft, the Mole's ring and the Fixer's reopen. design §5, §8.4, §11.1, §19.3
 import { describe, expect, it } from "vitest";
-import { viewFor, type GameState, type PlayerCommand } from "@skimjob/engine";
+import { viewFor, type GameState } from "@skimjob/engine";
 import { decide } from "./bot";
 import { forecast, LEAN_AT, leaning } from "./forecast";
-import { buyPerks, perkSpender } from "./perks";
 import { PERSONALITIES, type Personality } from "./personalities";
 import { closeAlibis, game, round } from "./testkit";
 
@@ -89,32 +87,5 @@ describe("the Fixer's reopen — design §5.3, §11.1", () => {
     };
     expect(ability(taped)).toEqual({ kind: "reopen", room: "vault" });
     expect(ability(as(taped, "fixer", {}, { usedThisGame: 1 }))).toBeUndefined();
-  });
-});
-
-describe("buying and spending perks — extension.md \"Tokens and the perk shop\"", () => {
-  const shop = (s: GameState): GameState => ({ ...s, shop: ["peek", "shield", "extraVote"] });
-  const bought = (cmds: PlayerCommand[]) => cmds.flatMap((c) => (c.type === "buyPerk" ? [c.perk] : []));
-
-  it("buys by priority as tokens allow, one of each, and never what it holds", () => {
-    const s = shop(game(5));
-    expect(bought(buyPerks(viewFor(as(s, "lookout", {}, { tokens: 1 }), "ana")))).toEqual(["extraVote"]); // Shield and Peek cost 2
-    expect(bought(buyPerks(viewFor(as(s, "lookout", {}, { tokens: 4 }), "ana")))).toEqual(["shield", "peek"]);
-    expect(bought(buyPerks(viewFor(as(s, "lookout", {}, { tokens: 2, perks: ["shield"] }), "ana")))).toEqual(["peek"]);
-    expect(bought(buyPerks(viewFor(as(s, "lookout", {}, { tokens: 0 }), "ana")))).toEqual([]);
-  });
-
-  it("spends every token in the last round: unspent tokens are worth nothing", () => {
-    const s = shop(game(5));
-    const last: GameState = { ...s, round: 12, phase: { kind: "planning", round: 12 } }; // the round cap (design §6.2)
-    expect(bought(buyPerks(viewFor(as(last, "lookout", {}, { tokens: 3, perks: ["shield", "peek", "extraVote"] }), "ana")))).toEqual(["extraVote", "extraVote", "extraVote"]);
-  });
-
-  it("uses at most one chosen perk a round; the Shield goes off by itself", () => {
-    const use = (kind: string): PlayerCommand => ({ type: "useAbility", player: "ana", ability: { kind } } as unknown as PlayerCommand);
-    const move: PlayerCommand = { type: "submitMove", player: "ana", move: { room: "lobby", duffel: 1, pocket: 0 } };
-    const spend = perkSpender(viewFor(game(5), "ana"));
-    expect(spend([use("peek"), move, use("tail")])).toEqual([use("peek"), move]);
-    expect(spend([use("alibi")])).toEqual([]); // already used one this round
   });
 });

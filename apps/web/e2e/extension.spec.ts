@@ -2,7 +2,7 @@ import { mkdirSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 import { startGame } from "./setupGame";
 
-// R6b, the extension UI (docs/extension.md): the perk shop, the round cap and
+// The role cards and rulebook (design §11, §12, §20), the round cap and
 // the Wanted meter (design §5.4) in a real game, and the lobby's role-list
 // setting (design §11.3). Numbers are never asserted: the balance pass tunes them
 // in packages/content. SHOTS_DIR=… saves the gallery sections per viewport.
@@ -10,46 +10,17 @@ const SHOTS = process.env.SHOTS_DIR;
 
 const overflow = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
 
-test("gallery shop: earn tokens, buy a perk privately, use it once this round @shop", async ({ page }) => {
-  await page.goto("/dev/gallery");
-  const demo = page.getByTestId("shop-demo");
-  await demo.scrollIntoViewIfNeeded();
-  await expect(demo.getByText("only you see this")).toBeVisible();
-
-  await demo.getByRole("button", { name: "Shop", exact: true }).click();
-  const shop = page.getByRole("dialog", { name: "The shop" });
-  const buyPeek = shop.getByRole("button", { name: /^Buy Peek for \d+$/ });
-  await expect(buyPeek).toBeDisabled(); // no tokens yet
-  const cost = Number((await buyPeek.getAttribute("aria-label"))!.match(/\d+$/)![0]);
-  await shop.getByRole("button", { name: "Close" }).click();
-
-  for (let i = 0; i < cost; i++) await demo.getByRole("button", { name: "Earn a token" }).click();
-  await demo.getByRole("button", { name: "Shop", exact: true }).click();
-  await expect(buyPeek).toBeEnabled();
-  await buyPeek.click();
-  await expect(shop.getByText("You own one.")).toBeVisible();
-  await shop.getByRole("button", { name: "Close" }).click();
-
-  // Use it: pick someone, peek; then the one-per-round note.
-  const uses = demo.getByLabel("Use a perk");
-  await uses.getByRole("group", { name: "Player to peek at" }).getByRole("button").first().click();
-  await uses.getByRole("button", { name: "Peek", exact: true }).click();
-  await expect(uses.getByText("You've used a perk this round.")).toBeVisible();
-  await demo.getByRole("button", { name: "Next round" }).click();
-  await expect(uses).toHaveCount(0); // nothing owned, nothing used this round
-});
-
 test("gallery extension sections fit every viewport @shop", async ({ page }, info) => {
   test.skip(info.project.name !== "mobile", "viewports are set per test");
   test.setTimeout(120_000);
   for (const width of [360, 768, 1280]) {
     await page.setViewportSize({ width, height: 1400 });
     await page.goto("/dev/gallery");
-    await expect(page.getByRole("heading", { name: "Tokens and the shop", level: 3 })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Rulebook sheet", level: 3 })).toBeVisible();
     expect(await overflow(page)).toBeLessThanOrEqual(0);
     if (!SHOTS) continue;
     mkdirSync(SHOTS, { recursive: true });
-    for (const id of ["ext-role-card", "ext-rulebook", "ext-shop", "ext-notells", "ext-end-fail"]) {
+    for (const id of ["ext-role-card", "ext-rulebook", "ext-notells", "ext-end-fail"]) {
       // Viewport shots: Chromium paints tall element shots of this long page blank.
       const box = await page.locator(`section[aria-labelledby="g-${id}"]`).evaluate((el) => {
         el.scrollIntoView({ block: "start" });

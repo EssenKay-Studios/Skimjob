@@ -1,24 +1,13 @@
-// Role facts (design §11, §20.2), the shop and perk uses (extension.md, until
-// S3a.7) and endings, from real engine views.
-import { PERKS, ROLES, ROLE_TEXT, ROLE_WIN } from "@skimjob/content";
-import {
-  PUBLIC,
-  applyEvent,
-  handleCommand,
-  privateTo,
-  viewFor,
-  type GameConfig,
-  type GameState,
-  type PlayerCommand,
-  type SystemCommand,
-} from "@skimjob/engine";
+// Role facts (design §11, §20.2), the black market in the rulebook (§12, §20.3)
+// and endings, from real engine views.
+import { PERKS, PERK_IDS, PERK_TEXT, ROLES, ROLE_TEXT, ROLE_WIN } from "@skimjob/content";
+import { privateTo, viewFor, type GameConfig } from "@skimjob/engine";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { EndingNote } from "../components/Extension";
+import { EndingNote, RulebookSheet } from "../components/Extension";
 import { describeEvent } from "./describeEvent";
-import { KIND_LABEL, endingText, perkUses, roleInfo, roleListInfo, rolesByKind, shopState, usedPerkThisRound } from "./extension";
-import { abilityOffers } from "./meeting";
+import { KIND_LABEL, endingText, roleInfo, roleListInfo, rolesByKind } from "./extension";
 import { createGame } from "./deal.testkit";
 
 const config = (extra: Partial<GameConfig> = {}): GameConfig => ({
@@ -30,21 +19,6 @@ const config = (extra: Partial<GameConfig> = {}): GameConfig => ({
   ...extra,
 });
 
-function run(state: GameState, ...commands: (PlayerCommand | SystemCommand)[]): GameState {
-  for (const c of commands) {
-    const r = handleCommand(state, c);
-    if (!r.ok) throw new Error(`${c.type}: ${r.reason}`);
-    state = r.state;
-  }
-  return state;
-}
-const round = (r: number): SystemCommand => ({ type: "advance", deadline: { kind: "round", round: r } });
-const alibis = (r: number): SystemCommand => ({ type: "advance", deadline: { kind: "alibis", round: r } });
-const tokens = (s: GameState, n: number, player = "p1") => {
-  for (let i = 0; i < n; i++) s = applyEvent(s, { type: "tokenEarned", visibility: privateTo(player), player, trigger: "watchedShakenDirty" });
-  return s;
-};
-
 describe("role facts — design §11.1, §20.2", () => {
   it("gives every role its kind, its §20.2 power line and its How you win line; ★ marks the Mole and the Fixer", () => {
     for (const id of Object.keys(ROLES)) {
@@ -55,8 +29,7 @@ describe("role facts — design §11.1, §20.2", () => {
       expect(info.star, id).toBe(id === "mole" || id === "fixer");
     }
     expect(roleInfo("hacker")).toMatchObject({ kind: "shadows", kindLabel: "Shadows", star: false });
-    expect(roleInfo("priest")).toMatchObject({ kind: "eyes", kindLabel: "Eyes", earns: null });
-    expect(roleInfo("lookout").earns).toMatch(/^A token when: /);
+    expect(roleInfo("priest")).toMatchObject({ kind: "eyes", kindLabel: "Eyes" });
   });
 
   it("groups roles by kind, eyes first, in content order", () => {
@@ -74,54 +47,17 @@ describe("role facts — design §11.1, §20.2", () => {
   });
 });
 
-describe("tokens and the perk shop (extension.md)", () => {
-  const withShop = (shop: GameState["shop"]) => ({ ...createGame(config()), shop });
+describe("the black market in the rulebook — design §12, §20.3", () => {
+  const sheet = (view: Parameters<typeof RulebookSheet>[0]["view"]) => renderToStaticMarkup(createElement(RulebookSheet, { open: true, onClose: () => {}, view }));
 
-  it("prices perks from the view, buys with tokens and keeps them private", () => {
-    let s = withShop(["peek", "shield", "rig"]);
-    expect(shopState(viewFor(s, "p1")).items.map((i) => [i.perk, i.cost, i.column, i.affordable])).toEqual([
-      ["peek", PERKS.peek.cost, "learn", false],
-      ["shield", PERKS.shield.cost, "protect", false],
-      ["rig", PERKS.rig.cost, "sway", false],
-    ]);
-    s = tokens(s, PERKS.peek.cost);
-    expect(shopState(viewFor(s, "p1")).items[0]!.affordable).toBe(true);
-    s = run(s, { type: "buyPerk", player: "p1", perk: "peek" });
-    const mine = shopState(viewFor(s, "p1"));
-    expect(mine.tokens).toBe(0);
-    expect(mine.items[0]!.owned).toBe(1);
-    expect(shopState(viewFor(s, "p2")).items[0]!.owned).toBe(0);
-    expect(shopState(viewFor(s, "p2")).items[1]!.auto).toBe(true);
-  });
-
-  it("offers one perk use per round; after a use the rest wait for the next round", () => {
-    let s = withShop(["peek", "alibi", "extraVote"]);
-    s = tokens(s, PERKS.peek.cost * 2);
-    s = run(s, { type: "buyPerk", player: "p1", perk: "peek" }, { type: "buyPerk", player: "p1", perk: "peek" });
-    expect(perkUses(viewFor(s, "p1")).map((u) => u.kind)).toEqual(["peek"]);
-    s = run(s, { type: "useAbility", player: "p1", ability: { kind: "peek", target: "p2" } });
-    const v = viewFor(s, "p1");
-    expect(usedPerkThisRound(v)).toBe(true);
-    expect(shopState(v).usedThisRound).toBe(true);
-    expect(perkUses(v)).toEqual([]);
-    expect(handleCommand(s, { type: "useAbility", player: "p1", ability: { kind: "peek", target: "p3" } }).ok).toBe(false);
-  });
-
-  it("hides the meeting perks after a perk use this round", () => {
-    let s = tokens(withShop(["peek", "alibi", "extraVote"]), PERKS.peek.cost + PERKS.extraVote.cost);
-    s = run(
-      s,
-      { type: "buyPerk", player: "p1", perk: "peek" },
-      { type: "buyPerk", player: "p1", perk: "extraVote" },
-      // design §9.3: the emergency in round 1's result window.
-      { type: "advance", deadline: { kind: "round", round: 1 } },
-      { type: "advance", deadline: { kind: "alibis", round: 1 } },
-      { type: "callEmergency", player: "p2" },
-      { type: "advance", deadline: { kind: "openMeeting", meetingId: "emergency-1" } },
-    );
-    const offered = (st: GameState) => abilityOffers(viewFor(st, "p1")).some((o) => o.kind === "extraVote");
-    expect(offered(s)).toBe(true);
-    expect(offered(run(s, { type: "useAbility", player: "p1", ability: { kind: "peek", target: "p2" } }))).toBe(false);
+  it("lists this game's three perks with their costs and §20.3 lines; outside a game, all seven", () => {
+    const game = sheet(viewFor({ ...createGame(config()), shop: ["tail", "softShoes", "bail"] }, "p1"));
+    for (const p of ["tail", "softShoes", "bail"] as const) expect(game).toContain(PERK_TEXT[p]!.name);
+    expect(game).not.toContain(PERK_TEXT.plantEvidence!.name);
+    expect(game).toContain(`(${PERKS.bail.cost})`);
+    const content = sheet(null);
+    for (const p of PERK_IDS) expect(content).toContain(PERK_TEXT[p]!.name);
+    expect(content).not.toMatch(/token/i);
   });
 });
 
@@ -129,7 +65,7 @@ describe("no tells — design §11.1", () => {
   it("reads a blacked-out room's feed as cameras offline, with no source", () => {
     const ctx = { me: "p1", name: (p: string) => p };
     const feed = { type: "roomWatched", visibility: privateTo("p1"), player: "p1", round: 3, source: "security", room: "vault", seen: [], offline: true } as const;
-    expect(describeEvent(feed, ctx)).toBe("Round 3, on the cameras: cameras offline in the Vault.");
+    expect(describeEvent(feed, ctx)).toBe("Round 3, on the cameras: the cameras were offline, nobody seen in the Vault.");
   });
 });
 

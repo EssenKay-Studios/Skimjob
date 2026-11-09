@@ -10,10 +10,12 @@
 //  - handleCommand never throws, and a rejection leaves the state untouched
 //    (states are deep-frozen, so any mutation throws). [§17.2]
 //  - a command for a seat that isn't in the game is always refused. [§17.2]
-//  - loot is conserved: kitty + set-aside + stashes = loot split from rooms
-//    (less a bust round's unsplit hand-ins); nothing goes negative; the kitty
+//  - loot is conserved: kitty + set-aside + stashes + coins spent on perks =
+//    loot split from rooms (less a bust round's unsplit hand-ins); the coins
+//    spent are every purchase's private cost, and its public one once planning
+//    closes; nothing goes negative; the kitty
 //    is change smaller than the crew; at the end the kitty and set-aside coins
-//    pay the getaway car. [§5.5, §6.3, §7.2, §7.7, §10, §11.3]
+//    pay the getaway car. [§5.5, §6.3, §7.2, §7.7, §10, §11.3, §12]
 //  - coins are conserved: bank + seized + coins in the bags = the bank's
 //    start. [§6.1, §7.7]
 //  - every open room's bell is a whole number below its size (a full bell is
@@ -35,7 +37,7 @@ import { isDeepStrictEqual } from "node:util";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { BANK_JOB, MAX_ROLE_COPIES, ROLES } from "@skimjob/content";
-import type { Command, GameConfig, GameEvent, GameState, Move, PlayerId, PlayerState, RoleListSetting, VoteVisibility } from "./types";
+import type { Command, GameConfig, GameEvent, GameState, Move, PlayerId, PlayerState, RoleListSetting, VoteChoice, VoteVisibility } from "./types";
 import { REVEAL, canSee, secretTo } from "./types";
 import { createGame } from "./setup";
 import { roleHandler } from "./roles";
@@ -151,7 +153,7 @@ function playerCommand(state: GameState, t: Tape, style: Style): { command: Reco
         : fit && phase === "meeting"
           ? 9
           : fit && phase === "shakedownPending"
-            ? 12
+            ? 13
             : fit && phase === "result" && t.chance(50)
               ? 14
               : t.int(15);
@@ -208,10 +210,11 @@ function playerCommand(state: GameState, t: Tape, style: Style): { command: Reco
     case 12:
       return { command: { ...base, type: "useAbility", ability: { kind: t.pick(["audit", "detect"]), room: room(), target: t.pick(state.playerOrder) } }, seated };
     case 13: {
-      // extension.md "Tokens and the perk shop": shop buys; the Mole's ring outside a move is refused (design §11.1).
-      if (t.chance(20)) return { command: { ...base, type: "useAbility", ability: { kind: "ring", room: room() } }, seated };
-      const perk = state.shop.length && t.chance(90) ? t.pick(state.shop) : "peek";
-      return { command: { ...base, type: "buyPerk", perk }, seated };
+      // design §9.6, §12: Bail's choice, and perks bought; the Mole's ring outside a move is refused (design §11.1).
+      if (phase === "shakedownPending" && t.chance(70)) return { command: { ...base, type: "chooseBail", use: t.chance(60) }, seated };
+      if (t.chance(10)) return { command: { ...base, type: "useAbility", ability: { kind: "ring", room: room() } }, seated };
+      const kind = state.shop.length && t.chance(90) ? t.pick(state.shop) : "jetpack";
+      return { command: { ...base, type: "buyPerk", perk: { kind, room: room(), target: t.pick(state.playerOrder) } }, seated };
     }
     default:
       return { command: { ...base, type: "callEmergency" }, seated };
@@ -302,7 +305,7 @@ function lostInBust(state: GameState): number {
 }
 
 function holdings(state: GameState): number {
-  return state.kitty + state.setAside + lostInBust(state) + Object.values(state.players).reduce((sum, p) => sum + p.stash, 0);
+  return state.kitty + state.setAside + state.spent + lostInBust(state) + Object.values(state.players).reduce((sum, p) => sum + p.stash, 0);
 }
 
 const isCount = (n: number): boolean => Number.isInteger(n) && n >= 0;
@@ -334,7 +337,13 @@ function checkState(state: GameState, inflow: number): void {
   const taken = jobFor(state.config).bank.coinsPerPlayer * state.playerOrder.length - state.bank - state.seized;
   check(state.reached <= taken, "coins reached ≤ coins taken (design §7.5)", [state.reached, taken]);
   for (const p of Object.values(state.players)) check(isCount(p.stash), "stashes are whole numbers ≥ 0", p);
-  check(holdings(state) === inflow, "loot conservation (kitty + set-aside + stashes = loot in − loot out, design §7.7)", { holdings: holdings(state), inflow });
+  check(holdings(state) === inflow, "loot conservation (kitty + set-aside + stashes + spent = loot in − loot out, design §7.7)", { holdings: holdings(state), inflow });
+  // design §12: the coins spent on perks are each buyer's private cost, and once planning closes every purchase's public one.
+  const planning = state.phase.kind === "planning" ? state.round : null;
+  const sold = state.log.reduce((n, e) => n + (e.type === "perkSold" ? e.cost : 0), 0);
+  const paid = state.log.reduce((n, e) => n + (e.type === "perkBought" ? e.cost : 0), 0);
+  const announced = state.log.reduce((n, e) => n + (e.type === "perkBought" && e.round !== planning ? e.cost : 0), 0);
+  check(state.spent === paid && sold === announced, "coins spent on perks = private costs; public costs = purchases of closed rounds", [state.spent, paid, sold, announced]);
   // design §6.1, §7.7: every coin grabbed came out of the bank (into a bag, or seized), and the bank never goes below 0.
   const filled = state.log.find((e) => e.type === "bankFilled");
   const grabbed = state.log.reduce((n, e) => n + (e.type === "coinsGrabbed" ? e.duffel + e.pocket + e.seized : 0), 0);
@@ -377,6 +386,12 @@ function checkDeal(state: GameState): void {
  * private fields, moves and ballots, the seed and RNG,
  * and hidden events (dropped, junk added).
  */
+/** The open meeting's ballots `viewer` sees through their Check ballots. design §12 */
+function seenBy(meeting: NonNullable<GameState["meeting"]>, viewer: PlayerId): Record<PlayerId, VoteChoice> {
+  const grants = Object.hasOwn(meeting.ballotGrants, viewer) ? (meeting.ballotGrants[viewer] as readonly PlayerId[]) : [];
+  return Object.fromEntries(grants.filter((id) => Object.hasOwn(meeting.votes, id)).map((id) => [id, meeting.votes[id] as VoteChoice]));
+}
+
 function scrub(state: GameState, viewer: PlayerId): GameState {
   const over = state.phase.kind === "ended";
   const other = state.playerOrder.find((id) => id !== viewer) as PlayerId;
@@ -393,7 +408,7 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
             ...p,
             role: p.role === "priest" ? "hacker" : "priest",
             stash: p.stash + 101,
-            roleState: { usedThisStretch: 4, usedThisGame: 1, tokens: p.roleState.tokens + 3, perks: ["peek", "shield"], tail: "vault" },
+            roleState: { usedThisStretch: 4, usedThisGame: 1, bail: !p.roleState.bail },
             consecutiveMissedMoves: 5,
             sealedVote: { kind: "shakedown", target: viewer },
           };
@@ -419,11 +434,19 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
     ...state,
     bells,
     cutsPending: ["vault", "lobby"],
+    // design §9.6, §12: Check ballots waiting for the next meeting and a Bail choice are private.
+    ballotChecks: [{ player: other, target: viewer }, ...state.ballotChecks.filter((c) => c.player === viewer)],
+    pendingShakedown: state.pendingShakedown && { ...state.pendingShakedown, useBail: state.pendingShakedown.target === viewer ? state.pendingShakedown.useBail : !state.pendingShakedown.useBail },
     config: { ...state.config, seed: "scrubbed" },
     rng: { words: [1, 2, 3, 4] },
     players,
     moves: fakeMoves,
-    meeting: state.meeting && { ...state.meeting, votes: fakeFor(state.meeting.votes, { kind: "shakedown", target: viewer }) },
+    meeting: state.meeting && {
+      ...state.meeting,
+      // The ballots the viewer bought a Check ballot for are theirs to see (design §12).
+      votes: { ...fakeFor(state.meeting.votes, { kind: "shakedown", target: viewer }), ...seenBy(state.meeting, viewer) },
+      ballotGrants: fakeFor(state.meeting.ballotGrants, [viewer]),
+    },
     log,
   };
 }

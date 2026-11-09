@@ -6,15 +6,13 @@ import { sampleEvents } from "./types/samples";
 
 describe("revealsRole (design §8, §12.1)", () => {
   it("flags the role deal and every entry that states a role or faction", () => {
-    for (const t of ["roleDealt", "tokenEarned", "insideTip"] as const) {
+    for (const t of ["roleDealt", "insideTip"] as const) {
       expect(revealsRole(sampleEvents[t]), t).toBe(true);
     }
-    // A Peek names the target's role.
-    expect(revealsRole(sampleEvents.perkUsed)).toBe(true);
   });
 
   it("leaves ability results and moves shareable (sightings, cameras, audits, splits)", () => {
-    for (const t of ["roomSighting", "roomWatched", "coinsGrabbed", "moveSubmitted", "abilityResolved", "voteCast", "perkBought", "bellsRung", "roomRaided", "shopDealt"] as const) {
+    for (const t of ["roomSighting", "roomWatched", "coinsGrabbed", "moveSubmitted", "abilityResolved", "voteCast", "perkBought", "perkSold", "bailChosen", "bellsRung", "roomRaided", "shopDealt"] as const) {
       expect(revealsRole(sampleEvents[t]), t).toBe(false);
     }
   });
