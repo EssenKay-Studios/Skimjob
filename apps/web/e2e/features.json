@@ -71,5 +71,8 @@
   "packages/engine/src/perks.ts": "@shop",
   "packages/engine/src/bells.ts": "@move",
   "packages/engine/src/reveal.ts": "@reveal",
-  "packages/engine/src/round.ts": "@move"
+  "packages/engine/src/round.ts": "@move",
+  "apps/web/src/components/BlackMarket.tsx": "@shop",
+  "apps/web/src/game/market.ts": "@shop",
+  "apps/web/src/screens/GalleryMarket.tsx": "@shop"
 }

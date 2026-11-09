@@ -126,11 +126,15 @@ export function dealRoles(config: GameConfig, rng: RngState): { readonly value: 
   return { value: draw(shuffle(rng, dealt)), rng };
 }
 
-/** The black market's three perks, one per tier, drawn with the game's seed. design §12 */
-function dealShop(rng: RngState): { readonly value: PerkId[]; readonly rng: RngState } {
+/**
+ * The black market's three perks, one per tier, drawn with the game's seed.
+ * In Open vote mode the Check ballot is left out: ballots are already public
+ * (owner, 9 Nov, #187). design §12
+ */
+function dealShop(config: GameConfig, rng: RngState): { readonly value: PerkId[]; readonly rng: RngState } {
   const perks: PerkId[] = [];
   for (const tier of PERK_TIERS) {
-    const drawn = pick(rng, PERK_IDS.filter((id) => PERKS[id].tier === tier));
+    const drawn = pick(rng, PERK_IDS.filter((id) => PERKS[id].tier === tier && !(id === "ballot" && config.voteVisibility === "open")));
     rng = drawn.rng;
     perks.push(drawn.value);
   }
@@ -152,7 +156,7 @@ export function setupEvents(config: GameConfig): GameEvent[] {
   const errors = validateConfig(config);
   if (errors.length > 0) throw new Error(`invalid game config: ${errors.join("; ")}`);
   const dealt = dealRoles(config, seedRng(config.seed));
-  const shop = dealShop(dealt.rng);
+  const shop = dealShop(config, dealt.rng);
   return [
     {
       type: "gameCreated",

@@ -160,3 +160,14 @@ export function Pin({ on = false }: { on?: boolean }) {
     </svg>
   );
 }
+
+/** A coin: the black market's prices. */
+export function Coin() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true">
+      <circle cx="10.6" cy="10.6" r="6.4" fill="var(--gold)" />
+      <circle cx="10" cy="10" r="6.4" {...S} />
+      <path d="M10 6.8v6.4" {...S} strokeWidth={1.5} />
+    </svg>
+  );
+}

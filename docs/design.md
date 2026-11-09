@@ -390,7 +390,7 @@ Every role has a one-sentence power, a "How you win" line and a "How to spot it"
 ## 12. Perks and the black market
 
 - **There are no tokens.** Perks are bought with coins **from your own stash**, which lowers your score. The coins **leave the game** (paid to fixers and cops); buying doesn't change the duffel or honesty.
-- **The shop:** each game deals **one perk per tier** (3 items), picked with the game's seed. The "This game" rulebook lists only those.
+- **The shop:** each game deals **one perk per tier** (3 items), picked with the game's seed. In Open vote mode the Check ballot is never dealt, since ballots are already public there *(owner, 9 Nov)*. The "This game" rulebook lists only those.
 - **Stock** *(owner, 6 Nov)*: each of the 3 items has unlimited stock, and any player may buy any item, again in later rounds.
 - **One perk per player per round**, each single-use, bought and used while planning, except **Bail**, the one held item: you keep it until a shakedown passes against you and you choose to use it (§9.6). You can hold only one Bail at a time *(owner, 6 Nov)*. *(Owner, 6 Nov.)* You pay from your stash as it stood at the start of the round; this round's pocket can't pay.
 - **Every purchase is logged without a name:** "🛒 Someone bought Soft shoes (2 coins)". A round's purchases are logged together as planning closes, in the black market's order, so neither their order nor their timing shows who bought. Who bought it opens at the reveal.
@@ -663,6 +663,8 @@ Bust (every role): "On a bust, only the Rooftop gets away."
 | Leads | What happened, newest first. ⚠ means two facts don't add up. |
 | Pins | Pin a lead or one fact. Only you see your pins. |
 | Suspect | Who your facts point at: your pins if you have 2 or more, otherwise every lead. A hunch, not proof. |
+| Black market | Perks cost coins from your stash; they leave the game. Every purchase is logged without a name. |
+| Paying from your stash | You pay from your stash as it stood when the round began. This round's pocket can't pay. |
 
 ---
 
