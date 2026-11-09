@@ -60,7 +60,6 @@ const LAST = <T extends GameEvent["type"]>(s: GameState, type: T) => ofType(s.lo
 const ids = (n: number) => Array.from({ length: n }, (_, i) => `p${i}`);
 const mv = (player: string, room: string, duffel: number, pocket = 0) => ({ type: "submitMove", player, move: { room, duffel, pocket } });
 const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
-const ALIBIS = (s: GameState) => ({ type: "advance", deadline: { kind: "alibis", round: s.resolvedRound } });
 const RESULT = (s: GameState) => ({ type: "advance", deadline: { kind: "result", round: s.resolvedRound } });
 const CLOSE = (s: GameState) => ({ type: "advance", deadline: { kind: "closeMeeting", meetingId: s.meeting?.id } });
 const OPEN = (s: GameState) => ({ type: "advance", deadline: { kind: "openMeeting", meetingId: s.scheduledMeeting?.meetingId ?? s.pendingEmergency?.meetingId } });
@@ -87,7 +86,7 @@ describe("QA: the crew's emergency pool by crew size — design §9.3", () => {
     for (const p of ids(n)) expect(viewFor(s, p).emergencies).toBe(pool);
     // Spend the whole pool, one emergency per round's window, each meeting failing quorum (still spent).
     for (let i = 0; i < pool; i++) {
-      s = run(s, lobby, ROUND, ALIBIS);
+      s = run(s, lobby, ROUND);
       if (s.phase.kind === "awaitingMeeting") s = run(s, SCHED, OPEN, CLOSE);
       expect(s.phase.kind).toBe("result");
       s = run(s, emergency(`p${i}`), OPEN, CLOSE);
@@ -95,11 +94,10 @@ describe("QA: the crew's emergency pool by crew size — design §9.3", () => {
       expect(s.emergencies).toBe(pool - i - 1);
       expect(s.phase.kind).toBe("planning");
     }
-    // Empty pool: alibis go straight to the next round (no window), and nobody can call one, ever.
+    // Empty pool: the round goes straight to the next one (no window), and nobody can call one, ever.
+    const round = s.round;
     s = run(s, lobby, ROUND);
     expect(reason(s, emergency("p1"))).toMatch(/between a round's result and the next planning/);
-    const round = s.round;
-    s = run(s, ALIBIS);
     if (s.phase.kind === "awaitingMeeting") s = run(s, SCHED, OPEN, CLOSE);
     expect(s.phase).toEqual({ kind: "planning", round: round + 1 });
     expect(reason(s, emergency("p1"))).toMatch(/between a round's result and the next planning/);
@@ -113,15 +111,12 @@ describe("QA: the crew's emergency pool by crew size — design §9.3", () => {
 describe("QA: callEmergency outside the result window is refused (#167) — design §9.3", () => {
   const WINDOW = /between a round's result and the next planning/;
 
-  it("in planning (round 1 and later), in alibis, while a meeting is due, while it is open, during a shakedown window", () => {
+  it("in planning (round 1 and later), while a meeting is due, while it is open, during a shakedown window", () => {
     let s = game(7, { shop: WITH_BAIL });
     expect(reason(s, emergency("p0"))).toMatch(WINDOW); // round 1 planning
     s = run(s, mv("p0", "vault", 6), lobby);
     expect(reason(s, emergency("p0"))).toMatch(WINDOW); // planning, moves locked in
     s = run(s, ROUND);
-    expect(s.phase.kind).toBe("alibis");
-    expect(reason(s, emergency("p1"))).toMatch(WINDOW);
-    s = run(s, ALIBIS);
     expect(s.phase).toMatchObject({ kind: "awaitingMeeting", meeting: "briefing" });
     expect(reason(s, emergency("p1"))).toMatch(WINDOW);
     s = run(s, SCHED);
@@ -139,7 +134,7 @@ describe("QA: callEmergency outside the result window is refused (#167) — desi
   });
 
   it("twice in one window is refused even with pool left; the next round's window takes the second; nothing is refunded", () => {
-    let s = run(game(12), lobby, ROUND, ALIBIS, emergency("p3"));
+    let s = run(game(12), lobby, ROUND, emergency("p3"));
     expect(reason(s, emergency("p3"))).toMatch(/already been called/);
     expect(reason(s, emergency("p4"))).toMatch(/already been called/);
     expect(reason(s, RESULT(s))).toMatch(/emergency meeting has been called/);
@@ -149,12 +144,12 @@ describe("QA: callEmergency outside the result window is refused (#167) — desi
     expect(s.phase).toEqual({ kind: "planning", round: 2 });
     expect(reason(s, emergency("p4"))).toMatch(WINDOW);
     // 144 coins: round 2 leaves 96 (two-thirds), so its regular meeting comes first, then the window.
-    s = run(s, lobby, ROUND, ALIBIS);
+    s = run(s, lobby, ROUND);
     expect(s.phase).toMatchObject({ kind: "awaitingMeeting", meeting: "regular" });
     expect(reason(s, emergency("p4"))).toMatch(WINDOW);
     s = run(s, SCHED, OPEN, CLOSE, emergency("p4"), OPEN, CLOSE);
     expect(s.emergencies).toBe(0);
-    s = run(s, lobby, ROUND, ALIBIS);
+    s = run(s, lobby, ROUND);
     expect(s.phase.kind).toBe("planning"); // the window is skipped
     expect(ofType(s.log, "emergencyMeetingCalled").map((e) => [e.by, e.meetingId])).toEqual([
       ["p3", "emergency-1"],
@@ -163,14 +158,14 @@ describe("QA: callEmergency outside the result window is refused (#167) — desi
   });
 
   it("an unknown or missing caller is refused in the window; after the last round nobody can call one", () => {
-    let s = run(game(3), lobby, ROUND, ALIBIS);
+    let s = run(game(3), lobby, ROUND);
     expect(reason(s, emergency("nobody"))).toMatch(/unknown|not in/i);
     expect(reason(s, { type: "callEmergency" })).toBeTruthy();
     // Play the bank out without spending: no result window after the last round.
     s = run(s, RESULT);
     while (s.phase.kind !== "ended") {
       const k = s.phase.kind;
-      s = run(s, ...(k === "planning" ? [lobby, ROUND] : k === "alibis" ? [ALIBIS] : k === "awaitingMeeting" ? [SCHED, OPEN, CLOSE] : [RESULT]));
+      s = run(s, ...(k === "planning" ? [lobby, ROUND] : k === "awaitingMeeting" ? [SCHED, OPEN, CLOSE] : [RESULT]));
     }
     expect(s.emergencies).toBe(1);
     expect(reason(s, emergency("p0"))).toMatch(/over/);
@@ -179,49 +174,48 @@ describe("QA: callEmergency outside the result window is refused (#167) — desi
 
 describe("QA: regular meetings at the bank's thirds — design §9.1, §9.2, §4.2 step 9", () => {
   it("36 coins: the bank at 25 calls nothing; at exactly 24 (two-thirds) it calls a regular meeting", () => {
-    const base = run(game(3), lobby, ROUND, ALIBIS, RESULT); // 30 left
-    const at25 = run(base, mv("p0", "lobby", 1), lobby, ROUND, ALIBIS);
+    const base = run(game(3), lobby, ROUND, RESULT); // 30 left
+    const at25 = run(base, mv("p0", "lobby", 1), lobby, ROUND);
     expect([at25.bank, at25.phase.kind, at25.thirds]).toEqual([25, "result", 0]);
-    const at24 = run(base, lobby, ROUND, ALIBIS);
+    const at24 = run(base, lobby, ROUND);
     expect([at24.bank, at24.thirds]).toEqual([24, 1]);
     expect(at24.phase).toEqual({ kind: "awaitingMeeting", meeting: "regular", meetingId: "meeting-1" });
     // From 25, a 3-coin round takes it to 22: that round calls the meeting.
-    const from25 = run(at25, RESULT, ...ids(3).map((p) => mv(p, "lobby", 1)), ROUND, ALIBIS);
+    const from25 = run(at25, RESULT, ...ids(3).map((p) => mv(p, "lobby", 1)), ROUND);
     expect([from25.bank, from25.phase.kind, from25.thirds]).toEqual([22, "awaitingMeeting", 1]);
   });
 
   it("one round crossing both thirds holds one regular meeting, and none later", () => {
     // 9 coins; one round of three Lobby grabs takes 6, leaving 3 = one-third.
-    let s = run(game(3, { coins: 3 }), lobby, ROUND, ALIBIS);
+    let s = run(game(3, { coins: 3 }), lobby, ROUND);
     expect([s.bank, s.thirds]).toEqual([3, 2]);
     expect(s.phase).toMatchObject({ kind: "awaitingMeeting", meeting: "regular" });
     s = run(s, SCHED, OPEN, CLOSE, RESULT);
     expect(s.stretch).toBe(2);
     while (s.phase.kind !== "ended") {
       const k = s.phase.kind;
-      s = run(s, ...(k === "planning" ? [...ids(3).map((p) => mv(p, "lobby", 1)), ROUND] : k === "alibis" ? [ALIBIS] : k === "result" ? [RESULT] : [SCHED, OPEN, CLOSE]));
+      s = run(s, ...(k === "planning" ? [...ids(3).map((p) => mv(p, "lobby", 1)), ROUND] : k === "result" ? [RESULT] : [SCHED, OPEN, CLOSE]));
     }
     expect(ofType(s.log, "meetingOpened").map((e) => e.kind)).toEqual(["regular"]);
   });
 
   it("a raid in the round that crosses a third: one meeting, counted as regular (recharges, lifts protection, next stretch)", () => {
     // Round 1: a briefing (Vault raid); p1 is shaken down there and protected. 36 − 6 − 4 = 26 left.
-    let s = run(game(3), mv("p0", "vault", 6), lobby, ROUND, ALIBIS);
+    let s = run(game(3), mv("p0", "vault", 6), lobby, ROUND);
     expect(s.phase).toMatchObject({ kind: "awaitingMeeting", meeting: "briefing", meetingId: "meeting-1" });
     s = run(s, SCHED, OPEN, vote("p0", "p1"), vote("p2", "p1"), CLOSE);
     expect([s.protected, s.stretch]).toEqual([["p1"], 1]);
     s = run(s, RESULT);
     // Round 2 (Vault taped): all Lobby, 26 − 6 = 20 ≤ 24. Round 3 (still taped): 14. Round 4 (Vault back): a raid while 14 − 6 − 4 = 4 ≤ 12 crosses the second third.
-    s = run(s, lobby, ROUND, ALIBIS);
+    s = run(s, lobby, ROUND);
     expect(s.phase).toMatchObject({ kind: "awaitingMeeting", meeting: "regular", meetingId: "meeting-2" });
     s = run(s, SCHED, OPEN);
     expect([s.protected, s.stretch]).toEqual([[], 2]);
-    s = run(s, CLOSE, RESULT, lobby, ROUND, ALIBIS);
+    s = run(s, CLOSE, RESULT, lobby, ROUND);
     expect([s.bank, s.phase.kind]).toEqual([14, "result"]);
     s = run(s, RESULT, mv("p2", "vault", 6), lobby, ROUND);
     expect(ofType(s.log, "roomRaided").length).toBe(2);
     expect([s.bank, s.thirds]).toEqual([4, 2]);
-    s = run(s, ALIBIS);
     expect(s.phase).toEqual({ kind: "awaitingMeeting", meeting: "regular", meetingId: "meeting-3" });
     s = run(s, SCHED, OPEN);
     expect(s.meeting?.kind).toBe("regular");
@@ -237,14 +231,14 @@ describe("QA: regular meetings at the bank's thirds — design §9.1, §9.2, §4
 describe("QA: shakedowns against the share and honesty — design §9.6, §7.1, §7.5", () => {
   it("exactly at the share is clean; above it the excess is set aside and counts toward honesty once, at the next split only", () => {
     // Round 1: p0 pockets 2 (stash 2 + cut), p1 pockets 1, p2 hands in 2. Duffel 3 → cut 1, kitty 0.
-    let s = run(game(3), mv("p0", "lobby", 0, 2), mv("p1", "lobby", 1, 1), mv("p2", "lobby", 2), ROUND, ALIBIS);
+    let s = run(game(3), mv("p0", "lobby", 0, 2), mv("p1", "lobby", 1, 1), mv("p2", "lobby", 2), ROUND);
     expect([s.share, s.players.p0?.stash, s.players.p1?.stash, s.players.p2?.stash, s.reached]).toEqual([1, 3, 2, 1, 3]);
     // The pool's emergency: p2 (at the share) is clean, nothing taken, but still protected.
     s = run(s, emergency("p0"), OPEN, vote("p0", "p2"), vote("p1", "p2"), CLOSE);
     expect(LAST(s, "shakedownResolved")).toMatchObject({ target: "p2", stashRevealed: 1, taken: 0, clean: true });
     expect([s.setAside, s.players.p2?.stash, s.protected]).toEqual([0, 1, ["p2"]]);
     // Round 2 crosses the first third (36 − 6 − 6 = 24): the regular meeting shakes down p0 (2 above the share).
-    s = run(s, lobby, ROUND, ALIBIS, SCHED, OPEN, vote("p1", "p0"), vote("p2", "p0"), CLOSE);
+    s = run(s, lobby, ROUND, SCHED, OPEN, vote("p1", "p0"), vote("p2", "p0"), CLOSE);
     const sharePre = s.share;
     expect(LAST(s, "shakedownResolved")).toMatchObject({ target: "p0", taken: 2, clean: false });
     expect([s.players.p0?.stash, s.setAside]).toEqual([sharePre, 2]);
@@ -256,7 +250,6 @@ describe("QA: shakedowns against the share and honesty — design §9.6, §7.1, 
     expect(s.setAside).toBe(0);
     // Round 4: nothing set aside any more; the kitty never counts again.
     const r3 = s.reached;
-    s = run(s, ALIBIS);
     while (s.phase.kind !== "planning") s = run(s, s.phase.kind === "awaitingMeeting" ? [SCHED, OPEN, CLOSE] : RESULT);
     s = run(s, lobby, ROUND);
     expect(LAST(s, "duffelSplit")).toMatchObject({ handedIn: 6, setAside: 0 });
@@ -270,7 +263,7 @@ describe("QA: shakedowns against the share and honesty — design §9.6, §7.1, 
 describe("QA: protection until the next regular meeting opens — design §9.5, §9.7", () => {
   it("live votes for a protected player are refused in briefings and emergencies; sealed ones count as skips there; the next regular meeting lifts it", () => {
     // 7 players. Round 1: p0's Vault raid → briefing; p6 pockets 2 and is shaken down.
-    let s = run(game(7), seal("p1", "p6"), mv("p0", "vault", 6), mv("p6", "lobby", 0, 2), lobby, ROUND, ALIBIS, SCHED, OPEN);
+    let s = run(game(7), seal("p1", "p6"), mv("p0", "vault", 6), mv("p6", "lobby", 0, 2), lobby, ROUND, SCHED, OPEN);
     // p1's sealed vote was cast as it opened (p6 not yet protected).
     expect(s.meeting?.votes.p1).toEqual({ kind: "shakedown", target: "p6" });
     s = run(s, (x: GameState) => against(x, "p6").filter((c) => c.player !== "p1"), CLOSE);
@@ -285,7 +278,7 @@ describe("QA: protection until the next regular meeting opens — design §9.5, 
     expect(LAST(s, "meetingClosed")?.tally).toEqual({ skip: 2, targets: { p5: 2 } });
     expect([s.protected, s.players.p2?.sealedVote, s.players.p3?.sealedVote]).toEqual([["p6"], null, null]);
     // Round 2 (36·7/3·2 = 56 is the line; 84 − 6 − 14 = 64, − 14 = 50): its regular meeting lifts protection as it opens.
-    s = run(s, seal("p5", "p6"), lobby, ROUND, ALIBIS);
+    s = run(s, seal("p5", "p6"), lobby, ROUND);
     expect(s.phase).toMatchObject({ kind: "awaitingMeeting", meeting: "regular" });
     expect(reason(s, seal("p5", "p5"))).toMatch(/yourself/);
     s = run(s, SCHED, OPEN);
@@ -297,14 +290,14 @@ describe("QA: protection until the next regular meeting opens — design §9.5, 
 
   it("a shakedown passed through the Bail window protects too; a briefing does not lift it; protection after the last regular meeting lasts to the end", () => {
     // 3 players, 9 coins: round 1 crosses both thirds; its regular meeting is the last.
-    let s = run(game(3, { coins: 3, shop: WITH_BAIL }), lobby, ROUND, ALIBIS, SCHED, OPEN, vote("p1", "p0"), vote("p2", "p0"), CLOSE);
+    let s = run(game(3, { coins: 3, shop: WITH_BAIL }), lobby, ROUND, SCHED, OPEN, vote("p1", "p0"), vote("p2", "p0"), CLOSE);
     expect(s.phase.kind).toBe("shakedownPending");
     s = run(s, RESOLVE);
     expect(s.protected).toEqual(["p0"]);
     s = run(s, RESULT);
     while (s.phase.kind !== "ended") {
       const k = s.phase.kind;
-      s = run(s, ...(k === "planning" ? [...ids(3).map((p) => mv(p, "lobby", 1)), ROUND] : [ALIBIS]));
+      s = run(s, ...(k === "planning" ? [...ids(3).map((p) => mv(p, "lobby", 1)), ROUND] : [RESULT]));
       if (s.phase.kind !== "ended") expect(s.protected).toEqual(["p0"]);
     }
     expect(viewFor(s, "p1").protected).toEqual(["p0"]);
@@ -322,12 +315,12 @@ describe("QA: determinism and viewFor of the new state — CLAUDE.md, design §1
         out.push(s);
       }
     };
-    push(seal("p2", "p6"), mv("p0", "vault", 6), mv("p6", "lobby", 0, 2), lobby, ROUND, ALIBIS, SCHED, OPEN, (x: GameState) => against(x, "p6"), CLOSE, RESOLVE);
+    push(seal("p2", "p6"), mv("p0", "vault", 6), mv("p6", "lobby", 0, 2), lobby, ROUND, SCHED, OPEN, (x: GameState) => against(x, "p6"), CLOSE, RESOLVE);
     push(seal("p3", "p6"), emergency("p4"), OPEN, CLOSE);
     let guard = 0;
     while (s.phase.kind !== "ended" && guard++ < 200) {
       const k = s.phase.kind;
-      push(...(k === "planning" ? [lobby, ROUND] : k === "alibis" ? [ALIBIS] : k === "awaitingMeeting" ? [SCHED, OPEN] : k === "meeting" ? [CLOSE] : k === "shakedownPending" ? [RESOLVE] : [RESULT]));
+      push(...(k === "planning" ? [lobby, ROUND] : k === "awaitingMeeting" ? [SCHED, OPEN] : k === "meeting" ? [CLOSE] : k === "shakedownPending" ? [RESOLVE] : [RESULT]));
     }
     expect(s.phase.kind).toBe("ended");
     return out;

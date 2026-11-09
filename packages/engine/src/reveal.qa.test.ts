@@ -8,7 +8,7 @@ import { privateTo } from "./types";
 import { createGame, setupEvents } from "./setup";
 import { replay } from "./reduce";
 import { viewFor } from "./view";
-import { handleThroughAlibis } from "./alibis.testkit";
+import { handleThroughResult } from "./result.testkit";
 import { outcomeFor } from "./end";
 import { revealSummary } from "./reveal";
 

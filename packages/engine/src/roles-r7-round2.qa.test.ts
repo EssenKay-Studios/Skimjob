@@ -8,7 +8,7 @@ import { setupEvents } from "./setup";
 import { replay } from "./reduce";
 import { handleCommand, type CommandResult } from "./handle";
 import { viewFor } from "./view";
-import { closeResultWindow } from "./alibis.testkit";
+import { closeResultWindow } from "./result.testkit";
 import { fullGrab } from "./grab.testkit";
 import { giveTail } from "./perks.testkit";
 
@@ -39,7 +39,6 @@ function run(state: GameState, ...commands: Cmd[]): GameState {
   }, state);
 }
 const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
-const ALIBIS = (s: GameState) => ({ type: "advance", deadline: { kind: "alibis", round: s.resolvedRound } });
 const since = (before: GameState, after: GameState): GameEvent[] => after.log.slice(before.log.length);
 const ofType = <T extends GameEvent["type"]>(events: readonly GameEvent[], type: T) => events.filter((e): e is Extract<GameEvent, { type: T }> => e.type === type);
 const mv = (player: string, room: string, extra: object = {}) => ({ type: "submitMove", player, move: { ...fullGrab(room, 0), ...extra } });
@@ -51,7 +50,7 @@ const json = (s: GameState, id: string) => JSON.stringify(viewFor(s, id));
 function darkRound2(players: number, roles: string[], cuts: [string, string][]): GameState {
   const cutters = cuts.map(([p]) => p);
   const rest = Array.from({ length: players }, (_, i) => `p${i}`).filter((id) => !cutters.includes(id));
-  const s = planningOpen(run(game(players, roles), ...cuts.map(([p, r]) => cut(p, r)), ...rest.map((id) => mv(id, "lobby")), ROUND, ALIBIS));
+  const s = planningOpen(run(game(players, roles), ...cuts.map(([p, r]) => cut(p, r)), ...rest.map((id) => mv(id, "lobby")), ROUND));
   expect(s.phase.kind).toBe("planning");
   expect([...s.dark].sort()).toEqual(cuts.map(([, r]) => r).sort());
   return s;
@@ -104,20 +103,19 @@ describe("QA an Electrician cut on Security takes Security's own cameras offline
 
   it("the cut lasts one round: the round after, the same Security watch sees the room again", () => {
     const s = darkRound2(4, ["electrician"], [["p0", "security"]]);
-    const r2 = run(s, mv("p0", "lobby"), watch("p1", "office"), mv("p2", "office"), mv("p3", "lobby"), ROUND, ALIBIS);
+    const r2 = run(s, mv("p0", "lobby"), watch("p1", "office"), mv("p2", "office"), mv("p3", "lobby"), ROUND);
     const r3start = planningOpen(r2);
     expect(r3start.dark).toEqual([]);
     const r3 = run(r3start, mv("p0", "lobby"), watch("p1", "office"), mv("p2", "office"), mv("p3", "lobby"), ROUND);
     expect(ofType(since(r3start, r3), "roomWatched").map((e) => [e.seen, e.offline])).toEqual([[["p2"], false]]);
   });
 
-  it("viewFor: the dark-Security watcher's view is the same whoever is in the room they watch, in the alibi window and after", () => {
+  it("viewFor: the dark-Security watcher's view is the same whoever is in the room they watch, in the result window", () => {
     const s = darkRound2(5, ["electrician"], [["p0", "security"]]);
     const a = run(s, mv("p0", "lobby"), watch("p1", "office"), mv("p2", "office"), mv("p3", "office"), mv("p4", "lobby"), ROUND);
     // Same public facts (two in the Office), different people.
     const b = run(s, mv("p0", "lobby"), watch("p1", "office"), mv("p2", "lobby"), mv("p3", "office"), mv("p4", "office"), ROUND);
     expect(json(a, "p1")).toBe(json(b, "p1"));
-    expect(json(run(a, ALIBIS), "p1")).toBe(json(run(b, ALIBIS), "p1"));
     // Sanity: with the lights on, the same watch tells the games apart.
     const lit = darkRound2(5, ["electrician"], [["p0", "vault"]]);
     const la = run(lit, mv("p0", "lobby"), watch("p1", "office"), mv("p2", "office"), mv("p3", "office"), mv("p4", "lobby"), ROUND);
@@ -131,7 +129,6 @@ describe("QA an Electrician cut on Security takes Security's own cameras offline
     const b = run(s, mv("p0", "lobby"), watch("p1", "vault"), mv("p2", "office"), mv("p3", "vault"), mv("p4", "lobby"), ROUND);
     for (const id of ["p0", "p2", "p3", "p4"]) {
       expect(json(a, id)).toBe(json(b, id));
-      expect(json(run(a, ALIBIS), id)).toBe(json(run(b, ALIBIS), id));
     }
     const shown = viewFor(s, "p3").ledger.filter((e) => e.event.type === "powerCut").map((e) => e.event);
     expect(shown).toEqual([{ type: "powerCut", visibility: { kind: "public" }, round: 2, room: "security" }]);
@@ -141,7 +138,7 @@ describe("QA an Electrician cut on Security takes Security's own cameras offline
   it("determinism: the same commands give the same log, and replay rebuilds the state", () => {
     const play = () => {
       const s = darkRound2(6, ["electrician", "electrician"], [["p0", "security"], ["p1", "office"]]);
-      return run(s, mv("p0", "lobby"), mv("p1", "lobby"), watch("p2", "office"), watch("p3", "vault"), mv("p4", "office"), mv("p5", "vault"), ROUND, ALIBIS);
+      return run(s, mv("p0", "lobby"), mv("p1", "lobby"), watch("p2", "office"), watch("p3", "vault"), mv("p4", "office"), mv("p5", "vault"), ROUND);
     };
     const a = play();
     expect(JSON.stringify(play().log)).toBe(JSON.stringify(a.log));
@@ -156,7 +153,7 @@ describe("QA the meeting.qa spec's Smooth Talker branch at the engine level — 
   const vote = (player: string, target: string | null) => ({ type: "castVote", player, vote: target === null ? { kind: "skip" } : { kind: "shakedown", target } });
   function play(roles: string[], mode: VoteVisibility): GameState {
     let s = run(game(3, roles, mode), mv("p0", "office"), mv("p1", "lobby"), mv("p2", "lobby"));
-    s = run(s, { type: "sealVote", player: "p2", vote: { kind: "skip" } }, ROUND, ALIBIS);
+    s = run(s, { type: "sealVote", player: "p2", vote: { kind: "skip" } }, ROUND);
     expect(s.phase.kind).toBe("result");
     s = run(s, { type: "callEmergency", player: "p1" }, (x: GameState) => ({ type: "advance", deadline: { kind: "openMeeting", meetingId: x.pendingEmergency?.meetingId } }));
     s = run(s, vote("p0", "p2"), vote("p1", null), vote("p1", "p2"), CLOSE);
@@ -191,7 +188,7 @@ describe("QA the meeting.qa spec's Smooth Talker branch at the engine level — 
   it("a changed vote leaves no weight behind: the Smooth Talker's skip switched to a target counts 2 for it, 0 for skip", () => {
     // 3 seats, p1 Smooth Talker votes skip then p2; p0 skips; p2 sealed skip: p2 gets 2 of 4 → no majority, skip 2 of 4 → no majority.
     let s = run(game(3, ["lookout", "smoothTalker", "auditor"]), mv("p0", "lobby"), mv("p1", "lobby"), mv("p2", "lobby"));
-    s = run(s, { type: "sealVote", player: "p2", vote: { kind: "skip" } }, ROUND, ALIBIS);
+    s = run(s, { type: "sealVote", player: "p2", vote: { kind: "skip" } }, ROUND);
     s = run(s, { type: "callEmergency", player: "p0" }, (x: GameState) => ({ type: "advance", deadline: { kind: "openMeeting", meetingId: x.pendingEmergency?.meetingId } }));
     s = run(s, vote("p1", null), vote("p0", null), vote("p1", "p2"), CLOSE);
     expect(closed(s)).toMatchObject({ tally: { skip: 2, targets: { p2: 1 } }, result: { kind: "noMajority" } });
@@ -199,7 +196,7 @@ describe("QA the meeting.qa spec's Smooth Talker branch at the engine level — 
 
   it("the Smooth Talker's live vote overrides their sealed skip; the double weight follows the live vote", () => {
     let s = run(game(3, ["lookout", "auditor", "smoothTalker"]), mv("p0", "lobby"), mv("p1", "lobby"), mv("p2", "lobby"));
-    s = run(s, { type: "sealVote", player: "p2", vote: { kind: "skip" } }, ROUND, ALIBIS);
+    s = run(s, { type: "sealVote", player: "p2", vote: { kind: "skip" } }, ROUND);
     s = run(s, { type: "callEmergency", player: "p1" }, (x: GameState) => ({ type: "advance", deadline: { kind: "openMeeting", meetingId: x.pendingEmergency?.meetingId } }));
     // p2 now votes p1 live (2), p0 votes p1 (1): 3 of 4 passes.
     s = run(s, vote("p2", "p1"), vote("p0", "p1"), vote("p1", null), CLOSE);

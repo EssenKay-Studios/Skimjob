@@ -4,7 +4,7 @@ import { callEmergency, startGame } from "./setupGame";
 
 // M2-7 acceptance (docs/m2-plan.md): one full meeting and vote in the browser,
 // in each vote mode. The 1-hour preset at TIME_SCALE 0.1: round 1 resolves
-// (30 s), its alibis close (3 s), the result window (6 s) takes the emergency,
+// (30 s), the result window (6 s) takes the emergency,
 // then a 6 s notice and an 18 s vote window. MEET_SHOTS=… saves the vote dialog and the
 // results as meet-<mode>-<what>-<width>.png.
 const SHOTS = process.env.MEET_SHOTS ?? process.env.SHOTS_DIR;

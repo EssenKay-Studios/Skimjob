@@ -403,7 +403,7 @@ export interface CrookFigureProps extends CrookProps {
   readonly armsUp?: boolean;
   /**
    * Draw a dashed outline with a "?" instead of the crook: a room someone
-   * *claims* (alibi) but nobody saw them in. design §5.4, m2-plan M2-9.
+   * *claims* (alibi) but nobody saw them in. design §11.3, m2-plan M2-9.
    */
   readonly ghost?: boolean;
   /**

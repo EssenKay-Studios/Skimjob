@@ -15,13 +15,14 @@ import {
   type PlayerCommand,
   type PlayerId,
   type PlayerView,
+  type PowerClaim,
   type RngState,
   type VoteChoice,
 } from "@skimjob/engine";
 import type { Personality } from "./personalities";
-import { jobOf, lastResolvedRound, myPower, ofType, roomsWhere } from "./read";
+import { jobOf, lastResolvedRound, myPower, ofType, roomsWhere, saidOf, saidRooms } from "./read";
 import { mostSuspicious, suspicion } from "./suspicion";
-import { claimCommands, meetingTime } from "./claims";
+import { bluffs, claimCommands, meetingTime } from "./claims";
 import { bailChoice, buyPerk } from "./perks";
 import { bustDanger, jobThisRound, openRooms, quietGrab, raidRisk } from "./alarm";
 import { leaning } from "./forecast";
@@ -35,6 +36,14 @@ import { leaning } from "./forecast";
 export interface Agent {
   readonly player: PlayerId;
   act(view: PlayerView): PlayerCommand[];
+  /** design §10: its own claims on this round's plan board (a room claim and a pledge), or null; an agent without it never uses the board. */
+  spot?(view: PlayerView): PlanSpot | null;
+}
+
+/** A seat's own claims on the plan board: its room claim (✋) and an optional power claim. design §10 */
+export interface PlanSpot {
+  readonly room: RoomId;
+  readonly power: PowerClaim | null;
 }
 
 /** A bot's random numbers in [0, 1). */
@@ -64,14 +73,26 @@ export function botRandom(seed: string): Random {
   };
 }
 
-export function createBot({ player, personality, seed, crewSeed }: BotOptions): Agent & { readonly personality: Personality } {
+export function createBot({ player, personality, seed, crewSeed }: BotOptions): Required<Agent> & { readonly personality: Personality } {
   const random = botRandom(seed);
+  // design §10: the spot it took on each round's board, chosen with its move.
+  const spots = new Map<number, PlanSpot>();
+  const mine = (view: PlayerView) => {
+    if (view.me.id !== player) throw new Error(`bot ${player} was given ${view.me.id}'s view`);
+  };
   return {
     player,
     personality,
     act: (view) => {
-      if (view.me.id !== player) throw new Error(`bot ${player} was given ${view.me.id}'s view`);
-      return decide(view, personality, random, crewSeed);
+      mine(view);
+      const out = decide(view, personality, random, crewSeed);
+      const move = out.find((c) => c.type === "submitMove")?.move;
+      if (move) spots.set(view.round, chooseSpot(view, personality, random, move));
+      return out;
+    },
+    spot: (view) => {
+      mine(view);
+      return view.phase.kind === "planning" ? (spots.get(view.round) ?? null) : null;
     },
   };
 }
@@ -94,9 +115,9 @@ export function decide(view: PlayerView, p: Personality, random: Random, crewSee
   if (phase.kind === "ended" || phase.kind === "setup") return [];
   const player = view.me.id;
   const out: PlayerCommand[] = [];
-  // design §5.4: alibis only while the round's alibi window is open.
-  const room = view.alibiRound !== null ? chooseAlibi(view, p, random) : null;
-  if (room !== null) out.push({ type: "postAlibi", player, room });
+  // design §11.3: an alibi for the latest round as it resolves (alibis have no window).
+  const room = chooseAlibi(view, p, random);
+  if (room !== null) out.push({ type: "postAlibi", player, round: lastResolvedRound(view), room });
   if (phase.kind === "meeting") {
     // v2 §4: vote, then maybe claim a role (the Priest only after its vote).
     const vote = view.me.vote === null ? chooseVote(view, p, random, crewSeed) : null;
@@ -141,8 +162,8 @@ function crewPowers(view: PlayerView): PlayerCommand[] {
   // The engine allows one use per resolved round (a regular meeting can free the Auditor's again before a new round resolves).
   if (round === 0 || ofType(view.caseFile, "abilityResolved").some((e) => e.ability.kind === power.kind && "round" in e.ability && e.ability.round === round)) return [];
   if (power.kind === "detect") return [{ type: "useAbility", player, ability: { kind: "detect", target: top.player } }];
-  const claim = ofType(view.ledger, "alibiPosted").find((a) => a.player === top.player && a.round === round);
-  return claim ? [{ type: "useAbility", player, ability: { kind: "audit", room: claim.room } }] : [];
+  const claim = saidRooms(view).get(round)?.get(top.player);
+  return claim ? [{ type: "useAbility", player, ability: { kind: "audit", room: claim } }] : [];
 }
 
 // ---------------------------------------------------------------- moves (§5.1)
@@ -248,19 +269,43 @@ function choosePocket(view: PlayerView, p: Personality, random: Random, coins: n
   return pocket;
 }
 
-// ---------------------------------------------------------------- alibis (§5.4)
+// ---------------------------------------------------------------- the plan board (§10)
+
+/**
+ * The bot's spot on the board as it picks its move: the room it is going to,
+ * unless it is pocketing and decides to break the plan (chance `lie`, unless
+ * it lies only when unseen): then a
+ * quieter room whose coins are no more than it hands in, so the plan adds up.
+ * It pledges its power where its move aims it, unless its role bluffs (the
+ * Mole, the Fixer and the evidence-leaving roles keep quiet).
+ */
+export function chooseSpot(view: PlayerView, p: Personality, random: Random, move: Move): PlanSpot {
+  const job = jobThisRound(view);
+  const covers = view.rooms.filter((r) => r !== move.room && roomDef(job, r).coins <= move.duffel && openRooms(view).includes(r)).sort((a, b) => roomDef(job, b).coins - roomDef(job, a).coins);
+  // One that lies only when unseen can't know yet whether it will be, so it keeps to the plan.
+  const breaks = move.pocket > 0 && p.lie > 0 && !p.lieOnlyWhenAlone && covers.length > 0 && random() < p.lie;
+  const a = move.ability;
+  const target = a === undefined || bluffs(view.me.role) ? undefined : a.kind === "lookout" ? a.rooms[0] : a.kind === "absolve" ? a.target : a.room;
+  return { room: breaks ? (covers[0] as RoomId) : move.room, power: target === undefined ? null : { role: view.me.role, target } };
+}
+
+// ---------------------------------------------------------------- alibis (§11.3)
 
 /**
  * The room to claim for the latest resolved round, or null if already posted.
- * The truth, unless the bot pocketed and decides to cover it: then the richest
+ * Its plan spot if that was a cover story (it sticks to it, design §10); else the
+ * truth, unless the bot pocketed and decides to cover it: then the richest
  * room whose coins are no more than what it really handed in (so the claim adds up).
  */
 export function chooseAlibi(view: PlayerView, p: Personality, random: Random): RoomId | null {
   const round = lastResolvedRound(view);
   if (round === 0) return null;
-  if (ofType(view.ledger, "alibiPosted").some((a) => a.player === view.me.id && a.round === round)) return null;
+  if (saidOf(view, "alibi").some((a) => a.player === view.me.id && a.round === round)) return null;
   const split = ofType(view.caseFile, "coinsGrabbed").find((e) => e.round === round);
   if (!split) return null;
+  const spot = saidOf(view, "plan").find((x) => x.round === round)?.plan.entries.find((e) => e.player === view.me.id)?.room;
+  // A line with no room claim (only a placement, or "I agree") is no spot.
+  if (spot != null && spot !== split.room) return spot;
   // A bot that never lies (Honest) doesn't post a random alibi either.
   if (p.lie > 0 && random() < p.noise) return random() < 0.3 ? null : pick(view.rooms, random);
   if (split.pocket === 0 || p.lie === 0) return split.room;

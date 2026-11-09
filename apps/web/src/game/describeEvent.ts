@@ -2,7 +2,7 @@
 // the reveal timeline and chat toasts read through this. Pure; the switches are
 // exhaustive, so a new event, ability, perk or meeting-result kind fails
 // typecheck until it has a line here. docs/m2-plan.md M2-6; design §13
-import { EVENTS, JOBS, PERK_TEXT, ROLES } from "@skimjob/content";
+import { EVENTS, JOBS, PERK_TEXT, POWER_CLAIM_TARGET, ROLES } from "@skimjob/content";
 import { MEETING_TITLE } from "./meeting";
 import type { GameEvent, MeetingResult, PerkUse, PlayerId, ResolvedAbility, RoomId, VoteChoice } from "@skimjob/engine";
 
@@ -21,6 +21,11 @@ const ALL_ROOMS = Object.fromEntries(Object.values(JOBS).flatMap((j) => Object.v
 export const roomName = (room: RoomId): string => ALL_ROOMS[room] ?? room;
 /** A role's display name, e.g. "Smooth Talker". */
 export const roleName = (role: string): string => ROLES[role]?.name ?? role;
+/** A power claim names a player (Detective, Priest) rather than a room. design §10 */
+const aimsAtPlayer = (role: string): boolean => {
+  const kind = ROLES[role]?.power.kind;
+  return kind !== undefined && POWER_CLAIM_TARGET[kind] === "player";
+};
 /** An event card's display name, e.g. "Shift change". */
 export const cardName = (card: string): string => EVENTS[card]?.name ?? card;
 export const perkName = (perk: string): string => PERK_TEXT[perk]?.name ?? perk;
@@ -133,12 +138,17 @@ function line(e: GameEvent, ctx: DescribeContext): string {
         ? `Audit of round ${e.round}: no coins reached the duffel.`
         : `Audit of round ${e.round}: ${list(handedIn.map(([room, n]) => `${roomName(room)} ${n}`))} reached the duffel.`;
     }
-    case "alibiPosted":
-      return `${verb(e.player, "say", "says")} ${you(e.player) ? "you were" : "they were"} in the ${roomName(e.room)} in round ${e.round}.`;
-    case "alibisClosed":
-      return `Alibis for round ${e.round} are closed.`;
-    case "roleClaimed":
-      return `${verb(e.player, "claim", "claims")} to be the ${roleName(e.role)}.`;
+    case "said": {
+      // design §10, §11.3: what people said.
+      const s = e.statement;
+      if (s.kind === "alibi") return `${verb(s.player, "say", "says")} ${you(s.player) ? "you were" : "they were"} in the ${roomName(s.room)} in round ${s.round}.`;
+      if (s.kind === "role") return `${verb(s.player, "claim", "claims")} to be the ${roleName(s.role)}.`;
+      const spots = s.plan.entries.flatMap((p) => [
+        ...(p.room === null ? [] : [`${who(p.player)} ${roomName(p.room)}`]),
+        ...(p.power === null ? [] : [`${who(p.player)} ${roleName(p.power.role)} → ${aimsAtPlayer(p.power.role) ? who(p.power.target) : roomName(p.power.target)}`]),
+      ]);
+      return spots.length === 0 ? `The plan for round ${s.round} had no claims.` : `The plan for round ${s.round}: ${list(spots)}.`;
+    }
     case "meetingProposed":
       return `${verb(e.by, "proposed", "proposed")} the next meeting for ${slot(e.slot)}.`;
     case "meetingProposalAccepted":

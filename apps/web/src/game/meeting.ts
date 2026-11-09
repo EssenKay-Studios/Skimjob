@@ -285,7 +285,7 @@ export function claimState(view: PlayerView): { readonly stretch: number; readon
   if (view.phase.kind === "ended" || view.phase.kind === "setup") return null;
   const { stretch } = view;
   let claimed: string | null = null;
-  for (const { event } of view.ledger) if (event.type === "roleClaimed" && event.player === view.me.id && event.stretch === stretch) claimed = event.role;
+  for (const { event: e } of view.ledger) if (e.type === "said" && e.statement.kind === "role" && e.statement.player === view.me.id && e.statement.stretch === stretch) claimed = e.statement.role;
   const roles = rolesFor({ contentOverrides: setupOf(view)?.contentOverrides ?? null });
   const options = Object.entries(roles)
     .map(([id, def]) => ({ id, name: def.name }))

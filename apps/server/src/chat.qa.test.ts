@@ -111,7 +111,6 @@ function nextDeadline(state: GameState): Command[] {
     return [{ type: "advance", deadline: { kind: "openMeeting", meetingId: state.pendingEmergency.meetingId } }];
   }
   if (phase.kind === "planning") return [{ type: "advance", deadline: { kind: "round", round: phase.round } }];
-  if (phase.kind === "alibis") return [{ type: "advance", deadline: { kind: "alibis", round: phase.round } }];
   // design §9.3: the result window closes when nobody called an emergency.
   if (phase.kind === "result") return [{ type: "advance", deadline: { kind: "result", round: phase.round } }];
   if (phase.kind === "awaitingMeeting") {

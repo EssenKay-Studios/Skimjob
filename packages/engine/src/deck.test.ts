@@ -2,7 +2,7 @@
 // round starts, and each card's effect. design §13
 import { describe, expect, it } from "vitest";
 import { NO_RAIDS } from "./v01-numbers.testkit";
-import { handleThroughAlibis } from "./alibis.testkit";
+import { handleThroughResult } from "./result.testkit";
 import { EVENTS, EVENT_CHANCE, EVENT_DECK, EVENTS_FROM_ROUND, type RoomId } from "@skimjob/content";
 import type { GameConfig, GameEvent, GameState, PlayerId } from "./types";
 import { PUBLIC, privateTo } from "./types";
@@ -38,7 +38,7 @@ function game(players: number, roles: string[] = [], extra: Partial<GameConfig> 
 
 function run(state: GameState, ...commands: unknown[]): GameState {
   return commands.reduce<GameState>((s, c) => {
-    const r = handleThroughAlibis(s, c);
+    const r = handleThroughResult(s, c);
     if (!r.ok) throw new Error(`rejected ${JSON.stringify(c)}: ${r.reason}`);
     return r.state;
   }, state);
@@ -164,9 +164,9 @@ describe("card effects — design §13", () => {
     const s = resolve(base, { p0: { room: "vault", duffel: 1, pocket: 3 } });
     expect(find(lastRound(s), "coinsGrabbed").find((e) => e.player === "p0")).toMatchObject({ duffel: 1, pocket: 3, seized: 0 });
     expect(find(lastRound(s), "bellsRung")[0]).toMatchObject({ bells: { vault: 4 } });
-    expect(handleThroughAlibis(base, { type: "submitMove", player: "p0", move: { room: "vault", duffel: 1, pocket: 4 } }).ok).toBe(false);
+    expect(handleThroughResult(base, { type: "submitMove", player: "p0", move: { room: "vault", duffel: 1, pocket: 4 } }).ok).toBe(false);
     const plain = withCard(resolve(game(4)), "audit");
-    expect(handleThroughAlibis(plain, { type: "submitMove", player: "p0", move: { room: "vault", duffel: 1, pocket: 3 } }).ok).toBe(false);
+    expect(handleThroughResult(plain, { type: "submitMove", player: "p0", move: { room: "vault", duffel: 1, pocket: 3 } }).ok).toBe(false);
   });
 
   it("Shift change can't apply with the Vault taped off: another card is redrawn (owner, 8 Nov)", () => {
@@ -178,9 +178,9 @@ describe("card effects — design §13", () => {
 
   it("Lockdown: the named room is refused for the round and reopens the next", () => {
     const s = withCard(resolve(game(4)), "lockdown", "vault");
-    expect(handleThroughAlibis(s, move("p0", "vault")).ok).toBe(false);
-    expect(handleThroughAlibis(s, move("p0", "office")).ok).toBe(true);
-    expect(handleThroughAlibis(withCard(resolve(s), "audit"), move("p0", "vault")).ok).toBe(true);
+    expect(handleThroughResult(s, move("p0", "vault")).ok).toBe(false);
+    expect(handleThroughResult(s, move("p0", "office")).ok).toBe(true);
+    expect(handleThroughResult(withCard(resolve(s), "audit"), move("p0", "vault")).ok).toBe(true);
   });
 
   it("Lockdown closes an open room, never the Lobby or the Rooftop; with none left, another card is redrawn (owner, 8 Nov)", () => {

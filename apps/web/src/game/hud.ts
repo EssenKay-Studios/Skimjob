@@ -118,8 +118,6 @@ export function phaseInfo(view: PlayerView): PhaseInfo {
       return { title: "Setting up the job", timerKey: null, timerLabel: "" };
     case "planning":
       return { title: "Planning: pick a room", timerKey: `round:${p.round}`, timerLabel: "locks in" };
-    case "alibis":
-      return { title: "Alibi window", timerKey: `alibis:${p.round}`, timerLabel: "alibis close in" };
     case "awaitingMeeting":
       return {
         title: `${MEETING_TITLE[p.meeting]} next`,
@@ -212,16 +210,21 @@ export const defaultRoom = (view: PlayerView): RoomId => jobOf(view).defaultRoom
 export function justMissed(view: PlayerView): { readonly round: number; readonly room: RoomId | null } | null {
   const latest = view.caseFile.filter((x) => x.event.type === "defaultMoveAssigned").at(-1)?.event;
   if (!latest || latest.type !== "defaultMoveAssigned") return null;
-  const lastResolved = view.phase.kind === "planning" ? view.phase.round - 1 : view.phase.kind === "alibis" || view.phase.kind === "result" ? view.phase.round : view.round;
+  const lastResolved = view.phase.kind === "planning" ? view.phase.round - 1 : view.phase.kind === "result" ? view.phase.round : view.round;
   return latest.round === lastResolved ? { round: latest.round, room: latest.move?.room ?? null } : null;
 }
 
-/** The round whose alibi you may post, and the room you already claimed for it (if any). design §5.4 */
+/**
+ * Between rounds (the result window, or a meeting, awaited or open), the round
+ * that just resolved and the room you already claimed for it (if any). Alibis
+ * have no window (design §11.3); this is where the panel offers one.
+ */
 export function alibiState(view: PlayerView): { readonly round: number; readonly posted: RoomId | null } | null {
-  if (view.alibiRound === null) return null;
-  const round = view.alibiRound;
+  const k = view.phase.kind;
+  if (k === "setup" || k === "planning" || k === "ended") return null;
+  const round = view.round;
   let posted: RoomId | null = null;
-  for (const { event } of view.ledger) if (event.type === "alibiPosted" && event.player === view.me.id && event.round === round) posted = event.room;
+  for (const { event: e } of view.ledger) if (e.type === "said" && e.statement.kind === "alibi" && e.statement.player === view.me.id && e.statement.round === round) posted = e.statement.room;
   return { round, posted };
 }
 

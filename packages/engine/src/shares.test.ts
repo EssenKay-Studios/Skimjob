@@ -2,7 +2,7 @@
 // the whole-crew win they lead to. design §4.2 step 5, §6.3, §7, §8.2
 import { describe, expect, it } from "vitest";
 import { FACTS } from "@skimjob/content";
-import { handleThroughAlibis } from "./alibis.testkit";
+import { handleThroughResult } from "./result.testkit";
 import type { Command, ContentOverrides, GameConfig, GameEvent, GameState, Outcome } from "./types";
 import { PUBLIC } from "./types";
 import { setupEvents } from "./setup";
@@ -26,7 +26,7 @@ function game(players: number, contentOverrides: ContentOverrides | null = NO_RA
 
 function run(state: GameState, ...commands: unknown[]): GameState {
   return commands.reduce<GameState>((s, c) => {
-    const r = handleThroughAlibis(s, typeof c === "function" ? c(s) : c);
+    const r = handleThroughResult(s, typeof c === "function" ? c(s) : c);
     if (!r.ok) throw new Error(`rejected ${JSON.stringify(c)}: ${r.reason}`);
     return r.state;
   }, state);

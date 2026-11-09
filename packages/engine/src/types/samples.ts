@@ -97,9 +97,18 @@ export const sampleEvents: { readonly [T in GameEventType]: EventOfType<T> } = {
   eventFlipped: { type: "eventFlipped", visibility: PUBLIC, round: 2, card: "lockdown", room: "vault" },
   insideTip: { type: "insideTip", visibility: privateTo(ana), player: ana, round: 5, subject: ben, role: "hacker" },
   auditReport: { type: "auditReport", visibility: PUBLIC, round: 6, duffel: { vault: 4, office: 0, lobby: 0, security: 0, rooftop: 0 } },
-  alibiPosted: { type: "alibiPosted", visibility: PUBLIC, player: ana, round: 1, room: "lobby" },
-  alibisClosed: { type: "alibisClosed", visibility: PUBLIC, round: 1 },
-  roleClaimed: { type: "roleClaimed", visibility: PUBLIC, player: ana, role: "lookout", stretch: 1 },
+  said: {
+    type: "said",
+    visibility: PUBLIC,
+    statement: {
+      kind: "plan",
+      round: 1,
+      plan: {
+        entries: [{ player: ana, placed: "vault", room: "office", power: { role: "hacker", target: "vault" }, agreed: true }],
+        history: [{ actor: ben, kind: "place", subject: ana, value: "vault", target: null, msBeforeDeadline: 120_000 }],
+      },
+    },
+  },
   alibiVerified: { type: "alibiVerified", visibility: PUBLIC, player: ana, round: 1, room: "lobby" },
   meetingProposed: { type: "meetingProposed", visibility: PUBLIC, proposalId: "p1", by: ana, slot: "2026-11-01T19:00Z" },
   meetingProposalAccepted: { type: "meetingProposalAccepted", visibility: PUBLIC, proposalId: "p1", by: ben },
@@ -151,7 +160,7 @@ export const sampleEvents: { readonly [T in GameEventType]: EventOfType<T> } = {
 
 export const sampleCommands: { readonly [T in CommandType]: Extract<Command, { type: T }> } = {
   submitMove: { type: "submitMove", player: ana, move: { room: "security", duffel: 0, pocket: 0, watch: "vault" } },
-  postAlibi: { type: "postAlibi", player: ana, room: "office" },
+  postAlibi: { type: "postAlibi", player: ana, round: 1, room: "office" },
   claimRole: { type: "claimRole", player: ben, role: "auditor" },
   proposeMeeting: { type: "proposeMeeting", player: ana, slot: "2026-11-01T19:00Z" },
   acceptMeeting: { type: "acceptMeeting", player: ben, proposalId: "p1" },

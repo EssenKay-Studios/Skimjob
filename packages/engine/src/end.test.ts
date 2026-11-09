@@ -1,7 +1,7 @@
 // End of game: the end check after a round (the bank, the round cap), the
 // honesty line, the ranking and the winners. design §4.2 step 8, §6.2, §7.5, §8
 import { describe, expect, it } from "vitest";
-import { handleThroughAlibis } from "./alibis.testkit";
+import { handleThroughResult } from "./result.testkit";
 import { BANK_JOB } from "@skimjob/content";
 import type { ContentOverrides, GameConfig, GameEvent, GameState, Outcome, PlayerState } from "./types";
 import { setupEvents } from "./setup";
@@ -37,7 +37,7 @@ type Cmd = unknown | ((s: GameState) => unknown);
 function run(state: GameState, ...commands: Cmd[]): GameState {
   return commands.reduce<GameState>((s, c) => {
     const command = typeof c === "function" ? c(s) : c;
-    const r = handleThroughAlibis(s, command);
+    const r = handleThroughResult(s, command);
     if (!r.ok) throw new Error(`rejected: ${r.reason}`);
     return r.state;
   }, state);

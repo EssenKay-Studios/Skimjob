@@ -58,7 +58,7 @@
   "apps/web/src/screens/Lobby.tsx": "@lobby",
   "apps/web/src/screens/Meetings.tsx": "@meeting",
   "apps/web/src/screens/NewGame.tsx": "@lobby",
-  "packages/engine/src/claims.ts": "@move",
+  "packages/engine/src/said.ts": "@move",
   "packages/engine/src/meeting.ts": "@meeting",
   "packages/engine/src/perks.ts": "@shop",
   "packages/engine/src/bells.ts": "@move",

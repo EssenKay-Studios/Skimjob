@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 import { viewFor, type GameState } from "@skimjob/engine";
 import { SUSPICION_WEIGHTS as W, suspicion } from "./suspicion";
-import { closeAlibis, game, round } from "./testkit";
+import { closeResult, game, round } from "./testkit";
 
 type Ev = GameState["log"][number];
 const raid = (room: string, r = 1): Ev =>
@@ -14,7 +14,7 @@ const myAudit = (room: string, duffel: number): Ev =>
   ({ type: "abilityResolved", visibility: { kind: "private", player: "ana" }, player: "ana", round: 2, ability: { kind: "audit", round: 1, room, duffel } }) as Ev;
 
 // ben and carl claim the Vault (6 coins each); ana is in the Office.
-const base = () => closeAlibis(round(game(3), { ana: { room: "office" }, ben: { room: "vault" }, carl: { room: "vault" } }));
+const base = () => closeResult(round(game(3), { ana: { room: "office" }, ben: { room: "vault" }, carl: { room: "vault" } }));
 const scores = (s: GameState, extra: Ev[]) => suspicion(viewFor({ ...s, log: [...s.log, ...extra] }, "ana"));
 const vaultPair = (m: Map<string, number>) => [m.get("ben"), m.get("carl")];
 

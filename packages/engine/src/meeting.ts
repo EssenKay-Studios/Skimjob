@@ -184,7 +184,7 @@ export function castVote(state: GameState, command: Raw): Result {
 
 /**
  * The slot (or the emergency's notice period) has arrived. A regular meeting
- * or briefing opens only once the round that called it is through its alibis
+ * or briefing opens only once the round that called it has resolved
  * (`awaitingMeeting`); an emergency opens when its notice ends. Sealed votes
  * are cast as it opens; one naming a player still protected then counts as a
  * skip (a regular meeting lifts protection as it opens). design §9.4, §9.5, §9.7
@@ -196,7 +196,7 @@ export function openMeeting(state: GameState, meetingId: unknown): Result {
   if (typeof meetingId !== "string") return `meeting ${show(meetingId)} is not waiting to open`;
   let kind: MeetingKind;
   if (state.scheduledMeeting?.meetingId === meetingId) {
-    if (state.phase.kind !== "awaitingMeeting") return `meeting ${meetingId} opens once a round calls it and its alibis close`;
+    if (state.phase.kind !== "awaitingMeeting") return `meeting ${meetingId} opens once a round calls it`;
     kind = state.phase.meeting;
   } else if (state.pendingEmergency?.meetingId === meetingId) {
     kind = "emergency";

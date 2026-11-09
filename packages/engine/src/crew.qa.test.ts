@@ -2,7 +2,7 @@
 // dirty and clean at exactly the share, a view-diff leak check with them
 // dealt, determinism. design §9.6, §11.1, §11.2, §18
 import { describe, expect, it } from "vitest";
-import { closeResultWindow } from "./alibis.testkit";
+import { closeResultWindow } from "./result.testkit";
 import { handleCommand, type CommandResult } from "./handle";
 import { ROLES } from "@skimjob/content";
 import type { GameConfig, GameEvent, GameState } from "./types";
@@ -36,17 +36,14 @@ function game(players: number, roles: string[], extra: Partial<GameConfig> = {})
 }
 
 /**
- * A command, with a round deadline followed by its alibi deadline (nobody
- * posts). The result window (design §9.3) stays open, so an emergency can be
- * called in it, until a move or a round deadline closes it.
+ * A command. The result window (design §9.3) stays open, so an emergency can
+ * be called in it, until a move or a round deadline closes it.
  */
-function handleThroughAlibis(state: GameState, command: unknown): CommandResult {
+function handleThroughResult(state: GameState, command: unknown): CommandResult {
   const c = command as { type?: unknown; deadline?: { kind?: unknown } } | null;
   const planning = c?.type === "submitMove" || c?.deadline?.kind === "round";
   const s = state.phase.kind === "result" && !state.pendingEmergency && planning ? must(closeResultWindow(state)) : state;
-  const r = handleCommand(s, command);
-  if (!r.ok || r.state.phase.kind !== "alibis" || c?.deadline?.kind !== "round") return r;
-  return handleCommand(r.state, { type: "advance", deadline: { kind: "alibis", round: r.state.phase.round } });
+  return handleCommand(s, command);
 }
 const must = (r: CommandResult): GameState => {
   if (!r.ok) throw new Error(r.reason);
@@ -57,7 +54,7 @@ type Cmd = unknown | ((s: GameState) => unknown);
 function run(state: GameState, ...commands: Cmd[]): GameState {
   return commands.reduce<GameState>((s, c) => {
     const command = typeof c === "function" ? c(s) : c;
-    const r = handleThroughAlibis(s, command);
+    const r = handleThroughResult(s, command);
     if (!r.ok) throw new Error(`rejected ${JSON.stringify(command)}: ${r.reason}`);
     return passWindow(r.state);
   }, state);
@@ -65,12 +62,12 @@ function run(state: GameState, ...commands: Cmd[]): GameState {
 /** The shop may hold Bail, so a passed shakedown waits for its Bail choice window; nobody here uses one. */
 function passWindow(s: GameState): GameState {
   if (s.phase.kind !== "shakedownPending") return s;
-  const r = handleThroughAlibis(s, { type: "advance", deadline: { kind: "resolveShakedown", meetingId: s.phase.meetingId } });
+  const r = handleThroughResult(s, { type: "advance", deadline: { kind: "resolveShakedown", meetingId: s.phase.meetingId } });
   if (!r.ok) throw new Error(r.reason);
   return r.state;
 }
 function reason(state: GameState, command: unknown): string {
-  const r = handleThroughAlibis(state, command);
+  const r = handleThroughResult(state, command);
   if (r.ok) throw new Error("expected a rejection");
   return r.reason;
 }

@@ -3,7 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { callEmergency, startGame } from "./setupGame";
 
 // QA for M2-7 (PR #35): three human contexts in one game, 1-hour preset at
-// TIME_SCALE 0.1 (30 s rounds, 3 s alibis, 6 s notice, 18 s vote window).
+// TIME_SCALE 0.1 (30 s rounds, 6 s notice, 18 s vote window).
 // Screenshots: qa-meet-*.png into QA_SHOTS (or SHOTS_DIR) when set; none otherwise (CI).
 const DIR = process.env.QA_SHOTS ?? process.env.SHOTS_DIR;
 

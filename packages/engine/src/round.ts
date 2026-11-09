@@ -117,9 +117,9 @@ function grabbed(order: readonly PlayerId[], asked: (id: PlayerId) => number, ba
  *    round cap (`endCheck`), and nothing below runs.
  * Two copies of a role on one target resolve in seat order from a seeded seat;
  * a use the other already did is "already done" and not spent (§11.4).
- * Otherwise the fold of `roundResolved` opens the round's alibis and notes the
- * meeting the round called (§4.2 step 9: a raid calls a briefing, a third of
- * the bank a regular meeting), and `closeAlibis` goes on.
+ * Otherwise the fold of `roundResolved` notes the meeting the round called
+ * (§4.2 step 9: a raid calls a briefing, a third of the bank a regular
+ * meeting) and awaits it; else the result window opens, or the next round starts (§9.3).
  */
 export function resolveRound(state: GameState, round: number, draw: Draw): GameEvent[] {
   const job = roundJob(jobFor(state.config), state.card, eventsFor(state.config));
@@ -344,16 +344,8 @@ export function resolveRound(state: GameState, round: number, draw: Draw): GameE
 
   // §4.2 step 8: the end check (a bust has already ended the game).
   const ended = busted ? gameEnded(state, events, "bust", lyingLow) : endCheck(state, events, round);
-  if (ended) events.push(ended);
-  return events;
-}
-
-/**
- * design §5.4: the alibi deadline for `round` has passed. The meeting the
- * round called is awaited (the fold of `alibisClosed`, §4.2 step 9); else the
- * result window opens, or with the pool empty the next round starts (§9.3).
- */
-export function closeAlibis(state: GameState, round: number, draw: Draw): GameEvent[] {
-  const closed: GameEvent = { type: "alibisClosed", visibility: PUBLIC, round };
-  return [closed, ...(state.meetingDue ? [] : afterResult(applyEvent(state, closed), draw))];
+  if (ended) return [...events, ended];
+  // §4.2 steps 9–10: the meeting the round called is awaited; else the result window, or with the pool empty the next round (§9.3).
+  const settled = events.reduce(applyEvent, state);
+  return settled.meetingDue ? events : [...events, ...afterResult(settled, draw)];
 }

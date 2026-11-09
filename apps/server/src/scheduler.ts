@@ -7,7 +7,7 @@
 //   their due time, ones the game has moved past are deleted, and the rest
 //   keep the due time they were given. So a restart changes nothing, and a
 //   fired deadline is gone once its change is stored.
-// - No round, alibi window or result window runs while a meeting is open: each
+// - No round or result window runs while a meeting is open: each
 //   phase has its own deadlines (design §4.1, §9.3), so nothing needs pausing.
 // - A host pause (M2-13, `games.paused_at`) stops every row, `roundEarly`
 //   included (`paused_at` is set); on resume each moves on by the pause. The
@@ -39,15 +39,13 @@ const advance = (deadline: Deadline): SystemCommand => ({ type: "advance", deadl
 
 /**
  * The deadlines the host's extend moves on (M2-13, design §15): the round being
- * planned (with its early end, set once everyone locked in), the alibi window,
- * the result window or the open vote window. None in other phases.
+ * planned (with its early end, set once everyone locked in), the result
+ * window or the open vote window. None in other phases.
  */
 export function extendKeys(s: GameState): readonly string[] {
   switch (s.phase.kind) {
     case "planning":
       return [`round:${s.phase.round}`, `roundEarly:${s.phase.round}`];
-    case "alibis":
-      return [`alibis:${s.phase.round}`];
     case "result":
       return [`result:${s.phase.round}`];
     case "meeting":
@@ -84,9 +82,6 @@ export const DEADLINE_RULES: { readonly [K in Deadline["kind"] | "scheduleMeetin
     if (allLockedIn(s)) out.push({ key: `roundEarly:${round}`, command, dueAt: now + t.lockInGraceMs });
     return out;
   },
-  // The alibi window after a round resolves. design §5.4
-  alibis: (s, t, now) =>
-    s.phase.kind === "alibis" ? [{ key: `alibis:${s.phase.round}`, command: advance({ kind: "alibis", round: s.phase.round }), dueAt: now + t.alibiMs }] : [],
   // The result window, when an emergency can be called; once one is, the next round waits for its meeting. design §9.3
   result: (s, t, now) =>
     s.phase.kind === "result" && !s.pendingEmergency

@@ -4,7 +4,7 @@
 //   included (scheduler.ts), until the host resumes; each
 //   then moves on by its pause. Players can still plan, vote and chat.
 // - `POST /games/:id/extend`: adds the preset's `extendMs` to the current
-//   round's planning (and its early end), alibi window or vote window.
+//   round's planning (and its early end), result window or vote window.
 // - `POST /games/:id/seats/:seat/stand-in` `{ personality? }`: a bot plays a
 //   person's seat, offered once they missed `REPLACE_AFTER_MISSED_ROUNDS`
 //   rounds in a row. `DELETE` the same hands the seat back (the host, or the

@@ -51,14 +51,13 @@ function apply(state: GameState, c: Command): GameState {
 }
 /** A full grab of the room's (pinned) coins, `pocket` of them pocketed. design §3.2 */
 const move = (player: string, room: string, pocket = 0): Command => ({ type: "submitMove", player, move: { room, duffel: (R6.rooms?.[room]?.coins ?? 0) - pocket, pocket } });
-/** The round's deadline, then (design §5.4) its alibi deadline. */
+/** The round's deadline. */
 const roundDeadline = (s: GameState): Command => ({ type: "advance", deadline: { kind: "round", round: s.round } });
-const alibiDeadline = (s: GameState): Command => ({ type: "advance", deadline: { kind: "alibis", round: s.resolvedRound } });
 function run(state: GameState, ...commands: Command[]): GameState {
   return commands.reduce<GameState>((s, c) => {
     const r = handleCommand(s, c);
     if (!r.ok) throw new Error(`rejected ${JSON.stringify(c)}: ${r.reason}`);
-    return r.state.phase.kind === "alibis" ? apply(r.state, alibiDeadline(r.state)) : r.state;
+    return r.state;
   }, state);
 }
 /** Back to planning: a Bail choice window, a due meeting (server slot, nobody votes) and the result window pass (design §9.3, §9.4, §9.6). */
@@ -103,6 +102,17 @@ describe("recordGame — a scripted game", () => {
     expect(rec.capWithBankLeft).toBe(true); // at the cap, with over a quarter of the bank left
     expect(rec.meetings).toEqual({ regular: 0, briefing: 0, emergency: 1 }); // the bank never lost a third
     expect(rec.winners).toEqual(["p1"]);
+  });
+
+  it("records the plan spots and how many were kept (design §10)", () => {
+    expect([rec.planSpots, rec.planKept]).toEqual([0, 0]); // nobody used the board
+    const cfg = { ...config(3), contentOverrides: { ...R6, roundCap: 1 } };
+    let t = replay(cfg, setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: "lookout" } : e)));
+    const spot = (player: string, room: string | null) => ({ player, placed: null, room, power: null, agreed: true });
+    // p0 keeps its spot, p1 claims the Lobby but goes to the Vault, p2 claims nothing.
+    const plan = { entries: [spot("p0", "lobby"), spot("p1", "lobby"), spot("p2", null)], history: [] };
+    t = run(t, move("p0", "lobby"), move("p1", "vault"), move("p2", "lobby"), { type: "advance", deadline: { kind: "round", round: 1, plan } });
+    expect(recordGame(t, ["honest", "greedy", "honest"])).toMatchObject({ planSpots: 2, planKept: 1 });
   });
 
   it("records a heist sunk by theft (design §8.4)", () => {

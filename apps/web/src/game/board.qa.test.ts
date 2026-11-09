@@ -51,7 +51,8 @@ function backed(v: PlayerView): void {
     for (const o of list) {
       if (o.id === v.me.id) continue;
       if (o.ghost) {
-        expect(v.ledger.some((x) => x.event.type === "alibiPosted" && x.event.player === o.id && x.event.room === room && x.event.round === scene.round), `ghost ${o.id}@${room}`).toBe(true);
+        const said = (e: (typeof v.ledger)[number]["event"]) => e.type === "said" && e.statement.kind === "alibi" && e.statement.player === o.id && e.statement.room === room && e.statement.round === scene.round;
+        expect(v.ledger.some((x) => said(x.event)), `ghost ${o.id}@${room}`).toBe(true);
       } else expect(ok.has(`${o.id}@${room}`), `${v.me.id} sees ${o.id}@${room} (round ${scene.round}, ${v.phase.kind})`).toBe(true);
     }
   if (scene.mode === "pick") expect(Object.values(scene.occupants).flat().every((o) => o.id === v.me.id)).toBe(true);
@@ -79,16 +80,15 @@ function playAll(cfg: GameConfig, max = 400, roles: readonly string[] = []): Gam
         }
       });
       push({ type: "advance", deadline: { kind: "round", round: p.round } });
-    } else if (p.kind === "alibis") {
+      // design §11.3: alibis any time once the round resolved; here right after it.
       ids(s).forEach((id, i) => {
-        if (i % 2) return;
-        const r = handleCommand(s, { type: "postAlibi", player: id, room: s.rooms[i % s.rooms.length] } as PlayerCommand);
+        if (i % 2 || s.phase.kind === "ended") return;
+        const r = handleCommand(s, { type: "postAlibi", player: id, round: p.round, room: s.rooms[i % s.rooms.length] } as PlayerCommand);
         if (r.ok) {
           s = r.state;
           states.push(s);
         }
       });
-      push({ type: "advance", deadline: { kind: "alibis", round: p.round } });
     } else if (p.kind === "result") {
       push({ type: "advance", deadline: { kind: "result", round: p.round } });
     } else if (p.kind === "awaitingMeeting") {
@@ -117,7 +117,7 @@ describe("QA: board figures come only from the viewer's view (PR #41)", () => {
           backed(v);
           for (const o of Object.values(boardScene(v).occupants).flat()) if (o.id !== id) kinds.add(o.ghost ? "ghost" : o.camera ? "camera" : "here");
         }
-      expect(phases.has("planning") && phases.has("alibis") && phases.has("ended")).toBe(true);
+      expect(phases.has("planning") && phases.has("result") && phases.has("ended")).toBe(true);
       // The game really drew others: room-mates and alibi ghosts (and, with a Security room in play, cameras).
       expect(kinds.has("here") && kinds.has("ghost")).toBe(true);
       if (n === 12) expect(kinds.has("camera")).toBe(true);
@@ -151,9 +151,7 @@ describe("QA: board figures come only from the viewer's view (PR #41)", () => {
     let s = createGame(config(3));
     for (const id of ["p1", "p2", "p3"]) s = step(s, move(id, "vault"));
     s = step(s, { type: "advance", deadline: { kind: "round", round: 1 } });
-    s = step(s, { type: "postAlibi", player: "p2", room: "office" } as PlayerCommand);
-    expect(figures(boardScene(viewFor(s, "p1")))).toEqual(["p1@vault", "p2@office?", "p2@vault", "p3@vault"]);
-    s = step(s, { type: "advance", deadline: { kind: "alibis", round: 1 } });
+    s = step(s, { type: "postAlibi", player: "p2", round: 1, room: "office" } as PlayerCommand);
     // Three Vault grabs raid it: the police briefing (design §9.2), then the result window (§9.3).
     expect(s.phase).toMatchObject({ kind: "awaitingMeeting", meeting: "briefing", meetingId: "meeting-1" });
     s = step(s, { type: "scheduleMeeting", meetingId: "meeting-1", slot: "now" });

@@ -30,21 +30,19 @@ function run(state: GameState, ...commands: (PlayerCommand | SystemCommand)[]): 
 const ids = (s: GameState) => s.config.players.map((p) => p.id);
 const allMove = (s: GameState, room = "office") => run(s, ...ids(s).map((p) => ({ type: "submitMove", player: p, move: { room, duffel: BANK_JOB.rooms[room]?.coins ?? 0, pocket: 0 } }) as PlayerCommand));
 const round = (r: number): SystemCommand => ({ type: "advance", deadline: { kind: "round", round: r } });
-const alibisClose = (r: number): SystemCommand => ({ type: "advance", deadline: { kind: "alibis", round: r } });
 const resultClose = (r: number): SystemCommand => ({ type: "advance", deadline: { kind: "result", round: r } });
 const open = (id: string): SystemCommand => ({ type: "advance", deadline: { kind: "openMeeting", meetingId: id } });
 const close = (id: string): SystemCommand => ({ type: "advance", deadline: { kind: "closeMeeting", meetingId: id } });
 const shake = (player: PlayerId, target: PlayerId): PlayerCommand => ({ type: "castVote", player, vote: { kind: "shakedown", target } });
 const skip = (player: PlayerId): PlayerCommand => ({ type: "castVote", player, vote: { kind: "skip" } });
 
-/** Plays a round (everyone to `room`, all in) through its alibi window into its result window (design §9.3). */
+/** Plays a round (everyone to `room`, all in) into its result window (design §9.3). */
 function toResult(s: GameState, room = "office"): GameState {
   const r = s.phase.kind === "planning" ? s.phase.round : -1;
-  s = run(allMove(s, room), round(r));
-  return s.phase.kind === "alibis" ? run(s, alibisClose(r)) : s;
+  return run(allMove(s, room), round(r));
 }
 
-/** Plays a round through its alibi and result windows (nobody calls an emergency). */
+/** Plays a round through its result window (nobody calls an emergency). */
 function playRound(s: GameState, room = "office"): GameState {
   s = toResult(s, room);
   return s.phase.kind === "result" ? run(s, resultClose(s.phase.round)) : s;
@@ -143,7 +141,7 @@ describe("while you were away (design §13)", () => {
   });
 });
 
-/** One scheduler-ish step: everyone moves (Ana pockets 1), alibis close, meetings open and close with skips. */
+/** One scheduler-ish step: everyone moves (Ana pockets 1), an alibi in the result window, meetings open and close with skips. */
 function step(s: GameState): GameState {
   const p = s.phase;
   if (p.kind === "planning") {
@@ -155,11 +153,10 @@ function step(s: GameState): GameState {
     }
     return run(s, round(p.round));
   }
-  if (p.kind === "alibis") {
-    const r = handleCommand(s, { type: "postAlibi", player: "p2", room: s.rooms[0] } as PlayerCommand);
-    return run(r.ok ? r.state : s, alibisClose(p.round));
+  if (p.kind === "result") {
+    const r = handleCommand(s, { type: "postAlibi", player: "p2", round: p.round, room: s.rooms[0] } as PlayerCommand);
+    return run(r.ok ? r.state : s, resultClose(p.round));
   }
-  if (p.kind === "result") return run(s, resultClose(p.round));
   if (p.kind === "awaitingMeeting") {
     if (!s.scheduledMeeting) s = run(s, { type: "scheduleMeeting", meetingId: p.meetingId, slot: `s-${p.meetingId}` });
     return run(s, open(p.meetingId));

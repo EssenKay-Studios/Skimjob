@@ -14,6 +14,8 @@ import {
   type PlayerCommand,
   type PlayerId,
   type PlayerSeat,
+  type PlanEntry,
+  type PlanSnapshot,
 } from "@skimjob/engine";
 import { createBot, type Agent } from "./bot";
 import type { Personality } from "./personalities";
@@ -54,11 +56,25 @@ export function createBots(
 /**
  * Run a game to the end. Each step, every agent (in seat order) sees its view
  * and sends its commands; then one deadline passes: an open meeting closes, a
- * pending shakedown's window ends, a called emergency opens, the round resolves,
- * its alibis close, the meeting it called opens (the server picks a slot if
+ * pending shakedown's window ends, a called emergency opens, the round resolves
+ * (with the bots' plan-board spots, design §10), the meeting it called opens (the server picks a slot if
  * nobody locked one in), or its result window closes. Seats without an agent just
  * get default moves, like an absent player.
  */
+/**
+ * design §10: the plan board as the round resolves, from each agent's spot:
+ * its avatar placed where it claims, and agreed. No clock here, so no edit history.
+ */
+function planBoard(state: GameState, agents: readonly Agent[]): PlanSnapshot {
+  // One line per seat (a seat may have more than one agent asking).
+  const bySeat = new Map<PlayerId, PlanEntry>();
+  for (const agent of agents) {
+    const spot = agent.spot?.(viewFor(state, agent.player));
+    if (spot) bySeat.set(agent.player, { player: agent.player, placed: spot.room, room: spot.room, power: spot.power, agreed: true });
+  }
+  return { entries: [...bySeat.values()], history: [] };
+}
+
 export function runBotGame(config: GameConfig, agents: readonly Agent[], options: BotGameOptions = {}): BotGameResult {
   const maxSteps = options.maxSteps ?? 200;
   let state = createGame(config);
@@ -91,10 +107,7 @@ export function runBotGame(config: GameConfig, agents: readonly Agent[], options
     } else if (state.pendingEmergency) {
       system({ type: "advance", deadline: { kind: "openMeeting", meetingId: state.pendingEmergency.meetingId } });
     } else if (phase.kind === "planning") {
-      system({ type: "advance", deadline: { kind: "round", round: phase.round } });
-    } else if (phase.kind === "alibis") {
-      // design §5.4: the bots have posted their alibis this step, so the alibi deadline passes.
-      system({ type: "advance", deadline: { kind: "alibis", round: phase.round } });
+      system({ type: "advance", deadline: { kind: "round", round: phase.round, plan: planBoard(state, agents) } });
     } else if (phase.kind === "result") {
       // design §9.3: the bots had their say; nobody called an emergency, so the window closes.
       system({ type: "advance", deadline: { kind: "result", round: phase.round } });

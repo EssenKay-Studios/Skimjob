@@ -22,11 +22,8 @@ const config = (voteVisibility: GameConfig["voteVisibility"] = "hiddenThenReveal
   voteVisibility,
 });
 
-/** Round 1 resolves (everyone misses) and its alibis close: the result window (design §9.3). */
-const ROUND_TO_RESULT = [
-  { type: "advance", deadline: { kind: "round", round: 1 } },
-  { type: "advance", deadline: { kind: "alibis", round: 1 } },
-];
+/** Round 1 resolves (everyone misses): the result window (design §9.3). */
+const ROUND_TO_RESULT = [{ type: "advance", deadline: { kind: "round", round: 1 } }];
 const VIEWERS = ["ana", "ben", "carl"]; // carl owns no sample event
 const ended = (s: GameState): GameState => ({ ...s, phase: { kind: "ended", outcome: sampleEvents.gameEnded.outcome } });
 const withEvent = (s: GameState, event: GameEvent): GameState => ({ ...s, log: [...s.log, event] });
@@ -204,8 +201,7 @@ describe("views are copies — design §17.3 (bots only get viewFor), task 8 rev
       createGame(config()),
       { type: "submitMove", player: "ana", move: { ...fullGrab("security"), watch: "vault" } },
       { type: "advance", deadline: { kind: "round", round: 1 } },
-      { type: "postAlibi", player: "ana", room: "office" },
-      { type: "advance", deadline: { kind: "alibis", round: 1 } },
+      { type: "postAlibi", player: "ana", round: 1, room: "office" },
       { type: "advance", deadline: { kind: "result", round: 1 } },
       { type: "proposeMeeting", player: "ana", slot: "fri" },
       { type: "sealVote", player: "ana", vote: { kind: "shakedown", target: "ben" } },

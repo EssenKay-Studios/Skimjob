@@ -9,7 +9,7 @@ import type { ContentOverrides, GameConfig, GameEvent, GameState, Outcome, Playe
 import { setupEvents } from "./setup";
 import { replay } from "./reduce";
 import { handleCommand } from "./handle";
-import { handleThroughAlibis } from "./alibis.testkit";
+import { handleThroughResult } from "./result.testkit";
 import { NO_RAIDS } from "./v01-numbers.testkit";
 import { viewFor } from "./view";
 
@@ -44,7 +44,7 @@ function conserved(s: GameState): void {
 type Cmd = unknown | ((s: GameState) => unknown);
 function run(state: GameState, ...commands: Cmd[]): GameState {
   return commands.reduce<GameState>((s, c) => {
-    const r = handleThroughAlibis(s, typeof c === "function" ? c(s) : c);
+    const r = handleThroughResult(s, typeof c === "function" ? c(s) : c);
     if (!r.ok) throw new Error(`rejected: ${r.reason}`);
     conserved(r.state);
     return r.state;
@@ -279,7 +279,6 @@ describe("after the end — design §6.2, §17.2", () => {
       mv("p0", "vault", 3),
       { type: "advance", deadline: { kind: "round", round: 1 } },
       { type: "advance", deadline: { kind: "round", round: 2 } },
-      { type: "advance", deadline: { kind: "alibis", round: 1 } },
       sched("meeting-1"),
       { type: "advance", deadline: { kind: "openMeeting", meetingId: "meeting-1" } },
       { type: "advance", deadline: { kind: "result", round: 1 } },

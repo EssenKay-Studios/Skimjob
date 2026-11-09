@@ -61,8 +61,6 @@ function atFirstMeeting(seed: string): GameState {
         s = must(s, { type: "submitMove", player: p, move: { room, duffel: p === "p1" ? 1 : 3, pocket: p === "p1" ? 2 : 0 } });
       }
       s = must(s, { type: "advance", deadline: { kind: "round", round: phase.round } });
-    } else if (phase.kind === "alibis") {
-      s = must(s, { type: "advance", deadline: { kind: "alibis", round: phase.round } });
     } else if (phase.kind === "result") {
       s = must(s, { type: "advance", deadline: { kind: "result", round: phase.round } });
     } else if (phase.kind === "awaitingMeeting") {

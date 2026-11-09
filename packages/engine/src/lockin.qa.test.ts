@@ -31,7 +31,6 @@ function run(state: GameState, ...commands: unknown[]): GameState {
 const move = (player: string, room = "lobby", pocket = 0) => ({ type: "submitMove", player, move: fullGrab(room, pocket) });
 const since = (before: GameState, after: GameState): GameEvent[] => after.log.slice(before.log.length);
 const roundDeadline = (round: number) => ({ type: "advance", deadline: { kind: "round", round } });
-const alibiDeadline = (round: number) => ({ type: "advance", deadline: { kind: "alibis", round } });
 /** A second room in play (not the lobby) for move changes. */
 const other = (s: GameState) => s.rooms.find((r) => r !== "lobby" && r !== "security") ?? "lobby";
 
@@ -58,9 +57,9 @@ describe("a move change after the first lock-in is invisible to others — desig
     expect(lockedIn(s0)).toEqual([]);
   });
 
-  it("out of phase: no move and no mark during alibis", () => {
+  it("out of phase: no move and no mark in the result window", () => {
     const s = run(crew(3), move("p0"), move("p1"), roundDeadline(1));
-    expect(s.phase.kind).toBe("alibis");
+    expect(s.phase.kind).toBe("result");
     expect(handleCommand(s, move("p0")).ok).toBe(false);
     expect(lockedIn(s)).toEqual([]);
   });
@@ -82,7 +81,7 @@ describe("the default move never shows as locked in — design §5.1", () => {
       expect(evts.filter((e) => e.type === "moveLocked")).toHaveLength(0);
       for (const p of s.playerOrder) expect(viewFor(s, p).lockedIn).toEqual([]);
       // Next round: nobody is marked until they move again.
-      s = run(s, alibiDeadline(1), { type: "advance", deadline: { kind: "result", round: 1 } });
+      s = run(s, { type: "advance", deadline: { kind: "result", round: 1 } });
       expect(lockedIn(s)).toEqual([]);
       s = run(s, move(`p${n - 1}`));
       expect(lockedIn(s)).toEqual([`p${n - 1}`]);
@@ -106,7 +105,7 @@ describe("lock-ins and an emergency meeting — design §5.1, §9.3", () => {
   it("no emergency mid-round; in the result window and its meeting nobody is marked and nobody can move", () => {
     let s = run(crew(3), move("p0"), move("p1"));
     expect(handleCommand(s, { type: "callEmergency", player: "p2" }).ok).toBe(false);
-    s = run(s, roundDeadline(1), alibiDeadline(1), { type: "callEmergency", player: "p2" });
+    s = run(s, roundDeadline(1), { type: "callEmergency", player: "p2" });
     const meetingId = s.pendingEmergency!.meetingId;
     s = run(s, { type: "advance", deadline: { kind: "openMeeting", meetingId } });
     expect(s.phase.kind).toBe("meeting");

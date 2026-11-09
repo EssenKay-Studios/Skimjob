@@ -1,5 +1,5 @@
 // QA (PR #21, owner answers 1 Nov; extension.md): the one vote rule at every
-// crew size, the alibi phase (§5.4) with meetings,
+// crew size, rounds resolving straight into meetings and the result window,
 // shakedown windows and the last round, and repeating cards (§13).
 import { BANK_JOB, EVENTS } from "@skimjob/content";
 import { describe, expect, it } from "vitest";
@@ -45,13 +45,11 @@ function refused(state: GameState, c: Cmd): string {
   return r.reason;
 }
 const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
-const ALIBIS = (s: GameState) => ({ type: "advance", deadline: { kind: "alibis", round: s.resolvedRound } });
-const alibiAt = (round: unknown) => ({ type: "advance", deadline: { kind: "alibis", round } });
 const mv = (player: string, room: string, pocket = 0, extra: object = {}) => ({ type: "submitMove", player, move: { ...fullGrab(room, pocket, R6_COINS), ...extra } });
 const open = (meetingId: unknown) => ({ type: "advance", deadline: { kind: "openMeeting", meetingId } });
 const close = (meetingId: unknown) => ({ type: "advance", deadline: { kind: "closeMeeting", meetingId } });
 const RESULT = (s: GameState) => ({ type: "advance", deadline: { kind: "result", round: s.resolvedRound } });
-/** The deadlines outside planning and alibis, nobody voting: the meeting a round called (design §9.1, §9.2), then the result window (§9.3). */
+/** The deadlines outside planning, nobody voting: the meeting a round called (design §9.1, §9.2), then the result window (§9.3). */
 function pass(s: GameState): GameState {
   if (s.phase.kind === "result") return run(s, RESULT);
   if (s.phase.kind !== "awaitingMeeting") throw new Error(`unexpected ${s.phase.kind}`);
@@ -92,10 +90,9 @@ describe("QA one vote rule at 8 vs 9 players — extension.md \"One vote rule\",
     // Bail in the shop, so a passed shakedown waits for its Bail choice window (design §9.6).
     const g = game(config(n), roles);
     const withBail = replay(g.config, g.log.map((e): GameEvent => (e.type === "shopDealt" ? { ...e, perks: ["tail", "softShoes", "bail"] } : e)));
-    let s = run(withBail, ROUND, ALIBIS);
+    let s = run(withBail, ROUND);
     expect(s.phase).toEqual({ kind: "result", round: 1 });
     s = run(s, { type: "callEmergency", player: "p8" }, open("emergency-1"));
-    expect(viewFor(s, "p0").alibiRound).toBeNull();
     expect(refused(s, RESULT)).toMatch(/no result window is open/);
     expect(refused(s, mv("p0", "lobby"))).toMatch(/only be submitted while a round is being planned/);
     s = run(s, ...votes.map(([p, t]) => vote(p, t)));
@@ -112,13 +109,11 @@ describe("QA one vote rule at 8 vs 9 players — extension.md \"One vote rule\",
     refused(s, ROUND);
     s = run(s, { type: "advance", deadline: { kind: "resolveShakedown", meetingId: "emergency-1" } });
     expect(s.phase).toEqual({ kind: "planning", round: 2 });
-    expect(viewFor(s, "p0").alibiRound).toBeNull();
-    expect(refused(s, alibiAt(1))).toMatch(/no alibi deadline/);
     expect(replay(s.config, s.log)).toEqual(s);
   });
 
   it("8p integrated: a 3-vote lead is no shakedown (nor at 9p)", () => {
-    let t = run(game(config(8)), ROUND, ALIBIS, { type: "callEmergency", player: "p7" }, open("emergency-1"));
+    let t = run(game(config(8)), ROUND, { type: "callEmergency", player: "p7" }, open("emergency-1"));
     t = run(t, ...ballots.slice(0, 7).map(([p, v]) => vote(p, v)), close("emergency-1"));
     expect(LAST(t, "meetingClosed")?.result).toEqual({ kind: "noMajority" });
     expect(t.phase).toEqual({ kind: "planning", round: 2 });
@@ -132,67 +127,44 @@ describe("QA Shift change — design §13", () => {
   });
 });
 
-describe("QA alibi phase — design §5.4", () => {
-  it("stale, duplicate, future and malformed alibi deadlines are refused without state change", () => {
+describe("QA alibis at any time — design §11.3 (owner, 6 Nov)", () => {
+  it("a round resolves straight into its result window: an emergency is taken at once, and alibis any time after (design §9.3)", () => {
     let s = run(game(config(3)), ROUND);
-    for (const r of [0, 2, -1, "1", 1.5, null, undefined]) {
-      const before = JSON.stringify(s);
-      refused(s, alibiAt(r));
-      expect(JSON.stringify(s)).toBe(before);
-    }
-    expect(refused(s, ROUND)).toMatch(/no round deadline/);
-    s = run(s, alibiAt(1));
-    expect(refused(s, alibiAt(1))).toMatch(/no alibi deadline/);
-    expect(refused(s, { type: "postAlibi", player: "p0", room: "lobby" })).toMatch(/closed/);
-    expect(refused(game(config(3)), alibiAt(0))).toMatch(/no alibi deadline/);
-  });
-
-  it("no emergency during alibis; once they close, one called in the result window opens and the next round follows (design §9.3)", () => {
-    let s = run(game(config(3)), ROUND);
-    expect(refused(s, { type: "callEmergency", player: "p0" })).toMatch(/between a round's result and the next planning/);
-    s = run(s, ALIBIS, { type: "callEmergency", player: "p0" });
     expect(s.phase).toEqual({ kind: "result", round: 1 });
-    s = run(s, open("emergency-1"), close("emergency-1"));
+    expect(refused(s, ROUND)).toMatch(/no round deadline/);
+    s = run(s, { type: "callEmergency", player: "p0" }, { type: "postAlibi", player: "p0", round: 1, room: "lobby" });
+    s = run(s, open("emergency-1"), { type: "postAlibi", player: "p1", round: 1, room: "vault" }, close("emergency-1"));
     expect(s.phase).toEqual({ kind: "planning", round: 2 });
   });
 
-  it("a round that calls a meeting: it can't open during the round's alibis, only once they close (design §4.2 step 9)", () => {
+  it("a round that calls a meeting: it is awaited as the round resolves and opens at its locked slot (design §4.2 step 9)", () => {
     // A bank of 9: round 1's three missed moves leave 6, a third gone (design §9.1).
     let s = run(game(config(3, { contentOverrides: { ...R6_COINS, bank: { coinsPerPlayer: 3 } } })), { type: "proposeMeeting", player: "p0", slot: "x" }, { type: "acceptMeeting", player: "p1", proposalId: "proposal-1" }, ROUND);
-    expect(s.phase).toEqual({ kind: "alibis", round: 1 });
-    expect(refused(s, open("meeting-1"))).toMatch(/opens once a round calls it/);
-    expect(refused(s, { type: "callEmergency", player: "p2" })).toMatch(/between a round's result/);
-    s = run(s, ALIBIS);
     expect(s.phase).toEqual({ kind: "awaitingMeeting", meeting: "regular", meetingId: "meeting-1" });
+    expect(refused(s, { type: "callEmergency", player: "p2" })).toMatch(/between a round's result/);
     s = run(s, open("meeting-1"));
     expect(s.phase.kind).toBe("meeting");
   });
 
-  it("last round of the game: the round cap ends it at once, with no alibi window after it (design §6.2)", () => {
+  it("last round of the game: the round cap ends it at once, with no result window after it (design §6.2)", () => {
     let s = game(config(3));
     while (s.phase.kind !== "ended") {
       if (s.phase.kind === "planning") s = run(s, ROUND);
-      else if (s.phase.kind === "alibis") s = run(s, ALIBIS);
       else s = pass(s);
     }
     // Missed moves: 3 Lobby coins a round, so the 48-coin bank outlasts the 12 rounds.
     expect(s.round).toBe(12);
-    expect(s.log.filter((e) => e.type === "alibisClosed").map((e) => (e as { round: number }).round)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
-    expect(refused(s, alibiAt(12))).toMatch(/over/);
+    expect(s.log.at(-1)?.type).toBe("gameEnded");
+    expect(refused(s, { type: "postAlibi", player: "p0", round: 12, room: "lobby" })).toMatch(/over/);
   });
-});
 
-describe("QA game end closes the alibi window — design §5.4 (PR #21 QA repro)", () => {
-  it("3p, all in the Vault every round until the game ends: no alibi window in state or view", () => {
+  it("3p, all in the Vault every round until a bust: the game ends with the round, and replays (PR #21 QA repro)", () => {
     let s = game(config(3));
     for (let i = 0; i < 12 && s.phase.kind !== "ended"; i++) {
-      if (s.phase.kind === "alibis") s = run(s, ALIBIS);
       while (s.phase.kind === "awaitingMeeting" || s.phase.kind === "result") s = pass(s);
       s = run(s, mv("p0", "vault"), mv("p1", "vault"), mv("p2", "vault"), ROUND);
     }
     expect(s.phase.kind).toBe("ended");
-    expect(s.alibisOpen).toBe(false);
-    for (const p of ["p0", "p1", "p2"]) expect(viewFor(s, p).alibiRound).toBeNull();
     expect(replay(s.config, s.log)).toEqual(s);
   });
 });
@@ -202,7 +174,6 @@ describe("QA repeating cards — design §13", () => {
     let s = game(config(4, { seed, eventsEnabled: true }));
     for (let i = 0; i < 40 && s.phase.kind !== "ended"; i++) {
       if (s.phase.kind === "planning") s = run(s, ROUND);
-      else if (s.phase.kind === "alibis") s = run(s, ALIBIS);
       else if (s.phase.kind === "awaitingMeeting" || s.phase.kind === "result") s = pass(s);
       else break;
     }

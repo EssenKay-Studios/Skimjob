@@ -112,8 +112,6 @@ function nextDeadline(state: GameState): Command[] {
     return [{ type: "advance", deadline: { kind: "openMeeting", meetingId: state.pendingEmergency.meetingId } }];
   }
   if (phase.kind === "planning") return [{ type: "advance", deadline: { kind: "round", round: phase.round } }];
-  // design §5.4: the round's alibi window closes before the next round's planning.
-  if (phase.kind === "alibis") return [{ type: "advance", deadline: { kind: "alibis", round: phase.round } }];
   // design §9.3: the result window closes when nobody called an emergency.
   if (phase.kind === "result") return [{ type: "advance", deadline: { kind: "result", round: phase.round } }];
   if (phase.kind === "awaitingMeeting") {
@@ -245,7 +243,6 @@ describe("QA: flooding and many sockets", () => {
     expect(t2.messages.filter((m) => !("view" in m) && !("chatHistory" in m) && !("plan" in m) && !("presence" in m))).toHaveLength(0);
     // A deadline: both tabs move on together.
     await app.live.system(id, { type: "advance", deadline: { kind: "round", round: 1 } });
-    await app.live.system(id, { type: "advance", deadline: { kind: "alibis", round: 1 } }); // design §5.4
     await toPlanning(id);
     await t1.barrier();
     await t2.barrier();
@@ -255,7 +252,6 @@ describe("QA: flooding and many sockets", () => {
     t1.ws.close();
     await vi.waitFor(() => expect(t1.closed).not.toBeNull(), quick);
     await app.live.system(id, { type: "advance", deadline: { kind: "round", round: 2 } });
-    await app.live.system(id, { type: "advance", deadline: { kind: "alibis", round: 2 } }); // design §5.4
     await toPlanning(id);
     await t2.barrier();
     expect(t2.lastView()).toEqual(viewFor(await loadVia(id), humans[0]!.player));
@@ -266,12 +262,10 @@ describe("QA: flooding and many sockets", () => {
     const { id, humans } = await startGame(2, 1);
     const c = await Client.open(id, humans[0]!);
     await app.live.system(id, { type: "advance", deadline: { kind: "round", round: 1 } });
-    await app.live.system(id, { type: "advance", deadline: { kind: "alibis", round: 1 } }); // design §5.4
     await toPlanning(id);
     await c.send({ type: "submitMove", move: { room: "lobby", duffel: 0, pocket: 1 } });
     c.ws.close();
     await app.live.system(id, { type: "advance", deadline: { kind: "round", round: 2 } }); // changes while away
-    await app.live.system(id, { type: "advance", deadline: { kind: "alibis", round: 2 } }); // design §5.4
     await toPlanning(id);
     const again = await Client.open(id, humans[0]!);
     const state = await loadVia(id);
@@ -318,7 +312,6 @@ describe("QA: mixed games", () => {
     const c = await Client.open(id, humans[0]!);
     for (let r = 1; r <= 2; r++) {
       await app.live.system(id, { type: "advance", deadline: { kind: "round", round: r } });
-      await app.live.system(id, { type: "advance", deadline: { kind: "alibis", round: r } }); // design §5.4
       await toPlanning(id);
     }
     await c.send({ type: "submitMove", move: { room: "lobby", duffel: 1, pocket: 0 } });

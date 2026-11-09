@@ -54,9 +54,8 @@ const blackout = (p: string, room: string) => ({ type: "buyPerk", player: p, per
 const mv = (p: string, room = "lobby", pocket = 0, extra: object = {}) => ({ type: "submitMove", player: p, move: { ...fullGrab(room, pocket), ...extra } });
 const cut = (p: string, room: string) => mv(p, "lobby", 0, { ability: { kind: "blackout", room } });
 const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
-const ALIBIS = (s: GameState) => ({ type: "advance", deadline: { kind: "alibis", round: s.resolvedRound } });
 const RESULT = (s: GameState) => ({ type: "advance", deadline: { kind: "result", round: s.resolvedRound } });
-const NEXT = [ROUND, ALIBIS, RESULT];
+const NEXT = [ROUND, RESULT];
 const CLOSE = (s: GameState) => ({ type: "advance", deadline: { kind: "closeMeeting", meetingId: s.meeting?.id } });
 const RESOLVE = (s: GameState) => ({ type: "advance", deadline: { kind: "resolveShakedown", meetingId: s.pendingShakedown?.meetingId } });
 const vote = (p: string, target: string) => ({ type: "castVote", player: p, vote: { kind: "shakedown", target } });
@@ -175,7 +174,6 @@ describe("QA: power cuts come out together, in an order that tells nothing — d
         mv("p1", "vault", 3),
         cut("p0", elecRoom),
         ROUND,
-        ALIBIS,
         { type: "callEmergency", player: "p2" },
         (x: GameState) => ({ type: "advance", deadline: { kind: "openMeeting", meetingId: x.pendingEmergency?.meetingId } }),
         vote("p0", "p1"),

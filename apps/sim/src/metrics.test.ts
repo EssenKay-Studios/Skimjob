@@ -109,6 +109,13 @@ describe("event cards — design §13", () => {
   });
 });
 
+describe("plan spots kept — design §10", () => {
+  it("is room claims kept ÷ room claims; null when nobody used the board", () => {
+    expect(summarize([gameRec({ planSpots: 3, planKept: 2 }), gameRec({ planSpots: 1, planKept: 1 })]).overall.planKept).toBe(0.75);
+    expect(summarize([gameRec()]).overall.planKept).toBeNull();
+  });
+});
+
 describe("whole-crew wins — design §8.2, §21 G6", () => {
   it("a success every player won is a whole-crew win; the rate is over successful games only", () => {
     const all = gameRec({ players: 3, winners: ["a", "b", "c"] });

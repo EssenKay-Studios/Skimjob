@@ -2,7 +2,7 @@
 // Written against the spec, not the implementation: the win rule, "between
 // meetings" windows, shakedowns against the share, the one vote rule.
 import { describe, expect, it } from "vitest";
-import { handleThroughAlibis } from "./alibis.testkit";
+import { handleThroughResult } from "./result.testkit";
 import { handleCommand } from "./handle";
 import type { GameConfig, GameEvent, GameState, PlayerId, PlayerState } from "./types";
 import { setupEvents } from "./setup";
@@ -47,7 +47,7 @@ type Cmd = unknown | ((s: GameState) => unknown);
 function run(state: GameState, ...commands: Cmd[]): GameState {
   return commands.reduce<GameState>((s, c) => {
     const cmd = typeof c === "function" ? (c as (s: GameState) => unknown)(s) : c;
-    const r = handleThroughAlibis(s, cmd);
+    const r = handleThroughResult(s, cmd);
     if (!r.ok) throw new Error(`rejected ${JSON.stringify(cmd)}: ${r.reason}`);
     return r.state;
   }, state);
@@ -73,7 +73,7 @@ function step(s: GameState, ...commands: unknown[]): GameState {
 }
 /** Resolves the round being planned, and `p` spends the crew's emergency in its result window; the meeting opens (design §9.3). */
 function withEmergency(s: GameState, p: string): GameState {
-  s = step(s, ROUND(s), { type: "advance", deadline: { kind: "alibis", round: s.round } }, { type: "callEmergency", player: p });
+  s = step(s, ROUND(s), { type: "callEmergency", player: p });
   return step(s, { type: "advance", deadline: { kind: "openMeeting", meetingId: s.pendingEmergency?.meetingId } });
 }
 const closeMeeting = (s: GameState) => run(s, { type: "advance", deadline: { kind: "closeMeeting", meetingId: s.meeting?.id } });

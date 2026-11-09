@@ -50,7 +50,6 @@ function run(state: GameState, ...commands: Cmd[]): GameState {
 const buy = (p: string, perk: unknown) => ({ type: "buyPerk", player: p, perk });
 const mv = (p: string) => ({ type: "submitMove", player: p, move: fullGrab("lobby", 0) });
 const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
-const ALIBIS = (s: GameState) => ({ type: "advance", deadline: { kind: "alibis", round: s.resolvedRound } });
 const RESULT = (s: GameState) => ({ type: "advance", deadline: { kind: "result", round: s.resolvedRound } });
 
 const ledger = (s: GameState, id: string) => viewFor(s, id).ledger.map(({ event }) => event);
@@ -104,7 +103,7 @@ describe("anonymous purchases: the public log can't name a buyer — design §12
             if (when === "afterOwnLock" && id === buyer) steps.push(buy(buyer, perk));
           }
           if (when === "last" || (when === "afterOwnLock" && !locks.includes(buyer))) steps.push(buy(buyer, perk));
-          const s = run(game(4), ...steps, ROUND, ALIBIS, RESULT);
+          const s = run(game(4), ...steps, ROUND, RESULT);
           expect(s.phase.kind).toBe("planning");
           const view = viewFor(s, "p3");
           // The seq of the bystander's view counts only what it sees: no gaps where others' private events sit.
@@ -169,7 +168,7 @@ describe("anonymous purchases: the public log can't name a buyer — design §12
   });
 
   it("nothing is announced for a round with no purchase, and a purchase is announced only for its own round", () => {
-    let s = run(game(3), buy("p0", { kind: "softShoes" }), ...ids(3).map(mv), ROUND, ALIBIS, RESULT);
+    let s = run(game(3), buy("p0", { kind: "softShoes" }), ...ids(3).map(mv), ROUND, RESULT);
     const before = s;
     s = run(s, ...ids(3).map(mv), ROUND);
     expect(ofType(s.log.slice(before.log.length), "perkSold")).toEqual([]);
@@ -177,7 +176,7 @@ describe("anonymous purchases: the public log can't name a buyer — design §12
   });
 
   it("determinism: the same seed and commands with purchases give the same log", () => {
-    const play = () => run(game(4), mv("p0"), buy("p0", { kind: "blackout", room: "vault" }), buy("p2", { kind: "alibi" }), ...ids(4).map(mv), ROUND, ALIBIS, RESULT, ...ids(4).map(mv), ROUND);
+    const play = () => run(game(4), mv("p0"), buy("p0", { kind: "blackout", room: "vault" }), buy("p2", { kind: "alibi" }), ...ids(4).map(mv), ROUND, RESULT, ...ids(4).map(mv), ROUND);
     expect(json(play().log)).toBe(json(play().log));
   });
 });

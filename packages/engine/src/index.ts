@@ -13,7 +13,7 @@ export * from "./meeting";
 export * from "./end";
 export { honesty } from "./shares";
 export * from "./deck";
-export * from "./claims";
+export * from "./said";
 export * from "./roles";
 export * from "./evidence";
 export * from "./perks";

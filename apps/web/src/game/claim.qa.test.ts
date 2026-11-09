@@ -23,13 +23,12 @@ function step(s: GameState, c: PlayerCommand | SystemCommand): GameState {
 }
 const claim = (player: string, role: string) => ({ type: "claimRole", player, role }) as PlayerCommand;
 
-/** Finish one round: all move to the lobby, resolve, close alibis, run a due meeting (design §9.1, §9.2) and close the result window. */
+/** Finish one round: all move to the lobby, resolve, run a due meeting (design §9.1, §9.2) and close the result window. */
 function round(s: GameState): GameState {
   const p = s.phase;
   if (p.kind !== "planning") throw new Error(p.kind);
   for (const id of Object.keys(s.players)) s = step(s, { type: "submitMove", player: id, move: { room: "lobby", duffel: 1, pocket: 0 } } as PlayerCommand);
   s = step(s, { type: "advance", deadline: { kind: "round", round: p.round } });
-  if (s.phase.kind === "alibis") s = step(s, { type: "advance", deadline: { kind: "alibis", round: p.round } });
   if (s.phase.kind === "awaitingMeeting") {
     const meetingId = s.phase.meetingId;
     s = step(s, { type: "scheduleMeeting", meetingId, slot: "qa" });
@@ -65,7 +64,7 @@ describe("QA: Claim role (PR #41)", () => {
     let s = createGame(config(3));
     s = step(s, claim("p1", "lookout"));
     expect(handleCommand(s, claim("p1", "auditor")).ok).toBe(false);
-    // Rounds through the alibi windows until a third of the bank is gone and its regular meeting is held.
+    // Rounds until a third of the bank is gone and its regular meeting is held.
     for (let guard = 0; guard < 12 && viewFor(s, "p1").stretch === 1; guard++) {
       expect(claimState(viewFor(s, "p1"))).toMatchObject({ stretch: 1, claimed: "lookout" });
       s = round(s);
@@ -78,13 +77,13 @@ describe("QA: Claim role (PR #41)", () => {
     expect(claimState(viewFor(step(s, claim("p2", "auditor")), "p1"))!.claimed).toBeNull();
   });
 
-  it("the claimed stretch agrees with the engine in a round's alibi window", () => {
+  it("the claimed stretch agrees with the engine in a round's result window", () => {
     let s = createGame(config(3));
     s = round(s);
     s = round(s);
     for (const id of Object.keys(s.players)) s = step(s, { type: "submitMove", player: id, move: { room: "lobby", duffel: 1, pocket: 0 } } as PlayerCommand);
     s = step(s, { type: "advance", deadline: { kind: "round", round: 3 } });
-    expect(s.phase.kind).toBe("alibis");
+    expect(s.phase.kind).toBe("result");
     const before = claimState(viewFor(s, "p1"))!;
     const ok = handleCommand(s, claim("p1", "locksmith"));
     expect(ok.ok).toBe(true);

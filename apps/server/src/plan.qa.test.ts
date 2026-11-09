@@ -52,6 +52,10 @@ async function startGame(people: number, bots = 0, settings: Partial<LobbySettin
     humans.push({ who, player: (res.json() as LobbyView).seats.find((s) => s.you)!.playerId! });
   }
   const botIds = started.seats.filter((s) => s.bot !== null).map((s) => s.playerId!);
+  // The bots took their round-1 spots with their moves at the start (design §10, plan.test.ts): wiped, so
+  // these tests see only what people do in round 1. Bots don't edit again until they move in a later round.
+  await db.query("delete from plan_entries where game_id = $1", [game.id]);
+  await db.query("delete from plan_edits where game_id = $1", [game.id]);
   const state = (await load(game.id))!;
   return { id: game.id, inviteCode: game.inviteCode, humans, botIds, rooms: state.rooms };
 }
@@ -112,7 +116,6 @@ function nextDeadline(state: GameState): Command[] {
     return [{ type: "advance", deadline: { kind: "openMeeting", meetingId: state.pendingEmergency.meetingId } }];
   }
   if (phase.kind === "planning") return [{ type: "advance", deadline: { kind: "round", round: phase.round } }];
-  if (phase.kind === "alibis") return [{ type: "advance", deadline: { kind: "alibis", round: phase.round } }];
   // design §9.3: the result window closes when nobody called an emergency.
   if (phase.kind === "result") return [{ type: "advance", deadline: { kind: "result", round: phase.round } }];
   if (phase.kind === "awaitingMeeting") {
@@ -260,10 +263,7 @@ describe("QA: when the board takes edits (design §10: the round's span)", () =>
     const { id, humans, rooms } = await startGame(3);
     const a = await Client.open(id, humans[0]!);
     await app.live.system(id, { type: "advance", deadline: { kind: "round", round: 1 } });
-    expect((await load(id)).phase.kind).toBe("alibis");
-    // design §9.3: not during the alibis; in the result window (after any meeting the round called).
-    expect(await a.sendRaw({ cmd: { type: "callEmergency" } })).toMatchObject({ rejected: true });
-    await app.live.system(id, { type: "advance", deadline: { kind: "alibis", round: 1 } });
+    // design §9.3: in the result window (after any meeting the round called).
     while ((await load(id)).phase.kind !== "result") await step(id);
     expect(await a.sendRaw({ cmd: { type: "callEmergency" } })).toMatchObject({ ok: true });
     while ((await load(id)).phase.kind !== "meeting") await step(id);
@@ -278,17 +278,21 @@ describe("QA: when the board takes edits (design §10: the round's span)", () =>
     closeAll(a);
   });
 
-  it("after the game ends nothing is accepted; bots never wrote the board over a whole game", async () => {
-    const { id, humans, rooms } = await startGame(2, 2);
+  it("after the game ends nothing is accepted; over a whole game bots wrote only their own lines", async () => {
+    const { id, humans, rooms, botIds } = await startGame(2, 2);
     const a = await Client.open(id, humans[0]!);
     for (let i = 0; i < 400 && (await load(id)).phase.kind !== "ended"; i++) await step(id);
     expect((await load(id)).phase.kind).toBe("ended");
-    expect(await db.query("select 1 from plan_entries where game_id = $1", [id])).toEqual([]);
-    expect(await db.query("select 1 from plan_edits where game_id = $1", [id])).toEqual([]);
+    const rows = () => db.query<{ player_id: string }>("select player_id from plan_entries where game_id = $1", [id]);
+    const before = await rows();
+    expect(before.length).toBeGreaterThan(0);
+    expect(before.every((r) => botIds.includes(r.player_id))).toBe(true);
+    const edits = await db.query<{ actor: string; subject: string }>("select actor, subject from plan_edits where game_id = $1", [id]);
+    expect(edits.every((e) => botIds.includes(e.actor) && e.subject === e.actor)).toBe(true);
     for (const plan of [{ room: rooms[0] }, { agree: true }, { place: { player: humans[1]!.player, room: rooms[0] } }, { power: { role: "hacker", target: rooms[0] } }]) {
       expect(await a.plan(plan)).toMatchObject(closed);
     }
-    expect(await db.query("select 1 from plan_entries where game_id = $1", [id])).toEqual([]);
+    expect(await rows()).toEqual(before);
     closeAll(a);
   });
 
@@ -473,7 +477,7 @@ describe("QA: the edit history is compact and bounded (design §10)", () => {
 
 describe("QA: reconnects, per-round reset and leaks", () => {
   it("a seat that drops and reconnects gets the current board, edits made while away included; in a later round the fresh board", async () => {
-    const { id, humans, rooms } = await startGame(2, 1);
+    const { id, humans, rooms, botIds } = await startGame(2, 1);
     const [a, b] = await Promise.all(humans.map((h) => Client.open(id, h)));
     expect(await a!.plan({ room: rooms[0] })).toMatchObject({ ok: true });
     b!.ws.close();
@@ -489,17 +493,18 @@ describe("QA: reconnects, per-round reset and leaks", () => {
     });
     b2.ws.close();
     await app.live.system(id, { type: "advance", deadline: { kind: "round", round: 1 } });
-    await app.live.system(id, { type: "advance", deadline: { kind: "alibis", round: 1 } });
     while ((await load(id)).phase.kind !== "planning") await step(id); // design §9.3: the result window (and any meeting)
     const b3 = await Client.open(id, humans[1]!);
-    expect(b3.board()).toEqual({ round: 2, entries: [] });
-    // The new round's history starts empty too; round 1's is kept.
+    // The fresh board: only the bot's own spot, taken with its round-2 move (design §10).
+    expect(b3.board().round).toBe(2);
+    expect(b3.board().entries.map((e) => e.player)).toEqual(botIds);
+    // The new round's history starts with no person's edit; round 1's is kept.
     const plan = createPlan(db, clock);
-    expect(await plan.history(id, 2)).toEqual([]);
+    expect((await plan.history(id, 2)).filter((h) => !botIds.includes(h.actor))).toEqual([]);
     expect((await plan.history(id, 1)).length).toBeGreaterThan(0);
     // An edit now lands in round 2 only.
     expect(await b3.plan({ room: rooms[0] })).toMatchObject({ ok: true });
-    expect(await db.query("select round, player_id, room from plan_entries where game_id = $1 and round = 2", [id])).toEqual([{ round: 2, player_id: humans[1]!.player, room: rooms[0] }]);
+    expect(await db.query("select round, player_id, room from plan_entries where game_id = $1 and round = 2 and player_id = $2", [id, humans[1]!.player])).toEqual([{ round: 2, player_id: humans[1]!.player, room: rooms[0] }]);
     closeAll(a!, b3);
   });
 

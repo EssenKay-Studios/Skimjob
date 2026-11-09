@@ -24,7 +24,7 @@ test("a host and a guest play a 15-min game against bots to the end @move", asyn
   const guest = await guestCtx.newPage();
   const game = await startGame(page.request, { bots: 2, guests: [guest.request] });
 
-  // The alibi window is well under a second of real time at this clock, shorter than a loaded runner's
+  // The result window, where the alibi panel sits, is about a second of real time at this clock, shorter than a loaded runner's
   // click round trips, so the host's alibi is posted from inside the page (no round trips): pick the
   // Lobby, post, and note that the confirmation ("You told the crew ...") was shown (issue #127).
   await page.addInitScript(() => {
@@ -50,7 +50,7 @@ test("a host and a guest play a 15-min game against bots to the end @move", asyn
     // Every interaction below waits generously for its click and counts only what the UI confirms ("Vote cast",
     // "Locked in: Office", "You told the crew ..."), never the click itself. A click that fails under load (the
     // sheet still animating, the round gone) is retried on the next pass. The three steps run side by side:
-    // one that stalls on a vanished button (a 5 s click timeout) must not eat the alibi or vote window.
+    // one that stalls on a vanished button (a 5 s click timeout) must not eat the result or vote window.
     // Issue #127: 1 s clicks that were counted, or followed by "Back to the board", left votes/alibis at 0.
     const landed = (l: Locator) => l.waitFor({ state: "visible", timeout: 5000 }).then(() => true, () => false);
     const click = (l: Locator) => l.click({ timeout: 5000 }).catch(() => {});
@@ -158,7 +158,7 @@ test("the bank board: tap a room to pick it, see who you saw and the alibi claim
   test.setTimeout(150_000);
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  // The 1-hour preset: 30 s rounds and 3 s alibi windows at TIME_SCALE 0.1.
+  // The 1-hour preset: 30 s rounds and 6 s result windows at TIME_SCALE 0.1.
   // An absent guest keeps the round to its full length (it would end soon after everyone locks in: owner decision, 2 Nov).
   const idle = await browser.newContext();
   const game = await startGame(page.request, { bots: 4, guests: [idle.request], sessionLength: "1h" });
@@ -188,7 +188,7 @@ test("the bank board: tap a room to pick it, see who you saw and the alibi claim
   await expect(card.getByText("You claimed to be the Lookout. One claim between meetings")).toBeVisible();
   await expect(card.getByRole("button", { name: "Claim role" })).toHaveCount(0);
 
-  // The alibi window (3 s): the board shows the resolved round, with you in the Office; the claim moves next to the alibi button.
+  // The result window (6 s): the board shows the resolved round, with you in the Office; the claim moves next to the alibi button.
   const alibi = page.locator(".alibi");
   await expect(alibi).toBeVisible({ timeout: 45_000 });
   await expect(board.getByText(/as you saw it/)).toBeVisible();

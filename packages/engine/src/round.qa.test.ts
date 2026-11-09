@@ -1,7 +1,7 @@
 // QA (PR #4): scripted full games, rejections, determinism and private
 // information for the round loop. design §3 (rooms, coins, grabs), §6.1. The
 // scripted games pin bells too big to raid; bells and raids: bells.test.ts.
-import { handleThroughAlibis } from "./alibis.testkit";
+import { handleThroughResult } from "./result.testkit";
 import { describe, expect, it } from "vitest";
 import type { GameConfig, GameEvent, GameState, Move } from "./types";
 import { canSee } from "./types";
@@ -40,7 +40,7 @@ function deepFreeze<T>(value: T): T {
 
 /** A function command is called with the current state (e.g. `ROUND`). */
 function ok(state: GameState, command: unknown): GameState {
-  const r = handleThroughAlibis(state, typeof command === "function" ? command(state) : command);
+  const r = handleThroughResult(state, typeof command === "function" ? command(state) : command);
   if (!r.ok) throw new Error(`rejected: ${r.reason}`);
   return r.state;
 }
@@ -202,7 +202,7 @@ describe("QA scripted full games — design §3, §6.1", () => {
 describe("QA resubmitting a move — design §3.2", () => {
   it("a rejected resubmission keeps the earlier move", () => {
     let s = ok(game(3), submit("p0", m("office", 2)));
-    expect(handleThroughAlibis(s, submit("p0", m("office", 3))).ok).toBe(false);
+    expect(handleThroughResult(s, submit("p0", m("office", 3))).ok).toBe(false);
     s = ok(s, ROUND);
     expect(ofType(s, "coinsGrabbed").find((e) => e.player === "p0")).toMatchObject({ room: "office", duffel: 0, pocket: 2 });
   });
@@ -245,7 +245,7 @@ describe("QA rejected commands leave state unchanged", () => {
   ];
   for (const [name, command] of cases) {
     it(name, () => {
-      const r = handleThroughAlibis(base, command);
+      const r = handleThroughResult(base, command);
       expect(r.ok).toBe(false);
       expect(JSON.stringify(base)).toBe(snapshot);
     });
@@ -256,7 +256,7 @@ describe("QA rejected commands leave state unchanged", () => {
     const vault = [m("vault"), m("vault"), m("vault")];
     const waiting = play(game(3), [vault, vault]);
     expect(waiting.phase.kind).toBe("awaitingMeeting");
-    for (const c of [submit("p0", m("lobby")), ROUND(waiting)]) expect(handleThroughAlibis(waiting, c).ok).toBe(false);
+    for (const c of [submit("p0", m("lobby")), ROUND(waiting)]) expect(handleThroughResult(waiting, c).ok).toBe(false);
   });
 });
 

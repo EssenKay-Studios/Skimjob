@@ -60,17 +60,15 @@ const buy = (p: string, perk: unknown) => ({ type: "buyPerk", player: p, perk })
 const mv = (p: string, room: string, pocket = 0, extra: object = {}) => ({ type: "submitMove", player: p, move: { ...fullGrab(room, pocket), ...extra } });
 const watch = (p: string, room: string) => mv(p, "security", 0, { watch: room });
 const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
-const ALIBIS = (s: GameState) => ({ type: "advance", deadline: { kind: "alibis", round: s.resolvedRound } });
 const RESULT = (s: GameState) => ({ type: "advance", deadline: { kind: "result", round: s.resolvedRound } });
-/** The round being planned resolves, nobody posts an alibi and nobody calls an emergency: the next round is being planned. */
-const NEXT = [ROUND, ALIBIS, RESULT];
+/** The round being planned resolves and nobody calls an emergency: the next round is being planned. */
+const NEXT = [ROUND, RESULT];
 const CLOSE = (s: GameState) => ({ type: "advance", deadline: { kind: "closeMeeting", meetingId: s.meeting?.id } });
 const RESOLVE = (s: GameState) => ({ type: "advance", deadline: { kind: "resolveShakedown", meetingId: s.pendingShakedown?.meetingId } });
 const vote = (p: string, target: string) => ({ type: "castVote", player: p, vote: { kind: "shakedown", target } });
 /** The round being planned resolves and, in its result window, `by` calls the crew's emergency, which opens at once. design §9.3 */
 const emergency = (by: string): Cmd[] => [
   ROUND,
-  ALIBIS,
   { type: "callEmergency", player: by },
   (s: GameState) => ({ type: "advance", deadline: { kind: "openMeeting", meetingId: s.pendingEmergency?.meetingId } }),
 ];
@@ -141,7 +139,7 @@ describe("buying a perk — design §7.6, §7.7, §12", () => {
     expect(handleCommand(withStash(s, "p1", 1), buy("p1", { kind: "alibi" })).ok).toBe(true);
     s = run(s, ROUND);
     expect(reason(s, buy("p0", { kind: "softShoes" }))).toBe("perks are bought while a round is being planned");
-    s = run(s, ALIBIS, RESULT);
+    s = run(s, RESULT);
     expect(handleCommand(s, buy("p0", { kind: "softShoes" })).ok).toBe(true);
   });
 
@@ -188,16 +186,16 @@ describe("Stamped alibi: a true alibi for this round is stamped \"verified\" —
     let s = withStash(game(), "p0", 1);
     if (buyer) s = run(s, buy(buyer, { kind: "alibi" }));
     s = run(s, mv("p0", "office"), mv("p1", "lobby"), mv("p2", "lobby"), ROUND);
-    return since(s, run(s, { type: "postAlibi", player: "p0", room: alibi }));
+    return since(s, run(s, { type: "postAlibi", player: "p0", round: 1, room: alibi }));
   };
 
   it("only if the alibi is true and the poster bought one that round; the stamp is public", () => {
     expect(posted("p0", "office")).toEqual([
-      { type: "alibiPosted", visibility: PUBLIC, player: "p0", round: 1, room: "office" },
+      { type: "said", visibility: PUBLIC, statement: { kind: "alibi", player: "p0", round: 1, room: "office" } },
       { type: "alibiVerified", visibility: PUBLIC, player: "p0", round: 1, room: "office" },
     ]);
-    expect(posted("p0", "lobby").map((e) => e.type)).toEqual(["alibiPosted"]);
-    expect(posted(null, "office").map((e) => e.type)).toEqual(["alibiPosted"]);
+    expect(posted("p0", "lobby").map((e) => e.type)).toEqual(["said"]);
+    expect(posted(null, "office").map((e) => e.type)).toEqual(["said"]);
   });
 });
 
@@ -286,7 +284,7 @@ describe("Plant evidence: one player appears in one room's feeds this round — 
       ["p3", "vault", []],
     ]);
     // The next round, the feed shows only who was there.
-    s = run(s, ALIBIS, RESULT, mv("p0", "lobby"), mv("p1", "lobby"), watch("p2", "vault"), mv("p3", "vault"), ROUND);
+    s = run(s, RESULT, mv("p0", "lobby"), mv("p1", "lobby"), watch("p2", "vault"), mv("p3", "vault"), ROUND);
     expect(ofType(s.log, "roomWatched").at(-1)?.seen).toEqual(["p3"]);
   });
 
@@ -366,7 +364,7 @@ describe("Bail: held until a shakedown passes, then a private choice — design 
 
   it("after a regular meeting the result window follows once the window ends (design §9.3)", () => {
     let s = run(game(3, {}, ["tail", "softShoes", "bail"]), mv("p1", "vault", 3), ...NEXT);
-    while (s.phase.kind === "planning") s = run(s, mv("p0", "lobby"), mv("p1", "lobby"), mv("p2", "lobby"), ROUND, ALIBIS, (x: GameState) => (x.phase.kind === "result" ? RESULT(x) : []));
+    while (s.phase.kind === "planning") s = run(s, mv("p0", "lobby"), mv("p1", "lobby"), mv("p2", "lobby"), ROUND, (x: GameState) => (x.phase.kind === "result" ? RESULT(x) : []));
     expect(s.phase.kind).toBe("awaitingMeeting");
     const meetingId = s.phase.kind === "awaitingMeeting" ? s.phase.meetingId : "";
     const round = s.resolvedRound;

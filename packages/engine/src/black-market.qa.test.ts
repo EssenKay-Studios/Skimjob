@@ -105,15 +105,11 @@ const ROUND = (s: GameState) => ({
   type: "advance",
   deadline: { kind: "round", round: s.round },
 });
-const ALIBIS = (s: GameState) => ({
-  type: "advance",
-  deadline: { kind: "alibis", round: s.resolvedRound },
-});
 const RESULT = (s: GameState) => ({
   type: "advance",
   deadline: { kind: "result", round: s.resolvedRound },
 });
-const NEXT = [ROUND, ALIBIS, RESULT];
+const NEXT = [ROUND, RESULT];
 const CLOSE = (s: GameState) => ({
   type: "advance",
   deadline: { kind: "closeMeeting", meetingId: s.meeting?.id },
@@ -132,7 +128,6 @@ const vote = (p: string, target: string) => ({
 });
 const emergency = (by: string): Cmd[] => [
   ROUND,
-  ALIBIS,
   { type: "callEmergency", player: by },
   (s: GameState) => ({
     type: "advance",
@@ -213,18 +208,13 @@ describe("QA: the shop — design §12", () => {
     expect([s.spent, player(s, "p0").roleState.bail]).toEqual([4, true]);
   });
 
-  it("refused outside planning: alibis, result window, an open meeting, after the game ends; and for strangers", () => {
+  it("refused outside planning: the result window, an open meeting, after the game ends; and for strangers", () => {
     let s = withStash(game(3, { contentOverrides: { roundCap: 1 } }), {
       p0: 9,
     });
     expect(reason(s, buy("p9", { kind: "alibi" }))).toMatch(/p9/);
     s = withStash(game(3), { p0: 9 });
     s = run(s, mv("p1", "vault", 3), ROUND);
-    expect(s.phase.kind).toBe("alibis");
-    expect(reason(s, buy("p0", { kind: "alibi" }))).toBe(
-      "perks are bought while a round is being planned",
-    );
-    s = run(s, ALIBIS);
     expect(s.phase.kind).toBe("result");
     expect(reason(s, buy("p0", { kind: "alibi" }))).toBe(
       "perks are bought while a round is being planned",
@@ -392,8 +382,7 @@ describe("QA: each perk at its boundaries — design §12", () => {
     );
     s = run(
       s,
-      { type: "postAlibi", player: "p0", room: "office" },
-      ALIBIS,
+      { type: "postAlibi", player: "p0", round: 1, room: "office" },
       RESULT,
     );
     s = run(
@@ -402,7 +391,7 @@ describe("QA: each perk at its boundaries — design §12", () => {
       mv("p1", "lobby"),
       mv("p2", "lobby"),
       ROUND,
-      { type: "postAlibi", player: "p0", room: "office" },
+      { type: "postAlibi", player: "p0", round: 2, room: "office" },
     );
     expect(ofType(s.log, "alibiVerified").map((e) => e.round)).toEqual([1]);
   });
@@ -420,13 +409,13 @@ describe("QA: each perk at its boundaries — design §12", () => {
     const wrong = real === "office" ? "vault" : "office";
     expect(
       ofType(
-        since(s, run(s, { type: "postAlibi", player: "p0", room: wrong })),
+        since(s, run(s, { type: "postAlibi", player: "p0", round: 1, room: wrong })),
         "alibiVerified",
       ),
     ).toEqual([]);
     expect(
       ofType(
-        since(s, run(s, { type: "postAlibi", player: "p0", room: real })),
+        since(s, run(s, { type: "postAlibi", player: "p0", round: 1, room: real })),
         "alibiVerified",
       ),
     ).toHaveLength(1);
@@ -528,7 +517,7 @@ describe("QA: Check ballot — design §9.5, §12", () => {
         vote: { kind: "shakedown", target: "p2" },
       },
     );
-    s = run(s, mv("p1", "vault"), mv("p2", "vault"), ROUND, ALIBIS);
+    s = run(s, mv("p1", "vault"), mv("p2", "vault"), ROUND);
     s = run(s, OPEN);
     expect(s.meeting?.kind).toBe("briefing");
     expect(viewFor(s, "p0").me.seenBallots).toEqual({
@@ -615,7 +604,6 @@ describe("QA: Bail — design §9.6, §9.7, §12", () => {
     );
     while (s.phase.kind !== "ended") {
       if (s.phase.kind === "planning") s = run(s, ROUND);
-      else if (s.phase.kind === "alibis") s = run(s, ALIBIS);
       else if (s.phase.kind === "result") s = run(s, RESULT);
       else if (s.phase.kind === "awaitingMeeting") s = run(s, OPEN);
       else if (s.phase.kind === "meeting") s = run(s, CLOSE);
@@ -655,8 +643,7 @@ describe("QA: Bail — design §9.6, §9.7, §12", () => {
               break;
             }
         s = run(s, ROUND);
-      } else if (s.phase.kind === "alibis") s = run(s, ALIBIS);
-      else if (s.phase.kind === "result") s = run(s, RESULT);
+      } else if (s.phase.kind === "result") s = run(s, RESULT);
       else if (s.phase.kind === "awaitingMeeting") {
         // A briefing: p1 is still protected there.
         s = run(s, OPEN);
@@ -800,7 +787,6 @@ describe("QA: the Rig is gone next to S3a.8's redraw — design §12, §13", () 
           ROUND,
         );
         if (s.phase.kind === "ended") break;
-        s = run(s, ALIBIS);
         while (s.phase.kind !== "planning" && s.phase.kind !== "ended") {
           if (s.phase.kind === "result") s = run(s, RESULT);
           else if (s.phase.kind === "awaitingMeeting") s = run(s, OPEN, CLOSE);
@@ -850,7 +836,6 @@ describe("QA: determinism — design §19.1", () => {
       buy("p2", { kind: "alibi" }),
       mv("p2", "office"),
       ROUND,
-      ALIBIS,
     );
   };
 

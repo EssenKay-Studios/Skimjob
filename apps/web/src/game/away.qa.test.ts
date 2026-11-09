@@ -42,8 +42,7 @@ function step(s: GameState): GameState {
     }
     return run(s, { type: "advance", deadline: { kind: "round", round: p.round } });
   }
-  if (p.kind === "alibis") return run(tryRun(s, { type: "postAlibi", player: "p2", room: s.rooms[0] } as PlayerCommand), { type: "advance", deadline: { kind: "alibis", round: p.round } });
-  if (p.kind === "result") return run(s, { type: "advance", deadline: { kind: "result", round: p.round } });
+  if (p.kind === "result") return run(tryRun(s, { type: "postAlibi", player: "p2", round: p.round, room: s.rooms[0] } as PlayerCommand), { type: "advance", deadline: { kind: "result", round: p.round } });
   if (p.kind === "awaitingMeeting") {
     if (!s.scheduledMeeting) s = run(s, { type: "scheduleMeeting", meetingId: p.meetingId, slot: `s-${p.meetingId}` } as SystemCommand);
     return run(s, { type: "advance", deadline: { kind: "openMeeting", meetingId: p.meetingId } });

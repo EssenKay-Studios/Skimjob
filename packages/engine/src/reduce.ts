@@ -104,8 +104,6 @@ export function initialState(config: GameConfig): GameState {
     spent: 0,
     card: null,
     moves: {},
-    alibisOpen: false,
-    alibisPosted: [],
     ballotChecks: [],
     proposals: [],
     scheduledMeeting: null,
@@ -253,43 +251,34 @@ function applyChange(state: GameState, event: GameEvent): GameState {
         reached: state.reached + event.handedIn + event.setAside,
       };
     case "roundResolved": {
-      // The bank is a public total. The round's alibis open (design §5.4); the meeting it called, the
-      // result window or the next round waits for their deadline. Crossing a third of the bank calls a
-      // regular meeting (§9.1; crossing both in one round, one meeting).
+      // The bank is a public total. Crossing a third of the bank calls a regular meeting (§9.1; crossing
+      // both in one round, one meeting); the meeting the round called is awaited, else the result window
+      // (§4.2 steps 9–10).
       const thirds = thirdsGone(state.bankStart, event.bank);
-      return {
+      const resolved: GameState = {
         ...state,
-        phase: { kind: "alibis", round: event.round },
         bank: event.bank,
         thirds,
         meetingDue: thirds > state.thirds ? "regular" : state.meetingDue,
         moves: {},
         card: null,
         resolvedRound: event.round,
-        alibisOpen: true,
-        alibisPosted: [],
+      };
+      return {
+        ...resolved,
+        phase: resolved.meetingDue ? { kind: "awaitingMeeting", meeting: resolved.meetingDue, meetingId: nextMeetingId(resolved) } : resultWindow(resolved),
       };
     }
-    case "alibisClosed":
-      // design §4.2 steps 9–10: the meeting the round called is awaited, else the result window.
-      return {
-        ...state,
-        alibisOpen: false,
-        phase: state.meetingDue ? { kind: "awaitingMeeting", meeting: state.meetingDue, meetingId: nextMeetingId(state) } : resultWindow(state),
-      };
     case "gameEnded":
-      // A round that ends the game has no alibi window (design §5.4, PR #21 QA).
-      return { ...state, phase: { kind: "ended", outcome: event.outcome }, alibisOpen: false };
+      return { ...state, phase: { kind: "ended", outcome: event.outcome } };
     // ------------------------------------------------ events deck. design §13
     case "eventFlipped":
       return { ...state, card: { round: event.round, id: event.card, room: event.room } };
     case "insideTip":
     case "auditReport":
       return state;
-    case "alibiPosted":
-      return { ...state, alibisPosted: [...state.alibisPosted, event.player] };
-    // design §8, §12.1: talk only; the handler reads earlier claims from the log.
-    case "roleClaimed":
+    // design §19.2 seam 5: talk only; handlers read earlier statements from the log.
+    case "said":
       return state;
     // ------------------------------------------------ meetings and votes. design §11
     case "meetingProposed": {

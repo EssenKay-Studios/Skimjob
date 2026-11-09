@@ -373,10 +373,10 @@ function Actions({ view, timers, offset, send, autoMeetings, pick }: BoardProps 
       {alibi && <AlibiPanel view={view} round={alibi.round} posted={alibi.posted} send={send} />}
       {p.kind === "planning" ? (
         <MovePanel key={p.round} view={view} round={p.round} timers={timers} offset={offset} send={send} autoMeetings={autoMeetings} pick={pick} />
-      ) : p.kind === "alibis" || voting ? null : (
+      ) : voting ? null : (
         <WaitPanel view={view} />
       )}
-      {/* During the alibi window the claim sits next to the alibi button instead of on the card. */}
+      {/* Between rounds the claim sits next to the alibi button instead of on the card. */}
       <RoleCard view={view} send={send} claim={!alibi} />
       {!voting && <MeetingsPanel view={view} timers={timers} offset={offset} send={send} autoMeetings={autoMeetings} />}
     </>
@@ -493,7 +493,7 @@ function AlibiPanel({ view, round, posted, send }: { view: PlayerView; round: nu
   const post = async () => {
     if (!room) return;
     setBusy(true);
-    await send({ type: "postAlibi", room }, "Alibi posted.");
+    await send({ type: "postAlibi", round, room }, "Alibi posted.");
     setBusy(false);
   };
   return (

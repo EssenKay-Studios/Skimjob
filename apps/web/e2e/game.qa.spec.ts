@@ -1,7 +1,7 @@
 // QA for M2-6 (PR #31): the game screen under abuse. Full 15-min games with 12
 // seats and 24-character names at 390×844 touch and 1280×800; reloads mid-round
-// and mid-alibi window; a killed socket; a client clock an hour off; an alibi
-// posted after its window closed; and nothing on screen giving away another
+// and between rounds; a killed socket; a client clock an hour off; an alibi
+// posted from a stale screen (alibis have no window); and nothing on screen giving away another
 // player's hidden move, split, role or "submitted" status.
 import { mkdirSync } from "node:fs";
 import { expect, test, type APIRequestContext, type Browser, type Page, type WebSocketRoute } from "@playwright/test";
@@ -86,20 +86,20 @@ test("12 seats, 24-char names: a 15-min game to the end with moves changed, alib
   const errors: string[] = [];
   for (const p of [host, guest]) p.on("pageerror", (e) => errors.push(e.message));
   const game = await start(host.request, guest.request, 10, "15m");
-  // At the fast clock a round is 3.75 s and an alibi window 750 ms (× 0.05): under
+  // At the fast clock a round is 3.75 s and a result window 1 s (× 0.05): under
   // CI load a round of taps outlasts them, so the test could miss them all. Until
   // the host has changed a move, and then posted an alibi, it pauses the game from
-  // the push that opens the phase it needs (a pause stops every deadline and players
+  // the push that opens the phase it needs (between rounds for the alibi panel; a pause stops every deadline and players
   // can still plan and post, design §15) and resumes once that is done. Both steps
   // are counted from the host's own view, not from a tap's promise: under load a
   // tap can time out after its click went through.
   let changed = 0; // rounds where the host resubmitted its move (design §5.1)
-  let alibis = 0; // alibis the host posted (design §5.4)
+  let alibis = 0; // alibis the host posted (design §11.3)
   let phase = "";
-  const holding = () => (phase === "planning" && changed === 0) || (phase === "alibis" && alibis === 0);
+  const holding = () => (phase === "planning" && changed === 0) || ((phase === "result" || phase === "awaitingMeeting") && alibis === 0);
   let pausing: ReturnType<APIRequestContext["post"]> | null = null;
   let pausedAt = 0;
-  type Logged = { event: { type: string; player?: string; round?: number } };
+  type Logged = { event: { type: string; player?: string; round?: number; statement?: { kind: string; player?: string } } };
   host.on("websocket", (ws) =>
     ws.on("framereceived", ({ payload }) => {
       if (typeof payload !== "string" || !payload.startsWith('{"view"')) return;
@@ -108,7 +108,7 @@ test("12 seats, 24-char names: a 15-min game to the end with moves changed, alib
       const submitted = mine(view.caseFile, "moveSubmitted");
       phase = view.phase.kind;
       changed = new Set(submitted.filter((r, i) => submitted.indexOf(r) !== i)).size;
-      alibis = mine(view.ledger, "alibiPosted").length;
+      alibis = view.ledger.filter(({ event }) => event.type === "said" && event.statement?.kind === "alibi" && event.statement.player === view.me.id).length;
       if (!holding() || pausing) return;
       pausedAt = Date.now();
       pausing = host.request.post(`/api/games/${game.id}/pause`, { data: {} });
@@ -178,7 +178,7 @@ test("12 seats, 24-char names: a 15-min game to the end with moves changed, alib
         await ok(await host.request.post(`/api/games/${game.id}/resume`, { data: {} }));
       }
       if (await host.locator(".panel[aria-live=polite]").isVisible().catch(() => false)) await once("waiting", host);
-      // Wake as soon as an alibi window opens rather than on a fixed 120 ms tick.
+      // Wake as soon as the alibi panel shows rather than on a fixed 120 ms tick.
       await post.waitFor({ state: "visible", timeout: 120 }).catch(() => {});
     }
   } finally {
@@ -205,7 +205,7 @@ const clock = (t: string | null) => {
   return m ? Number(m[1] ?? 0) * 3600 + Number(m[2]) * 60 + Number(m[3]) : NaN;
 };
 
-test("reloads, a killed socket, a skewed clock and a late alibi (3h preset: 102 s rounds, 6 s alibi window) @move", async ({ browser }, info) => {
+test("reloads, a killed socket, a skewed clock and a late alibi (3h preset: 102 s rounds) @move", async ({ browser }, info) => {
   test.skip(info.project.name !== "desktop", "one viewport is enough for the channel behaviour");
   test.setTimeout(240_000);
   const { hostCtx, guestCtx, host, guest } = await contexts(browser, false);
@@ -270,9 +270,9 @@ test("reloads, a killed socket, a skewed clock and a late alibi (3h preset: 102 
   expect(seqs.length).toBeGreaterThanOrEqual(entriesBefore);
   await expect(status).toHaveText(before!);
 
-  // Round 1 resolves (≈102 s). The guest reloads mid-alibi window and the panel comes back.
+  // Round 1 resolves (≈102 s). The guest reloads between rounds and the alibi panel comes back.
   await expect(guest.getByRole("button", { name: "Post alibi" })).toBeVisible({ timeout: 150_000 });
-  freeze = true; // the host's screen now keeps the open window
+  freeze = true; // the host's screen now keeps the alibi panel
   await guest.reload();
   await expect(guest.getByRole("button", { name: "Post alibi" })).toBeVisible({ timeout: 4000 });
   await guest.getByRole("group", { name: "Alibi room" }).getByRole("button", { name: "Lobby" }).click();
@@ -280,20 +280,19 @@ test("reloads, a killed socket, a skewed clock and a late alibi (3h preset: 102 
   await expect(guest.getByText("You told the crew you were in the")).toBeVisible();
   await shot(guest, "alibi-posted-after-reload");
 
-  // The host posts after the window closed (their screen is stale): refused, with a readable reason.
-  // The alibi window closes; a briefing (after a raid) or the result window may come before round 2 (design §9.2, §9.3).
-  await expect(guest.getByRole("heading", { name: "Alibi window", level: 1 })).toHaveCount(0, { timeout: 15_000 });
+  // The host posts once round 2 is being planned (their screen is stale): alibis have no window, so it is
+  // still taken for round 1 (design §11.3, owner 6 Nov). A briefing (after a raid) or the result window may come first (§9.2, §9.3).
+  await expect(guest.getByRole("heading", { name: "Round 2 · Pick your room", level: 2 })).toBeVisible({ timeout: 90_000 });
+  // The host's screen may have frozen on a meeting's vote: back to the board, where the alibi panel waits.
+  const back = host.getByRole("button", { name: "Back to the board" });
+  if (await back.isVisible()) await back.click();
   await host.getByRole("group", { name: "Alibi room" }).getByRole("button", { name: "Office" }).click();
   await host.getByRole("button", { name: "Post alibi" }).click();
-  const toast = host.locator(".toast").filter({ hasText: /closed/i });
-  await expect(toast).toBeVisible();
-  const text = (await toast.textContent()) ?? "";
-  expect(text, "refusal reads as a sentence, no raw error").not.toMatch(/error|undefined|\{|rejected/i);
-  await shot(host, "alibi-refused");
+  await expect(host.locator(".toast").filter({ hasText: "Alibi posted." })).toBeVisible();
+  await shot(host, "alibi-late");
   freeze = false;
   await host.reload();
   await expect(host.locator(".hud__kicker")).toBeVisible();
-  await expect(host.getByText("You say you were in the Office")).toHaveCount(0);
   await hostCtx.close();
   await guestCtx.close();
 });

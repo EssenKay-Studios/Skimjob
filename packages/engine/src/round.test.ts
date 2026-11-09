@@ -1,6 +1,6 @@
 // The round loop: moves (rooms, coins and grabs), missed moves, the bank and
 // the short bank, resolution, information. design §3, §4.2, §6.1 (bells: bells.test.ts)
-import { handleThroughAlibis } from "./alibis.testkit";
+import { handleThroughResult } from "./result.testkit";
 import { describe, expect, it } from "vitest";
 import type { Command, GameConfig, GameEvent, GameState } from "./types";
 import { setupEvents } from "./setup";
@@ -35,7 +35,7 @@ function game(players: number, roles: string[] = [], contentOverrides: GameConfi
 /** Commands to run; a function is called with the current state (e.g. `ROUND`). */
 function run(state: GameState, ...commands: unknown[]): GameState {
   return commands.reduce<GameState>((s, c) => {
-    const r = handleThroughAlibis(s, typeof c === "function" ? c(s) : c);
+    const r = handleThroughResult(s, typeof c === "function" ? c(s) : c);
     if (!r.ok) throw new Error(`rejected: ${r.reason}`);
     return r.state;
   }, state);
@@ -53,7 +53,7 @@ function lastEvents(before: GameState, after: GameState): GameEvent[] {
 }
 
 function reason(state: GameState, command: unknown): string {
-  const r = handleThroughAlibis(state, command);
+  const r = handleThroughResult(state, command);
   if (r.ok) throw new Error("expected a rejection");
   return r.reason;
 }
@@ -102,7 +102,7 @@ describe("planning — design §3.2", () => {
     const s = game(9);
     for (const [room, limit] of Object.entries(limits)) {
       for (let pocket = 0; pocket <= limit; pocket++) {
-        for (const grab of [1, limit]) if (pocket <= grab) expect(handleThroughAlibis(s, submit("p0", { room, duffel: grab - pocket, pocket })).ok, `${room} ${grab}/${pocket}`).toBe(true);
+        for (const grab of [1, limit]) if (pocket <= grab) expect(handleThroughResult(s, submit("p0", { room, duffel: grab - pocket, pocket })).ok, `${room} ${grab}/${pocket}`).toBe(true);
       }
       expect(reason(s, submit("p0", { room, duffel: limit + 1 }))).toMatch(new RegExp(`at most ${limit}`));
       expect(reason(s, submit("p0", { room, duffel: limit, pocket: 1 }))).toMatch(new RegExp(`at most ${limit}`));
@@ -113,8 +113,8 @@ describe("planning — design §3.2", () => {
 
   it("Security and the Rooftop grab nothing (design §3.1, §3.2)", () => {
     const s = game(3);
-    expect(handleThroughAlibis(s, submit("p0", { room: "rooftop" })).ok).toBe(true);
-    expect(handleThroughAlibis(s, submit("p0", { room: "security", watch: "vault" })).ok).toBe(true);
+    expect(handleThroughResult(s, submit("p0", { room: "rooftop" })).ok).toBe(true);
+    expect(handleThroughResult(s, submit("p0", { room: "security", watch: "vault" })).ok).toBe(true);
     expect(reason(s, submit("p0", { room: "rooftop", duffel: 1 }))).toMatch(/no coins to grab/);
     expect(reason(s, submit("p0", { room: "security", pocket: 1, watch: "vault" }))).toMatch(/no coins to grab/);
   });
@@ -152,7 +152,7 @@ describe("rejected commands leave state untouched", () => {
   ];
   for (const [name, command] of cases) {
     it(name, () => {
-      const r = handleThroughAlibis(s, command);
+      const r = handleThroughResult(s, command);
       expect(r.ok).toBe(false);
       if (!r.ok) expect(r.reason).toEqual(expect.any(String));
       expect(s.log).toHaveLength(game(3).log.length);
@@ -214,8 +214,7 @@ describe("resolution — design §3.2, §4.2 step 1", () => {
       "roomSighting",
       "roomWatched",
       "roundResolved",
-      // design §5.4: the round's alibi deadline (here passed at once by the test helper), then the next round.
-      "alibisClosed",
+      // design §9.3: the result window (here closed at once by the test helper), then the next round.
       "roundStarted",
     ]);
   });

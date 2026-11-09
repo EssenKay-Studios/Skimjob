@@ -5,7 +5,7 @@ import { viewFor, type GameState } from "@skimjob/engine";
 import { decide } from "./bot";
 import { forecast, LEAN_AT, leaning } from "./forecast";
 import { PERSONALITIES, type Personality } from "./personalities";
-import { closeAlibis, game, round } from "./testkit";
+import { closeResult, game, round } from "./testkit";
 
 type Player = GameState["players"][string];
 const exact: Personality = { ...PERSONALITIES.honest, noise: 0, misread: 0, hunch: 0 };
@@ -18,7 +18,7 @@ const as = (s: GameState, role: string, me: Partial<Player> = {}, roleState: Par
 const cold = (): GameState => {
   let s = game(5);
   for (let r = 0; r < 2; r++) s = round(s, Object.fromEntries(s.playerOrder.map((id) => [id, { room: "lobby", pocket: 2 }])));
-  return closeAlibis(s);
+  return closeResult(s);
 };
 
 describe("ending forecast and leaning — design §5.5, §8.4, §19.3", () => {

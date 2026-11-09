@@ -1,7 +1,7 @@
 // Small readers over a PlayerView: everything a bot knows comes from here.
 // Bots never see the game state, only viewFor() output. design §17.3
 import { MAX_ROLE_COPIES, ROLES, type JobDef, type RoleId, type RolePower, type RoomDef, type RoomId } from "@skimjob/content";
-import { jobById, overrideJob, overrideRoles, roleHandler, roomDef, type GameEvent, type LoggedEvent, type PlayerId, type PlayerView } from "@skimjob/engine";
+import { jobById, overrideJob, overrideRoles, roleHandler, roomDef, type GameEvent, type LoggedEvent, type PlayerId, type PlayerView, type Statement } from "@skimjob/engine";
 
 type EventOf<T extends GameEvent["type"]> = Extract<GameEvent, { type: T }>;
 
@@ -48,19 +48,46 @@ export function lastResolvedRound(view: PlayerView): number {
 export const roomsWhere = (view: PlayerView, job: JobDef, test: (def: RoomDef) => boolean): RoomId[] =>
   view.rooms.filter((r) => test(roomDef(job, r)));
 
-// ---------------------------------------------------------------- role claims (design §11.3; v2 §4)
+// ---------------------------------------------------------------- what players said (design §10, §11.3; §19.2 seam 5)
 
-/** Every player's claims, oldest first (me included). */
+/** The said statements of one kind on the ledger, oldest first. */
+export function saidOf<K extends Statement["kind"]>(view: PlayerView, kind: K): Extract<Statement, { kind: K }>[] {
+  return ofType(view.ledger, "said").flatMap((e) => (e.statement.kind === kind ? [e.statement as Extract<Statement, { kind: K }>] : []));
+}
+
+/**
+ * Where each player said they were, per round: their room claim on the round's
+ * plan board (design §10), replaced by an alibi if they posted one (§11.3).
+ */
+export function saidRooms(view: PlayerView): Map<number, Map<PlayerId, RoomId>> {
+  const out = new Map<number, Map<PlayerId, RoomId>>();
+  const set = (round: number, player: PlayerId, room: RoomId) => {
+    if (!out.has(round)) out.set(round, new Map());
+    out.get(round)?.set(player, room);
+  };
+  for (const p of saidOf(view, "plan")) for (const e of p.plan.entries) if (e.room !== null) set(p.round, e.player, e.room);
+  for (const a of saidOf(view, "alibi")) set(a.round, a.player, a.room);
+  return out;
+}
+
+/**
+ * Has the crew had its say about `round`: a later round has resolved, or the
+ * next round's planning has started. Before that, silence is no evidence yet
+ * (bots post their alibis as the round resolves). Alibis have no window (design §11.3).
+ */
+export const settled = (view: PlayerView, round: number): boolean => round < lastResolvedRound(view) || view.phase.kind === "planning";
+
+/** Every player's role claims, oldest first (me included). design §11.3; v2 §4 */
 export function claimsOf(view: PlayerView): Map<PlayerId, RoleId[]> {
   const out = new Map<PlayerId, RoleId[]>();
-  for (const c of ofType(view.ledger, "roleClaimed")) out.set(c.player, [...(out.get(c.player) ?? []), c.role]);
+  for (const c of saidOf(view, "role")) out.set(c.player, [...(out.get(c.player) ?? []), c.role]);
   return out;
 }
 
 /** Who has claimed `role` (any stretch), in claim order. */
 export function claimantsOf(view: PlayerView, role: RoleId): PlayerId[] {
   const out: PlayerId[] = [];
-  for (const c of ofType(view.ledger, "roleClaimed")) if (c.role === role && !out.includes(c.player)) out.push(c.player);
+  for (const c of saidOf(view, "role")) if (c.role === role && !out.includes(c.player)) out.push(c.player);
   return out;
 }
 

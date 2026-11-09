@@ -371,6 +371,7 @@ Every role has a one-sentence power, a "How you win" line and a "How to spot it"
 - Roles are **secret**; holding a role is an event in the log (§19 seam 9). The game shows a **role list** per host setting: *Exact* (default: the roles dealt, with counts, e.g. "Lookout ×2"), *Possible* (the pool), or *Hidden*.
 - **Claims:** a player can formally claim a role ("I'm the Lookout"), true or a bluff, as a **said** entry in the ledger. A claim changes no rule.
 - **Alibis** *(owner, 6 Nov)*: a player can post an alibi (a room and a round, "I was in the Office in round 3") as a **said** entry at any time; there is no alibi window. Stamped alibi (§12) checks it.
+- **Limits** *(owner, 9 Nov)*: one alibi per player per round, and one role claim per player per stretch (§9.1).
 - No role should be so strong or weak that claiming it hurts its holder; §21 gates each role's win rate (per seat holding it, copies included).
 
 ### 11.4 Copies acting on the same target

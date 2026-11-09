@@ -52,33 +52,24 @@ export function run(state: GameState, ...commands: unknown[]): GameState {
 
 export type Plan = Record<PlayerId, { room: string; pocket?: number; watch?: string; alibi?: string | null }>;
 
-/**
- * Pass the alibi deadline if the last round's alibi window is still open
- * (design §5.4), then the result window's if nobody called an emergency (§9.3).
- */
-export function closeAlibis(state: GameState): GameState {
-  const s = state.phase.kind === "alibis" ? run(state, { type: "advance", deadline: { kind: "alibis", round: state.phase.round } }) : state;
-  return s.phase.kind === "result" && !s.pendingEmergency ? run(s, { type: "advance", deadline: { kind: "result", round: s.phase.round } }) : s;
-}
-
-/** Pass only the alibi deadline: the game rests in the round's result window (design §9.3). */
-export function toResult(state: GameState): GameState {
-  return state.phase.kind === "alibis" ? run(state, { type: "advance", deadline: { kind: "alibis", round: state.phase.round } }) : state;
+/** Pass the result window's deadline if nobody called an emergency (design §9.3). */
+export function closeResult(state: GameState): GameState {
+  return state.phase.kind === "result" && !state.pendingEmergency ? run(state, { type: "advance", deadline: { kind: "result", round: state.phase.round } }) : state;
 }
 
 /** `caller` spends the crew's emergency in the result window, and its meeting opens (design §9.3). */
 export function emergencyMeeting(state: GameState, caller: PlayerId): GameState {
-  const s = run(toResult(state), { type: "callEmergency", player: caller });
+  const s = run(state, { type: "callEmergency", player: caller });
   return run(s, { type: "advance", deadline: { kind: "openMeeting", meetingId: s.pendingEmergency?.meetingId } });
 }
 
 /**
  * One round: everyone's move, the deadline, then the alibis (default the truth;
- * null = none posted). The round's alibi window is left open (design §5.4);
- * the next `round` closes it first.
+ * null = none posted, design §11.3). The round's result window is left open
+ * (design §9.3); the next `round` closes it first.
  */
 export function round(state: GameState, plan: Plan): GameState {
-  const open = closeAlibis(state);
+  const open = closeResult(state);
   const r = open.phase.kind === "planning" ? open.phase.round : 0;
   let s = run(
     open,
@@ -92,7 +83,7 @@ export function round(state: GameState, plan: Plan): GameState {
   );
   for (const [player, m] of Object.entries(plan)) {
     const alibi = m.alibi === undefined ? m.room : m.alibi;
-    if (alibi !== null) s = run(s, { type: "postAlibi", player, room: alibi });
+    if (alibi !== null) s = run(s, { type: "postAlibi", player, round: r, room: alibi });
   }
   return s;
 }

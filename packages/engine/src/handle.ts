@@ -12,10 +12,10 @@ import type { GameEvent, GameState, RngState } from "./types";
 import { PUBLIC, REVEAL, privateTo } from "./types";
 import { pick, randomInt, shuffle } from "./rng";
 import { applyEvent } from "./reduce";
-import { checkMove, closeAlibis, resolveRound } from "./round";
+import { checkMove, resolveRound } from "./round";
 import { isObject, playerFor, show } from "./check";
-import { claimRole } from "./claims";
-import { buyPerk, chooseBail, stampedAlibi } from "./perks";
+import { claimRole, planSaid, postAlibi } from "./said";
+import { buyPerk, chooseBail } from "./perks";
 import {
   acceptMeeting,
   callEmergency,
@@ -84,24 +84,13 @@ const submitMove: Handler = (state, command) => {
   return Object.hasOwn(state.moves, player.id) ? [submitted] : [{ type: "moveLocked", visibility: PUBLIC, player: player.id, round }, submitted];
 };
 
-/**
- * design §5.4: after a round resolves, each player may post one alibi for it,
- * true or not, until the round's alibi deadline (before the next round's planning).
- * A true one is stamped "verified" if they bought a Stamped alibi that round (§12).
- */
-const postAlibi: Handler = (state, command) => {
-  const player = playerFor(state, command);
-  if (typeof player === "string") return player;
-  const round = state.resolvedRound;
-  if (round === 0) return "no round has resolved yet";
-  if (!state.alibisOpen) return `alibis for round ${round} are closed`;
-  if (state.alibisPosted.includes(player.id)) return `you already posted an alibi for round ${round}`;
-  const room = command.room;
-  if (typeof room !== "string" || !state.rooms.includes(room)) return `room ${show(room)} is not open in this game`;
-  return [{ type: "alibiPosted", visibility: PUBLIC, player: player.id, round, room }, ...stampedAlibi(state, player.id, round, room)];
-};
+/** design §10: the round's plan board goes into the log as it resolves, before what really happened. */
+function withPlan(state: GameState, round: number, plan: unknown, draw: Draw): HandlerResult {
+  const said = planSaid(state, round, plan);
+  return typeof said === "string" ? said : [...said, ...resolveRound(state, round, draw)];
+}
 
-/** The scheduler says a deadline has passed. design §4.1, §5.4, §9 */
+/** The scheduler says a deadline has passed. design §4.1, §9 */
 const advance: Handler = (state, command, draw) => {
   const deadline = command.deadline;
   if (!isObject(deadline) || typeof deadline.kind !== "string") return "advance needs a deadline";
@@ -110,11 +99,7 @@ const advance: Handler = (state, command, draw) => {
       if (state.phase.kind !== "planning") return "no round deadline is pending";
       // Named round, so a retried or late deadline is refused instead of resolving the next round.
       if (deadline.round !== state.phase.round) return `the round ${show(deadline.round)} deadline is not pending (round ${state.phase.round} is)`;
-      return resolveRound(state, state.phase.round, draw);
-    case "alibis":
-      if (state.phase.kind !== "alibis") return "no alibi deadline is pending";
-      if (deadline.round !== state.phase.round) return `the round ${show(deadline.round)} alibi deadline is not pending (round ${state.phase.round}'s is)`;
-      return closeAlibis(state, state.phase.round, draw);
+      return withPlan(state, state.phase.round, deadline.plan, draw);
     case "result":
       return closeResult(state, deadline.round, draw);
     case "openMeeting":

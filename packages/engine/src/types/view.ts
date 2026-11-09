@@ -76,8 +76,6 @@ export interface PlayerView {
   readonly round: number;
   /** The stretch between regular meetings: 1 until the first regular meeting opens (public). design §9.1 */
   readonly stretch: number;
-  /** The round whose alibis may still be posted, or null. design §5.4 */
-  readonly alibiRound: number | null;
   readonly rooms: readonly RoomId[];
   /** Coins left in the bank (public). design §6.1 */
   readonly bank: number;

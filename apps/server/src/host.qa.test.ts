@@ -230,7 +230,7 @@ async function pauseAcross(id: string, host: string, on: FastifyInstance = app) 
   const left = await remaining(id);
   expect((await req("POST", `/games/${id}/pause`, host, undefined, on)).status).toBe(200);
   for (let i = 0; i < 3; i++) {
-    clock.advance(H1.roundMs + H1.alibiMs + H1.meetingMs);
+    clock.advance(H1.roundMs + H1.resultMs + H1.meetingMs);
     expect(await on.scheduler.tick()).toBe(0);
   }
   expect((await req("POST", `/games/${id}/resume`, host, undefined, on)).status).toBe(200);
@@ -239,7 +239,7 @@ async function pauseAcross(id: string, host: string, on: FastifyInstance = app) 
 }
 
 describe("a pause keeps every clock's time left exactly (design §15)", () => {
-  it("across roundEarly, the alibi window, the result window and an open meeting", async () => {
+  it("across roundEarly, the result window and an open meeting", async () => {
     const { id, seats } = await startGame(3);
     const host = seats[0]!.who;
     const clients = await Promise.all(seats.map((s) => Client.open(id, s.who)));
@@ -249,14 +249,8 @@ describe("a pause keeps every clock's time left exactly (design §15)", () => {
     // Planning: round and roundEarly.
     const planning = await pauseAcross(id, host);
     expect([...planning.keys()].sort()).toEqual(["round:1", "roundEarly:1"]);
-    // To the alibi window.
-    while ((await load(id)).phase.kind === "planning") await step(id);
-    expect((await load(id)).phase.kind).toBe("alibis");
-    clock.advance(500);
-    const alibis = await pauseAcross(id, host);
-    expect(alibis.has("alibis:1")).toBe(true);
     // To the result window (design §9.3), then an open meeting (an emergency called in it).
-    while ((await load(id)).phase.kind === "alibis") await step(id);
+    while ((await load(id)).phase.kind === "planning") await step(id);
     expect((await load(id)).phase.kind).toBe("result");
     clock.advance(250);
     const result = await pauseAcross(id, host);

@@ -9,7 +9,7 @@
 // 2. Edge cases per role: limits, wrong phase / wrong role, vote maths at ties
 //    and quorum edges in every vote mode, threshold and stash edges.
 import { describe, expect, it } from "vitest";
-import { closeResultWindow } from "./alibis.testkit";
+import { closeResultWindow } from "./result.testkit";
 import { BANK_JOB } from "@skimjob/content";
 import type { GameConfig, GameEvent, GameState, PlayerId, PlayerState, PlayerView, VoteVisibility } from "./types";
 import { privateTo } from "./types";
@@ -46,17 +46,14 @@ function game(players: number, roles: string[], extra: Partial<GameConfig> = {})
 }
 
 /**
- * A command, with a round deadline followed by its alibi deadline (nobody
- * posts). The result window (design §9.3) stays open, so an emergency can be
- * called in it, until a move or a round deadline closes it.
+ * A command. The result window (design §9.3) stays open, so an emergency can
+ * be called in it, until a move or a round deadline closes it.
  */
-function handleThroughAlibis(state: GameState, command: unknown): CommandResult {
+function handleThroughResult(state: GameState, command: unknown): CommandResult {
   const c = command as { type?: unknown; deadline?: { kind?: unknown } } | null;
   const planning = c?.type === "submitMove" || c?.deadline?.kind === "round";
   const s = state.phase.kind === "result" && !state.pendingEmergency && planning ? must(closeResultWindow(state)) : state;
-  const r = handleCommand(s, command);
-  if (!r.ok || r.state.phase.kind !== "alibis" || c?.deadline?.kind !== "round") return r;
-  return handleCommand(r.state, { type: "advance", deadline: { kind: "alibis", round: r.state.phase.round } });
+  return handleCommand(s, command);
 }
 const must = (r: CommandResult): GameState => {
   if (!r.ok) throw new Error(r.reason);
@@ -67,7 +64,7 @@ type Cmd = unknown | ((s: GameState) => unknown);
 function run(state: GameState, ...commands: Cmd[]): GameState {
   return commands.reduce<GameState>((s, c) => {
     const cmd = typeof c === "function" ? c(s) : c;
-    const r = handleThroughAlibis(s, cmd);
+    const r = handleThroughResult(s, cmd);
     if (!r.ok) throw new Error(`rejected ${JSON.stringify(cmd)}: ${r.reason}`);
     return r.state;
   }, state);
@@ -75,7 +72,7 @@ function run(state: GameState, ...commands: Cmd[]): GameState {
 /** The rejection reason; the state (and so every view) is untouched. */
 function reason(state: GameState, command: unknown): string {
   const before = JSON.stringify(state);
-  const r = handleThroughAlibis(state, command);
+  const r = handleThroughResult(state, command);
   if (r.ok) throw new Error(`expected a rejection of ${JSON.stringify(command)}`);
   expect(JSON.stringify(state)).toBe(before);
   return r.reason;
@@ -209,7 +206,7 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
   const probes = (s: GameState, y: PlayerId): string[] => {
     const room = s.rooms[0] as string;
     return [{ type: "useAbility", player: y, ability: { kind: "detect", target: y } }, mv(y, room, 0, { ability: { kind: "hide", room } })].map((c) => {
-      const r = handleThroughAlibis(s, c);
+      const r = handleThroughResult(s, c);
       return r.ok ? "ok" : r.reason;
     });
   };
@@ -245,12 +242,12 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
     if (over()) return;
     for (const c of a) {
       commands.push(c);
-      const r = handleThroughAlibis(A, c);
+      const r = handleThroughResult(A, c);
       if (!r.ok) throw new Error(`A rejected ${JSON.stringify(c)}: ${r.reason}`);
       A = r.state;
     }
     for (const c of b) {
-      const r = handleThroughAlibis(B, c);
+      const r = handleThroughResult(B, c);
       if (!r.ok) throw new Error(`B rejected ${JSON.stringify(c)}: ${r.reason}`);
       B = r.state;
     }

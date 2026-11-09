@@ -4,7 +4,7 @@
 // viewFor leaks. design §13, §4.1, §5.3, §16, §18
 import { describe, expect, it } from "vitest";
 import { NO_RAIDS } from "./v01-numbers.testkit";
-import { handleThroughAlibis } from "./alibis.testkit";
+import { handleThroughResult } from "./result.testkit";
 import { EVENT_CHANCE, EVENT_DECK, EVENTS_FROM_ROUND, type RoomId } from "@skimjob/content";
 import type { GameConfig, GameEvent, GameState, PlayerId } from "./types";
 import { PUBLIC, privateTo } from "./types";
@@ -39,7 +39,7 @@ function game(players: number, roles: string[] = [], extra: Partial<GameConfig> 
 
 function run(state: GameState, ...commands: unknown[]): GameState {
   return commands.reduce<GameState>((s, c) => {
-    const r = handleThroughAlibis(s, c);
+    const r = handleThroughResult(s, c);
     if (!r.ok) throw new Error(`rejected ${JSON.stringify(c)}: ${r.reason}`);
     return r.state;
   }, state);
@@ -294,11 +294,11 @@ describe("QA §13: Lockdown", () => {
   it("the closed room refuses moves only that round; missed moves still go to the Lobby", () => {
     const s = withCard(resolve(game(3)), "lockdown", "office");
     expect(closedRoom(s)).toBe("office");
-    expect(handleThroughAlibis(s, { type: "submitMove", player: "p0", move: fullGrab("office") }).ok).toBe(false);
+    expect(handleThroughResult(s, { type: "submitMove", player: "p0", move: fullGrab("office") }).ok).toBe(false);
     const after = resolve(s, {}, ["p0"]);
     expect(find(lastRound(after), "coinsGrabbed").find((e) => e.player === "p0")).toMatchObject({ room: "lobby", duffel: 1 });
     expect(closedRoom(after)).toBeNull();
-    expect(handleThroughAlibis(after, { type: "submitMove", player: "p0", move: fullGrab("office") }).ok).toBe(true);
+    expect(handleThroughResult(after, { type: "submitMove", player: "p0", move: fullGrab("office") }).ok).toBe(true);
   });
 });
 
@@ -323,7 +323,7 @@ describe("QA §13: Shift change", () => {
 
   it("the Vault takes 4 coins this round (5 refused), back to 3 the next; other rooms unchanged", () => {
     const s = withCard(resolve(game(3)), "shiftChange");
-    const sub = (st: GameState, room: RoomId, coins: number) => handleThroughAlibis(st, { type: "submitMove", player: "p0", move: { room, duffel: coins, pocket: 0 } }).ok;
+    const sub = (st: GameState, room: RoomId, coins: number) => handleThroughResult(st, { type: "submitMove", player: "p0", move: { room, duffel: coins, pocket: 0 } }).ok;
     expect(sub(s, "vault", 4)).toBe(true);
     expect(sub(s, "vault", 5)).toBe(false);
     expect(sub(s, "office", 3)).toBe(false);

@@ -8,7 +8,7 @@ import { useToast } from "../components/Toast";
 import { seatOffers, type Control, type HostSeat } from "../game/host";
 import { api, sentence, type LobbyView } from "../api";
 
-const EXTENDABLE = new Set(["planning", "alibis", "meeting"]);
+const EXTENDABLE = new Set(["planning", "meeting"]);
 
 const minutes = (ms: number) => (ms >= 3_600_000 ? `${Math.round(ms / 3_600_000)} h` : ms >= 60_000 ? `${Math.round(ms / 60_000)} min` : `${Math.round(ms / 1000)} s`);
 

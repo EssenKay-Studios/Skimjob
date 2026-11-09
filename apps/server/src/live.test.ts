@@ -405,9 +405,8 @@ describe("pushing views", () => {
     const c = await Client.open(id, humans[0]!);
     await expect(app.live.system(id, { type: "advance", deadline: { kind: "round", round: 2 } })).rejects.toThrow(/refused/);
     const resolved = await app.live.system(id, { type: "advance", deadline: { kind: "round", round: 1 } });
-    expect(resolved.phase).toMatchObject({ kind: "alibis", round: 1 }); // design §5.4
-    let after = await app.live.system(id, { type: "advance", deadline: { kind: "alibis", round: 1 } });
     // design §9.2, §9.3: a raid's briefing, if the bots raided a room, then the result window.
+    let after = resolved;
     expect(["result", "awaitingMeeting"]).toContain(after.phase.kind);
     while (after.phase.kind !== "planning") for (const cmd of nextDeadline(after)) after = await app.live.system(id, cmd as Parameters<typeof app.live.system>[1]);
     expect(after.phase).toMatchObject({ kind: "planning", round: 2 });
@@ -427,8 +426,6 @@ function nextDeadline(state: GameState): Command[] {
     return [{ type: "advance", deadline: { kind: "openMeeting", meetingId: state.pendingEmergency.meetingId } }];
   }
   if (phase.kind === "planning") return [{ type: "advance", deadline: { kind: "round", round: phase.round } }];
-  // design §5.4: the round's alibi window closes before the next round's planning.
-  if (phase.kind === "alibis") return [{ type: "advance", deadline: { kind: "alibis", round: phase.round } }];
   // design §9.3: the result window closes when nobody called an emergency.
   if (phase.kind === "result") return [{ type: "advance", deadline: { kind: "result", round: phase.round } }];
   if (phase.kind === "awaitingMeeting") {

@@ -3,7 +3,7 @@
 // design §4.2 (end-of-round order), §5.1–§5.6, §11.1
 import { describe, expect, it } from "vitest";
 import { BANK_JOB, FACTS } from "@skimjob/content";
-import { handleThroughAlibis } from "./alibis.testkit";
+import { handleThroughResult } from "./result.testkit";
 import type { Command, GameConfig, GameEvent, GameState } from "./types";
 import { setupEvents } from "./setup";
 import { replay } from "./reduce";
@@ -31,7 +31,7 @@ function game(players: number, roles: string[] = [], contentOverrides: GameConfi
 
 function run(state: GameState, ...commands: unknown[]): GameState {
   return commands.reduce<GameState>((s, c) => {
-    const r = handleThroughAlibis(s, typeof c === "function" ? c(s) : c);
+    const r = handleThroughResult(s, typeof c === "function" ? c(s) : c);
     if (!r.ok) throw new Error(`rejected ${JSON.stringify(c)}: ${r.reason}`);
     return r.state;
   }, state);
@@ -203,12 +203,11 @@ describe("the bust and the Rooftop escape — design §5.5, §4.2 step 4, §8.3"
     return run({ ...g, wanted: 2, players }, mv("p0", "vault", 2, 1), mv("p1", "vault", 1), mv("p2", "rooftop"), ROUND);
   };
 
-  it("Wanted 3 ends the game at once: no cooling, no alibi window; only the Rooftop escapes", () => {
+  it("Wanted 3 ends the game at once: no cooling, no result window; only the Rooftop escapes", () => {
     const s = busted();
     expect(s.wanted).toBe(3);
     expect(s.phase).toMatchObject({ kind: "ended", outcome: { result: "failed", reason: "bust", escapees: ["p2"], winners: ["p2"] } });
     expect(ofType(lastRound(s), "bellsCooled")).toEqual([]);
-    expect(s.alibisOpen).toBe(false);
     expect(s.log.at(-1)?.type).toBe("gameEnded");
     expect(handleCommand(s, mv("p0", "lobby", 1))).toEqual({ ok: false, reason: "the game is over" });
   });
