@@ -308,11 +308,47 @@ for (const { width, height } of VIEWPORTS) {
       expect(box.width, "composer spans the tab").toBeGreaterThanOrEqual(tab.width * 0.7);
       expect(box.y + box.height, "composer shows unscrolled").toBeLessThanOrEqual(tab.y + tab.height + 1);
       expect(send.y + send.height, "Send shows unscrolled").toBeLessThanOrEqual(tab.y + tab.height + 1);
+      // Round-2 bug: the chat frame's padding was 0 px sideways, so its outline cut through the text. Every child keeps ≥ 8 px inside it.
+      const inset = await page.locator(".shell__left .shell-chat").evaluate((frame) => {
+        const f = frame.getBoundingClientRect();
+        const kids = [...frame.querySelectorAll(".chat__feed, .chat__compose-row, .chat__note, .chat__tabs, .chat__send")].filter((el) => el.getBoundingClientRect().width > 0);
+        return Math.min(...kids.map((el) => { const r = el.getBoundingClientRect(); return Math.min(r.left - f.left, f.right - r.right); }));
+      });
+      expect(inset, "chat contents stay off the frame outline").toBeGreaterThanOrEqual(8);
       const strip = (await page.locator(".shell__status").boundingBox())!;
       const logo = (await page.locator(".topbar__home > :first-child").first().boundingBox())!;
       expect(Math.abs(logo.x - strip.x)).toBeLessThanOrEqual(1);
       await page.screenshot({ path: SHOTS ? `${SHOTS}/topbar-${width}.png` : test.info().outputPath("topbar.png"), clip: { x: 0, y: 0, width, height: strip.y + strip.height + 10 } });
     }
+    await ctx.close();
+  });
+}
+
+// Round-2 blocker: a toast must not cover the phone tab bar or the dock, at any narrow width, even with two toasts stacked.
+for (const { width, height } of VIEWPORTS.filter((v) => v.width < 1024)) {
+  test(`toasts at ${width}: clear of the tab bar and the dock, and the tabs take taps @shell`, async ({ browser }) => {
+    test.setTimeout(60_000);
+    const { ctx, page } = await newPage(browser, width, height);
+    const game = await startGame(page.request, { bots: 3, sessionLength: "1w" });
+    await page.goto(`/game/${game.id}`);
+    await openPanel(page, "This round");
+    await page.locator('.room-tile[data-room="Office"]').first().click();
+    await page.getByRole("button", { name: "Lock it in" }).click();
+    await openPanel(page, "Chat");
+    await composer(page).fill("toast check");
+    await composer(page).press("Enter");
+    await page.locator(".bsheet__close").click();
+    const toasts = page.locator(".toasts");
+    await expect(page.locator(".toast").first()).toBeVisible();
+    await settle(page);
+    const t = (await toasts.boundingBox())!;
+    for (const part of [".shell__tabs", ".shell__dock"]) {
+      const b = (await page.locator(part).boundingBox())!;
+      expect(t.y + t.height, `toasts end above ${part} at ${width}`).toBeLessThanOrEqual(b.y);
+    }
+    await shot(page, "toast");
+    await page.getByRole("navigation", { name: "Game panels" }).getByRole("button", { name: /^Notes/ }).click();
+    await expect(page.locator("dialog.bsheet[open]")).toHaveCount(1);
     await ctx.close();
   });
 }
