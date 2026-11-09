@@ -10,7 +10,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { expect, test, type APIRequestContext, type Browser, type Page } from "@playwright/test";
-import { callEmergency, chatTab, openPanel, showResult, startGame, type PanelName } from "./setupGame";
+import { callEmergency, chatTab, expectRankingReadable, openPanel, showResult, startGame, type PanelName } from "./setupGame";
 
 const SHOTS = process.env.SHOTS_DIR;
 const VIEWPORTS = [
@@ -300,6 +300,14 @@ for (const { width, height } of VIEWPORTS) {
       await page.mouse.up();
       await expect(page.locator("dialog.bsheet[open]")).toHaveCount(1);
     } else {
+      // Round-1 bug: the laptop Chat tab's composer was 52/92 px wide and sat under the frame. It must span the tab and show unscrolled.
+      await openPanel(page, "Chat");
+      const tab = (await page.locator(".shell__left .shell__scroll").boundingBox())!;
+      const box = (await composer(page).boundingBox())!;
+      const send = (await page.locator(".shell__left .chat__send").boundingBox())!;
+      expect(box.width, "composer spans the tab").toBeGreaterThanOrEqual(tab.width * 0.7);
+      expect(box.y + box.height, "composer shows unscrolled").toBeLessThanOrEqual(tab.y + tab.height + 1);
+      expect(send.y + send.height, "Send shows unscrolled").toBeLessThanOrEqual(tab.y + tab.height + 1);
       const strip = (await page.locator(".shell__status").boundingBox())!;
       const logo = (await page.locator(".topbar__home > :first-child").first().boundingBox())!;
       expect(Math.abs(logo.x - strip.x)).toBeLessThanOrEqual(1);
@@ -320,6 +328,10 @@ test("finished game: The result panel at every width @fast-clock @reveal", async
     await page.setViewportSize({ width, height });
     await showResult(page);
     await fits(page, `result at ${width}`);
+    // Round-1 bug: at 1024/1280 the ranking names wrapped one letter per line. Every name gets at least 40 px.
+    const narrow = await page.locator(".ranking__who").evaluateAll((els) => els.filter((e) => e.getBoundingClientRect().width < 40).map((e) => e.textContent));
+    expect(narrow, `ranking names at ${width}`).toEqual([]);
+    await expectRankingReadable(page);
     await shot(page, "result");
   }
   await ctx.close();
