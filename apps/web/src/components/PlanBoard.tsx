@@ -18,6 +18,8 @@ export interface PlanSeat {
   readonly isBot: boolean;
   readonly you: boolean;
   readonly look: number;
+  /** The head's initials, unique across the crew (bots share a "Bot · " prefix). */
+  readonly tag?: string | undefined;
 }
 export interface PlanRoom {
   readonly id: string;
@@ -107,7 +109,7 @@ function Live({ seats, rooms, board, onEdit, roomName, name, seed }: LiveProps) 
       onDragStart={(e) => e.dataTransfer.setData("text/plain", s.id)}
       onClick={() => toggle(s.id)}
     >
-      <CrookAvatar name={s.name} look={s.look} bot={s.isBot} size={30} />
+      <CrookAvatar name={s.name} look={s.look} tag={s.tag} bot={s.isBot} size={30} />
       {entry(s.id)?.agreed && <span className="plan__tick" aria-hidden="true">✓</span>}
     </button>
   );

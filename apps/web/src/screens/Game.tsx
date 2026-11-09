@@ -414,7 +414,7 @@ function PlanPanel({ view, send, channel }: { view: PlayerView; send: BoardProps
         </h2>
       </div>
       <PlanBoard
-        seats={seatsOf(view).map((s) => ({ ...s, look: looks.get(s.id)?.look ?? 0 }))}
+        seats={seatsOf(view).map((s) => ({ ...s, look: looks.get(s.id)?.look ?? 0, tag: looks.get(s.id)?.tag }))}
         rooms={roomOptions(view).map((r) => ({ id: r.id, name: r.name, closed: r.closed }))}
         board={round === null ? null : live?.round === round ? live : { round, entries: [] }}
         onEdit={async (edit) => {

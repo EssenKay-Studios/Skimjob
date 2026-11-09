@@ -81,7 +81,27 @@ describe("the plan board (design §10)", () => {
   });
 });
 
+describe("heads (design §10)", () => {
+  it("draw the tag they are given, so bots sharing a prefix tell apart", () => {
+    const bots = [
+      { id: "p1", name: "Sam", isBot: false, you: true, look: 0, tag: "Sa" },
+      { id: "p2", name: "Bot · Riya", isBot: true, you: false, look: 1, tag: "Ri" },
+      { id: "p3", name: "Bot · Max", isBot: true, you: false, look: 2, tag: "Ma" },
+    ];
+    const out = html({ seats: bots });
+    expect(out).toContain(">Ri<");
+    expect(out).toContain(">Ma<");
+    expect(out).not.toContain(">B·<");
+  });
+});
+
 describe("plan board styles", () => {
+  it("keep a posted alibi one sentence: only the form is a grid, not the paragraph", () => {
+    const css = readFileSync(new URL("./planboard.css", import.meta.url), "utf8");
+    expect(css).not.toMatch(/(^|[\s,])\.plan__alibi\s*[,{]/m);
+    expect(css).toMatch(/div\.plan__alibi/);
+  });
+
   const code = readFileSync(new URL("./planboard.css", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
 
   it("use theme.css tokens only", () => {
