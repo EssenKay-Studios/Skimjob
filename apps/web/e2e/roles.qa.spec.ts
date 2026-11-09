@@ -14,6 +14,7 @@ async function start(host: APIRequestContext, settings: object, guests: APIReque
   for (const [i, g] of guests.entries()) await ok(await g.post(`/api/invites/${game.inviteCode}/join`, { data: { nickname: `Guest ${i + 1}` } }));
   for (let i = 0; i < bots; i++) await ok(await host.post(`/api/games/${game.id}/bots`, { data: {} }));
   await ok(await host.post(`/api/games/${game.id}/start`, { data: {} }));
+  for (const who of [host, ...guests]) await ok(await who.patch("/api/me", { data: { tips: false } })); // no teaching pop-up (design §15.6)
   return game;
 }
 

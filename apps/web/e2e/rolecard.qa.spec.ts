@@ -25,6 +25,7 @@ async function botGame(page: Page, roleList: List) {
   const game = await ok<{ id: string }>(await r.post("/api/games", { data: { settings: { sessionLength: "1h", roleList } } }));
   for (let i = 0; i < 4; i++) await ok(await r.post(`/api/games/${game.id}/bots`, { data: {} }));
   await ok(await r.post(`/api/games/${game.id}/start`, { data: {} }));
+  await ok(await r.patch("/api/me", { data: { tips: false } })); // no teaching pop-up (design §15.6) over the cards
   await page.goto(`/game/${game.id}`);
   await openPanel(page, "This round"); // below 1024 px the role card is in this sheet
   const panel = page.locator(".role-card");

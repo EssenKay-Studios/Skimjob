@@ -25,9 +25,9 @@ export function happened(view: PlayerView): ReadonlySet<LessonId> {
   return out;
 }
 
-/** The lesson to show now, or null: Tips off, nothing new, or everything already seen. */
+/** The lesson to show now, or null: Tips off, the game over (the reveal has the floor), nothing new, or everything already seen. */
 export function dueLesson(view: PlayerView, seen: ReadonlySet<string>, tips: boolean): LessonId | null {
-  if (!tips) return null;
+  if (!tips || view.phase.kind === "ended") return null;
   const now = happened(view);
   return ORDER.find((id) => now.has(id) && !seen.has(id)) ?? null;
 }

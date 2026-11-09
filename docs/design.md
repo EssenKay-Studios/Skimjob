@@ -668,7 +668,7 @@ Bust (every role): "On a bust, only the Rooftop gets away."
 
 ### 20.6 Teaching pop-ups
 
-Each is "What just happened / What it means / What you can do", shown once per player, one at a time, when it happened in the last two rounds and Tips is on. Several at once queue in this order.
+Each is "What just happened / What it means / What you can do", shown once per player, one at a time, when it happened in the last two rounds, Tips is on and the game is still running. Several at once queue in this order.
 
 | Pop-up | What just happened | What it means | What you can do |
 |---|---|---|---|
