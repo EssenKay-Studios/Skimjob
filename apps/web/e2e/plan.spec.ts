@@ -36,7 +36,10 @@ test("two players plan together on the board, live, with the ledger linked to th
   await expect(board(page).getByText("2 of 3 agreed")).toBeVisible();
   await board(page).getByRole("button", { name: "Claim a power" }).click();
   await board(page).getByRole("group", { name: "Role to pledge" }).getByRole("button", { name: "Detective" }).click();
-  await board(page).getByRole("group", { name: "Player to pledge on" }).getByRole("button", { name: "Guest 1" }).click();
+  // design §10: a power claim names a room or another player, never yourself.
+  const targets = board(page).getByRole("group", { name: "Player to pledge on" });
+  await expect(targets.getByRole("button", { name: "Host" })).toHaveCount(0);
+  await targets.getByRole("button", { name: "Guest 1" }).click();
   await board(page).getByRole("button", { name: "Pledge", exact: true }).click();
   await expect(board(guest).getByRole("button", { name: /^Host: Office, Detective on Guest 1\./ })).toBeVisible();
 

@@ -217,7 +217,7 @@ function Pledge({ rooms, seats, current, seed, onSave, onCancel }: { rooms: read
   const [role, setRole] = useState<string | null>(current?.role ?? null);
   const [target, setTarget] = useState<string | null>(current?.target ?? null);
   const aims = role ? pledgeAims(role) : undefined;
-  const targets = aims === "player" ? seats.map((s) => ({ id: s.id, name: s.name })) : rooms.map((r) => ({ id: r.id, name: r.name }));
+  const targets = aims === "player" ? seats.filter((s) => !s.you).map((s) => ({ id: s.id, name: s.name })) : rooms.map((r) => ({ id: r.id, name: r.name }));
   return (
     <div className="plan__pledge">
       <div className="plan__chips" role="group" aria-label="Role to pledge">
@@ -284,6 +284,7 @@ function Snapshot({ last, seats, name, roomName }: { last: NonNullable<PlanBoard
 /** An alibi for the latest resolved round: a room, true or not; everyone sees it. design §11.3 */
 function Alibi({ alibi, rooms, roomName, onAlibi, seed }: { alibi: NonNullable<PlanBoardProps["alibi"]>; rooms: readonly PlanRoom[]; roomName: (id: string) => string; onAlibi: (round: number, room: string) => Promise<void>; seed: string }) {
   const [room, setRoom] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   if (alibi.posted) {
     return (
       <p className="plan__alibi">
@@ -301,7 +302,7 @@ function Alibi({ alibi, rooms, roomName, onAlibi, seed }: { alibi: NonNullable<P
           </Button>
         ))}
       </div>
-      <Button variant="secondary" seed={`${seed}-alibi-post`} disabled={!room} onClick={() => void onAlibi(alibi.round, room!)}>
+      <Button variant="secondary" seed={`${seed}-alibi-post`} disabled={!room || busy} onClick={async () => { setBusy(true); await onAlibi(alibi.round, room!); setBusy(false); }}>
         Post alibi
       </Button>
     </div>
