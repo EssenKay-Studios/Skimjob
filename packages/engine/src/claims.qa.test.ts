@@ -5,7 +5,7 @@ import { createGame } from "./setup";
 import { replay } from "./reduce";
 import { handleCommand } from "./handle";
 import { viewFor } from "./view";
-import { handleThroughAlibis } from "./alibis.testkit";
+import { handleThroughResult } from "./result.testkit";
 
 const cfg = (n: number, extra: Partial<GameConfig> = {}): GameConfig => ({
   seed: `qa-claim-${n}`,
@@ -26,9 +26,10 @@ const refused = (s: GameState, command: unknown): string => {
   if (r.ok) throw new Error(`expected a refusal of ${JSON.stringify(command)}`);
   return r.reason;
 };
+const roleClaims = (log: readonly GameEvent[]) => log.flatMap((e) => (e.type === "said" && e.statement.kind === "role" ? [e.statement] : []));
 const roundAdvance = (s: GameState): GameState => {
   const round = s.round;
-  const r = handleThroughAlibis(s, { type: "advance", deadline: { kind: "round", round } });
+  const r = handleThroughResult(s, { type: "advance", deadline: { kind: "round", round } });
   if (!r.ok) throw new Error(r.reason);
   return r.state;
 };
@@ -37,7 +38,7 @@ describe("claimRole — QA PR #37, design §11.3", () => {
   it("hostile extra fields can't forge the event: only player, role, the real stretch and public visibility — design §11.3", () => {
     const s = createGame(cfg(4));
     const { events } = step(s, { type: "claimRole", player: "p1", role: "lookout", stretch: 3, visibility: { kind: "secret", player: "p1" }, round: 9 });
-    expect(events).toEqual([{ type: "roleClaimed", visibility: { kind: "public" }, player: "p1", role: "lookout", stretch: 1 }]);
+    expect(events).toEqual([{ type: "said", visibility: { kind: "public" }, statement: { kind: "role", player: "p1", role: "lookout", stretch: 1 } }]);
   });
 
   it("refuses hostile player ids (prototype keys, non-strings) without throwing", () => {
@@ -53,10 +54,10 @@ describe("claimRole — QA PR #37, design §11.3", () => {
     for (const role of ["fixer", "auditor", "mole"]) expect(refused(first, { type: "claimRole", player: "p0", role })).toMatch(/already claimed/);
     // An unknown role is reported as unknown, even after an earlier claim (no hint either way).
     expect(refused(first, { type: "claimRole", player: "p0", role: "zzz" })).toMatch(/unknown role/);
-    expect(first.log.filter((e) => e.type === "roleClaimed")).toHaveLength(1);
+    expect(first.log.filter((e) => e.type === "said")).toHaveLength(1);
   });
 
-  it("allowed in every live phase (planning, alibis, awaitingMeeting, meeting, result) and in each stretch, once — design §11.3", () => {
+  it("allowed in every live phase (planning, awaitingMeeting, meeting, result) and in each stretch, once — design §11.3", () => {
     // A bank of 12: round 1's default moves take a third of it, so a regular meeting follows (design §9.1).
     let s = createGame(cfg(4, { contentOverrides: { bank: { coinsPerPlayer: 3 } } }));
     const phases: string[] = [];
@@ -66,18 +67,16 @@ describe("claimRole — QA PR #37, design §11.3", () => {
     };
     tryClaim("p0", "lookout"); // planning, stretch 1
     s = step(s, { type: "advance", deadline: { kind: "round", round: 1 } }).state;
-    expect(s.phase.kind).toBe("alibis");
-    tryClaim("p1", "auditor");
-    s = step(s, { type: "advance", deadline: { kind: "alibis", round: 1 } }).state;
     expect(s.phase.kind).toBe("awaitingMeeting");
+    tryClaim("p1", "auditor");
     tryClaim("p2", "fixer");
     s = step(s, { type: "scheduleMeeting", meetingId: "meeting-1", slot: "now" }).state;
     s = step(s, { type: "advance", deadline: { kind: "openMeeting", meetingId: "meeting-1" } }).state;
     tryClaim("p3", "lookout"); // stretch 2 from here
     s = step(s, { type: "advance", deadline: { kind: "closeMeeting", meetingId: "meeting-1" } }).state;
     tryClaim("p0", "detective");
-    expect(phases).toEqual(["planning", "alibis", "awaitingMeeting", "meeting", "result"]);
-    expect(s.log.filter((e) => e.type === "roleClaimed").map((e) => (e as Extract<GameEvent, { type: "roleClaimed" }>).stretch)).toEqual([1, 1, 1, 2, 2]);
+    expect(phases).toEqual(["planning", "awaitingMeeting", "awaitingMeeting", "meeting", "result"]);
+    expect(roleClaims(s.log).map((c) => c.stretch)).toEqual([1, 1, 1, 2, 2]);
   });
 
   it("claims in every stretch up to the round cap, then refused once the game really ends (played out, not a patched phase)", () => {
@@ -86,7 +85,7 @@ describe("claimRole — QA PR #37, design §11.3", () => {
     for (let guard = 0; s.phase.kind !== "ended" && guard < 200; guard++) {
       const r = handleCommand(s, { type: "claimRole", player: "p0", role: "lookout" });
       if (r.ok) {
-        stretches.push((r.events[0] as Extract<GameEvent, { type: "roleClaimed" }>).stretch);
+        stretches.push(roleClaims(r.events)[0]!.stretch);
         s = r.state;
       }
       const p = s.phase;
@@ -97,8 +96,6 @@ describe("claimRole — QA PR #37, design §11.3", () => {
         s = step(s, { type: "advance", deadline: { kind: "closeMeeting", meetingId: p.meetingId } }).state;
       } else if (p.kind === "planning") {
         s = roundAdvance(s);
-      } else if (p.kind === "alibis") {
-        s = step(s, { type: "advance", deadline: { kind: "alibis", round: p.round } }).state;
       } else if (p.kind === "result") {
         s = step(s, { type: "advance", deadline: { kind: "result", round: p.round } }).state;
       } else if (p.kind !== "ended") throw new Error(`unexpected phase ${p.kind}`);
@@ -114,10 +111,10 @@ describe("claimRole — QA PR #37, design §11.3", () => {
       const c = cfg(n);
       let s = createGame(c);
       for (let i = 0; i < n; i++) s = step(s, { type: "claimRole", player: `p${i}`, role: i % 2 ? "detective" : "lookout" }).state;
-      const claims = s.log.filter((e) => e.type === "roleClaimed");
+      const claims = s.log.filter((e) => e.type === "said");
       expect(claims).toHaveLength(n);
       for (let v = 0; v < n; v++) {
-        const seen = viewFor(s, `p${v}`).ledger.filter(({ event }) => event.type === "roleClaimed").map(({ event }) => event);
+        const seen = viewFor(s, `p${v}`).ledger.filter(({ event }) => event.type === "said").map(({ event }) => event);
         expect(seen).toEqual(claims);
       }
       expect(replay(c, s.log)).toEqual(s);
@@ -131,7 +128,7 @@ describe("claimRole — QA PR #37, design §11.3", () => {
   it("accepts any known role, dealt in this game or not (the deal stays hidden) — design §11.3", () => {
     const s = createGame(cfg(4));
     // Whatever was dealt, known content is accepted.
-    expect(step(s, { type: "claimRole", player: "p0", role: "fixer" }).events[0]).toMatchObject({ role: "fixer" });
-    expect(step(s, { type: "claimRole", player: "p1", role: "hacker" }).events[0]).toMatchObject({ role: "hacker" });
+    expect(step(s, { type: "claimRole", player: "p0", role: "fixer" }).events[0]).toMatchObject({ statement: { role: "fixer" } });
+    expect(step(s, { type: "claimRole", player: "p1", role: "hacker" }).events[0]).toMatchObject({ statement: { role: "hacker" } });
   });
 });

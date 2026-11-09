@@ -7,7 +7,7 @@ import { forecast, LEAN_AT, leaning } from "./forecast";
 import { PERSONALITIES, type Personality } from "./personalities";
 import { createBots, runBotGame } from "./run";
 import { suspicion } from "./suspicion";
-import { closeAlibis, config, game, round } from "./testkit";
+import { closeResult, config, game, round } from "./testkit";
 
 type Player = GameState["players"][string];
 const exact: Personality = { ...PERSONALITIES.honest, noise: 0, misread: 0, hunch: 0 };
@@ -27,7 +27,7 @@ describe("QA #51: votes are on suspicion only — design §19.3", { timeout: 10_
     // Two rounds with every coin pocketed: a top-rated Mole leans toward theft (design §8.4).
     let cold = game(5);
     for (let r = 0; r < 2; r++) cold = round(cold, Object.fromEntries(cold.playerOrder.map((id) => [id, { room: "lobby", pocket: 2 }])));
-    const base = addLog({ ...closeAlibis(cold), phase: { kind: "meeting", meetingId: "meeting-1" } }, {
+    const base = addLog({ ...closeResult(cold), phase: { kind: "meeting", meetingId: "meeting-1" } }, {
       type: "shakedownResolved", visibility: PUBLIC, meetingId: "emergency-x", target: "ben", stashRevealed: 7, taken: 7, clean: false,
     });
     const star = withRole(base, "ana", "mole", { stash: 10 });

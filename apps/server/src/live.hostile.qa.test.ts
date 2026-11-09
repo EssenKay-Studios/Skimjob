@@ -112,7 +112,7 @@ const commandFields = (room: string, proposalId: string, other: string): readonl
   [{ type: "submitMove", move: { room, duffel: BANK_JOB.rooms[room]?.coins ?? 0, pocket: 0, ability: { kind: "absolve", target: other } } }, [id(["move", "ability", "target"])]],
   // '["lobby"]' is a valid rooms list, accepted when the (randomly dealt) attacker is a Lookout, so it isn't tried there.
   [{ type: "submitMove", move: { room, duffel: BANK_JOB.rooms[room]?.coins ?? 0, pocket: 0, ability: { kind: "lookout", rooms: [room] } } }, [[["move", "ability", "rooms"], ALL.filter((v) => v !== '["lobby"]')], id(["move", "ability", "rooms", "0"])]],
-  [{ type: "postAlibi", room }, [id(["room"])]],
+  [{ type: "postAlibi", round: 1, room }, [[["round"], NOT_NUMBER], id(["room"])]],
   [{ type: "proposeMeeting", slot: "s" }, [[["slot"], NON_STRING]]],
   [{ type: "acceptMeeting", proposalId }, [id(["proposalId"])]],
   [{ type: "castVote", vote: { kind: "shakedown", target: other } }, [id(["vote"]), id(["vote", "kind"]), id(["vote", "target"])]],
@@ -153,7 +153,7 @@ async function attack(gameId: string, attacker: Client, others: readonly Client[
 }
 
 describe("QA: hostile command values over the socket (PR #28)", () => {
-  it("every command type and field, in planning, alibis and an open meeting: refused on that socket only, no error, nothing changed", async () => {
+  it("every command type and field, in planning, the result window and an open meeting: refused on that socket only, no error, nothing changed", async () => {
     const { id, who, players } = await startGame(3);
     const [a, b, c] = await Promise.all(who.map((w) => Client.open(id, w)));
     // A proposal by B, so acceptMeeting has a real id to start from.
@@ -171,16 +171,14 @@ describe("QA: hostile command values over the socket (PR #28)", () => {
     expect(await a!.send({ type: "submitMove", move: { room, duffel: BANK_JOB.rooms[room]?.coins ?? 0, pocket: 0 } })).toMatchObject({ ok: true });
     expect(await a!.send({ type: "acceptMeeting", proposalId: state.proposals[0]!.id })).toMatchObject({ ok: true });
 
-    // Alibis for round 1.
+    // Round 1's result window (design §9.3).
     await app.live.system(id, { type: "advance", deadline: { kind: "round", round: 1 } });
     state = await loadVia(id);
-    expect(state.phase.kind).toBe("alibis");
+    expect(state.phase.kind).toBe("result");
     await Promise.all([a!, b!, c!].map((x) => x.barrier()));
     tried += await attack(id, a!, [b!, c!], state, players);
-    expect(await a!.send({ type: "postAlibi", room: state.moves[players[0]!]?.room ?? room })).toMatchObject({ ok: true });
-
-    // The alibis close: round 1's result window (design §9.3).
-    await app.live.system(id, { type: "advance", deadline: { kind: "alibis", round: 1 } });
+    // design §11.3: an alibi for round 1, in its result window (design §9.3).
+    expect(await a!.send({ type: "postAlibi", round: 1, room })).toMatchObject({ ok: true });
     expect((await loadVia(id)).phase.kind).toBe("result");
     // An emergency, opened: voting. A hostile `player` and a `__proto__` key don't change whose call it is.
     expect(await a!.send(JSON.parse(`{"type":"callEmergency","player":{"toString":null},"__proto__":{"player":"${players[1]}"}}`))).toMatchObject({ ok: true });

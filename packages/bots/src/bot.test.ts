@@ -3,9 +3,10 @@
 import { describe, expect, it } from "vitest";
 import { jobFor, ringsOf, roomDef, viewFor, jobById, type GameEvent, type GameState, type Move, type PlayerCommand } from "@skimjob/engine";
 import { PERSONALITIES, type Personality } from "./personalities";
-import { botRandom, chooseAlibi, chooseMove, chooseVote, createBot, crewHunch, decide, misjudged, type Random } from "./bot";
+import { botRandom, chooseAlibi, chooseMove, chooseSpot, chooseVote, createBot, crewHunch, decide, misjudged, type Random } from "./bot";
+import { runBotGame } from "./run";
 import { suspicion } from "./suspicion";
-import { closeAlibis, emergencyMeeting, game, round, run, toResult } from "./testkit";
+import { closeResult, config, emergencyMeeting, game, round, run } from "./testkit";
 
 /** A personality with no noise or misreading at votes, so a test can pin its behaviour. */
 const exact = (base: Personality, change: Partial<Personality> = {}): Personality => ({ ...base, noise: 0, misread: 0, hunch: 0, ...change });
@@ -47,9 +48,9 @@ describe("Agent — design §17.3", () => {
     let s = game(4);
     const proposes = (st: GameState) => decide(viewFor(st, "ana"), exact(PERSONALITIES.honest), seeded("a"), "test-crew").some((c) => c.type === "proposeMeeting");
     expect(proposes(s)).toBe(false);
-    s = closeAlibis(round(s, all(s)));
+    s = closeResult(round(s, all(s)));
     expect(proposes(s)).toBe(false);
-    s = closeAlibis(round(s, all(s))); // round 3
+    s = closeResult(round(s, all(s))); // round 3
     expect(proposes(s)).toBe(false);
   });
 
@@ -126,20 +127,20 @@ describe("moves — design §5.1, §6, §7, §8", () => {
     let s = game(4);
     const half = { room: "lobby", pocket: 1 };
     for (let r = 1; r <= 2; r++) s = round(s, { ana: half, ben: half, carl: half, dee: half });
-    s = closeAlibis(s); // round 3 is being planned
+    s = closeResult(s); // round 3 is being planned
     const greedyCrewMinded = exact(PERSONALITIES.greedy, { pocketChance: 1, teamSpirit: 1, watch: 0, caution: 0 });
     for (let i = 0; i < 20; i++) expect(chooseMove(viewFor(s, "ana"), greedyCrewMinded, seeded(`p${i}`)).pocket).toBe(0);
     // Everything handed in so far (16 of 16): there is room for a pocketed coin.
     let honest = game(4);
     const all = { room: "lobby" };
     for (let r = 1; r <= 2; r++) honest = round(honest, { ana: all, ben: all, carl: all, dee: all });
-    honest = closeAlibis(honest);
+    honest = closeResult(honest);
     const pockets = Array.from({ length: 20 }, (_, i) => chooseMove(viewFor(honest, "ana"), greedyCrewMinded, seeded(`p${i}`)).pocket);
     expect(pockets.some((p) => p > 0)).toBe(true);
   });
 });
 
-describe("alibis — design §5.4", () => {
+describe("alibis — design §11.3", () => {
   // Ana pockets 4 of the Vault's 6, handing in 2; whether anyone saw her decides the cover-up.
   const pocketed = (withWitness: boolean): GameState =>
     round(game(3), {
@@ -212,10 +213,10 @@ describe("votes — design §11.2, §17.3", () => {
 
   it("spends the crew's emergency in the result window when suspicion is high enough, never while planning — design §9.3", () => {
     const cautious = exact(PERSONALITIES.cautious, { emergencyAt: 8 });
-    const cmds = decide(viewFor(toResult(liar()), "ana"), cautious, rolls(0.5), "test-crew");
+    const cmds = decide(viewFor(liar(), "ana"), cautious, rolls(0.5), "test-crew");
     expect(cmds.map((c) => c.type)).toContain("callEmergency");
-    run(toResult(liar()), ...cmds);
-    expect(decide(viewFor(closeAlibis(liar()), "ana"), cautious, rolls(0.5), "test-crew").map((c) => c.type)).not.toContain("callEmergency");
+    run(liar(), ...cmds);
+    expect(decide(viewFor(closeResult(liar()), "ana"), cautious, rolls(0.5), "test-crew").map((c) => c.type)).not.toContain("callEmergency");
   });
 });
 
@@ -229,7 +230,7 @@ describe("role habits — design §11.1, §19.3", () => {
   };
   const lobby = { room: "lobby" };
   // Round 1: ben pockets 4 in the Vault and claims the Office: the top suspect.
-  const suspectBen = () => closeAlibis(round(game(5), { ana: lobby, ben: { room: "vault", pocket: 4, alibi: "office" }, carl: lobby, dee: lobby, eve: lobby }));
+  const suspectBen = () => closeResult(round(game(5), { ana: lobby, ben: { room: "vault", pocket: 4, alibi: "office" }, carl: lobby, dee: lobby, eve: lobby }));
   const uses = (st: GameState, role: string, used = 0) =>
     decide(viewFor(withRole(st, "ana", role, { usedThisStretch: used }), "ana"), exact(PERSONALITIES.honest), seeded("c"), "test-crew").filter((c) => c.type === "useAbility");
   const skimmer = exact(PERSONALITIES.greedy, { pocketChance: 1, teamSpirit: 0, watch: 0, caution: 0 });
@@ -272,7 +273,7 @@ describe("role habits — design §11.1, §19.3", () => {
     const first = chooseMove(viewFor(s, "ana"), exact(PERSONALITIES.honest), seeded("p"));
     expect(first.ability).toEqual({ kind: "absolve", target: "ben" });
     // The absolve resolves; ben stays the top suspect, but the Priest turns elsewhere (or nowhere).
-    const after = closeAlibis(round(run(s, { type: "submitMove", player: "ana", move: first }), { ben: lobby, carl: lobby, dee: lobby, eve: lobby }));
+    const after = closeResult(round(run(s, { type: "submitMove", player: "ana", move: first }), { ben: lobby, carl: lobby, dee: lobby, eve: lobby }));
     const next = chooseMove(viewFor(after, "ana"), exact(PERSONALITIES.honest), seeded("p"));
     expect(next.ability === undefined || (next.ability.kind === "absolve" && next.ability.target !== "ben")).toBe(true);
   });
@@ -295,5 +296,49 @@ describe("role habits — design §11.1, §19.3", () => {
     const taped = { ...s, bells, taped: { vault: 3 } } satisfies GameState;
     for (const m of moves(taped)) expect(m.ability).toEqual({ kind: "reopen", room: "vault" });
     expect(moves(withRole(taped, "ana", "fixer", { usedThisGame: 1 })).every((m) => m.ability === undefined)).toBe(true);
+  });
+});
+
+describe("the plan board — design §10", () => {
+  const view = viewFor(game(5, { ben: "mole" }), "ana");
+  const skim: Move = { room: "vault", duffel: 1, pocket: 2 };
+
+  it("takes a sensible spot: the room it goes to, pledging its power where its move aims it", () => {
+    const move: Move = { room: "office", duffel: 2, pocket: 0, ability: { kind: "lookout", rooms: ["vault"] } };
+    expect(chooseSpot(view, PERSONALITIES.greedy, rolls(0), move)).toEqual({ room: "office", power: { role: "lookout", target: "vault" } });
+    // The Mole keeps quiet about its power.
+    const mole = viewFor(game(5, { ben: "mole" }), "ben");
+    expect(chooseSpot(mole, PERSONALITIES.honest, rolls(0), { room: "lobby", duffel: 1, pocket: 0, ability: { kind: "ring", room: "vault" } })).toEqual({ room: "lobby", power: null });
+  });
+
+  it("sometimes breaks it: pocketing, a liar claims a quieter room its hand-in adds up to", () => {
+    const spot = chooseSpot(view, PERSONALITIES.greedy, rolls(0), skim);
+    expect(spot.room).not.toBe("vault");
+    expect(roomDef(bank, spot.room).coins).toBeLessThanOrEqual(skim.duffel);
+    expect(chooseSpot(view, PERSONALITIES.greedy, rolls(0.99), skim).room).toBe("vault"); // not this time
+    expect(chooseSpot(view, PERSONALITIES.honest, rolls(0), skim).room).toBe("vault"); // Honest never lies
+    expect(chooseSpot(view, exact(PERSONALITIES.opportunist, { lie: 1 }), rolls(0), skim).room).toBe("vault"); // can't know yet if it'll be seen
+  });
+
+  it("an agent's spot is the one it took with its move, only while that round is planned", () => {
+    const bot = createBot({ player: "ana", personality: PERSONALITIES.honest, seed: "spot", crewSeed: "test-crew" });
+    const s = game(5);
+    expect(bot.spot(viewFor(s, "ana"))).toBeNull();
+    const move = submitted(bot.act(viewFor(s, "ana")));
+    expect(bot.spot(viewFor(s, "ana"))?.room).toBe(move?.room);
+    expect(bot.spot(viewFor(closeResult(round(s, {})), "ana"))).toBeNull();
+  });
+
+  it("in bot games each round's board goes into the log, and bots read it back — design §10, §19.3", () => {
+    const c = config(6, "plan-board");
+    const { state, rejections } = runBotGame(c, c.players.map((p) => createBot({ player: p.id, personality: PERSONALITIES.greedy, seed: p.id, crewSeed: "crew" })));
+    expect(rejections).toEqual([]);
+    const plans = state.log.flatMap((e) => (e.type === "said" && e.statement.kind === "plan" ? [e.statement] : []));
+    const rounds = state.log.filter((e) => e.type === "roundResolved").length;
+    expect(plans).toHaveLength(rounds);
+    for (const p of plans) expect(p.plan.entries.map((e) => e.player)).toEqual(state.playerOrder);
+    const real = new Map(state.log.flatMap((e) => (e.type === "coinsGrabbed" ? [[`${e.player}/${e.round}`, e.room] as const] : [])));
+    const broken = plans.flatMap((p) => p.plan.entries.filter((e) => e.room !== real.get(`${e.player}/${p.round}`)));
+    expect(broken.length).toBeGreaterThan(0); // Greedy breaks the plan now and then
   });
 });

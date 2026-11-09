@@ -36,7 +36,7 @@ describe("reveal summary — design §13", () => {
       dealt("p0", "mole"),
       dealt("p1", "lookout"),
       started(2),
-      { type: "roleClaimed", visibility: PUBLIC, player: "p0", role: "lookout", stretch: 1 },
+      { type: "said", visibility: PUBLIC, statement: { kind: "role", player: "p0", role: "lookout", stretch: 1 } },
     ];
     const outcome: Outcome = { result: "failed", reason: "theft", ranking: [rank("p0", "mole", 9), rank("p1", "lookout", 3)], winners: ["p0"], getaway: 0 };
     const s = revealSummary(log, outcome);

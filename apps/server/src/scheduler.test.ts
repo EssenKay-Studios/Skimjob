@@ -116,13 +116,12 @@ describe("all-bot games on a fake clock (M2-4 acceptance)", () => {
           if (!seen.has(d.key)) {
             seen.set(d.key, d.due);
             if (d.key.startsWith("round:")) expect(d.due - clock.now()).toBe(QUICK.roundMs); // design §17.1
-            if (d.key.startsWith("alibis:")) expect(d.due - clock.now()).toBe(QUICK.alibiMs); // design §5.4
             if (d.key.startsWith("result:")) expect(d.due - clock.now()).toBe(QUICK.resultMs); // design §9.3
             if (d.key.startsWith("closeMeeting:")) expect(d.due - clock.now()).toBe(QUICK.meetingMs);
             // STATUS: the shakedown window always runs its full server-set length. design §9.6
             if (d.key.startsWith("resolveShakedown:")) expect(d.due - clock.now()).toBe(QUICK.shakedownWindowMs);
           }
-          // A row's due time is fixed when it is made: no meeting runs under a round, alibi or result window
+          // A row's due time is fixed when it is made: no meeting runs under a round or result window
           // (design §4.1, §9.3), and only the host pauses a game.
           expect(d.paused).toBe(false);
           expect(d.due).toBe(seen.get(d.key));
@@ -156,12 +155,8 @@ describe("restarts (M2-4 acceptance)", () => {
     expect(await app.scheduler.tick()).toBe(1);
     const s = await load(id);
     expect(count(s, "roundResolved")).toBe(1);
-    expect(s.phase).toEqual({ kind: "alibis", round: 1 });
-    expect(await deadlines(id)).toEqual([{ key: "alibis:1", due: clock.now() + QUICK.alibiMs, paused: false }]);
-    // design §5.4, §9.3: the alibi deadline opens the result window, whose deadline then starts round 2.
-    clock.advance(QUICK.alibiMs);
-    expect(await app.scheduler.tick()).toBe(1);
-    expect((await load(id)).phase).toEqual({ kind: "result", round: 1 });
+    // design §9.3: the round opens the result window, whose deadline then starts round 2.
+    expect(s.phase).toEqual({ kind: "result", round: 1 });
     expect(await deadlines(id)).toEqual([{ key: "result:1", due: clock.now() + QUICK.resultMs, paused: false }]);
     clock.advance(QUICK.resultMs);
     expect(await app.scheduler.tick()).toBe(1);
@@ -182,7 +177,7 @@ describe("restarts (M2-4 acceptance)", () => {
     ]);
     await app.close();
     await boot();
-    expect(await deadlines(id)).toEqual([{ key: "alibis:1", due: clock.now() + QUICK.alibiMs, paused: false }]);
+    expect(await deadlines(id)).toEqual([{ key: "result:1", due: clock.now() + QUICK.resultMs, paused: false }]);
     expect(await app.scheduler.tick()).toBe(0);
     expect(count(await load(id), "roundResolved")).toBe(1);
   });
@@ -214,7 +209,7 @@ describe("failures (PR #22 review)", () => {
     expect(await sched.tick()).toBe(1);
     const s = await load(id);
     expect(count(s, "roundResolved")).toBe(1);
-    expect(await deadlines(id)).toEqual([{ key: "alibis:1", due: clock.now() + QUICK.alibiMs, paused: false }]);
+    expect(await deadlines(id)).toEqual([{ key: "result:1", due: clock.now() + QUICK.resultMs, paused: false }]);
   });
 
   it("a refused (stale) deadline is dropped and the game's real next deadline is planned", { timeout: 60_000 }, async () => {
@@ -230,7 +225,7 @@ describe("failures (PR #22 review)", () => {
     ]);
     expect(await app.scheduler.tick()).toBe(0);
     expect(count(await load(id), "roundResolved")).toBe(1);
-    expect(await deadlines(id)).toEqual([{ key: "alibis:1", due: clock.now() + QUICK.alibiMs, paused: false }]);
+    expect(await deadlines(id)).toEqual([{ key: "result:1", due: clock.now() + QUICK.resultMs, paused: false }]);
   });
 });
 
@@ -251,8 +246,6 @@ describe("the emergency's notice and the result window (design §9.3)", () => {
     };
     expect(await send({ type: "callEmergency" })).toMatchObject({ rejected: true });
     clock.advance(QUICK.roundMs);
-    expect(await app.scheduler.tick()).toBe(1);
-    clock.advance(QUICK.alibiMs);
     expect(await app.scheduler.tick()).toBe(1);
     expect((await load(id)).phase).toEqual({ kind: "result", round: 1 });
     expect(await send({ type: "callEmergency" })).toMatchObject({ ok: true });

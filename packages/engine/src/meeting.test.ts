@@ -72,7 +72,6 @@ const LAST = <T extends GameEvent["type"]>(s: GameState, type: T) => ofType(s.lo
 
 const mv = (player: string, room: string, pocket = 0, overrides: ContentOverrides = PINS) => ({ type: "submitMove", player, move: fullGrab(room, pocket, overrides) });
 const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
-const ALIBIS = (s: GameState) => ({ type: "advance", deadline: { kind: "alibis", round: s.resolvedRound } });
 const RESULT = (s: GameState) => ({ type: "advance", deadline: { kind: "result", round: s.resolvedRound } });
 const open = (meetingId: unknown) => ({ type: "advance", deadline: { kind: "openMeeting", meetingId } });
 const close = (meetingId: unknown) => ({ type: "advance", deadline: { kind: "closeMeeting", meetingId } });
@@ -87,8 +86,8 @@ const seal = (player: string, target: string | null) => ({ type: "sealVote", pla
 const SCHED = (s: GameState) => sched(s.phase.kind === "awaitingMeeting" ? s.phase.meetingId : null);
 const OPEN = (s: GameState) => open(s.scheduledMeeting?.meetingId ?? s.pendingEmergency?.meetingId);
 const CLOSE = (s: GameState) => close(s.meeting?.id);
-/** A round's deadline and then its alibis' (nobody posts). */
-const RESOLVE = [ROUND, ALIBIS];
+/** A round's deadline. */
+const RESOLVE = [ROUND];
 
 /**
  * 3 Lookouts. Round 1: p0 pockets the Vault's 6; p1 and p2 miss (the Lobby, 1
@@ -100,15 +99,14 @@ function regularMeeting(roles: string[] = [], mode?: VoteVisibility): GameState 
 }
 
 describe("regular meetings at the bank's thirds — design §9.1, §4.2 step 9", () => {
-  it("a regular meeting follows the round in which the bank first drops to two-thirds, after its alibis; not before", () => {
+  it("a regular meeting follows the round in which the bank first drops to two-thirds; not before", () => {
     // Round 1: everyone misses, 3 coins taken: 15 of 18 left, no third gone.
     let s = run(game(3), ...RESOLVE);
     expect([s.bank, s.thirds, s.meetingDue]).toEqual([15, 0, null]);
     expect(s.phase).toEqual({ kind: "result", round: 1 });
     // Round 2: p0's Vault grab leaves 15 − 6 − 2 = 7: a third is gone.
     s = run(s, RESULT, mv("p0", "vault"), ROUND);
-    expect([s.bank, s.thirds, s.meetingDue, s.phase.kind]).toEqual([7, 1, "regular", "alibis"]);
-    s = run(s, ALIBIS);
+    expect([s.bank, s.thirds, s.meetingDue]).toEqual([7, 1, "regular"]);
     expect(s.phase).toEqual({ kind: "awaitingMeeting", meeting: "regular", meetingId: "meeting-1" });
     const before = run(s, SCHED);
     s = run(before, OPEN);
@@ -154,7 +152,7 @@ describe("regular meetings at the bank's thirds — design §9.1, §4.2 step 9",
 });
 
 describe("police briefings — design §9.2", () => {
-  it("a raid calls a police briefing after the round's alibis; it recharges nothing", () => {
+  it("a raid calls a police briefing after the round; it recharges nothing", () => {
     // p0's 6 Vault coins ring 6: the Vault is raided. The bank (300) is nowhere near a third.
     let s = run(game(3, [], undefined, RAIDS), mv("p0", "vault", 0, RAIDS), ...RESOLVE);
     expect(s.wanted).toBe(1);
@@ -193,15 +191,12 @@ describe("the emergency pool and the result window — design §9.3, §4.2 step 
     }
   });
 
-  it("refused during planning, a round's alibis, a due or open meeting; allowed in the result window (#167)", () => {
+  it("refused during planning, a due or open meeting; allowed in the result window (#167)", () => {
     let s = game(3);
     expect(s.phase.kind).toBe("planning");
     const only = /only be called between a round's result and the next planning/;
     expect(reason(s, emergency("p0"))).toMatch(only);
     s = run(s, mv("p0", "vault", 6), ROUND);
-    expect(s.phase.kind).toBe("alibis");
-    expect(reason(s, emergency("p0"))).toMatch(only);
-    s = run(s, ALIBIS);
     expect(s.phase.kind).toBe("awaitingMeeting");
     expect(reason(s, emergency("p0"))).toMatch(only);
     s = run(s, SCHED, OPEN);
@@ -228,7 +223,7 @@ describe("the emergency pool and the result window — design §9.3, §4.2 step 
     expect([s.phase, s.emergencies]).toEqual([{ kind: "planning", round: 2 }, 0]);
   });
 
-  it("with the pool empty the result window is skipped: the next round starts as the alibis close", () => {
+  it("with the pool empty the result window is skipped: the next round starts as the round resolves", () => {
     let s = run(game(3, [], undefined, BIG_BANK), ...RESOLVE, emergency("p0"), OPEN, CLOSE);
     s = run(s, ...RESOLVE);
     expect(s.phase).toEqual({ kind: "planning", round: 3 });
@@ -248,9 +243,9 @@ describe("the emergency pool and the result window — design §9.3, §4.2 step 
   });
 
   it("the result window's deadline is refused when stale, retried or outside the window", () => {
-    let s = run(game(3, [], undefined, BIG_BANK), ROUND);
-    expect(reason(s, { type: "advance", deadline: { kind: "result", round: 1 } })).toMatch(/no result window/);
-    s = run(s, ALIBIS);
+    const planning = game(3, [], undefined, BIG_BANK);
+    expect(reason(planning, { type: "advance", deadline: { kind: "result", round: 1 } })).toMatch(/no result window/);
+    let s = run(planning, ROUND);
     for (const round of [0, 2, "1", null]) expect(reason(s, { type: "advance", deadline: { kind: "result", round } })).toMatch(/not open/);
     s = run(s, RESULT);
     expect(reason(s, { type: "advance", deadline: { kind: "result", round: 1 } })).toMatch(/no result window/);
@@ -274,12 +269,10 @@ describe("scheduling — design §9.4", () => {
     expect([s.scheduledMeeting, s.proposals, s.phase]).toEqual([{ meetingId: "meeting-1", slot: "tue-19:00" }, [], { kind: "planning", round: 1 }]);
   });
 
-  it("a locked slot opens only once a round calls the meeting and its alibis close", () => {
+  it("a locked slot opens only once a round calls the meeting", () => {
     let s = run(game(3), propose("p0", "a"), (x: GameState) => accept("p1", x.proposals[0]!.id));
     expect(reason(s, open("meeting-1"))).toMatch(/opens once a round calls it/);
-    s = run(s, mv("p0", "vault"), ROUND);
-    expect(reason(s, open("meeting-1"))).toMatch(/opens once a round calls it/);
-    s = run(s, ALIBIS, open("meeting-1"));
+    s = run(s, mv("p0", "vault"), ROUND, open("meeting-1"));
     expect(s.meeting).toMatchObject({ id: "meeting-1", kind: "regular" });
   });
 

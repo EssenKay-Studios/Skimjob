@@ -151,17 +151,22 @@ function playGame(players: number, voteVisibility: VoteVisibility, dark = false)
       if (i === 0) step({ type: "submitMove", player: id, move: fullGrab("lobby") }); // later changed
       step({ type: "submitMove", player: id, move });
     });
-    step({ type: "advance", deadline: { kind: "round", round } });
+    // design §10: the plan board as the round resolves: two seats' claims and pledges (a bluff among them) and the edits.
+    const plan = {
+      entries: ids.slice(0, 2).map((id, i) => ({ player: id, placed: s.rooms[i], room: s.rooms[round % s.rooms.length], power: i ? { role: "hacker", target: "vault" } : null, agreed: i === 0 })),
+      history: [{ actor: ids[1], kind: "place", subject: ids[0], value: s.rooms[0], target: null, msBeforeDeadline: 60_000 * round }],
+    };
+    step({ type: "advance", deadline: { kind: "round", round, plan } });
+    // design §11.3: a role claim (a bluff, maybe) once in the game.
+    if (round === 1 && !over()) step({ type: "claimRole", player: ids[1], role: "lookout" });
     ids.forEach((id, i) => {
       // design §12: in round 2 the last player posts a true alibi, stamped "verified" by its Stamped alibi.
       if (round === 2 && id === last) {
         const split = s.log.find((e) => e.type === "coinsGrabbed" && e.player === id && e.round === round);
         if (split?.type !== "coinsGrabbed") throw new Error("no split");
-        step({ type: "postAlibi", player: id, room: split.room });
-      } else if (i % 4 !== 3) step({ type: "postAlibi", player: id, room: s.rooms[i % s.rooms.length] });
+        step({ type: "postAlibi", player: id, round, room: split.room });
+      } else if (i % 4 !== 3) step({ type: "postAlibi", player: id, round, room: s.rooms[i % s.rooms.length] });
     });
-    // design §5.4: the alibi deadline closes the round's alibis before the next round's planning.
-    if (!over()) step({ type: "advance", deadline: { kind: "alibis", round } });
     // design §4.2 steps 9–10: the meeting the round called, then the result window (an emergency in round 2's).
     while (!over() && (s.phase.kind === "awaitingMeeting" || s.phase.kind === "result")) {
       const p = s.phase;
@@ -338,6 +343,7 @@ describe("no leaks in real games — design §17.2, §13, §9.5", () => {
   const seenTypes = new Set<string>();
   const seenAbilities = new Set<string>();
   const seenPerks = new Set<string>();
+  const seenSaid = new Set<string>();
   const seenWatch = new Set<string>();
   const seenCards = new Set<string>();
   const meetingKinds = new Set<string>();
@@ -356,6 +362,7 @@ describe("no leaks in real games — design §17.2, §13, §9.5", () => {
     for (const t of types) seenTypes.add(t);
     for (const e of final.log) if (e.type === "abilityResolved") seenAbilities.add(e.ability.kind);
     for (const e of final.log) if (e.type === "perkBought") seenPerks.add(e.perk.kind);
+    for (const e of final.log) if (e.type === "said") seenSaid.add(e.statement.kind);
     for (const e of final.log) if (e.type === "roomWatched") seenWatch.add(e.source);
     for (const e of final.log) if (e.type === "eventFlipped") seenCards.add(e.card);
     for (const e of final.log) if (e.type === "meetingOpened") meetingKinds.add(e.kind);
@@ -380,6 +387,7 @@ describe("no leaks in real games — design §17.2, §13, §9.5", () => {
     for (const e of final.log) darkTypes.add(e.type), seenTypes.add(e.type);
     for (const e of final.log) if (e.type === "abilityResolved") seenAbilities.add(e.ability.kind);
     for (const e of final.log) if (e.type === "perkBought") seenPerks.add(e.perk.kind);
+    for (const e of final.log) if (e.type === "said") seenSaid.add(e.statement.kind);
     for (const state of states) {
       for (const viewer of state.playerOrder) {
         const view = viewFor(state, viewer);
@@ -395,7 +403,9 @@ describe("no leaks in real games — design §17.2, §13, §9.5", () => {
   });
 
   it("the games above reach every info, vote, role and event-card event (design §11, §13)", () => {
-    for (const t of ["shakedownPending", "shakedownCancelled", "alibisClosed", "roleListShown", "shopDealt"]) expect(seenTypes, t).toContain(t);
+    for (const t of ["shakedownPending", "shakedownCancelled", "said", "roleListShown", "shopDealt"]) expect(seenTypes, t).toContain(t);
+    // design §10, §11.3: every kind of said statement.
+    for (const k of ["plan", "alibi", "role"]) expect(seenSaid, k).toContain(k);
     // design §5: bells, raids and cooling.
     for (const t of ["bellsRung", "roomRaided", "bellsCooled"]) expect(seenTypes, t).toContain(t);
     // design §7.2, §7.4: the split and the round summary.

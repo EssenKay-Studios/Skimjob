@@ -56,6 +56,9 @@ export interface GameRecord {
   readonly stalls: number;
   /** Event cards flipped (design §13: a 4-in-10 chance each round from round 2). */
   readonly cards: number;
+  /** Room claims on the plan board as rounds resolved, and how many of them were where the player really went. design §10 */
+  readonly planSpots: number;
+  readonly planKept: number;
   /** Meetings held, by kind. design §9.1–§9.3 */
   readonly meetings: Readonly<Record<MeetingKind, number>>;
   readonly shakedowns: readonly ShakedownRecord[];
@@ -87,11 +90,18 @@ export function recordGame(state: GameState, crew: readonly PersonalityId[], rej
   let raids = 0;
   let cards = 0;
   const lyingLow = new Map<number, number>();
+  // design §10: each round's room claims, then where everyone really went.
+  const claimed = new Map<string, string>();
+  const went = new Map<string, string>();
 
   const add = (m: Map<PlayerId, number>, id: PlayerId, v: number) => m.set(id, (m.get(id) ?? 0) + v);
   for (const event of state.log as readonly GameEvent[]) {
     switch (event.type) {
+      case "said":
+        if (event.statement.kind === "plan") for (const e of event.statement.plan.entries) if (e.room !== null) claimed.set(`${e.player}/${event.statement.round}`, e.room);
+        break;
       case "coinsGrabbed":
+        went.set(`${event.player}/${event.round}`, event.room);
         if (job.rooms[event.room]?.lieLow) lyingLow.set(event.round, (lyingLow.get(event.round) ?? 0) + 1);
         add(grabbed, event.player, event.duffel + event.pocket);
         add(pocketed, event.player, event.pocket);
@@ -146,6 +156,8 @@ export function recordGame(state: GameState, crew: readonly PersonalityId[], rej
     raids,
     stalls: [...lyingLow.values()].filter((k) => k > n / 2).length,
     cards,
+    planSpots: claimed.size,
+    planKept: [...claimed].filter(([key, room]) => went.get(key) === room).length,
     meetings,
     shakedowns,
     winners,

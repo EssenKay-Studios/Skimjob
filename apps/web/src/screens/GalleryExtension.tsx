@@ -41,7 +41,6 @@ const createGame = (c: GameConfig): GameState => {
   return replay(c, setupEvents(c).map((e) => (e.type === "roleDealt" ? { ...e, role: GALLERY_ROLES[seat++] as RoleId } : e)));
 };
 const round = (r: number): SystemCommand => ({ type: "advance", deadline: { kind: "round", round: r } });
-const alibis = (r: number): SystemCommand => ({ type: "advance", deadline: { kind: "alibis", round: r } });
 const step = (s: GameState, c: Parameters<typeof handleCommand>[1]) => {
   const r = handleCommand(s, c);
   return r.ok ? r.state : s;
@@ -52,8 +51,7 @@ function playedGame(): GameState {
   let s = createGame(config({ eventsEnabled: false }));
   for (let r = 1; r <= 3; r++) {
     s = step(s, round(r));
-    if (r === 1) s = step(s, { type: "postAlibi", player: "p2", room: "vault" });
-    s = step(s, alibis(r));
+    if (r === 1) s = step(s, { type: "postAlibi", player: "p2", round: 1, room: "vault" });
     s = step(s, { type: "advance", deadline: { kind: "result", round: r } });
   }
   return s;

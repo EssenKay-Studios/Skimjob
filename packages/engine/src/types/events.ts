@@ -6,7 +6,7 @@
 // `samples.ts`, and make sure viewFor() tests cover it (CLAUDE.md).
 import type { EventId, JobId, PerkId, RoleId, RoomId } from "@skimjob/content";
 import type { ContentOverrides, PlayerId, PlayerSeat, RoleListSetting, VoteVisibility } from "./config";
-import type { AbilityUse, Move, PerkUse, VoteChoice } from "./commands";
+import type { AbilityUse, Move, PerkUse, PlanSnapshot, VoteChoice } from "./commands";
 import type { PrivateVisibility, PublicVisibility, RevealVisibility, SecretVisibility } from "./visibility";
 import type { RoleState } from "./state";
 
@@ -370,34 +370,22 @@ export interface AuditReport {
   readonly duffel: Readonly<Record<RoomId, number>>;
 }
 
-// ---------------------------------------------------------------- alibis (§5.4)
+// ---------------------------------------------------------------- said (§10, §11.3, §19.2 seam 5)
 
-/** A formal, possibly false, claim of where you were. */
-export interface AlibiPosted {
-  readonly type: "alibiPosted";
-  readonly visibility: PublicVisibility;
-  readonly player: PlayerId;
-  readonly round: number;
-  readonly room: RoomId;
-}
+/** What a player (or the crew, on the plan board) said: talk that changes no rule, possibly false. */
+export type Statement =
+  /** The plan board as `round` resolved (design §10): its final plan, pledges and edit history. */
+  | { readonly kind: "plan"; readonly round: number; readonly plan: PlanSnapshot }
+  /** "I was in the `room` in round `round`" (design §11.3 Alibis). */
+  | { readonly kind: "alibi"; readonly player: PlayerId; readonly round: number; readonly room: RoomId }
+  /** "I'm the `role`" (design §11.3 Claims), once per player per stretch (`stretch`, the one it was made in, §9.1). */
+  | { readonly kind: "role"; readonly player: PlayerId; readonly role: RoleId; readonly stretch: number };
 
-/**
- * A formal, possibly false, claim of your role (design §11.3): public talk
- * that changes no rule. Once per player per stretch (`stretch`, the one it was made in, §9.1).
- */
-export interface RoleClaimed {
-  readonly type: "roleClaimed";
+/** design §19.2 seam 5: every player statement is one public "said" event. design §18 */
+export interface Said {
+  readonly type: "said";
   readonly visibility: PublicVisibility;
-  readonly player: PlayerId;
-  readonly role: RoleId;
-  readonly stretch: number;
-}
-
-/** The alibi deadline for `round` passed: no more alibis for it. design §5.4 */
-export interface AlibisClosed {
-  readonly type: "alibisClosed";
-  readonly visibility: PublicVisibility;
-  readonly round: number;
+  readonly statement: Statement;
 }
 
 // ---------------------------------------------------------------- meetings (§11)
@@ -668,9 +656,7 @@ export type GameEvent =
   | EventFlipped
   | InsideTip
   | AuditReport
-  | AlibiPosted
-  | AlibisClosed
-  | RoleClaimed
+  | Said
   | MeetingProposed
   | MeetingProposalAccepted
   | MeetingScheduled

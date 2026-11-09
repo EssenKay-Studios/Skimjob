@@ -50,8 +50,8 @@ const shake = (player: PlayerId, target: PlayerId): PlayerCommand => ({ type: "c
 const skip = (player: PlayerId): PlayerCommand => ({ type: "castVote", player, vote: { kind: "skip" } });
 const open = (id: string): SystemCommand => ({ type: "advance", deadline: { kind: "openMeeting", meetingId: id } });
 const close = (id: string): SystemCommand => ({ type: "advance", deadline: { kind: "closeMeeting", meetingId: id } });
-/** Round 1 resolves and its alibis close: the result window, when an emergency can be called (design §9.3). */
-const RESULT_WINDOW: SystemCommand[] = [{ type: "advance", deadline: { kind: "round", round: 1 } }, { type: "advance", deadline: { kind: "alibis", round: 1 } }];
+/** Round 1 resolves into the result window, when an emergency can be called (design §9.3). */
+const RESULT_WINDOW: SystemCommand[] = [{ type: "advance", deadline: { kind: "round", round: 1 } }];
 
 /** p2 calls an emergency meeting; p1 (the viewer) votes Ben, p3 and p4 vote Ben, p5 skips. */
 function voting(mode: VoteVisibility, extra: Partial<GameConfig> = {}, roles: readonly string[] = []): GameState {

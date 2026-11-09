@@ -148,8 +148,8 @@ function stats(ids: readonly PersonalityId[], n: number, games: number) {
         if (e.room === "rooftop") s.laidLow++;
         if (e.room === "security") s.watched++;
       }
-      if (e.type === "alibiPosted" && real.get(`${e.player}/${e.round}`) !== e.room) {
-        const s = by.get(personality(e.player));
+      if (e.type === "said" && e.statement.kind === "alibi" && real.get(`${e.statement.player}/${e.statement.round}`) !== e.statement.room) {
+        const s = by.get(personality(e.statement.player));
         if (s) s.lies++;
       }
       if (e.type === "shakedownResolved") {

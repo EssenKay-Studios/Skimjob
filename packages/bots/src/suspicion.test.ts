@@ -1,10 +1,10 @@
 // The suspicion model over real (scripted) engine games, read through viewFor
-// only. design §19.3; §5.3 shortfall, §5.4 alibis, §3.4 Security, §11.1
+// only. design §19.3; §5.3 shortfall, §10 plan spots, §11.3 alibis, §3.4 Security, §11.1
 // powers, §13 the Audit card, §9.6 shakedown results
 import { describe, expect, it } from "vitest";
 import { viewFor, type GameState, type PlayerId } from "@skimjob/engine";
 import { SUSPICION_WEIGHTS as W, mostSuspicious, suspicion } from "./suspicion";
-import { closeAlibis, emergencyMeeting, game, round, run, toResult, type Plan } from "./testkit";
+import { closeResult, emergencyMeeting, game, round, run, type Plan } from "./testkit";
 
 const scoresOf = (s: GameState, viewer: PlayerId) => suspicion(viewFor(s, viewer));
 
@@ -33,7 +33,7 @@ describe("suspicion — design §17.3", () => {
 
   it("my own Detective and Auditor results count against the alibis — design §11.1", () => {
     // Everyone hands in, so only the powers' results move the scores.
-    const s = closeAlibis(round(game(3), { ana: { room: "office" }, ben: { room: "vault" }, carl: { room: "vault" } }));
+    const s = closeResult(round(game(3), { ana: { room: "office" }, ben: { room: "vault" }, carl: { room: "vault" } }));
     const mine = (ability: object): GameState => ({
       ...s,
       log: [...s.log, { type: "abilityResolved", visibility: { kind: "private", player: "ana" }, player: "ana", round: 2, ability } as GameState["log"][number]],
@@ -48,7 +48,7 @@ describe("suspicion — design §17.3", () => {
   });
 
   it("the Audit card counts like my Auditor's result, for every room — design §13", () => {
-    const s = closeAlibis(round(game(3), { ana: { room: "office" }, ben: { room: "vault" }, carl: { room: "vault" } }));
+    const s = closeResult(round(game(3), { ana: { room: "office" }, ben: { room: "vault" }, carl: { room: "vault" } }));
     const audit = (duffel: Record<string, number>): GameState => ({
       ...s,
       log: [...s.log, { type: "auditReport", visibility: { kind: "public" }, round: 1, duffel } as GameState["log"][number]],
@@ -111,9 +111,9 @@ describe("suspicion — design §17.3", () => {
     expect(scoresOf(s, "ana").get("ben")).toBe(-W.verified);
   });
 
-  it("no alibi counts once the round's alibi window has closed — design §5.4", () => {
+  it("no alibi counts once the crew has had its say about the round (the next planning, or a later round) — design §11.3", () => {
     let s = round(game(3), { ana: { room: "office" }, ben: { room: "office" }, carl: { room: "lobby", alibi: null } });
-    expect(scoresOf(s, "ana").get("carl")).toBe(0); // still open: Carl may yet post it
+    expect(scoresOf(s, "ana").get("carl")).toBe(0); // just resolved: Carl may yet post it
     s = round(s, { ana: { room: "office" }, ben: { room: "office" }, carl: { room: "lobby" } });
     expect(scoresOf(s, "ana").get("carl")).toBe(W.noAlibi);
   });
@@ -134,7 +134,7 @@ describe("suspicion — design §17.3", () => {
     s = resolve(s);
     expect(scoresOf(s, "ana").get("ben")).toBe(W.afterDirty);
     // The bank (300) is far from a third, so a regular meeting is forced as a third would call it.
-    s = toResult(round(s, { ana: { room: "lobby" }, ben: { room: "lobby" }, carl: { room: "lobby" } }));
+    s = round(s, { ana: { room: "lobby" }, ben: { room: "lobby" }, carl: { room: "lobby" } });
     s = run(
       { ...s, phase: { kind: "awaitingMeeting", meeting: "regular", meetingId: "meeting-1" }, meetingDue: "regular" },
       { type: "scheduleMeeting", meetingId: "meeting-1", slot: "x" },

@@ -65,12 +65,15 @@ test("QA: each player sees the other's placement and claim live; a reconnect get
   const game = await startGame(page.request, { bots: 1, guests: [guest.request], sessionLength: "1w" });
   expect(await openChannel(page, game.id)).toBe("open");
   expect(await openChannel(guest, game.id)).toBe("open");
+  // design §10: the bot took its spot as the round started; set its line aside.
+  const bots = (await board(page))!.entries.map((e) => e.player);
+  expect(bots).toHaveLength(1);
 
   // Each claims: their ids come from the board itself.
   expect(await post(page, "h1", { room: "office" })).toMatchObject({ ok: true });
   expect(await post(guest, "g1", { room: "vault", agree: true })).toMatchObject({ ok: true });
-  await expect.poll(async () => (await board(page))?.entries.length).toBe(2);
-  const [hostId, guestId] = (await board(page))!.entries.map((e) => e.player) as [string, string];
+  await expect.poll(async () => (await board(page))?.entries.length).toBe(3);
+  const [hostId, guestId] = (await board(page))!.entries.map((e) => e.player).filter((p) => !bots.includes(p)) as [string, string];
 
   // The host places the guest's avatar and pledges a power on the guest: the guest sees both live.
   expect(await post(page, "h2", { place: { player: guestId, room: "office" }, power: { role: "detective", target: guestId } })).toMatchObject({ ok: true });

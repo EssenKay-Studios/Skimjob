@@ -78,7 +78,6 @@ function play(c: GameConfig, absent: readonly PlayerId[] = [], ids: readonly Per
     else if (state.pendingEmergency)
       system({ type: "advance", deadline: { kind: "openMeeting", meetingId: state.pendingEmergency.meetingId } });
     else if (phase.kind === "planning") system({ type: "advance", deadline: { kind: "round", round: phase.round } });
-    else if (phase.kind === "alibis") system({ type: "advance", deadline: { kind: "alibis", round: phase.round } });
     else if (phase.kind === "result") system({ type: "advance", deadline: { kind: "result", round: phase.round } });
     else if (phase.kind === "awaitingMeeting") {
       if (!state.scheduledMeeting) system({ type: "scheduleMeeting", meetingId: phase.meetingId, slot: `server-${phase.meetingId}` });
@@ -212,9 +211,12 @@ function audit(state: GameState, cov: Coverage): RevealSummary {
   expect(moves.length).toBe(splits.length);
   for (const sp of splits) {
     const m = moves.find((x) => x.round === sp.round && x.player === sp.player);
-    const alibi = state.log.find((e) => e.type === "alibiPosted" && e.player === sp.player && e.round === sp.round);
+    const said = state.log.flatMap((e) => (e.type === "said" ? [e.statement] : []));
+    const alibi = said.find((x) => x.kind === "alibi" && x.player === sp.player && x.round === sp.round);
+    const spot = said.find((x) => x.kind === "plan" && x.round === sp.round);
+    const planned = spot?.kind === "plan" ? (spot.plan.entries.find((e) => e.player === sp.player)?.room ?? null) : null;
     const missed = state.log.some((e) => e.type === "defaultMoveAssigned" && e.player === sp.player && e.round === sp.round);
-    expect(m).toEqual({ player: sp.player, round: sp.round, room: sp.room, duffel: sp.duffel, pocket: sp.pocket, missed, alibi: alibi?.type === "alibiPosted" ? alibi.room : null });
+    expect(m).toEqual({ player: sp.player, round: sp.round, room: sp.room, duffel: sp.duffel, pocket: sp.pocket, missed, alibi: alibi?.kind === "alibi" ? alibi.room : null, planned });
     if (missed) cov.add("missed");
   }
   return summary;
@@ -235,7 +237,7 @@ describe("QA #55 reveal summary vs the engine's truth — design §8, §15.5", (
     // Content bells (no R6 pins), so raids happen (design §5.3), and the Rooftop escapees win a bust (§5.5).
     audit(play(config(8, "qa55-8-c-10", { contentOverrides: null })), cov);
     // Content numbers and a greedy crew: sunk by theft below the honesty line, and a Mole or Fixer on top wins it (design §8.4).
-    audit(play(config(5, "qa55-greedy-5-0", { contentOverrides: null }), [], ["greedy", "random"]), cov);
+    audit(play(config(5, "qa55-greedy-5-4", { contentOverrides: null }), [], ["greedy", "random"]), cov);
     for (const k of MUST) expect(cov, k).toContain(k);
   }, 120_000);
 

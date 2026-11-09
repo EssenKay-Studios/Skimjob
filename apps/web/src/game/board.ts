@@ -51,11 +51,11 @@ export const timeOfRound = (round: number): TimeOfDay => {
   return third <= 1 ? "day" : third === 2 ? "dusk" : "night";
 };
 
-/** The latest resolved round (the one an alibi window, a meeting or the end follows). */
+/** The latest resolved round (the one a result window, a meeting or the end follows). */
 function resolvedRound(view: PlayerView): number {
   const p = view.phase;
   if (p.kind === "planning") return p.round - 1;
-  if (p.kind === "alibis" || p.kind === "result") return p.round;
+  if (p.kind === "result") return p.round;
   return view.round;
 }
 
@@ -129,12 +129,13 @@ export function boardScene(view: PlayerView, pick: RoomId | null = null): BoardS
       put(e.room, other, "camera");
     }
   }
-  // design §5.4: claims are public talk, drawn as ghosts. A claim that only
+  // design §11.3: alibis are public talk, drawn as ghosts. One that only
   // repeats what you already see (you, or someone you saw, in that very room) adds nothing.
   for (const { event: e } of view.ledger) {
-    if (e.type !== "alibiPosted" || e.round !== round) continue;
-    const there = occupants[e.room]?.some((o) => o.id === e.player && !o.ghost);
-    if (!there) put(e.room, e.player, "ghost");
+    if (e.type !== "said" || e.statement.kind !== "alibi" || e.statement.round !== round) continue;
+    const { room, player } = e.statement;
+    const there = occupants[room]?.some((o) => o.id === player && !o.ghost);
+    if (!there) put(room, player, "ghost");
   }
   return { round, mode: "seen", selected: mine, occupants, closed: closedIn(view, round), time: timeOfRound(round) };
 }

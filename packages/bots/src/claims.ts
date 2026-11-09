@@ -1,6 +1,6 @@
 // Role claims and bluffs for bots (docs/roles-v2.md §4 "Claim"; design §11.3).
 //
-// A claim is the public `claimRole` command (a `roleClaimed` on the ledger),
+// A claim is the public `claimRole` command (a said claim on the ledger),
 // once between meetings (design §11.3). Bots don't read chat, so claims are structured engine data
 // and the same in the simulator and on the server.
 //
@@ -13,7 +13,7 @@ import type { RoleId } from "@skimjob/content";
 import { roomDef, type PlayerCommand, type PlayerId, type PlayerView } from "@skimjob/engine";
 import type { Personality } from "./personalities";
 import type { Random } from "./bot";
-import { claimantsOf, claimsOf, copiesOf, couldBeDealt, jobOf, myPower, ofType, winsSunk } from "./read";
+import { claimantsOf, claimsOf, copiesOf, couldBeDealt, jobOf, myPower, ofType, saidOf, saidRooms, settled, winsSunk } from "./read";
 import { suspicion } from "./suspicion";
 
 /**
@@ -65,7 +65,7 @@ export function meetingTime(view: PlayerView): boolean {
 
 /**
  * Suspicion of every player, me included, from public data only: the ledger's
- * alibis and round summaries (each round's shortfall against the claimed
+ * plan spots, alibis and round summaries (each round's shortfall against the claimed
  * rooms, shared by how much each claimant could have taken), missing alibis,
  * shakedown results and double role claims. What the crew can see of me.
  */
@@ -75,10 +75,11 @@ export function publicSuspicion(view: PlayerView): Map<PlayerId, number> {
   const score = new Map<PlayerId, number>(ids.map((id) => [id, 0]));
   const add = (id: PlayerId, n: number) => score.has(id) && score.set(id, (score.get(id) ?? 0) + n);
   const maxCoins = Math.max(...view.rooms.map((r) => roomDef(job, r).coins));
+  const said = saidRooms(view);
   for (const { event: e } of view.ledger) {
     if (e.type === "shakedownResolved") score.set(e.target, e.clean ? -3 : 1);
-    if (e.type !== "roundResolved" || e.round === view.alibiRound) continue;
-    const claims = new Map(ofType(view.ledger, "alibiPosted").filter((a) => a.round === e.round).map((a) => [a.player, a.room]));
+    if (e.type !== "roundResolved" || !settled(view, e.round)) continue;
+    const claims = said.get(e.round) ?? new Map<PlayerId, string>();
     let expected = 0;
     for (const room of claims.values()) expected += roomDef(job, room).coins;
     const short = expected - (e.taken - e.missing);
@@ -96,7 +97,7 @@ export function publicSuspicion(view: PlayerView): Map<PlayerId, number> {
 /** Roles claimed by more players than can hold them (design §15.4 "Over-claimed role"), and who claimed them. */
 function doubleClaims(view: PlayerView): Map<RoleId, PlayerId[]> {
   const out = new Map<RoleId, PlayerId[]>();
-  for (const role of new Set(ofType(view.ledger, "roleClaimed").map((c) => c.role))) {
+  for (const role of new Set(saidOf(view, "role").map((c) => c.role))) {
     const who = claimantsOf(view, role);
     if (who.length > copiesOf(view, role)) out.set(role, who);
   }
@@ -126,7 +127,7 @@ export function accused(view: PlayerView): "shakedown" | "suspected" | null {
 export function bluffFor(view: PlayerView): RoleId | null {
   const mine = claimsOf(view).get(view.me.id)?.at(-1);
   if (mine !== undefined) return mine;
-  const taken = new Set(ofType(view.ledger, "roleClaimed").filter((c) => c.player !== view.me.id).map((c) => c.role));
+  const taken = new Set(saidOf(view, "role").filter((c) => c.player !== view.me.id).map((c) => c.role));
   return SAFE_BLUFFS.find((r) => r !== view.me.role && !taken.has(r) && couldBeDealt(view, r)) ?? null;
 }
 
@@ -139,7 +140,8 @@ function holdsEvidence(view: PlayerView): boolean {
   const power = myPower(view);
   const abilities = ofType(view.caseFile, "abilityResolved").map((e) => e.ability);
   const job = jobOf(view);
-  const alibi = (round: number) => ofType(view.ledger, "alibiPosted").find((a) => a.player === target && a.round === round)?.room;
+  const said = saidRooms(view);
+  const alibi = (round: number) => said.get(round)?.get(target);
   // A grab bigger than the room they claimed allows.
   if (power?.kind === "detect") {
     return abilities.some((a) => {
@@ -151,10 +153,9 @@ function holdsEvidence(view: PlayerView): boolean {
   if (power?.kind === "audit") return abilities.some((a) => a.kind === "audit" && alibi(a.round) === a.room && a.duffel < roomDef(job, a.room).coins);
   if (power?.kind === "lookout") {
     // A sighting that contradicts the target's alibi.
-    const alibis = ofType(view.ledger, "alibiPosted").filter((a) => a.player === target);
     return ofType(view.caseFile, "roomWatched").some((w) => {
-      const said = alibis.find((a) => a.round === w.round)?.room;
-      return !w.offline && said !== undefined && (w.seen.includes(target) ? said !== w.room : said === w.room);
+      const room = alibi(w.round);
+      return !w.offline && room !== undefined && (w.seen.includes(target) ? room !== w.room : room === w.room);
     });
   }
   return false;
@@ -172,7 +173,7 @@ function saved(view: PlayerView): boolean {
  */
 export function chooseClaim(view: PlayerView, p: Personality, random: Random, voted = view.me.vote !== null): RoleId | null {
   if (!meetingTime(view)) return null;
-  if (ofType(view.ledger, "roleClaimed").some((c) => c.player === view.me.id && c.stretch === view.stretch)) return null;
+  if (saidOf(view, "role").some((c) => c.player === view.me.id && c.stretch === view.stretch)) return null;
   const blame = accused(view);
   if (bluffs(view.me.role)) {
     if (blame === null || random() >= BLUFF_WHEN_ACCUSED) return null;

@@ -7,7 +7,7 @@
 import { BANK_JOB, MAX_PLAYERS, MIN_PLAYERS, type RoomId } from "@skimjob/content";
 import { NO_RAIDS } from "./v01-numbers.testkit";
 import { describe, expect, it } from "vitest";
-import { handleThroughAlibis } from "./alibis.testkit";
+import { handleThroughResult } from "./result.testkit";
 import type { Command, GameConfig, GameEvent, GameState, PlayerId, PlayerView } from "./types";
 import { PUBLIC } from "./types";
 import { setupEvents, validateConfig } from "./setup";
@@ -42,7 +42,7 @@ function game(players: number, contentOverrides: Overrides = null, extra: Partia
 }
 
 function ok(s: GameState, c: unknown): GameState {
-  const r = handleThroughAlibis(s, c);
+  const r = handleThroughResult(s, c);
   if (!r.ok) throw new Error(`rejected ${JSON.stringify(c)}: ${r.reason}`);
   return r.state;
 }
@@ -247,19 +247,15 @@ describe("QA: the duffel/pocket split is checked — design §3.2", () => {
     }
   });
 
-  it("out of phase: refused in the alibi window, while awaiting a meeting, in the result window and after the game ends", () => {
+  it("out of phase: refused while awaiting a meeting, in the result window and after the game ends", () => {
     const resolved = handleCommand(run(s, submit("p0", { room: "lobby", duffel: 1, pocket: 0 })), ROUND(s));
     if (!resolved.ok) throw new Error(resolved.reason);
-    expect(resolved.state.phase.kind).toBe("alibis");
-    expect(refusal(resolved.state, submit("p0", { room: "lobby", duffel: 1, pocket: 0 }))).toMatch(/only be submitted while a round is being planned/);
     // A bank of 9: round 1's three missed moves leave 6, a third gone, so a regular meeting is due (design §9.1).
     const r3 = ok(game(3, { bank: { coinsPerPlayer: 3 } }), ROUND(s));
     expect(r3.phase.kind).toBe("awaitingMeeting");
     expect(refusal(r3, submit("p0", { room: "lobby", duffel: 1, pocket: 0 }))).toMatch(/planned/);
-    const result = handleCommand(resolved.state, { type: "advance", deadline: { kind: "alibis", round: 1 } });
-    if (!result.ok) throw new Error(result.reason);
-    expect(result.state.phase.kind).toBe("result");
-    expect(refusal(result.state, submit("p0", { room: "lobby", duffel: 1, pocket: 0 }))).toMatch(/planned/);
+    expect(resolved.state.phase.kind).toBe("result");
+    expect(refusal(resolved.state, submit("p0", { room: "lobby", duffel: 1, pocket: 0 }))).toMatch(/only be submitted while a round is being planned/);
     const ended = { ...r3, phase: { kind: "ended" } } as unknown as GameState;
     expect(refusal(ended, submit("p0", { room: "lobby", duffel: 1, pocket: 0 }))).toMatch(/over/);
   });

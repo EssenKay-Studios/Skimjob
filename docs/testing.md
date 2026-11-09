@@ -96,7 +96,7 @@ pnpm sim:suite -- --help
 - Coins are conserved (design §7.7): the kitty, the coins set aside and the stashes hold every coin handed in or pocketed (less a bust round's unsplit hand-ins). Nothing goes negative or fractional, the kitty is less than the crew size, coins that reached the duffel never exceed coins taken (honesty, §7.5), and at the end the getaway car takes the kitty and the coins set aside.
 - Every open bell is a whole number below its size, a taped-off room has no bell, Wanted equals the raids so far, and the game is over once Wanted reaches the bust line (design §5).
 - The game never gets stuck: until it ends, a deadline the scheduler would send is accepted, and every game ends.
-- The phase agrees with `meeting` / `pendingShakedown`, and alibis are open in the alibi phase only.
+- The phase agrees with `meeting` / `pendingShakedown`, and each player posts at most one alibi per round.
 - Meetings (design §9): the crew's emergency pool only shrinks, one per call; an emergency is only ever pending in the result window; there is at most one regular meeting per third of the bank, each starting a stretch; only players a shakedown passed against are protected.
 - The deal follows the design, `replay(config, log)` equals the state, and running the same commands again gives the same log.
 - `viewFor` doesn't leak. The ledger is exactly what `canSee` allows, others show only public fields, and the seed stays hidden until the reveal. If you change anything a player can't see (others' roles, stashes, moves, ballots, the RNG, hidden events), that player's view stays byte-identical.

@@ -64,7 +64,6 @@ function run(s: GameState, ...commands: unknown[]): GameState {
     const r = handleCommand(s, typeof c === "function" ? (c as (x: GameState) => unknown)(s) : c);
     if (!r.ok) throw new Error(`rejected ${JSON.stringify(c)}: ${r.reason}`);
     s = r.state;
-    if (s.phase.kind === "alibis") s = run(s, { type: "advance", deadline: { kind: "alibis", round: s.phase.round } });
   }
   return s;
 }

@@ -1,7 +1,7 @@
 // QA (PR #37): bot role claims, bluffs and meeting-proposal timing in whole games.
 // design §9.4, §11.3, §15.4, §19.3; docs/roles-v2.md §4
 import { ROLES } from "@skimjob/content";
-import { replay, viewFor, type GameConfig, type GameEvent, type PlayerCommand, type PlayerView, type VoteVisibility } from "@skimjob/engine";
+import { replay, viewFor, type GameConfig, type GameEvent, type PlayerCommand, type PlayerView, type Statement, type VoteVisibility } from "@skimjob/engine";
 import { describe, expect, it } from "vitest";
 import type { Agent } from "./bot";
 import { PERSONALITIES, type PersonalityId } from "./personalities";
@@ -25,11 +25,12 @@ const config = (n: number, seed: string, extra: Partial<GameConfig> = {}): GameC
 const play = (c: GameConfig, agents?: Agent[]) =>
   runBotGame(c, agents ?? createBots(c.players, (_, i) => PERSONALITIES[MIX[i % MIX.length] as PersonalityId], c.seed));
 
-type Claim = Extract<GameEvent, { type: "roleClaimed" }>;
+type Claim = Extract<Statement, { kind: "role" }>;
+const claimsIn = (log: readonly GameEvent[]): Claim[] => log.flatMap((e) => (e.type === "said" && e.statement.kind === "role" ? [e.statement] : []));
 
 /** Every claim with the claimant's real role at that moment. */
 function claimsWithTruth(c: GameConfig, log: readonly GameEvent[]) {
-  return log.flatMap((e, i) => (e.type === "roleClaimed" ? [{ i, claim: e, real: replay(c, log.slice(0, i)).players[e.player]?.role as string }] : []));
+  return log.flatMap((e, i) => (e.type === "said" && e.statement.kind === "role" ? [{ i, claim: e.statement, real: replay(c, log.slice(0, i)).players[e.statement.player]?.role as string }] : []));
 }
 
 describe("bot claims in whole games — QA PR #37", () => {
@@ -46,15 +47,15 @@ describe("bot claims in whole games — QA PR #37", () => {
       expect(r.rejections, `${n}p ${mode}`).toEqual([]);
     }
     // Bots do claim (otherwise the rest of this file proves nothing).
-    expect(results.flatMap(({ r }) => r.state.log.filter((e) => e.type === "roleClaimed")).length).toBeGreaterThan(0);
+    expect(results.flatMap(({ r }) => claimsIn(r.state.log)).length).toBeGreaterThan(0);
   });
 
-  it("every claim is public and carries only player, role and stretch; one per player per stretch — design §11.3", () => {
+  it("every claim is a public said entry carrying only player, role and stretch; one per player per stretch — design §11.3", () => {
     for (const { r } of results) {
-      const claims = r.state.log.filter((e): e is Claim => e.type === "roleClaimed");
+      for (const e of r.state.log) if (e.type === "said" && e.statement.kind === "role") expect(e.visibility).toEqual({ kind: "public" });
+      const claims = claimsIn(r.state.log);
       for (const c of claims) {
-        expect(Object.keys(c).sort()).toEqual(["player", "role", "stretch", "type", "visibility"]);
-        expect(c.visibility).toEqual({ kind: "public" });
+        expect(Object.keys(c).sort()).toEqual(["kind", "player", "role", "stretch"]);
         expect(Object.hasOwn(ROLES, c.role)).toBe(true);
       }
       const keys = claims.map((c) => `${c.player}/${c.stretch}`);
@@ -71,7 +72,7 @@ describe("bot claims in whole games — QA PR #37", () => {
           continue;
         }
         bluffed++;
-        const before = r.state.log.slice(0, i).filter((e): e is Claim => e.type === "roleClaimed");
+        const before = claimsIn(r.state.log.slice(0, i));
         if (before.some((b) => b.player === claim.player && b.role === claim.role)) continue; // sticking to its story
         expect(SAFE_BLUFFS).toContain(claim.role);
         expect(before.filter((b) => b.role === claim.role).map((b) => b.player), `${c.seed}: ${claim.player} bluffs ${claim.role}`).toEqual([]);

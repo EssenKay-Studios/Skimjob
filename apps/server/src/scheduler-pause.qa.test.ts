@@ -96,8 +96,6 @@ function lengthOf(key: string, t: Timing): number {
       return t.roundMs;
     case "roundEarly":
       return t.lockInGraceMs;
-    case "alibis":
-      return t.alibiMs;
     case "result":
       return t.resultMs;
     case "closeMeeting":
@@ -207,8 +205,8 @@ describe("no meeting pause any more: only the host stops deadlines (ca2d538; des
         for (const p of plain.phases) phases.add(p);
         kinds = new Set([...kinds, ...plain.fired.map((k) => (k.startsWith("openMeeting:emergency") ? "notice" : k.split(":")[0]!))]);
       }
-      for (const p of ["planning", "alibis", "result", "notice", "meeting"]) expect(phases.has(p), p).toBe(true);
-      for (const k of ["round", "alibis", "result", "notice", "closeMeeting"]) expect(kinds.has(k), k).toBe(true);
+      for (const p of ["planning", "result", "notice", "meeting"]) expect(phases.has(p), p).toBe(true);
+      for (const k of ["round", "result", "notice", "closeMeeting"]) expect(kinds.has(k), k).toBe(true);
       console.log(`QA ${sessionLength}: phases ${[...phases].join(",")}; deadlines fired ${[...kinds].join(",")}`);
     });
   }
@@ -220,8 +218,6 @@ describe("rows planned while the host has paused (design §15, §9.3)", () => {
     const t = TIMINGS["1h"];
     const { id, host } = await startGame(0, { sessionLength: "1h" }, 2);
     clock.advance(t.roundMs);
-    expect(await app.scheduler.tick()).toBe(1);
-    clock.advance(t.alibiMs);
     expect(await app.scheduler.tick()).toBe(1);
     expect((await load(id)).phase).toEqual({ kind: "result", round: 1 });
     clock.advance(10_000);
@@ -271,7 +267,7 @@ describe("rows planned while the host has paused (design §15, §9.3)", () => {
     expect(await app.scheduler.tick()).toBe(0);
     clock.advance(1);
     expect(await app.scheduler.tick()).toBe(1);
-    expect((await load(id)).phase).toEqual({ kind: "alibis", round: 1 });
-    expect(await deadlines(id)).toEqual([{ key: "alibis:1", due: clock.now() + t.alibiMs, paused: false }]);
+    expect((await load(id)).phase).toEqual({ kind: "result", round: 1 });
+    expect(await deadlines(id)).toEqual([{ key: "result:1", due: clock.now() + t.resultMs, paused: false }]);
   });
 });

@@ -2,7 +2,7 @@
 // target, per-holder charges and the Mole's and Fixer's own win rule; the
 // Smooth Talker's vote and the shakedown window. design §11, §8.4, §9.5
 import { describe, expect, it } from "vitest";
-import { closeResultWindow } from "./alibis.testkit";
+import { closeResultWindow } from "./result.testkit";
 import { BANK_JOB, MAX_PLAYERS, MIN_PLAYERS, ROLES } from "@skimjob/content";
 import type { ContentOverrides, GameConfig, GameEvent, GameState, PlayerState, RoleListSetting, VoteVisibility } from "./types";
 import { createGame, setupEvents, validateConfig } from "./setup";
@@ -34,17 +34,14 @@ function game(players: number, roles: string[], overrides: ContentOverrides | nu
 }
 
 /**
- * A command; a round deadline is followed by its alibi deadline (nobody
- * posts). The result window (design §9.3) stays open until a move or a round
- * deadline closes it, so an emergency can be called in it.
+ * A command. The result window (design §9.3) stays open until a move or a
+ * round deadline closes it, so an emergency can be called in it.
  */
-function handleThroughAlibis(state: GameState, command: unknown): CommandResult {
+function handleThroughResult(state: GameState, command: unknown): CommandResult {
   const c = command as { type?: unknown; deadline?: { kind?: unknown } } | null;
   const planning = c?.type === "submitMove" || c?.deadline?.kind === "round";
   const s = state.phase.kind === "result" && !state.pendingEmergency && planning ? must(closeResultWindow(state)) : state;
-  const r = handleCommand(s, command);
-  if (!r.ok || r.state.phase.kind !== "alibis" || c?.deadline?.kind !== "round") return r;
-  return handleCommand(r.state, { type: "advance", deadline: { kind: "alibis", round: r.state.phase.round } });
+  return handleCommand(s, command);
 }
 const must = (r: CommandResult): GameState => {
   if (!r.ok) throw new Error(r.reason);
@@ -54,14 +51,14 @@ const must = (r: CommandResult): GameState => {
 type Cmd = unknown | ((s: GameState) => unknown);
 function run(state: GameState, ...commands: Cmd[]): GameState {
   return commands.reduce<GameState>((s, c) => {
-    const r = handleThroughAlibis(s, typeof c === "function" ? c(s) : c);
+    const r = handleThroughResult(s, typeof c === "function" ? c(s) : c);
     if (!r.ok) throw new Error(`rejected ${JSON.stringify(typeof c === "function" ? c(s) : c)}: ${r.reason}`);
     return r.state;
   }, state);
 }
 function reason(state: GameState, command: Cmd): string {
   const before = JSON.stringify(state);
-  const r = handleThroughAlibis(state, typeof command === "function" ? command(state) : command);
+  const r = handleThroughResult(state, typeof command === "function" ? command(state) : command);
   if (r.ok) throw new Error("expected a rejection");
   expect(JSON.stringify(state)).toBe(before);
   return r.reason;
@@ -76,7 +73,7 @@ const mv = (player: string, room: string, pocket = 0, extra: object = {}) => ({ 
 const watch = (player: string, room: string, extra: object = {}) => mv(player, "security", 0, { watch: room, ...extra });
 /** The round being planned; from the result window, the next one (closing the window first). */
 const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.phase.kind === "result" ? s.round + 1 : s.round } });
-/** Resolve the round being planned and stop in its alibi window (before the next round starts). */
+/** Resolve the round being planned and stop in its result window (before the next round starts). */
 const resolve = (s: GameState): GameState => must(handleCommand(s.phase.kind === "result" ? must(closeResultWindow(s)) : s, ROUND(s)));
 const use = (player: string, ability: object) => ({ type: "useAbility", player, ability });
 const vote = (player: string, target: string | null) => ({ type: "castVote", player, vote: target === null ? { kind: "skip" } : { kind: "shakedown", target } });
@@ -324,7 +321,7 @@ describe("Hacker: once between meetings, hide one open room's bell this round �
     expect(viewFor(after, "p0").bells.vault).toBe(2);
     expect(used(after, "p0").usedThisStretch).toBe(1);
     // design §11.1: it reappears when the next round starts.
-    const next = must(closeResultWindow(run(after, { type: "advance", deadline: { kind: "alibis", round: 1 } })));
+    const next = must(closeResultWindow(after));
     expect(next.phase).toEqual({ kind: "planning", round: 2 });
     expect(viewFor(next, "p1").hiddenBells).toEqual([]);
     expect(viewFor(next, "p1").bells.vault).toBe(2);
@@ -338,7 +335,7 @@ describe("Hacker: once between meetings, hide one open room's bell this round �
     expect(after.hidden).toEqual([]);
     expect(after.bells).not.toHaveProperty("vault");
     // A taped-off room's bell is off: it can't be hidden (design §5.3).
-    const next = pastBriefing(run(after, { type: "advance", deadline: { kind: "alibis", round: 1 } }));
+    const next = pastBriefing(after);
     expect(reason(next, mv("p0", "lobby", 0, hide("vault")))).toMatch(/taped-off room's bell is off/);
   });
 
@@ -371,7 +368,7 @@ describe("Electrician: once between meetings, black out one room next round — 
     ]);
     expect(ofType(events, "bellsRung")[0]?.bells.office).toBe(2);
     // The power cut ends with the round.
-    s = run(s, { type: "advance", deadline: { kind: "alibis", round: 2 } }, (x: GameState) => ({ type: "advance", deadline: { kind: "result", round: x.resolvedRound } }));
+    s = run(s, (x: GameState) => ({ type: "advance", deadline: { kind: "result", round: x.resolvedRound } }));
     expect(s.dark).toEqual([]);
     expect(ofType(s.log, "powerCut")).toHaveLength(1);
   });
@@ -416,7 +413,7 @@ describe("Priest: once between meetings, absolve one player at the split — des
     expect(viewFor(r1, "p2").caseFile.some((e) => e.event.type === "sinsAbsolved" || e.event.type === "abilityResolved")).toBe(false);
     expect(ofType(events, "roundResolved")[0]?.honesty).toEqual({ reached: 2, taken: 5 });
     // The next split shares them out, and they count toward honesty as they reach it (design §7.5).
-    const r2 = run(r1, { type: "advance", deadline: { kind: "alibis", round: 1 } }, mv("p0", "lobby"), mv("p1", "lobby"), mv("p2", "lobby"), ROUND);
+    const r2 = run(r1, mv("p0", "lobby"), mv("p1", "lobby"), mv("p2", "lobby"), ROUND);
     expect(ofType(r2.log, "duffelSplit").at(-1)).toMatchObject({ handedIn: 3, setAside: 3, kittyIn: 2, cut: 2, kitty: 2 });
     expect(ofType(r2.log, "roundResolved").at(-1)?.honesty).toEqual({ reached: 8, taken: 8 });
     expect(r2.setAside).toBe(0);
@@ -558,9 +555,8 @@ describe("copies of a role on the same target — design §11.4", () => {
     const first = ofType(events, "abilityResolved")[0]?.player as string;
     const second = ofType(events, "abilityAlreadyDone")[0]?.player as string;
     expect(used(after, second).usedThisStretch).toBe(0);
-    const next = run(after, { type: "advance", deadline: { kind: "alibis", round: 1 } });
-    expect(reason(next, mv(first, "lobby", 0, absolve))).toMatch(/twice in a row/);
-    run(next, mv(second, "lobby", 0, absolve));
+    expect(reason(after, mv(first, "lobby", 0, absolve))).toMatch(/twice in a row/);
+    run(after, mv(second, "lobby", 0, absolve));
   });
 
   it("Priest: on a target who was already clean, the second is an ordinary absolve: spent, learns 0; the target is told once", () => {

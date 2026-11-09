@@ -2,7 +2,7 @@
 // effect on the rules. design §17.4 "config overrides"
 import { describe, expect, it } from "vitest";
 import { NO_RAIDS } from "./v01-numbers.testkit";
-import { handleThroughAlibis } from "./alibis.testkit";
+import { handleThroughResult } from "./result.testkit";
 import { BANK_JOB, CONTENT_VERSION, EVENTS, ROLES } from "@skimjob/content";
 import type { Command, ContentOverrides, GameConfig, GameEvent, GameState } from "./types";
 import { setupEvents, validateConfig } from "./setup";
@@ -35,7 +35,7 @@ function game(cfg: GameConfig, roles: string[] = []): GameState {
 
 function run(state: GameState, ...commands: Command[]): GameState {
   return commands.reduce<GameState>((s, c) => {
-    const r = handleThroughAlibis(s, c);
+    const r = handleThroughResult(s, c);
     if (!r.ok) throw new Error(`rejected: ${r.reason}`);
     return r.state;
   }, state);
@@ -209,7 +209,7 @@ describe("overrides in play (design §17.4)", () => {
     expect(s2.taped).toEqual({ office: 4 });
     expect(s2.wanted).toBe(1);
     // A grab above the overridden limit is refused, like the shipped one.
-    expect(handleThroughAlibis(s1, submit("p0", { room: "vault", duffel: 0, pocket: 10 })).ok).toBe(false);
+    expect(handleThroughResult(s1, submit("p0", { room: "vault", duffel: 0, pocket: 10 })).ok).toBe(false);
   });
 
   it("the round cap changes when the game ends (design §6.2)", () => {

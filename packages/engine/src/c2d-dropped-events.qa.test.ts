@@ -12,7 +12,7 @@ import { handleCommand } from "./handle";
 import { viewFor } from "./view";
 import { closedRoom } from "./deck";
 import { jobFor } from "./overrides";
-import { handleThroughAlibis } from "./alibis.testkit";
+import { handleThroughResult } from "./result.testkit";
 import { fullGrab } from "./grab.testkit";
 
 const DROPPED = ["quietNight", "payday", "powerCut", "raidRumour", "doubleCross"];
@@ -34,7 +34,7 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
 
 function run(state: GameState, ...commands: unknown[]): GameState {
   return commands.reduce<GameState>((s, c) => {
-    const r = handleThroughAlibis(s, c);
+    const r = handleThroughResult(s, c);
     if (!r.ok) throw new Error(`rejected ${JSON.stringify(c)}: ${r.reason}`);
     return r.state;
   }, state);
@@ -160,8 +160,8 @@ describe("QA: the Server room is an ordinary room", () => {
     for (const n of [5, 6, 12]) {
       let s = resolve(createGame(config(n, { eventsEnabled: false, seed: `srv-${n}` })));
       expect(s.rooms).toContain("serverRoom" as RoomId);
-      expect(handleThroughAlibis(s, { type: "submitMove", player: "p0", move: fullGrab("serverRoom", 1) }).ok).toBe(true);
-      expect(handleThroughAlibis(s, { type: "submitMove", player: "p0", move: { room: "serverRoom", duffel: 2, pocket: 1 } }).ok).toBe(false);
+      expect(handleThroughResult(s, { type: "submitMove", player: "p0", move: fullGrab("serverRoom", 1) }).ok).toBe(true);
+      expect(handleThroughResult(s, { type: "submitMove", player: "p0", move: { room: "serverRoom", duffel: 2, pocket: 1 } }).ok).toBe(false);
       const base = resolve(s, { p0: fullGrab("office"), p1: fullGrab("vault", 3) });
       const before = s.log.length;
       s = resolve(s, { p0: fullGrab("serverRoom"), p1: fullGrab("vault", 3) });

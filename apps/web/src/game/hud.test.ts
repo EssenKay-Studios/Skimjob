@@ -37,14 +37,13 @@ function run(state: GameState, ...commands: (PlayerCommand | SystemCommand)[]): 
   return state;
 }
 const round = (r: number): SystemCommand => ({ type: "advance", deadline: { kind: "round", round: r } });
-const alibis = (r: number): SystemCommand => ({ type: "advance", deadline: { kind: "alibis", round: r } });
 
 describe("HUD", () => {
-  it("names the phase and its deadline: planning, alibis (design §5, §5.4)", () => {
+  it("names the phase and its deadline: planning, then the result window (design §5, §9.3)", () => {
     let s = createGame(config());
     expect(phaseInfo(viewFor(s, "p1"))).toEqual({ title: "Planning: pick a room", timerKey: "round:1", timerLabel: "locks in" });
     s = run(s, round(1));
-    expect(phaseInfo(viewFor(s, "p1"))).toEqual({ title: "Alibi window", timerKey: "alibis:1", timerLabel: "alibis close in" });
+    expect(phaseInfo(viewFor(s, "p1"))).toEqual({ title: "Round 1 result", timerKey: "result:1", timerLabel: "next round in" });
   });
 
   it("counts down from the server clock, frozen while paused", () => {
@@ -112,7 +111,7 @@ describe("seats", () => {
     expect(timerFor([round], "round:2")).toBe(round);
     expect(timerFor([round, early], "round:2")).toBe(early);
     expect(timerFor([{ ...early, dueAt: 60_000 }, round], "round:2")).toBe(round);
-    expect(timerFor([early, { key: "alibis:2", dueAt: 1, pausedAt: null }], "alibis:2")?.key).toBe("alibis:2");
+    expect(timerFor([early, { key: "result:2", dueAt: 1, pausedAt: null }], "result:2")?.key).toBe("result:2");
   });
 });
 
@@ -133,8 +132,6 @@ describe("move panel", () => {
     s = run(s, { type: "submitMove", player: "p2", move: { room: "office", duffel: 2, pocket: 0 } }, round(1));
     expect(justMissed(viewFor(s, "p1"))).toEqual({ round: 1, room: "lobby" });
     expect(justMissed(viewFor(s, "p2"))).toBeNull();
-    s = run(s, alibis(1));
-    expect(justMissed(viewFor(s, "p1"))).toEqual({ round: 1, room: "lobby" });
     // design §9.3: the result window closes with no emergency called.
     s = run(s, { type: "advance", deadline: { kind: "result", round: 1 } });
     s = run(s, { type: "submitMove", player: "p1", move: { room: "office", duffel: 2, pocket: 0 } }, round(2));
@@ -143,14 +140,21 @@ describe("move panel", () => {
 });
 
 describe("alibis", () => {
-  it("opens for the resolved round and remembers your claim (design §5.4)", () => {
+  it("offers the round that just resolved between rounds and remembers your claim (design §11.3)", () => {
     let s = createGame(config(3));
     expect(alibiState(viewFor(s, "p1"))).toBeNull();
     s = run(s, round(1));
     expect(alibiState(viewFor(s, "p1"))).toEqual({ round: 1, posted: null });
-    s = run(s, { type: "postAlibi", player: "p1", room: "vault" });
+    s = run(s, { type: "postAlibi", player: "p1", round: 1, room: "vault" });
     expect(alibiState(viewFor(s, "p1"))).toEqual({ round: 1, posted: "vault" });
     expect(alibiState(viewFor(s, "p2"))).toEqual({ round: 1, posted: null });
+    // Also while a meeting is open (a raid's briefing can open at once): still between rounds.
+    const meeting = run(s, { type: "callEmergency", player: "p2" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: "emergency-1" } });
+    expect(meeting.phase.kind).toBe("meeting");
+    expect(alibiState(viewFor(meeting, "p2"))).toEqual({ round: 1, posted: null });
+    // Not while the next round is planned (the engine still takes one; the panel sits between rounds).
+    s = run(s, { type: "advance", deadline: { kind: "result", round: 1 } });
+    expect(alibiState(viewFor(s, "p1"))).toBeNull();
   });
 });
 

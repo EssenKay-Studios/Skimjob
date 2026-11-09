@@ -37,7 +37,7 @@ export interface RevealEnding {
   readonly why: "success" | "failedTopWins" | "failedNobody";
 }
 
-/** One player's real move in a round: room, the coins grabbed into each bag, and the alibi they posted. design §3.2, §15.5 */
+/** One player's real move in a round: room, the coins grabbed into each bag, their plan spot and the alibi they posted. design §3.2, §15.5 */
 export interface RevealMove {
   readonly player: PlayerId;
   readonly room: RoomId;
@@ -45,8 +45,10 @@ export interface RevealMove {
   readonly pocket: number;
   /** Missed the deadline and got the default move. design §5.1 */
   readonly missed: boolean;
-  /** The room in their posted alibi for this round, or null if they posted none. design §5.4 */
+  /** The room in their posted alibi for this round, or null if they posted none. design §11.3 */
   readonly alibi: RoomId | null;
+  /** Their room claim on this round's plan board as it resolved, or null if they made none. design §10, §15.5 */
+  readonly planned: RoomId | null;
 }
 
 /**
@@ -58,7 +60,7 @@ export interface RevealMove {
  */
 export type RevealItem =
   | { readonly kind: "event"; readonly event: GameEvent }
-  /** A public role claim next to the truth (the claimer's role when they claimed). design §12.1 */
+  /** A public role claim next to the truth (the claimer's role when they claimed). design §11.3 */
   | { readonly kind: "claim"; readonly player: PlayerId; readonly claimed: RoleId; readonly real: RoleId };
 
 /**

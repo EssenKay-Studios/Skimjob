@@ -25,7 +25,7 @@ function run(state: GameState, ...commands: (PlayerCommand | SystemCommand)[]): 
 }
 const move = (player: string, room: string, watch?: string): PlayerCommand =>
   ({ type: "submitMove", player, move: { room, duffel: BANK_JOB.rooms[room]?.coins ?? 0, pocket: 0, ...(watch ? { watch } : {}) } }) as PlayerCommand;
-const alibi = (player: string, room: string): PlayerCommand => ({ type: "postAlibi", player, room }) as PlayerCommand;
+const alibi = (player: string, room: string): PlayerCommand => ({ type: "postAlibi", player, round: 1, room }) as PlayerCommand;
 const round = (r: number): SystemCommand => ({ type: "advance", deadline: { kind: "round", round: r } });
 
 /** p1 + p2 in the vault, p3 in the lobby, p4 in the office; round 1 resolved. */
@@ -60,7 +60,7 @@ describe("board scene (M2-9 wiring)", () => {
     expect(figures(boardScene(viewFor(afterRound1(), "p3")))).toEqual(["p3@lobby"]);
   });
 
-  it("draws alibi claims as ghosts, true or not, but not a claim you already see (design §5.4)", () => {
+  it("draws alibi claims as ghosts, true or not, but not a claim you already see (design §11.3)", () => {
     // p3 lies (says vault), p4 tells the truth (office) but p1 didn't see it; p2's claim matches what p1 saw.
     const s = run(afterRound1(), alibi("p3", "vault"), alibi("p4", "office"), alibi("p2", "vault"));
     const v = viewFor(s, "p1");
@@ -96,7 +96,7 @@ describe("board scene (M2-9 wiring)", () => {
       const stripped: PlayerView = {
         ...v,
         caseFile: v.caseFile.filter((x) => x.event.type !== "roomSighting" && x.event.type !== "roomWatched"),
-        ledger: v.ledger.filter((x) => x.event.type !== "alibiPosted"),
+        ledger: v.ledger.filter((x) => x.event.type !== "said"),
       };
       expect(figures(boardScene(stripped)), viewer).toEqual([viewer === "p1" ? "p1@vault" : "p4@security"]);
       // Every non-ghost figure other than you is backed by a roomSighting or roomWatched in your case file.
@@ -116,7 +116,7 @@ describe("board scene (M2-9 wiring)", () => {
     const stripped: PlayerView = {
       ...v,
       caseFile: v.caseFile.filter((x) => x.event.type !== "roomSighting"),
-      ledger: v.ledger.filter((x) => x.event.type !== "alibiPosted"),
+      ledger: v.ledger.filter((x) => x.event.type !== "said"),
     };
     expect(figures(boardScene(stripped))).toEqual(["p1@vault"]);
     const seenIds = new Set(v.caseFile.flatMap((x) => (x.event.type === "roomSighting" ? x.event.others : [])));

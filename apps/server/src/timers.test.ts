@@ -76,13 +76,13 @@ describe("timers on the live channel", () => {
     await b.send({}); // a barrier through the game's lock
     expect(b.raw.slice(before).some((t) => "view" in JSON.parse(t))).toBe(false);
 
-    // The round's deadline passes: the alibi window's timer replaces it. design §5.4
+    // The round's deadline passes: the result window's timer replaces it. design §9.3
     clock.advance(TIMINGS["15m"].roundMs);
     await app.scheduler.tick();
-    await vi.waitFor(() => expect(b.view().phase.kind).toBe("alibis"), quick);
-    const alibis = b.views().at(-1)!;
-    expect(alibis.timers).toEqual([{ key: "alibis:1", dueAt: clock.now() + TIMINGS["15m"].alibiMs, pausedAt: null }]);
-    expect(alibis.now).toBe(clock.now());
+    await vi.waitFor(() => expect(b.view().phase.kind).toBe("result"), quick);
+    const result = b.views().at(-1)!;
+    expect(result.timers).toEqual([{ key: "result:1", dueAt: clock.now() + TIMINGS["15m"].resultMs, pausedAt: null }]);
+    expect(result.now).toBe(clock.now());
     a.ws.close();
     b.ws.close();
     await app.close();
@@ -94,8 +94,6 @@ describe("timers on the live channel", () => {
     await open(app, id, guest);
     const t = TIMINGS["15m"];
     clock.advance(t.roundMs);
-    await app.scheduler.tick();
-    clock.advance(t.alibiMs);
     await app.scheduler.tick();
     await vi.waitFor(() => expect(a.view().phase.kind).toBe("result"), quick);
     expect(a.views().at(-1)!.timers).toEqual([{ key: "result:1", dueAt: clock.now() + t.resultMs, pausedAt: null }]);
@@ -137,7 +135,7 @@ describe("TIME_SCALE", () => {
 
   it("scales every wall time but keeps a zero lead at zero", () => {
     const t = scaleTiming(TIMINGS["15m"], 0.1);
-    expect(t).toMatchObject({ roundMs: 7500, alibiMs: 1500, meetingMs: 12000, emergencyNoticeMs: 2000, shakedownWindowMs: 1500, meetingLeadMs: 0, autoMeetings: true });
+    expect(t).toMatchObject({ roundMs: 7500, resultMs: 2000, meetingMs: 12000, emergencyNoticeMs: 2000, shakedownWindowMs: 1500, meetingLeadMs: 0, autoMeetings: true });
     expect(scaleTiming(TIMINGS["1d"], 0.5).meetingLeadMs).toBe(TIMINGS["1d"].meetingLeadMs / 2);
     expect(scaleTiming(TIMINGS["15m"], 1)).toBe(TIMINGS["15m"]);
   });

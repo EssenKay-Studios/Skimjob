@@ -1,6 +1,7 @@
 // The plan board's live channel (design §10, S3b.4). Like chat it is
 // server-side only: entries live in `plan_entries` and go out over the game
-// socket (live.ts); only the per-round snapshot will enter the engine log (S3a.9).
+// socket (live.ts); only the per-round snapshot enters the engine log, with the
+// round's deadline (`snapshot`, live.ts), as a public said event.
 // - Two things on the board (design §10), kept apart: the proposed plan
 //   (`placed`: any seat may put any crew avatar, bots too, on a room) and each
 //   seat's own claims (`room`, `power`, `agreed`: only that seat sets them).
@@ -13,34 +14,17 @@
 // - Every effective edit is also recorded in `plan_edits`, compactly: one row per
 //   actor, kind and subject (the latest), with the time and the time left to
 //   the round's deadline, so it is bounded (players × (players + 3) a round).
-//   Server-only: S3a.9 reads it for the round's snapshot; clients never get it.
+//   Server-only: it goes into the round's snapshot; clients never get it live.
 // - A claim is not a commitment and can be a bluff, so it is checked only
-//   against content: a room in play, a role with a claimable power, a target
-//   of the kind that power takes. Nothing here is private: every seat sees the
-//   whole board, and non-players have no socket.
-import { POWER_CLAIM_TARGET, ROLES, type RoleId, type RoomId } from "@skimjob/content";
-import type { GameState, PlayerId } from "@skimjob/engine";
+//   against content (the engine's `checkPowerClaim`): a room in play, a role
+//   with a claimable power, a target of the kind that power takes. Nothing
+//   here is private: every seat sees the whole board, and non-players have no socket.
+import type { RoomId } from "@skimjob/content";
+import { checkPowerClaim, type GameState, type PlanEditRecord as SnapshotEdit, type PlanEntry, type PlanSnapshot, type PlayerId, type PowerClaim } from "@skimjob/engine";
 import type { Clock } from "./clock";
 import type { Db } from "./db";
 import { rateLimiter } from "./notes";
 import { PLAN_RATE } from "./settings";
-
-/** "Hacker → Vault" or "Detective → Eli": `target` is a room or a player, by the role's power. */
-export interface PowerClaim {
-  readonly role: RoleId;
-  readonly target: RoomId | PlayerId;
-}
-
-/** One seat's entry. Seats with nothing on the board are not listed. */
-export interface PlanEntry {
-  readonly player: PlayerId;
-  /** Where the crew put this avatar on the proposed plan (anyone may move it); null: nowhere. */
-  readonly placed: RoomId | null;
-  /** The seat's own room claim (✋): only that seat sets it. */
-  readonly room: RoomId | null;
-  readonly power: PowerClaim | null;
-  readonly agreed: boolean;
-}
 
 export interface PlanBoard {
   /** The round it belongs to. */
@@ -106,15 +90,8 @@ function checkPower(input: unknown, state: GameState, me: PlayerId): Result<Powe
   if (input === null) return { ok: true, value: null };
   if (!isObject(input)) return { ok: false, reason: "power must be { role, target } or null" };
   for (const k of Object.keys(input)) if (k !== "role" && k !== "target") return { ok: false, reason: `unknown power field ${JSON.stringify(k)}` };
-  const { role, target } = input;
-  if (typeof role !== "string" || !Object.hasOwn(ROLES, role)) return { ok: false, reason: "no such role" };
-  const kind = ROLES[role]!.power.kind;
-  const aims = Object.hasOwn(POWER_CLAIM_TARGET, kind) ? POWER_CLAIM_TARGET[kind] : undefined;
-  if (!aims) return { ok: false, reason: "that role's power can't be claimed" };
-  if (typeof target !== "string") return { ok: false, reason: "target must be a room or a player" };
-  if (aims === "room") return state.rooms.includes(target) ? { ok: true, value: { role, target } } : { ok: false, reason: "that power takes a room in play" };
-  if (target === me) return { ok: false, reason: "you can't claim a power on yourself" };
-  return state.config.players.some((p) => p.id === target) ? { ok: true, value: { role, target } } : { ok: false, reason: "that power takes a player in this game" };
+  const claim = checkPowerClaim(state, me, input);
+  return typeof claim === "string" ? { ok: false, reason: claim } : { ok: true, value: claim };
 }
 
 interface Row {
@@ -135,20 +112,14 @@ const toEntry = (r: Row): PlanEntry => ({
 });
 const sameClaim = (a: PowerClaim | null, b: PowerClaim | null) => a?.role === b?.role && a?.target === b?.target;
 
-/** One recorded edit (the latest of its actor, kind and subject). For the round's snapshot, S3a.9. */
-export interface PlanEditRecord {
-  readonly actor: PlayerId;
-  /** "place" moves `subject`'s avatar; "room", "power" and "agree" are the actor's own claims (subject = actor). */
-  readonly kind: "place" | "room" | "power" | "agree";
-  readonly subject: PlayerId;
-  /** The room, the claimed role, or "true" / "false" for agree; null: cleared. */
-  readonly value: string | null;
-  /** A power claim's target. */
-  readonly target: string | null;
+/**
+ * One recorded edit (the latest of its actor, kind and subject), as the
+ * snapshot keeps it, plus the time the server took it. `msBeforeDeadline` is
+ * measured to the pause in a paused round.
+ */
+export interface PlanEditRecord extends SnapshotEdit {
   /** ISO time the server took it. */
   readonly at: string;
-  /** Ms left to the round's deadline when it was made (a paused round: when it paused); null if there was none. */
-  readonly msBeforeDeadline: number | null;
 }
 
 export interface Plan {
@@ -156,8 +127,10 @@ export interface Plan {
   edit(gameId: string, state: GameState, actor: PlayerId, edit: PlanEdit): Promise<Result<void>>;
   /** The board for the latest round started. */
   board(gameId: string, state: GameState): Promise<PlanBoard>;
-  /** The compact edit history of `round`, oldest first. */
+  /** The compact edit history of `round`, oldest first: most time left before the deadline first (edits with none first), so a retried deadline logs the same order. */
   history(gameId: string, round: number): Promise<readonly PlanEditRecord[]>;
+  /** design §10: the board of the round being planned as it resolves (its final plan and edit history), for the round's deadline. */
+  snapshot(gameId: string, state: GameState): Promise<PlanSnapshot>;
 }
 
 export function createPlan(db: Db, clock: Clock): Plan {
@@ -169,6 +142,13 @@ export function createPlan(db: Db, clock: Clock): Plan {
     );
     const bySeat = new Map(rows.map((r) => [r.player_id, r] as const));
     return { round: state.round, entries: state.playerOrder.flatMap((p) => (bySeat.has(p) ? [toEntry(bySeat.get(p)!)] : [])) };
+  };
+  const history: Plan["history"] = async (gameId, round) => {
+    const rows = await db.query<{ actor: string; kind: PlanEditRecord["kind"]; subject: string; value: string | null; target: string | null; at: Date | string; ms: number | string | null }>(
+      "select actor, kind, subject, value, target, at, ms_before_deadline as ms from plan_edits where game_id = $1 and round = $2 order by ms_before_deadline desc nulls first, kind, subject, actor",
+      [gameId, round],
+    );
+    return rows.map((r) => ({ actor: r.actor, kind: r.kind, subject: r.subject, value: r.value, target: r.target, at: new Date(r.at).toISOString(), msBeforeDeadline: r.ms === null ? null : Number(r.ms) }));
   };
   return {
     board,
@@ -228,12 +208,11 @@ export function createPlan(db: Db, clock: Clock): Plan {
       }
       return { ok: true, value: undefined };
     },
-    async history(gameId, round) {
-      const rows = await db.query<{ actor: string; kind: PlanEditRecord["kind"]; subject: string; value: string | null; target: string | null; at: Date | string; ms: number | string | null }>(
-        "select actor, kind, subject, value, target, at, ms_before_deadline as ms from plan_edits where game_id = $1 and round = $2 order by at, kind, subject, actor",
-        [gameId, round],
-      );
-      return rows.map((r) => ({ actor: r.actor, kind: r.kind, subject: r.subject, value: r.value, target: r.target, at: new Date(r.at).toISOString(), msBeforeDeadline: r.ms === null ? null : Number(r.ms) }));
+    history,
+    async snapshot(gameId, state) {
+      const edits = await history(gameId, state.round);
+      // The log keeps no wall time (design §19.1): how long before the deadline says when.
+      return { entries: (await board(gameId, state)).entries, history: edits.map(({ at: _at, ...edit }) => edit) };
     },
   };
 }

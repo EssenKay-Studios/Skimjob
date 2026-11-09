@@ -20,7 +20,7 @@ export interface RngState {
 
 /**
  * Resting phases of the state machine: Setup → Planning → Resolving (with the
- * end check, design §4.2) → Alibis → (a regular meeting or a briefing) →
+ * end check, design §4.2) → (a regular meeting or a briefing) →
  * the result window (an emergency) → Planning … → Reveal. design §4.1
  * Resolving and the end check happen inside a single `advance()` and leave
  * only events behind, so they are not resting phases here.
@@ -31,13 +31,6 @@ export type Phase =
   | { readonly kind: "setup" }
   /** Players are submitting moves for `round` (1 up to the round cap, design §6.2). */
   | { readonly kind: "planning"; readonly round: number }
-  /**
-   * `round` has resolved; players post their alibis for it until the alibi
-   * deadline (`advance { kind: "alibis", round }`). Then the meeting the round
-   * called for is awaited, else the result window or the next round follows.
-   * design §5.4
-   */
-  | { readonly kind: "alibis"; readonly round: number }
   /**
    * The round crossed a third of the bank (a regular meeting, §9.1) or had a
    * raid (a police briefing, §9.2); waiting for meeting `meetingId` to open.
@@ -214,12 +207,8 @@ export interface GameState {
   readonly card: ActiveCard | null;
   /** Moves submitted so far for the current round (cleared when it resolves). */
   readonly moves: Readonly<Record<PlayerId, Move>>;
-  /** The latest round resolved; 0 before any. Alibis are posted for this round. design §5.4 */
+  /** The latest round resolved; 0 before any. Alibis are posted for this round or an earlier one. design §11.3 */
   readonly resolvedRound: number;
-  /** Alibis for `resolvedRound` may still be posted (its alibi deadline hasn't passed). design §5.4 */
-  readonly alibisOpen: boolean;
-  /** Players who already posted an alibi for `resolvedRound` (one each). design §5.4 */
-  readonly alibisPosted: readonly PlayerId[];
   /** Check ballots bought for the next meeting that opens, in order (hidden). design §12 */
   readonly ballotChecks: readonly { readonly player: PlayerId; readonly target: PlayerId }[];
   /** Open slot proposals for the next regular meeting or briefing; cleared once a slot is locked. design §9.4 */

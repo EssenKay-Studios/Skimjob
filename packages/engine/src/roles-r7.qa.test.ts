@@ -9,7 +9,7 @@ import { createGame, setupEvents } from "./setup";
 import { replay } from "./reduce";
 import { handleCommand, type CommandResult } from "./handle";
 import { viewFor } from "./view";
-import { closeResultWindow } from "./alibis.testkit";
+import { closeResultWindow } from "./result.testkit";
 import { fullGrab } from "./grab.testkit";
 
 function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
@@ -53,8 +53,7 @@ function reason(state: GameState, command: unknown): string {
   return r.reason;
 }
 const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
-const ALIBIS = (s: GameState) => ({ type: "advance", deadline: { kind: "alibis", round: s.resolvedRound } });
-/** Resolve the round being planned, stopping in its alibi window. */
+/** Resolve the round being planned, stopping in its result window (or the meeting it called). */
 const resolve = (s: GameState, ...moves: Cmd[]): GameState => run(s, ...moves, ROUND);
 /** Open the due meeting (a briefing or a regular one) and close it with no votes. design §9.1, §9.2 */
 function passMeeting(s: GameState): GameState {
@@ -63,9 +62,9 @@ function passMeeting(s: GameState): GameState {
   const open = run(s, { type: "scheduleMeeting", meetingId: id, slot: "x" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: id } });
   return planningOpen(run(open, (y: GameState) => ({ type: "advance", deadline: { kind: "closeMeeting", meetingId: y.meeting?.id } })));
 }
-/** On to the next round's planning (alibis closed, any due meeting held with no votes, result window closed). */
+/** On to the next round's planning (any due meeting held with no votes, result window closed). */
 const nextRound = (s: GameState): GameState => {
-  const x = planningOpen(passMeeting(s.phase.kind === "alibis" ? run(s, ALIBIS) : s));
+  const x = planningOpen(passMeeting(s));
   if (x.phase.kind !== "planning") throw new Error(`not planning: ${x.phase.kind}`);
   return x;
 };
@@ -83,8 +82,8 @@ const lobbyAll = (n: number, except: readonly string[] = []) =>
 const use = (player: string, ability: object) => ({ type: "useAbility", player, ability });
 /** Quiet Lobby rounds until a regular meeting is due, then open and close it with no votes (design §9.1). */
 function pastRegularMeeting(s: GameState, n: number): GameState {
-  let x = s.phase.kind === "alibis" ? run(s, ALIBIS) : s;
-  while (x.phase.kind !== "awaitingMeeting") x = run(x, ...lobbyAll(n), ROUND, ALIBIS);
+  let x = s;
+  while (x.phase.kind !== "awaitingMeeting") x = run(x, ...lobbyAll(n), ROUND);
   expect(x.stretch).toBe(1);
   x = passMeeting(x);
   expect(x.stretch).toBe(2);
@@ -372,15 +371,14 @@ describe("QA each power at its edges; invalid and out-of-phase uses — design �
     expect(reason(s, withAbility("p2", "lobby", { kind: "reopen", room: "vault" }))).toMatch(/no reopen ability/);
   });
 
-  it("out of phase: no move power in the alibi window or a meeting", () => {
+  it("out of phase: no move power in the result window or a meeting", () => {
     const s = game(3, ["hacker", "electrician", "priest"]);
-    const alibis = resolve(s, ...lobbyAll(3));
-    expect(alibis.phase.kind).toBe("alibis");
-    const result = run(alibis, ALIBIS);
+    const result = resolve(s, ...lobbyAll(3));
     expect(result.phase.kind).toBe("result");
-    expect(reason(alibis, withAbility("p0", "lobby", { kind: "hide", room: "vault" }))).toMatch(/while a round is being planned/);
-    expect(reason(alibis, withAbility("p1", "lobby", { kind: "blackout", room: "vault" }))).toMatch(/while a round is being planned/);
-    expect(reason(alibis, withAbility("p2", "lobby", { kind: "absolve", target: "p1" }))).toMatch(/while a round is being planned/);
+    // Straight to the engine: the helpers close the result window first.
+    for (const command of [withAbility("p0", "lobby", { kind: "hide", room: "vault" }), withAbility("p1", "lobby", { kind: "blackout", room: "vault" }), withAbility("p2", "lobby", { kind: "absolve", target: "p1" })]) {
+      expect(handleCommand(result, command)).toEqual({ ok: false, reason: "moves can only be submitted while a round is being planned" });
+    }
     // In a meeting: no moves at all.
     const called = must(handleCommand(result, { type: "callEmergency", player: "p1" }));
     const meet = must(handleCommand(called, { type: "advance", deadline: { kind: "openMeeting", meetingId: called.pendingEmergency?.meetingId } }));
@@ -501,7 +499,6 @@ describe("QA viewFor leaks: two games differing only in a hidden fact look the s
     const a = play(true);
     const b = play(false);
     sameView(a, b, "p2");
-    sameView(run(a, ALIBIS), run(b, ALIBIS), "p2");
     // The Hacker does see the difference (the test can tell them apart).
     expect(viewFor(a, "p0").bells.vault).toBe(1);
     expect(viewFor(b, "p0").bells.vault).toBe(0);
@@ -516,7 +513,6 @@ describe("QA viewFor leaks: two games differing only in a hidden fact look the s
     const b = resolve(s, mv("p0", "lobby"), mv("p1", "lobby"), mv("p2", "lobby"));
     for (const id of ["p1", "p2"]) {
       sameView(a, b, id);
-      sameView(run(a, ALIBIS), run(b, ALIBIS), id);
     }
     expect(viewFor(a, "p1").dark).toEqual([]);
     const next = nextRound(a);

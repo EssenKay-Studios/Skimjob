@@ -1,22 +1,22 @@
 // The bots' suspicion model: a score for every other player, worked out from
-// the view alone. design §19.3 (and §5.3 shortfalls, §5.4 alibis, §3.4 Security
+// the view alone. design §19.3 (and §5.3 shortfalls, §10 plan spots, §11.3 alibis, §3.4 Security
 //, §11.1 powers, §13 the Audit card, §9.6 shakedown results)
 //
 // Rebuilt from the ledger and case file each time it's needed, so a bot keeps
 // no hidden memory of its own: same view, same scores.
 import type { RoleId, RoomId } from "@skimjob/content";
 import { roomDef, type AbilityResolved, type PlayerId, type PlayerView, type RoundResolved } from "@skimjob/engine";
-import { claimantsOf, claimsOf, copiesOf, jobOf, ofType, winsSunk } from "./read";
+import { claimantsOf, claimsOf, copiesOf, jobOf, ofType, saidRooms, settled, winsSunk } from "./read";
 
 /** How much each kind of evidence moves a score. Shared by every personality; they differ in when they act on it. */
 export interface SuspicionWeights {
   /** Per loot of unexplained shortfall, shared among the players who could have taken it. design §5.3 */
   readonly shortfall: number;
-  /** An alibi that contradicts what I saw (a sighting, Security or Lookout). design §5.4 */
+  /** A plan spot or alibi that contradicts what I saw (a sighting, Security or Lookout). design §10, §11.3 */
   readonly lie: number;
   /** I saw them where they said they were. */
   readonly verified: number;
-  /** No alibi once the round's alibi window has closed ("posting none is suspicious in itself", §5.4). */
+  /** No plan spot and no alibi once the crew has had its say about the round (`settled`; saying nothing is suspicious in itself). */
   readonly noAlibi: number;
   /** Score after a shakedown found them clean. design §11.3 */
   readonly afterClean: number;
@@ -62,11 +62,8 @@ export function suspicion(view: PlayerView, w: SuspicionWeights = SUSPICION_WEIG
     const s = score.get(id);
     if (s !== undefined) score.set(id, s + n);
   };
-  const alibis = new Map<number, Map<PlayerId, RoomId>>();
-  for (const a of ofType(view.ledger, "alibiPosted")) {
-    if (!alibis.has(a.round)) alibis.set(a.round, new Map());
-    alibis.get(a.round)?.set(a.player, a.room);
-  }
+  // design §10, §11.3: where each said they were (plan spot, or alibi).
+  const alibis = saidRooms(view);
   const coins = (room: RoomId): number => roomDef(job, room).coins;
   const maxCoins = Math.max(...view.rooms.map(coins));
 
@@ -92,14 +89,14 @@ export function suspicion(view: PlayerView, w: SuspicionWeights = SUSPICION_WEIG
         rooms.add(watch.room);
       }
     }
-    // The latest round's alibi window is still open: silence there isn't evidence yet.
-    const windowClosed = view.alibiRound !== round; // design §5.4
+    // The crew hasn't had its say about the latest round yet: silence there isn't evidence.
+    const heard = settled(view, round);
 
-    // design §5.4: alibis against what I saw.
+    // design §11.3: what they said against what I saw.
     for (const id of others) {
       const claim = claims.get(id);
       if (claim === undefined) {
-        if (windowClosed) add(id, w.noAlibi);
+        if (heard) add(id, w.noAlibi);
         continue;
       }
       const at = seenIn.get(id);
@@ -122,7 +119,7 @@ export function suspicion(view: PlayerView, w: SuspicionWeights = SUSPICION_WEIG
     for (const id of others) {
       const claim = claims.get(id);
       if (claim === undefined) {
-        if (windowClosed) weights.set(id, maxCoins + 1);
+        if (heard) weights.set(id, maxCoins + 1);
       } else if (!(seenIn.get(id) === claim && coins(claim) === 0)) {
         weights.set(id, coins(claim) + 1);
       }

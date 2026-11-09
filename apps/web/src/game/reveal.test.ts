@@ -58,7 +58,7 @@ describe("<Reveal>", () => {
       {
         round: 1,
         card: null,
-        moves: [{ player: "p2", room: "vault", duffel: 2, pocket: 4, missed: false, alibi: "lobby" }],
+        moves: [{ player: "p2", room: "vault", duffel: 2, pocket: 4, missed: false, alibi: "lobby", planned: "office" }],
         resolved: { taken: 6, missing: 4 },
         split: { cut: 0, share: 0 },
         items: [{ kind: "event", event: { ...sampleEvents.abilityResolved, player: "p2", ability: { kind: "ring", room: "office" } } }],

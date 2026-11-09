@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { createGame, setupEvents } from "./setup";
 import { replay } from "./reduce";
 import { handleCommand } from "./handle";
-import { handleThroughAlibis } from "./alibis.testkit";
+import { handleThroughResult } from "./result.testkit";
 import { viewFor } from "./view";
 import { canSee } from "./types";
 import type { Command, GameConfig, GameEvent, GameState } from "./types";
@@ -31,7 +31,7 @@ function game(players: number, roles: string[] = [], seed?: string): GameState {
 type Step = Command | ((s: GameState) => Command);
 function run(state: GameState, ...commands: Step[]): GameState {
   return commands.reduce<GameState>((s, c) => {
-    const r = handleThroughAlibis(s, typeof c === "function" ? c(s) : c);
+    const r = handleThroughResult(s, typeof c === "function" ? c(s) : c);
     if (!r.ok) throw new Error(`rejected ${JSON.stringify(c)}: ${r.reason}`);
     return r.state;
   }, state);
@@ -255,16 +255,15 @@ describe("QA: the bust and the Rooftop escape — design §5.5, §8.3, §8.5", (
     expect(outcome(s)).toMatchObject({ escapees: ["p1", "p2"], winners: ["p1", "p2"] });
   });
 
-  it("skips cooling, the alibi window and every later round; the round's summary still goes out", () => {
+  it("skips cooling, the result window and every later round; the round's summary still goes out", () => {
     const before = hot(game(3));
     const s = run(before, mv("p0", "vault", 1), mv("p1", "rooftop"), mv("p2", "lobby", 1), ROUND);
     const tail = since(before, s).map((e) => e.type);
     expect(tail).not.toContain("bellsCooled");
-    expect(tail).not.toContain("alibisClosed");
     expect(tail).not.toContain("roundStarted");
     expect(tail).toContain("roundResolved");
     expect(tail.at(-1)).toBe("gameEnded");
-    expect(handleCommand(s, { type: "advance", deadline: { kind: "alibis", round: 1 } }).ok).toBe(false);
+    expect(handleCommand(s, { type: "advance", deadline: { kind: "result", round: 1 } }).ok).toBe(false);
   });
 
   it("coins are conserved through a bust: bank + seized + the kitty + stashes = the starting bank", () => {
@@ -341,11 +340,11 @@ describe("QA: crew sizes and invalid or out-of-phase commands — design §3.2, 
     for (const room of [undefined, 3, "office", "constructor", "__proto__", "hasOwnProperty"]) expect(reason(fixer, reopen(room))).toMatch(/taped-off room/);
   });
 
-  it("refuses a move or a power out of phase: during the alibi window and after a bust", () => {
+  it("refuses a move or a power out of phase: in the result window and after a bust", () => {
     const g = game(3, ["mole"]);
     const r = handleCommand(run(g, mv("p0", "lobby", 1), mv("p1", "lobby", 1), mv("p2", "lobby", 1)), { type: "advance", deadline: { kind: "round", round: 1 } });
     if (!r.ok) throw new Error(r.reason);
-    expect(r.state.phase.kind).toBe("alibis");
+    expect(r.state.phase.kind).toBe("result");
     expect(handleCommand(r.state, mv("p0", "lobby", 1, 0, { ability: { kind: "ring", room: "vault" } })).ok).toBe(false);
     // A stale round deadline is refused too.
     expect(handleCommand(r.state, { type: "advance", deadline: { kind: "round", round: 1 } }).ok).toBe(false);

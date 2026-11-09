@@ -69,7 +69,6 @@ const LAST = <T extends GameEvent["type"]>(s: GameState, type: T) => ofType(s.lo
 const ids = (n: number) => Array.from({ length: n }, (_, i) => `p${i}`);
 const mv = (player: string, room: string, pocket = 0) => ({ type: "submitMove", player, move: fullGrab(room, pocket, PINS) });
 const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
-const ALIBIS = (s: GameState) => ({ type: "advance", deadline: { kind: "alibis", round: s.resolvedRound } });
 const RESULT = (s: GameState) => ({ type: "advance", deadline: { kind: "result", round: s.resolvedRound } });
 const open = (meetingId: unknown) => ({ type: "advance", deadline: { kind: "openMeeting", meetingId } });
 const close = (meetingId: unknown) => ({ type: "advance", deadline: { kind: "closeMeeting", meetingId } });
@@ -87,7 +86,7 @@ const lobby = (s: GameState) => s.playerOrder.filter((p) => !s.moves[p]).map((p)
 
 /** Round 1 in the Lobby, then an emergency in its result window: a meeting open with nothing taken above the share. */
 function toMeeting(s: GameState): GameState {
-  s = run(s, ...lobby(s), ROUND, ALIBIS);
+  s = run(s, ...lobby(s), ROUND);
   return run(s, emergency("p0"), OPEN);
 }
 
@@ -103,7 +102,6 @@ function fullGame(n: number, mode: VoteVisibility, meet: (s: GameState) => Cmd[]
   while (s.phase.kind !== "ended") {
     const p = s.phase;
     if (p.kind === "planning") s = run(s, ...(p.round === 1 ? [mv("p0", "vault")] : []), (x: GameState) => lobby(x), ROUND);
-    else if (p.kind === "alibis") s = run(s, ALIBIS);
     else if (p.kind === "awaitingMeeting") s = run(s, SCHED, OPEN);
     else if (p.kind === "meeting") s = run(s, ...meet(s), CLOSE);
     else if (p.kind === "result") s = run(s, s.pendingEmergency ? OPEN : p.round % 2 === 1 ? emergency(callers.shift() as string) : RESULT);
@@ -182,14 +180,13 @@ describe("QA: emergency meetings — design §9.3", () => {
     for (let i = 0; i < 3; i++) {
       s = run(s, ...lobby(s), ROUND);
       expect(reason(s, emergency("p1"))).toMatch(/between a round's result and the next planning/);
-      s = run(s, ALIBIS);
       if (s.phase.kind === "awaitingMeeting") s = run(s, SCHED, OPEN, CLOSE);
       expect(s.phase.kind).toBe("planning");
     }
   });
 
   it("during the notice period: proposals and sealing go on; a second call, the window's deadline and moves are refused", () => {
-    let s = run(game(7), ...lobby(game(7)), ROUND, { type: "postAlibi", player: "p0", room: "lobby" }, ALIBIS, emergency("p3"));
+    let s = run(game(7), ...lobby(game(7)), ROUND, { type: "postAlibi", player: "p0", round: 1, room: "lobby" }, emergency("p3"));
     expect(s.phase).toEqual({ kind: "result", round: 1 });
     s = run(s, propose("p1", "x"), seal("p2", "p3"));
     expect(reason(s, emergency("p0"))).toMatch(/already been called/);
@@ -202,7 +199,7 @@ describe("QA: emergency meetings — design §9.3", () => {
 
   it("after a regular meeting closes, its result window takes an emergency; the next round starts when that closes", () => {
     let s = game(3);
-    while (s.phase.kind !== "awaitingMeeting") s = run(s, ...(s.phase.kind === "planning" ? [...lobby(s), ROUND] : s.phase.kind === "alibis" ? [ALIBIS] : [RESULT]));
+    while (s.phase.kind !== "awaitingMeeting") s = run(s, ...(s.phase.kind === "planning" ? [...lobby(s), ROUND] : [RESULT]));
     s = run(s, SCHED, OPEN, CLOSE);
     expect(s.phase.kind).toBe("result");
     s = run(s, emergency("p2"), OPEN);
@@ -214,7 +211,7 @@ describe("QA: emergency meetings — design §9.3", () => {
 
 describe("QA: stale, duplicate and wrong-id deadlines — design §4.1", () => {
   it("are refused without changing state", () => {
-    let s = run(game(3), ...lobby(game(3)), ROUND, ALIBIS, emergency("p1"));
+    let s = run(game(3), ...lobby(game(3)), ROUND, emergency("p1"));
     expect(reason(s, open("emergency-2"))).toMatch(/not waiting/);
     expect(reason(s, open("meeting-1"))).toMatch(/not waiting/); // nothing scheduled
     expect(reason(s, close("emergency-1"))).toMatch(/not open/); // not open yet
@@ -226,7 +223,6 @@ describe("QA: stale, duplicate and wrong-id deadlines — design §4.1", () => {
     expect(reason(s, close("emergency-1"))).toMatch(/not open/); // duplicate
     expect(reason(s, open("emergency-1"))).toMatch(/not waiting/); // stale re-open
     expect(reason(s, { type: "advance", deadline: { kind: "round", round: 1 } })).toMatch(/not pending/);
-    expect(reason(s, { type: "advance", deadline: { kind: "alibis", round: 1 } })).toMatch(/no alibi deadline/);
     expect(reason(s, { type: "advance", deadline: { kind: "result", round: 1 } })).toMatch(/no result window/);
     expect(reason(s, sched("meeting-1"))).toMatch(/no meeting is due/);
   });
@@ -239,7 +235,7 @@ describe("QA: shakedowns at the share — design §9.6", () => {
     [2, false],
   ])("%i pocketed above the share: clean=%s, and exactly that is taken", (pocketed, clean) => {
     // Round 1: everyone in the Lobby, p0 pocketing `pocketed` of its 2. 3 players: the split is 6 − pocketed.
-    let s = run(game(3), mv("p0", "lobby", pocketed), mv("p1", "lobby"), mv("p2", "lobby"), ROUND, ALIBIS, emergency("p1"), OPEN);
+    let s = run(game(3), mv("p0", "lobby", pocketed), mv("p1", "lobby"), mv("p2", "lobby"), ROUND, emergency("p1"), OPEN);
     const share = s.share;
     expect(s.players.p0?.stash).toBe(share + pocketed);
     s = run(s, vote("p1", "p0"), vote("p2", "p0"), CLOSE);
@@ -250,7 +246,7 @@ describe("QA: shakedowns at the share — design §9.6", () => {
   it("coins a briefing's and an emergency's shakedowns set aside after one round all land in the next split, counting toward honesty once", () => {
     // 7 players. Round 1: p0 and p1 each pocket the Lobby's 2; p2's Vault grab is raided (seized); the rest hand in 2 each.
     let s = game(7);
-    s = run(s, mv("p0", "lobby", 2), mv("p1", "lobby", 2), mv("p2", "vault"), (x: GameState) => lobby(x), ROUND, ALIBIS);
+    s = run(s, mv("p0", "lobby", 2), mv("p1", "lobby", 2), mv("p2", "vault"), (x: GameState) => lobby(x), ROUND);
     expect(s.phase).toMatchObject({ kind: "awaitingMeeting", meeting: "briefing" });
     s = run(s, SCHED, OPEN, ...ids(7).filter((p) => p !== "p0").map((p) => vote(p, "p0")), CLOSE);
     s = run(s, emergency("p3"), OPEN, ...ids(7).filter((p) => p !== "p1").map((p) => vote(p, "p1")), CLOSE);

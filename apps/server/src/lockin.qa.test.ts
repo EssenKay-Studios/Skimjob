@@ -130,12 +130,12 @@ describe("early end with 3 and 12 seats (design §4.1)", () => {
       clock.advance(t.lockInGraceMs - 1);
       expect(await app.scheduler.tick()).toBe(0);
       clock.advance(1);
-      expect(await app.scheduler.tick()).toBe(1);
+      // The round resolves; a meeting it called may open at once (design §9.1, 15m auto meetings).
+      expect(await app.scheduler.tick()).toBeGreaterThanOrEqual(1);
       s = await load(id);
-      expect(s.phase).toEqual({ kind: "alibis", round: 1 });
       expect(count(s, "roundResolved")).toBe(1);
       expect(count(s, "defaultMoveAssigned")).toBe(0);
-      expect((await deadlines(id)).map((d) => d.key)).toEqual(["alibis:1"]);
+      expect((await deadlines(id)).some((d) => d.key.startsWith("round"))).toBe(false);
     });
   }
 
@@ -146,8 +146,9 @@ describe("early end with 3 and 12 seats (design §4.1)", () => {
     expect(await send(id, humans[0]!.who, moveFor(s, humans[0]!.player))).toMatchObject({ ok: true });
     expect(await rowOf(id, "roundEarly:1")).toBeUndefined();
     clock.advance(t.roundMs);
-    expect(await app.scheduler.tick()).toBe(1);
+    expect(await app.scheduler.tick()).toBeGreaterThanOrEqual(1);
     const end = await load(id);
+    expect(count(end, "roundResolved")).toBe(1);
     expect(count(end, "defaultMoveAssigned")).toBe(1);
     expect(count(end, "defaultMoveAssigned", (e) => e.player === humans[1]!.player)).toBe(1);
   });
@@ -226,7 +227,7 @@ describe("restart mid-grace: no double, no skip", () => {
       }
       expect(await send(id, humans[0]!.who, moveFor(s, humans[0]!.player, 1))).toMatchObject({ ok: true });
       clock.advance(t.lockInGraceMs);
-      expect(await app.scheduler.tick()).toBe(1);
+      expect(await app.scheduler.tick()).toBeGreaterThanOrEqual(1);
       return (await load(id)).log;
     };
     expect(await once(true)).toEqual(await once(false));

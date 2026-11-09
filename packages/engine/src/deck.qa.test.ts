@@ -2,7 +2,7 @@
 // interactions, repeats, and determinism. design §13
 import { describe, expect, it } from "vitest";
 import { NO_RAIDS } from "./v01-numbers.testkit";
-import { handleThroughAlibis } from "./alibis.testkit";
+import { handleThroughResult } from "./result.testkit";
 import type { RoomId } from "@skimjob/content";
 import type { GameConfig, GameEvent, GameState, PlayerId } from "./types";
 import { PUBLIC } from "./types";
@@ -37,14 +37,14 @@ function game(players: number, roles: string[] = [], extra: Partial<GameConfig> 
 
 function run(state: GameState, ...commands: unknown[]): GameState {
   return commands.reduce<GameState>((s, c) => {
-    const r = handleThroughAlibis(s, c);
+    const r = handleThroughResult(s, c);
     if (!r.ok) throw new Error(`rejected ${JSON.stringify(c)}: ${r.reason}`);
     return r.state;
   }, state);
 }
 
 const move = (player: PlayerId, room: RoomId, pocket = 0, rest: Record<string, unknown> = {}) => ({ type: "submitMove", player, move: { ...fullGrab(room, pocket), ...rest } });
-const refused = (s: GameState, c: unknown) => !handleThroughAlibis(s, c).ok;
+const refused = (s: GameState, c: unknown) => !handleThroughResult(s, c).ok;
 
 /** Everyone not in `moves` goes to the Office (Lobby if the Office is closed); `skip` players submit nothing. */
 function resolve(state: GameState, moves: Record<PlayerId, Record<string, unknown>> = {}, skip: PlayerId[] = []): GameState {

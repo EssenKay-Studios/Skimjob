@@ -50,9 +50,7 @@ type ExpectedVisibility = {
   eventFlipped: "public"; // design §13: the card is shown to everyone
   insideTip: "private"; // design §13: private to the recipient
   auditReport: "public"; // design §13: per-room coins that reached the duffel, on the ledger
-  alibiPosted: "public";
-  alibisClosed: "public";
-  roleClaimed: "public"; // design §8, §12.1: a role claim is public talk
+  said: "public"; // design §18, §19.2 seam 5: plans, pledges, alibis and claims are public talk
   meetingProposed: "public";
   meetingProposalAccepted: "public";
   meetingScheduled: "public";

@@ -98,7 +98,6 @@ function buildView(state: GameState, playerId: PlayerId): PlayerView {
     phase: state.phase,
     round: state.round,
     stretch: state.stretch,
-    alibiRound: state.alibisOpen ? state.resolvedRound : null,
     rooms: state.rooms,
     // design §6.1: the bank count is public.
     bank: state.bank,

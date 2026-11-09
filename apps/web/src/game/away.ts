@@ -62,7 +62,8 @@ export function recapItems(events: readonly LoggedEvent[], view: PlayerView, ctx
     picks.push({ prio: 4, ...say(e) });
   }
   // What people said (design §15.4): role claims, with emergencies called and meetings set.
-  for (const e of [...of("emergencyMeetingCalled"), ...of("meetingScheduled"), ...of("roleClaimed")]) picks.push({ prio: 5, ...say(e) });
+  const claims = of("said").filter((e) => e.event.statement.kind === "role");
+  for (const e of [...of("emergencyMeetingCalled"), ...of("meetingScheduled"), ...claims]) picks.push({ prio: 5, ...say(e) });
 
   // Your case file: only your own entries are in it (viewFor), minus what you did yourself.
   const news = events.filter((e) => e.event.visibility.kind !== "public" && !OWN_ACTIONS.has(e.event.type));
@@ -90,8 +91,6 @@ export function nextUp(view: PlayerView): string | null {
   switch (p.kind) {
     case "planning":
       return view.me.move ? `Now: round ${p.round}, you're locked in (you can still change it).` : `Now: round ${p.round}. Pick your room before the deadline.`;
-    case "alibis":
-      return `Now: the round ${p.round} alibi window is open.`;
     case "meeting":
       return view.me.vote || view.me.sealedVote ? "Now: the meeting is open; your vote is in." : "Now: the meeting is open. Cast your vote.";
     case "shakedownPending":

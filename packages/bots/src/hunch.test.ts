@@ -58,7 +58,8 @@ describe("crew hunch — design §17.3 (v2 §5)", () => {
   }, 30_000); // 60 full games: about 1 s alone, over the 5 s default on a busy machine
 
   it("with the harness's hidden crewSeed it can't be computed from public data: the same view gives a different hunch per seed (STATUS follow-up, PR #37 review)", () => {
-    const g = meetingViews("g-a");
+    // Seeds re-picked when the bots' draws shift (S3a.9): g-b's first meeting is a regular one, like most of the others'.
+    const g = meetingViews("g-b");
     const seeds = ["s1", "s2", "s3", "s4", "s5"].map((seed) => crewHunch(g.p2, "p3", seed));
     expect(new Set(seeds).size).toBe(seeds.length);
     // Still shared by the crew and steady for the meeting, for one crewSeed.
@@ -66,7 +67,7 @@ describe("crew hunch — design §17.3 (v2 §5)", () => {
     expect(crewHunch(g.later, "p3", "s1")).toBe(seeds[0]);
     // And it comes from the crewSeed, not the view: another game's view of the same meeting gives the same hunch for the same crewSeed.
     const meetingOf = (v: typeof g.p2) => (v.phase.kind === "meeting" ? v.phase.meetingId : null);
-    const other = ["g-b", "g-c", "g-d", "g-e", "g-f", "g-g"].map((seed) => meetingViews(seed).p2).find((v) => meetingOf(v) === meetingOf(g.p2));
+    const other = ["g-a", "g-c", "g-d", "g-e", "g-f", "g-g"].map((seed) => meetingViews(seed).p2).find((v) => meetingOf(v) === meetingOf(g.p2));
     expect(other).toBeDefined();
     expect(crewHunch(other as typeof g.p2, "p3", "s1")).toBe(seeds[0]);
   });

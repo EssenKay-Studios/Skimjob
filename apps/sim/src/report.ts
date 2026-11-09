@@ -29,6 +29,7 @@ const ROWS: readonly Row[] = [
   { label: "Perk buyers' win rate ÷ non-buyers'", target: "0.8–1.25", cell: (m) => num(m.perks.buyerRatio) },
   { label: "Bank emptied", target: "", cell: (m) => pct(m.bankEmptied) },
   { label: "Event cards (rounds from round 2)", target: "≈ 40%", cell: (m) => pct(m.cardRate) },
+  { label: "Plan spots kept", target: "report", cell: (m) => pct(m.planKept) },
   { label: "Regular meetings per game", target: "", cell: (m) => num(m.meetings.regular) },
   { label: "Police briefings per game", target: "", cell: (m) => num(m.meetings.briefing) },
   { label: "Emergencies per game", target: "", cell: (m) => num(m.meetings.emergency) },

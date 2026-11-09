@@ -60,14 +60,21 @@ test("two players see each other's plan entry live @plan", async ({ page, browse
   const game = await startGame(page.request, { bots: 1, guests: [guest.request], sessionLength: "1w" });
   await openChannel(page, game.id);
   await openChannel(guest, game.id);
-  expect(await board(page)).toEqual({ round: 1, entries: [] });
+  // design §10: the bot took its spot as the round started (its own room, agreed); the rest is the people's.
+  const bots = (await board(page))!.entries.map((e) => e.player);
+  expect(await board(page)).toMatchObject({ round: 1, entries: [{ player: bots[0], agreed: true }] });
+  expect(bots).toHaveLength(1);
+  const people = async (p: Page) => {
+    const b = await board(p);
+    return b && { ...b, entries: b.entries.filter((e) => !bots.includes(e.player)) };
+  };
 
   expect(await post(page, "a1", { room: "office", agree: true })).toMatchObject({ ok: true });
-  await expect.poll(() => board(guest)).toMatchObject({ round: 1, entries: [{ room: "office", power: null, agreed: true }] });
-  const hostId = (await board(guest))!.entries[0]!.player;
+  await expect.poll(() => people(guest)).toMatchObject({ round: 1, entries: [{ room: "office", power: null, agreed: true }] });
+  const hostId = (await people(guest))!.entries[0]!.player;
 
   expect(await post(guest, "g1", { room: "vault", power: { role: "hacker", target: "vault" } })).toMatchObject({ ok: true });
-  await expect.poll(() => board(page)).toMatchObject({
+  await expect.poll(() => people(page)).toMatchObject({
     entries: [
       { player: hostId, room: "office", agreed: true },
       { room: "vault", power: { role: "hacker", target: "vault" }, agreed: false },

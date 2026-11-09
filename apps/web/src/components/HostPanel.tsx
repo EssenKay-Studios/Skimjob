@@ -34,7 +34,7 @@ export function StandInBanner({ busy, onTakeBack }: { busy: boolean; onTakeBack:
 
 export interface HostPanelProps {
   readonly paused: boolean;
-  /** There's a phase clock to add time to (planning, alibis, an open meeting). */
+  /** There's a phase clock to add time to (planning or an open meeting). */
   readonly canExtend: boolean;
   readonly offers: readonly SeatOffer[];
   readonly busy: boolean;

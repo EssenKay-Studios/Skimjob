@@ -49,9 +49,7 @@ describe("public lock-in marks — design §5.1 (owner decision, 2 Nov)", () => 
     // Others never see the move itself.
     expect(JSON.stringify(viewFor(s, "p1"))).not.toContain('"lobby","pocket"');
     s = run(s, move("p1"), { type: "advance", deadline: { kind: "round", round: 1 } });
-    expect(viewFor(s, "p1").lockedIn).toEqual([]); // resolved: alibis
-    s = run(s, { type: "advance", deadline: { kind: "alibis", round: 1 } });
-    expect(viewFor(s, "p1").lockedIn).toEqual([]); // the result window (design §9.3)
+    expect(viewFor(s, "p1").lockedIn).toEqual([]); // resolved: the result window (design §9.3)
     s = run(s, { type: "advance", deadline: { kind: "result", round: 1 } });
     expect(s.phase).toEqual({ kind: "planning", round: 2 });
     expect(viewFor(s, "p0").lockedIn).toEqual([]);

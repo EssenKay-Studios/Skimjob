@@ -362,6 +362,12 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
           state = r.state;
           changed ||= r.changed;
         }
+        // design §10: with its move, the bot takes its spot on the round's plan board (everyone sees it as the board goes out).
+        const spot = agent.spot(viewFor(state, seat.player));
+        if (spot) {
+          const r = await plan.edit(gameId, state, seat.player, { place: { player: seat.player, room: spot.room }, room: spot.room, power: spot.power, agree: true });
+          if (!r.ok) app.log.warn({ gameId, player: seat.player, reason: r.reason }, "bot plan edit refused");
+        }
         // Kept across restarts (after its commands), so a rebuilt server doesn't act again on a view this bot already acted on.
         await db.query("update seats set bot_seen = $3 where game_id = $1 and player_id = $2", [gameId, seat.player, hash]);
       }
@@ -487,11 +493,13 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
     return settled;
   };
 
-  /** Applies a system command; the caller holds the game's lock. */
+  /** Applies a system command; the caller holds the game's lock. A round's deadline carries its plan board (design §10). */
   const runSystem = async (gameId: string, command: SystemCommand) => {
     const state = await store.load(gameId);
     if (!state) throw new Error(`game ${gameId} has not started`);
-    const r = await apply(gameId, state, command);
+    const deadline = command.type === "advance" ? command.deadline : null;
+    const full: SystemCommand = deadline?.kind === "round" ? { type: "advance", deadline: { ...deadline, plan: await plan.snapshot(gameId, state) } } : command;
+    const r = await apply(gameId, state, full);
     if (!r.ok) throw new SystemRefused(`system command refused: ${JSON.stringify(command)}: ${r.reason}`);
     return afterChange(gameId, r.state);
   };

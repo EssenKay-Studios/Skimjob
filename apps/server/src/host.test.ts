@@ -146,7 +146,7 @@ describe("pause and resume (design §15, §4.1)", () => {
     const paused = await deadlines(id);
     expect(paused.every((r) => r.paused)).toBe(true);
     // Far past every due time: nothing fires while paused.
-    const pausedFor = 2 * (H1.roundMs + H1.alibiMs) * 3;
+    const pausedFor = 2 * (H1.roundMs + H1.resultMs) * 3;
     clock.advance(pausedFor);
     expect(await app.scheduler.tick()).toBe(0);
     expect((await load(id)).phase).toEqual({ kind: "planning", round: 1 });

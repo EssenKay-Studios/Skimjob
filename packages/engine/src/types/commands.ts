@@ -71,6 +71,47 @@ export interface Move {
   readonly ability?: AbilityUse;
 }
 
+// ---------------------------------------------------------------- the plan board (§10)
+
+/** A power claim (a pledge): "Hacker → Vault" or "Detective → Eli". design §10 */
+export interface PowerClaim {
+  readonly role: RoleId;
+  /** A room in play or another player, by the role's power. */
+  readonly target: RoomId | PlayerId;
+}
+
+/** One seat's line on the plan board. Seats with nothing on it are not listed. design §10 */
+export interface PlanEntry {
+  readonly player: PlayerId;
+  /** Where the crew put this avatar on the proposed plan (anyone may move it); null: nowhere. */
+  readonly placed: RoomId | null;
+  /** The seat's own room claim (✋): only that seat sets it. */
+  readonly room: RoomId | null;
+  readonly power: PowerClaim | null;
+  readonly agreed: boolean;
+}
+
+/** One edit in the board's compact history: the latest of its actor, kind and subject. design §10 */
+export interface PlanEditRecord {
+  readonly actor: PlayerId;
+  /** "place" moves `subject`'s avatar; "room", "power" and "agree" are the actor's own claims (subject = actor). */
+  readonly kind: "place" | "room" | "power" | "agree";
+  readonly subject: PlayerId;
+  /** The room, the claimed role, or "true" / "false" for agree; null: cleared. */
+  readonly value: string | null;
+  /** A power claim's target. */
+  readonly target: string | null;
+  /** Ms left to the round's deadline when it was made; null if there was none. */
+  readonly msBeforeDeadline: number | null;
+}
+
+/** The plan board as its round resolves: the final plan and its pledges, and the edit history oldest first. design §10 */
+export interface PlanSnapshot {
+  /** In seat order. */
+  readonly entries: readonly PlanEntry[];
+  readonly history: readonly PlanEditRecord[];
+}
+
 /** A vote in a crew meeting: shake someone down, or skip. design §11.2 */
 export type VoteChoice =
   | { readonly kind: "shakedown"; readonly target: PlayerId }
@@ -78,8 +119,8 @@ export type VoteChoice =
 
 export type PlayerCommand =
   | { readonly type: "submitMove"; readonly player: PlayerId; readonly move: Move }
-  /** Claim (truthfully or not) which room you were in during the last resolved round. design §5.4 */
-  | { readonly type: "postAlibi"; readonly player: PlayerId; readonly room: RoomId }
+  /** Say (truthfully or not) you were in `room` in resolved `round`; any time, once per round. design §11.3 */
+  | { readonly type: "postAlibi"; readonly player: PlayerId; readonly round: number; readonly room: RoomId }
   /**
    * Claim (truthfully or not) to be `role`: public, changes no rule. Once per
    * stretch; any role the content knows. design §11.3
@@ -114,16 +155,11 @@ export type Deadline =
   /**
    * The planning deadline for `round`: resolve it (default moves for anyone
    * missing). Rejected unless `round` is the one being planned, so a retried
-   * or late deadline can't resolve the next round early. design §5
+   * or late deadline can't resolve the next round early. `plan` is the plan
+   * board as the round resolves (the server's live board, design §10), left
+   * out when nobody used it. design §4.2
    */
-  | { readonly kind: "round"; readonly round: number }
-  /**
-   * The alibi deadline for `round` (design §5.4): no more alibis for it; the
-   * meeting the round called is awaited, else the result window opens or the
-   * next round starts. Rejected unless `round` is the one whose alibis are
-   * open, so a retry is refused.
-   */
-  | { readonly kind: "alibis"; readonly round: number }
+  | { readonly kind: "round"; readonly round: number; readonly plan?: PlanSnapshot }
   /** The result window after `round` has closed with no emergency called: the next round starts. design §9.3 */
   | { readonly kind: "result"; readonly round: number }
   /** A scheduled meeting's slot, or an emergency's notice period, has arrived: open the vote window. design §9.3, §9.4 */

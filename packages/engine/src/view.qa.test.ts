@@ -324,8 +324,7 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
   for (let round = 1; round <= BANK_JOB.roundCap && !over(); round++) {
     planRound(round);
     step([{ type: "advance", deadline: { kind: "round", round } }]);
-    for (const id of ids) if (!over() && rand() < 0.7) step([{ type: "postAlibi", player: id, room: pick(A.rooms) }]);
-    if (!over()) step([{ type: "advance", deadline: { kind: "alibis", round } }]); // design §5.4
+    for (const id of ids) if (!over() && rand() < 0.7) step([{ type: "postAlibi", player: id, round, room: pick(A.rooms) }]);
     // design §4.2 steps 9–10: the meeting the round called, then the result window, where an emergency may be called.
     while (!over() && (A.phase.kind === "awaitingMeeting" || A.phase.kind === "result")) {
       const p = A.phase;
@@ -455,7 +454,6 @@ describe("QA: viewFor edges — design §13, §9.5", () => {
       check();
       s = apply(s, { type: "advance", deadline: { kind: "round", round } }, "A");
       check();
-      if (s.phase.kind === "alibis") s = apply(s, { type: "advance", deadline: { kind: "alibis", round } }, "A");
       if (s.phase.kind === "awaitingMeeting") {
         s = apply(s, { type: "scheduleMeeting", meetingId: s.phase.meetingId, slot: "x" }, "A");
         s = apply(s, { type: "advance", deadline: { kind: "openMeeting", meetingId: s.scheduledMeeting?.meetingId } }, "A");

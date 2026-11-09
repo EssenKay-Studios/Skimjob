@@ -90,8 +90,6 @@ function nextDeadlines(state: GameState): Command[] {
   const out: Command[] = [];
   if (state.pendingEmergency) out.push({ type: "advance", deadline: { kind: "openMeeting", meetingId: state.pendingEmergency.meetingId } });
   if (phase.kind === "planning") out.push({ type: "advance", deadline: { kind: "round", round: phase.round } });
-  // design §5.4: the alibi deadline after each round.
-  if (phase.kind === "alibis") out.push({ type: "advance", deadline: { kind: "alibis", round: phase.round } });
   // design §9.3: the result window closes unless an emergency was called in it.
   if (phase.kind === "result" && !state.pendingEmergency) out.push({ type: "advance", deadline: { kind: "result", round: phase.round } });
   if (phase.kind === "awaitingMeeting") {
@@ -148,7 +146,7 @@ function playerCommand(state: GameState, t: Tape, style: Style): { command: Reco
   const choice =
     fit && phase === "planning"
       ? 0
-      : fit && phase === "alibis"
+      : fit && phase === "result" && t.chance(30)
         ? 5
         : fit && phase === "meeting"
           ? 9
@@ -193,7 +191,7 @@ function playerCommand(state: GameState, t: Tape, style: Style): { command: Reco
       return { command: { ...base, type: "submitMove", move }, seated };
     }
     case 5:
-      return { command: { ...base, type: "postAlibi", room: room() }, seated };
+      return { command: { ...base, type: "postAlibi", round: t.int(state.resolvedRound + 2), room: room() }, seated };
     case 6:
       return { command: { ...base, type: "proposeMeeting", slot: `slot-${t.int(3)}` }, seated };
     case 7: {
@@ -268,9 +266,7 @@ function garbageCommand(state: GameState, t: Tape): unknown {
     { type: "advance", deadline: { kind: "round", round: String(state.round) } },
     { type: "advance", deadline: { kind: "round", round: state.round + 1 } },
     { type: "advance", deadline: { kind: "round", round: state.round - 1 } },
-    { type: "advance", deadline: { kind: "alibis", round: state.round + 1 } },
-    { type: "advance", deadline: { kind: "alibis", round: state.resolvedRound - 1 } },
-    { type: "advance", deadline: { kind: "alibis" } },
+    { type: "advance", deadline: { kind: "round", round: state.round, plan: { entries: [{ player: "p99", placed: null, room: null, power: null, agreed: true }], history: [] } } },
     { type: "advance", deadline: { kind: "openMeeting", meetingId: "meeting-9" } },
     { type: "advance", deadline: { kind: "result", round: 99 } },
     { type: "advance", deadline: { kind: "closeMeeting", meetingId: "emergency-nobody" } },
@@ -358,9 +354,9 @@ function checkState(state: GameState, inflow: number): void {
   // design §6.2: the game ends after the round that empties the bank or reaches the cap; no round or meeting follows.
   if (state.resolvedRound > 0 && (state.bank === 0 || state.resolvedRound === roundCap)) check(state.phase.kind === "ended", "the game is over once the bank is empty or the cap is reached", state.phase);
   if (state.phase.kind === "planning") check(state.phase.round === state.round, "planning the latest round");
-  // design §5.4: alibis are open exactly in the alibi phase (or in a meeting called during it), for the round just resolved.
-  if (state.phase.kind === "alibis") check(state.alibisOpen && state.phase.round === state.resolvedRound && state.phase.round === state.round, "alibi phase for the round just resolved", state.phase);
-  if (state.phase.kind === "planning" || state.phase.kind === "awaitingMeeting") check(!state.alibisOpen, "alibis closed outside their phase", state.phase);
+  // design §11.3: one alibi per player and round.
+  const alibis = state.log.flatMap((e) => (e.type === "said" && e.statement.kind === "alibi" ? [`${e.statement.player}/${e.statement.round}`] : []));
+  check(new Set(alibis).size === alibis.length, "one alibi per player per round", alibis);
   // design §9.3: the pool only shrinks, by one per call, and an emergency is only ever pending in the result window.
   const calls = state.log.filter((e) => e.type === "emergencyMeetingCalled").length;
   check(state.emergencies === (state.playerOrder.length <= 6 ? 1 : 2) - calls && state.emergencies >= 0, "the emergency pool = its size − calls ≥ 0", [state.emergencies, calls]);

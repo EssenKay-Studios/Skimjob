@@ -46,6 +46,7 @@ function recording(agents: readonly Agent[]) {
       for (const command of out) sent.push({ view, command });
       return out;
     },
+    spot: (view) => a.spot?.(view) ?? null,
   }));
   return { sent, wrapped };
 }
@@ -161,7 +162,11 @@ describe("QA: bots never read the state, only their view — design §17.3", () 
       const normal = runBotGame(c, createBots(c.players, rotate(1), "json"));
       const detached = runBotGame(
         c,
-        createBots(c.players, rotate(1), "json").map((a): Agent => ({ player: a.player, act: (v) => a.act(JSON.parse(JSON.stringify(v)) as PlayerView) })),
+        createBots(c.players, rotate(1), "json").map((a): Agent => ({
+          player: a.player,
+          act: (v) => a.act(JSON.parse(JSON.stringify(v)) as PlayerView),
+          spot: (v) => a.spot?.(JSON.parse(JSON.stringify(v)) as PlayerView) ?? null,
+        })),
       );
       expect(JSON.stringify(detached.state.log)).toBe(JSON.stringify(normal.state.log));
     }
@@ -194,8 +199,6 @@ function midGame(c: GameConfig): GameState {
   };
   for (const b of bots) for (const cmd of b.act(viewFor(state, b.player))) apply(cmd);
   apply({ type: "advance", deadline: { kind: "round", round: 1 } });
-  for (const b of bots) for (const cmd of b.act(viewFor(state, b.player))) apply(cmd);
-  apply({ type: "advance", deadline: { kind: "alibis", round: 1 } }); // design §5.4
   for (const b of bots) for (const cmd of b.act(viewFor(state, b.player))) apply(cmd);
   // design §9.3: an emergency a bot called in the result window, then the window's close.
   while (state.phase.kind !== "planning") {
@@ -234,6 +237,11 @@ describe("QA: vandalising a view doesn't touch the game — design §17.3", () =
         player: a.player,
         act: (view) => {
           const out = a.act(view);
+          vandalise(view);
+          return out;
+        },
+        spot: (view) => {
+          const out = a.spot?.(view) ?? null;
           vandalise(view);
           return out;
         },

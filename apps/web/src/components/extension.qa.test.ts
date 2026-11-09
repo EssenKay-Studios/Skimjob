@@ -70,7 +70,6 @@ function run(state: GameState, ...commands: Cmd[]): GameState {
 const refused = (s: GameState, cmd: object) => !handleCommand(s, cmd).ok;
 const mv = (player: string, room: string, pocket = 0, extra: object = {}) => ({ type: "submitMove", player, move: { room, duffel: Math.max(0, (BANK_JOB.rooms[room]?.coins ?? 0) - pocket), pocket, ...extra } });
 const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
-const ALIBIS = (s: GameState) => ({ type: "advance", deadline: { kind: "alibis", round: s.phase.kind === "alibis" ? s.phase.round : s.round } });
 /** The result window closes with no emergency called (design §9.3). */
 const RESULT = (s: GameState) => ({ type: "advance", deadline: { kind: "result", round: s.resolvedRound } });
 const buy = (player: string, perk: object) => ({ type: "buyPerk", player, perk });
@@ -81,7 +80,6 @@ function playOut(s: GameState, room: (s: GameState, p: string) => string, pocket
   for (let guard = 0; guard < 200 && s.phase.kind !== "ended"; guard++) {
     const p = s.phase;
     if (p.kind === "planning") s = run(s, ...s.playerOrder.map((id) => mv(id, room(s, id), pocket)), ROUND);
-    else if (p.kind === "alibis") s = run(s, ALIBIS);
     else if (p.kind === "result") s = run(s, { type: "advance", deadline: { kind: "result", round: p.round } });
     else if (p.kind === "awaitingMeeting") s = run(s, { type: "scheduleMeeting", meetingId: p.meetingId, slot: "x" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: p.meetingId } });
     else if (p.kind === "meeting") s = run(s, { type: "advance", deadline: { kind: "closeMeeting", meetingId: s.meeting?.id } });
@@ -130,7 +128,7 @@ describe("no tells: cameras offline (design §11.1)", () => {
   function cameraWorld() {
     let s = game(config(5, { seed: "cam" }), { roles: ["electrician"] });
     const cut = { ability: { kind: "blackout", room: "vault" } };
-    s = run(s, mv("p0", "office", 0, cut), ...ids(5).slice(1).map((p) => mv(p, "office")), ROUND, ALIBIS, RESULT);
+    s = run(s, mv("p0", "office", 0, cut), ...ids(5).slice(1).map((p) => mv(p, "office")), ROUND, RESULT);
     const moves = [mv("p0", "office"), mv("p1", "security", 0, { watch: "vault" }), mv("p2", "vault", 2), mv("p3", "office"), mv("p4", "office")];
     return run(s, ...moves, ROUND);
   }
@@ -149,7 +147,6 @@ describe("no tells: cameras offline (design §11.1)", () => {
 function playOut1(s: GameState): GameState {
   const p = s.phase;
   if (p.kind === "planning") return run(s, ...s.playerOrder.map((id) => mv(id, "office")), ROUND);
-  if (p.kind === "alibis") return run(s, ALIBIS);
   if (p.kind === "result") return run(s, { type: "advance", deadline: { kind: "result", round: p.round } });
   if (p.kind === "awaitingMeeting") return run(s, { type: "scheduleMeeting", meetingId: p.meetingId, slot: "x" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: p.meetingId } });
   return run(s, { type: "advance", deadline: { kind: "closeMeeting", meetingId: s.meeting?.id } });

@@ -58,7 +58,6 @@ function run(state: GameState, ...commands: unknown[]): GameState {
 
 const mv = (player: string, room: string) => ({ type: "submitMove", player, move: fullGrab(room) });
 const round = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
-const alibis = (s: GameState) => ({ type: "advance", deadline: { kind: "alibis", round: s.resolvedRound } });
 
 /** States across the phases where each command can be accepted. */
 function scenarioStates(): GameState[] {
@@ -70,10 +69,9 @@ function scenarioStates(): GameState[] {
   keep(s); // planning round 1
   s = keep(run(s, ...s.playerOrder.map((id) => mv(id, "lobby"))));
   s = keep(run(s, { type: "proposeMeeting", player: "p0", slot: "slot-a" }));
-  s = keep(run(s, round(s))); // alibis for round 1
-  s = keep(run(s, { type: "postAlibi", player: "p8", room: "lobby" }));
+  s = keep(run(s, round(s))); // the result window after round 1 (design §9.3)
+  s = keep(run(s, { type: "postAlibi", player: "p8", round: 1, room: "lobby" }));
   s = keep(run(s, { type: "useAbility", player: "p5", ability: { kind: "audit", room: "lobby" } }));
-  s = keep(run(s, alibis(s))); // the result window after round 1 (design §9.3)
   expect(s.phase.kind).toBe("result");
   s = keep(run(s, { type: "callEmergency", player: "p1" })); // waiting to open
   s = keep(run(s, { type: "advance", deadline: { kind: "openMeeting", meetingId: "emergency-1" } })); // voting
@@ -82,8 +80,7 @@ function scenarioStates(): GameState[] {
   expect(s.phase.kind).toBe("shakedownPending");
   s = keep(run(s, { type: "advance", deadline: { kind: "resolveShakedown", meetingId: "emergency-1" } })); // planning round 2
   // Round 2: everyone in the Vault rings it past its last bulb: the raid calls a police briefing (design §9.2).
-  s = run(s, ...s.playerOrder.map((id) => mv(id, "vault")), round(s));
-  s = keep(run(s, alibis(s)));
+  s = keep(run(s, ...s.playerOrder.map((id) => mv(id, "vault")), round(s)));
   expect(s.phase.kind).toBe("awaitingMeeting");
   s = keep(run(s, (s.phase.kind === "awaitingMeeting" ? { type: "scheduleMeeting", meetingId: s.phase.meetingId, slot: "server" } : null)));
   // A Lockdown card forged onto planning (design §13).
@@ -136,8 +133,8 @@ function baseCommands(s: GameState): Record<string, unknown>[] {
       out.push({ type: "buyPerk", player, perk });
     }
     out.push({ type: "chooseBail", player, use: true });
-    out.push({ type: "postAlibi", player, room });
-    out.push({ type: "claimRole", player, role: "lookout" }); // design §8, §12.1
+    out.push({ type: "postAlibi", player, round: s.resolvedRound, room });
+    out.push({ type: "claimRole", player, role: "lookout" }); // design §11.3
     out.push({ type: "proposeMeeting", player, slot: `slot-${s.log.length}` });
     for (const proposal of s.proposals) out.push({ type: "acceptMeeting", player, proposalId: proposal.id });
     out.push({ type: "callEmergency", player });
@@ -148,7 +145,12 @@ function baseCommands(s: GameState): Record<string, unknown>[] {
   }
   const meetingIds = [s.scheduledMeeting?.meetingId, s.pendingEmergency?.meetingId, s.meeting?.id, s.pendingShakedown?.meetingId];
   out.push({ type: "advance", deadline: { kind: "round", round: s.round } });
-  out.push({ type: "advance", deadline: { kind: "alibis", round: s.resolvedRound } });
+  // design §10: the round deadline with the plan board as it resolves (every field fuzzed).
+  const plan = {
+    entries: [{ player: "p0", placed: "lobby", room: "lobby", power: { role: "hacker", target: "vault" }, agreed: true }],
+    history: [{ actor: "p1", kind: "place", subject: "p0", value: "lobby", target: null, msBeforeDeadline: 1000 }],
+  };
+  out.push({ type: "advance", deadline: { kind: "round", round: s.round, plan } });
   out.push({ type: "advance", deadline: { kind: "result", round: s.resolvedRound } });
   for (const kind of ["openMeeting", "closeMeeting", "resolveShakedown"]) {
     for (const meetingId of meetingIds) if (meetingId) out.push({ type: "advance", deadline: { kind, meetingId } });
@@ -162,7 +164,15 @@ function baseCommands(s: GameState): Record<string, unknown>[] {
 /** Fields whose strings are free text the engine only stores and compares (`slot`, design §9.4): any short string is fine there. */
 const FREE_TEXT = new Set(["slot"]);
 /** Fields a command may leave out (a move without a power). */
-const OPTIONAL = new Set(["move.ability"]);
+const OPTIONAL = new Set(["move.ability", "deadline.plan"]);
+/** Hostile values that are valid in these fields (design §10: nobody placed, no claim, no deadline, an empty board or history). */
+const isEmptyList = (h: unknown) => Array.isArray(h) && h.length === 0;
+const ALSO_VALID: ReadonlyMap<string, (h: unknown) => boolean> = new Map([
+  ...["placed", "room", "power"].map((k) => [`deadline.plan.entries.${k}`, (h: unknown) => h === null] as const),
+  ...["value", "msBeforeDeadline"].map((k) => [`deadline.plan.history.${k}`, (h: unknown) => h === null] as const),
+  ["deadline.plan.entries", isEmptyList],
+  ["deadline.plan.history", isEmptyList],
+]);
 /** Stands for "the field is left out". */
 const ABSENT = Symbol("absent");
 
@@ -195,8 +205,10 @@ function hostileFor(path: Path, value: unknown): unknown[] {
   // A list item can't be left out in JSON (no holes), so only object fields are.
   const missing = OPTIONAL.has(field) ? [] : typeof path[path.length - 1] === "number" ? [undefined] : [ABSENT, undefined];
   // Objects and lists are replaced by every hostile value, objects with no string form included.
-  if (isContainer(value)) return [...HOSTILE_VALUES, ...missing];
-  const others = HOSTILE_VALUES.filter((h) => typeof h !== typeof value);
+  const valid = ALSO_VALID.get(field);
+  const hostile = valid ? HOSTILE_VALUES.filter((h) => !valid(h)) : HOSTILE_VALUES;
+  if (isContainer(value)) return [...hostile, ...missing];
+  const others = hostile.filter((h) => typeof h !== typeof value);
   if (typeof value !== "string") return [...others, ...missing];
   // design §17.2: free text is capped (content), so an over-long slot is refused too.
   const extra = FREE_TEXT.has(field) ? ["x".repeat(MAX_SLOT_LENGTH + 1)] : PROTOTYPE_KEYS;
