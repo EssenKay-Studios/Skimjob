@@ -1,6 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 import { callEmergency, openPanel, startGame } from "./setupGame";
+import { pickRoom } from "./move";
 
 // QA for M2-7 (PR #35): three human contexts in one game, 1-hour preset at
 // TIME_SCALE 0.1 (30 s rounds, 6 s notice, 18 s vote window).
@@ -49,7 +50,7 @@ for (const mode of ["hiddenThenRevealed", "open", "secret"] as const) {
     for (const p of [host, g1, g2]) await openPanel(p, "This round"); // below 1024 px it stays open: the vote dialog opens over it
 
     // Round 1: the host loots the Office.
-    await host.locator('.room-tile[data-room="Office"]').click();
+    await pickRoom(host, "Office");
     await expect(host.getByRole("button", { name: "Lock it in" })).toBeEnabled();
     await host.getByRole("button", { name: "Lock it in" }).click();
 

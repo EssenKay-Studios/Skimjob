@@ -20,12 +20,16 @@ import {
   type DescribeContext,
 } from "../game/describeEvent";
 import {
+  changedStory,
   isHidden,
   itemText,
+  planOf,
   roundLabel,
+  satOutText,
   stashTrend,
   whyText,
   starText,
+  endingText,
 } from "../game/reveal";
 import { Button } from "./Button";
 import { Chip } from "./Chip";
@@ -56,7 +60,9 @@ export function Reveal({ summary, ctx, looks }: RevealProps) {
       holes
       className="panel reveal"
       aria-labelledby="reveal-h"
-      data-ending={summary.ending.result === "success" ? "success" : summary.ending.reason}
+      data-ending={
+        summary.ending.result === "success" ? "success" : summary.ending.reason
+      }
     >
       <header className="reveal__head">
         <h2 id="reveal-h">The reveal</h2>
@@ -144,9 +150,7 @@ function RoleEnvelope({
         <dl className="reveal__facts">
           <div>
             <dt>Stash</dt>
-            <dd className="num">
-              {s.stash}
-            </dd>
+            <dd className="num">{s.stash}</dd>
           </div>
         </dl>
         <StashLine
@@ -290,25 +294,37 @@ function RoundSheet({
         )}
         {round.resolved && (
           <span className="meta num">
-            {round.resolved.taken} taken, {round.resolved.missing} missing{round.split ? `, share ${round.split.share}` : ""}
+            {round.resolved.taken} taken, {round.resolved.missing} missing
+            {round.split ? `, share ${round.split.share}` : ""}
           </span>
         )}
       </header>
-      {round.moves.length > 0 && (
-        <ul className="reveal__moves" aria-label="Where everyone really was">
+      {(round.moves.length > 0 || round.satOut.length > 0) && (
+        <ul
+          className="reveal__moves"
+          aria-label="Plan against what everyone really did"
+        >
           {round.moves.map((m) => {
             const lied = m.alibi !== null && m.alibi !== m.room;
+            const plan = planOf(m);
+            const changed = changedStory(m);
             return (
               <li
                 key={m.player}
-                className={lied ? "reveal__move is-lie" : "reveal__move"}
+                className={
+                  lied || plan.broken ? "reveal__move is-lie" : "reveal__move"
+                }
               >
                 <b className="reveal__mover">
                   {m.player === ctx.me ? "You" : ctx.name(m.player)}
                 </b>
                 <span className="reveal__facts">
                   <span>
-                    {roomName(m.room)}
+                    Plan: {plan.spot}
+                    {plan.broken && <b> (broken)</b>}
+                  </span>
+                  <span>
+                    Went: {roomName(m.room)}
                     {m.missed && (
                       <span className="meta"> (missed the deadline)</span>
                     )}
@@ -325,6 +341,9 @@ function RoundSheet({
                       <span className="meta">alibi true</span>
                     )}
                   </span>
+                  {changed && (
+                    <span className="reveal__changed">{changed}</span>
+                  )}
                   <span className="meta num">
                     stash {round.stashes[m.player] ?? 0}
                   </span>
@@ -332,6 +351,11 @@ function RoundSheet({
               </li>
             );
           })}
+          {round.satOut.map((p) => (
+            <li key={p} className="reveal__move reveal__sat-out">
+              {satOutText(p, ctx)}
+            </li>
+          ))}
         </ul>
       )}
       {round.items.length > 0 ? (
@@ -357,5 +381,35 @@ function RoundSheet({
         <p className="meta">Nothing hidden happened.</p>
       )}
     </article>
+  );
+}
+
+/** How the game ended, and on a failure that the ranking is a loss. */
+export function EndingNote({
+  outcome,
+  name,
+}: {
+  outcome: Parameters<typeof endingText>[0];
+  name: (id: string) => string;
+}) {
+  const e = endingText(outcome);
+  const who = outcome.winners.map(name);
+  const winners =
+    who.length > 1
+      ? `${who.slice(0, -1).join(", ")} and ${who[who.length - 1]}`
+      : (who[0] ?? "");
+  const verb =
+    who.length > 1 || who[0] === "You"
+      ? e.badge.replace(/^Wins/, "win")
+      : e.badge.replace(/^Wins/, "wins");
+  return (
+    <p className={e.loss ? "ending is-loss" : "ending"}>
+      <b>{e.title}.</b>{" "}
+      {outcome.result === "success"
+        ? "The biggest stash wins."
+        : e.loss
+          ? "The ranking is marked as a loss."
+          : `${winners} ${verb}.`}
+    </p>
   );
 }

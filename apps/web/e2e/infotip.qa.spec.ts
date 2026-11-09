@@ -151,12 +151,14 @@ test("a scroll keeps an open tip until its i leaves the screen; a resize keeps i
   // A window just taller than the i (where a tap leaves it depends on the gallery's length), so the tip must flip above it.
   const height = Math.ceil((await tipButton(p, "Duffel").boundingBox())!.y) + 80;
   await p.setViewportSize({ width: 390, height });
-  await p.waitForTimeout(150);
   await expect(popover(p)).toHaveCount(1);
+  // The tip follows a resize once a frame, and a long page reflows slowly on a busy machine: wait for it to settle inside the window.
+  await expect.poll(async () => ((await popover(p).boundingBox())?.y ?? 0) + ((await popover(p).boundingBox())?.height ?? 0)).toBeLessThanOrEqual(height);
   attached(...(await boxes(p, tipButton(p, "Duffel"))));
   await p.setViewportSize({ width: 430, height });
-  await p.waitForTimeout(150);
   await expect(popover(p)).toHaveCount(1);
+  // The tip follows a resize once a frame, and a long page reflows slowly on a busy machine: wait for it to settle inside the window.
+  await expect.poll(async () => ((await popover(p).boundingBox())?.y ?? 0) + ((await popover(p).boundingBox())?.height ?? 0)).toBeLessThanOrEqual(height);
   const [t, b] = await boxes(p, tipButton(p, "Duffel"));
   inside(t, { width: 430, height });
   attached(t, b);

@@ -228,6 +228,16 @@
   color: var(--bad);
   font-weight: 650;
 }
+.reveal__changed {
+  color: var(--bad);
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+.reveal__sat-out {
+  display: block;
+  font-style: italic;
+  overflow-wrap: anywhere;
+}
 .reveal__item {
   display: grid;
   grid-template-columns: 20px minmax(0, 1fr);
@@ -266,4 +276,8 @@
   .reveal__card {
     animation: none;
   }
+}
+
+.ending.is-loss b {
+  color: var(--bad);
 }

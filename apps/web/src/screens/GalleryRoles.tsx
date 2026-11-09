@@ -1,8 +1,8 @@
-// /dev/gallery sections for role facts and tappable role names (design §11,
-// §20.2), the rulebook with the black market (§12), the no-tells feed lines and
-// the end screen. No server: a local engine game.
+// /dev/gallery sections for the role icons, the role card, roles in play and the
+// "This game" rulebook (design §11, §12, §15.6, §20.2), the no-tells feed lines
+// and the end screen. No server: a local engine game.
 import { useMemo, useState, type ReactNode } from "react";
-import type { RoleId } from "@skimjob/content";
+import { ROLES, type RoleId } from "@skimjob/content";
 import {
   PUBLIC,
   handleCommand,
@@ -15,17 +15,20 @@ import {
   type PlayerView,
   type SystemCommand,
 } from "@skimjob/engine";
-import { RoleFacts, RoleList, RoleTip, RulebookButton } from "../components/Extension";
+import { RoleIcon } from "../art/RoleIcon";
+import { Button } from "../components/Button";
+import { MoreInGame } from "../components/InfoTip";
+import { RolesInPlay } from "../components/RoleCard";
+import { RulebookSheet } from "../components/Rulebook";
 import { SketchFrame } from "../components/SketchFrame";
 import { useToast } from "../components/Toast";
 import { Underline } from "../components/Underline";
 import { describeEvent } from "../game/describeEvent";
-import { roleInfo } from "../game/extension";
 import type { ClientCommand, Reply } from "../game/useGame";
 import { GameOver } from "./Game";
 import { RoleCard } from "./Meetings";
 
-const NAMES = ["Ana", "Ben", "Cy", "Dot"];
+const NAMES = ["Ana", "Ben", "Cy", "Dot", "Eli", "Fay"];
 const config = (extra: Partial<GameConfig> = {}): GameConfig => ({
   seed: "gallery-ext",
   players: NAMES.map((name, i) => ({ id: `p${i + 1}`, name, isBot: false })),
@@ -35,7 +38,7 @@ const config = (extra: Partial<GameConfig> = {}): GameConfig => ({
   ...extra,
 });
 /** A new local game with these roles dealt in seat order, so the gallery always shows the same cards. */
-const GALLERY_ROLES: readonly RoleId[] = ["lookout", "auditor", "detective", "smoothTalker"];
+const GALLERY_ROLES: readonly RoleId[] = ["lookout", "detective", "priest", "locksmith", "hacker", "mole"];
 const createGame = (c: GameConfig): GameState => {
   let seat = 0;
   return replay(c, setupEvents(c).map((e) => (e.type === "roleDealt" ? { ...e, role: GALLERY_ROLES[seat++] as RoleId } : e)));
@@ -89,55 +92,42 @@ function useLocalGame(init: () => GameState) {
   return { state, setState, view, send };
 }
 
-export function ExtensionSections() {
-  return (
-    <>
-      <RoleSections />
-      <NoTellsSection />
-      <EndSection />
-    </>
-  );
-}
-
 function RoleSections() {
   const game = useLocalGame(() => createGame(config()));
-  const sample: RoleId[] = ["lookout", "locksmith", "hacker", "mole", "fixer"];
+  const [rules, setRules] = useState(false);
   return (
-    <>
-      <Section id="ext-role-card" title="Role card" note="design §11, §20.2 · kind, power, How you win, role list, rulebook">
+    <MoreInGame.Provider value={() => setRules(true)}>
+      <Section id="role-icons" title="Role icons" note="design §15.6 · one drawn icon per role, used everywhere the role appears">
+        <ul className="g-roleicons">
+          {Object.values(ROLES).map((r) => (
+            <li key={r.id}>
+              <RoleIcon role={r.id} size={40} />
+              <span>{r.name}</span>
+            </li>
+          ))}
+        </ul>
+      </Section>
+      <Section id="role-card" title="Role card" note="design §11, §20.2 · your role card (Role card button), Claim and Use power, Roles in play chips open each role's card">
         <RoleCard view={game.view} send={game.send} />
       </Section>
-      <Section id="ext-roles" title="Role facts and role names" note="every role card carries its kind and a How you win line · tap a name for its kind and win line">
-        <div className="g-stack">
-          {sample.map((r) => (
-            <div key={r} className="g-ext-role">
-              <p>
-                <RoleTip id={r} />
-              </p>
-              <RoleFacts info={roleInfo(r)} />
-            </div>
-          ))}
-        </div>
-      </Section>
-      <Section id="ext-rulebook" title="Rulebook sheet" note="game in a minute, Endings table, roles by kind with ★, the black market · numbers from content">
-        <div className="g-row">
-          <RulebookButton view={null} seed="g-rulebook-content" />
-          <RulebookButton view={game.view} seed="g-rulebook-game" />
-        </div>
-        <p className="meta">Left: outside a game (every perk). Right: this game's role list and three-perk black market.</p>
-      </Section>
-      <Section id="ext-rolelist" title="Role list" note="host setting: Exact, Possible or Hidden">
+      <Section id="rolelist" title="Role list" note="host setting: Exact, Possible or Hidden (design §11.3)">
         <div className="g-stack">
           {(["exact", "possible", "hidden"] as const).map((list) => (
-            <RoleList key={list} view={viewFor(createGame(config({ roleList: list })), "p1")} />
+            <RolesInPlay key={list} view={viewFor(createGame(config({ roleList: list })), "p1")} />
           ))}
         </div>
       </Section>
-    </>
+      <Section id="rulebook" title="This game rulebook" note="design §15.6 · this game's roles, three perks, events, numbers and Terms, all from content">
+        <Button variant="secondary" seed="g-rulebook" aria-haspopup="dialog" onClick={() => setRules(true)}>
+          Open the rulebook
+        </Button>
+        <RulebookSheet open={rules} onClose={() => setRules(false)} view={game.view} />
+      </Section>
+    </MoreInGame.Provider>
   );
 }
 
-/** extension.md Situations, design §5.2: a Mole's ring reads like any ring. */
+/** design §5.2: a Mole's ring reads like any ring. */
 function NoTellsSection() {
   const ctx = { me: "p1", name: (p: string) => NAMES[Number(p.slice(1)) - 1] ?? p };
   const feed = { type: "roomWatched", visibility: privateTo("p1"), player: "p1", round: 4, source: "security", room: "vault", seen: [], offline: true } as const;
@@ -158,7 +148,7 @@ function NoTellsSection() {
 
 function EndSection() {
   const base = useMemo(() => viewFor(playedGame(), "p1"), []);
-  const ranking = base.players.map((p, i) => ({ player: p.id, role: (["hacker", "locksmith", "lookout", "mole"] as const)[i]!, stash: 30 - i * 6 }));
+  const ranking = base.players.map((p, i) => ({ player: p.id, role: (["hacker", "locksmith", "lookout", "mole", "priest", "detective"] as const)[i]!, stash: 30 - i * 6 }));
   const ended = (outcome: Extract<PlayerView["phase"], { kind: "ended" }>["outcome"]): PlayerView => ({ ...base, phase: { kind: "ended", outcome } });
   return (
     <>
@@ -168,6 +158,16 @@ function EndSection() {
       <Section id="ext-end-win" title="End screen: success" note="biggest stash wins">
         <GameOver view={ended({ result: "success", ranking, winners: [ranking[0]!.player], getaway: 0 })} />
       </Section>
+    </>
+  );
+}
+
+export function RolesGallery() {
+  return (
+    <>
+      <RoleSections />
+      <NoTellsSection />
+      <EndSection />
     </>
   );
 }

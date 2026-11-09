@@ -1,8 +1,9 @@
 // Pure helpers behind the game screen: what the HUD, seats, move and alibi
 // panels show, read only from the player's own view (and the public timers).
 // docs/m2-plan.md M2-6; design §5, §5.4, §6, §11.5, §13
-import { EVENTS, type JobDef, type RoomId } from "@skimjob/content";
+import type { JobDef, RoomId } from "@skimjob/content";
 import {
+  eventsFor,
   jobFor,
   rolesFor,
   type GameCreated,
@@ -175,12 +176,12 @@ export interface RoomOption {
   readonly id: RoomId;
   readonly name: string;
   /** The most coins a visitor grabs here this round (Shift change included). design §3.1 */
-  readonly loot: number;
+  readonly coins: number;
   /** "Bell 2 of 4", or "Bell off" while taped off. design §5.1, §5.3 */
   readonly bell: string;
   /** Why nobody can pick it this round (Lockdown, or taped off after a raid), or null. design §5.3, §13 */
   readonly closed: string | null;
-  /** Short notes: "+1 coin this round", "watch one room". */
+  /** Short notes: "+1 coin this round", "+2 coins this round", "watch one room". */
   readonly notes: readonly string[];
   /** Security: the move must name a room to watch. design §6.1 */
   readonly watcher: boolean;
@@ -189,20 +190,20 @@ export interface RoomOption {
 export function roomOptions(view: PlayerView): RoomOption[] {
   const job = jobOf(view);
   const card = view.card && view.card.round === view.round ? view.card : null;
-  const effect = card ? EVENTS[card.id]?.effect : undefined;
+  const effect = card ? eventsFor({ contentOverrides: setupOf(view)?.contentOverrides ?? null })[card.id]?.effect : undefined; // with this game's overrides, design §17.4
   return view.rooms.map((id) => {
     const def = job.rooms[id];
     const notes: string[] = [];
-    let loot = def?.coins ?? 0;
+    let coins = def?.coins ?? 0;
     if (effect?.kind === "roomSurge" && effect.room === id) {
-      loot += effect.extraCoins;
-      if (effect.extraCoins !== 0) notes.push(`+${effect.extraCoins} coin this round`);
+      coins += effect.extraCoins;
+      if (effect.extraCoins !== 0) notes.push(`+${effect.extraCoins} ${effect.extraCoins === 1 ? "coin" : "coins"} this round`);
     }
     if (def?.info === "watchRoom") notes.push("watch one room");
     const taped = Object.hasOwn(view.taped, id);
     const closed = taped ? `Taped off through round ${view.taped[id]}` : effect?.kind === "lockdown" && card?.room === id ? "Closed by Lockdown" : null;
     const bell = taped ? "Bell off" : `Bell ${view.bells[id] ?? 0} of ${job.alarm.bulbs}`;
-    return { id, name: def?.name ?? id, loot, bell, closed, notes, watcher: def?.info === "watchRoom" };
+    return { id, name: def?.name ?? id, coins, bell, closed, notes, watcher: def?.info === "watchRoom" };
   });
 }
 

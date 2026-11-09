@@ -14,6 +14,10 @@ import {
   TERMS,
   TIPS,
   infoText,
+  lineText,
+  lineWords,
+  termsFor,
+  ordinal,
 } from "./index";
 
 const oneLine = (s: string) => !s.includes("\n") && s.trim() === s && s.length > 0;
@@ -53,6 +57,39 @@ describe("role text — design §20.2", () => {
     for (const [id, role] of Object.entries(ROLE_TEXT)) expect(role.win, id).toBe(id === "mole" || id === "fixer" ? "sunk" : "crew");
     expect(ROLE_WIN.sunk).toContain("sunk by theft");
     expect(BUST_ROLE_TEXT).toContain("Rooftop");
+  });
+});
+
+describe("the numbers in the §20.5 lines come from the data", () => {
+  it("writes the ordinal and the honesty line as the rulebook does", () => {
+    expect([1, 2, 3, 4, 5, 11, 12, 13, 21, 22].map(ordinal)).toEqual(["1st", "2nd", "3rd", "4th", "5th", "11th", "12th", "13th", "21st", "22nd"]);
+    expect(lineText(2 / 3)).toBe("⅔");
+    expect(lineText(0.7)).toBe("70%");
+  });
+
+  it("says the bell's bulb, the bust's stars and the honesty line from the job", () => {
+    const { bulbs, bustStars } = BANK_JOB.alarm;
+    expect(TIPS.bell.text).toContain(`Light the ${ordinal(bulbs)} and`);
+    expect(TERMS.raid.text).toContain(`The ${ordinal(bulbs)} bulb lights`);
+    expect(TERMS.bust.text).toContain(`Wanted ${bustStars}.`);
+    expect(TERMS.wanted.text).toBe(`One star per raid. Three is a bust.`);
+    expect(TERMS.honesty.text).toContain(`Line: ${lineText(BANK_JOB.honestyLine)}.`);
+  });
+});
+
+describe("a game's own numbers in the glossary — design §20.5", () => {
+  it("termsFor reads the job it is given; TERMS is content's own", () => {
+    const odd = termsFor({ alarm: { bulbs: 5, tapedRounds: 2, bustStars: 4 }, honestyLine: 0.7 });
+    expect(odd.raid.text).toBe("The 5th bulb lights: grabs there are seized.");
+    expect(odd.wanted.text).toBe("One star per raid. Four is a bust.");
+    expect(odd.bust.text).toBe("Wanted 4. Only the Rooftop gets away.");
+    expect(odd.honesty.text).toContain("Line: 70%.");
+    expect(TERMS).toEqual(termsFor(BANK_JOB));
+  });
+
+  it("writes the honesty line in words", () => {
+    expect(lineWords(2 / 3)).toBe("two-thirds");
+    expect(lineWords(0.75)).toBe("75%");
   });
 });
 

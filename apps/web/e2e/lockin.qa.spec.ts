@@ -3,6 +3,7 @@
 import { existsSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 import { openPanel, startGame } from "./setupGame";
+import { pickRoom } from "./move";
 
 const WIDTHS = [360, 390, 768, 1024, 1280];
 const seat = (page: Page, name: string) => page.locator(".crew-seat:not(.is-you)").filter({ hasText: name });
@@ -36,7 +37,7 @@ test("a person's lock-in shows on others' seats, a change shows nothing; presenc
   await expect(seat(page, "Host")).toContainText("online");
 
   // The host locks in: the guest sees the mark, never the room or split.
-  await host.locator('.room-tile[data-room="Vault"]').click();
+  await pickRoom(host, "Vault");
   await host.getByRole("button", { name: "Lock it in" }).click();
   await expect(host.getByRole("button", { name: "Locked in" })).toBeDisabled();
   await expect(seat(page, "Host").locator(".crook-avatar--ready")).toBeVisible();
@@ -45,7 +46,7 @@ test("a person's lock-in shows on others' seats, a change shows nothing; presenc
 
   // A change: the guest's crew list is unchanged.
   // A room change.
-  await host.locator('.room-tile[data-room="Office"]').click();
+  await pickRoom(host, "Office");
   await host.getByRole("button", { name: "Update move" }).click();
   await expect(host.getByText(/Locked in: Office/)).toBeVisible();
   await page.waitForTimeout(1000);

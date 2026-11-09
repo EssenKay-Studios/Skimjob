@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { callEmergency, closePanel, openPanel, startGame } from "./setupGame";
+import { pickRoom } from "./move";
 
 // The live game screen (M2-6) at every launch viewport (decisions.md
 // 2026-11-01 "Web-first launch; responsive everywhere"): no horizontal
@@ -51,7 +52,7 @@ for (const viewport of VIEWPORTS) {
       await page.goto(`/game/${game.id}`);
       await openPanel(page, "This round");
       await expect(page.getByRole("heading", { name: "Round 1 · Pick your room", level: 2 })).toBeVisible();
-      await page.locator('.room-tile[data-room="Security"]').click();
+      await pickRoom(page, "Security");
       await expect(page.getByRole("group", { name: "Room to watch" })).toBeVisible();
 
       const o = await overflow(page);
@@ -59,9 +60,10 @@ for (const viewport of VIEWPORTS) {
       expect(o.viewport).toBe(viewport.width);
       expect(await smallTargets(page)).toEqual([]);
 
-      await page.locator('.room-tile[data-room="Vault"]').click();
-      // The split slider (every role may pocket).
-      await expect(page.locator("#split")).toBeVisible();
+      await pickRoom(page, "Vault");
+      // The coins and the two bags (every role may pocket).
+      await expect(page.locator("[data-bag=duffel]")).toBeVisible();
+      await expect(page.locator("[data-bag=pocket]")).toBeVisible();
       const o2 = await overflow(page);
       expect(o2.scroll).toBeLessThanOrEqual(o2.client);
       expect(await smallTargets(page)).toEqual([]);
@@ -74,7 +76,7 @@ for (const viewport of VIEWPORTS) {
       expect(bank!.x + bank!.width).toBeLessThanOrEqual(viewport.width);
       await board.locator(".bank-room[data-room=office]").click();
       await openPanel(page, "This round");
-      await expect(page.locator('.room-tile[data-room="Office"]')).toHaveAttribute("aria-pressed", "true");
+      await expect(page.locator(".move__room-name")).toHaveText("Office");
       const o3 = await overflow(page);
       expect(o3.scroll).toBeLessThanOrEqual(o3.client);
       expect(await smallTargets(page)).toEqual([]);

@@ -133,11 +133,21 @@ describe("move panel", () => {
     const opts = roomOptions(viewFor(createGame(config(5)), "p1"));
     const by = Object.fromEntries(opts.map((o) => [o.id, o]));
     expect(opts.map((o) => o.id)).toEqual(["vault", "office", "lobby", "security", "rooftop", "depositBoxes", "serverRoom"]);
-    expect(by.vault).toMatchObject({ loot: 3, bell: "Bell 0 of 4", watcher: false, closed: null });
-    expect(by.serverRoom).toMatchObject({ loot: 2, notes: [] });
-    expect(by.rooftop).toMatchObject({ loot: 0, bell: "Bell 0 of 4" });
+    expect(by.vault).toMatchObject({ coins: 3, bell: "Bell 0 of 4", watcher: false, closed: null });
+    expect(by.serverRoom).toMatchObject({ coins: 2, notes: [] });
+    expect(by.rooftop).toMatchObject({ coins: 0, bell: "Bell 0 of 4" });
     expect(by.security).toMatchObject({ watcher: true, notes: ["watch one room"] });
-    expect(by.depositBoxes).toMatchObject({ loot: 2, notes: [] }); // no visitor limit (design §3.2)
+    expect(by.depositBoxes).toMatchObject({ coins: 2, notes: [] }); // no visitor limit (design §3.2)
+  });
+
+  it("notes a Shift change surge with the right plural, and a short row of coins (design §13)", () => {
+    const surge = (extraCoins: number) => {
+      const v = viewFor(createGame(config(5, { contentOverrides: { events: { shiftChange: { extraCoins } } } })), "p1");
+      return roomOptions({ ...v, card: { round: v.round, id: "shiftChange", room: null } }).find((o) => o.id === "vault");
+    };
+    expect(surge(1)).toMatchObject({ coins: 4, notes: ["+1 coin this round"] });
+    expect(surge(2)).toMatchObject({ coins: 5, notes: ["+2 coins this round"] });
+    expect(surge(0)).toMatchObject({ coins: 3, notes: [] });
   });
 
   it("shows a missed deadline's default move (design §5.1)", () => {

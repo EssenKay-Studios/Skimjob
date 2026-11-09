@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { closePanel, openPanel, startGame } from "./setupGame";
+import { pickRoom } from "./move";
 
 // QA (PR #41): the bank board at every launch width with a full 12-seat crew
 // and with 3 seats: no overflow, every target ≥ 44 px, keyboard picking (no
@@ -77,11 +78,11 @@ for (const seats of [12, 3]) {
       await lobby.focus();
       await page.keyboard.press("Enter");
       await openPanel(page, "This round");
-      await expect(page.locator('.room-tile[data-room="Lobby"]')).toHaveAttribute("aria-pressed", "true");
+      await expect(page.locator(".move__room-name")).toHaveText("Lobby");
       await expect(board.locator(".bank-room .crook-fig")).toHaveCount(1);
       await expect(board.locator(".bank-room[data-room=lobby] .crook-fig")).toHaveCount(1);
-      // Tile -> board.
-      await page.locator('.room-tile[data-room="Vault"]').click();
+      // Panel -> board.
+      await pickRoom(page, "Vault");
       await expect(board.locator(".bank-room[data-room=vault]")).toHaveAttribute("aria-pressed", "true");
       await expect(board.locator(".bank-room .crook-fig")).toHaveCount(1);
       await page.getByRole("button", { name: "Lock it in" }).click();

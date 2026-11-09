@@ -2,6 +2,7 @@ import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { expect as baseExpect, test, type APIRequestContext, type Page } from "@playwright/test";
+import { pickRoom } from "./move";
 import { openPanel } from "./setupGame";
 
 const expect = baseExpect.configure({ timeout: 20_000 });
@@ -94,7 +95,7 @@ for (const seats of [6, 12]) {
     expect(new Set(tags).size, `head tags: ${tags.join(" ")}`).toBe(seats);
 
     // design §10 / visibility: the guest locks in a private move (Vault); the host's board never shows it.
-    await guest.locator('.room-tile[data-room="Vault"]').click();
+    await pickRoom(guest, "Vault");
     await guest.getByRole("button", { name: "Lock it in" }).click();
     await expect(guest.getByRole("button", { name: "Locked in" })).toBeDisabled();
     await page.waitForTimeout(1000);
@@ -145,10 +146,10 @@ for (const seats of [6, 12]) {
     });
 
     // Everyone human locks in; the round resolves and the snapshot shows.
-    await page.locator('.room-tile[data-room="Vault"]').click();
+    await pickRoom(page, "Vault");
     await page.getByRole("button", { name: "Lock it in" }).click();
     for (const g of guests.slice(1)) {
-      await g.locator('.room-tile[data-room="Office"]').click();
+      await pickRoom(g, "Office");
       await g.getByRole("button", { name: "Lock it in" }).click();
     }
     const summary = panel(page).getByText("Round 1 plan", { exact: true });

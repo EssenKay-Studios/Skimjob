@@ -7,6 +7,7 @@ import { mkdirSync } from "node:fs";
 import { closePanel, gameOver, keepRoundOpen, openPanel, showResult } from "./setupGame";
 import { expect, test, type APIRequestContext, type Browser, type Page, type WebSocketRoute } from "@playwright/test";
 import { openLeads } from "./setupGame";
+import { bagCoins, pickOtherRoom, pickRoom } from "./move";
 
 const SHOTS = process.env.SHOTS_DIR;
 const LONG_HOST = "WWWWWWWWWWWWWWWWWWWWWWWW"; // 24, the cap; the widest glyph, no break points
@@ -150,20 +151,20 @@ test("12 seats, 24-char names: a 15-min game to the end with moves changed, alib
           if (r > 1) await once("missed-or-move", host);
           // Vault, pocket what the slider allows, lock; then change to another open room
           // (a Lockdown event can close a room for the round, design §13).
-          await tap(host, host.locator('.room-tile[data-room="Vault"]')).catch(() => {});
-          await host.locator("#split").fill("1", { timeout: 500 }).catch(() => {});
+          await pickRoom(host, "Vault", 1000).catch(() => {});
+          for (const _ of [1, 2]) await bagCoins(host, "duffel").first().click({ timeout: 500 }).catch(() => {});
           await once("move-picked", host);
           if (await lock.isEnabled({ timeout: 500 }).catch(() => false)) await tap(host, lock).catch(() => {});
           await once("locked", host);
           for (const x of await leaks(guest)) leaked.add(`round ${r}: ${x}`);
           await once("guest-view", guest);
-          await tap(host, host.locator('.room-tile:enabled:not([aria-pressed="true"])').first()).catch(() => {});
+          await pickOtherRoom(host, 1000).catch(() => {});
           const upd = host.getByRole("button", { name: "Update move" });
           if (await upd.isEnabled({ timeout: 500 }).catch(() => false)) await tap(host, upd).catch(() => {});
           // The guest locks in on even rounds only (odd rounds: missed deadline).
           if (r % 2 === 0) {
             await keepRoundOpen(guest);
-            await tap(guest, guest.locator('.room-tile[data-room="Lobby"]')).catch(() => {});
+            await pickRoom(guest, "Lobby", 1000).catch(() => {});
             await tap(guest, guest.getByRole("button", { name: "Lock it in" })).catch(() => {});
             for (const x of await leaks(host)) leaked.add(`host sees guest round ${r}: ${x}`);
           }
@@ -247,9 +248,7 @@ test("reloads, a killed socket, a skewed clock and a late alibi (3h preset: 102 
   await expect(host.getByRole("heading", { name: "Round 1 · Pick your room", level: 2 })).toBeVisible();
 
   // Lock in, then reload mid-round: the move is still there.
-  await host.locator('.room-tile[data-room="Vault"]').click();
-  const split = host.locator("#split");
-  if (await split.isVisible()) await split.fill("3");
+  await pickRoom(host, "Vault");
   await host.getByRole("button", { name: "Lock it in" }).click();
   const status = host.locator(".move__status");
   await expect(status).toContainText("Locked in: Vault");

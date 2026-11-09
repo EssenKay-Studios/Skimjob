@@ -302,7 +302,7 @@ hr.dashed {
   justify-items: start;
   gap: 10px;
 }
-/* Extension samples (R6b) */
+/* Role gallery samples */
 .g-stack {
   display: grid;
   gap: 12px;
@@ -312,11 +312,20 @@ hr.dashed {
 .g-stack dd {
   margin: 0 0 6px;
 }
-.g-ext-role {
+.g-roleicons {
   display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.g-roleicons li {
+  display: grid;
+  justify-items: center;
   gap: 4px;
-  padding-top: 8px;
-  border-top: 1.3px dashed var(--ink-faint);
+  text-align: center;
+  font: 650 13px/1.2 var(--font-ui);
 }
 /* Chat samples (M2-8b) */
 .g-chat {

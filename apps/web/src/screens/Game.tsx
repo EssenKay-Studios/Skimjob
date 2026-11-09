@@ -13,27 +13,23 @@ import { Chip } from "../components/Chip";
 import { WantedStars } from "../components/Bell";
 import { GameShell, SHELL_WIDE_QUERY, type ShellPanel } from "../components/GameShell";
 import { useMedia } from "../game/useMedia";
-import { Bubble, Clock, Evidence, Pin, Play, Star } from "../components/icons";
-import { InfoTip } from "../components/InfoTip";
-import { EndingNote } from "../components/Extension";
-import { endingText } from "../game/extension";
+import { Bubble, Clock, Evidence, Pin, Star } from "../components/icons";
+import { InfoTip, MoreInGame } from "../components/InfoTip";
 import { MEETING_TITLE } from "../game/meeting";
 import { BankCutaway } from "../art/BankCutaway";
-import { BANK_ROOMS, type BankRoomId } from "../art/bankLayout";
+import type { BankRoomId } from "../art/bankLayout";
 import { CrookAvatar } from "../art/Crook";
 import { PlanBoard } from "../components/PlanBoard";
-import { Reveal } from "../components/Reveal";
+import { EndingNote, Reveal } from "../components/Reveal";
+import { RulebookSheet } from "../components/Rulebook";
 import { AwayRecap } from "../components/AwayRecap";
 import { CaseBoard } from "../components/CaseBoard";
 import { SuspicionBoard, SuspicionMark } from "../components/SuspicionBoard";
 import { useAwayRecap, usePins, useSeatNotes, useSuspicionBoard, type Board as SuspicionMarks, type BoardChannel, type NotesLoad } from "../game/notes";
 import { caseData } from "../game/caseLeads";
 import type { DescribeContext } from "../game/describeEvent";
-import { RoomIcon } from "../art/RoomIcon";
 import { BustedSpot, JobDoneSpot, WaitingSpot } from "../art/Spots";
-import { RoomTile } from "../components/RoomTile";
 import { SketchFrame } from "../components/SketchFrame";
-import { SplitSlider } from "../components/SplitSlider";
 import { useToast } from "../components/Toast";
 import { Underline } from "../components/Underline";
 import { boardScene, seatLooks } from "../game/board";
@@ -54,12 +50,14 @@ import {
   type Timer,
 } from "../game/hud";
 import { lastPlan } from "../game/plan";
+import { endingText } from "../game/reveal";
 import { openMeetingOf, slotText } from "../game/meeting";
 import { DecidingPanel, MeetingNow, MeetingsPanel, ResultsBanner, RoleCard } from "./Meetings";
 import { useCountdown, useGame, useNow, type ClientCommand, type Connection, type GameChannel, type Reply } from "../game/useGame";
 import { api, ApiError, sentence, UNREACHABLE, type LobbyView } from "../api";
 import { navigate } from "../router";
 import { useGameChat } from "./GameChat";
+import { MovePanel } from "./MovePanel";
 import { GameHost } from "./GameHost";
 import { TopBar } from "./TopBar";
 import "./game.css";
@@ -169,8 +167,6 @@ interface Pick {
   readonly setRoom: (room: RoomId) => void;
 }
 
-const isBankRoom = (r: string): r is BankRoomId => (BANK_ROOMS as readonly string[]).includes(r);
-
 function Board({ view, timers, offset, send, autoMeetings, gameId, channel, dmNotices, host }: BoardProps & { gameId: string; channel: GameChannel; dmNotices: boolean; host: LobbyView | null }) {
   const outcome = outcomeOf(view);
   const planning = view.phase.kind === "planning" ? view.phase.round : null;
@@ -187,6 +183,8 @@ function Board({ view, timers, offset, send, autoMeetings, gameId, channel, dmNo
   const pins = usePins(gameId, notes);
   const caseBoard = useMemo(() => caseData(view, pins.pins), [view, pins.pins]);
   const people = otherSeats(view);
+  // Every tip ends with "More in This game", which opens the rulebook; so does the Rules button.
+  const [rules, setRules] = useState(false);
   const chat = useGameChat({ gameId, view, channel, dmNotices });
   const [open, setOpen] = useState<string | null>(null);
   // The vote window lives in the "This round" panel: below 1024 px a meeting opening brings that sheet up (and with it the vote dialog).
@@ -217,7 +215,7 @@ function Board({ view, timers, offset, send, autoMeetings, gameId, channel, dmNo
     },
   ];
   return (
-    <>
+    <MoreInGame.Provider value={() => setRules(true)}>
       <div className="game-away">
         <Away gameId={gameId} view={view} ctx={ctx} notes={notes} />
       </div>
@@ -239,7 +237,8 @@ function Board({ view, timers, offset, send, autoMeetings, gameId, channel, dmNo
         open={open}
         onOpen={setOpen}
       />
-    </>
+      <RulebookSheet open={rules} onClose={() => setRules(false)} view={view} />
+    </MoreInGame.Provider>
   );
 }
 
@@ -295,7 +294,9 @@ function Hud({ view, timers, offset, hostPaused }: { view: PlayerView; timers: r
       </div>
       {/* design §7.3: the share is public. */}
       <div className="hud__stat hud__share">
-        <span className="meta">Share</span>
+        <span className="meta">
+          Share <InfoTip info={{ kind: "term", id: "share" }} />
+        </span>
         <span className="num hud__big">{view.share}</span>
       </div>
       {/* design §6.1: the bank's coins left, public. */}
@@ -424,7 +425,7 @@ function Actions({ view, timers, offset, send, autoMeetings, pick, channel, plan
       {p.kind === "shakedownPending" && <DecidingPanel view={view} timers={timers} offset={offset} />}
       {plan && <PlanPanel view={view} send={send} channel={channel} />}
       {p.kind === "planning" ? (
-        <MovePanel key={p.round} view={view} round={p.round} timers={timers} offset={offset} send={send} autoMeetings={autoMeetings} pick={pick} />
+        <MovePanel key={p.round} view={view} round={p.round} timers={timers} offset={offset} send={send} pick={pick} />
       ) : voting ? null : (
         <WaitPanel view={view} />
       )}
@@ -484,90 +485,6 @@ function WaitPanel({ view }: { view: PlayerView }) {
       </h2>
       <p>{text}</p>
       <WaitingSpot className="panel__spot" />
-    </SketchFrame>
-  );
-}
-
-function MovePanel({ view, round, timers, offset, send, pick }: BoardProps & { round: number; pick: Pick }) {
-  const options = useMemo(() => roomOptions(view), [view]);
-  const mine = view.me.move;
-  const { room, setRoom } = pick;
-  const [pocket, setPocket] = useState(mine?.pocket ?? 0);
-  const [watch, setWatch] = useState<RoomId | null>(mine?.watch ?? null);
-  const [busy, setBusy] = useState(false);
-  const countdown = useCountdown(timers, `round:${round}`, offset);
-  const picked = options.find((o) => o.id === room) ?? null;
-  const loot = picked?.loot ?? 0;
-  const p = Math.min(pocket, loot);
-  const missed = justMissed(view);
-  const changed = !mine || mine.room !== room || mine.pocket !== p || (mine.watch ?? null) !== (picked?.watcher ? watch : null);
-  const ready = picked !== null && picked.closed === null && (!picked.watcher || watch !== null);
-
-  const lock = async () => {
-    if (!picked || !ready) return;
-    setBusy(true);
-    // design §3.2: the old panel grabs the room's whole limit; the slider splits it between the two bags.
-    await send({ type: "submitMove", move: { room: picked.id, duffel: loot - p, pocket: p, ...(picked.watcher && watch ? { watch } : {}) } }, mine ? "Move updated." : "Locked in.");
-    setBusy(false);
-  };
-
-  return (
-    <SketchFrame as="section" seed="game-move" radius={18} shadow={0.5} className="panel move" aria-labelledby="move-h">
-      <div className="panel__head">
-        <h2 id="move-h" className="panel__title">
-          <Underline seed={`move-${round}`}>Round {round} · Pick your room</Underline>
-        </h2>
-        {countdown && <span className="meta">locks in {countdown.text}</span>}
-      </div>
-      {missed && (
-        <p className="move__missed" role="status">
-          {missed.room === null
-            ? `You missed round ${missed.round}: the default room is taped off, so you sat the round out.`
-            : `You missed round ${missed.round}: the default move sent you to the ${roomName(missed.room)}, handing everything in.`}
-        </p>
-      )}
-      <div className="move__rooms" role="group" aria-label="Rooms">
-        {options.map((o) => (
-          <RoomTile
-            key={o.id}
-            seed={`room-${o.id}`}
-            name={o.name}
-            {...(isBankRoom(o.id) ? { icon: <RoomIcon room={o.id} size={22} /> } : {})}
-            loot={o.loot}
-            bell={o.bell}
-            notes={o.notes}
-            selected={room === o.id}
-            disabled={o.closed !== null}
-            {...(o.closed !== null ? { disabledNote: o.closed } : {})}
-            onSelect={() => setRoom(o.id)}
-          />
-        ))}
-      </div>
-      {picked?.watcher && (
-        <div className="move__watch">
-          <p className="meta">Which room do the cameras watch?</p>
-          <div className="move__chips" role="group" aria-label="Room to watch">
-            {options
-              .filter((o) => o.id !== picked.id)
-              .map((o) => (
-                <Button key={o.id} variant="toggle" seed={`watch-${o.id}`} pressed={watch === o.id} onClick={() => setWatch(o.id)}>
-                  {o.name}
-                </Button>
-              ))}
-          </div>
-        </div>
-      )}
-      {picked && loot > 0 && <SplitSlider id="split" loot={loot} pocket={p} onChange={setPocket} />}
-      <div className="move__foot">
-        <Button variant="primary" seed="lock" icon={<Play />} disabled={!ready || busy || !changed} onClick={lock} className="move__lock">
-          {mine && !changed ? "Locked in" : mine ? "Update move" : "Lock it in"}
-        </Button>
-        <p className="meta move__status" aria-live="polite">
-          {mine
-            ? `Locked in: ${roomName(mine.room)}${mine.pocket > 0 ? `, pocket ${mine.pocket}` : ", all to the duffel"}. You can change it until the deadline.`
-            : `Miss the deadline and you go to the ${roomName(defaultRoom(view))}, handing everything in.`}
-        </p>
-      </div>
     </SketchFrame>
   );
 }

@@ -10,6 +10,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { expect, test, type APIRequestContext, type Browser, type Page } from "@playwright/test";
+import { pickRoom } from "./move";
 import { callEmergency, chatTab, expectRankingReadable, openPanel, showResult, startGame, type PanelName } from "./setupGame";
 
 const SHOTS = process.env.SHOTS_DIR;
@@ -266,7 +267,7 @@ for (const { width, height } of VIEWPORTS) {
     await page.goto(`/game/${game.id}`);
     await expect(page.locator(".hud__kicker")).toContainText(/Round 1 of/);
     await openPanel(page, "This round");
-    await page.locator('.room-tile[data-room="Office"]').first().click();
+    await pickRoom(page, "Office");
     await openPanel(page, "Chat");
     for (const text of ["Anyone hitting the vault?", "Not me. Office for me, honest."]) {
       await composer(page).fill(text);
@@ -332,7 +333,7 @@ for (const { width, height } of VIEWPORTS.filter((v) => v.width < 1024)) {
     const game = await startGame(page.request, { bots: 3, sessionLength: "1w" });
     await page.goto(`/game/${game.id}`);
     await openPanel(page, "This round");
-    await page.locator('.room-tile[data-room="Office"]').first().click();
+    await pickRoom(page, "Office");
     await page.getByRole("button", { name: "Lock it in" }).click();
     await openPanel(page, "Chat");
     await composer(page).fill("toast check");

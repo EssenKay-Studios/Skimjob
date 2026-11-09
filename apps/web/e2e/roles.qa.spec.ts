@@ -1,8 +1,7 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 
 // Adversarial QA for the role cards and rulebook: private purchases across
-// clients (design §12), the role list host setting in a real game, and the
-// gallery's rulebook at 360/768/1280 by touch and keyboard.
+// clients (design §12, §18) and the role list host setting in a real game (§11.3).
 
 async function ok<T>(res: Awaited<ReturnType<APIRequestContext["post"]>>): Promise<T> {
   expect(res.ok(), `${res.url()} → ${res.status()} ${await res.text()}`).toBe(true);
@@ -39,7 +38,7 @@ function find(value: unknown, types: readonly string[], out: Record<string, unkn
 test.describe("private purchases, two real clients", () => {
   test.beforeEach(() => test.skip(test.info().project.name !== "desktop", "one run is enough"));
 
-  test("no tokens anywhere; the rulebook shows the black market; no frame carries another's purchase or Bail choice @shop", async ({ browser }) => {
+  test("no tokens anywhere; the rulebook shows the black market; no frame carries another's purchase or Bail choice @roles", async ({ browser }) => {
     test.setTimeout(90_000);
     const hostCtx = await browser.newContext();
     const guestCtx = await browser.newContext();
@@ -55,9 +54,9 @@ test.describe("private purchases, two real clients", () => {
         await expect(card).toContainText("only you see this", { timeout: 20_000 });
         await expect(card).not.toContainText(/token/i);
         // By keyboard: Enter opens the rulebook, Escape closes it and stays in the game.
-        await card.getByRole("button", { name: "Rulebook", exact: true }).focus();
+        await card.getByRole("button", { name: "Rules", exact: true }).focus();
         await p.keyboard.press("Enter");
-        const sheet = p.getByRole("dialog", { name: "Rulebook" });
+        const sheet = p.getByRole("dialog", { name: "This game" });
         await expect(sheet).toBeVisible();
         await expect(sheet.getByRole("list", { name: "This game's black market" }).getByRole("listitem")).toHaveCount(3);
         await p.keyboard.press("Escape");
@@ -82,65 +81,34 @@ test.describe("private purchases, two real clients", () => {
     }
   });
 
-  test("a Hidden role list says so on the role card; Possible lists roles that could be in play @shop", async ({ page }) => {
+  test("a Hidden role list says so on Roles in play; Possible lists roles that could be in play @roles", async ({ page }) => {
     test.setTimeout(60_000);
     const hidden = await start(page.request, { sessionLength: "1h", roleList: "hidden" }, [], 4);
     await page.goto(`/game/${hidden.id}`);
-    const card = page.locator(".role-card");
-    await expect(card).toContainText("The role list is hidden in this game.", { timeout: 20_000 });
-    await expect(card.locator(".role-list__names")).toHaveCount(0);
+    const panel = page.locator(".rolesinplay");
+    await expect(panel).toContainText("hidden in this game", { timeout: 20_000 });
+    await expect(panel.getByRole("button")).toHaveCount(0);
+    await page.locator(".role-card").getByRole("button", { name: "Rules", exact: true }).click();
+    await expect(page.getByRole("dialog", { name: "This game" })).toContainText("The role list is hidden in this game.");
 
     const possible = await start(page.request, { sessionLength: "1h", roleList: "possible" }, [], 4);
     await page.goto(`/game/${possible.id}`);
-    await expect(card).toContainText("Roles that could be in play", { timeout: 20_000 });
-    await expect(card.getByRole("list", { name: "Roles that could be in play" }).getByRole("listitem").first()).toBeVisible();
+    await expect(panel).toContainText("Roles that could be in play", { timeout: 20_000 });
+    await expect(panel.getByRole("list", { name: "Roles that could be in play" }).getByRole("listitem").first()).toBeVisible();
   });
 
-  test("player-facing text never says act @shop", async ({ page }) => {
+  test("player-facing text never says act, and an opponent's card explains its tell @roles", async ({ page }) => {
     test.setTimeout(60_000);
     const game = await start(page.request, { sessionLength: "1h" }, [], 4);
     await page.goto(`/game/${game.id}`);
     await expect(page.locator(".hud__kicker")).toContainText(/Round 1 of 12/, { timeout: 20_000 });
-    await page.getByRole("button", { name: "Rulebook", exact: true }).first().click();
-    await expect(page.getByRole("dialog", { name: "Rulebook" })).toBeVisible();
+    // design §15.6: an opponent's role card names who could explain the tell.
+    await page.locator(".rolesinplay").getByRole("button").filter({ hasNotText: "(you)" }).first().click();
+    await expect(page.locator(".rolesinplay__why")).toContainText("or someone lying.");
+    await page.locator(".role-card").getByRole("button", { name: "Rules", exact: true }).click();
+    await expect(page.getByRole("dialog", { name: "This game" })).toBeVisible();
     const text = await page.locator("body").innerText();
     expect(text).not.toMatch(/\bacts?\b/i);
     expect(text).toMatch(/between meetings/);
   });
-});
-
-test.describe("gallery rulebook: touch, keyboard, viewports", () => {
-  test.beforeEach(() => test.skip(test.info().project.name !== "mobile", "viewports are set per test"));
-
-  for (const width of [360, 768, 1280]) {
-    test(`at ${width}px: rulebook controls are ≥44px and fit; the rulebook works by keyboard @shop`, async ({ page }) => {
-      test.setTimeout(60_000);
-      await page.setViewportSize({ width, height: 900 });
-      await page.goto("/dev/gallery");
-      const demo = page.locator('section[aria-labelledby="g-ext-rulebook"]');
-      await demo.scrollIntoViewIfNeeded();
-      const small: string[] = [];
-      for (const b of await demo.getByRole("button").all()) {
-        const box = await b.boundingBox();
-        if (box && (box.height < 44 || box.width < 44)) small.push(`${await b.textContent()} ${box.width}×${box.height}`);
-      }
-      expect(small).toEqual([]);
-      expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
-
-      // Keyboard: focus the Rulebook button, open with Enter, every perk listed, Close by keyboard.
-      // (Escape on /dev pages goes home, App.tsx; the game page's Escape is covered above.)
-      const open = demo.getByRole("button", { name: "Rulebook", exact: true }).first();
-      await open.focus();
-      await page.keyboard.press("Enter");
-      const sheet = page.getByRole("dialog", { name: "Rulebook" });
-      await expect(sheet).toBeVisible();
-      await expect(sheet.getByRole("list", { name: "The black market" }).getByRole("listitem")).toHaveCount(7);
-      const dialogBox = await sheet.boundingBox();
-      expect(dialogBox!.width).toBeLessThanOrEqual(width);
-      await sheet.getByRole("button", { name: "Close" }).focus();
-      await page.keyboard.press("Enter");
-      await expect(sheet).toHaveCount(0);
-      await expect(open).toBeFocused();
-    });
-  }
 });

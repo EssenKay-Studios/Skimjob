@@ -16,6 +16,14 @@ import { navigate, usePath } from "./router";
 const Gallery = import.meta.env.DEV ? lazy(() => import("./screens/Gallery").then((m) => ({ default: m.Gallery }))) : null;
 const ShellDemo = import.meta.env.DEV ? lazy(() => import("./screens/GalleryShell").then((m) => ({ default: m.ShellDemo }))) : null;
 
+const RevealDemo = import.meta.env.DEV
+  ? lazy(() =>
+      import("./screens/GalleryReveal").then((m) => ({
+        default: m.RevealDemo,
+      })),
+    )
+  : null;
+
 function NotFound() {
   return (
     <main className="notfound">
@@ -65,6 +73,10 @@ export function App() {
       ) : route === "/dev/gallery/shell" && ShellDemo ? (
         <Suspense fallback={null}>
           <ShellDemo />
+        </Suspense>
+      ) : route === "/dev/gallery/reveal" && RevealDemo ? (
+        <Suspense fallback={null}>
+          <RevealDemo />
         </Suspense>
       ) : (
         <NotFound />
