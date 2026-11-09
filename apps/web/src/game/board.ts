@@ -10,10 +10,11 @@
 // public alibi claim for the round as a dashed ghost. Nothing else: never another player's
 // move or room unless the view itself says so.
 import { BANK_JOB, EVENTS, type RoomId } from "@skimjob/content";
-import { powerOf, ringsOf, type PlayerId, type PlayerView } from "@skimjob/engine";
+import type { PlayerId, PlayerView } from "@skimjob/engine";
 import type { BankOccupant, RoomBell, TimeOfDay } from "../art/BankCutaway";
 import { crewTags } from "../art/crookLooks";
 import { jobOf, roomOptions, seatsOf, setupOf } from "./hud";
+import { ownRings } from "./move";
 
 export interface BoardScene {
   /** The round on the board (0 before the first round). */
@@ -102,10 +103,7 @@ function tapedLeft(view: PlayerView): Record<RoomId, number> {
  */
 function bellsOf(view: PlayerView, selected: RoomId | null, taped: Readonly<Record<RoomId, number>>): Record<RoomId, RoomBell> {
   const hidden = new Set(view.hiddenBells);
-  const power = powerOf({ contentOverrides: setupOf(view)?.contentOverrides ?? null }, view.me.role);
-  const softShoes = view.caseFile.some(({ event: e }) => e.type === "perkBought" && e.player === view.me.id && e.round === view.round - 1 && e.perk.kind === "softShoes");
-  const job = jobOf(view);
-  const loot = new Map(roomOptions(view).map((o) => [o.id, o.loot]));
+  const coinsAt = new Map(roomOptions(view).map((o) => [o.id, o.coins]));
   const bells: Record<RoomId, RoomBell> = {};
   for (const room of view.rooms) {
     if (Object.hasOwn(taped, room)) continue;
@@ -114,9 +112,8 @@ function bellsOf(view: PlayerView, selected: RoomId | null, taped: Readonly<Reco
       bells[room] = { lit: 0, hidden: hidden.has(room) };
       continue;
     }
-    const coins = view.me.move?.room === room ? view.me.move.duffel + view.me.move.pocket : (loot.get(room) ?? 0);
-    const def = job.rooms[room];
-    const rings = view.phase.kind === "planning" && room === selected && def && !softShoes ? ringsOf(def, coins, power?.kind === "muffle" ? power.fewerRings : 0) : 0;
+    const coins = view.me.move?.room === room ? view.me.move.duffel + view.me.move.pocket : (coinsAt.get(room) ?? 0);
+    const rings = view.phase.kind === "planning" && room === selected ? ownRings(view, room, coins) : 0;
     bells[room] = { lit, ...(rings > 0 && { preview: rings }) };
   }
   return bells;

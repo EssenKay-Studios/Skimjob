@@ -335,12 +335,14 @@ sketchbook paper. Below, `[frame]` means the sketch frame from §4.
 ### Round-move panel (pick a room, grab coins, split them)
 - A **bottom drawer sub-panel** (§8). Header: "Round 3 · Pick your room" in Pangolin 17px with a
   clay squiggle. The hint on the right reads "locks in 4h 12m".
-- Room picker: a row of **item tiles** (92×88) with a room icon on a colour blob, the room name in
-  Inter 600 12px and a coins-and-noise hint. Number keys 1–9 are shown as `<kbd>` on hover.
-- After picking, the player taps coins on the room's counter, then drags each coin into the
-  **crew duffel** (olive hatched fill) or **your pocket** (clay hatched fill). The numbers use
-  tabular Inter 650, and the pocket flashes `sk-pulse-b` (scale 1.08, red) as it fills. The room's
-  bell previews the rings before locking in. End with a **Primary** "Lock it in" button.
+- Pick the room on the bank cutaway (or from the room buttons in the panel, which come back with
+  "Change"). The panel then names the room and shows a row of **coins** to grab (44 px each; at
+  least 1, up to the room's limit) with the bell's bulbs beside it: filled for the lit ones, dashed
+  clay for those the grab would light.
+- Each grabbed coin sits in the **crew duffel** (olive-green paper) or **your pocket** (clay
+  paper) and moves by a tap, Enter or a drag to the other bag; dragging is never the only way. A
+  line under the bags says what the duffel adds to each share, and a note warns when the bank may
+  run short. A role's move power shows as room or player buttons. End with a **Primary** "Lock it in" button.
 
 ### Alarm bells and Wanted stars
 - Each room has a **4-bulb alarm bell** over its door. Bulbs fill from `--olive` through `--gold`

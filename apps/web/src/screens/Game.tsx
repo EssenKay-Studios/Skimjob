@@ -10,14 +10,14 @@ import { useEffect, useMemo, useState } from "react";
 import type { PlayerView, RoomId } from "@skimjob/engine";
 import { Button } from "../components/Button";
 import { Chip } from "../components/Chip";
-import { Clock, Play } from "../components/icons";
+import { Clock } from "../components/icons";
 import { WantedStars } from "../components/Bell";
 import { InfoTip } from "../components/InfoTip";
 import { EndingNote } from "../components/Extension";
 import { endingText } from "../game/extension";
 import { MEETING_TITLE } from "../game/meeting";
 import { BankCutaway } from "../art/BankCutaway";
-import { BANK_ROOMS, type BankRoomId } from "../art/bankLayout";
+import type { BankRoomId } from "../art/bankLayout";
 import { CrookAvatar } from "../art/Crook";
 import { PlanBoard } from "../components/PlanBoard";
 import { Reveal } from "../components/Reveal";
@@ -27,11 +27,8 @@ import { SuspicionBoard, SuspicionMark } from "../components/SuspicionBoard";
 import { useAwayRecap, usePins, useSeatNotes, useSuspicionBoard, type Board as SuspicionMarks, type BoardChannel, type NotesLoad } from "../game/notes";
 import { caseData } from "../game/caseLeads";
 import type { DescribeContext } from "../game/describeEvent";
-import { RoomIcon } from "../art/RoomIcon";
 import { BustedSpot, JobDoneSpot, WaitingSpot } from "../art/Spots";
-import { RoomTile } from "../components/RoomTile";
 import { SketchFrame } from "../components/SketchFrame";
-import { SplitSlider } from "../components/SplitSlider";
 import { useToast } from "../components/Toast";
 import { Underline } from "../components/Underline";
 import { boardScene, seatLooks } from "../game/board";
@@ -58,6 +55,7 @@ import { useCountdown, useGame, useNow, type ClientCommand, type Connection, typ
 import { api, ApiError, sentence, UNREACHABLE, type LobbyView } from "../api";
 import { navigate } from "../router";
 import { GameChat } from "./GameChat";
+import { MovePanel } from "./MovePanel";
 import { GameHost } from "./GameHost";
 import { TopBar } from "./TopBar";
 import "./game.css";
@@ -168,8 +166,6 @@ interface Pick {
   readonly room: RoomId | null;
   readonly setRoom: (room: RoomId) => void;
 }
-
-const isBankRoom = (r: string): r is BankRoomId => (BANK_ROOMS as readonly string[]).includes(r);
 
 function Board({ view, timers, offset, send, autoMeetings, gameId, channel, dmNotices }: BoardProps & { gameId: string; channel: GameChannel; dmNotices: boolean }) {
   const outcome = outcomeOf(view);
@@ -390,7 +386,7 @@ function Actions({ view, timers, offset, send, autoMeetings, pick, channel }: Bo
       {p.kind === "shakedownPending" && <DecidingPanel view={view} timers={timers} offset={offset} />}
       <PlanPanel view={view} send={send} channel={channel} />
       {p.kind === "planning" ? (
-        <MovePanel key={p.round} view={view} round={p.round} timers={timers} offset={offset} send={send} autoMeetings={autoMeetings} pick={pick} />
+        <MovePanel key={p.round} view={view} round={p.round} timers={timers} offset={offset} send={send} pick={pick} />
       ) : voting ? null : (
         <WaitPanel view={view} />
       )}
@@ -445,90 +441,6 @@ function WaitPanel({ view }: { view: PlayerView }) {
       </h2>
       <p>{text}</p>
       <WaitingSpot className="panel__spot" />
-    </SketchFrame>
-  );
-}
-
-function MovePanel({ view, round, timers, offset, send, pick }: BoardProps & { round: number; pick: Pick }) {
-  const options = useMemo(() => roomOptions(view), [view]);
-  const mine = view.me.move;
-  const { room, setRoom } = pick;
-  const [pocket, setPocket] = useState(mine?.pocket ?? 0);
-  const [watch, setWatch] = useState<RoomId | null>(mine?.watch ?? null);
-  const [busy, setBusy] = useState(false);
-  const countdown = useCountdown(timers, `round:${round}`, offset);
-  const picked = options.find((o) => o.id === room) ?? null;
-  const loot = picked?.loot ?? 0;
-  const p = Math.min(pocket, loot);
-  const missed = justMissed(view);
-  const changed = !mine || mine.room !== room || mine.pocket !== p || (mine.watch ?? null) !== (picked?.watcher ? watch : null);
-  const ready = picked !== null && picked.closed === null && (!picked.watcher || watch !== null);
-
-  const lock = async () => {
-    if (!picked || !ready) return;
-    setBusy(true);
-    // design §3.2: the old panel grabs the room's whole limit; the slider splits it between the two bags.
-    await send({ type: "submitMove", move: { room: picked.id, duffel: loot - p, pocket: p, ...(picked.watcher && watch ? { watch } : {}) } }, mine ? "Move updated." : "Locked in.");
-    setBusy(false);
-  };
-
-  return (
-    <SketchFrame as="section" seed="game-move" radius={18} shadow={0.5} className="panel move" aria-labelledby="move-h">
-      <div className="panel__head">
-        <h2 id="move-h" className="panel__title">
-          <Underline seed={`move-${round}`}>Round {round} · Pick your room</Underline>
-        </h2>
-        {countdown && <span className="meta">locks in {countdown.text}</span>}
-      </div>
-      {missed && (
-        <p className="move__missed" role="status">
-          {missed.room === null
-            ? `You missed round ${missed.round}: the default room is taped off, so you sat the round out.`
-            : `You missed round ${missed.round}: the default move sent you to the ${roomName(missed.room)}, handing everything in.`}
-        </p>
-      )}
-      <div className="move__rooms" role="group" aria-label="Rooms">
-        {options.map((o) => (
-          <RoomTile
-            key={o.id}
-            seed={`room-${o.id}`}
-            name={o.name}
-            {...(isBankRoom(o.id) ? { icon: <RoomIcon room={o.id} size={22} /> } : {})}
-            loot={o.loot}
-            bell={o.bell}
-            notes={o.notes}
-            selected={room === o.id}
-            disabled={o.closed !== null}
-            {...(o.closed !== null ? { disabledNote: o.closed } : {})}
-            onSelect={() => setRoom(o.id)}
-          />
-        ))}
-      </div>
-      {picked?.watcher && (
-        <div className="move__watch">
-          <p className="meta">Which room do the cameras watch?</p>
-          <div className="move__chips" role="group" aria-label="Room to watch">
-            {options
-              .filter((o) => o.id !== picked.id)
-              .map((o) => (
-                <Button key={o.id} variant="toggle" seed={`watch-${o.id}`} pressed={watch === o.id} onClick={() => setWatch(o.id)}>
-                  {o.name}
-                </Button>
-              ))}
-          </div>
-        </div>
-      )}
-      {picked && loot > 0 && <SplitSlider id="split" loot={loot} pocket={p} onChange={setPocket} />}
-      <div className="move__foot">
-        <Button variant="primary" seed="lock" icon={<Play />} disabled={!ready || busy || !changed} onClick={lock} className="move__lock">
-          {mine && !changed ? "Locked in" : mine ? "Update move" : "Lock it in"}
-        </Button>
-        <p className="meta move__status" aria-live="polite">
-          {mine
-            ? `Locked in: ${roomName(mine.room)}${mine.pocket > 0 ? `, pocket ${mine.pocket}` : ", all to the duffel"}. You can change it until the deadline.`
-            : `Miss the deadline and you go to the ${roomName(defaultRoom(view))}, handing everything in.`}
-        </p>
-      </div>
     </SketchFrame>
   );
 }
