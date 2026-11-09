@@ -8,7 +8,7 @@ import { Avatar } from "../components/Avatar";
 import { BankDoodle } from "../components/BankDoodle";
 import { ArtSections, BankSection } from "./GalleryArt";
 import { NotesSections } from "./GalleryNotes";
-import { ExtensionSections } from "./GalleryExtension";
+import { RolesGallery } from "./GalleryRoles";
 import { HostSection } from "./GalleryHost";
 import { PlanDemo } from "./GalleryPlan";
 import { RevealSection } from "./GalleryReveal";
@@ -330,7 +330,7 @@ export function Gallery() {
               <MeetingKitSamples />
             </Section>
 
-            <ExtensionSections />
+            <RolesGallery />
 
             <HostSection />
 

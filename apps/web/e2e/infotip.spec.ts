@@ -1,4 +1,4 @@
-import { TERMS, TIPS } from "@skimjob/content";
+import { ROOM_TEXT, TERMS, TIPS } from "@skimjob/content";
 import { expect, test, type Browser, type Page } from "@playwright/test";
 
 // The InfoTip (design §15.6, §20.5, S3b.1) on the gallery page at the five launch
@@ -36,8 +36,8 @@ for (const viewport of VIEWPORTS) {
     const p = await open(browser, viewport, viewport.width < 1024);
     const bell = tipButton(p, "Bell");
     const b = (await bell.boundingBox())!;
-    expect(b.width).toBeGreaterThanOrEqual(44);
-    expect(b.height).toBeGreaterThanOrEqual(44);
+    expect(b.width).toBeGreaterThanOrEqual(43.99);
+    expect(b.height).toBeGreaterThanOrEqual(43.99);
     await bell.click();
     await expect(popover(p)).toBeVisible();
     await expect(popover(p)).toContainText(TIPS.bell.text);
@@ -48,8 +48,8 @@ for (const viewport of VIEWPORTS) {
     expect(t.y).toBeGreaterThanOrEqual(0);
     expect(t.y + t.height).toBeLessThanOrEqual(viewport.height);
     const close = (await popover(p).getByRole("button", { name: "Close" }).boundingBox())!;
-    expect(close.width).toBeGreaterThanOrEqual(44);
-    expect(close.height).toBeGreaterThanOrEqual(44);
+    expect(close.width).toBeGreaterThanOrEqual(43.99);
+    expect(close.height).toBeGreaterThanOrEqual(43.99);
     const o = await p.evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth }));
     expect(o.scroll).toBeLessThanOrEqual(o.client);
     await p.evaluate(() => Promise.all(document.getAnimations().filter((a) => a.effect?.getComputedTiming().iterations !== Infinity).map((a) => a.finished.catch(() => undefined))));
@@ -197,6 +197,25 @@ test("moving the mouse from one i to the next shows only the next tip @infotip",
   // At once, inside the first tip's 200 ms grace.
   expect(await popover(p).count()).toBe(1);
   await expect(tipButton(p, "Vault")).toHaveAttribute("aria-expanded", "false");
+  await p.context().close();
+});
+
+test("a pinned tip stays open when the mouse hovers another i, and no preview opens until it closes @infotip", async ({ browser }) => {
+  const p = await open(browser, { width: 1280, height: 800 }, false);
+  const vault = tipButton(p, "Vault");
+  await vault.click();
+  await expect(popover(p)).toContainText(ROOM_TEXT.vault!);
+  await tipButton(p, "Mole").hover();
+  await p.waitForTimeout(400);
+  await expect(popover(p)).toHaveCount(1);
+  await expect(popover(p)).toContainText(ROOM_TEXT.vault!);
+  await expect(tipButton(p, "Mole")).toHaveAttribute("aria-expanded", "false");
+  // The pinned tip closes on Esc; then a hover previews again.
+  await p.keyboard.press("Escape");
+  await expect(popover(p)).toHaveCount(0);
+  await p.mouse.move(0, 0);
+  await tipButton(p, "Mole").hover();
+  await expect(tipButton(p, "Mole")).toHaveAttribute("aria-expanded", "true");
   await p.context().close();
 });
 

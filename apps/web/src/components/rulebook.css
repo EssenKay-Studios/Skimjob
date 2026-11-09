@@ -1,0 +1,98 @@
+/* The "This game" rulebook (design §15.6): columns that follow the width it
+   has, hand-lettered section headings with a clay squiggle. Theme tokens only. */
+.dialog__sheet:has(.rulebook) {
+  width: min(1100px, 100%);
+}
+.rulebook__sheet {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+.rulebook__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.rulebook__head h2 {
+  margin: 0;
+}
+.rulebook {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: 16px 22px;
+  align-items: start;
+  min-width: 0;
+}
+.rulebook__sec {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.rulebook__sec > header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px 10px;
+}
+.rulebook__sec > header h3 {
+  margin: 0;
+  font-size: 22px;
+  text-decoration: underline wavy var(--clay);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 5px;
+}
+.rulebook__rows {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.rulebook__rows li {
+  display: grid;
+  gap: 2px;
+  padding-top: 8px;
+  border-top: 1.3px dashed var(--ink-faint);
+}
+.rulebook__rows > li > p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.rulebook__name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+.rulebook__name b {
+  font-size: 20px;
+}
+.rulebook__price {
+  padding: 1px 8px;
+  border: 1.3px solid var(--ink);
+  border-radius: var(--radius-chip);
+  background: var(--gold);
+  font-size: 13px;
+}
+.rulebook__numbers {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+.rulebook__numbers > div {
+  display: grid;
+  grid-template-columns: minmax(0, 8.5em) minmax(0, 1fr);
+  gap: 2px 10px;
+  padding-top: 6px;
+  border-top: 1.3px dashed var(--ink-faint);
+}
+.rulebook__numbers dt {
+  font: 700 13px/1.4 var(--font-ui);
+  color: var(--clay-d);
+}
+.rulebook__numbers dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}

@@ -1,0 +1,150 @@
+/* Role card dialog and "Roles in play" panel (design §15.6). Theme tokens only. */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border: 1.3px solid var(--ink);
+  border-radius: var(--radius-chip);
+  font: 700 12px/1.3 var(--font-ui);
+  color: var(--ink);
+  background: var(--paper);
+  white-space: nowrap;
+}
+.tag--cadence {
+  background: var(--paper2);
+}
+.tag--eyes {
+  background: var(--sight-l);
+}
+.tag--shadows {
+  background: var(--oat);
+}
+.rolecard {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+.rolecard__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.rolecard__main {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+.rolecard__tile {
+  display: grid;
+  place-items: center;
+  width: 110px;
+  height: 110px;
+  border: 1.5px solid var(--ink);
+  border-radius: var(--radius-card);
+  background: var(--card-sand);
+}
+.rolecard__body {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.rolecard__title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.rolecard__name {
+  margin: 0;
+  font-size: 32px;
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+}
+h3.rolecard__name {
+  font-size: 24px;
+}
+.rolecard__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+}
+.rolecard__facts {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+.rolecard__facts > div {
+  padding-top: 8px;
+  border-top: 1.3px dashed var(--ink-faint);
+}
+.rolecard__facts dt {
+  font: 700 13px/1.3 var(--font-ui);
+  color: var(--clay-d);
+}
+.rolecard__facts dd {
+  margin: 2px 0 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.rolecard__bust {
+  display: block;
+}
+.rolecard__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 10px;
+}
+.rolecard__targets {
+  flex: 1 1 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+@media (max-width: 420px) {
+  .rolecard__main {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .rolecard__tile {
+    width: 84px;
+    height: 84px;
+  }
+  .rolecard__tile svg {
+    width: 70px;
+    height: 70px;
+  }
+}
+
+.rolesinplay {
+  display: grid;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1.3px dashed var(--ink-faint);
+  min-width: 0;
+}
+.rolesinplay__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px 12px;
+}
+.rolesinplay__head h3 {
+  margin: 0;
+  font-size: 18px;
+}
+.rolesinplay__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.rolesinplay__why {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
