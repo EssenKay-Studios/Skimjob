@@ -6,6 +6,7 @@
 // (ranking, reveal and its timeline, case board) at 360, 390 and 768 px:
 // nothing past the edge, and every name still whole in the DOM (wrapped, not cut).
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
+import { openPanel, showResult } from "./setupGame";
 
 const WIDE = "W".repeat(24);
 const EMOJI = "\u{1F600}".repeat(24); // 24 code points, no break points
@@ -80,17 +81,20 @@ test("real 15-min game over with W×24, emoji×24 and combining-mark names: no o
 
   // Nobody moves: the deadlines run the game out.
   const ranking = g1.getByRole("list", { name: /Final ranking/ });
-  await expect(ranking).toBeVisible({ timeout: 360_000 });
+  await showResult(g1, 360_000);
   await expect(ranking.locator(".ranking__row")).toHaveCount(5);
 
   const problems: string[] = [];
   const pages: [string, Page][] = [["emoji guest", g1], ["combining guest", g2], ["host", host]];
   for (const [label, page] of pages) {
     await page.reload();
-    await expect(page.getByRole("list", { name: /Final ranking/ })).toBeVisible({ timeout: 20_000 });
+    await showResult(page, 20_000);
     for (const width of WIDTHS) {
       await page.setViewportSize({ width, height: 844 });
       await page.waitForTimeout(150);
+      await openPanel(page, "The result"); // each width starts from the result sheet
+      // The sheet's slide-in and the stamp's thump are drawn bigger or off to the side until they land.
+      await page.evaluate(() => Promise.all(document.getAnimations().filter((a) => a.effect?.getComputedTiming().iterations !== Infinity).map((a) => a.finished.catch(() => undefined))));
       const who = `${label} ${width}`;
       for (const x of await overflow(page)) problems.push(`${who} game over: ${x}`);
       // Every name whole in the ranking (wrapped, never truncated).
@@ -109,7 +113,8 @@ test("real 15-min game over with W×24, emoji×24 and combining-mark names: no o
         const all = ((await reveal.textContent()) ?? "").normalize("NFD");
         for (const nm of [WIDE, EMOJI, COMBINING]) expect(all, `${who}: reveal has ${nm}`).toContain(nm.normalize("NFD"));
       } else problems.push(`${who}: no reveal on the game-over screen`);
-      // The case board.
+      // The case board (its own sheet below 1024 px).
+      await openPanel(page, "Case");
       await expect(page.getByRole("region", { name: "Case board" })).toBeVisible();
       for (const x of await overflow(page)) problems.push(`${who} case board: ${x}`);
     }

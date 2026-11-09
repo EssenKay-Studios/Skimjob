@@ -1,6 +1,6 @@
 import { mkdirSync } from "node:fs";
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { openLeads, startGame } from "./setupGame";
+import { closePanel, gameOver, keepRoundOpen, openLeads, openPanel, showResult, startGame } from "./setupGame";
 
 // M2-6 acceptance (docs/m2-plan.md): a host and a guest play a 15-min game
 // against bots to the end in the browser and see the ranking.
@@ -39,14 +39,16 @@ test("a host and a guest play a 15-min game against bots to the end @move", asyn
   await page.goto(`/game/${game.id}`);
   await guest.goto(`/game/${game.id}`);
   await expect(page.locator(".hud__kicker")).toContainText(/Round \d+ of 12/);
+  await openPanel(page, "Crew");
   await expect(page.locator(".crew-seat")).toHaveCount(4);
+  await closePanel(page);
 
   // Until the end: the host moves every round (Office, all in) and posts alibis; the guest never moves.
   const over = page.getByRole("list", { name: "Final ranking" });
   let alibis = 0;
   let moves = 0;
   let votes = 0;
-  while (!(await over.isVisible())) {
+  while (!(await gameOver(page).isVisible())) {
     // Every interaction below waits generously for its click and counts only what the UI confirms ("Vote cast",
     // "Locked in: Office", "You told the crew ..."), never the click itself. A click that fails under load (the
     // sheet still animating, the round gone) is retried on the next pass. The three steps run side by side:
@@ -67,6 +69,8 @@ test("a host and a guest play a 15-min game against bots to the end @move", asyn
       }
     };
     const move = async () => {
+      // Below 1024 px the move panel is a sheet, and the page's own timer (the alibi poster) wants it open too: keep it open.
+      await keepRoundOpen(page);
       if (!(await page.getByRole("button", { name: "Lock it in" }).isVisible().catch(() => false))) return;
       await click(page.locator('.room-tile[data-room="Office"]'));
       await click(page.getByRole("button", { name: "Lock it in" }));
@@ -81,6 +85,7 @@ test("a host and a guest play a 15-min game against bots to the end @move", asyn
   expect(votes).toBeGreaterThan(0);
 
   // Game over: stamp, ranking of all four, winners marked.
+  await showResult(page);
   // The server seeds each game afresh, so read the ending this game reached and check its own lines (design §5.5, §8, §20.2).
   const panel = page.locator("section.over");
   const ending = await panel.getAttribute("data-ending");
@@ -94,6 +99,7 @@ test("a host and a guest play a 15-min game against bots to the end @move", asyn
   // The case board keeps the game's facts (design §15.4): the round haul, the host's alibi and grab, the host's
   // ballot (private in the default Hidden mode: seen by you, not a public fact) and the ending.
   const ENDS: Record<string, string> = { success: "Job done! The crew got away with it", bust: "Busted: Wanted hit the bust line and the heist failed", theft: "The heist was sunk by theft" };
+  await openPanel(page, "Case");
   const leads = await openLeads(page);
   await expect(leads).toContainText(/Fact Round 1: \d+ taken/);
   await expect(leads).toContainText("Said You say you were in the Lobby");
@@ -102,7 +108,8 @@ test("a host and a guest play a 15-min game against bots to the end @move", asyn
   await expect(leads).toContainText(ENDS[ending!]!);
 
   // The guest missed every deadline: the default move is on their board (design §3.3), and they see the end too.
-  await expect(guest.getByRole("list", { name: "Final ranking" })).toBeVisible();
+  await showResult(guest);
+  await openPanel(guest, "Case");
   await expect(await openLeads(guest)).toContainText("Seen by you You missed round 1's deadline: the default move went to the Lobby");
   expect(errors).toEqual([]);
   await guestCtx.close();
@@ -129,6 +136,7 @@ test("the move panel: pick a room, split the loot, lock it in, change it; reconn
   const idle = await browser.newContext();
   const game = await startGame(page.request, { bots: 3, guests: [idle.request], sessionLength: "1h" });
   await page.goto(`/game/${game.id}`);
+  await openPanel(page, "This round");
   await expect(page.getByRole("heading", { name: "Round 1 · Pick your room", level: 2 })).toBeVisible();
   await expect(page.getByText("Miss the deadline and you go to the Lobby, handing everything in.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Lock it in" })).toBeDisabled();
@@ -141,6 +149,7 @@ test("the move panel: pick a room, split the loot, lock it in, change it; reconn
   await page.getByRole("button", { name: "Lock it in" }).click();
   await expect(page.getByRole("button", { name: "Locked in" })).toBeDisabled();
   await expect(page.getByText("Locked in: Vault, pocket 2.")).toBeVisible();
+  await openPanel(page, "Crew");
   await expect(page.locator(".crew-seat.is-you .crook-avatar--ready")).toBeVisible(); // your own "locked in" mark (everyone's is public)
   // Lock-ins are public (owner decision, 2 Nov): the bots have locked in, the idle guest hasn't; never a room or split.
   await expect(page.locator(".crew-seat:not(.is-you) .crook-avatar--ready")).toHaveCount(3);
@@ -149,6 +158,7 @@ test("the move panel: pick a room, split the loot, lock it in, change it; reconn
   await shot(page, "mid-round");
 
   // Security needs a room to watch before it can lock in. design §6.1
+  await openPanel(page, "This round");
   await page.locator('.room-tile[data-room="Security"]').click();
   await expect(page.getByRole("button", { name: "Update move" })).toBeDisabled();
   await page.getByRole("group", { name: "Room to watch" }).getByRole("button", { name: "Vault" }).click();
@@ -174,20 +184,26 @@ test("the bank board: tap a room to pick it, see who you saw and the alibi claim
   const idle = await browser.newContext();
   const game = await startGame(page.request, { bots: 4, guests: [idle.request], sessionLength: "1h" });
   await page.goto(`/game/${game.id}`);
+  await openPanel(page, "This round");
   await expect(page.getByRole("heading", { name: "Round 1 · Pick your room", level: 2 })).toBeVisible();
+  await closePanel(page);
   const board = page.getByRole("region", { name: "The bank" });
   await expect(board.getByText("Round 1: tap a room to pick it.")).toBeVisible();
 
   // The board drives the move panel, and the panel drives the board.
   await board.locator(".bank-room[data-room=vault]").click();
+  await openPanel(page, "This round");
   await expect(page.locator('.room-tile[data-room="Vault"]')).toHaveAttribute("aria-pressed", "true");
+  await closePanel(page);
   await expect(board.locator(".bank-room[data-room=vault]")).toHaveAttribute("aria-pressed", "true");
   await expect(board.getByText(/heading for the Vault/)).toBeVisible();
+  await openPanel(page, "This round");
   await page.locator('.room-tile[data-room="Office"]').click();
   await expect(board.locator(".bank-room[data-room=office]")).toHaveAttribute("aria-pressed", "true");
   await expect(board.locator(".bank-room[data-room=vault]")).toHaveAttribute("aria-pressed", "false");
   // Only you stand in the bank while planning: nobody else's pick is drawn.
   await expect(board.locator(".bank-room .crook-fig")).toHaveCount(1);
+  await openPanel(page, "This round");
   await page.getByRole("button", { name: "Lock it in" }).click();
   await expect(page.getByText("Locked in: Office")).toBeVisible();
 
@@ -213,6 +229,7 @@ test("shows the default move after a missed round (design §5.1) @move", async (
   test.setTimeout(60_000);
   const game = await startGame(page.request, { bots: 2 });
   await page.goto(`/game/${game.id}`);
+  await openPanel(page, "This round");
   await expect(page.getByRole("heading", { name: "Round 2 · Pick your room", level: 2 })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole("status").filter({ hasText: "You missed round 1: the default move sent you to the Lobby" })).toBeVisible();
 });

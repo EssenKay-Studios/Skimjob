@@ -4,6 +4,7 @@
 // posted from a stale screen (alibis have no window); and nothing on screen giving away another
 // player's hidden move, split, role or "submitted" status.
 import { mkdirSync } from "node:fs";
+import { closePanel, gameOver, keepRoundOpen, openPanel, showResult } from "./setupGame";
 import { expect, test, type APIRequestContext, type Browser, type Page, type WebSocketRoute } from "@playwright/test";
 import { openLeads } from "./setupGame";
 
@@ -119,7 +120,9 @@ test("12 seats, 24-char names: a 15-min game to the end with moves changed, alib
   );
   await host.goto(`/game/${game.id}`);
   await guest.goto(`/game/${game.id}`);
+  await openPanel(host, "Crew");
   await expect(host.locator(".crew-seat")).toHaveCount(12);
+  await closePanel(host);
 
   const tap = (p: Page, sel: ReturnType<Page["locator"]>) => (mobile ? sel.tap({ timeout: 1000 }) : sel.click({ timeout: 1000 }));
   const problems = new Set<string>();
@@ -135,7 +138,8 @@ test("12 seats, 24-char names: a 15-min game to the end with moves changed, alib
   let round = 0;
   const post = host.getByRole("button", { name: "Post alibi" });
   try {
-    while (!(await over.isVisible())) {
+    while (!(await gameOver(host).isVisible())) {
+      await keepRoundOpen(host); // below 1024 px the move panel and the alibi panel are in the "This round" sheet
       const heading = await host.locator("#move-h").textContent({ timeout: 200 }).catch(() => null);
       const lock = host.getByRole("button", { name: /Lock it in|Update move/ });
       if (heading && (await host.locator(".move__lock").isVisible().catch(() => false))) {
@@ -158,6 +162,7 @@ test("12 seats, 24-char names: a 15-min game to the end with moves changed, alib
           if (await upd.isEnabled({ timeout: 500 }).catch(() => false)) await tap(host, upd).catch(() => {});
           // The guest locks in on even rounds only (odd rounds: missed deadline).
           if (r % 2 === 0) {
+            await keepRoundOpen(guest);
             await tap(guest, guest.locator('.room-tile[data-room="Lobby"]')).catch(() => {});
             await tap(guest, guest.getByRole("button", { name: "Lock it in" })).catch(() => {});
             for (const x of await leaks(host)) leaked.add(`host sees guest round ${r}: ${x}`);
@@ -187,6 +192,7 @@ test("12 seats, 24-char names: a 15-min game to the end with moves changed, alib
     const held = pausing as ReturnType<APIRequestContext["post"]> | null;
     if (held) await held.then(() => host.request.post(`/api/games/${game.id}/resume`, { data: {} })).catch(() => {});
   }
+  await showResult(host);
   await expect(over.locator(".ranking__row")).toHaveCount(12);
   await expect(host.locator(".over__stamp")).toHaveText(/JOB DONE|BUSTED/);
   await once("over", host);

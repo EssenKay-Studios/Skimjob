@@ -1,6 +1,6 @@
 import { mkdirSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
-import { startGame } from "./setupGame";
+import { isWide, openPanel, startGame } from "./setupGame";
 
 // The chat (M2-8b) at every launch viewport (decisions.md 2026-11-01 "Web-first
 // launch; responsive everywhere"): a side panel from 1024 px, a sheet behind a
@@ -66,24 +66,29 @@ for (const viewport of VIEWPORTS) {
       const guest = await guestCtx.newPage();
       const game = await startGame(page.request, { bots: 3, guests: [guest.request], sessionLength: "1w" });
       await page.goto(`/game/${game.id}`);
-      await expect(page.getByRole("heading", { name: "Round 1 · Pick your room", level: 2 })).toBeVisible();
+      await expect(page.locator(".hud__kicker")).toBeVisible();
 
-      const wide = viewport.width >= 1024;
-      const fab = page.locator(".chat-fab");
-      if (wide) await expect(fab).toHaveCount(0);
+      // From 1024 px the chat is a side tab; below that a tab in the bar opens it as a bottom sheet.
+      const wide = isWide(page);
+      const chatTab = page.getByRole("navigation", { name: "Game panels" }).getByRole("button", { name: /^Chat/ });
+      if (wide) await expect(chatTab).toHaveCount(0);
       else {
-        await expect(fab).toBeVisible();
+        await expect(chatTab).toBeVisible();
         await expect(page.getByRole("region", { name: "Chat" })).toBeHidden();
         expect(await smallTargets(page)).toEqual([]);
-        await fab.click();
       }
+      await openPanel(page, "Chat");
       const chat = page.getByRole("region", { name: "Chat" });
       await expect(chat).toBeVisible();
-      if (viewport.width <= 560) {
-        // Phones: full screen (inside the safe-area padding).
-        const box = (await chat.boundingBox())!;
-        expect(box.width).toBeGreaterThan(viewport.width - 24);
-        expect(box.height).toBeGreaterThan(viewport.height - 24);
+      if (!wide) {
+        // The sheet stays inside the screen, with its composer on it.
+        const sheet = (await page.locator(".bsheet__sheet").boundingBox())!;
+        expect(sheet.x).toBeGreaterThanOrEqual(0);
+        expect(sheet.x + sheet.width).toBeLessThanOrEqual(viewport.width);
+        expect(sheet.y).toBeGreaterThanOrEqual(0);
+        // (its bottom outline hangs 14 px below the screen edge, and it slides in from 40 px lower.)
+        await expect.poll(async () => (await page.locator(".bsheet__sheet").boundingBox())!.y + sheet.height).toBeLessThanOrEqual(viewport.height + 15);
+        await expect(page.locator(".chat__input")).toBeInViewport();
       }
 
       // Long words, long lines and a DM thread.
@@ -105,9 +110,9 @@ for (const viewport of VIEWPORTS) {
       await shot(page, touch ? "touch" : "open");
 
       if (!wide) {
-        await page.getByRole("button", { name: "Close chat" }).click();
+        await page.getByRole("button", { name: "Close", exact: true }).click();
         await expect(chat).toBeHidden();
-        await expect(fab).toBeFocused();
+        await expect(chatTab).toBeFocused();
       }
       await ctx.close();
       await guestCtx.close();

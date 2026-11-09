@@ -60,11 +60,23 @@ function WideShell({ status, board, panels }: GameShellProps) {
         {status}
       </SketchFrame>
       {shown && (
-        <SketchFrame as="aside" seed="shell-left" radius={16} shadow={0.5} className="shell__left" aria-label="Crew, case and chat">
+        <SketchFrame as="aside" seed="shell-left" radius={16} shadow={0.5} className="shell__left" aria-label="Crew, case, notes and chat">
           <div className="shell__seg" role="group" aria-label="Side panel">
             {left.map((p) => (
-              <Button key={p.id} variant="toggle" seed={`shell-tab-${p.id}`} pressed={p.id === shown.id} onClick={() => setLeftId(p.id)}>
+              <Button
+                key={p.id}
+                variant="toggle"
+                seed={`shell-tab-${p.id}`}
+                pressed={p.id === shown.id}
+                aria-label={p.tab?.badge ? `${p.title}, ${p.tab.badge} new` : p.title}
+                onClick={() => setLeftId(p.id)}
+              >
                 {p.title}
+                {!!p.tab?.badge && (
+                  <b className="shell__count" aria-hidden="true">
+                    {p.tab.badge}
+                  </b>
+                )}
               </Button>
             ))}
           </div>
@@ -101,7 +113,9 @@ function NarrowShell({ status, board, dock, panels, open, onOpen }: GameShellPro
   const sheet = panels.find((p) => p.id === open);
   return (
     <div className="shell shell--narrow">
-      <header className="shell__status">{status}</header>
+      <SketchFrame as="header" seed="shell-status" radius={12} shadow={0.4} className="shell__status">
+        {status}
+      </SketchFrame>
       <main className="shell__board" aria-label="Bank board">
         {board}
       </main>

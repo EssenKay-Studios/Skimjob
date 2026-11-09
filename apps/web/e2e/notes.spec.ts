@@ -1,8 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
-import { startGame } from "./setupGame";
+import { openPanel, startGame } from "./setupGame";
 
 /** A public event any time (design §11.3): the player claims the Lookout from the role card. */
 async function claimLookout(page: Page): Promise<void> {
+  await openPanel(page, "This round");
   const card = page.locator(".role-card");
   await card.getByRole("button", { name: "Claim role" }).click();
   await card.getByRole("group", { name: "Role to claim" }).getByRole("button", { name: "Lookout" }).click();
@@ -67,6 +68,7 @@ test("the recap shows what changed while you were away, once, and the board stay
   await dismissed;
   await back.reload();
   await expect(back.getByRole("heading", { name: "Round 1 · Pick your room", level: 2 })).toBeVisible();
+  await openPanel(back, "Notes");
   await expect(back.getByRole("region", { name: "While you were away" })).toHaveCount(0);
 
   // design §12.3: tag the guest suspicious with a note; it survives a reload.
@@ -78,13 +80,16 @@ test("the recap shows what changed while you were away, once, and the board stay
   await board.getByLabel("Note on Guest 1").fill("Says Lobby, smells like Vault");
   await board.getByRole("button", { name: "Save note" }).click();
   await expect(board).toContainText("Says Lobby, smells like Vault");
+  await openPanel(back, "Crew");
   await expect(back.locator(".crew .sus-mark--suspicious")).toHaveText("Suspicious");
   await back.reload();
+  await openPanel(back, "Notes");
   await expect(back.getByRole("region", { name: "Your suspicion board" })).toContainText("Says Lobby, smells like Vault");
   await expect(back.getByRole("region", { name: "Your suspicion board" }).getByRole("group", { name: "Your tag for Guest 1" }).getByRole("button", { name: "Suspicious" })).toHaveAttribute("aria-pressed", "true");
 
   // The guest sees none of it, anywhere on their screen.
   await guest.reload();
+  await openPanel(guest, "Notes");
   await expect(guest.getByRole("region", { name: "Your suspicion board" })).toBeVisible();
   await expect(guest.locator("body")).not.toContainText("smells like Vault");
   await expect(guest.locator(".sus-row.is-suspicious, .sus-mark")).toHaveCount(0);
@@ -176,8 +181,10 @@ for (const viewport of VIEWPORTS) {
     const box = await recap.boundingBox();
     expect(box!.y).toBeLessThan(200);
 
+    await openPanel(page, "Case");
     await expect(page.getByRole("region", { name: "Case board" })).toBeVisible();
 
+    await openPanel(page, "Notes");
     const board = page.getByRole("region", { name: "Your suspicion board" });
     const first = board.getByRole("group").first();
     await first.getByRole("button", { name: "Unsure" }).click();

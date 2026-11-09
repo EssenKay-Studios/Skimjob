@@ -1,5 +1,5 @@
 import { expect as baseExpect, test, type Browser, type Page } from "@playwright/test";
-import { startGame } from "./setupGame";
+import { chatTab, openChat, openPanel, startGame } from "./setupGame";
 
 // Several browsers and a server share the machine: allow for slow round trips.
 const expect = baseExpect.configure({ timeout: 15_000 });
@@ -14,15 +14,6 @@ const expect = baseExpect.configure({ timeout: 15_000 });
 async function player(browser: Browser, page: Page) {
   const ctx = await browser.newContext({ viewport: page.viewportSize()! });
   return ctx.newPage();
-}
-
-/** Opens the chat sheet on narrow screens (on wide ones the panel is always there). */
-async function openChat(page: Page) {
-  const fab = page.locator(".chat-fab");
-  const region = page.getByRole("region", { name: "Chat" });
-  await expect(fab.or(region)).toBeVisible(); // the game has loaded
-  if (await fab.isVisible()) await fab.click();
-  await expect(region).toBeVisible();
 }
 
 const feed = (page: Page) => page.locator(".chat__feed");
@@ -43,19 +34,19 @@ test("crew chat reaches everyone; a DM reaches only its two players @chat", asyn
   const game = await startGame(page.request, { bots: 1, guests: [guest1.request, guest2.request], sessionLength: "1w" });
   for (const p of [page, guest1, guest2]) {
     await p.goto(`/game/${game.id}`);
-    await expect(p.getByRole("heading", { name: "Round 1 · Pick your room", level: 2 })).toBeVisible();
+    await expect(p.locator(".hud__kicker")).toContainText(/Round 1 of/);
   }
 
   // A move gives the host a shareable case-file entry (role cards can't be shared).
+  await openPanel(page, "This round");
   await page.locator('.room-tile[data-room="Office"]').click();
   await page.getByRole("button", { name: "Lock it in" }).click();
   await expect(page.getByRole("button", { name: "Locked in" })).toBeVisible();
 
-  // Unread before opening: the phone button counts it.
+  // Unread before opening: the chat tab counts it.
   await openChat(page);
   await say(page, "Hi crew <b>not bold</b> **not bold either**");
-  const wide = (page.viewportSize()?.width ?? 0) >= 1024;
-  if (!wide) await expect(guest1.locator(".chat-fab")).toHaveAccessibleName("Open chat, 1 unread");
+  await expect(chatTab(guest1)).toHaveAccessibleName("Chat, 1 new");
 
   // Crew message: everyone sees it, as text.
   for (const p of [guest1, guest2]) {

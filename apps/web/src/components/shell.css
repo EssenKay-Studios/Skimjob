@@ -15,9 +15,13 @@
   max-width: 640px;
   margin: 0 auto;
 }
-.shell--narrow > .shell__status,
 .shell--narrow > .shell__board {
   padding: 0 var(--gutter-r) 0 var(--gutter-l);
+}
+/* A frame keeps clear of the screen edge with a margin (its own padding is for what's inside). */
+.shell--narrow > .shell__status {
+  margin: 0 var(--gutter-r) 0 var(--gutter-l);
+  padding: 4px 6px;
 }
 .shell__board {
   min-width: 0;
@@ -159,11 +163,18 @@
   overscroll-behavior: contain;
 }
 .shell__seg {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 .shell__seg .btn {
-  flex: 1;
+  min-width: 0;
+}
+/* The unread count inside a side tab. */
+.shell__seg .shell__count {
+  position: static;
+  display: inline-block;
+  margin-left: 6px;
 }
 
 /* ---------- Bottom sheet ---------- */
@@ -183,9 +194,9 @@
   overflow: hidden;
   overscroll-behavior: contain;
 }
-/* The page behind a sheet does not scroll. */
-html.sheet-open,
-html.sheet-open body {
+/* The page behind a modal does not scroll. */
+html.modal-open,
+html.modal-open body {
   overflow: hidden;
 }
 .bsheet[open] {
@@ -208,8 +219,18 @@ html.sheet-open body {
   padding: 10px max(16px, env(safe-area-inset-right)) calc(28px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
   animation: bsheet-in 0.4s var(--slide) both;
 }
+/* The grip is a 44 px drag zone (swipe down to dismiss); its drawn bar is the ::before. */
 .bsheet__grip {
-  align-self: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  margin: -10px 0 -14px;
+  touch-action: none;
+  cursor: grab;
+}
+.bsheet__grip::before {
+  content: "";
   width: 46px;
   height: 5px;
   border-radius: var(--radius-grip);

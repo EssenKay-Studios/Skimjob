@@ -1,20 +1,13 @@
-// The chat on the game screen (M2-8b): a side panel from 1024 px, and below
-// that a "Chat" button (with the unread count) that opens it as a sheet:
-// full screen on phones, a bottom sheet on tablets. Read marks are kept per
-// game in localStorage. design §12.1, ui-style §10, docs/m2-plan.md M2-8
+// The chat on the game screen (M2-8b): a panel of the game shell, a side tab
+// from 1024 px and a bottom sheet below that. Read marks are kept per game in
+// localStorage. design §12.1, ui-style §10, docs/m2-plan.md M2-8
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PlayerView } from "@skimjob/engine";
-import { Button } from "../components/Button";
-import { ChatBadge, ChatPanel, type ChatPerson } from "../components/Chat";
-import { Bubble } from "../components/icons";
+import { ChatPanel, type ChatPerson } from "../components/Chat";
 import { feedWorthy, markRead, mergeRead, shareableEntries, totalUnread, type FeedEvent, type ReadState, type ThreadId } from "../game/chat";
 import { describeEvent } from "../game/describeEvent";
 import { namesOf, seatsOf } from "../game/hud";
 import type { GameChannel } from "../game/useGame";
-import { useMedia } from "../game/useMedia";
-
-/** The side panel takes over from here (docs: "on 1024+ px it is a side panel"). */
-const CHAT_DOCK_QUERY = "(min-width: 1024px)";
 
 /** Per game and seat, so a shared device doesn't mix two players' marks. */
 const readKey = (gameId: string, player: string) => `skimjob:chat-read:${gameId}:${player}`;
@@ -86,10 +79,8 @@ function useLiveEvents(view: PlayerView, offset: number): readonly FeedEvent[] {
   return events;
 }
 
-export function GameChat({ gameId, view, channel, dmNotices }: { gameId: string; view: PlayerView; channel: GameChannel; dmNotices: boolean }) {
-  const docked = useMedia(CHAT_DOCK_QUERY);
-  const [open, setOpen] = useState(false);
-  const [focusKey, setFocusKey] = useState(0);
+/** The chat panel for the game shell, and the unread count for its tab (the read marks and the feed live here, so they follow the game while the panel is closed). */
+export function useGameChat({ gameId, view, channel, dmNotices }: { gameId: string; view: PlayerView; channel: GameChannel; dmNotices: boolean }) {
   const [read, onRead] = useChatRead(gameId, view.me.id);
   const events = useLiveEvents(view, channel.offset);
   const me = view.me.id;
@@ -100,69 +91,22 @@ export function GameChat({ gameId, view, channel, dmNotices }: { gameId: string;
       .slice(0, 40)
       .map((e) => ({ seq: e.seq, text: describeEvent(e.event, { me, name }) }));
   }, [view, me]);
-  const unread = totalUnread(channel.chat, me, read);
-  const sheet = !docked;
-
-  const close = useCallback(() => {
-    setOpen(false);
-    requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(".chat-fab")?.focus());
-  }, []);
-  useEffect(() => {
-    if (!sheet || !open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
-    document.addEventListener("keydown", onKey);
-    document.documentElement.classList.add("chat-sheet-open");
-    // A modal sheet: the game behind it can't be tabbed into or read out.
-    const behind = [...document.querySelectorAll<HTMLElement>(".topbar, .game-grid > :not(.game-grid__side), .game-grid__side > :not(.chat-dock)")];
-    for (const el of behind) el.inert = true;
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.documentElement.classList.remove("chat-sheet-open");
-      for (const el of behind) el.inert = false;
-    };
-  }, [sheet, open, close]);
-
-  return (
-    <>
-      <div
-        className={sheet ? "chat-dock is-sheet" : "chat-dock is-docked"}
-        hidden={sheet && !open}
-        {...(sheet && { role: "dialog", "aria-modal": true, "aria-label": "Chat" })}
-      >
-        {sheet && <div className="chat-dock__scrim" aria-hidden="true" onClick={close} />}
-        <ChatPanel
-          me={me}
-          people={people}
-          chat={channel.chat}
-          read={read}
-          onRead={onRead}
-          send={channel.sendChat}
-          connection={channel.connection}
-          evidence={evidence}
-          events={events}
-          dmNotices={dmNotices}
-          visible={docked || open}
-          focusKey={focusKey}
-          className="chat-dock__panel"
-          {...(sheet && { onClose: close })}
-        />
-      </div>
-      {sheet && !open && (
-        <Button
-          variant="primary"
-          seed="chat-fab"
-          className="chat-fab"
-          icon={<Bubble />}
-          aria-label={`Open chat${unread > 0 ? `, ${unread} unread` : ""}`}
-          onClick={() => {
-            setOpen(true);
-            setFocusKey((k) => k + 1);
-          }}
-        >
-          Chat
-          <ChatBadge count={unread} />
-        </Button>
-      )}
-    </>
+  // The shell mounts the panel only while it is on screen, so what it shows counts as read.
+  const node = (
+    <ChatPanel
+      me={me}
+      people={people}
+      chat={channel.chat}
+      read={read}
+      onRead={onRead}
+      send={channel.sendChat}
+      connection={channel.connection}
+      evidence={evidence}
+      events={events}
+      dmNotices={dmNotices}
+      visible
+      className="shell-chat"
+    />
   );
+  return { unread: totalUnread(channel.chat, me, read), node };
 }

@@ -1,4 +1,4 @@
-// /game/:id: the game screen, thin slice (docs/m2-plan.md M2-6). HUD, seats,
+// /game/:id: the game screen, mounted in the GameShell (design §15.6). HUD, seats,
 // move panel, alibis, ledger and case file, and the game-over ranking, all
 // from the player's own view over the live channel, and the chat (M2-8b,
 // GameChat.tsx), meetings and votes (M2-7, Meetings.tsx) and the bank board
@@ -10,9 +10,11 @@ import { useEffect, useMemo, useState } from "react";
 import type { PlayerView, RoomId } from "@skimjob/engine";
 import { Button } from "../components/Button";
 import { Chip } from "../components/Chip";
-import { Clock, Play } from "../components/icons";
 import { WantedStars } from "../components/Bell";
+import { GameShell, type ShellPanel } from "../components/GameShell";
+import { Bubble, Clock, Evidence, Pin, Play, Star } from "../components/icons";
 import { InfoTip } from "../components/InfoTip";
+import { Meter } from "../components/Meter";
 import { EndingNote } from "../components/Extension";
 import { endingText } from "../game/extension";
 import { MEETING_TITLE } from "../game/meeting";
@@ -52,12 +54,12 @@ import {
   type Timer,
 } from "../game/hud";
 import { lastPlan } from "../game/plan";
-import { slotText } from "../game/meeting";
-import { DecidingPanel, MeetingNow, MeetingsPanel, ResultsBanner, RoleCard } from "./Meetings";
+import { openMeetingOf, slotText } from "../game/meeting";
+import { ClaimRole, DecidingPanel, MeetingNow, MeetingsPanel, ResultsBanner, RoleCard } from "./Meetings";
 import { useCountdown, useGame, useNow, type ClientCommand, type Connection, type GameChannel, type Reply } from "../game/useGame";
 import { api, ApiError, sentence, UNREACHABLE, type LobbyView } from "../api";
 import { navigate } from "../router";
-import { GameChat } from "./GameChat";
+import { useGameChat } from "./GameChat";
 import { GameHost } from "./GameHost";
 import { TopBar } from "./TopBar";
 import "./game.css";
@@ -100,7 +102,7 @@ export function Game({ id }: { id: string }) {
 
   if (access.kind === "error" || access.kind === "lobby") {
     return (
-      <div className="page game-page">
+      <div className="page">
         <GameTop connection={null} />
         <main>
           <SketchFrame as="section" seed="game-err" radius={20} tape tilt={-0.5} className="sheet game-msg enter-sheet" aria-labelledby="game-msg">
@@ -117,30 +119,28 @@ export function Game({ id }: { id: string }) {
 
   const view = channel.view;
   return (
-    <div className="page game-page">
+    <div className="page">
       <GameTop connection={access.kind === "ok" ? channel.connection : null} />
-      <main className="game" aria-busy={!view}>
-        {!view ? (
+      {!view ? (
+        <main className="game" aria-busy="true">
           <SketchFrame seed="game-load" radius={20} className="sheet game-msg" aria-live="polite">
             <h1>Casing the joint…</h1>
             <p>Opening the game.</p>
           </SketchFrame>
-        ) : (
-          <>
-          {access.kind === "ok" && <GameHost gameId={id} game={access.game} view={view} control={channel.control} />}
-          <Board
-            view={view}
-            timers={channel.timers}
-            offset={channel.offset}
-            send={send}
-            autoMeetings={access.kind === "ok" ? access.autoMeetings : true}
-            gameId={id}
-            channel={channel}
-            dmNotices={access.kind === "ok" && access.dmNotices}
-          />
-          </>
-        )}
-      </main>
+        </main>
+      ) : (
+        <Board
+          view={view}
+          timers={channel.timers}
+          offset={channel.offset}
+          send={send}
+          autoMeetings={access.kind === "ok" ? access.autoMeetings : true}
+          gameId={id}
+          channel={channel}
+          dmNotices={access.kind === "ok" && access.dmNotices}
+          host={access.kind === "ok" ? access.game : null}
+        />
+      )}
     </div>
   );
 }
@@ -171,7 +171,7 @@ interface Pick {
 
 const isBankRoom = (r: string): r is BankRoomId => (BANK_ROOMS as readonly string[]).includes(r);
 
-function Board({ view, timers, offset, send, autoMeetings, gameId, channel, dmNotices }: BoardProps & { gameId: string; channel: GameChannel; dmNotices: boolean }) {
+function Board({ view, timers, offset, send, autoMeetings, gameId, channel, dmNotices, host }: BoardProps & { gameId: string; channel: GameChannel; dmNotices: boolean; host: LobbyView | null }) {
   const outcome = outcomeOf(view);
   const planning = view.phase.kind === "planning" ? view.phase.round : null;
   const [picked, setPicked] = useState<{ round: number; room: RoomId } | null>(null);
@@ -187,24 +187,55 @@ function Board({ view, timers, offset, send, autoMeetings, gameId, channel, dmNo
   const pins = usePins(gameId, notes);
   const caseBoard = useMemo(() => caseData(view, pins.pins), [view, pins.pins]);
   const people = otherSeats(view);
-  return (
-    <>
-      <Away gameId={gameId} view={view} ctx={ctx} notes={notes} />
-      <div className={outcome ? "game-grid is-over" : "game-grid"}>
-        <Hud view={view} timers={timers} offset={offset} hostPaused={channel.control.pausedAt !== null} />
-        <BankBoard view={view} pick={planning !== null ? pick : null} />
-        <Seats view={view} presence={channel.presence} offset={offset} marks={board.board} />
-        <div className="game-grid__action">
-          {outcome ? <GameOver view={view} /> : <Actions view={view} timers={timers} offset={offset} send={send} autoMeetings={autoMeetings} pick={pick} channel={channel} />}
-          {!outcome && <CrewBoard people={people} board={board} />}
+  const chat = useGameChat({ gameId, view, channel, dmNotices });
+  const [open, setOpen] = useState<string | null>(null);
+  // The vote window lives in the "This round" panel: below 1024 px a meeting opening brings that sheet up (and with it the vote dialog).
+  const meetingId = openMeetingOf(view)?.meetingId ?? null;
+  useEffect(() => {
+    if (meetingId) setOpen("round");
+  }, [meetingId]);
+  const panels: readonly ShellPanel[] = [
+    { id: "crew", title: "Crew", place: "left", tab: { icon: <Star /> }, node: <Seats view={view} presence={channel.presence} offset={offset} marks={board.board} /> },
+    { id: "case", title: "Case", place: "left", tab: { icon: <Evidence /> }, node: <CaseBoard data={caseBoard} people={people} pins={pins} marks={board.board} /> },
+    ...(outcome ? [] : [{ id: "notes", title: "Notes", place: "left", tab: { icon: <Pin /> }, node: <CrewBoard people={people} board={board} /> } satisfies ShellPanel]),
+    { id: "chat", title: "Chat", place: "left", tab: { icon: <Bubble />, badge: chat.unread }, node: chat.node },
+    {
+      id: "round",
+      title: outcome ? "The result" : "This round",
+      place: "right",
+      tab: { icon: <Clock /> },
+      node: (
+        <div className="round">
+          {host && <GameHost gameId={gameId} game={host} view={view} control={channel.control} />}
+          {outcome ? <GameOver view={view} /> : <Actions view={view} timers={timers} offset={offset} send={send} autoMeetings={autoMeetings} pick={pick} />}
           {view.reveal && <Reveal summary={view.reveal.summary} ctx={ctx} looks={seatLooks(view)} />}
         </div>
-        {/* From 1024 px the chat and the records share the right column; below that the chat is a sheet. */}
-        <div className="game-grid__side">
-          <GameChat gameId={gameId} view={view} channel={channel} dmNotices={dmNotices} />
-          <CaseBoard data={caseBoard} people={people} pins={pins} marks={board.board} />
-        </div>
+      ),
+    },
+  ];
+  return (
+    <>
+      <div className="game-away">
+        <Away gameId={gameId} view={view} ctx={ctx} notes={notes} />
       </div>
+      <GameShell
+        status={<Hud view={view} timers={timers} offset={offset} hostPaused={channel.control.pausedAt !== null} />}
+        board={<BankBoard view={view} pick={planning !== null ? pick : null} />}
+        dock={
+          outcome ? undefined : (
+            <>
+              <span className="hand shell__dock-room">{planning !== null ? (pick.room ? roomName(pick.room) : "No room picked") : phaseInfo(view).title}</span>
+              <span className="shell__fill" />
+              <Button variant="primary" seed="dock-round" onClick={() => setOpen("round")}>
+                {planning !== null ? (view.me.move ? "Change move" : "Pick your room") : "This round"}
+              </Button>
+            </>
+          )
+        }
+        panels={panels}
+        open={open}
+        onOpen={setOpen}
+      />
     </>
   );
 }
@@ -236,7 +267,7 @@ function Hud({ view, timers, offset, hostPaused }: { view: PlayerView; timers: r
   const bust = bustOf(view);
   const { roundCap } = jobOf(view); // design §6.2
   return (
-    <SketchFrame as="section" seed="game-hud" radius={18} shadow={0.5} className="hud" aria-label="Heist status">
+    <section className="hud" aria-label="Heist status">
       <div className="hud__phase">
         <p className="kicker hud__kicker">
           {view.round > 0 ? `Round ${view.round} of ${roundCap}` : "Setting up"}
@@ -282,7 +313,7 @@ function Hud({ view, timers, offset, hostPaused }: { view: PlayerView; timers: r
         <WantedStars stars={view.wanted} max={bust} />
         {view.card && view.card.round === view.round && <span className="meta">Card: {cardLabel(view)}</span>}
       </div>
-    </SketchFrame>
+    </section>
   );
 }
 

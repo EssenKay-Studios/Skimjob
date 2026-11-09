@@ -31,7 +31,7 @@ import type { Connection, Reply } from "../game/useGame";
 import { sentence } from "../api";
 import { Avatar } from "./Avatar";
 import { Button } from "./Button";
-import { Bubble, Close, Evidence, Plus, Send } from "./icons";
+import { Bubble, Evidence, Plus, Send } from "./icons";
 import { FrameArt, SketchFrame, useElementSize } from "./SketchFrame";
 import { Underline } from "./Underline";
 import "./chat.css";
@@ -154,15 +154,11 @@ export interface ChatPanelProps {
   readonly dmNotices?: boolean;
   /** On screen now (the side panel, or the open sheet): new messages count as read. */
   readonly visible: boolean;
-  /** Shown as a close button (the phone / tablet sheet). */
-  readonly onClose?: () => void;
-  /** Focus the composer when this changes (the sheet opening). */
-  readonly focusKey?: number;
   readonly className?: string;
 }
 
 export function ChatPanel(props: ChatPanelProps) {
-  const { me, people, chat, read, onRead, send, connection, evidence, events = [], dmNotices = true, visible, onClose, focusKey, className } = props;
+  const { me, people, chat, read, onRead, send, connection, evidence, events = [], dmNotices = true, visible, className } = props;
   const byId = useMemo(() => new Map(people.map((p) => [p.id, p])), [people]);
   const ctx = useMemo(
     () => ({
@@ -226,10 +222,6 @@ export function ChatPanel(props: ChatPanelProps) {
     if (visible && pageVisible && atBottom && latest) onRead(thread, latest);
   }, [visible, pageVisible, atBottom, latest, thread, onRead]);
 
-  useEffect(() => {
-    if (focusKey) composer.current?.focus({ preventScroll: true });
-  }, [focusKey]);
-
   const openThread = (t: ThreadId) => {
     setThread(t);
     setPicker("none");
@@ -247,7 +239,6 @@ export function ChatPanel(props: ChatPanelProps) {
         <h2 id={headId} className="chat__title">
           <Underline seed="chat">Chat</Underline>
         </h2>
-        {onClose && <Button variant="small" seed="chat-close" icon={<Close />} aria-label="Close chat" onClick={onClose} />}
       </div>
 
       <div className="chat__tabs" role="group" aria-label="Conversations">

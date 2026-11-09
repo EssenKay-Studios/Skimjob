@@ -75,11 +75,6 @@ describe("ChatPanel", () => {
     expect(out).toContain("Connection lost. Trying again");
     expect(out).toMatch(/<button[^>]*type="submit"[^>]*disabled=""/);
   });
-
-  it("has a close button only as a sheet", () => {
-    expect(panel()).not.toContain('aria-label="Close chat"');
-    expect(panel({ onClose: () => {} })).toContain('aria-label="Close chat"');
-  });
 });
 
 describe("EvidenceCardView (design §12.1)", () => {

@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { startGame } from "./setupGame";
+import { openPanel, startGame } from "./setupGame";
 
 // M2-13 (design §15): the host pauses (everyone sees it, it survives a reload),
 // adds time and resumes; in the lobby the host removes a guest's seat.
@@ -16,6 +16,8 @@ test("the host pauses, the crew sees it, a reload keeps it, add time, then resum
   await expect(page.locator(".hud__kicker")).toContainText(/Round 1 of/);
 
   const panel = page.getByRole("region", { name: "Host controls" });
+  await openPanel(page, "This round");
+  await openPanel(guest, "This round");
   await expect(guest.getByRole("region", { name: "Host controls" })).toHaveCount(0);
   await panel.getByText("Host controls").click();
   await panel.getByRole("button", { name: "Pause the game" }).click();
@@ -26,6 +28,7 @@ test("the host pauses, the crew sees it, a reload keeps it, add time, then resum
   await expect(guest.locator(".hud__timer")).not.toContainText("meeting");
 
   await page.reload();
+  await openPanel(page, "This round");
   await expect(page.getByText("Paused by the host")).toBeVisible();
   await expect(panel.getByText("Paused", { exact: true })).toBeVisible();
   await panel.getByText("Host controls").click();

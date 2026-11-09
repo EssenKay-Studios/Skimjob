@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { chatTab, openPanel, startGame } from "./setupGame";
 
 // The one-screen layout shell and the bottom sheet (design §15.6, S3b.2) at the
 // five launch widths, on the gallery's demo page: no horizontal overflow, targets
@@ -175,8 +176,63 @@ test("a sheet locks the page behind it and gives the scroll back on close @shell
   expect(await scrollY()).toBe(before);
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toBeHidden();
-  expect(await page.evaluate(() => document.documentElement.classList.contains("sheet-open"))).toBe(false);
+  expect(await page.evaluate(() => document.documentElement.classList.contains("modal-open"))).toBe(false);
   await page.mouse.wheel(0, 100);
   await expect.poll(scrollY).toBeGreaterThan(before);
+  await ctx.close();
+});
+
+// S4: the live game's chat sheet. Dragging the grip down past 80 px dismisses it (a real touch drag through the
+// DevTools protocol, and a mouse drag: both reach the sheet as pointer events); a short drag springs back.
+test("swiping the grip of a game sheet down dismisses it, by touch and by mouse; a short swipe springs back @shell", async ({ browser }) => {
+  test.setTimeout(60_000);
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+  const page = await ctx.newPage();
+  const game = await startGame(page.request, { bots: 3, sessionLength: "1w" });
+  await page.goto(`/game/${game.id}`);
+  const cdp = await ctx.newCDPSession(page);
+  const sheet = page.locator("dialog.bsheet[open]");
+  const grip = page.locator(".bsheet__grip");
+  const centre = async () => {
+    const b = (await grip.boundingBox())!;
+    return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+  };
+  const touchDrag = async (dy: number) => {
+    const { x, y } = await centre();
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x, y }] });
+    for (let i = 1; i <= 6; i++) await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x, y: y + (dy * i) / 6 }] });
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  };
+  const mouseDrag = async (dy: number) => {
+    const { x, y } = await centre();
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x, y + dy / 2, { steps: 4 });
+    await page.mouse.move(x, y + dy, { steps: 4 });
+    await page.mouse.up();
+  };
+
+  await openPanel(page, "Chat");
+  await expect(sheet).toHaveCount(1);
+  await settle(page);
+  // Short: the sheet follows the finger, then goes back; it stays open.
+  await touchDrag(30);
+  await expect(sheet).toHaveCount(1);
+  await expect.poll(() => page.locator(".bsheet__sheet").evaluate((el) => (el as HTMLElement).style.transform)).toBe("");
+  // Long, by touch: gone, and the focus is back on the tab that opened it.
+  await touchDrag(160);
+  await expect(sheet).toHaveCount(0);
+  await expect(chatTab(page)).toBeFocused();
+  expect(await page.evaluate(() => document.documentElement.classList.contains("modal-open"))).toBe(false);
+  // Long, by mouse.
+  await openPanel(page, "Chat");
+  await settle(page);
+  await mouseDrag(160);
+  await expect(sheet).toHaveCount(0);
+  // Dragging up does nothing.
+  await openPanel(page, "Chat");
+  await settle(page);
+  await touchDrag(-160);
+  await expect(sheet).toHaveCount(1);
   await ctx.close();
 });

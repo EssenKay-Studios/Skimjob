@@ -1,8 +1,7 @@
 // /dev/gallery: every component and token on one page, for eyeballing the
 // style against docs/ui-style.md and for screenshots.
 import { useCallback, useReducer, useState, type ReactNode } from "react";
-import { ChatBadge, ChatPanel, EvidenceCardView } from "../components/Chat";
-import { Bubble } from "../components/icons";
+import { ChatPanel, EvidenceCardView } from "../components/Chat";
 import { chatReducer, EMPTY_CHAT, markRead, type ChatMessage, type ChatRequest, type ReadState, type ThreadId } from "../game/chat";
 import { Avatar } from "../components/Avatar";
 import { BankDoodle } from "../components/BankDoodle";
@@ -481,14 +480,6 @@ function ChatSamples() {
       />
       <div className="g-col">
         <EvidenceCardView card={G_SIGHTING} from="dez" ctx={{ me: "me", name: (p) => G_PEOPLE.find((x) => x.id === p)?.name ?? p }} seed="g-ev-card" />
-        <div className="g-row">
-          <Button variant="primary" seed="g-chat-fab" icon={<Bubble />} aria-label="Open chat, 3 unread">
-            <span className="g-fab-label">
-              Chat <ChatBadge count={3} />
-            </span>
-          </Button>
-          <span className="meta">The phone / tablet open-chat button</span>
-        </div>
       </div>
     </div>
   );
