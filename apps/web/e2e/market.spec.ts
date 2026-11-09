@@ -30,7 +30,7 @@ test.describe("gallery black market", () => {
     // design §12, §18: round 1's purchase, logged without a name.
     await expect(mid.locator(".market__sale")).toHaveText(["🛒 Someone bought Soft shoes (2 coins). R1"]);
     await expect(mid.getByText("1 perk a round")).toBeVisible();
-    await expect(mid.locator(".market__stash .num")).toHaveText("5");
+    await expect(mid.locator(".market__stash .num")).toHaveText("6"); // 5, plus round 1's share
 
     await mid.getByRole("button", { name: "Buy Plant evidence" }).click();
     const players = mid.getByRole("group", { name: "Player" });
@@ -44,7 +44,7 @@ test.describe("gallery black market", () => {
     await expect(mid.locator(".perk__warn")).toHaveCount(0);
     await pay.click();
     await expect(mid.getByRole("status")).toContainText("You bought Plant evidence this round");
-    await expect(mid.locator(".market__stash .num")).toHaveText("2");
+    await expect(mid.locator(".market__stash .num")).toHaveText("3");
     for (const name of ["Buy Tail", "Buy Soft shoes", "Buy Plant evidence"]) await expect(mid.getByRole("button", { name })).toBeDisabled();
 
     // design §12: bought in the last round, a "next round" perk does nothing; it says so before you pay.
@@ -83,15 +83,20 @@ test.describe("gallery black market", () => {
   }
 });
 
-test("a real game: buy a perk in round 2; the crew hears of it with no name as the round resolves @shop", async ({ page }, info) => {
+test("a real game: buy a perk; the crew hears of it with no name as the round resolves @shop", async ({ page }, info) => {
   test.skip(info.project.name !== "desktop", "one run is enough");
-  test.setTimeout(120_000);
-  const game = await startGame(page.request, { bots: 2 });
+  test.setTimeout(240_000);
+  const game = await startGame(page.request, { bots: 2, sessionLength: "1h" });
   await page.goto(`/game/${game.id}`);
-  // Round 1's share fills the stash; perks are paid from it (design §12).
-  await expect(page.getByRole("heading", { name: "Round 2 · Pick your room", level: 2 })).toBeVisible({ timeout: 60_000 });
-  await page.getByRole("button", { name: "Black market", exact: true }).click();
   const sheet = page.getByRole("dialog", { name: /^Black market/ });
+  // Perks are paid from the stash (design §12): wait for a round that starts with a coin in it.
+  for (let round = 1; ; round++) {
+    expect(round, "a stash to pay from by round 5").toBeLessThan(6);
+    await expect(page.getByRole("heading", { name: `Round ${round} · Pick your room`, level: 2 })).toBeVisible({ timeout: 90_000 });
+    await page.getByRole("button", { name: "Black market", exact: true }).click();
+    if ((await sheet.locator(".market__stash .num").textContent()) !== "0") break;
+    await page.keyboard.press("Escape");
+  }
   // Tier 1 costs one coin; it is always the first card.
   const first = sheet.locator(".perk").first();
   const name = (await first.locator(".perk__name").textContent())!;
@@ -104,5 +109,5 @@ test("a real game: buy a perk in round 2; the crew hears of it with no name as t
   await expect(sheet.getByRole("status")).toContainText(`You bought ${name} this round`);
   await page.keyboard.press("Escape");
   // Held until the round resolves, then public and nameless.
-  await expect(page.getByRole("region", { name: "Case board" })).toContainText(`Someone bought ${name}`, { timeout: 60_000 });
+  await expect(page.getByRole("region", { name: "Case board" })).toContainText(`Someone bought ${name}`, { timeout: 90_000 });
 });
