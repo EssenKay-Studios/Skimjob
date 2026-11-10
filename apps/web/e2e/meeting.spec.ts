@@ -1,5 +1,6 @@
 import { mkdirSync } from "node:fs";
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { clearMeeting } from "./meetingCards";
 import { callEmergency, openPanel, startGame } from "./setupGame";
 
 // M2-7 acceptance (docs/m2-plan.md): one full meeting and vote in the browser,
@@ -167,7 +168,10 @@ test("a player a shakedown passed against is left off the next vote's list (desi
   const game = await startGame(page.request, { bots: 3, sessionLength: "1h", voteVisibility: "hiddenThenRevealed", seed: "meeting-6" });
   await page.goto(`/game/${game.id}`);
   await expect(page.getByRole("heading", { name: "Police briefing" })).toBeVisible({ timeout: 45_000 });
-  await callEmergency(page);
+  // The briefing's cards, then round 1's result window: held while we call, so its 6 s can't run out between the two taps.
+  await clearMeeting(page);
+  await expect(page.getByRole("button", { name: "Call an emergency meeting" })).toBeEnabled({ timeout: 30_000 });
+  await paused(page, game.id, () => callEmergency(page));
   const dialog = page.getByRole("dialog", { name: "Who's skimming?" });
   await expect(dialog).toContainText("Emergency meeting · called by you", { timeout: 20_000 });
   const pick = dialog.getByRole("group", { name: "Your vote" });
