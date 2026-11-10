@@ -8,6 +8,7 @@ import { closePanel, gameOver, keepRoundOpen, openPanel, showResult } from "./se
 import { expect, test, type APIRequestContext, type Browser, type Page, type WebSocketRoute } from "@playwright/test";
 import { openLeads } from "./setupGame";
 import { bagCoins, pickOtherRoom, pickRoom } from "./move";
+import { clearMeeting } from "./meetingCards";
 
 const SHOTS = process.env.SHOTS_DIR;
 const LONG_HOST = "WWWWWWWWWWWWWWWWWWWWWWWW"; // 24, the cap; the widest glyph, no break points
@@ -298,6 +299,8 @@ test("reloads, a killed socket, a skewed clock and a late alibi (3h preset: 102 
 
   // The host posts once round 2 is being planned (their screen is stale): alibis have no window, so it is
   // still taken for round 1 (design §11.3, owner 6 Nov). A briefing (after a raid) or the result window may come first (§9.2, §9.3).
+  // A meeting before it leaves its modal result card up; the board behind a modal is out of the accessibility tree until it is closed (design §9.6).
+  await clearMeeting(guest);
   await expect(guest.getByRole("heading", { name: "Round 2 · Pick your room", level: 2 })).toBeVisible({ timeout: 90_000 });
   // The host's screen may have frozen on a meeting's vote: back to the board, where the alibi panel waits.
   const back = host.getByRole("button", { name: "Back to the board" });
