@@ -5,7 +5,10 @@ import { callEmergency, openPanel, startGame } from "./setupGame";
 // M2-7 acceptance (docs/m2-plan.md): one full meeting and vote in the browser,
 // in each vote mode. The 1-hour preset at TIME_SCALE 0.1: round 1 resolves
 // (30 s), the result window (6 s) takes the emergency,
-// then a 6 s notice and an 18 s vote window. MEET_SHOTS=… saves the vote dialog and the
+// then a 6 s notice and an 18 s vote window. The game's seed is pinned: with a
+// random one, a raid in round 1 may call a police briefing first (design §9.2;
+// the result window then opens at 48 to 51 s), and a bot may spend the crew's
+// only emergency the moment the window opens (design §9.3), before any person can. MEET_SHOTS=… saves the vote dialog and the
 // results as meet-<mode>-<what>-<width>.png.
 const SHOTS = process.env.MEET_SHOTS ?? process.env.SHOTS_DIR;
 
@@ -51,7 +54,7 @@ for (const mode of ["hiddenThenRevealed", "open", "secret"] as const) {
     test.setTimeout(90_000);
     const errors: string[] = [];
     page.on("pageerror", (e) => errors.push(e.message));
-    const game = await startGame(page.request, { bots: 3, sessionLength: "1h", voteVisibility: mode });
+    const game = await startGame(page.request, { bots: 3, sessionLength: "1h", voteVisibility: mode, seed: "meeting-1" });
     await page.goto(`/game/${game.id}`);
     await openPanel(page, "This round"); // below 1024 px it stays open: the vote dialog opens over it
     await expect(page.getByRole("heading", { name: "Round 1 · Pick your room", level: 2 })).toBeVisible();
@@ -156,6 +159,25 @@ for (const mode of ["hiddenThenRevealed", "open", "secret"] as const) {
     expect(errors).toEqual([]);
   });
 }
+
+test("a player a shakedown passed against is left off the next vote's list (design §9.5, §9.7) @meeting", async ({ page }, info) => {
+  test.skip(info.project.name !== "desktop", "one viewport is enough");
+  test.setTimeout(90_000);
+  // This seed's round 1 ends in a raid: the police briefing's shakedown passes against a bot (design §9.2), who is then protected.
+  const game = await startGame(page.request, { bots: 3, sessionLength: "1h", voteVisibility: "hiddenThenRevealed", seed: "meeting-6" });
+  await page.goto(`/game/${game.id}`);
+  await expect(page.getByRole("heading", { name: "Police briefing" })).toBeVisible({ timeout: 45_000 });
+  await callEmergency(page);
+  const dialog = page.getByRole("dialog", { name: "Who's skimming?" });
+  await expect(dialog).toContainText("Emergency meeting · called by you", { timeout: 20_000 });
+  const pick = dialog.getByRole("group", { name: "Your vote" });
+  // The protected bot is named on the briefing and left off the list: two others and Skip.
+  await expect(dialog.locator(".briefing__protected")).toContainText(/so not on the list: Bot/);
+  await expect(pick.getByRole("button")).toHaveCount(3);
+  await pick.getByRole("button").first().click();
+  await dialog.getByRole("button", { name: "Cast vote" }).click();
+  await expect(dialog.locator(".vote__status")).toContainText("Your vote: shake down Bot");
+});
 
 test("propose a meeting time, a second player backs it, and leave a sealed vote (design §11.1, §11.2) @meeting", async ({ page, browser }, info) => {
   test.skip(info.project.name !== "desktop", "one viewport is enough");

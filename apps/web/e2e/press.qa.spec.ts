@@ -110,6 +110,11 @@ for (const project of ["mobile", "desktop"]) {
         continue;
       }
       await btn.scrollIntoViewIfNeeded();
+      // The premium button's idle wiggle (btn-bang: tilted and up to 4 % bigger for 0.84 s of every 6 s) must not fall
+      // in the rest or held box: wait until the next one is at least 1.5 s away (iteration progress < 0.6; it starts at 0.86).
+      await expect
+        .poll(() => btn.evaluate((el) => el.getAnimations().every((a) => (a.effect?.getComputedTiming().progress ?? 0) < 0.6)))
+        .toBe(true);
       const rest = (await btn.boundingBox())!;
       await page.mouse.move(rest.x + rest.width / 2, rest.y + rest.height / 2);
       await page.mouse.down();
