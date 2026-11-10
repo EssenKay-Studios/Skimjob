@@ -4,11 +4,12 @@ _Last updated: 10 Nov 2026._
 
 ## Where things stand
 - **Specs:** `docs/design.md` is the single rules spec (R7 Simplified); `docs/simplified.md` is the plan. Current decisions: `docs/decisions.md`. Later: Skimjob Advanced (`docs/advanced.md`). Out of scope: the recruited Mole.
-- **Content** 0.26.0 (`main`; the live build is the older R6, which R7 replaces).
-- **Live:** https://skimjob.duckdns.org on the owner's AWS Lightsail box (`docs/deploy.md`), commit 1a4e083, Google sign-in on. The live game has no real players, so R7 is built straight on `main`.
+- **Content** 0.26.0.
+- **Live** (`docs/deploy.md`): commit fc5768c, deployed 10 Nov 2026: R7 with all of S4 except S4.10 (#111); the old R6 games are cleared. Google sign-in on. The live game has no real players, so R7 is built straight on `main`.
 - **Mockups:** the [approved S2 mockups](https://claude.ai/artifact/QtmuUsTX9aFxiESdDQHzEp) (owner, 7 Nov) are the S4 reference for wording and behaviour; their artboard captions and the icon key are review notes, not product UI.
-- **S4 is done except S4.10, Learn the game (#111),** which comes after the S4 test deploy (owner, 10 Nov). Merged: #198, #199, #200, #201, #206, #207, #208, #217, #219; S4.8, the meeting and shakedown screens (#218), is in review. The live game runs in `GameShell`.
-- **Next:** the S4 test deploy (an owner checkpoint, a hard stop), then #111, then S5 (#112, final audit, balance pass, deploy; owner playtest).
+- **S4 is merged except S4.10, Learn the game (#111),** which is next. The live game runs in `GameShell`.
+- **Open:** #226 (CI stability; its new spec covers the lost vote, where the live vote picker offered a protected player, fixed in #218) and #230 (the teaching-spec race fix).
+- **Then:** S5 (#112, final audit, balance pass, deploy; owner playtest).
 
 ## Tasks, follow-ups and owner questions
 Tracked as GitHub issues, not in this file:
