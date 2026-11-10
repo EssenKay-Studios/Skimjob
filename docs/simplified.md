@@ -329,7 +329,7 @@ Each step runs on the account, host and model the ticket's labels choose (`docs/
   4. **Keep:** seeded RNG, event log and reduce, visibility and `viewFor`, meetings and voting, chat, server, lobby, auth, scheduler, host controls, the UI kit, the art.
   Plus a **test audit:** duplicated coverage between `*.test.ts` and `*.qa.test.ts`, tests of removed rules, slow tests with no unique value.
 - **The reviewer and QA review the audit itself** (their verdicts on the audit PR), and the owner gets a one-page summary (for information, not a hard stop). Deletion starts only after both pass.
-- **C2 Delete lists 1 and 2** in about four PRs: engine + content + bots + sim; server; web + e2e; test consolidation. Opus developers. After each, the game still runs (R6 minus the cut features).
+- **C2 Delete lists 1 and 2** in about four PRs: engine + content + bots + sim; server; web + e2e; test consolidation. After each, the game still runs (R6 minus the cut features).
   - Reviewer: every deletion is on the approved audit; nothing on the keep list changed behaviour.
   - QA: full suite on the Mac, the 12-seat game, a sim smoke, and one game played start to finish.
 - **C3 Guardrails, permanent:** the scoped test setup (see "Test plan" below); `knip` in CI fails on unused files, exports or dependencies; each PR body reports lines added/removed per package; `builder.md` gets the three cleanup rules; `reviewer.md` checks them.

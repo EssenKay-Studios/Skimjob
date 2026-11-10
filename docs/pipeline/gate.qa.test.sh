@@ -24,7 +24,7 @@ case "$method $path" in
   "PUT "*/pulls/*/merge) echo merged >"$FIX/MERGED"; f=merge.json ;;
   "DELETE "*/git/refs/heads/*) echo "${path#*/git/refs/heads/}" >"$FIX/DELETED"; exit 0 ;;
   "GET "*/pulls/*/reviews) f=reviews.json ;; "GET "*/issues/*/comments) f=comments.json ;;
-  "GET "*/pulls/*/files) f=pr-files.json ;; "GET "*/pulls/*/commits) f=pr-commits.json ;; "GET "*/pulls/*) f=pr.json ;;
+  "GET "*/pulls/*/commits) f=pr-commits.json ;; "GET "*/pulls/*) f=pr.json ;;
   "GET "*/compare/*) f=compare.json ;; "GET "*/check-runs) f=checks.json ;; "GET "*/status) f=status.json ;;
   "GET "*/commits/*) f=commit-${path##*/}.json ;; "GET "*/issues) [ -f "$FIX/NO_ISSUES" ] && exit 1; f=issues.json ;;
   *) echo "fake gh: unexpected: $method $path" >&2; exit 1 ;;
@@ -55,7 +55,6 @@ reset() {
   review_new_by=karthik24iyer; qa_new_by=karthik24iyer; review_new_state=COMMENTED
   qa_as_review=""; review_as_comment=""; statuses=""
   checks='{"name":"Typecheck","status":"completed","conclusion":"success"},{"name":"CI ok","status":"completed","conclusion":"success"}'
-  pr_files='[{"filename":"apps/web/src/x.ts"},{"filename":"apps/web/src/x.qa.test.ts"}]'
   compare_status=ahead; since_files='["apps/web/src/x.qa.test.ts"]'; prev=""
 }
 write() {
@@ -79,7 +78,6 @@ J
       {body: $b, user: {login: $by}, created_at: "2026-01-01T00:00:04Z"},
       {body: $x, user: {login: "karthik24iyer"}, created_at: "2026-01-01T00:00:06Z"}
     ] | map(select(.body != "") | .body |= gsub("\\\\n"; "\n"))' >"$FIX/comments.json"
-  echo "$pr_files" >"$FIX/pr-files.json"
   echo "{\"statuses\":[$statuses]}" >"$FIX/status.json"
   echo "{\"check_runs\":[$checks]}" >"$FIX/checks.json"
   echo "{\"status\":\"$compare_status\",\"total_commits\":1,\"commits\":[{\"sha\":\"$C\"}]}" >"$FIX/compare.json"
@@ -170,14 +168,13 @@ reset; qa_new="qa: fail\nHead: $H"; expect no "newer lower-case QA verdict is ma
 reset; qa_new="**Qa: Pass**\nHead: $H"; expect no "newer bold mixed-case QA verdict is malformed"
 reset; qa_new="> QA : FAIL\nHead: $H"; expect no "newer quoted QA verdict is malformed"
 reset; qa_new="QA:PASS\nHead: $H"; expect no "newer QA verdict without a space is malformed"
-# Only GATE_AUTHORS count (public repo); PENDING reviews don't count.
+# Only karthik24iyer counts (public repo); PENDING reviews don't count.
 reset; review="VERDICT: CHANGES REQUESTED\nHead: $H"; review_new="VERDICT: APPROVE\nHead: $H"; review_new_by=mallory; expect no "foreign APPROVE newer than a real CHANGES REQUESTED"
 reset; qa="QA: FAIL\nHead: $H"; qa_new="QA: PASS\nHead: $H"; qa_new_by=mallory; expect no "foreign PASS newer than a real QA FAIL"
 reset; review_new="VERDICT: CHANGES REQUESTED\nHead: $H"; review_new_by=mallory; expect yes "foreign CHANGES REQUESTED doesn't block"
 reset; qa_new="QA: FAIL\nHead: $H"; qa_new_by=mallory; expect yes "foreign QA FAIL doesn't block"
-reset; review_new="VERDICT: CHANGES REQUESTED\nHead: $H"; review_new_by=pm-bot; export GATE_AUTHORS=karthik24iyer,pm-bot; expect no "GATE_AUTHORS adds an account"; unset GATE_AUTHORS
 reset; review="VERDICT: CHANGES REQUESTED\nHead: $H"; review_new="VERDICT: APPROVE\nHead: $H"; review_new_state=PENDING; expect no "pending APPROVE doesn't count"
-# One reviewer, posting as karthik24iyer: no bot login counts, for VERDICT or QA, whatever the PR touches.
+# One reviewer, posting as karthik24iyer: no other login counts, for VERDICT or QA.
 reset; review=""; review_new="VERDICT: APPROVE\nHead: $H"; review_new_by='github-actions[bot]'; expect no "bot APPROVE on head does not count"
 reset; review="VERDICT: CHANGES REQUESTED\nHead: $H"; review_new="VERDICT: APPROVE\nHead: $H"; review_new_by='github-actions[bot]'; expect no "bot APPROVE newer than a human CHANGES REQUESTED does not count"
 reset; review_new="VERDICT: CHANGES REQUESTED\nHead: $H"; review_new_by='github-actions[bot]'; expect yes "bot CHANGES REQUESTED is ignored"
@@ -189,9 +186,7 @@ reset; qa=""; qa_new="QA: PASS\nHead: $H"; qa_new_by='github-actions[bot]'; expe
 reset; qa_new="QA: FAIL\nHead: $H"; qa_new_by='github-actions[bot]'; expect yes "bot QA: FAIL is ignored"
 reset; review=""; review_new="VERDICT: APPROVE\nHead: $H"; review_new_by=mallory; expect no "a random user's VERDICT does not count"
 reset; review=""; review_new="VERDICT: APPROVE\nHead: $H"; review_new_by=claude; expect no "login claude does not count"
-# No special rule for pipeline, workflow or Claude-config PRs: the one reviewer's APPROVE counts there too.
-reset; pr_files='[{"filename":".github/workflows/ci.yml"},{"filename":"docs/pipeline/verdicts.sh"},{"filename":"CLAUDE.md"},{"filename":".claude/settings.json"}]'; expect yes "human APPROVE on a PR touching .github/, docs/pipeline/ and Claude config"
-reset; review="VERDICT: APPROVE\nHead: $R"; since_files='["apps/web/e2e/notes.qa.spec.ts","packages/engine/src/x.qa.test.ts"]'; pr_files='[{"filename":"docs/pipeline/merge.sh"}]'; expect yes "QA-test-only commits after the APPROVE on a pipeline PR"
+reset; review=""; review_new="VERDICT: APPROVE\nHead: $H"; review_new_by=pm-bot; export GATE_AUTHORS=karthik24iyer,pm-bot; expect no "GATE_AUTHORS is gone: setting it trusts no one else"; unset GATE_AUTHORS
 # DISMISSED reviews never count.
 reset; review="VERDICT: CHANGES REQUESTED\nHead: $H"; review_new="VERDICT: APPROVE\nHead: $H"; review_new_state=DISMISSED; expect no "dismissed APPROVE doesn't count"
 reset; review_new="VERDICT: CHANGES REQUESTED\nHead: $H"; review_new_state=DISMISSED; expect yes "dismissed CHANGES REQUESTED doesn't block"

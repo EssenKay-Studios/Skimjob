@@ -31,7 +31,7 @@ The host and the model apply to every step (build, review, QA). To change one st
 
 **Stop a job:** remove its account label.
 
-**Blocked:** the agent asks in the issue, with options and a recommendation. Answer in a comment, then add the account label again.
+**Blocked:** the agent asks in the issue, with options and a recommendation, removes `agent:working` and adds `agent:blocked`. It leaves the account, host and model labels in place. Answer in a comment, then remove `agent:blocked`; the agent picks the ticket up again.
 
 ## Merge
 

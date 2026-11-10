@@ -8,7 +8,7 @@
 # Read-only. GitHub REST API only (`gh api`; no GraphQL, no `gh pr`), so it runs on
 # the Mac and in cloud sessions alike. Works from any directory (REPO overrides the repo).
 #
-# Only reviews/comments by GATE_AUTHORS count (see below); DISMISSED and PENDING reviews never do.
+# Only reviews/comments by karthik24iyer count; DISMISSED and PENDING reviews never do.
 # Mergeable iff: the latest verdict-like review/comment is exactly
 # `VERDICT: APPROVE` + `Head: <sha S_r>` (a malformed latest one is a no, never a
 # fall-back to an older one); the latest QA-like one is exactly
@@ -69,12 +69,8 @@ echo "head:   $head"
 [ "$draft" = false ] || no "PR is a draft"
 [ "$mstate" = clean ] || no "merge state $mstate (want clean)"
 
-# Verdicts count only from the pipeline's accounts (the repo is public, so anyone
-# can comment): GATE_AUTHORS, comma-separated logins, default karthik24iyer.
+# Verdicts count only from karthik24iyer (the repo is public, so anyone can comment).
 # Everyone else is ignored entirely, and so are PENDING (unsubmitted) reviews.
-GATE_AUTHORS=${GATE_AUTHORS:-karthik24iyer}
-[[ $GATE_AUTHORS =~ ^[A-Za-z0-9-]+(,[A-Za-z0-9-]+)*$ ]] || fatal "bad GATE_AUTHORS '$GATE_AUTHORS'"
-allow="[\"${GATE_AUTHORS//,/\",\"}\"]"
 # Reviews and PR comments are both scanned for both kinds (an agent may post on
 # the wrong channel). Each body is one kind at most, any case, leading markdown
 # (* # > _ blanks) ignored: its first line starts with "verdict" or "qa"; else a
@@ -82,7 +78,7 @@ allow="[\"${GATE_AUTHORS//,/\",\"}\"]"
 # Output per match: "<time>\t<kind>\t<line 1>\t<line 2>". The newest of each kind
 # is used and must be in the exact format; there is no fall-back to older ones.
 scan='select((.state // "") != "PENDING" and (.state // "") != "DISMISSED")
-  | select(.user.login as $u | '"$allow"' | any(. == $u))
+  | select(.user.login == "'"$AUTHOR_NAME"'")
   | (.body // "") as $b | ($b | gsub("\r"; "") | split("\n")) as $l
   | (if ($b | test("^[\\s\\x{feff}*#>_]*verdict"; "i")) then "verdict"
      elif ($b | test("^[\\s\\x{feff}*#>_]*qa\\b"; "i")) then "qa"
