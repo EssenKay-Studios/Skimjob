@@ -135,8 +135,7 @@ for (const mode of ["hiddenThenRevealed", "open", "secret"] as const) {
     const back = await c2.newPage();
     back.on("pageerror", (e) => errors.push(e.message));
     await back.goto(`/game/${game.id}`);
-    await openPanel(back, "This round");
-    // The result card lasts until the next round resolves: they were the one shaken down.
+    // The result card is a dialog of its own, whichever panel is open; it lasts until the next round resolves: they were the one shaken down.
     if (talker) await expect(back.getByRole("dialog", { name: /No majority/ })).toBeVisible();
     else await expect(back.getByRole("dialog", { name: /shaken down/ })).toContainText("You were shaken down");
     await shot(back, `${mode}-g2-back`);

@@ -25,7 +25,7 @@ import { RulebookSheet } from "../components/Rulebook";
 import { AwayRecap } from "../components/AwayRecap";
 import { CaseBoard } from "../components/CaseBoard";
 import { SuspicionBoard, SuspicionMark } from "../components/SuspicionBoard";
-import { useAwayRecap, usePins, useSeatNotes, useSuspicionBoard, type Board as SuspicionMarks, type BoardChannel, type NotesLoad, type PinsChannel } from "../game/notes";
+import { useAwayRecap, usePins, useSeatNotes, useSuspicionBoard, type Board as SuspicionMarks, type BoardChannel, type NotesLoad } from "../game/notes";
 import { caseData } from "../game/caseLeads";
 import type { DescribeContext } from "../game/describeEvent";
 import { BustedSpot, JobDoneSpot, WaitingSpot } from "../art/Spots";
@@ -51,7 +51,7 @@ import {
 } from "../game/hud";
 import { lastPlan } from "../game/plan";
 import { endingText } from "../game/reveal";
-import { openMeetingOf, slotText } from "../game/meeting";
+import { bailPromptOf, openMeetingOf, slotText } from "../game/meeting";
 import { DecidingPanel, MeetingNow, MeetingsPanel, ResultDialog, RoleCard } from "./Meetings";
 import { useCountdown, useGame, useNow, type ClientCommand, type Connection, type GameChannel, type Reply } from "../game/useGame";
 import { api, ApiError, sentence, UNREACHABLE, type LobbyView } from "../api";
@@ -200,6 +200,11 @@ function Board({ view, timers, offset, send, autoMeetings, gameId, channel, dmNo
   useEffect(() => {
     if (meetingId) setOpen("round");
   }, [meetingId]);
+  // design §9.6, §17.4: the Bail choice is in the same panel; it comes up when the window opens for the holder.
+  const bailId = bailPromptOf(view)?.meetingId ?? null;
+  useEffect(() => {
+    if (bailId) setOpen("round");
+  }, [bailId]);
   // From 1024 px the plan board sits in the shell's centre column, under the bank (design §15.6); below it, it is the first block of "This round".
   const wide = useMedia(SHELL_WIDE_QUERY);
   const panels: readonly ShellPanel[] = [
@@ -216,7 +221,7 @@ function Board({ view, timers, offset, send, autoMeetings, gameId, channel, dmNo
       node: (
         <div className="round">
           {host && <GameHost gameId={gameId} game={host} view={view} control={channel.control} />}
-          {outcome ? <GameOver view={view} /> : <Actions view={view} timers={timers} offset={offset} send={send} autoMeetings={autoMeetings} pick={pick} channel={channel} plan={!wide} pins={pins} />}
+          {outcome ? <GameOver view={view} /> : <Actions view={view} timers={timers} offset={offset} send={send} autoMeetings={autoMeetings} pick={pick} channel={channel} plan={!wide} />}
           {view.reveal && <Reveal summary={view.reveal.summary} ctx={ctx} looks={seatLooks(view)} />}
         </div>
       ),
@@ -245,6 +250,8 @@ function Board({ view, timers, offset, send, autoMeetings, gameId, channel, dmNo
         open={open}
         onOpen={setOpen}
       />
+      {/* design §9.6: the meeting's result card is a dialog of its own, so it shows whichever panel is open. */}
+      <ResultDialog view={view} pins={pins} />
       <RulebookSheet open={rules} onClose={() => setRules(false)} view={view} />
     </MoreInGame.Provider>
   );
@@ -423,12 +430,11 @@ function Seats({ view, presence, offset, marks }: { view: PlayerView; presence: 
   );
 }
 
-function Actions({ view, timers, offset, send, autoMeetings, pick, channel, plan, pins }: BoardProps & { pick: Pick; channel: GameChannel; plan: boolean; pins: PinsChannel }) {
+function Actions({ view, timers, offset, send, autoMeetings, pick, channel, plan }: BoardProps & { pick: Pick; channel: GameChannel; plan: boolean }) {
   const p = view.phase;
   const voting = p.kind === "meeting" || p.kind === "shakedownPending";
   return (
     <>
-      <ResultDialog view={view} pins={pins} />
       {p.kind === "meeting" && <MeetingNow view={view} timers={timers} offset={offset} send={send} />}
       {p.kind === "shakedownPending" && <DecidingPanel view={view} timers={timers} offset={offset} send={send} />}
       {plan && <PlanPanel view={view} send={send} channel={channel} />}

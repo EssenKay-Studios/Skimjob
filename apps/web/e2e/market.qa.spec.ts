@@ -1,5 +1,6 @@
 import { mkdirSync } from "node:fs";
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { clearMeeting } from "./meetingCards";
 import { openPanel, startGame } from "./setupGame";
 
 // QA (S4.7, #108): the black market sheet in real bot games, Open and Secret
@@ -58,6 +59,7 @@ async function waitForStash(page: Page, coins: number) {
   for (let round = 1; ; round++) {
     expect(round, `a stash of ${coins} by round 8`).toBeLessThan(9);
     await expect(page.getByRole("heading", { name: `Round ${round} · Pick your room`, level: 2 })).toBeVisible({ timeout: 90_000 });
+    await clearMeeting(page); // a meeting between rounds leaves its modal result card up until closed (design §9.6)
     await page.getByRole("button", { name: "Black market", exact: true }).click();
     if (Number(await sheet.locator(".market__stash .num").textContent()) >= coins) return round;
     await page.keyboard.press("Escape");
@@ -96,6 +98,7 @@ test.describe("QA black market, real games", () => {
     await page.keyboard.press("Escape");
 
     await expect(page.getByRole("heading", { name: `Round ${round + 1} · Pick your room`, level: 2 })).toBeVisible({ timeout: 90_000 });
+    await clearMeeting(page); // a meeting between rounds leaves its modal result card up until closed (design §9.6)
     await page.getByRole("button", { name: "Black market", exact: true }).click();
     const sales = sheet.locator(".market__sale");
     await expect(sales.first()).toBeVisible();
@@ -129,6 +132,7 @@ test.describe("QA black market, real games", () => {
     for (let i = 0; i < 8 && !found; i++) {
       const game = await startGame(page.request, { bots: 2, sessionLength: "1h", voteVisibility: "secret" });
       await page.goto(`/game/${game.id}`);
+      await clearMeeting(page); // a meeting between rounds leaves its modal result card up until closed (design §9.6)
       await page.getByRole("button", { name: "Black market", exact: true }).click();
       found = (await sheet.getByRole("button", { name: "Buy Bail" }).count()) > 0;
       await page.keyboard.press("Escape");
@@ -157,6 +161,8 @@ test.describe("QA black market, real games", () => {
       await page.waitForTimeout(300);
     });
     await page.keyboard.press("Escape");
+
+    await clearMeeting(page); // a meeting between rounds leaves its modal result card up until closed (design §9.6)
 
     await page.getByRole("button", { name: "Black market", exact: true }).click();
     await expect(sheet.getByRole("button", { name: "Buy Bail" })).toBeDisabled();
