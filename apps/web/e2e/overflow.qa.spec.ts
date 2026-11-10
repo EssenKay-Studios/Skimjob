@@ -49,6 +49,8 @@ test("real 15-min game over with W×24, emoji×24 and combining-mark names: no o
   await ok(await g2.request.post(`/api/invites/${game.inviteCode}/join`, { data: { nickname: COMBINING } }));
   for (let i = 0; i < 2; i++) await ok(await host.request.post(`/api/games/${game.id}/bots`, { data: {} }));
   await ok(await host.request.post(`/api/games/${game.id}/start`, { data: {} }));
+  // No teaching pop-up (design §15.6) over the board.
+  for (const who of [host, g1, g2]) await ok(await who.request.patch("/api/me", { data: { tips: false } }));
   await g1.goto(`/game/${game.id}`);
   await g2.goto(`/game/${game.id}`);
   await host.goto(`/game/${game.id}`);

@@ -1,0 +1,33 @@
+// /dev/gallery: the teaching pop-up for each lesson, and the game menu with the
+// Tips setting (design §15.6, §20.6). No server: the toggle just flips here.
+import { useState } from "react";
+import { LESSONS, type LessonId } from "@skimjob/content";
+import { Button } from "../components/Button";
+import { GameMenu } from "../components/GameMenu";
+import { SketchFrame } from "../components/SketchFrame";
+import { TeachingPopup } from "../components/TeachingPopup";
+import { Underline } from "../components/Underline";
+
+export function TeachingSection() {
+  const [lesson, setLesson] = useState<LessonId | null>(null);
+  const [tips, setTips] = useState(true);
+  return (
+    <SketchFrame as="section" seed="g-teaching" radius={16} shadow={0.5} className="g-section" aria-labelledby="g-teaching">
+      <header className="g-section__head">
+        <h3 id="g-teaching">
+          <Underline seed="teaching">Teaching pop-ups</Underline>
+        </h3>
+        <p className="meta">S4.6 · design §15.6, §20.6 · what happened, what it means, what you can do</p>
+      </header>
+      <div className="g-row">
+        {(Object.keys(LESSONS) as LessonId[]).map((id) => (
+          <Button key={id} variant="secondary" seed={`g-lesson-${id}`} aria-haspopup="dialog" onClick={() => setLesson(id)}>
+            {LESSONS[id].title}
+          </Button>
+        ))}
+        <GameMenu tips={tips} busy={false} onChange={setTips} />
+      </div>
+      <TeachingPopup lesson={lesson} busy={false} onGotIt={() => setLesson(null)} onTipsOff={() => setLesson(null)} />
+    </SketchFrame>
+  );
+}

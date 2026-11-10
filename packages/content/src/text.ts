@@ -177,6 +177,56 @@ export const TIPS = {
   marketStash: { name: "Paying from your stash", text: "You pay from your stash as it stood when the round began. This round's pocket can't pay." },
 } as const satisfies Record<string, InfoText>;
 
+/** The teaching pop-ups, shown once per player the first time each thing happens (design §15.6, §20.6). */
+export interface Lesson {
+  readonly title: string;
+  readonly happened: string;
+  readonly means: string;
+  readonly canDo: string;
+}
+
+/** Teaching pop-up text by lesson id. design §20.6 */
+export const LESSONS = {
+  bell: {
+    title: "A bell rang",
+    happened: "Someone's noisy coin lit a bulb on a room's bell.",
+    means: TIPS.bell.text,
+    canDo: "Pick quiet rooms, or share the noise. The Rooftop cools the hottest bell.",
+  },
+  raid: {
+    title: "Raid!",
+    happened: `A room's ${ordinal(bulbs)} bulb lit and the police raided it.`,
+    means: "Every grab there was seized, the room is taped off for a couple of rounds, and Wanted went up by one star.",
+    canDo: `Go somewhere else while the tape is up. ${word(bustStars)} stars is a bust.`,
+  },
+  oneStar: {
+    title: "One star from a bust",
+    happened: `Wanted is at ${bustStars - 1} of ${bustStars}.`,
+    means: "One more raid is a bust, and on a bust only the Rooftop gets away.",
+    canDo: "Keep the bells low, or hide on the Rooftop.",
+  },
+  powerCut: {
+    title: "A power cut",
+    happened: "The lights went out in one room.",
+    means: "Nobody there sees who else is there this round, and its cameras are offline. Its bell still rings.",
+    canDo: "Ask the crew who wanted no witnesses. An Electrician can do this.",
+  },
+  shakedown: {
+    title: "A shakedown",
+    happened: "The crew voted to open one stash.",
+    means: TERMS.shakedown.text,
+    canDo: "Keep your pocket modest, or bring a Bail. A shaken-down player is protected until the next regular meeting.",
+  },
+  missing: {
+    title: "Coins went missing",
+    happened: "The round's result shows coins that were taken but never handed in.",
+    means: TIPS.missing.text,
+    canDo: `Watch the honesty meter: under ${lineWords(BANK_JOB.honestyLine)} and the heist fails for everyone. Talk it over at the meeting.`,
+  },
+} as const satisfies Record<string, Lesson>;
+
+export type LessonId = keyof typeof LESSONS;
+
 export type TermId = keyof typeof TERMS;
 export type TipId = keyof typeof TIPS;
 

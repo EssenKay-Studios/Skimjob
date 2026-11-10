@@ -11,7 +11,7 @@ import { BankDoodle } from "../components/BankDoodle";
 import { Button } from "../components/Button";
 import { Chip } from "../components/Chip";
 import { MyGames } from "../components/MyGames";
-import { Segmented } from "../components/Segmented";
+import { TipsToggle } from "../components/TipsToggle";
 import { SketchFrame } from "../components/SketchFrame";
 import { TextField } from "../components/TextField";
 import { useToast } from "../components/Toast";
@@ -167,18 +167,7 @@ export function Landing() {
               {me && (
                 <>
                   <hr className="dashed" />
-                  <Segmented
-                    seed="tips"
-                    label="Tips"
-                    hint="Short how-to cards the first time something happens."
-                    options={[
-                      { value: true, label: "On" },
-                      { value: false, label: "Off" },
-                    ]}
-                    value={me.tips}
-                    busy={savingTips}
-                    onChange={changeTips}
-                  />
+                  <TipsToggle tips={me.tips} busy={savingTips} onChange={changeTips} />
                 </>
               )}
             </div>
