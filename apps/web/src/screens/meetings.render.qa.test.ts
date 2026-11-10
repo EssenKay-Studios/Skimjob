@@ -40,7 +40,7 @@ const props = (view: PlayerView) => ({ view, timers: [], offset: 0, send });
 const html = (s: GameState, me: string) => {
   const v = viewFor(s, me);
   return [
-    renderToStaticMarkup(createElement(ResultDialog, { view: v, pins })),
+    renderToStaticMarkup(createElement(ResultDialog, { view: v, pins, dismissed: null, onDismiss: () => {} })),
     v.phase.kind === "meeting" ? renderToStaticMarkup(createElement(MeetingNow, props(v))) : "",
     v.phase.kind === "shakedownPending" ? renderToStaticMarkup(createElement(DecidingPanel, props(v))) : "",
     v.phase.kind !== "meeting" && v.phase.kind !== "shakedownPending" ? renderToStaticMarkup(createElement(MeetingsPanel, { ...props(v), autoMeetings: true })) : "",

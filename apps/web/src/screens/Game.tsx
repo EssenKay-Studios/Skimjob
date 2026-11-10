@@ -52,7 +52,7 @@ import {
 import { lastPlan } from "../game/plan";
 import { endingText } from "../game/reveal";
 import { bailPromptOf, openMeetingOf, slotText } from "../game/meeting";
-import { DecidingPanel, MeetingNow, MeetingsPanel, ResultDialog, RoleCard } from "./Meetings";
+import { DecidingPanel, MeetingNow, MeetingsPanel, ResultDialog, resultCardOf, RoleCard } from "./Meetings";
 import { useCountdown, useGame, useNow, type ClientCommand, type Connection, type GameChannel, type Reply } from "../game/useGame";
 import { api, ApiError, sentence, UNREACHABLE, type LobbyView } from "../api";
 import { navigate } from "../router";
@@ -91,6 +91,8 @@ function useAccess(id: string): Access {
 }
 
 export function Game({ id }: { id: string }) {
+  // The meeting result card you closed; the card and the teaching pop-ups (one sheet at a time, §20.6) both read it.
+  const [cardDismissed, setCardDismissed] = useState<string | null>(null);
   const access = useAccess(id);
   const channel = useGame(id, access.kind === "ok");
   const toast = useToast();
@@ -132,7 +134,7 @@ export function Game({ id }: { id: string }) {
         </main>
       ) : (
         <>
-        {tips.me && <TeachingPopups view={view} player={tips.me.id} tips={tips.me.tips} saving={tips.saving} onTipsOff={() => tips.change(false)} />}
+        {tips.me && <TeachingPopups view={view} player={tips.me.id} tips={tips.me.tips} saving={tips.saving} held={resultCardOf(view, cardDismissed) !== null} onTipsOff={() => tips.change(false)} />}
         <Board
           view={view}
           timers={channel.timers}
@@ -143,6 +145,8 @@ export function Game({ id }: { id: string }) {
           channel={channel}
           dmNotices={access.kind === "ok" && access.dmNotices}
           host={access.kind === "ok" ? access.game : null}
+          cardDismissed={cardDismissed}
+          onCardDismiss={setCardDismissed}
         />
         </>
       )}
@@ -175,7 +179,7 @@ interface Pick {
   readonly setRoom: (room: RoomId) => void;
 }
 
-function Board({ view, timers, offset, send, autoMeetings, gameId, channel, dmNotices, host }: BoardProps & { gameId: string; channel: GameChannel; dmNotices: boolean; host: LobbyView | null }) {
+function Board({ view, timers, offset, send, autoMeetings, gameId, channel, dmNotices, host, cardDismissed, onCardDismiss }: BoardProps & { gameId: string; channel: GameChannel; dmNotices: boolean; host: LobbyView | null; cardDismissed: string | null; onCardDismiss: (meetingId: string) => void }) {
   const outcome = outcomeOf(view);
   const planning = view.phase.kind === "planning" ? view.phase.round : null;
   const [picked, setPicked] = useState<{ round: number; room: RoomId } | null>(null);
@@ -251,7 +255,7 @@ function Board({ view, timers, offset, send, autoMeetings, gameId, channel, dmNo
         onOpen={setOpen}
       />
       {/* design §9.6: the meeting's result card is a dialog of its own, so it shows whichever panel is open. */}
-      <ResultDialog view={view} pins={pins} />
+      <ResultDialog view={view} pins={pins} dismissed={cardDismissed} onDismiss={onCardDismiss} />
       <RulebookSheet open={rules} onClose={() => setRules(false)} view={view} />
     </MoreInGame.Provider>
   );

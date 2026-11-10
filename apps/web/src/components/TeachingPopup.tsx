@@ -43,15 +43,15 @@ export function TeachingPopup({ lesson, busy, onGotIt, onTipsOff }: { lesson: Le
 /**
  * Shows the due pop-up for this player, if any; "Got it" (or Esc) marks it seen for good.
  * One at a time: the lesson on screen stays until dismissed and a newer one queues behind it,
- * and the sheet steps aside while a meeting's vote window is open (§20.6).
+ * and the sheet steps aside while a meeting's vote window or result card is open (§20.6).
  */
-export function TeachingPopups({ view, player, tips, saving, onTipsOff }: { view: PlayerView; player: string; tips: boolean; saving: boolean; onTipsOff: () => void }) {
+export function TeachingPopups({ view, player, tips, saving, held, onTipsOff }: { view: PlayerView; player: string; tips: boolean; saving: boolean; held: boolean; onTipsOff: () => void }) {
   const [seen, setSeen] = useState(() => loadSeen(player));
   const [current, setCurrent] = useState<LessonId | null>(null);
   const due = dueLesson(view, seen, tips);
   const latched = latch(current, due, tips);
   useEffect(() => setCurrent(latched), [latched]);
-  const lesson = tips && !heldByMeeting(view) && view.phase.kind !== "ended" ? latched : null;
+  const lesson = tips && !held && !heldByMeeting(view) && view.phase.kind !== "ended" ? latched : null;
   const gotIt = () => {
     // The dialog's own close event lands here once more after it hides: nothing is showing then.
     if (!lesson) return;

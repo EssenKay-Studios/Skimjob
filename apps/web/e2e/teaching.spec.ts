@@ -1,5 +1,6 @@
 import { LESSONS } from "@skimjob/content";
 import { expect, test, type Page } from "@playwright/test";
+import { showsAfterCards } from "./meetingCards";
 import { pickRoom } from "./move";
 import { openPanel, startGame } from "./setupGame";
 
@@ -107,7 +108,8 @@ test("with Tips on a lesson opens in a live game, Got it keeps it away after a r
   test.setTimeout(240_000);
   await playRound1(page, { tips: true });
   const dialog = lessonDialog(page);
-  await expect(dialog).toBeVisible({ timeout: 120_000 });
+  // One sheet at a time (§20.6): a lesson waits behind a meeting's result card until it is closed.
+  await showsAfterCards(page, dialog, 120_000);
   const title = (await dialog.getByRole("heading").textContent())!;
   const id = Object.entries(LESSONS).find(([, l]) => l.title === title)![0];
   await dialog.getByRole("button", { name: "Got it" }).click();
@@ -131,7 +133,8 @@ test("Turn tips off closes the live pop-up and saves Tips off @teaching", async 
   test.setTimeout(240_000);
   await playRound1(page, { tips: true });
   const dialog = lessonDialog(page);
-  await expect(dialog).toBeVisible({ timeout: 120_000 });
+  // One sheet at a time (§20.6): a lesson waits behind a meeting's result card until it is closed.
+  await showsAfterCards(page, dialog, 120_000);
   await dialog.getByRole("button", { name: "Turn tips off" }).click();
   await expect(dialog).toBeHidden();
   await expect.poll(async () => (await (await page.request.get("/api/me")).json()).user.tips).toBe(false);

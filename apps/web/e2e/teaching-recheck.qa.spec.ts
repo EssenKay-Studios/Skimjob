@@ -32,6 +32,9 @@ test("one sheet at a time, and the open lesson stays until dismissed, in a live 
       vote: document.querySelectorAll("dialog[open][aria-labelledby=vote-h]").length,
     }));
     expect(teach && vote, "a pop-up and a vote window open together").toBeFalsy();
+    // A meeting's result card holds the lessons back until it is closed (one sheet at a time, §20.6).
+    const card = page.getByRole("button", { name: "Back to the bank" });
+    if (!teach && (await card.isVisible())) await card.click();
     if (showing && vote) {
       sawMeetingWhileHeld = true;
       // Stepping aside is not Got it: the lesson is not stored as seen.

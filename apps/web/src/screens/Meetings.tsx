@@ -455,24 +455,29 @@ const RESULT_TITLE = (o: MeetingOutcome, who: (p: PlayerId) => string, me: Playe
 };
 
 /** The latest meeting's result, as a taped card: tally, ballots (per vote mode), the shakedown's rows and the protection. design §9.6, §9.7 */
-export function ResultDialog({ view, pins }: { view: PlayerView; pins: PinsChannel }) {
+/** The meeting result card to show now, or null: none yet, a newer round has resolved, the Bail window is open, or you closed it. design §9.6 */
+export function resultCardOf(view: PlayerView, dismissed: string | null): MeetingOutcome | null {
   const o = latestOutcome(view);
-  const [dismissed, setDismissed] = useState<string | null>(null);
+  return o && o.fresh && !o.deciding && dismissed !== o.meetingId ? o : null;
+}
+
+export function ResultDialog({ view, pins, dismissed, onDismiss }: { view: PlayerView; pins: PinsChannel; dismissed: string | null; onDismiss: (meetingId: string) => void }) {
+  const o = resultCardOf(view, dismissed);
   const who = useWho(view);
   // showModal focuses the first control, an InfoTip whose focus preview would open by itself: start on the primary button.
-  const shownId = o && o.fresh && !o.deciding && dismissed !== o.meetingId ? o.meetingId : null;
+  const shownId = o?.meetingId ?? null;
   useEffect(() => {
     if (shownId) document.getElementById("results-ok")?.focus();
   }, [shownId]);
-  if (!o || !o.fresh || o.deciding) return null;
+  if (!o) return null;
   const s = o.shakedown;
   const target = o.result.kind === "shakedown" ? o.result.target : null;
   const mine = target === view.me.id;
   const leadId = `m.${o.meetingId}`;
   const pinned = pins.pins.has(leadId);
-  const close = () => setDismissed(o.meetingId);
+  const close = () => onDismiss(o.meetingId);
   return (
-    <DialogSheet open={dismissed !== o.meetingId} onClose={close} seed={`results-${o.meetingId}`} labelledBy="results-h">
+    <DialogSheet open onClose={close} seed={`results-${o.meetingId}`} labelledBy="results-h">
       <div className="result">
         <div className="result__head">
           {target && <Avatar name={plain(who(target))} size={52} bot={view.players.find((p) => p.id === target)?.isBot} />}

@@ -6,7 +6,7 @@ import { applyEvent, handleCommand, privateTo, viewFor, type GameState, type Pla
 import { describe, expect, it } from "vitest";
 import { createGame } from "../game/deal.testkit";
 import type { PinsChannel } from "../game/notes";
-import { DecidingPanel, MeetingNow, ResultDialog } from "./Meetings";
+import { DecidingPanel, MeetingNow, ResultDialog, resultCardOf } from "./Meetings";
 
 const config = {
   seed: "meeting-render",
@@ -39,7 +39,7 @@ const send = async () => ({ ok: true as const });
 const pins: PinsChannel = { pins: new Set(), ready: true, error: null, toggle: () => {} };
 const html = (el: ReturnType<typeof createElement>) => renderToStaticMarkup(el);
 const nowOf = (v: PlayerView) => html(createElement(MeetingNow, { view: v, timers: [], offset: 0, send }));
-const resultOf = (v: PlayerView) => html(createElement(ResultDialog, { view: v, pins }));
+const resultOf = (v: PlayerView) => html(createElement(ResultDialog, { view: v, pins, dismissed: null, onDismiss: () => {} }));
 const decidingOf = (v: PlayerView) => html(createElement(DecidingPanel, { view: v, timers: [], offset: 0, send }));
 
 describe("the meeting briefing (design §9.1–§9.3, §9.7)", () => {
@@ -102,6 +102,15 @@ describe("the shakedown result (board 5b, design §9.6, §9.7)", () => {
     expect(out).toMatch(/Too few votes|No majority/);
     expect(out).not.toContain("Protected");
     expect(out).not.toContain("stash");
+  });
+});
+
+describe("the result card's visibility (design §9.6, §20.6)", () => {
+  it("shows for a fresh closed meeting until its id is dismissed, so the teaching pop-ups can step aside for it", () => {
+    const v = viewFor(closed(meeting(NO_BAIL)), "p1");
+    expect(resultCardOf(v, null)?.meetingId).toBe("emergency-1");
+    expect(resultCardOf(v, "emergency-1")).toBeNull();
+    expect(resultCardOf(viewFor(meeting(NO_BAIL), "p1"), null)).toBeNull(); // the vote window is not a result
   });
 });
 
