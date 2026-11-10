@@ -13,9 +13,9 @@ A social deduction heist game for groups of friends (web + Android/iOS). A crew 
 
 ## End of every session
 
-1. Run `pnpm precheck` (commands below) before every push; CI runs the same checks and the scoped set, and must be green, and the full tier runs on `main` after the merge (`docs/testing.md`).
+1. Before pushing, a builder runs only the static checks, the unit tests the diff needs and its new or changed e2e specs ×3, pushes to a draft PR and marks it ready once CI (the scoped set, e2e on 6 shards) is green; QA runs `pnpm precheck`. The full tier runs on `main` after the merge (`docs/pipeline/common.md` "Testing speed", `docs/testing.md`).
 2. Don't edit `docs/STATUS.md` or `docs/decisions.md` in a feature PR: put "Closes #N" (your issue) in the PR body, provisional rule calls under `## Decisions` and new follow-ups under `## Follow-ups`; the PM folds decisions into `docs/decisions.md` (in its own docs PR) and creates issues from the follow-ups. If a rule changed, update `docs/design.md` in the PR.
-3. Commit to your branch, push it and open a PR (`docs/pipeline/common.md`).
+3. Commit to your branch, push it and open a draft PR (`docs/pipeline/common.md`).
 
 ## Repo layout (pnpm monorepo)
 
@@ -38,7 +38,7 @@ Dependency direction: `content` ← `engine` ← `bots` ← `sim`/`server`. The 
 pnpm install         # install all workspaces
 pnpm test            # run all tests (vitest)
 pnpm test:scoped     # only the tests your diff needs (same logic as CI)
-pnpm precheck        # before every push: typecheck, knip, theme-token lint, test:scoped, new e2e specs x3
+pnpm precheck        # QA before its push: typecheck, knip, theme-token lint, test:scoped, new e2e specs x3
 pnpm lint:theme      # raw colours, fonts, shadows, radii outside theme.css
 pnpm knip            # unused files, exports and dependencies (CI fails on any)
 pnpm typecheck       # tsc --noEmit across workspaces

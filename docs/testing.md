@@ -49,7 +49,7 @@ A PR waits only for the tests of what it touched; `main` is tested in full after
 
 ## Precheck
 
-`pnpm precheck` is the one command to run before every push (builder and QA, `docs/pipeline/common.md`). It runs what CI would fail on, so a push is green the first time:
+`pnpm precheck` runs what CI would fail on, so a push is green the first time; QA runs it before pushing, builders run steps 1 and 3 and only the unit half of step 2 (`docs/pipeline/common.md` "Testing speed"):
 
 1. In parallel: `pnpm typecheck`, `pnpm knip`, `pnpm lint:theme` and `node scripts/scope.mjs --check` (feature tags and `features.json` entries).
 2. `pnpm test:scoped` (the tests the diff needs, as in "Scoped tests").
@@ -57,7 +57,7 @@ A PR waits only for the tests of what it touched; `main` is tested in full after
 
 It stops at the first failing step, and does nothing at all when only `.md` files changed. Locally Playwright runs up to 4 workers per run, and always starts its own servers: a port already in use makes the run fail loudly rather than test another agent's server (`playwright.config.ts`).
 
-**Theme-token lint.** `scripts/theme-lint.mjs` checks every `.css`, `.ts` and `.tsx` file under `apps/web/src` except `theme.css` and tests: no raw colour (`#hex`, `rgb()`, `hsl()`, ...), `font-family`/`font` only a `--font-*` token or `inherit`, and `border-radius`, `box-shadow` and `text-shadow` only `var(--...)`, `0`, `none` or `inherit`. `scripts/theme-lint.baseline.json` holds the number of violations per file that predate the lint; it can only go down (a file over its count, or any count for a file not listed, fails). When you clean a file up, run `node scripts/theme-lint.mjs --update` to lower it. The baseline only shrinks: reviewers reject a PR whose baseline diff adds a file or raises a number (`--update` does not stop it). S4 removes entries as it replaces the R6 screens. New styles use or add a `theme.css` token.
+**Theme-token lint.** `scripts/theme-lint.mjs` checks every `.css`, `.ts` and `.tsx` file under `apps/web/src` except `theme.css` and tests: no raw colour (`#hex`, `rgb()`, `hsl()`, ...), `font-family`/`font` only a `--font-*` token or `inherit`, and `border-radius`, `box-shadow` and `text-shadow` only `var(--...)`, `0`, `none` or `inherit`. `scripts/theme-lint.baseline.json` holds the number of violations per file that predate the lint; it can only go down (a file over its count, or any count for a file not listed, fails). When you clean a file up, run `node scripts/theme-lint.mjs --update` to lower it. The baseline only shrinks: reviewers reject a PR whose baseline diff adds a file or raises a number (`--update` does not stop it). New styles use or add a `theme.css` token.
 
 ## Running the suite
 
