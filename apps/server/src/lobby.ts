@@ -140,7 +140,10 @@ const refuse = (status: number, message: string): never => {
 };
 const body = (req: FastifyRequest) => (req.body ?? {}) as Record<string, unknown>;
 
-/** `onStart` runs once a game has started, outside its lock (the live channel lets the bots move). */
+/**
+ * `onStart` runs once a game has started, outside its lock (the live channel lets the bots move).
+ * With `seedFromRequest` (never in production) the start request may name the game's seed, so an E2E game replays.
+ */
 export function lobbyRoutes(
   app: FastifyInstance,
   db: Db,
@@ -148,6 +151,7 @@ export function lobbyRoutes(
   s: Sessions,
   onStart: (gameId: string) => Promise<void> = async () => {},
   gameSeed: () => string = () => randomBytes(16).toString("hex"),
+  seedFromRequest = false,
 ): void {
   const signedIn = async (req: FastifyRequest) => (await s.user(req)) ?? refuse(401, "not signed in");
 
@@ -335,7 +339,9 @@ export function lobbyRoutes(
   app.post<{ Params: { id: string } }>("/games/:id/start", async (req) => {
     const started = await asHost(req, async (game, seats, user) => {
       if (seats.length < MIN_PLAYERS) refuse(409, `a game needs at least ${MIN_PLAYERS} seats`);
-      const config = gameConfig(storedSettings(game.settings), seats, gameSeed());
+      const asked = body(req).seed;
+      const seed = seedFromRequest && typeof asked === "string" && asked !== "" ? asked : gameSeed();
+      const config = gameConfig(storedSettings(game.settings), seats, seed);
       const errors = validateConfig(config);
       if (errors.length > 0) throw new Error(`lobby made a bad config: ${errors.join("; ")}`);
       await store.start(game.id, config, async (tx) => {

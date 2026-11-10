@@ -18,7 +18,8 @@ async function ok<T>(res: Awaited<ReturnType<APIRequestContext["post"]>>): Promi
  * Signs `host` in as a guest, creates a game, seats `guests` (each signed in
  * through the invite) and `bots` bots, and starts it. Tips are switched off for
  * every human (unless `tips`), so a teaching pop-up (design §15.6) never covers
- * the board mid-test; teaching.spec.ts turns them on.
+ * the board mid-test; teaching.spec.ts turns them on. `seed` names the game's
+ * seed (the E2E server takes it), so a spec that needs one course of play replays it.
  */
 export async function startGame(
   host: APIRequestContext,
@@ -29,7 +30,16 @@ export async function startGame(
     nickname = "Host",
     voteVisibility,
     tips = false,
-  }: { bots: number; guests?: readonly APIRequestContext[]; sessionLength?: string; nickname?: string; voteVisibility?: "hiddenThenRevealed" | "open" | "secret"; tips?: boolean },
+    seed,
+  }: {
+    bots: number;
+    guests?: readonly APIRequestContext[];
+    sessionLength?: string;
+    nickname?: string;
+    voteVisibility?: "hiddenThenRevealed" | "open" | "secret";
+    tips?: boolean;
+    seed?: string;
+  },
 ): Promise<StartedGame> {
   await ok(await host.post("/api/auth/guest", { data: { nickname } }));
   const settings = { sessionLength, ...(voteVisibility && { voteVisibility }) };
@@ -37,7 +47,7 @@ export async function startGame(
   for (const [i, g] of guests.entries()) await ok(await g.post(`/api/invites/${game.inviteCode}/join`, { data: { nickname: `Guest ${i + 1}` } }));
   if (!tips) for (const who of [host, ...guests]) await ok(await who.patch("/api/me", { data: { tips: false } }));
   for (let i = 0; i < bots; i++) await ok(await host.post(`/api/games/${game.id}/bots`, { data: {} }));
-  await ok(await host.post(`/api/games/${game.id}/start`, { data: {} }));
+  await ok(await host.post(`/api/games/${game.id}/start`, { data: seed ? { seed } : {} }));
   return game;
 }
 
@@ -85,6 +95,8 @@ export async function openPanel(page: Page, name: PanelName): Promise<void> {
   }
   await page.getByRole("navigation", { name: "Game panels" }).getByRole("button", { name: button }).click();
   await expect(sheet.locator(".bsheet__head h2")).toHaveText(name);
+  // Read it once it has slid up, as a player does: mid-slide its fractional offset measures a 44 px target as 43.99997 px.
+  await sheet.evaluate((el) => Promise.all(el.getAnimations({ subtree: true }).filter((a) => a.effect?.getComputedTiming().iterations !== Infinity).map((a) => a.finished.catch(() => undefined))));
 }
 
 /** Closes the open bottom sheet, if any, with its close button (Esc is tested on its own; a text field in the sheet may take it). */
