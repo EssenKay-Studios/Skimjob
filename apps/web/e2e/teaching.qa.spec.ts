@@ -35,7 +35,9 @@ async function nextLesson(page: Page, timeout = 120_000): Promise<string | null>
   const card = page.getByRole("button", { name: "Back to the bank" });
   while (Date.now() < end) {
     if (await card.isVisible()) await card.click(); // a meeting's result card holds the pop-up back until closed (§20.6)
-    if (await lessonDialog(page).isVisible()) return (await page.locator("#teaching-h").textContent())!.trim();
+    // A non-waiting read: the pop-up can step aside (a vote window, the game's end) between two checks (§20.6).
+    const [title] = await lessonDialog(page).locator("#teaching-h").allTextContents();
+    if (title) return title.trim();
     if (await over(page).isVisible()) return null;
     await page.waitForTimeout(200);
   }
@@ -101,8 +103,13 @@ for (const vp of VIEWPORTS) {
       await fits(page, vp.width);
       await shot(page, `lesson-${slug(title)}`);
       // The title at the moment of the click is the one marked seen (an open pop-up can switch lessons: QA #217 finding).
-      dismissed.push((await page.locator("#teaching-h").textContent())!.trim());
-      await gotIt.click();
+      // If it steps aside first (a vote window, the game's end), go back to waiting for it, as a player would.
+      const [now] = await lessonDialog(page).locator("#teaching-h").allTextContents();
+      if (!now || !(await gotIt.click({ timeout: 5000 }).then(() => true, () => false))) {
+        await expect(lessonDialog(page)).toHaveCount(0);
+        continue;
+      }
+      dismissed.push(now.trim());
       // Seen for good: after a reload it doesn't come back.
       if (!reloaded) {
         reloaded = true;
