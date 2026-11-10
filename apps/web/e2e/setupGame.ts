@@ -2,6 +2,7 @@
 // the context's cookie is the host's session. The lobby screens (M2-5b) do the
 // same with clicks; the game screen tests only need a started game.
 import { expect, type APIRequestContext, type Locator, type Page } from "@playwright/test";
+import { clearMeeting } from "./meetingCards";
 
 export interface StartedGame {
   readonly id: string;
@@ -46,6 +47,7 @@ export async function startGame(
  * it arms, then calls.
  */
 export async function callEmergency(page: Page): Promise<void> {
+  await clearMeeting(page); // an automatic meeting's result card (a third of the bank gone, a raid) would cover the button
   const call = page.getByRole("button", { name: "Call an emergency meeting" });
   await expect(call).toBeEnabled({ timeout: 60_000 });
   await call.click();

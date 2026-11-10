@@ -69,6 +69,7 @@ async function sweep(page: Page, label: string, reopen?: () => Promise<void>) {
     await page.screenshot({ path: join(SHOTS, `${label}-${w}-page.png`), fullPage: w >= 1024 });
   }
   await page.setViewportSize({ width: 390, height: 844 });
+  await clearMeeting(page);
   await openPanel(page, "This round");
   await reopen?.();
 }
@@ -189,14 +190,19 @@ for (const seats of [6, 12]) {
     // A meeting that fell due first (chance) sits over the panels as modal cards: close them as a player would, then look.
     await clearMeeting(page);
     await expect(panel(page).getByText(/ of \d+ agreed/)).toBeVisible({ timeout: 60_000 });
-    // The offer is for the latest resolved round: a meeting that held the game up (the player idles through it) moves it past
-    // round 1, and the round can tick again before the post lands, so the round number is not pinned.
-    await expect(panel(page).getByText(/^Round \d+ alibi: where were you\?$/)).toBeVisible();
     await expect(panel(page).getByRole("button", { name: new RegExp(`^${GUESTS[0]}: no claims\\.`) })).toBeVisible();
     await sweep(page, `s${seats}-round2-alibi`);
+    // The offer names the latest resolved round: the planning round in the HUD minus one. That is round 1 unless a meeting held
+    // the game up (the player idles through it), so read the HUD, assert the offer and the posted alibi name exactly that round.
+    const planning = async () => Number((await page.locator(".hud__kicker").textContent())!.match(/Round (\d+)/)![1]);
+    let alibiRound = 0;
+    await expect(async () => {
+      alibiRound = (await planning()) - 1;
+      await expect(panel(page).getByText(`Round ${alibiRound} alibi: where were you?`)).toBeVisible({ timeout: 1000 });
+    }).toPass({ timeout: 10_000 });
     await panel(page).getByRole("group", { name: "Alibi room" }).getByRole("button", { name: "Lobby" }).click();
     await panel(page).getByRole("button", { name: "Post alibi" }).click();
-    await expect(panel(page).getByText(/You told the crew you were in the\s*Lobby\s*in round \d+/)).toBeVisible();
+    await expect(panel(page).getByText(new RegExp(`You told the crew you were in the\\s*Lobby\\s*in round ${alibiRound}\\b`))).toBeVisible();
     // Re-check bug 2: the posted alibi is one inline sentence, not a grid of rows.
     expect(await panel(page).locator("p.plan__alibi").evaluate((el) => getComputedStyle(el).display)).toBe("block");
     await sweep(page, `s${seats}-alibi-posted`);
