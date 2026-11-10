@@ -4,10 +4,10 @@ Read this with `docs/STATUS.md` (where things stand; it links the GitHub issues 
 
 **Standing rule: keep status and orchestration docs clean.** Update in place, delete stale or contradictory content, no history narratives (history lives in git, the PRs and `docs/archive/decisions-history.md`).
 
-## Current state (6 Nov 2026)
-- **Merged:** R7 S0, S1 (`docs/design.md` is the single spec, owner-approved 6 Nov), C1, C2a-C2e. **In flight:** nothing. **Next:** C3 guardrails (#87) and S2 mockups (#81); they can run in parallel. The board is the task list.
+## Current state (10 Nov 2026)
+- **Progress and next step:** `docs/STATUS.md` "Where things stand". The board is the task list.
 - **Review:** the Claude review Action (Pro subscription, Opus) reviews every PR automatically and its verdict counts, except on PRs touching `.github/`, `docs/pipeline/` or Claude config, where the PM's Opus reviewer is required. The PM posts a `Review focus:` comment on each PR.
-- **Owner questions** are open issues labelled `owner-decision` (none open as of 6 Nov).
+- **Owner questions** are open issues labelled `owner-decision` (none open as of 10 Nov).
 - **Mac:** prefix `gh` with `GH_TOKEN=$(gh auth token --user karthik24iyer)`, because a work account may be active. Merges work from the cloud too (the gate pages manually).
 - **Parked by the owner:** M2-14 playtest pass and M2-15 offline demo. **Out of scope for now:** Skimjob Advanced (`docs/advanced.md`), the recruited Mole.
 - **Specs:** `docs/design.md` (rules), `docs/simplified.md` (R7 plan), `docs/decisions.md` (current decisions).
@@ -17,7 +17,7 @@ Read this with `docs/STATUS.md` (where things stand; it links the GitHub issues 
 Run milestone **R7 Simplified** exactly as `docs/simplified.md` "How to run it" says (roles and models, kickoff prompt, steps S0–S5 with owner checkpoints). Tasks are GitHub issues in the milestone "R7 Simplified" (one per task, labelled `type:task`, `step:*`, `feature:*`); the owner's open questions are issues labelled `owner-decision`.
 
 ## How the pipeline works
-- **Where it runs:** three setups, all covered in `common.md` "Where you run": (a) the owner's Mac directly (main clone `~/Documents/Misc/Skimjob`, one worktree per agent under `…/Misc/skimjob-wt/<name>`); (b) a cloud session whose agents run commands on the Mac through the local terminal tool (≈60 s per call: background long runs with nohup and poll logs; never `/tmp`); (c) a cloud session working entirely in its Linux container (clone under `/home/claude`, Node 22 preinstalled, GraphQL blocked so REST only, slow 2-core box: run only affected specs and rely on CI). Tell each agent which setup it is in.
+- **Where it runs:** three setups, all covered in `common.md` "Where you run": (a) the owner's Mac directly (main clone `~/Documents/Misc/Skimjob`, one worktree per agent under `…/Misc/skimjob-wt/<name>`); (b) a cloud session whose agents run commands on the Mac through the local terminal tool (≈60 s per call: long runs go through `scripts/bg.sh`, polled within the turn; never `/tmp`); (c) a cloud session working entirely in its Linux container (clone under `/home/claude`, Node 22 preinstalled, GraphQL blocked so REST only, slow 2-core box: run only affected specs and rely on CI). Tell each agent which setup it is in.
 - The orchestrator (PM) never writes code itself. It spawns subagents, one per task, up to about 3–5 at once. Each pipeline brief lives in this folder:
   - `builder.md` writes code and opens a PR (REST `gh api …/pulls`).
   - `reviewer.md` posts a review (`gh api …/pulls/N/reviews -f event=COMMENT`); first line `VERDICT: APPROVE` or `VERDICT: CHANGES REQUESTED`, second line `Head: <40-char sha reviewed>`. It now runs automatically as the **"Claude review" GitHub Action** (`.github/workflows/claude-review.yml`) on the owner's Claude Pro subscription; see "Automatic review (Claude review Action)" below.
@@ -45,8 +45,10 @@ Run milestone **R7 Simplified** exactly as `docs/simplified.md` "How to run it" 
 - Send the owner a short progress update about every 15 minutes while work is running.
 
 ## Agent quirks and testing
-- **Never `gh pr checks --watch`:** it gets backgrounded and stalls agents. Poll the check-runs in short calls instead (common.md). On the Mac directly, run long commands in the foreground; through the terminal tool, background them with nohup and poll.
-- **Testing policy:** `pnpm precheck` before pushing (QA too), push once, and let CI run the scoped set; the full tier runs on `main` after each merge and nightly. Never skip or disable a test.
+- **Never `gh pr checks --watch`:** it gets backgrounded and stalls agents. Poll the check-runs in short calls instead (common.md).
+- **Foreground only:** every long command runs in the foreground (through the terminal tool, `bg.sh` polled until it exits). An agent never ends its turn while a command runs in the background: a headless session stops there.
+- **Testing policy** (common.md "Testing speed"): builders run locally only the static checks, the unit tests their diff needs and the e2e specs they added or changed (×3), push to a draft PR (the review Action skips drafts), let CI run the scoped e2e on its 6 shards, and mark the PR ready once CI is green. QA runs `pnpm precheck` and pushes once. The full tier runs on `main` after each merge and nightly. Never skip or disable a test.
+- **Screenshot QA:** UI PRs get their screenshot check (common.md, `qa.md`) from an agent that can view images.
 - **Known flaky tests** (rerun once; if it fails again, treat it as real). E2E files are in `apps/web/e2e/`; `[project]` is the Playwright project:
   - `responsive.qa.spec.ts` "landing behaviour › reduced motion › turns off the sheet entrance and toast animations" [mobile]; not reproduced in 80 runs under load on 7 Nov;
   - `notes.spec.ts` "the recap shows what changed while you were away, once, and the board stays private" [desktop]; not reproduced in 40 runs under load on 7 Nov.
@@ -58,7 +60,7 @@ Run milestone **R7 Simplified** exactly as `docs/simplified.md` "How to run it" 
 
 ## Environment gotchas
 - Setup per environment (paths, Node 22, ports, the terminal tool's limits, the cloud container): `common.md` "Where you run".
-- **At most 2 e2e runs on the Mac at once** (PM rule; each uses 4 browser workers): start at most 2 agents that run Playwright on the Mac; the others work in setup (c) (the cloud box, then CI). Long commands go through `scripts/bg.sh` (common.md).
+- **At most 3 e2e runs on the Mac at once** (PM rule; each uses 4 browser workers): start at most 3 agents that run Playwright on the Mac; the others work in setup (c) (the cloud box, then CI). Through the terminal tool, long commands go through `scripts/bg.sh` (common.md).
 - Concurrent agents on the Mac must use their own `E2E_*` ports; a killed run can leave vite/server processes holding them (`lsof -iTCP:<port> -sTCP:LISTEN`, kill by PID). Several agents share the machine, so local runs are slower under load.
 - `pnpm test:pg` needs a local Postgres (`scripts/db.sh`); optional, CI covers PGlite.
 - Rebase, `reset --hard` and force-push to an agent's own feature branch are fine. Never force-push `main`.

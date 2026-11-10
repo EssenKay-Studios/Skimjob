@@ -1,13 +1,14 @@
 # Status
 
-_Last updated: 9 Nov 2026._
+_Last updated: 10 Nov 2026._
 
 ## Where things stand
 - **Specs:** `docs/design.md` is the single rules spec (R7 Simplified); `docs/simplified.md` is the plan. Current decisions: `docs/decisions.md`. Later: Skimjob Advanced (`docs/advanced.md`). Out of scope: the recruited Mole.
 - **Content** 0.26.0 (`main`; the live build is the older R6, which R7 replaces).
 - **Live:** https://skimjob.duckdns.org on the owner's AWS Lightsail box (`docs/deploy.md`), commit 1a4e083, Google sign-in on. The live game has no real players, so R7 is built straight on `main`.
 - **Mockups:** the [approved S2 mockups](https://claude.ai/artifact/QtmuUsTX9aFxiESdDQHzEp) (owner, 7 Nov) are the S4 reference for wording and behaviour; their artboard captions and the icon key are review notes, not product UI.
-- **Next step: S4** (S4.1–S4.10, #102–#111, wire the screens). Owner checkpoint: the S4 test deploy is a hard stop. Then S5 (#112, final audit, balance pass, deploy; owner playtest). S3 is complete: S3a.1–S3a.9 and S3b.1–S3b.5 are merged.
+- **S4 is done except S4.10, Learn the game (#111),** which comes after the S4 test deploy (owner, 10 Nov). Merged: #198, #199, #200, #201, #206, #207, #208, #217, #219; S4.8, the meeting and shakedown screens (#218), is in review. The live game runs in `GameShell`.
+- **Next:** the S4 test deploy (an owner checkpoint, a hard stop), then #111, then S5 (#112, final audit, balance pass, deploy; owner playtest).
 
 ## Tasks, follow-ups and owner questions
 Tracked as GitHub issues, not in this file:
@@ -28,6 +29,8 @@ Record: M1 (engine, simulator, bots), M2-1 to M2-13 (server, web, chat, Google s
 - **Database:** no `DATABASE_URL` = PGlite in `.pglite/` (`PGLITE_DIR=memory` for in-memory); tests share one PGlite per file; `pnpm test:pg` runs them on real Postgres.
 - **Content:** numbers live in `packages/content`; tunables that should be overridable go in `ContentOverrides` and `validateOverrides`. After any rule, number or bot change, run the sim suite (or the "Sim suite" workflow) with `--compare docs/balance/baseline.json` (`docs/testing.md`).
 - **Web:** frames use `<SketchFrame>` with a stable `seed`; new components go in `/dev/gallery`; e2e responsive specs cover 360–1280 px (add new screens to their route lists). A client route must not equal an API `GET` route (the server serves both on one origin).
+- **Game layout:** the game screen is `GameShell` (`components/GameShell.tsx`): a new panel is one `ShellPanel` entry in `Game.tsx` with a `place` (`left` side tab, `centre`, `right`, or `sheet` for phones only) and, for phones, a `tab`. From 1024 px the panels are columns and side tabs; below it each is a bottom sheet from the tab bar, one open at a time. e2e reaches a panel with `openPanel` / `closePanel` (`e2e/setupGame.ts`), never by clicking tabs directly, and whole-game loops on phones call `keepRoundOpen`.
+- **Teaching pop-ups** (`TeachingPopup.tsx`) step aside for dialogs that need the player: none shows while a meeting or shakedown window is open or once the game has ended, and a lesson on screen waits until then. e2e games switch Tips off for their humans (`startGame`); only the teaching specs opt in.
 - **Player ids** match `/^[A-Za-z0-9_-]{1,32}$/` and are never `__proto__`/`constructor`/`prototype`.
 
 ## Upcoming milestones
