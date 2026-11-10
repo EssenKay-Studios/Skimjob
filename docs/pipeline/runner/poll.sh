@@ -3,6 +3,7 @@
 # The runner (docs/pipeline/agents.md). The same file on macOS, Linux and in .github/workflows/agent.yml.
 #   poll.sh                 one poll: reap and stop jobs, tidy the board, check every labelled open ticket
 #                           and start the steps this place may run (the service repeats it every 5 minutes)
+#   poll.sh stop N          the cloud: clear agent:working after the account label was removed, if a cloud step holds it
 #   poll.sh check N         check one ticket (the cloud workflow; prints step/account/model/prompt to $GITHUB_OUTPUT)
 #   poll.sh job N STEP ACCOUNT MODEL PROMPT_FILE [SLOT]
 #                           run one step in the foreground: Claude Code headless in a fresh worktree
@@ -78,7 +79,7 @@ prs=
 # gather N: the start check's input for issue N (scripts/agent-start.ts).
 gather() {
   local n=$1 issue events comments working pr='' v flags=null builders
-  issue=$(gh api "$R/issues/$n" --jq '{number, title, type: .type.name, body: (.body // ""), labels: [.labels[].name]}') || return 1
+  issue=$(gh api "$R/issues/$n" --jq '{number, author: .user.login, title, type: .type.name, body: (.body // ""), labels: [.labels[].name]}') || return 1
   events=$(gh api --paginate "$R/issues/$n/events?per_page=100" --jq '.[] | select(.event == "labeled" or .event == "unlabeled")
     | {event, label: .label.name, actor: .actor.login, at: .created_at}' | jq -s .) || return 1
   comments=$(gh api --paginate "$R/issues/$n/comments?per_page=100" --jq '.[] | {author: .user.login, body: (.body // ""), at: .created_at}' | jq -s .) || return 1
@@ -151,7 +152,7 @@ job() {
   logf=$WORK_DIR/logs/$n-$step-$(date -u +%Y%m%dT%H%M%SZ).log
   mkdir -p "$WORK_DIR/logs" "$WORK_DIR/wt"
   wt=$WORK_DIR/wt/$n-$step-$$
-  local acc=(env -u ANTHROPIC_API_KEY -u CLAUDE_CONFIG_DIR) budget=()
+  local acc=(env -u ANTHROPIC_API_KEY -u CLAUDE_CONFIG_DIR) budget=() keyf=''
   case $account in
     max) [ "$PLACE" = cloud ] && acc=(env -u ANTHROPIC_API_KEY) ;; # cloud: CLAUDE_CODE_OAUTH_TOKEN from the workflow
     pro) if [ "$PLACE" = cloud ]; then acc=(env -u ANTHROPIC_API_KEY); else acc=(env -u ANTHROPIC_API_KEY CLAUDE_CONFIG_DIR="${PRO_CONFIG_DIR:?PRO_CONFIG_DIR not set}"); fi ;;
@@ -162,16 +163,20 @@ job() {
       else
         local kf=$CONF/anthropic-api-key
         [ -n "$(find "$kf" -maxdepth 0 -perm 600 2>/dev/null)" ] || { log "#$n: $kf missing or not mode 0600"; finish "$n" "" "runner: not started: the API key file is missing or not mode 0600."; return 1; }
-        acc=(env -u CLAUDE_CODE_OAUTH_TOKEN -u CLAUDE_CONFIG_DIR ANTHROPIC_API_KEY="$(cat "$kf")")
+        acc=(env -u CLAUDE_CODE_OAUTH_TOKEN -u CLAUDE_CONFIG_DIR) keyf=$kf
       fi ;;
   esac
   local nn=$((${E2E_PORT_BASE:-41} + slot))
   log "#$n: $step on $PLACE, $account/$model, log $logf"
-  if ! { git -C "$REPO_DIR" fetch -q origin && git -C "$REPO_DIR" worktree add -q --detach "$wt" origin/main; }; then
+  # origin/main as of this poll's fetch (one fetch per poll: parallel fetches race for the ref lock).
+  if ! git -C "$REPO_DIR" worktree add -q --detach "$wt" origin/main; then
     finish "$n" "" "runner: $step stopped: cannot make a worktree on $PLACE."; return 1
   fi
+  [ "$PLACE" = cloud ] || echo "$wt" >"$JOBS/$n/wt"
   (
     cd "$wt" && git config user.name $OWNER && git config user.email $OWNER@gmail.com
+    # Exported here, not passed to env: an env argument shows in ps.
+    if [ -n "$keyf" ]; then ANTHROPIC_API_KEY=$(cat "$keyf"); export ANTHROPIC_API_KEY; fi
     # In the cloud the agent writes as karthik24iyer with AGENT_GH_TOKEN; GITHUB_TOKEN can't (the gate only counts karthik24iyer).
     GH_TOKEN=${AGENT_GH_TOKEN:-$GH_TOKEN} E2E_PORT=5${nn}79 E2E_SERVER_PORT=3${nn}79 E2E_FAST_PORT=5${nn}80 E2E_FAST_SERVER_PORT=3${nn}80 \
       "${acc[@]}" claude -p "$(cat "$pf")" --model "$model" --dangerously-skip-permissions \
@@ -186,9 +191,12 @@ $out
 
 Answer here, then remove \`agent:blocked\` to resume."
   else finish "$n" ""; fi
-  # Keep a worktree with uncommitted work; remove a clean one.
-  git -C "$REPO_DIR" worktree remove "$wt" 2>/dev/null || log "#$n: kept $wt (uncommitted changes)"
+  # Remove a clean worktree; keep one with uncommitted work, detached so the next step can check out its branch.
+  git -C "$REPO_DIR" worktree remove "$wt" 2>/dev/null || { git -C "$wt" checkout -q --detach; log "#$n: kept $wt (uncommitted changes)"; }
 }
+
+# free_wt JOB_DIR: detach the job's worktree (its changes stay), so its branch is free for the next step.
+free_wt() { [ -f "$1/wt" ] && act git -C "$(cat "$1/wt")" checkout -q --detach; }
 
 # finish N [blocked] [COMMENT]: the job is over: clear agent:working (or swap it for agent:blocked).
 finish() {
@@ -206,12 +214,13 @@ reap() {
     n=$(basename "$d"); pid=$(cat "$d/pid" 2>/dev/null)
     # Polls never overlap, so a job dir without a live pid is over.
     if ! alive "$pid"; then
-      log "#$n: job ended without cleaning up"; act rm -rf "$d"; label_rm "$n" agent:working; continue
+      log "#$n: job ended without cleaning up"; free_wt "$d"; act rm -rf "$d"; label_rm "$n" agent:working; continue
     fi
     acct=$(cat "$d/account"); labels=$(gh api "$R/issues/$n" --jq '[.labels[].name] | join(" ")') || continue
     if [[ " $labels " != *" agent:$acct "* ]]; then
       log "#$n: agent:$acct removed: stopping the job"
       act kill -TERM -- "-$pid"
+      free_wt "$d"
       label_rm "$n" agent:working
       comment "$n" "runner: stopped on $PLACE: the account label was removed. Add it again to resume."
       act rm -rf "$d"
@@ -219,11 +228,26 @@ reap() {
   done
 }
 
+# stop N (the cloud, when the account label was removed): clear agent:working only if a cloud step holds it.
+stop() {
+  local held
+  held=$(gh api --paginate "$R/issues/$1/comments?per_page=100" --jq '.[] | select((.user.login == "'$OWNER'" or .user.login == "github-actions[bot]")
+    and ((.body // "") | startswith("runner: picked up on "))) | .body' | tail -1)
+  case $held in
+    "runner: picked up on cloud,"*) ;;
+    *) log "#$1: no cloud step holds it"; return 0 ;;
+  esac
+  gh api "$R/issues/$1" --jq '.labels[].name' | grep -qx agent:working || return 0
+  label_rm "$1" agent:working
+  comment "$1" "runner: stopped on cloud: the account label was removed. Add it again to resume."
+}
+
 case ${1:-} in
   job) shift; job "$@"; exit ;;
+  stop) stop "$2"; exit ;;
   check) [ "$PLACE" = cloud ] || board_load; check "$2"; exit ;;
   "") ;;
-  *) echo "usage: poll.sh [check N | job N STEP ACCOUNT MODEL PROMPT_FILE [SLOT]]" >&2; exit 2 ;;
+  *) echo "usage: poll.sh [check N | stop N | job N STEP ACCOUNT MODEL PROMPT_FILE [SLOT]]" >&2; exit 2 ;;
 esac
 
 # One poll at a time.
@@ -235,6 +259,7 @@ fi
 echo $$ >"$lock/pid"
 trap 'rm -rf "$lock"' EXIT
 log "poll on $PLACE${DRY_RUN:+ (dry run)}"
+git -C "$REPO_DIR" fetch -q origin || log "fetch failed: jobs start from the last fetched origin/main"
 reap
 board_load
 board_tidy

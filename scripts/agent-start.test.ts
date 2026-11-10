@@ -13,7 +13,7 @@ function input(over: Partial<Input> & { labels?: string[]; extra?: LabelEvent[] 
   const labels = over.labels ?? START;
   return {
     place: "mac",
-    issue: { number: 7, title: "T", type: "Feature", body: body(), labels, ...over.issue },
+    issue: { number: 7, author: "karthik24iyer", title: "T", type: "Feature", body: body(), labels, ...over.issue },
     events: [...labels.map((l) => by(l)), ...(over.extra ?? [])],
     comments: [],
     working: [],
@@ -99,6 +99,23 @@ describe("the three start groups", () => {
     const i = input();
     i.issue.type = null;
     expect(decide(i)).toEqual({ kind: "comment", text: "runner: not started: the issue has no Type: set Bug, Feature or Task." });
+  });
+});
+
+describe("the issue's author", () => {
+  it("starts nothing on an issue someone else opened, even with the owner's labels: its text can change after them", () => {
+    const i = input();
+    i.issue.author = "mallory";
+    expect(decide(i)).toEqual({ kind: "comment", text: "runner: not started: opened by mallory, not karthik24iyer: copy it into a new issue." });
+    // Nor its PR steps.
+    const p = withPr(verdicts({ review: "none" }));
+    p.issue.author = "mallory";
+    expect(decide(p).kind).toBe("comment");
+  });
+  it("says it once", () => {
+    const i = input({ comments: [{ author: "karthik24iyer", body: "runner: not started: opened by mallory, not karthik24iyer: copy it into a new issue.", at: "2026-11-10T12:00:00Z" }] });
+    i.issue.author = "mallory";
+    expect(decide(i).kind).toBe("wait");
   });
 });
 

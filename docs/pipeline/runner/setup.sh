@@ -60,7 +60,9 @@ if [ $os = mac ]; then
   mkdir -p "$(dirname "$plist")"
   fill "$here/com.skimjob.agent.plist" >"$plist"
   launchctl bootout "gui/$(id -u)/com.skimjob.agent" 2>/dev/null
-  launchctl bootstrap "gui/$(id -u)" "$plist" || { echo "launchctl bootstrap failed"; exit 1; }
+  # bootout finishes asynchronously: a rerun's bootstrap can fail once (error 5) while it does.
+  launchctl bootstrap "gui/$(id -u)" "$plist" 2>/dev/null || { sleep 1; launchctl bootstrap "gui/$(id -u)" "$plist"; } \
+    || { echo "launchctl bootstrap failed"; exit 1; }
   echo "installed $plist (every 5 minutes); log $WORK_DIR/poll.log"
 else
   units=$HOME/.config/systemd/user

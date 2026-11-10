@@ -36,7 +36,7 @@ export interface Comment {
 }
 export interface Input {
   place: Host; // where this runner is
-  issue: { number: number; title: string; type: string | null; body: string; labels: string[] };
+  issue: { number: number; author: string; title: string; type: string | null; body: string; labels: string[] };
   events: LabelEvent[]; // the issue's label events, oldest first
   comments: Comment[]; // oldest first
   boardFlags?: string | null; // the board's Flags; absent where the board can't be read (the cloud)
@@ -113,6 +113,8 @@ export function decide(input: Input): Decision {
   const all = issue.labels;
   if (all.includes("agent:blocked")) return { kind: "wait", reason: "agent:blocked: waiting for the owner" };
   if (all.includes("agent:working")) return { kind: "wait", reason: "agent:working: a step is running" };
+  // Its author can edit the title and body at any time, also after the labels: only karthik24iyer's text is a brief.
+  if (issue.author !== OWNER) return commentOnce(input, `runner: not started: opened by ${issue.author}, not ${OWNER}: copy it into a new issue.`);
 
   // Only labels karthik24iyer added count.
   const labels = all.filter((l) => addedBy(events, l) === OWNER);
