@@ -2,7 +2,7 @@ import { mkdirSync } from "node:fs";
 import { LESSONS } from "@skimjob/content";
 import { expect, test, type Page } from "@playwright/test";
 import { pickRoom } from "./move";
-import { startGame } from "./setupGame";
+import { openPanel, startGame } from "./setupGame";
 
 // QA for S4.6 (design §15.6, §20.6): the teaching pop-ups in a real bot game, at every launch width.
 // A dismissed lesson never comes back (not even after a reload), with its text from content, 44 px buttons,
@@ -82,9 +82,12 @@ for (const vp of VIEWPORTS) {
       // One sheet at a time (§20.6): while a meeting's vote window is open the pop-up steps aside, and it comes back
       // with focus on Got it when the window closes. So wait for the moment it is the only open sheet.
       const vote = page.locator("dialog[open][aria-labelledby=vote-h]");
-      if (await vote.count()) await shot(page, `under-vote-${slug(title)}`);
+      if (await vote.count()) {
+        await expect(lessonDialog(page)).toHaveCount(0); // stepped aside for the vote window
+        await shot(page, `under-vote-${slug(title)}`);
+      }
       await expect(async () => {
-        await expect(page.locator("dialog[open]")).toHaveCount(1, { timeout: 1000 });
+        await expect(vote).toHaveCount(0, { timeout: 1000 }); // the panel sheets of the shell may stay open beneath the pop-up
         await expect(dialog.locator("#teaching-h")).toHaveText(title, { timeout: 1000 });
         for (const line of [lesson.happened, lesson.means, lesson.canDo]) await expect(dialog.getByText(line, { exact: true })).toBeVisible({ timeout: 1000 });
         await expect(gotIt).toBeFocused({ timeout: 1000 });
@@ -172,6 +175,7 @@ test("a pop-up that opens over a move in progress leaves the move as it was @tea
   });
   await page.reload();
   await expect(page.locator(".hud__kicker")).toBeVisible();
+  await openPanel(page, "This round");
   await pickRoom(page, "Lobby");
   await expect(lessonDialog(page)).toHaveCount(0);
   release();

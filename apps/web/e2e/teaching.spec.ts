@@ -1,7 +1,7 @@
 import { LESSONS } from "@skimjob/content";
 import { expect, test, type Page } from "@playwright/test";
 import { pickRoom } from "./move";
-import { startGame } from "./setupGame";
+import { openPanel, startGame } from "./setupGame";
 
 // S4.6, design §15.6, §20.6: the teaching pop-ups and the game menu's Tips
 // setting. The pop-ups on /dev/gallery (which lessons are due is unit-tested in
@@ -96,6 +96,7 @@ async function playRound1(page: Page, opts: { tips: boolean }) {
   // The 3-hour preset: rounds stay open long enough that the lock-in, not the clock, resolves round 1.
   const game = await startGame(page.request, { bots: 3, nickname: "Tipster", sessionLength: "3h", tips: opts.tips });
   await page.goto(`/game/${game.id}`);
+  await openPanel(page, "This round");
   await pickRoom(page, "Vault");
   await page.getByRole("button", { name: "Lock it in" }).click();
   return game;
