@@ -3,7 +3,7 @@
 # Runs the verdicts.sh gate; if MERGEABLE: yes, squash-merges exactly the gated
 # head (REST `PUT pulls/N/merge` with sha=<head>, so a newer push is refused) and
 # deletes the branch, then prints one line:
-#   merged #N -> main <sha> | next: #<lowest open R7 task issue>
+#   merged #N -> main <sha> | next: #<lowest open R7 Task issue>
 # Aborts with the gate's reasons otherwise. Docs-only PRs need green CI too.
 # GitHub REST API only (`gh api`), like verdicts.sh: works on the Mac and in cloud sessions.
 set -o pipefail
@@ -31,8 +31,8 @@ sha=$(gh api -X PUT "$A/pulls/$N/merge" -f merge_method=squash -f sha="$head" --
 if [ "$headrepo" = "$REPO" ] && [ -n "$branch" ]; then
   gh api -X DELETE "$A/git/refs/heads/$branch" >/dev/null 2>&1 || echo "warning: could not delete branch $branch" >&2
 fi
-# Next task: the lowest-numbered open `type:task` issue in the R7 milestone (REST). Fail-safe.
-next=$(gh api "$A/issues?milestone=${MILESTONE:-1}&state=open&labels=type:task&per_page=100" \
+# Next task: the lowest-numbered open issue of Type Task in the R7 milestone (REST). Fail-safe.
+next=$(gh api "$A/issues?milestone=${MILESTONE:-1}&state=open&type=Task&per_page=100" \
   --jq '[.[] | select(.pull_request == null)] | if length == 0 then empty else (min_by(.number) | "#\(.number) \(.title)") end' 2>/dev/null | cut -c1-80) || next=
 [ -n "$next" ] || next="see the board"
 echo "merged #$N -> main ${sha:0:7} | next: $next"

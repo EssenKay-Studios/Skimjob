@@ -15,8 +15,8 @@ import { defineConfig, devices } from "@playwright/test";
 // E2E_PORT (web, default 5179), E2E_SERVER_PORT (3179), E2E_FAST_PORT (5180), E2E_FAST_SERVER_PORT (3180).
 // A run always starts its own servers (reuseExistingServer is off): if a port is already taken, by another
 // agent's run or a stale server, Playwright fails loudly instead of testing against code it didn't start.
-// Pick free E2E_* ports or stop the owner of the port (by pid). Locally up to 4 workers per run (CI keeps Playwright's default, 50% of the cores); the PM
-// allows at most 2 runs at once (docs/pipeline/HANDOFF.md).
+// Pick free E2E_* ports or stop the owner of the port (by pid). Locally up to 4 workers per run (CI keeps Playwright's default, 50% of the cores); at most
+// 3 runs per machine at once (docs/pipeline/common.md).
 // CI shards the suite by spec file: `node scripts/scope.mjs --shard i/6` (.github/workflows/ci.yml).
 const num = (name: string, fallback: number) => Number(process.env[name] ?? fallback);
 const port = num("E2E_PORT", 5179);

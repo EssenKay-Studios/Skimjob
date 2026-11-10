@@ -1,0 +1,62 @@
+name: Feature
+description: Something new, or a change to how the game works.
+type: Feature
+projects: ["EssenKay-Studios/2"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What and why
+    validations:
+      required: true
+  - type: textarea
+    id: behaviour
+    attributes:
+      label: How it should behave
+      description: Include the owner's rulings word for word.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance checks
+      placeholder: "- [ ] ..."
+    validations:
+      required: true
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Out of scope
+    validations:
+      required: true
+  - type: textarea
+    id: mockup
+    attributes:
+      label: Mockup
+      description: Optional. An image or a link.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: [board, bots, caseboard, chat, ci, host, learn, lobby, meeting, move, plan, reveal, roles, shell, teaching]
+    validations:
+      required: true
+  - type: input
+    id: design
+    attributes:
+      label: Design reference
+      description: A section of docs/design.md (e.g. §5.2), or "rule change".
+    validations:
+      required: true
+  - type: dropdown
+    id: owner-decision
+    attributes:
+      label: Owner decision needed?
+      options: ["no", "yes"]
+    validations:
+      required: true
+  - type: input
+    id: related
+    attributes:
+      label: Related tickets
+      description: Optional. e.g. #123, #130

@@ -287,29 +287,22 @@ Three cleanup rules hold from start to finish:
 
 | Agent | Model | Does |
 |---|---|---|
-| **Orchestrator (PM)** | Opus 5.5 | Plans, writes briefs, merges via the gate, folds `## Decisions` into `docs/decisions.md`, turns `## Follow-ups` into GitHub issues and keeps the R7 board current, reports to the owner. Never writes code. |
-| **Developer** | **Sonnet 5.5** for well-specified work; **Opus 5.5** for engine rules (see below) | Builds one task per PR (`docs/pipeline/builder.md`). |
-| **Reviewer** | Opus 5.5 | Reviews a PR from the diff (`reviewer.md`). Never merges, never pushes. |
-| **QA** | Opus 5.5 | Adversarial tests, pushes once, posts the verdict (`qa.md`). Never merges. |
+| **Orchestrator (PM)** | Opus 5.5 | Plans, writes briefs, folds `## Decisions` into `docs/decisions.md`, turns `## Follow-ups` into GitHub issues and keeps the R7 board current, reports to the owner. Never writes code. |
+| **Developer** | the ticket's `model:` label | Builds one task per PR (`docs/pipeline/builder.md`). |
+| **Reviewer** | the ticket's `model:` label | The one reviewer, posting as karthik24iyer (`reviewer.md`). Never merges, never pushes. |
+| **QA** | the ticket's `model:` label | Adversarial tests, pushes once, posts the verdict (`qa.md`). Never merges. |
 
-**Sonnet or Opus for the developer?** Sonnet 5.5 is the right default for tasks the spec and mockups pin down: components and screens, content edits, copy, CSS, docs, mechanical refactors. It's faster and cheaper, and an Opus reviewer and an Opus QA agent check every PR. Use **Opus 5.5 for the developer** on:
-
-- engine rule changes (S3a), where determinism, visibility and `viewFor` leaks are subtle and a mistake is expensive;
-- the case board's data layer and its ⚠ checks (it must use only `viewFor`);
-- bot changes;
-- any fix round where a Sonnet build failed review twice.
-
-The orchestrator picks the model per task and says which in the brief (Agent tool `model: "sonnet"` or `model: "opus"`).
+Each step runs on the account, host and model the ticket's labels choose (`docs/pipeline/agents.md`); agy (Gemini) only for menial, conflict-free rebases. The order and the rules are in `docs/pipeline/common.md`.
 
 ### Kickoff prompt for the new chat
 
-> You are the PM/orchestrator for Skimjob (github.com/EssenKay-Studios/Skimjob, Project "Heist And Coop"), running milestone **R7 Simplified** from `docs/simplified.md`. Don't write code yourself: delegate every task to subagents in the pipeline builder → reviewer + QA (in parallel) → merge. Developers are Sonnet 5.5 by default and Opus 5.5 for engine rules, the case board's data layer, bots, or a twice-failed fix (pick per task, as the plan says); reviewers and QA are Opus 5.5.
+> You are the PM/orchestrator for Skimjob (github.com/EssenKay-Studios/Skimjob, Project "Heist And Coop"), running milestone **R7 Simplified** from `docs/simplified.md`. Don't write code yourself: delegate every task to subagents in the order build → CI → review → QA → I merge (`docs/pipeline/common.md`).
 >
 > Start by cloning the repo and reading CLAUDE.md, docs/simplified.md, docs/STATUS.md, docs/decisions.md, docs/pipeline/HANDOFF.md and the briefs in docs/pipeline/ ("Where you run" in common.md). Rebuild the live state from GitHub: list open PRs and run `bash docs/pipeline/verdicts.sh <PR>` on each. Treat agents from earlier sessions as dead.
 >
 > Begin with step S0 (record the agreed decisions and clean the docs), then S1, then the code cleanup (C) alongside the mockups (S2). Build straight on main: no downtime concerns, no R6 code kept alive. Owner checkpoints in the plan are hard stops: don't pass one without my approval.
 >
-> Run builds and tests on my Mac when it's reachable; otherwise work in the cloud and rely on CI. Merge only with `docs/pipeline/merge.sh <PR>` when the latest head has a reviewer APPROVE, a QA PASS and green CI; only you merge. Commits are authored as karthik24iyer <karthik24iyer@gmail.com>, with no Claude co-author or session lines.
+> Start a ticket only when I have added exactly one account, host and model label, and run each step where and on what they say (`docs/pipeline/agents.md`). When `docs/pipeline/verdicts.sh <PR>` says mergeable, label it `ready-to-merge` and tell me; I merge. Commits are authored as karthik24iyer <karthik24iyer@gmail.com>, with no Claude co-author or session lines.
 >
 > Send me a short update about every 15 minutes, and ask me only for real decisions, as multiple-choice questions with a recommended option.
 
@@ -336,7 +329,7 @@ The orchestrator picks the model per task and says which in the brief (Agent too
   4. **Keep:** seeded RNG, event log and reduce, visibility and `viewFor`, meetings and voting, chat, server, lobby, auth, scheduler, host controls, the UI kit, the art.
   Plus a **test audit:** duplicated coverage between `*.test.ts` and `*.qa.test.ts`, tests of removed rules, slow tests with no unique value.
 - **The reviewer and QA review the audit itself** (their verdicts on the audit PR), and the owner gets a one-page summary (for information, not a hard stop). Deletion starts only after both pass.
-- **C2 Delete lists 1 and 2** in about four PRs: engine + content + bots + sim; server; web + e2e; test consolidation. Sonnet developers (Opus for the engine PR). After each, the game still runs (R6 minus the cut features).
+- **C2 Delete lists 1 and 2** in about four PRs: engine + content + bots + sim; server; web + e2e; test consolidation. After each, the game still runs (R6 minus the cut features).
   - Reviewer: every deletion is on the approved audit; nothing on the keep list changed behaviour.
   - QA: full suite on the Mac, the 12-seat game, a sim smoke, and one game played start to finish.
 - **C3 Guardrails, permanent:** the scoped test setup (see "Test plan" below); `knip` in CI fails on unused files, exports or dependencies; each PR body reports lines added/removed per package; `builder.md` gets the three cleanup rules; `reviewer.md` checks them.
@@ -363,7 +356,7 @@ The orchestrator picks the model per task and says which in the brief (Agent too
   9. the plan-board snapshot as a public event.
 
   Each PR deletes the R6 code it replaces (its audit list-3 items), updates bots and the sim's metrics for its rule, adds its events to the leak scrub and property tests, and runs a sim smoke. The web app may show the old screens against new rules in between; that is fine.
-- **(b) Interface foundations (Sonnet developers):**
+- **(b) Interface foundations:**
   1. `InfoTip` + content-text plumbing, in `/dev/gallery`;
   2. the one-screen layout shell and bottom sheets at all five widths;
   3. the per-user Tips setting (one field on the user, default on);
@@ -372,7 +365,7 @@ The orchestrator picks the model per task and says which in the brief (Agent too
 
 **Seams for Skimjob Advanced:** every S3/S4 PR follows A12's ten seams; the reviewer checks them.
 
-**S4 — wire the screens (Sonnet for UI, Opus for the case board's data layer):**
+**S4 — wire the screens:**
 1. the board art (bells, tape, Wanted, the bank pile);
 2. the move (coins into two bags) with previews;
 3. the plan board UI;
@@ -392,64 +385,18 @@ Each deletes the old screen, component, gallery page and e2e spec it replaces. T
 - Deploy to Lightsail by `docs/deploy.md`: back up, then clear old games (R6 logs won't replay).
 - The owner playtests again.
 
-### Test plan: scoped per feature, full suite after merge
+### Tests
 
-**Goal:** a PR waits only for the tests of what it touched, while `main` is still fully tested. Target: a typical PR's CI finishes in **about 5–8 minutes**.
-
-**1. Feature tags, worked out from imports.**
-- Every e2e spec carries exactly one feature tag in its title: `@board`, `@move`, `@plan`, `@caseboard`, `@meeting`, `@chat`, `@shop`, `@roles`, `@reveal`, `@lobby`, `@auth`, `@host`, `@learn`.
-- `apps/web/e2e/features.json` maps only **entry points** to tags: screens and top-level panels on the web side, and the engine, bots and server modules that implement a feature (for example `packages/engine/src/meeting.ts` → `@meeting`, `apps/server/src/chat.ts` → `@chat`).
-- For a changed file, CI follows the **import graph** up to the entry points that depend on it and runs the union of their tags. A shared module (`api.ts`, `router.ts`, game state, `InfoTip`) therefore runs every feature that uses it. If a changed file reaches **no** entry point, or **3+ tags**, CI runs everything.
-- A CI check fails if any e2e spec has no tag or any screen/panel/feature module has no entry. Everything is in the repo, so nothing depends on PR-body text, and a re-push re-runs it.
-
-**2. What a PR runs (the `changes` job decides from the diff):**
-
-| Changed | Runs |
-|---|---|
-| Docs only | Typecheck, unit tests (as today) |
-| Any code | Typecheck and `knip` across the repo (fast); unit, property and server tests **only for changed packages and those depending on them** (`pnpm --filter "...[origin/main]"`); the always-on `@smoke` e2e (2 specs: create a game, play one round with bots, finish); the tags from step 1 |
-| Engine, content or bots | Also the engine property tests and the `viewFor` leak scrub (always, whichever rule changed), and a **50-game** sim smoke at 3/6/12 players |
-| Server | Also `@lobby @host`; the live channel or store (`live.ts`, `store.ts`, `db.ts`) count as shared and run everything |
-| Shared kit (`theme.css`, `SketchFrame`, `Button`, layout shell), any root or workspace config (`package.json`, lockfile, `tsconfig*`, `vitest`/`playwright` config, `.github/`, `scripts/`), `features.json` or the scoping script itself | **Everything** (the full tier) |
-
-A single always-on **"CI ok"** job depends on all the others and passes when each either passed or was deliberately skipped; branch protection and `merge.sh` gate on it.
-
-**3. The full tier runs on every push to `main`** (after each merge), nightly, and at owner checkpoints (S4 test deploy, S5): all unit tests, all e2e on 6 shards (including the 12-seat game), and the 200-game sim smoke.
-- If a post-merge run fails, the orchestrator **stops merging** until a fix-forward PR (with a test that would have caught it in the scoped tier) is green.
-- `features.json` gets the missing mapping, so the same gap can't recur.
-
-**4. Lean tests, rebuilt with the features.**
+How tests run is in `docs/testing.md`; CI runs the full suite on every PR. For R7 features:
 - Rules are tested in the engine (fast, deterministic, citing the design section), not through the browser.
-- e2e covers user journeys only: per feature, one happy path plus its key edge cases, at 360 and 1280 px; the full tier adds the five widths.
-- Each R7 PR **replaces** the specs for the feature it rebuilds. QA's adversarial cases go in `<feature>.qa.spec.ts` under the same tag, never a parallel copy of the normal spec.
-- Bot games in e2e use the fastest timing preset and a fixed seed. Only the full tier runs 12 seats.
-- CI caches the Playwright browser and pnpm store.
+- e2e covers user journeys only: per feature, one happy path plus its key edge cases. Every spec carries one feature tag (`apps/web/e2e/features.json`).
+- Each R7 PR **replaces** the specs for the feature it rebuilds. QA's edge cases go in `<feature>.qa.spec.ts` under the same tag, never a copy of the normal spec.
+- Bot games in e2e use the fastest timing preset and a fixed seed.
+- Every bug fix adds a test that would have caught it.
 
-**5. Review and QA stay solid:**
-- **Reviewer:**
-  - checks that `features.json` has an entry for every new screen, panel or feature module, and that the scoped run listed in CI covers the change;
-  - that each new rule has an engine test naming its design section;
-  - that each new event type is in the leak scrub;
-  - that deleted R6 tests went with their code.
-- **QA:**
-  - runs the PR's scoped set on the Mac (`pnpm precheck`, whose `test:scoped` uses the same diff logic as CI);
-  - writes adversarial tests inside the feature;
-  - for engine PRs, also a 200-game sim run locally.
-- **The gate** is unchanged: APPROVE + PASS on the head, green scoped CI. The full tier on `main` is the safety net, not the gate.
+### Briefs
 
-**Built in step C (C3):** the tags, `features.json` with its coverage check, the import-graph scoping script, `pnpm test:scoped`, the "CI ok" job, and the post-merge/nightly full tier; plus the docs that describe testing (CLAUDE.md, `docs/testing.md`, `builder.md`, `qa.md`, `reviewer.md`, `common.md`) updated in the same PR. They land before any R7 code, so every R7 PR uses them.
-
-### Rules learned on 3 Nov (put in every brief)
-
-- **Build and test on the Mac** (18 cores) when reachable; the cloud box has 2 cores.
-- **Builders run only the static checks, the unit tests their diff needs and their new or changed e2e specs ×3**, push to a draft PR and mark it ready once CI is green (`docs/pipeline/common.md` "Testing speed"); the full suite runs on `main` after the merge.
-- **At most 3 e2e runs on the Mac at a time, 4 browser workers each** (`playwright.config.ts`): 10 parallel 12-seat games on a busy Mac produced a false failure.
-- **Review and QA start together** once the builder marks the PR ready (CI green). **Hard time limits** in every brief (builder 30–50 min, reviewer 10–30, QA 15–35).
-- **Only the orchestrator merges.** Reviewer and QA agents never merge, even when the gate would pass.
-- **Every bug fix adds a test** that would have caught it (`docs/testing.md`).
-- **Verdicts name a sha;** a rebase or a non-QA-test commit needs a delta re-review.
-- **Branch deletion after a merge can fail from a cloud session;** delete it from the Mac.
-- **Lightsail:** never touch Arcway; take a `pg_dump` before any database change; no secrets or connection details in the (public) repo.
+The pipeline rules are in `docs/pipeline/`. Every brief also gets a hard time limit (builder 30–50 min, reviewer 10–30, QA 15–35). Before any database change on Lightsail, take a `pg_dump`.
 
 ## Out of scope for R7
 

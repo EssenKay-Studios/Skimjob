@@ -1,0 +1,74 @@
+name: Bug
+description: Something in the game is broken.
+type: Bug
+projects: ["EssenKay-Studios/2"]
+body:
+  - type: input
+    id: where
+    attributes:
+      label: Where
+      description: The screen or area.
+    validations:
+      required: true
+  - type: dropdown
+    id: device
+    attributes:
+      label: Device
+      options: [phone, laptop, both]
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: "1. ...\n2. ..."
+    validations:
+      required: true
+  - type: textarea
+    id: happened
+    attributes:
+      label: What happened
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected
+    validations:
+      required: true
+  - type: textarea
+    id: screenshot
+    attributes:
+      label: Screenshot
+      description: Optional. Paste or drag an image here.
+  - type: input
+    id: build
+    attributes:
+      label: Build or date
+      description: Optional. When you saw it.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: [board, bots, caseboard, chat, ci, host, learn, lobby, meeting, move, plan, reveal, roles, shell, teaching]
+    validations:
+      required: true
+  - type: input
+    id: design
+    attributes:
+      label: Design reference
+      description: A section of docs/design.md (e.g. §5.2), or "rule change".
+    validations:
+      required: true
+  - type: dropdown
+    id: owner-decision
+    attributes:
+      label: Owner decision needed?
+      options: ["no", "yes"]
+    validations:
+      required: true
+  - type: input
+    id: related
+    attributes:
+      label: Related tickets
+      description: Optional. e.g. #123, #130

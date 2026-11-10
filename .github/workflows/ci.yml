@@ -1,7 +1,6 @@
-# CI: typecheck, knip, theme-token lint, scoped unit + property + integration tests, scoped web e2e, simulator smoke.
-# A PR runs what its diff touches (scripts/scope.mjs, docs/testing.md "Scoped tests"); a push to main
-# and the nightly run (02:17 UTC) are the full tier. "CI ok" is the one check branch protection
-# and the merge gate need. Nothing deploys from CI: releases go to Lightsail by hand (docs/deploy.md).
+# CI: typecheck, knip, theme-token lint, unit + property + integration tests, web e2e, simulator smoke.
+# Every PR, every push to main and the nightly run (02:17 UTC) run the full tier (docs/testing.md).
+# "CI ok" is the one check branch protection and the merge gate need. Nothing deploys from CI: releases go to Lightsail by hand (docs/deploy.md).
 name: CI
 
 on:
@@ -11,8 +10,7 @@ on:
   schedule:
     - cron: "17 2 * * *"
 
-# Read-only default token: nothing here writes to the repo, and no workflow that runs PR code may
-# post as github-actions[bot] (the merge gate trusts that login for review verdicts).
+# Read-only default token: nothing here writes to the repo.
 permissions:
   contents: read
 
@@ -22,38 +20,8 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # What the diff needs: unit (all, none or package dirs), tags (all, none or a Playwright --grep) and
-  # sim (games per size, 0 = skip). Pushes to main, the nightly run and any diff error get the full tier.
-  changes:
-    name: Changed files
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    outputs:
-      unit: ${{ steps.scope.outputs.unit }}
-      tags: ${{ steps.scope.outputs.tags }}
-      sim: ${{ steps.scope.outputs.sim }}
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          fetch-depth: 0
-      - id: scope
-        env:
-          EVENT: ${{ github.event_name }}
-          BASE: ${{ github.event.pull_request.base.sha }}
-          HEAD: ${{ github.event.pull_request.head.sha }}
-        run: |
-          if [ "$EVENT" = pull_request ] && files=$(git diff --name-only --no-renames "$BASE...$HEAD"); then
-            echo "$files"
-            scope=$(node scripts/scope.mjs <<<"$files")
-          else
-            scope=$(node scripts/scope.mjs --full)
-          fi
-          echo "$scope"
-          for k in unit tags sim; do echo "$k=$(jq -r ".$k" <<<"$scope")" >> "$GITHUB_OUTPUT"; done
-
   test:
     name: Typecheck and tests
-    needs: changes
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -83,19 +51,9 @@ jobs:
       # Every e2e test has exactly one feature tag and every feature module has an entry (apps/web/e2e/features.json).
       - run: node scripts/scope.mjs --check
       # Unit, QA, engine property (*.prop.test.ts, seeded) and server scenario (*.int.test.ts, PGlite) tests.
-      - name: Tests (the changed packages and what depends on them)
-        env:
-          UNIT: ${{ needs.changes.outputs.unit }}
-        run: |
-          case "$UNIT" in
-            "") ;;
-            all) pnpm test ;;
-            *) pnpm test $UNIT ;;
-          esac
+      - run: pnpm test
 
   e2e:
-    needs: changes
-    if: needs.changes.outputs.tags != ''
     # Six shards in parallel, each with its own servers (playwright.config.ts) and a balanced set of spec
     # files (scripts/scope.mjs --shard, weights in apps/web/e2e/shard-weights.json).
     name: Web e2e (Playwright, shard ${{ matrix.shard }}/6)
@@ -127,14 +85,11 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Playwright (shard ${{ matrix.shard }}/6)
         working-directory: apps/web
-        env:
-          TAGS: ${{ needs.changes.outputs.tags }}
         run: |
           files=$(node ../../scripts/scope.mjs --shard ${{ matrix.shard }}/6)
           [ -n "$files" ] || exit 0
-          args=(--pass-with-no-tests)
-          if [ "$TAGS" != all ]; then args+=(--grep "$TAGS"); fi
-          npx playwright test "${args[@]}" $files
+          # shellcheck disable=SC2086 # one argument per spec file
+          npx playwright test --pass-with-no-tests $files
       - if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -143,8 +98,6 @@ jobs:
           if-no-files-found: ignore
 
   sim-smoke:
-    needs: changes
-    if: needs.changes.outputs.sim != '0'
     name: Simulator smoke (all-bot games at 3/6/12 players)
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -156,12 +109,12 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: bash scripts/sim-smoke.sh ${{ needs.changes.outputs.sim }}
+      - run: bash scripts/sim-smoke.sh 200
 
-  # Always runs: passes when every job above passed or was skipped on purpose.
+  # Always runs: passes when every job above passed.
   ci-ok:
     name: CI ok
-    needs: [changes, test, e2e, sim-smoke]
+    needs: [test, e2e, sim-smoke]
     if: always()
     runs-on: ubuntu-latest
     steps:

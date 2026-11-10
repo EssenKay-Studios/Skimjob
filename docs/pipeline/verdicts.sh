@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck disable=SC2016  # single-quoted jq programs are expanded later on purpose
 # usage: verdicts.sh PR
 # Prints the PR head, the latest reviewer and QA verdicts with the head each names,
 # commits since the review, CI on the head, authorship, and a last line
@@ -7,19 +8,13 @@
 # Read-only. GitHub REST API only (`gh api`; no GraphQL, no `gh pr`), so it runs on
 # the Mac and in cloud sessions alike. Works from any directory (REPO overrides the repo).
 #
-# Only reviews/comments by GATE_AUTHORS count (see below); the review bots in
-# GATE_REVIEW_BOTS (default github-actions[bot], the login the "Claude review" workflow's
-# post job uses) count for reviewer `VERDICT:` reviews/comments ONLY, never for `QA:`
-# verdicts, and only when the PR changes nothing under .github/ or docs/pipeline/ (else
-# a PR could add a workflow that posts a fake verdict as that login) and no Claude config
-# (.claude/, .claude.json, .mcp.json, CLAUDE.md, CLAUDE.local.md). DISMISSED and
-# PENDING reviews never count.
+# Only reviews/comments by karthik24iyer count; DISMISSED and PENDING reviews never do.
 # Mergeable iff: the latest verdict-like review/comment is exactly
 # `VERDICT: APPROVE` + `Head: <sha S_r>` (a malformed latest one is a no, never a
 # fall-back to an older one); the latest QA-like one is exactly
 # `QA: PASS` + `Head: <current head>`; every commit (old and new paths) in
 # S_r..head touches only *.qa.test.ts / *.qa.spec.ts (else a delta re-review is needed); every
-# check-run on the head completed as success/skipped/neutral; PR open, not draft,
+# check-run on the head completed as success/skipped/neutral and `CI ok` succeeded; PR open, not draft,
 # mergeable_state clean; every commit authored by karthik24iyer <karthik24iyer@gmail.com>
 # and no commit message has a co-authored-by / claude-session / generated-by line.
 set -o pipefail
@@ -74,26 +69,8 @@ echo "head:   $head"
 [ "$draft" = false ] || no "PR is a draft"
 [ "$mstate" = clean ] || no "merge state $mstate (want clean)"
 
-# Verdicts count only from the pipeline's accounts (the repo is public, so anyone
-# can comment): GATE_AUTHORS, comma-separated logins, default karthik24iyer.
+# Verdicts count only from karthik24iyer (the repo is public, so anyone can comment).
 # Everyone else is ignored entirely, and so are PENDING (unsubmitted) reviews.
-GATE_AUTHORS=${GATE_AUTHORS:-karthik24iyer}
-[[ $GATE_AUTHORS =~ ^[A-Za-z0-9-]+(,[A-Za-z0-9-]+)*$ ]] || fatal "bad GATE_AUTHORS '$GATE_AUTHORS'"
-allow="[\"${GATE_AUTHORS//,/\",\"}\"]"
-# Review bots (may post reviewer VERDICTs, never QA): GATE_REVIEW_BOTS, comma-separated
-# logins as GitHub reports them (Actions' GITHUB_TOKEN posts as `github-actions[bot]`); set it empty to trust none.
-GATE_REVIEW_BOTS=${GATE_REVIEW_BOTS-github-actions[bot]}
-[[ -z $GATE_REVIEW_BOTS || $GATE_REVIEW_BOTS =~ ^[A-Za-z0-9-]+(\[bot\])?(,[A-Za-z0-9-]+(\[bot\])?)*$ ]] || fatal "bad GATE_REVIEW_BOTS '$GATE_REVIEW_BOTS'"
-if [ -n "$GATE_REVIEW_BOTS" ]; then allowv="[\"${GATE_AUTHORS//,/\",\"}\",\"${GATE_REVIEW_BOTS//,/\",\"}\"]"; else allowv=$allow; fi
-# Bots count only if the PR touches nothing under .github/ or docs/pipeline/ (old and new paths).
-# Unreadable file list: fail closed. 3000 is the API's cap on listed files: treat it as touched.
-if [ -n "$GATE_REVIEW_BOTS" ]; then
-  pfiles=$(pages "pulls/$N/files" . '.filename, (.previous_filename // empty)') || fatal "cannot read the files of PR #$N"
-  if grep -qiE '^(\.github/|docs/pipeline/|\.claude/|\.claude\.json$|\.mcp\.json$)|/\.claude/|(^|/)claude(\.local)?\.md$' <<<"$pfiles" || [ "$(grep -c . <<<"$pfiles")" -ge 3000 ]; then
-    allowv=$allow
-    echo "bots:   ignored (PR touches .github/, docs/pipeline/ or Claude config: needs a human-account review)"
-  fi
-fi
 # Reviews and PR comments are both scanned for both kinds (an agent may post on
 # the wrong channel). Each body is one kind at most, any case, leading markdown
 # (* # > _ blanks) ignored: its first line starts with "verdict" or "qa"; else a
@@ -101,14 +78,13 @@ fi
 # Output per match: "<time>\t<kind>\t<line 1>\t<line 2>". The newest of each kind
 # is used and must be in the exact format; there is no fall-back to older ones.
 scan='select((.state // "") != "PENDING" and (.state // "") != "DISMISSED")
-  | select(.user.login as $u | '"$allowv"' | any(. == $u))
+  | select(.user.login == "'"$AUTHOR_NAME"'")
   | (.body // "") as $b | ($b | gsub("\r"; "") | split("\n")) as $l
   | (if ($b | test("^[\\s\\x{feff}*#>_]*verdict"; "i")) then "verdict"
      elif ($b | test("^[\\s\\x{feff}*#>_]*qa\\b"; "i")) then "qa"
      elif $ch == "review" and ($b | test("verdict"; "i")) then "verdict"
      elif $ch == "comment" and ($b | test("\\bqa\\s*[:\u2014\u2013]"; "i")) then "qa"
      else empty end) as $k
-  | select($k == "verdict" or (.user.login as $u | '"$allow"' | any(. == $u)))
   | [(.submitted_at // .created_at // ""), $k, $l[0], ($l[1] // "")] | @tsv'
 found=$(pages "pulls/$N/reviews" . "\"review\" as \$ch | $scan") || fatal "cannot read reviews"
 c=$(pages "issues/$N/comments" . "\"comment\" as \$ch | $scan") || fatal "cannot read PR comments"
