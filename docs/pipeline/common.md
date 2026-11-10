@@ -35,7 +35,7 @@ Your prompt says which of the three setups you are in. The rules below are the s
 **(c) A cloud session working entirely in its Linux container.**
 - Clone under `/home/claude` (`git clone https://github.com/EssenKay-Studios/Skimjob.git`), branch from `origin/main`, set the git user as above. Node 22 is preinstalled; `pnpm install --frozen-lockfile`.
 - **GraphQL is blocked:** `gh pr create/view/checks/merge` fail. Use `gh api` (REST) for everything, as in the commands below; the gate scripts already do.
-- The box is slow (2 cores): run only the affected unit tests and specs (`pnpm precheck` scopes itself), and rely on CI for the rest. Install Chromium with `cd apps/web && npx playwright install --with-deps chromium` if you need e2e.
+- The box is slow (2 cores): run only the affected unit tests and specs (QA's `pnpm precheck` scopes itself; builders follow "Testing speed"), and rely on CI for the rest. Install Chromium with `cd apps/web && npx playwright install --with-deps chromium` if you need e2e.
 
 ## Rules
 

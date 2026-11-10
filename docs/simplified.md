@@ -444,7 +444,7 @@ A single always-on **"CI ok"** job depends on all the others and passes when eac
 - **Build and test on the Mac** (18 cores) when reachable; the cloud box has 2 cores.
 - **Builders run only the static checks, the unit tests their diff needs and their new or changed e2e specs ×3**, push to a draft PR and mark it ready once CI is green (`docs/pipeline/common.md` "Testing speed"); the full suite runs on `main` after the merge.
 - **At most 3 e2e runs on the Mac at a time, 4 browser workers each** (`playwright.config.ts`): 10 parallel 12-seat games on a busy Mac produced a false failure.
-- **Review and QA start together** as soon as a PR is marked ready. **Hard time limits** in every brief (builder 30–50 min, reviewer 10–30, QA 15–35).
+- **Review and QA start together** once the builder marks the PR ready (CI green). **Hard time limits** in every brief (builder 30–50 min, reviewer 10–30, QA 15–35).
 - **Only the orchestrator merges.** Reviewer and QA agents never merge, even when the gate would pass.
 - **Every bug fix adds a test** that would have caught it (`docs/testing.md`).
 - **Verdicts name a sha;** a rebase or a non-QA-test commit needs a delta re-review.
