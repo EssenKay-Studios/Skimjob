@@ -46,6 +46,7 @@ async function sweep(page: Page, label: string, reopen?: () => Promise<void>) {
   mkdirSync(SHOTS, { recursive: true });
   for (const w of WIDTHS) {
     await page.setViewportSize({ width: w, height: w < 700 ? 800 : 900 });
+    await clearMeeting(page); // a meeting can fall due between widths; its modal cards cover the panel buttons
     await openPanel(page, "This round");
     await reopen?.();
     // The sheet and the pop-up spring in (0.55 s): measure once they have landed.
@@ -188,12 +189,14 @@ for (const seats of [6, 12]) {
     // A meeting that fell due first (chance) sits over the panels as modal cards: close them as a player would, then look.
     await clearMeeting(page);
     await expect(panel(page).getByText(/ of \d+ agreed/)).toBeVisible({ timeout: 60_000 });
-    await expect(panel(page).getByText("Round 1 alibi: where were you?")).toBeVisible();
+    // The offer is for the latest resolved round: a meeting that held the game up (the player idles through it) moves it past
+    // round 1, and the round can tick again before the post lands, so the round number is not pinned.
+    await expect(panel(page).getByText(/^Round \d+ alibi: where were you\?$/)).toBeVisible();
     await expect(panel(page).getByRole("button", { name: new RegExp(`^${GUESTS[0]}: no claims\\.`) })).toBeVisible();
     await sweep(page, `s${seats}-round2-alibi`);
     await panel(page).getByRole("group", { name: "Alibi room" }).getByRole("button", { name: "Lobby" }).click();
     await panel(page).getByRole("button", { name: "Post alibi" }).click();
-    await expect(panel(page).getByText(/You told the crew you were in the\s*Lobby\s*in round 1/)).toBeVisible();
+    await expect(panel(page).getByText(/You told the crew you were in the\s*Lobby\s*in round \d+/)).toBeVisible();
     // Re-check bug 2: the posted alibi is one inline sentence, not a grid of rows.
     expect(await panel(page).locator("p.plan__alibi").evaluate((el) => getComputedStyle(el).display)).toBe("block");
     await sweep(page, `s${seats}-alibi-posted`);
