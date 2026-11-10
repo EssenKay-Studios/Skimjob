@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { startGame } from "./setupGame";
+import { openPanel, startGame } from "./setupGame";
 
 // The case board shell (design §15.4, S3b.5) on /dev/gallery at the five launch widths:
 // tap a lead to open its facts, pin a lead or a single fact into the Pinned group,
@@ -144,20 +144,28 @@ test("the suspect card names its basis and each lead has its summary line @caseb
   await ctx.close();
 });
 
-// The live game keeps the board in its grid place at every width, 960 to 1023 px included.
+// The live game keeps the case board in the shell at every width: a side tab beside the bank from 1024 px, a bottom sheet below it.
 for (const width of [960, 980, 1023, 1024, 1280]) {
   test(`in the live game the case board has its own place at ${width} px @caseboard`, async ({ browser }) => {
     const ctx = await browser.newContext({ viewport: { width, height: 900 } });
     const page = await ctx.newPage();
     const game = await startGame(page.request, { bots: 3, sessionLength: "1w" });
     await page.goto(`/game/${game.id}`);
+    await openPanel(page, "Case");
     const board = page.getByRole("region", { name: "Case board" });
     const bank = page.getByRole("region", { name: "The bank" });
     await expect(board).toBeVisible();
-    const [b, k] = [await board.boundingBox(), await bank.boundingBox()];
-    // Beside the bank, in the right column; from 960 to 1023 px it starts level with the bank, not dropped under the crew.
-    expect(b!.x).toBeGreaterThan(k!.x + k!.width - 1);
-    if (width < 1024) expect(Math.abs(b!.y - k!.y)).toBeLessThanOrEqual(2);
+    const b = (await board.boundingBox())!;
+    if (width >= 1024) {
+      // In the left column, level with the bank and to its left.
+      const k = (await bank.boundingBox())!;
+      expect(b.x + b.width).toBeLessThanOrEqual(k.x + 1);
+    } else {
+      // In the sheet, inside the screen.
+      await expect(page.locator("dialog.bsheet[open] .bsheet__head h2")).toHaveText("Case");
+      expect(b.x).toBeGreaterThanOrEqual(0);
+      expect(b.x + b.width).toBeLessThanOrEqual(width);
+    }
     const o = await overflow(page);
     expect(o.scroll).toBeLessThanOrEqual(o.client);
     await ctx.close();

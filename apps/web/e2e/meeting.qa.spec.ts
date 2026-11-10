@@ -1,6 +1,6 @@
 import { mkdirSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
-import { callEmergency, startGame } from "./setupGame";
+import { callEmergency, openPanel, startGame } from "./setupGame";
 import { pickRoom } from "./move";
 
 // QA for M2-7 (PR #35): three human contexts in one game, 1-hour preset at
@@ -47,6 +47,7 @@ for (const mode of ["hiddenThenRevealed", "open", "secret"] as const) {
     for (const p of [host, g1, g2]) p.on("pageerror", (e) => errors.push(e.message));
     const game = await startGame(host.request, { bots: 0, guests: [g1.request, g2.request], voteVisibility: mode, sessionLength: "1h" });
     await Promise.all([host, g1, g2].map((p) => p.goto(`/game/${game.id}`)));
+    for (const p of [host, g1, g2]) await openPanel(p, "This round"); // below 1024 px it stays open: the vote dialog opens over it
 
     // Round 1: the host loots the Office.
     await pickRoom(host, "Office");
@@ -102,7 +103,7 @@ for (const mode of ["hiddenThenRevealed", "open", "secret"] as const) {
     await shot(host, `${mode}-host-dialog`);
 
     // The host reloads mid-meeting: the ballot is still theirs.
-    await host.reload();
+    await host.reload(); // below 1024 px the meeting brings the "This round" sheet up by itself, and the vote dialog with it
     const again = host.getByRole("button", { name: "Change your vote" });
     // The vote dialog reopens by itself after a reload (or via "Change your vote").
     await expect(hd).toBeVisible({ timeout: 5_000 }).catch(() => again.click());
@@ -131,6 +132,7 @@ for (const mode of ["hiddenThenRevealed", "open", "secret"] as const) {
     const back = await c2.newPage();
     back.on("pageerror", (e) => errors.push(e.message));
     await back.goto(`/game/${game.id}`);
+    await openPanel(back, "This round");
     // The results banner lasts until the next round resolves: they were the one shaken down.
     if (talker) await expect(back.getByRole("region", { name: /No majority/ })).toBeVisible();
     else await expect(back.getByRole("region", { name: /The crew voted/ })).toContainText("The crew voted to shake you down");

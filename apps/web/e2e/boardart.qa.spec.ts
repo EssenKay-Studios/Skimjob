@@ -89,13 +89,16 @@ test("a 12-seat game with a 24-character name: bells fit at every width, the pre
     await expect(
       page.getByRole("img", { name: /^Wanted 0 of \d+$/ }),
     ).toBeVisible();
-    const vault = await page
-      .locator('.bank-room[data-room="vault"]')
-      .boundingBox();
-    expect(
-      Math.min(vault!.width, vault!.height),
-      `${width}px vault target`,
-    ).toBeGreaterThanOrEqual(44);
+    // The shell swaps layouts at 1024 px and remounts the board: measure inside the retry.
+    await expect(async () => {
+      const vault = await page
+        .locator('.bank-room[data-room="vault"]')
+        .boundingBox();
+      expect(
+        Math.min(vault!.width, vault!.height),
+        `${width}px vault target`,
+      ).toBeGreaterThanOrEqual(44);
+    }).toPass({ timeout: 5_000 });
   }
 });
 
@@ -212,13 +215,15 @@ test("HUD with 12 seats and a 24-character name: Bank lines up with Share and th
   await page.goto(`/game/${game.id}`);
   for (const width of WIDTHS) {
     await page.setViewportSize({ width, height: 900 });
-    const bank = await page.locator(".hud__bank .hud__big").boundingBox();
-    const share = await page.locator(".hud__share .hud__big").boundingBox();
-    expect(Math.abs(bank!.y - share!.y), `${width}px`).toBeLessThanOrEqual(2);
-    for (const tip of await page.locator(".hud .infotip").all()) {
-      const b = await tip.boundingBox();
-      expect(Math.min(b!.width, b!.height), `${width}px i`).toBeGreaterThanOrEqual(44);
-    }
+    await expect(page.locator(".hud__bank .hud__big")).toBeVisible(); // the shell swaps its layout at 1024 px: wait for the new one
+    await expect(async () => {
+      const [bankY, shareY] = await page.evaluate(() => [".hud__bank .hud__big", ".hud__share .hud__big"].map((q) => document.querySelector(q)?.getBoundingClientRect().y ?? NaN));
+      expect(Math.abs(bankY! - shareY!), `${width}px`).toBeLessThanOrEqual(2);
+    }).toPass({ timeout: 5_000 });
+    // Measured in one go in the page, so a layout swap between two reads cannot leave a stale handle.
+    const sizes = await page.evaluate(() => [...document.querySelectorAll(".hud .infotip")].map((t) => Math.min(t.getBoundingClientRect().width, t.getBoundingClientRect().height)));
+    expect(sizes.length, `${width}px has the i buttons`).toBeGreaterThan(0);
+    for (const size of sizes) expect(size, `${width}px i`).toBeGreaterThanOrEqual(44);
     // The negative margin must not let the i spill over the HUD's round line or out of the card.
     const spill = await page.evaluate(() => {
       const hud = document.querySelector(".hud")!.getBoundingClientRect();

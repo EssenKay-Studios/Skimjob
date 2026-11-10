@@ -31,7 +31,7 @@ import type { Connection, Reply } from "../game/useGame";
 import { sentence } from "../api";
 import { Avatar } from "./Avatar";
 import { Button } from "./Button";
-import { Bubble, Close, Evidence, Plus, Send } from "./icons";
+import { Bubble, Evidence, Plus, Send } from "./icons";
 import { FrameArt, SketchFrame, useElementSize } from "./SketchFrame";
 import { Underline } from "./Underline";
 import "./chat.css";
@@ -152,17 +152,16 @@ export interface ChatPanelProps {
   readonly events?: readonly FeedEvent[];
   /** Whether others are told that a DM happened (the host's setting). */
   readonly dmNotices?: boolean;
-  /** On screen now (the side panel, or the open sheet): new messages count as read. */
-  readonly visible: boolean;
-  /** Shown as a close button (the phone / tablet sheet). */
-  readonly onClose?: () => void;
-  /** Focus the composer when this changes (the sheet opening). */
-  readonly focusKey?: number;
+  /** Unsent drafts per thread. Held by the caller, so one survives the panel closing (the phone sheet) and a tab switch. */
+  readonly drafts: ChatDrafts;
+  readonly onDraft: (thread: ThreadId, text: string) => void;
   readonly className?: string;
 }
 
+export type ChatDrafts = Readonly<Partial<Record<ThreadId, string>>>;
+
 export function ChatPanel(props: ChatPanelProps) {
-  const { me, people, chat, read, onRead, send, connection, evidence, events = [], dmNotices = true, visible, onClose, focusKey, className } = props;
+  const { me, people, chat, read, onRead, send, connection, evidence, events = [], dmNotices = true, drafts, onDraft, className } = props;
   const byId = useMemo(() => new Map(people.map((p) => [p.id, p])), [people]);
   const ctx = useMemo(
     () => ({
@@ -183,8 +182,6 @@ export function ChatPanel(props: ChatPanelProps) {
   const pageVisible = usePageVisible();
   const composer = useRef<HTMLTextAreaElement>(null);
   const sent = useRef<number[]>([]);
-  /** Unsent drafts per thread, so switching tabs never loses one. */
-  const [drafts, setDrafts] = useState<Readonly<Partial<Record<ThreadId, string>>>>({});
   const headId = useId();
 
   // ---- scrolling: follow the latest unless you've scrolled up to read ----
@@ -193,7 +190,6 @@ export function ChatPanel(props: ChatPanelProps) {
   const [atBottom, setAtBottom] = useState(true);
   const [newBelow, setNewBelow] = useState(false);
   const lastThread = useRef<ThreadId | null>(null);
-  const wasVisible = useRef(false);
   const last = items.at(-1);
   const toEnd = () => {
     const el = feed.current;
@@ -203,14 +199,13 @@ export function ChatPanel(props: ChatPanelProps) {
     setNewBelow(false);
   };
   useLayoutEffect(() => {
-    const jump = lastThread.current !== thread || (visible && !wasVisible.current);
+    const jump = lastThread.current !== thread;
     lastThread.current = thread;
-    wasVisible.current = visible;
     const mine = last?.kind === "message" && last.message.from === me;
     if (jump || atBottomRef.current || mine) toEnd();
     else if (last) setNewBelow(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [last?.key, thread, visible]);
+  }, [last?.key, thread]);
   const onScroll = () => {
     const el = feed.current;
     if (!el) return;
@@ -220,15 +215,11 @@ export function ChatPanel(props: ChatPanelProps) {
     if (bottom) setNewBelow(false);
   };
 
-  // ---- read marks: what you can see at the bottom of an on-screen feed ----
+  // ---- read marks: what you can see at the bottom of the feed (the panel is mounted only while it is on screen) ----
   const latest = latestAt(chat, thread, me);
   useEffect(() => {
-    if (visible && pageVisible && atBottom && latest) onRead(thread, latest);
-  }, [visible, pageVisible, atBottom, latest, thread, onRead]);
-
-  useEffect(() => {
-    if (focusKey) composer.current?.focus({ preventScroll: true });
-  }, [focusKey]);
+    if (pageVisible && atBottom && latest) onRead(thread, latest);
+  }, [pageVisible, atBottom, latest, thread, onRead]);
 
   const openThread = (t: ThreadId) => {
     setThread(t);
@@ -247,7 +238,6 @@ export function ChatPanel(props: ChatPanelProps) {
         <h2 id={headId} className="chat__title">
           <Underline seed="chat">Chat</Underline>
         </h2>
-        {onClose && <Button variant="small" seed="chat-close" icon={<Close />} aria-label="Close chat" onClick={onClose} />}
       </div>
 
       <div className="chat__tabs" role="group" aria-label="Conversations">
@@ -315,7 +305,7 @@ export function ChatPanel(props: ChatPanelProps) {
         // Closing after a share leaves the DM picker alone if it was opened meanwhile.
         onPick={(on) => setPicker((p) => (on ? "evidence" : p === "evidence" ? "none" : p))}
         draft={drafts[thread] ?? ""}
-        onDraft={(text) => setDrafts((d) => ({ ...d, [thread]: text }))}
+        onDraft={(text) => onDraft(thread, text)}
       />
     </SketchFrame>
   );

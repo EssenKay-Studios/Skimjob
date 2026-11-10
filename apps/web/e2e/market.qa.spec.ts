@@ -1,6 +1,6 @@
 import { mkdirSync } from "node:fs";
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { startGame } from "./setupGame";
+import { openPanel, startGame } from "./setupGame";
 
 // QA (S4.7, #108): the black market sheet in real bot games, Open and Secret
 // vote modes. Every websocket frame is kept: no frame may tie a purchase to its
@@ -162,6 +162,7 @@ test.describe("QA black market, real games", () => {
     await expect(sheet.getByRole("button", { name: "Buy Bail" })).toBeDisabled();
     await expect(sheet.getByText(/already hold a Bail|You bought Bail/).first()).toBeVisible();
     await page.keyboard.press("Escape");
+    await openPanel(page, "Case");
     await expect(page.getByRole("region", { name: "Case board" })).toContainText("Someone bought Bail", { timeout: 90_000 });
     expect(leaks(frames)).toEqual([]);
   });

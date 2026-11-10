@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { startGame } from "./setupGame";
+import { openPanel, startGame } from "./setupGame";
 
 // QA (M2-10, PR #46): the suspicion board renders hostile notes as text and
 // stays private (design §12.3); 12 seats at the narrowest and widest widths.
@@ -20,6 +20,7 @@ test("hostile notes are plain text; nothing of the board reaches the other seat;
   });
   const game = await startGame(host.request, { bots: 2, guests: [guest.request], sessionLength: "1w" });
   await host.goto(`/game/${game.id}`);
+  await openPanel(host, "Notes");
   const board = host.getByRole("region", { name: "Your suspicion board" });
   const row = board.getByRole("group", { name: "Your tag for Guest 1" });
   await row.getByRole("button", { name: "Add note" }).click();
@@ -28,6 +29,7 @@ test("hostile notes are plain text; nothing of the board reaches the other seat;
   await board.getByRole("button", { name: "Save note" }).click();
   await expect(board.locator(".sus-row__note")).toHaveText(evil);
   await host.reload();
+  await openPanel(host, "Notes");
   await expect(host.getByRole("region", { name: "Your suspicion board" }).locator(".sus-row__note")).toHaveText(evil);
   expect(await host.evaluate(() => (window as unknown as { __xss?: number }).__xss)).toBeUndefined();
   expect(await host.locator(".sus img, .sus script").count()).toBe(0);
@@ -38,6 +40,7 @@ test("hostile notes are plain text; nothing of the board reaches the other seat;
   await host.getByRole("button", { name: "Save note" }).click();
   await expect(host.getByRole("region", { name: "Your suspicion board" }).getByRole("alert")).toBeVisible();
   await host.reload();
+  await openPanel(host, "Notes");
   await expect(host.getByRole("region", { name: "Your suspicion board" }).locator(".sus-row__note")).toHaveText(evil);
 
   // The guest's own notes are their own; a stranger has none.
@@ -49,6 +52,7 @@ test("hostile notes are plain text; nothing of the board reaches the other seat;
   expect((await stranger.get(`/api/games/${game.id}/notes`)).status()).toBe(404);
   expect((await stranger.patch(`/api/games/${game.id}/notes/board`, { data: { subject: "p1", tag: "trusted" } })).status()).toBe(404);
   await guest.goto(`/game/${game.id}`);
+  await openPanel(guest, "Notes");
   await expect(guest.getByRole("region", { name: "Your suspicion board" })).toBeVisible();
   await expect(guest.locator("body")).not.toContainText("onerror");
   expect(errors).toEqual([]);
@@ -68,6 +72,7 @@ for (const viewport of [
     const page = await ctx.newPage();
     const game = await startGame(page.request, { bots: 11, sessionLength: "1w" });
     await page.goto(`/game/${game.id}`);
+    await openPanel(page, "Notes");
     const board = page.getByRole("region", { name: "Your suspicion board" });
     await expect(board.locator(".sus-row")).toHaveCount(11);
     // Tag everyone, one long unbroken note on the last.
@@ -81,18 +86,28 @@ for (const viewport of [
     await board.locator("input, textarea").first().fill("W".repeat(280));
     await board.getByRole("button", { name: "Save note" }).click();
     await expect(board.locator(".sus-row__note")).toHaveCount(1);
-    await expect(page.locator(".crew .sus-mark")).toHaveCount(11);
-    await expect(page.getByRole("region", { name: "Case board" })).toBeVisible();
-    const o = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth }));
-    expect(o.scroll).toBeLessThanOrEqual(o.client);
+    // Each panel (a side tab from 1024 px, a sheet below) fits and has 44 px targets.
+    const fits = async (selector: string) => {
+      const o = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth }));
+      expect(o.scroll).toBeLessThanOrEqual(o.client);
+      const small = await page.evaluate(
+        (sel) =>
+          [...document.querySelectorAll<HTMLElement>(sel)]
+            .map((el) => el.getBoundingClientRect())
+            .filter((r) => r.width > 0 && (r.width < 44 || r.height < 44)).length,
+        selector,
+      );
+      expect(small).toBe(0);
+    };
     const note = await board.locator(".sus-row__note").boundingBox();
     expect(note!.x + note!.width).toBeLessThanOrEqual(viewport.width);
-    const small = await page.evaluate(() =>
-      [...document.querySelectorAll<HTMLElement>(".sus button, .cb button")]
-        .map((el) => el.getBoundingClientRect())
-        .filter((r) => r.width > 0 && (r.width < 44 || r.height < 44)).length,
-    );
-    expect(small).toBe(0);
+    await fits(".sus button");
+    await openPanel(page, "Crew");
+    await expect(page.locator(".crew .sus-mark")).toHaveCount(11);
+    await fits(".crew button");
+    await openPanel(page, "Case");
+    await expect(page.getByRole("region", { name: "Case board" })).toBeVisible();
+    await fits(".cb button");
     if (process.env.SHOTS_DIR) await page.screenshot({ path: `${process.env.SHOTS_DIR}/qa-m210-12seats-${viewport.width}.png`, fullPage: true });
     await ctx.close();
   });

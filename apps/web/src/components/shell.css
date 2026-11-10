@@ -5,6 +5,17 @@
 .shell {
   --shell-gap: 12px;
 }
+/* The phone bar's parts: the tab bar and the dock, plus the bar's padding and gap. Their sum lifts the toasts clear of the bar. */
+:root {
+  --shell-tab-h: 52px;
+  --shell-dock-h: 56px;
+  --shell-bar-pad: 8px;
+  --shell-bar-h: calc(var(--shell-bar-pad) * 2 + var(--shell-dock-h) + var(--shell-tab-h));
+}
+/* While the phone layout is on screen, game toasts rise above its sticky bar (the tabs and the dock stay tappable). */
+:root:has(.shell--narrow) .toasts {
+  bottom: calc(var(--shell-bar-h) + 8px + env(safe-area-inset-bottom));
+}
 
 /* ---------- Phones and tablets ---------- */
 .shell--narrow {
@@ -15,9 +26,13 @@
   max-width: 640px;
   margin: 0 auto;
 }
-.shell--narrow > .shell__status,
 .shell--narrow > .shell__board {
   padding: 0 var(--gutter-r) 0 var(--gutter-l);
+}
+/* A frame keeps clear of the screen edge with a margin (its own padding is for what's inside). */
+.shell--narrow > .shell__status {
+  margin: 0 var(--gutter-r) 0 var(--gutter-l);
+  padding: 4px 6px;
 }
 .shell__board {
   min-width: 0;
@@ -28,8 +43,8 @@
   z-index: 2;
   margin-top: auto;
   display: grid;
-  gap: 8px;
-  padding: 8px var(--gutter-r) env(safe-area-inset-bottom) var(--gutter-l);
+  gap: var(--shell-bar-pad);
+  padding: var(--shell-bar-pad) var(--gutter-r) env(safe-area-inset-bottom) var(--gutter-l);
   background: var(--paper);
   border-top: 1.3px dashed var(--rule);
 }
@@ -37,7 +52,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 56px;
+  min-height: var(--shell-dock-h);
   padding: 6px 12px;
 }
 .shell__fill {
@@ -56,7 +71,7 @@
   justify-content: center;
   gap: 2px;
   min-width: 44px;
-  min-height: 52px;
+  min-height: var(--shell-tab-h);
   padding: 0;
   border: 0;
   background: none;
@@ -86,7 +101,7 @@
 /* ---------- Laptops ---------- */
 .shell--wide {
   display: grid;
-  grid-template-columns: minmax(200px, 240px) minmax(0, 1fr) minmax(240px, 280px);
+  grid-template-columns: minmax(200px, 296px) minmax(0, 1fr) minmax(240px, 280px);
   grid-template-rows: auto minmax(0, 1fr);
   gap: var(--shell-gap) 14px;
   height: calc(100dvh - var(--topbar-h));
@@ -96,7 +111,7 @@
 }
 @media (min-width: 1280px) {
   .shell--wide {
-    grid-template-columns: 280px minmax(0, 1fr) 326px;
+    grid-template-columns: 296px minmax(0, 1fr) 326px;
   }
 }
 .shell--wide > .shell__status {
@@ -159,11 +174,18 @@
   overscroll-behavior: contain;
 }
 .shell__seg {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 .shell__seg .btn {
-  flex: 1;
+  min-width: 0;
+}
+/* The unread count inside a side tab. */
+.shell__seg .shell__count {
+  position: static;
+  display: inline-block;
+  margin-left: 6px;
 }
 
 /* ---------- Bottom sheet ---------- */
@@ -183,9 +205,9 @@
   overflow: hidden;
   overscroll-behavior: contain;
 }
-/* The page behind a sheet does not scroll. */
-html.sheet-open,
-html.sheet-open body {
+/* The page behind a modal does not scroll. */
+html.modal-open,
+html.modal-open body {
   overflow: hidden;
 }
 .bsheet[open] {
@@ -208,14 +230,25 @@ html.sheet-open body {
   padding: 10px max(16px, env(safe-area-inset-right)) calc(28px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
   animation: bsheet-in 0.4s var(--slide) both;
 }
+/* The grip is a 44 px drag zone (swipe down to dismiss); its drawn bar is the ::before. */
 .bsheet__grip {
-  align-self: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  margin: -10px 0 -14px;
+  touch-action: none;
+  cursor: grab;
+}
+.bsheet__grip::before {
+  content: "";
   width: 46px;
   height: 5px;
   border-radius: var(--radius-grip);
   background: var(--ink-faint);
 }
 .bsheet__head {
+  position: relative; /* paints over the grip's drag zone, which overlaps it by 14 px */
   display: flex;
   align-items: center;
   gap: 8px;

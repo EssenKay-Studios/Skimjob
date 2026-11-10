@@ -319,7 +319,7 @@ Each item is deleted by the PR that builds its replacement (cleanup rule 1). Ste
 | "While you were away" recap | `components/AwayRecap.tsx`, `game/away.ts` | ~140 | keep the mechanism; rewriting its lines (planned for **S4.4**) is a follow-up (PM files the issue) |
 | R6 reveal (★ endings, token lines, Heat breakdown, timeline) | `components/Reveal.tsx` (395), `reveal.css` (269), `game/reveal.ts` (117), `screens/GalleryReveal.tsx` (172), engine `reveal.ts` (224), `types/reveal.ts` (119) | ~1,300 | engine parts with each S3a rule; web **S4.9** |
 | Meeting screens (act scheduling, slot planner) | `screens/Meetings.tsx` (611), `meetings.css` (274), `game/meeting.ts` (376) | ~1,250 | **S4.8** (keep the vote/tally kit: `MeetingKit.tsx`) |
-| Game screen layout (long scroll) | `screens/Game.tsx` (579), `game.css` (504), `game/hud.ts` (241) | ~1,300 | **S3b.2** (shell) and **S4.1–4.3** |
+| Game screen layout (long scroll) | `screens/Game.tsx` (579), `game.css` (504), `game/hud.ts` (241) | ~1,300 | **S3b.2** (shell) and **S4.1–4.3**. Done in S4 (#192): the live game mounts in `GameShell`; the old grid, the chat dock and its open button are gone |
 | Bank cutaway Heat/Lockdown states | `art/BankCutaway.tsx` Heat parts, `game/board.ts` | ~150 | **S4.1: done (#102)**: no Heat left; a raided room is taped with "CLOSED N" and a siren, Lockdown stays a plain closed room, and the Wanted sky tint stays |
 | e2e specs for replaced screens | `game*.spec.ts`, `extension*.spec.ts`, `reveal*.spec.ts`, `meeting*.spec.ts`, `notes*.spec.ts`, `board.qa.spec.ts`, `lockin.qa.spec.ts`, `responsive*.spec.ts` (route lists) | ~2,300 | the S4 step that replaces each screen (cleanup rule 1, test plan step 4) |
 

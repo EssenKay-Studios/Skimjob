@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { startGame } from "./setupGame";
+import { openPanel, startGame } from "./setupGame";
 
 // QA, M2-13 host controls (design §15): the host panel at 360 and 1280 px (no sideways
 // scroll, touch targets ≥ 44 px), only the host gets it, a guest's own API calls are refused,
@@ -22,6 +22,8 @@ for (const width of [360, 1280]) {
     await expect(guest.locator(".hud__kicker")).toContainText(/Round 1 of/);
 
     const panel = page.getByRole("region", { name: "Host controls" });
+    await openPanel(page, "This round");
+    await openPanel(guest, "This round");
     await expect(guest.getByRole("region", { name: "Host controls" })).toHaveCount(0);
     // A guest going round the UI is refused, and nothing shows as paused.
     for (const path of ["pause", "extend", "resume"]) {

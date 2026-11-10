@@ -1,6 +1,6 @@
 import { mkdirSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
-import { startGame } from "./setupGame";
+import { openPanel, startGame } from "./setupGame";
 
 // The black market sheet (design §12, mockup 5a): on /dev/gallery's local game,
 // buy with a target picker that never offers yourself (§11.1), the last-round
@@ -111,5 +111,6 @@ test("a real game: buy a perk; the crew hears of it with no name as the round re
   await expect(sheet.getByRole("status")).toContainText(`You bought ${name} this round`);
   await page.keyboard.press("Escape");
   // Held until the round resolves, then public and nameless.
+  await openPanel(page, "Case");
   await expect(page.getByRole("region", { name: "Case board" })).toContainText(`Someone bought ${name}`, { timeout: 90_000 });
 });

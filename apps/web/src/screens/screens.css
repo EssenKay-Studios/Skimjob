@@ -19,6 +19,13 @@
   margin: 0 auto;
   padding: max(14px, env(safe-area-inset-top)) var(--gutter-r) 4px var(--gutter-l);
 }
+/* On the game screen the top bar sits in the shell's column, so the wordmark lines up with the frames below (see shell.css). */
+.page:has(.shell--wide) .topbar {
+  max-width: 1400px;
+}
+.page:has(.shell--narrow) .topbar {
+  max-width: 640px;
+}
 .topbar__home {
   display: inline-flex;
   align-items: center;
@@ -337,11 +344,6 @@ hr.dashed {
 }
 .g-chat .g-col {
   justify-items: stretch;
-}
-.g-fab-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
 }
 .g-frames {
   display: grid;

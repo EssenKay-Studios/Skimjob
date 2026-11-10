@@ -1,6 +1,6 @@
 import { mkdirSync } from "node:fs";
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { callEmergency, startGame } from "./setupGame";
+import { callEmergency, openPanel, startGame } from "./setupGame";
 
 // M2-7 acceptance (docs/m2-plan.md): one full meeting and vote in the browser,
 // in each vote mode. The 1-hour preset at TIME_SCALE 0.1: round 1 resolves
@@ -11,6 +11,7 @@ const SHOTS = process.env.MEET_SHOTS ?? process.env.SHOTS_DIR;
 
 /** design §15.4: opens the newest case board lead titled `title` and returns it. */
 async function openLead(page: Page, title: string): Promise<Locator> {
+  await openPanel(page, "Case");
   const lead = page.getByRole("group", { name: "Leads" }).locator(".cb__lead", { has: page.locator(".cb__title", { hasText: title }) }).first();
   const btn = lead.locator(".cb__lead-btn");
   if ((await btn.getAttribute("aria-expanded")) === "false") await btn.click();
@@ -33,6 +34,7 @@ for (const mode of ["hiddenThenRevealed", "open", "secret"] as const) {
     page.on("pageerror", (e) => errors.push(e.message));
     const game = await startGame(page.request, { bots: 3, sessionLength: "1h", voteVisibility: mode });
     await page.goto(`/game/${game.id}`);
+    await openPanel(page, "This round"); // below 1024 px it stays open: the vote dialog opens over it
     await expect(page.getByRole("heading", { name: "Round 1 · Pick your room", level: 2 })).toBeVisible();
 
     // design §9.3: not while planning; in round 1's result window the button arms, then calls; then the crew's pool is spent.

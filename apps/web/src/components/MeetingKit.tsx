@@ -1,7 +1,8 @@
 // Meetings kit (M2-7, ui-style "Vote window"): the drawn clock face with hands,
 // the tally bars (hatched gold for the leader, green for what passed), the
 // result banner, and the dialog sheet the vote window opens in.
-import { useEffect, useRef, type CSSProperties, type ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
+import { Modal } from "./Modal";
 import { SketchFrame } from "./SketchFrame";
 
 /** A 36 px drawn clock: the long hand shows minutes left, the short one seconds (decorative; the text says the time). */
@@ -78,36 +79,14 @@ export interface DialogSheetProps {
 
 /**
  * A centred modal sheet, min(520px, 100%) wide, tilted -0.5°, springing in
- * from above (ui-style "Vote window"). Native <dialog>: Esc and the backdrop
- * close it, the page behind is inert while it's open.
+ * from above (ui-style "Vote window"), on the shared Modal base.
  */
 export function DialogSheet({ open, onClose, seed, labelledBy, children }: DialogSheetProps) {
-  const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    const d = ref.current;
-    if (!d) return;
-    if (open && !d.open) d.showModal();
-    if (!open && d.open) d.close();
-  }, [open]);
   return (
-    <dialog
-      ref={ref}
-      className="dialog"
-      aria-labelledby={labelledBy}
-      onClose={onClose}
-      onCancel={(e) => {
-        e.preventDefault();
-        onClose();
-      }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      {open && (
-        <SketchFrame seed={seed} radius={20} shadow={0.55} tape className="dialog__sheet">
-          {children}
-        </SketchFrame>
-      )}
-    </dialog>
+    <Modal open={open} onClose={onClose} className="dialog" labelledBy={labelledBy}>
+      <SketchFrame seed={seed} radius={20} shadow={0.55} tape className="dialog__sheet">
+        {children}
+      </SketchFrame>
+    </Modal>
   );
 }

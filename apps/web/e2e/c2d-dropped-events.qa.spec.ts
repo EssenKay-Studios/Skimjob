@@ -3,7 +3,7 @@
 // The Electrician's power cut is live again (design §11.1, §18: "Power cut in the Office", no
 // source; the gallery's "A power cut" label), so only a bare "Power cut", the old card's name, is banned.
 import { expect, test, type Page } from "@playwright/test";
-import { startGame } from "./setupGame";
+import { gameOver, keepRoundOpen, startGame } from "./setupGame";
 import { pickRoom } from "./move";
 
 const DROPPED = /Quiet night|Payday|(?<!a )Power cut(?! in the )|Raid rumou?r|Double[- ]cross|pocket count|how many (players )?pocketed/i;
@@ -27,9 +27,9 @@ test("a 15-min game with events on, played to the end: kept cards flip, no dropp
   const game = await startGame(page.request, { bots: 5 });
   await page.goto(`/game/${game.id}`);
   await expect(page.locator(".hud__kicker")).toContainText(/Round \d+ of 12/);
-  const over = page.getByRole("list", { name: "Final ranking" });
   const seen: string[] = [];
-  while (!(await over.isVisible())) {
+  while (!(await gameOver(page).isVisible())) {
+    await keepRoundOpen(page);
     const dialog = page.getByRole("dialog", { name: "Who's skimming?" });
     if (await dialog.isVisible().catch(() => false)) {
       seen.push(await text(page));

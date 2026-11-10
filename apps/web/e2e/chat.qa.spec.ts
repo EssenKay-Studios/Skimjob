@@ -5,7 +5,7 @@
 // someone without a seat, and the layout at 360 and 1280 px. design §12.1
 import { mkdirSync } from "node:fs";
 import { expect as baseExpect, test, type Browser, type Page } from "@playwright/test";
-import { startGame } from "./setupGame";
+import { chatTab, closeChat, openChat, showResult, startGame } from "./setupGame";
 
 const expect = baseExpect.configure({ timeout: 15_000 });
 // Screenshots only when QA_SHOTS names a folder (CI has no such folder).
@@ -56,17 +56,6 @@ async function restoreSocket(page: Page) {
   });
 }
 
-async function openChat(page: Page) {
-  const fab = page.locator(".chat-fab");
-  const region = page.getByRole("region", { name: "Chat" });
-  await expect(fab.or(region)).toBeVisible();
-  if (await fab.isVisible()) await fab.click();
-  await expect(region).toBeVisible();
-}
-async function closeChat(page: Page) {
-  const close = page.getByRole("button", { name: "Close chat" });
-  if (await close.isVisible()) await close.click();
-}
 const feed = (page: Page) => page.locator(".chat__feed");
 const composer = (page: Page) => page.locator(".chat__input");
 const sendBtn = (page: Page) => page.getByRole("button", { name: "Send", exact: true });
@@ -82,7 +71,7 @@ async function dm(page: Page, who: RegExp) {
 }
 async function loaded(page: Page, gameId: string) {
   await page.goto(`/game/${gameId}`);
-  await expect(page.getByRole("heading", { name: "Round 1 · Pick your room", level: 2 })).toBeVisible();
+  await expect(page.locator(".hud__kicker")).toContainText(/Round 1 of/);
 }
 /** No horizontal overflow on the page, no sideways scrolling in the chat, and nothing poking out of the panel. */
 async function noOverflow(page: Page, label: string) {
@@ -310,18 +299,15 @@ test("QA: unread badges per thread: a DM's badge and the crew's are separate, an
   const game = await startGame(page.request, { bots: 1, guests: [g1.request, g2.request], sessionLength: "1w" });
   for (const p of [page, g1, g2]) await loaded(p, game.id);
   for (const p of [g1, g2]) await openChat(p);
-  const wide = (page.viewportSize()?.width ?? 0) >= 1024;
 
   await dm(g2, /Host/);
   await say(g2, "dm one");
   await say(g2, "dm two");
   await say(g1, "crew one");
-  if (!wide) {
-    await expect(page.locator(".chat-fab")).toHaveAccessibleName("Open chat, 3 unread");
-    await expect(page.locator(".chat-fab .chat-badge")).toHaveText("3");
-    await openChat(page);
-  }
-  // Wide: the panel shows the crew feed, so the crew counts as read at once; the DM doesn't.
+  await expect(chatTab(page)).toHaveAccessibleName("Chat, 3 new");
+  await expect(chatTab(page).locator(".shell__count")).toHaveText("3");
+  await openChat(page);
+  // The panel shows the crew feed, so the crew counts as read at once; the DM doesn't.
   const dmTab = tabs(page).getByRole("button", { name: /^Guest 2 \(direct message\), 2 unread/ });
   await expect(dmTab).toBeVisible();
   await expect(tabs(page).getByRole("button", { name: /^Crew/ })).toHaveAccessibleName(/^Crew\s*$/);
@@ -334,15 +320,13 @@ test("QA: unread badges per thread: a DM's badge and the crew's are separate, an
   // Read marks survive a reload.
   await tabs(page).getByRole("button", { name: /^Crew/ }).click();
   await page.reload();
-  if (!wide) await expect(page.locator(".chat-fab")).toHaveAccessibleName("Open chat");
+  await expect(chatTab(page)).toHaveAccessibleName("Chat");
   await openChat(page);
   await expect(tabs(page).getByRole("button", { name: /unread/ })).toHaveCount(0);
-  if (!wide) {
-    // A hidden sheet marks nothing read.
-    await closeChat(page);
-    await say(g1, "crew three");
-    await expect(page.locator(".chat-fab")).toHaveAccessibleName("Open chat, 1 unread");
-  }
+  // A chat that is off screen (a closed sheet, another side tab) marks nothing read.
+  await closeChat(page);
+  await say(g1, "crew three");
+  await expect(chatTab(page)).toHaveAccessibleName("Chat, 1 new");
   for (const p of [g1, g2]) await p.context().close();
 });
 
@@ -354,31 +338,31 @@ test("QA: two tabs of one player share read marks: a DM read in tab A stays read
   const tabB = await page.context().newPage();
   for (const p of [page, tabB, g1, g2]) await loaded(p, game.id);
   for (const g of [g1, g2]) await openChat(g);
-  const fab = (p: Page) => p.locator(".chat-fab");
+  const fab = chatTab;
 
   await dm(g2, /Host/);
   await say(g2, "dm to host");
-  await expect(fab(page)).toHaveAccessibleName("Open chat, 1 unread");
-  await expect(fab(tabB)).toHaveAccessibleName("Open chat, 1 unread");
+  await expect(fab(page)).toHaveAccessibleName("Chat, 1 new");
+  await expect(fab(tabB)).toHaveAccessibleName("Chat, 1 new");
   // Tab A reads the DM; tab B hears about it through storage.
   await openChat(page);
   await tabs(page).getByRole("button", { name: /^Guest 2/ }).click();
   await expect(tabs(page).getByRole("button", { name: /^Guest 2/ })).not.toHaveAccessibleName(/unread/);
   await closeChat(page);
-  await expect(fab(tabB)).toHaveAccessibleName("Open chat");
+  await expect(fab(tabB)).toHaveAccessibleName("Chat");
   // A crew message; tab B reads the crew. Its write must not drop tab A's DM mark.
   await say(g1, "crew msg");
   await openChat(tabB);
   await expect(feed(tabB)).toContainText("crew msg");
-  await expect(fab(page)).toHaveAccessibleName("Open chat");
+  await expect(fab(page)).toHaveAccessibleName("Chat");
   await page.reload();
-  await expect(fab(page)).toHaveAccessibleName("Open chat");
+  await expect(fab(page)).toHaveAccessibleName("Chat");
   await openChat(page);
   await expect(tabs(page).getByRole("button", { name: /unread/ })).toHaveCount(0);
   // A tab that was closed meanwhile also starts from the merged marks.
   const tabC = await page.context().newPage();
   await loaded(tabC, game.id);
-  await expect(fab(tabC)).toHaveAccessibleName("Open chat");
+  await expect(fab(tabC)).toHaveAccessibleName("Chat");
   for (const p of [tabB, tabC]) await p.close();
   for (const g of [g1, g2]) await g.context().close();
 });
@@ -401,14 +385,17 @@ test("QA: chat survives phase changes (draft kept, event rows), and still works 
   await expect(composer(page)).toHaveValue(draft);
   await expect(feed(page).locator(".chat-event").first()).toBeVisible();
   await sendBtn(page).click();
+  // A meeting opening brings the "This round" sheet up over whatever sheet is open (it holds the vote window): open the chat again.
+  await openChat(g1);
   await expect(feed(g1)).toContainText(draft);
 
   // To the end.
-  await expect(page.getByRole("list", { name: "Final ranking" })).toBeVisible({ timeout: 280_000 });
+  await showResult(page, 280_000);
   await openChat(page);
   await expect(page.getByRole("region", { name: "Chat" })).toBeVisible();
   await expect(feed(page)).toContainText(draft); // history kept
   await say(page, "gg crew");
+  for (const p of [g1, g2]) await openChat(p);
   await expect(feed(g1)).toContainText("gg crew");
   await expect(feed(g2)).toContainText("gg crew");
   await dm(page, /Guest 1/);
@@ -439,7 +426,7 @@ test("QA: someone without a seat (no spectators in M2) gets no chat and no messa
   await outsider.goto(`/game/${game.id}`);
   await expect(outsider.getByRole("heading", { name: "No job here" })).toBeVisible();
   await outsider.waitForTimeout(1500);
-  await expect(outsider.locator(".chat, .chat-fab")).toHaveCount(0);
+  await expect(outsider.locator(".chat, .shell")).toHaveCount(0);
   await expect(outsider.locator("body")).not.toContainText("QA-INSIDERS");
   expect(outsiderFrames.join("\n")).not.toContain("QA-INSIDERS");
   for (const p of [guest, outsider]) await p.context().close();

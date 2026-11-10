@@ -6,17 +6,10 @@
 //     pressed 44 px target measured 42.7 px ("Vault" in the 12-seat alibi
 //     picker); now only its children scale. ui-style §5, design §12.1
 import { expect as baseExpect, test, type Browser, type Page } from "@playwright/test";
-import { startGame } from "./setupGame";
+import { chatTab, openChat, startGame } from "./setupGame";
 
 const expect = baseExpect.configure({ timeout: 15_000 });
 
-async function openChat(page: Page) {
-  const fab = page.locator(".chat-fab");
-  const region = page.getByRole("region", { name: "Chat" });
-  await expect(fab.or(region)).toBeVisible();
-  if (await fab.isVisible()) await fab.click();
-  await expect(region).toBeVisible();
-}
 async function say(page: Page, text: string) {
   const input = page.locator(".chat__input");
   await input.fill(text);
@@ -38,7 +31,7 @@ test("QA: the chat's New messages pill stays inside the viewport with no sideway
   const game = await startGame(page.request, { bots: 1, guests: gs.map((g) => g.request), sessionLength: "1w" });
   for (const p of [page, ...gs]) {
     await p.goto(`/game/${game.id}`);
-    await expect(p.getByRole("heading", { name: "Round 1 · Pick your room", level: 2 })).toBeVisible();
+    await expect(p.locator(".hud__kicker")).toContainText(/Round 1 of/);
   }
   for (const g of gs) await openChat(g);
 
@@ -46,9 +39,8 @@ test("QA: the chat's New messages pill stays inside the viewport with no sideway
   const jump = page.locator(".chat__jump");
   for (const [i, width] of [1280, 390].entries()) {
     await page.setViewportSize({ width, height: width > 1000 ? 800 : 844 });
-    // Below 1024 px the docked panel becomes a sheet behind the chat button.
-    if (width < 1024) await expect(page.locator(".chat-fab")).toBeVisible();
-    else await expect(page.locator(".chat-dock.is-docked")).toBeVisible();
+    // Below 1024 px the side tab becomes a sheet behind the chat button in the tab bar.
+    await expect(chatTab(page)).toBeVisible();
     await openChat(page);
     // Enough long messages that the feed scrolls (rate limit: 8 per 10 s per player).
     const filler = gs[i]!;

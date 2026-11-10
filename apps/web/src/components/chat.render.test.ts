@@ -30,7 +30,8 @@ const panel = (over: Partial<ChatPanelProps> = {}) =>
       send: async () => ({ ok: true }) as const,
       connection: "open",
       evidence: [],
-      visible: true,
+      drafts: {},
+      onDraft: () => {},
       ...over,
     }),
   );
@@ -74,11 +75,6 @@ describe("ChatPanel", () => {
     const out = panel({ connection: "reconnecting" });
     expect(out).toContain("Connection lost. Trying again");
     expect(out).toMatch(/<button[^>]*type="submit"[^>]*disabled=""/);
-  });
-
-  it("has a close button only as a sheet", () => {
-    expect(panel()).not.toContain('aria-label="Close chat"');
-    expect(panel({ onClose: () => {} })).toContain('aria-label="Close chat"');
   });
 });
 

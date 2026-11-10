@@ -2,7 +2,7 @@
 // another person's screen. Owner decisions, 2 Nov. design §5.1, §13
 import { existsSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
-import { startGame } from "./setupGame";
+import { openPanel, startGame } from "./setupGame";
 import { pickRoom } from "./move";
 
 const WIDTHS = [360, 390, 768, 1024, 1280];
@@ -20,7 +20,8 @@ test("a person's lock-in shows on others' seats, a change shows nothing; presenc
   const game = await startGame(host.request, { bots: 2, guests: [page.request, idle.request], sessionLength: "1w" });
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto(`/game/${game.id}`);
-  await expect(page.getByRole("heading", { name: "Round 1 · Pick your room", level: 2 })).toBeVisible();
+  await expect(page.locator(".hud__kicker")).toContainText(/Round 1 of/);
+  await openPanel(page, "Crew");
   // Before the host opens the game: never here; the idle guest too; bots show as bots, never online.
   await expect(seat(page, "Host")).toContainText("not here yet");
   await expect(seat(page, "Guest 2")).toContainText("not here yet");
@@ -31,6 +32,7 @@ test("a person's lock-in shows on others' seats, a change shows nothing; presenc
   await expect(seat(page, "Host").locator(".crook-avatar--ready")).toHaveCount(0);
 
   await host.goto(`/game/${game.id}`);
+  await openPanel(host, "This round");
   await expect(host.getByRole("heading", { name: "Round 1 · Pick your room", level: 2 })).toBeVisible();
   await expect(seat(page, "Host")).toContainText("online");
 
@@ -57,6 +59,7 @@ test("a person's lock-in shows on others' seats, a change shows nothing; presenc
     const tab = await page.context().newPage();
     await tab.setViewportSize({ width: w, height: 844 });
     await tab.goto(`/game/${game.id}`);
+    await openPanel(tab, "Crew");
     await expect(seat(tab, "Host")).toContainText("locked in");
     await expect(seat(tab, "Host")).toContainText("online");
     await tab.waitForTimeout(300);

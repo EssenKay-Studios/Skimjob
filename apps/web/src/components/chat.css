@@ -328,7 +328,7 @@
   color: var(--ink);
 }
 
-/* ---------- Badge and the open-chat button ---------- */
+/* ---------- Unread badge (conversation tabs and the shell's chat tab) ---------- */
 .chat-badge {
   display: inline-grid;
   place-items: center;

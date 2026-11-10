@@ -101,11 +101,9 @@ describe("the case board shell (design §15.4)", () => {
 
 describe("the board's place and look (design §15.6, ui-style)", () => {
   const css = (f: string) => readFileSync(new URL(f, import.meta.url), "utf8");
-  it("fills the game grid's `records` area from 960 px up, and joins the side column from 1024 px", () => {
-    const game = css("../screens/game.css");
-    expect(game).toMatch(/\.game-grid \.cb \{\s*grid-area: records;/);
-    expect(game).toMatch(/\.game-grid__side > \.cb \{\s*grid-area: auto;/);
-    expect(game).not.toContain(".records");
+  it("is the game shell's Case panel, with no grid area of its own", () => {
+    expect(css("../screens/Game.tsx")).toMatch(/id: "case"[^\n]*<CaseBoard /);
+    expect(css("../screens/game.css")).not.toContain(".records");
   });
   it("sits on manila with punch holes, and the players strip is one row that scrolls", () => {
     expect(css("./CaseBoard.tsx")).toContain('fill="var(--manilla)"');

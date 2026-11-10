@@ -1,137 +1,12 @@
 /* Game screen (M2-6): HUD, seats, move panel, records, game over.
    ui-style §8 (in-game HUD), §10 (mobile), "Applying this to Skimjob". Tokens only. */
 
-.game-page {
-  padding-bottom: env(safe-area-inset-bottom);
-}
-
-.game-grid {
-  display: grid;
-  gap: 18px;
-  max-width: 1160px;
-  margin: 12px auto 32px;
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-areas: "hud" "board" "seats" "action" "records";
-}
-.game-grid.is-over {
-  grid-template-areas: "hud" "action" "board" "seats" "records";
-}
-.game-grid > .board {
-  grid-area: board;
-}
-.game-grid > .hud {
-  grid-area: hud;
-}
-.game-grid > .crew {
-  grid-area: seats;
-}
-.game-grid__action {
-  grid-area: action;
+/* The panels of the "This round" column stack. */
+.round {
   display: grid;
   gap: 18px;
   align-content: start;
   min-width: 0;
-}
-.game-grid .cb {
-  grid-area: records;
-}
-/* The right column from 1024 px (chat above records); below that its children join the grid. */
-.game-grid__side {
-  display: contents;
-}
-
-@media (min-width: 960px) {
-  .game-grid,
-  .game-grid.is-over {
-    grid-template-columns: minmax(0, 1.35fr) minmax(300px, 1fr);
-    grid-template-areas:
-      "hud hud"
-      "board records"
-      "seats records"
-      "action records";
-    grid-template-rows: auto auto auto 1fr;
-    align-items: start;
-  }
-}
-@media (min-width: 1024px) {
-  .game-grid,
-  .game-grid.is-over {
-    grid-template-areas:
-      "hud hud"
-      "board side"
-      "seats side"
-      "action side";
-  }
-  .game-grid__side {
-    grid-area: side;
-    display: grid;
-    gap: 18px;
-    align-content: start;
-    min-width: 0;
-  }
-  .game-grid__side > .cb {
-    grid-area: auto;
-  }
-}
-
-/* ---------- Chat dock (M2-8b): side panel from 1024 px, a sheet below ---------- */
-.chat-dock[hidden],
-.chat-dock.is-sheet[hidden] {
-  display: none;
-}
-.chat-dock.is-docked {
-  min-width: 0;
-}
-.chat-dock.is-docked .chat {
-  height: min(78vh, 600px);
-}
-.chat-dock.is-sheet {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  align-items: center;
-  padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom))
-    max(12px, env(safe-area-inset-left));
-}
-.chat-dock__scrim {
-  position: absolute;
-  inset: 0;
-  background: var(--backdrop-shade);
-}
-.chat-dock.is-sheet .chat {
-  width: min(100%, 640px);
-  height: min(84dvh, 720px);
-  animation: sheet-up 0.32s var(--slide) both;
-}
-@keyframes sheet-up {
-  from {
-    opacity: 0;
-    transform: translateY(28px);
-  }
-}
-html.chat-sheet-open body {
-  overflow: hidden;
-}
-.chat-fab {
-  position: fixed;
-  z-index: 30;
-  right: max(14px, env(safe-area-inset-right));
-  bottom: max(14px, env(safe-area-inset-bottom));
-}
-.chat-fab .btn__label {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-}
-/* Room for the button under the last panel, and toasts above it. */
-.game-page:has(.chat-fab) {
-  padding-bottom: calc(80px + env(safe-area-inset-bottom));
-}
-:root:has(.chat-fab) .toasts {
-  bottom: calc(max(18px, env(safe-area-inset-bottom)) + 62px);
 }
 
 .game-msg {
@@ -149,7 +24,10 @@ html.chat-sheet-open body {
   grid-template-columns: minmax(0, 1.7fr) repeat(3, auto);
   gap: 18px 26px;
   align-items: center;
-  padding: 16px 22px 18px;
+  padding: 10px 4px 12px;
+  /* Fills the status strip of the shell. */
+  flex: 1;
+  min-width: 0;
 }
 .hud__kicker {
   margin-bottom: 6px;
@@ -197,6 +75,11 @@ html.chat-sheet-open body {
 /* The i keeps its 44 px target but doesn't make its label taller than Share's, so the values line up. */
 .hud__stat > .meta .infotip {
   margin-block: -14px;
+}
+/* Share and the bank stand on the same line whatever else is in the row; their values are the same size, so the bottoms meet. */
+.hud__share,
+.hud__bank {
+  align-self: end;
 }
 /* Wanted: the stars, and this round's event card under them. */
 .hud__wanted {
@@ -467,7 +350,7 @@ html.chat-sheet-open body {
 @media (max-width: 720px) {
   .hud {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    padding: 14px 16px 16px;
+    padding: 8px 4px 10px;
     gap: 14px 18px;
   }
   /* Share and the bank side by side; Wanted gets a row of its own, its card beside the stars. */
@@ -486,10 +369,6 @@ html.chat-sheet-open body {
   }
 }
 @media (max-width: 560px) {
-  .game-grid {
-    gap: 14px;
-    margin-top: 8px;
-  }
   .move__lock {
     width: 100%;
   }
@@ -509,19 +388,60 @@ html.chat-sheet-open body {
   }
 }
 
-@media (max-width: 560px) {
-  /* Phones: the chat is full screen. */
-  .chat-dock.is-sheet {
-    padding: max(6px, env(safe-area-inset-top)) max(6px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left));
-  }
-  .chat-dock.is-sheet .chat {
-    height: 100%;
+@media (prefers-reduced-motion: reduce) {
+  .over__stamp {
+    animation: none;
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .over__stamp,
-  .chat-dock.is-sheet .chat {
-    animation: none;
-  }
+/* ---------- Chat in the game shell: the side tab from 1024 px, a bottom sheet below ---------- */
+/* The tab or the sheet already says "Chat", so the panel's own heading (it still names the region) is not drawn. */
+.shell-chat {
+  height: min(68dvh, 600px);
+}
+.shell-chat .chat__head {
+  display: none;
+}
+
+/* The "While you were away" recap above the shell, in the shell's column. */
+.game-away {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 0 var(--gutter-r) 0 var(--gutter-l);
+}
+.page:has(.shell--wide) .game-away {
+  max-width: 1400px;
+}
+
+/* ---------- Laptop columns (the shell's side tabs and right column are narrow) ---------- */
+/* The chat fills its tab, and the composer takes the full width with the attach and send buttons under it. */
+.shell__left .shell-chat {
+  height: 100%;
+  min-height: 0;
+  padding: 12px 12px 12px; /* inside the frame, like the sheet: the outline never touches the text */
+}
+.shell__left .chat__compose-row {
+  flex-wrap: wrap;
+}
+.shell__left .chat__box {
+  order: -1;
+  flex: 1 1 100%;
+}
+.shell__left .chat__send {
+  margin-left: auto;
+}
+/* "The result" ranking: position and avatar beside the name; the score and the chips under the name. */
+.shell__right .ranking__row {
+  grid-template-columns: 18px auto minmax(0, 1fr);
+  gap: 4px 8px;
+}
+.shell__right .ranking__score {
+  grid-column: 3;
+  text-align: left;
+  overflow-wrap: normal;
+}
+.shell__right .ranking__row .chip,
+.shell__right .ranking__row .ranking__loss {
+  grid-column: 3;
+  justify-self: start;
 }

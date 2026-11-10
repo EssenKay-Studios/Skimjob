@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { startGame } from "./setupGame";
+import { closePanel, openPanel, startGame } from "./setupGame";
 import { pickRoom } from "./move";
 
 // QA (PR #41): the bank board at every launch width with a full 12-seat crew
@@ -62,8 +62,13 @@ for (const seats of [12, 3]) {
       page.on("pageerror", (e) => errors.push(e.message));
       const game = await startGame(page.request, { bots: seats - 1, sessionLength: "1w" });
       await page.goto(`/game/${game.id}`);
+      await openPanel(page, "This round");
       await expect(page.getByRole("heading", { name: "Round 1 · Pick your room", level: 2 })).toBeVisible();
+      await check(page, "planning, move panel open");
+      await openPanel(page, "Crew");
       await expect(page.locator(".crew-seat")).toHaveCount(seats);
+      await check(page, "planning, crew open");
+      await closePanel(page);
       const board = page.getByRole("region", { name: "The bank" });
       await expect(board.locator(".bank-room .crook-fig")).toHaveCount(0);
       await check(page, "planning, nothing picked");
@@ -72,6 +77,7 @@ for (const seats of [12, 3]) {
       const lobby = board.locator(".bank-room[data-room=lobby]");
       await lobby.focus();
       await page.keyboard.press("Enter");
+      await openPanel(page, "This round");
       await expect(page.locator(".move__room-name")).toHaveText("Lobby");
       await expect(board.locator(".bank-room .crook-fig")).toHaveCount(1);
       await expect(board.locator(".bank-room[data-room=lobby] .crook-fig")).toHaveCount(1);
