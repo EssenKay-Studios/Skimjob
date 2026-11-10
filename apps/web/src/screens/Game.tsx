@@ -25,7 +25,7 @@ import { RulebookSheet } from "../components/Rulebook";
 import { AwayRecap } from "../components/AwayRecap";
 import { CaseBoard } from "../components/CaseBoard";
 import { SuspicionBoard, SuspicionMark } from "../components/SuspicionBoard";
-import { useAwayRecap, usePins, useSeatNotes, useSuspicionBoard, type Board as SuspicionMarks, type BoardChannel, type NotesLoad } from "../game/notes";
+import { useAwayRecap, usePins, useSeatNotes, useSuspicionBoard, type Board as SuspicionMarks, type BoardChannel, type NotesLoad, type PinsChannel } from "../game/notes";
 import { caseData } from "../game/caseLeads";
 import type { DescribeContext } from "../game/describeEvent";
 import { BustedSpot, JobDoneSpot, WaitingSpot } from "../art/Spots";
@@ -52,7 +52,7 @@ import {
 import { lastPlan } from "../game/plan";
 import { endingText } from "../game/reveal";
 import { openMeetingOf, slotText } from "../game/meeting";
-import { DecidingPanel, MeetingNow, MeetingsPanel, ResultsBanner, RoleCard } from "./Meetings";
+import { DecidingPanel, MeetingNow, MeetingsPanel, ResultDialog, RoleCard } from "./Meetings";
 import { useCountdown, useGame, useNow, type ClientCommand, type Connection, type GameChannel, type Reply } from "../game/useGame";
 import { api, ApiError, sentence, UNREACHABLE, type LobbyView } from "../api";
 import { navigate } from "../router";
@@ -216,7 +216,7 @@ function Board({ view, timers, offset, send, autoMeetings, gameId, channel, dmNo
       node: (
         <div className="round">
           {host && <GameHost gameId={gameId} game={host} view={view} control={channel.control} />}
-          {outcome ? <GameOver view={view} /> : <Actions view={view} timers={timers} offset={offset} send={send} autoMeetings={autoMeetings} pick={pick} channel={channel} plan={!wide} />}
+          {outcome ? <GameOver view={view} /> : <Actions view={view} timers={timers} offset={offset} send={send} autoMeetings={autoMeetings} pick={pick} channel={channel} plan={!wide} pins={pins} />}
           {view.reveal && <Reveal summary={view.reveal.summary} ctx={ctx} looks={seatLooks(view)} />}
         </div>
       ),
@@ -423,14 +423,14 @@ function Seats({ view, presence, offset, marks }: { view: PlayerView; presence: 
   );
 }
 
-function Actions({ view, timers, offset, send, autoMeetings, pick, channel, plan }: BoardProps & { pick: Pick; channel: GameChannel; plan: boolean }) {
+function Actions({ view, timers, offset, send, autoMeetings, pick, channel, plan, pins }: BoardProps & { pick: Pick; channel: GameChannel; plan: boolean; pins: PinsChannel }) {
   const p = view.phase;
   const voting = p.kind === "meeting" || p.kind === "shakedownPending";
   return (
     <>
-      <ResultsBanner view={view} />
+      <ResultDialog view={view} pins={pins} />
       {p.kind === "meeting" && <MeetingNow view={view} timers={timers} offset={offset} send={send} />}
-      {p.kind === "shakedownPending" && <DecidingPanel view={view} timers={timers} offset={offset} />}
+      {p.kind === "shakedownPending" && <DecidingPanel view={view} timers={timers} offset={offset} send={send} />}
       {plan && <PlanPanel view={view} send={send} channel={channel} />}
       {p.kind === "planning" ? (
         <MovePanel key={p.round} view={view} round={p.round} timers={timers} offset={offset} send={send} pick={pick} />

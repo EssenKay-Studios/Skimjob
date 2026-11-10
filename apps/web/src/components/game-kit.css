@@ -122,7 +122,7 @@
 }
 .tally__row {
   display: grid;
-  grid-template-columns: minmax(0, 8.5em) minmax(0, 1fr) 2.2em;
+  grid-template-columns: minmax(0, 10em) minmax(0, 1fr) 2.2em;
   align-items: center;
   gap: 10px;
   font: 600 13px/1.25 var(--font-ui);
@@ -177,11 +177,19 @@
   color: var(--ink);
   overflow-wrap: anywhere;
 }
-.banner--good .banner__title {
-  color: var(--good);
-}
 .banner--bad .banner__title {
   color: var(--bad);
+}
+.banner--protected {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+.banner__shield {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  color: var(--ink);
 }
 .banner__body {
   font-size: 13.5px;

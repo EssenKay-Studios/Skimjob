@@ -111,7 +111,7 @@ for (const viewport of VIEWPORTS) {
 }
 
 // M2-7: the meetings panel (1-week preset: the slot planner and the sealed
-// vote), the vote dialog and the results banner at every launch width.
+// vote), the vote dialog and the result card at every launch width.
 for (const viewport of VIEWPORTS) {
   for (const touch of [false, true]) {
     test(`meetings at ${viewport.width}x${viewport.height}${touch ? " touch" : ""}: planner, vote dialog, results @meeting`, async ({ browser }) => {
@@ -156,7 +156,7 @@ for (const viewport of VIEWPORTS) {
       await check("vote dialog");
       await dialog.getByRole("button", { name: "Back to the board" }).click();
       await check("meeting on");
-      await expect(page.getByRole("button", { name: "Got it" })).toBeVisible({ timeout: 40_000 });
+      await expect(page.getByRole("button", { name: "Back to the bank" })).toBeVisible({ timeout: 40_000 });
       await check("results");
       await ctx.close();
     });

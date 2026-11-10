@@ -71,6 +71,7 @@
   /* Light washes for result banners (M2-7). */
   --good-l: #e2ebd2;
   --bad-l: #f4d5cf;
+  --sight-l: #dde8f3;
   /* Vote tallies (ui-style "Vote window"): the leading option, and the one that passed. */
   --tally-lead: #f2b640;
   --tally-pass: #2f6b2a;

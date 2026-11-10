@@ -2,6 +2,8 @@
 // the tally bars (hatched gold for the leader, green for what passed), the
 // result banner, and the dialog sheet the vote window opens in.
 import type { CSSProperties, ReactNode } from "react";
+import { InfoTip } from "./InfoTip";
+import { Shield } from "./icons";
 import { Modal } from "./Modal";
 import { SketchFrame } from "./SketchFrame";
 
@@ -54,16 +56,31 @@ export function TallyBars({ rows, label }: { rows: readonly TallyBar[]; label: s
   );
 }
 
-export type BannerTone = "good" | "bad" | "info";
+export type BannerTone = "bad" | "info";
 
-const BANNER_FILL: Record<BannerTone, string> = { good: "var(--good-l)", bad: "var(--bad-l)", info: "var(--card-sand)" };
+const BANNER_FILL: Record<BannerTone, string> = { bad: "var(--bad-l)", info: "var(--card-sand)" };
 
-/** A taped result note: shakedown results. */
+/** A taped note: a shakedown that fell through, a bot playing your seat. */
 export function Banner({ tone = "info", seed, title, children }: { tone?: BannerTone; seed: string; title: ReactNode; children?: ReactNode }) {
   return (
     <SketchFrame seed={seed} radius={12} shadow={0.35} fill={BANNER_FILL[tone]} className={`banner banner--${tone}`} role="status">
       <p className="banner__title">{title}</p>
       {children && <div className="banner__body">{children}</div>}
+    </SketchFrame>
+  );
+}
+
+/** A shield on a taped note: who is protected from shakedowns until the next regular meeting. design §9.7 */
+export function ProtectedBanner({ seed, children }: { seed: string; children: ReactNode }) {
+  return (
+    <SketchFrame seed={seed} radius={12} shadow={0.35} fill="var(--sight-l)" className="banner banner--protected" role="status">
+      <span className="banner__shield">
+        <Shield />
+      </span>
+      <p className="banner__title">
+        <b>Protected</b> {children}
+      </p>
+      <InfoTip info={{ kind: "term", id: "protected" }} />
     </SketchFrame>
   );
 }

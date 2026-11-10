@@ -172,6 +172,11 @@ test("12 seats, 24-char names: a 15-min game to the end with moves changed, alib
           }
         }
       }
+      // design §9.6: a meeting's result card is a modal over the board until it is closed; both seats close it.
+      for (const p of [host, guest]) {
+        const card = p.getByRole("button", { name: "Back to the bank" });
+        if (await card.isVisible().catch(() => false)) await tap(p, card).catch(() => {});
+      }
       if (await post.isVisible().catch(() => false)) {
         await once("alibi-open", host);
         await tap(host, host.getByRole("group", { name: "Alibi room" }).getByRole("button", { name: "Vault" })).catch(() => {});

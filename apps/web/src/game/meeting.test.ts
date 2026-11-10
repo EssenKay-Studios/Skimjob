@@ -12,9 +12,11 @@ import {
   type SystemCommand,
   type VoteVisibility,
 } from "@skimjob/engine";
+import { caseData } from "./caseLeads";
 import { createGame } from "./deal.testkit";
 import { describe, expect, it } from "vitest";
 import {
+  bailPromptOf,
   claimState,
   decidingOf,
   emergencyOf,
@@ -22,8 +24,10 @@ import {
   localInputValue,
   openMeetingOf,
   plannerOf,
+  protectedPlayers,
   slotFromLocal,
   tallyRows,
+  voteTargets,
 } from "./meeting";
 
 /** A new game with a pinned black market without Bail, whatever the seed: Bail opens a choice window after every passed shakedown (design §9.6). */
@@ -174,13 +178,21 @@ describe("scheduling and emergencies (design §9.3, §9.4)", () => {
 
   it("the crew's emergency pool: only in the result window, one waiting at a time, until it is spent (design §9.3)", () => {
     let s = newGame(config("hiddenThenRevealed"));
-    expect(emergencyOf(viewFor(s, "p1"))).toMatchObject({ canCall: false, note: "Only after a round's result, before the next planning (1 left for the crew)." });
+    expect(emergencyOf(viewFor(s, "p1"))).toMatchObject({ left: 1, inWindow: false, canCall: false, note: "Only after a round's result, before the next planning." });
     s = run(s, ...RESULT_WINDOW);
-    expect(emergencyOf(viewFor(s, "p1"))).toMatchObject({ canCall: true, note: "1 left for the crew. Everyone is told who called it." });
+    expect(emergencyOf(viewFor(s, "p1"))).toMatchObject({ left: 1, inWindow: true, canCall: true, note: "Everyone is told who called it." });
     s = run(s, { type: "callEmergency", player: "p1" });
-    expect(emergencyOf(viewFor(s, "p2"))).toMatchObject({ canCall: false, note: "The crew's emergency meetings are all spent." });
+    // One per window: the pool is spent at once, and the window is still open until the meeting does.
+    expect(emergencyOf(viewFor(s, "p2"))).toMatchObject({ left: 0, canCall: false, note: "The crew's emergency meetings are all spent." });
     s = run(s, open("emergency-1"), close("emergency-1"));
-    expect(emergencyOf(viewFor(s, "p1"))).toMatchObject({ canCall: false, note: "The crew's emergency meetings are all spent." });
+    expect(emergencyOf(viewFor(s, "p1"))).toMatchObject({ left: 0, inWindow: false, canCall: false, note: "The crew's emergency meetings are all spent." });
+  });
+
+  it("a bigger crew has two emergencies; a second call in the same window waits for the first (design §9.3)", () => {
+    const names = ["Ana", "Ben", "Cy", "Dee", "Eve", "Fay", "Gus"];
+    let s = newGame(config("open", { players: names.map((name, i) => ({ id: `p${i + 1}`, name, isBot: false })) }));
+    s = run(s, ...RESULT_WINDOW, { type: "callEmergency", player: "p1" });
+    expect(emergencyOf(viewFor(s, "p2"))).toMatchObject({ left: 1, inWindow: true, canCall: false, note: "An emergency meeting has already been called." });
   });
 });
 
@@ -191,7 +203,7 @@ describe("the shakedown window and results (design §9.6)", () => {
     // No Bail on the black market: no window, the shakedown lands as the meeting closes.
     const s = run(voting("hiddenThenRevealed"), close("emergency-1"));
     const o = latestOutcome(viewFor(s, "p1"))!;
-    expect(o).toMatchObject({ kind: "emergency", deciding: false, fresh: true, cancelled: false });
+    expect(o).toMatchObject({ kind: "emergency", round: 1, deciding: false, fresh: true, cancelled: false });
     expect(o.shakedown).toMatchObject({ target: "p2", stashRevealed: s.share, taken: 0, clean: true });
     const later = run(s, { type: "advance", deadline: { kind: "round", round: 2 } });
     expect(latestOutcome(viewFor(later, "p1"))!.fresh).toBe(false);
@@ -207,6 +219,98 @@ describe("the shakedown window and results (design §9.6)", () => {
     expect(o.result).toEqual({ kind: "skipped" });
     expect(o).not.toHaveProperty("checkpoint");
     expect(o.fresh).toBe(true);
+  });
+});
+
+describe("protection and the vote picker (design §9.5, §9.7)", () => {
+  // p2 is voted out in the emergency meeting; with no Bail on the market the shakedown lands as it closes.
+  const afterShakedown = () => run(voting("open"), close("emergency-1"));
+
+  it("a protected player is public, and left out of every picker; nobody else is", () => {
+    const s = afterShakedown();
+    expect(voteTargets(viewFor(newGame(config("open")), "p1")).map((t) => t.id)).toEqual(["p2", "p3", "p4", "p5"]);
+    for (const me of ["p1", "p3", "p5"]) {
+      const v = viewFor(s, me);
+      expect(protectedPlayers(v)).toEqual(["p2"]);
+      expect(voteTargets(v).map((t) => t.id)).not.toContain("p2");
+    }
+    // The protected player may still vote on the others, and never gets themselves in the list.
+    expect(voteTargets(viewFor(s, "p2")).map((t) => t.id)).toEqual(["p1", "p3", "p4", "p5"]);
+  });
+
+  // The engine refuses a live vote for them (engine/meeting.test.ts); a sealed one is allowed and counts as a skip while they are protected.
+  it("a sealed vote may still name a protected player, so only the sealed picker lists them", () => {
+    const s = afterShakedown();
+    const v = viewFor(s, "p1");
+    expect(voteTargets(v, true).map((t) => t.id)).toEqual(["p2", "p3", "p4", "p5"]);
+    expect(handleCommand(s, { type: "sealVote", player: "p1", vote: { kind: "shakedown", target: "p2" } }).ok).toBe(true);
+  });
+
+  // design §9.7: protection limits only shakedowns, so a protected player's Open ballot still counts and shows.
+  it("Open mode: a protected player's ballot stays in the list and the live tally", () => {
+    // Seven seats: the pool holds two emergencies. p2 is shaken down in the first; the second comes in round 2's result window.
+    const players = ["Ana", "Ben", "Cy", "Dee", "Eve", "Fay", "Gus"].map((name, i) => ({ id: `p${i + 1}`, name, isBot: false }));
+    let s = run(voting("open", { players }), close("emergency-1"), { type: "advance", deadline: { kind: "round", round: 2 } });
+    expect(s.protected).toEqual(["p2"]);
+    s = run(s, { type: "callEmergency", player: "p3" }, open("emergency-2"), shake("p2", "p4"), shake("p5", "p4"));
+    const m = openMeetingOf(viewFor(s, "p1"))!;
+    expect(m.ballots.map((b) => b.player)).toEqual(["p2", "p5"]);
+    expect(m.live).toEqual({ skip: 0, targets: { p4: 2 } });
+  });
+
+  // design §9.6: a clean shakedown has nothing set aside, so its case board lead doesn't say "0 back".
+  it("the case board lead for a clean shakedown says clean", () => {
+    const lead = caseData(viewFor(afterShakedown(), "p1"), new Set()).leads.find((l) => l.summary?.includes("shaken down"));
+    expect(lead?.summary).toContain("shaken down · clean");
+    expect(lead?.summary).not.toContain("back");
+  });
+
+  it("nobody is protected before a shakedown", () => {
+    expect(protectedPlayers(viewFor(newGame(config("open")), "p1"))).toEqual([]);
+  });
+});
+
+describe("the Bail choice prompt (design §9.6)", () => {
+  /** Bail on the market and in p2's hands; p2 is voted out in an emergency meeting. */
+  function bailed(): GameState {
+    let s: GameState = { ...createGame(config("open")), shop: ["bail", "tail", "softShoes"] };
+    s = applyEvent(s, { type: "perkBought", visibility: privateTo("p2"), player: "p2", round: 1, perk: { kind: "bail" }, cost: 0 });
+    s = run(s, ...RESULT_WINDOW, { type: "callEmergency", player: "p3" }, open("emergency-1"), shake("p1", "p2"), shake("p3", "p2"), shake("p4", "p2"), skip("p5"));
+    return run(s, close("emergency-1"));
+  }
+
+  it("goes only to the target, and only if they hold a Bail; no answer means don't use", () => {
+    const s = bailed();
+    expect(s.phase.kind).toBe("shakedownPending");
+    expect(bailPromptOf(viewFor(s, "p2"))).toEqual({ meetingId: "emergency-1", use: false, answered: false });
+    // Everyone else sees the same neutral window, and no prompt.
+    for (const me of ["p1", "p3", "p4", "p5"]) {
+      expect(bailPromptOf(viewFor(s, me))).toBeNull();
+      expect(decidingOf(viewFor(s, me))).toEqual({ meetingId: "emergency-1", target: "p2" });
+    }
+  });
+
+  it("the latest answer counts and is private to the holder", () => {
+    let s = run(bailed(), { type: "chooseBail", player: "p2", use: true });
+    expect(bailPromptOf(viewFor(s, "p2"))).toMatchObject({ use: true, answered: true });
+    s = run(s, { type: "chooseBail", player: "p2", use: false });
+    expect(bailPromptOf(viewFor(s, "p2"))).toMatchObject({ use: false, answered: true });
+    expect(JSON.stringify(viewFor(s, "p1"))).not.toContain("bailChosen");
+  });
+
+  it("a target without a Bail gets no prompt, even when the window is open", () => {
+    // Bail is on the market but nobody bought it: the window still opens for the target.
+    let s: GameState = { ...createGame(config("open")), shop: ["bail", "tail", "softShoes"] };
+    s = run(s, ...RESULT_WINDOW, { type: "callEmergency", player: "p3" }, open("emergency-1"), shake("p1", "p2"), shake("p3", "p2"), shake("p4", "p2"), skip("p5"), close("emergency-1"));
+    expect(s.phase.kind).toBe("shakedownPending");
+    expect(bailPromptOf(viewFor(s, "p2"))).toBeNull();
+  });
+
+  it("a Bail used makes it fall through; the target is still protected (design §9.6, §9.7)", () => {
+    let s = run(bailed(), { type: "chooseBail", player: "p2", use: true }, { type: "advance", deadline: { kind: "resolveShakedown", meetingId: "emergency-1" } });
+    const v = viewFor(s, "p1");
+    expect(latestOutcome(v)).toMatchObject({ cancelled: true, shakedown: null });
+    expect(protectedPlayers(v)).toEqual(["p2"]);
   });
 });
 

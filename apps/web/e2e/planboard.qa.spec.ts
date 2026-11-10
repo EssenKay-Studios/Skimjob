@@ -2,6 +2,7 @@ import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { expect as baseExpect, test, type APIRequestContext, type Page } from "@playwright/test";
+import { clearMeeting } from "./meetingCards";
 import { pickRoom } from "./move";
 import { openPanel } from "./setupGame";
 
@@ -158,6 +159,7 @@ for (const seats of [6, 12]) {
     await expect(summary).toBeVisible({ timeout: 60_000 });
     // The alibi is offered for round 1 in the result window (and stays through round 2's planning, below).
     await expect(panel(page).getByText("Round 1 alibi: where were you?")).toBeVisible();
+    await clearMeeting(page);
     await summary.click();
     const history = panel(page).getByRole("list", { name: "How the round 1 plan changed" });
     await expect(history).toBeVisible();
@@ -186,6 +188,7 @@ for (const seats of [6, 12]) {
     await expect(panel(page).getByText(/ of \d+ agreed/)).toBeVisible({ timeout: 60_000 });
     await expect(panel(page).getByText("Round 1 alibi: where were you?")).toBeVisible();
     await expect(panel(page).getByRole("button", { name: new RegExp(`^${GUESTS[0]}: no claims\\.`) })).toBeVisible();
+    await clearMeeting(page);
     await sweep(page, `s${seats}-round2-alibi`);
     await panel(page).getByRole("group", { name: "Alibi room" }).getByRole("button", { name: "Lobby" }).click();
     await panel(page).getByRole("button", { name: "Post alibi" }).click();

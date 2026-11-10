@@ -25,6 +25,25 @@ async function shot(page: Page, name: string) {
   await page.screenshot({ path: `${SHOTS}/meet-${name}-${page.viewportSize()!.width}.png` });
 }
 
+/** The title of a meeting's result card. */
+const RESULT_NAME = /shaken down|fell through|The crew voted|No majority|Too few votes/;
+
+/**
+ * Holds every clock while `steps` runs, so a slow run (CI shards, a busy Mac) can't close the result window or the vote
+ * window under the test (#176, #204). Only the host may pause; the game is resumed afterwards.
+ */
+async function paused(page: Page, gameId: string, steps: () => Promise<void>) {
+  const post = async (what: "pause" | "resume") => expect((await page.request.post(`/api/games/${gameId}/${what}`)).ok(), `${what} the game`).toBe(true);
+  await post("pause");
+  // The paused banner re-lays the page out; wait for it, or a click lands on a button that is about to be rebuilt.
+  await expect(page.getByText("Paused by the host")).toBeVisible();
+  try {
+    await steps();
+  } finally {
+    await post("resume");
+  }
+}
+
 for (const mode of ["hiddenThenRevealed", "open", "secret"] as const) {
   test(`an emergency meeting: call it, vote, change the vote, see the result (${mode}) @meeting`, async ({ page }, info) => {
     // Not about widths (game.responsive.spec.ts covers them): Hidden at both, the other modes on desktop only.
@@ -37,67 +56,101 @@ for (const mode of ["hiddenThenRevealed", "open", "secret"] as const) {
     await openPanel(page, "This round"); // below 1024 px it stays open: the vote dialog opens over it
     await expect(page.getByRole("heading", { name: "Round 1 · Pick your room", level: 2 })).toBeVisible();
 
-    // design §9.3: not while planning; in round 1's result window the button arms, then calls; then the crew's pool is spent.
+    // design §9.3: the button is offered only in a round's result window, never while planning; there it arms, then calls;
+    // then the crew's pool is spent. The game is held while we click, so the 6 s window can't close on a slow run. A bot may
+    // spend the pool first (#204): then there is no button, and the meeting is its call.
     const call = page.getByRole("button", { name: "Call an emergency meeting" });
-    await expect(call).toBeDisabled();
-    await callEmergency(page);
-    await expect(page.locator(".hud__alert")).toContainText("Emergency meeting in");
+    const alert = page.locator(".hud__alert");
+    await expect(call).toHaveCount(0);
+    await expect(page.getByText("1 left for the crew.")).toBeVisible();
+    // A bot's call leaves the button there, disabled (one per window), beside the alert.
+    await expect(call.or(alert).first()).toBeVisible({ timeout: 60_000 });
+    let mine = false;
+    // A regular meeting can fall due after round 1 (a third of the bank gone): its result card sits over the page, and
+    // the result window with the emergency button comes after it (§9.3). Close the card first.
+    const earlier = page.getByRole("dialog", { name: RESULT_NAME });
+    await paused(page, game.id, async () => {
+      if (await earlier.isVisible()) await earlier.getByRole("button", { name: "Back to the bank" }).click();
+      if ((await call.count()) > 0 && (await call.isEnabled())) {
+        await call.click({ timeout: 10_000 });
+        await page.getByRole("button", { name: "Sure? Tap again to call it" }).click({ timeout: 10_000 });
+        mine = true;
+      }
+      await expect(alert).toContainText("Emergency meeting in");
+    });
 
     // The vote window opens by itself as a dialog.
     const dialog = page.getByRole("dialog", { name: "Who's skimming?" });
     await expect(dialog).toBeVisible({ timeout: 20_000 });
-    await expect(dialog).toContainText("Emergency meeting · called by you");
+    await expect(dialog).toContainText(mine ? "Emergency meeting · called by you" : /Emergency meeting · called by Bot/);
+    // The briefing: why it is on, and the pool the call just spent (design §9.1, §9.3).
+    await expect(dialog).toContainText("Called from the crew's emergency pool.");
+    await expect(dialog).toContainText("Emergency pool: 0 left for the crew.");
     const pick = dialog.getByRole("group", { name: "Your vote" });
-    await expect(pick.getByRole("button")).toHaveCount(4); // three others and Skip, never yourself
-    await pick.getByRole("button").first().click();
-    await dialog.getByRole("button", { name: "Cast vote" }).click();
-    await expect(dialog.locator(".vote__status")).toContainText("Your vote: shake down Bot");
-    // design §11.2: change it until the window closes.
-    await pick.getByRole("button", { name: "Skip" }).click();
-    await dialog.getByRole("button", { name: "Change vote" }).click();
-    await expect(dialog.locator(".vote__status")).toContainText("Your vote: skip.");
-    await expect(dialog.getByRole("button", { name: "Vote cast" })).toBeDisabled();
+    await paused(page, game.id, async () => {
+      // Three others and Skip, never yourself, and never a protected player (§9.7): a regular meeting before this one may have shaken one down.
+      const shielded = ((await dialog.locator(".briefing__protected").textContent({ timeout: 1_000 }).catch(() => null)) ?? "").split("list: ")[1]?.replace(/\.$/, "").split(", ") ?? [];
+      await expect(pick.getByRole("button")).toHaveCount(4 - shielded.filter((n) => n !== "You").length);
+      await pick.getByRole("button").first().click();
+      await dialog.getByRole("button", { name: "Cast vote" }).click();
+      await expect(dialog.locator(".vote__status")).toContainText("Your vote: shake down Bot");
+      // design §11.2: change it until the window closes.
+      await pick.getByRole("button", { name: "Skip" }).click();
+      await dialog.getByRole("button", { name: "Change vote" }).click();
+      await expect(dialog.locator(".vote__status")).toContainText("Your vote: skip.");
+      await expect(dialog.getByRole("button", { name: "Vote cast" })).toBeDisabled();
 
-    // Each mode shows only what it allows (design §11.2).
-    if (mode === "open") {
-      await expect(dialog.getByRole("list", { name: "Live tally" })).toBeVisible();
-      await expect(dialog.getByRole("list", { name: "Live tally" })).toContainText("Skip");
-    } else {
-      await expect(dialog.getByRole("list", { name: "Live tally" })).toHaveCount(0);
-      await expect(dialog.getByRole("list", { name: "Ballots so far" })).toHaveCount(0);
-    }
-    await shot(page, `${mode}-vote`);
+      // Each mode shows only what it allows (design §11.2).
+      if (mode === "open") {
+        await expect(dialog.getByRole("list", { name: "Live tally" })).toBeVisible();
+        await expect(dialog.getByRole("list", { name: "Live tally" })).toContainText("Skip");
+      } else {
+        await expect(dialog.getByRole("list", { name: "Live tally" })).toHaveCount(0);
+        await expect(dialog.getByRole("list", { name: "Ballots so far" })).toHaveCount(0);
+      }
+      await shot(page, `${mode}-vote`);
 
-    // Back to the board and in again.
-    await dialog.getByRole("button", { name: "Back to the board" }).click();
-    await expect(dialog).toBeHidden();
-    await page.getByRole("button", { name: "Change your vote" }).click();
-    await expect(dialog).toBeVisible();
-    await page.keyboard.press("Escape");
-    await expect(dialog).toBeHidden();
+      // Back to the board and in again.
+      await dialog.getByRole("button", { name: "Back to the board" }).click();
+      await expect(dialog).toBeHidden();
+      await page.getByRole("button", { name: "Change your vote" }).click();
+      await expect(dialog).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(dialog).toBeHidden();
+    });
 
-    // The window closes: the result banner with the tally (and the shakedown window if one opens).
-    const results = page.getByRole("region", { name: /The crew voted|No majority|Too few votes/ });
-    await expect(results.or(page.getByRole("heading", { name: "The crew is deciding…" }))).toBeVisible({ timeout: 30_000 });
-    await expect(results).toBeVisible({ timeout: 30_000 });
+    // The window closes: the result card with the tally (after the Bail window, if a bot holds one).
+    const results = page.getByRole("dialog", { name: RESULT_NAME });
+    await expect(results).toBeVisible({ timeout: 60_000 });
     await expect(results.getByRole("list", { name: "Final tally" })).toContainText("Skip");
+    // The card opens on its primary button, not on an InfoTip whose focus preview would open by itself.
+    await expect(results.getByRole("button", { name: "Back to the bank" })).toBeFocused();
+    await expect(page.locator(".infotip__pop:popover-open")).toHaveCount(0);
     if (mode === "secret") {
       await expect(results.getByRole("list", { name: "How everyone voted" })).toHaveCount(0);
       await expect(results).toContainText("only the final tally is ever shown");
     } else {
       await expect(results.getByRole("list", { name: "How everyone voted" })).toContainText("You: skip");
     }
+    // design §9.6, §9.7: a shakedown opens the stash and protects the target; any other result does neither.
+    const title = (await results.locator("h2").textContent()) ?? "";
+    if (title.endsWith("shaken down") && !title.startsWith("No majority")) {
+      await expect(results.locator(".result__rows")).toContainText("stash");
+      await expect(results).toContainText("until the next regular meeting");
+    } else {
+      await expect(results.locator(".result__rows")).toHaveCount(0);
+    }
     await results.scrollIntoViewIfNeeded();
     await shot(page, `${mode}-results`);
 
-    await expect(call).toBeDisabled();
-    await expect(page.getByText("The crew's emergency meetings are all spent.")).toBeVisible();
-    await page.getByRole("button", { name: "Got it" }).click();
+    await expect(call).toHaveCount(0);
+    await page.getByRole("button", { name: "Back to the bank" }).click();
     await expect(results).toBeHidden();
+    await expect(page.getByText("The crew's emergency meetings are all spent.")).toBeVisible();
 
     // The case board's lead for the meeting (design §15.4): the call, the result, and your ballot, a public fact only in Open mode.
     const lead = await openLead(page, "Emergency meeting");
-    await expect(lead).toContainText("Fact You called an emergency meeting.");
+    await expect(lead).toContainText(mine ? "Fact You called an emergency meeting." : /Fact Bot .* called an emergency meeting\./);
     await expect(lead).toContainText(/The crew voted|No majority|Too few votes/);
     await expect(lead).toContainText(mode === "open" ? "Fact You voted to skip." : "Seen by you You voted to skip.");
     expect(errors).toEqual([]);

@@ -173,7 +173,7 @@ function line(e: GameEvent, ctx: DescribeContext): string {
       // design §9.6: the ledger says only that it fell through.
       return "A shakedown fell through.";
     case "shakedownResolved":
-      return `${who(e.target)} ${you(e.target) ? "were" : "was"} shaken down: a stash of ${e.stashRevealed}, ${e.taken} set aside for the next split.${e.clean ? " Clean: nothing above the share." : ""}`;
+      return `${who(e.target)} ${you(e.target) ? "were" : "was"} shaken down: a stash of ${e.stashRevealed}${e.clean ? ". Clean: nothing above the share." : `, ${e.taken} set aside for the next split.`}`;
     case "perkSold":
       // design §12: logged without a name as planning closes.
       return `🛒 Someone bought ${perkName(e.perk)} (${e.cost} coin${e.cost === 1 ? "" : "s"}).`;

@@ -31,7 +31,7 @@ import { BANK_JOB } from "@skimjob/content";
 import { AlarmBell, WantedStars } from "../components/Bell";
 import { CoinBags } from "../components/CoinBags";
 import { bagsOf, moveCoin } from "../game/move";
-import { Banner, ClockFace, DialogSheet, TallyBars } from "../components/MeetingKit";
+import { Banner, ClockFace, DialogSheet, ProtectedBanner, TallyBars } from "../components/MeetingKit";
 import { navigate } from "../router";
 
 const SWATCHES: readonly [string, string][] = [
@@ -327,7 +327,7 @@ export function Gallery() {
 
             <RevealSection />
 
-            <Section id="meet" title="Meetings kit" note="M2-7 · clock face, tally bars, result banners, vote dialog sheet">
+            <Section id="meet" title="Meetings kit" note="M2-7 · clock face, tally bars, protection and result banners, vote dialog sheet">
               <MeetingKitSamples />
             </Section>
 
@@ -417,12 +417,7 @@ function MeetingKitSamples() {
           { key: "skip", label: "Skip", votes: 1, share: 0.5 },
         ]}
       />
-      <Banner tone="good" seed="g-b1" title="Caught! Dez was holding 11.">
-        11 set aside for the next split.
-      </Banner>
-      <Banner tone="bad" seed="g-b2" title="Clean! Mo was holding 2.">
-        Nothing above the share: nothing taken.
-      </Banner>
+      <ProtectedBanner seed="g-b1">until the next regular meeting</ProtectedBanner>
       <Banner seed="g-b3" title="A shakedown fell through.">
         Nobody's stash was opened.
       </Banner>

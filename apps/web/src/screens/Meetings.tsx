@@ -1,34 +1,40 @@
-// Meetings and voting on the game screen (docs/m2-plan.md M2-7): the slot
-// planner, the emergency button and the sealed vote; the vote dialog; the
-// Bail choice window ("the crew is deciding…"); the results banner; and your
-// role card. Everything reads the player's own
-// view through game/meeting.ts. design §11.1–§11.5, ui-style "Vote window"
+// Meetings and shakedowns on the game screen: the slot planner, the emergency
+// pool and the sealed vote; the vote dialog with its briefing; the Bail choice
+// window ("the crew is deciding…"); the shakedown result card; and your role
+// card. Everything reads the player's own view through game/meeting.ts.
+// design §9.1–§9.7, §12, ui-style "Vote window"
 import { useContext, useEffect, useId, useState } from "react";
 import { PERK_TEXT } from "@skimjob/content";
-import type { PlayerId, PlayerView, VoteChoice } from "@skimjob/engine";
+import type { MeetingKind, PlayerId, PlayerView, VoteChoice } from "@skimjob/engine";
 import { Avatar } from "../components/Avatar";
 import { Button, DangerButton } from "../components/Button";
 import { Chip } from "../components/Chip";
-import { Banner, ClockFace, DialogSheet, TallyBars, type TallyBar } from "../components/MeetingKit";
+import { Banner, ClockFace, DialogSheet, ProtectedBanner, TallyBars, type TallyBar } from "../components/MeetingKit";
 import { SketchFrame } from "../components/SketchFrame";
 import { TextField } from "../components/TextField";
 import { InfoTip, MoreInGame } from "../components/InfoTip";
 import { RoleCardDialog, RolesInPlay } from "../components/RoleCard";
+import { Pin, Shield } from "../components/icons";
+import { useToast } from "../components/Toast";
 import { Underline } from "../components/Underline";
 import { RoleIcon } from "../art/RoleIcon";
 import { roleName } from "../game/describeEvent";
 import { namesOf, type Timer } from "../game/hud";
+import type { PinsChannel } from "../game/notes";
 import {
+  bailPromptOf,
   claimState,
   decidingOf,
   emergencyOf,
   latestOutcome,
   localInputValue,
   MEETING_TITLE,
+  MEETING_WHY,
   MODE_NAME,
   MODE_NOTE,
   openMeetingOf,
   plannerOf,
+  protectedPlayers,
   sameVote,
   slotFromLocal,
   slotText,
@@ -63,10 +69,10 @@ function voteText(v: VoteChoice | null, who: (p: PlayerId) => string): string {
 }
 
 /** Pick a player to shake down, or Skip: avatar toggles. */
-function VotePicker({ view, value, onChange, label, seed }: { view: PlayerView; value: VoteChoice | null; onChange: (v: VoteChoice) => void; label: string; seed: string }) {
+function VotePicker({ view, value, onChange, label, seed, sealed = false }: { view: PlayerView; value: VoteChoice | null; onChange: (v: VoteChoice) => void; label: string; seed: string; sealed?: boolean }) {
   return (
     <div className="vote-picker" role="group" aria-label={label}>
-      {voteTargets(view).map((t) => (
+      {voteTargets(view, sealed).map((t) => (
         <Button
           key={t.id}
           variant="toggle"
@@ -126,17 +132,23 @@ export function MeetingsPanel({ view, timers, offset, send, autoMeetings }: Prop
       </div>
 
       <div className="meetings__block">
-        <h3 className="meetings__sub">Emergency meeting</h3>
-        <p className="meta">{emergency.note}</p>
-        <DangerButton
-          seed="emergency"
-          className="meetings__emergency"
-          disabled={!emergency.canCall}
-          armedLabel="Sure? Tap again to call it"
-          onConfirm={() => void send({ type: "callEmergency" }, "Emergency meeting called.")}
-        >
-          Call an emergency meeting
-        </DangerButton>
+        <h3 className="meetings__sub">
+          Emergency pool <InfoTip info={{ kind: "tip", id: "emergency" }} />
+        </h3>
+        <p className="meta">
+          <b className="num">{emergency.left}</b> left for the crew. {emergency.note}
+        </p>
+        {emergency.inWindow && (
+          <DangerButton
+            seed="emergency"
+            className="meetings__emergency"
+            disabled={!emergency.canCall}
+            armedLabel="Sure? Tap again to call it"
+            onConfirm={() => void send({ type: "callEmergency" }, "Emergency meeting called.")}
+          >
+            Call an emergency meeting
+          </DangerButton>
+        )}
       </div>
 
       <SealedVote view={view} send={send} who={who} />
@@ -212,8 +224,8 @@ function SealedVote({ view, send, who }: { view: PlayerView; send: Send; who: (p
         <span className="meetings__sub">Can't make the meeting?</span>
         <span className="meta">{sealed ? `Sealed: ${voteText(sealed, who)}` : "Leave a sealed vote"}</span>
       </summary>
-      <p className="meta">It's cast for you when the next meeting opens. Seal again to change it; turn up and you can still vote live.</p>
-      <VotePicker view={view} value={pick} onChange={setPick} label="Sealed vote" seed="seal" />
+      <p className="meta">It's cast for you when the next meeting opens. Seal again to change it; turn up and you can still vote live. A protected player is still on this list: if they're protected when the meeting opens, your vote counts as a skip.</p>
+      <VotePicker view={view} value={pick} onChange={setPick} label="Sealed vote" seed="seal" sealed />
       <Button variant="secondary" seed="seal-go" disabled={!pick || busy || sameVote(pick, sealed)} onClick={seal}>
         {sealed ? "Seal this instead" : "Seal vote"}
       </Button>
@@ -249,6 +261,27 @@ export function MeetingNow({ view, timers, offset, send }: Props) {
         <VoteSheet key={m.meetingId} view={view} timers={timers} offset={offset} send={send} onDone={() => setClosedFor(m.meetingId)} />
       </DialogSheet>
     </>
+  );
+}
+
+/** Why this meeting is on, the emergency pool, and who can't be voted on. design §9.1–§9.3, §9.7 */
+function Briefing({ view, kind, who }: { view: PlayerView; kind: MeetingKind; who: (p: PlayerId) => string }) {
+  const shielded = protectedPlayers(view);
+  return (
+    <div className="briefing">
+      <p>{MEETING_WHY[kind]}</p>
+      <p className="meta">
+        Emergency pool: <b className="num">{view.emergencies}</b> left for the crew.
+      </p>
+      {shielded.length > 0 && (
+        <p className="briefing__protected">
+          <Shield />
+          <span>
+            <b>Protected</b> until the next regular meeting, so not on the list: {shielded.map((p) => cap(who(p))).join(", ")}.
+          </span>
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -291,6 +324,7 @@ function VoteSheet({ view, timers, offset, send, onDone }: Props & { onDone: () 
           </p>
         )}
       </div>
+      <Briefing view={view} kind={m.kind} who={who} />
       <p className="meta">{MODE_NOTE[m.mode]}</p>
       <VotePicker view={view} value={pick} onChange={setPick} label="Your vote" seed={`vote-${m.meetingId}`} />
       <div className="vote__foot">
@@ -343,11 +377,18 @@ function BallotList({ rows, who, label }: { rows: readonly { player: PlayerId; v
 
 // ---------------------------------------------------------------- the shakedown window and results (§11.3, §11.4)
 
-/** The window after a passed shakedown. Identical for everyone, whether or not anyone can act in it. */
-export function DecidingPanel({ view, timers, offset }: Omit<Props, "send">) {
+/** The window after a passed shakedown. Identical for everyone but a Bail holder's own prompt, so it never tells who holds one. */
+export function DecidingPanel({ view, timers, offset, send }: Props) {
   const d = decidingOf(view)!;
   const who = useWho(view);
   const left = useCountdown(timers, `resolveShakedown:${d.meetingId}`, offset);
+  const bail = bailPromptOf(view);
+  const toast = useToast();
+  // design §17.4: the holder is told as the window opens.
+  const holder = bail !== null;
+  useEffect(() => {
+    if (holder) toast("The crew voted to shake you down. Use your Bail, or keep it.", "bad");
+  }, [holder, d.meetingId, toast]);
   return (
     <SketchFrame as="section" seed="game-deciding" radius={16} shadow={0.45} fill="var(--card-sand)" className="panel deciding" aria-labelledby="deciding-h" aria-live="polite">
       <div className="panel__head">
@@ -366,14 +407,44 @@ export function DecidingPanel({ view, timers, offset }: Omit<Props, "send">) {
       <p>
         The vote went against <b>{who(d.target)}</b>. The shakedown lands when the clock runs out.
       </p>
+      {bail && <BailChoice use={bail.use} answered={bail.answered} send={send} />}
     </SketchFrame>
   );
 }
 
+/** The target's private Bail choice, before the stash opens; no answer means don't use. design §9.6 */
+function BailChoice({ use, answered, send }: { use: boolean; answered: boolean; send: Send }) {
+  const [busy, setBusy] = useState(false);
+  const choose = async (next: boolean) => {
+    setBusy(true);
+    await send({ type: "chooseBail", use: next }, next ? "You'll use your Bail." : "You'll keep your Bail.");
+    setBusy(false);
+  };
+  return (
+    <div className="bail" role="group" aria-label="Your Bail choice">
+      <p>
+        <b>Use your Bail?</b> The shakedown falls through and your stash stays closed. Only you see this, and you can change your answer until the clock runs out. No answer means don't use it.
+      </p>
+      <div className="bail__choices">
+        <Button variant="toggle" seed="bail-use" pressed={answered && use} disabled={busy} onClick={() => void choose(true)}>
+          Use Bail
+        </Button>
+        <Button variant="toggle" seed="bail-keep" pressed={!use} disabled={busy} onClick={() => void choose(false)}>
+          Don't use it
+        </Button>
+      </div>
+      <p className="meta" aria-live="polite">
+        {answered ? `Your answer: ${use ? "use Bail" : "keep it"}.` : "No answer yet: it counts as keeping it."}
+      </p>
+    </div>
+  );
+}
+
 const RESULT_TITLE = (o: MeetingOutcome, who: (p: PlayerId) => string, me: PlayerId): string => {
+  if (o.cancelled) return "A shakedown fell through";
   switch (o.result.kind) {
     case "shakedown":
-      return o.result.target === me ? "The crew voted to shake you down" : `The crew voted to shake down ${who(o.result.target)}`;
+      return o.result.target === me ? "You were shaken down" : `${cap(who(o.result.target))} shaken down`;
     case "skipped":
       return "The crew voted to skip";
     case "noMajority":
@@ -383,42 +454,79 @@ const RESULT_TITLE = (o: MeetingOutcome, who: (p: PlayerId) => string, me: Playe
   }
 };
 
-/** The latest meeting's result: tally, ballots (per vote mode), and the shakedown. */
-export function ResultsBanner({ view }: { view: PlayerView }) {
+/** The latest meeting's result, as a taped card: tally, ballots (per vote mode), the shakedown's rows and the protection. design §9.6, §9.7 */
+export function ResultDialog({ view, pins }: { view: PlayerView; pins: PinsChannel }) {
   const o = latestOutcome(view);
   const [dismissed, setDismissed] = useState<string | null>(null);
   const who = useWho(view);
-  if (!o || !o.fresh || o.deciding || dismissed === o.meetingId) return null;
+  // showModal focuses the first control, an InfoTip whose focus preview would open by itself: start on the primary button.
+  const shownId = o && o.fresh && !o.deciding && dismissed !== o.meetingId ? o.meetingId : null;
+  useEffect(() => {
+    if (shownId) document.getElementById("results-ok")?.focus();
+  }, [shownId]);
+  if (!o || !o.fresh || o.deciding) return null;
   const s = o.shakedown;
-  const target = s ? cap(who(s.target)) : "";
-  const are = s?.target === view.me.id ? "were" : "was";
+  const target = o.result.kind === "shakedown" ? o.result.target : null;
+  const mine = target === view.me.id;
+  const leadId = `m.${o.meetingId}`;
+  const pinned = pins.pins.has(leadId);
+  const close = () => setDismissed(o.meetingId);
   return (
-    <SketchFrame as="section" seed={`results-${o.meetingId}`} radius={18} shadow={0.5} tape fill="var(--manilla)" className="panel results enter-sheet" aria-labelledby="results-h">
-      <p className="kicker results__kicker">{MEETING_TITLE[o.kind]} · result</p>
-      <h2 id="results-h" className="results__title">
-        {RESULT_TITLE(o, who, view.me.id)}
-      </h2>
-      <TallyBars rows={bars(o.tally, who, o.result)} label="Final tally" />
-      {o.ballots ? <BallotList rows={o.ballots} who={who} label="How everyone voted" /> : <p className="meta">{MODE_NOTE.secret}</p>}
-      {o.cancelled && (
-        <Banner seed="res-cancel" title="A shakedown fell through.">
-          Nobody's stash was opened.
-        </Banner>
-      )}
-      {s &&
-        (s.clean ? (
-          <Banner tone="bad" seed="res-clean" title={`Clean! ${target} ${are} holding ${s.stashRevealed}.`}>
-            Nothing above the share: nothing taken.
-          </Banner>
-        ) : (
-          <Banner tone="good" seed="res-dirty" title={`Caught! ${target} ${are} holding ${s.stashRevealed}.`}>
-            {s.taken} set aside for the next split.
-          </Banner>
-        ))}
-      <Button variant="secondary" seed="results-ok" onClick={() => setDismissed(o.meetingId)} className="results__ok">
-        Got it
-      </Button>
-    </SketchFrame>
+    <DialogSheet open={dismissed !== o.meetingId} onClose={close} seed={`results-${o.meetingId}`} labelledBy="results-h">
+      <div className="result">
+        <div className="result__head">
+          {target && <Avatar name={plain(who(target))} size={52} bot={view.players.find((p) => p.id === target)?.isBot} />}
+          <div>
+            <p className="meta">
+              {MEETING_TITLE[o.kind]} after R{o.round}
+            </p>
+            <h2 id="results-h" className="result__title">
+              {RESULT_TITLE(o, who, view.me.id)}
+            </h2>
+          </div>
+        </div>
+        <TallyBars rows={bars(o.tally, who, o.result)} label="Final tally" />
+        {o.ballots ? <BallotList rows={o.ballots} who={who} label="How everyone voted" /> : <p className="meta">{MODE_NOTE.secret}</p>}
+        {o.cancelled && <Banner seed="res-cancel" title="Nobody's stash was opened." />}
+        {s && (
+          <dl className="result__rows" aria-label="The stash">
+            <div>
+              <dt>
+                {mine ? "Your stash" : `${cap(who(s.target))}'s stash`} <InfoTip info={{ kind: "term", id: "stash" }} />
+              </dt>
+              <dd className="num">{s.stashRevealed}</dd>
+            </div>
+            <div>
+              <dt>
+                Share <InfoTip info={{ kind: "term", id: "share" }} />
+              </dt>
+              <dd className="num">{view.share}</dd>
+            </div>
+            {s.clean ? (
+              <div>
+                <dt>Clean: nothing above the share.</dt>
+              </div>
+            ) : (
+              <div>
+                <dt>
+                  Into the next split <InfoTip info={{ kind: "term", id: "shakedown" }} />
+                </dt>
+                <dd className="num result__back">+{s.taken}</dd>
+              </div>
+            )}
+          </dl>
+        )}
+        {target && (s || o.cancelled) && view.protected.includes(target) && <ProtectedBanner seed="res-protected">until the next regular meeting</ProtectedBanner>}
+        <div className="result__foot">
+          <Button variant="secondary" seed="results-pin" icon={<Pin on={pinned} />} aria-pressed={pinned} disabled={!pins.ready} onClick={() => pins.toggle(leadId)}>
+            {pinned ? "Pinned" : "Pin"}
+          </Button>
+          <Button variant="primary" seed="results-ok" id="results-ok" onClick={close}>
+            Back to the bank
+          </Button>
+        </div>
+      </div>
+    </DialogSheet>
   );
 }
 

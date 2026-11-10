@@ -82,6 +82,15 @@ describe("describeEvent", () => {
     expect(describeEvent(sampleEvents.shakedownCancelled, asCyd)).toBe("A shakedown fell through.");
   });
 
+  // design §9.6: what is above the share is set aside; a clean shakedown has nothing to set aside, so its line says so once.
+  it("a dirty shakedown says what was set aside; a clean one drops that clause", () => {
+    const resolved = sampleEvents.shakedownResolved;
+    expect(describeEvent(resolved, asCyd)).toBe("Ana was shaken down: a stash of 7, 2 set aside for the next split.");
+    const clean = describeEvent({ ...resolved, taken: 0, clean: true }, asCyd);
+    expect(clean).toBe("Ana was shaken down: a stash of 7. Clean: nothing above the share.");
+    expect(clean).not.toContain("set aside");
+  });
+
   // design §5.1: a missed deadline shows the default move.
   it("says when the default move was made", () => {
     expect(describeEvent(sampleEvents.defaultMoveAssigned, { ...asAna, me: "ben" })).toBe(

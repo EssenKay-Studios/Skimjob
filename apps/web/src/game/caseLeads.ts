@@ -266,7 +266,7 @@ export function caseData(view: PlayerView, pins: ReadonlySet<string>): CaseData 
           d.summary = [r.kind === "shakedown" ? `${who(r.target)} voted out` : r.kind === "skipped" ? "skipped" : r.kind === "noMajority" ? "no majority" : "too few votes"];
           if (r.kind === "shakedown") names.push(r.target);
         }
-        if (e.type === "shakedownResolved") d.summary = [`${who(e.target)} shaken down · ${e.taken} back`];
+        if (e.type === "shakedownResolved") d.summary = [`${who(e.target)} shaken down · ${e.clean ? "clean" : `${e.taken} back`}`];
         if (e.type === "shakedownCancelled") d.summary = ["a shakedown fell through"];
         fact(d, `${seq}`, text(), trust, names);
         break;
