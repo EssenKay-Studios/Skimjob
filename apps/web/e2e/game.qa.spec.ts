@@ -226,7 +226,7 @@ const clock = (t: string | null) => {
 
 test("reloads, a killed socket, a skewed clock and a late alibi (3h preset: 102 s rounds) @move", async ({ browser }, info) => {
   test.skip(info.project.name !== "desktop", "one viewport is enough for the channel behaviour");
-  test.setTimeout(240_000);
+  test.setTimeout(360_000); // round 1 (~102 s), then a meeting's vote window and Bail window may come before round 2 on a slow runner
   const { hostCtx, guestCtx, host, guest } = await contexts(browser, false);
   // The guest's clock runs an hour fast; the countdown must still follow the server's.
   await guest.addInitScript(() => {
