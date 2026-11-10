@@ -517,3 +517,21 @@ describe("start", () => {
     expect(seeds[0]).not.toBe(seeds[1]);
   });
 });
+
+describe("the game seed", () => {
+  // design §19.1 (deterministic engine): outside production an E2E spec may name its game's seed to replay one game.
+  const started = async (server: FastifyInstance) => {
+    const who = (await server.inject({ method: "POST", url: "/auth/guest", payload: { nickname: "Seeder" } })).cookies.find((c) => c.name === SESSION_COOKIE)!.value;
+    const cookies = { [SESSION_COOKIE]: who };
+    const game = (await server.inject({ method: "POST", url: "/games", payload: {}, cookies })).json() as LobbyView;
+    for (let i = 0; i < 2; i++) await server.inject({ method: "POST", url: `/games/${game.id}/bots`, payload: {}, cookies });
+    expect((await server.inject({ method: "POST", url: `/games/${game.id}/start`, payload: { seed: "e2e-seed" }, cookies })).statusCode).toBe(200);
+    return (await store.load(game.id))!.config.seed;
+  };
+  it("the start request's seed is used only where the server allows it (never in production)", async () => {
+    const seeded = buildServer({ db, clock, store, seedFromRequest: true });
+    expect(await started(seeded)).toBe("e2e-seed");
+    expect(await started(app)).not.toBe("e2e-seed");
+    await seeded.close();
+  });
+});

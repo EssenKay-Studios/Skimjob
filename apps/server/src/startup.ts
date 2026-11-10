@@ -42,7 +42,7 @@ export async function openDatabase(config: ServerConfig): Promise<{ db: Db; appl
 }
 
 /** The parts of buildServer's deps that come from the environment (main.ts). */
-export function serverDeps(config: ServerConfig): Pick<ServerDeps, "auth" | "allowedOrigins" | "webDir" | "secureCookies" | "trustProxy" | "timeScale"> {
+export function serverDeps(config: ServerConfig): Pick<ServerDeps, "auth" | "allowedOrigins" | "webDir" | "secureCookies" | "trustProxy" | "timeScale" | "seedFromRequest"> {
   return {
     // loadConfig already turns DEV_LOGIN off in production; this is the only place providers are chosen.
     auth: [
@@ -54,5 +54,6 @@ export function serverDeps(config: ServerConfig): Pick<ServerDeps, "auth" | "all
     secureCookies: config.production,
     trustProxy: config.production,
     timeScale: config.timeScale,
+    seedFromRequest: !config.production,
   };
 }
