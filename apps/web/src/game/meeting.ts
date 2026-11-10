@@ -18,11 +18,17 @@ import { crewSize, jobOf, setupOf } from "./hud";
 /** Each kind of meeting, as the screens name it. design §9.1–§9.3 */
 export const MEETING_TITLE: Readonly<Record<MeetingKind, string>> = { regular: "Regular meeting", briefing: "Police briefing", emergency: "Emergency meeting" };
 
-/** Every other player, in seat order: who you may vote for (never yourself, design §11.2). */
-export function voteTargets(view: PlayerView): { readonly id: PlayerId; readonly name: string; readonly isBot: boolean }[] {
+/**
+ * Every other player, in seat order, who you may vote for: not a protected player in a live vote (the engine
+ * refuses it); a sealed vote may name one, it counts as a skip if they are still protected at the opening. design §9.5, §9.7
+ */
+export function voteTargets(view: PlayerView, sealed = false): { readonly id: PlayerId; readonly name: string; readonly isBot: boolean }[] {
   const order = setupOf(view)?.players ?? view.players;
-  return order.filter((p) => p.id !== view.me.id).map((p) => ({ id: p.id, name: p.name, isBot: p.isBot }));
+  return order.filter((p) => p.id !== view.me.id && (sealed || !view.protected.includes(p.id))).map((p) => ({ id: p.id, name: p.name, isBot: p.isBot }));
 }
+
+/** Everyone protected from shakedowns until the next regular meeting, in seat order (public). design §9.7 */
+export const protectedPlayers = (view: PlayerView): PlayerId[] => (setupOf(view)?.players ?? [...view.players, view.me]).map((p) => p.id).filter((id) => view.protected.includes(id));
 
 export const sameVote = (a: VoteChoice | null, b: VoteChoice | null): boolean =>
   a === null || b === null ? a === b : a.kind === b.kind && (a.kind === "skip" || (b.kind === "shakedown" && a.target === b.target));
@@ -32,6 +38,13 @@ export const MODE_NOTE: Readonly<Record<VoteVisibility, string>> = {
   hiddenThenRevealed: "Ballots stay hidden while the window is open. When it closes, everyone's vote goes in the ledger.",
   open: "Open vote: everyone sees each ballot as it's cast.",
   secret: "Secret vote: only the final tally is ever shown, even after the game.",
+};
+
+/** Why each kind of meeting is held, and what it does for powers. design §9.1–§9.3 */
+export const MEETING_WHY: Readonly<Record<MeetingKind, string>> = {
+  regular: "A third of the bank is gone. Powers that recharge between meetings recharge now.",
+  briefing: "The police raided a room. Nothing recharges.",
+  emergency: "Called from the crew's emergency pool. Nothing recharges.",
 };
 
 export const MODE_NAME: Readonly<Record<VoteVisibility, string>> = { hiddenThenRevealed: "Hidden, then revealed", open: "Open", secret: "Secret" };
@@ -98,19 +111,40 @@ export function localInputValue(ms: number): string {
 }
 
 export interface EmergencyState {
+  /** The crew's pool: calls left (public). design §9.3 */
+  readonly left: number;
+  /** The result window: the only time the button is offered. */
+  readonly inWindow: boolean;
   readonly canCall: boolean;
   /** Why not, or what it costs. */
   readonly note: string;
 }
 
-/** The crew's emergency pool: anyone may spend one, only between a round's result and the next planning. design §9.3 */
+/** The crew's emergency pool: anyone may spend one, only between a round's result and the next planning, one per window. design §9.3 */
 export function emergencyOf(view: PlayerView): EmergencyState {
-  const left = `${view.emergencies} left for the crew`;
-  if (view.phase.kind === "ended") return { canCall: false, note: "The game is over." };
-  if (view.emergencies === 0) return { canCall: false, note: "The crew's emergency meetings are all spent." };
-  if (view.pendingEmergency) return { canCall: false, note: "An emergency meeting has already been called." };
-  if (view.phase.kind !== "result") return { canCall: false, note: `Only after a round's result, before the next planning (${left}).` };
-  return { canCall: true, note: `${left}. Everyone is told who called it.` };
+  const left = view.emergencies;
+  const inWindow = view.phase.kind === "result";
+  const no = (note: string): EmergencyState => ({ left, inWindow, canCall: false, note });
+  if (view.phase.kind === "ended") return no("The game is over.");
+  if (left === 0) return no("The crew's emergency meetings are all spent.");
+  if (view.pendingEmergency) return no("An emergency meeting has already been called.");
+  if (!inWindow) return no("Only after a round's result, before the next planning.");
+  return { left, inWindow, canCall: true, note: "Everyone is told who called it." };
+}
+
+/** What the Bail choice holds for you, the target: null unless a passed shakedown is on you and you hold a Bail. Private. design §9.6 */
+export function bailPromptOf(view: PlayerView): { readonly meetingId: string; readonly use: boolean; readonly answered: boolean } | null {
+  const d = decidingOf(view);
+  if (!d || d.target !== view.me.id || !view.me.roleState.bail) return null;
+  // The latest choice counts; no answer means don't use.
+  let use = false;
+  let answered = false;
+  for (const { event: e } of view.caseFile)
+    if (e.type === "bailChosen" && e.meetingId === d.meetingId) {
+      use = e.use;
+      answered = true;
+    }
+  return { meetingId: d.meetingId, use, answered };
 }
 
 // ---------------------------------------------------------------- the vote window (§11.2)
@@ -156,7 +190,8 @@ export function openMeetingOf(view: PlayerView): OpenMeeting | null {
   // Your own ballots: public in Open mode (ledger), private or secret otherwise (case file).
   for (const { event: e } of [...view.ledger, ...view.caseFile]) if (e.type === "voteCast" && e.meetingId === id && e.player === view.me.id) fromSealed = e.sealed;
   const mode = view.voteVisibility;
-  const ballots = mode === "open" ? voteTargets(view).filter((t) => latest.has(t.id)).map((t) => ({ player: t.id, vote: latest.get(t.id)! })) : [];
+  // Every other seat, protected ones too: they can still vote (design §9.7).
+  const ballots = mode === "open" ? voteTargets(view, true).filter((t) => latest.has(t.id)).map((t) => ({ player: t.id, vote: latest.get(t.id)! })) : [];
   const seen = Object.entries(view.me.seenBallots).map(([player, vote]) => ({ player, vote }));
   const live = mode === "open" ? tallyOf([...ballots.map((b) => b.vote!), ...(view.me.vote ? [view.me.vote] : [])]) : null;
   return { meetingId: id, kind, calledBy, mode, mine: view.me.vote, fromSealed: fromSealed && view.me.vote !== null, ballots, seen, live };
@@ -218,6 +253,8 @@ export function tallyRows(tally: Tally, result: MeetingResult | null = null): Ta
 export interface MeetingOutcome {
   readonly meetingId: string;
   readonly kind: MeetingKind;
+  /** The round that resolved just before it. */
+  readonly round: number;
   readonly result: MeetingResult;
   readonly tally: Tally;
   /** Everyone's ballot once the window closed (Hidden and Open modes); null in Secret mode. design §11.2 */
@@ -244,7 +281,11 @@ export function latestOutcome(view: PlayerView): MeetingOutcome | null {
   if (closed.type !== "meetingClosed") return null;
   const id = closed.meetingId;
   let kind: MeetingKind = "regular";
-  for (const { event: e } of view.ledger) if (e.type === "meetingOpened" && e.meetingId === id) kind = e.kind;
+  let round = 0;
+  for (const { event: e } of view.ledger.slice(0, start)) {
+    if (e.type === "meetingOpened" && e.meetingId === id) kind = e.kind;
+    else if (e.type === "roundResolved") round = e.round;
+  }
   let shakedown: ShakedownResolved | null = null;
   let cancelled = false;
   let fresh = true;
@@ -258,7 +299,7 @@ export function latestOutcome(view: PlayerView): MeetingOutcome | null {
   }
   const ballots = closed.ballots ? voteTargetsAll(view).filter((p) => Object.hasOwn(closed.ballots!, p)).map((p) => ({ player: p, vote: closed.ballots![p]! })) : null;
   const deciding = view.phase.kind === "shakedownPending" && view.phase.meetingId === id;
-  return { meetingId: id, kind, result: closed.result, tally: closed.tally, ballots, deciding, shakedown, cancelled, fresh };
+  return { meetingId: id, kind, round, result: closed.result, tally: closed.tally, ballots, deciding, shakedown, cancelled, fresh };
 }
 
 /** Everyone in seat order, you included. */

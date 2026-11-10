@@ -5,7 +5,7 @@
 // from public round results). docs/m2-plan.md M2-10
 import type { GameEvent, LoggedEvent, PlayerView } from "@skimjob/engine";
 import { describeEvent, type DescribeContext } from "./describeEvent";
-import { MEETING_TITLE } from "./meeting";
+import { bailPromptOf, MEETING_TITLE } from "./meeting";
 
 /** One recap line and the entries it was built from (for tests: they must all be in the viewer's view). */
 export interface RecapItem {
@@ -94,7 +94,7 @@ export function nextUp(view: PlayerView): string | null {
     case "meeting":
       return view.me.vote || view.me.sealedVote ? "Now: the meeting is open; your vote is in." : "Now: the meeting is open. Cast your vote.";
     case "shakedownPending":
-      return "Now: a shakedown is about to land.";
+      return bailPromptOf(view) ? "Now: a shakedown is about to land on you. Use your Bail, or keep it." : "Now: a shakedown is about to land.";
     case "awaitingMeeting":
       return `Now: the ${MEETING_TITLE[p.meeting].toLowerCase()} is next.`;
     case "result":

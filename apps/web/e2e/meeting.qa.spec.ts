@@ -111,14 +111,17 @@ for (const mode of ["hiddenThenRevealed", "open", "secret"] as const) {
     await hd.getByRole("button", { name: "Back to the board" }).click();
 
     // Result: 2 for Guest 2, 1 sealed skip → passes; Guest 2 is clean (only the share): nothing is taken (design §9.6).
-    const results = host.getByRole("region", { name: /The crew voted|No majority|Too few votes/ });
+    const results = host.getByRole("dialog", { name: /shaken down|No majority|Too few votes/ });
     await expect(results).toBeVisible({ timeout: 25_000 });
     if (talker) {
       await expect(results).toContainText("No majority: nobody is shaken down");
     } else {
-      await expect(results).toContainText("The crew voted to shake down Guest 2");
-      await expect(results).toContainText(/Clean! Guest 2 was holding \d+/);
-      await expect(results).toContainText("Nothing above the share: nothing taken.");
+      // design §9.6, §9.7: the stash opens, a clean one has no set-aside row, and the target is protected.
+      await expect(results).toContainText("Guest 2 shaken down");
+      await expect(results.locator(".result__rows")).toContainText("Guest 2's stash");
+      await expect(results).toContainText("Clean: nothing above the share.");
+      await expect(results).not.toContainText("Into the next split");
+      await expect(results).toContainText("Protected");
     }
     const tally = results.getByRole("list", { name: "Final tally" });
     await expect(tally).toContainText("Skip");
@@ -132,10 +135,9 @@ for (const mode of ["hiddenThenRevealed", "open", "secret"] as const) {
     const back = await c2.newPage();
     back.on("pageerror", (e) => errors.push(e.message));
     await back.goto(`/game/${game.id}`);
-    await openPanel(back, "This round");
-    // The results banner lasts until the next round resolves: they were the one shaken down.
-    if (talker) await expect(back.getByRole("region", { name: /No majority/ })).toBeVisible();
-    else await expect(back.getByRole("region", { name: /The crew voted/ })).toContainText("The crew voted to shake you down");
+    // The result card is a dialog of its own, whichever panel is open; it lasts until the next round resolves: they were the one shaken down.
+    if (talker) await expect(back.getByRole("dialog", { name: /No majority/ })).toBeVisible();
+    else await expect(back.getByRole("dialog", { name: /shaken down/ })).toContainText("You were shaken down");
     await shot(back, `${mode}-g2-back`);
 
     expect(errors).toEqual([]);

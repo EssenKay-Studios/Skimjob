@@ -1,5 +1,5 @@
 /* Meetings and voting (M2-7): planner, emergency, sealed vote, vote dialog,
-   shakedown window, results, role card. ui-style "Vote window". Tokens only. */
+   shakedown window, Bail choice, results, role card. ui-style "Vote window". Tokens only. */
 
 .meetings__block {
   display: grid;
@@ -26,7 +26,6 @@
 }
 .meetings__emergency,
 .meetings__open,
-.results__ok,
 .role-card .claim__toggle {
   justify-self: start;
 }
@@ -190,16 +189,84 @@
   color: var(--ink);
 }
 
-/* ---------- Results ---------- */
-.results {
-  padding-top: 24px;
+/* ---------- Results (shakedown result, board 5b) ---------- */
+.result {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
 }
-.results__kicker {
-  margin-bottom: 0;
+.result__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
-.results__title {
-  font-size: 22px;
+.result__head > div {
+  min-width: 0;
+}
+.result__title {
+  font-size: 24px;
   overflow-wrap: anywhere;
+}
+.result__rows {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-top: 10px;
+  border-top: 1.3px dashed var(--ink-faint);
+}
+.result__rows > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.result__rows dt {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.result__rows dd {
+  margin: 0;
+  font-size: 18px;
+}
+.result__back {
+  color: var(--good);
+}
+.result__foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px 12px;
+}
+
+/* ---------- Briefing and the Bail choice ---------- */
+.briefing {
+  display: grid;
+  gap: 6px;
+}
+.briefing__protected {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13.5px;
+}
+.briefing__protected svg {
+  flex: none;
+  width: 22px;
+  height: 22px;
+}
+.bail {
+  display: grid;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1.3px dashed var(--ink-faint);
+}
+.bail__choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 /* A 24-character name like W×24 has no break point of its own. */
 .deciding p {
@@ -260,7 +327,8 @@
 @media (max-width: 560px) {
   .slot-form > .btn,
   .meetings__emergency,
-  .meetings__open {
+  .meetings__open,
+  .bail__choices > .btn {
     width: 100%;
   }
   .slot-form > .btn {

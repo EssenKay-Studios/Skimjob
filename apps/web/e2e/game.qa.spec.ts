@@ -8,6 +8,7 @@ import { closePanel, gameOver, keepRoundOpen, openPanel, showResult } from "./se
 import { expect, test, type APIRequestContext, type Browser, type Page, type WebSocketRoute } from "@playwright/test";
 import { openLeads } from "./setupGame";
 import { bagCoins, pickOtherRoom, pickRoom } from "./move";
+import { clickAfterCards, showsAfterCards } from "./meetingCards";
 
 const SHOTS = process.env.SHOTS_DIR;
 const LONG_HOST = "WWWWWWWWWWWWWWWWWWWWWWWW"; // 24, the cap; the widest glyph, no break points
@@ -172,6 +173,11 @@ test("12 seats, 24-char names: a 15-min game to the end with moves changed, alib
           }
         }
       }
+      // design §9.6: a meeting's result card is a modal over the board until it is closed; both seats close it.
+      for (const p of [host, guest]) {
+        const card = p.getByRole("button", { name: "Back to the bank" });
+        if (await card.isVisible().catch(() => false)) await tap(p, card).catch(() => {});
+      }
       if (await post.isVisible().catch(() => false)) {
         await once("alibi-open", host);
         await tap(host, host.getByRole("group", { name: "Alibi room" }).getByRole("button", { name: "Vault" })).catch(() => {});
@@ -220,7 +226,7 @@ const clock = (t: string | null) => {
 
 test("reloads, a killed socket, a skewed clock and a late alibi (3h preset: 102 s rounds) @move", async ({ browser }, info) => {
   test.skip(info.project.name !== "desktop", "one viewport is enough for the channel behaviour");
-  test.setTimeout(240_000);
+  test.setTimeout(360_000); // round 1 (~102 s), then a meeting's vote window and Bail window may come before round 2 on a slow runner
   const { hostCtx, guestCtx, host, guest } = await contexts(browser, false);
   // The guest's clock runs an hour fast; the countdown must still follow the server's.
   await guest.addInitScript(() => {
@@ -286,14 +292,16 @@ test("reloads, a killed socket, a skewed clock and a late alibi (3h preset: 102 
   freeze = true; // the host's screen now keeps the alibi panel
   await guest.reload();
   await expect(guest.getByRole("button", { name: "Post alibi" })).toBeVisible({ timeout: 4000 });
-  await guest.getByRole("group", { name: "Alibi room" }).getByRole("button", { name: "Lobby" }).click();
-  await guest.getByRole("button", { name: "Post alibi" }).click();
+  // A meeting after round 1 can open over the guest's screen: its vote window, then its result card, are modal (design §9.6).
+  await clickAfterCards(guest, guest.getByRole("group", { name: "Alibi room" }).getByRole("button", { name: "Lobby" }), 150_000);
+  await clickAfterCards(guest, guest.getByRole("button", { name: "Post alibi" }), 150_000);
   await expect(guest.getByText("You told the crew you were in the")).toBeVisible();
   await shot(guest, "alibi-posted-after-reload");
 
   // The host posts once round 2 is being planned (their screen is stale): alibis have no window, so it is
   // still taken for round 1 (design §11.3, owner 6 Nov). A briefing (after a raid) or the result window may come first (§9.2, §9.3).
-  await expect(guest.getByRole("heading", { name: "Round 2 · Pick your room", level: 2 })).toBeVisible({ timeout: 90_000 });
+  // A meeting before it leaves its modal result card up, and the board behind a modal is out of the accessibility tree until it is closed (design §9.6).
+  await showsAfterCards(guest, guest.getByRole("heading", { name: "Round 2 · Pick your room", level: 2 }), 150_000);
   // The host's screen may have frozen on a meeting's vote: back to the board, where the alibi panel waits.
   const back = host.getByRole("button", { name: "Back to the board" });
   if (await back.isVisible()) await back.click();

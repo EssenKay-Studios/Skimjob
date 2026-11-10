@@ -171,3 +171,13 @@ export function Coin() {
     </svg>
   );
 }
+
+/** A shield: protected from shakedowns until the next regular meeting. design §9.7 */
+export function Shield() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true">
+      <path d="M10 2.6l6 2v5c0 3.6-2.5 6.2-6 7.6-3.5-1.4-6-4-6-7.6v-5z" {...S} />
+      <path d="M7.2 10l2 2 3.6-4" {...S} />
+    </svg>
+  );
+}
