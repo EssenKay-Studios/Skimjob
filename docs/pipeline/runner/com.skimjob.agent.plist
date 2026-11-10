@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- The Skimjob runner on the Mac: poll.sh every 5 minutes. setup.sh fills in @REPO_DIR@ and @WORK_DIR@
+     and installs it as ~/Library/LaunchAgents/com.skimjob.agent.plist. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.skimjob.agent</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>@REPO_DIR@/docs/pipeline/runner/poll.sh</string>
+  </array>
+  <key>StartInterval</key>
+  <integer>300</integer>
+  <key>RunAtLoad</key>
+  <true/>
+  <!-- The jobs poll.sh starts outlive the poll. -->
+  <key>AbandonProcessGroup</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>@WORK_DIR@/poll.log</string>
+  <key>StandardErrorPath</key>
+  <string>@WORK_DIR@/poll.log</string>
+</dict>
+</plist>

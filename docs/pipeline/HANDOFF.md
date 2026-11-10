@@ -15,11 +15,9 @@ Run milestone R7 as `docs/simplified.md` "How to run it" says. Rebuild the live 
 
 ## Running the pipeline
 
-- You never write code. Spawn one agent per ticket and step, on the model and host its labels choose (`agents.md` "Start it"; never start a ticket without exactly one account, host and model label), with its role file (`builder.md`, `reviewer.md`, `qa.md`), the issue number, the branch and worktree name, and where it runs. agy (Gemini) only for menial, conflict-free rebases.
-- Hold the order in `common.md` "The flow": spawn the reviewer only on green CI, QA only after an APPROVE on the current head, and send findings back to the builder.
-- When the gate passes, add `ready-to-merge` and tell the owner. The owner merges; run `merge.sh <PR>` yourself only when the owner asks.
+- You never write code. The runner (`agents.md`, `docs/pipeline/runner/`, `.github/workflows/agent.yml`) starts each step on the host and model the ticket's labels choose, in the order of `common.md` "The flow", sets `agent:working` / `agent:blocked` and adds `ready-to-merge` with the merge command when the gate passes. You watch the tickets and PRs, and step in when a ticket stalls. agy (Gemini) only for menial, conflict-free rebases.
+- The owner merges; run `merge.sh <PR>` yourself only when the owner asks.
 - **Merge order:** one PR at a time. After each merge the other open PRs rebase onto `main`; a rebase that changes more than QA tests needs a delta review.
-- **At most 3 e2e runs per machine:** give at most 3 Playwright-running agents a Mac slot at once; the rest wait or run elsewhere.
 - **Your own docs PRs:** you can't QA yourself; spawn a QA agent.
 - **Issues and the board** (from the Mac or Linux; the cloud can't reach Projects): move the card (Todo / In progress / In review / Owner review / Done, set PR). After a merge, fold the PR's `## Decisions` into `docs/decisions.md` (in your own docs PR, concisely) and open one issue per `## Follow-ups` line: the right Type, plus Area, Step and Flags on the board (`follow-up`, `owner-decision`, `flaky`, … as they fit).
 - **Owner questions:** ask only for real decisions, as multiple-choice questions with a recommended option; batch technical defaults (about 4 at a time). Otherwise keep going. Send a short progress update about every 15 minutes while work runs.

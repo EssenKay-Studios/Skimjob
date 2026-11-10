@@ -1,0 +1,137 @@
+# The cloud runner (docs/pipeline/agents.md): runs one step of a ticket on a GitHub runner when the start
+# check (scripts/agent-start.ts, through docs/pipeline/runner/poll.sh) says its host is cloud
+# (on:cloud, or a build:/review:/qa:cloud override). Never merges, never prints a secret.
+# The board can't be read here (GITHUB_TOKEN has no project scope): Area and the owner decision come
+# from the issue form's answers.
+name: Agent
+
+on:
+  issues:
+    types: [labeled, unlabeled]
+  pull_request:
+    types: [synchronize]
+  # check_suite never fires for suites GitHub Actions creates (CI), so CI's end is workflow_run.
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: Issue number
+        required: true
+        type: number
+
+permissions: {}
+
+jobs:
+  resolve:
+    name: Find the ticket
+    # Only karthik24iyer, or this workflow re-dispatching itself after a step.
+    if: github.event.sender.login == 'karthik24iyer' || (github.event_name == 'workflow_dispatch' && github.event.sender.login == 'github-actions[bot]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: read
+    outputs:
+      issue: ${{ steps.n.outputs.issue }}
+    steps:
+      - id: n
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ github.event.issue.number || inputs.issue }}
+          PR: ${{ github.event.pull_request.number || github.event.workflow_run.pull_requests[0].number }}
+        run: |
+          n=$ISSUE
+          if [ -z "$n" ] && [ -n "$PR" ]; then
+            n=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR" --jq '.body // ""' | grep -oiE '\b(close[sd]?|fix(e[sd])?|resolve[sd]?) #[0-9]+' | head -1 | grep -oE '[0-9]+$')
+          fi
+          echo "issue=$n" >> "$GITHUB_OUTPUT"
+          echo "ticket: ${n:-none}"
+
+  run:
+    name: Run a step for #${{ needs.resolve.outputs.issue }}
+    needs: resolve
+    if: needs.resolve.outputs.issue != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    # One run per ticket at a time; removing its account label cancels the running step.
+    concurrency:
+      group: agent-${{ needs.resolve.outputs.issue }}
+      cancel-in-progress: ${{ github.event.action == 'unlabeled' && contains(fromJSON('["agent:max","agent:pro","agent:api"]'), github.event.label.name) }}
+    permissions:
+      contents: read
+      pull-requests: read # the gate (verdicts.sh)
+      checks: read
+      statuses: read
+      issues: write # labels and the runner's comments
+      actions: write # re-dispatch this workflow after a step
+    env:
+      STOP: ${{ github.event.action == 'unlabeled' && contains(fromJSON('["agent:max","agent:pro","agent:api"]'), github.event.label.name) }}
+      PLACE: cloud
+      REPO_DIR: ${{ github.workspace }}
+      WORK_DIR: ${{ github.workspace }}/../agent-work # outside the checkout
+      N: ${{ needs.resolve.outputs.issue }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          # The agent pushes and posts as karthik24iyer: CI doesn't run on GITHUB_TOKEN pushes and the gate
+          # counts only karthik24iyer's verdicts.
+          token: ${{ secrets.AGENT_GH_TOKEN }}
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0 (version from package.json "packageManager")
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Stop
+        if: env.STOP == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh api "repos/$GITHUB_REPOSITORY/issues/$N" --jq '[.labels[].name] | index("agent:working")' | grep -q '[0-9]'; then
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/issues/$N/labels/agent:working" --silent
+            gh api "repos/$GITHUB_REPOSITORY/issues/$N/comments" -f body="runner: stopped on cloud: the account label was removed. Add it again to resume." --silent
+          fi
+      - name: Start check
+        id: check
+        if: env.STOP != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          # Give the owner a minute to add all three start labels before checking.
+          [ "$EVENT" != issues ] || sleep 60
+          bash docs/pipeline/runner/poll.sh check "$N"
+      - name: Install for QA
+        if: steps.check.outputs.step == 'qa'
+        run: pnpm install --frozen-lockfile && cd apps/web && npx playwright install --with-deps chromium
+      - name: Run the step
+        if: steps.check.outputs.step != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AGENT_GH_TOKEN: ${{ secrets.AGENT_GH_TOKEN }}
+          # Only the secret of the ticket's account reaches this step.
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ steps.check.outputs.account == 'max' && secrets.CLAUDE_MAX_OAUTH_TOKEN || steps.check.outputs.account == 'pro' && secrets.CLAUDE_PRO_OAUTH_TOKEN || '' }}
+          ANTHROPIC_API_KEY: ${{ steps.check.outputs.account == 'api' && secrets.ANTHROPIC_API_KEY || '' }}
+          API_BUDGET_USD: ${{ vars.AGENT_API_BUDGET_USD }}
+          STEP: ${{ steps.check.outputs.step }}
+          ACCOUNT: ${{ steps.check.outputs.account }}
+          MODEL: ${{ steps.check.outputs.model }}
+          PROMPT: ${{ steps.check.outputs.prompt }}
+        run: |
+          npm install -g @anthropic-ai/claude-code@2.1.322 >/dev/null
+          bash docs/pipeline/runner/poll.sh job "$N" "$STEP" "$ACCOUNT" "$MODEL" "$PROMPT"
+      - name: Job log
+        if: always() && steps.check.outputs.step != ''
+        run: cat "$WORK_DIR"/logs/*.log 2>/dev/null || echo "no job log"
+      - name: Clear agent:working after a cancel or crash
+        if: (cancelled() || failure()) && steps.check.outputs.step != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X DELETE "repos/$GITHUB_REPOSITORY/issues/$N/labels/agent:working" --silent 2>/dev/null || true
+      # The next step (or ready-to-merge) is checked right away: reviews and QA verdicts trigger nothing here.
+      - name: Check the next step
+        if: success() && steps.check.outputs.step != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run agent.yml -f issue="$N"
