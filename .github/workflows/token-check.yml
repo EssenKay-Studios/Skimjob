@@ -1,0 +1,38 @@
+# Token check (manual): asks Claude Code for a one-word reply with each agent secret and prints
+# only OK, FAIL or MISSING per secret, never a value. Actions > "Token check" > Run workflow.
+name: Token check
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  check:
+    name: Token check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - run: npm install -g @anthropic-ai/claude-code@2.1.322 >/dev/null
+      - env:
+          MAX: ${{ secrets.CLAUDE_MAX_OAUTH_TOKEN }}
+          PRO: ${{ secrets.CLAUDE_PRO_OAUTH_TOKEN }}
+          KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          # ask: one prompt with only this credential set; its output is discarded.
+          ask() { cd "$(mktemp -d)" && env -u MAX -u PRO -u KEY "$@" timeout 120 claude -p 'Reply with one word: OK' >/dev/null 2>&1; }
+          bad=0
+          check() {
+            local name=$1 val=$2 var=$3 status=OK
+            if [ -z "$val" ]; then status=MISSING
+            elif ! (ask "$var=$val"); then status=FAIL; fi
+            echo "$name: $status" | tee -a "$GITHUB_STEP_SUMMARY"
+            [ $status = OK ] || bad=1
+          }
+          check CLAUDE_MAX_OAUTH_TOKEN "$MAX" CLAUDE_CODE_OAUTH_TOKEN
+          check CLAUDE_PRO_OAUTH_TOKEN "$PRO" CLAUDE_CODE_OAUTH_TOKEN
+          check ANTHROPIC_API_KEY "$KEY" ANTHROPIC_API_KEY
+          exit $bad

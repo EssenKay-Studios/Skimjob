@@ -1,0 +1,44 @@
+name: Task
+description: A piece of work that is neither a bug nor a feature.
+type: Task
+projects: ["EssenKay-Studios/2"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What
+    validations:
+      required: true
+  - type: textarea
+    id: done-when
+    attributes:
+      label: Done when
+      placeholder: "- [ ] ..."
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: [board, bots, caseboard, chat, ci, host, learn, lobby, meeting, move, plan, reveal, roles, shell, teaching]
+    validations:
+      required: true
+  - type: input
+    id: design
+    attributes:
+      label: Design reference
+      description: A section of docs/design.md (e.g. §5.2), or "rule change".
+    validations:
+      required: true
+  - type: dropdown
+    id: owner-decision
+    attributes:
+      label: Owner decision needed?
+      options: ["no", "yes"]
+    validations:
+      required: true
+  - type: input
+    id: related
+    attributes:
+      label: Related tickets
+      description: Optional. e.g. #123, #130

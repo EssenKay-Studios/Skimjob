@@ -1,6 +1,5 @@
 // What must a change test? (docs/testing.md "Scoped tests")
 //   node scripts/scope.mjs           changed paths (one per line) on stdin -> JSON { full, unit, tags, sim, reason }
-//   node scripts/scope.mjs --full    the full tier (pushes to main, nightly)
 //   node scripts/scope.mjs --check   features.json coverage; fails if an e2e test lacks exactly one feature tag
 //   node scripts/scope.mjs --run     `pnpm test:scoped`: scope the diff against origin/main and run it
 //   node scripts/scope.mjs --shard 3/6   the e2e spec files of CI shard 3 of 6, balanced by apps/web/e2e/shard-weights.json
@@ -168,7 +167,6 @@ function main(mode) {
   const files = lines(out("git", ["ls-files"])).filter((f) => existsSync(join(root, f))); // not deleted in the working tree
   const read = (f) => readFileSync(join(root, f), "utf8");
   const features = JSON.parse(read(FEATURES));
-  if (mode === "--full") return console.log(JSON.stringify({ ...FULL, reason: "full tier" }));
   if (mode === "--check") {
     const problems = check(files, features);
     problems.forEach((p) => console.error(p));

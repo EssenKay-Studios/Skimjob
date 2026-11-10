@@ -13,9 +13,8 @@ A social deduction heist game for groups of friends (web + Android/iOS). A crew 
 
 ## End of every session
 
-1. Before pushing, a builder runs only the static checks, the unit tests the diff needs and its new or changed e2e specs ×3, pushes to a draft PR and marks it ready once CI (the scoped set, e2e on 6 shards) is green; QA runs `pnpm precheck`. The full tier runs on `main` after the merge (`docs/pipeline/common.md` "Testing speed", `docs/testing.md`).
-2. Don't edit `docs/STATUS.md` or `docs/decisions.md` in a feature PR: put "Closes #N" (your issue) in the PR body, provisional rule calls under `## Decisions` and new follow-ups under `## Follow-ups`; the PM folds decisions into `docs/decisions.md` (in its own docs PR) and creates issues from the follow-ups. If a rule changed, update `docs/design.md` in the PR.
-3. Commit to your branch, push it and open a draft PR (`docs/pipeline/common.md`).
+1. Every PR goes Build → CI → Review → QA → the owner merges (`docs/pipeline/common.md`). A builder runs quick local checks and its changed specs, pushes a draft PR, fixes CI until the full suite is green and then marks it ready.
+2. Don't edit `docs/STATUS.md` or `docs/decisions.md` in a feature PR: put "Closes #N" (your issue) in the PR body, provisional rule calls under `## Decisions` and new follow-ups under `## Follow-ups`; the PM folds decisions into `docs/decisions.md` (in its own docs PR) and opens issues for the follow-ups. If a rule changed, update `docs/design.md` in the PR.
 
 ## Repo layout (pnpm monorepo)
 
@@ -38,7 +37,7 @@ Dependency direction: `content` ← `engine` ← `bots` ← `sim`/`server`. The 
 pnpm install         # install all workspaces
 pnpm test            # run all tests (vitest)
 pnpm test:scoped     # only the tests your diff needs (same logic as CI)
-pnpm precheck        # QA before its push: typecheck, knip, theme-token lint, test:scoped, new e2e specs x3
+pnpm precheck        # typecheck, knip, theme-token lint, test:scoped, changed e2e specs x3
 pnpm lint:theme      # raw colours, fonts, shadows, radii outside theme.css
 pnpm knip            # unused files, exports and dependencies (CI fails on any)
 pnpm typecheck       # tsc --noEmit across workspaces
@@ -73,6 +72,5 @@ pnpm sim -- --help   # run the simulator (once implemented)
 
 ## Git
 
-- Author every commit as `karthik24iyer <karthik24iyer@gmail.com>`.
-- Never add Claude as author or co-author — no `Co-Authored-By` or `Claude-Session` lines in commit messages.
-- Small, focused commits with clear messages. **Everything goes through a PR, docs included; never push to `main`.** Only the PM merges, with `docs/pipeline/merge.sh <PR>` once the gate passes (`docs/pipeline/HANDOFF.md`).
+- Author every commit as `karthik24iyer <karthik24iyer@gmail.com>`, with no `Co-Authored-By`, `Claude-Session` or other attribution lines.
+- Small, focused commits with clear messages. **Everything goes through a PR, docs included; never push to `main`.** Agents never merge: the owner runs `docs/pipeline/merge.sh <PR>` once the gate passes.

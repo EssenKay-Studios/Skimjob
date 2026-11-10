@@ -13,9 +13,9 @@ _Last updated: 10 Nov 2026._
 
 ## Tasks, follow-ups and owner questions
 Tracked as GitHub issues, not in this file:
-- **Board:** [Skimjob R7](https://github.com/orgs/EssenKay-Studios/projects/2) (private; Status Todo / In progress / In review / Owner review / Done; fields Step, Model, PR).
-- **Milestone:** [R7 Simplified](https://github.com/EssenKay-Studios/Skimjob/milestone/1) (`docs/simplified.md`), steps S0 to S5 and C as `type:task` issues titled "S1 — ...", "C2a — ...".
-- **Follow-ups:** issues labelled `type:follow-up`. **Owner questions:** issues labelled `owner-decision` (`provisional` when a reading awaits confirmation); the rule itself stays in `docs/decisions.md`.
+- **Board:** [Skimjob R7](https://github.com/orgs/EssenKay-Studios/projects/2) (private; Status Todo / In progress / In review / Owner review / Done; fields Area, Step, Model, PR, Flags).
+- **Milestone:** [R7 Simplified](https://github.com/EssenKay-Studios/Skimjob/milestone/1) (`docs/simplified.md`), steps S0 to S5 and C as issues of Type Task titled "S1 — ...", "C2a — ...".
+- **Follow-ups:** issues flagged `follow-up` on the board. **Owner questions:** issues flagged `owner-decision` (`provisional` when a reading awaits confirmation); the rule itself stays in `docs/decisions.md`. Labels are only the agent labels (`docs/pipeline/agents.md`).
 - Rules and decisions stay in the repo: `docs/design.md`, `docs/decisions.md`, `docs/simplified.md`.
 
 Record: M1 (engine, simulator, bots), M2-1 to M2-13 (server, web, chat, Google sign-in, host controls) and R6 are built and live; M2-14 and M2-15 are parked. History: git, the PRs and `docs/archive/`.
