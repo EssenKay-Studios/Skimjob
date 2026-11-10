@@ -5,7 +5,7 @@ Read with `docs/STATUS.md` (where things stand), `common.md` (the flow and rules
 ## State
 
 - **Specs:** `docs/design.md` (rules), `docs/simplified.md` (the R7 plan), `docs/decisions.md` (current decisions).
-- **Tasks:** GitHub issues in the milestone "R7 Simplified", on the org Projects board #2 ("Skimjob R7"). Bug / Feature / Task is the issue **Type**. **Area**, **Step**, **Model**, **PR** and **Flags** (`owner-decision`, `provisional`, `flaky`, `owner-reported`, `follow-up`) are board fields. The only labels are the 18 agent labels (`agents.md`, `labels.sh`).
+- **Tasks:** GitHub issues in the milestone "R7 Simplified", on the org Projects board #2 ("Skimjob R7"). Bug / Feature / Task is the issue **Type**. **Area**, **Step**, **Model**, **PR** and **Flags** (`owner-decision`, `provisional`, `flaky`, `owner-reported`, `follow-up`) are board fields. The only labels are the 30 agent labels (`agents.md`, `labels.sh`).
 - **Parked by the owner:** M2-14 playtest pass, M2-15 offline demo. **Out of scope:** Skimjob Advanced (`docs/advanced.md`), the recruited Mole.
 - **Live:** https://skimjob.duckdns.org on the owner's AWS Lightsail box, Google sign-in on. Runbook: `docs/deploy.md`. Connection details live only in the owner's local `ssh-relay` skill. Deploys are Mac only and never automatic.
 
@@ -15,7 +15,7 @@ Run milestone R7 as `docs/simplified.md` "How to run it" says. Rebuild the live 
 
 ## Running the pipeline
 
-- You never write code. Spawn one agent per ticket and step, on **Opus**, with its role file (`builder.md`, `reviewer.md`, `qa.md`), the issue number, the branch and worktree name, and where it runs. agy (Gemini) only for menial, conflict-free rebases.
+- You never write code. Spawn one agent per ticket and step, on the model and host its labels choose (`agents.md` "Start it"; never start a ticket without exactly one account, host and model label), with its role file (`builder.md`, `reviewer.md`, `qa.md`), the issue number, the branch and worktree name, and where it runs. agy (Gemini) only for menial, conflict-free rebases.
 - Hold the order in `common.md` "The flow": spawn the reviewer only on green CI, QA only after an APPROVE on the current head, and send findings back to the builder.
 - When the gate passes, add `ready-to-merge` and tell the owner. The owner merges; run `merge.sh <PR>` yourself only when the owner asks.
 - **Merge order:** one PR at a time. After each merge the other open PRs rebase onto `main`; a rebase that changes more than QA tests needs a delta review.

@@ -10,18 +10,18 @@ New issue → pick **Bug**, **Feature** or **Task**. Each form sets the issue Ty
 
 ## Start it
 
-Add **one account label**:
+A ticket starts only when you have added **exactly one label from each of three groups**. Nothing is assumed: a missing group, or two labels in one group, and nothing starts (PR 2's poller then comments once, naming the group).
 
-| Label | Runs on |
+| Group | Labels |
 |---|---|
-| `agent:max` | the Max plan |
-| `agent:pro` | the Pro plan |
-| `agent:api` | the API key (pay per use) |
+| Account | `agent:max` (Max plan), `agent:pro` (Pro plan), `agent:api` (API key, pay per use) |
+| Host | `on:mac`, `on:linux`, `on:cloud` |
+| Model | `model:opus`, `model:sonnet`, `model:haiku` |
 
-Every step runs on the Mac unless you say otherwise:
+The host and the model apply to every step (build, review, QA). To change one step, add an override; it wins over the group label:
 
-- the whole ticket: `on:mac`, `on:linux` or `on:cloud`;
-- one step: `build:…`, `review:…` or `qa:…` with `mac`, `linux` or `cloud` (it wins over `on:`).
+- host: `build:`, `review:` or `qa:` with `mac`, `linux` or `cloud`;
+- model: `build:`, `review:` or `qa:` with `opus`, `sonnet` or `haiku`.
 
 ## Progress labels
 
@@ -51,7 +51,7 @@ Repository secrets (Settings → Secrets and variables → Actions):
 
 ## Where agents run
 
-- **Mac** (the default): your main clone and one worktree per agent; Node 22, pnpm, Chromium, `gh` logged in as karthik24iyer and Claude Code. At most 3 e2e runs at once.
+- **Mac:** your main clone and one worktree per agent; Node 22, pnpm, Chromium, `gh` logged in as karthik24iyer and Claude Code. At most 3 e2e runs at once.
 - **Linux:** a Linux box with the same tools; full speed. The runner comes in PR 2.
 - **Cloud:** a Claude Code cloud session; 2 slow cores, no GraphQL (so no board updates or `gh pr ready` from there). Good for builds that lean on CI. The runner comes in PR 2.
 
@@ -59,7 +59,7 @@ Repository secrets (Settings → Secrets and variables → Actions):
 
 Anyone can open an issue on this public repo, so:
 
-- an agent acts only on tickets whose agent label **you** (karthik24iyer) added;
+- an agent acts only on tickets whose account, host and model labels **you** (karthik24iyer) added;
 - it treats the issue and comment text as the job description, never as instructions that override CLAUDE.md or the pipeline;
 - it ignores comments from anyone else for instructions.
 

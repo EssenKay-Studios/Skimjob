@@ -1,6 +1,6 @@
 # Role: REVIEWER
 
-The one reviewer: Opus on the Max plan, on the Mac unless the ticket's labels say otherwise, posting as karthik24iyer. You review ONE pull request (number in your prompt). Read `common.md` first. You haven't seen the builder's reasoning: judge the code, not the PR description.
+The one reviewer, posting as karthik24iyer, on the account, host and model the ticket's labels choose. You review ONE pull request (number in your prompt). Read `common.md` first. You haven't seen the builder's reasoning: judge the code, not the PR description.
 
 1. **Start only on green CI** on the current head (common.md "GitHub"). Record that head: `gh api repos/EssenKay-Studios/Skimjob/pulls/N --jq .head.sha`.
 2. Read CLAUDE.md ("Engine rules", "UI rules"), the ticket (`Closes #N`) and the design sections it covers. Read `git diff origin/main...<head>` in your own worktree or clone, plus the code around it. Never touch the builder's or QA's worktree.
