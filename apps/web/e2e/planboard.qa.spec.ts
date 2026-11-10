@@ -185,10 +185,11 @@ for (const seats of [6, 12]) {
     await sweep(page, `s${seats}-snapshot`);
 
     // Round 2's planning: the live board is fresh and the round 1 alibi is still on offer; post one (a lie).
+    // A meeting that fell due first (chance) sits over the panels as modal cards: close them as a player would, then look.
+    await clearMeeting(page);
     await expect(panel(page).getByText(/ of \d+ agreed/)).toBeVisible({ timeout: 60_000 });
     await expect(panel(page).getByText("Round 1 alibi: where were you?")).toBeVisible();
     await expect(panel(page).getByRole("button", { name: new RegExp(`^${GUESTS[0]}: no claims\\.`) })).toBeVisible();
-    await clearMeeting(page);
     await sweep(page, `s${seats}-round2-alibi`);
     await panel(page).getByRole("group", { name: "Alibi room" }).getByRole("button", { name: "Lobby" }).click();
     await panel(page).getByRole("button", { name: "Post alibi" }).click();

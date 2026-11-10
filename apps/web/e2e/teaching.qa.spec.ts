@@ -32,7 +32,9 @@ async function shot(page: Page, name: string) {
 /** Waits for the next pop-up (or the end); returns its title, or null at the end. */
 async function nextLesson(page: Page, timeout = 120_000): Promise<string | null> {
   const end = Date.now() + timeout;
+  const card = page.getByRole("button", { name: "Back to the bank" });
   while (Date.now() < end) {
+    if (await card.isVisible()) await card.click(); // a meeting's result card holds the pop-up back until closed (§20.6)
     if (await lessonDialog(page).isVisible()) return (await page.locator("#teaching-h").textContent())!.trim();
     if (await over(page).isVisible()) return null;
     await page.waitForTimeout(200);
@@ -87,6 +89,9 @@ for (const vp of VIEWPORTS) {
         await shot(page, `under-vote-${slug(title)}`);
       }
       await expect(async () => {
+        // A meeting's result card keeps the pop-up stepped aside until the player closes it (§20.6).
+        const card = page.getByRole("button", { name: "Back to the bank" });
+        if (await card.isVisible()) await card.click();
         await expect(vote).toHaveCount(0, { timeout: 1000 }); // the panel sheets of the shell may stay open beneath the pop-up
         await expect(dialog.locator("#teaching-h")).toHaveText(title, { timeout: 1000 });
         for (const line of [lesson.happened, lesson.means, lesson.canDo]) await expect(dialog.getByText(line, { exact: true })).toBeVisible({ timeout: 1000 });
