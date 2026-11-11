@@ -74,6 +74,8 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # In the container the checkout belongs to another user; scope.mjs runs git ls-files.
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Playwright (shard ${{ matrix.shard }}/6)
         working-directory: apps/web
         run: |
