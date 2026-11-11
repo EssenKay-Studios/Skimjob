@@ -158,3 +158,37 @@ describe("agent:blocked and resume", () => {
     expect(decide(i)).toMatchObject({ kind: "comment", text: expect.stringContaining("an owner decision is open") });
   });
 });
+
+// QA for #272: the runner merges a gated PR, and blocks only when authorship alone stands in the way.
+describe("merge and the authorship block (#272)", () => {
+  const gate = (reasons: string) => MERGEABLE.replace("MERGEABLE: yes", `MERGEABLE: no (${reasons})`);
+  const WRONG = "commits not authored by karthik24iyer <karthik24iyer@gmail.com>";
+  const ATTR = "attribution lines in abc1234";
+
+  it("a PR that passes the gate is handed to the ticket's own host, whichever host checks it", () => {
+    for (const place of ["mac", "linux", "cloud"] as const)
+      expect(decide(input({ place, labels: ["agent:max", "on:linux"], pr: { number: 9, verdicts: MERGEABLE } }))).toEqual({ kind: "ready", pr: 9, host: "linux" });
+  });
+
+  it("blocks when both authorship reasons, and only they, stand in the way", () => {
+    const d = decide(input({ pr: { number: 9, verdicts: gate(`${WRONG}; ${ATTR}`) } }));
+    expect(d.kind).toBe("block");
+    expect(d.kind === "block" && d.text).toContain(`${WRONG}; ${ATTR}`);
+  });
+
+  it("an authorship problem alongside any other reason runs the normal next step, not the block", () => {
+    const draft = gate(`PR is a draft; ${ATTR}`).replace("draft false", "draft true");
+    expect(decide(input({ pr: { number: 9, verdicts: draft } }))).toMatchObject({ kind: "start", step: "build" });
+    const noQa = gate(`no QA verdict; ${WRONG}`).replace(`qa:     QA: PASS  @ ${H}`, "qa:     none  @ <no Head: line>");
+    expect(decide(input({ pr: { number: 9, verdicts: noQa } }))).toMatchObject({ kind: "start", step: "qa" });
+  });
+
+  it("never blocks or merges while CI is still running, even with an authorship problem", () => {
+    const running = gate(`CI pending: e2e; ${ATTR}`).replace("ci:     green (9 check-runs)", "ci:     9 check-runs\n  pending: e2e");
+    expect(decide(input({ pr: { number: 9, verdicts: running } }))).toEqual({ kind: "wait", reason: "CI is running" });
+  });
+
+  it("a blocked ticket whose PR passes the gate is not merged", () => {
+    expect(decide(input({ labels: [...START, "agent:blocked"], pr: { number: 9, verdicts: MERGEABLE } })).kind).toBe("wait");
+  });
+});

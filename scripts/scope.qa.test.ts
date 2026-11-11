@@ -196,3 +196,55 @@ describe("fix round: shared modules, deleted and renamed specs, deleted sources"
     }
   });
 });
+
+// QA for #272: CI runs only what a change needs; mixed diffs get the union, never less.
+describe("CI scope classes on the real repo (#272)", () => {
+  const ENGINE = "packages/engine/src/meeting.ts";
+  const WEB = "apps/web/src/screens/Meetings.tsx";
+  const SERVER = "apps/server/src/lobby.ts";
+
+  it("every pipeline path runs the scripts tests and the pipeline checks only, docs/pipeline markdown included", () => {
+    for (const f of [".github/workflows/ci.yml", ".github/workflows/agent.yml", "docs/pipeline/qa.md", "docs/pipeline/runner/poll.sh", "scripts/agent-start.ts", "scripts/runner.test.ts"])
+      expect(run([f]), f).toMatchObject({ full: false, unit: "scripts", tags: "", sim: 0, pipeline: true });
+  });
+
+  it("markdown inside apps and packages counts as docs", () => {
+    expect(run(["packages/engine/README.md", "apps/web/e2e/README.md"])).toMatchObject({ full: false, unit: "", tags: "", sim: 0, pipeline: false });
+  });
+
+  it("a pipeline change alongside scripts/scope.mjs or other config still runs everything", () => {
+    expect(run([".github/workflows/ci.yml", "scripts/scope.mjs"])).toMatchObject(FULL);
+    expect(run(["docs/pipeline/qa.md", "package.json"])).toMatchObject(FULL);
+  });
+
+  it("pipeline plus engine runs both: the engine's tests and sim, and the pipeline checks", () => {
+    const s = run([ENGINE, ".github/workflows/ci.yml"]);
+    const alone = run([ENGINE]);
+    expect(alone.full).toBe(false);
+    expect(s).toMatchObject({ full: false, sim: alone.sim, tags: alone.tags, pipeline: true });
+    expect(s.unit.split(" ").sort()).toEqual([...alone.unit.split(" "), "scripts"].sort());
+  });
+
+  it("docs alongside code never drop the code's tests", () => {
+    for (const f of [WEB, SERVER, ENGINE]) {
+      const alone = run([f]);
+      expect(run([f, "docs/testing.md", "README.md"]), f).toEqual(alone);
+    }
+  });
+
+  it("the server runs its unit tests and the e2e its contract reaches (@lobby, @host), but no sim or pipeline checks", () => {
+    const s = run([SERVER]);
+    expect(s).toMatchObject({ full: false, sim: 0, pipeline: false });
+    expect(s.unit.split(" ")).toContain("apps/server");
+    expect(s.tags.split("|")).toEqual(expect.arrayContaining(["@lobby", "@host"]));
+  });
+
+  it("docs/design.md with a pipeline change runs the content and web tests plus the pipeline checks", () => {
+    expect(run(["docs/design.md", "docs/pipeline/common.md"])).toMatchObject({ full: false, unit: "apps/web packages/content scripts", tags: "", sim: 0, pipeline: true });
+  });
+
+  it("no changed paths (a push to main, the nightly run) runs everything, the pipeline checks included", () => {
+    expect(run([])).toMatchObject(FULL);
+    expect(run([""])).toMatchObject(FULL);
+  });
+});
