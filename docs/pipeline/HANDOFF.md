@@ -15,8 +15,8 @@ Run milestone R7 as `docs/simplified.md` "How to run it" says. Rebuild the live 
 
 ## Running the pipeline
 
-- You never write code. The runner (`agents.md`, `docs/pipeline/runner/`, `.github/workflows/agent.yml`) starts each step on the host the ticket's label chooses, the builder on the model its Effort field picks and review and QA on Opus, in the order of `common.md` "The flow", sets `agent:working` / `agent:blocked` and adds `ready-to-merge` with the merge command when the gate passes. You watch the tickets and PRs, and step in when a ticket stalls. agy (Gemini) only for menial, conflict-free rebases.
-- The owner merges; run `merge.sh <PR>` yourself only when the owner asks.
+- You never write code. The runner (`agents.md`, `docs/pipeline/runner/`, `.github/workflows/agent.yml`) starts each step on the host the ticket's label chooses, the builder on the model its Effort field picks and review and QA on Opus, in the order of `common.md` "The flow", sets `agent:working` / `agent:blocked`, and merges with `merge.sh` when the gate passes. You watch the tickets and PRs, and step in when a ticket stalls. agy (Gemini) only for menial, conflict-free rebases.
+- The runner merges; run `merge.sh <PR>` yourself only when the owner asks.
 - **Merge order:** one PR at a time. After each merge the other open PRs rebase onto `main`; a rebase that changes more than QA tests needs a delta review.
 - **Your own docs PRs:** you can't QA yourself; spawn a QA agent.
 - **Issues and the board** (from the Mac or Linux; the cloud can't reach Projects): move the card (Todo / In progress / In review / Owner review / Done, set PR). After a merge, fold the PR's `## Decisions` into `docs/decisions.md` (in your own docs PR, concisely) and open one issue per `## Follow-ups` line: the right Type, plus Area, Step and Flags on the board (`follow-up`, `owner-decision`, `flaky`, … as they fit).

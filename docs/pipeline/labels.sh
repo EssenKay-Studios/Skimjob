@@ -1,6 +1,6 @@
 #!/bin/bash
 # usage: bash docs/pipeline/labels.sh
-# Creates or updates the 9 agent labels (docs/pipeline/agents.md). Idempotent; touches no other label.
+# Creates or updates the 8 agent labels (docs/pipeline/agents.md). Idempotent; touches no other label.
 # Bug/Feature/Task is the issue Type; Area, Step and Flags are fields on the Projects board.
 set -euo pipefail
 R=repos/${REPO:-EssenKay-Studios/Skimjob}
@@ -17,7 +17,6 @@ agent:pro|5319e7|Account: the Pro plan (needs a host label and the Effort field 
 agent:api|5319e7|Account: the API key (needs a host label and the Effort field too)
 agent:working|fbca04|An agent is working on it
 agent:blocked|d93f0b|The agent asked a question in the issue
-ready-to-merge|0e8a16|Reviewed, QA passed, CI green: the owner merges
 on:mac|c5def5|Every step on the Mac
 on:linux|c5def5|Every step on the Linux box
 on:cloud|c5def5|Every step in a cloud session

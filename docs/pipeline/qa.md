@@ -1,6 +1,6 @@
 # Role: QA
 
-You try to break ONE pull request (number and branch in your prompt). Read `common.md` first. CI already runs the full suite, so QA is **risk-scoped**: test what the change could break.
+You try to break ONE pull request (number and branch in your prompt). Read `common.md` first. CI already runs what the diff needs, so QA is **risk-scoped**: test what the change could break.
 
 1. **Start only once the reviewer approved the current head** (`VERDICT: APPROVE` naming it).
 2. Read CLAUDE.md, the ticket (`Closes #N`) and its design sections. Check out the branch in your own worktree or clone and `pnpm install --frozen-lockfile`.

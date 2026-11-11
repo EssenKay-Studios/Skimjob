@@ -1,6 +1,6 @@
-# CI: typecheck, knip, theme-token lint, unit + property + integration tests, web e2e, simulator smoke.
-# Every PR, every push to main and the nightly run (02:17 UTC) run the full tier (docs/testing.md).
-# "CI ok" is the one check branch protection and the merge gate need. Nothing deploys from CI: releases go to Lightsail by hand (docs/deploy.md).
+# CI: typecheck, knip, theme-token lint, unit + property + integration tests, web e2e, simulator smoke, pipeline checks.
+# A PR runs what its diff needs (scripts/scope.mjs, docs/testing.md "Scoped tests"); every push to main and the
+# nightly run (02:17 UTC) run everything. "CI ok" is the one check branch protection and the merge gate need. Nothing deploys from CI: releases go to Lightsail by hand (docs/deploy.md).
 name: CI
 
 on:
@@ -20,8 +20,31 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # What the PR's diff needs; a push to main or the nightly run has no diff, which scope.mjs runs in full.
+  scope:
+    name: Scope
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      unit: ${{ steps.s.outputs.unit }}
+      tags: ${{ steps.s.outputs.tags }}
+      sim: ${{ steps.s.outputs.sim }}
+      pipeline: ${{ steps.s.outputs.pipeline }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 2 # the PR's merge commit and its base
+      - id: s
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT" = pull_request ]; then git diff --name-only --no-renames HEAD^1 HEAD; fi | node scripts/scope.mjs > scope.json
+          cat scope.json
+          jq -r '"unit=\(.unit)", "tags=\(.tags)", "sim=\(.sim)", "pipeline=\(.pipeline)"' scope.json >> "$GITHUB_OUTPUT"
+
   test:
     name: Typecheck and tests
+    needs: scope
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -50,13 +73,23 @@ jobs:
       - run: pnpm lint:theme
       # Every e2e test has exactly one feature tag and every feature module has an entry (apps/web/e2e/features.json).
       - run: node scripts/scope.mjs --check
-      # Unit, QA, engine property (*.prop.test.ts, seeded) and server scenario (*.int.test.ts, PGlite) tests.
-      - run: pnpm test
+      # Unit, QA, engine property (*.prop.test.ts, seeded) and server scenario (*.int.test.ts, PGlite) tests:
+      # all of them, or the changed packages and their dependents ("scripts" for the pipeline). None for docs.
+      - if: needs.scope.outputs.unit != ''
+        env:
+          UNIT: ${{ needs.scope.outputs.unit }}
+        run: |
+          if [ "$UNIT" = all ]; then pnpm test; else
+            # shellcheck disable=SC2086 # one argument per package dir
+            pnpm test $UNIT
+          fi
 
   e2e:
     # Six shards in parallel, each with its own servers (playwright.config.ts) and a balanced set of spec
     # files (scripts/scope.mjs --shard, weights in apps/web/e2e/shard-weights.json).
     name: Web e2e (Playwright, shard ${{ matrix.shard }}/6)
+    needs: scope
+    if: needs.scope.outputs.tags != ''
     runs-on: ubuntu-latest
     # Playwright's own image has Chromium and its system libraries baked in, so the shards never
     # call apt-get: an Ubuntu mirror outage can't fail them (#269). Keep the tag = @playwright/test.
@@ -78,11 +111,15 @@ jobs:
       - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Playwright (shard ${{ matrix.shard }}/6)
         working-directory: apps/web
+        env:
+          TAGS: ${{ needs.scope.outputs.tags }}
         run: |
           files=$(node ../../scripts/scope.mjs --shard ${{ matrix.shard }}/6)
           [ -n "$files" ] || exit 0
+          # Only the tests of the changed features, unless everything runs.
+          [ "$TAGS" = all ] || set -- --grep "$TAGS"
           # shellcheck disable=SC2086 # one argument per spec file
-          npx playwright test --pass-with-no-tests $files
+          npx playwright test --pass-with-no-tests "$@" $files
       - if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -92,6 +129,8 @@ jobs:
 
   sim-smoke:
     name: Simulator smoke (all-bot games at 3/6/12 players)
+    needs: scope
+    if: needs.scope.outputs.sim != '0'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -104,10 +143,25 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: bash scripts/sim-smoke.sh 200
 
-  # Always runs: passes when every job above passed.
+  # The runner, the gate and the workflows (their unit tests run in "test", as "scripts").
+  pipeline:
+    name: Pipeline checks (gate, shellcheck, actionlint)
+    needs: scope
+    if: needs.scope.outputs.pipeline == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - run: bash docs/pipeline/gate.qa.test.sh
+      # shellcheck is on the runner image; warnings and errors fail, style notes don't.
+      - run: git ls-files -z '*.sh' | xargs -0 shellcheck -S warning
+      - name: actionlint
+        run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.7
+
+  # Always runs: fails when any job that ran failed or was cancelled; a job skipped by scope is fine.
   ci-ok:
     name: CI ok
-    needs: [test, e2e, sim-smoke]
+    needs: [scope, test, e2e, sim-smoke, pipeline]
     if: always()
     runs-on: ubuntu-latest
     steps:

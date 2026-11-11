@@ -109,6 +109,17 @@ describe("poll.sh job", () => {
     expect(readFileSync(join(w.dir, "env.argv"), "utf8")).not.toContain("sk-test-secret");
   });
 
+  it("runs Claude Code with its commit and PR attribution switched off in its settings (#267)", () => {
+    const w = world();
+    const seen = join(w.dir, "seen");
+    w.stub("claude", claudeStub(`for a in "$@"; do echo "$a"; done > ${seen}`));
+    mkdirSync(join(w.work, "jobs/5"));
+    writeFileSync(join(w.dir, "prompt"), "p");
+    w.poll("job", "5", "build", "max", "haiku", join(w.dir, "prompt"), "0");
+    const args = readFileSync(seen, "utf8").split("\n");
+    expect(JSON.parse(args[args.indexOf("--settings") + 1])).toEqual({ attribution: { commit: "", pr: "" } });
+  });
+
   it("swaps agent:working for agent:blocked and posts the question after the marker", () => {
     const w = world();
     w.stub("claude", claudeStub("true", "Report.\nNEEDS-OWNER: Blue or red?\nA) blue (recommended)"));
@@ -207,6 +218,59 @@ describe("poll.sh check: the Effort field", () => {
   });
 });
 
+describe("poll.sh merges once the gate passes (#270)", () => {
+  /** Ticket 9 with start labels on:HOST and an open PR #12 that closes it; verdicts.sh and merge.sh stubbed. */
+  function ready(host: string, place = "mac", merge = 'echo "merged #12 -> main abc1234 | next: #13 x"') {
+    const w = world(place);
+    const labels = ["agent:max", `on:${host}`];
+    w.fixture(`${R}/issues/9`, {
+      number: 9, title: "T", user: { login: "karthik24iyer" }, type: { name: "Feature" }, body: "### Area\n\nci",
+      labels: labels.map((name) => ({ name })), issue_field_values: [{ issue_field_name: "Effort", single_select_option: { name: "Low" } }],
+    });
+    w.fixture(`${R}/issues/9/events?per_page=100`, labels.map((name) => ({ event: "labeled", label: { name }, actor: { login: "karthik24iyer" }, created_at: "2026-11-10T10:00:00Z" })));
+    w.fixture(`${R}/issues/9/comments?per_page=100`, []);
+    w.fixture(`${R}/issues?state=open&labels=agent:working&per_page=100`, []);
+    w.fixture(`${R}/pulls?state=open&per_page=100`, [{ number: 12, body: "Closes #9" }]);
+    mkdirSync(join(w.repo, "docs/pipeline"), { recursive: true });
+    writeFileSync(join(w.repo, "docs/pipeline/verdicts.sh"), 'echo "MERGEABLE: yes"\n');
+    writeFileSync(join(w.repo, "docs/pipeline/merge.sh"), `echo "GH_TOKEN=$GH_TOKEN" > ${join(w.dir, "merged")}\n${merge}\n`);
+    return w;
+  }
+
+  it("merges on the ticket's host and comments the merge", () => {
+    const w = ready("mac");
+    expect(w.poll("check", "9").stdout).toContain("PR #12 passed the gate: merging");
+    expect(readFileSync(join(w.dir, "merged"), "utf8")).toBe("GH_TOKEN=tok\n");
+    expect(w.ghLog()).toContain(`gh api ${R}/issues/9/comments -f body=runner: merged #12 → main abc1234 --silent`);
+    expect(w.ghLog()).not.toContain("agent:blocked");
+  });
+
+  it("leaves the merge to the ticket's host", () => {
+    const w = ready("cloud");
+    expect(w.poll("check", "9").stdout).toContain("PR #12 passed the gate: cloud merges it");
+    expect(existsSync(join(w.dir, "merged"))).toBe(false);
+  });
+
+  it("in the cloud, hands the merge to the workflow's Merge step, which merges with AGENT_GH_TOKEN", () => {
+    const w = ready("cloud", "cloud");
+    const out = join(w.dir, "out");
+    const r = spawnSync("bash", [join(ROOT, "docs/pipeline/runner/poll.sh"), "check", "9"], { env: { ...w.env, GITHUB_OUTPUT: out }, encoding: "utf8" });
+    expect(r.status).toBe(0);
+    expect(readFileSync(out, "utf8")).toBe("merge=12\n");
+    expect(existsSync(join(w.dir, "merged"))).toBe(false);
+    spawnSync("bash", [join(ROOT, "docs/pipeline/runner/poll.sh"), "merge", "9", "12"], { env: { ...w.env, AGENT_GH_TOKEN: "agent-tok" } });
+    expect(readFileSync(join(w.dir, "merged"), "utf8")).toBe("GH_TOKEN=agent-tok\n");
+  });
+
+  it("a refused merge is never merged: it comments the gate's reason and sets agent:blocked", () => {
+    const w = ready("mac", "mac", 'echo "MERGEABLE: no (CI failing: e2e (failure))"; echo "ABORT: #12 not merged (CI failing: e2e (failure))"; exit 1');
+    w.poll("check", "9");
+    expect(w.ghLog()).toContain(`gh api ${R}/issues/9/labels -f labels[]=agent:blocked`);
+    expect(w.ghLog()).toContain("runner: merge refused: #12 not merged (CI failing: e2e (failure))\nFix it, then remove `agent:blocked`.");
+    expect(w.ghLog()).not.toContain("runner: merged");
+  });
+});
+
 describe("poll.sh stop (the cloud)", () => {
   const pickup = (place: string) => [{ user: { login: "github-actions[bot]" }, body: `runner: picked up on ${place}, max/opus (build, head none)` }];
 
@@ -252,6 +316,15 @@ describe("setup.sh", () => {
     expect(existsSync(join(w.home, "Library/LaunchAgents/com.skimjob.agent.plist"))).toBe(false);
   });
 
+  it("refuses a REPO_DIR or WORK_DIR under ~/Documents, ~/Desktop or ~/Downloads (the service can't read them)", () => {
+    const { w, run } = mac();
+    writeFileSync(join(w.home, ".config/skimjob-agent/env"), `PLACE=mac\nREPO_DIR=${w.home}/Documents/Skimjob\nWORK_DIR=${w.home}/Downloads/work\nE2E_PORT_BASE=41\n`);
+    const r = run();
+    expect(r.status).toBe(1);
+    expect(r.stdout).toContain("REPO_DIR outside ~/Documents");
+    expect(r.stdout).toContain("WORK_DIR outside ~/Downloads");
+  });
+
   it("installs the service when every check passes, retrying a bootstrap that races the bootout, and is idempotent (review: launchctl)", () => {
     const { w, run } = mac();
     copyFileSync(w.env.ENV_FILE, join(w.home, ".config/skimjob-agent/env"));
@@ -271,14 +344,15 @@ describe("agent.yml", () => {
     expect(yml).not.toMatch(/^\s*pull_request(_target)?:/m);
     expect(yml).toContain("ref: ${{ github.event.repository.default_branch }}");
   });
-  it("leaves no token in .git/config; only the step that runs the agent sets up AGENT_GH_TOKEN", () => {
+  it("leaves no token in .git/config; only the steps that run the agent or the merge get AGENT_GH_TOKEN", () => {
     expect(yml).toContain("persist-credentials: false");
     expect(yml).not.toMatch(/token: \$\{\{ secrets\.AGENT_GH_TOKEN/);
-    expect(yml.match(/secrets\.AGENT_GH_TOKEN/g)).toHaveLength(1);
+    expect(yml.match(/secrets\.AGENT_GH_TOKEN/g)).toHaveLength(2);
+    expect(yml).toMatch(/- name: Merge\n {8}if: steps\.check\.outputs\.merge != ''\n {8}env:\n.*\n {10}AGENT_GH_TOKEN: \$\{\{ secrets\.AGENT_GH_TOKEN \}\}/);
     expect(yml).toContain("GH_TOKEN=$AGENT_GH_TOKEN gh auth setup-git");
   });
   it("ignores the runner's own label writes and stops only a cloud step", () => {
-    expect(yml).toContain(`!contains(fromJSON('["agent:working","ready-to-merge"]'), github.event.label.name)`);
+    expect(yml).toContain("&& github.event.label.name != 'agent:working'");
     expect(yml).toContain("!(github.event.action == 'labeled' && github.event.label.name == 'agent:blocked')");
     expect(yml).toContain('poll.sh stop "$N"');
   });

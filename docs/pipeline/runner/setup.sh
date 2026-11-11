@@ -24,6 +24,14 @@ if [ -f "$ENV_FILE" ]; then
     [ "$(git -C "$REPO_DIR" config user.name)" = $OWNER ] && [ "$(git -C "$REPO_DIR" config user.email)" = $OWNER@gmail.com ] \
       || need "git identity in $REPO_DIR: git config user.name $OWNER && git config user.email $OWNER@gmail.com"
   else need "$ENV_FILE: REPO_DIR=<the Skimjob clone>"; fi
+  # macOS privacy: launchd services can't read ~/Documents, ~/Desktop or ~/Downloads ("Operation not permitted").
+  if [ $os = mac ]; then
+    for v in REPO_DIR WORK_DIR; do
+      for d in Documents Desktop Downloads; do
+        case "${!v:-}/" in "$HOME/$d/"*) need "$ENV_FILE: $v outside ~/$d (the service can't read it), e.g. ~/skimjob-runner" ;; esac
+      done
+    done
+  fi
   if [ -f "$CONF/anthropic-api-key" ]; then
     [ -n "$(find "$CONF/anthropic-api-key" -maxdepth 0 -perm 600)" ] || need "chmod 600 $CONF/anthropic-api-key"
     [[ ${API_BUDGET_USD:-} =~ ^[0-9]+(\.[0-9]+)?$ ]] || need "$ENV_FILE: API_BUDGET_USD=<dollar cap per API job> (the API key file is there)"

@@ -73,8 +73,8 @@ jobs:
           args=(--shard "$SHARD" --ci "$CI_PP" --max-games "$MAX_GAMES" --out "sim-output/shard-$N.json")
           if [ -n "$OVERRIDES" ]; then args+=(--overrides "$OVERRIDES"); fi
           # $EXTRA is split into words on purpose (several options); never eval'd.
-          read -r -a extra <<< "$EXTRA"
-          pnpm -s sim:suite -- "${args[@]}" "${extra[@]}"
+          read -r -a words <<< "$EXTRA"
+          pnpm -s sim:suite -- "${args[@]}" "${words[@]}"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: suite-shard-${{ matrix.shard }}
@@ -105,6 +105,7 @@ jobs:
           STRICT: ${{ inputs.strict && '--strict' || '' }}
         run: |
           set +e
+          # shellcheck disable=SC2086 # STRICT is empty or one flag
           pnpm -s sim:suite -- merge sim-output/shards/*.json --out sim-output/suite.json --compare docs/balance/baseline.json $STRICT > sim-output/suite.txt
           code=$?
           set -e

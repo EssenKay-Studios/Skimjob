@@ -15,7 +15,7 @@ const HOSTS = ["mac", "linux", "cloud"] as const;
 const EFFORT_MODEL = new Map<string, Model>([["High", "opus"], ["Medium", "sonnet"], ["Low", "haiku"]]);
 const ROLE = { build: "builder", review: "reviewer", qa: "qa" } as const;
 // Labels the runner itself sets; changing them never counts as the owner asking for a retry.
-const RUNNER_LABELS = ["agent:working", "ready-to-merge"];
+const RUNNER_LABELS = ["agent:working"];
 // The line an agent ends its final message with when it needs the owner (builder.md "Blocked").
 export const MARKER = "NEEDS-OWNER:";
 
@@ -47,7 +47,8 @@ export interface Input {
 }
 export type Decision =
   | { kind: "start"; step: Step; host: Host; account: Account; model: Model; pr: number | null; pickup: string; prompt: string }
-  | { kind: "ready"; pr: number; comment: string }
+  | { kind: "ready"; pr: number; host: Host } // the gate passes: the runner on `host` (the ticket's on:) merges it
+  | { kind: "block"; text: string } // post `text` and set agent:blocked
   | { kind: "comment"; text: string }
   | { kind: "wait"; reason: string };
 
@@ -73,8 +74,11 @@ function one(name: string, prefix: string, options: readonly string[], labels: s
   return { problem: got.length ? `${name} is doubled (${names}): keep one` : `${name} is missing: add one of ${names}` };
 }
 
+/** The reasons on the gate's `MERGEABLE: no (…)` line, or "". */
+const gateReasons = (verdicts: string) => /^MERGEABLE: no \((.*)\)$/m.exec(verdicts)?.[1] ?? "";
+
 /** The next step from `verdicts.sh` output, by its rules: build → CI green → review → QA (common.md "The flow"). */
-export function nextStep(verdicts: string): { step: Step; head: string } | { ready: true } | { wait: string } {
+export function nextStep(verdicts: string): { step: Step; head: string } | { ready: true } | { wait: string } | { authorship: string } {
   const lines = verdicts.trim().split("\n");
   const last = lines.at(-1) ?? "";
   if (last === "MERGEABLE: yes") return { ready: true };
@@ -82,6 +86,9 @@ export function nextStep(verdicts: string): { step: Step; head: string } | { rea
   const line = (key: string) => lines.find((l) => l.startsWith(key));
   if (!head || !line("review:") || !line("qa:") || !line("ci:") || !line("commits:")) return { wait: `the gate can't read the PR (${last})` };
   if (/^\s+pending:/m.test(verdicts) || /^ci:\s+no check-runs/m.test(verdicts)) return { wait: "CI is running" };
+  // Only the commits' author or attribution lines stand in the way: the owner has to say how to fix them.
+  const reasons = gateReasons(verdicts);
+  if (reasons.split("; ").every((r) => /^(commits not authored by|attribution lines in) /.test(r))) return { authorship: reasons };
   const ciGreen = /^ci:\s+green/m.test(verdicts) && !/^ci:\s+no successful CI ok/m.test(verdicts);
   if (!ciGreen || /\bdraft true\b/.test(lines[0] ?? "")) return { step: "build", head };
   const verdict = (key: string) => {
@@ -137,11 +144,13 @@ export function decide(input: Input): Decision {
   let head = "none";
   if (input.pr) {
     const next = nextStep(input.pr.verdicts);
-    if ("ready" in next) {
-      const cmd = `GH_TOKEN=$(gh auth token --user ${OWNER}) docs/pipeline/merge.sh ${input.pr.number}`;
-      return { kind: "ready", pr: input.pr.number, comment: `runner: #${input.pr.number} passed the gate. Merge on the Mac:\n\n\`\`\`\n${cmd}\n\`\`\`` };
-    }
+    if ("ready" in next) return { kind: "ready", pr: input.pr.number, host: host.value as Host };
     if ("wait" in next) return { kind: "wait", reason: next.wait };
+    if ("authorship" in next)
+      return {
+        kind: "block",
+        text: `runner: #${input.pr.number} passes the gate except for authorship: ${next.authorship}. Every commit must be by ${OWNER} <${OWNER}@gmail.com> with no Co-Authored-By, Claude-Session or Generated-by line. Fix the commits, then remove \`agent:blocked\`.`,
+      };
     ({ step, head } = next);
   }
   const short = head.slice(0, 7);
@@ -152,7 +161,8 @@ export function decide(input: Input): Decision {
   const lastPickup = pickups.at(-1);
   if (lastPickup?.body.endsWith(`(${step}, head ${short})`)) {
     const relabelled = events.some((e) => e.actor === OWNER && e.at > lastPickup.at && !RUNNER_LABELS.includes(e.label));
-    if (!relabelled) return commentOnce(input, `runner: ${step} already ran on head ${short} and nothing moved on. Remove and re-add the account label to run it again.`);
+    const why = input.pr ? `the gate says ${gateReasons(input.pr.verdicts)}` : `no open PR says Closes #${issue.number}`;
+    if (!relabelled) return commentOnce(input, `runner: ${step} already ran on head ${short} and nothing moved on: ${why}. Remove and re-add the account label to run it again.`);
   }
 
   const area = formAnswer(issue.body, "Area");

@@ -4,7 +4,8 @@
 #   poll.sh                 one poll: reap and stop jobs, tidy the board, check every labelled open ticket
 #                           and start the steps this place may run (the service repeats it every 5 minutes)
 #   poll.sh stop N          the cloud: clear agent:working after the account label was removed, if a cloud step holds it
-#   poll.sh check N         check one ticket (the cloud workflow; prints step/account/model/prompt to $GITHUB_OUTPUT)
+#   poll.sh check N         check one ticket (the cloud workflow; prints step/account/model/prompt, or merge=PR, to $GITHUB_OUTPUT)
+#   poll.sh merge N PR      merge PR with merge.sh (the gate passed) and say so on ticket N, or block N with the gate's reason
 #   poll.sh job N STEP ACCOUNT MODEL PROMPT_FILE [SLOT]
 #                           run one step in the foreground: Claude Code headless in a fresh worktree
 # Settings: ~/.config/skimjob-agent/env (ENV_FILE overrides; the cloud sets them in the workflow):
@@ -107,16 +108,18 @@ check() {
   in=$(gather "$n") || { log "#$n: cannot read the ticket"; return 1; }
   d=$(node "$REPO_DIR/scripts/agent-start.ts" <<<"$in") || { log "#$n: start check failed"; return 1; }
   kind=$(jq -r .kind <<<"$d")
-  local has_ready
-  has_ready=$(jq -r '.issue.labels | index("ready-to-merge") != null' <<<"$in")
-  # ready-to-merge follows the gate.
-  if [ "$kind" != ready ] && [ "$has_ready" = true ]; then log "#$n: gate no longer passes"; label_rm "$n" ready-to-merge; fi
   case $kind in
     wait) log "#$n: wait: $(jq -r .reason <<<"$d")" ;;
     comment) log "#$n: comment: $(jq -r .text <<<"$d")"; comment "$n" "$(jq -r .text <<<"$d")" ;;
+    block) log "#$n: block: $(jq -r .text <<<"$d")"; label_add "$n" agent:blocked; comment "$n" "$(jq -r .text <<<"$d")" ;;
     ready)
-      log "#$n: PR #$(jq -r .pr <<<"$d") passed the gate"
-      [ "$has_ready" = true ] || { label_add "$n" ready-to-merge; comment "$n" "$(jq -r .comment <<<"$d")"; } ;;
+      local pr host
+      IFS=$'\t' read -r pr host < <(jq -r '[.pr, .host] | @tsv' <<<"$d")
+      # Only the ticket's host merges, so two runners never race for one PR.
+      if [ "$host" != "$PLACE" ]; then log "#$n: PR #$pr passed the gate: $host merges it"; return 0; fi
+      log "#$n: PR #$pr passed the gate: merging"
+      # The cloud merges in its own step, the only other one with AGENT_GH_TOKEN (agent.yml).
+      if [ "$PLACE" = cloud ]; then echo "merge=$pr" >>"${GITHUB_OUTPUT:-/dev/stdout}"; else merge "$n" "$pr"; fi ;;
     start)
       local step host account model
       IFS=$'\t' read -r step host account model < <(jq -r '[.step, .host, .account, .model] | @tsv' <<<"$d")
@@ -144,6 +147,26 @@ check() {
       echo $! >"$dir/pid" ;;
   esac
 }
+
+# merge N PR: merge.sh as karthik24iyer (in the cloud AGENT_GH_TOKEN: a merge by GITHUB_TOKEN starts no CI on main).
+merge() {
+  local n=$1 pr=$2 out
+  if [ -n "${DRY_RUN:-}" ]; then log "DRY: merge.sh $pr"; return 0; fi
+  if out=$(GH_TOKEN=${AGENT_GH_TOKEN:-$GH_TOKEN} bash "$REPO_DIR/docs/pipeline/merge.sh" "$pr" 2>&1); then
+    log "#$n: $out"
+    comment "$n" "runner: merged #$pr → main $(sed -n 's/^merged #[0-9]* -> main \([0-9a-f]*\).*/\1/p' <<<"$out")"
+  else
+    # merge.sh ends with its ABORT line: the gate's reasons, or why the merge call failed.
+    out=$(tail -1 <<<"$out")
+    log "#$n: merge of #$pr refused: $out"
+    label_add "$n" agent:blocked
+    comment "$n" "runner: merge refused: ${out#ABORT: }
+Fix it, then remove \`agent:blocked\`."
+  fi
+}
+
+# Claude Code's own commit and PR attribution off in every step (common.md "Hard rules": the gate refuses it).
+NO_ATTRIBUTION='{"attribution":{"commit":"","pr":""}}'
 
 # job N STEP ACCOUNT MODEL PROMPT_FILE [SLOT]: one step, in the foreground.
 job() {
@@ -179,7 +202,7 @@ job() {
     if [ -n "$keyf" ]; then ANTHROPIC_API_KEY=$(cat "$keyf"); export ANTHROPIC_API_KEY; fi
     # In the cloud the agent writes as karthik24iyer with AGENT_GH_TOKEN; GITHUB_TOKEN can't (the gate only counts karthik24iyer).
     GH_TOKEN=${AGENT_GH_TOKEN:-$GH_TOKEN} E2E_PORT=5${nn}79 E2E_SERVER_PORT=3${nn}79 E2E_FAST_PORT=5${nn}80 E2E_FAST_SERVER_PORT=3${nn}80 \
-      "${acc[@]}" claude -p "$(cat "$pf")" --model "$model" --dangerously-skip-permissions \
+      "${acc[@]}" claude -p "$(cat "$pf")" --model "$model" --dangerously-skip-permissions --settings "$NO_ATTRIBUTION" \
       --output-format stream-json --verbose ${budget[@]+"${budget[@]}"} </dev/null
   ) >"$logf" 2>&1
   log "#$n: $step exited $?"
@@ -245,9 +268,10 @@ stop() {
 case ${1:-} in
   job) shift; job "$@"; exit ;;
   stop) stop "$2"; exit ;;
+  merge) merge "$2" "$3"; exit ;;
   check) [ "$PLACE" = cloud ] || board_load; check "$2"; exit ;;
   "") ;;
-  *) echo "usage: poll.sh [check N | stop N | job N STEP ACCOUNT MODEL PROMPT_FILE [SLOT]]" >&2; exit 2 ;;
+  *) echo "usage: poll.sh [check N | stop N | merge N PR | job N STEP ACCOUNT MODEL PROMPT_FILE [SLOT]]" >&2; exit 2 ;;
 esac
 
 # One poll at a time.

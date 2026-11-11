@@ -13,7 +13,7 @@ A social deduction heist game for groups of friends (web + Android/iOS). A crew 
 
 ## End of every session
 
-1. Every PR goes Build → CI → Review → QA → the owner merges (`docs/pipeline/common.md`). A builder runs quick local checks and its changed specs, pushes a draft PR, fixes CI until the full suite is green and then marks it ready.
+1. Every PR goes Build → CI → Review → QA → merge (`docs/pipeline/common.md`). A builder runs quick local checks and its changed specs, pushes a draft PR, fixes CI until it is green and then marks it ready.
 2. Don't edit `docs/STATUS.md` or `docs/decisions.md` in a feature PR: put "Closes #N" (your issue) in the PR body, provisional rule calls under `## Decisions` and new follow-ups under `## Follow-ups`; the PM folds decisions into `docs/decisions.md` (in its own docs PR) and opens issues for the follow-ups. If a rule changed, update `docs/design.md` in the PR.
 
 ## Repo layout (pnpm monorepo)
@@ -73,4 +73,4 @@ pnpm sim -- --help   # run the simulator (once implemented)
 ## Git
 
 - Author every commit as `karthik24iyer <karthik24iyer@gmail.com>`, with no `Co-Authored-By`, `Claude-Session` or other attribution lines.
-- Small, focused commits with clear messages. **Everything goes through a PR, docs included; never push to `main`.** Agents never merge: the owner runs `docs/pipeline/merge.sh <PR>` once the gate passes.
+- Small, focused commits with clear messages. **Everything goes through a PR, docs included; never push to `main`.** Agents never merge: the runner runs `docs/pipeline/merge.sh <PR>` once the gate passes.

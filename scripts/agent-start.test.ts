@@ -232,12 +232,22 @@ describe("the next step from the PR (verdicts.sh)", () => {
     expect(nextStep(`PR #9  state open  draft false  merge-state clean\nhead:   ${H}\nMERGEABLE: no (cannot read reviews)`)).toMatchObject({ wait: expect.any(String) });
   });
 
-  it("a ready PR gives the merge command with the GH_TOKEN prefix", () => {
-    expect(decide(withPr(verdicts({ qa: "QA: PASS", mergeable: "MERGEABLE: yes" })))).toEqual({
-      kind: "ready",
-      pr: 9,
-      comment: "runner: #9 passed the gate. Merge on the Mac:\n\n```\nGH_TOKEN=$(gh auth token --user karthik24iyer) docs/pipeline/merge.sh 9\n```",
+  it("a ready PR is merged by the ticket's host (#270)", () => {
+    const v = verdicts({ qa: "QA: PASS", mergeable: "MERGEABLE: yes" });
+    expect(decide(withPr(v))).toEqual({ kind: "ready", pr: 9, host: "mac" });
+    const labels = START.map((l) => (l === "on:mac" ? "on:cloud" : l));
+    expect(decide(withPr(v, { issue: { ...input().issue, labels }, events: labels.map((l) => by(l)) }))).toEqual({ kind: "ready", pr: 9, host: "cloud" });
+  });
+
+  it("blocks with the reason when only authorship stands in the way (#267)", () => {
+    const why = "commits not authored by karthik24iyer <karthik24iyer@gmail.com>; attribution lines in abc1234";
+    expect(nextStep(verdicts({ qa: "QA: PASS", mergeable: `MERGEABLE: no (${why})` }))).toEqual({ authorship: why });
+    expect(decide(withPr(verdicts({ qa: "QA: PASS", mergeable: "MERGEABLE: no (attribution lines in abc1234)" })))).toEqual({
+      kind: "block",
+      text: "runner: #9 passes the gate except for authorship: attribution lines in abc1234. Every commit must be by karthik24iyer <karthik24iyer@gmail.com> with no Co-Authored-By, Claude-Session or Generated-by line. Fix the commits, then remove `agent:blocked`.",
     });
+    // Authorship among other reasons: the usual next step.
+    expect(nextStep(verdicts({ mergeable: "MERGEABLE: no (no QA verdict; attribution lines in abc1234)" }))).toMatchObject({ step: "qa" });
   });
 });
 
@@ -246,9 +256,16 @@ describe("a step runs once per head", () => {
   const ran = "runner: picked up on mac, max/opus (review, head aaaaaaa)";
 
   it("doesn't rerun the same step on the same head", () => {
-    expect(decide(withPr(verdicts({ review: "none" }), { comments: [pickup(ran)] }))).toEqual({
+    expect(decide(withPr(verdicts({ review: "none", mergeable: "MERGEABLE: no (no reviewer verdict; no QA verdict)" }), { comments: [pickup(ran)] }))).toEqual({
       kind: "comment",
-      text: "runner: review already ran on head aaaaaaa and nothing moved on. Remove and re-add the account label to run it again.",
+      text: "runner: review already ran on head aaaaaaa and nothing moved on: the gate says no reviewer verdict; no QA verdict. Remove and re-add the account label to run it again.",
+    });
+  });
+  it("always says why nothing moved on, also without a PR (#272)", () => {
+    const build = pickup("runner: picked up on mac, max/opus (build, head none)");
+    expect(decide(input({ comments: [build] }))).toEqual({
+      kind: "comment",
+      text: "runner: build already ran on head none and nothing moved on: no open PR says Closes #7. Remove and re-add the account label to run it again.",
     });
   });
   it("reruns after the owner re-adds the account label or removes agent:blocked", () => {
