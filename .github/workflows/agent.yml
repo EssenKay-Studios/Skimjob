@@ -1,6 +1,6 @@
 # The cloud runner (docs/pipeline/agents.md): runs one step of a ticket on a GitHub runner when the start
 # check (scripts/agent-start.ts, through docs/pipeline/runner/poll.sh) says its host is cloud
-# (on:cloud, or a build:/review:/qa:cloud override). Never merges, never prints a secret.
+# (on:cloud). Never merges, never prints a secret.
 # The runner's scripts and the gate always come from main (the checkout's ref), never from a PR.
 # The board can't be read here (GITHUB_TOKEN has no project scope): Area and the owner decision come
 # from the issue form's answers.
@@ -100,7 +100,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           EVENT: ${{ github.event_name }}
         run: |
-          # Give the owner a minute to add all three start labels before checking.
+          # Give the owner a minute to add the start labels and the Effort field before checking.
           [ "$EVENT" != issues ] || sleep 60
           bash docs/pipeline/runner/poll.sh check "$N"
       - name: Install for QA

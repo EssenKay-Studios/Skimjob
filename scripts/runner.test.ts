@@ -142,7 +142,7 @@ describe("poll.sh, one poll", () => {
     writeFileSync(join(jd, "account"), "pro\n");
     writeFileSync(join(jd, "step"), "build\n");
     writeFileSync(join(jd, "wt"), `${wt}\n`);
-    w.fixture(`${R}/issues/5`, { number: 5, labels: [{ name: "on:mac" }, { name: "model:opus" }, { name: "agent:working" }] });
+    w.fixture(`${R}/issues/5`, { number: 5, labels: [{ name: "on:mac" }, { name: "agent:working" }] });
     w.fixture(`${R}/issues?state=open&per_page=100`, []);
     const r = w.poll();
     expect(r.status).toBe(0);
@@ -163,15 +163,46 @@ describe("poll.sh check", () => {
     const at = "2026-11-10T10:00:00Z";
     w.fixture(`${R}/issues/9`, {
       number: 9, title: "T", user: { login: "mallory" }, type: { name: "Feature" }, body: "### Area\n\nci",
-      labels: ["agent:max", "on:mac", "model:haiku"].map((name) => ({ name })),
+      labels: ["agent:max", "on:mac"].map((name) => ({ name })),
     });
-    w.fixture(`${R}/issues/9/events?per_page=100`, ["agent:max", "on:mac", "model:haiku"].map((name) => ({ event: "labeled", label: { name }, actor: { login: "karthik24iyer" }, created_at: at })));
+    w.fixture(`${R}/issues/9/events?per_page=100`, ["agent:max", "on:mac"].map((name) => ({ event: "labeled", label: { name }, actor: { login: "karthik24iyer" }, created_at: at })));
     w.fixture(`${R}/issues/9/comments?per_page=100`, []);
     w.fixture(`${R}/issues?state=open&labels=agent:working&per_page=100`, []);
     w.fixture(`${R}/pulls?state=open&per_page=100`, []);
     const r = w.poll("check", "9");
     expect(r.stdout).toContain("#9: comment: runner: not started: opened by mallory, not karthik24iyer");
     expect(w.ghLog()).toContain(`gh api ${R}/issues/9/comments -f body=runner: not started: opened by mallory`);
+    expect(w.ghLog()).not.toContain("agent:working --silent");
+  });
+});
+
+describe("poll.sh check: the Effort field", () => {
+  const ticket = (w: ReturnType<typeof world>, fields: unknown) => {
+    const at = "2026-11-10T10:00:00Z";
+    w.fixture(`${R}/issues/9`, {
+      number: 9, title: "T", user: { login: "karthik24iyer" }, type: { name: "Task" }, body: "### Area\n\nci",
+      labels: ["agent:max", "on:mac"].map((name) => ({ name })), issue_field_values: fields,
+    });
+    w.fixture(`${R}/issues/9/events?per_page=100`, ["agent:max", "on:mac"].map((name) => ({ event: "labeled", label: { name }, actor: { login: "karthik24iyer" }, created_at: at })));
+    w.fixture(`${R}/issues/9/comments?per_page=100`, []);
+    w.fixture(`${R}/issues?state=open&labels=agent:working&per_page=100`, []);
+    w.fixture(`${R}/pulls?state=open&per_page=100`, []);
+  };
+  const effort = (name: string) => [{ issue_field_name: "Priority", single_select_option: { name: "High" } }, { issue_field_name: "Effort", single_select_option: { name } }];
+
+  it.each([["High", "opus"], ["Medium", "sonnet"], ["Low", "haiku"]])("Effort %s: the dry run starts the builder on %s", (name, model) => {
+    const w = world();
+    ticket(w, effort(name));
+    const r = spawnSync("bash", [join(ROOT, "docs/pipeline/runner/poll.sh"), "check", "9"], { env: { ...w.env, DRY_RUN: "1" }, encoding: "utf8" });
+    expect(r.stdout).toContain(`#9: start build on mac, max/${model}`);
+    expect(r.stdout).toContain(`claude -p --model ${model}`);
+  });
+
+  it("no Effort: comments once to set it and starts nothing", () => {
+    const w = world();
+    ticket(w, []);
+    const r = w.poll("check", "9");
+    expect(r.stdout).toContain("#9: comment: runner: not started: set the Effort field.");
     expect(w.ghLog()).not.toContain("agent:working --silent");
   });
 });

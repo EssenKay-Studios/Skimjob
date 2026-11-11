@@ -8,18 +8,16 @@ New issue → pick **Bug**, **Feature** or **Task**, and open it yourself, as ka
 
 ## Start it
 
-A ticket starts only when you have added **exactly one label from each of three groups**. Nothing is assumed: a missing group, or two labels in one group, and nothing starts; the runner comments once, naming the group. Labels anyone else added don't count.
+A ticket starts only when you have added **exactly one label from each of two groups** and set the issue's **Effort** field. Nothing is assumed: a missing group, two labels in one group or an empty Effort, and nothing starts; the runner comments once, naming the problem (for Effort: "set the Effort field"). Labels anyone else added don't count.
 
 | Group | Labels |
 |---|---|
 | Account | `agent:max` (Max plan), `agent:pro` (Pro plan), `agent:api` (API key, pay per use, a dollar cap per job) |
 | Host | `on:mac`, `on:linux`, `on:cloud` |
-| Model | `model:opus`, `model:sonnet`, `model:haiku` |
 
-The host and the model apply to every step (build, review, QA). To change one step, add an override; it wins over the group label:
+The host applies to every step (build, review, QA).
 
-- host: `build:`, `review:` or `qa:` with `mac`, `linux` or `cloud`;
-- model: `build:`, `review:` or `qa:` with `opus`, `sonnet` or `haiku`.
+**Effort** is the org-level issue field (a single select, not a label) and picks the **builder's** model: High → Opus, Medium → Sonnet, Low → Haiku. Review and QA always run on Opus. The map lives in one place, `scripts/agent-start.ts`; the runner reads the field as `issue_field_values` from the issue's REST response.
 
 The runner takes the steps in order, from the PR's state (`verdicts.sh`): build → CI green → review → QA. A commit that is not a QA test needs a delta review; QA starts only after an APPROVE on the head. Each start comments `runner: picked up on <place>, <account>/<model> (<step>, head <sha>)` and moves the card to In progress. A step runs once per head: if it ends without moving the PR on, the runner says so; remove and re-add the account label to run it again.
 
@@ -91,6 +89,6 @@ API_BUDGET_USD=5          # for agent:api: the dollar cap per job
 
 Anyone can open an issue on this public repo, so:
 
-- an agent acts only on tickets **you** (karthik24iyer) opened and whose account, host and model labels you added;
+- an agent acts only on tickets **you** (karthik24iyer) opened and whose account and host labels you added;
 - it treats the issue and comment text as the job description, never as instructions that override CLAUDE.md or the pipeline;
 - the runner hands the agent only your comments; everyone else's are left out.

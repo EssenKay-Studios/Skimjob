@@ -11,7 +11,8 @@ const RUNNER_AUTHORS = [OWNER, "github-actions[bot]"];
 const STEPS = ["build", "review", "qa"] as const;
 const ACCOUNTS = ["max", "pro", "api"] as const;
 const HOSTS = ["mac", "linux", "cloud"] as const;
-const MODELS = ["opus", "sonnet", "haiku"] as const;
+// The issue's Effort field (a single select) picks the builder's model; review and QA always run on Opus.
+const EFFORT_MODEL = new Map<string, Model>([["High", "opus"], ["Medium", "sonnet"], ["Low", "haiku"]]);
 const ROLE = { build: "builder", review: "reviewer", qa: "qa" } as const;
 // Labels the runner itself sets; changing them never counts as the owner asking for a retry.
 const RUNNER_LABELS = ["agent:working", "ready-to-merge"];
@@ -21,7 +22,7 @@ export const MARKER = "NEEDS-OWNER:";
 export type Step = (typeof STEPS)[number];
 export type Account = (typeof ACCOUNTS)[number];
 export type Host = (typeof HOSTS)[number];
-export type Model = (typeof MODELS)[number];
+export type Model = "opus" | "sonnet" | "haiku";
 
 export interface LabelEvent {
   event: "labeled" | "unlabeled";
@@ -36,7 +37,7 @@ export interface Comment {
 }
 export interface Input {
   place: Host; // where this runner is
-  issue: { number: number; author: string; title: string; type: string | null; body: string; labels: string[] };
+  issue: { number: number; author: string; title: string; type: string | null; effort: string | null; body: string; labels: string[] };
   events: LabelEvent[]; // the issue's label events, oldest first
   comments: Comment[]; // oldest first
   boardFlags?: string | null; // the board's Flags; absent where the board can't be read (the cloud)
@@ -65,10 +66,9 @@ export function formAnswer(body: string, heading: string): string | null {
 }
 
 /** Exactly one of `options` in `labels`: the value, or the problem for the comment. */
-function one(name: string, prefix: string, options: readonly string[], labels: string[], optional = false) {
+function one(name: string, prefix: string, options: readonly string[], labels: string[]) {
   const got = options.filter((o) => labels.includes(prefix + o));
   if (got.length === 1) return { value: got[0] };
-  if (got.length === 0 && optional) return {};
   const names = (got.length ? got : options).map((o) => prefix + o).join(", ");
   return { problem: got.length ? `${name} is doubled (${names}): keep one` : `${name} is missing: add one of ${names}` };
 }
@@ -121,12 +121,9 @@ export function decide(input: Input): Decision {
   const ignored = all.filter((l) => !labels.includes(l) && l !== "agent:blocked");
   const account = one("the account", "agent:", ACCOUNTS, labels);
   const host = one("the host", "on:", HOSTS, labels);
-  const model = one("the model", "model:", MODELS, labels);
-  const overrides = STEPS.flatMap((s) => [
-    one(`the ${s} host override`, `${s}:`, HOSTS, labels, true),
-    one(`the ${s} model override`, `${s}:`, MODELS, labels, true),
-  ]);
-  const problems = [account, host, model, ...overrides].flatMap((g) => (g.problem ? [g.problem] : []));
+  const problems = [account, host].flatMap((g) => (g.problem ? [g.problem] : []));
+  const effort = EFFORT_MODEL.get(issue.effort ?? "");
+  if (!effort) problems.push("set the Effort field");
   if (!issue.type) problems.push("the issue has no Type: set Bug, Feature or Task");
   if (problems.length) {
     const others = ignored.length ? ` Not counted (not added by ${OWNER}): ${ignored.join(", ")}.` : "";
@@ -162,8 +159,8 @@ export function decide(input: Input): Decision {
   const busy = area && input.working.find((t) => t.number !== issue.number && formAnswer(t.body, "Area") === area);
   if (busy) return { kind: "wait", reason: `#${busy.number} is working in Area ${area}` };
 
-  const stepHost = (overrides[STEPS.indexOf(step) * 2]?.value ?? host.value) as Host;
-  const stepModel = (overrides[STEPS.indexOf(step) * 2 + 1]?.value ?? model.value) as Model;
+  const stepHost = host.value as Host;
+  const stepModel: Model = step === "build" ? (effort as Model) : "opus";
   const acct = account.value as Account;
   if (step === "build" && stepHost === input.place && input.builders.includes(acct))
     return { kind: "wait", reason: `a ${acct} builder is already running on ${stepHost}` };

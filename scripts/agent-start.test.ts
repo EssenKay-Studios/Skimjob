@@ -7,13 +7,13 @@ const OLD = "b".repeat(40);
 const body = (area = "board", decision = "no") =>
   `### What and why\n\nA thing.\n\n### Area\n\n${area}\n\n### Design reference\n\n§5.2\n\n### Owner decision needed?\n\n${decision}\n\n### Related tickets\n\n_No response_`;
 const by = (label: string, actor = "karthik24iyer", at = "2026-11-10T10:00:00Z"): LabelEvent => ({ event: "labeled", label, actor, at });
-const START = ["agent:max", "on:mac", "model:opus"];
+const START = ["agent:max", "on:mac"];
 
 function input(over: Partial<Input> & { labels?: string[]; extra?: LabelEvent[] } = {}): Input {
   const labels = over.labels ?? START;
   return {
     place: "mac",
-    issue: { number: 7, author: "karthik24iyer", title: "T", type: "Feature", body: body(), labels, ...over.issue },
+    issue: { number: 7, author: "karthik24iyer", title: "T", type: "Feature", effort: "High", body: body(), labels, ...over.issue },
     events: [...labels.map((l) => by(l)), ...(over.extra ?? [])],
     comments: [],
     working: [],
@@ -40,18 +40,16 @@ function verdicts(o: { draft?: boolean; mstate?: string; review?: string; rsha?:
 }
 const withPr = (v: string, over: Partial<Input> = {}) => input({ pr: { number: 9, verdicts: v }, ...over });
 
-describe("the three start groups", () => {
-  it("starts a build with exactly one account, host and model label, all added by karthik24iyer", () => {
+describe("the start rule", () => {
+  it("starts a build with one account label, one host label and the Effort field set, the labels added by karthik24iyer", () => {
     expect(decide(input())).toMatchObject({ kind: "start", step: "build", host: "mac", account: "max", model: "opus", pr: null });
   });
 
   it.each([
-    [["on:mac", "model:opus"], "the account is missing: add one of agent:max, agent:pro, agent:api"],
-    [["agent:max", "model:opus"], "the host is missing: add one of on:mac, on:linux, on:cloud"],
-    [["agent:max", "on:mac"], "the model is missing: add one of model:opus, model:sonnet, model:haiku"],
-    [["agent:max", "agent:pro", "on:mac", "model:opus"], "the account is doubled (agent:max, agent:pro): keep one"],
-    [["agent:max", "on:mac", "on:cloud", "model:opus"], "the host is doubled (on:mac, on:cloud): keep one"],
-    [["agent:max", "on:mac", "model:opus", "model:haiku"], "the model is doubled (model:opus, model:haiku): keep one"],
+    [["on:mac"], "the account is missing: add one of agent:max, agent:pro, agent:api"],
+    [["agent:max"], "the host is missing: add one of on:mac, on:linux, on:cloud"],
+    [["agent:max", "agent:pro", "on:mac"], "the account is doubled (agent:max, agent:pro): keep one"],
+    [["agent:max", "on:mac", "on:cloud"], "the host is doubled (on:mac, on:cloud): keep one"],
   ])("no defaults: %j comments once, naming the group", (labels, problem) => {
     expect(decide(input({ labels }))).toEqual({ kind: "comment", text: `runner: not started: ${problem}.` });
   });
@@ -60,13 +58,13 @@ describe("the three start groups", () => {
     const d = decide(input({ labels: ["agent:max", "agent:api"] }));
     expect(d).toEqual({
       kind: "comment",
-      text: "runner: not started: the account is doubled (agent:max, agent:api): keep one; the host is missing: add one of on:mac, on:linux, on:cloud; the model is missing: add one of model:opus, model:sonnet, model:haiku.",
+      text: "runner: not started: the account is doubled (agent:max, agent:api): keep one; the host is missing: add one of on:mac, on:linux, on:cloud.",
     });
   });
 
   it("doesn't count a label someone else added, and says so", () => {
     const i = input();
-    i.events = [by("agent:max", "mallory"), by("on:mac"), by("model:opus")];
+    i.events = [by("agent:max", "mallory"), by("on:mac")];
     expect(decide(i)).toEqual({
       kind: "comment",
       text: "runner: not started: the account is missing: add one of agent:max, agent:pro, agent:api. Not counted (not added by karthik24iyer): agent:max.",
@@ -80,19 +78,19 @@ describe("the three start groups", () => {
 
   it("a label with no labeled event (unknown adder) doesn't count", () => {
     const i = input();
-    i.events = i.events.filter((e) => e.label !== "model:opus");
-    expect(decide(i)).toMatchObject({ kind: "comment", text: expect.stringContaining("the model is missing") });
+    i.events = i.events.filter((e) => e.label !== "on:mac");
+    expect(decide(i)).toMatchObject({ kind: "comment", text: expect.stringContaining("the host is missing") });
   });
 
   it("doesn't repeat a comment that is already the newest runner comment", () => {
     const text = "runner: not started: the account is missing: add one of agent:max, agent:pro, agent:api.";
     const c = (author: string, b: string): Comment => ({ author, body: b, at: "2026-11-10T12:00:00Z" });
-    expect(decide(input({ labels: ["on:mac", "model:opus"], comments: [c("karthik24iyer", text)] }))).toEqual({ kind: "wait", reason: text });
-    expect(decide(input({ labels: ["on:mac", "model:opus"], comments: [c("github-actions[bot]", text)] })).kind).toBe("wait");
+    expect(decide(input({ labels: ["on:mac"], comments: [c("karthik24iyer", text)] }))).toEqual({ kind: "wait", reason: text });
+    expect(decide(input({ labels: ["on:mac"], comments: [c("github-actions[bot]", text)] })).kind).toBe("wait");
     // A stranger's copy of the text is not a runner comment.
-    expect(decide(input({ labels: ["on:mac", "model:opus"], comments: [c("mallory", text)] })).kind).toBe("comment");
+    expect(decide(input({ labels: ["on:mac"], comments: [c("mallory", text)] })).kind).toBe("comment");
     // A different, newer runner comment means the problem is new again.
-    expect(decide(input({ labels: ["on:mac", "model:opus"], comments: [c("karthik24iyer", text), c("karthik24iyer", "runner: picked up on mac, max/opus (build, head none)")] })).kind).toBe("comment");
+    expect(decide(input({ labels: ["on:mac"], comments: [c("karthik24iyer", text), c("karthik24iyer", "runner: picked up on mac, max/opus (build, head none)")] })).kind).toBe("comment");
   });
 
   it("needs an issue Type", () => {
@@ -119,23 +117,43 @@ describe("the issue's author", () => {
   });
 });
 
-describe("per-step overrides", () => {
-  it("a host or model override wins for its step only", () => {
-    const labels = [...START, "build:linux", "build:haiku", "review:cloud"];
-    expect(decide(input({ labels }))).toMatchObject({ step: "build", host: "linux", model: "haiku" });
-    expect(decide(withPr(verdicts({ review: "none" }), { labels } as Partial<Input>))).toMatchObject({ step: "review", host: "cloud", model: "opus" });
-    expect(decide(withPr(verdicts(), { labels } as Partial<Input>))).toMatchObject({ step: "qa", host: "mac", model: "opus" });
+describe("the Effort field and the model", () => {
+  const withEffort = (effort: string | null, over: Partial<Input> = {}) => {
+    const i = input(over);
+    i.issue.effort = effort;
+    return i;
+  };
+  it.each([
+    ["High", "opus"],
+    ["Medium", "sonnet"],
+    ["Low", "haiku"],
+  ])("Effort %s: the builder runs on %s", (effort, model) => {
+    expect(decide(withEffort(effort))).toMatchObject({ kind: "start", step: "build", model });
   });
 
-  it("a doubled override starts nothing", () => {
-    expect(decide(input({ labels: [...START, "qa:sonnet", "qa:haiku"] }))).toEqual({
+  it("review and QA always run on Opus, whatever the Effort", () => {
+    for (const effort of ["High", "Medium", "Low"]) {
+      expect(decide(withEffort(effort, { pr: { number: 9, verdicts: verdicts({ review: "none" }) } }))).toMatchObject({ step: "review", model: "opus" });
+      expect(decide(withEffort(effort, { pr: { number: 9, verdicts: verdicts() } }))).toMatchObject({ step: "qa", model: "opus" });
+    }
+  });
+
+  it("an empty Effort starts nothing and says so", () => {
+    expect(decide(withEffort(null))).toEqual({ kind: "comment", text: "runner: not started: set the Effort field." });
+  });
+  it("an unknown Effort value is the same as empty", () => {
+    expect(decide(withEffort("toString"))).toMatchObject({ kind: "comment", text: expect.stringContaining("set the Effort field") });
+  });
+  it("an empty Effort stops review and QA too, and the comment is not repeated", () => {
+    const text = "runner: not started: set the Effort field.";
+    expect(decide(withEffort(null, { pr: { number: 9, verdicts: verdicts() } })).kind).toBe("comment");
+    expect(decide(withEffort(null, { comments: [{ author: "karthik24iyer", body: text, at: "2026-11-10T12:00:00Z" }] }))).toEqual({ kind: "wait", reason: text });
+  });
+  it("names the Effort with the other broken groups in one comment", () => {
+    expect(decide(withEffort(null, { labels: ["agent:max"] }))).toEqual({
       kind: "comment",
-      text: "runner: not started: the qa model override is doubled (qa:sonnet, qa:haiku): keep one.",
+      text: "runner: not started: the host is missing: add one of on:mac, on:linux, on:cloud; set the Effort field.",
     });
-  });
-
-  it("an override never replaces a missing group label", () => {
-    expect(decide(input({ labels: ["agent:max", "build:mac", "build:opus", "review:mac", "review:opus", "qa:mac", "qa:opus"] })).kind).toBe("comment");
   });
 });
 
@@ -168,7 +186,7 @@ describe("never start", () => {
     expect(decide(input({ builders: ["max"] }))).toEqual({ kind: "wait", reason: "a max builder is already running on mac" });
     expect(decide(input({ builders: ["pro"] })).kind).toBe("start");
     // Another machine's build isn't limited by this machine's builders.
-    expect(decide(input({ builders: ["max"], labels: ["agent:max", "on:linux", "model:opus"] }))).toMatchObject({ kind: "start", host: "linux" });
+    expect(decide(input({ builders: ["max"], labels: ["agent:max", "on:linux"] }))).toMatchObject({ kind: "start", host: "linux" });
     // Review and QA aren't builders.
     expect(decide(withPr(verdicts({ review: "none" }), { builders: ["max"] })).kind).toBe("start");
   });

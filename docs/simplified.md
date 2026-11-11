@@ -288,9 +288,9 @@ Three cleanup rules hold from start to finish:
 | Agent | Model | Does |
 |---|---|---|
 | **Orchestrator (PM)** | Opus 5.5 | Plans, writes briefs, folds `## Decisions` into `docs/decisions.md`, turns `## Follow-ups` into GitHub issues and keeps the R7 board current, reports to the owner. Never writes code. |
-| **Developer** | the ticket's `model:` label | Builds one task per PR (`docs/pipeline/builder.md`). |
-| **Reviewer** | the ticket's `model:` label | The one reviewer, posting as karthik24iyer (`reviewer.md`). Never merges, never pushes. |
-| **QA** | the ticket's `model:` label | Adversarial tests, pushes once, posts the verdict (`qa.md`). Never merges. |
+| **Developer** | the issue's Effort field | Builds one task per PR (`docs/pipeline/builder.md`). |
+| **Reviewer** | Opus | The one reviewer, posting as karthik24iyer (`reviewer.md`). Never merges, never pushes. |
+| **QA** | Opus | Adversarial tests, pushes once, posts the verdict (`qa.md`). Never merges. |
 
 Each step runs on the account, host and model the ticket's labels choose (`docs/pipeline/agents.md`); agy (Gemini) only for menial, conflict-free rebases. The order and the rules are in `docs/pipeline/common.md`.
 
@@ -302,7 +302,7 @@ Each step runs on the account, host and model the ticket's labels choose (`docs/
 >
 > Begin with step S0 (record the agreed decisions and clean the docs), then S1, then the code cleanup (C) alongside the mockups (S2). Build straight on main: no downtime concerns, no R6 code kept alive. Owner checkpoints in the plan are hard stops: don't pass one without my approval.
 >
-> Start a ticket only when I have added exactly one account, host and model label, and run each step where and on what they say (`docs/pipeline/agents.md`). When `docs/pipeline/verdicts.sh <PR>` says mergeable, label it `ready-to-merge` and tell me; I merge. Commits are authored as karthik24iyer <karthik24iyer@gmail.com>, with no Claude co-author or session lines.
+> Start a ticket only when I have added exactly one account label and one host label, and the Effort field set, and run each step where and on what they say (`docs/pipeline/agents.md`). When `docs/pipeline/verdicts.sh <PR>` says mergeable, label it `ready-to-merge` and tell me; I merge. Commits are authored as karthik24iyer <karthik24iyer@gmail.com>, with no Claude co-author or session lines.
 >
 > Send me a short update about every 15 minutes, and ask me only for real decisions, as multiple-choice questions with a recommended option.
 
