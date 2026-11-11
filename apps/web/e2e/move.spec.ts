@@ -48,6 +48,7 @@ test("touch: tap to pick a coin and tap a bag to drop it, drag into either bag, 
   await touchDragTo(page, pileCoins(page, "duffel").first(), page.locator("[data-pile=pocket]"));
   await expect.poll(() => count(page)).toEqual({ room: 0, duffel: 1, pocket: 1 });
 
-  await page.getByRole("button", { name: "Lock it in" }).tap();
+  // Lock in with a click: a synthetic tap right after the scripted touch drag can be read as a double tap (no click).
+  await page.getByRole("button", { name: "Lock it in" }).click();
   await expect(page.locator(".move__status")).toHaveText(/Locked in: Office, pocket 1\./);
 });
