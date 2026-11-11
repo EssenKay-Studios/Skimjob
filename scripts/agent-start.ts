@@ -122,10 +122,7 @@ export function decide(input: Input): Decision {
   const account = one("the account", "agent:", ACCOUNTS, labels);
   const host = one("the host", "on:", HOSTS, labels);
   const model = one("the model", "model:", MODELS, labels);
-  const overrides = STEPS.flatMap((s) => [
-    one(`the ${s} host override`, `${s}:`, HOSTS, labels, true),
-    one(`the ${s} model override`, `${s}:`, MODELS, labels, true),
-  ]);
+  const overrides = STEPS.map((s) => one(`the ${s} host override`, `${s}:`, HOSTS, labels, true));
   const problems = [account, host, model, ...overrides].flatMap((g) => (g.problem ? [g.problem] : []));
   if (!issue.type) problems.push("the issue has no Type: set Bug, Feature or Task");
   if (problems.length) {
@@ -162,8 +159,8 @@ export function decide(input: Input): Decision {
   const busy = area && input.working.find((t) => t.number !== issue.number && formAnswer(t.body, "Area") === area);
   if (busy) return { kind: "wait", reason: `#${busy.number} is working in Area ${area}` };
 
-  const stepHost = (overrides[STEPS.indexOf(step) * 2]?.value ?? host.value) as Host;
-  const stepModel = (overrides[STEPS.indexOf(step) * 2 + 1]?.value ?? model.value) as Model;
+  const stepHost = (overrides[STEPS.indexOf(step)]?.value ?? host.value) as Host;
+  const stepModel = model.value as Model;
   const acct = account.value as Account;
   if (step === "build" && stepHost === input.place && input.builders.includes(acct))
     return { kind: "wait", reason: `a ${acct} builder is already running on ${stepHost}` };

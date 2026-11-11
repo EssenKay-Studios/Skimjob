@@ -16,10 +16,7 @@ A ticket starts only when you have added **exactly one label from each of three 
 | Host | `on:mac`, `on:linux`, `on:cloud` |
 | Model | `model:opus`, `model:sonnet`, `model:haiku` |
 
-The host and the model apply to every step (build, review, QA). To change one step, add an override; it wins over the group label:
-
-- host: `build:`, `review:` or `qa:` with `mac`, `linux` or `cloud`;
-- model: `build:`, `review:` or `qa:` with `opus`, `sonnet` or `haiku`.
+The host and the model apply to every step (build, review, QA). To change the host of one step, add an override; it wins over the group label: `build:`, `review:` or `qa:` with `mac`, `linux` or `cloud`. The model has no per-step override.
 
 The runner takes the steps in order, from the PR's state (`verdicts.sh`): build → CI green → review → QA. A commit that is not a QA test needs a delta review; QA starts only after an APPROVE on the head. Each start comments `runner: picked up on <place>, <account>/<model> (<step>, head <sha>)` and moves the card to In progress. A step runs once per head: if it ends without moving the PR on, the runner says so; remove and re-add the account label to run it again.
 

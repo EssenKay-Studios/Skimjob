@@ -119,23 +119,23 @@ describe("the issue's author", () => {
   });
 });
 
-describe("per-step overrides", () => {
-  it("a host or model override wins for its step only", () => {
-    const labels = [...START, "build:linux", "build:haiku", "review:cloud"];
-    expect(decide(input({ labels }))).toMatchObject({ step: "build", host: "linux", model: "haiku" });
+describe("per-step host overrides", () => {
+  it("a host override wins for its step only; the model label applies to every step", () => {
+    const labels = [...START, "build:linux", "review:cloud"];
+    expect(decide(input({ labels }))).toMatchObject({ step: "build", host: "linux", model: "opus" });
     expect(decide(withPr(verdicts({ review: "none" }), { labels } as Partial<Input>))).toMatchObject({ step: "review", host: "cloud", model: "opus" });
     expect(decide(withPr(verdicts(), { labels } as Partial<Input>))).toMatchObject({ step: "qa", host: "mac", model: "opus" });
   });
 
   it("a doubled override starts nothing", () => {
-    expect(decide(input({ labels: [...START, "qa:sonnet", "qa:haiku"] }))).toEqual({
+    expect(decide(input({ labels: [...START, "qa:mac", "qa:linux"] }))).toEqual({
       kind: "comment",
-      text: "runner: not started: the qa model override is doubled (qa:sonnet, qa:haiku): keep one.",
+      text: "runner: not started: the qa host override is doubled (qa:mac, qa:linux): keep one.",
     });
   });
 
   it("an override never replaces a missing group label", () => {
-    expect(decide(input({ labels: ["agent:max", "build:mac", "build:opus", "review:mac", "review:opus", "qa:mac", "qa:opus"] })).kind).toBe("comment");
+    expect(decide(input({ labels: ["agent:max", "build:mac", "review:mac", "qa:mac"] })).kind).toBe("comment");
   });
 });
 

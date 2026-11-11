@@ -5,7 +5,7 @@ Read with `docs/STATUS.md` (where things stand), `common.md` (the flow and rules
 ## State
 
 - **Specs:** `docs/design.md` (rules), `docs/simplified.md` (the R7 plan), `docs/decisions.md` (current decisions).
-- **Tasks:** GitHub issues in the milestone "R7 Simplified", on the org Projects board #2 ("Skimjob R7"). Bug / Feature / Task is the issue **Type**. **Area**, **Step**, **Model**, **PR** and **Flags** (`owner-decision`, `provisional`, `flaky`, `owner-reported`, `follow-up`) are board fields. The only labels are the 30 agent labels (`agents.md`, `labels.sh`).
+- **Tasks:** GitHub issues in the milestone "R7 Simplified", on the org Projects board #2 ("Skimjob R7"). Bug / Feature / Task is the issue **Type**. **Area**, **Step**, **Model**, **PR** and **Flags** (`owner-decision`, `provisional`, `flaky`, `owner-reported`, `follow-up`) are board fields. The only labels are the 21 agent labels (`agents.md`, `labels.sh`).
 - **Parked by the owner:** M2-14 playtest pass, M2-15 offline demo. **Out of scope:** Skimjob Advanced (`docs/advanced.md`), the recruited Mole.
 - **Live:** https://skimjob.duckdns.org on the owner's AWS Lightsail box, Google sign-in on. Runbook: `docs/deploy.md`. Connection details live only in the owner's local `ssh-relay` skill. Deploys are Mac only and never automatic.
 

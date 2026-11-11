@@ -83,9 +83,9 @@ describe("a label re-added by someone else", () => {
     i.events = [...START.map((l) => add(l)), add("agent:api", "mallory")];
     expect(decide(i)).toMatchObject({ kind: "start", account: "max" });
   });
-  it("a stranger's override is ignored: the group's host and model apply", () => {
-    const i = input({ labels: [...START, "build:cloud", "build:haiku"] });
-    i.events = [...START.map((l) => add(l)), add("build:cloud", "mallory"), add("build:haiku", "mallory")];
+  it("a stranger's override is ignored: the group's host applies", () => {
+    const i = input({ labels: [...START, "build:cloud"] });
+    i.events = [...START.map((l) => add(l)), add("build:cloud", "mallory")];
     expect(decide(i)).toMatchObject({ kind: "start", step: "build", host: "mac", model: "opus" });
   });
   it("a stranger removing agent:blocked after a pickup doesn't rerun the same step on the same head", () => {

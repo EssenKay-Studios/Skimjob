@@ -1,6 +1,6 @@
 #!/bin/bash
 # usage: bash docs/pipeline/labels.sh
-# Creates or updates the 30 agent labels (docs/pipeline/agents.md). Idempotent; touches no other label.
+# Creates or updates the 21 agent labels (docs/pipeline/agents.md). Idempotent; touches no other label.
 # Bug/Feature/Task is the issue Type; Area, Step and Flags are fields on the Projects board.
 set -euo pipefail
 R=repos/${REPO:-EssenKay-Studios/Skimjob}
@@ -33,13 +33,4 @@ qa:cloud|bfd4f2|QA in a cloud session
 model:opus|d4c5f9|Every step on Opus
 model:sonnet|d4c5f9|Every step on Sonnet
 model:haiku|d4c5f9|Every step on Haiku
-build:opus|e4dcf9|Build on Opus
-build:sonnet|e4dcf9|Build on Sonnet
-build:haiku|e4dcf9|Build on Haiku
-review:opus|e4dcf9|Review on Opus
-review:sonnet|e4dcf9|Review on Sonnet
-review:haiku|e4dcf9|Review on Haiku
-qa:opus|e4dcf9|QA on Opus
-qa:sonnet|e4dcf9|QA on Sonnet
-qa:haiku|e4dcf9|QA on Haiku
 EOF
