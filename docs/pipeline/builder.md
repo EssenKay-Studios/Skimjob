@@ -12,6 +12,6 @@ You build exactly ONE ticket: the GitHub issue in your prompt (`gh api repos/Ess
 8. When CI is green on the head, mark the PR ready (`gh pr ready N`). That hands it to the reviewer.
 9. Report (≤ 80 words): PR, branch, head sha, results, provisional decisions.
 
-**Blocked:** if the ticket truly cannot go on without the owner, commit nothing broken, ask one clear question in the issue (options and your recommendation), and report `BLOCKED:` with it.
+**Blocked:** if the ticket truly cannot go on without the owner, commit nothing broken and end your final message with the marker line: `NEEDS-OWNER:` at the start of a line, then one clear question with options and your recommendation (it may run over several lines). Don't post it or touch the labels yourself: the runner posts everything after the marker in the issue and swaps `agent:working` for `agent:blocked`. Any role may block this way.
 
 **Fix rounds** (review or QA findings): `git fetch origin && git checkout -B <branch> origin/<branch>` (QA may have pushed tests). Rebase onto `origin/main` if it moved (`push --force-with-lease`). Fix every blocking item, run the quick checks, push, get CI green again (step 7), and report what changed per item plus the new head. The reviewer then does a delta review.

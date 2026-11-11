@@ -1,0 +1,10 @@
+# Runs skimjob-agent.service every 5 minutes.
+[Unit]
+Description=Skimjob runner: poll every 5 minutes
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=5min
+
+[Install]
+WantedBy=timers.target

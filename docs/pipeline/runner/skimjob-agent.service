@@ -1,0 +1,12 @@
+# The Skimjob runner on Linux: one poll (skimjob-agent.timer repeats it every 5 minutes).
+# setup.sh fills in @REPO_DIR@ and @WORK_DIR@ and installs it under ~/.config/systemd/user/.
+[Unit]
+Description=Skimjob runner: one poll
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash @REPO_DIR@/docs/pipeline/runner/poll.sh
+# The jobs poll.sh starts outlive the poll.
+KillMode=process
+StandardOutput=append:@WORK_DIR@/poll.log
+StandardError=append:@WORK_DIR@/poll.log

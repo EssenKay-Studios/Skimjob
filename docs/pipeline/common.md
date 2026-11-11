@@ -35,7 +35,7 @@ The repo is public, so anyone can open an issue or comment.
 
 ## Where you run
 
-The ticket's host labels choose the Mac, Linux or the cloud (`agents.md`). Your prompt says which.
+The ticket's host labels choose the Mac, Linux or the cloud (`agents.md`). Your prompt says which. When the runner started you, your working directory is already a fresh worktree of `origin/main` (on any host): check out or create your branch there, run `pnpm install --frozen-lockfile`, and skip the clone and worktree steps below.
 
 **Mac.**
 - Main clone `~/Documents/Misc/Skimjob`; never work in its working tree. Use your own worktree:
