@@ -302,7 +302,7 @@ Each step runs on the account, host and model the ticket's labels choose (`docs/
 >
 > Begin with step S0 (record the agreed decisions and clean the docs), then S1, then the code cleanup (C) alongside the mockups (S2). Build straight on main: no downtime concerns, no R6 code kept alive. Owner checkpoints in the plan are hard stops: don't pass one without my approval.
 >
-> Start a ticket only when I have added exactly one account label and one host label, and the Effort field set, and run each step where and on what they say (`docs/pipeline/agents.md`). When `docs/pipeline/verdicts.sh <PR>` says mergeable, label it `ready-to-merge` and tell me; I merge. Commits are authored as karthik24iyer <karthik24iyer@gmail.com>, with no Claude co-author or session lines.
+> Start a ticket only when I have added exactly one account label and one host label, and the Effort field set, and run each step where and on what they say (`docs/pipeline/agents.md`). When `docs/pipeline/verdicts.sh <PR>` says mergeable, the runner merges it with `merge.sh`. Commits are authored as karthik24iyer <karthik24iyer@gmail.com>, with no Claude co-author or session lines.
 >
 > Send me a short update about every 15 minutes, and ask me only for real decisions, as multiple-choice questions with a recommended option.
 

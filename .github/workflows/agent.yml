@@ -1,6 +1,6 @@
 # The cloud runner (docs/pipeline/agents.md): runs one step of a ticket on a GitHub runner when the start
 # check (scripts/agent-start.ts, through docs/pipeline/runner/poll.sh) says its host is cloud
-# (on:cloud). Never merges, never prints a secret.
+# (on:cloud), and merges the PR through merge.sh once the gate passes. Never prints a secret.
 # The runner's scripts and the gate always come from main (the checkout's ref), never from a PR.
 # The board can't be read here (GITHUB_TOKEN has no project scope): Area and the owner decision come
 # from the issue form's answers.
@@ -26,11 +26,11 @@ jobs:
   resolve:
     name: Find the ticket
     # Only karthik24iyer, or this workflow re-dispatching itself after a step. The labels the runner sets
-    # itself (a Mac or Linux runner writes as karthik24iyer) need no check: agent:working, ready-to-merge,
-    # and agent:blocked being added (its removal resumes).
+    # itself (a Mac or Linux runner writes as karthik24iyer) need no check: agent:working and agent:blocked
+    # being added (its removal resumes).
     if: >-
       (github.event.sender.login == 'karthik24iyer' || (github.event_name == 'workflow_dispatch' && github.event.sender.login == 'github-actions[bot]'))
-      && !contains(fromJSON('["agent:working","ready-to-merge"]'), github.event.label.name)
+      && github.event.label.name != 'agent:working'
       && !(github.event.action == 'labeled' && github.event.label.name == 'agent:blocked')
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -103,6 +103,14 @@ jobs:
           # Give the owner a minute to add the start labels and the Effort field before checking.
           [ "$EVENT" != issues ] || sleep 60
           bash docs/pipeline/runner/poll.sh check "$N"
+      # The gate passed: merge as karthik24iyer (a GITHUB_TOKEN merge would start no CI on main).
+      - name: Merge
+        if: steps.check.outputs.merge != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AGENT_GH_TOKEN: ${{ secrets.AGENT_GH_TOKEN }}
+          PR: ${{ steps.check.outputs.merge }}
+        run: bash docs/pipeline/runner/poll.sh merge "$N" "$PR"
       - name: Install for QA
         if: steps.check.outputs.step == 'qa'
         run: pnpm install --frozen-lockfile && cd apps/web && npx playwright install --with-deps chromium
@@ -133,7 +141,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh api -X DELETE "repos/$GITHUB_REPOSITORY/issues/$N/labels/agent:working" --silent 2>/dev/null || true
-      # The next step (or ready-to-merge) is checked right away: reviews and QA verdicts trigger nothing here.
+      # The next step (or the merge) is checked right away: reviews and QA verdicts trigger nothing here.
       - name: Check the next step
         if: success() && steps.check.outputs.step != ''
         env:

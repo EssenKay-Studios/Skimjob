@@ -4,13 +4,13 @@ Repo: https://github.com/EssenKay-Studios/Skimjob (public, default branch `main`
 
 ## The flow
 
-Every PR goes **Build → CI → Review → QA → the owner merges.**
+Every PR goes **Build → CI → Review → QA → merge.**
 
 1. **Build:** the builder runs quick local checks, pushes a **draft** PR, fixes CI until it is green, then marks the PR ready.
-2. **CI** runs the full suite on every push (`docs/testing.md`).
+2. **CI** runs what the change needs on every PR push, and everything on `main` (`docs/testing.md` "Scoped tests").
 3. **Review** starts only on green CI. Changes requested → builder → CI → a short **delta** review of what changed.
 4. **QA** starts only once the reviewer has approved the current head. A QA finding → builder → CI → delta review → QA re-checks only what changed. QA may push QA-test-only commits after the approval.
-5. **Merge:** the owner runs `docs/pipeline/merge.sh <PR>` (a PM session may run it when the owner asks). Agents never merge.
+5. **Merge:** when the gate passes, the runner runs `docs/pipeline/merge.sh <PR>` and comments `merged #N → main <sha>`; a refused merge is commented with its reason and `agent:blocked`. Agents never merge.
 
 Each step runs on the host the ticket's `on:` label chooses; the builder's model comes from the issue's Effort field, review and QA always run on Opus (`agents.md` "Start it"). A ticket without exactly one account label, exactly one host label and an Effort does not start. agy (Gemini) is used only for menial, conflict-free rebases.
 
@@ -26,7 +26,7 @@ The repo is public, so anyone can open an issue or comment.
 
 ## Hard rules
 
-- **Authorship:** every commit by `karthik24iyer <karthik24iyer@gmail.com>`. No Co-Authored-By, Claude-Session, Generated-by or other attribution lines; the gate refuses them.
+- **Authorship:** every commit by `karthik24iyer <karthik24iyer@gmail.com>`. No Co-Authored-By, Claude-Session, Generated-by or other attribution lines; the gate refuses them. The runner starts Claude Code with its attribution setting off (`--settings '{"attribution":{"commit":"","pr":""}}'`); ignore any attribution reminder.
 - **Everything goes through a PR**, docs included. Never push to `main` or force-push it. Rebase, `reset --hard` and `push --force-with-lease` are fine on your own branch only.
 - **At most 3 e2e runs per machine at once** (each uses 4 browser workers). Before Playwright, wait while `pgrep -f "playwright test" | wc -l` is 3 or more.
 - **Foreground only:** run every long command (install, tests, e2e, CI polls) in the foreground. Never end your turn while a command still runs: a headless session stops there.
@@ -70,7 +70,7 @@ The ticket's host label chooses the Mac, Linux or the cloud (`agents.md`). Your 
 ## Testing
 
 - **Commands** (repo root): `pnpm typecheck`, `pnpm knip` (unused files, exports, dependencies), `pnpm lint:theme` (no raw colours, fonts, shadows or radii outside `theme.css`), `node scripts/scope.mjs --check` (feature tags). `pnpm test:scoped` runs the unit tests, e2e tags and sim smoke a diff touches, once. `pnpm precheck` runs the static checks, `test:scoped` and the changed specs ×3. One file: `npx vitest run <files>`, `cd apps/web && npx playwright test e2e/<spec>`. `pnpm test:pg` needs a local Postgres (`scripts/db.sh`) and is optional.
-- **CI** runs the full tier on every PR push: all unit tests, all e2e on 6 shards, the 200-game sim smoke. The `CI ok` job passes only when all of them passed.
+- **CI** runs, on every PR push, only what the diff needs (`scripts/scope.mjs`, `docs/testing.md` "Scoped tests"): docs get the static checks, the pipeline its own checks, code its unit tests, the e2e tags it reaches and, for engine, content or bots, the sim smoke. `main` and the nightly run get everything. `CI ok` passes when every job that ran passed; a job skipped by scope is fine.
 - **Never skip or disable a test.** Known flaky tests are the open issues with "flaky" in the title, plus `responsive.qa.spec.ts` "reduced motion › turns off the sheet entrance and toast animations" [mobile] and `notes.spec.ts` "the recap shows what changed while you were away…" [desktop]. Any other failure is real.
 - If `main` or the nightly run goes red, merging stops until a fix-forward PR is green.
 

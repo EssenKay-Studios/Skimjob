@@ -105,6 +105,7 @@ jobs:
           STRICT: ${{ inputs.strict && '--strict' || '' }}
         run: |
           set +e
+          # shellcheck disable=SC2086 # STRICT is empty or one flag
           pnpm -s sim:suite -- merge sim-output/shards/*.json --out sim-output/suite.json --compare docs/balance/baseline.json $STRICT > sim-output/suite.txt
           code=$?
           set -e

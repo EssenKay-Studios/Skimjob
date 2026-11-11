@@ -11,7 +11,7 @@ const readRepo = (f: string) => readFileSync(join(root, f), "utf8");
 const features: Record<string, string | string[]> = JSON.parse(readRepo("apps/web/e2e/features.json"));
 const graph = buildGraph(files, readRepo);
 const run = (changed: string[], read = readRepo) => scope(changed, graph, features, read);
-const FULL = { full: true, unit: "all", tags: "all", sim: 200 };
+const FULL = { full: true, unit: "all", tags: "all", sim: 200, pipeline: true };
 
 describe("scope on the real import graph", () => {
   it("runs everything for the shared UI kit", () => {
@@ -41,7 +41,6 @@ describe("scope on the real import graph", () => {
       "apps/web/playwright.config.ts",
       "apps/web/vite.config.ts",
       "apps/web/index.html",
-      ".github/workflows/ci.yml",
       "scripts/scope.mjs",
       "scripts/sim-smoke.sh",
       "apps/web/e2e/features.json",
@@ -122,8 +121,8 @@ describe("scope on the real import graph", () => {
     expect(run(["apps/server/src/brandNew.ts"])).toMatchObject(FULL);
   });
 
-  it("docs only (anywhere) runs every unit test and no browser or sim", () => {
-    expect(run(["docs/design.md", "README.md", "docs/pipeline/qa.md", "apps/web/README.md"])).toMatchObject({ full: false, unit: "all", tags: "", sim: 0 });
+  it("docs only (anywhere but docs/pipeline) runs no unit test, browser, sim or pipeline check (#272)", () => {
+    expect(run(["docs/design.md", "README.md", "docs/balance/baseline.json", "apps/web/README.md"])).toMatchObject({ full: false, unit: "", tags: "", sim: 0, pipeline: false });
   });
 });
 

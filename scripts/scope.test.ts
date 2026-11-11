@@ -36,15 +36,21 @@ const features = {
 };
 const read = (f: string) => text[f];
 const run = (...changed: string[]) => scope(changed, buildGraph(Object.keys(text), read), features, read);
-const none = { full: false, tags: "", sim: 0 };
+const none = { full: false, tags: "", sim: 0, pipeline: false };
 
 describe("scope", () => {
-  it("runs the whole unit set and no browser for docs only", () => {
-    expect(run("docs/testing.md", "README.md")).toMatchObject({ ...none, unit: "all" });
+  it("runs no unit test, browser, sim or pipeline check for docs only (#272)", () => {
+    expect(run("docs/testing.md", "README.md", "docs/balance/baseline.json")).toMatchObject({ ...none, unit: "", pipeline: false });
+  });
+  it("runs only the scripts tests and the pipeline checks for the pipeline (#272)", () => {
+    for (const f of ["docs/pipeline/runner/poll.sh", "docs/pipeline/common.md", "scripts/agent-start.ts", "scripts/runner.test.ts", ".github/workflows/ci.yml"]) {
+      expect(run(f), f).toMatchObject({ ...none, unit: "scripts", pipeline: true });
+    }
+    expect(run("docs/pipeline/verdicts.sh", "apps/web/src/Chat.tsx")).toMatchObject({ ...none, tags: "@chat", unit: "apps/web scripts", pipeline: true });
   });
   it("runs everything for config, unknown paths and an empty diff", () => {
-    for (const f of ["package.json", "apps/web/package.json", "scripts/scope.mjs", ".github/workflows/ci.yml", "apps/web/e2e/features.json", "apps/server/migrations/001.sql"]) {
-      expect(run(f)).toMatchObject({ full: true, unit: "all", tags: "all", sim: 200 });
+    for (const f of ["package.json", "apps/web/package.json", "scripts/scope.mjs", "scripts/sim-smoke.sh", "apps/web/e2e/features.json", "apps/server/migrations/001.sql"]) {
+      expect(run(f)).toMatchObject({ full: true, unit: "all", tags: "all", sim: 200, pipeline: true });
     }
     expect(run()).toMatchObject({ full: true });
   });

@@ -51,7 +51,7 @@ const PR = { number: 9, verdicts: AWAITING_REVIEW };
 const pickup = (at = T1): Comment => ({ author: "karthik24iyer", body: "runner: picked up on mac, max/opus (review, head aaaaaaa)", at });
 
 describe("an issue opened by someone else", () => {
-  it("starts nothing and never reports ready-to-merge, even when its PR passes the gate", () => {
+  it("starts nothing and never merges, even when its PR passes the gate", () => {
     expect(decide(input({ author: "mallory", pr: { number: 9, verdicts: MERGEABLE } }))).toMatchObject({ kind: "comment", text: expect.stringContaining("opened by mallory") });
   });
   it("names the author, not the label groups, even with every group broken", () => {

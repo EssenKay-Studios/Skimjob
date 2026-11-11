@@ -24,24 +24,29 @@ Tests that check the R6 rules (Heat, loot, tokens) are replaced in S3 by tests o
 
 ## Scoped tests
 
-CI (`.github/workflows/ci.yml`) runs the full tier (all unit tests, all e2e on 6 shards, the 200-game sim smoke) on every PR, every push to `main` and nightly. Locally, `pnpm test:scoped` and `pnpm precheck` run only what a diff needs, decided by `scripts/scope.mjs`. Nothing deploys from CI; releases go to Lightsail by hand (`docs/deploy.md`).
+CI (`.github/workflows/ci.yml`) and, locally, `pnpm test:scoped` and `pnpm precheck` run only what a diff needs, decided by `scripts/scope.mjs`. On a PR, CI's first job (Scope) feeds the PR's changed paths to it; the other jobs run or skip on its answer. Every push to `main` and the nightly run have no diff, so they run everything: all unit tests, all e2e on 6 shards, the 200-game sim smoke and the pipeline checks. Nothing deploys from CI; releases go to Lightsail by hand (`docs/deploy.md`).
 
 **Feature tags and `features.json`.** Every e2e test title carries exactly one feature tag (`@board`, `@move`, `@meeting`, `@chat`, `@shop`, `@reveal`, `@lobby`, `@auth`, `@host`, `@caseboard`, `@plan`; new ones arrive with their feature). `apps/web/e2e/features.json` maps only **entry points** to tags: the web screens and top-level panels, and the engine and server modules that implement a feature (`packages/engine/src/meeting.ts` is `@meeting`, `apps/server/src/chat.ts` is `@chat`). An entry can list several tags, or `"*"` for a shared module (`live.ts`, `store.ts`, `db.ts`, ...) whose change, or a change to anything it imports, runs everything.
 
 **From a diff to a local run.** For each changed file the script follows the import graph (workspace packages included) up to the entry points that depend on it, stopping at each, and runs the union of their tags. A shared module (`api.ts`, `router.ts`, `useGame.ts`, the UI kit) reaches several entries, so it runs everything. A file that reaches no entry, or 3+ tags, runs everything too, and so does a file that a `"*"` module imports (bots, which `live.ts` uses, included). A deleted or renamed spec runs nothing; a deleted source file runs everything (its importers changed too, but nothing is left to follow).
 
+Every CI run does the static checks (case-colliding paths, typecheck, knip, the theme-token lint, `scope.mjs --check`). On top:
+
 | Changed | Runs |
 |---|---|
-| Docs only | Typecheck, knip, all unit tests |
-| Any code | Typecheck, knip and the theme-token lint (whole repo); unit, property and server tests of the changed packages and the packages that depend on them; the e2e tags from the graph |
+| Docs only (`*.md`, `docs/**` except `docs/pipeline/`) | Nothing more: no unit, sim or e2e |
+| Pipeline (`docs/pipeline/**`, `scripts/agent-*`, `scripts/runner*`, `.github/**`) | The `scripts/` unit tests and the pipeline job: `gate.qa.test.sh`, shellcheck (warnings) on every `*.sh`, actionlint (locally `test:scoped` runs the gate test). No sim or e2e |
+| Any code | Unit, property and server tests of the changed packages and the packages that depend on them; the e2e tags from the graph |
 | A unit test file | That package's unit tests only. A changed spec runs its own tag |
-| Engine, content or bots | Also the engine package (property tests, `viewFor` leak scrub) and a 50-game sim smoke at 3/6/12 players |
-| Server | Also `@lobby @host` |
-| Config (`package.json`, lockfile, `tsconfig*`, vitest or playwright config, `.github/`, `scripts/`), `features.json`, the scoping script, any non-source file | **Everything** |
+| Engine, content or bots | Also the engine package (property tests, `viewFor` leak scrub) and the sim smoke at 3/6/12 players (CI 200 games, locally 50) |
+| Server | Also `@lobby @host` (the web client depends on the server's contract); its scenario tests are among its unit tests |
+| Config (`package.json`, lockfile, `tsconfig*`, vitest or playwright config, other `scripts/`), `features.json`, the scoping script, any other non-source file | **Everything** |
+
+Changes of several kinds run the union. CI's e2e shards keep their files and run only the tests whose tag matches (`--grep`); a shard with none passes.
 
 If `main` or the nightly run fails, merging stops until a fix-forward PR is green; that PR adds the test that would have caught it.
 
-**The gate.** The always-on **CI ok** job depends on every other job and passes when each passed; branch protection and the merge gate (`docs/pipeline/verdicts.sh`, which needs every check-run on the head green and a `CI ok` check-run that completed with success: missing, pending, skipped or neutral is a no) rely on it.
+**The gate.** The always-on **CI ok** job depends on every other job and fails when any job that ran failed or was cancelled; a job skipped by scope is fine. Branch protection and the merge gate (`docs/pipeline/verdicts.sh`, which needs every check-run on the head green and a `CI ok` check-run that completed with success: missing, pending, skipped or neutral is a no) rely on it.
 
 **Adding a feature.** Give each new screen, panel or feature module an entry in `features.json`, tag its specs, and run `node scripts/scope.mjs --check` (CI runs it). QA's edge-case specs go in `<feature>.qa.spec.ts` under the same tag.
 

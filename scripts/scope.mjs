@@ -1,9 +1,11 @@
 // What must a change test? (docs/testing.md "Scoped tests")
-//   node scripts/scope.mjs           changed paths (one per line) on stdin -> JSON { full, unit, tags, sim, reason }
+//   node scripts/scope.mjs           changed paths (one per line) on stdin -> JSON { full, unit, tags, sim, pipeline, reason }
+//                                    (CI runs it on the PR's diff, docs/testing.md "Scoped tests")
 //   node scripts/scope.mjs --check   features.json coverage; fails if an e2e test lacks exactly one feature tag
 //   node scripts/scope.mjs --run     `pnpm test:scoped`: scope the diff against origin/main and run it
 //   node scripts/scope.mjs --shard 3/6   the e2e spec files of CI shard 3 of 6, balanced by apps/web/e2e/shard-weights.json
-// unit: "all", "" (none) or package dirs; tags: "all", "" (none) or a Playwright --grep regex; sim: games.
+// unit: "all", "" (none) or package dirs ("scripts" for the runner's tests); tags: "all", "" (none) or a Playwright --grep regex;
+// sim: games; pipeline: run the pipeline checks (gate.qa.test.sh, shellcheck, actionlint).
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, posix } from "node:path";
@@ -16,7 +18,11 @@ const TEST = /\.(test|testkit)\.tsx?$/;
 export const SPEC = /\/e2e\/.*\.spec\.ts$/;
 const TAG = /@[a-z][a-z-]*/g;
 const RULES = ["packages/engine", "packages/content", "packages/bots"];
-const FULL = { full: true, unit: "all", tags: "all", sim: 200 };
+const FULL = { full: true, unit: "all", tags: "all", sim: 200, pipeline: true };
+// The runner, the gate and CI: their own tests and checks only, no sim or e2e.
+const PIPELINE = /^(docs\/pipeline\/|scripts\/agent-|scripts\/runner|\.github\/)/;
+// Docs (not the pipeline's): the static checks only.
+const DOCS = /(^docs\/|\.md$)/;
 
 export function buildGraph(files, readFile) {
   const set = new Set(files);
@@ -89,11 +95,16 @@ export function scope(changed, graph, features, readFile) {
     }
   };
   const tagsOf = (f) => (features[f] ? [features[f]].flat() : SPEC.test(f) ? (specOf(f) ?? []) : []);
-  const files = changed.filter((f) => f && !f.endsWith(".md"));
   const unit = new Set();
   const tags = new Set();
   let sim = 0;
-  for (const f of files) {
+  let pipeline = false;
+  for (const f of changed.filter(Boolean)) {
+    if (PIPELINE.test(f)) {
+      unit.add("scripts"), (pipeline = true);
+      continue;
+    }
+    if (DOCS.test(f)) continue;
     if (!SOURCE.test(f)) return full(`${f} is config or not source`);
     const pkg = f.split("/").slice(0, 2).join("/");
     if (!f.startsWith(`${pkg}/e2e/`)) for (const d of TEST.test(f) ? [pkg] : graph.dependents(pkg)) unit.add(d);
@@ -113,7 +124,7 @@ export function scope(changed, graph, features, readFile) {
     if (f.startsWith("apps/server/")) tags.add("@lobby").add("@host");
     if (RULES.includes(pkg)) unit.add("packages/engine"), (sim = 50);
   }
-  return { full: false, unit: files.length ? [...unit].sort().join(" ") : "all", tags: [...tags].sort().join("|"), sim, reason: "scoped" };
+  return { full: false, unit: [...unit].sort().join(" "), tags: [...tags].sort().join("|"), sim, pipeline, reason: "scoped" };
 }
 
 // Heaviest spec file first onto the lightest shard (Playwright's own --shard slices by test count, which
@@ -186,6 +197,7 @@ function main(mode) {
   if (s.unit) run("pnpm", ["test", ...(s.unit === "all" ? [] : s.unit.split(" "))]);
   if (s.tags) run("npx", ["playwright", "test", "--pass-with-no-tests", ...(s.tags === "all" ? [] : ["--grep", s.tags])], join(root, "apps/web"));
   if (s.sim) run("bash", ["scripts/sim-smoke.sh", String(s.sim)]);
+  if (s.pipeline) run("bash", ["docs/pipeline/gate.qa.test.sh"]);
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) main(process.argv[2]);
