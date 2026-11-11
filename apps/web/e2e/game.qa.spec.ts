@@ -7,7 +7,7 @@ import { mkdirSync } from "node:fs";
 import { closePanel, gameOver, keepRoundOpen, openPanel, showResult } from "./setupGame";
 import { expect, test, type APIRequestContext, type Browser, type Page, type WebSocketRoute } from "@playwright/test";
 import { openLeads } from "./setupGame";
-import { bagCoins, pickOtherRoom, pickRoom } from "./move";
+import { pickOtherRoom, pickRoom, tapMove } from "./move";
 import { clickAfterCards, showsAfterCards } from "./meetingCards";
 
 const SHOTS = process.env.SHOTS_DIR;
@@ -155,7 +155,7 @@ test("12 seats, 24-char names: a 15-min game to the end with moves changed, alib
           // Vault, pocket what the slider allows, lock; then change to another open room
           // (a Lockdown event can close a room for the round, design §13).
           await pickRoom(host, "Vault", 1000).catch(() => {});
-          for (const _ of [1, 2]) await bagCoins(host, "duffel").first().click({ timeout: 500 }).catch(() => {});
+          for (const _ of [1, 2]) await tapMove(host, "duffel", "pocket", 500).catch(() => {});
           await once("move-picked", host);
           if (await lock.isEnabled({ timeout: 500 }).catch(() => false)) await tap(host, lock).catch(() => {});
           await once("locked", host);

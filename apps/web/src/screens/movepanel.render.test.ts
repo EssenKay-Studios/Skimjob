@@ -22,14 +22,14 @@ describe("the move panel", () => {
   it("offers the rooms to pick while none is picked, and no coins yet", () => {
     const out = html(viewAs("detective"));
     expect(out).toContain('aria-label="Rooms"');
-    expect(out).not.toContain("data-bag");
+    expect(out).not.toContain("data-pile");
     expect(out).toContain("Lock it in");
   });
 
   it("shows the picked room with the Change button, the bags and the previews (design §3.2, §5.2)", () => {
     const out = html(viewAs("detective"), "office");
     expect(out).toContain("Change");
-    expect(out).toContain('data-bag="duffel"');
+    expect(out).toContain('data-pile="duffel"');
     expect(out).toContain("Bell: 0 of 4 lit, your grab adds 1");
     expect(out).toContain("Your 2 duffel coins add about 0.4 to each share.");
   });
@@ -37,7 +37,7 @@ describe("the move panel", () => {
   it("has no coins to grab in Security or on the Rooftop (design §3.1)", () => {
     const out = html(viewAs("detective"), "rooftop");
     expect(out).toContain("No coins to grab here.");
-    expect(out).not.toContain("data-bag");
+    expect(out).not.toContain("data-pile");
   });
 
   it("warns that the bank may run short (design §3.2) only when it may", () => {

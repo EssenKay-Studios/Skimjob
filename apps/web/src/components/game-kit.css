@@ -11,10 +11,21 @@
   background: var(--hatch), var(--gold);
   box-shadow: var(--shadow-card);
 }
-.coin.is-left {
-  background: var(--paper2);
+/* An empty coin place: a coin taken from the Grab row, or where a picked-up coin can drop. */
+.coin.is-slot {
+  border-style: dashed;
+  border-color: var(--ink-faint);
+  background: none;
   box-shadow: none;
-  opacity: 0.55;
+}
+.coin-btn .coin.is-slot {
+  border-color: var(--clay-d);
+}
+.coin-place {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
 }
 /* A coin you can press: a 44 px target. */
 .coin-btn {
@@ -33,6 +44,25 @@
   outline: 2.5px solid var(--clay-d);
   outline-offset: 1px;
   border-radius: var(--radius-blob);
+}
+.coin-btn:not(.is-dragging) {
+  transition: translate 0.25s var(--spring), rotate 0.25s var(--spring);
+}
+@media (prefers-reduced-motion: reduce) {
+  .coin-btn:not(.is-dragging) {
+    transition: none;
+  }
+}
+/* A picked-up coin lifts off its pile. */
+.coin-btn.is-picked {
+  position: relative;
+  z-index: 2;
+  translate: 0 -6px;
+  rotate: -8deg;
+}
+.coin-btn.is-picked .coin {
+  outline: 2.5px dashed var(--clay-d);
+  outline-offset: 3px;
 }
 .coin-btn.is-dragging {
   position: relative;
@@ -56,6 +86,9 @@
 }
 .coin-bags__fill {
   flex: 1;
+}
+.coin-bags__hint {
+  font-size: 12px;
 }
 .coin-bags__bags {
   display: grid;

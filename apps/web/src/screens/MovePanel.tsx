@@ -15,7 +15,7 @@ import { SketchFrame } from "../components/SketchFrame";
 import { Underline } from "../components/Underline";
 import { useCountdown, type ClientCommand, type Reply } from "../game/useGame";
 import { defaultRoom, justMissed, namesOf, roomOptions, type Timer } from "../game/hud";
-import { abilityOf, bagsOf, bellPreview, grabOf, mayRunShort, moveCoin, powerControl, sameMove, shareEach, type PowerControl } from "../game/move";
+import { abilityOf, bagsOf, bellPreview, grabOf, mayRunShort, powerControl, sameMove, shareEach, type PowerControl } from "../game/move";
 import { roomName } from "../game/describeEvent";
 
 export interface MovePanelProps {
@@ -177,11 +177,13 @@ export function MovePanel({ view, round, timers, offset, send, pick }: MovePanel
       {picked && preview && (
         <>
           <CoinBags
+            key={picked.id}
             limit={picked.coins}
-            grab={grab}
             bags={bags}
-            onGrab={setWanted}
-            onMove={(bag) => setPocket(moveCoin(bags, bag).pocket)}
+            onBags={(next) => {
+              setWanted(next.duffel + next.pocket);
+              setPocket(next.pocket);
+            }}
             bell={<AlarmBell bulbs={preview.bulbs} lit={preview.lit ?? 0} preview={preview.adds} hidden={preview.lit === null} />}
           />
           {/* design §5.3: the others' rings are unknown, so only your own grab is warned about. */}

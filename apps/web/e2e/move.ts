@@ -3,8 +3,16 @@
 // pass a short `timeout`, so a room closed by a raid or a Lockdown fails the pick at once instead of waiting.
 import { expect, type Locator, type Page } from "@playwright/test";
 
-/** The coin buttons of one bag: the duffel's or the pocket's. */
-export const bagCoins = (page: Page, bag: "duffel" | "pocket") => page.locator(`[data-bag=${bag}] .coin-btn`);
+type Pile = "room" | "duffel" | "pocket";
+
+/** The coins of one pile: those still in the room (the Grab row), the duffel's or the pocket's. */
+export const pileCoins = (page: Page, pile: Pile) => page.locator(`[data-pile=${pile}] .coin-btn[aria-pressed]`);
+
+/** Tap to pick: tap the first coin of `from` (it lifts), then tap `to`'s name, off its coins, to drop it there. */
+export async function tapMove(page: Page, from: Pile, to: Pile, timeout = 30_000): Promise<void> {
+  await pileCoins(page, from).first().click({ timeout });
+  await page.locator(`[data-pile=${to}]`).locator(to === "room" ? ".coin-bags__label" : ".bag__name").click({ timeout });
+}
 
 const rooms = (page: Page) => page.getByRole("group", { name: "Rooms", exact: true });
 
@@ -34,4 +42,18 @@ export async function dragTo(page: Page, from: Locator, to: Locator): Promise<vo
   await page.mouse.down();
   await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 8 });
   await page.mouse.up();
+}
+
+/** The same drag with a finger: touch events in steps (Chromium, through the DevTools protocol; needs `hasTouch`). */
+export async function touchDragTo(page: Page, from: Locator, to: Locator): Promise<void> {
+  await from.scrollIntoViewIfNeeded(); // a finger starts on a coin it can see
+  const a = await from.boundingBox();
+  const b = await to.boundingBox();
+  if (!a || !b) throw new Error("touchDragTo: both ends must be on screen");
+  const cdp = await page.context().newCDPSession(page);
+  const [ax, ay, bx, by] = [a.x + a.width / 2, a.y + a.height / 2, b.x + b.width / 2, b.y + b.height / 2];
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: ax, y: ay }] });
+  for (let i = 1; i <= 8; i++) await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: ax + ((bx - ax) * i) / 8, y: ay + ((by - ay) * i) / 8 }] });
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  await cdp.detach();
 }

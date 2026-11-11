@@ -19,10 +19,20 @@ export const bagsOf = (grab: number, pocket: number): Bags => {
   return { duffel: grab - p, pocket: p };
 };
 
-/** One coin moves to `bag` (a tap, or a drop on the bag); nothing moves when the other bag has none. */
-export function moveCoin(bags: Bags, bag: keyof Bags): Bags {
-  if (bag === "duffel") return bags.pocket > 0 ? { duffel: bags.duffel + 1, pocket: bags.pocket - 1 } : bags;
-  return bags.duffel > 0 ? { duffel: bags.duffel - 1, pocket: bags.pocket + 1 } : bags;
+/** Where a coin can sit on the move panel: still in the room (not grabbed), or in one of the two bags. */
+export type Pile = "room" | keyof Bags;
+
+/**
+ * One coin moves from `from` to `to`: out of the room into a bag (the grab goes up, never past
+ * `limit`), between the bags, or back into the room (the grab goes down, never below 1).
+ * Nothing moves when `from` has no coin to give. design §3.2 steps 2-3
+ */
+export function moveCoin(bags: Bags, from: Pile, to: Pile, limit: number): Bags {
+  const grab = bags.duffel + bags.pocket;
+  const has = from === "room" ? grab < limit : bags[from] > 0;
+  if (from === to || !has || (to === "room" && grab <= 1)) return bags;
+  const take = from === "room" ? bags : { ...bags, [from]: bags[from] - 1 };
+  return to === "room" ? take : { ...take, [to]: take[to] + 1 };
 }
 
 /** What the grab does to the room's bell, before you lock in. design §5.2, §5.3 */

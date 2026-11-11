@@ -336,11 +336,14 @@ sketchbook paper. Below, `[frame]` means the sketch frame from §4.
 - A **bottom drawer sub-panel** (§8). Header: "Round 3 · Pick your room" in Pangolin 17px with a
   clay squiggle. The hint on the right reads "locks in 4h 12m".
 - Pick the room on the bank cutaway (or from the room buttons in the panel, which come back with
-  "Change"). The panel then names the room and shows a row of **coins** to grab (44 px each; at
-  least 1, up to the room's limit) with the bell's bulbs beside it: filled for the lit ones, dashed
-  clay for those the grab would light.
+  "Change"). The panel then names the room and shows the **Grab** row: the room's coins not yet
+  grabbed (44 px each), a dashed empty place for each one taken, and the bell's bulbs beside it:
+  filled for the lit ones, dashed clay for those the grab would light.
 - Each grabbed coin sits in the **crew duffel** (olive-green paper) or **your pocket** (clay
-  paper) and moves by a tap, Enter or a drag to the other bag; dragging is never the only way. A
+  paper). **Tap to pick:** a tap (or Enter) on any coin lifts it with a dashed clay ring, and a
+  dashed clay place shows where it can go; a tap on the Duffel, the Pocket or the Grab row drops it
+  there (Esc puts it down). A drag does the same; dragging is never the only way. The grab stays at
+  least 1 coin, so the Grab row takes no coin back at 1. A
   line under the bags says what the duffel adds to each share, and a note warns when the bank may
   run short. A role's move power shows as room or player buttons. End with a **Primary** "Lock it in" button.
 

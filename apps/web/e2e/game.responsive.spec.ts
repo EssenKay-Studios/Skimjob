@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { callEmergency, closePanel, openPanel, startGame } from "./setupGame";
-import { pickRoom } from "./move";
+import { pickRoom, pileCoins } from "./move";
 
 // The live game screen (M2-6) at every launch viewport (decisions.md
 // 2026-11-01 "Web-first launch; responsive everywhere"): no horizontal
@@ -62,11 +62,18 @@ for (const viewport of VIEWPORTS) {
 
       await pickRoom(page, "Vault");
       // The coins and the two bags (every role may pocket).
-      await expect(page.locator("[data-bag=duffel]")).toBeVisible();
-      await expect(page.locator("[data-bag=pocket]")).toBeVisible();
+      await expect(page.locator("[data-pile=duffel]")).toBeVisible();
+      await expect(page.locator("[data-pile=pocket]")).toBeVisible();
       const o2 = await overflow(page);
       expect(o2.scroll).toBeLessThanOrEqual(o2.client);
       expect(await smallTargets(page)).toEqual([]);
+      // A coin picked up (#232): it lifts and drop places show in the Grab row and the Pocket, still fitting.
+      await pileCoins(page, "duffel").first().click();
+      await expect(page.getByRole("button", { name: "Drop the coin in your pocket" })).toBeVisible();
+      const held = await overflow(page);
+      expect(held.scroll).toBeLessThanOrEqual(held.client);
+      expect(await smallTargets(page)).toEqual([]);
+      await pileCoins(page, "duffel").first().click(); // put it down again
 
       // M2-9: the bank board is the main board; tapping a room picks it in the move panel.
       await closePanel(page); // below 1024 px the sheet covers the board

@@ -201,7 +201,7 @@ describe("QA: the split never loses or invents a coin (design §3.2 step 3)", ()
         "duffel",
       ];
       for (const to of seq) {
-        bags = moveCoin(bags, to);
+        bags = moveCoin(bags, to === "duffel" ? "pocket" : "duffel", to, grab);
         expect(bags.duffel + bags.pocket).toBe(grab);
         expect(bags.duffel).toBeGreaterThanOrEqual(0);
         expect(bags.pocket).toBeGreaterThanOrEqual(0);
