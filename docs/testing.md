@@ -34,7 +34,7 @@ Every CI run does the static checks (case-colliding paths, typecheck, knip, the 
 
 | Changed | Runs |
 |---|---|
-| Docs only (`*.md`, `docs/**` except `docs/pipeline/`) | Nothing more: no unit, sim or e2e |
+| Docs only (`*.md`, `docs/**` except `docs/pipeline/`) | Nothing more: no unit, sim or e2e. `docs/design.md` also runs the content and web unit tests that check it |
 | Pipeline (`docs/pipeline/**`, `scripts/agent-*`, `scripts/runner*`, `.github/**`) | The `scripts/` unit tests and the pipeline job: `gate.qa.test.sh`, shellcheck (warnings) on every `*.sh`, actionlint (locally `test:scoped` runs the gate test). No sim or e2e |
 | Any code | Unit, property and server tests of the changed packages and the packages that depend on them; the e2e tags from the graph |
 | A unit test file | That package's unit tests only. A changed spec runs its own tag |

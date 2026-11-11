@@ -122,7 +122,9 @@ describe("scope on the real import graph", () => {
   });
 
   it("docs only (anywhere but docs/pipeline) runs no unit test, browser, sim or pipeline check (#272)", () => {
-    expect(run(["docs/design.md", "README.md", "docs/balance/baseline.json", "apps/web/README.md"])).toMatchObject({ full: false, unit: "", tags: "", sim: 0, pipeline: false });
+    expect(run(["docs/testing.md", "README.md", "docs/balance/baseline.json", "apps/web/README.md"])).toMatchObject({ full: false, unit: "", tags: "", sim: 0, pipeline: false });
+    // design.md is read word for word by content's text.qa and web's TeachingPopup.qa tests
+    expect(run(["docs/design.md"])).toMatchObject({ full: false, unit: "apps/web packages/content", tags: "", sim: 0, pipeline: false });
   });
 });
 

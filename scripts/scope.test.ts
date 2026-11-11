@@ -42,6 +42,9 @@ describe("scope", () => {
   it("runs no unit test, browser, sim or pipeline check for docs only (#272)", () => {
     expect(run("docs/testing.md", "README.md", "docs/balance/baseline.json")).toMatchObject({ ...none, unit: "", pipeline: false });
   });
+  it("runs the content and web unit tests that read docs/design.md, and nothing else (#272)", () => {
+    expect(run("docs/design.md", "docs/testing.md")).toMatchObject({ ...none, unit: "apps/web packages/content" });
+  });
   it("runs only the scripts tests and the pipeline checks for the pipeline (#272)", () => {
     for (const f of ["docs/pipeline/runner/poll.sh", "docs/pipeline/common.md", "scripts/agent-start.ts", "scripts/runner.test.ts", ".github/workflows/ci.yml"]) {
       expect(run(f), f).toMatchObject({ ...none, unit: "scripts", pipeline: true });

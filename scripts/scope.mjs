@@ -104,6 +104,7 @@ export function scope(changed, graph, features, readFile) {
       unit.add("scripts"), (pipeline = true);
       continue;
     }
+    if (f === "docs/design.md") unit.add("packages/content").add("apps/web"); // their text.qa / TeachingPopup.qa tests read it
     if (DOCS.test(f)) continue;
     if (!SOURCE.test(f)) return full(`${f} is config or not source`);
     const pkg = f.split("/").slice(0, 2).join("/");
