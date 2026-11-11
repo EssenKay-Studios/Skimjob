@@ -79,7 +79,7 @@ prs=
 # gather N: the start check's input for issue N (scripts/agent-start.ts).
 gather() {
   local n=$1 issue events comments working pr='' v flags=null builders
-  issue=$(gh api "$R/issues/$n" --jq '{number, author: .user.login, title, type: .type.name, body: (.body // ""), labels: [.labels[].name]}') || return 1
+  issue=$(gh api "$R/issues/$n" --jq '{number, author: .user.login, title, type: .type.name, effort: ([.issue_field_values[]? | select(.issue_field_name == "Effort") | .single_select_option.name] | first), body: (.body // ""), labels: [.labels[].name]}') || return 1
   events=$(gh api --paginate "$R/issues/$n/events?per_page=100" --jq '.[] | select(.event == "labeled" or .event == "unlabeled")
     | {event, label: .label.name, actor: .actor.login, at: .created_at}' | jq -s .) || return 1
   comments=$(gh api --paginate "$R/issues/$n/comments?per_page=100" --jq '.[] | {author: .user.login, body: (.body // ""), at: .created_at}' | jq -s .) || return 1
@@ -265,6 +265,6 @@ board_load
 board_tidy
 # Open tickets with any start label.
 tickets=$(gh api --paginate "$R/issues?state=open&per_page=100" --jq '.[] | select(.pull_request == null)
-  | select([.labels[].name] | any(test("^(agent:(max|pro|api)|on:(mac|linux|cloud)|model:(opus|sonnet|haiku))$"))) | .number') \
+  | select([.labels[].name] | any(test("^(agent:(max|pro|api)|on:(mac|linux|cloud))$"))) | .number') \
   || { log "cannot list issues"; exit 1; }
 for n in $tickets; do check "$n"; done

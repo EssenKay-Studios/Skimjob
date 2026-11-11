@@ -11,14 +11,14 @@ const body = (area = "board", decision = "no") =>
   `### What and why\n\nA thing.\n\n### Area\n\n${area}\n\n### Owner decision needed?\n\n${decision}\n`;
 const add = (label: string, actor = "karthik24iyer", at = T0): LabelEvent => ({ event: "labeled", label, actor, at });
 const del = (label: string, actor = "karthik24iyer", at = T1): LabelEvent => ({ event: "unlabeled", label, actor, at });
-const START = ["agent:max", "on:mac", "model:opus"];
+const START = ["agent:max", "on:mac"];
 
 function input(over: Partial<Input> & { labels?: string[]; author?: string; area?: string; extra?: LabelEvent[] } = {}): Input {
   const labels = over.labels ?? START;
   const { author = "karthik24iyer", area = "board", extra = [], ...rest } = over;
   return {
     place: "mac",
-    issue: { number: 7, author, title: "T", type: "Feature", body: body(area), labels },
+    issue: { number: 7, author, title: "T", type: "Feature", effort: "High", body: body(area), labels },
     events: [...labels.map((l) => add(l)), ...extra],
     comments: [],
     working: [],
@@ -82,11 +82,6 @@ describe("a label re-added by someone else", () => {
     const i = input({ labels: [...START, "agent:api"] });
     i.events = [...START.map((l) => add(l)), add("agent:api", "mallory")];
     expect(decide(i)).toMatchObject({ kind: "start", account: "max" });
-  });
-  it("a stranger's override is ignored: the group's host applies", () => {
-    const i = input({ labels: [...START, "build:cloud"] });
-    i.events = [...START.map((l) => add(l)), add("build:cloud", "mallory")];
-    expect(decide(i)).toMatchObject({ kind: "start", step: "build", host: "mac", model: "opus" });
   });
   it("a stranger removing agent:blocked after a pickup doesn't rerun the same step on the same head", () => {
     const i = input({ pr: PR, comments: [pickup()], extra: [add("agent:blocked", "github-actions[bot]", T2), del("agent:blocked", "mallory", T3)] });
@@ -153,12 +148,12 @@ describe("agent:blocked and resume", () => {
     expect(d.prompt).not.toContain("skip the tests");
   });
   it("in the cloud, where the runner's agent:blocked comes from github-actions[bot], the owner's removal still resumes", () => {
-    const i = input({ place: "cloud", labels: ["agent:max", "on:cloud", "model:opus"], pr: PR, extra: [add("agent:blocked", "github-actions[bot]", T2), del("agent:blocked", "karthik24iyer", T3)] });
+    const i = input({ place: "cloud", labels: ["agent:max", "on:cloud"], pr: PR, extra: [add("agent:blocked", "github-actions[bot]", T2), del("agent:blocked", "karthik24iyer", T3)] });
     i.comments = [{ author: "github-actions[bot]", body: "runner: picked up on cloud, max/opus (review, head aaaaaaa)", at: T1 }];
     expect(decide(i)).toMatchObject({ kind: "start", host: "cloud" });
   });
   it("the cloud reads the owner decision from the form only", () => {
-    const i = input({ place: "cloud", labels: ["agent:max", "on:cloud", "model:opus"] });
+    const i = input({ place: "cloud", labels: ["agent:max", "on:cloud"] });
     i.issue.body = body("board", "yes");
     expect(decide(i)).toMatchObject({ kind: "comment", text: expect.stringContaining("an owner decision is open") });
   });
