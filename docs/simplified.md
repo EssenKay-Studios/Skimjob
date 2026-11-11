@@ -288,9 +288,9 @@ Three cleanup rules hold from start to finish:
 | Agent | Model | Does |
 |---|---|---|
 | **Orchestrator (PM)** | Opus 5.5 | Plans, writes briefs, folds `## Decisions` into `docs/decisions.md`, turns `## Follow-ups` into GitHub issues and keeps the R7 board current, reports to the owner. Never writes code. |
-| **Developer** | the ticket's `model:` label | Builds one task per PR (`docs/pipeline/builder.md`). |
-| **Reviewer** | the ticket's `model:` label | The one reviewer, posting as karthik24iyer (`reviewer.md`). Never merges, never pushes. |
-| **QA** | the ticket's `model:` label | Adversarial tests, pushes once, posts the verdict (`qa.md`). Never merges. |
+| **Developer** | the issue's Effort field | Builds one task per PR (`docs/pipeline/builder.md`). |
+| **Reviewer** | Opus | The one reviewer, posting as karthik24iyer (`reviewer.md`). Never merges, never pushes. |
+| **QA** | Opus | Adversarial tests, pushes once, posts the verdict (`qa.md`). Never merges. |
 
 Each step runs on the account, host and model the ticket's labels choose (`docs/pipeline/agents.md`); agy (Gemini) only for menial, conflict-free rebases. The order and the rules are in `docs/pipeline/common.md`.
 
