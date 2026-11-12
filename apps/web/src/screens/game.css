@@ -347,6 +347,13 @@
   justify-self: start;
 }
 
+/* Tablets: the honesty meter takes a row of its own so the phase column keeps its width. */
+@media (max-width: 960px) {
+  .hud__honesty {
+    grid-column: 1 / -1;
+  }
+}
+
 /* ---------- Phones and small tablets ---------- */
 @media (max-width: 720px) {
   .hud {

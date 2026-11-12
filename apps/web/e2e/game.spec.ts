@@ -211,6 +211,8 @@ test("the bank board: tap a room to pick it, see who you saw and the alibi claim
   await closePanel(page);
   const board = page.getByRole("region", { name: "The bank" });
   await expect(board.getByText("Round 1: tap a room to pick it.")).toBeVisible();
+  // The honesty meter reads full before any coin is taken (design §7.5).
+  await expect(page.getByRole("meter", { name: "Honesty" })).toHaveAttribute("aria-valuenow", "100");
 
   // The board drives the move panel, and the panel drives the board.
   await board.locator(".bank-room[data-room=vault]").click();
