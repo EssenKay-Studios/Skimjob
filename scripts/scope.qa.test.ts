@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { buildGraph, scope, shard } from "./scope.mjs";
+import { buildGraph, scope, shard, testsOf } from "./scope.mjs";
 
 const root = join(import.meta.dirname, "..");
 const files = execFileSync("git", ["ls-files"], { cwd: root, encoding: "utf8" }).split("\n").filter(Boolean);
@@ -141,6 +141,53 @@ describe("shard edge cases", () => {
     const all = [1, 2].flatMap((i) => shard(units, { ...weights, "e2e/deleted.spec.ts:1": 999 }, i, 2));
     expect(all).not.toContain("e2e/deleted.spec.ts:1");
     expect(all).toHaveLength(units.length);
+  });
+});
+
+// QA for #282: the per-test shards on the real Playwright list and weights.
+describe("per-test shards on the real e2e list (#282)", () => {
+  const web = join(root, "apps/web");
+  type Spec = { title: string; file: string; tests: { projectName: string }[] };
+  type Suite = { title: string; file?: string; specs?: Spec[]; suites?: Suite[] };
+  const report: { suites: Suite[] } = JSON.parse(execFileSync("npx", ["playwright", "test", "--list", "--reporter=json"], { cwd: web, encoding: "utf8", maxBuffer: 1 << 28 }));
+  const list = testsOf(report);
+  const weights: Record<string, number> = JSON.parse(readRepo("apps/web/e2e/shard-weights.json"));
+  // What Playwright's --grep matches: project, file and titles joined by spaces.
+  const runs = list.flatMap((t) => t.tests.map((x: { projectName: string }) => `${x.projectName} ${t.file} ${t.title}`));
+  const grepOf = (i: number, tags: string) => execFileSync("node", ["scripts/scope.mjs", "--shard", `${i}/6`, tags], { cwd: root, encoding: "utf8" }).trim();
+  const loads = (re: RegExp) => {
+    const by = Object.fromEntries(list.filter((t) => re.test(t.title)).map((t) => [t.key, weights[t.key]]));
+    return { heaviest: Math.max(...Object.values(by)), total: Object.values(by).reduce((s, w) => s + w, 0), shards: [1, 2, 3, 4, 5, 6].map((i) => shard(Object.keys(by), by, i, 6).reduce((s, k) => s + by[k], 0)) };
+  };
+  const tags = [...new Set(list.flatMap((t) => t.title.match(/@[\w-]+/g) ?? []))];
+
+  it("has a weight for every test, no weight for a test that is gone, and one key per file + title", () => {
+    expect(list.filter((t) => weights[t.key] === undefined).map((t) => t.key)).toEqual([]);
+    expect(Object.keys(weights).filter((k) => !list.some((t) => t.key === k))).toEqual([]);
+    expect(new Set(list.map((t) => `${t.file} ${t.title}`)).size).toBe(list.length);
+  });
+
+  it("the six full-run greps select every test run exactly once", () => {
+    const greps = [1, 2, 3, 4, 5, 6].map((i) => new RegExp(grepOf(i, "all")));
+    for (const r of runs) expect(greps.filter((g) => g.test(r)).length, r).toBe(1);
+  }, 60_000);
+
+  it("a scoped run's greps select exactly the tests its tags select, each once", () => {
+    const tagRe = "@chat|@meeting";
+    const greps = [1, 2, 3, 4, 5, 6].map((i) => grepOf(i, tagRe)).filter(Boolean).map((g) => new RegExp(g));
+    for (const r of runs) expect(greps.filter((g) => g.test(r)).length, r).toBe(new RegExp(tagRe).test(r) ? 1 : 0);
+  }, 60_000);
+
+  it("the slowest full-run shard is within 25% of the median shard", () => {
+    const s = loads(/(?:)/).shards.sort((a, b) => a - b);
+    expect(s[5]).toBeLessThanOrEqual(1.25 * ((s[2] + s[3]) / 2));
+  });
+
+  it("for every feature tag, the slowest shard is its heaviest test or within 25% of an even split", () => {
+    for (const tag of tags) {
+      const { heaviest, total, shards } = loads(new RegExp(tag));
+      expect(Math.max(...shards), tag).toBeLessThanOrEqual(Math.max(heaviest, 1.25 * (total / 6)));
+    }
   });
 });
 
