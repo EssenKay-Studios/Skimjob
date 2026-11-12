@@ -1,4 +1,5 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
+import { settle } from "./setupGame";
 
 // QA for the game shell and bottom sheet (design §15.6, S3b.2): the breakpoint
 // edges, a landscape phone, long sheet content, the page behind a sheet, focus
@@ -22,17 +23,6 @@ async function open(
   await page.goto("/dev/gallery/shell");
   await expect(page.getByText("The bank board")).toBeVisible();
   return { ctx, page };
-}
-
-async function settle(page: Page) {
-  await page.evaluate(() =>
-    Promise.all(
-      document
-        .getAnimations()
-        .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity)
-        .map((a) => a.finished.catch(() => undefined)),
-    ),
-  );
 }
 
 const noOverflow = (page: Page) =>

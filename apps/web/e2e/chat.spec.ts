@@ -1,5 +1,5 @@
 import { expect as baseExpect, test, type Browser, type Page } from "@playwright/test";
-import { chatTab, openChat, openPanel, startGame } from "./setupGame";
+import { chatTab, openChat, openPanel, settle, startGame } from "./setupGame";
 import { pickRoom } from "./move";
 
 // Several browsers and a server share the machine: allow for slow round trips.
@@ -137,7 +137,7 @@ test("two tabs of one player share read marks: a DM read in one stays read (QA, 
   await openChat(tabB);
   await expect(feed(tabB)).toContainText("crew news");
   await expect(dmTab(tabB)).not.toHaveAccessibleName(/unread/); // merged in from tab A
-  await tabB.waitForTimeout(300);
+  await settle(tabB);
 
   // Tab A after a reload: the DM is still read.
   await page.reload();

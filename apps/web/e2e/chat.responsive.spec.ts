@@ -1,6 +1,6 @@
 import { mkdirSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
-import { isWide, openPanel, startGame } from "./setupGame";
+import { isWide, openPanel, settle, startGame } from "./setupGame";
 
 // The chat (M2-8b) at every launch viewport (decisions.md 2026-11-01 "Web-first
 // launch; responsive everywhere"): a side panel from 1024 px, a sheet behind a
@@ -18,17 +18,6 @@ const VIEWPORTS = [
 ];
 
 test.beforeEach(({}, info) => test.skip(info.project.name !== "mobile", "viewports are set per test"));
-
-async function settle(page: Page) {
-  await page.evaluate(() =>
-    Promise.all(
-      document
-        .getAnimations()
-        .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity)
-        .map((a) => a.finished.catch(() => undefined)),
-    ),
-  );
-}
 
 async function smallTargets(page: Page) {
   await settle(page);

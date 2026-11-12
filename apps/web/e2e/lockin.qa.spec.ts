@@ -2,7 +2,7 @@
 // another person's screen. Owner decisions, 2 Nov. design §5.1, §13
 import { existsSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
-import { openPanel, startGame } from "./setupGame";
+import { openPanel, settle, startGame } from "./setupGame";
 import { pickRoom } from "./move";
 
 const WIDTHS = [360, 390, 768, 1024, 1280];
@@ -49,7 +49,7 @@ test("a person's lock-in shows on others' seats, a change shows nothing; presenc
   await pickRoom(host, "Office");
   await host.getByRole("button", { name: "Update move" }).click();
   await expect(host.getByText(/Locked in: Office/)).toBeVisible();
-  await page.waitForTimeout(1000);
+  await page.waitForTimeout(1000); // sleep kept: negative check: the crew list must stay unchanged
   const crewAfter = await page.locator(".crew-seat").evaluateAll((els) => els.map((e) => e.outerHTML).join("\n"));
   expect(crewAfter).toBe(crewBefore);
 
@@ -62,7 +62,7 @@ test("a person's lock-in shows on others' seats, a change shows nothing; presenc
     await openPanel(tab, "Crew");
     await expect(seat(tab, "Host")).toContainText("locked in");
     await expect(seat(tab, "Host")).toContainText("online");
-    await tab.waitForTimeout(300);
+    await settle(tab);
     const o = await tab.evaluate(() => {
       const client = document.documentElement.clientWidth;
       const wide = [...document.querySelectorAll<HTMLElement>("body *")]

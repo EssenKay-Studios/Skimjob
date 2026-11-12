@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { callEmergency, closePanel, openPanel, startGame } from "./setupGame";
+import { callEmergency, closePanel, openPanel, settle, startGame } from "./setupGame";
 import { pickRoom, pileCoins } from "./move";
 
 // The live game screen (M2-6) at every launch viewport (decisions.md
@@ -17,17 +17,6 @@ const VIEWPORTS = [
 ];
 
 test.beforeEach(({}, info) => test.skip(info.project.name !== "mobile", "viewports are set per test"));
-
-async function settle(page: Page) {
-  await page.evaluate(() =>
-    Promise.all(
-      document
-        .getAnimations()
-        .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity)
-        .map((a) => a.finished.catch(() => undefined)),
-    ),
-  );
-}
 
 async function smallTargets(page: Page) {
   await settle(page);

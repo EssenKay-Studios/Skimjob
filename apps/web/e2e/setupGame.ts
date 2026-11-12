@@ -4,6 +4,9 @@
 import { expect, type APIRequestContext, type Locator, type Page } from "@playwright/test";
 import { clearMeeting } from "./meetingCards";
 
+/** Every game is seeded, so a spec replays one course of play: a spec that needs a particular game passes its own seed. */
+export const DEFAULT_SEED = "e2e-default";
+
 export interface StartedGame {
   readonly id: string;
   readonly inviteCode: string;
@@ -19,7 +22,7 @@ async function ok<T>(res: Awaited<ReturnType<APIRequestContext["post"]>>): Promi
  * through the invite) and `bots` bots, and starts it. Tips are switched off for
  * every human (unless `tips`), so a teaching pop-up (design §15.6) never covers
  * the board mid-test; teaching.spec.ts turns them on. `seed` names the game's
- * seed (the E2E server takes it), so a spec that needs one course of play replays it.
+ * seed (the E2E server takes it) and defaults to DEFAULT_SEED, so no game depends on chance.
  */
 export async function startGame(
   host: APIRequestContext,
@@ -30,7 +33,7 @@ export async function startGame(
     nickname = "Host",
     voteVisibility,
     tips = false,
-    seed,
+    seed = DEFAULT_SEED,
   }: {
     bots: number;
     guests?: readonly APIRequestContext[];
@@ -47,7 +50,7 @@ export async function startGame(
   for (const [i, g] of guests.entries()) await ok(await g.post(`/api/invites/${game.inviteCode}/join`, { data: { nickname: `Guest ${i + 1}` } }));
   if (!tips) for (const who of [host, ...guests]) await ok(await who.patch("/api/me", { data: { tips: false } }));
   for (let i = 0; i < bots; i++) await ok(await host.post(`/api/games/${game.id}/bots`, { data: {} }));
-  await ok(await host.post(`/api/games/${game.id}/start`, { data: seed ? { seed } : {} }));
+  await ok(await host.post(`/api/games/${game.id}/start`, { data: { seed } }));
   return game;
 }
 
@@ -171,4 +174,16 @@ export async function expectRankingReadable(page: Page): Promise<void> {
     return out;
   });
   expect(bad).toEqual([]);
+}
+
+/** Waits until every finite CSS animation on the page has finished (entrances, springs, transitions): the resting layout. */
+export async function settle(page: Page): Promise<void> {
+  await page.evaluate(() =>
+    Promise.all(
+      document
+        .getAnimations()
+        .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity)
+        .map((a) => a.finished.catch(() => undefined)),
+    ),
+  );
 }

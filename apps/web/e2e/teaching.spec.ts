@@ -2,7 +2,7 @@ import { LESSONS } from "@skimjob/content";
 import { expect, test, type Page } from "@playwright/test";
 import { showsAfterCards } from "./meetingCards";
 import { pickRoom } from "./move";
-import { openPanel, startGame } from "./setupGame";
+import { openPanel, settle, startGame } from "./setupGame";
 
 // S4.6, design §15.6, §20.6: the teaching pop-ups and the game menu's Tips
 // setting. The pop-ups on /dev/gallery (which lessons are due is unit-tested in
@@ -49,7 +49,7 @@ for (const vp of VIEWPORTS) {
     await page.getByRole("button", { name: LESSONS.missing.title, exact: true }).click();
     const dialog = page.getByRole("dialog", { name: LESSONS.missing.title });
     await expect(dialog).toBeVisible();
-    await page.waitForTimeout(700); // the entrance spring settles
+    await settle(page); // the entrance spring settles
     const sheet = dialog.locator(".dialog__sheet");
     const box = (await sheet.boundingBox())!;
     expect(box.x).toBeGreaterThanOrEqual(-1);

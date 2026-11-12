@@ -1,4 +1,5 @@
 import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
+import { DEFAULT_SEED, settle } from "./setupGame";
 
 // QA (PR #27, M2-5b): lobby flows with two/three browsers. Screens go to
 // /home/claude/pipeline/shots when QA_SHOTS is set (evidence, not assertions).
@@ -6,7 +7,7 @@ import { expect, test, type Browser, type BrowserContext, type Page } from "@pla
 const SHOTS = process.env.QA_SHOTS;
 const shot = async (page: Page, name: string) => {
   if (!SHOTS) return;
-  await page.waitForTimeout(700); // entrance animations
+  await settle(page); // entrance animations
   await page.screenshot({ path: `${SHOTS}/qa-lobby-${name}.png`, fullPage: true });
 };
 
@@ -116,7 +117,7 @@ test("bad and started invite codes show a friendly page @lobby", async ({ browse
   await expect(page.getByRole("heading", { name: "That invite doesn't open anything." })).toBeVisible();
 
   for (let i = 0; i < 2; i++) await hctx.request.post(`/api/games/${g.id}/bots`, { data: {} }); // 3 seats, the minimum
-  expect((await hctx.request.post(`/api/games/${g.id}/start`)).ok()).toBe(true);
+  expect((await hctx.request.post(`/api/games/${g.id}/start`, { data: { seed: DEFAULT_SEED } })).ok()).toBe(true);
   await page.goto(`/join/${g.inviteCode}`);
   await expect(page.getByRole("heading", { name: "This job already started." })).toBeVisible();
   await shot(page, "invite-started");
@@ -165,7 +166,7 @@ test("non-host: controls hidden and the API refuses host actions; hand-over to a
   await shot(guest, "lobby-nonhost");
 
   const r = gctx.request;
-  expect((await r.post(`/api/games/${g.id}/start`)).status()).toBe(403);
+  expect((await r.post(`/api/games/${g.id}/start`, { data: { seed: DEFAULT_SEED } })).status()).toBe(403);
   expect((await r.post(`/api/games/${g.id}/host`, { data: { seat: 1 } })).status()).toBe(403);
   expect((await r.patch(`/api/games/${g.id}/settings`, { data: { settings: { roleList: "hidden" } } })).status()).toBe(403);
   expect((await r.post(`/api/games/${g.id}/bots`, { data: {} })).status()).toBe(403);
@@ -244,7 +245,7 @@ test("leave and rejoin; back button and refresh on every route @lobby", async ({
   await hctx.request.post(`/api/games/${g.id}/bots`, { data: {} }); // 3 seats, the minimum
   await expect(guest.locator(".seat")).toHaveCount(3);
 
-  await hctx.request.post(`/api/games/${g.id}/start`);
+  await hctx.request.post(`/api/games/${g.id}/start`, { data: { seed: DEFAULT_SEED } });
   await expect(guest).toHaveURL(/\/game\//, { timeout: 10_000 });
   await guest.reload();
   await expect(guest.getByRole("img", { name: "Lou (you)" })).toBeVisible(); // the game screen's own seat (M2-6)
@@ -267,7 +268,7 @@ test("offline and server errors show friendly messages @lobby", async ({ browser
   await expect(host.getByRole("heading", { name: "Assemble the crew" })).toBeVisible();
   await hctx.setOffline(true);
   await expect(host.getByText(/can't reach the hideout/i).first()).toBeVisible({ timeout: 5_000 });
-  await host.waitForTimeout(4_500);
+  await host.waitForTimeout(4_500); // sleep kept: negative check: spans poll intervals so a toast per poll would show
   await shot(host, "lobby-offline");
   // QA PR #27 (fixed): one persistent banner, never a toast per poll.
   await expect(host.getByText(/can't reach the hideout/i)).toHaveCount(1);

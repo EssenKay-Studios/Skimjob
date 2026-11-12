@@ -24,7 +24,7 @@ async function paused(page: Page, gameId: string, steps: () => Promise<void>) {
 async function widths(page: Page, name: string) {
   for (const width of WIDTHS) {
     await page.setViewportSize({ width, height: 844 });
-    await page.waitForTimeout(700);
+    await page.waitForTimeout(700); // sleep kept: the meeting sheet mounts after the resize, so settling the animations present now is not enough
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     expect(overflow, `${name} at ${width}: horizontal overflow`).toBeLessThanOrEqual(0);
     if (DIR) {

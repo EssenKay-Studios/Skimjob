@@ -1,7 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { clearMeeting } from "./meetingCards";
-import { openPanel, startGame } from "./setupGame";
+import { openPanel, settle, startGame } from "./setupGame";
 
 // QA (S4.7, #108): the black market sheet in real bot games, Open and Secret
 // vote modes. Every websocket frame is kept: no frame may tie a purchase to its
@@ -42,7 +42,7 @@ async function shoot(page: Page, name: string, target?: Locator, prep?: () => Pr
   mkdirSync(SHOTS, { recursive: true });
   for (const width of WIDTHS) {
     await page.setViewportSize({ width, height: width < 768 ? 844 : 900 });
-    await page.waitForTimeout(400);
+    await settle(page);
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth), `overflow at ${width}`).toBeLessThanOrEqual(0);
     if (target) await target.scrollIntoViewIfNeeded();
     await prep?.();
@@ -150,7 +150,7 @@ test.describe("QA black market, real games", () => {
     await page.keyboard.press("Escape");
     await shoot(page, "secret-bail-tip", perks, async () => {
       await openTip();
-      await page.waitForTimeout(300);
+      await settle(page);
     });
     await page.keyboard.press("Escape");
 

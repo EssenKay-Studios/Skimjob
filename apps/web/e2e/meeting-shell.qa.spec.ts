@@ -2,7 +2,7 @@ import { mkdirSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 import { applyEvent, handleCommand, privateTo, viewFor, type GameState, type PlayerCommand, type SystemCommand } from "@skimjob/engine";
 import { createGame } from "../src/game/deal.testkit";
-import { startGame } from "./setupGame";
+import { settle, startGame } from "./setupGame";
 
 // QA (PR #218, S4.8, after #200): the vote window, the Bail prompt and the result card inside the GameShell. A bot game can't be steered into "you are the
 // target and hold a Bail", so the game's socket is mocked with a real engine view of that state (design §9.6, §17.4);
@@ -61,7 +61,7 @@ async function open(page: Page, state: GameState, me: string, tips = false): Pro
 async function widths(page: Page, name: string) {
   for (const width of WIDTHS) {
     await page.setViewportSize({ width, height: 844 });
-    await page.waitForTimeout(700);
+    await settle(page);
     expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth), `${name} at ${width}: overflow`).toBeLessThanOrEqual(0);
     if (DIR) {
       mkdirSync(DIR, { recursive: true });
@@ -80,9 +80,8 @@ test.describe("QA #218 the vote window, the Bail prompt and the result card in t
       await page.setViewportSize({ width, height: 844 });
       const push = await open(page, resultWindow(), "p1");
       await expect(page.getByRole("heading", { name: "Shakedown pending" }).or(page.locator(".hud")).first()).toBeVisible({ timeout: 15_000 });
-      await page.waitForTimeout(500);
+      await settle(page);
       push(deciding(false, true));
-      await page.waitForTimeout(1_500);
       if (DIR) await page.screenshot({ path: `${DIR}/qa218-shell-vote-opens-${width}.png` });
       await expect(page.getByRole("dialog", { name: "Who's skimming?" })).toBeVisible();
     });
@@ -95,7 +94,7 @@ test.describe("QA #218 the vote window, the Bail prompt and the result card in t
       await page.getByRole("dialog", { name: "Who's skimming?" }).getByRole("button", { name: "Back to the board" }).click();
       push(deciding(false));
       await expect(bail(page)).toBeInViewport({ timeout: 10_000 });
-      await page.waitForTimeout(700);
+      await settle(page);
       if (DIR) await page.screenshot({ path: `${DIR}/qa218-shell-bail-live-${width}.png` });
       // design §17.4: the holder is told as the window opens (dev StrictMode runs the effect twice, so no exact count here).
       await expect(page.locator(".toasts").getByText("The crew voted to shake you down").first()).toBeVisible();
@@ -141,7 +140,7 @@ test.describe("QA #218 the vote window, the Bail prompt and the result card in t
       const vote = page.getByRole("dialog", { name: "Who's skimming?" });
       const card = page.getByRole("dialog", { name: /shaken down|fell through|No majority|Too few votes/ });
       const snap = async (name: string) => {
-        await page.waitForTimeout(800);
+        await settle(page);
         if (DIR) await page.screenshot({ path: `${DIR}/qa218-teach-${name}-${width}.png` });
       };
       const push = await open(page, rang(resultWindow()), "p1", true);

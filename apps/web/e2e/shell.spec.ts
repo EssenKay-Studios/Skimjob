@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { chatTab, openChat, openPanel, startGame } from "./setupGame";
+import { chatTab, openChat, openPanel, settle, startGame } from "./setupGame";
 
 // The one-screen layout shell and the bottom sheet (design §15.6, S3b.2) at the
 // five launch widths, on the gallery's demo page: no horizontal overflow, targets
@@ -15,17 +15,6 @@ const VIEWPORTS = [
 ];
 
 test.beforeEach(({}, info) => test.skip(info.project.name !== "mobile", "viewports are set per test"));
-
-async function settle(page: Page) {
-  await page.evaluate(() =>
-    Promise.all(
-      document
-        .getAnimations()
-        .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity)
-        .map((a) => a.finished.catch(() => undefined)),
-    ),
-  );
-}
 
 async function check(page: Page, width: number) {
   await settle(page);

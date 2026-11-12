@@ -6,7 +6,7 @@
 //     pressed 44 px target measured 42.7 px ("Vault" in the 12-seat alibi
 //     picker); now only its children scale. ui-style §5, design §12.1
 import { expect as baseExpect, test, type Browser, type Page } from "@playwright/test";
-import { chatTab, openChat, startGame } from "./setupGame";
+import { chatTab, openChat, settle, startGame } from "./setupGame";
 
 const expect = baseExpect.configure({ timeout: 15_000 });
 
@@ -54,11 +54,11 @@ test("QA: the chat's New messages pill stays inside the viewport with no sideway
       el.scrollTop = 0;
       el.dispatchEvent(new Event("scroll"));
     });
-    await page.waitForTimeout(200);
+    await settle(page);
     await say(gs[2]!, `w${width} arrives while scrolled up`);
     await expect(feed).toContainText(`w${width} arrives while scrolled up`);
     await expect(jump).toBeVisible();
-    await page.waitForTimeout(400); // springy entrance settles
+    await settle(page); // springy entrance settles
     // The page may scroll vertically (the chat panel can run past the fold at 800 px tall); bring the pill on screen, never sideways.
     await jump.scrollIntoViewIfNeeded();
     const r = await page.evaluate(() => {
@@ -118,7 +118,7 @@ for (const project of ["mobile", "desktop"]) {
       const rest = (await btn.boundingBox())!;
       await page.mouse.move(rest.x + rest.width / 2, rest.y + rest.height / 2);
       await page.mouse.down();
-      await page.waitForTimeout(250); // the press transition is 0.06 s
+      await settle(page); // the press transition is 0.06 s
       const held = await btn.evaluate((el) => {
         const b = el.getBoundingClientRect();
         return { w: b.width, h: b.height, active: el.matches(":active") };
