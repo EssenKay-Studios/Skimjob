@@ -148,7 +148,7 @@ test("swipe: 79 px springs back, 81 px dismisses, by touch and mouse; a cancelle
 test("nested modals: the vote window over the This round sheet; Esc closes the top one only, the lock goes with the last @meeting", async ({ browser }) => {
   test.setTimeout(120_000);
   const { ctx, page } = await newPage(browser, 390, 844);
-  const game = await startGame(page.request, { bots: 3, sessionLength: "1h" });
+  const game = await startGame(page.request, { bots: 3, sessionLength: "1h", seed: "nested-1" });
   await page.goto(`/game/${game.id}`);
   await openPanel(page, "This round");
   await callEmergency(page);
