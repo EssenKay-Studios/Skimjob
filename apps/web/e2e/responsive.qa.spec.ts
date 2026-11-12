@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { settle } from "./setupGame";
 
 // QA (PR #19): responsive guards for the web shell. decisions.md 2026-11-01
 // "Web-first launch; responsive everywhere": 360–430 px phones, 768–1024 px
@@ -29,14 +30,7 @@ async function smallTargets(page: Page) {
   // Measure the resting layout: wait for the entrance animations (sheet-in, toast-in, pop-in) to
   // finish. Mid-animation, a translated element's box can come out a hair under 44 px (43.99…),
   // which made this check flaky in CI. Infinite ones (line boil, the premium button's bang) are left running.
-  await page.evaluate(() =>
-    Promise.all(
-      document
-        .getAnimations()
-        .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity)
-        .map((a) => a.finished.catch(() => undefined)),
-    ),
-  );
+  await settle(page);
   return page.evaluate(() =>
     [...document.querySelectorAll<HTMLElement>("a[href], button, input, select, textarea, [role=button]")]
       .filter((el) => !el.closest("footer")) // the dev-only gallery link
@@ -55,7 +49,7 @@ for (const { width, height } of VIEWPORTS) {
       for (const route of ROUTES) {
         test(`no horizontal overflow on ${route} @lobby`, async ({ page }) => {
           await page.goto(route);
-          await page.waitForTimeout(800); // let the entrance animation finish
+          await settle(page);
           const o = await overflow(page);
           expect(o.scroll).toBeLessThanOrEqual(o.client);
           // A mobile browser widens the layout viewport to fit overflowing content.
@@ -79,7 +73,7 @@ test.describe("tall sheet", () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
   test("no horizontal overflow on /dev/gallery @board", async ({ page }) => {
     await page.goto("/dev/gallery");
-    await page.waitForTimeout(800);
+    await settle(page);
     expect((await overflow(page)).viewport).toBe(390);
   });
 });
@@ -190,7 +184,7 @@ test.describe("phones", () => {
 
       test("every landing chip is fully on screen @lobby", async ({ page }) => {
         await page.goto("/");
-        await page.waitForTimeout(700);
+        await settle(page);
         const boxes = await page.locator(".landing__chips .chip").evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON()));
         expect(boxes).toHaveLength(3);
         for (const b of boxes) {
@@ -222,7 +216,7 @@ test.describe("tablets", () => {
       test.use({ viewport, hasTouch: true, isMobile: true });
       test("the sheet keeps a gutter so its frame and shadow are not clipped @lobby", async ({ page }) => {
         await page.goto("/");
-        await page.waitForTimeout(700);
+        await settle(page);
         const r = await page.locator(".landing__sheet").evaluate((e) => e.getBoundingClientRect().toJSON());
         expect(r.left).toBeGreaterThanOrEqual(12);
         expect(viewport.width - r.right).toBeGreaterThanOrEqual(12);
@@ -230,7 +224,7 @@ test.describe("tablets", () => {
 
       test("no button label spills out of its frame @lobby", async ({ page }) => {
         await page.goto("/");
-        await page.waitForTimeout(700);
+        await settle(page);
         const spilled = await page.locator("button").evaluateAll((els) =>
           els.filter((e) => e.scrollWidth > e.clientWidth + 1).map((e) => e.textContent?.trim()),
         );
@@ -265,7 +259,7 @@ test.describe("primary button contrast", () => {
 
   test("label is at least 4.5:1 on the clay fill, at rest and on hover @lobby", async ({ page }) => {
     await page.goto("/");
-    await page.waitForTimeout(700);
+    await settle(page);
     const rest = await colours(page);
     // --fr-fill is a var() chain; resolve it through a probe element.
     const resolve = (v: string) =>

@@ -2,7 +2,7 @@ import { mkdirSync } from "node:fs";
 import { LESSONS } from "@skimjob/content";
 import { expect, test, type Page } from "@playwright/test";
 import { pickRoom } from "./move";
-import { openPanel, startGame } from "./setupGame";
+import { openPanel, startGame, settle } from "./setupGame";
 
 // QA for S4.6 (design §15.6, §20.6): the teaching pop-ups in a real bot game, at every launch width.
 // A dismissed lesson never comes back (not even after a reload), with its text from content, 44 px buttons,
@@ -39,7 +39,7 @@ async function nextLesson(page: Page, timeout = 120_000): Promise<string | null>
     const [title] = await lessonDialog(page).locator("#teaching-h").allTextContents();
     if (title) return title.trim();
     if (await over(page).isVisible()) return null;
-    await page.waitForTimeout(200);
+    await settle(page);
   }
   return null;
 }
@@ -67,7 +67,7 @@ for (const vp of VIEWPORTS) {
     await menu.click();
     const menuDialog = page.getByRole("dialog", { name: "Game menu" });
     await expect(menuDialog.getByRole("group", { name: "Tips" }).getByRole("button", { name: "On" })).toHaveAttribute("aria-pressed", "true");
-    await page.waitForTimeout(700);
+    await settle(page);
     await shot(page, "menu");
     for (const name of ["On", "Off", "Close"]) expect(await menuDialog.getByRole("button", { name }).evaluate((el) => (el as HTMLElement).offsetHeight), name).toBeGreaterThanOrEqual(44);
     await menuDialog.getByRole("button", { name: "Close" }).click();
@@ -99,7 +99,7 @@ for (const vp of VIEWPORTS) {
         for (const line of [lesson.happened, lesson.means, lesson.canDo]) await expect(dialog.getByText(line, { exact: true })).toBeVisible({ timeout: 1000 });
         await expect(gotIt).toBeFocused({ timeout: 1000 });
       }).toPass({ timeout: 90_000 });
-      await page.waitForTimeout(700); // the entrance spring settles
+      await settle(page);
       await fits(page, vp.width);
       await shot(page, `lesson-${slug(title)}`);
       // The title at the moment of the click is the one marked seen (an open pop-up can switch lessons: QA #217 finding).
@@ -148,7 +148,7 @@ test("Turn tips off in a pop-up is saved: no pop-up after, Off in the menu after
   const end = Date.now() + 15_000;
   while (Date.now() < end && !(await over(page).isVisible())) {
     await expect(lessonDialog(page)).toHaveCount(0);
-    await page.waitForTimeout(250);
+    await settle(page);
   }
 });
 
@@ -169,7 +169,7 @@ test("Tips off from the game menu holds across a reload and no pop-up opens @tea
   const end = Date.now() + 20_000;
   while (Date.now() < end && !(await over(page).isVisible())) {
     await expect(lessonDialog(page)).toHaveCount(0);
-    await page.waitForTimeout(250);
+    await settle(page);
   }
 });
 

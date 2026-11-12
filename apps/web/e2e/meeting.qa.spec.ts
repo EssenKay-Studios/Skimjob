@@ -1,6 +1,6 @@
 import { mkdirSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
-import { callEmergency, openPanel, startGame } from "./setupGame";
+import { callEmergency, openPanel, startGame, settle } from "./setupGame";
 import { pickRoom } from "./move";
 
 // QA for M2-7 (PR #35): three human contexts in one game, 1-hour preset at
@@ -11,7 +11,7 @@ const DIR = process.env.QA_SHOTS ?? process.env.SHOTS_DIR;
 async function shot(p: Page, name: string) {
   if (!DIR) return;
   mkdirSync(DIR, { recursive: true });
-  await p.waitForTimeout(600);
+  await settle(p);
   await p.screenshot({ path: `${DIR}/qa-meet-${name}-${p.viewportSize()!.width}.png`, fullPage: true });
 }
 

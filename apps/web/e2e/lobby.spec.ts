@@ -1,4 +1,5 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
+import { settle } from "./setupGame";
 
 // M2-5 acceptance (m2-plan): two browsers. The host creates a game, copies the
 // invite link, a guest joins with a nickname, the host adds bots, and start
@@ -133,19 +134,12 @@ test.describe("lobby and invite at every width", () => {
       ];
       for (const [p, route, shot] of pages) {
         await p.goto(route);
-        await p.waitForTimeout(900);
+        await settle(p);
         const o = await p.evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth, vw: window.innerWidth }));
         expect(o.scroll, route).toBeLessThanOrEqual(o.client);
         expect(o.vw, route).toBe(width);
         // Measure the resting layout (as responsive*.spec.ts): finite entrance animations done.
-        await p.evaluate(() =>
-          Promise.all(
-            document
-              .getAnimations()
-              .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity)
-              .map((a) => a.finished.catch(() => undefined)),
-          ),
-        );
+        await settle(p);
         const small = await p.evaluate(() =>
           [...document.querySelectorAll<HTMLElement>("a[href], button, input, select, textarea, [role=button]")]
             .map((el) => ({ el, r: el.getBoundingClientRect() }))
@@ -158,7 +152,7 @@ test.describe("lobby and invite at every width", () => {
       await guest.getByLabel("Your nickname").fill("Lucky Lou");
       await guest.getByRole("button", { name: "Join the crew" }).click();
       await expect(guest).toHaveURL(/\/lobby\//);
-      await guest.waitForTimeout(900);
+      await settle(guest);
       expect(await guest.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
       if (process.env.SHOTS && (width === 390 || width === 1280)) await guest.screenshot({ path: `${process.env.SHOTS}/lobby-guest-${width}.png`, fullPage: true });
     });
@@ -193,10 +187,10 @@ test.describe("lobby while the server is unreachable", () => {
     await expect(page.getByRole("heading", { name: "Assemble the crew" })).toBeVisible();
     for (let i = 0; i < 5; i++) {
       await page.evaluate(() => window.dispatchEvent(new Event("online")));
-      await page.waitForTimeout(120);
+      await page.waitForTimeout(120); // sleep: spaces the online events
     }
     polls = 0;
-    await page.waitForTimeout(6_900);
+    await page.waitForTimeout(6_900); // sleep: counts polls over a fixed 6.9 s window
     // One loop: a poll every ~2.3 s (2 s wait + 0.3 s in flight) → about 3 in 6.9 s; two loops would be ~6.
     expect(polls).toBeLessThanOrEqual(4);
   });

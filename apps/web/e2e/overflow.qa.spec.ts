@@ -5,7 +5,7 @@
 // fast-clock 15-min game's game-over screen (ranking, reveal and its timeline, case board) at 360, 390 and 768 px:
 // nothing past the edge, and every name still whole in the DOM (wrapped, not cut).
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
-import { openPanel, showResult } from "./setupGame";
+import { openPanel, showResult, settle, DEFAULT_SEED } from "./setupGame";
 
 const WIDE = "W".repeat(24);
 const EMOJI = "\u{1F600}".repeat(24); // 24 code points, no break points
@@ -48,7 +48,7 @@ test("real 15-min game over with W×24, emoji×24 and combining-mark names: no o
   await ok(await g1.request.post(`/api/invites/${game.inviteCode}/join`, { data: { nickname: EMOJI } }));
   await ok(await g2.request.post(`/api/invites/${game.inviteCode}/join`, { data: { nickname: COMBINING } }));
   for (let i = 0; i < 2; i++) await ok(await host.request.post(`/api/games/${game.id}/bots`, { data: {} }));
-  await ok(await host.request.post(`/api/games/${game.id}/start`, { data: {} }));
+  await ok(await host.request.post(`/api/games/${game.id}/start`, { data: { seed: DEFAULT_SEED } }));
   // No teaching pop-up (design §15.6) over the board.
   for (const who of [host, g1, g2]) await ok(await who.request.patch("/api/me", { data: { tips: false } }));
   await g1.goto(`/game/${game.id}`);
@@ -67,10 +67,10 @@ test("real 15-min game over with W×24, emoji×24 and combining-mark names: no o
     await showResult(page, 20_000);
     for (const width of WIDTHS) {
       await page.setViewportSize({ width, height: 844 });
-      await page.waitForTimeout(150);
+      await settle(page);
       await openPanel(page, "The result"); // each width starts from the result sheet
       // The sheet's slide-in and the stamp's thump are drawn bigger or off to the side until they land.
-      await page.evaluate(() => Promise.all(document.getAnimations().filter((a) => a.effect?.getComputedTiming().iterations !== Infinity).map((a) => a.finished.catch(() => undefined))));
+      await settle(page);
       const who = `${label} ${width}`;
       for (const x of await overflow(page)) problems.push(`${who} game over: ${x}`);
       // Every name whole in the ranking (wrapped, never truncated).

@@ -1,6 +1,6 @@
 import { LESSONS } from "@skimjob/content";
 import { expect, test, type Page } from "@playwright/test";
-import { startGame } from "./setupGame";
+import { startGame, settle } from "./setupGame";
 
 // QA re-check for S4.6 (design §20.6 "one at a time", "Several at once queue"), the two QA #217 findings:
 // 1. never a pop-up and a vote window open together, and a pop-up on screen always has focus on Got it;
@@ -63,7 +63,7 @@ test("one sheet at a time, and the open lesson stays until dismissed, in a live 
         await expect(page.locator("#teaching-h").filter({ hasText: title })).toHaveCount(0);
       }
     }
-    await page.waitForTimeout(150);
+    await settle(page);
   }
   console.log(`lessons: ${dismissed.join(" | ")}; held one through a meeting: ${sawMeetingWhileHeld}`);
   expect(dismissed.length + (showing ? 1 : 0)).toBeGreaterThan(0);

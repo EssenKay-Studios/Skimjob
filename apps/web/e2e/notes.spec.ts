@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { openPanel, startGame } from "./setupGame";
+import { openPanel, startGame, settle } from "./setupGame";
 
 /** A public event any time (design §11.3): the player claims the Lookout from the role card. */
 async function claimLookout(page: Page): Promise<void> {
@@ -128,16 +128,16 @@ test("a hidden tab coming back to the front shows the recap, and the missed even
   await guest.goto(`/game/${game.id}`);
   await claimLookout(guest);
   // It reaches the hidden tab's view, but nobody is looking: the mark stays put.
-  await host.waitForTimeout(2500);
+  await host.waitForTimeout(2500); // sleep: proves a negative while the tab is hidden
   expect(await lastSeen()).toBe(before);
   // Away long enough to count (AWAY_MIN_HIDDEN_MS, 10 s): a quick tab switch gets no recap.
-  await host.waitForTimeout(Math.max(0, hiddenAt + 10_500 - Date.now()));
+  await host.waitForTimeout(Math.max(0, hiddenAt + 10_500 - Date.now())); // sleep: the away threshold is wall time (AWAY_MIN_HIDDEN_MS)
 
   await host.evaluate(() => (window as unknown as { setHidden: (h: boolean) => void }).setHidden(false));
   const recap = host.getByRole("region", { name: "While you were away" });
   await expect(recap).toBeVisible();
   await expect(recap).toContainText("Guest 1 claims to be the Lookout.");
-  await host.waitForTimeout(2500);
+  await host.waitForTimeout(2500); // sleep: proves a negative after the short switch
   expect(await lastSeen()).toBe(before);
   const dismissed = seenSaved(host);
   await recap.getByRole("button", { name: "Caught up" }).click();
@@ -147,16 +147,6 @@ test("a hidden tab coming back to the front shows the recap, and the missed even
   await guestCtx.close();
 });
 
-async function settle(page: Page) {
-  await page.evaluate(() =>
-    Promise.all(
-      document
-        .getAnimations()
-        .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity)
-        .map((a) => a.finished.catch(() => undefined)),
-    ),
-  );
-}
 async function smallTargets(page: Page) {
   await settle(page);
   return page.evaluate(() =>

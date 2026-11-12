@@ -1,6 +1,6 @@
 import { mkdirSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
-import { startGame } from "./setupGame";
+import { startGame, settle } from "./setupGame";
 
 // QA (PR #218, S4.8): the meeting screens in a real bot game, 6 and 12 seats, a 24-character host name, Open and Secret.
 // The game is held (host pause) while each screen is looked at in all five widths. QA_SHOTS=… saves qa218-game-*.png.
@@ -24,7 +24,7 @@ async function paused(page: Page, gameId: string, steps: () => Promise<void>) {
 async function widths(page: Page, name: string) {
   for (const width of WIDTHS) {
     await page.setViewportSize({ width, height: 844 });
-    await page.waitForTimeout(700);
+    await settle(page);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     expect(overflow, `${name} at ${width}: horizontal overflow`).toBeLessThanOrEqual(0);
     if (DIR) {

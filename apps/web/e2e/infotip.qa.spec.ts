@@ -1,5 +1,6 @@
 import { TERMS, TIPS } from "@skimjob/content";
 import { expect, test, type Browser, type Page } from "@playwright/test";
+import { settle } from "./setupGame";
 
 // QA for the InfoTip (design §15.6 "Info on everything", §20.5, S3b.1): the tip
 // placed at every edge and corner of the screen at the launch widths and on a
@@ -142,7 +143,7 @@ test("a scroll keeps an open tip until its i leaves the screen; a resize keeps i
   await tipButton(p, "Duffel").tap();
   await expect(popover(p)).toHaveCount(1);
   await p.evaluate(() => window.scrollBy(0, -120));
-  await p.waitForTimeout(150);
+  await settle(p);
   await expect(popover(p)).toHaveCount(1);
   attached(...(await boxes(p, tipButton(p, "Duffel"))));
   await p.evaluate(() => window.scrollTo(0, 0));
@@ -186,7 +187,7 @@ test("in a scrolling GameShell column the tip is not clipped, and scrolling its 
   const hit = await p.evaluate(([x, y]) => !!document.elementFromPoint(x!, y!)?.closest(".infotip__pop"), [t.x + 10, t.y + t.height - 10]);
   expect(hit).toBe(true);
   await p.locator(".shell__right").evaluate((el) => el.scrollBy(0, 10));
-  await p.waitForTimeout(150);
+  await settle(p);
   await expect(popover(p)).toHaveCount(1);
   attached(...(await boxes(p, btn)));
   await p.locator(".shell__right").evaluate((el) => el.scrollBy(0, 200));
@@ -221,7 +222,7 @@ test("tabbing onto an i below the screen opens its preview right next to the scr
   await duffel.evaluate((el) => window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY - window.innerHeight - 58));
   await p.keyboard.press("Tab");
   await expect(duffel).toBeFocused();
-  await p.waitForTimeout(300);
+  await settle(p);
   await expect(popover(p)).toContainText(TERMS.duffel.text);
   const t = (await popover(p).boundingBox())!;
   const b = (await duffel.boundingBox())!;
@@ -266,14 +267,14 @@ test("hover grace: a quick out-and-back keeps the tip, staying out closes it, an
   await expect(popover(p)).toBeVisible();
   await p.mouse.move(away.x, away.y);
   await p.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
-  await p.waitForTimeout(400);
+  await p.waitForTimeout(400); // sleep: outlasts the 200 ms hover grace (InfoTip GRACE_MS) to prove the tip stays
   await expect(popover(p)).toHaveCount(1);
   await p.mouse.move(away.x, away.y);
-  await p.waitForTimeout(400);
+  await settle(p);
   await expect(popover(p)).toHaveCount(0);
   await vault.hover();
   await tipButton(p, "Mole").hover();
-  await p.waitForTimeout(400);
+  await p.waitForTimeout(400); // sleep: outlasts the 200 ms hover grace (InfoTip GRACE_MS) to prove the tip stays
   await expect(popover(p)).toHaveCount(1);
   await expect(popover(p)).toContainText("ring any room once");
   await p.context().close();
@@ -314,10 +315,10 @@ test("fast wheel scrolling keeps the tip on its i in every frame, and scrolling 
   const ys: number[] = [];
   for (const dy of [-120, -120, 120, 120, -120, 120, -90, 90, -200]) {
     await p.mouse.wheel(0, dy);
-    await p.waitForTimeout(60);
+    await p.waitForTimeout(60); // sleep: paces mouse-wheel steps
     ys.push(await p.evaluate(() => window.scrollY));
   }
-  await p.waitForTimeout(300);
+  await settle(p);
   expect(await p.evaluate(() => window.scrollY)).not.toBe(y0);
   await expect(popover(p)).toHaveCount(1);
   const drift = await p.evaluate(() => (window as unknown as { drift: number[] }).drift);
@@ -356,7 +357,7 @@ test("pinning during the hover grace keeps the tip: Enter on a focused i just af
   await p.mouse.move(b.x + 22, b.y + 22);
   await p.mouse.move(b.x + 22, b.y - 40); // the grace starts
   await p.keyboard.press("Enter"); // pinned within it
-  await p.waitForTimeout(400);
+  await p.waitForTimeout(400); // sleep: outlasts the 200 ms hover grace (InfoTip GRACE_MS) to prove the tip stays
   await expect(popover(p)).toHaveCount(1);
   await expect(duffel).toHaveAttribute("aria-expanded", "true");
   await p.context().close();

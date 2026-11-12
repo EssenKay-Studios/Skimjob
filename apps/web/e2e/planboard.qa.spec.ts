@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { expect as baseExpect, test, type APIRequestContext, type Page } from "@playwright/test";
 import { clearMeeting } from "./meetingCards";
 import { pickRoom } from "./move";
-import { openPanel } from "./setupGame";
+import { openPanel, settle, DEFAULT_SEED } from "./setupGame";
 
 const expect = baseExpect.configure({ timeout: 20_000 });
 
@@ -34,7 +34,7 @@ async function start(host: APIRequestContext, guests: APIRequestContext[], seats
   const game = await ok(await host.post("/api/games", { data: { settings: { sessionLength: "3h" } } }));
   for (const [i, g] of guests.entries()) await ok(await g.post(`/api/invites/${game.inviteCode}/join`, { data: { nickname: GUESTS[i] } }));
   for (let i = 0; i < seats - 1 - guests.length; i++) await ok(await host.post(`/api/games/${game.id}/bots`, { data: {} }));
-  await ok(await host.post(`/api/games/${game.id}/start`, { data: {} }));
+  await ok(await host.post(`/api/games/${game.id}/start`, { data: { seed: DEFAULT_SEED } }));
   // No teaching pop-up (design §15.6) over the plan board.
   for (const who of [host, ...guests]) await ok(await who.patch("/api/me", { data: { tips: false } }));
   return game.id;
@@ -50,7 +50,7 @@ async function sweep(page: Page, label: string, reopen?: () => Promise<void>) {
     await openPanel(page, "This round");
     await reopen?.();
     // The sheet and the pop-up spring in (0.55 s): measure once they have landed.
-    await page.waitForTimeout(700);
+    await settle(page);
     const over = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     expect(over, `${label} @${w}: horizontal overflow`).toBeLessThanOrEqual(0);
     const small = await panel(page).evaluate((el) =>
@@ -103,7 +103,6 @@ for (const seats of [6, 12]) {
     await pickRoom(guest, "Vault");
     await guest.getByRole("button", { name: "Lock it in" }).click();
     await expect(guest.getByRole("button", { name: "Locked in" })).toBeDisabled();
-    await page.waitForTimeout(1000);
     await expect(panel(page).getByRole("button", { name: new RegExp(`^${GUESTS[0]}: no claims\\.`) })).toBeVisible();
     await expect(panel(page).getByRole("group", { name: "Crew not on the plan" }).getByRole("button", { name: new RegExp(`^${GUESTS[0]}\\. Show claims`) })).toBeVisible();
     expect((await heads(page)).join(" ")).not.toContain(GUESTS[0]);
