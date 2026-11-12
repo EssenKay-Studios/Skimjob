@@ -156,14 +156,13 @@ describe("per-test shards on the real e2e list (#282)", () => {
   const runs = list.flatMap((t) => t.tests.map((x: { projectName: string }) => `${x.projectName} ${t.file} ${t.title}`));
   const grepOf = (i: number, tags: string) => execFileSync("node", ["scripts/scope.mjs", "--shard", `${i}/6`, tags], { cwd: root, encoding: "utf8" }).trim();
   const loads = (re: RegExp) => {
-    const by = Object.fromEntries(list.filter((t) => re.test(t.title)).map((t) => [t.key, weights[t.key]]));
+    const by = Object.fromEntries(list.filter((t) => re.test(t.title) && weights[t.key] !== undefined).map((t) => [t.key, weights[t.key]]));
     return { heaviest: Math.max(...Object.values(by)), total: Object.values(by).reduce((s, w) => s + w, 0), shards: [1, 2, 3, 4, 5, 6].map((i) => shard(Object.keys(by), by, i, 6).reduce((s, k) => s + by[k], 0)) };
   };
   const tags = [...new Set(list.flatMap((t) => t.title.match(/@[\w-]+/g) ?? []))];
 
-  it("has a weight for every test, no weight for a test that is gone, and one key per file + title", () => {
-    expect(list.filter((t) => weights[t.key] === undefined).map((t) => t.key)).toEqual([]);
-    expect(Object.keys(weights).filter((k) => !list.some((t) => t.key === k))).toEqual([]);
+  // Missing or stale weights only warn (PR #289 Decisions), so they are not asserted here: main would go red on a new spec.
+  it("gives each test its own file + title, so its grep cannot pick up another test", () => {
     expect(new Set(list.map((t) => `${t.file} ${t.title}`)).size).toBe(list.length);
   });
 
