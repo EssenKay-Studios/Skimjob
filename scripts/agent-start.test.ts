@@ -263,6 +263,27 @@ describe("the next step from the PR (verdicts.sh)", () => {
   });
 });
 
+describe("a builder on an existing PR is told why (a fix round)", () => {
+  const prompt = (v: string) => {
+    const d = decide(withPr(v));
+    return d.kind === "start" ? d.prompt : "";
+  };
+  it("names the review it must answer when the reviewer requested changes on the head", () => {
+    const p = prompt(verdicts({ review: "VERDICT: CHANGES REQUESTED", rsha: H }));
+    expect(p).toContain("This is a FIX ROUND: the reviewer requested changes on head aaaaaaa");
+    expect(p).toContain("pulls/9/reviews");
+    expect(p).toContain("Saying the PR is already done, without a push, is never the answer.");
+  });
+  it("names QA's verdict when QA failed on the head", () => {
+    expect(prompt(verdicts({ qa: "QA: FAIL", qsha: H }))).toContain("This is a FIX ROUND: QA failed on head aaaaaaa");
+  });
+  it("says finish the build for a draft, and nothing about fix rounds before there is a PR", () => {
+    expect(prompt(verdicts({ draft: true, review: "none" }))).toContain("The PR is still a draft");
+    const d = decide(input());
+    expect(d.kind === "start" && d.prompt).not.toContain("FIX ROUND");
+  });
+});
+
 describe("the runner's own actions run once per head", () => {
   const runner = (b: string): Comment => ({ author: "karthik24iyer", body: b, at: "2026-11-10T12:00:00Z" });
   const behind = verdicts({ qa: "QA: PASS", mstate: "behind", mergeable: "MERGEABLE: no (merge state behind (want clean))" });
