@@ -35,9 +35,9 @@ describe("theme-token lint, QA edge cases", () => {
     expect(css("font: 12px Menlo;")).toBe(1);
   });
 
-  it("skips comment lines in TS but not colours after code on the same line", () => {
+  it("skips comment lines and trailing comments in TS but not colours before the comment", () => {
     expect(tsx("// #fff\n * rgb(1 2 3)\n/* #000 */\nconst a = 1;")).toBe(0);
-    expect(tsx('const a = "#fff"; // #000')).toBe(2);
+    expect(tsx('const a = "#fff"; // #000')).toBe(1);
   });
 
   it("fails a new file at its first violation and names the file and the allowance", () => {

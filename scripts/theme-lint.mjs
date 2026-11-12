@@ -20,8 +20,20 @@ const CSS = /^apps\/web\/src\/.*\.css$/;
 const TS = /^apps\/web\/src\/.*\.tsx?$/;
 const TEST = /\.(test|testkit)\.tsx?$/;
 const COLOUR = /(?<!url\()#[0-9a-fA-F]{3,8}\b|\b(?:rgb|hsl|hwb|lab|lch|oklab|oklch)a?\(/g;
+const NAMED = new Set("aliceblue antiquewhite aqua aquamarine azure beige bisque black blanchedalmond blue blueviolet brown burlywood cadetblue chartreuse chocolate coral cornflowerblue cornsilk crimson cyan darkblue darkcyan darkgoldenrod darkgray darkgreen darkgrey darkkhaki darkmagenta darkolivegreen darkorange darkorchid darkred darksalmon darkseagreen darkslateblue darkslategray darkslategrey darkturquoise darkviolet deeppink deepskyblue dimgray dimgrey dodgerblue firebrick floralwhite forestgreen fuchsia gainsboro ghostwhite gold goldenrod gray green greenyellow grey honeydew hotpink indianred indigo ivory khaki lavender lavenderblush lawngreen lemonchiffon lightblue lightcoral lightcyan lightgoldenrodyellow lightgray lightgreen lightgrey lightpink lightsalmon lightseagreen lightskyblue lightslategray lightslategrey lightsteelblue lightyellow lime limegreen linen magenta maroon mediumaquamarine mediumblue mediumorchid mediumpurple mediumseagreen mediumslateblue mediumspringgreen mediumturquoise mediumvioletred midnightblue mintcream mistyrose moccasin navajowhite navy oldlace olive olivedrab orange orangered orchid palegoldenrod palegreen paleturquoise palevioletred papayawhip peachpuff peru pink plum powderblue purple rebeccapurple red rosybrown royalblue saddlebrown salmon sandybrown seagreen seashell sienna silver skyblue slateblue slategray slategrey snow springgreen steelblue tan teal thistle tomato turquoise violet wheat white whitesmoke yellow yellowgreen".split(" "));
+// A property that takes a colour (CSS name or React camelCase name), or a custom property.
+const COLOUR_PROP = /^(?:--[\w-]+|(?:[a-z]+-)*(?:color|fill|stroke|background|border|outline))$/;
 const SHAPE = /^(?:border(?:-[a-z]+)*-radius|box-shadow|text-shadow)$/;
 const KEYWORD = /^(?:0|none|inherit|initial|unset|,)$/;
+
+const kebab = (p) => p.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
+const hasNamedColour = (prop, v) => COLOUR_PROP.test(kebab(prop)) && v.replace(/(?:var|url)\([^)]*\)/g, "").split(/[^a-zA-Z]+/).some((w) => NAMED.has(w.toLowerCase()));
+const badShape = (prop, v) =>
+  prop === "font-family" ? !/^(?:var\(--font-[a-z]+\)|inherit)$/.test(v)
+  : prop === "font" ? !/^inherit$|var\(--font-/.test(v)
+  : SHAPE.test(prop) && v.replace(/var\(--[\w-]+\)/g, "").split(/\s+|(,)/).some((t) => t && !KEYWORD.test(t));
+// Inline style props in .tsx: `borderRadius: 9`, `boxShadow: "..."`, `fontFamily: "..."`.
+const STYLE_PROP = /\b(border(?:[A-Z][a-z]+)*Radius|boxShadow|textShadow|fontFamily|font)\s*:\s*("[^"]*"|'[^']*'|`[^`]*`|[^,}\n]+)/g;
 
 // Number of violations in one file's text.
 export function violations(file, text) {
@@ -29,14 +41,19 @@ export function violations(file, text) {
     let n = 0;
     for (const [, prop, value] of text.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([a-z-]+)\s*:\s*([^;{}]+)/gi)) {
       const v = value.trim();
-      if (v.match(COLOUR)) n++;
-      else if (prop === "font-family" && !/^(?:var\(--font-[a-z]+\)|inherit)$/.test(v)) n++;
-      else if (prop === "font" && !/^inherit$|var\(--font-/.test(v)) n++;
-      else if (SHAPE.test(prop) && v.replace(/var\(--[\w-]+\)/g, "").split(/\s+|(,)/).some((t) => t && !KEYWORD.test(t))) n++;
+      if (v.match(COLOUR) || hasNamedColour(prop, v)) n++;
+      else if (badShape(prop, v)) n++;
     }
     return n;
   }
-  return text.split("\n").filter((l) => !/^\s*(\/\/|\/?\*)/.test(l)).join("\n").match(COLOUR)?.length ?? 0;
+  let n = 0;
+  const code = text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\*.*$/gm, "").replace(/(^|\s)\/\/.*$/gm, "$1")
+    .replace(STYLE_PROP, (_, prop, value) => {
+      if (badShape(kebab(prop), value.trim().replace(/^["'`]|["'`]$/g, ""))) n++;
+      return "";
+    });
+  for (const [, prop, value] of code.matchAll(/\b([\w-]+)\s*[:=]\s*\{?\s*["'`]([^"'`]*)["'`]/g)) if (hasNamedColour(prop, value)) n++;
+  return n + (code.match(COLOUR)?.length ?? 0);
 }
 
 export function check(counts, baseline) {
