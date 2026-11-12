@@ -87,8 +87,8 @@ jobs:
           fi
 
   e2e:
-    # Six shards in parallel, each with its own servers (playwright.config.ts) and a balanced set of spec
-    # files (scripts/scope.mjs --shard, weights in apps/web/e2e/shard-weights.json).
+    # Six shards in parallel, each with its own servers (playwright.config.ts) and a balanced set of tests
+    # (scripts/scope.mjs --shard, weights in apps/web/e2e/shard-weights.json).
     name: Web e2e (Playwright, shard ${{ matrix.shard }}/6)
     needs: scope
     if: needs.scope.outputs.tags != ''
@@ -116,12 +116,10 @@ jobs:
         env:
           TAGS: ${{ needs.scope.outputs.tags }}
         run: |
-          files=$(node ../../scripts/scope.mjs --shard ${{ matrix.shard }}/6)
-          [ -n "$files" ] || exit 0
-          # Only the tests of the changed features, unless everything runs.
-          [ "$TAGS" = all ] || set -- --grep "$TAGS"
-          # shellcheck disable=SC2086 # one argument per spec file
-          npx playwright test --pass-with-no-tests "$@" $files
+          # This shard's tests as one --grep, only those of the changed features unless everything runs.
+          grep=$(node ../../scripts/scope.mjs --shard ${{ matrix.shard }}/6 "$TAGS")
+          [ -n "$grep" ] || exit 0
+          npx playwright test --grep "$grep"
       - if: failure()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
