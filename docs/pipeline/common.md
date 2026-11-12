@@ -7,12 +7,15 @@ Repo: https://github.com/EssenKay-Studios/Skimjob (public, default branch `main`
 Every PR goes **Build → CI → Review → QA → merge.**
 
 1. **Build:** the builder runs quick local checks, pushes a **draft** PR, fixes CI until it is green, then marks the PR ready.
-2. **CI** runs what the change needs on every PR push, and everything on `main` (`docs/testing.md` "Scoped tests").
+2. **CI** runs what the change needs on every PR push, and everything on `main` (`docs/testing.md` "Scoped tests"). A failed run is re-run once by the runner before the builder is asked to fix it.
 3. **Review** starts only on green CI. Changes requested → builder → CI → a short **delta** review of what changed.
 4. **QA** starts only once the reviewer has approved the current head. A QA finding → builder → CI → delta review → QA re-checks only what changed. QA may push QA-test-only commits after the approval.
-5. **Merge:** when the gate passes, the runner runs `docs/pipeline/merge.sh <PR>` and comments `merged #N → main <sha>`; a refused merge is commented with its reason and `agent:blocked`. Agents never merge.
+5. **Sync and full suite:** after QA, the runner rebases the branch onto `main` if it moved (the verdicts carry over when the PR's own changes are the same) and runs the whole CI suite on it.
+6. **Merge:** when the gate passes, the runner runs `docs/pipeline/merge.sh <PR>`, comments `merged #N → main <sha>` and closes the issue. Agents never merge.
 
-Each step runs on the host the ticket's `on:` label chooses; the builder's model comes from the issue's Effort field, review and QA always run on Opus (`agents.md` "Start it"). A ticket without exactly one account label, exactly one host label and an Effort does not start. agy (Gemini) is used only for menial, conflict-free rebases.
+Each step runs on the host the ticket's `on:` label chooses; the builder's model comes from the issue's Effort field, review and QA always run on Opus (`agents.md` "Start it"). A ticket without exactly one account label, exactly one host label and an Effort does not start.
+
+**Nobody waits for the owner.** When something is unclear, make the call the design and the ticket support best, write it under `## Decisions` in the PR body (one line each, with the reason) and carry on. The reviewer judges those calls like any other code. Your final message (at most 80 words) is posted on the issue, so make it say what you did and the head sha.
 
 ## Security
 
@@ -80,7 +83,8 @@ The ticket's host label chooses the Mac, Linux or the cloud (`agents.md`). Your 
 
 - the newest review verdict by karthik24iyer is exactly `VERDICT: APPROVE` + `Head: <sha>`, on the head or followed only by QA-test commits (`*.qa.test.ts`, `*.qa.spec.ts`; old and new paths);
 - the newest QA verdict by karthik24iyer is exactly `QA: PASS` + `Head: <current head>`;
-- CI is green on the head, including a successful `CI ok`;
+- a rebase onto `main` keeps both verdicts when the PR's own changes (its diff against `main`, hunk line numbers aside) are the same as at the verdict's head;
+- CI is green on the head, including a successful `CI ok`, and a `Full suite` run (ci.yml dispatched on the branch) passed on it;
 - the PR is open, not a draft, and its merge state is `clean`;
 - every commit is authored by karthik24iyer, with no attribution lines.
 
@@ -89,4 +93,4 @@ Only karthik24iyer's reviews and comments count; bots, other users, PENDING and 
 ## Issues and status docs
 
 - Your prompt gives an issue; put `Closes #N` in the PR body.
-- Don't edit `docs/STATUS.md` or `docs/decisions.md` in a feature PR. Provisional rule calls go under `## Decisions` in the PR body; new follow-ups and owner questions go under `## Follow-ups`, one line each. The PM turns them into issues. If a rule changed, update `docs/design.md` in the PR.
+- Don't edit `docs/STATUS.md` or `docs/decisions.md` in a feature PR. Your own calls go under `## Decisions` in the PR body; new follow-ups go under `## Follow-ups`, one line each. The PM turns them into issues. If a rule changed, update `docs/design.md` in the PR.

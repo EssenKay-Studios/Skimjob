@@ -25,6 +25,7 @@ case "$method $path" in
   "DELETE "*/git/refs/heads/*) echo "${path#*/git/refs/heads/}" >"$FIX/DELETED"; exit 0 ;;
   "GET "*/pulls/*/reviews) f=reviews.json ;; "GET "*/issues/*/comments) f=comments.json ;;
   "GET "*/pulls/*/commits) f=pr-commits.json ;; "GET "*/pulls/*) f=pr.json ;;
+  "GET "*/compare/main...*) f=own-${path##*...}.json; [ -f "$FIX/$f" ] || f=compare.json ;;
   "GET "*/compare/*) f=compare.json ;; "GET "*/check-runs) f=checks.json ;; "GET "*/status) f=status.json ;;
   "GET "*/commits/*) f=commit-${path##*/}.json ;; "GET "*/issues) [ -f "$FIX/NO_ISSUES" ] && exit 1; f=issues.json ;;
   *) echo "fake gh: unexpected: $method $path" >&2; exit 1 ;;
@@ -55,7 +56,7 @@ reset() {
   review_new_by=karthik24iyer; qa_new_by=karthik24iyer; review_new_state=COMMENTED
   qa_as_review=""; review_as_comment=""; statuses=""
   checks='{"name":"Typecheck","status":"completed","conclusion":"success"},{"name":"CI ok","status":"completed","conclusion":"success"}'
-  compare_status=ahead; since_files='["apps/web/src/x.qa.test.ts"]'; prev=""
+  compare_status=ahead; since_files='["apps/web/src/x.qa.test.ts"]'; prev=""; nofull=
 }
 write() {
   cat >"$FIX/pr.json" <<J
@@ -79,7 +80,10 @@ J
       {body: $x, user: {login: "karthik24iyer"}, created_at: "2026-01-01T00:00:06Z"}
     ] | map(select(.body != "") | .body |= gsub("\\\\n"; "\n"))' >"$FIX/comments.json"
   echo "{\"statuses\":[$statuses]}" >"$FIX/status.json"
-  echo "{\"check_runs\":[$checks]}" >"$FIX/checks.json"
+  # The merge-time Full suite check is there unless nofull is set.
+  local all=$checks
+  [ -n "$nofull" ] || [ -z "$checks" ] || all+=',{"name":"Full suite","status":"completed","conclusion":"success"}'
+  echo "{\"check_runs\":[$all]}" >"$FIX/checks.json"
   echo "{\"status\":\"$compare_status\",\"total_commits\":1,\"commits\":[{\"sha\":\"$C\"}]}" >"$FIX/compare.json"
   jq -n --argjson f "$since_files" --arg p "$prev" \
     '{files: [$f[] | {filename: .} + (if $p == "" then {} else {previous_filename: $p, status: "renamed"} end)]}' \
@@ -139,6 +143,30 @@ reset; checks='{"name":"CI ok","status":"completed","conclusion":"neutral"}'; ex
 reset; checks='{"name":"CI ok","status":"completed","conclusion":"failure"}'; expect no "CI ok failed"
 reset; checks='{"name":"CI ok","status":"completed","conclusion":"success"}'; expect yes "CI ok alone, green"
 reset; checks='{"name":"CI ok (old)","status":"completed","conclusion":"success"}'; expect no "a look-alike name is not CI ok"
+
+# The merge-time Full suite (ci.yml dispatched on the branch) must have passed on the head.
+reset; nofull=1; expect no "no Full suite on the head"
+reset; nofull=1; checks+=',{"name":"Full suite","status":"completed","conclusion":"skipped"}'; expect no "Full suite skipped (a PR run) is not a full run"
+reset; nofull=1; checks+=',{"name":"Full suite","status":"completed","conclusion":"failure"}'; expect no "Full suite failed"
+reset; nofull=1; checks+=',{"name":"Full suite","status":"completed","conclusion":"skipped"},{"name":"Full suite","status":"completed","conclusion":"success"}'; expect yes "Full suite passed next to the PR run's skipped one"
+
+# A rebase onto main keeps the verdicts when the PR's own changes are the same (hunk line numbers aside).
+own() { # own SHA FILES_JSON: the compare main...SHA answer for SHA
+  echo "{\"files\":$2}" >"$FIX/own-$1.json"
+}
+# shellcheck disable=SC2034 # used in the after= strings (eval)
+P1='[{"filename":"src/a.ts","status":"modified","patch":"@@ -1,2 +1,3 @@\n x\n+y"}]'
+# shellcheck disable=SC2034
+P2='[{"filename":"src/a.ts","status":"modified","patch":"@@ -7,2 +7,3 @@\n x\n+y"}]'
+# shellcheck disable=SC2034
+P3='[{"filename":"src/a.ts","status":"modified","patch":"@@ -1,2 +1,3 @@\n x\n+z"}]'
+# shellcheck disable=SC2034
+PQ='[{"filename":"src/a.ts","status":"modified","patch":"@@ -1,2 +1,3 @@\n x\n+y"},{"filename":"src/a.qa.test.ts","status":"added","patch":"@@ -0,0 +1 @@\n+t"}]'
+reset; review="VERDICT: APPROVE\nHead: $R"; qa="QA: PASS\nHead: $R"; compare_status=diverged; after='own $R "$P1"; own $H "$P2"'; expect yes "rebased onto main, same changes: review and QA carry over"
+reset; review="VERDICT: APPROVE\nHead: $R"; qa="QA: PASS\nHead: $R"; compare_status=diverged; after='own $R "$P1"; own $H "$P3"'; expect no "rebased with a changed line: re-review and QA"
+reset; review="VERDICT: APPROVE\nHead: $R"; qa="QA: PASS\nHead: $H"; compare_status=diverged; after='own $R "$P1"; own $H "$PQ"'; expect yes "rebased plus a QA test: review carries over"
+reset; review="VERDICT: APPROVE\nHead: $R"; qa="QA: PASS\nHead: $R"; compare_status=diverged; after='own $R "$P1"; own $H "$PQ"'; expect no "a QA test added after QA's PASS: QA again"
+reset; review="VERDICT: APPROVE\nHead: $R"; compare_status=diverged; after='own $R "$P1"'; expect no "the head's own changes can't be read: re-review"
 reset; checks='{"name":"CI ok","status":"completed","conclusion":"success"},{"name":"e2e","status":"completed","conclusion":"failure"}'; expect no "CI ok green but another check failed"
 reset; authors='{"name":"someone","email":"someone@example.com"}'; expect no "commit by another author"
 reset; authors='{"name":"karthik24iyer","email":"noreply@anthropic.com"}'; expect no "right name, wrong email"

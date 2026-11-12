@@ -1,6 +1,7 @@
 # CI: typecheck, knip, theme-token lint, unit + property + integration tests, web e2e, simulator smoke, pipeline checks.
-# A PR runs what its diff needs (scripts/scope.mjs, docs/testing.md "Scoped tests"); every push to main and the
-# nightly run (02:17 UTC) run everything. "CI ok" is the one check branch protection and the merge gate need. Nothing deploys from CI: releases go to Lightsail by hand (docs/deploy.md).
+# A PR runs what its diff needs (scripts/scope.mjs, docs/testing.md "Scoped tests"); every push to main, the
+# nightly run (02:17 UTC) and a dispatch run everything. The runner dispatches it on a PR's branch once QA has
+# passed: its "Full suite" check is the merge-time run the gate needs. "CI ok" is the one check branch protection needs. Nothing deploys from CI: releases go to Lightsail by hand (docs/deploy.md).
 name: CI
 
 on:
@@ -9,6 +10,7 @@ on:
   pull_request:
   schedule:
     - cron: "17 2 * * *"
+  workflow_dispatch:
 
 # Read-only default token: nothing here writes to the repo.
 permissions:
@@ -166,4 +168,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1
+
+  # Everything ran and passed (not on PR runs, which are scoped): the merge gate's full-suite check.
+  full:
+    name: Full suite
+    needs: [scope, test, e2e, sim-smoke, pipeline]
+    if: always() && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped')
         run: exit 1

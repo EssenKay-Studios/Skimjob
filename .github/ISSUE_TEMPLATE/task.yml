@@ -30,13 +30,6 @@ body:
       description: A section of docs/design.md (e.g. §5.2), or "rule change".
     validations:
       required: true
-  - type: dropdown
-    id: owner-decision
-    attributes:
-      label: Owner decision needed?
-      options: ["no", "yes"]
-    validations:
-      required: true
   - type: input
     id: related
     attributes:
