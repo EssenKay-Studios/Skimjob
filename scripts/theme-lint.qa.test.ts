@@ -35,9 +35,31 @@ describe("theme-token lint, QA edge cases", () => {
     expect(css("font: 12px Menlo;")).toBe(1);
   });
 
-  it("skips comment lines in TS but not colours after code on the same line", () => {
+  it("skips comment lines and trailing comments in TS but not colours before the comment", () => {
     expect(tsx("// #fff\n * rgb(1 2 3)\n/* #000 */\nconst a = 1;")).toBe(0);
-    expect(tsx('const a = "#fff"; // #000')).toBe(2);
+    expect(tsx('const a = "#fff"; // #000')).toBe(1);
+  });
+
+  // QA #190: named colours, inline style props and trailing comments.
+  it("flags named colours in any case and inside shadows, but not colour keywords, tokens or url fragments", () => {
+    expect(css("color: RED; box-shadow: 0 0 2px white;")).toBe(2);
+    expect(css("color: currentColor; fill: transparent; stroke: url(#red); background: var(--white);")).toBe(0);
+    expect(tsx('<stop stopColor="white" />; <path fill="currentColor" stroke="url(#red)" />')).toBe(1);
+    expect(tsx('const a = <i style={{ color: "var(--red)", outlineColor: "Navy" }} />;')).toBe(1);
+  });
+
+  it("checks inline style props in .ts too and treats tokens and zero as clean", () => {
+    const ts = (s: string) => violations("apps/web/src/screens/qa.ts", `export const s = { ${s} };`);
+    expect(ts('font: "600 1rem/1.2 var(--font-hand)", borderRadius: "0", textShadow: "none", fontFamily: "inherit"')).toBe(0);
+    expect(ts('fontFamily: "var(--font-hand), sans-serif"')).toBe(1);
+    expect(ts("borderRadius: `${r}px`")).toBe(1);
+    expect(ts('borderBottomRightRadius: 4, boxShadow: "0 0 2px red"')).toBe(2);
+  });
+
+  it("ignores colours in block and trailing comments but keeps those in the code before them", () => {
+    expect(tsx('/* fill="red"\n   #fff */\nconst a = 1; // fill="red" #000')).toBe(0);
+    expect(tsx('const a = <path fill="red" />; // fill="blue" #000')).toBe(1);
+    expect(tsx('const u = "http://x.test/#abc"; // #fff')).toBe(1);
   });
 
   it("fails a new file at its first violation and names the file and the allowance", () => {
