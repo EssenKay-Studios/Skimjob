@@ -29,6 +29,7 @@ import { CREW_COLOURS } from "../components/avatarLooks";
 import { Clock, Lock } from "../components/icons";
 import { BANK_JOB } from "@skimjob/content";
 import { AlarmBell, WantedStars } from "../components/Bell";
+import { HonestyMeter } from "../components/HonestyMeter";
 import { CoinBags } from "../components/CoinBags";
 import { Banner, ClockFace, DialogSheet, ProtectedBanner, TallyBars } from "../components/MeetingKit";
 import { navigate } from "../router";
@@ -375,6 +376,9 @@ function GameKitSamples() {
           <WantedStars key={n} stars={n} max={bustStars} />
         ))}
         <span className="meta">Wanted 0 to the bust line</span>
+        <HonestyMeter reached={0} taken={0} line={BANK_JOB.honestyLine} />
+        <HonestyMeter reached={9} taken={12} line={BANK_JOB.honestyLine} />
+        <HonestyMeter reached={6} taken={12} line={BANK_JOB.honestyLine} />
         <span className="g-icon">
           <Clock />
         </span>

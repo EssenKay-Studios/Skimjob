@@ -11,6 +11,7 @@ import type { PlayerView, RoomId } from "@skimjob/engine";
 import { Button } from "../components/Button";
 import { Chip } from "../components/Chip";
 import { WantedStars } from "../components/Bell";
+import { HonestyMeter } from "../components/HonestyMeter";
 import { GameShell, SHELL_WIDE_QUERY, type ShellPanel } from "../components/GameShell";
 import { useMedia } from "../game/useMedia";
 import { Bubble, Clock, Evidence, Pin, Star } from "../components/icons";
@@ -286,7 +287,7 @@ function Hud({ view, timers, offset, hostPaused }: { view: PlayerView; timers: r
   const emergency = view.pendingEmergency;
   const emergencyIn = useCountdown(timers, emergency ? `openMeeting:${emergency.meetingId}` : null, offset);
   const bust = bustOf(view);
-  const { roundCap } = jobOf(view); // design §6.2
+  const { roundCap, honestyLine } = jobOf(view); // design §6.2, §7.5
   return (
     <section className="hud" aria-label="Heist status">
       <div className="hud__phase">
@@ -328,6 +329,8 @@ function Hud({ view, timers, offset, hostPaused }: { view: PlayerView; timers: r
           <small>/{bankTotal(view)}</small>
         </span>
       </div>
+      {/* design §7.5: honesty against the line, public. */}
+      <HonestyMeter reached={view.honesty.reached} taken={view.honesty.taken} line={honestyLine} />
       {/* design §5.4: Wanted stars, public; at the bust line the heist is busted (§5.5). */}
       <div className="hud__stat hud__wanted">
         <span className="meta">
