@@ -267,14 +267,14 @@ test("hover grace: a quick out-and-back keeps the tip, staying out closes it, an
   await expect(popover(p)).toBeVisible();
   await p.mouse.move(away.x, away.y);
   await p.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
-  await settle(p);
+  await p.waitForTimeout(400); // sleep: outlasts the 200 ms hover grace (InfoTip GRACE_MS) to prove the tip stays
   await expect(popover(p)).toHaveCount(1);
   await p.mouse.move(away.x, away.y);
   await settle(p);
   await expect(popover(p)).toHaveCount(0);
   await vault.hover();
   await tipButton(p, "Mole").hover();
-  await settle(p);
+  await p.waitForTimeout(400); // sleep: outlasts the 200 ms hover grace (InfoTip GRACE_MS) to prove the tip stays
   await expect(popover(p)).toHaveCount(1);
   await expect(popover(p)).toContainText("ring any room once");
   await p.context().close();
@@ -357,7 +357,7 @@ test("pinning during the hover grace keeps the tip: Enter on a focused i just af
   await p.mouse.move(b.x + 22, b.y + 22);
   await p.mouse.move(b.x + 22, b.y - 40); // the grace starts
   await p.keyboard.press("Enter"); // pinned within it
-  await settle(p);
+  await p.waitForTimeout(400); // sleep: outlasts the 200 ms hover grace (InfoTip GRACE_MS) to prove the tip stays
   await expect(popover(p)).toHaveCount(1);
   await expect(duffel).toHaveAttribute("aria-expanded", "true");
   await p.context().close();

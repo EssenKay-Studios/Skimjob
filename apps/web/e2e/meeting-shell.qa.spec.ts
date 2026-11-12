@@ -80,11 +80,9 @@ test.describe("QA #218 the vote window, the Bail prompt and the result card in t
       await page.setViewportSize({ width, height: 844 });
       const push = await open(page, resultWindow(), "p1");
       await expect(page.getByRole("heading", { name: "Shakedown pending" }).or(page.locator(".hud")).first()).toBeVisible({ timeout: 15_000 });
-      await page.waitForTimeout(500); // sleep: lets the pushed state propagate through the poll
       push(deciding(false, true));
-      await page.waitForTimeout(1_500); // sleep: lets the pushed state propagate through the poll
-      if (DIR) await page.screenshot({ path: `${DIR}/qa218-shell-vote-opens-${width}.png` });
       await expect(page.getByRole("dialog", { name: "Who's skimming?" })).toBeVisible();
+      if (DIR) await page.screenshot({ path: `${DIR}/qa218-shell-vote-opens-${width}.png` });
     });
 
   for (const width of WIDTHS)

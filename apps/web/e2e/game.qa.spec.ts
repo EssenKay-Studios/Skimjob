@@ -4,7 +4,7 @@
 // posted from a stale screen (alibis have no window); and nothing on screen giving away another
 // player's hidden move, split, role or "submitted" status.
 import { mkdirSync } from "node:fs";
-import { closePanel, gameOver, keepRoundOpen, openPanel, showResult, settle } from "./setupGame";
+import { closePanel, gameOver, keepRoundOpen, openPanel, showResult, settle, DEFAULT_SEED } from "./setupGame";
 import { expect, test, type APIRequestContext, type Browser, type Page, type WebSocketRoute } from "@playwright/test";
 import { openLeads } from "./setupGame";
 import { pickOtherRoom, pickRoom, tapMove } from "./move";
@@ -24,7 +24,7 @@ async function start(host: APIRequestContext, guest: APIRequestContext, bots: nu
   const game = await ok<{ id: string; inviteCode: string }>(await host.post("/api/games", { data: { settings: { sessionLength } } }));
   await ok(await guest.post(`/api/invites/${game.inviteCode}/join`, { data: { nickname: LONG_GUEST } }));
   for (let i = 0; i < bots; i++) await ok(await host.post(`/api/games/${game.id}/bots`, { data: {} }));
-  await ok(await host.post(`/api/games/${game.id}/start`, { data: { seed: "e2e-default" } }));
+  await ok(await host.post(`/api/games/${game.id}/start`, { data: { seed: DEFAULT_SEED } }));
   // No teaching pop-up (design §15.6) over the board.
   for (const who of [host, guest]) await ok(await who.patch("/api/me", { data: { tips: false } }));
   return game;

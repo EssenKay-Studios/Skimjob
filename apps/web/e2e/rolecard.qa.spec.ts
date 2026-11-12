@@ -1,7 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { ROLES, TERMS, TIPS } from "@skimjob/content";
 import { expect, test, type APIRequestContext, type Locator, type Page } from "@playwright/test";
-import { closePanel, openPanel, settle } from "./setupGame";
+import { closePanel, openPanel, settle, DEFAULT_SEED } from "./setupGame";
 
 // QA for PR #207 (S4.5; design §11.3, §15.6, §18, §20): the role card, Roles in
 // play and the "This game" rulebook in real bot games with Exact, Possible and
@@ -24,7 +24,7 @@ async function botGame(page: Page, roleList: List) {
   await ok(await r.post("/api/auth/guest", { data: { nickname: "Sam" } }));
   const game = await ok<{ id: string }>(await r.post("/api/games", { data: { settings: { sessionLength: "1h", roleList } } }));
   for (let i = 0; i < 4; i++) await ok(await r.post(`/api/games/${game.id}/bots`, { data: {} }));
-  await ok(await r.post(`/api/games/${game.id}/start`, { data: { seed: "e2e-default" } }));
+  await ok(await r.post(`/api/games/${game.id}/start`, { data: { seed: DEFAULT_SEED } }));
   await ok(await r.patch("/api/me", { data: { tips: false } })); // no teaching pop-up (design §15.6) over the cards
   await page.goto(`/game/${game.id}`);
   await openPanel(page, "This round"); // below 1024 px the role card is in this sheet

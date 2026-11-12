@@ -1,5 +1,5 @@
 import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
-import { settle } from "./setupGame";
+import { settle, DEFAULT_SEED } from "./setupGame";
 
 // QA (PR #27, M2-5b): lobby flows with two/three browsers. Screens go to
 // /home/claude/pipeline/shots when QA_SHOTS is set (evidence, not assertions).
@@ -40,14 +40,7 @@ async function apiJoin(ctx: BrowserContext, code: string, nickname: string) {
 }
 
 async function overflowAndTargets(page: Page) {
-  await page.evaluate(() =>
-    Promise.all(
-      document
-        .getAnimations()
-        .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity)
-        .map((a) => a.finished.catch(() => undefined)),
-    ),
-  );
+  await settle(page);
   return page.evaluate(() => ({
     overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth || window.innerWidth !== document.documentElement.clientWidth,
     small: [...document.querySelectorAll<HTMLElement>("a[href], button, input, select, textarea, [role=button]")]
@@ -117,7 +110,7 @@ test("bad and started invite codes show a friendly page @lobby", async ({ browse
   await expect(page.getByRole("heading", { name: "That invite doesn't open anything." })).toBeVisible();
 
   for (let i = 0; i < 2; i++) await hctx.request.post(`/api/games/${g.id}/bots`, { data: {} }); // 3 seats, the minimum
-  expect((await hctx.request.post(`/api/games/${g.id}/start`, { data: { seed: "e2e-default" } })).ok()).toBe(true);
+  expect((await hctx.request.post(`/api/games/${g.id}/start`, { data: { seed: DEFAULT_SEED } })).ok()).toBe(true);
   await page.goto(`/join/${g.inviteCode}`);
   await expect(page.getByRole("heading", { name: "This job already started." })).toBeVisible();
   await shot(page, "invite-started");
@@ -166,7 +159,7 @@ test("non-host: controls hidden and the API refuses host actions; hand-over to a
   await shot(guest, "lobby-nonhost");
 
   const r = gctx.request;
-  expect((await r.post(`/api/games/${g.id}/start`)).status()).toBe(403);
+  expect((await r.post(`/api/games/${g.id}/start`)).status()).toBe(403); // unseeded: a non-host is refused before any game starts
   expect((await r.post(`/api/games/${g.id}/host`, { data: { seat: 1 } })).status()).toBe(403);
   expect((await r.patch(`/api/games/${g.id}/settings`, { data: { settings: { roleList: "hidden" } } })).status()).toBe(403);
   expect((await r.post(`/api/games/${g.id}/bots`, { data: {} })).status()).toBe(403);
@@ -245,7 +238,7 @@ test("leave and rejoin; back button and refresh on every route @lobby", async ({
   await hctx.request.post(`/api/games/${g.id}/bots`, { data: {} }); // 3 seats, the minimum
   await expect(guest.locator(".seat")).toHaveCount(3);
 
-  await hctx.request.post(`/api/games/${g.id}/start`, { data: { seed: "e2e-default" } });
+  await hctx.request.post(`/api/games/${g.id}/start`, { data: { seed: DEFAULT_SEED } });
   await expect(guest).toHaveURL(/\/game\//, { timeout: 10_000 });
   await guest.reload();
   await expect(guest.getByRole("img", { name: "Lou (you)" })).toBeVisible(); // the game screen's own seat (M2-6)

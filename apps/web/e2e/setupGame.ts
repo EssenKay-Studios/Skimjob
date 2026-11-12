@@ -5,7 +5,7 @@ import { expect, type APIRequestContext, type Locator, type Page } from "@playwr
 import { clearMeeting } from "./meetingCards";
 
 /** Every game is seeded, so a spec replays one course of play; a spec that needs a particular course passes its own `seed`. */
-const DEFAULT_SEED = "e2e-default";
+export const DEFAULT_SEED = "e2e-default";
 
 /** Waits two frames (a resize or a state change reflows and starts its animations) and then for every finite animation and transition to finish (entrances, springs, sheet slides). */
 export async function settle(page: Page): Promise<void> {

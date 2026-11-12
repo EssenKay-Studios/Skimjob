@@ -139,14 +139,7 @@ test.describe("lobby and invite at every width", () => {
         expect(o.scroll, route).toBeLessThanOrEqual(o.client);
         expect(o.vw, route).toBe(width);
         // Measure the resting layout (as responsive*.spec.ts): finite entrance animations done.
-        await p.evaluate(() =>
-          Promise.all(
-            document
-              .getAnimations()
-              .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity)
-              .map((a) => a.finished.catch(() => undefined)),
-          ),
-        );
+        await settle(p);
         const small = await p.evaluate(() =>
           [...document.querySelectorAll<HTMLElement>("a[href], button, input, select, textarea, [role=button]")]
             .map((el) => ({ el, r: el.getBoundingClientRect() }))

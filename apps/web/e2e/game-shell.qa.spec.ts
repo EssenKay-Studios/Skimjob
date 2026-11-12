@@ -11,7 +11,7 @@ import { mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { expect, test, type APIRequestContext, type Browser, type Page } from "@playwright/test";
 import { pickRoom } from "./move";
-import { callEmergency, chatTab, expectRankingReadable, openPanel, showResult, startGame, type PanelName, settle } from "./setupGame";
+import { callEmergency, chatTab, expectRankingReadable, openPanel, showResult, startGame, type PanelName, settle, DEFAULT_SEED } from "./setupGame";
 
 const SHOTS = process.env.SHOTS_DIR;
 const VIEWPORTS = [
@@ -178,7 +178,7 @@ test("12 seats with 24-character names: Crew and HUD fit at 360 and 1280 @shell"
     guests.push(g);
     await ok(await g.post(`/api/invites/${game.inviteCode}/join`, { data: { nickname: LONG(i) } }));
   }
-  await ok(await req.post(`/api/games/${game.id}/start`, { data: { seed: "e2e-default" } }));
+  await ok(await req.post(`/api/games/${game.id}/start`, { data: { seed: DEFAULT_SEED } }));
   for (const [width, height] of [
     [360, 740],
     [1280, 800],

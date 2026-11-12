@@ -5,7 +5,7 @@
 // someone without a seat, and the layout at 360 and 1280 px. design §12.1
 import { mkdirSync } from "node:fs";
 import { expect as baseExpect, test, type Browser, type Page } from "@playwright/test";
-import { chatTab, closeChat, openChat, showResult, startGame } from "./setupGame";
+import { chatTab, closeChat, openChat, showResult, startGame, DEFAULT_SEED } from "./setupGame";
 
 const expect = baseExpect.configure({ timeout: 15_000 });
 // Screenshots only when QA_SHOTS names a folder (CI has no such folder).
@@ -171,7 +171,7 @@ test("QA: with DM notices off, a third player gets no frame and no row for a DM 
   expect(res.ok(), await res.text()).toBe(true);
   const game = (await res.json()) as { id: string; inviteCode: string };
   for (const [i, g] of [g1, g2].entries()) expect((await g.request.post(`/api/invites/${game.inviteCode}/join`, { data: { nickname: `Guest ${i + 1}` } })).ok()).toBe(true);
-  expect((await page.request.post(`/api/games/${game.id}/start`, { data: { seed: "e2e-default" } })).ok()).toBe(true);
+  expect((await page.request.post(`/api/games/${game.id}/start`, { data: { seed: DEFAULT_SEED } })).ok()).toBe(true);
   for (const p of [page, g1, g2]) await loaded(p, game.id);
   for (const p of [page, g1, g2]) await openChat(p);
 
@@ -440,7 +440,7 @@ test("QA: layout at 360 and 1280 px with five long-named humans, DM tabs, an evi
   const game = (await res.json()) as { id: string; inviteCode: string };
   const names = ["WWWWWWWWWWWWWWWWWWWWWWWW", "مرحبا مرحبا مرحبا مرحبا", "😀😀😀😀😀😀😀😀😀😀😀😀", "Supercalifragilisticexpi"];
   for (const [i, g] of guests.entries()) expect((await g.request.post(`/api/invites/${game.inviteCode}/join`, { data: { nickname: names[i] } })).ok()).toBe(true);
-  expect((await page.request.post(`/api/games/${game.id}/start`, { data: { seed: "e2e-default" } })).ok()).toBe(true);
+  expect((await page.request.post(`/api/games/${game.id}/start`, { data: { seed: DEFAULT_SEED } })).ok()).toBe(true);
   for (const g of guests) await loaded(g, game.id);
   for (const g of guests) await openChat(g);
   // Everyone DMs the viewer, so the viewer has four DM tabs with long names.
