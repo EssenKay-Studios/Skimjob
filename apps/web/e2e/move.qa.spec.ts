@@ -2,7 +2,7 @@
 // drop it), the coins conserved through taps and drags, and no R6 words. design §3.2, §20.1
 import { expect, test, type Page } from "@playwright/test";
 import { openPanel, startGame } from "./setupGame";
-import { dragTo, pickRoom, pileCoins } from "./move";
+import { dragTo, pickRoom, pileCoins, tapMove } from "./move";
 
 /** Tabs forward until `match` holds for the focused element (at most `max` presses). */
 async function tabTo(
@@ -92,4 +92,55 @@ test("the grab and the split work by keyboard alone, and taps and drags keep eve
 
   // No R6 money words on the move panel.
   await expect(page.locator(".move")).not.toContainText(/\bloot\b|\bhaul\b/i);
+});
+
+// QA (#232): the edges of tap to pick. design §3.2 steps 2-3
+test("a 1-coin room, a tap on a coin in another pile, a held coin let go on a room change, and the split kept after a reload @move", async ({ page }) => {
+  const game = await startGame(page.request, { bots: 3, sessionLength: "1w" });
+  await page.goto(`/game/${game.id}`);
+  await openPanel(page, "This round");
+
+  // The Lobby's 1 coin: nothing left in the room, and the held coin can only go to the other bag.
+  await pickRoom(page, "Lobby");
+  await expect.poll(() => count(page)).toEqual({ room: 0, duffel: 1, pocket: 0 });
+  await pileCoins(page, "duffel").first().click();
+  await expect(page.getByText("Tap the Pocket to drop it.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Drop the coin in/ })).toHaveCount(1);
+  await page.locator("[data-pile=room] .coin-bags__label").click(); // the room takes no coin back at 1
+  await expect.poll(() => count(page)).toEqual({ room: 0, duffel: 1, pocket: 0 });
+  await page.getByRole("button", { name: "Drop the coin in your pocket" }).click();
+  await expect.poll(() => count(page)).toEqual({ room: 0, duffel: 0, pocket: 1 });
+
+  // The Vault keeps the 1-coin grab (2 left in the room). A held room coin dropped by a tap on a pocket coin.
+  await pickRoom(page, "Vault");
+  await expect.poll(() => count(page)).toEqual({ room: 2, duffel: 0, pocket: 1 });
+  await pileCoins(page, "room").first().click();
+  await pileCoins(page, "pocket").first().click();
+  await expect.poll(() => count(page)).toEqual({ room: 1, duffel: 0, pocket: 2 });
+  await expect(page.locator('.coin-btn[aria-pressed="true"]')).toHaveCount(0);
+  // A tap on the held coin puts it down.
+  const coin = pileCoins(page, "pocket").last();
+  await coin.click();
+  await expect(coin).toHaveAttribute("aria-pressed", "true");
+  await coin.click();
+  await expect(page.locator('.coin-btn[aria-pressed="true"]')).toHaveCount(0);
+
+  // A coin held when the room changes is let go: nothing lifted in the new room, and a bag tap moves nothing.
+  await pileCoins(page, "pocket").first().click();
+  await pickRoom(page, "Office");
+  await expect(page.locator('.coin-btn[aria-pressed="true"]')).toHaveCount(0);
+  await expect(page.getByText("Tap a coin to pick it up, or drag it.")).toBeVisible();
+  const before = await count(page);
+  await page.locator("[data-pile=duffel] .bag__name").click();
+  expect(await count(page)).toEqual(before);
+
+  // Put one back in the room, lock in, reload: the bags come back as locked in.
+  await tapMove(page, "pocket", "room");
+  const locked = await count(page);
+  expect(locked.room).toBe(1);
+  await page.getByRole("button", { name: "Lock it in" }).click();
+  await expect(page.locator(".move__status")).toHaveText(/Locked in: Office/);
+  await page.reload();
+  await openPanel(page, "This round");
+  await expect.poll(() => count(page)).toEqual(locked);
 });
