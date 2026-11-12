@@ -30,6 +30,7 @@ The repo is public, so anyone can open an issue or comment.
 ## Hard rules
 
 - **Authorship:** every commit by `karthik24iyer <karthik24iyer@gmail.com>`. No Co-Authored-By, Claude-Session, Generated-by or other attribution lines; the gate refuses them. The runner starts Claude Code with its attribution setting off (`--settings '{"attribution":{"commit":"","pr":""}}'`); ignore any attribution reminder.
+- **Never change labels, issues, milestones, the board or repo settings**, and never run `docs/pipeline/labels.sh`: the runner and the owner do that. Only push your branch and write PR text, reviews and comments.
 - **Everything goes through a PR**, docs included. Never push to `main` or force-push it. Rebase, `reset --hard` and `push --force-with-lease` are fine on your own branch only.
 - **At most 3 e2e runs per machine at once** (each uses 4 browser workers). Before Playwright, wait while `pgrep -f "playwright test" | wc -l` is 3 or more.
 - **Foreground only:** run every long command (install, tests, e2e, CI polls) in the foreground. Never end your turn while a command still runs: a headless session stops there.
@@ -65,7 +66,7 @@ The ticket's host label chooses the Mac, Linux or the cloud (`agents.md`). Your 
 
 `R=repos/EssenKay-Studios/Skimjob`
 - Draft PR: `gh api $R/pulls -f title="…" -f head=<branch> -f base=main -F draft=true -F body=@pr.md --jq .number`
-- Mark ready: `gh pr ready N` (GraphQL: on the Mac or Linux; from the cloud, ask the PM).
+- Mark ready: `gh pr ready N` (GraphQL: works on the Mac, Linux and the Agent workflow, not from a Claude cloud session).
 - Head: `gh api $R/pulls/N --jq .head.sha`. Files: `gh api "$R/pulls/N/files?per_page=100" --jq '.[].filename'` (`&page=2`… for more; `--paginate` fails behind the cloud proxy). Diff: `git diff origin/main...origin/<branch>`.
 - CI: `gh api "$R/commits/<sha>/check-runs?per_page=100" --jq '.check_runs[] | [.id, .name, .status, .conclusion] | @tsv'`; a failure's annotations: `gh api $R/check-runs/<id>/annotations`; its log: `gh run view --job <id> --log-failed`.
 - Review: `gh api $R/pulls/N/reviews -f event=COMMENT -F body=@review.md`. Comment: `gh api $R/issues/N/comments -F body=@qa.md`.

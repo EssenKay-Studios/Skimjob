@@ -54,6 +54,11 @@ describe("the start rule", () => {
     expect(decide(input({ labels }))).toEqual({ kind: "comment", text: `runner: not started: ${problem}.` });
   });
 
+  it("says nothing on a ticket with no start label at all (one a PR closes, say)", () => {
+    expect(decide(input({ labels: [] }))).toEqual({ kind: "wait", reason: "no start labels" });
+    expect(decide(input({ labels: ["agent:blocked"] })).kind).toBe("wait");
+  });
+
   it("names every broken group in one comment", () => {
     const d = decide(input({ labels: ["agent:max", "agent:api"] }));
     expect(d).toEqual({

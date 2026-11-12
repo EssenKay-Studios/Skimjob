@@ -110,6 +110,18 @@ describe("poll.sh job", () => {
     expect(readFileSync(join(w.dir, "env.argv"), "utf8")).not.toContain("sk-test-secret");
   });
 
+  it("never hands the agent the workflow's own tokens, only the push and PR token", () => {
+    const w = world();
+    const seen = join(w.dir, "seen");
+    w.stub("claude", claudeStub(`echo "gh=$GH_TOKEN gt=\${GITHUB_TOKEN:-none} rt=\${ACTIONS_RUNTIME_TOKEN:-none}" > ${seen}`));
+    mkdirSync(join(w.work, "jobs/5"));
+    writeFileSync(join(w.dir, "prompt"), "p");
+    w.git("-C", w.repo, "config", "--unset-all", "user.name");
+    const env = { ...w.env, GITHUB_TOKEN: "workflow-tok", ACTIONS_RUNTIME_TOKEN: "rt", AGENT_GH_TOKEN: "agent-tok" };
+    spawnSync("bash", [join(ROOT, "docs/pipeline/runner/poll.sh"), "job", "5", "build", "pro", "haiku", join(w.dir, "prompt"), "0"], { env: { ...env, PRO_CONFIG_DIR: w.home }, encoding: "utf8" });
+    expect(readFileSync(seen, "utf8")).toBe("gh=agent-tok gt=none rt=none\n");
+  });
+
   it("runs Claude Code with its commit and PR attribution switched off in its settings (#267)", () => {
     const w = world();
     const seen = join(w.dir, "seen");
