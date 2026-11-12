@@ -127,17 +127,9 @@ test.describe("QA black market, real games", () => {
     test.setTimeout(600_000);
     const frames = watch(page);
     const sheet = sheetOf(page);
-    // The deal is seeded: start games until one sells Bail (tier 3 is Bail or Plant evidence).
-    let found = false;
-    for (let i = 0; i < 8 && !found; i++) {
-      const game = await startGame(page.request, { bots: 2, sessionLength: "1h", voteVisibility: "secret" });
-      await page.goto(`/game/${game.id}`);
-      await clearMeeting(page); // a meeting between rounds leaves its modal result card up until closed (design §9.6)
-      await page.getByRole("button", { name: "Black market", exact: true }).click();
-      found = (await sheet.getByRole("button", { name: "Buy Bail" }).count()) > 0;
-      await page.keyboard.press("Escape");
-    }
-    expect(found, "a game selling Bail in 8 tries").toBe(true);
+    // The deal is seeded: this seed's shop sells Bail (tier 3 is Bail or Plant evidence).
+    const game = await startGame(page.request, { bots: 2, sessionLength: "1h", voteVisibility: "secret", seed: "market-bail-1" });
+    await page.goto(`/game/${game.id}`);
     frames.length = 0;
     await page.reload();
     await waitForStash(page, 3);
