@@ -127,4 +127,15 @@ describe("testsOf", () => {
     const report = { suites: [{ title: "a.spec.ts", file: "a.spec.ts", suites: [{ title: "group", specs: [{ title: "does it @x", file: "a.spec.ts", line: 7, tests: [] }] }] }] };
     expect(testsOf(report)).toEqual([{ key: "a.spec.ts > group > does it @x", file: "a.spec.ts", line: 7, title: "group does it @x", tests: [] }]);
   });
+
+  it("merges the entries of a spec that every project lists, so the weights add up", () => {
+    const run = (project: string, duration: number) => ({ projectName: project, results: [{ duration }] });
+    const report = { suites: [{ title: "a.spec.ts", file: "a.spec.ts", specs: [
+      { title: "t", file: "a.spec.ts", line: 1, tests: [run("mobile", 5000)] },
+      { title: "t", file: "a.spec.ts", line: 1, tests: [run("desktop", 0)] },
+    ] }] };
+    const [t, ...rest] = testsOf(report);
+    expect(rest).toEqual([]);
+    expect(t.tests.flatMap((x) => x.results).reduce((sum, r) => sum + r.duration, 0)).toBe(5000);
+  });
 });

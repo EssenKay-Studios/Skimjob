@@ -143,12 +143,17 @@ export function shard(units, weights, i, n) {
   return loads[i - 1].units.sort();
 }
 
-// Every test of a Playwright JSON report (--list or a real run): key "file > describes > title", file, line, title and tests.
+// Every test of a Playwright JSON report (--list or a real run), once however many projects run it: key "file > describes > title", file, line, title and tests.
 export function testsOf(report) {
   const found = [];
   const walk = (suite, path) => {
     const here = /\.spec\.ts$/.test(suite.title) ? path : [...path, suite.title];
-    for (const s of suite.specs ?? []) found.push({ key: [suite.file ?? s.file, ...here, s.title].join(" > "), file: s.file, line: s.line, title: [...here, s.title].join(" "), tests: s.tests });
+    for (const s of suite.specs ?? []) {
+      const key = [suite.file ?? s.file, ...here, s.title].join(" > ");
+      const seen = found.find((t) => t.key === key); // the report repeats a spec once per project: one entry, all projects' tests
+      if (seen) seen.tests.push(...s.tests);
+      else found.push({ key, file: s.file, line: s.line, title: [...here, s.title].join(" "), tests: [...s.tests] });
+    }
     for (const c of suite.suites ?? []) walk(c, here);
   };
   for (const s of report.suites) walk(s, []);
@@ -213,7 +218,7 @@ function main(mode) {
     }
     const mine = new Set(shard(Object.keys(byKey), byKey, i, n));
     // One --grep for the shard: each of its tests by "file describes title" (Playwright greps the project, file and titles joined by spaces).
-    return console.log(list.filter((t) => mine.has(t.key)).map((t) => `${`${t.file} ${t.title}`.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`).join("|"));
+    return console.log(list.filter((t) => mine.has(t.key)).map((t) => `(^| )${`${t.file} ${t.title}`.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`).join("|"));
   }
   if (mode === "--weights") {
     const seconds = {};
