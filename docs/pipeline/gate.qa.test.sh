@@ -154,9 +154,13 @@ reset; nofull=1; checks+=',{"name":"Full suite","status":"completed","conclusion
 own() { # own SHA FILES_JSON: the compare main...SHA answer for SHA
   echo "{\"files\":$2}" >"$FIX/own-$1.json"
 }
+# shellcheck disable=SC2034 # used in the after= strings (eval)
 P1='[{"filename":"src/a.ts","status":"modified","patch":"@@ -1,2 +1,3 @@\n x\n+y"}]'
+# shellcheck disable=SC2034
 P2='[{"filename":"src/a.ts","status":"modified","patch":"@@ -7,2 +7,3 @@\n x\n+y"}]'
+# shellcheck disable=SC2034
 P3='[{"filename":"src/a.ts","status":"modified","patch":"@@ -1,2 +1,3 @@\n x\n+z"}]'
+# shellcheck disable=SC2034
 PQ='[{"filename":"src/a.ts","status":"modified","patch":"@@ -1,2 +1,3 @@\n x\n+y"},{"filename":"src/a.qa.test.ts","status":"added","patch":"@@ -0,0 +1 @@\n+t"}]'
 reset; review="VERDICT: APPROVE\nHead: $R"; qa="QA: PASS\nHead: $R"; compare_status=diverged; after='own $R "$P1"; own $H "$P2"'; expect yes "rebased onto main, same changes: review and QA carry over"
 reset; review="VERDICT: APPROVE\nHead: $R"; qa="QA: PASS\nHead: $R"; compare_status=diverged; after='own $R "$P1"; own $H "$P3"'; expect no "rebased with a changed line: re-review and QA"
