@@ -1,6 +1,6 @@
 import { mkdirSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
-import { startGame } from "./setupGame";
+import { startGame, settle } from "./setupGame";
 
 // The role card, "Roles in play" and the "This game" rulebook (design §11, §12,
 // §15.6, §20) on the gallery at the five launch widths and in a real game, the
@@ -43,7 +43,7 @@ test("gallery role card, roles in play and rulebook fit every launch width @role
     expect(await overflow(page)).toBeLessThanOrEqual(0);
     if (SHOTS) {
       mkdirSync(SHOTS, { recursive: true });
-      await page.waitForTimeout(600);
+      await settle(page);
       await page.screenshot({ path: `${SHOTS}/s45-role-card-${width}.png` });
     }
     // design §11.1: a move power (the Lookout's) closes the card and points back at the move.
@@ -68,7 +68,7 @@ test("gallery role card, roles in play and rulebook fit every launch width @role
     expect(await smallTargets(book)).toEqual([]);
     expect(await overflow(page)).toBeLessThanOrEqual(0);
     if (SHOTS) {
-      await page.waitForTimeout(600);
+      await settle(page);
       await page.screenshot({ path: `${SHOTS}/s45-rulebook-${width}.png` });
     }
     await book.locator(".btn", { hasText: "Close" }).click();

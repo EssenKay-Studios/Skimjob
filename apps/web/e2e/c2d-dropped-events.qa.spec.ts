@@ -43,7 +43,7 @@ test("a 15-min game with events on, played to the end: kept cards flip, no dropp
       await pickRoom(page, "Office", 1000).catch(() => {});
       if (await lock.isEnabled({ timeout: 500 }).catch(() => false)) await lock.click({ timeout: 1000 }).catch(() => {});
     }
-    await page.waitForTimeout(250);
+    await page.waitForTimeout(250); // sleep: paces a retry loop that polls the live game for a window
   }
   seen.push(await text(page));
   // The kept cards flipped on the board (the HUD names each round's card) over the game.

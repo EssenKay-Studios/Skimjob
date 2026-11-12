@@ -1,7 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 import { clearMeeting } from "./meetingCards";
-import { callEmergency, openPanel, startGame } from "./setupGame";
+import { callEmergency, openPanel, startGame, settle } from "./setupGame";
 
 // QA (PR #226, the lost vote): seed meeting-6's round 1 ends in a raid whose police briefing shakes a bot down, so that
 // bot is protected (design §9.2, §9.7). The sealed picker in the result window still lists them (a sealed vote may name
@@ -16,7 +16,7 @@ test("a briefing's protected bot: on the sealed picker, off the live one, and th
   const shot = async (what: string) => {
     if (!DIR) return;
     mkdirSync(DIR, { recursive: true });
-    await page.waitForTimeout(700);
+    await settle(page);
     await page.screenshot({ path: `${DIR}/qa226-${what}-${page.viewportSize()!.width}.png` });
   };
   const game = await startGame(page.request, { bots: 3, sessionLength: "1h", voteVisibility: "hiddenThenRevealed", seed: "meeting-6" });

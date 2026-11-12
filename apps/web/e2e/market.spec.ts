@@ -1,6 +1,6 @@
 import { mkdirSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
-import { openPanel, startGame } from "./setupGame";
+import { openPanel, startGame, settle } from "./setupGame";
 
 // The black market sheet (design §12, mockup 5a): on /dev/gallery's local game,
 // buy with a target picker that never offers yourself (§11.1), the last-round
@@ -76,7 +76,7 @@ test.describe("gallery black market", () => {
       expect(box!.x + box!.width).toBeLessThanOrEqual(width);
       if (SHOTS) {
         mkdirSync(SHOTS, { recursive: true });
-        await page.waitForTimeout(500);
+        await settle(page);
         await page.screenshot({ path: `${SHOTS}/market-sheet-${width}.png` });
       }
       await page.keyboard.press("Escape");

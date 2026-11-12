@@ -11,7 +11,7 @@ import { mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { expect, test, type APIRequestContext, type Browser, type Page } from "@playwright/test";
 import { pickRoom } from "./move";
-import { callEmergency, chatTab, expectRankingReadable, openPanel, showResult, startGame, type PanelName } from "./setupGame";
+import { callEmergency, chatTab, expectRankingReadable, openPanel, showResult, startGame, type PanelName, settle } from "./setupGame";
 
 const SHOTS = process.env.SHOTS_DIR;
 const VIEWPORTS = [
@@ -27,17 +27,6 @@ test.beforeEach(({}, info) => test.skip(!info.project.name.startsWith("mobile"),
 async function ok<T>(res: Awaited<ReturnType<APIRequestContext["post"]>>): Promise<T> {
   expect(res.ok(), `${res.url()} → ${res.status()} ${await res.text()}`).toBe(true);
   return (await res.json()) as T;
-}
-
-async function settle(page: Page) {
-  await page.evaluate(() =>
-    Promise.all(
-      document
-        .getAnimations()
-        .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity)
-        .map((a) => a.finished.catch(() => undefined)),
-    ),
-  );
 }
 
 async function shot(page: Page, name: string) {
@@ -189,7 +178,7 @@ test("12 seats with 24-character names: Crew and HUD fit at 360 and 1280 @shell"
     guests.push(g);
     await ok(await g.post(`/api/invites/${game.inviteCode}/join`, { data: { nickname: LONG(i) } }));
   }
-  await ok(await req.post(`/api/games/${game.id}/start`, { data: {} }));
+  await ok(await req.post(`/api/games/${game.id}/start`, { data: { seed: "e2e-default" } }));
   for (const [width, height] of [
     [360, 740],
     [1280, 800],

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { closePanel, openPanel, startGame } from "./setupGame";
+import { closePanel, openPanel, startGame, settle } from "./setupGame";
 import { pickRoom } from "./move";
 
 // QA (PR #41): the bank board at every launch width with a full 12-seat crew
@@ -17,17 +17,6 @@ const VIEWPORTS = [
 const SHOTS = process.env.QA_SHOTS;
 
 test.beforeEach(({}, info) => test.skip(info.project.name !== "mobile", "viewports are set per test"));
-
-async function settle(page: Page) {
-  await page.evaluate(() =>
-    Promise.all(
-      document
-        .getAnimations()
-        .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity)
-        .map((a) => a.finished.catch(() => undefined)),
-    ),
-  );
-}
 
 async function check(page: Page, where: string) {
   await settle(page);
@@ -90,7 +79,7 @@ for (const seats of [12, 3]) {
       await expect(board.locator(".bank-room .crook-fig")).toHaveCount(1);
       // However many others lock in meanwhile, their picks never appear on your board.
       for (let i = 0; i < 5; i++) {
-        await page.waitForTimeout(1000);
+        await page.waitForTimeout(1000); // sleep: proves a negative over 5 s while other players lock in; there is no state to wait for
         await expect(board.locator(".bank-room .crook-fig")).toHaveCount(1);
       }
       await check(page, "locked in");

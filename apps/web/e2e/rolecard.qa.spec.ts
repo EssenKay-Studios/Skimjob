@@ -1,7 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { ROLES, TERMS, TIPS } from "@skimjob/content";
 import { expect, test, type APIRequestContext, type Locator, type Page } from "@playwright/test";
-import { closePanel, openPanel } from "./setupGame";
+import { closePanel, openPanel, settle } from "./setupGame";
 
 // QA for PR #207 (S4.5; design §11.3, §15.6, §18, §20): the role card, Roles in
 // play and the "This game" rulebook in real bot games with Exact, Possible and
@@ -24,7 +24,7 @@ async function botGame(page: Page, roleList: List) {
   await ok(await r.post("/api/auth/guest", { data: { nickname: "Sam" } }));
   const game = await ok<{ id: string }>(await r.post("/api/games", { data: { settings: { sessionLength: "1h", roleList } } }));
   for (let i = 0; i < 4; i++) await ok(await r.post(`/api/games/${game.id}/bots`, { data: {} }));
-  await ok(await r.post(`/api/games/${game.id}/start`, { data: {} }));
+  await ok(await r.post(`/api/games/${game.id}/start`, { data: { seed: "e2e-default" } }));
   await ok(await r.patch("/api/me", { data: { tips: false } })); // no teaching pop-up (design §15.6) over the cards
   await page.goto(`/game/${game.id}`);
   await openPanel(page, "This round"); // below 1024 px the role card is in this sheet
@@ -49,7 +49,6 @@ const clipped = (scope: Locator) =>
       return n.scrollWidth > n.clientWidth + 1 && /hidden|clip/.test(s.overflowX) && n.clientWidth > 0 ? [`${n.className} ${n.scrollWidth}>${n.clientWidth}`] : [];
     }),
   );
-const settle = (page: Page) => page.evaluate(() => Promise.all(document.getAnimations().filter((a) => a.effect?.getComputedTiming().iterations !== Infinity).map((a) => a.finished.catch(() => undefined))));
 async function shot(page: Page, name: string, el?: Locator) {
   if (!SHOTS) return;
   mkdirSync(SHOTS, { recursive: true });
@@ -176,12 +175,12 @@ test("pinned tips on the HUD: hover another i, Esc, a tap elsewhere and a scroll
   await bank.click();
   await expect(pop(page)).toContainText(TIPS.bank.text);
   await wanted.hover();
-  await page.waitForTimeout(400);
+  await settle(page);
   await expect(pop(page)).toHaveCount(1);
   await expect(pop(page)).toContainText(TIPS.bank.text);
   await expect(wanted).toHaveAttribute("aria-expanded", "false");
   await share.hover();
-  await page.waitForTimeout(400);
+  await settle(page);
   await expect(share).toHaveAttribute("aria-expanded", "false");
 
   // Esc closes it and keeps the focus on its "i".

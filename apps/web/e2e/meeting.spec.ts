@@ -1,7 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { clearMeeting } from "./meetingCards";
-import { callEmergency, openPanel, startGame } from "./setupGame";
+import { callEmergency, openPanel, startGame, settle } from "./setupGame";
 
 // M2-7 acceptance (docs/m2-plan.md): one full meeting and vote in the browser,
 // in each vote mode. The 1-hour preset at TIME_SCALE 0.1: round 1 resolves
@@ -25,7 +25,7 @@ async function openLead(page: Page, title: string): Promise<Locator> {
 async function shot(page: Page, name: string) {
   if (!SHOTS) return;
   mkdirSync(SHOTS, { recursive: true });
-  await page.waitForTimeout(700); // the sheet's spring and the tally bars settle
+  await settle(page);
   await page.screenshot({ path: `${SHOTS}/meet-${name}-${page.viewportSize()!.width}.png` });
 }
 

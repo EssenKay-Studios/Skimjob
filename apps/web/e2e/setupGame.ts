@@ -4,6 +4,22 @@
 import { expect, type APIRequestContext, type Locator, type Page } from "@playwright/test";
 import { clearMeeting } from "./meetingCards";
 
+/** Every game is seeded, so a spec replays one course of play; a spec that needs a particular course passes its own `seed`. */
+const DEFAULT_SEED = "e2e-default";
+
+/** Waits two frames (a resize or a state change reflows and starts its animations) and then for every finite animation and transition to finish (entrances, springs, sheet slides). */
+export async function settle(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    await Promise.all(
+      document
+        .getAnimations()
+        .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity)
+        .map((a) => a.finished.catch(() => undefined)),
+    );
+  });
+}
+
 export interface StartedGame {
   readonly id: string;
   readonly inviteCode: string;
@@ -30,7 +46,7 @@ export async function startGame(
     nickname = "Host",
     voteVisibility,
     tips = false,
-    seed,
+    seed = DEFAULT_SEED,
   }: {
     bots: number;
     guests?: readonly APIRequestContext[];
@@ -47,7 +63,7 @@ export async function startGame(
   for (const [i, g] of guests.entries()) await ok(await g.post(`/api/invites/${game.inviteCode}/join`, { data: { nickname: `Guest ${i + 1}` } }));
   if (!tips) for (const who of [host, ...guests]) await ok(await who.patch("/api/me", { data: { tips: false } }));
   for (let i = 0; i < bots; i++) await ok(await host.post(`/api/games/${game.id}/bots`, { data: {} }));
-  await ok(await host.post(`/api/games/${game.id}/start`, { data: seed ? { seed } : {} }));
+  await ok(await host.post(`/api/games/${game.id}/start`, { data: { seed } }));
   return game;
 }
 

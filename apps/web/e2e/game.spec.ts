@@ -1,6 +1,6 @@
 import { mkdirSync } from "node:fs";
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { closePanel, expectRankingReadable, gameOver, isWide, keepRoundOpen, openLeads, openPanel, showResult, startGame } from "./setupGame";
+import { closePanel, expectRankingReadable, gameOver, isWide, keepRoundOpen, openLeads, openPanel, showResult, startGame, settle } from "./setupGame";
 import { dragTo, pickRoom, pileCoins, tapMove } from "./move";
 
 // M2-6 acceptance (docs/m2-plan.md): a host and a guest play a 15-min game
@@ -13,7 +13,7 @@ const SHOTS = process.env.SHOTS_DIR;
 async function shot(page: Page, name: string) {
   if (!SHOTS) return;
   mkdirSync(SHOTS, { recursive: true });
-  await page.waitForTimeout(700); // entrances and the bulb springs settle
+  await settle(page);
   await page.screenshot({ path: `${SHOTS}/game-${name}-${page.viewportSize()!.width}.png`, fullPage: true });
 }
 
@@ -78,7 +78,7 @@ test("a host and a guest play a 15-min game against bots to the end @move", asyn
       if (await landed(page.getByText(/Locked in: Office/))) moves++;
     };
     await Promise.all([vote(), move()]);
-    await page.waitForTimeout(150);
+    await page.waitForTimeout(150); // sleep: paces the vote/move race loop
   }
   expect(moves).toBeGreaterThan(0);
   alibis = (await page.evaluate(() => (window as unknown as { __alibiShown?: boolean }).__alibiShown)) ? 1 : 0;
