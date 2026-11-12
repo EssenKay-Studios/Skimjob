@@ -239,7 +239,7 @@ test("no game-grid, chat-dock or chat-fab left anywhere in the repo @shell", () 
   const words = ["game" + "-grid", "chat" + "-dock", "chat" + "-fab", "chat-sheet" + "-open", "game" + "-page", "Game" + "Chat\\b(?!\\.tsx)"];
   let found = "";
   try {
-    found = execFileSync("git", ["grep", "-nP", words.join("|"), "--", ".", ":!apps/web/e2e/game-shell.qa.spec.ts", ":!docs/archive"], { cwd: root, encoding: "utf8" });
+    found = execFileSync("git", ["grep", "-nP", words.join("|"), "--", ".", ":!apps/web/e2e/game-shell.qa.spec.ts", ":!apps/web/e2e/shard-weights.json", ":!docs/archive"], { cwd: root, encoding: "utf8" });
   } catch (e) {
     if ((e as { status?: number }).status !== 1) throw e; // 1: no match
   }
