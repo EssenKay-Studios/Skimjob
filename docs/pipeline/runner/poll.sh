@@ -234,6 +234,8 @@ job() {
   logf=$WORK_DIR/logs/$n-$step-$(date -u +%Y%m%dT%H%M%SZ).log
   mkdir -p "$WORK_DIR/logs" "$WORK_DIR/wt"
   wt=$WORK_DIR/wt/$n-$step-$$
+  # env options before any NAME=value (acc[0] is env). The agent never gets the workflow's own tokens (labels, issues, Actions): only the push and PR token below.
+  local scrub=(-u GITHUB_TOKEN -u ACTIONS_RUNTIME_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL)
   local acc=(env -u ANTHROPIC_API_KEY -u CLAUDE_CONFIG_DIR) budget=() keyf=''
   case $account in
     max) [ "$PLACE" = cloud ] && acc=(env -u ANTHROPIC_API_KEY) ;; # cloud: CLAUDE_CODE_OAUTH_TOKEN from the workflow
@@ -261,7 +263,7 @@ job() {
     if [ -n "$keyf" ]; then ANTHROPIC_API_KEY=$(cat "$keyf"); export ANTHROPIC_API_KEY; fi
     # In the cloud the agent writes as karthik24iyer with AGENT_GH_TOKEN; GITHUB_TOKEN can't (the gate only counts karthik24iyer).
     GH_TOKEN=${AGENT_GH_TOKEN:-$GH_TOKEN} E2E_PORT=5${nn}79 E2E_SERVER_PORT=3${nn}79 E2E_FAST_PORT=5${nn}80 E2E_FAST_SERVER_PORT=3${nn}80 \
-      "${acc[@]}" claude -p "$(cat "$pf")" --model "$model" --dangerously-skip-permissions --settings "$NO_ATTRIBUTION" \
+      env "${scrub[@]}" "${acc[@]:1}" claude -p "$(cat "$pf")" --model "$model" --dangerously-skip-permissions --settings "$NO_ATTRIBUTION" \
       --output-format stream-json --verbose ${budget[@]+"${budget[@]}"} </dev/null
   ) >"$logf" 2>&1
   log "#$n: $step exited $?"

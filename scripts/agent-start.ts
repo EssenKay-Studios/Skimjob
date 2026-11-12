@@ -44,7 +44,7 @@ export interface Input {
   issue: { number: number; author: string; title: string; type: string | null; effort: string | null; body: string; labels: string[] };
   events: LabelEvent[]; // the issue's label events, oldest first
   comments: Comment[]; // oldest first
-  working: { number: number; body: string }[]; // open tickets with agent:working
+  working: { number: number; body: string }[]; // open tickets with a step running (RUNNING)
   pr: { number: number; verdicts: string } | null; // the open PR that closes the ticket, with `verdicts.sh` output
   builders: Account[]; // accounts with a build running on this machine
 }
@@ -142,6 +142,9 @@ export function decide(input: Input): Decision {
   if (running) return { kind: "wait", reason: `${running}: a step is running` };
   // Its author can edit the title and body at any time, also after the labels: only karthik24iyer's text is a brief.
   if (issue.author !== OWNER) return commentOnce(input, `runner: not started: opened by ${issue.author}, not ${OWNER}: copy it into a new issue.`);
+
+  // A ticket nobody has started (no account or host label at all, e.g. one a PR closes): nothing to say.
+  if (!all.some((l) => /^(agent:(max|pro|api)|on:(mac|linux|cloud))$/.test(l))) return { kind: "wait", reason: "no start labels" };
 
   // Only labels karthik24iyer added count.
   const labels = all.filter((l) => addedBy(events, l) === OWNER);
