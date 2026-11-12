@@ -1,7 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { closePanel, expectRankingReadable, gameOver, isWide, keepRoundOpen, openLeads, openPanel, showResult, startGame } from "./setupGame";
-import { bagCoins, dragTo, pickRoom } from "./move";
+import { dragTo, pickRoom, pileCoins, tapMove } from "./move";
 
 // M2-6 acceptance (docs/m2-plan.md): a host and a guest play a 15-min game
 // against bots to the end in the browser and see the ranking.
@@ -149,24 +149,25 @@ test("the move panel: pick a room, coins into the bags, lock it in, change it; r
   await expect(page.getByText("Miss the deadline and you go to the Lobby, handing everything in.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Lock it in" })).toBeDisabled();
 
-  // The Vault's 3 coins, all in the duffel at first: a tap sends one to the pocket, a drag another (design §3.2).
+  // The Vault's 3 coins, all in the duffel at first: tap one to pick it up, tap the Pocket to drop it; a drag sends another (design §3.2).
   await pickRoom(page, "Vault");
   await expect(page.getByRole("button", { name: "Lock it in" })).toBeEnabled();
-  await expect(bagCoins(page, "duffel")).toHaveCount(3);
-  await bagCoins(page, "duffel").first().click();
-  await expect(bagCoins(page, "pocket")).toHaveCount(1);
-  await dragTo(page, bagCoins(page, "duffel").first(), page.locator("[data-bag=pocket]"));
-  await expect(bagCoins(page, "pocket")).toHaveCount(2);
-  await expect(bagCoins(page, "duffel")).toHaveCount(1);
+  await expect(pileCoins(page, "duffel")).toHaveCount(3);
+  await tapMove(page, "duffel", "pocket");
+  await expect(pileCoins(page, "pocket")).toHaveCount(1);
+  await dragTo(page, pileCoins(page, "duffel").first(), page.locator("[data-pile=pocket]"));
+  await expect(pileCoins(page, "pocket")).toHaveCount(2);
+  await expect(pileCoins(page, "duffel")).toHaveCount(1);
   // The previews follow the grab: the Vault's bell (a Locksmith's coins are silent) and what the duffel adds to the share (5 in the crew).
   await expect(page.locator(".coin-bags").getByRole("img", { name: /^Bell: 0 of 4 lit(, your grab adds 3)?$/ })).toBeVisible();
   await expect(page.getByText("Your 1 duffel coin adds about 0.2 to each share.")).toBeVisible();
-  // A tap alternative to dragging: a coin is a button, Enter sends it to the other bag.
-  await bagCoins(page, "pocket").first().focus();
+  // By keyboard: Enter picks a pocket coin up, Enter on the duffel's drop place puts it there.
+  await pileCoins(page, "pocket").first().focus();
   await page.keyboard.press("Enter");
-  await expect(bagCoins(page, "duffel")).toHaveCount(2);
-  await bagCoins(page, "duffel").first().click();
-  await expect(bagCoins(page, "pocket")).toHaveCount(2);
+  await page.getByRole("button", { name: "Drop the coin in the duffel" }).press("Enter");
+  await expect(pileCoins(page, "duffel")).toHaveCount(2);
+  await tapMove(page, "duffel", "pocket");
+  await expect(pileCoins(page, "pocket")).toHaveCount(2);
   await page.getByRole("button", { name: "Lock it in" }).click();
   await expect(page.getByRole("button", { name: "Locked in" })).toBeDisabled();
   await expect(page.getByText("Locked in: Vault, pocket 2.")).toBeVisible();

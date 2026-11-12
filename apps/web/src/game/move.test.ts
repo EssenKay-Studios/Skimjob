@@ -31,11 +31,25 @@ describe("the grab and the two bags (design §3.2)", () => {
     expect(bagsOf(0, 2)).toEqual({ duffel: 0, pocket: 0 });
   });
 
-  it("moves one coin to the other bag, and nothing when that bag has none", () => {
-    expect(moveCoin({ duffel: 2, pocket: 0 }, "pocket")).toEqual({ duffel: 1, pocket: 1 });
-    expect(moveCoin({ duffel: 1, pocket: 1 }, "duffel")).toEqual({ duffel: 2, pocket: 0 });
-    expect(moveCoin({ duffel: 0, pocket: 2 }, "pocket")).toEqual({ duffel: 0, pocket: 2 });
-    expect(moveCoin({ duffel: 2, pocket: 0 }, "duffel")).toEqual({ duffel: 2, pocket: 0 });
+  // design §3.2 steps 2-3: a coin goes between the bags, or from the room into a bag and back.
+  it("moves one coin between the bags, and nothing when the giving bag has none", () => {
+    expect(moveCoin({ duffel: 2, pocket: 0 }, "duffel", "pocket", 3)).toEqual({ duffel: 1, pocket: 1 });
+    expect(moveCoin({ duffel: 1, pocket: 1 }, "pocket", "duffel", 3)).toEqual({ duffel: 2, pocket: 0 });
+    expect(moveCoin({ duffel: 0, pocket: 2 }, "duffel", "pocket", 3)).toEqual({ duffel: 0, pocket: 2 });
+    expect(moveCoin({ duffel: 2, pocket: 0 }, "duffel", "duffel", 3)).toEqual({ duffel: 2, pocket: 0 });
+  });
+
+  it("grabs a coin from the room into either bag, up to the room's limit: the room's last coin can be taken", () => {
+    expect(moveCoin({ duffel: 1, pocket: 0 }, "room", "pocket", 3)).toEqual({ duffel: 1, pocket: 1 });
+    expect(moveCoin({ duffel: 1, pocket: 1 }, "room", "duffel", 3)).toEqual({ duffel: 2, pocket: 1 });
+    expect(moveCoin({ duffel: 2, pocket: 1 }, "room", "pocket", 3)).toEqual({ duffel: 2, pocket: 1 }); // the room is empty
+  });
+
+  it("puts a coin back in the room, but never the last one grabbed (at least 1 coin)", () => {
+    expect(moveCoin({ duffel: 1, pocket: 2 }, "pocket", "room", 3)).toEqual({ duffel: 1, pocket: 1 });
+    expect(moveCoin({ duffel: 1, pocket: 1 }, "duffel", "room", 3)).toEqual({ duffel: 0, pocket: 1 });
+    expect(moveCoin({ duffel: 0, pocket: 1 }, "pocket", "room", 3)).toEqual({ duffel: 0, pocket: 1 });
+    expect(moveCoin({ duffel: 0, pocket: 1 }, "duffel", "room", 3)).toEqual({ duffel: 0, pocket: 1 }); // the duffel has none
   });
 
   it("compares moves whatever order the fields come in", () => {

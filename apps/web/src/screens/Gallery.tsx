@@ -30,7 +30,6 @@ import { Clock, Lock } from "../components/icons";
 import { BANK_JOB } from "@skimjob/content";
 import { AlarmBell, WantedStars } from "../components/Bell";
 import { CoinBags } from "../components/CoinBags";
-import { bagsOf, moveCoin } from "../game/move";
 import { Banner, ClockFace, DialogSheet, ProtectedBanner, TallyBars } from "../components/MeetingKit";
 import { navigate } from "../router";
 
@@ -353,17 +352,13 @@ export function Gallery() {
 /** The game screen's building blocks (M2-6, S4.2), live. */
 function GameKitSamples() {
   const { bulbs, bustStars } = BANK_JOB.alarm;
-  const [grab, setGrab] = useState(3);
-  const [pocket, setPocket] = useState(1);
-  const bags = bagsOf(grab, pocket);
+  const [bags, setBags] = useState({ duffel: 1, pocket: 1 });
   return (
     <>
       <CoinBags
         limit={3}
-        grab={grab}
         bags={bags}
-        onGrab={setGrab}
-        onMove={(bag) => setPocket(moveCoin(bags, bag).pocket)}
+        onBags={setBags}
         bell={<AlarmBell bulbs={bulbs} lit={2} preview={1} />}
       />
       <div className="g-row g-row--center">
