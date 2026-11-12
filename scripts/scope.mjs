@@ -3,11 +3,13 @@
 //                                    (CI runs it on the PR's diff, docs/testing.md "Scoped tests")
 //   node scripts/scope.mjs --check   features.json coverage; fails if an e2e test lacks exactly one feature tag
 //   node scripts/scope.mjs --run     `pnpm test:scoped`: scope the diff against origin/main and run it
-//   node scripts/scope.mjs --shard 3/6   the e2e spec files of CI shard 3 of 6, balanced by apps/web/e2e/shard-weights.json
+//   node scripts/scope.mjs --shard 3/6 [tags]   a --grep regex for the e2e tests of CI shard 3 of 6 (only those matching the tags regex),
+//                                    balanced by apps/web/e2e/shard-weights.json; warns for a test without a weight
+//   node scripts/scope.mjs --weights <report.json>   write shard-weights.json from the Playwright JSON report of a full run
 // unit: "all", "" (none) or package dirs ("scripts" for the runner's tests); tags: "all", "" (none) or a Playwright --grep regex;
 // sim: games; pipeline: run the pipeline checks (gate.qa.test.sh, shellcheck, actionlint).
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, posix } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -128,17 +130,34 @@ export function scope(changed, graph, features, readFile) {
   return { full: false, unit: [...unit].sort().join(" "), tags: [...tags].sort().join("|"), sim, pipeline, reason: "scoped" };
 }
 
-// Heaviest spec file first onto the lightest shard (Playwright's own --shard slices by test count, which
-// bunches the slow full-game tests). Weights are seconds per file on a local run; a file without one counts 60.
-export function shard(specs, weights, i, n) {
-  const weight = (f) => weights[f] ?? 60;
-  const loads = Array.from({ length: n }, () => ({ total: 0, files: [] }));
-  for (const f of [...specs].sort((a, b) => weight(b) - weight(a) || a.localeCompare(b))) {
+// Heaviest test first onto the lightest shard. Playwright's own --shard slices by test count, which bunches the
+// slow full-game tests. A unit is one test; weights are its seconds, from
+// apps/web/e2e/shard-weights.json (docs/testing.md "Shards").
+export function shard(units, weights, i, n) {
+  const loads = Array.from({ length: n }, () => ({ total: 0, units: [] }));
+  for (const u of [...units].sort((a, b) => weights[b] - weights[a] || a.localeCompare(b))) {
     const lightest = loads.reduce((m, x) => (x.total < m.total ? x : m));
-    lightest.total += weight(f);
-    lightest.files.push(f);
+    lightest.total += weights[u];
+    lightest.units.push(u);
   }
-  return loads[i - 1].files.sort();
+  return loads[i - 1].units.sort();
+}
+
+// Every test of a Playwright JSON report (--list or a real run), once however many projects run it: key "file > describes > title", file, line, title and tests.
+export function testsOf(report) {
+  const found = [];
+  const walk = (suite, path) => {
+    const here = /\.spec\.ts$/.test(suite.title) ? path : [...path, suite.title];
+    for (const s of suite.specs ?? []) {
+      const key = [suite.file ?? s.file, ...here, s.title].join(" > ");
+      const seen = found.find((t) => t.key === key); // the report repeats a spec once per project: one entry, all projects' tests
+      if (seen) seen.tests.push(...s.tests);
+      else found.push({ key, file: s.file, line: s.line, title: [...here, s.title].join(" "), tests: [...s.tests] });
+    }
+    for (const c of suite.suites ?? []) walk(c, here);
+  };
+  for (const s of report.suites) walk(s, []);
+  return found;
 }
 
 const out = (cmd, args, cwd = root) => execFileSync(cmd, args, { cwd, encoding: "utf8", maxBuffer: 1 << 28 });
@@ -186,9 +205,25 @@ function main(mode) {
   }
   if (mode === "--shard") {
     const [i, n] = process.argv[3].split("/").map(Number);
-    const specs = files.filter((f) => SPEC.test(f)).map((f) => f.replace("apps/web/", ""));
+    const tags = process.argv[4] && process.argv[4] !== "all" ? new RegExp(process.argv[4]) : /(?:)/;
     const weights = JSON.parse(read("apps/web/e2e/shard-weights.json"));
-    return console.log(shard(specs, Object.fromEntries(Object.entries(weights).map(([f, w]) => [`e2e/${f}`, w])), i, n).join(" "));
+    const list = testsOf(JSON.parse(out("npx", ["playwright", "test", "--list", "--reporter=json"], join(root, "apps/web"))));
+    const known = Object.values(weights).sort((a, b) => a - b);
+    const median = known[Math.floor(known.length / 2)] ?? 1;
+    // A test without a weight counts the median.
+    const byKey = {};
+    for (const t of list) {
+      if (weights[t.key] === undefined) console.error(`::warning::no shard weight for ${t.key}: refresh with node scripts/scope.mjs --weights <report.json> (docs/testing.md "Shards")`);
+      if (tags.test(t.title)) byKey[t.key] = weights[t.key] ?? median;
+    }
+    const mine = new Set(shard(Object.keys(byKey), byKey, i, n));
+    // One --grep for the shard: each of its tests by "file describes title" (Playwright greps the project, file and titles joined by spaces).
+    return console.log(list.filter((t) => mine.has(t.key)).map((t) => `(^| )${`${t.file} ${t.title}`.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`).join("|"));
+  }
+  if (mode === "--weights") {
+    const seconds = {};
+    for (const t of testsOf(JSON.parse(read(process.argv[3])))) seconds[t.key] = Math.max(0.1, Math.round(t.tests.flatMap((x) => x.results).reduce((sum, r) => sum + r.duration, 0) / 100) / 10); // a skipped test still lands on a shard
+    return writeFileSync(join(root, "apps/web/e2e/shard-weights.json"), `${JSON.stringify(seconds, null, 1)}\n`);
   }
   const graph = buildGraph(files, read);
   if (mode !== "--run") return console.log(JSON.stringify(scope(lines(readFileSync(0, "utf8")), graph, features, read)));

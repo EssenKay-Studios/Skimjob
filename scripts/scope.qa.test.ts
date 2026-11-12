@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { buildGraph, scope, shard } from "./scope.mjs";
+import { buildGraph, scope, shard, testsOf } from "./scope.mjs";
 
 const root = join(import.meta.dirname, "..");
 const files = execFileSync("git", ["ls-files"], { cwd: root, encoding: "utf8" }).split("\n").filter(Boolean);
@@ -128,28 +128,65 @@ describe("scope on the real import graph", () => {
   });
 });
 
-describe("shard on the real spec list", () => {
-  const specs = files.filter((f) => /^apps\/web\/e2e\/.*\.spec\.ts$/.test(f)).map((f) => f.replace("apps/web/", ""));
-  const raw: Record<string, number> = JSON.parse(readRepo("apps/web/e2e/shard-weights.json"));
-  const weights = Object.fromEntries(Object.entries(raw).map(([f, w]) => [`e2e/${f}`, w]));
+describe("shard edge cases", () => {
+  const units = ["e2e/a.spec.ts:3", "e2e/a.spec.ts:20", "e2e/b.spec.ts:5"];
+  const weights = { "e2e/a.spec.ts:3": 5, "e2e/a.spec.ts:20": 9, "e2e/b.spec.ts:5": 0 };
 
-  it("puts every spec file on exactly one of the 6 shards, a spec missing from the weights file included", () => {
-    for (const list of [specs, [...specs, "e2e/zz-unweighted.qa.spec.ts"]]) {
-      const all = [1, 2, 3, 4, 5, 6].flatMap((i) => shard(list, weights, i, 6));
-      expect(all.sort()).toEqual([...list].sort());
+  it("puts every test on exactly one shard, even with more shards than tests or a zero weight", () => {
+    const all = [1, 2, 3, 4, 5, 6].flatMap((i) => shard(units, weights, i, 6));
+    expect(all.sort()).toEqual([...units].sort());
+  });
+
+  it("ignores weights of tests that no longer exist", () => {
+    const all = [1, 2].flatMap((i) => shard(units, { ...weights, "e2e/deleted.spec.ts:1": 999 }, i, 2));
+    expect(all).not.toContain("e2e/deleted.spec.ts:1");
+    expect(all).toHaveLength(units.length);
+  });
+});
+
+// QA for #282: the per-test shards on the real Playwright list and weights.
+describe("per-test shards on the real e2e list (#282)", () => {
+  const web = join(root, "apps/web");
+  type Spec = { title: string; file: string; tests: { projectName: string }[] };
+  type Suite = { title: string; file?: string; specs?: Spec[]; suites?: Suite[] };
+  const report: { suites: Suite[] } = JSON.parse(execFileSync("npx", ["playwright", "test", "--list", "--reporter=json"], { cwd: web, encoding: "utf8", maxBuffer: 1 << 28 }));
+  const list = testsOf(report);
+  const weights: Record<string, number> = JSON.parse(readRepo("apps/web/e2e/shard-weights.json"));
+  // What Playwright's --grep matches: project, file and titles joined by spaces.
+  const runs = list.flatMap((t) => t.tests.map((x: { projectName: string }) => `${x.projectName} ${t.file} ${t.title}`));
+  const grepOf = (i: number, tags: string) => execFileSync("node", ["scripts/scope.mjs", "--shard", `${i}/6`, tags], { cwd: root, encoding: "utf8" }).trim();
+  const loads = (re: RegExp) => {
+    const by = Object.fromEntries(list.filter((t) => re.test(t.title) && weights[t.key] !== undefined).map((t) => [t.key, weights[t.key]]));
+    return { heaviest: Math.max(...Object.values(by)), total: Object.values(by).reduce((s, w) => s + w, 0), shards: [1, 2, 3, 4, 5, 6].map((i) => shard(Object.keys(by), by, i, 6).reduce((s, k) => s + by[k], 0)) };
+  };
+  const tags = [...new Set(list.flatMap((t) => t.title.match(/@[\w-]+/g) ?? []))];
+
+  // Missing or stale weights only warn (PR #289 Decisions), so they are not asserted here: main would go red on a new spec.
+  it("gives each test its own file + title, so its grep cannot pick up another test", () => {
+    expect(new Set(list.map((t) => `${t.file} ${t.title}`)).size).toBe(list.length);
+  });
+
+  it("the six full-run greps select every test run exactly once", () => {
+    const greps = [1, 2, 3, 4, 5, 6].map((i) => new RegExp(grepOf(i, "all")));
+    for (const r of runs) expect(greps.filter((g) => g.test(r)).length, r).toBe(1);
+  }, 60_000);
+
+  it("a scoped run's greps select exactly the tests its tags select, each once", () => {
+    const tagRe = "@chat|@meeting";
+    const greps = [1, 2, 3, 4, 5, 6].map((i) => grepOf(i, tagRe)).filter(Boolean).map((g) => new RegExp(g));
+    for (const r of runs) expect(greps.filter((g) => g.test(r)).length, r).toBe(new RegExp(tagRe).test(r) ? 1 : 0);
+  }, 60_000);
+
+  it("the slowest full-run shard is within 25% of the median shard", () => {
+    const s = loads(/(?:)/).shards.sort((a, b) => a - b);
+    expect(s[5]).toBeLessThanOrEqual(1.25 * ((s[2] + s[3]) / 2));
+  });
+
+  it("for every feature tag, the slowest shard is its heaviest test or within 25% of an even split", () => {
+    for (const tag of tags) {
+      const { heaviest, total, shards } = loads(new RegExp(tag));
+      expect(Math.max(...shards), tag).toBeLessThanOrEqual(Math.max(heaviest, 1.25 * (total / 6)));
     }
-  });
-
-  it("ignores weights of spec files that no longer exist", () => {
-    const all = [1, 2, 3, 4, 5, 6].flatMap((i) => shard(specs, { ...weights, "e2e/deleted.spec.ts": 999 }, i, 6));
-    expect(all).not.toContain("e2e/deleted.spec.ts");
-    expect(all).toHaveLength(specs.length);
-  });
-
-  it("works with more shards than spec files", () => {
-    const few = specs.slice(0, 2);
-    const all = [1, 2, 3, 4, 5, 6].flatMap((i) => shard(few, weights, i, 6));
-    expect(all.sort()).toEqual([...few].sort());
   });
 });
 
@@ -177,15 +214,11 @@ describe("fix round: shared modules, deleted and renamed specs, deleted sources"
     expect(run(["apps/web/e2e/landing.spec.ts", "apps/web/src/screens/Meetings.tsx"], read)).toMatchObject({ full: false, tags: "@meeting" });
   });
 
-  it("a renamed spec runs its tag at the new path and lands on exactly one shard", () => {
+  it("a renamed spec runs its tag at the new path", () => {
     const from = "apps/web/e2e/landing.spec.ts";
     const to = "apps/web/e2e/landing-renamed.spec.ts";
     const read = (f: string) => (f === to ? readRepo(from) : without([from])(f));
     expect(run([from, to], read)).toMatchObject({ full: false, tags: "@lobby" });
-    const specs = files.filter((f) => /^apps\/web\/e2e\/.*\.spec\.ts$/.test(f) && f !== from).concat(to).map((f) => f.replace("apps/web/", ""));
-    const all = [1, 2, 3, 4, 5, 6].flatMap((i) => shard(specs, {}, i, 6));
-    expect(all.filter((f) => f === "e2e/landing-renamed.spec.ts")).toHaveLength(1);
-    expect(all).not.toContain("e2e/landing.spec.ts");
   });
 
   it("a deleted source file runs everything, whatever still imported it", () => {

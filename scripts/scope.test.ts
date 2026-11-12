@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildGraph, scope, shard } from "./scope.mjs";
+import { buildGraph, scope, shard, testsOf } from "./scope.mjs";
 
 // A tiny repo: web -> engine -> content, one shared web module, entry points for chat and meeting.
 const text: Record<string, string> = {
@@ -109,15 +109,33 @@ describe("scope", () => {
 });
 
 describe("shard", () => {
-  const weights = { "e2e/a.spec.ts": 300, "e2e/b.spec.ts": 200, "e2e/c.spec.ts": 150, "e2e/d.spec.ts": 150 };
-  const specs = [...Object.keys(weights), "e2e/new.spec.ts"];
-  it("gives every spec file to exactly one shard", () => {
-    const all = [1, 2, 3].flatMap((i) => shard(specs, weights, i, 3));
-    expect(all.sort()).toEqual([...specs].sort());
+  const weights = { "e2e/a.spec.ts:1": 300, "e2e/b.spec.ts:2": 200, "e2e/c.spec.ts:3": 150, "e2e/d.spec.ts:4": 150 };
+  const units = Object.keys(weights);
+  it("gives every test to exactly one shard", () => {
+    const all = [1, 2, 3].flatMap((i) => shard(units, weights, i, 3));
+    expect(all.sort()).toEqual([...units].sort());
   });
-  it("puts the heaviest files on different shards and counts an unlisted file as 60 s", () => {
-    expect(shard(specs, weights, 1, 3)).toEqual(["e2e/a.spec.ts"]);
-    expect(shard(specs, weights, 2, 3)).toEqual(["e2e/b.spec.ts", "e2e/new.spec.ts"]);
-    expect(shard(specs, weights, 3, 3)).toEqual(["e2e/c.spec.ts", "e2e/d.spec.ts"]);
+  it("puts the heaviest tests on different shards", () => {
+    expect(shard(units, weights, 1, 3)).toEqual(["e2e/a.spec.ts:1"]);
+    expect(shard(units, weights, 2, 3)).toEqual(["e2e/b.spec.ts:2"]);
+    expect(shard(units, weights, 3, 3)).toEqual(["e2e/c.spec.ts:3", "e2e/d.spec.ts:4"]);
+  });
+});
+
+describe("testsOf", () => {
+  it("keys a test by file, describes and title, and keeps its line and results", () => {
+    const report = { suites: [{ title: "a.spec.ts", file: "a.spec.ts", suites: [{ title: "group", specs: [{ title: "does it @x", file: "a.spec.ts", line: 7, tests: [] }] }] }] };
+    expect(testsOf(report)).toEqual([{ key: "a.spec.ts > group > does it @x", file: "a.spec.ts", line: 7, title: "group does it @x", tests: [] }]);
+  });
+
+  it("merges the entries of a spec that every project lists, so the weights add up", () => {
+    const run = (project: string, duration: number) => ({ projectName: project, results: [{ duration }] });
+    const report = { suites: [{ title: "a.spec.ts", file: "a.spec.ts", specs: [
+      { title: "t", file: "a.spec.ts", line: 1, tests: [run("mobile", 5000)] },
+      { title: "t", file: "a.spec.ts", line: 1, tests: [run("desktop", 0)] },
+    ] }] };
+    const [t, ...rest] = testsOf(report);
+    expect(rest).toEqual([]);
+    expect(t.tests.flatMap((x) => x.results).reduce((sum, r) => sum + r.duration, 0)).toBe(5000);
   });
 });

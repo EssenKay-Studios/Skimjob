@@ -17,7 +17,7 @@ import { defineConfig, devices } from "@playwright/test";
 // agent's run or a stale server, Playwright fails loudly instead of testing against code it didn't start.
 // Pick free E2E_* ports or stop the owner of the port (by pid). Locally up to 4 workers per run (CI keeps Playwright's default, 50% of the cores); at most
 // 3 runs per machine at once (docs/pipeline/common.md).
-// CI shards the suite by spec file: `node scripts/scope.mjs --shard i/6` (.github/workflows/ci.yml).
+// CI shards the suite by test: `node scripts/scope.mjs --shard i/6` (.github/workflows/ci.yml).
 const num = (name: string, fallback: number) => Number(process.env[name] ?? fallback);
 const port = num("E2E_PORT", 5179);
 const serverPort = num("E2E_SERVER_PORT", 3179);
