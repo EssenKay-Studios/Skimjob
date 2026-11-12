@@ -83,9 +83,9 @@ describe("a label re-added by someone else", () => {
     i.events = [...START.map((l) => add(l)), add("agent:api", "mallory")];
     expect(decide(i)).toMatchObject({ kind: "start", account: "max" });
   });
-  it("a stranger removing agent:blocked after a pickup doesn't rerun the same step on the same head", () => {
-    const i = input({ pr: PR, comments: [pickup()], extra: [add("agent:blocked", "github-actions[bot]", T2), del("agent:blocked", "mallory", T3)] });
-    expect(decide(i)).toMatchObject({ kind: "comment", text: expect.stringContaining("review already ran on head aaaaaaa") });
+  it("a stranger removing agent:blocked after two pickups doesn't rerun the same step on the same head", () => {
+    const i = input({ pr: PR, comments: [pickup(), pickup()], extra: [add("agent:blocked", "github-actions[bot]", T2), del("agent:blocked", "mallory", T3)] });
+    expect(decide(i)).toMatchObject({ kind: "block", text: expect.stringContaining("review ran 2 times on head aaaaaaa") });
   });
 });
 
@@ -152,28 +152,26 @@ describe("agent:blocked and resume", () => {
     i.comments = [{ author: "github-actions[bot]", body: "runner: picked up on cloud, max/opus (review, head aaaaaaa)", at: T1 }];
     expect(decide(i)).toMatchObject({ kind: "start", host: "cloud" });
   });
-  it("the cloud reads the owner decision from the form only", () => {
+  it("an old form's owner decision never stops it, in the cloud either", () => {
     const i = input({ place: "cloud", labels: ["agent:max", "on:cloud"] });
     i.issue.body = body("board", "yes");
-    expect(decide(i)).toMatchObject({ kind: "comment", text: expect.stringContaining("an owner decision is open") });
+    expect(decide(i)).toMatchObject({ kind: "start", host: "cloud" });
   });
 });
 
-// QA for #272: the runner merges a gated PR, and blocks only when authorship alone stands in the way.
-describe("merge and the authorship block (#272)", () => {
+// The runner merges a gated PR, and fixes authorship itself (a sync re-authors every commit) once QA has passed.
+describe("merge and authorship", () => {
   const gate = (reasons: string) => MERGEABLE.replace("MERGEABLE: yes", `MERGEABLE: no (${reasons})`);
   const WRONG = "commits not authored by karthik24iyer <karthik24iyer@gmail.com>";
   const ATTR = "attribution lines in abc1234";
 
   it("a PR that passes the gate is handed to the ticket's own host, whichever host checks it", () => {
     for (const place of ["mac", "linux", "cloud"] as const)
-      expect(decide(input({ place, labels: ["agent:max", "on:linux"], pr: { number: 9, verdicts: MERGEABLE } }))).toEqual({ kind: "ready", pr: 9, host: "linux" });
+      expect(decide(input({ place, labels: ["agent:max", "on:linux"], pr: { number: 9, verdicts: MERGEABLE } }))).toEqual({ kind: "ready", pr: 9, host: "linux", head: "" });
   });
 
-  it("blocks when both authorship reasons, and only they, stand in the way", () => {
-    const d = decide(input({ pr: { number: 9, verdicts: gate(`${WRONG}; ${ATTR}`) } }));
-    expect(d.kind).toBe("block");
-    expect(d.kind === "block" && d.text).toContain(`${WRONG}; ${ATTR}`);
+  it("syncs (no block, no agent) when authorship reasons stand in the way after QA", () => {
+    expect(decide(input({ pr: { number: 9, verdicts: gate(`${WRONG}; ${ATTR}`) } }))).toEqual({ kind: "sync", pr: 9, host: "mac", head: H });
   });
 
   it("an authorship problem alongside any other reason runs the normal next step, not the block", () => {
@@ -183,9 +181,9 @@ describe("merge and the authorship block (#272)", () => {
     expect(decide(input({ pr: { number: 9, verdicts: noQa } }))).toMatchObject({ kind: "start", step: "qa" });
   });
 
-  it("never blocks or merges while CI is still running, even with an authorship problem", () => {
+  it("never syncs or merges while CI is still running, even with an authorship problem", () => {
     const running = gate(`CI pending: e2e; ${ATTR}`).replace("ci:     green (9 check-runs)", "ci:     9 check-runs\n  pending: e2e");
-    expect(decide(input({ pr: { number: 9, verdicts: running } }))).toEqual({ kind: "wait", reason: "CI is running" });
+    expect(decide(input({ pr: { number: 9, verdicts: running } }))).toEqual({ kind: "wait", reason: "CI is running", stage: "agent:ci" });
   });
 
   it("a blocked ticket whose PR passes the gate is not merged", () => {

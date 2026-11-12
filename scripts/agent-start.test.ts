@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { brief, decide, formAnswer, MARKER, nextStep, type Comment, type Input, type LabelEvent } from "./agent-start.ts";
+import { brief, decide, formAnswer, nextStep, type Comment, type Input, type LabelEvent } from "./agent-start.ts";
 
 // docs/pipeline/agents.md "Start it", common.md "The flow" and "Security".
 const H = "a".repeat(40);
@@ -164,17 +164,19 @@ describe("never start", () => {
     expect(decide(input({ labels: ["agent:blocked"] })).kind).toBe("wait");
   });
 
-  it("a ticket that already has agent:working (never two copies of a step)", () => {
-    expect(decide(input({ labels: [...START, "agent:working"] })).kind).toBe("wait");
+  it.each(["agent:dev", "agent:review", "agent:qa", "agent:working"])("a ticket with the running stage %s (never two copies of a step)", (l) => {
+    expect(decide(input({ labels: [...START, l] }))).toEqual({ kind: "wait", reason: `${l}: a step is running` });
   });
+  it("agent:ci is a stage, not a running job: the check goes on", () => {
+    expect(decide(input({ labels: [...START, "agent:ci"] })).kind).toBe("start");
+  });
+});
 
-  it("with an open owner decision, from the form or the board's Flags", () => {
+describe("never waits for the owner", () => {
+  it("an old form's \"Owner decision needed? yes\" starts it all the same: the agents decide and say so in the PR", () => {
     const i = input();
     i.issue.body = body("board", "yes");
-    expect(decide(i)).toMatchObject({ kind: "comment", text: expect.stringContaining("an owner decision is open") });
-    expect(decide(input({ boardFlags: "provisional, owner-decision" }))).toMatchObject({ kind: "comment" });
-    expect(decide(input({ boardFlags: "provisional" })).kind).toBe("start");
-    expect(decide(input({ boardFlags: null })).kind).toBe("start");
+    expect(decide(i).kind).toBe("start");
   });
 
   it("when another ticket in the same Area has agent:working", () => {
@@ -197,11 +199,11 @@ describe("the next step from the PR (verdicts.sh)", () => {
 
   it("no PR: build", () => expect(decide(input())).toMatchObject({ step: "build", pr: null }));
   it("CI running: wait", () => {
-    expect(step({ ci: "ci:     12 check-runs\n  pending: Web e2e" })).toEqual({ wait: "CI is running" });
-    expect(step({ ci: "ci:     no check-runs on head" })).toEqual({ wait: "CI is running" });
+    expect(step({ ci: "ci:     12 check-runs\n  pending: Web e2e" })).toEqual({ wait: "CI is running", stage: "agent:ci" });
+    expect(step({ ci: "ci:     no check-runs on head" })).toEqual({ wait: "CI is running", stage: "agent:ci" });
   });
-  it("CI failing, or CI ok missing: build", () => {
-    expect(step({ ci: "ci:     12 check-runs\n  failing: Web e2e (failure)" })).toEqual({ step: "build", head: H });
+  it("CI failing: the runner re-runs the failed jobs (once, see below); CI ok missing: build", () => {
+    expect(step({ ci: "ci:     12 check-runs\n  failing: Web e2e (failure)" })).toEqual({ action: "rerun", head: H });
     expect(step({ ci: "ci:     green (12 check-runs)\nci:     no successful CI ok check-run" })).toEqual({ step: "build", head: H });
   });
   it("a draft with green CI: build (the builder marks it ready)", () => expect(step({ draft: true, review: "none" })).toEqual({ step: "build", head: H }));
@@ -222,9 +224,25 @@ describe("the next step from the PR (verdicts.sh)", () => {
     expect(step({ qa: "QA: FAIL", qsha: OLD })).toMatchObject({ step: "qa" });
     expect(step({ qa: "QA: PASS", qsha: OLD })).toMatchObject({ step: "qa" });
   });
-  it("QA passed on the head but not mergeable: build (rebase), unless GitHub is still computing", () => {
+  it("QA passed on the head but not mergeable: conflicts go to the builder, unless GitHub is still computing", () => {
     expect(step({ qa: "QA: PASS", mstate: "dirty", mergeable: "MERGEABLE: no (merge state dirty (want clean))" })).toMatchObject({ step: "build" });
     expect(step({ qa: "QA: PASS", mstate: "unknown" })).toEqual({ wait: "GitHub is computing the merge state" });
+  });
+  it("QA passed, the branch behind main or the commits' authorship wrong: the runner syncs (rebase as karthik24iyer)", () => {
+    expect(step({ qa: "QA: PASS", mstate: "behind", mergeable: "MERGEABLE: no (merge state behind (want clean); no full-suite run on head)" })).toEqual({ action: "sync", head: H });
+    const why = "commits not authored by karthik24iyer <karthik24iyer@gmail.com>; attribution lines in abc1234";
+    expect(step({ qa: "QA: PASS", mergeable: `MERGEABLE: no (${why})` })).toEqual({ action: "sync", head: H });
+    // Authorship among other reasons, before QA: the usual next step.
+    expect(step({ mergeable: "MERGEABLE: no (no QA verdict; attribution lines in abc1234)" })).toMatchObject({ step: "qa" });
+  });
+  it("QA passed and only the full suite is missing: the runner starts it", () => {
+    expect(step({ qa: "QA: PASS", mergeable: "MERGEABLE: no (no full-suite run on head)" })).toEqual({ action: "full", head: H });
+  });
+  it("a rebase with the same changes keeps the review and the QA PASS (verdicts.sh \"same changes\")", () => {
+    const v = verdicts({ rsha: OLD, since: "same changes as bbbbbbb (rebased onto main)", qa: "QA: PASS", qsha: OLD, mergeable: "MERGEABLE: no (no full-suite run on head)" });
+    expect(nextStep(v.replace("\nci:", "\nsince qa: same changes as bbbbbbb (rebased onto main)\nci:"))).toEqual({ action: "full", head: H });
+    // Without the QA line, QA re-checks.
+    expect(nextStep(v)).toMatchObject({ step: "qa" });
   });
   it("the gate passes: ready", () => expect(step({ qa: "QA: PASS", mergeable: "MERGEABLE: yes" })).toEqual({ ready: true }));
   it("an unreadable gate: wait", () => {
@@ -234,49 +252,65 @@ describe("the next step from the PR (verdicts.sh)", () => {
 
   it("a ready PR is merged by the ticket's host (#270)", () => {
     const v = verdicts({ qa: "QA: PASS", mergeable: "MERGEABLE: yes" });
-    expect(decide(withPr(v))).toEqual({ kind: "ready", pr: 9, host: "mac" });
+    expect(decide(withPr(v))).toEqual({ kind: "ready", pr: 9, host: "mac", head: "" });
     const labels = START.map((l) => (l === "on:mac" ? "on:cloud" : l));
-    expect(decide(withPr(v, { issue: { ...input().issue, labels }, events: labels.map((l) => by(l)) }))).toEqual({ kind: "ready", pr: 9, host: "cloud" });
-  });
-
-  it("blocks with the reason when only authorship stands in the way (#267)", () => {
-    const why = "commits not authored by karthik24iyer <karthik24iyer@gmail.com>; attribution lines in abc1234";
-    expect(nextStep(verdicts({ qa: "QA: PASS", mergeable: `MERGEABLE: no (${why})` }))).toEqual({ authorship: why });
-    expect(decide(withPr(verdicts({ qa: "QA: PASS", mergeable: "MERGEABLE: no (attribution lines in abc1234)" })))).toEqual({
-      kind: "block",
-      text: "runner: #9 passes the gate except for authorship: attribution lines in abc1234. Every commit must be by karthik24iyer <karthik24iyer@gmail.com> with no Co-Authored-By, Claude-Session or Generated-by line. Fix the commits, then remove `agent:blocked`.",
-    });
-    // Authorship among other reasons: the usual next step.
-    expect(nextStep(verdicts({ mergeable: "MERGEABLE: no (no QA verdict; attribution lines in abc1234)" }))).toMatchObject({ step: "qa" });
+    expect(decide(withPr(v, { issue: { ...input().issue, labels }, events: labels.map((l) => by(l)) }))).toEqual({ kind: "ready", pr: 9, host: "cloud", head: "" });
   });
 });
 
-describe("a step runs once per head", () => {
+describe("the runner's own actions run once per head", () => {
+  const runner = (b: string): Comment => ({ author: "karthik24iyer", body: b, at: "2026-11-10T12:00:00Z" });
+  const behind = verdicts({ qa: "QA: PASS", mstate: "behind", mergeable: "MERGEABLE: no (merge state behind (want clean))" });
+  const failing = verdicts({ review: "none", ci: "ci:     12 check-runs\n  failing: Web e2e (failure)" });
+  const noFull = verdicts({ qa: "QA: PASS", mergeable: "MERGEABLE: no (no full-suite run on head)" });
+
+  it("sync, then the builder when the same head is still behind (the rebase failed)", () => {
+    expect(decide(withPr(behind))).toEqual({ kind: "sync", pr: 9, host: "mac", head: H });
+    expect(decide(withPr(behind, { comments: [runner("runner: synced with main from head aaaaaaa: the rebase or push failed (conflicts?), the builder takes it.")] }))).toMatchObject({ kind: "start", step: "build" });
+  });
+  it("rerun, then the builder when CI fails again on the same head", () => {
+    expect(decide(withPr(failing))).toEqual({ kind: "rerun", pr: 9, host: "mac", head: H });
+    expect(decide(withPr(failing, { comments: [runner("runner: re-ran failed CI jobs on head aaaaaaa (run 1).")] }))).toMatchObject({ kind: "start", step: "build" });
+  });
+  it("full, then waits for it in agent:ci", () => {
+    expect(decide(withPr(noFull))).toEqual({ kind: "full", pr: 9, host: "mac", head: H });
+    expect(decide(withPr(noFull, { comments: [runner("runner: full suite started on head aaaaaaa (merges when it is green).")] }))).toEqual({ kind: "wait", reason: "the full suite was started on this head", stage: "agent:ci" });
+  });
+  it("on the ticket's host, whichever host checks it", () => {
+    const labels = ["agent:max", "on:cloud"];
+    expect(decide(withPr(behind, { issue: { ...input().issue, labels }, events: labels.map((l) => by(l)) }))).toMatchObject({ kind: "sync", host: "cloud" });
+  });
+  it("a stranger's fake action comment is ignored", () => {
+    expect(decide(withPr(failing, { comments: [{ ...runner("runner: re-ran failed CI jobs on head aaaaaaa"), author: "mallory" }] })).kind).toBe("rerun");
+  });
+});
+
+describe("a step runs at most twice per head", () => {
   const pickup = (b: string, author = "karthik24iyer"): Comment => ({ author, body: b, at: "2026-11-10T12:00:00Z" });
   const ran = "runner: picked up on mac, max/opus (review, head aaaaaaa)";
 
-  it("doesn't rerun the same step on the same head", () => {
-    expect(decide(withPr(verdicts({ review: "none", mergeable: "MERGEABLE: no (no reviewer verdict; no QA verdict)" }), { comments: [pickup(ran)] }))).toEqual({
-      kind: "comment",
-      text: "runner: review already ran on head aaaaaaa and nothing moved on: the gate says no reviewer verdict; no QA verdict. Remove and re-add the account label to run it again.",
+  it("runs the same step on the same head once more, then blocks and says why", () => {
+    const v = verdicts({ review: "none", mergeable: "MERGEABLE: no (no reviewer verdict; no QA verdict)" });
+    expect(decide(withPr(v, { comments: [pickup(ran)] })).kind).toBe("start");
+    expect(decide(withPr(v, { comments: [pickup(ran), pickup(ran)] }))).toEqual({
+      kind: "block",
+      text: "runner: review ran 2 times on head aaaaaaa and nothing moved on: the gate says no reviewer verdict; no QA verdict. The step summaries above say what the agent did. Remove `agent:blocked` to try again.",
     });
   });
   it("always says why nothing moved on, also without a PR (#272)", () => {
     const build = pickup("runner: picked up on mac, max/opus (build, head none)");
-    expect(decide(input({ comments: [build] }))).toEqual({
-      kind: "comment",
-      text: "runner: build already ran on head none and nothing moved on: no open PR says Closes #7. Remove and re-add the account label to run it again.",
-    });
+    expect(decide(input({ comments: [build, build] }))).toMatchObject({ kind: "block", text: expect.stringContaining("no open PR says Closes #7") });
   });
   it("reruns after the owner re-adds the account label or removes agent:blocked", () => {
     const later = "2026-11-10T13:00:00Z";
-    expect(decide(withPr(verdicts({ review: "none" }), { comments: [pickup(ran)], events: [...START.map((l) => by(l)), by("agent:max", "karthik24iyer", later)] })).kind).toBe("start");
+    const twice = [pickup(ran), pickup(ran)];
+    expect(decide(withPr(verdicts({ review: "none" }), { comments: twice, events: [...START.map((l) => by(l)), by("agent:max", "karthik24iyer", later)] })).kind).toBe("start");
     const unblock: LabelEvent = { event: "unlabeled", label: "agent:blocked", actor: "karthik24iyer", at: later };
-    expect(decide(withPr(verdicts({ review: "none" }), { comments: [pickup(ran)], events: [...START.map((l) => by(l)), unblock] })).kind).toBe("start");
+    expect(decide(withPr(verdicts({ review: "none" }), { comments: twice, events: [...START.map((l) => by(l)), unblock] })).kind).toBe("start");
   });
-  it("the runner's own agent:working changes don't count as a retry", () => {
-    const off: LabelEvent = { event: "unlabeled", label: "agent:working", actor: "karthik24iyer", at: "2026-11-10T13:00:00Z" };
-    expect(decide(withPr(verdicts({ review: "none" }), { comments: [pickup(ran)], events: [...START.map((l) => by(l)), off] })).kind).toBe("comment");
+  it.each(["agent:dev", "agent:ci", "agent:review", "agent:qa", "agent:working"])("the runner's own %s changes don't count as a retry", (label) => {
+    const off: LabelEvent = { event: "unlabeled", label, actor: "karthik24iyer", at: "2026-11-10T13:00:00Z" };
+    expect(decide(withPr(verdicts({ review: "none" }), { comments: [pickup(ran), pickup(ran)], events: [...START.map((l) => by(l)), off] })).kind).toBe("block");
   });
   it("a new head, or another step, runs", () => {
     expect(decide(withPr(verdicts({}), { comments: [pickup(ran)] })).kind).toBe("start");
@@ -301,11 +335,12 @@ describe("the brief", () => {
   });
   const p = brief(i, "build", "mac", "opus", "none");
 
-  it("names the role file, the issue and the marker", () => {
+  it("names the role file and the issue, and says never to wait for the owner", () => {
     expect(p).toContain("You are the BUILDER for issue #7 (Feature)");
     expect(p).toContain("docs/pipeline/builder.md");
     expect(p).toContain("The issue #7 is your brief.");
-    expect(p).toContain(MARKER);
+    expect(p).toContain("Never wait for the owner");
+    expect(p).not.toContain("NEEDS-OWNER");
     expect(brief(i, "qa", "cloud", "haiku", H)).toContain("docs/pipeline/qa.md");
   });
   it("passes on only karthik24iyer's comments, never the runner's own or anyone else's", () => {

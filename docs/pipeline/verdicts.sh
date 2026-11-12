@@ -14,9 +14,12 @@
 # fall-back to an older one); the latest QA-like one is exactly
 # `QA: PASS` + `Head: <current head>`; every commit (old and new paths) in
 # S_r..head touches only *.qa.test.ts / *.qa.spec.ts (else a delta re-review is needed); every
-# check-run on the head completed as success/skipped/neutral and `CI ok` succeeded; PR open, not draft,
+# check-run on the head completed as success/skipped/neutral and `CI ok` succeeded; a `Full suite` run
+# (ci.yml run in full on the branch, started by the runner after QA) succeeded on the head; PR open, not draft,
 # mergeable_state clean; every commit authored by karthik24iyer <karthik24iyer@gmail.com>
 # and no commit message has a co-authored-by / claude-session / generated-by line.
+# A rebase onto main keeps the verdicts: an APPROVE (or QA PASS) whose sha has the same own changes as the
+# head (the PR's diff against main, hunk line numbers aside; QA test files aside for the review) still counts.
 set -o pipefail
 N=$1
 [[ $N =~ ^[0-9]+$ ]] || { echo "usage: verdicts.sh PR_NUMBER" >&2; exit 2; }
@@ -92,6 +95,20 @@ found=$(printf '%s\n%s\n' "$found" "$c" | grep . | sort -s -t $'\t' -k1,1)
 newest() { awk -F'\t' -v k="$1" '$2 == k { l = $3 "\t" $4 } END { print l }' <<<"$found"; }
 IFS=$'\t' read -r rv1 rv2 <<<"$(newest verdict)"
 IFS=$'\t' read -r qa1 qa2 <<<"$(newest qa)"
+# own SHA ALL: a checksum of the changes SHA makes on top of main (compare main...SHA), with hunk line numbers
+# dropped, so a rebase that doesn't change them gives the same sum. ALL=0 leaves QA test files out. Empty on any
+# error, or when the compare is too big to list in full (300 files): never equal to anything.
+own() {
+  local out
+  out=$(gh api "$A/compare/main...$1" --jq '
+    if (.files | length) >= 300 then error("too many files") else . end
+    | [.files[] | select('"$2"' == 1 or (.filename | test("\\.qa\\.(test|spec)\\.ts$") | not))
+       | "\(.filename) \(.previous_filename // "") \(.status)\n\((.patch // "blob \(.sha)") | gsub("(?m)^@@ [^@]* @@"; "@@"))"]
+    | sort | join("\n")' 2>/dev/null) || return 0
+  cksum <<<"$out"
+}
+# same SHA1 SHA2 ALL: both make the same own changes.
+same() { local a b; a=$(own "$1" "$3"); b=$(own "$2" "$3"); [ -n "$a" ] && [ "$a" = "$b" ]; }
 sha_of() { [[ $1 =~ ^Head:\ ([0-9a-f]{40})[[:space:]]*$ ]] && echo "${BASH_REMATCH[1]}"; }
 rsha=$(sha_of "$rv2"); qsha=$(sha_of "$qa2")
 echo "review: ${rv1:-none}  @ ${rsha:-<no Head: line>}"
@@ -106,7 +123,10 @@ esac
 case "$qa1" in
   "QA: PASS")
     if [ -z "$qsha" ]; then no "QA has no 'Head: <40-char sha>' second line"
-    elif [ "$qsha" != "$head" ]; then no "QA PASS is for ${qsha:0:7}, head is ${head:0:7}"; fi ;;
+    elif [ "$qsha" != "$head" ]; then
+      if same "$qsha" "$head" 1; then echo "since qa: same changes as ${qsha:0:7} (rebased onto main)"
+      else no "QA PASS is for ${qsha:0:7}, head is ${head:0:7}"; fi
+    fi ;;
   "QA: FAIL") no "QA is FAIL" ;;
   "") no "no QA verdict" ;;
   *) no "malformed latest QA verdict: '${qa1:0:60}' (want 'QA: PASS' / 'QA: FAIL')" ;;
@@ -114,7 +134,9 @@ esac
 
 # Commits pushed after the reviewed sha: only QA's test files may change
 # (*.qa.test.ts unit tests and *.qa.spec.ts e2e specs).
-if [ -n "$rsha" ] && [ "$rsha" != "$head" ]; then
+if [ -n "$rsha" ] && [ "$rsha" != "$head" ] && same "$rsha" "$head" 0; then
+  echo "since review: same changes as ${rsha:0:7} (rebased onto main)"
+elif [ -n "$rsha" ] && [ "$rsha" != "$head" ]; then
   # compare lists at most 250 commits: more than that is a no (total_commits check).
   cmp=$(gh api "$A/compare/$rsha...$head" \
     --jq '[.status, (.total_commits | tostring), ([.commits[].sha] | join(" "))] | @tsv' 2>/dev/null) || cmp=
@@ -155,11 +177,12 @@ fi
 
 # CI: latest check-run per name on the head.
 runs=$(pages "commits/$head/check-runs" .check_runs '[.name, .status, (.conclusion // "")] | @tsv') || fatal "cannot read check-runs on head"
-total=0; ciok=0; failing=(); pending=()
+total=0; ciok=0; full=0; failing=(); pending=()
 while IFS=$'\t' read -r name st concl; do
   [ -z "$name" ] && continue
   total=$((total + 1))
   [ "$name" = "CI ok" ] && [ "$st" = completed ] && [ "$concl" = success ] && ciok=1
+  [ "$name" = "Full suite" ] && [ "$st" = completed ] && [ "$concl" = success ] && full=1
   if [ "$st" != completed ]; then pending+=("$name")
   else case "$concl" in success|skipped|neutral) ;; *) failing+=("$name ($concl)") ;; esac; fi
 done <<<"$runs"
@@ -179,6 +202,8 @@ fi
 
 # The always-on "CI ok" job (ci.yml) must exist and have succeeded: skipped, neutral, pending or missing is a no.
 [ $ciok -eq 1 ] || { echo "ci:     no successful CI ok check-run"; no "CI ok check-run missing or not a success"; }
+# The whole suite on the head, once QA has passed (the runner starts it: ci.yml on workflow_dispatch).
+if [ $full -eq 1 ]; then echo "full:   green"; else echo "full:   none on head"; no "no full-suite run on head"; fi
 
 # Authorship and attribution lines, every commit on the branch.
 commits=$(pages "pulls/$N/commits" . '

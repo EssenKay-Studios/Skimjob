@@ -71,6 +71,7 @@ describe("poll.sh job", () => {
   it("keeps a worktree with uncommitted work but detaches it, so the next step can check out the branch (review blocking 3)", () => {
     const w = world();
     w.stub("claude", claudeStub("git checkout -q -b feat && echo wip > wip.txt"));
+    w.fixture(`${R}/issues/5`, { number: 5, labels: [{ name: "agent:dev" }] });
     mkdirSync(join(w.work, "jobs/5"));
     writeFileSync(join(w.dir, "prompt"), "p");
     const r = w.poll("job", "5", "build", "max", "haiku", join(w.dir, "prompt"), "0");
@@ -79,7 +80,7 @@ describe("poll.sh job", () => {
     expect(readFileSync(join(wt, "wip.txt"), "utf8")).toBe("wip\n");
     expect(spawnSync("git", ["-C", wt, "symbolic-ref", "-q", "HEAD"]).status).not.toBe(0); // detached
     expect(() => w.git("-C", w.repo, "worktree", "add", "-q", join(w.dir, "next"), "feat")).not.toThrow();
-    expect(w.ghLog()).toContain(`gh api -X DELETE ${R}/issues/5/labels/agent:working`);
+    expect(w.ghLog()).toContain(`gh api -X DELETE ${R}/issues/5/labels/agent:dev`);
   });
 
   it("removes a clean worktree", () => {
@@ -120,16 +121,17 @@ describe("poll.sh job", () => {
     expect(JSON.parse(args[args.indexOf("--settings") + 1])).toEqual({ attribution: { commit: "", pr: "" } });
   });
 
-  it("swaps agent:working for agent:blocked and posts the question after the marker", () => {
+  it("posts the agent's summary on the issue, clears the stage label and never blocks", () => {
     const w = world();
-    w.stub("claude", claudeStub("true", "Report.\nNEEDS-OWNER: Blue or red?\nA) blue (recommended)"));
+    w.stub("claude", claudeStub("true", "PR #12, head abc1234: CI green, marked ready."));
+    w.fixture(`${R}/issues/5`, { number: 5, labels: [{ name: "agent:review" }] });
     mkdirSync(join(w.work, "jobs/5"));
     writeFileSync(join(w.dir, "prompt"), "p");
-    w.poll("job", "5", "build", "max", "haiku", join(w.dir, "prompt"), "0");
+    w.poll("job", "5", "review", "max", "opus", join(w.dir, "prompt"), "0");
     const log = w.ghLog();
-    expect(log).toContain(`gh api ${R}/issues/5/labels -f labels[]=agent:blocked`);
-    expect(log).toContain(`gh api -X DELETE ${R}/issues/5/labels/agent:working`);
-    expect(log).toContain("needs you:\nBlue or red?\nA) blue (recommended)");
+    expect(log).toContain("runner: review finished on mac:\nPR #12, head abc1234: CI green, marked ready.");
+    expect(log).toContain(`gh api -X DELETE ${R}/issues/5/labels/agent:review`);
+    expect(log).not.toContain("agent:blocked");
   });
 });
 
@@ -178,12 +180,12 @@ describe("poll.sh check", () => {
     });
     w.fixture(`${R}/issues/9/events?per_page=100`, ["agent:max", "on:mac"].map((name) => ({ event: "labeled", label: { name }, actor: { login: "karthik24iyer" }, created_at: at })));
     w.fixture(`${R}/issues/9/comments?per_page=100`, []);
-    w.fixture(`${R}/issues?state=open&labels=agent:working&per_page=100`, []);
+    w.fixture(`${R}/issues?state=open&per_page=100`, []);
     w.fixture(`${R}/pulls?state=open&per_page=100`, []);
     const r = w.poll("check", "9");
     expect(r.stdout).toContain("#9: comment: runner: not started: opened by mallory, not karthik24iyer");
     expect(w.ghLog()).toContain(`gh api ${R}/issues/9/comments -f body=runner: not started: opened by mallory`);
-    expect(w.ghLog()).not.toContain("agent:working --silent");
+    expect(w.ghLog()).not.toContain("labels[]=agent:");
   });
 });
 
@@ -196,7 +198,7 @@ describe("poll.sh check: the Effort field", () => {
     });
     w.fixture(`${R}/issues/9/events?per_page=100`, ["agent:max", "on:mac"].map((name) => ({ event: "labeled", label: { name }, actor: { login: "karthik24iyer" }, created_at: at })));
     w.fixture(`${R}/issues/9/comments?per_page=100`, []);
-    w.fixture(`${R}/issues?state=open&labels=agent:working&per_page=100`, []);
+    w.fixture(`${R}/issues?state=open&per_page=100`, []);
     w.fixture(`${R}/pulls?state=open&per_page=100`, []);
   };
   const effort = (name: string) => [{ issue_field_name: "Priority", single_select_option: { name: "High" } }, { issue_field_name: "Effort", single_select_option: { name } }];
@@ -214,7 +216,7 @@ describe("poll.sh check: the Effort field", () => {
     ticket(w, []);
     const r = w.poll("check", "9");
     expect(r.stdout).toContain("#9: comment: runner: not started: set the Effort field.");
-    expect(w.ghLog()).not.toContain("agent:working --silent");
+    expect(w.ghLog()).not.toContain("labels[]=agent:");
   });
 });
 
@@ -229,7 +231,7 @@ describe("poll.sh merges once the gate passes (#270)", () => {
     });
     w.fixture(`${R}/issues/9/events?per_page=100`, labels.map((name) => ({ event: "labeled", label: { name }, actor: { login: "karthik24iyer" }, created_at: "2026-11-10T10:00:00Z" })));
     w.fixture(`${R}/issues/9/comments?per_page=100`, []);
-    w.fixture(`${R}/issues?state=open&labels=agent:working&per_page=100`, []);
+    w.fixture(`${R}/issues?state=open&per_page=100`, []);
     w.fixture(`${R}/pulls?state=open&per_page=100`, [{ number: 12, body: "Closes #9" }]);
     mkdirSync(join(w.repo, "docs/pipeline"), { recursive: true });
     writeFileSync(join(w.repo, "docs/pipeline/verdicts.sh"), 'echo "MERGEABLE: yes"\n');
@@ -237,37 +239,156 @@ describe("poll.sh merges once the gate passes (#270)", () => {
     return w;
   }
 
-  it("merges on the ticket's host and comments the merge", () => {
+  it("merges on the ticket's host, comments the merge and closes the ticket", () => {
     const w = ready("mac");
-    expect(w.poll("check", "9").stdout).toContain("PR #12 passed the gate: merging");
+    expect(w.poll("check", "9").stdout).toContain("#9: PR #12: merge");
     expect(readFileSync(join(w.dir, "merged"), "utf8")).toBe("GH_TOKEN=tok\n");
     expect(w.ghLog()).toContain(`gh api ${R}/issues/9/comments -f body=runner: merged #12 → main abc1234 --silent`);
+    expect(w.ghLog()).toContain(`gh api -X PATCH ${R}/issues/9 -f state=closed -f state_reason=completed --silent`);
     expect(w.ghLog()).not.toContain("agent:blocked");
   });
 
   it("leaves the merge to the ticket's host", () => {
     const w = ready("cloud");
-    expect(w.poll("check", "9").stdout).toContain("PR #12 passed the gate: cloud merges it");
+    expect(w.poll("check", "9").stdout).toContain("#9: PR #12: merge on cloud");
     expect(existsSync(join(w.dir, "merged"))).toBe(false);
   });
 
-  it("in the cloud, hands the merge to the workflow's Merge step, which merges with AGENT_GH_TOKEN", () => {
+  it("in the cloud, hands the merge to the workflow's Runner action step, which merges with AGENT_GH_TOKEN", () => {
     const w = ready("cloud", "cloud");
     const out = join(w.dir, "out");
     const r = spawnSync("bash", [join(ROOT, "docs/pipeline/runner/poll.sh"), "check", "9"], { env: { ...w.env, GITHUB_OUTPUT: out }, encoding: "utf8" });
     expect(r.status).toBe(0);
-    expect(readFileSync(out, "utf8")).toBe("merge=12\n");
+    expect(readFileSync(out, "utf8")).toBe("action=merge\npr=12\nhead=\n");
     expect(existsSync(join(w.dir, "merged"))).toBe(false);
     spawnSync("bash", [join(ROOT, "docs/pipeline/runner/poll.sh"), "merge", "9", "12"], { env: { ...w.env, AGENT_GH_TOKEN: "agent-tok" } });
     expect(readFileSync(join(w.dir, "merged"), "utf8")).toBe("GH_TOKEN=agent-tok\n");
   });
 
-  it("a refused merge is never merged: it comments the gate's reason and sets agent:blocked", () => {
+  it("a refused merge (the gate changed since the check) is never merged, blocks nothing and is retried at the next check", () => {
     const w = ready("mac", "mac", 'echo "MERGEABLE: no (CI failing: e2e (failure))"; echo "ABORT: #12 not merged (CI failing: e2e (failure))"; exit 1');
-    w.poll("check", "9");
-    expect(w.ghLog()).toContain(`gh api ${R}/issues/9/labels -f labels[]=agent:blocked`);
-    expect(w.ghLog()).toContain("runner: merge refused: #12 not merged (CI failing: e2e (failure))\nFix it, then remove `agent:blocked`.");
+    expect(w.poll("check", "9").stdout).toContain("#9: merge of #12 refused: ABORT: #12 not merged (CI failing: e2e (failure))");
+    expect(w.ghLog()).not.toContain("agent:blocked");
     expect(w.ghLog()).not.toContain("runner: merged");
+    expect(w.ghLog()).not.toContain("state=closed");
+  });
+});
+
+describe("poll.sh's own actions (no agent)", () => {
+  /** origin with a PR branch `feat` (one commit by the wrong author, with an attribution line) behind a newer main. */
+  function behind() {
+    const w = world();
+    const other = join(w.dir, "other");
+    w.git("clone", "-q", w.origin, other);
+    w.git("-C", other, "checkout", "-q", "-b", "feat");
+    writeFileSync(join(other, "f.txt"), "x\n");
+    w.git("-C", other, "add", "f.txt");
+    w.git("-C", other, "-c", "user.name=Karthikeyan Iyer", "-c", "user.email=karthik24iyer@gmail.com", "commit", "-qm", "feat: f\n\nCo-Authored-By: Claude <noreply@anthropic.com>");
+    w.git("-C", other, "push", "-q", "origin", "feat");
+    const head = w.git("-C", other, "rev-parse", "HEAD");
+    w.git("-C", other, "checkout", "-q", "main");
+    w.git("-C", other, "-c", "user.name=k", "-c", "user.email=k@x", "commit", "-q", "--allow-empty", "-m", "main moved");
+    w.git("-C", other, "push", "-q", "origin", "main");
+    w.fixture(`${R}/pulls/12`, { head: { ref: "feat" } });
+    w.fixture(`${R}/issues/9`, { number: 9, labels: [{ name: "agent:ci" }] });
+    return { w, head, main: w.git("-C", other, "rev-parse", "HEAD") };
+  }
+
+  it("sync: rebases the branch onto main as karthik24iyer, drops attribution lines and pushes", () => {
+    const { w, head, main } = behind();
+    expect(w.poll("sync", "9", "12", head).status).toBe(0);
+    const tip = w.git("--git-dir", w.origin, "rev-parse", "feat");
+    expect(tip).not.toBe(head);
+    expect(w.git("--git-dir", w.origin, "rev-parse", "feat~1")).toBe(main);
+    expect(w.git("--git-dir", w.origin, "log", "-1", "--format=%an <%ae>|%B", "feat")).toBe("karthik24iyer <karthik24iyer@gmail.com>|feat: f");
+    expect(w.ghLog()).toContain(`runner: synced with main from head ${head.slice(0, 7)}: new head ${tip.slice(0, 7)}.`);
+    expect(w.git("-C", w.repo, "worktree", "list")).not.toContain("-sync-");
+  });
+
+  it("sync: pushes and says nothing when the branch moved since the check (the next check decides)", () => {
+    const { w } = behind();
+    const before = w.git("--git-dir", w.origin, "rev-parse", "feat");
+    expect(w.poll("sync", "9", "12", "0".repeat(40)).stdout).toContain("#9: feat moved since the check: not synced");
+    expect(w.git("--git-dir", w.origin, "rev-parse", "feat")).toBe(before);
+    expect(w.ghLog()).not.toContain("runner: synced");
+  });
+
+  it("sync: a conflict pushes nothing and hands it to the builder", () => {
+    const { w, head } = behind();
+    const other = join(w.dir, "other");
+    writeFileSync(join(other, "f.txt"), "main's\n");
+    w.git("-C", other, "add", "f.txt");
+    w.git("-C", other, "-c", "user.name=k", "-c", "user.email=k@x", "commit", "-qm", "conflict");
+    w.git("-C", other, "push", "-q", "origin", "main");
+    w.poll("sync", "9", "12", head);
+    expect(w.git("--git-dir", w.origin, "rev-parse", "feat")).toBe(head);
+    expect(w.ghLog()).toContain(`runner: synced with main from head ${head.slice(0, 7)}: the rebase or push failed`);
+  });
+
+  it("full: dispatches ci.yml on the PR's branch, sets agent:ci and says so", () => {
+    const { w, head } = behind();
+    w.fixture(`${R}/issues/9`, { number: 9, labels: [{ name: "agent:qa" }] });
+    w.poll("full", "9", "12", head);
+    const log = w.ghLog();
+    expect(log).toContain(`gh api ${R}/actions/workflows/ci.yml/dispatches -f ref=feat --silent`);
+    expect(log).toContain(`gh api -X DELETE ${R}/issues/9/labels/agent:qa`);
+    expect(log).toContain(`gh api ${R}/issues/9/labels -f labels[]=agent:ci`);
+    expect(log).toContain(`runner: full suite started on head ${head.slice(0, 7)}`);
+  });
+
+  it("rerun: re-runs the failed jobs of the head's failed CI runs and says so", () => {
+    const w = world();
+    const h = "a".repeat(40);
+    w.fixture(`${R}/actions/runs?head_sha=${h}&per_page=20`, { workflow_runs: [
+      { id: 1, name: "CI", conclusion: "failure" }, { id: 2, name: "CI", conclusion: "success" }, { id: 3, name: "Agent", conclusion: "failure" },
+    ] });
+    w.fixture(`${R}/issues/9`, { number: 9, labels: [] });
+    w.poll("rerun", "9", "12", h);
+    const log = w.ghLog();
+    expect(log).toContain(`gh api -X POST ${R}/actions/runs/1/rerun-failed-jobs --silent`);
+    expect(log).not.toContain("runs/2/rerun");
+    expect(log).not.toContain("runs/3/rerun");
+    expect(log).toContain("runner: re-ran failed CI jobs on head aaaaaaa (run 1).");
+  });
+});
+
+describe("poll.sh keeps the runner on the newest main", () => {
+  it("fast-forwards a clean checkout of main once per poll; leaves one with local changes alone", () => {
+    const w = world();
+    const other = join(w.dir, "other");
+    w.git("clone", "-q", w.origin, other);
+    w.git("-C", other, "-c", "user.name=k", "-c", "user.email=k@x", "commit", "-q", "--allow-empty", "-m", "pipeline fix");
+    w.git("-C", other, "push", "-q", "origin", "HEAD:main");
+    w.fixture(`${R}/issues?state=open&per_page=100`, []);
+    const r = w.poll();
+    expect(r.stdout).toMatch(/updated to [0-9a-f]{7}/);
+    expect(w.git("-C", w.repo, "rev-parse", "HEAD")).toBe(w.git("-C", other, "rev-parse", "HEAD"));
+    expect(r.stdout.match(/poll on mac/g)).toHaveLength(1); // the restarted poll; the first one exec'd before its lock
+    // Local changes: not updated.
+    w.git("-C", other, "-c", "user.name=k", "-c", "user.email=k@x", "commit", "-q", "--allow-empty", "-m", "another");
+    w.git("-C", other, "push", "-q", "origin", "HEAD:main");
+    writeFileSync(join(w.repo, "scripts/agent-start.ts"), "// edited\n");
+    expect(w.poll().stdout).toContain("has local changes: not updated");
+  });
+});
+
+describe("poll.sh check sets the stage label while CI runs", () => {
+  it("a PR whose CI is running gets agent:ci", () => {
+    const w = world();
+    const labels = ["agent:max", "on:mac"];
+    w.fixture(`${R}/issues/9`, {
+      number: 9, title: "T", user: { login: "karthik24iyer" }, type: { name: "Task" }, body: "### Area\n\nci",
+      labels: labels.map((name) => ({ name })), issue_field_values: [{ issue_field_name: "Effort", single_select_option: { name: "Low" } }],
+    });
+    w.fixture(`${R}/issues/9/events?per_page=100`, labels.map((name) => ({ event: "labeled", label: { name }, actor: { login: "karthik24iyer" }, created_at: "2026-11-10T10:00:00Z" })));
+    w.fixture(`${R}/issues/9/comments?per_page=100`, []);
+    w.fixture(`${R}/issues?state=open&per_page=100`, []);
+    w.fixture(`${R}/pulls?state=open&per_page=100`, [{ number: 12, body: "Closes #9" }]);
+    mkdirSync(join(w.repo, "docs/pipeline"), { recursive: true });
+    const h = "a".repeat(40);
+    writeFileSync(join(w.repo, "docs/pipeline/verdicts.sh"), `printf '%s\\n' "PR #12  state open  draft false  merge-state clean" "head:   ${h}" "review: none  @ <no Head: line>" "qa:     none  @ <no Head: line>" "ci:     3 check-runs" "  pending: e2e" "commits: 1 ok" "MERGEABLE: no (CI pending: e2e)"\n`);
+    expect(w.poll("check", "9").stdout).toContain("#9: wait: CI is running");
+    expect(w.ghLog()).toContain(`gh api ${R}/issues/9/labels -f labels[]=agent:ci --silent`);
   });
 });
 
@@ -348,11 +469,11 @@ describe("agent.yml", () => {
     expect(yml).toContain("persist-credentials: false");
     expect(yml).not.toMatch(/token: \$\{\{ secrets\.AGENT_GH_TOKEN/);
     expect(yml.match(/secrets\.AGENT_GH_TOKEN/g)).toHaveLength(2);
-    expect(yml).toMatch(/- name: Merge\n {8}if: steps\.check\.outputs\.merge != ''\n {8}env:\n.*\n {10}AGENT_GH_TOKEN: \$\{\{ secrets\.AGENT_GH_TOKEN \}\}/);
+    expect(yml).toMatch(/- name: Runner action\n {8}if: steps\.check\.outputs\.action != ''\n {8}env:\n {10}GH_TOKEN: \$\{\{ github\.token \}\}\n {10}AGENT_GH_TOKEN: \$\{\{ secrets\.AGENT_GH_TOKEN \}\}/);
     expect(yml).toContain("GH_TOKEN=$AGENT_GH_TOKEN gh auth setup-git");
   });
   it("ignores the runner's own label writes and stops only a cloud step", () => {
-    expect(yml).toContain("&& github.event.label.name != 'agent:working'");
+    expect(yml).toContain(`&& !contains(fromJSON('["agent:dev","agent:ci","agent:review","agent:qa","agent:working"]'), github.event.label.name)`);
     expect(yml).toContain("!(github.event.action == 'labeled' && github.event.label.name == 'agent:blocked')");
     expect(yml).toContain('poll.sh stop "$N"');
   });
