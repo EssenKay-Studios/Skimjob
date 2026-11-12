@@ -30,6 +30,9 @@ describe("theme-token lint", () => {
     expect(css("color: transparent; background: var(--red); animation: white-flash 1s;")).toBe(0);
     expect(violations("apps/web/src/x.tsx", 'const a = <path fill="red" style={{ backgroundColor: "white", borderTopColor: "navy" }} />;')).toBe(3);
     expect(violations("apps/web/src/x.tsx", 'const a = <path fill="none" className="red" />;')).toBe(0);
+    expect(css("border-left: 2px solid red; text-decoration: underline red;")).toBe(2);
+    expect(css("background-image: linear-gradient(red, blue);")).toBe(1);
+    expect(violations("apps/web/src/x.tsx", 'const a = <i style={{ borderLeft: "2px solid red" }} />;')).toBe(1);
   });
 
   it("flags raw inline style radii, shadows and fonts in .tsx", () => {
