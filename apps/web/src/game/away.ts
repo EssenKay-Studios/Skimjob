@@ -1,10 +1,11 @@
-// "While you were away" (design §13, M2-10): a 2–4 line summary of what changed
-// since the player last looked, from `eventsSince(view, lastSeen)` only, so it
-// can never say more than the player's own ledger and case file. Pure; generic
-// over events (it names no role or faction: lines come from describeEvent or
-// from public round results). docs/m2-plan.md M2-10
+// "While you were away" (design §15.4): a 2–4 line summary of what changed since
+// the player last looked, from `eventsSince(view, lastSeen)` only, so it can
+// never say more than the player's own ledger and case file. Pure; generic over
+// events (it names no role or faction). Each line is the case board's own fact
+// line from describeEvent, so the ledger, the recap and the case board say a
+// fact the same way.
 import type { GameEvent, LoggedEvent, PlayerView } from "@skimjob/engine";
-import { describeEvent, the, type DescribeContext } from "./describeEvent";
+import { describeEvent, type DescribeContext } from "./describeEvent";
 import { bailPromptOf, MEETING_TITLE } from "./meeting";
 
 /** One recap line and the entries it was built from (for tests: they must all be in the viewer's view). */
@@ -16,8 +17,8 @@ export interface RecapItem {
 /** At most this many lines; at least two whenever there is anything to say (the last says what's next). */
 export const RECAP_MAX_LINES = 4;
 
-/** Your own deliberate actions in the case file: you know them already, so they aren't news. */
-const OWN_ACTIONS: ReadonlySet<GameEvent["type"]> = new Set<GameEvent["type"]>(["moveSubmitted", "voteSealed", "voteCast", "coinsGrabbed"]);
+/** Your own deliberate actions in the case file (your trust marks included, design §10.3): you know them already, so they aren't news. */
+const OWN_ACTIONS: ReadonlySet<GameEvent["type"]> = new Set<GameEvent["type"]>(["moveSubmitted", "voteSealed", "voteCast", "coinsGrabbed", "alibiMarked"]);
 
 /** The highest seq in a view (-1 when empty): what "seen everything" means. */
 export const topSeq = (view: Pick<PlayerView, "ledger" | "caseFile">): number => view.ledger.length + view.caseFile.length - 1;
@@ -37,32 +38,24 @@ export function recapItems(events: readonly LoggedEvent[], view: PlayerView, ctx
   // design §5.3: raids (with Wanted) and a reopened room.
   for (const e of [...of("roomRaided"), ...of("roomReopened")]) picks.push({ prio: 1, ...say(e) });
 
-  // design §7.4, §13 round summaries: coins taken and missing, and the bank, over every round resolved while away.
+  // design §7.4: coins taken and missing and the bank, as the case board's Haul line; several rounds add up in one.
   const rounds = of("roundResolved");
-  if (rounds.length > 0) {
-    const first = rounds[0]!.event;
+  if (rounds.length === 1) picks.push({ prio: 2, ...say(rounds[0]!) });
+  else if (rounds.length > 1) {
     const last = rounds.at(-1)!.event;
     const taken = rounds.reduce((n, e) => n + e.event.taken, 0);
     const missing = rounds.reduce((n, e) => n + e.event.missing, 0);
-    const which = rounds.length === 1 ? `Round ${first.round}` : `Rounds ${first.round}–${last.round}`;
     picks.push({
       prio: 2,
       seq: rounds.at(-1)!.seq,
-      text: `${which} done: ${taken} taken, ${missing} went missing, ${last.bank} coins left in the bank.`,
+      text: `Rounds ${rounds[0]!.event.round}–${last.round}: ${taken} taken, ${missing} ${missing === 1 ? "coin" : "coins"} went missing, ${last.bank} coins left in the bank.`,
       from: rounds.map((e) => e.seq),
     });
   }
 
-  // design §10: the latest snapshot card, from public data (the round's alibis and its "no alibi" facts).
+  // design §10.2: the latest snapshot card is out. Its alibis and "no alibi" facts are on the card, not their own lines.
   const card = of("alibiWindowClosed").at(-1);
-  if (card) {
-    const { round, noAlibi } = card.event;
-    const alibis = view.ledger.flatMap(({ seq, event: e }) => (e.type === "said" && e.statement.kind === "alibi" && e.statement.round === round ? [{ seq, room: e.statement.room }] : []));
-    const said = new Map<string, number>();
-    for (const { room } of alibis) said.set(room, (said.get(room) ?? 0) + 1);
-    const parts = [...[...said].sort((a, b) => b[1] - a[1]).map(([room, n]) => `${n} said ${the(room)}`), ...(noAlibi.length ? [`${noAlibi.length} had no alibi`] : [])];
-    picks.push({ prio: 6, seq: card.seq, text: `Round ${round}'s card is in: ${parts.length ? parts.join(", ") : "nobody played"}.`, from: [...alibis.map((e) => e.seq), card.seq] });
-  }
+  if (card) picks.push({ prio: 6, seq: card.seq, text: `Round ${card.event.round}'s snapshot card is in the case board.`, from: [card.seq] });
 
   // Meetings: the shakedown's result says more than the vote that called it.
   const settled = new Set([...of("shakedownResolved"), ...of("shakedownCancelled")].map((e) => e.event.target));

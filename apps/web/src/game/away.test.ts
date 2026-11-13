@@ -1,10 +1,11 @@
-// "While you were away" (design §13), from real engine views. M2-10 acceptance:
-// recaps for a quiet round, a meeting and a shakedown; nothing
-// in a recap comes from outside the viewer's own view.
+// "While you were away" (design §15.4), from real engine views: recaps for a
+// quiet round, a meeting, a shakedown and a snapshot card, each line in the case
+// board's wording; nothing in a recap comes from outside the viewer's own view.
 import { eventsSince, handleCommand, viewFor, type GameConfig, type GameState, type PlayerCommand, type PlayerId, type SystemCommand } from "@skimjob/engine";
 import { createGame } from "./deal.testkit";
 import { describe, expect, it } from "vitest";
 import { nextUp, recap, recapItems, RECAP_MAX_LINES, topSeq } from "./away";
+import { describeEvent } from "./describeEvent";
 import { namesOf } from "./hud";
 import { BANK_JOB } from "@skimjob/content";
 
@@ -57,7 +58,7 @@ function recapBetween(before: GameState, after: GameState, player: PlayerId = "p
   return recap(eventsSince(view, seen), view, ctx);
 }
 
-describe("while you were away (design §13)", () => {
+describe("while you were away (design §15.4)", () => {
   it("says nothing when nothing happened, or only lock-in marks", () => {
     const s = createGame(config());
     expect(recapBetween(s, s)).toEqual([]);
@@ -76,7 +77,7 @@ describe("while you were away (design §13)", () => {
     const lines = recapBetween(s, playRound(s));
     expect(lines.length).toBeGreaterThanOrEqual(2);
     expect(lines.length).toBeLessThanOrEqual(RECAP_MAX_LINES);
-    expect(lines.find((l) => l.startsWith("Round 1 done"))).toMatch(/^Round 1 done: \d+ taken, \d+ went missing, \d+ coins left in the bank\.$/);
+    expect(lines.find((l) => l.startsWith("Round 1:"))).toMatch(/^Round 1: \d+ taken, \d+ coins? went missing, \d+ coins left in the bank\.$/);
     expect(lines.at(-1)).toBe("Now: round 2. Pick your room before the deadline.");
   });
 
@@ -86,7 +87,7 @@ describe("while you were away (design §13)", () => {
     const lines = recapBetween(s, after);
     const resolved = after.log.filter((e) => e.type === "roundResolved");
     const taken = resolved.reduce((n, e) => n + e.taken, 0);
-    expect(lines.find((l) => l.startsWith("Rounds"))).toMatch(new RegExp(`^Rounds 1–2 done: ${taken} taken, \\d+ went missing, ${resolved.at(-1)?.bank} coins left`));
+    expect(lines.find((l) => l.startsWith("Rounds"))).toMatch(new RegExp(`^Rounds 1–2: ${taken} taken, \\d+ coins? went missing, ${resolved.at(-1)?.bank} coins left in the bank\\.$`));
   });
 
   it("a meeting: the vote result", () => {
@@ -120,18 +121,36 @@ describe("while you were away (design §13)", () => {
     expect(lines.at(-1)).toBe(`Now: round ${r + 1}. Pick your room before the deadline.`);
   });
 
-  it("the latest snapshot card: what the alibis said and who had none (design §10)", () => {
+  it("the latest snapshot card has its line; its alibis and missed alibis stay on the card (design §10.2, §15.4)", () => {
     let s = run(allMove(createGame(config())), round(1));
     expect(nextUp(viewFor(s, "p1"))).toBe("Now: round 1's alibi window is open.");
     const before = s;
-    s = run(
-      s,
-      { type: "postAlibi", player: "p2", round: 1, room: "vault" },
-      { type: "postAlibi", player: "p3", round: 1, room: "vault" },
-      { type: "postAlibi", player: "p4", round: 1, room: "office" },
-      alibiClose(1),
-    );
-    expect(recapBetween(before, s)).toContain("Round 1's card is in: 2 said the Vault, 1 said the Office, 2 had no alibi.");
+    s = run(s, { type: "postAlibi", player: "p2", round: 1, room: "vault" }, { type: "postAlibi", player: "p3", round: 1, room: "office" }, alibiClose(1));
+    const lines = recapBetween(before, s);
+    expect(lines).toContain("Round 1's snapshot card is in the case board.");
+    expect(lines.join("\n")).not.toMatch(/alibi|says they were/i);
+    // Only the latest card when several came out while away.
+    const two = recapBetween(createGame(config()), playRound(playRound(createGame(config()))));
+    expect(two.filter((l) => /snapshot card/.test(l))).toEqual(["Round 2's snapshot card is in the case board."]);
+  });
+
+  it("your own trust marks aren't news (design §10.3)", () => {
+    const s = run(allMove(createGame(config())), round(1), alibiClose(1));
+    const marked = run(s, { type: "markAlibi", player: "p1", round: 1, target: "p2", mark: "liar" });
+    expect(recapBetween(s, marked)).toEqual([]);
+  });
+
+  it("each line reads as the case board's fact line for the same event (design §15.4)", () => {
+    let s = toResult(createGame(config()));
+    const before = s;
+    s = run(s, { type: "claimRole", player: "p3", role: "lookout" }, { type: "callEmergency", player: "p2" }, open("emergency-1"), ...ids(s).map(skip), close("emergency-1"));
+    const view = viewFor(s, "p1");
+    const ctx = { me: "p1", name: namesOf(view) };
+    const items = recapItems(eventsSince(view, topSeq(viewFor(before, "p1"))), view, ctx);
+    const own = new Map([...view.ledger, ...view.caseFile].map((e) => [e.seq, e.event]));
+    const single = items.filter((i) => i.from.length === 1);
+    expect(single.length).toBeGreaterThanOrEqual(2);
+    for (const i of single) expect(i.text).toBe(describeEvent(own.get(i.from[0]!)!, ctx));
   });
 
   it("your case file: one entry in full, several as a count; your own moves aren't news", () => {
@@ -190,7 +209,7 @@ function step(s: GameState): GameState {
   throw new Error(`unexpected phase ${p.kind}`);
 }
 
-describe("leaks: a recap holds only the viewer's own view (design §13, §17.2)", () => {
+describe("leaks: a recap holds only the viewer's own view (design §15.4, §18)", () => {
   for (const n of [3, 5, 9]) {
     it(`whole game at ${n} seats: every line comes from the viewer's ledger or own case file`, () => {
       const roles = n >= 5 ? ["locksmith", "lookout", "priest", "hacker", "auditor", "detective"] : [];
@@ -210,6 +229,8 @@ describe("leaks: a recap holds only the viewer's own view (design §13, §17.2)"
             expect(items.length).toBeLessThanOrEqual(RECAP_MAX_LINES);
             for (const item of items) {
               lines++;
+              // No plan board (#258, #294): nothing about plans, pledges or agreeing.
+              expect(item.text).not.toMatch(/\bplan\b|pledge|agree/i);
               for (const seq of item.from) {
                 const e = own.get(seq);
                 expect(e, `seq ${seq} is in ${id}'s view`).toBeDefined();

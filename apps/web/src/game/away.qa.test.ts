@@ -1,9 +1,11 @@
-// QA (M2-10, PR #46): "While you were away" (design §13) at 2, 3 and 12 seats; recaps after a meeting, a shakedown, the
-// end and a reconnect-style catch-up; nothing from anyone else's case file.
+// QA (M2-10, PR #46; R7 lines, PR #303): "While you were away" (design §15.4) at 3 and 12 seats; recaps after a meeting,
+// a shakedown, the end and a reconnect-style catch-up; nothing from anyone else's case file (design §18); each line in
+// the case board's wording, one line for the latest snapshot card, nothing about a plan board.
 import { eventsSince, handleCommand, viewFor, type GameConfig, type GameState, type PlayerCommand, type PlayerId, type SystemCommand } from "@skimjob/engine";
 import { createGame } from "./deal.testkit";
 import { describe, expect, it } from "vitest";
 import { recap, recapItems, RECAP_MAX_LINES, topSeq } from "./away";
+import { describeEvent } from "./describeEvent";
 import { namesOf } from "./hud";
 import { BANK_JOB } from "@skimjob/content";
 
@@ -62,10 +64,10 @@ function playAll(cfg: GameConfig): GameState[] {
   return states;
 }
 /** Your own deliberate actions (away.ts): not news. */
-const OWN = new Set(["moveSubmitted", "voteSealed", "voteCast", "coinsGrabbed"]);
+const OWN = new Set(["moveSubmitted", "voteSealed", "voteCast", "coinsGrabbed", "alibiMarked"]);
 const ctxOf = (view: ReturnType<typeof viewFor>, me: PlayerId) => ({ me, name: namesOf(view) });
 
-describe("QA: recaps at 3 and 12 seats only ever hold the viewer's own view (design §13, §17.2)", () => {
+describe("QA: recaps at 3 and 12 seats only ever hold the viewer's own view (design §15.4, §18)", () => {
   for (const n of [3, 12]) {
     it(`${n} seats, every (last seen, came back) pair: at most ${RECAP_MAX_LINES} lines, sources all in the viewer's view`, () => {
       const states = playAll(config(n));
@@ -82,14 +84,27 @@ describe("QA: recaps at 3 and 12 seats only ever hold the viewer's own view (des
             expect(items.length).toBeLessThanOrEqual(RECAP_MAX_LINES);
             // Lines are unique: a recap never says the same thing twice.
             expect(new Set(items.map((x) => x.text)).size).toBe(items.length);
+            const since = eventsSince(view, topSeq(viewFor(states[i]!, id)));
+            const card = since.filter((e) => e.event.type === "alibiWindowClosed").at(-1);
+            const rounds = since.filter((e) => e.event.type === "roundResolved");
             for (const item of items) {
               lines++;
+              // No plan board (owner, 13 Nov; #258, #294) and no alibi tallies: those stay the card's facts (design §10.2).
+              expect(item.text).not.toMatch(/\bplan|pledge|agree|said the|had no alibi|alibis? (?:are )?in/i);
+              // design §15.4: a single-source line is the case board's / ledger's own fact line (the "Only you:" prefix aside;
+              // the snapshot-card line is the ticket's own sentence, #203).
+              if (item.from.length === 1 && !/new entries|snapshot card/.test(item.text)) expect(item.text.replace(/^Only you: /, "")).toBe(describeEvent(own.get(item.from[0]!)!, ctxOf(view, id)));
+              // The snapshot-card line is for the latest card only.
+              if (/snapshot card/.test(item.text)) expect(item).toEqual({ text: `Round ${(card!.event as { round: number }).round}'s snapshot card is in the case board.`, from: [card!.seq] });
+              if (/^Rounds /.test(item.text)) expect(item.from).toEqual(rounds.map((e) => e.seq));
               for (const seq of item.from) {
                 const e = own.get(seq);
                 expect(e, `seq ${seq} in ${id}'s view`).toBeDefined();
                 if (e!.visibility.kind !== "public") expect(e!.visibility).toMatchObject({ player: id });
               }
             }
+            // A card that came out while away always gets its line unless the cap squeezed it out.
+            if (card && items.length < RECAP_MAX_LINES) expect(items.some((x) => /snapshot card/.test(x.text)), items.map((x) => x.text).join(" | ")).toBe(true);
           }
         }
       }
@@ -132,7 +147,7 @@ describe("QA: recaps at 3 and 12 seats only ever hold the viewer's own view (des
   });
 });
 
-describe("QA: recap after a meeting, a shakedown, the end and a reconnect (design §13)", () => {
+describe("QA: recap after a meeting, a shakedown, the end and a reconnect (design §15.4)", () => {
   const states = playAll(config(5));
   const end = states.at(-1)!;
   const at = (pred: (s: GameState) => boolean) => states.findIndex(pred);
@@ -190,5 +205,39 @@ describe("QA: recap after a meeting, a shakedown, the end and a reconnect (desig
       // Caught up: from the top, nothing.
       expect(recap(eventsSince(burst, topSeq(burst)), burst, ctxOf(burst, id))).toEqual([]);
     }
+  });
+});
+
+describe("QA: R7 recap lines (PR #303, design §15.4)", () => {
+  it("several rounds away: one line summing them in the Haul line's form, singular 'coin' at exactly 1 missing", () => {
+    const states = playAll(config(5));
+    const end = states.at(-1)!;
+    const view = viewFor(end, "p1");
+    const rounds = view.ledger.filter((e) => e.event.type === "roundResolved").slice(0, 2);
+    expect(rounds).toHaveLength(2);
+    const [a, b] = rounds.map((e, k) => ({ ...e, event: { ...e.event, missing: k, taken: 10 + k } }) as typeof e);
+    const lines = recap([a!, b!], view, ctxOf(view, "p1"));
+    const bank = (b!.event as { bank: number }).bank;
+    expect(lines).toEqual([`Rounds ${(a!.event as { round: number }).round}–${(b!.event as { round: number }).round}: 21 taken, 1 coin went missing, ${bank} coins left in the bank.`]);
+    const zero = recap([a!, { ...b!, event: { ...b!.event, missing: 0 } } as NonNullable<typeof b>], view, ctxOf(view, "p1"));
+    expect(zero[0]).toMatch(/: 21 taken, 0 coins went missing, /);
+  });
+
+  it("a trust mark beside one real case-file entry: the entry is said in full, the mark isn't counted (design §10.3)", () => {
+    let s = createGame(config(5));
+    // p1 watches the vault from Security: a private camera result; then marks Ben's alibi once the card is out.
+    for (const [i, id] of ids(s).entries()) s = run(s, { type: "submitMove", player: id, move: i === 0 ? { room: "security", duffel: 0, pocket: 0, watch: "vault" } : { room: "office", duffel: 1, pocket: 0 } } as PlayerCommand);
+    const before = s;
+    s = run(s, { type: "advance", deadline: { kind: "round", round: 1 } }, { type: "postAlibi", player: "p2", round: 1, room: "vault" } as PlayerCommand);
+    s = run(s, { type: "advance", deadline: { kind: "alibi", round: 1 } }, { type: "markAlibi", player: "p1", round: 1, target: "p2", mark: "liar" } as PlayerCommand);
+    const view = viewFor(s, "p1");
+    const since = eventsSince(view, topSeq(viewFor(before, "p1")));
+    expect(since.some((e) => e.event.type === "alibiMarked")).toBe(true);
+    const news = since.filter((e) => e.event.visibility.kind !== "public" && !OWN.has(e.event.type));
+    const lines = recap(since, view, ctxOf(view, "p1")).join("\n");
+    expect(lines).not.toMatch(/marked|Liar|Trusted/);
+    if (news.length === 1) expect(lines).toContain(`Only you: ${describeEvent(news[0]!.event, ctxOf(view, "p1"))}`);
+    else expect(lines).toContain(`${news.length} new entries in your case file`);
+    expect(lines).toContain("Round 1's snapshot card is in the case board.");
   });
 });
