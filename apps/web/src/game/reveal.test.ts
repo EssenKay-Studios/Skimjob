@@ -126,6 +126,12 @@ describe("<Reveal>", () => {
     expect(html).toContain("Cy sat the round out: the Lobby was taped off.");
   });
 
+  it("says the last round had no alibi window (design §10.1)", () => {
+    const last = renderToStaticMarkup(createElement(Reveal, { summary: { ...summary, rounds: summary.rounds.slice(1) }, ctx, looks: new Map(), marks: new Map(), cards: new Map(), bulbs: 5 }));
+    expect(last).toContain("No alibi window: the game ended.");
+    expect(html).not.toContain("No alibi window");
+  });
+
   it("never injects HTML (UI rules)", () => {
     for (const f of ["../components/Reveal.tsx", "../components/reveal.css", "./reveal.ts", "../screens/GalleryReveal.tsx"]) {
       const src = readFileSync(new URL(f, import.meta.url), "utf8");

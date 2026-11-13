@@ -280,12 +280,12 @@ function Timeline({ summary, ...sheet }: SheetProps & { summary: RevealSummary }
           ›
         </Button>
       </div>
-      <RoundSheet round={round} {...sheet} />
+      <RoundSheet round={round} last={rounds.at(-1)!.round} {...sheet} />
     </section>
   );
 }
 
-function RoundSheet({ round, ctx, looks, marks, cards, bulbs }: SheetProps & { round: RevealRound }) {
+function RoundSheet({ round, last, ctx, looks, marks, cards, bulbs }: SheetProps & { round: RevealRound; last: number }) {
   const who = (p: PlayerId) => (p === ctx.me ? "You" : ctx.name(p));
   const snap = cards.get(round.round);
   const lies = roundLies(round, marks);
@@ -316,6 +316,7 @@ function RoundSheet({ round, ctx, looks, marks, cards, bulbs }: SheetProps & { r
           </span>
         )}
       </header>
+      {round.round === last && !snap && <p className="meta">No alibi window: the game ended.</p>}
       {snap && (
         <>
           <SnapshotCard
