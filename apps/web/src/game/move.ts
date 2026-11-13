@@ -3,7 +3,7 @@
 // powers offer. All read from the player's own view. design §3.2, §5.2, §11.1
 import { powerOf, ringsOf, type AbilityUse, type Move, type PlayerId, type PlayerView, type RoomId } from "@skimjob/engine";
 import type { RolePower } from "@skimjob/content";
-import { crewSize, jobOf, setupOf, type RoomOption } from "./hud";
+import { crewSize, jobOf, roomOptions, setupOf, type RoomOption } from "./hud";
 
 /** The coins grabbed: the player's choice, from none (a fresh move) up to the room's limit; 0 where there are none. The least that locks in is 1. design §3.2 */
 export const grabOf = (coins: number, wanted: number): number => Math.min(coins, Math.max(0, wanted));
@@ -99,7 +99,8 @@ function lastAbsolved(view: PlayerView): PlayerId | null {
 /**
  * The power your role can use with this move, if it has one that a move carries
  * and a use left (design §11.1). It lists what it accepts: the Lookout any room
- * in play, the Electrician any room, the Hacker an open room, the Mole an open
+ * in play, the Electrician any room, the Hacker an open room (not taped off or
+ * locked down, design §3.2), the Mole an open
  * room but the Rooftop, the Fixer a taped-off one.
  */
 export function powerControl(view: PlayerView): PowerControl | null {
@@ -116,7 +117,7 @@ export function powerControl(view: PlayerView): PowerControl | null {
     case "blackout":
       return { kind: "blackout", target: "room", pick: 1, rooms: view.rooms };
     case "hide":
-      return { kind: "hide", target: "room", pick: 1, rooms: rooms((r) => !taped(r)) };
+      return { kind: "hide", target: "room", pick: 1, rooms: roomOptions(view).filter((o) => !o.closed).map((o) => o.id) };
     case "ring":
       return { kind: "ring", target: "room", pick: 1, rooms: rooms((r) => !taped(r) && !job.rooms[r]?.lieLow) };
     case "reopen":
