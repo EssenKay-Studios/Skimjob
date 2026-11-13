@@ -347,7 +347,7 @@ sketchbook paper. Below, `[frame]` means the sketch frame from §4.
   run short. A role's move power shows as room or player buttons. End with a **Primary** "Lock it in" button.
 
 ### Alarm bells and Wanted stars
-- Each room has a **4-bulb alarm bell** over its door. Bulbs fill from `--olive` through `--gold`
+- Each room has a **5-bulb alarm bell** over its door. Bulbs fill from `--olive` through `--gold`
   and `--clay` to `--bad`, with spring easing over .8s, and the bell wobbles when it rings.
 - A raided room gets police tape, a blue-red siren light and a "CLOSED 2" sign that counts down.
 - **Wanted** is 3 sheriff stars at the top of the screen; the third star is a bust.

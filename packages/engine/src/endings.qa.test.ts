@@ -169,7 +169,7 @@ describe("a bust wins over the bank and the cap in the same round — design §4
   });
 
   it("12 players, shipped numbers: three raids in one round jump Wanted 0 → 3 (a bust), both Rooftop players win tied", () => {
-    // Vault: 2 × 3 rings = 6. Office: 4 × 1 ring (1st coin quiet). Deposit boxes: 4 × 1. Two on the Rooftop.
+    // Vault: 2 × 3 rings = 6. Office: 4 × 2 rings. Deposit boxes: 4 × 2. Two on the Rooftop.
     const moves: [string, number, number?][] = [
       ["vault", 3], ["vault", 3],
       ["office", 2], ["office", 2], ["office", 2], ["office", 2],

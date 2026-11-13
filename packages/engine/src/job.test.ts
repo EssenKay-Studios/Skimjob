@@ -26,7 +26,7 @@ describe("rooms in play — design §3.1", () => {
 });
 
 describe("rings — design §3.1, §5.2", () => {
-  it("every coin rings once, except in the Lobby; the Locksmith's and Soft shoes' rings are 0", () => {
+  it("every coin rings once, except in the Lobby; the Locksmith's rings are 0", () => {
     const ring = (room: string, coins: number) => ringsOf(roomDef(bank, room), coins);
     // The Lobby is silent; every coin elsewhere rings once.
     expect(ring("lobby", 1)).toBe(0);

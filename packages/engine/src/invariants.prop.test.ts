@@ -383,6 +383,13 @@ function checkDeal(state: GameState): void {
  * and hidden events (dropped, junk added).
  */
 /** The open meeting's ballots `viewer` sees through their Check ballots. design §12 */
+// The votes the viewer may see; a granted Check ballot not yet cast stays unfaked.
+function scrubVotes(meeting: NonNullable<GameState["meeting"]>, viewer: PlayerId, faked: Record<PlayerId, VoteChoice>): Record<PlayerId, VoteChoice> {
+  const granted = meeting.ballotGrants[viewer] ?? [];
+  const merged = { ...faked, ...seenBy(meeting, viewer) };
+  return Object.fromEntries(Object.entries(merged).filter(([id]) => !granted.includes(id) || Object.hasOwn(meeting.votes, id)));
+}
+
 function seenBy(meeting: NonNullable<GameState["meeting"]>, viewer: PlayerId): Record<PlayerId, VoteChoice> {
   const grants = Object.hasOwn(meeting.ballotGrants, viewer) ? (meeting.ballotGrants[viewer] as readonly PlayerId[]) : [];
   return Object.fromEntries(grants.filter((id) => Object.hasOwn(meeting.votes, id)).map((id) => [id, meeting.votes[id] as VoteChoice]));
@@ -441,7 +448,7 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
       ...state.meeting,
       // The ballots the viewer bought a Check ballot for are theirs to see (design §12).
       // A granted ballot not yet cast reads null either way, so it is never faked.
-      votes: Object.fromEntries(Object.entries({ ...fakeFor(state.meeting.votes, { kind: "shakedown", target: viewer }), ...seenBy(state.meeting, viewer) }).filter(([id]) => !(state.meeting?.ballotGrants[viewer] ?? []).includes(id) || Object.hasOwn(state.meeting?.votes ?? {}, id))),
+      votes: scrubVotes(state.meeting, viewer, fakeFor(state.meeting.votes, { kind: "shakedown", target: viewer })),
       ballotGrants: fakeFor(state.meeting.ballotGrants, [viewer]),
     },
     log,

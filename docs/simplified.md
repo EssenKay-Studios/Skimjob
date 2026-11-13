@@ -55,7 +55,7 @@ Two fixes: **Part A** remakes the rules around a few visible things (coins, bell
    | Office | 2 | Every coin rings once | All |
    | Deposit boxes | 2 | As the Office | 5+ |
    | Manager's office | 2 | As the Office | 9+ |
-   | Vault | 3 | Every coin rings (or the 1st is silent: the simulator picks) | All |
+   | Vault | 3 | Every coin rings once | All |
    | Security | 0 | Watch one room's cameras: see who was in it | All |
    | Server room | 2 | As the Office | 5+ |
    | Rooftop | 0 | Lie low: automatically cools the hottest room (A2), and it's the only escape on a bust (A5) | All |
@@ -224,7 +224,7 @@ Rule changes keep the engine's non-negotiables (`CLAUDE.md`): deterministic, eve
    - Nothing needed for this round sits below the fold at 360–1280 px.
 2. **The move as a picture:** tap coins on the room's counter, then drag each into the **crew duffel** or **your pocket**. The bell previews the rings before you lock in.
 3. **The artwork carries the state:**
-   - a 4-bulb alarm bell over each door, glowing green → amber → red, with a wobble when it rings;
+   - a 5-bulb alarm bell over each door, glowing green → amber → red, with a wobble when it rings;
    - a raided room: police tape, a blue-red siren light, and a "CLOSED 2" sign counting down;
    - **Wanted** as 3 sheriff stars at the top of the screen;
    - the bank as a pile of money in the Vault, visibly shrinking;
