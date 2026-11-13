@@ -340,9 +340,9 @@ A **police briefing** follows every raid, after that round's resolution. It vote
 
 - **When and where:** a round's card appears when its alibi window ends, never before, so a missing alibi gives nothing away early. The latest card is in "This round"; every round's card is in the case board (§15.4).
 - **Built from alibis and public facts only.** Nothing new is stored and no hidden information is added.
-- **A small card:** one row per floor, each divided into its rooms; each room has its wall colour, icon, name and bell, and the players are a row of small avatars under the room name (22 px on a phone, 24 px on a laptop, one row per room even with 12 players). The card's height fits its contents.
+- **A small card:** "After the alibis" over "Round N, as told" (the case board: "Round N"). One row per floor, each divided into its rooms; each room is filled with its wall colour and has its icon, name and bell, and the players are a row of small avatars under the room name (22 px on a phone, 24 px on a laptop; a crowded room wraps to a second row on a phone). Room names break only at spaces. The card's height fits its contents.
 - **Two looks:** a **dashed ring** means "says" (their alibi); a **solid ink ring** means "no alibi", a fact.
-- **Icons:** a raid is a "raided −N" chip and tape along the room's bottom; the bell's bulbs; a dashed clay glow on a room that rang while no alibi puts anyone there; the round's event card as a tag; the missing coins on the duffel line.
+- **Icons:** a raid is a "raided −N" chip in place of the bell and tape along the room's bottom; the bell's bulbs; a dashed clay glow on a room that rang while no alibi puts anyone there; the round's event card as a tag; the missing coins on the duffel line.
 - **The key:** a "How to read the card" dropdown under the card and above Your move, closed by default: says / no alibi; you trust them / you think they lied; and the tip "Tap a crook to mark them Trusted or Liar. Only you see your marks, and they go in your case board."
 
 ### 10.3 Trust marks

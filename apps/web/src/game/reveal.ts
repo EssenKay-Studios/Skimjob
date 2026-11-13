@@ -74,14 +74,6 @@ export function endingText(outcome: Ending): { title: string; badge: string; los
     : { title: "Sunk by theft: too many coins went missing", badge: "Wins a heist sunk by theft", loss };
 }
 
-/** One room on a round's card, told true: each alibi stamped TRUE or LIE, the "no alibi" facts, and each liar drawn where they really were. */
-export interface TruthRoom {
-  readonly room: RoomId;
-  readonly said: readonly { readonly player: PlayerId; readonly lie: boolean }[];
-  readonly noAlibi: readonly PlayerId[];
-  readonly really: readonly PlayerId[];
-}
-
 /** A lie in a round, with the viewer's own mark on it, if they made one. */
 export interface Lie {
   readonly player: PlayerId;
@@ -91,26 +83,12 @@ export interface Lie {
 }
 
 /**
- * design §15.5, §18 board 5: `round`'s card with the truth, in seat order; rooms in the order
- * they first come up. `marks`: the viewer's own trust marks by "round/target" (engine `marksOf`
- * over their case file; secret to them even now).
+ * design §15.5, §18 board 5: `round`'s lies (an alibi for a room the player wasn't in), in seat
+ * order. `marks`: the viewer's own trust marks by "round/target" (engine `marksOf` over their
+ * case file; secret to them even now).
  */
-export function roundTruth(round: RevealRound, marks: ReadonlyMap<string, AlibiMark>): { rooms: TruthRoom[]; lies: Lie[] } {
-  const rooms = new Map<RoomId, { room: RoomId; said: { player: PlayerId; lie: boolean }[]; noAlibi: PlayerId[]; really: PlayerId[] }>();
-  const at = (room: RoomId) => rooms.get(room) ?? rooms.set(room, { room, said: [], noAlibi: [], really: [] }).get(room)!;
-  const lies: Lie[] = [];
-  for (const m of round.moves) {
-    if (m.alibi === null) {
-      at(m.room).noAlibi.push(m.player);
-      continue;
-    }
-    const lie = m.alibi !== m.room;
-    at(m.alibi).said.push({ player: m.player, lie });
-    if (!lie) continue;
-    at(m.room).really.push(m.player);
-    lies.push({ player: m.player, said: m.alibi, real: m.room, mark: marks.get(`${round.round}/${m.player}`) ?? null });
-  }
-  return { rooms: [...rooms.values()], lies };
+export function roundLies(round: RevealRound, marks: ReadonlyMap<string, AlibiMark>): Lie[] {
+  return round.moves.flatMap((m) => (m.alibi !== null && m.alibi !== m.room ? [{ player: m.player, said: m.alibi, real: m.room, mark: marks.get(`${round.round}/${m.player}`) ?? null }] : []));
 }
 
 /** "Ben said the Vault; really the Office. You had marked Ben a liar." */

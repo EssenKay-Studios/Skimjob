@@ -52,10 +52,11 @@ const snap: Snapshot = {
 const card = (marks = new Map<string, "trusted" | "liar">()) => renderToStaticMarkup(createElement(SnapshotCard, { snap, crew, me: "p1", marks, bulbs: 5, onMark: () => {} }));
 
 describe("the snapshot card (design §10)", () => {
-  it("puts one row per floor and each room's icon, name and bell", () => {
+  it("puts one row per floor and each room's icon, name and bell (a raid chip in its place on a raided room)", () => {
     const out = card();
     expect(out.match(/class="snap__floor"/g)).toHaveLength(2);
-    expect(out).toContain("Bell: 5 of 5 lit");
+    expect(out).toContain("Bell: 1 of 5 lit");
+    expect(out).not.toContain("Bell: 5 of 5 lit");
     expect(out).toContain("Bell: hidden");
   });
 
@@ -69,11 +70,14 @@ describe("the snapshot card (design §10)", () => {
 
   it("shows the raid, a quiet ring, the event and the missing coins", () => {
     const out = card();
+    expect(out).toContain("After the alibis");
+    expect(out).toContain("Round 2, as told");
     expect(out).toContain("raided −4");
+    expect(out).toContain("rang, nobody says they were here");
     expect(out).toMatch(/class="snap__room is-raided"[^>]*data-room="vault"/);
     expect(out).toMatch(/class="snap__room is-quiet"[^>]*data-room="lobby"/);
     expect(out).toContain("Shift change");
-    expect(out).toContain("<b class=\"num\">4</b> coins missing");
+    expect(out).toContain("4 coins</b> never reached the duffel");
   });
 
   it("badges a crook you marked", () => {
@@ -81,6 +85,30 @@ describe("the snapshot card (design §10)", () => {
     expect(out).toContain("Ava says the Vault, marked Liar");
     expect(out).toContain("snap__badge--liar");
     expect(out).toContain("snap__badge--trusted");
+  });
+});
+
+describe("the card told true at the reveal (design §18)", () => {
+  // Sam (you) told the truth; Ava said the Vault but was in the Office; Ben gave no alibi.
+  const truth = new Map([["p1", "vault"], ["p2", "office"], ["p3", "vault"], ["p4", "office"]]);
+  const out = renderToStaticMarkup(createElement(SnapshotCard, { snap, crew, me: "p1", marks: new Map([["2/p2", "liar" as const]]), bulbs: 5, title: "Round 2, the truth", truth }));
+
+  it("stamps each alibi TRUE or LIE, and none on a no-alibi fact", () => {
+    expect(out).toContain("Every alibi, checked");
+    expect(out).toContain("Round 2, the truth");
+    expect(out.match(/snap__stamp--true/g)).toHaveLength(2);
+    expect(out.match(/snap__stamp--lie/g)).toHaveLength(1);
+    expect(out).toContain("Ava says the Vault: LIE");
+  });
+
+  it("draws each liar again, ringed under \"really:\" in the room they were really in", () => {
+    expect(out).toMatch(/data-room="office".*?really:<\/span><span class="snap__liar">.*?Ava was really in the Office/);
+    expect(out.match(/class="snap__liar"/g)).toHaveLength(1);
+  });
+
+  it("is read-only: no mark buttons, no mark badges", () => {
+    expect(out).not.toMatch(/<button[^>]*snap__crook/);
+    expect(out).not.toContain("snap__badge");
   });
 });
 
@@ -123,6 +151,11 @@ describe("alibi styles", () => {
   it("keep every crook, mark button, tile and the key's button a 44 px target", () => {
     for (const sel of ["snap__crook", "markpop__btn"]) expect(code, sel).toMatch(new RegExp(`\\.${sel}\\s*\\{[^}]*width: 44px;[^}]*height: 44px`));
     for (const sel of ["alibi__tile", "cardkey__btn"]) expect(code, sel).toMatch(new RegExp(`\\.${sel}\\s*\\{[^}]*min-height: 44px`));
+  });
+
+  it("break room names only at spaces: a room is never narrower than its longest word", () => {
+    expect(code).toMatch(/\.snap__room\s*\{[^}]*min-width: min-content/);
+    expect(code).not.toMatch(/overflow-wrap|word-break/);
   });
 
   it("draw the key in one size, with 16 px icons", () => {

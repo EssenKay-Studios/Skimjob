@@ -232,7 +232,7 @@ function Board({ view, timers, offset, send, autoMeetings, gameId, channel, dmNo
   const wide = useMedia(SHELL_WIDE_QUERY);
   const panels: readonly ShellPanel[] = [
     { id: "crew", title: "Crew", place: "left", tab: { icon: <Star /> }, node: <Seats view={view} presence={channel.presence} offset={offset} marks={board.board} /> },
-    { id: "case", title: "Case", place: "left", tab: { icon: <Evidence /> }, node: <CaseBoard data={caseBoard} people={people} pins={pins} marks={board.board} card={(r) => <RoundCard view={view} send={send} round={r} />} /> },
+    { id: "case", title: "Case", place: "left", tab: { icon: <Evidence /> }, node: <CaseBoard data={caseBoard} people={people} pins={pins} marks={board.board} card={(r) => <RoundCard view={view} send={send} round={r} title={`Round ${r}`} />} /> },
     ...(outcome ? [] : [{ id: "notes", title: "Notes", place: "left", tab: { icon: <Pin /> }, node: <CrewBoard people={people} board={board} /> } satisfies ShellPanel]),
     { id: "chat", title: "Chat", place: "left", tab: { icon: <Bubble />, badge: chat.unread }, node: chat.node },
     ...(wide ? [{ id: "plan", title: "Plan board", place: "centre", node: <PlanPanel view={view} channel={channel} bare /> } satisfies ShellPanel] : []),
@@ -245,7 +245,7 @@ function Board({ view, timers, offset, send, autoMeetings, gameId, channel, dmNo
         <div className="round">
           {host && <GameHost gameId={gameId} game={host} view={view} control={channel.control} />}
           {outcome ? <GameOver view={view} /> : <Actions view={view} timers={timers} offset={offset} send={send} autoMeetings={autoMeetings} pick={pick} channel={channel} plan={!wide} />}
-          {view.reveal && <Reveal summary={view.reveal.summary} ctx={ctx} looks={seatLooks(view)} marks={myMarks(view)} />}
+          {view.reveal && <Reveal summary={view.reveal.summary} ctx={ctx} looks={seatLooks(view)} marks={myMarks(view)} cards={new Map(snapshotRounds(view).map((r) => [r, snapshotOf(view, r)!]))} bulbs={jobOf(view).alarm.bulbs} />}
         </div>
       ),
     },
@@ -504,9 +504,9 @@ function LatestCard({ view, send }: { view: PlayerView; send: BoardProps["send"]
 }
 
 /** design §10: `round`'s snapshot card, once its alibi window has closed (This round and the case board). */
-function RoundCard({ view, send, round }: { view: PlayerView; send: BoardProps["send"]; round: number }) {
+function RoundCard({ view, send, round, title }: { view: PlayerView; send: BoardProps["send"]; round: number; title?: string }) {
   const snap = snapshotOf(view, round);
-  return snap && <SnapshotCard snap={snap} crew={seatLooks(view)} me={view.me.id} marks={myMarks(view)} bulbs={jobOf(view).alarm.bulbs} onMark={(r, target, mark) => void send({ type: "markAlibi", round: r, target, mark })} />;
+  return snap && <SnapshotCard snap={snap} title={title} crew={seatLooks(view)} me={view.me.id} marks={myMarks(view)} bulbs={jobOf(view).alarm.bulbs} onMark={(r, target, mark) => void send({ type: "markAlibi", round: r, target, mark })} />;
 }
 
 /** design §10: the live board while a round is planned, and its snapshot after. */

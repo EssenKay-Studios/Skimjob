@@ -5,6 +5,7 @@
 // The names can switch to 24-character ones (the cap; "W" is the widest glyph
 // and has no break points) to check nothing pushes past a phone's edge.
 import { useMemo, useState, type ReactNode } from "react";
+import { BANK_JOB, type RoomId } from "@skimjob/content";
 import { PUBLIC, privateTo, revealSummary, type GameEvent, type Outcome, type RankEntry } from "@skimjob/engine";
 import { Button } from "../components/Button";
 import { ArrowBack } from "../components/icons";
@@ -13,6 +14,7 @@ import { Segmented } from "../components/Segmented";
 import { SketchFrame } from "../components/SketchFrame";
 import { Underline } from "../components/Underline";
 import { navigate } from "../router";
+import type { Snapshot } from "../game/snapshot";
 import { TopBar } from "./TopBar";
 
 const NAMES: Record<string, string> = {
@@ -41,6 +43,31 @@ const looks = new Map([
 const marks = new Map([
   ["1/p2", "liar" as const],
   ["2/p2", "trusted" as const],
+]);
+
+/**
+ * The snapshot cards of rounds 1 and 2, as the log below plays them (round 3 ends the game, so it
+ * has no alibi window and no card). Each room: its bell and who says, or was shown, there.
+ */
+const FLOORS: RoomId[][] = [["rooftop"], ["security", "office", "managersOffice", "serverRoom"], ["lobby"], ["vault", "depositBoxes"]];
+const snapCard = (round: number, missing: number, at: Partial<Record<RoomId, { bell?: number; raided?: number; crooks?: [string, "says" | "fact"][] }>>): Snapshot => ({
+  round,
+  floors: FLOORS.map((f) =>
+    f.map((id) => ({
+      id,
+      name: BANK_JOB.rooms[id]!.name,
+      bell: at[id]?.bell ?? 0,
+      raided: at[id]?.raided ?? null,
+      quiet: false,
+      crooks: (at[id]?.crooks ?? []).map(([player, kind]) => ({ player, kind })),
+    })),
+  ),
+  card: null,
+  missing,
+});
+const CARDS = new Map([
+  [1, snapCard(1, 5, { security: { crooks: [["p1", "fact"]] }, office: { bell: 1, crooks: [["p3", "says"]] }, lobby: { crooks: [["p2", "says"]] }, vault: { bell: 4, crooks: [["p4", "fact"]] } })],
+  [2, snapCard(2, 5, { office: { bell: 2, crooks: [["p1", "fact"], ["p2", "says"]] }, lobby: { bell: 5, raided: 4, crooks: [["p4", "fact"]] }, vault: { bell: 3, crooks: [["p3", "says"]] } })],
 ]);
 
 /** `player` grabbed `coins` in `room`, pocketing `pocket` of them. design §3.2 */
@@ -324,7 +351,7 @@ export function RevealDemo() {
             { value: true, label: "24 characters" },
           ]}
         />
-        <Reveal key={ending} summary={summary} ctx={ctx} looks={looks} marks={marks} />
+        <Reveal key={ending} summary={summary} ctx={ctx} looks={looks} marks={marks} cards={CARDS} bulbs={BANK_JOB.alarm.bulbs} />
       </Section>
     </div>
   );

@@ -33,11 +33,13 @@ test.describe("the reveal demo", () => {
     // Round 1: Ben went to the Vault but said the Lobby: the card told true stamps it a LIE.
     const sheet = reveal.locator(".reveal__round");
     const moves = sheet.getByRole("list", { name: "What everyone really did" });
-    const truth = sheet.getByRole("list", { name: "The card, told true" });
+    const truth = sheet.locator(".snap");
     await expect(sheet.getByRole("heading", { name: "Round 1", exact: true })).toBeVisible();
     await expect(moves.locator("li")).toHaveCount(4);
     await expect(moves.locator("li").filter({ hasText: "Ben" })).toContainText("Went: Vault");
-    await expect(truth.locator(".reveal__said.is-lie")).toContainText("LIE");
+    await expect(truth).toContainText("Round 1, the truth");
+    await expect(truth.locator('[data-room="lobby"] .snap__stamp--lie')).toHaveText("LIE");
+    await expect(truth.locator('[data-room="vault"] .snap__really .snap__liar')).toHaveCount(1);
     await expect(sheet.locator(".reveal__lies")).toContainText("Lies in round 1");
     await expect(sheet.locator(".reveal__lies")).toContainText("Ben said the Lobby; really the Vault.");
 

@@ -15,7 +15,7 @@ import type {
   RevealSummary,
 } from "@skimjob/engine";
 import { CrookAvatar } from "../art/Crook";
-import { Avatar } from "./Avatar";
+import { initialsOf } from "./avatarLooks";
 import {
   cardName,
   perkName,
@@ -28,7 +28,7 @@ import {
   itemText,
   lieText,
   roundLabel,
-  roundTruth,
+  roundLies,
   satOutText,
   stashTrend,
   whyText,
@@ -39,6 +39,8 @@ import { Button } from "./Button";
 import { Chip } from "./Chip";
 import { Lock } from "./icons";
 import { SketchFrame } from "./SketchFrame";
+import { SnapshotCard } from "./SnapshotCard";
+import type { Snapshot } from "../game/snapshot";
 import "./reveal.css";
 
 export interface RevealLook {
@@ -53,9 +55,13 @@ export interface RevealProps {
   readonly looks: ReadonlyMap<PlayerId, RevealLook>;
   /** Your own trust marks by "round/target" (game/snapshot.ts `myMarks`): still only yours. design §10 */
   readonly marks: ReadonlyMap<string, AlibiMark>;
+  /** Each round's snapshot card (game/snapshot.ts), told true here. The last round has none. design §18 */
+  readonly cards: ReadonlyMap<number, Snapshot>;
+  /** Bulbs on a bell, from content. */
+  readonly bulbs: number;
 }
 
-export function Reveal({ summary, ctx, looks, marks }: RevealProps) {
+export function Reveal({ summary, ctx, looks, marks, cards, bulbs }: RevealProps) {
   const failed = summary.ending.result === "failed";
   return (
     <SketchFrame
@@ -87,7 +93,7 @@ export function Reveal({ summary, ctx, looks, marks }: RevealProps) {
           />
         ))}
       </ol>
-      <Timeline summary={summary} ctx={ctx} looks={looks} marks={marks} />
+      <Timeline summary={summary} ctx={ctx} looks={looks} marks={marks} cards={cards} bulbs={bulbs} />
     </SketchFrame>
   );
 }
@@ -227,6 +233,8 @@ interface SheetProps {
   ctx: DescribeContext;
   looks: ReadonlyMap<PlayerId, RevealLook>;
   marks: ReadonlyMap<string, AlibiMark>;
+  cards: ReadonlyMap<number, Snapshot>;
+  bulbs: number;
 }
 
 function Timeline({ summary, ...sheet }: SheetProps & { summary: RevealSummary }) {
@@ -277,18 +285,15 @@ function Timeline({ summary, ...sheet }: SheetProps & { summary: RevealSummary }
   );
 }
 
-function RoundSheet({ round, ctx, looks, marks }: SheetProps & { round: RevealRound }) {
-  const truth = roundTruth(round, marks);
+function RoundSheet({ round, ctx, looks, marks, cards, bulbs }: SheetProps & { round: RevealRound }) {
   const who = (p: PlayerId) => (p === ctx.me ? "You" : ctx.name(p));
-  const face = (p: PlayerId, title: string) => (
-    <Avatar
-      name={ctx.name(p)}
-      initials={looks.get(p)?.tag}
-      seat={looks.get(p)?.look}
-      bot={looks.get(p)?.bot}
-      size={26}
-      title={title}
-    />
+  const snap = cards.get(round.round);
+  const lies = roundLies(round, marks);
+  const crew = new Map(
+    [...looks].map(([p, l]) => {
+      const name = ctx.name(p).replace(/^Bot · /, "");
+      return [p, { look: l.look, tag: l.tag ?? initialsOf(name), bot: l.bot, name }];
+    }),
   );
   return (
     <article
@@ -311,52 +316,30 @@ function RoundSheet({ round, ctx, looks, marks }: SheetProps & { round: RevealRo
           </span>
         )}
       </header>
-      {truth.rooms.length > 0 && (
-        <ul className="reveal__truth" aria-label="The card, told true">
-          {truth.rooms.map((r) => (
-            <li key={r.room} className="reveal__troom">
-              <b className="reveal__tname">{roomName(r.room)}</b>
-              <span className="reveal__crooks">
-                {r.said.map(({ player, lie }) => (
-                  <span key={player} className={lie ? "reveal__said is-lie" : "reveal__said"}>
-                    {face(player, `${who(player)} said the ${roomName(r.room)}`)}
-                    <span className="reveal__stamp">{lie ? "LIE" : "TRUE"}</span>
-                  </span>
+      {snap && (
+        <>
+          <SnapshotCard
+            snap={snap}
+            crew={crew}
+            me={ctx.me}
+            marks={marks}
+            bulbs={bulbs}
+            title={`Round ${round.round}, the truth`}
+            truth={new Map(round.moves.map((m) => [m.player, m.room]))}
+          />
+          <div className="reveal__lies">
+            <h5>Lies in round {round.round}</h5>
+            {lies.length > 0 ? (
+              <ul>
+                {lies.map((l) => (
+                  <li key={l.player}>{lieText(l, ctx)}</li>
                 ))}
-                {r.noAlibi.map((p) => (
-                  <span key={p} className="reveal__said">
-                    {face(p, `${who(p)} gave no alibi: in the ${roomName(r.room)}`)}
-                    <span className="meta">no alibi</span>
-                  </span>
-                ))}
-              </span>
-              {r.really.length > 0 && (
-                <span className="reveal__really">
-                  <span className="meta">really:</span>
-                  {r.really.map((p) => (
-                    <span key={p} className="reveal__liar">
-                      {face(p, `${who(p)} was really in the ${roomName(r.room)}`)}
-                    </span>
-                  ))}
-                </span>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-      {truth.rooms.length > 0 && (
-        <div className="reveal__lies">
-          <h5>Lies in round {round.round}</h5>
-          {truth.lies.length > 0 ? (
-            <ul>
-              {truth.lies.map((l) => (
-                <li key={l.player}>{lieText(l, ctx)}</li>
-              ))}
-            </ul>
-          ) : (
-            <p className="meta">Nobody lied.</p>
-          )}
-        </div>
+              </ul>
+            ) : (
+              <p className="meta">Nobody lied.</p>
+            )}
+          </div>
+        </>
       )}
       {(round.moves.length > 0 || round.satOut.length > 0) && (
         <ul className="reveal__moves" aria-label="What everyone really did">

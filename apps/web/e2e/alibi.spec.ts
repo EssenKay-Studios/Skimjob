@@ -32,7 +32,7 @@ test("the alibi pop-up posts an alibi, the snapshot card shows says and facts, a
 
   // The window closes: the card is out, the host said the Office (dashed), the guest is a fact in the Lobby (solid).
   await openPanel(page, "This round");
-  const card = page.getByRole("region", { name: "Round 1 snapshot" });
+  const card = page.getByRole("region", { name: "Round 1, as told" });
   await expect(card).toBeVisible();
   await expect(card.locator('[data-room="office"] span.snap__crook--says')).toHaveCount(1);
   const crook = card.locator('[data-room="lobby"]').getByRole("button", { name: "Guest 1 gave no alibi: in the Lobby. Mark Guest 1" });
@@ -77,6 +77,6 @@ test("the alibi pop-up posts an alibi, the snapshot card shows says and facts, a
     return c;
   });
   expect(await r1.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe(gold);
-  await expect(board.getByRole("region", { name: "Round 1 snapshot" })).toBeVisible();
+  await expect(board.getByRole("region", { name: "Round 1", exact: true })).toBeVisible();
   await guest.close();
 });

@@ -36,7 +36,7 @@
 .alibi__bar {
   flex: 1;
   height: 9px;
-  border: 1.3px solid var(--ink);
+  border: var(--line) solid var(--ink);
   border-radius: var(--radius-chip);
   background: var(--paper2);
   overflow: hidden;
@@ -59,7 +59,7 @@
   gap: 4px;
   min-height: 44px;
   padding: 6px;
-  border: 1.4px solid var(--ink);
+  border: var(--line) solid var(--ink);
   border-radius: var(--radius-card);
   background: var(--paper-hi);
   color: var(--ink);
@@ -70,7 +70,7 @@
 }
 .alibi__tile[aria-pressed="true"] {
   background: var(--clay-l);
-  outline: 2.5px dashed var(--clay-d);
+  outline: var(--line-bold) dashed var(--clay-d);
   outline-offset: 2px;
 }
 .alibi__tile:active {
@@ -82,13 +82,13 @@
   }
 }
 .alibi__tile:focus-visible {
-  outline: 2.5px solid var(--clay-d);
+  outline: var(--line-bold) solid var(--clay-d);
   outline-offset: 3px;
 }
 .alibi__art {
   width: 100%;
   height: auto;
-  border: 1.2px solid var(--ink);
+  border: var(--line) solid var(--ink);
   border-radius: var(--radius-clip);
 }
 .alibi__art > rect {
@@ -122,51 +122,55 @@
 }
 .snap__head {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 4px 6px;
+  gap: 6px;
+}
+.snap__title {
+  flex: 1;
+  min-width: 0;
+}
+.snap__kicker {
+  margin: 0;
+  font-size: var(--fs-key);
 }
 .snap__head h3 {
   margin: 0;
   font-size: 17px;
+  line-height: 1.1;
 }
+/* design §10: the round's event card, a gold tag at the top right. */
 .snap__event {
-  margin-left: auto;
   padding: 2px 8px;
-  border: 1.2px solid var(--ink);
+  border: var(--line) solid var(--ink);
   border-radius: var(--radius-chip);
   background: var(--gold);
-  font: 600 var(--fs-key) / 1.4 var(--font-ui);
+  font: 700 var(--fs-key) / 1.4 var(--font-ui);
+  rotate: 2deg;
 }
+/* A floor's rooms share a row; on a card too narrow for every room's longest word they wrap. */
 .snap__floor {
   display: flex;
-  gap: 4px;
+  flex-wrap: wrap;
+  gap: 5px;
 }
+/* A room, filled with its wall colour (tinted so ink stays readable on the dark walls). */
 .snap__room {
   position: relative;
   flex: 1 1 0;
-  min-width: 0;
+  /* Never narrower than its longest word: names break only at spaces. */
+  min-width: min-content;
   display: grid;
-  align-content: start;
+  align-content: space-between;
   gap: 2px;
-  padding: 8px 4px 0;
-  border: 1.2px solid var(--ink);
+  padding: 4px 6px 0;
+  border: var(--line) solid var(--ink);
   border-radius: var(--radius-card);
-  background: var(--paper-hi);
-}
-/* The room's back-wall colour, as a band along its top. */
-.snap__room::before {
-  content: "";
-  position: absolute;
-  inset: 0 0 auto;
-  height: 5px;
-  border-radius: var(--radius-card);
-  background: var(--wall);
+  background: color-mix(in srgb, var(--wall) 60%, var(--paper-hi));
+  overflow: hidden;
 }
 /* design §10: it rang with nobody saying or shown there. */
 .snap__room.is-quiet {
-  outline: 2px dashed var(--clay);
-  outline-offset: 1px;
+  border: var(--line-bold) dashed var(--clay-d);
   background: var(--clay-l);
 }
 /* Police tape along the bottom of a raided room. */
@@ -174,35 +178,46 @@
   content: "";
   position: absolute;
   inset: auto 0 0;
-  height: 6px;
+  height: 5px;
   background: repeating-linear-gradient(-45deg, var(--gold) 0 7px, var(--ink) 7px 10px);
 }
+/* Icon and name together; the bell (or raid chip) sits beside them, or drops below when the room is narrow. */
 .snap__room-head {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 3px;
-  min-width: 0;
+  gap: 2px 4px;
 }
-.snap__room-head .room-icon {
+.snap__room-title {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.snap__room-title .room-icon {
   flex: none;
 }
 .snap__room-name {
-  min-width: 0;
-  font: 600 var(--fs-key) / 1.2 var(--font-ui);
-  overflow-wrap: break-word;
+  font-size: 13px;
+  line-height: 1.1;
 }
 .snap__raid {
-  justify-self: start;
   padding: 0 5px;
   border-radius: var(--radius-chip);
   background: var(--bad);
   color: var(--cream);
   font: 700 var(--fs-key) / 1.5 var(--font-ui);
+  white-space: nowrap;
+}
+.snap__quiet {
+  margin: 0;
+  color: var(--clay-d);
+  font: 700 var(--fs-key) / 1.3 var(--font-ui);
 }
 .snap__crooks {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   margin: 0;
   /* Each crook is a 44 px target drawn as a small avatar: the boxes overlap their neighbours' padding, not their faces. */
   padding: 8px 8px 10px;
@@ -228,16 +243,19 @@ span.snap__crook {
   cursor: default;
 }
 .snap__crook .avatar {
-  padding: 1.5px;
-  border: 1.5px solid var(--ink);
+  padding: var(--line);
+  border: var(--line) solid var(--ink);
   border-radius: var(--radius-blob);
   box-sizing: content-box;
 }
 .snap__crook--says .avatar {
   border-style: dashed;
 }
+.snap__crook--fact .avatar {
+  border-width: var(--line-bold);
+}
 .snap__crook:focus-visible {
-  outline: 2.5px solid var(--clay-d);
+  outline: var(--line-bold) solid var(--clay-d);
   outline-offset: -6px;
 }
 .snap__badge {
@@ -246,7 +264,7 @@ span.snap__crook {
   bottom: 6px;
   width: 13px;
   height: 13px;
-  border: 1.2px solid var(--ink);
+  border: var(--line) solid var(--ink);
   border-radius: var(--radius-blob);
   background: var(--paper-hi);
 }
@@ -262,8 +280,53 @@ span.snap__crook {
 .snap__badge--liar {
   color: var(--bad);
 }
+/* design §18: the reveal's stamp under each alibi. */
+.snap__stamp {
+  position: absolute;
+  left: 50%;
+  bottom: 2px;
+  translate: -50% 0;
+  padding: 0 3px;
+  border: var(--line) solid var(--ink);
+  border-radius: var(--radius-clip);
+  background: var(--paper-hi);
+  color: var(--good);
+  font: 800 8px / 1.25 var(--font-ui);
+  letter-spacing: 0.04em;
+}
+.snap__stamp--lie {
+  rotate: -6deg;
+  background: var(--bad);
+  color: var(--cream);
+}
+/* design §18: each liar again, where they really were, in a red ring. */
+.snap__crooks > .snap__really {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 8px;
+}
+.snap__really-h {
+  color: var(--bad);
+  font: 800 var(--fs-key) / 1 var(--font-ui);
+}
+.snap__liar {
+  display: inline-flex;
+  border-radius: var(--radius-blob);
+  outline: var(--line-bold) solid var(--bad);
+  outline-offset: 1px;
+}
 .snap__duffel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   margin: 0;
+  font-size: var(--fs-key);
+}
+.snap__duffel svg {
+  flex: none;
+  width: 26px;
+  height: 20px;
 }
 
 /* ---------- The key ---------- */
@@ -281,7 +344,7 @@ span.snap__crook {
   gap: 8px;
   min-height: 44px;
   padding: 0 10px;
-  border: 1.3px solid var(--ink);
+  border: var(--line) solid var(--ink);
   border-radius: var(--radius-chip);
   background: var(--paper);
   color: var(--ink);
@@ -289,7 +352,7 @@ span.snap__crook {
   cursor: pointer;
 }
 .cardkey__btn:focus-visible {
-  outline: 2.5px solid var(--clay-d);
+  outline: var(--line-bold) solid var(--clay-d);
   outline-offset: 3px;
 }
 .cardkey__chev {
@@ -328,7 +391,7 @@ span.snap__crook {
   flex: none;
   width: 16px;
   height: 16px;
-  border: 1.5px solid var(--ink);
+  border: var(--line) solid var(--ink);
   border-radius: var(--radius-blob);
 }
 .cardkey__ring--says {
@@ -366,7 +429,7 @@ span.snap__crook {
 }
 .markpop__name {
   padding: 2px 8px;
-  border: 1.2px solid var(--ink);
+  border: var(--line) solid var(--ink);
   border-radius: var(--radius-chip);
   background: var(--note-yellow);
   color: var(--ink);
@@ -393,7 +456,7 @@ span.snap__crook {
   width: 22px;
   height: 22px;
   padding: 3px;
-  border: 1.4px solid var(--ink);
+  border: var(--line) solid var(--ink);
   border-radius: var(--radius-blob);
   background: var(--paper-hi);
 }
@@ -402,15 +465,17 @@ span.snap__crook {
   height: 100%;
 }
 .markpop__btn--trusted .markpop__dot {
-  color: var(--good);
+  background: var(--good);
+  color: var(--cream);
 }
 .markpop__btn--liar .markpop__dot {
-  color: var(--bad);
+  background: var(--bad);
+  color: var(--cream);
 }
 .markpop__btn--clear .markpop__dot {
   border-style: dashed;
 }
 .markpop__btn:focus-visible {
-  outline: 2.5px solid var(--clay-d);
+  outline: var(--line-bold) solid var(--clay-d);
   outline-offset: -4px;
 }

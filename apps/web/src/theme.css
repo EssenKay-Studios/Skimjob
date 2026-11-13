@@ -194,6 +194,9 @@
   --radius-blob: 50% 46% 52% 48%; /* round-ish blobs: coins, dots */
   --radius-grip: 3px; /* the bottom sheet's grip */
   --shadow-card: 2px 3px 0 var(--shade);
+  /* Ink line widths: an outline, and a bold one (rings, focus). */
+  --line: 1.5px;
+  --line-bold: 2.5px;
 
   color-scheme: light;
 }
